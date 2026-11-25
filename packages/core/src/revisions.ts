@@ -151,15 +151,20 @@ export interface EntityPatchApplyResult {
 
 /**
  * Pure state-transition function applying a typed EntityPatch onto the current entity snapshot.
- * Throws explicit domain errors on illegal transitions (e.g. creating an active entity or updating a deleted one).
+ * Throws explicit domain errors on illegal transitions (e.g. creating an active or soft-deleted entity, or updating a deleted one).
  */
 export function applyEntityPatch(
-  current: { data: EntityPayload; deletedAt: string | null } | null,
+  current: { data: EntityPayload; deletedAt: string | null; revisionId?: number } | null,
   patch: EntityPatch
 ): EntityPatchApplyResult {
   switch (patch.action) {
     case 'create': {
-      if (current !== null && current.deletedAt === null) {
+      if (current !== null) {
+        if (current.deletedAt !== null) {
+          throw new Error(
+            `Cannot create ${patch.entity_type}/${patch.entity_id}: entity is soft-deleted; use restore or revert with expected_parent_revision_id`
+          );
+        }
         throw new Error(
           `Cannot create ${patch.entity_type}/${patch.entity_id}: entity already exists`
         );
@@ -176,6 +181,15 @@ export function applyEntityPatch(
       if (current === null || current.deletedAt !== null) {
         throw new Error(
           `Cannot update ${patch.entity_type}/${patch.entity_id}: entity does not exist or is deleted`
+        );
+      }
+      if (
+        current.revisionId !== undefined &&
+        patch.parent_revision_id !== undefined &&
+        patch.parent_revision_id !== current.revisionId
+      ) {
+        throw new Error(
+          `Optimistic concurrency conflict on ${patch.entity_type}/${patch.entity_id}: expected parent revision ${patch.parent_revision_id}, current is ${current.revisionId}`
         );
       }
       const before = structuredClone(current.data);
@@ -195,6 +209,15 @@ export function applyEntityPatch(
           `Cannot delete ${patch.entity_type}/${patch.entity_id}: entity does not exist or is already deleted`
         );
       }
+      if (
+        current.revisionId !== undefined &&
+        patch.parent_revision_id !== undefined &&
+        patch.parent_revision_id !== current.revisionId
+      ) {
+        throw new Error(
+          `Optimistic concurrency conflict on ${patch.entity_type}/${patch.entity_id}: expected parent revision ${patch.parent_revision_id}, current is ${current.revisionId}`
+        );
+      }
       const before = structuredClone(current.data);
       return {
         action: 'delete',
@@ -207,6 +230,15 @@ export function applyEntityPatch(
       if (current === null || current.deletedAt === null) {
         throw new Error(
           `Cannot restore ${patch.entity_type}/${patch.entity_id}: entity is not soft-deleted`
+        );
+      }
+      if (
+        current.revisionId !== undefined &&
+        patch.parent_revision_id !== undefined &&
+        patch.parent_revision_id !== current.revisionId
+      ) {
+        throw new Error(
+          `Optimistic concurrency conflict on ${patch.entity_type}/${patch.entity_id}: expected parent revision ${patch.parent_revision_id}, current is ${current.revisionId}`
         );
       }
       const restored = patch.data

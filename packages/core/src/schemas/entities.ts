@@ -109,6 +109,7 @@ export const RawPersonSchema = z.object({
   death_edtf: CoercedEdtfStringSchema.default(''),
   portrait_url: z.string().nullable().default(null),
   thumb_url: z.string().nullable().optional(),
+  has_primary_source: z.boolean().optional(),
 });
 
 export const PersonSchema = RawPersonSchema.extend({
@@ -138,6 +139,7 @@ export const PlaceSchema = z.object({
   photo_url: z.string().nullable().optional(),
   photo_caption: z.string().nullable().optional(),
   sources: z.array(EventSourceRefSchema).optional(),
+  has_primary_source: z.boolean().optional(),
 });
 
 export const RawEventSchema = z.object({
@@ -160,6 +162,7 @@ export const RawEventSchema = z.object({
   photo_placeholder_caption: z.string().nullable().optional(),
   participants: z.array(EventParticipantSchema).default([]),
   sources: z.array(EventSourceRefSchema).default([]),
+  has_primary_source: z.boolean().optional(),
 });
 
 export const ArchiveEventSchema = RawEventSchema.extend({
@@ -218,6 +221,7 @@ export const SourceRecordSchema = z.object({
   source_type: z.string(),
   repository: z.string().nullable().optional(),
   url: z.string().nullable().optional(),
+  has_primary_source: z.boolean().optional(),
 });
 
 export const MediaItemSchema = z.object({
@@ -235,6 +239,7 @@ export const MediaItemSchema = z.object({
   caption: z.string(),
   date_edtf: OptionalCoercedStringSchema,
   provenance: z.string().nullable().optional(),
+  has_primary_source: z.boolean().optional(),
 });
 
 export const NarrativeSchema = z.object({
@@ -249,6 +254,7 @@ export const NarrativeSchema = z.object({
   event_ids: z.array(z.string().min(1)).default([]),
   source_ids: z.array(z.string().min(1)).default([]),
   updated_at: z.string().optional(),
+  has_primary_source: z.boolean().optional(),
 });
 
 export const ReadingPageSchema = z.object({
@@ -294,6 +300,8 @@ export const ArchiveBundleMetaSchema = z.object({
   version: z.string().optional(),
   build_mode: BuildModeSchema,
   generated_at: z.string(),
+  max_revision_id: z.number().int().nonnegative().optional(),
+  uncited_entity_keys: z.array(z.string()).optional(),
   counts: ArchiveBundleCountsSchema,
 });
 

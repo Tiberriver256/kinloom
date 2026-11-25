@@ -1,6 +1,7 @@
 import type { KinloomSiteConfig } from '@kinloom/core';
 
 export const demoSiteConfig: KinloomSiteConfig = {
+  "schemaVersion": 1,
   "site": {
     "title": "Lincoln & Todd Historical Archive",
     "familyName": "Lincoln & Todd Family",

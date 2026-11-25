@@ -2,5 +2,31 @@
   "name": "@kinloom/worker",
   "version": "0.1.0",
   "type": "module",
-  "license": "MIT"
+  "license": "MIT",
+  "description": "Cloudflare Worker API, D1 revision ledger, R2 media and bundle cache, and auth/RBAC layer for Kinloom family archives.",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "migrations"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@kinloom/core": "0.1.0",
+    "zod": "^3.24.2"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20261125.1",
+    "miniflare": "^4.20260730.0",
+    "wrangler": "~4.116.0"
+  }
 }

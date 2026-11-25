@@ -2,9 +2,12 @@ import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
 import { compileArchive } from './compileArchive.js';
 import {
+  PrivacyViolationError,
   applyPrivacyFilter,
+  assertMediaAllowedForPrivacy,
   isPersonLivingPublic,
   redactSinglePerson,
+  sanitizeEventForWrite,
   sanitizePersonForWrite,
 } from './privacy.js';
 import { parseKinloomConfig } from './schemas/config.js';
@@ -292,6 +295,119 @@ describe('compileArchive and living-person privacy', () => {
     expect(
       isPersonLivingPublic({ hasDeathOrBurial: false, birthYear: 1926, earliestEventYear: 1926, referenceYear: 2026 })
     ).toBe(true);
+
+    // Single-entity event write sanitizer
+    const livingIds = new Set(['per_elena_alder']);
+    const sanitizedEvent = sanitizeEventForWrite(SYNTHETIC_EVENTS[2], livingIds);
+    expect(sanitizedEvent.edtf_date).toBe('1984');
+    expect(sanitizedEvent.place_id).toBeNull();
+    expect(sanitizedEvent.summary).toBe('Living relative record (location and exact date omitted).');
+
+    const sanitizedNoYear = sanitizeEventForWrite(SYNTHETIC_EVENTS[2], livingIds, {
+      privateModeShowsBirthYear: false,
+    });
+    expect(sanitizedNoYear.edtf_date).toBe('');
+
+    // Single-entity media privacy assertion (direct person_ids and via event participants)
+    expect(() => assertMediaAllowedForPrivacy(SYNTHETIC_MEDIA[1], livingIds)).toThrow(
+      PrivacyViolationError
+    );
+    const eventsById = new Map(SYNTHETIC_EVENTS.map((e) => [e.id, e]));
+    expect(() =>
+      assertMediaAllowedForPrivacy(
+        { id: 'med_ev_living', event_id: 'evt_1990_shared' },
+        livingIds,
+        eventsById
+      )
+    ).toThrow(PrivacyViolationError);
+    expect(() =>
+      assertMediaAllowedForPrivacy(SYNTHETIC_MEDIA[0], livingIds, eventsById)
+    ).not.toThrow();
+  });
+
+  it('wires siteConfig.privacy cutoff, referenceYear, and config schemaVersion + wiki defaults', () => {
+    expect(SYNTHETIC_CONFIG.schemaVersion).toBe(1);
+    expect(SYNTHETIC_CONFIG.wiki).toBeUndefined();
+
+    const customCfg = parseKinloomConfig({
+      site: {
+        title: 'Custom Privacy Archive',
+        familyName: 'Alder',
+        gedcomSourceName: 'CUSTOM_ARCHIVE',
+      },
+      privacy: {
+        livingCutoffYears: 80,
+        referenceYear: 2020,
+        privateModeShowsBirthYear: false,
+        stripLivingPortraits: true,
+        stripLivingResidenceSpans: true,
+      },
+      wiki: {
+        allowTalk: true,
+        allowWatchlists: true,
+        maxUploadBytes: 10_000_000,
+      },
+    });
+    expect(customCfg.schemaVersion).toBe(1);
+    expect(customCfg.wiki?.allowWatchlists).toBe(true);
+
+    // Born 1945 with no death date and is_living=false -> > (2020 - 80 = 1940), auto-protected as living
+    const recentUnflagged: RawPerson = {
+      id: 'per_recent',
+      slug: 'recent-alder',
+      full_name: 'Sam Alder',
+      given_name: 'Sam',
+      surname: 'Alder',
+      alt_names: [],
+      sex: 'U',
+      is_living: false,
+      lineage_group: 'descendant',
+      birth_edtf: '1945-02-10',
+      death_edtf: '',
+      portrait_url: '/media/sam.jpg',
+    };
+    const { bundle } = compileArchive({
+      people: [recentUnflagged],
+      events: [],
+      places: [],
+      sources: [],
+      kinship: [],
+      siteConfig: customCfg,
+      mode: 'private',
+      generatedAt: '2026-11-24T00:00:00.000Z',
+    });
+    expect(bundle.people[0].is_living).toBe(true);
+    expect(bundle.people[0].birth_edtf).toBe('');
+    expect(bundle.people[0].birth_year).toBeNull();
+    expect(bundle.people[0].portrait_url).toBeNull();
+  });
+
+  it('flags living person names mentioned in non-living public events via precompiled livingPattern', () => {
+    const leakEvent: RawEvent = {
+      id: 'evt_leak_check',
+      title: 'Arthur Alder reunion noted by Elena Alder',
+      scope: 'family',
+      event_kind: 'point_event',
+      edtf_date: '1910',
+      place_id: 'plc_riverdale',
+      summary: 'Later transcribed by Elena Alder in a family notebook.',
+      participants: [{ person_id: 'per_arthur_alder', role: 'subject' }],
+      sources: [],
+    };
+    const result = compileArchive({
+      people: SYNTHETIC_PEOPLE,
+      events: [...SYNTHETIC_EVENTS, leakEvent],
+      places: SYNTHETIC_PLACES,
+      sources: SYNTHETIC_SOURCES,
+      kinship: SYNTHETIC_KINSHIP,
+      siteConfig: SYNTHETIC_CONFIG,
+      mode: 'public',
+      generatedAt: '2026-11-24T00:00:00.000Z',
+    });
+    expect(result.reviewFlags).toEqual([
+      "[evt_leak_check] 'Arthur Alder reunion noted by Elena Alder' mentions living person 'Elena Alder' in event title.",
+      "[evt_leak_check] 'Arthur Alder reunion noted by Elena Alder' mentions living person 'Elena Alder' in summary prose.",
+    ]);
   });
 
   it('property: living exact birthdates and portraits never survive private or public privacy filter', () => {

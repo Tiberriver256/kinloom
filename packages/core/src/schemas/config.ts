@@ -77,7 +77,14 @@ export const PrivacyConfigSchema = z.object({
   markGedcomLivingConfidential: z.boolean().default(true),
 });
 
+export const WikiConfigSchema = z.object({
+  allowTalk: z.boolean().default(true),
+  allowWatchlists: z.boolean().default(false),
+  maxUploadBytes: z.number().int().positive().default(15 * 1024 * 1024),
+});
+
 export const KinloomSiteConfigSchema = z.object({
+  schemaVersion: z.literal(1).default(1),
   site: SiteMetadataSchema,
   theme: SiteThemeConfigSchema.optional(),
   defaultBranchId: z.string().min(1).optional(),
@@ -89,6 +96,7 @@ export const KinloomSiteConfigSchema = z.object({
   mapDefaults: MapDefaultsConfigSchema.default({}),
   anchorYears: z.array(AnchorYearConfigSchema).optional(),
   privacy: PrivacyConfigSchema.default({}),
+  wiki: WikiConfigSchema.optional(),
 });
 
 export type SiteMetadata = z.infer<typeof SiteMetadataSchema>;
@@ -100,6 +108,7 @@ export type MigrationEraConfig = z.infer<typeof MigrationEraConfigSchema>;
 export type MapDefaultsConfig = z.infer<typeof MapDefaultsConfigSchema>;
 export type AnchorYearConfig = z.infer<typeof AnchorYearConfigSchema>;
 export type PrivacyConfig = z.infer<typeof PrivacyConfigSchema>;
+export type WikiConfig = z.infer<typeof WikiConfigSchema>;
 export type KinloomSiteConfig = z.infer<typeof KinloomSiteConfigSchema>;
 export type KinloomSiteConfigInput = z.input<typeof KinloomSiteConfigSchema>;
 

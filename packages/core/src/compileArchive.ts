@@ -19,7 +19,7 @@ import type {
 import { getMediaPersonIds } from './schemas/entities.js';
 import { edtfToBounds, edtfYear, formatEdtfDisplay } from './edtf.js';
 import { applyCitationCleanings } from './gedcom/citations.js';
-import { applyPrivacyFilter, filterMediaForPrivacy } from './privacy.js';
+import { applyPrivacyFilter, filterMediaForPrivacy, resolveEffectiveLiving } from './privacy.js';
 import { buildPlaceAncestors, deriveResidenceSpans } from './residenceSpans.js';
 
 export interface AncestryHouseholdEvent {
@@ -58,6 +58,7 @@ export interface CompileArchiveInput {
   mode: BuildMode;
   generatedAt?: string;
   version?: string;
+  maxRevisionId?: number;
   legacyContainerSourceIds?: ReadonlySet<string>;
 }
 
@@ -118,7 +119,10 @@ export function mergeEventSources(
   return merged;
 }
 
-function resolvePersonBranch(person: RawPerson, siteConfig: KinloomSiteConfig): string {
+export function resolvePersonBranch(
+  person: Pick<RawPerson, 'branch' | 'surname' | 'lineage_group'>,
+  siteConfig: KinloomSiteConfig
+): string {
   if (person.branch) {
     return person.branch;
   }
@@ -135,6 +139,85 @@ function resolvePersonBranch(person: RawPerson, siteConfig: KinloomSiteConfig): 
     }
   }
   return resolveDefaultBranchId(siteConfig);
+}
+
+export function compareArchiveEvents(
+  a: Pick<ArchiveEvent, 'id' | 'time_min' | 'severity_rank'>,
+  b: Pick<ArchiveEvent, 'id' | 'time_min' | 'severity_rank'>
+): number {
+  const aNone = a.time_min === null ? 1 : 0;
+  const bNone = b.time_min === null ? 1 : 0;
+  if (aNone !== bNone) {
+    return aNone - bNone;
+  }
+  const aMin = a.time_min ?? 99_999_999;
+  const bMin = b.time_min ?? 99_999_999;
+  if (aMin !== bMin) {
+    return aMin - bMin;
+  }
+  const sevDiff = (b.severity_rank ?? 0) - (a.severity_rank ?? 0);
+  if (sevDiff !== 0) {
+    return sevDiff;
+  }
+  return a.id.localeCompare(b.id);
+}
+
+export function buildTimedEvent(
+  ev: RawEvent,
+  placeAncestors: Readonly<Record<string, readonly string[]>>
+): ArchiveEvent {
+  const edtf = ev.edtf_date || '';
+  const bounds = edtfToBounds(edtf);
+  return {
+    ...ev,
+    time_min: bounds ? bounds[0] : null,
+    time_max: bounds ? bounds[1] : null,
+    display_date: formatEdtfDisplay(edtf),
+    year: edtfYear(edtf),
+    place_ancestors: ev.place_id ? [...(placeAncestors[ev.place_id] ?? [])] : [],
+  };
+}
+
+export function collectUncitedEntityKeys(bundle: {
+  people: readonly Pick<Person, 'id' | 'has_primary_source'>[];
+  events: readonly Pick<ArchiveEvent, 'id' | 'has_primary_source'>[];
+  places: readonly Pick<Place, 'id' | 'has_primary_source'>[];
+  sources: readonly Pick<SourceRecord, 'id' | 'has_primary_source'>[];
+  media?: readonly Pick<MediaItem, 'id' | 'has_primary_source'>[];
+  narratives?: readonly Pick<Narrative, 'id' | 'has_primary_source'>[];
+}): string[] {
+  const uncited: string[] = [];
+  for (const p of bundle.people) {
+    if (p.has_primary_source === false) {
+      uncited.push(`person:${p.id}`);
+    }
+  }
+  for (const e of bundle.events) {
+    if (e.has_primary_source === false) {
+      uncited.push(`event:${e.id}`);
+    }
+  }
+  for (const pl of bundle.places) {
+    if (pl.has_primary_source === false) {
+      uncited.push(`place:${pl.id}`);
+    }
+  }
+  for (const s of bundle.sources) {
+    if (s.has_primary_source === false) {
+      uncited.push(`source:${s.id}`);
+    }
+  }
+  for (const m of bundle.media ?? []) {
+    if (m.has_primary_source === false) {
+      uncited.push(`media:${m.id}`);
+    }
+  }
+  for (const n of bundle.narratives ?? []) {
+    if (n.has_primary_source === false) {
+      uncited.push(`narrative:${n.id}`);
+    }
+  }
+  return uncited.toSorted();
 }
 
 function enrichHouseholdDescriptions(
@@ -193,7 +276,7 @@ function enrichHouseholdDescriptions(
   return enriched;
 }
 
-const ALLOWED_MANUAL_MEDIA_KINDS = new Set([
+export const ALLOWED_MANUAL_MEDIA_KINDS = new Set([
   'milestone',
   'portrait',
   'headstone',
@@ -202,8 +285,11 @@ const ALLOWED_MANUAL_MEDIA_KINDS = new Set([
   'record_scan',
 ]);
 
+export const EVENT_HERO_MEDIA_KINDS = new Set(['milestone', 'headstone', 'family_photo']);
+
 /**
  * Pure TypeScript archive compiler replacing legacy Python build.py.
+ * Clones external inputs once at entry and forwards siteConfig.privacy through privacy redaction and media filtering.
  */
 export function compileArchive(input: CompileArchiveInput): CompileArchiveResult {
   const {
@@ -211,15 +297,23 @@ export function compileArchive(input: CompileArchiveInput): CompileArchiveResult
     mode,
     generatedAt = new Date().toISOString(),
     version,
+    maxRevisionId,
     resolveThumbUrl,
     mediaExists,
     legacyContainerSourceIds,
   } = input;
 
-  // Stage 1: Clone inputs and assign branches from siteConfig
+  const privacy = siteConfig.privacy;
+  const stripLivingPortraits = mode === 'public' || privacy.stripLivingPortraits;
+  const includeLivingSpans = mode === 'private' && !privacy.stripLivingResidenceSpans;
+
+  // Stage 1: Clone inputs once at the entry boundary and assign branches from siteConfig
   const rawPeople: RawPerson[] = input.people.map((p) => {
     const clone = structuredClone(p);
     clone.branch = resolvePersonBranch(clone, siteConfig);
+    if (resolveEffectiveLiving(clone, privacy)) {
+      clone.is_living = true;
+    }
     return clone;
   });
 
@@ -298,47 +392,29 @@ export function compileArchive(input: CompileArchiveInput): CompileArchiveResult
   const placeAncestors = buildPlaceAncestors(placesById);
 
   // Stage 2: Parse temporal bounds and place ancestor chains
-  const timedEvents: ArchiveEvent[] = rawEvents.map((ev) => {
-    const edtf = ev.edtf_date || '';
-    const bounds = edtfToBounds(edtf);
-    return {
-      ...ev,
-      time_min: bounds ? bounds[0] : null,
-      time_max: bounds ? bounds[1] : null,
-      display_date: formatEdtfDisplay(edtf),
-      year: edtfYear(edtf),
-      place_ancestors: ev.place_id ? [...(placeAncestors[ev.place_id] ?? [])] : [],
-    };
-  });
+  const timedEvents: ArchiveEvent[] = rawEvents.map((ev) => buildTimedEvent(ev, placeAncestors));
 
   // Apply GEDCOM citation cleanings
   applyCitationCleanings(timedEvents, uniqueSources, legacyContainerSourceIds);
 
   // Stage 3: Derive residence spans
-  const rawSpans = deriveResidenceSpans(rawPeople, timedEvents, placesById);
+  const rawSpans = deriveResidenceSpans(rawPeople, timedEvents, placesById, {
+    includeLiving: includeLivingSpans,
+  });
 
-  // Stage 5: Apply living-person privacy filter
+  // Stage 5: Apply living-person privacy filter in place on already-cloned inputs
   const {
     people: redactedRawPeople,
     events: redactedEvents,
     residenceSpans,
     reviewFlags,
-  } = applyPrivacyFilter(rawPeople, timedEvents, rawSpans, mode);
+  } = applyPrivacyFilter(rawPeople, timedEvents, rawSpans, mode, {
+    privacy,
+    cloneInputs: false,
+  });
 
   // Sort events chronologically matching Python's stable sort tuple: (time_min is None, time_min or 99999999, -(severity_rank or 0))
-  const sortedEvents = redactedEvents.toSorted((a, b) => {
-    const aNone = a.time_min === null ? 1 : 0;
-    const bNone = b.time_min === null ? 1 : 0;
-    if (aNone !== bNone) {
-      return aNone - bNone;
-    }
-    const aMin = a.time_min ?? 99_999_999;
-    const bMin = b.time_min ?? 99_999_999;
-    if (aMin !== bMin) {
-      return aMin - bMin;
-    }
-    return (b.severity_rank ?? 0) - (a.severity_rank ?? 0);
-  });
+  const sortedEvents = redactedEvents.toSorted(compareArchiveEvents);
 
   // Compute compiled Person summary fields
   const eventsByPerson = new Map<string, ArchiveEvent[]>();
@@ -437,8 +513,11 @@ export function compileArchive(input: CompileArchiveInput): CompileArchiveResult
   const eventsById = new Map<string, ArchiveEvent>(sortedEvents.map((e) => [e.id, e]));
   const livingIds = new Set(compiledPeople.filter((p) => p.is_living).map((p) => p.id));
 
-  // Filter media for living-person privacy across both person_id and person_ids[]
-  const finalMedia = filterMediaForPrivacy(mergedMedia, peopleById, eventsById);
+  // Filter media for living-person privacy in place on already-cloned mergedMedia
+  const finalMedia = filterMediaForPrivacy(mergedMedia, peopleById, eventsById, {
+    cloneInputs: false,
+    stripLivingPortraits,
+  });
 
   const mediaCounts = new Map<string, number>();
   const portraitFromMedia = new Map<string, string>();
@@ -446,7 +525,6 @@ export function compileArchive(input: CompileArchiveInput): CompileArchiveResult
   const overlayMediaIds = new Set(
     (input.compiledMediaOverlay?.media ?? []).map((m) => m.id).filter(Boolean)
   );
-  const EVENT_HERO_MEDIA_KINDS = new Set(['milestone', 'headstone', 'family_photo']);
 
   for (const item of finalMedia) {
     if (resolveThumbUrl) {
@@ -478,7 +556,7 @@ export function compileArchive(input: CompileArchiveInput): CompileArchiveResult
   }
 
   for (const person of compiledPeople) {
-    if (person.is_living) {
+    if (person.is_living && stripLivingPortraits) {
       person.portrait_url = null;
       person.thumb_url = null;
       person.media_count = 0;
@@ -509,7 +587,7 @@ export function compileArchive(input: CompileArchiveInput): CompileArchiveResult
       continue;
     }
     const hasLiving = ev.participants.some((pt) => livingIds.has(pt.person_id));
-    if (hasLiving) {
+    if (hasLiving && stripLivingPortraits) {
       continue;
     }
     const overlayPhoto = compiledPhotoByEvent.get(ev.id);
@@ -534,14 +612,25 @@ export function compileArchive(input: CompileArchiveInput): CompileArchiveResult
     ? input.narratives.map((n) => structuredClone(n))
     : undefined;
 
+  const uncitedKeys = collectUncitedEntityKeys({
+    people: compiledPeople,
+    events: sortedEvents,
+    places,
+    sources: uniqueSources,
+    media: finalMedia,
+    narratives,
+  });
+
   const bundle: ArchiveBundle = {
     meta: {
       ...(version ? { version } : {}),
       build_mode: mode,
       generated_at: generatedAt,
+      ...(maxRevisionId !== undefined ? { max_revision_id: maxRevisionId } : {}),
+      ...(uncitedKeys.length > 0 ? { uncited_entity_keys: uncitedKeys } : {}),
       counts: {
         people: compiledPeople.length,
-        living_redacted: compiledPeople.filter((p) => p.is_living).length,
+        living_redacted: livingIds.size,
         events: sortedEvents.length,
         residence_spans: residenceSpans.length,
         places: places.length,

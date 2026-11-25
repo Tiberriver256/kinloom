@@ -1,4 +1,14 @@
 import { z } from 'zod';
+import {
+  KinshipEdgeSchema,
+  MediaItemSchema,
+  NarrativeSchema,
+  PlaceSchema,
+  RawEventSchema,
+  RawPersonSchema,
+  SourceRecordSchema,
+  type KinshipEdge,
+} from './entities.js';
 
 export const EntityTypeSchema = z.enum([
   'person',
@@ -20,7 +30,107 @@ export const RevisionActionSchema = z.enum([
 
 export const AuthorTypeSchema = z.enum(['human', 'agent', 'system_seed']);
 
+export const AgentTokenScopeSchema = z.enum(['write_batch', 'read_backup']);
+
+export const UserRoleSchema = z.enum(['admin', 'editor']);
+
 export const EntityPayloadSchema = z.record(z.unknown());
+
+export const FieldDiffKindSchema = z.enum(['added', 'removed', 'changed']);
+
+export const FieldDiffSchema = z.object({
+  path: z.string(),
+  kind: FieldDiffKindSchema,
+  before: z.unknown(),
+  after: z.unknown(),
+});
+
+export const EntityDiffSummarySchema = z.object({
+  fields: z.array(FieldDiffSchema),
+  addedCount: z.number().int().nonnegative(),
+  removedCount: z.number().int().nonnegative(),
+  changedCount: z.number().int().nonnegative(),
+  hasChanges: z.boolean(),
+});
+
+export const OptimisticConflictErrorSchema = z.object({
+  kind: z.literal('conflict').default('conflict'),
+  entity_type: EntityTypeSchema,
+  entity_id: z.string().min(1),
+  expected_parent_revision_id: z.number().int().positive().nullable(),
+  server_revision_id: z.number().int().positive(),
+  server_entity: EntityPayloadSchema.nullable(),
+  server_deleted_at: z.string().nullable(),
+  last_author_name: z.string(),
+  last_updated_at: z.string(),
+  diff: EntityDiffSummarySchema,
+});
+
+export const ApiErrorEnvelopeSchema = z.object({
+  error: z.object({
+    code: z.string().min(1),
+    message: z.string().min(1),
+    details: z.unknown().optional(),
+  }),
+});
+
+export const EntityWriteInputSchema = z.object({
+  entity_id: z.string().min(1).optional(),
+  data: EntityPayloadSchema,
+  expected_parent_revision_id: z.number().int().positive().optional(),
+  merge: z.boolean().optional(),
+  summary: z.string().trim().min(3, 'Edit summary must be at least 3 characters'),
+  has_primary_source: z.boolean(),
+});
+
+export const EntityUpdateInputSchema = EntityWriteInputSchema.extend({
+  expected_parent_revision_id: z.number().int().positive(),
+});
+
+export const EntityDeleteInputSchema = z.object({
+  expected_parent_revision_id: z.number().int().positive(),
+  summary: z.string().trim().min(3, 'Edit summary must be at least 3 characters'),
+});
+
+export const EntityRestoreInputSchema = z.object({
+  expected_parent_revision_id: z.number().int().positive(),
+  data: EntityPayloadSchema.optional(),
+  summary: z.string().trim().min(3, 'Edit summary must be at least 3 characters'),
+});
+
+export const ENTITY_SCHEMA_BY_TYPE = {
+  person: RawPersonSchema,
+  event: RawEventSchema,
+  place: PlaceSchema,
+  source: SourceRecordSchema,
+  media: MediaItemSchema,
+  narrative: NarrativeSchema,
+  kinship_edge: KinshipEdgeSchema,
+} as const satisfies Record<z.infer<typeof EntityTypeSchema>, z.ZodTypeAny>;
+
+export type TypedEntityByType = {
+  [K in keyof typeof ENTITY_SCHEMA_BY_TYPE]: z.infer<(typeof ENTITY_SCHEMA_BY_TYPE)[K]>;
+};
+
+export function parseEntityPayload<T extends EntityType>(
+  entityType: T,
+  raw: unknown
+): TypedEntityByType[T] {
+  const schema = ENTITY_SCHEMA_BY_TYPE[entityType];
+  return schema.parse(raw) as TypedEntityByType[T];
+}
+
+export function safeParseEntityPayload<T extends EntityType>(
+  entityType: T,
+  raw: unknown
+): z.SafeParseReturnType<unknown, TypedEntityByType[T]> {
+  const schema = ENTITY_SCHEMA_BY_TYPE[entityType];
+  return schema.safeParse(raw) as z.SafeParseReturnType<unknown, TypedEntityByType[T]>;
+}
+
+export function deriveKinshipEdgeId(edge: Pick<KinshipEdge, 'from' | 'relation' | 'to'>): string {
+  return `${edge.from}:${edge.relation}:${edge.to}`;
+}
 
 export const RevisionRecordSchema = z.object({
   revision_id: z.number().int().positive(),
@@ -109,7 +219,10 @@ export const TalkCommentSchema = z.object({
 export type EntityType = z.infer<typeof EntityTypeSchema>;
 export type RevisionAction = z.infer<typeof RevisionActionSchema>;
 export type AuthorType = z.infer<typeof AuthorTypeSchema>;
+export type AgentTokenScope = z.infer<typeof AgentTokenScopeSchema>;
+export type UserRole = z.infer<typeof UserRoleSchema>;
 export type EntityPayload = z.infer<typeof EntityPayloadSchema>;
+export type ApiErrorEnvelope = z.infer<typeof ApiErrorEnvelopeSchema>;
 export type RevisionRecord = z.infer<typeof RevisionRecordSchema>;
 export type EntityPatch = z.infer<typeof EntityPatchSchema>;
 export type BatchSubmission = z.infer<typeof BatchSubmissionSchema>;

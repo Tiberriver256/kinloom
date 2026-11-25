@@ -11,6 +11,10 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
+    },
+    "./machines": {
+      "types": "./dist/machines/index.d.ts",
+      "import": "./dist/machines/index.js"
     }
   },
   "files": [

@@ -6,7 +6,17 @@ import {
   buildRevertPayload,
   computeEntityDiff,
 } from './revisions.js';
-import { BatchSubmissionSchema, RevisionRecordSchema } from './schemas/revisions.js';
+import {
+  AgentTokenScopeSchema,
+  ApiErrorEnvelopeSchema,
+  BatchSubmissionSchema,
+  ENTITY_SCHEMA_BY_TYPE,
+  EntityWriteInputSchema,
+  OptimisticConflictErrorSchema,
+  RevisionRecordSchema,
+  deriveKinshipEdgeId,
+  parseEntityPayload,
+} from './schemas/revisions.js';
 
 describe('revision diff and revert engine', () => {
   it('computes nested field diffs across added, removed, and changed keys', () => {
@@ -71,11 +81,80 @@ describe('revision diff and revert engine', () => {
     );
     expect(deleted.after).toBeNull();
 
+    // Soft-deleted entity must reject action: 'create' and require restore/revert
+    expect(() =>
+      applyEntityPatch(
+        { data: updated.after!, deletedAt: '2026-11-24T00:00:00Z', revisionId: 3 },
+        { action: 'create', entity_type: 'person', entity_id: 'per_1', data: { id: 'per_1' } }
+      )
+    ).toThrow(/soft-deleted/);
+
     const restored = applyEntityPatch(
       { data: updated.after!, deletedAt: '2026-11-24T00:00:00Z' },
       { action: 'restore', entity_type: 'person', entity_id: 'per_1' }
     );
     expect(restored.after).toEqual(updated.after);
+  });
+
+  it('validates typed entity payloads, kinship edge IDs, and Phase 3 API schemas', () => {
+    expect(Object.keys(ENTITY_SCHEMA_BY_TYPE).toSorted()).toEqual([
+      'event',
+      'kinship_edge',
+      'media',
+      'narrative',
+      'person',
+      'place',
+      'source',
+    ]);
+
+    const parsedSource = parseEntityPayload('source', {
+      id: 'src_1',
+      citation: '1880 Census',
+      source_type: 'census',
+    });
+    expect(parsedSource.citation).toBe('1880 Census');
+    expect(() => parseEntityPayload('place', { id: 'plc_bad', lat: 999 })).toThrow();
+
+    expect(
+      deriveKinshipEdgeId({ from: 'per_a', relation: 'parent', to: 'per_b' })
+    ).toBe('per_a:parent:per_b');
+
+    expect(AgentTokenScopeSchema.parse('write_batch')).toBe('write_batch');
+    expect(AgentTokenScopeSchema.parse('read_backup')).toBe('read_backup');
+    expect(() => AgentTokenScopeSchema.parse('admin')).toThrow();
+
+    const conflict = OptimisticConflictErrorSchema.parse({
+      entity_type: 'person',
+      entity_id: 'per_1',
+      expected_parent_revision_id: 4,
+      server_revision_id: 5,
+      server_entity: { id: 'per_1' },
+      server_deleted_at: null,
+      last_author_name: 'Editor',
+      last_updated_at: '2026-11-24T00:00:00Z',
+      diff: { fields: [], addedCount: 0, removedCount: 0, changedCount: 0, hasChanges: false },
+    });
+    expect(conflict.kind).toBe('conflict');
+
+    const envelope = ApiErrorEnvelopeSchema.parse({
+      error: { code: 'OPTIMISTIC_CONFLICT', message: 'Conflict detected', details: conflict },
+    });
+    expect(envelope.error.code).toBe('OPTIMISTIC_CONFLICT');
+
+    const writeInput = EntityWriteInputSchema.parse({
+      data: { id: 'per_1' },
+      expected_parent_revision_id: 5,
+      summary: '  Update birth year  ',
+      has_primary_source: true,
+    });
+    expect(writeInput.summary).toBe('Update birth year');
+    expect(() =>
+      EntityWriteInputSchema.parse({
+        data: {},
+        summary: '  x ',
+        has_primary_source: false,
+      })
+    ).toThrow();
   });
 
   it('builds Wikipedia-style non-destructive revert payloads and unwinds agent batches in reverse order', () => {

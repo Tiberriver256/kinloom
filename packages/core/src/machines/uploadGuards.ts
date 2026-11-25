@@ -1,0 +1,165 @@
+import type { RawEvent } from '../schemas/entities.js';
+
+export const ALLOWED_MEDIA_MIMES = [
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+  'application/pdf',
+] as const;
+
+export type AllowedMediaMime = (typeof ALLOWED_MEDIA_MIMES)[number];
+
+export const MAX_IMAGE_BYTES = 15 * 1024 * 1024;
+export const MAX_PDF_BYTES = 25 * 1024 * 1024;
+
+export interface MediaAttachTargets {
+  personIds: readonly string[];
+  eventId?: string | null;
+  sourceId?: string | null;
+}
+
+export type MediaValidationFailure =
+  | 'unsupported_mime'
+  | 'empty_file'
+  | 'file_too_large'
+  | 'living_person_blocked'
+  | 'hash_failed';
+
+const ALLOWED_MIME_SET: ReadonlySet<string> = new Set(ALLOWED_MEDIA_MIMES);
+
+/**
+ * Guard: accepts only JPEG, PNG, WebP, and PDF media uploads.
+ */
+export function isAllowedMediaMime(mimeType: string): mimeType is AllowedMediaMime {
+  return ALLOWED_MIME_SET.has(mimeType.trim().toLowerCase());
+}
+
+/**
+ * Resolve maximum allowed byte size for a media MIME type (15 MiB images, 25 MiB PDFs, or configured cap).
+ */
+export function maxBytesForMediaMime(mimeType: string, overrideMaxBytes?: number): number {
+  const normalized = mimeType.trim().toLowerCase();
+  const defaultCap = normalized === 'application/pdf' ? MAX_PDF_BYTES : MAX_IMAGE_BYTES;
+  if (overrideMaxBytes !== undefined && overrideMaxBytes > 0) {
+    return Math.min(defaultCap, overrideMaxBytes);
+  }
+  return defaultCap;
+}
+
+/**
+ * Guard: file size must be strictly positive and within the MIME byte limit.
+ */
+export function isWithinMediaSizeLimit(
+  mimeType: string,
+  sizeBytes: number,
+  overrideMaxBytes?: number
+): boolean {
+  if (!Number.isFinite(sizeBytes) || sizeBytes <= 0) {
+    return false;
+  }
+  return sizeBytes <= maxBytesForMediaMime(mimeType, overrideMaxBytes);
+}
+
+/**
+ * Guard: checks whether any target person or target event participant is living.
+ */
+export function hasLivingUploadTarget(
+  targets: MediaAttachTargets,
+  livingPersonIds: ReadonlySet<string>,
+  eventsById?: ReadonlyMap<string, Pick<RawEvent, 'id' | 'participants'>>
+): boolean {
+  for (const pid of targets.personIds) {
+    if (livingPersonIds.has(pid)) {
+      return true;
+    }
+  }
+  if (targets.eventId && eventsById) {
+    const ev = eventsById.get(targets.eventId);
+    if (ev && ev.participants.some((pt) => livingPersonIds.has(pt.person_id))) {
+      return true;
+    }
+  }
+  return false;
+}
+
+export type MediaSelectionValidationResult =
+  | { ok: true }
+  | {
+      ok: false;
+      reason: Exclude<MediaValidationFailure, 'hash_failed'>;
+      message: string;
+    };
+
+/**
+ * Pre-upload client and server validation of MIME allowlist, size limit, and living-person portrait restriction.
+ */
+export function validateMediaSelection(input: {
+  mimeType: string;
+  sizeBytes: number;
+  targetHasLiving: boolean;
+  maxUploadBytes?: number;
+}): MediaSelectionValidationResult {
+  const normalizedMime = input.mimeType.trim().toLowerCase();
+  if (!isAllowedMediaMime(normalizedMime)) {
+    return {
+      ok: false,
+      reason: 'unsupported_mime',
+      message: `Unsupported file type '${input.mimeType}'. Allowed types: JPEG, PNG, WebP, or PDF.`,
+    };
+  }
+  if (!Number.isFinite(input.sizeBytes) || input.sizeBytes <= 0) {
+    return {
+      ok: false,
+      reason: 'empty_file',
+      message: 'Selected file is empty.',
+    };
+  }
+  const limit = maxBytesForMediaMime(normalizedMime, input.maxUploadBytes);
+  if (input.sizeBytes > limit) {
+    return {
+      ok: false,
+      reason: 'file_too_large',
+      message: `File exceeds the maximum allowed size of ${Math.round(limit / (1024 * 1024))} MiB.`,
+    };
+  }
+  if (input.targetHasLiving) {
+    return {
+      ok: false,
+      reason: 'living_person_blocked',
+      message: 'Photos and portraits cannot be attached to living relatives.',
+    };
+  }
+  return { ok: true };
+}
+
+/**
+ * Guard: prevents stale or cancelled upload/attach responses from advancing a newer upload generation.
+ */
+export function isMatchingUploadGeneration(params: {
+  activeUploadGen: number;
+  eventUploadGen: number;
+  cancelled: boolean;
+}): boolean {
+  return (
+    !params.cancelled &&
+    params.activeUploadGen > 0 &&
+    params.eventUploadGen === params.activeUploadGen
+  );
+}
+
+/**
+ * Guard: blocks attach completion if upload generation is stale, cancelled, or if a target person became living mid-upload.
+ */
+export function canCompleteMediaAttach(params: {
+  activeUploadGen: number;
+  eventUploadGen: number;
+  cancelled: boolean;
+  targetHasLiving: boolean;
+  targetBecameLiving: boolean;
+}): boolean {
+  return (
+    isMatchingUploadGeneration(params) &&
+    !params.targetHasLiving &&
+    !params.targetBecameLiving
+  );
+}

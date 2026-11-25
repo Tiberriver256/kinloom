@@ -10,8 +10,15 @@ export * from './residenceSpans.js';
 // Living-Person Privacy Filter
 export * from './privacy.js';
 
-// Pure TypeScript Archive Compiler
+// Pure TypeScript Archive Compiler & Incremental Bundle Patcher
 export * from './compileArchive.js';
+export * from './patchArchive.js';
+
+// Shared Phase 3 Contracts & Port Interfaces
+export * from './contracts.js';
+
+// Zero-Dependency State Machine Guards & Entity Lifecycle Table
+export * from './machines/index.js';
 
 // Deterministic YAML Loader & Serializer
 export * from './yaml.js';
