@@ -1,0 +1,10 @@
+{
+  "name": "@kinloom/tokens",
+  "version": "0.1.0",
+  "type": "module",
+  "license": "MIT",
+  "exports": {
+    "./tokens.json": "./tokens.json",
+    "./kinloom.css": "./kinloom.css"
+  }
+}

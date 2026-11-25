@@ -1,0 +1,13 @@
+{
+  "name": "kinloom-monorepo",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "check:contrast": "node scripts/check-contrast.mjs",
+    "check:leaks": "node scripts/check-public-leaks.mjs",
+    "check": "npm run check:contrast && npm run check:leaks"
+  }
+}

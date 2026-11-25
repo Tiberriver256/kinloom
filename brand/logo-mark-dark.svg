@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="none" role="img" aria-label="Kinloom mark (dark surface)">
+  <path d="M8 2.5V13.5M8 18.5V21.5" stroke="#FCF9F2" stroke-width="2.5" stroke-linecap="round"/>
+  <path d="M16 2.5V5.5M16 10.5V21.5" stroke="#FCF9F2" stroke-width="2.5" stroke-linecap="round"/>
+  <path d="M2.5 8H5.5M10.5 8H21.5" stroke="#D89C56" stroke-width="2.5" stroke-linecap="round"/>
+  <path d="M2.5 16H13.5M18.5 16H21.5" stroke="#FCF9F2" stroke-width="2.5" stroke-linecap="round"/>
+</svg>

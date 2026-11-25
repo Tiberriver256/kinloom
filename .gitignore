@@ -1,0 +1,11 @@
+node_modules/
+dist/
+.wrangler/
+.venv/
+__pycache__/
+*.tsbuildinfo
+.env
+.env.*
+!.env.example
+test-results/
+playwright-report/
