@@ -62,7 +62,7 @@ def _normalize_query_for_waf_retry(query: str) -> str | None:
 
 def _new_api_client() -> httpx.Client:
     return httpx.Client(
-        timeout=30.0,
+        timeout=15.0,
         follow_redirects=True,
         limits=httpx.Limits(
             max_connections=API_MAX_WORKERS * 2,

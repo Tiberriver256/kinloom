@@ -30,7 +30,7 @@ HEADERS = {"User-Agent": "kinloom/1.0 (genealogy research)"}
 # tile.loc.gov (storage-services PDFs) rejects hotlinking: it requires a
 # loc.gov Referer. Send one for all file downloads; harmless elsewhere.
 DOWNLOAD_HEADERS = dict(HEADERS, Referer="https://www.loc.gov/")
-TIMEOUT = 90.0
+TIMEOUT = 25.0
 
 
 def _get_json(url: str, params: dict | list[tuple[str, str]] | None = None) -> dict:
