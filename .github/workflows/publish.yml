@@ -1,0 +1,102 @@
+name: Publish Packages to npm
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Run npm publish --dry-run without uploading packages"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: publish-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Ensure npm supports Trusted Publishing OIDC
+        run: |
+          npm install -g npm@latest
+          node -v
+          npm -v
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run full verification suite (lint, build, typecheck, tests, contrast, leaks)
+        run: npm run check
+
+      - name: Verify release tag matches package versions
+        if: github.ref_type == 'tag'
+        run: |
+          expected="${GITHUB_REF_NAME#v}"
+          for dir in packages/tokens packages/core packages/server packages/worker packages/cli packages/ui; do
+            actual="$(node -p "JSON.parse(require('node:fs').readFileSync('${dir}/package.json', 'utf8')).version")"
+            if [ "${actual}" != "${expected}" ]; then
+              echo "Version mismatch in ${dir}/package.json: expected ${expected} from tag ${GITHUB_REF_NAME}, found ${actual}" >&2
+              exit 1
+            fi
+          done
+
+      - name: Publish @kinloom/* packages in topological order
+        env:
+          DRY_RUN: ${{ inputs.dry_run || false }}
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          if [ -n "${NODE_AUTH_TOKEN:-}" ]; then
+            echo "Using NPM_TOKEN fallback authentication with provenance."
+            printf '//registry.npmjs.org/:_authToken=${NODE_AUTH_TOKEN}\n' >> "${HOME}/.npmrc"
+          else
+            echo "Using npm Trusted Publishing (GitHub Actions OIDC)."
+            unset NODE_AUTH_TOKEN
+          fi
+
+          # Topological dependency order:
+          # tokens -> core -> server -> worker -> cli -> ui
+          packages=(
+            "packages/tokens"
+            "packages/core"
+            "packages/server"
+            "packages/worker"
+            "packages/cli"
+            "packages/ui"
+          )
+
+          for dir in "${packages[@]}"; do
+            name="$(node -p "JSON.parse(require('node:fs').readFileSync('${dir}/package.json', 'utf8')).name")"
+            version="$(node -p "JSON.parse(require('node:fs').readFileSync('${dir}/package.json', 'utf8')).version")"
+
+            if [ "${DRY_RUN}" = "true" ]; then
+              echo "Dry-run publishing ${name}@${version}..."
+              npm publish --workspace="${name}" --dry-run --access public
+              continue
+            fi
+
+            if npm view "${name}@${version}" version --registry https://registry.npmjs.org/ >/dev/null 2>&1; then
+              echo "Skipping ${name}@${version} because it is already published on npm."
+              continue
+            fi
+
+            echo "Publishing ${name}@${version}..."
+            npm publish --workspace="${name}" --provenance --access public
+          done
