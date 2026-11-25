@@ -73,48 +73,77 @@ export function inferSourceRepository(
   return 'Archival Record Collection (imported via Ancestry tree)';
 }
 
+const RE_AT_ANCESTRY_GEDCOM = /\s*\((?:Ancestry\s+)?GEDCOM\s+@[A-Za-z][0-9]+@\)/gi;
+const RE_AT_ACCORDING = /\s+according to the Ancestry GEDCOM\s*\(@[A-Za-z][0-9]+@\)\.?/gi;
+const RE_AT_PARENS = /\s*\(@[A-Za-z][0-9]+@\)/g;
+const RE_AT_GEDCOM = /\bGEDCOM\s+@[A-Za-z][0-9]+@\b/gi;
+const RE_AT_BARE = /\s*@[A-Za-z][0-9]+@/g;
+const RE_RECORDED_MARRIAGE_YEAR = /\brecorded marriage on\s+(?=\d{4}\b)/gi;
+const RE_RECORDED_MARRIAGE_MONTH =
+  /\brecorded marriage on\s+(?=(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.?\s+\d{4}\b)/gi;
+const RE_RECORDED_MARRIAGE = /\brecorded marriage on\s+/gi;
+const RE_RECORDED_DIVORCE_YEAR_MONTH =
+  /\brecorded divorce on\s+(?=(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.?\s+\d{4}\b|\d{4}\b)/gi;
+const RE_RECORDED_DIVORCE = /\brecorded divorce on\s+/gi;
+const RE_WAS_DIED_ON = /\bwas died on\b/gi;
+const RE_WAS_BORN_ABT = /\bwas born on\s+Abt\.?\s+/gi;
+const RE_DIED_ABT = /\bdied on\s+Abt\.?\s+/gi;
+const RE_WAS_BORN_YEAR = /\bwas born on\s+(\d{4})(?=\b(?!\s*[-–/]\s*\d))/g;
+const RE_DIED_YEAR = /\bdied on\s+(\d{4})(?=\b(?!\s*[-–/]\s*\d))/g;
+const RE_CONFLICT_ONE = /Note:\s*1\s+conflicting\s+GEDCOM\s+entr(?:y|ies)\s+recorded\.?/gi;
+const RE_CONFLICT_MANY = /Note:\s*(\d+)\s+conflicting\s+GEDCOM\s+entr(?:y|ies)\s+recorded\.?/gi;
+const RE_DAY_MONTH_YEAR = /\b(\d{1,2})\s+(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\s+(\d{4})\b/gi;
+const RE_SPACE_DOT = /\s+\./g;
+const RE_DOUBLE_DOT = /\.\.+/g;
+const RE_MULTI_SPACE = /\s{2,}/g;
+
+const RE_ALT_GEDCOM_DATE = /\bGEDCOM\s+alternate\s+date:/gi;
+const RE_ALT_GEDCOM_PLACE = /\bGEDCOM\s+alternate\s+place:/gi;
+const RE_ALT_GEDCOM_ENTRY = /\bGEDCOM\s+entry\b/gi;
+
 export function cleanEventSummaryProse(summary: string): string {
   if (!summary) {
     return summary;
   }
-  return summary
-    .replaceAll(/\s*\((?:Ancestry\s+)?GEDCOM\s+@[A-Za-z][0-9]+@\)/gi, '')
-    .replaceAll(/\s+according to the Ancestry GEDCOM\s*\(@[A-Za-z][0-9]+@\)\.?/gi, '.')
-    .replaceAll(/\s*\(@[A-Za-z][0-9]+@\)/g, '')
-    .replaceAll(/\bGEDCOM\s+@[A-Za-z][0-9]+@\b/gi, '')
-    .replaceAll(/\s*@[A-Za-z][0-9]+@/g, '')
-    .replaceAll(/\brecorded marriage on\s+(?=\d{4}\b)/gi, 'married in ')
+  let out = summary;
+  if (out.includes('@')) {
+    out = out
+      .replaceAll(RE_AT_ANCESTRY_GEDCOM, '')
+      .replaceAll(RE_AT_ACCORDING, '.')
+      .replaceAll(RE_AT_PARENS, '')
+      .replaceAll(RE_AT_GEDCOM, '')
+      .replaceAll(RE_AT_BARE, '');
+  }
+  if (out.includes('recorded ') || out.includes('Recorded ')) {
+    out = out
+      .replaceAll(RE_RECORDED_MARRIAGE_YEAR, 'married in ')
+      .replaceAll(RE_RECORDED_MARRIAGE_MONTH, 'married in ')
+      .replaceAll(RE_RECORDED_MARRIAGE, 'married on ')
+      .replaceAll(RE_RECORDED_DIVORCE_YEAR_MONTH, 'divorced in ')
+      .replaceAll(RE_RECORDED_DIVORCE, 'divorced on ');
+  }
+  if (out.includes(' on ') || out.includes(' On ')) {
+    out = out
+      .replaceAll(RE_WAS_DIED_ON, 'died on')
+      .replaceAll(RE_WAS_BORN_ABT, 'was born about ')
+      .replaceAll(RE_DIED_ABT, 'died about ')
+      .replaceAll(RE_WAS_BORN_YEAR, 'was born in $1')
+      .replaceAll(RE_DIED_YEAR, 'died in $1');
+  }
+  if (out.includes('GEDCOM') || out.includes('gedcom')) {
+    out = out
+      .replaceAll(RE_CONFLICT_ONE, 'Note: 1 alternate record entry preserved.')
+      .replaceAll(RE_CONFLICT_MANY, 'Note: $1 alternate record entries preserved.');
+  }
+  return out
     .replaceAll(
-      /\brecorded marriage on\s+(?=(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.?\s+\d{4}\b)/gi,
-      'married in '
-    )
-    .replaceAll(/\brecorded marriage on\s+/gi, 'married on ')
-    .replaceAll(
-      /\brecorded divorce on\s+(?=(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.?\s+\d{4}\b|\d{4}\b)/gi,
-      'divorced in '
-    )
-    .replaceAll(/\brecorded divorce on\s+/gi, 'divorced on ')
-    .replaceAll(/\bwas died on\b/gi, 'died on')
-    .replaceAll(/\bwas born on\s+Abt\.?\s+/gi, 'was born about ')
-    .replaceAll(/\bdied on\s+Abt\.?\s+/gi, 'died about ')
-    .replaceAll(/\bwas born on\s+(\d{4})(?=\b(?!\s*[-–/]\s*\d))/g, 'was born in $1')
-    .replaceAll(/\bdied on\s+(\d{4})(?=\b(?!\s*[-–/]\s*\d))/g, 'died in $1')
-    .replaceAll(
-      /Note:\s*1\s+conflicting\s+GEDCOM\s+entr(?:y|ies)\s+recorded\.?/gi,
-      'Note: 1 alternate record entry preserved.'
-    )
-    .replaceAll(
-      /Note:\s*(\d+)\s+conflicting\s+GEDCOM\s+entr(?:y|ies)\s+recorded\.?/gi,
-      'Note: $1 alternate record entries preserved.'
-    )
-    .replaceAll(
-      /\b(\d{1,2})\s+(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\s+(\d{4})\b/gi,
+      RE_DAY_MONTH_YEAR,
       (_, d: string, m: string, y: string) =>
         `${d} ${m[0].toUpperCase()}${m.slice(1).toLowerCase()} ${y}`
     )
-    .replaceAll(/\s+\./g, '.')
-    .replaceAll(/\.\.+/g, '.')
-    .replaceAll(/\s{2,}/g, ' ')
+    .replaceAll(RE_SPACE_DOT, '.')
+    .replaceAll(RE_DOUBLE_DOT, '.')
+    .replaceAll(RE_MULTI_SPACE, ' ')
     .trim();
 }
 
@@ -122,15 +151,17 @@ export function cleanAlternateNote(note: string): string {
   if (!note) {
     return note;
   }
-  return note
-    .replaceAll(/\bGEDCOM\s+alternate\s+date:/gi, 'Alternate date:')
-    .replaceAll(/\bGEDCOM\s+alternate\s+place:/gi, 'Alternate place:')
-    .replaceAll(/\s*\((?:Ancestry\s+)?GEDCOM\s+@[A-Za-z][0-9]+@\)/gi, '')
-    .replaceAll(/\bGEDCOM\s+@[A-Za-z][0-9]+@\b/gi, '')
-    .replaceAll(/\s*@[A-Za-z][0-9]+@/g, '')
-    .replaceAll(/\bGEDCOM\s+entry\b/gi, 'archival entry')
-    .replaceAll(/\s{2,}/g, ' ')
-    .trim();
+  let out = note;
+  if (out.includes('@') || out.includes('GEDCOM') || out.includes('gedcom')) {
+    out = out
+      .replaceAll(RE_ALT_GEDCOM_DATE, 'Alternate date:')
+      .replaceAll(RE_ALT_GEDCOM_PLACE, 'Alternate place:')
+      .replaceAll(RE_AT_ANCESTRY_GEDCOM, '')
+      .replaceAll(RE_AT_GEDCOM, '')
+      .replaceAll(RE_AT_BARE, '')
+      .replaceAll(RE_ALT_GEDCOM_ENTRY, 'archival entry');
+  }
+  return out.replaceAll(RE_MULTI_SPACE, ' ').trim();
 }
 
 export function applyCitationCleanings(

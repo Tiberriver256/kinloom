@@ -253,6 +253,7 @@ export interface CachedBundleObject {
   body: ReadableStream<Uint8Array> | string;
   byteLength: number;
   generated_at: string;
+  readonly parsedBundle?: ArchiveBundle;
 }
 
 export interface BundleCache {

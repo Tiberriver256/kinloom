@@ -144,10 +144,8 @@ export function compileLivingNamePattern(livingNames: readonly string[]): RegExp
   if (livingNames.length === 0) {
     return null;
   }
-  const alternations = livingNames.map(
-    (name) => `(?<![\\p{L}\\p{N}_])${escapeRegExp(name)}(?![\\p{L}\\p{N}_])`
-  );
-  return new RegExp(alternations.join('|'), 'gu');
+  const body = livingNames.map((name) => escapeRegExp(name)).join('|');
+  return new RegExp(`(?<![\\p{L}\\p{N}_])(?:${body})(?![\\p{L}\\p{N}_])`, 'gu');
 }
 
 export function scrubLivingNames(text: string, pattern: RegExp | null): string {
@@ -234,11 +232,15 @@ export function sanitizeEventForWrite<T extends RawEvent>(
   livingPersonIds: ReadonlySet<string>,
   privacyConfig?: Partial<PrivacyConfig>
 ): T {
-  const copy = structuredClone(event);
-  const hasLivingParticipant = copy.participants.some((pt) => livingPersonIds.has(pt.person_id));
+  const hasLivingParticipant = event.participants.some((pt) => livingPersonIds.has(pt.person_id));
   if (!hasLivingParticipant) {
-    return copy;
+    return {
+      ...event,
+      participants: event.participants.map((pt) => ({ ...pt })),
+      sources: event.sources.map((s) => ({ ...s })),
+    };
   }
+  const copy = structuredClone(event);
   const showBirthYear = privacyConfig?.privateModeShowsBirthYear ?? true;
   const stripPortraits = privacyConfig?.stripLivingPortraits ?? true;
   const yr = showBirthYear ? edtfYear(copy.edtf_date) : null;

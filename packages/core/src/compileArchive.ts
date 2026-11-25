@@ -296,6 +296,61 @@ export const ALLOWED_MANUAL_MEDIA_KINDS = new Set([
 
 export const EVENT_HERO_MEDIA_KINDS = new Set(['milestone', 'headstone', 'family_photo']);
 
+function clonePerson(p: RawPerson): RawPerson {
+  return {
+    ...p,
+    alt_names: [...p.alt_names],
+    ...(p.extensions !== undefined ? { extensions: structuredClone(p.extensions) } : {}),
+  };
+}
+
+function cloneEvent(e: RawEvent): RawEvent {
+  return {
+    ...e,
+    participants: e.participants.map((pt) => ({ ...pt })),
+    sources: e.sources.map((src) => ({ ...src })),
+    ...(e.alternate_dates !== undefined
+      ? { alternate_dates: e.alternate_dates.map((a) => ({ ...a })) }
+      : {}),
+    ...(e.alternate_places !== undefined
+      ? { alternate_places: e.alternate_places.map((a) => ({ ...a })) }
+      : {}),
+    ...(e.fact_conflicts !== undefined
+      ? { fact_conflicts: e.fact_conflicts.map((a) => ({ ...a })) }
+      : {}),
+    ...(e.weather_metrics !== undefined ? { weather_metrics: { ...e.weather_metrics } } : {}),
+    ...(e.extensions !== undefined ? { extensions: structuredClone(e.extensions) } : {}),
+  };
+}
+
+function clonePlace(p: Place): Place {
+  return {
+    ...p,
+    ...(p.ancestor_ids !== undefined ? { ancestor_ids: [...p.ancestor_ids] } : {}),
+    ...(p.historical_names !== undefined
+      ? { historical_names: p.historical_names.map((h) => ({ ...h })) }
+      : {}),
+    ...(p.sources !== undefined ? { sources: p.sources.map((s) => ({ ...s })) } : {}),
+    ...(p.extensions !== undefined ? { extensions: structuredClone(p.extensions) } : {}),
+  };
+}
+
+function cloneSource(s: SourceRecord): SourceRecord {
+  return { ...s };
+}
+
+function cloneMedia(m: MediaItem): MediaItem {
+  return {
+    ...m,
+    ...(m.person_ids !== undefined ? { person_ids: [...m.person_ids] } : {}),
+    ...(m.extensions !== undefined ? { extensions: structuredClone(m.extensions) } : {}),
+  };
+}
+
+function cloneKinship(k: KinshipEdge): KinshipEdge {
+  return { ...k };
+}
+
 /**
  * Pure TypeScript archive compiler replacing legacy Python build.py.
  * Clones external inputs once at entry and forwards siteConfig.privacy through privacy redaction and media filtering.
@@ -318,7 +373,7 @@ export function compileArchive(input: CompileArchiveInput): CompileArchiveResult
 
   // Stage 1: Clone inputs once at the entry boundary and assign branches from siteConfig
   const rawPeople: RawPerson[] = input.people.map((p) => {
-    const clone = structuredClone(p);
+    const clone = clonePerson(p);
     clone.branch = resolvePersonBranch(clone, siteConfig);
     if (resolveEffectiveLiving(clone, privacy)) {
       clone.is_living = true;
@@ -326,13 +381,13 @@ export function compileArchive(input: CompileArchiveInput): CompileArchiveResult
     return clone;
   });
 
-  const rawEvents: RawEvent[] = input.events.map((e) => structuredClone(e));
-  const places: Place[] = input.places.map((p) => structuredClone(p));
-  const kinship: KinshipEdge[] = input.kinship.map((k) => structuredClone(k));
+  const rawEvents: RawEvent[] = input.events.map(cloneEvent);
+  const places: Place[] = input.places.map(clonePlace);
+  const kinship: KinshipEdge[] = input.kinship.map(cloneKinship);
 
   const combinedSources: SourceRecord[] = [
-    ...input.sources.map((s) => structuredClone(s)),
-    ...(input.contextSources ?? []).map((s) => structuredClone(s)),
+    ...input.sources.map(cloneSource),
+    ...(input.contextSources ?? []).map(cloneSource),
   ];
 
   // Apply narrative enrichments (overrides and appended events)
@@ -388,7 +443,7 @@ export function compileArchive(input: CompileArchiveInput): CompileArchiveResult
 
   // Merge external context events
   for (const ctxEv of input.contextEvents ?? []) {
-    rawEvents.push(structuredClone(ctxEv));
+    rawEvents.push(cloneEvent(ctxEv));
   }
 
   // Build maps for places and sources
@@ -483,7 +538,7 @@ export function compileArchive(input: CompileArchiveInput): CompileArchiveResult
       if (mediaExists && item.file.startsWith('/media/') && !mediaExists(item.file)) {
         continue;
       }
-      const clone = structuredClone(item);
+      const clone = cloneMedia(item);
       mergedMedia.push(clone);
       if (clone.id) {
         seenMediaIds.add(clone.id);
@@ -514,7 +569,7 @@ export function compileArchive(input: CompileArchiveInput): CompileArchiveResult
     if (mediaExists && item.file.startsWith('/media/') && !mediaExists(item.file)) {
       continue;
     }
-    const clone = structuredClone(item);
+    const clone = cloneMedia(item);
     mergedMedia.push(clone);
     seenMediaIds.add(clone.id);
     if (clone.file && clone.caption && !captionByFile.has(clone.file)) {

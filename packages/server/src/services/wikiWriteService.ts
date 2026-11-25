@@ -14,6 +14,7 @@ import {
   transitionBatchRevertLifecycle,
   transitionEntityLifecycle,
   type ArchiveBundle,
+  type ArchiveRawSnapshot,
   type ArchiveRepository,
   type AtomicMutationOp,
   type BatchId,
@@ -28,10 +29,13 @@ import {
   type KinloomSiteConfig,
   type OptimisticConflictError,
   type RawEvent,
+  type RawPerson,
   type RevisionAuthor,
   type RevisionId,
   type RevisionRecord,
   type StoredEntityRecord,
+  type StoredEntityRow,
+  type StoredKinshipRow,
 } from '@kinloom/core';
 import { generateEntityId, readBodyToString } from '../crypto.js';
 import { KinloomHttpError } from '../errors.js';
@@ -122,6 +126,60 @@ function extractMediaEventId(payload: unknown): string | null {
 
 function compositeKey(entityType: EntityType, entityId: string): string {
   return entityLookupCompositeKey(entityType, entityId);
+}
+
+function buildInitialSnapshotFromRevisions(
+  revisions: readonly RevisionRecord[],
+  headRevisionId: RevisionId
+): ArchiveRawSnapshot {
+  const entitiesByKey = new Map<string, StoredEntityRow>();
+  const kinshipById = new Map<string, StoredKinshipRow>();
+
+  for (const rev of revisions) {
+    if (rev.entity_type === 'kinship_edge') {
+      if (rev.after_json === null) {
+        kinshipById.delete(rev.entity_id);
+      } else {
+        kinshipById.set(rev.entity_id, {
+          edge_id: rev.entity_id,
+          edge: parseEntityPayload('kinship_edge', rev.after_json),
+          current_revision_id: asRevisionId(rev.revision_id),
+          deleted_at: null,
+          updated_at: rev.created_at,
+        });
+      }
+      continue;
+    }
+
+    const key = compositeKey(rev.entity_type, rev.entity_id);
+    if (rev.after_json === null) {
+      entitiesByKey.delete(key);
+    } else {
+      entitiesByKey.set(key, {
+        entity_type: rev.entity_type,
+        entity_id: rev.entity_id,
+        slug: extractSlug(rev.entity_type, rev.after_json),
+        data: rev.after_json,
+        current_revision_id: asRevisionId(rev.revision_id),
+        has_primary_source: rev.has_primary_source,
+        deleted_at: null,
+        updated_at: rev.created_at,
+      });
+    }
+  }
+
+  const entities = [...entitiesByKey.values()].toSorted((a, b) =>
+    a.entity_type === b.entity_type
+      ? a.entity_id.localeCompare(b.entity_id)
+      : a.entity_type.localeCompare(b.entity_type)
+  );
+  const kinship = [...kinshipById.values()].toSorted((a, b) => a.edge_id.localeCompare(b.edge_id));
+
+  return {
+    head_revision_id: headRevisionId,
+    entities,
+    kinship,
+  };
 }
 
 export class WikiWriteService {
@@ -408,9 +466,11 @@ export class WikiWriteService {
       );
     }
 
-    const existing = await this.repository.getEntity(targetRev.entity_type, targetRev.entity_id);
+    const [existing, headRev] = await Promise.all([
+      this.repository.getEntity(targetRev.entity_type, targetRev.entity_id),
+      this.repository.getHeadRevisionId(),
+    ]);
     const working = rowToWorking(existing);
-    const headRev = await this.repository.getHeadRevisionId();
 
     const outcome = transitionEntityLifecycle(
       working.lifecycle,
@@ -1055,14 +1115,14 @@ export class WikiWriteService {
     workingEvents: Map<string, Pick<RawEvent, 'id' | 'participants'>>
   ): void {
     if (entityType === 'person') {
-      const parsed = parseEntityPayload('person', sanitized);
+      const parsed = sanitized as unknown as RawPerson;
       if (resolveEffectiveLiving(parsed, this.siteConfig.privacy)) {
         livingIds.add(entityId);
       } else {
         livingIds.delete(entityId);
       }
     } else if (entityType === 'event') {
-      const parsed = parseEntityPayload('event', sanitized);
+      const parsed = sanitized as unknown as RawEvent;
       workingEvents.set(entityId, { id: parsed.id, participants: parsed.participants });
     }
   }
@@ -1077,7 +1137,12 @@ export class WikiWriteService {
     extraEventsById?: ReadonlyMap<string, Pick<RawEvent, 'id' | 'participants'>>;
     prefetchedEventIds?: ReadonlySet<string>;
   }): Promise<{ entityId: string; sanitized: EntityPayload }> {
-    const candidate = structuredClone(params.rawPayload);
+    // Shallow-copy top-level fields before assigning id/has_primary_source;
+    // parseEntityPayload() produces a freshly allocated validated record.
+    const candidate: Record<string, unknown> = { ...params.rawPayload };
+    if (candidate.extensions !== undefined) {
+      candidate.extensions = structuredClone(candidate.extensions);
+    }
 
     if (params.entityType === 'kinship_edge') {
       const parsedEdge = parseEntityPayload('kinship_edge', candidate);
@@ -1231,8 +1296,9 @@ export class WikiWriteService {
       const cached = await this.bundleCache.getCached(null);
       const firstNewRevId = committedRevisions[0].revision_id;
       if (cached.status === 'hit' && cached.object.revision_id === firstNewRevId - 1) {
-        const rawJson = await readBodyToString(cached.object.body);
-        const previousBundle = JSON.parse(rawJson) as ArchiveBundle;
+        const previousBundle =
+          cached.object.parsedBundle ??
+          (JSON.parse(await readBodyToString(cached.object.body)) as ArchiveBundle);
         const patched = await this.bundleCache.applyMutationsAndStore(
           previousBundle,
           committedRevisions
@@ -1241,7 +1307,12 @@ export class WikiWriteService {
       }
     }
 
-    const snapshot = await this.repository.loadActiveSnapshot();
+    // When the first committed revision is r1, no earlier revisions existed in the archive,
+    // so we can materialize the active snapshot directly without a full DB roundtrip.
+    const snapshot =
+      committedRevisions.length > 0 && committedRevisions[0].revision_id === 1
+        ? buildInitialSnapshotFromRevisions(committedRevisions, headRevisionId)
+        : await this.repository.loadActiveSnapshot();
     const rebuilt = await this.bundleCache.rebuildAndStore(snapshot);
     return rebuilt.etag || `"r${headRevisionId}"`;
   }

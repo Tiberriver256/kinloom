@@ -12,7 +12,11 @@ import {
   type RevisionId,
   type RevisionRecord,
 } from '@kinloom/core';
-import { extractCollectionsFromSnapshot, matchesIfNoneMatch } from '@kinloom/server';
+import {
+  bytesToStream,
+  extractCollectionsFromSnapshot,
+  matchesIfNoneMatch,
+} from '@kinloom/server';
 import type { R2Bucket } from '../types.js';
 
 export const DEFAULT_COMPILED_BUNDLE_KEY = 'compiled/archive.json';
@@ -24,6 +28,21 @@ export interface R2IncrementalPatchBundleCacheOptions {
   mode?: BuildMode;
   key?: string;
 }
+
+interface StoredBundleMemo {
+  readonly revision: RevisionId;
+  readonly etag: string;
+  readonly generatedAt: string;
+  readonly serialized: string;
+  readonly byteLength: number;
+  readonly bundle: ArchiveBundle;
+  readonly bytes: Uint8Array;
+}
+
+// Last bundle this isolate wrote, per bucket and key. getCached() trusts it only
+// when R2 head() still reports the same revision, etag, and generated_at, so a
+// write from any other isolate falls back to a full R2 read.
+const storedBundleMemos = new WeakMap<R2Bucket, Map<string, StoredBundleMemo>>();
 
 function parseRevisionMetadata(raw: string | undefined): RevisionId | null {
   if (!raw || !/^\d+$/.test(raw)) {
@@ -57,12 +76,17 @@ export class R2IncrementalPatchBundleCache implements BundleCache {
     this.key = options.key ?? DEFAULT_COMPILED_BUNDLE_KEY;
   }
 
+  private get memoKey(): string {
+    return `${this.mode}:${this.key}`;
+  }
+
   async getCached(ifNoneMatch: string | null): Promise<
     | { status: 'not_modified'; etag: string }
     | { status: 'hit'; object: CachedBundleObject }
     | { status: 'miss' }
   > {
-    if (ifNoneMatch) {
+    const memo = storedBundleMemos.get(this.bucket)?.get(this.memoKey);
+    if (ifNoneMatch || memo) {
       const headObj = await this.bucket.head(this.key);
       if (!headObj) {
         return { status: 'miss' };
@@ -72,8 +96,26 @@ export class R2IncrementalPatchBundleCache implements BundleCache {
         return { status: 'miss' };
       }
       const headEtag = headObj.customMetadata?.etag ?? `"r${headRev}"`;
-      if (matchesIfNoneMatch(ifNoneMatch, headEtag)) {
+      if (ifNoneMatch && matchesIfNoneMatch(ifNoneMatch, headEtag)) {
         return { status: 'not_modified', etag: headEtag };
+      }
+      if (
+        memo &&
+        headRev === memo.revision &&
+        headEtag === memo.etag &&
+        headObj.customMetadata?.generated_at === memo.generatedAt
+      ) {
+        return {
+          status: 'hit',
+          object: {
+            etag: memo.etag,
+            revision_id: memo.revision,
+            body: bytesToStream(memo.bytes),
+            byteLength: memo.byteLength,
+            generated_at: memo.generatedAt,
+            parsedBundle: memo.bundle,
+          },
+        };
       }
     }
 
@@ -159,12 +201,28 @@ export class R2IncrementalPatchBundleCache implements BundleCache {
       },
     });
 
+    let memos = storedBundleMemos.get(this.bucket);
+    if (!memos) {
+      memos = new Map();
+      storedBundleMemos.set(this.bucket, memos);
+    }
+    memos.set(this.memoKey, {
+      revision: headRevisionId,
+      etag,
+      generatedAt,
+      serialized,
+      byteLength: encoded.byteLength,
+      bundle,
+      bytes: encoded,
+    });
+
     return {
       etag,
       revision_id: headRevisionId,
       body: serialized,
       byteLength: encoded.byteLength,
       generated_at: generatedAt,
+      parsedBundle: bundle,
     };
   }
 }
