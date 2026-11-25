@@ -1,0 +1,290 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.11"
+# dependencies = [
+#   "click>=8.1",
+#   "httpx>=0.27",
+#   "pyyaml>=6.0",
+# ]
+# ///
+"""narrative-audio: turn Kinloom narrative biographies into narrated MP3s.
+
+Workflow (see ../SKILL.md):
+  1. `list` / `extract`  read narratives from an archive's data/narratives.yaml (free)
+  2. an agent writes a spoken script + IPA names file by hand (free; see
+     ../references/script-rules.md)
+  3. `check`             lint the script and names file (free)
+  4. `synth`             Gemini TTS -> MP3: story voice, then "Editor's notes" in a
+                         second voice (paid API call)
+  5. `transcribe`        optional verification transcript (paid API call)
+
+API key: GEMINI_API_KEY or GOOGLE_API_KEY, or --key-file. Requires ffmpeg on PATH.
+"""
+
+from __future__ import annotations
+
+import base64
+import io
+import json
+import os
+import re
+import shutil
+import subprocess
+import sys
+import tempfile
+import time
+import wave
+from pathlib import Path
+
+import click
+import httpx
+import yaml
+
+API = "https://generativelanguage.googleapis.com/v1beta/models"
+DEFAULT_TTS_MODEL = "gemini-3.8-flash-tts"
+DEFAULT_TEXT_MODEL = "gemini-4-hydrogen"
+NOTES_MARKER = "# EDITOR'S NOTES"
+
+MONTHS = ("January|February|March|April|May|June|July|August|September|October|"
+          "November|December")
+_ORD = ("first second third fourth fifth sixth seventh eighth ninth tenth eleventh "
+        "twelfth thirteenth fourteenth fifteenth sixteenth seventeenth eighteenth "
+        "nineteenth twentieth").split()
+
+
+# --------------------------------------------------------------------------- helpers
+
+def ordinal(n: int) -> str:
+    if n <= 20:
+        return _ORD[n - 1]
+    if n == 30:
+        return "thirtieth"
+    return ("twenty-" if n < 30 else "thirty-") + _ORD[n % 10 - 1]
+
+
+def speak_dates(text: str) -> str:
+    """'9 May 1766' / 'May 9, 1766' / '9 May' -> 'May ninth, 1766' / 'May ninth'."""
+    text = re.sub(
+        rf"\b(\d{{1,2}})(?:st|nd|rd|th)? ({MONTHS})(,? (\d{{4}}))?\b",
+        lambda m: f"{m.group(2)} {ordinal(int(m.group(1)))}"
+        + (f", {m.group(4)}" if m.group(4) else ""),
+        text,
+    )
+    return re.sub(
+        rf"\b({MONTHS}) (\d{{1,2}})(?:st|nd|rd|th)?\b",
+        lambda m: f"{m.group(1)} {ordinal(int(m.group(2)))}",
+        text,
+    )
+
+
+def apply_names(text: str, names: dict[str, str]) -> str:
+    """Replace each name with its IPA string, longest keys first, whole words only."""
+    for name, ipa in sorted(names.items(), key=lambda kv: -len(kv[0])):
+        text = re.sub(rf"(?<![\w/]){re.escape(name)}(?![\w/])", ipa, text)
+    return text
+
+
+def split_script(script: str) -> tuple[list[str], list[str]]:
+    story, _, notes = script.partition(NOTES_MARKER)
+    sections = [s.strip() for s in re.split(r"(?m)^(?=## )", story) if s.strip()]
+    sections = [re.sub(r"^##\s*(.+)$", r"\1.", s, flags=re.M) for s in sections]
+    note_items = [re.sub(r"^\s*[-*]\s*", "", n).strip()
+                  for n in notes.strip().splitlines() if n.strip()]
+    return sections, note_items
+
+
+def api_key(key_file: str | None) -> str:
+    if key_file:
+        return Path(key_file).expanduser().read_text().strip()
+    key = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
+    if not key:
+        raise click.ClickException(
+            "Set GEMINI_API_KEY (or GOOGLE_API_KEY), or pass --key-file.")
+    return key
+
+
+def generate(key: str, model: str, body: dict, retries: int = 3) -> dict:
+    for attempt in range(retries + 1):
+        r = httpx.post(f"{API}/{model}:generateContent", json=body,
+                       headers={"x-goog-api-key": key}, timeout=600)
+        if r.status_code in (429, 500, 502, 503, 504) and attempt < retries:
+            time.sleep(5 * (attempt + 1))
+            continue
+        if r.status_code != 200:
+            raise click.ClickException(f"{model}: HTTP {r.status_code}: {r.text[:800]}")
+        return r.json()
+    raise AssertionError("unreachable")
+
+
+def load_narratives(path: str) -> list[dict]:
+    data = yaml.safe_load(Path(path).read_text())
+    return data if isinstance(data, list) else data.get("narratives", [])
+
+
+# --------------------------------------------------------------------------- CLI
+
+@click.group()
+def cli() -> None:
+    """Narrate Kinloom narrative biographies with Gemini TTS."""
+
+
+@cli.command("list")
+@click.argument("narratives_yaml", type=click.Path(exists=True))
+@click.option("--kind", default="biography", show_default=True)
+def list_cmd(narratives_yaml: str, kind: str) -> None:
+    """List narratives (word count, id, title), shortest first."""
+    rows = [(len((n.get("body_md") or "").split()), n["id"], n.get("title", ""))
+            for n in load_narratives(narratives_yaml) if not kind or n.get("kind") == kind]
+    for words, nid, title in sorted(rows):
+        click.echo(f"{words:6d}  {nid}  {title}")
+
+
+@cli.command()
+@click.argument("narratives_yaml", type=click.Path(exists=True))
+@click.argument("narrative_id")
+def extract(narratives_yaml: str, narrative_id: str) -> None:
+    """Print one narrative's slug, title and body_md (input for the script writer)."""
+    n = next((n for n in load_narratives(narratives_yaml) if n["id"] == narrative_id), None)
+    if not n:
+        raise click.ClickException(f"no narrative with id {narrative_id}")
+    click.echo(f"SLUG: {n.get('slug', narrative_id)}\nTITLE: {n.get('title', '')}\n")
+    click.echo(n.get("body_md", ""))
+
+
+@cli.command()
+@click.argument("script", type=click.Path(exists=True))
+@click.option("--names", type=click.Path(exists=True), help="IPA names JSON")
+def check(script: str, names: str | None) -> None:
+    """Lint a spoken script (and names file) before paying for synthesis."""
+    text = Path(script).read_text()
+    problems: list[str] = []
+    patterns = {
+        "day-before-month date (write 'May ninth, 1766')": rf"\b\d{{1,2}} ({MONTHS})\b",
+        "numeric month-day date (write 'May ninth')": rf"\b({MONTHS}) \d{{1,2}}\b(?!\d)",
+        "currency symbol (write '470 pounds')": r"[£$]",
+        "s./d. money abbreviation": r"\b\d+[sd]\.",
+        "citation remnant": r"\b(Lib\.|Vol\.|pp?\.\s*\d|DB \d|FHL|Book \d+)",
+        "slash (write 'or')": r"\S/\S",
+        "abbreviation to spell out": r"\b(ca\.|b\.|d\.|decd|Co\.|Jr\.|Sr\.|Capt\.)(?=\s|$)",
+        "markdown emphasis or link": r"[*_`]|\]\(",
+        "quotation mark": r"[\"“”]",
+    }
+    for i, line in enumerate(text.splitlines(), 1):
+        for label, pat in patterns.items():
+            if re.search(pat, line):
+                problems.append(f"{script}:{i}: {label}: {line.strip()[:100]}")
+    if NOTES_MARKER not in text:
+        problems.append(f"no '{NOTES_MARKER}' section (fine only if there are no notes)")
+    if names:
+        mapping = json.loads(Path(names).read_text())
+        for k, v in mapping.items():
+            if not re.search(rf"(?<!\w){re.escape(k)}(?!\w)", text):
+                problems.append(f"names: '{k}' does not appear in the script")
+            if not (v.startswith("/") and v.endswith("/")):
+                problems.append(f"names: '{k}' value is not /IPA/ in slashes: {v}")
+    sections, notes = split_script(text)
+    click.echo(f"{len(sections)} story sections, {len(notes)} notes, "
+               f"{len(text.split())} words")
+    for p in problems:
+        click.echo(p)
+    if problems:
+        sys.exit(1)
+    click.echo("ok")
+
+
+@cli.command()
+@click.argument("script", type=click.Path(exists=True))
+@click.option("--names", type=click.Path(exists=True), help="IPA names JSON")
+@click.option("-o", "--out", type=click.Path(), help="output .mp3 (default: next to script)")
+@click.option("--model", default=DEFAULT_TTS_MODEL, show_default=True)
+@click.option("--voice", default="Charon", show_default=True, help="story voice")
+@click.option("--notes-voice", default="Kore", show_default=True)
+@click.option("--section-pause", default=0.8, show_default=True, type=float)
+@click.option("--notes-pause", default=2.0, show_default=True, type=float)
+@click.option("--bitrate", default="96k", show_default=True)
+@click.option("--key-file", type=click.Path(), help="file containing the API key")
+@click.option("--dry-run", is_flag=True, help="print the exact text each request would send")
+def synth(script, names, out, model, voice, notes_voice, section_pause, notes_pause,
+          bitrate, key_file, dry_run) -> None:
+    """Synthesize SCRIPT to MP3 (story voice, then editor's notes voice)."""
+    text = Path(script).read_text()
+    if names:
+        text = apply_names(text, json.loads(Path(names).read_text()))
+    text = speak_dates(text)
+    sections, notes = split_script(text)
+    chunks = [(s, voice, section_pause) for s in sections]
+    if notes:
+        chunks.append(("Editor's notes.\n\n" + "\n\n".join(notes), notes_voice, notes_pause))
+
+    if dry_run:
+        for i, (t, v, _) in enumerate(chunks, 1):
+            click.echo(f"===== request {i} [{v}] =====\n{t}\n")
+        return
+    if not shutil.which("ffmpeg"):
+        raise click.ClickException("ffmpeg not found on PATH")
+    key = api_key(key_file)
+    out_path = Path(out) if out else Path(script).with_suffix("").with_suffix(".mp3")
+
+    pcm, rate, total_tokens = b"", 24000, 0
+    for i, (t, v, pause) in enumerate(chunks, 1):
+        # Send ONLY the words to speak. These TTS models read any style direction aloud,
+        # and reject systemInstruction ("Developer instruction is not enabled").
+        resp = generate(key, model, {
+            "contents": [{"parts": [{"text": t}]}],
+            "generationConfig": {
+                "responseModalities": ["AUDIO"],
+                "speechConfig": {"voiceConfig": {"prebuiltVoiceConfig": {"voiceName": v}}},
+            },
+        })
+        part = resp["candidates"][0]["content"]["parts"][0]["inlineData"]
+        raw = base64.b64decode(part["data"])
+        if raw[:4] == b"RIFF":  # audio/wav: strip header or it plays as a burst of noise
+            with wave.open(io.BytesIO(raw)) as w:
+                rate, raw = w.getframerate(), w.readframes(w.getnframes())
+        elif m := re.search(r"rate=(\d+)", part.get("mimeType", "")):
+            rate = int(m.group(1))
+        if pcm:
+            pcm += b"\x00\x00" * int(rate * pause)
+        pcm += raw
+        tokens = resp.get("usageMetadata", {}).get("totalTokenCount", 0)
+        total_tokens += tokens
+        click.echo(f"  section {i}/{len(chunks)} [{v}]: {len(t.split())} words, "
+                   f"{len(raw) / 2 / rate:.0f}s, {tokens} tokens", err=True)
+
+    with tempfile.NamedTemporaryFile(suffix=".pcm") as tmp:
+        tmp.write(pcm)
+        tmp.flush()
+        subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-f", "s16le", "-ar", str(rate),
+                        "-ac", "1", "-i", tmp.name, "-b:a", bitrate, str(out_path)], check=True)
+    click.echo(f"wrote {out_path} ({len(pcm) / 2 / rate / 60:.1f} min, {total_tokens} tokens)")
+
+
+@cli.command()
+@click.argument("audio", type=click.Path(exists=True))
+@click.option("--model", default=DEFAULT_TEXT_MODEL, show_default=True)
+@click.option("--key-file", type=click.Path())
+@click.option("-o", "--out", type=click.Path(), help="output .md (default: next to audio)")
+def transcribe(audio, model, key_file, out) -> None:
+    """Verbatim, timestamped transcript that flags glitches (paid; for QA)."""
+    key = api_key(key_file)
+    mime = {".mp3": "audio/mpeg", ".wav": "audio/wav", ".ogg": "audio/ogg"}.get(
+        Path(audio).suffix.lower(), "audio/mpeg")
+    prompt = ("Transcribe this audio VERBATIM with [mm:ss] timestamps at the start of each "
+              "sentence. Write exactly what is spoken, including mistakes, repetitions and "
+              "mispronunciations (note them in [brackets]), and any non-speech sounds such as "
+              "clicks, noise bursts, garbled audio, long silences, or abrupt cuts. If any "
+              "phonetic symbols or slashes are read out literally, mark them [read IPA aloud]. "
+              "Do not correct or clean up anything.")
+    resp = generate(key, model, {"contents": [{"parts": [
+        {"inlineData": {"mimeType": mime,
+                        "data": base64.b64encode(Path(audio).read_bytes()).decode()}},
+        {"text": prompt}]}]})
+    text = "".join(p.get("text", "") for p in resp["candidates"][0]["content"]["parts"])
+    out_path = Path(out) if out else Path(audio).with_suffix(".transcript.md")
+    out_path.write_text(text)
+    click.echo(text)
+    click.echo(f"\nwrote {out_path}", err=True)
+
+
+if __name__ == "__main__":
+    cli()
