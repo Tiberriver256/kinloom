@@ -90,6 +90,95 @@ describe('residenceSpans and place ancestors', () => {
     expect(spans.every((s) => s.person_id === 'per_deceased')).toBe(true);
   });
 
+  it('coalesces co-resident household duplicate anchors at the same place into one Confirmed span', () => {
+    const places = new Map<string, Place>([
+      ['plc_precinct_1', makePlace({ id: 'plc_precinct_1', lat: 30.0, lng: -98.7 })],
+      ['plc_valley_town', makePlace({ id: 'plc_valley_town', lat: 37.6, lng: -120.95 })],
+    ]);
+
+    const people: Pick<RawPerson, 'id' | 'is_living'>[] = [{ id: 'per_alder', is_living: false }];
+
+    const household1900 = Array.from({ length: 9 }, (_, idx) =>
+      makeAnchor(`ev_1900_${String(idx + 1).padStart(2, '0')}`, 'per_alder', 'plc_precinct_1', '1900')
+    );
+    const household1920 = Array.from({ length: 5 }, (_, idx) =>
+      makeAnchor(`ev_1920_${String(idx + 1).padStart(2, '0')}`, 'per_alder', 'plc_valley_town', '1920')
+    );
+
+    const spans1900Only = deriveResidenceSpans(people, household1900, places);
+    expect(spans1900Only).toHaveLength(1);
+    expect(spans1900Only[0]).toMatchObject({
+      id: 'span_0001',
+      person_id: 'per_alder',
+      place_id: 'plc_precinct_1',
+      start_year: 1900,
+      end_year: 1900,
+      confidence_tier: 'Confirmed',
+      from_event_id: 'ev_1900_01',
+      to_event_id: 'ev_1900_09',
+    });
+
+    const combinedSpans = deriveResidenceSpans(people, [...household1900, ...household1920], places);
+    expect(combinedSpans).toHaveLength(2);
+    expect(combinedSpans).toMatchObject([
+      {
+        id: 'span_0001',
+        place_id: 'plc_precinct_1',
+        start_year: 1900,
+        end_year: 1900,
+        confidence_tier: 'Confirmed',
+        from_event_id: 'ev_1900_01',
+        to_event_id: 'ev_1900_09',
+      },
+      {
+        id: 'span_0002',
+        place_id: 'plc_valley_town',
+        start_year: 1920,
+        end_year: 1920,
+        confidence_tier: 'Confirmed',
+        from_event_id: 'ev_1920_01',
+        to_event_id: 'ev_1920_05',
+      },
+    ]);
+  });
+
+  it('coalesces consecutive same-place same-tier spans and keeps higher confidence on same-year merges', () => {
+    const places = new Map<string, Place>([
+      ['plc_milltown', makePlace({ id: 'plc_milltown', lat: 40.0, lng: -83.0 })],
+    ]);
+    const people: Pick<RawPerson, 'id' | 'is_living'>[] = [{ id: 'per_mercer', is_living: false }];
+    const events: ArchiveEvent[] = [
+      makeAnchor('ev_1', 'per_mercer', 'plc_milltown', '1880-01-10'),
+      makeAnchor('ev_2', 'per_mercer', 'plc_milltown', '1880-06-01'),
+      makeAnchor('ev_3', 'per_mercer', 'plc_milltown', '1880-06-01'),
+      makeAnchor('ev_4', 'per_mercer', 'plc_milltown', '1890'),
+      makeAnchor('ev_5', 'per_mercer', 'plc_milltown', '1900'),
+    ];
+
+    const spans = deriveResidenceSpans(people, events, places);
+    expect(spans).toHaveLength(2);
+    expect(spans).toMatchObject([
+      {
+        id: 'span_0001',
+        place_id: 'plc_milltown',
+        start_year: 1880,
+        end_year: 1880,
+        confidence_tier: 'Confirmed',
+        from_event_id: 'ev_1',
+        to_event_id: 'ev_3',
+      },
+      {
+        id: 'span_0002',
+        place_id: 'plc_milltown',
+        start_year: 1880,
+        end_year: 1900,
+        confidence_tier: 'Inferred',
+        from_event_id: 'ev_3',
+        to_event_id: 'ev_5',
+      },
+    ]);
+  });
+
   it('property: living people never receive residence spans and every span has time_min <= time_max', () => {
     fc.assert(
       fc.property(

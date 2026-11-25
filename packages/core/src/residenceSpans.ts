@@ -68,6 +68,36 @@ export function samePlaceOrWithin15Miles(
   return false;
 }
 
+const CONFIDENCE_TIER_RANK: Readonly<Record<ConfidenceTier, number>> = {
+  Confirmed: 3,
+  Inferred: 2,
+  Possible: 1,
+};
+
+function higherConfidenceTier(a: ConfidenceTier, b: ConfidenceTier): ConfidenceTier {
+  return CONFIDENCE_TIER_RANK[a] >= CONFIDENCE_TIER_RANK[b] ? a : b;
+}
+
+function minNullableYear(a: number | null, b: number | null): number | null {
+  if (a === null) {
+    return b;
+  }
+  if (b === null) {
+    return a;
+  }
+  return Math.min(a, b);
+}
+
+function maxNullableYear(a: number | null, b: number | null): number | null {
+  if (a === null) {
+    return b;
+  }
+  if (b === null) {
+    return a;
+  }
+  return Math.max(a, b);
+}
+
 function spanTier(gapDays: number): ConfidenceTier | null {
   if (gapDays <= 0) {
     return 'Confirmed';
@@ -95,10 +125,13 @@ export function deriveResidenceSpansForPerson(
     return [];
   }
   const sorted = anchors.toSorted(
-    (a, b) => a.time_min - b.time_min || a.time_max - b.time_max || a.id.localeCompare(b.id)
+    (a, b) =>
+      a.time_min - b.time_min ||
+      a.time_max - b.time_max ||
+      a.place_id.localeCompare(b.place_id) ||
+      a.id.localeCompare(b.id)
   );
-  const spans: ResidenceSpan[] = [];
-  let spanIdx = startIndex;
+  const rawSpans: Omit<ResidenceSpan, 'id'>[] = [];
 
   for (let i = 0; i < sorted.length - 1; i += 1) {
     const a = sorted[i];
@@ -111,22 +144,52 @@ export function deriveResidenceSpansForPerson(
     if (!tier) {
       continue;
     }
-    spanIdx += 1;
-    spans.push({
-      id: `span_${String(spanIdx).padStart(4, '0')}`,
+
+    const next: Omit<ResidenceSpan, 'id'> = {
       person_id: personId,
       place_id: a.place_id,
       time_min: a.time_min,
-      time_max: b.time_max,
+      time_max: Math.max(a.time_max, b.time_max),
       start_year: edtfYear(a.edtf_date),
       end_year: edtfYear(b.edtf_date),
       confidence_tier: tier,
       from_event_id: a.id,
       to_event_id: b.id,
-    });
+    };
+
+    const prev = rawSpans[rawSpans.length - 1];
+    const sameYearWindow =
+      prev !== undefined &&
+      prev.start_year !== null &&
+      prev.end_year !== null &&
+      prev.start_year === next.start_year &&
+      prev.end_year === next.end_year;
+    const overlappingSameTier =
+      prev !== undefined &&
+      prev.confidence_tier === next.confidence_tier &&
+      next.time_min <= prev.time_max;
+
+    if (prev && prev.place_id === next.place_id && (sameYearWindow || overlappingSameTier)) {
+      rawSpans[rawSpans.length - 1] = {
+        ...prev,
+        time_min: Math.min(prev.time_min, next.time_min),
+        time_max: Math.max(prev.time_max, next.time_max),
+        start_year: minNullableYear(prev.start_year, next.start_year),
+        end_year: maxNullableYear(prev.end_year, next.end_year),
+        confidence_tier: higherConfidenceTier(prev.confidence_tier, next.confidence_tier),
+        from_event_id: prev.from_event_id,
+        to_event_id: next.to_event_id,
+      };
+      continue;
+    }
+
+    rawSpans.push(next);
   }
 
-  return spans;
+  return rawSpans.map((span, idx) => ({
+    id: `span_${String(startIndex + idx + 1).padStart(4, '0')}`,
+    ...span,
+  }));
 }
 
 /**

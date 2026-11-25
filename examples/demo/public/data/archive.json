@@ -7,7 +7,7 @@
       "people": 54,
       "living_redacted": 1,
       "events": 120,
-      "residence_spans": 96,
+      "residence_spans": 60,
       "places": 39,
       "sources": 24,
       "media": 29,
@@ -6369,7 +6369,7 @@
       "person_id": "p_samuel_lincoln_1622",
       "place_id": "pl_hingham_ma",
       "time_min": -117608,
-      "time_max": -116641,
+      "time_max": -116513,
       "start_year": 1649,
       "end_year": 1650,
       "confidence_tier": "Confirmed",
@@ -6393,7 +6393,7 @@
       "person_id": "p_martha_lyford",
       "place_id": "pl_hingham_ma",
       "time_min": -117608,
-      "time_max": -116641,
+      "time_max": -116513,
       "start_year": 1649,
       "end_year": 1650,
       "confidence_tier": "Confirmed",
@@ -6429,7 +6429,7 @@
       "person_id": "p_mordecai_lincoln_sr",
       "place_id": "pl_hingham_ma",
       "time_min": -104459,
-      "time_max": -103615,
+      "time_max": -103364,
       "start_year": 1685,
       "end_year": 1686,
       "confidence_tier": "Confirmed",
@@ -6465,7 +6465,7 @@
       "person_id": "p_sarah_jones_lincoln",
       "place_id": "pl_hingham_ma",
       "time_min": -104459,
-      "time_max": -103615,
+      "time_max": -103364,
       "start_year": 1685,
       "end_year": 1686,
       "confidence_tier": "Confirmed",
@@ -6561,27 +6561,15 @@
       "person_id": "p_john_lincoln_1716",
       "place_id": "pl_berks_pa",
       "time_min": -86562,
-      "time_max": -82725,
-      "start_year": 1733,
-      "end_year": 1743,
-      "confidence_tier": "Inferred",
-      "from_event_id": "evt_1733_exeter_homestead",
-      "to_event_id": "evt_1743_marr_john_rebecca"
-    },
-    {
-      "id": "span_0019",
-      "person_id": "p_john_lincoln_1716",
-      "place_id": "pl_berks_pa",
-      "time_min": -82725,
       "time_max": -82412,
-      "start_year": 1743,
+      "start_year": 1733,
       "end_year": 1744,
       "confidence_tier": "Inferred",
-      "from_event_id": "evt_1743_marr_john_rebecca",
+      "from_event_id": "evt_1733_exeter_homestead",
       "to_event_id": "evt_1744_birt_capt_abraham"
     },
     {
-      "id": "span_0020",
+      "id": "span_0019",
       "person_id": "p_rebecca_flowers_morris",
       "place_id": "pl_berks_pa",
       "time_min": -82725,
@@ -6593,31 +6581,19 @@
       "to_event_id": "evt_1744_birt_capt_abraham"
     },
     {
-      "id": "span_0021",
+      "id": "span_0020",
       "person_id": "p_david_todd_1723",
       "place_id": "pl_chester_pa",
       "time_min": -85101,
-      "time_max": -79989,
-      "start_year": 1737,
-      "end_year": 1749,
-      "confidence_tier": "Inferred",
-      "from_event_id": "evt_1737_todd_emigration_pa",
-      "to_event_id": "evt_1749_marr_david_hannah_todd"
-    },
-    {
-      "id": "span_0022",
-      "person_id": "p_david_todd_1723",
-      "place_id": "pl_chester_pa",
-      "time_min": -81084,
       "time_max": -77885,
-      "start_year": 1749,
+      "start_year": 1737,
       "end_year": 1756,
       "confidence_tier": "Inferred",
-      "from_event_id": "evt_1749_marr_david_hannah_todd",
+      "from_event_id": "evt_1737_todd_emigration_pa",
       "to_event_id": "evt_1756_birt_levi_todd"
     },
     {
-      "id": "span_0023",
+      "id": "span_0021",
       "person_id": "p_hannah_owen_todd",
       "place_id": "pl_chester_pa",
       "time_min": -81084,
@@ -6629,7 +6605,7 @@
       "to_event_id": "evt_1756_birt_levi_todd"
     },
     {
-      "id": "span_0024",
+      "id": "span_0022",
       "person_id": "p_joseph_hanks",
       "place_id": "pl_hampshire_va",
       "time_min": -75240,
@@ -6641,91 +6617,31 @@
       "to_event_id": "evt_1784_birt_nancy_hanks"
     },
     {
-      "id": "span_0025",
+      "id": "span_0023",
       "person_id": "p_abraham_lincoln_1744",
       "place_id": "pl_rockingham_va",
       "time_min": -73607,
-      "time_max": -72889,
+      "time_max": -69333,
       "start_year": 1768,
-      "end_year": 1770,
+      "end_year": 1780,
       "confidence_tier": "Inferred",
       "from_event_id": "evt_1768_linville_creek_va",
-      "to_event_id": "evt_1770_marr_capt_abraham_bathsheba"
-    },
-    {
-      "id": "span_0026",
-      "person_id": "p_abraham_lincoln_1744",
-      "place_id": "pl_rockingham_va",
-      "time_min": -72889,
-      "time_max": -72319,
-      "start_year": 1770,
-      "end_year": 1771,
-      "confidence_tier": "Inferred",
-      "from_event_id": "evt_1770_marr_capt_abraham_bathsheba",
-      "to_event_id": "evt_1771_birt_mordecai_1771"
-    },
-    {
-      "id": "span_0027",
-      "person_id": "p_abraham_lincoln_1744",
-      "place_id": "pl_rockingham_va",
-      "time_min": -72683,
-      "time_max": -70121,
-      "start_year": 1771,
-      "end_year": 1778,
-      "confidence_tier": "Inferred",
-      "from_event_id": "evt_1771_birt_mordecai_1771",
-      "to_event_id": "evt_1778_birt_thomas"
-    },
-    {
-      "id": "span_0028",
-      "person_id": "p_abraham_lincoln_1744",
-      "place_id": "pl_rockingham_va",
-      "time_min": -70121,
-      "time_max": -69333,
-      "start_year": 1778,
-      "end_year": 1780,
-      "confidence_tier": "Inferred",
-      "from_event_id": "evt_1778_birt_thomas",
       "to_event_id": "evt_1780_land_warrant"
     },
     {
-      "id": "span_0029",
+      "id": "span_0024",
       "person_id": "p_bathsheba_herring",
       "place_id": "pl_rockingham_va",
       "time_min": -72889,
-      "time_max": -72319,
-      "start_year": 1770,
-      "end_year": 1771,
-      "confidence_tier": "Inferred",
-      "from_event_id": "evt_1770_marr_capt_abraham_bathsheba",
-      "to_event_id": "evt_1771_birt_mordecai_1771"
-    },
-    {
-      "id": "span_0030",
-      "person_id": "p_bathsheba_herring",
-      "place_id": "pl_rockingham_va",
-      "time_min": -72683,
-      "time_max": -70121,
-      "start_year": 1771,
-      "end_year": 1778,
-      "confidence_tier": "Inferred",
-      "from_event_id": "evt_1771_birt_mordecai_1771",
-      "to_event_id": "evt_1778_birt_thomas"
-    },
-    {
-      "id": "span_0031",
-      "person_id": "p_bathsheba_herring",
-      "place_id": "pl_rockingham_va",
-      "time_min": -70121,
       "time_max": -69333,
-      "start_year": 1778,
+      "start_year": 1770,
       "end_year": 1780,
       "confidence_tier": "Inferred",
-      "from_event_id": "evt_1778_birt_thomas",
+      "from_event_id": "evt_1770_marr_capt_abraham_bathsheba",
       "to_event_id": "evt_1780_land_warrant"
     },
     {
-      "id": "span_0032",
+      "id": "span_0025",
       "person_id": "p_levi_todd",
       "place_id": "pl_lexington_ky",
       "time_min": -69706,
@@ -6737,7 +6653,7 @@
       "to_event_id": "evt_1791_birt_robert_todd"
     },
     {
-      "id": "span_0033",
+      "id": "span_0026",
       "person_id": "p_jane_briggs",
       "place_id": "pl_lexington_ky",
       "time_min": -69706,
@@ -6749,7 +6665,7 @@
       "to_event_id": "evt_1791_birt_robert_todd"
     },
     {
-      "id": "span_0034",
+      "id": "span_0027",
       "person_id": "p_lucy_hanks",
       "place_id": "pl_hampshire_va",
       "time_min": -75240,
@@ -6761,7 +6677,7 @@
       "to_event_id": "evt_1784_birt_nancy_hanks"
     },
     {
-      "id": "span_0035",
+      "id": "span_0028",
       "person_id": "p_mordecai_lincoln_1771",
       "place_id": "pl_rockingham_va",
       "time_min": -72683,
@@ -6773,7 +6689,7 @@
       "to_event_id": "evt_1780_land_warrant"
     },
     {
-      "id": "span_0036",
+      "id": "span_0029",
       "person_id": "p_thomas_lincoln",
       "place_id": "pl_rockingham_va",
       "time_min": -70121,
@@ -6785,7 +6701,7 @@
       "to_event_id": "evt_1780_land_warrant"
     },
     {
-      "id": "span_0037",
+      "id": "span_0030",
       "person_id": "p_thomas_lincoln",
       "place_id": "pl_washington_ky",
       "time_min": -66839,
@@ -6797,7 +6713,7 @@
       "to_event_id": "evt_1806_marr_thomas_nancy"
     },
     {
-      "id": "span_0038",
+      "id": "span_0031",
       "person_id": "p_thomas_lincoln",
       "place_id": "pl_hardin_ky",
       "time_min": -59495,
@@ -6809,7 +6725,7 @@
       "to_event_id": "evt_1809_birt_abraham"
     },
     {
-      "id": "span_0039",
+      "id": "span_0032",
       "person_id": "p_nancy_hanks",
       "place_id": "pl_hardin_ky",
       "time_min": -59495,
@@ -6821,7 +6737,7 @@
       "to_event_id": "evt_1809_birt_abraham"
     },
     {
-      "id": "span_0040",
+      "id": "span_0033",
       "person_id": "p_sarah_bush_johnston",
       "place_id": "pl_pigeon_creek_in",
       "time_min": -54568,
@@ -6833,127 +6749,31 @@
       "to_event_id": "evt_1821_marr_dennis_elizabeth_hanks"
     },
     {
-      "id": "span_0041",
+      "id": "span_0034",
       "person_id": "p_robert_smith_todd",
       "place_id": "pl_lexington_ky",
       "time_min": -57379,
-      "time_max": -57027,
-      "start_year": 1812,
-      "end_year": 1813,
-      "confidence_tier": "Inferred",
-      "from_event_id": "evt_1812_marr_robert_eliza_todd",
-      "to_event_id": "evt_1813_birt_elizabeth_todd"
-    },
-    {
-      "id": "span_0042",
-      "person_id": "p_robert_smith_todd",
-      "place_id": "pl_lexington_ky",
-      "time_min": -57027,
-      "time_max": -56249,
-      "start_year": 1813,
-      "end_year": 1815,
-      "confidence_tier": "Inferred",
-      "from_event_id": "evt_1813_birt_elizabeth_todd",
-      "to_event_id": "evt_1815_birt_levi_o_todd"
-    },
-    {
-      "id": "span_0043",
-      "person_id": "p_robert_smith_todd",
-      "place_id": "pl_lexington_ky",
-      "time_min": -56613,
-      "time_max": -55817,
-      "start_year": 1815,
-      "end_year": 1817,
-      "confidence_tier": "Inferred",
-      "from_event_id": "evt_1815_birt_levi_o_todd",
-      "to_event_id": "evt_1817_birt_frances_todd"
-    },
-    {
-      "id": "span_0044",
-      "person_id": "p_robert_smith_todd",
-      "place_id": "pl_lexington_ky",
-      "time_min": -55817,
-      "time_max": -55171,
-      "start_year": 1817,
-      "end_year": 1818,
-      "confidence_tier": "Inferred",
-      "from_event_id": "evt_1817_birt_frances_todd",
-      "to_event_id": "evt_1818_birt_mary_todd"
-    },
-    {
-      "id": "span_0045",
-      "person_id": "p_robert_smith_todd",
-      "place_id": "pl_lexington_ky",
-      "time_min": -55171,
-      "time_max": -52291,
-      "start_year": 1818,
-      "end_year": 1826,
-      "confidence_tier": "Inferred",
-      "from_event_id": "evt_1818_birt_mary_todd",
-      "to_event_id": "evt_1826_marr_robert_betsy_todd"
-    },
-    {
-      "id": "span_0046",
-      "person_id": "p_robert_smith_todd",
-      "place_id": "pl_lexington_ky",
-      "time_min": -52291,
       "time_max": -48628,
-      "start_year": 1826,
+      "start_year": 1812,
       "end_year": 1836,
       "confidence_tier": "Inferred",
-      "from_event_id": "evt_1826_marr_robert_betsy_todd",
+      "from_event_id": "evt_1812_marr_robert_eliza_todd",
       "to_event_id": "evt_1836_birt_emilie_todd_helm"
     },
     {
-      "id": "span_0047",
+      "id": "span_0035",
       "person_id": "p_eliza_parker",
       "place_id": "pl_lexington_ky",
       "time_min": -57379,
-      "time_max": -57027,
-      "start_year": 1812,
-      "end_year": 1813,
-      "confidence_tier": "Inferred",
-      "from_event_id": "evt_1812_marr_robert_eliza_todd",
-      "to_event_id": "evt_1813_birt_elizabeth_todd"
-    },
-    {
-      "id": "span_0048",
-      "person_id": "p_eliza_parker",
-      "place_id": "pl_lexington_ky",
-      "time_min": -57027,
-      "time_max": -56249,
-      "start_year": 1813,
-      "end_year": 1815,
-      "confidence_tier": "Inferred",
-      "from_event_id": "evt_1813_birt_elizabeth_todd",
-      "to_event_id": "evt_1815_birt_levi_o_todd"
-    },
-    {
-      "id": "span_0049",
-      "person_id": "p_eliza_parker",
-      "place_id": "pl_lexington_ky",
-      "time_min": -56613,
-      "time_max": -55817,
-      "start_year": 1815,
-      "end_year": 1817,
-      "confidence_tier": "Inferred",
-      "from_event_id": "evt_1815_birt_levi_o_todd",
-      "to_event_id": "evt_1817_birt_frances_todd"
-    },
-    {
-      "id": "span_0050",
-      "person_id": "p_eliza_parker",
-      "place_id": "pl_lexington_ky",
-      "time_min": -55817,
       "time_max": -55171,
-      "start_year": 1817,
+      "start_year": 1812,
       "end_year": 1818,
       "confidence_tier": "Inferred",
-      "from_event_id": "evt_1817_birt_frances_todd",
+      "from_event_id": "evt_1812_marr_robert_eliza_todd",
       "to_event_id": "evt_1818_birt_mary_todd"
     },
     {
-      "id": "span_0051",
+      "id": "span_0036",
       "person_id": "p_elizabeth_humphreys_todd",
       "place_id": "pl_lexington_ky",
       "time_min": -52291,
@@ -6965,7 +6785,7 @@
       "to_event_id": "evt_1836_birt_emilie_todd_helm"
     },
     {
-      "id": "span_0052",
+      "id": "span_0037",
       "person_id": "p_dennis_friend_hanks",
       "place_id": "pl_pigeon_creek_in",
       "time_min": -54568,
@@ -6977,7 +6797,7 @@
       "to_event_id": "evt_1821_marr_dennis_elizabeth_hanks"
     },
     {
-      "id": "span_0053",
+      "id": "span_0038",
       "person_id": "p_elizabeth_johnston_hanks",
       "place_id": "pl_pigeon_creek_in",
       "time_min": -54568,
@@ -6989,7 +6809,7 @@
       "to_event_id": "evt_1821_marr_dennis_elizabeth_hanks"
     },
     {
-      "id": "span_0054",
+      "id": "span_0039",
       "person_id": "p_sarah_lincoln_grigsby",
       "place_id": "pl_hardin_ky",
       "time_min": -59495,
@@ -7001,7 +6821,7 @@
       "to_event_id": "evt_1809_birt_abraham"
     },
     {
-      "id": "span_0055",
+      "id": "span_0040",
       "person_id": "p_sarah_lincoln_grigsby",
       "place_id": "pl_pigeon_creek_in",
       "time_min": -55913,
@@ -7013,7 +6833,7 @@
       "to_event_id": "evt_1820_census_spencer"
     },
     {
-      "id": "span_0056",
+      "id": "span_0041",
       "person_id": "p_abraham_lincoln_1809",
       "place_id": "pl_pigeon_creek_in",
       "time_min": -55913,
@@ -7025,7 +6845,7 @@
       "to_event_id": "evt_1820_census_spencer"
     },
     {
-      "id": "span_0057",
+      "id": "span_0042",
       "person_id": "p_abraham_lincoln_1809",
       "place_id": "pl_new_salem_il",
       "time_min": -50588,
@@ -7037,91 +6857,19 @@
       "to_event_id": "evt_1837_springfield_move"
     },
     {
-      "id": "span_0058",
+      "id": "span_0043",
       "person_id": "p_abraham_lincoln_1809",
       "place_id": "pl_springfield_il",
       "time_min": -48473,
-      "time_max": -46444,
-      "start_year": 1837,
-      "end_year": 1842,
-      "confidence_tier": "Inferred",
-      "from_event_id": "evt_1837_springfield_move",
-      "to_event_id": "evt_1842_marr_abraham_mary"
-    },
-    {
-      "id": "span_0059",
-      "person_id": "p_abraham_lincoln_1809",
-      "place_id": "pl_springfield_il",
-      "time_min": -46444,
-      "time_max": -46174,
-      "start_year": 1842,
-      "end_year": 1843,
-      "confidence_tier": "Inferred",
-      "from_event_id": "evt_1842_marr_abraham_mary",
-      "to_event_id": "evt_1843_birt_robert_todd_lincoln"
-    },
-    {
-      "id": "span_0060",
-      "person_id": "p_abraham_lincoln_1809",
-      "place_id": "pl_springfield_il",
-      "time_min": -46174,
-      "time_max": -45222,
-      "start_year": 1843,
-      "end_year": 1846,
-      "confidence_tier": "Inferred",
-      "from_event_id": "evt_1843_birt_robert_todd_lincoln",
-      "to_event_id": "evt_1846_birt_edward_lincoln"
-    },
-    {
-      "id": "span_0061",
-      "person_id": "p_abraham_lincoln_1809",
-      "place_id": "pl_springfield_il",
-      "time_min": -45222,
-      "time_max": -43589,
-      "start_year": 1846,
-      "end_year": 1850,
-      "confidence_tier": "Inferred",
-      "from_event_id": "evt_1846_birt_edward_lincoln",
-      "to_event_id": "evt_1850_census_springfield"
-    },
-    {
-      "id": "span_0062",
-      "person_id": "p_abraham_lincoln_1809",
-      "place_id": "pl_springfield_il",
-      "time_min": -43589,
-      "time_max": -43475,
-      "start_year": 1850,
-      "end_year": 1850,
-      "confidence_tier": "Inferred",
-      "from_event_id": "evt_1850_census_springfield",
-      "to_event_id": "evt_1850_birt_willie_lincoln"
-    },
-    {
-      "id": "span_0063",
-      "person_id": "p_abraham_lincoln_1809",
-      "place_id": "pl_springfield_il",
-      "time_min": -43475,
-      "time_max": -42640,
-      "start_year": 1850,
-      "end_year": 1853,
-      "confidence_tier": "Inferred",
-      "from_event_id": "evt_1850_birt_willie_lincoln",
-      "to_event_id": "evt_1853_birt_tad_lincoln"
-    },
-    {
-      "id": "span_0064",
-      "person_id": "p_abraham_lincoln_1809",
-      "place_id": "pl_springfield_il",
-      "time_min": -42640,
       "time_max": -39982,
-      "start_year": 1853,
+      "start_year": 1837,
       "end_year": 1860,
       "confidence_tier": "Inferred",
-      "from_event_id": "evt_1853_birt_tad_lincoln",
+      "from_event_id": "evt_1837_springfield_move",
       "to_event_id": "evt_1860_census_springfield"
     },
     {
-      "id": "span_0065",
+      "id": "span_0044",
       "person_id": "p_elizabeth_todd_edwards",
       "place_id": "pl_springfield_il",
       "time_min": -47574,
@@ -7133,7 +6881,7 @@
       "to_event_id": "evt_1842_marr_abraham_mary"
     },
     {
-      "id": "span_0066",
+      "id": "span_0045",
       "person_id": "p_frances_todd_wallace",
       "place_id": "pl_springfield_il",
       "time_min": -47574,
@@ -7145,7 +6893,7 @@
       "to_event_id": "evt_1842_marr_abraham_mary"
     },
     {
-      "id": "span_0067",
+      "id": "span_0046",
       "person_id": "p_mary_todd_lincoln",
       "place_id": "pl_lexington_ky",
       "time_min": -55171,
@@ -7157,163 +6905,55 @@
       "to_event_id": "evt_1826_marr_robert_betsy_todd"
     },
     {
-      "id": "span_0068",
+      "id": "span_0047",
       "person_id": "p_mary_todd_lincoln",
       "place_id": "pl_springfield_il",
       "time_min": -47574,
-      "time_max": -46444,
-      "start_year": 1839,
-      "end_year": 1842,
-      "confidence_tier": "Inferred",
-      "from_event_id": "evt_1839_mary_todd_springfield",
-      "to_event_id": "evt_1842_marr_abraham_mary"
-    },
-    {
-      "id": "span_0069",
-      "person_id": "p_mary_todd_lincoln",
-      "place_id": "pl_springfield_il",
-      "time_min": -46444,
-      "time_max": -46174,
-      "start_year": 1842,
-      "end_year": 1843,
-      "confidence_tier": "Inferred",
-      "from_event_id": "evt_1842_marr_abraham_mary",
-      "to_event_id": "evt_1843_birt_robert_todd_lincoln"
-    },
-    {
-      "id": "span_0070",
-      "person_id": "p_mary_todd_lincoln",
-      "place_id": "pl_springfield_il",
-      "time_min": -46174,
-      "time_max": -45222,
-      "start_year": 1843,
-      "end_year": 1846,
-      "confidence_tier": "Inferred",
-      "from_event_id": "evt_1843_birt_robert_todd_lincoln",
-      "to_event_id": "evt_1846_birt_edward_lincoln"
-    },
-    {
-      "id": "span_0071",
-      "person_id": "p_mary_todd_lincoln",
-      "place_id": "pl_springfield_il",
-      "time_min": -45222,
-      "time_max": -43589,
-      "start_year": 1846,
-      "end_year": 1850,
-      "confidence_tier": "Inferred",
-      "from_event_id": "evt_1846_birt_edward_lincoln",
-      "to_event_id": "evt_1850_census_springfield"
-    },
-    {
-      "id": "span_0072",
-      "person_id": "p_mary_todd_lincoln",
-      "place_id": "pl_springfield_il",
-      "time_min": -43589,
-      "time_max": -43475,
-      "start_year": 1850,
-      "end_year": 1850,
-      "confidence_tier": "Inferred",
-      "from_event_id": "evt_1850_census_springfield",
-      "to_event_id": "evt_1850_birt_willie_lincoln"
-    },
-    {
-      "id": "span_0073",
-      "person_id": "p_mary_todd_lincoln",
-      "place_id": "pl_springfield_il",
-      "time_min": -43475,
-      "time_max": -42640,
-      "start_year": 1850,
-      "end_year": 1853,
-      "confidence_tier": "Inferred",
-      "from_event_id": "evt_1850_birt_willie_lincoln",
-      "to_event_id": "evt_1853_birt_tad_lincoln"
-    },
-    {
-      "id": "span_0074",
-      "person_id": "p_mary_todd_lincoln",
-      "place_id": "pl_springfield_il",
-      "time_min": -42640,
       "time_max": -39982,
-      "start_year": 1853,
+      "start_year": 1839,
       "end_year": 1860,
       "confidence_tier": "Inferred",
-      "from_event_id": "evt_1853_birt_tad_lincoln",
+      "from_event_id": "evt_1839_mary_todd_springfield",
       "to_event_id": "evt_1860_census_springfield"
     },
     {
-      "id": "span_0075",
+      "id": "span_0048",
       "person_id": "p_james_harlan",
       "place_id": "pl_mount_pleasant_ia",
       "time_min": -45343,
-      "time_max": -45023,
-      "start_year": 1845,
-      "end_year": 1846,
-      "confidence_tier": "Inferred",
-      "from_event_id": "evt_1845_marr_james_harlan_ann_peck",
-      "to_event_id": "evt_1846_birt_mary_harlan"
-    },
-    {
-      "id": "span_0076",
-      "person_id": "p_james_harlan",
-      "place_id": "pl_mount_pleasant_ia",
-      "time_min": -45023,
       "time_max": -41941,
-      "start_year": 1846,
+      "start_year": 1845,
       "end_year": 1855,
       "confidence_tier": "Inferred",
-      "from_event_id": "evt_1846_birt_mary_harlan",
+      "from_event_id": "evt_1845_marr_james_harlan_ann_peck",
       "to_event_id": "evt_1855_harlan_us_senate"
     },
     {
-      "id": "span_0077",
+      "id": "span_0049",
       "person_id": "p_james_harlan",
       "place_id": "pl_washington_dc",
       "time_min": -39749,
-      "time_max": -38283,
-      "start_year": 1861,
-      "end_year": 1865,
-      "confidence_tier": "Inferred",
-      "from_event_id": "evt_1861_washington_residence",
-      "to_event_id": "evt_1865_harlan_secretary_interior"
-    },
-    {
-      "id": "span_0078",
-      "person_id": "p_james_harlan",
-      "place_id": "pl_washington_dc",
-      "time_min": -38283,
       "time_max": -36988,
-      "start_year": 1865,
+      "start_year": 1861,
       "end_year": 1868,
       "confidence_tier": "Inferred",
-      "from_event_id": "evt_1865_harlan_secretary_interior",
+      "from_event_id": "evt_1861_washington_residence",
       "to_event_id": "evt_1868_marr_robert_mary"
     },
     {
-      "id": "span_0079",
+      "id": "span_0050",
       "person_id": "p_ann_eliza_peck",
       "place_id": "pl_mount_pleasant_ia",
       "time_min": -45343,
-      "time_max": -45023,
-      "start_year": 1845,
-      "end_year": 1846,
-      "confidence_tier": "Inferred",
-      "from_event_id": "evt_1845_marr_james_harlan_ann_peck",
-      "to_event_id": "evt_1846_birt_mary_harlan"
-    },
-    {
-      "id": "span_0080",
-      "person_id": "p_ann_eliza_peck",
-      "place_id": "pl_mount_pleasant_ia",
-      "time_min": -45023,
       "time_max": -41941,
-      "start_year": 1846,
+      "start_year": 1845,
       "end_year": 1855,
       "confidence_tier": "Inferred",
-      "from_event_id": "evt_1846_birt_mary_harlan",
+      "from_event_id": "evt_1845_marr_james_harlan_ann_peck",
       "to_event_id": "evt_1855_harlan_us_senate"
     },
     {
-      "id": "span_0081",
+      "id": "span_0051",
       "person_id": "p_ann_eliza_peck",
       "place_id": "pl_washington_dc",
       "time_min": -38283,
@@ -7325,67 +6965,31 @@
       "to_event_id": "evt_1868_marr_robert_mary"
     },
     {
-      "id": "span_0082",
+      "id": "span_0052",
       "person_id": "p_robert_todd_lincoln",
       "place_id": "pl_springfield_il",
       "time_min": -46174,
-      "time_max": -43589,
-      "start_year": 1843,
-      "end_year": 1850,
-      "confidence_tier": "Inferred",
-      "from_event_id": "evt_1843_birt_robert_todd_lincoln",
-      "to_event_id": "evt_1850_census_springfield"
-    },
-    {
-      "id": "span_0083",
-      "person_id": "p_robert_todd_lincoln",
-      "place_id": "pl_springfield_il",
-      "time_min": -43589,
       "time_max": -39982,
-      "start_year": 1850,
+      "start_year": 1843,
       "end_year": 1860,
       "confidence_tier": "Inferred",
-      "from_event_id": "evt_1850_census_springfield",
+      "from_event_id": "evt_1843_birt_robert_todd_lincoln",
       "to_event_id": "evt_1860_census_springfield"
     },
     {
-      "id": "span_0084",
+      "id": "span_0053",
       "person_id": "p_robert_todd_lincoln",
       "place_id": "pl_chicago_il",
       "time_min": -36602,
-      "time_max": -36344,
-      "start_year": 1869,
-      "end_year": 1870,
-      "confidence_tier": "Inferred",
-      "from_event_id": "evt_1869_birt_mary_lincoln_isham",
-      "to_event_id": "evt_1870_census_chicago_robert"
-    },
-    {
-      "id": "span_0085",
-      "person_id": "p_robert_todd_lincoln",
-      "place_id": "pl_chicago_il",
-      "time_min": -36373,
-      "time_max": -35203,
-      "start_year": 1870,
-      "end_year": 1873,
-      "confidence_tier": "Inferred",
-      "from_event_id": "evt_1870_census_chicago_robert",
-      "to_event_id": "evt_1873_birt_abraham_lincoln_ii"
-    },
-    {
-      "id": "span_0086",
-      "person_id": "p_robert_todd_lincoln",
-      "place_id": "pl_chicago_il",
-      "time_min": -35203,
       "time_max": -34389,
-      "start_year": 1873,
+      "start_year": 1869,
       "end_year": 1875,
       "confidence_tier": "Inferred",
-      "from_event_id": "evt_1873_birt_abraham_lincoln_ii",
+      "from_event_id": "evt_1869_birt_mary_lincoln_isham",
       "to_event_id": "evt_1875_birt_jessie_harlan_lincoln"
     },
     {
-      "id": "span_0087",
+      "id": "span_0054",
       "person_id": "p_mary_harlan_lincoln",
       "place_id": "pl_mount_pleasant_ia",
       "time_min": -45023,
@@ -7397,7 +7001,7 @@
       "to_event_id": "evt_1855_harlan_us_senate"
     },
     {
-      "id": "span_0088",
+      "id": "span_0055",
       "person_id": "p_mary_harlan_lincoln",
       "place_id": "pl_washington_dc",
       "time_min": -38283,
@@ -7409,43 +7013,19 @@
       "to_event_id": "evt_1868_marr_robert_mary"
     },
     {
-      "id": "span_0089",
+      "id": "span_0056",
       "person_id": "p_mary_harlan_lincoln",
       "place_id": "pl_chicago_il",
       "time_min": -36602,
-      "time_max": -36344,
-      "start_year": 1869,
-      "end_year": 1870,
-      "confidence_tier": "Inferred",
-      "from_event_id": "evt_1869_birt_mary_lincoln_isham",
-      "to_event_id": "evt_1870_census_chicago_robert"
-    },
-    {
-      "id": "span_0090",
-      "person_id": "p_mary_harlan_lincoln",
-      "place_id": "pl_chicago_il",
-      "time_min": -36373,
-      "time_max": -35203,
-      "start_year": 1870,
-      "end_year": 1873,
-      "confidence_tier": "Inferred",
-      "from_event_id": "evt_1870_census_chicago_robert",
-      "to_event_id": "evt_1873_birt_abraham_lincoln_ii"
-    },
-    {
-      "id": "span_0091",
-      "person_id": "p_mary_harlan_lincoln",
-      "place_id": "pl_chicago_il",
-      "time_min": -35203,
       "time_max": -34389,
-      "start_year": 1873,
+      "start_year": 1869,
       "end_year": 1875,
       "confidence_tier": "Inferred",
-      "from_event_id": "evt_1873_birt_abraham_lincoln_ii",
+      "from_event_id": "evt_1869_birt_mary_lincoln_isham",
       "to_event_id": "evt_1875_birt_jessie_harlan_lincoln"
     },
     {
-      "id": "span_0092",
+      "id": "span_0057",
       "person_id": "p_william_wallace_lincoln",
       "place_id": "pl_springfield_il",
       "time_min": -43475,
@@ -7457,7 +7037,7 @@
       "to_event_id": "evt_1860_census_springfield"
     },
     {
-      "id": "span_0093",
+      "id": "span_0058",
       "person_id": "p_thomas_tad_lincoln",
       "place_id": "pl_springfield_il",
       "time_min": -42640,
@@ -7469,31 +7049,19 @@
       "to_event_id": "evt_1860_census_springfield"
     },
     {
-      "id": "span_0094",
+      "id": "span_0059",
       "person_id": "p_mary_lincoln_isham",
       "place_id": "pl_chicago_il",
       "time_min": -36602,
-      "time_max": -36344,
-      "start_year": 1869,
-      "end_year": 1870,
-      "confidence_tier": "Inferred",
-      "from_event_id": "evt_1869_birt_mary_lincoln_isham",
-      "to_event_id": "evt_1870_census_chicago_robert"
-    },
-    {
-      "id": "span_0095",
-      "person_id": "p_mary_lincoln_isham",
-      "place_id": "pl_chicago_il",
-      "time_min": -36373,
       "time_max": -34389,
-      "start_year": 1870,
+      "start_year": 1869,
       "end_year": 1875,
       "confidence_tier": "Inferred",
-      "from_event_id": "evt_1870_census_chicago_robert",
+      "from_event_id": "evt_1869_birt_mary_lincoln_isham",
       "to_event_id": "evt_1875_birt_jessie_harlan_lincoln"
     },
     {
-      "id": "span_0096",
+      "id": "span_0060",
       "person_id": "p_abraham_lincoln_ii",
       "place_id": "pl_chicago_il",
       "time_min": -35203,
