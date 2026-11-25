@@ -69,13 +69,13 @@ jobs:
         env:
           KINLOOM_TOKEN: \${{ secrets.KINLOOM_BACKUP_TOKEN }}
         run: |
-          npx @kinloom/cli export-yaml \\
+          npx -y @kinloom/cli@latest export-yaml \\
             --site "\${{ vars.KINLOOM_SITE_URL }}" \\
             --out data \\
             --state-file data/.last-backup-revision
       - name: Commit backup when revision advanced
         run: |
-          if git diff --quiet data; then
+          if [ -z "$(git status --porcelain data)" ]; then
             echo "No archive changes since last backup."
             exit 0
           fi
@@ -106,7 +106,7 @@ jobs:
         env:
           KINLOOM_TOKEN: \${{ secrets.KINLOOM_BACKUP_TOKEN }}
         run: |
-          npx @kinloom/cli reconcile \\
+          npx -y @kinloom/cli@latest reconcile \\
             --site "\${{ vars.KINLOOM_SITE_URL }}" \\
             --config kinloom.config.yaml
 `;
