@@ -8,6 +8,7 @@ import {
   formatPublicProvenance,
   getEventsForPerson,
   getMediaPersonIds,
+  orderNarrativeSources,
   partitionPersonNarratives,
 } from '@kinloom/core';
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
@@ -44,6 +45,11 @@ const MEDIA_KIND_LABELS: Record<string, string> = {
   audio_oral_history: 'Audio Oral History',
 };
 
+type PersonLightboxState =
+  | { kind: 'closed' }
+  | { kind: 'gallery'; index: number }
+  | { kind: 'single'; media: MediaItem };
+
 export const PersonPage: React.FC = () => {
   const { slug } = useParams<{ slug: string }>();
   const location = useLocation();
@@ -66,7 +72,7 @@ export const PersonPage: React.FC = () => {
   const person = slug ? peopleBySlug.get(slug) : undefined;
 
   const [activeEventId, setActiveEventId] = useState<string | null>(searchParams.get('event'));
-  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
+  const [lightbox, setLightbox] = useState<PersonLightboxState>({ kind: 'closed' });
   const [showAllMedia, setShowAllMedia] = useState(false);
   const [showAllNarratives, setShowAllNarratives] = useState(false);
   const [showAllFamilyStories, setShowAllFamilyStories] = useState(false);
@@ -82,7 +88,7 @@ export const PersonPage: React.FC = () => {
   const [prevSlug, setPrevSlug] = useState(slug);
   if (slug !== prevSlug) {
     setPrevSlug(slug);
-    setLightboxIndex(null);
+    setLightbox({ kind: 'closed' });
     setShowAllMedia(false);
     setShowAllNarratives(false);
     setShowAllFamilyStories(false);
@@ -238,18 +244,47 @@ export const PersonPage: React.FC = () => {
     };
   }, [bundle, person, peopleById]);
 
+  const handleOpenCitationMedia = useCallback(
+    (media: MediaItem) => {
+      const idx = personMedia.findIndex((item) => item.id === media.id);
+      if (idx !== -1) {
+        setLightbox({ kind: 'gallery', index: idx });
+      } else {
+        setLightbox({ kind: 'single', media });
+      }
+    },
+    [personMedia],
+  );
+
+  const resolveCitationMediaUrl = useCallback(
+    (media: MediaItem): string | null => {
+      const resolved = resolveAssetUrl(media.thumb_file || media.file, baseUrl);
+      return resolved || null;
+    },
+    [baseUrl],
+  );
+
   useEffect(() => {
-    if (lightboxIndex === null || personMedia.length === 0) {
+    if (lightbox.kind === 'closed') {
       return undefined;
     }
     const onKey = (e: KeyboardEvent): void => {
       if (e.key === 'Escape') {
-        setLightboxIndex(null);
-      } else if (e.key === 'ArrowRight') {
-        setLightboxIndex((i) => (i === null ? null : (i + 1) % personMedia.length));
-      } else if (e.key === 'ArrowLeft') {
-        setLightboxIndex((i) =>
-          i === null ? null : (i - 1 + personMedia.length) % personMedia.length,
+        setLightbox({ kind: 'closed' });
+      } else if (e.key === 'ArrowRight' && personMedia.length > 0) {
+        setLightbox((prev) =>
+          prev.kind === 'gallery'
+            ? { kind: 'gallery', index: (prev.index + 1) % personMedia.length }
+            : prev,
+        );
+      } else if (e.key === 'ArrowLeft' && personMedia.length > 0) {
+        setLightbox((prev) =>
+          prev.kind === 'gallery'
+            ? {
+                kind: 'gallery',
+                index: (prev.index - 1 + personMedia.length) % personMedia.length,
+              }
+            : prev,
         );
       }
     };
@@ -257,7 +292,7 @@ export const PersonPage: React.FC = () => {
     return (): void => {
       window.removeEventListener('keydown', onKey);
     };
-  }, [lightboxIndex, personMedia.length]);
+  }, [lightbox.kind, personMedia.length]);
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
@@ -513,7 +548,7 @@ export const PersonPage: React.FC = () => {
                     className="person-portrait-btn"
                     onClick={() => {
                       const idx = personMedia.findIndex((m) => m.file === person.portrait_url);
-                      setLightboxIndex(idx === -1 ? 0 : idx);
+                      setLightbox({ kind: 'gallery', index: idx === -1 ? 0 : idx });
                     }}
                     title="Click to zoom archival portrait"
                   >
@@ -682,9 +717,11 @@ export const PersonPage: React.FC = () => {
                     const isExpanded = expandedNarrativeIds.has(narrative.id);
                     const sourcesOpen = expandedSourceNarrativeIds.has(narrative.id);
                     const dateLabel = formatNarrativeDateSpan(narrative.date_edtf);
-                    const linkedSources = (narrative.source_ids ?? [])
-                      .map((srcId) => sourcesById.get(srcId))
-                      .filter((src): src is NonNullable<typeof src> => Boolean(src));
+                    const orderedSources = orderNarrativeSources(
+                      narrative.body_md,
+                      narrative.source_ids ?? [],
+                      sourcesById,
+                    );
 
                     return (
                       <article key={narrative.id} className="person-biography-entry">
@@ -702,10 +739,21 @@ export const PersonPage: React.FC = () => {
                         <div
                           className={`person-biography-body ${isLong && !isExpanded ? 'is-collapsed' : ''}`}
                         >
-                          <ArchivalMarkdown markdown={narrative.body_md} />
+                          <ArchivalMarkdown
+                            markdown={narrative.body_md}
+                            sourcesById={sourcesById}
+                            mediaItems={bundle.media}
+                            events={bundle.events}
+                            subjectPersonId={person.id}
+                            onInspectSource={(sourceId) => {
+                              openSourceInspector({ sourceId });
+                            }}
+                            onOpenMedia={handleOpenCitationMedia}
+                            resolveMediaUrl={resolveCitationMediaUrl}
+                          />
                         </div>
 
-                        {(isLong || linkedSources.length > 0) && (
+                        {(isLong || orderedSources.length > 0) && (
                           <div className="person-biography-actions print-hide">
                             {isLong && (
                               <button
@@ -720,7 +768,7 @@ export const PersonPage: React.FC = () => {
                               </button>
                             )}
 
-                            {linkedSources.length > 0 && (
+                            {orderedSources.length > 0 && (
                               <button
                                 type="button"
                                 className="person-biography-sources-toggle"
@@ -729,7 +777,7 @@ export const PersonPage: React.FC = () => {
                                   toggleNarrativeSources(narrative.id);
                                 }}
                               >
-                                <span>Sources ({linkedSources.length})</span>
+                                <span>Sources ({orderedSources.length})</span>
                                 <span className="person-biography-chevron" aria-hidden="true">
                                   {sourcesOpen ? '▾' : '▸'}
                                 </span>
@@ -738,10 +786,10 @@ export const PersonPage: React.FC = () => {
                           </div>
                         )}
 
-                        {sourcesOpen && linkedSources.length > 0 && (
+                        {sourcesOpen && orderedSources.length > 0 && (
                           <div className="person-biography-sources">
                             <ul className="person-biography-source-list">
-                              {linkedSources.map((src) => (
+                              {orderedSources.map(({ source: src, footnoteNumber }) => (
                                 <li key={src.id}>
                                   <button
                                     type="button"
@@ -750,6 +798,11 @@ export const PersonPage: React.FC = () => {
                                       openSourceInspector({ sourceId: src.id });
                                     }}
                                   >
+                                    {footnoteNumber !== null && (
+                                      <span className="person-biography-source-num">
+                                        [{footnoteNumber}]
+                                      </span>
+                                    )}
                                     <span className="person-biography-source-text">
                                       {formatPublicCitation(src.citation)}
                                     </span>
@@ -803,9 +856,11 @@ export const PersonPage: React.FC = () => {
                   const isExpanded = expandedNarrativeIds.has(story.id);
                   const sourcesOpen = expandedSourceNarrativeIds.has(story.id);
                   const dateLabel = formatNarrativeDateSpan(story.date_edtf);
-                  const linkedSources = (story.source_ids ?? [])
-                    .map((srcId) => sourcesById.get(srcId))
-                    .filter((src): src is NonNullable<typeof src> => Boolean(src));
+                  const orderedSources = orderNarrativeSources(
+                    story.body_md,
+                    story.source_ids ?? [],
+                    sourcesById,
+                  );
 
                   return (
                     <article key={story.id} className="person-biography-entry person-family-story-entry">
@@ -822,7 +877,18 @@ export const PersonPage: React.FC = () => {
 
                       {isExpanded && (
                         <div className="person-biography-body">
-                          <ArchivalMarkdown markdown={story.body_md} />
+                          <ArchivalMarkdown
+                            markdown={story.body_md}
+                            sourcesById={sourcesById}
+                            mediaItems={bundle.media}
+                            events={bundle.events}
+                            subjectPersonId={person.id}
+                            onInspectSource={(sourceId) => {
+                              openSourceInspector({ sourceId });
+                            }}
+                            onOpenMedia={handleOpenCitationMedia}
+                            resolveMediaUrl={resolveCitationMediaUrl}
+                          />
                         </div>
                       )}
 
@@ -838,7 +904,7 @@ export const PersonPage: React.FC = () => {
                           {isExpanded ? 'Hide story' : 'Read story'}
                         </button>
 
-                        {linkedSources.length > 0 && (
+                        {orderedSources.length > 0 && (
                           <button
                             type="button"
                             className="person-biography-sources-toggle"
@@ -847,7 +913,7 @@ export const PersonPage: React.FC = () => {
                               toggleNarrativeSources(story.id);
                             }}
                           >
-                            <span>Sources ({linkedSources.length})</span>
+                            <span>Sources ({orderedSources.length})</span>
                             <span className="person-biography-chevron" aria-hidden="true">
                               {sourcesOpen ? '▾' : '▸'}
                             </span>
@@ -855,10 +921,10 @@ export const PersonPage: React.FC = () => {
                         )}
                       </div>
 
-                      {sourcesOpen && linkedSources.length > 0 && (
+                      {sourcesOpen && orderedSources.length > 0 && (
                         <div className="person-biography-sources">
                           <ul className="person-biography-source-list">
-                            {linkedSources.map((src) => (
+                            {orderedSources.map(({ source: src, footnoteNumber }) => (
                               <li key={src.id}>
                                 <button
                                   type="button"
@@ -867,6 +933,11 @@ export const PersonPage: React.FC = () => {
                                     openSourceInspector({ sourceId: src.id });
                                   }}
                                 >
+                                  {footnoteNumber !== null && (
+                                    <span className="person-biography-source-num">
+                                      [{footnoteNumber}]
+                                    </span>
+                                  )}
                                   <span className="person-biography-source-text">
                                     {formatPublicCitation(src.citation)}
                                   </span>
@@ -923,7 +994,7 @@ export const PersonPage: React.FC = () => {
                     type="button"
                     className="person-media-card"
                     onClick={() => {
-                      setLightboxIndex(idx);
+                      setLightbox({ kind: 'gallery', index: idx });
                     }}
                   >
                     <div className="person-media-thumb-wrap">
@@ -1034,82 +1105,101 @@ export const PersonPage: React.FC = () => {
         }}
       />
 
-      {lightboxIndex !== null && personMedia[lightboxIndex] && (
-        <dialog
-          open
-          className="lightbox-backdrop photo-lightbox-overlay print-hide"
-          aria-label="Archival media lightbox"
-        >
-          <button
-            type="button"
-            className="lightbox-backdrop-close"
-            aria-label="Close lightbox"
-            onClick={() => {
-              setLightboxIndex(null);
-            }}
-          />
-          <div className="scan-lightbox-card">
-            <div className="scan-lightbox-header">
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                <span
-                  className={`media-kind-badge kind-${personMedia[lightboxIndex].kind}`}
-                  style={{ position: 'static' }}
-                >
-                  {MEDIA_KIND_LABELS[personMedia[lightboxIndex].kind] || personMedia[lightboxIndex].kind}
-                </span>
-                <strong style={{ fontFamily: 'var(--font-mono)', fontSize: '0.78rem', color: 'var(--text-inverse)' }}>
-                  {lightboxIndex + 1} / {personMedia.length}
-                </strong>
+      {(() => {
+        const activeLightboxMedia =
+          lightbox.kind === 'gallery'
+            ? (personMedia[lightbox.index] ?? null)
+            : lightbox.kind === 'single'
+              ? lightbox.media
+              : null;
+        if (!activeLightboxMedia) {
+          return null;
+        }
+        return (
+          <dialog
+            open
+            className="lightbox-backdrop photo-lightbox-overlay print-hide"
+            aria-label="Archival media lightbox"
+          >
+            <button
+              type="button"
+              className="lightbox-backdrop-close"
+              aria-label="Close lightbox"
+              onClick={() => {
+                setLightbox({ kind: 'closed' });
+              }}
+            />
+            <div className="scan-lightbox-card">
+              <div className="scan-lightbox-header">
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                  <span
+                    className={`media-kind-badge kind-${activeLightboxMedia.kind}`}
+                    style={{ position: 'static' }}
+                  >
+                    {MEDIA_KIND_LABELS[activeLightboxMedia.kind] || activeLightboxMedia.kind}
+                  </span>
+                  {lightbox.kind === 'gallery' && (
+                    <strong style={{ fontFamily: 'var(--font-mono)', fontSize: '0.78rem', color: 'var(--text-inverse)' }}>
+                      {lightbox.index + 1} / {personMedia.length}
+                    </strong>
+                  )}
+                </div>
+                <div className="media-lightbox-nav">
+                  {lightbox.kind === 'gallery' && personMedia.length > 1 && (
+                    <>
+                      <button
+                        type="button"
+                        className="pill-btn"
+                        onClick={() => {
+                          setLightbox({
+                            kind: 'gallery',
+                            index: (lightbox.index - 1 + personMedia.length) % personMedia.length,
+                          });
+                        }}
+                      >
+                        ← Prev
+                      </button>
+                      <button
+                        type="button"
+                        className="pill-btn"
+                        onClick={() => {
+                          setLightbox({
+                            kind: 'gallery',
+                            index: (lightbox.index + 1) % personMedia.length,
+                          });
+                        }}
+                      >
+                        Next →
+                      </button>
+                    </>
+                  )}
+                  <button
+                    type="button"
+                    className="pill-btn"
+                    onClick={() => {
+                      setLightbox({ kind: 'closed' });
+                    }}
+                  >
+                    Close [Esc]
+                  </button>
+                </div>
               </div>
-              <div className="media-lightbox-nav">
-                {personMedia.length > 1 && (
-                  <>
-                    <button
-                      type="button"
-                      className="pill-btn"
-                      onClick={() => {
-                        setLightboxIndex((lightboxIndex - 1 + personMedia.length) % personMedia.length);
-                      }}
-                    >
-                      ← Prev
-                    </button>
-                    <button
-                      type="button"
-                      className="pill-btn"
-                      onClick={() => {
-                        setLightboxIndex((lightboxIndex + 1) % personMedia.length);
-                      }}
-                    >
-                      Next →
-                    </button>
-                  </>
-                )}
-                <button
-                  type="button"
-                  className="pill-btn"
-                  onClick={() => {
-                    setLightboxIndex(null);
-                  }}
-                >
-                  Close [Esc]
-                </button>
+              <div className="scan-lightbox-scroll">
+                <MediaPlayer media={activeLightboxMedia} baseUrl={baseUrl} variant="full" />
+                <div style={{ marginTop: 12, padding: '8px 4px' }}>
+                  <div style={{ fontFamily: 'var(--font-serif)', fontSize: '1.05rem', color: 'var(--surface-header)', fontWeight: 600 }}>
+                    {activeLightboxMedia.caption}
+                  </div>
+                  <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.74rem', color: 'var(--text-secondary)', marginTop: 4 }}>
+                    {activeLightboxMedia.date_edtf ? `Date: ${activeLightboxMedia.date_edtf} · ` : ''}
+                    {formatPublicProvenance(activeLightboxMedia.provenance)}
+                  </div>
+                </div>
               </div>
             </div>
-            <div className="scan-lightbox-scroll">
-              <MediaPlayer media={personMedia[lightboxIndex]} baseUrl={baseUrl} variant="full" />
-              <div style={{ marginTop: 12, padding: '8px 4px' }}>
-                <div style={{ fontFamily: 'var(--font-serif)', fontSize: '1.05rem', color: 'var(--surface-header)', fontWeight: 600 }}>
-                  {personMedia[lightboxIndex].caption}
-                </div>
-                <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.74rem', color: 'var(--text-secondary)', marginTop: 4 }}>
-                  {personMedia[lightboxIndex].date_edtf ? `Date: ${personMedia[lightboxIndex].date_edtf} · ` : ''}
-                  {formatPublicProvenance(personMedia[lightboxIndex].provenance)}
-                </div>
-              </div>
-            </div>
-          </div>
-        </dialog>
-      )}
+          </dialog>
+        );
+      })()}
       <KinloomFooter />
     </div>
   );

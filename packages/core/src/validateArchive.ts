@@ -8,6 +8,7 @@ import type {
   SourceRecord,
 } from './schemas/entities.js';
 import { getMediaPersonIds } from './schemas/entities.js';
+import { validateNarrativeCitations } from './citations.js';
 
 export interface ValidateArchiveInput {
   people: readonly Pick<RawPerson, 'id'>[];
@@ -16,10 +17,10 @@ export interface ValidateArchiveInput {
   sources?: readonly Pick<SourceRecord, 'id'>[];
   kinship?: readonly Pick<KinshipEdge, 'from' | 'to' | 'relation'>[];
   media?: readonly Pick<MediaItem, 'id' | 'person_id' | 'person_ids' | 'event_id' | 'source_id'>[];
-  narratives?: readonly Pick<
+  narratives?: readonly (Pick<
     Narrative,
     'id' | 'kind' | 'subject_person_id' | 'person_ids' | 'place_ids' | 'event_ids' | 'source_ids'
-  >[];
+  > & { body_md?: string })[];
 }
 
 export interface ArchiveValidationResult {
@@ -119,6 +120,11 @@ export function validateArchive(input: ValidateArchiveInput): ArchiveValidationR
         }
       }
     }
+  }
+
+  if (sourceIds && input.narratives && input.narratives.length > 0) {
+    const mediaIds = input.media ? new Set(input.media.map((m) => m.id)) : null;
+    errors.push(...validateNarrativeCitations(input.narratives, sourceIds, mediaIds));
   }
 
   return {

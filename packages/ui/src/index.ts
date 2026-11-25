@@ -101,6 +101,21 @@ export {
 } from './components/Atoms.js';
 export { AppErrorBoundary } from './components/AppErrorBoundary.js';
 export type { AppErrorBoundaryProps } from './components/AppErrorBoundary.js';
+export {
+  ArchivalMarkdown,
+  formatNarrativeDateSpan,
+  parseMarkdownBlocks,
+} from './components/ArchivalMarkdown.js';
+export type { ArchivalMarkdownProps } from './components/ArchivalMarkdown.js';
+export {
+  CitationPopover,
+  computeCitationPopoverPosition,
+} from './components/CitationPopover.js';
+export type {
+  CitationPopoverProps,
+  PopoverAnchorRect,
+  PopoverCoordinates,
+} from './components/CitationPopover.js';
 export { BlankScreenWatchdog } from './components/BlankScreenWatchdog.js';
 export { ScrollMemory } from './components/ScrollMemory.js';
 export { KinloomFooter, KinloomMark } from './components/KinloomFooter.js';

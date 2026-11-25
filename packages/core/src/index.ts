@@ -34,6 +34,7 @@ export * from './gedcom/slice.js';
 export * from './revisions.js';
 
 // Core Domain Algorithms (UI-agnostic)
+export * from './citations.js';
 export * from './domain/publicDisplay.js';
 export * from './domain/citations.js';
 export * from './domain/kinshipFinder.js';

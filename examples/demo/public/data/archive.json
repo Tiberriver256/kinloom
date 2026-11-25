@@ -11,7 +11,7 @@
       "places": 39,
       "sources": 24,
       "media": 29,
-      "narratives": 4
+      "narratives": 5
     }
   },
   "media": [
@@ -8854,11 +8854,41 @@
       ]
     },
     {
+      "id": "nar_abraham_lincoln_bio",
+      "slug": "abraham-lincoln-archival-biography",
+      "kind": "biography",
+      "subject_person_id": "p_abraham_lincoln_1809",
+      "title": "Abraham Lincoln in Primary Records (1809–1865)",
+      "summary": "Public-domain federal records, county registers, and contemporary press documenting Abraham Lincoln from Springfield to Washington.",
+      "body_md": "In December 1859 Abraham Lincoln sketched his frontier upbringing from Hardin County, Kentucky through Indiana to Illinois for Jesse W. Fell.[^src_lincoln_autobiography_1859]\nAfter settling in Springfield he married Mary Ann Todd on November 4, 1842,[^src_sangamon_marriage_1842] and in May 1849 received U.S. Patent No. 6,469 for buoying river vessels over shoals.[^src_nara_patent_6469|med_scan_nara_patent_6469_petition]\n\nThe 1850 and 1860 federal censuses record the growing Eighth Street household in Springfield,[^src_census_1850_springfield][^src_census_1860_springfield] while his presidential papers preserve the signed January 1, 1863 Emancipation Proclamation.[^src_nara_emancipation_1863]\nContemporary Washington newspapers documented his death on April 15, 1865,[^src_chronam_evening_star_1865] closing a career anchored across both family and federal archives.[^src_nara_patent_6469]\n",
+      "date_edtf": "1809/1865",
+      "person_ids": [
+        "p_abraham_lincoln_1809",
+        "p_mary_todd_lincoln",
+        "p_robert_todd_lincoln"
+      ],
+      "place_ids": [
+        "pl_hodgenville_ky",
+        "pl_springfield_il",
+        "pl_washington_dc"
+      ],
+      "event_ids": [],
+      "source_ids": [
+        "src_lincoln_autobiography_1859",
+        "src_sangamon_marriage_1842",
+        "src_nara_patent_6469",
+        "src_census_1850_springfield",
+        "src_census_1860_springfield",
+        "src_nara_emancipation_1863",
+        "src_chronam_evening_star_1865"
+      ]
+    },
+    {
       "id": "nar_springfield_household",
       "slug": "eighth-street-springfield-household",
       "title": "The Eighth Street Household & Patent Years (1842–1861)",
       "summary": "Federal census schedules, county marriage records, and NARA Patent No. 6,469 documenting the Lincoln and Todd family years in Springfield.",
-      "body_md": "Following their November 4, 1842 marriage at Ninian and Elizabeth Todd Edwards's home in Springfield,\nAbraham Lincoln and Mary Ann Todd bought the Eighth Street house in 1844. Between congressional service,\nfiling U.S. Patent No. 6,469 in May 1849, and riding the Eighth Judicial Circuit, the 1850 and 1860\nfederal censuses preserve the full sweep of their Springfield household.\n",
+      "body_md": "Following their November 4, 1842 marriage at Ninian and Elizabeth Todd Edwards's home in Springfield,[^src_sangamon_marriage_1842]\nAbraham Lincoln and Mary Ann Todd bought the Eighth Street house in 1844. Between congressional service,\nfiling U.S. Patent No. 6,469 in May 1849,[^src_nara_patent_6469] and riding the Eighth Judicial Circuit, the 1850 and 1860\nfederal censuses preserve the full sweep of their Springfield household.[^src_census_1850_springfield][^src_census_1860_springfield]\n",
       "date_edtf": "1842/1861",
       "person_ids": [
         "p_abraham_lincoln_1809",

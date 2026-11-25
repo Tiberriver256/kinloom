@@ -1,4 +1,12 @@
-import React from 'react';
+import type { ArchiveEvent, MediaItem, SourceRecord } from '@kinloom/core';
+import {
+  extractNarrativeCitations,
+  formatPublicCitation,
+  resolveCitationMedia,
+} from '@kinloom/core';
+import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
+import { CitationPopover } from './CitationPopover.js';
+import { resolveAssetUrl } from './Atoms.js';
 
 type MarkdownBlock =
   | { kind: 'heading'; level: 3 | 4; text: string }
@@ -7,15 +15,59 @@ type MarkdownBlock =
   | { kind: 'list'; ordered: boolean; items: string[] };
 
 const SAFE_LINK_PATTERN = /^(https?:\/\/|\/(?!\/))/i;
+const POPOVER_CLOSE_DELAY_MS = 150;
 
 function isSafeLinkHref(href: string): boolean {
   return SAFE_LINK_PATTERN.test(href.trim());
 }
 
-function parseInlineNodes(text: string, keyPrefix: string): React.ReactNode[] {
+interface ActiveCitationPopover {
+  occurrenceKey: string;
+  footnoteNumber: number;
+  source: SourceRecord;
+  media: MediaItem | null;
+  mediaUrl: string | null;
+  anchorEl: HTMLButtonElement;
+  triggerMode: 'hover' | 'focus' | 'pinned';
+}
+
+interface InlineCitationPayload {
+  occurrenceKey: string;
+  footnoteNumber: number;
+  source: SourceRecord;
+  media: MediaItem | null;
+  mediaUrl: string | null;
+}
+
+interface InlineCitationRenderContext {
+  sourcesById?: ReadonlyMap<string, SourceRecord>;
+  numberBySourceId: ReadonlyMap<string, number>;
+  mediaItems?: readonly MediaItem[];
+  events?: readonly ArchiveEvent[];
+  subjectPersonId?: string;
+  resolveMediaUrl: (media: MediaItem) => string | null;
+  activeKey: string | null;
+  popoverId: string;
+  onTriggerHover: (payload: InlineCitationPayload, anchorEl: HTMLButtonElement) => void;
+  onTriggerLeave: (occurrenceKey: string) => void;
+  onTriggerFocus: (payload: InlineCitationPayload, anchorEl: HTMLButtonElement) => void;
+  onTriggerBlur: (event: React.FocusEvent<HTMLButtonElement>) => void;
+  onTriggerClick: (payload: InlineCitationPayload, anchorEl: HTMLButtonElement) => void;
+}
+
+function defaultResolveMediaUrl(media: MediaItem): string | null {
+  const resolved = resolveAssetUrl(media.thumb_file || media.file);
+  return resolved || null;
+}
+
+function parseInlineNodes(
+  text: string,
+  keyPrefix: string,
+  citationCtx?: InlineCitationRenderContext,
+): React.ReactNode[] {
   const nodes: React.ReactNode[] = [];
   const tokenRe =
-    /(\*\*([^*]+)\*\*|__([^_]+)__|`([^`]+)`|\[([^\]]+)\]\(([^)\s]+)\)|\*([^*]+)\*|(?<!\w)_([^_]+)_(?!\w))/g;
+    /(\*\*([^*]+)\*\*|__([^_]+)__|`([^`]+)`|\[\^([A-Za-z0-9._:-]+)(?:\|([A-Za-z0-9._:-]+))?\]|\[([^\]]+)\]\(([^)\s]+)\)|\*([^*]+)\*|(?<!\w)_([^_]+)_(?!\w))/g;
 
   let lastIndex = 0;
   let match: RegExpExecArray | null = tokenRe.exec(text);
@@ -31,12 +83,68 @@ function parseInlineNodes(text: string, keyPrefix: string): React.ReactNode[] {
 
     if (match[2] !== undefined || match[3] !== undefined) {
       const content = match[2] ?? match[3] ?? '';
-      nodes.push(<strong key={key}>{parseInlineNodes(content, key)}</strong>);
+      nodes.push(<strong key={key}>{parseInlineNodes(content, key, citationCtx)}</strong>);
     } else if (match[4] !== undefined) {
       nodes.push(<code key={key}>{match[4]}</code>);
-    } else if (match[5] !== undefined && match[6] !== undefined) {
-      const label = match[5];
-      const href = match[6].trim();
+    } else if (match[5] !== undefined) {
+      const sourceId = match[5];
+      const explicitMediaId = match[6] ?? null;
+      const source = citationCtx?.sourcesById?.get(sourceId);
+      const footnoteNumber = citationCtx?.numberBySourceId.get(sourceId);
+
+      if (citationCtx && source && footnoteNumber !== undefined) {
+        const media = resolveCitationMedia(
+          sourceId,
+          explicitMediaId,
+          citationCtx.mediaItems,
+          citationCtx.subjectPersonId,
+          citationCtx.events,
+        );
+        const mediaUrl = media ? citationCtx.resolveMediaUrl(media) : null;
+        const payload: InlineCitationPayload = {
+          occurrenceKey: key,
+          footnoteNumber,
+          source,
+          media,
+          mediaUrl,
+        };
+        const isActive = citationCtx.activeKey === key;
+
+        nodes.push(
+          <sup key={key} className="archival-footnote-sup">
+            <button
+              type="button"
+              className={`archival-footnote-ref${isActive ? ' is-active' : ''}`}
+              aria-label={`Source citation ${footnoteNumber}: ${formatPublicCitation(source.citation)}`}
+              aria-expanded={isActive}
+              aria-controls={isActive ? citationCtx.popoverId : undefined}
+              aria-haspopup="dialog"
+              onMouseEnter={(e) => {
+                citationCtx.onTriggerHover(payload, e.currentTarget);
+              }}
+              onMouseLeave={() => {
+                citationCtx.onTriggerLeave(key);
+              }}
+              onFocus={(e) => {
+                citationCtx.onTriggerFocus(payload, e.currentTarget);
+              }}
+              onBlur={(e) => {
+                citationCtx.onTriggerBlur(e);
+              }}
+              onClick={(e) => {
+                e.stopPropagation();
+                citationCtx.onTriggerClick(payload, e.currentTarget);
+              }}
+            >
+              [{footnoteNumber}]
+            </button>
+          </sup>,
+        );
+      }
+      // Unresolved citation tokens are omitted so raw syntax never appears to readers.
+    } else if (match[7] !== undefined && match[8] !== undefined) {
+      const label = match[7];
+      const href = match[8].trim();
       if (isSafeLinkHref(href)) {
         const isExternal = /^https?:\/\//i.test(href);
         nodes.push(
@@ -53,9 +161,9 @@ function parseInlineNodes(text: string, keyPrefix: string): React.ReactNode[] {
       } else {
         nodes.push(label);
       }
-    } else if (match[7] !== undefined || match[8] !== undefined) {
-      const content = match[7] ?? match[8] ?? '';
-      nodes.push(<em key={key}>{parseInlineNodes(content, key)}</em>);
+    } else if (match[9] !== undefined || match[10] !== undefined) {
+      const content = match[9] ?? match[10] ?? '';
+      nodes.push(<em key={key}>{parseInlineNodes(content, key, citationCtx)}</em>);
     } else {
       nodes.push(match[0]);
     }
@@ -170,10 +278,231 @@ export function formatNarrativeDateSpan(dateSpan?: string | null): string | null
 export interface ArchivalMarkdownProps {
   markdown: string;
   className?: string;
+  sourcesById?: ReadonlyMap<string, SourceRecord>;
+  mediaItems?: readonly MediaItem[];
+  events?: readonly ArchiveEvent[];
+  subjectPersonId?: string;
+  onInspectSource?: (sourceId: string) => void;
+  onOpenMedia?: (media: MediaItem) => void;
+  resolveMediaUrl?: (media: MediaItem) => string | null;
 }
 
-export const ArchivalMarkdown: React.FC<ArchivalMarkdownProps> = ({ markdown, className }) => {
-  const blocks = parseMarkdownBlocks(markdown);
+export const ArchivalMarkdown: React.FC<ArchivalMarkdownProps> = ({
+  markdown,
+  className,
+  sourcesById,
+  mediaItems,
+  events,
+  subjectPersonId,
+  onInspectSource,
+  onOpenMedia,
+  resolveMediaUrl,
+}) => {
+  const blocks = useMemo(() => parseMarkdownBlocks(markdown), [markdown]);
+  const extractedCitations = useMemo(
+    () =>
+      sourcesById
+        ? extractNarrativeCitations(markdown, { knownSourceIds: sourcesById })
+        : null,
+    [markdown, sourcesById],
+  );
+
+  const popoverId = useId();
+  const popoverRef = useRef<HTMLDivElement | null>(null);
+  const closeTimerRef = useRef<number | null>(null);
+  const [activePopover, setActivePopover] = useState<ActiveCitationPopover | null>(null);
+
+  const clearCloseTimer = useCallback(() => {
+    if (closeTimerRef.current !== null) {
+      window.clearTimeout(closeTimerRef.current);
+      closeTimerRef.current = null;
+    }
+  }, []);
+
+  const closePopover = useCallback(() => {
+    clearCloseTimer();
+    setActivePopover(null);
+  }, [clearCloseTimer]);
+
+  const scheduleClose = useCallback(
+    (expectedKey?: string) => {
+      clearCloseTimer();
+      closeTimerRef.current = window.setTimeout(() => {
+        closeTimerRef.current = null;
+        setActivePopover((prev) => {
+          if (!prev || prev.triggerMode === 'pinned') {
+            return prev;
+          }
+          if (expectedKey && prev.occurrenceKey !== expectedKey) {
+            return prev;
+          }
+          return null;
+        });
+      }, POPOVER_CLOSE_DELAY_MS);
+    },
+    [clearCloseTimer],
+  );
+
+  useEffect(() => clearCloseTimer, [clearCloseTimer]);
+
+  useEffect(() => {
+    if (!activePopover) {
+      return undefined;
+    }
+    const onKeyDown = (event: KeyboardEvent): void => {
+      if (event.key === 'Escape') {
+        const focusWasInside = Boolean(
+          popoverRef.current &&
+            document.activeElement &&
+            popoverRef.current.contains(document.activeElement),
+        );
+        const anchor = activePopover.anchorEl;
+        closePopover();
+        if (focusWasInside) {
+          anchor.focus();
+        }
+      }
+    };
+    const onOutsidePointerDown = (event: MouseEvent): void => {
+      const target = event.target;
+      if (!(target instanceof Node)) {
+        return;
+      }
+      if (activePopover.anchorEl.contains(target)) {
+        return;
+      }
+      if (popoverRef.current?.contains(target)) {
+        return;
+      }
+      closePopover();
+    };
+
+    window.addEventListener('keydown', onKeyDown);
+    document.addEventListener('mousedown', onOutsidePointerDown);
+    return (): void => {
+      window.removeEventListener('keydown', onKeyDown);
+      document.removeEventListener('mousedown', onOutsidePointerDown);
+    };
+  }, [activePopover, closePopover]);
+
+  const handleTriggerHover = useCallback(
+    (payload: InlineCitationPayload, anchorEl: HTMLButtonElement) => {
+      clearCloseTimer();
+      setActivePopover((prev) => ({
+        ...payload,
+        anchorEl,
+        triggerMode:
+          prev && prev.occurrenceKey === payload.occurrenceKey && prev.triggerMode === 'pinned'
+            ? 'pinned'
+            : 'hover',
+      }));
+    },
+    [clearCloseTimer],
+  );
+
+  const handleTriggerLeave = useCallback(
+    (occurrenceKey: string) => {
+      scheduleClose(occurrenceKey);
+    },
+    [scheduleClose],
+  );
+
+  const handleTriggerFocus = useCallback(
+    (payload: InlineCitationPayload, anchorEl: HTMLButtonElement) => {
+      clearCloseTimer();
+      setActivePopover((prev) => ({
+        ...payload,
+        anchorEl,
+        triggerMode:
+          prev && prev.occurrenceKey === payload.occurrenceKey && prev.triggerMode === 'pinned'
+            ? 'pinned'
+            : 'focus',
+      }));
+    },
+    [clearCloseTimer],
+  );
+
+  const handleFocusLeavingSurface = useCallback(
+    (relatedTarget: EventTarget | null) => {
+      if (relatedTarget instanceof Node) {
+        if (popoverRef.current?.contains(relatedTarget)) {
+          return;
+        }
+        if (activePopover?.anchorEl.contains(relatedTarget)) {
+          return;
+        }
+      }
+      setActivePopover((prev) => (prev && prev.triggerMode === 'focus' ? null : prev));
+    },
+    [activePopover],
+  );
+
+  const handleTriggerBlur = useCallback(
+    (event: React.FocusEvent<HTMLButtonElement>) => {
+      handleFocusLeavingSurface(event.relatedTarget);
+    },
+    [handleFocusLeavingSurface],
+  );
+
+  const handlePopoverBlur = useCallback(
+    (event: React.FocusEvent<HTMLDivElement>) => {
+      handleFocusLeavingSurface(event.relatedTarget);
+    },
+    [handleFocusLeavingSurface],
+  );
+
+  const handleTriggerClick = useCallback(
+    (payload: InlineCitationPayload, anchorEl: HTMLButtonElement) => {
+      clearCloseTimer();
+      setActivePopover((prev) => {
+        if (prev && prev.occurrenceKey === payload.occurrenceKey && prev.triggerMode === 'pinned') {
+          return null;
+        }
+        return {
+          ...payload,
+          anchorEl,
+          triggerMode: 'pinned',
+        };
+      });
+    },
+    [clearCloseTimer],
+  );
+
+  const citationCtx: InlineCitationRenderContext | undefined = useMemo(() => {
+    if (!sourcesById || !extractedCitations) {
+      return undefined;
+    }
+    return {
+      sourcesById,
+      numberBySourceId: extractedCitations.numberBySourceId,
+      mediaItems,
+      events,
+      subjectPersonId,
+      resolveMediaUrl: resolveMediaUrl ?? defaultResolveMediaUrl,
+      activeKey: activePopover?.occurrenceKey ?? null,
+      popoverId,
+      onTriggerHover: handleTriggerHover,
+      onTriggerLeave: handleTriggerLeave,
+      onTriggerFocus: handleTriggerFocus,
+      onTriggerBlur: handleTriggerBlur,
+      onTriggerClick: handleTriggerClick,
+    };
+  }, [
+    sourcesById,
+    extractedCitations,
+    mediaItems,
+    events,
+    subjectPersonId,
+    resolveMediaUrl,
+    activePopover?.occurrenceKey,
+    popoverId,
+    handleTriggerHover,
+    handleTriggerLeave,
+    handleTriggerFocus,
+    handleTriggerBlur,
+    handleTriggerClick,
+  ]);
+
   if (blocks.length === 0) {
     return null;
   }
@@ -186,17 +515,17 @@ export const ArchivalMarkdown: React.FC<ArchivalMarkdownProps> = ({ markdown, cl
           case 'heading':
             return block.level === 3 ? (
               <h4 key={blockKey} className="archival-md-heading">
-                {parseInlineNodes(block.text, blockKey)}
+                {parseInlineNodes(block.text, blockKey, citationCtx)}
               </h4>
             ) : (
               <h5 key={blockKey} className="archival-md-subheading">
-                {parseInlineNodes(block.text, blockKey)}
+                {parseInlineNodes(block.text, blockKey, citationCtx)}
               </h5>
             );
           case 'blockquote':
             return (
               <blockquote key={blockKey} className="archival-md-quote">
-                {parseInlineNodes(block.text, blockKey)}
+                {parseInlineNodes(block.text, blockKey, citationCtx)}
               </blockquote>
             );
           case 'list':
@@ -204,7 +533,7 @@ export const ArchivalMarkdown: React.FC<ArchivalMarkdownProps> = ({ markdown, cl
               <ol key={blockKey} className="archival-md-list">
                 {block.items.map((item, itemIdx) => (
                   <li key={`${blockKey}-li-${itemIdx}`}>
-                    {parseInlineNodes(item, `${blockKey}-li-${itemIdx}`)}
+                    {parseInlineNodes(item, `${blockKey}-li-${itemIdx}`, citationCtx)}
                   </li>
                 ))}
               </ol>
@@ -212,7 +541,7 @@ export const ArchivalMarkdown: React.FC<ArchivalMarkdownProps> = ({ markdown, cl
               <ul key={blockKey} className="archival-md-list">
                 {block.items.map((item, itemIdx) => (
                   <li key={`${blockKey}-li-${itemIdx}`}>
-                    {parseInlineNodes(item, `${blockKey}-li-${itemIdx}`)}
+                    {parseInlineNodes(item, `${blockKey}-li-${itemIdx}`, citationCtx)}
                   </li>
                 ))}
               </ul>
@@ -220,7 +549,7 @@ export const ArchivalMarkdown: React.FC<ArchivalMarkdownProps> = ({ markdown, cl
           case 'paragraph':
             return (
               <p key={blockKey} className="archival-md-p">
-                {parseInlineNodes(block.text, blockKey)}
+                {parseInlineNodes(block.text, blockKey, citationCtx)}
               </p>
             );
           default: {
@@ -229,6 +558,26 @@ export const ArchivalMarkdown: React.FC<ArchivalMarkdownProps> = ({ markdown, cl
           }
         }
       })}
+
+      {activePopover && (
+        <CitationPopover
+          id={popoverId}
+          footnoteNumber={activePopover.footnoteNumber}
+          source={activePopover.source}
+          media={activePopover.media}
+          mediaUrl={activePopover.mediaUrl}
+          anchorEl={activePopover.anchorEl}
+          popoverRef={popoverRef}
+          onMouseEnter={clearCloseTimer}
+          onMouseLeave={() => {
+            scheduleClose(activePopover.occurrenceKey);
+          }}
+          onBlur={handlePopoverBlur}
+          onClose={closePopover}
+          onInspectSource={onInspectSource}
+          onOpenMedia={onOpenMedia}
+        />
+      )}
     </div>
   );
 };
