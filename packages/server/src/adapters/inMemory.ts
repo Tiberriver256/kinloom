@@ -2,6 +2,7 @@ import {
   asRevisionId,
   compileArchive,
   computeEntityDiff,
+  entityLookupCompositeKey,
   parseEntityPayload,
   patchCompiledBundle,
   resolveEffectiveLiving,
@@ -17,6 +18,7 @@ import {
   type Clock,
   type CommitMutationsResult,
   type EmailSender,
+  type EntityLookupKey,
   type EntityPayload,
   type EntityType,
   type InviteRecord,
@@ -39,6 +41,7 @@ import {
   type RevisionRecord,
   type Sha256Hex,
   type SourceRecord,
+  type StoredEntityRecord,
   type StoredEntityRow,
   type StoredKinshipRow,
   type StoredMediaObject,
@@ -88,13 +91,33 @@ export class InMemoryArchiveRepository implements ArchiveRepository {
   async getEntity(
     entityType: EntityType,
     entityId: string
-  ): Promise<StoredEntityRow | StoredKinshipRow | null> {
+  ): Promise<StoredEntityRecord | null> {
     if (entityType === 'kinship_edge') {
       const row = this.kinship.get(entityId);
       return row ? structuredClone(row) : null;
     }
     const row = this.entities.get(entityCompositeKey(entityType, entityId));
     return row ? structuredClone(row) : null;
+  }
+
+  async getEntitiesBatch(
+    keys: readonly EntityLookupKey[]
+  ): Promise<Map<string, StoredEntityRecord | null>> {
+    const result = new Map<string, StoredEntityRecord | null>();
+    for (const key of keys) {
+      const composite = entityLookupCompositeKey(key.entityType, key.entityId);
+      if (result.has(composite)) {
+        continue;
+      }
+      if (key.entityType === 'kinship_edge') {
+        const row = this.kinship.get(key.entityId);
+        result.set(composite, row ? structuredClone(row) : null);
+      } else {
+        const row = this.entities.get(composite);
+        result.set(composite, row ? structuredClone(row) : null);
+      }
+    }
+    return result;
   }
 
   async getLivingPersonIds(): Promise<ReadonlySet<string>> {

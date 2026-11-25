@@ -233,6 +233,20 @@ describe('D1 migration 0001_initial.sql EXPLAIN QUERY PLAN checks', () => {
           forbidTempSort: true,
         },
         {
+          name: 'batch entity lookup by entity_type and entity_id IN',
+          sql: `SELECT entity_type, entity_id, slug, data_json, current_revision_id, has_primary_source, deleted_at, updated_at FROM entities WHERE entity_type = ? AND entity_id IN (?, ?, ?)`,
+          bindings: ['person', 'per_1', 'per_2', 'per_3'],
+          expectedIndex: 'sqlite_autoindex_entities_1',
+          forbiddenScans: ['SCAN entities'],
+        },
+        {
+          name: 'batch kinship lookup by edge_id IN',
+          sql: `SELECT edge_id, from_person_id, to_person_id, relation, family_xref, current_revision_id, deleted_at, updated_at FROM kinship_edges WHERE edge_id IN (?, ?)`,
+          bindings: ['edge_1', 'edge_2'],
+          expectedIndex: 'sqlite_autoindex_kinship_edges_1',
+          forbiddenScans: ['SCAN kinship_edges'],
+        },
+        {
           name: 'magic-link lookup by email ordered by expires_at DESC',
           sql: `SELECT token_hash, expires_at FROM magic_links WHERE email = ? ORDER BY expires_at DESC`,
           bindings: ['editor@example.test'],

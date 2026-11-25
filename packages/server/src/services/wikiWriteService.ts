@@ -5,6 +5,7 @@ import {
   BatchSubmissionSchema,
   computeEntityDiff,
   deriveKinshipEdgeId,
+  entityLookupCompositeKey,
   isEditSummaryValid,
   parseEntityPayload,
   resolveEffectiveLiving,
@@ -20,6 +21,7 @@ import {
   type BundleCache,
   type Clock,
   type EntityLifecycleState,
+  type EntityLookupKey,
   type EntityPayload,
   type EntityType,
   type KinloomServerPlugin,
@@ -29,8 +31,7 @@ import {
   type RevisionAuthor,
   type RevisionId,
   type RevisionRecord,
-  type StoredEntityRow,
-  type StoredKinshipRow,
+  type StoredEntityRecord,
 } from '@kinloom/core';
 import { generateEntityId, readBodyToString } from '../crypto.js';
 import { KinloomHttpError } from '../errors.js';
@@ -60,14 +61,14 @@ interface WorkingEntityRecord {
   updatedAt: string;
 }
 
-function rowToPayload(row: StoredEntityRow | StoredKinshipRow): EntityPayload {
+function rowToPayload(row: StoredEntityRecord): EntityPayload {
   if ('edge' in row) {
     return structuredClone(row.edge) as unknown as EntityPayload;
   }
   return structuredClone(row.data);
 }
 
-function rowToWorking(row: StoredEntityRow | StoredKinshipRow | null): WorkingEntityRecord {
+function rowToWorking(row: StoredEntityRecord | null): WorkingEntityRecord {
   if (!row) {
     return {
       lifecycle: { kind: 'nonExistent' },
@@ -111,8 +112,16 @@ function extractSlug(entityType: EntityType, payload: EntityPayload | null): str
     : null;
 }
 
+function extractMediaEventId(payload: unknown): string | null {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+    return null;
+  }
+  const eventId = (payload as Record<string, unknown>).event_id;
+  return typeof eventId === 'string' && eventId.trim().length > 0 ? eventId.trim() : null;
+}
+
 function compositeKey(entityType: EntityType, entityId: string): string {
-  return `${entityType}:${entityId}`;
+  return entityLookupCompositeKey(entityType, entityId);
 }
 
 export class WikiWriteService {
@@ -475,12 +484,64 @@ export class WikiWriteService {
     const batchId = asBatchId(parsed.batch_id);
     const nowIso = this.clock.nowIso();
 
-    const livingIds = new Set<string>(await this.repository.getLivingPersonIds());
+    const prefetchKeys: EntityLookupKey[] = [];
+    for (const patch of parsed.patches) {
+      prefetchKeys.push({ entityType: patch.entity_type, entityId: patch.entity_id });
+      if (patch.entity_type === 'media' && 'data' in patch) {
+        const refEventId = extractMediaEventId(patch.data);
+        if (refEventId) {
+          prefetchKeys.push({ entityType: 'event', entityId: refEventId });
+        }
+      }
+    }
+
+    const [initialLivingIds, headRevisionId, prefetchedRows] = await Promise.all([
+      this.repository.getLivingPersonIds(),
+      this.repository.getHeadRevisionId(),
+      this.prefetchEntities(prefetchKeys),
+    ]);
+
+    // If a media update/restore merges or restores an existing record whose stored event_id was not in patch.data, batch-fetch those events too.
+    const extraEventKeys: EntityLookupKey[] = [];
+    for (const patch of parsed.patches) {
+      if (patch.entity_type !== 'media' || (patch.action !== 'update' && patch.action !== 'restore')) {
+        continue;
+      }
+      const existingMedia = prefetchedRows.get(compositeKey('media', patch.entity_id));
+      if (!existingMedia || 'edge' in existingMedia) {
+        continue;
+      }
+      const existingEventId = extractMediaEventId(existingMedia.data);
+      if (existingEventId && !prefetchedRows.has(compositeKey('event', existingEventId))) {
+        extraEventKeys.push({ entityType: 'event', entityId: existingEventId });
+      }
+    }
+    if (extraEventKeys.length > 0) {
+      const extraRows = await this.prefetchEntities(extraEventKeys);
+      for (const [k, v] of extraRows.entries()) {
+        prefetchedRows.set(k, v);
+      }
+    }
+
+    const livingIds = new Set<string>(initialLivingIds);
     const workingEvents = new Map<string, Pick<RawEvent, 'id' | 'participants'>>();
+    const prefetchedEventIds = new Set<string>();
     const workingByKey = new Map<string, WorkingEntityRecord>();
     const lockedInitialByKey = new Set<string>();
     const operations: AtomicMutationOp[] = [];
-    let syntheticRev = (await this.repository.getHeadRevisionId()) + 1;
+    let syntheticRev = headRevisionId + 1;
+
+    for (const [key, row] of prefetchedRows.entries()) {
+      workingByKey.set(key, rowToWorking(row));
+      if (key.startsWith('event:')) {
+        const eventId = key.slice('event:'.length);
+        prefetchedEventIds.add(eventId);
+        if (row && !('edge' in row) && row.deleted_at === null) {
+          const parsedEv = parseEntityPayload('event', row.data);
+          workingEvents.set(parsedEv.id, { id: parsedEv.id, participants: parsedEv.participants });
+        }
+      }
+    }
 
     const getWorking = async (entityType: EntityType, entityId: string): Promise<WorkingEntityRecord> => {
       const key = compositeKey(entityType, entityId);
@@ -489,6 +550,7 @@ export class WikiWriteService {
         return cached;
       }
       const row = await this.repository.getEntity(entityType, entityId);
+      prefetchedRows.set(key, row);
       const loaded = rowToWorking(row);
       workingByKey.set(key, loaded);
       return loaded;
@@ -524,6 +586,7 @@ export class WikiWriteService {
             hasPrimarySource,
             livingPersonIdsOverride: livingIds,
             extraEventsById: workingEvents,
+            prefetchedEventIds,
           });
           this.updateWorkingPrivacyContext(entityType, validated.entityId, validated.sanitized, livingIds, workingEvents);
 
@@ -573,6 +636,7 @@ export class WikiWriteService {
             requireIdMatch: true,
             livingPersonIdsOverride: livingIds,
             extraEventsById: workingEvents,
+            prefetchedEventIds,
           });
 
           const expectedParent = alreadyMutatedInBatch
@@ -584,7 +648,7 @@ export class WikiWriteService {
             patch.parent_revision_id !== undefined &&
             patch.parent_revision_id !== current.lifecycle.currentRevisionId
           ) {
-            const existingRow = await this.repository.getEntity(entityType, entityId);
+            const existingRow = prefetchedRows.get(key) ?? (await this.repository.getEntity(entityType, entityId));
             if (existingRow) {
               throw await this.buildConflictHttpError({
                 entityType,
@@ -642,7 +706,7 @@ export class WikiWriteService {
             patch.parent_revision_id !== undefined &&
             patch.parent_revision_id !== current.lifecycle.currentRevisionId
           ) {
-            const existingRow = await this.repository.getEntity(entityType, entityId);
+            const existingRow = prefetchedRows.get(key) ?? (await this.repository.getEntity(entityType, entityId));
             if (existingRow) {
               throw await this.buildConflictHttpError({
                 entityType,
@@ -656,6 +720,9 @@ export class WikiWriteService {
 
           if (entityType === 'person') {
             livingIds.delete(entityId);
+          } else if (entityType === 'event') {
+            workingEvents.delete(entityId);
+            prefetchedEventIds.add(entityId);
           }
 
           operations.push({
@@ -710,6 +777,7 @@ export class WikiWriteService {
             requireIdMatch: true,
             livingPersonIdsOverride: livingIds,
             extraEventsById: workingEvents,
+            prefetchedEventIds,
           });
 
           const expectedParent = alreadyMutatedInBatch
@@ -721,7 +789,7 @@ export class WikiWriteService {
             patch.parent_revision_id !== undefined &&
             patch.parent_revision_id !== current.lifecycle.currentRevisionId
           ) {
-            const existingRow = await this.repository.getEntity(entityType, entityId);
+            const existingRow = prefetchedRows.get(key) ?? (await this.repository.getEntity(entityType, entityId));
             if (existingRow) {
               throw await this.buildConflictHttpError({
                 entityType,
@@ -801,15 +869,49 @@ export class WikiWriteService {
       );
     }
 
-    const currentStatesByKey = new Map<string, EntityLifecycleState>();
-    const initialRevisionByKey = new Map<string, RevisionId>();
+    const prefetchKeys: EntityLookupKey[] = [];
     const revById = new Map<number, RevisionRecord>();
-
     for (const rev of batchRevisions) {
       revById.set(rev.revision_id, rev);
+      prefetchKeys.push({ entityType: rev.entity_type, entityId: rev.entity_id });
+      if (rev.entity_type === 'media') {
+        const beforeEvId = extractMediaEventId(rev.before_json);
+        if (beforeEvId) {
+          prefetchKeys.push({ entityType: 'event', entityId: beforeEvId });
+        }
+        const afterEvId = extractMediaEventId(rev.after_json);
+        if (afterEvId) {
+          prefetchKeys.push({ entityType: 'event', entityId: afterEvId });
+        }
+      }
+    }
+
+    const [headRev, initialLivingIds, prefetchedRows] = await Promise.all([
+      this.repository.getHeadRevisionId(),
+      this.repository.getLivingPersonIds(),
+      this.prefetchEntities(prefetchKeys),
+    ]);
+
+    const currentStatesByKey = new Map<string, EntityLifecycleState>();
+    const initialRevisionByKey = new Map<string, RevisionId>();
+    const workingEvents = new Map<string, Pick<RawEvent, 'id' | 'participants'>>();
+    const prefetchedEventIds = new Set<string>();
+
+    for (const [key, row] of prefetchedRows.entries()) {
+      if (key.startsWith('event:')) {
+        const eventId = key.slice('event:'.length);
+        prefetchedEventIds.add(eventId);
+        if (row && !('edge' in row) && row.deleted_at === null) {
+          const parsedEv = parseEntityPayload('event', row.data);
+          workingEvents.set(parsedEv.id, { id: parsedEv.id, participants: parsedEv.participants });
+        }
+      }
+    }
+
+    for (const rev of batchRevisions) {
       const key = compositeKey(rev.entity_type, rev.entity_id);
       if (!currentStatesByKey.has(key)) {
-        const row = await this.repository.getEntity(rev.entity_type, rev.entity_id);
+        const row = prefetchedRows.get(key) ?? null;
         const working = rowToWorking(row);
         currentStatesByKey.set(key, working.lifecycle);
         if (row) {
@@ -818,7 +920,6 @@ export class WikiWriteService {
       }
     }
 
-    const headRev = await this.repository.getHeadRevisionId();
     const outcome = transitionBatchRevertLifecycle(
       currentStatesByKey,
       batchRevisions,
@@ -837,8 +938,7 @@ export class WikiWriteService {
       );
     }
 
-    const livingIds = new Set<string>(await this.repository.getLivingPersonIds());
-    const workingEvents = new Map<string, Pick<RawEvent, 'id' | 'participants'>>();
+    const livingIds = new Set<string>(initialLivingIds);
     const lockedInitialByKey = new Set<string>();
     const operations: AtomicMutationOp[] = [];
 
@@ -855,11 +955,15 @@ export class WikiWriteService {
           hasPrimarySource,
           livingPersonIdsOverride: livingIds,
           extraEventsById: workingEvents,
+          prefetchedEventIds,
         });
         sanitizedAfter = validated.sanitized;
         this.updateWorkingPrivacyContext(step.entityType, step.entityId, sanitizedAfter, livingIds, workingEvents);
       } else if (step.entityType === 'person') {
         livingIds.delete(step.entityId);
+      } else if (step.entityType === 'event') {
+        workingEvents.delete(step.entityId);
+        prefetchedEventIds.add(step.entityId);
       }
 
       const alreadyLocked = lockedInitialByKey.has(step.entityKey);
@@ -903,6 +1007,36 @@ export class WikiWriteService {
     };
   }
 
+  private async prefetchEntities(
+    keys: readonly EntityLookupKey[]
+  ): Promise<Map<string, StoredEntityRecord | null>> {
+    if (keys.length === 0) {
+      return new Map();
+    }
+    if (this.repository.getEntitiesBatch) {
+      return this.repository.getEntitiesBatch(keys);
+    }
+    const unique: EntityLookupKey[] = [];
+    const seen = new Set<string>();
+    for (const key of keys) {
+      const composite = compositeKey(key.entityType, key.entityId);
+      if (seen.has(composite)) {
+        continue;
+      }
+      seen.add(composite);
+      unique.push(key);
+    }
+    const rows = await Promise.all(
+      unique.map((key) => this.repository.getEntity(key.entityType, key.entityId))
+    );
+    const result = new Map<string, StoredEntityRecord | null>();
+    for (let i = 0; i < unique.length; i += 1) {
+      const key = unique[i];
+      result.set(compositeKey(key.entityType, key.entityId), rows[i] ?? null);
+    }
+    return result;
+  }
+
   private assertSummaryValid(summary: string): void {
     if (!isEditSummaryValid(summary)) {
       throw new KinloomHttpError(
@@ -941,6 +1075,7 @@ export class WikiWriteService {
     requireIdMatch?: boolean;
     livingPersonIdsOverride?: ReadonlySet<string>;
     extraEventsById?: ReadonlyMap<string, Pick<RawEvent, 'id' | 'participants'>>;
+    prefetchedEventIds?: ReadonlySet<string>;
   }): Promise<{ entityId: string; sanitized: EntityPayload }> {
     const candidate = structuredClone(params.rawPayload);
 
@@ -992,14 +1127,19 @@ export class WikiWriteService {
       case 'media': {
         const parsed = parseEntityPayload('media', candidate);
         const livingIds = params.livingPersonIdsOverride ?? (await this.repository.getLivingPersonIds());
-        const eventsMap = new Map<string, Pick<RawEvent, 'id' | 'participants'>>(
-          params.extraEventsById ?? []
-        );
-        if (parsed.event_id && !eventsMap.has(parsed.event_id)) {
+        let eventsMap: ReadonlyMap<string, Pick<RawEvent, 'id' | 'participants'>> | undefined =
+          params.extraEventsById;
+        if (
+          parsed.event_id &&
+          !params.extraEventsById?.has(parsed.event_id) &&
+          !params.prefetchedEventIds?.has(parsed.event_id)
+        ) {
           const evRow = await this.repository.getEntity('event', parsed.event_id);
           if (evRow && !('edge' in evRow) && evRow.deleted_at === null) {
             const parsedEv = parseEntityPayload('event', evRow.data);
-            eventsMap.set(parsedEv.id, parsedEv);
+            const nextEvents = new Map(params.extraEventsById ?? []);
+            nextEvents.set(parsedEv.id, parsedEv);
+            eventsMap = nextEvents;
           }
         }
         assertMediaAllowedForPrivacy(parsed, livingIds, eventsMap);
@@ -1028,7 +1168,7 @@ export class WikiWriteService {
     entityType: EntityType;
     entityId: string;
     expectedParentRevisionId: RevisionId;
-    existing: StoredEntityRow | StoredKinshipRow;
+    existing: StoredEntityRecord;
     candidateAfter: EntityPayload | null;
   }): Promise<KinloomHttpError> {
     const history = await this.repository.listRevisions({

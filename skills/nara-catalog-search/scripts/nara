@@ -15,6 +15,7 @@ to headless Chromium against catalog.archives.gov when no key is configured.
 
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 import json
 import os
 import re
@@ -29,11 +30,45 @@ import httpx
 
 CATALOG_WEB_BASE = "https://catalog.archives.gov"
 CATALOG_API_BASE = "https://catalog.archives.gov/api/v2"
+API_MAX_WORKERS = 6
 USER_AGENT = (
     "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
     "(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
 )
 VALID_LEVELS = ("recordGroup", "collection", "series", "fileUnit", "item")
+
+
+class _NaraWafOrNonJsonError(RuntimeError):
+    """Raised when the NARA v2 API returns an HTML WAF page or non-JSON body."""
+
+    def __init__(self, url: str, content_type: str, detail: str = "") -> None:
+        self.url = url
+        self.content_type = content_type
+        msg = f"NARA v2 API returned non-JSON response ({content_type or 'unknown content-type'})"
+        if detail:
+            msg = f"{msg}: {detail}"
+        super().__init__(msg)
+
+
+def _normalize_query_for_waf_retry(query: str) -> str | None:
+    """Strip double quotes and standalone boolean AND operators that trigger CloudFront WAF."""
+    stripped = query.replace('"', " ")
+    stripped = re.sub(r"\bAND\b", " ", stripped)
+    normalized = re.sub(r"\s+", " ", stripped).strip()
+    if not normalized or normalized == query.strip():
+        return None
+    return normalized
+
+
+def _new_api_client() -> httpx.Client:
+    return httpx.Client(
+        timeout=30.0,
+        follow_redirects=True,
+        limits=httpx.Limits(
+            max_connections=API_MAX_WORKERS * 2,
+            max_keepalive_connections=API_MAX_WORKERS,
+        ),
+    )
 
 
 def find_browser_executable() -> str | None:
@@ -236,12 +271,36 @@ def _extract_record(
     return out
 
 
-def _api_get_json(url: str, api_key: str) -> dict[str, Any]:
-    headers = {"x-api-key": api_key, "Accept": "application/json"}
-    with httpx.Client(timeout=30.0, follow_redirects=True) as client:
-        resp = client.get(url, headers=headers)
-        resp.raise_for_status()
-        return resp.json()
+def _api_get_json(
+    url: str,
+    api_key: str,
+    *,
+    client: httpx.Client | None = None,
+) -> dict[str, Any]:
+    headers = {
+        "x-api-key": api_key,
+        "Accept": "application/json",
+        "User-Agent": USER_AGENT,
+    }
+    if client is None:
+        with _new_api_client() as local_client:
+            return _api_get_json(url, api_key, client=local_client)
+    resp = client.get(url, headers=headers)
+    content_type = resp.headers.get("content-type", "")
+    if resp.status_code == 403 and "html" in content_type.lower():
+        raise _NaraWafOrNonJsonError(url, content_type, "HTTP 403 HTML response")
+    resp.raise_for_status()
+    if "json" not in content_type.lower():
+        raise _NaraWafOrNonJsonError(url, content_type)
+    try:
+        data = resp.json()
+    except ValueError as exc:
+        raise _NaraWafOrNonJsonError(url, content_type, str(exc)) from exc
+    if not isinstance(data, dict):
+        raise _NaraWafOrNonJsonError(
+            url, content_type, f"expected JSON object, got {type(data).__name__}"
+        )
+    return data
 
 
 def _browser_search_many(
@@ -509,6 +568,58 @@ def cmd_url(
     click.echo(encode_catalog_url(params, for_api=for_api))
 
 
+def _build_search_payload(
+    query: str | None,
+    web_url: str,
+    raw: dict[str, Any],
+) -> dict[str, Any]:
+    hits_obj = raw.get("body", raw).get("hits", {})
+    hits = hits_obj.get("hits", [])
+    total_raw = hits_obj.get("total", len(hits))
+    total = total_raw.get("value", len(hits)) if isinstance(total_raw, dict) else int(total_raw)
+    item: dict[str, Any] = {
+        "searchUrl": web_url,
+        "total": total,
+        "results": [_extract_record(h) for h in hits],
+    }
+    if query is not None:
+        item = {"query": query, **item}
+    return item
+
+
+def _api_search_one(
+    query: str | None,
+    *,
+    api_key: str,
+    client: httpx.Client,
+    filter_kwargs: dict[str, Any],
+) -> tuple[dict[str, Any] | None, str]:
+    api_url = encode_catalog_url(
+        build_query_params(query, **filter_kwargs, for_api=True),
+        for_api=True,
+    )
+    web_url = encode_catalog_url(
+        build_query_params(query, **filter_kwargs, for_api=False),
+        for_api=False,
+    )
+    try:
+        raw = _api_get_json(api_url, api_key, client=client)
+        return _build_search_payload(query, web_url, raw), web_url
+    except _NaraWafOrNonJsonError:
+        retry_query = _normalize_query_for_waf_retry(query) if query else None
+        if retry_query is None:
+            return None, web_url
+        retry_api_url = encode_catalog_url(
+            build_query_params(retry_query, **filter_kwargs, for_api=True),
+            for_api=True,
+        )
+        try:
+            raw = _api_get_json(retry_api_url, api_key, client=client)
+            return _build_search_payload(query, web_url, raw), web_url
+        except _NaraWafOrNonJsonError:
+            return None, web_url
+
+
 @cli.command("search")
 @click.argument("queries", nargs=-1)
 @_common_search_options
@@ -533,55 +644,71 @@ def cmd_search(
     force_browser: bool,
     as_json: bool,
 ) -> None:
-    """Search the NARA Catalog. Accepts one or multiple queries sharing one browser session."""
+    """Search the NARA Catalog. Accepts one or multiple queries (parallel via API or shared browser)."""
     query_list: list[str | None] = list(queries) if queries else [None]
     use_api = bool(api_key) and not force_browser
+    filter_kwargs: dict[str, Any] = {
+        "levels": levels,
+        "record_groups": record_groups,
+        "online": online,
+        "material_type": material_type,
+        "person": person,
+        "title": title,
+        "geo": geo,
+        "control": control,
+        "start_date": start_date,
+        "end_date": end_date,
+        "page": page,
+        "limit": limit,
+    }
 
     payloads: list[dict[str, Any]] = []
     if use_api and api_key:
-        for q in query_list:
-            api_url = encode_catalog_url(
-                build_query_params(
-                    q, levels=levels, record_groups=record_groups, online=online,
-                    material_type=material_type, person=person, title=title, geo=geo,
-                    control=control, start_date=start_date, end_date=end_date,
-                    page=page, limit=limit, for_api=True,
-                ),
-                for_api=True,
-            )
-            web_url = encode_catalog_url(
-                build_query_params(
-                    q, levels=levels, record_groups=record_groups, online=online,
-                    material_type=material_type, person=person, title=title, geo=geo,
-                    control=control, start_date=start_date, end_date=end_date,
-                    page=page, limit=limit, for_api=False,
-                ),
-                for_api=False,
-            )
-            raw = _api_get_json(api_url, api_key)
-            hits_obj = raw.get("body", raw).get("hits", {})
-            hits = hits_obj.get("hits", [])
-            total_raw = hits_obj.get("total", len(hits))
-            total = total_raw.get("value", len(hits)) if isinstance(total_raw, dict) else int(total_raw)
-            item: dict[str, Any] = {
-                "searchUrl": web_url,
-                "total": total,
-                "results": [_extract_record(h) for h in hits],
-            }
-            if q is not None:
-                item = {"query": q, **item}
-            payloads.append(item)
+        with _new_api_client() as client:
+            if len(query_list) == 1:
+                outcomes = [
+                    _api_search_one(
+                        query_list[0],
+                        api_key=api_key,
+                        client=client,
+                        filter_kwargs=filter_kwargs,
+                    )
+                ]
+            else:
+                workers = min(API_MAX_WORKERS, len(query_list))
+                with ThreadPoolExecutor(max_workers=workers) as executor:
+                    outcomes = list(
+                        executor.map(
+                            lambda q: _api_search_one(
+                                q,
+                                api_key=api_key,
+                                client=client,
+                                filter_kwargs=filter_kwargs,
+                            ),
+                            query_list,
+                        )
+                    )
+
+        slots: list[dict[str, Any] | None] = [entry for entry, _ in outcomes]
+        fallback_indices: list[int] = []
+        fallback_pairs: list[tuple[str | None, str]] = []
+        for idx, (entry, web_url) in enumerate(outcomes):
+            if entry is None:
+                fallback_indices.append(idx)
+                fallback_pairs.append((query_list[idx], web_url))
+
+        if fallback_pairs:
+            fallback_results = _browser_search_many(fallback_pairs)
+            for idx, fb_entry in zip(fallback_indices, fallback_results, strict=True):
+                slots[idx] = fb_entry
+
+        payloads = [entry for entry in slots if entry is not None]
     else:
         url_pairs = [
             (
                 q,
                 encode_catalog_url(
-                    build_query_params(
-                        q, levels=levels, record_groups=record_groups, online=online,
-                        material_type=material_type, person=person, title=title, geo=geo,
-                        control=control, start_date=start_date, end_date=end_date,
-                        page=page, limit=limit, for_api=False,
-                    ),
+                    build_query_params(q, **filter_kwargs, for_api=False),
                     for_api=False,
                 ),
             )
@@ -612,6 +739,36 @@ def cmd_search(
             click.echo(f"  {idx:2d}. NAID {rec['naId']} ({meta}): {rec.get('title')}{series}")
 
 
+def _api_get_one_record(
+    naid: str,
+    *,
+    api_key: str,
+    client: httpx.Client,
+    include_objects: bool,
+    include_text: bool,
+    page_spec: str,
+) -> dict[str, Any] | None:
+    clean_id = re.sub(r"\D+", "", naid)
+    url = (
+        f"{CATALOG_API_BASE}/records/search?"
+        f"naId_is={clean_id}&includeExtractedText={'true' if include_text else 'false'}"
+        f"&includeOtherExtractedText={'true' if include_text else 'false'}"
+    )
+    try:
+        raw = _api_get_json(url, api_key, client=client)
+    except _NaraWafOrNonJsonError:
+        return None
+    hits = raw.get("body", raw).get("hits", {}).get("hits", [])
+    if hits:
+        return _extract_record(
+            hits[0],
+            include_objects=include_objects,
+            include_text=include_text,
+            page_spec=page_spec,
+        )
+    return {"naId": clean_id, "url": f"{CATALOG_WEB_BASE}/id/{clean_id}", "error": "Not found"}
+
+
 @cli.command("get")
 @click.argument("naids", nargs=-1, required=True)
 @click.option("--api-key", envvar="NARA_API_KEY", default=None, help="NARA Catalog v2 API key (defaults to $NARA_API_KEY).")
@@ -633,21 +790,49 @@ def cmd_get(
     use_api = bool(api_key) and not force_browser
     records: list[dict[str, Any]] = []
     if use_api and api_key:
-        for naid in naids:
-            clean_id = re.sub(r"\D+", "", naid)
-            url = (
-                f"{CATALOG_API_BASE}/records/search?"
-                f"naId_is={clean_id}&includeExtractedText={'true' if text else 'false'}"
-                f"&includeOtherExtractedText={'true' if text else 'false'}"
-            )
-            raw = _api_get_json(url, api_key)
-            hits = raw.get("body", raw).get("hits", {}).get("hits", [])
-            if hits:
-                records.append(
-                    _extract_record(hits[0], include_objects=objects, include_text=text, page_spec=pages)
-                )
+        naid_list = list(naids)
+        with _new_api_client() as client:
+            if len(naid_list) == 1:
+                slots: list[dict[str, Any] | None] = [
+                    _api_get_one_record(
+                        naid_list[0],
+                        api_key=api_key,
+                        client=client,
+                        include_objects=objects,
+                        include_text=text,
+                        page_spec=pages,
+                    )
+                ]
             else:
-                records.append({"naId": clean_id, "url": f"{CATALOG_WEB_BASE}/id/{clean_id}", "error": "Not found"})
+                workers = min(API_MAX_WORKERS, len(naid_list))
+                with ThreadPoolExecutor(max_workers=workers) as executor:
+                    slots = list(
+                        executor.map(
+                            lambda n: _api_get_one_record(
+                                n,
+                                api_key=api_key,
+                                client=client,
+                                include_objects=objects,
+                                include_text=text,
+                                page_spec=pages,
+                            ),
+                            naid_list,
+                        )
+                    )
+
+        fallback_indices = [idx for idx, rec in enumerate(slots) if rec is None]
+        if fallback_indices:
+            fallback_naids = [naid_list[idx] for idx in fallback_indices]
+            fallback_recs = _browser_get_records(
+                fallback_naids,
+                include_objects=objects,
+                include_text=text,
+                page_spec=pages,
+            )
+            for idx, fb_rec in zip(fallback_indices, fallback_recs, strict=True):
+                slots[idx] = fb_rec
+
+        records = [rec for rec in slots if rec is not None]
     else:
         records = _browser_get_records(
             list(naids), include_objects=objects, include_text=text, page_spec=pages
@@ -685,11 +870,17 @@ def cmd_download(
     use_api = bool(api_key) and not force_browser
     if use_api and api_key:
         url = f"{CATALOG_API_BASE}/records/search?naId_is={clean_id}"
-        raw = _api_get_json(url, api_key)
-        hits = raw.get("body", raw).get("hits", {}).get("hits", [])
-        if not hits:
-            raise click.ClickException(f"NAID {clean_id} not found.")
-        rec = _extract_record(hits[0], include_objects=True, page_spec=pages)
+        try:
+            raw = _api_get_json(url, api_key)
+        except _NaraWafOrNonJsonError:
+            rec = _browser_get_records([clean_id], include_objects=True, page_spec=pages)[0]
+            if rec.get("error"):
+                raise click.ClickException(f"NAID {clean_id}: {rec['error']}")
+        else:
+            hits = raw.get("body", raw).get("hits", {}).get("hits", [])
+            if not hits:
+                raise click.ClickException(f"NAID {clean_id} not found.")
+            rec = _extract_record(hits[0], include_objects=True, page_spec=pages)
     else:
         rec = _browser_get_records([clean_id], include_objects=True, page_spec=pages)[0]
         if rec.get("error"):

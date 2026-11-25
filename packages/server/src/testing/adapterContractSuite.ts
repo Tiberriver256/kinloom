@@ -2,8 +2,11 @@ import { describe, expect, it } from 'vitest';
 import {
   asBatchId,
   asRevisionId,
+  deriveKinshipEdgeId,
+  entityLookupCompositeKey,
   KinloomSiteConfigSchema,
   type ArchiveBundle,
+  type EntityLookupKey,
   type KinloomServerPorts,
   type KinloomSiteConfig,
   type RawEvent,
@@ -553,6 +556,251 @@ export function runBackendAdapterContractTests(
         const rowAfterRevert = await ports.repository.getEntity('person', person.id);
         expect(rowAfterRevert?.deleted_at).not.toBeNull();
         expect(rowAfterRevert?.current_revision_id).toBe(4);
+      });
+    });
+
+    it('batch-reads >100 entities across multiple types with missing IDs and avoids N+1 getEntity calls in submitBatch and revertBatch', async () => {
+      await withHarness(async ({ ports, server }) => {
+        const cookie = await seedAdminCookie(ports);
+        expect(typeof ports.repository.getEntitiesBatch).toBe('function');
+        const emptyMap = await ports.repository.getEntitiesBatch!([]);
+        expect(emptyMap.size).toBe(0);
+
+        const patches: Array<Record<string, unknown>> = [];
+        const lookupKeys: EntityLookupKey[] = [];
+
+        for (let i = 0; i < 95; i += 1) {
+          const id = `per_bulk_${String(i).padStart(3, '0')}`;
+          const person = createSyntheticHistoricalPerson({
+            id,
+            slug: `bulk-person-${i}`,
+            full_name: `Historical Person ${i}`,
+          });
+          patches.push({
+            action: 'create',
+            entity_type: 'person',
+            entity_id: id,
+            data: person,
+            summary: `Create ${id}`,
+          });
+          lookupKeys.push({ entityType: 'person', entityId: id });
+        }
+
+        for (let i = 0; i < 20; i += 1) {
+          const id = `evt_bulk_${String(i).padStart(2, '0')}`;
+          const event = createSyntheticEvent({
+            id,
+            summary: `Historical Event ${i}`,
+            participants: [{ person_id: 'per_bulk_000', role: 'principal' }],
+          });
+          patches.push({
+            action: 'create',
+            entity_type: 'event',
+            entity_id: id,
+            data: event,
+            summary: `Create ${id}`,
+          });
+          lookupKeys.push({ entityType: 'event', entityId: id });
+        }
+
+        for (let i = 1; i <= 10; i += 1) {
+          const edge = {
+            from: 'per_bulk_000',
+            to: `per_bulk_${String(i).padStart(3, '0')}`,
+            relation: 'parent' as const,
+          };
+          const edgeId = deriveKinshipEdgeId(edge);
+          patches.push({
+            action: 'create',
+            entity_type: 'kinship_edge',
+            entity_id: edgeId,
+            data: edge,
+            summary: `Create kinship ${edgeId}`,
+          });
+          lookupKeys.push({ entityType: 'kinship_edge', entityId: edgeId });
+        }
+
+        let singleGetCalls = 0;
+        const originalGetEntity = ports.repository.getEntity.bind(ports.repository);
+        ports.repository.getEntity = async (entityType, entityId) => {
+          singleGetCalls += 1;
+          return originalGetEntity(entityType, entityId);
+        };
+
+        const bulkRes = await server.fetch(
+          new Request(`${CONTRACT_TEST_ORIGIN}/api/batches`, {
+            method: 'POST',
+            headers: {
+              'content-type': 'application/json',
+              origin: CONTRACT_TEST_ORIGIN,
+              cookie,
+            },
+            body: JSON.stringify({
+              batch_id: 'batch_bulk_125',
+              summary: 'Seed 125 synthetic entities',
+              has_primary_source: true,
+              patches,
+            }),
+          })
+        );
+        expect(bulkRes.status).toBe(201);
+        expect(singleGetCalls).toBe(0);
+
+        const missingKeys: EntityLookupKey[] = [
+          { entityType: 'person', entityId: 'per_does_not_exist' },
+          { entityType: 'event', entityId: 'evt_does_not_exist' },
+          { entityType: 'kinship_edge', entityId: 'kinship_missing_edge' },
+        ];
+        const fetched = await ports.repository.getEntitiesBatch!([
+          ...lookupKeys,
+          lookupKeys[0],
+          ...missingKeys,
+        ]);
+        expect(fetched.size).toBe(128);
+
+        const firstPerson = fetched.get(entityLookupCompositeKey('person', 'per_bulk_000'));
+        expect(firstPerson && !('edge' in firstPerson) ? firstPerson.data.full_name : null).toBe(
+          'Historical Person 0'
+        );
+        const lastPerson = fetched.get(entityLookupCompositeKey('person', 'per_bulk_094'));
+        expect(lastPerson && !('edge' in lastPerson) ? lastPerson.data.full_name : null).toBe(
+          'Historical Person 94'
+        );
+        const lastEvent = fetched.get(entityLookupCompositeKey('event', 'evt_bulk_19'));
+        expect(lastEvent && !('edge' in lastEvent) ? lastEvent.data.summary : null).toBe(
+          'Historical Event 19'
+        );
+        const firstEdge = fetched.get(
+          entityLookupCompositeKey('kinship_edge', lookupKeys[115].entityId)
+        );
+        expect(firstEdge && 'edge' in firstEdge ? firstEdge.edge.relation : null).toBe('parent');
+
+        for (const missing of missingKeys) {
+          const k = entityLookupCompositeKey(missing.entityType, missing.entityId);
+          expect(fetched.has(k)).toBe(true);
+          expect(fetched.get(k)).toBeNull();
+        }
+
+        // Verify media-event privacy enforcement and conflict detection in submitBatch with zero single getEntity calls
+        const living = createSyntheticLivingPerson({ id: 'per_living_batch_01' });
+        const livingEvent = createSyntheticEvent({
+          id: 'evt_living_batch_01',
+          edtf_date: '2016-04-02',
+          participants: [{ person_id: living.id, role: 'principal' }],
+        });
+        const seedLivingRes = await server.fetch(
+          new Request(`${CONTRACT_TEST_ORIGIN}/api/batches`, {
+            method: 'POST',
+            headers: {
+              'content-type': 'application/json',
+              origin: CONTRACT_TEST_ORIGIN,
+              cookie,
+            },
+            body: JSON.stringify({
+              batch_id: 'batch_living_seed',
+              summary: 'Seed living person and event',
+              has_primary_source: false,
+              patches: [
+                {
+                  action: 'create',
+                  entity_type: 'person',
+                  entity_id: living.id,
+                  data: living,
+                },
+                {
+                  action: 'create',
+                  entity_type: 'event',
+                  entity_id: livingEvent.id,
+                  data: livingEvent,
+                },
+              ],
+            }),
+          })
+        );
+        expect(seedLivingRes.status).toBe(201);
+        expect(singleGetCalls).toBe(0);
+
+        const forbiddenMediaRes = await server.fetch(
+          new Request(`${CONTRACT_TEST_ORIGIN}/api/batches`, {
+            method: 'POST',
+            headers: {
+              'content-type': 'application/json',
+              origin: CONTRACT_TEST_ORIGIN,
+              cookie,
+            },
+            body: JSON.stringify({
+              batch_id: 'batch_living_media_reject',
+              summary: 'Attempt media linked to living event',
+              has_primary_source: false,
+              patches: [
+                {
+                  action: 'create',
+                  entity_type: 'media',
+                  entity_id: 'med_living_event_photo',
+                  data: {
+                    id: 'med_living_event_photo',
+                    kind: 'document_scan',
+                    event_id: livingEvent.id,
+                    file: 'media/synthetic/living-event-document.jpg',
+                    caption: 'Event document',
+                  },
+                },
+              ],
+            }),
+          })
+        );
+        expect(forbiddenMediaRes.status).toBe(422);
+        const forbiddenBody = (await forbiddenMediaRes.json()) as { error: { code: string } };
+        expect(forbiddenBody.error.code).toBe('LIVING_MEDIA_FORBIDDEN');
+        expect(singleGetCalls).toBe(0);
+
+        // Stale parent revision conflict in submitBatch must use prefetched row with zero single getEntity calls
+        const conflictRes = await server.fetch(
+          new Request(`${CONTRACT_TEST_ORIGIN}/api/batches`, {
+            method: 'POST',
+            headers: {
+              'content-type': 'application/json',
+              origin: CONTRACT_TEST_ORIGIN,
+              cookie,
+            },
+            body: JSON.stringify({
+              batch_id: 'batch_stale_conflict',
+              summary: 'Attempt stale batch update',
+              has_primary_source: true,
+              patches: [
+                {
+                  action: 'update',
+                  entity_type: 'person',
+                  entity_id: 'per_bulk_000',
+                  parent_revision_id: 999999,
+                  merge: true,
+                  data: { full_name: 'Stale Name' },
+                },
+              ],
+            }),
+          })
+        );
+        expect(conflictRes.status).toBe(409);
+        expect(singleGetCalls).toBe(0);
+
+        // Revert the 125-entity batch and verify zero single getEntity calls
+        const revertBulkRes = await server.fetch(
+          new Request(`${CONTRACT_TEST_ORIGIN}/api/batches/batch_bulk_125/revert`, {
+            method: 'POST',
+            headers: {
+              'content-type': 'application/json',
+              origin: CONTRACT_TEST_ORIGIN,
+              cookie,
+            },
+            body: JSON.stringify({ summary: 'Revert 125-entity synthetic batch' }),
+          })
+        );
+        expect(revertBulkRes.status).toBe(201);
+        expect(singleGetCalls).toBe(0);
+
+        ports.repository.getEntity = originalGetEntity;
+        const revertedFirst = await ports.repository.getEntity('person', 'per_bulk_000');
+        expect(revertedFirst?.deleted_at).not.toBeNull();
       });
     });
 

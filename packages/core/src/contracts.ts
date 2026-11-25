@@ -76,6 +76,17 @@ export interface StoredKinshipRow {
   updated_at: string;
 }
 
+export type StoredEntityRecord = StoredEntityRow | StoredKinshipRow;
+
+export interface EntityLookupKey {
+  readonly entityType: EntityType;
+  readonly entityId: string;
+}
+
+export function entityLookupCompositeKey(entityType: EntityType, entityId: string): string {
+  return `${entityType}:${entityId}`;
+}
+
 export interface ArchiveRawSnapshot {
   head_revision_id: RevisionId;
   entities: readonly StoredEntityRow[];
@@ -179,7 +190,10 @@ export interface ArchiveRepository {
   getEntity(
     entityType: EntityType,
     entityId: string
-  ): Promise<StoredEntityRow | StoredKinshipRow | null>;
+  ): Promise<StoredEntityRecord | null>;
+  getEntitiesBatch?(
+    keys: readonly EntityLookupKey[]
+  ): Promise<Map<string, StoredEntityRecord | null>>;
   getLivingPersonIds(): Promise<ReadonlySet<string>>;
   loadActiveSnapshot(): Promise<ArchiveRawSnapshot>;
 

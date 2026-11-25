@@ -4,6 +4,7 @@ import {
   asSha256Hex,
   AuthorTypeSchema,
   computeEntityDiff,
+  entityLookupCompositeKey,
   EntityTypeSchema,
   parseEntityPayload,
   resolveEffectiveLiving,
@@ -15,6 +16,7 @@ import {
   type AtomicMutationOp,
   type BatchId,
   type CommitMutationsResult,
+  type EntityLookupKey,
   type EntityPayload,
   type EntityType,
   type InviteRecord,
@@ -27,6 +29,7 @@ import {
   type RevisionQuery,
   type RevisionRecord,
   type Sha256Hex,
+  type StoredEntityRecord,
   type StoredEntityRow,
   type StoredKinshipRow,
   type TalkComment,
@@ -34,6 +37,8 @@ import {
   type UserRole,
 } from '@kinloom/core';
 import type { D1Database, D1PreparedStatement } from '../types.js';
+
+const D1_BATCH_IN_CHUNK_SIZE = 80;
 
 type NonKinshipEntityType = Exclude<EntityType, 'kinship_edge'>;
 
@@ -310,7 +315,7 @@ export class D1ArchiveRepository implements ArchiveRepository {
   async getEntity(
     entityType: EntityType,
     entityId: string
-  ): Promise<StoredEntityRow | StoredKinshipRow | null> {
+  ): Promise<StoredEntityRecord | null> {
     if (entityType === 'kinship_edge') {
       const row = await this.db
         .prepare(
@@ -334,6 +339,85 @@ export class D1ArchiveRepository implements ArchiveRepository {
       .bind(entityType, entityId)
       .first<RawDbEntityRow>();
     return row ? mapEntityRow(row) : null;
+  }
+
+  async getEntitiesBatch(
+    keys: readonly EntityLookupKey[]
+  ): Promise<Map<string, StoredEntityRecord | null>> {
+    const result = new Map<string, StoredEntityRecord | null>();
+    if (keys.length === 0) {
+      return result;
+    }
+
+    const idsByType = new Map<EntityType, string[]>();
+    for (const key of keys) {
+      const composite = entityLookupCompositeKey(key.entityType, key.entityId);
+      if (result.has(composite)) {
+        continue;
+      }
+      result.set(composite, null);
+      let bucket = idsByType.get(key.entityType);
+      if (!bucket) {
+        bucket = [];
+        idsByType.set(key.entityType, bucket);
+      }
+      bucket.push(key.entityId);
+    }
+
+    const statements: D1PreparedStatement[] = [];
+    const statementKinds: Array<'kinship_edge' | 'entity'> = [];
+
+    for (const [entityType, ids] of idsByType.entries()) {
+      for (let offset = 0; offset < ids.length; offset += D1_BATCH_IN_CHUNK_SIZE) {
+        const chunk = ids.slice(offset, offset + D1_BATCH_IN_CHUNK_SIZE);
+        const placeholders = chunk.map(() => '?').join(', ');
+        if (entityType === 'kinship_edge') {
+          statements.push(
+            this.db
+              .prepare(
+                `SELECT edge_id, from_person_id, to_person_id, relation, family_xref,
+                        current_revision_id, deleted_at, updated_at
+                 FROM kinship_edges
+                 WHERE edge_id IN (${placeholders})`
+              )
+              .bind(...chunk)
+          );
+          statementKinds.push('kinship_edge');
+        } else {
+          statements.push(
+            this.db
+              .prepare(
+                `SELECT entity_type, entity_id, slug, data_json, current_revision_id,
+                        has_primary_source, deleted_at, updated_at
+                 FROM entities
+                 WHERE entity_type = ? AND entity_id IN (${placeholders})`
+              )
+              .bind(entityType, ...chunk)
+          );
+          statementKinds.push('entity');
+        }
+      }
+    }
+
+    const batchResults = await this.db.batch(statements);
+    for (let i = 0; i < batchResults.length; i += 1) {
+      const kind = statementKinds[i];
+      if (kind === 'kinship_edge') {
+        const rows = (batchResults[i]?.results ?? []) as unknown as RawDbKinshipRow[];
+        for (const row of rows) {
+          const mapped = mapKinshipRow(row);
+          result.set(entityLookupCompositeKey('kinship_edge', mapped.edge_id), mapped);
+        }
+      } else {
+        const rows = (batchResults[i]?.results ?? []) as unknown as RawDbEntityRow[];
+        for (const row of rows) {
+          const mapped = mapEntityRow(row);
+          result.set(entityLookupCompositeKey(mapped.entity_type, mapped.entity_id), mapped);
+        }
+      }
+    }
+
+    return result;
   }
 
   async getLivingPersonIds(): Promise<ReadonlySet<string>> {
@@ -743,12 +827,15 @@ export class D1ArchiveRepository implements ArchiveRepository {
     nowIso: string,
     originalError: unknown
   ): Promise<OptimisticConflictError> {
+    const existingByKey = await this.getEntitiesBatch(
+      operations.map((op) => ({ entityType: op.entity_type, entityId: op.entity_id }))
+    );
     const seenInBatch = new Set<string>();
 
     for (const op of operations) {
       const key = entityCompositeKey(op.entity_type, op.entity_id);
       const alreadySeen = seenInBatch.has(key);
-      const existing = await this.getEntity(op.entity_type, op.entity_id);
+      const existing = existingByKey.get(key) ?? null;
 
       if (op.action === 'create') {
         if (existing !== null || alreadySeen) {
