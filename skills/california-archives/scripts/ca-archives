@@ -1,0 +1,373 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.11"
+# dependencies = [
+#   "click>=8.1",
+#   "httpx>=0.27",
+#   "playwright>=1.49",
+# ]
+# ///
+"""Search California archives portals: OAC, Calisphere, the California
+Archives Search Portal, the Archives exhibits (Omeka S API), plus
+search-URL builders for CDNC and Minerva.
+
+Machine interfaces verified live 2026-11-24 (see the
+california-archives SKILL.md). No account or API key is needed for any
+source. OAC and Calisphere sit behind a bot challenge that plain HTTP
+cannot pass, so those two run through headless Chromium; the Portal and
+the exhibits API answer plain HTTPS directly. CDNC is behind a
+Cloudflare challenge even headless Chromium cannot pass, and Minerva
+is a POST/JS catalog with no verified machine search route, so those
+two are URL builders only (see the `url` command).
+"""
+
+from __future__ import annotations
+
+import json
+import os
+import re
+import shutil
+import sys
+from html.parser import HTMLParser
+from pathlib import Path
+from urllib.parse import quote, urlencode
+
+import click
+import httpx
+
+OAC_BASE = "https://oac.cdlib.org"
+CALISPHERE_BASE = "https://calisphere.org"
+PORTAL_BASE = "https://archives.sos.ca.gov"
+EXHIBITS_BASE = "https://exhibits.sos.ca.gov"
+CDNC_BASE = "https://cdnc.ucr.edu/cgi-bin/cdnc"
+MINERVA_URL = (
+    "https://gencat.sos.ca.gov/webcat/request/DoMenuRequest"
+    "?SystemName=California+State+Archives&UserName=csa+public&Password="
+    "&TemplateProcessID=6000_3355&bCachable=1&MenuName=Minerva+Online+Catalog"
+)
+USER_AGENT = (
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+)
+SEARCHABLE = ("oac", "calisphere", "portal", "exhibits")
+ALL_SOURCES = SEARCHABLE + ("cdnc", "minerva")
+
+
+def find_browser_executable():
+    env_exe = os.environ.get("CA_ARCHIVES_BROWSER")
+    if env_exe and Path(env_exe).exists():
+        return env_exe
+    for candidate in ("chromium", "chromium-browser", "google-chrome", "google-chrome-stable"):
+        found = shutil.which(candidate)
+        if found:
+            return found
+    return None
+
+
+def oac_url(query):
+    return OAC_BASE + "/search?" + urlencode({"q": query}, quote_via=quote)
+
+
+def calisphere_url(query):
+    return CALISPHERE_BASE + "/search/?" + urlencode({"q": query}, quote_via=quote)
+
+
+def portal_url(query):
+    return PORTAL_BASE + "/Items?" + urlencode({"SearchText": query}, quote_via=quote)
+
+
+def exhibits_url(query, limit=10):
+    return EXHIBITS_BASE + "/api/items?" + urlencode(
+        {"search": query, "per_page": str(limit)}, quote_via=quote
+    )
+
+
+def cdnc_url(query):
+    # Veridian search URL; pattern corroborated by published CDNC result
+    # URLs. The e= value selects all years, English, 20 results per page.
+    return CDNC_BASE + "?a=q&r=1&results=1&txq=" + quote(query) + "&e=-------en--20--1--txt-txIN-------"
+
+
+def build_url(source, query, limit=10):
+    builders = {
+        "oac": lambda: oac_url(query),
+        "calisphere": lambda: calisphere_url(query),
+        "portal": lambda: portal_url(query),
+        "exhibits": lambda: exhibits_url(query, limit),
+        "cdnc": lambda: cdnc_url(query),
+        "minerva": lambda: MINERVA_URL,
+    }
+    return builders[source]()
+
+class PortalLinkParser(HTMLParser):
+    """Collect titled links to /Items/Details/<id> from a Portal results page."""
+
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.results = []
+        self._href = None
+        self._text = []
+
+    def handle_starttag(self, tag, attrs):
+        if tag == "a":
+            href = dict(attrs).get("href", "")
+            m = re.match(r"/Items/Details/(\d+)$", href)
+            if m:
+                self._href = (m.group(1), href)
+                self._text = []
+
+    def handle_data(self, data):
+        if self._href is not None:
+            self._text.append(data)
+
+    def handle_endtag(self, tag):
+        if tag == "a" and self._href is not None:
+            title = " ".join("".join(self._text).split())
+            if title:
+                item_id, href = self._href
+                if not any(r["id"] == item_id for r in self.results):
+                    self.results.append({"id": item_id, "title": title, "url": PORTAL_BASE + href})
+            self._href = None
+            self._text = []
+
+
+def search_portal(query, limit=10):
+    url = portal_url(query)
+    with httpx.Client(timeout=30.0, follow_redirects=True, headers={"User-Agent": USER_AGENT}) as client:
+        resp = client.get(url)
+        resp.raise_for_status()
+        html = resp.text
+    total = None
+    m = re.search(r"Search Results \d+ to \d+ of (\d+)", html)
+    if m:
+        total = int(m.group(1))
+    parser = PortalLinkParser()
+    parser.feed(html)
+    return {"source": "portal", "url": url, "total": total, "results": parser.results[:limit]}
+
+
+def _omeka_title(item):
+    title = item.get("o:title")
+    if title:
+        return title
+    vals = item.get("dcterms:title", [])
+    if vals and isinstance(vals, list) and vals[0].get("@value"):
+        return vals[0]["@value"]
+    return "(untitled)"
+
+
+def search_exhibits(query, limit=10):
+    url = exhibits_url(query, limit)
+    with httpx.Client(timeout=30.0, follow_redirects=True, headers={"User-Agent": USER_AGENT}) as client:
+        resp = client.get(url, headers={"Accept": "application/ld+json"})
+        resp.raise_for_status()
+        items = resp.json()
+        hdr = resp.headers.get("Omeka-S-Total-Results")
+        total = int(hdr) if hdr else (len(items) if isinstance(items, list) else 0)
+    results = []
+    for item in items if isinstance(items, list) else []:
+        item_id = item.get("o:id")
+        types = item.get("@type", [])
+        results.append({
+            "id": str(item_id),
+            "title": _omeka_title(item),
+            "type": ", ".join(t for t in types if t != "o:Item"),
+            "url": EXHIBITS_BASE + "/s/exhibits/item/" + str(item_id),
+        })
+    return {"source": "exhibits", "url": url, "total": total, "results": results}
+
+OAC_LINKS_JS = """() => Array.from(document.querySelectorAll('a[href*="/findaid/"]')).map(a => ({href: a.getAttribute('href'), text: a.textContent.trim().replace(/\\s+/g, ' ').slice(0, 160)}))"""
+CAL_LINKS_JS = """() => Array.from(document.querySelectorAll('a[href*="/item/"]')).map(a => ({href: a.getAttribute('href'), text: a.textContent.trim().replace(/\\s+/g, ' ').slice(0, 160)}))"""
+
+
+def _dedupe_links(links, base, limit):
+    seen = set()
+    results = []
+    for link in links:
+        href = link.get("href", "")
+        text = (link.get("text") or "").strip()
+        if not href or not text or href in seen:
+            continue
+        seen.add(href)
+        kind = "component" if "_aspace_" in href else "collection"
+        results.append({"title": text, "url": base + href, "kind": kind})
+        if len(results) >= limit:
+            break
+    return results
+
+
+def browser_search(sources, query, limit=10, timeout_ms=60000):
+    """Search OAC and/or Calisphere sharing one headless Chromium session."""
+    from playwright.sync_api import sync_playwright
+
+    exe = find_browser_executable()
+    if exe is None:
+        raise click.ClickException("No Chromium/Chrome executable found; set CA_ARCHIVES_BROWSER.")
+    out = {}
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch(headless=True, executable_path=exe, args=["--no-sandbox"])
+        page = browser.new_page(user_agent=USER_AGENT)
+        try:
+            if "oac" in sources:
+                url = oac_url(query)
+                page.goto(url, wait_until="domcontentloaded", timeout=timeout_ms)
+                try:
+                    page.wait_for_function(
+                        "() => /of \\d+ entries|No results/i.test(document.body.innerText)",
+                        timeout=20000,
+                    )
+                except Exception:
+                    pass
+                page.wait_for_timeout(500)
+                text = page.evaluate("document.body.innerText")
+                m = re.search(r"of (\d+) entries", text)
+                total = int(m.group(1)) if m else None
+                links = page.evaluate(OAC_LINKS_JS)
+                out["oac"] = {"source": "oac", "url": url, "total": total,
+                                "results": _dedupe_links(links, OAC_BASE, limit)}
+            if "calisphere" in sources:
+                url = calisphere_url(query)
+                page.goto(url, wait_until="domcontentloaded", timeout=timeout_ms)
+                try:
+                    page.wait_for_function(
+                        "() => /\\d+ items? found|No results/i.test(document.body.innerText)",
+                        timeout=20000,
+                    )
+                except Exception:
+                    pass
+                page.wait_for_timeout(500)
+                text = page.evaluate("document.body.innerText")
+                m = re.search(r"(\d+) items? found", text)
+                total = int(m.group(1)) if m else None
+                links = page.evaluate(CAL_LINKS_JS)
+                results = []
+                for link in links:
+                    href = link.get("href", "")
+                    title = (link.get("text") or "").strip()
+                    if not href.startswith("/item/") or not title:
+                        continue
+                    if any(r["url"] == CALISPHERE_BASE + href for r in results):
+                        continue
+                    results.append({"title": title, "url": CALISPHERE_BASE + href})
+                    if len(results) >= limit:
+                        break
+                out["calisphere"] = {"source": "calisphere", "url": url, "total": total, "results": results}
+        finally:
+            browser.close()
+    return out
+
+
+def _print_source(entry, limit_note=True):
+    total = entry.get("total")
+    shown = len(entry["results"])
+    header = entry["source"]
+    if total is not None:
+        header += " (%d total" % total
+        header += ", showing %d" % shown if shown != total else ")"
+        if shown != total:
+            header += ")"
+    else:
+        header += " (showing %d)" % shown
+    click.echo(header)
+    click.echo("  " + entry["url"])
+    if not entry["results"]:
+        click.echo("  No results.")
+    for i, r in enumerate(entry["results"], 1):
+        line = "  %d. %s" % (i, r["title"])
+        if r.get("kind"):
+            line += " [%s]" % r["kind"]
+        if r.get("type"):
+            line += " (%s)" % r["type"]
+        click.echo(line)
+        click.echo("     " + r["url"])
+
+
+@click.group()
+def cli():
+    """Search California archives portals (OAC, Calisphere, State Archives)."""
+
+
+@cli.command()
+@click.argument("query", nargs=-1, required=True)
+@click.option("--source", "sources", multiple=True, type=click.Choice(SEARCHABLE),
+              help="Only search this source (repeatable). Default: all four.")
+@click.option("--limit", default=10, show_default=True, help="Results per source.")
+@click.option("--json", "as_json", is_flag=True, help="Emit JSON instead of text.")
+def search(query, sources, limit, as_json):
+    """Search the California archives portals for QUERY."""
+    q = " ".join(query)
+    wanted = list(sources) if sources else list(SEARCHABLE)
+    browser_sources = [s for s in wanted if s in ("oac", "calisphere")]
+    out = {}
+    if browser_sources:
+        out.update(browser_search(browser_sources, q, limit))
+    if "portal" in wanted:
+        out["portal"] = search_portal(q, limit)
+    if "exhibits" in wanted:
+        out["exhibits"] = search_exhibits(q, limit)
+    ordered = [out[s] for s in wanted if s in out]
+    if as_json:
+        click.echo(json.dumps({"query": q, "sources": ordered}, indent=2))
+        return
+    for entry in ordered:
+        _print_source(entry)
+        click.echo("")
+
+
+@cli.command()
+@click.argument("query", nargs=-1, required=True)
+@click.option("--source", "sources", multiple=True, type=click.Choice(ALL_SOURCES),
+              help="Only print URLs for this source (repeatable). Default: all six.")
+def url(query, sources):
+    """Print verified search URLs for QUERY without running any search."""
+    q = " ".join(query)
+    wanted = list(sources) if sources else list(ALL_SOURCES)
+    for s in wanted:
+        click.echo("%s: %s" % (s, build_url(s, q)))
+    if "cdnc" in wanted:
+        click.echo("note: CDNC is behind a Cloudflare challenge; open the URL in a browser.")
+    if "minerva" in wanted:
+        click.echo("note: Minerva is a catalog you search in the browser; this is its launch URL.")
+
+
+@cli.command()
+@click.option("--portal", "portal_id", default=None, help="Portal item ID (from search results).")
+@click.option("--exhibits", "exhibits_id", default=None, help="Exhibits item ID (from search results).")
+@click.option("--json", "as_json", is_flag=True, help="Emit JSON instead of text.")
+def get(portal_id, exhibits_id, as_json):
+    """Fetch one Portal or exhibits item by ID."""
+    if bool(portal_id) == bool(exhibits_id):
+        raise click.UsageError("Pass exactly one of --portal ID or --exhibits ID.")
+    if portal_id:
+        url = PORTAL_BASE + "/Items/Details/" + portal_id
+        with httpx.Client(timeout=30.0, follow_redirects=True, headers={"User-Agent": USER_AGENT}) as client:
+            resp = client.get(url)
+            resp.raise_for_status()
+        m = re.search(r"<title>([^<]+)</title>", resp.text)
+        title = (m.group(1).strip() if m else "(no title)").replace(" | California Archives Search", "")
+        data = {"source": "portal", "id": portal_id, "title": title, "url": url}
+    else:
+        url = EXHIBITS_BASE + "/api/items/" + exhibits_id
+        with httpx.Client(timeout=30.0, follow_redirects=True, headers={"User-Agent": USER_AGENT}) as client:
+            resp = client.get(url, headers={"Accept": "application/ld+json"})
+            resp.raise_for_status()
+            item = resp.json()
+        desc = ""
+        for val in item.get("dcterms:description", []) or []:
+            if val.get("@value"):
+                desc = val["@value"]
+                break
+        data = {"source": "exhibits", "id": exhibits_id, "title": _omeka_title(item),
+                "type": ", ".join(t for t in item.get("@type", []) if t != "o:Item"),
+                "description": desc[:500],
+                "url": EXHIBITS_BASE + "/s/exhibits/item/" + exhibits_id}
+    if as_json:
+        click.echo(json.dumps(data, indent=2))
+        return
+    for key, val in data.items():
+        if val:
+            click.echo("%s: %s" % (key, val))
+
+
+if __name__ == "__main__":
+    cli()

@@ -1,0 +1,585 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.11"
+# dependencies = [
+#   "click>=8.1",
+#   "httpx>=0.27",
+# ]
+# ///
+"""Search the New Jersey State Archives databases portal and the Monmouth
+County OPRS 1875 census from the command line.
+
+The NJ State Archives portal publishes no public API and no stable GET
+search URL: it is ASP.NET WebForms. This CLI drives the real form flow over
+plain HTTP: GET the portal index, POST a __doPostBack to open a database
+search page, POST the search form, and parse the results grid. A browser
+User-Agent is required (the portal returns 403 to a bare curl/httpx default
+UA) and the ASP.NET session cookie must be carried across the requests.
+
+Verified live 2026-11-24. See the skill for the full
+verification log and the per-database field maps.
+"""
+
+from __future__ import annotations
+
+import html as html_mod
+import json
+import re
+import sys
+
+import click
+import httpx
+
+PORTAL_BASE = "https://wwwdnet-dos.nj.gov/DOS_ArchivesDBPortal/"
+PORTAL_INDEX = PORTAL_BASE + "index.aspx"
+MONMOUTH_BASE = "https://oprs.co.monmouth.nj.us/oprs/Archives/"
+MONMOUTH_SEARCH = MONMOUTH_BASE + "ASearch.aspx"
+USER_AGENT = (
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+)
+PREFIX = "ctl00$ContentPlaceHolder1$"
+GRID_TARGET = "ctl00$ContentPlaceHolder1$GridView1"
+# Registry of portal databases. `target` is the __doPostBack event target of
+# the database row on the portal index page; `page` is the search form the
+# postback lands on; `fields` maps CLI option names to the form field names
+# (without the ctl00$ContentPlaceHolder1$ prefix). All verified live
+# 2026-11-24 by navigating each row and reading its search form.
+DATABASES = {
+    "land": {
+        "title": "Early Land Records, ca. 1650-1900s",
+        "page": "EarlyLandRecords.aspx",
+        "target": "ctl00$ContentPlaceHolder1$GridView3$ctl02$lbtnColonialMarriages",
+        "count": "75,685 land records, over 397,267 names (data entry ongoing)",
+        "fields": {"surname": "txtLN", "given": "txtFN", "role": "ddlToFrom",
+                   "location": "txtLocation", "county": "ddlCounty",
+                   "from_year": "EYear", "to_year": "LYear"},
+        "roles": ["Grantor", "Grantee", "Named", "Official"],
+        "notes": "First stop for colonial New Jersey landholdings. Most deeds after 1785 were recorded at the county level, not the State. Result rows link to scanned PDFs.",
+    },
+    "supreme-court": {
+        "title": "Supreme Court Case Files, 1704-1844",
+        "page": "SupremeCourt.aspx",
+        "target": "ctl00$ContentPlaceHolder1$GridView3$ctl03$lbtnColonialMarriages",
+        "count": "55,114 case files, over 234,709 names (data entry ongoing)",
+        "fields": {"surname": "txtLN", "given": "txtFN", "role": "ddlRoleList",
+                   "case_type": "txtCaseType", "county": "ddlCountyList",
+                   "from_year": "EYear", "to_year": "LYear", "case_number": "txtCN"},
+        "roles": ["Plaintiff", "Defendant", "Official", "Victim", "Other"],
+    },
+    "colonial-marriages": {
+        "title": "Colonial Marriage Bonds, ca. 1666-1799",
+        "page": "ColonialMarriages.aspx",
+        "target": "ctl00$ContentPlaceHolder1$GridView1$ctl02$lbtnColonialMarriages",
+        "count": "11,533 marriage bonds",
+        "fields": {"surname": "txtGRLN", "given": "txtGRFN",
+                   "spouse_surname": "txtBRLN", "spouse_given": "txtBRFN",
+                   "from_year": "txtEYear", "to_year": "txtLYear",
+                   "location": "ddlLocationList"},
+    },
+    "marriages-1848-1900": {
+        "title": "Marriage Records, May 1848 - December 1900",
+        "page": "Marriage1867.aspx",
+        "target": "ctl00$ContentPlaceHolder1$GridView1$ctl03$lbtnColonialMarriages",
+        "count": "Approximately 492,000 marriage records",
+        "fields": {"surname": "txtGRLN", "given": "txtGRFN",
+                   "spouse_surname": "txtBRLN", "spouse_given": "txtBRFN",
+                   "from_year": "txtEYear", "to_year": "txtLYear",
+                   "county": "ddlCountyList"},
+    },
+    "deaths-1848-1878": {
+        "title": "Death Records, May 1848 - May 1878",
+        "page": "DeathIndex1848.aspx",
+        "target": "ctl00$ContentPlaceHolder1$GridView1$ctl04$lbtnColonialMarriages",
+        "count": "Over 303,172 death records (data entry ongoing)",
+        "fields": {"surname": "txtLN", "given": "txtFN",
+                   "from_year": "Year1", "to_year": "Year2",
+                   "county": "ddlCountyList"},
+    },
+    "deaths-1878-1900": {
+        "title": "Death Records, June 1878 - December 1900",
+        "page": "DeathIndex.aspx",
+        "target": "ctl00$ContentPlaceHolder1$GridView1$ctl05$lbtnColonialMarriages",
+        "count": "628,584 death records (data entry complete)",
+        "fields": {"surname": "txtLN", "given": "txtFN",
+                   "from_year": "Year1", "to_year": "Year2",
+                   "county": "ddlCountyList"},
+    },
+    "name-changes": {
+        "title": "Legal Name Changes, 1847-1947",
+        "page": "NameChanges.aspx",
+        "target": "ctl00$ContentPlaceHolder1$GridView3$ctl04$lbtnColonialMarriages",
+        "count": "12,254 name changes, 46,010 names",
+        "fields": {"surname": "txtLN", "given": "txtFN"},
+    },
+    "census-1885": {
+        "title": "1885 State Census - Passaic County and Atlantic City",
+        "page": "Census1885.aspx",
+        "target": "ctl00$ContentPlaceHolder1$GridView3$ctl05$lbtnColonialMarriages",
+        "count": "69,302 names",
+        "fields": {"surname": "txtLN", "given": "txtFN", "location": "ddlLocation"},
+    },
+    "revwar-damage": {
+        "title": "Revolutionary War Damage Claims, 1776-1783",
+        "page": "RevWarDamages.aspx",
+        "target": "ctl00$ContentPlaceHolder1$GridView5$ctl02$lbtnColonialMarriages",
+        "count": "2,662 claims, 7,435 names",
+        "fields": {"surname": "txtLN", "given": "txtFN", "county": "ddlCounty",
+                   "location": "ddlLocation", "from_year": "EYear",
+                   "to_year": "LYear"},
+    },
+    "civilwar-service": {
+        "title": "Civil War Service Records, 1861-1865",
+        "page": "StrykerCivilWar.aspx",
+        "target": "ctl00$ContentPlaceHolder1$GridView5$ctl03$lbtnColonialMarriages",
+        "count": "82,471 names",
+        "fields": {"surname": "txtLN", "given": "txtFN"},
+    },
+    "civilwar-vouchers": {
+        "title": "Civil War Payment Vouchers, 1861-1865",
+        "page": "CivilWarVouchers.aspx",
+        "target": "ctl00$ContentPlaceHolder1$GridView5$ctl04$lbtnColonialMarriages",
+        "count": "15,770 vouchers, 114,212 names",
+        "fields": {"surname": "txtLN", "given": "txtFN"},
+    },
+    "wwi-deaths": {
+        "title": "World War I Deaths",
+        "page": "WWICards.aspx",
+        "target": "ctl00$ContentPlaceHolder1$GridView5$ctl05$lbtnColonialMarriages",
+        "count": "3,427 names (9,310 scanned images)",
+        "fields": {"surname": "txtLN", "given": "txtFN", "county": "ddlNJCounty"},
+    },
+    "natguard-photos": {
+        "title": "New Jersey National Guard Photographs",
+        "page": "natguard1.aspx",
+        "target": "ctl00$ContentPlaceHolder1$GridView5$ctl06$lbtnColonialMarriages",
+        "count": "1,316 images",
+        "fields": {"keyword": "txtSearch", "location": "txtLocation",
+                   "from_year": "txtEYear", "to_year": "txtLYear"},
+    },
+}
+
+# Portal rows that lead to records-request (order) forms, not searchable
+# result grids. `search` refuses these; `url` prints the form to open.
+ORDER_ONLY = {
+    "births-1848-1925": ("Birth Record Search: May 1, 1848 - December 31, 1925",
+                         "BirthRecordsRequest.aspx", "GridView2", "ctl02"),
+    "marriages-1848-1950": ("Marriage Record Search: May 1, 1848 - December 31, 1950",
+                            "MarriageRecordsRequest.aspx", "GridView2", "ctl03"),
+    "deaths-1848-1950": ("Death Record Search: May 1, 1848 - December 31, 1950",
+                        "DeathRecordsRequest.aspx", "GridView2", "ctl04"),
+    "county-clerks-marriages": ("County Clerks' Marriage Record Search",
+                                "CountyMarriageRecordRequest.aspx", "GridView2", "ctl05"),
+    "probate": ("Probate Record Search, ca. 1660-1952",
+               "ProbateRecordRequest.aspx", "GridView4", "ctl02"),
+    "naturalization": ("County Naturalization Record Search",
+                      "NaturalizationRecordRequest.aspx", "GridView4", "ctl03"),
+    "revwar-search": ("Revolutionary War Record Search",
+                     "RevWarRecordRequest.aspx", "GridView6", "ctl02"),
+    "wwi-search": ("World War I Record Search",
+                  "WorldWarIRecordRequest.aspx", "GridView6", "ctl03"),
+}
+
+MONMOUTH_TOWNS = ["Atlantic", "Freehold", "Holmdel", "Howell", "Marlboro",
+                  "Middletown", "Ocean", "Shrewsbury", "Upper Freehold", "Wall"]
+MONMOUTH_CATEGORIES = ["Agriculture", "Commerce", "Manufactures", "Mining",
+                       "Population", "Return of Births", "Return of Deaths"]
+
+def clean(raw: str) -> str:
+    """Strip tags, unescape entities, collapse whitespace."""
+    text = re.sub(r"<[^>]+>", " ", raw)
+    return " ".join(html_mod.unescape(text).split())
+
+
+def hidden_fields(page_html: str) -> dict[str, str]:
+    """All ASP.NET hidden fields (__VIEWSTATE, __EVENTVALIDATION, ...)."""
+    fields: dict[str, str] = {}
+    for tag in re.findall(r"<input[^>]*type=\"hidden\"[^>]*>", page_html):
+        name = re.search(r'name="([^"]+)"', tag)
+        value = re.search(r'value="([^"]*)"', tag)
+        if name:
+            fields[name.group(1)] = html_mod.unescape(value.group(1)) if value else ""
+    return fields
+
+
+def form_action(page_html: str) -> str | None:
+    match = re.search(r"<form[^>]*action=\"([^\"]*)\"", page_html)
+    return html_mod.unescape(match.group(1)) if match else None
+
+
+def select_options(page_html: str, short_name: str) -> list[str]:
+    """Option values of a <select> on a search page, by short field name."""
+    pattern = (
+        r"<select[^>]*name=\"" + re.escape(PREFIX + short_name) + r"\"[^>]*>(.*?)</select>"
+    )
+    match = re.search(pattern, page_html, re.S)
+    if not match:
+        return []
+    return [
+        html_mod.unescape(value)
+        for value, _label in re.findall(
+            r"<option[^>]*value=\"([^\"]*)\"[^>]*>([^<]*)", match.group(1)
+        )
+    ]
+
+
+def parse_grid(page_html: str, table_hint: str) -> tuple[list[str], list[dict]]:
+    """Parse an ASP.NET results grid into (headers, rows).
+
+    Each row is a dict keyed by header text plus a "links" list of
+    {"text", "href"} for anchors in the row (e.g. scanned-PDF links) and
+    for PopUpBig('/path.pdf') census-page links (Monmouth OPRS).
+    A single-cell 'No Records Found' grid yields ([], []). Pager rows
+    (a single cell of page numbers) are skipped. Header rows are <th>
+    rows, or, for grids like Monmouth's that use <td> headers, the first
+    row whose non-empty cells contain no digits.
+    """
+    table = re.search(
+        r"<table[^>]*id=\"([^\"]*" + re.escape(table_hint) + r"[^\"]*)\"[^>]*>(.*?)</table>",
+        page_html,
+        re.S,
+    )
+    if not table:
+        return [], []
+    rows_html = re.findall(r"<tr[^>]*>(.*?)</tr>", table.group(2), re.S)
+    headers: list[str] = []
+    rows: list[dict] = []
+    for row_html in rows_html:
+        cells = re.findall(r"<t[dh][^>]*>(.*?)</t[dh]>", row_html, re.S)
+        texts = [clean(cell) for cell in cells]
+        if not texts or all(text == "" for text in texts):
+            continue
+        if len(texts) == 1 and texts[0] == "No Records Found":
+            return [], []
+        if len(texts) == 1 and re.fullmatch(r"[\d\s]+", texts[0]):
+            continue  # pager row ("1 2 3 4 5 6")
+        links = [
+            {"text": clean(label), "href": html_mod.unescape(href)}
+            for href, label in re.findall(
+                r"<a[^>]*href=\"([^\"]+)\"[^>]*>(.*?)</a>", row_html, re.S
+            )
+        ]
+        for pdf_path in re.findall(r"PopUpBig\(&#39;([^&]+?)&#39;\)", row_html):
+            href = pdf_path if pdf_path.startswith("http") else "https://oprs.co.monmouth.nj.us" + pdf_path
+            links.append({"text": "census page image", "href": href})
+        is_header = bool(re.search(r"<th", row_html)) or (
+            not headers
+            and all(not re.search(r"\d", text) for text in texts if text)
+        )
+        if is_header:
+            headers = texts
+            continue
+        if not headers:
+            headers = [f"col{i + 1}" for i in range(len(texts))]
+        row = {headers[i]: texts[i] for i in range(min(len(headers), len(texts)))}
+        row["links"] = links
+        rows.append(row)
+    return headers, rows
+
+
+def capped_notice(page_html: str) -> bool:
+    return "Results are limited to 500 records per search" in clean(page_html)
+
+class Portal:
+    """One cookie-carrying session against the NJ State Archives portal."""
+
+    def __init__(self) -> None:
+        self.client = httpx.Client(
+            headers={"User-Agent": USER_AGENT},
+            follow_redirects=True,
+            timeout=60.0,
+        )
+
+    def __enter__(self) -> "Portal":
+        return self
+
+    def __exit__(self, *exc: object) -> None:
+        self.client.close()
+
+    def _get(self, url: str) -> str:
+        response = self.client.get(url)
+        response.raise_for_status()
+        return response.text
+
+    def _post(self, url: str, data: dict[str, str]) -> str:
+        response = self.client.post(url, data=data)
+        response.raise_for_status()
+        return response.text
+
+    def list_databases(self) -> list[dict[str, str]]:
+        """Database rows live from the portal index, keyed where known."""
+        page = self._get(PORTAL_INDEX)
+        by_target = {spec["target"]: key for key, spec in DATABASES.items()}
+        found: list[dict[str, str]] = []
+        for grid in re.finditer(
+            r"<table[^>]*id=\"([^\"]*GridView\d+[^\"]*)\"[^>]*>(.*?)</table>", page, re.S
+        ):
+            for row in re.findall(r"<tr[^>]*>(.*?)</tr>", grid.group(2), re.S):
+                target = re.search(r"__doPostBack\(&#39;([^&]+?)&#39;", row)
+                if not target:
+                    continue
+                cells = [clean(c) for c in re.findall(r"<td[^>]*>(.*?)</td>", row, re.S)]
+                found.append({
+                    "key": by_target.get(target.group(1), ""),
+                    "title": cells[0] if cells else "",
+                    "count": cells[1] if len(cells) > 1 else "",
+                })
+        return found
+
+    def open_search_page(self, key: str) -> tuple[str, str]:
+        """POST the database row's __doPostBack; return (page_url, html)."""
+        spec = DATABASES[key]
+        index = self._get(PORTAL_INDEX)
+        data = {
+            **hidden_fields(index),
+            "__EVENTTARGET": spec["target"],
+            "__EVENTARGUMENT": "",
+        }
+        page_html = self._post(PORTAL_INDEX, data)
+        action = form_action(page_html) or spec["page"]
+        return PORTAL_BASE + action.lstrip("./"), page_html
+
+    def search(self, key: str, criteria: dict[str, str | None], pages: int = 1) -> dict:
+        """Run a search and optionally page through GridView1 results."""
+        spec = DATABASES[key]
+        page_url, page_html = self.open_search_page(key)
+        self._validate(criteria, spec, page_html)
+        data: dict[str, str] = {
+            **hidden_fields(page_html),
+            "__EVENTTARGET": "",
+            "__EVENTARGUMENT": "",
+        }
+        for option, value in criteria.items():
+            if value is not None and option in spec["fields"]:
+                data[PREFIX + spec["fields"][option]] = value
+        data[PREFIX + SUBMIT_BUTTON.get(key, "Search")] = "Search"
+        result_html = self._post(page_url, data)
+        headers, rows = parse_grid(result_html, "GridView1")
+        capped = capped_notice(result_html)
+        seen_pages = 1
+        while seen_pages < pages and rows:
+            page_html = result_html
+            data = {
+                **hidden_fields(page_html),
+                "__EVENTTARGET": GRID_TARGET,
+                "__EVENTARGUMENT": f"Page${seen_pages + 1}",
+            }
+            result_html = self._post(page_url, data)
+            _h, more = parse_grid(result_html, "GridView1")
+            if not more:
+                break
+            rows.extend(more)
+            seen_pages += 1
+        return {"database": key, "title": spec["title"], "headers": headers,
+                "rows": rows, "capped_500": capped, "pages_read": seen_pages}
+
+    @staticmethod
+    def _validate(criteria: dict[str, str | None], spec: dict, page_html: str) -> None:
+        for option, value in criteria.items():
+            if value is None or option not in spec["fields"]:
+                continue
+            short = spec["fields"][option]
+            options = select_options(page_html, short)
+            if options and value not in options:
+                raise click.UsageError(
+                    f"--{option.replace('_', '-')} {value!r} is not a valid choice for "
+                    f"{spec['title']}; valid: {', '.join(o for o in options if o)}"
+                )
+        roles = spec.get("roles")
+        role = criteria.get("role")
+        if roles and role is not None and role not in roles:
+            raise click.UsageError(
+                f"--role {role!r} is not valid here; valid: {', '.join(roles)}"
+            )
+
+
+def monmouth_search(surname: str, town: str, category: str, match: str,
+                    limit: int | None) -> dict:
+    """Search the Monmouth County OPRS 1875 census (page 1 only; its pager
+    postback was not verified, so --pages is not offered here)."""
+    with httpx.Client(headers={"User-Agent": USER_AGENT},
+                      follow_redirects=True, timeout=60.0) as client:
+        page_html = client.get(MONMOUTH_SEARCH).text
+        data = {
+            **hidden_fields(page_html),
+            "__EVENTTARGET": "",
+            "__EVENTARGUMENT": "",
+            PREFIX + "ddlTown": town,
+            PREFIX + "ddlCat": category,
+            PREFIX + "txtName": surname,
+            PREFIX + "Search": "radContains" if match == "contains" else "radStarts",
+            PREFIX + "btnSearch": "Search",
+        }
+        result_html = client.post(MONMOUTH_SEARCH, data=data).text
+    headers, rows = parse_grid(result_html, "dgdArcSearch")
+    if limit is not None:
+        rows = rows[:limit]
+    return {"database": "monmouth-1875-census", "headers": headers,
+            "rows": rows, "pages_read": 1}
+
+SUBMIT_BUTTON = {"natguard-photos": "btnSearch"}
+
+
+def emit(result: dict, as_json: bool, limit: int | None = None) -> None:
+    total = len(result["rows"])
+    rows = result["rows"]
+    if limit is not None:
+        rows = rows[:limit]
+    if as_json:
+        click.echo(json.dumps({**result, "rows": rows}, indent=2))
+        return
+    title = result.get("title") or result["database"]
+    if not rows:
+        click.echo(f"{title}: no records found.")
+        return
+    click.echo(f"{title}: {len(rows)} result(s)" +
+                (" (search capped at 500 records; narrow the criteria)"
+                 if result.get("capped_500") and total >= 500 else "") +
+                (f" (pages read: {result.get('pages_read')})"
+                 if result.get("pages_read", 1) > 1 else ""))
+    headers = [h for h in result["headers"] if h != "Select"]
+    for i, row in enumerate(rows, 1):
+        cells = [row.get(h, "") for h in headers if row.get(h, "")]
+        click.echo(f"{i}. " + " | ".join(cells))
+        for link in row.get("links", []):
+            if link["href"].lower().endswith(".pdf"):
+                click.echo(f"   PDF: {link['href']}")
+
+
+@click.group()
+def cli() -> None:
+    """Search New Jersey State Archives databases and the Monmouth County
+    OPRS 1875 census."""
+
+
+@cli.command("databases")
+@click.option("--json", "as_json", is_flag=True, help="Emit JSON.")
+def databases_cmd(as_json: bool) -> None:
+    """List the searchable databases on the NJ State Archives portal."""
+    with Portal() as portal:
+        live = portal.list_databases()
+    if as_json:
+        click.echo(json.dumps(live, indent=2))
+        return
+    for entry in live:
+        key = f" [{entry['key']}]" if entry["key"] else ""
+        count = f" -- {entry['count']}" if entry["count"] else ""
+        click.echo(f"{entry['title']}{key}{count}")
+    click.echo("\nOrder-form only (no online search; use `nj-archives url <key>`):")
+    for key, (title, _page, _grid, _ctl) in ORDER_ONLY.items():
+        click.echo(f"  {title} [{key}]")
+
+
+@cli.command("search")
+@click.argument("database")
+@click.option("--surname", required=True, help="Surname to search.")
+@click.option("--given", default=None, help="Given name.")
+@click.option("--spouse-surname", default=None, help="Spouse surname (marriage databases).")
+@click.option("--spouse-given", default=None, help="Spouse given name (marriage databases).")
+@click.option("--county", default=None, help="County filter.")
+@click.option("--location", default=None, help="Location filter.")
+@click.option("--from-year", type=int, default=None, help="Earliest year.")
+@click.option("--to-year", type=int, default=None, help="Latest year.")
+@click.option("--role", default=None, help="Role, e.g. Grantee (land) or Defendant (supreme-court).")
+@click.option("--case-type", default=None, help="Case type (supreme-court).")
+@click.option("--case-number", default=None, help="Case number (supreme-court).")
+@click.option("--keyword", default=None, help="Keyword (natguard-photos).")
+@click.option("--limit", type=int, default=None, help="Max rows to show.")
+@click.option("--pages", type=int, default=1, show_default=True,
+              help="Result pages to read (10 rows per page).")
+@click.option("--json", "as_json", is_flag=True, help="Emit JSON.")
+def search_cmd(database: str, surname: str, given: str | None,
+               spouse_surname: str | None, spouse_given: str | None,
+               county: str | None, location: str | None,
+               from_year: int | None, to_year: int | None,
+               role: str | None, case_type: str | None,
+               case_number: str | None, keyword: str | None,
+               limit: int | None, pages: int, as_json: bool) -> None:
+    """Search one portal database, e.g. `nj-archives search land --surname Lincoln`."""
+    if database in ORDER_ONLY:
+        title, page, _grid, _ctl = ORDER_ONLY[database]
+        raise click.UsageError(
+            f"{title} has no online search; it is a records-request (order) form. "
+            f"Open it in a browser: {PORTAL_BASE}{page}"
+        )
+    if database not in DATABASES:
+        raise click.UsageError(
+            f"unknown database {database!r}; run `nj-archives databases` for the list"
+        )
+    criteria = {
+        "surname": surname, "given": given,
+        "spouse_surname": spouse_surname, "spouse_given": spouse_given,
+        "county": county, "location": location,
+        "from_year": str(from_year) if from_year is not None else None,
+        "to_year": str(to_year) if to_year is not None else None,
+        "role": role, "case_type": case_type, "case_number": case_number,
+        "keyword": keyword,
+    }
+    try:
+        with Portal() as portal:
+            result = portal.search(database, criteria, pages=max(1, pages))
+    except httpx.HTTPStatusError as exc:
+        raise click.ClickException(
+            f"portal returned HTTP {exc.response.status_code} for {database}; "
+            "the portal may be down or blocking automated access"
+        ) from exc
+    emit(result, as_json, limit)
+
+@cli.command("monmouth")
+@click.option("--surname", required=True, help="Person name to search.")
+@click.option("--town", default="ALL", show_default=True,
+              help="Town, or ALL. Choices: " + ", ".join(MONMOUTH_TOWNS))
+@click.option("--category", default="ALL", show_default=True,
+              help="Category, or ALL. Choices: " + ", ".join(MONMOUTH_CATEGORIES))
+@click.option("--match", type=click.Choice(["starts", "contains"]),
+              default="contains", show_default=True)
+@click.option("--limit", type=int, default=None, help="Max rows to show.")
+@click.option("--json", "as_json", is_flag=True, help="Emit JSON.")
+def monmouth_cmd(surname: str, town: str, category: str, match: str,
+                 limit: int | None, as_json: bool) -> None:
+    """Search the Monmouth County OPRS 1875 census by person name."""
+    if town != "ALL" and town not in MONMOUTH_TOWNS:
+        raise click.UsageError(
+            f"--town {town!r} is not valid; valid: ALL, " + ", ".join(MONMOUTH_TOWNS)
+        )
+    if category != "ALL" and category not in MONMOUTH_CATEGORIES:
+        raise click.UsageError(
+            f"--category {category!r} is not valid; valid: ALL, "
+            + ", ".join(MONMOUTH_CATEGORIES)
+        )
+    try:
+        result = monmouth_search(surname, town, category, match, limit)
+    except httpx.HTTPStatusError as exc:
+        raise click.ClickException(
+            f"Monmouth OPRS returned HTTP {exc.response.status_code}; "
+            "the site may be down or blocking automated access"
+        ) from exc
+    emit(result, as_json, limit)
+
+
+@cli.command("url")
+@click.argument("database", required=False, default=None)
+def url_cmd(database: str | None) -> None:
+    """Print the browser URL for the portal, a database, or Monmouth OPRS."""
+    if database is None:
+        click.echo(f"Portal index: {PORTAL_INDEX}")
+        click.echo(f"Monmouth County OPRS 1875 census: {MONMOUTH_SEARCH}")
+        return
+    if database == "monmouth":
+        click.echo(MONMOUTH_SEARCH)
+        return
+    if database in DATABASES:
+        click.echo(PORTAL_BASE + DATABASES[database]["page"])
+        return
+    if database in ORDER_ONLY:
+        title, page, _grid, _ctl = ORDER_ONLY[database]
+        click.echo(f"{title} (records-request form, no online search):")
+        click.echo(PORTAL_BASE + page)
+        return
+    raise click.UsageError(
+        f"unknown database {database!r}; run `nj-archives databases` for the list"
+    )
+
+
+if __name__ == "__main__":
+    cli()

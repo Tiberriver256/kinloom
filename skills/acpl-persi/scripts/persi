@@ -1,0 +1,268 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.11"
+# dependencies = [
+#   "click>=8.1",
+#   "httpx>=0.27",
+# ]
+# ///
+"""Search the Allen County Public Library Genealogy Center's free PERSI
+(Periodical Source Index) from the command line.
+
+PERSI is a citation index, not a full-text archive: a hit gives the article
+title, periodical, year, and publisher, plus a free link when the issue is
+online and copyright-clear. Use the citation to find the article through a
+library, WorldCat, or the Genealogy Center's article copy service.
+
+All three search modes are plain POST forms on genealogycenter.info, verified
+live 2026-11-24. No account, key, or sign-in is required.
+"""
+
+from __future__ import annotations
+
+import html as htmlmod
+import json
+import sys
+import time
+from html.parser import HTMLParser
+from urllib.parse import urlencode
+
+import click
+import httpx
+
+BASE = "https://www.genealogycenter.info"
+SEARCH_PAGE = BASE + "/persi/"
+SURNAME_URL = BASE + "/results_persisurname.php"
+TITLE_URL = BASE + "/results_persiarttitle.php"
+LOCATION_URL = BASE + "/results_persilocation.php"
+USER_AGENT = "Mozilla/5.0"
+# The Genealogy Center's front door intermittently 412/429s python-httpx's
+# default header set. Plain curl-style headers (short UA, Accept */*) plus
+# a Referer return 200 consistently; fetch() also retries once on 412/429.
+
+US_STATES = {
+    "AL", "AK", "AZ", "AR", "CA", "CO", "CT", "DE", "DC", "FL", "GA", "HI",
+    "ID", "IL", "IN", "IA", "KS", "KY", "LA", "ME", "MD", "MA", "MI", "MN",
+    "MS", "MO", "MT", "NE", "NV", "NH", "NJ", "NM", "NY", "NC", "ND", "OH",
+    "OK", "OR", "PA", "RI", "SC", "SD", "TN", "TX", "UT", "VT", "VA", "WA",
+    "WV", "WI", "WY", "GEN",
+}
+
+
+class TableParser(HTMLParser):
+    """Collect rows of the first <table> whose cells look like PERSI results."""
+
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.in_table = False
+        self.in_row = False
+        self.in_cell = False
+        self.current_row: list[str] = []
+        self.current_cell = ""
+        self.current_links: list[str] = []
+        self.cell_links: list[list[str]] = []
+        self.rows: list[dict] = []
+
+    def handle_starttag(self, tag, attrs):
+        attrs = dict(attrs)
+        if tag == "table":
+            self.in_table = True
+        if not self.in_table:
+            return
+        if tag == "tr":
+            self.in_row = True
+            self.current_row = []
+            self.cell_links = []
+        elif tag in ("td", "th") and self.in_row:
+            self.in_cell = True
+            self.current_cell = ""
+            self.current_links = []
+        elif tag == "a" and self.in_cell:
+            href = attrs.get("href", "")
+            if href:
+                self.current_links.append(href)
+
+    def handle_endtag(self, tag):
+        if tag == "table":
+            self.in_table = False
+        if not self.in_table and tag != "table":
+            return
+        if tag in ("td", "th") and self.in_cell:
+            self.in_cell = False
+            self.current_row.append(" ".join(self.current_cell.split()))
+            self.cell_links.append(list(self.current_links))
+        elif tag == "tr" and self.in_row:
+            self.in_row = False
+            if self.current_row:
+                self.rows.append(
+                    {"cells": self.current_row, "links": self.cell_links}
+                )
+
+    def handle_data(self, data):
+        if self.in_cell:
+            self.current_cell += data
+
+
+def fetch(url: str, data: dict, referer: str) -> str:
+    headers = {
+        "User-Agent": USER_AGENT,
+        "Accept": "*/*",
+        "Accept-Encoding": "identity",
+        "Referer": referer,
+    }
+    last_exc: Exception | None = None
+    for attempt in (1, 2):
+        try:
+            with httpx.Client(
+                headers=headers, timeout=60.0, follow_redirects=True
+            ) as client:
+                resp = client.post(url, data=data)
+                if resp.status_code in (412, 429) and attempt == 1:
+                    time.sleep(5)
+                    continue
+                resp.raise_for_status()
+                return resp.text
+        except httpx.HTTPError as exc:
+            last_exc = exc
+    raise click.ClickException(f"PERSI request failed: {last_exc}") from last_exc
+
+
+def parse_articles(page: str) -> list[dict]:
+    parser = TableParser()
+    parser.feed(page)
+    articles = []
+    for row in parser.rows:
+        cells = row["cells"]
+        if len(cells) < 3:
+            continue
+        if cells[0].lower().startswith("article title"):
+            continue
+        free_links = [
+            link
+            for cell in row["links"]
+            for link in cell
+            if link.startswith("http")
+        ]
+        articles.append(
+            {
+                "title": cells[0],
+                "periodical": cells[1] if len(cells) > 1 else "",
+                "year": cells[2] if len(cells) > 2 else "",
+                "publisher": cells[3] if len(cells) > 3 else "",
+                "free_link": free_links[0] if free_links else None,
+            }
+        )
+    return articles
+
+
+def parse_categories(page: str) -> list[dict]:
+    parser = TableParser()
+    parser.feed(page)
+    categories = []
+    for row in parser.rows:
+        cells = row["cells"]
+        if len(cells) == 2 and cells[1].replace(",", "").isdigit():
+            if cells[0].lower().startswith("category"):
+                continue
+            categories.append(
+                {"category": cells[0], "articles": int(cells[1].replace(",", ""))}
+            )
+    return categories
+
+
+def emit(items: list[dict], as_json: bool, limit: int) -> None:
+    items = items[:limit]
+    if as_json:
+        click.echo(json.dumps(items, indent=2))
+        return
+    if not items:
+        click.echo("No results.")
+        return
+    for item in items:
+        if "articles" in item:
+            click.echo(f"{item['articles']:>6}  {item['category']}")
+        else:
+            line = (
+                f"{item['title']} | {item['periodical']} | "
+                f"{item['year']} | {item['publisher']}"
+            )
+            click.echo(line)
+            if item.get("free_link"):
+                click.echo(f"       free online: {item['free_link']}")
+    click.echo(f"({len(items)} shown)")
+
+
+@click.group()
+def cli() -> None:
+    """Search ACPL's free PERSI (Periodical Source Index)."""
+
+
+@cli.command()
+@click.argument("surname")
+@click.option("--limit", default=25, show_default=True, help="Max results to show.")
+@click.option("--json", "as_json", is_flag=True, help="Emit JSON.")
+def surname(surname: str, limit: int, as_json: bool) -> None:
+    """Search PERSI by surname, e.g. persi surname Lincoln."""
+    page = fetch(SURNAME_URL, {"surname": surname, "sort": "title", "submit": "Search"}, BASE + "/search_persisurname.php")
+    emit(parse_articles(page), as_json, limit)
+
+
+@cli.command()
+@click.argument("keyword")
+@click.option("--limit", default=25, show_default=True, help="Max results to show.")
+@click.option("--json", "as_json", is_flag=True, help="Emit JSON.")
+def title(keyword: str, limit: int, as_json: bool) -> None:
+    """Search PERSI by article-title keyword, e.g. persi title Lincoln."""
+    page = fetch(TITLE_URL, {"keyword": keyword, "sort": "title", "submit": "Search"}, BASE + "/search_persiarttitle.php")
+    emit(parse_articles(page), as_json, limit)
+
+
+@cli.command()
+@click.option("--state", required=True, help="Two-letter state code, e.g. MI. GEN for US general.")
+@click.option("--county", default="", help="County name (optional; leave blank for statewide).")
+@click.option("--json", "as_json", is_flag=True, help="Emit JSON.")
+def location(state: str, county: str, as_json: bool) -> None:
+    """List PERSI article counts by category for a state/county.
+
+    Returns category counts, not articles: pick a category on the website
+    to drill into its articles.
+    """
+    state = state.upper()
+    if state not in US_STATES:
+        raise click.ClickException(f"Unknown state code: {state}")
+    page = fetch(
+        LOCATION_URL,
+        {
+            "subloc": "USA",
+            "cosearch": "USA",
+            "usloc": state,
+            "county": county,
+            "submit": "Search",
+        },
+        BASE + "/search_persilocation.php",
+    )
+    cats = parse_categories(page)
+    if not cats:
+        click.echo(
+            "No category counts returned. The county value may not match "
+            "PERSI's list; try a blank county (statewide) or check the "
+            "website form."
+        )
+        sys.exit(1)
+    emit(cats, as_json, len(cats))
+
+
+@cli.command()
+@click.argument("mode", type=click.Choice(["surname", "title", "location"]))
+def url(mode: str) -> None:
+    """Print the PERSI website search page for a mode (POST forms have no shareable result URL)."""
+    pages = {
+        "surname": BASE + "/search_persisurname.php",
+        "title": BASE + "/search_persiarttitle.php",
+        "location": BASE + "/search_persilocation.php",
+    }
+    click.echo(pages[mode])
+
+
+if __name__ == "__main__":
+    cli()

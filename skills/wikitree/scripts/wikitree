@@ -1,0 +1,219 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.11"
+# dependencies = [
+#   "click>=8.1",
+#   "httpx>=0.27",
+# ]
+# ///
+"""Compact CLI for the public WikiTree API (https://api.wikitree.com/api.php).
+
+Read-only. No account or API key is needed for public profiles; every call
+sends an appId (WikiTree rate-limits calls without one). See
+skills/wikitree/SKILL.md for the API reference and rules.
+"""
+
+from __future__ import annotations
+
+import json
+import os
+import sys
+
+import click
+import httpx
+
+API_BASE = "https://api.wikitree.com/api.php"
+DEFAULT_APP_ID = "Kinloom"
+DEFAULT_FIELDS = "Id,Name,FirstName,LastNameAtBirth,BirthDate,DeathDate,BirthLocation"
+
+
+def _app_id() -> str:
+    return os.environ.get("WIKITREE_APP_ID", DEFAULT_APP_ID)
+
+
+def api_call(params: dict) -> list:
+    """One GET against the WikiTree API; returns the decoded JSON array."""
+    params = {"appId": _app_id(), **params}
+    try:
+        resp = httpx.get(API_BASE, params=params, timeout=30.0)
+        resp.raise_for_status()
+    except httpx.HTTPError as exc:
+        raise click.ClickException(f"WikiTree API request failed: {exc}") from exc
+    try:
+        data = resp.json()
+    except ValueError as exc:
+        raise click.ClickException("WikiTree API returned non-JSON") from exc
+    if not isinstance(data, list):
+        raise click.ClickException(f"Unexpected API response: {data!r}")
+    return data
+
+
+def check_status(data: list, label: str) -> dict:
+    """Raise on a non-zero status element; return the first element."""
+    if not data:
+        raise click.ClickException(f"{label}: empty response from WikiTree API")
+    first = data[0]
+    status = first.get("status", 0)
+    if status != 0 and status != "":
+        raise click.ClickException(f"{label}: {status}")
+    return first
+
+
+def show_person(person: dict) -> None:
+    """One compact line per profile, with unknown dates shown as such."""
+    name = person.get("Name") or person.get("Id", "?")
+    first = person.get("FirstName", "")
+    last = person.get("LastNameAtBirth") or person.get("LastNameCurrent", "")
+    birth = person.get("BirthDate") or ""
+    death = person.get("DeathDate") or ""
+    birth = "" if birth in ("", "0000-00-00") else birth
+    death = "" if death in ("", "0000-00-00") else death
+    place = person.get("BirthLocation", "")
+    dates = f"b. {birth}" if birth else "b. ?"
+    if death:
+        dates += f" d. {death}"
+    line = f"{name}: {first} {last} ({dates})"
+    if place:
+        line += f", born {place}"
+    click.echo(line.strip())
+
+
+@click.group()
+def cli() -> None:
+    """Read public WikiTree profiles (search, person, ancestors, bio)."""
+
+
+@cli.command()
+@click.option("--first", "first_name", default=None, help="First name.")
+@click.option("--last", "last_name", default=None, help="Last name.")
+@click.option("--birth-date", default=None, help="Birth date, YYYY-MM-DD.")
+@click.option("--death-date", default=None, help="Death date, YYYY-MM-DD.")
+@click.option("--birth-location", default=None, help="Birth location.")
+@click.option("--death-location", default=None, help="Death location.")
+@click.option("--date-include", type=click.Choice(["both", "neither"]),
+              default=None, help="'both' requires dates on matches.")
+@click.option("--limit", type=click.IntRange(1, 100), default=10,
+              show_default=True, help="Results to return (1-100).")
+@click.option("--start", type=int, default=0, show_default=True,
+              help="Result offset for paging.")
+@click.option("--fields", default=DEFAULT_FIELDS, show_default=True,
+              help="Comma-separated profile fields, or '*'.")
+@click.option("--json", "as_json", is_flag=True, help="Print raw JSON.")
+def search(first_name, last_name, birth_date, death_date, birth_location,
+           death_location, date_include, limit, start, fields, as_json):
+    """Search person profiles, e.g. search --first Abraham --last Lincoln."""
+    if not any([first_name, last_name, birth_date, death_date,
+                birth_location, death_location]):
+        raise click.BadParameter("give at least one of --first/--last/--birth-date/--death-date/--birth-location/--death-location.")
+    params: dict = {"action": "searchPerson", "limit": limit, "start": start,
+                    "fields": fields}
+    if first_name:
+        params["FirstName"] = first_name
+    if last_name:
+        params["LastName"] = last_name
+    if birth_date:
+        params["BirthDate"] = birth_date
+    if death_date:
+        params["DeathDate"] = death_date
+    if birth_location:
+        params["BirthLocation"] = birth_location
+    if death_location:
+        params["DeathLocation"] = death_location
+    if date_include:
+        params["dateInclude"] = date_include
+    data = api_call(params)
+    first = check_status(data, "searchPerson")
+    if as_json:
+        click.echo(json.dumps(data, indent=2))
+        return
+    matches = first.get("matches", [])
+    click.echo(f"{first.get('total', len(matches))} match(es), showing {len(matches)}:")
+    for match in matches:
+        if "Name" in match or "FirstName" in match:
+            show_person(match)
+        else:
+            # Sparse match (Id only): flag it so the caller follows up.
+            click.echo(f"Id {match.get('Id')}: sparse match, run `person {match.get('Id')}` for details")
+
+
+@cli.command()
+@click.argument("key")
+@click.option("--fields", default=DEFAULT_FIELDS, show_default=True,
+              help="Comma-separated profile fields, or '*'.")
+@click.option("--bio-format", type=click.Choice(["wiki", "html", "both"]),
+              default=None, help="Include Bio in this format.")
+@click.option("--resolve-redirect", is_flag=True,
+              help="Follow merged-profile redirects.")
+@click.option("--json", "as_json", is_flag=True, help="Print raw JSON.")
+def person(key, fields, bio_format, resolve_redirect, as_json):
+    """Fetch one person by WikiTree ID (e.g. <Surname>-<Number>) or numeric Id."""
+    params: dict = {"action": "getPerson", "key": key, "fields": fields}
+    if bio_format:
+        params["bioFormat"] = bio_format
+        if "Bio" not in fields.split(",") and fields != "*":
+            params["fields"] = fields + ",Bio"
+    if resolve_redirect:
+        params["resolveRedirect"] = 1
+    data = api_call(params)
+    first = check_status(data, f"getPerson {key}")
+    if as_json:
+        click.echo(json.dumps(data, indent=2))
+        return
+    profile = first.get("person") or first.get("profile")
+    if not profile:
+        raise click.ClickException(f"getPerson {key}: no profile returned")
+    show_person(profile)
+    if bio_format and profile.get("Bio"):
+        click.echo(profile["Bio"])
+
+
+@cli.command()
+@click.argument("key")
+@click.option("--depth", type=click.IntRange(1, 10), default=4,
+              show_default=True, help="Generations to follow (1-10).")
+@click.option("--fields", default=DEFAULT_FIELDS, show_default=True,
+              help="Comma-separated profile fields, or '*'.")
+@click.option("--json", "as_json", is_flag=True, help="Print raw JSON.")
+def ancestors(key, depth, fields, as_json):
+    """Fetch ancestors of KEY, following father and mother.
+
+    Uses getPeople with ancestors=N: the standalone getAncestors action
+    is deprecated (the API returns an error telling callers to use
+    getPeople instead). The people dict includes the subject profile
+    itself, so it is excluded from the listing.
+    """
+    data = api_call({"action": "getPeople", "keys": key, "ancestors": depth,
+                     "fields": fields})
+    first = check_status(data, f"getPeople {key}")
+    if as_json:
+        click.echo(json.dumps(data, indent=2))
+        return
+    people = first.get("people", {})
+    subject = (first.get("resultByKey") or {}).get(key, {})
+    subject_id = str(subject.get("Id", ""))
+    profiles = [p for pid, p in people.items() if pid != subject_id]
+    profiles.sort(key=lambda p: (p.get("BirthDate") or "9999",
+                                 p.get("Name") or ""))
+    click.echo(f"{len(profiles)} ancestor(s) within {depth} generation(s) of {key}:")
+    for profile in profiles:
+        show_person(profile)
+
+
+@cli.command()
+@click.argument("key")
+@click.option("--format", "bio_format", type=click.Choice(["wiki", "html", "both"]),
+              default="wiki", show_default=True, help="Biography format.")
+@click.option("--json", "as_json", is_flag=True, help="Print raw JSON.")
+def bio(key, bio_format, as_json):
+    """Fetch the biography text of KEY (default wiki markup)."""
+    data = api_call({"action": "getBio", "key": key, "bioFormat": bio_format})
+    first = check_status(data, f"getBio {key}")
+    if as_json:
+        click.echo(json.dumps(data, indent=2))
+        return
+    text = first.get("bio") or ""
+    click.echo(text if text else "(no biography text returned)")
+
+
+if __name__ == "__main__":
+    cli()

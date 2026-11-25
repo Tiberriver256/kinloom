@@ -1,0 +1,169 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.11"
+# dependencies = [
+#   "click>=8.1",
+# ]
+# ///
+"""Search Michiganology, the Archives of Michigan digital collections
+(Preservica Universal Access), from the command line.
+
+Simple search is a stable GET: https://michigan.access.preservica.com/?s=<query>
+Results are server-rendered, so plain HTTP works, no browser and no key.
+Transport note: Preservica's front door 403s Python httpx requests (TLS
+fingerprint) while curl succeeds with any User-Agent, so this CLI shells out
+to curl for the fetch. curl must be installed; it is on any normal Unix box.
+Verified live 2026-11-24: simple search returns server-rendered HTML results.
+"""
+
+from __future__ import annotations
+
+import html as htmlmod
+import json
+import re
+import shutil
+import subprocess
+from html.parser import HTMLParser
+from urllib.parse import quote_plus
+
+import click
+
+BASE = "https://michigan.access.preservica.com"
+# Preservica 403s python-httpx's default header set. Plain curl-style headers
+# (short UA, Accept */*) return 200 consistently.
+USER_AGENT = "Mozilla/5.0"
+
+COLLECTIONS = [
+    ("Death Certificates, 1897-1952", BASE + "/death-certificates-1897-1952/"),
+    ("Michigan State Census, 1827-1894", BASE + "/michigan-state-census/"),
+    ("Naturalization Records", BASE + "/naturalization-records/"),
+    ("World War I, Service Cards", BASE + "/world-war-i-service-cards/"),
+    ("Surveyor Field Notebooks, 1815-1918", BASE + "/surveyor-field-notebooks/"),
+    ("Surveyor Maps, 1816-1860", BASE + "/surveyor-maps/"),
+    ("General Photograph Collection, ca. 1860-1990", BASE + "/general-photograph-collection/"),
+    ("Archives of Michigan Map Collection, ca. 1810-1970", BASE + "/archives-of-michigan-map-collection/"),
+    ("Corporation Annual Reports, 1997-2006", BASE + "/corporation-annual-reports/"),
+]
+
+
+class ResultParser(HTMLParser):
+    """Collect result-item blocks: first link href plus its text."""
+
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.depth = 0
+        self.results: list[dict] = []
+        self.current: dict | None = None
+        self.in_link = False
+        self.link_text = ""
+
+    def handle_starttag(self, tag, attrs):
+        attrs = dict(attrs)
+        classes = attrs.get("class", "")
+        if tag == "div" and "result-item" in classes and self.depth == 0:
+            self.depth = 1
+            self.current = {"title": "", "url": ""}
+            return
+        if self.depth > 0:
+            if tag == "div":
+                self.depth += 1
+            elif tag == "a" and not self.current["url"]:
+                href = attrs.get("href", "")
+                if href:
+                    self.current["url"] = href
+                    self.in_link = True
+                    self.link_text = ""
+
+    def handle_endtag(self, tag):
+        if self.depth > 0 and tag == "div":
+            self.depth -= 1
+            if self.depth == 0 and self.current:
+                self.current["title"] = " ".join(self.link_text.split()) or "(no title)"
+                if self.current["url"]:
+                    self.results.append(self.current)
+                self.current = None
+        if tag == "a" and self.in_link:
+            self.in_link = False
+
+    def handle_data(self, data):
+        if self.in_link:
+            self.link_text += data
+
+
+def fetch_search(query: str) -> str:
+    url = f"{BASE}/?s={quote_plus(query)}"
+    curl = shutil.which("curl")
+    if not curl:
+        raise click.ClickException("curl is required but was not found on PATH.")
+    try:
+        proc = subprocess.run(
+            [curl, "-sS", "-A", USER_AGENT, "--max-time", "60", url],
+            capture_output=True,
+            text=True,
+            timeout=70,
+        )
+    except (subprocess.SubprocessError, OSError) as exc:
+        raise click.ClickException(f"Michiganology request failed: {exc}") from exc
+    if proc.returncode != 0:
+        raise click.ClickException(
+            f"Michiganology request failed (curl exit {proc.returncode}): "
+            f"{proc.stderr.strip()[:300]}"
+        )
+    return proc.stdout
+
+
+def total_results(page: str) -> int | None:
+    match = re.search(r"([\d,]+)\s+total results", page)
+    return int(match.group(1).replace(",", "")) if match else None
+
+
+@click.group()
+def cli() -> None:
+    """Search Michiganology (Archives of Michigan digital collections)."""
+
+
+@cli.command()
+@click.argument("query")
+@click.option("--limit", default=10, show_default=True, help="Max results to show (first page only).")
+@click.option("--json", "as_json", is_flag=True, help="Emit JSON.")
+def search(query: str, limit: int, as_json: bool) -> None:
+    """Search all Michiganology collections, e.g. michiganology search Lincoln."""
+    page = fetch_search(query)
+    parser = ResultParser()
+    parser.feed(page)
+    total = total_results(page)
+    results = parser.results[:limit]
+    if as_json:
+        click.echo(json.dumps({"query": query, "total": total, "results": results}, indent=2))
+        return
+    click.echo(f"Query: {query}  |  Total results: {total if total is not None else 'unknown'}")
+    if not results:
+        click.echo("No results on the first page.")
+        return
+    for item in results:
+        click.echo(f"- {item['title']}\n  {item['url']}")
+    click.echo(f"({len(results)} of {total} shown; first page only)")
+
+
+@cli.command()
+@click.option("--json", "as_json", is_flag=True, help="Emit JSON.")
+def collections(as_json: bool) -> None:
+    """List the Michiganology digital collections (verified 2026-11-24)."""
+    if as_json:
+        click.echo(json.dumps(
+            [{"name": name, "url": url} for name, url in COLLECTIONS], indent=2
+        ))
+        return
+    for name, url in COLLECTIONS:
+        click.echo(f"- {name}\n  {url}")
+
+
+@cli.command()
+@click.argument("query")
+def url(query: str) -> None:
+    """Print the shareable Michiganology search URL for a query."""
+    click.echo(f"{BASE}/?s={quote_plus(query)}")
+
+
+if __name__ == "__main__":
+    cli()

@@ -1,0 +1,358 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.11"
+# dependencies = [
+#   "click>=8.1",
+#   "httpx>=0.27",
+# ]
+# ///
+"""ky-archives: search Kentucky archives from the command line.
+
+Verified live 2026-11-24. No account or API key is needed
+for any command. Three real machine interfaces:
+
+- KHS Digital Collections (CONTENTdm dmwebservices API, key-free):
+  ``cdm`` and ``cdm-item`` hit https://www.kyhistory.com/digital/api/...
+- KY Secretary of State Land Office, County Court Orders patents
+  (ASP.NET form POST with VIEWSTATE): ``land`` and ``land-patent``.
+- KDLA Preservica e-archives (WordPress search RSS feed):
+  ``preservica`` fetches https://kdla.access.preservica.com/search/<term>/feed/rss2/
+  and lists the matching record pages. Viewing a packet itself needs the browser.
+
+What has NO machine interface (browser only, use the ``urls`` command
+to get the links): the Virginia / Old Kentucky Patent Series browser
+(series + patent dropdowns, no name search), Pass the Word oral
+histories, and the UK Kentucky Vital Records Index (its old
+ukcc.uky.edu/vitalrec URL did not resolve live 2026-11-24).
+"""
+
+from __future__ import annotations
+
+import html as htmlmod
+import json
+import re
+from urllib.parse import quote
+
+import click
+import httpx
+
+CDM_BASE = "https://www.kyhistory.com"
+CDM_API = CDM_BASE + "/digital/api"
+LAND_URL = "https://web.sos.ky.gov/land/ccorders.aspx"
+PRESERVICA_BASE = "https://kdla.access.preservica.com"
+# The KHS web UI returns 403 to a bare Linux-Chrome UA; a Windows Chrome
+# UA returns 200. The CONTENTdm API accepts either; use one UA everywhere.
+UA = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
+)
+TIMEOUT = 30.0
+
+LAND_BY = {
+    "grantee": "GrantHR",
+    "patent": "Patent",
+    "grant-book": "GRNTBKPG",
+    "county": "County",
+    "watercourse": "Water",
+    "survey-name": "SurName",
+    "survey-year": "Sur_Date",
+    "grant-year": "GrantDte",
+    "warrant": "Warrant",
+}
+
+
+def _client() -> httpx.Client:
+    return httpx.Client(headers={"User-Agent": UA}, timeout=TIMEOUT, follow_redirects=True)
+
+
+def _get(client: httpx.Client, url: str) -> httpx.Response:
+    try:
+        resp = client.get(url)
+    except httpx.HTTPError as exc:
+        raise click.ClickException(f"request failed: {exc}")
+    if resp.status_code != 200:
+        raise click.ClickException(f"{url} returned HTTP {resp.status_code}")
+    return resp
+
+
+def _clean(text: str) -> str:
+    text = re.sub(r"<script.*?</script>", " ", text, flags=re.S | re.I)
+    text = re.sub(r"<style.*?</style>", " ", text, flags=re.S | re.I)
+    text = re.sub(r"<[^>]+>", " ", text)
+    text = htmlmod.unescape(text)
+    return re.sub(r"\s+", " ", text).strip()
+
+
+# ---------------------------------------------------------------- CONTENTdm
+@click.command("cdm")
+@click.argument("query")
+@click.option("--collection", "alias", default="all",
+              help="CONTENTdm collection alias (default: all). See `collections`.")
+@click.option("--field", default="all",
+              help="Search field: all, title, descri, date, subjec, publis, source (default: all).")
+@click.option("--limit", default=10, type=int, show_default=True)
+@click.option("--json", "as_json", is_flag=True, help="Print raw trimmed JSON.")
+def cdm_cmd(query: str, alias: str, field: str, limit: int, as_json: bool) -> None:
+    """Search KHS Digital Collections (CONTENTdm API)."""
+    url = (
+        f"{CDM_API}/search/collection/{alias}/searchterm/{quote(query)}/"
+        f"field/{field}/maxRecords/{limit}"
+    )
+    with _client() as client:
+        data = _get(client, url).json()
+    total = data.get("totalResults", 0)
+    items = data.get("items", [])
+    if as_json:
+        click.echo(json.dumps(
+            {"totalResults": total,
+             "items": [{k: it.get(k) for k in
+                        ("collectionAlias", "itemId", "title", "filetype", "itemLink")
+                        } | {"fields": {f["field"]: f["value"]
+                                        for f in it.get("metadataFields", [])}}
+                       for it in items]},
+            indent=2))
+        return
+    click.echo(f"{total} result(s) for {query!r} in KHS Digital Collections")
+    for it in items:
+        fields = {f["field"]: f["value"] for f in it.get("metadataFields", [])}
+        date = fields.get("date", "")
+        click.echo(f"- [{it.get('collectionAlias')}:{it.get('itemId')}] "
+                   f"{it.get('title')}" + (f" ({date})" if date else ""))
+        click.echo(f"  {CDM_BASE}/digital{it.get('itemLink', '')}")
+
+
+@click.command("cdm-item")
+@click.argument("alias")
+@click.argument("item_id")
+@click.option("--json", "as_json", is_flag=True, help="Print raw JSON.")
+def cdm_item_cmd(alias: str, item_id: str, as_json: bool) -> None:
+    """Show full metadata for one CONTENTdm item: ALIAS ITEM_ID."""
+    url = f"{CDM_API}/singleitem/collection/{alias}/id/{item_id}"
+    with _client() as client:
+        data = _get(client, url).json()
+    if as_json:
+        click.echo(json.dumps(data, indent=2))
+        return
+    click.echo(f"{CDM_BASE}/digital/singleitem/collection/{alias}/id/{item_id}")
+    for f in data.get("fields", []):
+        click.echo(f"{f.get('label', f.get('key'))}: {f.get('value')}")
+    if data.get("contentType"):
+        click.echo(f"Content-Type: {data['contentType']}")
+
+
+@click.command("collections")
+@click.option("--json", "as_json", is_flag=True, help="Print raw JSON.")
+def collections_cmd(as_json: bool) -> None:
+    """List the KHS Digital Collections (CONTENTdm aliases)."""
+    with _client() as client:
+        data = _get(client, f"{CDM_API}/collections").json()
+    cards = data.get("cards", [])
+    if as_json:
+        click.echo(json.dumps(cards, indent=2))
+        return
+    click.echo(f"{data.get('totalCollections', len(cards))} collections")
+    for c in cards:
+        click.echo(f"- {c.get('alias')}: {c.get('title')}")
+
+
+@click.command("cdm-url")
+@click.argument("query")
+def cdm_url_cmd(query: str) -> None:
+    """Print the verified KHS catalog web search URL for QUERY."""
+    click.echo(f"{CDM_BASE}/cdm/search/searchterm/{quote(query)}/mode/exact")
+
+
+# ---------------------------------------------------------------- Land Office
+def _asp_state(html_text: str) -> dict[str, str]:
+    def grab(name: str) -> str:
+        m = re.search(r'name="' + re.escape(name) + r'"[^>]*value="([^"]*)"', html_text)
+        return m.group(1) if m else ""
+    return {
+        "__VIEWSTATE": grab("__VIEWSTATE"),
+        "__VIEWSTATEGENERATOR": grab("__VIEWSTATEGENERATOR"),
+        "__EVENTVALIDATION": grab("__EVENTVALIDATION"),
+    }
+
+
+def _land_post(client: httpx.Client, data: dict[str, str]) -> str:
+    try:
+        resp = client.post(LAND_URL, data=data)
+    except httpx.HTTPError as exc:
+        raise click.ClickException(f"Land Office request failed: {exc}")
+    if resp.status_code != 200:
+        raise click.ClickException(f"Land Office returned HTTP {resp.status_code}")
+    return resp.text
+
+
+def _parse_land_results(page_html: str) -> tuple[int, list[dict[str, str]]]:
+    text = _clean(page_html)
+    m = re.search(r"(\d+) Results found", text)
+    total = int(m.group(1)) if m else 0
+    body = text[m.end():] if m else text
+    entries = re.split(r"\d+\) Patent #", body)
+    results: list[dict[str, str]] = []
+    field_re = re.compile(
+        r"\s*([\d.]+)\s+Grantee:\s*(.*?)\s+Grant Book & Pg:\s*(.*?)\s+"
+        r"Acreage:\s*(.*?)\s+County:\s*(.*?)\s+WaterCourse:\s*(.*?)\s+"
+        r"Survey Name:\s*(.*?)\s+Survey Date:\s*(.*?)\s+Grant Date:\s*(.*?)\s+"
+        r"Grant Note:\s*(.*?)\s*$",
+        re.S)
+    for chunk in entries[1:]:
+        fm = field_re.match(chunk)
+        if not fm:
+            continue
+        keys = ("patent", "grantee", "grant_book_page", "acreage", "county",
+                "watercourse", "survey_name", "survey_date", "grant_date",
+                "grant_note")
+        results.append(dict(zip(keys, (g.strip() for g in fm.groups()))))
+    return total, results
+
+
+def _print_land(total: int, results: list[dict[str, str]], as_json: bool) -> None:
+    if as_json:
+        click.echo(json.dumps({"totalResults": total, "results": results}, indent=2))
+        return
+    click.echo(f"{total} patent(s) found")
+    for r in results:
+        click.echo(f"- Patent #{r['patent']}: {r['grantee']} "
+                   f"({r['county']} Co., grant {r['grant_date']}, "
+                   f"survey {r['survey_date']}, {r['acreage']} acres)")
+        click.echo(f"  Grant Book & Pg: {r['grant_book_page']}; "
+                   f"watercourse: {r['watercourse']}; "
+                   f"survey name: {r['survey_name']}")
+
+
+@click.command("land")
+@click.argument("term")
+@click.option("--by", "by", default="grantee", type=click.Choice(sorted(LAND_BY)),
+              show_default=True, help="Advanced-search field.")
+@click.option("--limit", default=10, type=click.Choice(["10", "25", "50", "100"]),
+              show_default=True, help="Results per page.")
+@click.option("--json", "as_json", is_flag=True, help="Print JSON.")
+def land_cmd(term: str, by: str, limit: str, as_json: bool) -> None:
+    """Advanced search of County Court Orders patents (1835-2000).
+
+    Example: ky-archives land Lincoln --by grantee
+    """
+    with _client() as client:
+        page = _get(client, LAND_URL).text
+        # Open the advanced-search panel (postback), then search from it.
+        adv = _land_post(client, _asp_state(page) | {
+            "__EVENTTARGET": "ctl00$ContentPlaceHolder1$LbAdvSearch",
+            "__EVENTARGUMENT": ""})
+        results_html = _land_post(client, _asp_state(adv) | {
+            "__EVENTTARGET": "", "__EVENTARGUMENT": "",
+            "ctl00$ContentPlaceHolder1$DdlAdvSearchBy": LAND_BY[by],
+            "ctl00$ContentPlaceHolder1$TxtAdvSearchFor": term,
+            "ctl00$ContentPlaceHolder1$ddlMatch": "All",
+            "ctl00$ContentPlaceHolder1$ddlShow": limit,
+            "ctl00$ContentPlaceHolder1$ddlSortBy": "",
+            "ctl00$ContentPlaceHolder1$ddlSortDir": "ASC",
+            "ctl00$ContentPlaceHolder1$BtnAdvSearch": "Search"})
+    total, results = _parse_land_results(results_html)
+    _print_land(total, results, as_json)
+
+
+@click.command("land-patent")
+@click.argument("number")
+@click.option("--book", default=None, help="Grant book number (quick search).")
+@click.option("--page", default=None, help="Grant book page (quick search).")
+@click.option("--json", "as_json", is_flag=True, help="Print JSON.")
+def land_patent_cmd(number: str, book: str | None, page: str | None, as_json: bool) -> None:
+    """Quick search of County Court Orders patents by patent number.
+
+    Example: ky-archives land-patent <patent-number>
+    """
+    with _client() as client:
+        state = _asp_state(_get(client, LAND_URL).text)
+        data = state | {
+            "__EVENTTARGET": "", "__EVENTARGUMENT": "",
+            "ctl00$ContentPlaceHolder1$TxtSPatent": number,
+            "ctl00$ContentPlaceHolder1$TxtSBook": book or "",
+            "ctl00$ContentPlaceHolder1$TxtSPage": page or "",
+            "ctl00$ContentPlaceHolder1$BtnSearch": "Search"}
+        results_html = _land_post(client, data)
+    total, results = _parse_land_results(results_html)
+    _print_land(total, results, as_json)
+
+
+# ---------------------------------------------------------------- Preservica
+@click.command("preservica")
+@click.argument("query")
+@click.option("--limit", default=10, type=int, show_default=True)
+@click.option("--json", "as_json", is_flag=True, help="Print JSON.")
+def preservica_cmd(query: str, limit: int, as_json: bool) -> None:
+    """Search the KDLA Preservica e-archives (WordPress search RSS feed).
+
+    Returns the matching record pages (title + URL). The site's search
+    is full-text (titles, descriptions, creators, document contents),
+    so open a hit to confirm why it matched. Opening a packet and
+    viewing its scans needs the browser; there is no public Preservica
+    search API on this host (verified 2026-11-24).
+    """
+    url = f"{PRESERVICA_BASE}/search/{quote(query)}/feed/rss2/"
+    with _client() as client:
+        feed = _get(client, url).text
+    results: list[dict[str, str]] = []
+    seen: set[str] = set()
+    for block in re.findall(r"<item>(.*?)</item>", feed, re.S):
+        title_m = re.search(r"<title>(.*?)</title>", block, re.S)
+        link_m = re.search(r"<link>(.*?)</link>", block, re.S)
+        if not title_m or not link_m:
+            continue
+        link = link_m.group(1).strip()
+        if link in seen:
+            continue
+        seen.add(link)
+        title = _clean(title_m.group(1))
+        if title:
+            results.append({"title": title, "url": link})
+        if len(results) >= limit:
+            break
+    if as_json:
+        click.echo(json.dumps(
+            {"search_url": f"{PRESERVICA_BASE}/?s={quote(query)}",
+             "feed_url": url, "results": results}, indent=2))
+        return
+    click.echo(f"KDLA Preservica search: {PRESERVICA_BASE}/?s={quote(query)}")
+    if not results:
+        click.echo("No results in the search feed.")
+        return
+    for r in results:
+        click.echo(f"- {r['title']}")
+        click.echo(f"  {r['url']}")
+
+
+# ---------------------------------------------------------------- URLs
+@click.command("urls")
+@click.argument("query")
+def urls_cmd(query: str) -> None:
+    """Print every verified Kentucky search URL for QUERY (no requests)."""
+    click.echo("KHS Digital Collections (CONTENTdm web search):")
+    click.echo(f"  {CDM_BASE}/cdm/search/searchterm/{quote(query)}/mode/exact")
+    click.echo("KDLA Preservica e-archives (WordPress search):")
+    click.echo(f"  {PRESERVICA_BASE}/?s={quote(query)}")
+    click.echo("Land Office, County Court Orders patents (form search, no GET URL):")
+    click.echo(f"  {LAND_URL}")
+    click.echo("Pass the Word oral histories (browse/search in browser):")
+    click.echo("  https://passtheword.ky.gov/")
+    click.echo("KHS research starting page:")
+    click.echo("  https://history.ky.gov/research-genealogy")
+
+
+@click.group()
+def cli() -> None:
+    """Search Kentucky archives: KHS, KDLA Preservica, Land Office."""
+
+
+cli.add_command(cdm_cmd)
+cli.add_command(cdm_item_cmd)
+cli.add_command(collections_cmd)
+cli.add_command(cdm_url_cmd)
+cli.add_command(land_cmd)
+cli.add_command(land_patent_cmd)
+cli.add_command(preservica_cmd)
+cli.add_command(urls_cmd)
+
+if __name__ == "__main__":
+    cli()

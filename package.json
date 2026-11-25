@@ -6,8 +6,20 @@
     "packages/*"
   ],
   "scripts": {
+    "build": "npm run build --workspace=@kinloom/core",
+    "typecheck": "tsc --noEmit -p packages/core/tsconfig.json",
+    "lint": "oxlint packages/core/src",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "check:contrast": "node scripts/check-contrast.mjs",
     "check:leaks": "node scripts/check-public-leaks.mjs",
-    "check": "npm run check:contrast && npm run check:leaks"
+    "check": "npm run lint && npm run typecheck && npm run build && npm test && npm run check:contrast && npm run check:leaks"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.0",
+    "fast-check": "^4.1.1",
+    "oxlint": "^1.0.0",
+    "typescript": "~5.8.3",
+    "vitest": "^3.1.3"
   }
 }

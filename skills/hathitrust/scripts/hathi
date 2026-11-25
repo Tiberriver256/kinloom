@@ -1,0 +1,194 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.11"
+# dependencies = [
+#   "click>=8.1",
+#   "httpx>=0.27",
+# ]
+# ///
+"""Compact CLI for HathiTrust Digital Library lookups.
+
+Uses the public Bibliographic API (no key, no login) to look up records by
+identifier, and builds verified catalog search URLs for a real browser.
+The Bib API is identifier lookup only: it cannot keyword-search.
+Catalog search HTML is not scraped: HathiTrust serves Cloudflare
+challenges to server-side fetches intermittently, so `url` prints a
+search URL instead of fetching results.
+"""
+
+from __future__ import annotations
+
+import json
+import sys
+from urllib.parse import quote, urlencode
+
+import click
+import httpx
+
+BIB_API_BASE = "https://catalog.hathitrust.org/api/volumes"
+CATALOG_SEARCH_BASE = "https://catalog.hathitrust.org/Search/Home"
+USER_AGENT = (
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+)
+VALID_ID_TYPES = ("oclc", "lccn", "issn", "isbn", "htid", "recordnumber")
+VALID_SEARCH_TYPES = ("all", "title", "author", "subject")
+
+
+def bib_url(id_type: str, value: str, full: bool) -> str:
+    brevity = "full" if full else "brief"
+    return f"{BIB_API_BASE}/{brevity}/{id_type}/{quote(value, safe='')}.json"
+
+
+def fetch_bib(client: httpx.Client, id_type: str, value: str, full: bool) -> dict:
+    url = bib_url(id_type, value, full)
+    try:
+        resp = client.get(url, timeout=30.0)
+        resp.raise_for_status()
+    except httpx.HTTPStatusError as exc:
+        raise click.ClickException(
+            f"Bib API request failed ({exc.response.status_code}): {url}"
+        ) from exc
+    except httpx.HTTPError as exc:
+        raise click.ClickException(f"Bib API request failed: {exc}") from exc
+    try:
+        return resp.json()
+    except ValueError as exc:
+        raise click.ClickException(f"Bib API returned non-JSON for {url}") from exc
+
+
+def parse_id(spec: str) -> tuple[str, str]:
+    if ":" not in spec:
+        raise click.BadParameter(
+            f"Bad identifier {spec!r}. Use type:value, e.g. oclc:424023."
+        )
+    id_type, value = spec.split(":", 1)
+    id_type = id_type.strip().lower()
+    value = value.strip()
+    if id_type not in VALID_ID_TYPES or not value:
+        raise click.BadParameter(
+            f"Bad identifier {spec!r}. Type must be one of: "
+            f"{', '.join(VALID_ID_TYPES)}."
+        )
+    return id_type, value
+
+
+def compact_bib(data: dict, full: bool) -> str:
+    lines: list[str] = []
+    records = data.get("records") or {}
+    items = data.get("items") or []
+    if not records and not items:
+        return "No matching HathiTrust record (empty records and items)."
+    for rec_no, rec in records.items():
+        titles = rec.get("titles") or []
+        lines.append(f"Record {rec_no}: {titles[0] if titles else '(no title)'}")
+        if len(titles) > 1:
+            lines.append(f"  alt titles: {'; '.join(titles[1:])}")
+        lines.append(f"  record URL: {rec.get('recordURL', '')}")
+        if rec.get("publishDates"):
+            lines.append(f"  published: {', '.join(rec['publishDates'])}")
+        for field in ("oclcs", "lccns", "isbns", "issns"):
+            if rec.get(field):
+                lines.append(f"  {field}: {', '.join(rec[field])}")
+        if full and rec.get("marc-xml"):
+            lines.append("  marc-xml:")
+            lines.append(rec["marc-xml"])
+    for item in items:
+        lines.append(
+            f"Item {item.get('htid', '')} ({item.get('orig', '')}): "
+            f"{item.get('usRightsString', '')}"
+        )
+        lines.append(f"  item URL: {item.get('itemURL', '')}")
+        if item.get("enumcron"):
+            lines.append(f"  enumcron: {item['enumcron']}")
+        if item.get("rightsCode"):
+            lines.append(f"  rights code: {item['rightsCode']}")
+    return "\n".join(lines)
+
+
+@click.group()
+def cli() -> None:
+    """HathiTrust Digital Library lookups (Bibliographic API, no key)."""
+
+
+@cli.command()
+@click.argument("id_type", required=False)
+@click.argument("value", required=False)
+@click.option(
+    "--id",
+    "ids",
+    multiple=True,
+    help="Identifier as type:value, e.g. oclc:424023. Repeatable.",
+)
+@click.option("--full", is_flag=True, help="Full record with MARC-XML.")
+@click.option("--json", "as_json", is_flag=True, help="Print raw API JSON.")
+def bib(
+    id_type: str | None,
+    value: str | None,
+    ids: tuple[str, ...],
+    full: bool,
+    as_json: bool,
+) -> None:
+    """Look up record(s) by identifier.
+
+    ID_TYPE is one of oclc, lccn, issn, isbn, htid, recordnumber.
+
+    Examples:\n
+        hathi bib oclc 424023\n
+        hathi bib recordnumber 000578050\n
+        hathi bib --id oclc:424023 --id recordnumber:000578050
+    """
+    specs: list[tuple[str, str]] = []
+    if ids:
+        specs = [parse_id(spec) for spec in ids]
+    elif id_type and value:
+        id_type = id_type.strip().lower()
+        if id_type not in VALID_ID_TYPES:
+            raise click.BadParameter(
+                f"Invalid id type {id_type!r}. Choose from: "
+                f"{', '.join(VALID_ID_TYPES)}"
+            )
+        specs = [(id_type, value.strip())]
+    else:
+        raise click.UsageError(
+            "Give an identifier: hathi bib <type> <value> "
+            "or hathi bib --id type:value [--id type:value ...]"
+        )
+    merged: dict = {"records": {}, "items": []}
+    with httpx.Client(headers={"User-Agent": USER_AGENT}) as client:
+        for id_type, value in specs:
+            data = fetch_bib(client, id_type, value, full)
+            merged["records"].update(data.get("records") or {})
+            merged["items"].extend(data.get("items") or [])
+    if as_json:
+        click.echo(json.dumps(merged, indent=2, ensure_ascii=False))
+    else:
+        click.echo(compact_bib(merged, full))
+
+
+@cli.command()
+@click.argument("query")
+@click.option(
+    "--type",
+    "search_type",
+    default="all",
+    show_default=True,
+    type=click.Choice(VALID_SEARCH_TYPES),
+    help="Catalog search field.",
+)
+def url(query: str, search_type: str) -> None:
+    """Print a verified catalog search URL for QUERY (open in a browser).
+
+    Examples:\n
+        hathi url "Abraham Lincoln" --type title\n
+        hathi url "Douglass, Frederick" --type author
+    """
+    params = urlencode(
+        {"lookfor": query, "type": search_type, "inst": ""},
+        quote_via=quote,
+    )
+    click.echo(f"{CATALOG_SEARCH_BASE}?{params}")
+
+
+if __name__ == "__main__":
+    cli()

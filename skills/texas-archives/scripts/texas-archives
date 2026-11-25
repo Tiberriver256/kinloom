@@ -1,0 +1,441 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.11"
+# dependencies = [
+#   "click>=8.1",
+#   "httpx>=0.27",
+# ]
+# ///
+"""texas-archives: search Texas genealogy portals from the command line.
+
+Verified live 2026-11-24. No account or API key is needed
+for any command.
+
+Machine interfaces:
+
+- Portal to Texas History (UNT): OpenSearch JSON at
+  ``GET https://texashistory.unt.edu/search/opensearch/?q=<query>&format=json``
+  (100 hits per page, ``pw`` for page). Item metadata via OAI-PMH
+  ``GetRecord`` with ``identifier=ark:/67531/<id>``.
+  The HTML search UI and item/scan views redirect through an ALTCHA
+  challenge; plain HTTP cannot open them.
+
+- Texas Digital Archive (TSLAC / Preservica): WordPress search RSS feed at
+  ``GET https://tsl.access.preservica.com/search/<term>/feed/rss2/``
+  (fetched with curl; httpx gets HTTP 403 on this host).
+
+Browser-only (use the ``url`` command):
+
+- Portal item pages, page images, and OCR downloads (ALTCHA).
+- Texas General Land Office Land Grant Search (``s3.glo.texas.gov``):
+  Salesforce/SPA shell; POST did not return parseable results live.
+- Texas Ranger muster rolls and some TSLAC indexes (mail or reading room).
+"""
+
+from __future__ import annotations
+
+import html as htmlmod
+import json
+import re
+import subprocess
+import xml.etree.ElementTree as ET
+from datetime import date
+from urllib.parse import quote, urlencode
+
+import click
+import httpx
+
+PORTAL_BASE = "https://texashistory.unt.edu"
+PORTAL_OPENSEARCH = PORTAL_BASE + "/search/opensearch/"
+PORTAL_OAI = PORTAL_BASE + "/oai/"
+TDA_BASE = "https://tsl.access.preservica.com"
+GLO_LAND = "https://s3.glo.texas.gov/lookup/index.php"
+TSLAC_HOME = "https://www.tsl.texas.gov/"
+TSLAC_RANGERS = "https://www.tsl.texas.gov/agency/items/texas-rangers"
+UA = (
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+)
+TIMEOUT = 60.0
+OAI_NS = {"oai": "http://www.openarchives.org/OAI/2.0/", "dc": "http://purl.org/dc/elements/1.1/"}
+
+
+def _client() -> httpx.Client:
+    return httpx.Client(headers={"User-Agent": UA}, timeout=TIMEOUT, follow_redirects=True)
+
+
+def _clean(text: str) -> str:
+    text = re.sub(r"<[^>]+>", " ", text)
+    return htmlmod.unescape(re.sub(r"\s+", " ", text)).strip()
+
+
+def _ark_id(raw: str) -> str:
+    raw = raw.strip()
+    if raw.startswith("ark:/"):
+        m = re.search(r"metap?th\d+|metadc\d+", raw)
+        if m:
+            return m.group(0)
+        parts = raw.rstrip("/").split("/")
+        return parts[-1] if parts else raw
+    return raw
+
+
+def _normalize_ark(ark_token: str) -> str:
+    token = _ark_id(ark_token)
+    return f"ark:/67531/{token}"
+
+
+def _parse_item_date(value: str | None) -> tuple[date | None, date | None]:
+    if not value:
+        return None, None
+    value = value.strip()
+    m = re.match(r"^(\d{4})-(\d{2})-(\d{2})", value)
+    if m:
+        d = date(int(m.group(1)), int(m.group(2)), int(m.group(3)))
+        return d, d
+    m = re.match(r"^(\d{4})/(\d{4})$", value)
+    if m:
+        return date(int(m.group(1)), 1, 1), date(int(m.group(2)), 12, 31)
+    m = re.match(r"^(\d{4})$", value)
+    if m:
+        y = int(m.group(1))
+        return date(y, 1, 1), date(y, 12, 31)
+    return None, None
+
+
+def _entry_matches_filters(
+    entry: dict,
+    county: str | None,
+    type_filter: str | None,
+    date_from: date | None,
+    date_to: date | None,
+) -> bool:
+    if type_filter:
+        if (entry.get("type") or "").lower() != type_filter.lower():
+            return False
+    if county:
+        blob = " ".join(
+            filter(
+                None,
+                [
+                    entry.get("title"),
+                    entry.get("description"),
+                    " ".join(entry.get("subjects") or []),
+                ],
+            )
+        ).lower()
+        if county.lower() not in blob:
+            return False
+    if date_from or date_to:
+        start, end = _parse_item_date(entry.get("date"))
+        if start is None and end is None:
+            return False
+        lo = start or end
+        hi = end or start
+        assert lo is not None and hi is not None
+        if date_from and hi < date_from:
+            return False
+        if date_to and lo > date_to:
+            return False
+    return True
+
+
+def _opensearch_entry(raw: dict) -> dict:
+    return {
+        "ark": raw.get("id", ""),
+        "title": raw.get("title", ""),
+        "creator": raw.get("dc:creator", ""),
+        "date": raw.get("dc:date", ""),
+        "description": raw.get("dc:description", ""),
+        "type": raw.get("dc:type", ""),
+        "url": raw.get("link", ""),
+        "thumbnail": raw.get("thumbnail") or "",
+    }
+
+
+def _fetch_opensearch_page(client: httpx.Client, query: str, page: int) -> dict:
+    params = {"q": query, "format": "json", "pw": str(page)}
+    resp = client.get(PORTAL_OPENSEARCH, params=params)
+    if resp.status_code != 200:
+        raise click.ClickException(f"OpenSearch returned HTTP {resp.status_code}")
+    data = resp.json()
+    feed = data.get("feed") or {}
+    total_s = feed.get("opensearch:totalResults", "0")
+    try:
+        total = int(total_s)
+    except ValueError:
+        total = 0
+    entries = [_opensearch_entry(e) for e in feed.get("entry") or []]
+    return {"total": total, "page": page, "entries": entries}
+
+
+def _build_portal_query(query: str, county: str | None) -> str:
+    parts = [query.strip()]
+    if county:
+        parts.append(county.strip())
+    return " ".join(p for p in parts if p)
+
+
+def _parse_oai_record(xml_text: str) -> dict:
+    root = ET.fromstring(xml_text)
+    err = root.find("oai:error", OAI_NS)
+    if err is not None:
+        code = err.get("code", "error")
+        raise click.ClickException(f"OAI error {code}: {(err.text or '').strip()}")
+    rec = root.find(".//oai:record", OAI_NS)
+    if rec is None:
+        raise click.ClickException("OAI response had no record")
+    header = rec.find("oai:header", OAI_NS)
+    identifier = ""
+    sets: list[str] = []
+    if header is not None:
+        id_el = header.find("oai:identifier", OAI_NS)
+        if id_el is not None and id_el.text:
+            identifier = id_el.text.strip()
+        for s in header.findall("oai:setSpec", OAI_NS):
+            if s.text:
+                sets.append(s.text.strip())
+    meta = rec.find(".//dc:title", OAI_NS)
+    titles = [el.text.strip() for el in rec.findall(".//dc:title", OAI_NS) if el.text]
+    creators = [el.text.strip() for el in rec.findall(".//dc:creator", OAI_NS) if el.text]
+    subjects = [el.text.strip() for el in rec.findall(".//dc:subject", OAI_NS) if el.text]
+    dates = [el.text.strip() for el in rec.findall(".//dc:date", OAI_NS) if el.text]
+    types = [el.text.strip() for el in rec.findall(".//dc:type", OAI_NS) if el.text]
+    desc = [el.text.strip() for el in rec.findall(".//dc:description", OAI_NS) if el.text]
+    ark = ""
+    m = re.search(r"metap?th\d+|metadc\d+", identifier)
+    if m:
+        ark = f"ark:/67531/{m.group(0)}"
+    return {
+        "oai_identifier": identifier,
+        "ark": ark,
+        "titles": titles,
+        "creators": creators,
+        "subjects": subjects,
+        "dates": dates,
+        "types": types,
+        "descriptions": desc,
+        "set_specs": sets,
+        "url": (PORTAL_BASE + "/" + ark + "/") if ark else "",
+    }
+
+
+def _fetch_portal_item(client: httpx.Client, ark_token: str) -> dict:
+    ark = _normalize_ark(ark_token)
+    params = {"verb": "GetRecord", "identifier": ark, "metadataPrefix": "oai_dc"}
+    resp = client.get(PORTAL_OAI, params=params)
+    if resp.status_code != 200:
+        raise click.ClickException(f"OAI GetRecord returned HTTP {resp.status_code}")
+    data = _parse_oai_record(resp.text)
+    data["ark"] = ark
+    data["url"] = PORTAL_BASE + "/" + ark + "/"
+    data["browser_note"] = (
+        "Item pages and scans need a browser (ALTCHA challenge on texashistory.unt.edu)."
+    )
+    return data
+
+
+def _curl_text(url: str) -> str:
+    """Fetch a URL with curl when Python TLS is blocked (TSLAC Preservica host)."""
+    try:
+        proc = subprocess.run(
+            ["curl", "-sS", "-L", "-A", UA, url],
+            capture_output=True,
+            text=True,
+            timeout=int(TIMEOUT),
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        raise click.ClickException(f"curl failed: {exc}") from exc
+    if proc.returncode != 0:
+        err = (proc.stderr or "").strip() or f"exit {proc.returncode}"
+        raise click.ClickException(f"curl error: {err}")
+    if "403 Forbidden" in proc.stdout[:500] and "<rss" not in proc.stdout:
+        raise click.ClickException("TDA RSS returned a 403 page to curl")
+    return proc.stdout
+
+
+def _fetch_tda_rss(query: str, limit: int) -> list[dict[str, str]]:
+    url = f"{TDA_BASE}/search/{quote(query)}/feed/rss2/"
+    feed = _curl_text(url)
+    results: list[dict[str, str]] = []
+    seen: set[str] = set()
+    for block in re.findall(r"<item>(.*?)</item>", feed, re.S):
+        title_m = re.search(r"<title>(.*?)</title>", block, re.S)
+        link_m = re.search(r"<link>(.*?)</link>", block, re.S)
+        if not title_m or not link_m:
+            continue
+        link = link_m.group(1).strip()
+        if link in seen:
+            continue
+        seen.add(link)
+        title = _clean(title_m.group(1))
+        if title.lower().startswith("search results for"):
+            continue
+        if title:
+            results.append({"title": title, "url": link})
+        if len(results) >= limit:
+            break
+    return results
+
+
+def _print_portal_hit(rec: dict) -> None:
+    click.echo(rec.get("title") or "(no title)")
+    line = f"  {rec.get('date') or ''}  [{rec.get('type') or ''}]  {rec.get('creator') or ''}".rstrip()
+    click.echo(line)
+    click.echo(f"  {rec.get('ark')}  {rec.get('url')}")
+
+
+@click.group(context_settings={"help_option_names": ["-h", "--help"]})
+def cli() -> None:
+    """Search Texas archives: Portal to Texas History, Texas Digital Archive, URL builders."""
+
+
+@cli.group("portal")
+def portal() -> None:
+    """The Portal to Texas History (University of North Texas)."""
+
+
+@portal.command("search")
+@click.argument("query", nargs=-1, required=True)
+@click.option("--county", default=None, help="Add a county term to the query and filter hits that mention it.")
+@click.option("--date-from", default=None, help="Keep hits on or after this date (YYYY-MM-DD).")
+@click.option("--date-to", default=None, help="Keep hits on or before this date (YYYY-MM-DD).")
+@click.option("--type", "type_filter", default=None, help="Keep hits whose dc:type matches, e.g. text_newspaper.")
+@click.option("--limit", default=10, show_default=True, type=int, help="Maximum hits to print after filters.")
+@click.option("--pages", default=3, show_default=True, type=int, help="OpenSearch pages to scan (100 hits each).")
+@click.option("--json", "as_json", is_flag=True, help="Output compact structured JSON.")
+def cmd_portal_search(
+    query: tuple[str, ...],
+    county: str | None,
+    date_from: str | None,
+    date_to: str | None,
+    type_filter: str | None,
+    limit: int,
+    pages: int,
+    as_json: bool,
+) -> None:
+    """Search the Portal via its public OpenSearch JSON API."""
+    d_from = date.fromisoformat(date_from) if date_from else None
+    d_to = date.fromisoformat(date_to) if date_to else None
+    q = _build_portal_query(" ".join(query), county)
+    matched: list[dict] = []
+    total_reported = 0
+    with _client() as client:
+        for page in range(1, pages + 1):
+            if len(matched) >= limit:
+                break
+            batch = _fetch_opensearch_page(client, q, page)
+            total_reported = batch["total"]
+            if not batch["entries"] and page > 1:
+                break
+            for entry in batch["entries"]:
+                full = dict(entry)
+                full["subjects"] = []
+                if _entry_matches_filters(full, county, type_filter, d_from, d_to):
+                    matched.append(entry)
+                if len(matched) >= limit:
+                    break
+    payload = {
+        "query": q,
+        "opensearch_total": total_reported,
+        "returned": len(matched),
+        "records": matched,
+        "search_url": PORTAL_BASE + "/search/?" + urlencode({"q": q, "t": "fulltext"}),
+        "note": "HTML search requires a browser (ALTCHA). Filters apply to OpenSearch fields only.",
+    }
+    if as_json:
+        click.echo(json.dumps(payload, indent=1))
+        return
+    click.echo(f"{total_reported} OpenSearch hit(s) for {q!r}; showing {len(matched)} after filters:")
+    click.echo(payload["search_url"] + "  (browser)")
+    for rec in matched:
+        _print_portal_hit(rec)
+        click.echo()
+
+
+@portal.command("item")
+@click.argument("ark_id")
+@click.option("--json", "as_json", is_flag=True, help="Output compact structured JSON.")
+def cmd_portal_item(ark_id: str, as_json: bool) -> None:
+    """Fetch Dublin Core metadata for one Portal item (OAI-PMH GetRecord)."""
+    with _client() as client:
+        data = _fetch_portal_item(client, ark_id)
+    if as_json:
+        click.echo(json.dumps(data, indent=1))
+        return
+    title = (data.get("titles") or ["(no title)"])[0]
+    click.echo(title)
+    click.echo(f"  {data['ark']}")
+    if data.get("creators"):
+        click.echo("  Creator(s): " + "; ".join(data["creators"][:6]))
+    if data.get("dates"):
+        click.echo("  Date(s): " + "; ".join(data["dates"][:6]))
+    if data.get("types"):
+        click.echo("  Type(s): " + ", ".join(data["types"]))
+    if data.get("subjects"):
+        click.echo("  Subject(s): " + "; ".join(data["subjects"][:8]))
+    click.echo(f"  {data['url']}")
+    click.echo(f"  {data['browser_note']}")
+
+
+@cli.command("tda")
+@click.argument("query")
+@click.option("--limit", default=10, show_default=True, type=int)
+@click.option("--json", "as_json", is_flag=True, help="Output compact structured JSON.")
+def cmd_tda(query: str, limit: int, as_json: bool) -> None:
+    """Search the Texas Digital Archive (TSLAC Preservica RSS feed)."""
+    results = _fetch_tda_rss(query, limit)
+    payload = {
+        "search_url": f"{TDA_BASE}/?s={quote(query)}",
+        "feed_url": f"{TDA_BASE}/search/{quote(query)}/feed/rss2/",
+        "returned": len(results),
+        "results": results,
+    }
+    if as_json:
+        click.echo(json.dumps(payload, indent=1))
+        return
+    click.echo(f"TDA search: {payload['search_url']}")
+    if not results:
+        click.echo("No results in the RSS feed (feed returns at most ~25 items per query).")
+        return
+    for r in results:
+        click.echo(f"- {r['title']}")
+        click.echo(f"  {r['url']}")
+
+
+@cli.command("url")
+@click.argument("query", required=False, default="")
+@click.option("--portal", is_flag=True, help="Portal to Texas History full-text search URL.")
+@click.option("--tda", is_flag=True, help="Texas Digital Archive search URL.")
+@click.option("--glo", is_flag=True, help="Texas GLO land grant lookup (browser-only).")
+@click.option("--rangers", is_flag=True, help="TSLAC Texas Rangers collection pointer.")
+@click.option("--tslac", is_flag=True, help="Texas State Library and Archives Commission home.")
+def cmd_url(query: str, portal: bool, tda: bool, glo: bool, rangers: bool, tslac: bool) -> None:
+    """Print verified portal URLs (no search is run)."""
+    any_flag = portal or tda or glo or rangers or tslac
+    show_all = not any_flag
+    q = query or "Houston"
+    if portal or show_all:
+        click.echo("Portal to Texas History (browser; ALTCHA on HTML):")
+        click.echo("  " + PORTAL_BASE + "/search/?" + urlencode({"q": q, "t": "fulltext"}))
+        click.echo("Portal OpenSearch JSON (CLI uses this):")
+        click.echo("  " + PORTAL_OPENSEARCH + "?" + urlencode({"q": q, "format": "json"}))
+    if tda or show_all:
+        click.echo("Texas Digital Archive:")
+        click.echo(f"  {TDA_BASE}/?s={quote(q)}")
+    if glo or show_all:
+        click.echo("Texas General Land Office Land Grant Search (browser-only; SPA):")
+        click.echo(f"  {GLO_LAND}")
+        click.echo("  Texas was not a public-land state; state grants are indexed here, not BLM GLO patents.")
+    if rangers or show_all:
+        click.echo("TSLAC Texas Rangers:")
+        click.echo(f"  {TSLAC_RANGERS}")
+        click.echo("  Ranger muster rolls: open records request or in-person at TSLAC.")
+    if tslac or show_all:
+        click.echo("Texas State Library and Archives Commission:")
+        click.echo(f"  {TSLAC_HOME}")
+
+
+if __name__ == "__main__":
+    cli()

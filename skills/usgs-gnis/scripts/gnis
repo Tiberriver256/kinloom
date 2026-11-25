@@ -1,0 +1,254 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.11"
+# dependencies = [
+#   "click>=8.1",
+#   "httpx>=0.27",
+# ]
+# ///
+"""Search USGS GNIS geographic names from the official staged-products downloads.
+
+There is no documented public GNIS search API: the GNIS Domestic Names
+Search web app is a JavaScript app backed by authenticated services.
+This CLI downloads the USGS per-state pipe-delimited text files
+(prd-tnm.s3.amazonaws.com) once, caches them, and searches locally.
+"""
+
+from __future__ import annotations
+
+import json
+import os
+import sys
+import zipfile
+from io import BytesIO
+from pathlib import Path
+
+import click
+import httpx
+
+S3_BASE = "https://prd-tnm.s3.amazonaws.com/StagedProducts/GeographicNames"
+SEARCH_APP = "https://edits.nationalmap.gov/apps/gaz-domestic/public/search/names"
+HEADERS = {"User-Agent": "kinloom/1.0 (genealogy research)"}
+TIMEOUT = 120.0
+
+STATE_CODES = {
+    "AK", "AL", "AR", "AS", "AZ", "CA", "CO", "CT", "DC", "DE", "FL", "GA",
+    "GU", "HI", "IA", "ID", "IL", "IN", "KS", "KY", "LA", "MA", "MD", "ME",
+    "MI", "MN", "MO", "MP", "MS", "MT", "NC", "ND", "NE", "NH", "NJ", "NM",
+    "NV", "NY", "OH", "OK", "OR", "PA", "PR", "RI", "SC", "SD", "TN", "TX",
+    "UT", "VA", "VI", "VT", "WA", "WI", "WV", "WY",
+}
+
+
+def cache_dir() -> Path:
+    override = os.environ.get("GNIS_CACHE_DIR")
+    if override:
+        return Path(override).expanduser()
+    return Path.home() / ".cache" / "kinloom-gnis"
+
+
+def _state_zip_url(state: str) -> str:
+    return f"{S3_BASE}/DomesticNames/DomesticNames_{state}_Text.zip"
+
+
+def _historical_zip_url() -> str:
+    return f"{S3_BASE}/Topical/HistoricalFeatures_National_Text.zip"
+
+
+def _download_zip(url: str) -> bytes:
+    with httpx.Client(headers=HEADERS, timeout=TIMEOUT, follow_redirects=True) as client:
+        resp = client.get(url)
+        resp.raise_for_status()
+        return resp.content
+
+
+def _extract_txt(zip_bytes: bytes) -> tuple[str, str]:
+    zf = zipfile.ZipFile(BytesIO(zip_bytes))
+    txt_names = [n for n in zf.namelist() if n.lower().endswith(".txt")]
+    if not txt_names:
+        raise click.ClickException(f"No .txt member in downloaded zip (members: {zf.namelist()})")
+    name = txt_names[0]
+    return name, zf.read(name).decode("utf-8-sig")
+
+
+def _load_rows(path: Path) -> list[dict]:
+    lines = path.read_text(encoding="utf-8-sig").splitlines()
+    if not lines:
+        return []
+    header = [h.strip() for h in lines[0].split("|")]
+    rows = []
+    for line in lines[1:]:
+        if not line.strip():
+            continue
+        fields = line.split("|")
+        fields += [""] * (len(header) - len(fields))
+        rows.append(dict(zip(header, fields)))
+    return rows
+
+
+def _ensure_state_file(state: str) -> Path:
+    state = state.upper()
+    if state not in STATE_CODES:
+        raise click.ClickException(f"Unknown state/territory code: {state}")
+    cdir = cache_dir()
+    cdir.mkdir(parents=True, exist_ok=True)
+    path = cdir / f"{state}.txt"
+    if path.exists():
+        return path
+    click.echo(f"Downloading GNIS data for {state} ...", err=True)
+    _, text = _extract_txt(_download_zip(_state_zip_url(state)))
+    path.write_text(text, encoding="utf-8")
+    click.echo(f"Cached {path} ({len(text.splitlines()) - 1} features)", err=True)
+    return path
+
+
+def _ensure_historical_file() -> Path:
+    cdir = cache_dir()
+    cdir.mkdir(parents=True, exist_ok=True)
+    path = cdir / "HistoricalFeatures.txt"
+    if path.exists():
+        return path
+    click.echo("Downloading national Historical Features file (large) ...", err=True)
+    _, text = _extract_txt(_download_zip(_historical_zip_url()))
+    path.write_text(text, encoding="utf-8")
+    click.echo(f"Cached {path} ({len(text.splitlines()) - 1} features)", err=True)
+    return path
+
+
+def _compact(row: dict) -> dict:
+    return {
+        "feature_id": row.get("feature_id"),
+        "feature_name": row.get("feature_name"),
+        "feature_class": row.get("feature_class"),
+        "state": row.get("state_name"),
+        "county": row.get("county_name"),
+        "map_name": row.get("map_name"),
+        "latitude": row.get("prim_lat_dec"),
+        "longitude": row.get("prim_long_dec"),
+        "date_created": row.get("date_created"),
+        "date_edited": row.get("date_edited"),
+    }
+
+
+def _match(rows: list[dict], name: str, exact: bool, feature_class: str | None,
+           county: str | None) -> list[dict]:
+    needle = name.lower()
+    out = []
+    for row in rows:
+        fname = (row.get("feature_name") or "").lower()
+        if exact:
+            if fname != needle:
+                continue
+        elif needle not in fname:
+            continue
+        if feature_class and (row.get("feature_class") or "").lower() != feature_class.lower():
+            continue
+        if county and county.lower() not in (row.get("county_name") or "").lower():
+            continue
+        out.append(row)
+    return out
+
+
+@click.group()
+def cli() -> None:
+    """Search USGS GNIS geographic names (cached state downloads)."""
+
+
+@cli.command()
+@click.argument("state")
+@click.option("--force", is_flag=True, help="Re-download even if cached.")
+def download(state, force):
+    """Download and cache the GNIS text file for a state (e.g. MI, CA, MO)."""
+    state = state.upper()
+    if state not in STATE_CODES:
+        raise click.ClickException(f"Unknown state/territory code: {state}")
+    path = cache_dir() / f"{state}.txt"
+    if path.exists() and not force:
+        rows = _load_rows(path)
+        click.echo(f"Already cached: {path} ({len(rows)} features). Use --force to re-download.")
+        return
+    path = _ensure_state_file(state) if not force else None
+    if force:
+        cdir = cache_dir()
+        cdir.mkdir(parents=True, exist_ok=True)
+        _, text = _extract_txt(_download_zip(_state_zip_url(state)))
+        path = cdir / f"{state}.txt"
+        path.write_text(text, encoding="utf-8")
+        click.echo(f"Cached {path} ({len(text.splitlines()) - 1} features)")
+        return
+    rows = _load_rows(path)
+    click.echo(f"Cached {path} ({len(rows)} features)")
+
+
+@cli.command()
+@click.argument("name")
+@click.option("--state", "-s", default=None,
+              help="State code to search (downloads and caches the state file if needed).")
+@click.option("--exact", is_flag=True, help="Match the full feature name, not a substring.")
+@click.option("--class", "feature_class", default=None, help="Filter by feature class, e.g. 'Populated Place'.")
+@click.option("--county", default=None, help="Filter by county name (substring).")
+@click.option("--historical", is_flag=True,
+              help="Search the national Historical Features file instead of a state file (defunct places, post offices).")
+@click.option("--limit", "-n", default=20, show_default=True)
+@click.option("--json", "as_json", is_flag=True, help="Emit JSON instead of compact text.")
+def search(name, state, exact, feature_class, county, historical, limit, as_json):
+    """Search feature names (substring unless --exact)."""
+    if historical:
+        rows = _load_rows(_ensure_historical_file())
+        source = "HistoricalFeatures (national)"
+    else:
+        if not state:
+            raise click.UsageError("Give --state (e.g. --state CA) or --historical.")
+        rows = _load_rows(_ensure_state_file(state))
+        source = f"DomesticNames_{state.upper()}"
+    matches = _match(rows, name, exact, feature_class, county)[:limit]
+    if as_json:
+        click.echo(json.dumps(
+            {"source": source, "matches": len(matches),
+             "results": [_compact(r) for r in matches]}, indent=2, ensure_ascii=False))
+        return
+    click.echo(f"source: {source} | matches shown: {len(matches)}")
+    for row in matches:
+        c = _compact(row)
+        click.echo(f"- {c['feature_id']} | {c['feature_name']} ({c['feature_class']}) | "
+                   f"{c['county']} County, {c['state']} | {c['latitude']}, {c['longitude']} | map: {c['map_name']}")
+
+
+@cli.command()
+@click.argument("feature_id")
+@click.option("--state", "-s", default=None, help="State code (downloads and caches if needed).")
+@click.option("--historical", is_flag=True, help="Look in the national Historical Features file.")
+@click.option("--json", "as_json", is_flag=True)
+def get(feature_id, state, historical, as_json):
+    """Show one feature by its GNIS feature_id."""
+    if historical:
+        rows = _load_rows(_ensure_historical_file())
+    else:
+        if not state:
+            raise click.UsageError("Give --state or --historical.")
+        rows = _load_rows(_ensure_state_file(state))
+    for row in rows:
+        if (row.get("feature_id") or "") == str(feature_id):
+            if as_json:
+                click.echo(json.dumps(row, indent=2, ensure_ascii=False))
+            else:
+                for key, value in row.items():
+                    if value != "":
+                        click.echo(f"{key}: {value}")
+            return
+    click.echo(f"Feature {feature_id} not found in the searched file.", err=True)
+    sys.exit(1)
+
+
+@cli.command()
+@click.argument("name", required=False)
+def url(name):
+    """Print the GNIS Domestic Names Search web app URL (open in a browser)."""
+    click.echo(SEARCH_APP)
+    if name:
+        click.echo(f"(Enter {name!r} in the Feature Name field; the app has no stable "
+                   "query-string search URL.)")
+
+
+if __name__ == "__main__":
+    cli()

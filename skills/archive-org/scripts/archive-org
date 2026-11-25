@@ -1,0 +1,219 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.11"
+# dependencies = [
+#   "click>=8.1",
+#   "httpx>=0.27",
+# ]
+# ///
+"""Internet Archive CLI: search items, read metadata, download files.
+
+Uses the public advancedsearch and metadata APIs, verified live
+2026-11-24. No key or login is needed for read access.
+"""
+
+from __future__ import annotations
+
+import json
+from pathlib import Path
+from urllib.parse import quote
+
+import click
+import httpx
+
+BASE = "https://archive.org"
+ADVANCED_SEARCH = f"{BASE}/advancedsearch.php"
+USER_AGENT = "kinloom archive-org skill (research use)"
+DEFAULT_FIELDS = ["identifier", "title", "creator", "date", "mediatype"]
+
+
+def client() -> httpx.Client:
+    return httpx.Client(
+        timeout=60.0, follow_redirects=True,
+        headers={"User-Agent": USER_AGENT},
+    )
+
+
+def fail(message: str) -> None:
+    click.echo(message, err=True)
+    raise SystemExit(1)
+
+
+def search_api(query: str, fields, rows: int, page: int, sorts) -> dict:
+    params = [("q", query), ("output", "json"), ("rows", str(rows))]
+    if page > 1:
+        params.append(("page", str(page)))
+    for field in fields:
+        params.append(("fl[]", field))
+    for sort in sorts:
+        params.append(("sort[]", sort))
+    try:
+        with client() as http:
+            resp = http.get(ADVANCED_SEARCH, params=params)
+    except httpx.HTTPError as exc:
+        fail(f"Request failed: {exc}")
+    if resp.status_code != 200:
+        fail(f"HTTP {resp.status_code} from {ADVANCED_SEARCH}")
+    return resp.json()
+
+
+def metadata_api(identifier: str) -> dict:
+    url = f"{BASE}/metadata/{quote(identifier)}"
+    try:
+        with client() as http:
+            resp = http.get(url)
+    except httpx.HTTPError as exc:
+        fail(f"Request failed: {exc}")
+    if resp.status_code == 404:
+        fail(f"No item with identifier {identifier}")
+    if resp.status_code != 200:
+        fail(f"HTTP {resp.status_code} from {url}")
+    return resp.json()
+
+
+def item_url(identifier: str) -> str:
+    return f"{BASE}/details/{quote(identifier)}"
+
+
+def short(text, limit: int = 300) -> str:
+    if not text:
+        return ""
+    text = " ".join(str(text).split())
+    if len(text) <= limit:
+        return text
+    return text[:limit].rstrip() + " ..."
+
+
+@click.group()
+def cli() -> None:
+    """Search, inspect, and download Internet Archive items."""
+
+
+@cli.command()
+@click.argument("query")
+@click.option("--mediatype", default=None,
+              help="e.g. texts, movies, audio, software, collection.")
+@click.option("--rows", type=int, default=10, show_default=True)
+@click.option("--page", type=int, default=1, show_default=True)
+@click.option("--sort", "sorts", multiple=True,
+              help="Repeatable, e.g. --sort 'downloads desc'.")
+@click.option("--field", "fields", multiple=True,
+              help="Repeatable metadata field to return.")
+@click.option("--json", "as_json", is_flag=True, help="Full JSON output.")
+def search(query, mediatype, rows, page, sorts, fields, as_json):
+    """Search items with a Lucene query.
+
+    Example: search 'title:(Lincoln) AND mediatype:(texts)'
+    """
+    if mediatype:
+        query = f"{query} AND mediatype:({mediatype})"
+    chosen = list(fields) if fields else DEFAULT_FIELDS
+    data = search_api(query, chosen, rows, page, list(sorts))
+    response = data.get("response") or {}
+    if as_json:
+        click.echo(json.dumps(data, indent=2))
+        return
+    click.echo(f"{response.get('numFound')} items")
+    for doc in response.get("docs") or []:
+        identifier = doc.get("identifier") or ""
+        title = doc.get("title") or ""
+        creator = doc.get("creator") or ""
+        date = doc.get("date") or ""
+        mediatype_out = doc.get("mediatype") or ""
+        click.echo(
+            f"{identifier} | {title} | {creator} | {date} | "
+            f"{mediatype_out} | {item_url(identifier)}"
+        )
+
+
+@cli.command()
+@click.argument("identifier")
+@click.option("--json", "as_json", is_flag=True, help="Full JSON output.")
+@click.option("--files", is_flag=True, help="List the item's files.")
+def get(identifier, as_json, files):
+    """Read an item's metadata and file list by identifier."""
+    data = metadata_api(identifier)
+    if as_json:
+        click.echo(json.dumps(data, indent=2))
+        return
+    meta = data.get("metadata") or {}
+    click.echo(f"{meta.get('title') or identifier}")
+    click.echo(f"  Identifier: {meta.get('identifier')}")
+    if meta.get("creator"):
+        click.echo(f"  Creator: {meta.get('creator')}")
+    if meta.get("date"):
+        click.echo(f"  Date: {meta.get('date')}")
+    if meta.get("mediatype"):
+        click.echo(f"  Mediatype: {meta.get('mediatype')}")
+    if meta.get("collection"):
+        collection = meta.get("collection")
+        if isinstance(collection, list):
+            collection = ", ".join(collection)
+        click.echo(f"  Collection: {collection}")
+    if meta.get("description"):
+        click.echo(f"  Description: {short(meta.get('description'))}")
+    file_list = data.get("files") or []
+    click.echo(f"  Files: {len(file_list)} | {item_url(identifier)}")
+    if files:
+        for entry in file_list:
+            size = entry.get("size") or ""
+            click.echo(
+                f"    {entry.get('name')} | {entry.get('format')} | "
+                f"{size} bytes"
+            )
+
+
+@cli.command()
+@click.argument("identifier")
+@click.argument("files", nargs=-1)
+@click.option("--out", default=".", show_default=True,
+              help="Directory to save files into.")
+@click.option("--list", "list_only", is_flag=True,
+              help="Only list files, do not download.")
+def download(identifier, files, out, list_only):
+    """Download files of an item, or list them with no FILE given.
+
+    Example: download <identifier> <identifier>_djvu.txt
+    """
+    data = metadata_api(identifier)
+    file_list = data.get("files") or []
+    if list_only or not files:
+        for entry in file_list:
+            size = entry.get("size") or ""
+            click.echo(
+                f"{entry.get('name')} | {entry.get('format')} | "
+                f"{size} bytes"
+            )
+        return
+    available = {entry.get("name") for entry in file_list}
+    out_dir = Path(out)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    with client() as http:
+        for name in files:
+            if name not in available:
+                fail(f"File not in item {identifier}: {name}")
+            url = f"{BASE}/download/{quote(identifier)}/{quote(name)}"
+            try:
+                resp = http.get(url)
+            except httpx.HTTPError as exc:
+                fail(f"Request failed: {exc}")
+            if resp.status_code != 200:
+                fail(f"HTTP {resp.status_code} from {url}")
+            dest = out_dir / Path(name).name
+            dest.write_bytes(resp.content)
+            click.echo(f"{dest} ({len(resp.content)} bytes)")
+
+
+@cli.command()
+@click.argument("query")
+@click.option("--mediatype", default=None)
+def url(query, mediatype):
+    """Print the website advanced-search URL for a query."""
+    full = query
+    if mediatype:
+        full = f"{query} AND mediatype:({mediatype})"
+    click.echo(f"{ADVANCED_SEARCH}?q={quote(full)}")
+
+
+if __name__ == "__main__":
+    cli()

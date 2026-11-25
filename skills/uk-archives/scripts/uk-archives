@@ -1,0 +1,391 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.11"
+# dependencies = [
+#   "click>=8.1",
+#   "httpx>=0.27",
+# ]
+# ///
+"""CLI for UK/England genealogy: TNA Discovery API and FreeREG parish registers.
+
+Verified live 2026-11-24 with plain HTTP (no API key):
+
+- Discovery search: GET discovery.nationalarchives.gov.uk/API/search/v1/records
+  with sps.searchQuery, optional sps.dateFrom / sps.dateTo (YYYY-MM-DD), rows.
+- Discovery detail: GET .../API/records/v1/details/<id> (not .../search/v1/...).
+- FreeREG: GET home page for CSRF token, POST /search_queries with
+  search_query[...] fields; results HTML at /search_queries/<id>.
+
+Nottinghamshire Archives CalmView (nawcat.nottinghamshire.gov.uk) timed out
+from this host (45s+); no machine search is wired. Use `url --notts`.
+"""
+
+from __future__ import annotations
+
+import html as html_mod
+import json
+import re
+from urllib.parse import quote, urlencode, urljoin
+
+import click
+import httpx
+
+DISCOVERY_SEARCH = "https://discovery.nationalarchives.gov.uk/API/search/v1/records"
+DISCOVERY_DETAIL = "https://discovery.nationalarchives.gov.uk/API/records/v1/details"
+DISCOVERY_WEB = "https://discovery.nationalarchives.gov.uk/details/r/"
+FREEREG_BASE = "https://www.freereg.org.uk"
+FREEREG_SEARCH = FREEREG_BASE + "/search_queries"
+USER_AGENT = (
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+)
+
+# Chapman county codes (FreeREG). Extend as needed.
+CHAPMAN: dict[str, str] = {
+    "nottinghamshire": "NTT",
+    "ntt": "NTT",
+    "london": "LND",
+    "lnd": "LND",
+    "kent": "KEN",
+    "ken": "KEN",
+}
+
+GENUKI_PARISHES: dict[str, str] = {
+    "england": "https://www.genuki.org.uk/big/eng",
+    "kent": "https://www.genuki.org.uk/big/eng/KEN",
+    "london": "https://www.genuki.org.uk/big/eng/LND",
+    "nottingham": "https://www.genuki.org.uk/big/eng/NTT/Nottingham",
+    "nottinghamshire": "https://www.genuki.org.uk/big/eng/NTT",
+    "yorkshire": "https://www.genuki.org.uk/big/eng/YKS",
+}
+
+
+def _client() -> httpx.Client:
+    return httpx.Client(headers={"User-Agent": USER_AGENT}, timeout=90.0, follow_redirects=True)
+
+
+def _date_from(value: str | None) -> str | None:
+    if not value:
+        return None
+    value = value.strip()
+    if re.fullmatch(r"\d{4}", value):
+        return f"{value}-01-01"
+    return value
+
+
+def _date_to(value: str | None) -> str | None:
+    if not value:
+        return None
+    value = value.strip()
+    if re.fullmatch(r"\d{4}", value):
+        return f"{value}-12-31"
+    return value
+
+
+def _discovery_query(query: str, held_by: str | None, collection: str | None) -> str:
+    parts = [query.strip()]
+    if held_by:
+        parts.append(held_by.strip())
+    if collection:
+        parts.append(f'"{collection.strip()}"')
+    return " ".join(p for p in parts if p)
+
+
+def _discovery_hit(rec: dict) -> dict:
+    rec_id = rec.get("id") or ""
+    ref = rec.get("reference") or ""
+    return {
+        "id": rec_id,
+        "reference": ref,
+        "title": rec.get("title") or "",
+        "description": rec.get("description") or "",
+        "covering_dates": rec.get("coveringDates") or "",
+        "department": rec.get("department") or "",
+        "places": rec.get("places") or [],
+        "held_by": rec.get("heldBy") or [],
+        "record_url": DISCOVERY_WEB + rec_id if rec_id else "",
+    }
+
+
+def _collection_match(rec: dict, collection: str) -> bool:
+    coll = collection.strip()
+    ref = rec.get("reference") or ""
+    if coll.upper().startswith("PROB"):
+        return ref.upper().startswith(coll.upper())
+    return coll.upper() in ref.upper() or coll.upper() in (rec.get("title") or "").upper()
+
+
+def _discovery_detail_payload(raw: dict) -> dict:
+    scope = raw.get("scopeContent") or {}
+    desc = scope.get("description") if isinstance(scope, dict) else None
+    if desc and isinstance(desc, str):
+        desc = re.sub(r"<[^>]+>", " ", html_mod.unescape(desc))
+        desc = re.sub(r"\s+", " ", desc).strip()
+    held = raw.get("heldBy") or []
+    held_names = []
+    for item in held:
+        if isinstance(item, dict):
+            held_names.append(item.get("xReferenceName") or item.get("name") or "")
+        elif isinstance(item, str):
+            held_names.append(item)
+    return {
+        "id": raw.get("id"),
+        "citable_reference": raw.get("citableReference") or raw.get("referencePart"),
+        "covering_dates": raw.get("coveringDates"),
+        "description": desc,
+        "held_by": [h for h in held_names if h],
+        "digitised": raw.get("digitised"),
+        "legal_status": raw.get("legalStatus"),
+        "catalogue_level": raw.get("catalogueLevel"),
+        "record_url": DISCOVERY_WEB + (raw.get("id") or ""),
+    }
+
+
+def _freereg_token(html: str) -> str:
+    m = re.search(r'name="authenticity_token" value="([^"]+)"', html)
+    if not m:
+        raise click.ClickException("FreeREG authenticity_token not found (page layout may have changed).")
+    return m.group(1)
+
+
+def parse_freereg_results(page: str) -> list[dict]:
+    """Parse FreeREG search results table rows."""
+    tbody = re.search(r"<tbody>(.*?)</tbody>", page, re.S | re.I)
+    if not tbody:
+        return []
+    out: list[dict] = []
+    for tr in re.finditer(r'<tr id="([^"]+)"[^>]*>(.*?)</tr>', tbody.group(1), re.S | re.I):
+        row_id = tr.group(1)
+        inner = tr.group(2)
+        link_m = re.search(r'href="([^"]+)"[^>]*>\s*View\s*\d+', inner, re.I)
+        path = link_m.group(1) if link_m else ""
+        cells = re.findall(r"<td[^>]*>(.*?)</td>", inner, re.S | re.I)
+        if len(cells) < 5:
+            continue
+        clean = []
+        for c in cells[1:]:
+            text = html_mod.unescape(re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", c))).strip()
+            clean.append(text)
+        persons, record_type, event_date, county, register = (clean + [""] * 5)[:5]
+        out.append({
+            "transcript_id": row_id,
+            "persons": persons,
+            "record_type": record_type,
+            "event_date": event_date,
+            "county": county,
+            "register": register,
+            "transcript_url": urljoin(FREEREG_BASE, path) if path else "",
+        })
+    return out
+
+
+@click.group(context_settings={"help_option_names": ["-h", "--help"]})
+def cli() -> None:
+    """Search UK archives: TNA Discovery and FreeREG parish registers."""
+
+
+@cli.group("discovery")
+def discovery() -> None:
+    """The National Archives Discovery catalogue (free JSON API)."""
+
+
+@discovery.command("search")
+@click.argument("query")
+@click.option("--held-by", default=None, help="Extra text added to the query (e.g. Nottinghamshire).")
+@click.option("--date-from", "date_from", default=None, help="Covering date from (YYYY or YYYY-MM-DD).")
+@click.option("--date-to", "date_to", default=None, help="Covering date to (YYYY or YYYY-MM-DD).")
+@click.option(
+    "--collection",
+    default=None,
+    help='Filter hits whose reference/title match this string (e.g. PROB 11). Also appended to the query.',
+)
+@click.option("--limit", default=10, show_default=True, type=int, help="Maximum records to return (API rows).")
+@click.option("--json", "as_json", is_flag=True, help="Output compact structured JSON.")
+def cmd_discovery_search(
+    query: str,
+    held_by: str | None,
+    date_from: str | None,
+    date_to: str | None,
+    collection: str | None,
+    limit: int,
+    as_json: bool,
+) -> None:
+    """Search Discovery for catalogue records."""
+    q = _discovery_query(query, held_by, collection)
+    params: dict[str, str | int] = {"sps.searchQuery": q, "rows": min(max(limit, 1), 100)}
+    df = _date_from(date_from)
+    dt = _date_to(date_to)
+    if df:
+        params["sps.dateFrom"] = df
+    if dt:
+        params["sps.dateTo"] = dt
+    with _client() as c:
+        resp = c.get(DISCOVERY_SEARCH, params=params)
+        resp.raise_for_status()
+        data = resp.json()
+    records = [_discovery_hit(r) for r in data.get("records") or []]
+    if collection:
+        records = [r for r in records if _collection_match(
+            {"reference": r["reference"], "department": r["department"], "title": r["title"]},
+            collection,
+        )]
+    records = records[:limit]
+    total = data.get("count", len(records))
+    if as_json:
+        click.echo(json.dumps({"query": q, "total": total, "returned": len(records), "records": records}, indent=1))
+        return
+    click.echo(f'{total} hit(s) for "{q}"; showing {len(records)}:')
+    for rec in records:
+        places = ", ".join(rec["places"]) if rec["places"] else ""
+        click.echo(f'{rec["id"]}  {rec["reference"]}  {rec["covering_dates"]}')
+        click.echo(f'  {rec["title"]}')
+        if places:
+            click.echo(f"  Places: {places}")
+        click.echo(f"  {rec['record_url']}")
+
+
+@discovery.command("detail")
+@click.argument("record_id")
+@click.option("--json", "as_json", is_flag=True, help="Output compact structured JSON.")
+def cmd_discovery_detail(record_id: str, as_json: bool) -> None:
+    """Fetch one Discovery record by id (e.g. <record-id>)."""
+    url = f"{DISCOVERY_DETAIL}/{record_id}"
+    with _client() as c:
+        resp = c.get(url)
+        resp.raise_for_status()
+        raw = resp.json()
+    detail = _discovery_detail_payload(raw)
+    if as_json:
+        click.echo(json.dumps(detail, indent=1))
+        return
+    click.echo(f'{detail["id"]}  {detail["citable_reference"]}  {detail["covering_dates"]}')
+    if detail["description"]:
+        click.echo(f'  {detail["description"]}')
+    if detail["held_by"]:
+        click.echo("  Held by: " + "; ".join(detail["held_by"]))
+    click.echo(f'  Digitised: {detail["digitised"]}  Legal status: {detail["legal_status"] or "n/a"}')
+    click.echo(f'  {detail["record_url"]}')
+
+
+@cli.group("freereg")
+def freereg() -> None:
+    """FreeREG parish register transcriptions (Rails form POST, no API key)."""
+
+
+@freereg.command("search")
+@click.option("--surname", required=True, help="Last name (required).")
+@click.option("--given", default=None, help="First name.")
+@click.option(
+    "--county",
+    default="NTT",
+    show_default=True,
+    help="Chapman county code or name (e.g. NTT / nottinghamshire).",
+)
+@click.option("--from-year", "from_year", default=None, help="Start year (YYYY).")
+@click.option("--to-year", "to_year", default=None, help="End year (YYYY).")
+@click.option(
+    "--record-type",
+    "record_type",
+    type=click.Choice(["all", "baptism", "marriage", "burial"], case_sensitive=False),
+    default="all",
+    show_default=True,
+)
+@click.option("--place-contains", default=None, help="Keep only hits whose register column contains this text.")
+@click.option("--json", "as_json", is_flag=True, help="Output compact structured JSON.")
+def cmd_freereg_search(
+    surname: str,
+    given: str | None,
+    county: str,
+    from_year: str | None,
+    to_year: str | None,
+    record_type: str,
+    place_contains: str | None,
+    as_json: bool,
+) -> None:
+    """Search FreeREG parish register transcriptions."""
+    chapman = CHAPMAN.get(county.strip().lower(), county.strip().upper())
+    rt_map = {"all": "", "baptism": "ba", "marriage": "ma", "burial": "bu"}
+    data: dict[str, str] = {
+        "utf8": "✓",
+        "search_query[last_name]": surname,
+        "search_query[chapman_codes][]": chapman,
+        "commit": "Search",
+    }
+    if given:
+        data["search_query[first_name]"] = given
+    if from_year:
+        data["search_query[start_year]"] = from_year
+    if to_year:
+        data["search_query[end_year]"] = to_year
+    rt = rt_map[record_type]
+    if rt:
+        data["search_query[record_type]"] = rt
+    with _client() as c:
+        home = c.get(FREEREG_BASE + "/")
+        home.raise_for_status()
+        data["authenticity_token"] = _freereg_token(home.text)
+        resp = c.post(FREEREG_SEARCH, data=data)
+        resp.raise_for_status()
+    records = parse_freereg_results(resp.text)
+    if place_contains:
+        needle = place_contains.lower()
+        records = [r for r in records if needle in r["register"].lower()]
+    if as_json:
+        click.echo(json.dumps({"surname": surname, "county": chapman, "returned": len(records), "records": records}, indent=1))
+        return
+    click.echo(f"{len(records)} FreeREG hit(s) for {surname} ({chapman}):")
+    for rec in records:
+        click.echo(f'{rec["event_date"]}  {rec["record_type"]}  {rec["persons"]}')
+        click.echo(f'  {rec["register"]}  ({rec["county"]})')
+        if rec["transcript_url"]:
+            click.echo(f'  {rec["transcript_url"]}')
+
+
+@cli.command("url")
+@click.option("--discovery", "discovery_query", default=None, help="Discovery web search URL for a query.")
+@click.option("--freereg", is_flag=True, help="FreeREG search form home.")
+@click.option("--notts", "notts_query", default=None, help="Nottinghamshire Archives CalmView search hint (browser).")
+@click.option("--bho", "bho_query", default=None, help="British History Online search query.")
+@click.option(
+    "--genuki",
+    type=click.Choice(list(GENUKI_PARISHES.keys())),
+    default=None,
+    help="GENUKI county/parish page for England research.",
+)
+def cmd_url(
+    discovery_query: str | None,
+    freereg: bool,
+    notts_query: str | None,
+    bho_query: str | None,
+    genuki: str | None,
+) -> None:
+    """Print verified portal URLs (no search is run)."""
+    if discovery_query:
+        click.echo(
+            "https://discovery.nationalarchives.gov.uk/results/r?"
+            + urlencode({"_q": discovery_query, "_p": 100}, quote_via=quote)
+        )
+    if freereg:
+        click.echo(FREEREG_BASE + "/")
+    if notts_query is not None:
+        click.echo("https://nawcat.nottinghamshire.gov.uk/CalmView/")
+        click.echo(
+            "  (browser-only: HTTPS to nawcat timed out after 45s in automated checks; "
+            f"search in CalmView for: {notts_query or 'Lincoln'})"
+        )
+    if bho_query:
+        click.echo(
+            "https://www.british-history.ac.uk/search?"
+            + urlencode({"query": bho_query})
+        )
+    if genuki:
+        click.echo(GENUKI_PARISHES[genuki])
+    if not any([discovery_query, freereg, notts_query is not None, bho_query, genuki]):
+        click.echo(DISCOVERY_WEB.rstrip("/"))
+        click.echo(FREEREG_BASE + "/")
+        click.echo("https://www.british-history.ac.uk/")
+        click.echo(GENUKI_PARISHES["nottinghamshire"])
+
+
+if __name__ == "__main__":
+    cli()

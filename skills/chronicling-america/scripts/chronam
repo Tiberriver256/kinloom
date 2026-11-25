@@ -1,0 +1,222 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.11"
+# dependencies = [
+#   "click>=8.1",
+#   "httpx>=0.27",
+# ]
+# ///
+"""Search Library of Congress Chronicling America historic newspapers.
+
+Uses the public loc.gov JSON API (no key, no account). The retired
+chroniclingamerica.loc.gov search API returns 404 as of 2026-11-24;
+do not use it or third-party docs that describe it.
+"""
+
+from __future__ import annotations
+
+import json
+import re
+import sys
+from pathlib import Path
+from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
+
+import click
+import httpx
+
+COLLECTION_BASE = "https://www.loc.gov/collections/chronicling-america/"
+HEADERS = {"User-Agent": "kinloom/1.0 (genealogy research)"}
+# tile.loc.gov (storage-services PDFs) rejects hotlinking: it requires a
+# loc.gov Referer. Send one for all file downloads; harmless elsewhere.
+DOWNLOAD_HEADERS = dict(HEADERS, Referer="https://www.loc.gov/")
+TIMEOUT = 90.0
+
+
+def _get_json(url: str, params: dict | None = None) -> dict:
+    with httpx.Client(headers=HEADERS, timeout=TIMEOUT, follow_redirects=True) as client:
+        resp = client.get(url, params=params)
+        resp.raise_for_status()
+        return resp.json()
+
+
+def _as_jsonable(value):
+    return value
+
+
+def _first(value):
+    if isinstance(value, list):
+        return value[0] if value else None
+    return value
+
+
+def _compact_result(item: dict) -> dict:
+    return {
+        "title": _first(item.get("partof_title")) or item.get("title"),
+        "date": item.get("date"),
+        "state": _first(item.get("location_state")),
+        "county": _first(item.get("location_county")),
+        "city": _first(item.get("location_city")),
+        "lccn": item.get("number_lccn"),
+        "page": item.get("number_page"),
+        "url": item.get("url"),
+        "id": item.get("id"),
+    }
+
+
+def _print_search(data: dict, as_json: bool) -> None:
+    search = data.get("search") or {}
+    hits = search.get("hits")
+    results = data.get("results") or []
+    if as_json:
+        click.echo(json.dumps(
+            {"hits": hits, "results": [_compact_result(r) for r in results]},
+            indent=2, ensure_ascii=False))
+        return
+    click.echo(f"hits: {hits} (showing {len(results)} on this page)")
+    for item in results:
+        c = _compact_result(item)
+        click.echo(f"- {c['date']} | {c['title']} | {c['state']} | {c['url']}")
+
+
+def _resource_json(resource_url: str) -> dict:
+    parsed = urlparse(resource_url)
+    qs = parse_qs(parsed.query)
+    qs["fo"] = ["json"]
+    url = urlunparse(parsed._replace(query=urlencode(qs, doseq=True)))
+    return _get_json(url)
+
+
+def _build_resource_url(lccn: str, date: str, edition: str, seq: str) -> str:
+    return f"https://www.loc.gov/resource/{lccn}/{date}/ed-{edition}/?sp={seq}"
+
+
+@click.group()
+def cli() -> None:
+    """Search Chronicling America historic newspapers (Library of Congress)."""
+
+
+@cli.command()
+@click.argument("query")
+@click.option("--dates", default=None, help="Date range YYYY/YYYY, e.g. 1880/1920.")
+@click.option("--level", default="page", type=click.Choice(["page", "issue", "title", "all"]),
+              show_default=True, help="Display level (dl=).")
+@click.option("--limit", "-n", default=10, show_default=True, help="Results per page (c=).")
+@click.option("--page", "-p", default=1, show_default=True, help="Results page (sp=).")
+@click.option("--state", default=None, help="Keep only results from this state (client-side filter on location_state).")
+@click.option("--lccn", default=None, help="Keep only results from this newspaper LCCN (client-side filter).")
+@click.option("--json", "as_json", is_flag=True, help="Emit JSON instead of compact text.")
+def search(query, dates, level, limit, page, state, lccn, as_json):
+    """Search newspaper pages for QUERY (full-text, e.g. a surname)."""
+    params: dict = {"q": query, "fo": "json", "c": limit, "sp": page}
+    if level != "all":
+        params["dl"] = level
+    if dates:
+        params["dates"] = dates
+    data = _get_json(COLLECTION_BASE, params=params)
+    results = data.get("results") or []
+    if state:
+        results = [r for r in results
+                   if state.lower() in [str(s).lower() for s in (r.get("location_state") or [])]]
+    if lccn:
+        results = [r for r in results if (r.get("number_lccn") or "") == lccn]
+    data["results"] = results
+    _print_search(data, as_json)
+
+
+@cli.command()
+@click.argument("resource_url", required=False)
+@click.option("--lccn", default=None, help="Newspaper LCCN, e.g. sn83045462.")
+@click.option("--date", default=None, help="Issue date YYYY-MM-DD.")
+@click.option("--edition", default="1", show_default=True)
+@click.option("--seq", default="1", show_default=True, help="Page sequence within the issue (?sp=).")
+@click.option("--json", "as_json", is_flag=True, help="Emit the raw item JSON.")
+def get(resource_url, lccn, date, edition, seq, as_json):
+    """Show metadata and download links for one newspaper page.
+
+    Give a loc.gov resource URL, or build one with --lccn --date [--edition --seq].
+    """
+    if resource_url is None:
+        if not lccn or not date:
+            raise click.UsageError("Give a resource URL or both --lccn and --date.")
+        resource_url = _build_resource_url(lccn, date, edition, seq)
+    data = _resource_json(resource_url)
+    if as_json:
+        click.echo(json.dumps(data, indent=2, ensure_ascii=False))
+        return
+    item = data.get("item") or {}
+    resource = data.get("resource") or {}
+    click.echo(f"title: {resource.get('title') or item.get('title')}")
+    click.echo(f"date: {item.get('date')}")
+    click.echo(f"lccn: {_first(item.get('number_lccn')) or item.get('lccn')}")
+    click.echo(f"place: {_first(item.get('location_city'))}, {_first(item.get('location_state'))}")
+    click.echo(f"url: {resource_url}")
+    for res in data.get("resources") or []:
+        for key in ("pdf", "image", "fulltext_file", "iiif_manifest_url"):
+            if res.get(key):
+                click.echo(f"{key}: {res[key]}")
+
+
+@cli.command()
+@click.argument("resource_url", required=False)
+@click.option("--lccn", default=None)
+@click.option("--date", default=None, help="Issue date YYYY-MM-DD.")
+@click.option("--edition", default="1", show_default=True)
+@click.option("--seq", default="1", show_default=True)
+@click.option("--out", "-o", default=".", show_default=True, help="Output directory.")
+@click.option("--pdf/--no-pdf", default=True, show_default=True, help="Download the page PDF.")
+@click.option("--image/--no-image", default=False, show_default=True,
+              help="Download the IIIF image URL as served (reduced-size rendition).")
+@click.option("--text/--no-text", default=False, show_default=True,
+              help="Download the ALTO XML word-coordinates file (OCR full text).")
+def download(resource_url, lccn, date, edition, seq, out, pdf, image, text):
+    """Download a newspaper page (PDF, image, OCR) plus metadata.json."""
+    if resource_url is None:
+        if not lccn or not date:
+            raise click.UsageError("Give a resource URL or both --lccn and --date.")
+        resource_url = _build_resource_url(lccn, date, edition, seq)
+    data = _resource_json(resource_url)
+    item = data.get("item") or {}
+    outdir = Path(out)
+    outdir.mkdir(parents=True, exist_ok=True)
+    stem = re.sub(r"[^A-Za-z0-9._-]+", "_",
+                  f"{_first(item.get('number_lccn')) or 'loc'}_{item.get('date') or 'nodate'}_sp{seq}")
+    resources = (data.get("resources") or [{}])[0]
+    jobs = []
+    if pdf and resources.get("pdf"):
+        jobs.append(("pdf", resources["pdf"], f"{stem}.pdf"))
+    if image and resources.get("image"):
+        jobs.append(("image", resources["image"], f"{stem}.jpg"))
+    if text and resources.get("fulltext_file"):
+        jobs.append(("text", resources["fulltext_file"], f"{stem}.alto.xml"))
+    if not jobs:
+        click.echo("No downloadable resources found for this page.", err=True)
+        sys.exit(1)
+    with httpx.Client(headers=DOWNLOAD_HEADERS, timeout=TIMEOUT, follow_redirects=True) as client:
+        for kind, url, filename in jobs:
+            resp = client.get(url)
+            resp.raise_for_status()
+            (outdir / filename).write_bytes(resp.content)
+            click.echo(f"{kind}: {outdir / filename} ({len(resp.content)} bytes)")
+    (outdir / f"{stem}.metadata.json").write_text(
+        json.dumps({"resource_url": resource_url, "item": item,
+                    "resources": data.get("resources")}, indent=2, ensure_ascii=False))
+    click.echo(f"metadata: {outdir / (stem + '.metadata.json')}")
+
+
+@cli.command()
+@click.argument("query")
+@click.option("--dates", default=None, help="Date range YYYY/YYYY.")
+@click.option("--level", default="page", type=click.Choice(["page", "issue", "title", "all"]),
+              show_default=True)
+def url(query, dates, level):
+    """Print the loc.gov website search URL for QUERY (open in a browser)."""
+    params = {"q": query, "fo": "json"}
+    if level != "all":
+        params["dl"] = level
+    if dates:
+        params["dates"] = dates
+    click.echo(COLLECTION_BASE + "?" + urlencode(params))
+
+
+if __name__ == "__main__":
+    cli()

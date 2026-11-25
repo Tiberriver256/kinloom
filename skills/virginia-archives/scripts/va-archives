@@ -1,0 +1,466 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.11"
+# dependencies = [
+#   "click>=8.1",
+#   "httpx>=0.27",
+# ]
+# ///
+"""CLI for Library of Virginia research: Chancery Records Index, Primo catalog.
+
+All routes below were verified live 2026-11-24 with plain
+HTTP (no key, no account, no browser):
+
+- Chancery search is a POST form to old.lva.virginia.gov/chancery/default.asp
+  accepting surname, match mode, and locality filters.
+- Case detail is a GET: /chancery/case_detail.asp?CFN=<loc>-<year>-<number>.
+- Case images are listed by /chancery/case_images.asp?CFN=<CFN> as
+  myImages[N]="/ChanceryImg/<locality>/Box<nnn>/<cfn>_<####>.pdf";
+  each page PDF and the whole-case ZIP
+  (/chancery/zip/download.php?cfn=<CFN>) return 200.
+- The Primo catalog has a public, key-free JSON API (PNXS):
+  lva.primo.exlibrisgroup.com/primaws/rest/pub/pnxs?q=any,contains,<q>
+  &vid=01LVA_INST:01LVA&scope=MyInstitution.
+
+Virginia Chronicle (virginiachronicle.com) is behind Cloudflare: curl and
+headless Chromium both get "Just a moment..." (2026-11-24). No machine
+interface was verified for it; use the `url --chronicle` pointer and search
+in the browser. ARVAS (arvasarchive.org) returns an empty 202 to plain HTTP
+and is likewise browser-only. The old Aleph Land Office index host
+(lva1.hosted.exlibrisgroup.com) was unreachable on 2026-11-24.
+"""
+
+from __future__ import annotations
+
+import html as _html
+import json
+import re
+import sys
+from pathlib import Path
+from urllib.parse import quote, urlencode
+
+import click
+import httpx
+
+CHANCERY_BASE = "https://old.lva.virginia.gov/chancery"
+CHANCERY_SEARCH = CHANCERY_BASE + "/default.asp"
+CHANCERY_DETAIL = CHANCERY_BASE + "/case_detail.asp"
+CHANCERY_IMAGES = CHANCERY_BASE + "/case_images.asp"
+CHANCERY_ZIP = CHANCERY_BASE + "/zip/download.php"
+CHANCERY_AVAILABLE = CHANCERY_BASE + "/available.asp"
+PRIMO_BASE = "https://lva.primo.exlibrisgroup.com"
+PRIMO_PNXS = PRIMO_BASE + "/primaws/rest/pub/pnxs"
+PRIMO_VID = "01LVA_INST:01LVA"
+USER_AGENT = (
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+)
+MATCH_OPS = ("Exact", "Starts", "Includes")
+CATALOG_FIELDS = ("any", "title", "creator")
+
+
+def _client() -> httpx.Client:
+    return httpx.Client(headers={"User-Agent": USER_AGENT}, timeout=60.0, follow_redirects=True)
+
+
+def _clean(text: str) -> str:
+    text = re.sub(r"<br\s*/?>", "\n", text, flags=re.I)
+    text = re.sub(r"<[^>]+>", " ", text)
+    text = _html.unescape(re.sub(r"[ \t]+", " ", text))
+    return text.strip()
+
+
+def _names(cell: str) -> list[str]:
+    return [line.strip() for line in _clean(cell).splitlines() if line.strip()]
+
+
+def parse_search_page(page: str) -> dict:
+    """Parse a Chancery default.asp results page into records + paging info."""
+    total_m = re.search(r"Your search returned (\d+) record\(s\). You are now viewing records (\d+) through (\d+)", page)
+    total = int(total_m.group(1)) if total_m else 0
+    first = int(total_m.group(2)) if total_m else 0
+    last = int(total_m.group(3)) if total_m else 0
+    pat = re.compile(
+        r"<strong>Index Number:</strong>\s*([^<]+?)\s*</span>\s*"
+        r"<a href=\"case_detail\.asp\?CFN=([0-9\-]+)\"[^>]*>.*?"
+        r"<strong>Locality:</strong>\s*([^<]+?)\s*</td>.*?"
+        r"<td valign=\"top\">\s*(.*?)\s*</td>\s*<td valign=\"top\">\s*(.*?)\s*</td>",
+        re.S | re.I,
+    )
+    records = []
+    for m in pat.finditer(page):
+        records.append({
+            "index_number": _html.unescape(m.group(1).strip()),
+            "cfn": m.group(2),
+            "locality": _html.unescape(m.group(3).strip()),
+            "plaintiffs": _names(m.group(4)),
+            "defendants": _names(m.group(5)),
+            "case_url": CHANCERY_DETAIL + "?CFN=" + m.group(2),
+        })
+    return {"total": total, "first": first, "last": last, "records": records}
+
+
+def parse_case_page(page: str) -> dict:
+    """Parse a Chancery case_detail.asp page."""
+    def section(label: str) -> str:
+        m = re.search(r"<strong>" + re.escape(label) + r"</strong></td></tr>\s*<tr>\s*<td[^>]*>(.*?)</td>", page, re.S | re.I)
+        return _clean(m.group(1)) if m else ""
+    head = re.search(
+        r"<strong>Locality</strong></td><td[^>]*><strong>Index Number</strong></td><td[^>]*><strong>Original Case Number</strong></td></tr>\s*<tr>\s*<td[^>]*>([^<]*)</td>\s*<td[^>]*>([^<]*)</td>\s*<td[^>]*>([^<]*)</td>",
+        page, re.S | re.I)
+    parties = re.search(
+        r"<strong>Plaintiff\(s\)</strong></td><td[^>]*><strong>Defendant\(s\)</strong></td></tr>\s*<tr>\s*<td[^>]*>(.*?)</td>\s*<td[^>]*>(.*?)</td>",
+        page, re.S | re.I)
+    surnames = re.search(r"<strong>Surname\(s\)</strong></td></tr>\s*<tr><td[^>]*>(.*?)</td>", page, re.S | re.I)
+    plat = re.search(r"<strong>Plat\?</strong></td></tr>\s*<tr><td[^>]*>([^<]*)</td>\s*<td[^>]*>([^<]*)</td>", page, re.S | re.I)
+    fmt = section("Format")
+    wills = ""
+    wm = re.search(r"<strong>Wills</strong></td><td[^>]*>.*?Plat\?.*?</tr>\s*<tr><td[^>]*>(.*?)</td>", page, re.S | re.I)
+    if wm:
+        wills = _clean(wm.group(1))
+    return {
+        "locality": _html.unescape(head.group(1).strip()) if head else "",
+        "index_number": _html.unescape(head.group(2).strip()) if head else "",
+        "original_case_number": _html.unescape(head.group(3).strip()) if head else "",
+        "plaintiffs": _names(parties.group(1)) if parties else [],
+        "defendants": _names(parties.group(2)) if parties else [],
+        "surnames": _names(surnames.group(1)) if surnames else [],
+        "wills": wills,
+        "plat": _html.unescape(plat.group(2).strip()) if plat else "",
+        "format": fmt,
+    }
+
+
+def parse_images_page(page: str) -> dict:
+    """Parse case_images.asp: myImages[N] PDF list + total page count."""
+    urls = re.findall(r'myImages\[\d+\]\s*=\s*"([^"]+)"', page)
+    urls = [u for u in urls if u]
+    total_m = re.search(r"of\s+(\d+)\s+prev", _clean(page))
+    total = int(total_m.group(1)) if total_m else len(urls)
+    zip_m = re.search(r'href="([^"]*download\.php\?cfn=[^"]*)"', page, re.I)
+    return {
+        "total_pages": total,
+        "page_pdfs": [CHANCERY_BASE.rsplit("/chancery", 1)[0] + u if u.startswith("/") else u for u in urls],
+        "zip_url": ("https://old.lva.virginia.gov" + _html.unescape(zip_m.group(1))) if zip_m else CHANCERY_ZIP + "?cfn=",
+    }
+
+
+def parse_localities_page(page: str) -> list[dict]:
+    """Parse available.asp locality availability table."""
+    rows = []
+    for m in re.finditer(
+        r"<TR><TD>([^<]*)</td><TD>([^<]*)</td><TD>([^<]*)</td><TD>([^<]*)</td><TD>(.*?)</td></TR>",
+        page, re.S | re.I):
+        rows.append({
+            "locality": _html.unescape(m.group(1).replace("&nbsp;", " ").strip()),
+            "region": _html.unescape(m.group(2).replace("&nbsp;", " ").strip()),
+            "time_frame": _html.unescape(m.group(3).replace("&nbsp;", " ").strip()),
+            "viewing_status": _html.unescape(m.group(4).replace("&nbsp;", " ").strip()),
+            "notes": _clean(m.group(5)),
+        })
+    return rows
+
+
+def parse_page_spec(spec: str, total: int) -> list[int]:
+    """1-based page slice like '1-5,10' or 'all' (NARA CLI convention)."""
+    if spec.strip().lower() == "all":
+        return list(range(1, total + 1))
+    out: list[int] = []
+    for part in spec.split(","):
+        part = part.strip()
+        if "-" in part:
+            a, b = part.split("-", 1)
+            out.extend(range(int(a), int(b) + 1))
+        elif part:
+            out.append(int(part))
+    return sorted(set(n for n in out if 1 <= n <= total))
+
+
+def _pnxs_record(doc: dict) -> dict:
+    pnx = doc.get("pnx", {})
+    disp = pnx.get("display", {})
+    control = pnx.get("control", {})
+    recordid = (control.get("recordid") or [""])[0]
+    def first(key: str) -> str:
+        vals = disp.get(key) or []
+        return vals[0].strip() if vals else ""
+    return {
+        "recordid": recordid,
+        "title": first("title"),
+        "creator": first("creator"),
+        "date": first("creationdate"),
+        "type": first("type"),
+        "source": first("source"),
+        "record_url": (
+            PRIMO_BASE + "/discovery/fulldisplay?docid=" + recordid
+            + "&context=L&vid=" + quote(PRIMO_VID, safe="")
+            + "&lang=en&search_scope=MyInstitution"
+        ) if recordid else "",
+    }
+
+
+def _fmt_record_text(rec: dict) -> str:
+    lines = [f"{rec['cfn']}  {rec['locality']}  index {rec['index_number']}"]
+    if rec["plaintiffs"]:
+        lines.append("  P: " + "; ".join(rec["plaintiffs"]))
+    if rec["defendants"]:
+        lines.append("  D: " + "; ".join(rec["defendants"]))
+    lines.append("  " + rec["case_url"])
+    return "\n".join(lines)
+
+
+@click.group(context_settings={"help_option_names": ["-h", "--help"]})
+def cli() -> None:
+    """Search the Library of Virginia: Chancery Records Index and Primo catalog."""
+
+
+@cli.group("chancery")
+def chancery() -> None:
+    """Chancery Records Index (old.lva.virginia.gov/chancery)."""
+
+
+@chancery.command("search")
+@click.argument("surnames", nargs=-1, required=True)
+@click.option("--locality", default="All", show_default=True,
+              help="County/city, e.g. 'ALBEMARLE CO'. Default All. Use `chancery localities` to list values.")
+@click.option("--match", type=click.Choice(["Exact", "Starts", "Includes"], case_sensitive=False), default="Starts", show_default=True,
+              help="How the surname match works (form values Exact/Starts/Includes).")
+@click.option("--surname2", default=None, help="Second surname (ANDed by the index form).")
+@click.option("--plaintiff-last", default=None, help="Plaintiff last name.")
+@click.option("--plaintiff-first", default=None, help="Plaintiff first name.")
+@click.option("--defendant-last", default=None, help="Defendant last name.")
+@click.option("--defendant-first", default=None, help="Defendant first name.")
+@click.option("--year-from", default=None, help="First year of case (strDate1).")
+@click.option("--year-to", default=None, help="Last year of case (strDate2).")
+@click.option("--index-number", default=None, help="Index number, e.g. YYYY-NNN (txtIndexNum).")
+@click.option("--local-case-number", default=None, help="Local case file number (txtLclCFN).")
+@click.option("--enslaved", is_flag=True, help="Only cases referencing enslaved persons.")
+@click.option("--free", is_flag=True, help="Only cases referencing free persons.")
+@click.option("--plats", is_flag=True, help="Only cases with plats available.")
+@click.option("--pages", default="1", show_default=True, help="Result pages to fetch: '1', '1-3', '1,3', or 'all' (20 records per page).")
+@click.option("--json", "as_json", is_flag=True, help="Output compact structured JSON.")
+def cmd_chancery_search(surnames, locality, match, surname2, plaintiff_last, plaintiff_first,
+                         defendant_last, defendant_first, year_from, year_to, index_number,
+                         local_case_number, enslaved, free, plats, pages, as_json):
+    """Search the Chancery Records Index by surname (more surnames = OR)."""
+    match = match.capitalize()
+    all_records: list[dict] = []
+    total = 0
+    with _client() as c:
+        for surname in surnames:
+            form: dict[str, str] = {
+                "surname1": surname, "sn1select": match,
+                "plnlstName": plaintiff_last or "", "plselect": match,
+                "plnfrstName": plaintiff_first or "", "pfselect": match,
+                "deflstName": defendant_last or "", "dlselect": match,
+                "deffrstName": defendant_first or "", "dfselect": match,
+                "strDate1": year_from or "", "strDate2": year_to or "",
+                "txtIndexNum": index_number or "", "txtLclCFN": local_case_number or "",
+                "Submit": "Search",
+            }
+            if surname2:
+                form["surname2"] = surname2
+                form["sn2select"] = match
+            if enslaved:
+                form["chkEnslaved"] = "on"
+            if free:
+                form["chkFree"] = "on"
+            if plats:
+                form["chkPlat"] = "on"
+            first_page = 1
+            form["LOC"] = locality
+            resp = c.post(CHANCERY_SEARCH, data=form)
+            resp.raise_for_status()
+            parsed = parse_search_page(resp.text)
+            total += parsed["total"]
+            if pages.strip().lower() == "all":
+                wanted = list(range(1, (total + 19) // 20 + 1)) or [1]
+            else:
+                wanted = parse_page_spec(pages, max((total + 19) // 20, 1))
+            for pn in wanted:
+                if pn == first_page:
+                    all_records.extend(parsed["records"])
+                    continue
+                form2 = dict(form)
+                form2["intPage"] = str(pn)
+                r2 = c.post(CHANCERY_SEARCH, data=form2)
+                r2.raise_for_status()
+                all_records.extend(parse_search_page(r2.text)["records"])
+    if as_json:
+        click.echo(json.dumps({"total": total, "returned": len(all_records), "records": all_records}, indent=1))
+        return
+    click.echo(f"{total} record(s); showing {len(all_records)}:")
+    for rec in all_records:
+        click.echo(_fmt_record_text(rec))
+        click.echo()
+
+
+@chancery.command("case")
+@click.argument("cfn")
+@click.option("--images", is_flag=True, help="Also list the scanned page PDFs and ZIP URL.")
+@click.option("--json", "as_json", is_flag=True, help="Output compact structured JSON.")
+def cmd_chancery_case(cfn: str, images: bool, as_json: bool) -> None:
+    """Show one chancery cause by CFN (locality-year-number)."""
+    with _client() as c:
+        resp = c.get(CHANCERY_DETAIL, params={"CFN": cfn})
+        resp.raise_for_status()
+        detail = parse_case_page(resp.text)
+    detail["cfn"] = cfn
+    detail["case_url"] = CHANCERY_DETAIL + "?CFN=" + cfn
+    if images:
+        with _client() as c:
+            resp = c.get(CHANCERY_IMAGES, params={"CFN": cfn})
+            resp.raise_for_status()
+            detail["images"] = parse_images_page(resp.text)
+    if as_json:
+        click.echo(json.dumps(detail, indent=1))
+        return
+    click.echo(f"{cfn}  {detail['locality']}  index {detail['index_number']} (original case no. {detail['original_case_number'] or 'n/a'})")
+    click.echo("Plaintiff(s): " + ("; ".join(detail["plaintiffs"]) or "n/a"))
+    click.echo("Defendant(s): " + ("; ".join(detail["defendants"]) or "n/a"))
+    click.echo("Surname(s): " + (", ".join(detail["surnames"]) or "n/a"))
+    click.echo(f"Wills: {detail['wills'] or 'n/a'}  Plat: {detail['plat'] or 'n/a'}  Format: {detail['format'] or 'n/a'}")
+    click.echo(detail["case_url"])
+    if images:
+        imgs = detail["images"]
+        click.echo(f"Images: {imgs['total_pages']} page(s)")
+        for u in imgs["page_pdfs"]:
+            click.echo("  " + u)
+        click.echo("ZIP: " + imgs["zip_url"])
+
+
+@chancery.command("download")
+@click.argument("cfn")
+@click.option("--out", "out_dir", default=None, type=click.Path(path_type=Path),
+              help="Output directory (default: ./va-chancery-<cfn>).")
+@click.option("--pages", default="all", show_default=True, help="1-based page selection, e.g. '1-5' or 'all'.")
+@click.option("--zip", "as_zip", is_flag=True, help="Download the whole-case ZIP instead of page PDFs.")
+@click.option("--overwrite", is_flag=True, help="Overwrite existing files.")
+def cmd_chancery_download(cfn: str, out_dir: Path | None, pages: str, as_zip: bool, overwrite: bool) -> None:
+    """Download the scanned pages (or whole-case ZIP) for one chancery cause."""
+    out_dir = out_dir or Path(f"va-chancery-{cfn}")
+    out_dir.mkdir(parents=True, exist_ok=True)
+    with _client() as c:
+        resp = c.get(CHANCERY_DETAIL, params={"CFN": cfn})
+        resp.raise_for_status()
+        detail = parse_case_page(resp.text)
+        detail["cfn"] = cfn
+        detail["case_url"] = CHANCERY_DETAIL + "?CFN=" + cfn
+        imgs = None
+        if not as_zip:
+            r2 = c.get(CHANCERY_IMAGES, params={"CFN": cfn})
+            r2.raise_for_status()
+            imgs = parse_images_page(r2.text)
+            detail["images"] = imgs
+        (out_dir / "metadata.json").write_text(json.dumps(detail, indent=1), encoding="utf-8")
+        if as_zip:
+            zip_url = (imgs["zip_url"] if imgs else None) or (CHANCERY_ZIP + "?cfn=" + cfn)
+            dest = out_dir / f"{cfn}.zip"
+            if dest.exists() and not overwrite:
+                click.echo(f"exists, skipping: {dest}")
+                return
+            with c.stream("GET", zip_url) as r:
+                r.raise_for_status()
+                with open(dest, "wb") as f:
+                    for chunk in r.iter_bytes():
+                        f.write(chunk)
+            click.echo(f"saved {dest} ({dest.stat().st_size} bytes)")
+            return
+        assert imgs is not None
+        wanted = parse_page_spec(pages, imgs["total_pages"])
+        for n in wanted:
+            url = imgs["page_pdfs"][n - 1]
+            dest = out_dir / Path(url).name
+            if dest.exists() and not overwrite:
+                click.echo(f"exists, skipping: {dest.name}")
+                continue
+            with c.stream("GET", url) as r:
+                r.raise_for_status()
+                with open(dest, "wb") as f:
+                    for chunk in r.iter_bytes():
+                        f.write(chunk)
+            click.echo(f"saved {dest} ({dest.stat().st_size} bytes)")
+        click.echo(f"metadata: {out_dir / 'metadata.json'}")
+
+
+@chancery.command("localities")
+@click.option("--status", default=None, help="Filter by viewing status substring, e.g. Scanned.")
+@click.option("--json", "as_json", is_flag=True, help="Output compact structured JSON.")
+def cmd_chancery_localities(status: str | None, as_json: bool) -> None:
+    """List per-locality chancery coverage from available.asp."""
+    with _client() as c:
+        resp = c.get(CHANCERY_AVAILABLE)
+        resp.raise_for_status()
+        rows = parse_localities_page(resp.text)
+    if status:
+        rows = [r for r in rows if status.lower() in r["viewing_status"].lower()]
+    if as_json:
+        click.echo(json.dumps(rows, indent=1))
+        return
+    for r in rows:
+        click.echo(f"{r['locality']:20s} {r['region']:22s} {r['time_frame']:14s} {r['viewing_status']}")
+    click.echo(f"{len(rows)} localities")
+
+
+@cli.command("catalog")
+@click.argument("query")
+@click.option("--field", type=click.Choice(list(CATALOG_FIELDS)), default="any", show_default=True,
+              help="PNXS search field (verified: any, title, creator).")
+@click.option("--limit", default=10, show_default=True, type=int, help="Results per page (PNXS limit).")
+@click.option("--offset", default=0, show_default=True, type=int, help="Result offset (PNXS offset).")
+@click.option("--json", "as_json", is_flag=True, help="Output compact structured JSON.")
+def cmd_catalog(query: str, field: str, limit: int, offset: int, as_json: bool) -> None:
+    """Search the Library of Virginia catalog via the public Primo PNXS API."""
+    params = {
+        "q": f"{field},contains,{query}",
+        "vid": PRIMO_VID, "scope": "MyInstitution", "lang": "en",
+        "limit": str(limit), "offset": str(offset),
+    }
+    with _client() as c:
+        resp = c.get(PRIMO_PNXS, params=params)
+        resp.raise_for_status()
+        data = resp.json()
+    info = data.get("info", {})
+    records = [_pnxs_record(d) for d in data.get("docs", [])]
+    if as_json:
+        click.echo(json.dumps({"total": info.get("total"), "first": info.get("first"),
+                                "last": info.get("last"), "records": records}, indent=1))
+        return
+    click.echo(f"{info.get('total')} result(s); showing {info.get('first')}-{info.get('last')}:")
+    for rec in records:
+        click.echo(f"{rec['title'] or '(no title)'}")
+        click.echo(f"  {rec['creator'] or ''} {rec['date'] or ''} [{rec['type'] or ''}]".rstrip())
+        click.echo(f"  {rec['record_url']}")
+
+
+@cli.command("url")
+@click.option("--chancery-case", "chancery_case", default=None, help="CFN (locality-year-number).")
+@click.option("--catalog", "catalog_query", default=None, help="Catalog search term (Primo search URL).")
+@click.option("--chronicle", is_flag=True, help="Virginia Chronicle home page (browser-only; Cloudflare blocks machine access).")
+@click.option("--land", is_flag=True, help="Land Office patents/grants: libguide + LONN volume index.")
+@click.option("--arvas", is_flag=True, help="ARVAS finding-aid search home (browser-only).")
+@click.option("--chancery", is_flag=True, help="Chancery Records Index home page.")
+def cmd_url(chancery_case, catalog_query, chronicle, land, arvas, chancery) -> None:
+    """Print verified portal URLs (no search is run)."""
+    if chancery_case:
+        click.echo(CHANCERY_DETAIL + "?CFN=" + chancery_case)
+    if catalog_query:
+        click.echo(PRIMO_BASE + "/discovery/search?vid=" + quote(PRIMO_VID, safe="") +
+                     "&query=any,contains," + quote(catalog_query) + "&lang=en")
+    if chancery:
+        click.echo("https://www.lva.virginia.gov/collections/chancery")
+        click.echo(CHANCERY_BASE + "/")
+    if chronicle:
+        click.echo("https://www.virginiachronicle.com/  (free; search in the browser -- Cloudflare blocks curl/headless Chromium, verified 2026-11-24)")
+    if land:
+        click.echo("https://lva-virginia.libguides.com/land-grants")
+        click.echo("https://image.lva.virginia.gov/LONN/LO.html  (Virginia Land Office Patents and Grants Index, browse by volume)")
+    if arvas:
+        click.echo("https://arvasarchive.org/  (browser-only; plain HTTP returns an empty 202, verified 2026-11-24)")
+    if not any([chancery_case, catalog_query, chronicle, land, arvas, chancery]):
+        click.echo("https://www.lva.virginia.gov/collections")
+        click.echo("https://www.lva.virginia.gov/collections/digital-collections")
+
+
+if __name__ == "__main__":
+    cli()

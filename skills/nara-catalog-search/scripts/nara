@@ -1,0 +1,743 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.11"
+# dependencies = [
+#   "click>=8.1",
+#   "httpx>=0.27",
+#   "playwright>=1.49",
+# ]
+# ///
+"""Compact CLI for searching, inspecting, and downloading National Archives Catalog records.
+
+Uses the official NARA Catalog v2 API when NARA_API_KEY is set, and falls back
+to headless Chromium against catalog.archives.gov when no key is configured.
+"""
+
+from __future__ import annotations
+
+import json
+import os
+import re
+import shutil
+import sys
+from pathlib import Path
+from typing import Any
+from urllib.parse import quote, urlencode
+
+import click
+import httpx
+
+CATALOG_WEB_BASE = "https://catalog.archives.gov"
+CATALOG_API_BASE = "https://catalog.archives.gov/api/v2"
+USER_AGENT = (
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+)
+VALID_LEVELS = ("recordGroup", "collection", "series", "fileUnit", "item")
+
+
+def find_browser_executable() -> str | None:
+    env_exe = os.environ.get("NARA_BROWSER")
+    if env_exe and Path(env_exe).exists():
+        return env_exe
+    for candidate in ("chromium", "chromium-browser", "google-chrome", "google-chrome-stable"):
+        found = shutil.which(candidate)
+        if found:
+            return found
+    return None
+
+
+def build_query_params(
+    query: str | None = None,
+    *,
+    levels: tuple[str, ...] = (),
+    record_groups: tuple[str, ...] = (),
+    online: bool = False,
+    material_type: str | None = None,
+    person: str | None = None,
+    title: str | None = None,
+    geo: str | None = None,
+    control: str | None = None,
+    start_date: str | None = None,
+    end_date: str | None = None,
+    page: int = 1,
+    limit: int = 20,
+    for_api: bool = False,
+) -> list[tuple[str, str]]:
+    """Build verified NARA Catalog query parameters (q first, comma-joined multi-values)."""
+    params: list[tuple[str, str]] = []
+    if query:
+        params.append(("q", query))
+    if title:
+        params.append(("title", title))
+    if person:
+        params.append(("personOrOrg", person))
+    if geo:
+        params.append(("geographicReference", geo))
+    if control:
+        params.append(("controlNumbers", control))
+    if levels:
+        flat = [p.strip() for item in levels for p in item.split(",") if p.strip()]
+        invalid = [lv for lv in flat if lv not in VALID_LEVELS]
+        if invalid:
+            raise click.BadParameter(
+                f"Invalid level(s): {', '.join(invalid)}. Choose from: {', '.join(VALID_LEVELS)}"
+            )
+        if flat:
+            params.append(("levelOfDescription", ",".join(flat)))
+    if record_groups:
+        flat_rg = [p.strip() for item in record_groups for p in item.split(",") if p.strip()]
+        if flat_rg:
+            params.append(("recordGroupNumber", ",".join(flat_rg)))
+    if online:
+        params.append(("availableOnline", "true"))
+        if not for_api:
+            params.append(("dataSource", "description"))
+    if material_type:
+        params.append(("typeOfMaterials", material_type))
+    if start_date:
+        params.append(("startDate", start_date))
+    if end_date:
+        params.append(("endDate", end_date))
+    if page > 1 or for_api:
+        params.append(("page", str(page)))
+    if for_api or limit != 20:
+        params.append(("limit", str(limit)))
+    return params
+
+
+def encode_catalog_url(params: list[tuple[str, str]], *, for_api: bool = False) -> str:
+    base = f"{CATALOG_API_BASE}/records/search" if for_api else f"{CATALOG_WEB_BASE}/search"
+    qs = urlencode(params, quote_via=quote)
+    return f"{base}?{qs}" if qs else base
+
+
+def parse_page_spec(spec: str | None, total: int) -> list[int]:
+    """Parse a 1-based page selection like '1-3,5,8-10' into sorted 1-based indices."""
+    if not spec or spec.strip().lower() == "all":
+        return list(range(1, total + 1))
+    chosen: set[int] = set()
+    for part in spec.split(","):
+        part = part.strip()
+        if not part:
+            continue
+        if "-" in part:
+            a_s, b_s = part.split("-", 1)
+            a = int(a_s.strip()) if a_s.strip() else 1
+            b = int(b_s.strip()) if b_s.strip() else total
+            if a > b:
+                a, b = b, a
+            chosen.update(range(max(1, a), min(total, b) + 1))
+        else:
+            idx = int(part)
+            if 1 <= idx <= total:
+                chosen.add(idx)
+    return sorted(chosen)
+
+
+def _extract_record(
+    hit: dict[str, Any],
+    *,
+    include_objects: bool = False,
+    include_text: bool = False,
+    page_spec: str | None = None,
+) -> dict[str, Any]:
+    """Extract only high-signal archival fields (omitting nulls, empties, and raw bloat)."""
+    src = hit.get("_source", {}) if isinstance(hit, dict) else {}
+    rec = src.get("record", hit if isinstance(hit, dict) else {})
+    naid = str(rec.get("naId") or "")
+    ancestors = rec.get("ancestors") or []
+    rg = next((a for a in ancestors if a.get("levelOfDescription") == "recordGroup"), None)
+    series = next((a for a in ancestors if a.get("levelOfDescription") == "series"), None)
+    microforms = rec.get("microformPublications") or []
+    objs = rec.get("digitalObjects") or []
+
+    out: dict[str, Any] = {
+        "naId": naid,
+        "title": rec.get("title") or "",
+        "url": f"{CATALOG_WEB_BASE}/id/{naid}" if naid else "",
+    }
+    if rec.get("levelOfDescription"):
+        out["level"] = rec["levelOfDescription"]
+
+    rg_num = rg.get("recordGroupNumber") if rg else rec.get("recordGroupNumber")
+    if rg_num is not None:
+        out["rg"] = rg_num
+    if rg and rg.get("title"):
+        out["rgTitle"] = rg["title"]
+    if series and series.get("title"):
+        out["series"] = series["title"]
+    if series and series.get("naId"):
+        out["seriesNaId"] = str(series["naId"])
+
+    dates: list[str] = []
+    for k in ("inclusiveStartDate", "inclusiveEndDate", "productionDateArray", "coverageStartDate", "coverageEndDate"):
+        v = rec.get(k)
+        if isinstance(v, dict) and v.get("logicalDate"):
+            dates.append(str(v["logicalDate"]))
+        elif isinstance(v, list):
+            for entry in v:
+                if isinstance(entry, dict) and entry.get("logicalDate"):
+                    dates.append(str(entry["logicalDate"]))
+    if dates:
+        out["dates"] = dates
+
+    mf_list = []
+    for m in microforms:
+        parts = [m.get("identifier"), m.get("title"), m.get("note")]
+        text = " | ".join(str(p).strip() for p in parts if p)
+        if text:
+            mf_list.append(text)
+    if mf_list:
+        out["microform"] = mf_list
+
+    access = (rec.get("accessRestriction") or {}).get("status")
+    use = (rec.get("useRestriction") or {}).get("status")
+    if access:
+        out["access"] = access
+    if use:
+        out["use"] = use
+
+    if rec.get("scopeAndContentNote"):
+        out["scope"] = rec["scopeAndContentNote"]
+
+    locations: list[str] = []
+    for po in rec.get("physicalOccurrences") or []:
+        for ru in po.get("referenceUnits") or []:
+            name = ru.get("name") if isinstance(ru, dict) else None
+            if name and name not in locations:
+                locations.append(name)
+    if locations:
+        out["location"] = locations[0] if len(locations) == 1 else locations
+
+    if objs:
+        out["objectCount"] = len(objs)
+        if include_objects:
+            selected = parse_page_spec(page_spec, len(objs))
+            out["objects"] = [
+                {
+                    "page": p,
+                    "filename": objs[p - 1].get("objectFilename") or str(objs[p - 1].get("objectId") or ""),
+                    "url": objs[p - 1].get("objectUrl") or "",
+                }
+                for p in selected
+            ]
+        if include_text:
+            selected = parse_page_spec(page_spec, len(objs))
+            texts = []
+            for p in selected:
+                o = objs[p - 1]
+                txt = o.get("extractedText") or o.get("otherExtractedText")
+                if txt:
+                    texts.append({"page": p, "filename": o.get("objectFilename") or "", "text": txt})
+            if texts:
+                out["extractedText"] = texts
+
+    return out
+
+
+def _api_get_json(url: str, api_key: str) -> dict[str, Any]:
+    headers = {"x-api-key": api_key, "Accept": "application/json"}
+    with httpx.Client(timeout=30.0, follow_redirects=True) as client:
+        resp = client.get(url, headers=headers)
+        resp.raise_for_status()
+        return resp.json()
+
+
+def _browser_search_many(
+    items: list[tuple[str | None, str]], timeout_ms: int = 30000
+) -> list[dict[str, Any]]:
+    """Run one or more catalog searches sharing a single headless Chromium session."""
+    from playwright.sync_api import sync_playwright
+
+    exe = find_browser_executable()
+    results: list[dict[str, Any]] = []
+
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch(headless=True, executable_path=exe)
+        context = browser.new_context(user_agent=USER_AGENT)
+        page = context.new_page()
+
+        for query, search_url in items:
+            captured: list[dict[str, Any]] = []
+
+            def on_response(resp: Any, bucket: list[dict[str, Any]] = captured) -> None:
+                u = resp.url
+                if "/proxy/" in u and "/records/search" in u and resp.status == 200:
+                    try:
+                        if "json" in resp.headers.get("content-type", ""):
+                            bucket.append(resp.json())
+                    except Exception:
+                        pass
+
+            page.on("response", on_response)
+            page.goto(search_url, wait_until="domcontentloaded", timeout=timeout_ms)
+            try:
+                page.wait_for_function(
+                    """() => {
+                        const t = document.body.innerText || '';
+                        return /\\d+\\s+results?\\s+for|No results|0 results|did not match/i.test(t);
+                    }""",
+                    timeout=min(timeout_ms, 20000),
+                )
+            except Exception:
+                pass
+            page.wait_for_timeout(500)
+            page.remove_listener("response", on_response)
+
+            entry: dict[str, Any] | None = None
+            for cap in reversed(captured):
+                body = cap.get("body", cap)
+                hits_obj = body.get("hits", {}) if isinstance(body, dict) else {}
+                hits = hits_obj.get("hits")
+                if isinstance(hits, list):
+                    total_raw = hits_obj.get("total", len(hits))
+                    total = total_raw.get("value", len(hits)) if isinstance(total_raw, dict) else int(total_raw)
+                    entry = {
+                        "query": query,
+                        "searchUrl": search_url,
+                        "total": total,
+                        "results": [_extract_record(h) for h in hits],
+                    }
+                    break
+
+            if entry is None:
+                dom_items = page.evaluate(
+                    """() => {
+                        const items = [];
+                        const seen = new Set();
+                        for (const a of document.querySelectorAll('a[href*="/id/"]')) {
+                            const m = (a.getAttribute('href') || '').match(/\\/id\\/(\\d+)/);
+                            if (!m || seen.has(m[1])) continue;
+                            const title = (a.textContent || '').trim();
+                            if (!title) continue;
+                            seen.add(m[1]);
+                            items.push({ naId: m[1], title, url: 'https://catalog.archives.gov/id/' + m[1] });
+                        }
+                        return items;
+                    }"""
+                )
+                entry = {
+                    "query": query,
+                    "searchUrl": search_url,
+                    "total": len(dom_items),
+                    "results": dom_items,
+                }
+            if entry.get("query") is None:
+                entry.pop("query", None)
+            results.append(entry)
+
+        browser.close()
+
+    return results
+
+
+def _browser_get_records(
+    naids: list[str],
+    *,
+    include_objects: bool = False,
+    include_text: bool = False,
+    page_spec: str | None = None,
+    timeout_ms: int = 30000,
+) -> list[dict[str, Any]]:
+    from playwright.sync_api import sync_playwright
+
+    exe = find_browser_executable()
+    records: list[dict[str, Any]] = []
+
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch(headless=True, executable_path=exe)
+        context = browser.new_context(user_agent=USER_AGENT)
+        page = context.new_page()
+
+        for naid in naids:
+            clean_id = re.sub(r"\D+", "", str(naid))
+            captured_record: dict[str, Any] | None = None
+            contributions: list[dict[str, Any]] = []
+
+            def on_response(resp: Any, target: str = clean_id) -> None:
+                nonlocal captured_record
+                u = resp.url
+                if resp.status != 200 or "json" not in resp.headers.get("content-type", ""):
+                    return
+                if f"naId_is={target}" in u and "/records/search" in u:
+                    try:
+                        payload = resp.json()
+                        hits = payload.get("body", payload).get("hits", {}).get("hits", [])
+                        if hits:
+                            captured_record = _extract_record(
+                                hits[0],
+                                include_objects=include_objects,
+                                include_text=include_text,
+                                page_spec=page_spec,
+                            )
+                    except Exception:
+                        pass
+                elif include_text and f"targetNaId/{target}" in u and "/contributions/" in u:
+                    try:
+                        c = resp.json()
+                        if isinstance(c, list):
+                            contributions.extend(c)
+                    except Exception:
+                        pass
+
+            page.on("response", on_response)
+            url = f"{CATALOG_WEB_BASE}/id/{clean_id}"
+            page.goto(url, wait_until="domcontentloaded", timeout=timeout_ms)
+            try:
+                page.wait_for_function(
+                    "() => /National Archives Identifier/i.test(document.body.innerText || '')",
+                    timeout=min(timeout_ms, 20000),
+                )
+            except Exception:
+                pass
+            page.wait_for_timeout(600)
+            page.remove_listener("response", on_response)
+
+            if captured_record is None:
+                captured_record = {"naId": clean_id, "url": url, "error": "Record metadata not captured."}
+            elif include_text and contributions:
+                transcriptions = [
+                    c.get("text") or c.get("transcription")
+                    for c in contributions
+                    if c.get("contributionType") == "transcription" and (c.get("text") or c.get("transcription"))
+                ]
+                if transcriptions:
+                    captured_record["transcriptions"] = transcriptions
+            records.append(captured_record)
+
+        browser.close()
+
+    return records
+
+
+def _format_record_text(rec: dict[str, Any]) -> str:
+    if rec.get("error"):
+        return f"NAID {rec.get('naId')}: ERROR - {rec['error']}"
+    header_parts = [f"NAID {rec['naId']}"]
+    if rec.get("level"):
+        header_parts.append(f"[{rec['level']}]")
+    if rec.get("rg") is not None:
+        header_parts.append(f"RG {rec['rg']}")
+    if rec.get("objectCount"):
+        header_parts.append(f"{rec['objectCount']} files")
+    lines = [f"{' '.join(header_parts)}: {rec.get('title')}", f"  {rec.get('url')}"]
+    if rec.get("series"):
+        lines.append(f"  Series: {rec['series']}")
+    if rec.get("dates"):
+        lines.append(f"  Dates: {' .. '.join(rec['dates'])}")
+    for mf in rec.get("microform") or []:
+        lines.append(f"  Microform: {mf}")
+    if rec.get("access") or rec.get("use"):
+        lines.append(f"  Access/Use: {rec.get('access', '?')} / {rec.get('use', '?')}")
+    if rec.get("location"):
+        loc = rec["location"] if isinstance(rec["location"], str) else "; ".join(rec["location"])
+        lines.append(f"  Location: {loc}")
+    if rec.get("scope"):
+        lines.append(f"  Scope: {rec['scope']}")
+    for obj in rec.get("objects") or []:
+        lines.append(f"  [{obj['page']:03d}] {obj['filename']}: {obj['url']}")
+    for item in rec.get("extractedText") or []:
+        lines.append(f"  --- Page {item['page']} ({item['filename']}) ---\n{item['text']}")
+    for tr in rec.get("transcriptions") or []:
+        lines.append(f"  --- Transcription ---\n{tr}")
+    return "\n".join(lines)
+
+
+def _common_search_options(fn: Any) -> Any:
+    options = [
+        click.option("--level", "levels", multiple=True, help="Level(s): recordGroup, collection, series, fileUnit, item."),
+        click.option("--rg", "record_groups", multiple=True, help="Record Group number(s), e.g. 109 or 29,109."),
+        click.option("--online", is_flag=True, help="Limit to records with viewable digital objects."),
+        click.option("--type", "material_type", default=None, help="Type of material, e.g. 'Textual Records'."),
+        click.option("--person", default=None, help="Person or Organization authority heading."),
+        click.option("--title", default=None, help="Title search filter."),
+        click.option("--geo", default=None, help="Geographic reference filter."),
+        click.option("--control", default=None, help="Control number or microform identifier."),
+        click.option("--start-date", default=None, help="Beginning date (YYYY, YYYY-MM, or YYYY-MM-DD)."),
+        click.option("--end-date", default=None, help="Ending date (YYYY, YYYY-MM, or YYYY-MM-DD)."),
+        click.option("--page", default=1, show_default=True, type=int, help="Result page number."),
+        click.option("--limit", default=20, show_default=True, type=int, help="Results per page."),
+    ]
+    for opt in reversed(options):
+        fn = opt(fn)
+    return fn
+
+
+@click.group(context_settings={"help_option_names": ["-h", "--help"]})
+def cli() -> None:
+    """Search, inspect, and download National Archives Catalog (NARA) records."""
+
+
+@cli.command("url")
+@click.argument("query", required=False, default=None)
+@_common_search_options
+@click.option("--api", "for_api", is_flag=True, help="Output the v2 API endpoint URL instead of the website URL.")
+def cmd_url(
+    query: str | None,
+    levels: tuple[str, ...],
+    record_groups: tuple[str, ...],
+    online: bool,
+    material_type: str | None,
+    person: str | None,
+    title: str | None,
+    geo: str | None,
+    control: str | None,
+    start_date: str | None,
+    end_date: str | None,
+    page: int,
+    limit: int,
+    for_api: bool,
+) -> None:
+    """Build and print a verified NARA Catalog search URL."""
+    params = build_query_params(
+        query,
+        levels=levels,
+        record_groups=record_groups,
+        online=online,
+        material_type=material_type,
+        person=person,
+        title=title,
+        geo=geo,
+        control=control,
+        start_date=start_date,
+        end_date=end_date,
+        page=page,
+        limit=limit,
+        for_api=for_api,
+    )
+    click.echo(encode_catalog_url(params, for_api=for_api))
+
+
+@cli.command("search")
+@click.argument("queries", nargs=-1)
+@_common_search_options
+@click.option("--api-key", envvar="NARA_API_KEY", default=None, help="NARA Catalog v2 API key (defaults to $NARA_API_KEY).")
+@click.option("--browser", "force_browser", is_flag=True, help="Force headless Chromium website mode.")
+@click.option("--json", "as_json", is_flag=True, help="Output compact structured JSON.")
+def cmd_search(
+    queries: tuple[str, ...],
+    levels: tuple[str, ...],
+    record_groups: tuple[str, ...],
+    online: bool,
+    material_type: str | None,
+    person: str | None,
+    title: str | None,
+    geo: str | None,
+    control: str | None,
+    start_date: str | None,
+    end_date: str | None,
+    page: int,
+    limit: int,
+    api_key: str | None,
+    force_browser: bool,
+    as_json: bool,
+) -> None:
+    """Search the NARA Catalog. Accepts one or multiple queries sharing one browser session."""
+    query_list: list[str | None] = list(queries) if queries else [None]
+    use_api = bool(api_key) and not force_browser
+
+    payloads: list[dict[str, Any]] = []
+    if use_api and api_key:
+        for q in query_list:
+            api_url = encode_catalog_url(
+                build_query_params(
+                    q, levels=levels, record_groups=record_groups, online=online,
+                    material_type=material_type, person=person, title=title, geo=geo,
+                    control=control, start_date=start_date, end_date=end_date,
+                    page=page, limit=limit, for_api=True,
+                ),
+                for_api=True,
+            )
+            web_url = encode_catalog_url(
+                build_query_params(
+                    q, levels=levels, record_groups=record_groups, online=online,
+                    material_type=material_type, person=person, title=title, geo=geo,
+                    control=control, start_date=start_date, end_date=end_date,
+                    page=page, limit=limit, for_api=False,
+                ),
+                for_api=False,
+            )
+            raw = _api_get_json(api_url, api_key)
+            hits_obj = raw.get("body", raw).get("hits", {})
+            hits = hits_obj.get("hits", [])
+            total_raw = hits_obj.get("total", len(hits))
+            total = total_raw.get("value", len(hits)) if isinstance(total_raw, dict) else int(total_raw)
+            item: dict[str, Any] = {
+                "searchUrl": web_url,
+                "total": total,
+                "results": [_extract_record(h) for h in hits],
+            }
+            if q is not None:
+                item = {"query": q, **item}
+            payloads.append(item)
+    else:
+        url_pairs = [
+            (
+                q,
+                encode_catalog_url(
+                    build_query_params(
+                        q, levels=levels, record_groups=record_groups, online=online,
+                        material_type=material_type, person=person, title=title, geo=geo,
+                        control=control, start_date=start_date, end_date=end_date,
+                        page=page, limit=limit, for_api=False,
+                    ),
+                    for_api=False,
+                ),
+            )
+            for q in query_list
+        ]
+        payloads = _browser_search_many(url_pairs)
+
+    if as_json:
+        click.echo(json.dumps(payloads[0] if len(payloads) == 1 else payloads, indent=2))
+        return
+
+    for p_idx, payload in enumerate(payloads):
+        if p_idx > 0:
+            click.echo("")
+        hdr = f"Query: {payload['query']} | " if payload.get("query") else ""
+        click.echo(f"{hdr}Total: {payload['total']} | {payload['searchUrl']}")
+        for idx, rec in enumerate(payload["results"], 1):
+            meta = " | ".join(
+                part
+                for part in (
+                    rec.get("level"),
+                    f"RG {rec['rg']}" if rec.get("rg") is not None else None,
+                    f"{rec['objectCount']} files" if rec.get("objectCount") else None,
+                )
+                if part
+            )
+            series = f" [{rec['series']}]" if rec.get("series") else ""
+            click.echo(f"  {idx:2d}. NAID {rec['naId']} ({meta}): {rec.get('title')}{series}")
+
+
+@cli.command("get")
+@click.argument("naids", nargs=-1, required=True)
+@click.option("--api-key", envvar="NARA_API_KEY", default=None, help="NARA Catalog v2 API key (defaults to $NARA_API_KEY).")
+@click.option("--browser", "force_browser", is_flag=True, help="Force headless Chromium website mode.")
+@click.option("--objects", is_flag=True, help="Include compact digital object URLs (omitted by default to keep output small).")
+@click.option("--pages", default="all", show_default=True, help="1-based page slice when using --objects or --text, e.g. '1-10'.")
+@click.option("--text", is_flag=True, help="Include extracted OCR text and transcriptions if present.")
+@click.option("--json", "as_json", is_flag=True, help="Output compact structured JSON.")
+def cmd_get(
+    naids: tuple[str, ...],
+    api_key: str | None,
+    force_browser: bool,
+    objects: bool,
+    pages: str,
+    text: bool,
+    as_json: bool,
+) -> None:
+    """Inspect one or more NARA records by NAID (compact metadata by default)."""
+    use_api = bool(api_key) and not force_browser
+    records: list[dict[str, Any]] = []
+    if use_api and api_key:
+        for naid in naids:
+            clean_id = re.sub(r"\D+", "", naid)
+            url = (
+                f"{CATALOG_API_BASE}/records/search?"
+                f"naId_is={clean_id}&includeExtractedText={'true' if text else 'false'}"
+                f"&includeOtherExtractedText={'true' if text else 'false'}"
+            )
+            raw = _api_get_json(url, api_key)
+            hits = raw.get("body", raw).get("hits", {}).get("hits", [])
+            if hits:
+                records.append(
+                    _extract_record(hits[0], include_objects=objects, include_text=text, page_spec=pages)
+                )
+            else:
+                records.append({"naId": clean_id, "url": f"{CATALOG_WEB_BASE}/id/{clean_id}", "error": "Not found"})
+    else:
+        records = _browser_get_records(
+            list(naids), include_objects=objects, include_text=text, page_spec=pages
+        )
+
+    if as_json:
+        click.echo(json.dumps(records[0] if len(records) == 1 else records, indent=2))
+        return
+
+    for idx, rec in enumerate(records):
+        if idx > 0:
+            click.echo("")
+        click.echo(_format_record_text(rec))
+
+
+@cli.command("download")
+@click.argument("naid")
+@click.option("--out", "out_dir", default=None, type=click.Path(path_type=Path), help="Output directory (default: ./nara-<naid>).")
+@click.option("--pages", default="all", show_default=True, help="1-based page selection, e.g. '1-5,10' or 'all'.")
+@click.option("--metadata/--no-metadata", default=True, show_default=True, help="Save compact provenance metadata.json.")
+@click.option("--overwrite", is_flag=True, help="Overwrite existing downloaded files.")
+@click.option("--api-key", envvar="NARA_API_KEY", default=None, help="NARA Catalog v2 API key (defaults to $NARA_API_KEY).")
+@click.option("--browser", "force_browser", is_flag=True, help="Force headless Chromium website mode.")
+def cmd_download(
+    naid: str,
+    out_dir: Path | None,
+    pages: str,
+    metadata: bool,
+    overwrite: bool,
+    api_key: str | None,
+    force_browser: bool,
+) -> None:
+    """Download digitized files for a NARA record (NAID) with compact provenance metadata."""
+    clean_id = re.sub(r"\D+", "", naid)
+    use_api = bool(api_key) and not force_browser
+    if use_api and api_key:
+        url = f"{CATALOG_API_BASE}/records/search?naId_is={clean_id}"
+        raw = _api_get_json(url, api_key)
+        hits = raw.get("body", raw).get("hits", {}).get("hits", [])
+        if not hits:
+            raise click.ClickException(f"NAID {clean_id} not found.")
+        rec = _extract_record(hits[0], include_objects=True, page_spec=pages)
+    else:
+        rec = _browser_get_records([clean_id], include_objects=True, page_spec=pages)[0]
+        if rec.get("error"):
+            raise click.ClickException(f"NAID {clean_id}: {rec['error']}")
+
+    selected_objs = rec.get("objects") or []
+    total_count = rec.get("objectCount") or len(selected_objs)
+    if not selected_objs:
+        raise click.ClickException(f"NAID {clean_id} ({rec.get('title')}) has no matching digital objects for '{pages}'.")
+
+    target_dir = out_dir or Path(f"nara-{clean_id}")
+    target_dir.mkdir(parents=True, exist_ok=True)
+
+    downloaded_manifest: list[dict[str, Any]] = []
+    with httpx.Client(timeout=60.0, follow_redirects=True, headers={"User-Agent": USER_AGENT}) as client:
+        for obj in selected_objs:
+            page_num = obj["page"]
+            obj_url = obj.get("url")
+            if not obj_url:
+                click.echo(f"Skipping page {page_num}: missing url", err=True)
+                continue
+            raw_name = obj.get("filename") or f"{page_num}.bin"
+            safe_name = re.sub(r"[^A-Za-z0-9._-]+", "_", Path(raw_name).name)
+            dest = target_dir / f"{page_num:03d}_{safe_name}"
+            if dest.exists() and not overwrite:
+                click.echo(f"Exists (skip): {dest}")
+            else:
+                with client.stream("GET", obj_url) as resp:
+                    resp.raise_for_status()
+                    with dest.open("wb") as fh:
+                        for chunk in resp.iter_bytes():
+                            fh.write(chunk)
+                click.echo(f"Downloaded [{page_num}/{total_count}]: {dest} ({dest.stat().st_size:,} bytes)")
+            downloaded_manifest.append({"page": page_num, "file": dest.name, "url": obj_url})
+
+    if metadata:
+        compact_meta = {k: v for k, v in rec.items() if k != "objects"}
+        compact_meta["downloaded"] = downloaded_manifest
+        meta_path = target_dir / "metadata.json"
+        meta_path.write_text(json.dumps(compact_meta, indent=2) + "\n", encoding="utf-8")
+        click.echo(f"Saved metadata: {meta_path}")
+
+    click.echo(f"Done: {len(downloaded_manifest)} file(s) in {target_dir}")
+
+
+if __name__ == "__main__":
+    try:
+        cli()
+    except httpx.HTTPStatusError as exc:
+        click.echo(f"HTTP error {exc.response.status_code}: {exc.request.url}", err=True)
+        sys.exit(1)

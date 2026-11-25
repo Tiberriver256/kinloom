@@ -1,0 +1,494 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.11"
+# dependencies = [
+#   "click>=8.1",
+#   "httpx>=0.27",
+# ]
+# ///
+"""Find a Grave CLI: search and read memorials, cemeteries, and places.
+
+Uses the site's own GraphQL API (POST https://www.findagrave.com/orc/graphql),
+verified live 2026-11-24. The API is undocumented and internal: no key or
+login is needed, but it can change without notice. Requests are spaced
+0.3 s apart; bursts can trigger Cloudflare challenges.
+"""
+
+from __future__ import annotations
+
+import json
+import sys
+import time
+from pathlib import Path
+from urllib.parse import urlencode
+
+import click
+import httpx
+
+GRAPHQL_URL = "https://www.findagrave.com/orc/graphql"
+WEBSITE_BASE = "https://www.findagrave.com"
+USER_AGENT = (
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+    "Chrome/131.0 Safari/537.36"
+)
+MIN_INTERVAL_S = 0.3
+MONTHS = [
+    "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+    "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+]
+
+SEARCH_QUERY = """
+query($s: MemorialSearchInput) {
+  memorialSearch(search: $s) {
+    total
+    memorials {
+      id
+      name { first last maiden }
+      birth { date { year month day circa } place { names { name } } }
+      death { date { year month day circa } place { names { name } } }
+      cemetery { id names { name } memorialCount }
+      plot
+      hasGravePhoto
+      isVeteran
+    }
+  }
+}
+"""
+
+GET_QUERY = """
+query($ids: [ID!]!) {
+  memorialsById(ids: $ids) {
+    id
+    name { first last maiden }
+    birth { date { year month day circa } place { names { name } } }
+    death { date { year month day circa } place { names { name } } }
+    cemetery { id names { name } memorialCount }
+    plot
+    inscription { value }
+    bio { value }
+    isVeteran
+    hasGravePhoto
+    hasPersonPhoto
+    dateCreated
+    dateModified
+    relationships { type yearMarried memorial { id name { first last } } }
+    photos(size: 50) { total photos { id path caption type } }
+  }
+}
+"""
+
+CEMETERY_QUERY = """
+query($s: CemeterySearchInput) {
+  cemeteries(search: $s) {
+    total
+    cemeteries { id names { name } memorialCount }
+  }
+}
+"""
+
+CEMETERY_BY_ID_QUERY = """
+query($ids: [ID!]) {
+  cemeteries(ids: $ids) {
+    total
+    cemeteries { id names { name } memorialCount }
+  }
+}
+"""
+
+PLACE_QUERY = """
+query($s: LocationSearchInput) {
+  locationsByTypeahead(search: $s) {
+    total
+    locations {
+      __typename
+      ... on Location { id names { name } type }
+      ... on Cemetery { id names { name } memorialCount }
+    }
+  }
+}
+"""
+
+
+def gql(query: str, variables: dict) -> dict:
+    """Run one GraphQL query and return its data dict."""
+    time.sleep(MIN_INTERVAL_S)
+    headers = {
+        "Content-Type": "application/json",
+        "User-Agent": USER_AGENT,
+        "Accept": "application/json",
+    }
+    try:
+        with httpx.Client(timeout=30.0, follow_redirects=True) as client:
+            resp = client.post(
+                GRAPHQL_URL,
+                json={"query": query, "variables": variables},
+                headers=headers,
+            )
+    except httpx.HTTPError as exc:
+        click.echo(f"Request failed: {exc}", err=True)
+        raise SystemExit(1)
+    if resp.status_code == 403:
+        click.echo(
+            "Find a Grave returned 403 (Cloudflare challenge). "
+            "Wait a few minutes and retry, or use the website in a browser.",
+            err=True,
+        )
+        raise SystemExit(1)
+    if resp.status_code != 200:
+        click.echo(f"HTTP {resp.status_code} from {GRAPHQL_URL}", err=True)
+        raise SystemExit(1)
+    body = resp.json()
+    if body.get("errors"):
+        for err in body["errors"]:
+            click.echo(f"GraphQL error: {err.get('message')}", err=True)
+        raise SystemExit(1)
+    return body.get("data") or {}
+
+
+def primary_name(memorial: dict) -> str:
+    names = memorial.get("name") or []
+    if not names:
+        return ""
+    first = names[0] or {}
+    parts = [first.get("first"), first.get("last")]
+    text = " ".join(p for p in parts if p)
+    maiden = first.get("maiden")
+    if maiden:
+        text += f" (nee {maiden})"
+    return text
+
+
+def first_place_name(place: dict | None) -> str:
+    if not place:
+        return ""
+    names = place.get("names") or []
+    if not names:
+        return ""
+    return names[0].get("name") or ""
+
+
+def fmt_date(date: dict | None) -> str:
+    if not date:
+        return ""
+    year = date.get("year")
+    month = date.get("month")
+    day = date.get("day")
+    if year is None:
+        return ""
+    text = str(year)
+    if month:
+        text = f"{MONTHS[month - 1]} {text}" if 1 <= month <= 12 else text
+        if day:
+            text = f"{day} {text}"
+    if date.get("circa"):
+        text = f"c. {text}"
+    return text
+
+
+def fmt_event(event: dict | None) -> str:
+    if not event:
+        return ""
+    date = fmt_date(event.get("date"))
+    place = first_place_name(event.get("place"))
+    return ", ".join(p for p in (date, place) if p)
+
+
+def fmt_cemetery(cemetery: dict | None) -> str:
+    if not cemetery:
+        return ""
+    names = cemetery.get("names") or []
+    return names[0].get("name") if names else ""
+
+
+def memorial_url(memorial_id: str) -> str:
+    return f"{WEBSITE_BASE}/memorial/{memorial_id}"
+
+
+def cemetery_url(cemetery_id: str) -> str:
+    return f"{WEBSITE_BASE}/cemetery/{cemetery_id}"
+
+
+def emit(data: dict, as_json: bool) -> None:
+    if as_json:
+        click.echo(json.dumps(data, indent=2))
+
+
+@click.group()
+def cli() -> None:
+    """Search and read Find a Grave memorials, cemeteries, and places."""
+
+
+@cli.command()
+@click.option("--first", "first_name", default=None, help="First name.")
+@click.option("--last", "last_name", default=None, help="Last name.")
+@click.option("--birth-year", type=int, default=None)
+@click.option("--death-year", type=int, default=None)
+@click.option("--year-range", type=int, default=None,
+              help="Plus/minus years around a birth/death year.")
+@click.option("--birth-year-filter", default=None,
+              help="before, after, exact, or unknown.")
+@click.option("--death-year-filter", default=None,
+              help="before, after, exact, or unknown.")
+@click.option("--cemetery-id", multiple=True, help="Repeatable.")
+@click.option("--location-id", default=None,
+              help="Place id, e.g. city_<id> (see the place command).")
+@click.option("--bio", default=None, help="Words in the biography.")
+@click.option("--text", default=None, help="Words anywhere on the memorial.")
+@click.option("--relative", default=None,
+              help="Name of a linked relative.")
+@click.option("--exact/--no-exact", default=False,
+              help="Exact name match (default: site matching).")
+@click.option("--include-maiden/--no-include-maiden", default=True,
+              help="Also match married women under maiden names.")
+@click.option("--limit", type=int, default=10, show_default=True,
+              help="Rows per call (max 50).")
+@click.option("--offset", type=int, default=0, show_default=True)
+@click.option("--json", "as_json", is_flag=True, help="Full JSON output.")
+def search(first_name, last_name, birth_year, death_year, year_range,
+            birth_year_filter, death_year_filter, cemetery_id, location_id,
+            bio, text, relative, exact, include_maiden, limit, offset,
+            as_json):
+    """Search memorials. Example: search --first Abraham --last Lincoln."""
+    search_input: dict = {}
+    if first_name:
+        search_input["firstName"] = first_name
+    if last_name:
+        search_input["lastName"] = last_name
+    if birth_year is not None:
+        search_input["birthYear"] = birth_year
+    if death_year is not None:
+        search_input["deathYear"] = death_year
+    if year_range is not None:
+        if birth_year is not None:
+            search_input["birthYearRange"] = year_range
+        if death_year is not None:
+            search_input["deathYearRange"] = year_range
+    if birth_year_filter:
+        search_input["birthYearFilter"] = birth_year_filter
+    if death_year_filter:
+        search_input["deathYearFilter"] = death_year_filter
+    if cemetery_id:
+        search_input["cemeteryIds"] = list(cemetery_id)
+    if location_id:
+        search_input["locationId"] = location_id
+    if bio:
+        search_input["bio"] = bio
+    if text:
+        search_input["fullText"] = text
+    if relative:
+        search_input["linkedToName"] = relative
+    if exact:
+        search_input["exactName"] = True
+    search_input["includeMaidenName"] = include_maiden
+    search_input["from"] = offset
+    search_input["size"] = min(limit, 50)
+    data = gql(SEARCH_QUERY, {"s": search_input})
+    result = data.get("memorialSearch") or {}
+    if as_json:
+        click.echo(json.dumps(result, indent=2))
+        return
+    total = result.get("total")
+    memorials = result.get("memorials") or []
+    click.echo(f"{total} memorials")
+    for mem in memorials:
+        born = fmt_event(mem.get("birth"))
+        died = fmt_event(mem.get("death"))
+        cem = fmt_cemetery(mem.get("cemetery"))
+        photo = "yes" if mem.get("hasGravePhoto") else "no"
+        vet = " veteran" if mem.get("isVeteran") else ""
+        plot = mem.get("plot") or ""
+        row = (
+            f"{mem.get('id')} | {primary_name(mem)} | "
+            f"b. {born} | d. {died} | {cem} | plot: {plot} | "
+            f"grave photo: {photo}{vet} | {memorial_url(str(mem.get('id')))}"
+        )
+        click.echo(row)
+
+
+@cli.command()
+@click.argument("memorial_ids", nargs=-1, required=True)
+@click.option("--json", "as_json", is_flag=True, help="Full JSON output.")
+@click.option("--full", is_flag=True,
+              help="Print full bio and inscription instead of truncated.")
+@click.option("--photos", is_flag=True,
+              help="List photo ids, types, and image URLs.")
+def get(memorial_ids, as_json, full, photos):
+    """Read one or more memorials in full by memorial id."""
+    data = gql(GET_QUERY, {"ids": list(memorial_ids)})
+    memorials = data.get("memorialsById") or []
+    if as_json:
+        click.echo(json.dumps(memorials, indent=2))
+        return
+    for mem in memorials:
+        mid = str(mem.get("id"))
+        click.echo(f"Memorial {mid}: {primary_name(mem)}")
+        click.echo(f"  URL: {memorial_url(mid)}")
+        born = fmt_event(mem.get("birth"))
+        died = fmt_event(mem.get("death"))
+        if born:
+            click.echo(f"  Born: {born}")
+        if died:
+            click.echo(f"  Died: {died}")
+        cem = mem.get("cemetery") or {}
+        cem_name = fmt_cemetery(cem)
+        if cem_name:
+            click.echo(f"  Cemetery: {cem_name} ({cem.get('id')})")
+        if mem.get("plot"):
+            click.echo(f"  Plot: {mem.get('plot')}")
+        click.echo(
+            f"  Veteran: {'yes' if mem.get('isVeteran') else 'no'} | "
+            f"Grave photo: {'yes' if mem.get('hasGravePhoto') else 'no'} | "
+            f"Photos: {(mem.get('photos') or {}).get('total')}"
+        )
+        inscription = (mem.get("inscription") or {}).get("value")
+        bio = (mem.get("bio") or {}).get("value")
+        if inscription:
+            shown = inscription if full else inscription[:500]
+            click.echo(f"  Inscription: {shown}")
+        if bio:
+            shown = bio if full else bio[:500]
+            click.echo(f"  Bio: {shown}")
+        relations = mem.get("relationships") or []
+        if relations:
+            click.echo("  Relationships:")
+            for rel in relations:
+                target = rel.get("memorial") or {}
+                target_name = primary_name(target)
+                click.echo(
+                    f"    {rel.get('type')}: {target_name} "
+                    f"({target.get('id')})"
+                )
+        if photos:
+            photo_list = (mem.get("photos") or {}).get("photos") or []
+            if photo_list:
+                click.echo("  Photos:")
+                for photo in photo_list:
+                    click.echo(
+                        f"    {photo.get('id')} | {photo.get('type')} | "
+                        f"{photo.get('path')}"
+                    )
+        if mem.get("dateCreated"):
+            click.echo(
+                f"  Created: {mem.get('dateCreated')} | "
+                f"Modified: {mem.get('dateModified')}"
+            )
+
+
+@cli.command()
+@click.option("--name", default=None, help="Cemetery name to search.")
+@click.option("--id", "cemetery_id", default=None,
+              help="Read one cemetery by id.")
+@click.option("--place", default=None,
+              help="Containing place name, e.g. 'Sangamon County, Illinois'.")
+@click.option("--limit", type=int, default=10, show_default=True)
+@click.option("--offset", type=int, default=0, show_default=True)
+@click.option("--json", "as_json", is_flag=True, help="Full JSON output.")
+def cemetery(name, cemetery_id, place, limit, offset, as_json):
+    """Search cemeteries by name, or read one by id."""
+    if cemetery_id:
+        data = gql(CEMETERY_BY_ID_QUERY, {"ids": [cemetery_id]})
+    else:
+        if not name:
+            raise click.UsageError("Pass --name or --id.")
+        search_input: dict = {"name": name}
+        if place:
+            search_input["containingLocationName"] = place
+        search_input["from"] = offset
+        search_input["size"] = min(limit, 100)
+        data = gql(CEMETERY_QUERY, {"s": search_input})
+    result = data.get("cemeteries") or {}
+    if as_json:
+        click.echo(json.dumps(result, indent=2))
+        return
+    click.echo(f"{result.get('total')} cemeteries")
+    for cem in result.get("cemeteries") or []:
+        names = cem.get("names") or []
+        shown = names[0].get("name") if names else ""
+        extra = ""
+        if len(names) > 1:
+            extra = " (also: " + ", ".join(n.get("name") for n in names[1:]) + ")"
+        click.echo(
+            f"{cem.get('id')} | {shown}{extra} | "
+            f"{cem.get('memorialCount')} memorials | "
+            f"{cemetery_url(str(cem.get('id')))}"
+        )
+
+
+@cli.command()
+@click.option("--name", required=True, help="Place name, e.g. Springfield.")
+@click.option("--limit", type=int, default=10, show_default=True)
+@click.option("--json", "as_json", is_flag=True, help="Full JSON output.")
+def place(name, limit, as_json):
+    """Resolve a place name to Find a Grave place ids.
+
+    Use the returned id (e.g. city_<id>) with search --location-id.
+    """
+    data = gql(PLACE_QUERY, {"s": {"name": name, "size": min(limit, 50)}})
+    result = data.get("locationsByTypeahead") or {}
+    if as_json:
+        click.echo(json.dumps(result, indent=2))
+        return
+    click.echo(f"{result.get('total')} places")
+    for loc in result.get("locations") or []:
+        names = loc.get("names") or []
+        shown = names[0].get("name") if names else ""
+        kind = loc.get("__typename")
+        count = loc.get("memorialCount")
+        suffix = f" | {count} memorials" if count is not None else ""
+        click.echo(f"{loc.get('id')} | {kind} | {shown}{suffix}")
+
+
+@cli.command()
+@click.argument("memorial_id")
+@click.option("--out", default=".", show_default=True,
+              help="Directory to save photos into.")
+@click.option("--type", "photo_type", default=None,
+              help="Only download this photo type, e.g. Grave.")
+def photo(memorial_id, out, photo_type):
+    """Download a memorial's photos (grave, portrait, family, other)."""
+    data = gql(GET_QUERY, {"ids": [memorial_id]})
+    memorials = data.get("memorialsById") or []
+    if not memorials:
+        click.echo(f"No memorial found with id {memorial_id}", err=True)
+        raise SystemExit(1)
+    photo_list = (memorials[0].get("photos") or {}).get("photos") or []
+    if photo_type:
+        photo_list = [p for p in photo_list if p.get("type") == photo_type]
+    if not photo_list:
+        click.echo("No photos found.")
+        return
+    out_dir = Path(out)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    with httpx.Client(timeout=60.0, follow_redirects=True) as client:
+        for item in photo_list:
+            url = item.get("path") or ""
+            suffix = Path(url.split("?")[0]).suffix or ".jpg"
+            dest = out_dir / f"{item.get('id')}{suffix}"
+            resp = client.get(url, headers={"User-Agent": USER_AGENT})
+            resp.raise_for_status()
+            dest.write_bytes(resp.content)
+            click.echo(f"{dest} ({len(resp.content)} bytes)")
+
+
+@cli.command()
+@click.option("--first", "first_name", default=None)
+@click.option("--last", "last_name", default=None)
+@click.option("--birth-year", type=int, default=None)
+@click.option("--death-year", type=int, default=None)
+def url(first_name, last_name, birth_year, death_year):
+    """Print the website search URL for a name (open it in a browser)."""
+    params = []
+    if first_name:
+        params.append(("firstname", first_name))
+    if last_name:
+        params.append(("lastname", last_name))
+    if birth_year is not None:
+        params.append(("birthyear", str(birth_year)))
+    if death_year is not None:
+        params.append(("deathyear", str(death_year)))
+    base = f"{WEBSITE_BASE}/memorial/search"
+    click.echo(f"{base}?{urlencode(params)}" if params else base)
+
+
+if __name__ == "__main__":
+    cli()
