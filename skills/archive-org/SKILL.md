@@ -1,19 +1,55 @@
 ---
 name: archive-org
-description: Search, inspect, and download Internet Archive items via the bundled uv-based `archive-org` CLI or the public advancedsearch and metadata APIs. Covers CLI usage, Lucene query syntax, field selection, pagination, file downloads, and worked examples. Use when finding digitized books, genealogies, newspapers, audio, or other archived material, or when downloading a full text or scan for family-history research.
+description: Search, inspect, grep cached OCR text, and download pages or files from Internet Archive items via the bundled Python 3.11+ `archive-org` CLI or the public advancedsearch and metadata APIs. Covers CLI usage, persistent local disk caching (`KINLOOM_IA_CACHE_DIR`), exact printed-page to leaf resolution, Lucene query syntax, field selection, pagination, file downloads, and worked examples. Use when finding digitized books, genealogies, newspapers, audio, or other archived material, or when searching inside or downloading scans from Internet Archive for family-history research.
 ---
 
 # Archive.org
 
-This skill includes a standalone executable Python CLI at `skills/archive-org/scripts/archive-org` using a PEP 723 `#!/usr/bin/env -S uv run --script` shebang with inline dependencies (`click`, `httpx`). No virtualenv setup or API key is required. The APIs are public and read-only.
+This skill includes a standalone executable Python 3.11+ standard-library CLI at `skills/archive-org/scripts/archive-org` (`#!/usr/bin/env -S python3 -S`). No virtualenv, `uv`, third-party packages, or API key is required. The APIs are public and read-only.
 
 ## Bundled CLI (`scripts/archive-org`)
 
 Path: `skills/archive-org/scripts/archive-org`
 
+### Persistent local disk cache (`grep` & `page`)
+
+`grep` and `page --printed-page` cache each item atomically at `~/.cache/kinloom-ia/<item_id>/` (overrideable via `KINLOOM_IA_CACHE_DIR`):
+
+- `metadata.json`: item metadata and file inventory from `/metadata/<item_id>`.
+- `scandata.xml`: raw IA leaf/page scan metadata (when present).
+- `page_index.json`: pre-parsed bidirectional lookup table mapping `scandata` `leafNum`, BookReader `n<leaf>` index (skipping deleted/non-access leaves), and `printed_page` label so cache hits never re-parse XML.
+- `djvu.txt`: form-feed (`\x0c`) page-delimited OCR text (taken verbatim from `_djvu.txt` when form-feed delimited, or reconstructed from `_hocr_searchtext.txt.gz` + `_hocr_pageindex.json.gz` when raw `_djvu.txt` lacks page breaks).
+
+### Search inside cached digitized books (`grep`)
+
+Downloads missing metadata, `scandata.xml`, and OCR text in parallel (`max_workers=6`, `timeout=25`) on cache miss, then searches line by line (never `re.S` + `.*`) and maps every match to its exact BookReader `leaf`, `printed_page`, snippet, and direct JPEG URL:
+
+```bash
+# Search one or more digitized books (cache miss populates ~/.cache/kinloom-ia/<id>/)
+skills/archive-org/scripts/archive-org grep ourmartyrpreside00banc --pattern 'Gettysburg' --context 240 --limit 25
+
+# Case-insensitive multi-item regex grep with structured JSON output
+skills/archive-org/scripts/archive-org grep item_a item_b --pattern 'Lincoln|Douglass' -i --json
+```
+
+### Download single high-res pages (`page`) by printed page or leaf
+
+Resolve printed book page numbers to exact BookReader leaves automatically via cached `page_index.json` (eliminating off-by-one leaf offsets), or pass `--leaf` / legacy positional `<leaf>` directly:
+
+```bash
+# Resolve printed page "12" automatically and save at BookReader scale 2
+skills/archive-org/scripts/archive-org page ourmartyrpreside00banc --printed-page 12 --scale 2 --out ./page12.jpg
+
+# Fetch an explicit BookReader leaf n0 into a file or directory
+skills/archive-org/scripts/archive-org page ourmartyrpreside00banc --leaf 0 --scale 2 --out ./cover.jpg
+skills/archive-org/scripts/archive-org page ourmartyrpreside00banc 0 --width 1200 --out ./downloads
+```
+
+Single-page URL patterns: `https://archive.org/download/<identifier>/page/n<leaf>_s<scale>.jpg` and `https://archive.org/download/<identifier>/page/n<leaf>_w<width>.jpg`. Returns HTTP 403 on borrow-only / `inlibrary` items.
+
 ### Search item metadata (`search`) vs full-text OCR (`fulltext`)
 
-`search` calls `advancedsearch.php`, which searches **item metadata only** (title, creator, description, subjects), NOT the OCR text inside digitized books. Use `fulltext` to search inside digitized book and directory OCR pages:
+`search` calls `advancedsearch.php`, which searches **item metadata only** (title, creator, description, subjects), NOT the OCR text inside digitized books. Use `fulltext` to search across books, and `grep` to search inside specific known items:
 
 ```bash
 # Metadata search: titles mentioning Lincoln
@@ -53,17 +89,6 @@ skills/archive-org/scripts/archive-org download <identifier> <identifier>.pdf --
 
 The CLI refuses a file name that is not in the item's file list, so list first when unsure. Download URLs follow the site's redirect to the file server automatically.
 
-### Download single high-res pages (`page`) without pulling huge PDFs
-
-For large 100 to 250 MB county plat atlases or city directories, download `_djvu.txt` or `_hocr_pageindex.json.gz` first to identify the target leaf number (`n<leaf>`), then fetch just that single rendered JPEG page on unrestricted public-domain items:
-
-```bash
-# Fetch leaf 0 at 1200px or 2400px width (instead of downloading a 200 MB PDF)
-skills/archive-org/scripts/archive-org page ourmartyrpreside00banc 0 --width 1200 --out ./downloads
-```
-
-Single-page URL pattern: `https://archive.org/download/<identifier>/page/n<leaf>_w<width>.jpg`. Returns HTTP 403 on borrow-only / `inlibrary` items.
-
 ### Build a website search URL offline
 
 ```bash
@@ -101,4 +126,4 @@ skills/archive-org/scripts/archive-org url 'title:(Lincoln)' --mediatype texts
 
 ## Environment variables
 
-None. No key, login, or account is needed for anything in this skill.
+- `KINLOOM_IA_CACHE_DIR` (optional): overrides the default `~/.cache/kinloom-ia` cache directory used by `grep` and `page`. No API key or login is required.

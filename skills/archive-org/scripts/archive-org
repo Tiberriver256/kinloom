@@ -1,246 +1,612 @@
-#!/usr/bin/env -S uv run --script
-# /// script
-# requires-python = ">=3.11"
-# dependencies = [
-#   "click>=8.1",
-#   "httpx>=0.27",
-# ]
-# ///
-"""Internet Archive CLI: search items, read metadata, download files.
+#!/usr/bin/env -S python3 -S
+"""Internet Archive CLI: search items, inspect metadata, grep cached books, and fetch pages.
 
-Uses the public advancedsearch and metadata APIs, verified live
-2026-11-24. No key or login is needed for read access.
+Uses Python 3.11+ standard library only with lazy network/XML imports for fast
+cache-hit startup (~50 ms) and zero external dependency installation.
+All APIs are public and read-only.
 """
 
 from __future__ import annotations
 
+import argparse
 import json
+import os
 from pathlib import Path
-from urllib.parse import quote
-
-import click
-import httpx
+import re
+import sys
+import time
+from urllib.parse import quote, urlencode
 
 BASE = "https://archive.org"
 ADVANCED_SEARCH = f"{BASE}/advancedsearch.php"
 FULLTEXT_SEARCH = f"{BASE}/services/search/beta/page_production/"
 USER_AGENT = "kinloom archive-org skill (research use)"
 DEFAULT_FIELDS = ["identifier", "title", "creator", "date", "mediatype"]
+DEFAULT_TIMEOUT = 25.0
+SEARCH_TIMEOUT = 45.0
+MAX_WORKERS = 6
+SAFE_ID_RE = re.compile(r"^[A-Za-z0-9._-]+$")
+IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".webp"}
 
 
-def client() -> httpx.Client:
-    return httpx.Client(
-        timeout=60.0, follow_redirects=True,
-        headers={"User-Agent": USER_AGENT},
-    )
+def get_cache_root() -> Path:
+    override = os.environ.get("KINLOOM_IA_CACHE_DIR")
+    if override:
+        return Path(override).expanduser()
+    return Path.home() / ".cache" / "kinloom-ia"
 
 
-def fail(message: str) -> None:
-    click.echo(message, err=True)
-    raise SystemExit(1)
+def validate_identifier(identifier: str) -> str:
+    cleaned = identifier.strip()
+    if not cleaned or not SAFE_ID_RE.match(cleaned) or cleaned in (".", ".."):
+        fail(f"Invalid Internet Archive identifier: {identifier!r}")
+    return cleaned
+
+
+def fail(message: str, code: int = 1) -> None:
+    sys.stderr.write(f"{message}\n")
+    raise SystemExit(code)
+
+
+def atomic_write_bytes(dest: Path, data: bytes) -> None:
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    tmp = dest.with_name(f".{dest.name}.{os.getpid()}.{time.time_ns()}.tmp")
+    try:
+        tmp.write_bytes(data)
+        os.replace(tmp, dest)
+    except Exception:
+        if tmp.exists():
+            tmp.unlink(missing_ok=True)
+        raise
+
+
+def atomic_write_text(dest: Path, text: str) -> None:
+    atomic_write_bytes(dest, text.encode("utf-8"))
+
+
+def atomic_write_json(dest: Path, payload: object) -> None:
+    atomic_write_text(dest, json.dumps(payload, ensure_ascii=False, separators=(",", ":")))
+
+
+def http_get_bytes(url: str, timeout: float = DEFAULT_TIMEOUT) -> bytes:
+    from urllib.error import HTTPError, URLError
+    from urllib.request import Request, urlopen
+
+    req = Request(url, headers={"User-Agent": USER_AGENT})
+    try:
+        with urlopen(req, timeout=timeout) as resp:
+            return resp.read()
+    except HTTPError as exc:
+        if exc.code == 403:
+            raise RuntimeError(
+                f"HTTP 403 from {url}. This item may be access-restricted or borrow-only."
+            ) from exc
+        if exc.code == 404:
+            raise FileNotFoundError(f"HTTP 404 from {url}") from exc
+        raise RuntimeError(f"HTTP {exc.code} from {url}") from exc
+    except (URLError, TimeoutError, OSError) as exc:
+        raise RuntimeError(f"Request failed for {url}: {exc}") from exc
+
+
+def http_get_json(url: str, timeout: float = DEFAULT_TIMEOUT) -> dict:
+    raw = http_get_bytes(url, timeout=timeout)
+    try:
+        data = json.loads(raw.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise RuntimeError(f"Invalid JSON response from {url}: {exc}") from exc
+    if not isinstance(data, dict):
+        raise RuntimeError(f"Expected JSON object from {url}")
+    return data
 
 
 def fulltext_api(query: str, rows: int, page: int) -> dict:
-    params = {
-        "user_query": query,
-        "service_backend": "fts",
-        "hits_per_page": str(rows),
-        "page": str(page),
-    }
+    qs = urlencode(
+        [
+            ("user_query", query),
+            ("service_backend", "fts"),
+            ("hits_per_page", str(rows)),
+            ("page", str(page)),
+        ]
+    )
     try:
-        with client() as http:
-            resp = http.get(FULLTEXT_SEARCH, params=params)
-    except httpx.HTTPError as exc:
-        fail(f"Request failed: {exc}")
-    if resp.status_code != 200:
-        fail(f"HTTP {resp.status_code} from {FULLTEXT_SEARCH}")
-    return resp.json()
+        return http_get_json(f"{FULLTEXT_SEARCH}?{qs}", timeout=SEARCH_TIMEOUT)
+    except (RuntimeError, FileNotFoundError) as exc:
+        fail(str(exc))
+    return {}
 
 
-def search_api(query: str, fields, rows: int, page: int, sorts) -> dict:
-    params = [("q", query), ("output", "json"), ("rows", str(rows))]
+def search_api(query: str, fields: list[str], rows: int, page: int, sorts: list[str]) -> dict:
+    params: list[tuple[str, str]] = [
+        ("q", query),
+        ("output", "json"),
+        ("rows", str(rows)),
+    ]
     if page > 1:
         params.append(("page", str(page)))
     for field in fields:
         params.append(("fl[]", field))
     for sort in sorts:
         params.append(("sort[]", sort))
+    qs = urlencode(params)
     try:
-        with client() as http:
-            resp = http.get(ADVANCED_SEARCH, params=params)
-    except httpx.HTTPError as exc:
-        fail(f"Request failed: {exc}")
-    if resp.status_code != 200:
-        fail(f"HTTP {resp.status_code} from {ADVANCED_SEARCH}")
-    return resp.json()
+        return http_get_json(f"{ADVANCED_SEARCH}?{qs}", timeout=SEARCH_TIMEOUT)
+    except (RuntimeError, FileNotFoundError) as exc:
+        fail(str(exc))
+    return {}
 
 
-def metadata_api(identifier: str) -> dict:
+def metadata_api(identifier: str, timeout: float = DEFAULT_TIMEOUT) -> dict:
     url = f"{BASE}/metadata/{quote(identifier)}"
     try:
-        with client() as http:
-            resp = http.get(url)
-    except httpx.HTTPError as exc:
-        fail(f"Request failed: {exc}")
-    if resp.status_code == 404:
+        data = http_get_json(url, timeout=timeout)
+    except FileNotFoundError:
         fail(f"No item with identifier {identifier}")
-    if resp.status_code != 200:
-        fail(f"HTTP {resp.status_code} from {url}")
-    return resp.json()
+    except RuntimeError as exc:
+        fail(str(exc))
+    if not data or (not data.get("metadata") and not data.get("files")):
+        fail(f"No item with identifier {identifier}")
+    return data
 
 
 def item_url(identifier: str) -> str:
     return f"{BASE}/details/{quote(identifier)}"
 
 
-def short(text, limit: int = 300) -> str:
+def page_image_url(identifier: str, leaf_n: int, *, scale: int | None = None, width: int | None = None) -> str:
+    if width is not None:
+        return f"{BASE}/download/{quote(identifier)}/page/n{leaf_n}_w{width}.jpg"
+    effective_scale = scale if scale is not None else 2
+    return f"{BASE}/download/{quote(identifier)}/page/n{leaf_n}_s{effective_scale}.jpg"
+
+
+def page_details_url(identifier: str, leaf_n: int) -> str:
+    return f"{BASE}/details/{quote(identifier)}/page/n{leaf_n}"
+
+
+def short(text: object, limit: int = 300) -> str:
     if not text:
         return ""
-    text = " ".join(str(text).split())
-    if len(text) <= limit:
-        return text
-    return text[:limit].rstrip() + " ..."
+    cleaned = " ".join(str(text).split())
+    if len(cleaned) <= limit:
+        return cleaned
+    return cleaned[:limit].rstrip() + " ..."
 
 
-@click.group()
-def cli() -> None:
-    """Search, inspect, and download Internet Archive items."""
+def find_item_file(files: list[dict], *, suffixes: tuple[str, ...], formats: tuple[str, ...] = ()) -> str | None:
+    for entry in files:
+        name = entry.get("name") or ""
+        if any(name.endswith(suf) for suf in suffixes):
+            return str(name)
+    if formats:
+        fmt_set = {f.lower() for f in formats}
+        for entry in files:
+            fmt = str(entry.get("format") or "").lower()
+            name = entry.get("name") or ""
+            if fmt in fmt_set and name:
+                return str(name)
+    return None
 
 
-@cli.command()
-@click.argument("query")
-@click.option("--mediatype", default=None,
-              help="e.g. texts, movies, audio, software, collection.")
-@click.option("--rows", type=int, default=10, show_default=True)
-@click.option("--page", type=int, default=1, show_default=True)
-@click.option("--sort", "sorts", multiple=True,
-              help="Repeatable, e.g. --sort 'downloads desc'.")
-@click.option("--field", "fields", multiple=True,
-              help="Repeatable metadata field to return.")
-@click.option("--json", "as_json", is_flag=True, help="Full JSON output.")
-def search(query, mediatype, rows, page, sorts, fields, as_json):
-    """Search items with a Lucene query.
+def parse_scandata_xml(xml_bytes: bytes) -> dict:
+    """Parse scandata.xml into compact bidirectional leaf/page lookup tables.
 
-    Example: search 'title:(Lincoln) AND mediatype:(texts)'
+    Internet Archive BookReader `/page/n<N>` indexes 0-based over leaves with
+    `addToAccessFormats == true` (excluding deleted leaves). Storing both raw
+    `leafNum` and BookReader `n` eliminates off-by-one page offset bugs.
     """
-    if mediatype:
-        query = f"{query} AND mediatype:({mediatype})"
-    chosen = list(fields) if fields else DEFAULT_FIELDS
-    data = search_api(query, chosen, rows, page, list(sorts))
+    import xml.etree.ElementTree as ET
+
+    root = ET.fromstring(xml_bytes)
+    pages = root.findall(".//pageData/page")
+    scandata_to_bookreader: dict[str, int] = {}
+    bookreader_to_scandata: dict[str, int] = {}
+    scandata_to_printed: dict[str, str] = {}
+    bookreader_to_printed: dict[str, str] = {}
+    printed_to_bookreader: dict[str, int] = {}
+    printed_to_bookreader_ci: dict[str, int] = {}
+    printed_to_scandata: dict[str, int] = {}
+
+    access_idx = 0
+    for seq_idx, page_el in enumerate(pages):
+        raw_leaf = page_el.attrib.get("leafNum")
+        try:
+            leaf_num = int(raw_leaf) if raw_leaf is not None else seq_idx
+        except ValueError:
+            leaf_num = seq_idx
+        page_type = (page_el.findtext("pageType") or "").strip()
+        add_access_raw = page_el.findtext("addToAccessFormats")
+        if add_access_raw is not None:
+            in_access = add_access_raw.strip().lower() == "true"
+        else:
+            in_access = page_type.lower() != "delete"
+
+        printed = (page_el.findtext("pageNumber") or "").strip()
+        leaf_key = str(leaf_num)
+        if printed:
+            scandata_to_printed[leaf_key] = printed
+            printed_to_scandata.setdefault(printed, leaf_num)
+
+        if in_access:
+            br_n = access_idx
+            access_idx += 1
+            scandata_to_bookreader[leaf_key] = br_n
+            bookreader_to_scandata[str(br_n)] = leaf_num
+            if printed:
+                bookreader_to_printed[str(br_n)] = printed
+                printed_to_bookreader.setdefault(printed, br_n)
+                printed_to_bookreader_ci.setdefault(printed.lower(), br_n)
+
+    return {
+        "leaf_count": len(pages),
+        "access_leaf_count": access_idx,
+        "scandata_to_bookreader": scandata_to_bookreader,
+        "bookreader_to_scandata": bookreader_to_scandata,
+        "scandata_to_printed": scandata_to_printed,
+        "bookreader_to_printed": bookreader_to_printed,
+        "printed_to_bookreader": printed_to_bookreader,
+        "printed_to_bookreader_ci": printed_to_bookreader_ci,
+        "printed_to_scandata": printed_to_scandata,
+        "segment_mode": "scandata",
+    }
+
+
+def empty_page_index() -> dict:
+    return {
+        "leaf_count": 0,
+        "access_leaf_count": 0,
+        "scandata_to_bookreader": {},
+        "bookreader_to_scandata": {},
+        "scandata_to_printed": {},
+        "bookreader_to_printed": {},
+        "printed_to_bookreader": {},
+        "printed_to_bookreader_ci": {},
+        "printed_to_scandata": {},
+        "segment_mode": "bookreader",
+    }
+
+
+def synthesize_djvu_from_hocr(searchtext_gz: bytes, pageindex_gz: bytes) -> str:
+    import gzip
+
+    text = gzip.decompress(searchtext_gz).decode("utf-8", errors="replace")
+    offsets = json.loads(gzip.decompress(pageindex_gz).decode("utf-8"))
+    if not isinstance(offsets, list) or not offsets:
+        return text
+    segments: list[str] = []
+    text_len = len(text)
+    for row in offsets:
+        if isinstance(row, list) and len(row) >= 2:
+            start = max(0, min(int(row[0]), text_len))
+            end = max(start, min(int(row[1]), text_len))
+            segments.append(text[start:end].replace("\x0c", " "))
+        else:
+            segments.append("")
+    return "\x0c".join(segments)
+
+
+def ensure_item_cache(
+    identifier: str,
+    *,
+    need_djvu: bool,
+    cache_root: Path | None = None,
+    timeout: float = DEFAULT_TIMEOUT,
+) -> dict:
+    """Populate and return cached metadata, page_index, and optional djvu.txt."""
+    item_id = validate_identifier(identifier)
+    root = cache_root if cache_root is not None else get_cache_root()
+    item_dir = root / item_id
+    meta_path = item_dir / "metadata.json"
+    scandata_path = item_dir / "scandata.xml"
+    page_index_path = item_dir / "page_index.json"
+    djvu_path = item_dir / "djvu.txt"
+
+    has_meta = meta_path.is_file()
+    has_page_index = page_index_path.is_file()
+    has_djvu = djvu_path.is_file()
+
+    if has_meta and has_page_index and (not need_djvu or has_djvu):
+        return {
+            "identifier": item_id,
+            "item_dir": item_dir,
+            "metadata_path": meta_path,
+            "scandata_path": scandata_path,
+            "page_index_path": page_index_path,
+            "djvu_path": djvu_path,
+            "cached": True,
+        }
+
+    # Fetch metadata if missing.
+    if has_meta:
+        meta_data = json.loads(meta_path.read_text(encoding="utf-8"))
+    else:
+        url = f"{BASE}/metadata/{quote(item_id)}"
+        meta_data = http_get_json(url, timeout=timeout)
+        if not meta_data or (not meta_data.get("metadata") and not meta_data.get("files")):
+            raise FileNotFoundError(f"No item with identifier {item_id}")
+        atomic_write_json(meta_path, meta_data)
+
+    files = meta_data.get("files") or []
+    scandata_name = find_item_file(files, suffixes=("_scandata.xml", "scandata.xml"), formats=("scandata",))
+    djvu_name = find_item_file(files, suffixes=("_djvu.txt",), formats=("djvutxt",))
+    hocr_text_name = find_item_file(files, suffixes=("_hocr_searchtext.txt.gz",), formats=("ocr search text",))
+    hocr_idx_name = find_item_file(files, suffixes=("_hocr_pageindex.json.gz",), formats=("ocr page index",))
+
+    tasks: dict[str, str] = {}
+    if not has_page_index and scandata_name and not scandata_path.is_file():
+        tasks["scandata"] = f"{BASE}/download/{quote(item_id)}/{quote(scandata_name)}"
+    if need_djvu and not has_djvu:
+        if djvu_name:
+            tasks["djvu"] = f"{BASE}/download/{quote(item_id)}/{quote(djvu_name)}"
+        if hocr_text_name and hocr_idx_name:
+            tasks["hocr_text"] = f"{BASE}/download/{quote(item_id)}/{quote(hocr_text_name)}"
+            tasks["hocr_idx"] = f"{BASE}/download/{quote(item_id)}/{quote(hocr_idx_name)}"
+
+    fetched: dict[str, bytes] = {}
+    fetch_errors: dict[str, Exception] = {}
+    if tasks:
+        from concurrent.futures import ThreadPoolExecutor
+
+        with ThreadPoolExecutor(max_workers=min(MAX_WORKERS, len(tasks))) as pool:
+            future_map = {
+                key: pool.submit(http_get_bytes, url, timeout) for key, url in tasks.items()
+            }
+            for key, fut in future_map.items():
+                try:
+                    fetched[key] = fut.result()
+                except Exception as exc:
+                    fetch_errors[key] = exc
+
+    page_index: dict
+    if has_page_index:
+        page_index = json.loads(page_index_path.read_text(encoding="utf-8"))
+    else:
+        scandata_bytes = fetched.get("scandata")
+        if scandata_bytes is None and scandata_path.is_file():
+            scandata_bytes = scandata_path.read_bytes()
+        if scandata_bytes is not None:
+            atomic_write_bytes(scandata_path, scandata_bytes)
+            page_index = parse_scandata_xml(scandata_bytes)
+        else:
+            page_index = empty_page_index()
+
+    if need_djvu and not has_djvu:
+        djvu_raw = fetched.get("djvu")
+        djvu_text: str | None = None
+        segment_mode = page_index.get("segment_mode", "scandata")
+        if djvu_raw is not None:
+            decoded = djvu_raw.decode("utf-8", errors="replace")
+            if "\x0c" in decoded:
+                djvu_text = decoded
+                seg_count = decoded.count("\x0c") + 1
+                access_count = int(page_index.get("access_leaf_count") or 0)
+                leaf_count = int(page_index.get("leaf_count") or 0)
+                if access_count and abs(seg_count - access_count) < abs(seg_count - leaf_count):
+                    segment_mode = "bookreader"
+                else:
+                    segment_mode = "scandata"
+            elif "hocr_text" in fetched and "hocr_idx" in fetched:
+                djvu_text = synthesize_djvu_from_hocr(fetched["hocr_text"], fetched["hocr_idx"])
+                segment_mode = "scandata"
+            else:
+                djvu_text = decoded
+                segment_mode = "flat"
+        elif "hocr_text" in fetched and "hocr_idx" in fetched:
+            djvu_text = synthesize_djvu_from_hocr(fetched["hocr_text"], fetched["hocr_idx"])
+            segment_mode = "scandata"
+
+        if djvu_text is None:
+            err_detail = "; ".join(f"{k}: {v}" for k, v in fetch_errors.items())
+            raise RuntimeError(
+                f"Item {item_id} has no downloadable OCR text (_djvu.txt or _hocr_searchtext.txt.gz)"
+                + (f" ({err_detail})" if err_detail else "")
+            )
+        page_index["segment_mode"] = segment_mode
+        atomic_write_text(djvu_path, djvu_text)
+        atomic_write_json(page_index_path, page_index)
+    elif not has_page_index:
+        atomic_write_json(page_index_path, page_index)
+
+    return {
+        "identifier": item_id,
+        "item_dir": item_dir,
+        "metadata_path": meta_path,
+        "scandata_path": scandata_path,
+        "page_index_path": page_index_path,
+        "djvu_path": djvu_path,
+        "cached": False,
+    }
+
+
+def resolve_segment_page(seg_idx: int, page_index: dict) -> tuple[int | None, int | None, str | None]:
+    """Map a 0-based `\x0c` segment index to (bookreader_leaf_n, scandata_leaf, printed_page)."""
+    mode = page_index.get("segment_mode", "scandata")
+    if mode == "flat":
+        return None, None, None
+    key = str(seg_idx)
+    if mode == "bookreader":
+        scandata_leaf = page_index.get("bookreader_to_scandata", {}).get(key)
+        printed = page_index.get("bookreader_to_printed", {}).get(key)
+        return seg_idx, scandata_leaf, printed
+    # scandata leaf indexing (e.g. hocr_pageindex or full-leaf djvu.txt)
+    scandata_to_br = page_index.get("scandata_to_bookreader", {})
+    br_n = scandata_to_br.get(key)
+    if br_n is None and not scandata_to_br:
+        br_n = seg_idx
+    printed = page_index.get("scandata_to_printed", {}).get(key)
+    return br_n, seg_idx, printed
+
+
+def extract_snippet(page_text: str, match_start: int, match_end: int, context_chars: int) -> str:
+    half = max(20, context_chars // 2)
+    start = max(0, match_start - half)
+    end = min(len(page_text), match_end + half)
+    raw = page_text[start:end]
+    cleaned = " ".join(raw.split())
+    if start > 0:
+        cleaned = "..." + cleaned
+    if end < len(page_text):
+        cleaned = cleaned + "..."
+    return cleaned
+
+
+def grep_cached_item(
+    identifier: str,
+    djvu_text: str,
+    page_index: dict,
+    compiled: re.Pattern[str],
+    *,
+    context_chars: int,
+    limit: int,
+) -> tuple[list[dict], int]:
+    """Search cached page-delimited text line by line without DOTALL backtracking."""
+    hits: list[dict] = []
+    total_matches = 0
+    pages = djvu_text.split("\x0c")
+
+    for seg_idx, page_text in enumerate(pages):
+        if not page_text or not compiled.search(page_text):
+            continue
+        # Search line by line on matching pages so multi-line DOTALL backtracking cannot happen.
+        offset = 0
+        for line in page_text.splitlines(keepends=True):
+            for match in compiled.finditer(line):
+                total_matches += 1
+                if len(hits) < limit:
+                    leaf_n, scandata_leaf, printed_page = resolve_segment_page(seg_idx, page_index)
+                    m_start = offset + match.start()
+                    m_end = offset + match.end()
+                    hits.append(
+                        {
+                            "identifier": identifier,
+                            "leaf": leaf_n,
+                            "scandata_leaf": scandata_leaf,
+                            "printed_page": printed_page,
+                            "match": match.group(0),
+                            "snippet": extract_snippet(page_text, m_start, m_end, context_chars),
+                            "image_url": page_image_url(identifier, leaf_n, scale=2)
+                            if leaf_n is not None
+                            else None,
+                            "details_url": page_details_url(identifier, leaf_n)
+                            if leaf_n is not None
+                            else item_url(identifier),
+                        }
+                    )
+            offset += len(line)
+    return hits, total_matches
+
+
+def resolve_printed_page_to_leaf(page_index: dict, printed_page: str) -> tuple[int, int | None]:
+    target = printed_page.strip()
+    p2b = page_index.get("printed_to_bookreader") or {}
+    if target in p2b:
+        br_n = int(p2b[target])
+        sc_leaf = page_index.get("bookreader_to_scandata", {}).get(str(br_n))
+        return br_n, sc_leaf
+    p2b_ci = page_index.get("printed_to_bookreader_ci") or {}
+    lower = target.lower()
+    if lower in p2b_ci:
+        br_n = int(p2b_ci[lower])
+        sc_leaf = page_index.get("bookreader_to_scandata", {}).get(str(br_n))
+        return br_n, sc_leaf
+    # Fallback to scandata_to_printed when access mapping is absent
+    p2s = page_index.get("printed_to_scandata") or {}
+    if target in p2s:
+        sc_leaf = int(p2s[target])
+        return sc_leaf, sc_leaf
+    sample_pages = list(p2b.keys())
+    hint = f" (known printed pages: {sample_pages[0]}..{sample_pages[-1]}, total {len(sample_pages)})" if sample_pages else " (no printed page numbers in scandata.xml)"
+    raise KeyError(f"Printed page {printed_page!r} not found in page_index.json{hint}")
+
+
+def cmd_search(args: argparse.Namespace) -> int:
+    query = args.query
+    if args.mediatype:
+        query = f"{query} AND mediatype:({args.mediatype})"
+    chosen = list(args.fields) if args.fields else DEFAULT_FIELDS
+    data = search_api(query, chosen, args.rows, args.page, list(args.sorts))
     response = data.get("response") or {}
-    if as_json:
-        click.echo(json.dumps(data, indent=2))
-        return
-    click.echo(f"{response.get('numFound')} items")
+    if args.as_json:
+        print(json.dumps(data, indent=2))
+        return 0
+    print(f"{response.get('numFound')} items")
     for doc in response.get("docs") or []:
         identifier = doc.get("identifier") or ""
         title = doc.get("title") or ""
         creator = doc.get("creator") or ""
         date = doc.get("date") or ""
         mediatype_out = doc.get("mediatype") or ""
-        click.echo(
+        print(
             f"{identifier} | {title} | {creator} | {date} | "
             f"{mediatype_out} | {item_url(identifier)}"
         )
+    return 0
 
 
-@cli.command()
-@click.argument("identifier")
-@click.option("--json", "as_json", is_flag=True, help="Full JSON output.")
-@click.option("--files", is_flag=True, help="List the item's files.")
-def get(identifier, as_json, files):
-    """Read an item's metadata and file list by identifier."""
-    data = metadata_api(identifier)
-    if as_json:
-        click.echo(json.dumps(data, indent=2))
-        return
+def cmd_get(args: argparse.Namespace) -> int:
+    data = metadata_api(validate_identifier(args.identifier))
+    if args.as_json:
+        print(json.dumps(data, indent=2))
+        return 0
     meta = data.get("metadata") or {}
-    click.echo(f"{meta.get('title') or identifier}")
-    click.echo(f"  Identifier: {meta.get('identifier')}")
+    print(f"{meta.get('title') or args.identifier}")
+    print(f"  Identifier: {meta.get('identifier')}")
     if meta.get("creator"):
-        click.echo(f"  Creator: {meta.get('creator')}")
+        print(f"  Creator: {meta.get('creator')}")
     if meta.get("date"):
-        click.echo(f"  Date: {meta.get('date')}")
+        print(f"  Date: {meta.get('date')}")
     if meta.get("mediatype"):
-        click.echo(f"  Mediatype: {meta.get('mediatype')}")
+        print(f"  Mediatype: {meta.get('mediatype')}")
     if meta.get("collection"):
         collection = meta.get("collection")
         if isinstance(collection, list):
             collection = ", ".join(collection)
-        click.echo(f"  Collection: {collection}")
+        print(f"  Collection: {collection}")
     if meta.get("description"):
-        click.echo(f"  Description: {short(meta.get('description'))}")
+        print(f"  Description: {short(meta.get('description'))}")
     file_list = data.get("files") or []
-    click.echo(f"  Files: {len(file_list)} | {item_url(identifier)}")
-    if files:
+    print(f"  Files: {len(file_list)} | {item_url(args.identifier)}")
+    if args.files:
         for entry in file_list:
             size = entry.get("size") or ""
-            click.echo(
-                f"    {entry.get('name')} | {entry.get('format')} | "
-                f"{size} bytes"
-            )
+            print(f"    {entry.get('name')} | {entry.get('format')} | {size} bytes")
+    return 0
 
 
-@cli.command()
-@click.argument("identifier")
-@click.argument("files", nargs=-1)
-@click.option("--out", default=".", show_default=True,
-              help="Directory to save files into.")
-@click.option("--list", "list_only", is_flag=True,
-              help="Only list files, do not download.")
-def download(identifier, files, out, list_only):
-    """Download files of an item, or list them with no FILE given.
-
-    Example: download <identifier> <identifier>_djvu.txt
-    """
+def cmd_download(args: argparse.Namespace) -> int:
+    identifier = validate_identifier(args.identifier)
     data = metadata_api(identifier)
     file_list = data.get("files") or []
-    if list_only or not files:
+    if args.list_only or not args.files:
         for entry in file_list:
             size = entry.get("size") or ""
-            click.echo(
-                f"{entry.get('name')} | {entry.get('format')} | "
-                f"{size} bytes"
-            )
-        return
+            print(f"{entry.get('name')} | {entry.get('format')} | {size} bytes")
+        return 0
     available = {entry.get("name") for entry in file_list}
-    out_dir = Path(out)
+    out_dir = Path(args.out)
     out_dir.mkdir(parents=True, exist_ok=True)
-    with client() as http:
-        for name in files:
-            if name not in available:
-                fail(f"File not in item {identifier}: {name}")
-            url = f"{BASE}/download/{quote(identifier)}/{quote(name)}"
-            try:
-                resp = http.get(url)
-            except httpx.HTTPError as exc:
-                fail(f"Request failed: {exc}")
-            if resp.status_code != 200:
-                fail(f"HTTP {resp.status_code} from {url}")
-            dest = out_dir / Path(name).name
-            dest.write_bytes(resp.content)
-            click.echo(f"{dest} ({len(resp.content)} bytes)")
+    for name in args.files:
+        if name not in available:
+            fail(f"File not in item {identifier}: {name}")
+        url = f"{BASE}/download/{quote(identifier)}/{quote(name)}"
+        try:
+            content = http_get_bytes(url, timeout=60.0)
+        except (RuntimeError, FileNotFoundError) as exc:
+            fail(str(exc))
+        dest = out_dir / Path(name).name
+        atomic_write_bytes(dest, content)
+        print(f"{dest} ({len(content)} bytes)")
+    return 0
 
 
-@cli.command()
-@click.argument("query")
-@click.option("--rows", type=int, default=10, show_default=True, help="Hits per page.")
-@click.option("--page", type=int, default=1, show_default=True, help="Results page (1-based).")
-@click.option("--json", "as_json", is_flag=True, help="Full JSON output.")
-def fulltext(query, rows, page, as_json):
-    """Search OCR full text inside digitized books and periodicals.
-
-    Unlike `search` (which queries item metadata only), `fulltext` searches
-    page text and returns highlighted OCR snippets.
-    """
-    data = fulltext_api(query, rows, page)
-    if as_json:
-        click.echo(json.dumps(data, indent=2, ensure_ascii=False))
-        return
+def cmd_fulltext(args: argparse.Namespace) -> int:
+    data = fulltext_api(args.query, args.rows, args.page)
+    if args.as_json:
+        print(json.dumps(data, indent=2, ensure_ascii=False))
+        return 0
     hits_block = ((data.get("response") or {}).get("body") or {}).get("hits") or {}
     total = hits_block.get("total", 0)
     hits = hits_block.get("hits") or []
-    click.echo(f"{total} full-text matches (showing {len(hits)})")
+    print(f"{total} full-text matches (showing {len(hits)})")
     for hit in hits:
         fields = hit.get("fields") or {}
         identifier = fields.get("identifier") or ""
@@ -248,54 +614,266 @@ def fulltext(query, rows, page, as_json):
         year = fields.get("year") or fields.get("date") or ""
         snippets = (hit.get("highlight") or {}).get("text") or []
         snippet = short(snippets[0].replace("{{{", "").replace("}}}", ""), 200) if snippets else ""
-        click.echo(f"- {identifier} | {title} | {year} | {item_url(identifier)}")
+        print(f"- {identifier} | {title} | {year} | {item_url(identifier)}")
         if snippet:
-            click.echo(f"  OCR: {snippet}")
+            print(f"  OCR: {snippet}")
+    return 0
 
 
-@cli.command("page")
-@click.argument("identifier")
-@click.argument("leaf", type=int)
-@click.option("--width", type=int, default=2400, show_default=True,
-              help="Rendered JPEG width in pixels (e.g. 1200 or 2400).")
-@click.option("--out", default=".", show_default=True,
-              help="Directory to save the page image into.")
-def fetch_page(identifier, leaf, width, out):
-    """Download one rendered page image (leaf n<LEAF>) from an unrestricted item.
-
-    Avoids downloading 100-250 MB full PDFs when you only need specific pages
-    from a county plat atlas, city directory, or digitized book.
-    """
-    page_url = f"{BASE}/download/{quote(identifier)}/page/n{leaf}_w{width}.jpg"
+def cmd_grep(args: argparse.Namespace) -> int:
+    t0 = time.perf_counter()
+    flags = re.IGNORECASE if args.ignore_case else 0
     try:
-        with client() as http:
-            resp = http.get(page_url)
-    except httpx.HTTPError as exc:
-        fail(f"Request failed: {exc}")
-    if resp.status_code == 403:
-        fail(
-            f"HTTP 403 from {page_url}. This item is likely access-restricted or borrow-only; "
-            "single-page JPEG downloads work only on unrestricted public-domain items."
+        compiled = re.compile(args.pattern, flags)
+    except re.error as exc:
+        fail(f"Invalid regex pattern {args.pattern!r}: {exc}", code=2)
+
+    identifiers = [validate_identifier(item) for item in args.identifiers]
+    cache_root = get_cache_root()
+
+    # Fetch missing items in parallel (max_workers=6, timeout=25).
+    def prepare(item_id: str) -> dict:
+        return ensure_item_cache(item_id, need_djvu=True, cache_root=cache_root, timeout=args.timeout)
+
+    if len(identifiers) == 1:
+        try:
+            cache_entries = [prepare(identifiers[0])]
+        except Exception as exc:
+            fail(str(exc))
+    else:
+        from concurrent.futures import ThreadPoolExecutor
+
+        cache_entries = []
+        with ThreadPoolExecutor(max_workers=min(MAX_WORKERS, len(identifiers))) as pool:
+            futures = [(item_id, pool.submit(prepare, item_id)) for item_id in identifiers]
+            for item_id, fut in futures:
+                try:
+                    cache_entries.append(fut.result())
+                except Exception as exc:
+                    fail(f"{item_id}: {exc}")
+
+    all_hits: list[dict] = []
+    item_summaries: list[dict] = []
+    remaining = max(0, args.limit)
+    total_matches = 0
+    all_cached = True
+
+    for entry in cache_entries:
+        item_id = entry["identifier"]
+        was_cached = bool(entry["cached"])
+        all_cached = all_cached and was_cached
+        page_index = json.loads(entry["page_index_path"].read_text(encoding="utf-8"))
+        djvu_text = entry["djvu_path"].read_text(encoding="utf-8", errors="replace")
+        hits, item_total = grep_cached_item(
+            item_id,
+            djvu_text,
+            page_index,
+            compiled,
+            context_chars=args.context,
+            limit=remaining,
         )
-    if resp.status_code != 200:
-        fail(f"HTTP {resp.status_code} from {page_url}")
-    out_dir = Path(out)
-    out_dir.mkdir(parents=True, exist_ok=True)
-    dest = out_dir / f"{identifier}_n{leaf}_w{width}.jpg"
-    dest.write_bytes(resp.content)
-    click.echo(f"{dest} ({len(resp.content)} bytes)")
+        for h in hits:
+            h["cached"] = was_cached
+        all_hits.extend(hits)
+        remaining = max(0, args.limit - len(all_hits))
+        total_matches += item_total
+        item_summaries.append(
+            {
+                "identifier": item_id,
+                "cached": was_cached,
+                "matches": item_total,
+                "returned": len(hits),
+                "cache_dir": str(entry["item_dir"]),
+            }
+        )
+
+    elapsed_ms = round((time.perf_counter() - t0) * 1000.0, 2)
+    payload = {
+        "pattern": args.pattern,
+        "ignore_case": bool(args.ignore_case),
+        "cached": all_cached,
+        "elapsed_ms": elapsed_ms,
+        "total_matches": total_matches,
+        "returned": len(all_hits),
+        "items": item_summaries,
+        "hits": all_hits,
+    }
+
+    if args.as_json:
+        print(json.dumps(payload, indent=2, ensure_ascii=False))
+        return 0
+
+    status = "cache-hit" if all_cached else "fetched"
+    print(f"{total_matches} matches across {len(identifiers)} item(s) (showing {len(all_hits)}, {status}, {elapsed_ms} ms)")
+    for hit in all_hits:
+        pp = f"p.{hit['printed_page']}" if hit["printed_page"] else "p.?"
+        lf = f"n{hit['leaf']}" if hit["leaf"] is not None else "n?"
+        print(f"- {hit['identifier']} | {lf} ({pp}) | {hit['image_url'] or hit['details_url']}")
+        print(f"  {hit['snippet']}")
+    return 0
 
 
-@cli.command()
-@click.argument("query")
-@click.option("--mediatype", default=None)
-def url(query, mediatype):
-    """Print the website advanced-search URL for a query."""
-    full = query
-    if mediatype:
-        full = f"{query} AND mediatype:({mediatype})"
-    click.echo(f"{ADVANCED_SEARCH}?q={quote(full)}")
+def cmd_page(args: argparse.Namespace) -> int:
+    t0 = time.perf_counter()
+    identifier = validate_identifier(args.identifier)
+
+    # Support both legacy positional `<leaf>` and new `--leaf` / `--printed-page`.
+    leaf_from_pos = args.leaf_pos
+    leaf_from_flag = args.leaf
+    printed_page = args.printed_page
+
+    if printed_page is not None and (leaf_from_pos is not None or leaf_from_flag is not None):
+        fail("Pass either --printed-page or --leaf (not both).", code=2)
+    if leaf_from_pos is not None and leaf_from_flag is not None:
+        fail("Pass either positional <leaf> or --leaf (not both).", code=2)
+
+    target_leaf: int | None = leaf_from_flag if leaf_from_flag is not None else leaf_from_pos
+    scandata_leaf: int | None = None
+    resolved_printed: str | None = printed_page
+    index_cached: bool | None = None
+
+    if printed_page is not None:
+        try:
+            cache_entry = ensure_item_cache(
+                identifier,
+                need_djvu=False,
+                cache_root=get_cache_root(),
+                timeout=args.timeout,
+            )
+            index_cached = bool(cache_entry["cached"])
+            page_index = json.loads(cache_entry["page_index_path"].read_text(encoding="utf-8"))
+            target_leaf, scandata_leaf = resolve_printed_page_to_leaf(page_index, printed_page)
+        except Exception as exc:
+            fail(str(exc))
+    elif target_leaf is None:
+        fail("Specify a target page with --printed-page <str>, --leaf <int>, or positional <leaf>.", code=2)
+
+    assert target_leaf is not None
+    if target_leaf < 0:
+        fail(f"Leaf index must be >= 0, got {target_leaf}.", code=2)
+
+    # Determine URL: explicit --scale uses _s<scale>.jpg; otherwise --width uses _w<width>.jpg.
+    if args.scale is not None:
+        url = page_image_url(identifier, target_leaf, scale=args.scale)
+        suffix_tag = f"s{args.scale}"
+    else:
+        width = args.width if args.width is not None else 2400
+        url = page_image_url(identifier, target_leaf, width=width)
+        suffix_tag = f"w{width}"
+
+    try:
+        content = http_get_bytes(url, timeout=args.timeout)
+    except (RuntimeError, FileNotFoundError) as exc:
+        fail(str(exc))
+
+    out_path = Path(args.out)
+    if out_path.suffix.lower() in IMAGE_EXTS and not out_path.is_dir():
+        dest = out_path
+    else:
+        out_path.mkdir(parents=True, exist_ok=True)
+        dest = out_path / f"{identifier}_n{target_leaf}_{suffix_tag}.jpg"
+
+    atomic_write_bytes(dest, content)
+    elapsed_ms = round((time.perf_counter() - t0) * 1000.0, 2)
+    payload = {
+        "identifier": identifier,
+        "leaf": target_leaf,
+        "scandata_leaf": scandata_leaf,
+        "printed_page": resolved_printed,
+        "url": url,
+        "path": str(dest),
+        "bytes": len(content),
+        "index_cached": index_cached,
+        "elapsed_ms": elapsed_ms,
+    }
+    if args.as_json:
+        print(json.dumps(payload, indent=2))
+    else:
+        extra = f" [p.{resolved_printed} -> n{target_leaf}]" if resolved_printed is not None else f" [n{target_leaf}]"
+        print(f"{dest} ({len(content)} bytes){extra}")
+    return 0
+
+
+def cmd_url(args: argparse.Namespace) -> int:
+    full = args.query
+    if args.mediatype:
+        full = f"{args.query} AND mediatype:({args.mediatype})"
+    print(f"{ADVANCED_SEARCH}?q={quote(full)}")
+    return 0
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog="archive-org",
+        description="Search, inspect, grep cached OCR, and download pages from Internet Archive.",
+    )
+    sub = parser.add_subparsers(dest="command", required=True)
+
+    p_search = sub.add_parser("search", help="Search items with a Lucene query.")
+    p_search.add_argument("query")
+    p_search.add_argument("--mediatype", default=None, help="e.g. texts, movies, audio, software, collection.")
+    p_search.add_argument("--rows", type=int, default=10, help="Results per page (default: 10).")
+    p_search.add_argument("--page", type=int, default=1, help="Results page (default: 1).")
+    p_search.add_argument("--sort", dest="sorts", action="append", default=[], help="Repeatable, e.g. --sort 'downloads desc'.")
+    p_search.add_argument("--field", dest="fields", action="append", default=[], help="Repeatable metadata field.")
+    p_search.add_argument("--json", dest="as_json", action="store_true", help="Full JSON output.")
+    p_search.set_defaults(func=cmd_search)
+
+    p_get = sub.add_parser("get", help="Read an item's metadata and file list by identifier.")
+    p_get.add_argument("identifier")
+    p_get.add_argument("--json", dest="as_json", action="store_true", help="Full JSON output.")
+    p_get.add_argument("--files", action="store_true", help="List the item's files.")
+    p_get.set_defaults(func=cmd_get)
+
+    p_dl = sub.add_parser("download", help="Download files of an item, or list them with no FILE given.")
+    p_dl.add_argument("identifier")
+    p_dl.add_argument("files", nargs="*")
+    p_dl.add_argument("--out", default=".", help="Directory to save files into (default: .).")
+    p_dl.add_argument("--list", dest="list_only", action="store_true", help="Only list files, do not download.")
+    p_dl.set_defaults(func=cmd_download)
+
+    p_ft = sub.add_parser("fulltext", help="Search OCR full text across digitized books and periodicals.")
+    p_ft.add_argument("query")
+    p_ft.add_argument("--rows", type=int, default=10, help="Hits per page (default: 10).")
+    p_ft.add_argument("--page", type=int, default=1, help="Results page, 1-based (default: 1).")
+    p_ft.add_argument("--json", dest="as_json", action="store_true", help="Full JSON output.")
+    p_ft.set_defaults(func=cmd_fulltext)
+
+    p_grep = sub.add_parser("grep", help="Search cached full-text OCR inside one or more items with exact page mapping.")
+    p_grep.add_argument("identifiers", nargs="+", help="One or more Internet Archive item identifiers.")
+    p_grep.add_argument("--pattern", required=True, help="Regular expression pattern (searched line by line).")
+    p_grep.add_argument("--context", type=int, default=240, help="Context characters per hit snippet (default: 240).")
+    p_grep.add_argument("--limit", type=int, default=25, help="Maximum hits returned (default: 25).")
+    p_grep.add_argument("-i", "--ignore-case", action="store_true", help="Case-insensitive regex matching.")
+    p_grep.add_argument("--timeout", type=float, default=DEFAULT_TIMEOUT, help="HTTP timeout seconds on cache miss (default: 25).")
+    p_grep.add_argument("--json", dest="as_json", action="store_true", help="Structured JSON output.")
+    p_grep.set_defaults(func=cmd_grep)
+
+    p_page = sub.add_parser("page", help="Download one rendered page JPEG by printed page number or BookReader leaf.")
+    p_page.add_argument("identifier")
+    p_page.add_argument("leaf_pos", nargs="?", type=int, default=None, help="Legacy positional BookReader leaf index.")
+    p_page.add_argument("--printed-page", default=None, help="Printed page label resolved via cached page_index.json.")
+    p_page.add_argument("--leaf", type=int, default=None, help="BookReader leaf index (n<LEAF>).")
+    p_page.add_argument("--scale", type=int, default=None, help="BookReader scale factor (e.g. 1=full, 2=half, 4=quarter).")
+    p_page.add_argument("--width", type=int, default=None, help="Rendered JPEG width in pixels (default 2400 when --scale is omitted).")
+    p_page.add_argument("--out", default=".", help="Output file path (.jpg) or directory (default: .).")
+    p_page.add_argument("--timeout", type=float, default=DEFAULT_TIMEOUT, help="HTTP timeout seconds (default: 25).")
+    p_page.add_argument("--json", dest="as_json", action="store_true", help="Structured JSON output.")
+    p_page.set_defaults(func=cmd_page)
+
+    p_url = sub.add_parser("url", help="Print the website advanced-search URL for a query.")
+    p_url.add_argument("query")
+    p_url.add_argument("--mediatype", default=None)
+    p_url.set_defaults(func=cmd_url)
+
+    return parser
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = build_parser()
+    args = parser.parse_args(argv)
+    return int(args.func(args))
 
 
 if __name__ == "__main__":
-    cli()
+    raise SystemExit(main())
