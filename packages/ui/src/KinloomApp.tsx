@@ -19,9 +19,11 @@ import { BlankScreenWatchdog } from './components/BlankScreenWatchdog.js';
 import { ExplorerTopBar } from './components/ExplorerTopBar.js';
 import { GlobalSearchModal } from './components/GlobalSearchModal.js';
 import { IndexPage } from './pages/IndexPage.js';
+import { PrivateArchiveGate } from './components/wiki/PrivateArchiveGate.js';
 import { ScrollMemory } from './components/ScrollMemory.js';
 import { SourceInspectorDrawer } from './components/SourceInspectorDrawer.js';
 import { SourceReaderDrawer } from './components/SourceReaderDrawer.js';
+import { useArchiveData } from './context/ArchiveDataContext.js';
 import { useKinloomPlugins } from './plugins/PluginContext.js';
 
 const AdminPage = lazy(async () => {
@@ -100,6 +102,16 @@ const RoutedAppShell: React.FC<{ siteTitle: string; baseUrl: string }> = ({
 }) => {
   const location = useLocation();
   const { routes: pluginRoutes } = useKinloomPlugins();
+  const { bundle, loading, session } = useArchiveData();
+
+  if (!loading && bundle === null && session?.principal_kind === 'anonymous') {
+    return (
+      <>
+        <BlankScreenWatchdog />
+        <PrivateArchiveGate />
+      </>
+    );
+  }
 
   return (
     <>

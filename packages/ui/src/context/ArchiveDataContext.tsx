@@ -266,6 +266,14 @@ export const ArchiveDataProvider: React.FC<ArchiveDataProviderProps> = ({
       const res = await resolvedDataSource.getSession();
       setLiveSession(res.session);
       setLiveCapabilities(res.capabilities);
+      if (res.session.principal_kind === 'anonymous') {
+        hasBundleRef.current = false;
+        etagRef.current = null;
+        setEtag(null);
+        setBundle(null);
+        setReadings(null);
+        readingsFetchedRef.current = false;
+      }
     } catch {
       // Keep current session state on transient refresh failure.
     }

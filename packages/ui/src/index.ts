@@ -131,6 +131,7 @@ export type { TalkPanelProps } from './components/wiki/TalkPanel.js';
 export { SignInModal } from './components/wiki/SignInModal.js';
 export type { SignInModalProps } from './components/wiki/SignInModal.js';
 export { AuthStatusBanner } from './components/wiki/AuthStatusBanner.js';
+export { PrivateArchiveGate } from './components/wiki/PrivateArchiveGate.js';
 
 // UI-Only Helpers
 export * from './lib/ohmStyle.js';
