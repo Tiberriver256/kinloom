@@ -25,6 +25,7 @@ export interface SeedCommandOptions {
   dryRun?: boolean;
   batchId?: string;
   summary?: string;
+  chunkSize?: number;
   fetchImpl?: typeof fetch;
 }
 
@@ -35,6 +36,7 @@ export interface SeedCommandResult {
   updatedCount: number;
   unchangedCount: number;
   totalEntities: number;
+  chunksSubmitted?: number;
   precompiledCounts: ArchiveBundle['meta']['counts'];
   reviewFlagsCount: number;
   response?: SubmitBatchResponse;
@@ -283,25 +285,54 @@ export async function runSeedCommand(options: SeedCommandOptions): Promise<SeedC
     };
   }
 
-  const batch: BatchSubmission = validateBatchSubmission({
-    batch_id: batchId,
-    author_type: 'system_seed',
-    summary,
-    has_primary_source: true,
-    patches,
-  });
+  const chunkSize = options.chunkSize ?? 100;
+  if (!Number.isInteger(chunkSize) || chunkSize <= 0) {
+    throw new CliValidationError('`--chunk-size` must be a positive integer.');
+  }
 
-  const response = await client.submitBatch(batch);
+  let lastResponse: SubmitBatchResponse | undefined;
+  let chunksSubmitted = 0;
+
+  if (patches.length <= chunkSize) {
+    const batch: BatchSubmission = validateBatchSubmission({
+      batch_id: batchId,
+      author_type: 'system_seed',
+      summary,
+      has_primary_source: true,
+      patches,
+    });
+    lastResponse = await client.submitBatch(batch);
+    chunksSubmitted = 1;
+  } else {
+    const totalChunks = Math.ceil(patches.length / chunkSize);
+    const padWidth = String(totalChunks).length;
+    for (let index = 0; index < totalChunks; index += 1) {
+      const start = index * chunkSize;
+      const slice = patches.slice(start, start + chunkSize);
+      const partLabel = String(index + 1).padStart(padWidth, '0');
+      const chunkBatchId = `${batchId}-p${partLabel}`;
+      const batch: BatchSubmission = validateBatchSubmission({
+        batch_id: chunkBatchId,
+        author_type: 'system_seed',
+        summary: `${summary} (part ${index + 1}/${totalChunks})`,
+        has_primary_source: true,
+        patches: slice,
+      });
+      lastResponse = await client.submitBatch(batch);
+      chunksSubmitted += 1;
+    }
+  }
 
   return {
     dryRun: false,
-    batchId: response.batch_id,
+    batchId: chunksSubmitted === 1 && lastResponse ? lastResponse.batch_id : batchId,
     createdCount,
     updatedCount,
     unchangedCount,
     totalEntities: entries.length,
+    chunksSubmitted,
     precompiledCounts: precompiled.bundle.meta.counts,
     reviewFlagsCount: precompiled.reviewFlags.length,
-    response,
+    response: lastResponse,
   };
 }

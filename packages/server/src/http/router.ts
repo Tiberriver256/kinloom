@@ -691,10 +691,16 @@ export function createKinloomServer(config: KinloomServerConfig): KinloomServer 
       );
     }
 
-    if (method === 'GET' && segments.length === 2 && segments[0] === 'media') {
+    if (
+      method === 'GET' &&
+      segments.length >= 2 &&
+      (segments[0] === 'media' || segments[0] === 'sources')
+    ) {
       requireMinRole(auth.principal, 'viewer', { allowAgentScopes: ['write_batch'] });
-      const key = decodeSegment(segments[1]);
+      const prefix = segments[0];
+      const key = segments.slice(1).map(decodeSegment).join('/');
       const result = await mediaService.getMedia({
+        prefix,
         key,
         rangeHeader: request.headers.get('range'),
       });
@@ -703,9 +709,12 @@ export function createKinloomServer(config: KinloomServerConfig): KinloomServer 
         'content-type': result.object.contentType,
         'content-length': String(result.object.sizeBytes),
         'accept-ranges': 'bytes',
-        etag: `"${result.object.sha256}"`,
         'cache-control': 'private, max-age=31536000, immutable',
       });
+      const rawEtag = result.object.sha256 ?? result.object.etag;
+      if (rawEtag) {
+        headers.set('etag', rawEtag.startsWith('"') ? rawEtag : `"${rawEtag}"`);
+      }
       if (result.status === 206 && result.object.range) {
         const { start, end, total } = result.object.range;
         headers.set('content-range', `bytes ${start}-${end}/${total}`);
@@ -947,8 +956,14 @@ export function createKinloomServer(config: KinloomServerConfig): KinloomServer 
       config.ports.assetHandler &&
       (method === 'GET' || method === 'HEAD') &&
       !pathname.startsWith('/api/') &&
-      !pathname.startsWith('/media/')
+      !pathname.startsWith('/media/') &&
+      !pathname.startsWith('/sources/')
     ) {
+      if (pathname.startsWith('/data/')) {
+        requireMinRole(auth.principal, 'viewer', {
+          allowAgentScopes: ['write_batch', 'read_backup'],
+        });
+      }
       return config.ports.assetHandler.fetch(request);
     }
 

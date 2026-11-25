@@ -43,7 +43,9 @@ export function createCloudflareAssetHandler(assets?: Fetcher): AssetHandler {
         pathname === '/api' ||
         pathname.startsWith('/api/') ||
         pathname === '/media' ||
-        pathname.startsWith('/media/')
+        pathname.startsWith('/media/') ||
+        pathname === '/sources' ||
+        pathname.startsWith('/sources/')
       ) {
         return notFoundPlainResponse();
       }

@@ -871,5 +871,120 @@ describe('createCloudflareWorker full HTTP lifecycle (Miniflare)', () => {
     const media404 = await assetHandler.fetch(new Request(`${CONTRACT_TEST_ORIGIN}/media/missing.jpg`));
     expect(media404.status).toBe(404);
     expect(media404.headers.get('content-type')).toContain('text/plain');
+
+    const source404 = await assetHandler.fetch(new Request(`${CONTRACT_TEST_ORIGIN}/sources/missing.pdf`));
+    expect(source404.status).toBe(404);
+    expect(source404.headers.get('content-type')).toContain('text/plain');
+  });
+
+  it('serves nested /media/* and /sources/* pre-seeded R2 objects without custom sha256 metadata and auth-gates /data/*', async () => {
+    const fixture = await createMiniflareFixture();
+    try {
+      const clock = new FixedClock('2026-07-02T12:00:00.000Z');
+      const emailSender = new InMemoryEmailSender();
+      const siteConfig = createSyntheticSiteConfig();
+
+      // Upload pre-seeded R2 objects directly (matching wrangler r2 object put without customMetadata.sha256)
+      await fixture.bucket.put('media/photos/portrait-1900.jpg', new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 1, 2, 3, 4]), {
+        httpMetadata: { contentType: 'image/jpeg' },
+      });
+      await fixture.bucket.put('sources/memoir-1999.pdf', new Uint8Array([0x25, 0x50, 0x44, 0x46, 0x2d, 0x31, 0x2e, 0x34]), {
+        httpMetadata: { contentType: 'application/pdf' },
+      });
+
+      const fakeAssets: Fetcher = {
+        async fetch(input) {
+          const reqUrl = new URL(typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url);
+          if (reqUrl.pathname === '/data/readings.json') {
+            return new Response(JSON.stringify({ documents: { doc1: { pages: [] } } }), {
+              status: 200,
+              headers: { 'content-type': 'application/json; charset=utf-8' },
+            });
+          }
+          if (reqUrl.pathname === '/index.html') {
+            return new Response('<!doctype html><html><body>SPA</body></html>', {
+              status: 200,
+              headers: { 'content-type': 'text/html; charset=utf-8' },
+            });
+          }
+          return new Response('Not Found', { status: 404 });
+        },
+      };
+
+      const env: KinloomWorkerEnv = {
+        DB: fixture.db,
+        MEDIA_BUCKET: fixture.bucket,
+        ASSETS: fakeAssets,
+        SESSION_SECRET: CONTRACT_SESSION_SECRET,
+        BOOTSTRAP_ADMIN_EMAIL: 'archivist@example.test',
+        ARCHIVE_MODE: 'private',
+      };
+
+      const worker = createCloudflareWorker({ siteConfig, clock, emailSender });
+
+      // Unauthenticated requests to /media/*, /sources/*, and /data/* must all fail with 401
+      const unauthMedia = await worker.fetch(new Request(`${CONTRACT_TEST_ORIGIN}/media/photos/portrait-1900.jpg`), env);
+      expect(unauthMedia.status).toBe(401);
+      const unauthSource = await worker.fetch(new Request(`${CONTRACT_TEST_ORIGIN}/sources/memoir-1999.pdf`), env);
+      expect(unauthSource.status).toBe(401);
+      const unauthReadings = await worker.fetch(new Request(`${CONTRACT_TEST_ORIGIN}/data/readings.json`), env);
+      expect(unauthReadings.status).toBe(401);
+
+      // Sign in as bootstrap admin
+      const reqLink = await worker.fetch(
+        new Request(`${CONTRACT_TEST_ORIGIN}/api/auth/magic-link/request`, {
+          method: 'POST',
+          headers: { origin: CONTRACT_TEST_ORIGIN, 'content-type': 'application/json' },
+          body: JSON.stringify({ email: 'archivist@example.test' }),
+        }),
+        env
+      );
+      expect(reqLink.status).toBe(202);
+      const sentLink = emailSender.sentMessages[0]?.magicLinkUrl;
+      expect(sentLink).toBeDefined();
+
+      const verifyRes = await worker.fetch(new Request(sentLink!), env);
+      expect(verifyRes.status).toBe(302);
+      const cookie = cookiePairFromSetCookie(extractSetCookies(verifyRes)[0] ?? '');
+      expect(cookie).toContain('kinloom_session=');
+
+      // Nested /media/photos/... returns 200 with ETag and bytes
+      const mediaRes = await worker.fetch(
+        new Request(`${CONTRACT_TEST_ORIGIN}/media/photos/portrait-1900.jpg`, { headers: { cookie } }),
+        env
+      );
+      expect(mediaRes.status).toBe(200);
+      expect(mediaRes.headers.get('content-type')).toBe('image/jpeg');
+      expect(mediaRes.headers.get('etag')).toBeTruthy();
+      expect((await mediaRes.arrayBuffer()).byteLength).toBe(8);
+
+      // /sources/... supports HTTP 206 byte range streaming
+      const sourceRes = await worker.fetch(
+        new Request(`${CONTRACT_TEST_ORIGIN}/sources/memoir-1999.pdf`, {
+          headers: { cookie, range: 'bytes=0-3' },
+        }),
+        env
+      );
+      expect(sourceRes.status).toBe(206);
+      expect(sourceRes.headers.get('content-range')).toBe('bytes 0-3/8');
+      expect(new TextDecoder().decode(await sourceRes.arrayBuffer())).toBe('%PDF');
+
+      // Traversal attempt must return 404
+      const traversalRes = await worker.fetch(
+        new Request(`${CONTRACT_TEST_ORIGIN}/media/photos/%2e%2e/%2e%2e/compiled/archive.json`, { headers: { cookie } }),
+        env
+      );
+      expect(traversalRes.status).toBe(404);
+
+      // Auth-gated /data/readings.json returns 200 when signed in
+      const readingsRes = await worker.fetch(
+        new Request(`${CONTRACT_TEST_ORIGIN}/data/readings.json`, { headers: { cookie } }),
+        env
+      );
+      expect(readingsRes.status).toBe(200);
+      expect(await readingsRes.json()).toEqual({ documents: { doc1: { pages: [] } } });
+    } finally {
+      await fixture.dispose();
+    }
   });
 });

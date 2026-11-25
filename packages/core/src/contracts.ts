@@ -266,7 +266,8 @@ export interface StoredMediaObject {
   key: string;
   contentType: string;
   sizeBytes: number;
-  sha256: Sha256Hex;
+  sha256?: Sha256Hex;
+  etag?: string;
   body: ReadableStream<Uint8Array>;
   /** Populated when serving an HTTP 206 Partial Content byte range (required for video/audio scrubbing). */
   range?: { start: number; end: number; total: number };

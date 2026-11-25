@@ -278,6 +278,7 @@ export async function runCli(
             token: { type: 'string' },
             'batch-id': { type: 'string' },
             summary: { type: 'string' },
+            'chunk-size': { type: 'string' },
             'dry-run': { type: 'boolean', default: false },
           },
         });
@@ -294,6 +295,7 @@ export async function runCli(
           dryRun,
           batchId: values['batch-id'],
           summary: values.summary,
+          chunkSize: parseOptionalPositiveInt(values['chunk-size'], '--chunk-size'),
           fetchImpl,
         });
 

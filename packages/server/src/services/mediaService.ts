@@ -31,7 +31,29 @@ const EXTENSION_BY_MIME: Record<string, string> = {
   'audio/wav': 'wav',
 };
 
-const SAFE_MEDIA_KEY_PATTERN = /^[a-zA-Z0-9._-]+$/;
+const SAFE_MEDIA_SEGMENT_PATTERN = /^[a-zA-Z0-9._-]+$/;
+const MAX_MEDIA_PATH_SEGMENTS = 8;
+
+function isSafeRelativeMediaKey(key: string): boolean {
+  if (!key || key.startsWith('/') || key.endsWith('/') || key.includes('\\') || key.includes('\0')) {
+    return false;
+  }
+  const segments = key.split('/');
+  if (segments.length === 0 || segments.length > MAX_MEDIA_PATH_SEGMENTS) {
+    return false;
+  }
+  for (const segment of segments) {
+    if (
+      !segment ||
+      segment === '.' ||
+      segment === '..' ||
+      !SAFE_MEDIA_SEGMENT_PATTERN.test(segment)
+    ) {
+      return false;
+    }
+  }
+  return true;
+}
 
 export interface MediaServiceDeps {
   repository: ArchiveRepository;
@@ -229,13 +251,15 @@ export class MediaService {
   async getMedia(params: {
     key: string;
     rangeHeader: string | null;
+    prefix?: 'media' | 'sources';
   }): Promise<{ status: 200 | 206; object: StoredMediaObject }> {
     const trimmedKey = params.key.trim();
-    if (!SAFE_MEDIA_KEY_PATTERN.test(trimmedKey) || trimmedKey.includes('..')) {
+    if (!isSafeRelativeMediaKey(trimmedKey)) {
       throw new KinloomHttpError(404, 'NOT_FOUND', 'Media object was not found.');
     }
 
-    const storeKey = `media/${trimmedKey}`;
+    const prefix = params.prefix ?? 'media';
+    const storeKey = `${prefix}/${trimmedKey}`;
 
     if (params.rangeHeader) {
       const head = await this.mediaStore.head(storeKey);

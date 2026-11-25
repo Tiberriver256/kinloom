@@ -9,16 +9,16 @@ import type { R2Bucket, R2ObjectBody } from '../types.js';
 
 const KEY_SHA256_PATTERN = /(?:^|\/)([0-9a-f]{64})\.[a-z0-9]+$/i;
 
-function resolveSha256(key: string, obj: R2ObjectBody): Sha256Hex {
+function resolveSha256(key: string, obj: R2ObjectBody): Sha256Hex | undefined {
   const metaSha = obj.customMetadata?.sha256;
-  if (metaSha) {
+  if (metaSha && /^[0-9a-f]{64}$/i.test(metaSha)) {
     return asSha256Hex(metaSha);
   }
   const match = KEY_SHA256_PATTERN.exec(key);
   if (match?.[1]) {
     return asSha256Hex(match[1]);
   }
-  throw new Error(`R2 media object '${key}' is missing sha256 metadata.`);
+  return undefined;
 }
 
 /**
@@ -79,11 +79,13 @@ export class R2MediaStore implements MediaStore {
           : total;
       const rangeLength = Math.max(0, endExclusive - start);
 
+      const sha256 = resolveSha256(key, obj);
       return {
         key,
         contentType: obj.httpMetadata?.contentType ?? 'application/octet-stream',
         sizeBytes: rangeLength,
-        sha256: resolveSha256(key, obj),
+        ...(sha256 ? { sha256 } : {}),
+        etag: obj.etag,
         body: obj.body,
         range: {
           start,
@@ -98,11 +100,13 @@ export class R2MediaStore implements MediaStore {
       return null;
     }
 
+    const sha256 = resolveSha256(key, obj);
     return {
       key,
       contentType: obj.httpMetadata?.contentType ?? 'application/octet-stream',
       sizeBytes: obj.size,
-      sha256: resolveSha256(key, obj),
+      ...(sha256 ? { sha256 } : {}),
+      etag: obj.etag,
       body: obj.body,
     };
   }
