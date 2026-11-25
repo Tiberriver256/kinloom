@@ -1,0 +1,432 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.11"
+# dependencies = [
+#   "click>=8.1",
+#   "httpx>=0.27",
+# ]
+# ///
+"""Search and inspect Dutch and Belgian genealogical records via OpenArchieven.
+
+Uses the public OpenArchieven 1.0 JSON API (https://api.openarch.nl/1.0/records/):
+no API key or login is required for read access. Requests are spaced to respect
+the 4 requests/second IP rate limit.
+"""
+
+from __future__ import annotations
+
+import json
+import re
+import time
+from typing import Any
+from urllib.parse import urlencode
+
+import click
+import httpx
+
+API_BASE = "https://api.openarch.nl/1.0/records"
+WEB_BASE = "https://www.openarchieven.nl"
+USER_AGENT = "kinloom/1.0 (genealogy research; https://github.com/tiberriver256/kinloom)"
+MIN_INTERVAL_S = 0.25
+TIMEOUT = 30.0
+
+KNOWN_SOURCE_TYPES = {
+    "bevolkingsregister",
+    "passagiersregisters",
+    "notariële archieven",
+    "militieregisters",
+    "bidprentjes",
+    "familienamen",
+    "gezinskaarten",
+    "persoonskaarten",
+    "woningkaarten",
+    "memorie van successie",
+}
+
+
+def _fail(message: str) -> None:
+    click.echo(message, err=True)
+    raise SystemExit(1)
+
+
+def _get_json(endpoint: str, params: dict[str, Any]) -> Any:
+    """Fetch one JSON response from api.openarch.nl with boundary validation."""
+    time.sleep(MIN_INTERVAL_S)
+    url = f"{API_BASE}/{endpoint}"
+    try:
+        with httpx.Client(
+            timeout=TIMEOUT,
+            follow_redirects=True,
+            headers={"User-Agent": USER_AGENT, "Accept": "application/json"},
+        ) as client:
+            resp = client.get(url, params=params)
+    except httpx.HTTPError as exc:
+        _fail(f"OpenArchieven request failed: {exc}")
+    if resp.status_code != 200:
+        _fail(f"HTTP {resp.status_code} from {url}")
+    try:
+        data = resp.json()
+    except ValueError as exc:
+        _fail(f"Invalid JSON from {url}: {exc}")
+    if isinstance(data, dict) and data.get("error_code") is not None:
+        desc = data.get("error_description") or data.get("error") or "Unknown API error"
+        _fail(f"OpenArchieven API error {data['error_code']}: {desc}")
+    return data
+
+
+def _is_source_type(value: str) -> bool:
+    low = value.strip().lower()
+    return low.startswith("bs ") or low.startswith("dtb ") or low in KNOWN_SOURCE_TYPES
+
+
+def _fmt_eventdate(date_obj: Any) -> str:
+    if not isinstance(date_obj, dict):
+        return ""
+    year = date_obj.get("year")
+    month = date_obj.get("month")
+    day = date_obj.get("day")
+    if year is None:
+        return ""
+    if month and day:
+        return f"{int(year):04d}-{int(month):02d}-{int(day):02d}"
+    if month:
+        return f"{int(year):04d}-{int(month):02d}"
+    return f"{int(year):04d}"
+
+
+def _a2a_text(node: Any) -> str:
+    """Unwrap OpenArchieven's nested A2A JSON single-key string wrappers."""
+    if node is None:
+        return ""
+    if isinstance(node, str):
+        return node.strip()
+    if isinstance(node, (int, float)):
+        return str(node)
+    if isinstance(node, dict):
+        for key, val in node.items():
+            if isinstance(val, (str, int, float)):
+                return str(val).strip()
+            if isinstance(val, dict) and key in val:
+                return _a2a_text(val[key])
+        for val in node.values():
+            found = _a2a_text(val)
+            if found:
+                return found
+    return ""
+
+
+def _as_list(val: Any) -> list[Any]:
+    if val is None:
+        return []
+    return val if isinstance(val, list) else [val]
+
+
+def _fmt_a2a_date(date_node: Any) -> str:
+    if not isinstance(date_node, dict):
+        return _a2a_text(date_node)
+    year = _a2a_text(date_node.get("a2a_Year"))
+    month = _a2a_text(date_node.get("a2a_Month"))
+    day = _a2a_text(date_node.get("a2a_Day"))
+    if year and month and day:
+        try:
+            return f"{int(year):04d}-{int(month):02d}-{int(day):02d}"
+        except ValueError:
+            pass
+    if year and month:
+        try:
+            return f"{int(year):04d}-{int(month):02d}"
+        except ValueError:
+            pass
+    if year:
+        return year
+    return _a2a_text(date_node.get("a2a_LiteralDate"))
+
+
+def _fmt_a2a_person_name(name_node: Any) -> str:
+    if not isinstance(name_node, dict):
+        return _a2a_text(name_node)
+    parts = [
+        _a2a_text(name_node.get("a2a_PersonNameFirstName")),
+        _a2a_text(name_node.get("a2a_PersonNamePatronym")),
+        _a2a_text(name_node.get("a2a_PersonNamePrefixLastName")),
+        _a2a_text(name_node.get("a2a_PersonNameLastName")),
+    ]
+    return " ".join(p for p in parts if p)
+
+
+def _parse_record_ref(archive: str, identifier: str | None) -> tuple[str, str]:
+    """Accept either (archive, identifier), 'archive:identifier', or an openarchieven.nl URL."""
+    if identifier:
+        return archive.strip(), identifier.strip()
+    match = re.search(r"openarchieven\.nl/([a-z0-9_-]+):([A-Za-z0-9-]+)", archive, re.I)
+    if match:
+        return match.group(1), match.group(2)
+    if ":" in archive:
+        code, ident = archive.split(":", 1)
+        if code.strip() and ident.strip():
+            return code.strip(), ident.strip()
+    raise click.UsageError(
+        "Pass ARCHIVE and IDENTIFIER, an 'archive:uuid' token, or an openarchieven.nl record URL."
+    )
+
+
+def _format_a2a_record(archive: str, identifier: str, record: dict[str, Any]) -> str:
+    lines = [
+        f"Record: {archive}:{identifier}",
+        f"  URL: {WEB_BASE}/{archive}:{identifier}",
+    ]
+    source = record.get("a2a_Source") or {}
+    source_type = _a2a_text(source.get("a2a_SourceType"))
+    source_place = _a2a_text((source.get("a2a_SourcePlace") or {}).get("a2a_Place"))
+    ref = source.get("a2a_SourceReference") or {}
+    inst = _a2a_text(ref.get("a2a_InstitutionName"))
+    book = _a2a_text(ref.get("a2a_Book"))
+    collection = _a2a_text(ref.get("a2a_Collection"))
+    doc_num = _a2a_text(ref.get("a2a_DocumentNumber"))
+    archive_num = _a2a_text(ref.get("a2a_Archive"))
+    reg_num = _a2a_text(ref.get("a2a_RegistryNumber"))
+
+    if source_type:
+        lines.append(f"  Source type: {source_type}")
+    if inst:
+        lines.append(f"  Institution: {inst}")
+    if source_place:
+        lines.append(f"  Source place: {source_place}")
+    ref_parts = [
+        f"Archive {archive_num}" if archive_num else "",
+        f"Registry {reg_num}" if reg_num else "",
+        book,
+        collection,
+        f"Document {doc_num}" if doc_num else "",
+    ]
+    ref_line = " | ".join(p for p in ref_parts if p)
+    if ref_line:
+        lines.append(f"  Reference: {ref_line}")
+
+    events = _as_list(record.get("a2a_Event"))
+    for ev in events:
+        if not isinstance(ev, dict):
+            continue
+        ev_type = _a2a_text(ev.get("a2a_EventType"))
+        ev_date = _fmt_a2a_date(ev.get("a2a_EventDate"))
+        ev_place = _a2a_text((ev.get("a2a_EventPlace") or {}).get("a2a_Place"))
+        summary = " | ".join(p for p in (ev_type, ev_date, ev_place) if p)
+        if summary:
+            lines.append(f"  Event: {summary}")
+
+    roles_by_pid: dict[str, list[str]] = {}
+    for rel in _as_list(record.get("a2a_RelationEP")):
+        if not isinstance(rel, dict):
+            continue
+        pid = _a2a_text(rel.get("a2a_PersonKeyRef"))
+        role = _a2a_text(rel.get("a2a_RelationType"))
+        if pid and role:
+            roles_by_pid.setdefault(pid, []).append(role)
+
+    persons = _as_list(record.get("a2a_Person"))
+    if persons:
+        lines.append("  Persons:")
+        for person in persons:
+            if not isinstance(person, dict):
+                continue
+            pid = str(person.get("pid") or "")
+            name = _fmt_a2a_person_name(person.get("a2a_PersonName")) or "(unnamed)"
+            role_str = ", ".join(roles_by_pid.get(pid, []))
+            bdate = _fmt_a2a_date(person.get("a2a_BirthDate"))
+            bplace = _a2a_text((person.get("a2a_BirthPlace") or {}).get("a2a_Place"))
+            res = _a2a_text((person.get("a2a_Residence") or {}).get("a2a_Place"))
+            occ = _a2a_text(person.get("a2a_Profession"))
+            details = []
+            if role_str:
+                details.append(role_str)
+            if bdate or bplace:
+                details.append("b. " + ", ".join(p for p in (bdate, bplace) if p))
+            if res:
+                details.append(f"res. {res}")
+            if occ:
+                details.append(f"occ. {occ}")
+            suffix = f" ({'; '.join(details)})" if details else ""
+            lines.append(f"    - {name}{suffix}")
+
+    scans_block = source.get("a2a_SourceAvailableScans") or {}
+    scans = _as_list(scans_block.get("a2a_Scan")) if isinstance(scans_block, dict) else []
+    scan_uris = [_a2a_text(s.get("a2a_Uri")) for s in scans if isinstance(s, dict)]
+    scan_uris = [u for u in scan_uris if u]
+    if scan_uris:
+        lines.append("  Scans:")
+        for uri in scan_uris[:5]:
+            lines.append(f"    - {uri}")
+        if len(scan_uris) > 5:
+            lines.append(f"    - (+{len(scan_uris) - 5} more)")
+
+    orig = _a2a_text(source.get("a2a_SourceDigitalOriginal"))
+    if orig:
+        lines.append(f"  Original: {orig}")
+
+    return "\n".join(lines)
+
+
+@click.group(context_settings={"help_option_names": ["-h", "--help"]})
+def cli() -> None:
+    """Search and inspect Dutch and Belgian archive records on OpenArchieven."""
+
+
+@cli.command()
+@click.argument("name_arg", required=False, default=None)
+@click.option("--name", "name_opt", default=None, help="Person name query (may include '&' for two names).")
+@click.option("--place", default=None, help="Filter by event place (eventplace), e.g. Zundert or Rotterdam.")
+@click.option("--birth-place", default=None, help="Filter by person birth place (birthplace).")
+@click.option(
+    "--event-type",
+    default=None,
+    help="Event type (e.g. Geboorte, Huwelijk, Overlijden) or source type (e.g. 'BS Geboorte', Bevolkingsregister).",
+)
+@click.option(
+    "--source-type",
+    default=None,
+    help="Explicit OpenArchieven source type (e.g. 'BS Geboorte', 'BS Huwelijk', 'BS Overlijden', Bevolkingsregister, Passagiersregisters).",
+)
+@click.option(
+    "--year",
+    default=None,
+    help="Year or year range (e.g. 1853 or 1850-1860), appended to the name query as required by the API.",
+)
+@click.option("--archive", default=None, help="Archive code filter, e.g. bhi, wba, srt, saa, zal.")
+@click.option("--relation", default=None, help="Relation/role filter, e.g. Kind, Vader, Bruid, Geregistreerde.")
+@click.option("--country", default=None, help="Country code filter, e.g. nl, be, fr.")
+@click.option(
+    "--lang",
+    default="nl",
+    show_default=True,
+    type=click.Choice(["nl", "en", "de", "fr"]),
+    help="Language for returned archive and type labels.",
+)
+@click.option("--limit", "-n", type=int, default=10, show_default=True, help="Results to return (max 100).")
+@click.option("--start", type=int, default=0, show_default=True, help="Offset for paging (max 10000).")
+@click.option("--json", "as_json", is_flag=True, help="Emit raw API JSON output.")
+def search(
+    name_arg: str | None,
+    name_opt: str | None,
+    place: str | None,
+    birth_place: str | None,
+    event_type: str | None,
+    source_type: str | None,
+    year: str | None,
+    archive: str | None,
+    relation: str | None,
+    country: str | None,
+    lang: str,
+    limit: int,
+    start: int,
+    as_json: bool,
+) -> None:
+    """Search OpenArchieven records.
+
+    Example: openarchieven search --name "Vincent van Gogh" --place Zundert --year 1853
+    """
+    raw_name = (name_opt or name_arg or "").strip()
+    if not raw_name:
+        raise click.UsageError("Provide a name via --name or a positional argument.")
+    if year:
+        raw_name = f"{raw_name} {year.strip()}"
+
+    params: dict[str, Any] = {
+        "name": raw_name,
+        "number_show": max(1, min(limit, 100)),
+        "start": max(0, min(start, 10000)),
+        "lang": lang,
+    }
+    if place:
+        params["eventplace"] = place
+    if birth_place:
+        params["birthplace"] = birth_place
+    if source_type:
+        params["sourcetype"] = source_type
+    if event_type:
+        if _is_source_type(event_type) and "sourcetype" not in params:
+            params["sourcetype"] = event_type
+        else:
+            params["eventtype"] = event_type
+    if archive:
+        params["archive"] = archive
+    if relation:
+        params["relationtype"] = relation
+    if country:
+        params["country_code"] = country
+
+    data = _get_json("search.json", params)
+    if as_json:
+        click.echo(json.dumps(data, indent=2, ensure_ascii=False))
+        return
+
+    resp = data.get("response") or {}
+    total = resp.get("number_found", 0)
+    docs = resp.get("docs") or []
+    click.echo(f"Found {total} records (showing {len(docs)} from offset {start})")
+    for doc in docs:
+        code = doc.get("archive_code") or ""
+        ident = doc.get("identifier") or ""
+        person = doc.get("personname") or "(unnamed)"
+        role = doc.get("relationtype") or ""
+        stype = doc.get("sourcetype") or doc.get("eventtype") or ""
+        date_str = _fmt_eventdate(doc.get("eventdate"))
+        places = doc.get("eventplace") or []
+        place_str = ", ".join(places) if isinstance(places, list) else str(places)
+        url = doc.get("url") or f"{WEB_BASE}/{code}:{ident}"
+        click.echo(
+            f"- {code}:{ident} | {person} ({role}) | {stype} | {date_str} | {place_str}\n"
+            f"  {url}"
+        )
+
+
+@cli.command()
+@click.argument("archive")
+@click.argument("identifier", required=False, default=None)
+@click.option(
+    "--lang",
+    default="nl",
+    show_default=True,
+    type=click.Choice(["nl", "en", "de", "fr"]),
+    help="Language for returned labels.",
+)
+@click.option("--json", "as_json", is_flag=True, help="Emit raw A2A JSON output.")
+def show(archive: str, identifier: str | None, lang: str, as_json: bool) -> None:
+    """Fetch full A2A details for one record by ARCHIVE IDENTIFIER, archive:uuid, or URL."""
+    code, ident = _parse_record_ref(archive, identifier)
+    data = _get_json("show.json", {"archive": code, "identifier": ident, "lang": lang})
+    if as_json:
+        click.echo(json.dumps(data, indent=2, ensure_ascii=False))
+        return
+    records = data if isinstance(data, list) else [data]
+    if not records:
+        click.echo("No record data returned.")
+        return
+    for idx, rec in enumerate(records):
+        if idx > 0:
+            click.echo("")
+        if isinstance(rec, dict):
+            click.echo(_format_a2a_record(code, ident, rec))
+
+
+@cli.command()
+@click.option("--name", default=None, help="Person name query.")
+@click.option("--place", default=None, help="Event place.")
+@click.option("--year", default=None, help="Year or year range (e.g. 1853 or 1850-1860).")
+@click.option("--record", default=None, help="Record token 'archive:uuid' to build a direct record URL.")
+def url(name: str | None, place: str | None, year: str | None, record: str | None) -> None:
+    """Print a shareable OpenArchieven website URL offline."""
+    if record:
+        code, ident = _parse_record_ref(record, None)
+        click.echo(f"{WEB_BASE}/{code}:{ident}")
+        return
+    if not name:
+        raise click.UsageError("Pass --name or --record.")
+    q = f"{name.strip()} {year.strip()}" if year else name.strip()
+    params = [("name", q)]
+    if place:
+        params.append(("eventplace", place.strip()))
+    click.echo(f"{WEB_BASE}/search.php?{urlencode(params)}")
+
+
+if __name__ == "__main__":
+    cli()

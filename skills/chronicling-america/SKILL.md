@@ -24,7 +24,7 @@ skills/chronicling-america/scripts/chronam search Lincoln
 # Surname search narrowed to 1860-1865
 skills/chronicling-america/scripts/chronam search Lincoln --dates 1860/1865
 
-# Illinois papers only (client-side state filter), JSON output
+# Illinois papers only (server-side state facet), JSON output
 skills/chronicling-america/scripts/chronam search Lincoln --dates 1860/1865 --state Illinois --json
 
 # One newspaper title only, by LCCN (Evening Star, Washington, D.C.)
@@ -74,7 +74,7 @@ skills/chronicling-america/scripts/chronam url "Susan B. Anthony" --dates 1870/1
 - **Display level `dl=`:** `page` (default for full-text page results), `issue`, `title`, `all`. Pass `dl=page` for OCR searching.
 - **Pagination:** `c=` results per page, `sp=` page number (1-based). `sp` is also the page sequence inside an issue URL (`?sp=1` = 1st page of the issue).
 - **Item JSON:** append `fo=json` to a resource URL, e.g. `https://www.loc.gov/resource/<lccn>/<YYYY-MM-DD>/ed-1/?sp=<seq>&fo=json`. The `resources[]` array holds `pdf`, `image`, `fulltext_file`, and `iiif_manifest_url` (`tile.loc.gov` hosts). Note: the storage-services `pdf` URL returns 403 without a `Referer: https://www.loc.gov/` header (verified 2026-11-24); the CLI sends one on downloads. The `image` and `fulltext_file` URLs fetch without it.
-- **State / LCCN filters:** the README documents server-side facets (`fa=number_lccn:sn83045462`, `fa=batch:...`, `location_state=california`). Those were NOT re-verified live against the JSON API (see the `qs` finding above), so the CLI filters by `location_state` / `number_lccn` client-side on the returned page instead. If a query is too large to filter client-side, narrow with `dates=` first.
+- **State / LCCN filters (verified live 2026-11-25):** server-side facets `fa=location_state:<lowercase-state>` (for example `fa=location_state:illinois`) and `fa=number_lccn:<lccn>` work on the `fo=json` endpoint; bare `location_state=<state>` is ignored. The CLI sends `fa=` filters server-side so common surnames are not hidden behind nationwide hits. Note two LoC quirks: `loc.gov` occasionally drops a connection or returns a transient 0-hit response under load (the CLI retries once on dropped connections and warns when `hits > 0` with empty `results`), and a handful of digitized titles carry an incorrect `location_state` in LoC's metadata even when `location_county` is right, so verify by `--lccn` when targeting a known local paper.
 - **Multi-word queries:** `q` with several words was not verified for AND vs OR behavior; treat multi-word `q` as a broad match and verify the hit count before bulk work. For exact-phrase searching use the website's advanced search.
 
 ### Example URL patterns

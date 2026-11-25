@@ -11,22 +11,28 @@ This skill includes a standalone executable Python CLI at `skills/archive-org/sc
 
 Path: `skills/archive-org/scripts/archive-org`
 
-### Search items
+### Search item metadata (`search`) vs full-text OCR (`fulltext`)
+
+`search` calls `advancedsearch.php`, which searches **item metadata only** (title, creator, description, subjects), NOT the OCR text inside digitized books. Use `fulltext` to search inside digitized book and directory OCR pages:
 
 ```bash
-# Search titles mentioning Lincoln
+# Metadata search: titles mentioning Lincoln
 skills/archive-org/scripts/archive-org search 'title:(Lincoln)'
 
-# Narrow to digitized texts for a historical figure
+# Narrow metadata search to digitized texts for a historical figure
 skills/archive-org/scripts/archive-org search '"Frederick Douglass"' --mediatype texts
 
 # Sort by popularity, second page, full JSON
 skills/archive-org/scripts/archive-org search 'title:(Lincoln)' --sort 'downloads desc' --rows 5
 skills/archive-org/scripts/archive-org search 'title:(Lincoln)' --page 2
 skills/archive-org/scripts/archive-org search 'title:(Lincoln)' --json
+
+# Full-text OCR search inside digitized books (returns highlighted OCR snippets)
+skills/archive-org/scripts/archive-org fulltext '"Abraham Lincoln" Gettysburg' --rows 5
+skills/archive-org/scripts/archive-org fulltext '"Clara Barton" Red Cross' --json
 ```
 
-The query is Lucene syntax (see below). Default returned fields are `identifier`, `title`, `creator`, `date`, `mediatype`; pass `--field` (repeatable) to change them.
+The `search` query is Lucene syntax (see below). Default returned fields are `identifier`, `title`, `creator`, `date`, `mediatype`; pass `--field` (repeatable) to change them. A zero-hit `search` means no item metadata matched; run `fulltext` before concluding a name is absent from digitized directories or county histories.
 
 ### Read an item's metadata and files
 
@@ -46,6 +52,17 @@ skills/archive-org/scripts/archive-org download <identifier> <identifier>.pdf --
 ```
 
 The CLI refuses a file name that is not in the item's file list, so list first when unsure. Download URLs follow the site's redirect to the file server automatically.
+
+### Download single high-res pages (`page`) without pulling huge PDFs
+
+For large 100 to 250 MB county plat atlases or city directories, download `_djvu.txt` or `_hocr_pageindex.json.gz` first to identify the target leaf number (`n<leaf>`), then fetch just that single rendered JPEG page on unrestricted public-domain items:
+
+```bash
+# Fetch leaf 0 at 1200px or 2400px width (instead of downloading a 200 MB PDF)
+skills/archive-org/scripts/archive-org page ourmartyrpreside00banc 0 --width 1200 --out ./downloads
+```
+
+Single-page URL pattern: `https://archive.org/download/<identifier>/page/n<leaf>_w<width>.jpg`. Returns HTTP 403 on borrow-only / `inlibrary` items.
 
 ### Build a website search URL offline
 

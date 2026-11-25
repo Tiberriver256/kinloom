@@ -23,8 +23,10 @@ import json
 import re
 import shutil
 import subprocess
+import tempfile
 from html.parser import HTMLParser
-from urllib.parse import quote_plus
+from pathlib import Path
+from urllib.parse import quote_plus, unquote
 
 import click
 
@@ -90,14 +92,69 @@ class ResultParser(HTMLParser):
             self.link_text += data
 
 
-def fetch_search(query: str) -> str:
-    url = f"{BASE}/?s={quote_plus(query)}"
+class ItemMetadataParser(HTMLParser):
+    """Parse Preservica item page title, Item Data fields, and download link."""
+
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.in_h1 = False
+        self.title = ""
+        self.in_key = False
+        self.in_val = False
+        self.cur_key = ""
+        self.cur_val = ""
+        self.fields: list[tuple[str, str]] = []
+        self.download_url: str | None = None
+
+    def handle_starttag(self, tag, attrs):
+        attr_map = dict(attrs)
+        classes = attr_map.get("class", "")
+        if tag == "h1" and not self.title:
+            self.in_h1 = True
+        elif tag == "span" and "metadata-title" in classes:
+            self.in_key = True
+            self.cur_key = ""
+        elif tag == "span" and "metadata-content" in classes:
+            self.in_val = True
+            self.cur_val = ""
+        elif tag == "a":
+            href = attr_map.get("href", "")
+            if "/download/file/" in href and not self.download_url:
+                self.download_url = href
+
+    def handle_endtag(self, tag):
+        if tag == "h1" and self.in_h1:
+            self.in_h1 = False
+        elif tag == "span" and self.in_key:
+            self.in_key = False
+        elif tag == "span" and self.in_val:
+            self.in_val = False
+            key = " ".join(self.cur_key.split()).strip(":")
+            val = " ".join(self.cur_val.split())
+            if key:
+                self.fields.append((key, val))
+
+    def handle_data(self, data):
+        if self.in_h1:
+            self.title += data
+        elif self.in_key:
+            self.cur_key += data
+        elif self.in_val:
+            self.cur_val += data
+
+
+def _require_curl() -> str:
     curl = shutil.which("curl")
     if not curl:
         raise click.ClickException("curl is required but was not found on PATH.")
+    return curl
+
+
+def _curl_get_text(url: str) -> str:
+    curl = _require_curl()
     try:
         proc = subprocess.run(
-            [curl, "-sS", "-A", USER_AGENT, "--max-time", "60", url],
+            [curl, "-sSL", "-A", USER_AGENT, "--max-time", "60", url],
             capture_output=True,
             text=True,
             timeout=70,
@@ -110,6 +167,40 @@ def fetch_search(query: str) -> str:
             f"{proc.stderr.strip()[:300]}"
         )
     return proc.stdout
+
+
+def _resolve_item_ref(url_or_id: str) -> tuple[str, str]:
+    """Return (item_id, item_page_url) from a Preservica URL or IO_/SO_ identifier."""
+    raw = url_or_id.strip()
+    match = re.search(r"((?:IO|SO)_[A-Za-z0-9-]+)", raw)
+    if match:
+        item_id = match.group(1)
+        if raw.startswith("http://") or raw.startswith("https://"):
+            return item_id, raw
+        return item_id, f"{BASE}/uncategorized/{item_id}/"
+    if raw.startswith("http://") or raw.startswith("https://"):
+        return raw.rstrip("/").rsplit("/", 1)[-1], raw
+    raise click.UsageError(
+        "Pass a Michiganology item URL or a Preservica ID starting with IO_ or SO_."
+    )
+
+
+def _filename_from_headers(headers_text: str, fallback: str) -> str:
+    match_star = re.search(r"filename\*\s*=\s*UTF-8''([^\r\n;]+)", headers_text, re.I)
+    if match_star:
+        candidate = Path(unquote(match_star.group(1).strip().strip('"'))).name
+        if candidate:
+            return candidate
+    match_plain = re.search(r'filename\s*=\s*"?([^"\r\n;]+)"?', headers_text, re.I)
+    if match_plain:
+        candidate = Path(match_plain.group(1).strip()).name
+        if candidate:
+            return candidate
+    return fallback
+
+
+def fetch_search(query: str) -> str:
+    return _curl_get_text(f"{BASE}/?s={quote_plus(query)}")
 
 
 def total_results(page: str) -> int | None:
@@ -143,6 +234,92 @@ def search(query: str, limit: int, as_json: bool) -> None:
     for item in results:
         click.echo(f"- {item['title']}\n  {item['url']}")
     click.echo(f"({len(results)} of {total} shown; first page only)")
+
+
+@cli.command()
+@click.argument("url_or_id")
+@click.option("--json", "as_json", is_flag=True, help="Emit JSON.")
+def get(url_or_id: str, as_json: bool) -> None:
+    """Inspect a Michiganology item page (Item Data fields and file download URL)."""
+    item_id, item_url = _resolve_item_ref(url_or_id)
+    page = _curl_get_text(item_url)
+    parser = ItemMetadataParser()
+    parser.feed(page)
+    title = " ".join(parser.title.split()) or item_id
+    download_url = parser.download_url
+    if not download_url and item_id.startswith("IO_"):
+        download_url = f"{BASE}/download/file/{item_id}"
+    metadata: dict[str, str | list[str]] = {}
+    for key, val in parser.fields:
+        if key in metadata:
+            prev = metadata[key]
+            metadata[key] = [*prev, val] if isinstance(prev, list) else [prev, val]
+        else:
+            metadata[key] = val
+    payload = {
+        "id": item_id,
+        "title": title,
+        "url": item_url,
+        "download_url": download_url,
+        "metadata": metadata,
+    }
+    if as_json:
+        click.echo(json.dumps(payload, indent=2, ensure_ascii=False))
+        return
+    click.echo(f"Item {item_id}: {title}")
+    click.echo(f"  URL: {item_url}")
+    if download_url:
+        click.echo(f"  Download: {download_url}")
+    for key, val in parser.fields:
+        click.echo(f"  {key}: {val}")
+
+
+@cli.command()
+@click.argument("url_or_id")
+@click.option("--out", "-o", default=".", show_default=True, help="Output directory.")
+@click.option("--filename", default=None, help="Override output filename (default: from Content-Disposition).")
+def download(url_or_id: str, out: str, filename: str | None) -> None:
+    """Download the full-resolution file for a Michiganology IO_ item."""
+    item_id, item_url = _resolve_item_ref(url_or_id)
+    if not item_id.startswith("IO_"):
+        raise click.ClickException(
+            f"{item_id} is a folder/collection object (SO_); pass an IO_ item URL or ID to download."
+        )
+    download_url = f"{BASE}/download/file/{item_id}"
+    curl = _require_curl()
+    out_dir = Path(out)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        hdr_path = Path(tmp_dir) / "headers.txt"
+        body_path = Path(tmp_dir) / "body.bin"
+        try:
+            proc = subprocess.run(
+                [
+                    curl, "-sSL", "-A", USER_AGENT, "--max-time", "120",
+                    "-D", str(hdr_path), "-o", str(body_path),
+                    "-w", "%{http_code}", download_url,
+                ],
+                capture_output=True,
+                text=True,
+                timeout=130,
+            )
+        except (subprocess.SubprocessError, OSError) as exc:
+            raise click.ClickException(f"Michiganology download failed: {exc}") from exc
+        if proc.returncode != 0:
+            raise click.ClickException(
+                f"Michiganology download failed (curl exit {proc.returncode}): "
+                f"{proc.stderr.strip()[:300]}"
+            )
+        status = proc.stdout.strip()
+        if status != "200":
+            raise click.ClickException(
+                f"Michiganology download returned HTTP {status} for {download_url} (source page: {item_url})"
+            )
+        headers_text = hdr_path.read_text(encoding="utf-8", errors="replace")
+        chosen_name = filename or _filename_from_headers(headers_text, f"{item_id}.bin")
+        dest = out_dir / Path(chosen_name).name
+        dest.write_bytes(body_path.read_bytes())
+        click.echo(f"{dest} ({dest.stat().st_size} bytes)")
 
 
 @cli.command()

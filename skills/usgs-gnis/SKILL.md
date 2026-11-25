@@ -83,6 +83,7 @@ skills/usgs-gnis/scripts/gnis url "New Salem"
 ## Research workflow notes
 
 - Start from the place as written in the source (deed, memoir, obituary), then check GNIS for the current name, variant names, feature class, and county: county boundaries and names change, and the county on a hit is the modern one.
+- **Civil townships vs populated places:** rural townships are indexed with the suffix `"Township"` under feature class `Civil` (not `Populated Place`). When searching for a township name, omit `--exact` and `--class "Populated Place"`, or pass `--class Civil`.
 - Defunct post offices and railroad stops usually appear as `Post Office` / `Locale` / historical features; if a state-file search comes up empty, retry with `--historical`.
 - Record the GNIS `feature_id` alongside any place you cite in `data/`: it is the stable identifier when names collide (there are many repeated place names across states).
 - Coordinates from GNIS place a feature, not a parcel. For the parcel itself, pair the GNIS hit with the BLM GLO patent's township/range/section (see the `blm-glo` skill).

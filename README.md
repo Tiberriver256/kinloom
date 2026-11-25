@@ -56,7 +56,7 @@ Kinloom separates the React explorer (`<KinloomApp />`) from storage and hosting
 
 ## Architecture and packages
 
-Kinloom ships six npm workspaces, a public-domain demo app, and 18 standalone research skills:
+Kinloom ships six npm workspaces, a public-domain demo app, and 19 standalone research skills:
 
 | Package | Role | Key capabilities |
 | --- | --- | --- |
@@ -77,9 +77,9 @@ Private sites extend Kinloom without forking core packages:
 
 ## Bundled genealogy research skills
 
-The `skills/` directory bundles 18 standalone `uv`-based archival research CLIs for both human researchers and AI agents:
+The `skills/` directory bundles 19 standalone `uv`-based archival research CLIs for both human researchers and AI agents:
 
-`acpl-persi`, `archive-org`, `blm-glo`, `california-archives`, `chronicling-america`, `cyndis-list`, `findagrave`, `hathitrust`, `kentucky-archives`, `library-of-michigan`, `missouri-archives`, `nara-catalog-search`, `new-jersey-archives`, `texas-archives`, `uk-archives`, `usgs-gnis`, `virginia-archives`, and `wikitree`.
+`acpl-persi`, `archive-org`, `blm-glo`, `california-archives`, `chronicling-america`, `cyndis-list`, `findagrave`, `hathitrust`, `kentucky-archives`, `library-of-michigan`, `missouri-archives`, `nara-catalog-search`, `new-jersey-archives`, `openarchieven`, `texas-archives`, `uk-archives`, `usgs-gnis`, `virginia-archives`, and `wikitree`.
 
 Agents submit structured multi-entity discoveries through `POST /api/batches` with scoped `write_batch` bearer tokens. Every agent wave appears in `/changes` with a `Research agent` badge and supports one-click reverse-order Batch Revert.
 

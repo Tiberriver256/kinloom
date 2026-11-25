@@ -14,7 +14,7 @@ This skill includes a standalone executable Python CLI at `skills/hathitrust/scr
 
 ## Bundled CLI (`scripts/hathi`)
 
-Path: `skills/hathitrust/scripts/hathi`
+Path: `skills/hathitrust/scripts/hathi` (note the short binary name `hathi`, not `hathitrust`).
 
 ### Look up a record by identifier (Bibliographic API)
 

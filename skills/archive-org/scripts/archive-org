@@ -23,6 +23,7 @@ import httpx
 
 BASE = "https://archive.org"
 ADVANCED_SEARCH = f"{BASE}/advancedsearch.php"
+FULLTEXT_SEARCH = f"{BASE}/services/search/beta/page_production/"
 USER_AGENT = "kinloom archive-org skill (research use)"
 DEFAULT_FIELDS = ["identifier", "title", "creator", "date", "mediatype"]
 
@@ -37,6 +38,23 @@ def client() -> httpx.Client:
 def fail(message: str) -> None:
     click.echo(message, err=True)
     raise SystemExit(1)
+
+
+def fulltext_api(query: str, rows: int, page: int) -> dict:
+    params = {
+        "user_query": query,
+        "service_backend": "fts",
+        "hits_per_page": str(rows),
+        "page": str(page),
+    }
+    try:
+        with client() as http:
+            resp = http.get(FULLTEXT_SEARCH, params=params)
+    except httpx.HTTPError as exc:
+        fail(f"Request failed: {exc}")
+    if resp.status_code != 200:
+        fail(f"HTTP {resp.status_code} from {FULLTEXT_SEARCH}")
+    return resp.json()
 
 
 def search_api(query: str, fields, rows: int, page: int, sorts) -> dict:
@@ -202,6 +220,70 @@ def download(identifier, files, out, list_only):
             dest = out_dir / Path(name).name
             dest.write_bytes(resp.content)
             click.echo(f"{dest} ({len(resp.content)} bytes)")
+
+
+@cli.command()
+@click.argument("query")
+@click.option("--rows", type=int, default=10, show_default=True, help="Hits per page.")
+@click.option("--page", type=int, default=1, show_default=True, help="Results page (1-based).")
+@click.option("--json", "as_json", is_flag=True, help="Full JSON output.")
+def fulltext(query, rows, page, as_json):
+    """Search OCR full text inside digitized books and periodicals.
+
+    Unlike `search` (which queries item metadata only), `fulltext` searches
+    page text and returns highlighted OCR snippets.
+    """
+    data = fulltext_api(query, rows, page)
+    if as_json:
+        click.echo(json.dumps(data, indent=2, ensure_ascii=False))
+        return
+    hits_block = ((data.get("response") or {}).get("body") or {}).get("hits") or {}
+    total = hits_block.get("total", 0)
+    hits = hits_block.get("hits") or []
+    click.echo(f"{total} full-text matches (showing {len(hits)})")
+    for hit in hits:
+        fields = hit.get("fields") or {}
+        identifier = fields.get("identifier") or ""
+        title = fields.get("title") or ""
+        year = fields.get("year") or fields.get("date") or ""
+        snippets = (hit.get("highlight") or {}).get("text") or []
+        snippet = short(snippets[0].replace("{{{", "").replace("}}}", ""), 200) if snippets else ""
+        click.echo(f"- {identifier} | {title} | {year} | {item_url(identifier)}")
+        if snippet:
+            click.echo(f"  OCR: {snippet}")
+
+
+@cli.command("page")
+@click.argument("identifier")
+@click.argument("leaf", type=int)
+@click.option("--width", type=int, default=2400, show_default=True,
+              help="Rendered JPEG width in pixels (e.g. 1200 or 2400).")
+@click.option("--out", default=".", show_default=True,
+              help="Directory to save the page image into.")
+def fetch_page(identifier, leaf, width, out):
+    """Download one rendered page image (leaf n<LEAF>) from an unrestricted item.
+
+    Avoids downloading 100-250 MB full PDFs when you only need specific pages
+    from a county plat atlas, city directory, or digitized book.
+    """
+    page_url = f"{BASE}/download/{quote(identifier)}/page/n{leaf}_w{width}.jpg"
+    try:
+        with client() as http:
+            resp = http.get(page_url)
+    except httpx.HTTPError as exc:
+        fail(f"Request failed: {exc}")
+    if resp.status_code == 403:
+        fail(
+            f"HTTP 403 from {page_url}. This item is likely access-restricted or borrow-only; "
+            "single-page JPEG downloads work only on unrestricted public-domain items."
+        )
+    if resp.status_code != 200:
+        fail(f"HTTP {resp.status_code} from {page_url}")
+    out_dir = Path(out)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    dest = out_dir / f"{identifier}_n{leaf}_w{width}.jpg"
+    dest.write_bytes(resp.content)
+    click.echo(f"{dest} ({len(resp.content)} bytes)")
 
 
 @cli.command()

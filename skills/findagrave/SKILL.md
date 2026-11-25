@@ -43,7 +43,7 @@ skills/findagrave/scripts/findagrave get <memorial-id> --full --photos
 skills/findagrave/scripts/findagrave get <memorial-id-1> <memorial-id-2> --json
 ```
 
-A `get` returns name (with maiden name separate), birth/death dates and places, cemetery, plot, inscription, bio, veteran flag, grave-photo flag, photo count, linked relationships (each with its own memorial id to read next), and created/modified dates. `familyRelations` is usually null in search-shaped responses; use `relationships` for linked family.
+A `get` returns name (with maiden name separate), birth/death dates and places, cemetery, plot, inscription, bio, veteran flag, grave-photo flag, photo count, linked relationships (each with its own memorial id to read next), and created/modified dates. `familyRelations` is usually null in search-shaped responses; use `relationships` for linked family. In `--json` output, `bio` and `inscription` are returned as `{"value": "..."}` objects or `null` (matching the GraphQL schema).
 
 ### Cemeteries and places
 
@@ -67,9 +67,12 @@ Place ids look like `city_<id>`, `county_<id>`, or a plain cemetery id. Resolve 
 # Downloads a memorial's photos into ./photos
 skills/findagrave/scripts/findagrave photo <memorial-id> --out ./photos
 skills/findagrave/scripts/findagrave photo <memorial-id> --type Grave --out ./photos
+
+# Add a self-describing filename prefix and a provenance sidecar JSON file
+skills/findagrave/scripts/findagrave photo <memorial-id> --type Grave --prefix lincoln-abraham --metadata --out ./photos
 ```
 
-Files are saved as `<photo-id>.jpg`. Read a gravestone photo before trusting a memorial's transcribed dates: the stone is the better source.
+Files are saved as `<photo-id>.jpg` by default, or `<prefix>_<photo-id>.jpg` when `--prefix` is set (`--metadata` writes `<prefix>_<memorial-id>.metadata.json`). Read a gravestone photo before trusting a memorial's transcribed dates: the stone is the better source.
 
 ### Build a website search URL offline
 

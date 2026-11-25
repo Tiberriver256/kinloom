@@ -444,14 +444,19 @@ def place(name, limit, as_json):
               help="Directory to save photos into.")
 @click.option("--type", "photo_type", default=None,
               help="Only download this photo type, e.g. Grave.")
-def photo(memorial_id, out, photo_type):
+@click.option("--prefix", default=None,
+              help="Optional filename prefix, e.g. 'lincoln-abraham' -> '<prefix>_<photo-id>.jpg'.")
+@click.option("--metadata", "save_metadata", is_flag=True,
+              help="Also write a sidecar JSON file with memorial and photo provenance.")
+def photo(memorial_id, out, photo_type, prefix, save_metadata):
     """Download a memorial's photos (grave, portrait, family, other)."""
     data = gql(GET_QUERY, {"ids": [memorial_id]})
     memorials = data.get("memorialsById") or []
     if not memorials:
         click.echo(f"No memorial found with id {memorial_id}", err=True)
         raise SystemExit(1)
-    photo_list = (memorials[0].get("photos") or {}).get("photos") or []
+    memorial = memorials[0]
+    photo_list = (memorial.get("photos") or {}).get("photos") or []
     if photo_type:
         photo_list = [p for p in photo_list if p.get("type") == photo_type]
     if not photo_list:
@@ -459,15 +464,36 @@ def photo(memorial_id, out, photo_type):
         return
     out_dir = Path(out)
     out_dir.mkdir(parents=True, exist_ok=True)
+    stem_prefix = f"{prefix.strip('_')}_" if prefix else ""
+    saved_items = []
     with httpx.Client(timeout=60.0, follow_redirects=True) as client:
         for item in photo_list:
             url = item.get("path") or ""
             suffix = Path(url.split("?")[0]).suffix or ".jpg"
-            dest = out_dir / f"{item.get('id')}{suffix}"
+            dest = out_dir / f"{stem_prefix}{item.get('id')}{suffix}"
             resp = client.get(url, headers={"User-Agent": USER_AGENT})
             resp.raise_for_status()
             dest.write_bytes(resp.content)
             click.echo(f"{dest} ({len(resp.content)} bytes)")
+            saved_items.append({
+                "id": item.get("id"),
+                "type": item.get("type"),
+                "caption": item.get("caption"),
+                "url": url,
+                "file": dest.name,
+            })
+    if save_metadata:
+        meta_path = out_dir / f"{stem_prefix}{memorial_id}.metadata.json"
+        meta_payload = {
+            "memorial_id": str(memorial.get("id")),
+            "name": primary_name(memorial),
+            "url": memorial_url(str(memorial.get("id"))),
+            "cemetery": fmt_cemetery(memorial.get("cemetery")),
+            "plot": memorial.get("plot"),
+            "photos": saved_items,
+        }
+        meta_path.write_text(json.dumps(meta_payload, indent=2) + "\n", encoding="utf-8")
+        click.echo(f"{meta_path} (metadata)")
 
 
 @cli.command()

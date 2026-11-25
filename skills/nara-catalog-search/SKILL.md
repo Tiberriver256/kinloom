@@ -41,6 +41,8 @@ skills/nara-catalog-search/scripts/nara get <naid> --objects --pages 1-10 --json
 skills/nara-catalog-search/scripts/nara get <naid> --text
 ```
 
+Note on large multi-page file units: `nara get --text` prints text only when NARA's record object stores `extractedText`, `otherExtractedText`, or community transcriptions, and NARA's catalog search proxy response does not include page-level match highlights. When a search matches inside a large digitized file unit (for example hundreds of pages) with no `extractedText` returned by `get --text`, open `https://catalog.archives.gov/id/<naId>` in a browser to locate the matching page.
+
 ### Download digitized scans with compact provenance metadata
 
 ```bash

@@ -18,6 +18,7 @@ from __future__ import annotations
 import json
 import re
 import sys
+import time
 from pathlib import Path
 from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
 
@@ -32,11 +33,21 @@ DOWNLOAD_HEADERS = dict(HEADERS, Referer="https://www.loc.gov/")
 TIMEOUT = 90.0
 
 
-def _get_json(url: str, params: dict | None = None) -> dict:
-    with httpx.Client(headers=HEADERS, timeout=TIMEOUT, follow_redirects=True) as client:
-        resp = client.get(url, params=params)
-        resp.raise_for_status()
-        return resp.json()
+def _get_json(url: str, params: dict | list[tuple[str, str]] | None = None) -> dict:
+    last_exc: Exception | None = None
+    for attempt in range(2):
+        try:
+            with httpx.Client(headers=HEADERS, timeout=TIMEOUT, follow_redirects=True) as client:
+                resp = client.get(url, params=params)
+                resp.raise_for_status()
+                return resp.json()
+        except (httpx.RemoteProtocolError, httpx.ReadTimeout) as exc:
+            last_exc = exc
+            if attempt == 0:
+                time.sleep(1.5)
+                continue
+            raise click.ClickException(f"loc.gov request failed after retry: {exc}") from exc
+    raise click.ClickException(f"loc.gov request failed: {last_exc}")
 
 
 def _as_jsonable(value):
@@ -102,23 +113,34 @@ def cli() -> None:
               show_default=True, help="Display level (dl=).")
 @click.option("--limit", "-n", default=10, show_default=True, help="Results per page (c=).")
 @click.option("--page", "-p", default=1, show_default=True, help="Results page (sp=).")
-@click.option("--state", default=None, help="Keep only results from this state (client-side filter on location_state).")
-@click.option("--lccn", default=None, help="Keep only results from this newspaper LCCN (client-side filter).")
+@click.option("--state", default=None, help="Filter by state server-side via fa=location_state:<state>.")
+@click.option("--lccn", default=None, help="Filter by newspaper LCCN server-side via fa=number_lccn:<lccn>.")
 @click.option("--json", "as_json", is_flag=True, help="Emit JSON instead of compact text.")
 def search(query, dates, level, limit, page, state, lccn, as_json):
     """Search newspaper pages for QUERY (full-text, e.g. a surname)."""
-    params: dict = {"q": query, "fo": "json", "c": limit, "sp": page}
+    params: list[tuple[str, str]] = [
+        ("q", query),
+        ("fo", "json"),
+        ("c", str(limit)),
+        ("sp", str(page)),
+    ]
     if level != "all":
-        params["dl"] = level
+        params.append(("dl", level))
     if dates:
-        params["dates"] = dates
+        params.append(("dates", dates))
+    if state:
+        params.append(("fa", f"location_state:{state.strip().lower()}"))
+    if lccn:
+        params.append(("fa", f"number_lccn:{lccn.strip()}"))
     data = _get_json(COLLECTION_BASE, params=params)
     results = data.get("results") or []
-    if state:
-        results = [r for r in results
-                   if state.lower() in [str(s).lower() for s in (r.get("location_state") or [])]]
-    if lccn:
-        results = [r for r in results if (r.get("number_lccn") or "") == lccn]
+    hits = (data.get("search") or {}).get("hits")
+    if hits and not results:
+        click.echo(
+            f"Warning: loc.gov reported {hits} total hits but returned 0 rows on page {page}. "
+            "Check --page or retry once if loc.gov dropped facet results.",
+            err=True,
+        )
     data["results"] = results
     _print_search(data, as_json)
 
@@ -208,13 +230,19 @@ def download(resource_url, lccn, date, edition, seq, out, pdf, image, text):
 @click.option("--dates", default=None, help="Date range YYYY/YYYY.")
 @click.option("--level", default="page", type=click.Choice(["page", "issue", "title", "all"]),
               show_default=True)
-def url(query, dates, level):
+@click.option("--state", default=None, help="Filter by state via fa=location_state:<state>.")
+@click.option("--lccn", default=None, help="Filter by newspaper LCCN via fa=number_lccn:<lccn>.")
+def url(query, dates, level, state, lccn):
     """Print the loc.gov website search URL for QUERY (open in a browser)."""
-    params = {"q": query, "fo": "json"}
+    params: list[tuple[str, str]] = [("q", query)]
     if level != "all":
-        params["dl"] = level
+        params.append(("dl", level))
     if dates:
-        params["dates"] = dates
+        params.append(("dates", dates))
+    if state:
+        params.append(("fa", f"location_state:{state.strip().lower()}"))
+    if lccn:
+        params.append(("fa", f"number_lccn:{lccn.strip()}"))
     click.echo(COLLECTION_BASE + "?" + urlencode(params))
 
 

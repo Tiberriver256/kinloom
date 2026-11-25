@@ -26,6 +26,21 @@ skills/library-of-michigan/scripts/michiganology search Lincoln
 skills/library-of-michigan/scripts/michiganology search Lincoln --limit 20 --json
 ```
 
+Note on multi-word queries: Preservica simple search treats unquoted multi-word queries (such as `"Abraham Lincoln"`) as broad OR matches across collections, so a broad search can return county tax rolls or unrelated files. Inspect individual hits with `get` or narrow with Advanced Search on the website.
+
+### Inspect an item (`get`) and download the scan (`download`)
+
+Search output prints only the item title (often just a surname or certificate number) and URL. Use `get` to read the full Preservica `Item Data` fields (given name, death date, county, city, parents) and `download` to pull the full-resolution JPEG or PDF directly via `curl`:
+
+```bash
+# Read parsed Item Data metadata and direct download link
+skills/library-of-michigan/scripts/michiganology get IO_<uuid>
+skills/library-of-michigan/scripts/michiganology get "https://michigan.access.preservica.com/uncategorized/IO_<uuid>/" --json
+
+# Download the full-resolution file (filename inferred from Content-Disposition)
+skills/library-of-michigan/scripts/michiganology download IO_<uuid> --out ./downloads/michiganology
+```
+
 ### List the digital collections
 
 ```bash
