@@ -243,7 +243,7 @@ export const GlobalSearchModal: React.FC = () => {
               )}
               {readingsLoading && (
                 <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: 10 }}>
-                  Indexing primary source transcriptions…
+                  Loading primary source transcriptions…
                 </div>
               )}
             </div>
@@ -252,7 +252,7 @@ export const GlobalSearchModal: React.FC = () => {
 
         <div className="global-search-footer">
           <span>↑↓ navigate · Enter open · Esc close</span>
-          <span>{readings ? `${totalSourcePages} source pages indexed` : 'Archive ready'}</span>
+          <span>{readings ? `${totalSourcePages} source pages searchable` : 'Archive ready'}</span>
         </div>
       </div>
     </dialog>

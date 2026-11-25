@@ -85,8 +85,8 @@ export class AppErrorBoundary extends React.Component<AppErrorBoundaryProps, Bou
           <h1 className="archive-recovery-title">{heading}</h1>
           <p className="archive-recovery-lead">
             {chunkStale
-              ? 'This tab held an older page bundle after an archive update. Reload to open the current version.'
-              : 'Something interrupted rendering this archive view. Reload the page or return to the family index.'}
+              ? 'This page was updated since you opened it. Reload to view the latest version.'
+              : 'Something interrupted loading this page. Reload the page or return to the family index.'}
           </p>
           <div className="archive-recovery-actions">
             <button type="button" className="archive-recovery-btn primary" onClick={reloadCurrentPage}>

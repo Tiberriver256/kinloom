@@ -25,7 +25,7 @@ export const DateStamp: React.FC<{ displayDate: string; edtf?: string }> = ({
   displayDate,
   edtf,
 }) => (
-  <span className="date-stamp" title={edtf ? `EDTF: ${edtf}` : undefined}>
+  <span className="date-stamp" title={edtf ? `Recorded date: ${edtf}` : undefined}>
     {displayDate || 'Undated'}
   </span>
 );
@@ -286,7 +286,7 @@ export const ArchivalPhotoFrame: React.FC<{ caption: string; photoUrl?: string |
                 <span className="wireframe-photo-label">No Photograph Archived Yet</span>
                 <span className="wireframe-photo-caption">{caption}</span>
                 <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.78rem', color: 'var(--text-secondary)', marginTop: 8 }}>
-                  Add an image file under public/media/ and register it in data/media.yaml.
+                  A family photograph for this moment has not been added yet.
                 </span>
               </div>
             )}

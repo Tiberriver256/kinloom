@@ -2558,7 +2558,10 @@ html.tree-viewport-lock body {
 }
 
 .mobile-sources-btn,
-.mobile-decade-strip {
+.mobile-decade-strip,
+.topbar-mobile-icon-btn,
+.topbar-account-mobile-only,
+.topbar-account-item-mobile-only {
   display: none;
 }
 
@@ -3048,6 +3051,206 @@ dialog.global-search-backdrop {
   font-weight: 600;
 }
 
+.person-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.person-biography-section {
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--border-decorative);
+  border-radius: 0;
+  box-shadow: none;
+  padding: 0 0 22px;
+  margin-bottom: 24px;
+}
+
+.person-biography-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.person-biography-header h2 {
+  font-family: var(--font-serif);
+  font-size: 1.12rem;
+  font-weight: 600;
+  margin: 0;
+  color: var(--surface-header);
+}
+
+.person-biography-count {
+  font-family: var(--font-mono);
+  font-size: 0.76rem;
+  color: var(--text-secondary);
+}
+
+.person-biography-list {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.person-biography-entry {
+  max-width: 68ch;
+}
+
+.person-biography-entry + .person-biography-entry {
+  padding-top: 18px;
+  border-top: 1px solid rgba(130, 122, 106, 0.24);
+}
+
+.person-biography-entry-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 12px;
+  margin-bottom: 6px;
+}
+
+.person-biography-entry-head h3 {
+  font-family: var(--font-serif);
+  font-size: 1.08rem;
+  font-weight: 600;
+  color: var(--surface-header);
+  margin: 0;
+  line-height: 1.3;
+}
+
+.person-biography-date {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 0.76rem;
+  color: var(--radar-copresence);
+}
+
+.person-biography-summary {
+  margin: 0 0 10px;
+  font-size: 0.94rem;
+  font-style: italic;
+  color: var(--text-secondary);
+  line-height: 1.55;
+}
+
+.person-biography-body {
+  position: relative;
+}
+
+.person-biography-body.is-collapsed {
+  max-height: 13.5em;
+  overflow: hidden;
+}
+
+.person-biography-body.is-collapsed::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 3.4em;
+  background: linear-gradient(to bottom, rgba(245, 239, 226, 0), var(--surface-canvas) 90%);
+  pointer-events: none;
+}
+
+.person-biography-toggle {
+  margin-top: 8px;
+  font-size: 0.9rem;
+}
+
+.person-biography-sources {
+  margin-top: 12px;
+  font-family: var(--font-mono);
+  font-size: 0.74rem;
+  color: var(--text-secondary);
+  line-height: 1.55;
+}
+
+.person-biography-sources-label {
+  display: block;
+  margin-bottom: 4px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.person-biography-source-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.person-biography-source-btn {
+  text-align: left;
+  padding: 0;
+  line-height: 1.45;
+}
+
+.person-biography-more-wrap {
+  margin-top: 14px;
+}
+
+.archival-markdown {
+  color: var(--text-primary);
+  font-size: 0.98rem;
+  line-height: 1.68;
+}
+
+.archival-md-p {
+  margin: 0 0 12px;
+}
+
+.archival-md-p:last-child {
+  margin-bottom: 0;
+}
+
+.archival-md-heading {
+  font-family: var(--font-serif);
+  font-size: 1.02rem;
+  font-weight: 600;
+  color: var(--surface-header);
+  margin: 16px 0 6px;
+}
+
+.archival-md-subheading {
+  font-family: var(--font-serif);
+  font-size: 0.96rem;
+  font-weight: 600;
+  color: var(--surface-header);
+  margin: 14px 0 4px;
+}
+
+.archival-md-quote {
+  margin: 10px 0 12px;
+  padding: 4px 0 4px 14px;
+  border-left: 2px solid var(--border-control);
+  color: var(--text-secondary);
+  font-style: italic;
+}
+
+.archival-md-list {
+  margin: 0 0 12px;
+  padding-left: 20px;
+}
+
+.archival-md-list li + li {
+  margin-top: 4px;
+}
+
+.archival-md-link {
+  color: var(--radar-copresence);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
 .person-media-section {
   background: transparent;
   border: none;
@@ -3260,12 +3463,12 @@ dialog.global-search-backdrop {
 
 @media (max-width: 767px) {
   :root {
-    --topbar-height: 76px;
+    --topbar-height: 82px;
   }
 
   .topbar {
-    padding: 6px 12px;
-    gap: 4px 8px;
+    padding: 6px 12px 0;
+    gap: 0 8px;
     min-height: 0;
     height: auto;
     box-sizing: border-box;
@@ -3279,11 +3482,12 @@ dialog.global-search-backdrop {
 
   .brand-link {
     order: 1;
-    flex: 1 1 auto;
+    flex: 1 1 0%;
     min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
-    font-size: 0.94rem;
+    font-size: 0.96rem;
+    line-height: 36px;
     white-space: nowrap;
   }
 
@@ -3292,6 +3496,7 @@ dialog.global-search-backdrop {
     flex: 0 0 auto;
     margin-left: auto;
     width: auto;
+    min-height: 36px;
     display: flex;
     align-items: center;
     justify-content: flex-end;
@@ -3299,13 +3504,54 @@ dialog.global-search-backdrop {
     flex-wrap: nowrap;
   }
 
+  .topbar-mobile-icon-btn {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    padding: 0;
+    border-radius: 999px;
+    border: 1px solid var(--border-control);
+    background: var(--surface-card);
+    color: var(--surface-header);
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: background-color 0.14s ease, border-color 0.14s ease;
+  }
+
+  .topbar-mobile-icon-btn::after {
+    content: '';
+    position: absolute;
+    inset: -4px;
+  }
+
+  .topbar-mobile-icon-btn:hover,
+  .topbar-mobile-icon-btn.is-open {
+    background: var(--surface-linen);
+    border-color: var(--surface-header);
+  }
+
+  .topbar-account-mobile-only {
+    display: inline-flex;
+  }
+
+  .topbar-account-item-mobile-only {
+    display: flex;
+  }
+
   .nav-links {
     order: 3;
     flex-basis: 100%;
     flex-wrap: nowrap;
-    gap: 12px;
+    gap: 16px;
+    margin-top: 4px;
+    padding: 0;
+    border-top: 1px solid rgba(130, 122, 106, 0.22);
     overflow-x: auto;
     scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
   }
 
   .nav-links::-webkit-scrollbar {
@@ -3313,10 +3559,10 @@ dialog.global-search-backdrop {
   }
 
   .nav-pill {
-    padding: 4px 2px;
-    font-size: 0.86rem;
+    padding: 4px 0;
+    font-size: 0.88rem;
     white-space: nowrap;
-    min-height: 44px;
+    min-height: 36px;
     display: inline-flex;
     align-items: center;
   }
@@ -3338,14 +3584,11 @@ dialog.global-search-backdrop {
   }
 
   .year-readout {
-    font-size: 1.15rem;
-    padding: 1px 4px;
-    flex-shrink: 0;
+    display: none;
   }
 
   .mobile-sources-btn {
-    display: inline-block;
-    flex-shrink: 0;
+    display: none;
   }
 
   .topbar-right,
@@ -3381,9 +3624,9 @@ dialog.global-search-backdrop {
   }
 
   .index-filter-bar .search-input {
-    padding: 8px 4px;
+    padding: 6px 4px;
     font-size: 1rem;
-    min-height: 44px;
+    min-height: 38px;
     width: 100%;
     min-width: 0;
   }
@@ -3391,16 +3634,26 @@ dialog.global-search-backdrop {
   .index-filter-actions {
     width: 100%;
     flex-wrap: wrap;
-    gap: 6px 10px;
+    justify-content: flex-start;
+    gap: 6px 12px;
+  }
+
+  .index-export-btn {
+    margin-left: 0;
   }
 
   .index-filter-actions .pill-btn {
     font-size: 0.78rem;
-    padding: 6px 4px;
-    min-height: 44px;
+    padding: 4px 2px;
+    min-height: 36px;
     display: inline-flex;
     align-items: center;
     white-space: nowrap;
+  }
+
+  .index-filter-actions .wiki-btn-sm {
+    min-height: 36px;
+    padding: 5px 12px;
   }
 
   .index-section-heading {
@@ -4857,10 +5110,13 @@ dialog.global-search-backdrop {
 }
 
 .topbar-account-btn {
+  position: relative;
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 7px;
-  padding: 4px 10px 4px 5px;
+  height: 36px;
+  padding: 3px 10px 3px 4px;
   background: var(--surface-card);
   border: 1px solid var(--border-control);
   border-radius: 999px;
@@ -4868,8 +5124,10 @@ dialog.global-search-backdrop {
   font-family: var(--font-mono);
   font-size: 0.78rem;
   font-weight: 500;
+  line-height: 1;
   cursor: pointer;
   white-space: nowrap;
+  box-sizing: border-box;
   transition: background-color 0.14s ease, border-color 0.14s ease;
 }
 
@@ -4880,8 +5138,8 @@ dialog.global-search-backdrop {
 }
 
 .topbar-account-avatar {
-  width: 24px;
-  height: 24px;
+  width: 28px;
+  height: 28px;
   border-radius: 50%;
   background: var(--surface-header);
   color: var(--text-inverse);
@@ -4889,8 +5147,10 @@ dialog.global-search-backdrop {
   align-items: center;
   justify-content: center;
   font-family: var(--font-mono);
-  font-size: 0.68rem;
+  font-size: 0.72rem;
   font-weight: 600;
+  line-height: 1;
+  letter-spacing: 0.02em;
   flex-shrink: 0;
 }
 
@@ -4898,11 +5158,15 @@ dialog.global-search-backdrop {
   max-width: 150px;
   overflow: hidden;
   text-overflow: ellipsis;
+  line-height: 1.2;
 }
 
 .topbar-account-caret {
-  font-size: 0.7rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   color: var(--text-secondary);
+  flex-shrink: 0;
 }
 
 .topbar-account-menu {
@@ -5711,8 +5975,16 @@ dialog.global-search-backdrop {
   }
 
   .topbar-account-btn {
-    min-height: 44px;
-    padding: 4px 8px 4px 6px;
+    height: 36px;
+    min-height: 36px;
+    padding: 3px 8px 3px 4px;
+    gap: 5px;
+  }
+
+  .topbar-account-btn::after {
+    content: '';
+    position: absolute;
+    inset: -4px -2px;
   }
 
   .topbar-account-menu {
@@ -5725,13 +5997,34 @@ dialog.global-search-backdrop {
     min-height: 44px;
   }
 
-  .wiki-btn-sm,
+  .wiki-action-bar {
+    gap: 6px 12px;
+    margin: 0 0 14px;
+    padding: 8px 0;
+  }
+
+  .wiki-action-bar .wiki-btn-sm {
+    min-height: 36px;
+    padding: 5px 12px;
+  }
+
+  .wiki-action-bar .pill-btn {
+    min-height: 36px;
+    padding: 4px 2px;
+  }
+
+  .person-header-actions {
+    gap: 8px 14px;
+  }
+
+  .person-header-actions .pill-btn {
+    min-height: 36px;
+    padding: 4px 2px;
+  }
+
   .wiki-input,
   select.pill-btn,
-  .filter-bar .pill-btn,
-  .person-header .pill-btn,
   .drawer-top .pill-btn,
-  .wiki-action-bar .pill-btn,
   .wiki-revision-actions .pill-btn,
   .wiki-admin-row .pill-btn,
   .wiki-modal-header .pill-btn,

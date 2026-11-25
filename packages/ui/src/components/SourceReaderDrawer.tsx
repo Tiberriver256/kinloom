@@ -280,7 +280,7 @@ export const SourceReaderDrawer: React.FC = () => {
         {readingsLoading && <p className="empty-ring-note">Loading primary transcriptions…</p>}
         {readingsError && <p className="empty-ring-note">Error loading transcriptions: {readingsError}</p>}
         {!readingsLoading && !readingsError && orderedDocs.length === 0 && (
-          <p className="empty-ring-note">No primary source transcriptions are archived in this bundle yet.</p>
+          <p className="empty-ring-note">No primary source transcriptions have been added to this archive yet.</p>
         )}
 
         {currentDoc && currentPage && (

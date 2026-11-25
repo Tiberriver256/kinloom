@@ -193,7 +193,7 @@ export const IndexPage: React.FC = () => {
 
         <PluginSlot name="indexHero" />
 
-        {loading && <p>Loading compiled archive bundle…</p>}
+        {loading && <p>Loading family archive…</p>}
         {error && <p>Error loading archive: {error}</p>}
 
         {bundle && (
@@ -250,7 +250,7 @@ export const IndexPage: React.FC = () => {
                   className="pill-btn index-export-btn"
                   disabled={filteredPeople.length === 0}
                   onClick={handleExportFilteredGedcom}
-                  title="Download a GEDCOM 7.0 file of the relatives currently shown"
+                  title="Download a family tree file of the relatives currently shown"
                 >
                   Export GEDCOM ({filteredPeople.length})
                 </button>

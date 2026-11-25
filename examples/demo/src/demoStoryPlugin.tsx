@@ -15,8 +15,8 @@ const DemoReelStoryPage: React.FC = () => {
           <div>
             <h1>Archival Story Reel</h1>
             <p>
-              Curated public-domain story reel plugin for {siteConfig.site.familyName}. Custom
-              routes and detail slots mount cleanly through <code>KinloomUiPlugin</code>.
+              Curated historical story reel for the {siteConfig.site.familyName}, bringing together
+              recorded family stories and archival vignettes.
             </p>
           </div>
           <div className="folio-metrics">
@@ -75,10 +75,10 @@ export const demoStoryPlugin: KinloomUiPlugin = {
         <section
           className="place-map-box"
           data-testid="demo-plugin-person-slot"
-          aria-label="Archival story plugin highlight"
+          aria-label="Archival story highlight"
           style={{ marginBottom: 16 }}
         >
-          <strong>Archival Story Spotlight:</strong> {person.full_name} is indexed in the{' '}
+          <strong>Archival Story Spotlight:</strong> {person.full_name} is featured in the{' '}
           <Link to="/stories/demo-reel">Archival Story Reel</Link>.
         </section>
       );

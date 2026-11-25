@@ -1,9 +1,10 @@
-import type { ArchiveEvent, CoPresenceItem, MediaItem } from '@kinloom/core';
+import type { ArchiveEvent, CoPresenceItem, MediaItem, Narrative } from '@kinloom/core';
 import {
   buildFilteredGedcom7,
   buildGedcomExportFilename,
   computeRadarForEvent,
   findNearestEventForPerson,
+  formatPublicCitation,
   formatPublicProvenance,
   getEventsForPerson,
   getMediaPersonIds,
@@ -15,6 +16,7 @@ import {
   pickActiveTimelineEventId,
   shouldRunInitialEventScroll,
 } from '../lib/timelineScroll.js';
+import { ArchivalMarkdown, formatNarrativeDateSpan } from '../components/ArchivalMarkdown.js';
 import { ExplorerTopBar } from '../components/ExplorerTopBar.js';
 import { KinloomFooter } from '../components/KinloomFooter.js';
 import { MediaPlayer } from '../components/MediaPlayer.js';
@@ -58,13 +60,17 @@ export const PersonPage: React.FC = () => {
     placesById,
     sourcesById,
   } = useArchiveData();
-  const { setActiveYear, pushPivot } = useArchiveUi();
+  const { setActiveYear, pushPivot, openSourceInspector } = useArchiveUi();
 
   const person = slug ? peopleBySlug.get(slug) : undefined;
 
   const [activeEventId, setActiveEventId] = useState<string | null>(searchParams.get('event'));
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const [showAllMedia, setShowAllMedia] = useState(false);
+  const [showAllNarratives, setShowAllNarratives] = useState(false);
+  const [expandedNarrativeIds, setExpandedNarrativeIds] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  );
   const [wikiTab, setWikiTab] = useState<WikiEntityTab>('read');
   const [uploadModalOpen, setUploadModalOpen] = useState(false);
 
@@ -73,6 +79,8 @@ export const PersonPage: React.FC = () => {
     setPrevSlug(slug);
     setLightboxIndex(null);
     setShowAllMedia(false);
+    setShowAllNarratives(false);
+    setExpandedNarrativeIds(new Set());
     setWikiTab('read');
   }
 
@@ -119,6 +127,13 @@ export const PersonPage: React.FC = () => {
       audio_oral_history: 7,
     };
     return [...items].toSorted((a, b) => (order[a.kind] ?? 9) - (order[b.kind] ?? 9));
+  }, [bundle, person]);
+
+  const personNarratives: Narrative[] = useMemo(() => {
+    if (!bundle || !person) {
+      return [];
+    }
+    return (bundle.narratives ?? []).filter((n) => n.person_ids.includes(person.id));
   }, [bundle, person]);
 
   const immediateFamily = useMemo(() => {
@@ -436,7 +451,7 @@ export const PersonPage: React.FC = () => {
         <ExplorerTopBar />
         <main className="index-page">
           <h1>Relative Not Found</h1>
-          <p>{error || `No person record found for "${slug}".`}</p>
+          <p>{error || 'We could not find that person in the archive.'}</p>
           <Link to="/" className="pill-btn">
             Return to people
           </Link>
@@ -491,7 +506,7 @@ export const PersonPage: React.FC = () => {
                   </div>
                 </div>
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+              <div className="person-header-actions">
                 {routePlaceCount > 1 && (
                   <Link to={`/map?person=${person.slug}`} className="ink-link-btn">
                     Their route
@@ -501,7 +516,7 @@ export const PersonPage: React.FC = () => {
                   type="button"
                   className="pill-btn print-hide"
                   onClick={handleExportPersonGedcom}
-                  title={`Download GEDCOM 7.0 record for ${person.full_name}`}
+                  title={`Download family tree file for ${person.full_name}`}
                 >
                   Export GEDCOM
                 </button>
@@ -618,6 +633,112 @@ export const PersonPage: React.FC = () => {
             <TalkPanel entityType="person" entityId={person.id} entityTitle={person.full_name} />
           )}
 
+          {wikiTab !== 'history' && wikiTab !== 'talk' && personNarratives.length > 0 && (
+            <section className="person-biography-section" aria-label="Biography">
+              <div className="person-biography-header">
+                <h2>Biography</h2>
+                {personNarratives.length > 1 && (
+                  <span className="person-biography-count">
+                    {personNarratives.length} stories
+                  </span>
+                )}
+              </div>
+
+              <div className="person-biography-list">
+                {(showAllNarratives ? personNarratives : personNarratives.slice(0, 1)).map(
+                  (narrative) => {
+                    const isLong = narrative.body_md.trim().length > 560;
+                    const isExpanded = expandedNarrativeIds.has(narrative.id);
+                    const dateLabel = formatNarrativeDateSpan(narrative.date_edtf);
+                    const linkedSources = (narrative.source_ids ?? [])
+                      .map((srcId) => sourcesById.get(srcId))
+                      .filter((src): src is NonNullable<typeof src> => Boolean(src));
+
+                    return (
+                      <article key={narrative.id} className="person-biography-entry">
+                        <div className="person-biography-entry-head">
+                          <h3>{narrative.title}</h3>
+                          {dateLabel && !narrative.title.includes(dateLabel) && (
+                            <span className="person-biography-date">{dateLabel}</span>
+                          )}
+                        </div>
+
+                        {narrative.summary && (
+                          <p className="person-biography-summary">{narrative.summary}</p>
+                        )}
+
+                        <div
+                          className={`person-biography-body ${isLong && !isExpanded ? 'is-collapsed' : ''}`}
+                        >
+                          <ArchivalMarkdown markdown={narrative.body_md} />
+                        </div>
+
+                        {isLong && (
+                          <button
+                            type="button"
+                            className="ink-inline-btn person-biography-toggle print-hide"
+                            aria-expanded={isExpanded}
+                            onClick={() => {
+                              setExpandedNarrativeIds((prev) => {
+                                const next = new Set(prev);
+                                if (next.has(narrative.id)) {
+                                  next.delete(narrative.id);
+                                } else {
+                                  next.add(narrative.id);
+                                }
+                                return next;
+                              });
+                            }}
+                          >
+                            {isExpanded ? 'Show less' : 'Read full biography'}
+                          </button>
+                        )}
+
+                        {linkedSources.length > 0 && (
+                          <div className="person-biography-sources">
+                            <span className="person-biography-sources-label">Sources</span>
+                            <ul className="person-biography-source-list">
+                              {linkedSources.map((src) => (
+                                <li key={src.id}>
+                                  <button
+                                    type="button"
+                                    className="source-read-inline person-biography-source-btn"
+                                    onClick={() => {
+                                      openSourceInspector({ sourceId: src.id });
+                                    }}
+                                  >
+                                    {formatPublicCitation(src.citation)}
+                                  </button>
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+                      </article>
+                    );
+                  },
+                )}
+              </div>
+
+              {personNarratives.length > 1 && (
+                <div className="person-biography-more-wrap print-hide">
+                  <button
+                    type="button"
+                    className="pill-btn"
+                    aria-expanded={showAllNarratives}
+                    onClick={() => {
+                      setShowAllNarratives((v) => !v);
+                    }}
+                  >
+                    {showAllNarratives
+                      ? 'Show fewer stories'
+                      : `Read ${personNarratives.length - 1} more ${personNarratives.length - 1 === 1 ? 'story' : 'stories'}`}
+                  </button>
+                </div>
+              )}
+            </section>
+          )}
+
           {wikiTab !== 'history' && wikiTab !== 'talk' && personMedia.length > 0 && (
             <section className="person-media-section" aria-label="Archival photos and primary record scans">
               <div className="person-media-header">
@@ -656,7 +777,7 @@ export const PersonPage: React.FC = () => {
 
           {wikiTab !== 'history' && wikiTab !== 'talk' && (personEvents.length === 0 ? (
             <div className="story-card">
-              <p>No dated events available in this build for {person.full_name}.</p>
+              <p>No dated events recorded yet for {person.full_name}.</p>
             </div>
           ) : (
             <div className="timeline-layout">

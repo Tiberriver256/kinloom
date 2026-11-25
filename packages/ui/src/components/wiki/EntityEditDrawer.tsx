@@ -534,7 +534,7 @@ export const EntityEditDrawer: React.FC<EntityEditDrawerProps> = ({
                 />
               </label>
               <label className="wiki-field wiki-field-full">
-                <span className="wiki-field-label">Historical profile (Markdown)</span>
+                <span className="wiki-field-label">Historical profile</span>
                 <textarea
                   className="wiki-textarea"
                   rows={5}
@@ -563,7 +563,7 @@ export const EntityEditDrawer: React.FC<EntityEditDrawerProps> = ({
                 />
               </label>
               <label className="wiki-field">
-                <span className="wiki-field-label">Date (EDTF)</span>
+                <span className="wiki-field-label">Date</span>
                 <input
                   type="text"
                   className="wiki-input"
@@ -575,7 +575,7 @@ export const EntityEditDrawer: React.FC<EntityEditDrawerProps> = ({
                 />
               </label>
               <label className="wiki-field wiki-field-full">
-                <span className="wiki-field-label">Narrative summary (Markdown)</span>
+                <span className="wiki-field-label">Narrative summary</span>
                 <textarea
                   className="wiki-textarea"
                   rows={5}
@@ -604,7 +604,7 @@ export const EntityEditDrawer: React.FC<EntityEditDrawerProps> = ({
                 />
               </label>
               <label className="wiki-field wiki-field-full">
-                <span className="wiki-field-label">Body (Markdown)</span>
+                <span className="wiki-field-label">Story text</span>
                 <textarea
                   className="wiki-textarea"
                   rows={8}
@@ -623,7 +623,7 @@ export const EntityEditDrawer: React.FC<EntityEditDrawerProps> = ({
             entityType !== 'event' &&
             entityType !== 'narrative' && (
               <label className="wiki-field wiki-field-full">
-                <span className="wiki-field-label">Structured JSON payload</span>
+                <span className="wiki-field-label">Record details</span>
                 <textarea
                   className="wiki-textarea wiki-mono"
                   rows={8}

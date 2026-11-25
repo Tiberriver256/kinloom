@@ -242,7 +242,7 @@ export const PlacePage: React.FC = () => {
             </div>
 
             {/* oxlint-disable-next-line jsx-a11y/prefer-tag-over-role -- role="group" is the correct grouping pattern for a button toolbar */}
-            <div className="filter-bar" style={{ margin: 0 }} role="group" aria-label="Spatial query scope">
+            <div className="filter-bar" style={{ margin: 0 }} role="group" aria-label="Map area filter">
               <button
                 type="button"
                 className={`pill-btn ${scopeMode === 'exact' ? 'active' : ''}`}
@@ -356,7 +356,7 @@ export const PlacePage: React.FC = () => {
           </div>
 
           {occupancyRows.rows.length === 0 ? (
-            <p className="empty-ring-note">No family residency records in this spatial scope.</p>
+            <p className="empty-ring-note">No family residency records found in this area.</p>
           ) : (
             <div>
               {occupancyRows.rows.map((row) => {
@@ -395,7 +395,7 @@ export const PlacePage: React.FC = () => {
         <section className="place-map-box">
           <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10, marginBottom: 12 }}>
             <h2 style={{ fontFamily: 'var(--font-serif)', margin: 0 }}>
-              Local Weather &amp; Historic Newspaper Strata
+              Local Weather &amp; Historic Newspapers
             </h2>
             <div className="filter-bar" style={{ margin: 0 }}>
               <button

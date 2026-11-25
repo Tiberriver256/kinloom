@@ -191,8 +191,8 @@ export const AdminPage: React.FC<AdminPageProps> = ({ adminClient }) => {
           <div>
             <h1>Site Administration</h1>
             <p>
-              Manage enrolled family editors, generate revocable read-only invite links, and issue
-              scoped bearer tokens for CLI research batches or nightly YAML backups.
+              Manage enrolled family editors, create read-only invite links, and manage access keys
+              for research helpers or archive backups.
             </p>
           </div>
           <div className="folio-metrics">
@@ -360,8 +360,8 @@ export const AdminPage: React.FC<AdminPageProps> = ({ adminClient }) => {
                   setTokenScope(e.target.value as AgentTokenScope);
                 }}
               >
-                <option value="write_batch">write_batch (AI research batches)</option>
-                <option value="read_backup">read_backup (Read-only YAML export)</option>
+                <option value="write_batch">Research assistant updates</option>
+                <option value="read_backup">Read-only archive backup</option>
               </select>
             </label>
             <button

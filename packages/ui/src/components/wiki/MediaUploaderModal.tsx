@@ -191,8 +191,7 @@ export const MediaUploaderModal: React.FC<MediaUploaderModalProps> = ({
         {isComplete && (
           <output className="wiki-status-banner is-success" aria-live="polite">
             <div>
-              Uploaded and attached media <code>{snapshot.context.mediaId}</code>
-              {snapshot.context.sha256 ? ` (SHA-256 ${snapshot.context.sha256.slice(0, 12)}…)` : ''}.
+              Uploaded and attached media to the archive.
             </div>
             <div className="wiki-inline-actions">
               <button

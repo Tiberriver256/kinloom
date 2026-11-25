@@ -53,6 +53,7 @@ export const ExplorerTopBar: React.FC = () => {
   }, [accountOpen]);
 
   const handleOpenSources = (): void => {
+    setAccountOpen(false);
     openSourceReader({ sourceId: featuredDocumentId ?? '' });
   };
 
@@ -140,23 +141,29 @@ export const ExplorerTopBar: React.FC = () => {
 
         <button
           type="button"
-          className="nav-pill mobile-sources-btn"
+          className="topbar-mobile-icon-btn"
           onClick={openSearch}
           aria-label="Search full archive"
+          title="Search full archive"
         >
-          Find
+          <svg
+            width="17"
+            height="17"
+            viewBox="0 0 18 18"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.75"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+          >
+            <circle cx="8" cy="8" r="5.5" />
+            <path d="M12.2 12.2L16 16" />
+          </svg>
         </button>
 
-        <button
-          type="button"
-          className="nav-pill mobile-sources-btn"
-          onClick={handleOpenSources}
-        >
-          Sources
-        </button>
-
-        {isSignedInMember && (
-          <div className="topbar-account" ref={accountMenuRef}>
+        <div className={`topbar-account ${isSignedInMember ? '' : 'topbar-account-mobile-only'}`} ref={accountMenuRef}>
+          {isSignedInMember ? (
             <button
               type="button"
               className={`topbar-account-btn ${accountOpen ? 'is-open' : ''}`}
@@ -171,66 +178,117 @@ export const ExplorerTopBar: React.FC = () => {
                 {initialsOf(memberLabel)}
               </span>
               <span className="topbar-account-name">{memberLabel}</span>
-              <span className="topbar-account-caret" aria-hidden="true">
-                ▾
-              </span>
+              <svg
+                className="topbar-account-caret"
+                width="10"
+                height="10"
+                viewBox="0 0 12 12"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M3 4.5L6 7.5L9 4.5" />
+              </svg>
             </button>
+          ) : (
+            <button
+              type="button"
+              className={`topbar-mobile-icon-btn ${accountOpen ? 'is-open' : ''}`}
+              aria-expanded={accountOpen}
+              aria-haspopup="menu"
+              aria-label="Archive menu"
+              title="Archive menu"
+              onClick={() => {
+                setAccountOpen((open) => !open);
+              }}
+            >
+              <svg
+                width="17"
+                height="17"
+                viewBox="0 0 18 18"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.75"
+                strokeLinecap="round"
+                aria-hidden="true"
+              >
+                <path d="M3 5h12M3 9h12M3 13h12" />
+              </svg>
+            </button>
+          )}
 
-            {accountOpen && (
-              <div className="topbar-account-menu" role="menu" aria-label="Account options">
+          {accountOpen && (
+            <div
+              className="topbar-account-menu"
+              role="menu"
+              aria-label={isSignedInMember ? 'Account options' : 'Archive menu'}
+            >
+              {isSignedInMember && (
                 <div className="topbar-account-menu-header">
                   <strong>{memberLabel}</strong>
                   <span className="wiki-role-chip">
                     {session?.role === 'admin' ? 'Admin' : 'Editor'}
                   </span>
                 </div>
+              )}
 
-                {capabilities.hasRevisionHistory && (
-                  <Link
-                    to="/changes"
+              <button
+                type="button"
+                role="menuitem"
+                className="topbar-account-item topbar-account-item-mobile-only"
+                onClick={handleOpenSources}
+              >
+                Primary Sources
+              </button>
+
+              {isSignedInMember && capabilities.hasRevisionHistory && (
+                <Link
+                  to="/changes"
+                  role="menuitem"
+                  className={`topbar-account-item ${location.pathname === '/changes' ? 'active' : ''}`}
+                  onClick={() => {
+                    setAccountOpen(false);
+                  }}
+                >
+                  Recent Changes
+                </Link>
+              )}
+
+              {isSignedInMember && capabilities.canManageSite && (
+                <Link
+                  to="/admin"
+                  role="menuitem"
+                  className={`topbar-account-item ${location.pathname === '/admin' ? 'active' : ''}`}
+                  onClick={() => {
+                    setAccountOpen(false);
+                  }}
+                >
+                  Site Settings
+                </Link>
+              )}
+
+              {isSignedInMember && dataSource.logout && (
+                <>
+                  <div className="topbar-account-divider" role="separator" />
+                  <button
+                    type="button"
                     role="menuitem"
-                    className={`topbar-account-item ${location.pathname === '/changes' ? 'active' : ''}`}
+                    className="topbar-account-item is-danger"
+                    disabled={signingOut}
                     onClick={() => {
-                      setAccountOpen(false);
+                      void handleLogout();
                     }}
                   >
-                    Recent Changes
-                  </Link>
-                )}
-
-                {capabilities.canManageSite && (
-                  <Link
-                    to="/admin"
-                    role="menuitem"
-                    className={`topbar-account-item ${location.pathname === '/admin' ? 'active' : ''}`}
-                    onClick={() => {
-                      setAccountOpen(false);
-                    }}
-                  >
-                    Site Settings
-                  </Link>
-                )}
-
-                {dataSource.logout && (
-                  <>
-                    <div className="topbar-account-divider" role="separator" />
-                    <button
-                      type="button"
-                      role="menuitem"
-                      className="topbar-account-item is-danger"
-                      disabled={signingOut}
-                      onClick={() => {
-                        void handleLogout();
-                      }}
-                    >
-                      {signingOut ? 'Signing out…' : 'Sign Out'}
-                    </button>
-                  </>
-                )}
-              </div>
-            )}
-          </div>
-        )}
+                    {signingOut ? 'Signing out…' : 'Sign Out'}
+                  </button>
+                </>
+              )}
+            </div>
+          )}
+        </div>
       </div>
 
       {pivotTrail.length > 1 && location.pathname.startsWith('/person/') && (

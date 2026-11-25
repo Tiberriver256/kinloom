@@ -300,7 +300,7 @@ export const CreateEntityModal: React.FC<CreateEntityModalProps> = ({
                 />
               </label>
               <label className="wiki-field">
-                <span className="wiki-field-label">Date (EDTF)</span>
+                <span className="wiki-field-label">Date</span>
                 <input
                   type="text"
                   className="wiki-input"
