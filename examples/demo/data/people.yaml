@@ -1,0 +1,280 @@
+- id: p_abraham_lincoln_1744
+  slug: abraham-lincoln-1744
+  full_name: Abraham Lincoln (1744)
+  given_name: Abraham
+  surname: Lincoln
+  alt_names:
+    - Capt. Abraham Lincoln
+  sex: M
+  is_living: false
+  lineage_group: ancestor
+  branch: lincoln_hanks
+  birth_edtf: "1744-05-13"
+  death_edtf: "1786-05"
+  portrait_url: null
+
+- id: p_bathsheba_herring
+  slug: bathsheba-herring
+  full_name: Bathsheba Herring
+  given_name: Bathsheba
+  surname: Herring
+  alt_names:
+    - Bathsheba Lincoln
+  sex: F
+  is_living: false
+  lineage_group: ancestor
+  branch: lincoln_hanks
+  birth_edtf: "1742~"
+  death_edtf: "1836"
+  portrait_url: null
+
+- id: p_levi_todd
+  slug: levi-todd
+  full_name: Levi Todd
+  given_name: Levi
+  surname: Todd
+  alt_names:
+    - Maj. Gen. Levi Todd
+  sex: M
+  is_living: false
+  lineage_group: ancestor
+  branch: todd_edwards
+  birth_edtf: "1756-10-04"
+  death_edtf: "1807-09-06"
+  portrait_url: null
+
+- id: p_jane_briggs
+  slug: jane-briggs
+  full_name: Jane Briggs
+  given_name: Jane
+  surname: Briggs
+  alt_names:
+    - Jane Todd
+  sex: F
+  is_living: false
+  lineage_group: ancestor
+  branch: todd_edwards
+  birth_edtf: "1761"
+  death_edtf: "1800-07"
+  portrait_url: null
+
+- id: p_thomas_lincoln
+  slug: thomas-lincoln
+  full_name: Thomas Lincoln
+  given_name: Thomas
+  surname: Lincoln
+  alt_names: []
+  sex: M
+  is_living: false
+  lineage_group: ancestor
+  branch: lincoln_hanks
+  birth_edtf: "1778-01-06"
+  death_edtf: "1851-01-17"
+  portrait_url: /media/portrait-thomas-lincoln.svg
+
+- id: p_nancy_hanks
+  slug: nancy-hanks
+  full_name: Nancy Hanks
+  given_name: Nancy
+  surname: Hanks
+  alt_names:
+    - Nancy Lincoln
+  sex: F
+  is_living: false
+  lineage_group: ancestor
+  branch: lincoln_hanks
+  birth_edtf: "1784-02-05"
+  death_edtf: "1818-10-05"
+  portrait_url: null
+
+- id: p_sarah_bush_johnston
+  slug: sarah-bush-johnston
+  full_name: Sarah Bush Johnston
+  given_name: Sarah Bush
+  surname: Johnston
+  alt_names:
+    - Sarah Bush Lincoln
+  sex: F
+  is_living: false
+  lineage_group: descendant_spouse
+  branch: lincoln_hanks
+  birth_edtf: "1788-12-13"
+  death_edtf: "1869-04-12"
+  portrait_url: null
+
+- id: p_robert_smith_todd
+  slug: robert-smith-todd
+  full_name: Robert Smith Todd
+  given_name: Robert Smith
+  surname: Todd
+  alt_names: []
+  sex: M
+  is_living: false
+  lineage_group: ancestor
+  branch: todd_edwards
+  birth_edtf: "1791-02-25"
+  death_edtf: "1849-07-16"
+  portrait_url: null
+
+- id: p_eliza_parker
+  slug: eliza-ann-parker
+  full_name: Eliza Ann Parker
+  given_name: Eliza Ann
+  surname: Parker
+  alt_names:
+    - Eliza Ann Todd
+  sex: F
+  is_living: false
+  lineage_group: ancestor
+  branch: todd_edwards
+  birth_edtf: "1794"
+  death_edtf: "1825-07-06"
+  portrait_url: null
+
+- id: p_sarah_lincoln_grigsby
+  slug: sarah-lincoln-grigsby
+  full_name: Sarah Lincoln Grigsby
+  given_name: Sarah
+  surname: Lincoln
+  alt_names:
+    - Sarah Grigsby
+  sex: F
+  is_living: false
+  lineage_group: colonial_sibling
+  branch: lincoln_hanks
+  birth_edtf: "1807-02-10"
+  death_edtf: "1828-01-20"
+  portrait_url: null
+
+- id: p_abraham_lincoln_1809
+  slug: abraham-lincoln-1809
+  full_name: Abraham Lincoln
+  given_name: Abraham
+  surname: Lincoln
+  alt_names:
+    - A. Lincoln
+  sex: M
+  is_living: false
+  lineage_group: pivot_ancestor
+  branch: lincoln_hanks
+  birth_edtf: "1809-02-12"
+  death_edtf: "1865-04-15"
+  portrait_url: /media/portrait-abraham-lincoln.svg
+
+- id: p_mary_todd_lincoln
+  slug: mary-ann-todd
+  full_name: Mary Ann Todd
+  given_name: Mary Ann
+  surname: Todd
+  alt_names:
+    - Mary Todd Lincoln
+  sex: F
+  is_living: false
+  lineage_group: descendant_spouse
+  branch: todd_edwards
+  birth_edtf: "1818-12-13"
+  death_edtf: "1882-07-16"
+  portrait_url: /media/portrait-mary-todd.svg
+
+- id: p_elizabeth_todd_edwards
+  slug: elizabeth-todd-edwards
+  full_name: Elizabeth Todd Edwards
+  given_name: Elizabeth
+  surname: Todd
+  alt_names:
+    - Elizabeth Edwards
+  sex: F
+  is_living: false
+  lineage_group: extended
+  branch: todd_edwards
+  birth_edtf: "1813-11-13"
+  death_edtf: "1888-02-22"
+  portrait_url: null
+
+- id: p_robert_todd_lincoln
+  slug: robert-todd-lincoln
+  full_name: Robert Todd Lincoln
+  given_name: Robert Todd
+  surname: Lincoln
+  alt_names: []
+  sex: M
+  is_living: false
+  lineage_group: descendant
+  branch: lincoln_hanks
+  birth_edtf: "1843-08-01"
+  death_edtf: "1926-07-26"
+  portrait_url: /media/portrait-robert-todd-lincoln.svg
+
+- id: p_mary_harlan_lincoln
+  slug: mary-eunice-harlan
+  full_name: Mary Eunice Harlan
+  given_name: Mary Eunice
+  surname: Harlan
+  alt_names:
+    - Mary Harlan Lincoln
+  sex: F
+  is_living: false
+  lineage_group: descendant_spouse
+  branch: todd_edwards
+  birth_edtf: "1846-09-25"
+  death_edtf: "1937-03-31"
+  portrait_url: null
+
+- id: p_edward_baker_lincoln
+  slug: edward-baker-lincoln
+  full_name: Edward Baker Lincoln
+  given_name: Edward Baker
+  surname: Lincoln
+  alt_names:
+    - Eddie Lincoln
+  sex: M
+  is_living: false
+  lineage_group: descendant
+  branch: lincoln_hanks
+  birth_edtf: "1846-03-10"
+  death_edtf: "1850-02-01"
+  portrait_url: null
+
+- id: p_william_wallace_lincoln
+  slug: william-wallace-lincoln
+  full_name: William Wallace Lincoln
+  given_name: William Wallace
+  surname: Lincoln
+  alt_names:
+    - Willie Lincoln
+  sex: M
+  is_living: false
+  lineage_group: descendant
+  branch: lincoln_hanks
+  birth_edtf: "1850-12-21"
+  death_edtf: "1862-02-20"
+  portrait_url: null
+
+- id: p_thomas_tad_lincoln
+  slug: thomas-tad-lincoln
+  full_name: Thomas Tad Lincoln
+  given_name: Thomas
+  surname: Lincoln
+  alt_names:
+    - Tad Lincoln
+  sex: M
+  is_living: false
+  lineage_group: descendant
+  branch: lincoln_hanks
+  birth_edtf: "1853-04-04"
+  death_edtf: "1871-07-15"
+  portrait_url: null
+
+- id: p_jordan_mercer_living
+  slug: jordan-mercer
+  full_name: Jordan Mercer
+  given_name: Jordan
+  surname: Mercer
+  alt_names: []
+  sex: X
+  is_living: true
+  lineage_group: extended
+  branch: lincoln_hanks
+  birth_edtf: "1995-04-12"
+  death_edtf: ""
+  portrait_url: /media/portrait-thomas-lincoln.svg

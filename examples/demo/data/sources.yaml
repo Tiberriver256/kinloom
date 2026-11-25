@@ -1,0 +1,56 @@
+- id: src_lincoln_autobiography_1859
+  citation: Abraham Lincoln, Autobiographical Sketch Prepared for Jesse W. Fell (20 December 1859)
+  author: Abraham Lincoln
+  publisher: Library of Congress, Abraham Lincoln Papers
+  source_type: family_memoir
+  repository: Library of Congress Manuscript Division
+  url: https://www.loc.gov/collections/abraham-lincoln-papers/
+
+- id: src_census_1850_springfield
+  citation: 1850 U.S. Federal Census, Springfield, Sangamon County, Illinois, p. 129A, family 375
+  author: U.S. Bureau of the Census
+  publisher: National Archives and Records Administration (M432, Roll 127)
+  source_type: census
+  repository: National Archives (NARA)
+
+- id: src_census_1860_springfield
+  citation: 1860 U.S. Federal Census, Springfield, Sangamon County, Illinois, p. 113, dwelling 827
+  author: U.S. Bureau of the Census
+  publisher: National Archives and Records Administration (M653, Roll 226)
+  source_type: census
+  repository: National Archives (NARA)
+
+- id: src_census_1820_spencer
+  citation: 1820 U.S. Federal Census, Spencer County, Indiana, p. 95, Thomas Lincoln household
+  author: U.S. Bureau of the Census
+  publisher: National Archives and Records Administration (M33, Roll 14)
+  source_type: census
+  repository: National Archives (NARA)
+
+- id: src_sangamon_marriage_1842
+  citation: Sangamon County, Illinois Marriage Register, Vol. 2 (1842), Abraham Lincoln and Mary Todd
+  author: Sangamon County Clerk
+  publisher: Illinois State Archives
+  source_type: vital_record
+  repository: Sangamon County Courthouse, Springfield, Illinois
+
+- id: src_virginia_land_1780
+  citation: Virginia Land Office Treasury Warrant No. 3334 (4 March 1780), Jefferson County Survey
+  author: Commonwealth of Virginia Land Office
+  publisher: Library of Virginia
+  source_type: vital_record
+  repository: Library of Virginia, Richmond
+
+- id: src_fayette_history_1882
+  citation: William Henry Perrin, History of Fayette County, Kentucky (1882)
+  author: William Henry Perrin
+  publisher: O. L. Baskin & Co., Chicago
+  source_type: county_history
+  repository: Kentucky Historical Society
+
+- id: src_unverified_tree_entry
+  citation: Unverified compiled family tree note pending primary verification
+  author: Compiled Demo Tree
+  publisher: Archive Draft
+  source_type: unverified_tree_entry
+  repository: Local Research Queue

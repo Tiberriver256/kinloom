@@ -2,6 +2,7 @@
   "name": "@kinloom/core",
   "version": "0.1.0",
   "type": "module",
+  "sideEffects": false,
   "license": "MIT",
   "description": "Shared TypeScript domain model, EDTF parser, archive compiler, living-person privacy filter, YAML serializer, GEDCOM 7 engine, and revision diff/revert logic for Kinloom.",
   "main": "./dist/index.js",

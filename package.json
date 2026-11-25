@@ -3,23 +3,32 @@
   "private": true,
   "type": "module",
   "workspaces": [
-    "packages/*"
+    "packages/*",
+    "examples/*"
   ],
   "scripts": {
-    "build": "npm run build --workspace=@kinloom/core",
-    "typecheck": "tsc --noEmit -p packages/core/tsconfig.json",
-    "lint": "oxlint packages/core/src",
+    "build": "npm run build --workspace=@kinloom/core && npm run build --workspace=@kinloom/ui && npm run build --workspace=@kinloom/demo",
+    "typecheck": "tsc --noEmit -p packages/core/tsconfig.json && tsc --noEmit -p packages/ui/tsconfig.json && tsc --noEmit -p examples/demo/tsconfig.json && tsc --noEmit -p e2e/tsconfig.json",
+    "lint": "oxlint packages/core/src packages/ui/src examples/demo/src e2e",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:e2e": "npm run build:data --workspace=@kinloom/demo && npm run build --workspace=@kinloom/demo && playwright test",
     "check:contrast": "node scripts/check-contrast.mjs",
     "check:leaks": "node scripts/check-public-leaks.mjs",
     "check": "npm run lint && npm run typecheck && npm run build && npm test && npm run check:contrast && npm run check:leaks"
   },
   "devDependencies": {
+    "@playwright/test": "^1.65.1",
+    "@types/geojson": "^7946.0.16",
     "@types/node": "^22.15.0",
+    "@types/react": "^19.1.0",
+    "@types/react-dom": "^19.1.0",
+    "@vitejs/plugin-react": "^4.4.1",
     "fast-check": "^4.1.1",
+    "jsdom": "^26.1.0",
     "oxlint": "^1.0.0",
     "typescript": "~5.8.3",
+    "vite": "^6.3.2",
     "vitest": "^3.1.3"
   }
 }

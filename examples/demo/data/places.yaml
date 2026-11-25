@@ -1,0 +1,168 @@
+- id: pl_usa
+  slug: united-states
+  name: United States
+  full_name: United States
+  place_type: country
+  parent_id: null
+  lat: 39.5
+  lng: -84.0
+
+- id: pl_virginia
+  slug: virginia-usa
+  name: Virginia
+  full_name: Virginia, USA
+  place_type: state
+  parent_id: pl_usa
+  lat: 37.54
+  lng: -78.66
+
+- id: pl_rockingham_va
+  slug: rockingham-county-virginia
+  name: Rockingham County
+  full_name: Rockingham County, Virginia, USA
+  place_type: county
+  parent_id: pl_virginia
+  lat: 38.51
+  lng: -78.88
+  summary: Shenandoah Valley county formed in 1778 where Capt. Abraham Lincoln farmed along Linville Creek before migrating to Kentucky.
+  historical_names:
+    - name: Augusta County, Colony of Virginia
+      valid_from: "1745"
+      valid_to: "1778"
+    - name: Rockingham County, Virginia
+      valid_from: "1778"
+      valid_to: "present"
+
+- id: pl_kentucky
+  slug: kentucky-usa
+  name: Kentucky
+  full_name: Kentucky, USA
+  place_type: state
+  parent_id: pl_usa
+  lat: 37.84
+  lng: -84.27
+
+- id: pl_hardin_ky
+  slug: hardin-county-kentucky
+  name: Hardin County
+  full_name: Hardin County, Kentucky, USA
+  place_type: county
+  parent_id: pl_kentucky
+  lat: 37.69
+  lng: -85.86
+  summary: Central Kentucky county encompassing Sinking Spring and Knob Creek farms during Thomas and Nancy Lincoln's Kentucky years.
+
+- id: pl_hodgenville_ky
+  slug: hodgenville-kentucky
+  name: Hodgenville
+  full_name: Hodgenville, Hardin County, Kentucky, USA
+  place_type: town
+  parent_id: pl_hardin_ky
+  lat: 37.57
+  lng: -85.74
+  summary: Sinking Spring farmstead three miles south of Hodgenville, birthplace of Abraham Lincoln in February 1809.
+  historical_names:
+    - name: Hardin County, Kentucky
+      valid_from: "1793"
+      valid_to: "1843"
+    - name: LaRue County, Kentucky
+      valid_from: "1843"
+      valid_to: "present"
+
+- id: pl_lexington_ky
+  slug: lexington-kentucky
+  name: Lexington
+  full_name: Lexington, Fayette County, Kentucky, USA
+  place_type: town
+  parent_id: pl_kentucky
+  lat: 38.04
+  lng: -84.50
+  summary: Bluegrass commercial center founded by early Kentucky settlers including Levi Todd and home to the Robert Smith Todd family.
+
+- id: pl_indiana
+  slug: indiana-usa
+  name: Indiana
+  full_name: Indiana, USA
+  place_type: state
+  parent_id: pl_usa
+  lat: 39.77
+  lng: -86.16
+
+- id: pl_spencer_in
+  slug: spencer-county-indiana
+  name: Spencer County
+  full_name: Spencer County, Indiana, USA
+  place_type: county
+  parent_id: pl_indiana
+  lat: 38.01
+  lng: -87.01
+
+- id: pl_pigeon_creek_in
+  slug: little-pigeon-creek-indiana
+  name: Little Pigeon Creek
+  full_name: Little Pigeon Creek, Spencer County, Indiana, USA
+  place_type: homestead
+  parent_id: pl_spencer_in
+  lat: 38.12
+  lng: -87.00
+  summary: Southern Indiana timberland homestead cleared by Thomas Lincoln in late 1816 and occupied by the family for fourteen years.
+
+- id: pl_illinois
+  slug: illinois-usa
+  name: Illinois
+  full_name: Illinois, USA
+  place_type: state
+  parent_id: pl_usa
+  lat: 40.0
+  lng: -89.2
+
+- id: pl_sangamon_il
+  slug: sangamon-county-illinois
+  name: Sangamon County
+  full_name: Sangamon County, Illinois, USA
+  place_type: county
+  parent_id: pl_illinois
+  lat: 39.76
+  lng: -89.66
+
+- id: pl_new_salem_il
+  slug: new-salem-illinois
+  name: New Salem
+  full_name: New Salem, Sangamon County, Illinois, USA
+  place_type: town
+  parent_id: pl_sangamon_il
+  lat: 39.98
+  lng: -89.85
+  summary: River bluff village overlooking the Sangamon River where Abraham Lincoln worked as store clerk, postmaster, and surveyor from 1831 to 1837.
+
+- id: pl_springfield_il
+  slug: springfield-illinois
+  name: Springfield
+  full_name: Springfield, Sangamon County, Illinois, USA
+  place_type: town
+  parent_id: pl_sangamon_il
+  lat: 39.80
+  lng: -89.64
+  summary: Capital of Illinois from 1839 and home of the Lincoln and Edwards households on Eighth Street and Aristocracy Hill.
+  photo_url: /media/plate-springfield-home.svg
+  photo_caption: Archival line illustration of the Eighth Street residence in Springfield, Illinois.
+
+- id: pl_washington_dc
+  slug: washington-dc
+  name: Washington, D.C.
+  full_name: Washington, District of Columbia, USA
+  place_type: town
+  parent_id: pl_usa
+  lat: 38.90
+  lng: -77.04
+  summary: Federal capital where Abraham and Mary Lincoln lived during the Civil War years (1861–1865) and Robert Todd Lincoln later served as Secretary of War.
+
+- id: pl_manchester_vt
+  slug: manchester-vermont
+  name: Manchester
+  full_name: Manchester, Bennington County, Vermont, USA
+  place_type: town
+  parent_id: pl_usa
+  lat: 43.16
+  lng: -73.07
+  summary: Green Mountain town where Robert Todd Lincoln and Mary Eunice Harlan built their summer estate Hildene in 1905.

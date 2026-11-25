@@ -1,0 +1,81 @@
+{
+  "version": 1,
+  "documents": {
+    "src_lincoln_autobiography_1859": {
+      "source_id": "src_lincoln_autobiography_1859",
+      "title": "Autobiographical Sketch for Jesse W. Fell (1859)",
+      "author": "Abraham Lincoln",
+      "provenance": "Library of Congress, Abraham Lincoln Papers, Series 1, December 20, 1859 (public domain).",
+      "pages": [
+        {
+          "page": 1,
+          "label": "Page 1 — Birth & Virginia Ancestry",
+          "file": "lincoln-autobiography-p1.txt",
+          "text": "Springfield, December 20, 1859.\n\nI was born Feb. 12, 1809, in Hardin County, Kentucky. My parents were both born in Virginia, of undistinguished families—second families, perhaps I should say. My mother, who died in my tenth year, was of a family of the name of Hanks, some of whom now reside in Adams, and others in Macon counties, Illinois.\n\nMy paternal grandfather, Abraham Lincoln, emigrated from Rockingham County, Virginia, to Kentucky, about 1781 or 2, where, a year or two later, he was killed by Indians, not in battle, but by stealth, when he was laboring to open a farm in the forest."
+        },
+        {
+          "page": 2,
+          "label": "Page 2 — Indiana Youth & New Salem",
+          "file": "lincoln-autobiography-p2.txt",
+          "text": "My father, at the death of his father, was but six years of age; and he grew up, literally without education. He removed from Kentucky to what is now Spencer County, Indiana, in my eighth year. We reached our new home about the time the State came into the Union.\n\nIt was a wild region, with many bears and other wild animals still in the woods. There I grew up. There were some schools, so called; but no qualification was ever required of a teacher, beyond reading, writing, and ciphering to the Rule of Three.\n\nAfter a flatboat journey to New Orleans, I settled at New Salem on the Sangamon River, where I served as clerk, postmaster, and deputy surveyor."
+        },
+        {
+          "page": 3,
+          "label": "Page 3 — Springfield Law Practice & Family",
+          "file": "lincoln-autobiography-p3.txt",
+          "text": "In 1834 I was elected to the Illinois Legislature, and was re-elected in 1836, 1838, and 1840. During the legislative canvas I studied law from borrowed books.\n\nIn the autumn of 1836 I obtained a law license, and on April 15, 1837, removed to Springfield, and commenced the practice, his old friend Stuart taking him into partnership.\n\nOn November 4, 1842, I married Mary, daughter of Robert S. Todd, of Lexington, Kentucky. We have had four sons born in Springfield, three of whom are now living."
+        }
+      ]
+    },
+    "src_census_1850_springfield": {
+      "source_id": "src_census_1850_springfield",
+      "title": "1850 U.S. Federal Census — Springfield, Illinois (p. 129A)",
+      "author": "U.S. Bureau of the Census",
+      "provenance": "National Archives Microfilm Publication M432, Roll 127, Sangamon County, Illinois, City of Springfield, Schedule I (public domain).",
+      "pages": [
+        {
+          "page": 1,
+          "label": "Sheet 129A — Family 375",
+          "file": "census-1850-p129a.txt",
+          "image_url": "/media/scan-census-1850.svg",
+          "text": "SCHEDULE I — Free Inhabitants in the City of Springfield in the County of Sangamon, State of Illinois, enumerated by me on the 29th day of August, 1850.\n\nDwelling 375 / Family 375:\nLine 12: Abraham Lincoln | Age 41 | Sex M | Profession: Lawyer | Real Estate: $3,000 | Place of Birth: Kentucky\nLine 13: Mary Lincoln    | Age 28 | Sex F | Place of Birth: Kentucky\nLine 14: Robert Lincoln  | Age 7  | Sex M | Attended school within the year | Place of Birth: Illinois\nLine 15: Catherine Gordon| Age 18 | Sex F | Place of Birth: Ireland"
+        },
+        {
+          "page": 2,
+          "label": "Enumerator Notes — Eighth Street",
+          "file": "census-1850-notes.txt",
+          "text": "Archival Research Note:\n\nThe August 29, 1850 federal census captures the Eighth Street household six months after the death of second son Edward Baker Lincoln (February 1, 1850) and four months before the birth of William Wallace Lincoln (December 21, 1850).\n\nMary Ann Todd Lincoln's age is recorded as 28 (she was 31 in August 1850), a typical 19th-century census rounding discrepancy preserved alongside her 1818 Lexington birth record."
+        }
+      ]
+    }
+  },
+  "event_page_map": {
+    "evt_1778_birt_thomas": {
+      "src_lincoln_autobiography_1859": 1
+    },
+    "evt_1782_kentucky_settlement": {
+      "src_lincoln_autobiography_1859": 1
+    },
+    "evt_1809_birt_abraham": {
+      "src_lincoln_autobiography_1859": 1
+    },
+    "evt_1816_move_indiana": {
+      "src_lincoln_autobiography_1859": 2
+    },
+    "evt_1831_new_salem_residence": {
+      "src_lincoln_autobiography_1859": 2
+    },
+    "evt_1837_springfield_move": {
+      "src_lincoln_autobiography_1859": 3
+    },
+    "evt_1842_marr_abraham_mary": {
+      "src_lincoln_autobiography_1859": 3
+    },
+    "evt_1850_census_springfield": {
+      "src_census_1850_springfield": 1
+    },
+    "evt_1859_autobiography_written": {
+      "src_lincoln_autobiography_1859": 1
+    }
+  }
+}

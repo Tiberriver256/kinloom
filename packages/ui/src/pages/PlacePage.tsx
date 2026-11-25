@@ -1,0 +1,437 @@
+import type { ArchiveEvent, Person } from '@kinloom/core';
+import { haversineMiles } from '@kinloom/core';
+import { DateStamp, SourceCitationTag, resolveAssetUrl } from '../components/Atoms.js';
+import { Link, useNavigate, useParams } from 'react-router-dom';
+import React, { useMemo, useState } from 'react';
+import { ExplorerTopBar } from '../components/ExplorerTopBar.js';
+import { KinloomFooter } from '../components/KinloomFooter.js';
+import { LocalSurveyMap } from '../components/LocalSurveyMap.js';
+import { useArchiveData } from '../context/ArchiveDataContext.js';
+
+type ScopeMode = 'exact' | 'radius15' | 'county';
+
+export const PlacePage: React.FC = () => {
+  const { slug } = useParams<{ slug: string }>();
+  const navigate = useNavigate();
+  const { bundle, baseUrl, placesBySlug, placesById, peopleById, sourcesById, loading } = useArchiveData();
+
+  const [scopeMode, setScopeMode] = useState<ScopeMode>('radius15');
+  const [decadeFilter, setDecadeFilter] = useState<string>('all');
+
+  const place = slug ? placesBySlug.get(slug) : undefined;
+
+  const matchingPlaceIds = useMemo(() => {
+    if (!bundle || !place) {
+      return new Set<string>();
+    }
+    const set = new Set<string>([place.id]);
+    const myAnc = bundle.place_ancestors[place.id] || [];
+    const countyAnc = myAnc.find((id) => placesById.get(id)?.place_type === 'county') || place.parent_id;
+
+    for (const other of bundle.places) {
+      if (other.id === place.id) {
+        continue;
+      }
+      if (scopeMode === 'exact') {
+        if ((bundle.place_ancestors[other.id] || []).includes(place.id)) {
+          set.add(other.id);
+        }
+      } else if (scopeMode === 'radius15') {
+        const d = haversineMiles(place.lat, place.lng, other.lat, other.lng);
+        if (d <= 15 || (bundle.place_ancestors[other.id] || []).includes(place.id)) {
+          set.add(other.id);
+        }
+      } else if (scopeMode === 'county') {
+        const otherAnc = bundle.place_ancestors[other.id] || [];
+        if (
+          (countyAnc && otherAnc.includes(countyAnc)) ||
+          otherAnc.includes(place.id) ||
+          myAnc.includes(other.id)
+        ) {
+          set.add(other.id);
+        }
+      }
+    }
+    return set;
+  }, [bundle, place, scopeMode, placesById]);
+
+  const ancestorIds = useMemo(() => {
+    if (!bundle || !place) {
+      return new Set<string>();
+    }
+    return new Set<string>(bundle.place_ancestors[place.id] || []);
+  }, [bundle, place]);
+
+  const occupancyRows = useMemo(() => {
+    if (!bundle || !place) {
+      return { rows: [], minYear: 1800, maxYear: 2000 };
+    }
+    const byPerson = new Map<
+      string,
+      {
+        person: Person;
+        startYear: number;
+        endYear: number;
+        firstEventId: string;
+        tier: 'Confirmed' | 'Inferred' | 'Possible';
+      }
+    >();
+
+    for (const ev of bundle.events) {
+      if (ev.scope !== 'personal' && ev.scope !== 'family') {
+        continue;
+      }
+      if (!ev.place_id || !matchingPlaceIds.has(ev.place_id) || ev.year === null) {
+        continue;
+      }
+      for (const pt of ev.participants) {
+        const person = peopleById.get(pt.person_id);
+        if (!person || person.full_name === 'Living') {
+          continue;
+        }
+        const cur = byPerson.get(person.id);
+        if (cur) {
+          if (ev.year < cur.startYear) {
+            cur.startYear = ev.year;
+            cur.firstEventId = ev.id;
+          }
+          if (ev.year > cur.endYear) {
+            cur.endYear = ev.year;
+          }
+        } else {
+          byPerson.set(person.id, {
+            person,
+            startYear: ev.year,
+            endYear: ev.year,
+            firstEventId: ev.id,
+            tier: 'Confirmed',
+          });
+        }
+      }
+    }
+
+    for (const span of bundle.residence_spans) {
+      if (!matchingPlaceIds.has(span.place_id)) {
+        continue;
+      }
+      if (span.start_year === null || span.end_year === null) {
+        continue;
+      }
+      const person = peopleById.get(span.person_id);
+      if (!person || person.full_name === 'Living') {
+        continue;
+      }
+      const cur = byPerson.get(person.id);
+      if (cur) {
+        if (span.start_year < cur.startYear) {
+          cur.startYear = span.start_year;
+        }
+        if (span.end_year > cur.endYear) {
+          cur.endYear = span.end_year;
+        }
+      } else {
+        byPerson.set(person.id, {
+          person,
+          startYear: span.start_year,
+          endYear: span.end_year,
+          firstEventId: span.from_event_id,
+          tier: span.confidence_tier,
+        });
+      }
+    }
+
+    const rows = [...byPerson.values()].toSorted((a, b) => a.startYear - b.startYear);
+    const minYear = rows.length > 0 ? Math.min(...rows.map((r) => r.startYear)) : 1850;
+    const maxYear = rows.length > 0 ? Math.max(...rows.map((r) => r.endYear)) : 1960;
+    return { rows, minYear, maxYear: Math.max(maxYear, minYear + 10) };
+  }, [bundle, place, matchingPlaceIds, peopleById]);
+
+  const localRecords = useMemo(() => {
+    if (!bundle || !place) {
+      return [];
+    }
+    return bundle.events
+      .filter((ev) => {
+        if (ev.scope !== 'local' && ev.scope !== 'state') {
+          return false;
+        }
+        if (!ev.place_id) {
+          return false;
+        }
+        if (!matchingPlaceIds.has(ev.place_id)) {
+          return false;
+        }
+        if (decadeFilter !== 'all' && ev.year !== null) {
+          const dec = Math.floor(ev.year / 10) * 10;
+          if (String(dec) !== decadeFilter) {
+            return false;
+          }
+        }
+        return true;
+      })
+      .toSorted((a, b) => (a.year ?? 0) - (b.year ?? 0));
+  }, [bundle, place, matchingPlaceIds, decadeFilter]);
+
+  const recordDecades = useMemo(() => {
+    const set = new Set<number>();
+    for (const ev of localRecords) {
+      if (ev.year !== null) {
+        set.add(Math.floor(ev.year / 10) * 10);
+      }
+    }
+    return [...set].toSorted((a, b) => a - b);
+  }, [localRecords]);
+
+  if (loading) {
+    return (
+      <div>
+        <ExplorerTopBar />
+        <main className="place-page">Loading archive…</main>
+      </div>
+    );
+  }
+  if (!bundle || !place) {
+    return (
+      <div>
+        <ExplorerTopBar />
+        <main className="place-page">
+          <h1>Place Not Found</h1>
+          <Link to="/places" className="pill-btn">
+            Return to places
+          </Link>
+        </main>
+        <KinloomFooter />
+      </div>
+    );
+  }
+
+  const spanYears = Math.max(1, occupancyRows.maxYear - occupancyRows.minYear);
+  const placePhotoSrc = place.photo_url ? resolveAssetUrl(place.photo_url, baseUrl) : '';
+
+  return (
+    <div>
+      <ExplorerTopBar />
+      <main className="place-page">
+        {occupancyRows.rows.length > 0 && (
+          <div style={{ marginBottom: 14, display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'center' }}>
+            <Link to={`/time?year=${occupancyRows.minYear}`} className="ink-link-btn">
+              See Family in {occupancyRows.minYear} →
+            </Link>
+          </div>
+        )}
+
+        <section className="place-map-box">
+          <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
+            <div>
+              <h1 className="place-dossier-title">{place.full_name}</h1>
+            </div>
+
+            {/* oxlint-disable-next-line jsx-a11y/prefer-tag-over-role -- role="group" is the correct grouping pattern for a button toolbar */}
+            <div className="filter-bar" style={{ margin: 0 }} role="group" aria-label="Spatial query scope">
+              <button
+                type="button"
+                className={`pill-btn ${scopeMode === 'exact' ? 'active' : ''}`}
+                onClick={() => {
+                  setScopeMode('exact');
+                }}
+              >
+                Exact Place
+              </button>
+              <button
+                type="button"
+                className={`pill-btn ${scopeMode === 'radius15' ? 'active' : ''}`}
+                onClick={() => {
+                  setScopeMode('radius15');
+                }}
+              >
+                15-Mile Radius
+              </button>
+              <button
+                type="button"
+                className={`pill-btn ${scopeMode === 'county' ? 'active' : ''}`}
+                onClick={() => {
+                  setScopeMode('county');
+                }}
+              >
+                Historical County
+              </button>
+              <Link to={`/map?place=${place.slug}`} className="ink-link-btn">
+                Migration Map →
+              </Link>
+            </div>
+          </div>
+
+          <div style={{ marginTop: 14 }}>
+            <LocalSurveyMap
+              center={place}
+              allPlaces={bundle.places}
+              scopeMode={scopeMode}
+              excludeIds={ancestorIds}
+            />
+          </div>
+        </section>
+
+        {(place.summary || placePhotoSrc || (place.historical_names && place.historical_names.length > 0)) && (
+          <section className="place-map-box place-history-section">
+            <h2 style={{ fontFamily: 'var(--font-serif)', margin: '0 0 12px' }}>
+              Historical Profile
+            </h2>
+            <div className={placePhotoSrc ? 'place-history-grid' : undefined}>
+              <div className="place-history-copy">
+                {place.summary && <p className="place-history-summary">{place.summary}</p>}
+                {place.historical_names && place.historical_names.length > 0 && (
+                  <div className="place-historical-names" aria-label="Historical jurisdictions">
+                    <span className="place-historical-names-label">Jurisdictions:</span>
+                    <div className="place-historical-names-list">
+                      {place.historical_names.map((hn) => {
+                        const span =
+                          hn.valid_from || hn.valid_to
+                            ? ` (${hn.valid_from || '?'}–${hn.valid_to || 'present'})`
+                            : '';
+                        return (
+                          <span key={`${hn.name}-${hn.valid_from || ''}-${hn.valid_to || ''}`} className="place-jurisdiction-chip">
+                            {hn.name}
+                            {span}
+                          </span>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+                {place.sources && place.sources.length > 0 && (
+                  <SourceCitationTag sources={place.sources} sourcesById={sourcesById} />
+                )}
+              </div>
+              {placePhotoSrc && (
+                <figure className="place-history-figure">
+                  <a href={placePhotoSrc} target="_blank" rel="noreferrer">
+                    <img
+                      src={placePhotoSrc}
+                      alt={place.photo_caption || `Archival view of ${place.full_name}`}
+                      loading="lazy"
+                    />
+                  </a>
+                  {place.photo_caption && <figcaption>{place.photo_caption}</figcaption>}
+                </figure>
+              )}
+            </div>
+          </section>
+        )}
+
+        <section className="place-map-box">
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
+            <h2 style={{ fontFamily: 'var(--font-serif)', margin: 0 }}>
+              Who Passed Through
+            </h2>
+            <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
+              {occupancyRows.minYear} — {occupancyRows.maxYear}
+            </span>
+          </div>
+
+          {occupancyRows.rows.length === 0 ? (
+            <p className="empty-ring-note">No family residency records in this spatial scope.</p>
+          ) : (
+            <div>
+              {occupancyRows.rows.map((row) => {
+                const leftPct = ((row.startYear - occupancyRows.minYear) / spanYears) * 100;
+                const widthPct = Math.max(4, (Math.max(1, row.endYear - row.startYear) / spanYears) * 100);
+                const yearLabel =
+                  row.startYear === row.endYear ? String(row.startYear) : `${row.startYear}–${row.endYear}`;
+                return (
+                  <div key={row.person.id} className="occupancy-row">
+                    <Link
+                      to={`/person/${row.person.slug}?event=${row.firstEventId}`}
+                      style={{ fontSize: '0.86rem', fontWeight: 600 }}
+                    >
+                      {row.person.full_name}
+                    </Link>
+                    <div className="occupancy-track">
+                      <button
+                        type="button"
+                        className={`occupancy-bar ${row.tier.toLowerCase()}`}
+                        style={{ left: `${leftPct}%`, width: `${Math.min(100 - leftPct, widthPct)}%` }}
+                        onClick={() => {
+                          void navigate(`/person/${row.person.slug}?event=${row.firstEventId}`);
+                        }}
+                        title={`Jump to ${row.person.full_name} (${yearLabel})`}
+                      >
+                        {yearLabel}
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </section>
+
+        <section className="place-map-box">
+          <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10, marginBottom: 12 }}>
+            <h2 style={{ fontFamily: 'var(--font-serif)', margin: 0 }}>
+              Local Weather &amp; Historic Newspaper Strata
+            </h2>
+            <div className="filter-bar" style={{ margin: 0 }}>
+              <button
+                type="button"
+                className={`pill-btn ${decadeFilter === 'all' ? 'active' : ''}`}
+                onClick={() => {
+                  setDecadeFilter('all');
+                }}
+              >
+                All Decades
+              </button>
+              {recordDecades.map((d) => (
+                <button
+                  key={d}
+                  type="button"
+                  className={`pill-btn ${decadeFilter === String(d) ? 'active' : ''}`}
+                  onClick={() => {
+                    setDecadeFilter(String(d));
+                  }}
+                >
+                  {d}s
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {localRecords.length === 0 ? (
+            <p className="empty-ring-note">
+              No archived local weather anomalies or newspaper dispatches for this place and decade.
+            </p>
+          ) : (
+            <div style={{ display: 'grid', gap: 12 }}>
+              {localRecords.map((ev: ArchiveEvent) => (
+                <article key={ev.id} className="story-card" style={{ padding: 14 }}>
+                  <div className="story-card-top">
+                    <DateStamp displayDate={ev.display_date} edtf={ev.edtf_date} />
+                  </div>
+                  <h3 style={{ fontFamily: 'var(--font-serif)', margin: '0 0 6px', fontSize: '1.02rem' }}>
+                    {ev.title}
+                  </h3>
+                  <p style={{ margin: 0, fontSize: '0.9rem' }}>{ev.summary}</p>
+                  {ev.source_url && (
+                    <div style={{ marginTop: 8 }}>
+                      <a href={ev.source_url} target="_blank" rel="noreferrer" className="pill-btn" style={{ textDecoration: 'none' }}>
+                        View External Record ↗
+                      </a>
+                    </div>
+                  )}
+                  <SourceCitationTag
+                    sources={ev.sources}
+                    alternateDates={ev.alternate_dates}
+                    alternatePlaces={ev.alternate_places}
+                    factConflicts={ev.fact_conflicts}
+                    sourcesById={sourcesById}
+                    eventId={ev.id}
+                  />
+                </article>
+              ))}
+            </div>
+          )}
+        </section>
+      </main>
+      <KinloomFooter />
+    </div>
+  );
+};

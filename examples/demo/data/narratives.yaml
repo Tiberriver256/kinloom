@@ -1,0 +1,43 @@
+- id: nar_virginia_to_illinois
+  slug: virginia-to-illinois-migration
+  title: Three Generations Westward (1782–1837)
+  summary: From Linville Creek in Rockingham County, Virginia through Kentucky and Indiana to the Sangamon River valley in Illinois.
+  date_edtf: "1782/1837"
+  person_ids:
+    - p_abraham_lincoln_1744
+    - p_thomas_lincoln
+    - p_abraham_lincoln_1809
+  place_ids:
+    - pl_rockingham_va
+    - pl_hodgenville_ky
+    - pl_pigeon_creek_in
+    - pl_new_salem_il
+    - pl_springfield_il
+  source_ids:
+    - src_lincoln_autobiography_1859
+    - src_virginia_land_1780
+  body_md: |
+    In December 1859, Abraham Lincoln composed a brief three-page autobiographical sketch tracing
+    his family's westward movement across three frontiers: Virginia, Kentucky, and southern Indiana,
+    before settling along the Sangamon River in Illinois.
+
+- id: nar_springfield_household
+  slug: eighth-street-springfield-household
+  title: The Eighth Street Household in Springfield (1844–1861)
+  summary: Federal census schedules and county marriage records documenting the Lincoln and Todd family years in Springfield.
+  date_edtf: "1842/1861"
+  person_ids:
+    - p_abraham_lincoln_1809
+    - p_mary_todd_lincoln
+    - p_robert_todd_lincoln
+  place_ids:
+    - pl_springfield_il
+    - pl_lexington_ky
+  source_ids:
+    - src_sangamon_marriage_1842
+    - src_census_1850_springfield
+    - src_census_1860_springfield
+  body_md: |
+    Following their November 4, 1842 marriage at the Edwards home in Springfield, Abraham Lincoln
+    and Mary Ann Todd purchased the Eighth Street house in 1844, where the 1850 and 1860 federal
+    censuses document their growing household.

@@ -1,0 +1,73 @@
+- id: med_portrait_abraham_lincoln
+  kind: portrait
+  person_id: p_abraham_lincoln_1809
+  person_slug: abraham-lincoln-1809
+  person_name: Abraham Lincoln
+  file: /media/portrait-abraham-lincoln.svg
+  caption: Archival silhouette portrait plate of Abraham Lincoln (1809–1865)
+  date_edtf: "1860"
+  provenance: Public-domain archival demo plate
+
+- id: med_portrait_mary_todd
+  kind: portrait
+  person_id: p_mary_todd_lincoln
+  person_slug: mary-ann-todd
+  person_name: Mary Ann Todd
+  file: /media/portrait-mary-todd.svg
+  caption: Archival portrait plate of Mary Ann Todd (1818–1882)
+  date_edtf: "1861"
+  provenance: Public-domain archival demo plate
+
+- id: med_portrait_thomas_lincoln
+  kind: portrait
+  person_id: p_thomas_lincoln
+  person_slug: thomas-lincoln
+  person_name: Thomas Lincoln
+  file: /media/portrait-thomas-lincoln.svg
+  caption: Archival portrait plate of Thomas Lincoln (1778–1851)
+  date_edtf: "1845~"
+  provenance: Public-domain archival demo plate
+
+- id: med_portrait_robert_todd_lincoln
+  kind: portrait
+  person_id: p_robert_todd_lincoln
+  person_slug: robert-todd-lincoln
+  person_name: Robert Todd Lincoln
+  file: /media/portrait-robert-todd-lincoln.svg
+  caption: Archival portrait plate of Robert Todd Lincoln (1843–1926)
+  date_edtf: "1885~"
+  provenance: Public-domain archival demo plate
+
+- id: med_shared_oak_ridge_headstone
+  kind: headstone
+  person_ids:
+    - p_abraham_lincoln_1809
+    - p_mary_todd_lincoln
+  person_slug: abraham-lincoln-1809
+  person_name: Abraham Lincoln & Mary Ann Todd
+  file: /media/headstone-oak-ridge-tomb.svg
+  caption: Joint Oak Ridge Cemetery monument plate for Abraham Lincoln (1809–1865) and Mary Ann Todd Lincoln (1818–1882), Springfield, Illinois
+  date_edtf: "1882"
+  provenance: Shared multi-person headstone demonstration record
+
+- id: med_scan_census_1850
+  kind: record_scan
+  source_id: src_census_1850_springfield
+  page: 1
+  person_ids:
+    - p_abraham_lincoln_1809
+    - p_mary_todd_lincoln
+    - p_robert_todd_lincoln
+  event_id: evt_1850_census_springfield
+  file: /media/scan-census-1850.svg
+  caption: 1850 U.S. Federal Census Schedule, Springfield, Sangamon County, Illinois (p. 129A, family 375)
+  date_edtf: "1850-08-29"
+  provenance: National Archives M432 Roll 127 (archival demo plate)
+
+- id: med_living_should_be_filtered
+  kind: portrait
+  person_id: p_jordan_mercer_living
+  file: /media/portrait-thomas-lincoln.svg
+  caption: Living person portrait that must be stripped by privacy filter
+  date_edtf: "2020"
+  provenance: Synthetic privacy test fixture

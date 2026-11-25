@@ -1,0 +1,2953 @@
+{
+  "meta": {
+    "version": "0.1.0-demo",
+    "build_mode": "public",
+    "generated_at": "2026-11-24T00:00:00.000Z",
+    "counts": {
+      "people": 19,
+      "living_redacted": 1,
+      "events": 36,
+      "residence_spans": 32,
+      "places": 16,
+      "sources": 8,
+      "media": 6,
+      "narratives": 2
+    }
+  },
+  "media": [
+    {
+      "id": "med_portrait_abraham_lincoln",
+      "kind": "portrait",
+      "person_id": "p_abraham_lincoln_1809",
+      "person_slug": "abraham-lincoln-1809",
+      "person_name": "Abraham Lincoln",
+      "file": "/media/portrait-abraham-lincoln.svg",
+      "caption": "Archival silhouette portrait plate of Abraham Lincoln (1809–1865)",
+      "date_edtf": "1860",
+      "provenance": "Public-domain archival demo plate"
+    },
+    {
+      "id": "med_portrait_mary_todd",
+      "kind": "portrait",
+      "person_id": "p_mary_todd_lincoln",
+      "person_slug": "mary-ann-todd",
+      "person_name": "Mary Ann Todd",
+      "file": "/media/portrait-mary-todd.svg",
+      "caption": "Archival portrait plate of Mary Ann Todd (1818–1882)",
+      "date_edtf": "1861",
+      "provenance": "Public-domain archival demo plate"
+    },
+    {
+      "id": "med_portrait_thomas_lincoln",
+      "kind": "portrait",
+      "person_id": "p_thomas_lincoln",
+      "person_slug": "thomas-lincoln",
+      "person_name": "Thomas Lincoln",
+      "file": "/media/portrait-thomas-lincoln.svg",
+      "caption": "Archival portrait plate of Thomas Lincoln (1778–1851)",
+      "date_edtf": "1845~",
+      "provenance": "Public-domain archival demo plate"
+    },
+    {
+      "id": "med_portrait_robert_todd_lincoln",
+      "kind": "portrait",
+      "person_id": "p_robert_todd_lincoln",
+      "person_slug": "robert-todd-lincoln",
+      "person_name": "Robert Todd Lincoln",
+      "file": "/media/portrait-robert-todd-lincoln.svg",
+      "caption": "Archival portrait plate of Robert Todd Lincoln (1843–1926)",
+      "date_edtf": "1885~",
+      "provenance": "Public-domain archival demo plate"
+    },
+    {
+      "id": "med_shared_oak_ridge_headstone",
+      "kind": "headstone",
+      "person_ids": [
+        "p_abraham_lincoln_1809",
+        "p_mary_todd_lincoln"
+      ],
+      "person_slug": "abraham-lincoln-1809",
+      "person_name": "Abraham Lincoln & Mary Ann Todd",
+      "file": "/media/headstone-oak-ridge-tomb.svg",
+      "caption": "Joint Oak Ridge Cemetery monument plate for Abraham Lincoln (1809–1865) and Mary Ann Todd Lincoln (1818–1882), Springfield, Illinois",
+      "date_edtf": "1882",
+      "provenance": "Shared multi-person headstone demonstration record"
+    },
+    {
+      "id": "med_scan_census_1850",
+      "kind": "record_scan",
+      "source_id": "src_census_1850_springfield",
+      "page": 1,
+      "person_ids": [
+        "p_abraham_lincoln_1809",
+        "p_mary_todd_lincoln",
+        "p_robert_todd_lincoln"
+      ],
+      "event_id": "evt_1850_census_springfield",
+      "file": "/media/scan-census-1850.svg",
+      "caption": "1850 U.S. Federal Census Schedule, Springfield, Sangamon County, Illinois (p. 129A, family 375)",
+      "date_edtf": "1850-08-29",
+      "provenance": "National Archives M432 Roll 127 (archival demo plate)"
+    }
+  ],
+  "people": [
+    {
+      "id": "p_abraham_lincoln_1744",
+      "slug": "abraham-lincoln-1744",
+      "full_name": "Abraham Lincoln (1744)",
+      "given_name": "Abraham",
+      "surname": "Lincoln",
+      "alt_names": [
+        "Capt. Abraham Lincoln"
+      ],
+      "sex": "M",
+      "is_living": false,
+      "lineage_group": "ancestor",
+      "branch": "lincoln_hanks",
+      "birth_edtf": "1744-05-13",
+      "death_edtf": "1786-05",
+      "portrait_url": null,
+      "birth_year": 1744,
+      "death_year": 1786,
+      "event_count": 4,
+      "media_count": 0,
+      "primary_place_id": "pl_rockingham_va"
+    },
+    {
+      "id": "p_bathsheba_herring",
+      "slug": "bathsheba-herring",
+      "full_name": "Bathsheba Herring",
+      "given_name": "Bathsheba",
+      "surname": "Herring",
+      "alt_names": [
+        "Bathsheba Lincoln"
+      ],
+      "sex": "F",
+      "is_living": false,
+      "lineage_group": "ancestor",
+      "branch": "lincoln_hanks",
+      "birth_edtf": "1742~",
+      "death_edtf": "1836",
+      "portrait_url": null,
+      "birth_year": 1742,
+      "death_year": 1836,
+      "event_count": 4,
+      "media_count": 0,
+      "primary_place_id": "pl_rockingham_va"
+    },
+    {
+      "id": "p_levi_todd",
+      "slug": "levi-todd",
+      "full_name": "Levi Todd",
+      "given_name": "Levi",
+      "surname": "Todd",
+      "alt_names": [
+        "Maj. Gen. Levi Todd"
+      ],
+      "sex": "M",
+      "is_living": false,
+      "lineage_group": "ancestor",
+      "branch": "todd_edwards",
+      "birth_edtf": "1756-10-04",
+      "death_edtf": "1807-09-06",
+      "portrait_url": null,
+      "birth_year": 1756,
+      "death_year": 1807,
+      "event_count": 1,
+      "media_count": 0,
+      "primary_place_id": "pl_lexington_ky"
+    },
+    {
+      "id": "p_jane_briggs",
+      "slug": "jane-briggs",
+      "full_name": "Jane Briggs",
+      "given_name": "Jane",
+      "surname": "Briggs",
+      "alt_names": [
+        "Jane Todd"
+      ],
+      "sex": "F",
+      "is_living": false,
+      "lineage_group": "ancestor",
+      "branch": "todd_edwards",
+      "birth_edtf": "1761",
+      "death_edtf": "1800-07",
+      "portrait_url": null,
+      "birth_year": 1761,
+      "death_year": 1800,
+      "event_count": 1,
+      "media_count": 0,
+      "primary_place_id": "pl_lexington_ky"
+    },
+    {
+      "id": "p_thomas_lincoln",
+      "slug": "thomas-lincoln",
+      "full_name": "Thomas Lincoln",
+      "given_name": "Thomas",
+      "surname": "Lincoln",
+      "alt_names": [],
+      "sex": "M",
+      "is_living": false,
+      "lineage_group": "ancestor",
+      "branch": "lincoln_hanks",
+      "birth_edtf": "1778-01-06",
+      "death_edtf": "1851-01-17",
+      "portrait_url": "/media/portrait-thomas-lincoln.svg",
+      "birth_year": 1778,
+      "death_year": 1851,
+      "event_count": 12,
+      "media_count": 1,
+      "primary_place_id": "pl_hardin_ky"
+    },
+    {
+      "id": "p_nancy_hanks",
+      "slug": "nancy-hanks",
+      "full_name": "Nancy Hanks",
+      "given_name": "Nancy",
+      "surname": "Hanks",
+      "alt_names": [
+        "Nancy Lincoln"
+      ],
+      "sex": "F",
+      "is_living": false,
+      "lineage_group": "ancestor",
+      "branch": "lincoln_hanks",
+      "birth_edtf": "1784-02-05",
+      "death_edtf": "1818-10-05",
+      "portrait_url": null,
+      "birth_year": 1784,
+      "death_year": 1818,
+      "event_count": 5,
+      "media_count": 0,
+      "primary_place_id": "pl_hardin_ky"
+    },
+    {
+      "id": "p_sarah_bush_johnston",
+      "slug": "sarah-bush-johnston",
+      "full_name": "Sarah Bush Johnston",
+      "given_name": "Sarah Bush",
+      "surname": "Johnston",
+      "alt_names": [
+        "Sarah Bush Lincoln"
+      ],
+      "sex": "F",
+      "is_living": false,
+      "lineage_group": "descendant_spouse",
+      "branch": "lincoln_hanks",
+      "birth_edtf": "1788-12-13",
+      "death_edtf": "1869-04-12",
+      "portrait_url": null,
+      "birth_year": 1788,
+      "death_year": 1869,
+      "event_count": 2,
+      "media_count": 0,
+      "primary_place_id": "pl_hardin_ky"
+    },
+    {
+      "id": "p_robert_smith_todd",
+      "slug": "robert-smith-todd",
+      "full_name": "Robert Smith Todd",
+      "given_name": "Robert Smith",
+      "surname": "Todd",
+      "alt_names": [],
+      "sex": "M",
+      "is_living": false,
+      "lineage_group": "ancestor",
+      "branch": "todd_edwards",
+      "birth_edtf": "1791-02-25",
+      "death_edtf": "1849-07-16",
+      "portrait_url": null,
+      "birth_year": 1791,
+      "death_year": 1849,
+      "event_count": 4,
+      "media_count": 0,
+      "primary_place_id": "pl_lexington_ky"
+    },
+    {
+      "id": "p_eliza_parker",
+      "slug": "eliza-ann-parker",
+      "full_name": "Eliza Ann Parker",
+      "given_name": "Eliza Ann",
+      "surname": "Parker",
+      "alt_names": [
+        "Eliza Ann Todd"
+      ],
+      "sex": "F",
+      "is_living": false,
+      "lineage_group": "ancestor",
+      "branch": "todd_edwards",
+      "birth_edtf": "1794",
+      "death_edtf": "1825-07-06",
+      "portrait_url": null,
+      "birth_year": 1794,
+      "death_year": 1825,
+      "event_count": 2,
+      "media_count": 0,
+      "primary_place_id": "pl_lexington_ky"
+    },
+    {
+      "id": "p_sarah_lincoln_grigsby",
+      "slug": "sarah-lincoln-grigsby",
+      "full_name": "Sarah Lincoln Grigsby",
+      "given_name": "Sarah",
+      "surname": "Lincoln",
+      "alt_names": [
+        "Sarah Grigsby"
+      ],
+      "sex": "F",
+      "is_living": false,
+      "lineage_group": "colonial_sibling",
+      "branch": "lincoln_hanks",
+      "birth_edtf": "1807-02-10",
+      "death_edtf": "1828-01-20",
+      "portrait_url": null,
+      "birth_year": 1807,
+      "death_year": 1828,
+      "event_count": 5,
+      "media_count": 0,
+      "primary_place_id": "pl_pigeon_creek_in"
+    },
+    {
+      "id": "p_abraham_lincoln_1809",
+      "slug": "abraham-lincoln-1809",
+      "full_name": "Abraham Lincoln",
+      "given_name": "Abraham",
+      "surname": "Lincoln",
+      "alt_names": [
+        "A. Lincoln"
+      ],
+      "sex": "M",
+      "is_living": false,
+      "lineage_group": "pivot_ancestor",
+      "branch": "lincoln_hanks",
+      "birth_edtf": "1809-02-12",
+      "death_edtf": "1865-04-15",
+      "portrait_url": "/media/portrait-abraham-lincoln.svg",
+      "birth_year": 1809,
+      "death_year": 1865,
+      "event_count": 16,
+      "media_count": 3,
+      "primary_place_id": "pl_springfield_il"
+    },
+    {
+      "id": "p_mary_todd_lincoln",
+      "slug": "mary-ann-todd",
+      "full_name": "Mary Ann Todd",
+      "given_name": "Mary Ann",
+      "surname": "Todd",
+      "alt_names": [
+        "Mary Todd Lincoln"
+      ],
+      "sex": "F",
+      "is_living": false,
+      "lineage_group": "descendant_spouse",
+      "branch": "todd_edwards",
+      "birth_edtf": "1818-12-13",
+      "death_edtf": "1882-07-16",
+      "portrait_url": "/media/portrait-mary-todd.svg",
+      "birth_year": 1818,
+      "death_year": 1882,
+      "event_count": 12,
+      "media_count": 3,
+      "primary_place_id": "pl_springfield_il"
+    },
+    {
+      "id": "p_elizabeth_todd_edwards",
+      "slug": "elizabeth-todd-edwards",
+      "full_name": "Elizabeth Todd Edwards",
+      "given_name": "Elizabeth",
+      "surname": "Todd",
+      "alt_names": [
+        "Elizabeth Edwards"
+      ],
+      "sex": "F",
+      "is_living": false,
+      "lineage_group": "extended",
+      "branch": "todd_edwards",
+      "birth_edtf": "1813-11-13",
+      "death_edtf": "1888-02-22",
+      "portrait_url": null,
+      "birth_year": 1813,
+      "death_year": 1888,
+      "event_count": 4,
+      "media_count": 0,
+      "primary_place_id": "pl_springfield_il"
+    },
+    {
+      "id": "p_robert_todd_lincoln",
+      "slug": "robert-todd-lincoln",
+      "full_name": "Robert Todd Lincoln",
+      "given_name": "Robert Todd",
+      "surname": "Lincoln",
+      "alt_names": [],
+      "sex": "M",
+      "is_living": false,
+      "lineage_group": "descendant",
+      "branch": "lincoln_hanks",
+      "birth_edtf": "1843-08-01",
+      "death_edtf": "1926-07-26",
+      "portrait_url": "/media/portrait-robert-todd-lincoln.svg",
+      "birth_year": 1843,
+      "death_year": 1926,
+      "event_count": 7,
+      "media_count": 2,
+      "primary_place_id": "pl_springfield_il"
+    },
+    {
+      "id": "p_mary_harlan_lincoln",
+      "slug": "mary-eunice-harlan",
+      "full_name": "Mary Eunice Harlan",
+      "given_name": "Mary Eunice",
+      "surname": "Harlan",
+      "alt_names": [
+        "Mary Harlan Lincoln"
+      ],
+      "sex": "F",
+      "is_living": false,
+      "lineage_group": "descendant_spouse",
+      "branch": "todd_edwards",
+      "birth_edtf": "1846-09-25",
+      "death_edtf": "1937-03-31",
+      "portrait_url": null,
+      "birth_year": 1846,
+      "death_year": 1937,
+      "event_count": 3,
+      "media_count": 0,
+      "primary_place_id": "pl_manchester_vt"
+    },
+    {
+      "id": "p_edward_baker_lincoln",
+      "slug": "edward-baker-lincoln",
+      "full_name": "Edward Baker Lincoln",
+      "given_name": "Edward Baker",
+      "surname": "Lincoln",
+      "alt_names": [
+        "Eddie Lincoln"
+      ],
+      "sex": "M",
+      "is_living": false,
+      "lineage_group": "descendant",
+      "branch": "lincoln_hanks",
+      "birth_edtf": "1846-03-10",
+      "death_edtf": "1850-02-01",
+      "portrait_url": null,
+      "birth_year": 1846,
+      "death_year": 1850,
+      "event_count": 1,
+      "media_count": 0,
+      "primary_place_id": "pl_springfield_il"
+    },
+    {
+      "id": "p_william_wallace_lincoln",
+      "slug": "william-wallace-lincoln",
+      "full_name": "William Wallace Lincoln",
+      "given_name": "William Wallace",
+      "surname": "Lincoln",
+      "alt_names": [
+        "Willie Lincoln"
+      ],
+      "sex": "M",
+      "is_living": false,
+      "lineage_group": "descendant",
+      "branch": "lincoln_hanks",
+      "birth_edtf": "1850-12-21",
+      "death_edtf": "1862-02-20",
+      "portrait_url": null,
+      "birth_year": 1850,
+      "death_year": 1862,
+      "event_count": 3,
+      "media_count": 0,
+      "primary_place_id": "pl_springfield_il"
+    },
+    {
+      "id": "p_thomas_tad_lincoln",
+      "slug": "thomas-tad-lincoln",
+      "full_name": "Thomas Tad Lincoln",
+      "given_name": "Thomas",
+      "surname": "Lincoln",
+      "alt_names": [
+        "Tad Lincoln"
+      ],
+      "sex": "M",
+      "is_living": false,
+      "lineage_group": "descendant",
+      "branch": "lincoln_hanks",
+      "birth_edtf": "1853-04-04",
+      "death_edtf": "1871-07-15",
+      "portrait_url": null,
+      "birth_year": 1853,
+      "death_year": 1871,
+      "event_count": 3,
+      "media_count": 0,
+      "primary_place_id": "pl_springfield_il"
+    },
+    {
+      "id": "p_jordan_mercer_living",
+      "slug": "jordan-mercer",
+      "full_name": "Living",
+      "given_name": "Living",
+      "surname": "",
+      "alt_names": [],
+      "sex": "X",
+      "is_living": true,
+      "lineage_group": "extended",
+      "branch": "lincoln_hanks",
+      "birth_edtf": "",
+      "death_edtf": "",
+      "portrait_url": null,
+      "birth_year": null,
+      "death_year": null,
+      "event_count": 0,
+      "media_count": 0,
+      "primary_place_id": null,
+      "thumb_url": null
+    }
+  ],
+  "events": [
+    {
+      "id": "evt_1778_birt_thomas",
+      "title": "Birth of Thomas Lincoln in Rockingham County",
+      "scope": "personal",
+      "event_kind": "residence_anchor",
+      "category": "life_milestone",
+      "edtf_date": "1778-01-06",
+      "place_id": "pl_rockingham_va",
+      "summary": "Thomas Lincoln was born on Linville Creek in Rockingham County, Virginia, to Capt. Abraham Lincoln and Bathsheba Herring.",
+      "participants": [
+        {
+          "person_id": "p_thomas_lincoln",
+          "role": "principal"
+        },
+        {
+          "person_id": "p_abraham_lincoln_1744",
+          "role": "parent"
+        },
+        {
+          "person_id": "p_bathsheba_herring",
+          "role": "parent"
+        }
+      ],
+      "sources": [
+        {
+          "source_id": "src_lincoln_autobiography_1859",
+          "confidence": "high",
+          "citation_detail": "Page 1, family migration from Rockingham County, Virginia."
+        }
+      ],
+      "time_min": -70121,
+      "time_max": -70121,
+      "display_date": "Jan 6, 1778",
+      "year": 1778,
+      "place_ancestors": [
+        "pl_rockingham_va",
+        "pl_virginia",
+        "pl_usa"
+      ]
+    },
+    {
+      "id": "evt_1780_land_warrant",
+      "title": "Capt. Abraham Lincoln acquires Kentucky land warrant",
+      "scope": "family",
+      "event_kind": "residence_anchor",
+      "category": "homestead",
+      "edtf_date": "1780-03-04",
+      "place_id": "pl_rockingham_va",
+      "summary": "Virginia Land Office Treasury Warrant No. 3334 grants 400 acres on Long Run in Jefferson County, Kentucky, preparing the family's westward move.",
+      "participants": [
+        {
+          "person_id": "p_abraham_lincoln_1744",
+          "role": "principal"
+        },
+        {
+          "person_id": "p_bathsheba_herring",
+          "role": "spouse"
+        },
+        {
+          "person_id": "p_thomas_lincoln",
+          "role": "household"
+        }
+      ],
+      "sources": [
+        {
+          "source_id": "src_virginia_land_1780",
+          "confidence": "high",
+          "citation_detail": "Treasury Warrant No. 3334, 400 acres."
+        }
+      ],
+      "time_min": -69333,
+      "time_max": -69333,
+      "display_date": "Mar 4, 1780",
+      "year": 1780,
+      "place_ancestors": [
+        "pl_rockingham_va",
+        "pl_virginia",
+        "pl_usa"
+      ]
+    },
+    {
+      "id": "evt_1782_kentucky_settlement",
+      "title": "Lincoln family settles in Kentucky frontier",
+      "scope": "family",
+      "event_kind": "residence_anchor",
+      "category": "homestead",
+      "edtf_date": "1782",
+      "alternate_dates": [
+        {
+          "edtf_date": "1781~",
+          "source_id": "src_lincoln_autobiography_1859",
+          "note": "Abraham Lincoln's 1859 sketch writes \"about 1782\" from family memory."
+        }
+      ],
+      "place_id": "pl_hardin_ky",
+      "summary": "Capt. Abraham Lincoln moved his household over the Wilderness Road into Kentucky, settling on frontier land where young Thomas grew up.",
+      "participants": [
+        {
+          "person_id": "p_abraham_lincoln_1744",
+          "role": "principal"
+        },
+        {
+          "person_id": "p_bathsheba_herring",
+          "role": "spouse"
+        },
+        {
+          "person_id": "p_thomas_lincoln",
+          "role": "household"
+        }
+      ],
+      "sources": [
+        {
+          "source_id": "src_lincoln_autobiography_1859",
+          "confidence": "medium",
+          "citation_detail": "Page 1, removal from Virginia to Kentucky about 1782."
+        }
+      ],
+      "time_min": -68665,
+      "time_max": -68301,
+      "display_date": "1782",
+      "year": 1782,
+      "place_ancestors": [
+        "pl_hardin_ky",
+        "pl_kentucky",
+        "pl_usa"
+      ]
+    },
+    {
+      "id": "evt_1786_death_capt_abraham",
+      "title": "Death of Capt. Abraham Lincoln in Kentucky",
+      "scope": "personal",
+      "event_kind": "point_event",
+      "category": "life_milestone",
+      "edtf_date": "1786-05",
+      "place_id": "pl_hardin_ky",
+      "summary": "Capt. Abraham Lincoln was killed while clearing a field in Kentucky, leaving his widow Bathsheba to raise five children.",
+      "participants": [
+        {
+          "person_id": "p_abraham_lincoln_1744",
+          "role": "principal"
+        },
+        {
+          "person_id": "p_bathsheba_herring",
+          "role": "spouse"
+        },
+        {
+          "person_id": "p_thomas_lincoln",
+          "role": "child"
+        }
+      ],
+      "sources": [
+        {
+          "source_id": "src_lincoln_autobiography_1859",
+          "confidence": "high",
+          "citation_detail": "Page 1, killing of grandfather while laboring to clear a farm."
+        }
+      ],
+      "time_min": -67084,
+      "time_max": -67054,
+      "display_date": "May 1786",
+      "year": 1786,
+      "place_ancestors": [
+        "pl_hardin_ky",
+        "pl_kentucky",
+        "pl_usa"
+      ]
+    },
+    {
+      "id": "evt_1791_birt_robert_todd",
+      "title": "Birth of Robert Smith Todd in Lexington",
+      "scope": "personal",
+      "event_kind": "residence_anchor",
+      "category": "life_milestone",
+      "edtf_date": "1791-02-25",
+      "place_id": "pl_lexington_ky",
+      "summary": "Robert Smith Todd was born in Lexington, Fayette County, Kentucky, son of Maj. Gen. Levi Todd and Jane Briggs.",
+      "participants": [
+        {
+          "person_id": "p_robert_smith_todd",
+          "role": "principal"
+        },
+        {
+          "person_id": "p_levi_todd",
+          "role": "parent"
+        },
+        {
+          "person_id": "p_jane_briggs",
+          "role": "parent"
+        }
+      ],
+      "sources": [
+        {
+          "source_id": "src_fayette_history_1882",
+          "confidence": "high",
+          "citation_detail": "Biographical sketch of Levi Todd and Robert Smith Todd."
+        }
+      ],
+      "time_min": -65323,
+      "time_max": -65323,
+      "display_date": "Feb 25, 1791",
+      "year": 1791,
+      "place_ancestors": [
+        "pl_lexington_ky",
+        "pl_kentucky",
+        "pl_usa"
+      ]
+    },
+    {
+      "id": "evt_1806_marr_thomas_nancy",
+      "title": "Marriage of Thomas Lincoln and Nancy Hanks",
+      "scope": "family",
+      "event_kind": "residence_anchor",
+      "category": "family_milestone",
+      "edtf_date": "1806-06-12",
+      "place_id": "pl_hardin_ky",
+      "summary": "Thomas Lincoln married Nancy Hanks in Washington and Hardin County circles in Kentucky before establishing their farm at Sinking Spring.",
+      "participants": [
+        {
+          "person_id": "p_thomas_lincoln",
+          "role": "spouse"
+        },
+        {
+          "person_id": "p_nancy_hanks",
+          "role": "spouse"
+        }
+      ],
+      "sources": [
+        {
+          "source_id": "src_lincoln_autobiography_1859",
+          "confidence": "high",
+          "citation_detail": "Page 1, parentage of Abraham Lincoln."
+        }
+      ],
+      "time_min": -59738,
+      "time_max": -59738,
+      "display_date": "Jun 12, 1806",
+      "year": 1806,
+      "place_ancestors": [
+        "pl_hardin_ky",
+        "pl_kentucky",
+        "pl_usa"
+      ]
+    },
+    {
+      "id": "evt_1807_birt_sarah_lincoln",
+      "title": "Birth of Sarah Lincoln in Elizabethtown and Hardin County",
+      "scope": "personal",
+      "event_kind": "residence_anchor",
+      "category": "life_milestone",
+      "edtf_date": "1807-02-10",
+      "place_id": "pl_hardin_ky",
+      "summary": "Sarah Lincoln, elder sister of Abraham Lincoln, was born in Hardin County, Kentucky.",
+      "participants": [
+        {
+          "person_id": "p_sarah_lincoln_grigsby",
+          "role": "principal"
+        },
+        {
+          "person_id": "p_thomas_lincoln",
+          "role": "parent"
+        },
+        {
+          "person_id": "p_nancy_hanks",
+          "role": "parent"
+        }
+      ],
+      "sources": [
+        {
+          "source_id": "src_lincoln_autobiography_1859",
+          "confidence": "high",
+          "citation_detail": "Page 1, family household in Kentucky."
+        }
+      ],
+      "time_min": -59495,
+      "time_max": -59495,
+      "display_date": "Feb 10, 1807",
+      "year": 1807,
+      "place_ancestors": [
+        "pl_hardin_ky",
+        "pl_kentucky",
+        "pl_usa"
+      ]
+    },
+    {
+      "id": "evt_1809_birt_abraham",
+      "title": "Birth of Abraham Lincoln at Sinking Spring Farm",
+      "scope": "personal",
+      "event_kind": "residence_anchor",
+      "category": "life_milestone",
+      "edtf_date": "1809-02-12",
+      "place_id": "pl_hodgenville_ky",
+      "summary": "Abraham Lincoln was born in a one-room log cabin at Sinking Spring Farm near Hodgenville, Hardin County, Kentucky.",
+      "participants": [
+        {
+          "person_id": "p_abraham_lincoln_1809",
+          "role": "principal"
+        },
+        {
+          "person_id": "p_thomas_lincoln",
+          "role": "parent"
+        },
+        {
+          "person_id": "p_nancy_hanks",
+          "role": "parent"
+        },
+        {
+          "person_id": "p_sarah_lincoln_grigsby",
+          "role": "household"
+        }
+      ],
+      "sources": [
+        {
+          "source_id": "src_lincoln_autobiography_1859",
+          "confidence": "high",
+          "citation_detail": "Page 1, \"I was born Feb. 12, 1809, in Hardin County, Kentucky.\""
+        }
+      ],
+      "time_min": -58762,
+      "time_max": -58762,
+      "display_date": "Feb 12, 1809",
+      "year": 1809,
+      "place_ancestors": [
+        "pl_hodgenville_ky",
+        "pl_hardin_ky",
+        "pl_kentucky",
+        "pl_usa"
+      ]
+    },
+    {
+      "id": "evt_1813_birt_elizabeth_todd",
+      "title": "Birth of Elizabeth Todd in Lexington",
+      "scope": "personal",
+      "event_kind": "residence_anchor",
+      "category": "life_milestone",
+      "edtf_date": "1813-11-13",
+      "place_id": "pl_lexington_ky",
+      "summary": "Elizabeth Todd was born in Lexington, Kentucky, eldest surviving daughter of Robert Smith Todd and Eliza Ann Parker.",
+      "participants": [
+        {
+          "person_id": "p_elizabeth_todd_edwards",
+          "role": "principal"
+        },
+        {
+          "person_id": "p_robert_smith_todd",
+          "role": "parent"
+        },
+        {
+          "person_id": "p_eliza_parker",
+          "role": "parent"
+        }
+      ],
+      "sources": [
+        {
+          "source_id": "src_fayette_history_1882",
+          "confidence": "medium",
+          "citation_detail": "Robert Smith Todd family register."
+        }
+      ],
+      "time_min": -57027,
+      "time_max": -57027,
+      "display_date": "Nov 13, 1813",
+      "year": 1813,
+      "place_ancestors": [
+        "pl_lexington_ky",
+        "pl_kentucky",
+        "pl_usa"
+      ]
+    },
+    {
+      "id": "evt_1816_year_without_summer",
+      "title": "Year Without a Summer chills Ohio Valley harvests",
+      "scope": "local",
+      "event_kind": "context_span",
+      "category": "weather",
+      "edtf_date": "1816-06/1816-09",
+      "place_id": "pl_hardin_ky",
+      "summary": "Volcanic cooling following the 1815 Mount Tambora eruption brought killing frosts across Kentucky and Indiana in summer 1816.",
+      "severity_rank": 8,
+      "participants": [],
+      "sources": [
+        {
+          "source_id": "src_fayette_history_1882",
+          "confidence": "medium",
+          "citation_detail": "Regional weather annals, 1816."
+        }
+      ],
+      "time_min": -56096,
+      "time_max": -55975,
+      "display_date": "Jun 1816–Sep 1816",
+      "year": 1816,
+      "place_ancestors": [
+        "pl_hardin_ky",
+        "pl_kentucky",
+        "pl_usa"
+      ]
+    },
+    {
+      "id": "evt_1816_move_indiana",
+      "title": "Lincoln family crosses the Ohio River to Little Pigeon Creek",
+      "scope": "family",
+      "event_kind": "residence_anchor",
+      "category": "homestead",
+      "edtf_date": "1816-12",
+      "place_id": "pl_pigeon_creek_in",
+      "summary": "Seeking clear federal land titles and free-soil territory, Thomas Lincoln moved his family from Kentucky to Spencer County, Indiana.",
+      "participants": [
+        {
+          "person_id": "p_thomas_lincoln",
+          "role": "principal"
+        },
+        {
+          "person_id": "p_nancy_hanks",
+          "role": "spouse"
+        },
+        {
+          "person_id": "p_abraham_lincoln_1809",
+          "role": "household"
+        },
+        {
+          "person_id": "p_sarah_lincoln_grigsby",
+          "role": "household"
+        }
+      ],
+      "sources": [
+        {
+          "source_id": "src_lincoln_autobiography_1859",
+          "confidence": "high",
+          "citation_detail": "Page 2, removal from Kentucky to Spencer County, Indiana in his eighth year."
+        }
+      ],
+      "time_min": -55913,
+      "time_max": -55883,
+      "display_date": "Dec 1816",
+      "year": 1816,
+      "place_ancestors": [
+        "pl_pigeon_creek_in",
+        "pl_spencer_in",
+        "pl_indiana",
+        "pl_usa"
+      ]
+    },
+    {
+      "id": "evt_1818_death_nancy_hanks",
+      "title": "Death of Nancy Hanks Lincoln at Little Pigeon Creek",
+      "scope": "personal",
+      "event_kind": "point_event",
+      "category": "life_milestone",
+      "edtf_date": "1818-10-05",
+      "place_id": "pl_pigeon_creek_in",
+      "summary": "Nancy Hanks Lincoln died of milk sickness at the Little Pigeon Creek homestead in Spencer County, Indiana.",
+      "participants": [
+        {
+          "person_id": "p_nancy_hanks",
+          "role": "principal"
+        },
+        {
+          "person_id": "p_thomas_lincoln",
+          "role": "spouse"
+        },
+        {
+          "person_id": "p_abraham_lincoln_1809",
+          "role": "child"
+        }
+      ],
+      "sources": [
+        {
+          "source_id": "src_lincoln_autobiography_1859",
+          "confidence": "high",
+          "citation_detail": "Page 2, death of mother in autumn 1818."
+        }
+      ],
+      "time_min": -55240,
+      "time_max": -55240,
+      "display_date": "Oct 5, 1818",
+      "year": 1818,
+      "place_ancestors": [
+        "pl_pigeon_creek_in",
+        "pl_spencer_in",
+        "pl_indiana",
+        "pl_usa"
+      ]
+    },
+    {
+      "id": "evt_1818_birt_mary_todd",
+      "title": "Birth of Mary Ann Todd in Lexington",
+      "scope": "personal",
+      "event_kind": "residence_anchor",
+      "category": "life_milestone",
+      "edtf_date": "1818-12-13",
+      "place_id": "pl_lexington_ky",
+      "summary": "Mary Ann Todd was born in Lexington, Fayette County, Kentucky, fourth child of banker and merchant Robert Smith Todd and Eliza Ann Parker.",
+      "participants": [
+        {
+          "person_id": "p_mary_todd_lincoln",
+          "role": "principal"
+        },
+        {
+          "person_id": "p_robert_smith_todd",
+          "role": "parent"
+        },
+        {
+          "person_id": "p_eliza_parker",
+          "role": "parent"
+        }
+      ],
+      "sources": [
+        {
+          "source_id": "src_fayette_history_1882",
+          "confidence": "high",
+          "citation_detail": "Todd family entry, Lexington, Kentucky."
+        }
+      ],
+      "time_min": -55171,
+      "time_max": -55171,
+      "display_date": "Dec 13, 1818",
+      "year": 1818,
+      "place_ancestors": [
+        "pl_lexington_ky",
+        "pl_kentucky",
+        "pl_usa"
+      ]
+    },
+    {
+      "id": "evt_1819_marr_thomas_sarah",
+      "title": "Marriage of Thomas Lincoln and Sarah Bush Johnston",
+      "scope": "family",
+      "event_kind": "residence_anchor",
+      "category": "family_milestone",
+      "edtf_date": "1819-12-02",
+      "place_id": "pl_hardin_ky",
+      "summary": "Thomas Lincoln returned to Elizabethtown, Kentucky to marry widow Sarah Bush Johnston, who brought books and stability to Little Pigeon Creek.",
+      "participants": [
+        {
+          "person_id": "p_thomas_lincoln",
+          "role": "spouse"
+        },
+        {
+          "person_id": "p_sarah_bush_johnston",
+          "role": "spouse"
+        }
+      ],
+      "sources": [
+        {
+          "source_id": "src_census_1820_spencer",
+          "confidence": "medium",
+          "citation_detail": "Blended Lincoln-Johnston household enumerated in Spencer County in 1820."
+        }
+      ],
+      "time_min": -54817,
+      "time_max": -54817,
+      "display_date": "Dec 2, 1819",
+      "year": 1819,
+      "place_ancestors": [
+        "pl_hardin_ky",
+        "pl_kentucky",
+        "pl_usa"
+      ]
+    },
+    {
+      "id": "evt_1820_census_spencer",
+      "title": "1820 U.S. Census enumerates Thomas Lincoln household in Spencer County",
+      "scope": "family",
+      "event_kind": "residence_anchor",
+      "category": "homestead",
+      "edtf_date": "1820-08-07",
+      "place_id": "pl_pigeon_creek_in",
+      "summary": "The 1820 federal census records Thomas Lincoln, Sarah Bush Johnston, Abraham, Sarah, and the Johnston children farming in Spencer County, Indiana.",
+      "participants": [
+        {
+          "person_id": "p_thomas_lincoln",
+          "role": "principal"
+        },
+        {
+          "person_id": "p_sarah_bush_johnston",
+          "role": "spouse"
+        },
+        {
+          "person_id": "p_abraham_lincoln_1809",
+          "role": "household"
+        },
+        {
+          "person_id": "p_sarah_lincoln_grigsby",
+          "role": "household"
+        }
+      ],
+      "sources": [
+        {
+          "source_id": "src_census_1820_spencer",
+          "confidence": "high",
+          "citation_detail": "Spencer County, Indiana, p. 95, line 14."
+        }
+      ],
+      "time_min": -54568,
+      "time_max": -54568,
+      "display_date": "Aug 7, 1820",
+      "year": 1820,
+      "place_ancestors": [
+        "pl_pigeon_creek_in",
+        "pl_spencer_in",
+        "pl_indiana",
+        "pl_usa"
+      ]
+    },
+    {
+      "id": "evt_1828_death_sarah_grigsby",
+      "title": "Death of Sarah Lincoln Grigsby in Spencer County",
+      "scope": "personal",
+      "event_kind": "point_event",
+      "category": "life_milestone",
+      "edtf_date": "1828-01-20",
+      "place_id": "pl_pigeon_creek_in",
+      "summary": "Sarah Lincoln Grigsby died in childbirth in Spencer County, Indiana, and was buried at Little Pigeon Baptist Churchyard.",
+      "participants": [
+        {
+          "person_id": "p_sarah_lincoln_grigsby",
+          "role": "principal"
+        },
+        {
+          "person_id": "p_thomas_lincoln",
+          "role": "parent"
+        }
+      ],
+      "sources": [
+        {
+          "source_id": "src_lincoln_autobiography_1859",
+          "confidence": "medium",
+          "citation_detail": "Page 2, family years in Spencer County."
+        }
+      ],
+      "time_min": -51846,
+      "time_max": -51846,
+      "display_date": "Jan 20, 1828",
+      "year": 1828,
+      "place_ancestors": [
+        "pl_pigeon_creek_in",
+        "pl_spencer_in",
+        "pl_indiana",
+        "pl_usa"
+      ]
+    },
+    {
+      "id": "evt_1831_new_salem_residence",
+      "title": "Abraham Lincoln settles in New Salem on the Sangamon River",
+      "scope": "personal",
+      "event_kind": "residence_anchor",
+      "category": "homestead",
+      "edtf_date": "1831-07",
+      "place_id": "pl_new_salem_il",
+      "summary": "After a flatboat voyage to New Orleans, Abraham Lincoln settled in New Salem, Illinois, serving as clerk, postmaster, and deputy surveyor.",
+      "participants": [
+        {
+          "person_id": "p_abraham_lincoln_1809",
+          "role": "principal"
+        }
+      ],
+      "sources": [
+        {
+          "source_id": "src_lincoln_autobiography_1859",
+          "confidence": "high",
+          "citation_detail": "Page 2, arrival in New Salem and election to the Illinois legislature."
+        }
+      ],
+      "time_min": -50588,
+      "time_max": -50558,
+      "display_date": "Jul 1831",
+      "year": 1831,
+      "place_ancestors": [
+        "pl_new_salem_il",
+        "pl_sangamon_il",
+        "pl_illinois",
+        "pl_usa"
+      ]
+    },
+    {
+      "id": "evt_1837_springfield_move",
+      "title": "Abraham Lincoln moves to Springfield to practice law",
+      "scope": "personal",
+      "event_kind": "residence_anchor",
+      "category": "homestead",
+      "edtf_date": "1837-04-15",
+      "place_id": "pl_springfield_il",
+      "summary": "Admitted to the Illinois bar, Abraham Lincoln rode into Springfield on a borrowed horse to join John Todd Stuart's law office.",
+      "participants": [
+        {
+          "person_id": "p_abraham_lincoln_1809",
+          "role": "principal"
+        }
+      ],
+      "sources": [
+        {
+          "source_id": "src_lincoln_autobiography_1859",
+          "confidence": "high",
+          "citation_detail": "Page 3, removal to Springfield on April 15, 1837."
+        }
+      ],
+      "time_min": -48473,
+      "time_max": -48473,
+      "display_date": "Apr 15, 1837",
+      "year": 1837,
+      "place_ancestors": [
+        "pl_springfield_il",
+        "pl_sangamon_il",
+        "pl_illinois",
+        "pl_usa"
+      ]
+    },
+    {
+      "id": "evt_1839_mary_todd_springfield",
+      "title": "Mary Ann Todd moves to her sister's home in Springfield",
+      "scope": "personal",
+      "event_kind": "residence_anchor",
+      "category": "homestead",
+      "edtf_date": "1839-10",
+      "place_id": "pl_springfield_il",
+      "summary": "Mary Ann Todd moved from Lexington, Kentucky to Springfield, Illinois to live with her sister Elizabeth Todd Edwards.",
+      "participants": [
+        {
+          "person_id": "p_mary_todd_lincoln",
+          "role": "principal"
+        },
+        {
+          "person_id": "p_elizabeth_todd_edwards",
+          "role": "household"
+        }
+      ],
+      "sources": [
+        {
+          "source_id": "src_unverified_tree_entry",
+          "confidence": "low",
+          "citation_detail": "Uncited family arrival month; needs Sangamon local newspaper corroboration."
+        }
+      ],
+      "time_min": -47574,
+      "time_max": -47544,
+      "display_date": "Oct 1839",
+      "year": 1839,
+      "place_ancestors": [
+        "pl_springfield_il",
+        "pl_sangamon_il",
+        "pl_illinois",
+        "pl_usa"
+      ]
+    },
+    {
+      "id": "evt_1842_marr_abraham_mary",
+      "title": "Marriage of Abraham Lincoln and Mary Ann Todd in Springfield",
+      "scope": "family",
+      "event_kind": "residence_anchor",
+      "category": "family_milestone",
+      "edtf_date": "1842-11-04",
+      "place_id": "pl_springfield_il",
+      "summary": "Abraham Lincoln and Mary Ann Todd were married at the Springfield home of Ninian and Elizabeth Todd Edwards.",
+      "participants": [
+        {
+          "person_id": "p_abraham_lincoln_1809",
+          "role": "spouse"
+        },
+        {
+          "person_id": "p_mary_todd_lincoln",
+          "role": "spouse"
+        },
+        {
+          "person_id": "p_elizabeth_todd_edwards",
+          "role": "witness"
+        }
+      ],
+      "sources": [
+        {
+          "source_id": "src_sangamon_marriage_1842",
+          "confidence": "high",
+          "citation_detail": "Vol. 2, 4 November 1842, solemnized by Rev. Charles Dresser."
+        },
+        {
+          "source_id": "src_lincoln_autobiography_1859",
+          "confidence": "high",
+          "citation_detail": "Page 3, \"Married Nov. 4, 1842, to Mary, daughter of Robert S. Todd, of Lexington, Ky.\""
+        }
+      ],
+      "time_min": -46444,
+      "time_max": -46444,
+      "display_date": "Nov 4, 1842",
+      "year": 1842,
+      "place_ancestors": [
+        "pl_springfield_il",
+        "pl_sangamon_il",
+        "pl_illinois",
+        "pl_usa"
+      ]
+    },
+    {
+      "id": "evt_1843_birt_robert_todd_lincoln",
+      "title": "Birth of Robert Todd Lincoln in Springfield",
+      "scope": "personal",
+      "event_kind": "residence_anchor",
+      "category": "life_milestone",
+      "edtf_date": "1843-08-01",
+      "place_id": "pl_springfield_il",
+      "summary": "Robert Todd Lincoln, eldest child of Abraham and Mary Lincoln, was born at the Globe Tavern in Springfield, Illinois.",
+      "participants": [
+        {
+          "person_id": "p_robert_todd_lincoln",
+          "role": "principal"
+        },
+        {
+          "person_id": "p_abraham_lincoln_1809",
+          "role": "parent"
+        },
+        {
+          "person_id": "p_mary_todd_lincoln",
+          "role": "parent"
+        }
+      ],
+      "sources": [
+        {
+          "source_id": "src_census_1850_springfield",
+          "confidence": "high",
+          "citation_detail": "Sheet 129A, Robert T. Lincoln, age 7, born in Illinois."
+        }
+      ],
+      "time_min": -46174,
+      "time_max": -46174,
+      "display_date": "Aug 1, 1843",
+      "year": 1843,
+      "place_ancestors": [
+        "pl_springfield_il",
+        "pl_sangamon_il",
+        "pl_illinois",
+        "pl_usa"
+      ]
+    },
+    {
+      "id": "evt_1846_birt_edward_lincoln",
+      "title": "Birth of Edward Baker Lincoln in Springfield",
+      "scope": "personal",
+      "event_kind": "residence_anchor",
+      "category": "life_milestone",
+      "edtf_date": "1846-03-10",
+      "place_id": "pl_springfield_il",
+      "summary": "Edward Baker Lincoln was born at the Eighth Street house in Springfield, Illinois.",
+      "participants": [
+        {
+          "person_id": "p_edward_baker_lincoln",
+          "role": "principal"
+        },
+        {
+          "person_id": "p_abraham_lincoln_1809",
+          "role": "parent"
+        },
+        {
+          "person_id": "p_mary_todd_lincoln",
+          "role": "parent"
+        }
+      ],
+      "sources": [
+        {
+          "source_id": "src_lincoln_autobiography_1859",
+          "confidence": "high",
+          "citation_detail": "Page 3, four children born in Springfield."
+        }
+      ],
+      "time_min": -45222,
+      "time_max": -45222,
+      "display_date": "Mar 10, 1846",
+      "year": 1846,
+      "place_ancestors": [
+        "pl_springfield_il",
+        "pl_sangamon_il",
+        "pl_illinois",
+        "pl_usa"
+      ]
+    },
+    {
+      "id": "evt_1849_death_robert_smith_todd",
+      "title": "Death of Robert Smith Todd in Lexington",
+      "scope": "personal",
+      "event_kind": "point_event",
+      "category": "life_milestone",
+      "edtf_date": "1849-07-16",
+      "place_id": "pl_lexington_ky",
+      "summary": "Robert Smith Todd died during the 1849 cholera epidemic in Lexington, Kentucky.",
+      "participants": [
+        {
+          "person_id": "p_robert_smith_todd",
+          "role": "principal"
+        }
+      ],
+      "sources": [
+        {
+          "source_id": "src_fayette_history_1882",
+          "confidence": "high",
+          "citation_detail": "Lexington cholera mortality roll, July 1849."
+        }
+      ],
+      "time_min": -43998,
+      "time_max": -43998,
+      "display_date": "Jul 16, 1849",
+      "year": 1849,
+      "place_ancestors": [
+        "pl_lexington_ky",
+        "pl_kentucky",
+        "pl_usa"
+      ]
+    },
+    {
+      "id": "evt_1850_census_springfield",
+      "title": "1850 U.S. Federal Census records the Lincoln household in Springfield",
+      "scope": "family",
+      "event_kind": "residence_anchor",
+      "category": "homestead",
+      "edtf_date": "1850-08-29",
+      "fact_conflicts": [
+        {
+          "claim": "Real estate valued at $3,000 in 1850 vs. $5,000 in 1860",
+          "source_id": "src_census_1860_springfield",
+          "note": "Reflects the 1856 second-story expansion of the Eighth Street residence."
+        }
+      ],
+      "place_id": "pl_springfield_il",
+      "summary": "Enumerated on Eighth Street in Springfield, listing Abraham Lincoln (lawyer, real estate $3,000), Mary Lincoln, and 7-year-old Robert T. Lincoln.",
+      "photo_url": "/media/scan-census-1850.svg",
+      "photo_placeholder_caption": "Archival transcription plate of the 1850 Springfield Census Schedule (p. 129A).",
+      "participants": [
+        {
+          "person_id": "p_abraham_lincoln_1809",
+          "role": "principal"
+        },
+        {
+          "person_id": "p_mary_todd_lincoln",
+          "role": "spouse"
+        },
+        {
+          "person_id": "p_robert_todd_lincoln",
+          "role": "household"
+        }
+      ],
+      "sources": [
+        {
+          "source_id": "src_census_1850_springfield",
+          "confidence": "high",
+          "citation_detail": "Springfield, Sangamon County, Illinois, p. 129A, family 375, lines 12–14.",
+          "scan_url": "/media/scan-census-1850.svg",
+          "scan_title": "1850 U.S. Federal Census, Springfield, Illinois (p. 129A)"
+        }
+      ],
+      "time_min": -43589,
+      "time_max": -43589,
+      "display_date": "Aug 29, 1850",
+      "year": 1850,
+      "place_ancestors": [
+        "pl_springfield_il",
+        "pl_sangamon_il",
+        "pl_illinois",
+        "pl_usa"
+      ]
+    },
+    {
+      "id": "evt_1850_birt_willie_lincoln",
+      "title": "Birth of William Wallace Lincoln in Springfield",
+      "scope": "personal",
+      "event_kind": "residence_anchor",
+      "category": "life_milestone",
+      "edtf_date": "1850-12-21",
+      "place_id": "pl_springfield_il",
+      "summary": "William Wallace Lincoln was born at the Eighth Street home in Springfield, Illinois.",
+      "participants": [
+        {
+          "person_id": "p_william_wallace_lincoln",
+          "role": "principal"
+        },
+        {
+          "person_id": "p_abraham_lincoln_1809",
+          "role": "parent"
+        },
+        {
+          "person_id": "p_mary_todd_lincoln",
+          "role": "parent"
+        }
+      ],
+      "sources": [
+        {
+          "source_id": "src_census_1860_springfield",
+          "confidence": "high",
+          "citation_detail": "Sheet 113, William Lincoln, age 9, born in Illinois."
+        }
+      ],
+      "time_min": -43475,
+      "time_max": -43475,
+      "display_date": "Dec 21, 1850",
+      "year": 1850,
+      "place_ancestors": [
+        "pl_springfield_il",
+        "pl_sangamon_il",
+        "pl_illinois",
+        "pl_usa"
+      ]
+    },
+    {
+      "id": "evt_1853_birt_tad_lincoln",
+      "title": "Birth of Thomas Tad Lincoln in Springfield",
+      "scope": "personal",
+      "event_kind": "residence_anchor",
+      "category": "life_milestone",
+      "edtf_date": "1853-04-04",
+      "place_id": "pl_springfield_il",
+      "summary": "Thomas \"Tad\" Lincoln, youngest son of Abraham and Mary Lincoln, was born in Springfield, Illinois.",
+      "participants": [
+        {
+          "person_id": "p_thomas_tad_lincoln",
+          "role": "principal"
+        },
+        {
+          "person_id": "p_abraham_lincoln_1809",
+          "role": "parent"
+        },
+        {
+          "person_id": "p_mary_todd_lincoln",
+          "role": "parent"
+        }
+      ],
+      "sources": [
+        {
+          "source_id": "src_census_1860_springfield",
+          "confidence": "high",
+          "citation_detail": "Sheet 113, Thomas Lincoln, age 7, born in Illinois."
+        }
+      ],
+      "time_min": -42640,
+      "time_max": -42640,
+      "display_date": "Apr 4, 1853",
+      "year": 1853,
+      "place_ancestors": [
+        "pl_springfield_il",
+        "pl_sangamon_il",
+        "pl_illinois",
+        "pl_usa"
+      ]
+    },
+    {
+      "id": "evt_1859_autobiography_written",
+      "title": "Abraham Lincoln drafts autobiographical sketch for Jesse W. Fell",
+      "scope": "personal",
+      "event_kind": "point_event",
+      "category": "life_milestone",
+      "edtf_date": "1859-12-20",
+      "place_id": "pl_springfield_il",
+      "summary": "In a three-page handwritten memorandum from Springfield, Lincoln summarized his Virginia ancestry, Kentucky birth, Indiana youth, and Illinois legal career.",
+      "participants": [
+        {
+          "person_id": "p_abraham_lincoln_1809",
+          "role": "principal"
+        }
+      ],
+      "sources": [
+        {
+          "source_id": "src_lincoln_autobiography_1859",
+          "confidence": "high",
+          "citation_detail": "Full 3-page manuscript dated December 20, 1859."
+        }
+      ],
+      "time_min": -40189,
+      "time_max": -40189,
+      "display_date": "Dec 20, 1859",
+      "year": 1859,
+      "place_ancestors": [
+        "pl_springfield_il",
+        "pl_sangamon_il",
+        "pl_illinois",
+        "pl_usa"
+      ]
+    },
+    {
+      "id": "evt_1860_census_springfield",
+      "title": "1860 U.S. Federal Census records the Lincoln household in Springfield",
+      "scope": "family",
+      "event_kind": "residence_anchor",
+      "category": "homestead",
+      "edtf_date": "1860-07-14",
+      "place_id": "pl_springfield_il",
+      "summary": "Enumerated on July 14, 1860, two months after Abraham Lincoln's presidential nomination, listing Abraham, Mary, Robert, William, and Thomas in Springfield.",
+      "participants": [
+        {
+          "person_id": "p_abraham_lincoln_1809",
+          "role": "principal"
+        },
+        {
+          "person_id": "p_mary_todd_lincoln",
+          "role": "spouse"
+        },
+        {
+          "person_id": "p_robert_todd_lincoln",
+          "role": "household"
+        },
+        {
+          "person_id": "p_william_wallace_lincoln",
+          "role": "household"
+        },
+        {
+          "person_id": "p_thomas_tad_lincoln",
+          "role": "household"
+        }
+      ],
+      "sources": [
+        {
+          "source_id": "src_census_1860_springfield",
+          "confidence": "high",
+          "citation_detail": "Springfield, Sangamon County, Illinois, p. 113, dwelling 827."
+        }
+      ],
+      "time_min": -39982,
+      "time_max": -39982,
+      "display_date": "Jul 14, 1860",
+      "year": 1860,
+      "place_ancestors": [
+        "pl_springfield_il",
+        "pl_sangamon_il",
+        "pl_illinois",
+        "pl_usa"
+      ]
+    },
+    {
+      "id": "evt_1860_macro_election",
+      "title": "1860 United States Presidential Election",
+      "scope": "national",
+      "event_kind": "context_span",
+      "category": "macro",
+      "edtf_date": "1860-11-06",
+      "place_id": "pl_washington_dc",
+      "summary": "Four-way national election resulting in the election of Abraham Lincoln as sixteenth President of the United States.",
+      "severity_rank": 10,
+      "participants": [],
+      "sources": [
+        {
+          "source_id": "src_lincoln_autobiography_1859",
+          "confidence": "high"
+        }
+      ],
+      "time_min": -39867,
+      "time_max": -39867,
+      "display_date": "Nov 6, 1860",
+      "year": 1860,
+      "place_ancestors": [
+        "pl_washington_dc",
+        "pl_usa"
+      ]
+    },
+    {
+      "id": "evt_1861_washington_residence",
+      "title": "Lincoln family takes residence in Washington, D.C.",
+      "scope": "family",
+      "event_kind": "residence_anchor",
+      "category": "homestead",
+      "edtf_date": "1861-03-04",
+      "place_id": "pl_washington_dc",
+      "summary": "Abraham and Mary Lincoln moved from Springfield to Washington, D.C. for the inauguration on March 4, 1861.",
+      "participants": [
+        {
+          "person_id": "p_abraham_lincoln_1809",
+          "role": "principal"
+        },
+        {
+          "person_id": "p_mary_todd_lincoln",
+          "role": "spouse"
+        },
+        {
+          "person_id": "p_william_wallace_lincoln",
+          "role": "household"
+        },
+        {
+          "person_id": "p_thomas_tad_lincoln",
+          "role": "household"
+        }
+      ],
+      "sources": [
+        {
+          "source_id": "src_census_1860_springfield",
+          "confidence": "high",
+          "citation_detail": "Departure from Springfield Eighth Street residence in February 1861."
+        }
+      ],
+      "time_min": -39749,
+      "time_max": -39749,
+      "display_date": "Mar 4, 1861",
+      "year": 1861,
+      "place_ancestors": [
+        "pl_washington_dc",
+        "pl_usa"
+      ]
+    },
+    {
+      "id": "evt_1863_emancipation_macro",
+      "title": "Emancipation Proclamation takes effect",
+      "scope": "national",
+      "event_kind": "context_span",
+      "category": "macro",
+      "edtf_date": "1863-01-01",
+      "place_id": "pl_washington_dc",
+      "summary": "Presidential proclamation declaring enslaved persons in rebelling states forever free.",
+      "severity_rank": 10,
+      "participants": [],
+      "sources": [
+        {
+          "source_id": "src_lincoln_autobiography_1859",
+          "confidence": "high"
+        }
+      ],
+      "time_min": -39081,
+      "time_max": -39081,
+      "display_date": "Jan 1, 1863",
+      "year": 1863,
+      "place_ancestors": [
+        "pl_washington_dc",
+        "pl_usa"
+      ]
+    },
+    {
+      "id": "evt_1865_death_abraham",
+      "title": "Death of Abraham Lincoln in Washington, D.C.",
+      "scope": "personal",
+      "event_kind": "point_event",
+      "category": "life_milestone",
+      "edtf_date": "1865-04-15",
+      "place_id": "pl_washington_dc",
+      "summary": "Abraham Lincoln died in Washington, D.C. on April 15, 1865, and was returned by funeral train to Oak Ridge Cemetery in Springfield, Illinois.",
+      "participants": [
+        {
+          "person_id": "p_abraham_lincoln_1809",
+          "role": "principal"
+        },
+        {
+          "person_id": "p_mary_todd_lincoln",
+          "role": "spouse"
+        },
+        {
+          "person_id": "p_robert_todd_lincoln",
+          "role": "child"
+        }
+      ],
+      "sources": [
+        {
+          "source_id": "src_sangamon_marriage_1842",
+          "confidence": "high",
+          "citation_detail": "Interred at Oak Ridge Cemetery, Springfield, Illinois, May 4, 1865."
+        }
+      ],
+      "time_min": -38246,
+      "time_max": -38246,
+      "display_date": "Apr 15, 1865",
+      "year": 1865,
+      "place_ancestors": [
+        "pl_washington_dc",
+        "pl_usa"
+      ]
+    },
+    {
+      "id": "evt_1868_marr_robert_mary",
+      "title": "Marriage of Robert Todd Lincoln and Mary Eunice Harlan",
+      "scope": "family",
+      "event_kind": "residence_anchor",
+      "category": "family_milestone",
+      "edtf_date": "1868-09-24",
+      "place_id": "pl_washington_dc",
+      "summary": "Robert Todd Lincoln married Mary Eunice Harlan, daughter of U.S. Senator James Harlan of Iowa, in Washington, D.C.",
+      "participants": [
+        {
+          "person_id": "p_robert_todd_lincoln",
+          "role": "spouse"
+        },
+        {
+          "person_id": "p_mary_harlan_lincoln",
+          "role": "spouse"
+        }
+      ],
+      "sources": [
+        {
+          "source_id": "src_fayette_history_1882",
+          "confidence": "medium",
+          "citation_detail": "Descendant marriage entry."
+        }
+      ],
+      "time_min": -36988,
+      "time_max": -36988,
+      "display_date": "Sep 24, 1868",
+      "year": 1868,
+      "place_ancestors": [
+        "pl_washington_dc",
+        "pl_usa"
+      ]
+    },
+    {
+      "id": "evt_1882_death_mary_todd",
+      "title": "Death of Mary Ann Todd Lincoln in Springfield",
+      "scope": "personal",
+      "event_kind": "residence_anchor",
+      "category": "life_milestone",
+      "edtf_date": "1882-07-16",
+      "place_id": "pl_springfield_il",
+      "summary": "Mary Ann Todd Lincoln died at the Springfield home of her sister Elizabeth Todd Edwards and was interred beside Abraham Lincoln at Oak Ridge Cemetery.",
+      "participants": [
+        {
+          "person_id": "p_mary_todd_lincoln",
+          "role": "principal"
+        },
+        {
+          "person_id": "p_elizabeth_todd_edwards",
+          "role": "household"
+        }
+      ],
+      "sources": [
+        {
+          "source_id": "src_sangamon_marriage_1842",
+          "confidence": "high",
+          "citation_detail": "Oak Ridge Cemetery interment beside Abraham Lincoln, July 1882."
+        }
+      ],
+      "time_min": -31945,
+      "time_max": -31945,
+      "display_date": "Jul 16, 1882",
+      "year": 1882,
+      "place_ancestors": [
+        "pl_springfield_il",
+        "pl_sangamon_il",
+        "pl_illinois",
+        "pl_usa"
+      ]
+    },
+    {
+      "id": "evt_1905_hildene_manchester",
+      "title": "Robert Todd Lincoln completes Hildene in Manchester, Vermont",
+      "scope": "family",
+      "event_kind": "residence_anchor",
+      "category": "homestead",
+      "edtf_date": "1905",
+      "place_id": "pl_manchester_vt",
+      "summary": "Robert Todd Lincoln and Mary Eunice Harlan established their Georgian Revival summer estate Hildene overlooking the Battenkill Valley in Manchester, Vermont.",
+      "participants": [
+        {
+          "person_id": "p_robert_todd_lincoln",
+          "role": "principal"
+        },
+        {
+          "person_id": "p_mary_harlan_lincoln",
+          "role": "spouse"
+        }
+      ],
+      "sources": [
+        {
+          "source_id": "src_fayette_history_1882",
+          "confidence": "medium",
+          "citation_detail": "Manchester, Vermont property annals, 1905."
+        }
+      ],
+      "time_min": -23741,
+      "time_max": -23377,
+      "display_date": "1905",
+      "year": 1905,
+      "place_ancestors": [
+        "pl_manchester_vt",
+        "pl_usa"
+      ]
+    },
+    {
+      "id": "evt_1926_death_robert_todd_lincoln",
+      "title": "Death of Robert Todd Lincoln at Hildene",
+      "scope": "personal",
+      "event_kind": "point_event",
+      "category": "life_milestone",
+      "edtf_date": "1926-07-26",
+      "place_id": "pl_manchester_vt",
+      "summary": "Robert Todd Lincoln, last surviving child of Abraham and Mary Lincoln, died at Hildene in Manchester, Vermont at age 82.",
+      "participants": [
+        {
+          "person_id": "p_robert_todd_lincoln",
+          "role": "principal"
+        },
+        {
+          "person_id": "p_mary_harlan_lincoln",
+          "role": "spouse"
+        }
+      ],
+      "sources": [
+        {
+          "source_id": "src_fayette_history_1882",
+          "confidence": "high",
+          "citation_detail": "Bennington County death record, July 1926."
+        }
+      ],
+      "time_min": -15865,
+      "time_max": -15865,
+      "display_date": "Jul 26, 1926",
+      "year": 1926,
+      "place_ancestors": [
+        "pl_manchester_vt",
+        "pl_usa"
+      ]
+    }
+  ],
+  "residence_spans": [
+    {
+      "id": "span_0001",
+      "person_id": "p_abraham_lincoln_1744",
+      "place_id": "pl_rockingham_va",
+      "time_min": -70121,
+      "time_max": -69333,
+      "start_year": 1778,
+      "end_year": 1780,
+      "confidence_tier": "Inferred",
+      "from_event_id": "evt_1778_birt_thomas",
+      "to_event_id": "evt_1780_land_warrant"
+    },
+    {
+      "id": "span_0002",
+      "person_id": "p_bathsheba_herring",
+      "place_id": "pl_rockingham_va",
+      "time_min": -70121,
+      "time_max": -69333,
+      "start_year": 1778,
+      "end_year": 1780,
+      "confidence_tier": "Inferred",
+      "from_event_id": "evt_1778_birt_thomas",
+      "to_event_id": "evt_1780_land_warrant"
+    },
+    {
+      "id": "span_0003",
+      "person_id": "p_thomas_lincoln",
+      "place_id": "pl_rockingham_va",
+      "time_min": -70121,
+      "time_max": -69333,
+      "start_year": 1778,
+      "end_year": 1780,
+      "confidence_tier": "Inferred",
+      "from_event_id": "evt_1778_birt_thomas",
+      "to_event_id": "evt_1780_land_warrant"
+    },
+    {
+      "id": "span_0004",
+      "person_id": "p_thomas_lincoln",
+      "place_id": "pl_hardin_ky",
+      "time_min": -59738,
+      "time_max": -59495,
+      "start_year": 1806,
+      "end_year": 1807,
+      "confidence_tier": "Inferred",
+      "from_event_id": "evt_1806_marr_thomas_nancy",
+      "to_event_id": "evt_1807_birt_sarah_lincoln"
+    },
+    {
+      "id": "span_0005",
+      "person_id": "p_thomas_lincoln",
+      "place_id": "pl_hardin_ky",
+      "time_min": -59495,
+      "time_max": -58762,
+      "start_year": 1807,
+      "end_year": 1809,
+      "confidence_tier": "Inferred",
+      "from_event_id": "evt_1807_birt_sarah_lincoln",
+      "to_event_id": "evt_1809_birt_abraham"
+    },
+    {
+      "id": "span_0006",
+      "person_id": "p_nancy_hanks",
+      "place_id": "pl_hardin_ky",
+      "time_min": -59738,
+      "time_max": -59495,
+      "start_year": 1806,
+      "end_year": 1807,
+      "confidence_tier": "Inferred",
+      "from_event_id": "evt_1806_marr_thomas_nancy",
+      "to_event_id": "evt_1807_birt_sarah_lincoln"
+    },
+    {
+      "id": "span_0007",
+      "person_id": "p_nancy_hanks",
+      "place_id": "pl_hardin_ky",
+      "time_min": -59495,
+      "time_max": -58762,
+      "start_year": 1807,
+      "end_year": 1809,
+      "confidence_tier": "Inferred",
+      "from_event_id": "evt_1807_birt_sarah_lincoln",
+      "to_event_id": "evt_1809_birt_abraham"
+    },
+    {
+      "id": "span_0008",
+      "person_id": "p_robert_smith_todd",
+      "place_id": "pl_lexington_ky",
+      "time_min": -57027,
+      "time_max": -55171,
+      "start_year": 1813,
+      "end_year": 1818,
+      "confidence_tier": "Inferred",
+      "from_event_id": "evt_1813_birt_elizabeth_todd",
+      "to_event_id": "evt_1818_birt_mary_todd"
+    },
+    {
+      "id": "span_0009",
+      "person_id": "p_eliza_parker",
+      "place_id": "pl_lexington_ky",
+      "time_min": -57027,
+      "time_max": -55171,
+      "start_year": 1813,
+      "end_year": 1818,
+      "confidence_tier": "Inferred",
+      "from_event_id": "evt_1813_birt_elizabeth_todd",
+      "to_event_id": "evt_1818_birt_mary_todd"
+    },
+    {
+      "id": "span_0010",
+      "person_id": "p_sarah_lincoln_grigsby",
+      "place_id": "pl_hardin_ky",
+      "time_min": -59495,
+      "time_max": -58762,
+      "start_year": 1807,
+      "end_year": 1809,
+      "confidence_tier": "Inferred",
+      "from_event_id": "evt_1807_birt_sarah_lincoln",
+      "to_event_id": "evt_1809_birt_abraham"
+    },
+    {
+      "id": "span_0011",
+      "person_id": "p_sarah_lincoln_grigsby",
+      "place_id": "pl_pigeon_creek_in",
+      "time_min": -55913,
+      "time_max": -54568,
+      "start_year": 1816,
+      "end_year": 1820,
+      "confidence_tier": "Inferred",
+      "from_event_id": "evt_1816_move_indiana",
+      "to_event_id": "evt_1820_census_spencer"
+    },
+    {
+      "id": "span_0012",
+      "person_id": "p_abraham_lincoln_1809",
+      "place_id": "pl_pigeon_creek_in",
+      "time_min": -55913,
+      "time_max": -54568,
+      "start_year": 1816,
+      "end_year": 1820,
+      "confidence_tier": "Inferred",
+      "from_event_id": "evt_1816_move_indiana",
+      "to_event_id": "evt_1820_census_spencer"
+    },
+    {
+      "id": "span_0013",
+      "person_id": "p_abraham_lincoln_1809",
+      "place_id": "pl_new_salem_il",
+      "time_min": -50588,
+      "time_max": -48473,
+      "start_year": 1831,
+      "end_year": 1837,
+      "confidence_tier": "Inferred",
+      "from_event_id": "evt_1831_new_salem_residence",
+      "to_event_id": "evt_1837_springfield_move"
+    },
+    {
+      "id": "span_0014",
+      "person_id": "p_abraham_lincoln_1809",
+      "place_id": "pl_springfield_il",
+      "time_min": -48473,
+      "time_max": -46444,
+      "start_year": 1837,
+      "end_year": 1842,
+      "confidence_tier": "Inferred",
+      "from_event_id": "evt_1837_springfield_move",
+      "to_event_id": "evt_1842_marr_abraham_mary"
+    },
+    {
+      "id": "span_0015",
+      "person_id": "p_abraham_lincoln_1809",
+      "place_id": "pl_springfield_il",
+      "time_min": -46444,
+      "time_max": -46174,
+      "start_year": 1842,
+      "end_year": 1843,
+      "confidence_tier": "Inferred",
+      "from_event_id": "evt_1842_marr_abraham_mary",
+      "to_event_id": "evt_1843_birt_robert_todd_lincoln"
+    },
+    {
+      "id": "span_0016",
+      "person_id": "p_abraham_lincoln_1809",
+      "place_id": "pl_springfield_il",
+      "time_min": -46174,
+      "time_max": -45222,
+      "start_year": 1843,
+      "end_year": 1846,
+      "confidence_tier": "Inferred",
+      "from_event_id": "evt_1843_birt_robert_todd_lincoln",
+      "to_event_id": "evt_1846_birt_edward_lincoln"
+    },
+    {
+      "id": "span_0017",
+      "person_id": "p_abraham_lincoln_1809",
+      "place_id": "pl_springfield_il",
+      "time_min": -45222,
+      "time_max": -43589,
+      "start_year": 1846,
+      "end_year": 1850,
+      "confidence_tier": "Inferred",
+      "from_event_id": "evt_1846_birt_edward_lincoln",
+      "to_event_id": "evt_1850_census_springfield"
+    },
+    {
+      "id": "span_0018",
+      "person_id": "p_abraham_lincoln_1809",
+      "place_id": "pl_springfield_il",
+      "time_min": -43589,
+      "time_max": -43475,
+      "start_year": 1850,
+      "end_year": 1850,
+      "confidence_tier": "Inferred",
+      "from_event_id": "evt_1850_census_springfield",
+      "to_event_id": "evt_1850_birt_willie_lincoln"
+    },
+    {
+      "id": "span_0019",
+      "person_id": "p_abraham_lincoln_1809",
+      "place_id": "pl_springfield_il",
+      "time_min": -43475,
+      "time_max": -42640,
+      "start_year": 1850,
+      "end_year": 1853,
+      "confidence_tier": "Inferred",
+      "from_event_id": "evt_1850_birt_willie_lincoln",
+      "to_event_id": "evt_1853_birt_tad_lincoln"
+    },
+    {
+      "id": "span_0020",
+      "person_id": "p_abraham_lincoln_1809",
+      "place_id": "pl_springfield_il",
+      "time_min": -42640,
+      "time_max": -39982,
+      "start_year": 1853,
+      "end_year": 1860,
+      "confidence_tier": "Inferred",
+      "from_event_id": "evt_1853_birt_tad_lincoln",
+      "to_event_id": "evt_1860_census_springfield"
+    },
+    {
+      "id": "span_0021",
+      "person_id": "p_mary_todd_lincoln",
+      "place_id": "pl_springfield_il",
+      "time_min": -47574,
+      "time_max": -46444,
+      "start_year": 1839,
+      "end_year": 1842,
+      "confidence_tier": "Inferred",
+      "from_event_id": "evt_1839_mary_todd_springfield",
+      "to_event_id": "evt_1842_marr_abraham_mary"
+    },
+    {
+      "id": "span_0022",
+      "person_id": "p_mary_todd_lincoln",
+      "place_id": "pl_springfield_il",
+      "time_min": -46444,
+      "time_max": -46174,
+      "start_year": 1842,
+      "end_year": 1843,
+      "confidence_tier": "Inferred",
+      "from_event_id": "evt_1842_marr_abraham_mary",
+      "to_event_id": "evt_1843_birt_robert_todd_lincoln"
+    },
+    {
+      "id": "span_0023",
+      "person_id": "p_mary_todd_lincoln",
+      "place_id": "pl_springfield_il",
+      "time_min": -46174,
+      "time_max": -45222,
+      "start_year": 1843,
+      "end_year": 1846,
+      "confidence_tier": "Inferred",
+      "from_event_id": "evt_1843_birt_robert_todd_lincoln",
+      "to_event_id": "evt_1846_birt_edward_lincoln"
+    },
+    {
+      "id": "span_0024",
+      "person_id": "p_mary_todd_lincoln",
+      "place_id": "pl_springfield_il",
+      "time_min": -45222,
+      "time_max": -43589,
+      "start_year": 1846,
+      "end_year": 1850,
+      "confidence_tier": "Inferred",
+      "from_event_id": "evt_1846_birt_edward_lincoln",
+      "to_event_id": "evt_1850_census_springfield"
+    },
+    {
+      "id": "span_0025",
+      "person_id": "p_mary_todd_lincoln",
+      "place_id": "pl_springfield_il",
+      "time_min": -43589,
+      "time_max": -43475,
+      "start_year": 1850,
+      "end_year": 1850,
+      "confidence_tier": "Inferred",
+      "from_event_id": "evt_1850_census_springfield",
+      "to_event_id": "evt_1850_birt_willie_lincoln"
+    },
+    {
+      "id": "span_0026",
+      "person_id": "p_mary_todd_lincoln",
+      "place_id": "pl_springfield_il",
+      "time_min": -43475,
+      "time_max": -42640,
+      "start_year": 1850,
+      "end_year": 1853,
+      "confidence_tier": "Inferred",
+      "from_event_id": "evt_1850_birt_willie_lincoln",
+      "to_event_id": "evt_1853_birt_tad_lincoln"
+    },
+    {
+      "id": "span_0027",
+      "person_id": "p_mary_todd_lincoln",
+      "place_id": "pl_springfield_il",
+      "time_min": -42640,
+      "time_max": -39982,
+      "start_year": 1853,
+      "end_year": 1860,
+      "confidence_tier": "Inferred",
+      "from_event_id": "evt_1853_birt_tad_lincoln",
+      "to_event_id": "evt_1860_census_springfield"
+    },
+    {
+      "id": "span_0028",
+      "person_id": "p_elizabeth_todd_edwards",
+      "place_id": "pl_springfield_il",
+      "time_min": -47574,
+      "time_max": -46444,
+      "start_year": 1839,
+      "end_year": 1842,
+      "confidence_tier": "Inferred",
+      "from_event_id": "evt_1839_mary_todd_springfield",
+      "to_event_id": "evt_1842_marr_abraham_mary"
+    },
+    {
+      "id": "span_0029",
+      "person_id": "p_robert_todd_lincoln",
+      "place_id": "pl_springfield_il",
+      "time_min": -46174,
+      "time_max": -43589,
+      "start_year": 1843,
+      "end_year": 1850,
+      "confidence_tier": "Inferred",
+      "from_event_id": "evt_1843_birt_robert_todd_lincoln",
+      "to_event_id": "evt_1850_census_springfield"
+    },
+    {
+      "id": "span_0030",
+      "person_id": "p_robert_todd_lincoln",
+      "place_id": "pl_springfield_il",
+      "time_min": -43589,
+      "time_max": -39982,
+      "start_year": 1850,
+      "end_year": 1860,
+      "confidence_tier": "Inferred",
+      "from_event_id": "evt_1850_census_springfield",
+      "to_event_id": "evt_1860_census_springfield"
+    },
+    {
+      "id": "span_0031",
+      "person_id": "p_william_wallace_lincoln",
+      "place_id": "pl_springfield_il",
+      "time_min": -43475,
+      "time_max": -39982,
+      "start_year": 1850,
+      "end_year": 1860,
+      "confidence_tier": "Inferred",
+      "from_event_id": "evt_1850_birt_willie_lincoln",
+      "to_event_id": "evt_1860_census_springfield"
+    },
+    {
+      "id": "span_0032",
+      "person_id": "p_thomas_tad_lincoln",
+      "place_id": "pl_springfield_il",
+      "time_min": -42640,
+      "time_max": -39982,
+      "start_year": 1853,
+      "end_year": 1860,
+      "confidence_tier": "Inferred",
+      "from_event_id": "evt_1853_birt_tad_lincoln",
+      "to_event_id": "evt_1860_census_springfield"
+    }
+  ],
+  "places": [
+    {
+      "id": "pl_usa",
+      "slug": "united-states",
+      "name": "United States",
+      "full_name": "United States",
+      "place_type": "country",
+      "parent_id": null,
+      "lat": 39.5,
+      "lng": -84
+    },
+    {
+      "id": "pl_virginia",
+      "slug": "virginia-usa",
+      "name": "Virginia",
+      "full_name": "Virginia, USA",
+      "place_type": "state",
+      "parent_id": "pl_usa",
+      "lat": 37.54,
+      "lng": -78.66
+    },
+    {
+      "id": "pl_rockingham_va",
+      "slug": "rockingham-county-virginia",
+      "name": "Rockingham County",
+      "full_name": "Rockingham County, Virginia, USA",
+      "place_type": "county",
+      "parent_id": "pl_virginia",
+      "lat": 38.51,
+      "lng": -78.88,
+      "historical_names": [
+        {
+          "name": "Augusta County, Colony of Virginia",
+          "valid_from": "1745",
+          "valid_to": "1778"
+        },
+        {
+          "name": "Rockingham County, Virginia",
+          "valid_from": "1778",
+          "valid_to": "present"
+        }
+      ],
+      "summary": "Shenandoah Valley county formed in 1778 where Capt. Abraham Lincoln farmed along Linville Creek before migrating to Kentucky."
+    },
+    {
+      "id": "pl_kentucky",
+      "slug": "kentucky-usa",
+      "name": "Kentucky",
+      "full_name": "Kentucky, USA",
+      "place_type": "state",
+      "parent_id": "pl_usa",
+      "lat": 37.84,
+      "lng": -84.27
+    },
+    {
+      "id": "pl_hardin_ky",
+      "slug": "hardin-county-kentucky",
+      "name": "Hardin County",
+      "full_name": "Hardin County, Kentucky, USA",
+      "place_type": "county",
+      "parent_id": "pl_kentucky",
+      "lat": 37.69,
+      "lng": -85.86,
+      "summary": "Central Kentucky county encompassing Sinking Spring and Knob Creek farms during Thomas and Nancy Lincoln's Kentucky years."
+    },
+    {
+      "id": "pl_hodgenville_ky",
+      "slug": "hodgenville-kentucky",
+      "name": "Hodgenville",
+      "full_name": "Hodgenville, Hardin County, Kentucky, USA",
+      "place_type": "town",
+      "parent_id": "pl_hardin_ky",
+      "lat": 37.57,
+      "lng": -85.74,
+      "historical_names": [
+        {
+          "name": "Hardin County, Kentucky",
+          "valid_from": "1793",
+          "valid_to": "1843"
+        },
+        {
+          "name": "LaRue County, Kentucky",
+          "valid_from": "1843",
+          "valid_to": "present"
+        }
+      ],
+      "summary": "Sinking Spring farmstead three miles south of Hodgenville, birthplace of Abraham Lincoln in February 1809."
+    },
+    {
+      "id": "pl_lexington_ky",
+      "slug": "lexington-kentucky",
+      "name": "Lexington",
+      "full_name": "Lexington, Fayette County, Kentucky, USA",
+      "place_type": "town",
+      "parent_id": "pl_kentucky",
+      "lat": 38.04,
+      "lng": -84.5,
+      "summary": "Bluegrass commercial center founded by early Kentucky settlers including Levi Todd and home to the Robert Smith Todd family."
+    },
+    {
+      "id": "pl_indiana",
+      "slug": "indiana-usa",
+      "name": "Indiana",
+      "full_name": "Indiana, USA",
+      "place_type": "state",
+      "parent_id": "pl_usa",
+      "lat": 39.77,
+      "lng": -86.16
+    },
+    {
+      "id": "pl_spencer_in",
+      "slug": "spencer-county-indiana",
+      "name": "Spencer County",
+      "full_name": "Spencer County, Indiana, USA",
+      "place_type": "county",
+      "parent_id": "pl_indiana",
+      "lat": 38.01,
+      "lng": -87.01
+    },
+    {
+      "id": "pl_pigeon_creek_in",
+      "slug": "little-pigeon-creek-indiana",
+      "name": "Little Pigeon Creek",
+      "full_name": "Little Pigeon Creek, Spencer County, Indiana, USA",
+      "place_type": "homestead",
+      "parent_id": "pl_spencer_in",
+      "lat": 38.12,
+      "lng": -87,
+      "summary": "Southern Indiana timberland homestead cleared by Thomas Lincoln in late 1816 and occupied by the family for fourteen years."
+    },
+    {
+      "id": "pl_illinois",
+      "slug": "illinois-usa",
+      "name": "Illinois",
+      "full_name": "Illinois, USA",
+      "place_type": "state",
+      "parent_id": "pl_usa",
+      "lat": 40,
+      "lng": -89.2
+    },
+    {
+      "id": "pl_sangamon_il",
+      "slug": "sangamon-county-illinois",
+      "name": "Sangamon County",
+      "full_name": "Sangamon County, Illinois, USA",
+      "place_type": "county",
+      "parent_id": "pl_illinois",
+      "lat": 39.76,
+      "lng": -89.66
+    },
+    {
+      "id": "pl_new_salem_il",
+      "slug": "new-salem-illinois",
+      "name": "New Salem",
+      "full_name": "New Salem, Sangamon County, Illinois, USA",
+      "place_type": "town",
+      "parent_id": "pl_sangamon_il",
+      "lat": 39.98,
+      "lng": -89.85,
+      "summary": "River bluff village overlooking the Sangamon River where Abraham Lincoln worked as store clerk, postmaster, and surveyor from 1831 to 1837."
+    },
+    {
+      "id": "pl_springfield_il",
+      "slug": "springfield-illinois",
+      "name": "Springfield",
+      "full_name": "Springfield, Sangamon County, Illinois, USA",
+      "place_type": "town",
+      "parent_id": "pl_sangamon_il",
+      "lat": 39.8,
+      "lng": -89.64,
+      "summary": "Capital of Illinois from 1839 and home of the Lincoln and Edwards households on Eighth Street and Aristocracy Hill.",
+      "photo_url": "/media/plate-springfield-home.svg",
+      "photo_caption": "Archival line illustration of the Eighth Street residence in Springfield, Illinois."
+    },
+    {
+      "id": "pl_washington_dc",
+      "slug": "washington-dc",
+      "name": "Washington, D.C.",
+      "full_name": "Washington, District of Columbia, USA",
+      "place_type": "town",
+      "parent_id": "pl_usa",
+      "lat": 38.9,
+      "lng": -77.04,
+      "summary": "Federal capital where Abraham and Mary Lincoln lived during the Civil War years (1861–1865) and Robert Todd Lincoln later served as Secretary of War."
+    },
+    {
+      "id": "pl_manchester_vt",
+      "slug": "manchester-vermont",
+      "name": "Manchester",
+      "full_name": "Manchester, Bennington County, Vermont, USA",
+      "place_type": "town",
+      "parent_id": "pl_usa",
+      "lat": 43.16,
+      "lng": -73.07,
+      "summary": "Green Mountain town where Robert Todd Lincoln and Mary Eunice Harlan built their summer estate Hildene in 1905."
+    }
+  ],
+  "place_ancestors": {
+    "pl_usa": [
+      "pl_usa"
+    ],
+    "pl_virginia": [
+      "pl_virginia",
+      "pl_usa"
+    ],
+    "pl_rockingham_va": [
+      "pl_rockingham_va",
+      "pl_virginia",
+      "pl_usa"
+    ],
+    "pl_kentucky": [
+      "pl_kentucky",
+      "pl_usa"
+    ],
+    "pl_hardin_ky": [
+      "pl_hardin_ky",
+      "pl_kentucky",
+      "pl_usa"
+    ],
+    "pl_hodgenville_ky": [
+      "pl_hodgenville_ky",
+      "pl_hardin_ky",
+      "pl_kentucky",
+      "pl_usa"
+    ],
+    "pl_lexington_ky": [
+      "pl_lexington_ky",
+      "pl_kentucky",
+      "pl_usa"
+    ],
+    "pl_indiana": [
+      "pl_indiana",
+      "pl_usa"
+    ],
+    "pl_spencer_in": [
+      "pl_spencer_in",
+      "pl_indiana",
+      "pl_usa"
+    ],
+    "pl_pigeon_creek_in": [
+      "pl_pigeon_creek_in",
+      "pl_spencer_in",
+      "pl_indiana",
+      "pl_usa"
+    ],
+    "pl_illinois": [
+      "pl_illinois",
+      "pl_usa"
+    ],
+    "pl_sangamon_il": [
+      "pl_sangamon_il",
+      "pl_illinois",
+      "pl_usa"
+    ],
+    "pl_new_salem_il": [
+      "pl_new_salem_il",
+      "pl_sangamon_il",
+      "pl_illinois",
+      "pl_usa"
+    ],
+    "pl_springfield_il": [
+      "pl_springfield_il",
+      "pl_sangamon_il",
+      "pl_illinois",
+      "pl_usa"
+    ],
+    "pl_washington_dc": [
+      "pl_washington_dc",
+      "pl_usa"
+    ],
+    "pl_manchester_vt": [
+      "pl_manchester_vt",
+      "pl_usa"
+    ]
+  },
+  "kinship": [
+    {
+      "from": "p_abraham_lincoln_1744",
+      "to": "p_bathsheba_herring",
+      "relation": "spouse"
+    },
+    {
+      "from": "p_bathsheba_herring",
+      "to": "p_abraham_lincoln_1744",
+      "relation": "spouse"
+    },
+    {
+      "from": "p_abraham_lincoln_1744",
+      "to": "p_thomas_lincoln",
+      "relation": "parent"
+    },
+    {
+      "from": "p_thomas_lincoln",
+      "to": "p_abraham_lincoln_1744",
+      "relation": "child"
+    },
+    {
+      "from": "p_bathsheba_herring",
+      "to": "p_thomas_lincoln",
+      "relation": "parent"
+    },
+    {
+      "from": "p_thomas_lincoln",
+      "to": "p_bathsheba_herring",
+      "relation": "child"
+    },
+    {
+      "from": "p_levi_todd",
+      "to": "p_jane_briggs",
+      "relation": "spouse"
+    },
+    {
+      "from": "p_jane_briggs",
+      "to": "p_levi_todd",
+      "relation": "spouse"
+    },
+    {
+      "from": "p_levi_todd",
+      "to": "p_robert_smith_todd",
+      "relation": "parent"
+    },
+    {
+      "from": "p_robert_smith_todd",
+      "to": "p_levi_todd",
+      "relation": "child"
+    },
+    {
+      "from": "p_jane_briggs",
+      "to": "p_robert_smith_todd",
+      "relation": "parent"
+    },
+    {
+      "from": "p_robert_smith_todd",
+      "to": "p_jane_briggs",
+      "relation": "child"
+    },
+    {
+      "from": "p_thomas_lincoln",
+      "to": "p_nancy_hanks",
+      "relation": "spouse"
+    },
+    {
+      "from": "p_nancy_hanks",
+      "to": "p_thomas_lincoln",
+      "relation": "spouse"
+    },
+    {
+      "from": "p_thomas_lincoln",
+      "to": "p_sarah_bush_johnston",
+      "relation": "spouse"
+    },
+    {
+      "from": "p_sarah_bush_johnston",
+      "to": "p_thomas_lincoln",
+      "relation": "spouse"
+    },
+    {
+      "from": "p_thomas_lincoln",
+      "to": "p_sarah_lincoln_grigsby",
+      "relation": "parent"
+    },
+    {
+      "from": "p_sarah_lincoln_grigsby",
+      "to": "p_thomas_lincoln",
+      "relation": "child"
+    },
+    {
+      "from": "p_nancy_hanks",
+      "to": "p_sarah_lincoln_grigsby",
+      "relation": "parent"
+    },
+    {
+      "from": "p_sarah_lincoln_grigsby",
+      "to": "p_nancy_hanks",
+      "relation": "child"
+    },
+    {
+      "from": "p_thomas_lincoln",
+      "to": "p_abraham_lincoln_1809",
+      "relation": "parent"
+    },
+    {
+      "from": "p_abraham_lincoln_1809",
+      "to": "p_thomas_lincoln",
+      "relation": "child"
+    },
+    {
+      "from": "p_nancy_hanks",
+      "to": "p_abraham_lincoln_1809",
+      "relation": "parent"
+    },
+    {
+      "from": "p_abraham_lincoln_1809",
+      "to": "p_nancy_hanks",
+      "relation": "child"
+    },
+    {
+      "from": "p_robert_smith_todd",
+      "to": "p_eliza_parker",
+      "relation": "spouse"
+    },
+    {
+      "from": "p_eliza_parker",
+      "to": "p_robert_smith_todd",
+      "relation": "spouse"
+    },
+    {
+      "from": "p_robert_smith_todd",
+      "to": "p_elizabeth_todd_edwards",
+      "relation": "parent"
+    },
+    {
+      "from": "p_elizabeth_todd_edwards",
+      "to": "p_robert_smith_todd",
+      "relation": "child"
+    },
+    {
+      "from": "p_eliza_parker",
+      "to": "p_elizabeth_todd_edwards",
+      "relation": "parent"
+    },
+    {
+      "from": "p_elizabeth_todd_edwards",
+      "to": "p_eliza_parker",
+      "relation": "child"
+    },
+    {
+      "from": "p_robert_smith_todd",
+      "to": "p_mary_todd_lincoln",
+      "relation": "parent"
+    },
+    {
+      "from": "p_mary_todd_lincoln",
+      "to": "p_robert_smith_todd",
+      "relation": "child"
+    },
+    {
+      "from": "p_eliza_parker",
+      "to": "p_mary_todd_lincoln",
+      "relation": "parent"
+    },
+    {
+      "from": "p_mary_todd_lincoln",
+      "to": "p_eliza_parker",
+      "relation": "child"
+    },
+    {
+      "from": "p_abraham_lincoln_1809",
+      "to": "p_mary_todd_lincoln",
+      "relation": "spouse"
+    },
+    {
+      "from": "p_mary_todd_lincoln",
+      "to": "p_abraham_lincoln_1809",
+      "relation": "spouse"
+    },
+    {
+      "from": "p_abraham_lincoln_1809",
+      "to": "p_robert_todd_lincoln",
+      "relation": "parent"
+    },
+    {
+      "from": "p_robert_todd_lincoln",
+      "to": "p_abraham_lincoln_1809",
+      "relation": "child"
+    },
+    {
+      "from": "p_mary_todd_lincoln",
+      "to": "p_robert_todd_lincoln",
+      "relation": "parent"
+    },
+    {
+      "from": "p_robert_todd_lincoln",
+      "to": "p_mary_todd_lincoln",
+      "relation": "child"
+    },
+    {
+      "from": "p_abraham_lincoln_1809",
+      "to": "p_edward_baker_lincoln",
+      "relation": "parent"
+    },
+    {
+      "from": "p_edward_baker_lincoln",
+      "to": "p_abraham_lincoln_1809",
+      "relation": "child"
+    },
+    {
+      "from": "p_mary_todd_lincoln",
+      "to": "p_edward_baker_lincoln",
+      "relation": "parent"
+    },
+    {
+      "from": "p_edward_baker_lincoln",
+      "to": "p_mary_todd_lincoln",
+      "relation": "child"
+    },
+    {
+      "from": "p_abraham_lincoln_1809",
+      "to": "p_william_wallace_lincoln",
+      "relation": "parent"
+    },
+    {
+      "from": "p_william_wallace_lincoln",
+      "to": "p_abraham_lincoln_1809",
+      "relation": "child"
+    },
+    {
+      "from": "p_mary_todd_lincoln",
+      "to": "p_william_wallace_lincoln",
+      "relation": "parent"
+    },
+    {
+      "from": "p_william_wallace_lincoln",
+      "to": "p_mary_todd_lincoln",
+      "relation": "child"
+    },
+    {
+      "from": "p_abraham_lincoln_1809",
+      "to": "p_thomas_tad_lincoln",
+      "relation": "parent"
+    },
+    {
+      "from": "p_thomas_tad_lincoln",
+      "to": "p_abraham_lincoln_1809",
+      "relation": "child"
+    },
+    {
+      "from": "p_mary_todd_lincoln",
+      "to": "p_thomas_tad_lincoln",
+      "relation": "parent"
+    },
+    {
+      "from": "p_thomas_tad_lincoln",
+      "to": "p_mary_todd_lincoln",
+      "relation": "child"
+    },
+    {
+      "from": "p_robert_todd_lincoln",
+      "to": "p_mary_harlan_lincoln",
+      "relation": "spouse"
+    },
+    {
+      "from": "p_mary_harlan_lincoln",
+      "to": "p_robert_todd_lincoln",
+      "relation": "spouse"
+    }
+  ],
+  "sources": [
+    {
+      "id": "src_lincoln_autobiography_1859",
+      "citation": "Abraham Lincoln, Autobiographical Sketch Prepared for Jesse W. Fell (20 December 1859)",
+      "author": "Abraham Lincoln",
+      "publisher": "Library of Congress, Abraham Lincoln Papers",
+      "source_type": "family_memoir",
+      "repository": "Library of Congress Manuscript Division",
+      "url": "https://www.loc.gov/collections/abraham-lincoln-papers/"
+    },
+    {
+      "id": "src_census_1850_springfield",
+      "citation": "1850 U.S. Federal Census, Springfield, Sangamon County, Illinois, p. 129A, family 375",
+      "author": "U.S. Bureau of the Census",
+      "publisher": "National Archives and Records Administration (M432, Roll 127)",
+      "source_type": "census",
+      "repository": "National Archives (NARA)"
+    },
+    {
+      "id": "src_census_1860_springfield",
+      "citation": "1860 U.S. Federal Census, Springfield, Sangamon County, Illinois, p. 113, dwelling 827",
+      "author": "U.S. Bureau of the Census",
+      "publisher": "National Archives and Records Administration (M653, Roll 226)",
+      "source_type": "census",
+      "repository": "National Archives (NARA)"
+    },
+    {
+      "id": "src_census_1820_spencer",
+      "citation": "1820 U.S. Federal Census, Spencer County, Indiana, p. 95, Thomas Lincoln household",
+      "author": "U.S. Bureau of the Census",
+      "publisher": "National Archives and Records Administration (M33, Roll 14)",
+      "source_type": "census",
+      "repository": "National Archives (NARA)"
+    },
+    {
+      "id": "src_sangamon_marriage_1842",
+      "citation": "Sangamon County, Illinois Marriage Register, Vol. 2 (1842), Abraham Lincoln and Mary Todd",
+      "author": "Sangamon County Clerk",
+      "publisher": "Illinois State Archives",
+      "source_type": "vital_record",
+      "repository": "Sangamon County Courthouse, Springfield, Illinois"
+    },
+    {
+      "id": "src_virginia_land_1780",
+      "citation": "Virginia Land Office Treasury Warrant No. 3334 (4 March 1780), Jefferson County Survey",
+      "author": "Commonwealth of Virginia Land Office",
+      "publisher": "Library of Virginia",
+      "source_type": "vital_record",
+      "repository": "Library of Virginia, Richmond"
+    },
+    {
+      "id": "src_fayette_history_1882",
+      "citation": "William Henry Perrin, History of Fayette County, Kentucky (1882)",
+      "author": "William Henry Perrin",
+      "publisher": "O. L. Baskin & Co., Chicago",
+      "source_type": "county_history",
+      "repository": "Kentucky Historical Society"
+    },
+    {
+      "id": "src_unverified_tree_entry",
+      "citation": "Unverified compiled family tree note pending primary verification",
+      "author": "Compiled Demo Tree",
+      "publisher": "Archive Draft",
+      "source_type": "unverified_tree_entry",
+      "repository": "Local Research Queue"
+    }
+  ],
+  "narratives": [
+    {
+      "id": "nar_virginia_to_illinois",
+      "slug": "virginia-to-illinois-migration",
+      "title": "Three Generations Westward (1782–1837)",
+      "summary": "From Linville Creek in Rockingham County, Virginia through Kentucky and Indiana to the Sangamon River valley in Illinois.",
+      "body_md": "In December 1859, Abraham Lincoln composed a brief three-page autobiographical sketch tracing\nhis family's westward movement across three frontiers: Virginia, Kentucky, and southern Indiana,\nbefore settling along the Sangamon River in Illinois.\n",
+      "date_edtf": "1782/1837",
+      "person_ids": [
+        "p_abraham_lincoln_1744",
+        "p_thomas_lincoln",
+        "p_abraham_lincoln_1809"
+      ],
+      "place_ids": [
+        "pl_rockingham_va",
+        "pl_hodgenville_ky",
+        "pl_pigeon_creek_in",
+        "pl_new_salem_il",
+        "pl_springfield_il"
+      ],
+      "event_ids": [],
+      "source_ids": [
+        "src_lincoln_autobiography_1859",
+        "src_virginia_land_1780"
+      ]
+    },
+    {
+      "id": "nar_springfield_household",
+      "slug": "eighth-street-springfield-household",
+      "title": "The Eighth Street Household in Springfield (1844–1861)",
+      "summary": "Federal census schedules and county marriage records documenting the Lincoln and Todd family years in Springfield.",
+      "body_md": "Following their November 4, 1842 marriage at the Edwards home in Springfield, Abraham Lincoln\nand Mary Ann Todd purchased the Eighth Street house in 1844, where the 1850 and 1860 federal\ncensuses document their growing household.\n",
+      "date_edtf": "1842/1861",
+      "person_ids": [
+        "p_abraham_lincoln_1809",
+        "p_mary_todd_lincoln",
+        "p_robert_todd_lincoln"
+      ],
+      "place_ids": [
+        "pl_springfield_il",
+        "pl_lexington_ky"
+      ],
+      "event_ids": [],
+      "source_ids": [
+        "src_sangamon_marriage_1842",
+        "src_census_1850_springfield",
+        "src_census_1860_springfield"
+      ]
+    }
+  ]
+}

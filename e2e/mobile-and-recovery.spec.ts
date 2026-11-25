@@ -1,0 +1,73 @@
+import { expect, test } from '@playwright/test';
+import type { Route } from '@playwright/test';
+
+const MOBILE_ROUTES = [
+  '/',
+  '/person/abraham-lincoln-1809',
+  '/places',
+  '/place/springfield-illinois',
+  '/time',
+  '/tree',
+  '/map',
+  '/kinship',
+  '/evidence',
+];
+
+test('mobile viewports (390px and 360px) render every route without horizontal overflow', async ({ page }) => {
+  await page.route('https://www.openhistoricalmap.org/**', (route) => route.abort());
+  await page.route('https://vtiles.openhistoricalmap.org/**', (route) => route.abort());
+
+  for (const width of [390, 360]) {
+    // oxlint-disable-next-line eslint/no-await-in-loop -- sequential viewport audit
+    await page.setViewportSize({ width, height: 844 });
+    for (const url of MOBILE_ROUTES) {
+      // oxlint-disable-next-line eslint/no-await-in-loop -- sequential route audit
+      await page.goto(url);
+      // oxlint-disable-next-line eslint/no-await-in-loop -- wait for main content before measuring overflow
+      await expect(page.locator('main')).toBeVisible();
+      // oxlint-disable-next-line eslint/no-await-in-loop -- measure scrollWidth against innerWidth
+      const overflow = await page.evaluate(
+        () => document.documentElement.scrollWidth - window.innerWidth,
+      );
+      expect(overflow, `Horizontal overflow on ${url} at ${width}px`).toBeLessThanOrEqual(0);
+    }
+  }
+});
+
+test('error boundary catches a broken lazy route chunk and posts client telemetry', async ({ page }) => {
+  await page.addInitScript(() => {
+    // Prevent guarded auto-reload loop so the recovery card stays visible for assertions.
+    window.sessionStorage.setItem('kinloom_chunk_reload_at', String(Date.now()));
+    Object.defineProperty(navigator, 'sendBeacon', {
+      configurable: true,
+      value: undefined,
+    });
+  });
+
+  const telemetryPosted = page.waitForRequest(
+    (req) => req.url().includes('/api/client-error') && req.method() === 'POST',
+  );
+
+  await page.route('**/api/client-error', async (route) => {
+    await route.fulfill({ status: 204, body: '' });
+  });
+
+  const breakChunk = async (route: Route): Promise<void> => {
+    await route.fulfill({
+      status: 404,
+      contentType: 'text/html; charset=utf-8',
+      body: '<!doctype html><title>missing</title>',
+    });
+  };
+  await page.route('**/assets/*PersonPage*.js', breakChunk);
+
+  await page.goto('/person/abraham-lincoln-1809', { waitUntil: 'domcontentloaded' });
+
+  const recovery = page.getByRole('alert');
+  await expect(recovery).toBeVisible({ timeout: 20_000 });
+  await expect(recovery).toContainText(/LINCOLN & TODD HISTORICAL ARCHIVE/i);
+  await expect(recovery).toContainText(/could not be displayed|newer archive version/i);
+  await expect(page.getByRole('button', { name: 'Reload page' })).toBeVisible();
+
+  await telemetryPosted;
+});

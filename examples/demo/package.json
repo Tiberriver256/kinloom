@@ -1,0 +1,21 @@
+{
+  "name": "@kinloom/demo",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "license": "MIT",
+  "description": "Public-domain historical demo archive for Kinloom.",
+  "scripts": {
+    "build:data": "node scripts/build-demo.mjs",
+    "dev": "npm run build:data && vite --host 127.0.0.1 --port 4173",
+    "build": "npm run build:data && tsc --noEmit -p tsconfig.json && vite build",
+    "preview": "vite preview --host 127.0.0.1 --port 4173 --strictPort"
+  },
+  "dependencies": {
+    "@kinloom/core": "0.1.0",
+    "@kinloom/tokens": "0.1.0",
+    "@kinloom/ui": "0.1.0",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0"
+  }
+}
