@@ -5,6 +5,15 @@
   "sideEffects": false,
   "license": "MIT",
   "description": "Shared TypeScript domain model, EDTF parser, archive compiler, living-person privacy filter, YAML serializer, GEDCOM 7 engine, and revision diff/revert logic for Kinloom.",
+  "homepage": "https://github.com/Tiberriver256/kinloom#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Tiberriver256/kinloom.git",
+    "directory": "packages/core"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {

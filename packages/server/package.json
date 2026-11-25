@@ -5,6 +5,15 @@
   "sideEffects": false,
   "license": "MIT",
   "description": "Portable Web-Standard Fetch server, use-case services, and runtime-agnostic adapters for Kinloom.",
+  "homepage": "https://github.com/Tiberriver256/kinloom#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Tiberriver256/kinloom.git",
+    "directory": "packages/server"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
@@ -25,7 +34,15 @@
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
-    "@kinloom/core": "0.1.0",
+    "@kinloom/core": "^0.1.0",
     "zod": "^4.6.7"
+  },
+  "peerDependencies": {
+    "vitest": "^4.0.0 || ^5.0.0"
+  },
+  "peerDependenciesMeta": {
+    "vitest": {
+      "optional": true
+    }
   }
 }

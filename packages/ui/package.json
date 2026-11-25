@@ -7,6 +7,15 @@
   ],
   "license": "MIT",
   "description": "Config-driven React 19 archival explorer and wiki UI for Kinloom.",
+  "homepage": "https://github.com/Tiberriver256/kinloom#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Tiberriver256/kinloom.git",
+    "directory": "packages/ui"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
@@ -24,8 +33,8 @@
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
-    "@kinloom/core": "0.1.0",
-    "@kinloom/tokens": "0.1.0",
+    "@kinloom/core": "^0.1.0",
+    "@kinloom/tokens": "^0.1.0",
     "@openhistoricalmap/maplibre-gl-dates": "^2.0.0",
     "@xstate/react": "^6.1.0",
     "maplibre-gl": "^6.19.0",

@@ -2,9 +2,26 @@
   "name": "@kinloom/tokens",
   "version": "0.1.0",
   "type": "module",
+  "sideEffects": [
+    "**/*.css"
+  ],
   "license": "MIT",
+  "description": "Paper & Ink DTCG design tokens and CSS custom properties verified to WCAG 2.2 AA and AAA for Kinloom.",
+  "homepage": "https://github.com/Tiberriver256/kinloom#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Tiberriver256/kinloom.git",
+    "directory": "packages/tokens"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "exports": {
     "./tokens.json": "./tokens.json",
     "./kinloom.css": "./kinloom.css"
-  }
+  },
+  "files": [
+    "kinloom.css",
+    "tokens.json"
+  ]
 }
