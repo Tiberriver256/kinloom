@@ -54,6 +54,7 @@ export const EntityEditDrawer: React.FC<EntityEditDrawerProps> = ({
   onDeleted,
 }) => {
   const { dataSource, bundle, reloadArchive } = useArchiveData();
+  const [syncingRevision, setSyncingRevision] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [deleteSummary, setDeleteSummary] = useState('');
   const [deleteBusy, setDeleteBusy] = useState(false);
@@ -71,10 +72,48 @@ export const EntityEditDrawer: React.FC<EntityEditDrawerProps> = ({
   });
 
   useEffect(() => {
-    if (open && snapshot.matches('viewing')) {
-      send({ type: 'START_EDIT' });
+    if (!open) {
+      return undefined;
     }
-  }, [open, snapshot, send]);
+    if (!dataSource.getEntity) {
+      if (snapshot.matches('viewing')) {
+        send({ type: 'START_EDIT' });
+      }
+      return undefined;
+    }
+    let cancelled = false;
+    setSyncingRevision(true);
+    void dataSource
+      .getEntity(entityType, entityId)
+      .then((live) => {
+        if (cancelled) {
+          return;
+        }
+        send({
+          type: 'ENTITY_CHANGED',
+          entityType,
+          entityId,
+          revisionId: live.current_revision_id,
+          snapshot: live.entity,
+          hasPrimarySource: live.has_primary_source,
+        });
+        send({ type: 'START_EDIT' });
+      })
+      .catch(() => {
+        if (!cancelled) {
+          send({ type: 'START_EDIT' });
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setSyncingRevision(false);
+        }
+      });
+    return (): void => {
+      cancelled = true;
+    };
+    // oxlint-disable-next-line react-hooks/exhaustive-deps -- synchronize live entity revision once each time the drawer opens
+  }, [open, entityType, entityId, dataSource]);
 
   useEffect(() => {
     if (
@@ -121,7 +160,7 @@ export const EntityEditDrawer: React.FC<EntityEditDrawerProps> = ({
     validationErrors,
     networkError,
   } = snapshot.context;
-  const isBusy = snapshot.hasTag('busy');
+  const isBusy = snapshot.hasTag('busy') || syncingRevision;
   const isConflict = snapshot.matches('conflict409');
   const isSaved = snapshot.matches('saved');
   const isConfirmingLeave = snapshot.matches('confirmingLeave');

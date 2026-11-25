@@ -1,10 +1,25 @@
 import type {
   ArchiveBundle,
+  ArchiveCapabilities,
   ArchiveDataSource,
+  ArchiveSessionState,
   MediaChecklistItem,
   ReadingsBundle,
 } from '@kinloom/core';
 import { ArchiveBundleSchema, ReadingsBundleSchema } from '@kinloom/core';
+
+const STATIC_ANONYMOUS_SESSION: ArchiveSessionState = {
+  authenticated: false,
+  principal_kind: 'anonymous',
+};
+
+const STATIC_READONLY_CAPABILITIES: ArchiveCapabilities = {
+  canEdit: false,
+  canUploadMedia: false,
+  hasRevisionHistory: false,
+  hasTalk: false,
+  canManageSite: false,
+};
 
 function normalizeBaseUrl(raw?: string): string {
   const envBase = typeof import.meta !== 'undefined' ? import.meta.env?.BASE_URL : undefined;
@@ -74,6 +89,15 @@ export class StaticDemoDataSource implements ArchiveDataSource {
     } catch {
       return [];
     }
+  }
+  async getSession(): Promise<{
+    session: ArchiveSessionState;
+    capabilities: ArchiveCapabilities;
+  }> {
+    return {
+      session: { ...STATIC_ANONYMOUS_SESSION },
+      capabilities: { ...STATIC_READONLY_CAPABILITIES },
+    };
   }
 }
 

@@ -283,6 +283,8 @@ export const ALLOWED_MANUAL_MEDIA_KINDS = new Set([
   'family_photo',
   'document_scan',
   'record_scan',
+  'video_story',
+  'audio_oral_history',
 ]);
 
 export const EVENT_HERO_MEDIA_KINDS = new Set(['milestone', 'headstone', 'family_photo']);

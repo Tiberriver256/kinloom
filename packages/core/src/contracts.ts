@@ -420,7 +420,8 @@ export interface ArchiveDataSource {
   updateEntity?(
     entityType: EntityType,
     entityId: string,
-    input: EntityWriteInput
+    input: EntityWriteInput,
+    options?: { signal?: AbortSignal }
   ): Promise<
     | { ok: true; entity: EntityPayload; revision: RevisionRecord; etag: string }
     | { ok: false; conflict: OptimisticConflictError }
@@ -455,7 +456,10 @@ export interface ArchiveDataSource {
     etag: string;
   }>;
 
-  uploadMedia?(formData: FormData): Promise<{
+  uploadMedia?(
+    formData: FormData,
+    options?: { signal?: AbortSignal }
+  ): Promise<{
     media: MediaItem;
     url: string;
     revision: RevisionRecord;
@@ -464,6 +468,7 @@ export interface ArchiveDataSource {
 
   listTalkComments?(entityType: EntityType, entityId: string): Promise<readonly TalkComment[]>;
   postTalkComment?(entityType: EntityType, entityId: string, bodyMd: string): Promise<TalkComment>;
+  deleteTalkComment?(entityType: EntityType, entityId: string, commentId: number): Promise<void>;
 
   requestMagicLink?(email: string): Promise<{ sent: boolean }>;
   logout?(): Promise<void>;

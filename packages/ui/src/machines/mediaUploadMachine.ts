@@ -157,14 +157,7 @@ export const defaultUploadMediaActor = fromPromise<UploadActorOutcome, UploadMed
 
   if (input.dataSource?.uploadMedia) {
     try {
-      const uploadWithSignal = input.dataSource.uploadMedia as (
-        formData: FormData,
-        options?: { signal?: AbortSignal },
-      ) => Promise<{
-        media: MediaItem;
-        url: string;
-      }>;
-      const uploaded = await uploadWithSignal(form, { signal });
+      const uploaded = await input.dataSource.uploadMedia(form, { signal });
       return {
         kind: 'uploaded',
         uploadGen: input.uploadGen,

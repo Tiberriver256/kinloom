@@ -20,6 +20,7 @@ import { EntityEditDrawer } from './EntityEditDrawer.js';
 import { MemoryRouter } from 'react-router-dom';
 import { RecentChangesPage } from '../../pages/RecentChangesPage.js';
 import { RevisionDiffView } from './RevisionDiffView.js';
+import { StaticDemoDataSource } from '../../adapters/staticDemoDataSource.js';
 import { TalkPanel } from './TalkPanel.js';
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
@@ -321,8 +322,9 @@ describe('Wiki UI components and tree display polish helpers', () => {
     unmount();
   });
 
-  it('renders TalkPanel comments, posts a note, and displays invite AuthStatusBanner', async () => {
+  it('renders TalkPanel comments, posts and soft-deletes a note, and displays invite AuthStatusBanner', async () => {
     const posted: string[] = [];
+    const deleted: number[] = [];
     const initialComments: TalkComment[] = [
       {
         comment_id: 1,
@@ -354,6 +356,9 @@ describe('Wiki UI components and tree display polish helpers', () => {
           deleted_at: null,
         };
       },
+      deleteTalkComment: async (_t, _id, commentId) => {
+        deleted.push(commentId);
+      },
     };
 
     const { container, unmount } = renderIntoDom(
@@ -362,7 +367,13 @@ describe('Wiki UI components and tree display polish helpers', () => {
           siteConfig={siteConfig}
           initialBundle={testBundle}
           dataSource={mockDataSource}
-          session={{ authenticated: true, principal_kind: 'user', role: 'editor', displayName: 'Editor' }}
+          session={{
+            authenticated: true,
+            principal_kind: 'user',
+            role: 'editor',
+            email: 'editor@example.com',
+            displayName: 'Editor',
+          }}
         >
           <TalkPanel
             entityType="person"
@@ -387,7 +398,32 @@ describe('Wiki UI components and tree display polish helpers', () => {
     });
     expect(posted).toEqual(['Confirmed in town register p. 4.']);
     expect(container.textContent).toContain('Confirmed in town register p. 4.');
+
+    const deleteButtons = [...container.querySelectorAll<HTMLButtonElement>('button')].filter(
+      (b) => b.textContent === 'Delete',
+    );
+    expect(deleteButtons.length).toBe(2);
+    await act(async () => {
+      deleteButtons[1]?.click();
+      await new Promise((r) => setTimeout(r, 20));
+    });
+    expect(deleted).toEqual([2]);
+    expect(container.textContent).not.toContain('Confirmed in town register p. 4.');
     unmount();
+
+    // StaticDemoDataSource explicitly reports anonymous session and disabled write capabilities
+    const staticSource = new StaticDemoDataSource('/');
+    const staticSession = await staticSource.getSession();
+    expect(staticSession).toEqual({
+      session: { authenticated: false, principal_kind: 'anonymous' },
+      capabilities: {
+        canEdit: false,
+        canUploadMedia: false,
+        hasRevisionHistory: false,
+        hasTalk: false,
+        canManageSite: false,
+      },
+    });
 
     // Invite banner check
     const inviteRender = renderIntoDom(

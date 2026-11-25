@@ -15,11 +15,12 @@ export const TalkPanel: React.FC<TalkPanelProps> = ({
   entityTitle,
   initialComments,
 }) => {
-  const { dataSource, capabilities } = useArchiveData();
+  const { dataSource, capabilities, session } = useArchiveData();
   const [comments, setComments] = useState<readonly TalkComment[]>(initialComments ?? []);
   const [loading, setLoading] = useState<boolean>(initialComments === undefined);
   const [bodyMd, setBodyMd] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const loadComments = useCallback(async (): Promise<void> => {
@@ -65,6 +66,22 @@ export const TalkPanel: React.FC<TalkPanelProps> = ({
     }
   };
 
+  const handleDelete = async (commentId: number): Promise<void> => {
+    if (!dataSource.deleteTalkComment) {
+      return;
+    }
+    setDeletingId(commentId);
+    setError(null);
+    try {
+      await dataSource.deleteTalkComment(entityType, entityId, commentId);
+      setComments((prev) => prev.filter((c) => c.comment_id !== commentId));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
   return (
     <section className="wiki-panel" aria-label="Record discussion">
       <div className="wiki-panel-header">
@@ -88,15 +105,36 @@ export const TalkPanel: React.FC<TalkPanelProps> = ({
       )}
 
       <div className="wiki-talk-list">
-        {comments.map((comment) => (
-          <article key={comment.comment_id} className="wiki-talk-item">
-            <div className="wiki-talk-meta">
-              <strong>{comment.author_name}</strong>
-              <span>{comment.created_at}</span>
-            </div>
-            <div className="wiki-talk-body">{comment.body_md}</div>
-          </article>
-        ))}
+        {comments.map((comment) => {
+          const canDeleteComment =
+            Boolean(dataSource.deleteTalkComment) &&
+            capabilities.canEdit &&
+            (session?.role === 'admin' ||
+              (Boolean(session?.email) && session?.email === comment.author_id));
+          return (
+            <article key={comment.comment_id} className="wiki-talk-item">
+              <div className="wiki-talk-meta">
+                <div>
+                  <strong>{comment.author_name}</strong>{' '}
+                  <span>{comment.created_at}</span>
+                </div>
+                {canDeleteComment && (
+                  <button
+                    type="button"
+                    className="pill-btn wiki-danger-btn"
+                    disabled={deletingId !== null}
+                    onClick={() => {
+                      void handleDelete(comment.comment_id);
+                    }}
+                  >
+                    {deletingId === comment.comment_id ? 'Deleting…' : 'Delete'}
+                  </button>
+                )}
+              </div>
+              <div className="wiki-talk-body">{comment.body_md}</div>
+            </article>
+          );
+        })}
       </div>
 
       {capabilities.canEdit && dataSource.postTalkComment ? (

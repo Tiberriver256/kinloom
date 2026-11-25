@@ -5,7 +5,6 @@ import type {
   EntityPayload,
   EntityType,
   OptimisticConflictError,
-  RevisionId,
 } from '@kinloom/core';
 import {
   asRevisionId,
@@ -147,22 +146,7 @@ function readSaveEntityOutput(event: unknown): SaveEntityResult | null {
 export const defaultSaveEntityActor = fromPromise<SaveEntityResult, SaveEntityInput>(
   async ({ input, signal }) => {
     if (input.dataSource?.updateEntity) {
-      const updateWithSignal = input.dataSource.updateEntity as (
-        entityType: EntityType,
-        entityId: string,
-        body: {
-          data: EntityPayload;
-          expected_parent_revision_id?: RevisionId;
-          summary: string;
-          has_primary_source: boolean;
-        },
-        options?: { signal?: AbortSignal },
-      ) => Promise<
-        | { ok: true; entity: EntityPayload; revision: { revision_id: number }; etag: string }
-        | { ok: false; conflict: OptimisticConflictError }
-      >;
-
-      const res = await updateWithSignal(
+      const res = await input.dataSource.updateEntity(
         input.entityType,
         input.entityId,
         {

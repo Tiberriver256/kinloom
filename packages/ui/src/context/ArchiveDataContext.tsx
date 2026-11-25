@@ -244,6 +244,7 @@ export const ArchiveDataProvider: React.FC<ArchiveDataProviderProps> = ({
   const [readingsError, setReadingsError] = useState<string | null>(null);
   const readingsFetchedRef = useRef(initialReadings !== null);
   const etagRef = useRef<string | null>(null);
+  const hasBundleRef = useRef(initialBundle !== null);
 
   useEffect(() => {
     if (sessionProp !== undefined) {
@@ -320,7 +321,10 @@ export const ArchiveDataProvider: React.FC<ArchiveDataProviderProps> = ({
       return;
     }
     let cancelled = false;
-    setLoading(true);
+    // Keep mounted views/drawers intact during background stale-while-revalidate reloads.
+    if (!hasBundleRef.current) {
+      setLoading(true);
+    }
     setError(null);
     resolvedDataSource
       .loadArchive({ ifNoneMatch: etagRef.current ?? undefined })
@@ -328,6 +332,7 @@ export const ArchiveDataProvider: React.FC<ArchiveDataProviderProps> = ({
         if (cancelled) {
           return;
         }
+        hasBundleRef.current = true;
         etagRef.current = result.etag;
         setEtag(result.etag);
         setBundle(result.bundle);
