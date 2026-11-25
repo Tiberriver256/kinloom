@@ -204,6 +204,8 @@ const MEDIA_KEY_ORDER = [
 const NARRATIVE_KEY_ORDER = [
   'id',
   'slug',
+  'kind',
+  'subject_person_id',
   'title',
   'summary',
   'date_edtf',
@@ -212,6 +214,7 @@ const NARRATIVE_KEY_ORDER = [
   'event_ids',
   'source_ids',
   'updated_at',
+  'has_primary_source',
   'body_md',
   'extensions',
 ] as const;

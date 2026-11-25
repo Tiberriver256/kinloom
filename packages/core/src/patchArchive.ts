@@ -29,6 +29,7 @@ import {
   compileLivingNamePattern,
   filterMediaForPrivacy,
   redactSingleEvent,
+  redactSingleNarrative,
   redactSinglePerson,
   resolveEffectiveLiving,
 } from './privacy.js';
@@ -266,7 +267,14 @@ export function patchCompiledBundle(
           if (narratives === undefined) {
             narratives = [];
           }
-          const parsed = structuredClone(parseEntityPayload('narrative', after_json));
+          const { living } = ensurePeopleIndex();
+          const parsed = redactSingleNarrative(
+            parseEntityPayload('narrative', after_json),
+            living,
+            getLivingPattern(),
+            mode,
+            { clone: true }
+          );
           const existingIdx = narratives.findIndex((n) => n.id === entity_id);
           if (existingIdx !== -1) {
             narratives[existingIdx] = parsed;
@@ -668,6 +676,19 @@ export function patchCompiledBundle(
         eventsIdxById = null;
       } else {
         events[i] = redacted;
+      }
+    }
+
+    if (narratives) {
+      for (let i = 0; i < narratives.length; i += 1) {
+        const nar = narratives[i];
+        const hitsNewlyLiving =
+          (nar.subject_person_id !== undefined && newlyLivingPersonIds.has(nar.subject_person_id)) ||
+          nar.person_ids.some((pid) => newlyLivingPersonIds.has(pid));
+        if (!hitsNewlyLiving) {
+          continue;
+        }
+        narratives[i] = redactSingleNarrative(nar, living, livingPattern, mode, { clone: true });
       }
     }
   }

@@ -56,6 +56,13 @@ export const ArchivalMediaKindSchema = z.enum([
 
 export const BuildModeSchema = z.enum(['public', 'private']);
 
+export const NarrativeKindSchema = z.enum([
+  'biography',
+  'family_story',
+  'research_note',
+  'memoir',
+]);
+
 export const AlternateDateSchema = z.object({
   edtf_date: CoercedEdtfStringSchema,
   source_id: z.string().min(1),
@@ -255,6 +262,8 @@ export const MediaItemSchema = z.object({
 export const NarrativeSchema = z.object({
   id: z.string().min(1),
   slug: z.string().min(1),
+  kind: NarrativeKindSchema.optional(),
+  subject_person_id: z.string().min(1).optional(),
   title: z.string().min(1),
   summary: z.string().optional(),
   body_md: z.string(),
@@ -337,6 +346,7 @@ export type KinshipRelation = z.infer<typeof KinshipRelationSchema>;
 export type SourceConfidence = z.infer<typeof SourceConfidenceSchema>;
 export type ArchivalMediaKind = z.infer<typeof ArchivalMediaKindSchema>;
 export type BuildMode = z.infer<typeof BuildModeSchema>;
+export type NarrativeKind = z.infer<typeof NarrativeKindSchema>;
 
 export type AlternateDate = z.infer<typeof AlternateDateSchema>;
 export type AlternatePlace = z.infer<typeof AlternatePlaceSchema>;

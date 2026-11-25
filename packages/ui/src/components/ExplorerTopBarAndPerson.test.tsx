@@ -43,6 +43,20 @@ function buildTestBundle(narratives: Narrative[]): ArchiveBundle {
         death_edtf: '1912-04-12',
         portrait_url: null,
       },
+      {
+        id: 'p_stephen',
+        slug: 'stephen-barton',
+        full_name: 'Stephen Barton',
+        given_name: 'Stephen',
+        surname: 'Barton',
+        alt_names: [],
+        sex: 'M',
+        is_living: false,
+        lineage_group: 'pivot_ancestor',
+        birth_edtf: '1774-08-18',
+        death_edtf: '1862-03-21',
+        portrait_url: null,
+      },
     ],
     places: [],
     events: [],
@@ -51,6 +65,11 @@ function buildTestBundle(narratives: Narrative[]): ArchiveBundle {
         id: 'src_1821',
         citation: 'Oxford Vital Register (1821)',
         source_type: 'vital_record',
+      },
+      {
+        id: 'src_1850',
+        citation: '1850 U.S. Federal Census, Worcester County, Massachusetts, Roll 344, Page 192.',
+        source_type: 'census',
       },
     ],
     kinship: [],
@@ -238,7 +257,21 @@ describe('PersonPage biography narratives and plain-English copy', () => {
     expect(bioSection?.querySelector('em')?.textContent).toBe('widely');
     expect(bioSection?.querySelector('h4')?.textContent).toBe('Early Years in Oxford');
     expect(bioSection?.querySelectorAll('.archival-md-list li').length).toBe(2);
+
+    // Sources are collapsed by default behind a Sources (N) toggle and expand on click
+    expect(bioSection?.querySelectorAll('.person-biography-source-list li').length).toBe(0);
+    const sourcesToggleBtn = [...(bioSection?.querySelectorAll('button') ?? [])].find((b) =>
+      b.textContent?.includes('Sources (1)'),
+    );
+    expect(sourcesToggleBtn?.getAttribute('aria-expanded')).toBe('false');
+    act(() => {
+      sourcesToggleBtn?.click();
+    });
+    expect(sourcesToggleBtn?.getAttribute('aria-expanded')).toBe('true');
     expect(bioSection?.querySelectorAll('.person-biography-source-list li').length).toBe(1);
+    expect(bioSection?.querySelector('.person-biography-source-text')?.textContent).toContain(
+      'Oxford Vital Register (1821)',
+    );
 
     // Unsafe javascript: URL must NOT produce an <a> tag, while https:// link renders safely
     const links = [...(bioSection?.querySelectorAll('a') ?? [])];
@@ -273,5 +306,97 @@ describe('PersonPage biography narratives and plain-English copy', () => {
     expect(container.textContent).not.toContain('in this build');
 
     unmount();
+  });
+
+  it('scopes biography narratives strictly to subject_person_id and renders shared essays under collapsed Family Stories', () => {
+    const bundle = buildTestBundle([
+      {
+        id: 'nar_clara_life',
+        slug: 'clara-full-life',
+        kind: 'biography',
+        subject_person_id: 'p_clara',
+        title: 'Clara Barton: Full Life',
+        summary: 'Biography centered on Clara Barton.',
+        date_edtf: '1821/1912',
+        person_ids: ['p_clara', 'p_stephen'],
+        place_ids: [],
+        event_ids: [],
+        source_ids: ['src_1821', 'src_1850'],
+        body_md: 'Clara Barton grew up in Oxford with her father Stephen Barton.',
+      },
+      {
+        id: 'nar_oxford_homestead',
+        slug: 'oxford-homestead-essay',
+        kind: 'family_story',
+        title: 'The Oxford Homestead Lineage',
+        summary: 'Shared family essay spanning two generations.',
+        date_edtf: '1774/1912',
+        person_ids: ['p_clara', 'p_stephen'],
+        place_ids: [],
+        event_ids: [],
+        source_ids: ['src_1850'],
+        body_md: 'Multi-generation account of the Barton family farm in Oxford.',
+      },
+    ]);
+
+    // On subject's page (Clara): Biography shows Clara's bio with collapsed Sources (2), Family Stories shows essay collapsed
+    const claraView = renderIntoDom(
+      <MemoryRouter initialEntries={['/person/clara-barton']}>
+        <ArchiveProvider siteConfig={siteConfig} initialBundle={bundle}>
+          <Routes>
+            <Route path="/person/:slug" element={<PersonPage />} />
+          </Routes>
+        </ArchiveProvider>
+      </MemoryRouter>,
+    );
+
+    const claraBio = claraView.container.querySelector('section[aria-label="Biography"]');
+    expect(claraBio?.textContent).toContain('Clara Barton: Full Life');
+    expect(claraBio?.textContent).not.toContain('The Oxford Homestead Lineage');
+    expect(claraBio?.querySelectorAll('.person-biography-source-list li').length).toBe(0);
+
+    const claraSourcesBtn = [...(claraBio?.querySelectorAll('button') ?? [])].find((b) =>
+      b.textContent?.includes('Sources (2)'),
+    );
+    expect(claraSourcesBtn?.getAttribute('aria-expanded')).toBe('false');
+    act(() => {
+      claraSourcesBtn?.click();
+    });
+    expect(claraSourcesBtn?.getAttribute('aria-expanded')).toBe('true');
+    expect(claraBio?.querySelectorAll('.person-biography-source-list li').length).toBe(2);
+
+    const claraStories = claraView.container.querySelector('section[aria-label="Family Stories"]');
+    expect(claraStories?.textContent).toContain('The Oxford Homestead Lineage');
+    expect(claraStories?.textContent).toContain('Shared family essay spanning two generations.');
+    expect(claraStories?.textContent).not.toContain('Multi-generation account of the Barton family farm');
+
+    const readStoryBtn = [...(claraStories?.querySelectorAll('button') ?? [])].find(
+      (b) => b.textContent?.trim() === 'Read story',
+    );
+    expect(readStoryBtn?.getAttribute('aria-expanded')).toBe('false');
+    act(() => {
+      readStoryBtn?.click();
+    });
+    expect(readStoryBtn?.getAttribute('aria-expanded')).toBe('true');
+    expect(claraStories?.textContent).toContain('Multi-generation account of the Barton family farm');
+    claraView.unmount();
+
+    // On co-mentioned relative's page (Stephen): Clara's biography MUST NOT appear anywhere
+    const stephenView = renderIntoDom(
+      <MemoryRouter initialEntries={['/person/stephen-barton']}>
+        <ArchiveProvider siteConfig={siteConfig} initialBundle={bundle}>
+          <Routes>
+            <Route path="/person/:slug" element={<PersonPage />} />
+          </Routes>
+        </ArchiveProvider>
+      </MemoryRouter>,
+    );
+
+    expect(stephenView.container.querySelector('section[aria-label="Biography"]')).toBeNull();
+    expect(stephenView.container.textContent).not.toContain('Clara Barton: Full Life');
+
+    const stephenStories = stephenView.container.querySelector('section[aria-label="Family Stories"]');
+    expect(stephenStories?.textContent).toContain('The Oxford Homestead Lineage');
+    stephenView.unmount();
   });
 });

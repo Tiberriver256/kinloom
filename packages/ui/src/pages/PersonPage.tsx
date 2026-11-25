@@ -1,4 +1,4 @@
-import type { ArchiveEvent, CoPresenceItem, MediaItem, Narrative } from '@kinloom/core';
+import type { ArchiveEvent, CoPresenceItem, MediaItem } from '@kinloom/core';
 import {
   buildFilteredGedcom7,
   buildGedcomExportFilename,
@@ -8,6 +8,7 @@ import {
   formatPublicProvenance,
   getEventsForPerson,
   getMediaPersonIds,
+  partitionPersonNarratives,
 } from '@kinloom/core';
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -68,7 +69,11 @@ export const PersonPage: React.FC = () => {
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const [showAllMedia, setShowAllMedia] = useState(false);
   const [showAllNarratives, setShowAllNarratives] = useState(false);
+  const [showAllFamilyStories, setShowAllFamilyStories] = useState(false);
   const [expandedNarrativeIds, setExpandedNarrativeIds] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  );
+  const [expandedSourceNarrativeIds, setExpandedSourceNarrativeIds] = useState<ReadonlySet<string>>(
     () => new Set(),
   );
   const [wikiTab, setWikiTab] = useState<WikiEntityTab>('read');
@@ -80,7 +85,9 @@ export const PersonPage: React.FC = () => {
     setLightboxIndex(null);
     setShowAllMedia(false);
     setShowAllNarratives(false);
+    setShowAllFamilyStories(false);
     setExpandedNarrativeIds(new Set());
+    setExpandedSourceNarrativeIds(new Set());
     setWikiTab('read');
   }
 
@@ -129,12 +136,36 @@ export const PersonPage: React.FC = () => {
     return [...items].toSorted((a, b) => (order[a.kind] ?? 9) - (order[b.kind] ?? 9));
   }, [bundle, person]);
 
-  const personNarratives: Narrative[] = useMemo(() => {
+  const { biographies: personBiographies, familyStories } = useMemo(() => {
     if (!bundle || !person) {
-      return [];
+      return { biographies: [], familyStories: [] };
     }
-    return (bundle.narratives ?? []).filter((n) => n.person_ids.includes(person.id));
+    return partitionPersonNarratives(bundle.narratives ?? [], person.id);
   }, [bundle, person]);
+
+  const toggleNarrativeBody = useCallback((narrativeId: string) => {
+    setExpandedNarrativeIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(narrativeId)) {
+        next.delete(narrativeId);
+      } else {
+        next.add(narrativeId);
+      }
+      return next;
+    });
+  }, []);
+
+  const toggleNarrativeSources = useCallback((narrativeId: string) => {
+    setExpandedSourceNarrativeIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(narrativeId)) {
+        next.delete(narrativeId);
+      } else {
+        next.add(narrativeId);
+      }
+      return next;
+    });
+  }, []);
 
   const immediateFamily = useMemo(() => {
     if (!bundle || !person) {
@@ -633,22 +664,23 @@ export const PersonPage: React.FC = () => {
             <TalkPanel entityType="person" entityId={person.id} entityTitle={person.full_name} />
           )}
 
-          {wikiTab !== 'history' && wikiTab !== 'talk' && personNarratives.length > 0 && (
+          {wikiTab !== 'history' && wikiTab !== 'talk' && personBiographies.length > 0 && (
             <section className="person-biography-section" aria-label="Biography">
               <div className="person-biography-header">
                 <h2>Biography</h2>
-                {personNarratives.length > 1 && (
+                {personBiographies.length > 1 && (
                   <span className="person-biography-count">
-                    {personNarratives.length} stories
+                    {personBiographies.length} stories
                   </span>
                 )}
               </div>
 
               <div className="person-biography-list">
-                {(showAllNarratives ? personNarratives : personNarratives.slice(0, 1)).map(
+                {(showAllNarratives ? personBiographies : personBiographies.slice(0, 1)).map(
                   (narrative) => {
                     const isLong = narrative.body_md.trim().length > 560;
                     const isExpanded = expandedNarrativeIds.has(narrative.id);
+                    const sourcesOpen = expandedSourceNarrativeIds.has(narrative.id);
                     const dateLabel = formatNarrativeDateSpan(narrative.date_edtf);
                     const linkedSources = (narrative.source_ids ?? [])
                       .map((srcId) => sourcesById.get(srcId))
@@ -673,41 +705,54 @@ export const PersonPage: React.FC = () => {
                           <ArchivalMarkdown markdown={narrative.body_md} />
                         </div>
 
-                        {isLong && (
-                          <button
-                            type="button"
-                            className="ink-inline-btn person-biography-toggle print-hide"
-                            aria-expanded={isExpanded}
-                            onClick={() => {
-                              setExpandedNarrativeIds((prev) => {
-                                const next = new Set(prev);
-                                if (next.has(narrative.id)) {
-                                  next.delete(narrative.id);
-                                } else {
-                                  next.add(narrative.id);
-                                }
-                                return next;
-                              });
-                            }}
-                          >
-                            {isExpanded ? 'Show less' : 'Read full biography'}
-                          </button>
+                        {(isLong || linkedSources.length > 0) && (
+                          <div className="person-biography-actions print-hide">
+                            {isLong && (
+                              <button
+                                type="button"
+                                className="ink-inline-btn person-biography-toggle"
+                                aria-expanded={isExpanded}
+                                onClick={() => {
+                                  toggleNarrativeBody(narrative.id);
+                                }}
+                              >
+                                {isExpanded ? 'Show less' : 'Read full biography'}
+                              </button>
+                            )}
+
+                            {linkedSources.length > 0 && (
+                              <button
+                                type="button"
+                                className="person-biography-sources-toggle"
+                                aria-expanded={sourcesOpen}
+                                onClick={() => {
+                                  toggleNarrativeSources(narrative.id);
+                                }}
+                              >
+                                <span>Sources ({linkedSources.length})</span>
+                                <span className="person-biography-chevron" aria-hidden="true">
+                                  {sourcesOpen ? '▾' : '▸'}
+                                </span>
+                              </button>
+                            )}
+                          </div>
                         )}
 
-                        {linkedSources.length > 0 && (
+                        {sourcesOpen && linkedSources.length > 0 && (
                           <div className="person-biography-sources">
-                            <span className="person-biography-sources-label">Sources</span>
                             <ul className="person-biography-source-list">
                               {linkedSources.map((src) => (
                                 <li key={src.id}>
                                   <button
                                     type="button"
-                                    className="source-read-inline person-biography-source-btn"
+                                    className="person-biography-source-btn"
                                     onClick={() => {
                                       openSourceInspector({ sourceId: src.id });
                                     }}
                                   >
-                                    {formatPublicCitation(src.citation)}
+                                    <span className="person-biography-source-text">
+                                      {formatPublicCitation(src.citation)}
+                                    </span>
                                   </button>
                                 </li>
                               ))}
@@ -720,7 +765,7 @@ export const PersonPage: React.FC = () => {
                 )}
               </div>
 
-              {personNarratives.length > 1 && (
+              {personBiographies.length > 1 && (
                 <div className="person-biography-more-wrap print-hide">
                   <button
                     type="button"
@@ -732,7 +777,123 @@ export const PersonPage: React.FC = () => {
                   >
                     {showAllNarratives
                       ? 'Show fewer stories'
-                      : `Read ${personNarratives.length - 1} more ${personNarratives.length - 1 === 1 ? 'story' : 'stories'}`}
+                      : `Read ${personBiographies.length - 1} more ${personBiographies.length - 1 === 1 ? 'story' : 'stories'}`}
+                  </button>
+                </div>
+              )}
+            </section>
+          )}
+
+          {wikiTab !== 'history' && wikiTab !== 'talk' && familyStories.length > 0 && (
+            <section
+              className="person-biography-section person-family-stories-section"
+              aria-label="Family Stories"
+            >
+              <div className="person-biography-header">
+                <h2>Family Stories</h2>
+                {familyStories.length > 1 && (
+                  <span className="person-biography-count">
+                    {familyStories.length} stories
+                  </span>
+                )}
+              </div>
+
+              <div className="person-biography-list">
+                {(showAllFamilyStories ? familyStories : familyStories.slice(0, 3)).map((story) => {
+                  const isExpanded = expandedNarrativeIds.has(story.id);
+                  const sourcesOpen = expandedSourceNarrativeIds.has(story.id);
+                  const dateLabel = formatNarrativeDateSpan(story.date_edtf);
+                  const linkedSources = (story.source_ids ?? [])
+                    .map((srcId) => sourcesById.get(srcId))
+                    .filter((src): src is NonNullable<typeof src> => Boolean(src));
+
+                  return (
+                    <article key={story.id} className="person-biography-entry person-family-story-entry">
+                      <div className="person-biography-entry-head">
+                        <h3>{story.title}</h3>
+                        {dateLabel && !story.title.includes(dateLabel) && (
+                          <span className="person-biography-date">{dateLabel}</span>
+                        )}
+                      </div>
+
+                      {story.summary && (
+                        <p className="person-biography-summary">{story.summary}</p>
+                      )}
+
+                      {isExpanded && (
+                        <div className="person-biography-body">
+                          <ArchivalMarkdown markdown={story.body_md} />
+                        </div>
+                      )}
+
+                      <div className="person-biography-actions print-hide">
+                        <button
+                          type="button"
+                          className="ink-inline-btn person-biography-toggle"
+                          aria-expanded={isExpanded}
+                          onClick={() => {
+                            toggleNarrativeBody(story.id);
+                          }}
+                        >
+                          {isExpanded ? 'Hide story' : 'Read story'}
+                        </button>
+
+                        {linkedSources.length > 0 && (
+                          <button
+                            type="button"
+                            className="person-biography-sources-toggle"
+                            aria-expanded={sourcesOpen}
+                            onClick={() => {
+                              toggleNarrativeSources(story.id);
+                            }}
+                          >
+                            <span>Sources ({linkedSources.length})</span>
+                            <span className="person-biography-chevron" aria-hidden="true">
+                              {sourcesOpen ? '▾' : '▸'}
+                            </span>
+                          </button>
+                        )}
+                      </div>
+
+                      {sourcesOpen && linkedSources.length > 0 && (
+                        <div className="person-biography-sources">
+                          <ul className="person-biography-source-list">
+                            {linkedSources.map((src) => (
+                              <li key={src.id}>
+                                <button
+                                  type="button"
+                                  className="person-biography-source-btn"
+                                  onClick={() => {
+                                    openSourceInspector({ sourceId: src.id });
+                                  }}
+                                >
+                                  <span className="person-biography-source-text">
+                                    {formatPublicCitation(src.citation)}
+                                  </span>
+                                </button>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                    </article>
+                  );
+                })}
+              </div>
+
+              {familyStories.length > 3 && (
+                <div className="person-biography-more-wrap print-hide">
+                  <button
+                    type="button"
+                    className="pill-btn"
+                    aria-expanded={showAllFamilyStories}
+                    onClick={() => {
+                      setShowAllFamilyStories((v) => !v);
+                    }}
+                  >
+                    {showAllFamilyStories
+                      ? 'Show fewer family stories'
+                      : `Show ${familyStories.length - 3} more family ${familyStories.length - 3 === 1 ? 'story' : 'stories'}`}
                   </button>
                 </div>
               )}

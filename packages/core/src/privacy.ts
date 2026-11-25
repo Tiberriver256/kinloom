@@ -3,6 +3,7 @@ import type {
   ArchiveEvent,
   BuildMode,
   MediaItem,
+  Narrative,
   Person,
   RawEvent,
   RawPerson,
@@ -544,4 +545,58 @@ export function filterMediaForPrivacy(
     result.push(copy);
   }
   return result;
+}
+
+export interface RedactNarrativeOptions {
+  clone?: boolean;
+}
+
+/**
+ * Enforce living-person redaction on a single Narrative entity.
+ * In public mode, strips living IDs from `subject_person_id` and `person_ids`,
+ * and scrubs living names from prose when a living person was referenced.
+ */
+export function redactSingleNarrative(
+  narrative: Narrative,
+  livingIds: ReadonlySet<string>,
+  livingPattern: RegExp | null,
+  mode: BuildMode,
+  options?: RedactNarrativeOptions
+): Narrative {
+  const copy = options?.clone === false ? narrative : structuredClone(narrative);
+  if (mode !== 'public') {
+    return copy;
+  }
+
+  const hasLivingSubject = Boolean(copy.subject_person_id && livingIds.has(copy.subject_person_id));
+  const hasLivingPerson = copy.person_ids.some((pid) => livingIds.has(pid));
+
+  if (hasLivingSubject) {
+    delete copy.subject_person_id;
+  }
+  if (hasLivingPerson) {
+    copy.person_ids = copy.person_ids.filter((pid) => !livingIds.has(pid));
+  }
+  if ((hasLivingSubject || hasLivingPerson) && livingPattern) {
+    copy.title = scrubLivingNames(copy.title, livingPattern);
+    if (copy.summary) {
+      copy.summary = scrubLivingNames(copy.summary, livingPattern);
+    }
+    copy.body_md = scrubLivingNames(copy.body_md, livingPattern);
+  }
+  return copy;
+}
+
+/**
+ * Enforce living-person redaction across a list of Narratives.
+ */
+export function filterNarrativesForPrivacy(
+  narratives: readonly Narrative[],
+  livingIds: ReadonlySet<string>,
+  livingPattern: RegExp | null,
+  mode: BuildMode,
+  options?: { cloneInputs?: boolean }
+): Narrative[] {
+  const clone = options?.cloneInputs ?? true;
+  return narratives.map((n) => redactSingleNarrative(n, livingIds, livingPattern, mode, { clone }));
 }

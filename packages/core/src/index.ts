@@ -13,6 +13,7 @@ export * from './privacy.js';
 // Pure TypeScript Archive Compiler & Incremental Bundle Patcher
 export * from './compileArchive.js';
 export * from './patchArchive.js';
+export * from './validateArchive.js';
 
 // Shared Phase 3 Contracts & Port Interfaces
 export * from './contracts.js';
@@ -46,3 +47,4 @@ export * from './domain/radarEngine.js';
 export * from './domain/radarGeometry.js';
 export * from './domain/mapJourney.js';
 export * from './domain/timeYear.js';
+export * from './domain/narratives.js';

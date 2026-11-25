@@ -19,7 +19,14 @@ import type {
 import { getMediaPersonIds } from './schemas/entities.js';
 import { edtfToBounds, edtfYear, formatEdtfDisplay } from './edtf.js';
 import { applyCitationCleanings } from './gedcom/citations.js';
-import { applyPrivacyFilter, filterMediaForPrivacy, resolveEffectiveLiving } from './privacy.js';
+import {
+  applyPrivacyFilter,
+  collectLivingNames,
+  compileLivingNamePattern,
+  filterMediaForPrivacy,
+  filterNarrativesForPrivacy,
+  resolveEffectiveLiving,
+} from './privacy.js';
 import { buildPlaceAncestors, deriveResidenceSpans } from './residenceSpans.js';
 
 export interface AncestryHouseholdEvent {
@@ -404,6 +411,10 @@ export function compileArchive(input: CompileArchiveInput): CompileArchiveResult
     includeLiving: includeLivingSpans,
   });
 
+  // Capture pre-redaction living names for public-mode narrative scrubbing
+  const narrativeLivingPattern =
+    mode === 'public' ? compileLivingNamePattern(collectLivingNames(rawPeople)) : null;
+
   // Stage 5: Apply living-person privacy filter in place on already-cloned inputs
   const {
     people: redactedRawPeople,
@@ -611,8 +622,18 @@ export function compileArchive(input: CompileArchiveInput): CompileArchiveResult
   }
 
   const narratives = input.narratives
-    ? input.narratives.map((n) => structuredClone(n))
+    ? filterNarrativesForPrivacy(input.narratives, livingIds, narrativeLivingPattern, mode, {
+        cloneInputs: true,
+      })
     : undefined;
+
+  if (narratives) {
+    for (const n of narratives) {
+      if (n.subject_person_id && !peopleById.has(n.subject_person_id)) {
+        reviewFlags.push(`[${n.id}] references unknown subject_person_id '${n.subject_person_id}'.`);
+      }
+    }
+  }
 
   const uncitedKeys = collectUncitedEntityKeys({
     people: compiledPeople,
