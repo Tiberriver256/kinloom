@@ -126,10 +126,39 @@ export const PrivateArchiveGate: React.FC = () => {
                     setEmail(e.target.value);
                   }}
                   disabled={sending}
+                  style={{
+                    minHeight: '44px',
+                    fontSize: '1rem',
+                    padding: '10px 12px',
+                    borderRadius: '6px',
+                  }}
                 />
               </label>
-              <div className="wiki-form-actions">
-                <button type="submit" className="pill-btn active" disabled={sending || !email.trim()}>
+              <div className="wiki-form-actions" style={{ marginTop: '4px' }}>
+                <button
+                  type="submit"
+                  disabled={sending || !email.trim()}
+                  style={{
+                    width: '100%',
+                    minHeight: '46px',
+                    padding: '11px 16px',
+                    borderRadius: '6px',
+                    border: '1px solid var(--surface-header, #1B2A41)',
+                    background:
+                      sending || !email.trim()
+                        ? 'var(--surface-muted, #E5DAC5)'
+                        : 'var(--surface-header, #1B2A41)',
+                    color:
+                      sending || !email.trim()
+                        ? 'var(--text-secondary, #4E4A42)'
+                        : 'var(--text-inverse, #FCF9F2)',
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: '0.88rem',
+                    fontWeight: 600,
+                    letterSpacing: '0.02em',
+                    cursor: sending || !email.trim() ? 'not-allowed' : 'pointer',
+                  }}
+                >
                   {sending ? 'Sending link…' : 'Email Magic Link'}
                 </button>
               </div>
@@ -143,8 +172,23 @@ export const PrivateArchiveGate: React.FC = () => {
           <div className="wiki-signin-section">
             <a
               href={googleStartUrl}
-              className="pill-btn wiki-google-btn"
-              style={{ textDecoration: 'none', textAlign: 'center', width: '100%' }}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                width: '100%',
+                minHeight: '44px',
+                padding: '10px 16px',
+                borderRadius: '6px',
+                border: '1px solid var(--border-control, #827A6A)',
+                background: 'var(--surface-canvas, #F5EFE2)',
+                color: 'var(--text-primary, #23272E)',
+                fontFamily: 'var(--font-mono)',
+                fontSize: '0.86rem',
+                fontWeight: 500,
+                textDecoration: 'none',
+                boxSizing: 'border-box',
+              }}
             >
               Continue with Google
             </a>

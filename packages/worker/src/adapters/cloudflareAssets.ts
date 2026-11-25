@@ -19,6 +19,10 @@ function isHtmlResponse(response: Response): boolean {
   return contentType.includes('text/html');
 }
 
+function isValidStaticAssetResponse(response: Response): boolean {
+  return response.status === 304 || (response.ok && !isHtmlResponse(response));
+}
+
 function notFoundPlainResponse(): Response {
   return new Response('Not Found', {
     status: 404,
@@ -53,7 +57,7 @@ export function createCloudflareAssetHandler(assets?: Fetcher): AssetHandler {
       if (pathname === '/favicon.svg') {
         if (assets) {
           const assetRes = await assets.fetch(request);
-          if (assetRes.ok && !isHtmlResponse(assetRes)) {
+          if (isValidStaticAssetResponse(assetRes)) {
             return assetRes;
           }
         }
@@ -69,7 +73,7 @@ export function createCloudflareAssetHandler(assets?: Fetcher): AssetHandler {
       if (pathname === '/favicon.ico') {
         if (assets) {
           const assetRes = await assets.fetch(request);
-          if (assetRes.ok && !isHtmlResponse(assetRes)) {
+          if (isValidStaticAssetResponse(assetRes)) {
             return assetRes;
           }
         }
@@ -83,7 +87,7 @@ export function createCloudflareAssetHandler(assets?: Fetcher): AssetHandler {
       const directRes = await assets.fetch(request);
 
       if (STATIC_ASSET_EXTENSION_PATTERN.test(pathname)) {
-        if (directRes.ok && !isHtmlResponse(directRes)) {
+        if (isValidStaticAssetResponse(directRes)) {
           return directRes;
         }
         return notFoundPlainResponse();

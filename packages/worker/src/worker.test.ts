@@ -875,6 +875,23 @@ describe('createCloudflareWorker full HTTP lifecycle (Miniflare)', () => {
     const source404 = await assetHandler.fetch(new Request(`${CONTRACT_TEST_ORIGIN}/sources/missing.pdf`));
     expect(source404.status).toBe(404);
     expect(source404.headers.get('content-type')).toContain('text/plain');
+
+    // Regression check: conditional 304 Not Modified on static CSS/JS assets must pass through as 304, never 404.
+    const conditionalAssetHandler = createCloudflareAssetHandler({
+      async fetch() {
+        return new Response(null, {
+          status: 304,
+          headers: { etag: '"css-hash-1"' },
+        });
+      },
+    });
+    const css304 = await conditionalAssetHandler.fetch(
+      new Request(`${CONTRACT_TEST_ORIGIN}/assets/index-abc.css`, {
+        headers: { 'if-none-match': '"css-hash-1"' },
+      })
+    );
+    expect(css304.status).toBe(304);
+    expect(css304.headers.get('etag')).toBe('"css-hash-1"');
   });
 
   it('serves nested /media/* and /sources/* pre-seeded R2 objects without custom sha256 metadata and auth-gates /data/*', async () => {
