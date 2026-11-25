@@ -1,43 +1,120 @@
+- id: nar_atlantic_to_shenandoah
+  slug: hingham-norfolk-to-shenandoah-valley
+  title: From Hingham, Norfolk to Linville Creek (1622–1788)
+  summary: Five colonial generations tracing weaver Samuel Lincoln's 1637 Atlantic crossing through Massachusetts ironworks, New Jersey, Pennsylvania, and Virginia's Shenandoah Valley.
+  date_edtf: "1622/1788"
+  person_ids:
+    - p_samuel_lincoln_1622
+    - p_mordecai_lincoln_sr
+    - p_mordecai_lincoln_jr
+    - p_john_lincoln_1716
+    - p_abraham_lincoln_1744
+  place_ids:
+    - pl_hingham_norfolk
+    - pl_hingham_ma
+    - pl_scituate_ma
+    - pl_monmouth_nj
+    - pl_berks_pa
+    - pl_rockingham_va
+  source_ids:
+    - src_hingham_parish_1622
+    - src_hingham_town_1637
+    - src_scituate_vital_1686
+    - src_berks_probate_1736
+    - src_lincoln_scripps_1860
+  body_md: |
+    Baptized at St. Andrew's Parish in Hingham, Norfolk on August 24, 1622, fifteen-year-old weaver's apprentice
+    Samuel Lincoln sailed from Great Yarmouth in 1637 to join his older brothers in Hingham, Massachusetts.
+    Over the next four generations his descendants stepped steadily south and west: ironmaster Mordecai Lincoln Sr.
+    at Scituate, Mordecai Lincoln Jr. across Monmouth County, New Jersey to his 1733 stone house in Berks County,
+    Pennsylvania, and "Virginia" John Lincoln down the Great Wagon Road to Linville Creek in 1768.
+
 - id: nar_virginia_to_illinois
   slug: virginia-to-illinois-migration
-  title: Three Generations Westward (1782–1837)
+  title: Three Generations Westward (1780–1837)
   summary: From Linville Creek in Rockingham County, Virginia through Kentucky and Indiana to the Sangamon River valley in Illinois.
-  date_edtf: "1782/1837"
+  date_edtf: "1780/1837"
   person_ids:
     - p_abraham_lincoln_1744
     - p_thomas_lincoln
+    - p_nancy_hanks
+    - p_sarah_bush_johnston
     - p_abraham_lincoln_1809
+    - p_dennis_friend_hanks
   place_ids:
     - pl_rockingham_va
+    - pl_jefferson_ky
     - pl_hodgenville_ky
     - pl_pigeon_creek_in
+    - pl_macon_il
     - pl_new_salem_il
     - pl_springfield_il
   source_ids:
     - src_lincoln_autobiography_1859
     - src_virginia_land_1780
+    - src_washington_marriage_1806
+    - src_census_1820_spencer
   body_md: |
-    In December 1859, Abraham Lincoln composed a brief three-page autobiographical sketch tracing
-    his family's westward movement across three frontiers: Virginia, Kentucky, and southern Indiana,
-    before settling along the Sangamon River in Illinois.
+    Armed with Virginia Treasury Warrant No. 3334 in March 1780, Capt. Abraham Lincoln led his household
+    across the Wilderness Road into Kentucky, where an ambush on Long Run in May 1786 left young Thomas Lincoln
+    fatherless at age eight. Thomas Lincoln's later moves from Hardin County, Kentucky to Little Pigeon Creek,
+    Indiana (1816) and finally across the Wabash into Illinois (1830) shaped Abraham Lincoln's frontier youth
+    alongside his Hanks cousins and stepmother Sarah Bush Johnston.
 
 - id: nar_springfield_household
   slug: eighth-street-springfield-household
-  title: The Eighth Street Household in Springfield (1844–1861)
-  summary: Federal census schedules and county marriage records documenting the Lincoln and Todd family years in Springfield.
+  title: The Eighth Street Household & Patent Years (1842–1861)
+  summary: Federal census schedules, county marriage records, and NARA Patent No. 6,469 documenting the Lincoln and Todd family years in Springfield.
   date_edtf: "1842/1861"
   person_ids:
     - p_abraham_lincoln_1809
     - p_mary_todd_lincoln
+    - p_elizabeth_todd_edwards
     - p_robert_todd_lincoln
+    - p_edward_baker_lincoln
+    - p_william_wallace_lincoln
+    - p_thomas_tad_lincoln
   place_ids:
     - pl_springfield_il
     - pl_lexington_ky
   source_ids:
     - src_sangamon_marriage_1842
+    - src_nara_patent_6469
     - src_census_1850_springfield
     - src_census_1860_springfield
   body_md: |
-    Following their November 4, 1842 marriage at the Edwards home in Springfield, Abraham Lincoln
-    and Mary Ann Todd purchased the Eighth Street house in 1844, where the 1850 and 1860 federal
-    censuses document their growing household.
+    Following their November 4, 1842 marriage at Ninian and Elizabeth Todd Edwards's home in Springfield,
+    Abraham Lincoln and Mary Ann Todd bought the Eighth Street house in 1844. Between congressional service,
+    filing U.S. Patent No. 6,469 in May 1849, and riding the Eighth Judicial Circuit, the 1850 and 1860
+    federal censuses preserve the full sweep of their Springfield household.
+
+- id: nar_white_house_to_hildene
+  slug: white-house-harlan-alliance-and-hildene
+  title: Washington, the Harlan Alliance & Hildene (1861–1985)
+  summary: From the Civil War White House and NARA federal records through Robert Todd Lincoln's marriage to Mary Eunice Harlan and the final generation of Lincoln descendants.
+  date_edtf: "1861/1985"
+  person_ids:
+    - p_abraham_lincoln_1809
+    - p_mary_todd_lincoln
+    - p_james_harlan
+    - p_robert_todd_lincoln
+    - p_mary_harlan_lincoln
+    - p_jessie_harlan_lincoln
+    - p_robert_todd_lincoln_beckwith
+  place_ids:
+    - pl_washington_dc
+    - pl_mount_pleasant_ia
+    - pl_chicago_il
+    - pl_manchester_vt
+  source_ids:
+    - src_nara_emancipation_1863
+    - src_nara_harlan_brady
+    - src_chronam_evening_star_1865
+    - src_nara_treasury_1868
+    - src_nara_beckwith_1954
+  body_md: |
+    During the Civil War years in Washington, D.C., Abraham Lincoln forged a close political and personal bond
+    with Iowa Senator James Harlan, whom he appointed Secretary of the Interior in 1865. Three years after
+    Lincoln's assassination, Robert Todd Lincoln married Harlan's daughter Mary Eunice Harlan in Washington,
+    establishing a lineage that flourished in Chicago and at Hildene in Manchester, Vermont until the death
+    of great-grandson Robert Todd Lincoln Beckwith in 1985.

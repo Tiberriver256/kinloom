@@ -1,0 +1,138 @@
+import type { EntityType, TalkComment } from '@kinloom/core';
+import React, { useCallback, useEffect, useState } from 'react';
+import { useArchiveData } from '../../context/ArchiveDataContext.js';
+
+export interface TalkPanelProps {
+  entityType: EntityType;
+  entityId: string;
+  entityTitle?: string;
+  initialComments?: readonly TalkComment[];
+}
+
+export const TalkPanel: React.FC<TalkPanelProps> = ({
+  entityType,
+  entityId,
+  entityTitle,
+  initialComments,
+}) => {
+  const { dataSource, capabilities } = useArchiveData();
+  const [comments, setComments] = useState<readonly TalkComment[]>(initialComments ?? []);
+  const [loading, setLoading] = useState<boolean>(initialComments === undefined);
+  const [bodyMd, setBodyMd] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const loadComments = useCallback(async (): Promise<void> => {
+    if (!dataSource.listTalkComments) {
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    try {
+      const items = await dataSource.listTalkComments(entityType, entityId);
+      setComments(items);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setLoading(false);
+    }
+  }, [dataSource, entityType, entityId]);
+
+  useEffect(() => {
+    if (initialComments !== undefined) {
+      return;
+    }
+    void loadComments();
+  }, [initialComments, loadComments]);
+
+  const handleSubmit = async (e: React.FormEvent): Promise<void> => {
+    e.preventDefault();
+    const trimmed = bodyMd.trim();
+    if (!trimmed || !dataSource.postTalkComment) {
+      return;
+    }
+    setSubmitting(true);
+    setError(null);
+    try {
+      const created = await dataSource.postTalkComment(entityType, entityId, trimmed);
+      setComments((prev) => [...prev, created]);
+      setBodyMd('');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <section className="wiki-panel" aria-label="Record discussion">
+      <div className="wiki-panel-header">
+        <h2>Talk{entityTitle ? ` · ${entityTitle}` : ''}</h2>
+        <span className="wiki-panel-meta">
+          {comments.length} note{comments.length === 1 ? '' : 's'}
+        </span>
+      </div>
+
+      {error && (
+        <div className="wiki-status-banner is-error" role="alert">
+          {error}
+        </div>
+      )}
+
+      {loading && <p className="empty-ring-note">Loading discussion notes…</p>}
+      {!loading && comments.length === 0 && (
+        <p className="empty-ring-note">
+          No research notes or family discussion posted on this record yet.
+        </p>
+      )}
+
+      <div className="wiki-talk-list">
+        {comments.map((comment) => (
+          <article key={comment.comment_id} className="wiki-talk-item">
+            <div className="wiki-talk-meta">
+              <strong>{comment.author_name}</strong>
+              <span>{comment.created_at}</span>
+            </div>
+            <div className="wiki-talk-body">{comment.body_md}</div>
+          </article>
+        ))}
+      </div>
+
+      {capabilities.canEdit && dataSource.postTalkComment ? (
+        <form
+          className="wiki-talk-form"
+          onSubmit={(e) => {
+            void handleSubmit(e);
+          }}
+        >
+          <label htmlFor={`talk-input-${entityId}`} className="wiki-field-label">
+            Add a research note or question (Markdown supported)
+          </label>
+          <textarea
+            id={`talk-input-${entityId}`}
+            className="wiki-textarea"
+            rows={3}
+            placeholder="Share a source lead, question a date, or note family context…"
+            value={bodyMd}
+            onChange={(e) => {
+              setBodyMd(e.target.value);
+            }}
+            disabled={submitting}
+          />
+          <div className="wiki-form-actions">
+            <button
+              type="submit"
+              className="pill-btn active"
+              disabled={submitting || bodyMd.trim().length === 0}
+            >
+              {submitting ? 'Posting…' : 'Post Note'}
+            </button>
+          </div>
+        </form>
+      ) : (
+        <p className="wiki-hint-text">Sign in as a family editor to add notes to this Talk page.</p>
+      )}
+    </section>
+  );
+};

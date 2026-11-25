@@ -1,9 +1,20 @@
-import type { ArchiveBundle, KinloomSiteConfig, ReadingsBundle } from '@kinloom/core';
-import type { ArchiveCapabilities, ArchiveDataLoader, ArchiveSession } from './context/ArchiveDataContext.js';
+import type {
+  ArchiveBundle,
+  ArchiveDataSource,
+  KinloomSiteConfig,
+  ReadingsBundle,
+} from '@kinloom/core';
+import type {
+  ArchiveCapabilities,
+  ArchiveDataLoader,
+  ArchiveSession,
+} from './context/ArchiveDataContext.js';
+import type { KinloomUiPlugin } from './plugins/types.js';
 import { BrowserRouter, MemoryRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import React, { Suspense, lazy, useEffect } from 'react';
 import { AppErrorBoundary } from './components/AppErrorBoundary.js';
 import { ArchiveProvider } from './context/ArchiveProvider.js';
+import { AuthStatusBanner } from './components/wiki/AuthStatusBanner.js';
 import { BlankScreenWatchdog } from './components/BlankScreenWatchdog.js';
 import { ExplorerTopBar } from './components/ExplorerTopBar.js';
 import { GlobalSearchModal } from './components/GlobalSearchModal.js';
@@ -11,7 +22,12 @@ import { IndexPage } from './pages/IndexPage.js';
 import { ScrollMemory } from './components/ScrollMemory.js';
 import { SourceInspectorDrawer } from './components/SourceInspectorDrawer.js';
 import { SourceReaderDrawer } from './components/SourceReaderDrawer.js';
+import { useKinloomPlugins } from './plugins/PluginContext.js';
 
+const AdminPage = lazy(async () => {
+  const module = await import('./pages/AdminPage.js');
+  return { default: module.AdminPage };
+});
 const EvidencePage = lazy(async () => {
   const module = await import('./pages/EvidencePage.js');
   return { default: module.EvidencePage };
@@ -36,6 +52,10 @@ const PlacesIndexPage = lazy(async () => {
   const module = await import('./pages/PlacesIndexPage.js');
   return { default: module.PlacesIndexPage };
 });
+const RecentChangesPage = lazy(async () => {
+  const module = await import('./pages/RecentChangesPage.js');
+  return { default: module.RecentChangesPage };
+});
 const TimePage = lazy(async () => {
   const module = await import('./pages/TimePage.js');
   return { default: module.TimePage };
@@ -48,11 +68,13 @@ const TreePage = lazy(async () => {
 export interface KinloomAppProps {
   siteConfig: KinloomSiteConfig;
   loader?: ArchiveDataLoader;
+  dataSource?: ArchiveDataSource;
+  plugins?: readonly KinloomUiPlugin[];
   baseUrl?: string;
   initialBundle?: ArchiveBundle | null;
   initialReadings?: ReadingsBundle | null;
   session?: ArchiveSession | null;
-  capabilities?: ArchiveCapabilities;
+  capabilities?: Partial<ArchiveCapabilities>;
   /**
    * Optional MemoryRouter initial entries for unit/component tests.
    * When omitted, uses BrowserRouter with `baseUrl`.
@@ -77,9 +99,12 @@ const RoutedAppShell: React.FC<{ siteTitle: string; baseUrl: string }> = ({
   baseUrl,
 }) => {
   const location = useLocation();
+  const { routes: pluginRoutes } = useKinloomPlugins();
+
   return (
     <>
       <BlankScreenWatchdog />
+      <AuthStatusBanner />
       <AppErrorBoundary key={location.pathname} siteTitle={siteTitle} baseUrl={baseUrl}>
         <ScrollMemory />
         <Suspense fallback={<RouteLoading />}>
@@ -93,6 +118,18 @@ const RoutedAppShell: React.FC<{ siteTitle: string; baseUrl: string }> = ({
             <Route path="/map" element={<MapPage />} />
             <Route path="/kinship" element={<KinshipPage />} />
             <Route path="/evidence" element={<EvidencePage />} />
+            <Route path="/changes" element={<RecentChangesPage />} />
+            <Route path="/admin" element={<AdminPage />} />
+            {pluginRoutes.map((route) => {
+              const PluginComponent = route.component;
+              return (
+                <Route
+                  key={`${route.pluginId}:${route.path}`}
+                  path={route.path}
+                  element={<PluginComponent />}
+                />
+              );
+            })}
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </Suspense>
@@ -107,6 +144,8 @@ const RoutedAppShell: React.FC<{ siteTitle: string; baseUrl: string }> = ({
 export const KinloomApp: React.FC<KinloomAppProps> = ({
   siteConfig,
   loader,
+  dataSource,
+  plugins,
   baseUrl,
   initialBundle,
   initialReadings,
@@ -140,6 +179,8 @@ export const KinloomApp: React.FC<KinloomAppProps> = ({
         <ArchiveProvider
           siteConfig={siteConfig}
           loader={loader}
+          dataSource={dataSource}
+          plugins={plugins}
           baseUrl={resolvedBase}
           initialBundle={initialBundle}
           initialReadings={initialReadings}

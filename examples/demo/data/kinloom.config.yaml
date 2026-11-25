@@ -2,96 +2,161 @@ site:
   title: Lincoln & Todd Historical Archive
   familyName: Lincoln & Todd Family
   gedcomSourceName: LINCOLN_TODD_DEMO
-  description: Public-domain 18th and 19th-century historical demo archive tracing the Lincoln and Todd lines from Virginia and Kentucky through Indiana, Illinois, Washington, D.C., and Vermont.
+  description: Public-domain ten-generation historical archive (1622–1985) tracing the Lincoln, Hanks, Todd, and Harlan branches from Hingham, Norfolk and County Longford across Massachusetts, New Jersey, Pennsylvania, Virginia, Kentucky, Indiana, Illinois, Iowa, Washington, D.C., and Vermont with primary NARA and Library of Congress records.
   footerCredit: Built with Kinloom
 theme:
   accent: "#7A4612"
-defaultBranchId: lincoln_hanks
+defaultBranchId: lincoln
 branches:
-  - id: lincoln_hanks
-    label: Lincoln & Hanks Line
-    description: Virginia, Kentucky, Indiana, and Illinois lineage of Thomas Lincoln and Abraham Lincoln.
+  - id: lincoln
+    label: Lincoln Line (1622–1985)
+    description: Ten generations from Samuel Lincoln of Hingham, Norfolk (1622) through Massachusetts, New Jersey, Pennsylvania, Virginia, Kentucky, Indiana, Illinois, Washington, D.C., and Vermont.
     surnames:
       - Lincoln
-      - Hanks
-      - Johnston
+      - Lyford
+      - Jones
+      - Salter
+      - Morris
+      - Herring
       - Grigsby
+      - Isham
+      - Beckwith
     lineageGroups:
       - ancestor
       - pivot_ancestor
       - descendant
       - colonial_sibling
     supportsDirectMode: true
-  - id: todd_edwards
-    label: Todd & Edwards Line
-    description: Lexington, Kentucky and Springfield, Illinois lineage of Levi Todd, Robert Smith Todd, and Mary Ann Todd.
+  - id: hanks
+    label: Hanks & Johnston Line
+    description: Virginia, Kentucky, Indiana, and Illinois maternal and blended-family kin of Nancy Hanks, Lucy Hanks, Sarah Bush Johnston, Dennis Friend Hanks, and John Hanks.
     surnames:
-      - Todd
-      - Edwards
-      - Parker
-      - Harlan
-      - Briggs
+      - Hanks
+      - Lee
+      - Johnston
     lineageGroups:
+      - ancestor
       - descendant_spouse
       - extended
     supportsDirectMode: true
+  - id: todd_edwards
+    label: Todd & Edwards Line
+    description: County Longford, Pennsylvania, Lexington, and Springfield lineage of David Todd, Maj. Gen. Levi Todd, Robert Smith Todd, Mary Ann Todd, Elizabeth Todd Edwards, and Emilie Todd Helm.
+    surnames:
+      - Todd
+      - Owen
+      - Briggs
+      - Parker
+      - Humphreys
+      - Edwards
+      - Wallace
+      - Helm
+    lineageGroups:
+      - ancestor
+      - descendant_spouse
+      - colonial_sibling
+      - extended
+    supportsDirectMode: true
+  - id: harlan
+    label: Harlan Line
+    description: Illinois, Iowa, Washington, D.C., and Vermont lineage of Silas Harlan, U.S. Senator and Secretary of the Interior James Harlan, Ann Eliza Peck, and Mary Eunice Harlan Lincoln.
+    surnames:
+      - Harlan
+      - Conley
+      - Peck
+    lineageGroups:
+      - ancestor
+      - descendant_spouse
+    supportsDirectMode: true
 lineageSections:
   - id: pivot_and_descendants
-    title: Springfield & Washington Line (KY → IL → DC)
+    title: Springfield, Washington & Vermont Line (1809–1985)
     lineageGroups:
       - pivot_ancestor
       - descendant
   - id: ancestors
-    title: Virginia, Kentucky & Indiana Ancestors
+    title: Colonial & Frontier Ancestors (1622–1899)
     lineageGroups:
       - ancestor
-  - id: allied
-    title: Siblings, Spouses & Allied Lines
+  - id: spouses_and_siblings
+    title: Spouses & Collateral Siblings
     lineageGroups:
-      - colonial_sibling
       - descendant_spouse
+      - colonial_sibling
+  - id: allied
+    title: Extended Hanks & Todd Kin
+    lineageGroups:
       - extended
 featuredDocumentId: src_lincoln_autobiography_1859
 featuredKinshipPairs:
   - fromId: p_abraham_lincoln_1744
     toId: p_abraham_lincoln_1809
     label: Abraham Lincoln (1744) ↔ Abraham Lincoln (1809)
-    note: Grandfather and grandson sharing Virginia and Kentucky roots.
+    note: Grandfather and grandson sharing Rockingham County, Virginia and Kentucky frontier roots.
   - fromId: p_abraham_lincoln_1809
     toId: p_mary_todd_lincoln
     label: Abraham Lincoln ↔ Mary Ann Todd
-    note: Married in Springfield, Illinois in November 1842.
-  - fromId: p_thomas_lincoln
-    toId: p_robert_todd_lincoln
-    label: Thomas Lincoln ↔ Robert Todd Lincoln
-    note: Grandfather and eldest surviving grandson.
-  - fromId: p_levi_todd
-    toId: p_robert_todd_lincoln
-    label: Levi Todd ↔ Robert Todd Lincoln
-    note: Maternal great-grandfather from Lexington, Kentucky.
+    note: Married in Springfield, Illinois on November 4, 1842.
+  - fromId: p_samuel_lincoln_1622
+    toId: p_abraham_lincoln_1809
+    label: Samuel Lincoln (1622) ↔ Abraham Lincoln (1809)
+    note: Six generations from Hingham, Norfolk, England to Springfield, Illinois.
+  - fromId: p_abraham_lincoln_1809
+    toId: p_dennis_friend_hanks
+    label: Abraham Lincoln ↔ Dennis Friend Hanks
+    note: Maternal Hanks cousins raised together in Kentucky and Little Pigeon Creek, Indiana.
+  - fromId: p_abraham_lincoln_1809
+    toId: p_james_harlan
+    label: Abraham Lincoln ↔ Senator James Harlan
+    note: Cabinet colleagues whose children Robert Todd Lincoln and Mary Eunice Harlan married in 1868.
+  - fromId: p_samuel_lincoln_1622
+    toId: p_jessie_harlan_lincoln
+    label: Samuel Lincoln (1622) ↔ Jessie Harlan Lincoln (1875)
+    note: Eight generations spanning colonial Norfolk to Manchester, Vermont.
 migrationEras:
-  - id: appalachian_east
-    label: East & Capital
-    description: Virginia, Washington, D.C., and Vermont communities.
+  - id: british_isles
+    label: British Isles Origins
+    description: Hingham, Norfolk, England and County Longford, Ireland (1622–1737).
+    color: "#3B4D61"
+    minLng: -15.0
+  - id: colonial_seaboard
+    label: Colonial Seaboard
+    description: Hingham and Scituate, Massachusetts; Monmouth County, New Jersey; Berks and Chester Counties, Pennsylvania (1637–1785).
     color: "#1B2A41"
-    minLng: -82.0
-  - id: ohio_valley
-    label: Kentucky & Indiana
-    description: Hardin County, Lexington, and Spencer County settlements.
+    minLng: -77.8
+    maxLng: -68.0
+    endYear: 1785
+  - id: appalachian_frontier
+    label: Appalachian & Kentucky Frontier
+    description: Rockingham and Hampshire Counties, Virginia; Jefferson, Washington, Hardin, and Fayette Counties, Kentucky; Spencer County, Indiana (1768–1855).
     color: "#2F5245"
-    minLng: -88.0
-    maxLng: -82.0
-  - id: prairie_west
-    label: Illinois Prairie
-    description: New Salem and Springfield, Sangamon County, Illinois.
+    minLng: -87.8
+    maxLng: -77.8
+    endYear: 1855
+  - id: midwest_prairie
+    label: Illinois Prairie & Midwest
+    description: New Salem, Springfield, Macon and Coles Counties, Illinois; Chicago; and Mount Pleasant, Iowa (1816–1899).
     color: "#7A4612"
-    maxLng: -88.0
+    maxLng: -87.8
+  - id: capital_and_new_england
+    label: Washington & New England
+    description: Washington, D.C., Cambridge, Massachusetts, and Hildene in Manchester, Vermont (1856–1985).
+    color: "#5B3A5E"
+    minLng: -82.0
+    maxLng: -68.0
+    startYear: 1856
 mapDefaults:
-  centerLat: 39.2
-  centerLng: -83.5
-  zoom: 5
+  centerLat: 40.5
+  centerLng: -78.0
+  zoom: 4
   minSpanDeg: 1.5
 anchorYears:
+  - year: 1637
+    label: "1637"
+  - year: 1686
+    label: "1686"
+  - year: 1733
+    label: "1733"
   - year: 1782
     label: "1782"
   - year: 1809

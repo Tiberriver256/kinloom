@@ -1,3 +1,52 @@
+# British Isles Origins
+- id: pl_england
+  slug: england-uk
+  name: England
+  full_name: England, United Kingdom
+  place_type: country
+  parent_id: null
+  lat: 52.58
+  lng: 0.99
+
+- id: pl_norfolk_uk
+  slug: norfolk-england
+  name: Norfolk
+  full_name: Norfolk, England
+  place_type: county
+  parent_id: pl_england
+  lat: 52.62
+  lng: 1.00
+
+- id: pl_hingham_norfolk
+  slug: hingham-norfolk-england
+  name: Hingham (Norfolk)
+  full_name: Hingham, Norfolk, England
+  place_type: town
+  parent_id: pl_norfolk_uk
+  lat: 52.5805
+  lng: 0.9854
+  summary: East Anglian market town where Samuel Lincoln was baptized at St. Andrew's Parish Church on August 24, 1622 before sailing for Massachusetts Bay in 1637.
+
+- id: pl_ireland
+  slug: ireland
+  name: Ireland
+  full_name: Ireland
+  place_type: country
+  parent_id: null
+  lat: 53.73
+  lng: -7.79
+
+- id: pl_longford_ie
+  slug: county-longford-ireland
+  name: County Longford
+  full_name: County Longford, Ireland
+  place_type: county
+  parent_id: pl_ireland
+  lat: 53.7276
+  lng: -7.7931
+  summary: Irish midlands county where Todd family patriarch David Todd was born in April 1723 prior to emigrating to Pennsylvania in 1737.
+
+# United States — Colonial Seaboard
 - id: pl_usa
   slug: united-states
   name: United States
@@ -7,6 +56,115 @@
   lat: 39.5
   lng: -84.0
 
+- id: pl_massachusetts
+  slug: massachusetts-usa
+  name: Massachusetts
+  full_name: Massachusetts, USA
+  place_type: state
+  parent_id: pl_usa
+  lat: 42.30
+  lng: -71.40
+
+- id: pl_hingham_ma
+  slug: hingham-massachusetts
+  name: Hingham
+  full_name: Hingham, Plymouth County, Massachusetts, USA
+  place_type: town
+  parent_id: pl_massachusetts
+  lat: 42.2418
+  lng: -70.8898
+  summary: South Shore town settled by East Anglian emigrants in 1635; home of weaver Samuel Lincoln, Martha Lyford, and the 1681 Old Ship Meetinghouse.
+  photo_url: /media/place-old-ship-church-hingham.jpg
+  photo_caption: Old Ship Church (1681), Hingham, Massachusetts — Historic American Buildings Survey (HABS MASS,12-HING,5-17, Library of Congress, Public Domain).
+  historical_names:
+    - name: Bare Cove, Massachusetts Bay Colony
+      valid_from: "1633"
+      valid_to: "1635"
+    - name: Hingham, Suffolk County, Massachusetts Bay
+      valid_from: "1635"
+      valid_to: "1803"
+    - name: Hingham, Plymouth County, Massachusetts
+      valid_from: "1803"
+      valid_to: "present"
+
+- id: pl_scituate_ma
+  slug: scituate-massachusetts
+  name: Scituate
+  full_name: Scituate, Plymouth County, Massachusetts, USA
+  place_type: town
+  parent_id: pl_massachusetts
+  lat: 42.1959
+  lng: -70.7259
+  summary: Coastal Plymouth Colony town where ironmaster Mordecai Lincoln Sr. operated a bloomery forge, sawmill, and gristmill along Bound Brook.
+
+- id: pl_cambridge_ma
+  slug: cambridge-massachusetts
+  name: Cambridge
+  full_name: Cambridge, Middlesex County, Massachusetts, USA
+  place_type: town
+  parent_id: pl_massachusetts
+  lat: 42.3736
+  lng: -71.1097
+  summary: Seat of Harvard College, attended by Robert Todd Lincoln (Class of 1864) during his father's presidency.
+
+- id: pl_new_jersey
+  slug: new-jersey-usa
+  name: New Jersey
+  full_name: New Jersey, USA
+  place_type: state
+  parent_id: pl_usa
+  lat: 40.26
+  lng: -74.16
+
+- id: pl_monmouth_nj
+  slug: monmouth-county-new-jersey
+  name: Monmouth County
+  full_name: Monmouth County, New Jersey, USA
+  place_type: county
+  parent_id: pl_new_jersey
+  lat: 40.26
+  lng: -74.16
+  summary: Freehold and Machaponix settlement where Mordecai Lincoln Jr. married Hannah Salter and fathered "Virginia" John Lincoln in 1716.
+
+- id: pl_pennsylvania
+  slug: pennsylvania-usa
+  name: Pennsylvania
+  full_name: Pennsylvania, USA
+  place_type: state
+  parent_id: pl_usa
+  lat: 40.27
+  lng: -76.88
+
+- id: pl_berks_pa
+  slug: berks-county-pennsylvania
+  name: Berks County
+  full_name: Berks County, Pennsylvania, USA
+  place_type: county
+  parent_id: pl_pennsylvania
+  lat: 40.335
+  lng: -75.833
+  summary: Schuylkill River valley township of Exeter where Mordecai Lincoln Jr. built his 1733 stone homestead and where Capt. Abraham Lincoln was born in 1744.
+  photo_url: /media/place-mordecai-lincoln-house-pa.jpg
+  photo_caption: Mordecai Lincoln House (1733), Exeter Township, Berks County, Pennsylvania (CC0 Public Domain).
+  historical_names:
+    - name: Philadelphia County, Province of Pennsylvania
+      valid_from: "1682"
+      valid_to: "1752"
+    - name: Berks County, Pennsylvania
+      valid_from: "1752"
+      valid_to: "present"
+
+- id: pl_chester_pa
+  slug: chester-county-pennsylvania
+  name: Chester County
+  full_name: Chester County, Pennsylvania, USA
+  place_type: county
+  parent_id: pl_pennsylvania
+  lat: 39.97
+  lng: -75.75
+  summary: Southeastern Pennsylvania county settled by Scots-Irish immigrant David Todd and Hannah Owen, birthplace of Maj. Gen. Levi Todd in 1756.
+
+# Appalachian & Kentucky Frontier
 - id: pl_virginia
   slug: virginia-usa
   name: Virginia
@@ -24,7 +182,7 @@
   parent_id: pl_virginia
   lat: 38.51
   lng: -78.88
-  summary: Shenandoah Valley county formed in 1778 where Capt. Abraham Lincoln farmed along Linville Creek before migrating to Kentucky.
+  summary: Shenandoah Valley county formed in 1778 where "Virginia" John Lincoln and Capt. Abraham Lincoln farmed along Linville Creek before migrating to Kentucky.
   historical_names:
     - name: Augusta County, Colony of Virginia
       valid_from: "1745"
@@ -32,6 +190,16 @@
     - name: Rockingham County, Virginia
       valid_from: "1778"
       valid_to: "present"
+
+- id: pl_hampshire_va
+  slug: hampshire-county-virginia
+  name: Hampshire County
+  full_name: Hampshire County, Virginia, USA
+  place_type: county
+  parent_id: pl_virginia
+  lat: 39.31
+  lng: -78.61
+  summary: Potomac Highlands frontier county (now West Virginia) where Joseph Hanks and Lucy Hanks lived before crossing into Kentucky; disputed traditional birthplace of Nancy Hanks.
 
 - id: pl_kentucky
   slug: kentucky-usa
@@ -42,6 +210,26 @@
   lat: 37.84
   lng: -84.27
 
+- id: pl_jefferson_ky
+  slug: jefferson-county-kentucky
+  name: Jefferson County
+  full_name: Jefferson County, Kentucky, USA
+  place_type: county
+  parent_id: pl_kentucky
+  lat: 38.25
+  lng: -85.56
+  summary: Long Run Creek tract of 400 acres surveyed under Virginia Treasury Warrant No. 3334, where Capt. Abraham Lincoln was ambushed in May 1786.
+
+- id: pl_washington_ky
+  slug: washington-county-kentucky
+  name: Washington County
+  full_name: Washington County, Kentucky, USA
+  place_type: county
+  parent_id: pl_kentucky
+  lat: 37.75
+  lng: -85.25
+  summary: Beech Fork settlement where widow Bathsheba Lincoln raised her children and where Thomas Lincoln married Nancy Hanks on June 12, 1806.
+
 - id: pl_hardin_ky
   slug: hardin-county-kentucky
   name: Hardin County
@@ -50,7 +238,7 @@
   parent_id: pl_kentucky
   lat: 37.69
   lng: -85.86
-  summary: Central Kentucky county encompassing Sinking Spring and Knob Creek farms during Thomas and Nancy Lincoln's Kentucky years.
+  summary: Central Kentucky county encompassing Elizabethtown, Sinking Spring, and Knob Creek farms during Thomas Lincoln's Kentucky decades.
 
 - id: pl_hodgenville_ky
   slug: hodgenville-kentucky
@@ -60,7 +248,9 @@
   parent_id: pl_hardin_ky
   lat: 37.57
   lng: -85.74
-  summary: Sinking Spring farmstead three miles south of Hodgenville, birthplace of Abraham Lincoln in February 1809.
+  summary: Sinking Spring farmstead three miles south of Hodgenville, birthplace of Abraham Lincoln on February 12, 1809.
+  photo_url: /media/place-hodgenville-birthplace.jpg
+  photo_caption: Abraham Lincoln Birthplace Memorial Building, Hodgenville, Kentucky — National Archives (NAID 7720069, Public Domain).
   historical_names:
     - name: Hardin County, Kentucky
       valid_from: "1793"
@@ -77,8 +267,11 @@
   parent_id: pl_kentucky
   lat: 38.04
   lng: -84.50
-  summary: Bluegrass commercial center founded by early Kentucky settlers including Levi Todd and home to the Robert Smith Todd family.
+  summary: Bluegrass commercial center co-founded by Maj. Gen. Levi Todd and home of Robert Smith Todd, Eliza Ann Parker, and Mary Ann Todd on West Main Street.
+  photo_url: /media/place-lexington-todd-house.jpg
+  photo_caption: Historical marker at the Mary Todd Lincoln House, West Main Street, Lexington, Kentucky (Public Domain).
 
+# Ohio Valley & Indiana
 - id: pl_indiana
   slug: indiana-usa
   name: Indiana
@@ -105,8 +298,11 @@
   parent_id: pl_spencer_in
   lat: 38.12
   lng: -87.00
-  summary: Southern Indiana timberland homestead cleared by Thomas Lincoln in late 1816 and occupied by the family for fourteen years.
+  summary: Southern Indiana timberland homestead cleared by Thomas Lincoln in December 1816 and occupied by the Lincoln, Hanks, and Johnston families for fourteen years.
+  photo_url: /media/place-pigeon-creek-farm.jpg
+  photo_caption: Reconstructed pioneer living-history farm at Little Pigeon Creek — Lincoln Boyhood National Memorial (National Park Service, Public Domain).
 
+# Illinois Prairie & Midwest
 - id: pl_illinois
   slug: illinois-usa
   name: Illinois
@@ -115,6 +311,26 @@
   parent_id: pl_usa
   lat: 40.0
   lng: -89.2
+
+- id: pl_macon_il
+  slug: macon-county-illinois
+  name: Macon County
+  full_name: Macon County, Illinois, USA
+  place_type: county
+  parent_id: pl_illinois
+  lat: 39.84
+  lng: -88.95
+  summary: Sangamon River bottomland near Decatur where Thomas Lincoln, Abraham Lincoln, and cousin John Hanks split fence rails in 1830.
+
+- id: pl_coles_il
+  slug: coles-county-illinois
+  name: Coles County
+  full_name: Coles County, Illinois, USA
+  place_type: county
+  parent_id: pl_illinois
+  lat: 39.48
+  lng: -88.22
+  summary: Goosenest Prairie farmstead south of Charleston where Thomas Lincoln, Sarah Bush Johnston Lincoln, and Dennis Friend Hanks settled permanently from 1831 onward.
 
 - id: pl_sangamon_il
   slug: sangamon-county-illinois
@@ -133,7 +349,7 @@
   parent_id: pl_sangamon_il
   lat: 39.98
   lng: -89.85
-  summary: River bluff village overlooking the Sangamon River where Abraham Lincoln worked as store clerk, postmaster, and surveyor from 1831 to 1837.
+  summary: River bluff village overlooking the Sangamon River where Abraham Lincoln worked as store clerk, postmaster, Black Hawk War captain, and deputy surveyor (1831–1837).
 
 - id: pl_springfield_il
   slug: springfield-illinois
@@ -143,10 +359,40 @@
   parent_id: pl_sangamon_il
   lat: 39.80
   lng: -89.64
-  summary: Capital of Illinois from 1839 and home of the Lincoln and Edwards households on Eighth Street and Aristocracy Hill.
-  photo_url: /media/plate-springfield-home.svg
-  photo_caption: Archival line illustration of the Eighth Street residence in Springfield, Illinois.
+  summary: Capital of Illinois from 1839 and home of the Lincoln, Edwards, and Wallace households on Eighth Street and Aristocracy Hill.
+  photo_url: /media/place-springfield-home-1865.jpg
+  photo_caption: Abraham Lincoln's Eighth Street residence in Springfield, Illinois, draped in mourning, May 1865 (Public Domain).
 
+- id: pl_chicago_il
+  slug: chicago-illinois
+  name: Chicago
+  full_name: Chicago, Cook County, Illinois, USA
+  place_type: town
+  parent_id: pl_illinois
+  lat: 41.88
+  lng: -87.63
+  summary: Commercial metropolis where Robert Todd Lincoln practiced corporate law, led the Pullman Company, and raised his three children with Mary Eunice Harlan.
+
+- id: pl_iowa
+  slug: iowa-usa
+  name: Iowa
+  full_name: Iowa, USA
+  place_type: state
+  parent_id: pl_usa
+  lat: 41.88
+  lng: -93.10
+
+- id: pl_mount_pleasant_ia
+  slug: mount-pleasant-iowa
+  name: Mount Pleasant
+  full_name: Mount Pleasant, Henry County, Iowa, USA
+  place_type: town
+  parent_id: pl_iowa
+  lat: 40.9636
+  lng: -91.5580
+  summary: Southeastern Iowa college town where James Harlan served as President of Iowa Wesleyan University and built the Harlan-Lincoln House.
+
+# Washington, D.C. & New England
 - id: pl_washington_dc
   slug: washington-dc
   name: Washington, D.C.
@@ -155,14 +401,27 @@
   parent_id: pl_usa
   lat: 38.90
   lng: -77.04
-  summary: Federal capital where Abraham and Mary Lincoln lived during the Civil War years (1861–1865) and Robert Todd Lincoln later served as Secretary of War.
+  summary: Federal capital where Abraham and Mary Lincoln lived during the Civil War (1861–1865), James Harlan served as Senator and Secretary of the Interior, and Robert Todd Lincoln served as Secretary of War.
+  photo_url: /media/place-white-house-1861.jpg
+  photo_caption: The White House, Washington, D.C., 1861–1865 — Mathew Brady studio, National Archives (NAID 528200, Public Domain).
+
+- id: pl_vermont
+  slug: vermont-usa
+  name: Vermont
+  full_name: Vermont, USA
+  place_type: state
+  parent_id: pl_usa
+  lat: 44.00
+  lng: -72.70
 
 - id: pl_manchester_vt
   slug: manchester-vermont
   name: Manchester
   full_name: Manchester, Bennington County, Vermont, USA
   place_type: town
-  parent_id: pl_usa
+  parent_id: pl_vermont
   lat: 43.16
   lng: -73.07
-  summary: Green Mountain town where Robert Todd Lincoln and Mary Eunice Harlan built their summer estate Hildene in 1905.
+  summary: Green Mountain town beneath Mount Equinox where Robert Todd Lincoln and Mary Eunice Harlan built their Georgian Revival estate Hildene in 1905.
+  photo_url: /media/place-manchester-vermont.jpg
+  photo_caption: Mount Equinox and Manchester, Vermont, c. 1905 — New York Public Library historic postcard (Public Domain).

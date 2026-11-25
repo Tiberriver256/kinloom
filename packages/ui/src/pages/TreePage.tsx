@@ -21,6 +21,11 @@ import {
 } from '../lib/treeGestures.js';
 import { Link, useSearchParams } from 'react-router-dom';
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import {
+  formatLineageGroupLabel,
+  formatTreeCardName,
+  formatTreeCardPlace,
+} from '../lib/treeNodeDisplay.js';
 import { initialsOf, resolveAssetUrl } from '../components/Atoms.js';
 import { ExplorerTopBar } from '../components/ExplorerTopBar.js';
 import { useArchiveData } from '../context/ArchiveDataContext.js';
@@ -207,10 +212,11 @@ const TreeNodeItemImpl: React.FC<{
           {initials}
         </text>
       )}
+      <title>{p.full_name}</title>
       <text
         x={38}
         y={19}
-        fontSize="10.8"
+        fontSize="10"
         fontWeight="700"
         fontFamily="Newsreader, Georgia, serif"
         fill={isSelected ? '#FCF9F2' : '#1B2A41'}
@@ -220,7 +226,7 @@ const TreeNodeItemImpl: React.FC<{
       <text
         x={38}
         y={33}
-        fontSize="8.6"
+        fontSize="8.2"
         fontFamily="IBM Plex Mono, monospace"
         fill={isSelected ? '#EAE1CE' : '#4E4A42'}
       >
@@ -493,10 +499,11 @@ export const TreePage: React.FC = () => {
         const p = node.person;
         const pl = p.primary_place_id ? placesById.get(p.primary_place_id) : undefined;
         const rawThumb = personThumbMap.get(p.id) || p.portrait_url;
+        const cardPlace = formatTreeCardPlace(pl, placesById);
         return {
           node,
-          displayName: p.full_name.length > 18 ? `${p.full_name.slice(0, 17)}…` : p.full_name,
-          lifespanPlace: `${p.birth_year || '?'}–${p.death_year || '?'}${pl ? ` · ${pl.name.slice(0, 10)}` : ''}`,
+          displayName: formatTreeCardName(p.full_name),
+          lifespanPlace: `${p.birth_year || '?'}–${p.death_year || '?'}${cardPlace ? ` · ${cardPlace}` : ''}`,
           thumbUrl: rawThumb ? resolveAssetUrl(rawThumb, baseUrl) : null,
           initials: initialsOf(p.full_name),
         };
@@ -1112,7 +1119,7 @@ export const TreePage: React.FC = () => {
           <div className="tree-popover">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.78rem', color: 'var(--radar-copresence)' }}>
-                {selectedPerson.lineage_group.toUpperCase()}
+                {formatLineageGroupLabel(selectedPerson.lineage_group)}
               </span>
               <button
                 type="button"

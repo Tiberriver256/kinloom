@@ -6,7 +6,14 @@ import React, { useMemo, useState } from 'react';
 import { ExplorerTopBar } from '../components/ExplorerTopBar.js';
 import { KinloomFooter } from '../components/KinloomFooter.js';
 import { LocalSurveyMap } from '../components/LocalSurveyMap.js';
+import { MediaPlayer } from '../components/MediaPlayer.js';
+import { PluginSlot } from '../plugins/PluginContext.js';
 import { useArchiveData } from '../context/ArchiveDataContext.js';
+import { CreateEntityModal } from '../components/wiki/CreateEntityModal.js';
+import { EntityEditDrawer } from '../components/wiki/EntityEditDrawer.js';
+import { RevisionHistoryPanel } from '../components/wiki/RevisionHistoryPanel.js';
+import { TalkPanel } from '../components/wiki/TalkPanel.js';
+import { WikiActionBar, type WikiEntityTab } from '../components/wiki/WikiActionBar.js';
 
 type ScopeMode = 'exact' | 'radius15' | 'county';
 
@@ -17,6 +24,8 @@ export const PlacePage: React.FC = () => {
 
   const [scopeMode, setScopeMode] = useState<ScopeMode>('radius15');
   const [decadeFilter, setDecadeFilter] = useState<string>('all');
+  const [wikiTab, setWikiTab] = useState<WikiEntityTab>('read');
+  const [createModalOpen, setCreateModalOpen] = useState(false);
 
   const place = slug ? placesBySlug.get(slug) : undefined;
 
@@ -207,11 +216,40 @@ export const PlacePage: React.FC = () => {
 
   const spanYears = Math.max(1, occupancyRows.maxYear - occupancyRows.minYear);
   const placePhotoSrc = place.photo_url ? resolveAssetUrl(place.photo_url, baseUrl) : '';
+  const placePhotoMedia = place.photo_url
+    ? {
+        id: `place-photo-${place.id}`,
+        kind: 'milestone' as const,
+        file: place.photo_url,
+        caption: place.photo_caption || `Archival view of ${place.full_name}`,
+      }
+    : null;
 
   return (
     <div>
       <ExplorerTopBar />
       <main className="place-page">
+        <WikiActionBar
+          activeTab={wikiTab}
+          onSelectTab={(nextTab) => {
+            setWikiTab(nextTab);
+          }}
+          onCreateRecord={() => {
+            setCreateModalOpen(true);
+          }}
+          entityLabel={place.full_name}
+        />
+
+        <PluginSlot name="placeDetail" place={place} />
+
+        {wikiTab === 'history' && (
+          <RevisionHistoryPanel entityType="place" entityId={place.id} />
+        )}
+
+        {wikiTab === 'talk' && (
+          <TalkPanel entityType="place" entityId={place.id} entityTitle={place.full_name} />
+        )}
+
         {occupancyRows.rows.length > 0 && (
           <div style={{ marginBottom: 14, display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'center' }}>
             <Link to={`/time?year=${occupancyRows.minYear}`} className="ink-link-btn">
@@ -302,15 +340,9 @@ export const PlacePage: React.FC = () => {
                   <SourceCitationTag sources={place.sources} sourcesById={sourcesById} />
                 )}
               </div>
-              {placePhotoSrc && (
+              {placePhotoSrc && placePhotoMedia && (
                 <figure className="place-history-figure">
-                  <a href={placePhotoSrc} target="_blank" rel="noreferrer">
-                    <img
-                      src={placePhotoSrc}
-                      alt={place.photo_caption || `Archival view of ${place.full_name}`}
-                      loading="lazy"
-                    />
-                  </a>
+                  <MediaPlayer media={placePhotoMedia} baseUrl={baseUrl} variant="full" />
                   {place.photo_caption && <figcaption>{place.photo_caption}</figcaption>}
                 </figure>
               )}
@@ -431,6 +463,38 @@ export const PlacePage: React.FC = () => {
           )}
         </section>
       </main>
+      <EntityEditDrawer
+        open={wikiTab === 'edit'}
+        entityType="place"
+        entityId={place.id}
+        revisionId={bundle.meta.max_revision_id ?? 1}
+        initialData={{
+          id: place.id,
+          slug: place.slug,
+          name: place.name,
+          full_name: place.full_name,
+          place_type: place.place_type,
+          parent_id: place.parent_id,
+          lat: place.lat,
+          lng: place.lng,
+          summary: place.summary ?? '',
+          photo_url: place.photo_url ?? null,
+          photo_caption: place.photo_caption ?? null,
+          has_primary_source: place.has_primary_source,
+        }}
+        hasPrimarySource={place.has_primary_source ?? true}
+        title={place.full_name}
+        onClose={() => {
+          setWikiTab('read');
+        }}
+      />
+      <CreateEntityModal
+        open={createModalOpen}
+        defaultKind="place"
+        onClose={() => {
+          setCreateModalOpen(false);
+        }}
+      />
       <KinloomFooter />
     </div>
   );

@@ -7,9 +7,9 @@
     "examples/*"
   ],
   "scripts": {
-    "build": "npm run build --workspace=@kinloom/core && npm run build --workspace=@kinloom/server && npm run build --workspace=@kinloom/ui && npm run build --workspace=@kinloom/demo",
-    "typecheck": "tsc --noEmit -p packages/core/tsconfig.json && tsc --noEmit -p packages/server/tsconfig.json && tsc --noEmit -p packages/ui/tsconfig.json && tsc --noEmit -p examples/demo/tsconfig.json && tsc --noEmit -p e2e/tsconfig.json",
-    "lint": "oxlint packages/core/src packages/server/src packages/ui/src examples/demo/src e2e",
+    "build": "npm run build --workspace=@kinloom/core && npm run build --workspace=@kinloom/server && npm run build --workspace=@kinloom/worker && npm run build --workspace=@kinloom/cli && npm run build --workspace=@kinloom/ui && npm run build --workspace=@kinloom/demo",
+    "typecheck": "tsc --noEmit -p packages/core/tsconfig.json && tsc --noEmit -p packages/server/tsconfig.json && tsc --noEmit -p packages/worker/tsconfig.json && tsc --noEmit -p packages/cli/tsconfig.json && tsc --noEmit -p packages/ui/tsconfig.json && tsc --noEmit -p examples/demo/tsconfig.json && tsc --noEmit -p e2e/tsconfig.json",
+    "lint": "oxlint packages/core/src packages/server/src packages/worker/src packages/cli/src packages/ui/src examples/demo/src e2e",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "npm run build:data --workspace=@kinloom/demo && npm run build --workspace=@kinloom/demo && playwright test",

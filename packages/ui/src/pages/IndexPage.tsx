@@ -6,9 +6,11 @@ import {
 } from '@kinloom/core';
 import React, { useMemo, useState } from 'react';
 import { initialsOf, resolveAssetUrl } from '../components/Atoms.js';
+import { CreateEntityModal } from '../components/wiki/CreateEntityModal.js';
 import { ExplorerTopBar } from '../components/ExplorerTopBar.js';
 import { KinloomFooter } from '../components/KinloomFooter.js';
 import { Link } from 'react-router-dom';
+import { PluginSlot } from '../plugins/PluginContext.js';
 import { useArchiveData } from '../context/ArchiveDataContext.js';
 
 function byBirthThenName(a: Person, b: Person): number {
@@ -32,10 +34,12 @@ interface ResolvedSection {
 }
 
 export const IndexPage: React.FC = () => {
-  const { siteConfig, baseUrl, bundle, placesById, sourcesById, loading, error } = useArchiveData();
+  const { siteConfig, baseUrl, bundle, placesById, sourcesById, capabilities, loading, error } =
+    useArchiveData();
   const [onlyWithMedia, setOnlyWithMedia] = useState<boolean>(false);
   const [query, setQuery] = useState<string>('');
   const [exportStatus, setExportStatus] = useState<string>('');
+  const [createOpen, setCreateOpen] = useState<boolean>(false);
 
   const publicPeople = useMemo(() => {
     if (!bundle) {
@@ -187,6 +191,8 @@ export const IndexPage: React.FC = () => {
           </div>
         </section>
 
+        <PluginSlot name="indexHero" />
+
         {loading && <p>Loading compiled archive bundle…</p>}
         {error && <p>Error loading archive: {error}</p>}
 
@@ -228,6 +234,17 @@ export const IndexPage: React.FC = () => {
                     </button>
                   )}
                 </div>
+                {capabilities.canEdit && (
+                  <button
+                    type="button"
+                    className="pill-btn active"
+                    onClick={() => {
+                      setCreateOpen(true);
+                    }}
+                  >
+                    + New Record
+                  </button>
+                )}
                 <button
                   type="button"
                   className="pill-btn index-export-btn"
@@ -313,6 +330,12 @@ export const IndexPage: React.FC = () => {
           </>
         )}
       </main>
+      <CreateEntityModal
+        open={createOpen}
+        onClose={() => {
+          setCreateOpen(false);
+        }}
+      />
       <KinloomFooter />
     </div>
   );

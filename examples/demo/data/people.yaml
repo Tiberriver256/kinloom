@@ -1,3 +1,217 @@
+# Generation 1 (1622–1693) — Norfolk, England & Hingham, Massachusetts
+- id: p_samuel_lincoln_1622
+  slug: samuel-lincoln-1622
+  full_name: Samuel Lincoln
+  given_name: Samuel
+  surname: Lincoln
+  alt_names:
+    - Samuel Lincoln of Hingham
+  sex: M
+  is_living: false
+  lineage_group: ancestor
+  branch: lincoln
+  birth_edtf: "1622-08-24"
+  death_edtf: "1690-05-26"
+  portrait_url: null
+
+- id: p_martha_lyford
+  slug: martha-lyford
+  full_name: Martha Lyford
+  given_name: Martha
+  surname: Lyford
+  alt_names:
+    - Martha Lincoln
+  sex: F
+  is_living: false
+  lineage_group: ancestor
+  branch: lincoln
+  birth_edtf: "1625~"
+  death_edtf: "1693-04-10"
+  portrait_url: null
+
+# Generation 2 (1650–1728) — Hingham & Scituate, Massachusetts
+- id: p_samuel_lincoln_jr
+  slug: samuel-lincoln-jr
+  full_name: Samuel Lincoln Jr.
+  given_name: Samuel
+  surname: Lincoln
+  alt_names: []
+  sex: M
+  is_living: false
+  lineage_group: colonial_sibling
+  branch: lincoln
+  birth_edtf: "1650-08-25"
+  death_edtf: "1721-03"
+  portrait_url: null
+
+- id: p_mordecai_lincoln_sr
+  slug: mordecai-lincoln-sr
+  full_name: Mordecai Lincoln Sr.
+  given_name: Mordecai
+  surname: Lincoln
+  alt_names:
+    - Mordecai Lincoln of Scituate
+  sex: M
+  is_living: false
+  lineage_group: ancestor
+  branch: lincoln
+  birth_edtf: "1657-06-14"
+  death_edtf: "1727-11-28"
+  portrait_url: null
+
+- id: p_sarah_jones_lincoln
+  slug: sarah-jones-lincoln
+  full_name: Sarah Jones
+  given_name: Sarah
+  surname: Jones
+  alt_names:
+    - Sarah Lincoln
+  sex: F
+  is_living: false
+  lineage_group: ancestor
+  branch: lincoln
+  birth_edtf: "1660~"
+  death_edtf: "1701~"
+  portrait_url: null
+
+# Generation 3 (1686–1745) — Massachusetts, New Jersey & Pennsylvania
+- id: p_mordecai_lincoln_jr
+  slug: mordecai-lincoln-jr
+  full_name: Mordecai Lincoln Jr.
+  given_name: Mordecai
+  surname: Lincoln
+  alt_names:
+    - Mordecai Lincoln of Exeter Township
+  sex: M
+  is_living: false
+  lineage_group: ancestor
+  branch: lincoln
+  birth_edtf: "1686-04-24"
+  death_edtf: "1736-05-12"
+  portrait_url: null
+
+- id: p_hannah_salter
+  slug: hannah-salter
+  full_name: Hannah Salter
+  given_name: Hannah
+  surname: Salter
+  alt_names:
+    - Hannah Lincoln
+  sex: F
+  is_living: false
+  lineage_group: ancestor
+  branch: lincoln
+  birth_edtf: "1692~"
+  death_edtf: "1727~"
+  portrait_url: null
+
+- id: p_abraham_lincoln_1688
+  slug: abraham-lincoln-1688
+  full_name: Abraham Lincoln (1688)
+  given_name: Abraham
+  surname: Lincoln
+  alt_names:
+    - Abraham Lincoln of Springfield, Pennsylvania
+  sex: M
+  is_living: false
+  lineage_group: colonial_sibling
+  branch: lincoln
+  birth_edtf: "1688-01-13"
+  death_edtf: "1745-04"
+  portrait_url: null
+
+# Generation 4 (1716–1806) — Pennsylvania, Virginia, Ireland & Kentucky
+- id: p_john_lincoln_1716
+  slug: virginia-john-lincoln
+  full_name: Virginia John Lincoln
+  given_name: John
+  surname: Lincoln
+  alt_names:
+    - "\"Virginia\" John Lincoln"
+    - John Lincoln of Linville Creek
+  sex: M
+  is_living: false
+  lineage_group: ancestor
+  branch: lincoln
+  birth_edtf: "1716-05-03"
+  death_edtf: "1788-11"
+  portrait_url: null
+
+- id: p_rebecca_flowers_morris
+  slug: rebecca-flowers-morris
+  full_name: Rebecca Flowers Morris
+  given_name: Rebecca
+  surname: Morris
+  alt_names:
+    - Rebecca Flowers Lincoln
+  sex: F
+  is_living: false
+  lineage_group: ancestor
+  branch: lincoln
+  birth_edtf: "1720-03-30"
+  death_edtf: "1806-07-20"
+  portrait_url: null
+
+- id: p_david_todd_1723
+  slug: david-todd-1723
+  full_name: David Todd
+  given_name: David
+  surname: Todd
+  alt_names:
+    - David Todd of County Longford
+  sex: M
+  is_living: false
+  lineage_group: ancestor
+  branch: todd_edwards
+  birth_edtf: "1723-04-08"
+  death_edtf: "1785-02-08"
+  portrait_url: null
+
+- id: p_hannah_owen_todd
+  slug: hannah-owen-todd
+  full_name: Hannah Owen
+  given_name: Hannah
+  surname: Owen
+  alt_names:
+    - Hannah Todd
+  sex: F
+  is_living: false
+  lineage_group: ancestor
+  branch: todd_edwards
+  birth_edtf: "1729"
+  death_edtf: "1805"
+  portrait_url: null
+
+- id: p_joseph_hanks
+  slug: joseph-hanks
+  full_name: Joseph Hanks
+  given_name: Joseph
+  surname: Hanks
+  alt_names: []
+  sex: M
+  is_living: false
+  lineage_group: ancestor
+  branch: hanks
+  birth_edtf: "1725~"
+  death_edtf: "1793"
+  portrait_url: null
+
+- id: p_ann_nanny_lee
+  slug: ann-lee-hanks
+  full_name: Ann Nanny Lee
+  given_name: Ann
+  surname: Lee
+  alt_names:
+    - Nanny Hanks
+  sex: F
+  is_living: false
+  lineage_group: ancestor
+  branch: hanks
+  birth_edtf: "1730~"
+  death_edtf: "1795~"
+  portrait_url: null
+
+# Generation 5 (1742–1836) — Virginia & Kentucky Frontier
 - id: p_abraham_lincoln_1744
   slug: abraham-lincoln-1744
   full_name: Abraham Lincoln (1744)
@@ -8,7 +222,7 @@
   sex: M
   is_living: false
   lineage_group: ancestor
-  branch: lincoln_hanks
+  branch: lincoln
   birth_edtf: "1744-05-13"
   death_edtf: "1786-05"
   portrait_url: null
@@ -23,9 +237,23 @@
   sex: F
   is_living: false
   lineage_group: ancestor
-  branch: lincoln_hanks
+  branch: lincoln
   birth_edtf: "1742~"
   death_edtf: "1836"
+  portrait_url: null
+
+- id: p_robert_todd_1754
+  slug: robert-todd-1754
+  full_name: Col. Robert Todd
+  given_name: Robert
+  surname: Todd
+  alt_names: []
+  sex: M
+  is_living: false
+  lineage_group: colonial_sibling
+  branch: todd_edwards
+  birth_edtf: "1754"
+  death_edtf: "1814"
   portrait_url: null
 
 - id: p_levi_todd
@@ -58,6 +286,65 @@
   death_edtf: "1800-07"
   portrait_url: null
 
+- id: p_lucy_hanks
+  slug: lucy-hanks
+  full_name: Lucy Hanks
+  given_name: Lucy
+  surname: Hanks
+  alt_names:
+    - Lucy Sparrow
+  sex: F
+  is_living: false
+  lineage_group: ancestor
+  branch: hanks
+  birth_edtf: "1765~"
+  death_edtf: "1825~"
+  portrait_url: null
+
+- id: p_william_hanks
+  slug: william-hanks
+  full_name: William Hanks
+  given_name: William
+  surname: Hanks
+  alt_names: []
+  sex: M
+  is_living: false
+  lineage_group: extended
+  branch: hanks
+  birth_edtf: "1766~"
+  death_edtf: "1852"
+  portrait_url: null
+
+- id: p_nancy_hanks_sr
+  slug: nancy-hanks-sr
+  full_name: Nancy Hanks (Sr.)
+  given_name: Nancy
+  surname: Hanks
+  alt_names:
+    - Nancy Hanks Hall
+  sex: F
+  is_living: false
+  lineage_group: extended
+  branch: hanks
+  birth_edtf: "1770~"
+  death_edtf: "1840~"
+  portrait_url: null
+
+# Generation 6 (1771–1875) — Kentucky, Indiana, Illinois & Iowa
+- id: p_mordecai_lincoln_1771
+  slug: mordecai-lincoln-1771
+  full_name: Mordecai Lincoln III
+  given_name: Mordecai
+  surname: Lincoln
+  alt_names: []
+  sex: M
+  is_living: false
+  lineage_group: colonial_sibling
+  branch: lincoln
+  birth_edtf: "1771"
+  death_edtf: "1830-12"
+  portrait_url: null
+
 - id: p_thomas_lincoln
   slug: thomas-lincoln
   full_name: Thomas Lincoln
@@ -67,10 +354,10 @@
   sex: M
   is_living: false
   lineage_group: ancestor
-  branch: lincoln_hanks
+  branch: lincoln
   birth_edtf: "1778-01-06"
   death_edtf: "1851-01-17"
-  portrait_url: /media/portrait-thomas-lincoln.svg
+  portrait_url: /media/portrait-thomas-lincoln.jpg
 
 - id: p_nancy_hanks
   slug: nancy-hanks
@@ -82,7 +369,7 @@
   sex: F
   is_living: false
   lineage_group: ancestor
-  branch: lincoln_hanks
+  branch: hanks
   birth_edtf: "1784-02-05"
   death_edtf: "1818-10-05"
   portrait_url: null
@@ -97,10 +384,10 @@
   sex: F
   is_living: false
   lineage_group: descendant_spouse
-  branch: lincoln_hanks
+  branch: hanks
   birth_edtf: "1788-12-13"
   death_edtf: "1869-04-12"
-  portrait_url: null
+  portrait_url: /media/portrait-sarah-bush-lincoln.jpg
 
 - id: p_robert_smith_todd
   slug: robert-smith-todd
@@ -114,7 +401,7 @@
   branch: todd_edwards
   birth_edtf: "1791-02-25"
   death_edtf: "1849-07-16"
-  portrait_url: null
+  portrait_url: /media/portrait-robert-smith-todd.jpg
 
 - id: p_eliza_parker
   slug: eliza-ann-parker
@@ -131,6 +418,95 @@
   death_edtf: "1825-07-06"
   portrait_url: null
 
+- id: p_elizabeth_humphreys_todd
+  slug: elizabeth-humphreys-todd
+  full_name: Elizabeth Humphreys Todd
+  given_name: Elizabeth
+  surname: Humphreys
+  alt_names:
+    - Betsy Humphreys Todd
+  sex: F
+  is_living: false
+  lineage_group: descendant_spouse
+  branch: todd_edwards
+  birth_edtf: "1800"
+  death_edtf: "1874"
+  portrait_url: null
+
+- id: p_silas_harlan_1796
+  slug: silas-harlan-1796
+  full_name: Silas Harlan
+  given_name: Silas
+  surname: Harlan
+  alt_names: []
+  sex: M
+  is_living: false
+  lineage_group: ancestor
+  branch: harlan
+  birth_edtf: "1796-10-08"
+  death_edtf: "1869-09-12"
+  portrait_url: null
+
+- id: p_mary_conley_harlan
+  slug: mary-conley-harlan
+  full_name: Mary Conley
+  given_name: Mary
+  surname: Conley
+  alt_names:
+    - Mary Harlan
+  sex: F
+  is_living: false
+  lineage_group: ancestor
+  branch: harlan
+  birth_edtf: "1799-02-22"
+  death_edtf: "1875-06-14"
+  portrait_url: null
+
+# Generation 7 (1799–1930) — Pivot Generation (Abraham Lincoln, Mary Ann Todd, Cousins & In-Laws)
+- id: p_dennis_friend_hanks
+  slug: dennis-friend-hanks
+  full_name: Dennis Friend Hanks
+  given_name: Dennis Friend
+  surname: Hanks
+  alt_names:
+    - Dennis Hanks
+  sex: M
+  is_living: false
+  lineage_group: extended
+  branch: hanks
+  birth_edtf: "1799-05-15"
+  death_edtf: "1892-10-31"
+  portrait_url: /media/portrait-dennis-hanks.jpg
+
+- id: p_john_hanks
+  slug: john-hanks
+  full_name: John Hanks
+  given_name: John
+  surname: Hanks
+  alt_names: []
+  sex: M
+  is_living: false
+  lineage_group: extended
+  branch: hanks
+  birth_edtf: "1802-02-09"
+  death_edtf: "1889-07-01"
+  portrait_url: /media/portrait-john-hanks.jpg
+
+- id: p_elizabeth_johnston_hanks
+  slug: elizabeth-johnston-hanks
+  full_name: Elizabeth Johnston Hanks
+  given_name: Elizabeth
+  surname: Johnston
+  alt_names:
+    - Elizabeth Hanks
+  sex: F
+  is_living: false
+  lineage_group: extended
+  branch: hanks
+  birth_edtf: "1807"
+  death_edtf: "1864"
+  portrait_url: null
+
 - id: p_sarah_lincoln_grigsby
   slug: sarah-lincoln-grigsby
   full_name: Sarah Lincoln Grigsby
@@ -141,7 +517,7 @@
   sex: F
   is_living: false
   lineage_group: colonial_sibling
-  branch: lincoln_hanks
+  branch: lincoln
   birth_edtf: "1807-02-10"
   death_edtf: "1828-01-20"
   portrait_url: null
@@ -156,25 +532,24 @@
   sex: M
   is_living: false
   lineage_group: pivot_ancestor
-  branch: lincoln_hanks
+  branch: lincoln
   birth_edtf: "1809-02-12"
   death_edtf: "1865-04-15"
-  portrait_url: /media/portrait-abraham-lincoln.svg
+  portrait_url: /media/portrait-abraham-lincoln.jpg
 
-- id: p_mary_todd_lincoln
-  slug: mary-ann-todd
-  full_name: Mary Ann Todd
-  given_name: Mary Ann
-  surname: Todd
-  alt_names:
-    - Mary Todd Lincoln
-  sex: F
+- id: p_thomas_lincoln_jr
+  slug: thomas-lincoln-jr
+  full_name: Thomas Lincoln Jr.
+  given_name: Thomas
+  surname: Lincoln
+  alt_names: []
+  sex: M
   is_living: false
-  lineage_group: descendant_spouse
-  branch: todd_edwards
-  birth_edtf: "1818-12-13"
-  death_edtf: "1882-07-16"
-  portrait_url: /media/portrait-mary-todd.svg
+  lineage_group: colonial_sibling
+  branch: lincoln
+  birth_edtf: "1812"
+  death_edtf: "1812"
+  portrait_url: null
 
 - id: p_elizabeth_todd_edwards
   slug: elizabeth-todd-edwards
@@ -191,6 +566,96 @@
   death_edtf: "1888-02-22"
   portrait_url: null
 
+- id: p_levi_o_todd
+  slug: levi-o-todd
+  full_name: Levi O. Todd
+  given_name: Levi
+  surname: Todd
+  alt_names: []
+  sex: M
+  is_living: false
+  lineage_group: extended
+  branch: todd_edwards
+  birth_edtf: "1815"
+  death_edtf: "1864"
+  portrait_url: null
+
+- id: p_frances_todd_wallace
+  slug: frances-todd-wallace
+  full_name: Frances Todd Wallace
+  given_name: Frances
+  surname: Todd
+  alt_names:
+    - Frances Wallace
+  sex: F
+  is_living: false
+  lineage_group: extended
+  branch: todd_edwards
+  birth_edtf: "1817-03-07"
+  death_edtf: "1899-08-14"
+  portrait_url: null
+
+- id: p_mary_todd_lincoln
+  slug: mary-ann-todd
+  full_name: Mary Ann Todd
+  given_name: Mary Ann
+  surname: Todd
+  alt_names:
+    - Mary Todd Lincoln
+  sex: F
+  is_living: false
+  lineage_group: descendant_spouse
+  branch: todd_edwards
+  birth_edtf: "1818-12-13"
+  death_edtf: "1882-07-16"
+  portrait_url: /media/portrait-mary-todd.jpg
+
+- id: p_emilie_todd_helm
+  slug: emilie-todd-helm
+  full_name: Emilie Todd Helm
+  given_name: Emilie
+  surname: Todd
+  alt_names:
+    - Little Sister Emilie
+  sex: F
+  is_living: false
+  lineage_group: extended
+  branch: todd_edwards
+  birth_edtf: "1836-11-11"
+  death_edtf: "1930-02-20"
+  portrait_url: null
+
+- id: p_james_harlan
+  slug: james-harlan
+  full_name: Senator James Harlan
+  given_name: James
+  surname: Harlan
+  alt_names:
+    - James Harlan
+  sex: M
+  is_living: false
+  lineage_group: ancestor
+  branch: harlan
+  birth_edtf: "1820-08-26"
+  death_edtf: "1899-10-05"
+  portrait_url: /media/portrait-james-harlan.jpg
+
+- id: p_ann_eliza_peck
+  slug: ann-eliza-peck
+  full_name: Ann Eliza Peck
+  given_name: Ann Eliza
+  surname: Peck
+  alt_names:
+    - Ann Eliza Harlan
+  sex: F
+  is_living: false
+  lineage_group: ancestor
+  branch: harlan
+  birth_edtf: "1824-03-29"
+  death_edtf: "1884-09-04"
+  portrait_url: null
+
+# Generation 8 (1843–1937) — Children of Abraham & Mary Lincoln + Mary Eunice Harlan
 - id: p_robert_todd_lincoln
   slug: robert-todd-lincoln
   full_name: Robert Todd Lincoln
@@ -200,10 +665,10 @@
   sex: M
   is_living: false
   lineage_group: descendant
-  branch: lincoln_hanks
+  branch: lincoln
   birth_edtf: "1843-08-01"
   death_edtf: "1926-07-26"
-  portrait_url: /media/portrait-robert-todd-lincoln.svg
+  portrait_url: /media/portrait-robert-todd-lincoln.jpg
 
 - id: p_mary_harlan_lincoln
   slug: mary-eunice-harlan
@@ -215,10 +680,10 @@
   sex: F
   is_living: false
   lineage_group: descendant_spouse
-  branch: todd_edwards
+  branch: harlan
   birth_edtf: "1846-09-25"
   death_edtf: "1937-03-31"
-  portrait_url: null
+  portrait_url: /media/portrait-mary-harlan-lincoln.jpg
 
 - id: p_edward_baker_lincoln
   slug: edward-baker-lincoln
@@ -230,10 +695,10 @@
   sex: M
   is_living: false
   lineage_group: descendant
-  branch: lincoln_hanks
+  branch: lincoln
   birth_edtf: "1846-03-10"
   death_edtf: "1850-02-01"
-  portrait_url: null
+  portrait_url: /media/portrait-edward-baker-lincoln.jpg
 
 - id: p_william_wallace_lincoln
   slug: william-wallace-lincoln
@@ -245,10 +710,10 @@
   sex: M
   is_living: false
   lineage_group: descendant
-  branch: lincoln_hanks
+  branch: lincoln
   birth_edtf: "1850-12-21"
   death_edtf: "1862-02-20"
-  portrait_url: null
+  portrait_url: /media/portrait-willie-lincoln.jpg
 
 - id: p_thomas_tad_lincoln
   slug: thomas-tad-lincoln
@@ -260,11 +725,73 @@
   sex: M
   is_living: false
   lineage_group: descendant
-  branch: lincoln_hanks
+  branch: lincoln
   birth_edtf: "1853-04-04"
   death_edtf: "1871-07-15"
+  portrait_url: /media/portrait-tad-lincoln.jpg
+
+# Generation 9 (1869–1948) — Grandchildren of Abraham & Mary Lincoln
+- id: p_mary_lincoln_isham
+  slug: mary-lincoln-isham
+  full_name: Mary Lincoln Isham
+  given_name: Mary
+  surname: Lincoln
+  alt_names:
+    - Mamie Lincoln
+  sex: F
+  is_living: false
+  lineage_group: descendant
+  branch: lincoln
+  birth_edtf: "1869-10-15"
+  death_edtf: "1938-11-21"
   portrait_url: null
 
+- id: p_abraham_lincoln_ii
+  slug: abraham-lincoln-ii
+  full_name: Abraham Lincoln II
+  given_name: Abraham
+  surname: Lincoln
+  alt_names:
+    - Jack Lincoln
+  sex: M
+  is_living: false
+  lineage_group: descendant
+  branch: lincoln
+  birth_edtf: "1873-08-14"
+  death_edtf: "1890-03-05"
+  portrait_url: null
+
+- id: p_jessie_harlan_lincoln
+  slug: jessie-harlan-lincoln
+  full_name: Jessie Harlan Lincoln
+  given_name: Jessie Harlan
+  surname: Lincoln
+  alt_names:
+    - Jessie Lincoln Beckwith
+  sex: F
+  is_living: false
+  lineage_group: descendant
+  branch: lincoln
+  birth_edtf: "1875-11-06"
+  death_edtf: "1948-01-04"
+  portrait_url: /media/portrait-jessie-harlan-lincoln.jpg
+
+# Generation 10 (1904–1985) — Last direct descendant of Abraham Lincoln
+- id: p_robert_todd_lincoln_beckwith
+  slug: robert-todd-lincoln-beckwith
+  full_name: Robert Todd Lincoln Beckwith
+  given_name: Robert Todd Lincoln
+  surname: Beckwith
+  alt_names: []
+  sex: M
+  is_living: false
+  lineage_group: descendant
+  branch: lincoln
+  birth_edtf: "1904-07-19"
+  death_edtf: "1985-12-24"
+  portrait_url: null
+
+# Synthetic living test fixture (verified redacted in public mode)
 - id: p_jordan_mercer_living
   slug: jordan-mercer
   full_name: Jordan Mercer
@@ -274,7 +801,7 @@
   sex: X
   is_living: true
   lineage_group: extended
-  branch: lincoln_hanks
+  branch: lincoln
   birth_edtf: "1995-04-12"
   death_edtf: ""
-  portrait_url: /media/portrait-thomas-lincoln.svg
+  portrait_url: /media/portrait-thomas-lincoln.jpg

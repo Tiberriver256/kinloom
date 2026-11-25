@@ -1,24 +1,69 @@
-- id: src_lincoln_autobiography_1859
-  citation: Abraham Lincoln, Autobiographical Sketch Prepared for Jesse W. Fell (20 December 1859)
-  author: Abraham Lincoln
-  publisher: Library of Congress, Abraham Lincoln Papers
-  source_type: family_memoir
-  repository: Library of Congress Manuscript Division
-  url: https://www.loc.gov/collections/abraham-lincoln-papers/
+- id: src_hingham_parish_1622
+  citation: St. Andrew's Parish Register, Hingham, Norfolk, England, Baptism of Samuel Lincoln (24 August 1622)
+  author: Rector of St. Andrew's Parish, Hingham
+  publisher: Norfolk Record Office (PD 575/1)
+  source_type: church_record
+  repository: Norfolk Record Office, Norwich, England
 
-- id: src_census_1850_springfield
-  citation: 1850 U.S. Federal Census, Springfield, Sangamon County, Illinois, p. 129A, family 375
-  author: U.S. Bureau of the Census
-  publisher: National Archives and Records Administration (M432, Roll 127)
-  source_type: census
-  repository: National Archives (NARA)
+- id: src_hingham_town_1637
+  citation: George Lincoln, History of the Town of Hingham, Massachusetts, Vols. II–III (1893), Genealogical Register & Town Records (1637–1693)
+  author: George Lincoln
+  publisher: Town of Hingham, Massachusetts
+  source_type: vital_record
+  repository: Hingham Public Library & Massachusetts Historical Society
+  url: https://archive.org/details/historyoftownofh02hing
 
-- id: src_census_1860_springfield
-  citation: 1860 U.S. Federal Census, Springfield, Sangamon County, Illinois, p. 113, dwelling 827
-  author: U.S. Bureau of the Census
-  publisher: National Archives and Records Administration (M653, Roll 226)
-  source_type: census
-  repository: National Archives (NARA)
+- id: src_scituate_vital_1686
+  citation: Vital Records of Scituate, Massachusetts, to the Year 1850, Vol. I (Births) & Vol. II (Marriages and Deaths)
+  author: New England Historic Genealogical Society
+  publisher: NEHGS, Boston (1909)
+  source_type: vital_record
+  repository: New England Historic Genealogical Society
+  url: https://archive.org/details/vitalrecordsofsc01scit
+
+- id: src_berks_probate_1736
+  citation: Philadelphia County, Pennsylvania Will Book E, p. 370 (Will of Mordecai Lincoln of Amity/Exeter, proved 7 June 1736)
+  author: Register of Wills, Philadelphia County
+  publisher: Pennsylvania Historical and Museum Commission
+  source_type: probate_record
+  repository: Philadelphia City Archives & Berks County Historical Society
+
+- id: src_virginia_land_1780
+  citation: Virginia Land Office Treasury Warrant No. 3334 (4 March 1780), Jefferson County Survey (400 acres on Long Run)
+  author: Commonwealth of Virginia Land Office
+  publisher: Library of Virginia
+  source_type: land_record
+  repository: Library of Virginia, Richmond
+
+- id: src_jefferson_probate_1786
+  citation: Jefferson County, Kentucky Will Book 1, p. 25 (Appraisement of the Estate of Capt. Abraham Lincoln, 1788)
+  author: Jefferson County Court
+  publisher: Kentucky Department for Libraries and Archives
+  source_type: probate_record
+  repository: Jefferson County Courthouse, Louisville, Kentucky
+
+- id: src_washington_marriage_1806
+  citation: Washington County, Kentucky Marriage Bond and Minister's Return (Thomas Lincoln and Nancy Hanks, 12 June 1806, Rev. Jesse Head)
+  author: Washington County Clerk
+  publisher: Kentucky Department for Libraries and Archives
+  source_type: vital_record
+  repository: Washington County Courthouse, Springfield, Kentucky
+
+- id: src_hanks_research_1899
+  citation: William E. Barton, The Paternity of Abraham Lincoln (1920) & Caroline Hanks Hitchcock, Nancy Hanks (1899)
+  author: William E. Barton
+  publisher: George H. Doran Company, New York
+  source_type: compiled_genealogy
+  repository: Library of Congress General Collections
+  url: https://archive.org/details/paternityofabrah00bart
+
+- id: src_fayette_history_1882
+  citation: William Henry Perrin, History of Fayette County, Kentucky (1882), Todd Family Biographical Register
+  author: William Henry Perrin
+  publisher: O. L. Baskin & Co., Chicago
+  source_type: county_history
+  repository: Kentucky Historical Society
+  url: https://archive.org/details/historyoffayette00perr
 
 - id: src_census_1820_spencer
   citation: 1820 U.S. Federal Census, Spencer County, Indiana, p. 95, Thomas Lincoln household
@@ -28,25 +73,103 @@
   repository: National Archives (NARA)
 
 - id: src_sangamon_marriage_1842
-  citation: Sangamon County, Illinois Marriage Register, Vol. 2 (1842), Abraham Lincoln and Mary Todd
+  citation: Sangamon County, Illinois Marriage Register, Vol. 2 (4 November 1842), Abraham Lincoln and Mary Todd
   author: Sangamon County Clerk
   publisher: Illinois State Archives
   source_type: vital_record
   repository: Sangamon County Courthouse, Springfield, Illinois
 
-- id: src_virginia_land_1780
-  citation: Virginia Land Office Treasury Warrant No. 3334 (4 March 1780), Jefferson County Survey
-  author: Commonwealth of Virginia Land Office
-  publisher: Library of Virginia
-  source_type: vital_record
-  repository: Library of Virginia, Richmond
+- id: src_nara_patent_6469
+  citation: U.S. Patent No. 6,469, "Manner of Buoying Vessels," Abraham Lincoln (22 May 1849), NARA NAID 2524934 (RG 241, Selected Patent Files)
+  author: Abraham Lincoln & U.S. Patent Office
+  publisher: National Archives and Records Administration (RG 241, Series NAID 1122319)
+  source_type: federal_record
+  repository: National Archives (NARA), Washington, D.C.
+  url: https://catalog.archives.gov/id/2524934
 
-- id: src_fayette_history_1882
-  citation: William Henry Perrin, History of Fayette County, Kentucky (1882)
-  author: William Henry Perrin
-  publisher: O. L. Baskin & Co., Chicago
-  source_type: county_history
-  repository: Kentucky Historical Society
+- id: src_census_1850_springfield
+  citation: 1850 U.S. Federal Census, Springfield, Sangamon County, Illinois, p. 129A, family 375
+  author: U.S. Bureau of the Census
+  publisher: National Archives and Records Administration (M432, Roll 127)
+  source_type: census
+  repository: National Archives (NARA)
+
+- id: src_lincoln_autobiography_1859
+  citation: Abraham Lincoln, Autobiographical Sketch Prepared for Jesse W. Fell (20 December 1859)
+  author: Abraham Lincoln
+  publisher: Library of Congress, Abraham Lincoln Papers
+  source_type: family_memoir
+  repository: Library of Congress Manuscript Division
+  url: https://www.loc.gov/collections/abraham-lincoln-papers/
+
+- id: src_lincoln_scripps_1860
+  citation: Abraham Lincoln, Third-Person Campaign Autobiography Prepared for John Locke Scripps (June 1860)
+  author: Abraham Lincoln
+  publisher: Library of Congress, Abraham Lincoln Papers, Series 1
+  source_type: family_memoir
+  repository: Library of Congress Manuscript Division
+  url: https://www.loc.gov/collections/abraham-lincoln-papers/
+
+- id: src_census_1860_springfield
+  citation: 1860 U.S. Federal Census, Springfield, Sangamon County, Illinois, p. 113, dwelling 827
+  author: U.S. Bureau of the Census
+  publisher: National Archives and Records Administration (M653, Roll 226)
+  source_type: census
+  repository: National Archives (NARA)
+
+- id: src_nara_emancipation_1863
+  citation: Emancipation Proclamation (1 January 1863), NARA NAID 299998 (RG 11, General Records of the U.S. Government, Presidential Proclamations)
+  author: President Abraham Lincoln
+  publisher: National Archives and Records Administration (RG 11, Series NAID 299955, T1223)
+  source_type: federal_record
+  repository: National Archives (NARA), Washington, D.C.
+  url: https://catalog.archives.gov/id/299998
+
+- id: src_nara_harlan_brady
+  citation: Hon. James Harlan, Iowa (Mathew Brady Studio, c. 1860–1865), NARA NAID 525596 (RG 111-B, Brady Collection)
+  author: Mathew Brady Studio
+  publisher: National Archives and Records Administration (RG 111-B)
+  source_type: federal_record
+  repository: National Archives (NARA), College Park, Maryland
+  url: https://catalog.archives.gov/id/525596
+
+- id: src_chronam_evening_star_1865
+  citation: Evening Star (Washington, D.C.), 15 April 1865, p. 1, "Death of the President" (LCCN sn83045462)
+  author: Evening Star Newspaper Co.
+  publisher: Chronicling America, Library of Congress
+  source_type: newspaper
+  repository: Library of Congress Serial and Government Publications Division
+  url: https://www.loc.gov/resource/sn83045462/1865-04-15/ed-1/?sp=1
+
+- id: src_nara_treasury_1868
+  citation: $10,000 U.S. Treasury Department Security Issued to Abraham Lincoln and Redeemed by Robert Todd Lincoln (4 January 1868), NARA NAID 280924039 (RG 53)
+  author: U.S. Bureau of the Public Debt
+  publisher: National Archives and Records Administration (RG 53, Series NAID 572889)
+  source_type: federal_record
+  repository: National Archives (NARA), Washington, D.C.
+  url: https://catalog.archives.gov/id/280924039
+
+- id: src_census_1870_chicago
+  citation: 1870 U.S. Federal Census, Chicago Ward 1, Cook County, Illinois, Robert T. Lincoln household
+  author: U.S. Bureau of the Census
+  publisher: National Archives and Records Administration (M593, Roll 198)
+  source_type: census
+  repository: National Archives (NARA)
+
+- id: src_census_1880_iowa_harlan
+  citation: 1880 U.S. Federal Census, Mount Pleasant, Henry County, Iowa, James Harlan household (ED 95)
+  author: U.S. Bureau of the Census
+  publisher: National Archives and Records Administration (T9, Roll 344)
+  source_type: census
+  repository: National Archives (NARA)
+
+- id: src_nara_beckwith_1954
+  citation: Photograph of President Dwight D. Eisenhower Meeting Robert Todd Lincoln Beckwith (1954), NARA NAID 674693185 (RG 79, National Park Service White House Albums)
+  author: National Park Service
+  publisher: National Archives and Records Administration (RG 79, Series NAID 594999)
+  source_type: federal_record
+  repository: National Archives (NARA), College Park, Maryland
+  url: https://catalog.archives.gov/id/674693185
 
 - id: src_unverified_tree_entry
   citation: Unverified compiled family tree note pending primary verification

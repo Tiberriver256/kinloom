@@ -1,54 +1,227 @@
+# Historical Portraits (Public Domain — Library of Congress, NARA & Pre-1928 Archives)
 - id: med_portrait_abraham_lincoln
   kind: portrait
   person_id: p_abraham_lincoln_1809
   person_slug: abraham-lincoln-1809
   person_name: Abraham Lincoln
-  file: /media/portrait-abraham-lincoln.svg
-  caption: Archival silhouette portrait plate of Abraham Lincoln (1809–1865)
-  date_edtf: "1860"
-  provenance: Public-domain archival demo plate
+  file: /media/portrait-abraham-lincoln.jpg
+  caption: Portrait of President Abraham Lincoln by Alexander Gardner, Washington, D.C., November 8, 1863 (Ostendorf O-74)
+  date_edtf: "1863-11-08"
+  provenance: Alexander Gardner, Library of Congress Prints and Photographs Division (Public Domain — PD-US)
 
 - id: med_portrait_mary_todd
   kind: portrait
   person_id: p_mary_todd_lincoln
   person_slug: mary-ann-todd
   person_name: Mary Ann Todd
-  file: /media/portrait-mary-todd.svg
-  caption: Archival portrait plate of Mary Ann Todd (1818–1882)
+  file: /media/portrait-mary-todd.jpg
+  caption: First Lady Mary Ann Todd Lincoln photographed in Washington, D.C. by Mathew Brady's studio, c. 1861 (LCCN 2008680392)
   date_edtf: "1861"
-  provenance: Public-domain archival demo plate
+  provenance: Mathew Brady Studio, Library of Congress Prints and Photographs Division, LCCN 2008680392 (Public Domain — PD-US)
+
+# Shared Multi-Person Monument / Headstone (featured in top 8 cards on both Abraham & Mary Ann Todd)
+- id: med_shared_oak_ridge_headstone
+  kind: headstone
+  person_ids:
+    - p_abraham_lincoln_1809
+    - p_mary_todd_lincoln
+    - p_edward_baker_lincoln
+    - p_william_wallace_lincoln
+    - p_thomas_tad_lincoln
+  person_slug: abraham-lincoln-1809
+  person_name: Abraham Lincoln & Mary Ann Todd
+  event_id: evt_1882_death_mary_todd
+  file: /media/headstone-oak-ridge-tomb.jpg
+  caption: Lincoln Tomb and Oak Ridge Cemetery monument in Springfield, Illinois, resting place of Abraham Lincoln (1809–1865), Mary Ann Todd Lincoln (1818–1882), and sons Eddie, Willie, and Tad
+  date_edtf: "1882"
+  provenance: Historic photograph of Lincoln Tomb, Oak Ridge Cemetery, Springfield, Illinois via Wikimedia Commons (Public Domain — PD-US)
 
 - id: med_portrait_thomas_lincoln
   kind: portrait
   person_id: p_thomas_lincoln
   person_slug: thomas-lincoln
   person_name: Thomas Lincoln
-  file: /media/portrait-thomas-lincoln.svg
-  caption: Archival portrait plate of Thomas Lincoln (1778–1851)
-  date_edtf: "1845~"
-  provenance: Public-domain archival demo plate
+  file: /media/portrait-thomas-lincoln.jpg
+  caption: Daguerreotype portrait of Thomas Lincoln (1778–1851), father of Abraham Lincoln, taken in Illinois c. 1846
+  date_edtf: "1846~"
+  provenance: 19th-century American daguerreotype via Wikimedia Commons (Public Domain — PD-US)
+
+- id: med_portrait_sarah_bush_lincoln
+  kind: portrait
+  person_id: p_sarah_bush_johnston
+  person_slug: sarah-bush-johnston
+  person_name: Sarah Bush Johnston
+  file: /media/portrait-sarah-bush-lincoln.jpg
+  caption: Photograph of Sarah Bush Johnston Lincoln (1788–1869), Abraham Lincoln's stepmother, taken in Coles County, Illinois c. 1865
+  date_edtf: "1865~"
+  provenance: 1865 Illinois ambrotype/photograph via Wikimedia Commons (Public Domain — PD-US)
+
+- id: med_portrait_robert_smith_todd
+  kind: portrait
+  person_id: p_robert_smith_todd
+  person_slug: robert-smith-todd
+  person_name: Robert Smith Todd
+  file: /media/portrait-robert-smith-todd.jpg
+  caption: Early 1840s daguerreotype portrait of Lexington banker and Kentucky legislator Robert Smith Todd (1791–1849)
+  date_edtf: "1843~"
+  provenance: 1840s daguerreotype, Kentucky Historical Society / Wikimedia Commons (Public Domain — PD-US)
 
 - id: med_portrait_robert_todd_lincoln
   kind: portrait
   person_id: p_robert_todd_lincoln
   person_slug: robert-todd-lincoln
   person_name: Robert Todd Lincoln
-  file: /media/portrait-robert-todd-lincoln.svg
-  caption: Archival portrait plate of Robert Todd Lincoln (1843–1926)
-  date_edtf: "1885~"
-  provenance: Public-domain archival demo plate
+  file: /media/portrait-robert-todd-lincoln.jpg
+  caption: Portrait of Robert Todd Lincoln (1843–1926), later U.S. Secretary of War and Minister to the United Kingdom, Brady-Handy Collection, c. 1875
+  date_edtf: "1875~"
+  provenance: Brady-Handy Photograph Collection, Library of Congress (Public Domain — PD-US)
 
-- id: med_shared_oak_ridge_headstone
-  kind: headstone
+- id: med_portrait_mary_harlan_lincoln
+  kind: portrait
+  person_id: p_mary_harlan_lincoln
+  person_slug: mary-eunice-harlan
+  person_name: Mary Eunice Harlan
+  file: /media/portrait-mary-harlan-lincoln.jpg
+  caption: Studio portrait of Mary Eunice Harlan Lincoln (1846–1937), daughter of Senator James Harlan and wife of Robert Todd Lincoln
+  date_edtf: "1868~"
+  provenance: 19th-century studio portrait via Wikimedia Commons (Public Domain — PD-US)
+
+- id: med_portrait_james_harlan
+  kind: portrait
+  source_id: src_nara_harlan_brady
+  person_id: p_james_harlan
+  person_slug: james-harlan
+  person_name: Senator James Harlan
+  file: /media/portrait-james-harlan.jpg
+  caption: Portrait of Hon. James Harlan of Iowa (1820–1899), U.S. Senator and Secretary of the Interior, Mathew Brady studio (NARA NAID 525596)
+  date_edtf: "1862~"
+  provenance: National Archives and Records Administration, NAID 525596, RG 111-B, https://catalog.archives.gov/id/525596 (Public Domain — U.S. Federal)
+
+- id: med_portrait_edward_baker_lincoln
+  kind: portrait
+  person_id: p_edward_baker_lincoln
+  person_slug: edward-baker-lincoln
+  person_name: Edward Baker Lincoln
+  file: /media/portrait-edward-baker-lincoln.jpg
+  caption: Daguerreotype portrait of young Edward Baker "Eddie" Lincoln (1846–1850) in Springfield, Illinois
+  date_edtf: "1849~"
+  provenance: c. 1849 daguerreotype via Wikimedia Commons (Public Domain — PD-US)
+
+- id: med_portrait_willie_lincoln
+  kind: portrait
+  person_id: p_william_wallace_lincoln
+  person_slug: william-wallace-lincoln
+  person_name: William Wallace Lincoln
+  file: /media/portrait-willie-lincoln.jpg
+  caption: Portrait of William Wallace "Willie" Lincoln (1850–1862), taken shortly before his death at the White House
+  date_edtf: "1861~"
+  provenance: 1861 photograph via Library of Congress / Wikimedia Commons (Public Domain — PD-US)
+
+- id: med_portrait_tad_lincoln
+  kind: portrait
+  person_id: p_thomas_tad_lincoln
+  person_slug: thomas-tad-lincoln
+  person_name: Thomas Tad Lincoln
+  file: /media/portrait-tad-lincoln.jpg
+  caption: Portrait of Thomas "Tad" Lincoln (1853–1871) photographed by Mathew Brady's Washington studio (LCCN 2008680395)
+  date_edtf: "1864~"
+  provenance: Mathew Brady Studio, Library of Congress Prints and Photographs Division, LCCN 2008680395 (Public Domain — PD-US)
+
+- id: med_portrait_dennis_hanks
+  kind: portrait
+  person_id: p_dennis_friend_hanks
+  person_slug: dennis-friend-hanks
+  person_name: Dennis Friend Hanks
+  file: /media/portrait-dennis-hanks.jpg
+  caption: Photograph of Dennis Friend Hanks (1799–1892), maternal cousin and boyhood companion of Abraham Lincoln in Kentucky, Indiana, and Illinois
+  date_edtf: "1865~"
+  provenance: 19th-century Illinois photograph via Wikimedia Commons (Public Domain — PD-US)
+
+- id: med_portrait_john_hanks
+  kind: portrait
+  person_id: p_john_hanks
+  person_slug: john-hanks
+  person_name: John Hanks
+  file: /media/portrait-john-hanks.jpg
+  caption: Photograph of John Hanks (1802–1889), who split walnut rails with Abraham Lincoln in Macon County, Illinois in 1830
+  date_edtf: "1865~"
+  provenance: 19th-century photograph via Library of Congress / Wikimedia Commons (Public Domain — PD-US)
+
+- id: med_portrait_jessie_harlan_lincoln
+  kind: portrait
+  person_id: p_jessie_harlan_lincoln
+  person_slug: jessie-harlan-lincoln
+  person_name: Jessie Harlan Lincoln
+  file: /media/portrait-jessie-harlan-lincoln.jpg
+  caption: Studio portrait of Jessie Harlan Lincoln (1875–1948), granddaughter of Abraham Lincoln and mother of Robert Todd Lincoln Beckwith
+  date_edtf: "1897~"
+  provenance: Late 19th-century portrait via Wikimedia Commons (Public Domain — PD-US)
+
+# Multi-Person Family Photographs
+- id: med_family_abraham_tad_1865
+  kind: family_photo
   person_ids:
     - p_abraham_lincoln_1809
-    - p_mary_todd_lincoln
+    - p_thomas_tad_lincoln
   person_slug: abraham-lincoln-1809
-  person_name: Abraham Lincoln & Mary Ann Todd
-  file: /media/headstone-oak-ridge-tomb.svg
-  caption: Joint Oak Ridge Cemetery monument plate for Abraham Lincoln (1809–1865) and Mary Ann Todd Lincoln (1818–1882), Springfield, Illinois
-  date_edtf: "1882"
-  provenance: Shared multi-person headstone demonstration record
+  person_name: Abraham Lincoln & Thomas Tad Lincoln
+  event_id: evt_1865_gardner_portrait
+  file: /media/family-abraham-tad-1865.jpg
+  caption: President Abraham Lincoln seated holding a photograph album beside his youngest son Thomas "Tad" Lincoln, photographed by Alexander Gardner, February 5, 1865 (LCCN 2009630691)
+  date_edtf: "1865-02-05"
+  provenance: Alexander Gardner, Library of Congress Prints and Photographs Division, LCCN 2009630691 (Public Domain — PD-US)
+
+- id: med_family_willie_tad_1861
+  kind: family_photo
+  person_ids:
+    - p_william_wallace_lincoln
+    - p_thomas_tad_lincoln
+  person_slug: william-wallace-lincoln
+  person_name: Willie & Tad Lincoln
+  event_id: evt_1861_washington_residence
+  file: /media/family-willie-tad-lockwood.jpg
+  caption: William Wallace "Willie" Lincoln and Thomas "Tad" Lincoln with their cousin Lockwood Todd, photographed by Mathew Brady, c. 1861 (LCCN 2008680398)
+  date_edtf: "1861~"
+  provenance: Mathew Brady Studio, Library of Congress, LCCN 2008680398 (Public Domain — PD-US)
+
+- id: med_family_lincoln_grandchildren
+  kind: family_photo
+  person_ids:
+    - p_mary_lincoln_isham
+    - p_abraham_lincoln_ii
+    - p_jessie_harlan_lincoln
+  person_slug: abraham-lincoln-ii
+  person_name: Mary, Jack & Jessie Harlan Lincoln
+  event_id: evt_1875_birt_jessie_harlan_lincoln
+  file: /media/family-lincoln-grandchildren.jpg
+  caption: The three children of Robert Todd Lincoln and Mary Eunice Harlan — Mary "Mamie", Abraham Lincoln II "Jack", and Jessie Harlan Lincoln, c. 1882
+  date_edtf: "1882~"
+  provenance: c. 1882 Chicago/Washington cabinet card via Wikimedia Commons (Public Domain — PD-US)
+
+# Real NARA & Library of Congress Primary Record Scans
+- id: med_scan_nara_patent_6469_drawing
+  kind: document_scan
+  source_id: src_nara_patent_6469
+  page: 1
+  person_ids:
+    - p_abraham_lincoln_1809
+  event_id: evt_1849_patent_6469
+  file: /media/scan-nara-patent-6469-drawing.jpg
+  caption: Original patent drawing for U.S. Patent No. 6,469, "Manner of Buoying Vessels," granted to Abraham Lincoln on May 22, 1849 (NARA NAID 2524934, RG 241)
+  date_edtf: "1849-05-22"
+  provenance: National Archives and Records Administration, NAID 2524934 (RG 241, Selected Patent Files), https://catalog.archives.gov/id/2524934 (Public Domain — U.S. Federal)
+
+- id: med_scan_nara_patent_6469_petition
+  kind: document_scan
+  source_id: src_nara_patent_6469
+  page: 2
+  person_ids:
+    - p_abraham_lincoln_1809
+  event_id: evt_1849_patent_6469
+  file: /media/scan-nara-patent-6469-petition.jpg
+  caption: Signed patent petition and specification filed by Abraham Lincoln for U.S. Patent No. 6,469 (NARA NAID 2524934, RG 241, direct NARA catalog scan)
+  date_edtf: "1849-03-10"
+  provenance: National Archives and Records Administration, NAID 2524934 (RG 241, Selected Patent Files), https://catalog.archives.gov/id/2524934 (Public Domain — U.S. Federal)
 
 - id: med_scan_census_1850
   kind: record_scan
@@ -59,15 +232,119 @@
     - p_mary_todd_lincoln
     - p_robert_todd_lincoln
   event_id: evt_1850_census_springfield
-  file: /media/scan-census-1850.svg
-  caption: 1850 U.S. Federal Census Schedule, Springfield, Sangamon County, Illinois (p. 129A, family 375)
+  file: /media/scan-census-1850-springfield.jpg
+  caption: 1850 U.S. Federal Census Schedule I, City of Springfield, Sangamon County, Illinois, p. 129A, family 375 (NARA M432, Roll 127)
   date_edtf: "1850-08-29"
-  provenance: National Archives M432 Roll 127 (archival demo plate)
+  provenance: National Archives Microfilm Publication M432, Roll 127 (Public Domain — U.S. Federal)
 
+- id: med_scan_census_1860
+  kind: record_scan
+  source_id: src_census_1860_springfield
+  page: 1
+  person_ids:
+    - p_abraham_lincoln_1809
+    - p_mary_todd_lincoln
+    - p_robert_todd_lincoln
+    - p_william_wallace_lincoln
+    - p_thomas_tad_lincoln
+  event_id: evt_1860_census_springfield
+  file: /media/scan-census-1860-springfield.jpg
+  caption: 1860 U.S. Federal Census Schedule I, Springfield, Sangamon County, Illinois, p. 113, dwelling 827 (NARA M653, Roll 226)
+  date_edtf: "1860-07-14"
+  provenance: National Archives Microfilm Publication M653, Roll 226 (Public Domain — U.S. Federal)
+
+- id: med_scan_nara_emancipation_1863
+  kind: document_scan
+  source_id: src_nara_emancipation_1863
+  page: 1
+  person_ids:
+    - p_abraham_lincoln_1809
+  event_id: evt_1863_emancipation_macro
+  file: /media/scan-nara-emancipation-1863.jpg
+  caption: Manuscript page 1 of the Emancipation Proclamation signed by President Abraham Lincoln on January 1, 1863 (NARA NAID 299998, RG 11)
+  date_edtf: "1863-01-01"
+  provenance: National Archives and Records Administration, NAID 299998 (RG 11, Presidential Proclamations), https://catalog.archives.gov/id/299998 (Public Domain — U.S. Federal)
+
+- id: med_scan_chronam_evening_star_1865
+  kind: record_scan
+  source_id: src_chronam_evening_star_1865
+  page: 1
+  person_ids:
+    - p_abraham_lincoln_1809
+    - p_mary_todd_lincoln
+    - p_robert_todd_lincoln
+  event_id: evt_1865_death_abraham
+  file: /media/scan-chronam-evening-star-1865.jpg
+  caption: Front page of the Washington, D.C. Evening Star, April 15, 1865, reporting the death of President Abraham Lincoln (Chronicling America, LCCN sn83045462)
+  date_edtf: "1865-04-15"
+  provenance: Library of Congress, Chronicling America, https://www.loc.gov/resource/sn83045462/1865-04-15/ed-1/?sp=1 (Public Domain — PD-US)
+
+- id: med_scan_nara_treasury_1868
+  kind: record_scan
+  source_id: src_nara_treasury_1868
+  page: 1
+  person_ids:
+    - p_abraham_lincoln_1809
+    - p_robert_todd_lincoln
+  event_id: evt_1868_treasury_redemption
+  file: /media/scan-nara-treasury-1868.jpg
+  caption: $10,000 U.S. Treasury Department security issued to Abraham Lincoln and redeemed by his eldest son Robert Todd Lincoln on January 4, 1868 (NARA NAID 280924039, RG 53)
+  date_edtf: "1868-01-04"
+  provenance: National Archives and Records Administration, NAID 280924039 (RG 53, Bureau of the Public Debt), https://catalog.archives.gov/id/280924039 (Public Domain — U.S. Federal)
+
+# Historic Milestone & Homestead Photographs
+- id: med_milestone_springfield_rally_1860
+  kind: milestone
+  person_ids:
+    - p_abraham_lincoln_1809
+    - p_mary_todd_lincoln
+  event_id: evt_1860_springfield_rally
+  file: /media/place-springfield-rally-1860.jpg
+  caption: Abraham Lincoln standing in white coat by the doorway of his Eighth Street home in Springfield during the Republican rally of August 8, 1860 (LCCN 2009630655)
+  date_edtf: "1860-08-08"
+  provenance: Library of Congress Prints and Photographs Division, LCCN 2009630655 (Public Domain — PD-US)
+
+- id: med_milestone_inauguration_1861
+  kind: milestone
+  person_ids:
+    - p_abraham_lincoln_1809
+    - p_mary_todd_lincoln
+    - p_james_harlan
+  event_id: evt_1861_washington_residence
+  file: /media/place-inauguration-capitol-1861.jpg
+  caption: First Inauguration of President Abraham Lincoln before the unfinished U.S. Capitol dome, Washington, D.C., March 4, 1861 (LCCN 00652340)
+  date_edtf: "1861-03-04"
+  provenance: Library of Congress Prints and Photographs Division, LCCN 00652340 (Public Domain — PD-US)
+
+- id: med_milestone_old_ship_church_1681
+  kind: milestone
+  person_ids:
+    - p_samuel_lincoln_1622
+    - p_martha_lyford
+    - p_mordecai_lincoln_sr
+  event_id: evt_1681_old_ship_meetinghouse
+  file: /media/place-old-ship-church-hingham.jpg
+  caption: Old Ship Meetinghouse (built 1681), Hingham, Massachusetts — attended by Samuel Lincoln and his sons (HABS MASS,12-HING,5-17)
+  date_edtf: "1681"
+  provenance: Historic American Buildings Survey, Library of Congress, HABS MASS,12-HING,5-17 (Public Domain — U.S. Federal)
+
+- id: med_milestone_mordecai_house_1733
+  kind: milestone
+  person_ids:
+    - p_mordecai_lincoln_jr
+    - p_john_lincoln_1716
+    - p_abraham_lincoln_1744
+  event_id: evt_1733_exeter_homestead
+  file: /media/place-mordecai-lincoln-house-pa.jpg
+  caption: Stone homestead erected in 1733 by Mordecai Lincoln Jr. in Exeter Township, Berks County, Pennsylvania
+  date_edtf: "1733"
+  provenance: Berks County historic photograph via Wikimedia Commons (CC0 Public Domain)
+
+# Living-person privacy test fixture (must be stripped in public build)
 - id: med_living_should_be_filtered
   kind: portrait
   person_id: p_jordan_mercer_living
-  file: /media/portrait-thomas-lincoln.svg
+  file: /media/portrait-thomas-lincoln.jpg
   caption: Living person portrait that must be stripped by privacy filter
   date_edtf: "2020"
   provenance: Synthetic privacy test fixture

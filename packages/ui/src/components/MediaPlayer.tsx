@@ -1,0 +1,181 @@
+import type { MediaItem } from '@kinloom/core';
+import React from 'react';
+import { resolveAssetUrl } from './Atoms.js';
+import { useArchiveData } from '../context/ArchiveDataContext.js';
+import { useKinloomPlugins } from '../plugins/PluginContext.js';
+
+export interface MediaPlayerProps {
+  media: MediaItem;
+  baseUrl?: string;
+  /** Render compact card preview (poster/thumbnail) vs full interactive player. */
+  variant?: 'preview' | 'full';
+  className?: string;
+}
+
+export function isVideoMedia(media: MediaItem): boolean {
+  if (media.kind === 'video_story') {
+    return true;
+  }
+  const mime = media.mime_type?.toLowerCase() ?? '';
+  if (mime.startsWith('video/')) {
+    return true;
+  }
+  return /\.(mp4|webm|mov|m4v)(\?.*)?$/i.test(media.file);
+}
+
+export function isAudioMedia(media: MediaItem): boolean {
+  if (media.kind === 'audio_oral_history') {
+    return true;
+  }
+  const mime = media.mime_type?.toLowerCase() ?? '';
+  if (mime.startsWith('audio/')) {
+    return true;
+  }
+  return /\.(mp3|m4a|ogg|wav|flac)(\?.*)?$/i.test(media.file);
+}
+
+export function isPdfMedia(media: MediaItem): boolean {
+  const mime = media.mime_type?.toLowerCase() ?? '';
+  if (mime === 'application/pdf') {
+    return true;
+  }
+  return /\.pdf(\?.*)?$/i.test(media.file);
+}
+
+export function formatDurationSeconds(seconds: number | null | undefined): string | null {
+  if (seconds === null || seconds === undefined || !Number.isFinite(seconds) || seconds < 0) {
+    return null;
+  }
+  const total = Math.round(seconds);
+  const mins = Math.floor(total / 60);
+  const secs = total % 60;
+  return `${mins}:${String(secs).padStart(2, '0')}`;
+}
+
+export const MediaPlayer: React.FC<MediaPlayerProps> = ({
+  media,
+  baseUrl,
+  variant = 'full',
+  className,
+}) => {
+  const { mediaRenderers } = useKinloomPlugins();
+  const { baseUrl: contextBaseUrl } = useArchiveData();
+  const effectiveBase = baseUrl ?? contextBaseUrl;
+  const src = resolveAssetUrl(media.file, effectiveBase);
+  const posterSrc = media.poster_url ? resolveAssetUrl(media.poster_url, effectiveBase) : undefined;
+  const transcriptSrc = media.transcript_url
+    ? resolveAssetUrl(media.transcript_url, effectiveBase)
+    : undefined;
+  const durationLabel = formatDurationSeconds(media.duration_seconds);
+
+  // 1. Check plugin mediaRenderers first so private family sites can mount custom players.
+  for (const renderer of mediaRenderers) {
+    if (renderer.match(media)) {
+      return <div className={className ?? 'media-player-plugin-wrap'}>{renderer.render({ media, src })}</div>;
+    }
+  }
+
+  // 2. Native HTML5 video for video_story / video/* MIME types.
+  if (isVideoMedia(media)) {
+    if (variant === 'preview' && posterSrc) {
+      return (
+        <div className={className ?? 'media-player-preview media-player-video-preview'}>
+          <img src={posterSrc} alt={media.caption} className="person-media-thumb" loading="lazy" />
+          <span className="media-play-badge" aria-hidden="true">
+            ▶ {durationLabel ?? 'Video'}
+          </span>
+        </div>
+      );
+    }
+    return (
+      <div className={className ?? 'media-player-shell media-player-video'}>
+        {/* oxlint-disable-next-line jsx-a11y/media-has-caption -- track element is conditionally rendered when transcript_url is present */}
+        <video
+          controls
+          playsInline
+          preload="metadata"
+          poster={posterSrc}
+          className="media-player-video-el"
+          aria-label={media.caption}
+        >
+          <source src={src} type={media.mime_type ?? undefined} />
+          {transcriptSrc && (
+            <track kind="captions" src={transcriptSrc} label="Transcript captions" default />
+          )}
+        </video>
+        {durationLabel && (
+          <div className="media-player-meta">Duration: {durationLabel}</div>
+        )}
+      </div>
+    );
+  }
+
+  // 3. Native HTML5 audio for audio_oral_history / audio/* MIME types.
+  if (isAudioMedia(media)) {
+    if (variant === 'preview') {
+      return (
+        <div className={className ?? 'media-player-preview media-player-audio-preview'}>
+          <span className="media-audio-glyph" aria-hidden="true">
+            ♫
+          </span>
+          <span className="media-audio-label">
+            Audio Oral History{durationLabel ? ` · ${durationLabel}` : ''}
+          </span>
+        </div>
+      );
+    }
+    return (
+      <div className={className ?? 'media-player-shell media-player-audio'}>
+        {/* oxlint-disable-next-line jsx-a11y/media-has-caption -- oral history transcript link provided alongside audio element when available */}
+        <audio controls preload="metadata" className="media-player-audio-el" aria-label={media.caption}>
+          <source src={src} type={media.mime_type ?? undefined} />
+        </audio>
+        <div className="media-player-meta">
+          {durationLabel && <span>Duration: {durationLabel}</span>}
+          {transcriptSrc && (
+            <a href={transcriptSrc} target="_blank" rel="noreferrer" className="ink-link-btn">
+              Read transcript ↗
+            </a>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // 4. PDF archival document fallback.
+  if (isPdfMedia(media)) {
+    if (variant === 'preview') {
+      return (
+        <div className={className ?? 'media-player-preview media-player-pdf-preview'}>
+          <span className="media-audio-glyph" aria-hidden="true">
+            PDF
+          </span>
+          <span className="media-audio-label">Archival Document</span>
+        </div>
+      );
+    }
+    return (
+      <div className={className ?? 'media-player-shell media-player-pdf'}>
+        <iframe title={media.caption} src={src} className="media-player-pdf-frame" />
+        <div className="media-player-meta">
+          <a href={src} target="_blank" rel="noreferrer" className="pill-btn" style={{ textDecoration: 'none' }}>
+            Open PDF in new tab ↗
+          </a>
+        </div>
+      </div>
+    );
+  }
+
+  // 5. Standard archival image.
+  const imgSrc = variant === 'preview' && media.thumb_file
+    ? resolveAssetUrl(media.thumb_file, effectiveBase)
+    : src;
+  return (
+    <img
+      src={imgSrc}
+      alt={media.caption}
+      loading="lazy"
+      className={className ?? (variant === 'preview' ? 'person-media-thumb' : 'scan-page-img-full')}
+    />
+  );
+};

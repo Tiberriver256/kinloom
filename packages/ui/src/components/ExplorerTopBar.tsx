@@ -2,11 +2,14 @@ import { Link, useLocation } from 'react-router-dom';
 import React from 'react';
 import { useArchiveData } from '../context/ArchiveDataContext.js';
 import { useArchiveUi } from '../context/ArchiveUiContext.js';
+import { useKinloomPlugins } from '../plugins/PluginContext.js';
 
 export const ExplorerTopBar: React.FC = () => {
-  const { siteConfig, featuredDocumentId } = useArchiveData();
+  const { siteConfig, featuredDocumentId, capabilities } = useArchiveData();
   const { activeYear, pivotTrail, openSourceReader, openSearch } = useArchiveUi();
+  const { routes: pluginRoutes } = useKinloomPlugins();
   const location = useLocation();
+  const navPluginRoutes = pluginRoutes.filter((r) => Boolean(r.navLabel));
 
   const isPeopleActive =
     location.pathname === '/' || location.pathname.startsWith('/person/');
@@ -44,6 +47,34 @@ export const ExplorerTopBar: React.FC = () => {
           <Link to="/map" className={`nav-pill ${location.pathname === '/map' ? 'active' : ''}`}>
             Map
           </Link>
+
+          {capabilities.hasRevisionHistory && (
+            <Link
+              to="/changes"
+              className={`nav-pill nav-pill-desktop-only ${location.pathname === '/changes' ? 'active' : ''}`}
+            >
+              Changes
+            </Link>
+          )}
+
+          {capabilities.canManageSite && (
+            <Link
+              to="/admin"
+              className={`nav-pill nav-pill-desktop-only ${location.pathname === '/admin' ? 'active' : ''}`}
+            >
+              Admin
+            </Link>
+          )}
+
+          {navPluginRoutes.map((route) => (
+            <Link
+              key={`${route.pluginId}:${route.path}`}
+              to={route.path}
+              className={`nav-pill ${location.pathname === route.path ? 'active' : ''}`}
+            >
+              {route.navLabel}
+            </Link>
+          ))}
         </nav>
       </div>
 

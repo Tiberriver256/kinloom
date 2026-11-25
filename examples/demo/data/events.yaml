@@ -1,3 +1,586 @@
+# ==============================================================================
+# ERA 1: BRITISH ISLES ORIGINS (1622–1737)
+# ==============================================================================
+- id: evt_1622_bapt_samuel_lincoln
+  title: Baptism of Samuel Lincoln at St. Andrew's Parish, Hingham, Norfolk
+  scope: personal
+  event_kind: residence_anchor
+  category: life_milestone
+  edtf_date: "1622-08-24"
+  place_id: pl_hingham_norfolk
+  summary: Samuel Lincoln, youngest son of Edward Lincoln of Hingham, Norfolk, was baptized at St. Andrew's Parish Church on August 24, 1622.
+  participants:
+    - person_id: p_samuel_lincoln_1622
+      role: principal
+  sources:
+    - source_id: src_hingham_parish_1622
+      confidence: high
+      citation_detail: St. Andrew's Parish Register (PD 575/1), 24 August 1622.
+
+- id: evt_1637_samuel_atlantic_crossing
+  title: Samuel Lincoln sails from Great Yarmouth to Hingham, Massachusetts
+  scope: personal
+  event_kind: residence_anchor
+  category: migration
+  edtf_date: "1637-06"
+  place_id: pl_hingham_ma
+  summary: At age fifteen, weaver's apprentice Samuel Lincoln crossed the Atlantic aboard the John & Dorothy or Rose to join his brothers Thomas and Daniel in Hingham, Massachusetts Bay Colony.
+  participants:
+    - person_id: p_samuel_lincoln_1622
+      role: principal
+  sources:
+    - source_id: src_hingham_town_1637
+      confidence: high
+      citation_detail: Vol. II, p. 459, arrival of Samuel Lincoln in 1637.
+
+# ==============================================================================
+# ERA 2: COLONIAL SEABOARD — MASSACHUSETTS, NEW JERSEY & PENNSYLVANIA (1649–1776)
+# ==============================================================================
+- id: evt_1649_marr_samuel_martha
+  title: Marriage of Samuel Lincoln and Martha Lyford in Hingham
+  scope: family
+  event_kind: residence_anchor
+  category: family_milestone
+  edtf_date: "1649~"
+  place_id: pl_hingham_ma
+  summary: Samuel Lincoln married Martha Lyford in Hingham, Massachusetts Bay Colony, establishing a household of eleven children on North Street.
+  participants:
+    - person_id: p_samuel_lincoln_1622
+      role: spouse
+    - person_id: p_martha_lyford
+      role: spouse
+  sources:
+    - source_id: src_hingham_town_1637
+      confidence: high
+      citation_detail: Vol. II, p. 459, marriage of Samuel Lincoln and Martha.
+
+- id: evt_1650_birt_samuel_jr
+  title: Baptism of Samuel Lincoln Jr. in Hingham, Massachusetts
+  scope: personal
+  event_kind: residence_anchor
+  category: life_milestone
+  edtf_date: "1650-08-25"
+  place_id: pl_hingham_ma
+  summary: Eldest son Samuel Lincoln Jr., who later served in Capt. Isaac Johnson's company during King Philip's War (1675–1676), was baptized in Hingham.
+  participants:
+    - person_id: p_samuel_lincoln_jr
+      role: principal
+    - person_id: p_samuel_lincoln_1622
+      role: parent
+    - person_id: p_martha_lyford
+      role: parent
+  sources:
+    - source_id: src_hingham_town_1637
+      confidence: high
+      citation_detail: Vol. II, p. 460, Hingham First Parish baptism register.
+
+- id: evt_1657_birt_mordecai_sr
+  title: Birth of Mordecai Lincoln Sr. in Hingham, Massachusetts
+  scope: personal
+  event_kind: residence_anchor
+  category: life_milestone
+  edtf_date: "1657-06-14"
+  place_id: pl_hingham_ma
+  summary: Mordecai Lincoln Sr., fourth son of Samuel Lincoln and Martha Lyford, was born in Hingham, Massachusetts on June 14, 1657.
+  participants:
+    - person_id: p_mordecai_lincoln_sr
+      role: principal
+    - person_id: p_samuel_lincoln_1622
+      role: parent
+    - person_id: p_martha_lyford
+      role: parent
+  sources:
+    - source_id: src_hingham_town_1637
+      confidence: high
+      citation_detail: Vol. II, p. 460, birth of Mordecai Lincoln, 14 June 1657.
+
+- id: evt_1675_king_philips_war_macro
+  title: King Philip's War sweeps New England frontier towns
+  scope: local
+  event_kind: context_span
+  category: macro
+  edtf_date: "1675-06/1676-08"
+  place_id: pl_hingham_ma
+  summary: Armed conflict across Plymouth and Massachusetts Bay colonies, in which Samuel Lincoln Jr. served as a cavalryman under Capt. Isaac Johnson.
+  severity_rank: 8
+  participants:
+    - person_id: p_samuel_lincoln_jr
+      role: militia
+  sources:
+    - source_id: src_hingham_town_1637
+      confidence: high
+      citation_detail: Vol. I, Narragansett expedition militia rolls, 1675–1676.
+
+- id: evt_1681_old_ship_meetinghouse
+  title: Opening of the Old Ship Meetinghouse in Hingham
+  scope: family
+  event_kind: residence_anchor
+  category: homestead
+  edtf_date: "1681-07"
+  place_id: pl_hingham_ma
+  summary: The Town of Hingham raised the timber-framed Old Ship Meetinghouse, where Samuel Lincoln, Martha Lyford, and their sons held assigned pews.
+  photo_url: /media/place-old-ship-church-hingham.jpg
+  photo_placeholder_caption: Old Ship Church (1681), Hingham, Massachusetts — HABS MASS,12-HING,5-17 (Library of Congress).
+  participants:
+    - person_id: p_samuel_lincoln_1622
+      role: principal
+    - person_id: p_martha_lyford
+      role: spouse
+    - person_id: p_mordecai_lincoln_sr
+      role: household
+  sources:
+    - source_id: src_hingham_town_1637
+      confidence: high
+      citation_detail: Vol. I, p. 221, Old Ship Meetinghouse seating list, 1681.
+
+- id: evt_1685_marr_mordecai_sarah_jones
+  title: Marriage of Mordecai Lincoln Sr. and Sarah Jones
+  scope: family
+  event_kind: residence_anchor
+  category: family_milestone
+  edtf_date: "1685~"
+  place_id: pl_hingham_ma
+  summary: Blacksmith and ironmaster Mordecai Lincoln Sr. married Sarah Jones, daughter of Abraham Jones of Hull, before establishing ironworks along Bound Brook.
+  participants:
+    - person_id: p_mordecai_lincoln_sr
+      role: spouse
+    - person_id: p_sarah_jones_lincoln
+      role: spouse
+  sources:
+    - source_id: src_hingham_town_1637
+      confidence: high
+      citation_detail: Vol. II, p. 461, marriage of Mordecai Lincoln and Sarah Jones.
+
+- id: evt_1686_birt_mordecai_jr
+  title: Birth of Mordecai Lincoln Jr. in Hingham
+  scope: personal
+  event_kind: residence_anchor
+  category: life_milestone
+  edtf_date: "1686-04-24"
+  place_id: pl_hingham_ma
+  summary: Mordecai Lincoln Jr. was born in Hingham, Massachusetts on April 24, 1686, eldest son of ironmaster Mordecai Lincoln Sr. and Sarah Jones.
+  participants:
+    - person_id: p_mordecai_lincoln_jr
+      role: principal
+    - person_id: p_mordecai_lincoln_sr
+      role: parent
+    - person_id: p_sarah_jones_lincoln
+      role: parent
+  sources:
+    - source_id: src_hingham_town_1637
+      confidence: high
+      citation_detail: Vol. II, p. 461, birth of Mordecai Lincoln Jr., 24 April 1686.
+
+- id: evt_1688_birt_abraham_1688
+  title: Birth of Abraham Lincoln (1688) in Hingham
+  scope: personal
+  event_kind: residence_anchor
+  category: life_milestone
+  edtf_date: "1688-01-13"
+  place_id: pl_hingham_ma
+  summary: Abraham Lincoln, younger brother of Mordecai Lincoln Jr. and the first bearer of the name Abraham in the Lincoln line, was born in Hingham.
+  participants:
+    - person_id: p_abraham_lincoln_1688
+      role: principal
+    - person_id: p_mordecai_lincoln_sr
+      role: parent
+    - person_id: p_sarah_jones_lincoln
+      role: parent
+  sources:
+    - source_id: src_hingham_town_1637
+      confidence: high
+      citation_detail: Vol. II, p. 461, birth of Abraham Lincoln, 13 January 1688.
+
+- id: evt_1690_death_samuel_lincoln
+  title: Death of Samuel Lincoln in Hingham, Massachusetts
+  scope: personal
+  event_kind: point_event
+  category: life_milestone
+  edtf_date: "1690-05-26"
+  place_id: pl_hingham_ma
+  summary: Immigrant progenitor Samuel Lincoln died in Hingham, Massachusetts on May 26, 1690, aged 67, leaving his North Street homestead to Martha Lyford and his sons.
+  participants:
+    - person_id: p_samuel_lincoln_1622
+      role: principal
+    - person_id: p_martha_lyford
+      role: spouse
+  sources:
+    - source_id: src_hingham_town_1637
+      confidence: high
+      citation_detail: Vol. II, p. 459, death record of Samuel Lincoln, 26 May 1690.
+
+- id: evt_1693_death_martha_lyford
+  title: Death of Martha Lyford Lincoln in Hingham
+  scope: personal
+  event_kind: point_event
+  category: life_milestone
+  edtf_date: "1693-04-10"
+  place_id: pl_hingham_ma
+  summary: Martha Lyford Lincoln died in Hingham, Massachusetts on April 10, 1693.
+  participants:
+    - person_id: p_martha_lyford
+      role: principal
+  sources:
+    - source_id: src_hingham_town_1637
+      confidence: high
+      citation_detail: Vol. II, p. 459, burial register of Hingham, April 1693.
+
+- id: evt_1704_scituate_ironworks
+  title: Mordecai Lincoln Sr. operates bloomery forge and mills in Scituate
+  scope: family
+  event_kind: residence_anchor
+  category: homestead
+  edtf_date: "1704"
+  place_id: pl_scituate_ma
+  summary: Moving across Bound Brook to Scituate, Mordecai Lincoln Sr. built an iron smelting furnace, sawmill, and gristmill, becoming one of the wealthiest artisans on the South Shore.
+  participants:
+    - person_id: p_mordecai_lincoln_sr
+      role: principal
+    - person_id: p_mordecai_lincoln_jr
+      role: household
+    - person_id: p_abraham_lincoln_1688
+      role: household
+  sources:
+    - source_id: src_scituate_vital_1686
+      confidence: high
+      citation_detail: Scituate town and vital records, Bound Brook mill grants.
+
+- id: evt_1714_marr_mordecai_jr_hannah_salter
+  title: Marriage of Mordecai Lincoln Jr. and Hannah Salter in Monmouth County
+  scope: family
+  event_kind: residence_anchor
+  category: family_milestone
+  edtf_date: "1714~"
+  place_id: pl_monmouth_nj
+  summary: Having migrated from Massachusetts to Monmouth County, New Jersey with his brother Abraham, Mordecai Lincoln Jr. married Hannah Salter, daughter of provincial assemblyman Richard Salter.
+  participants:
+    - person_id: p_mordecai_lincoln_jr
+      role: spouse
+    - person_id: p_hannah_salter
+      role: spouse
+  sources:
+    - source_id: src_berks_probate_1736
+      confidence: high
+      citation_detail: Monmouth County deeds and 1736 Philadelphia County will recitals.
+
+- id: evt_1716_birt_virginia_john
+  title: Birth of "Virginia" John Lincoln in Monmouth County, New Jersey
+  scope: personal
+  event_kind: residence_anchor
+  category: life_milestone
+  edtf_date: "1716-05-03"
+  place_id: pl_monmouth_nj
+  summary: John Lincoln — later known as "Virginia" John — was born in Freehold, Monmouth County, New Jersey on May 3, 1716, eldest son of Mordecai Lincoln Jr. and Hannah Salter.
+  participants:
+    - person_id: p_john_lincoln_1716
+      role: principal
+    - person_id: p_mordecai_lincoln_jr
+      role: parent
+    - person_id: p_hannah_salter
+      role: parent
+  sources:
+    - source_id: src_berks_probate_1736
+      confidence: high
+      citation_detail: Eldest son and New Jersey land legatee in Mordecai Lincoln's 1736 will.
+
+- id: evt_1720_move_pennsylvania
+  title: Mordecai Lincoln Jr. relocates to the Schuylkill Valley in Pennsylvania
+  scope: family
+  event_kind: residence_anchor
+  category: migration
+  edtf_date: "1720"
+  place_id: pl_berks_pa
+  summary: Mordecai Lincoln Jr. partnered in Coventry Ironworks along French Creek before acquiring 1,000 acres in Amity (later Exeter) Township in what became Berks County, Pennsylvania.
+  participants:
+    - person_id: p_mordecai_lincoln_jr
+      role: principal
+    - person_id: p_hannah_salter
+      role: spouse
+    - person_id: p_john_lincoln_1716
+      role: household
+    - person_id: p_abraham_lincoln_1688
+      role: kin
+  sources:
+    - source_id: src_berks_probate_1736
+      confidence: high
+      citation_detail: Chester and Philadelphia County tax lists, 1720–1730.
+
+- id: evt_1723_birt_david_todd
+  title: Birth of David Todd in County Longford, Ireland
+  scope: personal
+  event_kind: residence_anchor
+  category: life_milestone
+  edtf_date: "1723-04-08"
+  place_id: pl_longford_ie
+  summary: David Todd, great-grandfather of Mary Ann Todd Lincoln, was born in County Longford, Ireland on April 8, 1723.
+  participants:
+    - person_id: p_david_todd_1723
+      role: principal
+  sources:
+    - source_id: src_fayette_history_1882
+      confidence: high
+      citation_detail: Todd family pedigree, County Longford origins.
+
+- id: evt_1727_death_mordecai_sr
+  title: Death of Mordecai Lincoln Sr. in Scituate, Massachusetts
+  scope: personal
+  event_kind: point_event
+  category: life_milestone
+  edtf_date: "1727-11-28"
+  place_id: pl_scituate_ma
+  summary: Ironmaster Mordecai Lincoln Sr. died in Scituate, Massachusetts on November 28, 1727, leaving an estate valued at over £3,000.
+  participants:
+    - person_id: p_mordecai_lincoln_sr
+      role: principal
+  sources:
+    - source_id: src_scituate_vital_1686
+      confidence: high
+      citation_detail: Vol. II, Scituate deaths, 28 November 1727.
+
+- id: evt_1733_exeter_homestead
+  title: Mordecai Lincoln Jr. builds stone homestead in Berks County, Pennsylvania
+  scope: family
+  event_kind: residence_anchor
+  category: homestead
+  edtf_date: "1733"
+  place_id: pl_berks_pa
+  summary: Mordecai Lincoln Jr. constructed the stone farmhouse in Exeter Township, Berks County, Pennsylvania where his descendants lived for three decades before heading south to Virginia.
+  photo_url: /media/place-mordecai-lincoln-house-pa.jpg
+  photo_placeholder_caption: Mordecai Lincoln House (1733), Exeter Township, Berks County, Pennsylvania.
+  participants:
+    - person_id: p_mordecai_lincoln_jr
+      role: principal
+    - person_id: p_john_lincoln_1716
+      role: household
+  sources:
+    - source_id: src_berks_probate_1736
+      confidence: high
+      citation_detail: Exeter Township tract described in Philadelphia Will Book E, p. 370.
+    - source_id: src_lincoln_scripps_1860
+      confidence: high
+      citation_detail: Page 1, ancestral origin in Berks County, Pennsylvania.
+
+- id: evt_1736_death_mordecai_jr
+  title: Death and probate of Mordecai Lincoln Jr. in Berks County
+  scope: personal
+  event_kind: point_event
+  category: life_milestone
+  edtf_date: "1736-05-12"
+  place_id: pl_berks_pa
+  summary: Mordecai Lincoln Jr. died on May 12, 1736; his will, proved in Philadelphia on June 7, 1736, bequeathed 300 acres in Monmouth County, New Jersey to his eldest son "Virginia" John Lincoln.
+  participants:
+    - person_id: p_mordecai_lincoln_jr
+      role: principal
+    - person_id: p_john_lincoln_1716
+      role: child
+  sources:
+    - source_id: src_berks_probate_1736
+      confidence: high
+      citation_detail: Philadelphia County Will Book E, p. 370, proved 7 June 1736.
+
+- id: evt_1737_todd_emigration_pa
+  title: David Todd emigrates from Ireland to Pennsylvania
+  scope: personal
+  event_kind: residence_anchor
+  category: migration
+  edtf_date: "1737"
+  place_id: pl_chester_pa
+  summary: Fourteen-year-old David Todd accompanied his father Robert Todd from County Longford, Ireland to southeastern Pennsylvania, settling in Montgomery and Chester Counties.
+  participants:
+    - person_id: p_david_todd_1723
+      role: principal
+  sources:
+    - source_id: src_fayette_history_1882
+      confidence: high
+      citation_detail: Todd family emigration to Pennsylvania, 1737.
+
+- id: evt_1743_marr_john_rebecca
+  title: Marriage of "Virginia" John Lincoln and Rebecca Flowers Morris
+  scope: family
+  event_kind: residence_anchor
+  category: family_milestone
+  edtf_date: "1743-07-05"
+  place_id: pl_berks_pa
+  summary: "'Virginia' John Lincoln married widow Rebecca Flowers Morris in Berks County, Pennsylvania on July 5, 1743; together they raised nine children."
+  participants:
+    - person_id: p_john_lincoln_1716
+      role: spouse
+    - person_id: p_rebecca_flowers_morris
+      role: spouse
+  sources:
+    - source_id: src_berks_probate_1736
+      confidence: high
+      citation_detail: Berks County family register and Shenandoah Valley deeds.
+
+- id: evt_1744_birt_capt_abraham
+  title: Birth of Capt. Abraham Lincoln in Berks County, Pennsylvania
+  scope: personal
+  event_kind: residence_anchor
+  category: life_milestone
+  edtf_date: "1744-05-13"
+  place_id: pl_berks_pa
+  summary: Capt. Abraham Lincoln, paternal grandfather of President Abraham Lincoln, was born in Berks County, Pennsylvania on May 13, 1744 to "Virginia" John Lincoln and Rebecca Flowers Morris.
+  alternate_places:
+    - place_name: Rockingham County, Virginia
+      place_id: pl_rockingham_va
+      source_id: src_lincoln_scripps_1860
+      note: In his June 1860 autobiography for John Locke Scripps, President Lincoln mistakenly believed his grandfather Abraham had been born in Rockingham County, Virginia rather than Berks County, Pennsylvania.
+  participants:
+    - person_id: p_abraham_lincoln_1744
+      role: principal
+    - person_id: p_john_lincoln_1716
+      role: parent
+    - person_id: p_rebecca_flowers_morris
+      role: parent
+  sources:
+    - source_id: src_berks_probate_1736
+      confidence: high
+      citation_detail: Berks County birth record prior to the 1768 move to Linville Creek, Virginia.
+    - source_id: src_lincoln_scripps_1860
+      confidence: medium
+      citation_detail: Page 1, family tradition of Berks County and Rockingham County origins.
+
+- id: evt_1749_marr_david_hannah_todd
+  title: Marriage of David Todd and Hannah Owen in Pennsylvania
+  scope: family
+  event_kind: residence_anchor
+  category: family_milestone
+  edtf_date: "1749~"
+  place_id: pl_chester_pa
+  summary: David Todd married Hannah Owen of Welsh Quaker descent in southeastern Pennsylvania.
+  participants:
+    - person_id: p_david_todd_1723
+      role: spouse
+    - person_id: p_hannah_owen_todd
+      role: spouse
+  sources:
+    - source_id: src_fayette_history_1882
+      confidence: high
+      citation_detail: Marriage of David Todd and Hannah Owen.
+
+- id: evt_1756_birt_levi_todd
+  title: Birth of Maj. Gen. Levi Todd in Pennsylvania
+  scope: personal
+  event_kind: residence_anchor
+  category: life_milestone
+  edtf_date: "1756-10-04"
+  place_id: pl_chester_pa
+  summary: Levi Todd, future defender of Fort Harrod, veteran of the Battle of Blue Licks, and clerk of Fayette County, Kentucky, was born to David Todd and Hannah Owen on October 4, 1756.
+  participants:
+    - person_id: p_levi_todd
+      role: principal
+    - person_id: p_david_todd_1723
+      role: parent
+    - person_id: p_hannah_owen_todd
+      role: parent
+    - person_id: p_robert_todd_1754
+      role: household
+  sources:
+    - source_id: src_fayette_history_1882
+      confidence: high
+      citation_detail: Biographical memoir of Gen. Levi Todd.
+
+# ==============================================================================
+# ERA 3: APPALACHIAN & KENTUCKY FRONTIER (1765–1825)
+# ==============================================================================
+- id: evt_1765_hanks_hampshire_va
+  title: Joseph Hanks and Ann Nanny Lee establish farm in Hampshire County, Virginia
+  scope: family
+  event_kind: residence_anchor
+  category: homestead
+  edtf_date: "1765~"
+  place_id: pl_hampshire_va
+  summary: Carpenter Joseph Hanks and his wife Ann "Nanny" Lee farmed on Patterson Creek in Hampshire County, Virginia, raising daughters Lucy and Nancy and son William.
+  participants:
+    - person_id: p_joseph_hanks
+      role: principal
+    - person_id: p_ann_nanny_lee
+      role: spouse
+    - person_id: p_lucy_hanks
+      role: household
+    - person_id: p_william_hanks
+      role: household
+    - person_id: p_nancy_hanks_sr
+      role: household
+  sources:
+    - source_id: src_hanks_research_1899
+      confidence: medium
+      citation_detail: Hampshire County, Virginia lease and tax rolls for Joseph Hanks.
+
+- id: evt_1768_linville_creek_va
+  title: "'Virginia' John Lincoln buys 600 acres on Linville Creek in the Shenandoah Valley"
+  scope: family
+  event_kind: residence_anchor
+  category: migration
+  edtf_date: "1768-06-21"
+  place_id: pl_rockingham_va
+  summary: Traveling down the Great Wagon Road from Berks County, Pennsylvania, "Virginia" John Lincoln purchased 600 acres on Linville Creek in Augusta (later Rockingham) County, Virginia.
+  participants:
+    - person_id: p_john_lincoln_1716
+      role: principal
+    - person_id: p_rebecca_flowers_morris
+      role: spouse
+    - person_id: p_abraham_lincoln_1744
+      role: household
+  sources:
+    - source_id: src_virginia_land_1780
+      confidence: high
+      citation_detail: Augusta County Deed Book 15, 21 June 1768, 600 acres on Linville Creek.
+
+- id: evt_1770_marr_capt_abraham_bathsheba
+  title: Marriage of Capt. Abraham Lincoln and Bathsheba Herring in Virginia
+  scope: family
+  event_kind: residence_anchor
+  category: family_milestone
+  edtf_date: "1770-06-09"
+  place_id: pl_rockingham_va
+  summary: Capt. Abraham Lincoln obtained a marriage license in Augusta County, Virginia on June 9, 1770 to marry Bathsheba Herring, settling on 210 acres deeded by his father on Linville Creek.
+  participants:
+    - person_id: p_abraham_lincoln_1744
+      role: spouse
+    - person_id: p_bathsheba_herring
+      role: spouse
+  sources:
+    - source_id: src_virginia_land_1780
+      confidence: high
+      citation_detail: Augusta County marriage license, 9 June 1770.
+
+- id: evt_1771_birt_mordecai_1771
+  title: Birth of Mordecai Lincoln III on Linville Creek
+  scope: personal
+  event_kind: residence_anchor
+  category: life_milestone
+  edtf_date: "1771"
+  place_id: pl_rockingham_va
+  summary: Eldest son Mordecai Lincoln III was born on Linville Creek in Augusta/Rockingham County, Virginia; at age fifteen he saved young brother Thomas during the 1786 Kentucky ambush.
+  participants:
+    - person_id: p_mordecai_lincoln_1771
+      role: principal
+    - person_id: p_abraham_lincoln_1744
+      role: parent
+    - person_id: p_bathsheba_herring
+      role: parent
+  sources:
+    - source_id: src_jefferson_probate_1786
+      confidence: high
+      citation_detail: Heir-at-law under Virginia primogeniture in Jefferson County estate settlement.
+
+- id: evt_1776_militia_captain_abraham
+  title: Capt. Abraham Lincoln commands Virginia militia company during the Revolutionary War
+  scope: personal
+  event_kind: point_event
+  category: military
+  edtf_date: "1776"
+  place_id: pl_rockingham_va
+  summary: Serving as captain of a Shenandoah Valley militia company during the American Revolution, Abraham Lincoln drilled Augusta and Rockingham County volunteers.
+  participants:
+    - person_id: p_abraham_lincoln_1744
+      role: principal
+  sources:
+    - source_id: src_virginia_land_1780
+      confidence: high
+      citation_detail: Augusta and Rockingham County militia court orders, 1776–1778.
+
 - id: evt_1778_birt_thomas
   title: Birth of Thomas Lincoln in Rockingham County
   scope: personal
@@ -6,6 +589,14 @@
   edtf_date: "1778-01-06"
   place_id: pl_rockingham_va
   summary: Thomas Lincoln was born on Linville Creek in Rockingham County, Virginia, to Capt. Abraham Lincoln and Bathsheba Herring.
+  alternate_dates:
+    - edtf_date: "1778-01-05"
+      source_id: src_lincoln_autobiography_1859
+      note: Some family Bible transcriptions cite January 5, 1778, while Abraham Lincoln's own family Bible entry records January 6, 1778.
+  fact_conflicts:
+    - claim: Birth county recorded as Augusta County vs. Rockingham County (boundary formed in 1778)
+      source_id: src_lincoln_scripps_1860
+      note: Rockingham County was partitioned from Augusta County in 1778, the exact year of Thomas Lincoln's birth on Linville Creek.
   participants:
     - person_id: p_thomas_lincoln
       role: principal
@@ -17,15 +608,38 @@
     - source_id: src_lincoln_autobiography_1859
       confidence: high
       citation_detail: Page 1, family migration from Rockingham County, Virginia.
+    - source_id: src_lincoln_scripps_1860
+      confidence: high
+      citation_detail: Page 1, "His father, Thomas, & grandfather, Abraham, were born in Rockingham county Virginia."
+
+- id: evt_1779_levi_todd_lexington
+  title: Levi Todd co-founds Lexington and marries Jane Briggs in Kentucky
+  scope: family
+  event_kind: residence_anchor
+  category: homestead
+  edtf_date: "1779-02-25"
+  place_id: pl_lexington_ky
+  summary: Revolutionary frontier officer Levi Todd married Jane Briggs at St. Asaph's Fort in February 1779 and became first clerk of Fayette County as Lexington was laid out.
+  participants:
+    - person_id: p_levi_todd
+      role: spouse
+    - person_id: p_jane_briggs
+      role: spouse
+    - person_id: p_robert_todd_1754
+      role: kin
+  sources:
+    - source_id: src_fayette_history_1882
+      confidence: high
+      citation_detail: Founding of Lexington and marriage of Levi Todd and Jane Briggs, 1779.
 
 - id: evt_1780_land_warrant
-  title: Capt. Abraham Lincoln acquires Kentucky land warrant
+  title: Capt. Abraham Lincoln acquires Virginia Treasury Warrant No. 3334 for Kentucky land
   scope: family
   event_kind: residence_anchor
   category: homestead
   edtf_date: "1780-03-04"
   place_id: pl_rockingham_va
-  summary: Virginia Land Office Treasury Warrant No. 3334 grants 400 acres on Long Run in Jefferson County, Kentucky, preparing the family's westward move.
+  summary: Virginia Land Office Treasury Warrant No. 3334 grants 400 acres on Long Run in Jefferson County, Kentucky, preparing the family's westward move over the Wilderness Road.
   participants:
     - person_id: p_abraham_lincoln_1744
       role: principal
@@ -33,54 +647,196 @@
       role: spouse
     - person_id: p_thomas_lincoln
       role: household
+    - person_id: p_mordecai_lincoln_1771
+      role: household
   sources:
     - source_id: src_virginia_land_1780
       confidence: high
-      citation_detail: Treasury Warrant No. 3334, 400 acres.
+      citation_detail: Treasury Warrant No. 3334, 400 acres on Long Run, Jefferson County.
 
 - id: evt_1782_kentucky_settlement
-  title: Lincoln family settles in Kentucky frontier
+  title: Lincoln family crosses the Wilderness Road to Jefferson County, Kentucky
   scope: family
   event_kind: residence_anchor
-  category: homestead
+  category: migration
   edtf_date: "1782"
-  place_id: pl_hardin_ky
-  summary: Capt. Abraham Lincoln moved his household over the Wilderness Road into Kentucky, settling on frontier land where young Thomas grew up.
+  place_id: pl_jefferson_ky
+  summary: Capt. Abraham Lincoln moved his household over the Wilderness Road into Kentucky, settling on his 400-acre Long Run tract near Hughes Station in Jefferson County.
   alternate_dates:
     - edtf_date: "1781~"
       source_id: src_lincoln_autobiography_1859
-      note: Abraham Lincoln's 1859 sketch writes "about 1782" from family memory.
+      note: Abraham Lincoln's 1859 sketch writes "about 1781 or 2" from family memory.
   participants:
     - person_id: p_abraham_lincoln_1744
       role: principal
     - person_id: p_bathsheba_herring
       role: spouse
+    - person_id: p_mordecai_lincoln_1771
+      role: household
     - person_id: p_thomas_lincoln
       role: household
   sources:
     - source_id: src_lincoln_autobiography_1859
       confidence: medium
-      citation_detail: Page 1, removal from Virginia to Kentucky about 1782.
+      citation_detail: Page 1, removal from Virginia to Kentucky about 1781 or 1782.
+    - source_id: src_virginia_land_1780
+      confidence: high
+      citation_detail: Long Run survey and Jefferson County settlement, 1782.
+
+- id: evt_1782_blue_licks_todd
+  title: Maj. Levi Todd survives the Battle of Blue Licks in Kentucky
+  scope: local
+  event_kind: point_event
+  category: military
+  edtf_date: "1782-08-19"
+  place_id: pl_lexington_ky
+  summary: Serving alongside his brother Col. John Todd and Daniel Boone, Levi Todd survived the Revolutionary War ambush at Blue Licks, where his brother John was killed.
+  severity_rank: 7
+  participants:
+    - person_id: p_levi_todd
+      role: principal
+  sources:
+    - source_id: src_fayette_history_1882
+      confidence: high
+      citation_detail: Battle of Blue Licks muster and Fayette County militia account.
+
+- id: evt_1784_birt_nancy_hanks
+  title: Birth of Nancy Hanks, mother of Abraham Lincoln
+  scope: personal
+  event_kind: residence_anchor
+  category: life_milestone
+  edtf_date: "1784-02-05"
+  place_id: pl_hampshire_va
+  summary: Nancy Hanks was born to Lucy Hanks in Virginia around February 5, 1784 before migrating with the Joseph Hanks household into central Kentucky.
+  alternate_dates:
+    - edtf_date: "1783~"
+      source_id: src_hanks_research_1899
+      note: Early biographers gave birth years ranging from 1783 to 1784 due to the absence of a surviving Virginia baptismal register.
+  fact_conflicts:
+    - claim: Traditional claim of legitimate birth to James Hanks vs. documented maternal lineage through Lucy Hanks
+      source_id: src_hanks_research_1899
+      note: Caroline Hanks Hitchcock (1899) claimed Nancy was daughter of Joseph Hanks's son James, whereas Mercer County court records (1789–1790) analyzed by William E. Barton (1920) proved Nancy was the daughter of Lucy Hanks prior to Lucy's 1791 marriage to Henry Sparrow.
+  participants:
+    - person_id: p_nancy_hanks
+      role: principal
+    - person_id: p_lucy_hanks
+      role: parent
+    - person_id: p_joseph_hanks
+      role: household
+  sources:
+    - source_id: src_hanks_research_1899
+      confidence: medium
+      citation_detail: Mercer County, Kentucky court records (1789–1791) and Hanks family depositions.
+    - source_id: src_lincoln_autobiography_1859
+      confidence: high
+      citation_detail: Page 1, "My parents were both born in Virginia... My mother... was of a family of the name of Hanks."
+
+- id: evt_1785_death_david_todd
+  title: Death of David Todd in Fayette County, Kentucky
+  scope: personal
+  event_kind: point_event
+  category: life_milestone
+  edtf_date: "1785-02-08"
+  place_id: pl_lexington_ky
+  summary: Having joined his sons Levi and Robert on the Kentucky frontier, Irish-born patriarch David Todd died in Fayette County on February 8, 1785.
+  participants:
+    - person_id: p_david_todd_1723
+      role: principal
+    - person_id: p_hannah_owen_todd
+      role: spouse
+    - person_id: p_levi_todd
+      role: child
+  sources:
+    - source_id: src_fayette_history_1882
+      confidence: high
+      citation_detail: Fayette County Todd family monument and probate notes.
 
 - id: evt_1786_death_capt_abraham
-  title: Death of Capt. Abraham Lincoln in Kentucky
+  title: Ambush and death of Capt. Abraham Lincoln on Long Run Creek
   scope: personal
   event_kind: point_event
   category: life_milestone
   edtf_date: "1786-05"
-  place_id: pl_hardin_ky
-  summary: Capt. Abraham Lincoln was killed while clearing a field in Kentucky, leaving his widow Bathsheba to raise five children.
+  place_id: pl_jefferson_ky
+  summary: While clearing his Long Run field in Jefferson County, Kentucky, Capt. Abraham Lincoln was killed in a frontier ambush; fifteen-year-old Mordecai Lincoln III drove off the attacker and saved eight-year-old Thomas.
+  alternate_dates:
+    - edtf_date: "1784~"
+      source_id: src_lincoln_autobiography_1859
+      note: In 1859 Abraham Lincoln wrote from oral memory that his grandfather died "a year or two" after 1782 when Thomas was "six years of age," but Jefferson County probate records prove the death occurred in May 1786 when Thomas was eight.
+  fact_conflicts:
+    - claim: Oral tradition places ambush in 1784 (Thomas age 6) vs. Jefferson County probate proof of May 1786 (Thomas age 8)
+      source_id: src_jefferson_probate_1786
+      note: Genealogical Proof Standard resolution favors contemporary Jefferson County court and estate inventory records (1786–1788) over 73-year-old family recollection.
   participants:
     - person_id: p_abraham_lincoln_1744
       role: principal
     - person_id: p_bathsheba_herring
       role: spouse
+    - person_id: p_mordecai_lincoln_1771
+      role: child
     - person_id: p_thomas_lincoln
       role: child
   sources:
-    - source_id: src_lincoln_autobiography_1859
+    - source_id: src_jefferson_probate_1786
       confidence: high
+      citation_detail: Jefferson County Will Book 1, p. 25, estate appraisement following May 1786 death.
+    - source_id: src_lincoln_autobiography_1859
+      confidence: medium
       citation_detail: Page 1, killing of grandfather while laboring to clear a farm.
+
+- id: evt_1787_bathsheba_washington_ky
+  title: Widow Bathsheba Lincoln settles with children in Washington County, Kentucky
+  scope: family
+  event_kind: residence_anchor
+  category: migration
+  edtf_date: "1787"
+  place_id: pl_washington_ky
+  summary: Following Capt. Abraham Lincoln's death, Bathsheba Herring Lincoln relocated her five children to Beech Fork in Washington County, Kentucky.
+  participants:
+    - person_id: p_bathsheba_herring
+      role: principal
+    - person_id: p_thomas_lincoln
+      role: household
+    - person_id: p_mordecai_lincoln_1771
+      role: household
+  sources:
+    - source_id: src_jefferson_probate_1786
+      confidence: high
+      citation_detail: Washington County tax lists for Bathsheba Lincoln, 1792–1800.
+
+- id: evt_1788_death_virginia_john
+  title: Death of "Virginia" John Lincoln in Rockingham County, Virginia
+  scope: personal
+  event_kind: point_event
+  category: life_milestone
+  edtf_date: "1788-11"
+  place_id: pl_rockingham_va
+  summary: "'Virginia' John Lincoln died at his Linville Creek plantation in Rockingham County, Virginia in November 1788, aged 72."
+  participants:
+    - person_id: p_john_lincoln_1716
+      role: principal
+    - person_id: p_rebecca_flowers_morris
+      role: spouse
+  sources:
+    - source_id: src_virginia_land_1780
+      confidence: high
+      citation_detail: Rockingham County will proved November 1788.
+
+- id: evt_1788_birt_sarah_bush_johnston
+  title: Birth of Sarah Bush Johnston in Hardin County, Kentucky
+  scope: personal
+  event_kind: residence_anchor
+  category: life_milestone
+  edtf_date: "1788-12-13"
+  place_id: pl_hardin_ky
+  summary: Sarah Bush — later Abraham Lincoln's beloved stepmother — was born in Elizabethtown, Hardin County, Kentucky on December 13, 1788.
+  participants:
+    - person_id: p_sarah_bush_johnston
+      role: principal
+  sources:
+    - source_id: src_census_1820_spencer
+      confidence: medium
+      citation_detail: Hardin County birth record and 1820–1860 census schedules.
 
 - id: evt_1791_birt_robert_todd
   title: Birth of Robert Smith Todd in Lexington
@@ -102,32 +858,95 @@
       confidence: high
       citation_detail: Biographical sketch of Levi Todd and Robert Smith Todd.
 
+- id: evt_1793_death_joseph_hanks
+  title: Will and death of Joseph Hanks in Nelson County, Kentucky
+  scope: personal
+  event_kind: point_event
+  category: life_milestone
+  edtf_date: "1793-05"
+  place_id: pl_hardin_ky
+  summary: Joseph Hanks signed his will in Kentucky in January 1793 (proved May 14, 1793), naming his wife Nanny and children including Lucy, William, and Nancy.
+  participants:
+    - person_id: p_joseph_hanks
+      role: principal
+    - person_id: p_ann_nanny_lee
+      role: spouse
+    - person_id: p_lucy_hanks
+      role: child
+    - person_id: p_william_hanks
+      role: child
+  sources:
+    - source_id: src_hanks_research_1899
+      confidence: high
+      citation_detail: Nelson County, Kentucky Will Book A, proved 14 May 1793.
+
+- id: evt_1799_birt_dennis_hanks
+  title: Birth of Dennis Friend Hanks in Hardin County, Kentucky
+  scope: personal
+  event_kind: residence_anchor
+  category: life_milestone
+  edtf_date: "1799-05-15"
+  place_id: pl_hardin_ky
+  summary: Dennis Friend Hanks, son of Nancy Hanks (Sr.) and maternal cousin of Abraham Lincoln, was born in Hardin County, Kentucky on May 15, 1799.
+  participants:
+    - person_id: p_dennis_friend_hanks
+      role: principal
+    - person_id: p_nancy_hanks_sr
+      role: parent
+  sources:
+    - source_id: src_hanks_research_1899
+      confidence: high
+      citation_detail: Dennis Friend Hanks autobiographical testimony and census records.
+
+- id: evt_1802_birt_john_hanks
+  title: Birth of John Hanks in Hardin County, Kentucky
+  scope: personal
+  event_kind: residence_anchor
+  category: life_milestone
+  edtf_date: "1802-02-09"
+  place_id: pl_hardin_ky
+  summary: John Hanks, son of William Hanks and future rail-splitting partner of Abraham Lincoln in Illinois, was born near Bardstown and Hardin County, Kentucky.
+  participants:
+    - person_id: p_john_hanks
+      role: principal
+    - person_id: p_william_hanks
+      role: parent
+  sources:
+    - source_id: src_hanks_research_1899
+      confidence: high
+      citation_detail: Hanks family genealogy and 1860 Illinois Republican convention accounts.
+
 - id: evt_1806_marr_thomas_nancy
-  title: Marriage of Thomas Lincoln and Nancy Hanks
+  title: Marriage of Thomas Lincoln and Nancy Hanks in Washington County, Kentucky
   scope: family
   event_kind: residence_anchor
   category: family_milestone
   edtf_date: "1806-06-12"
-  place_id: pl_hardin_ky
-  summary: Thomas Lincoln married Nancy Hanks in Washington and Hardin County circles in Kentucky before establishing their farm at Sinking Spring.
+  place_id: pl_washington_ky
+  summary: Carpenter Thomas Lincoln married Nancy Hanks at Beechland in Washington County, Kentucky on June 12, 1806, officiated by Methodist minister Rev. Jesse Head.
   participants:
     - person_id: p_thomas_lincoln
       role: spouse
     - person_id: p_nancy_hanks
       role: spouse
+    - person_id: p_lucy_hanks
+      role: parent
   sources:
+    - source_id: src_washington_marriage_1806
+      confidence: high
+      citation_detail: Washington County Marriage Bond (10 June 1806) and Minister's Return (12 June 1806).
     - source_id: src_lincoln_autobiography_1859
       confidence: high
       citation_detail: Page 1, parentage of Abraham Lincoln.
 
 - id: evt_1807_birt_sarah_lincoln
-  title: Birth of Sarah Lincoln in Elizabethtown and Hardin County
+  title: Birth of Sarah Lincoln in Elizabethtown, Hardin County
   scope: personal
   event_kind: residence_anchor
   category: life_milestone
   edtf_date: "1807-02-10"
   place_id: pl_hardin_ky
-  summary: Sarah Lincoln, elder sister of Abraham Lincoln, was born in Hardin County, Kentucky.
+  summary: Sarah Lincoln, elder sister of Abraham Lincoln, was born in Elizabethtown, Hardin County, Kentucky on February 10, 1807.
   participants:
     - person_id: p_sarah_lincoln_grigsby
       role: principal
@@ -140,6 +959,24 @@
       confidence: high
       citation_detail: Page 1, family household in Kentucky.
 
+- id: evt_1807_death_levi_todd
+  title: Death of Maj. Gen. Levi Todd in Lexington, Kentucky
+  scope: personal
+  event_kind: point_event
+  category: life_milestone
+  edtf_date: "1807-09-06"
+  place_id: pl_lexington_ky
+  summary: Fayette County Clerk and Kentucky militia general Levi Todd died at his Ellerslie estate near Lexington on September 6, 1807.
+  participants:
+    - person_id: p_levi_todd
+      role: principal
+    - person_id: p_robert_smith_todd
+      role: child
+  sources:
+    - source_id: src_fayette_history_1882
+      confidence: high
+      citation_detail: Death notice and probate of Gen. Levi Todd, September 1807.
+
 - id: evt_1809_birt_abraham
   title: Birth of Abraham Lincoln at Sinking Spring Farm
   scope: personal
@@ -147,7 +984,9 @@
   category: life_milestone
   edtf_date: "1809-02-12"
   place_id: pl_hodgenville_ky
-  summary: Abraham Lincoln was born in a one-room log cabin at Sinking Spring Farm near Hodgenville, Hardin County, Kentucky.
+  summary: Abraham Lincoln was born in a one-room log cabin at Sinking Spring Farm near Hodgenville, Hardin County, Kentucky on February 12, 1809.
+  photo_url: /media/place-hodgenville-birthplace.jpg
+  photo_placeholder_caption: Abraham Lincoln Birthplace Memorial Building, Hodgenville, Kentucky (NARA NAID 7720069).
   participants:
     - person_id: p_abraham_lincoln_1809
       role: principal
@@ -161,6 +1000,47 @@
     - source_id: src_lincoln_autobiography_1859
       confidence: high
       citation_detail: Page 1, "I was born Feb. 12, 1809, in Hardin County, Kentucky."
+    - source_id: src_lincoln_scripps_1860
+      confidence: high
+      citation_detail: Page 1, Sinking Spring birthplace in Hardin (later LaRue) County.
+
+- id: evt_1812_birt_thomas_jr
+  title: Birth and infant death of Thomas Lincoln Jr. at Knob Creek
+  scope: personal
+  event_kind: point_event
+  category: life_milestone
+  edtf_date: "1812"
+  place_id: pl_hardin_ky
+  summary: Younger brother Thomas Lincoln Jr. was born at the Knob Creek farm in Hardin County, Kentucky in 1812 and died in infancy.
+  participants:
+    - person_id: p_thomas_lincoln_jr
+      role: principal
+    - person_id: p_thomas_lincoln
+      role: parent
+    - person_id: p_nancy_hanks
+      role: parent
+  sources:
+    - source_id: src_lincoln_scripps_1860
+      confidence: high
+      citation_detail: Page 1, "a brother, younger than himself, died in infancy."
+
+- id: evt_1812_marr_robert_eliza_todd
+  title: Marriage of Robert Smith Todd and Eliza Ann Parker in Lexington
+  scope: family
+  event_kind: residence_anchor
+  category: family_milestone
+  edtf_date: "1812-11-26"
+  place_id: pl_lexington_ky
+  summary: Returning from War of 1812 militia service, Robert Smith Todd married his cousin Eliza Ann Parker in Lexington, Kentucky on November 26, 1812.
+  participants:
+    - person_id: p_robert_smith_todd
+      role: spouse
+    - person_id: p_eliza_parker
+      role: spouse
+  sources:
+    - source_id: src_fayette_history_1882
+      confidence: high
+      citation_detail: Fayette County marriage register and Todd family entry.
 
 - id: evt_1813_birt_elizabeth_todd
   title: Birth of Elizabeth Todd in Lexington
@@ -172,6 +1052,26 @@
   summary: Elizabeth Todd was born in Lexington, Kentucky, eldest surviving daughter of Robert Smith Todd and Eliza Ann Parker.
   participants:
     - person_id: p_elizabeth_todd_edwards
+      role: principal
+    - person_id: p_robert_smith_todd
+      role: parent
+    - person_id: p_eliza_parker
+      role: parent
+  sources:
+    - source_id: src_fayette_history_1882
+      confidence: medium
+      citation_detail: Robert Smith Todd family register.
+
+- id: evt_1815_birt_levi_o_todd
+  title: Birth of Levi O. Todd in Lexington
+  scope: personal
+  event_kind: residence_anchor
+  category: life_milestone
+  edtf_date: "1815"
+  place_id: pl_lexington_ky
+  summary: Levi O. Todd, elder brother of Mary Ann Todd, was born in Lexington, Kentucky to Robert Smith Todd and Eliza Ann Parker.
+  participants:
+    - person_id: p_levi_o_todd
       role: principal
     - person_id: p_robert_smith_todd
       role: parent
@@ -198,13 +1098,15 @@
       citation_detail: Regional weather annals, 1816.
 
 - id: evt_1816_move_indiana
-  title: Lincoln family crosses the Ohio River to Little Pigeon Creek
+  title: Lincoln family crosses the Ohio River to Little Pigeon Creek, Indiana
   scope: family
   event_kind: residence_anchor
-  category: homestead
+  category: migration
   edtf_date: "1816-12"
   place_id: pl_pigeon_creek_in
-  summary: Seeking clear federal land titles and free-soil territory, Thomas Lincoln moved his family from Kentucky to Spencer County, Indiana.
+  summary: Seeking clear federal land titles and free-soil territory, Thomas Lincoln moved his family from Kentucky to Little Pigeon Creek in Spencer County, Indiana.
+  photo_url: /media/place-pigeon-creek-farm.jpg
+  photo_placeholder_caption: Little Pigeon Creek pioneer homestead — Lincoln Boyhood National Memorial (National Park Service).
   participants:
     - person_id: p_thomas_lincoln
       role: principal
@@ -219,6 +1121,26 @@
       confidence: high
       citation_detail: Page 2, removal from Kentucky to Spencer County, Indiana in his eighth year.
 
+- id: evt_1817_birt_frances_todd
+  title: Birth of Frances Todd Wallace in Lexington
+  scope: personal
+  event_kind: residence_anchor
+  category: life_milestone
+  edtf_date: "1817-03-07"
+  place_id: pl_lexington_ky
+  summary: Frances Todd, who later married Springfield physician Dr. William S. Wallace, was born in Lexington, Kentucky on March 7, 1817.
+  participants:
+    - person_id: p_frances_todd_wallace
+      role: principal
+    - person_id: p_robert_smith_todd
+      role: parent
+    - person_id: p_eliza_parker
+      role: parent
+  sources:
+    - source_id: src_fayette_history_1882
+      confidence: medium
+      citation_detail: Robert Smith Todd family register.
+
 - id: evt_1818_death_nancy_hanks
   title: Death of Nancy Hanks Lincoln at Little Pigeon Creek
   scope: personal
@@ -226,7 +1148,7 @@
   category: life_milestone
   edtf_date: "1818-10-05"
   place_id: pl_pigeon_creek_in
-  summary: Nancy Hanks Lincoln died of milk sickness at the Little Pigeon Creek homestead in Spencer County, Indiana.
+  summary: Nancy Hanks Lincoln died of milk sickness (white snakeroot poisoning) at Little Pigeon Creek in Spencer County, Indiana on October 5, 1818.
   participants:
     - person_id: p_nancy_hanks
       role: principal
@@ -234,6 +1156,8 @@
       role: spouse
     - person_id: p_abraham_lincoln_1809
       role: child
+    - person_id: p_dennis_friend_hanks
+      role: witness
   sources:
     - source_id: src_lincoln_autobiography_1859
       confidence: high
@@ -260,23 +1184,28 @@
       citation_detail: Todd family entry, Lexington, Kentucky.
 
 - id: evt_1819_marr_thomas_sarah
-  title: Marriage of Thomas Lincoln and Sarah Bush Johnston
+  title: Marriage of Thomas Lincoln and Sarah Bush Johnston in Elizabethtown
   scope: family
   event_kind: residence_anchor
   category: family_milestone
   edtf_date: "1819-12-02"
   place_id: pl_hardin_ky
-  summary: Thomas Lincoln returned to Elizabethtown, Kentucky to marry widow Sarah Bush Johnston, who brought books and stability to Little Pigeon Creek.
+  summary: Thomas Lincoln returned to Elizabethtown, Kentucky to marry widow Sarah Bush Johnston, who brought her children, household furnishings, and books to Little Pigeon Creek.
   participants:
     - person_id: p_thomas_lincoln
       role: spouse
     - person_id: p_sarah_bush_johnston
       role: spouse
+    - person_id: p_elizabeth_johnston_hanks
+      role: child
   sources:
     - source_id: src_census_1820_spencer
-      confidence: medium
-      citation_detail: Blended Lincoln-Johnston household enumerated in Spencer County in 1820.
+      confidence: high
+      citation_detail: Blended Lincoln-Johnston household enumerated in Spencer County in August 1820.
 
+# ==============================================================================
+# ERA 4: ILLINOIS PRAIRIE & MIDWEST (1820–1860)
+# ==============================================================================
 - id: evt_1820_census_spencer
   title: 1820 U.S. Census enumerates Thomas Lincoln household in Spencer County
   scope: family
@@ -284,7 +1213,7 @@
   category: homestead
   edtf_date: "1820-08-07"
   place_id: pl_pigeon_creek_in
-  summary: The 1820 federal census records Thomas Lincoln, Sarah Bush Johnston, Abraham, Sarah, and the Johnston children farming in Spencer County, Indiana.
+  summary: The 1820 federal census records Thomas Lincoln, Sarah Bush Johnston, Abraham, Sarah, Dennis Friend Hanks, and the Johnston children farming in Spencer County, Indiana.
   participants:
     - person_id: p_thomas_lincoln
       role: principal
@@ -294,10 +1223,74 @@
       role: household
     - person_id: p_sarah_lincoln_grigsby
       role: household
+    - person_id: p_dennis_friend_hanks
+      role: household
+    - person_id: p_elizabeth_johnston_hanks
+      role: household
   sources:
     - source_id: src_census_1820_spencer
       confidence: high
       citation_detail: Spencer County, Indiana, p. 95, line 14.
+
+- id: evt_1820_birt_james_harlan
+  title: Birth of James Harlan in Illinois
+  scope: personal
+  event_kind: residence_anchor
+  category: life_milestone
+  edtf_date: "1820-08-26"
+  place_id: pl_coles_il
+  summary: James Harlan, future U.S. Senator from Iowa, Secretary of the Interior, and father-in-law of Robert Todd Lincoln, was born in Clark/Coles County borderland, Illinois to Silas Harlan and Mary Conley.
+  participants:
+    - person_id: p_james_harlan
+      role: principal
+    - person_id: p_silas_harlan_1796
+      role: parent
+    - person_id: p_mary_conley_harlan
+      role: parent
+  sources:
+    - source_id: src_census_1880_iowa_harlan
+      confidence: high
+      citation_detail: 1880 Federal Census, Mount Pleasant, Iowa, birthplace Illinois.
+
+- id: evt_1821_marr_dennis_elizabeth_hanks
+  title: Marriage of Dennis Friend Hanks and Elizabeth Johnston at Little Pigeon Creek
+  scope: family
+  event_kind: residence_anchor
+  category: family_milestone
+  edtf_date: "1821-06-09"
+  place_id: pl_pigeon_creek_in
+  summary: Abraham Lincoln's cousin Dennis Friend Hanks married stepsister Elizabeth Johnston in Spencer County, Indiana, uniting the Hanks and Johnston households.
+  participants:
+    - person_id: p_dennis_friend_hanks
+      role: spouse
+    - person_id: p_elizabeth_johnston_hanks
+      role: spouse
+    - person_id: p_sarah_bush_johnston
+      role: parent
+  sources:
+    - source_id: src_hanks_research_1899
+      confidence: high
+      citation_detail: Spencer County, Indiana marriage record, 9 June 1821.
+
+- id: evt_1826_marr_robert_betsy_todd
+  title: Robert Smith Todd marries Elizabeth Humphreys in Frankfort and Lexington
+  scope: family
+  event_kind: residence_anchor
+  category: family_milestone
+  edtf_date: "1826-11-01"
+  place_id: pl_lexington_ky
+  summary: Following the 1825 death of Eliza Ann Parker, Robert Smith Todd married Elizabeth "Betsy" Humphreys in November 1826; they later moved into the brick home on West Main Street in Lexington.
+  participants:
+    - person_id: p_robert_smith_todd
+      role: spouse
+    - person_id: p_elizabeth_humphreys_todd
+      role: spouse
+    - person_id: p_mary_todd_lincoln
+      role: household
+  sources:
+    - source_id: src_fayette_history_1882
+      confidence: high
+      citation_detail: Second marriage of Robert Smith Todd, 1826.
 
 - id: evt_1828_death_sarah_grigsby
   title: Death of Sarah Lincoln Grigsby in Spencer County
@@ -317,6 +1310,52 @@
       confidence: medium
       citation_detail: Page 2, family years in Spencer County.
 
+- id: evt_1830_move_macon_il
+  title: Lincoln, Hanks, and Johnston families migrate by ox-wagon to Macon County, Illinois
+  scope: family
+  event_kind: residence_anchor
+  category: migration
+  edtf_date: "1830-03"
+  place_id: pl_macon_il
+  summary: Driving ox-wagons out of Indiana on March 1, 1830, Thomas Lincoln, Sarah Bush Johnston, 21-year-old Abraham, Dennis Hanks, and cousin John Hanks cleared bottomland along the Sangamon River in Macon County and split thousands of walnut fence rails.
+  participants:
+    - person_id: p_thomas_lincoln
+      role: principal
+    - person_id: p_sarah_bush_johnston
+      role: spouse
+    - person_id: p_abraham_lincoln_1809
+      role: household
+    - person_id: p_dennis_friend_hanks
+      role: household
+    - person_id: p_elizabeth_johnston_hanks
+      role: household
+    - person_id: p_john_hanks
+      role: kin
+  sources:
+    - source_id: src_lincoln_scripps_1860
+      confidence: high
+      citation_detail: Page 2, March 1, 1830 ox-wagon migration to Macon County, Illinois.
+
+- id: evt_1831_coles_county_homestead
+  title: Thomas Lincoln and Sarah Bush Johnston establish Goosenest Prairie farm in Coles County
+  scope: family
+  event_kind: residence_anchor
+  category: homestead
+  edtf_date: "1831-05"
+  place_id: pl_coles_il
+  summary: After the harsh Winter of the Deep Snow, Thomas Lincoln, Sarah Bush Johnston, and Dennis Friend Hanks settled permanently in Coles County, Illinois.
+  participants:
+    - person_id: p_thomas_lincoln
+      role: principal
+    - person_id: p_sarah_bush_johnston
+      role: spouse
+    - person_id: p_dennis_friend_hanks
+      role: kin
+  sources:
+    - source_id: src_lincoln_scripps_1860
+      confidence: high
+      citation_detail: Page 2, Thomas Lincoln's removal to Coles County, Illinois.
+
 - id: evt_1831_new_salem_residence
   title: Abraham Lincoln settles in New Salem on the Sangamon River
   scope: personal
@@ -324,14 +1363,52 @@
   category: homestead
   edtf_date: "1831-07"
   place_id: pl_new_salem_il
-  summary: After a flatboat voyage to New Orleans, Abraham Lincoln settled in New Salem, Illinois, serving as clerk, postmaster, and deputy surveyor.
+  summary: After a flatboat voyage to New Orleans with cousin John Hanks, Abraham Lincoln settled in New Salem, Illinois, serving as clerk, postmaster, and deputy surveyor.
   participants:
     - person_id: p_abraham_lincoln_1809
       role: principal
+    - person_id: p_john_hanks
+      role: witness
   sources:
     - source_id: src_lincoln_autobiography_1859
       confidence: high
       citation_detail: Page 2, arrival in New Salem and election to the Illinois legislature.
+
+- id: evt_1832_black_hawk_war
+  title: Abraham Lincoln elected Captain of Sangamon volunteers in the Black Hawk War
+  scope: personal
+  event_kind: point_event
+  category: military
+  edtf_date: "1832-04-21"
+  place_id: pl_new_salem_il
+  summary: Volunteering in the 4th Regiment of Mounted Volunteers during the Black Hawk War, Abraham Lincoln was elected captain by his neighbors in Sangamon County — a distinction he later called a greater pleasure than any subsequent honor.
+  participants:
+    - person_id: p_abraham_lincoln_1809
+      role: principal
+  sources:
+    - source_id: src_lincoln_scripps_1860
+      confidence: high
+      citation_detail: Page 2, spring 1832 Black Hawk War militia captaincy.
+
+- id: evt_1836_birt_emilie_todd_helm
+  title: Birth of Emilie Todd Helm in Lexington, Kentucky
+  scope: personal
+  event_kind: residence_anchor
+  category: life_milestone
+  edtf_date: "1836-11-11"
+  place_id: pl_lexington_ky
+  summary: Emilie Todd — Mary Ann Todd's youngest half-sister, affectionately called "Little Sister Emilie" by Abraham Lincoln — was born in Lexington on November 11, 1836.
+  participants:
+    - person_id: p_emilie_todd_helm
+      role: principal
+    - person_id: p_robert_smith_todd
+      role: parent
+    - person_id: p_elizabeth_humphreys_todd
+      role: parent
+  sources:
+    - source_id: src_fayette_history_1882
+      confidence: high
+      citation_detail: Second family of Robert Smith Todd, Lexington, Kentucky.
 
 - id: evt_1837_springfield_move
   title: Abraham Lincoln moves to Springfield to practice law
@@ -356,12 +1433,14 @@
   category: homestead
   edtf_date: "1839-10"
   place_id: pl_springfield_il
-  summary: Mary Ann Todd moved from Lexington, Kentucky to Springfield, Illinois to live with her sister Elizabeth Todd Edwards.
+  summary: Mary Ann Todd moved from Lexington, Kentucky to Springfield, Illinois to live with her sister Elizabeth Todd Edwards and sister Frances Todd Wallace.
   participants:
     - person_id: p_mary_todd_lincoln
       role: principal
     - person_id: p_elizabeth_todd_edwards
       role: household
+    - person_id: p_frances_todd_wallace
+      role: kin
   sources:
     - source_id: src_unverified_tree_entry
       confidence: low
@@ -374,13 +1453,15 @@
   category: family_milestone
   edtf_date: "1842-11-04"
   place_id: pl_springfield_il
-  summary: Abraham Lincoln and Mary Ann Todd were married at the Springfield home of Ninian and Elizabeth Todd Edwards.
+  summary: Abraham Lincoln and Mary Ann Todd were married at the Springfield home of Ninian and Elizabeth Todd Edwards by Rev. Charles Dresser.
   participants:
     - person_id: p_abraham_lincoln_1809
       role: spouse
     - person_id: p_mary_todd_lincoln
       role: spouse
     - person_id: p_elizabeth_todd_edwards
+      role: witness
+    - person_id: p_frances_todd_wallace
       role: witness
   sources:
     - source_id: src_sangamon_marriage_1842
@@ -410,6 +1491,24 @@
       confidence: high
       citation_detail: Sheet 129A, Robert T. Lincoln, age 7, born in Illinois.
 
+- id: evt_1845_marr_james_harlan_ann_peck
+  title: Marriage of James Harlan and Ann Eliza Peck
+  scope: family
+  event_kind: residence_anchor
+  category: family_milestone
+  edtf_date: "1845-11-09"
+  place_id: pl_mount_pleasant_ia
+  summary: Educator and jurist James Harlan married Ann Eliza Peck in November 1845 before settling in Iowa, where he became President of Iowa Wesleyan University in Mount Pleasant.
+  participants:
+    - person_id: p_james_harlan
+      role: spouse
+    - person_id: p_ann_eliza_peck
+      role: spouse
+  sources:
+    - source_id: src_census_1880_iowa_harlan
+      confidence: high
+      citation_detail: Harlan family register, Mount Pleasant, Henry County, Iowa.
+
 - id: evt_1846_birt_edward_lincoln
   title: Birth of Edward Baker Lincoln in Springfield
   scope: personal
@@ -430,6 +1529,46 @@
       confidence: high
       citation_detail: Page 3, four children born in Springfield.
 
+- id: evt_1846_birt_mary_harlan
+  title: Birth of Mary Eunice Harlan
+  scope: personal
+  event_kind: residence_anchor
+  category: life_milestone
+  edtf_date: "1846-09-25"
+  place_id: pl_mount_pleasant_ia
+  summary: Mary Eunice Harlan, eldest child of James Harlan and Ann Eliza Peck, was born in Iowa City on September 25, 1846 and grew up in Mount Pleasant, Iowa.
+  participants:
+    - person_id: p_mary_harlan_lincoln
+      role: principal
+    - person_id: p_james_harlan
+      role: parent
+    - person_id: p_ann_eliza_peck
+      role: parent
+  sources:
+    - source_id: src_census_1880_iowa_harlan
+      confidence: high
+      citation_detail: Harlan household birth records, Iowa.
+
+- id: evt_1849_patent_6469
+  title: U.S. Patent Office grants Abraham Lincoln Patent No. 6,469 (NARA NAID 2524934)
+  scope: personal
+  event_kind: point_event
+  category: life_milestone
+  edtf_date: "1849-05-22"
+  place_id: pl_washington_dc
+  summary: Following his term in the U.S. House of Representatives, Abraham Lincoln became the only U.S. President to hold a patent — No. 6,469, "Manner of Buoying Vessels" over river shoals.
+  photo_url: /media/scan-nara-patent-6469-drawing.jpg
+  photo_placeholder_caption: Original patent drawing for Abraham Lincoln's Patent No. 6,469 (NARA NAID 2524934, RG 241).
+  participants:
+    - person_id: p_abraham_lincoln_1809
+      role: principal
+  sources:
+    - source_id: src_nara_patent_6469
+      confidence: high
+      citation_detail: NARA NAID 2524934 (RG 241, Selected Patent Files), Patent No. 6,469 granted 22 May 1849.
+      scan_url: /media/scan-nara-patent-6469-drawing.jpg
+      scan_title: NARA NAID 2524934 — Abraham Lincoln Patent No. 6,469 Drawing
+
 - id: evt_1849_death_robert_smith_todd
   title: Death of Robert Smith Todd in Lexington
   scope: personal
@@ -437,14 +1576,38 @@
   category: life_milestone
   edtf_date: "1849-07-16"
   place_id: pl_lexington_ky
-  summary: Robert Smith Todd died during the 1849 cholera epidemic in Lexington, Kentucky.
+  summary: Kentucky legislator and banker Robert Smith Todd died during the July 1849 cholera epidemic in Lexington, Kentucky.
   participants:
     - person_id: p_robert_smith_todd
       role: principal
+    - person_id: p_elizabeth_humphreys_todd
+      role: spouse
+    - person_id: p_emilie_todd_helm
+      role: child
   sources:
     - source_id: src_fayette_history_1882
       confidence: high
       citation_detail: Lexington cholera mortality roll, July 1849.
+
+- id: evt_1850_death_edward_lincoln
+  title: Death of Edward Baker Lincoln in Springfield
+  scope: personal
+  event_kind: point_event
+  category: life_milestone
+  edtf_date: "1850-02-01"
+  place_id: pl_springfield_il
+  summary: Three-year-old Edward Baker "Eddie" Lincoln died at the Eighth Street residence in Springfield after a 52-day illness.
+  participants:
+    - person_id: p_edward_baker_lincoln
+      role: principal
+    - person_id: p_abraham_lincoln_1809
+      role: parent
+    - person_id: p_mary_todd_lincoln
+      role: parent
+  sources:
+    - source_id: src_lincoln_autobiography_1859
+      confidence: high
+      citation_detail: Page 3, "four sons born in Springfield, three of whom are now living."
 
 - id: evt_1850_census_springfield
   title: 1850 U.S. Federal Census records the Lincoln household in Springfield
@@ -454,12 +1617,15 @@
   edtf_date: "1850-08-29"
   place_id: pl_springfield_il
   summary: Enumerated on Eighth Street in Springfield, listing Abraham Lincoln (lawyer, real estate $3,000), Mary Lincoln, and 7-year-old Robert T. Lincoln.
-  photo_url: /media/scan-census-1850.svg
-  photo_placeholder_caption: Archival transcription plate of the 1850 Springfield Census Schedule (p. 129A).
+  photo_url: /media/scan-census-1850-springfield.jpg
+  photo_placeholder_caption: 1850 U.S. Federal Census Schedule I, Springfield, Sangamon County, Illinois (NARA M432 Roll 127, p. 129A).
   fact_conflicts:
     - claim: Real estate valued at $3,000 in 1850 vs. $5,000 in 1860
       source_id: src_census_1860_springfield
       note: Reflects the 1856 second-story expansion of the Eighth Street residence.
+    - claim: Mary Ann Todd Lincoln's age recorded as 28 in 1850 vs. actual age 31 (born Dec 13, 1818)
+      source_id: src_fayette_history_1882
+      note: Common 19th-century census self-reporting discrepancy preserved alongside her 1818 Lexington birth record.
   participants:
     - person_id: p_abraham_lincoln_1809
       role: principal
@@ -471,8 +1637,8 @@
     - source_id: src_census_1850_springfield
       confidence: high
       citation_detail: Springfield, Sangamon County, Illinois, p. 129A, family 375, lines 12–14.
-      scan_url: /media/scan-census-1850.svg
-      scan_title: 1850 U.S. Federal Census, Springfield, Illinois (p. 129A)
+      scan_url: /media/scan-census-1850-springfield.jpg
+      scan_title: 1850 U.S. Federal Census, Springfield, Illinois (NARA M432 Roll 127, p. 129A)
 
 - id: evt_1850_birt_willie_lincoln
   title: Birth of William Wallace Lincoln in Springfield
@@ -494,6 +1660,26 @@
       confidence: high
       citation_detail: Sheet 113, William Lincoln, age 9, born in Illinois.
 
+- id: evt_1851_death_thomas_lincoln
+  title: Death of Thomas Lincoln in Coles County, Illinois
+  scope: personal
+  event_kind: point_event
+  category: life_milestone
+  edtf_date: "1851-01-17"
+  place_id: pl_coles_il
+  summary: Thomas Lincoln died at his Goosenest Prairie farm in Coles County, Illinois on January 17, 1851, aged 73, cared for by Sarah Bush Johnston and Dennis Friend Hanks.
+  participants:
+    - person_id: p_thomas_lincoln
+      role: principal
+    - person_id: p_sarah_bush_johnston
+      role: spouse
+    - person_id: p_dennis_friend_hanks
+      role: witness
+  sources:
+    - source_id: src_lincoln_scripps_1860
+      confidence: high
+      citation_detail: Page 2, death of Thomas Lincoln in Coles County, January 1851.
+
 - id: evt_1853_birt_tad_lincoln
   title: Birth of Thomas Tad Lincoln in Springfield
   scope: personal
@@ -513,6 +1699,26 @@
     - source_id: src_census_1860_springfield
       confidence: high
       citation_detail: Sheet 113, Thomas Lincoln, age 7, born in Illinois.
+
+- id: evt_1855_harlan_us_senate
+  title: James Harlan enters the U.S. Senate representing Iowa
+  scope: family
+  event_kind: residence_anchor
+  category: life_milestone
+  edtf_date: "1855-03-04"
+  place_id: pl_mount_pleasant_ia
+  summary: Elected from Mount Pleasant, Iowa as an early Republican leader, James Harlan served in the U.S. Senate (1855–1865) and became one of Abraham Lincoln's closest congressional confidants.
+  participants:
+    - person_id: p_james_harlan
+      role: principal
+    - person_id: p_ann_eliza_peck
+      role: spouse
+    - person_id: p_mary_harlan_lincoln
+      role: household
+  sources:
+    - source_id: src_nara_harlan_brady
+      confidence: high
+      citation_detail: NARA NAID 525596, Hon. James Harlan, U.S. Senator from Iowa.
 
 - id: evt_1859_autobiography_written
   title: Abraham Lincoln drafts autobiographical sketch for Jesse W. Fell
@@ -538,6 +1744,8 @@
   edtf_date: "1860-07-14"
   place_id: pl_springfield_il
   summary: Enumerated on July 14, 1860, two months after Abraham Lincoln's presidential nomination, listing Abraham, Mary, Robert, William, and Thomas in Springfield.
+  photo_url: /media/scan-census-1860-springfield.jpg
+  photo_placeholder_caption: 1860 U.S. Federal Census Schedule I, Springfield, Sangamon County, Illinois (NARA M653 Roll 226, p. 113).
   participants:
     - person_id: p_abraham_lincoln_1809
       role: principal
@@ -553,6 +1761,44 @@
     - source_id: src_census_1860_springfield
       confidence: high
       citation_detail: Springfield, Sangamon County, Illinois, p. 113, dwelling 827.
+      scan_url: /media/scan-census-1860-springfield.jpg
+      scan_title: 1860 U.S. Federal Census, Springfield, Illinois (NARA M653 Roll 226, p. 113)
+
+- id: evt_1860_springfield_rally
+  title: Republican presidential rally gathers outside the Eighth Street home
+  scope: family
+  event_kind: point_event
+  category: life_milestone
+  edtf_date: "1860-08-08"
+  place_id: pl_springfield_il
+  summary: Thousands of supporters paraded past Eighth and Jackson Streets in Springfield while Abraham Lincoln stood in a white coat by his front door alongside his family.
+  photo_url: /media/place-springfield-rally-1860.jpg
+  photo_placeholder_caption: Abraham Lincoln at his Eighth Street home in Springfield during the August 8, 1860 rally (LCCN 2009630655).
+  participants:
+    - person_id: p_abraham_lincoln_1809
+      role: principal
+    - person_id: p_mary_todd_lincoln
+      role: spouse
+  sources:
+    - source_id: src_lincoln_scripps_1860
+      confidence: high
+      citation_detail: Campaign season documentation, Springfield, August 1860.
+
+- id: evt_1860_robert_harvard
+  title: Robert Todd Lincoln enrolls at Harvard College in Cambridge
+  scope: personal
+  event_kind: residence_anchor
+  category: life_milestone
+  edtf_date: "1860-09"
+  place_id: pl_cambridge_ma
+  summary: After a preparatory year at Phillips Exeter Academy, Robert Todd Lincoln entered Harvard College in September 1860, graduating in 1864.
+  participants:
+    - person_id: p_robert_todd_lincoln
+      role: principal
+  sources:
+    - source_id: src_census_1870_chicago
+      confidence: high
+      citation_detail: Harvard College Class of 1864 biographical register.
 
 - id: evt_1860_macro_election
   title: 1860 United States Presidential Election
@@ -568,14 +1814,19 @@
     - source_id: src_lincoln_autobiography_1859
       confidence: high
 
+# ==============================================================================
+# ERA 5: WASHINGTON, D.C. & NEW ENGLAND (1861–1985)
+# ==============================================================================
 - id: evt_1861_washington_residence
-  title: Lincoln family takes residence in Washington, D.C.
+  title: First Inauguration and Lincoln family arrival in Washington, D.C.
   scope: family
   event_kind: residence_anchor
   category: homestead
   edtf_date: "1861-03-04"
   place_id: pl_washington_dc
-  summary: Abraham and Mary Lincoln moved from Springfield to Washington, D.C. for the inauguration on March 4, 1861.
+  summary: Abraham and Mary Lincoln took residence at the Executive Mansion in Washington, D.C. following the March 4, 1861 inauguration before the unfinished Capitol dome.
+  photo_url: /media/place-inauguration-capitol-1861.jpg
+  photo_placeholder_caption: First Inauguration of Abraham Lincoln at the U.S. Capitol, March 4, 1861 (LCCN 00652340).
   participants:
     - person_id: p_abraham_lincoln_1809
       role: principal
@@ -585,24 +1836,115 @@
       role: household
     - person_id: p_thomas_tad_lincoln
       role: household
+    - person_id: p_james_harlan
+      role: witness
   sources:
     - source_id: src_census_1860_springfield
       confidence: high
       citation_detail: Departure from Springfield Eighth Street residence in February 1861.
 
+- id: evt_1862_death_willie_lincoln
+  title: Death of William Wallace "Willie" Lincoln at the White House
+  scope: personal
+  event_kind: point_event
+  category: life_milestone
+  edtf_date: "1862-02-20"
+  place_id: pl_washington_dc
+  summary: Eleven-year-old Willie Lincoln died of typhoid fever at the White House on February 20, 1862, plunging Abraham and Mary Lincoln into deep wartime grief.
+  participants:
+    - person_id: p_william_wallace_lincoln
+      role: principal
+    - person_id: p_abraham_lincoln_1809
+      role: parent
+    - person_id: p_mary_todd_lincoln
+      role: parent
+    - person_id: p_thomas_tad_lincoln
+      role: household
+  sources:
+    - source_id: src_chronam_evening_star_1865
+      confidence: high
+      citation_detail: White House household record; interred later beside his father at Oak Ridge Cemetery.
+
 - id: evt_1863_emancipation_macro
-  title: Emancipation Proclamation takes effect
+  title: Emancipation Proclamation takes effect (NARA NAID 299998)
   scope: national
   event_kind: context_span
   category: macro
   edtf_date: "1863-01-01"
   place_id: pl_washington_dc
-  summary: Presidential proclamation declaring enslaved persons in rebelling states forever free.
+  summary: President Abraham Lincoln signed the final Emancipation Proclamation declaring enslaved persons in rebelling states forever free and authorizing Black enlistment in Union forces.
   severity_rank: 10
-  participants: []
+  photo_url: /media/scan-nara-emancipation-1863.jpg
+  photo_placeholder_caption: Emancipation Proclamation, page 1 (NARA NAID 299998, RG 11).
+  participants:
+    - person_id: p_abraham_lincoln_1809
+      role: principal
   sources:
-    - source_id: src_lincoln_autobiography_1859
+    - source_id: src_nara_emancipation_1863
       confidence: high
+      citation_detail: NARA NAID 299998, RG 11, Presidential Proclamations, 1 January 1863.
+      scan_url: /media/scan-nara-emancipation-1863.jpg
+      scan_title: NARA NAID 299998 — Emancipation Proclamation (Page 1)
+
+- id: evt_1863_emilie_helm_white_house
+  title: Widowed Emilie Todd Helm visits Abraham and Mary Lincoln at the White House
+  scope: family
+  event_kind: point_event
+  category: family_milestone
+  edtf_date: "1863-12"
+  place_id: pl_washington_dc
+  summary: After her husband Confederate Brig. Gen. Benjamin Hardin Helm was killed at Chickamauga, Emilie Todd Helm received a personal presidential pass to stay at the White House with her sister Mary.
+  participants:
+    - person_id: p_emilie_todd_helm
+      role: principal
+    - person_id: p_mary_todd_lincoln
+      role: kin
+    - person_id: p_abraham_lincoln_1809
+      role: kin
+  sources:
+    - source_id: src_fayette_history_1882
+      confidence: medium
+      citation_detail: Todd family Civil War correspondence, December 1863.
+
+- id: evt_1865_gardner_portrait
+  title: Alexander Gardner photographs Abraham and Tad Lincoln together in Washington
+  scope: family
+  event_kind: point_event
+  category: life_milestone
+  edtf_date: "1865-02-05"
+  place_id: pl_washington_dc
+  summary: In one of the last studio sittings of his life, Abraham Lincoln posed beside eleven-year-old son Tad examining a photograph album at Alexander Gardner's Washington gallery.
+  photo_url: /media/family-abraham-tad-1865.jpg
+  photo_placeholder_caption: Abraham Lincoln and son Tad Lincoln by Alexander Gardner, February 5, 1865 (LCCN 2009630691).
+  participants:
+    - person_id: p_abraham_lincoln_1809
+      role: principal
+    - person_id: p_thomas_tad_lincoln
+      role: child
+  sources:
+    - source_id: src_nara_harlan_brady
+      confidence: high
+      citation_detail: Library of Congress LCCN 2009630691, Gardner studio sitting, 5 February 1865.
+
+- id: evt_1865_harlan_secretary_interior
+  title: Senator James Harlan appointed U.S. Secretary of the Interior
+  scope: family
+  event_kind: residence_anchor
+  category: life_milestone
+  edtf_date: "1865-03-09"
+  place_id: pl_washington_dc
+  summary: President Lincoln nominated Senator James Harlan of Iowa as U.S. Secretary of the Interior on March 9, 1865; Harlan accompanied Lincoln to his second inaugural ball days earlier.
+  participants:
+    - person_id: p_james_harlan
+      role: principal
+    - person_id: p_ann_eliza_peck
+      role: spouse
+    - person_id: p_mary_harlan_lincoln
+      role: household
+  sources:
+    - source_id: src_nara_harlan_brady
+      confidence: high
+      citation_detail: NARA NAID 525596, Senate confirmation March 1865.
 
 - id: evt_1865_death_abraham
   title: Death of Abraham Lincoln in Washington, D.C.
@@ -611,7 +1953,9 @@
   category: life_milestone
   edtf_date: "1865-04-15"
   place_id: pl_washington_dc
-  summary: Abraham Lincoln died in Washington, D.C. on April 15, 1865, and was returned by funeral train to Oak Ridge Cemetery in Springfield, Illinois.
+  summary: President Abraham Lincoln died at the Petersen House in Washington, D.C. at 7:22 a.m. on April 15, 1865; the Evening Star published front-page dispatches as his funeral train prepared to return him to Oak Ridge Cemetery in Springfield.
+  photo_url: /media/scan-chronam-evening-star-1865.jpg
+  photo_placeholder_caption: Washington Evening Star, April 15, 1865, p. 1 (Chronicling America, LCCN sn83045462).
   participants:
     - person_id: p_abraham_lincoln_1809
       role: principal
@@ -619,28 +1963,229 @@
       role: spouse
     - person_id: p_robert_todd_lincoln
       role: child
+    - person_id: p_thomas_tad_lincoln
+      role: child
+    - person_id: p_james_harlan
+      role: witness
   sources:
+    - source_id: src_chronam_evening_star_1865
+      confidence: high
+      citation_detail: Evening Star (Washington, D.C.), 15 April 1865, p. 1 (LCCN sn83045462).
+      scan_url: /media/scan-chronam-evening-star-1865.jpg
+      scan_title: Evening Star (Washington, D.C.), April 15, 1865, Page 1
     - source_id: src_sangamon_marriage_1842
       confidence: high
       citation_detail: Interred at Oak Ridge Cemetery, Springfield, Illinois, May 4, 1865.
 
+- id: evt_1868_treasury_redemption
+  title: Robert Todd Lincoln redeems Abraham Lincoln's $10,000 U.S. Treasury security (NARA NAID 280924039)
+  scope: family
+  event_kind: point_event
+  category: homestead
+  edtf_date: "1868-01-04"
+  place_id: pl_washington_dc
+  summary: Settling his father's presidential estate, Robert Todd Lincoln endorsed and redeemed a 6% $10,000 U.S. Treasury Department security originally issued to Abraham Lincoln.
+  photo_url: /media/scan-nara-treasury-1868.jpg
+  photo_placeholder_caption: $10,000 Treasury Security redeemed by Robert Todd Lincoln, Jan 4, 1868 (NARA NAID 280924039, RG 53).
+  participants:
+    - person_id: p_robert_todd_lincoln
+      role: principal
+    - person_id: p_abraham_lincoln_1809
+      role: estate
+  sources:
+    - source_id: src_nara_treasury_1868
+      confidence: high
+      citation_detail: NARA NAID 280924039, RG 53, Bureau of the Public Debt, redeemed 4 January 1868.
+      scan_url: /media/scan-nara-treasury-1868.jpg
+      scan_title: NARA NAID 280924039 — $10,000 U.S. Treasury Security
+
 - id: evt_1868_marr_robert_mary
-  title: Marriage of Robert Todd Lincoln and Mary Eunice Harlan
+  title: Marriage of Robert Todd Lincoln and Mary Eunice Harlan in Washington, D.C.
   scope: family
   event_kind: residence_anchor
   category: family_milestone
   edtf_date: "1868-09-24"
   place_id: pl_washington_dc
-  summary: Robert Todd Lincoln married Mary Eunice Harlan, daughter of U.S. Senator James Harlan of Iowa, in Washington, D.C.
+  summary: Robert Todd Lincoln married Mary Eunice Harlan, daughter of U.S. Senator James Harlan and Ann Eliza Peck, at the Harlan residence in Washington, D.C. on September 24, 1868.
   participants:
     - person_id: p_robert_todd_lincoln
       role: spouse
     - person_id: p_mary_harlan_lincoln
       role: spouse
+    - person_id: p_james_harlan
+      role: parent
+    - person_id: p_ann_eliza_peck
+      role: parent
   sources:
-    - source_id: src_fayette_history_1882
-      confidence: medium
-      citation_detail: Descendant marriage entry.
+    - source_id: src_census_1870_chicago
+      confidence: high
+      citation_detail: Washington, D.C. marriage record and 1870 Chicago household enumeration.
+
+- id: evt_1869_death_sarah_bush_johnston
+  title: Death of Sarah Bush Johnston Lincoln in Coles County, Illinois
+  scope: personal
+  event_kind: point_event
+  category: life_milestone
+  edtf_date: "1869-04-12"
+  place_id: pl_coles_il
+  summary: Sarah Bush Johnston Lincoln died at Goosenest Prairie in Coles County, Illinois on April 12, 1869, aged 80, outliving her famous stepson by four years.
+  participants:
+    - person_id: p_sarah_bush_johnston
+      role: principal
+    - person_id: p_dennis_friend_hanks
+      role: kin
+  sources:
+    - source_id: src_hanks_research_1899
+      confidence: high
+      citation_detail: Shiloh Cemetery, Coles County, Illinois interment record, April 1869.
+
+- id: evt_1869_birt_mary_lincoln_isham
+  title: Birth of Mary "Mamie" Lincoln Isham in Chicago
+  scope: personal
+  event_kind: residence_anchor
+  category: life_milestone
+  edtf_date: "1869-10-15"
+  place_id: pl_chicago_il
+  summary: Mary "Mamie" Lincoln, eldest grandchild of Abraham and Mary Todd Lincoln, was born in Chicago, Illinois to Robert Todd Lincoln and Mary Eunice Harlan.
+  participants:
+    - person_id: p_mary_lincoln_isham
+      role: principal
+    - person_id: p_robert_todd_lincoln
+      role: parent
+    - person_id: p_mary_harlan_lincoln
+      role: parent
+  sources:
+    - source_id: src_census_1870_chicago
+      confidence: high
+      citation_detail: 1870 U.S. Federal Census, Chicago Ward 1, infant Mary Lincoln.
+
+- id: evt_1870_census_chicago_robert
+  title: 1870 U.S. Census records Robert Todd Lincoln's household in Chicago
+  scope: family
+  event_kind: residence_anchor
+  category: homestead
+  edtf_date: "1870-06"
+  place_id: pl_chicago_il
+  summary: Practicing corporate law in Chicago, Robert Todd Lincoln resided with wife Mary Eunice Harlan and infant daughter Mary "Mamie" in Cook County, Illinois.
+  participants:
+    - person_id: p_robert_todd_lincoln
+      role: principal
+    - person_id: p_mary_harlan_lincoln
+      role: spouse
+    - person_id: p_mary_lincoln_isham
+      role: household
+  sources:
+    - source_id: src_census_1870_chicago
+      confidence: high
+      citation_detail: 1870 U.S. Federal Census, Chicago, Cook County, Illinois (NARA M593 Roll 198).
+
+- id: evt_1871_death_tad_lincoln
+  title: Death of Thomas "Tad" Lincoln in Chicago
+  scope: personal
+  event_kind: point_event
+  category: life_milestone
+  edtf_date: "1871-07-15"
+  place_id: pl_chicago_il
+  summary: Returning from schooling in Europe with his mother Mary Todd Lincoln, eighteen-year-old Tad Lincoln died in Chicago on July 15, 1871 and was buried in the Lincoln Tomb in Springfield.
+  participants:
+    - person_id: p_thomas_tad_lincoln
+      role: principal
+    - person_id: p_mary_todd_lincoln
+      role: parent
+    - person_id: p_robert_todd_lincoln
+      role: kin
+  sources:
+    - source_id: src_census_1870_chicago
+      confidence: high
+      citation_detail: Chicago death record and Oak Ridge Cemetery interment, July 1871.
+
+- id: evt_1873_birt_abraham_lincoln_ii
+  title: Birth of Abraham Lincoln II "Jack" in Chicago
+  scope: personal
+  event_kind: residence_anchor
+  category: life_milestone
+  edtf_date: "1873-08-14"
+  place_id: pl_chicago_il
+  summary: Abraham Lincoln II — nicknamed "Jack", the only grandson of President Lincoln — was born in Chicago, Illinois on August 14, 1873.
+  participants:
+    - person_id: p_abraham_lincoln_ii
+      role: principal
+    - person_id: p_robert_todd_lincoln
+      role: parent
+    - person_id: p_mary_harlan_lincoln
+      role: parent
+  sources:
+    - source_id: src_census_1880_iowa_harlan
+      confidence: high
+      citation_detail: Robert Todd Lincoln family register, Chicago, 1873.
+
+- id: evt_1875_birt_jessie_harlan_lincoln
+  title: Birth of Jessie Harlan Lincoln in Chicago
+  scope: personal
+  event_kind: residence_anchor
+  category: life_milestone
+  edtf_date: "1875-11-06"
+  place_id: pl_chicago_il
+  summary: Jessie Harlan Lincoln, youngest child of Robert Todd Lincoln and Mary Eunice Harlan, was born in Chicago on November 6, 1875.
+  photo_url: /media/family-lincoln-grandchildren.jpg
+  photo_placeholder_caption: Mary "Mamie", Abraham Lincoln II "Jack", and Jessie Harlan Lincoln, c. 1882.
+  participants:
+    - person_id: p_jessie_harlan_lincoln
+      role: principal
+    - person_id: p_robert_todd_lincoln
+      role: parent
+    - person_id: p_mary_harlan_lincoln
+      role: parent
+    - person_id: p_mary_lincoln_isham
+      role: household
+    - person_id: p_abraham_lincoln_ii
+      role: household
+  sources:
+    - source_id: src_census_1880_iowa_harlan
+      confidence: high
+      citation_detail: Lincoln-Harlan family register, 1875.
+
+- id: evt_1880_census_mount_pleasant_harlan
+  title: 1880 U.S. Census records Senator James Harlan and Ann Eliza Peck in Mount Pleasant, Iowa
+  scope: family
+  event_kind: residence_anchor
+  category: homestead
+  edtf_date: "1880-06"
+  place_id: pl_mount_pleasant_ia
+  summary: Retired from the U.S. Senate, James Harlan and Ann Eliza Peck lived at their Mount Pleasant, Iowa estate where their Lincoln grandchildren frequently summered.
+  participants:
+    - person_id: p_james_harlan
+      role: principal
+    - person_id: p_ann_eliza_peck
+      role: spouse
+  sources:
+    - source_id: src_census_1880_iowa_harlan
+      confidence: high
+      citation_detail: 1880 U.S. Federal Census, Mount Pleasant, Henry County, Iowa, ED 95 (NARA T9 Roll 344).
+
+- id: evt_1881_robert_secretary_of_war
+  title: Robert Todd Lincoln serves as U.S. Secretary of War in Washington, D.C.
+  scope: family
+  event_kind: residence_anchor
+  category: life_milestone
+  edtf_date: "1881-03-05"
+  place_id: pl_washington_dc
+  summary: Appointed by President James A. Garfield and retained by Chester A. Arthur, Robert Todd Lincoln served as 35th U.S. Secretary of War from 1881 to 1885 before serving as Minister to the United Kingdom (1889–1893).
+  participants:
+    - person_id: p_robert_todd_lincoln
+      role: principal
+    - person_id: p_mary_harlan_lincoln
+      role: spouse
+    - person_id: p_mary_lincoln_isham
+      role: household
+    - person_id: p_abraham_lincoln_ii
+      role: household
+    - person_id: p_jessie_harlan_lincoln
+      role: household
+  sources:
+    - source_id: src_nara_treasury_1868
+      confidence: high
+      citation_detail: War Department executive commission records, 1881–1885.
 
 - id: evt_1882_death_mary_todd
   title: Death of Mary Ann Todd Lincoln in Springfield
@@ -649,7 +2194,9 @@
   category: life_milestone
   edtf_date: "1882-07-16"
   place_id: pl_springfield_il
-  summary: Mary Ann Todd Lincoln died at the Springfield home of her sister Elizabeth Todd Edwards and was interred beside Abraham Lincoln at Oak Ridge Cemetery.
+  summary: Mary Ann Todd Lincoln died at the Springfield home of her sister Elizabeth Todd Edwards on July 16, 1882 and was interred beside Abraham Lincoln at Oak Ridge Cemetery.
+  photo_url: /media/headstone-oak-ridge-tomb.jpg
+  photo_placeholder_caption: Lincoln Tomb and Oak Ridge Cemetery monument, Springfield, Illinois.
   participants:
     - person_id: p_mary_todd_lincoln
       role: principal
@@ -660,6 +2207,94 @@
       confidence: high
       citation_detail: Oak Ridge Cemetery interment beside Abraham Lincoln, July 1882.
 
+- id: evt_1889_death_john_hanks
+  title: Death of John Hanks in Macon County, Illinois
+  scope: personal
+  event_kind: point_event
+  category: life_milestone
+  edtf_date: "1889-07-01"
+  place_id: pl_macon_il
+  summary: John Hanks, who brought Abraham Lincoln's 1830 fence rails onto the floor of the Illinois Republican Convention in 1860, died in Macon County on July 1, 1889.
+  participants:
+    - person_id: p_john_hanks
+      role: principal
+  sources:
+    - source_id: src_hanks_research_1899
+      confidence: high
+      citation_detail: Macon County, Illinois obituary and burial record, July 1889.
+
+- id: evt_1890_death_jack_lincoln
+  title: Death of Abraham Lincoln II "Jack" in London during his father's ministry
+  scope: personal
+  event_kind: point_event
+  category: life_milestone
+  edtf_date: "1890-03-05"
+  place_id: pl_washington_dc
+  summary: Sixteen-year-old Abraham Lincoln II "Jack" died in London on March 5, 1890 from sepsis while Robert Todd Lincoln served as U.S. Minister to Britain; he was returned for burial at Oak Ridge Cemetery and later Arlington.
+  participants:
+    - person_id: p_abraham_lincoln_ii
+      role: principal
+    - person_id: p_robert_todd_lincoln
+      role: parent
+    - person_id: p_mary_harlan_lincoln
+      role: parent
+  sources:
+    - source_id: src_census_1880_iowa_harlan
+      confidence: high
+      citation_detail: U.S. Legation London death certificate, 5 March 1890.
+
+- id: evt_1892_death_dennis_hanks
+  title: Death of Dennis Friend Hanks in Paris and Charleston, Illinois
+  scope: personal
+  event_kind: point_event
+  category: life_milestone
+  edtf_date: "1892-10-31"
+  place_id: pl_coles_il
+  summary: Dennis Friend Hanks, last surviving childhood companion of Abraham Lincoln from Kentucky and Indiana, died at age 93 on October 31, 1892 in Coles County circles.
+  participants:
+    - person_id: p_dennis_friend_hanks
+      role: principal
+  sources:
+    - source_id: src_hanks_research_1899
+      confidence: high
+      citation_detail: Mound Cemetery, Charleston, Coles County, Illinois interment, October 1892.
+
+- id: evt_1899_death_james_harlan
+  title: Death of Senator James Harlan in Mount Pleasant, Iowa
+  scope: personal
+  event_kind: point_event
+  category: life_milestone
+  edtf_date: "1899-10-05"
+  place_id: pl_mount_pleasant_ia
+  summary: Former U.S. Senator and Secretary of the Interior James Harlan died in Mount Pleasant, Iowa on October 5, 1899, bequeathing the Harlan-Lincoln House to Iowa Wesleyan.
+  participants:
+    - person_id: p_james_harlan
+      role: principal
+    - person_id: p_mary_harlan_lincoln
+      role: child
+  sources:
+    - source_id: src_census_1880_iowa_harlan
+      confidence: high
+      citation_detail: Henry County, Iowa death record, 5 October 1899.
+
+- id: evt_1904_birt_robert_beckwith
+  title: Birth of Robert Todd Lincoln Beckwith, tenth-generation Lincoln descendant
+  scope: personal
+  event_kind: residence_anchor
+  category: life_milestone
+  edtf_date: "1904-07-19"
+  place_id: pl_mount_pleasant_ia
+  summary: Robert Todd Lincoln Beckwith, son of Jessie Harlan Lincoln and Warren Wallace Beckwith, was born in Riverside/Mount Pleasant circles on July 19, 1904, becoming the final direct descendant of Abraham Lincoln.
+  participants:
+    - person_id: p_robert_todd_lincoln_beckwith
+      role: principal
+    - person_id: p_jessie_harlan_lincoln
+      role: parent
+  sources:
+    - source_id: src_nara_beckwith_1954
+      confidence: high
+      citation_detail: NARA NAID 674693185 biographical identification as great-grandson of Abraham Lincoln.
+
 - id: evt_1905_hildene_manchester
   title: Robert Todd Lincoln completes Hildene in Manchester, Vermont
   scope: family
@@ -667,16 +2302,40 @@
   category: homestead
   edtf_date: "1905"
   place_id: pl_manchester_vt
-  summary: Robert Todd Lincoln and Mary Eunice Harlan established their Georgian Revival summer estate Hildene overlooking the Battenkill Valley in Manchester, Vermont.
+  summary: Robert Todd Lincoln and Mary Eunice Harlan established their Georgian Revival estate Hildene overlooking the Battenkill Valley and Mount Equinox in Manchester, Vermont.
+  photo_url: /media/place-manchester-vermont.jpg
+  photo_placeholder_caption: Mount Equinox and Manchester, Vermont, c. 1905 (NYPL historic postcard).
+  participants:
+    - person_id: p_robert_todd_lincoln
+      role: principal
+    - person_id: p_mary_harlan_lincoln
+      role: spouse
+    - person_id: p_jessie_harlan_lincoln
+      role: household
+    - person_id: p_robert_todd_lincoln_beckwith
+      role: household
+  sources:
+    - source_id: src_fayette_history_1882
+      confidence: medium
+      citation_detail: Manchester, Bennington County, Vermont property annals, 1905.
+
+- id: evt_1922_lincoln_memorial_dedication
+  title: Robert Todd Lincoln attends dedication of the Lincoln Memorial in Washington, D.C.
+  scope: family
+  event_kind: point_event
+  category: life_milestone
+  edtf_date: "1922-05-30"
+  place_id: pl_washington_dc
+  summary: At age 78, Robert Todd Lincoln made his final major public appearance at the dedication of the Lincoln Memorial on the National Mall alongside Chief Justice William Howard Taft and President Warren G. Harding.
   participants:
     - person_id: p_robert_todd_lincoln
       role: principal
     - person_id: p_mary_harlan_lincoln
       role: spouse
   sources:
-    - source_id: src_fayette_history_1882
-      confidence: medium
-      citation_detail: Manchester, Vermont property annals, 1905.
+    - source_id: src_nara_beckwith_1954
+      confidence: high
+      citation_detail: Lincoln Memorial Commission dedication program, 30 May 1922.
 
 - id: evt_1926_death_robert_todd_lincoln
   title: Death of Robert Todd Lincoln at Hildene
@@ -685,7 +2344,7 @@
   category: life_milestone
   edtf_date: "1926-07-26"
   place_id: pl_manchester_vt
-  summary: Robert Todd Lincoln, last surviving child of Abraham and Mary Lincoln, died at Hildene in Manchester, Vermont at age 82.
+  summary: Robert Todd Lincoln, last surviving child of Abraham and Mary Lincoln, died at Hildene in Manchester, Vermont on July 26, 1926 at age 82, and was interred at Arlington National Cemetery.
   participants:
     - person_id: p_robert_todd_lincoln
       role: principal
@@ -694,8 +2353,97 @@
   sources:
     - source_id: src_fayette_history_1882
       confidence: high
-      citation_detail: Bennington County death record, July 1926.
+      citation_detail: Bennington County death record, 26 July 1926.
 
+- id: evt_1930_death_emilie_todd_helm
+  title: Death of Emilie Todd Helm in Lexington, Kentucky
+  scope: personal
+  event_kind: point_event
+  category: life_milestone
+  edtf_date: "1930-02-20"
+  place_id: pl_lexington_ky
+  summary: Emilie Todd Helm, last surviving sibling of Mary Ann Todd Lincoln, died near Lexington, Kentucky at age 93 on February 20, 1930.
+  participants:
+    - person_id: p_emilie_todd_helm
+      role: principal
+  sources:
+    - source_id: src_fayette_history_1882
+      confidence: high
+      citation_detail: Fayette County, Kentucky death record, February 1930.
+
+- id: evt_1937_death_mary_harlan_lincoln
+  title: Death of Mary Eunice Harlan Lincoln in Washington, D.C.
+  scope: personal
+  event_kind: point_event
+  category: life_milestone
+  edtf_date: "1937-03-31"
+  place_id: pl_washington_dc
+  summary: Mary Eunice Harlan Lincoln died in Washington, D.C. on March 31, 1937 at age 90, bequeathing Hildene to her daughter Jessie and Abraham Lincoln's papers to the Library of Congress.
+  participants:
+    - person_id: p_mary_harlan_lincoln
+      role: principal
+    - person_id: p_mary_lincoln_isham
+      role: child
+    - person_id: p_jessie_harlan_lincoln
+      role: child
+  sources:
+    - source_id: src_nara_beckwith_1954
+      confidence: high
+      citation_detail: District of Columbia death record and Arlington interment, March 1937.
+
+- id: evt_1948_death_jessie_harlan_lincoln
+  title: Death of Jessie Harlan Lincoln in Rutland, Vermont
+  scope: personal
+  event_kind: point_event
+  category: life_milestone
+  edtf_date: "1948-01-04"
+  place_id: pl_manchester_vt
+  summary: Jessie Harlan Lincoln died in Vermont on January 4, 1948 at age 72, leaving Hildene in Manchester to her daughter Peggy Beckwith and son Robert Todd Lincoln Beckwith.
+  participants:
+    - person_id: p_jessie_harlan_lincoln
+      role: principal
+    - person_id: p_robert_todd_lincoln_beckwith
+      role: child
+  sources:
+    - source_id: src_nara_beckwith_1954
+      confidence: high
+      citation_detail: Vermont death register, 4 January 1948.
+
+- id: evt_1954_beckwith_white_house_nara
+  title: Robert Todd Lincoln Beckwith visits the White House (NARA NAID 674693185)
+  scope: personal
+  event_kind: residence_anchor
+  category: life_milestone
+  edtf_date: "1954-02"
+  place_id: pl_washington_dc
+  summary: Representing the Lincoln Day Committee, great-grandson Robert Todd Lincoln Beckwith met with President Dwight D. Eisenhower at the White House, documented in NARA RG 79 (NAID 674693185).
+  participants:
+    - person_id: p_robert_todd_lincoln_beckwith
+      role: principal
+  sources:
+    - source_id: src_nara_beckwith_1954
+      confidence: high
+      citation_detail: NARA NAID 674693185, RG 79, National Park Service White House Albums.
+
+- id: evt_1985_death_robert_beckwith
+  title: Death of Robert Todd Lincoln Beckwith, last direct descendant of Abraham Lincoln
+  scope: personal
+  event_kind: point_event
+  category: life_milestone
+  edtf_date: "1985-12-24"
+  place_id: pl_washington_dc
+  summary: Robert Todd Lincoln Beckwith died in Virginia near Washington, D.C. on December 24, 1985 at age 81, closing the ten-generation direct line from Samuel Lincoln (1622) and Abraham Lincoln (1809).
+  participants:
+    - person_id: p_robert_todd_lincoln_beckwith
+      role: principal
+  sources:
+    - source_id: src_nara_beckwith_1954
+      confidence: high
+      citation_detail: Obituary and lineage record, December 1985.
+
+# ==============================================================================
+# SYNTHETIC LIVING-PERSON PRIVACY FIXTURE (REDACTED IN PUBLIC MODE)
+# ==============================================================================
 - id: evt_1995_birt_jordan_mercer
   title: Birth of Jordan Mercer
   scope: personal

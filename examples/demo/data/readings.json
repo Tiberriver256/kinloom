@@ -35,35 +35,104 @@
       "pages": [
         {
           "page": 1,
-          "label": "Sheet 129A — Family 375",
+          "label": "Sheet 129A — Family 375 (NARA Scan)",
           "file": "census-1850-p129a.txt",
-          "image_url": "/media/scan-census-1850.svg",
+          "image_url": "/media/scan-census-1850-springfield.jpg",
           "text": "SCHEDULE I — Free Inhabitants in the City of Springfield in the County of Sangamon, State of Illinois, enumerated by me on the 29th day of August, 1850.\n\nDwelling 375 / Family 375:\nLine 12: Abraham Lincoln | Age 41 | Sex M | Profession: Lawyer | Real Estate: $3,000 | Place of Birth: Kentucky\nLine 13: Mary Lincoln    | Age 28 | Sex F | Place of Birth: Kentucky\nLine 14: Robert Lincoln  | Age 7  | Sex M | Attended school within the year | Place of Birth: Illinois\nLine 15: Catherine Gordon| Age 18 | Sex F | Place of Birth: Ireland"
         },
         {
           "page": 2,
           "label": "Enumerator Notes — Eighth Street",
           "file": "census-1850-notes.txt",
-          "text": "Archival Research Note:\n\nThe August 29, 1850 federal census captures the Eighth Street household six months after the death of second son Edward Baker Lincoln (February 1, 1850) and four months before the birth of William Wallace Lincoln (December 21, 1850).\n\nMary Ann Todd Lincoln's age is recorded as 28 (she was 31 in August 1850), a typical 19th-century census rounding discrepancy preserved alongside her 1818 Lexington birth record."
+          "image_url": "/media/scan-census-1860-springfield.jpg",
+          "text": "Archival Comparison (1850 vs. 1860 Federal Schedules):\n\nThe August 29, 1850 federal census captures the Eighth Street household six months after the death of second son Edward Baker Lincoln (February 1, 1850) and four months before the birth of William Wallace Lincoln (December 21, 1850).\n\nMary Ann Todd Lincoln's age is recorded as 28 (she was 31 in August 1850), a typical 19th-century census rounding discrepancy preserved alongside her 1818 Lexington birth record. By July 14, 1860 (M653 Roll 226, p. 113), the family's real estate valuation rose from $3,000 to $5,000 after expanding the residence to two full stories."
+        }
+      ]
+    },
+    "src_nara_patent_6469": {
+      "source_id": "src_nara_patent_6469",
+      "title": "U.S. Patent No. 6,469 — Buoying Vessels Over Shoals (NARA NAID 2524934)",
+      "author": "Abraham Lincoln",
+      "provenance": "National Archives and Records Administration, NAID 2524934, RG 241, Selected Patent Files, May 22, 1849 (public domain).",
+      "pages": [
+        {
+          "page": 1,
+          "label": "Sheet 1 — Patent Drawing (May 22, 1849)",
+          "file": "nara-patent-6469-drawing.txt",
+          "image_url": "/media/scan-nara-patent-6469-drawing.jpg",
+          "text": "UNITED STATES PATENT OFFICE.\nABRAHAM LINCOLN, OF SPRINGFIELD, ILLINOIS.\nMANNER OF BUOYING VESSELS.\nSpecification of Letters Patent No. 6,469, dated May 22, 1849.\n\nTo all whom it may concern:\nBe it known that I, ABRAHAM LINCOLN, of Springfield, in the county of Sangamon, in the State of Illinois, have invented a new and improved manner of combining adjustable buoyant air chambers with a steam boat or other vessel for the purpose of enabling their draught of water to be readily lessened to enable them to pass over bars, or through shallow water, without discharging their cargoes."
+        },
+        {
+          "page": 2,
+          "label": "Sheet 2 — Signed Petition (NARA Scan)",
+          "file": "nara-patent-6469-petition.txt",
+          "image_url": "/media/scan-nara-patent-6469-petition.jpg",
+          "text": "To the Commissioner of Patents:\n\nThe petition of Abraham Lincoln, of Springfield in the County of Sangamon & State of Illinois, respectfully represents:\nThat your petitioner has invented a new and improved manner of combining adjustable buoyant air chambers with steam boats or other vessels, which he verily believes has not been known or used prior to the invention thereof by your petitioner.\n\nSigned: Abraham Lincoln, March 10, 1849.\nNational Archives Identifier (NAID): 2524934, Record Group 241."
+        }
+      ]
+    },
+    "src_lincoln_scripps_1860": {
+      "source_id": "src_lincoln_scripps_1860",
+      "title": "Campaign Autobiography for John Locke Scripps (June 1860)",
+      "author": "Abraham Lincoln",
+      "provenance": "Library of Congress, Abraham Lincoln Papers, Series 1, June 1860 (public domain).",
+      "pages": [
+        {
+          "page": 1,
+          "label": "Page 1 — Berks County, Pennsylvania & Virginia Roots",
+          "file": "lincoln-scripps-1860-p1.txt",
+          "text": "Abraham Lincoln was born Feb. 12, 1809, then in Hardin, now in the more recently formed county of Larue, Kentucky.\n\nHis father, Thomas, & grandfather, Abraham, were born in Rockingham county Virginia, whither their ancestors had come from Berks county Pennsylvania. His lineage has been traced no farther back than this.\n\nThe family were originally quakers, though in later times they have fallen away from the peculiar habits of that people. (Note: Later parish and probate research proved the earlier four generations back to Hingham, Massachusetts and Hingham, Norfolk, England in 1622.)"
+        },
+        {
+          "page": 2,
+          "label": "Page 2 — The 1830 Illinois Migration & Black Hawk War",
+          "file": "lincoln-scripps-1860-p2.txt",
+          "text": "March 1st. 1830—Abraham having just completed his 21st. year, his father and family, with the families of the two daughters and sons-in-law, of his step-mother, left the old homestead in Indiana, and came to Illinois.\n\nTheir mode of conveyance was waggons drawn by ox-teams, and Abraham drove one of the teams. They reached the county of Macon, and stopped there some time within the same month of March.\n\nIn the spring of 1832 the Black-Hawk war broke out; and Abraham joined a volunteer company, and to his own surprize, was elected captain of it."
+        }
+      ]
+    },
+    "src_nara_emancipation_1863": {
+      "source_id": "src_nara_emancipation_1863",
+      "title": "Emancipation Proclamation (NARA NAID 299998)",
+      "author": "President Abraham Lincoln",
+      "provenance": "National Archives and Records Administration, NAID 299998, RG 11, Presidential Proclamations, January 1, 1863 (public domain).",
+      "pages": [
+        {
+          "page": 1,
+          "label": "Page 1 — Manuscript Proclamation (NARA Scan)",
+          "file": "nara-emancipation-1863-p1.txt",
+          "image_url": "/media/scan-nara-emancipation-1863.jpg",
+          "text": "By the President of the United States of America:\nA Proclamation.\n\nWhereas, on the twenty-second day of September, in the year of our Lord one thousand eight hundred and sixty-two, a proclamation was issued by the President of the United States...\n\nI do order and declare that all persons held as slaves within said designated States, and parts of States, are, and henceforward shall be free; and that the Executive government of the United States, including the military and naval authorities thereof, will recognize and maintain the freedom of said persons.\n\nDone at the City of Washington, this first day of January, in the year of our Lord one thousand eight hundred and sixty three.\nBy the President: ABRAHAM LINCOLN."
         }
       ]
     }
   },
   "event_page_map": {
+    "evt_1733_exeter_homestead": {
+      "src_lincoln_scripps_1860": 1
+    },
     "evt_1778_birt_thomas": {
-      "src_lincoln_autobiography_1859": 1
+      "src_lincoln_autobiography_1859": 1,
+      "src_lincoln_scripps_1860": 1
     },
     "evt_1782_kentucky_settlement": {
       "src_lincoln_autobiography_1859": 1
     },
     "evt_1809_birt_abraham": {
-      "src_lincoln_autobiography_1859": 1
+      "src_lincoln_autobiography_1859": 1,
+      "src_lincoln_scripps_1860": 1
     },
     "evt_1816_move_indiana": {
       "src_lincoln_autobiography_1859": 2
     },
+    "evt_1830_move_macon_il": {
+      "src_lincoln_scripps_1860": 2
+    },
     "evt_1831_new_salem_residence": {
       "src_lincoln_autobiography_1859": 2
+    },
+    "evt_1832_black_hawk_war": {
+      "src_lincoln_scripps_1860": 2
     },
     "evt_1837_springfield_move": {
       "src_lincoln_autobiography_1859": 3
@@ -71,11 +140,20 @@
     "evt_1842_marr_abraham_mary": {
       "src_lincoln_autobiography_1859": 3
     },
+    "evt_1849_patent_6469": {
+      "src_nara_patent_6469": 1
+    },
     "evt_1850_census_springfield": {
       "src_census_1850_springfield": 1
     },
     "evt_1859_autobiography_written": {
       "src_lincoln_autobiography_1859": 1
+    },
+    "evt_1860_census_springfield": {
+      "src_census_1850_springfield": 2
+    },
+    "evt_1863_emancipation_macro": {
+      "src_nara_emancipation_1863": 1
     }
   }
 }

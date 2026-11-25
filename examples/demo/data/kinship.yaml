@@ -1,9 +1,202 @@
+# Gen 1: Samuel Lincoln (1622) & Martha Lyford
+- from: p_samuel_lincoln_1622
+  to: p_martha_lyford
+  relation: spouse
+- from: p_martha_lyford
+  to: p_samuel_lincoln_1622
+  relation: spouse
+- from: p_samuel_lincoln_1622
+  to: p_samuel_lincoln_jr
+  relation: parent
+- from: p_samuel_lincoln_jr
+  to: p_samuel_lincoln_1622
+  relation: child
+- from: p_martha_lyford
+  to: p_samuel_lincoln_jr
+  relation: parent
+- from: p_samuel_lincoln_jr
+  to: p_martha_lyford
+  relation: child
+- from: p_samuel_lincoln_1622
+  to: p_mordecai_lincoln_sr
+  relation: parent
+- from: p_mordecai_lincoln_sr
+  to: p_samuel_lincoln_1622
+  relation: child
+- from: p_martha_lyford
+  to: p_mordecai_lincoln_sr
+  relation: parent
+- from: p_mordecai_lincoln_sr
+  to: p_martha_lyford
+  relation: child
+
+# Gen 2: Mordecai Lincoln Sr. & Sarah Jones
+- from: p_mordecai_lincoln_sr
+  to: p_sarah_jones_lincoln
+  relation: spouse
+- from: p_sarah_jones_lincoln
+  to: p_mordecai_lincoln_sr
+  relation: spouse
+- from: p_mordecai_lincoln_sr
+  to: p_mordecai_lincoln_jr
+  relation: parent
+- from: p_mordecai_lincoln_jr
+  to: p_mordecai_lincoln_sr
+  relation: child
+- from: p_sarah_jones_lincoln
+  to: p_mordecai_lincoln_jr
+  relation: parent
+- from: p_mordecai_lincoln_jr
+  to: p_sarah_jones_lincoln
+  relation: child
+- from: p_mordecai_lincoln_sr
+  to: p_abraham_lincoln_1688
+  relation: parent
+- from: p_abraham_lincoln_1688
+  to: p_mordecai_lincoln_sr
+  relation: child
+- from: p_sarah_jones_lincoln
+  to: p_abraham_lincoln_1688
+  relation: parent
+- from: p_abraham_lincoln_1688
+  to: p_sarah_jones_lincoln
+  relation: child
+
+# Gen 3: Mordecai Lincoln Jr. & Hannah Salter
+- from: p_mordecai_lincoln_jr
+  to: p_hannah_salter
+  relation: spouse
+- from: p_hannah_salter
+  to: p_mordecai_lincoln_jr
+  relation: spouse
+- from: p_mordecai_lincoln_jr
+  to: p_john_lincoln_1716
+  relation: parent
+- from: p_john_lincoln_1716
+  to: p_mordecai_lincoln_jr
+  relation: child
+- from: p_hannah_salter
+  to: p_john_lincoln_1716
+  relation: parent
+- from: p_john_lincoln_1716
+  to: p_hannah_salter
+  relation: child
+
+# Gen 4: Virginia John Lincoln & Rebecca Flowers Morris
+- from: p_john_lincoln_1716
+  to: p_rebecca_flowers_morris
+  relation: spouse
+- from: p_rebecca_flowers_morris
+  to: p_john_lincoln_1716
+  relation: spouse
+- from: p_john_lincoln_1716
+  to: p_abraham_lincoln_1744
+  relation: parent
+- from: p_abraham_lincoln_1744
+  to: p_john_lincoln_1716
+  relation: child
+- from: p_rebecca_flowers_morris
+  to: p_abraham_lincoln_1744
+  relation: parent
+- from: p_abraham_lincoln_1744
+  to: p_rebecca_flowers_morris
+  relation: child
+
+# Gen 4 (Todd): David Todd & Hannah Owen
+- from: p_david_todd_1723
+  to: p_hannah_owen_todd
+  relation: spouse
+- from: p_hannah_owen_todd
+  to: p_david_todd_1723
+  relation: spouse
+- from: p_david_todd_1723
+  to: p_robert_todd_1754
+  relation: parent
+- from: p_robert_todd_1754
+  to: p_david_todd_1723
+  relation: child
+- from: p_hannah_owen_todd
+  to: p_robert_todd_1754
+  relation: parent
+- from: p_robert_todd_1754
+  to: p_hannah_owen_todd
+  relation: child
+- from: p_david_todd_1723
+  to: p_levi_todd
+  relation: parent
+- from: p_levi_todd
+  to: p_david_todd_1723
+  relation: child
+- from: p_hannah_owen_todd
+  to: p_levi_todd
+  relation: parent
+- from: p_levi_todd
+  to: p_hannah_owen_todd
+  relation: child
+
+# Gen 4 (Hanks): Joseph Hanks & Ann Nanny Lee
+- from: p_joseph_hanks
+  to: p_ann_nanny_lee
+  relation: spouse
+- from: p_ann_nanny_lee
+  to: p_joseph_hanks
+  relation: spouse
+- from: p_joseph_hanks
+  to: p_lucy_hanks
+  relation: parent
+- from: p_lucy_hanks
+  to: p_joseph_hanks
+  relation: child
+- from: p_ann_nanny_lee
+  to: p_lucy_hanks
+  relation: parent
+- from: p_lucy_hanks
+  to: p_ann_nanny_lee
+  relation: child
+- from: p_joseph_hanks
+  to: p_william_hanks
+  relation: parent
+- from: p_william_hanks
+  to: p_joseph_hanks
+  relation: child
+- from: p_ann_nanny_lee
+  to: p_william_hanks
+  relation: parent
+- from: p_william_hanks
+  to: p_ann_nanny_lee
+  relation: child
+- from: p_joseph_hanks
+  to: p_nancy_hanks_sr
+  relation: parent
+- from: p_nancy_hanks_sr
+  to: p_joseph_hanks
+  relation: child
+- from: p_ann_nanny_lee
+  to: p_nancy_hanks_sr
+  relation: parent
+- from: p_nancy_hanks_sr
+  to: p_ann_nanny_lee
+  relation: child
+
+# Gen 5 (Lincoln): Capt. Abraham Lincoln (1744) & Bathsheba Herring
 - from: p_abraham_lincoln_1744
   to: p_bathsheba_herring
   relation: spouse
 - from: p_bathsheba_herring
   to: p_abraham_lincoln_1744
   relation: spouse
+- from: p_abraham_lincoln_1744
+  to: p_mordecai_lincoln_1771
+  relation: parent
+- from: p_mordecai_lincoln_1771
+  to: p_abraham_lincoln_1744
+  relation: child
+- from: p_bathsheba_herring
+  to: p_mordecai_lincoln_1771
+  relation: parent
+- from: p_mordecai_lincoln_1771
+  to: p_bathsheba_herring
+  relation: child
 - from: p_abraham_lincoln_1744
   to: p_thomas_lincoln
   relation: parent
@@ -17,6 +210,7 @@
   to: p_bathsheba_herring
   relation: child
 
+# Gen 5 (Todd): Levi Todd & Jane Briggs
 - from: p_levi_todd
   to: p_jane_briggs
   relation: spouse
@@ -36,6 +230,27 @@
   to: p_jane_briggs
   relation: child
 
+# Gen 5 (Hanks): Lucy Hanks -> Nancy Hanks; William Hanks -> John Hanks; Nancy Hanks Sr. -> Dennis Friend Hanks
+- from: p_lucy_hanks
+  to: p_nancy_hanks
+  relation: parent
+- from: p_nancy_hanks
+  to: p_lucy_hanks
+  relation: child
+- from: p_william_hanks
+  to: p_john_hanks
+  relation: parent
+- from: p_john_hanks
+  to: p_william_hanks
+  relation: child
+- from: p_nancy_hanks_sr
+  to: p_dennis_friend_hanks
+  relation: parent
+- from: p_dennis_friend_hanks
+  to: p_nancy_hanks_sr
+  relation: child
+
+# Gen 6 (Lincoln & Hanks): Thomas Lincoln, Nancy Hanks, Sarah Bush Johnston
 - from: p_thomas_lincoln
   to: p_nancy_hanks
   relation: spouse
@@ -48,7 +263,18 @@
 - from: p_sarah_bush_johnston
   to: p_thomas_lincoln
   relation: spouse
-
+- from: p_sarah_bush_johnston
+  to: p_elizabeth_johnston_hanks
+  relation: parent
+- from: p_elizabeth_johnston_hanks
+  to: p_sarah_bush_johnston
+  relation: child
+- from: p_dennis_friend_hanks
+  to: p_elizabeth_johnston_hanks
+  relation: spouse
+- from: p_elizabeth_johnston_hanks
+  to: p_dennis_friend_hanks
+  relation: spouse
 - from: p_thomas_lincoln
   to: p_sarah_lincoln_grigsby
   relation: parent
@@ -61,7 +287,6 @@
 - from: p_sarah_lincoln_grigsby
   to: p_nancy_hanks
   relation: child
-
 - from: p_thomas_lincoln
   to: p_abraham_lincoln_1809
   relation: parent
@@ -74,11 +299,30 @@
 - from: p_abraham_lincoln_1809
   to: p_nancy_hanks
   relation: child
+- from: p_thomas_lincoln
+  to: p_thomas_lincoln_jr
+  relation: parent
+- from: p_thomas_lincoln_jr
+  to: p_thomas_lincoln
+  relation: child
+- from: p_nancy_hanks
+  to: p_thomas_lincoln_jr
+  relation: parent
+- from: p_thomas_lincoln_jr
+  to: p_nancy_hanks
+  relation: child
 
+# Gen 6 (Todd): Robert Smith Todd, Eliza Ann Parker, Elizabeth Humphreys
 - from: p_robert_smith_todd
   to: p_eliza_parker
   relation: spouse
 - from: p_eliza_parker
+  to: p_robert_smith_todd
+  relation: spouse
+- from: p_robert_smith_todd
+  to: p_elizabeth_humphreys_todd
+  relation: spouse
+- from: p_elizabeth_humphreys_todd
   to: p_robert_smith_todd
   relation: spouse
 - from: p_robert_smith_todd
@@ -94,6 +338,30 @@
   to: p_eliza_parker
   relation: child
 - from: p_robert_smith_todd
+  to: p_levi_o_todd
+  relation: parent
+- from: p_levi_o_todd
+  to: p_robert_smith_todd
+  relation: child
+- from: p_eliza_parker
+  to: p_levi_o_todd
+  relation: parent
+- from: p_levi_o_todd
+  to: p_eliza_parker
+  relation: child
+- from: p_robert_smith_todd
+  to: p_frances_todd_wallace
+  relation: parent
+- from: p_frances_todd_wallace
+  to: p_robert_smith_todd
+  relation: child
+- from: p_eliza_parker
+  to: p_frances_todd_wallace
+  relation: parent
+- from: p_frances_todd_wallace
+  to: p_eliza_parker
+  relation: child
+- from: p_robert_smith_todd
   to: p_mary_todd_lincoln
   relation: parent
 - from: p_mary_todd_lincoln
@@ -105,14 +373,66 @@
 - from: p_mary_todd_lincoln
   to: p_eliza_parker
   relation: child
+- from: p_robert_smith_todd
+  to: p_emilie_todd_helm
+  relation: parent
+- from: p_emilie_todd_helm
+  to: p_robert_smith_todd
+  relation: child
+- from: p_elizabeth_humphreys_todd
+  to: p_emilie_todd_helm
+  relation: parent
+- from: p_emilie_todd_helm
+  to: p_elizabeth_humphreys_todd
+  relation: child
 
+# Gen 6 (Harlan): Silas Harlan & Mary Conley -> Senator James Harlan
+- from: p_silas_harlan_1796
+  to: p_mary_conley_harlan
+  relation: spouse
+- from: p_mary_conley_harlan
+  to: p_silas_harlan_1796
+  relation: spouse
+- from: p_silas_harlan_1796
+  to: p_james_harlan
+  relation: parent
+- from: p_james_harlan
+  to: p_silas_harlan_1796
+  relation: child
+- from: p_mary_conley_harlan
+  to: p_james_harlan
+  relation: parent
+- from: p_james_harlan
+  to: p_mary_conley_harlan
+  relation: child
+
+# Gen 7 (Harlan): Senator James Harlan & Ann Eliza Peck -> Mary Eunice Harlan
+- from: p_james_harlan
+  to: p_ann_eliza_peck
+  relation: spouse
+- from: p_ann_eliza_peck
+  to: p_james_harlan
+  relation: spouse
+- from: p_james_harlan
+  to: p_mary_harlan_lincoln
+  relation: parent
+- from: p_mary_harlan_lincoln
+  to: p_james_harlan
+  relation: child
+- from: p_ann_eliza_peck
+  to: p_mary_harlan_lincoln
+  relation: parent
+- from: p_mary_harlan_lincoln
+  to: p_ann_eliza_peck
+  relation: child
+
+# Gen 7 (Lincoln & Todd): Abraham Lincoln & Mary Ann Todd -> Four Sons
 - from: p_abraham_lincoln_1809
   to: p_mary_todd_lincoln
   relation: spouse
 - from: p_mary_todd_lincoln
   to: p_abraham_lincoln_1809
   relation: spouse
-
 - from: p_abraham_lincoln_1809
   to: p_robert_todd_lincoln
   relation: parent
@@ -125,7 +445,6 @@
 - from: p_robert_todd_lincoln
   to: p_mary_todd_lincoln
   relation: child
-
 - from: p_abraham_lincoln_1809
   to: p_edward_baker_lincoln
   relation: parent
@@ -138,7 +457,6 @@
 - from: p_edward_baker_lincoln
   to: p_mary_todd_lincoln
   relation: child
-
 - from: p_abraham_lincoln_1809
   to: p_william_wallace_lincoln
   relation: parent
@@ -151,7 +469,6 @@
 - from: p_william_wallace_lincoln
   to: p_mary_todd_lincoln
   relation: child
-
 - from: p_abraham_lincoln_1809
   to: p_thomas_tad_lincoln
   relation: parent
@@ -165,9 +482,54 @@
   to: p_mary_todd_lincoln
   relation: child
 
+# Gen 8: Robert Todd Lincoln & Mary Eunice Harlan -> Three Children
 - from: p_robert_todd_lincoln
   to: p_mary_harlan_lincoln
   relation: spouse
 - from: p_mary_harlan_lincoln
   to: p_robert_todd_lincoln
   relation: spouse
+- from: p_robert_todd_lincoln
+  to: p_mary_lincoln_isham
+  relation: parent
+- from: p_mary_lincoln_isham
+  to: p_robert_todd_lincoln
+  relation: child
+- from: p_mary_harlan_lincoln
+  to: p_mary_lincoln_isham
+  relation: parent
+- from: p_mary_lincoln_isham
+  to: p_mary_harlan_lincoln
+  relation: child
+- from: p_robert_todd_lincoln
+  to: p_abraham_lincoln_ii
+  relation: parent
+- from: p_abraham_lincoln_ii
+  to: p_robert_todd_lincoln
+  relation: child
+- from: p_mary_harlan_lincoln
+  to: p_abraham_lincoln_ii
+  relation: parent
+- from: p_abraham_lincoln_ii
+  to: p_mary_harlan_lincoln
+  relation: child
+- from: p_robert_todd_lincoln
+  to: p_jessie_harlan_lincoln
+  relation: parent
+- from: p_jessie_harlan_lincoln
+  to: p_robert_todd_lincoln
+  relation: child
+- from: p_mary_harlan_lincoln
+  to: p_jessie_harlan_lincoln
+  relation: parent
+- from: p_jessie_harlan_lincoln
+  to: p_mary_harlan_lincoln
+  relation: child
+
+# Gen 9 -> Gen 10: Jessie Harlan Lincoln -> Robert Todd Lincoln Beckwith
+- from: p_jessie_harlan_lincoln
+  to: p_robert_todd_lincoln_beckwith
+  relation: parent
+- from: p_robert_todd_lincoln_beckwith
+  to: p_jessie_harlan_lincoln
+  relation: child

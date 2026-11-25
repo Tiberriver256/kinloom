@@ -1,6 +1,9 @@
 import type {
   ArchiveBundle,
+  ArchiveCapabilities as CoreArchiveCapabilities,
+  ArchiveDataSource,
   ArchiveEvent,
+  ArchiveSessionState,
   ArchiveStatus,
   KinloomSiteConfig,
   MediaChecklistItem,
@@ -13,8 +16,10 @@ import {
   ArchiveBundleSchema,
   ReadingsBundleSchema,
   deriveArchiveStatus,
+  resolveCapabilities,
 } from '@kinloom/core';
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { createStaticArchiveDataSource } from '../adapters/staticDemoDataSource.js';
 
 export interface ArchiveDataLoader {
   loadArchive: () => Promise<ArchiveBundle>;
@@ -23,37 +28,43 @@ export interface ArchiveDataLoader {
 }
 
 /**
- * Extension hooks ready for Phase 3's live Cloudflare D1 Wiki API,
- * user session, and revision history.
+ * Backward-compatible session shape accepted by KinloomApp / ArchiveDataProvider.
  */
 export interface ArchiveSession {
   authenticated: boolean;
+  principal_kind?: 'anonymous' | 'invite_viewer' | 'user';
   email?: string;
   displayName?: string;
   role?: 'admin' | 'editor' | 'viewer';
+  inviteLabel?: string;
 }
 
 export interface ArchiveCapabilities {
   canEdit: boolean;
   canUploadMedia: boolean;
   hasRevisionHistory: boolean;
+  hasTalk: boolean;
+  canManageSite: boolean;
 }
 
 export interface ArchiveDataProviderProps {
   siteConfig: KinloomSiteConfig;
   loader?: ArchiveDataLoader;
+  dataSource?: ArchiveDataSource;
   baseUrl?: string;
   initialBundle?: ArchiveBundle | null;
   initialReadings?: ReadingsBundle | null;
   session?: ArchiveSession | null;
-  capabilities?: ArchiveCapabilities;
+  capabilities?: Partial<ArchiveCapabilities>;
   children: React.ReactNode;
 }
 
 export interface ArchiveDataContextValue {
   siteConfig: KinloomSiteConfig;
   baseUrl: string;
+  dataSource: ArchiveDataSource;
   bundle: ArchiveBundle | null;
+  etag: string | null;
   loading: boolean;
   error: string | null;
   status: ArchiveStatus;
@@ -71,14 +82,17 @@ export interface ArchiveDataContextValue {
   ensureReadings: () => void;
   loadMediaChecklist: () => Promise<MediaChecklistItem[]>;
   reloadArchive: () => void;
-  session: ArchiveSession | null;
-  capabilities: ArchiveCapabilities;
+  refreshSession: () => Promise<void>;
+  session: ArchiveSessionState | null;
+  capabilities: CoreArchiveCapabilities;
 }
 
-const DEFAULT_CAPABILITIES: ArchiveCapabilities = {
+const DEFAULT_CAPABILITIES: CoreArchiveCapabilities = {
   canEdit: false,
   canUploadMedia: false,
   hasRevisionHistory: false,
+  hasTalk: false,
+  canManageSite: false,
 };
 
 function normalizeBaseUrl(raw?: string): string {
@@ -94,6 +108,52 @@ function isMediaChecklistResponse(data: unknown): data is { items: MediaChecklis
     'items' in data &&
     Array.isArray((data as { items: unknown }).items)
   );
+}
+
+function normalizeSessionProp(session: ArchiveSession | null | undefined): ArchiveSessionState | null {
+  if (!session) {
+    return null;
+  }
+  const inferredKind: ArchiveSessionState['principal_kind'] =
+    session.principal_kind ??
+    (session.authenticated ? 'user' : session.role === 'viewer' ? 'invite_viewer' : 'anonymous');
+  return {
+    authenticated: session.authenticated,
+    principal_kind: inferredKind,
+    email: session.email,
+    displayName: session.displayName,
+    role: session.role,
+    inviteLabel: session.inviteLabel,
+  };
+}
+
+function normalizeCapabilities(
+  caps: Partial<ArchiveCapabilities> | undefined,
+  session: ArchiveSessionState | null,
+): CoreArchiveCapabilities {
+  if (!caps) {
+    return session ? resolveCapabilities(session) : DEFAULT_CAPABILITIES;
+  }
+  return {
+    canEdit: caps.canEdit ?? false,
+    canUploadMedia: caps.canUploadMedia ?? false,
+    hasRevisionHistory: caps.hasRevisionHistory ?? false,
+    hasTalk: caps.hasTalk ?? false,
+    canManageSite: caps.canManageSite ?? false,
+  };
+}
+
+function wrapLegacyLoader(loader: ArchiveDataLoader): ArchiveDataSource {
+  return {
+    async loadArchive() {
+      const bundle = await loader.loadArchive();
+      return { bundle, etag: null, notModified: false };
+    },
+    loadReadings: () => loader.loadReadings(),
+    loadMediaChecklist: loader.loadMediaChecklist
+      ? () => loader.loadMediaChecklist!()
+      : undefined,
+  };
 }
 
 export function createStaticArchiveLoader(baseUrl?: string): ArchiveDataLoader {
@@ -138,28 +198,98 @@ const ArchiveDataContext = createContext<ArchiveDataContextValue | null>(null);
 export const ArchiveDataProvider: React.FC<ArchiveDataProviderProps> = ({
   siteConfig,
   loader,
+  dataSource,
   baseUrl,
   initialBundle = null,
   initialReadings = null,
-  session = null,
-  capabilities = DEFAULT_CAPABILITIES,
+  session: sessionProp,
+  capabilities: capabilitiesProp,
   children,
 }) => {
   const resolvedBaseUrl = normalizeBaseUrl(baseUrl);
-  const resolvedLoader = useMemo(
-    () => loader ?? createStaticArchiveLoader(resolvedBaseUrl),
-    [loader, resolvedBaseUrl],
+  const resolvedDataSource = useMemo<ArchiveDataSource>(() => {
+    if (dataSource) {
+      return dataSource;
+    }
+    if (loader) {
+      return wrapLegacyLoader(loader);
+    }
+    return createStaticArchiveDataSource(resolvedBaseUrl);
+  }, [dataSource, loader, resolvedBaseUrl]);
+
+  const initialNormalizedSession = useMemo(
+    () => normalizeSessionProp(sessionProp),
+    [sessionProp],
+  );
+  const initialNormalizedCaps = useMemo(
+    () => normalizeCapabilities(capabilitiesProp, initialNormalizedSession),
+    [capabilitiesProp, initialNormalizedSession],
   );
 
   const [bundle, setBundle] = useState<ArchiveBundle | null>(initialBundle);
+  const [etag, setEtag] = useState<string | null>(null);
   const [loading, setLoading] = useState<boolean>(initialBundle === null);
   const [error, setError] = useState<string | null>(null);
   const [reloadTick, setReloadTick] = useState(0);
+
+  const [liveSession, setLiveSession] = useState<ArchiveSessionState | null>(
+    initialNormalizedSession,
+  );
+  const [liveCapabilities, setLiveCapabilities] = useState<CoreArchiveCapabilities>(
+    initialNormalizedCaps,
+  );
 
   const [readings, setReadings] = useState<ReadingsBundle | null>(initialReadings);
   const [readingsLoading, setReadingsLoading] = useState(false);
   const [readingsError, setReadingsError] = useState<string | null>(null);
   const readingsFetchedRef = useRef(initialReadings !== null);
+  const etagRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (sessionProp !== undefined) {
+      setLiveSession(initialNormalizedSession);
+    }
+  }, [sessionProp, initialNormalizedSession]);
+
+  useEffect(() => {
+    if (capabilitiesProp !== undefined || sessionProp !== undefined) {
+      setLiveCapabilities(initialNormalizedCaps);
+    }
+  }, [capabilitiesProp, sessionProp, initialNormalizedCaps]);
+
+  const refreshSession = useCallback(async (): Promise<void> => {
+    if (!resolvedDataSource.getSession) {
+      return;
+    }
+    try {
+      const res = await resolvedDataSource.getSession();
+      setLiveSession(res.session);
+      setLiveCapabilities(res.capabilities);
+    } catch {
+      // Keep current session state on transient refresh failure.
+    }
+  }, [resolvedDataSource]);
+
+  useEffect(() => {
+    if (sessionProp !== undefined || !resolvedDataSource.getSession) {
+      return;
+    }
+    let cancelled = false;
+    void resolvedDataSource
+      .getSession()
+      .then((res) => {
+        if (!cancelled) {
+          setLiveSession(res.session);
+          setLiveCapabilities(res.capabilities);
+        }
+      })
+      .catch(() => {
+        // Leave anonymous/read-only state on error.
+      });
+    return (): void => {
+      cancelled = true;
+    };
+  }, [resolvedDataSource, sessionProp]);
 
   const reloadArchive = useCallback(() => {
     setReloadTick((t) => t + 1);
@@ -172,7 +302,7 @@ export const ArchiveDataProvider: React.FC<ArchiveDataProviderProps> = ({
     readingsFetchedRef.current = true;
     setReadingsLoading(true);
     setReadingsError(null);
-    resolvedLoader
+    resolvedDataSource
       .loadReadings()
       .then((data) => {
         setReadings(data);
@@ -183,7 +313,7 @@ export const ArchiveDataProvider: React.FC<ArchiveDataProviderProps> = ({
         setReadingsError(String(error_));
         setReadingsLoading(false);
       });
-  }, [resolvedLoader]);
+  }, [resolvedDataSource]);
 
   useEffect(() => {
     if (initialBundle !== null && reloadTick === 0) {
@@ -192,13 +322,15 @@ export const ArchiveDataProvider: React.FC<ArchiveDataProviderProps> = ({
     let cancelled = false;
     setLoading(true);
     setError(null);
-    resolvedLoader
-      .loadArchive()
-      .then((data) => {
+    resolvedDataSource
+      .loadArchive({ ifNoneMatch: etagRef.current ?? undefined })
+      .then((result) => {
         if (cancelled) {
           return;
         }
-        setBundle(data);
+        etagRef.current = result.etag;
+        setEtag(result.etag);
+        setBundle(result.bundle);
         setLoading(false);
       })
       .catch((error_: unknown) => {
@@ -211,7 +343,7 @@ export const ArchiveDataProvider: React.FC<ArchiveDataProviderProps> = ({
     return (): void => {
       cancelled = true;
     };
-  }, [resolvedLoader, initialBundle, reloadTick]);
+  }, [resolvedDataSource, initialBundle, reloadTick]);
 
   // Quietly load readings once archive is ready so dynamic readableSourceIds
   // populate without hardcoding any source IDs in code.
@@ -279,17 +411,19 @@ export const ArchiveDataProvider: React.FC<ArchiveDataProviderProps> = ({
   }, [readings, siteConfig.featuredDocumentId]);
 
   const loadMediaChecklist = useCallback(async (): Promise<MediaChecklistItem[]> => {
-    if (!resolvedLoader.loadMediaChecklist) {
+    if (!resolvedDataSource.loadMediaChecklist) {
       return [];
     }
-    return resolvedLoader.loadMediaChecklist();
-  }, [resolvedLoader]);
+    return resolvedDataSource.loadMediaChecklist();
+  }, [resolvedDataSource]);
 
   const value = useMemo<ArchiveDataContextValue>(
     () => ({
       siteConfig,
       baseUrl: resolvedBaseUrl,
+      dataSource: resolvedDataSource,
       bundle,
+      etag,
       loading,
       error,
       status,
@@ -302,13 +436,16 @@ export const ArchiveDataProvider: React.FC<ArchiveDataProviderProps> = ({
       ensureReadings,
       loadMediaChecklist,
       reloadArchive,
-      session,
-      capabilities,
+      refreshSession,
+      session: liveSession,
+      capabilities: liveCapabilities,
     }),
     [
       siteConfig,
       resolvedBaseUrl,
+      resolvedDataSource,
       bundle,
+      etag,
       loading,
       error,
       status,
@@ -321,8 +458,9 @@ export const ArchiveDataProvider: React.FC<ArchiveDataProviderProps> = ({
       ensureReadings,
       loadMediaChecklist,
       reloadArchive,
-      session,
-      capabilities,
+      refreshSession,
+      liveSession,
+      liveCapabilities,
     ],
   );
 

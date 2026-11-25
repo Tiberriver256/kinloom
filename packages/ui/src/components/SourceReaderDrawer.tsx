@@ -8,6 +8,7 @@ import {
   formatPublicCitation,
 } from '@kinloom/core';
 import { readerNextPage, readerPrevPage, resolveReaderPageIndex } from '../lib/sourceReaderNav.js';
+import { PluginSlot } from '../plugins/PluginContext.js';
 import { resolveAssetUrl } from './Atoms.js';
 import { useArchiveData } from '../context/ArchiveDataContext.js';
 import { useArchiveUi } from '../context/ArchiveUiContext.js';
@@ -256,7 +257,7 @@ export const SourceReaderDrawer: React.FC = () => {
         </div>
 
         {orderedDocs.length > 0 && (
-          <div className="filter-bar" style={{ marginBottom: 0 }} role="tablist" aria-label="Primary source collections">
+          <div className="filter-bar source-collection-tabs" style={{ marginBottom: 0 }} role="tablist" aria-label="Primary source collections">
             {orderedDocs.map((doc) => (
               <button
                 key={doc.source_id}
@@ -323,8 +324,8 @@ export const SourceReaderDrawer: React.FC = () => {
             </div>
 
             <div className="source-reader-controls">
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6, flexWrap: 'wrap' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+              <div className="source-reader-toolbar-row">
+                <div className="source-pager-group">
                   <button
                     type="button"
                     className="pill-btn"
@@ -365,7 +366,7 @@ export const SourceReaderDrawer: React.FC = () => {
 
                 {hasScan && (
                   // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role -- role="group" is the correct grouping pattern for a button toolbar
-                  <div style={{ display: 'flex', gap: 4 }} role="group" aria-label="Document view mode">
+                  <div className="source-view-mode-group" role="group" aria-label="Document view mode">
                     <button
                       type="button"
                       className={`pill-btn ${effectiveMode === 'text' ? 'active' : ''}`}
@@ -480,6 +481,7 @@ export const SourceReaderDrawer: React.FC = () => {
             <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
               Provenance: {formatPublicCitation(currentDoc.provenance)}
             </div>
+            <PluginSlot name="sourceReaderFooter" />
           </>
         )}
 

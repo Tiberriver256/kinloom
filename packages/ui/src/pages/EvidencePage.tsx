@@ -1,10 +1,16 @@
 import type { ArchivalMediaKind, MediaChecklistItem, MediaItem } from '@kinloom/core';
-import { UNVERIFIED_TREE_SOURCE_ID, buildLibrarianCitation } from '@kinloom/core';
-import { DateStamp, resolveAssetUrl } from '../components/Atoms.js';
+import {
+  UNVERIFIED_TREE_SOURCE_ID,
+  buildLibrarianCitation,
+  formatPublicCitation,
+} from '@kinloom/core';
+import { DateStamp } from '../components/Atoms.js';
 import { Link, useSearchParams } from 'react-router-dom';
 import React, { useEffect, useMemo, useState } from 'react';
 import { ExplorerTopBar } from '../components/ExplorerTopBar.js';
 import { KinloomFooter } from '../components/KinloomFooter.js';
+import { MediaPlayer } from '../components/MediaPlayer.js';
+import { PluginSlot } from '../plugins/PluginContext.js';
 import { useArchiveData } from '../context/ArchiveDataContext.js';
 import { useArchiveUi } from '../context/ArchiveUiContext.js';
 
@@ -235,7 +241,7 @@ export const EvidencePage: React.FC = () => {
               headstones, primary record scans, and manuscript pages.
             </p>
           </div>
-          <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.8125rem', textAlign: 'right' }}>
+          <div className="folio-metrics">
             <div>
               <strong>{bundle.sources.length}</strong> distinct archival sources
             </div>
@@ -249,6 +255,8 @@ export const EvidencePage: React.FC = () => {
             </div>
           </div>
         </section>
+
+        <PluginSlot name="evidenceExtra" />
 
         <div className="filter-bar" role="tablist" aria-label="Evidence ledger sections">
           <button
@@ -339,58 +347,42 @@ export const EvidencePage: React.FC = () => {
                     <div className="source-details">
                       <strong>Conflicting Claims Preserved Side-by-Side:</strong>
                       <ul>
-                        {(ev.alternate_dates || []).map((alt) => {
-                          const src = sourcesById.get(alt.source_id);
+                        {[
+                          ...(ev.alternate_dates || []).map((alt) => ({
+                            key: `date|${alt.edtf_date}|${alt.source_id}|${alt.note}`,
+                            badge: alt.edtf_date,
+                            note: alt.note,
+                            sourceId: alt.source_id,
+                          })),
+                          ...(ev.alternate_places || []).map((alt) => ({
+                            key: `place|${alt.place_name}|${alt.source_id}|${alt.note}`,
+                            badge: `Place: ${alt.place_name}`,
+                            note: alt.note,
+                            sourceId: alt.source_id,
+                          })),
+                          ...(ev.fact_conflicts || []).map((alt) => ({
+                            key: `fact|${alt.claim}|${alt.source_id}|${alt.note}`,
+                            badge: alt.claim,
+                            note: alt.note,
+                            sourceId: alt.source_id,
+                          })),
+                        ].map((claim) => {
+                          const src = sourcesById.get(claim.sourceId);
+                          const publicCitation = src ? formatPublicCitation(src.citation) : '';
                           return (
-                            <li key={`date|${alt.edtf_date}|${alt.source_id}|${alt.note}`} style={{ marginBottom: 4 }}>
-                              <code>{alt.edtf_date}</code> — {alt.note}{' '}
-                              {src && <span style={{ color: 'var(--text-secondary)' }}>({src.citation})</span>}
-                              {readableSourceIds.has(alt.source_id) && (
-                                <button
-                                  type="button"
-                                  className="source-read-inline"
-                                  onClick={() => {
-                                    openSourceReader({ sourceId: alt.source_id, eventId: ev.id });
-                                  }}
-                                >
-                                  Read Page ↗
-                                </button>
+                            <li key={claim.key} style={{ marginBottom: 4 }}>
+                              <code>{claim.badge}</code> — {claim.note}
+                              {publicCitation && (
+                                <span style={{ color: 'var(--text-secondary)' }}>
+                                  {' '}· {publicCitation}
+                                </span>
                               )}
-                            </li>
-                          );
-                        })}
-                        {(ev.alternate_places || []).map((alt) => {
-                          const src = sourcesById.get(alt.source_id);
-                          return (
-                            <li key={`place|${alt.place_name}|${alt.source_id}|${alt.note}`} style={{ marginBottom: 4 }}>
-                              <code>Place: {alt.place_name}</code> — {alt.note}{' '}
-                              {src && <span style={{ color: 'var(--text-secondary)' }}>({src.citation})</span>}
-                              {readableSourceIds.has(alt.source_id) && (
+                              {readableSourceIds.has(claim.sourceId) && (
                                 <button
                                   type="button"
                                   className="source-read-inline"
                                   onClick={() => {
-                                    openSourceReader({ sourceId: alt.source_id, eventId: ev.id });
-                                  }}
-                                >
-                                  Read Page ↗
-                                </button>
-                              )}
-                            </li>
-                          );
-                        })}
-                        {(ev.fact_conflicts || []).map((alt) => {
-                          const src = sourcesById.get(alt.source_id);
-                          return (
-                            <li key={`fact|${alt.claim}|${alt.source_id}|${alt.note}`} style={{ marginBottom: 4 }}>
-                              <code>{alt.claim}</code> — {alt.note}{' '}
-                              {src && <span style={{ color: 'var(--text-secondary)' }}>({src.citation})</span>}
-                              {readableSourceIds.has(alt.source_id) && (
-                                <button
-                                  type="button"
-                                  className="source-read-inline"
-                                  onClick={() => {
-                                    openSourceReader({ sourceId: alt.source_id, eventId: ev.id });
+                                    openSourceReader({ sourceId: claim.sourceId, eventId: ev.id });
                                   }}
                                 >
                                   Read Page ↗
@@ -648,12 +640,7 @@ export const EvidencePage: React.FC = () => {
                         }}
                       >
                         <div className="person-media-thumb-wrap">
-                          <img
-                            src={resolveAssetUrl(m.file, baseUrl)}
-                            alt={m.caption}
-                            loading="lazy"
-                            className="person-media-thumb"
-                          />
+                          <MediaPlayer media={m} baseUrl={baseUrl} variant="preview" />
                           <span className={`media-kind-badge kind-${m.kind}`}>
                             {MEDIA_KIND_LABELS[m.kind] || m.kind}
                           </span>
@@ -789,11 +776,7 @@ export const EvidencePage: React.FC = () => {
                     </div>
                   </div>
                   <div className="scan-lightbox-scroll">
-                    <img
-                      src={resolveAssetUrl(lightboxItem.file, baseUrl)}
-                      alt={lightboxItem.caption}
-                      style={{ maxWidth: '100%', height: 'auto', display: 'block', margin: '0 auto' }}
-                    />
+                    <MediaPlayer media={lightboxItem} baseUrl={baseUrl} variant="full" />
                   </div>
                   {lightboxItem.provenance && (
                     <div style={{ padding: '8px 14px', fontFamily: 'var(--font-mono)', fontSize: '0.75rem', color: 'var(--text-secondary)', borderTop: '1px solid var(--border-decorative)' }}>

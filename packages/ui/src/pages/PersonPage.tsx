@@ -17,10 +17,19 @@ import {
 } from '../lib/timelineScroll.js';
 import { ExplorerTopBar } from '../components/ExplorerTopBar.js';
 import { KinloomFooter } from '../components/KinloomFooter.js';
+import { MediaPlayer } from '../components/MediaPlayer.js';
 import { MilestoneStoryCard } from '../components/MilestoneStoryCard.js';
+import { PluginSlot } from '../plugins/PluginContext.js';
 import { resolveAssetUrl } from '../components/Atoms.js';
 import { useArchiveData } from '../context/ArchiveDataContext.js';
 import { useArchiveUi } from '../context/ArchiveUiContext.js';
+import { CitationBadge } from '../components/wiki/WikiBadges.js';
+import { CreateEntityModal } from '../components/wiki/CreateEntityModal.js';
+import { EntityEditDrawer } from '../components/wiki/EntityEditDrawer.js';
+import { MediaUploaderModal } from '../components/wiki/MediaUploaderModal.js';
+import { RevisionHistoryPanel } from '../components/wiki/RevisionHistoryPanel.js';
+import { TalkPanel } from '../components/wiki/TalkPanel.js';
+import { WikiActionBar, type WikiEntityTab } from '../components/wiki/WikiActionBar.js';
 
 const MEDIA_KIND_LABELS: Record<string, string> = {
   portrait: 'Portrait',
@@ -57,12 +66,16 @@ export const PersonPage: React.FC = () => {
   const [activeEventId, setActiveEventId] = useState<string | null>(searchParams.get('event'));
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const [showAllMedia, setShowAllMedia] = useState(false);
+  const [wikiTab, setWikiTab] = useState<WikiEntityTab>('read');
+  const [uploadModalOpen, setUploadModalOpen] = useState(false);
+  const [createModalOpen, setCreateModalOpen] = useState(false);
 
   const [prevSlug, setPrevSlug] = useState(slug);
   if (slug !== prevSlug) {
     setPrevSlug(slug);
     setLightboxIndex(null);
     setShowAllMedia(false);
+    setWikiTab('read');
   }
 
   const cardRefs = useRef<Map<string, HTMLElement>>(new Map());
@@ -447,6 +460,20 @@ export const PersonPage: React.FC = () => {
 
       <div className="explorer-split">
         <main className="narrative-pane">
+          <WikiActionBar
+            activeTab={wikiTab}
+            onSelectTab={(nextTab) => {
+              setWikiTab(nextTab);
+            }}
+            onUploadMedia={() => {
+              setUploadModalOpen(true);
+            }}
+            onCreateRecord={() => {
+              setCreateModalOpen(true);
+            }}
+            entityLabel={person.full_name}
+          />
+
           <header className="person-header">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
@@ -474,6 +501,9 @@ export const PersonPage: React.FC = () => {
                       {person.birth_edtf || '?'} — {person.death_edtf || (person.is_living ? 'Living' : '?')}
                     </span>
                     {branchLabel && <span className="person-branch-badge">{branchLabel}</span>}
+                    {person.has_primary_source !== undefined && (
+                      <CitationBadge hasPrimarySource={person.has_primary_source} />
+                    )}
                   </div>
                 </div>
               </div>
@@ -583,7 +613,17 @@ export const PersonPage: React.FC = () => {
             )}
           </header>
 
-          {personMedia.length > 0 && (
+          <PluginSlot name="personDetail" person={person} />
+
+          {wikiTab === 'history' && (
+            <RevisionHistoryPanel entityType="person" entityId={person.id} />
+          )}
+
+          {wikiTab === 'talk' && (
+            <TalkPanel entityType="person" entityId={person.id} entityTitle={person.full_name} />
+          )}
+
+          {wikiTab !== 'history' && wikiTab !== 'talk' && personMedia.length > 0 && (
             <section className="person-media-section" aria-label="Archival photos and primary record scans">
               <div className="person-media-header">
                 <h2>Photos and scans</h2>
@@ -610,12 +650,7 @@ export const PersonPage: React.FC = () => {
                     }}
                   >
                     <div className="person-media-thumb-wrap">
-                      <img
-                        src={resolveAssetUrl(item.file, baseUrl)}
-                        alt={item.caption}
-                        className="person-media-thumb"
-                        loading="lazy"
-                      />
+                      <MediaPlayer media={item} baseUrl={baseUrl} variant="preview" />
                     </div>
                     <span className="person-media-caption">{item.caption}</span>
                   </button>
@@ -624,7 +659,7 @@ export const PersonPage: React.FC = () => {
             </section>
           )}
 
-          {personEvents.length === 0 ? (
+          {wikiTab !== 'history' && wikiTab !== 'talk' && (personEvents.length === 0 ? (
             <div className="story-card">
               <p>No dated events available in this build for {person.full_name}.</p>
             </div>
@@ -682,9 +717,54 @@ export const PersonPage: React.FC = () => {
                 ))}
               </section>
             </div>
-          )}
+          ))}
         </main>
       </div>
+
+      <EntityEditDrawer
+        open={wikiTab === 'edit'}
+        entityType="person"
+        entityId={person.id}
+        revisionId={bundle.meta.max_revision_id ?? 1}
+        initialData={{
+          id: person.id,
+          slug: person.slug,
+          full_name: person.full_name,
+          given_name: person.given_name,
+          surname: person.surname,
+          alt_names: person.alt_names,
+          sex: person.sex,
+          is_living: person.is_living,
+          lineage_group: person.lineage_group,
+          branch: person.branch,
+          birth_edtf: person.birth_edtf,
+          death_edtf: person.death_edtf,
+          portrait_url: person.portrait_url,
+          has_primary_source: person.has_primary_source,
+        }}
+        hasPrimarySource={person.has_primary_source ?? true}
+        title={person.full_name}
+        onClose={() => {
+          setWikiTab('read');
+        }}
+      />
+
+      <MediaUploaderModal
+        open={uploadModalOpen}
+        defaultPersonId={person.id}
+        onClose={() => {
+          setUploadModalOpen(false);
+        }}
+      />
+
+      <CreateEntityModal
+        open={createModalOpen}
+        defaultKind="event"
+        defaultPersonId={person.id}
+        onClose={() => {
+          setCreateModalOpen(false);
+        }}
+      />
 
       {lightboxIndex !== null && personMedia[lightboxIndex] && (
         <dialog
@@ -748,11 +828,7 @@ export const PersonPage: React.FC = () => {
               </div>
             </div>
             <div className="scan-lightbox-scroll">
-              <img
-                src={resolveAssetUrl(personMedia[lightboxIndex].file, baseUrl)}
-                alt={personMedia[lightboxIndex].caption}
-                className="scan-page-img-full"
-              />
+              <MediaPlayer media={personMedia[lightboxIndex]} baseUrl={baseUrl} variant="full" />
               <div style={{ marginTop: 12, padding: '8px 4px' }}>
                 <div style={{ fontFamily: 'var(--font-serif)', fontSize: '1.05rem', color: 'var(--surface-header)', fontWeight: 600 }}>
                   {personMedia[lightboxIndex].caption}
