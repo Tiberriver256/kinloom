@@ -18,10 +18,12 @@ import { ArchiveProvider } from '../../context/ArchiveProvider.js';
 import { AuthStatusBanner } from './AuthStatusBanner.js';
 import { EntityEditDrawer } from './EntityEditDrawer.js';
 import { MemoryRouter } from 'react-router-dom';
+import { PrivateArchiveGate } from './PrivateArchiveGate.js';
 import { RecentChangesPage } from '../../pages/RecentChangesPage.js';
 import { RevisionDiffView } from './RevisionDiffView.js';
 import { StaticDemoDataSource } from '../../adapters/staticDemoDataSource.js';
 import { TalkPanel } from './TalkPanel.js';
+import { initialsOf } from '../Atoms.js';
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { describe, expect, it } from 'vitest';
@@ -479,5 +481,58 @@ describe('Wiki UI components and tree display polish helpers', () => {
       [precinct.id, precinct],
     ]);
     expect(formatTreeCardPlace(precinct, map)).toBe('Worcester Co.');
+  });
+
+  it('computes clean monograms in initialsOf without punctuation, years, titles, or suffixes', () => {
+    expect(initialsOf('Abraham Lincoln (1744)')).toBe('AL');
+    expect(initialsOf('Nancy Hanks (Sr.)')).toBe('NH');
+    expect(initialsOf('Samuel Lincoln Jr.')).toBe('SL');
+    expect(initialsOf('Mordecai Lincoln III')).toBe('ML');
+    expect(initialsOf('Col. Robert Todd')).toBe('RT');
+    expect(initialsOf('Senator James Harlan')).toBe('JH');
+    expect(initialsOf('Clara')).toBe('CL');
+  });
+
+  it('hides Continue with Google in PrivateArchiveGate when google OAuth is unconfigured and shows it when enabled', async () => {
+    const makeSource = (googleEnabled: boolean): ArchiveDataSource => ({
+      loadArchive: async () => ({ bundle: testBundle, etag: null, notModified: false }),
+      loadReadings: async () => null,
+      requestMagicLink: async () => ({ sent: true }),
+      getSession: async () => ({
+        session: { authenticated: false, principal_kind: 'anonymous' },
+        capabilities: {
+          canEdit: false,
+          canUploadMedia: false,
+          hasRevisionHistory: false,
+          hasTalk: false,
+          canManageSite: false,
+        },
+        authProviders: { google: googleEnabled, magicLink: true },
+      }),
+    });
+
+    const withoutGoogle = renderIntoDom(
+      <ArchiveProvider siteConfig={siteConfig} dataSource={makeSource(false)} initialBundle={testBundle}>
+        <PrivateArchiveGate />
+      </ArchiveProvider>,
+    );
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 20));
+    });
+    expect(withoutGoogle.container.textContent).toContain('Email Magic Link');
+    expect(withoutGoogle.container.textContent).not.toContain('Continue with Google');
+    withoutGoogle.unmount();
+
+    const withGoogle = renderIntoDom(
+      <ArchiveProvider siteConfig={siteConfig} dataSource={makeSource(true)} initialBundle={testBundle}>
+        <PrivateArchiveGate />
+      </ArchiveProvider>,
+    );
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 20));
+    });
+    expect(withGoogle.container.textContent).toContain('Email Magic Link');
+    expect(withGoogle.container.textContent).toContain('Continue with Google');
+    withGoogle.unmount();
   });
 });

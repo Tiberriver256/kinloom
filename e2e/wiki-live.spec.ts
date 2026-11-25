@@ -45,7 +45,7 @@ async function enrollEditorViaInviteAndMagicLink(
   expect(sent?.toEmail).toBe(email);
 
   await page.goto(sent!.magicLinkUrl);
-  await expect(page.getByRole('region', { name: 'Signed-in editor bar' })).toBeVisible();
+  await expect(page.getByRole('button', { name: /Account menu for/ })).toBeVisible();
 }
 
 test('backend modularity: same KinloomApp responds to Static Files vs Live HTTP Wiki capabilities', async ({
@@ -54,14 +54,12 @@ test('backend modularity: same KinloomApp responds to Static Files vs Live HTTP 
   // 1. Static Files backend explicitly reports anonymous session and disabled write capabilities
   await page.goto(`${STATIC_DEMO_ORIGIN}/person/abraham-lincoln-1809`);
   await expect(page.getByRole('heading', { name: 'Abraham Lincoln', exact: true })).toBeVisible();
-  await expect(page.getByRole('region', { name: /Wiki actions/ })).toHaveCount(0);
-  await expect(page.getByRole('tab', { name: 'Edit' })).toHaveCount(0);
-  await expect(page.getByRole('tab', { name: /History/ })).toHaveCount(0);
-  await expect(page.getByRole('tab', { name: /Talk/ })).toHaveCount(0);
-  await expect(page.getByRole('button', { name: '+ Upload Media' })).toHaveCount(0);
-  await expect(page.locator('.nav-links a', { hasText: 'Changes' })).toHaveCount(0);
-  await expect(page.locator('.nav-links a', { hasText: 'Admin' })).toHaveCount(0);
-  await expect(page.getByRole('region', { name: 'Signed-in editor bar' })).toHaveCount(0);
+  await expect(page.getByRole('region', { name: /Contribute to/ })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Edit Page' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: /History/ })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: /Family Notes/ })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Add Photo' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: /Account menu for/ })).toHaveCount(0);
   await expect(page.getByRole('region', { name: 'Invite access notice' })).toHaveCount(0);
 
   await page.goto(`${STATIC_DEMO_ORIGIN}/admin`);
@@ -71,13 +69,15 @@ test('backend modularity: same KinloomApp responds to Static Files vs Live HTTP 
   await enrollEditorViaInviteAndMagicLink(page, 'modularity.editor@archive.example');
   await page.goto(`${wiki.baseUrl}/person/abraham-lincoln-1809`);
   await expect(page.getByRole('heading', { name: 'Abraham Lincoln', exact: true })).toBeVisible();
-  await expect(page.getByRole('region', { name: 'Wiki actions for Abraham Lincoln' })).toBeVisible();
-  await expect(page.getByRole('tab', { name: 'Edit' })).toBeVisible();
-  await expect(page.getByRole('tab', { name: /History/ })).toBeVisible();
-  await expect(page.getByRole('tab', { name: /Talk/ })).toBeVisible();
-  await expect(page.getByRole('button', { name: '+ Upload Media' })).toBeVisible();
-  await expect(page.locator('.nav-links a', { hasText: 'Changes' })).toBeVisible();
-  await expect(page.locator('.nav-links a', { hasText: 'Admin' })).toHaveCount(0);
+  await expect(page.getByRole('region', { name: 'Contribute to Abraham Lincoln' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Edit Page' })).toBeVisible();
+  await expect(page.getByRole('button', { name: /History/ })).toBeVisible();
+  await expect(page.getByRole('button', { name: /Family Notes/ })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Add Photo' })).toBeVisible();
+
+  await page.getByRole('button', { name: /Account menu for/ }).click();
+  await expect(page.getByRole('menuitem', { name: 'Recent Changes' })).toBeVisible();
+  await expect(page.getByRole('menuitem', { name: 'Site Settings' })).toHaveCount(0);
 });
 
 test('1. read-only invite shows viewer banner and magic-link sign-in auto-enrolls strictly as editor', async ({
@@ -89,12 +89,12 @@ test('1. read-only invite shows viewer banner and magic-link sign-in auto-enroll
   await expect(inviteBanner).toBeVisible();
   await expect(inviteBanner).toContainText('Read-only family invite (Reunion Cousins)');
 
-  // Invite viewer can read History and Talk, while Edit and Upload stay hidden
+  // Invite viewer can read History and Family Notes, while Edit Page and Add Photo stay hidden
   await page.goto(`${wiki.baseUrl}/person/abraham-lincoln-1809`);
-  await expect(page.getByRole('tab', { name: /History/ })).toBeVisible();
-  await expect(page.getByRole('tab', { name: /Talk/ })).toBeVisible();
-  await expect(page.getByRole('tab', { name: 'Edit' })).toHaveCount(0);
-  await expect(page.getByRole('button', { name: '+ Upload Media' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: /History/ })).toBeVisible();
+  await expect(page.getByRole('button', { name: /Family Notes/ })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Edit Page' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Add Photo' })).toHaveCount(0);
 
   // One-click sign-in upgrade via magic link
   await inviteBanner.getByRole('button', { name: 'Sign in to edit' }).click();
@@ -107,10 +107,12 @@ test('1. read-only invite shows viewer banner and magic-link sign-in auto-enroll
   expect(magicEmail?.magicLinkUrl).toContain('/api/auth/magic-link/verify?token=');
   await page.goto(magicEmail!.magicLinkUrl);
 
-  const memberBar = page.getByRole('region', { name: 'Signed-in editor bar' });
-  await expect(memberBar).toBeVisible();
-  await expect(memberBar.locator('.wiki-role-chip')).toHaveText('Editor');
-  await expect(memberBar).not.toContainText('Admin');
+  const accountBtn = page.getByRole('button', { name: /Account menu for/ });
+  await expect(accountBtn).toBeVisible();
+  await accountBtn.click();
+  const accountMenu = page.getByRole('menu', { name: 'Account options' });
+  await expect(accountMenu.locator('.wiki-role-chip')).toHaveText('Editor');
+  await expect(accountMenu).not.toContainText('Site Settings');
 
   const meRes = await page.request.get(`${wiki.baseUrl}/api/auth/me`);
   expect(meRes.status()).toBe(200);
@@ -131,7 +133,7 @@ test('1. read-only invite shows viewer banner and magic-link sign-in auto-enroll
   expect(adminAttempt.status()).toBe(403);
 
   await page.goto(`${wiki.baseUrl}/person/abraham-lincoln-1809`);
-  await expect(page.getByRole('tab', { name: 'Edit' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Edit Page' })).toBeVisible();
 });
 
 test('2. inline edit without primary source renders Family memory badge and persists across reload', async ({
@@ -140,20 +142,20 @@ test('2. inline edit without primary source renders Family memory badge and pers
   await enrollEditorViaInviteAndMagicLink(page, 'family.editor@archive.example');
   await page.goto(`${wiki.baseUrl}/person/abraham-lincoln-1809`);
 
-  await page.getByRole('tab', { name: 'Edit' }).click();
+  await page.getByRole('button', { name: 'Edit Page' }).click();
   const drawer = page.getByRole('dialog', { name: /Edit Abraham Lincoln/ });
   await expect(drawer).toBeVisible();
 
-  const altNamesInput = drawer.getByLabel('Alternate names (comma-separated)');
+  const altNamesInput = drawer.getByLabel('Nicknames or maiden names');
   await expect(altNamesInput).toBeEnabled();
   await altNamesInput.fill('Abe Lincoln, Rail-Splitter, Honest Abe');
 
   await drawer.locator('label.wiki-radio-card', { hasText: 'Family memory' }).click();
   await drawer
-    .getByLabel(/Edit summary/)
+    .getByLabel(/What did you change/)
     .fill('Record oral family nickname without primary citation');
 
-  await drawer.getByRole('button', { name: 'Save Revision' }).click();
+  await drawer.getByRole('button', { name: 'Save Changes' }).click();
   await expect(drawer).toContainText('Saved revision');
   await drawer.getByRole('button', { name: 'Done' }).click();
 
@@ -171,14 +173,14 @@ test('3. optimistic concurrency 409 Conflict shows field diff and Rebase & Save 
   await enrollEditorViaInviteAndMagicLink(page, 'editor.one@archive.example');
   await page.goto(`${wiki.baseUrl}/person/mary-ann-todd`);
 
-  await page.getByRole('tab', { name: 'Edit' }).click();
+  await page.getByRole('button', { name: 'Edit Page' }).click();
   const drawer = page.getByRole('dialog', { name: /Edit Mary Ann Todd/ });
   await expect(drawer).toBeVisible();
 
-  const altNamesInput = drawer.getByLabel('Alternate names (comma-separated)');
+  const altNamesInput = drawer.getByLabel('Nicknames or maiden names');
   await expect(altNamesInput).toBeEnabled();
   await altNamesInput.fill('Mary Todd Lincoln, Molly Todd');
-  await drawer.getByLabel(/Edit summary/).fill('Add childhood nickname from family letters');
+  await drawer.getByLabel(/What did you change/).fill('Add childhood nickname from family letters');
 
   // Trigger a concurrent server update to a different field while the drawer stays open
   await wiki.ports.repository.upsertUser({
@@ -229,7 +231,7 @@ test('3. optimistic concurrency 409 Conflict shows field diff and Rebase & Save 
   expect(concurrentRes.status).toBe(200);
 
   // Submit the now-stale draft from the browser drawer
-  await drawer.getByRole('button', { name: 'Save Revision' }).click();
+  await drawer.getByRole('button', { name: 'Save Changes' }).click();
 
   const conflictBox = drawer.getByRole('alert', { name: 'Edit conflict resolution' });
   await expect(conflictBox).toBeVisible();
@@ -260,19 +262,19 @@ test('4. History tab renders visual side-by-side diff and one-click Undo / Rever
   await enrollEditorViaInviteAndMagicLink(page, 'historian@archive.example');
   await page.goto(`${wiki.baseUrl}/person/robert-todd-lincoln`);
 
-  await page.getByRole('tab', { name: 'Edit' }).click();
+  await page.getByRole('button', { name: 'Edit Page' }).click();
   const drawer = page.getByRole('dialog', { name: /Edit Robert Todd Lincoln/ });
-  const altNamesInput = drawer.getByLabel('Alternate names (comma-separated)');
+  const altNamesInput = drawer.getByLabel('Nicknames or maiden names');
   await expect(altNamesInput).toBeEnabled();
   await altNamesInput.fill('Bob Lincoln');
-  await drawer.getByLabel(/Edit summary/).fill('Add informal family nickname');
-  await drawer.getByRole('button', { name: 'Save Revision' }).click();
+  await drawer.getByLabel(/What did you change/).fill('Add informal family nickname');
+  await drawer.getByRole('button', { name: 'Save Changes' }).click();
   await expect(drawer).toContainText('Saved revision');
   await drawer.getByRole('button', { name: 'Done' }).click();
 
   await expect(page.locator('.person-header')).toContainText('Bob Lincoln');
 
-  await page.getByRole('tab', { name: /History/ }).click();
+  await page.getByRole('button', { name: /History/ }).click();
   const historyPanel = page.getByRole('region', { name: 'Revision history' });
   await expect(historyPanel).toBeVisible();
   await expect(historyPanel).toContainText('Add informal family nickname');
@@ -283,7 +285,7 @@ test('4. History tab renders visual side-by-side diff and one-click Undo / Rever
   await expect(historyPanel).toContainText(/Reverted r\d+ in new revision r\d+/);
   await expect(historyPanel.locator('.wiki-action-tag.action-revert').first()).toHaveText('revert');
 
-  await page.getByRole('tab', { name: 'Read' }).click();
+  await page.getByRole('button', { name: '← Back to Profile' }).click();
   await expect(page.locator('.person-header')).not.toContainText('Bob Lincoln');
 });
 
@@ -294,15 +296,15 @@ test('5. soft-delete hides record from active views and restore brings it back c
   await page.goto(`${wiki.baseUrl}/person/samuel-lincoln-jr`);
   await expect(page.getByRole('heading', { name: 'Samuel Lincoln Jr.', exact: true })).toBeVisible();
 
-  await page.getByRole('tab', { name: 'Edit' }).click();
+  await page.getByRole('button', { name: 'Edit Page' }).click();
   const drawer = page.getByRole('dialog', { name: /Edit Samuel Lincoln Jr\./ });
   await expect(drawer.getByLabel('Full name')).toBeEnabled();
 
-  await drawer.getByRole('button', { name: 'Archive / Soft-Delete Record' }).click();
+  await drawer.getByRole('button', { name: 'Remove from Archive' }).click();
   await drawer
-    .getByPlaceholder('Reason for soft-deleting (min 3 characters)')
+    .getByPlaceholder('Why are you removing this? (at least 3 characters)')
     .fill('Archive duplicate entry pending verification');
-  await drawer.getByRole('button', { name: 'Confirm Soft-Delete' }).click();
+  await drawer.getByRole('button', { name: 'Confirm Removal' }).click();
 
   await expect(page.getByRole('heading', { name: 'Relative Not Found' })).toBeVisible();
 
@@ -331,7 +333,7 @@ test('6. media upload supports PNG and HTTP 206 WebM video streaming while block
   await page.goto(`${wiki.baseUrl}/person/abraham-lincoln-1809`);
 
   // 1. Upload a valid PNG photograph via UI
-  await page.getByRole('button', { name: '+ Upload Media' }).click();
+  await page.getByRole('button', { name: 'Add Photo' }).click();
   const modal = page.getByRole('dialog', { name: 'Upload archival media' });
   await expect(modal).toBeVisible();
 
@@ -341,7 +343,7 @@ test('6. media upload supports PNG and HTTP 206 WebM video streaming while block
     buffer: TINY_PNG_BYTES,
   });
   await modal.getByLabel('Caption').fill('Springfield Law Office Desk Scan');
-  await modal.getByRole('button', { name: 'Hash & Upload' }).click();
+  await modal.getByRole('button', { name: 'Upload Photo' }).click();
   await expect(modal).toContainText('Uploaded and attached media');
 
   // 2. Upload a valid WebM video fixture via UI
@@ -352,7 +354,7 @@ test('6. media upload supports PNG and HTTP 206 WebM video streaming while block
     buffer: TINY_WEBM_BYTES,
   });
   await modal.getByLabel('Caption').fill('Springfield Oral History Clip');
-  await modal.getByRole('button', { name: 'Hash & Upload' }).click();
+  await modal.getByRole('button', { name: 'Upload Photo' }).click();
   await expect(modal).toContainText('Uploaded and attached media');
   await modal.getByRole('button', { name: 'Done' }).click();
 
@@ -375,16 +377,16 @@ test('6. media upload supports PNG and HTTP 206 WebM video streaming while block
   expect((await rangeRes.body()).byteLength).toBe(128);
 
   // 4. Verify living-person portrait upload is blocked in UI and returns HTTP 422 on server without leaking
-  await page.getByRole('button', { name: '+ Upload Media' }).click();
+  await page.getByRole('button', { name: 'Add Photo' }).click();
   const livingModal = page.getByRole('dialog', { name: 'Upload archival media' });
-  await livingModal.getByLabel('Attach to relative (deceased only)').selectOption('p_jordan_mercer_living');
+  await livingModal.getByLabel('Who is in this photo? (deceased only)').selectOption('p_jordan_mercer_living');
   await expect(livingModal).toContainText('Living-person privacy rule');
   await livingModal.locator('input[type="file"]').setInputFiles({
     name: 'living-portrait.png',
     mimeType: 'image/png',
     buffer: TINY_PNG_BYTES,
   });
-  await livingModal.getByRole('button', { name: 'Hash & Upload' }).click();
+  await livingModal.getByRole('button', { name: 'Upload Photo' }).click();
   await expect(livingModal).toContainText('Upload blocked:');
   await livingModal.getByRole('button', { name: 'Close', exact: true }).click();
 
@@ -489,24 +491,24 @@ test('7. AI agent batch submit shows Research agent badge in /changes and one-cl
   expect(sourceBody.deleted_at).not.toBeNull();
 });
 
-test('8. Talk tab supports posting a discussion note and soft-deleting it cleanly', async ({
+test('8. Family Notes panel supports posting a discussion note and soft-deleting it cleanly', async ({
   page,
 }) => {
   await enrollEditorViaInviteAndMagicLink(page, 'researcher@archive.example');
   await page.goto(`${wiki.baseUrl}/person/abraham-lincoln-1809`);
 
-  await page.getByRole('tab', { name: /Talk/ }).click();
+  await page.getByRole('button', { name: /Family Notes/ }).click();
   const talkPanel = page.getByRole('region', { name: 'Record discussion' });
   await expect(talkPanel).toBeVisible();
 
   await talkPanel
-    .getByLabel('Add a research note or question (Markdown supported)')
+    .getByLabel('Add a family note or question')
     .fill('Cross-check 1850 Springfield census dwelling number 442.');
   await talkPanel.getByRole('button', { name: 'Post Note' }).click();
   await expect(talkPanel).toContainText('Cross-check 1850 Springfield census dwelling number 442.');
 
   await page.reload();
-  await page.getByRole('tab', { name: /Talk/ }).click();
+  await page.getByRole('button', { name: /Family Notes/ }).click();
   const reloadedTalk = page.getByRole('region', { name: 'Record discussion' });
   await expect(reloadedTalk).toContainText('Cross-check 1850 Springfield census dwelling number 442.');
 
@@ -516,7 +518,7 @@ test('8. Talk tab supports posting a discussion note and soft-deleting it cleanl
   );
 
   await page.reload();
-  await page.getByRole('tab', { name: /Talk/ }).click();
+  await page.getByRole('button', { name: /Family Notes/ }).click();
   await expect(page.getByRole('region', { name: 'Record discussion' })).not.toContainText(
     'Cross-check 1850 Springfield census dwelling number 442.',
   );

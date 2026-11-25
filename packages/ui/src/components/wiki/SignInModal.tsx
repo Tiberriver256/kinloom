@@ -9,7 +9,7 @@ export interface SignInModalProps {
 }
 
 export const SignInModal: React.FC<SignInModalProps> = ({ open, onClose, inviteLabel }) => {
-  const { dataSource, siteConfig } = useArchiveData();
+  const { dataSource, siteConfig, authProviders } = useArchiveData();
   const [email, setEmail] = useState('');
   const [sending, setSending] = useState(false);
   const [sentTo, setSentTo] = useState<string | null>(null);
@@ -62,24 +62,20 @@ export const SignInModal: React.FC<SignInModalProps> = ({ open, onClose, inviteL
 
         {inviteLabel && (
           <div className="wiki-status-banner is-info">
-            Invited via <strong>{inviteLabel}</strong>. Sign in with Google or an email magic link
-            to unlock editing automatically as a family editor.
+            <p>
+              Invited via <strong>{inviteLabel}</strong>.{' '}
+              {authProviders.google
+                ? 'Sign in with your email or Google to add stories, photos, and updates.'
+                : 'Enter your email below — no password needed — to add stories, photos, and updates.'}
+            </p>
           </div>
         )}
 
-        <div className="wiki-signin-section">
-          <a href={googleStartUrl} className="pill-btn active wiki-google-btn" style={{ textDecoration: 'none' }}>
-            Continue with Google
-          </a>
-        </div>
-
-        <div className="wiki-divider-label" aria-hidden="true">
-          <span>or email a one-time link</span>
-        </div>
-
         {sentTo ? (
           <output className="wiki-status-banner is-success" aria-live="polite">
-            Check <strong>{sentTo}</strong> for your one-time sign-in link (valid for 15 minutes).
+            <p>
+              Check <strong>{sentTo}</strong> for your one-time sign-in link (valid for 15 minutes).
+            </p>
           </output>
         ) : (
           <form
@@ -90,7 +86,7 @@ export const SignInModal: React.FC<SignInModalProps> = ({ open, onClose, inviteL
           >
             {error && (
               <div className="wiki-status-banner is-error" role="alert">
-                {error}
+                <p>{error}</p>
               </div>
             )}
             <label className="wiki-field">
@@ -98,7 +94,8 @@ export const SignInModal: React.FC<SignInModalProps> = ({ open, onClose, inviteL
               <input
                 type="email"
                 required
-                className="wiki-input"
+                autoComplete="email"
+                className="wiki-input wiki-input-lg"
                 placeholder="relative@example.com"
                 value={email}
                 onChange={(e) => {
@@ -108,11 +105,29 @@ export const SignInModal: React.FC<SignInModalProps> = ({ open, onClose, inviteL
               />
             </label>
             <div className="wiki-form-actions">
-              <button type="submit" className="pill-btn active" disabled={sending || !email.trim()}>
+              <button
+                type="submit"
+                className="wiki-btn-primary wiki-btn-full"
+                disabled={sending || !email.trim()}
+              >
                 {sending ? 'Sending link…' : 'Email Magic Link'}
               </button>
             </div>
           </form>
+        )}
+
+        {authProviders.google && (
+          <>
+            <div className="wiki-divider-label" aria-hidden="true">
+              <span>or</span>
+            </div>
+
+            <div className="wiki-signin-section">
+              <a href={googleStartUrl} className="wiki-btn-secondary wiki-btn-full">
+                Continue with Google
+              </a>
+            </div>
+          </>
         )}
       </div>
     </dialog>

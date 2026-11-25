@@ -8,7 +8,6 @@ import type {
 import {
   createKinloomServer,
   GoogleOAuthProvider,
-  KinloomHttpError,
   SystemClock,
 } from '@kinloom/server';
 import { createCloudflareAssetHandler } from './adapters/cloudflareAssets.js';
@@ -55,26 +54,6 @@ export type {
   SendEmailMessage,
 } from './types.js';
 
-class UnconfiguredAuthProvider implements AuthProvider {
-  readonly id = 'google';
-
-  buildAuthorizationUrl(): string {
-    throw new KinloomHttpError(
-      503,
-      'AUTH_PROVIDER_UNCONFIGURED',
-      'Google OAuth is not configured for this archive.'
-    );
-  }
-
-  async exchangeCode(): Promise<{ email: string; displayName: string; emailVerified: boolean }> {
-    throw new KinloomHttpError(
-      503,
-      'AUTH_PROVIDER_UNCONFIGURED',
-      'Google OAuth is not configured for this archive.'
-    );
-  }
-}
-
 export interface CreateCloudflareWorkerOptions {
   siteConfig: KinloomSiteConfig;
   plugins?: readonly KinloomServerPlugin[];
@@ -120,7 +99,7 @@ export function createCloudflareWorker(
               clientId: env.GOOGLE_CLIENT_ID,
               clientSecret: env.GOOGLE_CLIENT_SECRET,
             })
-          : new UnconfiguredAuthProvider());
+          : undefined);
       const assetHandler = createCloudflareAssetHandler(env.ASSETS);
 
       const server = createKinloomServer({

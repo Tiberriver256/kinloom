@@ -308,6 +308,8 @@ export interface EmailSender {
  */
 export interface AuthProvider {
   readonly id: string;
+  /** Optional explicit flag for adapters that represent an unconfigured provider. Defaults to true. */
+  readonly configured?: boolean;
   buildAuthorizationUrl(params: {
     state: string;
     codeChallenge: string;
@@ -361,10 +363,15 @@ export interface KinloomServerPorts {
   bundleCache: BundleCache;
   mediaStore: MediaStore;
   emailSender: EmailSender;
-  authProvider: AuthProvider;
+  authProvider?: AuthProvider;
   clock: Clock;
   assetHandler?: AssetHandler;
   plugins?: readonly KinloomServerPlugin[];
+}
+
+export interface ArchiveAuthProviders {
+  google: boolean;
+  magicLink: boolean;
 }
 
 export interface ArchiveSessionState {
@@ -404,7 +411,11 @@ export interface ArchiveDataSource {
   }>;
   loadReadings(): Promise<ReadingsBundle | null>;
   loadMediaChecklist?(): Promise<MediaChecklistItem[]>;
-  getSession?(): Promise<{ session: ArchiveSessionState; capabilities: ArchiveCapabilities }>;
+  getSession?(): Promise<{
+    session: ArchiveSessionState;
+    capabilities: ArchiveCapabilities;
+    authProviders?: ArchiveAuthProviders;
+  }>;
 
   getEntity?(entityType: EntityType, entityId: string): Promise<{
     entity: EntityPayload;

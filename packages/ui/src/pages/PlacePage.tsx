@@ -9,7 +9,6 @@ import { LocalSurveyMap } from '../components/LocalSurveyMap.js';
 import { MediaPlayer } from '../components/MediaPlayer.js';
 import { PluginSlot } from '../plugins/PluginContext.js';
 import { useArchiveData } from '../context/ArchiveDataContext.js';
-import { CreateEntityModal } from '../components/wiki/CreateEntityModal.js';
 import { EntityEditDrawer } from '../components/wiki/EntityEditDrawer.js';
 import { RevisionHistoryPanel } from '../components/wiki/RevisionHistoryPanel.js';
 import { TalkPanel } from '../components/wiki/TalkPanel.js';
@@ -25,7 +24,6 @@ export const PlacePage: React.FC = () => {
   const [scopeMode, setScopeMode] = useState<ScopeMode>('radius15');
   const [decadeFilter, setDecadeFilter] = useState<string>('all');
   const [wikiTab, setWikiTab] = useState<WikiEntityTab>('read');
-  const [createModalOpen, setCreateModalOpen] = useState(false);
 
   const place = slug ? placesBySlug.get(slug) : undefined;
 
@@ -229,27 +227,6 @@ export const PlacePage: React.FC = () => {
     <div>
       <ExplorerTopBar />
       <main className="place-page">
-        <WikiActionBar
-          activeTab={wikiTab}
-          onSelectTab={(nextTab) => {
-            setWikiTab(nextTab);
-          }}
-          onCreateRecord={() => {
-            setCreateModalOpen(true);
-          }}
-          entityLabel={place.full_name}
-        />
-
-        <PluginSlot name="placeDetail" place={place} />
-
-        {wikiTab === 'history' && (
-          <RevisionHistoryPanel entityType="place" entityId={place.id} />
-        )}
-
-        {wikiTab === 'talk' && (
-          <TalkPanel entityType="place" entityId={place.id} entityTitle={place.full_name} />
-        )}
-
         {occupancyRows.rows.length > 0 && (
           <div style={{ marginBottom: 14, display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'center' }}>
             <Link to={`/time?year=${occupancyRows.minYear}`} className="ink-link-btn">
@@ -298,6 +275,24 @@ export const PlacePage: React.FC = () => {
               </Link>
             </div>
           </div>
+
+          <WikiActionBar
+            activeTab={wikiTab}
+            onSelectTab={(nextTab) => {
+              setWikiTab(nextTab);
+            }}
+            entityLabel={place.full_name}
+          />
+
+          <PluginSlot name="placeDetail" place={place} />
+
+          {wikiTab === 'history' && (
+            <RevisionHistoryPanel entityType="place" entityId={place.id} />
+          )}
+
+          {wikiTab === 'talk' && (
+            <TalkPanel entityType="place" entityId={place.id} entityTitle={place.full_name} />
+          )}
 
           <div style={{ marginTop: 14 }}>
             <LocalSurveyMap
@@ -486,13 +481,6 @@ export const PlacePage: React.FC = () => {
         title={place.full_name}
         onClose={() => {
           setWikiTab('read');
-        }}
-      />
-      <CreateEntityModal
-        open={createModalOpen}
-        defaultKind="place"
-        onClose={() => {
-          setCreateModalOpen(false);
         }}
       />
       <KinloomFooter />

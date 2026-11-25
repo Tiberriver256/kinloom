@@ -96,15 +96,51 @@ export const ScopeGlyph: React.FC<{ category?: string; size?: number }> = ({
   );
 };
 
+const HONORIFIC_PREFIXES = new Set([
+  'capt',
+  'col',
+  'dr',
+  'gen',
+  'hon',
+  'lt',
+  'maj',
+  'mr',
+  'mrs',
+  'ms',
+  'prof',
+  'rev',
+  'sen',
+  'senator',
+  'sgt',
+  'sir',
+]);
+
+const NAME_SUFFIXES = new Set(['jr', 'sr', 'ii', 'iii', 'iv', 'v', 'vi', 'esq', 'md', 'phd']);
+
 export function initialsOf(name: string): string {
-  const parts = name.trim().split(/\s+/);
-  if (parts.length === 0 || !parts[0]) {
+  const withoutParens = name.replaceAll(/\([^)]*\)/g, ' ');
+  const rawTokens = withoutParens
+    .trim()
+    .split(/\s+/)
+    .map((token) => token.replaceAll(/^[^A-Za-zÀ-ÖØ-öø-ÿ]+|[^A-Za-zÀ-ÖØ-öø-ÿ]+$/g, ''))
+    .filter(Boolean);
+
+  if (rawTokens.length === 0) {
     return '?';
   }
-  if (parts.length === 1) {
-    return parts[0].slice(0, 2).toUpperCase();
+
+  const tokens = [...rawTokens];
+  while (tokens.length > 1 && HONORIFIC_PREFIXES.has(tokens[0].toLowerCase())) {
+    tokens.shift();
   }
-  return (parts[0][0] + (parts.at(-1) ?? '')[0]).toUpperCase();
+  while (tokens.length > 1 && NAME_SUFFIXES.has((tokens.at(-1) ?? '').toLowerCase())) {
+    tokens.pop();
+  }
+
+  if (tokens.length === 1) {
+    return tokens[0].slice(0, 2).toUpperCase();
+  }
+  return (tokens[0][0] + (tokens.at(-1) ?? '')[0]).toUpperCase();
 }
 
 export const RelativeAvatarChip: React.FC<{

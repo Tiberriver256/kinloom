@@ -182,7 +182,7 @@ export const CreateEntityModal: React.FC<CreateEntityModalProps> = ({
       />
       <div className="wiki-modal-card">
         <div className="wiki-modal-header">
-          <h2>Add New Archive Record</h2>
+          <h2>Add to the Family Archive</h2>
           <button type="button" className="pill-btn" onClick={onClose}>
             Close
           </button>
@@ -194,7 +194,7 @@ export const CreateEntityModal: React.FC<CreateEntityModalProps> = ({
               ['person', 'Person'],
               ['event', 'Event'],
               ['place', 'Place'],
-              ['kinship_edge', 'Kinship Link'],
+              ['kinship_edge', 'Family Link'],
             ] as const
           ).map(([id, label]) => (
             <button
@@ -250,11 +250,11 @@ export const CreateEntityModal: React.FC<CreateEntityModalProps> = ({
                 />
               </label>
               <label className="wiki-field">
-                <span className="wiki-field-label">Birth (EDTF)</span>
+                <span className="wiki-field-label">Birth date</span>
                 <input
                   type="text"
                   className="wiki-input"
-                  placeholder="1845-06-14"
+                  placeholder="e.g. 1845-06-14 or 1845"
                   value={birthEdtf}
                   onChange={(e) => {
                     setBirthEdtf(e.target.value);
@@ -262,11 +262,11 @@ export const CreateEntityModal: React.FC<CreateEntityModalProps> = ({
                 />
               </label>
               <label className="wiki-field">
-                <span className="wiki-field-label">Death (EDTF)</span>
+                <span className="wiki-field-label">Death date</span>
                 <input
                   type="text"
                   className="wiki-input"
-                  placeholder="1912-03-01"
+                  placeholder="Leave blank if living"
                   value={deathEdtf}
                   onChange={(e) => {
                     setDeathEdtf(e.target.value);
@@ -481,13 +481,13 @@ export const CreateEntityModal: React.FC<CreateEntityModalProps> = ({
           </label>
 
           <label className="wiki-field">
-            <span className="wiki-field-label">Edit summary (minimum 3 characters)</span>
+            <span className="wiki-field-label">Note about this addition</span>
             <input
               type="text"
               className="wiki-input"
               required
               minLength={3}
-              placeholder="Explain the source or reason for adding this record"
+              placeholder="e.g. From family photo album or 1880 census"
               value={summary}
               onChange={(e) => {
                 setSummary(e.target.value);
@@ -498,10 +498,10 @@ export const CreateEntityModal: React.FC<CreateEntityModalProps> = ({
           <div className="wiki-form-actions">
             <button
               type="submit"
-              className="pill-btn active"
+              className="wiki-btn-primary wiki-btn-sm"
               disabled={submitting || !isEditSummaryValid(summary)}
             >
-              {submitting ? 'Creating…' : 'Create Record'}
+              {submitting ? 'Saving…' : 'Save to Archive'}
             </button>
             <button type="button" className="pill-btn" onClick={onClose}>
               Cancel

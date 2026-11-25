@@ -3,6 +3,9 @@ import react from '@vitejs/plugin-react';
 
 export default defineConfig({
   plugins: [react()],
+  resolve: {
+    dedupe: ['react', 'react-dom', 'react-router-dom'],
+  },
   define: {
     __APP_BUILD_ID__: JSON.stringify(process.env.GITHUB_SHA?.slice(0, 8) || 'demo-local'),
   },

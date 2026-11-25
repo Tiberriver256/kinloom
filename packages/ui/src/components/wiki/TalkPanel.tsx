@@ -85,7 +85,7 @@ export const TalkPanel: React.FC<TalkPanelProps> = ({
   return (
     <section className="wiki-panel" aria-label="Record discussion">
       <div className="wiki-panel-header">
-        <h2>Talk{entityTitle ? ` · ${entityTitle}` : ''}</h2>
+        <h2>Family Notes{entityTitle ? ` · ${entityTitle}` : ''}</h2>
         <span className="wiki-panel-meta">
           {comments.length} note{comments.length === 1 ? '' : 's'}
         </span>
@@ -145,13 +145,13 @@ export const TalkPanel: React.FC<TalkPanelProps> = ({
           }}
         >
           <label htmlFor={`talk-input-${entityId}`} className="wiki-field-label">
-            Add a research note or question (Markdown supported)
+            Add a family note or question
           </label>
           <textarea
             id={`talk-input-${entityId}`}
             className="wiki-textarea"
             rows={3}
-            placeholder="Share a source lead, question a date, or note family context…"
+            placeholder="Share a memory, ask a question about a date, or add family context…"
             value={bodyMd}
             onChange={(e) => {
               setBodyMd(e.target.value);
@@ -161,7 +161,7 @@ export const TalkPanel: React.FC<TalkPanelProps> = ({
           <div className="wiki-form-actions">
             <button
               type="submit"
-              className="pill-btn active"
+              className="wiki-btn-primary wiki-btn-sm"
               disabled={submitting || bodyMd.trim().length === 0}
             >
               {submitting ? 'Posting…' : 'Post Note'}
@@ -169,7 +169,7 @@ export const TalkPanel: React.FC<TalkPanelProps> = ({
           </div>
         </form>
       ) : (
-        <p className="wiki-hint-text">Sign in as a family editor to add notes to this Talk page.</p>
+        <p className="wiki-hint-text">Sign in as a family editor to add family notes.</p>
       )}
     </section>
   );

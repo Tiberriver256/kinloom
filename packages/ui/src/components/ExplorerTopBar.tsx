@@ -1,15 +1,21 @@
 import { Link, useLocation } from 'react-router-dom';
-import React from 'react';
+import React, { useEffect, useRef, useState } from 'react';
+import { initialsOf } from './Atoms.js';
 import { useArchiveData } from '../context/ArchiveDataContext.js';
 import { useArchiveUi } from '../context/ArchiveUiContext.js';
 import { useKinloomPlugins } from '../plugins/PluginContext.js';
 
 export const ExplorerTopBar: React.FC = () => {
-  const { siteConfig, featuredDocumentId, capabilities } = useArchiveData();
+  const { siteConfig, featuredDocumentId, capabilities, session, dataSource, refreshSession } =
+    useArchiveData();
   const { activeYear, pivotTrail, openSourceReader, openSearch } = useArchiveUi();
   const { routes: pluginRoutes } = useKinloomPlugins();
   const location = useLocation();
   const navPluginRoutes = pluginRoutes.filter((r) => Boolean(r.navLabel));
+
+  const [accountOpen, setAccountOpen] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
+  const accountMenuRef = useRef<HTMLDivElement | null>(null);
 
   const isPeopleActive =
     location.pathname === '/' || location.pathname.startsWith('/person/');
@@ -17,8 +23,51 @@ export const ExplorerTopBar: React.FC = () => {
     location.pathname === '/places' || location.pathname.startsWith('/place/');
   const isTimeActive = location.pathname === '/time';
 
+  const isSignedInMember = Boolean(session?.authenticated && session.principal_kind === 'user');
+  const memberLabel = session?.displayName || session?.email || 'Member';
+
+  useEffect(() => {
+    setAccountOpen(false);
+  }, [location.pathname]);
+
+  useEffect(() => {
+    if (!accountOpen) {
+      return undefined;
+    }
+    const onPointerDown = (event: PointerEvent): void => {
+      if (accountMenuRef.current && !accountMenuRef.current.contains(event.target as Node)) {
+        setAccountOpen(false);
+      }
+    };
+    const onKeyDown = (event: KeyboardEvent): void => {
+      if (event.key === 'Escape') {
+        setAccountOpen(false);
+      }
+    };
+    document.addEventListener('pointerdown', onPointerDown);
+    document.addEventListener('keydown', onKeyDown);
+    return (): void => {
+      document.removeEventListener('pointerdown', onPointerDown);
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [accountOpen]);
+
   const handleOpenSources = (): void => {
     openSourceReader({ sourceId: featuredDocumentId ?? '' });
+  };
+
+  const handleLogout = async (): Promise<void> => {
+    if (!dataSource.logout) {
+      return;
+    }
+    setSigningOut(true);
+    try {
+      await dataSource.logout();
+      setAccountOpen(false);
+      await refreshSession();
+    } finally {
+      setSigningOut(false);
+    }
   };
 
   return (
@@ -47,24 +96,6 @@ export const ExplorerTopBar: React.FC = () => {
           <Link to="/map" className={`nav-pill ${location.pathname === '/map' ? 'active' : ''}`}>
             Map
           </Link>
-
-          {capabilities.hasRevisionHistory && (
-            <Link
-              to="/changes"
-              className={`nav-pill nav-pill-desktop-only ${location.pathname === '/changes' ? 'active' : ''}`}
-            >
-              Changes
-            </Link>
-          )}
-
-          {capabilities.canManageSite && (
-            <Link
-              to="/admin"
-              className={`nav-pill nav-pill-desktop-only ${location.pathname === '/admin' ? 'active' : ''}`}
-            >
-              Admin
-            </Link>
-          )}
 
           {navPluginRoutes.map((route) => (
             <Link
@@ -123,6 +154,83 @@ export const ExplorerTopBar: React.FC = () => {
         >
           Sources
         </button>
+
+        {isSignedInMember && (
+          <div className="topbar-account" ref={accountMenuRef}>
+            <button
+              type="button"
+              className={`topbar-account-btn ${accountOpen ? 'is-open' : ''}`}
+              aria-expanded={accountOpen}
+              aria-haspopup="menu"
+              aria-label={`Account menu for ${memberLabel}`}
+              onClick={() => {
+                setAccountOpen((open) => !open);
+              }}
+            >
+              <span className="topbar-account-avatar" aria-hidden="true">
+                {initialsOf(memberLabel)}
+              </span>
+              <span className="topbar-account-name">{memberLabel}</span>
+              <span className="topbar-account-caret" aria-hidden="true">
+                ▾
+              </span>
+            </button>
+
+            {accountOpen && (
+              <div className="topbar-account-menu" role="menu" aria-label="Account options">
+                <div className="topbar-account-menu-header">
+                  <strong>{memberLabel}</strong>
+                  <span className="wiki-role-chip">
+                    {session?.role === 'admin' ? 'Admin' : 'Editor'}
+                  </span>
+                </div>
+
+                {capabilities.hasRevisionHistory && (
+                  <Link
+                    to="/changes"
+                    role="menuitem"
+                    className={`topbar-account-item ${location.pathname === '/changes' ? 'active' : ''}`}
+                    onClick={() => {
+                      setAccountOpen(false);
+                    }}
+                  >
+                    Recent Changes
+                  </Link>
+                )}
+
+                {capabilities.canManageSite && (
+                  <Link
+                    to="/admin"
+                    role="menuitem"
+                    className={`topbar-account-item ${location.pathname === '/admin' ? 'active' : ''}`}
+                    onClick={() => {
+                      setAccountOpen(false);
+                    }}
+                  >
+                    Site Settings
+                  </Link>
+                )}
+
+                {dataSource.logout && (
+                  <>
+                    <div className="topbar-account-divider" role="separator" />
+                    <button
+                      type="button"
+                      role="menuitem"
+                      className="topbar-account-item is-danger"
+                      disabled={signingOut}
+                      onClick={() => {
+                        void handleLogout();
+                      }}
+                    >
+                      {signingOut ? 'Signing out…' : 'Sign Out'}
+                    </button>
+                  </>
+                )}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {pivotTrail.length > 1 && location.pathname.startsWith('/person/') && (

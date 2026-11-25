@@ -24,7 +24,6 @@ import { resolveAssetUrl } from '../components/Atoms.js';
 import { useArchiveData } from '../context/ArchiveDataContext.js';
 import { useArchiveUi } from '../context/ArchiveUiContext.js';
 import { CitationBadge } from '../components/wiki/WikiBadges.js';
-import { CreateEntityModal } from '../components/wiki/CreateEntityModal.js';
 import { EntityEditDrawer } from '../components/wiki/EntityEditDrawer.js';
 import { MediaUploaderModal } from '../components/wiki/MediaUploaderModal.js';
 import { RevisionHistoryPanel } from '../components/wiki/RevisionHistoryPanel.js';
@@ -68,7 +67,6 @@ export const PersonPage: React.FC = () => {
   const [showAllMedia, setShowAllMedia] = useState(false);
   const [wikiTab, setWikiTab] = useState<WikiEntityTab>('read');
   const [uploadModalOpen, setUploadModalOpen] = useState(false);
-  const [createModalOpen, setCreateModalOpen] = useState(false);
 
   const [prevSlug, setPrevSlug] = useState(slug);
   if (slug !== prevSlug) {
@@ -460,20 +458,6 @@ export const PersonPage: React.FC = () => {
 
       <div className="explorer-split">
         <main className="narrative-pane">
-          <WikiActionBar
-            activeTab={wikiTab}
-            onSelectTab={(nextTab) => {
-              setWikiTab(nextTab);
-            }}
-            onUploadMedia={() => {
-              setUploadModalOpen(true);
-            }}
-            onCreateRecord={() => {
-              setCreateModalOpen(true);
-            }}
-            entityLabel={person.full_name}
-          />
-
           <header className="person-header">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
@@ -612,6 +596,17 @@ export const PersonPage: React.FC = () => {
               </div>
             )}
           </header>
+
+          <WikiActionBar
+            activeTab={wikiTab}
+            onSelectTab={(nextTab) => {
+              setWikiTab(nextTab);
+            }}
+            onUploadMedia={() => {
+              setUploadModalOpen(true);
+            }}
+            entityLabel={person.full_name}
+          />
 
           <PluginSlot name="personDetail" person={person} />
 
@@ -754,15 +749,6 @@ export const PersonPage: React.FC = () => {
         defaultPersonId={person.id}
         onClose={() => {
           setUploadModalOpen(false);
-        }}
-      />
-
-      <CreateEntityModal
-        open={createModalOpen}
-        defaultKind="event"
-        defaultPersonId={person.id}
-        onClose={() => {
-          setCreateModalOpen(false);
         }}
       />
 

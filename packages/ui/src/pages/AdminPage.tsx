@@ -255,36 +255,46 @@ export const AdminPage: React.FC<AdminPageProps> = ({ adminClient }) => {
               void handleCreateInvite(e);
             }}
           >
-            <input
-              type="text"
-              className="wiki-input"
-              placeholder="Invite label (e.g. Reunion cousins)"
-              value={inviteLabel}
-              onChange={(e) => {
-                setInviteLabel(e.target.value);
-              }}
-            />
-            <input
-              type="number"
-              min="1"
-              max="365"
-              className="wiki-input wiki-input-narrow"
-              aria-label="Expires in days"
-              value={inviteDays}
-              onChange={(e) => {
-                setInviteDays(e.target.value);
-              }}
-            />
-            <button type="submit" className="pill-btn active" disabled={!inviteLabel.trim()}>
+            <label className="wiki-field wiki-inline-field-grow">
+              <span className="wiki-field-label">Invite label</span>
+              <input
+                type="text"
+                className="wiki-input"
+                placeholder="e.g. Reunion cousins"
+                value={inviteLabel}
+                onChange={(e) => {
+                  setInviteLabel(e.target.value);
+                }}
+              />
+            </label>
+            <label className="wiki-field wiki-inline-field-days">
+              <span className="wiki-field-label">Expires (days)</span>
+              <input
+                type="number"
+                min="1"
+                max="365"
+                className="wiki-input"
+                aria-label="Expires in days"
+                value={inviteDays}
+                onChange={(e) => {
+                  setInviteDays(e.target.value);
+                }}
+              />
+            </label>
+            <button
+              type="submit"
+              className="wiki-btn-primary wiki-btn-sm"
+              disabled={!inviteLabel.trim()}
+            >
               Generate Invite Link
             </button>
           </form>
 
           {createdInviteUrl && (
             <output className="wiki-status-banner is-success" aria-live="polite">
-              <div>
+              <p>
                 <strong>New invite link:</strong> <code>{createdInviteUrl}</code>
-              </div>
+              </p>
             </output>
           )}
 
@@ -328,27 +338,37 @@ export const AdminPage: React.FC<AdminPageProps> = ({ adminClient }) => {
               void handleCreateToken(e);
             }}
           >
-            <input
-              type="text"
-              className="wiki-input"
-              placeholder="Token label (e.g. Research CLI or Nightly Backup)"
-              value={tokenLabel}
-              onChange={(e) => {
-                setTokenLabel(e.target.value);
-              }}
-            />
-            <select
-              className="wiki-input wiki-input-medium"
-              aria-label="Agent token scope"
-              value={tokenScope}
-              onChange={(e) => {
-                setTokenScope(e.target.value as AgentTokenScope);
-              }}
+            <label className="wiki-field wiki-inline-field-grow">
+              <span className="wiki-field-label">Token label</span>
+              <input
+                type="text"
+                className="wiki-input"
+                placeholder="e.g. Research CLI or Nightly Backup"
+                value={tokenLabel}
+                onChange={(e) => {
+                  setTokenLabel(e.target.value);
+                }}
+              />
+            </label>
+            <label className="wiki-field wiki-inline-field-scope">
+              <span className="wiki-field-label">Permission scope</span>
+              <select
+                className="wiki-input"
+                aria-label="Agent token scope"
+                value={tokenScope}
+                onChange={(e) => {
+                  setTokenScope(e.target.value as AgentTokenScope);
+                }}
+              >
+                <option value="write_batch">write_batch (AI research batches)</option>
+                <option value="read_backup">read_backup (Read-only YAML export)</option>
+              </select>
+            </label>
+            <button
+              type="submit"
+              className="wiki-btn-primary wiki-btn-sm"
+              disabled={!tokenLabel.trim()}
             >
-              <option value="write_batch">write_batch (AI research batches)</option>
-              <option value="read_backup">read_backup (Read-only YAML export)</option>
-            </select>
-            <button type="submit" className="pill-btn active" disabled={!tokenLabel.trim()}>
               Create Token
             </button>
           </form>

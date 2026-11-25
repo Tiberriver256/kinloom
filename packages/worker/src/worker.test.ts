@@ -366,10 +366,12 @@ describe('createCloudflareWorker full HTTP lifecycle (Miniflare)', () => {
       const meBody = (await meRes.json()) as {
         session: { email: string; role: string };
         capabilities: { canManageSite: boolean };
+        authProviders: { google: boolean; magicLink: boolean };
       };
       expect(meBody.session.email).toBe('founder@example.test');
       expect(meBody.session.role).toBe('admin');
       expect(meBody.capabilities.canManageSite).toBe(true);
+      expect(meBody.authProviders).toEqual({ google: false, magicLink: true });
 
       // 2. Create and edit person -> verify R2 compiled/archive.json customMetadata + ETag 304
       const arthur = createSyntheticHistoricalPerson();

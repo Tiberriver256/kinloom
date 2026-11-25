@@ -8,7 +8,7 @@ import { KinloomFooter, KinloomMark } from '../KinloomFooter.js';
  * the visitor is anonymous and the archive bundle requires authentication.
  */
 export const PrivateArchiveGate: React.FC = () => {
-  const { dataSource, siteConfig } = useArchiveData();
+  const { dataSource, siteConfig, authProviders } = useArchiveData();
   const [email, setEmail] = useState('');
   const [sending, setSending] = useState(false);
   const [sentTo, setSentTo] = useState<string | null>(null);
@@ -40,66 +40,34 @@ export const PrivateArchiveGate: React.FC = () => {
   };
 
   return (
-    <div
-      className="private-archive-gate"
-      style={{
-        minHeight: '100vh',
-        display: 'flex',
-        flexDirection: 'column',
-        justifyContent: 'space-between',
-        background: 'var(--surface-canvas, #F5EFE2)',
-        color: 'var(--text-primary, #23272E)',
-      }}
-    >
-      <main
-        style={{
-          maxWidth: '30rem',
-          width: '100%',
-          margin: 'clamp(2rem, 8vh, 5rem) auto',
-          padding: '0 1.25rem',
-        }}
-      >
+    <div className="private-archive-gate">
+      <main className="private-archive-gate-main">
         <section
-          className="wiki-modal-card wiki-signin-card"
+          className="private-archive-gate-card"
           aria-label={`Sign in to ${siteConfig.site.title}`}
-          style={{
-            margin: 0,
-            maxWidth: '100%',
-            boxShadow: '0 12px 32px rgba(27, 42, 65, 0.08)',
-          }}
         >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', marginBottom: '0.75rem' }}>
-            <KinloomMark size={28} />
-            <span
-              style={{
-                fontFamily: 'var(--font-mono)',
-                fontSize: '0.78rem',
-                letterSpacing: '0.06em',
-                textTransform: 'uppercase',
-                color: 'var(--accent-primary, #7A4612)',
-              }}
-            >
-              Private Family Archive
-            </span>
+          <div className="private-archive-gate-brand">
+            <KinloomMark size={26} />
+            <span className="private-archive-gate-kicker">Private Family Archive</span>
           </div>
 
-          <h1 style={{ margin: '0 0 0.5rem 0', fontSize: '1.65rem', lineHeight: 1.2 }}>
-            {siteConfig.site.title}
-          </h1>
+          <h1 className="private-archive-gate-title">{siteConfig.site.title}</h1>
 
           {siteConfig.site.description && (
-            <p style={{ margin: '0 0 1.25rem 0', color: 'var(--text-secondary, #4E4A42)', lineHeight: 1.55 }}>
-              {siteConfig.site.description}
-            </p>
+            <p className="private-archive-gate-desc">{siteConfig.site.description}</p>
           )}
 
-          <p style={{ margin: '0 0 1rem 0', fontSize: '0.94rem', color: 'var(--text-secondary, #4E4A42)' }}>
-            Sign in with an invited family email address to view records, historical photos, and primary scans.
+          <p className="private-archive-gate-note">
+            Enter your invited family email address. No password is needed — we will email you a
+            one-click sign-in link.
           </p>
 
           {sentTo ? (
             <output className="wiki-status-banner is-success" aria-live="polite">
-              Check <strong>{sentTo}</strong> for your one-time sign-in link (valid for 15 minutes).
+              <p>
+                Check <strong>{sentTo}</strong> for your one-time sign-in link (valid for 15
+                minutes).
+              </p>
             </output>
           ) : (
             <form
@@ -110,7 +78,7 @@ export const PrivateArchiveGate: React.FC = () => {
             >
               {error && (
                 <div className="wiki-status-banner is-error" role="alert">
-                  {error}
+                  <p>{error}</p>
                 </div>
               )}
               <label className="wiki-field">
@@ -119,45 +87,20 @@ export const PrivateArchiveGate: React.FC = () => {
                   type="email"
                   required
                   autoComplete="email"
-                  className="wiki-input"
+                  className="wiki-input wiki-input-lg"
                   placeholder="relative@example.com"
                   value={email}
                   onChange={(e) => {
                     setEmail(e.target.value);
                   }}
                   disabled={sending}
-                  style={{
-                    minHeight: '44px',
-                    fontSize: '1rem',
-                    padding: '10px 12px',
-                    borderRadius: '6px',
-                  }}
                 />
               </label>
-              <div className="wiki-form-actions" style={{ marginTop: '4px' }}>
+              <div className="wiki-form-actions">
                 <button
                   type="submit"
+                  className="wiki-btn-primary wiki-btn-full"
                   disabled={sending || !email.trim()}
-                  style={{
-                    width: '100%',
-                    minHeight: '46px',
-                    padding: '11px 16px',
-                    borderRadius: '6px',
-                    border: '1px solid var(--surface-header, #1B2A41)',
-                    background:
-                      sending || !email.trim()
-                        ? 'var(--surface-muted, #E5DAC5)'
-                        : 'var(--surface-header, #1B2A41)',
-                    color:
-                      sending || !email.trim()
-                        ? 'var(--text-secondary, #4E4A42)'
-                        : 'var(--text-inverse, #FCF9F2)',
-                    fontFamily: 'var(--font-mono)',
-                    fontSize: '0.88rem',
-                    fontWeight: 600,
-                    letterSpacing: '0.02em',
-                    cursor: sending || !email.trim() ? 'not-allowed' : 'pointer',
-                  }}
                 >
                   {sending ? 'Sending link…' : 'Email Magic Link'}
                 </button>
@@ -165,34 +108,19 @@ export const PrivateArchiveGate: React.FC = () => {
             </form>
           )}
 
-          <div className="wiki-divider-label" aria-hidden="true" style={{ marginTop: '1.25rem' }}>
-            <span>or</span>
-          </div>
+          {authProviders.google && (
+            <>
+              <div className="wiki-divider-label" aria-hidden="true">
+                <span>or</span>
+              </div>
 
-          <div className="wiki-signin-section">
-            <a
-              href={googleStartUrl}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                width: '100%',
-                minHeight: '44px',
-                padding: '10px 16px',
-                borderRadius: '6px',
-                border: '1px solid var(--border-control, #827A6A)',
-                background: 'var(--surface-canvas, #F5EFE2)',
-                color: 'var(--text-primary, #23272E)',
-                fontFamily: 'var(--font-mono)',
-                fontSize: '0.86rem',
-                fontWeight: 500,
-                textDecoration: 'none',
-                boxSizing: 'border-box',
-              }}
-            >
-              Continue with Google
-            </a>
-          </div>
+              <div className="wiki-signin-section">
+                <a href={googleStartUrl} className="wiki-btn-secondary wiki-btn-full">
+                  Continue with Google
+                </a>
+              </div>
+            </>
+          )}
         </section>
       </main>
       <KinloomFooter />

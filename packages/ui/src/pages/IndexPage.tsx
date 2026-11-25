@@ -237,12 +237,12 @@ export const IndexPage: React.FC = () => {
                 {capabilities.canEdit && (
                   <button
                     type="button"
-                    className="pill-btn active"
+                    className="wiki-btn-secondary wiki-btn-sm"
                     onClick={() => {
                       setCreateOpen(true);
                     }}
                   >
-                    + New Record
+                    + Add Person
                   </button>
                 )}
                 <button

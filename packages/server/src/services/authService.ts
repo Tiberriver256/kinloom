@@ -6,6 +6,7 @@ import {
   evaluateInviteStatus,
   isInviteActive,
   resolveCapabilities,
+  type ArchiveAuthProviders,
   type ArchiveCapabilities,
   type ArchiveRepository,
   type ArchiveSessionState,
@@ -83,9 +84,14 @@ export class AuthService {
     this.magicLinkWindowMs = deps.magicLinkWindowMs ?? 60 * 60 * 1000;
   }
 
+  private isGoogleAuthConfigured(): boolean {
+    return Boolean(this.authProvider && this.authProvider.configured !== false);
+  }
+
   getSessionInfo(principal: CallerPrincipal): {
     session: ArchiveSessionState;
     capabilities: ArchiveCapabilities;
+    authProviders: ArchiveAuthProviders;
   } {
     let session: ArchiveSessionState;
     switch (principal.kind) {
@@ -124,7 +130,14 @@ export class AuthService {
       hasRevisionHistory: true,
     });
 
-    return { session, capabilities };
+    return {
+      session,
+      capabilities,
+      authProviders: {
+        google: this.isGoogleAuthConfigured(),
+        magicLink: true,
+      },
+    };
   }
 
   async redeemInvite(token: string): Promise<{ invite: InviteRecord }> {
@@ -163,7 +176,7 @@ export class AuthService {
     inviteToken: string | null;
     nextPath: string;
   }> {
-    if (!this.authProvider) {
+    if (!this.authProvider || !this.isGoogleAuthConfigured()) {
       throw new KinloomHttpError(
         503,
         'AUTH_PROVIDER_UNCONFIGURED',
@@ -197,7 +210,7 @@ export class AuthService {
     redirectUri: string;
     inviteToken: string | null;
   }): Promise<{ user: UserRecord; autoEnrolled: boolean }> {
-    if (!this.authProvider) {
+    if (!this.authProvider || !this.isGoogleAuthConfigured()) {
       throw new KinloomHttpError(
         503,
         'AUTH_PROVIDER_UNCONFIGURED',

@@ -27,7 +27,7 @@ export const MediaUploaderModal: React.FC<MediaUploaderModalProps> = ({
   const [kind, setKind] = useState<ArchivalMediaKind>('family_photo');
   const [caption, setCaption] = useState('');
   const [dateEdtf, setDateEdtf] = useState('');
-  const [summary, setSummary] = useState('Upload archival media');
+  const [summary, setSummary] = useState('Added family photo');
 
   const [snapshot, send] = useMachine(mediaUploadMachine, {
     input: {
@@ -97,7 +97,7 @@ export const MediaUploaderModal: React.FC<MediaUploaderModalProps> = ({
       />
       <div className="wiki-modal-card">
         <div className="wiki-modal-header">
-          <h2>Upload Archival Media</h2>
+          <h2>Add a Photo or Scan</h2>
           <button
             type="button"
             className="pill-btn"
@@ -114,18 +114,20 @@ export const MediaUploaderModal: React.FC<MediaUploaderModalProps> = ({
 
         {targetIsLiving && (
           <div className="wiki-status-banner is-warning" role="alert">
-            <strong>Living-person privacy rule:</strong> Portraits and photographs cannot be
-            attached to living relatives. Choose a deceased ancestor or historical record instead.
+            <p>
+              <strong>Living-person privacy rule:</strong> Portraits and photographs cannot be
+              attached to living relatives. Choose a deceased ancestor or historical record instead.
+            </p>
           </div>
         )}
 
         {isBusy && (
           <output className="wiki-status-banner is-info" aria-live="polite">
-            <div>
-              {snapshot.matches('hashingSha256') && 'Computing SHA-256 archival digest…'}
-              {snapshot.matches('uploading') && 'Uploading content-addressed file to archive…'}
-              {snapshot.matches('attaching') && 'Attaching media record to archive ledger…'}
-            </div>
+            <p>
+              {snapshot.matches('hashingSha256') && 'Preparing file for upload…'}
+              {snapshot.matches('uploading') && 'Uploading file to the family archive…'}
+              {snapshot.matches('attaching') && 'Saving photo to the archive…'}
+            </p>
             <button
               type="button"
               className="pill-btn"
@@ -140,8 +142,10 @@ export const MediaUploaderModal: React.FC<MediaUploaderModalProps> = ({
 
         {isRejected && (
           <div className="wiki-status-banner is-error" role="alert">
-            <strong>Upload blocked:</strong>{' '}
-            {snapshot.context.rejectionMessage ?? 'File failed archival upload validation.'}
+            <p>
+              <strong>Upload blocked:</strong>{' '}
+              {snapshot.context.rejectionMessage ?? 'File failed archival upload validation.'}
+            </p>
             <div className="wiki-inline-actions" style={{ marginTop: 6 }}>
               <button
                 type="button"
@@ -212,7 +216,7 @@ export const MediaUploaderModal: React.FC<MediaUploaderModalProps> = ({
         <form className="wiki-edit-form" onSubmit={handleStartUpload}>
           <label className="wiki-field">
             <span className="wiki-field-label">
-              File (JPEG, PNG, WebP, PDF{allowAudioVideo ? ', MP4, WebM, MP3, M4A, OGG, WAV' : ''})
+              Choose a photo, document{allowAudioVideo ? ', or video' : ''}
             </span>
             <input
               type="file"
@@ -236,7 +240,7 @@ export const MediaUploaderModal: React.FC<MediaUploaderModalProps> = ({
 
           <div className="wiki-field-grid">
             <label className="wiki-field">
-              <span className="wiki-field-label">Media category</span>
+              <span className="wiki-field-label">Type of item</span>
               <select
                 className="wiki-input"
                 value={kind}
@@ -257,7 +261,7 @@ export const MediaUploaderModal: React.FC<MediaUploaderModalProps> = ({
             </label>
 
             <label className="wiki-field">
-              <span className="wiki-field-label">Attach to relative (deceased only)</span>
+              <span className="wiki-field-label">Who is in this photo? (deceased only)</span>
               <select
                 className="wiki-input"
                 value={personId}
@@ -281,7 +285,7 @@ export const MediaUploaderModal: React.FC<MediaUploaderModalProps> = ({
               <input
                 type="text"
                 className="wiki-input"
-                placeholder="Describe who or what appears in this media"
+                placeholder="Describe who or what appears in this photo"
                 value={caption}
                 disabled={isBusy}
                 onChange={(e) => {
@@ -291,11 +295,11 @@ export const MediaUploaderModal: React.FC<MediaUploaderModalProps> = ({
             </label>
 
             <label className="wiki-field">
-              <span className="wiki-field-label">Date (EDTF, optional)</span>
+              <span className="wiki-field-label">Approximate date (optional)</span>
               <input
                 type="text"
                 className="wiki-input"
-                placeholder="e.g. 1918~"
+                placeholder="e.g. 1918 or 1945-06"
                 value={dateEdtf}
                 disabled={isBusy}
                 onChange={(e) => {
@@ -305,7 +309,7 @@ export const MediaUploaderModal: React.FC<MediaUploaderModalProps> = ({
             </label>
 
             <label className="wiki-field">
-              <span className="wiki-field-label">Edit summary</span>
+              <span className="wiki-field-label">Short note</span>
               <input
                 type="text"
                 className="wiki-input"
@@ -321,10 +325,10 @@ export const MediaUploaderModal: React.FC<MediaUploaderModalProps> = ({
           <div className="wiki-form-actions">
             <button
               type="submit"
-              className="pill-btn active"
+              className="wiki-btn-primary wiki-btn-sm"
               disabled={!selectedFile || isBusy}
             >
-              {isBusy ? 'Uploading…' : 'Hash & Upload'}
+              {isBusy ? 'Uploading…' : 'Upload Photo'}
             </button>
             <button type="button" className="pill-btn" onClick={onClose}>
               Cancel

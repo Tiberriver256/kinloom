@@ -622,10 +622,10 @@ export const TreePage: React.FC = () => {
     const gw = Math.max(400, graph.bounds.maxX - graph.bounds.minX);
     const gh = Math.max(400, graph.bounds.maxY - graph.bounds.minY);
     const padX = vw < 640 ? 24 : 60;
-    const padY = vw < 640 ? 96 : 60;
+    const padY = vw < 640 ? 96 : 112;
     const nextZoom = Math.max(0.24, Math.min(1, Math.min((vw - padX) / gw, (vh - padY) / gh)));
     const nextX = (vw - gw * nextZoom) / 2;
-    const nextY = Math.max(vw < 640 ? 56 : 16, (vh - gh * nextZoom) / 2);
+    const nextY = Math.max(vw < 640 ? 64 : 68, (vh - gh * nextZoom) / 2);
     return {
       zoom: Number(nextZoom.toFixed(2)),
       pan: { x: Math.round(nextX), y: Math.round(nextY) },
@@ -986,7 +986,7 @@ export const TreePage: React.FC = () => {
   const activeCount = branchCounts[branchFilter] ?? graph.nodes.length;
 
   return (
-    <div>
+    <div className="tree-shell">
       <ExplorerTopBar />
       {/* oxlint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-noninteractive-element-interactions -- pan/zoom canvas */}
       <main

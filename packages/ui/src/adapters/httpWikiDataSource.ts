@@ -1,6 +1,7 @@
 import type {
   AgentTokenRecord,
   AgentTokenScope,
+  ArchiveAuthProviders,
   ArchiveBundle,
   ArchiveCapabilities,
   ArchiveDataSource,
@@ -212,11 +213,16 @@ export class HttpWikiDataSource implements ArchiveDataSource {
 
   async getSession(options?: {
     signal?: AbortSignal;
-  }): Promise<{ session: ArchiveSessionState; capabilities: ArchiveCapabilities }> {
-    return this.requestJson<{ session: ArchiveSessionState; capabilities: ArchiveCapabilities }>(
-      '/api/auth/me',
-      { signal: options?.signal },
-    );
+  }): Promise<{
+    session: ArchiveSessionState;
+    capabilities: ArchiveCapabilities;
+    authProviders?: ArchiveAuthProviders;
+  }> {
+    return this.requestJson<{
+      session: ArchiveSessionState;
+      capabilities: ArchiveCapabilities;
+      authProviders?: ArchiveAuthProviders;
+    }>('/api/auth/me', { signal: options?.signal });
   }
 
   async getEntity(

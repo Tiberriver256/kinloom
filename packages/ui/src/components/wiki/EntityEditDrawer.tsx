@@ -248,8 +248,7 @@ export const EntityEditDrawer: React.FC<EntityEditDrawerProps> = ({
               Edit {title ?? `${entityType}/${entityId}`}
             </h2>
             <div className="wiki-drawer-subtitle">
-              <code>{entityType}</code> · <code>{entityId}</code> · base{' '}
-              <code>r{snapshot.context.baseRevisionId}</code>
+              Changes are saved to the family history and can always be undone.
             </div>
           </div>
           <button type="button" className="pill-btn" onClick={handleCloseAttempt}>
@@ -423,11 +422,11 @@ export const EntityEditDrawer: React.FC<EntityEditDrawerProps> = ({
                   />
                 </label>
                 <label className="wiki-field">
-                  <span className="wiki-field-label">Birth date (EDTF)</span>
+                  <span className="wiki-field-label">Birth date</span>
                   <input
                     type="text"
                     className="wiki-input"
-                    placeholder="e.g. 1850-04-12 or 1850~"
+                    placeholder="e.g. 1850-04-12 or 1850"
                     value={asString(draft.birth_edtf)}
                     onChange={(e) => {
                       updateField('birth_edtf', e.target.value);
@@ -436,7 +435,7 @@ export const EntityEditDrawer: React.FC<EntityEditDrawerProps> = ({
                   />
                 </label>
                 <label className="wiki-field">
-                  <span className="wiki-field-label">Death date (EDTF)</span>
+                  <span className="wiki-field-label">Death date</span>
                   <input
                     type="text"
                     className="wiki-input"
@@ -449,10 +448,11 @@ export const EntityEditDrawer: React.FC<EntityEditDrawerProps> = ({
                   />
                 </label>
                 <label className="wiki-field">
-                  <span className="wiki-field-label">Alternate names (comma-separated)</span>
+                  <span className="wiki-field-label">Nicknames or maiden names</span>
                   <input
                     type="text"
                     className="wiki-input"
+                    placeholder="Separate multiple names with commas"
                     value={asStringArray(draft.alt_names).join(', ')}
                     onChange={(e) => {
                       const list = e.target.value
@@ -706,14 +706,14 @@ export const EntityEditDrawer: React.FC<EntityEditDrawerProps> = ({
           {/* Required edit summary */}
           <label className="wiki-field">
             <span className="wiki-field-label">
-              Edit summary <span aria-hidden="true">*</span> (minimum 3 characters)
+              What did you change? <span aria-hidden="true">*</span>
             </span>
             <input
               type="text"
               className="wiki-input"
               required
               minLength={3}
-              placeholder="Describe what changed and why (e.g. Correct birth year from 1880 census)"
+              placeholder="e.g. Corrected birth year from 1880 census or family Bible"
               value={summary}
               onChange={(e) => {
                 send({ type: 'SET_SUMMARY', summary: e.target.value });
@@ -722,7 +722,7 @@ export const EntityEditDrawer: React.FC<EntityEditDrawerProps> = ({
             />
             {summary.length > 0 && !summaryValid && (
               <span className="wiki-field-hint is-error">
-                Summary needs at least 3 characters.
+                Please write a short note (at least 3 characters).
               </span>
             )}
           </label>
@@ -730,10 +730,10 @@ export const EntityEditDrawer: React.FC<EntityEditDrawerProps> = ({
           <div className="wiki-form-actions">
             <button
               type="submit"
-              className="pill-btn active"
+              className="wiki-btn-primary wiki-btn-sm"
               disabled={isBusy || !snapshot.context.dirty || !summaryValid}
             >
-              {isBusy ? 'Saving…' : 'Save Revision'}
+              {isBusy ? 'Saving…' : 'Save Changes'}
             </button>
             {isBusy ? (
               <button
@@ -763,23 +763,23 @@ export const EntityEditDrawer: React.FC<EntityEditDrawerProps> = ({
                   setDeleteConfirmOpen(true);
                 }}
               >
-                Archive / Soft-Delete Record
+                Remove from Archive
               </button>
             ) : (
               <div className="wiki-danger-confirm">
                 <p>
-                  Soft-deleting hides this record from the active archive while preserving its full
-                  revision history for one-click restore.
+                  Removing hides this page from the archive while keeping its full history so it
+                  can be restored anytime.
                 </p>
                 {deleteError && (
                   <div className="wiki-status-banner is-error" role="alert">
-                    {deleteError}
+                    <p>{deleteError}</p>
                   </div>
                 )}
                 <input
                   type="text"
                   className="wiki-input"
-                  placeholder="Reason for soft-deleting (min 3 characters)"
+                  placeholder="Why are you removing this? (at least 3 characters)"
                   value={deleteSummary}
                   onChange={(e) => {
                     setDeleteSummary(e.target.value);
@@ -795,7 +795,7 @@ export const EntityEditDrawer: React.FC<EntityEditDrawerProps> = ({
                       void handleSoftDelete();
                     }}
                   >
-                    {deleteBusy ? 'Deleting…' : 'Confirm Soft-Delete'}
+                    {deleteBusy ? 'Removing…' : 'Confirm Removal'}
                   </button>
                   <button
                     type="button"

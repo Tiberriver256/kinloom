@@ -157,6 +157,22 @@ export const videoStoryPlugin: KinloomUiPlugin = {
 \`\`\`
 
 Pass \`plugins={[videoStoryPlugin]}\` into \`<KinloomApp />\` in your private site entrypoint.
+
+## Vite Configuration (Single React Instance)
+
+When building a private site app with Vite, include \`resolve.dedupe\` in \`vite.config.ts\` so \`@kinloom/ui\` and your site share one React and Router instance:
+
+\`\`\`ts
+import { defineConfig } from 'vite';
+import react from '@vitejs/plugin-react';
+
+export default defineConfig({
+  plugins: [react()],
+  resolve: {
+    dedupe: ['react', 'react-dom', 'react-router-dom'],
+  },
+});
+\`\`\`
 `;
 
 const GITIGNORE_CONTENT = `node_modules/

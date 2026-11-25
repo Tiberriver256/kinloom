@@ -14,8 +14,9 @@ export interface WikiActionBarProps {
 }
 
 /**
- * Wikipedia-style Read / Edit / History / Talk action bar.
- * Returns null when all wiki capabilities are disabled so read-only static demos stay clean.
+ * Calm, plain-language contributor bar for person and place pages.
+ * Keeps primary actions (Edit Page, Add Photo) obvious and tucks secondary
+ * views (Family Notes, History) quietly aside. Returns null on read-only static demos.
  */
 export const WikiActionBar: React.FC<WikiActionBarProps> = ({
   activeTab,
@@ -23,8 +24,7 @@ export const WikiActionBar: React.FC<WikiActionBarProps> = ({
   revisionCount,
   talkCount,
   onUploadMedia,
-  onCreateRecord,
-  entityLabel = 'record',
+  entityLabel = 'page',
 }) => {
   const { capabilities } = useArchiveData();
 
@@ -38,73 +38,100 @@ export const WikiActionBar: React.FC<WikiActionBarProps> = ({
     return null;
   }
 
-  return (
-    <div className="wiki-action-bar print-hide" role="region" aria-label={`Wiki actions for ${entityLabel}`}>
-      <div className="wiki-action-tabs" role="tablist" aria-label="Record view tabs">
-        <button
-          type="button"
-          role="tab"
-          aria-selected={activeTab === 'read'}
-          className={`wiki-tab-btn ${activeTab === 'read' ? 'active' : ''}`}
-          onClick={() => {
-            onSelectTab('read');
-          }}
-        >
-          Read
-        </button>
+  const viewingSubPanel = activeTab === 'history' || activeTab === 'talk';
 
-        {capabilities.canEdit && (
+  return (
+    <div
+      className="wiki-action-bar print-hide"
+      role="region"
+      aria-label={`Contribute to ${entityLabel}`}
+    >
+      <div className="wiki-action-primary">
+        {viewingSubPanel ? (
           <button
             type="button"
-            role="tab"
-            aria-selected={activeTab === 'edit'}
-            className={`wiki-tab-btn ${activeTab === 'edit' ? 'active' : ''}`}
+            className="wiki-btn-secondary wiki-btn-sm"
             onClick={() => {
-              onSelectTab('edit');
+              onSelectTab('read');
             }}
           >
-            Edit
+            ← Back to Profile
+          </button>
+        ) : (
+          <>
+            {capabilities.canEdit && (
+              <button
+                type="button"
+                className="wiki-btn-secondary wiki-btn-sm"
+                onClick={() => {
+                  onSelectTab('edit');
+                }}
+              >
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 16 16"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.6"
+                  aria-hidden="true"
+                >
+                  <path d="M11.5 2.5l2 2L5 13H3v-2l8.5-8.5z" />
+                </svg>
+                Edit Page
+              </button>
+            )}
+
+            {capabilities.canUploadMedia && onUploadMedia && (
+              <button
+                type="button"
+                className="wiki-btn-secondary wiki-btn-sm"
+                onClick={onUploadMedia}
+              >
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 16 16"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.6"
+                  aria-hidden="true"
+                >
+                  <rect x="2" y="3.5" width="12" height="9.5" rx="1.5" />
+                  <circle cx="8" cy="8.25" r="2.25" />
+                  <path d="M5.5 3.5l1-1.5h3l1 1.5" />
+                </svg>
+                Add Photo
+              </button>
+            )}
+          </>
+        )}
+      </div>
+
+      <div className="wiki-action-secondary">
+        {capabilities.hasTalk && (
+          <button
+            type="button"
+            aria-pressed={activeTab === 'talk'}
+            className={`pill-btn ${activeTab === 'talk' ? 'active' : ''}`}
+            onClick={() => {
+              onSelectTab(activeTab === 'talk' ? 'read' : 'talk');
+            }}
+          >
+            Family Notes{typeof talkCount === 'number' ? ` (${talkCount})` : ''}
           </button>
         )}
 
         {capabilities.hasRevisionHistory && (
           <button
             type="button"
-            role="tab"
-            aria-selected={activeTab === 'history'}
-            className={`wiki-tab-btn ${activeTab === 'history' ? 'active' : ''}`}
+            aria-pressed={activeTab === 'history'}
+            className={`pill-btn ${activeTab === 'history' ? 'active' : ''}`}
             onClick={() => {
-              onSelectTab('history');
+              onSelectTab(activeTab === 'history' ? 'read' : 'history');
             }}
           >
             History{typeof revisionCount === 'number' ? ` (${revisionCount})` : ''}
-          </button>
-        )}
-
-        {capabilities.hasTalk && (
-          <button
-            type="button"
-            role="tab"
-            aria-selected={activeTab === 'talk'}
-            className={`wiki-tab-btn ${activeTab === 'talk' ? 'active' : ''}`}
-            onClick={() => {
-              onSelectTab('talk');
-            }}
-          >
-            Talk{typeof talkCount === 'number' ? ` (${talkCount})` : ''}
-          </button>
-        )}
-      </div>
-
-      <div className="wiki-action-tools">
-        {capabilities.canUploadMedia && onUploadMedia && (
-          <button type="button" className="pill-btn" onClick={onUploadMedia}>
-            + Upload Media
-          </button>
-        )}
-        {capabilities.canEdit && onCreateRecord && (
-          <button type="button" className="pill-btn" onClick={onCreateRecord}>
-            + New Record
           </button>
         )}
       </div>

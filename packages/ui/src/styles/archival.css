@@ -1763,6 +1763,37 @@ html.tree-viewport-lock body {
   overscroll-behavior: none;
 }
 
+.kinloom-app {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+}
+
+.kinloom-app:has(.map-shell),
+.kinloom-app:has(.tree-shell) {
+  height: 100dvh;
+  overflow: hidden;
+}
+
+.tree-shell {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.tree-shell .topbar {
+  position: relative;
+  flex: 0 0 auto;
+}
+
+.tree-shell .tree-page {
+  flex: 1 1 auto;
+  min-height: 0;
+  height: auto;
+}
+
 .tree-page {
   position: relative;
   height: calc(100vh - var(--topbar-height));
@@ -2081,7 +2112,8 @@ html.tree-viewport-lock body {
 .map-shell {
   display: flex;
   flex-direction: column;
-  height: 100dvh;
+  flex: 1 1 auto;
+  min-height: 0;
   overflow: hidden;
   outline: none;
 }
@@ -3247,13 +3279,18 @@ dialog.global-search-backdrop {
 
   .brand-link {
     order: 1;
-    flex: 0 1 auto;
-    font-size: 0.95rem;
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-size: 0.94rem;
     white-space: nowrap;
   }
 
   .topbar-center {
     order: 2;
+    flex: 0 0 auto;
+    margin-left: auto;
     width: auto;
     display: flex;
     align-items: center;
@@ -3277,9 +3314,9 @@ dialog.global-search-backdrop {
 
   .nav-pill {
     padding: 4px 2px;
-    font-size: 0.84rem;
+    font-size: 0.86rem;
     white-space: nowrap;
-    min-height: 36px;
+    min-height: 44px;
     display: inline-flex;
     align-items: center;
   }
@@ -3344,19 +3381,25 @@ dialog.global-search-backdrop {
   }
 
   .index-filter-bar .search-input {
-    padding: 5px 2px;
-    font-size: 0.92rem;
+    padding: 8px 4px;
+    font-size: 1rem;
+    min-height: 44px;
+    width: 100%;
+    min-width: 0;
   }
 
   .index-filter-actions {
     width: 100%;
     flex-wrap: wrap;
-    gap: 4px 10px;
+    gap: 6px 10px;
   }
 
   .index-filter-actions .pill-btn {
-    font-size: 0.74rem;
-    padding: 4px 2px;
+    font-size: 0.78rem;
+    padding: 6px 4px;
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
     white-space: nowrap;
   }
 
@@ -3402,8 +3445,11 @@ dialog.global-search-backdrop {
   }
 
   .places-search-bar .search-input {
-    padding: 5px 2px;
-    font-size: 0.92rem;
+    padding: 8px 4px;
+    font-size: 1rem;
+    min-height: 44px;
+    width: 100%;
+    min-width: 0;
   }
 
   .place-ledger-row {
@@ -3819,7 +3865,7 @@ dialog.global-search-backdrop {
     flex-shrink: 0;
     font-size: 1.15rem;
     padding: 4px 6px;
-    min-height: 40px;
+    min-height: 44px;
     text-align: center;
   }
 
@@ -3866,9 +3912,9 @@ dialog.global-search-backdrop {
   .source-collection-tabs .pill-btn {
     flex-shrink: 0;
     white-space: nowrap;
-    min-height: 36px;
-    padding: 4px 10px;
-    font-size: 0.76rem;
+    min-height: 44px;
+    padding: 6px 10px;
+    font-size: 0.78rem;
   }
 
   .source-download-bar {
@@ -3888,9 +3934,9 @@ dialog.global-search-backdrop {
   .source-download-bar .pill-btn {
     flex-shrink: 0;
     white-space: nowrap;
-    min-height: 36px;
-    padding: 4px 10px;
-    font-size: 0.74rem;
+    min-height: 44px;
+    padding: 6px 10px;
+    font-size: 0.76rem;
   }
 
   .source-reader-controls {
@@ -4803,26 +4849,283 @@ dialog.global-search-backdrop {
   color: var(--surface-header);
 }
 
-/* Auth & Invite Banner */
+/* Quiet Account Menu inside ExplorerTopBar */
+.topbar-account {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.topbar-account-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 4px 10px 4px 5px;
+  background: var(--surface-card);
+  border: 1px solid var(--border-control);
+  border-radius: 999px;
+  color: var(--surface-header);
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background-color 0.14s ease, border-color 0.14s ease;
+}
+
+.topbar-account-btn:hover,
+.topbar-account-btn.is-open {
+  background: var(--surface-linen);
+  border-color: var(--surface-header);
+}
+
+.topbar-account-avatar {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--surface-header);
+  color: var(--text-inverse);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.topbar-account-name {
+  max-width: 150px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.topbar-account-caret {
+  font-size: 0.7rem;
+  color: var(--text-secondary);
+}
+
+.topbar-account-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 60;
+  min-width: 220px;
+  padding: 8px;
+  background: var(--surface-card);
+  border: 1px solid var(--border-control);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-active);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.topbar-account-menu-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 8px 10px;
+  margin-bottom: 4px;
+  border-bottom: 1px solid var(--border-decorative);
+  font-size: 0.88rem;
+  color: var(--surface-header);
+}
+
+.topbar-account-item {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  padding: 8px 10px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background-color 0.14s ease, color 0.14s ease;
+}
+
+.topbar-account-item:hover,
+.topbar-account-item.active {
+  background: var(--surface-linen);
+  color: var(--surface-header);
+}
+
+.topbar-account-item.is-danger {
+  color: var(--diff-del-fg);
+}
+
+.topbar-account-item.is-danger:hover {
+  background: var(--diff-del-bg);
+}
+
+.topbar-account-divider {
+  height: 1px;
+  margin: 4px 0;
+  background: var(--border-decorative);
+}
+
+/* Primary & Secondary Archival Buttons (Clear Affordance for Grandma & Grandpa) */
+.wiki-btn-primary,
+.wiki-btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 46px;
+  padding: 10px 18px;
+  border-radius: var(--radius-md);
+  font-family: var(--font-mono);
+  font-size: 0.86rem;
+  font-weight: 600;
+  letter-spacing: 0.015em;
+  text-decoration: none;
+  cursor: pointer;
+  box-sizing: border-box;
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.wiki-btn-sm {
+  min-height: 38px;
+  padding: 7px 14px;
+  font-size: 0.8rem;
+}
+
+.wiki-btn-full {
+  width: 100%;
+}
+
+.wiki-btn-primary {
+  background: var(--surface-header);
+  color: var(--text-inverse);
+  border: 1px solid var(--surface-header);
+}
+
+.wiki-btn-primary:hover:not(:disabled) {
+  background: #273b59;
+  border-color: #273b59;
+}
+
+.wiki-btn-primary:active:not(:disabled) {
+  background: #132033;
+}
+
+.wiki-btn-primary:disabled {
+  background: var(--surface-muted);
+  color: var(--text-secondary);
+  border-color: var(--border-control);
+  cursor: not-allowed;
+}
+
+.wiki-btn-secondary {
+  background: var(--surface-card);
+  color: var(--surface-header);
+  border: 1px solid var(--border-control);
+}
+
+.wiki-btn-secondary:hover:not(:disabled) {
+  background: var(--surface-linen);
+  border-color: var(--surface-header);
+}
+
+.wiki-btn-secondary:active:not(:disabled) {
+  background: var(--surface-muted);
+}
+
+.wiki-btn-secondary:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* Private Archive Sign-In Gate */
+.private-archive-gate {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  background: var(--surface-canvas);
+  color: var(--text-primary);
+}
+
+.private-archive-gate-main {
+  max-width: 30rem;
+  width: 100%;
+  margin: clamp(1.75rem, 7vh, 4.5rem) auto;
+  padding: 0 1.15rem;
+}
+
+.private-archive-gate-card {
+  background: var(--surface-card);
+  border: 1px solid var(--border-control);
+  border-radius: 6px;
+  box-shadow: 0 12px 32px rgba(27, 42, 65, 0.08);
+  padding: clamp(1.35rem, 4vw, 2rem);
+}
+
+.private-archive-gate-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-bottom: 0.85rem;
+}
+
+.private-archive-gate-kicker {
+  font-family: var(--font-mono);
+  font-size: 0.76rem;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--accent-primary);
+}
+
+.private-archive-gate-title {
+  margin: 0 0 0.6rem;
+  font-family: var(--font-serif);
+  font-size: clamp(1.5rem, 4.5vw, 1.85rem);
+  font-weight: 700;
+  line-height: 1.18;
+  color: var(--surface-header);
+}
+
+.private-archive-gate-desc {
+  margin: 0 0 1rem;
+  font-size: 0.98rem;
+  line-height: 1.56;
+  color: var(--text-secondary);
+}
+
+.private-archive-gate-note {
+  margin: 0 0 1.25rem;
+  font-size: 0.94rem;
+  line-height: 1.5;
+  color: var(--text-primary);
+}
+
+.private-archive-gate .kinloom-footer {
+  width: 100%;
+  justify-content: center;
+}
+
+/* Auth & Invite Banner (Invite Guests Only) */
 .wiki-auth-banner {
   display: flex;
   justify-content: space-between;
   align-items: center;
   flex-wrap: wrap;
-  gap: 10px;
-  padding: 8px 20px;
-  font-size: 0.86rem;
+  gap: 10px 16px;
+  padding: 8px 26px;
+  font-size: 0.88rem;
   border-bottom: 1px solid var(--border-decorative);
 }
 
 .wiki-auth-banner.is-invite {
   background: var(--badge-memory-bg);
   color: var(--badge-memory-fg);
-}
-
-.wiki-auth-banner.is-member {
-  background: var(--surface-linen);
-  color: var(--text-primary);
 }
 
 .wiki-auth-banner-actions {
@@ -4832,54 +5135,23 @@ dialog.global-search-backdrop {
   flex-wrap: wrap;
 }
 
-/* Wikipedia-style Entity Action Bar */
+/* Quiet Contributor Action Bar (Person & Place Pages) */
 .wiki-action-bar {
   display: flex;
   justify-content: space-between;
   align-items: center;
   flex-wrap: wrap;
-  gap: 10px;
-  margin-bottom: 14px;
-  padding-bottom: 8px;
+  gap: 10px 16px;
+  margin: 0 0 20px;
+  padding: 10px 0;
   border-bottom: 1px solid var(--border-decorative);
 }
 
-.wiki-action-tabs {
+.wiki-action-primary,
+.wiki-action-secondary {
   display: flex;
   align-items: center;
-  gap: 4px;
-  flex-wrap: wrap;
-}
-
-.wiki-tab-btn {
-  font-family: var(--font-mono);
-  font-size: 0.8rem;
-  padding: 6px 12px;
-  background: transparent;
-  color: var(--text-secondary);
-  border: 1px solid transparent;
-  border-bottom: 2px solid transparent;
-  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
-  cursor: pointer;
-}
-
-.wiki-tab-btn:hover {
-  color: var(--surface-header);
-  background: var(--surface-linen);
-}
-
-.wiki-tab-btn.active {
-  color: var(--surface-header);
-  font-weight: 700;
-  background: var(--surface-card);
-  border-color: var(--border-decorative);
-  border-bottom-color: var(--accent-primary);
-}
-
-.wiki-action-tools {
-  display: flex;
-  align-items: center;
-  gap: 8px;
+  gap: 8px 14px;
   flex-wrap: wrap;
 }
 
@@ -4922,6 +5194,16 @@ dialog.global-search-backdrop {
   border-radius: var(--radius-sm);
   border: 1px solid var(--border-control);
   font-size: 0.88rem;
+  line-height: 1.5;
+}
+
+.wiki-status-banner p {
+  margin: 0;
+}
+
+.wiki-status-banner code {
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .wiki-status-banner.is-success {
@@ -4963,6 +5245,8 @@ dialog.global-search-backdrop {
   border: 1px solid var(--border-decorative);
   border-radius: var(--radius-sm);
   padding: 12px;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .wiki-revision-row,
@@ -4973,6 +5257,15 @@ dialog.global-search-backdrop {
   align-items: flex-start;
   gap: 12px;
   flex-wrap: wrap;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.wiki-revision-main,
+.wiki-admin-row > div {
+  min-width: 0;
+  max-width: 100%;
+  flex: 1 1 220px;
 }
 
 .wiki-revision-topline {
@@ -4980,6 +5273,14 @@ dialog.global-search-backdrop {
   align-items: center;
   gap: 6px;
   flex-wrap: wrap;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.wiki-revision-topline code,
+.wiki-panel-meta {
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .wiki-rev-id,
@@ -5239,13 +5540,19 @@ dialog.global-search-backdrop {
 .wiki-textarea {
   width: 100%;
   box-sizing: border-box;
-  padding: 8px 10px;
+  padding: 9px 11px;
   background: var(--surface-canvas);
   color: var(--text-primary);
   border: 1px solid var(--border-control);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-md);
   font-family: inherit;
-  font-size: 0.92rem;
+  font-size: 0.94rem;
+}
+
+.wiki-input-lg {
+  min-height: 46px;
+  font-size: 1rem;
+  padding: 10px 12px;
 }
 
 .wiki-mono {
@@ -5255,10 +5562,18 @@ dialog.global-search-backdrop {
 
 .wiki-checkbox-row {
   display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 0.88rem;
-  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: 0.9rem;
+  line-height: 1.45;
+  flex-wrap: nowrap;
+}
+
+.wiki-checkbox-row input[type="checkbox"] {
+  margin-top: 3px;
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
 }
 
 .wiki-citation-fieldset {
@@ -5300,21 +5615,21 @@ dialog.global-search-backdrop {
 
 .wiki-inline-form {
   display: flex;
-  gap: 8px;
+  gap: 10px;
   flex-wrap: wrap;
-  align-items: center;
+  align-items: flex-end;
 }
 
-.wiki-inline-form .wiki-input {
-  flex: 1 1 220px;
+.wiki-inline-field-grow {
+  flex: 1 1 240px;
 }
 
-.wiki-inline-form .wiki-input-narrow {
-  flex: 0 1 90px;
+.wiki-inline-field-days {
+  flex: 0 1 130px;
 }
 
-.wiki-inline-form .wiki-input-medium {
-  flex: 0 1 240px;
+.wiki-inline-field-scope {
+  flex: 1 1 250px;
 }
 
 .wiki-secret-box {
@@ -5357,11 +5672,21 @@ dialog.global-search-backdrop {
 }
 
 .wiki-divider-label {
-  text-align: center;
+  display: flex;
+  align-items: center;
+  gap: 12px;
   font-family: var(--font-mono);
   font-size: 0.76rem;
   color: var(--text-secondary);
-  margin: 12px 0;
+  margin: 16px 0;
+}
+
+.wiki-divider-label::before,
+.wiki-divider-label::after {
+  content: '';
+  flex: 1 1 auto;
+  height: 1px;
+  background: var(--border-decorative);
 }
 
 .wiki-google-btn {
@@ -5376,12 +5701,74 @@ dialog.global-search-backdrop {
   padding: 0;
 }
 
-@media (max-width: 640px) {
+.kinship-examples-bar .pill-btn {
+  text-align: left;
+}
+
+@media (max-width: 767px) {
+  .topbar-account-name {
+    display: none;
+  }
+
+  .topbar-account-btn {
+    min-height: 44px;
+    padding: 4px 8px 4px 6px;
+  }
+
+  .topbar-account-menu {
+    right: 0;
+    left: auto;
+    max-width: calc(100vw - 24px);
+  }
+
+  .topbar-account-item {
+    min-height: 44px;
+  }
+
+  .wiki-btn-sm,
+  .wiki-input,
+  select.pill-btn,
+  .filter-bar .pill-btn,
+  .person-header .pill-btn,
+  .drawer-top .pill-btn,
+  .wiki-action-bar .pill-btn,
+  .wiki-revision-actions .pill-btn,
+  .wiki-admin-row .pill-btn,
+  .wiki-modal-header .pill-btn,
+  .wiki-form-actions .pill-btn,
+  .wiki-danger-zone .pill-btn,
+  .tree-toolbar .pill-btn,
+  .place-map-box .pill-btn,
+  .kinship-selector-card .pill-btn {
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+  }
+
+  .wiki-input,
+  .wiki-textarea {
+    font-size: 1rem;
+  }
+
+  .wiki-inline-form {
+    align-items: stretch;
+  }
+
+  .wiki-inline-field-grow,
+  .wiki-inline-field-days,
+  .wiki-inline-field-scope {
+    flex: 1 1 100%;
+  }
+
+  .wiki-inline-form .wiki-btn-primary {
+    width: 100%;
+  }
+
   .wiki-field-grid {
     grid-template-columns: 1fr;
   }
 
   .wiki-auth-banner {
-    padding: 8px 12px;
+    padding: 10px 14px;
   }
 }

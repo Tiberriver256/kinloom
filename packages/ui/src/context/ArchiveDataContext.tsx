@@ -1,4 +1,5 @@
 import type {
+  ArchiveAuthProviders,
   ArchiveBundle,
   ArchiveCapabilities as CoreArchiveCapabilities,
   ArchiveDataSource,
@@ -85,6 +86,7 @@ export interface ArchiveDataContextValue {
   refreshSession: () => Promise<void>;
   session: ArchiveSessionState | null;
   capabilities: CoreArchiveCapabilities;
+  authProviders: ArchiveAuthProviders;
 }
 
 const DEFAULT_CAPABILITIES: CoreArchiveCapabilities = {
@@ -238,6 +240,10 @@ export const ArchiveDataProvider: React.FC<ArchiveDataProviderProps> = ({
   const [liveCapabilities, setLiveCapabilities] = useState<CoreArchiveCapabilities>(
     initialNormalizedCaps,
   );
+  const [liveAuthProviders, setLiveAuthProviders] = useState<ArchiveAuthProviders>({
+    google: false,
+    magicLink: Boolean(resolvedDataSource.requestMagicLink),
+  });
 
   const [readings, setReadings] = useState<ReadingsBundle | null>(initialReadings);
   const [readingsLoading, setReadingsLoading] = useState(false);
@@ -266,6 +272,9 @@ export const ArchiveDataProvider: React.FC<ArchiveDataProviderProps> = ({
       const res = await resolvedDataSource.getSession();
       setLiveSession(res.session);
       setLiveCapabilities(res.capabilities);
+      if (res.authProviders) {
+        setLiveAuthProviders(res.authProviders);
+      }
       if (res.session.principal_kind === 'anonymous') {
         hasBundleRef.current = false;
         etagRef.current = null;
@@ -290,6 +299,9 @@ export const ArchiveDataProvider: React.FC<ArchiveDataProviderProps> = ({
         if (!cancelled) {
           setLiveSession(res.session);
           setLiveCapabilities(res.capabilities);
+          if (res.authProviders) {
+            setLiveAuthProviders(res.authProviders);
+          }
         }
       })
       .catch(() => {
@@ -452,6 +464,7 @@ export const ArchiveDataProvider: React.FC<ArchiveDataProviderProps> = ({
       refreshSession,
       session: liveSession,
       capabilities: liveCapabilities,
+      authProviders: liveAuthProviders,
     }),
     [
       siteConfig,
@@ -474,6 +487,7 @@ export const ArchiveDataProvider: React.FC<ArchiveDataProviderProps> = ({
       refreshSession,
       liveSession,
       liveCapabilities,
+      liveAuthProviders,
     ],
   );
 

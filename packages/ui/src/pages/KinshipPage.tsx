@@ -106,7 +106,7 @@ export const KinshipPage: React.FC = () => {
         </section>
 
         {resolvedPresets.length > 0 && (
-          <div className="filter-bar" style={{ marginBottom: 14 }}>
+          <div className="filter-bar kinship-examples-bar" style={{ marginBottom: 14 }}>
             <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
               Examples:
             </span>
