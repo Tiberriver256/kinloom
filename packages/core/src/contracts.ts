@@ -1,4 +1,5 @@
 import type { EntityDiffSummary } from './revisions.js';
+import type { KinloomSiteConfig } from './schemas/config.js';
 import type {
   ArchiveBundle,
   KinshipEdge,
@@ -254,14 +255,21 @@ export interface BundleCache {
 }
 
 /**
- * Content-addressed binary storage port implemented by R2MediaStore.
+ * Content-addressed binary storage port implemented by R2MediaStore or filesystem/S3 stores.
  */
+export interface MediaByteRange {
+  offset: number;
+  length?: number;
+}
+
 export interface StoredMediaObject {
   key: string;
   contentType: string;
   sizeBytes: number;
   sha256: Sha256Hex;
   body: ReadableStream<Uint8Array>;
+  /** Populated when serving an HTTP 206 Partial Content byte range (required for video/audio scrubbing). */
+  range?: { start: number; end: number; total: number };
 }
 
 export interface MediaStore {
@@ -272,7 +280,14 @@ export interface MediaStore {
     contentType: string;
     sha256: Sha256Hex;
   }): Promise<void>;
-  get(key: string): Promise<StoredMediaObject | null>;
+  get(key: string, options?: { range?: MediaByteRange }): Promise<StoredMediaObject | null>;
+}
+
+/**
+ * Optional static SPA asset fallback port (for example Cloudflare ASSETS binding or Node static handler).
+ */
+export interface AssetHandler {
+  fetch(request: Request): Promise<Response>;
 }
 
 /**
@@ -305,13 +320,51 @@ export interface AuthProvider {
 }
 
 /**
- * Discriminated caller principal resolved by Worker auth middleware.
+ * Discriminated caller principal resolved by server auth middleware.
  */
 export type CallerPrincipal =
   | { kind: 'anonymous' }
   | { kind: 'invite_viewer'; invite_token: string; label: string }
   | { kind: 'user'; email: string; display_name: string; role: UserRole }
   | { kind: 'agent'; token_id: string; label: string; scope: AgentTokenScope };
+
+export type PluginRouteMinRole = 'public' | 'viewer' | 'editor' | 'admin';
+
+export interface KinloomServerPluginContext {
+  request: Request;
+  url: URL;
+  principal: CallerPrincipal;
+  siteConfig: KinloomSiteConfig;
+  ports: KinloomServerPorts;
+}
+
+export interface KinloomServerPluginRoute {
+  method: string;
+  pathPrefix: string;
+  minRole: PluginRouteMinRole;
+  handle(ctx: KinloomServerPluginContext): Promise<Response>;
+}
+
+export interface KinloomServerPlugin {
+  readonly id: string;
+  readonly name: string;
+  readonly routes?: readonly KinloomServerPluginRoute[];
+  onRevisionCommitted?(event: {
+    revisions: readonly RevisionRecord[];
+    headRevisionId: RevisionId;
+  }): Promise<void>;
+}
+
+export interface KinloomServerPorts {
+  repository: ArchiveRepository;
+  bundleCache: BundleCache;
+  mediaStore: MediaStore;
+  emailSender: EmailSender;
+  authProvider: AuthProvider;
+  clock: Clock;
+  assetHandler?: AssetHandler;
+  plugins?: readonly KinloomServerPlugin[];
+}
 
 export interface ArchiveSessionState {
   authenticated: boolean;

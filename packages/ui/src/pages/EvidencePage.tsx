@@ -18,6 +18,8 @@ const MEDIA_KIND_LABELS: Record<ArchivalMediaKind, string> = {
   record_scan: 'Primary Record Scan',
   document_scan: 'Document Scan',
   milestone: 'Milestone Photo',
+  video_story: 'Video Story',
+  audio_oral_history: 'Audio Oral History',
 };
 
 export const EvidencePage: React.FC = () => {
@@ -596,7 +598,16 @@ export const EvidencePage: React.FC = () => {
                   All Media ({allMedia.length})
                 </button>
                 {(
-                  ['record_scan', 'portrait', 'family_photo', 'headstone', 'document_scan', 'milestone'] as ArchivalMediaKind[]
+                  [
+                    'record_scan',
+                    'portrait',
+                    'family_photo',
+                    'headstone',
+                    'document_scan',
+                    'milestone',
+                    'video_story',
+                    'audio_oral_history',
+                  ] as ArchivalMediaKind[]
                 ).map((k) => {
                   const cnt = mediaCountsByKind[k] || 0;
                   if (cnt === 0) {

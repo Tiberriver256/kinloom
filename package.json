@@ -7,9 +7,9 @@
     "examples/*"
   ],
   "scripts": {
-    "build": "npm run build --workspace=@kinloom/core && npm run build --workspace=@kinloom/ui && npm run build --workspace=@kinloom/demo",
-    "typecheck": "tsc --noEmit -p packages/core/tsconfig.json && tsc --noEmit -p packages/ui/tsconfig.json && tsc --noEmit -p examples/demo/tsconfig.json && tsc --noEmit -p e2e/tsconfig.json",
-    "lint": "oxlint packages/core/src packages/ui/src examples/demo/src e2e",
+    "build": "npm run build --workspace=@kinloom/core && npm run build --workspace=@kinloom/server && npm run build --workspace=@kinloom/ui && npm run build --workspace=@kinloom/demo",
+    "typecheck": "tsc --noEmit -p packages/core/tsconfig.json && tsc --noEmit -p packages/server/tsconfig.json && tsc --noEmit -p packages/ui/tsconfig.json && tsc --noEmit -p examples/demo/tsconfig.json && tsc --noEmit -p e2e/tsconfig.json",
+    "lint": "oxlint packages/core/src packages/server/src packages/ui/src examples/demo/src e2e",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "npm run build:data --workspace=@kinloom/demo && npm run build --workspace=@kinloom/demo && playwright test",
@@ -20,15 +20,15 @@
   "devDependencies": {
     "@playwright/test": "^1.65.1",
     "@types/geojson": "^7946.0.16",
-    "@types/node": "^22.15.0",
-    "@types/react": "^19.1.0",
-    "@types/react-dom": "^19.1.0",
-    "@vitejs/plugin-react": "^4.4.1",
-    "fast-check": "^4.1.1",
-    "jsdom": "^26.1.0",
-    "oxlint": "^1.0.0",
-    "typescript": "~5.8.3",
-    "vite": "^6.3.2",
-    "vitest": "^3.1.3"
+    "@types/node": "^26.6.7",
+    "@types/react": "^19.3.1",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.3.0",
+    "fast-check": "^4.11.0",
+    "jsdom": "^31.0.1",
+    "oxlint": "^1.95.0",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.8",
+    "vitest": "^5.1.1"
   }
 }

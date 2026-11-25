@@ -15,6 +15,6 @@ if (!rootElement) {
 
 ReactDOM.createRoot(rootElement).render(
   <React.StrictMode>
-    <KinloomApp siteConfig={demoSiteConfig} />
+    <KinloomApp siteConfig={demoSiteConfig} baseUrl={import.meta.env.BASE_URL} />
   </React.StrictMode>,
 );

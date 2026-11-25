@@ -50,6 +50,8 @@ export const ArchivalMediaKindSchema = z.enum([
   'headstone',
   'record_scan',
   'milestone',
+  'video_story',
+  'audio_oral_history',
 ]);
 
 export const BuildModeSchema = z.enum(['public', 'private']);
@@ -110,6 +112,7 @@ export const RawPersonSchema = z.object({
   portrait_url: z.string().nullable().default(null),
   thumb_url: z.string().nullable().optional(),
   has_primary_source: z.boolean().optional(),
+  extensions: z.record(z.string(), z.unknown()).optional(),
 });
 
 export const PersonSchema = RawPersonSchema.extend({
@@ -140,6 +143,7 @@ export const PlaceSchema = z.object({
   photo_caption: z.string().nullable().optional(),
   sources: z.array(EventSourceRefSchema).optional(),
   has_primary_source: z.boolean().optional(),
+  extensions: z.record(z.string(), z.unknown()).optional(),
 });
 
 export const RawEventSchema = z.object({
@@ -156,13 +160,14 @@ export const RawEventSchema = z.object({
   place_precision: z.string().nullable().optional(),
   summary: z.string().nullable().default('').transform((v) => v ?? ''),
   severity_rank: z.number().nullable().optional(),
-  weather_metrics: z.record(z.union([z.string(), z.number()])).optional(),
+  weather_metrics: z.record(z.string(), z.union([z.string(), z.number()])).optional(),
   source_url: z.string().nullable().optional(),
   photo_url: z.string().nullable().optional(),
   photo_placeholder_caption: z.string().nullable().optional(),
   participants: z.array(EventParticipantSchema).default([]),
   sources: z.array(EventSourceRefSchema).default([]),
   has_primary_source: z.boolean().optional(),
+  extensions: z.record(z.string(), z.unknown()).optional(),
 });
 
 export const ArchiveEventSchema = RawEventSchema.extend({
@@ -239,7 +244,12 @@ export const MediaItemSchema = z.object({
   caption: z.string(),
   date_edtf: OptionalCoercedStringSchema,
   provenance: z.string().nullable().optional(),
+  mime_type: z.string().min(1).nullable().optional(),
+  duration_seconds: z.number().nonnegative().nullable().optional(),
+  poster_url: z.string().min(1).nullable().optional(),
+  transcript_url: z.string().min(1).nullable().optional(),
   has_primary_source: z.boolean().optional(),
+  extensions: z.record(z.string(), z.unknown()).optional(),
 });
 
 export const NarrativeSchema = z.object({
@@ -255,6 +265,7 @@ export const NarrativeSchema = z.object({
   source_ids: z.array(z.string().min(1)).default([]),
   updated_at: z.string().optional(),
   has_primary_source: z.boolean().optional(),
+  extensions: z.record(z.string(), z.unknown()).optional(),
 });
 
 export const ReadingPageSchema = z.object({
@@ -277,8 +288,8 @@ export const ReadingDocumentSchema = z.object({
 
 export const ReadingsBundleSchema = z.object({
   version: z.number().int().positive(),
-  documents: z.record(ReadingDocumentSchema),
-  event_page_map: z.record(z.record(z.number().int())),
+  documents: z.record(z.string(), ReadingDocumentSchema),
+  event_page_map: z.record(z.string(), z.record(z.string(), z.number().int())),
 });
 
 export const HistoricalContextItemSchema = RawEventSchema.extend({
@@ -311,7 +322,7 @@ export const ArchiveBundleSchema = z.object({
   events: z.array(ArchiveEventSchema),
   residence_spans: z.array(ResidenceSpanSchema),
   places: z.array(PlaceSchema),
-  place_ancestors: z.record(z.array(z.string())),
+  place_ancestors: z.record(z.string(), z.array(z.string())),
   kinship: z.array(KinshipEdgeSchema),
   sources: z.array(SourceRecordSchema),
   media: z.array(MediaItemSchema).optional(),

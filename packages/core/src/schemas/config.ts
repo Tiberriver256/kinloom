@@ -93,10 +93,11 @@ export const KinloomSiteConfigSchema = z.object({
   featuredDocumentId: z.string().min(1).optional(),
   featuredKinshipPairs: z.array(FeaturedKinshipPairSchema).default([]),
   migrationEras: z.array(MigrationEraConfigSchema).default([]),
-  mapDefaults: MapDefaultsConfigSchema.default({}),
+  mapDefaults: MapDefaultsConfigSchema.prefault({}),
   anchorYears: z.array(AnchorYearConfigSchema).optional(),
-  privacy: PrivacyConfigSchema.default({}),
+  privacy: PrivacyConfigSchema.prefault({}),
   wiki: WikiConfigSchema.optional(),
+  extensions: z.record(z.string(), z.unknown()).optional(),
 });
 
 export type SiteMetadata = z.infer<typeof SiteMetadataSchema>;

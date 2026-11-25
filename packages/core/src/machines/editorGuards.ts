@@ -83,7 +83,7 @@ export function validateEntityDraft<T extends EntityType>(
     return { ok: true, data: result.data };
   }
   const errors = result.error.issues.map((issue) => {
-    const path = issue.path.length > 0 ? `${issue.path.join('.')}: ` : '';
+    const path = issue.path.length > 0 ? `${issue.path.map(String).join('.')}: ` : '';
     return `${path}${issue.message}`;
   });
   return { ok: false, errors };

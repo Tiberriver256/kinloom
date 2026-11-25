@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
+  ALLOWED_AUDIO_VIDEO_MIMES,
   ALLOWED_MEDIA_MIMES,
+  MAX_AUDIO_VIDEO_BYTES,
   MAX_IMAGE_BYTES,
   MAX_PDF_BYTES,
   canAutoEnrollViaInvite,
@@ -244,6 +246,41 @@ describe('uploadGuards (Machine 3)', () => {
     expect(
       validateMediaSelection({ mimeType: 'image/jpeg', sizeBytes: 1024, targetHasLiving: false })
     ).toEqual({ ok: true });
+
+    // Video and audio MIME types are rejected by default and accepted when explicitly enabled
+    expect(ALLOWED_AUDIO_VIDEO_MIMES).toEqual([
+      'video/mp4',
+      'video/webm',
+      'audio/mpeg',
+      'audio/mp4',
+      'audio/ogg',
+      'audio/wav',
+    ]);
+    expect(isAllowedMediaMime('video/mp4')).toBe(false);
+    expect(isAllowedMediaMime('video/mp4', { allowAudioVideo: true })).toBe(true);
+    expect(isAllowedMediaMime('audio/mpeg', { allowAudioVideo: true })).toBe(true);
+    expect(isAllowedMediaMime('video/webm', { allowAudioVideo: true })).toBe(true);
+    expect(isWithinMediaSizeLimit('video/mp4', MAX_AUDIO_VIDEO_BYTES)).toBe(true);
+    expect(isWithinMediaSizeLimit('video/mp4', MAX_AUDIO_VIDEO_BYTES + 1)).toBe(false);
+    expect(
+      validateMediaSelection({ mimeType: 'video/mp4', sizeBytes: 4096, targetHasLiving: false })
+    ).toMatchObject({ ok: false, reason: 'unsupported_mime' });
+    expect(
+      validateMediaSelection({
+        mimeType: 'video/mp4',
+        sizeBytes: 4096,
+        targetHasLiving: false,
+        allowAudioVideo: true,
+      })
+    ).toEqual({ ok: true });
+    expect(
+      validateMediaSelection({
+        mimeType: 'audio/wav',
+        sizeBytes: 4096,
+        targetHasLiving: true,
+        allowAudioVideo: true,
+      })
+    ).toMatchObject({ ok: false, reason: 'living_person_blocked' });
   });
 
   it('catches mid-upload living-person race and post-cancel ABA attach counterexamples', () => {

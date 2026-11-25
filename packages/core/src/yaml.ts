@@ -119,6 +119,7 @@ const PERSON_KEY_ORDER = [
   'death_edtf',
   'portrait_url',
   'thumb_url',
+  'extensions',
 ] as const;
 
 const EVENT_KEY_ORDER = [
@@ -141,6 +142,7 @@ const EVENT_KEY_ORDER = [
   'photo_placeholder_caption',
   'participants',
   'sources',
+  'extensions',
 ] as const;
 
 const PLACE_KEY_ORDER = [
@@ -161,6 +163,7 @@ const PLACE_KEY_ORDER = [
   'photo_url',
   'photo_caption',
   'sources',
+  'extensions',
 ] as const;
 
 const SOURCE_KEY_ORDER = [
@@ -191,6 +194,11 @@ const MEDIA_KEY_ORDER = [
   'caption',
   'date_edtf',
   'provenance',
+  'mime_type',
+  'duration_seconds',
+  'poster_url',
+  'transcript_url',
+  'extensions',
 ] as const;
 
 const NARRATIVE_KEY_ORDER = [
@@ -205,9 +213,11 @@ const NARRATIVE_KEY_ORDER = [
   'source_ids',
   'updated_at',
   'body_md',
+  'extensions',
 ] as const;
 
 const CONFIG_KEY_ORDER = [
+  'schemaVersion',
   'site',
   'theme',
   'defaultBranchId',
@@ -219,6 +229,8 @@ const CONFIG_KEY_ORDER = [
   'mapDefaults',
   'anchorYears',
   'privacy',
+  'wiki',
+  'extensions',
 ] as const;
 
 export function parsePeopleYaml(text: string): RawPerson[] {

@@ -29,6 +29,8 @@ const MEDIA_KIND_LABELS: Record<string, string> = {
   record_scan: 'Primary Record Scan',
   document_scan: 'Document Scan',
   milestone: 'Milestone Photo',
+  video_story: 'Video Story',
+  audio_oral_history: 'Audio Oral History',
 };
 
 export const PersonPage: React.FC = () => {
@@ -102,6 +104,8 @@ export const PersonPage: React.FC = () => {
       headstone: 3,
       document_scan: 4,
       milestone: 5,
+      video_story: 6,
+      audio_oral_history: 7,
     };
     return [...items].toSorted((a, b) => (order[a.kind] ?? 9) - (order[b.kind] ?? 9));
   }, [bundle, person]);

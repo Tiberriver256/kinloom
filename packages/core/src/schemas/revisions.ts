@@ -34,7 +34,7 @@ export const AgentTokenScopeSchema = z.enum(['write_batch', 'read_backup']);
 
 export const UserRoleSchema = z.enum(['admin', 'editor']);
 
-export const EntityPayloadSchema = z.record(z.unknown());
+export const EntityPayloadSchema = z.record(z.string(), z.unknown());
 
 export const FieldDiffKindSchema = z.enum(['added', 'removed', 'changed']);
 
@@ -123,9 +123,9 @@ export function parseEntityPayload<T extends EntityType>(
 export function safeParseEntityPayload<T extends EntityType>(
   entityType: T,
   raw: unknown
-): z.SafeParseReturnType<unknown, TypedEntityByType[T]> {
+): z.ZodSafeParseResult<TypedEntityByType[T]> {
   const schema = ENTITY_SCHEMA_BY_TYPE[entityType];
-  return schema.safeParse(raw) as z.SafeParseReturnType<unknown, TypedEntityByType[T]>;
+  return schema.safeParse(raw) as z.ZodSafeParseResult<TypedEntityByType[T]>;
 }
 
 export function deriveKinshipEdgeId(edge: Pick<KinshipEdge, 'from' | 'relation' | 'to'>): string {
