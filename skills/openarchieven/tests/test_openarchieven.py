@@ -176,6 +176,65 @@ class TestOpenArchievenCache(unittest.TestCase):
         self.assertEqual(r3.exit_code, 0, r3.output)
         self.assertEqual(calls, 3)
 
+    def test_page_matches_start_cache_and_rejects_conflicts(self) -> None:
+        calls = 0
+        seen: list[dict[str, str]] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            nonlocal calls
+            calls += 1
+            seen.append({key: request.url.params[key] for key in ("start", "number_show")})
+            return httpx.Response(200, json=SEARCH_PAYLOAD)
+
+        with patch.object(oa, "_client", self._mock_client(handler)):
+            first = self.runner.invoke(
+                oa.cli, ["search", "--name", "Jan Jansen", "--limit", "10", "--json"], env=self.env
+            )
+            page_one = self.runner.invoke(
+                oa.cli,
+                ["search", "--name", "Jan Jansen", "--limit", "10", "--page", "1", "--json"],
+                env=self.env,
+            )
+            page_two = self.runner.invoke(
+                oa.cli,
+                ["search", "--name", "Jan Jansen", "--limit", "10", "--page", "2", "--json"],
+                env=self.env,
+            )
+            same_start = self.runner.invoke(
+                oa.cli,
+                ["search", "--name", "Jan Jansen", "--limit", "10", "--start", "10", "--json"],
+                env=self.env,
+            )
+            both = self.runner.invoke(
+                oa.cli,
+                ["search", "--name", "Jan Jansen", "--page", "2", "--start", "10", "--json"],
+                env=self.env,
+            )
+            zero = self.runner.invoke(
+                oa.cli, ["search", "--name", "Jan Jansen", "--page", "0", "--json"], env=self.env
+            )
+
+        self.assertEqual(first.exit_code, 0, first.output)
+        self.assertEqual(page_one.exit_code, 0, page_one.output)
+        self.assertEqual(page_two.exit_code, 0, page_two.output)
+        self.assertEqual(same_start.exit_code, 0, same_start.output)
+        self.assertEqual(calls, 2)
+        self.assertEqual(seen, [{"start": "0", "number_show": "10"}, {"start": "10", "number_show": "10"}])
+        self.assertFalse(json.loads(first.output)["cache_hit"])
+        self.assertTrue(json.loads(page_one.output)["cache_hit"])
+        self.assertFalse(json.loads(page_two.output)["cache_hit"])
+        self.assertTrue(json.loads(same_start.output)["cache_hit"])
+        self.assertEqual(both.exit_code, 2)
+        self.assertIn("--page", both.output)
+        self.assertEqual(zero.exit_code, 2)
+        queries = []
+        for path in Path(self.tmp.name).glob("*.json"):
+            entry = json.loads(path.read_text(encoding="utf-8"))
+            queries.append(entry["query"])
+            self.assertNotIn("cache_hit", entry["result"])
+        self.assertEqual(sorted(query["start"] for query in queries), [0, 10])
+        self.assertTrue(all("page" not in query for query in queries))
+
 
 JPEG_ONE = b"\xff\xd8\xff\x01"
 JPEG_TWO = b"\xff\xd8\xff\x02"

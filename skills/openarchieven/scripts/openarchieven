@@ -223,6 +223,24 @@ def _get_json(endpoint: str, params: dict[str, Any]) -> Any:
     return data
 
 
+def search_window(limit: int, start: int, page: int | None, start_from_user: bool) -> tuple[int, int]:
+    """Return (number_show, start) for search.json.
+
+    `--page` is a 1-based alias for start. The offset uses the same limit the
+    API receives (1 through 100). Page 1 therefore keeps start at 0, and the
+    cache key stays the existing start/number_show payload. Page is never
+    stored in that payload.
+    """
+    number_show = max(1, min(int(limit), 100))
+    if page is not None:
+        if start_from_user:
+            raise click.UsageError("Do not combine --page with --start.")
+        if page < 1:
+            raise click.BadParameter("Must be an integer >= 1.", param_hint="--page")
+        start = (page - 1) * number_show
+    return number_show, max(0, min(int(start), 10000))
+
+
 def _search_cacheable(result: dict[str, Any]) -> bool:
     resp = result.get("response")
     if not isinstance(resp, dict):
@@ -735,6 +753,12 @@ def cli() -> None:
 )
 @click.option("--limit", "-n", type=int, default=10, show_default=True, help="Results to return (max 100).")
 @click.option("--start", type=int, default=0, show_default=True, help="Offset for paging (max 10000).")
+@click.option(
+    "--page",
+    type=click.IntRange(min=1),
+    default=None,
+    help="1-based page. Sets start to (page - 1) times the limit sent to the API. Do not combine with --start.",
+)
 @click.option("--json", "as_json", is_flag=True, help="Emit raw API JSON output.")
 @cache_options
 def search(
@@ -751,6 +775,7 @@ def search(
     lang: str,
     limit: int,
     start: int,
+    page: int | None,
     as_json: bool,
     refresh: bool,
     cache_ttl_hours: float | None,
@@ -765,10 +790,13 @@ def search(
     if year:
         raw_name = f"{raw_name} {year.strip()}"
 
+    ctx = click.get_current_context()
+    start_from_user = ctx.get_parameter_source("start") is click.core.ParameterSource.COMMANDLINE
+    number_show, start = search_window(limit, start, page, start_from_user)
     params: dict[str, Any] = {
         "name": raw_name,
-        "number_show": max(1, min(limit, 100)),
-        "start": max(0, min(start, 10000)),
+        "number_show": number_show,
+        "start": start,
         "lang": lang,
     }
     if place:
@@ -806,7 +834,9 @@ def search(
         cacheable=_search_cacheable,
     )
     if as_json:
-        click.echo(json.dumps({**data, "cache_hit": hit}, indent=2, ensure_ascii=False))
+        shown = dict(data)
+        shown["cache_hit"] = bool(hit)
+        click.echo(json.dumps(shown, indent=2, ensure_ascii=False))
         return
 
     resp = data.get("response") or {}

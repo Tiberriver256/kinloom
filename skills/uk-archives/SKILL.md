@@ -49,7 +49,9 @@ skills/uk-archives/scripts/uk-archives freereg search --surname Smith --county N
 
 FreeREG has no public JSON API. The CLI GETs the home page for a Rails `authenticity_token`, POSTs to `/search_queries`, and parses the results table HTML. No CAPTCHA appeared in live tests on 2026-11-24. Chapman codes (for example `NTT` for Nottinghamshire, `LND` for London, `KEN` for Kent, `NFK` for Norfolk) are passed directly to FreeREG.
 
-Options: `--given`, `--county` (Chapman code or county name), `--from-year`, `--to-year`, `--record-type` (`all` / `baptism` / `marriage` / `burial`), `--place-contains`, `--json`.
+Options: `--given`, `--county` (Chapman code or county name), `--from-year`, `--to-year`, `--record-type` (`all` / `baptism` / `marriage` / `burial`), `--place-contains`, `--limit`, `--json`.
+
+`--limit` is an integer of 1 or more. The CLI applies it after `--place-contains`. Omit `--limit` to print every match. The cache key does not include `--limit`, so a later call with a different limit reads the same FreeREG response from disk.
 
 ### URL builders (no search run)
 

@@ -177,6 +177,69 @@ class TestUkArchivesCache(unittest.TestCase):
         self.assertEqual(d2["records"][0]["persons"], "Samuel LINCOLN")
         self.assertIn("[cache]", r3.output)
 
+    def test_freereg_limit_slices_after_place_filter_and_reuses_cache(self) -> None:
+        calls = 0
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            nonlocal calls
+            calls += 1
+            if request.method == "GET":
+                return httpx.Response(200, text=FREEREG_HOME_HTML)
+            return httpx.Response(200, text=FREEREG_RESULTS_HTML)
+
+        with patch.object(uk, "_client", self._mock_client(handler)):
+            r_all = self.runner.invoke(
+                uk.cli, ["freereg", "search", "--surname", "Lincoln", "--county", "NFK", "--json"], env=self.env
+            )
+            r_limit = self.runner.invoke(
+                uk.cli,
+                ["freereg", "search", "--surname", "Lincoln", "--county", "NFK", "--limit", "1", "--json"],
+                env=self.env,
+            )
+            r_place = self.runner.invoke(
+                uk.cli,
+                [
+                    "freereg",
+                    "search",
+                    "--surname",
+                    "Lincoln",
+                    "--county",
+                    "NFK",
+                    "--place-contains",
+                    "Swanton",
+                    "--limit",
+                    "1",
+                    "--json",
+                ],
+                env=self.env,
+            )
+            r_bad = self.runner.invoke(
+                uk.cli,
+                ["freereg", "search", "--surname", "Lincoln", "--county", "NFK", "--limit", "0"],
+                env=self.env,
+            )
+
+        self.assertEqual(r_all.exit_code, 0, r_all.output)
+        self.assertEqual(r_limit.exit_code, 0, r_limit.output)
+        self.assertEqual(r_place.exit_code, 0, r_place.output)
+        self.assertEqual(calls, 2)
+        self.assertEqual(json.loads(r_all.output)["returned"], 2)
+        self.assertFalse(json.loads(r_all.output)["cache_hit"])
+        limited = json.loads(r_limit.output)
+        self.assertTrue(limited["cache_hit"])
+        self.assertEqual(limited["returned"], 1)
+        self.assertEqual(limited["records"][0]["persons"], "Samuel LINCOLN")
+        placed = json.loads(r_place.output)
+        self.assertTrue(placed["cache_hit"])
+        self.assertEqual(placed["returned"], 1)
+        self.assertEqual(placed["records"][0]["persons"], "Edward LINCOLN")
+        self.assertEqual(r_bad.exit_code, 2)
+        cache_files = list(Path(self.tmp.name).glob("*.json"))
+        self.assertEqual(len(cache_files), 1)
+        stored = json.loads(cache_files[0].read_text(encoding="utf-8"))
+        self.assertNotIn("limit", stored["query"])
+        self.assertNotIn("cache_hit", stored["result"])
+
     def test_refresh_and_zero_ttl_bypass_cache(self) -> None:
         calls = 0
 

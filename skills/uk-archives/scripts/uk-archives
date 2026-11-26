@@ -493,6 +493,12 @@ def freereg() -> None:
     show_default=True,
 )
 @click.option("--place-contains", default=None, help="Keep only hits whose register column contains this text.")
+@click.option(
+    "--limit",
+    type=click.IntRange(min=1),
+    default=None,
+    help="Maximum rows after --place-contains. Omit to print every match. Does not change the cache key.",
+)
 @click.option("--json", "as_json", is_flag=True, help="Output compact structured JSON.")
 @cache_options
 def cmd_freereg_search(
@@ -503,6 +509,7 @@ def cmd_freereg_search(
     to_year: str | None,
     record_type: str,
     place_contains: str | None,
+    limit: int | None,
     as_json: bool,
     refresh: bool,
     cache_ttl_hours: float | None,
@@ -564,10 +571,18 @@ def cmd_freereg_search(
     if place_contains:
         needle = place_contains.lower()
         records = [r for r in records if needle in r["register"].lower()]
+    if limit is not None:
+        records = records[:limit]
     if as_json:
         click.echo(
             json.dumps(
-                {"surname": surname, "county": chapman, "returned": len(records), "records": records, "cache_hit": hit},
+                {
+                    "surname": surname,
+                    "county": chapman,
+                    "returned": len(records),
+                    "records": records,
+                    "cache_hit": bool(hit),
+                },
                 indent=1,
             )
         )

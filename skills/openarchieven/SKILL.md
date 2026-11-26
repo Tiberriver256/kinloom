@@ -31,9 +31,14 @@ skills/openarchieven/scripts/openarchieven search --name "van Dijk" --source-typ
 
 # Year range filter and full JSON output
 skills/openarchieven/scripts/openarchieven search --name "Vincent van Gogh" --year 1850-1855 --json
+
+# Page 2 with the default page size (10). This is the same request as --start 10.
+skills/openarchieven/scripts/openarchieven search --name "Vincent van Gogh" --limit 10 --page 2
 ```
 
 `search` also accepts a positional name (`openarchieven search "Vincent van Gogh" --place Zundert`).
+
+`--page` is an integer of 1 or more. The CLI sets `start` to `(page - 1)` times the limit it sends (`number_show`, from 1 to 100). Do not pass `--page` and `--start` in the same command. Omit `--page` to keep `--start` (default 0). Page 1 uses the same cache file as `start` 0. The cache key stores `start` and `number_show`. It does not store `page`.
 
 ### Inspect one full record (`show`)
 
@@ -93,7 +98,7 @@ skills/openarchieven/scripts/openarchieven url --record "bhi:78a37833-d731-ffe5-
 - **Archive code parameter on v1.0:** Pass the short `archive_code` (such as `bhi`, `wba`, `srt`, `rhe`, `saa`, `zal`), not the full institution name, to `archive=` on both `1.0/records/search.json` and `1.0/records/show.json`. (OpenArchieven's newer OpenAPI spec documents `archive_code` for v1.1, while v1.0 reads `archive`.)
 - **`sourcetype` vs `eventtype`:** Civil registration categories such as `BS Geboorte`, `BS Huwelijk`, `BS Overlijden`, `Bevolkingsregister`, and `Passagiersregisters` belong in `sourcetype`, while event verbs such as `Geboorte`, `Huwelijk`, `Overlijden`, `Registratie`, and `Vertrek` belong in `eventtype`. The CLI routes `BS ...`, `DTB ...`, and known source-type labels passed via `--event-type` to `sourcetype` automatically so queries do not silently return zero hits.
 - **Error signaling:** Invalid archive codes or identifiers can return HTTP 200 with `{"error_code": 1, "error_description": "Invalid archive"}`; the CLI checks for `error_code` and exits non-zero.
-- **Paging cap:** `number_show` accepts up to 100 rows per call; `start` accepts offsets up to 10,000.
+- **Paging cap:** `number_show` accepts up to 100 rows per call. `start` accepts offsets up to 10,000. `--page` 1 is the first page (`start` 0). `--page` 2 with `--limit` 10 is `start` 10.
 
 ## Key Dutch record types for genealogy
 
