@@ -33,6 +33,7 @@ import {
   buildSanitizedLocalEntries,
   buildTempTokenCleanupSql,
   buildTempTokenInsertSql,
+  computeLifespan,
   computeSyncPlan,
   generateTempToken,
   getTelemetryFilePath,
@@ -40,10 +41,12 @@ import {
   inspectImageBuffer,
   loadWranglerBindings,
   measureCommand,
+  parseAuditEdtf,
   parseDeleteTargets,
   parseEntityTypeList,
   recordTelemetryEvent,
   runAuditCommand,
+  runChronologyCheck,
   runContextCommand,
   runDatesCommand,
   runIntegrateCommand,
@@ -1739,6 +1742,180 @@ describe('ops/audit', () => {
       height: 240,
       error: null,
     });
+  });
+
+  function chronologyFor(birth: string, death: string, eventDate: string, title = 'Household register') {
+    return runChronologyCheck(
+      { birth_edtf: birth, death_edtf: death },
+      {
+        person_id: 'per_alder',
+        events: [
+          {
+            id: 'evt_span',
+            title,
+            event_kind: 'residence',
+            edtf_date: eventDate,
+            summary: title,
+            participants: [{ person_id: 'per_alder', role: 'principal' }],
+          },
+        ],
+      },
+      []
+    );
+  }
+
+  it('keeps a single EDTF date on one day', () => {
+    const parsed = parseAuditEdtf('1885-04-23');
+    expect(parsed).toEqual({
+      raw: '1885-04-23',
+      year: 1885,
+      month: 4,
+      day: 23,
+      precision: 'day',
+      approximate: false,
+      startMs: Date.UTC(1885, 3, 23),
+      endMs: Date.UTC(1885, 3, 23),
+    });
+  });
+
+  it('accepts a household interval that covers the birth and rejects one that ends before it', () => {
+    const covered = chronologyFor('1896-12-17', '1950-01-01', '1885-04-23/1910-01-18');
+    expect(covered.checkedEvents).toBe(1);
+    expect(covered.errors).toEqual([]);
+
+    const before = chronologyFor('1896-12-17', '1950-01-01', '1880-01-01/1890-12-31');
+    expect(before.checkedEvents).toBe(1);
+    expect(before.errors).toEqual([
+      'Event evt_span (1880-01-01/1890-12-31): predates birth (1896-12-17).',
+    ]);
+  });
+
+  it('accepts an interval that covers the death and rejects one that starts after it', () => {
+    const covered = chronologyFor('1880-01-01', '1920-03-03', '1900-01-01/1925-12-31');
+    expect(covered.checkedEvents).toBe(1);
+    expect(covered.errors).toEqual([]);
+
+    const after = chronologyFor('1880-01-01', '1920-03-03', '1925-01-01/1930-12-31');
+    expect(after.checkedEvents).toBe(1);
+    expect(after.errors).toEqual([
+      'Event evt_span (1925-01-01/1930-12-31): postdates death (1920-03-03) and is not a burial/probate/obituary/memorial event.',
+    ]);
+  });
+
+  it('reads open EDTF interval ends as event dates and as birth or death dates', () => {
+    const openEndEvent = chronologyFor('1896-12-17', '1950-01-01', '1879-03-03/');
+    expect(openEndEvent.checkedEvents).toBe(1);
+    expect(openEndEvent.errors).toEqual([]);
+
+    const openEndDots = chronologyFor('1896-12-17', '1950-01-01', '1879-03-03/..');
+    expect(openEndDots.checkedEvents).toBe(1);
+    expect(openEndDots.errors).toEqual([]);
+
+    const openStartEvent = chronologyFor('1896-12-17', '1950-01-01', '/1890-12-31');
+    expect(openStartEvent.errors).toEqual([
+      'Event evt_span (/1890-12-31): predates birth (1896-12-17).',
+    ]);
+
+    const openStartDots = chronologyFor('1896-12-17', '1950-01-01', '../1890-12-31');
+    expect(openStartDots.errors).toEqual([
+      'Event evt_span (../1890-12-31): predates birth (1896-12-17).',
+    ]);
+
+    const bornOnOrAfter = chronologyFor('1879-03-03/', '1950-01-01', '1870-01-01');
+    expect(bornOnOrAfter.errors).toEqual([
+      'Event evt_span (1870-01-01): predates birth (1879-03-03/).',
+    ]);
+    const bornOnOrAfterLater = chronologyFor('1879-03-03/', '1950-01-01', '1880-06-01');
+    expect(bornOnOrAfterLater.errors).toEqual([]);
+
+    const diedOnOrBefore = chronologyFor('1850-01-01', '/1890-12-31', '1891-01-01');
+    expect(diedOnOrBefore.errors).toEqual([
+      'Event evt_span (1891-01-01): postdates death (/1890-12-31) and is not a burial/probate/obituary/memorial event.',
+    ]);
+
+    const diedOnOrAfter = chronologyFor('1850-01-01', '1879-03-03/', '1900-01-01');
+    expect(diedOnOrAfter.errors).toEqual([]);
+    const diedOnOrAfterDots = chronologyFor('1850-01-01', '1879-03-03/..', '1900-01-01');
+    expect(diedOnOrAfterDots.errors).toEqual([]);
+
+    const openBirth = computeLifespan(parseAuditEdtf('1879-03-03/'), parseAuditEdtf('1920-03-03'));
+    expect(openBirth.exact).toBe(false);
+    expect(openBirth.years).toBe(41);
+    expect(openBirth.label).toBe('~41 years');
+
+    const openDeath = computeLifespan(parseAuditEdtf('1850-01-01'), parseAuditEdtf('1879-03-03/'));
+    expect(openDeath).toEqual({
+      exact: false,
+      years: null,
+      days: null,
+      totalDays: null,
+      label: null,
+    });
+
+    const openStartBirth = computeLifespan(parseAuditEdtf('/1890-12-31'), parseAuditEdtf('1920-03-03'));
+    expect(openStartBirth).toEqual({
+      exact: false,
+      years: null,
+      days: null,
+      totalDays: null,
+      label: null,
+    });
+
+    const openStartDeath = computeLifespan(parseAuditEdtf('../1890-12-31'), parseAuditEdtf('1920-03-03'));
+    expect(openStartDeath.exact).toBe(false);
+    expect(openStartDeath.years).toBeNull();
+  });
+
+  it('keeps approximate markers on both ends of an interval', () => {
+    const tilde = parseAuditEdtf('1885~/1910~');
+    expect(tilde).toEqual({
+      raw: '1885~/1910~',
+      year: 1885,
+      month: null,
+      day: null,
+      precision: 'year',
+      approximate: true,
+      startMs: Date.UTC(1885, 0, 1),
+      endMs: Date.UTC(1910, 11, 31),
+    });
+
+    const uncertain = parseAuditEdtf('1890?/1895');
+    expect(uncertain).toEqual({
+      raw: '1890?/1895',
+      year: 1890,
+      month: null,
+      day: null,
+      precision: 'year',
+      approximate: true,
+      startMs: Date.UTC(1890, 0, 1),
+      endMs: Date.UTC(1895, 11, 31),
+    });
+
+    const widenedDeath = chronologyFor('1880-01-01', '1912~/1920~', '1921-06-01');
+    expect(widenedDeath.checkedEvents).toBe(1);
+    expect(widenedDeath.errors).toEqual([]);
+
+    const singleApproxDeath = chronologyFor('1880-01-01', '1920~', '1921-06-01');
+    expect(singleApproxDeath.errors).toEqual([]);
+    const afterApproxDeath = chronologyFor('1880-01-01', '1920~', '1922-01-01');
+    expect(afterApproxDeath.errors).toEqual([
+      'Event evt_span (1922-01-01): postdates death (1920~) and is not a burial/probate/obituary/memorial event.',
+    ]);
+  });
+
+  it('does not treat a reversed closed interval as a date', () => {
+    expect(parseAuditEdtf('1910-01-18/1885-04-23')).toBeNull();
+    expect(parseAuditEdtf('1885-04-23/1910-01-18')?.endMs).toBe(Date.UTC(1910, 0, 18));
+  });
+
+  it('does not call a long marriage interval an underage marriage', () => {
+    const lateEnough = chronologyFor('1896-12-17', '1950-01-01', '1900-01-01/1920-01-01', 'Marriage of Alder');
+    expect(lateEnough.errors).toEqual([]);
+
+    const stillYoung = chronologyFor('1896-12-17', '1950-01-01', '1900-01-01/1905-01-01', 'Marriage of Alder');
+    expect(stillYoung.errors).toEqual([
+      'Event evt_span (1900-01-01/1905-01-01): marriage at implausible age 9 (birth 1896-12-17).',
+    ]);
   });
 });
 

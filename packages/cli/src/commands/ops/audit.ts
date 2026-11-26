@@ -185,51 +185,39 @@ function asString(value: unknown): string {
   return String(value);
 }
 
-export function parseAuditEdtf(raw: unknown): ParsedAuditEdtf | null {
-  if (typeof raw !== 'string') {
-    return null;
-  }
-  const trimmed = raw.trim();
-  if (!trimmed) {
-    return null;
-  }
-  const primary = trimmed.includes('/') ? trimmed.split('/')[0].trim() : trimmed;
-  const approximate = /[~?%]/.test(trimmed);
-  const clean = primary.replaceAll(/[~?%]/g, '');
+interface AuditEdtfPoint {
+  year: number;
+  month: number | null;
+  day: number | null;
+  precision: 'day' | 'month' | 'year';
+  startMs: number;
+  endMs: number;
+}
 
+type ParsedEndpoint = { kind: 'open' } | { kind: 'point'; point: AuditEdtfPoint };
+
+function parseClosedEdtfPoint(part: string): AuditEdtfPoint | null {
+  const clean = part.trim().replaceAll(/[~?%]/g, '');
   const full = /^(\d{4})-(\d{2})-(\d{2})$/.exec(clean);
   if (full) {
     const year = Number(full[1]);
     const month = Number(full[2]);
     const day = Number(full[3]);
     const ms = Date.UTC(year, month - 1, day);
-    return {
-      raw: trimmed,
-      year,
-      month,
-      day,
-      precision: 'day',
-      approximate,
-      startMs: ms,
-      endMs: ms,
-    };
+    return { year, month, day, precision: 'day', startMs: ms, endMs: ms };
   }
 
   const ym = /^(\d{4})-(\d{2})$/.exec(clean);
   if (ym) {
     const year = Number(ym[1]);
     const month = Number(ym[2]);
-    const startMs = Date.UTC(year, month - 1, 1);
-    const endMs = Date.UTC(year, month, 0);
     return {
-      raw: trimmed,
       year,
       month,
       day: null,
       precision: 'month',
-      approximate,
-      startMs,
-      endMs,
+      startMs: Date.UTC(year, month - 1, 1),
+      endMs: Date.UTC(year, month, 0),
     };
   }
 
@@ -237,12 +225,10 @@ export function parseAuditEdtf(raw: unknown): ParsedAuditEdtf | null {
   if (y) {
     const year = Number(y[1]);
     return {
-      raw: trimmed,
       year,
       month: null,
       day: null,
       precision: 'year',
-      approximate,
       startMs: Date.UTC(year, 0, 1),
       endMs: Date.UTC(year, 11, 31),
     };
@@ -251,12 +237,104 @@ export function parseAuditEdtf(raw: unknown): ParsedAuditEdtf | null {
   return null;
 }
 
+function parseAuditEndpoint(part: string): ParsedEndpoint | null {
+  const trimmed = part.trim();
+  if (trimmed === '' || trimmed === '..') {
+    return { kind: 'open' };
+  }
+  const point = parseClosedEdtfPoint(trimmed);
+  return point ? { kind: 'point', point } : null;
+}
+
+export function parseAuditEdtf(raw: unknown): ParsedAuditEdtf | null {
+  if (typeof raw !== 'string') {
+    return null;
+  }
+  const trimmed = raw.trim();
+  if (!trimmed) {
+    return null;
+  }
+  const approximate = /[~?%]/.test(trimmed);
+  const slash = trimmed.indexOf('/');
+  if (slash === -1) {
+    const point = parseClosedEdtfPoint(trimmed);
+    if (!point) {
+      return null;
+    }
+    return { raw: trimmed, approximate, ...point };
+  }
+  if (trimmed.indexOf('/', slash + 1) !== -1) {
+    return null;
+  }
+
+  const left = parseAuditEndpoint(trimmed.slice(0, slash));
+  const right = parseAuditEndpoint(trimmed.slice(slash + 1));
+  if (!left || !right || (left.kind === 'open' && right.kind === 'open')) {
+    return null;
+  }
+
+  const anchor = left.kind === 'point' ? left.point : right.kind === 'point' ? right.point : null;
+  if (!anchor) {
+    return null;
+  }
+  const startMs = left.kind === 'point' ? left.point.startMs : Number.NEGATIVE_INFINITY;
+  const endMs = right.kind === 'point' ? right.point.endMs : Number.POSITIVE_INFINITY;
+  if (Number.isFinite(startMs) && Number.isFinite(endMs) && startMs > endMs) {
+    return null;
+  }
+
+  return {
+    raw: trimmed,
+    year: anchor.year,
+    month: anchor.month,
+    day: anchor.day,
+    precision: anchor.precision,
+    approximate,
+    startMs,
+    endMs,
+  };
+}
+
+function auditLowerMs(bound: ParsedAuditEdtf): number {
+  if (!Number.isFinite(bound.startMs)) {
+    return bound.startMs;
+  }
+  if (bound.approximate) {
+    return Date.UTC(new Date(bound.startMs).getUTCFullYear() - 1, 0, 1);
+  }
+  return bound.startMs;
+}
+
+function auditUpperMs(bound: ParsedAuditEdtf): number {
+  if (!Number.isFinite(bound.endMs)) {
+    return bound.endMs;
+  }
+  if (bound.approximate) {
+    return Date.UTC(new Date(bound.endMs).getUTCFullYear() + 1, 11, 31);
+  }
+  return bound.endMs;
+}
+
 export function computeLifespan(
   birth: ParsedAuditEdtf | null,
   death: ParsedAuditEdtf | null
 ): LifespanSummary {
   if (!birth || !death) {
     return { exact: false, years: null, days: null, totalDays: null, label: null };
+  }
+  if (birth.raw.includes('/') || death.raw.includes('/')) {
+    if (!Number.isFinite(birth.startMs) || !Number.isFinite(death.endMs)) {
+      return { exact: false, years: null, days: null, totalDays: null, label: null };
+    }
+    const years =
+      new Date(death.endMs).getUTCFullYear() - new Date(birth.startMs).getUTCFullYear();
+    return {
+      exact: false,
+      years,
+      days: null,
+      totalDays: null,
+      label: `~${years} years`,
+    };
   }
   if (
     birth.precision === 'day' &&
@@ -346,16 +424,8 @@ export function runChronologyCheck(
     const isCensus = CENSUS_RE.test(`${evId} ${asString(ev.title)}`);
     const isMarriage = MARRIAGE_RE.test(`${evId} ${asString(ev.event_kind)} ${asString(ev.title)}`);
 
-    const birthMinMs = birth
-      ? birth.approximate
-        ? Date.UTC(birth.year - 1, 0, 1)
-        : birth.startMs
-      : null;
-    const deathMaxMs = death
-      ? death.approximate
-        ? Date.UTC(death.year + 1, 11, 31)
-        : death.endMs
-      : null;
+    const birthMinMs = birth ? auditLowerMs(birth) : null;
+    const deathMaxMs = death ? auditUpperMs(death) : null;
 
     if (birth && birthMinMs !== null && dt.endMs < birthMinMs) {
       if (isCensus) {
@@ -391,16 +461,24 @@ export function runChronologyCheck(
       const role = isPlainRecord(subjectPart) ? asString(subjectPart.role) : '';
       const isPrincipalSpouse = !role || SPOUSE_ROLE_RE.test(role);
       if (isPrincipalSpouse) {
-        const beforeBirthday =
-          birth.precision === 'day' &&
-          dt.precision === 'day' &&
-          birth.month !== null &&
-          birth.day !== null &&
-          dt.month !== null &&
-          dt.day !== null &&
-          (dt.month < birth.month || (dt.month === birth.month && dt.day < birth.day));
-        const ageAtEvent = dt.year - birth.year - (beforeBirthday ? 1 : 0);
-        if (ageAtEvent < 12) {
+        let ageAtEvent: number | null;
+        if (birth.raw.includes('/') || dt.raw.includes('/')) {
+          ageAtEvent =
+            Number.isFinite(birth.startMs) && Number.isFinite(dt.endMs)
+              ? new Date(dt.endMs).getUTCFullYear() - new Date(birth.startMs).getUTCFullYear()
+              : null;
+        } else {
+          const beforeBirthday =
+            birth.precision === 'day' &&
+            dt.precision === 'day' &&
+            birth.month !== null &&
+            birth.day !== null &&
+            dt.month !== null &&
+            dt.day !== null &&
+            (dt.month < birth.month || (dt.month === birth.month && dt.day < birth.day));
+          ageAtEvent = dt.year - birth.year - (beforeBirthday ? 1 : 0);
+        }
+        if (ageAtEvent !== null && ageAtEvent < 12) {
           errors.push(`Event ${evId} (${dt.raw}): marriage at implausible age ${ageAtEvent} (birth ${birth.raw}).`);
         }
       }
