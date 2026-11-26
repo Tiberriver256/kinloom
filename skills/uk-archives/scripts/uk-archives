@@ -22,13 +22,23 @@ from this host (45s+); no machine search is wired. Use `url --notts`.
 
 from __future__ import annotations
 
+import hashlib
 import html as html_mod
 import json
+import math
+import os
 import re
+import time
+from contextlib import contextmanager
+from pathlib import Path
+from typing import Any, Callable, Iterator
 from urllib.parse import quote, urlencode, urljoin
 
 import click
 import httpx
+
+DEFAULT_CACHE_TTL_HOURS = 168.0
+CACHE_SCHEMA = 1
 
 DISCOVERY_SEARCH = "https://discovery.nationalarchives.gov.uk/API/search/v1/records"
 DISCOVERY_DETAIL = "https://discovery.nationalarchives.gov.uk/API/records/v1/details"
@@ -58,6 +68,137 @@ GENUKI_PARISHES: dict[str, str] = {
     "nottinghamshire": "https://www.genuki.org.uk/big/eng/NTT",
     "yorkshire": "https://www.genuki.org.uk/big/eng/YKS",
 }
+
+
+def cache_dir() -> Path:
+    override = os.environ.get("KINLOOM_UK_ARCHIVES_CACHE_DIR")
+    if override:
+        return Path(override).expanduser()
+    return Path.home() / ".cache" / "kinloom-uk-archives"
+
+
+def resolve_ttl_hours(cli_ttl: float | None) -> float:
+    if cli_ttl is not None:
+        if not math.isfinite(cli_ttl) or cli_ttl < 0:
+            raise click.BadParameter(f"Invalid --cache-ttl-hours value: {cli_ttl!r} (must be >= 0).")
+        return float(cli_ttl)
+    raw = os.environ.get("KINLOOM_UK_ARCHIVES_CACHE_TTL_HOURS")
+    if raw is not None and raw.strip():
+        try:
+            parsed = float(raw.strip())
+        except ValueError as exc:
+            raise click.BadParameter(
+                f"Invalid KINLOOM_UK_ARCHIVES_CACHE_TTL_HOURS value: {raw!r}."
+            ) from exc
+        if not math.isfinite(parsed) or parsed < 0:
+            raise click.BadParameter(
+                f"Invalid KINLOOM_UK_ARCHIVES_CACHE_TTL_HOURS value: {raw!r} (must be >= 0)."
+            )
+        return parsed
+    return DEFAULT_CACHE_TTL_HOURS
+
+
+@contextmanager
+def file_lock(lock_path: Path) -> Iterator[None]:
+    """Advisory exclusive lock (POSIX flock); no-op where fcntl is missing."""
+    try:
+        import fcntl
+    except ImportError:
+        yield
+        return
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(lock_path, "a+b") as lock_file:
+        fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
+
+
+def atomic_write_json(dest: Path, payload: Any) -> None:
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    tmp = dest.with_name(f".{dest.name}.{os.getpid()}.{time.time_ns()}.tmp")
+    try:
+        tmp.write_text(json.dumps(payload, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
+        os.replace(tmp, dest)
+    except Exception:
+        tmp.unlink(missing_ok=True)
+        raise
+
+
+def cache_key(kind: str, payload: dict) -> str:
+    canonical = json.dumps([kind, payload], sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
+def read_cache(path: Path, ttl_hours: float) -> dict | None:
+    if not path.is_file():
+        return None
+    try:
+        entry = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+        return None
+    if not isinstance(entry, dict) or entry.get("schema") != CACHE_SCHEMA:
+        return None
+    fetched = entry.get("fetched_at")
+    if not isinstance(fetched, (int, float)):
+        return None
+    if ttl_hours <= 0 or (time.time() - fetched) > ttl_hours * 3600:
+        return None
+    result = entry.get("result")
+    return result if isinstance(result, dict) else None
+
+
+def cached_call(
+    kind: str,
+    payload: dict,
+    fetch: Callable[[], dict],
+    *,
+    refresh: bool,
+    ttl_hours: float,
+    cacheable: Callable[[dict], bool] = lambda _r: True,
+) -> tuple[dict, bool]:
+    """Return (result, cache_hit) with per-key flock and atomic JSON writes."""
+    key = cache_key(kind, payload)
+    root = cache_dir()
+    path = root / f"{key}.json"
+    if not refresh:
+        hit = read_cache(path, ttl_hours)
+        if hit is not None:
+            return hit, True
+    with file_lock(root / f"{key}.lock"):
+        if not refresh:
+            hit = read_cache(path, ttl_hours)
+            if hit is not None:
+                return hit, True
+        result = fetch()
+        if cacheable(result):
+            atomic_write_json(
+                path,
+                {
+                    "schema": CACHE_SCHEMA,
+                    "fetched_at": time.time(),
+                    "kind": kind,
+                    "query": payload,
+                    "result": result,
+                },
+            )
+        return result, False
+
+
+def cache_options(func: Callable) -> Callable:
+    func = click.option(
+        "--cache-ttl-hours",
+        type=float,
+        default=None,
+        help="Cache TTL in hours (default 168, env KINLOOM_UK_ARCHIVES_CACHE_TTL_HOURS; 0 disables reads).",
+    )(func)
+    func = click.option(
+        "--refresh",
+        is_flag=True,
+        help="Bypass the disk cache for this request (the fresh result is still cached).",
+    )(func)
+    return func
 
 
 def _client() -> httpx.Client:
@@ -179,6 +320,24 @@ def parse_freereg_results(page: str) -> list[dict]:
     return out
 
 
+def _get_json(url: str, *, params: dict[str, Any] | None = None, label: str) -> dict:
+    try:
+        with _client() as c:
+            resp = c.get(url, params=params)
+            resp.raise_for_status()
+    except httpx.HTTPStatusError as exc:
+        raise click.ClickException(f"{label} returned HTTP {exc.response.status_code}") from exc
+    except httpx.HTTPError as exc:
+        raise click.ClickException(f"{label} request failed: {exc}") from exc
+    try:
+        data = resp.json()
+    except ValueError as exc:
+        raise click.ClickException(f"{label} returned non-JSON: {exc}") from exc
+    if not isinstance(data, dict):
+        raise click.ClickException(f"{label} returned unexpected JSON shape")
+    return data
+
+
 @click.group(context_settings={"help_option_names": ["-h", "--help"]})
 def cli() -> None:
     """Search UK archives: TNA Discovery and FreeREG parish registers."""
@@ -202,6 +361,7 @@ def discovery() -> None:
 )
 @click.option("--limit", default=10, show_default=True, type=int, help="Maximum records to return (API rows).")
 @click.option("--json", "as_json", is_flag=True, help="Output compact structured JSON.")
+@cache_options
 def cmd_discovery_search(
     query: str | None,
     query_opt: str | None,
@@ -211,11 +371,14 @@ def cmd_discovery_search(
     collection: str | None,
     limit: int,
     as_json: bool,
+    refresh: bool,
+    cache_ttl_hours: float | None,
 ) -> None:
     """Search Discovery for catalogue records."""
     resolved_query = query if query is not None else query_opt
     if not resolved_query:
         raise click.UsageError("Provide QUERY as a positional argument or via --query.")
+    ttl = resolve_ttl_hours(cache_ttl_hours)
     q = _discovery_query(resolved_query, held_by, collection)
     params: dict[str, str | int] = {"sps.searchQuery": q, "rows": min(max(limit, 1), 100)}
     df = _date_from(date_from)
@@ -224,10 +387,18 @@ def cmd_discovery_search(
         params["sps.dateFrom"] = df
     if dt:
         params["sps.dateTo"] = dt
-    with _client() as c:
-        resp = c.get(DISCOVERY_SEARCH, params=params)
-        resp.raise_for_status()
-        data = resp.json()
+
+    def _fetch() -> dict:
+        return _get_json(DISCOVERY_SEARCH, params=params, label="Discovery search")
+
+    data, hit = cached_call(
+        "discovery_search",
+        params,
+        _fetch,
+        refresh=refresh,
+        ttl_hours=ttl,
+        cacheable=lambda r: isinstance(r.get("records"), list) and (bool(r["records"]) or int(r.get("count") or 0) > 0),
+    )
     records = [_discovery_hit(r) for r in data.get("records") or []]
     if collection:
         records = [r for r in records if _collection_match(
@@ -237,9 +408,15 @@ def cmd_discovery_search(
     records = records[:limit]
     total = data.get("count", len(records))
     if as_json:
-        click.echo(json.dumps({"query": q, "total": total, "returned": len(records), "records": records}, indent=1))
+        click.echo(
+            json.dumps(
+                {"query": q, "total": total, "returned": len(records), "records": records, "cache_hit": hit},
+                indent=1,
+            )
+        )
         return
-    click.echo(f'{total} hit(s) for "{q}"; showing {len(records)}:')
+    marker = " [cache]" if hit else ""
+    click.echo(f'{total} hit(s) for "{q}"; showing {len(records)}:{marker}')
     for rec in records:
         places = ", ".join(rec["places"]) if rec["places"] else ""
         click.echo(f'{rec["id"]}  {rec["reference"]}  {rec["covering_dates"]}')
@@ -252,18 +429,34 @@ def cmd_discovery_search(
 @discovery.command("detail")
 @click.argument("record_id")
 @click.option("--json", "as_json", is_flag=True, help="Output compact structured JSON.")
-def cmd_discovery_detail(record_id: str, as_json: bool) -> None:
+@cache_options
+def cmd_discovery_detail(
+    record_id: str,
+    as_json: bool,
+    refresh: bool,
+    cache_ttl_hours: float | None,
+) -> None:
     """Fetch one Discovery record by id (e.g. <record-id>)."""
+    ttl = resolve_ttl_hours(cache_ttl_hours)
     url = f"{DISCOVERY_DETAIL}/{record_id}"
-    with _client() as c:
-        resp = c.get(url)
-        resp.raise_for_status()
-        raw = resp.json()
+
+    def _fetch() -> dict:
+        return _get_json(url, label="Discovery detail")
+
+    raw, hit = cached_call(
+        "discovery_detail",
+        {"id": record_id},
+        _fetch,
+        refresh=refresh,
+        ttl_hours=ttl,
+        cacheable=lambda r: bool(r.get("id") or r.get("citableReference") or r.get("referencePart")),
+    )
     detail = _discovery_detail_payload(raw)
     if as_json:
-        click.echo(json.dumps(detail, indent=1))
+        click.echo(json.dumps({**detail, "cache_hit": hit}, indent=1))
         return
-    click.echo(f'{detail["id"]}  {detail["citable_reference"]}  {detail["covering_dates"]}')
+    marker = " [cache]" if hit else ""
+    click.echo(f'{detail["id"]}  {detail["citable_reference"]}  {detail["covering_dates"]}{marker}')
     if detail["description"]:
         click.echo(f'  {detail["description"]}')
     if detail["held_by"]:
@@ -301,6 +494,7 @@ def freereg() -> None:
 )
 @click.option("--place-contains", default=None, help="Keep only hits whose register column contains this text.")
 @click.option("--json", "as_json", is_flag=True, help="Output compact structured JSON.")
+@cache_options
 def cmd_freereg_search(
     surname: str,
     given: str | None,
@@ -310,39 +504,76 @@ def cmd_freereg_search(
     record_type: str,
     place_contains: str | None,
     as_json: bool,
+    refresh: bool,
+    cache_ttl_hours: float | None,
 ) -> None:
     """Search FreeREG parish register transcriptions."""
+    ttl = resolve_ttl_hours(cache_ttl_hours)
     chapman = CHAPMAN.get(county.strip().lower(), county.strip().upper())
+    rt_key = record_type.lower()
     rt_map = {"all": "", "baptism": "ba", "marriage": "ma", "burial": "bu"}
-    data: dict[str, str] = {
+    form_data: dict[str, str] = {
         "utf8": "✓",
         "search_query[last_name]": surname,
         "search_query[chapman_codes][]": chapman,
         "commit": "Search",
     }
     if given:
-        data["search_query[first_name]"] = given
+        form_data["search_query[first_name]"] = given
     if from_year:
-        data["search_query[start_year]"] = from_year
+        form_data["search_query[start_year]"] = from_year
     if to_year:
-        data["search_query[end_year]"] = to_year
-    rt = rt_map[record_type]
+        form_data["search_query[end_year]"] = to_year
+    rt = rt_map[rt_key]
     if rt:
-        data["search_query[record_type]"] = rt
-    with _client() as c:
-        home = c.get(FREEREG_BASE + "/")
-        home.raise_for_status()
-        data["authenticity_token"] = _freereg_token(home.text)
-        resp = c.post(FREEREG_SEARCH, data=data)
-        resp.raise_for_status()
-    records = parse_freereg_results(resp.text)
+        form_data["search_query[record_type]"] = rt
+
+    query_payload = {
+        "surname": surname.strip().lower(),
+        "given": (given or "").strip().lower(),
+        "county": chapman,
+        "from_year": (from_year or "").strip(),
+        "to_year": (to_year or "").strip(),
+        "record_type": rt_key,
+    }
+
+    def _fetch() -> dict:
+        post_data = dict(form_data)
+        try:
+            with _client() as c:
+                home = c.get(FREEREG_BASE + "/")
+                home.raise_for_status()
+                post_data["authenticity_token"] = _freereg_token(home.text)
+                resp = c.post(FREEREG_SEARCH, data=post_data)
+                resp.raise_for_status()
+        except httpx.HTTPStatusError as exc:
+            raise click.ClickException(f"FreeREG returned HTTP {exc.response.status_code}") from exc
+        except httpx.HTTPError as exc:
+            raise click.ClickException(f"FreeREG request failed: {exc}") from exc
+        return {"records": parse_freereg_results(resp.text)}
+
+    cached_data, hit = cached_call(
+        "freereg_search",
+        query_payload,
+        _fetch,
+        refresh=refresh,
+        ttl_hours=ttl,
+        cacheable=lambda r: bool(r.get("records")),
+    )
+    records = list(cached_data.get("records") or [])
     if place_contains:
         needle = place_contains.lower()
         records = [r for r in records if needle in r["register"].lower()]
     if as_json:
-        click.echo(json.dumps({"surname": surname, "county": chapman, "returned": len(records), "records": records}, indent=1))
+        click.echo(
+            json.dumps(
+                {"surname": surname, "county": chapman, "returned": len(records), "records": records, "cache_hit": hit},
+                indent=1,
+            )
+        )
         return
-    click.echo(f"{len(records)} FreeREG hit(s) for {surname} ({chapman}):")
+    marker = " [cache]" if hit else ""
+    click.echo(f"{len(records)} FreeREG hit(s) for {surname} ({chapman}):{marker}")
     for rec in records:
         click.echo(f'{rec["event_date"]}  {rec["record_type"]}  {rec["persons"]}')
         click.echo(f'  {rec["register"]}  ({rec["county"]})')

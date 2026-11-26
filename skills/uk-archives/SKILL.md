@@ -94,6 +94,15 @@ Priority order for English pre-emigration and parish research:
 - Nottinghamshire CalmView GET `https://nawcat.nottinghamshire.gov.uk/CalmView/`: connection timeout at 45s (browser-only note; no machine search).
 - CLI: `uv run --script skills/uk-archives/scripts/uk-archives --help`, `discovery search`, `discovery detail`, `freereg search`, and `url` all exited **0** on 2026-11-24.
 
+## Disk cache and environment variables
+
+`discovery search`, `discovery detail` (`inspect`/`get`), and `freereg search` cache successful responses on disk under `~/.cache/kinloom-uk-archives/` (default TTL `168` hours, advisory `flock` per cache key, atomic temp-file writes). HTTP errors, malformed JSON, missing CSRF tokens, and empty responses are never cached.
+
+- `--refresh`: bypass cached reads and write the fresh response to disk.
+- `--cache-ttl-hours <hours>`: override TTL for one call (`0` disables cached reads).
+- `KINLOOM_UK_ARCHIVES_CACHE_DIR`: override the cache directory path.
+- `KINLOOM_UK_ARCHIVES_CACHE_TTL_HOURS`: override the default TTL in hours.
+
 ## What this skill does not cover
 
 - Scotland, Wales, and Ireland beyond what Discovery holds for the whole UK catalogue.

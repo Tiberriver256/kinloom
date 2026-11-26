@@ -87,9 +87,16 @@ PERSI result pages are POST forms, so there is no shareable result URL. This pri
 4. Repeat across each state along a family's migration path.
 5. Record each citation in `data/` with periodical, volume, issue, year, and ACPL call number when shown; mark whether a free-online link existed.
 
-## Environment variables
+## Disk cache and environment variables
 
-None. No key or account is needed.
+`surname`, `title`, `location`, and `search` cache successful non-empty responses on disk under `~/.cache/kinloom-persi/` (default TTL `168` hours, advisory `flock` per cache key, atomic temp-file writes). HTTP errors and empty responses are never cached.
+
+- `--refresh`: bypass cached reads and write the fresh response to disk.
+- `--cache-ttl-hours <hours>`: override TTL for one call (`0` disables cached reads).
+- `KINLOOM_PERSI_CACHE_DIR`: override the cache directory path.
+- `KINLOOM_PERSI_CACHE_TTL_HOURS`: override the default TTL in hours.
+
+No key or account is needed.
 
 ## Verified-live note
 

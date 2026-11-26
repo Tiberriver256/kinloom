@@ -502,7 +502,7 @@ describe('bundled Python utilities and live script execution', () => {
     expect(prepHelp).toContain('stitch');
 
     const ocrHelp = execFileSync('python3', [ocrScript, '--help'], { encoding: 'utf8' });
-    expect(ocrHelp).toContain('Usage: kinloom ocr <image> [options]');
+    expect(ocrHelp).toContain('Usage: kinloom ocr <image> [image ...] [options]');
     expect(ocrHelp).toContain('--mode <printed|cursive>');
     expect(ocrHelp).toContain('KINLOOM_OCR_CACHE_DIR');
     expect(ocrHelp).toContain('KINLOOM_OCR_CLI');
@@ -1090,5 +1090,144 @@ describe('bundled Python utilities and live script execution', () => {
     expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(0);
     expect(result.stderr).toMatch(/Ran [1-9]\d* tests/);
     expect(result.stderr).toMatch(/\bOK\b/);
+  });
+
+  it('passes hathi, persi, texas-archives, and uk-archives disk-caching unit tests', () => {
+    const testFiles = [
+      path.join(SKILLS_ROOT, 'hathitrust', 'tests', 'test_hathi.py'),
+      path.join(SKILLS_ROOT, 'acpl-persi', 'tests', 'test_persi.py'),
+      path.join(SKILLS_ROOT, 'texas-archives', 'tests', 'test_texas_archives.py'),
+      path.join(SKILLS_ROOT, 'uk-archives', 'tests', 'test_uk_archives.py'),
+    ];
+    let pyCmd = 'python3';
+    let pyPrefix: string[] = [];
+    try {
+      execFileSync('python3', ['-c', 'import click, httpx'], { stdio: 'ignore' });
+    } catch {
+      pyCmd = 'uv';
+      pyPrefix = ['run', '--with', 'click', '--with', 'httpx', 'python3'];
+    }
+    const result = spawnSync(pyCmd, [...pyPrefix, '-m', 'unittest', '-v', ...testFiles], {
+      encoding: 'utf8',
+    });
+    expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(0);
+    expect(result.stderr).toMatch(/Ran [1-9]\d* tests/);
+    expect(result.stderr).toMatch(/\bOK\b/);
+  });
+
+  it('processes multiple images in kinloom ocr with per-file cache hits and backward-compatible single-file output', async () => {
+    const tmp = await makeTempDir('kinloom-ocr-multi-');
+    const binDir = path.join(tmp, 'bin');
+    const cacheDir = path.join(tmp, 'cache');
+    const img1 = path.join(tmp, 'page1.png');
+    const img2 = path.join(tmp, 'page2.png');
+    const callLog = path.join(tmp, 'calls.log');
+    fs.mkdirSync(binDir, { recursive: true });
+    await writeFile(img1, Buffer.from('synthetic-scan-page-1'));
+    await writeFile(img2, Buffer.from('synthetic-scan-page-2'));
+
+    const fakeTesseract = path.join(binDir, 'tesseract');
+    await writeFile(
+      fakeTesseract,
+      [
+        '#!/bin/sh',
+        `echo "$1|$OMP_THREAD_LIMIT|$*" >> "${callLog}"`,
+        'base=$(basename "$1")',
+        'case "$*" in',
+        '  *" tsv"*)',
+        '    printf "level\\tpage_num\\tblock_num\\tpar_num\\tline_num\\tword_num\\tleft\\ttop\\twidth\\theight\\tconf\\ttext\\n"',
+        '    printf "1\\t1\\t0\\t0\\t0\\t0\\t0\\t0\\t800\\t600\\t-1\\t\\n"',
+        '    if [ "$base" = "page1.png" ]; then',
+        '      printf "5\\t1\\t1\\t1\\t1\\t1\\t10\\t20\\t100\\t20\\t92\\tLincoln\\n"',
+        '    else',
+        '      printf "5\\t1\\t1\\t1\\t1\\t1\\t30\\t40\\t100\\t20\\t88\\tSpringfield\\n"',
+        '    fi',
+        '    ;;',
+        '  *)',
+        '    echo "TEXT:$base:OMP=$OMP_THREAD_LIMIT"',
+        '    ;;',
+        'esac',
+      ].join('\n') + '\n',
+      { mode: 0o755 }
+    );
+
+    const env: NodeJS.ProcessEnv = {
+      ...process.env,
+      PATH: `${binDir}:${process.env.PATH ?? ''}`,
+      OMP_THREAD_LIMIT: '16',
+    };
+    const runOcr = async (args: string[]) => {
+      const cap = createCaptureIo();
+      const res = await runRecordCommand('ocr', [...args, '--cache-dir', cacheDir], {
+        io: cap.io,
+        env,
+        telemetryFilePath: path.join(tmp, 'telemetry.jsonl'),
+      });
+      return { exitCode: res.exitCode, stdout: cap.stdout.join('\n'), stderr: cap.stderr.join('\n') };
+    };
+
+    // Cold multi-file text run invokes tesseract once per file with OMP_THREAD_LIMIT=1.
+    const coldText = await runOcr([img1, img2]);
+    expect(coldText.exitCode, coldText.stderr).toBe(0);
+    expect(coldText.stdout).toBe(
+      `=== ${img1} ===\nTEXT:page1.png:OMP=1\n\n=== ${img2} ===\nTEXT:page2.png:OMP=1`
+    );
+    expect(fs.readFileSync(callLog, 'utf8').trim().split('\n')).toHaveLength(2);
+
+    // Warm multi-file JSON run hits SHA-256 disk cache with zero new tesseract calls.
+    const warmJson = await runOcr([img1, img2, '--json']);
+    expect(warmJson.exitCode, warmJson.stderr).toBe(0);
+    const parsedMulti = JSON.parse(warmJson.stdout) as {
+      count: number;
+      cache_hits: number;
+      files: Array<{ file: string; cached: boolean; text: string }>;
+    };
+    expect(parsedMulti.count).toBe(2);
+    expect(parsedMulti.cache_hits).toBe(2);
+    expect(parsedMulti.files.map((f) => [f.file, f.cached, f.text])).toEqual([
+      [img1, true, 'TEXT:page1.png:OMP=1'],
+      [img2, true, 'TEXT:page2.png:OMP=1'],
+    ]);
+    expect(fs.readFileSync(callLog, 'utf8').trim().split('\n')).toHaveLength(2);
+
+    // Single-file JSON remains a flat object (backward-compatible).
+    const singleJson = await runOcr([img1, '--json']);
+    expect(singleJson.exitCode, singleJson.stderr).toBe(0);
+    const parsedSingle = JSON.parse(singleJson.stdout) as { cached: boolean; text: string; files?: unknown };
+    expect(parsedSingle.files).toBeUndefined();
+    expect(parsedSingle.cached).toBe(true);
+    expect(parsedSingle.text).toBe('TEXT:page1.png:OMP=1');
+
+    // Multi-file --find runs layout OCR once per file and caches boxes for repeat --find queries.
+    const find1 = await runOcr([img1, img2, '--find', 'lincoln']);
+    expect(find1.exitCode, find1.stderr).toBe(0);
+    const parsedFind1 = JSON.parse(find1.stdout) as {
+      count: number;
+      cache_hits: number;
+      files: Array<{ file: string; cached: boolean; lines: Array<{ text: string }> }>;
+    };
+    expect(parsedFind1.count).toBe(2);
+    expect(parsedFind1.cache_hits).toBe(0);
+    expect(parsedFind1.files[0].lines.map((l) => l.text)).toEqual(['Lincoln']);
+    expect(parsedFind1.files[1].lines).toEqual([]);
+    expect(fs.readFileSync(callLog, 'utf8').trim().split('\n')).toHaveLength(4);
+
+    const find2 = await runOcr([img1, img2, '--find', 'springfield']);
+    expect(find2.exitCode, find2.stderr).toBe(0);
+    const parsedFind2 = JSON.parse(find2.stdout) as {
+      count: number;
+      cache_hits: number;
+      files: Array<{ file: string; cached: boolean; lines: Array<{ text: string }> }>;
+    };
+    expect(parsedFind2.cache_hits).toBe(2);
+    expect(parsedFind2.files[0].lines).toEqual([]);
+    expect(parsedFind2.files[1].lines.map((l) => l.text)).toEqual(['Springfield']);
+    expect(fs.readFileSync(callLog, 'utf8').trim().split('\n')).toHaveLength(4);
+
+    // Missing file in a multi-file batch fails cleanly before invoking tesseract.
+    const missing = await runOcr([img1, path.join(tmp, 'does-not-exist.png')]);
+    expect(missing.exitCode).toBe(1);
+    expect(missing.stderr).toContain('image file not found');
+    expect(fs.readFileSync(callLog, 'utf8').trim().split('\n')).toHaveLength(4);
   });
 });

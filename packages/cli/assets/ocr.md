@@ -17,6 +17,16 @@ kinloom ocr ./scans/city-directory-p44.jpg --psm 4 --json
 kinloom ocr ./scans/obituary-1912.jpg --force
 ```
 
+## Multi-file batches
+
+Pass two or more image paths in one call instead of writing a shell `for` loop. Every image runs with the same `OMP_THREAD_LIMIT=1` pin, SHA-256 disk cache, and per-image `--timeout`. Single-image output is unchanged; multi-image runs print `=== <path> ===` sections in text or `--tsv` mode, and `{ files: [...], count, cache_hits }` in `--json`, `--boxes`, or `--find` mode:
+
+```bash
+kinloom ocr ./scans/page-01.jpg ./scans/page-02.jpg ./scans/page-03.jpg
+kinloom ocr ./scans/page-*.jpg --find 'probate|docket'
+kinloom ocr ./scans/crop-1.jpg ./scans/crop-2.jpg --json
+```
+
 ## Line boxes and raw TSV (`--boxes`, `--find`, `--tsv`)
 
 Use these flags instead of ad-hoc `tesseract ... tsv` calls when you need pixel coordinates (printed mode only). They run the same hardened `tesseract` call (`OMP_THREAD_LIMIT=1`, `--timeout`, default `30` seconds).

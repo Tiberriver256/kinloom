@@ -59,16 +59,16 @@ def print_usage() -> None:
     cache_default = default_cache_dir()
     cli_default = resolve_vision_cli()
     sys.stdout.write(
-        "Usage: kinloom ocr <image> [options]\n\n"
+        "Usage: kinloom ocr <image> [image ...] [options]\n\n"
         "Options:\n"
         "  --mode <printed|cursive>          OCR mode (default: printed)\n"
         "  --psm <int>                       Tesseract PSM for --mode printed (default: 6)\n"
         f"  --effort <low|medium|high|xhigh>  Reasoning effort for --mode cursive (default: {DEFAULT_CURSIVE_EFFORT})\n"
         f"  --cache-dir <dir>                 Cache directory (default: {cache_default})\n"
-        f"  --timeout <seconds>               Subprocess timeout (default: {DEFAULT_PRINTED_TIMEOUT_S} printed, {DEFAULT_CURSIVE_TIMEOUT_S} cursive)\n"
+        f"  --timeout <seconds>               Per-image subprocess timeout (default: {DEFAULT_PRINTED_TIMEOUT_S} printed, {DEFAULT_CURSIVE_TIMEOUT_S} cursive)\n"
         "  --prompt <text>                   Custom prompt for --mode cursive (supports {image_path})\n"
         "  --force                           Bypass cache and recompute OCR\n"
-        "  --json                            Emit structured JSON output\n"
+        "  --json                            Emit structured JSON output (or {files: [...]} for multiple images)\n"
         "  --boxes                           Emit JSON line/word pixel boxes (printed mode only)\n"
         "  --tsv                             Emit raw Tesseract TSV (printed mode only)\n"
         "  --find <regex>                    Case-insensitive line filter; implies --boxes\n"
@@ -81,8 +81,9 @@ def print_usage() -> None:
 
 
 def parse_args(argv: list[str]) -> dict[str, object]:
+    images: list[str] = []
     opts: dict[str, object] = {
-        "image": None,
+        "images": images,
         "mode": "printed",
         "psm": 6,
         "effort": DEFAULT_CURSIVE_EFFORT,
@@ -110,6 +111,9 @@ def parse_args(argv: list[str]) -> dict[str, object]:
             opts[arg[2:]] = True
             i += 1
             continue
+        if arg == "--":
+            images.extend(argv[i + 1 :])
+            break
         if arg.startswith("--"):
             if "=" in arg:
                 key, val = arg.split("=", 1)
@@ -157,13 +161,10 @@ def parse_args(argv: list[str]) -> dict[str, object]:
                 raise ValueError(f"Unknown option: {key}")
             i += 1
             continue
-        if opts["image"] is None:
-            opts["image"] = arg
-            i += 1
-            continue
-        raise ValueError(f"Unexpected positional argument: {arg}")
+        images.append(arg)
+        i += 1
 
-    if not opts["image"]:
+    if not images:
         raise ValueError("Missing required positional argument: <image>.")
     if opts["boxes"] and opts["tsv"]:
         raise ValueError("--tsv cannot be combined with --boxes or --find.")
@@ -306,8 +307,10 @@ def atomic_write_text(dest: str, text: str) -> None:
         raise
 
 
-def run_layout(opts: dict[str, object], img_path: str, sha256_hex: str, cache_dir: str) -> str:
-    """Return rendered --tsv or --boxes/--find output, using separate layout cache files."""
+def run_layout_data(
+    opts: dict[str, object], img_path: str, sha256_hex: str, cache_dir: str
+) -> tuple[str | dict[str, object], bool]:
+    """Return (tsv_text_or_boxes_dict, cache_hit) using separate layout cache files."""
     import re
 
     psm = int(opts["psm"])
@@ -327,8 +330,7 @@ def run_layout(opts: dict[str, object], img_path: str, sha256_hex: str, cache_di
 
     if opts["tsv"]:
         tsv, cached = load_tsv()
-        opts["_cache_hit"] = cached
-        return tsv if tsv.endswith("\n") else tsv + "\n"
+        return (tsv if tsv.endswith("\n") else tsv + "\n"), cached
 
     boxes: dict[str, object] | None = None
     cached = False
@@ -343,7 +345,6 @@ def run_layout(opts: dict[str, object], img_path: str, sha256_hex: str, cache_di
         tsv, cached = load_tsv()
         boxes = {"sha256": sha256_hex, "psm": psm, **parse_tesseract_tsv(tsv)}
         atomic_write_json(boxes_path, boxes)
-    opts["_cache_hit"] = cached
     out: dict[str, object] = {**boxes, "cached": cached, "cache_path": boxes_path}
     pattern = opts["find"]
     if isinstance(pattern, str):
@@ -352,7 +353,87 @@ def run_layout(opts: dict[str, object], img_path: str, sha256_hex: str, cache_di
         assert isinstance(lines, list)
         out["find"] = pattern
         out["lines"] = [ln for ln in lines if rx.search(str(ln.get("text", "")))]
-    return json.dumps(out, indent=2, ensure_ascii=False) + "\n"
+    return out, cached
+
+
+def run_ocr_data(
+    opts: dict[str, object],
+    img_path: str,
+    raw_bytes: bytes,
+    sha256_hex: str,
+    cache_dir: str,
+) -> tuple[dict[str, object], bool]:
+    """Return (ocr_record_with_cache_meta, cache_hit) for one image."""
+    from datetime import datetime, timezone
+
+    t_item = time.perf_counter()
+    mode = str(opts["mode"])
+    psm = int(opts["psm"])
+    effort = str(opts["effort"])
+    custom_prompt = opts["prompt"] if isinstance(opts["prompt"], str) else None
+    slug = mode_slug(mode, psm, effort, custom_prompt)
+    cache_file = os.path.join(cache_dir, f"{sha256_hex}_{slug}.json")
+
+    if not opts["force"] and os.path.isfile(cache_file):
+        try:
+            with open(cache_file, "r", encoding="utf-8") as fh:
+                record = json.load(fh)
+        except (OSError, json.JSONDecodeError):
+            record = None
+        if isinstance(record, dict) and isinstance(record.get("text"), str):
+            lookup_ms = round((time.perf_counter() - t_item) * 1000.0, 2)
+            return (
+                {
+                    **record,
+                    "cached": True,
+                    "cache_path": cache_file,
+                    "lookup_ms": lookup_ms,
+                },
+                True,
+            )
+
+    timeout_val = opts["timeout"]
+    timeout_s = (
+        int(timeout_val)
+        if timeout_val is not None
+        else (DEFAULT_PRINTED_TIMEOUT_S if mode == "printed" else DEFAULT_CURSIVE_TIMEOUT_S)
+    )
+    t_ocr = time.perf_counter()
+    if mode == "printed":
+        text, meta = run_printed_ocr(img_path, psm=psm, timeout_s=timeout_s)
+        engine = "tesseract"
+    else:
+        text, meta = run_cursive_ocr(
+            img_path=img_path,
+            raw_len=len(raw_bytes),
+            effort=effort,
+            timeout_s=timeout_s,
+            cache_dir=cache_dir,
+            custom_prompt=custom_prompt,
+        )
+        engine = f"{meta.get('cli', resolve_vision_cli())}:{meta.get('model', '')}"
+
+    elapsed_ms = int(round((time.perf_counter() - t_ocr) * 1000.0))
+    record = {
+        "sha256": sha256_hex,
+        "mode": slug,
+        "engine": engine,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "elapsed_ms": elapsed_ms,
+        "text": text,
+        "source_hint": os.path.basename(img_path),
+        "meta": meta,
+    }
+    atomic_write_json(cache_file, record)
+    return (
+        {
+            **record,
+            "cached": False,
+            "cache_path": cache_file,
+            "lookup_ms": round((time.perf_counter() - t_item) * 1000.0, 2),
+        },
+        False,
+    )
 
 
 def prepare_cursive_image(img_path: str, raw_len: int, work_dir: str) -> tuple[str, str | None, int]:
@@ -555,104 +636,100 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 2
 
-    img_path = os.path.abspath(str(opts["image"]))
+    raw_images = opts["images"]
+    assert isinstance(raw_images, list)
     mode = str(opts["mode"])
-    if not os.path.isfile(img_path):
-        sys.stderr.write(f"Error: image file not found: {img_path}\n")
-        append_telemetry(
-            mode=mode,
-            duration_ms=(time.perf_counter() - t_start) * 1000.0,
-            cache_hit=None,
-            exit_code=1,
-            bytes_out=0,
-        )
-        return 1
+    resolved_images: list[tuple[str, str]] = []
+    for raw_arg in raw_images:
+        img_path = os.path.abspath(str(raw_arg))
+        if not os.path.isfile(img_path):
+            sys.stderr.write(f"Error: image file not found: {img_path}\n")
+            append_telemetry(
+                mode=mode,
+                duration_ms=(time.perf_counter() - t_start) * 1000.0,
+                cache_hit=None,
+                exit_code=1,
+                bytes_out=0,
+            )
+            return 1
+        resolved_images.append((str(raw_arg), img_path))
 
     cache_dir = os.path.abspath(str(opts["cache_dir"]))
-    with open(img_path, "rb") as fh:
-        raw_bytes = fh.read()
-    sha256_hex = hashlib.sha256(raw_bytes).hexdigest()
-
-    psm = int(opts["psm"])
-    effort = str(opts["effort"])
-    custom_prompt = opts["prompt"] if isinstance(opts["prompt"], str) else None
-    slug = mode_slug(mode, psm, effort, custom_prompt)
-    cache_file = os.path.join(cache_dir, f"{sha256_hex}_{slug}.json")
+    multi = len(resolved_images) > 1
 
     if opts["boxes"] or opts["tsv"]:
+        layout_mode = "tsv" if opts["tsv"] else "boxes"
+        layout_results: list[tuple[str, str, str | dict[str, object]]] = []
+        hits: list[bool] = []
         try:
-            rendered = run_layout(opts, img_path, sha256_hex, cache_dir)
+            for raw_arg, img_path in resolved_images:
+                with open(img_path, "rb") as fh:
+                    sha256_hex = hashlib.sha256(fh.read()).hexdigest()
+                data, cached = run_layout_data(opts, img_path, sha256_hex, cache_dir)
+                layout_results.append((raw_arg, img_path, data))
+                hits.append(cached)
         except Exception as exc:
             sys.stderr.write(f"Error: {exc}\n")
             append_telemetry(
-                mode="tsv" if opts["tsv"] else "boxes",
+                mode=layout_mode,
                 duration_ms=(time.perf_counter() - t_start) * 1000.0,
                 cache_hit=False,
                 exit_code=1,
                 bytes_out=0,
             )
             return 1
+
+        if not multi:
+            single_data = layout_results[0][2]
+            if opts["tsv"]:
+                assert isinstance(single_data, str)
+                rendered = single_data
+            else:
+                rendered = json.dumps(single_data, indent=2, ensure_ascii=False) + "\n"
+        elif opts["tsv"]:
+            sections = [
+                f"=== {raw_arg} ===\n{str(data).rstrip()}"
+                for raw_arg, _img_path, data in layout_results
+            ]
+            rendered = "\n\n".join(sections) + "\n"
+        else:
+            files_out = []
+            for raw_arg, img_path, data in layout_results:
+                assert isinstance(data, dict)
+                files_out.append({"file": raw_arg, "path": img_path, **data})
+            rendered = (
+                json.dumps(
+                    {
+                        "files": files_out,
+                        "count": len(files_out),
+                        "cache_hits": sum(1 for h in hits if h),
+                    },
+                    indent=2,
+                    ensure_ascii=False,
+                )
+                + "\n"
+            )
+
         sys.stdout.write(rendered)
         append_telemetry(
-            mode="tsv" if opts["tsv"] else "boxes",
+            mode=layout_mode,
             duration_ms=(time.perf_counter() - t_start) * 1000.0,
-            cache_hit=bool(opts.get("_cache_hit")),
+            cache_hit=bool(hits) and all(hits),
             exit_code=0,
             bytes_out=len(rendered.encode("utf-8")),
         )
         return 0
 
-    if not opts["force"] and os.path.isfile(cache_file):
-        try:
-            with open(cache_file, "r", encoding="utf-8") as fh:
-                record = json.load(fh)
-        except (OSError, json.JSONDecodeError):
-            record = None
-        if isinstance(record, dict) and isinstance(record.get("text"), str):
-            lookup_ms = round((time.perf_counter() - t_start) * 1000.0, 2)
-            if opts["json"]:
-                out = {
-                    **record,
-                    "cached": True,
-                    "cache_path": cache_file,
-                    "lookup_ms": lookup_ms,
-                }
-                rendered = json.dumps(out, indent=2, ensure_ascii=False) + "\n"
-            else:
-                rendered = record["text"] + "\n"
-            sys.stdout.write(rendered)
-            append_telemetry(
-                mode=mode,
-                duration_ms=(time.perf_counter() - t_start) * 1000.0,
-                cache_hit=True,
-                exit_code=0,
-                bytes_out=len(rendered.encode("utf-8")),
-            )
-            return 0
-
-    from datetime import datetime, timezone
-
-    timeout_val = opts["timeout"]
-    timeout_s = (
-        int(timeout_val)
-        if timeout_val is not None
-        else (DEFAULT_PRINTED_TIMEOUT_S if mode == "printed" else DEFAULT_CURSIVE_TIMEOUT_S)
-    )
-    t_ocr = time.perf_counter()
+    ocr_results: list[tuple[str, str, dict[str, object]]] = []
+    hits = []
     try:
-        if mode == "printed":
-            text, meta = run_printed_ocr(img_path, psm=psm, timeout_s=timeout_s)
-            engine = "tesseract"
-        else:
-            text, meta = run_cursive_ocr(
-                img_path=img_path,
-                raw_len=len(raw_bytes),
-                effort=effort,
-                timeout_s=timeout_s,
-                cache_dir=cache_dir,
-                custom_prompt=custom_prompt,
-            )
-            engine = f"{meta.get('cli', resolve_vision_cli())}:{meta.get('model', '')}"
+        for raw_arg, img_path in resolved_images:
+            with open(img_path, "rb") as fh:
+                raw_bytes = fh.read()
+            sha256_hex = hashlib.sha256(raw_bytes).hexdigest()
+            record, cached = run_ocr_data(opts, img_path, raw_bytes, sha256_hex, cache_dir)
+            ocr_results.append((raw_arg, img_path, record))
+            hits.append(cached)
     except Exception as exc:
         sys.stderr.write(f"Error: {exc}\n")
         append_telemetry(
@@ -664,34 +741,41 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 1
 
-    elapsed_ms = int(round((time.perf_counter() - t_ocr) * 1000.0))
-    record = {
-        "sha256": sha256_hex,
-        "mode": slug,
-        "engine": engine,
-        "created_at": datetime.now(timezone.utc).isoformat(),
-        "elapsed_ms": elapsed_ms,
-        "text": text,
-        "source_hint": os.path.basename(img_path),
-        "meta": meta,
-    }
-    atomic_write_json(cache_file, record)
-
-    if opts["json"]:
-        out = {
-            **record,
-            "cached": False,
-            "cache_path": cache_file,
-            "lookup_ms": round((time.perf_counter() - t_start) * 1000.0, 2),
-        }
-        rendered = json.dumps(out, indent=2, ensure_ascii=False) + "\n"
+    if not multi:
+        single_rec = ocr_results[0][2]
+        if opts["json"]:
+            rendered = json.dumps(single_rec, indent=2, ensure_ascii=False) + "\n"
+        else:
+            rendered = str(single_rec["text"]) + "\n"
+    elif opts["json"]:
+        files_out = [
+            {"file": raw_arg, "path": img_path, **rec}
+            for raw_arg, img_path, rec in ocr_results
+        ]
+        rendered = (
+            json.dumps(
+                {
+                    "files": files_out,
+                    "count": len(files_out),
+                    "cache_hits": sum(1 for h in hits if h),
+                },
+                indent=2,
+                ensure_ascii=False,
+            )
+            + "\n"
+        )
     else:
-        rendered = text + "\n"
+        sections = [
+            f"=== {raw_arg} ===\n{rec['text']}"
+            for raw_arg, _img_path, rec in ocr_results
+        ]
+        rendered = "\n\n".join(sections) + "\n"
+
     sys.stdout.write(rendered)
     append_telemetry(
         mode=mode,
         duration_ms=(time.perf_counter() - t_start) * 1000.0,
-        cache_hit=False,
+        cache_hit=bool(hits) and all(hits),
         exit_code=0,
         bytes_out=len(rendered.encode("utf-8")),
     )

@@ -85,6 +85,15 @@ Worked order for tracing a person or family in Texas:
 - `https://www.tsl.texas.gov/` — HTTP 200.
 - CLI `texas-archives --help`, `portal search`, `portal item`, `tda`, `url` — all exited 0 on verification runs.
 
+## Disk cache and environment variables
+
+`portal search` (per OpenSearch page), `portal item`, and `tda` cache successful responses on disk under `~/.cache/kinloom-texas-archives/` (default TTL `168` hours, advisory `flock` per cache key, atomic temp-file writes). HTTP errors, curl failures, OAI errors, and empty/unverified payloads are never cached.
+
+- `--refresh`: bypass cached reads and write the fresh response to disk.
+- `--cache-ttl-hours <hours>`: override TTL for one call (`0` disables cached reads).
+- `KINLOOM_TEXAS_ARCHIVES_CACHE_DIR`: override the cache directory path.
+- `KINLOOM_TEXAS_ARCHIVES_CACHE_TTL_HOURS`: override the default TTL in hours.
+
 ## What this skill does not cover
 
 - Federal BLM GLO (public-land states) — see `blm-glo`; Texas state land is separate.

@@ -18,12 +18,21 @@ search URL instead of fetching results.
 
 from __future__ import annotations
 
+import hashlib
 import json
-import sys
+import math
+import os
+import time
+from contextlib import contextmanager
+from pathlib import Path
+from typing import Any, Callable, Iterator
 from urllib.parse import quote, urlencode
 
 import click
 import httpx
+
+DEFAULT_CACHE_TTL_HOURS = 168.0
+CACHE_SCHEMA = 1
 
 BIB_API_BASE = "https://catalog.hathitrust.org/api/volumes"
 CATALOG_SEARCH_BASE = "https://catalog.hathitrust.org/Search/Home"
@@ -33,6 +42,149 @@ USER_AGENT = (
 )
 VALID_ID_TYPES = ("oclc", "lccn", "issn", "isbn", "htid", "recordnumber")
 VALID_SEARCH_TYPES = ("all", "title", "author", "subject")
+
+
+def cache_dir() -> Path:
+    override = os.environ.get("KINLOOM_HATHI_CACHE_DIR")
+    if override:
+        return Path(override).expanduser()
+    return Path.home() / ".cache" / "kinloom-hathi"
+
+
+def resolve_ttl_hours(cli_ttl: float | None) -> float:
+    if cli_ttl is not None:
+        if not math.isfinite(cli_ttl) or cli_ttl < 0:
+            raise click.BadParameter(f"Invalid --cache-ttl-hours value: {cli_ttl!r} (must be >= 0).")
+        return float(cli_ttl)
+    raw = os.environ.get("KINLOOM_HATHI_CACHE_TTL_HOURS")
+    if raw is not None and raw.strip():
+        try:
+            parsed = float(raw.strip())
+        except ValueError as exc:
+            raise click.BadParameter(f"Invalid KINLOOM_HATHI_CACHE_TTL_HOURS value: {raw!r}.") from exc
+        if not math.isfinite(parsed) or parsed < 0:
+            raise click.BadParameter(
+                f"Invalid KINLOOM_HATHI_CACHE_TTL_HOURS value: {raw!r} (must be >= 0)."
+            )
+        return parsed
+    return DEFAULT_CACHE_TTL_HOURS
+
+
+@contextmanager
+def file_lock(lock_path: Path) -> Iterator[None]:
+    """Advisory exclusive lock (POSIX flock); no-op where fcntl is missing."""
+    try:
+        import fcntl
+    except ImportError:
+        yield
+        return
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(lock_path, "a+b") as lock_file:
+        fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
+
+
+def atomic_write_json(dest: Path, payload: Any) -> None:
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    tmp = dest.with_name(f".{dest.name}.{os.getpid()}.{time.time_ns()}.tmp")
+    try:
+        tmp.write_text(json.dumps(payload, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
+        os.replace(tmp, dest)
+    except Exception:
+        tmp.unlink(missing_ok=True)
+        raise
+
+
+def cache_key(kind: str, payload: dict) -> str:
+    canonical = json.dumps([kind, payload], sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
+def read_cache(path: Path, ttl_hours: float) -> dict | None:
+    if not path.is_file():
+        return None
+    try:
+        entry = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+        return None
+    if not isinstance(entry, dict) or entry.get("schema") != CACHE_SCHEMA:
+        return None
+    fetched = entry.get("fetched_at")
+    if not isinstance(fetched, (int, float)):
+        return None
+    if ttl_hours <= 0 or (time.time() - fetched) > ttl_hours * 3600:
+        return None
+    result = entry.get("result")
+    return result if isinstance(result, dict) else None
+
+
+def cached_call(
+    kind: str,
+    payload: dict,
+    fetch: Callable[[], dict],
+    *,
+    refresh: bool,
+    ttl_hours: float,
+    cacheable: Callable[[dict], bool] = lambda _r: True,
+) -> tuple[dict, bool]:
+    """Return (result, cache_hit) with per-key flock and atomic JSON writes."""
+    key = cache_key(kind, payload)
+    root = cache_dir()
+    path = root / f"{key}.json"
+    if not refresh:
+        hit = read_cache(path, ttl_hours)
+        if hit is not None:
+            return hit, True
+    with file_lock(root / f"{key}.lock"):
+        if not refresh:
+            hit = read_cache(path, ttl_hours)
+            if hit is not None:
+                return hit, True
+        result = fetch()
+        if cacheable(result):
+            atomic_write_json(
+                path,
+                {
+                    "schema": CACHE_SCHEMA,
+                    "fetched_at": time.time(),
+                    "kind": kind,
+                    "query": payload,
+                    "result": result,
+                },
+            )
+        return result, False
+
+
+def cache_options(func: Callable) -> Callable:
+    func = click.option(
+        "--cache-ttl-hours",
+        type=float,
+        default=None,
+        help="Cache TTL in hours (default 168, env KINLOOM_HATHI_CACHE_TTL_HOURS; 0 disables reads).",
+    )(func)
+    func = click.option(
+        "--refresh",
+        is_flag=True,
+        help="Bypass the disk cache for this request (the fresh result is still cached).",
+    )(func)
+    return func
+
+
+def _client() -> httpx.Client:
+    return httpx.Client(headers={"User-Agent": USER_AGENT})
+
+
+def _bib_cacheable(data: dict) -> bool:
+    if not isinstance(data, dict) or data.get("error"):
+        return False
+    records = data.get("records")
+    items = data.get("items")
+    if not isinstance(records, dict) or not isinstance(items, list):
+        return False
+    return bool(records) or bool(items)
 
 
 def bib_url(id_type: str, value: str, full: bool) -> str:
@@ -52,9 +204,12 @@ def fetch_bib(client: httpx.Client, id_type: str, value: str, full: bool) -> dic
     except httpx.HTTPError as exc:
         raise click.ClickException(f"Bib API request failed: {exc}") from exc
     try:
-        return resp.json()
+        data = resp.json()
     except ValueError as exc:
         raise click.ClickException(f"Bib API returned non-JSON for {url}") from exc
+    if not isinstance(data, dict):
+        raise click.ClickException(f"Bib API returned unexpected JSON shape for {url}")
+    return data
 
 
 def parse_id(spec: str) -> tuple[str, str]:
@@ -73,15 +228,19 @@ def parse_id(spec: str) -> tuple[str, str]:
     return id_type, value
 
 
-def compact_bib(data: dict, full: bool) -> str:
+def compact_bib(data: dict, full: bool, *, cache_hit: bool = False) -> str:
+    marker = " [cache]" if cache_hit else ""
     lines: list[str] = []
     records = data.get("records") or {}
     items = data.get("items") or []
     if not records and not items:
-        return "No matching HathiTrust record (empty records and items)."
+        return f"No matching HathiTrust record (empty records and items).{marker}"
+    first = True
     for rec_no, rec in records.items():
         titles = rec.get("titles") or []
-        lines.append(f"Record {rec_no}: {titles[0] if titles else '(no title)'}")
+        suffix = marker if first else ""
+        first = False
+        lines.append(f"Record {rec_no}: {titles[0] if titles else '(no title)'}{suffix}")
         if len(titles) > 1:
             lines.append(f"  alt titles: {'; '.join(titles[1:])}")
         lines.append(f"  record URL: {rec.get('recordURL', '')}")
@@ -94,9 +253,11 @@ def compact_bib(data: dict, full: bool) -> str:
             lines.append("  marc-xml:")
             lines.append(rec["marc-xml"])
     for item in items:
+        suffix = marker if first else ""
+        first = False
         lines.append(
             f"Item {item.get('htid', '')} ({item.get('orig', '')}): "
-            f"{item.get('usRightsString', '')}"
+            f"{item.get('usRightsString', '')}{suffix}"
         )
         lines.append(f"  item URL: {item.get('itemURL', '')}")
         if item.get("enumcron"):
@@ -122,12 +283,15 @@ def cli() -> None:
 )
 @click.option("--full", is_flag=True, help="Full record with MARC-XML.")
 @click.option("--json", "as_json", is_flag=True, help="Print raw API JSON.")
+@cache_options
 def bib(
     id_type: str | None,
     value: str | None,
     ids: tuple[str, ...],
     full: bool,
     as_json: bool,
+    refresh: bool,
+    cache_ttl_hours: float | None,
 ) -> None:
     """Look up record(s) by identifier.
 
@@ -154,16 +318,37 @@ def bib(
             "Give an identifier: hathi bib <type> <value> "
             "or hathi bib --id type:value [--id type:value ...]"
         )
-    merged: dict = {"records": {}, "items": []}
-    with httpx.Client(headers={"User-Agent": USER_AGENT}) as client:
-        for id_type, value in specs:
-            data = fetch_bib(client, id_type, value, full)
+    ttl = resolve_ttl_hours(cache_ttl_hours)
+    merged: dict[str, Any] = {"records": {}, "items": []}
+    hits: list[bool] = []
+    client: httpx.Client | None = None
+    try:
+        for spec_type, spec_value in specs:
+            def _fetch(t: str = spec_type, v: str = spec_value) -> dict:
+                nonlocal client
+                if client is None:
+                    client = _client()
+                return fetch_bib(client, t, v, full)
+
+            data, hit = cached_call(
+                "bib",
+                {"id_type": spec_type, "value": spec_value, "full": full},
+                _fetch,
+                refresh=refresh,
+                ttl_hours=ttl,
+                cacheable=_bib_cacheable,
+            )
+            hits.append(hit)
             merged["records"].update(data.get("records") or {})
             merged["items"].extend(data.get("items") or [])
+    finally:
+        if client is not None:
+            client.close()
+    all_cached = bool(hits) and all(hits)
     if as_json:
-        click.echo(json.dumps(merged, indent=2, ensure_ascii=False))
+        click.echo(json.dumps({**merged, "cache_hit": all_cached}, indent=2, ensure_ascii=False))
     else:
-        click.echo(compact_bib(merged, full))
+        click.echo(compact_bib(merged, full, cache_hit=all_cached))
 
 
 @cli.command()

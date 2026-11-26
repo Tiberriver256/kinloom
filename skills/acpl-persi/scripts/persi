@@ -20,15 +20,22 @@ live 2026-11-24. No account, key, or sign-in is required.
 
 from __future__ import annotations
 
-import html as htmlmod
+import hashlib
 import json
+import math
+import os
 import sys
 import time
+from contextlib import contextmanager
 from html.parser import HTMLParser
-from urllib.parse import urlencode
+from pathlib import Path
+from typing import Any, Callable, Iterator
 
 import click
 import httpx
+
+DEFAULT_CACHE_TTL_HOURS = 168.0
+CACHE_SCHEMA = 1
 
 BASE = "https://www.genealogycenter.info"
 SEARCH_PAGE = BASE + "/persi/"
@@ -36,6 +43,7 @@ SURNAME_URL = BASE + "/results_persisurname.php"
 TITLE_URL = BASE + "/results_persiarttitle.php"
 LOCATION_URL = BASE + "/results_persilocation.php"
 USER_AGENT = "Mozilla/5.0"
+RETRY_WAIT_S = 5.0
 # The Genealogy Center's front door intermittently 412/429s python-httpx's
 # default header set. Plain curl-style headers (short UA, Accept */*) plus
 # a Referer return 200 consistently; fetch() also retries once on 412/429.
@@ -47,6 +55,139 @@ US_STATES = {
     "OK", "OR", "PA", "RI", "SC", "SD", "TN", "TX", "UT", "VT", "VA", "WA",
     "WV", "WI", "WY", "GEN",
 }
+
+
+def cache_dir() -> Path:
+    override = os.environ.get("KINLOOM_PERSI_CACHE_DIR")
+    if override:
+        return Path(override).expanduser()
+    return Path.home() / ".cache" / "kinloom-persi"
+
+
+def resolve_ttl_hours(cli_ttl: float | None) -> float:
+    if cli_ttl is not None:
+        if not math.isfinite(cli_ttl) or cli_ttl < 0:
+            raise click.BadParameter(f"Invalid --cache-ttl-hours value: {cli_ttl!r} (must be >= 0).")
+        return float(cli_ttl)
+    raw = os.environ.get("KINLOOM_PERSI_CACHE_TTL_HOURS")
+    if raw is not None and raw.strip():
+        try:
+            parsed = float(raw.strip())
+        except ValueError as exc:
+            raise click.BadParameter(f"Invalid KINLOOM_PERSI_CACHE_TTL_HOURS value: {raw!r}.") from exc
+        if not math.isfinite(parsed) or parsed < 0:
+            raise click.BadParameter(
+                f"Invalid KINLOOM_PERSI_CACHE_TTL_HOURS value: {raw!r} (must be >= 0)."
+            )
+        return parsed
+    return DEFAULT_CACHE_TTL_HOURS
+
+
+@contextmanager
+def file_lock(lock_path: Path) -> Iterator[None]:
+    """Advisory exclusive lock (POSIX flock); no-op where fcntl is missing."""
+    try:
+        import fcntl
+    except ImportError:
+        yield
+        return
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(lock_path, "a+b") as lock_file:
+        fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
+
+
+def atomic_write_json(dest: Path, payload: Any) -> None:
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    tmp = dest.with_name(f".{dest.name}.{os.getpid()}.{time.time_ns()}.tmp")
+    try:
+        tmp.write_text(json.dumps(payload, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
+        os.replace(tmp, dest)
+    except Exception:
+        tmp.unlink(missing_ok=True)
+        raise
+
+
+def cache_key(kind: str, payload: dict) -> str:
+    canonical = json.dumps([kind, payload], sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
+def read_cache(path: Path, ttl_hours: float) -> dict | None:
+    if not path.is_file():
+        return None
+    try:
+        entry = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+        return None
+    if not isinstance(entry, dict) or entry.get("schema") != CACHE_SCHEMA:
+        return None
+    fetched = entry.get("fetched_at")
+    if not isinstance(fetched, (int, float)):
+        return None
+    if ttl_hours <= 0 or (time.time() - fetched) > ttl_hours * 3600:
+        return None
+    result = entry.get("result")
+    return result if isinstance(result, dict) else None
+
+
+def cached_call(
+    kind: str,
+    payload: dict,
+    fetch: Callable[[], dict],
+    *,
+    refresh: bool,
+    ttl_hours: float,
+    cacheable: Callable[[dict], bool] = lambda _r: True,
+) -> tuple[dict, bool]:
+    """Return (result, cache_hit) with per-key flock and atomic JSON writes."""
+    key = cache_key(kind, payload)
+    root = cache_dir()
+    path = root / f"{key}.json"
+    if not refresh:
+        hit = read_cache(path, ttl_hours)
+        if hit is not None:
+            return hit, True
+    with file_lock(root / f"{key}.lock"):
+        if not refresh:
+            hit = read_cache(path, ttl_hours)
+            if hit is not None:
+                return hit, True
+        result = fetch()
+        if cacheable(result):
+            atomic_write_json(
+                path,
+                {
+                    "schema": CACHE_SCHEMA,
+                    "fetched_at": time.time(),
+                    "kind": kind,
+                    "query": payload,
+                    "result": result,
+                },
+            )
+        return result, False
+
+
+def cache_options(func: Callable) -> Callable:
+    func = click.option(
+        "--cache-ttl-hours",
+        type=float,
+        default=None,
+        help="Cache TTL in hours (default 168, env KINLOOM_PERSI_CACHE_TTL_HOURS; 0 disables reads).",
+    )(func)
+    func = click.option(
+        "--refresh",
+        is_flag=True,
+        help="Bypass the disk cache for this request (the fresh result is still cached).",
+    )(func)
+    return func
+
+
+def _client(headers: dict[str, str]) -> httpx.Client:
+    return httpx.Client(headers=headers, timeout=60.0, follow_redirects=True)
 
 
 class TableParser(HTMLParser):
@@ -113,12 +254,11 @@ def fetch(url: str, data: dict, referer: str) -> str:
     last_exc: Exception | None = None
     for attempt in (1, 2):
         try:
-            with httpx.Client(
-                headers=headers, timeout=60.0, follow_redirects=True
-            ) as client:
+            with _client(headers) as client:
                 resp = client.post(url, data=data)
                 if resp.status_code in (412, 429) and attempt == 1:
-                    time.sleep(5)
+                    if RETRY_WAIT_S > 0:
+                        time.sleep(RETRY_WAIT_S)
                     continue
                 resp.raise_for_status()
                 return resp.text
@@ -170,13 +310,14 @@ def parse_categories(page: str) -> list[dict]:
     return categories
 
 
-def emit(items: list[dict], as_json: bool, limit: int) -> None:
+def emit(items: list[dict], as_json: bool, limit: int, *, cache_hit: bool = False) -> None:
     items = items[:limit]
     if as_json:
         click.echo(json.dumps(items, indent=2))
         return
+    marker = " [cache]" if cache_hit else ""
     if not items:
-        click.echo("No results.")
+        click.echo(f"No results.{marker}")
         return
     for item in items:
         if "articles" in item:
@@ -189,7 +330,7 @@ def emit(items: list[dict], as_json: bool, limit: int) -> None:
             click.echo(line)
             if item.get("free_link"):
                 click.echo(f"       free online: {item['free_link']}")
-    click.echo(f"({len(items)} shown)")
+    click.echo(f"({len(items)} shown){marker}")
 
 
 @click.group()
@@ -201,27 +342,82 @@ def cli() -> None:
 @click.argument("surname")
 @click.option("--limit", default=25, show_default=True, help="Max results to show.")
 @click.option("--json", "as_json", is_flag=True, help="Emit JSON.")
-def surname(surname: str, limit: int, as_json: bool) -> None:
+@cache_options
+def surname(
+    surname: str,
+    limit: int,
+    as_json: bool,
+    refresh: bool,
+    cache_ttl_hours: float | None,
+) -> None:
     """Search PERSI by surname, e.g. persi surname Lincoln."""
-    page = fetch(SURNAME_URL, {"surname": surname, "sort": "title", "submit": "Search"}, BASE + "/search_persisurname.php")
-    emit(parse_articles(page), as_json, limit)
+    ttl = resolve_ttl_hours(cache_ttl_hours)
+
+    def _fetch() -> dict:
+        page = fetch(
+            SURNAME_URL,
+            {"surname": surname, "sort": "title", "submit": "Search"},
+            BASE + "/search_persisurname.php",
+        )
+        return {"articles": parse_articles(page)}
+
+    data, hit = cached_call(
+        "surname",
+        {"surname": surname.strip().lower()},
+        _fetch,
+        refresh=refresh,
+        ttl_hours=ttl,
+        cacheable=lambda r: bool(r.get("articles")),
+    )
+    emit(data.get("articles") or [], as_json, limit, cache_hit=hit)
 
 
 @cli.command()
 @click.argument("keyword")
 @click.option("--limit", default=25, show_default=True, help="Max results to show.")
 @click.option("--json", "as_json", is_flag=True, help="Emit JSON.")
-def title(keyword: str, limit: int, as_json: bool) -> None:
+@cache_options
+def title(
+    keyword: str,
+    limit: int,
+    as_json: bool,
+    refresh: bool,
+    cache_ttl_hours: float | None,
+) -> None:
     """Search PERSI by article-title keyword, e.g. persi title Lincoln."""
-    page = fetch(TITLE_URL, {"keyword": keyword, "sort": "title", "submit": "Search"}, BASE + "/search_persiarttitle.php")
-    emit(parse_articles(page), as_json, limit)
+    ttl = resolve_ttl_hours(cache_ttl_hours)
+
+    def _fetch() -> dict:
+        page = fetch(
+            TITLE_URL,
+            {"keyword": keyword, "sort": "title", "submit": "Search"},
+            BASE + "/search_persiarttitle.php",
+        )
+        return {"articles": parse_articles(page)}
+
+    data, hit = cached_call(
+        "title",
+        {"keyword": keyword.strip().lower()},
+        _fetch,
+        refresh=refresh,
+        ttl_hours=ttl,
+        cacheable=lambda r: bool(r.get("articles")),
+    )
+    emit(data.get("articles") or [], as_json, limit, cache_hit=hit)
 
 
 @cli.command()
 @click.option("--state", required=True, help="Two-letter state code, e.g. MI. GEN for US general.")
 @click.option("--county", default="", help="County name (optional; leave blank for statewide).")
 @click.option("--json", "as_json", is_flag=True, help="Emit JSON.")
-def location(state: str, county: str, as_json: bool) -> None:
+@cache_options
+def location(
+    state: str,
+    county: str,
+    as_json: bool,
+    refresh: bool,
+    cache_ttl_hours: float | None,
+) -> None:
     """List PERSI article counts by category for a state/county.
 
     Returns category counts, not articles: pick a category on the website
@@ -230,18 +426,31 @@ def location(state: str, county: str, as_json: bool) -> None:
     state = state.upper()
     if state not in US_STATES:
         raise click.ClickException(f"Unknown state code: {state}")
-    page = fetch(
-        LOCATION_URL,
-        {
-            "subloc": "USA",
-            "cosearch": "USA",
-            "usloc": state,
-            "county": county,
-            "submit": "Search",
-        },
-        BASE + "/search_persilocation.php",
+    ttl = resolve_ttl_hours(cache_ttl_hours)
+
+    def _fetch() -> dict:
+        page = fetch(
+            LOCATION_URL,
+            {
+                "subloc": "USA",
+                "cosearch": "USA",
+                "usloc": state,
+                "county": county,
+                "submit": "Search",
+            },
+            BASE + "/search_persilocation.php",
+        )
+        return {"categories": parse_categories(page)}
+
+    data, hit = cached_call(
+        "location",
+        {"state": state, "county": county.strip().lower()},
+        _fetch,
+        refresh=refresh,
+        ttl_hours=ttl,
+        cacheable=lambda r: bool(r.get("categories")),
     )
-    cats = parse_categories(page)
+    cats = data.get("categories") or []
     if not cats:
         click.echo(
             "No category counts returned. The county value may not match "
@@ -249,7 +458,7 @@ def location(state: str, county: str, as_json: bool) -> None:
             "website form."
         )
         sys.exit(1)
-    emit(cats, as_json, len(cats))
+    emit(cats, as_json, len(cats), cache_hit=hit)
 
 
 @cli.command("search")
@@ -260,6 +469,7 @@ def location(state: str, county: str, as_json: bool) -> None:
 @click.option("--county", default="", help="County name (used with --state).")
 @click.option("--limit", default=25, show_default=True, help="Max results to show.")
 @click.option("--json", "as_json", is_flag=True, help="Emit JSON.")
+@cache_options
 @click.pass_context
 def search_cmd(
     ctx: click.Context,
@@ -270,6 +480,8 @@ def search_cmd(
     county: str,
     limit: int,
     as_json: bool,
+    refresh: bool,
+    cache_ttl_hours: float | None,
 ) -> None:
     """Convenience router to `surname`, `title`, or `location` search."""
     if state and (query or surname_opt or title_opt):
@@ -278,14 +490,35 @@ def search_cmd(
             "Use `persi surname <SURNAME>`, `persi title <KEYWORD>`, or `persi location --state <ST>` separately."
         )
     if state:
-        ctx.invoke(location, state=state, county=county, as_json=as_json)
+        ctx.invoke(
+            location,
+            state=state,
+            county=county,
+            as_json=as_json,
+            refresh=refresh,
+            cache_ttl_hours=cache_ttl_hours,
+        )
         return
     if title_opt:
-        ctx.invoke(title, keyword=title_opt, limit=limit, as_json=as_json)
+        ctx.invoke(
+            title,
+            keyword=title_opt,
+            limit=limit,
+            as_json=as_json,
+            refresh=refresh,
+            cache_ttl_hours=cache_ttl_hours,
+        )
         return
     target_surname = surname_opt or query
     if target_surname:
-        ctx.invoke(surname, surname=target_surname, limit=limit, as_json=as_json)
+        ctx.invoke(
+            surname,
+            surname=target_surname,
+            limit=limit,
+            as_json=as_json,
+            refresh=refresh,
+            cache_ttl_hours=cache_ttl_hours,
+        )
         return
     raise click.UsageError("Pass a surname, --title <KEYWORD>, or --state <ST>.")
 

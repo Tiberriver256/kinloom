@@ -93,9 +93,16 @@ Check the rights string before promising a readable copy. A title can be in Hath
 - URL scheme: `https://babel.hathitrust.org/cgi/htd/<resource>/<id>[/<fileid|seq>]`.
 - The CLI does not implement the Data API. If a Full View volume is needed as OCR text, first try the item URL in a browser; request a key only if programmatic bulk access is genuinely needed.
 
-## Environment variables
+## Disk cache and environment variables
 
-- None. The Bibliographic API needs no key and the CLI reads no environment variables.
+`bib` caches successful non-empty Bibliographic API lookups per identifier on disk under `~/.cache/kinloom-hathi/` (default TTL `168` hours, advisory `flock` per cache key, atomic temp-file writes). HTTP errors, non-JSON responses, and empty/error payloads are never cached.
+
+- `--refresh`: bypass cached reads and write the fresh response to disk.
+- `--cache-ttl-hours <hours>`: override TTL for one call (`0` disables cached reads).
+- `KINLOOM_HATHI_CACHE_DIR`: override the cache directory path.
+- `KINLOOM_HATHI_CACHE_TTL_HOURS`: override the default TTL in hours.
+
+No API key or login is needed for the Bibliographic API.
 
 ## Research workflow notes
 
