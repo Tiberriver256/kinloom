@@ -72,6 +72,7 @@ written narrative already has them.
 | £470 | 470 pounds (otherwise TTS says "lb") |
 | ca. / c. / b. / decd / Co. | circa or about / born / deceased / County |
 | Jr. / Sr. / Capt. | Junior / Senior / Captain |
+| U.S. Patent No. 6,469 | United States Patent number six thousand four hundred sixty-nine |
 | 21+ / & | twenty-one or older / and |
 | "Zero primary records…" | "No primary records…" |
 

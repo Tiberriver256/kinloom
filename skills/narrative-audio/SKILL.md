@@ -81,6 +81,7 @@ writing a script.
 - **£ is read as "lb".** For example, "£682.5.2" came out as "682.5 lb and 2 pence".
   Write the money out in full.
 - **Dates:** "9 May" can come out as "nine May". Write ordinals ("May ninth").
+- **Comma-grouped numbers pause in Chirp 3: HD:** "Patent number 6,469" is spoken as "Patent number six [pause] four hundred sixty-nine" because Chirp treats the thousands comma as a clause break. Spell out comma-grouped numbers in words (and `synth`'s `speak_numbers()` preprocessor automatically expands any that slip through).
 - **Inline IPA in slashes works well for names.** The voice pronounces it rather than
   reading the symbols out, and the audio length stays the same. Plain-English respellings
   ("Dool-hah-gen") are less dependable.

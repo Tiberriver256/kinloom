@@ -89,6 +89,45 @@ def speak_dates(text: str) -> str:
     )
 
 
+_ONES = (
+    "zero one two three four five six seven eight nine ten eleven twelve "
+    "thirteen fourteen fifteen sixteen seventeen eighteen nineteen"
+).split()
+_TENS = ("", "", "twenty", "thirty", "forty", "fifty", "sixty", "seventy", "eighty", "ninety")
+
+
+def _int_to_words(n: int) -> str:
+    if n < 20:
+        return _ONES[n]
+    if n < 100:
+        t, r = divmod(n, 10)
+        return _TENS[t] if r == 0 else f"{_TENS[t]}-{_ONES[r]}"
+    if n < 1000:
+        h, r = divmod(n, 100)
+        return f"{_ONES[h]} hundred" if r == 0 else f"{_ONES[h]} hundred {_int_to_words(r)}"
+    for scale_val, scale_name in ((1_000_000_000, "billion"), (1_000_000, "million"), (1000, "thousand")):
+        if n >= scale_val:
+            q, r = divmod(n, scale_val)
+            head = f"{_int_to_words(q)} {scale_name}"
+            return head if r == 0 else f"{head} {_int_to_words(r)}"
+    return str(n)
+
+
+def speak_numbers(text: str) -> str:
+    """Expand abbreviations ('U.S.', 'No.') and comma-grouped numbers ('6,469') for TTS.
+
+    Chirp 3: HD treats commas inside digits like '6,469' as a clause pause
+    ('six [pause] four hundred sixty-nine'). Expanding them to words prevents it.
+    """
+    text = re.sub(r"\bU\.S\.(?=\s|$)", "United States", text)
+    text = re.sub(r"\bNo\.\s*(?=\d)", "number ", text)
+    return re.sub(
+        r"\b\d{1,3}(?:,\d{3})+\b",
+        lambda m: _int_to_words(int(m.group(0).replace(",", ""))),
+        text,
+    )
+
+
 def apply_names(text: str, names: dict[str, str]) -> str:
     """Replace each name with its IPA string, longest keys first, whole words only."""
     for name, ipa in sorted(names.items(), key=lambda kv: -len(kv[0])):
@@ -279,7 +318,8 @@ def check(script: str, names: str | None) -> None:
         "s./d. money abbreviation": r"\b\d+[sd]\.",
         "citation remnant": r"\b(Lib\.|Vol\.|pp?\.\s*\d|DB \d|FHL|Book \d+)",
         "slash (write 'or')": r"\S/\S",
-        "abbreviation to spell out": r"\b(ca\.|b\.|d\.|decd|Co\.|Jr\.|Sr\.|Capt\.)(?=\s|$)",
+        "comma-grouped number (Chirp pauses on commas; spell out in words)": r"\b\d{1,3}(?:,\d{3})+\b",
+        "abbreviation to spell out": r"\b(ca\.|b\.|d\.|decd|Co\.|Jr\.|Sr\.|Capt\.|U\.S\.|No\.)(?=\s|$)",
         "markdown emphasis or link": r"[*_`]|\]\(",
         "quotation mark": r"[\"“”]",
     }
@@ -350,7 +390,7 @@ def synth(script, names, out, backend, language_code, gcp_project, model, voice,
     # For Gemini TTS, substitute inline /IPA/ into text; for Chirp 3: HD, pass
     # structured customPronunciations so prose stays unmodified.
     prepared = apply_names(raw_text, names_map) if (backend == "gemini" and names_map) else raw_text
-    prepared = speak_dates(prepared)
+    prepared = speak_numbers(speak_dates(prepared))
     sections, notes = split_script(prepared)
 
     # Build (text, voice, pause_before, is_notes) chunks
