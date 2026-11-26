@@ -20,6 +20,7 @@ import {
 import type { R2Bucket } from '../types.js';
 
 export const DEFAULT_COMPILED_BUNDLE_KEY = 'compiled/archive.json';
+const MAX_R2_STORE_ATTEMPTS = 5;
 
 export interface R2IncrementalPatchBundleCacheOptions {
   bucket: R2Bucket;
@@ -209,32 +210,66 @@ export class R2IncrementalPatchBundleCache implements BundleCache {
     const encoded = new TextEncoder().encode(serialized);
     const etag = `"r${headRevisionId}-${this.configHash}"`;
 
-    await this.bucket.put(this.key, encoded, {
-      httpMetadata: {
-        contentType: 'application/json; charset=utf-8',
-      },
-      customMetadata: {
-        revision: String(headRevisionId),
-        config_hash: this.configHash,
-        etag,
-        generated_at: generatedAt,
-      },
-    });
+    for (let attempt = 0; attempt < MAX_R2_STORE_ATTEMPTS; attempt += 1) {
+      const existingHead = await this.bucket.head(this.key);
+      if (existingHead) {
+        const existingRev = parseRevisionMetadata(existingHead.customMetadata?.revision);
+        const sameConfig = existingHead.customMetadata?.config_hash === this.configHash;
+        if (sameConfig && existingRev !== null && existingRev > headRevisionId) {
+          const fresher = await this.getCached(null);
+          if (fresher.status === 'hit') {
+            return fresher.object;
+          }
+          continue;
+        }
+      }
 
-    let memos = storedBundleMemos.get(this.bucket);
-    if (!memos) {
-      memos = new Map();
-      storedBundleMemos.set(this.bucket, memos);
+      const putResult = await this.bucket.put(this.key, encoded, {
+        onlyIf: existingHead
+          ? { etagMatches: existingHead.etag }
+          : { etagDoesNotMatch: '*' },
+        httpMetadata: {
+          contentType: 'application/json; charset=utf-8',
+        },
+        customMetadata: {
+          revision: String(headRevisionId),
+          config_hash: this.configHash,
+          etag,
+          generated_at: generatedAt,
+        },
+      });
+
+      if (putResult !== null) {
+        let memos = storedBundleMemos.get(this.bucket);
+        if (!memos) {
+          memos = new Map();
+          storedBundleMemos.set(this.bucket, memos);
+        }
+        memos.set(this.memoKey, {
+          revision: headRevisionId,
+          etag,
+          generatedAt,
+          serialized,
+          byteLength: encoded.byteLength,
+          bundle,
+          bytes: encoded,
+        });
+
+        return {
+          etag,
+          revision_id: headRevisionId,
+          body: serialized,
+          byteLength: encoded.byteLength,
+          generated_at: generatedAt,
+          parsedBundle: bundle,
+        };
+      }
     }
-    memos.set(this.memoKey, {
-      revision: headRevisionId,
-      etag,
-      generatedAt,
-      serialized,
-      byteLength: encoded.byteLength,
-      bundle,
-      bytes: encoded,
-    });
+
+    const latest = await this.getCached(null);
+    if (latest.status === 'hit' && latest.object.revision_id >= headRevisionId) {
+      return latest.object;
+    }
 
     return {
       etag,

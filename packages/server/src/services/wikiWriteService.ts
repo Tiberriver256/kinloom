@@ -1405,15 +1405,20 @@ export class WikiWriteService {
     if (this.bundleCache.applyMutationsAndStore && committedRevisions.length > 0) {
       const cached = await this.bundleCache.getCached(null);
       const firstNewRevId = committedRevisions[0].revision_id;
-      if (cached.status === 'hit' && cached.object.revision_id === firstNewRevId - 1) {
-        const previousBundle =
-          cached.object.parsedBundle ??
-          (JSON.parse(await readBodyToString(cached.object.body)) as ArchiveBundle);
-        const patched = await this.bundleCache.applyMutationsAndStore(
-          previousBundle,
-          committedRevisions
-        );
-        return patched.etag;
+      if (cached.status === 'hit') {
+        if (cached.object.revision_id === firstNewRevId - 1) {
+          const previousBundle =
+            cached.object.parsedBundle ??
+            (JSON.parse(await readBodyToString(cached.object.body)) as ArchiveBundle);
+          const patched = await this.bundleCache.applyMutationsAndStore(
+            previousBundle,
+            committedRevisions
+          );
+          return patched.etag;
+        }
+        if (typeof cached.object.body !== 'string') {
+          await cached.object.body.cancel().catch(() => undefined);
+        }
       }
     }
 

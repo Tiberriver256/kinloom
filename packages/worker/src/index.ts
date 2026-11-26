@@ -58,6 +58,7 @@ export type {
   Fetcher,
   KinloomWorkerEnv,
   R2Bucket,
+  R2Conditional,
   R2GetOptions,
   R2HTTPMetadata,
   R2Object,

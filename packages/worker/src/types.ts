@@ -57,7 +57,15 @@ export interface R2GetOptions {
   range?: R2Range | Headers;
 }
 
+export interface R2Conditional {
+  etagMatches?: string;
+  etagDoesNotMatch?: string;
+  uploadedBefore?: Date;
+  uploadedAfter?: Date;
+}
+
 export interface R2PutOptions {
+  onlyIf?: R2Conditional | Headers;
   httpMetadata?: R2HTTPMetadata | Headers;
   customMetadata?: Record<string, string>;
 }
