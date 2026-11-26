@@ -195,7 +195,7 @@ afterEach(async () => {
 });
 
 describe('record command registry and discovery', () => {
-  it('registers all 20 skills on disk plus prep-scan and ocr with zero missing files', () => {
+  it('registers all 21 skills on disk plus prep-scan and ocr with zero missing files', () => {
     const skillDirsOnDisk = fs
       .readdirSync(SKILLS_ROOT, { withFileTypes: true })
       .filter((entry) => entry.isDirectory())
@@ -208,9 +208,9 @@ describe('record command registry and discovery', () => {
       .map((spec) => spec.skillDir)
       .sort();
 
-    expect(skillDirsOnDisk).toHaveLength(20);
+    expect(skillDirsOnDisk).toHaveLength(21);
     expect(registeredSkillDirs).toEqual(skillDirsOnDisk);
-    expect(RECORD_COMMAND_SPECS).toHaveLength(22);
+    expect(RECORD_COMMAND_SPECS).toHaveLength(23);
 
     for (const spec of RECORD_COMMAND_SPECS) {
       const guidePath = resolveRecordGuidePath(spec);
@@ -307,7 +307,7 @@ Body text here.`;
     expect(iaHelp).toContain('Aliases: kinloom ia');
   });
 
-  it('formats a grouped help catalog containing all 22 commands', () => {
+  it('formats a grouped help catalog containing all 23 commands', () => {
     const catalog = formatRecordCommandsHelp();
     expect(catalog).toContain('Federal & general record archives:');
     expect(catalog).toContain('State archives:');
@@ -863,14 +863,14 @@ describe('offline-first uv fast-path with cold-cache online retry', () => {
 });
 
 describe('bundle-skills.mjs and dual-mode bundled resolution', () => {
-  it('bundles all 20 skills and 4 assets into a temp dist dir with executable script bits', async () => {
+  it('bundles all 21 skills and 4 assets into a temp dist dir with executable script bits', async () => {
     const tmpOut = await makeTempDir('kinloom-bundle-test-');
     const cliStubPath = path.join(tmpOut, 'cli.js');
     await writeFile(cliStubPath, '#!/usr/bin/env node\n', { encoding: 'utf8', mode: 0o644 });
     const output = execFileSync(process.execPath, [BUNDLE_SCRIPT, '--out-dir', tmpOut], {
       encoding: 'utf8',
     });
-    expect(output).toContain('Bundled 20 skills (18 scripts, 1 references) and 4 assets');
+    expect(output).toContain('Bundled 21 skills (19 scripts, 1 references) and 4 assets');
     expect(fs.statSync(cliStubPath).mode & 0o111).not.toBe(0);
 
     const fakeDistModuleDir = path.join(tmpOut, 'commands', 'records');
@@ -2095,12 +2095,13 @@ describe('bundled Python utilities and live script execution', () => {
     expect(result.stderr).toMatch(/\bOK\b/);
   });
 
-  it('passes hathi, persi, texas-archives, and uk-archives disk-caching unit tests', () => {
+  it('passes hathi, persi, texas-archives, uk-archives, and mn-archives disk-caching and safety unit tests', () => {
     const testFiles = [
       path.join(SKILLS_ROOT, 'hathitrust', 'tests', 'test_hathi.py'),
       path.join(SKILLS_ROOT, 'acpl-persi', 'tests', 'test_persi.py'),
       path.join(SKILLS_ROOT, 'texas-archives', 'tests', 'test_texas_archives.py'),
       path.join(SKILLS_ROOT, 'uk-archives', 'tests', 'test_uk_archives.py'),
+      path.join(SKILLS_ROOT, 'minnesota-archives', 'tests', 'test_mn_archives.py'),
     ];
     let pyCmd = 'python3';
     let pyPrefix: string[] = [];

@@ -122,7 +122,7 @@ export const RECORD_COMMAND_SPECS: readonly RecordCommandSpec[] = [
     summary: 'Search ACPL Periodical Source Index (PERSI) genealogy articles',
   },
 
-  // State archives (7)
+  // State archives (8)
   {
     kind: 'skill-script',
     command: 'ca-archives',
@@ -149,6 +149,15 @@ export const RECORD_COMMAND_SPECS: readonly RecordCommandSpec[] = [
     skillDir: 'library-of-michigan',
     scriptName: 'michiganology',
     summary: 'Search Library of Michigan and Michiganology digital collections',
+  },
+  {
+    kind: 'skill-script',
+    command: 'mn-archives',
+    aliases: [],
+    category: 'state-archives',
+    skillDir: 'minnesota-archives',
+    scriptName: 'mn_archives.py',
+    summary: 'Search Minnesota Historical Society People Records and Digital Newspaper Hub',
   },
   {
     kind: 'skill-script',

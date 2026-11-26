@@ -35,6 +35,9 @@ import { normalizeMediaFilePath } from './live-media-collisions.js';
 import {
   collectLivingNameHitsWithMatcher,
   compileLivingNameMatcher,
+  computeSourceMaxYearById,
+  extractLatestEdtfYear,
+  resolveNarrativeMaxYear,
   type LivingNameHit,
   type LivingNameTarget,
 } from './living-name-matcher.js';
@@ -350,19 +353,6 @@ export function verifyMediaFilesOnDisk(
   };
 }
 
-const NARRATIVE_POSTHUMOUS_HORIZON_YEARS = 100;
-
-function extractLatestEdtfYear(raw: string | null | undefined): number | null {
-  if (typeof raw !== 'string') {
-    return null;
-  }
-  const years = [...raw.matchAll(/\b(\d{4})\b/g)].map((match) => Number(match[1]));
-  if (years.length === 0) {
-    return null;
-  }
-  return Math.max(...years);
-}
-
 function pushTextTarget(
   targets: LivingNameTarget[],
   location: string,
@@ -423,62 +413,24 @@ export function scanPublicLivingNames(input: {
   });
 
   const eventMaxYearById = new Map<string, number | null>();
-  const sourceEventYears = new Map<string, Array<number | null>>();
   for (const event of input.events) {
-    const eventYear = extractLatestEdtfYear(event.edtf_date);
-    eventMaxYearById.set(event.id, eventYear);
-    for (const ref of event.sources) {
-      const years = sourceEventYears.get(ref.source_id) ?? [];
-      years.push(eventYear);
-      sourceEventYears.set(ref.source_id, years);
-    }
+    eventMaxYearById.set(event.id, extractLatestEdtfYear(event.edtf_date));
   }
-
-  const sourceMaxYearById = new Map<string, number | null>();
-  for (const [sourceId, years] of sourceEventYears) {
-    if (years.length > 0 && years.every((year): year is number => typeof year === 'number')) {
-      sourceMaxYearById.set(sourceId, Math.max(...years));
-    } else {
-      sourceMaxYearById.set(sourceId, null);
-    }
-  }
-
-  const resolveNarrativeMaxYear = (narrative: Narrative): number | null => {
-    const subjectIds = [
-      ...(narrative.subject_person_id ? [narrative.subject_person_id] : []),
-      ...narrative.person_ids,
-    ];
-    if (subjectIds.length === 0) {
-      return null;
-    }
-    let maxDeathYear: number | null = null;
-    for (const personId of subjectIds) {
-      if (livingIds.has(personId)) {
-        return null;
-      }
-      const person = peopleById.get(personId);
-      const deathYear = extractLatestEdtfYear(person?.death_edtf);
-      if (deathYear === null) {
-        return null;
-      }
-      maxDeathYear = maxDeathYear === null ? deathYear : Math.max(maxDeathYear, deathYear);
-    }
-    if (maxDeathYear === null) {
-      return null;
-    }
-    let narrativeMaxYear = maxDeathYear + NARRATIVE_POSTHUMOUS_HORIZON_YEARS;
-    for (const eventId of narrative.event_ids) {
-      const eventYear = eventMaxYearById.get(eventId);
-      if (typeof eventYear === 'number' && eventYear > narrativeMaxYear) {
-        narrativeMaxYear = eventYear;
-      }
-    }
-    return narrativeMaxYear;
-  };
+  const sourceMaxYearById = computeSourceMaxYearById(input.events);
+  const deathYearByPersonId = new Map<string, number | null>(
+    input.people.map((person) => [person.id, extractLatestEdtfYear(person.death_edtf)])
+  );
 
   const targets: LivingNameTarget[] = [];
   for (const narrative of [...publicNarratives].toSorted((a, b) => a.id.localeCompare(b.id))) {
-    const narrativeMaxYear = resolveNarrativeMaxYear(narrative);
+    const narrativeMaxYear = resolveNarrativeMaxYear({
+      subjectPersonId: narrative.subject_person_id,
+      personIds: narrative.person_ids,
+      eventIds: narrative.event_ids,
+      livingIds,
+      deathYearByPersonId,
+      eventMaxYearById,
+    });
     pushTextTarget(targets, `narrative:${narrative.id}:title`, narrative.title, narrativeMaxYear);
     pushTextTarget(targets, `narrative:${narrative.id}:summary`, narrative.summary, narrativeMaxYear);
     pushTextTarget(targets, `narrative:${narrative.id}:body_md`, narrative.body_md, narrativeMaxYear);

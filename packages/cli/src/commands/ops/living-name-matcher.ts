@@ -29,7 +29,103 @@ export interface CompiledLivingNameMatcher {
   derivedRules: DerivedLivingNameRule[];
 }
 
+export const NARRATIVE_POSTHUMOUS_HORIZON_YEARS = 100;
+
+export interface NarrativeMaxYearInput {
+  subjectPersonId?: string | null;
+  personIds: readonly string[];
+  eventIds: readonly string[];
+  livingIds: ReadonlySet<string>;
+  deathYearByPersonId: ReadonlyMap<string, number | null>;
+  eventMaxYearById: ReadonlyMap<string, number | null>;
+}
+
+export interface SourceCitingEventLike {
+  edtf_date?: unknown;
+  sources?: unknown;
+}
+
 const MAX_LIVING_NAME_HITS = 50;
+
+export function extractLatestEdtfYear(raw: unknown): number | null {
+  if (typeof raw !== 'string') {
+    return null;
+  }
+  const years = [...raw.matchAll(/\b(\d{4})\b/g)].map((match) => Number(match[1]));
+  if (years.length === 0) {
+    return null;
+  }
+  return Math.max(...years);
+}
+
+export function computeSourceMaxYearById(
+  events: readonly SourceCitingEventLike[]
+): Map<string, number | null> {
+  const sourceEventYears = new Map<string, Array<number | null>>();
+  for (const event of events) {
+    const eventYear = extractLatestEdtfYear(event.edtf_date);
+    const rawSources = Array.isArray(event.sources) ? event.sources : [];
+    for (const ref of rawSources) {
+      let sourceId = '';
+      if (typeof ref === 'string') {
+        sourceId = ref.trim();
+      } else if (typeof ref === 'object' && ref !== null && 'source_id' in ref) {
+        const candidate = (ref as { source_id?: unknown }).source_id;
+        if (typeof candidate === 'string') {
+          sourceId = candidate.trim();
+        }
+      }
+      if (!sourceId) {
+        continue;
+      }
+      const years = sourceEventYears.get(sourceId) ?? [];
+      years.push(eventYear);
+      sourceEventYears.set(sourceId, years);
+    }
+  }
+
+  const sourceMaxYearById = new Map<string, number | null>();
+  for (const [sourceId, years] of sourceEventYears) {
+    if (years.length > 0 && years.every((year): year is number => typeof year === 'number')) {
+      sourceMaxYearById.set(sourceId, Math.max(...years));
+    } else {
+      sourceMaxYearById.set(sourceId, null);
+    }
+  }
+  return sourceMaxYearById;
+}
+
+export function resolveNarrativeMaxYear(input: NarrativeMaxYearInput): number | null {
+  const subjectIds = [
+    ...(input.subjectPersonId ? [input.subjectPersonId] : []),
+    ...input.personIds,
+  ];
+  if (subjectIds.length === 0) {
+    return null;
+  }
+  let maxDeathYear: number | null = null;
+  for (const personId of subjectIds) {
+    if (input.livingIds.has(personId)) {
+      return null;
+    }
+    const deathYear = input.deathYearByPersonId.get(personId) ?? null;
+    if (deathYear === null) {
+      return null;
+    }
+    maxDeathYear = maxDeathYear === null ? deathYear : Math.max(maxDeathYear, deathYear);
+  }
+  if (maxDeathYear === null) {
+    return null;
+  }
+  let narrativeMaxYear = maxDeathYear + NARRATIVE_POSTHUMOUS_HORIZON_YEARS;
+  for (const eventId of input.eventIds) {
+    const eventYear = input.eventMaxYearById.get(eventId);
+    if (typeof eventYear === 'number' && eventYear > narrativeMaxYear) {
+      narrativeMaxYear = eventYear;
+    }
+  }
+  return narrativeMaxYear;
+}
 
 function trimmedNameTokens(value: unknown): string[] {
   if (typeof value !== 'string') {

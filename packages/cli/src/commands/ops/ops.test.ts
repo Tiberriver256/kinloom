@@ -3360,6 +3360,210 @@ describe('ops/audit', () => {
       'Clara Elizabeth Maple',
     ]);
   });
+
+  it('skips derived First Surname on 1791 patch records while still flagging exact names and 1960/undated derived hits', async () => {
+    const repoDir = await createSyntheticRepo();
+    const people = parsePeopleYaml(await readFile(path.join(repoDir, 'data', 'people.yaml'), 'utf8'));
+    const clara = people.find((person) => person.id === 'per_clara_maple_living');
+    if (!clara) {
+      throw new Error('fixture missing per_clara_maple_living');
+    }
+    clara.full_name = 'Clara Elizabeth Maple';
+    clara.given_name = 'Clara Elizabeth';
+    clara.surname = 'Maple';
+    clara.alt_names = [];
+    clara.is_living = false;
+    clara.birth_edtf = '1954-07-08';
+    clara.death_edtf = '';
+    people.push({
+      id: 'per_ezra_maple_1720',
+      slug: 'ezra-maple-1720',
+      gedcom_xref: '@I100020@',
+      full_name: 'Ezra Maple',
+      given_name: 'Ezra',
+      surname: 'Maple',
+      alt_names: [],
+      sex: 'M',
+      is_living: false,
+      lineage_group: 'ancestor',
+      birth_edtf: '1720',
+      death_edtf: '1795-11-01',
+      portrait_url: null,
+    });
+    await writeFile(
+      path.join(repoDir, 'data', 'people.yaml'),
+      serializePeopleYaml(people, { sortById: true }),
+      'utf8'
+    );
+
+    // Add a live 1789 event so patch media without date_edtf inherits its date from live events.yaml.
+    const liveEvents = parseEventsYaml(
+      await readFile(path.join(repoDir, 'data', 'events.yaml'), 'utf8')
+    );
+    liveEvents.push({
+      id: 'evt_1789_deed',
+      title: 'Ezra Maple land deed',
+      scope: 'family',
+      event_kind: 'point_event',
+      edtf_date: '1789-05-03',
+      place_id: 'plc_oak_county_ohio',
+      summary: 'Ezra Maple purchased farmland in Oak County.',
+      participants: [{ person_id: 'per_ezra_maple_1720', role: 'principal' }],
+      sources: [{ source_id: 'src_1880_census', confidence: 'medium' }],
+    });
+    await writeFile(
+      path.join(repoDir, 'data', 'events.yaml'),
+      serializeEventsYaml(liveEvents, { sortById: true }),
+      'utf8'
+    );
+
+    const packageDir = path.join(repoDir, 'research', 'people', 'per_ezra_maple_1720');
+    await mkdir(path.join(packageDir, 'scans'), { recursive: true });
+    await writeFile(path.join(packageDir, 'scans', 'bond-1791.png'), makeMinimalPng(40, 40));
+    await writeFile(path.join(packageDir, 'scans', 'deed-1789.png'), makeMinimalPng(40, 40));
+    await writeFile(
+      path.join(packageDir, 'dossier.md'),
+      '# Ezra Maple (1720-1795)\n\nEzra Maple consented for daughter Clara Maple in 1791.\n',
+      'utf8'
+    );
+
+    const basePatch = {
+      person_id: 'per_ezra_maple_1720',
+      person_updates: {
+        extensions: {
+          research_note: '1791 bond lists daughter Clara Maple.',
+        },
+      },
+      sources: [
+        {
+          id: 'src_1791_bond',
+          citation: 'Oak County Marriage Bond, 14 Feb 1791: Clara Maple married John Roe.',
+          source_type: 'vital_record',
+          repository: 'County Clerk',
+        },
+      ],
+      events: [
+        {
+          id: 'evt_1791_marriage',
+          title: 'Marriage bond mentioning Clara Maple',
+          scope: 'family',
+          event_kind: 'point_event',
+          edtf_date: '1791-02-14',
+          place_id: 'plc_oak_county_ohio',
+          summary: 'Ezra Maple consented for daughter Clara Maple.',
+          participants: [{ person_id: 'per_ezra_maple_1720', role: 'witness' }],
+          sources: [{ source_id: 'src_1791_bond', confidence: 'high' }],
+        },
+      ],
+      media: [
+        {
+          id: 'med_1791_bond',
+          kind: 'document_scan',
+          source_id: 'src_1791_bond',
+          person_id: 'per_ezra_maple_1720',
+          event_id: 'evt_1791_marriage',
+          date_edtf: '1791-02-14',
+          file: '/media/bond-1791.png',
+          caption: '1791 bond for Clara Maple',
+        },
+        {
+          id: 'med_1789_deed',
+          kind: 'document_scan',
+          source_id: 'src_1880_census',
+          person_id: 'per_ezra_maple_1720',
+          event_id: 'evt_1789_deed',
+          file: '/media/deed-1789.png',
+          caption: '1789 deed witnessed by Clara Maple',
+        },
+      ],
+      narratives: [
+        {
+          id: 'nar_ezra_bio',
+          slug: 'ezra-maple-bio',
+          kind: 'biography',
+          subject_person_id: 'per_ezra_maple_1720',
+          title: 'Ezra Maple (1720-1795)',
+          person_ids: ['per_ezra_maple_1720'],
+          place_ids: ['plc_oak_county_ohio'],
+          event_ids: ['evt_1791_marriage'],
+          source_ids: ['src_1791_bond'],
+          body_md: 'Ezra Maple witnessed Clara Maple marry in 1791.[^src_1791_bond|med_1791_bond]',
+        },
+      ],
+    };
+
+    await writeFile(path.join(packageDir, 'patch.json'), JSON.stringify(basePatch, null, 2), 'utf8');
+    const cleanAudit = await runAuditCommand({
+      repoDir,
+      personId: 'per_ezra_maple_1720',
+      json: true,
+    });
+    expect(cleanAudit.checks.privacy.livingNameHits).toEqual([]);
+    expect(cleanAudit.checks.privacy.ok).toBe(true);
+    expect(cleanAudit.ok).toBe(true);
+
+    // Exact full name on 1791 text still fails audit.
+    const exactLeakPatch = structuredClone(basePatch);
+    exactLeakPatch.events[0]!.summary = 'Leaked exact name Clara Elizabeth Maple in 1791 text.';
+    await writeFile(
+      path.join(packageDir, 'patch.json'),
+      JSON.stringify(exactLeakPatch, null, 2),
+      'utf8'
+    );
+    const exactLeakAudit = await runAuditCommand({
+      repoDir,
+      personId: 'per_ezra_maple_1720',
+      json: true,
+    });
+    expect(exactLeakAudit.ok).toBe(false);
+    expect(exactLeakAudit.checks.privacy.ok).toBe(false);
+    expect(exactLeakAudit.checks.privacy.livingNameHits).toEqual([
+      { location: 'patch.events[0].summary', match: 'Clara Elizabeth Maple' },
+    ]);
+
+    // Derived First Surname on a 1960 event and an undated event still fails audit.
+    const recentAndUndatedPatch = structuredClone(basePatch);
+    recentAndUndatedPatch.events.push(
+      {
+        id: 'evt_1960_memorial',
+        title: 'Memorial attended by Clara Maple',
+        scope: 'family',
+        event_kind: 'point_event',
+        edtf_date: '1960-08-01',
+        place_id: 'plc_oak_county_ohio',
+        summary: 'Memorial plaque dedicated.',
+        participants: [{ person_id: 'per_ezra_maple_1720', role: 'subject' }],
+        sources: [{ source_id: 'src_1880_census', confidence: 'low' }],
+      },
+      {
+        id: 'evt_undated_note',
+        title: 'Undated family record mentioning Clara Maple',
+        scope: 'family',
+        event_kind: 'point_event',
+        edtf_date: '',
+        place_id: 'plc_oak_county_ohio',
+        summary: 'No date recorded.',
+        participants: [{ person_id: 'per_ezra_maple_1720', role: 'mentioned' }],
+        sources: [{ source_id: 'src_1880_census', confidence: 'low' }],
+      }
+    );
+    await writeFile(
+      path.join(packageDir, 'patch.json'),
+      JSON.stringify(recentAndUndatedPatch, null, 2),
+      'utf8'
+    );
+    const recentAudit = await runAuditCommand({
+      repoDir,
+      personId: 'per_ezra_maple_1720',
+      json: true,
+    });
+    expect(recentAudit.ok).toBe(false);
+    expect(recentAudit.checks.privacy.ok).toBe(false);
+    expect(recentAudit.checks.privacy.livingNameHits).toEqual([
+      { location: 'patch.events[1].title', match: 'Clara Maple' },
+      { location: 'patch.events[2].title', match: 'Clara Maple' },
+    ]);
+  });
 });
 
 describe('ops/sync', () => {
