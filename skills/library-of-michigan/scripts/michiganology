@@ -12,32 +12,66 @@ Simple search is a stable GET: https://michigan.access.preservica.com/?s=<query>
 Results are server-rendered, so plain HTTP works, no browser and no key.
 Transport note: Preservica's front door 403s Python httpx requests (TLS
 fingerprint) while curl succeeds with any User-Agent, so this CLI shells out
-to curl for the fetch. curl must be installed; it is on any normal Unix box.
-Verified live 2026-11-24: simple search returns server-rendered HTML results.
+to curl with bounded retries, Retry-After support, and host allowlist checks.
+Verified live 2026-11-26: curl returns 200 while Python httpx returns 403.
 """
 
 from __future__ import annotations
 
+from contextlib import contextmanager
+from datetime import datetime, timezone
+from email.utils import parsedate_to_datetime
 import hashlib
-import html as htmlmod
 import json
 import math
 import os
+import random
 import re
 import shutil
 import subprocess
+import sys
 import tempfile
 import time
-from contextlib import contextmanager
 from html.parser import HTMLParser
 from pathlib import Path
 from typing import Any, Callable, Iterator
-from urllib.parse import quote_plus, unquote
+from urllib.parse import quote_plus, unquote, urlparse
 
 import click
 
 DEFAULT_CACHE_TTL_HOURS = 168.0
 CACHE_SCHEMA = 1
+BASE = "https://michigan.access.preservica.com"
+ALLOWED_HOSTS = frozenset({
+    "michigan.access.preservica.com",
+    "michiganology.org",
+    "www.michiganology.org",
+})
+# Preservica 403s python-httpx's TLS fingerprint. Plain curl headers return 200 consistently.
+USER_AGENT = "Mozilla/5.0"
+
+DEFAULT_TEXT_TIMEOUT = 120.0
+DEFAULT_DOWNLOAD_TIMEOUT = 180.0
+TEXT_ATTEMPT_CAP = 55.0
+DOWNLOAD_ATTEMPT_CAP = 90.0
+CONNECT_TIMEOUT = 15.0
+MAX_ATTEMPTS = 4
+BASE_BACKOFF_S = 0.25
+MAX_RETRY_AFTER_S = 30.0
+RETRYABLE_STATUS_CODES = frozenset({429, 500, 502, 503, 504, 520, 522, 524})
+RETRYABLE_CURL_EXITS = frozenset({6, 7, 18, 28, 35, 52, 55, 56, 92})
+
+_STATUS_MARKER = "\n__KINLOOM_HTTP_STATUS__:"
+_SAFE_ITEM_ID_RE = re.compile(r"^(?:IO|SO)_[A-Za-z0-9-]+$")
+_HTML_ERROR_PREFIXES = (b"<!doctype", b"<html", b"<head", b"<body", b"<title", b"<?xml")
+DOWNLOAD_FILE_EXTS = {".jpg", ".jpeg", ".png", ".tif", ".tiff", ".pdf"}
+
+SUBCOMMAND_ALIASES = {
+    "item": "get",
+    "show": "get",
+    "info": "get",
+    "fetch": "download",
+}
 
 
 def cache_dir() -> Path:
@@ -58,12 +92,86 @@ def resolve_ttl_hours(cli_ttl: float | None) -> float:
             parsed = float(raw.strip())
         except ValueError as exc:
             raise click.BadParameter(
-                f"Invalid KINLOOM_MICHIGANOLOGY_CACHE_TTL_HOURS value: {raw!r}.") from exc
+                f"Invalid KINLOOM_MICHIGANOLOGY_CACHE_TTL_HOURS value: {raw!r}."
+            ) from exc
         if not math.isfinite(parsed) or parsed < 0:
             raise click.BadParameter(
-                f"Invalid KINLOOM_MICHIGANOLOGY_CACHE_TTL_HOURS value: {raw!r} (must be >= 0).")
+                f"Invalid KINLOOM_MICHIGANOLOGY_CACHE_TTL_HOURS value: {raw!r} (must be >= 0)."
+            )
         return parsed
     return DEFAULT_CACHE_TTL_HOURS
+
+
+def validate_timeout(value: float) -> float:
+    if not math.isfinite(value) or value <= 0:
+        raise click.BadParameter(f"Invalid --timeout value: {value!r} (must be > 0).")
+    return float(value)
+
+
+def validate_michiganology_url(url: str) -> str:
+    """Allow only HTTPS URLs on verified Michiganology / Preservica hosts with no credentials."""
+    text = (url or "").strip()
+    if not text or "\x00" in text or any(ord(ch) < 32 for ch in text):
+        raise click.ClickException(f"Invalid Michiganology URL: {url!r}")
+    parsed = urlparse(text)
+    host = (parsed.hostname or "").lower()
+    if (
+        parsed.scheme != "https"
+        or not host
+        or parsed.port not in (None, 443)
+        or parsed.username
+        or parsed.password
+    ):
+        raise click.ClickException(f"Refusing to access non-HTTPS or disallowed URL: {text}")
+    if host not in ALLOWED_HOSTS:
+        raise click.ClickException(
+            f"Refusing to access disallowed host {host!r} (allowed: {', '.join(sorted(ALLOWED_HOSTS))}): {text}"
+        )
+    return text
+
+
+def validate_user_filename(filename: str) -> str:
+    """Reject path traversal or directory separators in user-provided --filename."""
+    if (
+        not filename
+        or "\x00" in filename
+        or "/" in filename
+        or "\\" in filename
+        or ":" in filename
+        or filename in (".", "..")
+        or ".." in filename
+    ):
+        raise click.BadParameter(f"Unsafe --filename value: {filename!r}")
+    return filename
+
+
+def sanitize_server_filename(raw: str, fallback: str) -> str:
+    """Turn a Content-Disposition filename into one safe path segment."""
+    candidate = (raw or "").replace("\\", "/")
+    base = candidate.rsplit("/", 1)[-1].strip().replace("..", "_")
+    base = re.sub(r"[^A-Za-z0-9._-]+", "_", base).strip("._")
+    if not base or base in {".", ".."} or ".." in base or "/" in base or "\\" in base:
+        return fallback
+    return base
+
+
+def resolve_safe_child(root: Path, filename: str) -> Path:
+    """Resolve one filename strictly inside root."""
+    if (
+        not filename
+        or "\x00" in filename
+        or "/" in filename
+        or "\\" in filename
+        or ":" in filename
+        or filename in (".", "..")
+        or ".." in filename
+    ):
+        raise click.ClickException(f"Unsafe filename: {filename!r}")
+    root_resolved = root.resolve()
+    dest = (root_resolved / filename).resolve()
+    if dest == root_resolved or not dest.is_relative_to(root_resolved):
+        raise click.ClickException(f"Unsafe path escaping {root}: {filename!r}")
+    return dest
 
 
 @contextmanager
@@ -128,9 +236,15 @@ def read_cache(path: Path, ttl_hours: float) -> dict | None:
     return result if isinstance(result, dict) else None
 
 
-def cached_call(kind: str, payload: dict, fetch: Callable[[], dict], *,
-                refresh: bool, ttl_hours: float,
-                cacheable: Callable[[dict], bool] = lambda _r: True) -> tuple[dict, bool]:
+def cached_call(
+    kind: str,
+    payload: dict,
+    fetch: Callable[[], dict],
+    *,
+    refresh: bool,
+    ttl_hours: float,
+    cacheable: Callable[[dict], bool] = lambda _r: True,
+) -> tuple[dict, bool]:
     """Return (result, cache_hit). Concurrent callers of one query serialize
     on a per-key flock, so the second caller reads the first caller's file.
     Exceptions from fetch propagate and write nothing; results rejected by
@@ -149,22 +263,33 @@ def cached_call(kind: str, payload: dict, fetch: Callable[[], dict], *,
                 return hit, True
         result = fetch()
         if cacheable(result):
-            atomic_write_json(path, {"schema": CACHE_SCHEMA, "fetched_at": time.time(),
-                                     "kind": kind, "query": payload, "result": result})
+            atomic_write_json(
+                path,
+                {
+                    "schema": CACHE_SCHEMA,
+                    "fetched_at": time.time(),
+                    "kind": kind,
+                    "query": payload,
+                    "result": result,
+                },
+            )
         return result, False
 
 
 def cache_options(func: Callable) -> Callable:
-    func = click.option("--cache-ttl-hours", type=float, default=None,
-                        help="Cache TTL in hours (default 168, env KINLOOM_MICHIGANOLOGY_CACHE_TTL_HOURS; 0 disables reads).")(func)
-    func = click.option("--refresh", is_flag=True,
-                        help="Bypass the disk cache for this request (the fresh result is still cached).")(func)
+    func = click.option(
+        "--cache-ttl-hours",
+        type=float,
+        default=None,
+        help="Cache TTL in hours (default 168, env KINLOOM_MICHIGANOLOGY_CACHE_TTL_HOURS; 0 disables reads).",
+    )(func)
+    func = click.option(
+        "--refresh",
+        is_flag=True,
+        help="Bypass the disk cache for this request (the fresh result is still cached).",
+    )(func)
     return func
 
-BASE = "https://michigan.access.preservica.com"
-# Preservica 403s python-httpx's default header set. Plain curl-style headers
-# (short UA, Accept */*) return 200 consistently.
-USER_AGENT = "Mozilla/5.0"
 
 COLLECTIONS = [
     ("Death Certificates, 1897-1952", BASE + "/death-certificates-1897-1952/"),
@@ -281,53 +406,160 @@ def _require_curl() -> str:
     return curl
 
 
-_STATUS_MARKER = "\n__KINLOOM_HTTP_STATUS__:"
-
-
-def _curl_get_text(url: str) -> str:
-    """GET a page via curl; raise ClickException on transport or non-200 status."""
-    curl = _require_curl()
+def _retry_after_from_headers(headers_text: str) -> float | None:
+    """Parse the final Retry-After header (seconds or HTTP-date), capped at MAX_RETRY_AFTER_S."""
+    matches = re.findall(r"(?im)^retry-after:\s*([^\r\n]+)", headers_text)
+    if not matches:
+        return None
+    raw = matches[-1].strip()
+    if not raw:
+        return None
     try:
-        proc = subprocess.run(
-            [curl, "-sSL", "-A", USER_AGENT, "--max-time", "60",
-             "-w", _STATUS_MARKER + "%{http_code}", url],
-            capture_output=True,
-            text=True,
-            timeout=70,
-        )
-    except (subprocess.SubprocessError, OSError) as exc:
-        raise click.ClickException(f"Michiganology request failed: {exc}") from exc
-    if proc.returncode != 0:
-        raise click.ClickException(
-            f"Michiganology request failed (curl exit {proc.returncode}): "
-            f"{proc.stderr.strip()[:300]}"
-        )
-    body, sep, status = proc.stdout.rpartition(_STATUS_MARKER)
-    if not sep:
-        raise click.ClickException("Michiganology request failed: no HTTP status from curl.")
-    status = status.strip()
-    if status != "200":
-        raise click.ClickException(f"Michiganology returned HTTP {status} for {url}")
-    return body
+        parsed = float(raw)
+        if math.isfinite(parsed):
+            return max(0.0, min(parsed, MAX_RETRY_AFTER_S))
+    except ValueError:
+        try:
+            dt = parsedate_to_datetime(raw)
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+            delta = (dt - datetime.now(timezone.utc)).total_seconds()
+            if math.isfinite(delta):
+                return max(0.0, min(delta, MAX_RETRY_AFTER_S))
+        except (TypeError, ValueError, OverflowError):
+            pass
+    return None
+
+
+def _retry_delay_seconds(attempt: int, status_code: int | None, headers_text: str) -> float:
+    """Honor Retry-After on 429/503 responses; otherwise use jittered exponential backoff."""
+    if status_code in (429, 503):
+        retry_after = _retry_after_from_headers(headers_text)
+        if retry_after is not None:
+            return retry_after
+    jitter = random.uniform(0.75, 1.25)
+    return min(MAX_RETRY_AFTER_S, BASE_BACKOFF_S * (2 ** attempt) * jitter)
+
+
+def _parse_status_and_effective_url(tail: str) -> tuple[str, str]:
+    lines = [line.strip() for line in tail.strip().splitlines() if line.strip()]
+    if not lines:
+        return "", ""
+    status = lines[0]
+    effective_url = lines[1] if len(lines) >= 2 else ""
+    return status, effective_url
+
+
+def _curl_get_text(url: str, *, timeout: float = DEFAULT_TEXT_TIMEOUT) -> str:
+    """GET a page via curl with host validation and retries on transient errors/timeouts."""
+    validated_url = validate_michiganology_url(url)
+    curl = _require_curl()
+    budget = max(1.0, float(timeout))
+    deadline = time.monotonic() + budget
+    last_error = f"Michiganology request failed for {validated_url}"
+
+    for attempt in range(MAX_ATTEMPTS):
+        remaining = deadline - time.monotonic()
+        if remaining <= 0.25:
+            break
+        attempt_max = max(1, int(math.ceil(min(TEXT_ATTEMPT_CAP, remaining))))
+        connect_max = max(1, int(math.ceil(min(CONNECT_TIMEOUT, attempt_max))))
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            hdr_path = Path(tmp_dir) / "headers.txt"
+            try:
+                proc = subprocess.run(
+                    [
+                        curl,
+                        "-sSL",
+                        "-A",
+                        USER_AGENT,
+                        "--connect-timeout",
+                        str(connect_max),
+                        "--max-time",
+                        str(attempt_max),
+                        "-D",
+                        str(hdr_path),
+                        "-w",
+                        _STATUS_MARKER + "%{http_code}\n%{url_effective}",
+                        validated_url,
+                    ],
+                    capture_output=True,
+                    text=True,
+                    timeout=attempt_max + 10,
+                )
+            except subprocess.TimeoutExpired as exc:
+                last_error = f"Michiganology request timed out for {validated_url}: {exc}"
+                wait = _retry_delay_seconds(attempt, None, "")
+                if attempt + 1 < MAX_ATTEMPTS and (deadline - time.monotonic()) >= wait + 1.0:
+                    time.sleep(wait)
+                    continue
+                raise click.ClickException(last_error) from exc
+            except (subprocess.SubprocessError, OSError) as exc:
+                raise click.ClickException(f"Michiganology request failed: {exc}") from exc
+
+            headers_text = (
+                hdr_path.read_text(encoding="utf-8", errors="replace") if hdr_path.is_file() else ""
+            )
+
+        if proc.returncode != 0:
+            last_error = (
+                f"Michiganology request failed (curl exit {proc.returncode}): "
+                f"{proc.stderr.strip()[:300]}"
+            )
+            if proc.returncode in RETRYABLE_CURL_EXITS:
+                wait = _retry_delay_seconds(attempt, None, headers_text)
+                if attempt + 1 < MAX_ATTEMPTS and (deadline - time.monotonic()) >= wait + 1.0:
+                    time.sleep(wait)
+                    continue
+            raise click.ClickException(last_error)
+
+        body, sep, tail = proc.stdout.rpartition(_STATUS_MARKER)
+        if not sep:
+            raise click.ClickException("Michiganology request failed: no HTTP status from curl.")
+        status_str, effective_url = _parse_status_and_effective_url(tail)
+        if effective_url:
+            validate_michiganology_url(effective_url)
+        if status_str == "200":
+            return body
+
+        try:
+            status_code = int(status_str)
+        except ValueError:
+            status_code = None
+
+        last_error = f"Michiganology returned HTTP {status_str} for {validated_url}"
+        if status_code in RETRYABLE_STATUS_CODES:
+            wait = _retry_delay_seconds(attempt, status_code, headers_text)
+            if attempt + 1 < MAX_ATTEMPTS and (deadline - time.monotonic()) >= wait + 1.0:
+                time.sleep(wait)
+                continue
+        raise click.ClickException(last_error)
+
+    raise click.ClickException(last_error)
 
 
 def _resolve_item_ref(url_or_id: str) -> tuple[str, str]:
-    """Return (item_id, item_page_url) from a Preservica URL or IO_/SO_ identifier."""
+    """Return (item_id, item_page_url) from a verified Preservica URL or IO_/SO_ identifier."""
     raw = url_or_id.strip()
+    if raw.startswith(("http://", "https://")):
+        validated = validate_michiganology_url(raw)
+        match = re.search(r"((?:IO|SO)_[A-Za-z0-9-]+)", validated)
+        if match:
+            return match.group(1), validated
+        tail = urlparse(validated).path.rstrip("/").rsplit("/", 1)[-1]
+        if not tail:
+            raise click.UsageError(
+                "Pass a Michiganology item URL or a Preservica ID starting with IO_ or SO_."
+            )
+        return tail, validated
+    if _SAFE_ITEM_ID_RE.match(raw):
+        return raw, f"{BASE}/uncategorized/{raw}/"
     match = re.search(r"((?:IO|SO)_[A-Za-z0-9-]+)", raw)
-    if match:
-        item_id = match.group(1)
-        if raw.startswith("http://") or raw.startswith("https://"):
-            return item_id, raw
-        return item_id, f"{BASE}/uncategorized/{item_id}/"
-    if raw.startswith("http://") or raw.startswith("https://"):
-        return raw.rstrip("/").rsplit("/", 1)[-1], raw
+    if match and match.group(1) == raw:
+        return raw, f"{BASE}/uncategorized/{raw}/"
     raise click.UsageError(
         "Pass a Michiganology item URL or a Preservica ID starting with IO_ or SO_."
     )
-
-
-DOWNLOAD_FILE_EXTS = {".jpg", ".jpeg", ".png", ".tif", ".tiff", ".pdf"}
 
 
 def _content_type_from_headers(headers_text: str) -> str:
@@ -339,26 +571,24 @@ def _is_html_payload(content_type: str, body: bytes) -> bool:
     media = content_type.split(";", 1)[0].strip().lower()
     if media in {"text/html", "application/xhtml+xml"}:
         return True
-    sniff = body.lstrip()[:256].lower()
-    return sniff.startswith((b"<!doctype", b"<html", b"<head"))
+    sniff = body[:512].lstrip(b"\xef\xbb\xbf \t\r\n").lower()
+    return sniff.startswith(_HTML_ERROR_PREFIXES)
 
 
 def _filename_from_headers(headers_text: str, fallback: str) -> str:
     match_star = re.search(r"filename\*\s*=\s*UTF-8''([^\r\n;]+)", headers_text, re.I)
     if match_star:
-        candidate = Path(unquote(match_star.group(1).strip().strip('"'))).name
-        if candidate:
-            return candidate
+        raw = unquote(match_star.group(1).strip().strip('"'))
+        return sanitize_server_filename(raw, fallback)
     match_plain = re.search(r'filename\s*=\s*"?([^"\r\n;]+)"?', headers_text, re.I)
     if match_plain:
-        candidate = Path(match_plain.group(1).strip()).name
-        if candidate:
-            return candidate
+        raw = match_plain.group(1).strip()
+        return sanitize_server_filename(raw, fallback)
     return fallback
 
 
-def fetch_search(query: str) -> str:
-    return _curl_get_text(f"{BASE}/?s={quote_plus(query)}")
+def fetch_search(query: str, *, timeout: float = DEFAULT_TEXT_TIMEOUT) -> str:
+    return _curl_get_text(f"{BASE}/?s={quote_plus(query)}", timeout=timeout)
 
 
 def total_results(page: str) -> int | None:
@@ -366,15 +596,17 @@ def total_results(page: str) -> int | None:
     return int(match.group(1).replace(",", "")) if match else None
 
 
-def search_page(query: str) -> dict:
+def search_page(query: str, *, timeout: float = DEFAULT_TEXT_TIMEOUT) -> dict:
     """Fetch + parse the first search results page into a JSON-able dict."""
-    page = fetch_search(query)
+    page = fetch_search(query, timeout=timeout)
     parser = ResultParser()
     parser.feed(page)
     return {"query": query, "total": total_results(page), "results": parser.results}
 
 
 def _file_cache_paths(item_id: str) -> tuple[Path, Path, Path]:
+    if not _SAFE_ITEM_ID_RE.match(item_id):
+        raise click.ClickException(f"Invalid Michiganology item identifier: {item_id!r}")
     root = cache_dir() / "files" / item_id
     return root / "body", root / "meta.json", root / ".lock"
 
@@ -417,53 +649,120 @@ def _read_file_cache(item_id: str, ttl_hours: float) -> dict[str, Any] | None:
     return {"body": body, "filename": filename, "content_type": content_type}
 
 
-def _fetch_download_bytes(item_id: str, item_url: str) -> dict[str, Any]:
-    """Download one IO_ file. Failures raise and leave the file cache untouched."""
-    download_url = f"{BASE}/download/file/{item_id}"
+def _fetch_download_bytes(
+    item_id: str, item_url: str, *, timeout: float = DEFAULT_DOWNLOAD_TIMEOUT
+) -> dict[str, Any]:
+    """Download one IO_ file with retries and validation. Failures leave file cache untouched."""
+    if not _SAFE_ITEM_ID_RE.match(item_id):
+        raise click.ClickException(f"Invalid Michiganology item identifier: {item_id!r}")
+    download_url = validate_michiganology_url(f"{BASE}/download/file/{item_id}")
     curl = _require_curl()
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        hdr_path = Path(tmp_dir) / "headers.txt"
-        body_path = Path(tmp_dir) / "body.bin"
-        try:
-            proc = subprocess.run(
-                [
-                    curl, "-sSL", "-A", USER_AGENT, "--max-time", "120",
-                    "-D", str(hdr_path), "-o", str(body_path),
-                    "-w", "%{http_code}", download_url,
-                ],
-                capture_output=True,
-                text=True,
-                timeout=130,
+    budget = max(1.0, float(timeout))
+    deadline = time.monotonic() + budget
+    last_error = f"Michiganology download failed for {download_url}"
+
+    for attempt in range(MAX_ATTEMPTS):
+        remaining = deadline - time.monotonic()
+        if remaining <= 0.25:
+            break
+        attempt_max = max(1, int(math.ceil(min(DOWNLOAD_ATTEMPT_CAP, remaining))))
+        connect_max = max(1, int(math.ceil(min(CONNECT_TIMEOUT, attempt_max))))
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            hdr_path = Path(tmp_dir) / "headers.txt"
+            body_path = Path(tmp_dir) / "body.bin"
+            try:
+                proc = subprocess.run(
+                    [
+                        curl,
+                        "-sSL",
+                        "-A",
+                        USER_AGENT,
+                        "--connect-timeout",
+                        str(connect_max),
+                        "--max-time",
+                        str(attempt_max),
+                        "-D",
+                        str(hdr_path),
+                        "-o",
+                        str(body_path),
+                        "-w",
+                        "%{http_code}\n%{url_effective}",
+                        download_url,
+                    ],
+                    capture_output=True,
+                    text=True,
+                    timeout=attempt_max + 10,
+                )
+            except subprocess.TimeoutExpired as exc:
+                last_error = f"Michiganology download timed out for {download_url}: {exc}"
+                wait = _retry_delay_seconds(attempt, None, "")
+                if attempt + 1 < MAX_ATTEMPTS and (deadline - time.monotonic()) >= wait + 1.0:
+                    time.sleep(wait)
+                    continue
+                raise click.ClickException(last_error) from exc
+            except (subprocess.SubprocessError, OSError) as exc:
+                raise click.ClickException(f"Michiganology download failed: {exc}") from exc
+
+            headers_text = (
+                hdr_path.read_text(encoding="utf-8", errors="replace") if hdr_path.is_file() else ""
             )
-        except (subprocess.SubprocessError, OSError) as exc:
-            raise click.ClickException(f"Michiganology download failed: {exc}") from exc
-        if proc.returncode != 0:
-            raise click.ClickException(
-                f"Michiganology download failed (curl exit {proc.returncode}): "
-                f"{proc.stderr.strip()[:300]}"
-            )
-        status = proc.stdout.strip()
-        if status != "200":
-            raise click.ClickException(
-                f"Michiganology download returned HTTP {status} for {download_url} (source page: {item_url})"
-            )
-        headers_text = hdr_path.read_text(encoding="utf-8", errors="replace") if hdr_path.is_file() else ""
-        body = body_path.read_bytes() if body_path.is_file() else b""
-        content_type = _content_type_from_headers(headers_text) or "application/octet-stream"
-        filename = _filename_from_headers(headers_text, f"{item_id}.bin")
-        if not body:
-            raise click.ClickException(
-                f"Michiganology download returned an empty file for {item_id}. The response was not cached."
-            )
-        if _is_html_payload(content_type, body):
-            raise click.ClickException(
-                f"Michiganology download returned an HTML page for {item_id}, not a file. "
-                "The response was not cached."
-            )
-        return {"body": body, "filename": filename, "content_type": content_type}
+
+            if proc.returncode != 0:
+                last_error = (
+                    f"Michiganology download failed (curl exit {proc.returncode}): "
+                    f"{proc.stderr.strip()[:300]}"
+                )
+                if proc.returncode in RETRYABLE_CURL_EXITS:
+                    wait = _retry_delay_seconds(attempt, None, headers_text)
+                    if attempt + 1 < MAX_ATTEMPTS and (deadline - time.monotonic()) >= wait + 1.0:
+                        time.sleep(wait)
+                        continue
+                raise click.ClickException(last_error)
+
+            status_str, effective_url = _parse_status_and_effective_url(proc.stdout)
+            if effective_url:
+                validate_michiganology_url(effective_url)
+            if status_str != "200":
+                try:
+                    status_code = int(status_str)
+                except ValueError:
+                    status_code = None
+                last_error = (
+                    f"Michiganology download returned HTTP {status_str} for {download_url} "
+                    f"(source page: {item_url})"
+                )
+                if status_code in RETRYABLE_STATUS_CODES:
+                    wait = _retry_delay_seconds(attempt, status_code, headers_text)
+                    if attempt + 1 < MAX_ATTEMPTS and (deadline - time.monotonic()) >= wait + 1.0:
+                        time.sleep(wait)
+                        continue
+                raise click.ClickException(last_error)
+
+            body = body_path.read_bytes() if body_path.is_file() else b""
+            content_type = _content_type_from_headers(headers_text) or "application/octet-stream"
+            filename = _filename_from_headers(headers_text, f"{item_id}.bin")
+            if not body:
+                raise click.ClickException(
+                    f"Michiganology download returned an empty file for {item_id}. The response was not cached."
+                )
+            if _is_html_payload(content_type, body):
+                raise click.ClickException(
+                    f"Michiganology download returned an HTML page for {item_id}, not a file. "
+                    "The response was not cached."
+                )
+            return {"body": body, "filename": filename, "content_type": content_type}
+
+    raise click.ClickException(last_error)
 
 
-def cached_download(item_id: str, item_url: str, *, refresh: bool, ttl_hours: float) -> tuple[dict[str, Any], bool]:
+def cached_download(
+    item_id: str,
+    item_url: str,
+    *,
+    refresh: bool,
+    ttl_hours: float,
+    timeout: float = DEFAULT_DOWNLOAD_TIMEOUT,
+) -> tuple[dict[str, Any], bool]:
     """Return ({body, filename, content_type}, cache_hit) for one IO_ file.
 
     Callers of the same item share one flock. A crash before the atomic
@@ -479,15 +778,18 @@ def cached_download(item_id: str, item_url: str, *, refresh: bool, ttl_hours: fl
             hit = _read_file_cache(item_id, ttl_hours)
             if hit is not None:
                 return hit, True
-        fetched = _fetch_download_bytes(item_id, item_url)
+        fetched = _fetch_download_bytes(item_id, item_url, timeout=timeout)
         atomic_write_bytes(body_path, fetched["body"])
-        atomic_write_json(meta_path, {
-            "schema": CACHE_SCHEMA,
-            "fetched_at": time.time(),
-            "filename": fetched["filename"],
-            "content_type": fetched["content_type"],
-            "bytes": len(fetched["body"]),
-        })
+        atomic_write_json(
+            meta_path,
+            {
+                "schema": CACHE_SCHEMA,
+                "fetched_at": time.time(),
+                "filename": fetched["filename"],
+                "content_type": fetched["content_type"],
+                "bytes": len(fetched["body"]),
+            },
+        )
         return fetched, False
 
 
@@ -497,9 +799,9 @@ def _search_cacheable(result: dict) -> bool:
     return bool(result.get("results")) or result.get("total") is not None
 
 
-def item_details(item_id: str, item_url: str) -> dict:
+def item_details(item_id: str, item_url: str, *, timeout: float = DEFAULT_TEXT_TIMEOUT) -> dict:
     """Fetch + parse an item page into a JSON-able dict."""
-    page = _curl_get_text(item_url)
+    page = _curl_get_text(item_url, timeout=timeout)
     parser = ItemMetadataParser()
     parser.feed(page)
     title = " ".join(parser.title.split())
@@ -516,29 +818,78 @@ def item_details(item_id: str, item_url: str) -> dict:
     }
 
 
-@click.group()
+class AliasedGroup(click.Group):
+    """Click group supporting common subcommand aliases (item/show/info -> get, fetch -> download)."""
+
+    def get_command(self, ctx: click.Context, cmd_name: str) -> click.Command | None:
+        canonical = SUBCOMMAND_ALIASES.get(cmd_name, cmd_name)
+        return super().get_command(ctx, canonical)
+
+
+@click.group(cls=AliasedGroup)
 def cli() -> None:
     """Search Michiganology (Archives of Michigan digital collections)."""
 
 
 @cli.command()
-@click.argument("query")
-@click.option("--limit", default=10, show_default=True, help="Max results to show (first page only).")
+@click.argument("query_parts", metavar="[QUERY]...", nargs=-1)
+@click.option("--query", "-q", "query_opt", default=None, help="Search query string.")
+@click.option(
+    "--limit",
+    "-n",
+    default=10,
+    show_default=True,
+    type=click.IntRange(min=1),
+    help="Max results to show (first page only).",
+)
+@click.option(
+    "--timeout",
+    type=float,
+    default=DEFAULT_TEXT_TIMEOUT,
+    show_default=True,
+    help="Total timeout budget in seconds (retries fit within this budget).",
+)
 @click.option("--json", "as_json", is_flag=True, help="Emit JSON.")
 @cache_options
-def search(query: str, limit: int, as_json: bool, refresh: bool, cache_ttl_hours: float | None) -> None:
+def search(
+    query_parts: tuple[str, ...],
+    query_opt: str | None,
+    limit: int,
+    timeout: float,
+    as_json: bool,
+    refresh: bool,
+    cache_ttl_hours: float | None,
+) -> None:
     """Search all Michiganology collections, e.g. michiganology search Lincoln."""
+    parts = [p.strip() for p in query_parts if p.strip()]
+    if query_opt and query_opt.strip():
+        parts.insert(0, query_opt.strip())
+    query = " ".join(parts).strip()
+    if not query:
+        raise click.UsageError("Missing search query. Example: michiganology search Lincoln")
     ttl = resolve_ttl_hours(cache_ttl_hours)
-    data, hit = cached_call("search", {"query": query}, lambda: search_page(query),
-                            refresh=refresh, ttl_hours=ttl, cacheable=_search_cacheable)
+    budget = validate_timeout(timeout)
+    data, hit = cached_call(
+        "search",
+        {"query": query},
+        lambda: search_page(query, timeout=budget),
+        refresh=refresh,
+        ttl_hours=ttl,
+        cacheable=_search_cacheable,
+    )
     total = data.get("total")
     results = list(data.get("results") or [])[:limit]
     if as_json:
-        click.echo(json.dumps({"query": query, "total": total, "results": results,
-                               "cache_hit": hit}, indent=2))
+        click.echo(
+            json.dumps(
+                {"query": query, "total": total, "results": results, "cache_hit": hit}, indent=2
+            )
+        )
         return
     marker = " [cache]" if hit else ""
-    click.echo(f"Query: {query}  |  Total results: {total if total is not None else 'unknown'}{marker}")
+    click.echo(
+        f"Query: {query}  |  Total results: {total if total is not None else 'unknown'}{marker}"
+    )
     if not results:
         click.echo("No results on the first page.")
         return
@@ -549,15 +900,34 @@ def search(query: str, limit: int, as_json: bool, refresh: bool, cache_ttl_hours
 
 @cli.command()
 @click.argument("url_or_id")
+@click.option(
+    "--timeout",
+    type=float,
+    default=DEFAULT_TEXT_TIMEOUT,
+    show_default=True,
+    help="Total timeout budget in seconds (retries fit within this budget).",
+)
 @click.option("--json", "as_json", is_flag=True, help="Emit JSON.")
 @cache_options
-def get(url_or_id: str, as_json: bool, refresh: bool, cache_ttl_hours: float | None) -> None:
+def get(
+    url_or_id: str,
+    timeout: float,
+    as_json: bool,
+    refresh: bool,
+    cache_ttl_hours: float | None,
+) -> None:
     """Inspect a Michiganology item page (Item Data fields and file download URL)."""
     item_id, item_url = _resolve_item_ref(url_or_id)
     ttl = resolve_ttl_hours(cache_ttl_hours)
-    data, hit = cached_call("get", {"id": item_id, "url": item_url},
-                            lambda: item_details(item_id, item_url), refresh=refresh,
-                            ttl_hours=ttl, cacheable=lambda r: bool(r.get("parsed")))
+    budget = validate_timeout(timeout)
+    data, hit = cached_call(
+        "get",
+        {"id": item_id, "url": item_url},
+        lambda: item_details(item_id, item_url, timeout=budget),
+        refresh=refresh,
+        ttl_hours=ttl,
+        cacheable=lambda r: bool(r.get("parsed")),
+    )
     title = data["title"]
     download_url = data.get("download_url")
     fields = [(k, v) for k, v in data.get("fields") or []]
@@ -588,36 +958,72 @@ def get(url_or_id: str, as_json: bool, refresh: bool, cache_ttl_hours: float | N
 
 
 def _download_dest(out: str, filename: str | None, resolved_name: str) -> Path:
+    if "\x00" in out:
+        raise click.BadParameter(f"Invalid --out path: {out!r}")
     out_path = Path(out)
-    if filename is None and out_path.suffix.lower() in DOWNLOAD_FILE_EXTS:
+    if filename is not None:
+        safe_name = validate_user_filename(filename)
+        out_path.mkdir(parents=True, exist_ok=True)
+        return resolve_safe_child(out_path, safe_name)
+    if out_path.suffix.lower() in DOWNLOAD_FILE_EXTS:
+        if ".." in out_path.parts:
+            raise click.BadParameter(f"Unsafe --out path containing '..': {out!r}")
         out_path.parent.mkdir(parents=True, exist_ok=True)
         return out_path
     out_path.mkdir(parents=True, exist_ok=True)
-    return out_path / Path(filename or resolved_name).name
+    safe_server = sanitize_server_filename(resolved_name, "download.bin")
+    return resolve_safe_child(out_path, safe_server)
 
 
 @cli.command()
 @click.argument("url_or_id")
-@click.option("--out", "-o", default=".", show_default=True,
-              help="Output directory, or a .jpg/.jpeg/.png/.tif/.tiff/.pdf file path when --filename is omitted.")
-@click.option("--filename", default=None, help="Override output filename (default: from Content-Disposition).")
+@click.option(
+    "--out",
+    "-o",
+    "--output",
+    default=".",
+    show_default=True,
+    help="Output directory, or a .jpg/.jpeg/.png/.tif/.tiff/.pdf file path when --filename is omitted.",
+)
+@click.option(
+    "--filename",
+    default=None,
+    help="Override output filename (default: from Content-Disposition).",
+)
+@click.option(
+    "--timeout",
+    type=float,
+    default=DEFAULT_DOWNLOAD_TIMEOUT,
+    show_default=True,
+    help="Total timeout budget in seconds (retries fit within this budget).",
+)
 @click.option("--json", "as_json", is_flag=True, help="Emit JSON.")
 @cache_options
-def download(url_or_id: str, out: str, filename: str | None, as_json: bool,
-             refresh: bool, cache_ttl_hours: float | None) -> None:
+def download(
+    url_or_id: str,
+    out: str,
+    filename: str | None,
+    timeout: float,
+    as_json: bool,
+    refresh: bool,
+    cache_ttl_hours: float | None,
+) -> None:
     """Download the full-resolution file for a Michiganology IO_ item."""
     item_id, item_url = _resolve_item_ref(url_or_id)
     if not item_id.startswith("IO_"):
         raise click.ClickException(
             f"{item_id} is a folder/collection object (SO_); pass an IO_ item URL or ID to download."
         )
+    if filename is not None:
+        validate_user_filename(filename)
     ttl = resolve_ttl_hours(cache_ttl_hours)
-    fetched, hit = cached_download(item_id, item_url, refresh=refresh, ttl_hours=ttl)
+    budget = validate_timeout(timeout)
+    fetched, hit = cached_download(item_id, item_url, refresh=refresh, ttl_hours=ttl, timeout=budget)
     body = fetched["body"]
     resolved_name = fetched["filename"]
     content_type = fetched["content_type"]
     dest = _download_dest(out, filename, resolved_name)
-    dest.write_bytes(body)
+    atomic_write_bytes(dest, body)
     payload = {
         "item_id": item_id,
         "path": str(dest),
@@ -637,20 +1043,33 @@ def download(url_or_id: str, out: str, filename: str | None, as_json: bool,
 def collections(as_json: bool) -> None:
     """List the Michiganology digital collections (verified 2026-11-24)."""
     if as_json:
-        click.echo(json.dumps(
-            [{"name": name, "url": url} for name, url in COLLECTIONS], indent=2
-        ))
+        click.echo(json.dumps([{"name": name, "url": url} for name, url in COLLECTIONS], indent=2))
         return
     for name, url in COLLECTIONS:
         click.echo(f"- {name}\n  {url}")
 
 
 @cli.command()
-@click.argument("query")
-def url(query: str) -> None:
+@click.argument("query_parts", metavar="QUERY...", nargs=-1, required=True)
+def url(query_parts: tuple[str, ...]) -> None:
     """Print the shareable Michiganology search URL for a query."""
+    query = " ".join(p.strip() for p in query_parts if p.strip())
     click.echo(f"{BASE}/?s={quote_plus(query)}")
 
 
+def main() -> int:
+    try:
+        cli(standalone_mode=True)
+        return 0
+    except BrokenPipeError:
+        try:
+            devnull = os.open(os.devnull, os.O_WRONLY)
+            os.dup2(devnull, sys.stdout.fileno())
+            os.close(devnull)
+        except OSError:
+            pass
+        return 0
+
+
 if __name__ == "__main__":
-    cli()
+    raise SystemExit(main())

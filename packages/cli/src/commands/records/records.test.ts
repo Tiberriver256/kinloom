@@ -2496,10 +2496,267 @@ describe('bundled Python utilities and live script execution', () => {
     expect(parsedFind2.files[1].lines.map((l) => l.text)).toEqual(['Springfield']);
     expect(fs.readFileSync(callLog, 'utf8').trim().split('\n')).toHaveLength(4);
 
-    // Missing file in a multi-file batch fails cleanly before invoking tesseract.
+    // Missing file in a multi-file batch fails cleanly with exit 2 before invoking tesseract.
     const missing = await runOcr([img1, path.join(tmp, 'does-not-exist.png')]);
-    expect(missing.exitCode).toBe(1);
+    expect(missing.exitCode).toBe(2);
     expect(missing.stderr).toContain('image file not found');
     expect(fs.readFileSync(callLog, 'utf8').trim().split('\n')).toHaveLength(4);
+  });
+
+  it('parallelizes multi-file OCR with OMP_THREAD_LIMIT=1, preserves input order, emits top-level boolean cache_hit, and uses flock', async () => {
+    const tmp = await makeTempDir('kinloom-ocr-parallel-');
+    const binDir = path.join(tmp, 'bin');
+    const cacheDir = path.join(tmp, 'cache');
+    const inflightDir = path.join(tmp, 'inflight');
+    const maxConcPath = path.join(tmp, 'max-conc.log');
+    const callLog = path.join(tmp, 'calls.log');
+    const telemetryFile = path.join(tmp, 'telemetry.jsonl');
+    fs.mkdirSync(binDir, { recursive: true });
+    fs.mkdirSync(inflightDir, { recursive: true });
+
+    const imgs = [1, 2, 3, 4].map((n) => path.join(tmp, `sheet-${n}.png`));
+    for (let i = 0; i < imgs.length; i += 1) {
+      await writeFile(imgs[i], Buffer.from(`synthetic-parallel-sheet-${i + 1}`));
+    }
+
+    // Earlier images sleep longer so deterministic output ordering is proven despite out-of-order completion.
+    await writeFile(
+      path.join(binDir, 'tesseract'),
+      [
+        '#!/bin/sh',
+        'base=$(basename "$1")',
+        `printf '%s|%s\\n' "$base" "$OMP_THREAD_LIMIT" >> ${JSON.stringify(callLog)}`,
+        `marker=${JSON.stringify(inflightDir)}/p_$$`,
+        'touch "$marker"',
+        `conc=$(ls -1 ${JSON.stringify(inflightDir)} | wc -l)`,
+        `printf '%s\\n' "$conc" >> ${JSON.stringify(maxConcPath)}`,
+        'case "$base" in',
+        '  sheet-1.png) sleep 0.28 ;;',
+        '  sheet-2.png) sleep 0.22 ;;',
+        '  sheet-3.png) sleep 0.16 ;;',
+        '  *) sleep 0.10 ;;',
+        'esac',
+        'echo "OUT:$base:OMP=$OMP_THREAD_LIMIT"',
+        'rm -f "$marker"',
+      ].join('\n') + '\n',
+      { mode: 0o755 }
+    );
+
+    const env: NodeJS.ProcessEnv = {
+      ...process.env,
+      PATH: `${binDir}:${process.env.PATH ?? ''}`,
+      OMP_THREAD_LIMIT: '32',
+    };
+
+    const runOcr = async (args: string[]) => {
+      const cap = createCaptureIo();
+      const res = await runRecordCommand('ocr', [...args, '--cache-dir', cacheDir], {
+        io: cap.io,
+        env,
+        telemetryFilePath: telemetryFile,
+      });
+      return { exitCode: res.exitCode, stdout: cap.stdout.join('\n'), stderr: cap.stderr.join('\n') };
+    };
+
+    // 1. Cold parallel batch runs concurrently, preserves exact input order, and emits cache_hit: false.
+    const cold = await runOcr([...imgs, '--json']);
+    expect(cold.exitCode, cold.stderr).toBe(0);
+    const coldBody = JSON.parse(cold.stdout) as {
+      count: number;
+      cache_hits: number;
+      cache_hit: boolean;
+      files: Array<{ file: string; cached: boolean; cache_hit: boolean; text: string }>;
+    };
+    expect(coldBody.count).toBe(4);
+    expect(coldBody.cache_hits).toBe(0);
+    expect(coldBody.cache_hit).toBe(false);
+    expect(coldBody.files.map((f) => [f.file, f.cached, f.cache_hit, f.text])).toEqual([
+      [imgs[0], false, false, 'OUT:sheet-1.png:OMP=1'],
+      [imgs[1], false, false, 'OUT:sheet-2.png:OMP=1'],
+      [imgs[2], false, false, 'OUT:sheet-3.png:OMP=1'],
+      [imgs[3], false, false, 'OUT:sheet-4.png:OMP=1'],
+    ]);
+
+    const maxObserved = Math.max(
+      ...fs.readFileSync(maxConcPath, 'utf8').trim().split('\n').map((s) => Number(s.trim()))
+    );
+    expect(maxObserved).toBeGreaterThanOrEqual(2);
+    expect(maxObserved).toBeLessThanOrEqual(4);
+    const callLines = fs.readFileSync(callLog, 'utf8').trim().split('\n');
+    expect(callLines).toHaveLength(4);
+    expect(callLines.every((line) => line.endsWith('|1'))).toBe(true);
+
+    // 2. Warm batch hits disk cache with zero new tesseract calls and emits cache_hit: true.
+    const warm = await runOcr([...imgs, '--json']);
+    expect(warm.exitCode, warm.stderr).toBe(0);
+    const warmBody = JSON.parse(warm.stdout) as {
+      cache_hits: number;
+      cache_hit: boolean;
+      files: Array<{ cache_hit: boolean }>;
+    };
+    expect(warmBody.cache_hits).toBe(4);
+    expect(warmBody.cache_hit).toBe(true);
+    expect(warmBody.files.every((f) => f.cache_hit)).toBe(true);
+    expect(fs.readFileSync(callLog, 'utf8').trim().split('\n')).toHaveLength(4);
+
+    // 3. Single-file --json emits top-level boolean cache_hit and honors --refresh alias.
+    const singleHit = await runOcr([imgs[0], '--json']);
+    expect(singleHit.exitCode, singleHit.stderr).toBe(0);
+    expect(JSON.parse(singleHit.stdout)).toMatchObject({ cached: true, cache_hit: true });
+
+    const refreshed = await runOcr([imgs[0], '--refresh', '--json']);
+    expect(refreshed.exitCode, refreshed.stderr).toBe(0);
+    expect(JSON.parse(refreshed.stdout)).toMatchObject({ cached: false, cache_hit: false });
+    expect(fs.readFileSync(callLog, 'utf8').trim().split('\n')).toHaveLength(5);
+
+    // 4. Telemetry recorded exact boolean cache_hit values from JSON stdout.
+    const events = (await readFile(telemetryFile, 'utf8'))
+      .trim()
+      .split('\n')
+      .map((line) => JSON.parse(line) as TelemetryEvent);
+    expect(events.map((e) => e.cache_hit)).toEqual([false, true, true, false]);
+  });
+
+  it('caps oversized printed scans and rescales --boxes, --find, and --tsv coordinates back to original pixels', async () => {
+    const tmp = await makeTempDir('kinloom-ocr-scale-');
+    const binDir = path.join(tmp, 'bin');
+    const cacheDir = path.join(tmp, 'cache');
+    const bigPng = path.join(tmp, 'oversized-4000x3000.png');
+    const seenSizesPath = path.join(tmp, 'seen-sizes.log');
+    fs.mkdirSync(binDir, { recursive: true });
+
+    // Generate a minimal valid 4000x3000 grayscale PNG using Python stdlib zlib/struct (no Pillow required).
+    execFileSync('python3', [
+      '-c',
+      [
+        'import struct, sys, zlib',
+        'w, h = 4000, 3000',
+        'def chunk(tag, data):',
+        '    return struct.pack(">I", len(data)) + tag + data + struct.pack(">I", zlib.crc32(tag + data) & 0xffffffff)',
+        'ihdr = struct.pack(">IIBBBBB", w, h, 8, 0, 0, 0, 0)',
+        'raw = (b"\\x00" + b"\\xff" * w) * h',
+        'idat = zlib.compress(raw, level=1)',
+        'png = b"\\x89PNG\\r\\n\\x1a\\n" + chunk(b"IHDR", ihdr) + chunk(b"IDAT", idat) + chunk(b"IEND", b"")',
+        'open(sys.argv[1], "wb").write(png)',
+      ].join('\n'),
+      bigPng,
+    ]);
+
+    // Fake tesseract inspects the actual PNG dimensions it received and emits TSV coordinates in that scaled space.
+    await writeFile(
+      path.join(binDir, 'tesseract'),
+      [
+        '#!/usr/bin/env python3',
+        'import struct, sys',
+        'img = sys.argv[1]',
+        'with open(img, "rb") as fh:',
+        '    data = fh.read(24)',
+        'w, h = struct.unpack(">II", data[16:24])',
+        `open(${JSON.stringify(seenSizesPath)}, "a").write(f"{w}x{h}\\n")`,
+        'if "tsv" in sys.argv:',
+        '    print("level\\tpage_num\\tblock_num\\tpar_num\\tline_num\\tword_num\\tleft\\ttop\\twidth\\theight\\tconf\\ttext")',
+        '    print(f"1\\t1\\t0\\t0\\t0\\t0\\t0\\t0\\t{w}\\t{h}\\t-1\\t")',
+        '    # Place a word at exactly 10%..30% X and 20%..25% Y in scaled coordinates.',
+        '    x0, y0 = round(w * 0.10), round(h * 0.20)',
+        '    bw, bh = round(w * 0.20), round(h * 0.05)',
+        '    print(f"5\\t1\\t1\\t1\\t1\\t1\\t{x0}\\t{y0}\\t{bw}\\t{bh}\\t93\\tProbate")',
+        'else:',
+        '    print("Probate")',
+      ].join('\n') + '\n',
+      { mode: 0o755 }
+    );
+
+    const env: NodeJS.ProcessEnv = {
+      ...process.env,
+      PATH: `${binDir}:${process.env.PATH ?? ''}`,
+    };
+
+    const cap = createCaptureIo();
+    const res = await runRecordCommand('ocr', [bigPng, '--cache-dir', cacheDir, '--find', 'probate'], {
+      io: cap.io,
+      env,
+      telemetryFilePath: path.join(tmp, 'telemetry.jsonl'),
+    });
+
+    expect(res.exitCode, cap.stderr.join('\n')).toBe(0);
+    const body = JSON.parse(cap.stdout.join('\n')) as {
+      image_width: number;
+      image_height: number;
+      cache_hit: boolean;
+      lines: Array<{ text: string; x0: number; y0: number; x1: number; y1: number }>;
+    };
+    // Coordinates must be rescaled accurately back to original 4000x3000 pixel space.
+    expect([body.image_width, body.image_height]).toEqual([4000, 3000]);
+    expect(body.cache_hit).toBe(false);
+    expect(body.lines).toHaveLength(1);
+    expect(body.lines[0].text).toBe('Probate');
+    expect(Math.abs(body.lines[0].x0 - 400)).toBeLessThanOrEqual(2);
+    expect(Math.abs(body.lines[0].y0 - 600)).toBeLessThanOrEqual(2);
+    expect(Math.abs(body.lines[0].x1 - 1200)).toBeLessThanOrEqual(2);
+    expect(Math.abs(body.lines[0].y1 - 750)).toBeLessThanOrEqual(2);
+
+    // If a resizer (Pillow, ImageMagick, or prep-scan) was available, verify tesseract saw <= 3500px.
+    const seen = fs.readFileSync(seenSizesPath, 'utf8').trim();
+    const [seenW, seenH] = seen.split('x').map(Number);
+    expect(Math.max(seenW, seenH)).toBeLessThanOrEqual(3500);
+
+    // Cached --tsv must also expose the rescaled 4000x3000 page box and hit cache.
+    const tsvCap = createCaptureIo();
+    const tsvRes = await runRecordCommand('ocr', [bigPng, '--cache-dir', cacheDir, '--tsv'], {
+      io: tsvCap.io,
+      env,
+      telemetryFilePath: path.join(tmp, 'telemetry.jsonl'),
+    });
+    expect(tsvRes.exitCode, tsvCap.stderr.join('\n')).toBe(0);
+    expect(tsvCap.stdout.join('\n')).toContain('\t4000\t3000\t-1');
+  });
+
+  it('exits 2 cleanly on missing, directory, empty, HTML, PDF, unknown flag, and corrupt image inputs', async () => {
+    const tmp = await makeTempDir('kinloom-ocr-invalid-');
+    const cacheDir = path.join(tmp, 'cache');
+    const emptyPath = path.join(tmp, 'empty.jpg');
+    const htmlPath = path.join(tmp, 'blocked.jpg');
+    const pdfPath = path.join(tmp, 'document.pdf');
+    const subDir = path.join(tmp, 'subdir');
+    const corruptPath = path.join(tmp, 'corrupt.png');
+    const binDir = path.join(tmp, 'bin');
+
+    fs.mkdirSync(subDir, { recursive: true });
+    fs.mkdirSync(binDir, { recursive: true });
+    await writeFile(emptyPath, Buffer.alloc(0));
+    await writeFile(htmlPath, '<!DOCTYPE html><html><body>Access Denied</body></html>');
+    await writeFile(pdfPath, '%PDF-1.4\n1 0 obj\n<<>>\nendobj\n%%EOF\n');
+    await writeFile(corruptPath, Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x00, 0x00]));
+    await writeFile(
+      path.join(binDir, 'tesseract'),
+      '#!/bin/sh\necho "Error in pixReadStream: Unknown format: no pix returned" >&2\nexit 1\n',
+      { mode: 0o755 }
+    );
+
+    const env: NodeJS.ProcessEnv = {
+      ...process.env,
+      PATH: `${binDir}:${process.env.PATH ?? ''}`,
+    };
+
+    const cases: Array<{ args: string[]; expectText: string }> = [
+      { args: [path.join(tmp, 'missing.jpg')], expectText: 'image file not found' },
+      { args: [subDir], expectText: 'not a regular file' },
+      { args: [emptyPath], expectText: 'empty (0 bytes)' },
+      { args: [htmlPath], expectText: 'HTML, not an image' },
+      { args: [pdfPath], expectText: 'PDF, not an image' },
+      { args: ['-z', emptyPath], expectText: 'Unknown option' },
+      { args: [corruptPath], expectText: 'invalid or unreadable image' },
+    ];
+
+    for (const tc of cases) {
+      const cap = createCaptureIo();
+      const res = await runRecordCommand('ocr', [...tc.args, '--cache-dir', cacheDir], {
+        io: cap.io,
+        env,
+        telemetryFilePath: path.join(tmp, 'telemetry.jsonl'),
+      });
+      expect(res.exitCode, `args=${tc.args.join(' ')} stderr=${cap.stderr.join('\n')}`).toBe(2);
+      expect(cap.stderr.join('\n')).toContain(tc.expectText);
+    }
   });
 });
