@@ -87,6 +87,7 @@ jobs:
           RELEASE_VERSION: ${{ inputs.version }}
         run: |
           set -euo pipefail
+          plan="${RUNNER_TEMP:-/tmp}/release-plan.json"
           args=(next --json)
           if [ -n "${RELEASE_VERSION}" ]; then
             args+=(--force-version "${RELEASE_VERSION}")
@@ -94,10 +95,10 @@ jobs:
           if [ -n "${RELEASE_BUMP}" ]; then
             args+=(--bump "${RELEASE_BUMP}")
           fi
-          node scripts/release-version.mjs "${args[@]}" > release-plan.json
-          node --input-type=module -e '
+          node scripts/release-version.mjs "${args[@]}" > "$plan"
+          PLAN_PATH="$plan" node --input-type=module -e '
             import { readFileSync, appendFileSync } from "node:fs";
-            const plan = JSON.parse(readFileSync("release-plan.json", "utf8"));
+            const plan = JSON.parse(readFileSync(process.env.PLAN_PATH, "utf8"));
             const out = process.env.GITHUB_OUTPUT;
             appendFileSync(out, `should_release=${plan.should_release}\n`);
             appendFileSync(out, `version=${plan.version ?? ""}\n`);
@@ -143,16 +144,20 @@ jobs:
 
           repo="$GITHUB_REPOSITORY"
           server="${GITHUB_SERVER_URL:-https://github.com}"
-          previous="$(node --input-type=module -e 'import { readFileSync } from "node:fs"; const plan = JSON.parse(readFileSync("release-plan.json", "utf8")); process.stdout.write(plan.previous_tag ?? "")')"
+          scratch="${RUNNER_TEMP:-/tmp}"
+          plan="$scratch/release-plan.json"
+          logins="$scratch/logins.txt"
+          notes="$scratch/release-notes.md"
+          previous="$(PLAN_PATH="$plan" node --input-type=module -e 'import { readFileSync } from "node:fs"; const plan = JSON.parse(readFileSync(process.env.PLAN_PATH, "utf8")); process.stdout.write(plan.previous_tag ?? "")')"
           compare=""
           if [ -n "$previous" ]; then
             compare="${server}/${repo}/compare/${previous}...${TAG}"
           fi
 
-          : > logins.txt
-          node --input-type=module -e '
+          : > "$logins"
+          PLAN_PATH="$plan" node --input-type=module -e '
             import { readFileSync } from "node:fs";
-            const plan = JSON.parse(readFileSync("release-plan.json", "utf8"));
+            const plan = JSON.parse(readFileSync(process.env.PLAN_PATH, "utf8"));
             for (const commit of plan.commits) process.stdout.write(`${commit.sha}\n`);
           ' | while IFS= read -r sha; do
             if [ -z "$sha" ]; then
@@ -160,26 +165,31 @@ jobs:
             fi
             login="$(gh api "repos/${repo}/commits/${sha}" --jq '.author.login // empty' || true)"
             if [ -n "$login" ]; then
-              printf '%s\n' "$login" >> logins.txt
+              printf '%s\n' "$login" >> "$logins"
             fi
           done
 
-          node scripts/release-version.mjs notes \
-            --plan release-plan.json \
-            --out release-notes.md \
-            --logins-file logins.txt \
-            --compare-url "$compare"
-
+          note_args=(
+            notes
+            --plan "$plan"
+            --out "$notes"
+            --logins-file "$logins"
+          )
           if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release edit "$TAG" --title "$TAG" --notes-file release-notes.md
+            if [ -n "$compare" ]; then
+              note_args+=(--compare-url "$compare")
+            fi
+            node scripts/release-version.mjs "${note_args[@]}"
+            gh release edit "$TAG" --title "$TAG" --notes-file "$notes"
           else
-            # gh 2.105.0 prepends --notes-file to the Release Notes API body when --generate-notes is set.
+            # gh 2.105.0 prepends --notes-file to the Release Notes API body, which already includes Full Changelog.
+            node scripts/release-version.mjs "${note_args[@]}"
             create_args=(
               release create "$TAG"
               --title "$TAG"
               --verify-tag
               --generate-notes
-              --notes-file release-notes.md
+              --notes-file "$notes"
             )
             if [ -n "$previous" ]; then
               create_args+=(--notes-start-tag "$previous")
