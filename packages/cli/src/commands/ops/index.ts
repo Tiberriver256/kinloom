@@ -220,3 +220,26 @@ export {
   type WeekdayName,
   type YearsMonthsDays,
 } from './dates.js';
+
+export { PRONOUNCE_HELP } from './help.js';
+
+export {
+  PRONOUNCE_SUPPORTED_LANGS,
+  buildCommonsAudioUrl,
+  extractMediaWikiPronunciations,
+  getPronounceCacheDir,
+  runPronounceAuditCommand,
+  runPronounceLookupCommand,
+  type PronounceAuditOptions,
+  type PronounceAuditResult,
+  type PronounceAudioHit,
+  type PronounceCoverageGapPerson,
+  type PronounceCoverageGapPlace,
+  type PronounceHomonymCollision,
+  type PronounceLang,
+  type PronounceLookupOptions,
+  type PronounceLookupResult,
+  type PronounceQualityWarning,
+  type PronounceSourceHit,
+  type PronounceUnsourcedEntry,
+} from './pronounce.js';

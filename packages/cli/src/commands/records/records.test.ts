@@ -8,6 +8,7 @@ import path from 'node:path';
 import { PassThrough } from 'node:stream';
 import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it } from 'vitest';
+import { CORE_CLI_COMMANDS } from '../../plugins.js';
 import type { OpsIo, TelemetryEvent } from '../ops/telemetry.js';
 import {
   RECORD_COMMAND_ALIASES,
@@ -195,12 +196,14 @@ afterEach(async () => {
 });
 
 describe('record command registry and discovery', () => {
-  it('registers all 23 skills on disk plus prep-scan and ocr with zero missing files', () => {
+  it('registers all 23 record skills on disk plus prep-scan and ocr with zero missing files (and excludes core CLI skills)', () => {
     const skillDirsOnDisk = fs
       .readdirSync(SKILLS_ROOT, { withFileTypes: true })
       .filter((entry) => entry.isDirectory())
       .map((entry) => entry.name)
       .sort();
+
+    const recordSkillDirsOnDisk = skillDirsOnDisk.filter((dir) => !CORE_CLI_COMMANDS.has(dir));
 
     const registeredSkillDirs = RECORD_COMMAND_SPECS.filter(
       (spec) => spec.kind === 'skill-script' || spec.kind === 'skill-guide'
@@ -208,8 +211,10 @@ describe('record command registry and discovery', () => {
       .map((spec) => spec.skillDir)
       .sort();
 
-    expect(skillDirsOnDisk).toHaveLength(23);
-    expect(registeredSkillDirs).toEqual(skillDirsOnDisk);
+    expect(skillDirsOnDisk).toHaveLength(24);
+    expect(skillDirsOnDisk).toContain('pronounce');
+    expect(recordSkillDirsOnDisk).toHaveLength(23);
+    expect(registeredSkillDirs).toEqual(recordSkillDirsOnDisk);
     expect(RECORD_COMMAND_SPECS).toHaveLength(25);
 
     for (const spec of RECORD_COMMAND_SPECS) {
@@ -942,14 +947,15 @@ describe('offline-first uv fast-path with cold-cache online retry', () => {
 });
 
 describe('bundle-skills.mjs and dual-mode bundled resolution', () => {
-  it('bundles all 23 skills and 4 assets into a temp dist dir with executable script bits', async () => {
+  it('bundles all 24 skills (including pronounce) and 4 assets into a temp dist dir with executable script bits', async () => {
     const tmpOut = await makeTempDir('kinloom-bundle-test-');
     const cliStubPath = path.join(tmpOut, 'cli.js');
     await writeFile(cliStubPath, '#!/usr/bin/env node\n', { encoding: 'utf8', mode: 0o644 });
     const output = execFileSync(process.execPath, [BUNDLE_SCRIPT, '--out-dir', tmpOut], {
       encoding: 'utf8',
     });
-    expect(output).toContain('Bundled 23 skills (21 scripts, 1 references) and 4 assets');
+    expect(output).toContain('Bundled 24 skills (21 scripts, 1 references) and 4 assets');
+    expect(fs.existsSync(path.join(tmpOut, 'bundled-skills', 'pronounce', 'SKILL.md'))).toBe(true);
     expect(fs.statSync(cliStubPath).mode & 0o111).not.toBe(0);
 
     const fakeDistModuleDir = path.join(tmpOut, 'commands', 'records');

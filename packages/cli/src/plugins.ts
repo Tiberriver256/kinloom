@@ -55,6 +55,7 @@ export const CORE_CLI_COMMANDS: ReadonlySet<string> = new Set([
   'status',
   'sync',
   'dates',
+  'pronounce',
   'telemetry',
 ]);
 

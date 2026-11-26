@@ -43,13 +43,24 @@ function asStringArray(value: unknown): string[] {
   return value.filter((item): item is string => typeof item === 'string');
 }
 
-type PronunciationFieldKey = keyof Pronunciation;
-const PRONUNCIATION_KEYS: readonly PronunciationFieldKey[] = [
+type PronunciationStringFieldKey =
+  | 'phonetic'
+  | 'ipa'
+  | 'language'
+  | 'audio_url'
+  | 'note'
+  | 'source_label'
+  | 'source_url'
+  | 'region';
+const PRONUNCIATION_STRING_KEYS: readonly PronunciationStringFieldKey[] = [
   'phonetic',
   'ipa',
   'language',
   'audio_url',
   'note',
+  'source_label',
+  'source_url',
+  'region',
 ];
 
 function readDraftPronunciation(value: unknown): Pronunciation | null {
@@ -58,11 +69,21 @@ function readDraftPronunciation(value: unknown): Pronunciation | null {
   }
   const raw = value as Record<string, unknown>;
   const out: Pronunciation = {};
-  for (const key of PRONUNCIATION_KEYS) {
+  for (const key of PRONUNCIATION_STRING_KEYS) {
     const val = raw[key];
     if (typeof val === 'string' && val.length > 0) {
       out[key] = val;
     }
+  }
+  if (Array.isArray(raw.variants) && raw.variants.length > 0) {
+    out.variants = raw.variants as Pronunciation['variants'];
+  }
+  if (
+    typeof raw.match_full_name_contains === 'string' ||
+    Array.isArray(raw.match_full_name_contains)
+  ) {
+    out.match_full_name_contains =
+      raw.match_full_name_contains as Pronunciation['match_full_name_contains'];
   }
   return Object.keys(out).length > 0 ? out : null;
 }
@@ -76,7 +97,8 @@ function cleanPronunciation(
   }
   const raw = value as Record<string, unknown>;
   const out: Pronunciation = {};
-  for (const key of PRONUNCIATION_KEYS) {
+  let hasAnyNonWhitespace = false;
+  for (const key of PRONUNCIATION_STRING_KEYS) {
     const val = raw[key];
     if (typeof val !== 'string') {
       continue;
@@ -84,9 +106,22 @@ function cleanPronunciation(
     const normalized = trimValues ? val.trim() : val;
     if (normalized.length > 0) {
       out[key] = normalized;
+      if (normalized.trim().length > 0) {
+        hasAnyNonWhitespace = true;
+      }
     }
   }
-  const hasAnyNonWhitespace = Object.values(out).some((v) => Boolean(v && v.trim().length > 0));
+  if (Array.isArray(raw.variants) && raw.variants.length > 0) {
+    out.variants = raw.variants as Pronunciation['variants'];
+    hasAnyNonWhitespace = true;
+  }
+  if (
+    typeof raw.match_full_name_contains === 'string' ||
+    Array.isArray(raw.match_full_name_contains)
+  ) {
+    out.match_full_name_contains =
+      raw.match_full_name_contains as Pronunciation['match_full_name_contains'];
+  }
   return hasAnyNonWhitespace ? out : null;
 }
 
@@ -118,6 +153,9 @@ export const EntityEditDrawer: React.FC<EntityEditDrawerProps> = ({
   const [sharedIpa, setSharedIpa] = useState('');
   const [sharedLanguage, setSharedLanguage] = useState('');
   const [sharedNote, setSharedNote] = useState('');
+  const [sharedSourceLabel, setSharedSourceLabel] = useState('');
+  const [sharedSourceUrl, setSharedSourceUrl] = useState('');
+  const [sharedRegion, setSharedRegion] = useState('');
   const [sharedSaveStatus, setSharedSaveStatus] = useState<'idle' | 'saving' | 'success' | 'error'>(
     'idle',
   );
@@ -257,9 +295,9 @@ export const EntityEditDrawer: React.FC<EntityEditDrawerProps> = ({
       ? asString(draft.full_name) || title || entityId
       : asString(draft.name) || asString(draft.full_name) || title || entityId;
 
-  const updatePronunciationField = (key: PronunciationFieldKey, value: string): void => {
+  const updatePronunciationField = (key: PronunciationStringFieldKey, value: string): void => {
     const current = readDraftPronunciation(draft.pronunciation) ?? {};
-    const next: Record<string, string | undefined> = { ...current, [key]: value };
+    const next: Record<string, unknown> = { ...current, [key]: value };
     if (value === '') {
       delete next[key];
     }
@@ -326,7 +364,10 @@ export const EntityEditDrawer: React.FC<EntityEditDrawerProps> = ({
     }
   };
 
-  const handleSaveSharedSurname = async (term: string): Promise<void> => {
+  const handleSaveSharedSurname = async (
+    term: string,
+    existingShared?: Pronunciation,
+  ): Promise<void> => {
     const trimmedTerm = term.trim();
     if (!trimmedTerm || sharedSaveStatus === 'saving') {
       return;
@@ -343,6 +384,12 @@ export const EntityEditDrawer: React.FC<EntityEditDrawerProps> = ({
           ipa: sharedIpa.trim() || undefined,
           language: sharedLanguage.trim() || undefined,
           note: sharedNote.trim() || undefined,
+          source_label: sharedSourceLabel.trim() || undefined,
+          source_url: sharedSourceUrl.trim() || undefined,
+          region: sharedRegion.trim() || undefined,
+          ...(existingShared?.variants && existingShared.variants.length > 0
+            ? { variants: existingShared.variants }
+            : {}),
         }),
       });
       if (!response.ok) {
@@ -799,10 +846,30 @@ export const EntityEditDrawer: React.FC<EntityEditDrawerProps> = ({
                         <span className="wiki-pronunciation-part">
                           <span className="wiki-pronunciation-part-label">Surname</span>
                           <strong>{surname}</strong>
-                          {sharedSurname?.phonetic && (
+                          {(sharedSurname?.phonetic || sharedSurname?.ipa) && (
                             <span className="wiki-pronunciation-part-shared">
-                              → {sharedSurname.phonetic}
-                              {sharedSurname.ipa ? ` ${sharedSurname.ipa}` : ''} (shared)
+                              → {sharedSurname.phonetic ?? sharedSurname.ipa}
+                              {sharedSurname.phonetic && sharedSurname.ipa
+                                ? ` ${sharedSurname.ipa}`
+                                : ''}{' '}
+                              (shared)
+                            </span>
+                          )}
+                          {(sharedSurname?.source_label || sharedSurname?.source_url) && (
+                            <span className="pronunciation-source">
+                              {sharedSurname.source_url &&
+                              /^https?:\/\//i.test(sharedSurname.source_url.trim()) ? (
+                                <a
+                                  href={sharedSurname.source_url.trim()}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="pronunciation-source-link"
+                                >
+                                  {sharedSurname.source_label || 'Source'}
+                                </a>
+                              ) : (
+                                sharedSurname.source_label
+                              )}
                             </span>
                           )}
                           <button
@@ -818,6 +885,9 @@ export const EntityEditDrawer: React.FC<EntityEditDrawerProps> = ({
                                 setSharedIpa(sharedSurname?.ipa ?? '');
                                 setSharedLanguage(sharedSurname?.language ?? '');
                                 setSharedNote(sharedSurname?.note ?? '');
+                                setSharedSourceLabel(sharedSurname?.source_label ?? '');
+                                setSharedSourceUrl(sharedSurname?.source_url ?? '');
+                                setSharedRegion(sharedSurname?.region ?? '');
                                 setSharedSaveStatus('idle');
                                 setSharedSaveMessage(null);
                                 setSharedEditorOpen(true);
@@ -893,6 +963,32 @@ export const EntityEditDrawer: React.FC<EntityEditDrawerProps> = ({
                               disabled={sharedSaveStatus === 'saving'}
                             />
                           </label>
+                          <label className="wiki-field">
+                            <span className="wiki-field-label">Source label (optional)</span>
+                            <input
+                              type="text"
+                              className="wiki-input"
+                              placeholder="e.g. Wiktionary (Dutch IPA) or Family oral tradition"
+                              value={sharedSourceLabel}
+                              onChange={(e) => {
+                                setSharedSourceLabel(e.target.value);
+                              }}
+                              disabled={sharedSaveStatus === 'saving'}
+                            />
+                          </label>
+                          <label className="wiki-field">
+                            <span className="wiki-field-label">Source URL (optional)</span>
+                            <input
+                              type="url"
+                              className="wiki-input"
+                              placeholder="e.g. https://en.wiktionary.org/wiki/..."
+                              value={sharedSourceUrl}
+                              onChange={(e) => {
+                                setSharedSourceUrl(e.target.value);
+                              }}
+                              disabled={sharedSaveStatus === 'saving'}
+                            />
+                          </label>
                         </div>
                         <div className="wiki-pronunciation-shared-actions">
                           <button
@@ -900,7 +996,7 @@ export const EntityEditDrawer: React.FC<EntityEditDrawerProps> = ({
                             className="wiki-pronunciation-shared-save-btn"
                             disabled={sharedSaveStatus === 'saving'}
                             onClick={() => {
-                              void handleSaveSharedSurname(surname);
+                              void handleSaveSharedSurname(surname, sharedSurname);
                             }}
                           >
                             {sharedSaveStatus === 'saving'
@@ -990,6 +1086,32 @@ export const EntityEditDrawer: React.FC<EntityEditDrawerProps> = ({
                     value={draftPronunciation?.note ?? ''}
                     onChange={(e) => {
                       updatePronunciationField('note', e.target.value);
+                    }}
+                    disabled={isBusy}
+                  />
+                </label>
+                <label className="wiki-field">
+                  <span className="wiki-field-label">Source label (optional)</span>
+                  <input
+                    type="text"
+                    className="wiki-input"
+                    placeholder="e.g. Wiktionary (Dutch IPA)"
+                    value={draftPronunciation?.source_label ?? ''}
+                    onChange={(e) => {
+                      updatePronunciationField('source_label', e.target.value);
+                    }}
+                    disabled={isBusy}
+                  />
+                </label>
+                <label className="wiki-field">
+                  <span className="wiki-field-label">Source URL (optional)</span>
+                  <input
+                    type="url"
+                    className="wiki-input"
+                    placeholder="e.g. https://en.wiktionary.org/wiki/Leiden"
+                    value={draftPronunciation?.source_url ?? ''}
+                    onChange={(e) => {
+                      updatePronunciationField('source_url', e.target.value);
                     }}
                     disabled={isBusy}
                   />

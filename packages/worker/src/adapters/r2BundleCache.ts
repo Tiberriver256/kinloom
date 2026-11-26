@@ -55,13 +55,15 @@ function parseRevisionMetadata(raw: string | undefined): RevisionId | null {
   return asRevisionId(num);
 }
 
+const BUNDLE_COMPILER_EPOCH = 'v2';
+
 /**
- * Deterministic 8-char hex fingerprint of siteConfig so any deploy that changes
- * kinloom.config.yaml (pronunciations, branches, privacy, etc.) automatically
+ * Deterministic 8-char hex fingerprint of siteConfig + compiler epoch so any deploy
+ * that changes kinloom.config.yaml or bundle pronunciation resolution automatically
  * invalidates both the R2 bundle cache and browser HTTP 304 ETag caches.
  */
 export function computeSiteConfigHash(siteConfig: KinloomSiteConfig): string {
-  const input = JSON.stringify(siteConfig);
+  const input = `${BUNDLE_COMPILER_EPOCH}:${JSON.stringify(siteConfig)}`;
   let hash = 0x811c9dc5;
   for (let i = 0; i < input.length; i += 1) {
     hash ^= input.charCodeAt(i);

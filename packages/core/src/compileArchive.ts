@@ -1,6 +1,5 @@
 import type { KinloomSiteConfig } from './schemas/config.js';
 import { resolveDefaultBranchId } from './schemas/config.js';
-import { resolvePersonPronunciation, resolvePlacePronunciation } from './schemas/entities.js';
 import type {
   ArchiveBundle,
   ArchiveEvent,
@@ -302,7 +301,7 @@ function clonePerson(p: RawPerson): RawPerson {
     ...p,
     alt_names: [...p.alt_names],
     ...(p.pronunciation !== undefined
-      ? { pronunciation: p.pronunciation ? { ...p.pronunciation } : null }
+      ? { pronunciation: p.pronunciation ? structuredClone(p.pronunciation) : null }
       : {}),
     ...(p.extensions !== undefined ? { extensions: structuredClone(p.extensions) } : {}),
   };
@@ -336,7 +335,7 @@ function clonePlace(p: Place): Place {
       : {}),
     ...(p.sources !== undefined ? { sources: p.sources.map((s) => ({ ...s })) } : {}),
     ...(p.pronunciation !== undefined
-      ? { pronunciation: p.pronunciation ? { ...p.pronunciation } : null }
+      ? { pronunciation: p.pronunciation ? structuredClone(p.pronunciation) : null }
       : {}),
     ...(p.extensions !== undefined ? { extensions: structuredClone(p.extensions) } : {}),
   };
@@ -378,7 +377,9 @@ export function compileArchive(input: CompileArchiveInput): CompileArchiveResult
   const stripLivingPortraits = mode === 'public' || privacy.stripLivingPortraits;
   const includeLivingSpans = mode === 'private' && !privacy.stripLivingResidenceSpans;
 
-  // Stage 1: Clone inputs once at the entry boundary and assign branches from siteConfig
+  // Stage 1: Clone inputs once at the entry boundary and assign branches from siteConfig.
+  // Keep shared lexicon entries in bundle.pronunciations only so live D1 lexicon overrides
+  // are never shadowed by stale pre-baked fields on individual person/place records.
   const pronunciationLexicon = siteConfig.pronunciations;
   const rawPeople: RawPerson[] = input.people.map((p) => {
     const clone = clonePerson(p);
@@ -386,22 +387,11 @@ export function compileArchive(input: CompileArchiveInput): CompileArchiveResult
     if (resolveEffectiveLiving(clone, privacy)) {
       clone.is_living = true;
     }
-    const resolvedPron = resolvePersonPronunciation(clone, pronunciationLexicon);
-    if (resolvedPron) {
-      clone.pronunciation = resolvedPron;
-    }
     return clone;
   });
 
   const rawEvents: RawEvent[] = input.events.map(cloneEvent);
-  const places: Place[] = input.places.map((p) => {
-    const clone = clonePlace(p);
-    const resolvedPron = resolvePlacePronunciation(clone, pronunciationLexicon);
-    if (resolvedPron) {
-      clone.pronunciation = resolvedPron;
-    }
-    return clone;
-  });
+  const places: Place[] = input.places.map(clonePlace);
   const kinship: KinshipEdge[] = input.kinship.map(cloneKinship);
 
   const combinedSources: SourceRecord[] = [

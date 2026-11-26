@@ -110,23 +110,75 @@ export function wrapPcmAsWav(
   return wav;
 }
 
+const LANGUAGE_DISPLAY_NAMES: Readonly<Record<string, string>> = {
+  nl: 'Dutch',
+  sv: 'Swedish',
+  fi: 'Finnish',
+  pl: 'Polish',
+  de: 'German',
+  fr: 'French',
+  it: 'Italian',
+  es: 'Spanish',
+  no: 'Norwegian',
+  nb: 'Norwegian',
+  nn: 'Norwegian',
+  da: 'Danish',
+  en: 'English',
+  'en-us': 'American English',
+  'en-gb': 'British English',
+};
+
+function formatLanguageDirective(language: string): string {
+  const trimmed = language.trim();
+  const lower = trimmed.toLowerCase();
+  const display = LANGUAGE_DISPLAY_NAMES[lower] ?? LANGUAGE_DISPLAY_NAMES[lower.split(/[-_]/)[0]];
+  return display ? `${display} (${trimmed})` : trimmed;
+}
+
 export function buildPronunciationPrompt(params: {
   text: string;
   phonetic?: string;
   ipa?: string;
+  language?: string;
 }): string {
-  const ipa = params.ipa?.trim();
-  if (ipa) {
-    const stripped = ipa.replace(/^\/+|\/+$/g, '').trim();
-    if (stripped) {
-      return `/${stripped}/`;
+  const text = params.text.trim();
+  const rawIpa = params.ipa?.trim();
+  const strippedIpa = rawIpa ? rawIpa.replace(/^\/+|\/+$/g, '').trim() : '';
+  const ipa = strippedIpa ? `/${strippedIpa}/` : '';
+  const phonetic = params.phonetic?.trim() ?? '';
+  const language = params.language?.trim() ?? '';
+
+  if (!text) {
+    if (ipa && phonetic) {
+      return language
+        ? `Pronounce in ${formatLanguageDirective(language)} as ${ipa} (guide: ${phonetic}).`
+        : `${ipa} (guide: ${phonetic})`;
     }
+    if (ipa) {
+      return language ? `Pronounce in ${formatLanguageDirective(language)} as ${ipa}.` : ipa;
+    }
+    if (phonetic) {
+      return language ? `Pronounce in ${formatLanguageDirective(language)} as ${phonetic}.` : phonetic;
+    }
+    return '';
   }
-  const phonetic = params.phonetic?.trim();
-  if (phonetic) {
-    return phonetic;
+
+  if (!ipa && !phonetic && !language) {
+    return text;
   }
-  return params.text.trim();
+
+  const parts: string[] = [`Pronounce "${text}"`];
+  if (language) {
+    parts.push(`in ${formatLanguageDirective(language)}`);
+  }
+  if (ipa && phonetic) {
+    parts.push(`as ${ipa} (guide: ${phonetic})`);
+  } else if (ipa) {
+    parts.push(`as ${ipa}`);
+  } else if (phonetic) {
+    parts.push(`as ${phonetic}`);
+  }
+  return `${parts.join(' ')}.`;
 }
 
 export class GeminiPronunciationAudioGenerator implements PronunciationAudioGenerator {

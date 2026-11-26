@@ -199,3 +199,25 @@ Options:
   --at <YYYY-MM-DD>  Target event date for \`age\` (repeatable)
   --json             Emit structured JSON output
   -h, --help         Show this help message`;
+
+export const PRONOUNCE_HELP = `Usage: kinloom pronounce <subcommand> [arguments] [options]
+
+Research verified IPA/audio from Wikimedia and audit archive pronunciation lexicons.
+
+Subcommands:
+  lookup <term> [--lang nl|sv|fi|pl|de|en] [--refresh] [--json]
+      Query Wiktionary and Wikipedia (disk-cached in ~/.cache/kinloom-pronounce/)
+      for verified IPA transcriptions, Wikimedia Commons native audio URLs, and
+      canonical source citations. Never fabricates IPA when upstream has none.
+
+  audit [--repo <path>] [--json]
+      Audit kinloom.config.yaml, deceased people in data/people.yaml (zero living
+      names), and data/places.yaml for coverage gaps, unsourced entries, homonymous
+      bare place collisions, and IPA/linguistic quality warnings.
+
+Options:
+  --lang <code>      Language filter for \`lookup\` (e.g. nl, sv, fi, pl, de, en)
+  --refresh          Bypass disk cache on \`lookup\` and re-fetch from Wikimedia
+  --repo <dir>       Archive repository root for \`audit\` (default: current directory)
+  --json             Emit structured JSON output
+  -h, --help         Show this help message`;

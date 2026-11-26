@@ -7260,6 +7260,62 @@ dialog.global-search-backdrop {
   color: var(--text-secondary);
 }
 
+.pronunciation-source {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  color: var(--text-secondary);
+}
+
+.pronunciation-source-link {
+  color: var(--accent-primary);
+  text-decoration: underline;
+  text-decoration-style: dotted;
+  text-underline-offset: 2px;
+}
+
+.pronunciation-source-link:hover,
+.pronunciation-source-link:focus-visible {
+  text-decoration-style: solid;
+}
+
+.pronunciation-variants {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  margin-left: 2px;
+}
+
+.pronunciation-variant-btn {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 7px;
+  border: 1px solid var(--border-control);
+  border-radius: 9999px;
+  background: var(--surface-card);
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  cursor: pointer;
+  transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease;
+}
+
+.pronunciation-variant-btn:hover {
+  border-color: var(--accent-primary);
+  color: var(--accent-primary);
+}
+
+.pronunciation-variant-btn.is-active {
+  background: var(--accent-primary);
+  border-color: var(--accent-primary);
+  color: var(--text-inverse);
+}
+
+.pronunciation-variant-btn:focus-visible {
+  outline: 2px solid var(--action-focus);
+  outline-offset: 2px;
+}
+
 .inline-entity-mention {
   display: inline;
 }

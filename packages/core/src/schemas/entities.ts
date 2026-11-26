@@ -102,15 +102,354 @@ export const HistoricalNameSchema = z.object({
   valid_to: OptionalCoercedStringSchema,
 });
 
+export const PronunciationVariantSchema = z.object({
+  label: z.string().min(1),
+  phonetic: z.string().min(1).optional(),
+  ipa: z.string().min(1).optional(),
+  language: z.string().min(1).optional(),
+  audio_url: z.string().min(1).optional(),
+  note: z.string().min(1).optional(),
+  source_url: z.string().min(1).optional(),
+  source_label: z.string().min(1).optional(),
+  region: z.string().min(1).optional(),
+});
+
+export type PronunciationVariant = z.infer<typeof PronunciationVariantSchema>;
+
 export const PronunciationSchema = z.object({
   phonetic: z.string().min(1).optional(),
   ipa: z.string().min(1).optional(),
   language: z.string().min(1).optional(),
   audio_url: z.string().min(1).optional(),
   note: z.string().min(1).optional(),
+  source_url: z.string().min(1).optional(),
+  source_label: z.string().min(1).optional(),
+  region: z.string().min(1).optional(),
+  match_full_name_contains: z.union([z.string().min(1), z.array(z.string().min(1))]).optional(),
+  variants: z.array(PronunciationVariantSchema).optional(),
 });
 
 export type Pronunciation = z.infer<typeof PronunciationSchema>;
+
+/**
+ * Merge a base pronunciation lexicon with live overrides, resolving case-insensitive
+ * key collisions so an override always supersedes any differently cased base key.
+ */
+export function mergePronunciationLexicons(
+  base?: Readonly<Record<string, Pronunciation>> | null,
+  override?: Readonly<Record<string, Pronunciation>> | null,
+): Record<string, Pronunciation> {
+  const out: Record<string, Pronunciation> = {};
+  const keyByLower = new Map<string, string>();
+  const apply = (source?: Readonly<Record<string, Pronunciation>> | null): void => {
+    if (!source) {
+      return;
+    }
+    for (const [key, entry] of Object.entries(source)) {
+      const lower = key.toLowerCase();
+      const prevKey = keyByLower.get(lower);
+      if (prevKey && prevKey !== key) {
+        delete out[prevKey];
+      }
+      keyByLower.set(lower, key);
+      out[key] = entry;
+    }
+  };
+  apply(base);
+  apply(override);
+  return out;
+}
+
+function mergePronunciationEntry(
+  shared: Pronunciation | undefined,
+  own: Pronunciation | undefined,
+): Pronunciation | null {
+  if (!own && !shared) {
+    return null;
+  }
+  if (!shared) {
+    return own ?? null;
+  }
+  if (!own) {
+    return shared;
+  }
+  const merged: Pronunciation = {
+    ...shared,
+    ...own,
+  };
+  const ownChangesSpokenGuide =
+    (own.phonetic !== undefined && own.phonetic !== shared.phonetic) ||
+    (own.ipa !== undefined && own.ipa !== shared.ipa);
+  if (ownChangesSpokenGuide && own.audio_url === undefined) {
+    delete merged.audio_url;
+  }
+  return merged;
+}
+
+const US_STATE_NAMES = new Set([
+  'alabama',
+  'alaska',
+  'arizona',
+  'arkansas',
+  'california',
+  'colorado',
+  'connecticut',
+  'delaware',
+  'florida',
+  'georgia',
+  'hawaii',
+  'idaho',
+  'illinois',
+  'indiana',
+  'iowa',
+  'kansas',
+  'kentucky',
+  'louisiana',
+  'maine',
+  'maryland',
+  'massachusetts',
+  'michigan',
+  'minnesota',
+  'mississippi',
+  'missouri',
+  'montana',
+  'nebraska',
+  'nevada',
+  'new hampshire',
+  'new jersey',
+  'new mexico',
+  'new york',
+  'north carolina',
+  'north dakota',
+  'ohio',
+  'oklahoma',
+  'oregon',
+  'pennsylvania',
+  'rhode island',
+  'south carolina',
+  'south dakota',
+  'tennessee',
+  'texas',
+  'utah',
+  'vermont',
+  'virginia',
+  'washington',
+  'west virginia',
+  'wisconsin',
+  'wyoming',
+  'district of columbia',
+]);
+
+const COUNTRY_TOKEN_PATTERNS: readonly { readonly code: string; readonly tokens: readonly string[] }[] = [
+  {
+    code: 'US',
+    tokens: ['united states', 'united states of america', 'usa', 'u.s.a.', 'u.s.'],
+  },
+  {
+    code: 'NL',
+    tokens: [
+      'netherlands',
+      'the netherlands',
+      'nederland',
+      'north holland',
+      'south holland',
+      'noord-holland',
+      'zuid-holland',
+      'noord-brabant',
+      'north brabant',
+      'gelderland',
+      'friesland',
+      'fryslân',
+      'groningen',
+      'overijssel',
+      'drenthe',
+      'utrecht',
+      'flevoland',
+      'limburg',
+    ],
+  },
+  {
+    code: 'BE',
+    tokens: ['belgium', 'belgië', 'belgique', 'flanders', 'vlaanderen', 'wallonia'],
+  },
+  {
+    code: 'GB',
+    tokens: ['united kingdom', 'great britain', 'england', 'scotland', 'wales', 'northern ireland', 'uk'],
+  },
+  {
+    code: 'SE',
+    tokens: ['sweden', 'sverige', 'värmland', 'dalarna', 'skåne', 'småland', 'östergötland', 'västergötland', 'bergslagen'],
+  },
+  {
+    code: 'FI',
+    tokens: ['finland', 'suomi', 'ostrobothnia', 'pohjanmaa', 'satakunta', 'karelia', 'karjala'],
+  },
+  {
+    code: 'PL',
+    tokens: ['poland', 'polska', 'galicia', 'pomerania', 'silesia', 'masovia', 'greater poland'],
+  },
+  {
+    code: 'DE',
+    tokens: ['germany', 'deutschland', 'prussia', 'preußen', 'bavaria', 'bayern', 'saxony', 'sachsen', 'hanover', 'hannover', 'hesse', 'hessen', 'westphalia', 'württemberg', 'baden'],
+  },
+  {
+    code: 'CA',
+    tokens: ['canada', 'ontario', 'quebec', 'québec', 'nova scotia', 'new brunswick', 'manitoba', 'saskatchewan', 'alberta', 'british columbia'],
+  },
+  {
+    code: 'IE',
+    tokens: ['ireland', 'éire'],
+  },
+  {
+    code: 'NO',
+    tokens: ['norway', 'norge'],
+  },
+  {
+    code: 'DK',
+    tokens: ['denmark', 'danmark'],
+  },
+  {
+    code: 'FR',
+    tokens: ['france'],
+  },
+  {
+    code: 'IT',
+    tokens: ['italy', 'italia'],
+  },
+  {
+    code: 'AU',
+    tokens: ['australia'],
+  },
+  {
+    code: 'NZ',
+    tokens: ['new zealand'],
+  },
+];
+
+const LANGUAGE_COMPATIBLE_COUNTRIES: Readonly<Record<string, ReadonlySet<string>>> = {
+  nl: new Set(['NL', 'BE']),
+  sv: new Set(['SE', 'FI']),
+  fi: new Set(['FI', 'SE']),
+  pl: new Set(['PL']),
+  de: new Set(['DE', 'AT', 'CH']),
+  fr: new Set(['FR', 'BE', 'CH', 'CA']),
+  it: new Set(['IT', 'CH']),
+  no: new Set(['NO']),
+  nb: new Set(['NO']),
+  nn: new Set(['NO']),
+  da: new Set(['DK']),
+  en: new Set(['US', 'GB', 'CA', 'IE', 'AU', 'NZ']),
+};
+
+function splitPlaceSegments(text: string): string[] {
+  return text
+    .split(',')
+    .map((part) => part.trim())
+    .filter((part) => part.length > 0);
+}
+
+function inferCountryCodeFromSegments(segments: readonly string[]): string | null {
+  for (let i = segments.length - 1; i >= 0; i -= 1) {
+    const seg = segments[i].toLowerCase();
+    for (const entry of COUNTRY_TOKEN_PATTERNS) {
+      if (entry.tokens.includes(seg)) {
+        return entry.code;
+      }
+    }
+    if (US_STATE_NAMES.has(seg)) {
+      return 'US';
+    }
+  }
+  const joined = segments.join(', ').toLowerCase();
+  for (const entry of COUNTRY_TOKEN_PATTERNS) {
+    for (const token of entry.tokens) {
+      if (token.length >= 4 && joined.includes(token)) {
+        return entry.code;
+      }
+    }
+  }
+  for (const state of US_STATE_NAMES) {
+    if (joined.includes(state)) {
+      return 'US';
+    }
+  }
+  return null;
+}
+
+function getPlaceQualifierSegments(place: { readonly name?: string; readonly full_name?: string }): string[] {
+  const fullName = place.full_name?.trim();
+  if (!fullName) {
+    return [];
+  }
+  const segments = splitPlaceSegments(fullName);
+  const nameLower = place.name?.trim().toLowerCase();
+  if (segments.length > 1 && nameLower && segments[0].toLowerCase() === nameLower) {
+    return segments.slice(1);
+  }
+  return segments;
+}
+
+function languageCompatibleCountries(language: string): ReadonlySet<string> | null {
+  const normalized = language.trim().toLowerCase();
+  if (!normalized) {
+    return null;
+  }
+  const parts = normalized.split(/[-_]/);
+  const primary = parts[0];
+  const subtag = parts[1]?.toUpperCase();
+  if (subtag && /^[A-Z]{2}$/.test(subtag)) {
+    return new Set([subtag]);
+  }
+  return LANGUAGE_COMPATIBLE_COUNTRIES[primary] ?? null;
+}
+
+function isBareLexiconEntryCompatibleWithPlace(
+  entry: Pronunciation,
+  place: { readonly name?: string; readonly full_name?: string },
+): boolean {
+  const fullName = place.full_name?.trim() ?? '';
+  const fullNameLower = fullName.toLowerCase();
+
+  if (entry.match_full_name_contains !== undefined) {
+    const needles = Array.isArray(entry.match_full_name_contains)
+      ? entry.match_full_name_contains
+      : [entry.match_full_name_contains];
+    const validNeedles = needles.map((n) => n.trim().toLowerCase()).filter(Boolean);
+    if (validNeedles.length > 0) {
+      if (!fullNameLower || !validNeedles.some((needle) => fullNameLower.includes(needle))) {
+        return false;
+      }
+    }
+  }
+
+  const qualifierSegments = getPlaceQualifierSegments(place);
+  const placeCountry = qualifierSegments.length > 0 ? inferCountryCodeFromSegments(qualifierSegments) : null;
+
+  if (entry.region?.trim() && fullNameLower) {
+    const regionSegments = splitPlaceSegments(entry.region);
+    const regionCountry = inferCountryCodeFromSegments(regionSegments);
+    const qualifierJoined = qualifierSegments.join(', ').toLowerCase();
+    const directRegionMatch =
+      fullNameLower.includes(entry.region.trim().toLowerCase()) ||
+      regionSegments.some((seg) => qualifierJoined.includes(seg.toLowerCase()));
+
+    if (regionCountry && placeCountry && regionCountry !== placeCountry) {
+      return false;
+    }
+    if (!directRegionMatch && (!regionCountry || !placeCountry || regionCountry !== placeCountry)) {
+      return false;
+    }
+  }
+
+  if (entry.language?.trim() && placeCountry) {
+    const compatibleCountries = languageCompatibleCountries(entry.language);
+    if (compatibleCountries && !compatibleCountries.has(placeCountry)) {
+      return false;
+    }
+  }
+
+  return true;
+}
 
 /**
  * Resolve a person's effective pronunciation by falling back to a shared
@@ -138,42 +477,85 @@ export function resolvePersonPronunciation(
         )?.[1])
       : undefined;
   const own = person.pronunciation ?? undefined;
-  if (!own && !shared) {
-    return null;
-  }
-  return {
-    ...shared,
-    ...own,
-  };
+  return mergePronunciationEntry(shared, own);
 }
 
 /**
- * Resolve a place's effective pronunciation, falling back to the shared
- * archive-level lexicon by place name when no per-place override is set.
+ * Resolve a place's effective pronunciation in strict specificity order:
+ * 1. Explicit `place.pronunciation` on the place record itself
+ * 2. `lexicon[place.id]` (exact place ID key)
+ * 3. `lexicon[place.full_name]` (case-insensitive qualified name, including matching
+ *    qualified keys such as "Zeeland, Michigan" for "Zeeland, Ottawa County, Michigan, United States")
+ * 4. Bare `lexicon[place.name]` only when region, `match_full_name_contains`, and language
+ *    do not conflict with the place's country/region scope.
  */
 export function resolvePlacePronunciation(
   place: {
+    readonly id?: string;
     readonly name?: string;
+    readonly full_name?: string;
     readonly pronunciation?: Pronunciation | null;
   },
   lexicon?: Readonly<Record<string, Pronunciation>> | null,
 ): Pronunciation | null {
-  const nameKey = place.name?.trim();
-  const shared =
-    lexicon && nameKey
-      ? (lexicon[nameKey] ??
+  let shared: Pronunciation | undefined;
+
+  if (lexicon) {
+    const idKey = place.id?.trim();
+    if (idKey && lexicon[idKey]) {
+      shared = lexicon[idKey];
+    }
+
+    const fullNameKey = place.full_name?.trim();
+    if (!shared && fullNameKey) {
+      shared =
+        lexicon[fullNameKey] ??
+        Object.entries(lexicon).find(
+          ([k]) => k.toLowerCase() === fullNameKey.toLowerCase(),
+        )?.[1];
+    }
+
+    const nameKey = place.name?.trim();
+    if (!shared && nameKey && fullNameKey) {
+      const nameLower = nameKey.toLowerCase();
+      const qualifierSegments = getPlaceQualifierSegments(place).map((s) => s.toLowerCase());
+      const qualifierJoined = qualifierSegments.join(', ');
+      let bestQualified: { readonly keyLen: number; readonly entry: Pronunciation } | null = null;
+
+      for (const [key, entry] of Object.entries(lexicon)) {
+        const keySegments = splitPlaceSegments(key);
+        if (keySegments.length < 2 || keySegments[0].toLowerCase() !== nameLower) {
+          continue;
+        }
+        const keyQualifiers = keySegments.slice(1).map((s) => s.toLowerCase());
+        const allMatch = keyQualifiers.every(
+          (q) =>
+            qualifierSegments.includes(q) ||
+            (q.length >= 3 && qualifierJoined.includes(q)),
+        );
+        if (allMatch && (!bestQualified || key.length > bestQualified.keyLen)) {
+          bestQualified = { keyLen: key.length, entry };
+        }
+      }
+      if (bestQualified) {
+        shared = bestQualified.entry;
+      }
+    }
+
+    if (!shared && nameKey) {
+      const bareEntry =
+        lexicon[nameKey] ??
         Object.entries(lexicon).find(
           ([k]) => k.toLowerCase() === nameKey.toLowerCase(),
-        )?.[1])
-      : undefined;
-  const own = place.pronunciation ?? undefined;
-  if (!own && !shared) {
-    return null;
+        )?.[1];
+      if (bareEntry && isBareLexiconEntryCompatibleWithPlace(bareEntry, place)) {
+        shared = bareEntry;
+      }
+    }
   }
-  return {
-    ...shared,
-    ...own,
-  };
+
+  const own = place.pronunciation ?? undefined;
+  return mergePronunciationEntry(shared, own);
 }
 
 export const RawPersonSchema = z.object({

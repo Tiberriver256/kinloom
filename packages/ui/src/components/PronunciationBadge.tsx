@@ -1,4 +1,4 @@
-import type { Pronunciation } from '@kinloom/core';
+import type { Pronunciation, PronunciationVariant } from '@kinloom/core';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { resolveAssetUrl } from './Atoms.js';
 
@@ -13,6 +13,8 @@ export interface PronunciationBadgeProps {
   iconOnly?: boolean;
   className?: string;
 }
+
+const SAFE_EXTERNAL_URL_RE = /^https?:\/\//i;
 
 let activeAudioElement: HTMLAudioElement | null = null;
 let activeStopCallback: (() => void) | null = null;
@@ -41,16 +43,44 @@ function stopActivePronunciation(): void {
   }
 }
 
+export function isEnglishPronunciationLanguage(language?: string | null): boolean {
+  const trimmed = language?.trim();
+  if (!trimmed) {
+    return true;
+  }
+  return /^en(?:[-_]|$)/i.test(trimmed);
+}
+
+function hasSingleEntryContent(
+  entry?: Pick<Pronunciation, 'phonetic' | 'ipa' | 'audio_url' | 'note'> | null,
+): boolean {
+  if (!entry) {
+    return false;
+  }
+  return Boolean(
+    entry.phonetic?.trim() ||
+      entry.ipa?.trim() ||
+      entry.audio_url?.trim() ||
+      entry.note?.trim(),
+  );
+}
+
 export function hasPronunciationContent(pronunciation?: Pronunciation | null): boolean {
   if (!pronunciation) {
     return false;
   }
-  return Boolean(
-    pronunciation.phonetic?.trim() ||
-      pronunciation.ipa?.trim() ||
-      pronunciation.audio_url?.trim() ||
-      pronunciation.note?.trim(),
-  );
+  if (hasSingleEntryContent(pronunciation)) {
+    return true;
+  }
+  return Boolean(pronunciation.variants?.some((variant) => hasSingleEntryContent(variant)));
+}
+
+function sanitizeSourceUrl(raw?: string | null): string | null {
+  const trimmed = raw?.trim();
+  if (!trimmed || !SAFE_EXTERNAL_URL_RE.test(trimmed)) {
+    return null;
+  }
+  return trimmed;
 }
 
 export const PronunciationBadge: React.FC<PronunciationBadgeProps> = ({
@@ -63,7 +93,22 @@ export const PronunciationBadge: React.FC<PronunciationBadgeProps> = ({
   className,
 }) => {
   const [playing, setPlaying] = useState(false);
+  const [selectedVariantIdx, setSelectedVariantIdx] = useState<number | null>(null);
   const stopSelfRef = useRef<(() => void) | null>(null);
+
+  const variants: readonly PronunciationVariant[] =
+    !compact && !iconOnly && pronunciation?.variants
+      ? pronunciation.variants.filter((v) => hasSingleEntryContent(v))
+      : [];
+
+  const effectiveVariantIdx =
+    selectedVariantIdx !== null && selectedVariantIdx < variants.length ? selectedVariantIdx : null;
+  const activeEntry: Pronunciation | PronunciationVariant | null | undefined =
+    effectiveVariantIdx !== null ? variants[effectiveVariantIdx] : pronunciation;
+
+  useEffect(() => {
+    setSelectedVariantIdx(null);
+  }, [pronunciation]);
 
   useEffect(() => {
     return (): void => {
@@ -92,7 +137,7 @@ export const PronunciationBadge: React.FC<PronunciationBadgeProps> = ({
         }
       };
 
-      const audioUrl = pronunciation?.audio_url?.trim();
+      const audioUrl = activeEntry?.audio_url?.trim();
       if (audioUrl && typeof Audio !== 'undefined') {
         const resolved = resolveAssetUrl(audioUrl, baseUrl);
         if (!resolved) {
@@ -136,10 +181,14 @@ export const PronunciationBadge: React.FC<PronunciationBadgeProps> = ({
         window.speechSynthesis &&
         typeof SpeechSynthesisUtterance !== 'undefined'
       ) {
-        const spokenText = pronunciation?.phonetic?.trim() || label;
+        // Send English respellings only to English voices; non-English voices pronounce
+        // the native orthography (`label`) cleanly in their own language.
+        const spokenText = isEnglishPronunciationLanguage(activeEntry?.language)
+          ? activeEntry?.phonetic?.trim() || label
+          : label;
         const utterance = new SpeechSynthesisUtterance(spokenText);
-        if (pronunciation?.language?.trim()) {
-          utterance.lang = pronunciation.language.trim();
+        if (activeEntry?.language?.trim()) {
+          utterance.lang = activeEntry.language.trim();
         }
         activeStopCallback = onStopped;
         stopSelfRef.current = onStopped;
@@ -161,19 +210,24 @@ export const PronunciationBadge: React.FC<PronunciationBadgeProps> = ({
         }
       }
     },
-    [playing, pronunciation, baseUrl, label],
+    [playing, activeEntry, baseUrl, label],
   );
 
-  if (!pronunciation || !hasPronunciationContent(pronunciation)) {
+  if (!pronunciation || !hasPronunciationContent(pronunciation) || !activeEntry) {
     return null;
   }
 
-  const phonetic = pronunciation.phonetic?.trim() || '';
-  const ipa = pronunciation.ipa?.trim() || '';
-  const language = pronunciation.language?.trim() || '';
-  const note = pronunciation.note?.trim() || '';
+  const phonetic = activeEntry.phonetic?.trim() || '';
+  const ipa = activeEntry.ipa?.trim() || '';
+  const language = activeEntry.language?.trim() || '';
+  const note = activeEntry.note?.trim() || '';
+  const sourceLabel = activeEntry.source_label?.trim() || '';
+  const safeSourceUrl = sanitizeSourceUrl(activeEntry.source_url);
   const primaryGuide = phonetic || ipa;
   const secondaryIpa = phonetic && ipa ? ipa : '';
+  const primaryVariantLabel =
+    pronunciation.region?.trim() ||
+    (pronunciation.language?.trim() ? `Primary (${pronunciation.language.trim()})` : 'Primary');
 
   const rootClassName = [
     'pronunciation-badge',
@@ -231,6 +285,53 @@ export const PronunciationBadge: React.FC<PronunciationBadgeProps> = ({
         </span>
       )}
       {!iconOnly && !compact && note && <span className="pronunciation-note">{note}</span>}
+      {!iconOnly && !compact && (sourceLabel || safeSourceUrl) && (
+        <span className="pronunciation-source">
+          {safeSourceUrl ? (
+            <a
+              href={safeSourceUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="pronunciation-source-link"
+            >
+              {sourceLabel || 'Source'}
+            </a>
+          ) : (
+            sourceLabel
+          )}
+        </span>
+      )}
+      {!iconOnly && !compact && variants.length > 0 && (
+        <span className="pronunciation-variants print-hide" aria-label="Pronunciation variants">
+          <button
+            type="button"
+            className={`pronunciation-variant-btn${effectiveVariantIdx === null ? ' is-active' : ''}`}
+            aria-pressed={effectiveVariantIdx === null}
+            onClick={(e) => {
+              e.stopPropagation();
+              stopActivePronunciation();
+              setSelectedVariantIdx(null);
+            }}
+          >
+            {primaryVariantLabel}
+          </button>
+          {variants.map((variant, idx) => (
+            <button
+              key={`${variant.label}-${idx}`}
+              type="button"
+              className={`pronunciation-variant-btn${effectiveVariantIdx === idx ? ' is-active' : ''}`}
+              aria-pressed={effectiveVariantIdx === idx}
+              onClick={(e) => {
+                e.stopPropagation();
+                stopActivePronunciation();
+                setSelectedVariantIdx(idx);
+              }}
+            >
+              {variant.label}
+            </button>
+          ))}
+        </span>
+      )}
     </span>
   );
 };

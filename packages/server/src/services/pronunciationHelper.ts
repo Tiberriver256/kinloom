@@ -21,16 +21,14 @@ export async function computePronunciationPromptHash(params: {
   language?: string;
   voice?: string;
 }): Promise<string> {
-  const ipa = params.ipa?.trim().replace(/^\/|\/$/g, '');
-  const phonetic = params.phonetic?.trim();
-  const canonical = ipa
-    ? `ipa:${ipa}`
-    : phonetic
-      ? `phonetic:${phonetic.toLowerCase()}`
-      : `text:${params.text.trim().toLowerCase()}`;
+  const text = params.text.trim().toLowerCase();
+  const phonetic = (params.phonetic ?? '').trim().toLowerCase();
+  const ipa = (params.ipa ?? '').trim().replace(/^\/+|\/+$/g, '').trim();
   const lang = (params.language ?? '').trim().toLowerCase();
   const voice = (params.voice ?? 'Charon').trim().toLowerCase();
-  const raw = new TextEncoder().encode(`${canonical}|lang:${lang}|voice:${voice}`);
+  const raw = new TextEncoder().encode(
+    `v2|text:${text}|phonetic:${phonetic}|ipa:${ipa}|lang:${lang}|voice:${voice}`
+  );
   return sha256Hex(raw);
 }
 

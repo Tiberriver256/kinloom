@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { ArchiveBundle, Place, RawPerson } from '@kinloom/core';
 import { createInMemoryServerPorts } from '../adapters/inMemory.js';
 import type { PronunciationAudioGenerator } from '../ports.js';
+import { computePronunciationPromptHash } from '../services/pronunciationHelper.js';
 import { createKinloomServer } from './router.js';
 import { signSessionToken } from './session.js';
 import {
@@ -670,5 +671,119 @@ describe('Shared pronunciation lexicon endpoints (GET /api/pronunciations, PUT /
       Alder: { phonetic: 'AWL-der' },
       Springfield: { phonetic: 'SPRING-feeld' },
     });
+  });
+
+  it('persists provenance and variants via PUT /api/pronunciations/:term and invalidates cache hash on text/phonetic/ipa/language/voice changes', async () => {
+    const baseHash = await computePronunciationPromptHash({
+      text: 'Goes',
+      phonetic: 'HOOS',
+      ipa: '/ɣus/',
+      language: 'nl',
+      voice: 'Charon',
+    });
+    const sameCaseHash = await computePronunciationPromptHash({
+      text: 'goes',
+      phonetic: 'hoos',
+      ipa: 'ɣus',
+      language: 'NL',
+      voice: 'charon',
+    });
+    expect(sameCaseHash).toBe(baseHash);
+
+    // Updating ANY of text, phonetic, ipa, language, or voice produces a distinct cache key
+    expect(
+      await computePronunciationPromptHash({
+        text: 'Goes, Zeeland',
+        phonetic: 'HOOS',
+        ipa: '/ɣus/',
+        language: 'nl',
+        voice: 'Charon',
+      })
+    ).not.toBe(baseHash);
+    expect(
+      await computePronunciationPromptHash({
+        text: 'Goes',
+        phonetic: 'KHOOS',
+        ipa: '/ɣus/',
+        language: 'nl',
+        voice: 'Charon',
+      })
+    ).not.toBe(baseHash);
+    expect(
+      await computePronunciationPromptHash({
+        text: 'Goes',
+        phonetic: 'HOOS',
+        ipa: '/xuːs/',
+        language: 'nl',
+        voice: 'Charon',
+      })
+    ).not.toBe(baseHash);
+    expect(
+      await computePronunciationPromptHash({
+        text: 'Goes',
+        phonetic: 'HOOS',
+        ipa: '/ɣus/',
+        language: 'en-US',
+        voice: 'Charon',
+      })
+    ).not.toBe(baseHash);
+    expect(
+      await computePronunciationPromptHash({
+        text: 'Goes',
+        phonetic: 'HOOS',
+        ipa: '/ɣus/',
+        language: 'nl',
+        voice: 'Kore',
+      })
+    ).not.toBe(baseHash);
+
+    const siteConfig = createSyntheticSiteConfig();
+    const ports = createInMemoryServerPorts(siteConfig);
+    const server = createKinloomServer({
+      siteConfig,
+      ports,
+      sessionSecret: SECRET,
+    });
+    const editorCookie = await createUserCookie(ports, {
+      email: 'editor@example.test',
+      display_name: 'Archive Editor',
+      role: 'editor',
+    });
+
+    const putRes = await server.fetch(
+      new Request(`${ORIGIN}/api/pronunciations/${encodeURIComponent('Zeeland, Netherlands')}`, {
+        method: 'PUT',
+        headers: { 'content-type': 'application/json', origin: ORIGIN, cookie: editorCookie },
+        body: JSON.stringify({
+          phonetic: 'ZAY-lahnt',
+          ipa: '/ˈzeː.lɑnt/',
+          language: 'nl',
+          region: 'Netherlands',
+          source_label: 'Wiktionary (Dutch IPA)',
+          source_url: 'https://en.wiktionary.org/wiki/Zeeland',
+          variants: [
+            {
+              label: 'West Michigan',
+              phonetic: 'ZEE-lund',
+              ipa: '/ˈziː.lənd/',
+              language: 'en-US',
+            },
+          ],
+        }),
+      })
+    );
+    expect(putRes.status).toBe(200);
+    const putBody = (await putRes.json()) as {
+      pronunciation: {
+        source_label?: string;
+        source_url?: string;
+        region?: string;
+        variants?: Array<{ label: string }>;
+      };
+    };
+    expect(putBody.pronunciation.source_label).toBe('Wiktionary (Dutch IPA)');
+    expect(putBody.pronunciation.source_url).toBe('https://en.wiktionary.org/wiki/Zeeland');
+    expect(putBody.pronunciation.region).toBe('Netherlands');
+    expect(putBody.pronunciation.variants?.[0]?.label).toBe('West Michigan');
   });
 });

@@ -280,7 +280,7 @@ describe('PronunciationBadge playback and fallback', () => {
     unmount();
   });
 
-  it('falls back to window.speechSynthesis when audio_url is absent', () => {
+  it('falls back to window.speechSynthesis using native label for non-English and phonetic guide for English', () => {
     const speak = vi.fn();
     const cancel = vi.fn();
     class MockUtterance {
@@ -299,31 +299,151 @@ describe('PronunciationBadge playback and fallback', () => {
     vi.stubGlobal('SpeechSynthesisUtterance', MockUtterance);
 
     const { container, unmount } = renderIntoDom(
-      <PronunciationBadge
-        pronunciation={{ phonetic: 'KRAH-koof', language: 'pl' }}
-        label="Kraków"
-      />,
+      <div>
+        <PronunciationBadge
+          pronunciation={{ phonetic: 'KRAH-koof', language: 'pl' }}
+          label="Kraków"
+        />
+        <PronunciationBadge
+          pronunciation={{ phonetic: 'HOOS', ipa: '/ɣus/', language: 'nl' }}
+          label="Goes"
+        />
+        <PronunciationBadge
+          pronunciation={{ phonetic: 'MER-ser', language: 'en-US' }}
+          label="Mercer"
+        />
+      </div>,
     );
 
-    const btn = container.querySelector<HTMLButtonElement>(
+    const krakowBtn = container.querySelector<HTMLButtonElement>(
       'button[aria-label="Listen to pronunciation of Kraków"]',
     );
-    expect(btn).not.toBeNull();
+    const goesBtn = container.querySelector<HTMLButtonElement>(
+      'button[aria-label="Listen to pronunciation of Goes"]',
+    );
+    const mercerBtn = container.querySelector<HTMLButtonElement>(
+      'button[aria-label="Listen to pronunciation of Mercer"]',
+    );
+    expect(krakowBtn).not.toBeNull();
+    expect(goesBtn).not.toBeNull();
+    expect(mercerBtn).not.toBeNull();
 
+    // Polish: speaks native label "Kraków", NOT English respelling "KRAH-koof"
     act(() => {
-      btn!.click();
+      krakowBtn!.click();
     });
-
     expect(speak).toHaveBeenCalledTimes(1);
-    const utterance = speak.mock.calls[0][0] as MockUtterance;
-    expect(utterance.text).toBe('KRAH-koof');
-    expect(utterance.lang).toBe('pl');
-    expect(btn!.getAttribute('aria-pressed')).toBe('true');
+    const plUtterance = speak.mock.calls[0][0] as MockUtterance;
+    expect(plUtterance.text).toBe('Kraków');
+    expect(plUtterance.lang).toBe('pl');
+    expect(krakowBtn!.getAttribute('aria-pressed')).toBe('true');
 
     act(() => {
-      utterance.onend?.();
+      plUtterance.onend?.();
     });
-    expect(btn!.getAttribute('aria-pressed')).toBe('false');
+    expect(krakowBtn!.getAttribute('aria-pressed')).toBe('false');
+
+    // Dutch: speaks native label "Goes", NOT English respelling "HOOS"
+    act(() => {
+      goesBtn!.click();
+    });
+    expect(speak).toHaveBeenCalledTimes(2);
+    const nlUtterance = speak.mock.calls[1][0] as MockUtterance;
+    expect(nlUtterance.text).toBe('Goes');
+    expect(nlUtterance.lang).toBe('nl');
+
+    // English: speaks phonetic guide "MER-ser"
+    act(() => {
+      mercerBtn!.click();
+    });
+    expect(speak).toHaveBeenCalledTimes(3);
+    const enUtterance = speak.mock.calls[2][0] as MockUtterance;
+    expect(enUtterance.text).toBe('MER-ser');
+    expect(enUtterance.lang).toBe('en-US');
+
+    unmount();
+  });
+
+  it('displays source attribution and switches/plays variants on non-compact badges without cluttering compact badges', () => {
+    const createdAudios: { src: string; play: ReturnType<typeof vi.fn>; pause: ReturnType<typeof vi.fn> }[] = [];
+    class MockAudio {
+      src: string;
+      currentTime = 0;
+      play = vi.fn(() => Promise.resolve());
+      pause = vi.fn();
+      constructor(src: string) {
+        this.src = src;
+        createdAudios.push(this);
+      }
+      addEventListener(): void {}
+    }
+    vi.stubGlobal('Audio', MockAudio);
+
+    const multiVariant = {
+      phonetic: 'ZAY-lahnt',
+      ipa: '/ˈzeː.lɑnt/',
+      language: 'nl',
+      region: 'Netherlands',
+      audio_url: '/audio/zeeland-nl.wav',
+      source_label: 'Wiktionary (Dutch IPA)',
+      source_url: 'https://en.wiktionary.org/wiki/Zeeland',
+      variants: [
+        {
+          label: 'West Michigan',
+          phonetic: 'ZEE-lund',
+          ipa: '/ˈziː.lənd/',
+          language: 'en-US',
+          audio_url: '/audio/zeeland-mi.wav',
+          source_label: 'Family oral tradition',
+        },
+      ],
+    };
+
+    const { container, unmount } = renderIntoDom(
+      <div>
+        <div data-testid="full-badge">
+          <PronunciationBadge pronunciation={multiVariant} label="Zeeland" baseUrl="/" />
+        </div>
+        <div data-testid="compact-badge">
+          <PronunciationBadge pronunciation={multiVariant} label="Zeeland" baseUrl="/" compact />
+        </div>
+      </div>,
+    );
+
+    const fullBadge = container.querySelector('[data-testid="full-badge"]')!;
+    const compactBadge = container.querySelector('[data-testid="compact-badge"]')!;
+
+    expect(fullBadge.textContent).toContain('ZAY-lahnt');
+    expect(fullBadge.querySelector('a.pronunciation-source-link')?.getAttribute('href')).toBe(
+      'https://en.wiktionary.org/wiki/Zeeland',
+    );
+    expect(fullBadge.querySelector('a.pronunciation-source-link')?.textContent).toBe(
+      'Wiktionary (Dutch IPA)',
+    );
+
+    // Compact badge omits source links and variant buttons
+    expect(compactBadge.querySelector('.pronunciation-variants')).toBeNull();
+    expect(compactBadge.querySelector('.pronunciation-source')).toBeNull();
+
+    // Switch to the West Michigan variant and play its clip
+    const miVariantBtn = Array.from(fullBadge.querySelectorAll('button.pronunciation-variant-btn')).find(
+      (b) => b.textContent?.trim() === 'West Michigan',
+    );
+    expect(miVariantBtn).toBeDefined();
+
+    act(() => {
+      miVariantBtn!.click();
+    });
+    expect(fullBadge.textContent).toContain('ZEE-lund');
+    expect(fullBadge.textContent).toContain('/ˈziː.lənd/');
+    expect(fullBadge.textContent).toContain('Family oral tradition');
+
+    const playBtn = fullBadge.querySelector<HTMLButtonElement>('button.pronunciation-play-btn');
+    act(() => {
+      playBtn!.click();
+    });
+    expect(createdAudios).toHaveLength(1);
+    expect(createdAudios[0].src).toBe('/audio/zeeland-mi.wav');
 
     unmount();
   });
@@ -878,6 +998,200 @@ describe('ArchivalMarkdown inline entity mentions and hover popovers', () => {
       window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
     });
     expect(document.body.querySelector('.entity-popover')).toBeNull();
+
+    unmount();
+  });
+});
+
+describe('Live-lexicon partial-update merge regression (PersonPage + EntityEditDrawer + InlineEntityMention)', () => {
+  it('immediately updates PersonPage heading badge and inline mentions with zero stale fields when shared surname lexicon is edited', async () => {
+    const configWithSharedSurname: KinloomSiteConfig = parseKinloomConfig({
+      site: {
+        title: 'Mercer Synthetic Archive',
+        familyName: 'Mercer Family',
+        gedcomSourceName: 'MERCER_LIVE_TEST',
+      },
+      pronunciations: {
+        Mercer: {
+          phonetic: 'MER-ser-OLD',
+          ipa: '/ˈmɜːr.sər.old/',
+          language: 'nl',
+        },
+      },
+    });
+
+    // Compile archive from raw people that have NO personal pronunciation override
+    const { bundle } = compileArchive({
+      siteConfig: configWithSharedSurname,
+      mode: 'private',
+      people: [
+        {
+          id: 'per_thomas',
+          slug: 'thomas-mercer',
+          full_name: 'Thomas Mercer',
+          given_name: 'Thomas',
+          surname: 'Mercer',
+          alt_names: [],
+          sex: 'M',
+          is_living: false,
+          lineage_group: 'pivot_ancestor',
+          birth_edtf: '1842-05-10',
+          death_edtf: '1911-08-19',
+          portrait_url: null,
+        },
+        {
+          id: 'per_hannah',
+          slug: 'hannah-mercer',
+          full_name: 'Hannah Mercer',
+          given_name: 'Hannah',
+          surname: 'Mercer',
+          alt_names: [],
+          sex: 'F',
+          is_living: false,
+          lineage_group: 'pivot_ancestor',
+          birth_edtf: '1846-09-02',
+          death_edtf: '1920-01-15',
+          portrait_url: null,
+        },
+      ],
+      places: [],
+      events: [],
+      sources: [],
+      kinship: [],
+      narratives: [
+        {
+          id: 'nar_thomas',
+          slug: 'thomas-bio',
+          kind: 'biography',
+          subject_person_id: 'per_thomas',
+          title: 'Thomas Mercer',
+          body_md: 'Thomas worked alongside [[person:per_hannah|Hannah Mercer]].',
+          person_ids: ['per_thomas', 'per_hannah'],
+          place_ids: [],
+          event_ids: [],
+          source_ids: [],
+        },
+      ],
+    });
+
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === 'string' ? input : input.toString();
+      if (url === '/api/pronunciations/Mercer' && init?.method === 'PUT') {
+        return new Response(
+          JSON.stringify({
+            term: 'Mercer',
+            pronunciation: {
+              phonetic: 'MUR-ser-NEW',
+              ipa: '/ˈmɜːr.sər.new/',
+              language: 'en-US',
+              note: 'Updated family pronunciation note',
+              source_label: 'Family oral tradition',
+              audio_url: '/media/pronunciation-new.wav',
+            },
+            pronunciations: {
+              Mercer: {
+                phonetic: 'MUR-ser-NEW',
+                ipa: '/ˈmɜːr.sər.new/',
+                language: 'en-US',
+                note: 'Updated family pronunciation note',
+                source_label: 'Family oral tradition',
+                audio_url: '/media/pronunciation-new.wav',
+              },
+            },
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        );
+      }
+      if (url === '/api/pronunciations') {
+        return new Response(
+          JSON.stringify({
+            pronunciations: configWithSharedSurname.pronunciations,
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        );
+      }
+      return new Response('{}', { status: 404 });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { container, unmount } = renderIntoDom(
+      <MemoryRouter initialEntries={['/person/thomas-mercer']}>
+        <ArchiveProvider
+          siteConfig={configWithSharedSurname}
+          initialBundle={bundle}
+          capabilities={{ canEdit: true }}
+        >
+          <Routes>
+            <Route path="/person/:slug" element={<PersonPage />} />
+          </Routes>
+        </ArchiveProvider>
+      </MemoryRouter>,
+    );
+
+    const headingRow = container.querySelector('.person-pronunciation-row')!;
+    expect(headingRow.textContent).toContain('MER-ser-OLD');
+    expect(headingRow.textContent).toContain('/ˈmɜːr.sər.old/');
+
+    // Open Edit drawer via the Edit button on the pronunciation row
+    const editBtn = headingRow.querySelector<HTMLButtonElement>('button.pronunciation-edit-link');
+    expect(editBtn).not.toBeNull();
+    act(() => {
+      editBtn!.click();
+    });
+
+    const editSharedBtn = Array.from(container.querySelectorAll('button')).find(
+      (b) => b.textContent?.trim() === 'Edit shared "Mercer"',
+    );
+    expect(editSharedBtn).toBeDefined();
+    act(() => {
+      editSharedBtn!.click();
+    });
+
+    const sharedEditor = container.querySelector('.wiki-pronunciation-shared-editor')!;
+    const phoneticInput = sharedEditor.querySelector<HTMLInputElement>('input[placeholder="e.g. MER-ser"]')!;
+    const ipaInput = sharedEditor.querySelector<HTMLInputElement>('input[placeholder="e.g. /ˈmɜːr.sər/"]')!;
+    const langInput = sharedEditor.querySelector<HTMLInputElement>('input[placeholder="e.g. en-US, nl, pl"]')!;
+    const noteInput = sharedEditor.querySelector<HTMLInputElement>('input[placeholder="e.g. Stress on first syllable"]')!;
+
+    act(() => {
+      setNativeInputValue(phoneticInput, 'MUR-ser-NEW');
+      setNativeInputValue(ipaInput, '/ˈmɜːr.sər.new/');
+      setNativeInputValue(langInput, 'en-US');
+      setNativeInputValue(noteInput, 'Updated family pronunciation note');
+    });
+
+    const saveSharedBtn = Array.from(sharedEditor.querySelectorAll('button')).find(
+      (b) => b.textContent?.trim() === 'Save for all Mercer records',
+    )!;
+
+    await act(async () => {
+      saveSharedBtn.click();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    // PersonPage heading badge MUST show NEW phonetic, NEW IPA, NEW language, NEW note, and ZERO old fields
+    const updatedHeadingRow = container.querySelector('.person-pronunciation-row')!;
+    expect(updatedHeadingRow.textContent).toContain('MUR-ser-NEW');
+    expect(updatedHeadingRow.textContent).toContain('/ˈmɜːr.sər.new/');
+    expect(updatedHeadingRow.textContent).toContain('en-US');
+    expect(updatedHeadingRow.textContent).toContain('Updated family pronunciation note');
+    expect(updatedHeadingRow.textContent).toContain('Family oral tradition');
+    expect(updatedHeadingRow.textContent).not.toContain('MER-ser-OLD');
+    expect(updatedHeadingRow.textContent).not.toContain('/ˈmɜːr.sər.old/');
+
+    // Hover Hannah Mercer's inline mention and verify its popover ALSO shows the NEW live pronunciation
+    const hannahLink = container.querySelector<HTMLAnchorElement>(
+      'a.inline-entity-link[href="/person/hannah-mercer"]',
+    );
+    expect(hannahLink).not.toBeNull();
+    act(() => {
+      hannahLink!.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
+    });
+    const popover = document.body.querySelector<HTMLDivElement>('.entity-popover[role="dialog"]');
+    expect(popover).not.toBeNull();
+    expect(popover!.textContent).toContain('MUR-ser-NEW');
+    expect(popover!.textContent).not.toContain('MER-ser-OLD');
 
     unmount();
   });

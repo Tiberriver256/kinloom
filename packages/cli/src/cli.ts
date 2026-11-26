@@ -8,6 +8,7 @@ import {
   CONTEXT_HELP,
   DATES_HELP,
   INTEGRATE_HELP,
+  PRONOUNCE_HELP,
   STATUS_HELP,
   SYNC_HELP,
   TELEMETRY_HELP,
@@ -72,6 +73,7 @@ Research & archive ops:
   status             Report archive totals and the deceased biography queue
   sync               Diff and sync local YAML + R2 media to a live Cloudflare archive
   dates              Compute exact Gregorian weekdays, date diffs, and ages
+  pronounce          Look up verified Wikimedia IPA/audio and audit pronunciation lexicons
   telemetry          Report local CLI latency, cache hit rate, and failure summary
 
 ${formatRecordCommandsHelp()}
@@ -176,6 +178,7 @@ Options:
   status: STATUS_HELP,
   sync: SYNC_HELP,
   dates: DATES_HELP,
+  pronounce: PRONOUNCE_HELP,
   telemetry: TELEMETRY_HELP,
 };
 
@@ -1324,6 +1327,84 @@ export async function runCli(
               json: values.json,
             });
           }
+        );
+        writeRenderedOutput(io, result.rendered);
+        return EXIT_OK;
+      }
+
+      case 'pronounce': {
+        const sub = rest[0];
+        if (sub !== 'lookup' && sub !== 'audit') {
+          throw new CliValidationError(
+            sub
+              ? `Unknown pronounce subcommand '${sub}'. Expected \`lookup\` or \`audit\`.`
+              : 'Missing pronounce subcommand. Expected `lookup` or `audit`.'
+          );
+        }
+        const subArgs = rest.slice(1);
+        const [{ runPronounceAuditCommand, runPronounceLookupCommand }, { measureCommand }] =
+          await Promise.all([
+            import('./commands/ops/pronounce.js'),
+            import('./commands/ops/telemetry.js'),
+          ]);
+        if (sub === 'lookup') {
+          const { values, positionals } = safeParseArgs({
+            args: subArgs,
+            allowPositionals: true,
+            options: {
+              lang: { type: 'string' },
+              refresh: { type: 'boolean', default: false },
+              json: { type: 'boolean', default: false },
+            },
+          });
+          const term = positionals.join(' ').trim();
+          if (!term) {
+            throw new CliValidationError(
+              'Usage: kinloom pronounce lookup <term> [--lang nl|sv|fi|pl|de|en] [--refresh] [--json]'
+            );
+          }
+          const result = await measureCommand(
+            {
+              subcmd: 'pronounce lookup',
+              extractResultMeta: (res) => ({
+                exitCode: EXIT_OK,
+                cacheHit: res.cache_hit,
+                bytesOut: Buffer.byteLength(res.rendered, 'utf8'),
+              }),
+            },
+            () =>
+              runPronounceLookupCommand({
+                term,
+                lang: values.lang,
+                refresh: values.refresh,
+                json: values.json,
+                fetchImpl,
+              })
+          );
+          writeRenderedOutput(io, result.rendered);
+          return EXIT_OK;
+        }
+        const { values } = safeParseArgs({
+          args: subArgs,
+          allowPositionals: false,
+          options: {
+            repo: { type: 'string' },
+            json: { type: 'boolean', default: false },
+          },
+        });
+        const result = await measureCommand(
+          {
+            subcmd: 'pronounce audit',
+            extractResultMeta: (res) => ({
+              exitCode: EXIT_OK,
+              bytesOut: Buffer.byteLength(res.rendered, 'utf8'),
+            }),
+          },
+          async () =>
+            runPronounceAuditCommand({
+              repoDir: values.repo ?? cwd,
+              json: values.json,
+            })
         );
         writeRenderedOutput(io, result.rendered);
         return EXIT_OK;

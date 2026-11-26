@@ -18,6 +18,7 @@ import {
   ArchiveBundleSchema,
   ReadingsBundleSchema,
   deriveArchiveStatus,
+  mergePronunciationLexicons,
   resolveCapabilities,
 } from '@kinloom/core';
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
@@ -420,10 +421,7 @@ export const ArchiveDataProvider: React.FC<ArchiveDataProviderProps> = ({
       })
       .then((raw) => {
         if (!cancelled && isPronunciationsResponse(raw)) {
-          setLivePronunciations((prev) => ({
-            ...prev,
-            ...raw.pronunciations,
-          }));
+          setLivePronunciations(raw.pronunciations);
         }
       })
       .catch(() => {
@@ -435,11 +433,11 @@ export const ArchiveDataProvider: React.FC<ArchiveDataProviderProps> = ({
   }, [liveCapabilities.canEdit, archiveLoadedOverHttp, reloadTick]);
 
   const pronunciations = useMemo<Readonly<Record<string, Pronunciation>>>(
-    () => ({
-      ...siteConfig.pronunciations,
-      ...bundle?.pronunciations,
-      ...livePronunciations,
-    }),
+    () =>
+      mergePronunciationLexicons(
+        mergePronunciationLexicons(siteConfig.pronunciations, bundle?.pronunciations),
+        livePronunciations,
+      ),
     [siteConfig.pronunciations, bundle?.pronunciations, livePronunciations],
   );
 
@@ -562,6 +560,10 @@ export const ArchiveDataProvider: React.FC<ArchiveDataProviderProps> = ({
 
   return <ArchiveDataContext.Provider value={value}>{children}</ArchiveDataContext.Provider>;
 };
+
+export function useOptionalArchiveData(): ArchiveDataContextValue | null {
+  return useContext(ArchiveDataContext);
+}
 
 export function useArchiveData(): ArchiveDataContextValue {
   const ctx = useContext(ArchiveDataContext);

@@ -98,6 +98,7 @@ const ALLOWED_PERSON_UPDATE_KEYS = new Set([
   'death_date',
   'portrait_url',
   'thumb_url',
+  'pronunciation',
   'has_primary_source',
   'extensions',
   'bio',
@@ -829,12 +830,13 @@ function mergePersonUpdates(
     'branch',
     'portrait_url',
     'thumb_url',
+    'pronunciation',
     'has_primary_source',
   ] as const;
 
   for (const field of directFields) {
     if (updates[field] !== undefined) {
-      next[field] = updates[field];
+      next[field] = structuredClone(updates[field]);
     }
   }
 
@@ -957,12 +959,13 @@ function mergeStagedPersonWithExisting(
     'death_edtf',
     'portrait_url',
     'thumb_url',
+    'pronunciation',
     'has_primary_source',
   ] as const;
 
   for (const field of directFields) {
     if (Object.hasOwn(rawObj, field) && rawObj[field] !== undefined) {
-      next[field] = parsedIncoming[field];
+      next[field] = structuredClone(parsedIncoming[field]);
     }
   }
 
@@ -1487,10 +1490,33 @@ export async function executeIntegrateSingle(
   );
 
   // Invariant 2: Every place in patch.places and merged places must have valid non-(0, 0) coordinates.
-  const validatedPatchPlaces = patch.places.map((pl, idx) =>
-    PlaceSchema.parse(assertValidPlaceCoordinates(pl, `patch.places[${idx}]`))
+  const placeIdsWithExplicitPronunciation = new Set<string>();
+  const validatedPatchPlaces = patch.places.map((pl, idx) => {
+    const normalized = assertValidPlaceCoordinates(pl, `patch.places[${idx}]`);
+    const parsed = PlaceSchema.parse(normalized);
+    if (Object.hasOwn(normalized, 'pronunciation')) {
+      placeIdsWithExplicitPronunciation.add(parsed.id);
+    }
+    return parsed;
+  });
+  const placesMerge = upsertById(
+    existingPlaces,
+    validatedPatchPlaces,
+    (p) => PlaceSchema.parse(p),
+    (prev, incoming) => {
+      if (
+        !placeIdsWithExplicitPronunciation.has(incoming.id) &&
+        incoming.pronunciation === undefined &&
+        prev.pronunciation !== undefined
+      ) {
+        return {
+          ...incoming,
+          pronunciation: structuredClone(prev.pronunciation),
+        };
+      }
+      return incoming;
+    }
   );
-  const placesMerge = upsertById(existingPlaces, validatedPatchPlaces, (p) => PlaceSchema.parse(p));
   for (const pl of placesMerge.items) {
     assertValidPlaceCoordinates(pl, `merged place '${pl.id}'`);
   }

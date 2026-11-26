@@ -1,4 +1,5 @@
-import type { Person, Place } from '@kinloom/core';
+import type { Person, Place, Pronunciation } from '@kinloom/core';
+import { resolvePersonPronunciation, resolvePlacePronunciation } from '@kinloom/core';
 import React, { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import { Link, useInRouterContext } from 'react-router-dom';
 import { createPortal } from 'react-dom';
@@ -7,6 +8,7 @@ import {
   computeCitationPopoverPosition,
 } from './CitationPopover.js';
 import { PronunciationBadge, hasPronunciationContent } from './PronunciationBadge.js';
+import { useOptionalArchiveData } from '../context/ArchiveDataContext.js';
 
 const POPOVER_CLOSE_DELAY_MS = 150;
 const useIsoLayoutEffect = typeof window !== 'undefined' ? useLayoutEffect : useEffect;
@@ -25,6 +27,7 @@ export type InlineEntityMentionProps = (
 ) & {
   displayText: string;
   baseUrl?: string;
+  pronunciations?: Readonly<Record<string, Pronunciation>>;
 };
 
 function formatPlaceTypeLabel(placeType?: string | null): string {
@@ -45,7 +48,9 @@ function formatPersonDates(person: Person): string {
 }
 
 export const InlineEntityMention: React.FC<InlineEntityMentionProps> = (props) => {
-  const { kind, displayText, baseUrl } = props;
+  const { kind, displayText, baseUrl, pronunciations: pronunciationsProp } = props;
+  const archiveData = useOptionalArchiveData();
+  const lexicon = pronunciationsProp ?? archiveData?.pronunciations;
   const inRouter = useInRouterContext();
   const popoverId = useId();
   const anchorRef = useRef<HTMLAnchorElement | null>(null);
@@ -66,12 +71,22 @@ export const InlineEntityMention: React.FC<InlineEntityMentionProps> = (props) =
   const href =
     kind === 'person' ? `/person/${props.person.slug}` : `/place/${props.place.slug}`;
   const entityTitle = kind === 'person' ? props.person.full_name : props.place.full_name;
-  const pronunciationLabel = kind === 'person' ? props.person.full_name : props.place.name;
   const pronunciation = isLivingPerson
     ? null
     : kind === 'person'
-      ? (props.person.pronunciation ?? null)
-      : (props.place.pronunciation ?? null);
+      ? resolvePersonPronunciation(props.person, lexicon)
+      : resolvePlacePronunciation(props.place, lexicon);
+  const isInheritedSurnameOnly =
+    kind === 'person' &&
+    Boolean(pronunciation) &&
+    !props.person.pronunciation &&
+    Boolean(props.person.surname);
+  const pronunciationLabel =
+    kind === 'person'
+      ? isInheritedSurnameOnly
+        ? props.person.surname
+        : props.person.full_name
+      : props.place.name;
   const showPronunciation = hasPronunciationContent(pronunciation);
 
   const clearCloseTimer = useCallback(() => {

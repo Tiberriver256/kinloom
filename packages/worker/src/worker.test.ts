@@ -52,6 +52,10 @@ const PRONUNCIATIONS_MIGRATION_SQL = readFileSync(
   resolve(THIS_DIR, '../migrations/0002_pronunciations.sql'),
   'utf8'
 );
+const PRONUNCIATIONS_PROVENANCE_MIGRATION_SQL = readFileSync(
+  resolve(THIS_DIR, '../migrations/0003_pronunciation_provenance.sql'),
+  'utf8'
+);
 
 interface MiniflareFixture {
   mf: Miniflare;
@@ -1320,6 +1324,50 @@ describe('createCloudflareWorker full HTTP lifecycle (Miniflare)', () => {
       // Delete removes entry
       await store.delete('Mercer');
       expect(await store.list()).toEqual({});
+
+      // Apply migration 0003 and verify provenance + variants persistence
+      await applySqlScript(db, PRONUNCIATIONS_PROVENANCE_MIGRATION_SQL);
+      const richSaved = await store.upsert(
+        'Zeeland, Netherlands',
+        {
+          phonetic: 'ZAY-lahnt',
+          ipa: '/ˈzeː.lɑnt/',
+          language: 'nl',
+          region: 'Netherlands',
+          source_label: 'Wiktionary (Dutch IPA)',
+          source_url: 'https://en.wiktionary.org/wiki/Zeeland',
+          variants: [
+            {
+              label: 'West Michigan',
+              phonetic: 'ZEE-lund',
+              ipa: '/ˈziː.lənd/',
+              language: 'en-US',
+            },
+          ],
+        },
+        'editor@example.test',
+        '2026-07-01T12:10:00.000Z'
+      );
+      expect(richSaved.source_label).toBe('Wiktionary (Dutch IPA)');
+      expect(richSaved.variants).toHaveLength(1);
+      expect(await store.list()).toEqual({
+        'Zeeland, Netherlands': {
+          phonetic: 'ZAY-lahnt',
+          ipa: '/ˈzeː.lɑnt/',
+          language: 'nl',
+          region: 'Netherlands',
+          source_label: 'Wiktionary (Dutch IPA)',
+          source_url: 'https://en.wiktionary.org/wiki/Zeeland',
+          variants: [
+            {
+              label: 'West Michigan',
+              phonetic: 'ZEE-lund',
+              ipa: '/ˈziː.lənd/',
+              language: 'en-US',
+            },
+          ],
+        },
+      });
     } finally {
       await mf.dispose();
     }

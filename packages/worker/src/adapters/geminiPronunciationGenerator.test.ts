@@ -16,28 +16,44 @@ function bytesToBase64(bytes: Uint8Array): string {
 }
 
 describe('GeminiPronunciationAudioGenerator', () => {
-  it('selects IPA (wrapped in slashes) > phonetic > plain text for prompt', () => {
+  it('includes language and native orthography alongside IPA and phonetic in buildPronunciationPrompt', () => {
+    expect(
+      buildPronunciationPrompt({
+        text: 'Goes',
+        phonetic: 'HOOS',
+        ipa: 'ɣus',
+        language: 'nl',
+      })
+    ).toBe('Pronounce "Goes" in Dutch (nl) as /ɣus/ (guide: HOOS).');
+
     expect(
       buildPronunciationPrompt({
         text: 'Thomas Mercer',
         phonetic: 'TOM-us MER-ser',
         ipa: 'ˈmɜːrsər',
       })
-    ).toBe('/ˈmɜːrsər/');
+    ).toBe('Pronounce "Thomas Mercer" as /ˈmɜːrsər/ (guide: TOM-us MER-ser).');
 
     expect(
       buildPronunciationPrompt({
         text: 'Thomas Mercer',
         ipa: '/ˈmɜːrsər/',
       })
-    ).toBe('/ˈmɜːrsər/');
+    ).toBe('Pronounce "Thomas Mercer" as /ˈmɜːrsər/.');
 
     expect(
       buildPronunciationPrompt({
         text: 'Thomas Mercer',
         phonetic: 'TOM-us MER-ser',
       })
-    ).toBe('TOM-us MER-ser');
+    ).toBe('Pronounce "Thomas Mercer" as TOM-us MER-ser.');
+
+    expect(
+      buildPronunciationPrompt({
+        text: 'Goes',
+        language: 'nl',
+      })
+    ).toBe('Pronounce "Goes" in Dutch (nl).');
 
     expect(
       buildPronunciationPrompt({
@@ -96,7 +112,7 @@ describe('GeminiPronunciationAudioGenerator', () => {
         speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: string } } };
       };
     };
-    expect(sentBody.contents[0].parts[0].text).toBe('TOM-us MER-ser');
+    expect(sentBody.contents[0].parts[0].text).toBe('Pronounce "Thomas Mercer" as TOM-us MER-ser.');
     expect(sentBody.generationConfig.responseModalities).toEqual(['AUDIO']);
     expect(sentBody.generationConfig.speechConfig.voiceConfig.prebuiltVoiceConfig.voiceName).toBe(
       DEFAULT_GEMINI_TTS_VOICE
@@ -154,6 +170,7 @@ describe('GeminiPronunciationAudioGenerator', () => {
     const result = await generator.generate({
       text: 'Springfield',
       ipa: 'ˈsprɪŋfiːld',
+      language: 'en-US',
       voice: 'Kore',
     });
 
@@ -167,7 +184,9 @@ describe('GeminiPronunciationAudioGenerator', () => {
         speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: string } } };
       };
     };
-    expect(sentBody.contents[0].parts[0].text).toBe('/ˈsprɪŋfiːld/');
+    expect(sentBody.contents[0].parts[0].text).toBe(
+      'Pronounce "Springfield" in American English (en-US) as /ˈsprɪŋfiːld/.'
+    );
     expect(sentBody.generationConfig.speechConfig.voiceConfig.prebuiltVoiceConfig.voiceName).toBe(
       'Kore'
     );

@@ -1,14 +1,16 @@
-import type { ArchiveEvent, MediaItem, Person, Place, SourceRecord } from '@kinloom/core';
+import type { ArchiveEvent, MediaItem, Person, Place, Pronunciation, SourceRecord } from '@kinloom/core';
 import {
   extractNarrativeCitations,
   formatPublicCitation,
   resolveCitationMedia,
+  resolvePlacePronunciation,
 } from '@kinloom/core';
 import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { CitationPopover } from './CitationPopover.js';
 import { InlineEntityMention } from './InlineEntityMention.js';
 import { hasPronunciationContent } from './PronunciationBadge.js';
 import { resolveAssetUrl } from './Atoms.js';
+import { useOptionalArchiveData } from '../context/ArchiveDataContext.js';
 
 type MarkdownBlock =
   | { kind: 'heading'; level: 3 | 4; text: string }
@@ -64,6 +66,7 @@ type AutoEntityTarget =
 interface InlineEntityRenderContext {
   peopleById?: ReadonlyMap<string, Person>;
   placesById?: ReadonlyMap<string, Place>;
+  pronunciations?: Readonly<Record<string, Pronunciation>>;
   baseUrl?: string;
   autoRegex: RegExp | null;
   autoTargetsByText: ReadonlyMap<string, AutoEntityTarget>;
@@ -76,13 +79,21 @@ function escapeRegExp(value: string): string {
 function buildEntityRenderContext(params: {
   peopleById?: ReadonlyMap<string, Person>;
   placesById?: ReadonlyMap<string, Place>;
+  pronunciations?: Readonly<Record<string, Pronunciation>>;
   linkedPersonIds?: readonly string[];
   linkedPlaceIds?: readonly string[];
   subjectPersonId?: string;
   baseUrl?: string;
 }): InlineEntityRenderContext | undefined {
-  const { peopleById, placesById, linkedPersonIds, linkedPlaceIds, subjectPersonId, baseUrl } =
-    params;
+  const {
+    peopleById,
+    placesById,
+    pronunciations,
+    linkedPersonIds,
+    linkedPlaceIds,
+    subjectPersonId,
+    baseUrl,
+  } = params;
   if (!peopleById && !placesById) {
     return undefined;
   }
@@ -105,7 +116,7 @@ function buildEntityRenderContext(params: {
   if (placesById) {
     const candidatePlaceIds = new Set<string>(linkedPlaceIds ?? []);
     for (const [id, place] of placesById) {
-      if (hasPronunciationContent(place.pronunciation)) {
+      if (hasPronunciationContent(resolvePlacePronunciation(place, pronunciations))) {
         candidatePlaceIds.add(id);
       }
     }
@@ -152,6 +163,7 @@ function buildEntityRenderContext(params: {
   return {
     peopleById,
     placesById,
+    pronunciations,
     baseUrl,
     autoRegex,
     autoTargetsByText,
@@ -192,6 +204,7 @@ function renderPlainProseWithEntities(
             person={target.person}
             displayText={matchedText}
             baseUrl={entityCtx.baseUrl}
+            pronunciations={entityCtx.pronunciations}
           />,
         );
       } else {
@@ -202,6 +215,7 @@ function renderPlainProseWithEntities(
             place={target.place}
             displayText={matchedText}
             baseUrl={entityCtx.baseUrl}
+            pronunciations={entityCtx.pronunciations}
           />,
         );
       }
@@ -339,6 +353,7 @@ function parseInlineNodes(
                 person={person}
                 displayText={explicitLabel ?? person.full_name}
                 baseUrl={entityCtx?.baseUrl}
+                pronunciations={entityCtx?.pronunciations}
               />,
             );
           }
@@ -356,6 +371,7 @@ function parseInlineNodes(
               place={place}
               displayText={explicitLabel ?? place.name}
               baseUrl={entityCtx?.baseUrl}
+              pronunciations={entityCtx?.pronunciations}
             />,
           );
         } else {
@@ -515,6 +531,7 @@ export interface ArchivalMarkdownProps {
   subjectPersonId?: string;
   peopleById?: ReadonlyMap<string, Person>;
   placesById?: ReadonlyMap<string, Place>;
+  pronunciations?: Readonly<Record<string, Pronunciation>>;
   linkedPersonIds?: readonly string[];
   linkedPlaceIds?: readonly string[];
   baseUrl?: string;
@@ -532,6 +549,7 @@ export const ArchivalMarkdown: React.FC<ArchivalMarkdownProps> = ({
   subjectPersonId,
   peopleById,
   placesById,
+  pronunciations: pronunciationsProp,
   linkedPersonIds,
   linkedPlaceIds,
   baseUrl,
@@ -539,6 +557,8 @@ export const ArchivalMarkdown: React.FC<ArchivalMarkdownProps> = ({
   onOpenMedia,
   resolveMediaUrl,
 }) => {
+  const archiveData = useOptionalArchiveData();
+  const effectivePronunciations = pronunciationsProp ?? archiveData?.pronunciations;
   const blocks = useMemo(() => parseMarkdownBlocks(markdown), [markdown]);
   const extractedCitations = useMemo(
     () =>
@@ -749,12 +769,21 @@ export const ArchivalMarkdown: React.FC<ArchivalMarkdownProps> = ({
       buildEntityRenderContext({
         peopleById,
         placesById,
+        pronunciations: effectivePronunciations,
         linkedPersonIds,
         linkedPlaceIds,
         subjectPersonId,
         baseUrl,
       }),
-    [peopleById, placesById, linkedPersonIds, linkedPlaceIds, subjectPersonId, baseUrl],
+    [
+      peopleById,
+      placesById,
+      effectivePronunciations,
+      linkedPersonIds,
+      linkedPlaceIds,
+      subjectPersonId,
+      baseUrl,
+    ],
   );
 
   if (blocks.length === 0) {

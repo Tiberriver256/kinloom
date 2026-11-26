@@ -9,7 +9,9 @@ import {
   EntityTypeSchema,
   EntityUpdateInputSchema,
   EntityWriteInputSchema,
+  mergePronunciationLexicons,
   parseEntityPayload,
+  PronunciationVariantSchema,
   resolveEffectiveLiving,
   type EntityType,
   type KinloomServerPluginRoute,
@@ -122,6 +124,10 @@ const UpsertPronunciationLexiconBodySchema = z.object({
   language: OptionalTrimmedStringSchema,
   note: OptionalTrimmedStringSchema,
   audio_url: OptionalTrimmedStringSchema,
+  source_url: OptionalTrimmedStringSchema,
+  source_label: OptionalTrimmedStringSchema,
+  region: OptionalTrimmedStringSchema,
+  variants: z.array(PronunciationVariantSchema).optional(),
 });
 
 const DEFAULT_SESSION_TTL_SECONDS = 30 * 24 * 60 * 60;
@@ -325,10 +331,7 @@ export function createKinloomServer(config: KinloomServerConfig): KinloomServer 
     const dynamicLexicon = config.ports.pronunciationLexiconStore
       ? await config.ports.pronunciationLexiconStore.list()
       : {};
-    return {
-      ...staticLexicon,
-      ...dynamicLexicon,
-    };
+    return mergePronunciationLexicons(staticLexicon, dynamicLexicon);
   }
   const plugins = config.ports.plugins ?? [];
   const pluginRoutes: KinloomServerPluginRoute[] = plugins.flatMap((plugin) =>
@@ -935,7 +938,15 @@ export function createKinloomServer(config: KinloomServerConfig): KinloomServer 
 
       const body = UpsertPronunciationLexiconBodySchema.parse(await readJsonBody(request));
       const isEmpty =
-        !body.phonetic && !body.ipa && !body.language && !body.note && !body.audio_url;
+        !body.phonetic &&
+        !body.ipa &&
+        !body.language &&
+        !body.note &&
+        !body.audio_url &&
+        !body.source_url &&
+        !body.source_label &&
+        !body.region &&
+        (!body.variants || body.variants.length === 0);
 
       if (isEmpty) {
         await config.ports.pronunciationLexiconStore.delete(term);
@@ -949,6 +960,10 @@ export function createKinloomServer(config: KinloomServerConfig): KinloomServer 
       if (body.language) entry.language = body.language;
       if (body.note) entry.note = body.note;
       if (body.audio_url) entry.audio_url = body.audio_url;
+      if (body.source_url) entry.source_url = body.source_url;
+      if (body.source_label) entry.source_label = body.source_label;
+      if (body.region) entry.region = body.region;
+      if (body.variants && body.variants.length > 0) entry.variants = body.variants;
 
       if (config.ports.pronunciationGenerator && config.ports.mediaStore) {
         try {
