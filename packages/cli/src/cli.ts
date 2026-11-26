@@ -2,14 +2,15 @@
 import { realpathSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { parseArgs, type ParseArgsConfig } from 'node:util';
-import { BuildModeSchema } from '@kinloom/core';
-import { runExportYamlCommand } from './commands/exportYaml.js';
-import { runInitCommand } from './commands/init.js';
-import { runReconcileCommand } from './commands/reconcile.js';
-import { runSeedCommand } from './commands/seed.js';
-import { runSliceGedcomCommand } from './commands/sliceGedcom.js';
-import { runSubmitBatchCommand } from './commands/submitBatch.js';
-import { runUploadMediaCommand } from './commands/uploadMedia.js';
+import {
+  AUDIT_HELP,
+  CONTEXT_HELP,
+  INTEGRATE_HELP,
+  SYNC_HELP,
+  TELEMETRY_HELP,
+} from './commands/ops/help.js';
+import { formatRecordCommandsHelp, renderRecordCommandHelp } from './commands/records/help.js';
+import { resolveRecordCommand } from './commands/records/registry.js';
 import {
   CliValidationError,
   EXIT_ERROR,
@@ -41,24 +42,36 @@ const DEFAULT_IO: CliIo = {
 
 export const ROOT_HELP = `Usage: kinloom <command> [options]
 
-Commands:
-  init           Scaffold a thin private family archive repository
-  slice-gedcom   Slice a combined GEDCOM export into deterministic YAML files
-  seed           Load local YAML + config and submit an idempotent seed batch
-  submit-batch   Validate and submit a typed BatchSubmission JSON/YAML file
-  export-yaml    Export deterministic YAML snapshot with ETag/304 support
-  upload-media   Validate and upload a media scan or recording via multipart POST
-  reconcile      Compare cached GET /api/bundle against full compileArchive
+Archive lifecycle:
+  init               Scaffold a thin private family archive repository
+  slice-gedcom       Slice a combined GEDCOM export into deterministic YAML files
+  seed               Load local YAML + config and submit an idempotent seed batch
+  submit-batch       Validate and submit a typed BatchSubmission JSON/YAML file
+  export-yaml        Export deterministic YAML snapshot with ETag/304 support
+  upload-media       Validate and upload a media scan or recording via multipart POST
+  reconcile          Compare cached GET /api/bundle against full compileArchive
+
+Research & archive ops:
+  context            Dump privacy-fenced YAML context, relatives, and leads for a person
+  integrate          Validate and merge a person research package into local YAML
+  audit              Run 5-check deterministic audit on a person research package
+  sync               Diff and sync local YAML + R2 media to a live Cloudflare archive
+  telemetry          Report local CLI latency, cache hit rate, and failure summary
+
+${formatRecordCommandsHelp()}
 
 Global options:
-  -h, --help     Show help for kinloom or a specific command
+  -h, --help         Show help for kinloom or a specific command
+  help <command>     Show full help or research guide for any command
 
 Environment variables:
-  KINLOOM_TOKEN  Bearer token used when --token is omitted
+  KINLOOM_TOKEN               Bearer token used when --token is omitted
+  KINLOOM_ANCESTRY_FACTS_DIR  Optional external facts JSON directory for \`kinloom context\`
+  KINLOOM_TELEMETRY_FILE      Override JSONL telemetry path (~/.cache/kinloom-telemetry/calls.jsonl)
 
 Exit codes:
   0  Success
-  1  Runtime, HTTP, or reconciliation drift error
+  1  Runtime, HTTP, audit, or reconciliation drift error
   2  CLI usage or boundary validation error
   3  Optimistic concurrency conflict (HTTP 409)`;
 
@@ -139,6 +152,12 @@ Options:
   --token <secret>     Bearer token (defaults to KINLOOM_TOKEN)
   --mode <mode>        Override build mode ('private' or 'public')
   -h, --help           Show this help message`,
+
+  context: CONTEXT_HELP,
+  integrate: INTEGRATE_HELP,
+  audit: AUDIT_HELP,
+  sync: SYNC_HELP,
+  telemetry: TELEMETRY_HELP,
 };
 
 function requireStringFlag(value: string | undefined, flagName: string): string {
@@ -159,6 +178,20 @@ function parseOptionalPositiveInt(value: string | undefined, flagName: string): 
   return parsed;
 }
 
+function parseOptionalPositiveNumber(
+  value: string | undefined,
+  flagName: string
+): number | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    throw new CliValidationError(`Option \`${flagName}\` must be a positive number.`);
+  }
+  return parsed;
+}
+
 function safeParseArgs<const T extends ParseArgsConfig>(
   config: T
 ): ReturnType<typeof parseArgs<T>> {
@@ -170,6 +203,158 @@ function safeParseArgs<const T extends ParseArgsConfig>(
   }
 }
 
+function writeRenderedOutput(io: CliIo, rendered: string): void {
+  const trimmed = rendered.replace(/\r?\n$/, '');
+  if (trimmed.length > 0) {
+    io.stdout(trimmed);
+  }
+}
+
+interface ParsedSyncArgs {
+  repoDir?: string;
+  siteUrl?: string;
+  typesRaw?: string;
+  syncMissingMedia: boolean;
+  uploadMediaPaths: string[];
+  concurrency?: number;
+  chunkSize?: number;
+  summary?: string;
+  allowDeletes: boolean;
+  deleteTokens: string[];
+  includeLiving: boolean;
+  dryRun: boolean;
+  json: boolean;
+}
+
+function parseSyncArgs(argv: readonly string[]): ParsedSyncArgs {
+  const parsed: ParsedSyncArgs = {
+    syncMissingMedia: false,
+    uploadMediaPaths: [],
+    allowDeletes: false,
+    deleteTokens: [],
+    includeLiving: false,
+    dryRun: false,
+    json: false,
+  };
+
+  const readFlagValue = (arg: string, index: number, name: string): [string, number] => {
+    if (arg.includes('=')) {
+      const val = arg.slice(arg.indexOf('=') + 1).trim();
+      if (!val) {
+        throw new CliValidationError(`Option \`${name}\` requires a value.`);
+      }
+      return [val, index];
+    }
+    const next = argv[index + 1];
+    if (!next || next.startsWith('-')) {
+      throw new CliValidationError(`Option \`${name}\` requires a value.`);
+    }
+    return [next.trim(), index + 1];
+  };
+
+  for (let i = 0; i < argv.length; i += 1) {
+    const arg = argv[i];
+    if (arg === '--sync-missing-media') {
+      parsed.syncMissingMedia = true;
+      continue;
+    }
+    if (arg === '--allow-deletes') {
+      parsed.allowDeletes = true;
+      continue;
+    }
+    if (arg === '--include-living') {
+      parsed.includeLiving = true;
+      continue;
+    }
+    if (arg === '--dry-run') {
+      parsed.dryRun = true;
+      continue;
+    }
+    if (arg === '--json') {
+      parsed.json = true;
+      continue;
+    }
+    if (arg === '--repo' || arg.startsWith('--repo=')) {
+      const [val, nextIdx] = readFlagValue(arg, i, '--repo');
+      parsed.repoDir = val;
+      i = nextIdx;
+      continue;
+    }
+    if (arg === '--site-url' || arg.startsWith('--site-url=')) {
+      const [val, nextIdx] = readFlagValue(arg, i, '--site-url');
+      parsed.siteUrl = val;
+      i = nextIdx;
+      continue;
+    }
+    if (arg === '--types' || arg.startsWith('--types=')) {
+      const [val, nextIdx] = readFlagValue(arg, i, '--types');
+      parsed.typesRaw = parsed.typesRaw ? `${parsed.typesRaw},${val}` : val;
+      i = nextIdx;
+      continue;
+    }
+    if (arg === '--summary' || arg.startsWith('--summary=')) {
+      const [val, nextIdx] = readFlagValue(arg, i, '--summary');
+      parsed.summary = val;
+      i = nextIdx;
+      continue;
+    }
+    if (arg === '--concurrency' || arg.startsWith('--concurrency=')) {
+      const [val, nextIdx] = readFlagValue(arg, i, '--concurrency');
+      parsed.concurrency = parseOptionalPositiveInt(val, '--concurrency');
+      i = nextIdx;
+      continue;
+    }
+    if (arg === '--chunk-size' || arg.startsWith('--chunk-size=')) {
+      const [val, nextIdx] = readFlagValue(arg, i, '--chunk-size');
+      parsed.chunkSize = parseOptionalPositiveInt(val, '--chunk-size');
+      i = nextIdx;
+      continue;
+    }
+    if (arg === '--delete' || arg.startsWith('--delete=')) {
+      const [val, nextIdx] = readFlagValue(arg, i, '--delete');
+      parsed.deleteTokens.push(val);
+      i = nextIdx;
+      continue;
+    }
+    if (arg === '--upload-media' || arg.startsWith('--upload-media=')) {
+      if (arg.startsWith('--upload-media=')) {
+        const raw = arg.slice('--upload-media='.length);
+        const items = raw
+          .split(',')
+          .map((item) => item.trim())
+          .filter(Boolean);
+        if (items.length === 0) {
+          throw new CliValidationError('Option `--upload-media` requires at least one file path.');
+        }
+        parsed.uploadMediaPaths.push(...items);
+      } else {
+        let consumed = 0;
+        while (i + 1 < argv.length && !argv[i + 1].startsWith('-')) {
+          i += 1;
+          for (const item of argv[i].split(',').map((part) => part.trim()).filter(Boolean)) {
+            parsed.uploadMediaPaths.push(item);
+            consumed += 1;
+          }
+        }
+        if (consumed === 0) {
+          throw new CliValidationError('Option `--upload-media` requires at least one file path.');
+        }
+      }
+      continue;
+    }
+    throw new CliValidationError(`Unknown argument '${arg}' for \`kinloom sync\`.`);
+  }
+
+  return parsed;
+}
+
+function normalizeExitCode(code: number): CliExitCode {
+  if (code === 0 || code === 1 || code === 2 || code === 3) {
+    return code;
+  }
+  return EXIT_ERROR;
+}
+
 export async function runCli(
   argv: readonly string[],
   options?: RunCliOptions
@@ -179,15 +364,41 @@ export async function runCli(
 
   if (argv.length === 0 || argv[0] === '-h' || argv[0] === '--help' || argv[0] === 'help') {
     const sub = argv[0] === 'help' ? argv[1] : undefined;
-    if (sub && COMMAND_HELP[sub]) {
-      io.stdout(COMMAND_HELP[sub]);
-    } else {
+    if (!sub) {
       io.stdout(ROOT_HELP);
+      return EXIT_OK;
     }
-    return EXIT_OK;
+    if (COMMAND_HELP[sub]) {
+      io.stdout(COMMAND_HELP[sub]);
+      return EXIT_OK;
+    }
+    const recordSpec = resolveRecordCommand(sub);
+    if (recordSpec) {
+      io.stdout(renderRecordCommandHelp(recordSpec));
+      return EXIT_OK;
+    }
+    io.stderr(`Unknown command '${sub}'. Run \`kinloom --help\` for available commands.`);
+    return EXIT_USAGE;
   }
 
   const [command, ...rest] = argv;
+
+  // Dispatch record, archive-search, guide, and scan/OCR commands before generic --help parsing
+  // so subcommand --help (e.g. `kinloom ia grep --help`) and `--script-help` pass through intact.
+  const recordSpec = resolveRecordCommand(command);
+  if (recordSpec) {
+    try {
+      const { runRecordCommand } = await import('./commands/records/runner.js');
+      const result = await runRecordCommand(recordSpec.command, rest, {
+        io: options?.io,
+      });
+      return normalizeExitCode(result.exitCode);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      io.stderr(`Error: ${message}`);
+      return EXIT_ERROR;
+    }
+  }
 
   if (rest.includes('-h') || rest.includes('--help')) {
     const help = COMMAND_HELP[command];
@@ -216,6 +427,7 @@ export async function runCli(
         if (!targetDir) {
           throw new CliValidationError('Missing required positional argument `<dir>`.');
         }
+        const { runInitCommand } = await import('./commands/init.js');
         const result = await runInitCommand({
           targetDir,
           family: requireStringFlag(values.family, '--family'),
@@ -246,6 +458,7 @@ export async function runCli(
             'reference-year': { type: 'string' },
           },
         });
+        const { runSliceGedcomCommand } = await import('./commands/sliceGedcom.js');
         const result = await runSliceGedcomCommand({
           inputPath: requireStringFlag(values.input, '--input'),
           outDir: requireStringFlag(values.out, '--out'),
@@ -287,6 +500,7 @@ export async function runCli(
           ? values.site?.trim() || 'http://localhost'
           : requireStringFlag(values.site, '--site');
 
+        const { runSeedCommand } = await import('./commands/seed.js');
         const result = await runSeedCommand({
           dataDir: requireStringFlag(values.data, '--data'),
           configPath: requireStringFlag(values.config, '--config'),
@@ -332,6 +546,7 @@ export async function runCli(
           ? values.site?.trim() || 'http://localhost'
           : requireStringFlag(values.site, '--site');
 
+        const { runSubmitBatchCommand } = await import('./commands/submitBatch.js');
         const result = await runSubmitBatchCommand({
           filePath: requireStringFlag(filePath, '--file'),
           siteUrl,
@@ -371,6 +586,7 @@ export async function runCli(
             'state-file': { type: 'string' },
           },
         });
+        const { runExportYamlCommand } = await import('./commands/exportYaml.js');
         const result = await runExportYamlCommand({
           siteUrl: requireStringFlag(values.site, '--site'),
           outDir: requireStringFlag(values.out, '--out'),
@@ -413,6 +629,7 @@ export async function runCli(
           ? values.site?.trim() || 'http://localhost'
           : requireStringFlag(values.site, '--site');
 
+        const { runUploadMediaCommand } = await import('./commands/uploadMedia.js');
         const result = await runUploadMediaCommand({
           filePath: requireStringFlag(values.file, '--file'),
           metadataInput: requireStringFlag(values.metadata, '--metadata'),
@@ -451,17 +668,17 @@ export async function runCli(
           },
         });
 
-        let mode;
+        let mode: 'private' | 'public' | undefined;
         if (values.mode !== undefined) {
-          const parsedMode = BuildModeSchema.safeParse(values.mode);
-          if (!parsedMode.success) {
+          if (values.mode !== 'private' && values.mode !== 'public') {
             throw new CliValidationError(
               `Invalid \`--mode\` '${values.mode}'. Expected 'private' or 'public'.`
             );
           }
-          mode = parsedMode.data;
+          mode = values.mode;
         }
 
+        const { runReconcileCommand } = await import('./commands/reconcile.js');
         const result = await runReconcileCommand({
           siteUrl: requireStringFlag(values.site, '--site'),
           configPath: requireStringFlag(values.config, '--config'),
@@ -486,6 +703,204 @@ export async function runCli(
           );
         }
         return EXIT_ERROR;
+      }
+
+      case 'context': {
+        const { values, positionals } = safeParseArgs({
+          args: rest,
+          allowPositionals: true,
+          options: {
+            person: { type: 'string' },
+            repo: { type: 'string' },
+            'ancestry-dir': { type: 'string' },
+            json: { type: 'boolean', default: false },
+          },
+        });
+        const personId = requireStringFlag(values.person ?? positionals[0], '--person');
+        const [{ runContextCommand }, { measureCommand }] = await Promise.all([
+          import('./commands/ops/context.js'),
+          import('./commands/ops/telemetry.js'),
+        ]);
+        const result = await measureCommand(
+          {
+            subcmd: 'context',
+            personId,
+            extractResultMeta: (res) => ({
+              personId,
+              exitCode: EXIT_OK,
+              bytesOut: res.bytesOut,
+            }),
+          },
+          () =>
+            runContextCommand({
+              repoDir: values.repo,
+              personId,
+              ancestryDir: values['ancestry-dir'],
+              json: values.json,
+            })
+        );
+        writeRenderedOutput(io, result.rendered);
+        return EXIT_OK;
+      }
+
+      case 'integrate': {
+        const { values, positionals } = safeParseArgs({
+          args: rest,
+          allowPositionals: true,
+          options: {
+            person: { type: 'string' },
+            repo: { type: 'string' },
+            'package-dir': { type: 'string' },
+            'dry-run': { type: 'boolean', default: false },
+            json: { type: 'boolean', default: false },
+          },
+        });
+        const personId = requireStringFlag(values.person ?? positionals[0], '--person');
+        const [{ runIntegrateCommand }, { measureCommand }] = await Promise.all([
+          import('./commands/ops/integrate.js'),
+          import('./commands/ops/telemetry.js'),
+        ]);
+        const result = await measureCommand(
+          {
+            subcmd: values['dry-run'] ? 'integrate --dry-run' : 'integrate',
+            personId,
+            extractResultMeta: (res) => ({
+              personId,
+              exitCode: EXIT_OK,
+              bytesOut: Buffer.byteLength(res.rendered, 'utf8'),
+            }),
+          },
+          () =>
+            runIntegrateCommand({
+              repoDir: values.repo,
+              personId,
+              packageDir: values['package-dir'],
+              dryRun: values['dry-run'],
+              json: values.json,
+            })
+        );
+        writeRenderedOutput(io, result.rendered);
+        return EXIT_OK;
+      }
+
+      case 'audit': {
+        const { values, positionals } = safeParseArgs({
+          args: rest,
+          allowPositionals: true,
+          options: {
+            person: { type: 'string' },
+            repo: { type: 'string' },
+            'package-dir': { type: 'string' },
+            json: { type: 'boolean', default: false },
+          },
+        });
+        const personId = requireStringFlag(values.person ?? positionals[0], '--person');
+        const [{ runAuditCommand }, { measureCommand }] = await Promise.all([
+          import('./commands/ops/audit.js'),
+          import('./commands/ops/telemetry.js'),
+        ]);
+        const result = await measureCommand(
+          {
+            subcmd: 'audit',
+            personId,
+            extractResultMeta: (res) => ({
+              personId,
+              exitCode: res.ok ? EXIT_OK : EXIT_ERROR,
+              bytesOut: Buffer.byteLength(res.rendered, 'utf8'),
+            }),
+          },
+          () =>
+            runAuditCommand({
+              repoDir: values.repo,
+              personId,
+              packageDir: values['package-dir'],
+              json: values.json,
+            })
+        );
+        writeRenderedOutput(io, result.rendered);
+        return result.ok ? EXIT_OK : EXIT_ERROR;
+      }
+
+      case 'sync': {
+        const parsed = parseSyncArgs(rest);
+        const [{ parseDeleteTargets, parseEntityTypeList, runSyncCommand }, { measureCommand }] =
+          await Promise.all([
+            import('./commands/ops/sync.js'),
+            import('./commands/ops/telemetry.js'),
+          ]);
+        const types = parsed.typesRaw ? parseEntityTypeList(parsed.typesRaw) : undefined;
+        const explicitDeletes =
+          parsed.deleteTokens.length > 0
+            ? parseDeleteTargets(parsed.deleteTokens.join(','))
+            : undefined;
+        const result = await measureCommand(
+          {
+            subcmd: parsed.dryRun ? 'sync --dry-run' : 'sync',
+            extractResultMeta: (res) => ({
+              exitCode: EXIT_OK,
+              bytesOut: Buffer.byteLength(res.rendered, 'utf8'),
+            }),
+          },
+          () =>
+            runSyncCommand({
+              repoDir: parsed.repoDir,
+              siteUrl: parsed.siteUrl,
+              types,
+              syncMissingMedia: parsed.syncMissingMedia,
+              uploadMediaPaths: parsed.uploadMediaPaths,
+              concurrency: parsed.concurrency,
+              chunkSize: parsed.chunkSize,
+              summary: parsed.summary,
+              allowDeletes: parsed.allowDeletes,
+              explicitDeletes,
+              includeLiving: parsed.includeLiving,
+              dryRun: parsed.dryRun,
+              json: parsed.json,
+              fetchImpl,
+            })
+        );
+        writeRenderedOutput(io, result.rendered);
+        return EXIT_OK;
+      }
+
+      case 'telemetry': {
+        const sub = rest[0];
+        const subArgs = sub === 'report' ? rest.slice(1) : rest;
+        if (sub && sub !== 'report' && !sub.startsWith('-')) {
+          throw new CliValidationError(
+            `Unknown telemetry subcommand '${sub}'. Use \`kinloom telemetry report\`.`
+          );
+        }
+        const { values } = safeParseArgs({
+          args: subArgs,
+          allowPositionals: false,
+          options: {
+            'since-hours': { type: 'string' },
+            file: { type: 'string' },
+            json: { type: 'boolean', default: false },
+          },
+        });
+        const { measureCommand, runTelemetryReportCommand } = await import(
+          './commands/ops/telemetry.js'
+        );
+        const result = await measureCommand(
+          {
+            subcmd: 'telemetry report',
+            filePath: values.file,
+            extractResultMeta: (res) => ({
+              exitCode: EXIT_OK,
+              bytesOut: Buffer.byteLength(res.rendered, 'utf8'),
+            }),
+          },
+          () =>
+            runTelemetryReportCommand({
+              filePath: values.file,
+              sinceHours: parseOptionalPositiveNumber(values['since-hours'], '--since-hours'),
+              json: values.json,
+            })
+        );
+        writeRenderedOutput(io, result.rendered);
+        return EXIT_OK;
       }
 
       default:

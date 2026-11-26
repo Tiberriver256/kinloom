@@ -80,6 +80,9 @@ export {
   type ReconcileCommandResult,
 } from './commands/reconcile.js';
 
+export * from './commands/ops/index.js';
+export * from './commands/records/index.js';
+
 export {
   ROOT_HELP,
   runCli,

@@ -1,0 +1,286 @@
+import { spawn, type ChildProcess, type SpawnOptions } from 'node:child_process';
+import fs from 'node:fs';
+import { performance } from 'node:perf_hooks';
+import {
+  isTelemetrySuppressedByParent,
+  recordTelemetryEvent,
+  type OpsIo,
+} from '../ops/telemetry.js';
+import { classifyRecordCommandIntent, renderRecordCommandHelp } from './help.js';
+import { resolveRecordCommand, type RecordCommandSpec } from './registry.js';
+import { resolveRecordScriptPath, type ResolveRootsOptions } from './resolve.js';
+
+export interface ScriptInvocation {
+  readonly command: string;
+  readonly args: readonly string[];
+}
+
+export type RecordSpawnFn = (
+  command: string,
+  args: readonly string[],
+  options: SpawnOptions
+) => ChildProcess;
+
+export interface RunRecordCommandOptions extends ResolveRootsOptions {
+  io?: OpsIo;
+  spawnImpl?: RecordSpawnFn;
+  env?: NodeJS.ProcessEnv;
+  cwd?: string;
+  telemetryFilePath?: string;
+  forceTelemetry?: boolean;
+}
+
+export interface RunRecordCommandResult {
+  readonly command: string;
+  readonly mode: 'guide' | 'script';
+  readonly exitCode: number;
+  readonly bytesOut: number;
+}
+
+const DEFAULT_IO: OpsIo = {
+  stdout: (line) => {
+    process.stdout.write(`${line}\n`);
+  },
+  stderr: (line) => {
+    process.stderr.write(`${line}\n`);
+  },
+};
+
+function readFirstLine(filePath: string): string {
+  const fd = fs.openSync(filePath, 'r');
+  try {
+    const buf = Buffer.alloc(256);
+    const bytesRead = fs.readSync(fd, buf, 0, buf.length, 0);
+    const snippet = buf.toString('utf8', 0, bytesRead);
+    const nlIndex = snippet.indexOf('\n');
+    return (nlIndex === -1 ? snippet : snippet.slice(0, nlIndex)).trim();
+  } finally {
+    fs.closeSync(fd);
+  }
+}
+
+export function resolveScriptInvocation(
+  scriptPath: string,
+  scriptArgs: readonly string[]
+): ScriptInvocation {
+  const firstLine = readFirstLine(scriptPath);
+  if (firstLine.startsWith('#!')) {
+    const shebang = firstLine.slice(2).trim();
+    const tokens = shebang.split(/\s+/).filter(Boolean);
+
+    if (tokens.includes('uv') && tokens.includes('run')) {
+      const uvIdx = tokens.indexOf('uv');
+      const uvArgs = tokens.slice(uvIdx + 1);
+      return {
+        command: 'uv',
+        args: [...uvArgs, scriptPath, ...scriptArgs],
+      };
+    }
+
+    const pyIdx = tokens.findIndex((t) => t === 'python3' || t.endsWith('/python3'));
+    if (pyIdx !== -1) {
+      const pyFlags = tokens.slice(pyIdx + 1);
+      return {
+        command: 'python3',
+        args: [...pyFlags, scriptPath, ...scriptArgs],
+      };
+    }
+  }
+
+  return {
+    command: scriptPath,
+    args: [...scriptArgs],
+  };
+}
+
+function buildTelemetrySubcmd(spec: RecordCommandSpec, args: readonly string[], mode: 'guide' | 'script'): string {
+  if (mode === 'guide') {
+    return `${spec.command} help`;
+  }
+  const firstArg = args[0];
+  if (firstArg && !firstArg.startsWith('-')) {
+    return `${spec.command} ${firstArg}`;
+  }
+  return spec.command;
+}
+
+function formatSpawnErrorMessage(
+  err: NodeJS.ErrnoException,
+  invocation: ScriptInvocation,
+  commandName: string
+): string {
+  if (err.code === 'ENOENT') {
+    if (invocation.command === 'uv') {
+      return `Error: 'uv' is required to run 'kinloom ${commandName}' (install uv from https://docs.astral.sh/uv/).`;
+    }
+    if (invocation.command === 'python3') {
+      return `Error: 'python3' is required to run 'kinloom ${commandName}'.`;
+    }
+    return `Error: executable '${invocation.command}' not found for 'kinloom ${commandName}'.`;
+  }
+  return `Error: failed to launch 'kinloom ${commandName}': ${err.message}`;
+}
+
+export async function runRecordCommand(
+  commandName: string,
+  args: readonly string[],
+  options?: RunRecordCommandOptions
+): Promise<RunRecordCommandResult> {
+  const spec = resolveRecordCommand(commandName);
+  const io = options?.io ?? DEFAULT_IO;
+  if (!spec) {
+    io.stderr(`Unknown record command '${commandName}'.`);
+    return {
+      command: commandName,
+      mode: 'guide',
+      exitCode: 2,
+      bytesOut: 0,
+    };
+  }
+
+  const startMs = performance.now();
+  const intent = classifyRecordCommandIntent(spec, args);
+  const shouldRecordTelemetry = Boolean(options?.forceTelemetry) || !isTelemetrySuppressedByParent();
+
+  if (intent.mode === 'render-guide') {
+    const rendered = renderRecordCommandHelp(spec, options);
+    io.stdout(rendered);
+    const bytesOut = Buffer.byteLength(`${rendered}\n`, 'utf8');
+    if (shouldRecordTelemetry) {
+      recordTelemetryEvent(
+        {
+          cmd: `records:${spec.command}`,
+          subcmd: buildTelemetrySubcmd(spec, args, 'guide'),
+          duration_ms: performance.now() - startMs,
+          exit_code: 0,
+          bytes_out: bytesOut,
+        },
+        { filePath: options?.telemetryFilePath, force: options?.forceTelemetry }
+      );
+    }
+    return {
+      command: spec.command,
+      mode: 'guide',
+      exitCode: 0,
+      bytesOut,
+    };
+  }
+
+  if (spec.kind === 'skill-guide') {
+    // Unreachable because classifyRecordCommandIntent always returns render-guide for skill-guide.
+    throw new Error(`Guide-only command '${spec.command}' cannot execute a script.`);
+  }
+
+  const scriptPath = resolveRecordScriptPath(spec, options);
+  const invocation = resolveScriptInvocation(scriptPath, intent.scriptArgs);
+  const spawnFn: RecordSpawnFn = options?.spawnImpl ?? spawn;
+  const captureOutput = options?.io !== undefined;
+
+  const childEnv: NodeJS.ProcessEnv = {
+    ...(options?.env ?? process.env),
+    KINLOOM_TELEMETRY_ACTIVE: '1',
+    KINLOOM_TELEMETRY_PARENT: '1',
+  };
+
+  let bytesOut = 0;
+  const exitCode = await new Promise<number>((resolve) => {
+    const child = spawnFn(invocation.command, [...invocation.args], {
+      cwd: options?.cwd,
+      env: childEnv,
+      stdio: captureOutput ? ['inherit', 'pipe', 'pipe'] : 'inherit',
+    });
+
+    const forwardSigInt = () => {
+      if (!child.killed) {
+        child.kill('SIGINT');
+      }
+    };
+    const forwardSigTerm = () => {
+      if (!child.killed) {
+        child.kill('SIGTERM');
+      }
+    };
+
+    process.on('SIGINT', forwardSigInt);
+    process.on('SIGTERM', forwardSigTerm);
+
+    const cleanupSignals = () => {
+      process.off('SIGINT', forwardSigInt);
+      process.off('SIGTERM', forwardSigTerm);
+    };
+
+    if (captureOutput) {
+      const stdoutChunks: Buffer[] = [];
+      const stderrChunks: Buffer[] = [];
+      child.stdout?.on('data', (chunk: Buffer | string) => {
+        const buf = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+        bytesOut += buf.length;
+        stdoutChunks.push(buf);
+      });
+      child.stderr?.on('data', (chunk: Buffer | string) => {
+        const buf = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+        stderrChunks.push(buf);
+      });
+
+      child.on('close', (code, signal) => {
+        cleanupSignals();
+        const outText = Buffer.concat(stdoutChunks).toString('utf8');
+        const errText = Buffer.concat(stderrChunks).toString('utf8');
+        if (outText.length > 0) {
+          io.stdout(outText.replace(/\r?\n$/, ''));
+        }
+        if (errText.length > 0) {
+          io.stderr(errText.replace(/\r?\n$/, ''));
+        }
+        if (typeof code === 'number') {
+          resolve(code);
+        } else if (signal === 'SIGINT') {
+          resolve(130);
+        } else if (signal === 'SIGTERM') {
+          resolve(143);
+        } else {
+          resolve(1);
+        }
+      });
+    } else {
+      child.on('close', (code, signal) => {
+        cleanupSignals();
+        if (typeof code === 'number') {
+          resolve(code);
+        } else if (signal === 'SIGINT') {
+          resolve(130);
+        } else if (signal === 'SIGTERM') {
+          resolve(143);
+        } else {
+          resolve(1);
+        }
+      });
+    }
+
+    child.on('error', (err: NodeJS.ErrnoException) => {
+      cleanupSignals();
+      io.stderr(formatSpawnErrorMessage(err, invocation, spec.command));
+      resolve(1);
+    });
+  });
+
+  if (shouldRecordTelemetry) {
+    recordTelemetryEvent(
+      {
+        cmd: `records:${spec.command}`,
+        subcmd: buildTelemetrySubcmd(spec, intent.scriptArgs, 'script'),
+        duration_ms: performance.now() - startMs,
+        exit_code: exitCode,
+        bytes_out: bytesOut,
+      },
+      { filePath: options?.telemetryFilePath, force: options?.forceTelemetry }
+    );
+  }
+
+  return {
+    command: spec.command,
+    mode: 'script',
+    exitCode,
+    bytesOut,
+  };
+}
