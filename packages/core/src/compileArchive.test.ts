@@ -212,10 +212,12 @@ describe('compileArchive and living-person privacy', () => {
     });
 
     const { bundle } = result;
+    const expectedLivingCount = SYNTHETIC_PEOPLE.filter((p) => p.is_living).length;
     expect(bundle.meta.build_mode).toBe('public');
-    expect(bundle.meta.counts.people).toBe(3);
-    expect(bundle.meta.counts.living_redacted).toBe(1);
-    expect(bundle.meta.counts.residence_spans).toBe(1);
+    expect(bundle.meta.counts.people).toBe(SYNTHETIC_PEOPLE.length);
+    expect(bundle.meta.counts.living_redacted).toBe(expectedLivingCount);
+    expect(bundle.residence_spans.map((span) => span.person_id)).toEqual(['per_arthur_alder']);
+    expect(bundle.meta.counts.residence_spans).toBe(bundle.residence_spans.length);
 
     // Living person completely redacted in public mode
     const elena = bundle.people.find((p) => p.id === 'per_elena_alder');
@@ -245,8 +247,7 @@ describe('compileArchive and living-person privacy', () => {
     expect(clara?.branch).toBe('mercer_side');
 
     // Multi-person headstone increments media_count for BOTH deceased people; photo with living person excluded
-    expect(bundle.media).toHaveLength(1);
-    expect(bundle.media?.[0]?.id).toBe('med_joint_stone');
+    expect(bundle.media?.map((item) => item.id)).toEqual(['med_joint_stone']);
     expect(arthur?.media_count).toBe(1);
     expect(clara?.media_count).toBe(1);
   });

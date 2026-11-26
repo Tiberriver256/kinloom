@@ -242,8 +242,7 @@ describe('KinloomApiClient', () => {
     if (wrapped.status === 'ok') {
       expect(wrapped.etag).toBe('"r7"');
       expect(wrapped.snapshot.head_revision_id).toBe(7);
-      expect(wrapped.snapshot.entities).toHaveLength(1);
-      expect(wrapped.snapshot.entities[0].entity_id).toBe('plc_oak_county_ohio');
+      expect(wrapped.snapshot.entities).toEqual([sampleEntity]);
       expect(wrapped.snapshot.kinship).toEqual([]);
     }
 
@@ -282,7 +281,7 @@ describe('KinloomApiClient', () => {
     expect(unwrapped.status).toBe('ok');
     if (unwrapped.status === 'ok') {
       expect(unwrapped.snapshot.head_revision_id).toBe(9);
-      expect(unwrapped.snapshot.entities).toHaveLength(1);
+      expect(unwrapped.snapshot.entities).toEqual([sampleEntity]);
     }
 
     // 4. Invalid shape still fails with INVALID_RESPONSE_SCHEMA.

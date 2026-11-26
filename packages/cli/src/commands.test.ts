@@ -304,7 +304,7 @@ describe('kinloom CLI commands', () => {
       { io: cap.io }
     );
     expect(exitCode).toBe(EXIT_OK);
-    expect(cap.stdout[0]).toContain('12 created, 0 skipped');
+    expect(cap.stdout[0]).toContain('13 created, 0 skipped');
 
     const configYaml = await readFile(path.join(targetDir, 'kinloom.config.yaml'), 'utf8');
     const parsedConfig = parseKinloomConfigYaml(configYaml);
@@ -335,6 +335,13 @@ describe('kinloom CLI commands', () => {
     const extReadme = await readFile(path.join(targetDir, 'extensions', 'README.md'), 'utf8');
     expect(extReadme).toContain('KinloomUiPlugin');
 
+    const oxlintrc = JSON.parse(await readFile(path.join(targetDir, '.oxlintrc.json'), 'utf8')) as {
+      jsPlugins: string[];
+      rules: Record<string, string>;
+    };
+    expect(oxlintrc.jsPlugins).toEqual(['@kinloom/core/oxlint-plugin']);
+    expect(oxlintrc.rules['kinloom/no-hardcoded-archive-counts']).toBe('error');
+
     const gitignore = await readFile(path.join(targetDir, '.gitignore'), 'utf8');
     expect(gitignore).toContain('raw-gedcom/');
 
@@ -345,7 +352,7 @@ describe('kinloom CLI commands', () => {
       { io: cap2.io }
     );
     expect(secondCode).toBe(EXIT_OK);
-    expect(cap2.stdout[0]).toContain('0 created, 12 skipped');
+    expect(cap2.stdout[0]).toContain('0 created, 13 skipped');
 
     // Invalid hex accent fails at CLI boundary with exit code 2.
     const cap3 = createCaptureIo();
