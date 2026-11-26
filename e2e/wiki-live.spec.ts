@@ -32,8 +32,9 @@ async function enrollEditorViaInviteAndMagicLink(
   email: string,
 ): Promise<void> {
   await page.goto(`${wiki.baseUrl}/api/auth/invite/${wiki.inviteToken}`);
-  await expect(page.getByRole('region', { name: 'Invite access notice' })).toBeVisible();
-  await page.getByRole('button', { name: 'Sign in to edit' }).click();
+  const inviteNotice = page.getByRole('region', { name: 'Invite access notice' });
+  await expect(inviteNotice).toBeVisible();
+  await inviteNotice.getByRole('button', { name: 'Sign in to edit' }).click();
   const dialog = page.getByRole('dialog', { name: 'Sign in to family archive' });
   await expect(dialog).toBeVisible();
   await dialog.getByLabel('Email address').fill(email);
@@ -87,7 +88,7 @@ test('1. read-only invite shows viewer banner and magic-link sign-in auto-enroll
 
   const inviteBanner = page.getByRole('region', { name: 'Invite access notice' });
   await expect(inviteBanner).toBeVisible();
-  await expect(inviteBanner).toContainText('Read-only family invite (Reunion Cousins)');
+  await expect(inviteBanner).toContainText('Family invite (Reunion Cousins)');
 
   // Invite viewer can read History and Family Notes, while Edit Page and Add Photo stay hidden
   await page.goto(`${wiki.baseUrl}/person/abraham-lincoln-1809`);

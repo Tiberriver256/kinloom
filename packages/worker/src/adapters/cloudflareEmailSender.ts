@@ -11,7 +11,21 @@ export interface CloudflareEmailSenderOptions {
 }
 
 function sanitizeHeaderValue(value: string): string {
-  return value.replace(/[\r\n\x00-\x1f\x7f]+/g, ' ').trim();
+  let out = '';
+  let pendingSpace = false;
+  for (let i = 0; i < value.length; i += 1) {
+    const code = value.charCodeAt(i);
+    if (code <= 31 || code === 127) {
+      pendingSpace = out.length > 0;
+      continue;
+    }
+    if (pendingSpace) {
+      out += ' ';
+      pendingSpace = false;
+    }
+    out += value[i];
+  }
+  return out.trim();
 }
 
 function escapeHtml(value: string): string {

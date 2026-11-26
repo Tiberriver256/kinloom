@@ -755,6 +755,108 @@ describe('ops/integrate', () => {
     ]);
   });
 
+  it('keeps a primary source and merges alternate dates when two people share one event', async () => {
+    const repoDir = await createSyntheticRepo();
+    const marriageId = 'evt_alder_maple_marriage';
+    const countyDate = {
+      edtf_date: '1882-06-01',
+      source_id: 'src_1880_census',
+      note: 'county register',
+    };
+    const bibleDate = {
+      edtf_date: '1882-06-02',
+      source_id: 'src_1932_death_cert',
+      note: 'family bible',
+    };
+    const baseEvent = {
+      id: marriageId,
+      title: 'Marriage of Arthur Alder and Helen Maple',
+      scope: 'family',
+      event_kind: 'point_event',
+      edtf_date: '1882-06-01',
+      place_id: 'plc_oak_county_ohio',
+      summary: 'Recorded in Oak County.',
+      sources: [{ source_id: 'src_1880_census', confidence: 'high' }],
+    };
+
+    const arthurDir = path.join(repoDir, 'research', 'people', 'per_arthur_alder');
+    await mkdir(arthurDir, { recursive: true });
+    await writeFile(
+      path.join(arthurDir, 'patch.json'),
+      JSON.stringify({
+        person_id: 'per_arthur_alder',
+        events: [
+          {
+            ...baseEvent,
+            place_precision: 'county',
+            has_primary_source: true,
+            alternate_dates: [countyDate],
+            participants: [{ person_id: 'per_arthur_alder', role: 'groom' }],
+          },
+        ],
+      }),
+      'utf8',
+    );
+    await runIntegrateCommand({ repoDir, personId: 'per_arthur_alder', dryRun: false });
+
+    const helenDir = path.join(repoDir, 'research', 'people', 'per_helen_maple');
+    await mkdir(helenDir, { recursive: true });
+    const helenPatch = {
+      person_id: 'per_helen_maple',
+      events: [
+        {
+          ...baseEvent,
+          has_primary_source: false,
+          alternate_dates: [countyDate, bibleDate],
+          participants: [{ person_id: 'per_helen_maple', role: 'bride' }],
+          sources: [{ source_id: 'src_1932_death_cert', confidence: 'medium' }],
+        },
+      ],
+    };
+    await writeFile(path.join(helenDir, 'patch.json'), JSON.stringify(helenPatch), 'utf8');
+    await runIntegrateCommand({ repoDir, personId: 'per_helen_maple', dryRun: false });
+
+    const eventsPath = path.join(repoDir, 'data', 'events.yaml');
+    const readMarriage = async () =>
+      parseEventsYaml(await readFile(eventsPath, 'utf8')).find((event) => event.id === marriageId);
+
+    const merged = await readMarriage();
+    expect(merged?.has_primary_source).toBe(true);
+    expect(merged?.place_precision).toBe('county');
+    expect(merged?.alternate_dates).toEqual([countyDate, bibleDate]);
+    expect(merged?.participants).toEqual([
+      { person_id: 'per_arthur_alder', role: 'groom' },
+      { person_id: 'per_helen_maple', role: 'bride' },
+    ]);
+
+    await writeFile(
+      path.join(helenDir, 'patch.json'),
+      JSON.stringify({
+        person_id: 'per_helen_maple',
+        events: [
+          {
+            ...baseEvent,
+            has_primary_source: false,
+            participants: [{ person_id: 'per_helen_maple', role: 'bride' }],
+            sources: [{ source_id: 'src_1932_death_cert', confidence: 'medium' }],
+          },
+        ],
+      }),
+      'utf8',
+    );
+    const omitRes = await runIntegrateCommand({
+      repoDir,
+      personId: 'per_helen_maple',
+      dryRun: false,
+    });
+    expect(omitRes.writtenYamlFiles).toEqual([]);
+    expect(await readMarriage()).toMatchObject({
+      has_primary_source: true,
+      place_precision: 'county',
+      alternate_dates: [countyDate, bibleDate],
+    });
+  });
+
   it('rejects dangling inline citations and (0, 0) coordinates', async () => {
     const repoDir = await createSyntheticRepo();
     const packageDir = await writeValidResearchPackage(repoDir);
