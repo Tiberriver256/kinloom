@@ -11,6 +11,17 @@ This skill includes a standalone executable Python CLI at `skills/findagrave/scr
 
 Path: `skills/findagrave/scripts/findagrave`
 
+### Persistent local disk cache
+
+`get`/`memorial`, `cemetery`, `photo`, `search`, and `place` cache responses atomically under `~/.cache/kinloom-findagrave/` (overrideable via `KINLOOM_FINDAGRAVE_CACHE_DIR`) using advisory file locks (`fcntl.flock` on POSIX, safe fallback elsewhere) so concurrent research threads never re-download shared memorials, cemeteries, or gravestone photos. Pass `--refresh` on any command to bypass the local cache and fetch fresh data.
+
+Cache layout:
+
+- `memorials/<id>.json`: parsed memorial JSON shared by `get`/`memorial` and `photo` (168-hour default TTL via `--cache-ttl-hours` or `KINLOOM_FINDAGRAVE_CACHE_TTL_HOURS`).
+- `cemeteries/<id>.json`: parsed cemetery JSON for `cemetery <id>` (168-hour default TTL).
+- `photos/<memorial_id>/<photo_id><ext>`: downloaded gravestone and portrait image files reused across `--out` directories and `--prefix` flags with zero HTTP requests.
+- `_queries/<search|cemetery_search|place>/<sha256>.json`: cached search and typeahead JSON responses (168-hour default TTL).
+
 ### Search memorials
 
 ```bash
@@ -114,4 +125,5 @@ Find a Grave is contributor-written. Dates, family links, and biographies are cl
 
 ## Environment variables
 
-None. No key, login, or account is needed for anything in this skill.
+- `KINLOOM_FINDAGRAVE_CACHE_DIR`: optional override for the local disk cache directory (default `~/.cache/kinloom-findagrave`).
+- `KINLOOM_FINDAGRAVE_CACHE_TTL_HOURS`: optional override for memorial, cemetery, and query cache TTL in hours (default `168`). No API key, login, or account is needed for anything in this skill.

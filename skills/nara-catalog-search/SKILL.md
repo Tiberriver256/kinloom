@@ -15,6 +15,16 @@ This skill includes a standalone executable Python CLI at `skills/nara-catalog-s
 
 Path: `skills/nara-catalog-search/scripts/nara`
 
+### Persistent local disk cache
+
+`search`, `get`, and `download` cache responses atomically under `~/.cache/kinloom-nara/` (overrideable via `KINLOOM_NARA_CACHE_DIR`) using advisory file locks (`fcntl.flock` on POSIX, safe fallback elsewhere) so concurrent research threads never duplicate downloads and repeat calls make zero HTTP requests. Pass `--refresh` on `search`, `get`, or `download` to bypass the cache and fetch fresh data.
+
+Cache layout:
+
+- `records/<naid>.json`: full record metadata and digital object inventory shared by `get` and `download` (upgraded automatically if `--text` is requested later).
+- `objects/<naid>/<page>_<safe_filename>`: individual downloaded page scans, so overlapping page slices (for example `--pages 315-350` followed by `--pages 340-360` or another biographer working the same census roll) reuse already-fetched pages straight from disk.
+- `_queries/<sha256>.json`: cached `search` query payloads keyed by canonical query parameters with a 168-hour (7-day) default TTL (`--cache-ttl-hours` or `KINLOOM_NARA_QUERY_TTL_HOURS`).
+
 ### Search records (single or batched in one browser session)
 
 ```bash
@@ -64,6 +74,8 @@ skills/nara-catalog-search/scripts/nara url '"Clara Barton"' --level item --api
 
 - `NARA_API_KEY`: optional NARA Catalog v2 API key for direct HTTP queries.
 - `NARA_BROWSER`: optional path to a Chromium or Chrome binary (defaults to `chromium`, `chromium-browser`, `google-chrome`, or Playwright's bundled browser).
+- `KINLOOM_NARA_CACHE_DIR`: optional override for the local disk cache directory (default `~/.cache/kinloom-nara`).
+- `KINLOOM_NARA_QUERY_TTL_HOURS`: optional override for the `search` query cache TTL in hours (default `168`).
 
 ## Website search & query string rules (verified live 2026-11-23)
 

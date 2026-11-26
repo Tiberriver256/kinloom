@@ -546,6 +546,28 @@ describe('bundled Python utilities and live script execution', () => {
     expect(result.stderr).toMatch(/\bOK\b/);
   });
 
+  it('passes nara, findagrave, and usgs-gnis disk-caching and path-safety unit tests', () => {
+    const testFiles = [
+      path.join(SKILLS_ROOT, 'nara-catalog-search', 'tests', 'test_nara.py'),
+      path.join(SKILLS_ROOT, 'findagrave', 'tests', 'test_findagrave.py'),
+      path.join(SKILLS_ROOT, 'usgs-gnis', 'tests', 'test_gnis.py'),
+    ];
+    let pyCmd = 'python3';
+    let pyPrefix: string[] = [];
+    try {
+      execFileSync('python3', ['-c', 'import click, httpx'], { stdio: 'ignore' });
+    } catch {
+      pyCmd = 'uv';
+      pyPrefix = ['run', '--with', 'click', '--with', 'httpx', 'python3'];
+    }
+    const result = spawnSync(pyCmd, [...pyPrefix, '-m', 'unittest', '-v', ...testFiles], {
+      encoding: 'utf8',
+    });
+    expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(0);
+    expect(result.stderr).toMatch(/Ran [1-9]\d* tests/);
+    expect(result.stderr).toMatch(/\bOK\b/);
+  });
+
   it('forces OMP_THREAD_LIMIT=1 and enforces --timeout on tesseract subprocesses', async () => {
     const tmp = await makeTempDir('kinloom-ocr-hardening-');
     const binDir = path.join(tmp, 'bin');

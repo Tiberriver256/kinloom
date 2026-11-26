@@ -16,12 +16,17 @@ This CLI downloads the USGS per-state pipe-delimited text files
 
 from __future__ import annotations
 
+from contextlib import contextmanager
+import hashlib
 import json
+import math
 import os
 import sys
+import time
 import zipfile
 from io import BytesIO
 from pathlib import Path
+from typing import Any, Iterator
 
 import click
 import httpx
@@ -30,6 +35,7 @@ S3_BASE = "https://prd-tnm.s3.amazonaws.com/StagedProducts/GeographicNames"
 SEARCH_APP = "https://edits.nationalmap.gov/apps/gaz-domestic/public/search/names"
 HEADERS = {"User-Agent": "kinloom/1.0 (genealogy research)"}
 TIMEOUT = 120.0
+DEFAULT_QUERY_TTL_HOURS = 720.0
 
 STATE_CODES = {
     "AK", "AL", "AR", "AS", "AZ", "CA", "CO", "CT", "DC", "DE", "FL", "GA",
@@ -41,10 +47,126 @@ STATE_CODES = {
 
 
 def cache_dir() -> Path:
-    override = os.environ.get("GNIS_CACHE_DIR")
+    override = os.environ.get("KINLOOM_GNIS_CACHE_DIR") or os.environ.get("GNIS_CACHE_DIR")
     if override:
         return Path(override).expanduser()
     return Path.home() / ".cache" / "kinloom-gnis"
+
+
+def resolve_query_ttl_hours(cli_ttl: float | None) -> float:
+    if cli_ttl is not None:
+        if not math.isfinite(cli_ttl) or cli_ttl < 0:
+            raise click.BadParameter(
+                f"Invalid --cache-ttl-hours value: {cli_ttl!r} (must be >= 0)."
+            )
+        return float(cli_ttl)
+    raw = os.environ.get("KINLOOM_GNIS_QUERY_TTL_HOURS")
+    if raw is not None and raw.strip():
+        try:
+            parsed = float(raw.strip())
+        except ValueError as exc:
+            raise click.BadParameter(
+                f"Invalid KINLOOM_GNIS_QUERY_TTL_HOURS value: {raw!r}."
+            ) from exc
+        if not math.isfinite(parsed) or parsed < 0:
+            raise click.BadParameter(
+                f"Invalid KINLOOM_GNIS_QUERY_TTL_HOURS value: {raw!r} (must be >= 0)."
+            )
+        return parsed
+    return DEFAULT_QUERY_TTL_HOURS
+
+
+def resolve_safe_child(root: Path, filename: str) -> Path:
+    if (
+        not filename
+        or "\x00" in filename
+        or "/" in filename
+        or "\\" in filename
+        or ":" in filename
+        or filename in (".", "..")
+    ):
+        raise ValueError(f"Unsafe filename: {filename!r}")
+    root_resolved = root.resolve()
+    dest = (root_resolved / filename).resolve()
+    if dest == root_resolved or not dest.is_relative_to(root_resolved):
+        raise ValueError(f"Unsafe path escaping root: {filename!r}")
+    return dest
+
+
+@contextmanager
+def file_lock(lock_path: Path) -> Iterator[None]:
+    """Advisory exclusive file lock (POSIX flock) with safe fallback on non-POSIX."""
+    try:
+        import fcntl
+    except ImportError:
+        yield
+        return
+
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(lock_path, "a+b") as lock_file:
+        fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
+
+
+def read_json_if_valid(path: Path) -> dict[str, Any] | None:
+    if not path.is_file():
+        return None
+    try:
+        parsed = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+        return None
+    return parsed if isinstance(parsed, dict) else None
+
+
+def atomic_write_bytes(dest: Path, data: bytes) -> None:
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    tmp = dest.with_name(f".{dest.name}.{os.getpid()}.{time.time_ns()}.tmp")
+    try:
+        tmp.write_bytes(data)
+        os.replace(tmp, dest)
+    except Exception:
+        tmp.unlink(missing_ok=True)
+        raise
+
+
+def atomic_write_text(dest: Path, text: str) -> None:
+    atomic_write_bytes(dest, text.encode("utf-8"))
+
+
+def atomic_write_json(dest: Path, payload: Any) -> None:
+    atomic_write_text(dest, json.dumps(payload, ensure_ascii=False, separators=(",", ":")))
+
+
+def query_cache_path(canonical_params: dict[str, Any], cdir: Path) -> tuple[str, Path]:
+    canonical = json.dumps(
+        canonical_params, sort_keys=True, separators=(",", ":"), ensure_ascii=False
+    )
+    digest = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+    return digest, resolve_safe_child(cdir / "_queries", f"{digest}.json")
+
+
+def _read_cached_search(
+    canonical_params: dict[str, Any], *, cdir: Path, ttl_hours: float
+) -> dict[str, Any] | None:
+    ttl_seconds = ttl_hours * 3600.0
+    if ttl_seconds <= 0:
+        return None
+    _, path = query_cache_path(canonical_params, cdir)
+    envelope = read_json_if_valid(path)
+    if envelope is None:
+        return None
+    cached_at = envelope.get("cached_at")
+    data = envelope.get("data")
+    if not isinstance(cached_at, (int, float)) or not isinstance(data, dict):
+        return None
+    if not isinstance(data.get("results"), list):
+        return None
+    if (time.time() - float(cached_at)) <= ttl_seconds:
+        return data
+    return None
 
 
 def _state_zip_url(state: str) -> str:
@@ -86,33 +208,41 @@ def _load_rows(path: Path) -> list[dict]:
     return rows
 
 
-def _ensure_state_file(state: str) -> Path:
+def _ensure_state_file(state: str, *, refresh: bool = False) -> Path:
     state = state.upper()
     if state not in STATE_CODES:
         raise click.ClickException(f"Unknown state/territory code: {state}")
     cdir = cache_dir()
     cdir.mkdir(parents=True, exist_ok=True)
-    path = cdir / f"{state}.txt"
-    if path.exists():
+    path = resolve_safe_child(cdir, f"{state}.txt")
+    if path.exists() and not refresh:
         return path
-    click.echo(f"Downloading GNIS data for {state} ...", err=True)
-    _, text = _extract_txt(_download_zip(_state_zip_url(state)))
-    path.write_text(text, encoding="utf-8")
-    click.echo(f"Cached {path} ({len(text.splitlines()) - 1} features)", err=True)
-    return path
+    lock_path = resolve_safe_child(cdir / "_locks", f"state_{state}.lock")
+    with file_lock(lock_path):
+        if path.exists() and not refresh:
+            return path
+        click.echo(f"Downloading GNIS data for {state} ...", err=True)
+        _, text = _extract_txt(_download_zip(_state_zip_url(state)))
+        atomic_write_text(path, text)
+        click.echo(f"Cached {path} ({len(text.splitlines()) - 1} features)", err=True)
+        return path
 
 
-def _ensure_historical_file() -> Path:
+def _ensure_historical_file(*, refresh: bool = False) -> Path:
     cdir = cache_dir()
     cdir.mkdir(parents=True, exist_ok=True)
-    path = cdir / "HistoricalFeatures.txt"
-    if path.exists():
+    path = resolve_safe_child(cdir, "HistoricalFeatures.txt")
+    if path.exists() and not refresh:
         return path
-    click.echo("Downloading national Historical Features file (large) ...", err=True)
-    _, text = _extract_txt(_download_zip(_historical_zip_url()))
-    path.write_text(text, encoding="utf-8")
-    click.echo(f"Cached {path} ({len(text.splitlines()) - 1} features)", err=True)
-    return path
+    lock_path = resolve_safe_child(cdir / "_locks", "historical.lock")
+    with file_lock(lock_path):
+        if path.exists() and not refresh:
+            return path
+        click.echo("Downloading national Historical Features file (large) ...", err=True)
+        _, text = _extract_txt(_download_zip(_historical_zip_url()))
+        atomic_write_text(path, text)
+        click.echo(f"Cached {path} ({len(text.splitlines()) - 1} features)", err=True)
+        return path
 
 
 def _compact(row: dict) -> dict:
@@ -156,26 +286,18 @@ def cli() -> None:
 
 @cli.command()
 @click.argument("state")
-@click.option("--force", is_flag=True, help="Re-download even if cached.")
+@click.option("--force", "--refresh", "force", is_flag=True, help="Re-download even if cached.")
 def download(state, force):
     """Download and cache the GNIS text file for a state (e.g. MI, CA, MO)."""
     state = state.upper()
     if state not in STATE_CODES:
         raise click.ClickException(f"Unknown state/territory code: {state}")
-    path = cache_dir() / f"{state}.txt"
+    path = resolve_safe_child(cache_dir(), f"{state}.txt")
     if path.exists() and not force:
         rows = _load_rows(path)
-        click.echo(f"Already cached: {path} ({len(rows)} features). Use --force to re-download.")
+        click.echo(f"Already cached: {path} ({len(rows)} features). Use --force or --refresh to re-download.")
         return
-    path = _ensure_state_file(state) if not force else None
-    if force:
-        cdir = cache_dir()
-        cdir.mkdir(parents=True, exist_ok=True)
-        _, text = _extract_txt(_download_zip(_state_zip_url(state)))
-        path = cdir / f"{state}.txt"
-        path.write_text(text, encoding="utf-8")
-        click.echo(f"Cached {path} ({len(text.splitlines()) - 1} features)")
-        return
+    path = _ensure_state_file(state, refresh=force)
     rows = _load_rows(path)
     click.echo(f"Cached {path} ({len(rows)} features)")
 
@@ -190,26 +312,67 @@ def download(state, force):
 @click.option("--historical", is_flag=True,
               help="Search the national Historical Features file instead of a state file (defunct places, post offices).")
 @click.option("--limit", "-n", default=20, show_default=True)
+@click.option("--refresh", is_flag=True,
+              help="Bypass cached query and state data and re-download fresh GNIS data.")
+@click.option("--cache-ttl-hours", type=float, default=None,
+              help="Override query cache TTL in hours (default: 720 or $KINLOOM_GNIS_QUERY_TTL_HOURS).")
 @click.option("--json", "as_json", is_flag=True, help="Emit JSON instead of compact text.")
-def search(name, state, exact, feature_class, county, historical, limit, as_json):
+def search(name, state, exact, feature_class, county, historical, limit, refresh, cache_ttl_hours, as_json):
     """Search feature names (substring unless --exact)."""
-    if historical:
-        rows = _load_rows(_ensure_historical_file())
-        source = "HistoricalFeatures (national)"
-    else:
+    ttl_hours = resolve_query_ttl_hours(cache_ttl_hours)
+    normalized_state: str | None = None
+    if not historical:
         if not state:
             raise click.UsageError("Give --state (e.g. --state CA) or --historical.")
-        rows = _load_rows(_ensure_state_file(state))
-        source = f"DomesticNames_{state.upper()}"
-    matches = _match(rows, name, exact, feature_class, county)[:limit]
+        normalized_state = state.upper()
+        if normalized_state not in STATE_CODES:
+            raise click.ClickException(f"Unknown state/territory code: {normalized_state}")
+
+    cdir = cache_dir()
+    canonical_params: dict[str, Any] = {
+        "name": name,
+        "state": None if historical else normalized_state,
+        "exact": bool(exact),
+        "feature_class": feature_class,
+        "county": county,
+        "historical": bool(historical),
+        "limit": int(limit),
+    }
+
+    payload: dict[str, Any] | None = None
+    if not refresh:
+        payload = _read_cached_search(canonical_params, cdir=cdir, ttl_hours=ttl_hours)
+
+    if payload is None:
+        digest, cache_path = query_cache_path(canonical_params, cdir)
+        lock_path = resolve_safe_child(cdir / "_locks", f"query_{digest}.lock")
+        with file_lock(lock_path):
+            if not refresh:
+                payload = _read_cached_search(canonical_params, cdir=cdir, ttl_hours=ttl_hours)
+            if payload is None:
+                if historical:
+                    rows = _load_rows(_ensure_historical_file(refresh=refresh))
+                    source = "HistoricalFeatures (national)"
+                else:
+                    assert normalized_state is not None
+                    rows = _load_rows(_ensure_state_file(normalized_state, refresh=refresh))
+                    source = f"DomesticNames_{normalized_state}"
+                matches = _match(rows, name, exact, feature_class, county)[:limit]
+                payload = {
+                    "source": source,
+                    "matches": len(matches),
+                    "results": [_compact(r) for r in matches],
+                }
+                atomic_write_json(
+                    cache_path,
+                    {"cached_at": time.time(), "params": canonical_params, "data": payload},
+                )
+
     if as_json:
-        click.echo(json.dumps(
-            {"source": source, "matches": len(matches),
-             "results": [_compact(r) for r in matches]}, indent=2, ensure_ascii=False))
+        click.echo(json.dumps(payload, indent=2, ensure_ascii=False))
         return
-    click.echo(f"source: {source} | matches shown: {len(matches)}")
-    for row in matches:
-        c = _compact(row)
+    click.echo(f"source: {payload['source']} | matches shown: {payload['matches']}")
+    for c in payload["results"]:
         click.echo(f"- {c['feature_id']} | {c['feature_name']} ({c['feature_class']}) | "
                    f"{c['county']} County, {c['state']} | {c['latitude']}, {c['longitude']} | map: {c['map_name']}")
 
@@ -218,15 +381,16 @@ def search(name, state, exact, feature_class, county, historical, limit, as_json
 @click.argument("feature_id")
 @click.option("--state", "-s", default=None, help="State code (downloads and caches if needed).")
 @click.option("--historical", is_flag=True, help="Look in the national Historical Features file.")
+@click.option("--refresh", is_flag=True, help="Re-download the underlying GNIS file before lookup.")
 @click.option("--json", "as_json", is_flag=True)
-def get(feature_id, state, historical, as_json):
+def get(feature_id, state, historical, refresh, as_json):
     """Show one feature by its GNIS feature_id."""
     if historical:
-        rows = _load_rows(_ensure_historical_file())
+        rows = _load_rows(_ensure_historical_file(refresh=refresh))
     else:
         if not state:
             raise click.UsageError("Give --state or --historical.")
-        rows = _load_rows(_ensure_state_file(state))
+        rows = _load_rows(_ensure_state_file(state, refresh=refresh))
     for row in rows:
         if (row.get("feature_id") or "") == str(feature_id):
             if as_json:

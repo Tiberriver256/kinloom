@@ -16,13 +16,17 @@ to headless Chromium against catalog.archives.gov when no key is configured.
 from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import contextmanager
+import hashlib
 import json
+import math
 import os
 import re
 import shutil
 import sys
+import time
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterator
 from urllib.parse import quote, urlencode
 
 import click
@@ -31,11 +35,299 @@ import httpx
 CATALOG_WEB_BASE = "https://catalog.archives.gov"
 CATALOG_API_BASE = "https://catalog.archives.gov/api/v2"
 API_MAX_WORKERS = 6
+DEFAULT_QUERY_TTL_HOURS = 168.0
 USER_AGENT = (
     "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
     "(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
 )
 VALID_LEVELS = ("recordGroup", "collection", "series", "fileUnit", "item")
+
+
+def get_cache_root() -> Path:
+    override = os.environ.get("KINLOOM_NARA_CACHE_DIR")
+    if override:
+        return Path(override).expanduser()
+    return Path.home() / ".cache" / "kinloom-nara"
+
+
+def resolve_query_ttl_hours(cli_ttl: float | None) -> float:
+    if cli_ttl is not None:
+        if not math.isfinite(cli_ttl) or cli_ttl < 0:
+            raise click.BadParameter(
+                f"Invalid --cache-ttl-hours value: {cli_ttl!r} (must be >= 0)."
+            )
+        return float(cli_ttl)
+    raw = os.environ.get("KINLOOM_NARA_QUERY_TTL_HOURS")
+    if raw is not None and raw.strip():
+        try:
+            parsed = float(raw.strip())
+        except ValueError as exc:
+            raise click.BadParameter(
+                f"Invalid KINLOOM_NARA_QUERY_TTL_HOURS value: {raw!r}."
+            ) from exc
+        if not math.isfinite(parsed) or parsed < 0:
+            raise click.BadParameter(
+                f"Invalid KINLOOM_NARA_QUERY_TTL_HOURS value: {raw!r} (must be >= 0)."
+            )
+        return parsed
+    return DEFAULT_QUERY_TTL_HOURS
+
+
+def validate_naid(naid: str) -> str:
+    raw = str(naid).strip()
+    if not raw or "\x00" in raw or "/" in raw or "\\" in raw or ".." in raw:
+        raise click.BadParameter(f"Invalid NAID: {naid!r}")
+    match = re.fullmatch(r"(?:NAID[\s:-]*)?(\d+)", raw, re.IGNORECASE)
+    if not match:
+        raise click.BadParameter(f"Invalid NAID (expected digits): {naid!r}")
+    return match.group(1)
+
+
+def safe_object_filename(page_num: int, raw_name: str | None) -> str:
+    """Build a traversal-safe per-page filename prefixed with 1-based page number."""
+    if page_num < 1:
+        raise ValueError(f"Invalid page number: {page_num!r}")
+    candidate = (raw_name or "").replace("\\", "/")
+    base = candidate.rsplit("/", 1)[-1].strip()
+    if not base or base in (".", "..") or "\x00" in base:
+        safe_base = f"{page_num}.bin"
+    else:
+        safe_base = re.sub(r"[^A-Za-z0-9._-]+", "_", base).lstrip(".")
+        if not safe_base or safe_base in (".", ".."):
+            safe_base = f"{page_num}.bin"
+    return f"{page_num:03d}_{safe_base}"
+
+
+def resolve_safe_child(root: Path, filename: str) -> Path:
+    """Resolve a single filename strictly inside root (rejecting traversal)."""
+    if (
+        not filename
+        or "\x00" in filename
+        or "/" in filename
+        or "\\" in filename
+        or ":" in filename
+        or filename in (".", "..")
+    ):
+        raise ValueError(f"Unsafe filename: {filename!r}")
+    root_resolved = root.resolve()
+    dest = (root_resolved / filename).resolve()
+    if dest == root_resolved or not dest.is_relative_to(root_resolved):
+        raise ValueError(f"Unsafe path escaping root: {filename!r}")
+    return dest
+
+
+@contextmanager
+def file_lock(lock_path: Path) -> Iterator[None]:
+    """Advisory exclusive file lock (POSIX flock) with safe fallback on non-POSIX."""
+    try:
+        import fcntl
+    except ImportError:
+        yield
+        return
+
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(lock_path, "a+b") as lock_file:
+        fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
+
+
+def read_json_if_valid(path: Path) -> dict[str, Any] | None:
+    if not path.is_file():
+        return None
+    try:
+        parsed = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+        return None
+    return parsed if isinstance(parsed, dict) else None
+
+
+def atomic_write_bytes(dest: Path, data: bytes) -> None:
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    tmp = dest.with_name(f".{dest.name}.{os.getpid()}.{time.time_ns()}.tmp")
+    try:
+        tmp.write_bytes(data)
+        os.replace(tmp, dest)
+    except Exception:
+        tmp.unlink(missing_ok=True)
+        raise
+
+
+def atomic_write_text(dest: Path, text: str) -> None:
+    atomic_write_bytes(dest, text.encode("utf-8"))
+
+
+def atomic_write_json(dest: Path, payload: Any) -> None:
+    atomic_write_text(dest, json.dumps(payload, ensure_ascii=False, separators=(",", ":")))
+
+
+def atomic_copy_file(src: Path, dest: Path) -> None:
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    tmp = dest.with_name(f".{dest.name}.{os.getpid()}.{time.time_ns()}.tmp")
+    try:
+        shutil.copyfile(src, tmp)
+        os.replace(tmp, dest)
+    except Exception:
+        tmp.unlink(missing_ok=True)
+        raise
+
+
+def query_cache_path(canonical_params: dict[str, Any], cache_root: Path) -> tuple[str, Path]:
+    canonical = json.dumps(
+        canonical_params, sort_keys=True, separators=(",", ":"), ensure_ascii=False
+    )
+    digest = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+    return digest, resolve_safe_child(cache_root / "_queries", f"{digest}.json")
+
+
+def _canonical_search_params(
+    query: str | None, filter_kwargs: dict[str, Any]
+) -> dict[str, Any]:
+    levels = [
+        p.strip()
+        for item in filter_kwargs["levels"]
+        for p in item.split(",")
+        if p.strip()
+    ]
+    record_groups = [
+        p.strip()
+        for item in filter_kwargs["record_groups"]
+        for p in item.split(",")
+        if p.strip()
+    ]
+    return {
+        "query": query,
+        "levels": levels,
+        "record_groups": record_groups,
+        "online": bool(filter_kwargs["online"]),
+        "material_type": filter_kwargs["material_type"],
+        "person": filter_kwargs["person"],
+        "title": filter_kwargs["title"],
+        "geo": filter_kwargs["geo"],
+        "control": filter_kwargs["control"],
+        "start_date": filter_kwargs["start_date"],
+        "end_date": filter_kwargs["end_date"],
+        "page": int(filter_kwargs["page"]),
+        "limit": int(filter_kwargs["limit"]),
+    }
+
+
+def _read_cached_search(
+    canonical_params: dict[str, Any],
+    *,
+    cache_root: Path,
+    ttl_hours: float,
+) -> dict[str, Any] | None:
+    ttl_seconds = ttl_hours * 3600.0
+    if ttl_seconds <= 0:
+        return None
+    _, path = query_cache_path(canonical_params, cache_root)
+    envelope = read_json_if_valid(path)
+    if envelope is None:
+        return None
+    cached_at = envelope.get("cached_at")
+    data = envelope.get("data")
+    if not isinstance(cached_at, (int, float)) or not isinstance(data, dict):
+        return None
+    if not isinstance(data.get("results"), list):
+        return None
+    if (time.time() - float(cached_at)) <= ttl_seconds:
+        return data
+    return None
+
+
+def _write_cached_search(
+    canonical_params: dict[str, Any],
+    payload: dict[str, Any],
+    *,
+    cache_root: Path,
+) -> None:
+    if not isinstance(payload.get("results"), list):
+        return
+    digest, path = query_cache_path(canonical_params, cache_root)
+    lock_path = resolve_safe_child(cache_root / "_locks", f"query_{digest}.lock")
+    with file_lock(lock_path):
+        atomic_write_json(
+            path,
+            {"cached_at": time.time(), "params": canonical_params, "data": payload},
+        )
+
+
+def _record_cache_path(clean_id: str, cache_root: Path) -> Path:
+    return resolve_safe_child(cache_root / "records", f"{clean_id}.json")
+
+
+def _read_cached_record(
+    clean_id: str, *, cache_root: Path, require_text: bool
+) -> dict[str, Any] | None:
+    envelope = read_json_if_valid(_record_cache_path(clean_id, cache_root))
+    if envelope is None:
+        return None
+    record = envelope.get("record")
+    if not isinstance(record, dict) or record.get("error"):
+        return None
+    if require_text and not envelope.get("has_text"):
+        return None
+    return record
+
+
+def _write_cached_record(
+    clean_id: str,
+    full_record: dict[str, Any],
+    *,
+    cache_root: Path,
+    has_text: bool,
+) -> None:
+    if full_record.get("error"):
+        return
+    path = _record_cache_path(clean_id, cache_root)
+    lock_path = resolve_safe_child(cache_root / "_locks", f"record_{clean_id}.lock")
+    with file_lock(lock_path):
+        atomic_write_json(
+            path,
+            {
+                "cached_at": time.time(),
+                "naId": clean_id,
+                "has_text": bool(has_text),
+                "record": full_record,
+            },
+        )
+
+
+def _project_record(
+    full_record: dict[str, Any],
+    *,
+    include_objects: bool = False,
+    include_text: bool = False,
+    page_spec: str | None = None,
+) -> dict[str, Any]:
+    """Slice a cached full record into the exact shape requested by CLI flags."""
+    out = {
+        k: v
+        for k, v in full_record.items()
+        if k not in ("objects", "extractedText", "transcriptions")
+    }
+    total = int(full_record.get("objectCount") or len(full_record.get("objects") or []))
+    if include_objects and full_record.get("objects"):
+        selected_pages = set(parse_page_spec(page_spec, total))
+        out["objects"] = [
+            obj for obj in full_record["objects"] if obj.get("page") in selected_pages
+        ]
+    if include_text:
+        if full_record.get("extractedText"):
+            selected_pages = set(parse_page_spec(page_spec, total)) if total > 0 else set()
+            texts = [
+                item
+                for item in full_record["extractedText"]
+                if not selected_pages or item.get("page") in selected_pages
+            ]
+            if texts:
+                out["extractedText"] = texts
+        if full_record.get("transcriptions"):
+            out["transcriptions"] = list(full_record["transcriptions"])
+    return out
 
 
 class _NaraWafOrNonJsonError(RuntimeError):
@@ -625,6 +917,13 @@ def _api_search_one(
 @_common_search_options
 @click.option("--api-key", envvar="NARA_API_KEY", default=None, help="NARA Catalog v2 API key (defaults to $NARA_API_KEY).")
 @click.option("--browser", "force_browser", is_flag=True, help="Force headless Chromium website mode.")
+@click.option("--refresh", is_flag=True, help="Bypass the local disk cache and fetch fresh search results.")
+@click.option(
+    "--cache-ttl-hours",
+    type=float,
+    default=None,
+    help="Override search query cache TTL in hours (default: 168 or $KINLOOM_NARA_QUERY_TTL_HOURS).",
+)
 @click.option("--json", "as_json", is_flag=True, help="Output compact structured JSON.")
 def cmd_search(
     queries: tuple[str, ...],
@@ -642,11 +941,15 @@ def cmd_search(
     limit: int,
     api_key: str | None,
     force_browser: bool,
+    refresh: bool,
+    cache_ttl_hours: float | None,
     as_json: bool,
 ) -> None:
     """Search the NARA Catalog. Accepts one or multiple queries (parallel via API or shared browser)."""
     query_list: list[str | None] = list(queries) if queries else [None]
     use_api = bool(api_key) and not force_browser
+    ttl_hours = resolve_query_ttl_hours(cache_ttl_hours)
+    cache_root = get_cache_root()
     filter_kwargs: dict[str, Any] = {
         "levels": levels,
         "record_groups": record_groups,
@@ -662,59 +965,86 @@ def cmd_search(
         "limit": limit,
     }
 
-    payloads: list[dict[str, Any]] = []
-    if use_api and api_key:
-        with _new_api_client() as client:
-            if len(query_list) == 1:
-                outcomes = [
-                    _api_search_one(
-                        query_list[0],
-                        api_key=api_key,
-                        client=client,
-                        filter_kwargs=filter_kwargs,
-                    )
-                ]
-            else:
-                workers = min(API_MAX_WORKERS, len(query_list))
-                with ThreadPoolExecutor(max_workers=workers) as executor:
-                    outcomes = list(
-                        executor.map(
-                            lambda q: _api_search_one(
-                                q,
-                                api_key=api_key,
-                                client=client,
-                                filter_kwargs=filter_kwargs,
-                            ),
-                            query_list,
+    # Validate query parameters at the boundary before consulting cache.
+    build_query_params(query_list[0], **filter_kwargs, for_api=use_api)
+
+    canonical_list = [_canonical_search_params(q, filter_kwargs) for q in query_list]
+    slots: list[dict[str, Any] | None] = [None] * len(query_list)
+    miss_indices: list[int] = []
+    for idx, canonical in enumerate(canonical_list):
+        if not refresh:
+            cached = _read_cached_search(canonical, cache_root=cache_root, ttl_hours=ttl_hours)
+            if cached is not None:
+                slots[idx] = cached
+                continue
+        miss_indices.append(idx)
+
+    if miss_indices:
+        miss_queries = [query_list[idx] for idx in miss_indices]
+        if use_api and api_key:
+            with _new_api_client() as client:
+                if len(miss_queries) == 1:
+                    outcomes = [
+                        _api_search_one(
+                            miss_queries[0],
+                            api_key=api_key,
+                            client=client,
+                            filter_kwargs=filter_kwargs,
                         )
+                    ]
+                else:
+                    workers = min(API_MAX_WORKERS, len(miss_queries))
+                    with ThreadPoolExecutor(max_workers=workers) as executor:
+                        outcomes = list(
+                            executor.map(
+                                lambda q: _api_search_one(
+                                    q,
+                                    api_key=api_key,
+                                    client=client,
+                                    filter_kwargs=filter_kwargs,
+                                ),
+                                miss_queries,
+                            )
+                        )
+
+            fallback_slots: list[int] = []
+            fallback_pairs: list[tuple[str | None, str]] = []
+            for slot_idx, (entry, web_url) in zip(miss_indices, outcomes, strict=True):
+                if entry is None:
+                    fallback_slots.append(slot_idx)
+                    fallback_pairs.append((query_list[slot_idx], web_url))
+                else:
+                    slots[slot_idx] = entry
+                    _write_cached_search(
+                        canonical_list[slot_idx], entry, cache_root=cache_root
                     )
 
-        slots: list[dict[str, Any] | None] = [entry for entry, _ in outcomes]
-        fallback_indices: list[int] = []
-        fallback_pairs: list[tuple[str | None, str]] = []
-        for idx, (entry, web_url) in enumerate(outcomes):
-            if entry is None:
-                fallback_indices.append(idx)
-                fallback_pairs.append((query_list[idx], web_url))
+            if fallback_pairs:
+                fallback_results = _browser_search_many(fallback_pairs)
+                for slot_idx, fb_entry in zip(fallback_slots, fallback_results, strict=True):
+                    slots[slot_idx] = fb_entry
+                    _write_cached_search(
+                        canonical_list[slot_idx], fb_entry, cache_root=cache_root
+                    )
+        else:
+            url_pairs = [
+                (
+                    q,
+                    encode_catalog_url(
+                        build_query_params(q, **filter_kwargs, for_api=False),
+                        for_api=False,
+                    ),
+                )
+                for q in miss_queries
+            ]
+            fetched = _browser_search_many(url_pairs)
+            for slot_idx, entry in zip(miss_indices, fetched, strict=True):
+                slots[slot_idx] = entry
+                _write_cached_search(
+                    canonical_list[slot_idx], entry, cache_root=cache_root
+                )
 
-        if fallback_pairs:
-            fallback_results = _browser_search_many(fallback_pairs)
-            for idx, fb_entry in zip(fallback_indices, fallback_results, strict=True):
-                slots[idx] = fb_entry
-
-        payloads = [entry for entry in slots if entry is not None]
-    else:
-        url_pairs = [
-            (
-                q,
-                encode_catalog_url(
-                    build_query_params(q, **filter_kwargs, for_api=False),
-                    for_api=False,
-                ),
-            )
-            for q in query_list
-        ]
-        payloads = _browser_search_many(url_pairs)
+    payloads = [entry for entry in slots if entry is not None]
 
     if as_json:
         click.echo(json.dumps(payloads[0] if len(payloads) == 1 else payloads, indent=2))
@@ -748,7 +1078,7 @@ def _api_get_one_record(
     include_text: bool,
     page_spec: str,
 ) -> dict[str, Any] | None:
-    clean_id = re.sub(r"\D+", "", naid)
+    clean_id = validate_naid(naid)
     url = (
         f"{CATALOG_API_BASE}/records/search?"
         f"naId_is={clean_id}&includeExtractedText={'true' if include_text else 'false'}"
@@ -769,6 +1099,111 @@ def _api_get_one_record(
     return {"naId": clean_id, "url": f"{CATALOG_WEB_BASE}/id/{clean_id}", "error": "Not found"}
 
 
+def _load_or_fetch_full_records(
+    naids: list[str],
+    *,
+    api_key: str | None,
+    force_browser: bool,
+    include_text: bool,
+    refresh: bool,
+    cache_root: Path,
+) -> list[dict[str, Any]]:
+    clean_ids = [validate_naid(n) for n in naids]
+    use_api = bool(api_key) and not force_browser
+    slots: list[dict[str, Any] | None] = [None] * len(clean_ids)
+    miss_indices: list[int] = []
+
+    for idx, clean_id in enumerate(clean_ids):
+        if not refresh:
+            cached = _read_cached_record(
+                clean_id, cache_root=cache_root, require_text=include_text
+            )
+            if cached is not None:
+                slots[idx] = cached
+                continue
+        miss_indices.append(idx)
+
+    if miss_indices:
+        miss_ids = [clean_ids[idx] for idx in miss_indices]
+        if use_api and api_key:
+            with _new_api_client() as client:
+                if len(miss_ids) == 1:
+                    fetched_slots: list[dict[str, Any] | None] = [
+                        _api_get_one_record(
+                            miss_ids[0],
+                            api_key=api_key,
+                            client=client,
+                            include_objects=True,
+                            include_text=include_text,
+                            page_spec="all",
+                        )
+                    ]
+                else:
+                    workers = min(API_MAX_WORKERS, len(miss_ids))
+                    with ThreadPoolExecutor(max_workers=workers) as executor:
+                        fetched_slots = list(
+                            executor.map(
+                                lambda n: _api_get_one_record(
+                                    n,
+                                    api_key=api_key,
+                                    client=client,
+                                    include_objects=True,
+                                    include_text=include_text,
+                                    page_spec="all",
+                                ),
+                                miss_ids,
+                            )
+                        )
+
+            fallback_slots: list[int] = []
+            fallback_naids: list[str] = []
+            for slot_idx, rec in zip(miss_indices, fetched_slots, strict=True):
+                if rec is None:
+                    fallback_slots.append(slot_idx)
+                    fallback_naids.append(clean_ids[slot_idx])
+                else:
+                    slots[slot_idx] = rec
+                    _write_cached_record(
+                        clean_ids[slot_idx],
+                        rec,
+                        cache_root=cache_root,
+                        has_text=include_text,
+                    )
+
+            if fallback_naids:
+                fallback_recs = _browser_get_records(
+                    fallback_naids,
+                    include_objects=True,
+                    include_text=include_text,
+                    page_spec="all",
+                )
+                for slot_idx, fb_rec in zip(fallback_slots, fallback_recs, strict=True):
+                    slots[slot_idx] = fb_rec
+                    _write_cached_record(
+                        clean_ids[slot_idx],
+                        fb_rec,
+                        cache_root=cache_root,
+                        has_text=include_text,
+                    )
+        else:
+            fetched_recs = _browser_get_records(
+                miss_ids,
+                include_objects=True,
+                include_text=include_text,
+                page_spec="all",
+            )
+            for slot_idx, rec in zip(miss_indices, fetched_recs, strict=True):
+                slots[slot_idx] = rec
+                _write_cached_record(
+                    clean_ids[slot_idx],
+                    rec,
+                    cache_root=cache_root,
+                    has_text=include_text,
+                )
+
+    return [rec for rec in slots if rec is not None]
+
+
 @cli.command("get")
 @click.argument("naids", nargs=-1, required=True)
 @click.option("--api-key", envvar="NARA_API_KEY", default=None, help="NARA Catalog v2 API key (defaults to $NARA_API_KEY).")
@@ -776,6 +1211,7 @@ def _api_get_one_record(
 @click.option("--objects", is_flag=True, help="Include compact digital object URLs (omitted by default to keep output small).")
 @click.option("--pages", default="all", show_default=True, help="1-based page slice when using --objects or --text, e.g. '1-10'.")
 @click.option("--text", is_flag=True, help="Include extracted OCR text and transcriptions if present.")
+@click.option("--refresh", is_flag=True, help="Bypass the local disk cache and fetch fresh record metadata.")
 @click.option("--json", "as_json", is_flag=True, help="Output compact structured JSON.")
 def cmd_get(
     naids: tuple[str, ...],
@@ -784,59 +1220,27 @@ def cmd_get(
     objects: bool,
     pages: str,
     text: bool,
+    refresh: bool,
     as_json: bool,
 ) -> None:
     """Inspect one or more NARA records by NAID (compact metadata by default)."""
-    use_api = bool(api_key) and not force_browser
-    records: list[dict[str, Any]] = []
-    if use_api and api_key:
-        naid_list = list(naids)
-        with _new_api_client() as client:
-            if len(naid_list) == 1:
-                slots: list[dict[str, Any] | None] = [
-                    _api_get_one_record(
-                        naid_list[0],
-                        api_key=api_key,
-                        client=client,
-                        include_objects=objects,
-                        include_text=text,
-                        page_spec=pages,
-                    )
-                ]
-            else:
-                workers = min(API_MAX_WORKERS, len(naid_list))
-                with ThreadPoolExecutor(max_workers=workers) as executor:
-                    slots = list(
-                        executor.map(
-                            lambda n: _api_get_one_record(
-                                n,
-                                api_key=api_key,
-                                client=client,
-                                include_objects=objects,
-                                include_text=text,
-                                page_spec=pages,
-                            ),
-                            naid_list,
-                        )
-                    )
-
-        fallback_indices = [idx for idx, rec in enumerate(slots) if rec is None]
-        if fallback_indices:
-            fallback_naids = [naid_list[idx] for idx in fallback_indices]
-            fallback_recs = _browser_get_records(
-                fallback_naids,
-                include_objects=objects,
-                include_text=text,
-                page_spec=pages,
-            )
-            for idx, fb_rec in zip(fallback_indices, fallback_recs, strict=True):
-                slots[idx] = fb_rec
-
-        records = [rec for rec in slots if rec is not None]
-    else:
-        records = _browser_get_records(
-            list(naids), include_objects=objects, include_text=text, page_spec=pages
+    cache_root = get_cache_root()
+    full_records = _load_or_fetch_full_records(
+        list(naids),
+        api_key=api_key,
+        force_browser=force_browser,
+        include_text=text,
+        refresh=refresh,
+        cache_root=cache_root,
+    )
+    records = [
+        rec
+        if rec.get("error")
+        else _project_record(
+            rec, include_objects=objects, include_text=text, page_spec=pages
         )
+        for rec in full_records
+    ]
 
     if as_json:
         click.echo(json.dumps(records[0] if len(records) == 1 else records, indent=2))
@@ -848,12 +1252,40 @@ def cmd_get(
         click.echo(_format_record_text(rec))
 
 
+def _new_download_client() -> httpx.Client:
+    return httpx.Client(
+        timeout=60.0,
+        follow_redirects=True,
+        headers={"User-Agent": USER_AGENT},
+    )
+
+
+def _download_object_to_cache(
+    client: httpx.Client, obj_url: str, cached_obj_path: Path
+) -> None:
+    cached_obj_path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = cached_obj_path.with_name(
+        f".{cached_obj_path.name}.{os.getpid()}.{time.time_ns()}.tmp"
+    )
+    try:
+        with client.stream("GET", obj_url) as resp:
+            resp.raise_for_status()
+            with tmp.open("wb") as fh:
+                for chunk in resp.iter_bytes():
+                    fh.write(chunk)
+        os.replace(tmp, cached_obj_path)
+    except Exception:
+        tmp.unlink(missing_ok=True)
+        raise
+
+
 @cli.command("download")
 @click.argument("naid")
 @click.option("--out", "out_dir", default=None, type=click.Path(path_type=Path), help="Output directory (default: ./nara-<naid>).")
 @click.option("--pages", default="all", show_default=True, help="1-based page selection, e.g. '1-5,10' or 'all'.")
 @click.option("--metadata/--no-metadata", default=True, show_default=True, help="Save compact provenance metadata.json.")
 @click.option("--overwrite", is_flag=True, help="Overwrite existing downloaded files.")
+@click.option("--refresh", is_flag=True, help="Bypass local metadata and object caches and re-download from NARA.")
 @click.option("--api-key", envvar="NARA_API_KEY", default=None, help="NARA Catalog v2 API key (defaults to $NARA_API_KEY).")
 @click.option("--browser", "force_browser", is_flag=True, help="Force headless Chromium website mode.")
 def cmd_download(
@@ -862,30 +1294,25 @@ def cmd_download(
     pages: str,
     metadata: bool,
     overwrite: bool,
+    refresh: bool,
     api_key: str | None,
     force_browser: bool,
 ) -> None:
     """Download digitized files for a NARA record (NAID) with compact provenance metadata."""
-    clean_id = re.sub(r"\D+", "", naid)
-    use_api = bool(api_key) and not force_browser
-    if use_api and api_key:
-        url = f"{CATALOG_API_BASE}/records/search?naId_is={clean_id}"
-        try:
-            raw = _api_get_json(url, api_key)
-        except _NaraWafOrNonJsonError:
-            rec = _browser_get_records([clean_id], include_objects=True, page_spec=pages)[0]
-            if rec.get("error"):
-                raise click.ClickException(f"NAID {clean_id}: {rec['error']}")
-        else:
-            hits = raw.get("body", raw).get("hits", {}).get("hits", [])
-            if not hits:
-                raise click.ClickException(f"NAID {clean_id} not found.")
-            rec = _extract_record(hits[0], include_objects=True, page_spec=pages)
-    else:
-        rec = _browser_get_records([clean_id], include_objects=True, page_spec=pages)[0]
-        if rec.get("error"):
-            raise click.ClickException(f"NAID {clean_id}: {rec['error']}")
+    clean_id = validate_naid(naid)
+    cache_root = get_cache_root()
+    full_rec = _load_or_fetch_full_records(
+        [clean_id],
+        api_key=api_key,
+        force_browser=force_browser,
+        include_text=False,
+        refresh=refresh,
+        cache_root=cache_root,
+    )[0]
+    if full_rec.get("error"):
+        raise click.ClickException(f"NAID {clean_id}: {full_rec['error']}")
 
+    rec = _project_record(full_rec, include_objects=True, include_text=False, page_spec=pages)
     selected_objs = rec.get("objects") or []
     total_count = rec.get("objectCount") or len(selected_objs)
     if not selected_objs:
@@ -893,34 +1320,60 @@ def cmd_download(
 
     target_dir = out_dir or Path(f"nara-{clean_id}")
     target_dir.mkdir(parents=True, exist_ok=True)
+    obj_cache_dir = cache_root / "objects" / clean_id
 
     downloaded_manifest: list[dict[str, Any]] = []
-    with httpx.Client(timeout=60.0, follow_redirects=True, headers={"User-Agent": USER_AGENT}) as client:
+    client: httpx.Client | None = None
+    try:
         for obj in selected_objs:
             page_num = obj["page"]
             obj_url = obj.get("url")
             if not obj_url:
                 click.echo(f"Skipping page {page_num}: missing url", err=True)
                 continue
-            raw_name = obj.get("filename") or f"{page_num}.bin"
-            safe_name = re.sub(r"[^A-Za-z0-9._-]+", "_", Path(raw_name).name)
-            dest = target_dir / f"{page_num:03d}_{safe_name}"
-            if dest.exists() and not overwrite:
-                click.echo(f"Exists (skip): {dest}")
+            cache_filename = safe_object_filename(page_num, obj.get("filename"))
+            cached_obj_path = resolve_safe_child(obj_cache_dir, cache_filename)
+            dest = resolve_safe_child(target_dir, cache_filename)
+
+            if not refresh and cached_obj_path.is_file():
+                if dest.exists() and not overwrite:
+                    click.echo(f"Exists (skip): {dest}")
+                else:
+                    atomic_copy_file(cached_obj_path, dest)
+                    click.echo(
+                        f"Cached [{page_num}/{total_count}]: {dest} ({dest.stat().st_size:,} bytes)"
+                    )
             else:
-                with client.stream("GET", obj_url) as resp:
-                    resp.raise_for_status()
-                    with dest.open("wb") as fh:
-                        for chunk in resp.iter_bytes():
-                            fh.write(chunk)
-                click.echo(f"Downloaded [{page_num}/{total_count}]: {dest} ({dest.stat().st_size:,} bytes)")
+                lock_path = resolve_safe_child(
+                    cache_root / "_locks", f"object_{clean_id}_{cache_filename}.lock"
+                )
+                served_from_cache = False
+                with file_lock(lock_path):
+                    if not refresh and cached_obj_path.is_file():
+                        served_from_cache = True
+                    else:
+                        if client is None:
+                            client = _new_download_client()
+                        _download_object_to_cache(client, obj_url, cached_obj_path)
+                if dest.exists() and not overwrite and not refresh:
+                    click.echo(f"Exists (skip): {dest}")
+                else:
+                    atomic_copy_file(cached_obj_path, dest)
+                    verb = "Cached" if served_from_cache else "Downloaded"
+                    click.echo(
+                        f"{verb} [{page_num}/{total_count}]: {dest} ({dest.stat().st_size:,} bytes)"
+                    )
+
             downloaded_manifest.append({"page": page_num, "file": dest.name, "url": obj_url})
+    finally:
+        if client is not None:
+            client.close()
 
     if metadata:
         compact_meta = {k: v for k, v in rec.items() if k != "objects"}
         compact_meta["downloaded"] = downloaded_manifest
         meta_path = target_dir / "metadata.json"
-        meta_path.write_text(json.dumps(compact_meta, indent=2) + "\n", encoding="utf-8")
+        atomic_write_text(meta_path, json.dumps(compact_meta, indent=2) + "\n")
         click.echo(f"Saved metadata: {meta_path}")
 
     click.echo(f"Done: {len(downloaded_manifest)} file(s) in {target_dir}")

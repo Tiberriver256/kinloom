@@ -15,6 +15,15 @@ This skill includes a standalone executable Python CLI at `skills/usgs-gnis/scri
 
 Path: `skills/usgs-gnis/scripts/gnis`
 
+### Persistent local disk cache
+
+Downloaded state/historical files and `search` query results are cached atomically under `~/.cache/kinloom-gnis/` (overrideable via `KINLOOM_GNIS_CACHE_DIR`, with legacy `GNIS_CACHE_DIR` fallback) using advisory file locks (`fcntl.flock` on POSIX, safe fallback elsewhere) so concurrent processes never race on downloads and repeated searches return immediately with zero HTTP requests or re-parsing.
+
+Cache layout:
+
+- `<STATE>.txt` and `HistoricalFeatures.txt`: extracted pipe-delimited USGS tables.
+- `_queries/<sha256>.json`: cached `search` query JSON keyed by canonical parameters with a 720-hour (30-day) default TTL (`--cache-ttl-hours` or `KINLOOM_GNIS_QUERY_TTL_HOURS`). Pass `--refresh` on `search`, `get`, or `download` to bypass the cache and re-download fresh USGS data.
+
 ### Download a state file
 
 ```bash
@@ -25,7 +34,7 @@ skills/usgs-gnis/scripts/gnis download IL
 skills/usgs-gnis/scripts/gnis download CA
 ```
 
-Files land in `~/.cache/kinloom-gnis/<STATE>.txt` (override with `GNIS_CACHE_DIR`).
+Files land in `~/.cache/kinloom-gnis/<STATE>.txt` (override with `KINLOOM_GNIS_CACHE_DIR`).
 
 ### Search feature names
 
@@ -78,7 +87,8 @@ skills/usgs-gnis/scripts/gnis url "New Salem"
 
 ## Environment variables
 
-- `GNIS_CACHE_DIR`: where state text files are cached (default `~/.cache/kinloom-gnis`).
+- `KINLOOM_GNIS_CACHE_DIR`: where state text files and query results are cached (default `~/.cache/kinloom-gnis`; `GNIS_CACHE_DIR` is still accepted as a fallback).
+- `KINLOOM_GNIS_QUERY_TTL_HOURS`: optional override for the `search` query cache TTL in hours (default `720`, 30 days).
 
 ## Research workflow notes
 
