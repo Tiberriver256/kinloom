@@ -177,6 +177,9 @@ export function redactSinglePerson<T extends RawPerson>(
     copy.birth_edtf = '';
     copy.death_edtf = '';
     copy.portrait_url = null;
+    if ('pronunciation' in copy) {
+      delete copy.pronunciation;
+    }
     if ('thumb_url' in copy) {
       copy.thumb_url = null;
     }
@@ -202,6 +205,9 @@ export function redactSinglePerson<T extends RawPerson>(
   }
   if (stripPortraits) {
     copy.portrait_url = null;
+    if ('pronunciation' in copy) {
+      delete copy.pronunciation;
+    }
     if ('thumb_url' in copy) {
       copy.thumb_url = null;
     }

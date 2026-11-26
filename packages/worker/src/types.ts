@@ -143,4 +143,6 @@ export interface KinloomWorkerEnv {
   GOOGLE_CLIENT_SECRET?: string;
   EMAIL_FROM?: string;
   ARCHIVE_MODE?: 'public' | 'private';
+  GEMINI_API_KEY?: string;
+  GEMINI_TTS_MODEL?: string;
 }

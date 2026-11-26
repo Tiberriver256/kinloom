@@ -89,3 +89,16 @@ export {
   type CliIo,
   type RunCliOptions,
 } from './cli.js';
+
+export {
+  CORE_CLI_COMMANDS,
+  discoverSiteCliPlugins,
+  formatPluginCommandsHelp,
+  isBuiltInCliCommand,
+  resolvePluginCommands,
+  type DiscoverSiteCliPluginsResult,
+  type KinloomCliCommand,
+  type KinloomCliPlugin,
+  type KinloomCliPluginContext,
+  type ResolvedPluginCommands,
+} from './plugins.js';

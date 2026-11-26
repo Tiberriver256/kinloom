@@ -1,4 +1,4 @@
-import type { ArchiveEvent, MediaItem, SourceRecord } from '@kinloom/core';
+import type { ArchiveEvent, MediaItem, Person, Place, SourceRecord } from '@kinloom/core';
 import {
   extractNarrativeCitations,
   formatPublicCitation,
@@ -6,6 +6,8 @@ import {
 } from '@kinloom/core';
 import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { CitationPopover } from './CitationPopover.js';
+import { InlineEntityMention } from './InlineEntityMention.js';
+import { hasPronunciationContent } from './PronunciationBadge.js';
 import { resolveAssetUrl } from './Atoms.js';
 
 type MarkdownBlock =
@@ -55,6 +57,169 @@ interface InlineCitationRenderContext {
   onTriggerClick: (payload: InlineCitationPayload, anchorEl: HTMLButtonElement) => void;
 }
 
+type AutoEntityTarget =
+  | { kind: 'person'; key: string; person: Person }
+  | { kind: 'place'; key: string; place: Place };
+
+interface InlineEntityRenderContext {
+  peopleById?: ReadonlyMap<string, Person>;
+  placesById?: ReadonlyMap<string, Place>;
+  baseUrl?: string;
+  autoRegex: RegExp | null;
+  autoTargetsByText: ReadonlyMap<string, AutoEntityTarget>;
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function buildEntityRenderContext(params: {
+  peopleById?: ReadonlyMap<string, Person>;
+  placesById?: ReadonlyMap<string, Place>;
+  linkedPersonIds?: readonly string[];
+  linkedPlaceIds?: readonly string[];
+  subjectPersonId?: string;
+  baseUrl?: string;
+}): InlineEntityRenderContext | undefined {
+  const { peopleById, placesById, linkedPersonIds, linkedPlaceIds, subjectPersonId, baseUrl } =
+    params;
+  if (!peopleById && !placesById) {
+    return undefined;
+  }
+
+  const candidates: { text: string; target: AutoEntityTarget }[] = [];
+  const seenText = new Set<string>();
+
+  const addCandidate = (rawText: string | undefined, target: AutoEntityTarget): void => {
+    const trimmed = rawText?.trim();
+    if (!trimmed || trimmed.length < 2) {
+      return;
+    }
+    if (seenText.has(trimmed)) {
+      return;
+    }
+    seenText.add(trimmed);
+    candidates.push({ text: trimmed, target });
+  };
+
+  if (placesById) {
+    const candidatePlaceIds = new Set<string>(linkedPlaceIds ?? []);
+    for (const [id, place] of placesById) {
+      if (hasPronunciationContent(place.pronunciation)) {
+        candidatePlaceIds.add(id);
+      }
+    }
+    for (const id of candidatePlaceIds) {
+      const place = placesById.get(id);
+      if (!place) {
+        continue;
+      }
+      const target: AutoEntityTarget = { kind: 'place', key: `place:${place.id}`, place };
+      addCandidate(place.full_name, target);
+      addCandidate(place.name, target);
+    }
+  }
+
+  if (peopleById && linkedPersonIds) {
+    for (const id of linkedPersonIds) {
+      if (subjectPersonId && id === subjectPersonId) {
+        continue;
+      }
+      const person = peopleById.get(id);
+      if (!person || person.is_living || person.full_name === 'Living') {
+        continue;
+      }
+      const target: AutoEntityTarget = { kind: 'person', key: `person:${person.id}`, person };
+      addCandidate(person.full_name, target);
+    }
+  }
+
+  candidates.sort((a, b) => b.text.length - a.text.length);
+
+  const autoTargetsByText = new Map<string, AutoEntityTarget>();
+  for (const item of candidates) {
+    autoTargetsByText.set(item.text, item.target);
+  }
+
+  const autoRegex =
+    candidates.length > 0
+      ? new RegExp(
+          `(?<![\\p{L}\\p{N}_])(${candidates.map((c) => escapeRegExp(c.text)).join('|')})(?![\\p{L}\\p{N}_])`,
+          'gu',
+        )
+      : null;
+
+  return {
+    peopleById,
+    placesById,
+    baseUrl,
+    autoRegex,
+    autoTargetsByText,
+  };
+}
+
+function renderPlainProseWithEntities(
+  slice: string,
+  keyPrefix: string,
+  entityCtx?: InlineEntityRenderContext,
+  seenAutoEntities?: Set<string>,
+): React.ReactNode[] {
+  if (!slice || !entityCtx?.autoRegex) {
+    return slice ? [slice] : [];
+  }
+
+  const out: React.ReactNode[] = [];
+  const regex = new RegExp(entityCtx.autoRegex.source, 'gu');
+  let lastIndex = 0;
+  let match: RegExpExecArray | null = regex.exec(slice);
+  let matchIdx = 0;
+
+  while (match !== null) {
+    if (match.index > lastIndex) {
+      out.push(slice.slice(lastIndex, match.index));
+    }
+    const matchedText = match[1];
+    const target = entityCtx.autoTargetsByText.get(matchedText);
+    if (target && (!seenAutoEntities || !seenAutoEntities.has(target.key))) {
+      seenAutoEntities?.add(target.key);
+      const key = `${keyPrefix}-ae-${matchIdx}`;
+      matchIdx += 1;
+      if (target.kind === 'person') {
+        out.push(
+          <InlineEntityMention
+            key={key}
+            kind="person"
+            person={target.person}
+            displayText={matchedText}
+            baseUrl={entityCtx.baseUrl}
+          />,
+        );
+      } else {
+        out.push(
+          <InlineEntityMention
+            key={key}
+            kind="place"
+            place={target.place}
+            displayText={matchedText}
+            baseUrl={entityCtx.baseUrl}
+          />,
+        );
+      }
+    } else {
+      out.push(match[0]);
+    }
+
+    lastIndex = match.index + match[0].length;
+    match = regex.exec(slice);
+  }
+
+  if (lastIndex < slice.length) {
+    out.push(slice.slice(lastIndex));
+  }
+
+  return out;
+}
+
 function defaultResolveMediaUrl(media: MediaItem): string | null {
   const resolved = resolveAssetUrl(media.thumb_file || media.file);
   return resolved || null;
@@ -64,10 +229,12 @@ function parseInlineNodes(
   text: string,
   keyPrefix: string,
   citationCtx?: InlineCitationRenderContext,
+  entityCtx?: InlineEntityRenderContext,
+  seenAutoEntities?: Set<string>,
 ): React.ReactNode[] {
   const nodes: React.ReactNode[] = [];
   const tokenRe =
-    /(\*\*([^*]+)\*\*|__([^_]+)__|`([^`]+)`|\[\^([A-Za-z0-9._:-]+)(?:\|([A-Za-z0-9._:-]+))?\]|\[([^\]]+)\]\(([^)\s]+)\)|\*([^*]+)\*|(?<!\w)_([^_]+)_(?!\w))/g;
+    /(\*\*([^*]+)\*\*|__([^_]+)__|`([^`]+)`|\[\^([A-Za-z0-9._:-]+)(?:\|([A-Za-z0-9._:-]+))?\]|\[\[(person|place):([A-Za-z0-9._:-]+)(?:\|([^\]]+))?\]\]|\[([^\]]+)\]\(([^)\s]+)\)|\*([^*]+)\*|(?<!\w)_([^_]+)_(?!\w))/g;
 
   let lastIndex = 0;
   let match: RegExpExecArray | null = tokenRe.exec(text);
@@ -75,7 +242,14 @@ function parseInlineNodes(
 
   while (match !== null) {
     if (match.index > lastIndex) {
-      nodes.push(text.slice(lastIndex, match.index));
+      nodes.push(
+        ...renderPlainProseWithEntities(
+          text.slice(lastIndex, match.index),
+          `${keyPrefix}-p-${tokenIdx}`,
+          entityCtx,
+          seenAutoEntities,
+        ),
+      );
     }
 
     const key = `${keyPrefix}-${tokenIdx}`;
@@ -83,7 +257,11 @@ function parseInlineNodes(
 
     if (match[2] !== undefined || match[3] !== undefined) {
       const content = match[2] ?? match[3] ?? '';
-      nodes.push(<strong key={key}>{parseInlineNodes(content, key, citationCtx)}</strong>);
+      nodes.push(
+        <strong key={key}>
+          {parseInlineNodes(content, key, citationCtx, entityCtx, seenAutoEntities)}
+        </strong>,
+      );
     } else if (match[4] !== undefined) {
       nodes.push(<code key={key}>{match[4]}</code>);
     } else if (match[5] !== undefined) {
@@ -143,8 +321,50 @@ function parseInlineNodes(
       }
       // Unresolved citation tokens are omitted so raw syntax never appears to readers.
     } else if (match[7] !== undefined && match[8] !== undefined) {
-      const label = match[7];
-      const href = match[8].trim();
+      const entityKind = match[7] as 'person' | 'place';
+      const entityId = match[8];
+      const explicitLabel = match[9]?.trim() || undefined;
+
+      if (entityKind === 'person') {
+        const person = entityCtx?.peopleById?.get(entityId);
+        if (person) {
+          if (person.is_living || person.full_name === 'Living') {
+            nodes.push('Living');
+          } else {
+            seenAutoEntities?.add(`person:${person.id}`);
+            nodes.push(
+              <InlineEntityMention
+                key={key}
+                kind="person"
+                person={person}
+                displayText={explicitLabel ?? person.full_name}
+                baseUrl={entityCtx?.baseUrl}
+              />,
+            );
+          }
+        } else {
+          nodes.push(explicitLabel ?? entityId);
+        }
+      } else {
+        const place = entityCtx?.placesById?.get(entityId);
+        if (place) {
+          seenAutoEntities?.add(`place:${place.id}`);
+          nodes.push(
+            <InlineEntityMention
+              key={key}
+              kind="place"
+              place={place}
+              displayText={explicitLabel ?? place.name}
+              baseUrl={entityCtx?.baseUrl}
+            />,
+          );
+        } else {
+          nodes.push(explicitLabel ?? entityId);
+        }
+      }
+    } else if (match[10] !== undefined && match[11] !== undefined) {
+      const label = match[10];
+      const href = match[11].trim();
       if (isSafeLinkHref(href)) {
         const isExternal = /^https?:\/\//i.test(href);
         nodes.push(
@@ -161,9 +381,13 @@ function parseInlineNodes(
       } else {
         nodes.push(label);
       }
-    } else if (match[9] !== undefined || match[10] !== undefined) {
-      const content = match[9] ?? match[10] ?? '';
-      nodes.push(<em key={key}>{parseInlineNodes(content, key, citationCtx)}</em>);
+    } else if (match[12] !== undefined || match[13] !== undefined) {
+      const content = match[12] ?? match[13] ?? '';
+      nodes.push(
+        <em key={key}>
+          {parseInlineNodes(content, key, citationCtx, entityCtx, seenAutoEntities)}
+        </em>,
+      );
     } else {
       nodes.push(match[0]);
     }
@@ -173,7 +397,14 @@ function parseInlineNodes(
   }
 
   if (lastIndex < text.length) {
-    nodes.push(text.slice(lastIndex));
+    nodes.push(
+      ...renderPlainProseWithEntities(
+        text.slice(lastIndex),
+        `${keyPrefix}-tail`,
+        entityCtx,
+        seenAutoEntities,
+      ),
+    );
   }
 
   return nodes;
@@ -282,6 +513,11 @@ export interface ArchivalMarkdownProps {
   mediaItems?: readonly MediaItem[];
   events?: readonly ArchiveEvent[];
   subjectPersonId?: string;
+  peopleById?: ReadonlyMap<string, Person>;
+  placesById?: ReadonlyMap<string, Place>;
+  linkedPersonIds?: readonly string[];
+  linkedPlaceIds?: readonly string[];
+  baseUrl?: string;
   onInspectSource?: (sourceId: string) => void;
   onOpenMedia?: (media: MediaItem) => void;
   resolveMediaUrl?: (media: MediaItem) => string | null;
@@ -294,6 +530,11 @@ export const ArchivalMarkdown: React.FC<ArchivalMarkdownProps> = ({
   mediaItems,
   events,
   subjectPersonId,
+  peopleById,
+  placesById,
+  linkedPersonIds,
+  linkedPlaceIds,
+  baseUrl,
   onInspectSource,
   onOpenMedia,
   resolveMediaUrl,
@@ -503,6 +744,19 @@ export const ArchivalMarkdown: React.FC<ArchivalMarkdownProps> = ({
     handleTriggerClick,
   ]);
 
+  const entityCtx: InlineEntityRenderContext | undefined = useMemo(
+    () =>
+      buildEntityRenderContext({
+        peopleById,
+        placesById,
+        linkedPersonIds,
+        linkedPlaceIds,
+        subjectPersonId,
+        baseUrl,
+      }),
+    [peopleById, placesById, linkedPersonIds, linkedPlaceIds, subjectPersonId, baseUrl],
+  );
+
   if (blocks.length === 0) {
     return null;
   }
@@ -515,17 +769,17 @@ export const ArchivalMarkdown: React.FC<ArchivalMarkdownProps> = ({
           case 'heading':
             return block.level === 3 ? (
               <h4 key={blockKey} className="archival-md-heading">
-                {parseInlineNodes(block.text, blockKey, citationCtx)}
+                {parseInlineNodes(block.text, blockKey, citationCtx, entityCtx, new Set())}
               </h4>
             ) : (
               <h5 key={blockKey} className="archival-md-subheading">
-                {parseInlineNodes(block.text, blockKey, citationCtx)}
+                {parseInlineNodes(block.text, blockKey, citationCtx, entityCtx, new Set())}
               </h5>
             );
           case 'blockquote':
             return (
               <blockquote key={blockKey} className="archival-md-quote">
-                {parseInlineNodes(block.text, blockKey, citationCtx)}
+                {parseInlineNodes(block.text, blockKey, citationCtx, entityCtx, new Set())}
               </blockquote>
             );
           case 'list':
@@ -533,7 +787,13 @@ export const ArchivalMarkdown: React.FC<ArchivalMarkdownProps> = ({
               <ol key={blockKey} className="archival-md-list">
                 {block.items.map((item, itemIdx) => (
                   <li key={`${blockKey}-li-${itemIdx}`}>
-                    {parseInlineNodes(item, `${blockKey}-li-${itemIdx}`, citationCtx)}
+                    {parseInlineNodes(
+                      item,
+                      `${blockKey}-li-${itemIdx}`,
+                      citationCtx,
+                      entityCtx,
+                      new Set(),
+                    )}
                   </li>
                 ))}
               </ol>
@@ -541,7 +801,13 @@ export const ArchivalMarkdown: React.FC<ArchivalMarkdownProps> = ({
               <ul key={blockKey} className="archival-md-list">
                 {block.items.map((item, itemIdx) => (
                   <li key={`${blockKey}-li-${itemIdx}`}>
-                    {parseInlineNodes(item, `${blockKey}-li-${itemIdx}`, citationCtx)}
+                    {parseInlineNodes(
+                      item,
+                      `${blockKey}-li-${itemIdx}`,
+                      citationCtx,
+                      entityCtx,
+                      new Set(),
+                    )}
                   </li>
                 ))}
               </ul>
@@ -549,7 +815,7 @@ export const ArchivalMarkdown: React.FC<ArchivalMarkdownProps> = ({
           case 'paragraph':
             return (
               <p key={blockKey} className="archival-md-p">
-                {parseInlineNodes(block.text, blockKey, citationCtx)}
+                {parseInlineNodes(block.text, blockKey, citationCtx, entityCtx, new Set())}
               </p>
             );
           default: {

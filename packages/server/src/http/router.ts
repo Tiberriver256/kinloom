@@ -9,17 +9,20 @@ import {
   EntityTypeSchema,
   EntityUpdateInputSchema,
   EntityWriteInputSchema,
+  parseEntityPayload,
+  resolveEffectiveLiving,
   type EntityType,
   type KinloomServerPluginRoute,
-  type KinloomServerPorts,
   type KinloomSiteConfig,
   type RevisionQuery,
 } from '@kinloom/core';
 import { KinloomHttpError, toErrorResponseData } from '../errors.js';
+import type { KinloomServerPorts } from '../ports.js';
 import { AdminService } from '../services/adminService.js';
 import { AuthService, sanitizeNextPath } from '../services/authService.js';
 import { BundleReadService } from '../services/bundleReadService.js';
 import { MediaService } from '../services/mediaService.js';
+import { generateAndStorePronunciationAudio } from '../services/pronunciationHelper.js';
 import { TalkService } from '../services/talkService.js';
 import { WikiWriteService } from '../services/wikiWriteService.js';
 import {
@@ -87,6 +90,16 @@ const CreateUserBodySchema = z.object({
 const UpdateUserBodySchema = z.object({
   role: z.enum(['admin', 'editor']),
   display_name: z.string().optional(),
+});
+
+const GeneratePronunciationBodySchema = z.object({
+  entity_type: z.enum(['person', 'place']),
+  entity_id: z.string().trim().min(1),
+  text: z.string().trim().min(1).optional(),
+  phonetic: z.string().trim().min(1).optional(),
+  ipa: z.string().trim().min(1).optional(),
+  language: z.string().trim().min(1).optional(),
+  voice: z.string().trim().min(1).optional(),
 });
 
 const DEFAULT_SESSION_TTL_SECONDS = 30 * 24 * 60 * 60;
@@ -212,6 +225,8 @@ export function createKinloomServer(config: KinloomServerConfig): KinloomServer 
     bundleCache: config.ports.bundleCache,
     clock: config.ports.clock,
     siteConfig: config.siteConfig,
+    mediaStore: config.ports.mediaStore,
+    pronunciationGenerator: config.ports.pronunciationGenerator,
     plugins,
     onPluginError: config.onPluginError,
   });
@@ -621,6 +636,70 @@ export function createKinloomServer(config: KinloomServerConfig): KinloomServer 
         author: principalToRevisionAuthor(auth.principal),
       });
       return jsonResponse(reverted, 201);
+    }
+
+    // -------------------------------------------------------------------------
+    // Pronunciation audio generation endpoint
+    // -------------------------------------------------------------------------
+    if (method === 'POST' && pathname === '/api/pronunciation/generate') {
+      enforceCsrfOrigin(request, url, auth.authMethod);
+      requireMinRole(auth.principal, 'editor', { allowAgentScopes: ['write_batch'] });
+
+      const body = GeneratePronunciationBodySchema.parse(await readJsonBody(request));
+      const entityRow = await config.ports.repository.getEntity(body.entity_type, body.entity_id);
+      if (entityRow === null || entityRow.deleted_at !== null || 'edge' in entityRow) {
+        throw new KinloomHttpError(
+          404,
+          'NOT_FOUND',
+          `Entity ${body.entity_type}/${body.entity_id} was not found.`
+        );
+      }
+
+      let defaultText = '';
+      if (body.entity_type === 'person') {
+        const parsedPerson = parseEntityPayload('person', entityRow.data);
+        if (resolveEffectiveLiving(parsedPerson, config.siteConfig.privacy)) {
+          throw new KinloomHttpError(
+            422,
+            'LIVING_PRIVACY_VIOLATION',
+            `Cannot generate pronunciation audio for living person '${body.entity_id}'.`
+          );
+        }
+        defaultText = parsedPerson.full_name.trim();
+      } else {
+        const parsedPlace = parseEntityPayload('place', entityRow.data);
+        defaultText = (parsedPlace.name || parsedPlace.full_name).trim();
+      }
+
+      if (!config.ports.pronunciationGenerator) {
+        throw new KinloomHttpError(
+          503,
+          'PRONUNCIATION_UNAVAILABLE',
+          'Pronunciation audio generation is not configured on this server.'
+        );
+      }
+
+      const text = body.text?.trim() || defaultText;
+      if (!text) {
+        throw new KinloomHttpError(
+          400,
+          'VALIDATION_ERROR',
+          'Pronunciation text is required when entity name is empty.'
+        );
+      }
+
+      const stored = await generateAndStorePronunciationAudio({
+        generator: config.ports.pronunciationGenerator,
+        mediaStore: config.ports.mediaStore,
+        entityType: body.entity_type,
+        text,
+        phonetic: body.phonetic,
+        ipa: body.ipa,
+        language: body.language,
+        voice: body.voice,
+      });
+
+      return jsonResponse(stored, 200);
     }
 
     // -------------------------------------------------------------------------

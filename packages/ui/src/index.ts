@@ -116,6 +116,10 @@ export {
   parseMarkdownBlocks,
 } from './components/ArchivalMarkdown.js';
 export type { ArchivalMarkdownProps } from './components/ArchivalMarkdown.js';
+export { InlineEntityMention } from './components/InlineEntityMention.js';
+export type { InlineEntityMentionProps } from './components/InlineEntityMention.js';
+export { PronunciationBadge } from './components/PronunciationBadge.js';
+export type { PronunciationBadgeProps } from './components/PronunciationBadge.js';
 export {
   CitationPopover,
   computeCitationPopoverPosition,

@@ -300,6 +300,9 @@ function clonePerson(p: RawPerson): RawPerson {
   return {
     ...p,
     alt_names: [...p.alt_names],
+    ...(p.pronunciation !== undefined
+      ? { pronunciation: p.pronunciation ? { ...p.pronunciation } : null }
+      : {}),
     ...(p.extensions !== undefined ? { extensions: structuredClone(p.extensions) } : {}),
   };
 }
@@ -331,6 +334,9 @@ function clonePlace(p: Place): Place {
       ? { historical_names: p.historical_names.map((h) => ({ ...h })) }
       : {}),
     ...(p.sources !== undefined ? { sources: p.sources.map((s) => ({ ...s })) } : {}),
+    ...(p.pronunciation !== undefined
+      ? { pronunciation: p.pronunciation ? { ...p.pronunciation } : null }
+      : {}),
     ...(p.extensions !== undefined ? { extensions: structuredClone(p.extensions) } : {}),
   };
 }

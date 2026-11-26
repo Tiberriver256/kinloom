@@ -27,7 +27,9 @@ import {
   type EntityType,
   type KinloomServerPlugin,
   type KinloomSiteConfig,
+  type MediaStore,
   type OptimisticConflictError,
+  type Pronunciation,
   type RawEvent,
   type RawPerson,
   type RevisionAuthor,
@@ -39,6 +41,8 @@ import {
 } from '@kinloom/core';
 import { generateEntityId, readBodyToString } from '../crypto.js';
 import { KinloomHttpError } from '../errors.js';
+import type { PronunciationAudioGenerator } from '../ports.js';
+import { generateAndStorePronunciationAudio } from './pronunciationHelper.js';
 
 const ENTITY_ID_PREFIX: Record<Exclude<EntityType, 'kinship_edge'>, string> = {
   person: 'per',
@@ -54,6 +58,8 @@ export interface WikiWriteServiceDeps {
   bundleCache: BundleCache;
   clock: Clock;
   siteConfig: KinloomSiteConfig;
+  mediaStore?: MediaStore;
+  pronunciationGenerator?: PronunciationAudioGenerator;
   plugins?: readonly KinloomServerPlugin[];
   onPluginError?: (pluginId: string, error: unknown) => void;
 }
@@ -187,6 +193,8 @@ export class WikiWriteService {
   private readonly bundleCache: BundleCache;
   private readonly clock: Clock;
   private readonly siteConfig: KinloomSiteConfig;
+  private readonly mediaStore?: MediaStore;
+  private readonly pronunciationGenerator?: PronunciationAudioGenerator;
   private readonly plugins: readonly KinloomServerPlugin[];
   private readonly onPluginError?: (pluginId: string, error: unknown) => void;
 
@@ -195,6 +203,8 @@ export class WikiWriteService {
     this.bundleCache = deps.bundleCache;
     this.clock = deps.clock;
     this.siteConfig = deps.siteConfig;
+    this.mediaStore = deps.mediaStore;
+    this.pronunciationGenerator = deps.pronunciationGenerator;
     this.plugins = deps.plugins ?? [];
     this.onPluginError = deps.onPluginError;
   }
@@ -209,7 +219,7 @@ export class WikiWriteService {
   }): Promise<{ entity: EntityPayload; revision: RevisionRecord; etag: string }> {
     this.assertSummaryValid(params.summary);
 
-    const { entityId, sanitized } = await this.validateAndSanitizePayload({
+    const { entityId, sanitized: initialSanitized } = await this.validateAndSanitizePayload({
       entityType: params.entityType,
       requestedEntityId: params.entityId,
       rawPayload: params.data,
@@ -226,6 +236,12 @@ export class WikiWriteService {
           : `Entity ${params.entityType}/${entityId} already exists.`
       );
     }
+
+    const sanitized = await this.maybeGeneratePronunciationAudio({
+      entityType: params.entityType,
+      sanitized: initialSanitized,
+      previousPayload: null,
+    });
 
     const op: AtomicMutationOp = {
       entity_type: params.entityType,
@@ -280,7 +296,7 @@ export class WikiWriteService {
       ? { ...existingPayload, ...structuredClone(params.data) }
       : structuredClone(params.data);
 
-    const { sanitized } = await this.validateAndSanitizePayload({
+    const { sanitized: initialSanitized } = await this.validateAndSanitizePayload({
       entityType: params.entityType,
       requestedEntityId: params.entityId,
       rawPayload: mergedRaw,
@@ -294,9 +310,15 @@ export class WikiWriteService {
         entityId: params.entityId,
         expectedParentRevisionId: params.expectedParentRevisionId,
         existing,
-        candidateAfter: sanitized,
+        candidateAfter: initialSanitized,
       });
     }
+
+    const sanitized = await this.maybeGeneratePronunciationAudio({
+      entityType: params.entityType,
+      sanitized: initialSanitized,
+      previousPayload: existingPayload,
+    });
 
     const op: AtomicMutationOp = {
       entity_type: params.entityType,
@@ -1095,6 +1117,94 @@ export class WikiWriteService {
       result.set(compositeKey(key.entityType, key.entityId), rows[i] ?? null);
     }
     return result;
+  }
+
+  private async maybeGeneratePronunciationAudio(params: {
+    entityType: EntityType;
+    sanitized: EntityPayload;
+    previousPayload: EntityPayload | null;
+  }): Promise<EntityPayload> {
+    if (!this.pronunciationGenerator || !this.mediaStore) {
+      return params.sanitized;
+    }
+    if (params.entityType !== 'person' && params.entityType !== 'place') {
+      return params.sanitized;
+    }
+
+    const nextPron = params.sanitized.pronunciation as Pronunciation | null | undefined;
+    if (!nextPron || typeof nextPron !== 'object') {
+      return params.sanitized;
+    }
+
+    if (
+      params.entityType === 'person' &&
+      resolveEffectiveLiving(params.sanitized as unknown as RawPerson, this.siteConfig.privacy)
+    ) {
+      return params.sanitized;
+    }
+
+    const prevPron =
+      params.previousPayload &&
+      typeof params.previousPayload.pronunciation === 'object' &&
+      params.previousPayload.pronunciation !== null
+        ? (params.previousPayload.pronunciation as Pronunciation)
+        : null;
+
+    const noAudioYet = !nextPron.audio_url;
+    let shouldGenerate = noAudioYet;
+
+    if (!shouldGenerate && params.previousPayload !== null) {
+      const phoneticChanged = (prevPron?.phonetic ?? '') !== (nextPron.phonetic ?? '');
+      const ipaChanged = (prevPron?.ipa ?? '') !== (nextPron.ipa ?? '');
+      const languageChanged = (prevPron?.language ?? '') !== (nextPron.language ?? '');
+      const nameChanged =
+        params.entityType === 'person'
+          ? (params.previousPayload.full_name ?? '') !== (params.sanitized.full_name ?? '')
+          : (params.previousPayload.name ?? '') !== (params.sanitized.name ?? '') ||
+            (params.previousPayload.full_name ?? '') !== (params.sanitized.full_name ?? '');
+      shouldGenerate = phoneticChanged || ipaChanged || languageChanged || nameChanged;
+    }
+
+    if (!shouldGenerate) {
+      return params.sanitized;
+    }
+
+    const entityText =
+      params.entityType === 'person'
+        ? typeof params.sanitized.full_name === 'string'
+          ? params.sanitized.full_name.trim()
+          : ''
+        : typeof params.sanitized.name === 'string' && params.sanitized.name.trim()
+          ? params.sanitized.name.trim()
+          : typeof params.sanitized.full_name === 'string'
+            ? params.sanitized.full_name.trim()
+            : '';
+
+    const text = entityText || nextPron.phonetic?.trim() || nextPron.ipa?.trim() || '';
+    if (!text) {
+      return params.sanitized;
+    }
+
+    try {
+      const stored = await generateAndStorePronunciationAudio({
+        generator: this.pronunciationGenerator,
+        mediaStore: this.mediaStore,
+        entityType: params.entityType,
+        text,
+        phonetic: nextPron.phonetic,
+        ipa: nextPron.ipa,
+        language: nextPron.language,
+      });
+      return {
+        ...params.sanitized,
+        pronunciation: {
+          ...nextPron,
+          audio_url: stored.audio_url,
+        },
+      };
+    } catch {
+      return params.sanitized;
+    }
   }
 
   private assertSummaryValid(summary: string): void {

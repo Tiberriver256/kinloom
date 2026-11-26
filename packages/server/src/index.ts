@@ -3,9 +3,13 @@ export type {
   KinloomServerPlugin,
   KinloomServerPluginContext,
   KinloomServerPluginRoute,
-  KinloomServerPorts,
   PluginRouteMinRole,
 } from '@kinloom/core';
+export type {
+  KinloomServerPorts,
+  PronunciationAudioGenerator,
+  PronunciationAudioResult,
+} from './ports.js';
 
 export const KINLOOM_SERVER_VERSION = '0.26.0';
 

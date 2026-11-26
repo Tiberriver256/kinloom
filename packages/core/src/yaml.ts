@@ -127,6 +127,7 @@ const PERSON_KEY_ORDER = [
   'death_edtf',
   'portrait_url',
   'thumb_url',
+  'pronunciation',
   'extensions',
 ] as const;
 
@@ -170,6 +171,7 @@ const PLACE_KEY_ORDER = [
   'summary',
   'photo_url',
   'photo_caption',
+  'pronunciation',
   'sources',
   'extensions',
 ] as const;

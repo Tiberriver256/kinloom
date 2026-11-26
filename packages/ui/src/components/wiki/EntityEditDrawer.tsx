@@ -2,11 +2,13 @@ import type {
   EditorCitationMode,
   EntityPayload,
   EntityType,
+  Pronunciation,
 } from '@kinloom/core';
 import { asRevisionId, isEditSummaryValid } from '@kinloom/core';
 import React, { useEffect, useState } from 'react';
 import { CitationBadge } from './WikiBadges.js';
 import { ConflictMergeDialog } from './ConflictMergeDialog.js';
+import { PronunciationBadge, hasPronunciationContent } from '../PronunciationBadge.js';
 import { entityEditorMachine } from '../../machines/entityEditorMachine.js';
 import { useArchiveData } from '../../context/ArchiveDataContext.js';
 import { useMachine } from '@xstate/react';
@@ -41,6 +43,53 @@ function asStringArray(value: unknown): string[] {
   return value.filter((item): item is string => typeof item === 'string');
 }
 
+type PronunciationFieldKey = keyof Pronunciation;
+const PRONUNCIATION_KEYS: readonly PronunciationFieldKey[] = [
+  'phonetic',
+  'ipa',
+  'language',
+  'audio_url',
+  'note',
+];
+
+function readDraftPronunciation(value: unknown): Pronunciation | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return null;
+  }
+  const raw = value as Record<string, unknown>;
+  const out: Pronunciation = {};
+  for (const key of PRONUNCIATION_KEYS) {
+    const val = raw[key];
+    if (typeof val === 'string' && val.length > 0) {
+      out[key] = val;
+    }
+  }
+  return Object.keys(out).length > 0 ? out : null;
+}
+
+function cleanPronunciation(
+  value: unknown,
+  trimValues: boolean,
+): Pronunciation | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return null;
+  }
+  const raw = value as Record<string, unknown>;
+  const out: Pronunciation = {};
+  for (const key of PRONUNCIATION_KEYS) {
+    const val = raw[key];
+    if (typeof val !== 'string') {
+      continue;
+    }
+    const normalized = trimValues ? val.trim() : val;
+    if (normalized.length > 0) {
+      out[key] = normalized;
+    }
+  }
+  const hasAnyNonWhitespace = Object.values(out).some((v) => Boolean(v && v.trim().length > 0));
+  return hasAnyNonWhitespace ? out : null;
+}
+
 export const EntityEditDrawer: React.FC<EntityEditDrawerProps> = ({
   open,
   entityType,
@@ -53,12 +102,16 @@ export const EntityEditDrawer: React.FC<EntityEditDrawerProps> = ({
   onSaved,
   onDeleted,
 }) => {
-  const { dataSource, bundle, reloadArchive } = useArchiveData();
+  const { dataSource, bundle, baseUrl, reloadArchive } = useArchiveData();
   const [syncingRevision, setSyncingRevision] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [deleteSummary, setDeleteSummary] = useState('');
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [audioGenStatus, setAudioGenStatus] = useState<'idle' | 'loading' | 'success' | 'error'>(
+    'idle',
+  );
+  const [audioGenMessage, setAudioGenMessage] = useState<string | null>(null);
 
   const [snapshot, send] = useMachine(entityEditorMachine, {
     input: {
@@ -175,6 +228,84 @@ export const EntityEditDrawer: React.FC<EntityEditDrawerProps> = ({
         [key]: value,
       },
     });
+  };
+
+  const draftPronunciation = readDraftPronunciation(draft?.pronunciation);
+  const canEditPronunciation =
+    entityType === 'place' ||
+    (entityType === 'person' && !draft?.is_living && asString(draft?.full_name) !== 'Living');
+  const pronunciationPreviewLabel =
+    entityType === 'person'
+      ? asString(draft.full_name) || title || entityId
+      : asString(draft.name) || asString(draft.full_name) || title || entityId;
+
+  const updatePronunciationField = (key: PronunciationFieldKey, value: string): void => {
+    const current = readDraftPronunciation(draft.pronunciation) ?? {};
+    const next: Record<string, string | undefined> = { ...current, [key]: value };
+    if (value === '') {
+      delete next[key];
+    }
+    const cleaned = cleanPronunciation(next, false);
+    updateField('pronunciation', cleaned);
+  };
+
+  const handleGeneratePronunciationAudio = async (): Promise<void> => {
+    if (!canEditPronunciation || audioGenStatus === 'loading') {
+      return;
+    }
+    const text =
+      entityType === 'person'
+        ? asString(draft.full_name).trim()
+        : (asString(draft.name).trim() || asString(draft.full_name).trim());
+    if (!text) {
+      setAudioGenStatus('error');
+      setAudioGenMessage('Enter a name before generating pronunciation audio.');
+      return;
+    }
+    setAudioGenStatus('loading');
+    setAudioGenMessage(null);
+    try {
+      const response = await fetch('/api/pronunciation/generate', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          entity_type: entityType,
+          entity_id: entityId,
+          text,
+          phonetic: draftPronunciation?.phonetic?.trim() || undefined,
+          ipa: draftPronunciation?.ipa?.trim() || undefined,
+          language: draftPronunciation?.language?.trim() || undefined,
+        }),
+      });
+      if (!response.ok) {
+        let errorMessage = `Audio generation failed (HTTP ${response.status}).`;
+        try {
+          const errBody = (await response.json()) as {
+            error?: { message?: string };
+            message?: string;
+          };
+          errorMessage = errBody.error?.message || errBody.message || errorMessage;
+        } catch {
+          // Non-JSON error response; keep HTTP status fallback.
+        }
+        setAudioGenStatus('error');
+        setAudioGenMessage(errorMessage);
+        return;
+      }
+      const data = (await response.json()) as { audio_url?: string };
+      if (!data.audio_url || typeof data.audio_url !== 'string') {
+        setAudioGenStatus('error');
+        setAudioGenMessage('Server response did not include an audio_url.');
+        return;
+      }
+      updatePronunciationField('audio_url', data.audio_url);
+      setAudioGenStatus('success');
+      setAudioGenMessage('Pronunciation audio generated. Save changes to publish.');
+    } catch (err) {
+      setAudioGenStatus('error');
+      setAudioGenMessage(err instanceof Error ? err.message : String(err));
+    }
   };
 
   const handleCloseAttempt = (): void => {
@@ -379,6 +510,21 @@ export const EntityEditDrawer: React.FC<EntityEditDrawerProps> = ({
           className="wiki-edit-form"
           onSubmit={(e) => {
             e.preventDefault();
+            if (entityType === 'person' || entityType === 'place') {
+              const cleanedPronunciation =
+                entityType === 'person' && Boolean(draft.is_living)
+                  ? null
+                  : cleanPronunciation(draft.pronunciation, true);
+              if (JSON.stringify(cleanedPronunciation) !== JSON.stringify(draft.pronunciation ?? null)) {
+                send({
+                  type: 'EDIT_FIELD',
+                  draft: {
+                    ...draft,
+                    pronunciation: cleanedPronunciation,
+                  },
+                });
+              }
+            }
             send({ type: 'SUBMIT' });
           }}
         >
@@ -546,6 +692,101 @@ export const EntityEditDrawer: React.FC<EntityEditDrawerProps> = ({
                 />
               </label>
             </div>
+          )}
+
+          {canEditPronunciation && (
+            <fieldset className="wiki-citation-fieldset wiki-pronunciation-fieldset">
+              <legend className="wiki-field-label">Pronunciation</legend>
+              <div className="wiki-field-grid">
+                <label className="wiki-field">
+                  <span className="wiki-field-label">Phonetic guide</span>
+                  <input
+                    type="text"
+                    className="wiki-input"
+                    placeholder="e.g. MER-ser or LAY-den"
+                    value={draftPronunciation?.phonetic ?? ''}
+                    onChange={(e) => {
+                      updatePronunciationField('phonetic', e.target.value);
+                    }}
+                    disabled={isBusy}
+                  />
+                </label>
+                <label className="wiki-field">
+                  <span className="wiki-field-label">IPA (optional)</span>
+                  <input
+                    type="text"
+                    className="wiki-input"
+                    placeholder="e.g. /ˈmɜːr.sər/"
+                    value={draftPronunciation?.ipa ?? ''}
+                    onChange={(e) => {
+                      updatePronunciationField('ipa', e.target.value);
+                    }}
+                    disabled={isBusy}
+                  />
+                </label>
+                <label className="wiki-field">
+                  <span className="wiki-field-label">Language / origin</span>
+                  <input
+                    type="text"
+                    className="wiki-input"
+                    placeholder="e.g. nl, pl, en-US"
+                    value={draftPronunciation?.language ?? ''}
+                    onChange={(e) => {
+                      updatePronunciationField('language', e.target.value);
+                    }}
+                    disabled={isBusy}
+                  />
+                </label>
+                <label className="wiki-field">
+                  <span className="wiki-field-label">Pronunciation note (optional)</span>
+                  <input
+                    type="text"
+                    className="wiki-input"
+                    placeholder="e.g. Stress on first syllable"
+                    value={draftPronunciation?.note ?? ''}
+                    onChange={(e) => {
+                      updatePronunciationField('note', e.target.value);
+                    }}
+                    disabled={isBusy}
+                  />
+                </label>
+              </div>
+
+              <div className="wiki-pronunciation-actions">
+                <button
+                  type="button"
+                  className="pill-btn"
+                  disabled={isBusy || audioGenStatus === 'loading'}
+                  onClick={() => {
+                    void handleGeneratePronunciationAudio();
+                  }}
+                >
+                  {audioGenStatus === 'loading'
+                    ? 'Generating…'
+                    : draftPronunciation?.audio_url
+                      ? 'Regenerate Audio'
+                      : 'Generate Audio'}
+                </button>
+                {hasPronunciationContent(draftPronunciation) && (
+                  <div className="wiki-pronunciation-preview">
+                    <PronunciationBadge
+                      pronunciation={draftPronunciation}
+                      label={pronunciationPreviewLabel}
+                      baseUrl={baseUrl}
+                    />
+                  </div>
+                )}
+              </div>
+
+              {audioGenMessage && (
+                <div
+                  className={`wiki-pronunciation-status ${audioGenStatus === 'error' ? 'is-error' : 'is-success'}`}
+                  role={audioGenStatus === 'error' ? 'alert' : 'status'}
+                >
+                  {audioGenMessage}
+                </div>
+              )}
+            </fieldset>
           )}
 
           {entityType === 'event' && (

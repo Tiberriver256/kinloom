@@ -97,6 +97,7 @@ export const KinloomSiteConfigSchema = z.object({
   anchorYears: z.array(AnchorYearConfigSchema).optional(),
   privacy: PrivacyConfigSchema.prefault({}),
   wiki: WikiConfigSchema.optional(),
+  plugins: z.array(z.string().min(1)).optional(),
   extensions: z.record(z.string(), z.unknown()).optional(),
 });
 

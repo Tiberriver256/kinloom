@@ -23,6 +23,13 @@ import {
   formatConflictDetails,
   type CliExitCode,
 } from './errors.js';
+import {
+  discoverSiteCliPlugins,
+  formatPluginCommandsHelp,
+  resolvePluginCommands,
+  type KinloomCliPlugin,
+  type KinloomCliPluginContext,
+} from './plugins.js';
 
 export interface CliIo {
   stdout(line: string): void;
@@ -32,6 +39,8 @@ export interface CliIo {
 export interface RunCliOptions {
   io?: CliIo;
   fetchImpl?: typeof fetch;
+  cwd?: string;
+  plugins?: readonly KinloomCliPlugin[];
 }
 
 const DEFAULT_IO: CliIo = {
@@ -419,11 +428,22 @@ export async function runCli(
 ): Promise<CliExitCode> {
   const io = options?.io ?? DEFAULT_IO;
   const fetchImpl = options?.fetchImpl;
+  const cwd = options?.cwd ?? process.cwd();
+
+  const discovered = await discoverSiteCliPlugins(cwd);
+  const mergedPlugins = resolvePluginCommands([
+    ...discovered.plugins,
+    ...(options?.plugins ?? []),
+  ]);
+  for (const warning of [...discovered.warnings, ...mergedPlugins.warnings]) {
+    io.stderr(`Warning: ${warning}`);
+  }
 
   if (argv.length === 0 || argv[0] === '-h' || argv[0] === '--help' || argv[0] === 'help') {
     const sub = argv[0] === 'help' ? argv[1] : undefined;
     if (!sub) {
-      io.stdout(ROOT_HELP);
+      const pluginHelp = formatPluginCommandsHelp(mergedPlugins.plugins);
+      io.stdout(pluginHelp ? `${ROOT_HELP}\n\n${pluginHelp}` : ROOT_HELP);
       return EXIT_OK;
     }
     if (COMMAND_HELP[sub]) {
@@ -433,6 +453,11 @@ export async function runCli(
     const recordSpec = resolveRecordCommand(sub);
     if (recordSpec) {
       io.stdout(renderRecordCommandHelp(recordSpec));
+      return EXIT_OK;
+    }
+    const pluginCmd = mergedPlugins.commands.get(sub);
+    if (pluginCmd) {
+      io.stdout(pluginCmd.help);
       return EXIT_OK;
     }
     io.stderr(`Unknown command '${sub}'. Run \`kinloom --help\` for available commands.`);
@@ -459,7 +484,7 @@ export async function runCli(
   }
 
   if (rest.includes('-h') || rest.includes('--help')) {
-    const help = COMMAND_HELP[command];
+    const help = COMMAND_HELP[command] ?? mergedPlugins.commands.get(command)?.help;
     if (!help) {
       io.stderr(`Unknown command '${command}'. Run \`kinloom --help\` for available commands.`);
       return EXIT_USAGE;
@@ -1244,9 +1269,20 @@ export async function runCli(
         return EXIT_OK;
       }
 
-      default:
+      default: {
+        const pluginCmd = mergedPlugins.commands.get(command);
+        if (pluginCmd) {
+          const pluginCtx: KinloomCliPluginContext = {
+            cwd,
+            io,
+            fetchImpl,
+            siteConfig: discovered.siteConfig,
+          };
+          return normalizeExitCode(await pluginCmd.run(rest, pluginCtx));
+        }
         io.stderr(`Unknown command '${command}'. Run \`kinloom --help\` for available commands.`);
         return EXIT_USAGE;
+      }
     }
   } catch (err: unknown) {
     if (err instanceof CliValidationError) {

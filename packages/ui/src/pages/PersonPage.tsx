@@ -24,6 +24,7 @@ import { KinloomFooter } from '../components/KinloomFooter.js';
 import { MediaPlayer } from '../components/MediaPlayer.js';
 import { MilestoneStoryCard } from '../components/MilestoneStoryCard.js';
 import { PluginSlot } from '../plugins/PluginContext.js';
+import { PronunciationBadge } from '../components/PronunciationBadge.js';
 import { resolveAssetUrl } from '../components/Atoms.js';
 import { useArchiveData } from '../context/ArchiveDataContext.js';
 import { useArchiveUi } from '../context/ArchiveUiContext.js';
@@ -568,6 +569,15 @@ export const PersonPage: React.FC = () => {
                 )}
                 <div>
                   <h1>{person.full_name}</h1>
+                  {!person.is_living && person.full_name !== 'Living' && person.pronunciation && (
+                    <div className="person-pronunciation-row">
+                      <PronunciationBadge
+                        pronunciation={person.pronunciation}
+                        label={person.full_name}
+                        baseUrl={baseUrl}
+                      />
+                    </div>
+                  )}
                   <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '4px 8px', fontFamily: 'var(--font-mono)', fontSize: '0.84rem', color: 'var(--text-secondary)' }}>
                     <span>
                       {person.birth_edtf || '?'} — {person.death_edtf || (person.is_living ? 'Living' : '?')}
@@ -804,6 +814,11 @@ export const PersonPage: React.FC = () => {
                             mediaItems={bundle.media}
                             events={bundle.events}
                             subjectPersonId={person.id}
+                            peopleById={peopleById}
+                            placesById={placesById}
+                            linkedPersonIds={narrative.person_ids}
+                            linkedPlaceIds={narrative.place_ids}
+                            baseUrl={baseUrl}
                             onInspectSource={(sourceId) => {
                               openSourceInspector({ sourceId });
                             }}
@@ -944,6 +959,11 @@ export const PersonPage: React.FC = () => {
                             mediaItems={bundle.media}
                             events={bundle.events}
                             subjectPersonId={person.id}
+                            peopleById={peopleById}
+                            placesById={placesById}
+                            linkedPersonIds={story.person_ids}
+                            linkedPlaceIds={story.place_ids}
+                            baseUrl={baseUrl}
                             onInspectSource={(sourceId) => {
                               openSourceInspector({ sourceId });
                             }}
@@ -1149,6 +1169,7 @@ export const PersonPage: React.FC = () => {
           birth_edtf: person.birth_edtf,
           death_edtf: person.death_edtf,
           portrait_url: person.portrait_url,
+          pronunciation: person.pronunciation ?? null,
           has_primary_source: person.has_primary_source,
         }}
         hasPrimarySource={person.has_primary_source ?? true}

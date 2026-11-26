@@ -8881,7 +8881,16 @@
         "src_census_1860_springfield",
         "src_nara_emancipation_1863",
         "src_chronam_evening_star_1865"
-      ]
+      ],
+      "extensions": {
+        "narrative_audio": {
+          "file": "media/audio-abraham-lincoln-bio.mp3",
+          "duration_seconds": 81,
+          "editor_notes_start_seconds": 57,
+          "story_voice": "Charon",
+          "notes_voice": "Kore"
+        }
+      }
     },
     {
       "id": "nar_springfield_household",

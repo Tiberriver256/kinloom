@@ -8,6 +8,7 @@ import { KinloomFooter } from '../components/KinloomFooter.js';
 import { LocalSurveyMap } from '../components/LocalSurveyMap.js';
 import { MediaPlayer } from '../components/MediaPlayer.js';
 import { PluginSlot } from '../plugins/PluginContext.js';
+import { PronunciationBadge } from '../components/PronunciationBadge.js';
 import { useArchiveData } from '../context/ArchiveDataContext.js';
 import { EntityEditDrawer } from '../components/wiki/EntityEditDrawer.js';
 import { RevisionHistoryPanel } from '../components/wiki/RevisionHistoryPanel.js';
@@ -239,6 +240,15 @@ export const PlacePage: React.FC = () => {
           <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
             <div>
               <h1 className="place-dossier-title">{place.full_name}</h1>
+              {place.pronunciation && (
+                <div className="place-pronunciation-row">
+                  <PronunciationBadge
+                    pronunciation={place.pronunciation}
+                    label={place.name}
+                    baseUrl={baseUrl}
+                  />
+                </div>
+              )}
             </div>
 
             {/* oxlint-disable-next-line jsx-a11y/prefer-tag-over-role -- role="group" is the correct grouping pattern for a button toolbar */}
@@ -475,6 +485,7 @@ export const PlacePage: React.FC = () => {
           summary: place.summary ?? '',
           photo_url: place.photo_url ?? null,
           photo_caption: place.photo_caption ?? null,
+          pronunciation: place.pronunciation ?? null,
           has_primary_source: place.has_primary_source,
         }}
         hasPrimarySource={place.has_primary_source ?? true}

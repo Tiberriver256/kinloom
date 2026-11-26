@@ -102,6 +102,16 @@ export const HistoricalNameSchema = z.object({
   valid_to: OptionalCoercedStringSchema,
 });
 
+export const PronunciationSchema = z.object({
+  phonetic: z.string().min(1).optional(),
+  ipa: z.string().min(1).optional(),
+  language: z.string().min(1).optional(),
+  audio_url: z.string().min(1).optional(),
+  note: z.string().min(1).optional(),
+});
+
+export type Pronunciation = z.infer<typeof PronunciationSchema>;
+
 export const RawPersonSchema = z.object({
   id: z.string().min(1),
   slug: z.string().min(1),
@@ -118,6 +128,7 @@ export const RawPersonSchema = z.object({
   death_edtf: CoercedEdtfStringSchema.default(''),
   portrait_url: z.string().nullable().default(null),
   thumb_url: z.string().nullable().optional(),
+  pronunciation: PronunciationSchema.nullable().optional(),
   has_primary_source: z.boolean().optional(),
   extensions: z.record(z.string(), z.unknown()).optional(),
 });
@@ -148,6 +159,7 @@ export const PlaceSchema = z.object({
   summary: z.string().nullable().optional(),
   photo_url: z.string().nullable().optional(),
   photo_caption: z.string().nullable().optional(),
+  pronunciation: PronunciationSchema.nullable().optional(),
   sources: z.array(EventSourceRefSchema).optional(),
   has_primary_source: z.boolean().optional(),
   extensions: z.record(z.string(), z.unknown()).optional(),
