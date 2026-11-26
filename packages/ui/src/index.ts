@@ -190,6 +190,7 @@ export type {
 } from './components/wiki/authErrorCopy.js';
 
 // UI-Only Helpers
+export * from './lib/archivalTreeModel.js';
 export * from './lib/ohmStyle.js';
 export * from './lib/scrollMemory.js';
 export * from './lib/searchNavigation.js';
@@ -198,3 +199,13 @@ export * from './lib/timelineScroll.js';
 export * from './lib/treeGestures.js';
 export * from './lib/treeNodeDisplay.js';
 export * from './lib/clientTelemetry.js';
+
+// Modular Tree Components
+export { TreeFocusDrawer } from './components/tree/TreeFocusDrawer.js';
+export type { TreeFocusDrawerProps } from './components/tree/TreeFocusDrawer.js';
+export { TreeOrthogonalCanvas } from './components/tree/TreeOrthogonalCanvas.js';
+export type { TreeOrthogonalCanvasProps } from './components/tree/TreeOrthogonalCanvas.js';
+export { TreePedigreeRoll } from './components/tree/TreePedigreeRoll.js';
+export type { TreePedigreeRollProps } from './components/tree/TreePedigreeRoll.js';
+export { TreeToolbar } from './components/tree/TreeToolbar.js';
+export type { TreeToolbarProps } from './components/tree/TreeToolbar.js';

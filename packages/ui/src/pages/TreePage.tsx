@@ -1,12 +1,20 @@
-import type { CoupleLink, GenBand, Person, PlacedNode, TreeBounds } from '@kinloom/core';
+import type { Person } from '@kinloom/core';
+import { buildPersonThumbMap, resolveDefaultBranchId } from '@kinloom/core';
+import type {
+  SemanticZoomLevel,
+  TreeLineageMode,
+  TreeViewSurface,
+} from '../lib/archivalTreeModel.js';
 import {
-  TREE_NODE_H as NODE_H,
-  TREE_NODE_W as NODE_W,
-  buildPersonThumbMap,
-  computeTreeLayout,
-  emptyTreeLayout,
-  resolveDefaultBranchId,
-} from '@kinloom/core';
+  ARCHIVAL_NODE_H,
+  ARCHIVAL_NODE_W,
+  buildArchivalTreeModel,
+  computeArchivalDiagramLayout,
+  computeLineageSpotlight,
+  isRedactedLivingPlaceholder,
+  resolveInitialTreePreferences,
+  resolveSemanticZoomLevel,
+} from '../lib/archivalTreeModel.js';
 import type { CanvasTransform, Point2D } from '../lib/treeGestures.js';
 import {
   clampPan,
@@ -19,278 +27,58 @@ import {
   midpointBetween,
   stepInertia,
 } from '../lib/treeGestures.js';
-import { Link, useSearchParams } from 'react-router-dom';
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import {
-  formatLineageGroupLabel,
-  formatTreeCardName,
-  formatTreeCardPlace,
-} from '../lib/treeNodeDisplay.js';
-import { initialsOf, resolveAssetUrl } from '../components/Atoms.js';
-import { CreateEntityModal } from '../components/wiki/CreateEntityModal.js';
+import { useSearchParams } from 'react-router-dom';
 import { ExplorerTopBar } from '../components/ExplorerTopBar.js';
+import { TreeFocusDrawer } from '../components/tree/TreeFocusDrawer.js';
+import { TreeOrthogonalCanvas } from '../components/tree/TreeOrthogonalCanvas.js';
+import { TreePedigreeRoll } from '../components/tree/TreePedigreeRoll.js';
+import { TreeToolbar } from '../components/tree/TreeToolbar.js';
+import { CreateEntityModal } from '../components/wiki/CreateEntityModal.js';
 import { useArchiveData } from '../context/ArchiveDataContext.js';
 
 const INITIAL_TRANSFORM: CanvasTransform = {
   pan: { x: 40, y: 40 },
-  zoom: 0.75,
+  zoom: 0.85,
 };
 
-interface PreparedEdge {
-  key: string;
-  d: string;
-  childId: string;
-  parentIds: string[];
-  isDirect: boolean;
+function readInitialPreferences(): {
+  readonly surface: TreeViewSurface;
+  readonly mode: TreeLineageMode;
+} {
+  const width = typeof window !== 'undefined' ? window.innerWidth : 1200;
+  return resolveInitialTreePreferences(width);
 }
-
-interface PreparedNode {
-  node: PlacedNode;
-  displayName: string;
-  lifespanPlace: string;
-  thumbUrl: string | null;
-  initials: string;
-}
-
-const TreeGenBandsImpl: React.FC<{ genBands: GenBand[]; maxX: number }> = ({
-  genBands,
-  maxX,
-}) => (
-  <g>
-    {genBands.map((b) => (
-      <g key={b.gen}>
-        <line
-          x1={16}
-          y1={b.y + NODE_H / 2}
-          x2={maxX - 16}
-          y2={b.y + NODE_H / 2}
-          stroke="#D6CEBE"
-          strokeWidth="1"
-          strokeDasharray="4 4"
-        />
-        <rect
-          x={12}
-          y={b.y + 10}
-          width={110}
-          height={28}
-          rx={3}
-          fill="#FCF9F2"
-          stroke="#827A6A"
-        />
-        <text
-          x={67}
-          y={b.y + 28}
-          textAnchor="middle"
-          fontSize="10"
-          fontWeight="600"
-          fontFamily="IBM Plex Mono, monospace"
-          fill="#4E4A42"
-        >
-          G{b.gen + 1} · {b.yearRange}
-        </text>
-      </g>
-    ))}
-  </g>
-);
-const TreeGenBands = React.memo(TreeGenBandsImpl);
-
-const TreeEdgeItemImpl: React.FC<{ d: string; isDirect: boolean; isLit: boolean }> = ({
-  d,
-  isDirect,
-  isLit,
-}) => {
-  const cls = `tree-edge${isDirect ? ' is-direct' : ''}${isLit ? ' is-lit' : ''}`;
-  return (
-    <path
-      className={cls}
-      d={d}
-      fill="none"
-      stroke={isDirect ? '#1B2A41' : '#827A6A'}
-      strokeWidth={isDirect ? 2.1 : 1.15}
-    />
-  );
-};
-const TreeEdgeItem = React.memo(TreeEdgeItemImpl);
-
-const TreeCoupleItemImpl: React.FC<{ couple: CoupleLink; isLit: boolean }> = ({
-  couple,
-  isLit,
-}) => (
-  <g className={`tree-couple${isLit ? ' is-lit' : ''}`}>
-    <line
-      x1={couple.a.x + NODE_W}
-      y1={couple.midY}
-      x2={couple.b.x}
-      y2={couple.midY}
-      stroke="#7A4612"
-      strokeWidth="2.2"
-    />
-    <line
-      x1={couple.midX}
-      y1={couple.midY}
-      x2={couple.midX}
-      y2={couple.a.y + NODE_H}
-      stroke="#7A4612"
-      strokeWidth="1.6"
-    />
-  </g>
-);
-const TreeCoupleItem = React.memo(TreeCoupleItemImpl);
-
-const TreeNodeItemImpl: React.FC<{
-  prepared: PreparedNode;
-  isSelected: boolean;
-  isLit: boolean;
-  onSelect: (person: Person, fromKeyboard: boolean) => void;
-}> = ({ prepared, isSelected, isLit, onSelect }) => {
-  const { node, displayName, lifespanPlace, thumbUrl, initials } = prepared;
-  const p = node.person;
-  let nodeStroke = '#827A6A';
-  let nodeStrokeWidth = 1.1;
-  if (isSelected) {
-    nodeStroke = '#7A4612';
-    nodeStrokeWidth = 2.4;
-  } else if (node.isDirect) {
-    nodeStroke = '#1B2A41';
-    nodeStrokeWidth = 1.8;
-  }
-
-  return (
-    // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role -- no native button exists inside SVG; this <g> already has tabIndex, aria-label, and Enter/Space handling
-    <g
-      role="button"
-      className={`tree-node-card${isLit ? ' is-lit' : ''}`}
-      tabIndex={0}
-      aria-label={`Inspect ${p.full_name}`}
-      transform={`translate(${node.x}, ${node.y})`}
-      onClick={(e) => {
-        e.stopPropagation();
-        onSelect(p, false);
-      }}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault();
-          onSelect(p, true);
-        }
-      }}
-    >
-      <rect
-        width={NODE_W}
-        height={NODE_H}
-        rx={3}
-        fill={isSelected ? '#1B2A41' : '#FCF9F2'}
-        stroke={nodeStroke}
-        strokeWidth={nodeStrokeWidth}
-        strokeDasharray={node.isDirect ? undefined : '4 2'}
-      />
-      <circle
-        cx={20}
-        cy={24}
-        r={12}
-        fill={isSelected ? '#7A4612' : '#EAE1CE'}
-        stroke={node.isDirect ? '#7A4612' : '#827A6A'}
-      />
-      {thumbUrl ? (
-        <image
-          href={thumbUrl}
-          x={8}
-          y={12}
-          width={24}
-          height={24}
-          preserveAspectRatio="xMidYMid slice"
-          clipPath="url(#tree-node-avatar-clip)"
-        />
-      ) : (
-        <text
-          x={20}
-          y={27}
-          textAnchor="middle"
-          fontSize="8.8"
-          fontWeight="700"
-          fontFamily="IBM Plex Mono, monospace"
-          fill={isSelected ? '#FCF9F2' : '#7A4612'}
-        >
-          {initials}
-        </text>
-      )}
-      <title>{p.full_name}</title>
-      <text
-        x={38}
-        y={19}
-        fontSize="10"
-        fontWeight="700"
-        fontFamily="Newsreader, Georgia, serif"
-        fill={isSelected ? '#FCF9F2' : '#1B2A41'}
-      >
-        {displayName}
-      </text>
-      <text
-        x={38}
-        y={33}
-        fontSize="8.2"
-        fontFamily="IBM Plex Mono, monospace"
-        fill={isSelected ? '#EAE1CE' : '#4E4A42'}
-      >
-        {lifespanPlace}
-      </text>
-    </g>
-  );
-};
-const TreeNodeItem = React.memo(TreeNodeItemImpl);
-
-const TreeMinimapImpl: React.FC<{
-  bounds: TreeBounds;
-  nodes: PlacedNode[];
-  familyName: string;
-  onFit: () => void;
-}> = ({ bounds, nodes, familyName, onFit }) => (
-  <button
-    type="button"
-    className="tree-minimap"
-    onMouseDown={(e) => {
-      e.stopPropagation();
-    }}
-    onClick={(e) => {
-      e.stopPropagation();
-      onFit();
-    }}
-    title={`Click minimap to recenter and fit the ${familyName} tree`}
-  >
-    <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.75rem', marginBottom: 4, textAlign: 'left', color: 'var(--surface-header)' }}>
-      MINIMAP · CLICK TO FIT
-    </div>
-    <svg
-      viewBox={`0 0 ${bounds.maxX} ${bounds.maxY}`}
-      width="100%"
-      height="68"
-      style={{ background: '#F5EFE2', border: '1px solid #D6CEBE' }}
-    >
-      {nodes.map((n) => (
-        <rect
-          key={n.person.id}
-          x={n.x}
-          y={n.y}
-          width={NODE_W}
-          height={NODE_H}
-          fill={n.isDirect ? '#1B2A41' : '#7A4612'}
-          opacity={n.isDirect ? 0.9 : 0.55}
-        />
-      ))}
-    </svg>
-  </button>
-);
-const TreeMinimap = React.memo(TreeMinimapImpl);
 
 export const TreePage: React.FC = () => {
   const { siteConfig, baseUrl, bundle, placesById, capabilities, loading } = useArchiveData();
+  const [searchParams] = useSearchParams();
+
   const personThumbMap = useMemo(
     () => (bundle ? buildPersonThumbMap(bundle) : new Map<string, string>()),
     [bundle],
   );
-  const [searchParams] = useSearchParams();
+
+  const initialPrefs = useMemo(readInitialPreferences, []);
+  const defaultBranchId = useMemo(() => resolveDefaultBranchId(siteConfig), [siteConfig]);
+
+  const [surface, setSurface] = useState<TreeViewSurface>(initialPrefs.surface);
+  const [mode, setMode] = useState<TreeLineageMode>(initialPrefs.mode);
+  const [branchFilter, setBranchFilter] = useState<string>('all');
+  const [selectedPersonId, setSelectedPersonId] = useState<string | null>(null);
+  const [expandedUnionIds, setExpandedUnionIds] = useState<ReadonlySet<string>>(
+    () => new Set<string>(),
+  );
+  const [semanticZoom, setSemanticZoom] = useState<SemanticZoomLevel>(
+    resolveSemanticZoomLevel(INITIAL_TRANSFORM.zoom),
+  );
+  const [liveAnnouncement, setLiveAnnouncement] = useState<string>('');
+  const [createPersonOpen, setCreatePersonOpen] = useState<boolean>(false);
+
   const containerRef = useRef<HTMLElement | null>(null);
   const stageRef = useRef<HTMLDivElement | null>(null);
   const appliedFocusSlugRef = useRef<string | null>(null);
+  const semanticZoomRef = useRef<SemanticZoomLevel>(semanticZoom);
 
   const transformRef = useRef<CanvasTransform>(INITIAL_TRANSFORM);
   const animationTargetRef = useRef<CanvasTransform | null>(null);
@@ -299,7 +87,13 @@ export const TreePage: React.FC = () => {
   const motionRafRef = useRef<number | null>(null);
   const inertiaSpeedRef = useRef(0);
   const zoomSettleTimerRef = useRef<number | null>(null);
-  const containerRectRef = useRef<{ left: number; top: number; width: number; height: number; ts: number }>({
+  const containerRectRef = useRef<{
+    left: number;
+    top: number;
+    width: number;
+    height: number;
+    ts: number;
+  }>({
     left: 0,
     top: 0,
     width: 1200,
@@ -308,7 +102,13 @@ export const TreePage: React.FC = () => {
   });
 
   const activePointersRef = useRef<Map<number, Point2D>>(new Map());
-  const dragStartRef = useRef<{ x: number; y: number; panX: number; panY: number; pointerType: string } | null>(null);
+  const dragStartRef = useRef<{
+    x: number;
+    y: number;
+    panX: number;
+    panY: number;
+    pointerType: string;
+  } | null>(null);
   const pinchStartRef = useRef<{
     startDist: number;
     startZoom: number;
@@ -320,11 +120,95 @@ export const TreePage: React.FC = () => {
   const lastCanvasTapRef = useRef<{ x: number; y: number; t: number } | null>(null);
   const didDragMoveRef = useRef(false);
 
-  const defaultBranchId = useMemo(() => resolveDefaultBranchId(siteConfig), [siteConfig]);
-  const [selectedPerson, setSelectedPerson] = useState<Person | null>(null);
-  const [branchFilter, setBranchFilter] = useState<string>('all');
-  const [mode, setMode] = useState<'direct' | 'full'>('full');
-  const [createPersonOpen, setCreatePersonOpen] = useState<boolean>(false);
+  const branchCounts = useMemo(() => {
+    const counts: Record<string, number> = { all: 0 };
+    if (!bundle) {
+      return counts;
+    }
+    for (const p of bundle.people) {
+      if (isRedactedLivingPlaceholder(p)) {
+        continue;
+      }
+      counts.all += 1;
+      const b = p.branch || defaultBranchId;
+      counts[b] = (counts[b] || 0) + 1;
+    }
+    return counts;
+  }, [bundle, defaultBranchId]);
+
+  const populatedBranches = useMemo(
+    () => siteConfig.branches.filter((b) => (branchCounts[b.id] || 0) > 0),
+    [siteConfig.branches, branchCounts],
+  );
+
+  const directModeBranchIds = useMemo(
+    () => siteConfig.branches.filter((b) => b.supportsDirectMode).map((b) => b.id),
+    [siteConfig.branches],
+  );
+
+  const activeBranchConfig = useMemo(
+    () => siteConfig.branches.find((b) => b.id === branchFilter),
+    [siteConfig.branches, branchFilter],
+  );
+
+  const activeBranchLabel =
+    branchFilter === 'all'
+      ? siteConfig.site.familyName
+      : (activeBranchConfig?.label ?? branchFilter);
+
+  const showDirectToggle =
+    branchFilter === 'all' || (activeBranchConfig?.supportsDirectMode ?? true);
+
+  const model = useMemo(() => {
+    if (!bundle) {
+      return buildArchivalTreeModel({
+        people: [],
+        kinship: [],
+        mode,
+        expandedUnionIds,
+      });
+    }
+    return buildArchivalTreeModel({
+      people: bundle.people,
+      kinship: bundle.kinship,
+      branchFilter: branchFilter === 'all' ? null : branchFilter,
+      defaultBranchId,
+      directModeBranchIds: directModeBranchIds.length > 0 ? directModeBranchIds : undefined,
+      mode,
+      expandedUnionIds,
+    });
+  }, [bundle, branchFilter, defaultBranchId, directModeBranchIds, mode, expandedUnionIds]);
+
+  const diagramLayout = useMemo(
+    () => computeArchivalDiagramLayout(model),
+    [model],
+  );
+
+  const selectedPerson = useMemo(
+    () => (selectedPersonId ? (model.peopleById.get(selectedPersonId) ?? null) : null),
+    [selectedPersonId, model.peopleById],
+  );
+
+  const spotlight = useMemo(
+    () =>
+      selectedPerson
+        ? computeLineageSpotlight({
+            selectedPersonId: selectedPerson.id,
+            model,
+            bundle,
+            placesById,
+          })
+        : null,
+    [selectedPerson, model, bundle, placesById],
+  );
+
+  const syncSemanticZoom = useCallback((zoom: number): void => {
+    const nextLevel = resolveSemanticZoomLevel(zoom);
+    if (nextLevel !== semanticZoomRef.current) {
+      semanticZoomRef.current = nextLevel;
+      setSemanticZoom(nextLevel);
+    }
+  }, []);
 
   const markZooming = useCallback((): void => {
     stageRef.current?.classList.add('is-zooming');
@@ -346,18 +230,22 @@ export const TreePage: React.FC = () => {
     inertiaSpeedRef.current = 0;
   }, []);
 
-  const writeTransformToDom = useCallback((next: CanvasTransform): void => {
-    const stage = stageRef.current;
-    if (stage) {
-      stage.style.transform = `translate3d(${next.pan.x}px, ${next.pan.y}px, 0) scale(${next.zoom})`;
-    }
-    const container = containerRef.current;
-    if (container) {
-      container.dataset.zoom = String(next.zoom);
-      container.dataset.panX = String(next.pan.x);
-      container.dataset.panY = String(next.pan.y);
-    }
-  }, []);
+  const writeTransformToDom = useCallback(
+    (next: CanvasTransform): void => {
+      const stage = stageRef.current;
+      if (stage) {
+        stage.style.transform = `translate3d(${next.pan.x}px, ${next.pan.y}px, 0) scale(${next.zoom})`;
+      }
+      const container = containerRef.current;
+      if (container) {
+        container.dataset.zoom = String(next.zoom);
+        container.dataset.panX = String(next.pan.x);
+        container.dataset.panY = String(next.pan.y);
+      }
+      syncSemanticZoom(next.zoom);
+    },
+    [syncSemanticZoom],
+  );
 
   const applyTransformNow = useCallback(
     (next: CanvasTransform): void => {
@@ -410,6 +298,35 @@ export const TreePage: React.FC = () => {
     [],
   );
 
+  // Only lock viewport scrolling when in 2D Diagram surface so Portrait Roll uses native vertical scroll
+  useEffect(() => {
+    if (surface === 'diagram') {
+      document.documentElement.classList.add('tree-viewport-lock');
+    } else {
+      document.documentElement.classList.remove('tree-viewport-lock');
+    }
+    return (): void => {
+      document.documentElement.classList.remove('tree-viewport-lock');
+    };
+  }, [surface]);
+
+  // Escape key clears active lineage focus
+  useEffect(() => {
+    if (!selectedPersonId || createPersonOpen) {
+      return undefined;
+    }
+    const onKeyDown = (e: KeyboardEvent): void => {
+      if (e.key === 'Escape') {
+        setSelectedPersonId(null);
+        setLiveAnnouncement('Lineage focus cleared.');
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return (): void => {
+      window.removeEventListener('keydown', onKeyDown);
+    };
+  }, [selectedPersonId, createPersonOpen]);
+
   const readContainerOffset = useCallback((forceRefresh: boolean) => {
     const now = performance.now();
     if (!forceRefresh && now - containerRectRef.current.ts < 250) {
@@ -427,92 +344,6 @@ export const TreePage: React.FC = () => {
     return next;
   }, []);
 
-  const branchCounts = useMemo(() => {
-    const counts: Record<string, number> = { all: 0 };
-    if (!bundle) {
-      return counts;
-    }
-    for (const p of bundle.people) {
-      if (p.is_living && p.full_name === 'Living') {
-        continue;
-      }
-      counts.all += 1;
-      const b = p.branch || defaultBranchId;
-      counts[b] = (counts[b] || 0) + 1;
-    }
-    return counts;
-  }, [bundle, defaultBranchId]);
-
-  const populatedBranches = useMemo(
-    () => siteConfig.branches.filter((b) => (branchCounts[b.id] || 0) > 0),
-    [siteConfig.branches, branchCounts],
-  );
-
-  const directModeBranchIds = useMemo(
-    () => siteConfig.branches.filter((b) => b.supportsDirectMode).map((b) => b.id),
-    [siteConfig.branches],
-  );
-
-  const activeBranchConfig = useMemo(
-    () => siteConfig.branches.find((b) => b.id === branchFilter),
-    [siteConfig.branches, branchFilter],
-  );
-
-  const activeBranchLabel =
-    branchFilter === 'all'
-      ? siteConfig.site.familyName
-      : (activeBranchConfig?.label ?? branchFilter);
-
-  const showDirectToggle =
-    branchFilter === 'all' || (activeBranchConfig?.supportsDirectMode ?? true);
-
-  const graph = useMemo(() => {
-    if (!bundle) {
-      return emptyTreeLayout();
-    }
-    return computeTreeLayout({
-      people: bundle.people,
-      kinship: bundle.kinship,
-      branchFilter: branchFilter === 'all' ? null : branchFilter,
-      defaultBranchId,
-      directModeBranchIds: directModeBranchIds.length > 0 ? directModeBranchIds : undefined,
-      mode,
-    });
-  }, [bundle, mode, branchFilter, defaultBranchId, directModeBranchIds]);
-
-  const preparedEdges = useMemo<PreparedEdge[]>(
-    () =>
-      graph.edges.map((ed) => {
-        const midY = (ed.fromY + ed.toY) / 2;
-        return {
-          key: `${ed.childId}-${ed.parentIds.join('+')}`,
-          d: `M ${ed.fromX} ${ed.fromY} C ${ed.fromX} ${midY}, ${ed.toX} ${midY}, ${ed.toX} ${ed.toY}`,
-          childId: ed.childId,
-          parentIds: ed.parentIds,
-          isDirect: ed.isDirect,
-        };
-      }),
-    [graph.edges],
-  );
-
-  const preparedNodes = useMemo<PreparedNode[]>(
-    () =>
-      graph.nodes.map((node) => {
-        const p = node.person;
-        const pl = p.primary_place_id ? placesById.get(p.primary_place_id) : undefined;
-        const rawThumb = personThumbMap.get(p.id) || p.portrait_url;
-        const cardPlace = formatTreeCardPlace(pl, placesById);
-        return {
-          node,
-          displayName: formatTreeCardName(p.full_name),
-          lifespanPlace: `${p.birth_year || '?'}–${p.death_year || '?'}${cardPlace ? ` · ${cardPlace}` : ''}`,
-          thumbUrl: rawThumb ? resolveAssetUrl(rawThumb, baseUrl) : null,
-          initials: initialsOf(p.full_name),
-        };
-      }),
-    [graph.nodes, placesById, personThumbMap, baseUrl],
-  );
-
   const clampTransform = useCallback(
     (next: CanvasTransform): CanvasTransform => {
       const el = containerRef.current;
@@ -522,10 +353,10 @@ export const TreePage: React.FC = () => {
       };
       return {
         zoom: next.zoom,
-        pan: clampPan(next.pan, next.zoom, graph.bounds, viewport),
+        pan: clampPan(next.pan, next.zoom, diagramLayout.bounds, viewport),
       };
     },
-    [graph.bounds],
+    [diagramLayout.bounds],
   );
 
   const animateToTransform = useCallback(
@@ -533,7 +364,9 @@ export const TreePage: React.FC = () => {
       const clampedTarget = clampTransform(target);
       if (
         durationMs <= 0 ||
-        (typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches)
+        (typeof window !== 'undefined' &&
+          typeof window.matchMedia === 'function' &&
+          window.matchMedia('(prefers-reduced-motion: reduce)').matches)
       ) {
         applyTransformNow(clampedTarget);
         return;
@@ -621,18 +454,23 @@ export const TreePage: React.FC = () => {
     const el = containerRef.current;
     const vw = el ? el.clientWidth : 1200;
     const vh = el ? el.clientHeight : 760;
-    const gw = Math.max(400, graph.bounds.maxX - graph.bounds.minX);
-    const gh = Math.max(400, graph.bounds.maxY - graph.bounds.minY);
-    const padX = vw < 640 ? 24 : 60;
-    const padY = vw < 640 ? 96 : 112;
-    const nextZoom = Math.max(0.24, Math.min(1, Math.min((vw - padX) / gw, (vh - padY) / gh)));
-    const nextX = (vw - gw * nextZoom) / 2;
-    const nextY = Math.max(vw < 640 ? 64 : 68, (vh - gh * nextZoom) / 2);
+    const gw = Math.max(400, diagramLayout.bounds.maxX - diagramLayout.bounds.minX);
+    const gh = Math.max(400, diagramLayout.bounds.maxY - diagramLayout.bounds.minY);
+    const padX = vw < 640 ? 24 : 56;
+    const padY = vw < 640 ? 92 : 108;
+    const nextZoom = Math.max(0.28, Math.min(1, Math.min((vw - padX) / gw, (vh - padY) / gh)));
+    const nextX = (vw - gw * nextZoom) / 2 - diagramLayout.bounds.minX * nextZoom;
+    const nextY = Math.max(vw < 640 ? 60 : 66, (vh - gh * nextZoom) / 2);
     return {
       zoom: Number(nextZoom.toFixed(2)),
       pan: { x: Math.round(nextX), y: Math.round(nextY) },
     };
-  }, [graph.bounds.maxX, graph.bounds.minX, graph.bounds.maxY, graph.bounds.minY]);
+  }, [
+    diagramLayout.bounds.maxX,
+    diagramLayout.bounds.minX,
+    diagramLayout.bounds.maxY,
+    diagramLayout.bounds.minY,
+  ]);
 
   const fitToViewport = useCallback(() => {
     applyTransformNow(computeFitTransform());
@@ -642,40 +480,99 @@ export const TreePage: React.FC = () => {
     animateToTransform(computeFitTransform(), 210);
   }, [animateToTransform, computeFitTransform]);
 
+  const handleToggleUnionSiblings = useCallback(
+    (unionId: string): void => {
+      setExpandedUnionIds((prev) => {
+        const next = new Set(prev);
+        if (next.has(unionId)) {
+          next.delete(unionId);
+          setLiveAnnouncement('Collapsed collateral siblings.');
+        } else {
+          next.add(unionId);
+          setLiveAnnouncement('Expanded collateral siblings.');
+        }
+        return next;
+      });
+    },
+    [],
+  );
+
+  const handleSelectPerson = useCallback(
+    (person: Person, fromKeyboard = false): void => {
+      if (surface === 'diagram' && !fromKeyboard && didDragMoveRef.current) {
+        return;
+      }
+      setSelectedPersonId(person.id);
+      setLiveAnnouncement(`Focused ${person.full_name} and traced direct lineage.`);
+    },
+    [surface],
+  );
+
+  const handleClearFocus = useCallback((): void => {
+    setSelectedPersonId(null);
+    setLiveAnnouncement('Lineage focus cleared.');
+  }, []);
+
+  // Handle ?focus=<slug> deep link and fit-to-viewport when layout/surface changes
   useLayoutEffect(() => {
-    if (graph.nodes.length === 0) {
+    if (!bundle) {
       return;
     }
     const focusSlug = searchParams.get('focus');
     if (focusSlug && appliedFocusSlugRef.current !== focusSlug) {
-      const targetNode = graph.nodes.find((n) => n.person.slug === focusSlug);
-      if (targetNode) {
+      const targetPerson = model.visiblePeople.find((p) => p.slug === focusSlug);
+      if (targetPerson) {
         appliedFocusSlugRef.current = focusSlug;
-        setSelectedPerson(targetNode.person);
-        const el = containerRef.current;
-        const vw = el ? el.clientWidth : 1200;
-        const vh = el ? el.clientHeight : 760;
-        const nextZoom = 0.85;
-        const cx = targetNode.x + NODE_W / 2;
-        const cy = targetNode.y + NODE_H / 2;
-        applyTransformNow({
-          zoom: nextZoom,
-          pan: {
-            x: Math.round(vw / 2 - cx * nextZoom),
-            y: Math.round(vh / 2 - cy * nextZoom),
-          },
-        });
-        return;
+        const containingUnion = model.unions.find((u) =>
+          u.collapsedSiblingIds.includes(targetPerson.id),
+        );
+        if (containingUnion) {
+          setExpandedUnionIds((prev) => new Set([...prev, containingUnion.id]));
+        }
+        setSelectedPersonId(targetPerson.id);
+
+        if (surface === 'diagram') {
+          const targetNode = diagramLayout.byId.get(targetPerson.id);
+          if (targetNode) {
+            const el = containerRef.current;
+            const vw = el ? el.clientWidth : 1200;
+            const vh = el ? el.clientHeight : 760;
+            const nextZoom = 0.9;
+            const cx = targetNode.x + ARCHIVAL_NODE_W / 2;
+            const cy = targetNode.y + ARCHIVAL_NODE_H / 2;
+            applyTransformNow({
+              zoom: nextZoom,
+              pan: {
+                x: Math.round(vw / 2 - cx * nextZoom),
+                y: Math.round(vh / 2 - cy * nextZoom),
+              },
+            });
+            return;
+          }
+        }
       }
     }
-    fitToViewport();
-  }, [fitToViewport, searchParams, graph.nodes, applyTransformNow]);
+
+    if (surface === 'diagram' && diagramLayout.nodes.length > 0) {
+      fitToViewport();
+    }
+  }, [
+    bundle,
+    searchParams,
+    model.visiblePeople,
+    model.unions,
+    surface,
+    diagramLayout.byId,
+    diagramLayout.nodes.length,
+    applyTransformNow,
+    fitToViewport,
+  ]);
 
   const isReady = !loading && Boolean(bundle);
 
   useEffect(() => {
     const el = containerRef.current;
-    if (!isReady || !el) {
+    if (!isReady || surface !== 'diagram' || !el) {
       return undefined;
     }
     const onWheel = (e: WheelEvent): void => {
@@ -700,22 +597,31 @@ export const TreePage: React.FC = () => {
     return (): void => {
       el.removeEventListener('wheel', onWheel);
     };
-  }, [isReady, cancelMotion, clampTransform, markZooming, readContainerOffset, scheduleTransform]);
+  }, [
+    isReady,
+    surface,
+    cancelMotion,
+    clampTransform,
+    markZooming,
+    readContainerOffset,
+    scheduleTransform,
+  ]);
 
   const setDraggingClass = useCallback((active: boolean): void => {
     containerRef.current?.classList.toggle('is-dragging', active);
   }, []);
 
-  useEffect(() => {
-    document.documentElement.classList.add('tree-viewport-lock');
-    return (): void => {
-      document.documentElement.classList.remove('tree-viewport-lock');
-    };
-  }, []);
-
   const handlePointerDown = useCallback(
     (e: React.PointerEvent<HTMLElement>): void => {
-      if (e.target instanceof Element && e.target.closest('button, a, .tree-toolbar, .tree-popover, .tree-controls, .tree-minimap')) {
+      if (surface !== 'diagram') {
+        return;
+      }
+      if (
+        e.target instanceof Element &&
+        e.target.closest(
+          'button, a, select, .tree-toolbar, .tree-popover, .tree-controls, .tree-diagram-sibling-btn',
+        )
+      ) {
         return;
       }
       const wasFastCoasting = inertiaSpeedRef.current > 0.15;
@@ -757,12 +663,12 @@ export const TreePage: React.FC = () => {
         markZooming();
       }
     },
-    [cancelMotion, markZooming, readContainerOffset, setDraggingClass],
+    [surface, cancelMotion, markZooming, readContainerOffset, setDraggingClass],
   );
 
   const handlePointerMoveNative = useCallback(
     (e: PointerEvent): void => {
-      if (!activePointersRef.current.has(e.pointerId)) {
+      if (surface !== 'diagram' || !activePointersRef.current.has(e.pointerId)) {
         return;
       }
       const offset = containerRectRef.current;
@@ -824,7 +730,7 @@ export const TreePage: React.FC = () => {
         scheduleTransform(next);
       }
     },
-    [clampTransform, markZooming, scheduleTransform],
+    [surface, clampTransform, markZooming, scheduleTransform],
   );
 
   const handlePointerUpNative = useCallback(
@@ -878,7 +784,9 @@ export const TreePage: React.FC = () => {
             }
           }
         } else if (!isCancel && !moved && e.pointerType === 'touch' && releasePt) {
-          const isOnNode = e.target instanceof Element && Boolean(e.target.closest('.tree-node-card'));
+          const isOnNode =
+            e.target instanceof Element &&
+            Boolean(e.target.closest('.tree-node-card, .tree-diagram-sibling-btn'));
           const prevTap = lastCanvasTapRef.current;
           if (!isOnNode && prevTap && now - prevTap.t < 300 && distanceBetween(prevTap, releasePt) < 34) {
             lastCanvasTapRef.current = null;
@@ -915,6 +823,9 @@ export const TreePage: React.FC = () => {
   );
 
   useEffect(() => {
+    if (surface !== 'diagram') {
+      return undefined;
+    }
     const onWindowBlur = (): void => {
       activePointersRef.current.clear();
       dragStartRef.current = null;
@@ -932,310 +843,215 @@ export const TreePage: React.FC = () => {
       window.removeEventListener('pointercancel', handlePointerUpNative);
       window.removeEventListener('blur', onWindowBlur);
     };
-  }, [handlePointerMoveNative, handlePointerUpNative, setDraggingClass]);
-
-  const handleSelectPerson = useCallback((person: Person, fromKeyboard: boolean): void => {
-    if (!fromKeyboard && didDragMoveRef.current) {
-      return;
-    }
-    setSelectedPerson(person);
-  }, []);
-
-  const highlightedIds = useMemo(() => {
-    if (!selectedPerson) {
-      return null;
-    }
-    const set = new Set<string>([selectedPerson.id]);
-    const walkUp = (id: string): void => {
-      for (const pid of graph.parentMap.get(id) || []) {
-        if (!set.has(pid)) {
-          set.add(pid);
-          walkUp(pid);
-        }
-      }
-    };
-    const walkDown = (id: string): void => {
-      for (const cid of graph.childMap.get(id) || []) {
-        if (!set.has(cid)) {
-          set.add(cid);
-          walkDown(cid);
-        }
-      }
-    };
-    walkUp(selectedPerson.id);
-    walkDown(selectedPerson.id);
-    return set;
-  }, [selectedPerson, graph.parentMap, graph.childMap]);
+  }, [surface, handlePointerMoveNative, handlePointerUpNative, setDraggingClass]);
 
   const stageStyle = useMemo(
     () => ({
-      width: graph.bounds.maxX,
-      height: graph.bounds.maxY,
+      width: diagramLayout.bounds.maxX - diagramLayout.bounds.minX,
+      height: diagramLayout.bounds.maxY - diagramLayout.bounds.minY,
     }),
-    [graph.bounds.maxX, graph.bounds.maxY],
+    [
+      diagramLayout.bounds.maxX,
+      diagramLayout.bounds.minX,
+      diagramLayout.bounds.maxY,
+      diagramLayout.bounds.minY,
+    ],
   );
 
   if (loading || !bundle) {
     return (
       <div>
         <ExplorerTopBar />
-        <main className="index-page">Loading 2D spatial-temporal canvas…</main>
+        <main className="index-page">
+          <output className="archive-loading-shell" aria-live="polite">
+            <span className="archive-loading-spinner" aria-hidden="true" />
+            <span>Loading family lineage tree…</span>
+          </output>
+        </main>
       </div>
     );
   }
 
-  const hasSelection = highlightedIds !== null;
-  const activeCount = branchCounts[branchFilter] ?? graph.nodes.length;
+  const activeCount = branchCounts[branchFilter] ?? model.totalVisibleCount;
 
   return (
-    <div className="tree-shell">
+    <div className={`tree-shell tree-shell-${surface}`}>
       <ExplorerTopBar />
-      {/* oxlint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-noninteractive-element-interactions -- pan/zoom canvas */}
+      {/* oxlint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-noninteractive-element-interactions -- interactive pan/zoom container clears selection on background click */}
       <main
         ref={containerRef}
-        className="tree-page"
+        className={`tree-page tree-page-${surface}`}
+        data-surface={surface}
+        data-mode={model.effectiveMode}
         onPointerDown={handlePointerDown}
         onClick={(e) => {
-          if (e.target instanceof Element && e.target.closest('button, a, .tree-toolbar, .tree-popover, .tree-controls, .tree-minimap')) {
+          if (surface !== 'diagram') {
+            return;
+          }
+          if (
+            e.target instanceof Element &&
+            e.target.closest(
+              'button, a, select, .tree-toolbar, .tree-popover, .tree-controls, .tree-node-card, .tree-diagram-sibling-btn',
+            )
+          ) {
             return;
           }
           if (!didDragMoveRef.current) {
-            setSelectedPerson(null);
+            setSelectedPersonId(null);
           }
         }}
       >
-        <div className="tree-toolbar">
-          {populatedBranches.length > 1 && (
-            <select
-              className="pill-btn tree-branch-select"
-              aria-label="Select family branch for 2D Tree"
-              value={branchFilter}
-              onChange={(e) => {
-                setBranchFilter(e.target.value);
-                setSelectedPerson(null);
-              }}
-            >
-              <option value="all">All Branches ({branchCounts.all || 0})</option>
-              {populatedBranches.map((b) => (
-                <option key={b.id} value={b.id}>
-                  {b.label} ({branchCounts[b.id] || 0})
-                </option>
-              ))}
-            </select>
-          )}
-          {showDirectToggle && (
-            <>
-              <button
-                type="button"
-                className={`pill-btn ${mode === 'full' ? 'active' : ''}`}
-                onClick={() => {
-                  setMode('full');
-                }}
-              >
-                Full Tree ({activeCount})
-              </button>
-              <button
-                type="button"
-                className={`pill-btn ${mode === 'direct' ? 'active' : ''}`}
-                onClick={() => {
-                  setMode('direct');
-                }}
-              >
-                Direct Spine
-              </button>
-            </>
-          )}
-          {capabilities.canEdit && (
-            <button
-              type="button"
-              className="pill-btn tree-add-person-btn"
-              onClick={() => {
-                setCreatePersonOpen(true);
-              }}
-            >
-              + Add Person
-            </button>
-          )}
-        </div>
+        <h1 className="visually-hidden">{activeBranchLabel} Family Tree</h1>
 
-        <div ref={stageRef} className="tree-stage" style={stageStyle}>
-          <svg
-            className={`tree-canvas${hasSelection ? ' has-selection' : ''}`}
-            width={graph.bounds.maxX}
-            height={graph.bounds.maxY}
-            viewBox={`0 0 ${graph.bounds.maxX} ${graph.bounds.maxY}`}
-            role="img"
-            aria-label={`Hierarchical 2D ${activeBranchLabel} family tree canvas`}
-          >
-            <defs>
-              <clipPath id="tree-node-avatar-clip">
-                <circle cx="20" cy="24" r="12" />
-              </clipPath>
-            </defs>
+        <TreeToolbar
+          populatedBranches={populatedBranches}
+          branchCounts={branchCounts}
+          branchFilter={branchFilter}
+          onBranchFilterChange={(nextBranch) => {
+            setBranchFilter(nextBranch);
+            setSelectedPersonId(null);
+            setExpandedUnionIds(new Set());
+          }}
+          showDirectToggle={showDirectToggle}
+          mode={model.effectiveMode}
+          activeCount={activeCount}
+          onModeChange={(nextMode) => {
+            setMode(nextMode);
+            setExpandedUnionIds(new Set());
+          }}
+          surface={surface}
+          onSurfaceChange={(nextSurface) => {
+            setSurface(nextSurface);
+          }}
+          canEdit={capabilities.canEdit}
+          onAddPerson={() => {
+            setCreatePersonOpen(true);
+          }}
+        />
 
-            <TreeGenBands genBands={graph.genBands} maxX={graph.bounds.maxX} />
+        {surface === 'roll' ? (
+          <TreePedigreeRoll
+            model={model}
+            spotlight={spotlight}
+            selectedPersonId={selectedPerson?.id ?? null}
+            personThumbMap={personThumbMap}
+            baseUrl={baseUrl}
+            familyLabel={activeBranchLabel}
+            onSelectPerson={(person) => {
+              handleSelectPerson(person, true);
+            }}
+            onToggleUnionSiblings={handleToggleUnionSiblings}
+          />
+        ) : (
+          <>
+            <div ref={stageRef} className="tree-stage" style={stageStyle}>
+              <TreeOrthogonalCanvas
+                layout={diagramLayout}
+                spotlight={spotlight}
+                selectedPersonId={selectedPerson?.id ?? null}
+                semanticZoom={semanticZoom}
+                activeBranchLabel={activeBranchLabel}
+                personThumbMap={personThumbMap}
+                baseUrl={baseUrl}
+                onSelectPerson={handleSelectPerson}
+                onToggleUnionSiblings={handleToggleUnionSiblings}
+              />
+            </div>
 
-            <g>
-              {preparedEdges.map((ed) => {
-                const isLit = Boolean(
-                  highlightedIds &&
-                    highlightedIds.has(ed.childId) &&
-                    ed.parentIds.some((pid) => highlightedIds.has(pid)),
-                );
-                return (
-                  <TreeEdgeItem
-                    key={ed.key}
-                    d={ed.d}
-                    isDirect={ed.isDirect}
-                    isLit={isLit}
-                  />
-                );
-              })}
-            </g>
-
-            <g>
-              {graph.couples.map((c) => {
-                const isLit = Boolean(
-                  highlightedIds &&
-                    (highlightedIds.has(c.a.person.id) || highlightedIds.has(c.b.person.id)),
-                );
-                return (
-                  <TreeCoupleItem
-                    key={`${c.a.person.id}-${c.b.person.id}`}
-                    couple={c}
-                    isLit={isLit}
-                  />
-                );
-              })}
-            </g>
-
-            <g>
-              {preparedNodes.map((prepared) => {
-                const pid = prepared.node.person.id;
-                const isSelected = selectedPerson?.id === pid;
-                const isLit = Boolean(highlightedIds?.has(pid));
-                return (
-                  <TreeNodeItem
-                    key={pid}
-                    prepared={prepared}
-                    isSelected={isSelected}
-                    isLit={isLit}
-                    onSelect={handleSelectPerson}
-                  />
-                );
-              })}
-            </g>
-          </svg>
-        </div>
-
-        {selectedPerson && (
-          <div className="tree-popover">
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.78rem', color: 'var(--radar-copresence)' }}>
-                {formatLineageGroupLabel(selectedPerson.lineage_group)}
-              </span>
+            <div className="tree-controls" role="group" aria-label="Diagram zoom controls">
               <button
                 type="button"
                 className="pill-btn"
-                style={{ padding: '2px 7px', fontSize: '0.78rem' }}
+                aria-label="Zoom in"
                 onClick={() => {
-                  setSelectedPerson(null);
+                  const el = containerRef.current;
+                  const focal = {
+                    x: (el?.clientWidth ?? 800) / 2,
+                    y: (el?.clientHeight ?? 600) / 2,
+                  };
+                  const base = animationTargetRef.current ?? transformRef.current;
+                  const next = computeZoomAroundPoint({
+                    currentPan: base.pan,
+                    currentZoom: base.zoom,
+                    targetZoom: base.zoom * 1.28,
+                    focalPoint: focal,
+                  });
+                  animateToTransform(next, 180);
                 }}
               >
-                ✕
+                +
+              </button>
+              <button
+                type="button"
+                className="pill-btn"
+                aria-label="Zoom out"
+                onClick={() => {
+                  const el = containerRef.current;
+                  const focal = {
+                    x: (el?.clientWidth ?? 800) / 2,
+                    y: (el?.clientHeight ?? 600) / 2,
+                  };
+                  const base = animationTargetRef.current ?? transformRef.current;
+                  const next = computeZoomAroundPoint({
+                    currentPan: base.pan,
+                    currentZoom: base.zoom,
+                    targetZoom: base.zoom / 1.28,
+                    focalPoint: focal,
+                  });
+                  animateToTransform(next, 180);
+                }}
+              >
+                −
+              </button>
+              <button type="button" className="pill-btn" onClick={animateFitToViewport}>
+                Fit
+              </button>
+              <button
+                type="button"
+                className="pill-btn"
+                aria-label="Reset zoom to 100%"
+                onClick={() => {
+                  const el = containerRef.current;
+                  const focal = {
+                    x: (el?.clientWidth ?? 800) / 2,
+                    y: (el?.clientHeight ?? 600) / 2,
+                  };
+                  const base = animationTargetRef.current ?? transformRef.current;
+                  animateToTransform(
+                    computeZoomAroundPoint({
+                      currentPan: base.pan,
+                      currentZoom: base.zoom,
+                      targetZoom: 1,
+                      focalPoint: focal,
+                    }),
+                    180,
+                  );
+                }}
+              >
+                1:1
               </button>
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '6px 0' }}>
-              {(personThumbMap.get(selectedPerson.id) || selectedPerson.portrait_url) && (
-                <img
-                  src={resolveAssetUrl(
-                    personThumbMap.get(selectedPerson.id) || selectedPerson.portrait_url || '',
-                    baseUrl,
-                  )}
-                  alt={selectedPerson.full_name}
-                  style={{ width: 46, height: 56, objectFit: 'cover', borderRadius: 2, border: '1px solid var(--border-control)', flexShrink: 0 }}
-                />
-              )}
-              <div>
-                <h2 style={{ fontFamily: 'var(--font-serif)', margin: '0 0 2px', color: 'var(--surface-header)', fontSize: '1.18rem' }}>
-                  {selectedPerson.full_name}
-                </h2>
-                <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.8rem', color: 'var(--radar-copresence)' }}>
-                  {selectedPerson.birth_edtf || '?'} — {selectedPerson.death_edtf || '?'}
-                </div>
-              </div>
-            </div>
-            <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', marginBottom: 10 }}>
-              Primary place:{' '}
-              {selectedPerson.primary_place_id
-                ? placesById.get(selectedPerson.primary_place_id)?.full_name
-                : 'Unrecorded'}
-              {(selectedPerson.media_count || 0) > 0 && (
-                <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.74rem', marginTop: 4, color: 'var(--surface-header)' }}>
-                  {selectedPerson.media_count} archival {selectedPerson.media_count === 1 ? 'photo/scan' : 'photos & scans'} attached
-                </div>
-              )}
-            </div>
-            <Link
-              to={`/person/${selectedPerson.slug}`}
-              className="pill-btn active"
-              style={{ display: 'inline-block', textDecoration: 'none' }}
-            >
-              Open Timeline →
-            </Link>
-          </div>
+          </>
         )}
 
-        <TreeMinimap
-          bounds={graph.bounds}
-          nodes={graph.nodes}
-          familyName={siteConfig.site.familyName}
-          onFit={animateFitToViewport}
-        />
+        {selectedPerson && (
+          <TreeFocusDrawer
+            person={selectedPerson}
+            model={model}
+            spotlight={spotlight}
+            placesById={placesById}
+            thumbUrl={personThumbMap.get(selectedPerson.id) || selectedPerson.portrait_url || null}
+            baseUrl={baseUrl}
+            onSelectPerson={(person) => {
+              handleSelectPerson(person, true);
+            }}
+            onClearFocus={handleClearFocus}
+          />
+        )}
 
-        <div className="tree-controls">
-          <button
-            type="button"
-            className="pill-btn"
-            aria-label="Zoom in"
-            onClick={() => {
-              const el = containerRef.current;
-              const focal = { x: (el?.clientWidth ?? 800) / 2, y: (el?.clientHeight ?? 600) / 2 };
-              const base = animationTargetRef.current ?? transformRef.current;
-              const next = computeZoomAroundPoint({
-                currentPan: base.pan,
-                currentZoom: base.zoom,
-                targetZoom: base.zoom * 1.28,
-                focalPoint: focal,
-              });
-              animateToTransform(next, 180);
-            }}
-          >
-            +
-          </button>
-          <button
-            type="button"
-            className="pill-btn"
-            aria-label="Zoom out"
-            onClick={() => {
-              const el = containerRef.current;
-              const focal = { x: (el?.clientWidth ?? 800) / 2, y: (el?.clientHeight ?? 600) / 2 };
-              const base = animationTargetRef.current ?? transformRef.current;
-              const next = computeZoomAroundPoint({
-                currentPan: base.pan,
-                currentZoom: base.zoom,
-                targetZoom: base.zoom / 1.28,
-                focalPoint: focal,
-              });
-              animateToTransform(next, 180);
-            }}
-          >
-            −
-          </button>
-          <button type="button" className="pill-btn" onClick={animateFitToViewport}>
-            Fit
-          </button>
-        </div>
+        <output className="visually-hidden" aria-live="polite">
+          {liveAnnouncement}
+        </output>
       </main>
       <CreateEntityModal
         open={createPersonOpen}

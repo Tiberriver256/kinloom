@@ -59,6 +59,18 @@ select {
   outline-offset: 2px;
 }
 
+.visually-hidden:where(:not(:focus-within, :active)) {
+  position: absolute !important;
+  clip-path: inset(50%) !important;
+  overflow: hidden !important;
+  width: 1px !important;
+  height: 1px !important;
+  margin: -1px !important;
+  padding: 0 !important;
+  border: 0 !important;
+  white-space: nowrap !important;
+}
+
 /* ==========================================================================
    Global Unboxed Hairline Top Bar (Cotton Paper — Zero Dark Slab)
    ========================================================================== */
@@ -1770,7 +1782,7 @@ html.tree-viewport-lock body {
 }
 
 .kinloom-app:has(.map-shell),
-.kinloom-app:has(.tree-shell) {
+.kinloom-app:has(.tree-shell-diagram) {
   height: 100dvh;
   overflow: hidden;
 }
@@ -1780,15 +1792,22 @@ html.tree-viewport-lock body {
   flex-direction: column;
   flex: 1 1 auto;
   min-height: 0;
+}
+
+.tree-shell-diagram {
   overflow: hidden;
 }
 
-.tree-shell .topbar {
+.tree-shell-roll {
+  overflow: visible;
+}
+
+.tree-shell-diagram .topbar {
   position: relative;
   flex: 0 0 auto;
 }
 
-.tree-shell .tree-page {
+.tree-shell-diagram .tree-page {
   flex: 1 1 auto;
   min-height: 0;
   height: auto;
@@ -1796,10 +1815,13 @@ html.tree-viewport-lock body {
 
 .tree-page {
   position: relative;
+  background-color: var(--surface-canvas);
+}
+
+.tree-page-diagram {
   height: calc(100vh - var(--topbar-height));
   height: calc(100dvh - var(--topbar-height));
   overflow: hidden;
-  background-color: var(--surface-canvas);
   user-select: none;
   -webkit-user-select: none;
   -webkit-touch-callout: none;
@@ -1807,6 +1829,13 @@ html.tree-viewport-lock body {
   overscroll-behavior: none;
   touch-action: none;
   cursor: grab;
+}
+
+.tree-page-roll {
+  min-height: calc(100dvh - var(--topbar-height));
+  overflow: visible;
+  touch-action: pan-y;
+  cursor: auto;
 }
 
 .tree-page.is-dragging {
@@ -1832,78 +1861,168 @@ html.tree-viewport-lock body {
 }
 
 .tree-canvas .tree-edge {
-  opacity: 0.6;
+  opacity: 0.68;
+  transition: opacity 0.16s ease;
 }
 
 .tree-canvas .tree-edge.is-direct {
-  opacity: 0.92;
+  opacity: 0.94;
 }
 
 .tree-canvas.has-selection .tree-edge {
-  opacity: 0.12;
+  opacity: 0.14;
 }
 
-.tree-canvas.has-selection .tree-edge.is-lit {
-  opacity: 0.6;
-}
-
+.tree-canvas.has-selection .tree-edge.is-lit,
 .tree-canvas.has-selection .tree-edge.is-lit.is-direct {
-  opacity: 0.92;
+  opacity: 1;
 }
 
 .tree-canvas .tree-couple {
   opacity: 1;
+  transition: opacity 0.16s ease;
 }
 
 .tree-canvas.has-selection .tree-couple {
-  opacity: 0.15;
+  opacity: 0.16;
 }
 
 .tree-canvas.has-selection .tree-couple.is-lit {
   opacity: 1;
 }
 
-.tree-canvas .tree-node-card {
+.tree-canvas .tree-node-card,
+.tree-canvas .tree-diagram-sibling-btn {
   cursor: pointer;
   opacity: 1;
+  transition: opacity 0.16s ease;
+}
+
+.tree-canvas .tree-node-card:focus-visible,
+.tree-canvas .tree-diagram-sibling-btn:focus-visible {
+  outline: 2px solid var(--action-focus);
+  outline-offset: 2px;
 }
 
 .tree-canvas.has-selection .tree-node-card {
-  opacity: 0.2;
+  opacity: 0.16;
 }
 
 .tree-canvas.has-selection .tree-node-card.is-lit {
   opacity: 1;
 }
 
+.tree-canvas .tree-diagram-early-strip,
+.tree-canvas .tree-diagram-sibling-toggle {
+  transition: opacity 0.16s ease;
+}
+
+.tree-canvas.has-selection .tree-diagram-early-strip {
+  opacity: 0.2;
+}
+
+.tree-canvas.has-selection .tree-diagram-early-strip.is-lit {
+  opacity: 1;
+}
+
+.tree-canvas.has-selection .tree-diagram-sibling-toggle {
+  opacity: 0.24;
+}
+
+.tree-canvas.has-selection .tree-diagram-sibling-toggle.is-lit {
+  opacity: 1;
+}
+
 .tree-toolbar {
   position: absolute;
-  top: 14px;
-  left: 18px;
+  top: 12px;
+  left: 16px;
   z-index: 20;
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: center;
-  gap: 8px 12px;
-  background: rgba(252, 249, 242, 0.94);
+  gap: 8px;
+  max-width: calc(100% - 32px);
+  overflow-x: auto;
+  scrollbar-width: none;
+  background: rgba(252, 249, 242, 0.96);
   border: 1px solid var(--border-control);
-  border-radius: var(--radius-sm);
-  padding: 6px 12px;
+  border-radius: 999px;
+  padding: 5px 10px;
   box-shadow: var(--shadow-print);
 }
 
-.tree-toolbar .tree-add-person-btn {
-  padding: 3px 9px;
-  border: 1px solid var(--border-control);
-  border-radius: var(--radius-sm);
-  background: var(--surface-card);
+.tree-toolbar::-webkit-scrollbar {
+  display: none;
+}
+
+.tree-page-roll .tree-toolbar {
+  position: sticky;
+  top: calc(var(--topbar-height) + 8px);
+  left: auto;
+  margin: 10px auto 0;
+  width: fit-content;
+  max-width: calc(100% - 20px);
+}
+
+.tree-segmented {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 999px;
+  background: var(--surface-linen);
+  border: 1px solid var(--border-decorative);
+  flex-shrink: 0;
+}
+
+.tree-segmented .tree-seg-btn {
+  border-radius: 999px;
+  padding: 4px 11px;
+  font-size: 0.78rem;
+  line-height: 1.25;
+  white-space: nowrap;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-secondary);
+}
+
+.tree-segmented .tree-seg-btn:hover {
   color: var(--surface-header);
+}
+
+.tree-segmented .tree-seg-btn.active {
+  background: var(--surface-header);
+  color: var(--text-inverse);
+  border-color: var(--surface-header);
   font-weight: 600;
 }
 
+.tree-toolbar .tree-branch-select {
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 0.78rem;
+  border: 1px solid var(--border-control);
+  background: var(--surface-card);
+  color: var(--text-primary);
+  flex-shrink: 0;
+}
+
+.tree-toolbar .tree-add-person-btn {
+  padding: 4px 11px;
+  border: 1px solid var(--accent-primary);
+  border-radius: 999px;
+  background: var(--surface-card);
+  color: var(--accent-primary);
+  font-weight: 600;
+  font-size: 0.78rem;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
 .tree-toolbar .tree-add-person-btn:hover {
-  background: var(--surface-linen);
-  border-color: var(--surface-header);
+  background: var(--accent-primary);
+  color: var(--text-inverse);
 }
 
 .tree-controls {
@@ -1917,14 +2036,17 @@ html.tree-viewport-lock body {
 }
 
 .tree-controls .pill-btn {
-  min-width: 38px;
-  min-height: 36px;
+  min-width: 40px;
+  min-height: 38px;
   text-align: center;
-  background: rgba(252, 249, 242, 0.94);
+  background: rgba(252, 249, 242, 0.96);
   border: 1px solid var(--border-control);
   border-radius: var(--radius-sm);
   box-shadow: var(--shadow-card);
   touch-action: manipulation;
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  font-weight: 600;
 }
 
 .tree-minimap {
@@ -1946,12 +2068,659 @@ html.tree-viewport-lock body {
   top: 16px;
   right: 18px;
   z-index: 25;
-  width: 296px;
+  width: 312px;
   background: var(--surface-card);
   border: 1px solid var(--border-control);
-  border-radius: var(--radius-sm);
-  padding: 15px 17px;
+  border-radius: var(--radius-md);
+  padding: 14px 16px;
   box-shadow: var(--shadow-active);
+}
+
+.tree-page-roll .tree-focus-drawer {
+  position: fixed;
+  top: auto;
+  right: 18px;
+  bottom: 18px;
+  z-index: 35;
+}
+
+.tree-focus-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.tree-focus-eyebrow-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.tree-focus-gen-tag {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 2px;
+  background: var(--surface-header);
+  color: var(--text-inverse);
+}
+
+.tree-focus-role-label {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--accent-primary);
+}
+
+.tree-focus-living-pill {
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--badge-cited-bg);
+  color: var(--badge-cited-fg);
+}
+
+.tree-focus-close-btn {
+  min-width: 32px;
+  min-height: 32px;
+  padding: 2px 7px;
+  font-size: 0.8rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.tree-focus-breadcrumb {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 3px 5px;
+  margin-bottom: 8px;
+  padding: 4px 7px;
+  border-radius: 3px;
+  background: var(--surface-linen);
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  color: var(--text-secondary);
+}
+
+.tree-focus-crumb-sep {
+  color: var(--border-control);
+}
+
+.tree-focus-crumb-btn {
+  background: transparent;
+  border: none;
+  padding: 2px 3px;
+  color: var(--accent-primary);
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: underline dotted;
+  text-underline-offset: 2px;
+}
+
+.tree-focus-crumb-btn:hover {
+  text-decoration-style: solid;
+}
+
+.tree-focus-crumb-current {
+  font-weight: 700;
+  color: var(--surface-header);
+}
+
+.tree-focus-identity {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 6px 0 8px;
+}
+
+.tree-focus-portrait {
+  width: 46px;
+  height: 54px;
+  object-fit: cover;
+  border-radius: 2px;
+  border: 1px solid var(--border-control);
+  flex-shrink: 0;
+  aspect-ratio: 46 / 54;
+}
+
+.tree-focus-monogram {
+  width: 44px;
+  height: 44px;
+  border-radius: 999px;
+  background: var(--surface-linen);
+  border: 1.5px solid var(--accent-primary);
+  color: var(--accent-primary);
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.tree-focus-identity-copy {
+  min-width: 0;
+}
+
+.tree-focus-name {
+  font-family: var(--font-serif);
+  margin: 0 0 2px;
+  color: var(--surface-header);
+  font-size: 1.12rem;
+  line-height: 1.24;
+}
+
+.tree-focus-dates {
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  color: var(--accent-primary);
+}
+
+.tree-focus-relation {
+  font-family: var(--font-serif);
+  font-style: italic;
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+  margin-top: 2px;
+}
+
+.tree-focus-meta {
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+  margin-bottom: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.tree-focus-meta-key {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.tree-focus-kin-summary {
+  font-family: var(--font-mono);
+  font-size: 0.74rem;
+  color: var(--surface-header);
+}
+
+.tree-focus-media-count {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  color: var(--text-secondary);
+}
+
+.tree-focus-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.tree-focus-timeline-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+  min-height: 36px;
+}
+
+.tree-focus-clear-btn {
+  min-height: 36px;
+  border: 1px solid var(--border-control);
+  background: var(--surface-canvas);
+  color: var(--text-primary);
+}
+
+/* Portrait Pedigree Roll ("The Living Spine") */
+.tree-roll-viewport {
+  width: 100%;
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 10px 14px 128px;
+}
+
+.tree-gen-jump-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding: 6px 2px 10px;
+  margin-bottom: 4px;
+}
+
+.tree-gen-jump-bar::-webkit-scrollbar {
+  display: none;
+}
+
+.tree-gen-jump-chip {
+  flex-shrink: 0;
+  min-width: 40px;
+  min-height: 32px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border-control);
+  background: var(--surface-card);
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: 0.74rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.tree-gen-jump-chip:hover {
+  border-color: var(--accent-primary);
+  color: var(--accent-primary);
+}
+
+.tree-roll-scroll {
+  position: relative;
+}
+
+.tree-roll-spine-rail {
+  position: absolute;
+  left: 50%;
+  top: 24px;
+  bottom: 24px;
+  width: 2px;
+  transform: translateX(-50%);
+  background: var(--border-decorative);
+  pointer-events: none;
+}
+
+.tree-roll-generations {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  position: relative;
+}
+
+.tree-roll-generation {
+  scroll-margin-top: 120px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+.tree-roll-gen-header {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 12px;
+  border-radius: 999px;
+  background: var(--surface-card);
+  border: 1px solid var(--border-control);
+  z-index: 2;
+}
+
+.tree-roll-gen-badge {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--surface-header);
+}
+
+.tree-roll-gen-years {
+  font-family: var(--font-mono);
+  font-size: 0.74rem;
+  color: var(--text-secondary);
+}
+
+.tree-roll-gen-units {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  z-index: 2;
+}
+
+.tree-roll-gen-connector {
+  width: 2px;
+  height: 16px;
+  background: var(--surface-header);
+  opacity: 0.65;
+}
+
+.tree-roll-unit {
+  width: 100%;
+  background: var(--surface-card);
+  border: 1px solid var(--border-decorative);
+  border-radius: 6px;
+  padding: 10px;
+  box-shadow: var(--shadow-card);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  transition: opacity 0.16s ease;
+}
+
+.tree-roll-unit.is-direct {
+  border-color: var(--border-control);
+  border-left: 4px solid var(--surface-header);
+}
+
+.tree-roll-unit.is-dimmed {
+  opacity: 0.28;
+}
+
+.tree-roll-couple-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+  justify-content: center;
+  gap: 8px;
+}
+
+.tree-roll-couple-row.is-single {
+  justify-content: center;
+}
+
+.tree-roll-union-hub {
+  align-self: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 999px;
+  background: var(--surface-card);
+  border: 1.8px solid var(--accent-primary);
+  color: var(--accent-primary);
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.tree-roll-union-hub.is-lit {
+  background: var(--accent-primary);
+  color: var(--text-inverse);
+}
+
+.tree-roll-card {
+  flex: 1 1 136px;
+  min-width: 0;
+  max-width: 320px;
+  min-height: 54px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  text-align: left;
+  padding: 8px 10px;
+  border-radius: 4px;
+  border: 1.25px solid var(--border-control);
+  background: var(--surface-canvas);
+  color: var(--text-primary);
+  cursor: pointer;
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease,
+    opacity 0.16s ease;
+}
+
+.tree-roll-card.is-direct {
+  border-color: var(--surface-header);
+  background: var(--surface-card);
+}
+
+.tree-roll-card.is-collateral {
+  border-style: dashed;
+}
+
+.tree-roll-card:hover {
+  border-color: var(--accent-primary);
+}
+
+.tree-roll-card.is-dimmed {
+  opacity: 0.22;
+}
+
+.tree-roll-card.is-lit {
+  opacity: 1;
+  border-color: var(--accent-primary);
+  border-style: solid;
+}
+
+.tree-roll-card.is-selected {
+  background: var(--surface-header);
+  border-color: var(--accent-primary);
+  border-style: solid;
+  color: var(--text-inverse);
+  box-shadow: var(--shadow-active);
+}
+
+.tree-roll-avatar {
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  background: var(--surface-linen);
+  border: 1.5px solid var(--accent-primary);
+  color: var(--accent-primary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.tree-roll-card.is-selected .tree-roll-avatar {
+  background: var(--accent-primary);
+  color: var(--text-inverse);
+  border-color: var(--text-inverse);
+}
+
+.tree-roll-avatar-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.tree-roll-avatar-initials {
+  font-family: var(--font-mono);
+  font-size: 0.74rem;
+  font-weight: 700;
+}
+
+.tree-roll-card-copy {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: 2px;
+}
+
+.tree-roll-card-name {
+  font-family: var(--font-serif);
+  font-size: 0.96rem;
+  font-weight: 700;
+  line-height: 1.2;
+  color: inherit;
+  overflow-wrap: anywhere;
+}
+
+.tree-roll-card-dates {
+  font-family: var(--font-mono);
+  font-size: 0.74rem;
+  color: var(--text-secondary);
+  line-height: 1.2;
+}
+
+.tree-roll-card.is-selected .tree-roll-card-dates {
+  color: var(--surface-linen);
+}
+
+.tree-roll-attachments {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--border-decorative);
+}
+
+.tree-roll-union-caption {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--accent-primary);
+}
+
+.tree-early-strip {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 10px;
+  border-radius: 4px;
+  background: var(--surface-linen);
+  border: 1px solid var(--border-decorative);
+}
+
+.tree-early-strip-heading {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.tree-early-sprig {
+  color: var(--accent-secondary);
+  flex-shrink: 0;
+}
+
+.tree-early-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.tree-early-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border-control);
+  background: var(--surface-card);
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: opacity 0.16s ease, border-color 0.15s ease;
+}
+
+.tree-early-chip:hover {
+  border-color: var(--accent-primary);
+}
+
+.tree-early-chip.is-dimmed {
+  opacity: 0.24;
+}
+
+.tree-early-chip.is-lit {
+  opacity: 1;
+  border-color: var(--accent-primary);
+}
+
+.tree-early-chip.is-selected {
+  background: var(--surface-header);
+  color: var(--text-inverse);
+  border-color: var(--accent-primary);
+}
+
+.tree-early-chip-name {
+  font-family: var(--font-serif);
+  font-size: 0.84rem;
+  font-weight: 600;
+}
+
+.tree-early-chip-years {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  color: var(--text-secondary);
+}
+
+.tree-early-chip.is-selected .tree-early-chip-years {
+  color: var(--surface-linen);
+}
+
+.tree-roll-siblings-block {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.tree-sibling-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 38px;
+  padding: 5px 14px;
+  border-radius: 999px;
+  border: 1.5px solid var(--accent-primary);
+  background: var(--surface-card);
+  color: var(--accent-primary);
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.tree-sibling-pill:hover,
+.tree-sibling-pill.is-expanded {
+  background: var(--accent-primary);
+  color: var(--text-inverse);
+}
+
+.tree-hanging-grid {
+  width: 100%;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 18px;
+  position: relative;
+  padding-top: 6px;
+}
+
+.tree-hanging-grid::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 0;
+  bottom: 12px;
+  width: 1.5px;
+  transform: translateX(-50%);
+  background: var(--border-control);
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+.tree-hanging-grid-item {
+  min-width: 0;
+  display: flex;
+}
+
+.tree-hanging-grid-item .tree-roll-card {
+  width: 100%;
+  max-width: none;
 }
 
 /* Interactive Archival Migration Map */
@@ -4527,17 +5296,79 @@ dialog.global-search-backdrop {
   }
 
   .tree-branch-select {
-    max-width: 100%;
-    flex: 1 1 180px;
+    max-width: 170px;
+    min-height: 44px;
+    flex: 0 0 auto;
   }
 
-  /* Responsive 2D Tree & Migration Map Controls on Mobile (3B Unified Bottom Drawer) */
+  /* Responsive 2D Tree & Portrait Roll Controls on Mobile */
   .tree-toolbar {
-    top: 10px;
+    top: 8px;
     left: 10px;
     right: 10px;
-    max-width: none;
-    padding: 5px 8px;
+    max-width: calc(100% - 20px);
+    padding: 4px 8px;
+    gap: 6px;
+  }
+
+  .tree-page-roll .tree-toolbar {
+    top: calc(var(--topbar-height) + 6px);
+    left: auto;
+    right: auto;
+    width: calc(100% - 20px);
+    justify-content: flex-start;
+  }
+
+  .tree-segmented .tree-seg-btn,
+  .tree-toolbar .tree-add-person-btn,
+  .tree-sibling-pill,
+  .tree-early-chip,
+  .tree-gen-jump-chip,
+  .tree-focus-close-btn,
+  .tree-focus-timeline-link,
+  .tree-focus-clear-btn {
+    min-height: 44px;
+  }
+
+  .tree-roll-viewport {
+    padding: 8px 10px 140px;
+  }
+
+  .tree-roll-unit {
+    padding: 9px;
+  }
+
+  .tree-roll-card {
+    flex: 1 1 128px;
+    padding: 8px 9px;
+    min-height: 56px;
+  }
+
+  .tree-roll-card-name {
+    font-size: 0.92rem;
+  }
+
+  .tree-hanging-grid {
+    gap: 8px 12px;
+  }
+
+  .tree-page-roll .tree-focus-drawer,
+  .tree-page-diagram .tree-focus-drawer {
+    position: fixed;
+    top: auto;
+    left: 10px;
+    right: 10px;
+    bottom: 10px;
+    width: auto;
+    max-height: 48dvh;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    z-index: 35;
+  }
+
+  .tree-page-diagram .tree-controls {
+    right: 10px;
+    bottom: 14px;
   }
 
   .map-toolbar {
@@ -4782,8 +5613,27 @@ dialog.global-search-backdrop {
   .timeline-spine,
   .print-hide,
   .global-search-backdrop,
-  .source-reader-backdrop {
+  .source-reader-backdrop,
+  .tree-toolbar,
+  .tree-controls,
+  .tree-gen-jump-bar,
+  .tree-focus-drawer {
     display: none !important;
+  }
+
+  .kinloom-app:has(.tree-shell-diagram),
+  .tree-shell,
+  .tree-page {
+    height: auto !important;
+    min-height: auto !important;
+    overflow: visible !important;
+  }
+
+  .tree-roll-unit {
+    break-inside: avoid;
+    page-break-inside: avoid;
+    box-shadow: none !important;
+    border-color: #888888 !important;
   }
 
   .explorer-split {
