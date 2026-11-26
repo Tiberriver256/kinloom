@@ -1,3 +1,13 @@
+import { runArchiveOrgCommand } from './clients/archive-org.js';
+import { runChronamCommand } from './clients/chronam.js';
+import { runFindagraveCommand } from './clients/findagrave.js';
+import { runHathiCommand } from './clients/hathi.js';
+import { runNaraCommand } from './clients/nara.js';
+import { runOpenarchievenCommand } from './clients/openarchieven.js';
+import { runPersiCommand } from './clients/persi.js';
+import { runWikitreeCommand } from './clients/wikitree.js';
+import type { RecordHandler } from './runtime/types.js';
+
 export type RecordCommandCategory =
   | 'federal-general'
   | 'state-archives'
@@ -25,6 +35,13 @@ export interface BaseRecordCommandSpec {
   readonly summary: string;
 }
 
+export interface NativeRecordCommandSpec extends BaseRecordCommandSpec {
+  readonly kind: 'native';
+  readonly skillDir: string;
+  readonly scriptName: string;
+  readonly handler: RecordHandler;
+}
+
 export interface SkillScriptCommandSpec extends BaseRecordCommandSpec {
   readonly kind: 'skill-script';
   readonly skillDir: string;
@@ -43,6 +60,7 @@ export interface AssetScriptCommandSpec extends BaseRecordCommandSpec {
 }
 
 export type RecordCommandSpec =
+  | NativeRecordCommandSpec
   | SkillScriptCommandSpec
   | SkillGuideCommandSpec
   | AssetScriptCommandSpec;
@@ -50,48 +68,53 @@ export type RecordCommandSpec =
 export const RECORD_COMMAND_SPECS: readonly RecordCommandSpec[] = [
   // Federal & general record archives (8)
   {
-    kind: 'skill-script',
+    kind: 'native',
     command: 'nara',
     aliases: [],
     category: 'federal-general',
     skillDir: 'nara-catalog-search',
     scriptName: 'nara',
+    handler: runNaraCommand,
     summary: 'Search, inspect, and download National Archives Catalog records (NARA)',
   },
   {
-    kind: 'skill-script',
+    kind: 'native',
     command: 'archive-org',
     aliases: ['ia'],
     category: 'federal-general',
     skillDir: 'archive-org',
     scriptName: 'archive-org',
+    handler: runArchiveOrgCommand,
     summary: 'Search, grep cached OCR, and fetch pages from Internet Archive',
   },
   {
-    kind: 'skill-script',
+    kind: 'native',
     command: 'chronam',
     aliases: [],
     category: 'federal-general',
     skillDir: 'chronicling-america',
     scriptName: 'chronam',
+    handler: runChronamCommand,
     summary: 'Search and download Library of Congress Chronicling America newspapers',
   },
   {
-    kind: 'skill-script',
+    kind: 'native',
     command: 'hathi',
     aliases: [],
     category: 'federal-general',
     skillDir: 'hathitrust',
     scriptName: 'hathi',
+    handler: runHathiCommand,
     summary: 'Look up books, volumes, and rights in HathiTrust Digital Library',
   },
   {
-    kind: 'skill-script',
+    kind: 'native',
     command: 'findagrave',
     aliases: [],
     category: 'federal-general',
     skillDir: 'findagrave',
     scriptName: 'findagrave',
+    handler: runFindagraveCommand,
     summary: 'Search Find a Grave memorials, cemeteries, places, and gravestone photos',
   },
   {
@@ -104,21 +127,23 @@ export const RECORD_COMMAND_SPECS: readonly RecordCommandSpec[] = [
     summary: 'Look up historical and current U.S. place names in USGS GNIS',
   },
   {
-    kind: 'skill-script',
+    kind: 'native',
     command: 'wikitree',
     aliases: [],
     category: 'federal-general',
     skillDir: 'wikitree',
     scriptName: 'wikitree',
+    handler: runWikitreeCommand,
     summary: 'Search and read public WikiTree profiles, ancestors, and biographies',
   },
   {
-    kind: 'skill-script',
+    kind: 'native',
     command: 'persi',
     aliases: [],
     category: 'federal-general',
     skillDir: 'acpl-persi',
     scriptName: 'persi',
+    handler: runPersiCommand,
     summary: 'Search ACPL Periodical Source Index (PERSI) genealogy articles',
   },
 
@@ -207,12 +232,13 @@ export const RECORD_COMMAND_SPECS: readonly RecordCommandSpec[] = [
     summary: 'Search Finnish HisKi parish registers and National Archives Digihakemisto index',
   },
   {
-    kind: 'skill-script',
+    kind: 'native',
     command: 'openarchieven',
     aliases: [],
     category: 'international',
     skillDir: 'openarchieven',
     scriptName: 'openarchieven',
+    handler: runOpenarchievenCommand,
     summary: 'Search Dutch and Belgian civil, parish, and Rotterdam passenger records',
   },
   {

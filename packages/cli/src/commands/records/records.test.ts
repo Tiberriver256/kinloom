@@ -23,7 +23,6 @@ import {
   resolveRecordCommand,
   resolveRecordGuidePath,
   resolveRecordScriptPath,
-  resolveScriptInvocation,
   rewriteSkillCommandExamples,
   runRecordCommand,
   type RecordSpawnFn,
@@ -206,11 +205,25 @@ describe('record command registry and discovery', () => {
     const recordSkillDirsOnDisk = skillDirsOnDisk.filter((dir) => !CORE_CLI_COMMANDS.has(dir));
 
     const registeredSkillDirs = RECORD_COMMAND_SPECS.filter(
-      (spec) => spec.kind === 'skill-script' || spec.kind === 'skill-guide'
+      (spec) => spec.kind === 'native' || spec.kind === 'skill-script' || spec.kind === 'skill-guide'
     )
       .map((spec) => spec.skillDir)
       .sort();
 
+    const nativeCommands = RECORD_COMMAND_SPECS.filter((spec) => spec.kind === 'native')
+      .map((spec) => spec.command)
+      .sort();
+
+    expect(nativeCommands).toEqual([
+      'archive-org',
+      'chronam',
+      'findagrave',
+      'hathi',
+      'nara',
+      'openarchieven',
+      'persi',
+      'wikitree',
+    ]);
     expect(skillDirsOnDisk).toHaveLength(24);
     expect(skillDirsOnDisk).toContain('pronounce');
     expect(recordSkillDirsOnDisk).toHaveLength(23);
@@ -220,7 +233,7 @@ describe('record command registry and discovery', () => {
     for (const spec of RECORD_COMMAND_SPECS) {
       const guidePath = resolveRecordGuidePath(spec);
       expect(fs.statSync(guidePath).isFile()).toBe(true);
-      if (spec.kind !== 'skill-guide') {
+      if (spec.kind === 'skill-script' || spec.kind === 'asset-script') {
         const scriptPath = resolveRecordScriptPath(spec);
         expect(fs.statSync(scriptPath).isFile()).toBe(true);
       }
@@ -299,7 +312,7 @@ Body text here.`;
       const rendered = renderRecordCommandHelp(spec);
       expect(rendered.startsWith('---')).toBe(false);
       expect(rendered.startsWith('# ')).toBe(true);
-      if (spec.kind === 'skill-script') {
+      if (spec.kind === 'skill-script' || spec.kind === 'native') {
         expect(rendered).not.toContain(`skills/${spec.skillDir}/scripts/${spec.scriptName}`);
         expect(rendered).toContain(`kinloom ${spec.command}`);
         expect(rendered).toContain(`kinloom ${spec.command} --script-help`);
@@ -373,39 +386,39 @@ describe('help vs subcommand routing and guide-only commands', () => {
     expect(calls).toHaveLength(0);
   });
 
-  it('passes subcommand --help through to child process and sets telemetry suppression env', async () => {
+  it('passes subcommand --help through to child process and sets telemetry suppression env for legacy scripts', async () => {
     const tmp = await makeTempDir('kinloom-records-passthrough-');
     const telemetryFile = path.join(tmp, 'calls.jsonl');
     const { io, stdout, stderr } = createCaptureIo();
     const { spawnImpl, calls } = createFakeSpawn({
       exitCode: 0,
-      stdout: 'usage: archive-org grep ...\n',
+      stdout: 'usage: ocr ...\n',
     });
 
-    const result = await runRecordCommand('ia', ['grep', '--help'], {
+    const result = await runRecordCommand('ocr', ['--script-help'], {
       io,
       spawnImpl,
       telemetryFilePath: telemetryFile,
     });
 
-    expect(result.command).toBe('archive-org');
+    expect(result.command).toBe('ocr');
     expect(result.mode).toBe('script');
     expect(result.exitCode).toBe(0);
-    expect(stdout).toEqual(['usage: archive-org grep ...']);
+    expect(stdout).toEqual(['usage: ocr ...']);
     expect(stderr).toEqual([]);
     expect(calls).toHaveLength(1);
     expect(calls[0].command).toBe('python3');
-    expect(calls[0].args.slice(-2)).toEqual(['grep', '--help']);
+    expect(calls[0].args.slice(-1)).toEqual(['--help']);
     expect(calls[0].env?.KINLOOM_TELEMETRY_ACTIVE).toBe('1');
     expect(calls[0].env?.KINLOOM_TELEMETRY_PARENT).toBe('1');
 
     const lines = (await readFile(telemetryFile, 'utf8')).trim().split('\n');
     expect(lines).toHaveLength(1);
     const event = JSON.parse(lines[0]) as TelemetryEvent;
-    expect(event.cmd).toBe('records:archive-org');
-    expect(event.subcmd).toBe('archive-org grep');
+    expect(event.cmd).toBe('records:ocr');
+    expect(event.subcmd).toBe('ocr');
     expect(event.exit_code).toBe(0);
-    expect(event.bytes_out).toBe('usage: archive-org grep ...\n'.length);
+    expect(event.bytes_out).toBe('usage: ocr ...\n'.length);
   });
 
   it('preserves non-zero exit codes, handles ENOENT errors, and honors parent telemetry suppression', async () => {
@@ -414,7 +427,7 @@ describe('help vs subcommand routing and guide-only commands', () => {
 
     const failCapture = createCaptureIo();
     const failSpawn = createFakeSpawn({ exitCode: 3, stderr: 'bad query\n' });
-    const failResult = await runRecordCommand('nara', ['search', 'bad'], {
+    const failResult = await runRecordCommand('va-archives', ['catalog', 'bad'], {
       io: failCapture.io,
       spawnImpl: failSpawn.spawnImpl,
       telemetryFilePath: telemetryFile,
@@ -427,13 +440,13 @@ describe('help vs subcommand routing and guide-only commands', () => {
     const enoentCapture = createCaptureIo();
     const enoentSpawn = createFakeSpawn({ errorCode: 'ENOENT' });
     process.env.KINLOOM_TELEMETRY_PARENT = '1';
-    const enoentResult = await runRecordCommand('nara', ['search', 'Lincoln'], {
+    const enoentResult = await runRecordCommand('va-archives', ['catalog', 'Lincoln'], {
       io: enoentCapture.io,
       spawnImpl: enoentSpawn.spawnImpl,
       telemetryFilePath: telemetryFile,
     });
     expect(enoentResult.exitCode).toBe(1);
-    expect(enoentCapture.stderr[0]).toContain("'uv' is required to run 'kinloom nara'");
+    expect(enoentCapture.stderr[0]).toContain("'uv' is required to run 'kinloom va-archives'");
 
     // Only the first call was logged because the second had KINLOOM_TELEMETRY_PARENT=1.
     const events = (await readFile(telemetryFile, 'utf8'))
@@ -503,7 +516,7 @@ describe('help vs subcommand routing and guide-only commands', () => {
     );
   });
 
-  it('records cache_hit from JSON stdout and leaves non-JSON output unset', async () => {
+  it('records cache_hit from JSON stdout and leaves non-JSON output unset for legacy scripts', async () => {
     const tmp = await makeTempDir('kinloom-cache-hit-telemetry-');
     const telemetryFile = path.join(tmp, 'calls.jsonl');
     const secretUrl = 'https://scans.invalid/private-scan.jpg';
@@ -513,8 +526,8 @@ describe('help vs subcommand routing and guide-only commands', () => {
     const hitCapture = createCaptureIo();
     const hitSpawn = createFakeSpawn({ exitCode: 0, stdout: hitPayload });
     const hitResult = await runRecordCommand(
-      'openarchieven',
-      ['download', 'bhi:11111111-2222-3333-4444-555555555555'],
+      'va-archives',
+      ['catalog', 'example', '--json'],
       {
         io: hitCapture.io,
         spawnImpl: hitSpawn.spawnImpl,
@@ -527,7 +540,7 @@ describe('help vs subcommand routing and guide-only commands', () => {
 
     const missPayload = '{"results":[],"cache_hit":false}\n';
     const missCapture = createCaptureIo();
-    await runRecordCommand('nara', ['search', 'example'], {
+    await runRecordCommand('gnis', ['search', 'example', '--state', 'OH', '--json'], {
       io: missCapture.io,
       spawnImpl: createFakeSpawn({ exitCode: 0, stdout: missPayload }).spawnImpl,
       telemetryFilePath: telemetryFile,
@@ -536,7 +549,7 @@ describe('help vs subcommand routing and guide-only commands', () => {
 
     const textPayload = 'note "cache_hit": true\n';
     const textCapture = createCaptureIo();
-    await runRecordCommand('chronam', ['search', 'example'], {
+    await runRecordCommand('uk-archives', ['discovery', 'search', 'example'], {
       io: textCapture.io,
       spawnImpl: createFakeSpawn({ exitCode: 0, stdout: textPayload }).spawnImpl,
       telemetryFilePath: telemetryFile,
@@ -554,52 +567,10 @@ describe('help vs subcommand routing and guide-only commands', () => {
     expect(events.map((event) => event.cache_hit)).toEqual([true, false, null]);
   });
 
-  it('records cache_hit from archive-org, findagrave, gnis, and va-archives JSON', async () => {
+  it('records cache_hit from gnis, va-archives, uk-archives, and se-archives JSON', async () => {
     const tmp = await makeTempDir('kinloom-cache-hit-archives-');
     const telemetryFile = path.join(tmp, 'calls.jsonl');
     const cases: Array<{ command: string; args: string[]; stdout: string; cacheHit: boolean }> = [
-      {
-        command: 'archive-org',
-        args: ['search', 'title:(Oak)', '--json'],
-        stdout: '{"response":{"numFound":1},"cache_hit":false}\n',
-        cacheHit: false,
-      },
-      {
-        command: 'archive-org',
-        args: ['page', 'synthetic_atlas_1888', '--leaf', '4', '--json'],
-        stdout: '{"identifier":"synthetic_atlas_1888","leaf":4,"page_cached":true,"cache_hit":true}\n',
-        cacheHit: true,
-      },
-      {
-        command: 'archive-org',
-        args: ['page', 'synthetic_atlas_1888', '--leaves', '1,2', '--json'],
-        stdout: '{"identifier":"synthetic_atlas_1888","count":2,"pages":[{"leaf":1,"page_cached":true},{"leaf":2,"page_cached":false}],"cache_hit":false}\n',
-        cacheHit: false,
-      },
-      {
-        command: 'archive-org',
-        args: ['grep', 'synthetic_atlas_1888', '-e', 'Oakridge', '--json'],
-        stdout: '{"pattern":"Oakridge","total_matches":0,"returned":0,"hits":[],"cache_hit":true}\n',
-        cacheHit: true,
-      },
-      {
-        command: 'findagrave',
-        args: ['search', '--last', 'Alder', '--json'],
-        stdout: '{"total":0,"memorials":[],"cache_hit":true}\n',
-        cacheHit: true,
-      },
-      {
-        command: 'findagrave',
-        args: ['get', '627', '--json'],
-        stdout: '[{"id":"627","cache_hit":true}]\n',
-        cacheHit: true,
-      },
-      {
-        command: 'findagrave',
-        args: ['photo', '627', '--json'],
-        stdout: '{"memorial_id":"627","files":[],"cache_hit":false}\n',
-        cacheHit: false,
-      },
       {
         command: 'gnis',
         args: ['search', 'Oak', '--state', 'OH', '--json'],
@@ -613,27 +584,15 @@ describe('help vs subcommand routing and guide-only commands', () => {
         cacheHit: true,
       },
       {
-        command: 'nara',
-        args: ['download', '595367', '--json'],
-        stdout: '{"naId":"595367","bytes":128,"path":"/tmp/out","url":"https://catalog.archives.gov/id/595367","content_type":"image/jpeg","cache_hit":true}\n',
+        command: 'uk-archives',
+        args: ['tna', 'search', 'Alder', '--json'],
+        stdout: '{"records":[],"cache_hit":true}\n',
         cacheHit: true,
       },
       {
-        command: 'nara',
-        args: ['census1950-image', '1950census/a/b.jpg', '--json'],
-        stdout: '{"image":"1950census/a/b.jpg","bytes":64,"width":null,"cache_hit":true}\n',
-        cacheHit: true,
-      },
-      {
-        command: 'nara',
-        args: ['census1950-image', '1950census/a/b.jpg', '1950census/a/c.jpg', '--json'],
-        stdout: '{"count":2,"files":[{"cache_hit":true},{"cache_hit":false}],"cache_hit":false}\n',
-        cacheHit: false,
-      },
-      {
-        command: 'chronam',
-        args: ['download', '--lccn', 'sn83045462', '--date', '1865-04-15', '--json'],
-        stdout: '{"resource_url":"https://www.loc.gov/resource/sn83045462/1865-04-15/ed-1/?sp=1","bytes":512,"cache_hit":false,"files":[]}\n',
+        command: 'se-archives',
+        args: ['search', 'Alder', '--json'],
+        stdout: '{"items":[],"cache_hit":false}\n',
         cacheHit: false,
       },
     ];
@@ -650,35 +609,16 @@ describe('help vs subcommand routing and guide-only commands', () => {
       .map((line) => JSON.parse(line) as TelemetryEvent);
     expect(recorded.map((event) => event.cache_hit)).toEqual(cases.map((item) => item.cacheHit));
     expect(recorded.map((event) => event.cmd)).toEqual([
-      'records:archive-org',
-      'records:archive-org',
-      'records:archive-org',
-      'records:archive-org',
-      'records:findagrave',
-      'records:findagrave',
-      'records:findagrave',
       'records:gnis',
       'records:va-archives',
-      'records:nara',
-      'records:nara',
-      'records:nara',
-      'records:chronam',
+      'records:uk-archives',
+      'records:se-archives',
     ]);
-    expect(recorded.slice(0, 4).map((event) => event.subcmd)).toEqual([
-      'archive-org search',
-      'archive-org page',
-      'archive-org page',
-      'archive-org grep',
-    ]);
-    expect(recorded.slice(4, 7).map((event) => event.subcmd)).toEqual([
-      'findagrave search',
-      'findagrave get',
-      'findagrave photo',
-    ]);
-    expect(recorded.slice(9, 12).map((event) => event.subcmd)).toEqual([
-      'nara download',
-      'nara census1950-image',
-      'nara census1950-image',
+    expect(recorded.map((event) => event.subcmd)).toEqual([
+      'gnis search',
+      'va-archives catalog',
+      'uk-archives tna',
+      'se-archives search',
     ]);
   });
 
@@ -695,8 +635,8 @@ describe('help vs subcommand routing and guide-only commands', () => {
     }) as typeof process.stdout.write;
     try {
       const result = await runRecordCommand(
-        'openarchieven',
-        ['show', 'bhi:11111111-2222-3333-4444-555555555555'],
+        'va-archives',
+        ['catalog', 'Alder'],
         {
           spawnImpl: createFakeSpawn({ exitCode: 0, stdout: payload }).spawnImpl,
           telemetryFilePath: telemetryFile,
@@ -738,7 +678,7 @@ describe('offline-first uv fast-path with cold-cache online retry', () => {
       stdout: '{"results":[],"cache_hit":true}\n',
     });
 
-    const result = await runRecordCommand('nara', ['search', 'Alder'], {
+    const result = await runRecordCommand('va-archives', ['catalog', 'Alder'], {
       io,
       env: cleanEnv(),
       spawnImpl,
@@ -768,7 +708,7 @@ describe('offline-first uv fast-path with cold-cache online retry', () => {
       },
     ]);
 
-    const result = await runRecordCommand('nara', ['search', 'Alder'], {
+    const result = await runRecordCommand('va-archives', ['catalog', 'Alder'], {
       io,
       env: cleanEnv(),
       spawnImpl,
@@ -799,10 +739,10 @@ describe('offline-first uv fast-path with cold-cache online retry', () => {
 
     const runtimeCapture = createCaptureIo();
     const runtimeSpawn = createFakeSpawnSequence([
-      { exitCode: 2, stderr: 'Usage: nara search <query>\nError: Missing argument.\n' },
+      { exitCode: 2, stderr: 'Usage: va-archives catalog <query>\nError: Missing argument.\n' },
       { exitCode: 0, stdout: 'should-not-run\n' },
     ]);
-    const runtimeResult = await runRecordCommand('nara', ['search'], {
+    const runtimeResult = await runRecordCommand('va-archives', ['catalog'], {
       io: runtimeCapture.io,
       env: cleanEnv(),
       spawnImpl: runtimeSpawn.spawnImpl,
@@ -811,7 +751,7 @@ describe('offline-first uv fast-path with cold-cache online retry', () => {
     expect(runtimeResult.exitCode).toBe(2);
     expect(runtimeSpawn.calls).toHaveLength(1);
     expect(runtimeSpawn.calls[0].env?.UV_OFFLINE).toBe('1');
-    expect(runtimeCapture.stderr[0]).toContain('Usage: nara search');
+    expect(runtimeCapture.stderr[0]).toContain('Usage: va-archives catalog');
 
     const partialOutCapture = createCaptureIo();
     const partialOutSpawn = createFakeSpawnSequence([
@@ -822,7 +762,7 @@ describe('offline-first uv fast-path with cold-cache online retry', () => {
       },
       { exitCode: 0, stdout: 'should-not-run\n' },
     ]);
-    const partialOutResult = await runRecordCommand('nara', ['search', 'Alder'], {
+    const partialOutResult = await runRecordCommand('va-archives', ['catalog', 'Alder'], {
       io: partialOutCapture.io,
       env: cleanEnv(),
       spawnImpl: partialOutSpawn.spawnImpl,
@@ -839,7 +779,7 @@ describe('offline-first uv fast-path with cold-cache online retry', () => {
 
     const onlineCapture = createCaptureIo();
     const onlineSpawn = createFakeSpawn({ exitCode: 0, stdout: 'ok\n' });
-    const onlineResult = await runRecordCommand('nara', ['search', 'Alder'], {
+    const onlineResult = await runRecordCommand('va-archives', ['catalog', 'Alder'], {
       io: onlineCapture.io,
       env: { ...cleanEnv(), UV_OFFLINE: '0' },
       spawnImpl: onlineSpawn.spawnImpl,
@@ -854,7 +794,7 @@ describe('offline-first uv fast-path with cold-cache online retry', () => {
       { exitCode: 1, stderr: UV_SCRIPT_CACHE_MISS_STDERR },
       { exitCode: 0, stdout: 'should-not-run\n' },
     ]);
-    const offlineResult = await runRecordCommand('nara', ['search', 'Alder'], {
+    const offlineResult = await runRecordCommand('va-archives', ['catalog', 'Alder'], {
       io: offlineCapture.io,
       env: { ...cleanEnv(), UV_OFFLINE: '1' },
       spawnImpl: offlineSpawn.spawnImpl,
@@ -874,7 +814,7 @@ describe('offline-first uv fast-path with cold-cache online retry', () => {
       { exitCode: 0, stdout: 'should-not-run\n' },
     ]);
 
-    const result = await runRecordCommand('ia', ['grep', '--help'], {
+    const result = await runRecordCommand('ocr', ['--script-help'], {
       io,
       env: cleanEnv(),
       spawnImpl,
@@ -926,7 +866,7 @@ describe('offline-first uv fast-path with cold-cache online retry', () => {
       { exitCode: 0, stdout: payload },
     ]);
     try {
-      const result = await runRecordCommand('nara', ['search', 'Alder'], {
+      const result = await runRecordCommand('va-archives', ['catalog', 'Alder'], {
         env: cleanEnv(),
         spawnImpl,
         telemetryFilePath: telemetryFile,
@@ -965,7 +905,7 @@ describe('bundle-skills.mjs and dual-mode bundled resolution', () => {
       expect(guidePath.startsWith(tmpOut)).toBe(true);
       expect(fs.statSync(guidePath).isFile()).toBe(true);
 
-      if (spec.kind !== 'skill-guide') {
+      if (spec.kind === 'skill-script' || spec.kind === 'asset-script') {
         const scriptPath = resolveRecordScriptPath(spec, { moduleDir: fakeDistModuleDir });
         expect(scriptPath.startsWith(tmpOut)).toBe(true);
         const mode = fs.statSync(scriptPath).mode;
@@ -1043,43 +983,41 @@ describe('bundled Python utilities and live script execution', () => {
     expect(parsed.sha256).toBe(sha256);
   });
 
-  it('runs real archive-org --script-help via python3 shebang detection', async () => {
-    const tmp = await makeTempDir('kinloom-ia-live-');
-    const spec = resolveRecordCommand('ia')!;
-    const scriptPath = resolveRecordScriptPath(spec as Extract<typeof spec, { kind: 'skill-script' }>);
-    expect(resolveScriptInvocation(scriptPath, ['--help'])).toEqual({
-      command: 'python3',
-      args: ['-S', scriptPath, '--help'],
-    });
+  it('dispatches all 8 Wave 55B native TypeScript commands with zero subprocess spawns', async () => {
+    const tmp = await makeTempDir('kinloom-native-dispatch-');
+    const telemetryFile = path.join(tmp, 'calls.jsonl');
+    const forbidSpawn: RecordSpawnFn = () => {
+      throw new Error('Native TypeScript record commands must not spawn subprocesses');
+    };
 
-    const { io, stdout, stderr } = createCaptureIo();
-    const result = await runRecordCommand('ia', ['--script-help'], {
-      io,
-      telemetryFilePath: path.join(tmp, 'telemetry.jsonl'),
-    });
-
-    expect(result.exitCode).toBe(0);
-    expect(stderr).toEqual([]);
-    expect(stdout.join('\n')).toContain('grep');
-    expect(stdout.join('\n')).toContain('page');
-  });
-
-  it('passes archive-org full-stack caching, lazy hOCR fallback, retry, and path-safety unit tests', () => {
-    const testFile = path.join(SKILLS_ROOT, 'archive-org', 'tests', 'test_archive_org.py');
-    const result = spawnSync('python3', ['-m', 'unittest', '-v', testFile], {
-      encoding: 'utf8',
-    });
-    expect(result.status).toBe(0);
-    expect(result.stderr).toMatch(/Ran [1-9]\d* tests/);
-    expect(result.stderr).toMatch(/\bOK\b/);
-  });
-
-  it('passes nara, findagrave, and usgs-gnis disk-caching and path-safety unit tests', () => {
-    const testFiles = [
-      path.join(SKILLS_ROOT, 'nara-catalog-search', 'tests', 'test_nara.py'),
-      path.join(SKILLS_ROOT, 'findagrave', 'tests', 'test_findagrave.py'),
-      path.join(SKILLS_ROOT, 'usgs-gnis', 'tests', 'test_gnis.py'),
+    const nativeCommands = [
+      { cmd: 'nara', expectToken: 'census1950' },
+      { cmd: 'archive-org', expectToken: 'grep' },
+      { cmd: 'ia', expectToken: 'grep' },
+      { cmd: 'findagrave', expectToken: 'cemetery' },
+      { cmd: 'openarchieven', expectToken: 'download' },
+      { cmd: 'wikitree', expectToken: 'ancestors' },
+      { cmd: 'chronam', expectToken: 'page' },
+      { cmd: 'hathi', expectToken: 'bib' },
+      { cmd: 'persi', expectToken: 'surname' },
     ];
+
+    for (const item of nativeCommands) {
+      const { io, stdout, stderr } = createCaptureIo();
+      const result = await runRecordCommand(item.cmd, ['--script-help'], {
+        io,
+        spawnImpl: forbidSpawn,
+        telemetryFilePath: telemetryFile,
+      });
+      expect(result.mode, item.cmd).toBe('native');
+      expect(result.exitCode, item.cmd).toBe(0);
+      expect(stderr, item.cmd).toEqual([]);
+      expect(stdout.join('\n'), item.cmd).toContain(item.expectToken);
+    }
+  });
+
+  it('passes usgs-gnis disk-caching and path-safety unit tests', () => {
+    const testFiles = [path.join(SKILLS_ROOT, 'usgs-gnis', 'tests', 'test_gnis.py')];
     let pyCmd = 'python3';
     let pyPrefix: string[] = [];
     try {
@@ -2366,9 +2304,8 @@ describe('bundled Python utilities and live script execution', () => {
     expect(previewHelp).toContain('--out-dir');
   });
 
-  it('passes chronam and nj-archives caching, retry, alias, and parsing unit tests', () => {
+  it('passes nj-archives caching, retry, alias, and parsing unit tests', () => {
     const testFiles = [
-      path.join(SKILLS_ROOT, 'chronicling-america', 'tests', 'test_chronam.py'),
       path.join(SKILLS_ROOT, 'new-jersey-archives', 'tests', 'test_nj_archives.py'),
     ];
     let pyCmd = 'python3';
@@ -2385,14 +2322,12 @@ describe('bundled Python utilities and live script execution', () => {
     expect(result.stderr).toMatch(/\bOK\b/);
   });
 
-  it('passes openarchieven, michiganology, ca/mo/ky-archives, and wikitree disk-caching unit tests', () => {
+  it('passes michiganology and ca/mo/ky-archives disk-caching unit tests', () => {
     const testFiles = [
-      path.join(SKILLS_ROOT, 'openarchieven', 'tests', 'test_openarchieven.py'),
       path.join(SKILLS_ROOT, 'library-of-michigan', 'tests', 'test_michiganology.py'),
       path.join(SKILLS_ROOT, 'california-archives', 'tests', 'test_ca_archives.py'),
       path.join(SKILLS_ROOT, 'missouri-archives', 'tests', 'test_mo_archives.py'),
       path.join(SKILLS_ROOT, 'kentucky-archives', 'tests', 'test_ky_archives.py'),
-      path.join(SKILLS_ROOT, 'wikitree', 'tests', 'test_wikitree.py'),
     ];
     let pyCmd = 'python3';
     let pyPrefix: string[] = [];
@@ -2408,10 +2343,8 @@ describe('bundled Python utilities and live script execution', () => {
     expect(result.stderr).toMatch(/\bOK\b/);
   });
 
-  it('passes hathi, persi, texas-archives, uk-archives, mn-archives, se-archives, and fi-archives disk-caching and safety unit tests', () => {
+  it('passes texas-archives, uk-archives, mn-archives, se-archives, and fi-archives disk-caching and safety unit tests', () => {
     const testFiles = [
-      path.join(SKILLS_ROOT, 'hathitrust', 'tests', 'test_hathi.py'),
-      path.join(SKILLS_ROOT, 'acpl-persi', 'tests', 'test_persi.py'),
       path.join(SKILLS_ROOT, 'texas-archives', 'tests', 'test_texas_archives.py'),
       path.join(SKILLS_ROOT, 'uk-archives', 'tests', 'test_uk_archives.py'),
       path.join(SKILLS_ROOT, 'minnesota-archives', 'tests', 'test_mn_archives.py'),
@@ -2833,58 +2766,57 @@ describe('bundled Python utilities and live script execution', () => {
   it('routes openarchieven get, findagrave show, wikitree get/show/profile, nara show, and archive-org show with boolean cache_hit telemetry', async () => {
     const tmp = await makeTempDir('kinloom-wave45-aliases-');
     const telemetryFile = path.join(tmp, 'calls.jsonl');
-    const cases: Array<{ command: string; args: string[]; stdout: string; expectedSubcmd: string; expectedHit: boolean }> = [
-      {
-        command: 'openarchieven',
-        args: ['get', 'bhi:11111111-2222-3333-4444-555555555555', '--json'],
-        stdout: '{"records":[],"cache_hit":true}\n',
-        expectedSubcmd: 'openarchieven get',
-        expectedHit: true,
-      },
-      {
-        command: 'findagrave',
-        args: ['show', '627', '--json'],
-        stdout: '[{"id":"627","cache_hit":false}]\n',
-        expectedSubcmd: 'findagrave show',
-        expectedHit: false,
-      },
-      {
-        command: 'wikitree',
-        args: ['get', 'Lincoln-1', '--json'],
-        stdout: '[{"status":0,"cache_hit":true}]\n',
-        expectedSubcmd: 'wikitree get',
-        expectedHit: true,
-      },
-      {
-        command: 'wikitree',
-        args: ['profile', 'Lincoln-1', '--json'],
-        stdout: '[{"status":0,"cache_hit":true}]\n',
-        expectedSubcmd: 'wikitree profile',
-        expectedHit: true,
-      },
-      {
-        command: 'nara',
-        args: ['show', '595367', '--json'],
-        stdout: '{"naId":"595367","cache_hit":true}\n',
-        expectedSubcmd: 'nara show',
-        expectedHit: true,
-      },
-      {
-        command: 'ia',
-        args: ['show', 'synthetic_book_1895', '--json'],
-        stdout: '{"metadata":{"identifier":"synthetic_book_1895"},"cache_hit":false}\n',
-        expectedSubcmd: 'archive-org show',
-        expectedHit: false,
-      },
+    const cacheDir = path.join(tmp, 'cache');
+    const forbidSpawn: RecordSpawnFn = () => {
+      throw new Error('Native record command must not invoke spawn');
+    };
+    const mockFetch: typeof fetch = async (input) => {
+      const url = String(input);
+      if (url.includes('api.wikitree.com')) {
+        return new Response(
+          JSON.stringify([{ status: 0, person: { Id: 100, Name: 'Lincoln-1', FirstName: 'Abraham' } }]),
+          { status: 200 }
+        );
+      }
+      if (url.includes('catalog.hathitrust.org')) {
+        return new Response(
+          JSON.stringify({
+            records: { '000578050': { titles: ['Synthetic County History'], recordURL: 'https://catalog.hathitrust.org/Record/000578050' } },
+            items: [],
+          }),
+          { status: 200 }
+        );
+      }
+      return new Response('not found', { status: 404 });
+    };
+
+    const nativeEnv: NodeJS.ProcessEnv = {
+      KINLOOM_WIKITREE_CACHE_DIR: path.join(cacheDir, 'wt'),
+      KINLOOM_HATHI_CACHE_DIR: path.join(cacheDir, 'hathi'),
+    };
+    const nativeCases: Array<{
+      command: string;
+      args: string[];
+      expectedSubcmd: string;
+      expectedHit: boolean;
+    }> = [
+      { command: 'wikitree', args: ['get', 'Lincoln-1', '--json'], expectedSubcmd: 'wikitree get', expectedHit: false },
+      { command: 'wikitree', args: ['profile', 'Lincoln-1', '--json'], expectedSubcmd: 'wikitree profile', expectedHit: true },
+      { command: 'hathi', args: ['bib', 'oclc', '424023', '--json'], expectedSubcmd: 'hathi bib', expectedHit: false },
+      { command: 'hathi', args: ['bib', 'oclc', '424023', '--json'], expectedSubcmd: 'hathi bib', expectedHit: true },
     ];
 
-    for (const tc of cases) {
+    for (const tc of nativeCases) {
       const cap = createCaptureIo();
       const res = await runRecordCommand(tc.command, tc.args, {
         io: cap.io,
-        spawnImpl: createFakeSpawn({ exitCode: 0, stdout: tc.stdout }).spawnImpl,
+        env: nativeEnv,
+        fetchImpl: mockFetch,
+        sleepFn: async () => {},
+        spawnImpl: forbidSpawn,
         telemetryFilePath: telemetryFile,
       });
+      expect(res.mode, tc.expectedSubcmd).toBe('native');
       expect(res.exitCode, tc.expectedSubcmd).toBe(0);
     }
 
@@ -2892,8 +2824,8 @@ describe('bundled Python utilities and live script execution', () => {
       .trim()
       .split('\n')
       .map((line) => JSON.parse(line) as TelemetryEvent);
-    expect(events.map((e) => e.subcmd)).toEqual(cases.map((tc) => tc.expectedSubcmd));
-    expect(events.map((e) => e.cache_hit)).toEqual(cases.map((tc) => tc.expectedHit));
+    expect(events.map((e) => e.subcmd)).toEqual(nativeCases.map((tc) => tc.expectedSubcmd));
+    expect(events.map((e) => e.cache_hit)).toEqual(nativeCases.map((tc) => tc.expectedHit));
   });
 
   it('enforces Wave 52B CLI, skill, and ubiquitous-language parity across all 24 public skills', async () => {

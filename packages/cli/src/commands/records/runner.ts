@@ -1,13 +1,12 @@
 import { spawn, type ChildProcess, type SpawnOptions } from 'node:child_process';
 import fs from 'node:fs';
 import { performance } from 'node:perf_hooks';
-import {
-  isTelemetrySuppressedByParent,
-  recordTelemetryEvent,
-  type OpsIo,
-} from '../ops/telemetry.js';
-import { classifyRecordCommandIntent, renderRecordCommandHelp } from './help.js';
-import { resolveRecordCommand, type RecordCommandSpec } from './registry.js';
+import { recordTelemetryEvent, type OpsIo } from '../ops/telemetry.js';
+import type {
+  AssetScriptCommandSpec,
+  RecordCommandSpec,
+  SkillScriptCommandSpec,
+} from './registry.js';
 import { resolveRecordScriptPath, type ResolveRootsOptions } from './resolve.js';
 
 export interface ScriptInvocation {
@@ -21,7 +20,7 @@ export type RecordSpawnFn = (
   options: SpawnOptions
 ) => ChildProcess;
 
-export interface RunRecordCommandOptions extends ResolveRootsOptions {
+export interface LegacyRunnerOptions extends ResolveRootsOptions {
   io?: OpsIo;
   spawnImpl?: RecordSpawnFn;
   env?: NodeJS.ProcessEnv;
@@ -30,21 +29,12 @@ export interface RunRecordCommandOptions extends ResolveRootsOptions {
   forceTelemetry?: boolean;
 }
 
-export interface RunRecordCommandResult {
+export interface LegacyScriptResult {
   readonly command: string;
-  readonly mode: 'guide' | 'script';
+  readonly mode: 'script';
   readonly exitCode: number;
   readonly bytesOut: number;
 }
-
-const DEFAULT_IO: OpsIo = {
-  stdout: (line) => {
-    process.stdout.write(`${line}\n`);
-  },
-  stderr: (line) => {
-    process.stderr.write(`${line}\n`);
-  },
-};
 
 function readFirstLine(filePath: string): string {
   const fd = fs.openSync(filePath, 'r');
@@ -476,58 +466,16 @@ function executeSpawnAttempt(params: {
   });
 }
 
-export async function runRecordCommand(
-  commandName: string,
-  args: readonly string[],
-  options?: RunRecordCommandOptions
-): Promise<RunRecordCommandResult> {
-  const spec = resolveRecordCommand(commandName);
-  const io = options?.io ?? DEFAULT_IO;
-  if (!spec) {
-    io.stderr(`Unknown record command '${commandName}'.`);
-    return {
-      command: commandName,
-      mode: 'guide',
-      exitCode: 2,
-      bytesOut: 0,
-    };
-  }
-
-  const startMs = performance.now();
-  const intent = classifyRecordCommandIntent(spec, args);
-  const shouldRecordTelemetry = Boolean(options?.forceTelemetry) || !isTelemetrySuppressedByParent();
-
-  if (intent.mode === 'render-guide') {
-    const rendered = renderRecordCommandHelp(spec, options);
-    io.stdout(rendered);
-    const bytesOut = Buffer.byteLength(`${rendered}\n`, 'utf8');
-    if (shouldRecordTelemetry) {
-      recordTelemetryEvent(
-        {
-          cmd: `records:${spec.command}`,
-          subcmd: buildTelemetrySubcmd(spec, args, 'guide'),
-          duration_ms: performance.now() - startMs,
-          exit_code: 0,
-          bytes_out: bytesOut,
-        },
-        { filePath: options?.telemetryFilePath, force: options?.forceTelemetry }
-      );
-    }
-    return {
-      command: spec.command,
-      mode: 'guide',
-      exitCode: 0,
-      bytesOut,
-    };
-  }
-
-  if (spec.kind === 'skill-guide') {
-    // Unreachable because classifyRecordCommandIntent always returns render-guide for skill-guide.
-    throw new Error(`Guide-only command '${spec.command}' cannot execute a script.`);
-  }
-
+export async function executeLegacyScriptCommand(
+  spec: SkillScriptCommandSpec | AssetScriptCommandSpec,
+  scriptArgs: readonly string[],
+  options: LegacyRunnerOptions | undefined,
+  startMs: number,
+  shouldRecordTelemetry: boolean,
+  io: OpsIo
+): Promise<LegacyScriptResult> {
   const scriptPath = resolveRecordScriptPath(spec, options);
-  const invocation = resolveScriptInvocation(scriptPath, intent.scriptArgs);
+  const invocation = resolveScriptInvocation(scriptPath, scriptArgs);
   const spawnFn: RecordSpawnFn = options?.spawnImpl ?? spawn;
   const captureOutput = options?.io !== undefined;
 
@@ -591,7 +539,7 @@ export async function runRecordCommand(
     recordTelemetryEvent(
       {
         cmd: `records:${spec.command}`,
-        subcmd: buildTelemetrySubcmd(spec, intent.scriptArgs, 'script'),
+        subcmd: buildTelemetrySubcmd(spec, scriptArgs, 'script'),
         duration_ms: performance.now() - startMs,
         exit_code: exitCode,
         bytes_out: bytesOut,
@@ -608,3 +556,9 @@ export async function runRecordCommand(
     bytesOut,
   };
 }
+
+export {
+  runRecordCommand,
+  type RunRecordCommandOptions,
+  type RunRecordCommandResult,
+} from './dispatch.js';
