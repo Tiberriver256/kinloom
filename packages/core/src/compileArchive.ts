@@ -1,5 +1,6 @@
 import type { KinloomSiteConfig } from './schemas/config.js';
 import { resolveDefaultBranchId } from './schemas/config.js';
+import { resolvePersonPronunciation, resolvePlacePronunciation } from './schemas/entities.js';
 import type {
   ArchiveBundle,
   ArchiveEvent,
@@ -378,17 +379,29 @@ export function compileArchive(input: CompileArchiveInput): CompileArchiveResult
   const includeLivingSpans = mode === 'private' && !privacy.stripLivingResidenceSpans;
 
   // Stage 1: Clone inputs once at the entry boundary and assign branches from siteConfig
+  const pronunciationLexicon = siteConfig.pronunciations;
   const rawPeople: RawPerson[] = input.people.map((p) => {
     const clone = clonePerson(p);
     clone.branch = resolvePersonBranch(clone, siteConfig);
     if (resolveEffectiveLiving(clone, privacy)) {
       clone.is_living = true;
     }
+    const resolvedPron = resolvePersonPronunciation(clone, pronunciationLexicon);
+    if (resolvedPron) {
+      clone.pronunciation = resolvedPron;
+    }
     return clone;
   });
 
   const rawEvents: RawEvent[] = input.events.map(cloneEvent);
-  const places: Place[] = input.places.map(clonePlace);
+  const places: Place[] = input.places.map((p) => {
+    const clone = clonePlace(p);
+    const resolvedPron = resolvePlacePronunciation(clone, pronunciationLexicon);
+    if (resolvedPron) {
+      clone.pronunciation = resolvedPron;
+    }
+    return clone;
+  });
   const kinship: KinshipEdge[] = input.kinship.map(cloneKinship);
 
   const combinedSources: SourceRecord[] = [

@@ -112,6 +112,70 @@ export const PronunciationSchema = z.object({
 
 export type Pronunciation = z.infer<typeof PronunciationSchema>;
 
+/**
+ * Resolve a person's effective pronunciation by falling back to a shared
+ * archive-level surname/term lexicon (so shared surnames are defined once
+ * in schema rather than duplicated across every person record).
+ */
+export function resolvePersonPronunciation(
+  person: {
+    readonly is_living?: boolean;
+    readonly full_name?: string;
+    readonly surname?: string;
+    readonly pronunciation?: Pronunciation | null;
+  },
+  lexicon?: Readonly<Record<string, Pronunciation>> | null,
+): Pronunciation | null {
+  if (person.is_living || person.full_name === 'Living') {
+    return null;
+  }
+  const surnameKey = person.surname?.trim();
+  const shared =
+    lexicon && surnameKey
+      ? (lexicon[surnameKey] ??
+        Object.entries(lexicon).find(
+          ([k]) => k.toLowerCase() === surnameKey.toLowerCase(),
+        )?.[1])
+      : undefined;
+  const own = person.pronunciation ?? undefined;
+  if (!own && !shared) {
+    return null;
+  }
+  return {
+    ...shared,
+    ...own,
+  };
+}
+
+/**
+ * Resolve a place's effective pronunciation, falling back to the shared
+ * archive-level lexicon by place name when no per-place override is set.
+ */
+export function resolvePlacePronunciation(
+  place: {
+    readonly name?: string;
+    readonly pronunciation?: Pronunciation | null;
+  },
+  lexicon?: Readonly<Record<string, Pronunciation>> | null,
+): Pronunciation | null {
+  const nameKey = place.name?.trim();
+  const shared =
+    lexicon && nameKey
+      ? (lexicon[nameKey] ??
+        Object.entries(lexicon).find(
+          ([k]) => k.toLowerCase() === nameKey.toLowerCase(),
+        )?.[1])
+      : undefined;
+  const own = place.pronunciation ?? undefined;
+  if (!own && !shared) {
+    return null;
+  }
+  return {
+    ...shared,
+    ...own,
+  };
+}
+
 export const RawPersonSchema = z.object({
   id: z.string().min(1),
   slug: z.string().min(1),

@@ -222,7 +222,7 @@ describe('Pronunciation audio generation endpoint and auto-regeneration', () => 
       content_type: string;
       size_bytes: number;
     };
-    expect(genPersonBody.audio_url).toMatch(/^\/media\/pronunciation-person-[a-f0-9]{16}\.wav$/);
+    expect(genPersonBody.audio_url).toMatch(/^\/media\/pronunciation-[a-f0-9]{16}\.wav$/);
     expect(genPersonBody.content_type).toBe('audio/wav');
     expect(genPersonBody.size_bytes).toBeGreaterThan(0);
     expect(generateSpy).toHaveBeenCalledWith({
@@ -256,7 +256,25 @@ describe('Pronunciation audio generation endpoint and auto-regeneration', () => 
     );
     expect(genPlaceRes.status).toBe(200);
     const genPlaceBody = (await genPlaceRes.json()) as { audio_url: string };
-    expect(genPlaceBody.audio_url).toMatch(/^\/media\/pronunciation-place-[a-f0-9]{16}\.wav$/);
+    expect(genPlaceBody.audio_url).toMatch(/^\/media\/pronunciation-[a-f0-9]{16}\.wav$/);
+
+    // Deduplication: generating the exact same phonetic prompt again reuses R2 clip with 0 extra TTS calls
+    const callCountBefore = generateSpy.mock.calls.length;
+    const dedupRes = await server.fetch(
+      new Request(`${ORIGIN}/api/pronunciation/generate`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', origin: ORIGIN, cookie: editorCookie },
+        body: JSON.stringify({
+          entity_type: 'person',
+          entity_id: mercer.id,
+          phonetic: 'tom-us mer-ser',
+        }),
+      })
+    );
+    expect(dedupRes.status).toBe(200);
+    const dedupBody = (await dedupRes.json()) as { audio_url: string };
+    expect(dedupBody.audio_url).toBe(genPersonBody.audio_url);
+    expect(generateSpy).toHaveBeenCalledTimes(callCountBefore);
   });
 
   it('auto-regenerates pronunciation audio on create/update when phonetic changes and degrades gracefully on error', async () => {
@@ -321,7 +339,7 @@ describe('Pronunciation audio generation endpoint and auto-regeneration', () => 
       revision: { revision_id: number };
     };
     const firstAudioUrl = created.entity.pronunciation?.audio_url;
-    expect(firstAudioUrl).toMatch(/^\/media\/pronunciation-person-[a-f0-9]{16}\.wav$/);
+    expect(firstAudioUrl).toMatch(/^\/media\/pronunciation-[a-f0-9]{16}\.wav$/);
     expect(generateSpy).toHaveBeenCalledTimes(1);
 
     // Confirm bundle cache also has the generated audio_url
@@ -379,7 +397,7 @@ describe('Pronunciation audio generation endpoint and auto-regeneration', () => 
       revision: { revision_id: number };
     };
     const secondAudioUrl = afterEditPron.entity.pronunciation?.audio_url;
-    expect(secondAudioUrl).toMatch(/^\/media\/pronunciation-person-[a-f0-9]{16}\.wav$/);
+    expect(secondAudioUrl).toMatch(/^\/media\/pronunciation-[a-f0-9]{16}\.wav$/);
     expect(secondAudioUrl).not.toBe(firstAudioUrl);
     expect(generateSpy).toHaveBeenCalledTimes(2);
 

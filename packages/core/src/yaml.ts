@@ -243,6 +243,8 @@ const CONFIG_KEY_ORDER = [
   'anchorYears',
   'privacy',
   'wiki',
+  'pronunciations',
+  'plugins',
   'extensions',
 ] as const;
 

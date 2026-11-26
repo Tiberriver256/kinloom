@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { PronunciationSchema } from './entities.js';
 
 const HexColorSchema = z
   .string()
@@ -97,6 +98,7 @@ export const KinloomSiteConfigSchema = z.object({
   anchorYears: z.array(AnchorYearConfigSchema).optional(),
   privacy: PrivacyConfigSchema.prefault({}),
   wiki: WikiConfigSchema.optional(),
+  pronunciations: z.record(z.string(), PronunciationSchema).optional(),
   plugins: z.array(z.string().min(1)).optional(),
   extensions: z.record(z.string(), z.unknown()).optional(),
 });
