@@ -426,9 +426,9 @@ describe('PronunciationBadge playback and fallback', () => {
     expect(compactBadge.querySelector('.pronunciation-source')).toBeNull();
 
     // Switch to the West Michigan variant and play its clip
-    const miVariantBtn = Array.from(fullBadge.querySelectorAll('button.pronunciation-variant-btn')).find(
-      (b) => b.textContent?.trim() === 'West Michigan',
-    );
+    const miVariantBtn = Array.from(
+      fullBadge.querySelectorAll<HTMLButtonElement>('button.pronunciation-variant-btn'),
+    ).find((b) => b.textContent?.trim() === 'West Michigan');
     expect(miVariantBtn).toBeDefined();
 
     act(() => {

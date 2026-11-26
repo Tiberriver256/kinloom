@@ -74,8 +74,13 @@ describe('kinloom pronounce lookup', () => {
     const cacheDir = await makeTempDir('kinloom-pron-cache-');
     const requestedUrls: string[] = [];
 
-    const mockFetch = vi.fn(async (input: RequestInfo | URL) => {
-      const url = typeof input === 'string' ? input : input.toString();
+    const mockFetch = vi.fn<typeof fetch>(async (input) => {
+      const url =
+        typeof input === 'string'
+          ? input
+          : input instanceof URL
+            ? input.toString()
+            : input.url;
       requestedUrls.push(url);
 
       if (url.startsWith('https://nl.wiktionary.org/')) {
@@ -137,7 +142,7 @@ describe('kinloom pronounce lookup', () => {
       lang: 'nl',
       json: true,
       cacheDir,
-      fetchImpl: mockFetch as unknown as typeof fetch,
+      fetchImpl: mockFetch,
       sleepFn: async () => {},
       nowIso: () => '2026-11-26T12:00:00.000Z',
     });
@@ -166,7 +171,7 @@ describe('kinloom pronounce lookup', () => {
       lang: 'nl',
       json: true,
       cacheDir,
-      fetchImpl: mockFetch as unknown as typeof fetch,
+      fetchImpl: mockFetch,
       sleepFn: async () => {},
     });
     expect(second.cache_hit).toBe(true);
@@ -180,7 +185,7 @@ describe('kinloom pronounce lookup', () => {
       lang: 'nl',
       refresh: true,
       cacheDir,
-      fetchImpl: mockFetch as unknown as typeof fetch,
+      fetchImpl: mockFetch,
       sleepFn: async () => {},
     });
     expect(refreshed.cache_hit).toBe(false);
@@ -192,8 +197,13 @@ describe('kinloom pronounce lookup', () => {
     const sleepCalls: number[] = [];
     let enWiktAttempts = 0;
 
-    const mockFetch = vi.fn(async (input: RequestInfo | URL) => {
-      const url = typeof input === 'string' ? input : input.toString();
+    const mockFetch = vi.fn<typeof fetch>(async (input) => {
+      const url =
+        typeof input === 'string'
+          ? input
+          : input instanceof URL
+            ? input.toString()
+            : input.url;
       if (url.startsWith('https://en.wiktionary.org/')) {
         enWiktAttempts += 1;
         if (enWiktAttempts === 1) {
@@ -235,7 +245,7 @@ describe('kinloom pronounce lookup', () => {
       term: 'Mercer',
       lang: 'en',
       cacheDir,
-      fetchImpl: mockFetch as unknown as typeof fetch,
+      fetchImpl: mockFetch,
       sleepFn: async (ms) => {
         sleepCalls.push(ms);
       },
@@ -246,7 +256,7 @@ describe('kinloom pronounce lookup', () => {
     expect(retried.primary_ipa).toBe('/ˈmɜː(ɹ)sə(ɹ)/');
 
     // Term with zero upstream IPA returns verified=false and never fabricates IPA
-    const emptyFetch = vi.fn(async () =>
+    const emptyFetch = vi.fn<typeof fetch>(async () =>
       new Response(
         JSON.stringify({ query: { pages: [{ title: 'Nonexistenthamlet', missing: true }] } }),
         { status: 200, headers: { 'content-type': 'application/json' } }
@@ -256,7 +266,7 @@ describe('kinloom pronounce lookup', () => {
       term: 'Nonexistenthamlet',
       lang: 'en',
       cacheDir,
-      fetchImpl: emptyFetch as unknown as typeof fetch,
+      fetchImpl: emptyFetch,
       sleepFn: async () => {},
     });
     expect(missing.verified).toBe(false);

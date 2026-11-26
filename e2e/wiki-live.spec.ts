@@ -39,7 +39,9 @@ async function enrollEditorViaInviteAndMagicLink(
   await expect(dialog).toBeVisible();
   await dialog.getByLabel('Email address').fill(email);
   await dialog.getByRole('button', { name: 'Email Magic Link' }).click();
-  await expect(dialog).toContainText(`Check ${email} for your one-time sign-in link`);
+  await expect(dialog).toContainText(
+    `If ${email} is enrolled in this archive, a one-time sign-in link is on its way`,
+  );
 
   const sent = wiki.ports.emailSender.sentMessages.at(-1);
   expect(sent).toBeDefined();
@@ -102,7 +104,9 @@ test('1. read-only invite shows viewer banner and magic-link sign-in auto-enroll
   const dialog = page.getByRole('dialog', { name: 'Sign in to family archive' });
   await dialog.getByLabel('Email address').fill('cousin.clara@archive.example');
   await dialog.getByRole('button', { name: 'Email Magic Link' }).click();
-  await expect(dialog).toContainText('Check cousin.clara@archive.example');
+  await expect(dialog).toContainText(
+    'If cousin.clara@archive.example is enrolled in this archive, a one-time sign-in link is on its way',
+  );
 
   const magicEmail = wiki.ports.emailSender.sentMessages.at(-1);
   expect(magicEmail?.magicLinkUrl).toContain('/api/auth/magic-link/verify?token=');
