@@ -15,6 +15,7 @@ import {
   FixedClock,
   InMemoryEmailSender,
   readStreamToBytes,
+  signSessionToken,
 } from '@kinloom/server';
 import {
   CONTRACT_SESSION_SECRET,
@@ -985,18 +986,34 @@ describe('createCloudflareWorker full HTTP lifecycle (Miniflare)', () => {
       const seededStale = await staleSeedCache.rebuildAndStore(snapshot1);
       expect(seededStale.revision_id).toBe(asRevisionId(1));
 
+      await repo.upsertUser({
+        email: 'admin@example.test',
+        display_name: 'Admin',
+        role: 'admin',
+        added_by: 'bootstrap',
+        added_at: clock.nowIso(),
+        last_login_at: clock.nowIso(),
+      });
+      const adminToken = await signSessionToken({
+        secret: CONTRACT_SESSION_SECRET,
+        clock,
+        ttlSeconds: 3600,
+        payload: { kind: 'user', email: 'admin@example.test', display_name: 'Admin', role: 'admin' },
+      });
+      const adminCookie = `__Host-kinloom_session=${adminToken}`;
+
       const env: KinloomWorkerEnv = {
         DB: fixture.db,
         MEDIA_BUCKET: fixture.bucket,
         SESSION_SECRET: CONTRACT_SESSION_SECRET,
-        ARCHIVE_MODE: 'public',
+        ARCHIVE_MODE: 'private',
       };
       const worker = createCloudflareWorker({ siteConfig, clock });
 
       // Client sends If-None-Match matching stale R2 rev 1 ETag -> must NOT get stale 304, must heal to rev 2
       const healedRes = await worker.fetch(
         new Request(`${CONTRACT_TEST_ORIGIN}/api/bundle`, {
-          headers: { 'if-none-match': seededStale.etag },
+          headers: { cookie: adminCookie, 'if-none-match': seededStale.etag },
         }),
         env
       );
