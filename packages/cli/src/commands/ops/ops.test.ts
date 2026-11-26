@@ -1,9 +1,10 @@
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import {
   parseEventsYaml,
   parseKinloomConfigYaml,
+  parseKinshipYaml,
   parseMediaYaml,
   parseNarrativesYaml,
   parsePeopleYaml,
@@ -571,6 +572,192 @@ describe('ops/context', () => {
       'img_deed',
       'img_obituary',
     ]);
+  });
+
+  it('includes deceased child and sibling images with --include-family and does not read living relatives', async () => {
+    const repoDir = await createSyntheticRepo();
+    const peoplePath = path.join(repoDir, 'data', 'people.yaml');
+    const kinshipPath = path.join(repoDir, 'data', 'kinship.yaml');
+    const people = parsePeopleYaml(await readFile(peoplePath, 'utf8'));
+    const extra: RawPerson[] = [
+      {
+        id: 'per_walter_alder',
+        slug: 'walter-alder',
+        gedcom_xref: '@I100005@',
+        full_name: 'Walter Alder',
+        given_name: 'Walter',
+        surname: 'Alder',
+        alt_names: [],
+        sex: 'M',
+        is_living: false,
+        lineage_group: 'ancestor',
+        birth_edtf: '1855-02-02',
+        death_edtf: '1920-03-03',
+        portrait_url: null,
+      },
+      {
+        id: 'per_nora_maple_living',
+        slug: 'nora-maple',
+        gedcom_xref: '@I100006@',
+        full_name: 'Nora Maple',
+        given_name: 'Nora',
+        surname: 'Maple',
+        alt_names: [],
+        sex: 'F',
+        is_living: true,
+        lineage_group: 'ancestor',
+        birth_edtf: '1864-04-04',
+        death_edtf: '',
+        portrait_url: null,
+      },
+      {
+        id: 'per_edwin_alder',
+        slug: 'edwin-alder',
+        gedcom_xref: '@I100007@',
+        full_name: 'Edwin Alder',
+        given_name: 'Edwin',
+        surname: 'Alder',
+        alt_names: [],
+        sex: 'M',
+        is_living: false,
+        lineage_group: 'descendant',
+        birth_edtf: '1888-05-05',
+        death_edtf: '1914-06-06',
+        portrait_url: null,
+      },
+      {
+        id: 'per_iris_alder',
+        slug: 'iris-alder',
+        gedcom_xref: '@I100008@',
+        full_name: 'Iris Alder',
+        given_name: 'Iris',
+        surname: 'Alder',
+        alt_names: [],
+        sex: 'F',
+        is_living: false,
+        lineage_group: 'descendant',
+        birth_edtf: '2010-01-01',
+        death_edtf: '',
+        portrait_url: null,
+      },
+    ];
+    await writeFile(
+      peoplePath,
+      serializePeopleYaml([...people, ...extra], { sortById: true }),
+      'utf8'
+    );
+    const kinship = parseKinshipYaml(await readFile(kinshipPath, 'utf8'));
+    kinship.push(
+      { from: 'per_thomas_alder', to: 'per_walter_alder', relation: 'parent' },
+      { from: 'per_thomas_alder', to: 'per_nora_maple_living', relation: 'parent' },
+      { from: 'per_arthur_alder', to: 'per_edwin_alder', relation: 'parent' },
+      { from: 'per_arthur_alder', to: 'per_iris_alder', relation: 'parent' }
+    );
+    await writeFile(
+      kinshipPath,
+      serializeKinshipYaml(kinship, { sortDeterministic: true }),
+      'utf8'
+    );
+
+    const factsDir = await makeTempDir('kinloom-family-facts-');
+    const recordImagesDir = path.join(factsDir, 'record_images');
+    await mkdir(recordImagesDir, { recursive: true });
+    const childImg = path.join(recordImagesDir, '100007_img_child_baptism.png');
+    const siblingImg = path.join(recordImagesDir, '100005_img_sibling_deed.png');
+    await writeFile(childImg, makeMinimalPng(20, 20));
+    await writeFile(siblingImg, makeMinimalPng(20, 20));
+    await writeFile(
+      path.join(factsDir, '100002.json'),
+      JSON.stringify({
+        personDbId: '100002',
+        fullName: 'Arthur Alder',
+        isLiving: false,
+      }),
+      'utf8'
+    );
+    await writeFile(
+      path.join(factsDir, '100007.json'),
+      JSON.stringify({
+        personDbId: '100007',
+        fullName: 'Edwin Alder',
+        isLiving: false,
+        sources: [{ Title: '1910 Baptism', RecordImageId: 'img_child_baptism' }],
+        recordImages: [{ RecordImageId: 'img_child_baptism', local: childImg, bytes: 42 }],
+      }),
+      'utf8'
+    );
+    await writeFile(
+      path.join(factsDir, '100005.json'),
+      JSON.stringify({
+        personDbId: '100005',
+        fullName: 'Walter Alder',
+        isLiving: false,
+        sources: [{ Title: '1890 Land Deed', RecordImageId: 'img_sibling_deed' }],
+        recordImages: [{ RecordImageId: 'img_sibling_deed', local: siblingImg, bytes: 42 }],
+      }),
+      'utf8'
+    );
+    for (const livingId of ['100004', '100006', '100008']) {
+      const livingPath = path.join(factsDir, `${livingId}.json`);
+      await writeFile(livingPath, '{LIVING-ANCESTRY-LEAK', 'utf8');
+      await chmod(livingPath, 0);
+    }
+
+    const closed = await runContextCommand({
+      repoDir,
+      personId: 'per_arthur_alder',
+      ancestryDir: factsDir,
+    });
+    expect(closed.context.relativeRecordImages).toEqual([]);
+    expect(closed.rendered).not.toContain('Walter Alder');
+    expect(closed.rendered).not.toContain('LIVING-ANCESTRY-LEAK');
+    expect(closed.rendered).not.toContain('Nora Maple');
+    expect(closed.rendered).not.toContain('Iris Alder');
+    expect(closed.rendered).not.toContain('Clara Maple');
+
+    const opened = await runContextCommand({
+      repoDir,
+      personId: 'per_arthur_alder',
+      ancestryDir: factsDir,
+      includeFamily: true,
+    });
+    expect(
+      opened.context.relativeRecordImages.map((img) => ({
+        recordImageId: img.recordImageId,
+        relation: img.relation,
+        relativeId: img.relativeId,
+        relativeName: img.relativeName,
+      }))
+    ).toEqual([
+      {
+        recordImageId: 'img_child_baptism',
+        relation: 'child',
+        relativeId: 'per_edwin_alder',
+        relativeName: 'Edwin Alder',
+      },
+      {
+        recordImageId: 'img_sibling_deed',
+        relation: 'sibling',
+        relativeId: 'per_walter_alder',
+        relativeName: 'Walter Alder',
+      },
+    ]);
+    expect(opened.context.relatives.children).toEqual([
+      REDACTED_RELATIVE_LABEL,
+      {
+        id: 'per_edwin_alder',
+        full_name: 'Edwin Alder',
+        lifespan: '1888-05-05 - 1914-06-06',
+        gedcom_xref: '@I100007@',
+      },
+      REDACTED_RELATIVE_LABEL,
+    ]);
+    expect(opened.rendered).toContain('[child: `per_edwin_alder` Edwin Alder]');
+    expect(opened.rendered).toContain('[sibling: `per_walter_alder` Walter Alder]');
+    expect(opened.rendered).not.toContain('LIVING-ANCESTRY-LEAK');
+    expect(opened.rendered).not.toContain('Nora Maple');
+    expect(opened.rendered).not.toContain('Iris Alder');
+    expect(opened.rendered).not.toContain('Clara Maple');
   });
 });
 

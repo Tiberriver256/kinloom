@@ -59,6 +59,8 @@ jobs:
 
       - name: Setup uv
         uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: false
 
       - name: Install tesseract and poppler
         run: sudo apt-get update && sudo apt-get install -y tesseract-ocr poppler-utils
@@ -235,6 +237,8 @@ jobs:
 
       - name: Setup uv
         uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: false
 
       - name: Install tesseract and poppler
         run: sudo apt-get update && sudo apt-get install -y tesseract-ocr poppler-utils

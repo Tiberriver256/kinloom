@@ -21,6 +21,7 @@ export interface ContextCommandOptions {
   repoDir?: string;
   personId: string;
   ancestryDir?: string;
+  includeFamily?: boolean;
   json?: boolean;
 }
 
@@ -40,10 +41,12 @@ export interface ContextRecordImage {
   sourceTitle: string | null;
 }
 
+export type ContextRelativeRelation = 'parent' | 'spouse' | 'child' | 'sibling';
+
 export interface ContextRelativeRecordImage extends ContextRecordImage {
   relativeId: string;
   relativeName: string;
-  relation: 'parent' | 'spouse';
+  relation: ContextRelativeRelation;
   personDbId: string;
 }
 
@@ -259,13 +262,21 @@ function formatLifespan(person: LooseYamlRecord): string {
   return `${b} - ${d}`;
 }
 
-async function buildAncestryNameIndex(ancestryDir: string): Promise<Map<string, string>> {
+async function buildAncestryNameIndex(
+  ancestryDir: string,
+  blockedPersonDbIds: ReadonlySet<string>
+): Promise<Map<string, string>> {
   const index = new Map<string, string>();
   if (!fs.existsSync(ancestryDir)) {
     return index;
   }
   const entries = await readdir(ancestryDir);
-  const jsonFiles = entries.filter((name) => name.endsWith('.json'));
+  const jsonFiles = entries.filter((name) => {
+    if (!name.endsWith('.json')) {
+      return false;
+    }
+    return !blockedPersonDbIds.has(name.slice(0, -'.json'.length));
+  });
   const namePattern = /"fullName"\s*:\s*"([^"]+)"/;
   const chunkSize = 32;
 
@@ -298,14 +309,15 @@ async function buildAncestryNameIndex(ancestryDir: string): Promise<Map<string, 
 async function findAncestryMatch(
   ancestryDir: string | null,
   person: LooseYamlRecord,
-  nameIndexHolder: { index: Map<string, string> | null }
+  nameIndexHolder: { index: Map<string, string> | null },
+  blockedPersonDbIds: ReadonlySet<string>
 ): Promise<AncestryMatch | null> {
   if (!ancestryDir || !fs.existsSync(ancestryDir)) {
     return null;
   }
 
   const numericId = extractNumericXref(person.gedcom_xref);
-  if (numericId) {
+  if (numericId && !blockedPersonDbIds.has(numericId)) {
     const directPath = path.join(ancestryDir, `${numericId}.json`);
     if (fs.existsSync(directPath)) {
       const parsed: unknown = JSON.parse(await readFile(directPath, 'utf8'));
@@ -326,7 +338,7 @@ async function findAncestryMatch(
   }
 
   if (!nameIndexHolder.index) {
-    nameIndexHolder.index = await buildAncestryNameIndex(ancestryDir);
+    nameIndexHolder.index = await buildAncestryNameIndex(ancestryDir, blockedPersonDbIds);
   }
   for (const name of targetNames) {
     const fullPath = nameIndexHolder.index.get(name);
@@ -431,11 +443,47 @@ function isConfirmedDeceasedRelative(
   return birthYear !== null && birthYear <= refYear - cutoffYears;
 }
 
+function collectSiblingIds(
+  parentIds: ReadonlySet<string>,
+  excludedIds: ReadonlySet<string>,
+  kinshipBlocks: readonly string[]
+): Set<string> {
+  const siblingIds = new Set<string>();
+  if (parentIds.size === 0) {
+    return siblingIds;
+  }
+  const blocks = kinshipBlocks.filter((block) => {
+    for (const parentId of parentIds) {
+      if (block.includes(parentId)) {
+        return true;
+      }
+    }
+    return false;
+  });
+  for (const edge of parseMatchingYamlBlocks(blocks)) {
+    const from = typeof edge.from === 'string' ? edge.from : '';
+    const to = typeof edge.to === 'string' ? edge.to : '';
+    let siblingId = '';
+    if (edge.relation === 'parent' && parentIds.has(from)) {
+      siblingId = to;
+    } else if (edge.relation === 'child' && parentIds.has(to)) {
+      siblingId = from;
+    }
+    if (siblingId && !excludedIds.has(siblingId)) {
+      siblingIds.add(siblingId);
+    }
+  }
+  return siblingIds;
+}
+
 async function collectDeceasedRelativeRecordImages(params: {
   parentIds: ReadonlySet<string>;
   spouseIds: ReadonlySet<string>;
+  childIds: ReadonlySet<string>;
+  siblingIds: ReadonlySet<string>;
   peopleById: ReadonlyMap<string, LooseYamlRecord>;
   livingIds: ReadonlySet<string>;
+  blockedPersonDbIds: ReadonlySet<string>;
   privacy: Partial<PrivacyConfig>;
   ancestryDir: string | null;
   recordImagesDir: string | null;
@@ -459,9 +507,11 @@ async function collectDeceasedRelativeRecordImages(params: {
     }
   }
 
-  const candidates: Array<{ id: string; relation: 'parent' | 'spouse' }> = [
+  const candidates: Array<{ id: string; relation: ContextRelativeRelation }> = [
     ...[...params.parentIds].toSorted().map((id) => ({ id, relation: 'parent' as const })),
     ...[...params.spouseIds].toSorted().map((id) => ({ id, relation: 'spouse' as const })),
+    ...[...params.childIds].toSorted().map((id) => ({ id, relation: 'child' as const })),
+    ...[...params.siblingIds].toSorted().map((id) => ({ id, relation: 'sibling' as const })),
   ];
 
   const relativeImages: ContextRelativeRecordImage[] = [];
@@ -471,7 +521,12 @@ async function collectDeceasedRelativeRecordImages(params: {
       continue;
     }
 
-    const match = await findAncestryMatch(params.ancestryDir, rel, params.nameIndexHolder);
+    const match = await findAncestryMatch(
+      params.ancestryDir,
+      rel,
+      params.nameIndexHolder,
+      params.blockedPersonDbIds
+    );
     const raw = match?.data ?? null;
     const card = isPlainRecord(raw?.personCard) ? raw.personCard : null;
     if (raw && (raw.isLiving === true || card?.IsLiving === true)) {
@@ -815,7 +870,9 @@ export function formatPersonContextMarkdown(ctx: PersonContextPayload): string {
   }
 
   const relImgs = ctx.relativeRecordImages;
-  lines.push(`- Confirmed-deceased parent/spouse record images on disk, deduplicated (${relImgs.length}):`);
+  lines.push(
+    `- Confirmed-deceased relative record images on disk, deduplicated (${relImgs.length}):`
+  );
   if (relImgs.length === 0) {
     lines.push('  - None');
   } else {
@@ -892,6 +949,7 @@ export async function runContextCommand(
     kinshipBlocks.filter((b) => b.includes(personId))
   );
 
+  const includeFamily = options.includeFamily === true;
   const parentIds = new Set<string>();
   const spouseIds = new Set<string>();
   const childIds = new Set<string>();
@@ -919,7 +977,20 @@ export async function runContextCommand(
     }
   }
 
-  const relativeIdSet = new Set<string>([...parentIds, ...spouseIds, ...childIds]);
+  const siblingIds = includeFamily
+    ? collectSiblingIds(
+        parentIds,
+        new Set([personId, ...parentIds, ...spouseIds, ...childIds]),
+        kinshipBlocks
+      )
+    : new Set<string>();
+
+  const relativeIdSet = new Set<string>([
+    ...parentIds,
+    ...spouseIds,
+    ...childIds,
+    ...siblingIds,
+  ]);
 
   const peopleBlocksToParse = peopleBlocks.filter((block) => {
     const id = extractYamlBlockId(block);
@@ -1195,7 +1266,12 @@ export async function runContextCommand(
   const recordImageFiles =
     recordImagesDir && fs.existsSync(recordImagesDir) ? await readdir(recordImagesDir) : [];
 
-  const ancestryMatch = await findAncestryMatch(ancestryDir, targetPerson, nameIndexHolder);
+  const ancestryMatch = await findAncestryMatch(
+    ancestryDir,
+    targetPerson,
+    nameIndexHolder,
+    livingAncestryPids
+  );
   const ancestrySummary = buildAncestrySummary(
     ancestryMatch,
     recordImagesDir,
@@ -1208,8 +1284,11 @@ export async function runContextCommand(
   const relativeRecordImages = await collectDeceasedRelativeRecordImages({
     parentIds,
     spouseIds,
+    childIds: includeFamily ? childIds : new Set<string>(),
+    siblingIds: includeFamily ? siblingIds : new Set<string>(),
     peopleById,
     livingIds,
+    blockedPersonDbIds: livingAncestryPids,
     privacy,
     ancestryDir,
     recordImagesDir,

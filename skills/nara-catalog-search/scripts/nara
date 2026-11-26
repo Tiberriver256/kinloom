@@ -1484,10 +1484,17 @@ def canonical_census1950_query(
     name: str | None,
     ed: str | None,
     limit: int,
+    page: int = 1,
 ) -> dict[str, Any]:
-    """One search the 1950 Census site can run. Empty filters stay empty strings."""
+    """One search the 1950 Census site can run. Empty filters stay empty strings.
+
+    ``page`` stays in the cache key. Page 1 is the historical default, so existing
+    page-1 cache files still match.
+    """
     if limit < 1 or limit > 100:
         raise click.BadParameter(f"Invalid --limit value: {limit!r} (must be 1..100).")
+    if page < 1:
+        raise click.BadParameter(f"Invalid --page value: {page!r} (must be >= 1).")
     state_code = normalize_census1950_state(state) if state and state.strip() else ""
     county_text = _census1950_plain_token(county, "--county", max_len=80) if county and county.strip() else ""
     name_text = _census1950_plain_token(name, "--name", max_len=120) if name and name.strip() else ""
@@ -1504,7 +1511,7 @@ def canonical_census1950_query(
         "name": name_text,
         "ed": ed_text,
         "limit": int(limit),
-        "page": 1,
+        "page": int(page),
     }
 
 
@@ -1626,6 +1633,7 @@ def _emit_census1950(data: dict[str, Any], *, cache_hit: bool, as_json: bool) ->
     type=int,
     help="Results per page (API size=, 1..100).",
 )
+@click.option("--page", default=1, show_default=True, type=int, help="Result page number (1-based).")
 @click.option("--json", "as_json", is_flag=True, help="Emit JSON instead of text.")
 @click.option("--refresh", is_flag=True, help="Bypass the disk cache and query the 1950 Census API.")
 @click.option(
@@ -1640,6 +1648,7 @@ def cmd_census1950(
     name: str | None,
     ed: str | None,
     limit: int,
+    page: int,
     as_json: bool,
     refresh: bool,
     cache_ttl_hours: float | None,
@@ -1647,10 +1656,10 @@ def cmd_census1950(
     """Search 1950 Census population schedules on 1950census.archives.gov.
 
     Results are cached under ~/.cache/kinloom-nara/census1950/ (168 h TTL).
-    A repeat call with the same filters makes no HTTP request.
+    A repeat call with the same filters and page makes no HTTP request.
     """
     canonical = canonical_census1950_query(
-        state=state, county=county, name=name, ed=ed, limit=limit
+        state=state, county=county, name=name, ed=ed, limit=limit, page=page
     )
     ttl_hours = resolve_query_ttl_hours(cache_ttl_hours)
     cache_root = get_cache_root()

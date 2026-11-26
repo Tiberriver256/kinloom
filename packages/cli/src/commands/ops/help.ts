@@ -9,6 +9,7 @@ Options:
   --person <person_id>   Target person ID in data/people.yaml (required if positional omitted)
   --repo <dir>           Archive repository root (default: current working directory)
   --ancestry-dir <dir>   Optional external facts JSON export directory (or set KINLOOM_ANCESTRY_FACTS_DIR)
+  --include-family       Also include record images for confirmed-deceased children and siblings
   --json                 Emit structured JSON instead of compact Markdown
   -h, --help             Show this help message`;
 

@@ -725,6 +725,7 @@ export async function runCli(
             person: { type: 'string' },
             repo: { type: 'string' },
             'ancestry-dir': { type: 'string' },
+            'include-family': { type: 'boolean', default: false },
             json: { type: 'boolean', default: false },
           },
         });
@@ -748,6 +749,7 @@ export async function runCli(
               repoDir: values.repo,
               personId,
               ancestryDir: values['ancestry-dir'],
+              includeFamily: values['include-family'],
               json: values.json,
             })
         );

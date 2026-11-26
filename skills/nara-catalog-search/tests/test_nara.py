@@ -614,6 +614,44 @@ class TestCensus1950Cache(unittest.TestCase):
         self.assertEqual(self.urls, [])
         self.assertEqual(list(self.cache_root.rglob("*.json")), [])
 
+    def test_page_selects_api_page_and_keeps_page_one_cache_key(self) -> None:
+        runner = CliRunner()
+        base = ["census1950", "--state", "IL", "--name", "Lincoln", "--json"]
+        first = runner.invoke(nara.cli, base)
+        self.assertEqual(first.exit_code, 0, first.output)
+        self.assertIn("page=1", self.urls[0])
+        page_one_files = list((self.cache_root / "census1950").glob("*.json"))
+        self.assertEqual(len(page_one_files), 1)
+        page_one_name = page_one_files[0].name
+
+        explicit = runner.invoke(nara.cli, [*base, "--page", "1"])
+        self.assertEqual(explicit.exit_code, 0, explicit.output)
+        self.assertTrue(json.loads(explicit.output)["cache_hit"])
+        self.assertEqual(len(self.urls), 1)
+        self.assertEqual(
+            [path.name for path in (self.cache_root / "census1950").glob("*.json")],
+            [page_one_name],
+        )
+
+        self.payload["page"] = 2
+        self.payload["results"][0]["scheduleId"] = "2002"
+        second = runner.invoke(nara.cli, [*base, "--page", "2"])
+        self.assertEqual(second.exit_code, 0, second.output)
+        body = json.loads(second.output)
+        self.assertFalse(body["cache_hit"])
+        self.assertEqual(body["results"][0]["scheduleId"], "2002")
+        self.assertEqual(len(self.urls), 2)
+        self.assertIn("page=2", self.urls[1])
+        self.assertNotIn("page=1", self.urls[1])
+        cached_names = sorted(path.name for path in (self.cache_root / "census1950").glob("*.json"))
+        self.assertEqual(len(cached_names), 2)
+        self.assertIn(page_one_name, cached_names)
+
+        rejected = runner.invoke(nara.cli, [*base, "--page", "0"])
+        self.assertNotEqual(rejected.exit_code, 0, rejected.output)
+        self.assertIn("must be >= 1", rejected.output)
+        self.assertEqual(len(self.urls), 2)
+
 
 if __name__ == "__main__":
     unittest.main()

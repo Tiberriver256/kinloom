@@ -66,7 +66,7 @@ skills/nara-catalog-search/scripts/nara download <naid> --out ./downloads/nara-<
 
 ### Search the 1950 Census population schedules
 
-`census1950` calls the public JSON API on `https://1950census.archives.gov/api/search`. Measured 2026-11-25, `GET /api/search` returns JSON (`total`, `page`, `size`, `results`) and `GET /api/state` returns `{abbr, name}` rows. That host is not the Catalog v2 API. The command sends the same query names the public site uses: `state` (postal code), `county`, `name`, `ed`, `size` (from `--limit`), and `page=1`.
+`census1950` calls the public JSON API on `https://1950census.archives.gov/api/search`. Measured 2026-11-25, `GET /api/search` returns JSON (`total`, `page`, `size`, `results`) and `GET /api/state` returns `{abbr, name}` rows. That host is not the Catalog v2 API. The command sends the same query names the public site uses: `state` (postal code), `county`, `name`, `ed`, `size` (from `--limit`), and `page` (from `--page`, default 1). The cache key includes `page`. Page 1 keeps the key written before `--page` existed.
 
 ```bash
 # Surname in one state. Repeat the same command and the second run does not call the network.
@@ -77,9 +77,12 @@ skills/nara-catalog-search/scripts/nara census1950 --state Illinois --county San
 
 # Force a new request
 skills/nara-catalog-search/scripts/nara census1950 --state IL --name Lincoln --refresh
+
+# Second page of the same search
+skills/nara-catalog-search/scripts/nara census1950 --state IL --name Lincoln --page 2 --json
 ```
 
-Give at least one of `--state`, `--county`, `--name`, or `--ed`. `--limit` is 1 through 100 (default 25). `--json` adds `"cache_hit": true` or `false`. State names and the codes published by `GET /api/state` both work, including territories such as `PR` and `PC` (Panama Canal Zone).
+Give at least one of `--state`, `--county`, `--name`, or `--ed`. `--limit` is 1 through 100 (default 25). `--page` is an integer greater than or equal to 1 (default 1). `--json` adds `"cache_hit": true` or `false`. State names and the codes published by `GET /api/state` both work, including territories such as `PR` and `PC` (Panama Canal Zone).
 
 ### Build verified search URLs offline
 
