@@ -28,7 +28,7 @@ import sys
 import time
 from pathlib import Path
 from typing import Any, Iterator
-from urllib.parse import quote, urlencode
+from urllib.parse import quote, unquote, urlencode, urlsplit
 
 import click
 import httpx
@@ -1601,6 +1601,7 @@ def _emit_census1950(data: dict[str, Any], *, cache_hit: bool, as_json: bool) ->
     for row in data.get("results") or []:
         if not isinstance(row, dict):
             continue
+        image = row.get("image")
         lines.append(
             " ".join(
                 part
@@ -1609,6 +1610,7 @@ def _emit_census1950(data: dict[str, Any], *, cache_hit: bool, as_json: bool) ->
                     str(row.get("county") or ""),
                     f"ED {row.get('ed')}" if row.get("ed") else "",
                     f"schedule {row.get('scheduleId')}" if row.get("scheduleId") else "",
+                    f"image {image}" if isinstance(image, str) and image else "",
                 )
                 if part
             )
@@ -1657,6 +1659,8 @@ def cmd_census1950(
 
     Results are cached under ~/.cache/kinloom-nara/census1950/ (168 h TTL).
     A repeat call with the same filters and page makes no HTTP request.
+    Text output prints each result's image path for census1950-image.
+    JSON results stay the API objects, including image and iiifUrl.
     """
     canonical = canonical_census1950_query(
         state=state, county=county, name=name, ed=ed, limit=limit, page=page
@@ -1681,6 +1685,250 @@ def cmd_census1950(
             {"cached_at": time.time(), "params": canonical, "data": fetched},
         )
     _emit_census1950(fetched, cache_hit=False, as_json=as_json)
+
+
+# IIIF Image API 2 on the 1950 Census host.
+# Measured 2026-11-26: GET .../full/full/0/default.jpg and .../full/240,/0/default.jpg
+# both return image/jpeg beginning with ff d8 ff, with no redirect.
+CENSUS1950_IIIF_ORIGIN = "https://1950census.archives.gov"
+CENSUS1950_IMAGE_MAX_WIDTH = 10000
+CENSUS1950_IMAGE_PATH_RE = re.compile(r"^1950census/[A-Za-z0-9._/-]+\.jpg$")
+JPEG_MAGIC = b"\xff\xd8\xff"
+
+
+def validate_census1950_image_path(raw: str) -> str:
+    """Accept one relative schedule path and reject traversal or other hosts."""
+    text = raw.strip()
+    if (
+        not text
+        or "\x00" in text
+        or "\\" in text
+        or not CENSUS1950_IMAGE_PATH_RE.fullmatch(text)
+    ):
+        raise click.BadParameter(f"Invalid 1950 Census image path: {raw!r}")
+    parts = text.split("/")
+    if any(part in ("", ".", "..") for part in parts):
+        raise click.BadParameter(f"Invalid 1950 Census image path: {raw!r}")
+    return text
+
+
+def parse_census1950_image_source(raw: str) -> str:
+    """Map an image path or a 1950 Census IIIF URL to one canonical image path."""
+    text = raw.strip()
+    if not text or "\x00" in text:
+        raise click.BadParameter(f"Invalid 1950 Census image: {raw!r}")
+    if text.startswith("1950census/"):
+        return validate_census1950_image_path(text)
+    if not text.startswith("https://"):
+        raise click.BadParameter(
+            "Pass a 1950census/...jpg path or an https://1950census.archives.gov/iiif/2/ URL."
+        )
+    parts = urlsplit(text)
+    host = parts.hostname or ""
+    if (
+        parts.scheme != "https"
+        or host != "1950census.archives.gov"
+        or parts.port not in (None, 443)
+        or parts.username
+        or parts.password
+        or parts.query
+        or parts.fragment
+    ):
+        raise click.BadParameter(
+            "1950 Census image URLs must be https://1950census.archives.gov/iiif/2/..."
+        )
+    prefix = "/iiif/2/"
+    if not parts.path.startswith(prefix) or "/" not in parts.path[len(prefix) :]:
+        raise click.BadParameter(
+            "1950 Census image URLs must be https://1950census.archives.gov/iiif/2/..."
+        )
+    encoded, suffix = parts.path[len(prefix) :].split("/", 1)
+    if suffix != "info.json" and not suffix.endswith("/default.jpg"):
+        raise click.BadParameter(
+            "Pass an IIIF info.json URL or a default.jpg URL from 1950census.archives.gov."
+        )
+    return validate_census1950_image_path(unquote(encoded))
+
+
+def census1950_image_jpeg_url(image_path: str, width: int | None) -> str:
+    size = "full" if width is None else f"{width},"
+    encoded = quote(image_path, safe="")
+    return f"{CENSUS1950_IIIF_ORIGIN}/iiif/2/{encoded}/full/{size}/0/default.jpg"
+
+
+def census1950_image_cache_paths(
+    image_path: str, width: int | None, cache_root: Path
+) -> tuple[Path, Path]:
+    key = json.dumps(
+        {"image": image_path, "width": width},
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+    )
+    digest = hashlib.sha256(key.encode("utf-8")).hexdigest()
+    directory = cache_root / "census1950-images"
+    return (
+        resolve_safe_child(directory, f"{digest}.jpg"),
+        resolve_safe_child(directory, f"{digest}.lock"),
+    )
+
+
+def resolve_census1950_image_output(out_path: Path, image_path: str) -> Path:
+    """Write basename.jpg when out_path is a directory or has no .jpg suffix."""
+    filename = image_path.rsplit("/", 1)[-1]
+    looks_like_file = out_path.suffix.lower() == ".jpg" and not out_path.is_dir()
+    dest = out_path if looks_like_file else out_path / filename
+    if "\x00" in str(dest):
+        raise click.BadParameter(f"Invalid output path: {out_path}")
+    return dest
+
+
+def require_jpeg_bytes(data: bytes) -> bytes:
+    if not data.startswith(JPEG_MAGIC):
+        raise click.ClickException("1950 Census image response is not a JPEG.")
+    return data
+
+
+def _read_cached_census1950_image(path: Path, *, ttl_hours: float) -> bytes | None:
+    if ttl_hours <= 0 or not path.is_file():
+        return None
+    age_seconds = time.time() - path.stat().st_mtime
+    if age_seconds > ttl_hours * 3600.0:
+        return None
+    try:
+        data = path.read_bytes()
+    except OSError:
+        return None
+    if not data.startswith(JPEG_MAGIC):
+        return None
+    return data
+
+
+def _census1950_fetch_jpeg(url: str, *, client: httpx.Client | None = None) -> bytes:
+    headers = {
+        "Accept": "image/jpeg",
+        "User-Agent": "kinloom/1.0 (genealogy research)",
+    }
+
+    def _read(active: httpx.Client) -> bytes:
+        resp = active.get(url, headers=headers)
+        resp.raise_for_status()
+        content_type = resp.headers.get("content-type", "")
+        if "html" in content_type.lower():
+            raise click.ClickException(
+                "1950 Census image response was HTML, not a JPEG."
+            )
+        return require_jpeg_bytes(resp.content)
+
+    if client is None:
+        with httpx.Client(timeout=120.0, follow_redirects=False) as local:
+            return _read(local)
+    return _read(client)
+
+
+def _emit_census1950_image(
+    *,
+    image_path: str,
+    url: str,
+    dest: Path,
+    nbytes: int,
+    width: int | None,
+    cache_hit: bool,
+    as_json: bool,
+) -> None:
+    if as_json:
+        click.echo(
+            json.dumps(
+                {
+                    "image": image_path,
+                    "url": url,
+                    "path": str(dest),
+                    "bytes": nbytes,
+                    "width": width,
+                    "cache_hit": cache_hit,
+                },
+                indent=2,
+                ensure_ascii=False,
+            )
+        )
+        return
+    verb = "Cached" if cache_hit else "Downloaded"
+    click.echo(f"{verb}: {dest} ({nbytes:,} bytes)")
+
+
+@cli.command("census1950-image")
+@click.argument("image_or_url")
+@click.option(
+    "-o",
+    "--out",
+    "--output",
+    "out_path",
+    default=".",
+    show_default=True,
+    type=click.Path(path_type=Path),
+    help="Output .jpg file, or a directory that receives <basename>.jpg.",
+)
+@click.option(
+    "--width",
+    default=None,
+    type=click.IntRange(1, CENSUS1950_IMAGE_MAX_WIDTH),
+    help=f"IIIF pixel width (1..{CENSUS1950_IMAGE_MAX_WIDTH}). Omit for full resolution.",
+)
+@click.option("--json", "as_json", is_flag=True, help="Emit JSON instead of text.")
+@click.option("--refresh", is_flag=True, help="Bypass the disk cache and download the JPEG again.")
+@click.option(
+    "--cache-ttl-hours",
+    default=None,
+    type=float,
+    help=f"Cache TTL in hours (default {DEFAULT_QUERY_TTL_HOURS:g}; env KINLOOM_NARA_QUERY_TTL_HOURS).",
+)
+def cmd_census1950_image(
+    image_or_url: str,
+    out_path: Path,
+    width: int | None,
+    as_json: bool,
+    refresh: bool,
+    cache_ttl_hours: float | None,
+) -> None:
+    """Download one 1950 Census schedule JPEG from the NARA IIIF server.
+
+    Accepts the image path printed by census1950, or that row's iiifUrl.
+    Files are cached under ~/.cache/kinloom-nara/census1950-images/.
+    """
+    image_path = parse_census1950_image_source(image_or_url)
+    url = census1950_image_jpeg_url(image_path, width)
+    dest = resolve_census1950_image_output(out_path, image_path)
+    ttl_hours = resolve_query_ttl_hours(cache_ttl_hours)
+    cache_root = get_cache_root()
+    data_path, lock_path = census1950_image_cache_paths(image_path, width, cache_root)
+
+    def deliver(data: bytes, *, cache_hit: bool) -> None:
+        jpeg = require_jpeg_bytes(data)
+        atomic_write_bytes(dest, jpeg)
+        _emit_census1950_image(
+            image_path=image_path,
+            url=url,
+            dest=dest,
+            nbytes=len(jpeg),
+            width=width,
+            cache_hit=cache_hit,
+            as_json=as_json,
+        )
+
+    if not refresh:
+        cached = _read_cached_census1950_image(data_path, ttl_hours=ttl_hours)
+        if cached is not None:
+            deliver(cached, cache_hit=True)
+            return
+    with file_lock(lock_path):
+        if not refresh:
+            cached = _read_cached_census1950_image(data_path, ttl_hours=ttl_hours)
+            if cached is not None:
+                deliver(cached, cache_hit=True)
+                return
+        fetched = require_jpeg_bytes(_census1950_fetch_jpeg(url))
+        atomic_write_bytes(data_path, fetched)
+    deliver(fetched, cache_hit=False)
 
 
 if __name__ == "__main__":

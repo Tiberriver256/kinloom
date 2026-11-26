@@ -1,6 +1,6 @@
 ---
 name: nara-catalog-search
-description: Search, inspect, and download records from the National Archives Catalog via the bundled uv-based `nara` CLI, website advanced search, or v2 API. Also searches the public 1950 Census population schedules. Covers CLI usage, query-string syntax, q operators, fielded parameters, filters, date and Congress ranges, pagination, and worked examples. Use when querying NARA, inspecting NAIDs, downloading digitized archival scans, searching the 1950 Census, or verifying genealogy records.
+description: Search, inspect, and download records from the National Archives Catalog via the bundled uv-based `nara` CLI, website advanced search, or v2 API. Also searches the public 1950 Census population schedules and downloads schedule JPEGs from the 1950 Census IIIF server. Covers CLI usage, query-string syntax, q operators, fielded parameters, filters, date and Congress ranges, pagination, and worked examples. Use when querying NARA, inspecting NAIDs, downloading digitized archival scans, searching the 1950 Census, downloading a 1950 Census schedule image, or verifying genealogy records.
 ---
 
 # NARA Catalog Search
@@ -17,7 +17,7 @@ Path: `skills/nara-catalog-search/scripts/nara`
 
 ### Persistent local disk cache
 
-`search`, `get`, `download`, and `census1950` cache responses atomically under `~/.cache/kinloom-nara/` (overrideable via `KINLOOM_NARA_CACHE_DIR`) using advisory file locks (`fcntl.flock` on POSIX, safe fallback elsewhere) so concurrent research threads never duplicate downloads and repeat calls make zero HTTP requests. Pass `--refresh` on `search`, `get`, `download`, or `census1950` to bypass the cache and fetch fresh data.
+`search`, `get`, `download`, `census1950`, and `census1950-image` cache responses atomically under `~/.cache/kinloom-nara/` (overrideable via `KINLOOM_NARA_CACHE_DIR`) using advisory file locks (`fcntl.flock` on POSIX, safe fallback elsewhere) so concurrent research threads never duplicate downloads and repeat calls make zero HTTP requests. Pass `--refresh` on `search`, `get`, `download`, `census1950`, or `census1950-image` to bypass the cache and fetch fresh data.
 
 Cache layout:
 
@@ -25,6 +25,7 @@ Cache layout:
 - `objects/<naid>/<page>_<safe_filename>`: individual downloaded page scans, so overlapping page slices (for example `--pages 315-350` followed by `--pages 340-360` or another biographer working the same census roll) reuse already-fetched pages straight from disk.
 - `_queries/<sha256>.json`: cached `search` query payloads keyed by canonical query parameters with a 168-hour (7-day) default TTL (`--cache-ttl-hours` or `KINLOOM_NARA_QUERY_TTL_HOURS`).
 - `census1950/<sha256>.json`: cached `census1950` responses, same TTL and the same `--cache-ttl-hours` / `KINLOOM_NARA_QUERY_TTL_HOURS` knobs. `0` skips cached reads.
+- `census1950-images/<sha256>.jpg`: cached `census1950-image` JPEGs. The key is the schedule `image` path plus the requested width (`full` when `--width` is omitted). The same TTL knobs apply. `0` skips cached reads. The command writes a file only after the body starts with the JPEG bytes `FF D8 FF`. HTML and HTTP errors are not cached.
 
 ### Search records (single or batched in one browser session)
 
@@ -82,7 +83,40 @@ skills/nara-catalog-search/scripts/nara census1950 --state IL --name Lincoln --r
 skills/nara-catalog-search/scripts/nara census1950 --state IL --name Lincoln --page 2 --json
 ```
 
-Give at least one of `--state`, `--county`, `--name`, or `--ed`. `--limit` is 1 through 100 (default 25). `--page` is an integer greater than or equal to 1 (default 1). `--json` adds `"cache_hit": true` or `false`. State names and the codes published by `GET /api/state` both work, including territories such as `PR` and `PC` (Panama Canal Zone).
+Give at least one of `--state`, `--county`, `--name`, or `--ed`. `--limit` is 1 through 100 (default 25). `--page` is an integer greater than or equal to 1 (default 1). `--json` adds `"cache_hit": true` or `false` and leaves each result object as the API returned it. Text output adds `image <path>` on the schedule line. Pass that path to `census1950-image`. State names and the codes published by `GET /api/state` both work, including territories such as `PR` and `PC` (Panama Canal Zone).
+
+### Download one 1950 Census schedule JPEG
+
+`census1950-image` downloads one schedule image from the public IIIF Image API 2 server. Measured 2026-11-26, these URLs return `image/jpeg` and do not redirect:
+
+- `https://1950census.archives.gov/iiif/2/<url-encoded-image>/full/full/0/default.jpg` (full resolution)
+- `https://1950census.archives.gov/iiif/2/<url-encoded-image>/full/<width>,/0/default.jpg` (width in pixels)
+
+The command accepts either value:
+
+- The `image` path from `census1950`, for example `1950census/43290879-Illinois/43290879-Illinois-087558/43290879-Illinois-087558-0002.jpg`.
+- The `iiifUrl` from the same row (`.../info.json`), or a `.../default.jpg` URL on `https://1950census.archives.gov/iiif/2/`.
+
+Both forms use the same cache entry when `--width` is the same. The command rebuilds the JPEG URL from the path. It does not request any other host. It rejects `..` path segments, a non-`1950census.archives.gov` host, and any URL that is not under `/iiif/2/`. It does not follow redirects.
+
+```bash
+# Full archival JPEG. The second run reads the cache and does not call the network.
+skills/nara-catalog-search/scripts/nara census1950-image \
+  1950census/43290879-Illinois/43290879-Illinois-087558/43290879-Illinois-087558-0002.jpg \
+  --out ./schedules --json
+
+# Same file, addressed by the iiifUrl from census1950 --json
+skills/nara-catalog-search/scripts/nara census1950-image \
+  "https://1950census.archives.gov/iiif/2/1950census%2F43290879-Illinois%2F43290879-Illinois-087558%2F43290879-Illinois-087558-0002.jpg/info.json" \
+  --out ./schedules
+
+# Smaller preview. This uses a different cache file from the full-resolution download.
+skills/nara-catalog-search/scripts/nara census1950-image \
+  1950census/43290879-Illinois/43290879-Illinois-087558/43290879-Illinois-087558-0002.jpg \
+  --width 2400 --out ./schedules/page.jpg
+```
+
+`--out` / `--output` is a `.jpg` file path or a directory. The default directory is `.`. A directory receives `<basename>.jpg` from the image path. `--width` is an integer from 1 through 10000. Omit it for the IIIF `full` size. `--json` prints `image`, `url`, `path`, `bytes`, `width` (`null` when you omit `--width`), and `cache_hit`. `--refresh` downloads again and replaces the cache file. `--cache-ttl-hours` matches `census1950`.
 
 ### Build verified search URLs offline
 
@@ -96,7 +130,7 @@ skills/nara-catalog-search/scripts/nara url '"Clara Barton"' --level item --api
 - `NARA_API_KEY`: optional NARA Catalog v2 API key for direct HTTP queries.
 - `NARA_BROWSER`: optional path to a Chromium or Chrome binary (defaults to `chromium`, `chromium-browser`, `google-chrome`, or Playwright's bundled browser).
 - `KINLOOM_NARA_CACHE_DIR`: optional override for the local disk cache directory (default `~/.cache/kinloom-nara`).
-- `KINLOOM_NARA_QUERY_TTL_HOURS`: optional override for the `search` query cache TTL in hours (default `168`).
+- `KINLOOM_NARA_QUERY_TTL_HOURS`: optional override for the `search`, `census1950`, and `census1950-image` cache TTL in hours (default `168`).
 
 ## Website search & query string rules (verified live 2026-11-23)
 

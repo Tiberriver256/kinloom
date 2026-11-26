@@ -666,6 +666,325 @@ class TestCensus1950Cache(unittest.TestCase):
         self.assertIn("must be >= 1", rejected.output)
         self.assertEqual(len(self.urls), 2)
 
+    def test_text_line_includes_image_and_json_stays_the_api_row(self) -> None:
+        image = (
+            "1950census/43290879-Illinois/43290879-Illinois-087558/"
+            "43290879-Illinois-087558-0002.jpg"
+        )
+        self.payload["results"][0]["image"] = image
+        runner = CliRunner()
+        text = runner.invoke(nara.cli, ["census1950", "--state", "IL", "--name", "Lincoln"])
+        self.assertEqual(text.exit_code, 0, text.output)
+        self.assertIn(f"image {image}", text.output)
+        as_json = runner.invoke(
+            nara.cli, ["census1950", "--state", "IL", "--name", "Lincoln", "--json"]
+        )
+        self.assertEqual(as_json.exit_code, 0, as_json.output)
+        body = json.loads(as_json.output)
+        self.assertEqual(
+            set(body),
+            {"cache_hit", "total", "page", "size", "results"},
+        )
+        self.assertEqual(body["results"][0], self.payload["results"][0])
+        self.assertTrue(body["cache_hit"])
+        self.assertEqual(len(self.urls), 1)
+
+
+LINCOLN_ED_IMAGE = (
+    "1950census/43290879-Illinois/43290879-Illinois-087558/"
+    "43290879-Illinois-087558-0002.jpg"
+)
+LINCOLN_ED_INFO = (
+    "https://1950census.archives.gov/iiif/2/"
+    "1950census%2F43290879-Illinois%2F43290879-Illinois-087558%2F"
+    "43290879-Illinois-087558-0002.jpg/info.json"
+)
+JPEG_FULL = b"\xff\xd8\xff\xd9full-schedule"
+JPEG_PREVIEW = b"\xff\xd8\xff\xd9width-preview"
+JPEG_REFRESHED = b"\xff\xd8\xff\xd9refreshed-schedule"
+
+
+class TestCensus1950Image(unittest.TestCase):
+    def setUp(self) -> None:
+        self._tmp = tempfile.TemporaryDirectory(prefix="kinloom-nara-census1950-image-")
+        self.cache_root = Path(self._tmp.name)
+        self.out_dir = self.cache_root / "out"
+        self.out_dir.mkdir()
+        self._env_patch = patch.dict(
+            os.environ, {"KINLOOM_NARA_CACHE_DIR": str(self.cache_root)}
+        )
+        self._env_patch.start()
+        self.urls: list[str] = []
+        self.bodies = {
+            "full": JPEG_FULL,
+            "2400": JPEG_PREVIEW,
+        }
+
+        def fake_fetch(url: str, *, client: httpx.Client | None = None) -> bytes:
+            del client
+            self.urls.append(url)
+            if "/full/2400,/0/default.jpg" in url:
+                return self.bodies["2400"]
+            if "/full/full/0/default.jpg" in url:
+                return self.bodies["full"]
+            raise AssertionError(f"unexpected image url: {url}")
+
+        self._fetch = patch.object(nara, "_census1950_fetch_jpeg", side_effect=fake_fetch)
+        self._fetch.start()
+
+    def tearDown(self) -> None:
+        self._fetch.stop()
+        self._env_patch.stop()
+        self._tmp.cleanup()
+
+    def _cached_jpegs(self) -> list[Path]:
+        directory = self.cache_root / "census1950-images"
+        if not directory.is_dir():
+            return []
+        return sorted(path for path in directory.glob("*.jpg") if path.is_file())
+
+    def test_image_path_miss_then_hit_makes_one_request(self) -> None:
+        runner = CliRunner()
+        args = [
+            "census1950-image",
+            LINCOLN_ED_IMAGE,
+            "--out",
+            str(self.out_dir),
+            "--json",
+        ]
+        first = runner.invoke(nara.cli, args)
+        self.assertEqual(first.exit_code, 0, first.output)
+        first_body = json.loads(first.output)
+        dest = self.out_dir / "43290879-Illinois-087558-0002.jpg"
+        self.assertFalse(first_body["cache_hit"])
+        self.assertEqual(first_body["image"], LINCOLN_ED_IMAGE)
+        self.assertIsNone(first_body["width"])
+        self.assertEqual(first_body["bytes"], len(JPEG_FULL))
+        self.assertEqual(first_body["path"], str(dest))
+        self.assertEqual(
+            first_body["url"],
+            "https://1950census.archives.gov/iiif/2/"
+            "1950census%2F43290879-Illinois%2F43290879-Illinois-087558%2F"
+            "43290879-Illinois-087558-0002.jpg/full/full/0/default.jpg",
+        )
+        self.assertEqual(dest.read_bytes(), JPEG_FULL)
+        self.assertEqual(len(self.urls), 1)
+        self.assertEqual(len(self._cached_jpegs()), 1)
+        self.assertEqual(self._cached_jpegs()[0].read_bytes(), JPEG_FULL)
+
+        second = runner.invoke(nara.cli, args)
+        self.assertEqual(second.exit_code, 0, second.output)
+        second_body = json.loads(second.output)
+        self.assertTrue(second_body["cache_hit"])
+        self.assertEqual(second_body["bytes"], len(JPEG_FULL))
+        self.assertEqual(dest.read_bytes(), JPEG_FULL)
+        self.assertEqual(len(self.urls), 1)
+
+    def test_info_json_url_uses_the_same_cache_entry_as_the_image_path(self) -> None:
+        runner = CliRunner()
+        by_path = runner.invoke(
+            nara.cli,
+            ["census1950-image", LINCOLN_ED_IMAGE, "--out", str(self.out_dir), "--json"],
+        )
+        self.assertEqual(by_path.exit_code, 0, by_path.output)
+        by_url = runner.invoke(
+            nara.cli,
+            ["census1950-image", LINCOLN_ED_INFO, "--out", str(self.out_dir), "--json"],
+        )
+        self.assertEqual(by_url.exit_code, 0, by_url.output)
+        body = json.loads(by_url.output)
+        self.assertTrue(body["cache_hit"])
+        self.assertEqual(body["image"], LINCOLN_ED_IMAGE)
+        self.assertEqual(json.loads(by_path.output)["url"], body["url"])
+        self.assertEqual(len(self.urls), 1)
+        self.assertEqual(len(self._cached_jpegs()), 1)
+
+    def test_width_selects_iiif_size_and_a_distinct_cache_file(self) -> None:
+        runner = CliRunner()
+        full = runner.invoke(
+            nara.cli,
+            ["census1950-image", LINCOLN_ED_IMAGE, "--out", str(self.out_dir), "--json"],
+        )
+        self.assertEqual(full.exit_code, 0, full.output)
+        preview_path = self.out_dir / "preview.jpg"
+        preview = runner.invoke(
+            nara.cli,
+            [
+                "census1950-image",
+                LINCOLN_ED_IMAGE,
+                "--width",
+                "2400",
+                "--out",
+                str(preview_path),
+                "--json",
+            ],
+        )
+        self.assertEqual(preview.exit_code, 0, preview.output)
+        body = json.loads(preview.output)
+        self.assertFalse(body["cache_hit"])
+        self.assertEqual(body["width"], 2400)
+        self.assertEqual(body["bytes"], len(JPEG_PREVIEW))
+        self.assertEqual(body["path"], str(preview_path))
+        self.assertIn("/full/2400,/0/default.jpg", body["url"])
+        self.assertEqual(self.urls[1], body["url"])
+        self.assertEqual(preview_path.read_bytes(), JPEG_PREVIEW)
+        cached = self._cached_jpegs()
+        self.assertEqual(len(cached), 2)
+        self.assertEqual({path.read_bytes() for path in cached}, {JPEG_FULL, JPEG_PREVIEW})
+
+        again = runner.invoke(
+            nara.cli,
+            [
+                "census1950-image",
+                LINCOLN_ED_IMAGE,
+                "--width",
+                "2400",
+                "--out",
+                str(preview_path),
+                "--json",
+            ],
+        )
+        self.assertTrue(json.loads(again.output)["cache_hit"])
+        self.assertEqual(len(self.urls), 2)
+
+    def test_refresh_replaces_the_cached_jpeg(self) -> None:
+        runner = CliRunner()
+        args = [
+            "census1950-image",
+            LINCOLN_ED_IMAGE,
+            "--out",
+            str(self.out_dir / "page.jpg"),
+            "--json",
+        ]
+        first = runner.invoke(nara.cli, args)
+        self.assertEqual(first.exit_code, 0, first.output)
+        self.assertFalse(json.loads(first.output)["cache_hit"])
+        self.bodies["full"] = JPEG_REFRESHED
+        refreshed = runner.invoke(nara.cli, [*args, "--refresh"])
+        self.assertEqual(refreshed.exit_code, 0, refreshed.output)
+        body = json.loads(refreshed.output)
+        self.assertFalse(body["cache_hit"])
+        self.assertEqual(body["bytes"], len(JPEG_REFRESHED))
+        self.assertEqual((self.out_dir / "page.jpg").read_bytes(), JPEG_REFRESHED)
+        self.assertEqual(self._cached_jpegs()[0].read_bytes(), JPEG_REFRESHED)
+        self.assertEqual(len(self.urls), 2)
+        self.assertEqual(len(self._cached_jpegs()), 1)
+
+        skipped = runner.invoke(nara.cli, [*args, "--cache-ttl-hours", "0"])
+        self.assertFalse(json.loads(skipped.output)["cache_hit"])
+        self.assertEqual(len(self.urls), 3)
+
+    def test_rejects_traversal_and_other_hosts_without_a_request(self) -> None:
+        runner = CliRunner()
+        rejected = [
+            "1950census/../secret.jpg",
+            "1950census/ed/../../secret.jpg",
+            "https://evil.example/iiif/2/1950census%2Fpage.jpg/info.json",
+            "http://1950census.archives.gov/iiif/2/1950census%2Fpage.jpg/info.json",
+            "https://user@1950census.archives.gov/iiif/2/1950census%2Fpage.jpg/info.json",
+            (
+                "https://1950census.archives.gov/iiif/2/"
+                "1950census%2F..%2Fsecret.jpg/info.json"
+            ),
+            "https://1950census.archives.gov/not-iiif/page.jpg",
+        ]
+        for raw in rejected:
+            result = runner.invoke(
+                nara.cli,
+                ["census1950-image", raw, "--out", str(self.out_dir), "--json"],
+            )
+            self.assertNotEqual(result.exit_code, 0, raw)
+        self.assertEqual(self.urls, [])
+        self.assertEqual(self._cached_jpegs(), [])
+        width = runner.invoke(
+            nara.cli,
+            ["census1950-image", LINCOLN_ED_IMAGE, "--width", "0", "--json"],
+        )
+        self.assertNotEqual(width.exit_code, 0, width.output)
+        self.assertEqual(self.urls, [])
+
+    def test_html_and_non_jpeg_payloads_are_not_cached(self) -> None:
+        runner = CliRunner()
+        html = runner.invoke(
+            nara.cli,
+            ["census1950-image", LINCOLN_ED_IMAGE, "--out", str(self.out_dir), "--json"],
+        )
+        self.assertEqual(html.exit_code, 0, html.output)
+
+        def bad_fetch(url: str, *, client: httpx.Client | None = None) -> bytes:
+            del client
+            self.urls.append(url)
+            if url.endswith("/full/800,/0/default.jpg"):
+                return b"GIF89a-not-a-jpeg"
+            return b"<html><body>error page</body></html>"
+
+        with patch.object(nara, "_census1950_fetch_jpeg", side_effect=bad_fetch):
+            html_result = runner.invoke(
+                nara.cli,
+                [
+                    "census1950-image",
+                    LINCOLN_ED_IMAGE,
+                    "--width",
+                    "400",
+                    "--refresh",
+                    "--out",
+                    str(self.out_dir / "bad.jpg"),
+                    "--json",
+                ],
+            )
+            gif_result = runner.invoke(
+                nara.cli,
+                [
+                    "census1950-image",
+                    LINCOLN_ED_IMAGE,
+                    "--width",
+                    "800",
+                    "--out",
+                    str(self.out_dir / "gif.jpg"),
+                    "--json",
+                ],
+            )
+        self.assertNotEqual(html_result.exit_code, 0, html_result.output)
+        self.assertNotEqual(gif_result.exit_code, 0, gif_result.output)
+        self.assertIn("not a JPEG", html_result.output)
+        self.assertIn("not a JPEG", gif_result.output)
+        self.assertFalse((self.out_dir / "bad.jpg").exists())
+        self.assertFalse((self.out_dir / "gif.jpg").exists())
+        cached = self._cached_jpegs()
+        self.assertEqual(len(cached), 1)
+        self.assertEqual(cached[0].read_bytes(), JPEG_FULL)
+        for path in self.cache_root.rglob("*"):
+            if path.is_file() and path.suffix != ".lock":
+                self.assertFalse(path.read_bytes().startswith(b"<html"))
+                self.assertFalse(path.read_bytes().startswith(b"GIF89a"))
+
+    def test_fetch_jpeg_rejects_html_and_http_errors(self) -> None:
+        self._fetch.stop()
+        try:
+            def handler(request: httpx.Request) -> httpx.Response:
+                if request.url.path.endswith("/missing.jpg"):
+                    return httpx.Response(404, text="missing")
+                return httpx.Response(
+                    200,
+                    headers={"content-type": "text/html; charset=utf-8"},
+                    text="<!doctype html><title>blocked</title>",
+                )
+
+            with httpx.Client(transport=httpx.MockTransport(handler)) as client:
+                with self.assertRaises(nara.click.ClickException) as caught:
+                    nara._census1950_fetch_jpeg(
+                        "https://1950census.archives.gov/iiif/2/x/full/full/0/default.jpg",
+                        client=client,
+                    )
+                self.assertIn("not a JPEG", str(caught.exception))
+                with self.assertRaises(httpx.HTTPStatusError):
+                    nara._census1950_fetch_jpeg(
+                        "https://1950census.archives.gov/iiif/2/missing.jpg",
+                        client=client,
+                    )
+        finally:
+            self._fetch.start()
+
 
 if __name__ == "__main__":
     unittest.main()
