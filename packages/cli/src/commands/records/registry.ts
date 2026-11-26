@@ -196,7 +196,7 @@ export const RECORD_COMMAND_SPECS: readonly RecordCommandSpec[] = [
     summary: 'Search Library of Virginia Chancery Records Index and Primo catalog',
   },
 
-  // International archives (2)
+  // International archives (3)
   {
     kind: 'skill-script',
     command: 'openarchieven',
@@ -205,6 +205,15 @@ export const RECORD_COMMAND_SPECS: readonly RecordCommandSpec[] = [
     skillDir: 'openarchieven',
     scriptName: 'openarchieven',
     summary: 'Search Dutch and Belgian civil, parish, and Rotterdam passenger records',
+  },
+  {
+    kind: 'skill-script',
+    command: 'se-archives',
+    aliases: [],
+    category: 'international',
+    skillDir: 'swedish-archives',
+    scriptName: 'se_archives.py',
+    summary: 'Search Swedish National Archives (Riksarkivet) records, church books, and IIIF scans',
   },
   {
     kind: 'skill-script',
