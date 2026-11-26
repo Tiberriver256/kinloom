@@ -1,7 +1,7 @@
 {
   "name": "@kinloom/demo",
   "private": true,
-  "version": "0.11.0",
+  "version": "0.12.0",
   "type": "module",
   "license": "MIT",
   "description": "Public-domain historical demo archive for Kinloom.",
@@ -12,9 +12,9 @@
     "preview": "vite preview --host 127.0.0.1 --port 4173 --strictPort"
   },
   "dependencies": {
-    "@kinloom/core": "0.11.0",
-    "@kinloom/tokens": "0.11.0",
-    "@kinloom/ui": "0.11.0",
+    "@kinloom/core": "0.12.0",
+    "@kinloom/tokens": "0.12.0",
+    "@kinloom/ui": "0.12.0",
     "react": "^19.3.1",
     "react-dom": "^19.3.1"
   }
