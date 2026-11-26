@@ -2,35 +2,232 @@ name: Publish Packages to npm
 
 on:
   push:
+    branches:
+      - main
     tags:
       - "v*"
   workflow_dispatch:
     inputs:
+      bump:
+        description: "SemVer bump when version is empty. auto follows conventional commits."
+        type: choice
+        options:
+          - auto
+          - patch
+          - minor
+          - major
+        default: auto
+      version:
+        description: "Explicit version override, for example 0.2.1"
+        required: false
+        default: ""
+        type: string
       dry_run:
-        description: "Run npm publish --dry-run without uploading packages"
+        description: "Plan the release and run npm publish --dry-run"
         type: boolean
         default: false
 
 permissions:
-  contents: read
+  contents: write
   id-token: write
 
 concurrency:
-  group: publish-${{ github.ref }}
+  group: publish-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
-  publish:
+  release:
+    if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      should_release: ${{ steps.plan.outputs.should_release }}
+      version: ${{ steps.plan.outputs.version }}
+      tag: ${{ steps.plan.outputs.tag }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 24
           cache: npm
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Install tesseract and poppler
+        run: sudo apt-get update && sudo apt-get install -y tesseract-ocr poppler-utils
+
+      - name: Skip release commits
+        id: gate
+        env:
+          GITHUB_EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          echo "skip=false" >> "$GITHUB_OUTPUT"
+          if [ "$GITHUB_EVENT_NAME" = "push" ]; then
+            subject="$(git log -1 --format=%s)"
+            case "$subject" in
+              'chore(release):'*)
+                echo "skip=true" >> "$GITHUB_OUTPUT"
+                ;;
+            esac
+          fi
+
+      - name: Calculate the next version
+        id: plan
+        if: steps.gate.outputs.skip != 'true'
+        env:
+          RELEASE_BUMP: ${{ inputs.bump }}
+          RELEASE_VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          args=(next --json)
+          if [ -n "${RELEASE_VERSION}" ]; then
+            args+=(--force-version "${RELEASE_VERSION}")
+          fi
+          if [ -n "${RELEASE_BUMP}" ]; then
+            args+=(--bump "${RELEASE_BUMP}")
+          fi
+          node scripts/release-version.mjs "${args[@]}" > release-plan.json
+          node --input-type=module -e '
+            import { readFileSync, appendFileSync } from "node:fs";
+            const plan = JSON.parse(readFileSync("release-plan.json", "utf8"));
+            const out = process.env.GITHUB_OUTPUT;
+            appendFileSync(out, `should_release=${plan.should_release}\n`);
+            appendFileSync(out, `version=${plan.version ?? ""}\n`);
+            appendFileSync(out, `tag=${plan.tag ?? ""}\n`);
+          '
+
+      - name: Bump, verify, tag, and create the GitHub release
+        if: steps.plan.outputs.should_release == 'true' && inputs.dry_run != true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.plan.outputs.version }}
+          TAG: ${{ steps.plan.outputs.tag }}
+        run: |
+          set -euo pipefail
+          case "$VERSION" in
+            ''|*[!0-9.]*) echo "refusing version [$VERSION]" >&2; exit 1 ;;
+          esac
+          case "$TAG" in
+            "v${VERSION}") ;;
+            *) echo "refusing tag [$TAG]" >&2; exit 1 ;;
+          esac
+
+          if git ls-remote --exit-code --tags origin "refs/tags/${TAG}" >/dev/null 2>&1; then
+            echo "Tag ${TAG} is already on origin."
+          else
+            node scripts/release-version.mjs bump "$VERSION"
+            npm ci
+            npm run check
+            git config user.name 'github-actions[bot]'
+            git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+            git add -u -- packages examples/demo/package.json package-lock.json
+            if git diff --cached --quiet; then
+              echo "Version files already match ${VERSION}."
+            else
+              git commit -m "chore(release): v${VERSION}"
+            fi
+            if ! git rev-parse "$TAG" >/dev/null 2>&1; then
+              git tag -a "$TAG" -m "$TAG"
+            fi
+            git push origin "HEAD:${GITHUB_REF_NAME}"
+            git push origin "$TAG"
+          fi
+
+          repo="$GITHUB_REPOSITORY"
+          server="${GITHUB_SERVER_URL:-https://github.com}"
+          previous="$(node --input-type=module -e 'import { readFileSync } from "node:fs"; const plan = JSON.parse(readFileSync("release-plan.json", "utf8")); process.stdout.write(plan.previous_tag ?? "")')"
+          compare=""
+          if [ -n "$previous" ]; then
+            compare="${server}/${repo}/compare/${previous}...${TAG}"
+          fi
+
+          : > logins.txt
+          node --input-type=module -e '
+            import { readFileSync } from "node:fs";
+            const plan = JSON.parse(readFileSync("release-plan.json", "utf8"));
+            for (const commit of plan.commits) process.stdout.write(`${commit.sha}\n`);
+          ' | while IFS= read -r sha; do
+            if [ -z "$sha" ]; then
+              continue
+            fi
+            login="$(gh api "repos/${repo}/commits/${sha}" --jq '.author.login // empty' || true)"
+            if [ -n "$login" ]; then
+              printf '%s\n' "$login" >> logins.txt
+            fi
+          done
+
+          node scripts/release-version.mjs notes \
+            --plan release-plan.json \
+            --out release-notes.md \
+            --logins-file logins.txt \
+            --compare-url "$compare"
+
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release edit "$TAG" --title "$TAG" --notes-file release-notes.md
+          else
+            # gh 2.105.0 prepends --notes-file to the Release Notes API body when --generate-notes is set.
+            create_args=(
+              release create "$TAG"
+              --title "$TAG"
+              --verify-tag
+              --generate-notes
+              --notes-file release-notes.md
+            )
+            if [ -n "$previous" ]; then
+              create_args+=(--notes-start-tag "$previous")
+            fi
+            gh "${create_args[@]}"
+          fi
+
+  publish:
+    needs: [release]
+    if: >-
+      always() &&
+      needs.release.result != 'cancelled' &&
+      (needs.release.result == 'success' || needs.release.result == 'skipped') &&
+      (
+        github.ref_type == 'tag' ||
+        needs.release.outputs.should_release == 'true' ||
+        (github.event_name == 'workflow_dispatch' && inputs.dry_run == true)
+      )
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check out the release tag
+        if: needs.release.outputs.should_release == 'true' && inputs.dry_run != true
+        env:
+          TAG: ${{ needs.release.outputs.tag }}
+        run: |
+          set -euo pipefail
+          git fetch origin "refs/tags/${TAG}"
+          git checkout --detach "$TAG"
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Install tesseract and poppler
+        run: sudo apt-get update && sudo apt-get install -y tesseract-ocr poppler-utils
 
       - name: Ensure npm supports Trusted Publishing OIDC
         run: |
@@ -45,34 +242,21 @@ jobs:
         run: npm run check
 
       - name: Verify release tag matches package versions
-        if: github.ref_type == 'tag'
+        if: github.ref_type == 'tag' || (needs.release.outputs.should_release == 'true' && inputs.dry_run != true)
+        env:
+          EXPECTED_VERSION: ${{ github.ref_type == 'tag' && github.ref_name || needs.release.outputs.version }}
         run: |
-          expected="${GITHUB_REF_NAME#v}"
-          for dir in packages/tokens packages/core packages/server packages/worker packages/cli packages/ui; do
-            actual="$(node -p "JSON.parse(require('node:fs').readFileSync('${dir}/package.json', 'utf8')).version")"
-            if [ "${actual}" != "${expected}" ]; then
-              echo "Version mismatch in ${dir}/package.json: expected ${expected} from tag ${GITHUB_REF_NAME}, found ${actual}" >&2
-              exit 1
-            fi
-          done
+          set -euo pipefail
+          node scripts/release-version.mjs verify "${EXPECTED_VERSION#v}"
 
       - name: Publish @kinloom/* packages in topological order
         env:
-          DRY_RUN: ${{ inputs.dry_run || false }}
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          DRY_RUN: ${{ inputs.dry_run == true && 'true' || 'false' }}
         run: |
           set -euo pipefail
+          unset NODE_AUTH_TOKEN || true
+          unset NPM_TOKEN || true
 
-          if [ -n "${NODE_AUTH_TOKEN:-}" ]; then
-            echo "Using NPM_TOKEN fallback authentication with provenance."
-            printf '//registry.npmjs.org/:_authToken=${NODE_AUTH_TOKEN}\n' >> "${HOME}/.npmrc"
-          else
-            echo "Using npm Trusted Publishing (GitHub Actions OIDC)."
-            unset NODE_AUTH_TOKEN
-          fi
-
-          # Topological dependency order:
-          # tokens -> core -> server -> worker -> cli -> ui
           packages=(
             "packages/tokens"
             "packages/core"
