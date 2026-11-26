@@ -8,6 +8,7 @@ import {
   parseMediaYaml,
   parseNarrativesYaml,
   parsePeopleYaml,
+  parsePlacesYaml,
   parseSourcesYaml,
   serializeEventsYaml,
   serializeKinloomConfigYaml,
@@ -52,6 +53,7 @@ import {
   runContextCommand,
   runDatesCommand,
   runIntegrateCommand,
+  runStatusCommand,
   runSyncCommand,
   runTelemetryReportCommand,
   runVerifyCommand,
@@ -1814,6 +1816,246 @@ describe('ops/dates', () => {
   });
 });
 
+describe('ops/status', () => {
+  it('ranks the deceased queue sparsest-first and omits living people from text and json', async () => {
+    const repoDir = await createSyntheticRepo();
+    const dataDir = path.join(repoDir, 'data');
+
+    const people = parsePeopleYaml(await readFile(path.join(dataDir, 'people.yaml'), 'utf8'));
+    const clara = people.find((person) => person.id === 'per_clara_maple_living');
+    if (!clara) {
+      throw new Error('fixture missing per_clara_maple_living');
+    }
+    clara.is_living = false;
+    people.push(
+      {
+        id: 'per_edmund_alder',
+        slug: 'edmund-alder',
+        gedcom_xref: '@I100010@',
+        full_name: 'Edmund Alder',
+        given_name: 'Edmund',
+        surname: 'Alder',
+        alt_names: [],
+        sex: 'M',
+        is_living: false,
+        lineage_group: 'ancestor',
+        birth_edtf: '1701-01-02',
+        death_edtf: '1788-03-03',
+        portrait_url: null,
+      },
+      {
+        id: 'per_nora_alder',
+        slug: 'nora-alder',
+        gedcom_xref: '@I100011@',
+        full_name: 'Nora Alder',
+        given_name: 'Nora',
+        surname: 'Alder',
+        alt_names: [],
+        sex: 'F',
+        is_living: false,
+        lineage_group: 'ancestor',
+        birth_edtf: '1890-01-01',
+        death_edtf: '1960-02-02',
+        portrait_url: null,
+      }
+    );
+
+    const places = parsePlacesYaml(await readFile(path.join(dataDir, 'places.yaml'), 'utf8'));
+    places.push({
+      id: 'plc_null_island',
+      slug: 'null-island',
+      name: 'Null Island',
+      full_name: 'Null Island',
+      place_type: 'town',
+      parent_id: null,
+      lat: 0,
+      lng: 0,
+      historical_names: [],
+    });
+
+    const events = parseEventsYaml(await readFile(path.join(dataDir, 'events.yaml'), 'utf8'));
+    events.push({
+      id: 'evt_nora_1910',
+      title: 'Nora Alder recorded in Oak County',
+      scope: 'personal',
+      event_kind: 'point_event',
+      edtf_date: '1910-04-02',
+      place_id: 'plc_oak_county_ohio',
+      summary: 'Nora Alder appears on a county record.',
+      participants: [{ person_id: 'per_nora_alder', role: 'principal' }],
+      sources: [{ source_id: 'src_1932_death_cert', confidence: 'medium' }],
+    });
+
+    const media = parseMediaYaml(await readFile(path.join(dataDir, 'media.yaml'), 'utf8'));
+    media.push({
+      id: 'med_nora_scan',
+      kind: 'document_scan',
+      person_ids: ['per_nora_alder'],
+      file: '/media/nora-record.png',
+      caption: 'Nora Alder county record',
+    });
+
+    const narratives: Narrative[] = [
+      {
+        id: 'nar_arthur_bio',
+        slug: 'arthur-alder-bio',
+        kind: 'biography',
+        subject_person_id: 'per_arthur_alder',
+        title: 'Arthur Alder Biography',
+        person_ids: ['per_arthur_alder'],
+        place_ids: [],
+        event_ids: [],
+        source_ids: [],
+        body_md: 'Arthur Alder farmed in Oak County.',
+      },
+      {
+        id: 'nar_thomas_story',
+        slug: 'thomas-alder-story',
+        kind: 'family_story',
+        subject_person_id: 'per_thomas_alder',
+        title: 'Thomas Alder Story',
+        person_ids: ['per_thomas_alder'],
+        place_ids: [],
+        event_ids: [],
+        source_ids: [],
+        body_md: 'Thomas Alder kept a farm.',
+      },
+    ];
+
+    await mkdir(path.join(repoDir, 'research', 'people', 'per_helen_maple'), { recursive: true });
+    await writeFile(path.join(repoDir, 'research', 'people', 'per_helen_maple', 'patch.json'), '{}\n', 'utf8');
+    await Promise.all([
+      writeFile(path.join(dataDir, 'people.yaml'), serializePeopleYaml(people, { sortById: true }), 'utf8'),
+      writeFile(path.join(dataDir, 'places.yaml'), serializePlacesYaml(places, { sortById: true }), 'utf8'),
+      writeFile(path.join(dataDir, 'events.yaml'), serializeEventsYaml(events, { sortById: true }), 'utf8'),
+      writeFile(path.join(dataDir, 'media.yaml'), serializeMediaYaml(media, { sortById: true }), 'utf8'),
+      writeFile(
+        path.join(dataDir, 'narratives.yaml'),
+        serializeNarrativesYaml(narratives, { sortById: true }),
+        'utf8'
+      ),
+    ]);
+
+    const jsonResult = await runStatusCommand({ repoDir, json: true });
+    const parsed = JSON.parse(jsonResult.rendered) as {
+      repo: string;
+      people: { total: number; deceased: number; living: number };
+      events: number;
+      places: number;
+      zeroCoordPlaces: number;
+      sources: number;
+      media: number;
+      narratives: number;
+      biographies: number;
+      queue: { done_live: number; staged: number; pending: number };
+      deceased: Array<{
+        id: string;
+        full_name: string;
+        status: string;
+        events: number;
+        sources: number;
+        media: number;
+      }>;
+    };
+    expect(parsed.repo).toBe(path.resolve(repoDir));
+    expect(parsed.people).toEqual({ total: 6, deceased: 5, living: 1 });
+    expect(parsed.events).toBe(3);
+    expect(parsed.places).toBe(2);
+    expect(parsed.zeroCoordPlaces).toBe(1);
+    expect(parsed.sources).toBe(2);
+    expect(parsed.media).toBe(2);
+    expect(parsed.narratives).toBe(2);
+    expect(parsed.biographies).toBe(1);
+    expect(parsed.queue).toEqual({ done_live: 1, staged: 1, pending: 3 });
+    expect(parsed.deceased).toEqual([
+      {
+        id: 'per_edmund_alder',
+        full_name: 'Edmund Alder',
+        birth_edtf: '1701-01-02',
+        death_edtf: '1788-03-03',
+        events: 0,
+        sources: 0,
+        media: 0,
+        has_biography: false,
+        has_staged_patch: false,
+        status: 'pending',
+      },
+      {
+        id: 'per_thomas_alder',
+        full_name: 'Thomas Alder',
+        birth_edtf: '1830-03-10',
+        death_edtf: '1902-11-04',
+        events: 0,
+        sources: 0,
+        media: 0,
+        has_biography: false,
+        has_staged_patch: false,
+        status: 'pending',
+      },
+      {
+        id: 'per_nora_alder',
+        full_name: 'Nora Alder',
+        birth_edtf: '1890-01-01',
+        death_edtf: '1960-02-02',
+        events: 1,
+        sources: 1,
+        media: 1,
+        has_biography: false,
+        has_staged_patch: false,
+        status: 'pending',
+      },
+      {
+        id: 'per_helen_maple',
+        full_name: 'Helen Maple',
+        birth_edtf: '1861-06-20',
+        death_edtf: '1940-01-15',
+        events: 0,
+        sources: 0,
+        media: 0,
+        has_biography: false,
+        has_staged_patch: true,
+        status: 'staged',
+      },
+      {
+        id: 'per_arthur_alder',
+        full_name: 'Arthur Alder',
+        birth_edtf: '1858-04-12',
+        death_edtf: '1932-09-18',
+        events: 2,
+        sources: 1,
+        media: 0,
+        has_biography: true,
+        has_staged_patch: false,
+        status: 'done_live',
+      },
+    ]);
+
+    const textResult = await runStatusCommand({ repoDir });
+    const forbidden = ['Clara', 'per_clara', '1954-07-08', 'clara-maple'];
+    for (const token of forbidden) {
+      expect(jsonResult.rendered.includes(token)).toBe(false);
+      expect(textResult.rendered.includes(token)).toBe(false);
+    }
+    const edmundAt = textResult.rendered.indexOf('Edmund Alder');
+    const thomasAt = textResult.rendered.indexOf('Thomas Alder');
+    const noraAt = textResult.rendered.indexOf('Nora Alder');
+    expect(edmundAt).toBeGreaterThan(-1);
+    expect(edmundAt).toBeLessThan(thomasAt);
+    expect(thomasAt).toBeLessThan(noraAt);
+    expect(textResult.rendered).toContain('Queue: done_live=1 staged=1 pending=3');
+    expect(textResult.rendered).toContain('1 living');
+
+    const cli = createCaptureIo();
+    expect(await runCli(['status', '--repo', repoDir, '--json'], { io: cli.io })).toBe(EXIT_OK);
+    expect(cli.stdout.join('\n')).toContain('"living": 1');
+    expect(cli.stderr).toEqual([]);
+    const help = createCaptureIo();
+    expect(await runCli(['status', '--help'], { io: help.io })).toBe(EXIT_OK);
+    expect(help.stdout.join('\n')).toContain('queue.pending');
+    expect(help.stdout.join('\n')).toContain('people.living');
+  });
+});
+
 describe('ops/audit', () => {
   it('passes all 5 checks in-process on a valid synthetic package', async () => {
     const repoDir = await createSyntheticRepo();
@@ -2531,6 +2773,110 @@ describe('ops/audit', () => {
     const stillYoung = chronologyFor('1896-12-17', '1950-01-01', '1900-01-01/1905-01-01', 'Marriage of Alder');
     expect(stillYoung.errors).toEqual([
       'Event evt_span (1900-01-01/1905-01-01): marriage at implausible age 9 (birth 1896-12-17).',
+    ]);
+  });
+
+  it('flags a living First Surname with the middle name omitted and skips a deceased namesake', async () => {
+    const caughtRepo = await createSyntheticRepo();
+    const caughtPeople = parsePeopleYaml(
+      await readFile(path.join(caughtRepo, 'data', 'people.yaml'), 'utf8')
+    );
+    const caughtClara = caughtPeople.find((person) => person.id === 'per_clara_maple_living');
+    if (!caughtClara) {
+      throw new Error('fixture missing per_clara_maple_living');
+    }
+    caughtClara.full_name = 'Clara Elizabeth Maple';
+    caughtClara.given_name = 'Clara Elizabeth';
+    caughtClara.surname = 'Maple';
+    caughtClara.alt_names = [];
+    caughtClara.is_living = false;
+    caughtClara.birth_edtf = '1954-07-08';
+    caughtClara.death_edtf = '';
+    await writeFile(
+      path.join(caughtRepo, 'data', 'people.yaml'),
+      serializePeopleYaml(caughtPeople, { sortById: true }),
+      'utf8'
+    );
+    const caughtPackage = path.join(caughtRepo, 'research', 'people', 'per_arthur_alder');
+    await mkdir(caughtPackage, { recursive: true });
+    await writeFile(
+      path.join(caughtPackage, 'patch.json'),
+      JSON.stringify({
+        person_id: 'per_arthur_alder',
+        narratives: [
+          {
+            id: 'nar_name_probe',
+            slug: 'name-probe',
+            title: 'Name Probe',
+            person_ids: ['per_arthur_alder'],
+            body_md: 'Clara Elizabeth Maple wrote home. Clara Maple replied later.',
+          },
+        ],
+      }),
+      'utf8'
+    );
+    const caught = await runAuditCommand({ repoDir: caughtRepo, personId: 'per_arthur_alder' });
+    expect(caught.checks.privacy.livingNameHits.map((hit) => hit.match)).toEqual([
+      'Clara Elizabeth Maple',
+      'Clara Maple',
+    ]);
+
+    const sparedRepo = await createSyntheticRepo();
+    const sparedPeople = parsePeopleYaml(
+      await readFile(path.join(sparedRepo, 'data', 'people.yaml'), 'utf8')
+    );
+    const sparedClara = sparedPeople.find((person) => person.id === 'per_clara_maple_living');
+    if (!sparedClara) {
+      throw new Error('fixture missing per_clara_maple_living');
+    }
+    sparedClara.full_name = 'Clara Elizabeth Maple';
+    sparedClara.given_name = 'Clara Elizabeth';
+    sparedClara.surname = 'Maple';
+    sparedClara.alt_names = [];
+    sparedClara.is_living = false;
+    sparedClara.birth_edtf = '1954-07-08';
+    sparedClara.death_edtf = '';
+    sparedPeople.push({
+      id: 'per_clara_maple_1850',
+      slug: 'clara-maple-1850',
+      gedcom_xref: '@I100012@',
+      full_name: 'Clara Maple',
+      given_name: 'Clara',
+      surname: 'Maple',
+      alt_names: [],
+      sex: 'F',
+      is_living: false,
+      lineage_group: 'ancestor',
+      birth_edtf: '1850-02-02',
+      death_edtf: '1920-03-03',
+      portrait_url: null,
+    });
+    await writeFile(
+      path.join(sparedRepo, 'data', 'people.yaml'),
+      serializePeopleYaml(sparedPeople, { sortById: true }),
+      'utf8'
+    );
+    const sparedPackage = path.join(sparedRepo, 'research', 'people', 'per_arthur_alder');
+    await mkdir(sparedPackage, { recursive: true });
+    await writeFile(
+      path.join(sparedPackage, 'patch.json'),
+      JSON.stringify({
+        person_id: 'per_arthur_alder',
+        narratives: [
+          {
+            id: 'nar_namesake_probe',
+            slug: 'namesake-probe',
+            title: 'Namesake Probe',
+            person_ids: ['per_arthur_alder'],
+            body_md: 'Clara Maple kept the letters. Clara Elizabeth Maple wrote them.',
+          },
+        ],
+      }),
+      'utf8'
+    );
+    const spared = await runAuditCommand({ repoDir: sparedRepo, personId: 'per_arthur_alder' });
+    expect(spared.checks.privacy.livingNameHits.map((hit) => hit.match)).toEqual([
+      'Clara Elizabeth Maple',
     ]);
   });
 });

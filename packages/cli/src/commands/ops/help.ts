@@ -52,6 +52,50 @@ Options:
   --json                 Emit structured JSON. A batch object is { ok, strictOk, repo, people, overlaps, summary, duration_ms }.
   -h, --help             Show this help message`;
 
+export const STATUS_HELP = `Usage: kinloom status [options]
+
+Read-only archive totals and a biography queue for confirmed-deceased people.
+Living people affect only the integer people.living count.
+The command does not print a living person's id, name, or birth date.
+
+Options:
+  --repo <dir>   Archive repository root (default: current working directory)
+  --json         Emit the status object as JSON
+  -h, --help     Show this help message
+
+Text output prints the totals, the queue counts, and up to 8 pending people (sparsest first).
+
+JSON object:
+  repo                 Absolute repository path
+  people.total         Rows in data/people.yaml
+  people.deceased      People who are not effective-living
+  people.living        People who are effective-living (count only)
+  events               Rows in data/events.yaml
+  places               Rows in data/places.yaml
+  zeroCoordPlaces      Places whose latitude and longitude are both within 1e-9 of 0
+  sources              Rows in data/sources.yaml
+  media                Rows in data/media.yaml
+  narratives           Rows in data/narratives.yaml
+  biographies          Narratives whose kind is biography
+  queue.done_live      Deceased people with a biography narrative
+  queue.staged         Deceased people with research/people/<id>/patch.json and no biography
+  queue.pending        Deceased people with neither a biography nor a staged patch
+  deceased             Deceased people only, ordered pending, then staged, then done_live
+
+Each deceased item has:
+  id, full_name, birth_edtf, death_edtf
+  events               Distinct events that list the person in participants
+  sources              Distinct source ids on those events
+  media                Distinct media rows whose person_id or person_ids include the person
+  has_biography        true when a biography narrative has subject_person_id equal to id
+  has_staged_patch     true when research/people/<id>/patch.json exists
+  status               done_live if has_biography, else staged if has_staged_patch, else pending
+
+Pending items sort by events, then sources, then media, then birth_edtf (an empty birth sorts as 9999), then id.
+Staged items and done_live items sort by id.
+Effective living status uses resolveEffectiveLiving with privacy.referenceYear and privacy.livingCutoffYears from kinloom.config.yaml.
+When that file is absent, the defaults are referenceYear 2026 and livingCutoffYears 101.`;
+
 export const VERIFY_HELP = `Usage: kinloom verify [options]
 
 Run full-archive invariants across local data/*.yaml files:

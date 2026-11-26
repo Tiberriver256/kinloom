@@ -8,11 +8,7 @@ import {
   type PrivacyConfig,
 } from '@kinloom/core';
 import { CliValidationError } from '../../errors.js';
-import {
-  extractYamlBlockId,
-  parseMatchingYamlBlocks,
-  splitTopLevelYamlList,
-} from './context.js';
+import { parseMatchingYamlBlocks, splitTopLevelYamlList } from './context.js';
 import { runIntegrateCommand, type IntegrateCommandResult } from './integrate.js';
 import {
   collectLiveMediaCollisions,
@@ -523,19 +519,102 @@ function collectStringsWithPath(
   }
 }
 
-function compileAuditLivingNameRegex(livingPeople: readonly LooseRecord[]): RegExp | null {
+function trimmedNameTokens(value: unknown): string[] {
+  if (typeof value !== 'string') {
+    return [];
+  }
+  return value
+    .trim()
+    .split(/\s+/)
+    .filter((token) => token.length > 0);
+}
+
+/**
+ * First token of given_name (or of full_name when given_name has fewer than two tokens)
+ * plus the surname. Used only when at least two tokens sit before the surname and the
+ * result is at least 6 characters, so "Clara Elizabeth Maple" also matches "Clara Maple".
+ */
+function derivedFirstSurname(person: LooseRecord): string | null {
+  const surname = typeof person.surname === 'string' ? person.surname.trim() : '';
+  if (!surname) {
+    return null;
+  }
+  let tokensBeforeSurname = trimmedNameTokens(person.given_name);
+  if (tokensBeforeSurname.length < 2) {
+    const fullTokens = trimmedNameTokens(person.full_name);
+    const last = fullTokens[fullTokens.length - 1];
+    if (
+      fullTokens.length >= 3 &&
+      last !== undefined &&
+      last.toLowerCase() === surname.toLowerCase()
+    ) {
+      tokensBeforeSurname = fullTokens.slice(0, -1);
+    }
+  }
+  if (tokensBeforeSurname.length < 2) {
+    return null;
+  }
+  const first = tokensBeforeSurname[0];
+  if (!first) {
+    return null;
+  }
+  const derived = `${first} ${surname}`;
+  if (derived.length < 6) {
+    return null;
+  }
+  return derived;
+}
+
+function addExactNameKeys(person: LooseRecord, keys: Set<string>): void {
+  const alts = Array.isArray(person.alt_names) ? person.alt_names : [];
+  for (const raw of [person.full_name, ...alts]) {
+    if (typeof raw !== 'string') {
+      continue;
+    }
+    const cleaned = raw.trim();
+    if (cleaned.length > 0) {
+      keys.add(cleaned.toLowerCase());
+    }
+  }
+  const derived = derivedFirstSurname(person);
+  if (derived) {
+    keys.add(derived.toLowerCase());
+  }
+}
+
+function collectStoredMultiwordNames(person: LooseRecord): string[] {
+  const alts = Array.isArray(person.alt_names) ? person.alt_names : [];
+  const names: string[] = [];
+  for (const raw of [person.full_name, ...alts]) {
+    if (typeof raw !== 'string') {
+      continue;
+    }
+    const cleaned = raw.trim();
+    // Multi-word names >= 6 chars prevent common single-token false positives.
+    if (cleaned.length >= 6 && cleaned.includes(' ')) {
+      names.push(cleaned);
+    }
+  }
+  return names;
+}
+
+function compileAuditLivingNameRegex(
+  livingPeople: readonly LooseRecord[],
+  deceasedPeople: readonly LooseRecord[] = []
+): RegExp | null {
+  const deceasedNameKeys = new Set<string>();
+  for (const person of deceasedPeople) {
+    addExactNameKeys(person, deceasedNameKeys);
+  }
   const names = new Set<string>();
-  for (const p of livingPeople) {
-    const alts = Array.isArray(p.alt_names) ? p.alt_names : [];
-    for (const raw of [p.full_name, ...alts]) {
-      if (typeof raw !== 'string') {
-        continue;
-      }
-      const cleaned = raw.trim();
-      // Multi-word names >= 6 chars prevent common single-token false positives.
-      if (cleaned.length >= 6 && cleaned.includes(' ')) {
-        names.add(cleaned);
-      }
+  for (const person of livingPeople) {
+    for (const stored of collectStoredMultiwordNames(person)) {
+      names.add(stored);
+    }
+    const derived = derivedFirstSurname(person);
+    // A deceased namesake with the same First Surname must not become a living-name hit.
+    if (derived && !deceasedNameKeys.has(derived.toLowerCase())) {
+      names.add(derived);
     }
   }
   if (names.size === 0) {
@@ -550,9 +629,10 @@ function compileAuditLivingNameRegex(livingPeople: readonly LooseRecord[]): RegE
 export function runPrivacyAndStyleScan(
   dossierText: string,
   patch: LooseRecord,
-  livingPeople: readonly LooseRecord[]
+  livingPeople: readonly LooseRecord[],
+  deceasedPeople: readonly LooseRecord[] = []
 ): PrivacyAndStyleCheckResult {
-  const livingNameRegex = compileAuditLivingNameRegex(livingPeople);
+  const livingNameRegex = compileAuditLivingNameRegex(livingPeople, deceasedPeople);
   const livingNameHits: Array<{ location: string; match: string }> = [];
   const ssnHits: Array<{ location: string; match: string }> = [];
   const phoneHits: Array<{ location: string; match: string }> = [];
@@ -1140,36 +1220,27 @@ export async function runAuditCommand(options: AuditCommandOptions): Promise<Aud
     : {};
 
   const peopleBlocks = splitTopLevelYamlList(peopleText);
-  const relevantPeopleBlocks = peopleBlocks.filter((block) => {
-    const id = extractYamlBlockId(block);
-    if (id === personId) {
-      return true;
-    }
-    if (/\b(?:is_living|living):\s*true\b/.test(block)) {
-      return true;
-    }
-    const dm = /^\s+death_edtf:\s*(.*)$/m.exec(block);
-    const dv = dm ? dm[1].trim().replaceAll(/^["']|["']$/g, '') : '';
-    return dv.length === 0 || dv === 'null' || dv === '~';
-  });
-
-  const parsedPeople = parseMatchingYamlBlocks(relevantPeopleBlocks);
+  const parsedPeople = parseMatchingYamlBlocks(peopleBlocks);
   const targetPerson = parsedPeople.find((p) => p.id === personId) ?? null;
 
-  const livingPeople = parsedPeople.filter((p) => {
-    if (p.id === personId) {
-      return false;
-    }
-    if (p.is_living === true || p.living === true) {
+  const isEffectiveLivingPerson = (person: LooseRecord): boolean => {
+    if (person.is_living === true || person.living === true) {
       return true;
     }
-    const birthEdtf = asString(p.birth_edtf).trim();
-    const deathEdtf = asString(p.death_edtf).trim();
     return resolveEffectiveLiving(
-      { is_living: false, birth_edtf: birthEdtf, death_edtf: deathEdtf },
+      {
+        is_living: false,
+        birth_edtf: asString(person.birth_edtf).trim(),
+        death_edtf: asString(person.death_edtf).trim(),
+      },
       privacyConfig
     );
-  });
+  };
+
+  const livingPeople = parsedPeople.filter(
+    (person) => person.id !== personId && isEffectiveLivingPerson(person)
+  );
+  const deceasedPeople = parsedPeople.filter((person) => !isEffectiveLivingPerson(person));
 
   const existingPersonEventBlocks = splitTopLevelYamlList(eventsText).filter((b) =>
     b.includes(personId)
@@ -1181,7 +1252,7 @@ export async function runAuditCommand(options: AuditCommandOptions): Promise<Aud
   );
 
   const chronology = runChronologyCheck(targetPerson, patch, existingPersonEvents);
-  const privacy = runPrivacyAndStyleScan(dossierText, patch, livingPeople);
+  const privacy = runPrivacyAndStyleScan(dossierText, patch, livingPeople, deceasedPeople);
   const citations = runUncitedSentenceCheck(patch);
   const scans = runScanInventoryCheck(repoDir, packageDir, patch);
   const zeroCoordinatePlaces = countZeroCoordPlaces(patch);

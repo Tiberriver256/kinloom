@@ -7,6 +7,7 @@ import {
   CONTEXT_HELP,
   DATES_HELP,
   INTEGRATE_HELP,
+  STATUS_HELP,
   SYNC_HELP,
   TELEMETRY_HELP,
   VERIFY_HELP,
@@ -58,6 +59,7 @@ Research & archive ops:
   integrate          Validate and merge a person research package into local YAML
   audit              Run 5-check package audits for one person or a staged batch
   verify             Run full-archive invariant checks over local data/*.yaml files
+  status             Report archive totals and the deceased biography queue
   sync               Diff and sync local YAML + R2 media to a live Cloudflare archive
   dates              Compute exact Gregorian weekdays, date diffs, and ages
   telemetry          Report local CLI latency, cache hit rate, and failure summary
@@ -161,6 +163,7 @@ Options:
   integrate: INTEGRATE_HELP,
   audit: AUDIT_HELP,
   verify: VERIFY_HELP,
+  status: STATUS_HELP,
   sync: SYNC_HELP,
   dates: DATES_HELP,
   telemetry: TELEMETRY_HELP,
@@ -912,6 +915,37 @@ export async function runCli(
         );
         writeRenderedOutput(io, result.rendered);
         return result.ok ? EXIT_OK : EXIT_ERROR;
+      }
+
+      case 'status': {
+        const { values } = safeParseArgs({
+          args: rest,
+          allowPositionals: false,
+          options: {
+            repo: { type: 'string' },
+            json: { type: 'boolean', default: false },
+          },
+        });
+        const [{ runStatusCommand }, { measureCommand }] = await Promise.all([
+          import('./commands/ops/status.js'),
+          import('./commands/ops/telemetry.js'),
+        ]);
+        const result = await measureCommand(
+          {
+            subcmd: 'status',
+            extractResultMeta: (res) => ({
+              exitCode: EXIT_OK,
+              bytesOut: Buffer.byteLength(res.rendered, 'utf8'),
+            }),
+          },
+          () =>
+            runStatusCommand({
+              repoDir: values.repo,
+              json: values.json,
+            })
+        );
+        writeRenderedOutput(io, result.rendered);
+        return EXIT_OK;
       }
 
       case 'sync': {

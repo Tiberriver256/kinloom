@@ -121,6 +121,18 @@ export {
 } from './sync.js';
 
 export {
+  STATUS_HELP,
+  buildDeceasedQueue,
+  formatStatusTextReport,
+  runStatusCommand,
+  type BiographyQueueStatus,
+  type DeceasedQueueItem,
+  type StatusCommandOptions,
+  type StatusCommandResult,
+  type StatusReport,
+} from './status.js';
+
+export {
   VERIFY_HELP,
   findDuplicateResidenceSpans,
   formatVerifyTextReport,
