@@ -30,23 +30,27 @@ $CLI extract $ARCHIVE/data/narratives.yaml <narrative-id> > /tmp/source.txt
 $CLI check audio/<slug>.script.txt --names audio/<slug>.names.json
 $CLI synth audio/<slug>.script.txt --names audio/<slug>.names.json --dry-run   # exact text sent
 
-# 4. Synthesize (paid)
+# 4. Synthesize (paid) — defaults to Google Cloud TTS Chirp 3: HD
 $CLI synth audio/<slug>.script.txt --names audio/<slug>.names.json -o audio/<slug>.mp3
+
+# Switch backends or voices via flags (or NARRATIVE_AUDIO_BACKEND=chirp3-hd|gemini):
+$CLI synth audio/<slug>.script.txt --names audio/<slug>.names.json --backend chirp3-hd --gcp-project <project> -o audio/<slug>.mp3
+$CLI synth audio/<slug>.script.txt --names audio/<slug>.names.json --backend gemini --model gemini-3.8-flash-tts -o audio/<slug>.mp3
 
 # 5. Optional QA transcript (paid; costs about as much as a short text call)
 $CLI transcribe audio/<slug>.mp3
 ```
 
-`synth` does the following:
-1. Swaps each name in the names file for its `/IPA/` (longest names first, whole words only).
-2. Rewrites any leftover dates like "9 May 1766" as "May ninth, 1766".
-3. Sends each `## ` section as its own request in the story voice (default `Charon`).
-4. Sends every editor note as one final "Editor's notes." segment in a second voice
-   (default `Kore`), after a 2-second pause.
-5. Removes the WAV headers and joins everything into a single MP3.
+`synth` supports two configurable TTS backends (`--backend` or `NARRATIVE_AUDIO_BACKEND`):
 
-Change the voices with `--voice` and `--notes-voice`, and the model with `--model`
-(default `gemini-3.8-flash-tts`).
+1. **`chirp3-hd` (default):** Google Cloud Text-to-Speech API (`texttospeech.googleapis.com`) using Chirp 3: HD voices (`en-US-Chirp3-HD-Charon` / `Kore`, configurable via `--language-code`, `--voice`, `--notes-voice`). Passes `.names.json` as structured `customPronunciations` (`PHONETIC_ENCODING_IPA`) without mutating the prose, automatically splits long sections under the 5,000-byte limit, and authenticates via `gcloud auth print-access-token` (with `--gcp-project` / `GOOGLE_CLOUD_PROJECT`) or `GOOGLE_CLOUD_TTS_API_KEY` / `--key-file`.
+2. **`gemini`:** Gemini TTS (`gemini-3.8-flash-tts`) via `GEMINI_API_KEY` / `GOOGLE_API_KEY` / `--key-file`, swapping each name in `.names.json` for its inline `/IPA/` string (longest names first, whole words only).
+
+In both backends, `synth`:
+1. Rewrites any leftover dates like "9 May 1766" as "May ninth, 1766".
+2. Sends each `## ` section in the story voice (default `Charon`).
+3. Sends every editor note as an "Editor's notes." segment in a second voice (default `Kore`), after a 2-second pause.
+4. Strips RIFF/WAV headers, joins the PCM chunks losslessly, encodes one MP3, and prints a ready-to-paste `extensions.narrative_audio` YAML snippet (`duration_seconds` and `editor_notes_start_seconds`) for Kinloom's `createNarrativeAudioPlugin()`.
 
 ## Script rules (summary)
 

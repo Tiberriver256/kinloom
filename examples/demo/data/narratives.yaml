@@ -87,8 +87,8 @@
   extensions:
     narrative_audio:
       file: media/audio-abraham-lincoln-bio.mp3
-      duration_seconds: 36
-      editor_notes_start_seconds: 26
+      duration_seconds: 73
+      editor_notes_start_seconds: 50
       story_voice: Charon
       notes_voice: Kore
   body_md: |
