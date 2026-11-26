@@ -135,8 +135,15 @@ export { ConflictMergeDialog } from './components/wiki/ConflictMergeDialog.js';
 export type { ConflictMergeDialogProps } from './components/wiki/ConflictMergeDialog.js';
 export { EntityEditDrawer } from './components/wiki/EntityEditDrawer.js';
 export type { EntityEditDrawerProps } from './components/wiki/EntityEditDrawer.js';
-export { CreateEntityModal } from './components/wiki/CreateEntityModal.js';
-export type { CreatableKind, CreateEntityModalProps } from './components/wiki/CreateEntityModal.js';
+export { CreateEntityModal, buildUniquePersonIdentity } from './components/wiki/CreateEntityModal.js';
+export type {
+  CreatableKind,
+  CreateEntityModalProps,
+  PersonLineageGroup,
+  PersonSex,
+  RelativeCreateContext,
+  RelativeRelation,
+} from './components/wiki/CreateEntityModal.js';
 export { RevisionHistoryPanel } from './components/wiki/RevisionHistoryPanel.js';
 export type { RevisionHistoryPanelProps } from './components/wiki/RevisionHistoryPanel.js';
 export { MediaUploaderModal } from './components/wiki/MediaUploaderModal.js';

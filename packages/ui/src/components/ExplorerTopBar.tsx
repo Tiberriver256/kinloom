@@ -1,5 +1,6 @@
 import { Link, useLocation } from 'react-router-dom';
 import React, { useEffect, useRef, useState } from 'react';
+import { SignInModal } from './wiki/SignInModal.js';
 import { initialsOf } from './Atoms.js';
 import { useArchiveData } from '../context/ArchiveDataContext.js';
 import { useArchiveUi } from '../context/ArchiveUiContext.js';
@@ -15,6 +16,7 @@ export const ExplorerTopBar: React.FC = () => {
 
   const [accountOpen, setAccountOpen] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
+  const [signInOpen, setSignInOpen] = useState(false);
   const accountMenuRef = useRef<HTMLDivElement | null>(null);
 
   const isPeopleActive =
@@ -24,6 +26,7 @@ export const ExplorerTopBar: React.FC = () => {
   const isTimeActive = location.pathname === '/time';
 
   const isSignedInMember = Boolean(session?.authenticated && session.principal_kind === 'user');
+  const isInviteViewer = Boolean(session && session.principal_kind === 'invite_viewer');
   const memberLabel = session?.displayName || session?.email || 'Member';
 
   useEffect(() => {
@@ -72,7 +75,8 @@ export const ExplorerTopBar: React.FC = () => {
   };
 
   return (
-    <header className="topbar">
+    <>
+      <header className="topbar">
       <div className="topbar-left">
         <Link to="/" className="brand-link">
           {siteConfig.site.title}
@@ -138,6 +142,18 @@ export const ExplorerTopBar: React.FC = () => {
         >
           Search (/)
         </button>
+
+        {isInviteViewer && (
+          <button
+            type="button"
+            className="nav-pill nav-pill-desktop-only"
+            onClick={() => {
+              setSignInOpen(true);
+            }}
+          >
+            Sign in to edit
+          </button>
+        )}
 
         <button
           type="button"
@@ -235,6 +251,29 @@ export const ExplorerTopBar: React.FC = () => {
                 </div>
               )}
 
+              {isInviteViewer && (
+                <>
+                  <div className="topbar-account-menu-header">
+                    <strong>
+                      {session?.inviteLabel ? `Invite: ${session.inviteLabel}` : 'Family Invite'}
+                    </strong>
+                    <span className="wiki-role-chip">Viewer</span>
+                  </div>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className="topbar-account-item"
+                    onClick={() => {
+                      setAccountOpen(false);
+                      setSignInOpen(true);
+                    }}
+                  >
+                    Sign in to edit
+                  </button>
+                  <div className="topbar-account-divider" role="separator" />
+                </>
+              )}
+
               <button
                 type="button"
                 role="menuitem"
@@ -304,6 +343,16 @@ export const ExplorerTopBar: React.FC = () => {
           </div>
         </div>
       )}
-    </header>
+      </header>
+      {isInviteViewer && (
+        <SignInModal
+          open={signInOpen}
+          inviteLabel={session?.inviteLabel}
+          onClose={() => {
+            setSignInOpen(false);
+          }}
+        />
+      )}
+    </>
   );
 };

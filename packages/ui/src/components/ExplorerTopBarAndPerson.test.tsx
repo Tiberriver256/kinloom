@@ -3,9 +3,11 @@ import type { ArchiveBundle, ArchiveDataSource, KinloomSiteConfig, Narrative } f
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { compileArchive, parseKinloomConfig } from '@kinloom/core';
 import { ArchiveProvider } from '../context/ArchiveProvider.js';
+import { AuthStatusBanner, getInviteStripDismissKey } from './wiki/AuthStatusBanner.js';
 import { ExplorerTopBar } from './ExplorerTopBar.js';
 import { PersonPage } from '../pages/PersonPage.js';
 import { SourceReaderDrawer } from './SourceReaderDrawer.js';
+import { TreePage } from '../pages/TreePage.js';
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { describe, expect, it } from 'vitest';
@@ -194,6 +196,54 @@ describe('ExplorerTopBar mobile & account menu behavior', () => {
     expect(menu?.textContent).not.toContain('Sign Out');
 
     unmount();
+  });
+
+  it('keeps Sign in to edit accessible in ExplorerTopBar and Archive menu after invite strip is dismissed', () => {
+    window.sessionStorage.clear();
+    const bundle = buildTestBundle([]);
+    const { container, unmount } = renderIntoDom(
+      <MemoryRouter initialEntries={['/']}>
+        <ArchiveProvider
+          siteConfig={siteConfig}
+          initialBundle={bundle}
+          session={{
+            authenticated: false,
+            principal_kind: 'invite_viewer',
+            role: 'viewer',
+            inviteLabel: 'Summer Reunion',
+          }}
+        >
+          <AuthStatusBanner />
+          <ExplorerTopBar />
+        </ArchiveProvider>
+      </MemoryRouter>,
+    );
+
+    const dismissBtn = container.querySelector<HTMLButtonElement>(
+      'button[aria-label="Dismiss family invite notice"]',
+    );
+    act(() => {
+      dismissBtn?.click();
+    });
+    expect(container.querySelector('.wiki-auth-banner')).toBeNull();
+    expect(window.sessionStorage.getItem(getInviteStripDismissKey('Summer Reunion'))).toBe('1');
+
+    // Mobile/archive menu still provides Sign in to edit and opens SignInModal
+    const menuBtn = container.querySelector<HTMLButtonElement>('button[aria-label="Archive menu"]');
+    act(() => {
+      menuBtn?.click();
+    });
+    const menuSignInBtn = [...container.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].find(
+      (b) => b.textContent?.trim() === 'Sign in to edit',
+    );
+    expect(menuSignInBtn).not.toBeNull();
+    act(() => {
+      menuSignInBtn?.click();
+    });
+    expect(container.querySelector('dialog[aria-label="Sign in to family archive"]')).not.toBeNull();
+
+    unmount();
+    window.sessionStorage.clear();
   });
 });
 
@@ -398,5 +448,108 @@ describe('PersonPage biography narratives and plain-English copy', () => {
     const stephenStories = stephenView.container.querySelector('section[aria-label="Family Stories"]');
     expect(stephenStories?.textContent).toContain('The Oxford Homestead Lineage');
     stephenView.unmount();
+  });
+
+  it('shows + Add parent / + Add spouse / + Add child on PersonPage for editors even with 0 relatives and hides them for viewers', () => {
+    const bundle = buildTestBundle([]);
+
+    // Read-only viewer on a root ancestor with 0 kinship edges sees no empty strip or add buttons
+    const viewerRender = renderIntoDom(
+      <MemoryRouter initialEntries={['/person/stephen-barton']}>
+        <ArchiveProvider siteConfig={siteConfig} initialBundle={bundle}>
+          <Routes>
+            <Route path="/person/:slug" element={<PersonPage />} />
+          </Routes>
+        </ArchiveProvider>
+      </MemoryRouter>,
+    );
+    expect(viewerRender.container.querySelector('.person-family-strip')).toBeNull();
+    expect(viewerRender.container.textContent).not.toContain('+ Add parent');
+    viewerRender.unmount();
+
+    // Signed-in editor sees Parents, Spouse, Children rows with contextual add buttons
+    const editorRender = renderIntoDom(
+      <MemoryRouter initialEntries={['/person/stephen-barton']}>
+        <ArchiveProvider
+          siteConfig={siteConfig}
+          initialBundle={bundle}
+          session={{
+            authenticated: true,
+            principal_kind: 'user',
+            role: 'editor',
+            displayName: 'Morgan Reid',
+          }}
+        >
+          <Routes>
+            <Route path="/person/:slug" element={<PersonPage />} />
+          </Routes>
+        </ArchiveProvider>
+      </MemoryRouter>,
+    );
+
+    const familyStrip = editorRender.container.querySelector('[aria-label="Immediate family connections"]');
+    expect(familyStrip).not.toBeNull();
+    const addButtons = [...(familyStrip?.querySelectorAll('button') ?? [])].map((b) =>
+      b.textContent?.trim(),
+    );
+    expect(addButtons).toEqual(['+ Add parent', '+ Add spouse', '+ Add child']);
+
+    const addParentBtn = [...(familyStrip?.querySelectorAll('button') ?? [])].find(
+      (b) => b.textContent?.trim() === '+ Add parent',
+    );
+    act(() => {
+      addParentBtn?.click();
+    });
+
+    const dialog = editorRender.container.querySelector('dialog[aria-label="Add parent of Stephen Barton"]');
+    expect(dialog).not.toBeNull();
+    expect(dialog?.textContent).toContain('Create new person');
+    expect(dialog?.textContent).toContain('Link existing person');
+
+    editorRender.unmount();
+  });
+
+  it('shows + Add Person button on TreePage for editors and hides it for read-only viewers', () => {
+    const bundle = buildTestBundle([]);
+
+    const viewerTree = renderIntoDom(
+      <MemoryRouter initialEntries={['/tree']}>
+        <ArchiveProvider siteConfig={siteConfig} initialBundle={bundle}>
+          <TreePage />
+        </ArchiveProvider>
+      </MemoryRouter>,
+    );
+    expect(viewerTree.container.textContent).not.toContain('+ Add Person');
+    viewerTree.unmount();
+
+    const editorTree = renderIntoDom(
+      <MemoryRouter initialEntries={['/tree']}>
+        <ArchiveProvider
+          siteConfig={siteConfig}
+          initialBundle={bundle}
+          session={{
+            authenticated: true,
+            principal_kind: 'user',
+            role: 'editor',
+            displayName: 'Morgan Reid',
+          }}
+        >
+          <TreePage />
+        </ArchiveProvider>
+      </MemoryRouter>,
+    );
+    const addPersonBtn = [...editorTree.container.querySelectorAll('button')].find(
+      (b) => b.textContent?.trim() === '+ Add Person',
+    );
+    expect(addPersonBtn).not.toBeNull();
+
+    act(() => {
+      addPersonBtn?.click();
+    });
+    expect(
+      editorTree.container.querySelector('dialog[aria-label="Add to the Family Archive"]'),
+    ).not.toBeNull();
+
+    editorTree.unmount();
   });
 });

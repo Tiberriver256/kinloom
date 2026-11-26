@@ -94,6 +94,25 @@ export interface Fetcher {
   fetch(input: Request | string | URL, init?: RequestInit): Promise<Response>;
 }
 
+export interface SendEmailAddress {
+  email: string;
+  name: string;
+}
+
+export interface SendEmailMessageBuilder {
+  from: string | SendEmailAddress;
+  to: string | SendEmailAddress | (string | SendEmailAddress)[];
+  subject: string;
+  text?: string;
+  html?: string;
+  replyTo?: string | SendEmailAddress;
+  headers?: Record<string, string>;
+}
+
+export interface SendEmailResult {
+  messageId: string;
+}
+
 export interface SendEmailMessage {
   readonly from: string;
   readonly to: string;
@@ -101,7 +120,7 @@ export interface SendEmailMessage {
 }
 
 export interface SendEmailBinding {
-  send(message: SendEmailMessage): Promise<unknown>;
+  send(message: SendEmailMessageBuilder): Promise<SendEmailResult | unknown>;
 }
 
 export interface ExecutionContext {

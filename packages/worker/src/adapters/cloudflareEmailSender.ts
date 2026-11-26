@@ -1,6 +1,6 @@
 import type { Clock, EmailSender } from '@kinloom/core';
-import { bytesToStream, KinloomHttpError, randomBase64Url } from '@kinloom/server';
-import type { SendEmailBinding, SendEmailMessage } from '../types.js';
+import { KinloomHttpError, randomBase64Url } from '@kinloom/server';
+import type { SendEmailBinding, SendEmailMessageBuilder } from '../types.js';
 
 export const DEFAULT_EMAIL_FROM = 'noreply@familyloom.org';
 
@@ -8,11 +8,19 @@ export interface CloudflareEmailSenderOptions {
   binding?: SendEmailBinding;
   fromEmail?: string;
   clock?: Clock;
-  createMessage?: (from: string, to: string, rawMime: string) => SendEmailMessage;
 }
 
 function sanitizeHeaderValue(value: string): string {
-  return value.replace(/[\r\n]+/g, ' ').trim();
+  return value.replace(/[\r\n\x00-\x1f\x7f]+/g, ' ').trim();
+}
+
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 }
 
 function extractDomain(email: string): string {
@@ -22,6 +30,53 @@ function extractDomain(email: string): string {
   }
   const domain = email.slice(atIdx + 1).trim();
   return domain || 'familyloom.org';
+}
+
+export function buildMagicLinkEmailMessage(params: {
+  fromEmail: string;
+  toEmail: string;
+  siteTitle: string;
+  magicLinkUrl: string;
+  expiresMinutes: number;
+}): SendEmailMessageBuilder {
+  const from = sanitizeHeaderValue(params.fromEmail);
+  const to = sanitizeHeaderValue(params.toEmail);
+  const siteTitle = sanitizeHeaderValue(params.siteTitle) || 'Kinloom';
+  const subject = `Sign in to ${siteTitle}`;
+
+  const text = [
+    `Sign in to ${siteTitle}`,
+    '',
+    'Open this one-time link to sign in:',
+    params.magicLinkUrl,
+    '',
+    `This link expires in ${params.expiresMinutes} minutes and can only be used once.`,
+    'If you did not request this email, you can ignore it.',
+  ].join('\n');
+
+  const safeTitle = escapeHtml(siteTitle);
+  const safeUrl = escapeHtml(params.magicLinkUrl);
+  const html = [
+    '<!doctype html>',
+    '<html>',
+    '<body style="font-family: -apple-system, BlinkMacSystemFont, \'Segoe UI\', sans-serif; color: #1c1917; line-height: 1.5; max-width: 560px; margin: 0 auto; padding: 24px;">',
+    `  <h1 style="font-size: 20px; margin: 0 0 16px;">Sign in to ${safeTitle}</h1>`,
+    '  <p style="margin: 0 0 20px;">Open this one-time link to sign in:</p>',
+    `  <p style="margin: 0 0 24px;"><a href="${safeUrl}" style="display: inline-block; background-color: #1c1917; color: #ffffff; text-decoration: none; padding: 12px 20px; border-radius: 6px; font-weight: 600;">Sign in to ${safeTitle}</a></p>`,
+    `  <p style="margin: 0 0 16px; font-size: 13px; color: #57534e; word-break: break-all;">Or copy and paste this link into your browser:<br>${safeUrl}</p>`,
+    `  <p style="margin: 0 0 8px; font-size: 13px; color: #57534e;">This link expires in ${params.expiresMinutes} minutes and can only be used once.</p>`,
+    '  <p style="margin: 0; font-size: 13px; color: #57534e;">If you did not request this email, you can ignore it.</p>',
+    '</body>',
+    '</html>',
+  ].join('\n');
+
+  return {
+    from: { email: from, name: siteTitle },
+    to,
+    subject,
+    text,
+    html,
+  };
 }
 
 export function buildMagicLinkMimeMessage(params: {
@@ -62,51 +117,22 @@ export function buildMagicLinkMimeMessage(params: {
   return `${headers.join('\r\n')}\r\n\r\n${bodyLines.join('\r\n')}\r\n`;
 }
 
-interface CloudflareEmailModule {
-  EmailMessage?: new (
-    from: string,
-    to: string,
-    raw: ReadableStream<Uint8Array> | string
-  ) => SendEmailMessage;
-}
-
-async function createRuntimeEmailMessage(
-  from: string,
-  to: string,
-  rawMime: string
-): Promise<SendEmailMessage> {
-  // Dynamically load cloudflare:email when running inside Cloudflare workerd; fall back to a plain object in Node/tests.
-  const specifier = 'cloudflare:email';
-  try {
-    const mod = (await import(/* @vite-ignore */ specifier)) as CloudflareEmailModule;
-    if (typeof mod.EmailMessage === 'function') {
-      return new mod.EmailMessage(from, to, rawMime);
-    }
-  } catch {
-    // Running outside workerd (Node / Vitest)
-  }
-  const encoded = new TextEncoder().encode(rawMime);
-  return {
-    from,
-    to,
-    raw: bytesToStream(encoded),
-  };
+function formatDeliveryErrorDetail(error: unknown, magicLinkUrl: string): string {
+  const raw = error instanceof Error ? error.message : String(error);
+  return magicLinkUrl ? raw.split(magicLinkUrl).join('[redacted]') : raw;
 }
 
 /**
  * Cloudflare SEND_EMAIL binding implementation of EmailSender.
+ * Uses Cloudflare Email Service's native structured EmailMessageBuilder payload.
  */
 export class CloudflareEmailSender implements EmailSender {
   private readonly binding?: SendEmailBinding;
   private readonly fromEmail: string;
-  private readonly clock?: Clock;
-  private readonly createMessage?: (from: string, to: string, rawMime: string) => SendEmailMessage;
 
   constructor(options: CloudflareEmailSenderOptions = {}) {
     this.binding = options.binding;
     this.fromEmail = sanitizeHeaderValue(options.fromEmail ?? DEFAULT_EMAIL_FROM);
-    this.clock = options.clock;
-    this.createMessage = options.createMessage;
   }
 
   async sendMagicLink(params: {
@@ -123,20 +149,27 @@ export class CloudflareEmailSender implements EmailSender {
       );
     }
 
-    const toEmail = sanitizeHeaderValue(params.toEmail);
-    const rawMime = buildMagicLinkMimeMessage({
+    const message = buildMagicLinkEmailMessage({
       fromEmail: this.fromEmail,
-      toEmail,
+      toEmail: params.toEmail,
       siteTitle: params.siteTitle,
       magicLinkUrl: params.magicLinkUrl,
       expiresMinutes: params.expiresMinutes,
-      now: this.clock?.now(),
     });
 
-    const message = this.createMessage
-      ? this.createMessage(this.fromEmail, toEmail, rawMime)
-      : await createRuntimeEmailMessage(this.fromEmail, toEmail, rawMime);
-
-    await this.binding.send(message);
+    try {
+      await this.binding.send(message);
+    } catch (error) {
+      if (error instanceof KinloomHttpError) {
+        throw error;
+      }
+      const detail = formatDeliveryErrorDetail(error, params.magicLinkUrl);
+      console.error(`[kinloom/worker] SEND_EMAIL binding delivery failed: ${detail}`);
+      throw new KinloomHttpError(
+        502,
+        'EMAIL_DELIVERY_FAILED',
+        'Unable to send sign-in email right now. Please try again later.'
+      );
+    }
   }
 }

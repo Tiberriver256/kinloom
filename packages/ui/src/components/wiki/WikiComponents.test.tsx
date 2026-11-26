@@ -15,7 +15,8 @@ import {
 } from '../../lib/treeNodeDisplay.js';
 import { AuthorPill, CitationBadge, ConflictBadge } from './WikiBadges.js';
 import { ArchiveProvider } from '../../context/ArchiveProvider.js';
-import { AuthStatusBanner } from './AuthStatusBanner.js';
+import { AuthStatusBanner, getInviteStripDismissKey } from './AuthStatusBanner.js';
+import { CreateEntityModal, buildUniquePersonIdentity } from './CreateEntityModal.js';
 import { EntityEditDrawer } from './EntityEditDrawer.js';
 import { MemoryRouter } from 'react-router-dom';
 import { PrivateArchiveGate } from './PrivateArchiveGate.js';
@@ -427,7 +428,8 @@ describe('Wiki UI components and tree display polish helpers', () => {
       },
     });
 
-    // Invite banner check
+    // Invite strip check (compact copy + sessionStorage dismissal)
+    window.sessionStorage.clear();
     const inviteRender = renderIntoDom(
       <MemoryRouter>
         <ArchiveProvider
@@ -444,9 +446,376 @@ describe('Wiki UI components and tree display polish helpers', () => {
         </ArchiveProvider>
       </MemoryRouter>,
     );
-    expect(inviteRender.container.textContent).toContain('Read-only family invite');
-    expect(inviteRender.container.textContent).toContain('Holiday Reunion');
+    expect(inviteRender.container.textContent).toContain('Family invite (Holiday Reunion)');
+    expect(inviteRender.container.textContent).toContain('Sign in to edit');
+    const signInBtn = [...inviteRender.container.querySelectorAll('button')].find((b) =>
+      b.textContent?.includes('Sign in to edit'),
+    );
+    act(() => {
+      signInBtn?.click();
+    });
+    expect(inviteRender.container.querySelector('dialog[aria-label="Sign in to family archive"]')).not.toBeNull();
+    const closeSignInBtn = [...inviteRender.container.querySelectorAll('button')].find(
+      (b) => b.textContent?.trim() === 'Close',
+    );
+    act(() => {
+      closeSignInBtn?.click();
+    });
+    const dismissBtn = inviteRender.container.querySelector<HTMLButtonElement>(
+      'button[aria-label="Dismiss family invite notice"]',
+    );
+    expect(dismissBtn).not.toBeNull();
+    act(() => {
+      dismissBtn?.click();
+    });
+    expect(inviteRender.container.querySelector('.wiki-auth-banner')).toBeNull();
+    expect(window.sessionStorage.getItem(getInviteStripDismissKey('Holiday Reunion'))).toBe('1');
     inviteRender.unmount();
+
+    // Remounting with same invite label stays dismissed; different invite label renders again
+    const remountSame = renderIntoDom(
+      <MemoryRouter>
+        <ArchiveProvider
+          siteConfig={siteConfig}
+          initialBundle={testBundle}
+          session={{
+            authenticated: false,
+            principal_kind: 'invite_viewer',
+            role: 'viewer',
+            inviteLabel: 'Holiday Reunion',
+          }}
+        >
+          <AuthStatusBanner />
+        </ArchiveProvider>
+      </MemoryRouter>,
+    );
+    expect(remountSame.container.querySelector('.wiki-auth-banner')).toBeNull();
+    remountSame.unmount();
+
+    const remountOther = renderIntoDom(
+      <MemoryRouter>
+        <ArchiveProvider
+          siteConfig={siteConfig}
+          initialBundle={testBundle}
+          session={{
+            authenticated: false,
+            principal_kind: 'invite_viewer',
+            role: 'viewer',
+            inviteLabel: 'Spring Gathering',
+          }}
+        >
+          <AuthStatusBanner />
+        </ArchiveProvider>
+      </MemoryRouter>,
+    );
+    expect(remountOther.container.textContent).toContain('Family invite (Spring Gathering)');
+    remountOther.unmount();
+    window.sessionStorage.clear();
+  });
+
+  it('creates new relative with sex, lineage_group, collision-checked per_ ID, and kinship edge in one submit', async () => {
+    const { bundle: twoPersonBundle } = compileArchive({
+      siteConfig,
+      mode: 'private',
+      people: [
+        {
+          id: 'p_clara',
+          slug: 'clara-barton',
+          full_name: 'Clara Barton',
+          given_name: 'Clara',
+          surname: 'Barton',
+          alt_names: [],
+          sex: 'F',
+          is_living: false,
+          lineage_group: 'pivot_ancestor',
+          birth_edtf: '1821-12-25',
+          death_edtf: '1912-04-12',
+          portrait_url: null,
+        },
+        {
+          id: 'per_stephen_barton',
+          slug: 'stephen-barton',
+          full_name: 'Stephen Barton',
+          given_name: 'Stephen',
+          surname: 'Barton',
+          alt_names: ['Capt. Barton'],
+          sex: 'M',
+          is_living: false,
+          lineage_group: 'ancestor',
+          birth_edtf: '1774-08-18',
+          death_edtf: '1862-03-21',
+          portrait_url: null,
+        },
+      ],
+      places: [],
+      events: [],
+      sources: [],
+      kinship: [],
+    });
+
+    // Collision check helper produces per_<slug>_2 when per_<slug> exists
+    expect(buildUniquePersonIdentity('Stephen Barton', twoPersonBundle.people)).toEqual({
+      id: 'per_stephen_barton_2',
+      slug: 'stephen-barton-2',
+    });
+
+    const createdCalls: { entityType: string; entityId: string; data: Record<string, unknown> }[] = [];
+    let closedCount = 0;
+    const mockDataSource: ArchiveDataSource = {
+      loadArchive: async () => ({ bundle: twoPersonBundle, etag: '"r2"', notModified: false }),
+      loadReadings: async () => null,
+      createEntity: async (entityType, input) => {
+        const resolvedEntityId = input.entity_id ?? '';
+        createdCalls.push({
+          entityType,
+          entityId: resolvedEntityId,
+          data: input.data,
+        });
+        return {
+          entity: input.data,
+          revision: {
+            revision_id: createdCalls.length + 1,
+            batch_id: null,
+            entity_type: entityType,
+            entity_id: resolvedEntityId,
+            parent_revision_id: null,
+            action: 'create',
+            reverted_revision_id: null,
+            author_id: 'editor@example.com',
+            author_name: 'Editor',
+            author_type: 'human',
+            summary: input.summary,
+            has_primary_source: input.has_primary_source,
+            before_json: null,
+            after_json: input.data,
+            created_at: '2026-11-25T10:00:00Z',
+          },
+          etag: `"r${createdCalls.length + 1}"`,
+        };
+      },
+    };
+
+    const setInput = (el: HTMLInputElement, value: string): void => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
+      setter?.call(el, value);
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+    };
+    const setSelect = (el: HTMLSelectElement, value: string): void => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value')?.set;
+      setter?.call(el, value);
+      el.dispatchEvent(new Event('change', { bubbles: true }));
+    };
+
+    const { container, unmount } = renderIntoDom(
+      <ArchiveProvider
+        siteConfig={siteConfig}
+        initialBundle={twoPersonBundle}
+        dataSource={mockDataSource}
+      >
+        <CreateEntityModal
+          open
+          relativeContext={{
+            anchorPersonId: 'p_clara',
+            anchorPersonName: 'Clara Barton',
+            relation: 'parent',
+          }}
+          onClose={() => {
+            closedCount += 1;
+          }}
+        />
+      </ArchiveProvider>,
+    );
+
+    expect(container.querySelector('h2')?.textContent).toBe('Add parent of Clara Barton');
+    const selects = [...container.querySelectorAll<HTMLSelectElement>('select')];
+    const sexSelect = selects[0];
+    const lineageSelect = selects[1];
+    expect(lineageSelect.value).toBe('ancestor');
+
+    const textInputs = [...container.querySelectorAll<HTMLInputElement>('input[type="text"]')];
+    const givenInput = textInputs[0];
+    const surnameInput = textInputs[1];
+    const birthInput = textInputs[2];
+    const summaryInput = textInputs[textInputs.length - 1];
+
+    act(() => {
+      setInput(givenInput, 'Sarah');
+      setInput(surnameInput, 'Stone');
+      setSelect(sexSelect, 'F');
+      setInput(birthInput, '1783-06-14');
+      setInput(summaryInput, 'Added mother from town register');
+    });
+
+    await act(async () => {
+      container.querySelector('form')?.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+      await new Promise((r) => setTimeout(r, 20));
+    });
+
+    expect(closedCount).toBe(1);
+    expect(createdCalls).toHaveLength(2);
+    expect(createdCalls[0]).toEqual({
+      entityType: 'person',
+      entityId: 'per_sarah_stone',
+      data: expect.objectContaining({
+        id: 'per_sarah_stone',
+        slug: 'sarah-stone',
+        full_name: 'Sarah Stone',
+        sex: 'F',
+        lineage_group: 'ancestor',
+        birth_edtf: '1783-06-14',
+      }),
+    });
+    expect(createdCalls[1]).toEqual({
+      entityType: 'kinship_edge',
+      entityId: 'per_sarah_stone:parent:p_clara',
+      data: {
+        from: 'per_sarah_stone',
+        to: 'p_clara',
+        relation: 'parent',
+      },
+    });
+    unmount();
+
+    // Link existing person mode filters candidates, excludes anchor, and creates only the kinship edge
+    createdCalls.length = 0;
+    const linkRender = renderIntoDom(
+      <ArchiveProvider
+        siteConfig={siteConfig}
+        initialBundle={twoPersonBundle}
+        dataSource={mockDataSource}
+      >
+        <CreateEntityModal
+          open
+          relativeContext={{
+            anchorPersonId: 'p_clara',
+            anchorPersonName: 'Clara Barton',
+            relation: 'parent',
+          }}
+          onClose={() => {}}
+        />
+      </ArchiveProvider>,
+    );
+
+    const linkTab = [...linkRender.container.querySelectorAll<HTMLButtonElement>('button[role="tab"]')].find(
+      (b) => b.textContent?.includes('Link existing person'),
+    );
+    act(() => {
+      linkTab?.click();
+    });
+
+    const candidateSelect = linkRender.container.querySelector<HTMLSelectElement>('select')!;
+    const optionValues = [...candidateSelect.options].map((o) => o.value);
+    expect(optionValues).toContain('per_stephen_barton');
+    expect(optionValues).not.toContain('p_clara');
+
+    const filterInput = linkRender.container.querySelector<HTMLInputElement>('input[type="search"]')!;
+    const linkSummaryInput = linkRender.container.querySelector<HTMLInputElement>('input[type="text"]')!;
+    act(() => {
+      setInput(filterInput, 'Stephen');
+      setSelect(candidateSelect, 'per_stephen_barton');
+      setInput(linkSummaryInput, 'Linked father from vital records');
+    });
+
+    await act(async () => {
+      linkRender.container
+        .querySelector('form')
+        ?.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+      await new Promise((r) => setTimeout(r, 20));
+    });
+
+    expect(createdCalls).toEqual([
+      {
+        entityType: 'kinship_edge',
+        entityId: 'per_stephen_barton:parent:p_clara',
+        data: {
+          from: 'per_stephen_barton',
+          to: 'p_clara',
+          relation: 'parent',
+        },
+      },
+    ]);
+    linkRender.unmount();
+
+    // Child relative mode defaults lineage_group to 'descendant' and links anchor -> newChild as 'parent'
+    createdCalls.length = 0;
+    const childRender = renderIntoDom(
+      <ArchiveProvider
+        siteConfig={siteConfig}
+        initialBundle={twoPersonBundle}
+        dataSource={mockDataSource}
+      >
+        <CreateEntityModal
+          open
+          relativeContext={{
+            anchorPersonId: 'per_stephen_barton',
+            anchorPersonName: 'Stephen Barton',
+            relation: 'child',
+          }}
+          onClose={() => {}}
+        />
+      </ArchiveProvider>,
+    );
+    const childSelects = [...childRender.container.querySelectorAll<HTMLSelectElement>('select')];
+    expect(childSelects[1].value).toBe('descendant');
+    const childInputs = [...childRender.container.querySelectorAll<HTMLInputElement>('input[type="text"]')];
+    act(() => {
+      setInput(childInputs[0], 'Sally');
+      setInput(childInputs[1], 'Barton');
+      setSelect(childSelects[0], 'F');
+      setInput(childInputs[childInputs.length - 1], 'Added child from family register');
+    });
+    await act(async () => {
+      childRender.container
+        .querySelector('form')
+        ?.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+      await new Promise((r) => setTimeout(r, 20));
+    });
+    expect(createdCalls[1]).toEqual({
+      entityType: 'kinship_edge',
+      entityId: 'per_stephen_barton:parent:per_sally_barton',
+      data: {
+        from: 'per_stephen_barton',
+        to: 'per_sally_barton',
+        relation: 'parent',
+      },
+    });
+    childRender.unmount();
+
+    // Standalone + Add Person exposes Sex and Lineage group selects
+    createdCalls.length = 0;
+    const standaloneRender = renderIntoDom(
+      <ArchiveProvider
+        siteConfig={siteConfig}
+        initialBundle={twoPersonBundle}
+        dataSource={mockDataSource}
+      >
+        <CreateEntityModal open defaultKind="person" onClose={() => {}} />
+      </ArchiveProvider>,
+    );
+    const standaloneSelects = [...standaloneRender.container.querySelectorAll<HTMLSelectElement>('select')];
+    const standaloneTextInputs = [
+      ...standaloneRender.container.querySelectorAll<HTMLInputElement>('input[type="text"]'),
+    ];
+    act(() => {
+      setInput(standaloneTextInputs[0], 'David');
+      setInput(standaloneTextInputs[1], 'Barton');
+      setSelect(standaloneSelects[0], 'M');
+      setSelect(standaloneSelects[1], 'collateral');
+      setInput(standaloneTextInputs[standaloneTextInputs.length - 1], 'Added sibling from census');
+    });
+    await act(async () => {
+      standaloneRender.container
+        .querySelector('form')
+        ?.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+      await new Promise((r) => setTimeout(r, 20));
+    });
+    expect(createdCalls).toHaveLength(1);
+    expect(createdCalls[0].entityId).toBe('per_david_barton');
+    expect(createdCalls[0].data).toMatchObject({
+      sex: 'M',
+      lineage_group: 'collateral',
+    });
+    standaloneRender.unmount();
   });
 
   it('formats tree node labels, names, and generic census subdivisions without private strings', () => {

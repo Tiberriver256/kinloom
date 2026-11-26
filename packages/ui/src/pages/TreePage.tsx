@@ -27,6 +27,7 @@ import {
   formatTreeCardPlace,
 } from '../lib/treeNodeDisplay.js';
 import { initialsOf, resolveAssetUrl } from '../components/Atoms.js';
+import { CreateEntityModal } from '../components/wiki/CreateEntityModal.js';
 import { ExplorerTopBar } from '../components/ExplorerTopBar.js';
 import { useArchiveData } from '../context/ArchiveDataContext.js';
 
@@ -281,7 +282,7 @@ const TreeMinimapImpl: React.FC<{
 const TreeMinimap = React.memo(TreeMinimapImpl);
 
 export const TreePage: React.FC = () => {
-  const { siteConfig, baseUrl, bundle, placesById, loading } = useArchiveData();
+  const { siteConfig, baseUrl, bundle, placesById, capabilities, loading } = useArchiveData();
   const personThumbMap = useMemo(
     () => (bundle ? buildPersonThumbMap(bundle) : new Map<string, string>()),
     [bundle],
@@ -323,6 +324,7 @@ export const TreePage: React.FC = () => {
   const [selectedPerson, setSelectedPerson] = useState<Person | null>(null);
   const [branchFilter, setBranchFilter] = useState<string>('all');
   const [mode, setMode] = useState<'direct' | 'full'>('full');
+  const [createPersonOpen, setCreatePersonOpen] = useState<boolean>(false);
 
   const markZooming = useCallback((): void => {
     stageRef.current?.classList.add('is-zooming');
@@ -1043,6 +1045,17 @@ export const TreePage: React.FC = () => {
               </button>
             </>
           )}
+          {capabilities.canEdit && (
+            <button
+              type="button"
+              className="pill-btn tree-add-person-btn"
+              onClick={() => {
+                setCreatePersonOpen(true);
+              }}
+            >
+              + Add Person
+            </button>
+          )}
         </div>
 
         <div ref={stageRef} className="tree-stage" style={stageStyle}>
@@ -1224,6 +1237,13 @@ export const TreePage: React.FC = () => {
           </button>
         </div>
       </main>
+      <CreateEntityModal
+        open={createPersonOpen}
+        defaultKind="person"
+        onClose={() => {
+          setCreatePersonOpen(false);
+        }}
+      />
     </div>
   );
 };

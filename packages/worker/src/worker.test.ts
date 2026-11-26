@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Miniflare } from 'miniflare';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   asBatchId,
   asRevisionId,
@@ -25,6 +25,7 @@ import {
   runBackendAdapterContractTests,
 } from '@kinloom/server/testing';
 import {
+  buildMagicLinkEmailMessage,
   buildMagicLinkMimeMessage,
   CloudflareEmailSender,
   createCloudflareAssetHandler,
@@ -38,7 +39,7 @@ import {
   type KinloomWorkerEnv,
   type R2Bucket,
   type SendEmailBinding,
-  type SendEmailMessage,
+  type SendEmailMessageBuilder,
 } from './index.js';
 
 const THIS_DIR = dirname(fileURLToPath(import.meta.url));
@@ -303,16 +304,12 @@ describe('createCloudflareWorker full HTTP lifecycle (Miniflare)', () => {
     try {
       const siteConfig = createSyntheticSiteConfig();
       const clock = new FixedClock('2026-07-01T09:00:00.000Z');
-      const sentMimeEmails: Array<{ from: string; to: string; mime: string }> = [];
+      const sentEmails: SendEmailMessageBuilder[] = [];
 
       const sendEmailBinding: SendEmailBinding = {
-        async send(message: SendEmailMessage): Promise<void> {
-          const rawBytes = await readStreamToBytes(message.raw);
-          sentMimeEmails.push({
-            from: message.from,
-            to: message.to,
-            mime: new TextDecoder().decode(rawBytes),
-          });
+        async send(message: SendEmailMessageBuilder): Promise<{ messageId: string }> {
+          sentEmails.push(message);
+          return { messageId: '<test-msg@familyloom.org>' };
         },
       };
 
@@ -352,7 +349,7 @@ describe('createCloudflareWorker full HTTP lifecycle (Miniflare)', () => {
 
       const worker = createCloudflareWorker({ siteConfig, clock });
 
-      // 1. Bootstrap admin via magic-link over SEND_EMAIL MIME binding
+      // 1. Bootstrap admin via magic-link over SEND_EMAIL EmailMessageBuilder binding
       const magicReqRes = await worker.fetch(
         new Request(`${CONTRACT_TEST_ORIGIN}/api/auth/magic-link/request`, {
           method: 'POST',
@@ -365,15 +362,21 @@ describe('createCloudflareWorker full HTTP lifecycle (Miniflare)', () => {
         env
       );
       expect(magicReqRes.status).toBe(202);
-      expect(sentMimeEmails).toHaveLength(1);
-      expect(sentMimeEmails[0].from).toBe('noreply@familyloom.org');
-      expect(sentMimeEmails[0].to).toBe('founder@example.test');
-      expect(sentMimeEmails[0].mime).toContain('MIME-Version: 1.0');
+      expect(sentEmails).toHaveLength(1);
+      expect(sentEmails[0].from).toEqual({
+        email: 'noreply@familyloom.org',
+        name: siteConfig.site.title,
+      });
+      expect(sentEmails[0].to).toBe('founder@example.test');
+      expect(sentEmails[0].subject).toBe(`Sign in to ${siteConfig.site.title}`);
+      expect(sentEmails[0].text).toBeTypeOf('string');
+      expect(sentEmails[0].html).toBeTypeOf('string');
 
-      const magicUrlMatch = /https:\/\/archive\.example\.test\/api\/auth\/magic-link\/verify\?[^\r\n]+/.exec(
-        sentMimeEmails[0].mime
+      const magicUrlMatch = /https:\/\/archive\.example\.test\/api\/auth\/magic-link\/verify\?[^\s]+/.exec(
+        sentEmails[0].text ?? ''
       );
       expect(magicUrlMatch).not.toBeNull();
+      expect(sentEmails[0].html).toContain(magicUrlMatch![0]);
 
       const verifyRes = await worker.fetch(new Request(magicUrlMatch![0]), env);
       expect(verifyRes.status).toBe(302);
@@ -683,9 +686,9 @@ describe('createCloudflareWorker full HTTP lifecycle (Miniflare)', () => {
         env
       );
       expect(cousinMagicReq.status).toBe(202);
-      const cousinEmail = sentMimeEmails[sentMimeEmails.length - 1];
-      const cousinVerifyUrl = /https:\/\/archive\.example\.test\/api\/auth\/magic-link\/verify\?[^\r\n]+/.exec(
-        cousinEmail.mime
+      const cousinEmail = sentEmails[sentEmails.length - 1];
+      const cousinVerifyUrl = /https:\/\/archive\.example\.test\/api\/auth\/magic-link\/verify\?[^\s]+/.exec(
+        cousinEmail.text ?? ''
       );
       const cousinVerifyRes = await worker.fetch(new Request(cousinVerifyUrl![0]), env);
       expect(cousinVerifyRes.status).toBe(302);
@@ -1026,5 +1029,186 @@ describe('createCloudflareWorker full HTTP lifecycle (Miniflare)', () => {
     } finally {
       await fixture.dispose();
     }
+  });
+
+  it('sends structured EmailMessageBuilder payloads with text and html, sanitizes input, and maps SEND_EMAIL failures to 502 EMAIL_DELIVERY_FAILED', async () => {
+    const captured: SendEmailMessageBuilder[] = [];
+    const magicLinkUrl =
+      'https://archive.example.test/api/auth/magic-link/verify?token=secret_tok_123&next=%2Fpeople';
+
+    const sender = new CloudflareEmailSender({
+      fromEmail: 'noreply@familyloom.org',
+      binding: {
+        async send(message) {
+          captured.push(message);
+          return { messageId: '<ok@familyloom.org>' };
+        },
+      },
+    });
+
+    await sender.sendMagicLink({
+      toEmail: 'member@example.test\r\nBcc: evil@example.test',
+      siteTitle: 'Alder & <Oak>\r\nSubject: Injected',
+      magicLinkUrl,
+      expiresMinutes: 15,
+    });
+
+    expect(captured).toHaveLength(1);
+    const msg = captured[0];
+    expect(msg.from).toEqual({
+      email: 'noreply@familyloom.org',
+      name: 'Alder & <Oak> Subject: Injected',
+    });
+    expect(msg.to).toBe('member@example.test Bcc: evil@example.test');
+    expect(msg.subject).toBe('Sign in to Alder & <Oak> Subject: Injected');
+    expect(msg.subject).not.toContain('\r');
+    expect(msg.subject).not.toContain('\n');
+    expect(msg.text).toContain(magicLinkUrl);
+    expect(msg.text).toContain('expires in 15 minutes');
+    expect(msg.html).toContain('Alder &amp; &lt;Oak&gt; Subject: Injected');
+    expect(msg.html).toContain(
+      'https://archive.example.test/api/auth/magic-link/verify?token=secret_tok_123&amp;next=%2Fpeople'
+    );
+    expect(msg.html).not.toContain('<Oak>');
+
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const failingSender = new CloudflareEmailSender({
+        fromEmail: 'noreply@familyloom.org',
+        binding: {
+          async send() {
+            throw new Error(`Email service rejected request for ${magicLinkUrl}`);
+          },
+        },
+      });
+
+      await expect(
+        failingSender.sendMagicLink({
+          toEmail: 'member@example.test',
+          siteTitle: 'Alder Archive',
+          magicLinkUrl,
+          expiresMinutes: 15,
+        })
+      ).rejects.toMatchObject({
+        status: 502,
+        code: 'EMAIL_DELIVERY_FAILED',
+      });
+
+      expect(errorSpy).toHaveBeenCalledTimes(1);
+      const logged = String(errorSpy.mock.calls[0]?.[0] ?? '');
+      expect(logged).toContain('SEND_EMAIL binding delivery failed');
+      expect(logged).toContain('[redacted]');
+      expect(logged).not.toContain('secret_tok_123');
+
+      // End-to-end Worker HTTP response maps upstream SEND_EMAIL errors to 502 instead of 500
+      const fixture = await createMiniflareFixture();
+      try {
+        const siteConfig = createSyntheticSiteConfig();
+        const clock = new FixedClock('2026-07-03T10:00:00.000Z');
+        const worker = createCloudflareWorker({ siteConfig, clock });
+        const env: KinloomWorkerEnv = {
+          DB: fixture.db,
+          MEDIA_BUCKET: fixture.bucket,
+          SEND_EMAIL: {
+            async send() {
+              throw new Error('Upstream Cloudflare Email Service error');
+            },
+          },
+          SESSION_SECRET: CONTRACT_SESSION_SECRET,
+          BOOTSTRAP_ADMIN_EMAIL: 'founder@example.test',
+          EMAIL_FROM: 'noreply@familyloom.org',
+          ARCHIVE_MODE: 'private',
+        };
+
+        const res = await worker.fetch(
+          new Request(`${CONTRACT_TEST_ORIGIN}/api/auth/magic-link/request`, {
+            method: 'POST',
+            headers: {
+              'content-type': 'application/json',
+              origin: CONTRACT_TEST_ORIGIN,
+            },
+            body: JSON.stringify({ email: 'founder@example.test' }),
+          }),
+          env
+        );
+        expect(res.status).toBe(502);
+        const body = (await res.json()) as { error: { code: string; message: string } };
+        expect(body.error.code).toBe('EMAIL_DELIVERY_FAILED');
+        expect(body.error.message).toBe(
+          'Unable to send sign-in email right now. Please try again later.'
+        );
+      } finally {
+        await fixture.dispose();
+      }
+    } finally {
+      errorSpy.mockRestore();
+    }
+  });
+
+  it('delivers buildMagicLinkEmailMessage payloads through Miniflare native SEND_EMAIL binding', async () => {
+    const payload = buildMagicLinkEmailMessage({
+      fromEmail: 'noreply@familyloom.org',
+      toEmail: 'founder@example.test',
+      siteTitle: 'Alder Family Archive',
+      magicLinkUrl: 'https://archive.example.test/api/auth/magic-link/verify?token=mf_token_001',
+      expiresMinutes: 15,
+    });
+
+    const mf = new Miniflare({
+      modules: true,
+      compatibilityDate: '2026-08-06',
+      script: `
+        export default {
+          async fetch(request, env) {
+            const builder = await request.json();
+            const result = await env.SEND_EMAIL.send(builder);
+            return Response.json(result);
+          }
+        };
+      `,
+      email: {
+        send_email: [{ name: 'SEND_EMAIL' }],
+      },
+    });
+
+    try {
+      const res = await mf.dispatchFetch('http://localhost/send', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      expect(res.status).toBe(200);
+      const data = (await res.json()) as { messageId?: string };
+      expect(data.messageId).toMatch(/^<[^@]+@familyloom\.org>$/);
+    } finally {
+      await mf.dispose();
+    }
+  });
+
+  it('serves GET /privacy as unauthenticated 200 text/html in private mode using siteConfig metadata', async () => {
+    const siteConfig = createSyntheticSiteConfig();
+    const worker = createCloudflareWorker({ siteConfig });
+    const env = {
+      ARCHIVE_MODE: 'private',
+      SESSION_SECRET: CONTRACT_SESSION_SECRET,
+    } as KinloomWorkerEnv;
+
+    const res = await worker.fetch(new Request(`${CONTRACT_TEST_ORIGIN}/privacy`), env);
+    expect(res.status).toBe(200);
+    expect(res.headers.get('content-type')).toBe('text/html; charset=utf-8');
+    const html = await res.text();
+    expect(html).toContain(`<title>Privacy Policy | ${siteConfig.site.title}</title>`);
+    expect(html).toContain(siteConfig.site.familyName);
+    expect(html).toContain('non-commercial, private family history archive');
+    expect(html).toContain('zero advertisements');
+    expect(html).toContain('zero tracking pixels');
+
+    const headRes = await worker.fetch(
+      new Request(`${CONTRACT_TEST_ORIGIN}/privacy`, { method: 'HEAD' }),
+      env
+    );
+    expect(headRes.status).toBe(200);
+    expect(headRes.headers.get('content-type')).toBe('text/html; charset=utf-8');
+    expect(await headRes.text()).toBe('');
   });
 });

@@ -28,6 +28,10 @@ import { resolveAssetUrl } from '../components/Atoms.js';
 import { useArchiveData } from '../context/ArchiveDataContext.js';
 import { useArchiveUi } from '../context/ArchiveUiContext.js';
 import { CitationBadge } from '../components/wiki/WikiBadges.js';
+import {
+  CreateEntityModal,
+  type RelativeCreateContext,
+} from '../components/wiki/CreateEntityModal.js';
 import { EntityEditDrawer } from '../components/wiki/EntityEditDrawer.js';
 import { MediaUploaderModal } from '../components/wiki/MediaUploaderModal.js';
 import { RevisionHistoryPanel } from '../components/wiki/RevisionHistoryPanel.js';
@@ -60,6 +64,7 @@ export const PersonPage: React.FC = () => {
     siteConfig,
     baseUrl,
     bundle,
+    capabilities,
     loading,
     error,
     peopleById,
@@ -84,6 +89,7 @@ export const PersonPage: React.FC = () => {
   );
   const [wikiTab, setWikiTab] = useState<WikiEntityTab>('read');
   const [uploadModalOpen, setUploadModalOpen] = useState(false);
+  const [relativeModal, setRelativeModal] = useState<RelativeCreateContext | null>(null);
 
   const [prevSlug, setPrevSlug] = useState(slug);
   if (slug !== prevSlug) {
@@ -95,6 +101,7 @@ export const PersonPage: React.FC = () => {
     setExpandedNarrativeIds(new Set());
     setExpandedSourceNarrativeIds(new Set());
     setWikiTab('read');
+    setRelativeModal(null);
   }
 
   const cardRefs = useRef<Map<string, HTMLElement>>(new Map());
@@ -593,13 +600,14 @@ export const PersonPage: React.FC = () => {
                 Also recorded as: {person.alt_names.join(', ')}
               </div>
             )}
-            {(immediateFamily.parents.length > 0 ||
+            {(capabilities.canEdit ||
+              immediateFamily.parents.length > 0 ||
               immediateFamily.spouses.length > 0 ||
               immediateFamily.children.length > 0 ||
               immediateFamily.livingSpouseCount > 0 ||
               immediateFamily.livingChildCount > 0) && (
               <div className="person-family-strip" aria-label="Immediate family connections">
-                {immediateFamily.parents.length > 0 && (
+                {(immediateFamily.parents.length > 0 || capabilities.canEdit) && (
                   <div className="person-family-row">
                     <span className="person-family-label">Parents</span>
                     <div className="person-family-chips">
@@ -608,10 +616,27 @@ export const PersonPage: React.FC = () => {
                           {rel.name} <span>({rel.years})</span>
                         </Link>
                       ))}
+                      {capabilities.canEdit && (
+                        <button
+                          type="button"
+                          className="person-family-add-btn print-hide"
+                          onClick={() => {
+                            setRelativeModal({
+                              anchorPersonId: person.id,
+                              anchorPersonName: person.full_name,
+                              relation: 'parent',
+                            });
+                          }}
+                        >
+                          + Add parent
+                        </button>
+                      )}
                     </div>
                   </div>
                 )}
-                {(immediateFamily.spouses.length > 0 || immediateFamily.livingSpouseCount > 0) && (
+                {(immediateFamily.spouses.length > 0 ||
+                  immediateFamily.livingSpouseCount > 0 ||
+                  capabilities.canEdit) && (
                   <div className="person-family-row">
                     <span className="person-family-label">
                       {immediateFamily.spouses.length + immediateFamily.livingSpouseCount > 1 ? 'Spouses' : 'Spouse'}
@@ -627,10 +652,27 @@ export const PersonPage: React.FC = () => {
                           {immediateFamily.livingSpouseCount} living spouse (redacted)
                         </span>
                       )}
+                      {capabilities.canEdit && (
+                        <button
+                          type="button"
+                          className="person-family-add-btn print-hide"
+                          onClick={() => {
+                            setRelativeModal({
+                              anchorPersonId: person.id,
+                              anchorPersonName: person.full_name,
+                              relation: 'spouse',
+                            });
+                          }}
+                        >
+                          + Add spouse
+                        </button>
+                      )}
                     </div>
                   </div>
                 )}
-                {(immediateFamily.children.length > 0 || immediateFamily.livingChildCount > 0) && (
+                {(immediateFamily.children.length > 0 ||
+                  immediateFamily.livingChildCount > 0 ||
+                  capabilities.canEdit) && (
                   <div className="person-family-row">
                     <span className="person-family-label">Children</span>
                     <div className="person-family-chips">
@@ -643,6 +685,21 @@ export const PersonPage: React.FC = () => {
                         <span className="person-family-chip is-redacted">
                           +{immediateFamily.livingChildCount} living {immediateFamily.livingChildCount === 1 ? 'child' : 'children'} (redacted)
                         </span>
+                      )}
+                      {capabilities.canEdit && (
+                        <button
+                          type="button"
+                          className="person-family-add-btn print-hide"
+                          onClick={() => {
+                            setRelativeModal({
+                              anchorPersonId: person.id,
+                              anchorPersonName: person.full_name,
+                              relation: 'child',
+                            });
+                          }}
+                        >
+                          + Add child
+                        </button>
                       )}
                     </div>
                   </div>
@@ -1102,6 +1159,14 @@ export const PersonPage: React.FC = () => {
         defaultPersonId={person.id}
         onClose={() => {
           setUploadModalOpen(false);
+        }}
+      />
+
+      <CreateEntityModal
+        open={relativeModal !== null}
+        relativeContext={relativeModal ?? undefined}
+        onClose={() => {
+          setRelativeModal(null);
         }}
       />
 
