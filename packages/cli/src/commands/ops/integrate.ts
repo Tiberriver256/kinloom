@@ -273,13 +273,17 @@ function dedupeExtensionSources(
   return out;
 }
 
+// Incoming roles replace a person's existing roles on the event. A person keeps
+// several roles only when the incoming patch lists each one explicitly.
 function dedupeParticipants(
   existing: readonly EventParticipant[] | undefined,
   additions: readonly EventParticipant[] | undefined
 ): EventParticipant[] {
+  const incomingIds = new Set((additions ?? []).map((pt) => pt.person_id));
+  const retained = (existing ?? []).filter((pt) => !incomingIds.has(pt.person_id));
   const out: EventParticipant[] = [];
   const seen = new Set<string>();
-  for (const pt of [...(existing ?? []), ...(additions ?? [])]) {
+  for (const pt of [...retained, ...(additions ?? [])]) {
     const key = `${pt.person_id}|${pt.role}`;
     if (seen.has(key)) {
       continue;

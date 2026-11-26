@@ -933,6 +933,190 @@ def resolve_printed_page_to_leaf(page_index: dict, printed_page: str) -> tuple[i
     raise KeyError(f"Printed page {printed_page!r} not found in page_index.json{hint}")
 
 
+def describe_leaf(page_index: dict, leaf_n: int) -> dict:
+    """Return BookReader leaf, scandata leaf, and printed page for one BookReader leaf."""
+    key = str(leaf_n)
+    scandata_leaf = page_index.get("bookreader_to_scandata", {}).get(key)
+    printed = page_index.get("bookreader_to_printed", {}).get(key)
+    return {"leaf": leaf_n, "scandata_leaf": scandata_leaf, "printed_page": printed}
+
+
+def validate_leaf_in_index(page_index: dict, leaf_n: int) -> None:
+    if leaf_n < 0:
+        raise ValueError(f"Leaf index must be >= 0, got {leaf_n}.")
+    access_count = int(page_index.get("access_leaf_count") or 0)
+    if access_count and leaf_n >= access_count:
+        raise ValueError(
+            f"Leaf n{leaf_n} is out of range (item has {access_count} BookReader leaves: n0..n{access_count - 1})."
+        )
+
+
+def leaf_from_scandata_leaf(page_index: dict, scandata_leaf: int) -> int:
+    s2b = page_index.get("scandata_to_bookreader") or {}
+    if str(scandata_leaf) in s2b:
+        return int(s2b[str(scandata_leaf)])
+    if not s2b:
+        raise KeyError(f"Scandata leaf {scandata_leaf} cannot be resolved (no scandata.xml mapping cached).")
+    raise KeyError(f"Scandata leaf {scandata_leaf} is not an access leaf (deleted or unknown) in page_index.json.")
+
+
+def segment_for_leaf(page_index: dict, leaf_n: int, scandata_leaf: int | None) -> int | None:
+    """Map a BookReader leaf to its 0-based `\\x0c` segment index in cached djvu.txt."""
+    mode = page_index.get("segment_mode", "scandata")
+    if mode == "flat":
+        return None
+    if mode == "bookreader":
+        return leaf_n
+    if scandata_leaf is not None:
+        return int(scandata_leaf)
+    if not page_index.get("scandata_to_bookreader"):
+        return leaf_n
+    return None
+
+
+def parse_printed_range(page_index: dict, spec: str) -> list[int]:
+    """Resolve a printed page range `p1-p2` (or a single label) to inclusive BookReader leaves."""
+    cleaned = spec.strip()
+    if not cleaned:
+        raise ValueError("Empty --pages range.")
+    try:
+        leaf, _ = resolve_printed_page_to_leaf(page_index, cleaned)
+        return [leaf]
+    except KeyError:
+        pass
+    if "-" not in cleaned:
+        leaf, _ = resolve_printed_page_to_leaf(page_index, cleaned)
+        return [leaf]
+    start_label, _, end_label = cleaned.partition("-")
+    if not start_label.strip() or not end_label.strip():
+        raise ValueError(f"Invalid --pages range {spec!r}; expected <p1>-<p2>.")
+    start_leaf, _ = resolve_printed_page_to_leaf(page_index, start_label)
+    end_leaf, _ = resolve_printed_page_to_leaf(page_index, end_label)
+    if end_leaf < start_leaf:
+        raise ValueError(
+            f"Invalid --pages range {spec!r}: printed page {end_label.strip()!r} (n{end_leaf}) precedes "
+            f"{start_label.strip()!r} (n{start_leaf})."
+        )
+    return list(range(start_leaf, end_leaf + 1))
+
+
+def cmd_text(args: argparse.Namespace) -> int:
+    identifier = validate_identifier(args.identifier)
+    selectors = [s for s in (args.printed_page, args.leaf, args.pages) if s is not None]
+    if len(selectors) != 1:
+        fail("Pass exactly one of --printed-page <p>, --leaf <n>, or --pages <p1-p2>.", code=2)
+
+    try:
+        cache_entry = ensure_item_cache(
+            identifier,
+            need_djvu=True,
+            cache_root=get_cache_root(),
+            timeout=args.timeout,
+            refresh=args.refresh,
+        )
+        page_index = json.loads(cache_entry["page_index_path"].read_text(encoding="utf-8"))
+        djvu_text = cache_entry["djvu_path"].read_text(encoding="utf-8", errors="replace")
+    except Exception as exc:
+        fail(str(exc))
+
+    try:
+        if args.printed_page is not None:
+            leaf, _ = resolve_printed_page_to_leaf(page_index, args.printed_page)
+            leaves = [leaf]
+        elif args.leaf is not None:
+            leaves = [args.leaf]
+        else:
+            leaves = parse_printed_range(page_index, args.pages)
+        for leaf in leaves:
+            validate_leaf_in_index(page_index, leaf)
+    except (KeyError, ValueError) as exc:
+        fail(str(exc.args[0]) if exc.args else str(exc))
+
+    if page_index.get("segment_mode") == "flat":
+        fail(
+            f"Item {identifier} OCR text has no page breaks; per-page text is unavailable. "
+            "Use `grep` or `download` for the full text."
+        )
+    segments = djvu_text.split("\x0c")
+    pages_out: list[dict] = []
+    for leaf in leaves:
+        info = describe_leaf(page_index, leaf)
+        seg_idx = segment_for_leaf(page_index, leaf, info["scandata_leaf"])
+        if seg_idx is None or seg_idx < 0 or seg_idx >= len(segments):
+            fail(f"No OCR text segment found for leaf n{leaf} in {identifier} (djvu.txt has {len(segments)} pages).")
+        info["text"] = segments[seg_idx].strip("\n")
+        info["image_url"] = page_image_url(identifier, leaf, scale=2)
+        info["details_url"] = page_details_url(identifier, leaf)
+        pages_out.append(info)
+
+    payload = {
+        "identifier": identifier,
+        "cached": bool(cache_entry["cached"]),
+        "pages": pages_out,
+    }
+    if args.as_json:
+        print(json.dumps(payload, indent=2, ensure_ascii=False))
+        return 0
+    for idx, page in enumerate(pages_out):
+        if idx:
+            print()
+        pp = f"p.{page['printed_page']}" if page["printed_page"] else "p.?"
+        sc = f", scandata leaf {page['scandata_leaf']}" if page["scandata_leaf"] is not None else ""
+        print(f"== {identifier} | n{page['leaf']} ({pp}{sc})")
+        print(f"   image: {page['image_url']}")
+        print(f"   details: {page['details_url']}")
+        print(page["text"])
+    return 0
+
+
+def cmd_lookup(args: argparse.Namespace) -> int:
+    identifier = validate_identifier(args.identifier)
+    selectors = [s for s in (args.printed_page, args.leaf, args.scandata_leaf) if s is not None]
+    if len(selectors) != 1:
+        fail("Pass exactly one of --printed-page <p>, --leaf <n>, or --scandata-leaf <n>.", code=2)
+
+    try:
+        cache_entry = ensure_item_cache(
+            identifier,
+            need_djvu=False,
+            cache_root=get_cache_root(),
+            timeout=args.timeout,
+            refresh=args.refresh,
+        )
+        page_index = json.loads(cache_entry["page_index_path"].read_text(encoding="utf-8"))
+    except Exception as exc:
+        fail(str(exc))
+
+    try:
+        if args.printed_page is not None:
+            leaf, _ = resolve_printed_page_to_leaf(page_index, args.printed_page)
+        elif args.leaf is not None:
+            leaf = args.leaf
+        else:
+            leaf = leaf_from_scandata_leaf(page_index, args.scandata_leaf)
+        validate_leaf_in_index(page_index, leaf)
+    except (KeyError, ValueError) as exc:
+        fail(str(exc.args[0]) if exc.args else str(exc))
+
+    info = describe_leaf(page_index, leaf)
+    payload = {
+        "identifier": identifier,
+        "cached": bool(cache_entry["cached"]),
+        **info,
+        "image_url": page_image_url(identifier, leaf, scale=2),
+        "details_url": page_details_url(identifier, leaf),
+    }
+    if args.as_json:
+        print(json.dumps(payload, indent=2, ensure_ascii=False))
+        return 0
+    pp = info["printed_page"] if info["printed_page"] else "?"
+    sc = info["scandata_leaf"] if info["scandata_leaf"] is not None else "?"
+    print(f"{identifier}: printed page {pp} | BookReader leaf n{leaf} | scandata leaf {sc}")
+    print(f"  image: {payload['image_url']}")
+    print(f"  details: {payload['details_url']}")
+    return 0
+
+
 def cmd_search(args: argparse.Namespace) -> int:
     query = args.query
     if args.mediatype:
@@ -1353,6 +1537,26 @@ def build_parser() -> argparse.ArgumentParser:
     p_page.add_argument("--refresh", action="store_true", help="Bypass local cache and re-fetch index and page JPEG.")
     p_page.add_argument("--json", dest="as_json", action="store_true", help="Structured JSON output.")
     p_page.set_defaults(func=cmd_page)
+
+    p_text = sub.add_parser("text", help="Print cached OCR text for a printed page, leaf, or printed-page range (no JPEG download).")
+    p_text.add_argument("identifier")
+    p_text.add_argument("--printed-page", default=None, help="Printed page label resolved via cached page_index.json.")
+    p_text.add_argument("--leaf", type=int, default=None, help="BookReader leaf index (n<LEAF>).")
+    p_text.add_argument("--pages", default=None, help="Inclusive printed-page range, e.g. 12-14.")
+    p_text.add_argument("--timeout", type=float, default=DEFAULT_TIMEOUT, help="HTTP timeout seconds on cache miss (default: 25).")
+    p_text.add_argument("--refresh", action="store_true", help="Bypass local cache and re-fetch metadata, scandata, and OCR text.")
+    p_text.add_argument("--json", dest="as_json", action="store_true", help="Structured JSON output.")
+    p_text.set_defaults(func=cmd_text)
+
+    p_lookup = sub.add_parser("lookup", help="Resolve printed page <-> BookReader leaf <-> scandata leaf from cached page_index.json.")
+    p_lookup.add_argument("identifier")
+    p_lookup.add_argument("--printed-page", default=None, help="Printed page label.")
+    p_lookup.add_argument("--leaf", type=int, default=None, help="BookReader leaf index (n<LEAF>).")
+    p_lookup.add_argument("--scandata-leaf", type=int, default=None, help="Raw scandata.xml leafNum.")
+    p_lookup.add_argument("--timeout", type=float, default=DEFAULT_TIMEOUT, help="HTTP timeout seconds on cache miss (default: 25).")
+    p_lookup.add_argument("--refresh", action="store_true", help="Bypass local cache and re-fetch metadata and scandata.")
+    p_lookup.add_argument("--json", dest="as_json", action="store_true", help="Structured JSON output.")
+    p_lookup.set_defaults(func=cmd_lookup)
 
     p_url = sub.add_parser("url", help="Print the website advanced-search URL for a query.")
     p_url.add_argument("query")

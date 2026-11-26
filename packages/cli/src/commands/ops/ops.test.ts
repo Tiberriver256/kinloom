@@ -708,6 +708,53 @@ describe('ops/integrate', () => {
     expect(secondRes.stagedScans[0]?.status).toBe('unchanged');
   });
 
+  it('replaces a stale participant role on event update instead of keeping both roles', async () => {
+    const repoDir = await createSyntheticRepo();
+    const packageDir = await writeValidResearchPackage(repoDir);
+    const patchPath = path.join(packageDir, 'patch.json');
+    const eventsPath = path.join(repoDir, 'data', 'events.yaml');
+    const basePatch = JSON.parse(await readFile(patchPath, 'utf8')) as {
+      events: Array<Record<string, unknown>>;
+    };
+    const censusEvent = parseEventsYaml(await readFile(eventsPath, 'utf8')).find(
+      (e) => e.id === 'evt_arthur_1880_census'
+    )!;
+    const applyParticipants = async (participants: Array<{ person_id: string; role: string }>) => {
+      const patch = structuredClone(basePatch);
+      patch.events.push({ ...structuredClone(censusEvent), participants });
+      await writeFile(patchPath, JSON.stringify(patch, null, 2), 'utf8');
+      await runIntegrateCommand({ repoDir, personId: 'per_arthur_alder', dryRun: false });
+      return parseEventsYaml(await readFile(eventsPath, 'utf8')).find(
+        (e) => e.id === 'evt_arthur_1880_census'
+      )?.participants;
+    };
+
+    expect(
+      await applyParticipants([
+        { person_id: 'per_thomas_alder', role: 'witness' },
+        { person_id: 'per_helen_maple', role: 'mentioned' },
+      ])
+    ).toEqual([
+      { person_id: 'per_arthur_alder', role: 'principal' },
+      { person_id: 'per_thomas_alder', role: 'witness' },
+      { person_id: 'per_helen_maple', role: 'mentioned' },
+    ]);
+
+    // witness -> grantor replaces the stale role; an explicit double listing keeps both roles.
+    expect(
+      await applyParticipants([
+        { person_id: 'per_thomas_alder', role: 'grantor' },
+        { person_id: 'per_arthur_alder', role: 'principal' },
+        { person_id: 'per_arthur_alder', role: 'head_of_household' },
+      ])
+    ).toEqual([
+      { person_id: 'per_helen_maple', role: 'mentioned' },
+      { person_id: 'per_thomas_alder', role: 'grantor' },
+      { person_id: 'per_arthur_alder', role: 'principal' },
+      { person_id: 'per_arthur_alder', role: 'head_of_household' },
+    ]);
+  });
+
   it('rejects dangling inline citations and (0, 0) coordinates', async () => {
     const repoDir = await createSyntheticRepo();
     const packageDir = await writeValidResearchPackage(repoDir);

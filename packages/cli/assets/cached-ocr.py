@@ -69,6 +69,9 @@ def print_usage() -> None:
         "  --prompt <text>                   Custom prompt for --mode cursive (supports {image_path})\n"
         "  --force                           Bypass cache and recompute OCR\n"
         "  --json                            Emit structured JSON output\n"
+        "  --boxes                           Emit JSON line/word pixel boxes (printed mode only)\n"
+        "  --tsv                             Emit raw Tesseract TSV (printed mode only)\n"
+        "  --find <regex>                    Case-insensitive line filter; implies --boxes\n"
         "  -h, --help                        Show this help message\n\n"
         "Environment:\n"
         f"  KINLOOM_OCR_CACHE_DIR             Override cache directory (default: {cache_default})\n"
@@ -88,6 +91,9 @@ def parse_args(argv: list[str]) -> dict[str, object]:
         "prompt": None,
         "force": False,
         "json": False,
+        "boxes": False,
+        "tsv": False,
+        "find": None,
     }
     i = 0
     n = len(argv)
@@ -100,8 +106,8 @@ def parse_args(argv: list[str]) -> dict[str, object]:
             opts["force"] = True
             i += 1
             continue
-        if arg == "--json":
-            opts["json"] = True
+        if arg in ("--json", "--boxes", "--tsv"):
+            opts[arg[2:]] = True
             i += 1
             continue
         if arg.startswith("--"):
@@ -138,6 +144,15 @@ def parse_args(argv: list[str]) -> dict[str, object]:
                 opts["timeout"] = parsed_timeout
             elif key == "--prompt":
                 opts["prompt"] = val
+            elif key == "--find":
+                import re
+
+                try:
+                    re.compile(val)
+                except re.error as exc:
+                    raise ValueError(f"Invalid --find regex '{val}': {exc}") from exc
+                opts["find"] = val
+                opts["boxes"] = True
             else:
                 raise ValueError(f"Unknown option: {key}")
             i += 1
@@ -150,6 +165,10 @@ def parse_args(argv: list[str]) -> dict[str, object]:
 
     if not opts["image"]:
         raise ValueError("Missing required positional argument: <image>.")
+    if opts["boxes"] and opts["tsv"]:
+        raise ValueError("--tsv cannot be combined with --boxes or --find.")
+    if (opts["boxes"] or opts["tsv"]) and opts["mode"] != "printed":
+        raise ValueError("--boxes, --tsv, and --find require --mode printed.")
     return opts
 
 
@@ -180,7 +199,9 @@ def atomic_write_json(dest: str, payload: dict[str, object]) -> None:
         raise
 
 
-def run_printed_ocr(img_path: str, psm: int, timeout_s: int) -> tuple[str, dict[str, object]]:
+def run_printed_ocr(
+    img_path: str, psm: int, timeout_s: int, tsv: bool = False
+) -> tuple[str, dict[str, object]]:
     import shutil
     import subprocess
 
@@ -193,21 +214,8 @@ def run_printed_ocr(img_path: str, psm: int, timeout_s: int) -> tuple[str, dict[
     # Pin OpenMP to a single thread so parallel OCR calls cannot thrash CPU cores.
     tesseract_env = {**os.environ, "OMP_THREAD_LIMIT": "1"}
     timeout_bin = shutil.which("timeout")
-    cmd = (
-        [
-            timeout_bin,
-            "-k",
-            "2",
-            str(timeout_s),
-            tesseract_bin,
-            img_path,
-            "stdout",
-            "--psm",
-            str(psm),
-        ]
-        if timeout_bin
-        else [tesseract_bin, img_path, "stdout", "--psm", str(psm)]
-    )
+    tess_cmd = [tesseract_bin, img_path, "stdout", "--psm", str(psm), *(["tsv"] if tsv else [])]
+    cmd = [timeout_bin, "-k", "2", str(timeout_s), *tess_cmd] if timeout_bin else tess_cmd
     try:
         proc = subprocess.run(
             cmd,
@@ -229,7 +237,122 @@ def run_printed_ocr(img_path: str, psm: int, timeout_s: int) -> tuple[str, dict[
     if proc.returncode != 0:
         detail = (proc.stderr or proc.stdout).strip()
         raise RuntimeError(f"tesseract exited {proc.returncode}: {detail[:300]}")
-    return proc.stdout.strip(), {"psm": psm, "omp_thread_limit": 1, "timeout_s": timeout_s}
+    out = proc.stdout if tsv else proc.stdout.strip()
+    return out, {"psm": psm, "omp_thread_limit": 1, "timeout_s": timeout_s}
+
+
+def parse_tesseract_tsv(tsv: str) -> dict[str, object]:
+    """Group Tesseract TSV word rows into lines keyed by (page, block, par, line)."""
+    rows = [r.split("\t") for r in tsv.splitlines() if r.strip()]
+    if not rows or rows[0][:1] != ["level"]:
+        raise RuntimeError("tesseract TSV output is missing its header row.")
+    header = rows[0]
+    image_width = image_height = 0
+    lines: dict[tuple[int, int, int, int], dict[str, object]] = {}
+    for raw in rows[1:]:
+        if len(raw) < len(header) - 1:
+            continue
+        rec = dict(zip(header, raw + [""] * (len(header) - len(raw))))
+        level = int(rec["level"])
+        left, top = int(rec["left"]), int(rec["top"])
+        right, bottom = left + int(rec["width"]), top + int(rec["height"])
+        if level == 1:
+            image_width = max(image_width, right)
+            image_height = max(image_height, bottom)
+            continue
+        text = rec.get("text", "").strip()
+        if level != 5 or not text:
+            continue
+        conf = float(rec["conf"])
+        key = (int(rec["page_num"]), int(rec["block_num"]), int(rec["par_num"]), int(rec["line_num"]))
+        line = lines.setdefault(key, {"words": []})
+        line["words"].append(  # type: ignore[union-attr]
+            {"text": text, "x0": left, "y0": top, "x1": right, "y1": bottom, "conf": conf}
+        )
+    out_lines: list[dict[str, object]] = []
+    for (page, block, par, line_num), line in lines.items():
+        words = line["words"]
+        assert isinstance(words, list)
+        confs = [w["conf"] for w in words if w["conf"] >= 0]
+        out_lines.append(
+            {
+                "text": " ".join(str(w["text"]) for w in words),
+                "x0": min(w["x0"] for w in words),
+                "y0": min(w["y0"] for w in words),
+                "x1": max(w["x1"] for w in words),
+                "y1": max(w["y1"] for w in words),
+                "conf": round(sum(confs) / len(confs), 2) if confs else -1.0,
+                "page": page,
+                "block": block,
+                "par": par,
+                "line": line_num,
+                "words": words,
+            }
+        )
+    return {"image_width": image_width, "image_height": image_height, "lines": out_lines}
+
+
+def atomic_write_text(dest: str, text: str) -> None:
+    parent = os.path.dirname(dest)
+    os.makedirs(parent, exist_ok=True)
+    tmp = os.path.join(parent, f".{os.path.basename(dest)}.{os.getpid()}.{time.time_ns()}.tmp")
+    try:
+        with open(tmp, "w", encoding="utf-8") as fh:
+            fh.write(text)
+        os.replace(tmp, dest)
+    except Exception:
+        if os.path.exists(tmp):
+            os.unlink(tmp)
+        raise
+
+
+def run_layout(opts: dict[str, object], img_path: str, sha256_hex: str, cache_dir: str) -> str:
+    """Return rendered --tsv or --boxes/--find output, using separate layout cache files."""
+    import re
+
+    psm = int(opts["psm"])
+    base = os.path.join(cache_dir, f"{sha256_hex}_printed_psm{psm}")
+    tsv_path, boxes_path = f"{base}.tsv", f"{base}.boxes.json"
+    timeout_val = opts["timeout"]
+    timeout_s = int(timeout_val) if timeout_val is not None else DEFAULT_PRINTED_TIMEOUT_S
+    force = bool(opts["force"])
+
+    def load_tsv() -> tuple[str, bool]:
+        if not force and os.path.isfile(tsv_path):
+            with open(tsv_path, "r", encoding="utf-8") as fh:
+                return fh.read(), True
+        tsv, _ = run_printed_ocr(img_path, psm=psm, timeout_s=timeout_s, tsv=True)
+        atomic_write_text(tsv_path, tsv)
+        return tsv, False
+
+    if opts["tsv"]:
+        tsv, cached = load_tsv()
+        opts["_cache_hit"] = cached
+        return tsv if tsv.endswith("\n") else tsv + "\n"
+
+    boxes: dict[str, object] | None = None
+    cached = False
+    if not force and os.path.isfile(boxes_path):
+        try:
+            with open(boxes_path, "r", encoding="utf-8") as fh:
+                boxes = json.load(fh)
+            cached = True
+        except (OSError, json.JSONDecodeError):
+            boxes = None
+    if boxes is None:
+        tsv, cached = load_tsv()
+        boxes = {"sha256": sha256_hex, "psm": psm, **parse_tesseract_tsv(tsv)}
+        atomic_write_json(boxes_path, boxes)
+    opts["_cache_hit"] = cached
+    out: dict[str, object] = {**boxes, "cached": cached, "cache_path": boxes_path}
+    pattern = opts["find"]
+    if isinstance(pattern, str):
+        rx = re.compile(pattern, re.IGNORECASE)
+        lines = boxes.get("lines") or []
+        assert isinstance(lines, list)
+        out["find"] = pattern
+        out["lines"] = [ln for ln in lines if rx.search(str(ln.get("text", "")))]
+    return json.dumps(out, indent=2, ensure_ascii=False) + "\n"
 
 
 def prepare_cursive_image(img_path: str, raw_len: int, work_dir: str) -> tuple[str, str | None, int]:
@@ -455,6 +578,29 @@ def main(argv: list[str] | None = None) -> int:
     custom_prompt = opts["prompt"] if isinstance(opts["prompt"], str) else None
     slug = mode_slug(mode, psm, effort, custom_prompt)
     cache_file = os.path.join(cache_dir, f"{sha256_hex}_{slug}.json")
+
+    if opts["boxes"] or opts["tsv"]:
+        try:
+            rendered = run_layout(opts, img_path, sha256_hex, cache_dir)
+        except Exception as exc:
+            sys.stderr.write(f"Error: {exc}\n")
+            append_telemetry(
+                mode="tsv" if opts["tsv"] else "boxes",
+                duration_ms=(time.perf_counter() - t_start) * 1000.0,
+                cache_hit=False,
+                exit_code=1,
+                bytes_out=0,
+            )
+            return 1
+        sys.stdout.write(rendered)
+        append_telemetry(
+            mode="tsv" if opts["tsv"] else "boxes",
+            duration_ms=(time.perf_counter() - t_start) * 1000.0,
+            cache_hit=bool(opts.get("_cache_hit")),
+            exit_code=0,
+            bytes_out=len(rendered.encode("utf-8")),
+        )
+        return 0
 
     if not opts["force"] and os.path.isfile(cache_file):
         try:

@@ -1,6 +1,6 @@
 ---
 name: virginia-archives
-description: Research historical and genealogical records at the Library of Virginia via the bundled `va-archives` CLI: Chancery Records Index search, case detail, and scanned-page download, plus the public Primo catalog API. Also covers Virginia Chronicle newspapers, Land Office patents and grants, Virginia Untold, and ARVAS finding aids, with an honest note on which of those are browser-only. Use when tracing ancestors through Virginia, finding chancery causes, land patents, newspaper notices, or catalog records held by the Library of Virginia, or deciding whether a Virginia record is online, orderable, or visit-only.
+description: Research historical and genealogical records at the Library of Virginia via the bundled `va-archives` CLI: Chancery Records Index search, case detail, and scanned-page download, plus the public Primo catalog API, Land Office and Dunmore's War TIFF scans from image.lva.virginia.gov, and Rosetta (IE id) file downloads, all disk-cached. Also covers Virginia Chronicle newspapers, Land Office patents and grants, Virginia Untold, and ARVAS finding aids, with an honest note on which of those are browser-only. Use when tracing ancestors through Virginia, finding chancery causes, land patents, newspaper notices, or catalog records held by the Library of Virginia, or deciding whether a Virginia record is online, orderable, or visit-only.
 ---
 
 # Virginia Archives: Library of Virginia
@@ -15,7 +15,7 @@ The Library of Virginia is both the state library and the state archives. It hol
 
 Path: `skills/virginia-archives/scripts/va-archives`
 
-A standalone executable Python CLI with a PEP 723 `#!/usr/bin/env -S uv run --script` shebang and inline dependencies (`click`, `httpx`). No virtualenv setup, no API key, no account. Run it from the repo root, e.g. `skills/virginia-archives/scripts/va-archives chancery search Lincoln`.
+A standalone executable Python CLI with a PEP 723 `#!/usr/bin/env -S uv run --script` shebang and inline dependencies (`click`, `httpx`, `pillow`). No virtualenv setup, no API key, no account. Run it from the repo root, e.g. `skills/virginia-archives/scripts/va-archives chancery search Lincoln`.
 
 The Library of Virginia exposes real machine interfaces, verified live on 2026-11-24 (see Verification log). The CLI uses plain HTTP for everything it does; no browser automation is bundled.
 
@@ -60,6 +60,45 @@ skills/virginia-archives/scripts/va-archives url --catalog Lincoln
 skills/virginia-archives/scripts/va-archives url --chronicle --land --arvas
 ```
 
+### Image server scans: `grant-tif` (alias `lva-tif`) and `dunmore`
+
+```bash
+# One Land Office patent/grant page (raw TIFF, or JPEG when --out ends in .jpg/.jpeg)
+skills/virginia-archives/scripts/va-archives grant-tif /LONN/LO-3/372/372_0195.tif --out patent.tif
+skills/virginia-archives/scripts/va-archives lva-tif https://image.lva.virginia.gov/LONN/LO-3/372/372_0195.tif --out patent.jpg
+
+# Dunmore's War (1774) card -> neighbouring page TIFFs; save the card's page (or --page N)
+skills/virginia-archives/scripts/va-archives dunmore <DRAWER> <CARD>
+skills/virginia-archives/scripts/va-archives dunmore <DRAWER> <CARD> --page 100 --out dw-page100.jpg --json
+```
+
+`grant-tif` fetches a single scan from `image.lva.virginia.gov` only. It accepts a full `https://image.lva.virginia.gov/...` URL or a path on that host, and it rejects any other host or scheme (including plain `http://`), credentials, ports, query strings, `.`/`..` segments (raw or percent-encoded), backslashes, and non-image suffixes. If the server redirects to another host, the download is refused. `--out *.jpg` converts TIFF to JPEG when Pillow is importable; Pillow is in the script's inline dependencies, so it is available under `uv run`. Without Pillow, the raw TIFF is written next to the requested file with a `.tif` suffix. Any other suffix gets the raw bytes. Land Office TIFF links appear in Primo catalog records (`catalog <surname> --json`).
+
+`dunmore DRAWER CARD` takes the `dir` and `card` values from the catalog's `GetDW.pl?dir=<dddd>/W<dddd>&card=<n>` links (Dunmore's War payroll and service-claim index cards). The CGI redirects to a `/cgi-bin/drawer` page that lists neighbouring microfilm page TIFFs under `/Microfilm/DW/<reel>/<nnnnn>.tif`. The command lists those pages and marks the card's own page, which is the link with no "Page N" label. `--out` saves the card's page, or the page chosen with `--page N`, through the same validated, cached download as `grant-tif`.
+
+### Rosetta delivered files: `download-rosetta`
+
+```bash
+skills/virginia-archives/scripts/va-archives download-rosetta IE3453061 --list
+skills/virginia-archives/scripts/va-archives download-rosetta IE3453061 --out item.pdf          # viewer's initial file
+skills/virginia-archives/scripts/va-archives download-rosetta IE3453061 --file 2 --json         # e.g. the Transcription
+skills/virginia-archives/scripts/va-archives download-rosetta IE3453061 --fl FL3453067
+```
+
+The Library's digital objects live in Ex Libris Rosetta at `rosetta.virginiamemory.com`. Primo records link them as `DeliveryManagerServlet?dps_pid=IE<n>`. The command validates the id with `^IE\d+$` and keeps a single cookie session while it resolves the item. It reads the delivery page's `ieViewer.do` iframe (with its `dps_dvs` token), takes the `FL<n>` file pids and their METS titles from the viewer, and streams the chosen file from `DeliveryManagerServlet?dps_pid=FL<n>&dps_func=stream`. Every hop must stay on `https://rosetta.virginiamemory.com`. If the server returns an HTML page instead of a file, the command treats the item as restricted. The output name defaults to `<IE>_<FL>.<ext>`, with the extension taken from the content type.
+
+### Disk cache
+
+Every network response is cached under `$KINLOOM_VA_ARCHIVES_CACHE_DIR`. The default is `$XDG_CACHE_HOME/kinloom-va-archives`, or `~/.cache/kinloom-va-archives` when `XDG_CACHE_HOME` is unset. Writes go to a temp file that is then renamed into place, under a per-entry `fcntl.flock`.
+
+- `http/`: chancery search/case/images/localities HTML and catalog JSON, keyed by a SHA-256 of the request. These expire after `$KINLOOM_VA_ARCHIVES_TTL_HOURS` (default 168).
+- `files/`: chancery page PDFs, ZIPs, and image-server TIFFs, keyed by URL. These never expire.
+- `rosetta/<IE>/`: `files.json` (the resolved file list) and `<FL>.bin` (the delivered bytes), keyed by IE id.
+
+To refetch, put `--refresh` before the subcommand to cover the whole run (`va-archives --refresh chancery localities`), or add it to a single command (`grant-tif ... --refresh`).
+
+Tests: `uv run --with click --with httpx python3 -m unittest skills/virginia-archives/tests/test_va_archives.py`. These are mocked-HTTP tests with synthetic fixtures. Vitest also runs them in `packages/cli/src/commands/records/records.test.ts`.
+
 ## What is searchable online
 
 - **Chancery Records Index:** https://www.lva.virginia.gov/collections/chancery (search itself lives at https://old.lva.virginia.gov/chancery/). See CLI above. Individual case pages use the verified pattern `case_detail.asp?CFN=<locality-code>-<year>-<number>`.
@@ -96,6 +135,7 @@ Worked order for tracing a family through Virginia (for example before a westwar
 - Virginia Chronicle: curl 403 with Cloudflare "Just a moment..."; headless Chromium also returns the challenge page. Browser-only.
 - ARVAS: plain HTTP returns 202 with an empty body. Browser-only.
 - LONN volume index `image.lva.virginia.gov/LONN/LO.html`: 200, browse-by-volume table; its Aleph name-search host was unreachable (connection failed).
+- Image server and Rosetta (verified 2026-11-26): `image.lva.virginia.gov/LONN/LO-3/372/372_0195.tif` returns `image/tiff` (CCITT G4). `cgi-bin/GetDW.pl?dir=<DRAWER>&card=<CARD>` redirects to a `cgi-bin/drawer` page listing `/Microfilm/DW/001/*.tif` pages. `rosetta.virginiamemory.com/delivery/DeliveryManagerServlet?dps_pid=IE3453061` embeds `view/action/ieViewer.do?...dps_dvs=...`, which lists `FL3453066` (Original) and `FL3453067` (Transcription). Both stream as `application/pdf` via `dps_func=stream`.
 - No account or API key is needed for anything the CLI does. Fees apply only to ordering copies, noted per collection above.
 
 ## What this skill does not cover

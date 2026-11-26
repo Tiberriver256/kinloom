@@ -17,6 +17,20 @@ kinloom ocr ./scans/city-directory-p44.jpg --psm 4 --json
 kinloom ocr ./scans/obituary-1912.jpg --force
 ```
 
+## Line boxes and raw TSV (`--boxes`, `--find`, `--tsv`)
+
+Use these flags instead of ad-hoc `tesseract ... tsv` calls when you need pixel coordinates (printed mode only). They run the same hardened `tesseract` call (`OMP_THREAD_LIMIT=1`, `--timeout`, default `30` seconds).
+
+- `--boxes` prints JSON: `{ sha256, psm, image_width, image_height, lines: [{ text, x0, y0, x1, y1, conf, page, block, par, line, words: [...] }], cached, cache_path }`. Words are grouped into lines by Tesseract `(block_num, par_num, line_num)`. `conf` is the mean word confidence.
+- `--find <regex>` implies `--boxes` and keeps only lines whose text matches the regex (case-insensitive). Pass each `x0 y0 x1 y1` box to `kinloom prep-scan crop` or `kinloom prep-scan stitch`.
+- `--tsv` prints the raw Tesseract TSV. You cannot combine it with `--boxes` or `--find`.
+
+```bash
+kinloom ocr ./scans/county-history-p212.jpg --find 'probate|docket'
+kinloom ocr ./scans/county-history-p212.jpg --boxes --psm 4
+kinloom ocr ./scans/county-history-p212.jpg --tsv > p212.tsv
+```
+
 ## Handwritten cursive (`--mode cursive`)
 
 Automatically downsizes scans larger than 350 KB using the bundled `prep-scan` preview pipeline, then invokes the configured vision CLI (`KINLOOM_OCR_CLI`, default `agy`) to transcribe headers and rows verbatim while marking illegible text as `[?]`:
@@ -29,7 +43,7 @@ kinloom ocr ./scans/letter-1864.jpg --mode cursive --prompt "Transcribe this let
 
 ## Cache layout
 
-Cached JSON records are written atomically to `<cache-dir>/<sha256>_<mode-slug>.json`, where `<cache-dir>` defaults to:
+Cached JSON records are written atomically to `<cache-dir>/<sha256>_<mode-slug>.json`. Layout output uses separate files, so it never collides with plain-text OCR: `<sha256>_printed_psm<N>.tsv` (raw TSV) and `<sha256>_printed_psm<N>.boxes.json` (parsed boxes). `--find` filters the cached boxes, so a new regex on the same scan does not run `tesseract` again. `<cache-dir>` defaults to:
 
 1. `--cache-dir <dir>`
 2. `KINLOOM_OCR_CACHE_DIR`

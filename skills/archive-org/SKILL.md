@@ -13,7 +13,7 @@ Path: `skills/archive-org/scripts/archive-org`
 
 ### Persistent local disk cache (all network commands)
 
-Every network command (`get`, `grep`, `page`, `download`, `search`, and `fulltext`) writes atomically under `~/.cache/kinloom-ia/` (overrideable via `KINLOOM_IA_CACHE_DIR`) using per-item advisory locks (`fcntl.flock`) so concurrent processes never duplicate downloads and repeat calls make zero HTTP requests. Pass `--refresh` on any command to bypass the local cache and fetch fresh data.
+Every network command (`get`, `grep`, `text`, `lookup`, `page`, `download`, `search`, and `fulltext`) writes atomically under `~/.cache/kinloom-ia/` (overrideable via `KINLOOM_IA_CACHE_DIR`) using per-item advisory locks (`fcntl.flock`) so concurrent processes never duplicate downloads and repeat calls make zero HTTP requests. Pass `--refresh` on any command to bypass the local cache and fetch fresh data.
 
 Cache layout:
 
@@ -53,6 +53,31 @@ skills/archive-org/scripts/archive-org page ourmartyrpreside00banc 0 --width 120
 ```
 
 Single-page URL patterns: `https://archive.org/download/<identifier>/page/n<leaf>_s<scale>.jpg` and `https://archive.org/download/<identifier>/page/n<leaf>_w<width>.jpg`. Returns HTTP 403 on borrow-only / `inlibrary` items.
+
+### Read OCR text for specific pages (`text`) and resolve page numbers (`lookup`)
+
+`text` reads the cached `djvu.txt` + `page_index.json` (populating them on a cache miss, same as `grep`), resolves printed page labels to BookReader leaves, and prints that page's OCR text with its leaf / printed-page / scandata-leaf metadata plus `image_url` and `details_url`. It never downloads a JPEG; use `page` only when you need to look at the scan. Pass exactly one of `--printed-page`, `--leaf`, or `--pages <p1-p2>` (inclusive printed-page range, which also covers unnumbered leaves between the endpoints):
+
+```bash
+# OCR text of printed page 12 (cache-hit repeat calls make zero HTTP requests)
+kinloom ia text ourmartyrpreside00banc --printed-page 12
+
+# A printed-page range or an explicit BookReader leaf, as JSON
+kinloom ia text ourmartyrpreside00banc --pages 12-14 --json
+kinloom ia text ourmartyrpreside00banc --leaf 7 --json
+```
+
+JSON shape: `{identifier, cached, pages: [{leaf, scandata_leaf, printed_page, text, image_url, details_url}]}`. An unknown printed page, out-of-range leaf, reversed range, or OCR text without page breaks exits nonzero with a clear message.
+
+`lookup` resolves printed page <-> BookReader leaf <-> scandata leaf using only `metadata.json` + `page_index.json` (never fetches `djvu.txt` or JPEGs). Pass exactly one of `--printed-page`, `--leaf`, or `--scandata-leaf`:
+
+```bash
+kinloom ia lookup ourmartyrpreside00banc --printed-page 12
+kinloom ia lookup ourmartyrpreside00banc --leaf 20 --json
+kinloom ia lookup ourmartyrpreside00banc --scandata-leaf 21 --json
+```
+
+Both accept `--refresh` to re-fetch cached metadata/scandata (and OCR text for `text`).
 
 ### Search item metadata (`search`) vs full-text OCR (`fulltext`)
 

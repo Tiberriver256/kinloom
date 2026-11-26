@@ -568,6 +568,24 @@ describe('bundled Python utilities and live script execution', () => {
     expect(result.stderr).toMatch(/\bOK\b/);
   });
 
+  it('passes va-archives disk-caching, grant-tif/dunmore path-safety, and rosetta download unit tests', () => {
+    const testFile = path.join(SKILLS_ROOT, 'virginia-archives', 'tests', 'test_va_archives.py');
+    let pyCmd = 'python3';
+    let pyPrefix: string[] = [];
+    try {
+      execFileSync('python3', ['-c', 'import click, httpx'], { stdio: 'ignore' });
+    } catch {
+      pyCmd = 'uv';
+      pyPrefix = ['run', '--with', 'click', '--with', 'httpx', 'python3'];
+    }
+    const result = spawnSync(pyCmd, [...pyPrefix, '-m', 'unittest', '-v', testFile], {
+      encoding: 'utf8',
+    });
+    expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(0);
+    expect(result.stderr).toMatch(/Ran [1-9]\d* tests/);
+    expect(result.stderr).toMatch(/\bOK\b/);
+  });
+
   it('forces OMP_THREAD_LIMIT=1 and enforces --timeout on tesseract subprocesses', async () => {
     const tmp = await makeTempDir('kinloom-ocr-hardening-');
     const binDir = path.join(tmp, 'bin');
@@ -640,6 +658,87 @@ describe('bundled Python utilities and live script execution', () => {
     expect(timeoutResult.exitCode).toBe(1);
     expect(elapsedMs).toBeLessThan(8000);
     expect(timeoutCapture.stderr.join('\n')).toContain('timed out after 1s');
+  });
+
+  it('emits cached --boxes, --find, and --tsv layout output with OMP_THREAD_LIMIT=1', async () => {
+    const tmp = await makeTempDir('kinloom-ocr-boxes-');
+    const binDir = path.join(tmp, 'bin');
+    const cacheDir = path.join(tmp, 'cache');
+    const imgPath = path.join(tmp, 'page.png');
+    const callLog = path.join(tmp, 'calls.log');
+    fs.mkdirSync(binDir, { recursive: true });
+    const imgBytes = Buffer.from('synthetic-layout-scan');
+    await writeFile(imgPath, imgBytes);
+    const sha256 = crypto.createHash('sha256').update(imgBytes).digest('hex');
+
+    const tsvRows = [
+      'level\tpage_num\tblock_num\tpar_num\tline_num\tword_num\tleft\ttop\twidth\theight\tconf\ttext',
+      '1\t1\t0\t0\t0\t0\t0\t0\t1200\t1600\t-1\t',
+      '5\t1\t1\t1\t1\t1\t100\t200\t80\t30\t90\tProbate',
+      '5\t1\t1\t1\t1\t2\t190\t205\t90\t32\t80\tDocket',
+      '5\t1\t1\t1\t2\t1\t100\t260\t60\t28\t70\tOMP=OMP_VALUE',
+      '5\t1\t2\t1\t1\t1\t400\t900\t50\t20\t95\tSpringfield',
+    ].join('\n');
+    const fixture = path.join(tmp, 'fixture.tsv');
+    await writeFile(fixture, `${tsvRows}\n`);
+    await writeFile(
+      path.join(binDir, 'tesseract'),
+      `#!/bin/sh\necho "$*" >> "${callLog}"\nsed "s/OMP_VALUE/$OMP_THREAD_LIMIT/" "${fixture}"\n`,
+      { mode: 0o755 }
+    );
+    const env: NodeJS.ProcessEnv = {
+      ...process.env,
+      PATH: `${binDir}:${process.env.PATH ?? ''}`,
+      OMP_THREAD_LIMIT: '28',
+    };
+    const run = async (args: string[]) => {
+      const cap = createCaptureIo();
+      const res = await runRecordCommand('ocr', [imgPath, '--cache-dir', cacheDir, ...args], {
+        io: cap.io,
+        env,
+        telemetryFilePath: path.join(tmp, 'telemetry.jsonl'),
+      });
+      return { exitCode: res.exitCode, stdout: cap.stdout.join('\n'), stderr: cap.stderr.join('\n') };
+    };
+    type Boxes = {
+      cached: boolean;
+      image_width: number;
+      image_height: number;
+      lines: Array<{ text: string; x0: number; y0: number; x1: number; y1: number; conf: number }>;
+    };
+
+    const first = await run(['--boxes']);
+    expect(first.exitCode, first.stderr).toBe(0);
+    const boxes = JSON.parse(first.stdout) as Boxes;
+    expect(boxes.cached).toBe(false);
+    expect([boxes.image_width, boxes.image_height]).toEqual([1200, 1600]);
+    expect(boxes.lines.map((l) => l.text)).toEqual(['Probate Docket', 'OMP=1', 'Springfield']);
+    expect(boxes.lines[0]).toMatchObject({ x0: 100, y0: 200, x1: 280, y1: 237, conf: 85 });
+    expect(fs.readFileSync(callLog, 'utf8')).toContain('--psm 6 tsv');
+
+    const found = await run(['--find', 'DOCKET|spring']);
+    expect(found.exitCode, found.stderr).toBe(0);
+    const foundBoxes = JSON.parse(found.stdout) as Boxes;
+    expect(foundBoxes.cached).toBe(true);
+    expect(foundBoxes.lines.map((l) => [l.text, l.x0, l.y0, l.x1, l.y1])).toEqual([
+      ['Probate Docket', 100, 200, 280, 237],
+      ['Springfield', 400, 900, 450, 920],
+    ]);
+
+    const tsv = await run(['--tsv']);
+    expect(tsv.exitCode, tsv.stderr).toBe(0);
+    expect(tsv.stdout).toContain('level\tpage_num');
+    expect(tsv.stdout).toContain('OMP=1');
+    // --boxes, --find, and --tsv share one tesseract run; plain-text cache is untouched.
+    expect(fs.readFileSync(callLog, 'utf8').trim().split('\n')).toHaveLength(1);
+    expect(fs.existsSync(path.join(cacheDir, `${sha256}_printed_psm6.tsv`))).toBe(true);
+    expect(fs.existsSync(path.join(cacheDir, `${sha256}_printed_psm6.boxes.json`))).toBe(true);
+    expect(fs.existsSync(path.join(cacheDir, `${sha256}_printed_psm6.json`))).toBe(false);
+
+    const conflict = await run(['--tsv', '--boxes']);
+    expect(conflict.exitCode).toBe(2);
+    const cursive = await run(['--boxes', '--mode', 'cursive']);
+    expect(cursive.exitCode).toBe(2);
   });
 
   it('runs prep-scan grid and prep-scan stitch on a synthetic image when Pillow is available', async () => {

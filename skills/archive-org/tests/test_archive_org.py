@@ -664,5 +664,209 @@ class TestArchiveOrgCachedGrepAndPage(unittest.TestCase):
             self.assertEqual(sum(1 for _, cached in results if cached), 3)
 
 
+SYNTHETIC_TEXT_PAGES = [
+    "",
+    "Cover Text",
+    "Title Page: Gazetteer of Oakridge County",
+    "Preface signed by Clara Barton on page iv.",
+    "Page one records the 1848 mill survey at Oakridge Creek.",
+    "Page two lists ferry tolls across Maple River.",
+]
+
+
+class TestArchiveOrgTextAndLookup(unittest.TestCase):
+    def make_fake_http(self, item_id: str, djvu_pages: list[str], seen: list[str]):
+        fake_meta = {
+            "metadata": {"identifier": item_id, "title": "Synthetic Gazetteer"},
+            "files": [
+                {"name": f"{item_id}_scandata.xml", "format": "Scandata"},
+                {"name": f"{item_id}_djvu.txt", "format": "DjVuTXT"},
+            ],
+        }
+
+        def fake_http_get_bytes(url: str, timeout: float = 25.0) -> bytes:
+            seen.append(url)
+            if "/page/n" in url or url.endswith(".jpg"):
+                raise AssertionError(f"JPEG must not be fetched: {url}")
+            if url.endswith(f"/metadata/{item_id}"):
+                return json.dumps(fake_meta).encode("utf-8")
+            if url.endswith(f"/{item_id}_scandata.xml"):
+                return SYNTHETIC_SCANDATA
+            if url.endswith(f"/{item_id}_djvu.txt"):
+                return "\x0c".join(djvu_pages).encode("utf-8")
+            raise AssertionError(f"Unexpected URL: {url}")
+
+        return fake_http_get_bytes
+
+    def run_cli(self, argv: list[str]) -> tuple[int, str]:
+        buf = io.StringIO()
+        with patch("sys.stdout", buf):
+            rc = ao.main(argv)
+        return rc, buf.getvalue()
+
+    def run_cli_error(self, argv: list[str]) -> tuple[int, str]:
+        err = io.StringIO()
+        with patch("sys.stderr", err), patch("sys.stdout", io.StringIO()):
+            with self.assertRaises(SystemExit) as cm:
+                ao.main(argv)
+        return int(cm.exception.code), err.getvalue()
+
+    def test_text_printed_page_caches_and_refreshes_without_jpeg(self) -> None:
+        item_id = "synthetic_text_gazetteer_1890"
+        seen: list[str] = []
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with patch.dict(os.environ, {"KINLOOM_IA_CACHE_DIR": tmpdir}, clear=False), patch.object(
+                ao, "http_get_bytes", side_effect=self.make_fake_http(item_id, SYNTHETIC_TEXT_PAGES, seen)
+            ):
+                rc, out = self.run_cli(["text", item_id, "--printed-page", "1", "--json"])
+                self.assertEqual(rc, 0)
+                payload = json.loads(out)
+                self.assertEqual(payload["identifier"], item_id)
+                self.assertFalse(payload["cached"])
+                self.assertEqual(len(payload["pages"]), 1)
+                page = payload["pages"][0]
+                self.assertEqual(page["leaf"], 3)
+                self.assertEqual(page["scandata_leaf"], 4)
+                self.assertEqual(page["printed_page"], "1")
+                self.assertIn("1848 mill survey", page["text"])
+                self.assertEqual(page["image_url"], f"https://archive.org/download/{item_id}/page/n3_s2.jpg")
+                self.assertEqual(page["details_url"], f"https://archive.org/details/{item_id}/page/n3")
+                self.assertEqual(len(seen), 3)
+                self.assertFalse(any("/page/n" in u for u in seen))
+                self.assertFalse((Path(tmpdir) / item_id / "pages").exists())
+
+                # Cache hit: zero HTTP requests, leaf selector works.
+                seen.clear()
+                rc, out = self.run_cli(["text", item_id, "--leaf", "0", "--json"])
+                self.assertEqual(rc, 0)
+                payload = json.loads(out)
+                self.assertTrue(payload["cached"])
+                self.assertEqual(payload["pages"][0]["text"], "Cover Text")
+                self.assertEqual(payload["pages"][0]["scandata_leaf"], 1)
+                self.assertIsNone(payload["pages"][0]["printed_page"])
+                self.assertEqual(seen, [])
+
+                # Human-readable output includes metadata and URLs.
+                rc, out = self.run_cli(["text", item_id, "--printed-page", "IV"])
+                self.assertEqual(rc, 0)
+                self.assertIn("n2 (p.iv, scandata leaf 3)", out)
+                self.assertIn(f"https://archive.org/download/{item_id}/page/n2_s2.jpg", out)
+                self.assertIn("Clara Barton", out)
+                self.assertEqual(seen, [])
+
+                # --refresh re-fetches metadata, scandata, and OCR text (still no JPEG).
+                rc, out = self.run_cli(["text", item_id, "--printed-page", "2", "--refresh", "--json"])
+                self.assertEqual(rc, 0)
+                self.assertFalse(json.loads(out)["cached"])
+                self.assertEqual(len(seen), 3)
+                self.assertFalse(any("/page/n" in u for u in seen))
+
+    def test_text_pages_range_and_bookreader_segment_mode(self) -> None:
+        for case, djvu_pages in (
+            ("scandata_mode", SYNTHETIC_TEXT_PAGES),
+            # One segment per BookReader access leaf (deleted leaf 0 omitted).
+            ("bookreader_mode", SYNTHETIC_TEXT_PAGES[1:]),
+        ):
+            with self.subTest(case=case):
+                item_id = f"synthetic_range_{case}_1899"
+                seen: list[str] = []
+                with tempfile.TemporaryDirectory() as tmpdir:
+                    with patch.dict(os.environ, {"KINLOOM_IA_CACHE_DIR": tmpdir}, clear=False), patch.object(
+                        ao, "http_get_bytes", side_effect=self.make_fake_http(item_id, djvu_pages, seen)
+                    ):
+                        rc, out = self.run_cli(["text", item_id, "--pages", "iv-2", "--json"])
+                        self.assertEqual(rc, 0)
+                        pages = json.loads(out)["pages"]
+                        self.assertEqual([p["leaf"] for p in pages], [2, 3, 4])
+                        self.assertEqual([p["printed_page"] for p in pages], ["iv", "1", "2"])
+                        self.assertEqual([p["scandata_leaf"] for p in pages], [3, 4, 5])
+                        self.assertIn("Clara Barton", pages[0]["text"])
+                        self.assertIn("1848 mill survey", pages[1]["text"])
+                        self.assertIn("ferry tolls", pages[2]["text"])
+
+                        rc, out = self.run_cli(["text", item_id, "--pages", "1-1", "--json"])
+                        self.assertEqual([p["leaf"] for p in json.loads(out)["pages"]], [3])
+                        self.assertEqual(len(seen), 3)
+
+    def test_lookup_uses_page_index_only_and_refreshes(self) -> None:
+        item_id = "synthetic_lookup_atlas_1877"
+        seen: list[str] = []
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with patch.dict(os.environ, {"KINLOOM_IA_CACHE_DIR": tmpdir}, clear=False), patch.object(
+                ao, "http_get_bytes", side_effect=self.make_fake_http(item_id, SYNTHETIC_TEXT_PAGES, seen)
+            ):
+                rc, out = self.run_cli(["lookup", item_id, "--printed-page", "2", "--json"])
+                self.assertEqual(rc, 0)
+                payload = json.loads(out)
+                self.assertEqual(payload["leaf"], 4)
+                self.assertEqual(payload["scandata_leaf"], 5)
+                self.assertEqual(payload["printed_page"], "2")
+                self.assertFalse(payload["cached"])
+                self.assertEqual(payload["image_url"], f"https://archive.org/download/{item_id}/page/n4_s2.jpg")
+                # Only metadata + scandata; no djvu.txt and no JPEG.
+                self.assertEqual(len(seen), 2)
+                self.assertFalse(any(u.endswith("_djvu.txt") for u in seen))
+                self.assertFalse(any("/page/n" in u for u in seen))
+                self.assertFalse((Path(tmpdir) / item_id / "djvu.txt").exists())
+                self.assertTrue((Path(tmpdir) / item_id / "page_index.json").is_file())
+
+                seen.clear()
+                rc, out = self.run_cli(["lookup", item_id, "--leaf", "3", "--json"])
+                payload = json.loads(out)
+                self.assertTrue(payload["cached"])
+                self.assertEqual((payload["printed_page"], payload["scandata_leaf"]), ("1", 4))
+
+                rc, out = self.run_cli(["lookup", item_id, "--scandata-leaf", "3"])
+                self.assertEqual(rc, 0)
+                self.assertIn("printed page iv | BookReader leaf n2 | scandata leaf 3", out)
+                self.assertEqual(seen, [])
+
+                rc, out = self.run_cli(["lookup", item_id, "--leaf", "0", "--refresh", "--json"])
+                self.assertEqual(rc, 0)
+                self.assertEqual(json.loads(out)["scandata_leaf"], 1)
+                self.assertEqual(len(seen), 2)
+                self.assertFalse(any(u.endswith("_djvu.txt") for u in seen))
+
+    def test_text_and_lookup_errors_on_unresolvable_pages_and_bad_selectors(self) -> None:
+        item_id = "synthetic_errors_registry_1866"
+        seen: list[str] = []
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with patch.dict(os.environ, {"KINLOOM_IA_CACHE_DIR": tmpdir}, clear=False), patch.object(
+                ao, "http_get_bytes", side_effect=self.make_fake_http(item_id, SYNTHETIC_TEXT_PAGES, seen)
+            ):
+                code, err = self.run_cli_error(["text", item_id, "--printed-page", "999"])
+                self.assertEqual(code, 1)
+                self.assertIn("Printed page '999' not found", err)
+
+                code, err = self.run_cli_error(["lookup", item_id, "--printed-page", "xlii"])
+                self.assertEqual(code, 1)
+                self.assertIn("not found", err)
+
+                code, err = self.run_cli_error(["text", item_id, "--leaf", "42"])
+                self.assertEqual(code, 1)
+                self.assertIn("out of range", err)
+
+                code, err = self.run_cli_error(["lookup", item_id, "--scandata-leaf", "0"])
+                self.assertEqual(code, 1)
+                self.assertIn("not an access leaf", err)
+
+                code, err = self.run_cli_error(["text", item_id, "--pages", "2-iv"])
+                self.assertEqual(code, 1)
+                self.assertIn("precedes", err)
+
+                code, err = self.run_cli_error(["text", item_id, "--pages", "1-999"])
+                self.assertEqual(code, 1)
+                self.assertIn("'999' not found", err)
+
+                seen.clear()
+                code, _ = self.run_cli_error(["text", item_id])
+                self.assertEqual(code, 2)
+                code, _ = self.run_cli_error(["text", item_id, "--leaf", "1", "--printed-page", "1"])
+                self.assertEqual(code, 2)
+                code, _ = self.run_cli_error(["lookup", item_id])
+                self.assertEqual(code, 2)
+                self.assertEqual(seen, [])
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -4,6 +4,7 @@
 # dependencies = [
 #   "click>=8.1",
 #   "httpx>=0.27",
+#   "pillow>=10",
 # ]
 # ///
 """CLI for Library of Virginia research: Chancery Records Index, Primo catalog.
@@ -28,16 +29,39 @@ interface was verified for it; use the `url --chronicle` pointer and search
 in the browser. ARVAS (arvasarchive.org) returns an empty 202 to plain HTTP
 and is likewise browser-only. The old Aleph Land Office index host
 (lva1.hosted.exlibrisgroup.com) was unreachable on 2026-11-24.
+
+Image and Rosetta routes verified live 2026-11-26:
+
+- Land Office patent/grant scans are plain TIFFs on image.lva.virginia.gov,
+  e.g. /LONN/LO-3/372/372_0195.tif (image/tiff, CCITT G4 bi-level).
+- Dunmore's War (1774) cards: /cgi-bin/GetDW.pl?dir=<dddd>/W<dddd>&card=<n>
+  redirects to a /cgi-bin/drawer page listing neighbouring page TIFFs under
+  /Microfilm/DW/<reel>/<nnnnn>.tif; the current card is the link without a
+  "Page N" label.
+- Rosetta (rosetta.virginiamemory.com): DeliveryManagerServlet?dps_pid=IE<n>
+  embeds an iframe to /view/action/ieViewer.do?...&dps_dvs=<session>&dps_pid=IE<n>;
+  the viewer lists file pids (FL<n>, with METS titles such as Original /
+  Transcription); DeliveryManagerServlet?dps_pid=FL<n>&dps_func=stream returns
+  the delivered file (application/pdf for the sample checked). The session
+  cookie jar is kept for the whole resolution.
+
+Every network response is cached on disk (see get_cache_root); pass the
+global `--refresh` (or a command's own `--refresh`) to refetch.
 """
 
 from __future__ import annotations
 
+import hashlib
 import html as _html
 import json
+import os
 import re
 import sys
+import time
+from contextlib import contextmanager
 from pathlib import Path
-from urllib.parse import quote, urlencode
+from typing import Any, Iterator
+from urllib.parse import quote, unquote, urlencode, urlsplit
 
 import click
 import httpx
@@ -57,6 +81,364 @@ USER_AGENT = (
 )
 MATCH_OPS = ("Exact", "Starts", "Includes")
 CATALOG_FIELDS = ("any", "title", "creator")
+LVA_IMAGE_HOST = "image.lva.virginia.gov"
+LVA_IMAGE_BASE = "https://" + LVA_IMAGE_HOST
+DUNMORE_CGI = LVA_IMAGE_BASE + "/cgi-bin/GetDW.pl"
+IMAGE_SUFFIXES = (".tif", ".tiff", ".jpg", ".jpeg", ".png", ".gif")
+ROSETTA_HOST = "rosetta.virginiamemory.com"
+ROSETTA_BASE = "https://" + ROSETTA_HOST
+ROSETTA_DELIVERY = ROSETTA_BASE + "/delivery/DeliveryManagerServlet"
+ROSETTA_VIEWER = ROSETTA_BASE + "/view/action/ieViewer.do"
+DEFAULT_TTL_HOURS = 168.0
+CACHE_ENV = "KINLOOM_VA_ARCHIVES_CACHE_DIR"
+TTL_ENV = "KINLOOM_VA_ARCHIVES_TTL_HOURS"
+
+# Per-invocation state: the group-level --refresh resets it, a command-level
+# --refresh can only turn it on.
+_STATE: dict[str, bool] = {"refresh": False}
+
+
+# ---------------------------------------------------------------------------
+# Disk cache (atomic temp-file + rename writes, fcntl.flock per entry)
+# ---------------------------------------------------------------------------
+
+def get_cache_root() -> Path:
+    override = os.environ.get(CACHE_ENV)
+    if override:
+        return Path(override).expanduser()
+    xdg = os.environ.get("XDG_CACHE_HOME")
+    base = Path(xdg).expanduser() if xdg else Path.home() / ".cache"
+    return base / "kinloom-va-archives"
+
+
+def resolve_ttl_hours() -> float:
+    raw = os.environ.get(TTL_ENV)
+    if raw is not None and raw.strip():
+        try:
+            val = float(raw.strip())
+        except ValueError as exc:
+            raise click.BadParameter(f"Invalid {TTL_ENV} value: {raw!r}.") from exc
+        if val < 0 or val != val:
+            raise click.BadParameter(f"Invalid {TTL_ENV} value: {raw!r} (must be >= 0).")
+        return val
+    return DEFAULT_TTL_HOURS
+
+
+@contextmanager
+def file_lock(lock_path: Path) -> Iterator[None]:
+    """Advisory exclusive lock (POSIX flock); no-op where fcntl is missing."""
+    try:
+        import fcntl
+    except ImportError:
+        yield
+        return
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(lock_path, "a+b") as fh:
+        fcntl.flock(fh.fileno(), fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(fh.fileno(), fcntl.LOCK_UN)
+
+
+def _tmp_sibling(dest: Path) -> Path:
+    return dest.with_name(f".{dest.name}.{os.getpid()}.{time.time_ns()}.tmp")
+
+
+def atomic_write_bytes(dest: Path, data: bytes) -> None:
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    tmp = _tmp_sibling(dest)
+    try:
+        tmp.write_bytes(data)
+        os.replace(tmp, dest)
+    except BaseException:
+        tmp.unlink(missing_ok=True)
+        raise
+
+
+def atomic_write_json(dest: Path, payload: Any) -> None:
+    atomic_write_bytes(dest, json.dumps(payload, ensure_ascii=False, indent=1).encode("utf-8"))
+
+
+def read_json_if_valid(path: Path) -> dict | None:
+    if not path.is_file():
+        return None
+    try:
+        parsed = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+        return None
+    return parsed if isinstance(parsed, dict) else None
+
+
+def _meta_path(cache_path: Path) -> Path:
+    return cache_path.with_name(cache_path.name + ".meta.json")
+
+
+def _host_ok(url: httpx.URL | str, allowed_hosts: tuple[str, ...] | None) -> bool:
+    if not allowed_hosts:
+        return True
+    u = httpx.URL(str(url))
+    return u.scheme == "https" and u.host in allowed_hosts
+
+
+def _cache_valid(cache_path: Path, ttl_hours: float | None) -> dict | None:
+    meta = read_json_if_valid(_meta_path(cache_path))
+    if meta is None or not cache_path.is_file():
+        return None
+    if ttl_hours is not None:
+        cached_at = meta.get("cached_at")
+        if not isinstance(cached_at, (int, float)) or time.time() - cached_at > ttl_hours * 3600:
+            return None
+    return meta
+
+
+def cached_fetch(
+    c: httpx.Client,
+    url: str,
+    cache_path: Path,
+    *,
+    method: str = "GET",
+    params: dict | None = None,
+    data: dict | None = None,
+    ttl_hours: float | None = None,
+    allowed_hosts: tuple[str, ...] | None = None,
+    refresh: bool | None = None,
+) -> tuple[Path, dict]:
+    """Fetch url into cache_path (streamed, atomic) unless a fresh copy exists.
+
+    ttl_hours=None means the entry never expires (immutable scans/files).
+    allowed_hosts pins the final (post-redirect) https host.
+    """
+    refresh = _STATE["refresh"] if refresh is None else refresh
+    if not refresh:
+        meta = _cache_valid(cache_path, ttl_hours)
+        if meta is not None:
+            return cache_path, meta
+    lock = cache_path.parent / f".{cache_path.name}.lock"
+    with file_lock(lock):
+        if not refresh:
+            meta = _cache_valid(cache_path, ttl_hours)
+            if meta is not None:
+                return cache_path, meta
+        cache_path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = _tmp_sibling(cache_path)
+        try:
+            with c.stream(method, url, params=params, data=data) as r:
+                r.raise_for_status()
+                if not _host_ok(r.url, allowed_hosts):
+                    raise click.ClickException(f"Refusing redirect outside {allowed_hosts}: {r.url}")
+                with open(tmp, "wb") as fh:
+                    for chunk in r.iter_bytes():
+                        fh.write(chunk)
+                meta = {
+                    "url": str(r.url),
+                    "content_type": r.headers.get("content-type", ""),
+                    "cached_at": time.time(),
+                    "size": tmp.stat().st_size,
+                }
+            os.replace(tmp, cache_path)
+        except BaseException:
+            tmp.unlink(missing_ok=True)
+            raise
+        atomic_write_json(_meta_path(cache_path), meta)
+        return cache_path, meta
+
+
+def _request_key(method: str, url: str, params: dict | None, data: dict | None) -> str:
+    canon = json.dumps(
+        {"m": method.upper(), "u": url, "p": params or {}, "d": data or {}},
+        sort_keys=True, separators=(",", ":"), ensure_ascii=False,
+    )
+    return hashlib.sha256(canon.encode("utf-8")).hexdigest()
+
+
+def fetch_text(c: httpx.Client, url: str, *, method: str = "GET", params: dict | None = None,
+               data: dict | None = None) -> str:
+    """Cached HTML/JSON GET/POST (TTL from $KINLOOM_VA_ARCHIVES_TTL_HOURS, default 168h)."""
+    key = _request_key(method, url, params, data)
+    path, meta = cached_fetch(
+        c, url, get_cache_root() / "http" / f"{key}.body",
+        method=method, params=params, data=data, ttl_hours=resolve_ttl_hours(),
+    )
+    return httpx.Response(200, headers={"content-type": meta.get("content_type", "")},
+                          content=path.read_bytes()).text
+
+
+def fetch_file(c: httpx.Client, url: str, *, allowed_hosts: tuple[str, ...] | None = None) -> Path:
+    """Cached immutable binary (PDF/ZIP/TIFF), keyed by URL. Returns cache path."""
+    key = hashlib.sha256(url.encode("utf-8")).hexdigest()
+    suffix = Path(urlsplit(url).path).suffix.lower()
+    if not re.fullmatch(r"\.[a-z0-9]{1,5}", suffix):
+        suffix = ".bin"
+    path, _ = cached_fetch(c, url, get_cache_root() / "files" / f"{key}{suffix}",
+                           allowed_hosts=allowed_hosts)
+    return path
+
+
+def copy_atomic(src: Path, dest: Path) -> None:
+    atomic_write_bytes(dest, src.read_bytes())
+
+
+def _refresh_callback(ctx: click.Context, _param: click.Parameter, value: bool) -> bool:
+    if value:
+        _STATE["refresh"] = True
+    return value
+
+
+refresh_option = click.option(
+    "--refresh", is_flag=True, expose_value=False, callback=_refresh_callback,
+    help="Bypass the disk cache for this command and refetch.",
+)
+
+
+# ---------------------------------------------------------------------------
+# Library of Virginia image server + Rosetta validation helpers
+# ---------------------------------------------------------------------------
+
+_SAFE_PATH = re.compile(r"/[A-Za-z0-9._~+\-/]+")
+
+
+def normalize_lva_image_url(raw: str) -> str:
+    """Validate an image.lva.virginia.gov image path or https URL; return the https URL.
+
+    Accepts 'https://image.lva.virginia.gov/<path>', '/<path>' or '<path>'.
+    Rejects other schemes/hosts, credentials, ports, queries, fragments,
+    '.'/'..' segments (raw or percent-encoded), backslashes, and non-image suffixes.
+    """
+    if not isinstance(raw, str):
+        raise ValueError("image path must be a string")
+    text = raw.strip()
+    if not text or any(ch in text for ch in ("\x00", "\\", "\r", "\n", "\t", " ")):
+        raise ValueError(f"Invalid LVA image path: {raw!r}")
+    if "?" in text or "#" in text:
+        raise ValueError(f"Query strings/fragments are not allowed: {raw!r}")
+    if text.startswith("//"):
+        raise ValueError(f"Scheme-relative URLs are not allowed: {raw!r}")
+    if re.match(r"^[A-Za-z][A-Za-z0-9+.\-]*:", text):
+        parts = urlsplit(text)
+        if parts.scheme.lower() != "https":
+            raise ValueError(f"Only https URLs are allowed (got {parts.scheme!r}): {raw!r}")
+        if parts.username or parts.password or parts.port not in (None, 443):
+            raise ValueError(f"Credentials/ports are not allowed: {raw!r}")
+        if (parts.hostname or "").lower() != LVA_IMAGE_HOST:
+            raise ValueError(f"Only {LVA_IMAGE_HOST} is allowed: {raw!r}")
+        path = parts.path
+    else:
+        path = text if text.startswith("/") else "/" + text
+    decoded = unquote(path)
+    if "%" in decoded or decoded != unquote(decoded):
+        raise ValueError(f"Double/odd percent-encoding is not allowed: {raw!r}")
+    if not _SAFE_PATH.fullmatch(decoded):
+        raise ValueError(f"Unsafe characters in LVA image path: {raw!r}")
+    segments = decoded.split("/")[1:]
+    if any(seg in ("", ".", "..") for seg in segments):
+        raise ValueError(f"Empty, '.' or '..' path segments are not allowed: {raw!r}")
+    if not decoded.lower().endswith(IMAGE_SUFFIXES):
+        raise ValueError(f"Not an image path (expected {', '.join(IMAGE_SUFFIXES)}): {raw!r}")
+    return LVA_IMAGE_BASE + decoded
+
+
+def validate_ie_id(raw: str) -> str:
+    text = (raw or "").strip()
+    if not re.fullmatch(r"IE\d{1,12}", text):
+        raise click.BadParameter(f"Invalid Rosetta IE id (expected IE<digits>): {raw!r}")
+    return text
+
+
+def validate_fl_id(raw: str) -> str:
+    text = (raw or "").strip()
+    if not re.fullmatch(r"FL\d{1,12}", text):
+        raise click.BadParameter(f"Invalid Rosetta file id (expected FL<digits>): {raw!r}")
+    return text
+
+
+def save_image(src: Path, out: Path) -> str:
+    """Write cached image bytes to out. TIFF->JPEG when out is .jpg/.jpeg and Pillow exists.
+
+    Returns 'jpeg' or 'raw'. Without Pillow a .jpg request writes the raw bytes
+    next to it with a .tif suffix instead of mislabelling TIFF data as JPEG.
+    """
+    if out.suffix.lower() in (".jpg", ".jpeg"):
+        try:
+            from PIL import Image  # type: ignore[import-not-found]
+        except ImportError:
+            alt = out.with_suffix(".tif")
+            click.echo(f"Pillow not installed; saving raw TIFF to {alt} instead of {out}", err=True)
+            copy_atomic(src, alt)
+            return "raw:" + str(alt)
+        out.parent.mkdir(parents=True, exist_ok=True)
+        tmp = _tmp_sibling(out)
+        try:
+            with Image.open(src) as im:
+                mode = "L" if im.mode in ("1", "L", "I;16", "I") else "RGB"
+                im.convert(mode).save(tmp, format="JPEG", quality=90)
+            os.replace(tmp, out)
+        except BaseException:
+            tmp.unlink(missing_ok=True)
+            raise
+        return "jpeg"
+    copy_atomic(src, out)
+    return "raw"
+
+
+def parse_dunmore_drawer(page: str) -> dict:
+    """Parse a Dunmore's War /cgi-bin/drawer page into page TIFF links."""
+    title_m = re.search(r"Dunmore's War\s*-\s*Page\s*(\d+)", page, re.I)
+    current = int(title_m.group(1)) if title_m else None
+    images = []
+    for m in re.finditer(r'<a href="(/Microfilm/[^"]+)"\s*>(.*?)</a>', page, re.S | re.I):
+        try:
+            url = normalize_lva_image_url(_html.unescape(m.group(1)))
+        except ValueError:
+            continue
+        label_m = re.search(r"Page\s*(\d+)", _clean(m.group(2)))
+        is_current = label_m is None
+        num = int(label_m.group(1)) if label_m else current
+        images.append({"page": num, "url": url, "current": is_current})
+    return {"current_page": current, "images": images}
+
+
+def parse_rosetta_delivery(page: str) -> dict:
+    """Find the ieViewer iframe URL and dps_dvs session token on a delivery page."""
+    viewer = None
+    for m in re.finditer(r'src="([^"]*ieViewer\.do[^"]*)"', page, re.I):
+        viewer = _html.unescape(m.group(1))
+        break
+    dvs_m = re.search(r"dps_dvs=([0-9]+~[0-9]+)", page)
+    return {"viewer_url": viewer, "dps_dvs": dvs_m.group(1) if dvs_m else None}
+
+
+def parse_rosetta_viewer(page: str) -> dict:
+    """List FL file pids (with METS titles) and the initially selected one."""
+    files: list[dict] = []
+    seen: set[str] = set()
+    for m in re.finditer(r"<item id='(FL\d+)' title='([^']*)'", page):
+        if m.group(1) not in seen:
+            seen.add(m.group(1))
+            files.append({"fl": m.group(1), "title": _html.unescape(m.group(2))})
+    for m in re.finditer(r"JSONObject\s*=\s*'(\{[^']*\})'", page):
+        try:
+            obj = json.loads(m.group(1))
+        except json.JSONDecodeError:
+            continue
+        for val in obj.values():
+            for fl in re.findall(r"FL\d+", str(val)):
+                if fl not in seen:
+                    seen.add(fl)
+                    files.append({"fl": fl, "title": ""})
+    init_m = re.search(r'initialSelect\s*=\s*"(FL\d+)"', page)
+    initial = init_m.group(1) if init_m else (files[0]["fl"] if files else None)
+    return {"files": files, "initial": initial}
+
+
+_CT_EXT = {
+    "application/pdf": ".pdf", "image/jpeg": ".jpg", "image/jp2": ".jp2", "image/tiff": ".tif",
+    "image/png": ".png", "image/gif": ".gif", "text/plain": ".txt", "application/zip": ".zip",
+}
+
+
+def _ext_for(content_type: str) -> str:
+    return _CT_EXT.get(content_type.split(";")[0].strip().lower(), ".bin")
 
 
 def _client() -> httpx.Client:
@@ -210,8 +592,14 @@ def _fmt_record_text(rec: dict) -> str:
 
 
 @click.group(context_settings={"help_option_names": ["-h", "--help"]})
-def cli() -> None:
-    """Search the Library of Virginia: Chancery Records Index and Primo catalog."""
+@click.option("--refresh", is_flag=True, help="Bypass the disk cache for every request in this run.")
+def cli(refresh: bool) -> None:
+    """Search the Library of Virginia: Chancery Records Index, Primo catalog, image server, Rosetta.
+
+    Responses are cached under $KINLOOM_VA_ARCHIVES_CACHE_DIR
+    (default $XDG_CACHE_HOME/kinloom-va-archives or ~/.cache/kinloom-va-archives).
+    """
+    _STATE["refresh"] = refresh
 
 
 @cli.group("chancery")
@@ -239,6 +627,7 @@ def chancery() -> None:
 @click.option("--plats", is_flag=True, help="Only cases with plats available.")
 @click.option("--pages", default="1", show_default=True, help="Result pages to fetch: '1', '1-3', '1,3', or 'all' (20 records per page).")
 @click.option("--json", "as_json", is_flag=True, help="Output compact structured JSON.")
+@refresh_option
 def cmd_chancery_search(surnames, locality, match, surname2, plaintiff_last, plaintiff_first,
                          defendant_last, defendant_first, year_from, year_to, index_number,
                          local_case_number, enslaved, free, plats, pages, as_json):
@@ -269,9 +658,7 @@ def cmd_chancery_search(surnames, locality, match, surname2, plaintiff_last, pla
                 form["chkPlat"] = "on"
             first_page = 1
             form["LOC"] = locality
-            resp = c.post(CHANCERY_SEARCH, data=form)
-            resp.raise_for_status()
-            parsed = parse_search_page(resp.text)
+            parsed = parse_search_page(fetch_text(c, CHANCERY_SEARCH, method="POST", data=form))
             total += parsed["total"]
             if pages.strip().lower() == "all":
                 wanted = list(range(1, (total + 19) // 20 + 1)) or [1]
@@ -283,9 +670,8 @@ def cmd_chancery_search(surnames, locality, match, surname2, plaintiff_last, pla
                     continue
                 form2 = dict(form)
                 form2["intPage"] = str(pn)
-                r2 = c.post(CHANCERY_SEARCH, data=form2)
-                r2.raise_for_status()
-                all_records.extend(parse_search_page(r2.text)["records"])
+                all_records.extend(parse_search_page(
+                    fetch_text(c, CHANCERY_SEARCH, method="POST", data=form2))["records"])
     if as_json:
         click.echo(json.dumps({"total": total, "returned": len(all_records), "records": all_records}, indent=1))
         return
@@ -299,19 +685,15 @@ def cmd_chancery_search(surnames, locality, match, surname2, plaintiff_last, pla
 @click.argument("cfn")
 @click.option("--images", is_flag=True, help="Also list the scanned page PDFs and ZIP URL.")
 @click.option("--json", "as_json", is_flag=True, help="Output compact structured JSON.")
+@refresh_option
 def cmd_chancery_case(cfn: str, images: bool, as_json: bool) -> None:
     """Show one chancery cause by CFN (locality-year-number)."""
     with _client() as c:
-        resp = c.get(CHANCERY_DETAIL, params={"CFN": cfn})
-        resp.raise_for_status()
-        detail = parse_case_page(resp.text)
-    detail["cfn"] = cfn
-    detail["case_url"] = CHANCERY_DETAIL + "?CFN=" + cfn
-    if images:
-        with _client() as c:
-            resp = c.get(CHANCERY_IMAGES, params={"CFN": cfn})
-            resp.raise_for_status()
-            detail["images"] = parse_images_page(resp.text)
+        detail = parse_case_page(fetch_text(c, CHANCERY_DETAIL, params={"CFN": cfn}))
+        detail["cfn"] = cfn
+        detail["case_url"] = CHANCERY_DETAIL + "?CFN=" + cfn
+        if images:
+            detail["images"] = parse_images_page(fetch_text(c, CHANCERY_IMAGES, params={"CFN": cfn}))
     if as_json:
         click.echo(json.dumps(detail, indent=1))
         return
@@ -336,21 +718,20 @@ def cmd_chancery_case(cfn: str, images: bool, as_json: bool) -> None:
 @click.option("--pages", default="all", show_default=True, help="1-based page selection, e.g. '1-5' or 'all'.")
 @click.option("--zip", "as_zip", is_flag=True, help="Download the whole-case ZIP instead of page PDFs.")
 @click.option("--overwrite", is_flag=True, help="Overwrite existing files.")
+@refresh_option
 def cmd_chancery_download(cfn: str, out_dir: Path | None, pages: str, as_zip: bool, overwrite: bool) -> None:
-    """Download the scanned pages (or whole-case ZIP) for one chancery cause."""
+    """Download the scanned pages (or whole-case ZIP) for one chancery cause (disk-cached)."""
+    if not re.fullmatch(r"[0-9]+(?:-[0-9]+)*", cfn):
+        raise click.BadParameter(f"Invalid CFN (expected locality-year-number digits): {cfn!r}")
     out_dir = out_dir or Path(f"va-chancery-{cfn}")
     out_dir.mkdir(parents=True, exist_ok=True)
     with _client() as c:
-        resp = c.get(CHANCERY_DETAIL, params={"CFN": cfn})
-        resp.raise_for_status()
-        detail = parse_case_page(resp.text)
+        detail = parse_case_page(fetch_text(c, CHANCERY_DETAIL, params={"CFN": cfn}))
         detail["cfn"] = cfn
         detail["case_url"] = CHANCERY_DETAIL + "?CFN=" + cfn
         imgs = None
         if not as_zip:
-            r2 = c.get(CHANCERY_IMAGES, params={"CFN": cfn})
-            r2.raise_for_status()
-            imgs = parse_images_page(r2.text)
+            imgs = parse_images_page(fetch_text(c, CHANCERY_IMAGES, params={"CFN": cfn}))
             detail["images"] = imgs
         (out_dir / "metadata.json").write_text(json.dumps(detail, indent=1), encoding="utf-8")
         if as_zip:
@@ -359,26 +740,19 @@ def cmd_chancery_download(cfn: str, out_dir: Path | None, pages: str, as_zip: bo
             if dest.exists() and not overwrite:
                 click.echo(f"exists, skipping: {dest}")
                 return
-            with c.stream("GET", zip_url) as r:
-                r.raise_for_status()
-                with open(dest, "wb") as f:
-                    for chunk in r.iter_bytes():
-                        f.write(chunk)
+            copy_atomic(fetch_file(c, zip_url), dest)
             click.echo(f"saved {dest} ({dest.stat().st_size} bytes)")
             return
         assert imgs is not None
         wanted = parse_page_spec(pages, imgs["total_pages"])
         for n in wanted:
             url = imgs["page_pdfs"][n - 1]
-            dest = out_dir / Path(url).name
+            name = re.sub(r"[^A-Za-z0-9._-]+", "_", Path(urlsplit(url).path).name).lstrip(".") or f"{n:04d}.pdf"
+            dest = out_dir / name
             if dest.exists() and not overwrite:
                 click.echo(f"exists, skipping: {dest.name}")
                 continue
-            with c.stream("GET", url) as r:
-                r.raise_for_status()
-                with open(dest, "wb") as f:
-                    for chunk in r.iter_bytes():
-                        f.write(chunk)
+            copy_atomic(fetch_file(c, url), dest)
             click.echo(f"saved {dest} ({dest.stat().st_size} bytes)")
         click.echo(f"metadata: {out_dir / 'metadata.json'}")
 
@@ -386,12 +760,11 @@ def cmd_chancery_download(cfn: str, out_dir: Path | None, pages: str, as_zip: bo
 @chancery.command("localities")
 @click.option("--status", default=None, help="Filter by viewing status substring, e.g. Scanned.")
 @click.option("--json", "as_json", is_flag=True, help="Output compact structured JSON.")
+@refresh_option
 def cmd_chancery_localities(status: str | None, as_json: bool) -> None:
     """List per-locality chancery coverage from available.asp."""
     with _client() as c:
-        resp = c.get(CHANCERY_AVAILABLE)
-        resp.raise_for_status()
-        rows = parse_localities_page(resp.text)
+        rows = parse_localities_page(fetch_text(c, CHANCERY_AVAILABLE))
     if status:
         rows = [r for r in rows if status.lower() in r["viewing_status"].lower()]
     if as_json:
@@ -409,6 +782,7 @@ def cmd_chancery_localities(status: str | None, as_json: bool) -> None:
 @click.option("--limit", default=10, show_default=True, type=int, help="Results per page (PNXS limit).")
 @click.option("--offset", default=0, show_default=True, type=int, help="Result offset (PNXS offset).")
 @click.option("--json", "as_json", is_flag=True, help="Output compact structured JSON.")
+@refresh_option
 def cmd_catalog(query: str, field: str, limit: int, offset: int, as_json: bool) -> None:
     """Search the Library of Virginia catalog via the public Primo PNXS API."""
     params = {
@@ -417,9 +791,7 @@ def cmd_catalog(query: str, field: str, limit: int, offset: int, as_json: bool) 
         "limit": str(limit), "offset": str(offset),
     }
     with _client() as c:
-        resp = c.get(PRIMO_PNXS, params=params)
-        resp.raise_for_status()
-        data = resp.json()
+        data = json.loads(fetch_text(c, PRIMO_PNXS, params=params))
     info = data.get("info", {})
     records = [_pnxs_record(d) for d in data.get("docs", [])]
     if as_json:
@@ -460,6 +832,207 @@ def cmd_url(chancery_case, catalog_query, chronicle, land, arvas, chancery) -> N
     if not any([chancery_case, catalog_query, chronicle, land, arvas, chancery]):
         click.echo("https://www.lva.virginia.gov/collections")
         click.echo("https://www.lva.virginia.gov/collections/digital-collections")
+
+
+def _grant_tif(path_or_url: str, out: Path | None, as_json: bool) -> None:
+    try:
+        url = normalize_lva_image_url(path_or_url)
+    except ValueError as exc:
+        raise click.BadParameter(str(exc)) from exc
+    with _client() as c:
+        cached = fetch_file(c, url, allowed_hosts=(LVA_IMAGE_HOST,))
+    result: dict = {"url": url, "cache_path": str(cached), "bytes": cached.stat().st_size}
+    if out is not None:
+        mode = save_image(cached, out)
+        if mode.startswith("raw:"):
+            result.update(out=mode[4:], mode="raw")
+        else:
+            result.update(out=str(out), mode=mode)
+    if as_json:
+        click.echo(json.dumps(result, indent=1))
+        return
+    if out is not None:
+        click.echo(f"saved {result['out']} ({result['mode']}) from {url}")
+    else:
+        click.echo(f"cached {url} -> {cached} ({result['bytes']} bytes); pass --out FILE to save it")
+
+
+_GRANT_TIF_HELP = (
+    "Fetch (and cache) one Library of Virginia image-server scan, e.g. a Land Office patent "
+    "/LONN/LO-3/372/372_0195.tif or a Dunmore's War /Microfilm/DW/... page. Accepts "
+    "https://image.lva.virginia.gov/<path> or a path on that host only. --out x.jpg converts "
+    "TIFF to JPEG when Pillow is available; any other suffix gets the raw bytes."
+)
+
+
+@cli.command("grant-tif", help=_GRANT_TIF_HELP)
+@click.argument("path_or_url")
+@click.option("--out", type=click.Path(path_type=Path), default=None, help="Output file (.jpg/.jpeg converts; else raw).")
+@click.option("--json", "as_json", is_flag=True, help="Output structured JSON.")
+@refresh_option
+def cmd_grant_tif(path_or_url: str, out: Path | None, as_json: bool) -> None:
+    _grant_tif(path_or_url, out, as_json)
+
+
+@cli.command("lva-tif", help="Alias of grant-tif. " + _GRANT_TIF_HELP)
+@click.argument("path_or_url")
+@click.option("--out", type=click.Path(path_type=Path), default=None, help="Output file (.jpg/.jpeg converts; else raw).")
+@click.option("--json", "as_json", is_flag=True, help="Output structured JSON.")
+@refresh_option
+def cmd_lva_tif(path_or_url: str, out: Path | None, as_json: bool) -> None:
+    _grant_tif(path_or_url, out, as_json)
+
+
+@cli.command("dunmore")
+@click.argument("drawer")
+@click.argument("card")
+@click.option("--page", "page_no", type=int, default=None, help="Page number to save (default: the card's own page).")
+@click.option("--out", type=click.Path(path_type=Path), default=None, help="Save the selected page image (.jpg converts; else raw TIFF).")
+@click.option("--json", "as_json", is_flag=True, help="Output structured JSON.")
+@refresh_option
+def cmd_dunmore(drawer: str, card: str, page_no: int | None, out: Path | None, as_json: bool) -> None:
+    """Resolve a Dunmore's War (1774) index card to its page TIFFs on image.lva.virginia.gov.
+
+    DRAWER and CARD come from the catalog's GetDW.pl links
+    (GetDW.pl?dir=<DRAWER>&card=<CARD> -> `dunmore <DRAWER> <CARD>`). Lists the
+    neighbouring page images; --out saves the card's page (or --page N).
+    """
+    if not re.fullmatch(r"\d{1,5}/W\d{1,6}", drawer):
+        raise click.BadParameter(f"Invalid drawer (expected e.g. 0001/W0001): {drawer!r}")
+    if not re.fullmatch(r"\d{1,6}", card):
+        raise click.BadParameter(f"Invalid card number: {card!r}")
+    with _client() as c:
+        parsed = parse_dunmore_drawer(fetch_text(c, DUNMORE_CGI, params={"dir": drawer, "card": card}))
+    parsed.update(drawer=drawer, card=card, source_url=f"{DUNMORE_CGI}?dir={drawer}&card={card}")
+    if not parsed["images"]:
+        raise click.ClickException("No page images found on the Dunmore's War drawer page.")
+    chosen = None
+    if page_no is not None:
+        chosen = next((im for im in parsed["images"] if im["page"] == page_no), None)
+        if chosen is None:
+            raise click.ClickException(f"Page {page_no} is not listed for this card.")
+    else:
+        chosen = next((im for im in parsed["images"] if im["current"]), parsed["images"][0])
+    parsed["selected"] = chosen
+    if out is not None:
+        with _client() as c:
+            cached = fetch_file(c, chosen["url"], allowed_hosts=(LVA_IMAGE_HOST,))
+        mode = save_image(cached, out)
+        parsed["out"] = mode[4:] if mode.startswith("raw:") else str(out)
+        parsed["mode"] = "raw" if mode.startswith("raw") else mode
+    if as_json:
+        click.echo(json.dumps(parsed, indent=1))
+        return
+    click.echo(f"Dunmore's War drawer {drawer} card {card}: page {parsed['current_page']}")
+    for im in parsed["images"]:
+        mark = "*" if im is chosen else " "
+        click.echo(f" {mark} page {im['page']}: {im['url']}")
+    if out is not None:
+        click.echo(f"saved {parsed['out']} ({parsed['mode']})")
+
+
+def resolve_rosetta(c: httpx.Client, ie: str) -> dict:
+    """Resolve an IE to its FL file list via the delivery page + ieViewer (one cookie session)."""
+    cache_dir = get_cache_root() / "rosetta" / ie
+    files_path = cache_dir / "files.json"
+    if not _STATE["refresh"]:
+        cached = read_json_if_valid(files_path)
+        if cached and cached.get("files"):
+            return {**cached, "session": False}
+    r = c.get(ROSETTA_DELIVERY, params={"dps_pid": ie})
+    r.raise_for_status()
+    if not _host_ok(r.url, (ROSETTA_HOST,)):
+        raise click.ClickException(f"Unexpected Rosetta redirect: {r.url}")
+    info = parse_rosetta_delivery(r.text)
+    viewer_url = info["viewer_url"]
+    if viewer_url:
+        vu = httpx.URL(viewer_url)
+        if vu.scheme != "https" or vu.host != ROSETTA_HOST or not vu.path.endswith("/ieViewer.do") or vu.params.get("dps_pid") != ie:
+            viewer_url = None
+    if not viewer_url:
+        params = {"search": "hide", "dps_pid": ie}
+        if info["dps_dvs"]:
+            params["dps_dvs"] = info["dps_dvs"]
+        viewer_url = str(httpx.URL(ROSETTA_VIEWER, params=params))
+    v = c.get(viewer_url)
+    v.raise_for_status()
+    if not _host_ok(v.url, (ROSETTA_HOST,)):
+        raise click.ClickException(f"Unexpected Rosetta redirect: {v.url}")
+    listing = parse_rosetta_viewer(v.text)
+    if not listing["files"]:
+        raise click.ClickException(f"No delivered files found for {ie} (restricted or not a viewable IE).")
+    result = {"ie": ie, "delivery_url": f"{ROSETTA_DELIVERY}?dps_pid={ie}",
+              "files": listing["files"], "initial": listing["initial"], "cached_at": time.time()}
+    atomic_write_json(files_path, result)
+    return {**result, "session": True}
+
+
+def download_rosetta_file(c: httpx.Client, ie: str, fl: str) -> tuple[Path, dict]:
+    cache_dir = get_cache_root() / "rosetta" / ie
+    path, meta = cached_fetch(
+        c, ROSETTA_DELIVERY, cache_dir / f"{fl}.bin",
+        params={"dps_pid": fl, "dps_func": "stream"}, allowed_hosts=(ROSETTA_HOST,),
+    )
+    if meta.get("content_type", "").lower().startswith("text/html"):
+        path.unlink(missing_ok=True)
+        _meta_path(path).unlink(missing_ok=True)
+        raise click.ClickException(f"Rosetta returned HTML instead of a file for {ie}/{fl} (access restricted?).")
+    return path, meta
+
+
+@cli.command("download-rosetta")
+@click.argument("ie_id")
+@click.option("--file", "file_index", type=int, default=None, help="1-based file number from --list (default: viewer's initial file).")
+@click.option("--fl", "fl_id", default=None, help="Explicit Rosetta file pid (FL<digits>) belonging to this IE.")
+@click.option("--list", "list_only", is_flag=True, help="Only list the IE's delivered files.")
+@click.option("--out", type=click.Path(path_type=Path), default=None, help="Output file (default ./<IE>_<FL>.<ext>).")
+@click.option("--json", "as_json", is_flag=True, help="Output structured JSON.")
+@refresh_option
+def cmd_download_rosetta(ie_id: str, file_index: int | None, fl_id: str | None, list_only: bool,
+                         out: Path | None, as_json: bool) -> None:
+    """Download a delivered file (PDF/image) for a Library of Virginia Rosetta IE id.
+
+    Resolves rosetta.virginiamemory.com DeliveryManagerServlet?dps_pid=IE... ->
+    ieViewer.do (same cookie session) -> FL file pid -> dps_func=stream. The
+    file list and bytes are cached per IE id.
+    """
+    ie = validate_ie_id(ie_id)
+    if fl_id is not None:
+        fl_id = validate_fl_id(fl_id)
+    with _client() as c:
+        info = resolve_rosetta(c, ie)
+        files = info["files"]
+        if list_only:
+            if as_json:
+                click.echo(json.dumps({k: v for k, v in info.items() if k != "session"}, indent=1))
+            else:
+                for i, f in enumerate(files, 1):
+                    star = "*" if f["fl"] == info.get("initial") else " "
+                    click.echo(f" {star} {i}. {f['fl']}  {f['title']}")
+            return
+        if fl_id is not None:
+            if fl_id not in {f["fl"] for f in files}:
+                raise click.ClickException(f"{fl_id} is not a file of {ie}; see --list.")
+            fl = fl_id
+        elif file_index is not None:
+            if not 1 <= file_index <= len(files):
+                raise click.BadParameter(f"--file must be 1..{len(files)}")
+            fl = files[file_index - 1]["fl"]
+        else:
+            fl = info.get("initial") or files[0]["fl"]
+        if not info.get("session") and (_STATE["refresh"] or _cache_valid(get_cache_root() / "rosetta" / ie / f"{fl}.bin", None) is None):
+            # Listing came from cache: open a delivery session (cookies) before streaming.
+            warm = c.get(ROSETTA_DELIVERY, params={"dps_pid": ie})
+            warm.raise_for_status()
+        path, meta = download_rosetta_file(c, ie, fl)
+    dest = out or Path(f"{ie}_{fl}{_ext_for(meta.get('content_type', ''))}")
+    copy_atomic(path, dest)
+    result = {"ie": ie, "fl": fl, "content_type": meta.get("content_type", ""), "out": str(dest),
+              "bytes": dest.stat().st_size, "cache_path": str(path)}
+    if as_json:
+        click.echo(json.dumps(result, indent=1))
+    else:
+        click.echo(f"saved {dest} ({result['bytes']} bytes, {result['content_type']}) from {ie}/{fl}")
 
 
 if __name__ == "__main__":
