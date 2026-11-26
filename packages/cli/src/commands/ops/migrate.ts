@@ -426,7 +426,11 @@ function hasNumberedMigrations(dirPath: string): boolean {
   }
 }
 
-export function resolveMigrationsDir(repoDir: string, explicitMigrationsDir?: string): string {
+export function resolveMigrationsDir(
+  repoDir: string,
+  explicitMigrationsDir?: string,
+  migrationsDirHint?: string
+): string {
   if (explicitMigrationsDir && explicitMigrationsDir.trim().length > 0) {
     const resolved = path.resolve(repoDir, explicitMigrationsDir.trim());
     if (!hasNumberedMigrations(resolved)) {
@@ -439,6 +443,9 @@ export function resolveMigrationsDir(repoDir: string, explicitMigrationsDir?: st
 
   const resolvedRepo = path.resolve(repoDir);
   const searchOrder = [
+    ...(migrationsDirHint && migrationsDirHint.trim().length > 0
+      ? [path.resolve(resolvedRepo, migrationsDirHint.trim())]
+      : []),
     path.join(resolvedRepo, 'node_modules', '@kinloom', 'worker', 'migrations'),
     path.resolve(MODULE_DIR, '../../../../worker/migrations'),
     path.resolve(MODULE_DIR, '../../../migrations'),
@@ -812,7 +819,11 @@ export async function runMigrateCommand(
   const target: MigrateTarget = options.target ?? 'remote';
   const dryRun = Boolean(options.dryRun);
   const binding = resolveD1DatabaseBinding(repoDir);
-  const migrationsDir = resolveMigrationsDir(repoDir, options.migrationsDir);
+  const migrationsDir = resolveMigrationsDir(
+    repoDir,
+    options.migrationsDir,
+    binding.migrationsDirHint
+  );
   const migrations = discoverMigrations(migrationsDir);
 
   const ctx: MigrateExecContext = {

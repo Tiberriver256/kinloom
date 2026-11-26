@@ -9,7 +9,7 @@ test('map route filters by migration era, steps through journey stops, and handl
   await page.route('https://vtiles.openhistoricalmap.org/**', (route) => route.abort());
 
   await page.goto('/map');
-  await expect(page.getByLabel('Filter migration map by person')).toContainText(/\(\d+ stops\)/);
+  await expect(page.getByLabel('Filter migration map by person')).toContainText(/All People \(\d+\)/);
   await expect(page.locator('.map-canvas')).toBeVisible();
 
   // Era filter buttons from kinloom.config.yaml

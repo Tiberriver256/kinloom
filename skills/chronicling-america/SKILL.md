@@ -5,7 +5,7 @@ description: Search, inspect, and download historic American newspaper pages fro
 
 # Chronicling America
 
-This skill includes a standalone executable Python CLI at `skills/chronicling-america/scripts/chronam` using a PEP 723 `#!/usr/bin/env -S uv run --script` shebang with inline dependencies (`click`, `httpx`). No virtualenv setup or API key is required.
+This skill includes a standalone executable Python CLI invoked as `kinloom chronam` using a PEP 723 `#!/usr/bin/env -S uv run --script` shebang with inline dependencies (`click`, `httpx`). No virtualenv setup or API key is required.
 
 - **Coverage:** millions of digitized U.S. newspaper pages, 1736 through 1963 (per the collection record; the site describes it as "through 1963").
 - **Access:** the public loc.gov JSON API. No key, no account, no sign-in.
@@ -16,30 +16,29 @@ This skill includes a standalone executable Python CLI at `skills/chronicling-am
 
 ## Bundled CLI (`scripts/chronam`)
 
-Path: `skills/chronicling-america/scripts/chronam`
-
+Command: `kinloom chronam`
 ### Search newspaper pages
 
 ```bash
 # Full-text search for a surname, page level, 10 results
-skills/chronicling-america/scripts/chronam search Lincoln
+kinloom chronam search Lincoln
 
 # Multi-word queries need no quotes; postal codes work for --state
-skills/chronicling-america/scripts/chronam search Abraham Lincoln --state IL --dates 1860/1865
+kinloom chronam search Abraham Lincoln --state IL --dates 1860/1865
 
 # Surname search narrowed to 1860-1865 (or --date-from 1860 --date-to 1865)
-skills/chronicling-america/scripts/chronam search Lincoln --dates 1860/1865
+kinloom chronam search Lincoln --dates 1860/1865
 
 # Illinois papers only (server-side state facet), JSON output
-skills/chronicling-america/scripts/chronam search Lincoln --dates 1860/1865 --state Illinois --json
+kinloom chronam search Lincoln --dates 1860/1865 --state Illinois --json
 
 # One newspaper title only, by LCCN (Evening Star, Washington, D.C.)
 # Use one distinctive word with --lccn: measured 2026-11-25, "Clara Barton" + this LCCN
 # returned 0 hits on three tries, while "Barton" + the same LCCN returned 38,628.
-skills/chronicling-america/scripts/chronam search Barton --lccn sn83045462
+kinloom chronam search Barton --lccn sn83045462
 
 # Second page of results, 25 per page (--per-page is an alias for --limit)
-skills/chronicling-america/scripts/chronam search "Frederick Douglass" --dates 1870/1895 --limit 25 --page 2
+kinloom chronam search "Frederick Douglass" --dates 1870/1895 --limit 25 --page 2
 ```
 
 Options: `--dates YYYY/YYYY` or `YYYY` (or `--date-from`/`--from-year`/`--date1`/`--year1` and `--date-to`/`--to-year`/`--date2`/`--year2`), `--state` (name or postal code), `--lccn`, `--level` (`page`/`issue`/`title`/`all`), `--limit` / `--per-page` / `--rows` / `-n`, `--page` / `-p`, `--timeout` (seconds, default `120`), `--terms` / `--query` / `-q` (alias for positional query), `--refresh`, `--cache-ttl-hours`, `--json`. JSON output carries `"cache_hit": true|false`; text output marks hits with `[cache]`.
@@ -59,10 +58,10 @@ Options: `--dates YYYY/YYYY` or `YYYY` (or `--date-from`/`--from-year`/`--date1`
 
 ```bash
 # By loc.gov resource URL (copy it from a search result)
-skills/chronicling-america/scripts/chronam get "https://www.loc.gov/resource/<lccn>/<YYYY-MM-DD>/ed-1/?sp=<seq>"
+kinloom chronam get "https://www.loc.gov/resource/<lccn>/<YYYY-MM-DD>/ed-1/?sp=<seq>"
 
 # Or build the URL from LCCN + date + page sequence
-skills/chronicling-america/scripts/chronam get --lccn sn83045462 --date 1865-04-15 --seq 1 --json
+kinloom chronam get --lccn sn83045462 --date 1865-04-15 --seq 1 --json
 ```
 
 `get` prints the paper title, date, place, and the download links: `pdf` (full page), `image` (IIIF rendition as served, reduced size), `fulltext_file` (ALTO XML word-coordinates file carrying the OCR text), and `iiif_manifest_url`.
@@ -71,10 +70,10 @@ skills/chronicling-america/scripts/chronam get --lccn sn83045462 --date 1865-04-
 
 ```bash
 # PDF + metadata JSON into ./downloads/chronam
-skills/chronicling-america/scripts/chronam download --lccn sn83045462 --date 1865-04-15 --seq 1 --out ./downloads/chronam
+kinloom chronam download --lccn sn83045462 --date 1865-04-15 --seq 1 --out ./downloads/chronam
 
 # Also fetch the OCR (ALTO XML) and the image rendition
-skills/chronicling-america/scripts/chronam download --lccn sn83045462 --date 1865-04-15 --seq 1 --out ./downloads/chronam --text --image
+kinloom chronam download --lccn sn83045462 --date 1865-04-15 --seq 1 --out ./downloads/chronam --text --image
 ```
 
 Files are named `<lccn>_<date>_sp<seq>.pdf` (etc.) with a matching `<stem>.metadata.json`. The first download fetches the file. The next download of the same URL copies it from `~/.cache/kinloom-chronam/files/` and makes no HTTP request. `--refresh` fetches again. A hit line ends with `[cache]`.
@@ -82,7 +81,7 @@ Files are named `<lccn>_<date>_sp<seq>.pdf` (etc.) with a matching `<stem>.metad
 ### Build a website search URL
 
 ```bash
-skills/chronicling-america/scripts/chronam url "Susan B. Anthony" --dates 1870/1900
+kinloom chronam url "Susan B. Anthony" --dates 1870/1900
 ```
 
 ## Website search & API rules (verified live 2026-11-24)
@@ -121,3 +120,22 @@ skills/chronicling-america/scripts/chronam url "Susan B. Anthony" --dates 1870/1
 - OCR is imperfect: try spelling variants and initials (for example `"S. L. Clemens"` and `"Samuel Clemens"`) as separate searches.
 - Estate notices, land sales, and court dockets cluster in county-seat weeklies. Once a promising title is found, note its LCCN and re-run with `--lccn` plus a tight `--dates` window.
 - A page hit is not a citation yet: open the PDF, confirm the name in context, and record the paper title, date, page (`sp=`), and LCCN alongside the quote.
+
+## Kinloom Research Package workflow
+
+Never edit `data/*.yaml` directly from a research session. Follow Kinloom's staged **Research Package** workflow and **Living Privacy Rule** (never include living people's portraits, exact birth dates, street addresses, or pronunciations in public archives):
+
+1. Discover research targets with `kinloom status --missing-biography` or `kinloom status --end-of-line`.
+2. Gather privacy-fenced context with `kinloom context <person_id> --include-family`.
+3. Prepare downloaded scans with `kinloom prep-scan` (for example `kinloom prep-scan crop --redact-orig`) and run `kinloom ocr` as needed, then stage scans under `research/people/<person_id>/scans/`.
+4. Write cited findings into `research/people/<person_id>/patch.json`.
+5. Audit, integrate, verify, and sync:
+
+```bash
+kinloom audit --all-staged --pending-only --strict
+kinloom integrate --all-staged --pending-only
+kinloom pronounce audit --strict
+kinloom verify
+kinloom migrate
+kinloom sync --sync-missing-media --verify-live
+```

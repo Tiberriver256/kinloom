@@ -34,13 +34,13 @@ description: Use Cyndi's List, the free categorized directory of 332,000+ geneal
 Cyndi's List does not vet the contents of linked sites, and links rot. Before citing anything found through it:
 
 - Open the link and confirm it still resolves and the transcription is actually there; dead or hijacked links are common on a directory this old.
-- Note who transcribed it, from what source, and when. A volunteer transcription is a finding aid, not a primary source; cite the transcription as a pointer and verify against the original record (county clerk, FamilySearch image, or archive) before recording it as fact in `data/`.
+- Note who transcribed it, from what source, and when. A volunteer transcription is a finding aid, not a primary source; cite the transcription as a pointer and verify against the original record (county clerk, FamilySearch image, or archive) before staging it in a **Research Package** (`research/people/<person_id>/patch.json`).
 - Prefer links to USGenWeb county pages, county genealogical societies, and library digital collections over undated personal home pages with no source notes.
 - If a link is dead, try the Wayback Machine for the URL, then search the county name plus the record type; the project often moved to a new host.
 
 ## What Cyndi's List cannot do
 
-- It holds no records itself. Searching it for a surname finds pages that mention that surname in a link description, not individuals in records.
+- It holds no records itself. Searching it for a surname finds pages that mention that surname in a link description, not people in records.
 - It has no API and no bulk data download. Do not scrape it wholesale; it is one person's curated directory, and heavy crawling is poor citizenship toward the maintainer.
 - Coverage is uneven: a county with an active USGenWeb volunteer has a rich page; a county without one may have almost nothing. An empty county page means "nothing catalogued here", not "no records exist".
 
@@ -51,3 +51,22 @@ A CLI needs a machine interface: a public API, a stable search URL pattern retur
 ## Verified-live note
 
 Homepage, categories index, state pages, counties index, and county topic subpages (`bmd`, `cemeteries`, `census`, and `general`) were verified live returning HTTP 200 on 2026-11-24.
+
+## Kinloom Research Package workflow
+
+Never edit `data/*.yaml` directly from a research session. Follow Kinloom's staged **Research Package** workflow and **Living Privacy Rule** (never include living people's portraits, exact birth dates, street addresses, or pronunciations in public archives):
+
+1. Discover research targets with `kinloom status --missing-biography` or `kinloom status --end-of-line`.
+2. Gather privacy-fenced context with `kinloom context <person_id> --include-family`.
+3. Stage any downloaded images or documents under `research/people/<person_id>/scans/` and prepare them with `kinloom prep-scan` or `kinloom ocr` when needed.
+4. Write cited findings into `research/people/<person_id>/patch.json`.
+5. Audit, integrate, verify, and sync:
+
+```bash
+kinloom audit --all-staged --pending-only --strict
+kinloom integrate --all-staged --pending-only
+kinloom pronounce audit --strict
+kinloom verify
+kinloom migrate
+kinloom sync --sync-missing-media --verify-live
+```

@@ -7,7 +7,7 @@ description: Research historical and genealogical records in Kentucky through th
 
 Kentucky has three primary repositories for genealogical research, and they hold different collections. Do not treat them as one repository.
 
-This skill includes a standalone executable Python CLI at `skills/kentucky-archives/scripts/ky-archives` using a PEP 723 `#!/usr/bin/env -S uv run --script` shebang with inline dependencies (`click`, `httpx`). No virtualenv setup or API key is needed. Run it from the repo root, for example `./skills/kentucky-archives/scripts/ky-archives cdm Lincoln`.
+This skill includes a standalone executable Python CLI invoked as `kinloom ky-archives` using a PEP 723 `#!/usr/bin/env -S uv run --script` shebang with inline dependencies (`click`, `httpx`). No virtualenv setup or API key is needed. Run it from the repo root, for example `./kinloom ky-archives cdm Lincoln`.
 
 ## Bundled CLI (`scripts/ky-archives`)
 
@@ -42,11 +42,11 @@ KHS Digital Collections is a searchable database of digital images and files fro
 
 ```bash
 # Surname search across all collections
-skills/kentucky-archives/scripts/ky-archives cdm Lincoln
+kinloom ky-archives cdm Lincoln
 # Manuscripts only
-skills/kentucky-archives/scripts/ky-archives cdm Lincoln --collection MS --limit 25
+kinloom ky-archives cdm Lincoln --collection MS --limit 25
 # Full metadata for one hit
-skills/kentucky-archives/scripts/ky-archives cdm-item <alias> <item-id>
+kinloom ky-archives cdm-item <alias> <item-id>
 ```
 
 The verified web search pattern, from KHS's own research blog, is `https://www.kyhistory.com/cdm/search/searchterm/<term>/mode/exact`, for example `https://www.kyhistory.com/cdm/search/searchterm/SC%201261/mode/exact` for a manuscript collection. Use it for a known collection number or a distinctive term; for a surname use the CLI or the catalog's surname search, which searches all manuscript collections and family histories at once.
@@ -69,7 +69,7 @@ KDLA is the state archives proper. Its e-archives hold state government records 
 
 ```bash
 # Search the e-archives (full-text; open hits to confirm the match)
-skills/kentucky-archives/scripts/ky-archives preservica Lincoln --limit 10
+kinloom ky-archives preservica Lincoln --limit 10
 ```
 
 Confederate Pension Application Packets are browsable in Preservica in numbered folders (for example packets 1526-1550, 2001-2025, 1101-1125), each packet a scanned application by a soldier or a widow, filed starting in 1912 when Kentucky began granting Confederate pensions. Search by surname to locate relevant packets, then view the scanned packet in a browser.
@@ -79,7 +79,7 @@ Confederate Pension Application Packets are browsable in Preservica in numbered 
 Portal: https://www.sos.ky.gov/land/Pages/default.aspx
 County Court Orders patents search: https://web.sos.ky.gov/land/ccorders.aspx
 
-The Land Office is the repository for all Kentucky land patents, including those issued by Virginia before Kentucky statehood in 1792. Because Kentucky is not a federal public-land state, early Kentucky land ownership is proved through Virginia warrants and Kentucky state patents rather than federal BLM GLO patents.
+The Land Office is the repository for all Kentucky land patents, including those issued by Virginia before Kentucky statehood in 1792. Because Kentucky is not a federal public-land state, early Kentucky land ownership is documented through Virginia warrants and Kentucky state patents rather than federal BLM GLO patents.
 
 Searchable online, verified 2026-11-24:
 
@@ -89,11 +89,11 @@ Searchable online, verified 2026-11-24:
 
 ```bash
 # Grantee search in the County Court Orders series (the CLI's `land` command)
-skills/kentucky-archives/scripts/ky-archives land Lincoln --by grantee
+kinloom ky-archives land Lincoln --by grantee
 # Other fields: --by county, --by watercourse, --by survey-year, --by grant-year
-skills/kentucky-archives/scripts/ky-archives land Hardin --by county --limit 25
+kinloom ky-archives land Hardin --by county --limit 25
 # Quick search by patent number
-skills/kentucky-archives/scripts/ky-archives land-patent <patent-number>
+kinloom ky-archives land-patent <patent-number>
 ```
 
 Not online: the South of Green River, Tellico, Kentucky Land Warrants, South of Walker's Line, and Warrants for Headrights series are not available online as of the Land Office's own series summary. Request those files by online order form or email to the Land Office, using Jillson's *The Kentucky Land Grants* to determine grantee, patent series, and citation first. Copies of grants can also be ordered from the KHS library and KDLA in Frankfort.
@@ -112,7 +112,7 @@ For families migrating into Kentucky from Virginia, check repositories in this o
 2. County Court Orders series (`ky-archives land <surname> --by grantee`) if the family held or acquired land after 1835.
 3. KHS Digital Collections (`ky-archives cdm <surname>`) for family papers, county indexes, and photographs.
 4. KDLA Preservica (`ky-archives preservica <surname>`) for Confederate pension packets and state agency files.
-5. Record the patent series, patent number, and survey year for every hit; the same individual often appears under both a Virginia warrant and a Kentucky patent.
+5. Record the patent series, patent number, and survey year for every hit; the same person often appears under both a Virginia warrant and a Kentucky patent.
 
 ## Verification log (verified live 2026-11-24)
 
@@ -122,3 +122,22 @@ For families migrating into Kentucky from Virginia, check repositories in this o
 - Preservica: WordPress search RSS feed returned up to 100 items per query; `/wp-json/` returned a Preservica "Page Not Found" page, confirming no public Preservica search API on this host.
 - Pass the Word `https://passtheword.ky.gov/` returned 200. The UK Vital Records Index old URL `http://ukcc.uky.edu/vitalrec/` did not resolve (connection failure). The Virginia / Old Kentucky Patent Series page `vakypatentseries.aspx` returned 200 and shows series + patent dropdowns only.
 - KDLA Preservica Confederate pension packets and Land Office patent series counts (County Court Orders 70,241 patents 1835-2000; 7,771 Old Kentucky patents) were confirmed on 2026-11-24.
+
+## Kinloom Research Package workflow
+
+Never edit `data/*.yaml` directly from a research session. Follow Kinloom's staged **Research Package** workflow and **Living Privacy Rule** (never include living people's portraits, exact birth dates, street addresses, or pronunciations in public archives):
+
+1. Discover research targets with `kinloom status --missing-biography` or `kinloom status --end-of-line`.
+2. Gather privacy-fenced context with `kinloom context <person_id> --include-family`.
+3. Stage any downloaded images or documents under `research/people/<person_id>/scans/` and prepare them with `kinloom prep-scan` or `kinloom ocr` when needed.
+4. Write cited findings into `research/people/<person_id>/patch.json`.
+5. Audit, integrate, verify, and sync:
+
+```bash
+kinloom audit --all-staged --pending-only --strict
+kinloom integrate --all-staged --pending-only
+kinloom pronounce audit --strict
+kinloom verify
+kinloom migrate
+kinloom sync --sync-missing-media --verify-live
+```

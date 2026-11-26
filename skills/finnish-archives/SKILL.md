@@ -5,7 +5,7 @@ description: Search Finnish historical and genealogical records via the bundled 
 
 # Finnish Archives (HisKi & National Archives / Digihakemisto)
 
-This skill includes a standalone executable Python CLI at `skills/finnish-archives/scripts/fi_archives.py` using a PEP 723 `#!/usr/bin/env -S uv run --script` shebang with inline dependency `httpx`. No virtualenv setup, account, or API key is required.
+This skill includes a standalone executable Python CLI invoked as `kinloom fi-archives` using a PEP 723 `#!/usr/bin/env -S uv run --script` shebang with inline dependency `httpx`. No virtualenv setup, account, or API key is required.
 
 ## Bundled CLI (`scripts/fi_archives.py`)
 
@@ -13,23 +13,23 @@ This skill includes a standalone executable Python CLI at `skills/finnish-archiv
 
 ```bash
 # Find 4-digit HisKi parish codes by Finnish or Swedish name
-skills/finnish-archives/scripts/fi_archives.py parishes --query Turku --json
-skills/finnish-archives/scripts/fi_archives.py parishes --query Ahlainen
+kinloom fi-archives parishes --query Turku --json
+kinloom fi-archives parishes --query Ahlainen
 ```
 
 ### Search HisKi parish registers (baptisms, marriages, burials, moves)
 
 ```bash
 # Search christenings in one parish by 4-digit code or parish name
-skills/finnish-archives/scripts/fi_archives.py hiski --parish 0001 --book christened \
+kinloom fi-archives hiski --parish 0001 --book christened \
   --given Johan --from-year 1750 --to-year 1760 --limit 15
 
 # Nationwide search across all parishes (`--parish "*"`) by surname and year window
-skills/finnish-archives/scripts/fi_archives.py hiski --parish "*" --book christened \
+kinloom fi-archives hiski --parish "*" --book christened \
   --surname Korhonen --from-year 1800 --to-year 1805 --limit 20 --json
 
 # Search burials or marriages in a named parish
-skills/finnish-archives/scripts/fi_archives.py hiski --parish Ahlainen --book buried \
+kinloom fi-archives hiski --parish Ahlainen --book buried \
   --given Anders --from-year 1750 --to-year 1770
 ```
 
@@ -39,21 +39,21 @@ Options: `--book` (`christened`/`births`, `married`/`marriages`, `buried`/`buria
 
 ```bash
 # Fetch full transcribed fields plus the SSHY Digiarkisto scan link
-skills/finnish-archives/scripts/fi_archives.py event 0001/kastetut/418 --json
-skills/finnish-archives/scripts/fi_archives.py event "https://hiski.genealogia.fi/hiski?en+0001+kastetut+418"
+kinloom fi-archives event 0001/kastetut/418 --json
+kinloom fi-archives event "https://hiski.genealogia.fi/hiski?en+0001+kastetut+418"
 ```
 
 ### Search National Archives of Finland (Astia) via Digihakemisto
 
 ```bash
 # Search parish archives (supports * wildcards)
-skills/finnish-archives/scripts/fi_archives.py archives "Turun seurakun*" --limit 15 --json
+kinloom fi-archives archives "Turun seurakun*" --limit 15 --json
 
 # Search provincial population/tax registers (henkikirjat) or built-in presets
-skills/finnish-archives/scripts/fi_archives.py archives --preset henkikirjat --digitized --limit 20
+kinloom fi-archives archives --preset henkikirjat --digitized --limit 20
 
 # Inspect an archive's series and digitized volumes (with Astia links)
-skills/finnish-archives/scripts/fi_archives.py archive 1299923671 --json
+kinloom fi-archives archive 1299923671 --json
 ```
 
 Built-in presets for `archives --preset`: `parishes`, `henkikirjat`, `tax`, `court`, `inventories`, and `say` (Suomen asutuksen yleisluettelo general settlement register).
@@ -62,9 +62,9 @@ Built-in presets for `archives --preset`: `parishes`, `henkikirjat`, `tax`, `cou
 
 ```bash
 # Build browser links for Finna (Cloudflare-gated for automated HTTP), Astia, Digi, and SSHY
-skills/finnish-archives/scripts/fi_archives.py url --finna "Turku kirkonkirjat"
-skills/finnish-archives/scripts/fi_archives.py url --digi "Turku 1850"
-skills/finnish-archives/scripts/fi_archives.py url --astia --sshy
+kinloom fi-archives url --finna "Turku kirkonkirjat"
+kinloom fi-archives url --digi "Turku 1850"
+kinloom fi-archives url --astia --sshy
 ```
 
 ## Verified endpoints (verified live 2026-11-26)
@@ -100,4 +100,23 @@ All `parishes`, `hiski`, `event`, `archives`, and `archive` commands cache verif
 1. Remember that western Finnish rural records before ~1880 often use **patronymics** (`Anders Johansson`, `Maria Eskilsdotter`) and **farm names** rather than fixed hereditary surnames, while eastern Finland (Savo/Karelia) used hereditary surnames (`Korhonen`, `Laine`) centuries earlier.
 2. Search `parishes --query <name>` to confirm the 4-digit HisKi code (Finnish and Swedish parish names are both indexed, for example `Alatornio - Nedertorneå`).
 3. Search `hiski` across christenings, marriages, and burials, then run `event` to capture the full transcription and SSHY Digiarkisto scan link.
-4. Use `archives` and `archive` to locate the parish's digitized *rippikirjat* (communion/household books) and provincial *henkikirjat* (tax/population rolls) in Astia so you can verify every transcribed entry against the original manuscript scan.
+4. Use `archives` and `archive` to locate the parish's digitized *rippikirjat* (communion/household books) and provincial *henkikirjat* (tax/population rolls) in Astia so you can verify every transcribed entry against the original register scan.
+
+## Kinloom Research Package workflow
+
+Never edit `data/*.yaml` directly from a research session. Follow Kinloom's staged **Research Package** workflow and **Living Privacy Rule** (never include living people's portraits, exact birth dates, street addresses, or pronunciations in public archives):
+
+1. Discover research targets with `kinloom status --missing-biography` or `kinloom status --end-of-line`.
+2. Gather privacy-fenced context with `kinloom context <person_id> --include-family`.
+3. Stage any downloaded images or documents under `research/people/<person_id>/scans/` and prepare them with `kinloom prep-scan` or `kinloom ocr` when needed.
+4. Write cited findings into `research/people/<person_id>/patch.json`.
+5. Audit, integrate, verify, and sync:
+
+```bash
+kinloom audit --all-staged --pending-only --strict
+kinloom integrate --all-staged --pending-only
+kinloom pronounce audit --strict
+kinloom verify
+kinloom migrate
+kinloom sync --sync-missing-media --verify-live
+```

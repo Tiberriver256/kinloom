@@ -5,35 +5,34 @@ description: Search, inspect, and download Dutch and Belgian genealogical archiv
 
 # OpenArchieven
 
-This skill includes a standalone executable Python CLI at `skills/openarchieven/scripts/openarchieven` using a PEP 723 `#!/usr/bin/env -S uv run --script` shebang with inline dependencies (`click`, `httpx`). No virtualenv setup, account, or API key is required for read queries.
+This skill includes a standalone executable Python CLI invoked as `kinloom openarchieven` using a PEP 723 `#!/usr/bin/env -S uv run --script` shebang with inline dependencies (`click`, `httpx`). No virtualenv setup, account, or API key is required for read queries.
 
 OpenArchieven (`https://www.openarchieven.nl/`) aggregates hundreds of millions of indexed person mentions from Dutch and Belgian municipal and regional archives (including Brabants Historisch Informatie Centrum, West-Brabants Archief, Stadsarchief Rotterdam, Stadsarchief Amsterdam, Zeeuws Archief, Regionaal Historisch Centrum Eindhoven, and Gelders Archief).
 
 ## Bundled CLI (`scripts/openarchieven`)
 
-Path: `skills/openarchieven/scripts/openarchieven`
-
+Command: `kinloom openarchieven`
 ### Search records
 
 ```bash
 # Search by person name, place, and year (Vincent van Gogh's 1853 Zundert birth)
-skills/openarchieven/scripts/openarchieven search --name "Vincent van Gogh" --place Zundert --year 1853
+kinloom openarchieven search --name "Vincent van Gogh" --place Zundert --year 1853
 
 # Filter by Dutch civil registration source type or event type
-skills/openarchieven/scripts/openarchieven search --name "Vincent van Gogh" --event-type "BS Geboorte" --place Zundert
-skills/openarchieven/scripts/openarchieven search --name "Johannes Vermeer" --event-type Overlijden --limit 5
+kinloom openarchieven search --name "Vincent van Gogh" --event-type "BS Geboorte" --place Zundert
+kinloom openarchieven search --name "Johannes Vermeer" --event-type Overlijden --limit 5
 
 # Search municipal population registers (Bevolkingsregisters)
-skills/openarchieven/scripts/openarchieven search --name "Vincent van Gogh" --source-type Bevolkingsregister --limit 10
+kinloom openarchieven search --name "Vincent van Gogh" --source-type Bevolkingsregister --limit 10
 
 # Search Holland America Line passenger lists at Stadsarchief Rotterdam (archive code: srt)
-skills/openarchieven/scripts/openarchieven search --name "van Dijk" --source-type Passagiersregisters --archive srt --limit 5
+kinloom openarchieven search --name "van Dijk" --source-type Passagiersregisters --archive srt --limit 5
 
 # Year range filter and full JSON output
-skills/openarchieven/scripts/openarchieven search --name "Vincent van Gogh" --year 1850-1855 --json
+kinloom openarchieven search --name "Vincent van Gogh" --year 1850-1855 --json
 
 # Page 2 with the default page size (10). This is the same request as --start 10.
-skills/openarchieven/scripts/openarchieven search --name "Vincent van Gogh" --limit 10 --page 2
+kinloom openarchieven search --name "Vincent van Gogh" --limit 10 --page 2
 ```
 
 `search` also accepts a positional name (`openarchieven search "Vincent van Gogh" --place Zundert`).
@@ -44,12 +43,12 @@ skills/openarchieven/scripts/openarchieven search --name "Vincent van Gogh" --li
 
 ```bash
 # By archive code and UUID from search output (`get` is an alias for `show`)
-skills/openarchieven/scripts/openarchieven show bhi 78a37833-d731-ffe5-184c-f9f424826871
-skills/openarchieven/scripts/openarchieven get "bhi:78a37833-d731-ffe5-184c-f9f424826871" --json
+kinloom openarchieven show bhi 78a37833-d731-ffe5-184c-f9f424826871
+kinloom openarchieven get "bhi:78a37833-d731-ffe5-184c-f9f424826871" --json
 
 # Or by compact archive:uuid token or full OpenArchieven URL
-skills/openarchieven/scripts/openarchieven show "bhi:78a37833-d731-ffe5-184c-f9f424826871"
-skills/openarchieven/scripts/openarchieven show "https://www.openarchieven.nl/bhi:78a37833-d731-ffe5-184c-f9f424826871" --json
+kinloom openarchieven show "bhi:78a37833-d731-ffe5-184c-f9f424826871"
+kinloom openarchieven show "https://www.openarchieven.nl/bhi:78a37833-d731-ffe5-184c-f9f424826871" --json
 ```
 
 `show` (or `get`) queries `show.json` and parses the returned A2A (Archives-to-Archives) record: source type, archive institution, inventory/book/document numbers, event date and place, every person named on the deed with their role (`Kind`, `Vader`, `Moeder`, `Bruid`, `Bruidegom`, `Overledene`, `Geregistreerde`), scan image URLs, and the digital original link.
@@ -60,14 +59,14 @@ skills/openarchieven/scripts/openarchieven show "https://www.openarchieven.nl/bh
 
 ```bash
 # List scan index, order, label, and URL. This does not download files.
-skills/openarchieven/scripts/openarchieven download "bhi:78a37833-d731-ffe5-184c-f9f424826871" --list
-skills/openarchieven/scripts/openarchieven download "bhi:78a37833-d731-ffe5-184c-f9f424826871" --list --json
+kinloom openarchieven download "bhi:78a37833-d731-ffe5-184c-f9f424826871" --list
+kinloom openarchieven download "bhi:78a37833-d731-ffe5-184c-f9f424826871" --list --json
 
 # Download scan 1 (the default) to one file.
-skills/openarchieven/scripts/openarchieven download bhi 78a37833-d731-ffe5-184c-f9f424826871 --out /tmp/van-gogh-birth.jpg
+kinloom openarchieven download bhi 78a37833-d731-ffe5-184c-f9f424826871 --out /tmp/van-gogh-birth.jpg
 
 # Download every scan into a directory. File names look like bhi-78a37833-scan-01.jpg.
-skills/openarchieven/scripts/openarchieven download "https://www.openarchieven.nl/bhi:78a37833-d731-ffe5-184c-f9f424826871" --all --out-dir /tmp/van-gogh-scans --json
+kinloom openarchieven download "https://www.openarchieven.nl/bhi:78a37833-d731-ffe5-184c-f9f424826871" --all --out-dir /tmp/van-gogh-scans --json
 ```
 
 `--out`, `--output`, and `-o` are the same option. With `--all`, that option is the output directory. `--out-dir` and `--output-dir` are the same directory option.
@@ -85,8 +84,8 @@ The command saves an image or a PDF only. If the URL returns HTML, another non-i
 ### Build a shareable website URL offline
 
 ```bash
-skills/openarchieven/scripts/openarchieven url --name "Vincent van Gogh" --place Zundert --year 1853
-skills/openarchieven/scripts/openarchieven url --record "bhi:78a37833-d731-ffe5-184c-f9f424826871"
+kinloom openarchieven url --name "Vincent van Gogh" --place Zundert --year 1853
+kinloom openarchieven url --record "bhi:78a37833-d731-ffe5-184c-f9f424826871"
 ```
 
 ## API rules and quirks (verified live 2026-11-25)
@@ -129,3 +128,22 @@ skills/openarchieven/scripts/openarchieven url --record "bhi:78a37833-d731-ffe5-
 - `KINLOOM_OPENARCHIEVEN_CACHE_TTL_HOURS`: override the default TTL in hours.
 
 No key or account is needed for OpenArchieven read queries.
+
+## Kinloom Research Package workflow
+
+Never edit `data/*.yaml` directly from a research session. Follow Kinloom's staged **Research Package** workflow and **Living Privacy Rule** (never include living people's portraits, exact birth dates, street addresses, or pronunciations in public archives):
+
+1. Discover research targets with `kinloom status --missing-biography` or `kinloom status --end-of-line`.
+2. Gather privacy-fenced context with `kinloom context <person_id> --include-family`.
+3. Prepare downloaded scans with `kinloom prep-scan` (for example `kinloom prep-scan crop --redact-orig`) and run `kinloom ocr` as needed, then stage scans under `research/people/<person_id>/scans/`.
+4. Write cited findings into `research/people/<person_id>/patch.json`.
+5. Audit, integrate, verify, and sync:
+
+```bash
+kinloom audit --all-staged --pending-only --strict
+kinloom integrate --all-staged --pending-only
+kinloom pronounce audit --strict
+kinloom verify
+kinloom migrate
+kinloom sync --sync-missing-media --verify-live
+```

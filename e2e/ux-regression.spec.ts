@@ -726,4 +726,355 @@ test.describe('Wave 50B UX regression suite', () => {
     await treeLink.click();
     await expect(page).toHaveURL(/\/tree$/);
   });
+
+  test('Wave 52B-1: Skip-to-content link, modal aria-modal + Tab focus trap + Escape restore, SVG ARIA roles, and tablist keyboard nav', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.goto('/');
+    await expect(page.locator('#main-content')).toBeVisible();
+
+    // First Tab lands on skip-to-content link targeting #main-content
+    await page.keyboard.press('Tab');
+    const firstFocused = await page.evaluate(() => ({
+      className: document.activeElement?.className ?? '',
+      href: document.activeElement?.getAttribute('href') ?? '',
+    }));
+    expect(firstFocused.className).toContain('skip-to-content');
+    expect(firstFocused.href).toBe('#main-content');
+
+    // Pressing Enter focuses #main-content
+    await page.keyboard.press('Enter');
+    const mainFocused = await page.evaluate(() => document.activeElement?.id ?? '');
+    expect(mainFocused).toBe('main-content');
+
+    // GlobalSearchModal: aria-modal, Tab trap (never hits backdrop close), Escape restores focus
+    const searchBtn = page.locator('header.topbar button', { hasText: 'Search (/)' });
+    await searchBtn.focus();
+    await searchBtn.click();
+    const searchDialog = page.locator('dialog.global-search-backdrop[open]');
+    await expect(searchDialog).toBeVisible();
+    await expect(searchDialog).toHaveAttribute('aria-modal', 'true');
+
+    for (let i = 0; i < 12; i += 1) {
+      // oxlint-disable-next-line eslint/no-await-in-loop -- sequential keyboard navigation
+      await page.keyboard.press(i < 6 ? 'Tab' : 'Shift+Tab');
+      // oxlint-disable-next-line eslint/no-await-in-loop -- verify focus remains trapped
+      const inside = await page.evaluate(() => {
+        const dlg = document.querySelector('dialog.global-search-backdrop[open]');
+        const active = document.activeElement;
+        return {
+          inDialog: Boolean(dlg && active && dlg.contains(active)),
+          isBackdropClose: Boolean(active?.classList.contains('lightbox-backdrop-close')),
+        };
+      });
+      expect(inside.inDialog, `Search Tab step ${i} escaped dialog`).toBe(true);
+      expect(inside.isBackdropClose, `Search Tab step ${i} hit backdrop close`).toBe(false);
+    }
+
+    await page.keyboard.press('Escape');
+    await expect(searchDialog).toHaveCount(0);
+    const searchRestored = await page.evaluate(() =>
+      document.activeElement?.textContent?.includes('Search'),
+    );
+    expect(searchRestored).toBe(true);
+
+    // SourceReaderDrawer: aria-modal, Tab trap, tablist ArrowRight without turning pages, Escape restore
+    const sourcesBtn = page.locator('header.topbar button', { hasText: 'Sources' });
+    await sourcesBtn.focus();
+    await sourcesBtn.click();
+    const readerDialog = page.locator('dialog.source-reader-backdrop[open]');
+    await expect(readerDialog).toBeVisible();
+    await expect(readerDialog).toHaveAttribute('aria-modal', 'true');
+
+    for (let i = 0; i < 10; i += 1) {
+      // oxlint-disable-next-line eslint/no-await-in-loop -- sequential Tab loop
+      await page.keyboard.press(i < 5 ? 'Tab' : 'Shift+Tab');
+      // oxlint-disable-next-line eslint/no-await-in-loop -- check containment
+      const inside = await page.evaluate(() => {
+        const dlg = document.querySelector('dialog.source-reader-backdrop[open]');
+        const active = document.activeElement;
+        return {
+          inDialog: Boolean(dlg && active && dlg.contains(active)),
+          isBackdropClose: Boolean(active?.classList.contains('lightbox-backdrop-close')),
+        };
+      });
+      expect(inside.inDialog).toBe(true);
+      expect(inside.isBackdropClose).toBe(false);
+    }
+
+    const readerTabs = readerDialog.locator('[role="tablist"] [role="tab"]');
+    if ((await readerTabs.count()) > 1) {
+      await readerTabs.first().focus();
+      await page.keyboard.press('ArrowRight');
+      await expect(readerTabs.nth(1)).toBeFocused();
+    }
+
+    await page.keyboard.press('Escape');
+    await expect(readerDialog).toHaveCount(0);
+    const sourcesRestored = await page.evaluate(() =>
+      document.activeElement?.textContent?.includes('Sources'),
+    );
+    expect(sourcesRestored).toBe(true);
+
+    // EvidencePage tablist keyboard navigation (ArrowRight/ArrowLeft/Home/End)
+    await page.goto('/evidence');
+    const evTabs = page.locator('.evidence-tabs[role="tablist"] [role="tab"]');
+    await expect(evTabs).toHaveCount(3);
+    await evTabs.first().focus();
+    await page.keyboard.press('ArrowRight');
+    await expect(evTabs.nth(1)).toHaveAttribute('aria-selected', 'true');
+    await expect(evTabs.nth(1)).toBeFocused();
+    await page.keyboard.press('End');
+    await expect(evTabs.nth(2)).toHaveAttribute('aria-selected', 'true');
+    await page.keyboard.press('Home');
+    await expect(evTabs.nth(0)).toHaveAttribute('aria-selected', 'true');
+
+    // PersonPage photo lightbox aria-modal + Escape restore
+    await page.goto('/person/abraham-lincoln-1809');
+    const firstMediaCard = page.locator('.person-media-card').first();
+    await expect(firstMediaCard).toBeVisible();
+    await firstMediaCard.focus();
+    await firstMediaCard.click();
+    const photoDialog = page.locator('dialog.photo-lightbox-overlay[open]');
+    await expect(photoDialog).toBeVisible();
+    await expect(photoDialog).toHaveAttribute('aria-modal', 'true');
+    await page.keyboard.press('Escape');
+    await expect(photoDialog).toHaveCount(0);
+    await expect(firstMediaCard).toBeFocused();
+
+    // Interactive SVG containers do not use role="img"
+    await page.goto('/place/springfield-illinois');
+    await expect(page.locator('svg.local-survey-svg')).toHaveAttribute('role', 'group');
+    await page.goto('/tree?surface=diagram');
+    await expect(page.locator('svg.tree-canvas')).toHaveAttribute('role', 'group');
+  });
+
+  test('Wave 52B-2: Archival print stylesheet expands biographies & footnotes and hides chrome', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.goto('/person/abraham-lincoln-1809');
+    await expect(page.locator('.person-biography-body')).toBeVisible();
+
+    await page.emulateMedia({ media: 'print' });
+
+    const personPrint = await page.evaluate(() => {
+      const bio = document.querySelector('.person-biography-body');
+      const bioSources = document.querySelector('.person-biography-sources');
+      const hiddenSelectors = [
+        '.source-toggle',
+        '.source-read-btn',
+        '.also-here',
+        '.wireframe-photo:not(.has-real-photo)',
+        '.person-header-actions',
+        '.skip-to-content',
+      ];
+      const visibleChrome = hiddenSelectors.reduce((sum, sel) => {
+        const visibleCount = [...document.querySelectorAll(sel)].filter((el) => {
+          const s = window.getComputedStyle(el);
+          return s.display !== 'none' && s.visibility !== 'hidden';
+        }).length;
+        return sum + visibleCount;
+      }, 0);
+      return {
+        bodyBg: window.getComputedStyle(document.body).backgroundColor,
+        bioMaxHeight: bio ? window.getComputedStyle(bio).maxHeight : '',
+        bioOverflow: bio ? window.getComputedStyle(bio).overflow : '',
+        sourcesDisplay: bioSources ? window.getComputedStyle(bioSources).display : 'missing',
+        visibleChrome,
+      };
+    });
+
+    expect(personPrint.bodyBg).toBe('rgb(255, 255, 255)');
+    expect(personPrint.bioMaxHeight).toBe('none');
+    expect(personPrint.bioOverflow).toBe('visible');
+    expect(personPrint.sourcesDisplay).not.toBe('none');
+    expect(personPrint.visibleChrome).toBe(0);
+    await maybeScreenshot(page, 'wave52b-person-print-1280x800.png');
+
+    await page.goto('/place/springfield-illinois');
+    const placePrint = await page.evaluate(() => {
+      const checkHidden = (sel: string): boolean =>
+        [...document.querySelectorAll(sel)].every(
+          (el) => window.getComputedStyle(el).display === 'none',
+        );
+      return {
+        scopeHidden: checkHidden('.place-scope-bar'),
+        decadeHidden: checkHidden('.place-decade-bar'),
+      };
+    });
+    expect(placePrint.scopeHidden).toBe(true);
+    expect(placePrint.decadeHidden).toBe(true);
+    await page.emulateMedia({ media: 'screen' });
+  });
+
+  test('Wave 52B-3: Tree Chart surnames & keyboard zoom, TimePage headlines, KinshipPage grammar, and PlacePage decade pills', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1280, height: 800 });
+
+    // Tree Chart: no 4px side-tab rects, full surnames rendered at default zoom, keyboard zoom updates live readout
+    await page.goto('/tree?surface=diagram&mode=full');
+    await expect(page.locator('svg.tree-canvas')).toBeVisible();
+    await maybeScreenshot(page, 'wave52b-tree-chart-1280x800.png');
+
+    const chartAudit = await page.evaluate(() => {
+      const sideTabs = document.querySelectorAll('.tree-node-card rect[width="4"]').length;
+      const nodeTexts = [...document.querySelectorAll('.tree-node-card text')].map(
+        (el) => el.textContent?.trim() ?? '',
+      );
+      const hasAbrahamLincoln = nodeTexts.some((t) => t.includes('Abraham Lincoln'));
+      const zoomText = document.querySelector('.tree-zoom-readout')?.textContent?.trim() ?? '';
+      return { sideTabs, hasAbrahamLincoln, zoomText };
+    });
+    expect(chartAudit.sideTabs).toBe(0);
+    expect(chartAudit.hasAbrahamLincoln).toBe(true);
+    expect(chartAudit.zoomText).toMatch(/^\d+%$/);
+
+    const beforeZoom = chartAudit.zoomText;
+    await page.keyboard.press('+');
+    await expect(page.locator('.tree-zoom-readout')).not.toHaveText(beforeZoom);
+
+    // Focus a person node, open Focus Drawer, Escape restores focus
+    const firstNode = page.locator('.tree-node-card').first();
+    await firstNode.focus();
+    await page.keyboard.press('Enter');
+    await expect(page.locator('.tree-focus-drawer')).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(page.locator('.tree-focus-drawer')).toHaveCount(0);
+    await expect(firstNode).toBeFocused();
+
+    // TimePage 1880: no future death headline, no verbatim duplicate title/note
+    await page.goto('/time?year=1880');
+    await expect(page.locator('.time-person-item').first()).toBeVisible();
+    const timeAudit = await page.evaluate(() =>
+      [...document.querySelectorAll('.time-person-item')].map((card) => ({
+        status: card.querySelector('.time-person-status')?.textContent?.trim() ?? '',
+        note: card.querySelector('.time-person-note')?.textContent?.trim() ?? '',
+      })),
+    );
+    expect(timeAudit.length).toBeGreaterThan(0);
+    for (const item of timeAudit) {
+      expect(item.status).not.toBe(item.note);
+      if (item.note.includes('Recorded in 1889')) {
+        expect(item.status).not.toContain('Death');
+      }
+    }
+
+    // KinshipPage: identical person selection has clean grammar
+    await page.goto('/kinship');
+    const selectA = page.locator('select[aria-label="Select first relative"]');
+    const selectB = page.locator('select[aria-label="Select second relative"]');
+    await expect(selectA).toBeVisible();
+    const firstVal = await selectA.inputValue();
+    await selectB.selectOption(firstVal);
+    const headingText = (await page.locator('.kinship-result-heading').textContent()) ?? '';
+    expect(headingText).toContain('Same person selected:');
+    expect(headingText).not.toContain('is the Same person');
+
+    // PlacePage: selecting a decade keeps all other decade pills visible
+    await page.goto('/place/springfield-illinois');
+    const decadeButtons = page.locator('.place-decade-bar button');
+    const initialDecadeCount = await decadeButtons.count();
+    if (initialDecadeCount > 2) {
+      await decadeButtons.nth(1).click();
+      await expect(decadeButtons).toHaveCount(initialDecadeCount);
+      await expect(decadeButtons.nth(1)).toHaveClass(/active/);
+    }
+  });
+
+  test('Wave 52B-4: Tablet 768x1024 and mobile 360x800 touch targets >= 44px and typography >= 12px', async ({
+    page,
+  }) => {
+    await blockExternalMapTiles(page);
+
+    for (const vp of [
+      { name: '360x800', width: 360, height: 800 },
+      { name: '768x1024', width: 768, height: 1024 },
+    ]) {
+      // oxlint-disable-next-line eslint/no-await-in-loop -- sequential viewport checks
+      await page.setViewportSize({ width: vp.width, height: vp.height });
+
+      // oxlint-disable-next-line eslint/no-await-in-loop -- check People Index
+      await page.goto('/');
+      // oxlint-disable-next-line eslint/no-await-in-loop -- wait for lazy route hydration
+      await expect(page.locator('.search-input').first()).toBeVisible();
+      // oxlint-disable-next-line eslint/no-await-in-loop -- verify search input and pill buttons
+      const indexHeights = await page.evaluate(() =>
+        [...document.querySelectorAll('.search-input, .index-filter-actions .pill-btn')].map((el) => ({
+          cls: el.className,
+          height: Math.round(el.getBoundingClientRect().height),
+        })),
+      );
+      expect(indexHeights.length, `no index controls found at ${vp.name}`).toBeGreaterThan(0);
+      for (const item of indexHeights) {
+        expect(item.height, `${item.cls} < 44px at ${vp.name}`).toBeGreaterThanOrEqual(44);
+      }
+
+      // oxlint-disable-next-line eslint/no-await-in-loop -- check Person Profile
+      await page.goto('/person/abraham-lincoln-1809');
+      // oxlint-disable-next-line eslint/no-await-in-loop -- wait for lazy PersonPage hydration
+      await expect(page.getByRole('heading', { name: 'Abraham Lincoln', exact: true })).toBeVisible();
+      // oxlint-disable-next-line eslint/no-await-in-loop -- verify pronunciation & family chips + typography
+      const personCheck = await page.evaluate(() => {
+        const targets = [
+          ...document.querySelectorAll('.person-header .pronunciation-play-btn, .person-header .pill-btn, .person-header .ink-link-btn'),
+        ].map((el) => ({
+          cls: el.className,
+          height: Math.round(el.getBoundingClientRect().height),
+        }));
+        const smallFonts = [
+          ...document.querySelectorAll('.media-kind-badge, .pronunciation-lang'),
+        ]
+          .filter((el) => window.getComputedStyle(el).display !== 'none')
+          .map((el) => ({
+            cls: el.className,
+            fontSize: Number.parseFloat(window.getComputedStyle(el).fontSize),
+          }));
+        return { targets, smallFonts };
+      });
+      expect(personCheck.targets.length, `no person targets found at ${vp.name}`).toBeGreaterThan(0);
+      for (const t of personCheck.targets) {
+        expect(t.height, `${t.cls} < 44px on PersonPage at ${vp.name}`).toBeGreaterThanOrEqual(44);
+      }
+      for (const f of personCheck.smallFonts) {
+        expect(f.fontSize, `${f.cls} < 12px at ${vp.name}`).toBeGreaterThanOrEqual(12);
+      }
+      // oxlint-disable-next-line eslint/no-await-in-loop -- capture person visual proof
+      await maybeScreenshot(page, `wave52b-person-${vp.name}.png`);
+
+      // oxlint-disable-next-line eslint/no-await-in-loop -- check Tree List View
+      await page.goto('/tree?surface=roll&mode=full');
+      // oxlint-disable-next-line eslint/no-await-in-loop -- wait for lazy TreePage hydration
+      await expect(page.locator('.tree-gen-jump-chip').first()).toBeVisible();
+      // oxlint-disable-next-line eslint/no-await-in-loop -- verify jump chips
+      const treeChipHeights = await page.evaluate(() =>
+        [...document.querySelectorAll('.tree-gen-jump-chip')].map((el) =>
+          Math.round(el.getBoundingClientRect().height),
+        ),
+      );
+      expect(treeChipHeights.length, `no tree jump chips found at ${vp.name}`).toBeGreaterThan(0);
+      for (const h of treeChipHeights) {
+        expect(h, `tree-gen-jump-chip < 44px at ${vp.name}`).toBeGreaterThanOrEqual(44);
+      }
+      // oxlint-disable-next-line eslint/no-await-in-loop -- capture tree visual proof
+      await maybeScreenshot(page, `wave52b-tree-${vp.name}.png`);
+
+      // oxlint-disable-next-line eslint/no-await-in-loop -- check Time View typography
+      await page.goto('/time?year=1860');
+      // oxlint-disable-next-line eslint/no-await-in-loop -- wait for lazy TimePage hydration
+      await expect(page.locator('.time-person-item').first()).toBeVisible();
+      // oxlint-disable-next-line eslint/no-await-in-loop -- check time fonts
+      const timeFonts = await page.evaluate(() =>
+        [...document.querySelectorAll('.time-anchor-count, .time-person-tier')]
+          .filter((el) => window.getComputedStyle(el).display !== 'none')
+          .map((el) => Number.parseFloat(window.getComputedStyle(el).fontSize)),
+      );
+      expect(timeFonts.length, `no time micro fonts found at ${vp.name}`).toBeGreaterThan(0);
+      for (const fs of timeFonts) {
+        expect(fs, `time micro font < 12px at ${vp.name}`).toBeGreaterThanOrEqual(12);
+      }
+    }
+  });
 });

@@ -5,7 +5,7 @@ description: Search HathiTrust Digital Library for out-of-copyright county histo
 
 # HathiTrust Digital Library
 
-This skill includes a standalone executable Python CLI at `skills/hathitrust/scripts/hathi` using a PEP 723 `#!/usr/bin/env -S uv run --script` shebang with inline dependencies (`click`, `httpx`). No virtualenv setup or API key is required for the Bibliographic API or the catalog search URLs.
+This skill includes a standalone executable Python CLI invoked as `kinloom hathi` using a PEP 723 `#!/usr/bin/env -S uv run --script` shebang with inline dependencies (`click`, `httpx`). No virtualenv setup or API key is required for the Bibliographic API or the catalog search URLs.
 
 - **Bibliographic API (no key, no login):** returns bibliographic, rights, and volume information for a known identifier (OCLC, LCCN, ISBN, ISSN, HathiTrust ID, record number). This is what the CLI uses. It is identifier lookup only: it cannot keyword-search by title or author.
 - **Catalog website (no login for searching):** keyword search by title, author, subject, or all fields. Use the `hathi url` command to build a verified search URL and open it in a browser.
@@ -14,25 +14,25 @@ This skill includes a standalone executable Python CLI at `skills/hathitrust/scr
 
 ## Bundled CLI (`scripts/hathi`)
 
-Path: `skills/hathitrust/scripts/hathi` (note the short binary name `hathi`, not `hathitrust`).
+Path: `kinloom hathi` (note the short binary name `hathi`, not `hathitrust`).
 
 ### Look up a record by identifier (Bibliographic API)
 
 ```bash
 # Official HathiTrust Bib API example (OCLC 424023)
-skills/hathitrust/scripts/hathi bib oclc 424023
+kinloom hathi bib oclc 424023
 
 # Same record by its 9-digit HathiTrust record number
-skills/hathitrust/scripts/hathi bib recordnumber 000578050
+kinloom hathi bib recordnumber 000578050
 
 # One volume by its HathiTrust ID, with full MARC-XML
-skills/hathitrust/scripts/hathi bib htid <htid> --full
+kinloom hathi bib htid <htid> --full
 
 # Several identifiers in one call (fetched one at a time, merged output)
-skills/hathitrust/scripts/hathi bib --id oclc:424023 --id recordnumber:000578050
+kinloom hathi bib --id oclc:424023 --id recordnumber:000578050
 
 # Raw JSON exactly as the API returned it
-skills/hathitrust/scripts/hathi bib oclc 424023 --json
+kinloom hathi bib oclc 424023 --json
 ```
 
 Identifier types: `oclc`, `lccn`, `issn`, `isbn`, `htid`, `recordnumber`. Values are URL-encoded by the CLI (LCCNs can contain spaces and slashes). A lookup that finds nothing prints empty `records` / `items` (the API returns `{ "records": {}, "items": [] }`, not an error), so check for that before concluding a title is absent under a different identifier.
@@ -43,13 +43,13 @@ Compact output keeps title, record URL, publish dates, identifiers, and for each
 
 ```bash
 # Title search (open the printed URL in a browser)
-skills/hathitrust/scripts/hathi url "Abraham Lincoln" --type title
+kinloom hathi url "Abraham Lincoln" --type title
 
 # Author search
-skills/hathitrust/scripts/hathi url "Douglass, Frederick" --type author
+kinloom hathi url "Douglass, Frederick" --type author
 
 # Keyword search across all fields
-skills/hathitrust/scripts/hathi url "Clara Barton" --type all
+kinloom hathi url "Clara Barton" --type all
 ```
 
 This only prints the URL; it does not fetch results. Fetching catalog search HTML from a server is unreliable (Cloudflare challenges curl intermittently; see "Verified live"), so run the search in a real browser.
@@ -115,3 +115,22 @@ No API key or login is needed for the Bibliographic API.
 - Bib API full `oclc/424023` returns 200 JSON including `marc-xml`.
 - Catalog search `type=all` returned 200 HTML in one live fetch; subsequent fetches of catalog search pages and record pages returned 403 Cloudflare challenge pages (about 5.7 KB). The Bib API was reliable on every attempt; catalog HTML was not. That is why the CLI looks records up through the Bib API and only builds catalog search URLs for a real browser instead of scraping result pages.
 - Full-text Large Scale Search (`https://babel.hathitrust.org/cgi/ls?a=srchls&q1=...`) returns 403 unauthenticated, so full-text search is documented as login-only and is not in the CLI.
+
+## Kinloom Research Package workflow
+
+Never edit `data/*.yaml` directly from a research session. Follow Kinloom's staged **Research Package** workflow and **Living Privacy Rule** (never include living people's portraits, exact birth dates, street addresses, or pronunciations in public archives):
+
+1. Discover research targets with `kinloom status --missing-biography` or `kinloom status --end-of-line`.
+2. Gather privacy-fenced context with `kinloom context <person_id> --include-family`.
+3. Stage any downloaded images or documents under `research/people/<person_id>/scans/` and prepare them with `kinloom prep-scan` or `kinloom ocr` when needed.
+4. Write cited findings into `research/people/<person_id>/patch.json`.
+5. Audit, integrate, verify, and sync:
+
+```bash
+kinloom audit --all-staged --pending-only --strict
+kinloom integrate --all-staged --pending-only
+kinloom pronounce audit --strict
+kinloom verify
+kinloom migrate
+kinloom sync --sync-missing-media --verify-live
+```

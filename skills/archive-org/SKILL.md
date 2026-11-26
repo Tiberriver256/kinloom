@@ -5,12 +5,11 @@ description: Search, inspect, grep cached OCR text, and download pages or files 
 
 # Archive.org
 
-This skill includes a standalone executable Python 3.11+ standard-library CLI at `skills/archive-org/scripts/archive-org` (`#!/usr/bin/env -S python3 -S`). No virtualenv, `uv`, third-party packages, or API key is required. The APIs are public and read-only.
+This skill includes a standalone executable Python 3.11+ standard-library CLI invoked as `kinloom archive-org` (`#!/usr/bin/env -S python3 -S`). No virtualenv, `uv`, third-party packages, or API key is required. The APIs are public and read-only.
 
 ## Bundled CLI (`scripts/archive-org`)
 
-Path: `skills/archive-org/scripts/archive-org`
-
+Command: `kinloom archive-org`
 ### Persistent local disk cache (all network commands)
 
 Every network command (`get`, `grep`, `text`, `lookup`, `page`, `download`, `search`, and `fulltext`) writes atomically under `~/.cache/kinloom-ia/` (overrideable via `KINLOOM_IA_CACHE_DIR`) using per-item advisory locks (`fcntl.flock`) so concurrent processes never duplicate downloads and repeat calls make zero HTTP requests. Pass `--refresh` on any command to bypass the local cache and fetch fresh data. `--json` on `search`, `get`, `fulltext`, `grep`, `text`, `lookup`, and `page` adds a top-level boolean `cache_hit`. `download` and `url` do not print that object.
@@ -33,10 +32,10 @@ Downloads missing metadata, `scandata.xml`, and OCR text in parallel (`max_worke
 
 ```bash
 # Search one or more digitized books (cache miss populates ~/.cache/kinloom-ia/<id>/)
-skills/archive-org/scripts/archive-org grep ourmartyrpreside00banc --pattern 'Gettysburg' --context 240 --limit 25
+kinloom archive-org grep ourmartyrpreside00banc --pattern 'Gettysburg' --context 240 --limit 25
 
 # Case-insensitive multi-item regex grep with structured JSON output
-skills/archive-org/scripts/archive-org grep item_a item_b --pattern 'Lincoln|Douglass' -i --json
+kinloom archive-org grep item_a item_b --pattern 'Lincoln|Douglass' -i --json
 ```
 
 ### Download single high-res pages (`page`) by printed page or leaf
@@ -45,17 +44,17 @@ Resolve printed book page numbers to exact BookReader leaves automatically via c
 
 ```bash
 # Resolve printed page "12" automatically and save at BookReader scale 2
-skills/archive-org/scripts/archive-org page ourmartyrpreside00banc --printed-page 12 --scale 2 --out ./page12.jpg
+kinloom archive-org page ourmartyrpreside00banc --printed-page 12 --scale 2 --out ./page12.jpg
 
 # Fetch an explicit BookReader leaf n0 into a file or directory
-skills/archive-org/scripts/archive-org page ourmartyrpreside00banc --leaf 0 --scale 2 --out ./cover.jpg
-skills/archive-org/scripts/archive-org page ourmartyrpreside00banc 0 --width 1200 --out ./downloads
+kinloom archive-org page ourmartyrpreside00banc --leaf 0 --scale 2 --out ./cover.jpg
+kinloom archive-org page ourmartyrpreside00banc 0 --width 1200 --out ./downloads
 
 # Fetch several BookReader leaves in one call (max 25). --out must be a directory.
-skills/archive-org/scripts/archive-org page ourmartyrpreside00banc --leaves 120-123,130 --scale 2 --out ./pages
+kinloom archive-org page ourmartyrpreside00banc --leaves 120-123,130 --scale 2 --out ./pages
 
 # Fetch several printed pages. Ranges such as 670-674 are inclusive printed labels.
-skills/archive-org/scripts/archive-org page ourmartyrpreside00banc --printed-pages 674,707,732 --out ./pages --json
+kinloom archive-org page ourmartyrpreside00banc --printed-pages 674,707,732 --out ./pages --json
 ```
 
 Single-page URL patterns: `https://archive.org/download/<identifier>/page/n<leaf>_s<scale>.jpg` and `https://archive.org/download/<identifier>/page/n<leaf>_w<width>.jpg`. Returns HTTP 403 on borrow-only / `inlibrary` items.
@@ -95,19 +94,19 @@ Both accept `--refresh` to re-fetch cached metadata/scandata (and OCR text for `
 
 ```bash
 # Metadata search: titles mentioning Lincoln
-skills/archive-org/scripts/archive-org search 'title:(Lincoln)'
+kinloom archive-org search 'title:(Lincoln)'
 
 # Narrow metadata search to digitized texts for a historical figure
-skills/archive-org/scripts/archive-org search '"Frederick Douglass"' --mediatype texts
+kinloom archive-org search '"Frederick Douglass"' --mediatype texts
 
 # Sort by popularity, second page, full JSON
-skills/archive-org/scripts/archive-org search 'title:(Lincoln)' --sort 'downloads desc' --rows 5
-skills/archive-org/scripts/archive-org search 'title:(Lincoln)' --page 2
-skills/archive-org/scripts/archive-org search 'title:(Lincoln)' --json
+kinloom archive-org search 'title:(Lincoln)' --sort 'downloads desc' --rows 5
+kinloom archive-org search 'title:(Lincoln)' --page 2
+kinloom archive-org search 'title:(Lincoln)' --json
 
 # Full-text OCR search inside digitized books (returns highlighted OCR snippets)
-skills/archive-org/scripts/archive-org fulltext '"Abraham Lincoln" Gettysburg' --rows 5
-skills/archive-org/scripts/archive-org fulltext '"Clara Barton" Red Cross' --json
+kinloom archive-org fulltext '"Abraham Lincoln" Gettysburg' --rows 5
+kinloom archive-org fulltext '"Clara Barton" Red Cross' --json
 ```
 
 The `search` query is Lucene syntax (see below). Multi-word positional queries are joined with spaces, and `-q` / `--query`, `--limit` / `-n` (aliases for `--rows`), `--type` (alias for `--mediatype`), `--collection` (repeatable or comma-separated), `--fields` (comma-separated or repeatable alias for `--field`), and `--timeout` are supported. `get` also accepts the `metadata` subcommand alias. Default returned fields are `identifier`, `title`, `creator`, `date`, `mediatype`. A zero-hit `search` means no item metadata matched; run `fulltext` before concluding a name is absent from digitized directories or county histories.
@@ -115,18 +114,18 @@ The `search` query is Lucene syntax (see below). Multi-word positional queries a
 ### Read an item's metadata and files
 
 ```bash
-skills/archive-org/scripts/archive-org get <identifier>
-skills/archive-org/scripts/archive-org get <identifier> --files
-skills/archive-org/scripts/archive-org get <identifier> --json
+kinloom archive-org get <identifier>
+kinloom archive-org get <identifier> --files
+kinloom archive-org get <identifier> --json
 ```
 
 ### Download files
 
 ```bash
 # List an item's files first, then download the OCR text or PDF
-skills/archive-org/scripts/archive-org download <identifier> --list
-skills/archive-org/scripts/archive-org download <identifier> <identifier>_djvu.txt --out ./downloads
-skills/archive-org/scripts/archive-org download <identifier> <identifier>.pdf --out ./downloads
+kinloom archive-org download <identifier> --list
+kinloom archive-org download <identifier> <identifier>_djvu.txt --out ./downloads
+kinloom archive-org download <identifier> <identifier>.pdf --out ./downloads
 ```
 
 The CLI refuses a file name that is not in the item's file list, so list first when unsure. Download URLs follow the site's redirect to the file server automatically.
@@ -134,7 +133,7 @@ The CLI refuses a file name that is not in the item's file list, so list first w
 ### Build a website search URL offline
 
 ```bash
-skills/archive-org/scripts/archive-org url 'title:(Lincoln)' --mediatype texts
+kinloom archive-org url 'title:(Lincoln)' --mediatype texts
 ```
 
 ## Advanced Search API (verified live 2026-11-24)
@@ -170,3 +169,22 @@ skills/archive-org/scripts/archive-org url 'title:(Lincoln)' --mediatype texts
 
 - `KINLOOM_IA_CACHE_DIR` (optional): overrides the default `~/.cache/kinloom-ia` cache directory used by all network commands.
 - `KINLOOM_IA_QUERY_TTL_HOURS` (optional): overrides the default `168` hour (7-day) TTL for cached `search` and `fulltext` responses. No API key or login is required.
+
+## Kinloom Research Package workflow
+
+Never edit `data/*.yaml` directly from a research session. Follow Kinloom's staged **Research Package** workflow and **Living Privacy Rule** (never include living people's portraits, exact birth dates, street addresses, or pronunciations in public archives):
+
+1. Discover research targets with `kinloom status --missing-biography` or `kinloom status --end-of-line`.
+2. Gather privacy-fenced context with `kinloom context <person_id> --include-family`.
+3. Prepare downloaded scans with `kinloom prep-scan` (for example `kinloom prep-scan crop --redact-orig`) and run `kinloom ocr` as needed, then stage scans under `research/people/<person_id>/scans/`.
+4. Write cited findings into `research/people/<person_id>/patch.json`.
+5. Audit, integrate, verify, and sync:
+
+```bash
+kinloom audit --all-staged --pending-only --strict
+kinloom integrate --all-staged --pending-only
+kinloom pronounce audit --strict
+kinloom verify
+kinloom migrate
+kinloom sync --sync-missing-media --verify-live
+```

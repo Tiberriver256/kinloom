@@ -310,8 +310,8 @@ describe('PersonPage biography narratives and plain-English copy', () => {
     expect(bioSection?.querySelector('h4')?.textContent).toBe('Early Years in Oxford');
     expect(bioSection?.querySelectorAll('.archival-md-list li').length).toBe(2);
 
-    // Sources are collapsed by default behind a Sources (N) toggle and expand on click
-    expect(bioSection?.querySelectorAll('.person-biography-source-list li').length).toBe(0);
+    // Sources are collapsed on screen (kept in DOM for @media print) behind a Sources (N) toggle and expand on click
+    expect(bioSection?.querySelector('.person-biography-sources.is-collapsed-screen')).not.toBeNull();
     const sourcesToggleBtn = [...(bioSection?.querySelectorAll('button') ?? [])].find((b) =>
       b.textContent?.includes('Sources (1)'),
     );
@@ -320,6 +320,7 @@ describe('PersonPage biography narratives and plain-English copy', () => {
       sourcesToggleBtn?.click();
     });
     expect(sourcesToggleBtn?.getAttribute('aria-expanded')).toBe('true');
+    expect(bioSection?.querySelector('.person-biography-sources.is-collapsed-screen')).toBeNull();
     expect(bioSection?.querySelectorAll('.person-biography-source-list li').length).toBe(1);
     expect(bioSection?.querySelector('.person-biography-source-text')?.textContent).toContain(
       'Oxford Vital Register (1821)',
@@ -405,7 +406,7 @@ describe('PersonPage biography narratives and plain-English copy', () => {
     const claraBio = claraView.container.querySelector('section[aria-label="Biography"]');
     expect(claraBio?.textContent).toContain('Clara Barton: Full Life');
     expect(claraBio?.textContent).not.toContain('The Oxford Homestead Lineage');
-    expect(claraBio?.querySelectorAll('.person-biography-source-list li').length).toBe(0);
+    expect(claraBio?.querySelector('.person-biography-sources.is-collapsed-screen')).not.toBeNull();
 
     const claraSourcesBtn = [...(claraBio?.querySelectorAll('button') ?? [])].find((b) =>
       b.textContent?.includes('Sources (2)'),
@@ -415,6 +416,7 @@ describe('PersonPage biography narratives and plain-English copy', () => {
       claraSourcesBtn?.click();
     });
     expect(claraSourcesBtn?.getAttribute('aria-expanded')).toBe('true');
+    expect(claraBio?.querySelector('.person-biography-sources.is-collapsed-screen')).toBeNull();
     expect(claraBio?.querySelectorAll('.person-biography-source-list li').length).toBe(2);
 
     const claraStories = claraView.container.querySelector('section[aria-label="Family Stories"]');

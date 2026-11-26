@@ -43,7 +43,7 @@ export async function runSliceGedcomCommand(
     throw new CliValidationError('`--out` data directory path is required.');
   }
   if (!root) {
-    throw new CliValidationError('`--root` individual xref (e.g. @I1@) or full name is required.');
+    throw new CliValidationError('`--root` person xref (e.g. @I1@) or full name is required.');
   }
 
   const gedcomText = await readFile(inputPath, 'utf8');

@@ -17,6 +17,19 @@ import { Link } from 'react-router-dom';
 import { KINLOOM_VOCABULARY } from '../lib/vocabulary.js';
 import { useArchiveData } from '../context/ArchiveDataContext.js';
 import { useArchiveUi } from '../context/ArchiveUiContext.js';
+import { useDialogFocusTrap } from '../lib/useDialogFocusTrap.js';
+
+export const EmptyStateNotice: React.FC<{
+  title: string;
+  body?: string;
+  action?: React.ReactNode;
+}> = ({ title, body, action }) => (
+  <div className="empty-state-notice" role="status">
+    <p className="empty-state-notice-title">{title}</p>
+    {body && <p className="empty-state-notice-body">{body}</p>}
+    {action && <div className="empty-state-notice-action">{action}</div>}
+  </div>
+);
 
 const EMPTY_ALTERNATE_DATES: AlternateDate[] = [];
 const EMPTY_ALTERNATE_PLACES: AlternatePlace[] = [];
@@ -169,7 +182,7 @@ export const RelativeAvatarChip: React.FC<{
       type="button"
       className={`avatar-chip ${tierClass}`}
       onClick={onClick}
-      title={`${name} (${relationship}) — ${tier}${distLabel}. Click to pivot timeline.`}
+      title={`${name} (${relationship}) — ${tier}${distLabel}. Open Person Profile.`}
     >
       <span className="avatar-circle">{initialsOf(name)}</span>
       <span>
@@ -202,22 +215,13 @@ export const ArchivalPhotoFrame: React.FC<{ caption: string; photoUrl?: string |
   const [open, setOpen] = useState(false);
   const closeBtnRef = React.useRef<HTMLButtonElement | null>(null);
   const resolvedUrl = resolveAssetUrl(photoUrl, baseUrl);
-
-  React.useEffect(() => {
-    if (!open) {
-      return undefined;
-    }
-    closeBtnRef.current?.focus();
-    const onKey = (e: KeyboardEvent): void => {
-      if (e.key === 'Escape') {
-        setOpen(false);
-      }
-    };
-    window.addEventListener('keydown', onKey);
-    return (): void => {
-      window.removeEventListener('keydown', onKey);
-    };
-  }, [open]);
+  const dialogRef = useDialogFocusTrap({
+    open,
+    onClose: () => {
+      setOpen(false);
+    },
+    initialFocusRef: closeBtnRef,
+  });
 
   return (
     <>
@@ -243,12 +247,15 @@ export const ArchivalPhotoFrame: React.FC<{ caption: string; photoUrl?: string |
       </button>
       {open && (
         <dialog
+          ref={dialogRef}
           open
+          aria-modal="true"
           className="lightbox-backdrop photo-lightbox-overlay"
           aria-label="Archival photograph lightbox"
         >
           <button
             type="button"
+            tabIndex={-1}
             className="lightbox-backdrop-close"
             aria-label="Close archival photograph lightbox"
             onClick={() => {
@@ -319,22 +326,13 @@ export const SourceCitationTag: React.FC<{
   const [activeScan, setActiveScan] = useState<{ url: string; title: string; citation?: string } | null>(null);
   const scanCloseRef = React.useRef<HTMLButtonElement | null>(null);
   const { openSourceReader, openSourceInspector } = useArchiveUi();
-
-  React.useEffect(() => {
-    if (!activeScan) {
-      return undefined;
-    }
-    scanCloseRef.current?.focus();
-    const onKey = (e: KeyboardEvent): void => {
-      if (e.key === 'Escape') {
-        setActiveScan(null);
-      }
-    };
-    window.addEventListener('keydown', onKey);
-    return (): void => {
-      window.removeEventListener('keydown', onKey);
-    };
-  }, [activeScan]);
+  const scanDialogRef = useDialogFocusTrap({
+    open: Boolean(activeScan),
+    onClose: () => {
+      setActiveScan(null);
+    },
+    initialFocusRef: scanCloseRef,
+  });
 
   if (
     sources.length === 0 &&
@@ -639,12 +637,15 @@ export const SourceCitationTag: React.FC<{
 
       {activeScan && (
         <dialog
+          ref={scanDialogRef}
           open
+          aria-modal="true"
           className="lightbox-backdrop photo-lightbox-overlay"
           aria-label="Record scan lightbox"
         >
           <button
             type="button"
+            tabIndex={-1}
             className="lightbox-backdrop-close"
             aria-label="Close record scan lightbox"
             onClick={() => {

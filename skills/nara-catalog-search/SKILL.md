@@ -5,7 +5,7 @@ description: Search, inspect, and download records from the National Archives Ca
 
 # NARA Catalog Search
 
-This skill includes a standalone executable Python CLI at `skills/nara-catalog-search/scripts/nara` using a PEP 723 `#!/usr/bin/env -S uv run --script` shebang with inline dependencies (`click`, `httpx`, `playwright`). No virtualenv setup or API key is required.
+This skill includes a standalone executable Python CLI invoked as `kinloom nara` using a PEP 723 `#!/usr/bin/env -S uv run --script` shebang with inline dependencies (`click`, `httpx`, `playwright`). No virtualenv setup or API key is required.
 
 - **Without `NARA_API_KEY` (default):** runs headless Chromium (auto-detecting system `chromium` or `google-chrome`) against `catalog.archives.gov` and reads the structured Catalog JSON responses.
 - **With `NARA_API_KEY`:** queries the official v2 API (`https://catalog.archives.gov/api/v2/records/search`) over HTTP directly. Pass `--browser` to force website mode.
@@ -13,8 +13,7 @@ This skill includes a standalone executable Python CLI at `skills/nara-catalog-s
 
 ## Bundled CLI (`scripts/nara`)
 
-Path: `skills/nara-catalog-search/scripts/nara`
-
+Command: `kinloom nara`
 ### Persistent local disk cache
 
 `search`, `get`, `download`, `census1950`, and `census1950-image` cache responses atomically under `~/.cache/kinloom-nara/` (overrideable via `KINLOOM_NARA_CACHE_DIR`) using advisory file locks (`fcntl.flock` on POSIX, safe fallback elsewhere) so concurrent research threads never duplicate downloads and repeat calls make zero HTTP requests. Pass `--refresh` on `search`, `get`, `download`, `census1950`, or `census1950-image` to bypass the cache and fetch fresh data.
@@ -33,27 +32,27 @@ Cache layout:
 
 ```bash
 # Single exact-phrase search in Record Group 15 (Department of Veterans Affairs pension files)
-skills/nara-catalog-search/scripts/nara search '"Harriet Tubman"' --rg 15
+kinloom nara search '"Harriet Tubman"' --rg 15
 
 # Batch multiple queries sharing one headless Chromium session (fast)
-skills/nara-catalog-search/scripts/nara search '"Clara Barton"' '"Frederick Douglass"' 'Gettysburg AND Lincoln' --online --json
+kinloom nara search '"Clara Barton"' '"Frederick Douglass"' 'Gettysburg AND Lincoln' --online --json
 
 # Digital records only, filtered by level, date range, and material type
-skills/nara-catalog-search/scripts/nara search '"Abraham Lincoln"' --level fileUnit,item --online --start-date 1860 --end-date 1865 --type "Textual Records"
+kinloom nara search '"Abraham Lincoln"' --level fileUnit,item --online --start-date 1860 --end-date 1865 --type "Textual Records"
 ```
 
 ### Inspect one or more NAIDs
 
 ```bash
 # Compact metadata and file counts for multiple NAIDs (reuses one browser; alias: show)
-skills/nara-catalog-search/scripts/nara get <naid-1> <naid-2> --json
-skills/nara-catalog-search/scripts/nara show <naid> --json
+kinloom nara get <naid-1> <naid-2> --json
+kinloom nara show <naid> --json
 
 # Include sliced digital object URLs for large rolls
-skills/nara-catalog-search/scripts/nara get <naid> --objects --pages 1-10 --json
+kinloom nara get <naid> --objects --pages 1-10 --json
 
 # Print extracted OCR or community transcriptions if available
-skills/nara-catalog-search/scripts/nara get <naid> --text
+kinloom nara get <naid> --text
 ```
 
 Note on large multi-page file units: `nara get --text` prints text only when NARA's record object stores `extractedText`, `otherExtractedText`, or community transcriptions, and NARA's catalog search proxy response does not include page-level match highlights. When a search matches inside a large digitized file unit (for example hundreds of pages) with no `extractedText` returned by `get --text`, open `https://catalog.archives.gov/id/<naId>` in a browser to locate the matching page.
@@ -62,13 +61,13 @@ Note on large multi-page file units: `nara get --text` prints text only when NAR
 
 ```bash
 # Download selected 1-based pages plus compact metadata.json (accepts NAID or catalog.archives.gov/id/<naid>)
-skills/nara-catalog-search/scripts/nara download <naid> --pages 1-5 --out ./downloads/nara-<naid> --json
+kinloom nara download <naid> --pages 1-5 --out ./downloads/nara-<naid> --json
 
 # Download all images in a file unit (concurrent up to 4 workers)
-skills/nara-catalog-search/scripts/nara download <naid> --out ./downloads/nara-<naid>
+kinloom nara download <naid> --out ./downloads/nara-<naid>
 
 # Download a direct NARA or NARA S3 file URL with atomic disk caching
-skills/nara-catalog-search/scripts/nara download "https://s3.amazonaws.com/NARAprodstorage/..." --out ./downloads/page.jpg --json
+kinloom nara download "https://s3.amazonaws.com/NARAprodstorage/..." --out ./downloads/page.jpg --json
 ```
 
 ### Search the 1950 Census population schedules
@@ -77,16 +76,16 @@ skills/nara-catalog-search/scripts/nara download "https://s3.amazonaws.com/NARAp
 
 ```bash
 # Surname in one state. Repeat the same command and the second run does not call the network.
-skills/nara-catalog-search/scripts/nara census1950 --state IL --name Lincoln --json
+kinloom nara census1950 --state IL --name Lincoln --json
 
 # One enumeration district
-skills/nara-catalog-search/scripts/nara census1950 --state Illinois --county Sangamon --ed 84-1
+kinloom nara census1950 --state Illinois --county Sangamon --ed 84-1
 
 # Force a new request
-skills/nara-catalog-search/scripts/nara census1950 --state IL --name Lincoln --refresh
+kinloom nara census1950 --state IL --name Lincoln --refresh
 
 # Second page of the same search
-skills/nara-catalog-search/scripts/nara census1950 --state IL --name Lincoln --page 2 --json
+kinloom nara census1950 --state IL --name Lincoln --page 2 --json
 ```
 
 Give at least one of `--state`, `--county`, `--name`, or `--ed`. `--limit` is 1 through 100 (default 25). `--page` is an integer greater than or equal to 1 (default 1). `--json` adds `"cache_hit": true` or `false` and leaves each result object as the API returned it. Text output adds `image <path>` on the schedule line. Pass that path to `census1950-image`. State names and the codes published by `GET /api/state` both work, including territories such as `PR` and `PC` (Panama Canal Zone).
@@ -107,17 +106,17 @@ Both forms use the same cache entry when `--width` is the same. The command rebu
 
 ```bash
 # Full archival JPEG. The second run reads the cache and does not call the network.
-skills/nara-catalog-search/scripts/nara census1950-image \
+kinloom nara census1950-image \
   1950census/43290879-Illinois/43290879-Illinois-087558/43290879-Illinois-087558-0002.jpg \
   --out ./schedules --json
 
 # Same file, addressed by the iiifUrl from census1950 --json
-skills/nara-catalog-search/scripts/nara census1950-image \
+kinloom nara census1950-image \
   "https://1950census.archives.gov/iiif/2/1950census%2F43290879-Illinois%2F43290879-Illinois-087558%2F43290879-Illinois-087558-0002.jpg/info.json" \
   --out ./schedules
 
 # Smaller preview. This uses a different cache file from the full-resolution download.
-skills/nara-catalog-search/scripts/nara census1950-image \
+kinloom nara census1950-image \
   1950census/43290879-Illinois/43290879-Illinois-087558/43290879-Illinois-087558-0002.jpg \
   --width 2400 --out ./schedules/page.jpg
 ```
@@ -131,8 +130,8 @@ The download tries up to 3 times when the status is 429, 500, 502, 503, 504, 520
 ### Build verified search URLs offline
 
 ```bash
-skills/nara-catalog-search/scripts/nara url '"Harriet Tubman"' --rg 15 --online
-skills/nara-catalog-search/scripts/nara url '"Clara Barton"' --level item --api
+kinloom nara url '"Harriet Tubman"' --rg 15 --online
+kinloom nara url '"Clara Barton"' --level item --api
 ```
 
 ### Environment variables
@@ -193,3 +192,22 @@ Rules:
 - Other endpoints: `/records/parentNaId/{parentNaId}`, `/extractedText/{naId}`, `/records/stats`, `/records/search/by-tag`, `/by-transcription`, `/by-comment`.
 - Attribution: services using the API must display "This product uses the National Archives Catalog API but is not endorsed or certified by the National Archives and Records Administration."
 - Terms note: do not scrape or bulk-mirror the whole Catalog; use the AWS Registry of Open Data dataset for bulk transfers.
+
+## Kinloom Research Package workflow
+
+Never edit `data/*.yaml` directly from a research session. Follow Kinloom's staged **Research Package** workflow and **Living Privacy Rule** (never include living people's portraits, exact birth dates, street addresses, or pronunciations in public archives):
+
+1. Discover research targets with `kinloom status --missing-biography` or `kinloom status --end-of-line`.
+2. Gather privacy-fenced context with `kinloom context <person_id> --include-family`.
+3. Prepare downloaded scans with `kinloom prep-scan` (for example `kinloom prep-scan crop --redact-orig`) and run `kinloom ocr` as needed, then stage scans under `research/people/<person_id>/scans/`.
+4. Write cited findings into `research/people/<person_id>/patch.json`.
+5. Audit, integrate, verify, and sync:
+
+```bash
+kinloom audit --all-staged --pending-only --strict
+kinloom integrate --all-staged --pending-only
+kinloom pronounce audit --strict
+kinloom verify
+kinloom migrate
+kinloom sync --sync-missing-media --verify-live
+```

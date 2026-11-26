@@ -9,6 +9,7 @@ import { Link } from 'react-router-dom';
 import { KINLOOM_VOCABULARY } from '../lib/vocabulary.js';
 import { useArchiveData } from '../context/ArchiveDataContext.js';
 import { useArchiveUi } from '../context/ArchiveUiContext.js';
+import { useDialogFocusTrap } from '../lib/useDialogFocusTrap.js';
 
 export const SourceInspectorDrawer: React.FC = () => {
   const { bundle, sourcesById, eventsById, readableSourceIds, baseUrl } = useArchiveData();
@@ -39,23 +40,19 @@ export const SourceInspectorDrawer: React.FC = () => {
     [activeSourceId, bundle],
   );
 
+  const dialogRef = useDialogFocusTrap({
+    open: Boolean(sourceInspector),
+    onClose: closeSourceInspector,
+    initialFocusRef: closeBtnRef,
+  });
+
   useEffect(() => {
     if (!sourceInspector) {
-      return undefined;
+      return;
     }
     setCopied(false);
     setScanExpanded(false);
-    closeBtnRef.current?.focus();
-    const onKey = (e: KeyboardEvent): void => {
-      if (e.key === 'Escape') {
-        closeSourceInspector();
-      }
-    };
-    window.addEventListener('keydown', onKey);
-    return (): void => {
-      window.removeEventListener('keydown', onKey);
-    };
-  }, [sourceInspector, closeSourceInspector]);
+  }, [sourceInspector]);
 
   if (!sourceInspector) {
     return null;
@@ -85,12 +82,15 @@ export const SourceInspectorDrawer: React.FC = () => {
 
   return (
     <dialog
+      ref={dialogRef}
       open
+      aria-modal="true"
       className="drawer-backdrop source-inspector-backdrop"
       aria-label={KINLOOM_VOCABULARY.sources.inspectorAria}
     >
       <button
         type="button"
+        tabIndex={-1}
         className="lightbox-backdrop-close"
         aria-label="Close source inspector"
         onClick={closeSourceInspector}

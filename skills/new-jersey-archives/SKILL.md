@@ -5,7 +5,7 @@ description: Search the New Jersey State Archives searchable-databases portal an
 
 # New Jersey Archives
 
-This skill includes a standalone executable Python CLI at `skills/new-jersey-archives/scripts/nj-archives` using a PEP 723 `#!/usr/bin/env -S uv run --script` shebang with inline dependencies (`click`, `httpx`). No virtualenv setup or API key is required.
+This skill includes a standalone executable Python CLI invoked as `kinloom nj-archives` using a PEP 723 `#!/usr/bin/env -S uv run --script` shebang with inline dependencies (`click`, `httpx`). No virtualenv setup or API key is required.
 
 The State Archives in Trenton is the official repository for New Jersey public records of enduring value, from the colony founded in 1664 to the present. It holds over 57,000 cubic feet of paper records and over 32,000 reels of microfilm. Admission is free; copies and research carry fees. Most holdings are not digitized.
 
@@ -13,29 +13,29 @@ The State Archives in Trenton is the official repository for New Jersey public r
 
 ```bash
 # List the databases live from the portal index
-skills/new-jersey-archives/scripts/nj-archives databases
+kinloom nj-archives databases
 
 # Early Land Records for a surname, Monmouth County only
-skills/new-jersey-archives/scripts/nj-archives search land --surname Lincoln --county Monmouth
+kinloom nj-archives search land --surname Lincoln --county Monmouth
 
 # Land records where the person is the grantee, 1670-1700
-skills/new-jersey-archives/scripts/nj-archives search land --surname Lincoln --role Grantee --from-year 1670 --to-year 1700
+kinloom nj-archives search land --surname Lincoln --role Grantee --from-year 1670 --to-year 1700
 
 # Supreme Court Case Files, 1704-1844
-skills/new-jersey-archives/scripts/nj-archives search supreme-court --surname Smith --role Defendant
+kinloom nj-archives search supreme-court --surname Smith --role Defendant
 
 # Read two pages of results (11 rows per page) as JSON
-skills/new-jersey-archives/scripts/nj-archives search land --surname Smith --pages 2 --json
+kinloom nj-archives search land --surname Smith --pages 2 --json
 
 # Monmouth County OPRS 1875 census, name contains Smith, all towns
-skills/new-jersey-archives/scripts/nj-archives monmouth --surname Smith
+kinloom nj-archives monmouth --surname Smith
 
 # Monmouth 1875 census, Freehold, Population category, name starts with Smith
-skills/new-jersey-archives/scripts/nj-archives monmouth --surname Smith --town Freehold --category Population --match starts
+kinloom nj-archives monmouth --surname Smith --town Freehold --category Population --match starts
 
 # Browser URL for a database search page or an order form
-skills/new-jersey-archives/scripts/nj-archives url land
-skills/new-jersey-archives/scripts/nj-archives url births-1848-1925
+kinloom nj-archives url land
+kinloom nj-archives url births-1848-1925
 ```
 
 `search` options: `--surname` (alias `--last`; required except for `natguard-photos`, which uses `--keyword`, and for the two marriage databases, which also accept `--spouse-surname` alone), `--given` (alias `--first`), `--spouse-surname` (alias `--spouse`) / `--spouse-given` (marriage databases), `--county`, `--location`, `--from-year`, `--to-year`, `--role` (land: Grantor/Grantee/Named/Official; supreme-court: Plaintiff/Defendant/Official/Victim/Other), `--case-type` / `--case-number` (supreme-court), `--keyword` (natguard-photos), `--limit`, `--pages` (stops cleanly when no further pager link exists), `--refresh`, `--cache-ttl-hours`, `--json`. County and role values are matched case-insensitively (and with or without a trailing `" County"`) against the live dropdown options on the search page. `search` refuses order-form-only databases with the form URL; use `url` for those.
@@ -133,3 +133,22 @@ Inferred, not verified: the Monmouth results page shows pager links whose postba
 - The other Monmouth OPRS collections listed above (Common Pleas, muster lists, slave births/manumissions, freeholders, incorporations) are separate pages, not covered.
 - In-person-only holdings, microfilm-only records, and subscription indexes (FamilySearch, Ancestry).
 - Do not invent an API endpoint, a query-string search URL, or an auth requirement for any of these portals. There is none verified. If the portal redesigns or the postback targets change, `databases` will show it (rows without a `[key]`) and the CLI's registry needs re-verifying against the live index.
+
+## Kinloom Research Package workflow
+
+Never edit `data/*.yaml` directly from a research session. Follow Kinloom's staged **Research Package** workflow and **Living Privacy Rule** (never include living people's portraits, exact birth dates, street addresses, or pronunciations in public archives):
+
+1. Discover research targets with `kinloom status --missing-biography` or `kinloom status --end-of-line`.
+2. Gather privacy-fenced context with `kinloom context <person_id> --include-family`.
+3. Stage any downloaded images or documents under `research/people/<person_id>/scans/` and prepare them with `kinloom prep-scan` or `kinloom ocr` when needed.
+4. Write cited findings into `research/people/<person_id>/patch.json`.
+5. Audit, integrate, verify, and sync:
+
+```bash
+kinloom audit --all-staged --pending-only --strict
+kinloom integrate --all-staged --pending-only
+kinloom pronounce audit --strict
+kinloom verify
+kinloom migrate
+kinloom sync --sync-missing-media --verify-live
+```

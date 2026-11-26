@@ -260,7 +260,7 @@ export const RECORD_COMMAND_SPECS: readonly RecordCommandSpec[] = [
     category: 'media-ocr',
     skillDir: 'narrative-audio',
     scriptName: 'narrative-audio',
-    summary: 'Turn Kinloom narratives into narrated MP3 audio with Gemini TTS',
+    summary: 'Turn Kinloom narratives into narrated MP3 audio (Chirp 3: HD or Gemini TTS)',
   },
   {
     kind: 'asset-script',

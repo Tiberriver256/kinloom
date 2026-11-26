@@ -3,16 +3,19 @@ import {
   UNVERIFIED_TREE_SOURCE_ID,
   buildLibrarianCitation,
   formatPublicCitation,
+  formatSourceTypeLabel,
 } from '@kinloom/core';
-import { DateStamp } from '../components/Atoms.js';
+import { DateStamp, EmptyStateNotice } from '../components/Atoms.js';
 import { Link, useSearchParams } from 'react-router-dom';
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ExplorerTopBar } from '../components/ExplorerTopBar.js';
 import { KinloomFooter } from '../components/KinloomFooter.js';
 import { MediaPlayer } from '../components/MediaPlayer.js';
 import { PluginSlot } from '../plugins/PluginContext.js';
 import { useArchiveData } from '../context/ArchiveDataContext.js';
 import { useArchiveUi } from '../context/ArchiveUiContext.js';
+import { handleTablistKeyDown } from '../lib/keyboardNav.js';
+import { useDialogFocusTrap } from '../lib/useDialogFocusTrap.js';
 import { KINLOOM_VOCABULARY, MEDIA_KIND_LABELS } from '../lib/vocabulary.js';
 
 type EvidenceTab = 'conflicts' | 'citations' | 'media';
@@ -44,6 +47,14 @@ export const EvidencePage: React.FC = () => {
   const [mediaLimit, setMediaLimit] = useState(36);
   const [lightboxItem, setLightboxItem] = useState<MediaItem | null>(null);
   const [mediaChecklist, setMediaChecklist] = useState<MediaChecklistItem[]>([]);
+  const lightboxCloseRef = useRef<HTMLButtonElement | null>(null);
+  const lightboxDialogRef = useDialogFocusTrap({
+    open: Boolean(lightboxItem),
+    onClose: () => {
+      setLightboxItem(null);
+    },
+    initialFocusRef: lightboxCloseRef,
+  });
 
   useEffect(() => {
     let cancelled = false;
@@ -185,33 +196,36 @@ export const EvidencePage: React.FC = () => {
     [mediaChecklist],
   );
 
+  const navMedia = useMemo(
+    () => filteredMedia.filter((m) => m.kind !== 'document_scan'),
+    [filteredMedia],
+  );
+
   useEffect(() => {
     if (!lightboxItem) {
       return undefined;
     }
     const onKey = (e: KeyboardEvent): void => {
-      if (e.key === 'Escape') {
-        setLightboxItem(null);
-      } else if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
-        const idx = filteredMedia.findIndex((m) => m.id === lightboxItem.id);
-        if (idx === -1 || filteredMedia.length <= 1) {
+      if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
+        const idx = navMedia.findIndex((m) => m.id === lightboxItem.id);
+        if (idx === -1 || navMedia.length <= 1) {
           return;
         }
         const delta = e.key === 'ArrowRight' ? 1 : -1;
-        setLightboxItem(filteredMedia[(idx + delta + filteredMedia.length) % filteredMedia.length]);
+        setLightboxItem(navMedia[(idx + delta + navMedia.length) % navMedia.length]);
       }
     };
     window.addEventListener('keydown', onKey);
     return (): void => {
       window.removeEventListener('keydown', onKey);
     };
-  }, [lightboxItem, filteredMedia]);
+  }, [lightboxItem, navMedia]);
 
   if (loading || !bundle) {
     return (
       <div>
         <ExplorerTopBar />
-        <main className="index-page">{KINLOOM_VOCABULARY.evidence.loading}</main>
+        <main id="main-content" className="index-page">{KINLOOM_VOCABULARY.evidence.loading}</main>
       </div>
     );
   }
@@ -221,7 +235,7 @@ export const EvidencePage: React.FC = () => {
   return (
     <div>
       <ExplorerTopBar />
-      <main className="place-page">
+      <main id="main-content" className="place-page">
         <section className="wire-banner" style={{ marginBottom: 18 }}>
           <div>
             <h1>{KINLOOM_VOCABULARY.evidence.heading}</h1>
@@ -253,10 +267,21 @@ export const EvidencePage: React.FC = () => {
           className="filter-bar evidence-tabs"
           role="tablist"
           aria-label={KINLOOM_VOCABULARY.evidence.tablistAria}
+          onKeyDown={(event) => {
+            handleTablistKeyDown(
+              event,
+              ['conflicts', 'citations', 'media'] as const,
+              tab,
+              (next) => {
+                setTab(next);
+              },
+            );
+          }}
         >
           <button
             type="button"
             role="tab"
+            tabIndex={tab === 'conflicts' ? 0 : -1}
             aria-selected={tab === 'conflicts'}
             className={`pill-btn ${tab === 'conflicts' ? 'active' : ''}`}
             onClick={() => {
@@ -268,6 +293,7 @@ export const EvidencePage: React.FC = () => {
           <button
             type="button"
             role="tab"
+            tabIndex={tab === 'citations' ? 0 : -1}
             aria-selected={tab === 'citations'}
             className={`pill-btn ${tab === 'citations' ? 'active' : ''}`}
             onClick={() => {
@@ -279,6 +305,7 @@ export const EvidencePage: React.FC = () => {
           <button
             type="button"
             role="tab"
+            tabIndex={tab === 'media' ? 0 : -1}
             aria-selected={tab === 'media'}
             className={`pill-btn ${tab === 'media' ? 'active' : ''}`}
             onClick={() => {
@@ -292,7 +319,7 @@ export const EvidencePage: React.FC = () => {
         {tab === 'conflicts' && (
           <section style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
             {conflictEvents.length === 0 ? (
-              <p className="empty-ring-note">No conflicting date, place, or fact claims are recorded.</p>
+              <EmptyStateNotice title="No source discrepancies are recorded." />
             ) : (
               conflictEvents.map((ev) => {
                 const primaryPerson = ev.participants
@@ -414,7 +441,29 @@ export const EvidencePage: React.FC = () => {
                 />
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {filteredSources.map((s) => {
+                {filteredSources.length === 0 ? (
+                  <EmptyStateNotice
+                    title={
+                      bundle.sources.length === 0
+                        ? 'No sources have been cataloged yet.'
+                        : 'No sources match that filter.'
+                    }
+                    action={
+                      sourceQuery.trim() ? (
+                        <button
+                          type="button"
+                          className="pill-btn"
+                          onClick={() => {
+                            setSourceQuery('');
+                          }}
+                        >
+                          Clear filter
+                        </button>
+                      ) : undefined
+                    }
+                  />
+                ) : (
+                filteredSources.map((s) => {
                   const count = sourceUsageCounts.get(s.id) || 0;
                   const readable = readableSourceIds.has(s.id);
                   const cit = buildLibrarianCitation(s);
@@ -435,7 +484,7 @@ export const EvidencePage: React.FC = () => {
                           {cit.title}
                         </div>
                         <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.78rem', color: 'var(--text-secondary)', marginTop: 2 }}>
-                          Repository: {cit.repository || 'Archival Collection'} · Type: {s.source_type}
+                          Repository: {cit.repository || 'Archival Collection'} · {formatSourceTypeLabel(s.source_type)}
                         </div>
                       </div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0, flexWrap: 'wrap' }}>
@@ -476,71 +525,77 @@ export const EvidencePage: React.FC = () => {
                       </div>
                     </div>
                   );
-                })}
+                }))}
               </div>
             </section>
 
             <section className="place-map-box" style={{ marginBottom: 0 }}>
-              <h2 style={{ fontFamily: 'var(--font-serif)', margin: '0 0 6px', color: 'var(--surface-header)' }}>
-                {KINLOOM_VOCABULARY.evidence.unverifiedHeading} ({unverifiedEvents.length})
-              </h2>
-              <p style={{ margin: '0 0 12px', fontSize: '0.9375rem', color: 'var(--text-secondary)' }}>
-                Because a GEDCOM export is a container rather than a primary source, events imported
-                without an underlying census, vital, or archival citation are tracked here for primary verification.
-              </p>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                {visibleUnverified.map((ev) => {
-                  const p = ev.participants
-                    .map((pt) => peopleById.get(pt.person_id))
-                    .find((x) => x && x.full_name !== 'Living');
-                  return (
-                    <div
-                      key={ev.id}
-                      style={{
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                        flexWrap: 'wrap',
-                        gap: 8,
-                        padding: '7px 10px',
-                        background: 'var(--surface-canvas)',
-                        border: '1px solid var(--border-decorative)',
-                        borderRadius: 2,
-                      }}
-                    >
-                      <div>
-                        <strong style={{ fontSize: '0.94rem' }}>{ev.title}</strong>{' '}
-                        <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.8125rem', color: 'var(--text-secondary)' }}>
-                          ({ev.display_date || 'Date unrecorded'})
-                        </span>
-                      </div>
-                      {p && (
-                        <Link
-                          to={`/person/${p.slug}?event=${ev.id}`}
-                          className="pill-btn"
-                          style={{ textDecoration: 'none', fontSize: '0.8125rem' }}
+              {unverifiedEvents.length === 0 ? (
+                <EmptyStateNotice title="All events have primary citations." />
+              ) : (
+                <>
+                  <h2 style={{ fontFamily: 'var(--font-serif)', margin: '0 0 6px', color: 'var(--surface-header)' }}>
+                    {KINLOOM_VOCABULARY.evidence.unverifiedHeading} ({unverifiedEvents.length})
+                  </h2>
+                  <p style={{ margin: '0 0 12px', fontSize: '0.9375rem', color: 'var(--text-secondary)' }}>
+                    Because a GEDCOM export is a container rather than a primary source, events imported
+                    without an underlying census, vital, or archival citation are tracked here for primary verification.
+                  </p>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    {visibleUnverified.map((ev) => {
+                      const p = ev.participants
+                        .map((pt) => peopleById.get(pt.person_id))
+                        .find((x) => x && x.full_name !== 'Living');
+                      return (
+                        <div
+                          key={ev.id}
+                          style={{
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center',
+                            flexWrap: 'wrap',
+                            gap: 8,
+                            padding: '7px 10px',
+                            background: 'var(--surface-canvas)',
+                            border: '1px solid var(--border-decorative)',
+                            borderRadius: 2,
+                          }}
                         >
-                          Verify on {p.full_name} →
-                        </Link>
-                      )}
+                          <div>
+                            <strong style={{ fontSize: '0.94rem' }}>{ev.title}</strong>{' '}
+                            <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.8125rem', color: 'var(--text-secondary)' }}>
+                              ({ev.display_date || 'Date unrecorded'})
+                            </span>
+                          </div>
+                          {p && (
+                            <Link
+                              to={`/person/${p.slug}?event=${ev.id}`}
+                              className="pill-btn"
+                              style={{ textDecoration: 'none', fontSize: '0.8125rem' }}
+                            >
+                              Verify on {p.full_name} →
+                            </Link>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                  {unverifiedEvents.length > 25 && (
+                    <div style={{ marginTop: 12 }}>
+                      <button
+                        type="button"
+                        className="pill-btn"
+                        onClick={() => {
+                          setShowAllUnverified((v) => !v);
+                        }}
+                      >
+                        {showAllUnverified
+                          ? 'Show Fewer Entries Needing Citation'
+                          : `Show All ${unverifiedEvents.length} Entries Needing Citation`}
+                      </button>
                     </div>
-                  );
-                })}
-              </div>
-              {unverifiedEvents.length > 25 && (
-                <div style={{ marginTop: 12 }}>
-                  <button
-                    type="button"
-                    className="pill-btn"
-                    onClick={() => {
-                      setShowAllUnverified((v) => !v);
-                    }}
-                  >
-                    {showAllUnverified
-                      ? 'Show Fewer Entries Needing Citation'
-                      : `Show All ${unverifiedEvents.length} Entries Needing Citation`}
-                  </button>
-                </div>
+                  )}
+                </>
               )}
             </section>
           </div>
@@ -617,7 +672,27 @@ export const EvidencePage: React.FC = () => {
               </div>
 
               {displayedMedia.length === 0 ? (
-                <p style={{ color: 'var(--text-secondary)' }}>{KINLOOM_VOCABULARY.evidence.mediaEmpty}</p>
+                <EmptyStateNotice
+                  title={
+                    allMedia.length === 0
+                      ? 'No photos or documents have been added yet.'
+                      : KINLOOM_VOCABULARY.evidence.mediaEmpty
+                  }
+                  action={
+                    mediaKindFilter !== 'all' || mediaQuery.trim() ? (
+                      <button
+                        type="button"
+                        className="pill-btn"
+                        onClick={() => {
+                          setMediaKindFilter('all');
+                          setMediaQuery('');
+                        }}
+                      >
+                        Clear filters
+                      </button>
+                    ) : undefined
+                  }
+                />
               ) : (
                 <>
                   <div className="person-media-grid">
@@ -664,7 +739,7 @@ export const EvidencePage: React.FC = () => {
             {mediaChecklist.length > 0 && (
               <section className="place-map-box" style={{ marginBottom: 0 }}>
                 <h2 style={{ fontFamily: 'var(--font-serif)', margin: '0 0 6px', color: 'var(--surface-header)' }}>
-                  Remaining Un-digitized Photos &amp; Documents Entries ({missingChecklistItems.length} missing of {mediaChecklist.length} cataloged)
+                  Un-digitized Photos &amp; Documents ({missingChecklistItems.length} missing of {mediaChecklist.length} cataloged)
                 </h2>
                 <p style={{ margin: '0 0 12px', fontSize: '0.92rem', color: 'var(--text-secondary)' }}>
                   Cataloged media attachments for deceased ancestors whose image files have not yet been digitized.
@@ -701,12 +776,18 @@ export const EvidencePage: React.FC = () => {
 
         {lightboxItem &&
           (() => {
-            const navList = filteredMedia.filter((m) => m.kind !== 'document_scan');
-            const curIdx = navList.findIndex((m) => m.id === lightboxItem.id);
+            const curIdx = navMedia.findIndex((m) => m.id === lightboxItem.id);
             return (
-              <dialog open className="lightbox-backdrop" aria-label={lightboxItem.caption}>
+              <dialog
+                ref={lightboxDialogRef}
+                open
+                aria-modal="true"
+                className="lightbox-backdrop"
+                aria-label={lightboxItem.caption}
+              >
                 <button
                   type="button"
+                  tabIndex={-1}
                   className="lightbox-backdrop-close"
                   aria-label="Close lightbox"
                   onClick={() => {
@@ -724,13 +805,13 @@ export const EvidencePage: React.FC = () => {
                       </strong>
                     </div>
                     <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-                      {navList.length > 1 && curIdx !== -1 && (
+                      {navMedia.length > 1 && curIdx !== -1 && (
                         <>
                           <button
                             type="button"
                             className="pill-btn"
                             onClick={() => {
-                              setLightboxItem(navList[(curIdx - 1 + navList.length) % navList.length]);
+                              setLightboxItem(navMedia[(curIdx - 1 + navMedia.length) % navMedia.length]);
                             }}
                           >
                             ← Prev
@@ -739,7 +820,7 @@ export const EvidencePage: React.FC = () => {
                             type="button"
                             className="pill-btn"
                             onClick={() => {
-                              setLightboxItem(navList[(curIdx + 1) % navList.length]);
+                              setLightboxItem(navMedia[(curIdx + 1) % navMedia.length]);
                             }}
                           >
                             Next →
@@ -759,6 +840,7 @@ export const EvidencePage: React.FC = () => {
                         </Link>
                       )}
                       <button
+                        ref={lightboxCloseRef}
                         type="button"
                         className="pill-btn"
                         onClick={() => {

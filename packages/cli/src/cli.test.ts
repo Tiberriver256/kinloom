@@ -381,4 +381,134 @@ describe('unified kinloom CLI dispatch', () => {
       .map((line) => (JSON.parse(line) as { subcmd: string }).subcmd);
     expect(subcmds).toEqual(['dates weekday', 'dates diff', 'dates age', 'dates age']);
   });
+
+  it('documents seed --chunk-size, supports audit/sync aliases, honors programmatic cwd, and keeps pronounce docs aligned', async () => {
+    const tmp = await makeTempDir('kinloom-cli-wave52b-');
+    process.env.KINLOOM_TELEMETRY_FILE = path.join(tmp, 'calls.jsonl');
+
+    // 1. seed --help documents --chunk-size
+    const seedHelp = createCaptureIo();
+    expect(await runCli(['seed', '--help'], { io: seedHelp.io })).toBe(EXIT_OK);
+    expect(seedHelp.stdout.join('\n')).toContain('--chunk-size');
+
+    // 2. pronounce --help documents --strict, full-name coverage, 0 living leaks, and cache env var
+    const pronounceHelp = createCaptureIo();
+    expect(await runCli(['pronounce', '--help'], { io: pronounceHelp.io })).toBe(EXIT_OK);
+    const pronounceText = pronounceHelp.stdout.join('\n');
+    expect(pronounceText).toContain('--strict');
+    expect(pronounceText).toContain('full-name coverage');
+    expect(pronounceText).toContain('0 living people');
+    expect(pronounceText).toContain('KINLOOM_PRONOUNCE_CACHE_DIR');
+
+    // 3. Minimal synthetic archive under tmp to verify programmatic cwd + audit/sync flag aliases
+    const dataDir = path.join(tmp, 'data');
+    const pkgDir = path.join(tmp, 'research', 'people', 'per_synth_1');
+    await mkdir(dataDir, { recursive: true });
+    await mkdir(pkgDir, { recursive: true });
+
+    await writeFile(
+      path.join(tmp, 'kinloom.config.yaml'),
+      serializeKinloomConfigYaml({
+        schemaVersion: 1,
+        site: {
+          title: 'Synthetic Archive',
+          familyName: 'Mercer',
+          gedcomSourceName: 'SYNTHETIC_TREE',
+          footerCredit: 'Built with Kinloom',
+        },
+        theme: { accent: '#7A4612' },
+        defaultBranchId: 'mercer',
+        branches: [
+          {
+            id: 'mercer',
+            label: 'Mercer Line',
+            surnames: ['Mercer'],
+            lineageGroups: ['ancestor'],
+            supportsDirectMode: true,
+          },
+        ],
+        lineageSections: [],
+        featuredKinshipPairs: [],
+        migrationEras: [],
+        mapDefaults: { centerLat: 40.0, centerLng: -83.0, zoom: 5, minSpanDeg: 1.0 },
+        privacy: {
+          referenceYear: 2026,
+          livingCutoffYears: 101,
+          privateModeShowsBirthYear: true,
+          stripLivingPortraits: true,
+          stripLivingResidenceSpans: true,
+          markGedcomLivingConfidential: true,
+        },
+      }),
+      'utf8'
+    );
+    await writeFile(
+      path.join(dataDir, 'people.yaml'),
+      serializePeopleYaml([
+        {
+          id: 'per_synth_1',
+          slug: 'thomas-mercer-1810',
+          full_name: 'Thomas Mercer',
+          given_name: 'Thomas',
+          surname: 'Mercer',
+          alt_names: [],
+          sex: 'M',
+          birth_edtf: '1810',
+          death_edtf: '1875',
+          is_living: false,
+          lineage_group: 'ancestor',
+          branch: 'mercer',
+          portrait_url: null,
+        },
+      ]),
+      'utf8'
+    );
+    await writeFile(path.join(dataDir, 'places.yaml'), serializePlacesYaml([]), 'utf8');
+    await writeFile(path.join(dataDir, 'events.yaml'), serializeEventsYaml([]), 'utf8');
+    await writeFile(path.join(dataDir, 'kinship.yaml'), serializeKinshipYaml([]), 'utf8');
+    await writeFile(path.join(dataDir, 'sources.yaml'), serializeSourcesYaml([]), 'utf8');
+    await writeFile(path.join(dataDir, 'media.yaml'), serializeMediaYaml([]), 'utf8');
+    await writeFile(path.join(dataDir, 'narratives.yaml'), serializeNarrativesYaml([]), 'utf8');
+    await writeFile(
+      path.join(pkgDir, 'patch.json'),
+      JSON.stringify({ person_id: 'per_synth_1', sources: [], events: [] }, null, 2),
+      'utf8'
+    );
+
+    // Programmatic cwd honored by status, verify, context, and audit (without --repo)
+    const statusCap = createCaptureIo();
+    expect(await runCli(['status', '--json'], { io: statusCap.io, cwd: tmp }), statusCap.stderr.join('\n')).toBe(EXIT_OK);
+    expect(JSON.parse(statusCap.stdout.join('\n')).repo).toBe(path.resolve(tmp));
+
+    const verifyCap = createCaptureIo();
+    expect(await runCli(['verify', '--json'], { io: verifyCap.io, cwd: tmp }), verifyCap.stderr.join('\n')).toBe(EXIT_OK);
+
+    const contextCap = createCaptureIo();
+    expect(
+      await runCli(['context', 'per_synth_1', '--json'], { io: contextCap.io, cwd: tmp }),
+      contextCap.stderr.join('\n')
+    ).toBe(EXIT_OK);
+    expect(contextCap.stdout.join('\n')).toContain('Thomas Mercer');
+
+    // audit accepts --package, --person-id, and --patch without unknown-option errors
+    for (const auditArgs of [
+      ['audit', '--package', pkgDir, '--json'],
+      ['audit', '--person-id', 'per_synth_1', '--json'],
+      ['audit', '--patch', path.join(pkgDir, 'patch.json'), '--json'],
+    ]) {
+      const cap = createCaptureIo();
+      const code = await runCli(auditArgs, { io: cap.io, cwd: tmp });
+      expect(code, `${auditArgs.join(' ')}: ${cap.stderr.join('\n')}`).toBe(EXIT_OK);
+    }
+
+    // sync accepts --site alias and honors cwd (reaches wrangler config check instead of unknown option error)
+    const syncCap = createCaptureIo();
+    const syncCode = await runCli(['sync', '--site', 'https://example.org', '--dry-run'], {
+      io: syncCap.io,
+      cwd: tmp,
+    });
+    expect(syncCode).toBe(EXIT_USAGE);
+    expect(syncCap.stderr.join('\n')).toContain('wrangler');
+    expect(syncCap.stderr.join('\n')).not.toContain('Unknown option');
+  });
 });

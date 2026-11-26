@@ -1,6 +1,7 @@
 import type { PlaceDirectoryEntry } from '@kinloom/core';
 import { DEFAULT_MIGRATION_ERAS, buildPlacesDirectory } from '@kinloom/core';
 import React, { useMemo, useState } from 'react';
+import { EmptyStateNotice } from '../components/Atoms.js';
 import { ExplorerTopBar } from '../components/ExplorerTopBar.js';
 import { KinloomFooter } from '../components/KinloomFooter.js';
 import { KINLOOM_VOCABULARY, formatReaderLoadError } from '../lib/vocabulary.js';
@@ -146,14 +147,14 @@ export const PlacesIndexPage: React.FC = () => {
   return (
     <div>
       <ExplorerTopBar />
-      <main className="places-index-page">
+      <main id="main-content" className="places-index-page">
         <header className="folio-header axis-page-header">
           <div className="folio-header-row">
             <div>
               <h1 className="folio-title">Places in the {siteConfig.site.familyName} Archive</h1>
               <p className="folio-lead">
                 Towns, counties, and homesteads along the line: who passed through, when they overlapped,
-                and what local weather or dispatches recorded.
+                and what local weather or newspaper notices recorded.
               </p>
               <div className="axis-page-header-actions">
                 <Link to="/map" className="ink-link-btn">
@@ -216,7 +217,27 @@ export const PlacesIndexPage: React.FC = () => {
             </div>
 
             {filtered.length === 0 ? (
-              <p className="empty-ring-note">{KINLOOM_VOCABULARY.place.emptyPlacesFilter}</p>
+              <EmptyStateNotice
+                title={
+                  directory.length === 0
+                    ? 'No documented places have been added to this archive yet.'
+                    : KINLOOM_VOCABULARY.place.emptyPlacesFilter
+                }
+                action={
+                  stage !== 'all' || query.trim() ? (
+                    <button
+                      type="button"
+                      className="pill-btn"
+                      onClick={() => {
+                        setStage('all');
+                        setQuery('');
+                      }}
+                    >
+                      Clear filters
+                    </button>
+                  ) : undefined
+                }
+              />
             ) : (
               <section className="places-ledger" aria-label="Archived places and residents">
                 {filtered.map((entry) => (

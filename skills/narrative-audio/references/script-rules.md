@@ -90,6 +90,8 @@ mention it when you report back.
 
 ## Pronunciation file (`<slug>.names.json`)
 
+Before authoring `<slug>.names.json`, check the archive's **Pronunciation Lexicon** (`kinloom.config.yaml` `pronunciations`) and run `kinloom pronounce lookup <term> --json` so narrated pronunciations stay consistent with the archive's verified **Pronunciation Guides**.
+
 This is a JSON object. Each key is a proper name, or an unusual legal term, that a TTS
 voice might mispronounce: Dutch, German, Huguenot or colonial surnames, unusual place
 names, archaic legal words. Write each key exactly as it appears in the script. Each value
@@ -107,4 +109,5 @@ is the General American IPA pronunciation with stress marks, inside slashes:
 Skip ordinary English names (John, Mary, Virginia, New Jersey). Use how descendants and
 local people actually say a name, not the textbook form; if a pronunciation is uncertain,
 say so when you report back. IPA in slashes works well: the TTS voice pronounces it
-instead of reading the symbols out.
+instead of reading the symbols out. After rendering MP3 audio, upload it to R2 with
+`kinloom sync --upload-media audio/<slug>.mp3 --verify-live`.

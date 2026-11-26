@@ -9,12 +9,13 @@ import {
   pickDefaultSnapshotYear,
 } from '@kinloom/core';
 import { Link, useSearchParams } from 'react-router-dom';
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { initialsOf, resolveAssetUrl } from '../components/Atoms.js';
 import { ExplorerTopBar } from '../components/ExplorerTopBar.js';
 import { KINLOOM_VOCABULARY, formatReaderLoadError } from '../lib/vocabulary.js';
 import { KinloomFooter } from '../components/KinloomFooter.js';
 import { useArchiveData } from '../context/ArchiveDataContext.js';
+import { useDialogFocusTrap } from '../lib/useDialogFocusTrap.js';
 
 const TimePersonCard: React.FC<{
   entry: TimePersonEntry;
@@ -100,6 +101,14 @@ export const TimePage: React.FC = () => {
   const [year, setYear] = useState<number | null>(null);
   const [yearSheetOpen, setYearSheetOpen] = useState(false);
   const [worldExpanded, setWorldExpanded] = useState(false);
+  const sheetCloseBtnRef = useRef<HTMLButtonElement | null>(null);
+  const yearSheetRef = useDialogFocusTrap<HTMLDivElement>({
+    open: yearSheetOpen,
+    onClose: () => {
+      setYearSheetOpen(false);
+    },
+    initialFocusRef: sheetCloseBtnRef,
+  });
 
   if (bundle && year === null) {
     setYear(
@@ -125,18 +134,6 @@ export const TimePage: React.FC = () => {
     url.searchParams.set('year', String(year));
     window.history.replaceState(window.history.state, '', url.toString());
   }, [year]);
-
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent): void => {
-      if (yearSheetOpen && event.key === 'Escape') {
-        setYearSheetOpen(false);
-      }
-    };
-    window.addEventListener('keydown', onKeyDown);
-    return (): void => {
-      window.removeEventListener('keydown', onKeyDown);
-    };
-  }, [yearSheetOpen]);
 
   const snapshot = useMemo(() => {
     if (!bundle) {
@@ -187,12 +184,12 @@ export const TimePage: React.FC = () => {
   return (
     <div>
       <ExplorerTopBar />
-      <main className="time-page">
+      <main id="main-content" className="time-page">
         <header className="folio-header axis-page-header time-folio-header">
           <div className="time-header-top">
             <div className="time-header-copy">
               <h1 className="folio-title">
-                Where the {siteConfig.site.familyName} Was in{' '}
+                {siteConfig.site.familyName} in{' '}
                 <span className="handwritten-year-hero" aria-live="polite">
                   {activeYear}
                 </span>
@@ -211,6 +208,7 @@ export const TimePage: React.FC = () => {
           {yearSheetOpen && (
             <button
               type="button"
+              tabIndex={-1}
               className="time-dock-scrim"
               aria-label="Close milestone year picker"
               onClick={() => {
@@ -219,15 +217,20 @@ export const TimePage: React.FC = () => {
             />
           )}
 
-          <div className={`time-scrubber-wrap ${yearSheetOpen ? 'sheet-open' : ''}`}>
+          <div className={`time-scrubber-wrap print-hide ${yearSheetOpen ? 'sheet-open' : ''}`}>
             {suggestedYears.length > 0 && (
               <div
+                ref={yearSheetRef}
                 id="time-anchor-sheet"
+                role={yearSheetOpen ? 'dialog' : undefined}
+                aria-modal={yearSheetOpen ? 'true' : undefined}
+                aria-label={yearSheetOpen ? 'Milestone years' : undefined}
                 className={`time-anchor-sheet ${yearSheetOpen ? 'open' : ''}`}
               >
                 <div className="time-sheet-header">
                   <span className="time-sheet-title">Milestone years</span>
                   <button
+                    ref={sheetCloseBtnRef}
                     type="button"
                     className="time-sheet-close"
                     onClick={() => {
@@ -237,6 +240,7 @@ export const TimePage: React.FC = () => {
                     Close
                   </button>
                 </div>
+                <div className="time-anchor-caption">Year · people alive</div>
                 {/* oxlint-disable-next-line jsx-a11y/prefer-tag-over-role -- role="group" is the correct grouping pattern for a button toolbar */}
                 <div className="time-anchor-strip" role="group" aria-label="Jump to notable family years">
                   {suggestedYears.map((m) => (
@@ -248,10 +252,11 @@ export const TimePage: React.FC = () => {
                         setYear(m.year);
                         setYearSheetOpen(false);
                       }}
+                      aria-label={`${m.label}: ${m.locatedCount} located of ${m.aliveCount} alive in ${m.year}`}
                       title={`${m.year}: ${m.locatedCount} located of ${m.aliveCount} alive in ${m.year}`}
                     >
                       <span className="time-anchor-year">{m.label}</span>
-                      <span className="time-anchor-count">{m.locatedCount}</span>
+                      <span className="time-anchor-count" aria-hidden="true">{m.locatedCount}</span>
                     </button>
                   ))}
                 </div>
@@ -402,7 +407,7 @@ export const TimePage: React.FC = () => {
                   {fallbackAnchorA !== undefined && (
                     <>
                       {' '}
-                      Try one of the marked anchor years above (such as{' '}
+                      Try a milestone year (such as{' '}
                       <button
                         type="button"
                         className="ink-inline-btn"

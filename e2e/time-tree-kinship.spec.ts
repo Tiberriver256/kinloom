@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test';
 
 test('time route updates town lanes when selecting anchor years and scrubbing slider', async ({ page }) => {
   await page.goto('/time');
-  await expect(page.getByRole('heading', { name: /Where the Lincoln & Todd Family Was in/ })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /Lincoln & Todd Family in \d{4}/ })).toBeVisible();
 
   // Click the 1860 anchor year button
   await page.locator('.time-anchor-btn', { hasText: '1860' }).click();
@@ -20,7 +20,7 @@ test('time route updates town lanes when selecting anchor years and scrubbing sl
 
 test('tree route filters branches, toggles direct line, and opens focus drawer', async ({ page }) => {
   await page.goto('/tree');
-  const canvas = page.getByRole('img', { name: /family tree chart/ });
+  const canvas = page.getByRole('group', { name: /family tree chart/ });
   await expect(canvas).toBeVisible();
 
   // Switch branch filter

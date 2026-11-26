@@ -5,6 +5,7 @@ import { isSearchableQuery, searchNavNext, searchNavPrev, searchNavReset } from 
 import { KINLOOM_VOCABULARY, SEARCH_KIND_LABELS } from '../lib/vocabulary.js';
 import { useArchiveData } from '../context/ArchiveDataContext.js';
 import { useArchiveUi } from '../context/ArchiveUiContext.js';
+import { useDialogFocusTrap } from '../lib/useDialogFocusTrap.js';
 import { useNavigate } from 'react-router-dom';
 
 export const GlobalSearchModal: React.FC = () => {
@@ -22,12 +23,11 @@ export const GlobalSearchModal: React.FC = () => {
     setActiveIdx(searchNavReset());
   }
 
-  useEffect(() => {
-    if (!searchOpen) {
-      return;
-    }
-    window.setTimeout(() => inputRef.current?.focus(), 10);
-  }, [searchOpen]);
+  const dialogRef = useDialogFocusTrap({
+    open: searchOpen,
+    onClose: closeSearch,
+    initialFocusRef: inputRef,
+  });
 
   const quickQueries = useMemo<string[]>(() => {
     const suggestions: string[] = [];
@@ -110,16 +110,17 @@ export const GlobalSearchModal: React.FC = () => {
       return undefined;
     }
     const onKeyDown = (e: KeyboardEvent): void => {
-      if (e.key === 'Escape') {
-        e.preventDefault();
-        closeSearch();
-      } else if (e.key === 'ArrowDown') {
+      if (e.key === 'ArrowDown') {
         e.preventDefault();
         setActiveIdx((i) => searchNavNext(i, results.length));
       } else if (e.key === 'ArrowUp') {
         e.preventDefault();
         setActiveIdx((i) => searchNavPrev(i));
-      } else if (e.key === 'Enter' && results[activeIdx]) {
+      } else if (
+        e.key === 'Enter' &&
+        document.activeElement === inputRef.current &&
+        results[activeIdx]
+      ) {
         e.preventDefault();
         activateResult(results[activeIdx]);
       }
@@ -128,7 +129,7 @@ export const GlobalSearchModal: React.FC = () => {
     return (): void => {
       window.removeEventListener('keydown', onKeyDown);
     };
-  }, [searchOpen, results, activeIdx, closeSearch, activateResult]);
+  }, [searchOpen, results, activeIdx, activateResult]);
 
   if (!searchOpen) {
     return null;
@@ -143,12 +144,15 @@ export const GlobalSearchModal: React.FC = () => {
 
   return (
     <dialog
+      ref={dialogRef}
       open
+      aria-modal="true"
       className="lightbox-backdrop global-search-backdrop"
       aria-label={KINLOOM_VOCABULARY.search.dialogAria}
     >
       <button
         type="button"
+        tabIndex={-1}
         className="lightbox-backdrop-close"
         aria-label="Close search"
         onClick={closeSearch}

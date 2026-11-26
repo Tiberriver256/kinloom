@@ -169,7 +169,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ adminClient }) => {
     return (
       <div>
         <ExplorerTopBar />
-        <main className="place-page">
+        <main id="main-content" className="place-page">
           <section className="place-map-box">
             <h1>Site Administration</h1>
             <p className="empty-ring-note">
@@ -186,7 +186,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ adminClient }) => {
   return (
     <div>
       <ExplorerTopBar />
-      <main className="place-page">
+      <main id="main-content" className="place-page">
         <section className="wire-banner" style={{ marginBottom: 18 }}>
           <div>
             <h1>Site Administration</h1>

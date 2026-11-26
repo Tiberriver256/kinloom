@@ -11,6 +11,7 @@ import {
   formatEarlyLossAgeLabel,
   toRomanNumeral,
 } from '../../lib/archivalTreeModel.js';
+import { scrollBehaviorForMotion } from '../../lib/keyboardNav.js';
 import { KINLOOM_VOCABULARY } from '../../lib/vocabulary.js';
 import { initialsOf, resolveAssetUrl } from '../Atoms.js';
 
@@ -21,6 +22,8 @@ export interface TreePedigreeRollProps {
   readonly personThumbMap: ReadonlyMap<string, string>;
   readonly baseUrl: string;
   readonly familyLabel: string;
+  readonly branchLabelsById?: ReadonlyMap<string, string>;
+  readonly showBranchLabels?: boolean;
   readonly onSelectPerson: (person: Person) => void;
   readonly onToggleUnionSiblings: (unionId: string) => void;
 }
@@ -248,6 +251,8 @@ export const TreePedigreeRoll: React.FC<TreePedigreeRollProps> = ({
   personThumbMap,
   baseUrl,
   familyLabel,
+  branchLabelsById,
+  showBranchLabels = false,
   onSelectPerson,
   onToggleUnionSiblings,
 }) => {
@@ -258,7 +263,7 @@ export const TreePedigreeRoll: React.FC<TreePedigreeRollProps> = ({
     return raw ? resolveAssetUrl(raw, baseUrl) : null;
   };
 
-  const renderUnit = (unit: TreeFamilyUnit): React.ReactNode => {
+  const renderUnit = (unit: TreeFamilyUnit, isFirstGeneration: boolean): React.ReactNode => {
     const members = unit.orderedMemberIds
       .map((id) => model.peopleById.get(id))
       .filter((p): p is Person => p !== undefined);
@@ -271,12 +276,18 @@ export const TreePedigreeRoll: React.FC<TreePedigreeRollProps> = ({
       !hasSelection ||
       unit.orderedMemberIds.some((id) => spotlight.highlightedPersonIds.has(id)) ||
       unitUnions.some((u) => spotlight.highlightedUnionIds.has(u.id));
+    const anchorPerson = model.peopleById.get(unit.anchorId) ?? members[0];
+    const branchLabel =
+      showBranchLabels && isFirstGeneration && anchorPerson?.branch
+        ? (branchLabelsById?.get(anchorPerson.branch) ?? anchorPerson.branch)
+        : null;
 
     return (
       <div
         key={unit.id}
         className={`tree-roll-unit${unit.isDirect ? ' is-direct' : ' is-collateral'}${isRemarried ? ' is-remarried' : ''}${hasSelection && !isUnitLit ? ' is-dimmed' : ''}`}
       >
+        {branchLabel && <div className="tree-roll-branch-caption">{branchLabel}</div>}
         <div className={`tree-roll-couple-row${members.length === 1 ? ' is-single' : ''}`}>
           {members.map((member, idx) => {
             const prevMember = idx > 0 ? members[idx - 1] : null;
@@ -347,7 +358,7 @@ export const TreePedigreeRoll: React.FC<TreePedigreeRollProps> = ({
               className="tree-gen-jump-chip"
               onClick={() => {
                 const target = document.getElementById(`tree-roll-gen-${g.gen}`);
-                target?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                target?.scrollIntoView({ behavior: scrollBehaviorForMotion(), block: 'start' });
               }}
             >
               {g.label}
@@ -361,7 +372,6 @@ export const TreePedigreeRoll: React.FC<TreePedigreeRollProps> = ({
         role="region"
         aria-label={`${familyLabel} ${KINLOOM_VOCABULARY.tree.listRegionSuffix}`}
       >
-        <div className="tree-roll-spine-rail" aria-hidden="true" />
         <ol className="tree-roll-generations">
           {model.generations.map((genGroup, idx) => (
             <li
@@ -374,7 +384,7 @@ export const TreePedigreeRoll: React.FC<TreePedigreeRollProps> = ({
                 <span className="tree-roll-gen-years">{genGroup.yearRange}</span>
               </header>
               <div className="tree-roll-gen-units">
-                {genGroup.units.map((unit) => renderUnit(unit))}
+                {genGroup.units.map((unit) => renderUnit(unit, idx === 0))}
               </div>
               {idx < model.generations.length - 1 && (
                 <div className="tree-roll-gen-connector" aria-hidden="true" />

@@ -2,9 +2,10 @@ import { Link, useSearchParams } from 'react-router-dom';
 import React, { useMemo, useState } from 'react';
 import { findKinshipPath } from '@kinloom/core';
 import { ExplorerTopBar } from '../components/ExplorerTopBar.js';
+import { formatKinshipPresentation } from '../lib/kinshipPresentation.js';
 import { KINLOOM_VOCABULARY } from '../lib/vocabulary.js';
 import { KinloomFooter } from '../components/KinloomFooter.js';
-import { initialsOf } from '../components/Atoms.js';
+import { EmptyStateNotice, initialsOf } from '../components/Atoms.js';
 import { useArchiveData } from '../context/ArchiveDataContext.js';
 
 function formatKinshipPersonOption(person: {
@@ -92,21 +93,32 @@ export const KinshipPage: React.FC = () => {
     return (
       <div>
         <ExplorerTopBar />
-        <main className="index-page">Loading kinship archive…</main>
+        <main id="main-content" className="index-page">Loading kinship archive…</main>
       </div>
     );
   }
 
+  const presentation =
+    result && personA && personB
+      ? formatKinshipPresentation({
+          fromId: effectiveFromId,
+          toId: effectiveToId,
+          personAName: personA.full_name,
+          personBName: personB.full_name,
+          result,
+        })
+      : null;
+
   return (
     <div>
       <ExplorerTopBar />
-      <main className="place-page">
+      <main id="main-content" className="place-page">
         <section className="wire-banner" style={{ marginBottom: 18 }}>
           <div>
             <h1>{KINLOOM_VOCABULARY.kinship.heading}</h1>
             <p>{KINLOOM_VOCABULARY.kinship.lead}</p>
           </div>
-          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+          <div className="print-hide" style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
             <Link to="/tree" className="pill-btn" style={{ textDecoration: 'none' }}>
               {KINLOOM_VOCABULARY.kinship.familyTreeCta}
             </Link>
@@ -116,176 +128,190 @@ export const KinshipPage: React.FC = () => {
           </div>
         </section>
 
-        <section className="kinship-selector-card">
-          <div className="kinship-selector-grid">
-            <label className="kinship-field">
-              <span>Person A</span>
-              <select
-                className="pill-btn"
-                value={effectiveFromId}
-                onChange={(e) => {
-                  setFromId(e.target.value);
-                }}
-                aria-label="Select first relative"
-              >
-                {selectablePeople.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {formatKinshipPersonOption(p)}
-                  </option>
+        {selectablePeople.length < 2 ? (
+          <EmptyStateNotice
+            title="At least two people are needed to compare kinship."
+            body="Add more family records to trace relationships, lifespan overlap, and shared places."
+            action={
+              <Link to="/" className="pill-btn" style={{ textDecoration: 'none' }}>
+                Return to People
+              </Link>
+            }
+          />
+        ) : (
+          <>
+            <section className="kinship-selector-card print-hide">
+              <div className="kinship-selector-grid">
+                <label className="kinship-field">
+                  <span>Person A</span>
+                  <select
+                    className="pill-btn"
+                    value={effectiveFromId}
+                    onChange={(e) => {
+                      setFromId(e.target.value);
+                    }}
+                    aria-label="Select first relative"
+                  >
+                    {selectablePeople.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {formatKinshipPersonOption(p)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <button
+                  type="button"
+                  className="pill-btn"
+                  onClick={() => {
+                    setFromId(effectiveToId);
+                    setToId(effectiveFromId);
+                  }}
+                  aria-label="Swap relatives"
+                  title="Swap Person A and Person B"
+                >
+                  ⇄ Swap
+                </button>
+
+                <label className="kinship-field">
+                  <span>Person B</span>
+                  <select
+                    className="pill-btn"
+                    value={effectiveToId}
+                    onChange={(e) => {
+                      setToId(e.target.value);
+                    }}
+                    aria-label="Select second relative"
+                  >
+                    {selectablePeople.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {formatKinshipPersonOption(p)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+            </section>
+
+            {resolvedPresets.length > 0 && (
+              <div className="filter-bar kinship-examples-bar print-hide" style={{ marginTop: 12, marginBottom: 14 }}>
+                <span className="kinship-examples-label">
+                  Examples:
+                </span>
+                {resolvedPresets.map((preset) => (
+                  <button
+                    key={preset.label}
+                    type="button"
+                    className="pill-btn kinship-example-chip"
+                    title={preset.note}
+                    onClick={() => {
+                      setFromId(preset.fromId);
+                      setToId(preset.toId);
+                    }}
+                  >
+                    {preset.label}
+                  </button>
                 ))}
-              </select>
-            </label>
-
-            <button
-              type="button"
-              className="pill-btn"
-              onClick={() => {
-                setFromId(effectiveToId);
-                setToId(effectiveFromId);
-              }}
-              aria-label="Swap relatives"
-              title="Swap Person A and Person B"
-            >
-              ⇄ Swap
-            </button>
-
-            <label className="kinship-field">
-              <span>Person B</span>
-              <select
-                className="pill-btn"
-                value={effectiveToId}
-                onChange={(e) => {
-                  setToId(e.target.value);
-                }}
-                aria-label="Select second relative"
-              >
-                {selectablePeople.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {formatKinshipPersonOption(p)}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
-        </section>
-
-        {resolvedPresets.length > 0 && (
-          <div className="filter-bar kinship-examples-bar" style={{ marginTop: 12, marginBottom: 14 }}>
-            <span className="kinship-examples-label">
-              Examples:
-            </span>
-            {resolvedPresets.map((preset) => (
-              <button
-                key={preset.label}
-                type="button"
-                className="pill-btn"
-                title={preset.note}
-                onClick={() => {
-                  setFromId(preset.fromId);
-                  setToId(preset.toId);
-                }}
-              >
-                {preset.label}
-              </button>
-            ))}
-          </div>
-        )}
-
-        {result && personA && personB && (
-          <section className="place-map-box" style={{ marginTop: 18 }}>
-            <h2 style={{ fontFamily: 'var(--font-serif)', fontSize: '1.5rem', margin: '0 0 4px', color: 'var(--surface-header)' }}>
-              {personA.full_name} is the <span style={{ color: 'var(--radar-copresence)' }}>{result.relationshipLabel}</span> {personB.full_name}
-            </h2>
-            <p style={{ margin: '0 0 12px', fontFamily: 'var(--font-mono)', fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
-              Documented relationship computed across compiled kinship links
-            </p>
-
-            <div className="kinship-stats-row">
-              <div className="kinship-stat-box">
-                <div className="kinship-stat-label">GENERATIONAL / KINSHIP HOPS</div>
-                <div className="kinship-stat-value">
-                  {result.connected ? `${result.steps.length} step${result.steps.length === 1 ? '' : 's'}` : 'Unlinked'}
-                </div>
               </div>
-              <div className="kinship-stat-box">
-                <div className="kinship-stat-label">OVERLAPPING YEARS ALIVE</div>
-                <div className="kinship-stat-value">
-                  {result.overlapYears
-                    ? `${result.overlapYears.start}–${result.overlapYears.end} (${result.overlapYears.durationYears} yrs)`
-                    : 'No lifespan overlap'}
-                </div>
-              </div>
-              <div className="kinship-stat-box">
-                <div className="kinship-stat-label">SHARED ARCHIVED PLACES</div>
-                <div className="kinship-stat-value">
-                  {result.sharedPlaces.length > 0
-                    ? `${result.sharedPlaces.length} shared place${result.sharedPlaces.length === 1 ? '' : 's'}`
-                    : 'Distinct migration eras'}
-                </div>
-              </div>
-            </div>
+            )}
 
-            {result.connected && result.personIds.length > 0 && (
-              <div style={{ marginTop: 18 }}>
-                <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: 10 }}>
-                  {KINLOOM_VOCABULARY.kinship.shortestPathHint}
+            {result && personA && personB && presentation && (
+              <section className="place-map-box" style={{ marginTop: 18 }}>
+                <h2 className="kinship-result-heading">
+                  {presentation.headingPrefix}
+                  <span style={{ color: 'var(--radar-copresence)' }}>{presentation.highlight}</span>
+                  {presentation.headingSuffix}
+                </h2>
+                <p style={{ margin: '0 0 12px', fontFamily: 'var(--font-mono)', fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
+                  {presentation.subtitle}
+                </p>
+
+                <div className="kinship-stats-row">
+                  <div className="kinship-stat-box">
+                    <div className="kinship-stat-label">GENERATIONAL / KINSHIP HOPS</div>
+                    <div className="kinship-stat-value">{presentation.hopsValue}</div>
+                  </div>
+                  <div className="kinship-stat-box">
+                    <div className="kinship-stat-label">OVERLAPPING YEARS ALIVE</div>
+                    <div className="kinship-stat-value">
+                      {result.overlapYears
+                        ? `${result.overlapYears.start}–${result.overlapYears.end} (${result.overlapYears.durationYears} yrs)`
+                        : 'No lifespan overlap'}
+                    </div>
+                  </div>
+                  <div className="kinship-stat-box">
+                    <div className="kinship-stat-label">SHARED PLACES</div>
+                    <div className="kinship-stat-value">
+                      {result.sharedPlaces.length > 0
+                        ? `${result.sharedPlaces.length} shared place${result.sharedPlaces.length === 1 ? '' : 's'}`
+                        : presentation.sharedPlacesEmptyText}
+                    </div>
+                  </div>
                 </div>
-                <div className="kinship-chain">
-                  {result.personIds.map((pid, idx) => {
-                    const p = peopleById.get(pid);
-                    const step = idx > 0 ? result.steps[idx - 1] : null;
-                    if (!p) {
-                      return null;
-                    }
-                    let edgeLabel = '';
-                    if (step?.relation === 'parent') {
-                      edgeLabel = 'parent of →';
-                    } else if (step?.relation === 'child') {
-                      edgeLabel = 'child of →';
-                    } else if (step?.relation === 'spouse') {
-                      edgeLabel = 'married to ↔';
-                    }
-                    return (
-                      <React.Fragment key={pid}>
-                        {step && <span className="kinship-edge-badge">{edgeLabel}</span>}
-                        <Link to={`/person/${p.slug}`} className="kinship-node-pill">
-                          <span className="avatar-circle" style={{ width: 28, height: 28, fontSize: '0.75rem' }}>
-                            {initialsOf(p.full_name)}
-                          </span>
-                          <span>
-                            <strong>{p.full_name}</strong>
-                            <span style={{ display: 'block', fontFamily: 'var(--font-mono)', fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
-                              {p.birth_year || '?'}–{p.death_year || '?'}
-                            </span>
-                          </span>
+
+                {result.connected && result.steps.length > 0 && result.personIds.length > 0 && (
+                  <div style={{ marginTop: 18 }}>
+                    <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: 10 }}>
+                      {KINLOOM_VOCABULARY.kinship.shortestPathHint}
+                    </div>
+                    <div className="kinship-chain">
+                      {result.personIds.map((pid, idx) => {
+                        const p = peopleById.get(pid);
+                        const step = idx > 0 ? result.steps[idx - 1] : null;
+                        if (!p) {
+                          return null;
+                        }
+                        let edgeLabel = '';
+                        if (step?.relation === 'parent') {
+                          edgeLabel = 'parent of →';
+                        } else if (step?.relation === 'child') {
+                          edgeLabel = 'child of →';
+                        } else if (step?.relation === 'spouse') {
+                          edgeLabel = 'married to ↔';
+                        }
+                        return (
+                          <React.Fragment key={pid}>
+                            {step && <span className="kinship-edge-badge">{edgeLabel}</span>}
+                            <Link to={`/person/${p.slug}`} className="kinship-node-pill">
+                              <span className="avatar-circle" style={{ width: 28, height: 28, fontSize: '0.75rem' }}>
+                                {initialsOf(p.full_name)}
+                              </span>
+                              <span>
+                                <strong>{p.full_name}</strong>
+                                <span style={{ display: 'block', fontFamily: 'var(--font-mono)', fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+                                  {p.birth_year || '?'}–{p.death_year || '?'}
+                                </span>
+                              </span>
+                            </Link>
+                          </React.Fragment>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {result.sharedPlaces.length > 0 && (
+                  <div style={{ marginTop: 18, paddingTop: 14, borderTop: '1px solid var(--border-decorative)' }}>
+                    <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: 8 }}>
+                      {KINLOOM_VOCABULARY.kinship.sharedPlacesHeading}
+                    </div>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                      {result.sharedPlaces.map(({ place }) => (
+                        <Link
+                          key={place.id}
+                          to={`/place/${place.slug}`}
+                          className="pill-btn"
+                          style={{ textDecoration: 'none' }}
+                        >
+                          {place.full_name} →
                         </Link>
-                      </React.Fragment>
-                    );
-                  })}
-                </div>
-              </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </section>
             )}
-
-            {result.sharedPlaces.length > 0 && (
-              <div style={{ marginTop: 18, paddingTop: 14, borderTop: '1px solid var(--border-decorative)' }}>
-                <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: 8 }}>
-                  {KINLOOM_VOCABULARY.kinship.sharedPlacesHeading}
-                </div>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                  {result.sharedPlaces.map(({ place }) => (
-                    <Link
-                      key={place.id}
-                      to={`/place/${place.slug}`}
-                      className="pill-btn"
-                      style={{ textDecoration: 'none' }}
-                    >
-                      {place.full_name} →
-                    </Link>
-                  ))}
-                </div>
-              </div>
-            )}
-          </section>
+          </>
         )}
       </main>
       <KinloomFooter />

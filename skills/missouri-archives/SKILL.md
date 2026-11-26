@@ -5,7 +5,7 @@ description: Search Missouri State Archives vital records through the bundled `m
 
 # Missouri Archives
 
-This skill includes a standalone executable Python CLI at `skills/missouri-archives/scripts/mo-archives` using a PEP 723 `#!/usr/bin/env -S uv run --script` shebang with inline dependencies (`click`, `httpx`). No virtualenv setup or API key is required. Run it from the repo root with `uv` on `PATH`.
+This skill includes a standalone executable Python CLI invoked as `kinloom mo-archives` using a PEP 723 `#!/usr/bin/env -S uv run --script` shebang with inline dependencies (`click`, `httpx`). No virtualenv setup or API key is required. Run it from the repo root with `uv` on `PATH`.
 
 ## Bundled CLI (`scripts/mo-archives`)
 
@@ -13,16 +13,16 @@ This skill includes a standalone executable Python CLI at `skills/missouri-archi
 
 ```bash
 # Search death certificates by name and year
-skills/missouri-archives/scripts/mo-archives death --last Clemens --first Samuel --begin-year 1910 --end-year 1920
+kinloom mo-archives death --last Clemens --first Samuel --begin-year 1910 --end-year 1920
 
 # All deaths for a surname in a county and decade, as JSON
-skills/missouri-archives/scripts/mo-archives death --last Clemens --county Marion --begin-year 1910 --end-year 1939 --json
+kinloom mo-archives death --last Clemens --county Marion --begin-year 1910 --end-year 1939 --json
 
 # Search by a parent's name (1953-1975 certificates only, see below)
-skills/missouri-archives/scripts/mo-archives death --last Clemens --role father --begin-year 1953 --end-year 1975
+kinloom mo-archives death --last Clemens --role father --begin-year 1953 --end-year 1975
 
 # Download the certificate PDFs for the hits
-skills/missouri-archives/scripts/mo-archives death --last Clemens --county Marion --begin-year 1910 --end-year 1920 --download ./downloads/mo-certs
+kinloom mo-archives death --last Clemens --county Marion --begin-year 1910 --end-year 1920 --download ./downloads/mo-certs
 ```
 
 Options: `--first`, `--middle`, `--role deceased|spouse|father|mother` (default deceased), `--match contains|starts-with|ends-with` (default contains, applied to every name field given), `--county` (spelled as on the site, default all counties), `--begin-year` / `--end-year` (default 1910-1975), `--begin-month` / `--end-month` (1-12, 0 means all, default 0), `--limit` (default 50, one results page), `--json`, `--download DIR`.
@@ -31,10 +31,10 @@ Options: `--first`, `--middle`, `--role deceased|spouse|father|mother` (default 
 
 ```bash
 # Deaths before 1910 (abstracts, no images)
-skills/missouri-archives/scripts/mo-archives pre1910 --type death --name Clemens
+kinloom mo-archives pre1910 --type death --name Clemens
 
 # Births before 1910, in one county
-skills/missouri-archives/scripts/mo-archives pre1910 --type birth --name Clemens --county Marion --json
+kinloom mo-archives pre1910 --type birth --name Clemens --county Marion --json
 ```
 
 Options: `--type birth|death` (default death), `--name` (required; the site recommends last name only), `--county` (default all counties), `--limit` (default 50), `--json`.
@@ -42,8 +42,8 @@ Options: `--type birth|death` (default death), `--name` (required; the site reco
 ### Fetch a pre-1910 full abstract
 
 ```bash
-skills/missouri-archives/scripts/mo-archives detail <detail-id>
-skills/missouri-archives/scripts/mo-archives detail <detail-id-1> <detail-id-2> --json
+kinloom mo-archives detail <detail-id>
+kinloom mo-archives detail <detail-id-1> <detail-id-2> --json
 ```
 
 Takes one or more detail IDs from `pre1910` output. Returns county, microfilm roll and page, dates, birthplace, cause of death, and the other abstract fields.
@@ -51,7 +51,7 @@ Takes one or more detail IDs from `pre1910` output. Returns county, microfilm ro
 ### Download certificate PDFs by image URL
 
 ```bash
-skills/missouri-archives/scripts/mo-archives download "https://www.sos.mo.gov/images/archives/deathcerts/<year>/<filename>.PDF" --out ./downloads/mo-certs
+kinloom mo-archives download "https://www.sos.mo.gov/images/archives/deathcerts/<year>/<filename>.PDF" --out ./downloads/mo-certs
 ```
 
 Always take the image URL from `death` output. The PDF filename is not derivable from the certificate number, so do not construct it by hand.
@@ -59,7 +59,7 @@ Always take the image URL from `death` output. The PDF filename is not derivable
 ### Missouri Digital Heritage (browser only)
 
 ```bash
-skills/missouri-archives/scripts/mo-archives mdh
+kinloom mo-archives mdh
 ```
 
 Prints the MDH home page, Advanced Search, and Archives URLs. MDH has no verified machine interface; do the search in the browser.
@@ -107,3 +107,22 @@ Prints the MDH home page, Advanced Search, and Archives URLs. MDH has no verifie
 1. For a Missouri death between 1910 and 1975, search the Death Certificates database by surname, county if known, and year range. Open the linked certificate PDF and record parents' names, birthplace, spouse, burial place, and informant; the informant is often a close relative.
 2. For a death or birth before 1910, search the pre-1910 Birth and Death Records database by surname only, then fetch the detail abstract with `mo-archives detail <id>` to confirm county, microfilm roll, and page before ordering microfilm or visiting. Note the pre-1910 index can list the same person twice from overlapping abstracts; check the detail page before counting two entries as two people.
 3. For landowners, follow up in the Land Patent Records and Missouri County Plat Books on MDH in the browser, and cross-check federal patents with the `blm-glo` skill.
+
+## Kinloom Research Package workflow
+
+Never edit `data/*.yaml` directly from a research session. Follow Kinloom's staged **Research Package** workflow and **Living Privacy Rule** (never include living people's portraits, exact birth dates, street addresses, or pronunciations in public archives):
+
+1. Discover research targets with `kinloom status --missing-biography` or `kinloom status --end-of-line`.
+2. Gather privacy-fenced context with `kinloom context <person_id> --include-family`.
+3. Prepare downloaded scans with `kinloom prep-scan` (for example `kinloom prep-scan crop --redact-orig`) and run `kinloom ocr` as needed, then stage scans under `research/people/<person_id>/scans/`.
+4. Write cited findings into `research/people/<person_id>/patch.json`.
+5. Audit, integrate, verify, and sync:
+
+```bash
+kinloom audit --all-staged --pending-only --strict
+kinloom integrate --all-staged --pending-only
+kinloom pronounce audit --strict
+kinloom verify
+kinloom migrate
+kinloom sync --sync-missing-media --verify-live
+```

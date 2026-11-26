@@ -12,7 +12,7 @@ export const NotFoundPage: React.FC = () => {
   return (
     <div>
       <ExplorerTopBar />
-      <main className="not-found-page">
+      <main id="main-content" className="not-found-page">
         <h1 className="not-found-title">Page Not Found</h1>
         <p className="not-found-copy">
           We could not find an archive page at{' '}

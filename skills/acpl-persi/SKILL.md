@@ -5,7 +5,7 @@ description: Search the Allen County Public Library Genealogy Center's free PERS
 
 # ACPL PERSI
 
-This skill includes a standalone executable Python CLI at `skills/acpl-persi/scripts/persi` using a PEP 723 `#!/usr/bin/env -S uv run --script` shebang with inline dependencies (`click`, `httpx`). No virtualenv setup or API key is required.
+This skill includes a standalone executable Python CLI invoked as `kinloom persi` using a PEP 723 `#!/usr/bin/env -S uv run --script` shebang with inline dependencies (`click`, `httpx`). No virtualenv setup or API key is required.
 
 - **What PERSI is:** the Periodical Source Index, produced by the staff of The Genealogy Center of the Allen County Public Library (ACPL), Fort Wayne, Indiana. It is the largest subject index to genealogy and local history periodicals, with more than 3.2 million citations to articles in 11,000+ periodical titles from local, state, national, and international societies.
 - **What it is not:** a full-text archive. A hit is a citation: article title, periodical, year, publisher. PERSI indexes article titles, not article contents, so search for topics and surnames around an ancestor's life, not for a person's full story. Full text comes from the holding library, the publisher, WorldCat, or the Genealogy Center's copy service.
@@ -13,16 +13,15 @@ This skill includes a standalone executable Python CLI at `skills/acpl-persi/scr
 
 ## Bundled CLI (`scripts/persi`)
 
-Path: `skills/acpl-persi/scripts/persi`
-
+Command: `kinloom persi`
 ### Search by surname
 
 ```bash
 # Lincoln articles, first 25 hits (persi search <Surname> is also accepted as an alias)
-skills/acpl-persi/scripts/persi surname Lincoln
+kinloom persi surname Lincoln
 
 # JSON output, 50 hits
-skills/acpl-persi/scripts/persi surname Lincoln --limit 50 --json
+kinloom persi surname Lincoln --limit 50 --json
 ```
 
 Note: PERSI's surname and article-title forms do **not** accept a `--state` filter; use `persi location --state <ST>` for state/county category counts.
@@ -30,18 +29,18 @@ Note: PERSI's surname and article-title forms do **not** accept a `--state` filt
 ### Search by article-title keyword
 
 ```bash
-skills/acpl-persi/scripts/persi title Lincoln --limit 25
-skills/acpl-persi/scripts/persi title "Clara Barton"
+kinloom persi title Lincoln --limit 25
+kinloom persi title "Clara Barton"
 ```
 
 ### Search by location (category counts)
 
 ```bash
 # Illinois statewide: returns article counts per category, not articles
-skills/acpl-persi/scripts/persi location --state IL
+kinloom persi location --state IL
 
 # A single county (county name as PERSI lists it; blank means statewide)
-skills/acpl-persi/scripts/persi location --state IL --county Sangamon
+kinloom persi location --state IL --county Sangamon
 ```
 
 The location search returns counts per category (for example History, Cemeteries, Military Records, Census Records, Court Records, Deeds, Directories, Land Records, Maps). Pick a category on the website to drill into its articles; the CLI does not drill down because the drill-down links are session pages, not a stable pattern.
@@ -49,7 +48,7 @@ The location search returns counts per category (for example History, Cemeteries
 ### Website search page for a mode
 
 ```bash
-skills/acpl-persi/scripts/persi url surname
+kinloom persi url surname
 ```
 
 PERSI result pages are POST forms, so there is no shareable result URL. This prints the search form URL instead.
@@ -85,7 +84,7 @@ PERSI result pages are POST forms, so there is no shareable result URL. This pri
 2. `persi title <Keyword>` catches articles whose title mentions a surname, place, or historical event but whose surname indexing differs.
 3. `persi location --state <ST>` (then `--county <County>`) for place-first hunting; the Cemeteries, Court Records, and History categories are often the strongest leads.
 4. Repeat across each state along a family's migration path.
-5. Record each citation in `data/` with periodical, volume, issue, year, and ACPL call number when shown; mark whether a free-online link existed.
+5. Stage each citation in a **Research Package** (`research/people/<person_id>/patch.json`) with periodical, volume, issue, year, and ACPL call number when shown; mark whether a free-online link existed.
 
 ## Disk cache and environment variables
 
@@ -101,3 +100,22 @@ No key or account is needed.
 ## Verified-live note
 
 All endpoints and form fields above were verified live on 2026-11-24 by direct HTTP and by reading the live forms. Anything marked stale or reported (the old article-order fee) is labeled as such.
+
+## Kinloom Research Package workflow
+
+Never edit `data/*.yaml` directly from a research session. Follow Kinloom's staged **Research Package** workflow and **Living Privacy Rule** (never include living people's portraits, exact birth dates, street addresses, or pronunciations in public archives):
+
+1. Discover research targets with `kinloom status --missing-biography` or `kinloom status --end-of-line`.
+2. Gather privacy-fenced context with `kinloom context <person_id> --include-family`.
+3. Stage any downloaded images or documents under `research/people/<person_id>/scans/` and prepare them with `kinloom prep-scan` or `kinloom ocr` when needed.
+4. Write cited findings into `research/people/<person_id>/patch.json`.
+5. Audit, integrate, verify, and sync:
+
+```bash
+kinloom audit --all-staged --pending-only --strict
+kinloom integrate --all-staged --pending-only
+kinloom pronounce audit --strict
+kinloom verify
+kinloom migrate
+kinloom sync --sync-missing-media --verify-live
+```

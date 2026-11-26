@@ -11,6 +11,7 @@ import { ConflictMergeDialog } from './ConflictMergeDialog.js';
 import { PronunciationBadge, hasPronunciationContent } from '../PronunciationBadge.js';
 import { entityEditorMachine } from '../../machines/entityEditorMachine.js';
 import { useArchiveData } from '../../context/ArchiveDataContext.js';
+import { useDialogFocusTrap } from '../../lib/useDialogFocusTrap.js';
 import { useMachine } from '@xstate/react';
 
 export type EntityEditDrawerSection = 'pronunciation';
@@ -287,6 +288,16 @@ export const EntityEditDrawer: React.FC<EntityEditDrawerProps> = ({
     };
   }, [open, initialSection, syncingRevision]);
 
+  const closeBtnRef = useRef<HTMLButtonElement | null>(null);
+  const closeHandlerRef = useRef<() => void>(onClose);
+  const dialogRef = useDialogFocusTrap({
+    open,
+    onClose: () => {
+      closeHandlerRef.current();
+    },
+    initialFocusRef: closeBtnRef,
+  });
+
   if (!open) {
     return null;
   }
@@ -476,6 +487,7 @@ export const EntityEditDrawer: React.FC<EntityEditDrawerProps> = ({
     }
     onClose();
   };
+  closeHandlerRef.current = handleCloseAttempt;
 
   const handleSoftDelete = async (): Promise<void> => {
     if (!dataSource.deleteEntity || !isEditSummaryValid(deleteSummary)) {
@@ -511,12 +523,15 @@ export const EntityEditDrawer: React.FC<EntityEditDrawerProps> = ({
 
   return (
     <dialog
+      ref={dialogRef}
       open
+      aria-modal="true"
       className="drawer-backdrop wiki-edit-drawer-backdrop"
       aria-label={`Edit ${title ?? `${entityType} ${entityId}`}`}
     >
       <button
         type="button"
+        tabIndex={-1}
         className="lightbox-backdrop-close"
         aria-label="Close edit drawer"
         onClick={handleCloseAttempt}
@@ -531,7 +546,7 @@ export const EntityEditDrawer: React.FC<EntityEditDrawerProps> = ({
               Changes are saved to the family history and can always be undone.
             </div>
           </div>
-          <button type="button" className="pill-btn" onClick={handleCloseAttempt}>
+          <button ref={closeBtnRef} type="button" className="pill-btn" onClick={handleCloseAttempt}>
             Close
           </button>
         </div>

@@ -26,9 +26,11 @@ import { MediaPlayer } from '../components/MediaPlayer.js';
 import { MilestoneStoryCard } from '../components/MilestoneStoryCard.js';
 import { PluginSlot } from '../plugins/PluginContext.js';
 import { PronunciationBadge } from '../components/PronunciationBadge.js';
-import { resolveAssetUrl } from '../components/Atoms.js';
+import { EmptyStateNotice, resolveAssetUrl } from '../components/Atoms.js';
 import { useArchiveData } from '../context/ArchiveDataContext.js';
 import { useArchiveUi } from '../context/ArchiveUiContext.js';
+import { scrollBehaviorForMotion } from '../lib/keyboardNav.js';
+import { useDialogFocusTrap } from '../lib/useDialogFocusTrap.js';
 import { CitationBadge } from '../components/wiki/WikiBadges.js';
 import {
   CreateEntityModal,
@@ -269,14 +271,21 @@ export const PersonPage: React.FC = () => {
     [baseUrl],
   );
 
+  const lightboxCloseBtnRef = useRef<HTMLButtonElement | null>(null);
+  const lightboxDialogRef = useDialogFocusTrap({
+    open: lightbox.kind !== 'closed',
+    onClose: () => {
+      setLightbox({ kind: 'closed' });
+    },
+    initialFocusRef: lightboxCloseBtnRef,
+  });
+
   useEffect(() => {
     if (lightbox.kind === 'closed') {
       return undefined;
     }
     const onKey = (e: KeyboardEvent): void => {
-      if (e.key === 'Escape') {
-        setLightbox({ kind: 'closed' });
-      } else if (e.key === 'ArrowRight' && personMedia.length > 0) {
+      if (e.key === 'ArrowRight' && personMedia.length > 0) {
         setLightbox((prev) =>
           prev.kind === 'gallery'
             ? { kind: 'gallery', index: (prev.index + 1) % personMedia.length }
@@ -512,7 +521,7 @@ export const PersonPage: React.FC = () => {
     return (
       <div>
         <ExplorerTopBar />
-        <main className="index-page">Loading archive…</main>
+        <main id="main-content" className="index-page">Loading archive…</main>
       </div>
     );
   }
@@ -520,7 +529,7 @@ export const PersonPage: React.FC = () => {
     return (
       <div>
         <ExplorerTopBar />
-        <main className="index-page">
+        <main id="main-content" className="index-page">
           <h1>{KINLOOM_VOCABULARY.person.notFoundHeading}</h1>
           <p>{formatReaderLoadError(error, 'We could not find that person in the archive.')}</p>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center' }}>
@@ -551,12 +560,33 @@ export const PersonPage: React.FC = () => {
   const alsoHere = [...radar.coPresenceVisible, ...radar.coPresenceOverflow];
   const branchLabel = person.branch ? (branchLabelById.get(person.branch) ?? person.branch) : null;
 
+  const sectionJumpItems = [
+    personBiographies.length > 0
+      ? { id: 'person-biography', label: KINLOOM_VOCABULARY.person.biographyHeading }
+      : null,
+    familyStories.length > 0
+      ? {
+          id: 'person-family-stories',
+          label: `${KINLOOM_VOCABULARY.person.familyStoriesHeading} (${familyStories.length})`,
+        }
+      : null,
+    personMedia.length > 0
+      ? {
+          id: 'person-media',
+          label: `${KINLOOM_VOCABULARY.person.photosAndDocumentsHeading} (${personMedia.length})`,
+        }
+      : null,
+    personEvents.length > 0
+      ? { id: 'person-timeline', label: `Life Timeline (${personEvents.length})` }
+      : null,
+  ].filter((item): item is { id: string; label: string } => item !== null);
+
   return (
     <div>
       <ExplorerTopBar />
 
       <div className="explorer-split">
-        <main className="narrative-pane">
+        <main id="main-content" className="narrative-pane">
           <header className="person-header">
             <div className="person-header-top">
               <div className={`person-header-identity${person.portrait_url ? ' has-portrait' : ''}`}>
@@ -566,7 +596,24 @@ export const PersonPage: React.FC = () => {
                     className="person-portrait-btn"
                     onClick={() => {
                       const idx = personMedia.findIndex((m) => m.file === person.portrait_url);
-                      setLightbox({ kind: 'gallery', index: idx === -1 ? 0 : idx });
+                      if (idx !== -1) {
+                        setLightbox({ kind: 'gallery', index: idx });
+                      } else if (personMedia.length > 0) {
+                        setLightbox({ kind: 'gallery', index: 0 });
+                      } else if (person.portrait_url) {
+                        setLightbox({
+                          kind: 'single',
+                          media: {
+                            id: `portrait-${person.id}`,
+                            kind: 'portrait',
+                            file: person.portrait_url,
+                            caption: `Archival portrait of ${person.full_name}`,
+                            person_id: person.id,
+                            person_name: person.full_name,
+                            person_slug: person.slug,
+                          },
+                        });
+                      }
                     }}
                     title="Click to zoom archival portrait"
                   >
@@ -641,8 +688,13 @@ export const PersonPage: React.FC = () => {
                     <CitationBadge hasPrimarySource={person.has_primary_source} />
                   )}
                 </div>
+                {person.alt_names.length > 0 && (
+                  <div className="person-alt-names">
+                    {KINLOOM_VOCABULARY.person.alsoRecordedAs} {person.alt_names.join(', ')}
+                  </div>
+                )}
               </div>
-              <div className="person-header-actions">
+              <div className="person-header-actions print-hide">
                 {routePlaceCount > 1 && (
                   <Link to={`/map?person=${person.slug}`} className="ink-link-btn">
                     Their route
@@ -658,11 +710,6 @@ export const PersonPage: React.FC = () => {
                 </button>
               </div>
             </div>
-            {person.alt_names.length > 0 && (
-              <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', marginTop: 6 }}>
-                Also recorded as: {person.alt_names.join(', ')}
-              </div>
-            )}
             {(capabilities.canEdit ||
               immediateFamily.parents.length > 0 ||
               immediateFamily.spouses.length > 0 ||
@@ -787,8 +834,17 @@ export const PersonPage: React.FC = () => {
                             : `${span.start_year}–${span.end_year}`
                           : 'Undated';
                       return (
-                        <Link key={span.id} to={`/place/${pl.slug}`} className="person-family-chip">
-                          {pl.name} <span>({range} · {span.confidence_tier})</span>
+                        <Link
+                          key={span.id}
+                          to={`/place/${pl.slug}`}
+                          className="person-family-chip"
+                          title={`${pl.full_name} (${range} · ${span.confidence_tier})`}
+                        >
+                          {pl.name}{' '}
+                          <span>
+                            ({range}
+                            {span.confidence_tier === 'Possible' ? ' · approx.' : ''})
+                          </span>
                         </Link>
                       );
                     })}
@@ -822,8 +878,19 @@ export const PersonPage: React.FC = () => {
             <TalkPanel entityType="person" entityId={person.id} entityTitle={person.full_name} />
           )}
 
+          {wikiTab !== 'history' && wikiTab !== 'talk' && sectionJumpItems.length >= 2 && (
+            <nav className="person-section-jump-bar print-hide" aria-label="Jump to profile section">
+              {sectionJumpItems.map((item) => (
+                <a key={item.id} href={`#${item.id}`} className="person-section-jump-link">
+                  {item.label}
+                </a>
+              ))}
+            </nav>
+          )}
+
           {wikiTab !== 'history' && wikiTab !== 'talk' && personBiographies.length > 0 && (
             <section
+              id="person-biography"
               className="person-biography-section"
               aria-label={KINLOOM_VOCABULARY.person.biographyHeading}
             >
@@ -919,8 +986,10 @@ export const PersonPage: React.FC = () => {
                           </div>
                         )}
 
-                        {sourcesOpen && orderedSources.length > 0 && (
-                          <div className="person-biography-sources">
+                        {orderedSources.length > 0 && (
+                          <div
+                            className={`person-biography-sources${sourcesOpen ? '' : ' is-collapsed-screen'}`}
+                          >
                             <ul className="person-biography-source-list">
                               {orderedSources.map(({ source: src, footnoteNumber }) => (
                                 <li key={src.id}>
@@ -972,6 +1041,7 @@ export const PersonPage: React.FC = () => {
 
           {wikiTab !== 'history' && wikiTab !== 'talk' && familyStories.length > 0 && (
             <section
+              id="person-family-stories"
               className="person-biography-section person-family-stories-section"
               aria-label="Family Stories"
             >
@@ -1061,8 +1131,10 @@ export const PersonPage: React.FC = () => {
                         )}
                       </div>
 
-                      {sourcesOpen && orderedSources.length > 0 && (
-                        <div className="person-biography-sources">
+                      {orderedSources.length > 0 && (
+                        <div
+                          className={`person-biography-sources${sourcesOpen ? '' : ' is-collapsed-screen'}`}
+                        >
                           <ul className="person-biography-source-list">
                             {orderedSources.map(({ source: src, footnoteNumber }) => (
                               <li key={src.id}>
@@ -1113,6 +1185,7 @@ export const PersonPage: React.FC = () => {
 
           {wikiTab !== 'history' && wikiTab !== 'talk' && personMedia.length > 0 && (
             <section
+              id="person-media"
               className="person-media-section"
               aria-label={KINLOOM_VOCABULARY.person.photosAndDocumentsAria}
             >
@@ -1151,66 +1224,91 @@ export const PersonPage: React.FC = () => {
           )}
 
           {wikiTab !== 'history' && wikiTab !== 'talk' && (personEvents.length === 0 ? (
-            <div className="story-card">
-              <p>No dated events recorded yet for {person.full_name}.</p>
-            </div>
-          ) : (
-            <div className="timeline-layout">
-              <nav className="timeline-spine" aria-label="Jump to decade">
-                <div className="scrubber-list">
-                  {scrubberItems.map((t) => {
-                    const isAct =
-                      activeEvent?.year !== null &&
-                      activeEvent?.year !== undefined &&
-                      Math.floor(activeEvent.year / 10) * 10 === t.decade;
-                    return (
-                      <button
-                        key={t.decade}
-                        type="button"
-                        className={`scrubber-tick ${isAct ? 'active' : ''}`}
-                        aria-current={isAct ? 'true' : undefined}
-                        onClick={() => {
-                          setActiveEventId(t.eventId);
-                          cardRefs.current.get(t.eventId)?.scrollIntoView({
-                            behavior: 'smooth',
-                            block: 'start',
-                          });
-                        }}
-                      >
-                        {t.decade}s
-                      </button>
-                    );
-                  })}
+            <EmptyStateNotice
+              title={`${KINLOOM_VOCABULARY.person.emptyEventsPrefix} ${person.full_name}.`}
+              action={
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                  <Link to={`/tree?focus=${person.slug}`} className="pill-btn" style={{ textDecoration: 'none' }}>
+                    Open Family Tree →
+                  </Link>
+                  {capabilities.canEdit && (
+                    <button
+                      type="button"
+                      className="pill-btn"
+                      onClick={() => {
+                        setEditInitialSection(undefined);
+                        setWikiTab('edit');
+                      }}
+                    >
+                      Edit Profile
+                    </button>
+                  )}
                 </div>
-              </nav>
+              }
+            />
+          ) : (
+            <section
+              id="person-timeline"
+              className="person-timeline-section"
+              aria-label={KINLOOM_VOCABULARY.person.lifeTimelineAria}
+            >
+              <h2 className="section-heading person-timeline-heading">Life Timeline</h2>
+              <div className={`timeline-layout${scrubberItems.length === 0 ? ' no-spine' : ''}`}>
+                {scrubberItems.length > 0 && (
+                  <nav className="timeline-spine" aria-label="Jump to decade">
+                    <div className="scrubber-list">
+                      {scrubberItems.map((t) => {
+                        const isAct =
+                          activeEvent?.year !== null &&
+                          activeEvent?.year !== undefined &&
+                          Math.floor(activeEvent.year / 10) * 10 === t.decade;
+                        return (
+                          <button
+                            key={t.decade}
+                            type="button"
+                            className={`scrubber-tick ${isAct ? 'active' : ''}`}
+                            aria-current={isAct ? 'true' : undefined}
+                            onClick={() => {
+                              setActiveEventId(t.eventId);
+                              cardRefs.current.get(t.eventId)?.scrollIntoView({
+                                behavior: scrollBehaviorForMotion(),
+                                block: 'start',
+                              });
+                            }}
+                          >
+                            {t.decade}s
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </nav>
+                )}
 
-              <section
-                className="story-stream"
-                aria-label={KINLOOM_VOCABULARY.person.lifeTimelineAria}
-              >
-                {personEvents.map((ev) => (
-                  <MilestoneStoryCard
-                    key={ev.id}
-                    event={ev}
-                    place={ev.place_id ? placesById.get(ev.place_id) : undefined}
-                    isActive={activeEvent?.id === ev.id}
-                    sourcesById={sourcesById}
-                    alsoHere={activeEvent?.id === ev.id ? alsoHere : []}
-                    onPivotPerson={handlePivotPerson}
-                    onSelect={() => {
-                      setActiveEventId(ev.id);
-                    }}
-                    cardRef={(el) => {
-                      if (el) {
-                        cardRefs.current.set(ev.id, el);
-                      } else {
-                        cardRefs.current.delete(ev.id);
-                      }
-                    }}
-                  />
-                ))}
-              </section>
-            </div>
+                <div className="story-stream">
+                  {personEvents.map((ev) => (
+                    <MilestoneStoryCard
+                      key={ev.id}
+                      event={ev}
+                      place={ev.place_id ? placesById.get(ev.place_id) : undefined}
+                      isActive={activeEvent?.id === ev.id}
+                      sourcesById={sourcesById}
+                      alsoHere={activeEvent?.id === ev.id ? alsoHere : []}
+                      onPivotPerson={handlePivotPerson}
+                      onSelect={() => {
+                        setActiveEventId(ev.id);
+                      }}
+                      cardRef={(el) => {
+                        if (el) {
+                          cardRefs.current.set(ev.id, el);
+                        } else {
+                          cardRefs.current.delete(ev.id);
+                        }
+                      }}
+                    />
+                  ))}
+                </div>
+              </div>
+            </section>
           ))}
         </main>
       </div>
@@ -1274,12 +1372,15 @@ export const PersonPage: React.FC = () => {
         }
         return (
           <dialog
+            ref={lightboxDialogRef}
             open
+            aria-modal="true"
             className="lightbox-backdrop photo-lightbox-overlay print-hide"
             aria-label={KINLOOM_VOCABULARY.person.mediaLightboxAria}
           >
             <button
               type="button"
+              tabIndex={-1}
               className="lightbox-backdrop-close"
               aria-label="Close lightbox"
               onClick={() => {
@@ -1331,6 +1432,7 @@ export const PersonPage: React.FC = () => {
                     </>
                   )}
                   <button
+                    ref={lightboxCloseBtnRef}
                     type="button"
                     className="pill-btn"
                     onClick={() => {

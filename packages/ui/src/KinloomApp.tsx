@@ -88,7 +88,7 @@ export interface KinloomAppProps {
 const RouteLoading: React.FC = () => (
   <div>
     <ExplorerTopBar />
-    <main className="index-page">
+    <main id="main-content" className="index-page">
       <output className="archive-loading-shell" aria-live="polite">
         <span className="archive-loading-spinner" aria-hidden="true" />
         <span>Loading archival view…</span>

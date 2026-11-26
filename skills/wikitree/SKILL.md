@@ -6,7 +6,7 @@ description: Search and read public WikiTree profiles via the bundled uv-based `
 # WikiTree
 
 This skill includes a standalone executable Python CLI at
-`skills/wikitree/scripts/wikitree` using a PEP 723
+`kinloom wikitree` using a PEP 723
 `#!/usr/bin/env -S uv run --script` shebang with inline dependencies
 (`click`, `httpx`). No virtualenv setup or API key is required for public
 profiles.
@@ -20,50 +20,49 @@ profiles.
 
 ## Bundled CLI (`scripts/wikitree`)
 
-Path: `skills/wikitree/scripts/wikitree`
-
+Command: `kinloom wikitree`
 ### Search for people
 
 ```bash
 # Search public profiles by first and last name (or positional name / --given / --surname)
-skills/wikitree/scripts/wikitree search --first Abraham --last Lincoln
-skills/wikitree/scripts/wikitree search Abraham Lincoln --birth-year 1809
+kinloom wikitree search --first Abraham --last Lincoln
+kinloom wikitree search Abraham Lincoln --birth-year 1809
 
 # Same search, raw JSON
-skills/wikitree/scripts/wikitree search --first Abraham --last Lincoln --limit 5 --json
+kinloom wikitree search --first Abraham --last Lincoln --limit 5 --json
 
 # Narrow by birth location
-skills/wikitree/scripts/wikitree search --last Barton --birth-location "Massachusetts" --limit 10
+kinloom wikitree search --last Barton --birth-location "Massachusetts" --limit 10
 
 # Require dates on matches (otherwise dateless profiles are also returned)
-skills/wikitree/scripts/wikitree search --first Clara --last Barton --date-include both
+kinloom wikitree search --first Clara --last Barton --date-include both
 ```
 
 ### Look up one profile
 
 ```bash
 # By WikiTree ID (<Surname>-<Number> from search output) or profile URL (aliases: get, show, profile)
-skills/wikitree/scripts/wikitree person <WikiTree-ID>
-skills/wikitree/scripts/wikitree get <WikiTree-ID>
+kinloom wikitree person <WikiTree-ID>
+kinloom wikitree get <WikiTree-ID>
 
 # Raw JSON, all fields
-skills/wikitree/scripts/wikitree person <WikiTree-ID> --fields '*' --json
+kinloom wikitree person <WikiTree-ID> --fields '*' --json
 
 # By numeric user Id
-skills/wikitree/scripts/wikitree person <numeric-id>
+kinloom wikitree person <numeric-id>
 ```
 
 ### Ancestors and biography
 
 ```bash
 # Two generations of ancestors
-skills/wikitree/scripts/wikitree ancestors <WikiTree-ID> --depth 2
+kinloom wikitree ancestors <WikiTree-ID> --depth 2
 
 # Biography text (wiki markup) for a profile
-skills/wikitree/scripts/wikitree bio <WikiTree-ID>
+kinloom wikitree bio <WikiTree-ID>
 
 # Biography as HTML instead
-skills/wikitree/scripts/wikitree bio <WikiTree-ID> --format html
+kinloom wikitree bio <WikiTree-ID> --format html
 ```
 
 ### Disk cache and environment variables
@@ -135,8 +134,8 @@ hold numeric user Ids; follow them with `getPerson` by Id.
 - **WikiTree is a lead, not evidence.** Profiles are collaborative and
   user-contributed; a profile states what other researchers believe, not
   what a record proves. Always follow the profile's cited sources, and
-  cross-check against primary records before recording conclusions in
-  `data/`. Never copy a WikiTree parentage claim without its citation.
+  cross-check against primary records before staging conclusions in a
+  **Research Package** (`research/people/<person_id>/patch.json`). Never copy a WikiTree parentage claim without its citation.
 - **Pre-1700 lines need primary citations.** Pre-1700 profiles in
   particular are expected to cite primary sources. If a profile's only
   sources are compiled genealogies, treat the claim as secondary and look
@@ -154,3 +153,22 @@ hold numeric user Ids; follow them with `getPerson` by Id.
 - **Redirects:** merged profiles redirect to a surviving WikiTree ID.
   Pass `--resolve-redirect` (person) or `resolveRedirect=1` so a lookup
   follows the merge instead of returning the redirect stub.
+
+## Kinloom Research Package workflow
+
+Never edit `data/*.yaml` directly from a research session. Follow Kinloom's staged **Research Package** workflow and **Living Privacy Rule** (never include living people's portraits, exact birth dates, street addresses, or pronunciations in public archives):
+
+1. Discover research targets with `kinloom status --missing-biography` or `kinloom status --end-of-line`.
+2. Gather privacy-fenced context with `kinloom context <person_id> --include-family`.
+3. Stage any downloaded images or documents under `research/people/<person_id>/scans/` and prepare them with `kinloom prep-scan` or `kinloom ocr` when needed.
+4. Write cited findings into `research/people/<person_id>/patch.json`.
+5. Audit, integrate, verify, and sync:
+
+```bash
+kinloom audit --all-staged --pending-only --strict
+kinloom integrate --all-staged --pending-only
+kinloom pronounce audit --strict
+kinloom verify
+kinloom migrate
+kinloom sync --sync-missing-media --verify-live
+```

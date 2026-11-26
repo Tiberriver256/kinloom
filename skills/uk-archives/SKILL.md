@@ -9,23 +9,22 @@ Portals: [The National Archives Discovery](https://discovery.nationalarchives.go
 
 ## Bundled CLI (`scripts/uk-archives`)
 
-Path: `skills/uk-archives/scripts/uk-archives`
-
+Command: `kinloom uk-archives`
 A standalone executable Python CLI with a PEP 723 `#!/usr/bin/env -S uv run --script` shebang and inline dependencies (`click`, `httpx`). No virtualenv setup, no API key, no account.
 
 ### The National Archives (TNA) Discovery API (`tna` / `discovery`)
 
 ```bash
 # Search PCC wills (PROB 11) in Norfolk for 1550-1620
-skills/uk-archives/scripts/uk-archives tna search --query "Smith Norfolk" \
+kinloom uk-archives tna search --query "Smith Norfolk" \
   --collection "PROB 11" --start-date 1550 --end-date 1620 --limit 10 --json
 
 # Inspect one TNA Discovery record by IAID (verified /API/records/v1/details/<iaid>)
-skills/uk-archives/scripts/uk-archives tna get D980036 --json
+kinloom uk-archives tna get D980036 --json
 
 # Alias group `discovery` remains supported (discovery search / discovery detail)
-skills/uk-archives/scripts/uk-archives discovery search Lincoln --held-by Norfolk --limit 10
-skills/uk-archives/scripts/uk-archives discovery detail D980036 --json
+kinloom uk-archives discovery search Lincoln --held-by Norfolk --limit 10
+kinloom uk-archives discovery detail D980036 --json
 ```
 
 Search options: `--query` / `-q` (or positional `QUERY`), `--collection` (series or department reference such as `"PROB 11"`, appended to the query, mapped to `sps.departments` when applicable, and post-filtered by catalogue reference), `--held-by` (extra repository or county text appended to the query), `--start-date` / `--date-from` / `--from-year` and `--end-date` / `--date-to` / `--to-year` (`YYYY` or `YYYY-MM-DD`, mapped to `sps.dateFrom` / `sps.dateTo`), `--limit` (integer `>= 1`), `--page` (`sps.page`), `--refresh`, `--cache-ttl-hours`, and `--json` (returns boolean `cache_hit`).
@@ -38,15 +37,15 @@ The detail route verified live is `https://discovery.nationalarchives.gov.uk/API
 
 ```bash
 # Search FreeREG by surname, county Chapman code, and year range
-skills/uk-archives/scripts/uk-archives freereg search --surname Lincoln --county NFK \
+kinloom uk-archives freereg search --surname Lincoln --county NFK \
   --from-year 1550 --to-year 1650
 
 # Filter hits by parish or register text
-skills/uk-archives/scripts/uk-archives freereg search --surname Lincoln --county NFK \
+kinloom uk-archives freereg search --surname Lincoln --county NFK \
   --from-year 1550 --to-year 1650 --place-contains Hingham
 
 # Search Nottinghamshire (NTT) parish registers, JSON output
-skills/uk-archives/scripts/uk-archives freereg search --surname Smith --county NTT \
+kinloom uk-archives freereg search --surname Smith --county NTT \
   --from-year 1570 --to-year 1630 --json
 ```
 
@@ -59,11 +58,11 @@ Options: `--given`, `--county` (Chapman code or county name), `--from-year`, `--
 ### URL builders (no search run)
 
 ```bash
-skills/uk-archives/scripts/uk-archives url --discovery "Lincoln Norfolk"
-skills/uk-archives/scripts/uk-archives url --freereg
-skills/uk-archives/scripts/uk-archives url --notts Lincoln
-skills/uk-archives/scripts/uk-archives url --bho "Nottinghamshire"
-skills/uk-archives/scripts/uk-archives url --genuki nottinghamshire
+kinloom uk-archives url --discovery "Lincoln Norfolk"
+kinloom uk-archives url --freereg
+kinloom uk-archives url --notts Lincoln
+kinloom uk-archives url --bho "Nottinghamshire"
+kinloom uk-archives url --genuki nottinghamshire
 ```
 
 ## What is searchable online
@@ -87,7 +86,7 @@ Priority order for English pre-emigration and parish research:
 2. **Discovery** for PCC wills (`PROB 11`) and Chancery records when parish registers do not establish family links.
 3. **County archive manuscript catalogues** in the browser when Discovery points to local deposit references.
 4. **BHO / GENUKI** for parish history, boundary changes, and manorial context.
-5. Cross-check transcribed parish entries against original register images or Bishop's Transcripts on FamilySearch, Ancestry UK, or Findmypast before recording them as proved in `data/`.
+5. Cross-check transcribed parish entries against original register images or Bishop's Transcripts on FamilySearch, Ancestry UK, or Findmypast before citing them in a staged **Research Package** (`research/people/<person_id>/patch.json`).
 
 ## Verification log (verified live 2026-11-26)
 
@@ -112,3 +111,22 @@ Priority order for English pre-emigration and parish research:
 - Scotland, Wales, and Ireland beyond what Discovery holds for the whole UK catalogue.
 - Subscription sites (Ancestry UK, Findmypast, MyHeritage) and the GRO index ordering flow.
 - Do not invent Discovery detail URLs under `/API/search/v1/.../details/` or a FreeREG JSON API. Where no machine interface was verified, the skill says so and gives a URL builder or browser path instead.
+
+## Kinloom Research Package workflow
+
+Never edit `data/*.yaml` directly from a research session. Follow Kinloom's staged **Research Package** workflow and **Living Privacy Rule** (never include living people's portraits, exact birth dates, street addresses, or pronunciations in public archives):
+
+1. Discover research targets with `kinloom status --missing-biography` or `kinloom status --end-of-line`.
+2. Gather privacy-fenced context with `kinloom context <person_id> --include-family`.
+3. Stage any downloaded images or documents under `research/people/<person_id>/scans/` and prepare them with `kinloom prep-scan` or `kinloom ocr` when needed.
+4. Write cited findings into `research/people/<person_id>/patch.json`.
+5. Audit, integrate, verify, and sync:
+
+```bash
+kinloom audit --all-staged --pending-only --strict
+kinloom integrate --all-staged --pending-only
+kinloom pronounce audit --strict
+kinloom verify
+kinloom migrate
+kinloom sync --sync-missing-media --verify-live
+```

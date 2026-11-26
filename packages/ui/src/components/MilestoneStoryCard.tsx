@@ -59,7 +59,7 @@ export const MilestoneStoryCard: React.FC<{
       )}
     </div>
 
-    <h2>{event.title}</h2>
+    <h3>{event.title}</h3>
     <p>{event.summary}</p>
 
     {(event.photo_url || event.photo_placeholder_caption) && (

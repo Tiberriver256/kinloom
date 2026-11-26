@@ -5,7 +5,7 @@ description: Research Michigan branches at the Library of Michigan (Lansing) and
 
 # Library of Michigan
 
-This skill includes a standalone executable Python CLI at `skills/library-of-michigan/scripts/michiganology` using a PEP 723 `#!/usr/bin/env -S uv run --script` shebang with inline dependency (`click`). It shells out to system `curl` for fetches, because Preservica's front door 403s Python httpx requests while curl succeeds; curl must be installed. No virtualenv setup or API key is required.
+This skill includes a standalone executable Python CLI invoked as `kinloom michiganology` using a PEP 723 `#!/usr/bin/env -S uv run --script` shebang with inline dependency (`click`). It shells out to system `curl` for fetches, because Preservica's front door 403s Python httpx requests while curl succeeds; curl must be installed. No virtualenv setup or API key is required.
 
 Two institutions share one building and one research mission in Lansing, and the skill covers both:
 
@@ -14,16 +14,15 @@ Two institutions share one building and one research mission in Lansing, and the
 
 ## Bundled CLI (`scripts/michiganology`)
 
-Path: `skills/library-of-michigan/scripts/michiganology`
-
+Command: `kinloom michiganology`
 ### Search all digital collections
 
 ```bash
 # Search a surname across every Michiganology collection
-skills/library-of-michigan/scripts/michiganology search Lincoln
+kinloom michiganology search Lincoln
 
 # JSON output, 20 hits
-skills/library-of-michigan/scripts/michiganology search Lincoln --limit 20 --json
+kinloom michiganology search Lincoln --limit 20 --json
 ```
 
 Note on multi-word queries: Preservica simple search treats unquoted multi-word queries (such as `"Abraham Lincoln"`) as broad OR matches across collections, so a broad search can return county tax rolls or unrelated files. Inspect individual hits with `get` or narrow with Advanced Search on the website.
@@ -34,14 +33,14 @@ Search output prints only the item title (often just a surname or certificate nu
 
 ```bash
 # Read parsed Item Data metadata and direct download link
-skills/library-of-michigan/scripts/michiganology get IO_<uuid>
-skills/library-of-michigan/scripts/michiganology get "https://michigan.access.preservica.com/uncategorized/IO_<uuid>/" --json
+kinloom michiganology get IO_<uuid>
+kinloom michiganology get "https://michigan.access.preservica.com/uncategorized/IO_<uuid>/" --json
 
 # Download the full-resolution file (filename inferred from Content-Disposition)
-skills/library-of-michigan/scripts/michiganology download IO_<uuid> --out ./downloads/michiganology
+kinloom michiganology download IO_<uuid> --out ./downloads/michiganology
 
 # Or write a specific file when --filename is omitted and --out ends in an image or PDF extension
-skills/library-of-michigan/scripts/michiganology download IO_<uuid> --out ./downloads/certificate.jpg --json
+kinloom michiganology download IO_<uuid> --out ./downloads/certificate.jpg --json
 ```
 
 `download` accepts the same `--refresh` and `--cache-ttl-hours` flags as `search`. `--json` prints `item_id`, `path`, `bytes`, `filename`, `content_type`, and `cache_hit`. `filename` is the Content-Disposition name. `path` is the file written this time, which follows `--filename` when you pass it. A repeat call copies the cached bytes and does not run curl.
@@ -49,13 +48,13 @@ skills/library-of-michigan/scripts/michiganology download IO_<uuid> --out ./down
 ### List the digital collections
 
 ```bash
-skills/library-of-michigan/scripts/michiganology collections
+kinloom michiganology collections
 ```
 
 ### Shareable search URL
 
 ```bash
-skills/library-of-michigan/scripts/michiganology url Lincoln
+kinloom michiganology url Lincoln
 # https://michigan.access.preservica.com/?s=Lincoln
 ```
 
@@ -105,7 +104,7 @@ Michigan residents can use the Library of Michigan's subscription databases remo
 3. Combine surname and locality (for example `michiganology search "Lincoln Detroit"`) when the surname alone is too noisy; simple search matches either word anywhere, so quote exact names to narrow.
 4. For pre-1897 Michigan deaths and marriages, cross-check FamilySearch Michigan collections; Michiganology's death run starts in 1897.
 5. For land and neighborhood context, pair surveyor maps and the map collection with county plat maps and atlases held in Lansing or digitized at the University of Michigan.
-6. Record every hit in `data/` with its Michiganology item URL; item URLs are stable (`michigan.access.preservica.com/uncategorized/SO_<uuid>` or `IO_<uuid>`).
+6. Stage every hit in a **Research Package** (`research/people/<person_id>/patch.json`) with its Michiganology item URL; item URLs are stable (`michigan.access.preservica.com/uncategorized/SO_<uuid>` or `IO_<uuid>`).
 
 ## Disk cache and environment variables
 
@@ -123,3 +122,22 @@ No key or account is needed for Michiganology search.
 ## Verified-live note
 
 The Michiganology homepage, the Preservica search (`/?s=<query>`), the collections list, and the Library of Michigan address, hours, and phone were verified live on 2026-11-24. Items marked "per library guides" or "reported" were not re-verified live and are labeled as such.
+
+## Kinloom Research Package workflow
+
+Never edit `data/*.yaml` directly from a research session. Follow Kinloom's staged **Research Package** workflow and **Living Privacy Rule** (never include living people's portraits, exact birth dates, street addresses, or pronunciations in public archives):
+
+1. Discover research targets with `kinloom status --missing-biography` or `kinloom status --end-of-line`.
+2. Gather privacy-fenced context with `kinloom context <person_id> --include-family`.
+3. Prepare downloaded scans with `kinloom prep-scan` (for example `kinloom prep-scan crop --redact-orig`) and run `kinloom ocr` as needed, then stage scans under `research/people/<person_id>/scans/`.
+4. Write cited findings into `research/people/<person_id>/patch.json`.
+5. Audit, integrate, verify, and sync:
+
+```bash
+kinloom audit --all-staged --pending-only --strict
+kinloom integrate --all-staged --pending-only
+kinloom pronounce audit --strict
+kinloom verify
+kinloom migrate
+kinloom sync --sync-missing-media --verify-live
+```

@@ -84,19 +84,19 @@ test('all 9 archival routes render cleanly with zero console or page errors', as
     {
       url: '/time',
       assertVisible: async () => {
-        await expect(page.getByRole('heading', { name: /Where the Lincoln & Todd Family Was in/ })).toBeVisible();
+        await expect(page.getByRole('heading', { name: /Lincoln & Todd Family in \d{4}/ })).toBeVisible();
       },
     },
     {
       url: '/tree',
       assertVisible: async () => {
-        await expect(page.getByRole('img', { name: /family tree chart/ })).toBeVisible();
+        await expect(page.getByRole('group', { name: /family tree chart/ })).toBeVisible();
       },
     },
     {
       url: '/map',
       assertVisible: async () => {
-        await expect(page.getByLabel('Filter migration map by person')).toContainText(/\(\d+ stops\)/);
+        await expect(page.getByLabel('Filter migration map by person')).toContainText(/All People \(\d+\)/);
         await expect(page.locator('.map-canvas')).toBeVisible();
       },
     },

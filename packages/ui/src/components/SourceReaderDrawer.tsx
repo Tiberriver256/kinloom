@@ -8,11 +8,13 @@ import {
   formatPublicCitation,
 } from '@kinloom/core';
 import { readerNextPage, readerPrevPage, resolveReaderPageIndex } from '../lib/sourceReaderNav.js';
+import { handleTablistKeyDown } from '../lib/keyboardNav.js';
 import { KINLOOM_VOCABULARY } from '../lib/vocabulary.js';
 import { PluginSlot } from '../plugins/PluginContext.js';
 import { resolveAssetUrl } from './Atoms.js';
 import { useArchiveData } from '../context/ArchiveDataContext.js';
 import { useArchiveUi } from '../context/ArchiveUiContext.js';
+import { useDialogFocusTrap } from '../lib/useDialogFocusTrap.js';
 
 function triggerTextDownload(filename: string, content: string): void {
   const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
@@ -71,12 +73,27 @@ export const SourceReaderDrawer: React.FC = () => {
   const { sourceReader, closeSourceReader } = useArchiveUi();
 
   const closeBtnRef = useRef<HTMLButtonElement | null>(null);
+  const scanZoomCloseBtnRef = useRef<HTMLButtonElement | null>(null);
   const [activeDocId, setActiveDocId] = useState<string>('');
   const [pageIdx, setPageIdx] = useState<number>(0);
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [viewMode, setViewMode] = useState<ReaderViewMode>('text');
   const [scanZoomOpen, setScanZoomOpen] = useState<boolean>(false);
   const [copyFeedback, setCopyFeedback] = useState<string>('');
+
+  const dialogRef = useDialogFocusTrap({
+    open: Boolean(sourceReader),
+    onClose: closeSourceReader,
+    initialFocusRef: closeBtnRef,
+  });
+
+  const scanZoomDialogRef = useDialogFocusTrap({
+    open: Boolean(sourceReader) && scanZoomOpen,
+    onClose: () => {
+      setScanZoomOpen(false);
+    },
+    initialFocusRef: scanZoomCloseBtnRef,
+  });
 
   const orderedDocs = useMemo<ReadingDocument[]>(() => {
     if (!readings) {
@@ -128,21 +145,16 @@ export const SourceReaderDrawer: React.FC = () => {
   }, [sourceReader, readings, featuredDocumentId, orderedDocs]);
 
   useEffect(() => {
-    if (!sourceReader) {
+    if (!sourceReader || scanZoomOpen) {
       return undefined;
     }
-    closeBtnRef.current?.focus();
     const onKey = (e: KeyboardEvent): void => {
-      if (e.key === 'Escape') {
-        if (scanZoomOpen) {
-          setScanZoomOpen(false);
-        } else {
-          closeSourceReader();
-        }
+      const targetEl = e.target instanceof HTMLElement ? e.target : null;
+      const tag = targetEl?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') {
         return;
       }
-      const tag = e.target instanceof HTMLElement ? e.target.tagName : undefined;
-      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') {
+      if (targetEl?.closest('[role="tablist"]')) {
         return;
       }
       if (e.key === 'ArrowRight') {
@@ -155,7 +167,7 @@ export const SourceReaderDrawer: React.FC = () => {
     return (): void => {
       window.removeEventListener('keydown', onKey);
     };
-  }, [sourceReader, scanZoomOpen, closeSourceReader, readings, activeDocId]);
+  }, [sourceReader, scanZoomOpen, readings, activeDocId]);
 
   const currentDoc = useMemo(() => {
     if (!readings) {
@@ -223,12 +235,15 @@ export const SourceReaderDrawer: React.FC = () => {
 
   return (
     <dialog
+      ref={dialogRef}
       open
+      aria-modal="true"
       className="drawer-backdrop source-reader-backdrop"
       aria-label={KINLOOM_VOCABULARY.sources.readerAria}
     >
       <button
         type="button"
+        tabIndex={-1}
         className="lightbox-backdrop-close"
         aria-label="Close source reader"
         onClick={closeSourceReader}
@@ -243,7 +258,7 @@ export const SourceReaderDrawer: React.FC = () => {
             </h2>
             {currentDoc && (
               <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.78rem', color: 'var(--text-secondary)', marginTop: 2 }}>
-                Primary Source Archive · {currentDoc.author}
+                Source Reader · {currentDoc.author}
               </div>
             )}
           </div>
@@ -258,23 +273,41 @@ export const SourceReaderDrawer: React.FC = () => {
         </div>
 
         {orderedDocs.length > 0 && (
-          <div className="filter-bar source-collection-tabs" style={{ marginBottom: 0 }} role="tablist" aria-label="Primary source collections">
-            {orderedDocs.map((doc) => (
-              <button
-                key={doc.source_id}
-                type="button"
-                role="tab"
-                aria-selected={currentDoc?.source_id === doc.source_id}
-                className={`pill-btn ${currentDoc?.source_id === doc.source_id ? 'active' : ''}`}
-                onClick={() => {
-                  setActiveDocId(doc.source_id);
-                  setPageIdx(0);
-                  setSearchTerm('');
-                }}
-              >
-                {doc.title}
-              </button>
-            ))}
+          <div
+            className="filter-bar source-collection-tabs"
+            style={{ marginBottom: 0 }}
+            role="tablist"
+            aria-label="Source collections"
+            onKeyDown={(event) => {
+              const ids = orderedDocs.map((d) => d.source_id);
+              const active = currentDoc?.source_id ?? ids[0] ?? '';
+              handleTablistKeyDown(event, ids, active, (nextId) => {
+                setActiveDocId(nextId);
+                setPageIdx(0);
+                setSearchTerm('');
+              });
+            }}
+          >
+            {orderedDocs.map((doc) => {
+              const isSelected = currentDoc?.source_id === doc.source_id;
+              return (
+                <button
+                  key={doc.source_id}
+                  type="button"
+                  role="tab"
+                  tabIndex={isSelected ? 0 : -1}
+                  aria-selected={isSelected}
+                  className={`pill-btn ${isSelected ? 'active' : ''}`}
+                  onClick={() => {
+                    setActiveDocId(doc.source_id);
+                    setPageIdx(0);
+                    setSearchTerm('');
+                  }}
+                >
+                  {doc.title}
+                </button>
+              );
+            })}
           </div>
         )}
 
@@ -487,9 +520,16 @@ export const SourceReaderDrawer: React.FC = () => {
         )}
 
         {scanZoomOpen && scanSrc && currentPage && (
-          <dialog open className="lightbox-backdrop" aria-label="Full page scan zoom view">
+          <dialog
+            ref={scanZoomDialogRef}
+            open
+            aria-modal="true"
+            className="lightbox-backdrop"
+            aria-label="Full page scan zoom view"
+          >
             <button
               type="button"
+              tabIndex={-1}
               className="lightbox-backdrop-close"
               aria-label="Close full page scan view"
               onClick={() => {
@@ -502,6 +542,7 @@ export const SourceReaderDrawer: React.FC = () => {
                   {currentDoc?.title} · {currentPage.label}
                 </strong>
                 <button
+                  ref={scanZoomCloseBtnRef}
                   type="button"
                   className="pill-btn"
                   onClick={() => {

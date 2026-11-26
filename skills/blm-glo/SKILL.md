@@ -52,3 +52,22 @@ The patent is the end of the process. The underlying land-entry case file, held 
 - Record the exact township, range, and section from every patent: that triple is what NARA needs for the case file, and it is what pins the parcel on a modern map.
 - Public-land states (such as Illinois, Missouri, Michigan, and Kansas) typically show early purchases as Cash Entry, Homestead, or Military Warrant patents. California land is trickier: much of it passed through Spanish or Mexican ranchos and state grants rather than federal patents, so a missing GLO patent in California is expected and is not evidence of no land.
 - Pair each patent with a GNIS lookup (see the `usgs-gnis` skill) for the modern place name and coordinates of the township's features.
+
+## Kinloom Research Package workflow
+
+Never edit `data/*.yaml` directly from a research session. Follow Kinloom's staged **Research Package** workflow and **Living Privacy Rule** (never include living people's portraits, exact birth dates, street addresses, or pronunciations in public archives):
+
+1. Discover research targets with `kinloom status --missing-biography` or `kinloom status --end-of-line`.
+2. Gather privacy-fenced context with `kinloom context <person_id> --include-family`.
+3. Stage any downloaded images or documents under `research/people/<person_id>/scans/` and prepare them with `kinloom prep-scan` or `kinloom ocr` when needed.
+4. Write cited findings into `research/people/<person_id>/patch.json`.
+5. Audit, integrate, verify, and sync:
+
+```bash
+kinloom audit --all-staged --pending-only --strict
+kinloom integrate --all-staged --pending-only
+kinloom pronounce audit --strict
+kinloom verify
+kinloom migrate
+kinloom sync --sync-missing-media --verify-live
+```

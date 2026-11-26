@@ -106,19 +106,34 @@ export const LocalSurveyMap: React.FC<LocalSurveyMapProps> = ({
       },
       {
         x: cx,
-        titleY: cy - (compact ? 14 : 18),
+        titleY: cy - (compact ? 14 : Math.max(18, Math.round(radiusPx) + 12)),
         anchor: 'middle',
-        box: { x1: cx - 90, x2: cx + 90, y1: cy - 32, y2: cy - 8 },
+        box: {
+          x1: cx - 90,
+          x2: cx + 90,
+          y1: cy - (compact ? 32 : Math.max(32, Math.round(radiusPx) + 26)),
+          y2: cy - (compact ? 8 : Math.max(8, Math.round(radiusPx) + 2)),
+        },
       },
       {
         x: cx,
-        titleY: cy + (compact ? 18 : 24),
+        titleY: cy + (compact ? 18 : Math.max(24, Math.round(radiusPx) + 18)),
         anchor: 'middle',
-        box: { x1: cx - 90, x2: cx + 90, y1: cy + 8, y2: cy + 32 },
+        box: {
+          x1: cx - 90,
+          x2: cx + 90,
+          y1: cy + (compact ? 8 : Math.max(8, Math.round(radiusPx) + 4)),
+          y2: cy + (compact ? 32 : Math.max(32, Math.round(radiusPx) + 28)),
+        },
       },
     ];
 
     for (const c of candidates) {
+      const clearOfRing =
+        compact || !isNarrow || scopeMode !== 'radius15' || c.anchor === 'middle';
+      if (!clearOfRing) {
+        continue;
+      }
       const blocked = markers.some(
         (m) =>
           m.x >= c.box.x1 - 7 &&
@@ -131,7 +146,7 @@ export const LocalSurveyMap: React.FC<LocalSurveyMapProps> = ({
       }
     }
     return candidates[2];
-  }, [markers, cx, cy, compact]);
+  }, [markers, cx, cy, compact, radiusPx, isNarrow, scopeMode]);
 
   const labelPlacement = useMemo(() => {
     const map = new Map<string, { lx: number; ly: number; anchor: 'start' | 'end'; extraCount: number }>();
@@ -221,7 +236,7 @@ export const LocalSurveyMap: React.FC<LocalSurveyMapProps> = ({
           border: '1px solid var(--border-decorative)',
           borderRadius: 'var(--radius-sm)',
         }}
-        role="img"
+        role="group"
         aria-label={`Geographic survey map centered on ${center.full_name} with ${markers.length} nearby archived places`}
       >
         {Array.from({ length: compact || isNarrow ? 3 : 5 }).map((_, i) => {

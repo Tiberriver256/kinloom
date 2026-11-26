@@ -5,12 +5,11 @@ description: Search and read Find a Grave memorials, cemeteries, and places via 
 
 # Find a Grave
 
-This skill includes a standalone executable Python CLI at `skills/findagrave/scripts/findagrave` using a PEP 723 `#!/usr/bin/env -S uv run --script` shebang with inline dependencies (`click`, `httpx`). No virtualenv setup or API key is required.
+This skill includes a standalone executable Python CLI invoked as `kinloom findagrave` using a PEP 723 `#!/usr/bin/env -S uv run --script` shebang with inline dependencies (`click`, `httpx`). No virtualenv setup or API key is required.
 
 ## Bundled CLI (`scripts/findagrave`)
 
-Path: `skills/findagrave/scripts/findagrave`
-
+Command: `kinloom findagrave`
 ### Persistent local disk cache
 
 `get`/`memorial`, `cemetery`, `photo`/`photos`, `search`, and `place` cache responses atomically under `~/.cache/kinloom-findagrave/` (overrideable via `KINLOOM_FINDAGRAVE_CACHE_DIR`) using advisory file locks (`fcntl.flock` on POSIX, safe fallback elsewhere) so concurrent research threads never re-download shared memorials, cemeteries, or gravestone photos. Pass `--refresh` on any command to bypass the local cache and fetch fresh data. `--json` on `search`, `cemetery`, `place`, and `photo` adds a top-level boolean `cache_hit`. `get` and `memorial` keep a JSON list contract and attach a boolean `cache_hit` field to each returned memorial object. For `photo`, `cache_hit` is true only when the memorial record and every saved photo file came from disk. Transient HTTP `429`/`5xx`/`520`/`522`/`524`, timeouts, transport errors, incomplete photo reads, and HTML outage pages on HTTP 200 retry up to 3 times honoring numeric or HTTP-date `Retry-After`. Photo downloads enforce an HTTPS host allowlist (`findagrave.com`, `ancestrycdn.com`, `cloudfront.net`).
@@ -26,19 +25,19 @@ Cache layout:
 
 ```bash
 # Search memorials by first and last name
-skills/findagrave/scripts/findagrave search --first Abraham --last Lincoln
+kinloom findagrave search --first Abraham --last Lincoln
 
 # Narrow by years and place
-skills/findagrave/scripts/findagrave search --first Clara --last Barton --birth-year 1821 --year-range 2
-skills/findagrave/scripts/findagrave search --last Douglass --death-year 1895 --death-year-filter exact
+kinloom findagrave search --first Clara --last Barton --birth-year 1821 --year-range 2
+kinloom findagrave search --last Douglass --death-year 1895 --death-year-filter exact
 
 # In one cemetery, or in one place (place id from the place command)
-skills/findagrave/scripts/findagrave search --last Lincoln --cemetery-id <cemetery-id>
-skills/findagrave/scripts/findagrave search --last Lincoln --location-id <location-id>
+kinloom findagrave search --last Lincoln --cemetery-id <cemetery-id>
+kinloom findagrave search --last Lincoln --location-id <location-id>
 
 # Biography text, any-text, or a linked relative; full JSON output
-skills/findagrave/scripts/findagrave search --last Lincoln --bio president --limit 5
-skills/findagrave/scripts/findagrave search --first Harriet --last Tubman --json
+kinloom findagrave search --last Lincoln --bio president --limit 5
+kinloom findagrave search --first Harriet --last Tubman --json
 ```
 
 Names match the site's default matching unless `--exact` is passed. You may pass `--first`/`--first-name`/`--given`, `--last`/`--last-name`/`--surname`, `--name "First Last"`, or a positional name (`search Abraham Lincoln`). Year options accept `--birth-year`/`--birth`/`--born`, `--death-year`/`--death`/`--died`, and `--year-range`/`--birth-year-range`/`--death-year-range`. Married women are also found under their maiden name by default (`--no-include-maiden` turns that off). A search returns at most 50 rows per call; use `-n`/`--limit`/`--rows`/`--size` with `--offset` or `--page` to page. `get`/`memorial`/`show`, `photo`/`photos`, and `cemetery` accept either numeric IDs or full `https://www.findagrave.com/...` URLs. `photo`/`photos` accepts `-o`/`--out`/`--out-dir`/`--output`. `place` accepts a place name either positionally or via `--name`. The site only reaches the first 10,000 results of a search, so narrow by place, years, or cemetery when totals are large.
@@ -47,12 +46,12 @@ Names match the site's default matching unless `--exact` is passed. You may pass
 
 ```bash
 # Read one memorial by id from search output (aliases: memorial, show)
-skills/findagrave/scripts/findagrave get <memorial-id>
-skills/findagrave/scripts/findagrave show <memorial-id>
+kinloom findagrave get <memorial-id>
+kinloom findagrave show <memorial-id>
 
 # Full bio/inscription text, photo list, and JSON output (includes cemetery_lat / cemetery_lng and coordinates)
-skills/findagrave/scripts/findagrave get <memorial-id> --full --photos
-skills/findagrave/scripts/findagrave get <memorial-id-1> <memorial-id-2> --json
+kinloom findagrave get <memorial-id> --full --photos
+kinloom findagrave get <memorial-id-1> <memorial-id-2> --json
 ```
 
 A `get` (or `memorial`) returns name (with maiden name separate), birth/death dates and places, memorial GPS `coordinates`, cemetery (with `coordinates`, `lat`/`lng`, `physicalAddress`, and top-level `cemetery_lat`/`cemetery_lng` in JSON), plot, inscription, bio, veteran flag, grave-photo flag, photo count, linked relationships (each with its own memorial id to read next), and created/modified dates. `familyRelations` is usually null in search-shaped responses; use `relationships` for linked family. In `--json` output, `bio` and `inscription` are returned as `{"value": "..."}` objects or `null` (matching the GraphQL schema).
@@ -61,15 +60,15 @@ A `get` (or `memorial`) returns name (with maiden name separate), birth/death da
 
 ```bash
 # Cemeteries by name
-skills/findagrave/scripts/findagrave cemetery --name "Oak Ridge"
-skills/findagrave/scripts/findagrave cemetery --name "Oak Ridge" --place "Sangamon County, Illinois"
+kinloom findagrave cemetery --name "Oak Ridge"
+kinloom findagrave cemetery --name "Oak Ridge" --place "Sangamon County, Illinois"
 
 # One cemetery by id (positional id or --id both work; JSON includes coordinates, lat, lng, physicalAddress)
-skills/findagrave/scripts/findagrave cemetery <cemetery-id> --json
-skills/findagrave/scripts/findagrave cemetery --id <cemetery-id>
+kinloom findagrave cemetery <cemetery-id> --json
+kinloom findagrave cemetery --id <cemetery-id>
 
 # Resolve a place name to ids (for use with search --location-id)
-skills/findagrave/scripts/findagrave place --name Springfield
+kinloom findagrave place --name Springfield
 ```
 
 Place ids look like `city_<id>`, `county_<id>`, or a plain cemetery id. Resolve the name first and check it before using an id: the typeahead ranks by its own relevance, and a name can fit several places.
@@ -78,16 +77,16 @@ Place ids look like `city_<id>`, `county_<id>`, or a plain cemetery id. Resolve 
 
 ```bash
 # Downloads a memorial's photos into ./photos
-skills/findagrave/scripts/findagrave photo <memorial-id> --out ./photos
-skills/findagrave/scripts/findagrave photo <memorial-id> --type Grave --out ./photos
-skills/findagrave/scripts/findagrave photo <memorial-id> --all --out ./photos
+kinloom findagrave photo <memorial-id> --out ./photos
+kinloom findagrave photo <memorial-id> --type Grave --out ./photos
+kinloom findagrave photo <memorial-id> --all --out ./photos
 
 # Add a self-describing filename prefix and a provenance sidecar JSON file
-skills/findagrave/scripts/findagrave photo <memorial-id> --type Grave --prefix lincoln-abraham --metadata --out ./photos
+kinloom findagrave photo <memorial-id> --type Grave --prefix lincoln-abraham --metadata --out ./photos
 
 # Print memorial_id, files, and cache_hit. cache_hit is true only when the memorial and every photo came from disk.
-skills/findagrave/scripts/findagrave photo <memorial-id> --out ./photos --json
-skills/findagrave/scripts/findagrave photo <memorial-id> --out ./photos --refresh --json
+kinloom findagrave photo <memorial-id> --out ./photos --json
+kinloom findagrave photo <memorial-id> --out ./photos --refresh --json
 ```
 
 Files are saved as `<photo-id>.jpg` by default, or `<prefix>_<photo-id>.jpg` when `--prefix` is set (`--metadata` writes `<prefix>_<memorial-id>.metadata.json`). `--type` keeps one photo type, such as `Grave`, `Portrait`, `Family`, or `Other`. `--all` downloads every type, which is also the default when you omit `--type`. `--refresh` bypasses the memorial cache and the photo cache. `--cache-ttl-hours` sets the age limit for both. Read a gravestone photo before trusting a memorial's transcribed dates. The stone is the better source.
@@ -95,7 +94,7 @@ Files are saved as `<photo-id>.jpg` by default, or `<prefix>_<photo-id>.jpg` whe
 ### Build a website search URL offline
 
 ```bash
-skills/findagrave/scripts/findagrave url --first Abraham --last Lincoln --birth-year 1809
+kinloom findagrave url --first Abraham --last Lincoln --birth-year 1809
 ```
 
 ## Website search & URL patterns (verified live 2026-11-24)
@@ -133,3 +132,22 @@ Find a Grave is contributor-written. Dates, family links, and biographies are cl
 
 - `KINLOOM_FINDAGRAVE_CACHE_DIR`: optional override for the local disk cache directory (default `~/.cache/kinloom-findagrave`).
 - `KINLOOM_FINDAGRAVE_CACHE_TTL_HOURS`: optional override for memorial, cemetery, and query cache TTL in hours (default `168`). No API key, login, or account is needed for anything in this skill.
+
+## Kinloom Research Package workflow
+
+Never edit `data/*.yaml` directly from a research session. Follow Kinloom's staged **Research Package** workflow and **Living Privacy Rule** (never include living people's portraits, exact birth dates, street addresses, or pronunciations in public archives):
+
+1. Discover research targets with `kinloom status --missing-biography` or `kinloom status --end-of-line`.
+2. Gather privacy-fenced context with `kinloom context <person_id> --include-family`.
+3. Prepare downloaded scans with `kinloom prep-scan` (for example `kinloom prep-scan crop --redact-orig`) and run `kinloom ocr` as needed, then stage scans under `research/people/<person_id>/scans/`.
+4. Write cited findings into `research/people/<person_id>/patch.json`.
+5. Audit, integrate, verify, and sync:
+
+```bash
+kinloom audit --all-staged --pending-only --strict
+kinloom integrate --all-staged --pending-only
+kinloom pronounce audit --strict
+kinloom verify
+kinloom migrate
+kinloom sync --sync-missing-media --verify-live
+```

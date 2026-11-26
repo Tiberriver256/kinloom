@@ -1021,7 +1021,7 @@ export const MapPage: React.FC = () => {
     return (
       <div className="map-shell">
         <ExplorerTopBar />
-        <main className="index-page">
+        <main id="main-content" className="index-page">
           <div className="archive-error-box" role="alert">
             <h2>Unable to load migration map</h2>
             <p>{error}</p>
@@ -1044,7 +1044,7 @@ export const MapPage: React.FC = () => {
     return (
       <div className="map-shell">
         <ExplorerTopBar />
-        <main className="index-page">
+        <main id="main-content" className="index-page">
           <output className="archive-loading-shell" aria-live="polite">
             <span className="archive-loading-spinner" aria-hidden="true" />
             <span>{KINLOOM_VOCABULARY.map.loading}</span>
@@ -1057,7 +1057,7 @@ export const MapPage: React.FC = () => {
   return (
     <div className="map-shell">
       <ExplorerTopBar />
-      <main className="tree-page map-page">
+      <main id="main-content" className="tree-page map-page">
         <div
           ref={mapHostRef}
           className="map-canvas"
@@ -1073,7 +1073,7 @@ export const MapPage: React.FC = () => {
           <label className="map-trace-label">
             <span>Trace:</span>
             <select
-              className="pill-btn"
+              className="pill-btn map-trace-select"
               aria-label="Filter migration map by person"
               value={selectedPersonId}
               onChange={(event) => {
@@ -1081,7 +1081,7 @@ export const MapPage: React.FC = () => {
               }}
             >
               <option value="all">
-                Full {siteConfig.site.familyName} Lineage ({allStopsForPerson.length} stops)
+                All People ({selectablePeople.length})
               </option>
               {selectablePeople.map((person) => (
                 <option key={person.id} value={person.id}>
@@ -1272,11 +1272,29 @@ export const MapPage: React.FC = () => {
           )}
 
           <div className="map-overlay map-playback-bar">
+            {stops.length === 0 ? (
+              <div className="map-empty-notice" role="status">
+                No geocoded stops match the active filter.
+                {(selectedPersonId !== 'all' || selectedEraId !== 'all') && (
+                  <button
+                    type="button"
+                    className="pill-btn map-bordered-btn"
+                    onClick={() => {
+                      setSelectedPersonId('all');
+                      setSelectedEraId('all');
+                    }}
+                  >
+                    Clear filters
+                  </button>
+                )}
+              </div>
+            ) : null}
             <div className="map-playback-buttons">
               <button
                 type="button"
                 className={`pill-btn map-bordered-btn ${playing ? 'active' : ''}`}
                 aria-pressed={playing}
+                disabled={stops.length === 0}
                 onClick={() => {
                   applyJourney(journeyPlayToggle(journey, stopIds));
                 }}

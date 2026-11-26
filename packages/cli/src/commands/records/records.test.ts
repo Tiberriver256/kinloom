@@ -2895,4 +2895,50 @@ describe('bundled Python utilities and live script execution', () => {
     expect(events.map((e) => e.subcmd)).toEqual(cases.map((tc) => tc.expectedSubcmd));
     expect(events.map((e) => e.cache_hit)).toEqual(cases.map((tc) => tc.expectedHit));
   });
+
+  it('enforces Wave 52B CLI, skill, and ubiquitous-language parity across all 24 public skills', async () => {
+    const skillDirs = fs
+      .readdirSync(SKILLS_ROOT, { withFileTypes: true })
+      .filter((d) => d.isDirectory())
+      .map((d) => d.name)
+      .toSorted();
+
+    expect(skillDirs.length).toBe(24);
+
+    const forbiddenPatterns: Array<{ label: string; regex: RegExp }> = [
+      { label: 'raw monorepo script path', regex: /skills\/[a-z0-9-]+\/scripts\// },
+      { label: 'leaked unittest command', regex: /\bpython3 -m unittest\b/ },
+      { label: 'leaked Vitest reference', regex: /\bVitest\b/ },
+      { label: 'direct data/ edit phrasing', regex: /\bin `data\/`/ },
+      { label: 'deprecated manuscript scan', regex: /\bmanuscript scan\b/i },
+      { label: 'deprecated living individuals', regex: /\bliving individuals\b/i },
+      { label: 'deprecated phonetic guide', regex: /\bphonetic guide\b/i },
+      { label: 'deprecated phonetic respelling', regex: /\bphonetic respelling\b/i },
+      { label: 'deprecated Collateral Relative', regex: /\bCollateral Relative\b/ },
+      { label: 'deprecated Record discussion', regex: /\bRecord discussion\b/ },
+      { label: 'deprecated anchor years', regex: /\banchor years\b/i },
+    ];
+
+    for (const dir of skillDirs) {
+      const skillMd = await readFile(path.join(SKILLS_ROOT, dir, 'SKILL.md'), 'utf8');
+      for (const { label, regex } of forbiddenPatterns) {
+        expect(skillMd, `${dir}/SKILL.md contains ${label}`).not.toMatch(regex);
+      }
+      expect(skillMd, `${dir}/SKILL.md mentions Living Privacy Rule`).toContain('Living Privacy Rule');
+    }
+
+    const pronounceSkill = await readFile(path.join(SKILLS_ROOT, 'pronounce', 'SKILL.md'), 'utf8');
+    expect(pronounceSkill).toContain('--strict');
+    expect(pronounceSkill).toContain('100% deceased Full-Name Pronunciation');
+    expect(pronounceSkill).toContain('100% Place coverage');
+    expect(pronounceSkill).toContain('Zero Living leaks');
+
+    const audioSkill = await readFile(path.join(SKILLS_ROOT, 'narrative-audio', 'SKILL.md'), 'utf8');
+    expect(audioSkill).toContain('chirp3-hd');
+    expect(audioSkill).toContain('GOOGLE_CLOUD_TTS_API_KEY');
+    expect(audioSkill).toContain('kinloom narrative-audio');
+
+    const audioSpec = RECORD_COMMAND_SPECS.find((s) => s.command === 'narrative-audio');
+    expect(audioSpec?.summary).toContain('Chirp 3: HD');
+  });
 });

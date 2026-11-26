@@ -13,9 +13,8 @@ The Library of Virginia is both the state library and the state archives. It hol
 
 ## Bundled CLI (`scripts/va-archives`)
 
-Path: `skills/virginia-archives/scripts/va-archives`
-
-A standalone executable Python CLI with a PEP 723 `#!/usr/bin/env -S uv run --script` shebang and inline dependencies (`click`, `httpx`, `pillow`). No virtualenv setup, no API key, no account. Run it from the repo root, e.g. `skills/virginia-archives/scripts/va-archives chancery search Lincoln`.
+Command: `kinloom va-archives`
+A standalone executable Python CLI with a PEP 723 `#!/usr/bin/env -S uv run --script` shebang and inline dependencies (`click`, `httpx`, `pillow`). No virtualenv setup, no API key, no account. Run it from the repo root, e.g. `kinloom va-archives chancery search Lincoln`.
 
 The Library of Virginia exposes real machine interfaces, verified live on 2026-11-24 (see Verification log). The CLI uses plain HTTP for everything it does; no browser automation is bundled. `--json` objects from `chancery search`, `chancery case`, `catalog`, `grant-tif`, `lva-tif`, `dunmore`, and `download-rosetta` include a boolean `cache_hit`. It is true only when every fetch in that command was read from disk. `chancery localities --json` stays a list and does not include `cache_hit`.
 
@@ -23,20 +22,20 @@ The Library of Virginia exposes real machine interfaces, verified live on 2026-1
 
 ```bash
 # Surname search (match defaults to Starts; 20 records per page)
-skills/virginia-archives/scripts/va-archives chancery search Lincoln
-skills/virginia-archives/scripts/va-archives chancery search Lincoln --locality "ROCKINGHAM CO" --year-from 1800 --year-to 1850
-skills/virginia-archives/scripts/va-archives chancery search Lincoln --match Includes --pages 1-3 --json
+kinloom va-archives chancery search Lincoln
+kinloom va-archives chancery search Lincoln --locality "ROCKINGHAM CO" --year-from 1800 --year-to 1850
+kinloom va-archives chancery search Lincoln --match Includes --pages 1-3 --json
 
 # One cause by CFN, with its scanned-page list
-skills/virginia-archives/scripts/va-archives chancery case <cfn> --images
+kinloom va-archives chancery case <cfn> --images
 
 # Download scanned pages (real PDFs) plus metadata.json; --zip for the whole-case ZIP
-skills/virginia-archives/scripts/va-archives chancery download <cfn> --pages 1-5 --out ./downloads/va-chancery
-skills/virginia-archives/scripts/va-archives chancery download <cfn> --zip
+kinloom va-archives chancery download <cfn> --pages 1-5 --out ./downloads/va-chancery
+kinloom va-archives chancery download <cfn> --zip
 
 # Per-locality coverage: region, time frame, viewing status
-skills/virginia-archives/scripts/va-archives chancery localities
-skills/virginia-archives/scripts/va-archives chancery localities --status Scanned --json
+kinloom va-archives chancery localities
+kinloom va-archives chancery localities --status Scanned --json
 ```
 
 Search options mirror the index form exactly: `--surname2`, `--plaintiff-last` / `--plaintiff-first`, `--defendant-last` / `--defendant-first`, `--index-number`, `--local-case-number`, `--enslaved`, `--free`, `--plats`, `--match Exact|Starts|Includes`. Multiple surnames on one command are ORed (one search each; totals add).
@@ -46,8 +45,8 @@ A chancery cause (equity suit: estate divisions, disputed wills, guardianships, 
 ### Library catalog (Primo PNXS API)
 
 ```bash
-skills/virginia-archives/scripts/va-archives catalog Lincoln
-skills/virginia-archives/scripts/va-archives catalog Lincoln --field title --limit 5 --offset 5 --json
+kinloom va-archives catalog Lincoln
+kinloom va-archives catalog Lincoln --field title --limit 5 --offset 5 --json
 ```
 
 The catalog runs on Primo (`lva.primo.exlibrisgroup.com`). The CLI queries its public, key-free PNXS JSON API (`/primaws/rest/pub/pnxs?q=<field>,contains,<query>&vid=01LVA_INST:01LVA&scope=MyInstitution`). Verified fields are `any`, `title`, and `creator`. Each hit prints title, creator, date, type, and a fulldisplay record URL built from the PNXS recordid in the standard Primo pattern. Use it for books, government publications, archives and manuscript collections, Bible and church records, and select maps. Land Office patents and grants are also discoverable here by surname; see below for the dedicated index.
@@ -55,21 +54,21 @@ The catalog runs on Primo (`lva.primo.exlibrisgroup.com`). The CLI queries its p
 ### URL builders (no search run)
 
 ```bash
-skills/virginia-archives/scripts/va-archives url --chancery-case <cfn>
-skills/virginia-archives/scripts/va-archives url --catalog Lincoln
-skills/virginia-archives/scripts/va-archives url --chronicle --land --arvas
+kinloom va-archives url --chancery-case <cfn>
+kinloom va-archives url --catalog Lincoln
+kinloom va-archives url --chronicle --land --arvas
 ```
 
 ### Image server scans: `grant-tif` (alias `lva-tif`) and `dunmore`
 
 ```bash
 # One Land Office patent/grant page (raw TIFF, or JPEG when --out ends in .jpg/.jpeg)
-skills/virginia-archives/scripts/va-archives grant-tif /LONN/LO-3/372/372_0195.tif --out patent.tif
-skills/virginia-archives/scripts/va-archives lva-tif https://image.lva.virginia.gov/LONN/LO-3/372/372_0195.tif --out patent.jpg
+kinloom va-archives grant-tif /LONN/LO-3/372/372_0195.tif --out patent.tif
+kinloom va-archives lva-tif https://image.lva.virginia.gov/LONN/LO-3/372/372_0195.tif --out patent.jpg
 
 # Dunmore's War (1774) card -> neighbouring page TIFFs; save the card's page (or --page N)
-skills/virginia-archives/scripts/va-archives dunmore <DRAWER> <CARD>
-skills/virginia-archives/scripts/va-archives dunmore <DRAWER> <CARD> --page 100 --out dw-page100.jpg --json
+kinloom va-archives dunmore <DRAWER> <CARD>
+kinloom va-archives dunmore <DRAWER> <CARD> --page 100 --out dw-page100.jpg --json
 ```
 
 `grant-tif` fetches a single scan from `image.lva.virginia.gov` only. It accepts a full `https://image.lva.virginia.gov/...` URL or a path on that host, and it rejects any other host or scheme (including plain `http://`), credentials, ports, query strings, `.`/`..` segments (raw or percent-encoded), backslashes, and non-image suffixes. If the server redirects to another host, the download is refused. `--out *.jpg` converts TIFF to JPEG when Pillow is importable; Pillow is in the script's inline dependencies, so it is available under `uv run`. Without Pillow, the raw TIFF is written next to the requested file with a `.tif` suffix. Any other suffix gets the raw bytes. Land Office TIFF links appear in Primo catalog records (`catalog <surname> --json`).
@@ -79,10 +78,10 @@ skills/virginia-archives/scripts/va-archives dunmore <DRAWER> <CARD> --page 100 
 ### Rosetta delivered files: `download-rosetta`
 
 ```bash
-skills/virginia-archives/scripts/va-archives download-rosetta IE3453061 --list
-skills/virginia-archives/scripts/va-archives download-rosetta IE3453061 --out item.pdf          # viewer's initial file
-skills/virginia-archives/scripts/va-archives download-rosetta IE3453061 --file 2 --json         # e.g. the Transcription
-skills/virginia-archives/scripts/va-archives download-rosetta IE3453061 --fl FL3453067
+kinloom va-archives download-rosetta IE3453061 --list
+kinloom va-archives download-rosetta IE3453061 --out item.pdf          # viewer's initial file
+kinloom va-archives download-rosetta IE3453061 --file 2 --json         # e.g. the Transcription
+kinloom va-archives download-rosetta IE3453061 --fl FL3453067
 ```
 
 The Library's digital objects live in Ex Libris Rosetta at `rosetta.virginiamemory.com`. Primo records link them as `DeliveryManagerServlet?dps_pid=IE<n>`. The command validates the id with `^IE\d+$` and keeps a single cookie session while it resolves the item. It reads the delivery page's `ieViewer.do` iframe (with its `dps_dvs` token), takes the `FL<n>` file pids and their METS titles from the viewer, and streams the chosen file from `DeliveryManagerServlet?dps_pid=FL<n>&dps_func=stream`. Every hop must stay on `https://rosetta.virginiamemory.com`. If the server returns an HTML page instead of a file, the command treats the item as restricted. The output name defaults to `<IE>_<FL>.<ext>`, with the extension taken from the content type.
@@ -95,15 +94,13 @@ Every network response is cached under `$KINLOOM_VA_ARCHIVES_CACHE_DIR`. The def
 - `files/`: chancery page PDFs, ZIPs, and image-server TIFFs, keyed by URL. These never expire.
 - `rosetta/<IE>/`: `files.json` (the resolved file list) and `<FL>.bin` (the delivered bytes), keyed by IE id.
 
-To refetch, put `--refresh` before the subcommand to cover the whole run (`va-archives --refresh chancery localities`), or add it to a single command (`grant-tif ... --refresh`).
-
-Tests: `uv run --with click --with httpx python3 -m unittest skills/virginia-archives/tests/test_va_archives.py`. These are mocked-HTTP tests with synthetic fixtures. Vitest also runs them in `packages/cli/src/commands/records/records.test.ts`.
+To refetch, put `--refresh` before the subcommand to cover the whole run (`kinloom va-archives --refresh chancery localities`), or add it to a single command (`grant-tif ... --refresh`).
 
 ## What is searchable online
 
 - **Chancery Records Index:** https://www.lva.virginia.gov/collections/chancery (search itself lives at https://old.lva.virginia.gov/chancery/). See CLI above. Individual case pages use the verified pattern `case_detail.asp?CFN=<locality-code>-<year>-<number>`.
 - **Virginia Chronicle:** https://www.virginiachronicle.com. Free full-text searchable archive of Virginia newspapers, over 5 million pages (the Library's own 2026 update puts the count near 7 million pages and growing). Search by keyword, title, date, or place. No account required. Use it for obituaries, marriage notices, estate sale notices, and local news. **Browser-only:** Cloudflare returns "Just a moment..." to curl and to headless Chromium (verified 2026-11-24), and the site blocks all crawlers in robots.txt. No stable GET search URL was verified; use the Search box on the site. `url --chronicle` prints the home page only.
-- **Land Office patents and grants.** The collection covers Virginia land patents 1623-1774 and land grants 1779-February 2000, including Northern Neck Proprietary grants 1690-1874, with survey plats and accompanying papers. Routes: the catalog CLI above (`catalog <surname>`), the libguide https://lva-virginia.libguides.com/land-grants, and the browse-by-volume index https://image.lva.virginia.gov/LONN/LO.html (Virginia Land Office Patents and Grants Index; search is a legacy Aleph form whose host, `lva1.hosted.exlibrisgroup.com`, was unreachable on 2026-11-24, so use the browser for the name search). Early Virginia land ownership is proved here rather than in county deed books alone.
+- **Land Office patents and grants.** The collection covers Virginia land patents 1623-1774 and land grants 1779-February 2000, including Northern Neck Proprietary grants 1690-1874, with survey plats and accompanying papers. Routes: the catalog CLI above (`catalog <surname>`), the libguide https://lva-virginia.libguides.com/land-grants, and the browse-by-volume index https://image.lva.virginia.gov/LONN/LO.html (Virginia Land Office Patents and Grants Index; search is a legacy Aleph form whose host, `lva1.hosted.exlibrisgroup.com`, was unreachable on 2026-11-24, so use the browser for the name search). Early Virginia land ownership is documented here rather than in county deed books alone.
 - **Virginia Untold: the African American Narrative.** Digital access to records documenting enslaved and free Black and multiracial people. Reach it through the digital-collections page; no separate machine interface was verified.
 - **Bible records, church records, cemetery records, maps, and photographs** are in the digital collections, searchable through the catalog CLI. Family Bible records are a named source for birth, death, and marriage dates.
 - **ARVAS finding aids:** https://arvasarchive.org (linked from the Collections page). A consolidated database of manuscripts and archival material in historical societies, libraries, museums, and colleges across Virginia and West Virginia. Use it when the record you need is not at the Library itself. **Browser-only:** plain HTTP returns an empty 202 (verified 2026-11-24); no search API was verified.
@@ -122,7 +119,7 @@ Worked order for tracing a family through Virginia (for example before a westwar
 2. Search Land Office patents and grants by surname (`va-archives catalog <surname>` plus the LONN index).
 3. Search Virginia Chronicle in a browser by surname and county for notices and obituaries.
 4. Search the catalog for Bible records, church registers, and manuscript collections.
-5. If the chancery index shows a cause without digitized images, record the index number and locality in `data/` and check `chancery localities` before requesting copies or visiting, since active processing can temporarily close a locality.
+5. If the chancery index shows a cause without digitized images, stage the index number and locality in a **Research Package** (`research/people/<person_id>/patch.json`) and check `chancery localities` before requesting copies or visiting, since active processing can temporarily close a locality.
 
 ## Verification log (verified live 2026-11-24)
 
@@ -142,3 +139,22 @@ Worked order for tracing a family through Virginia (for example before a westwar
 
 - Other state archive repositories (see sibling skills such as `kentucky-archives`, `missouri-archives`, `new-jersey-archives`, `california-archives`, and `texas-archives`).
 - Do not invent an API endpoint, a query-string search URL, or an auth requirement for Virginia Chronicle, ARVAS, Virginia Untold, or the Aleph Land Office search. Where no machine interface was verified, the skill says so and gives the click path instead.
+
+## Kinloom Research Package workflow
+
+Never edit `data/*.yaml` directly from a research session. Follow Kinloom's staged **Research Package** workflow and **Living Privacy Rule** (never include living people's portraits, exact birth dates, street addresses, or pronunciations in public archives):
+
+1. Discover research targets with `kinloom status --missing-biography` or `kinloom status --end-of-line`.
+2. Gather privacy-fenced context with `kinloom context <person_id> --include-family`.
+3. Prepare downloaded scans with `kinloom prep-scan` (for example `kinloom prep-scan crop --redact-orig`) and run `kinloom ocr` as needed, then stage scans under `research/people/<person_id>/scans/`.
+4. Write cited findings into `research/people/<person_id>/patch.json`.
+5. Audit, integrate, verify, and sync:
+
+```bash
+kinloom audit --all-staged --pending-only --strict
+kinloom integrate --all-staged --pending-only
+kinloom pronounce audit --strict
+kinloom verify
+kinloom migrate
+kinloom sync --sync-missing-media --verify-live
+```

@@ -68,7 +68,7 @@ Archive lifecycle:
 
 Research & archive ops:
   context            Dump privacy-fenced YAML context, relatives, and leads for a person
-  integrate          Validate and merge a person research package into local YAML
+  integrate          Validate and merge one or more person research packages into local YAML
   audit              Run 5-check package audits for one person or a staged batch
   verify             Run full-archive invariant checks over local data/*.yaml files
   status             Report archive totals and the deceased biography queue
@@ -87,6 +87,7 @@ Global options:
 Environment variables:
   KINLOOM_TOKEN               Bearer token used when --token is omitted
   KINLOOM_ANCESTRY_FACTS_DIR  Optional external facts JSON directory for \`kinloom context\`
+  KINLOOM_PRONOUNCE_CACHE_DIR Override pronunciation lookup cache dir (~/.cache/kinloom-pronounce)
   KINLOOM_TELEMETRY_FILE      Override JSONL telemetry path (~/.cache/kinloom-telemetry/calls.jsonl)
 
 Exit codes:
@@ -110,7 +111,7 @@ Options:
 Options:
   --input <path>               Source GEDCOM file path (required)
   --out <dir>                  Output directory for YAML files (required)
-  --root <xref-or-name>        Root individual xref (@I1@) or full name (required)
+  --root <xref-or-name>        Root person xref (@I1@) or full name (required)
   --surname <name>             Ancestor surname filter (repeatable or comma-separated)
   --branch <id>                Branch identifier stamped on output people
   --include-upstream-spouses   Expand ancestors of married-in spouses
@@ -128,6 +129,7 @@ Options:
   --site <url>         Target Kinloom server URL (required unless --dry-run)
   --token <secret>     Bearer token (defaults to KINLOOM_TOKEN)
   --batch-id <id>      Explicit batch identifier (default: content-hashed)
+  --chunk-size <N>     Max patches per POST /api/batches request (default: 25)
   --summary <text>     Revision summary for the seed batch
   --dry-run            Validate YAML, run compileArchive locally, and skip HTTP
   -h, --help           Show this help message`,
@@ -410,8 +412,14 @@ function parseSyncArgs(argv: readonly string[]): ParsedSyncArgs {
       i = nextIdx;
       continue;
     }
-    if (arg === '--site-url' || arg.startsWith('--site-url=')) {
-      const [val, nextIdx] = readFlagValue(arg, i, '--site-url');
+    if (
+      arg === '--site-url' ||
+      arg.startsWith('--site-url=') ||
+      arg === '--site' ||
+      arg.startsWith('--site=')
+    ) {
+      const flagName = arg.startsWith('--site-url') ? '--site-url' : '--site';
+      const [val, nextIdx] = readFlagValue(arg, i, flagName);
       parsed.siteUrl = val;
       i = nextIdx;
       continue;
@@ -880,7 +888,7 @@ export async function runCli(
           },
           () =>
             runContextCommand({
-              repoDir: values.repo,
+              repoDir: values.repo ?? cwd,
               personId,
               ancestryDir: values['ancestry-dir'],
               includeFamily: values['include-family'],
@@ -1038,8 +1046,11 @@ export async function runCli(
           allowPositionals: true,
           options: {
             person: { type: 'string' },
+            'person-id': { type: 'string' },
             repo: { type: 'string' },
+            package: { type: 'string' },
             'package-dir': { type: 'string' },
+            patch: { type: 'string' },
             json: { type: 'boolean', default: false },
             strict: { type: 'boolean', default: false },
             'all-staged': { type: 'boolean', default: false },
@@ -1047,15 +1058,41 @@ export async function runCli(
           },
         });
         const positionalIds = positionals.map((personId) => personId.trim()).filter((personId) => personId.length > 0);
+        const packageFlags = [
+          values.package !== undefined ? '--package' : undefined,
+          values['package-dir'] !== undefined ? '--package-dir' : undefined,
+          values.patch !== undefined ? '--patch' : undefined,
+        ].filter((flag): flag is string => flag !== undefined);
+        if (packageFlags.length > 1) {
+          throw new CliValidationError(
+            `Specify only one of ${packageFlags.map((flag) => `\`${flag}\``).join(' or ')}, not both.`
+          );
+        }
+        if (
+          values.person !== undefined &&
+          values['person-id'] !== undefined &&
+          values.person.trim() !== values['person-id'].trim()
+        ) {
+          throw new CliValidationError(
+            'Specify either `--person` or `--person-id` with matching values, not conflicting ids.'
+          );
+        }
+        const personFlag = values.person?.trim() || values['person-id']?.trim() || undefined;
+        const resolvedRepoDir = values.repo?.trim() || cwd;
+        const rawPackageDir = values['package-dir'] ?? values.package ?? values.patch;
+        let packageDir = rawPackageDir
+          ? normalizeIntegratePackageDir(rawPackageDir, resolvedRepoDir)
+          : undefined;
+
         if (values['pending-only'] && !values['all-staged']) {
           throw new CliValidationError('Option `--pending-only` requires `--all-staged`.');
         }
-        if (values['all-staged'] && (positionalIds.length > 0 || values.person)) {
+        if (values['all-staged'] && (positionalIds.length > 0 || personFlag)) {
           throw new CliValidationError(
             '`--all-staged` discovers person ids from research/people and does not take person ids.'
           );
         }
-        if (values.person && positionalIds.length > 0) {
+        if (personFlag && positionalIds.length > 0) {
           throw new CliValidationError('Pass person ids as positionals or with `--person`, not both.');
         }
         const [auditMod, batchMod, integrateBatchMod, { measureCommand }] = await Promise.all([
@@ -1067,8 +1104,6 @@ export async function runCli(
         const { runAuditCommand } = auditMod;
         const { runAuditBatchCommand, listStagedAuditPersonIds } = batchMod;
         const { classifyStagedPackages } = integrateBatchMod;
-        const resolvedRepoDir = values.repo?.trim() || process.cwd();
-        const singlePersonId = values['all-staged'] ? undefined : (values.person ?? positionalIds[0]);
         let batchIds = values['all-staged']
           ? listStagedAuditPersonIds(resolvedRepoDir)
           : positionalIds;
@@ -1084,11 +1119,25 @@ export async function runCli(
           skippedAlreadyIntegrated = classified.alreadyIntegrated;
         }
         const useBatch = values['all-staged'] || batchIds.length > 1;
-        if (useBatch && values['package-dir']) {
-          throw new CliValidationError('`--package-dir` applies to a single person audit only.');
+        if (useBatch && packageDir) {
+          throw new CliValidationError('`--package` / `--package-dir` applies to a single person audit only.');
         }
         if (!useBatch) {
-          const personId = requireStringFlag(singlePersonId, '--person');
+          let resolvedPersonId: string | undefined = personFlag ?? positionalIds[0];
+          if (!personFlag && !packageDir && positionalIds.length === 1) {
+            const fromPositionalPath = resolvePositionalIntegratePackage(
+              positionalIds[0],
+              resolvedRepoDir
+            );
+            if (fromPositionalPath) {
+              packageDir = fromPositionalPath.packageDir;
+              resolvedPersonId = fromPositionalPath.personId;
+            }
+          }
+          if (!resolvedPersonId && packageDir) {
+            resolvedPersonId = readPersonIdFromPackageDir(packageDir);
+          }
+          const personId = requireStringFlag(resolvedPersonId, '--person');
           const result = await measureCommand(
             {
               subcmd: 'audit',
@@ -1101,9 +1150,9 @@ export async function runCli(
             },
             () =>
               runAuditCommand({
-                repoDir: values.repo,
+                repoDir: resolvedRepoDir,
                 personId,
-                packageDir: values['package-dir'],
+                packageDir,
                 json: values.json,
               })
           );
@@ -1122,7 +1171,7 @@ export async function runCli(
           },
           () =>
             runAuditBatchCommand({
-              repoDir: values.repo,
+              repoDir: resolvedRepoDir,
               personIds: batchIds,
               json: values.json,
               pendingOnly: values['pending-only'],
@@ -1157,7 +1206,7 @@ export async function runCli(
           },
           () =>
             runVerifyCommand({
-              repoDir: values.repo,
+              repoDir: values.repo ?? cwd,
               strictHygiene: values['strict-hygiene'],
               json: values.json,
             })
@@ -1197,7 +1246,7 @@ export async function runCli(
           },
           () =>
             runStatusCommand({
-              repoDir: values.repo,
+              repoDir: values.repo ?? cwd,
               json: values.json,
               limit,
               filter,
@@ -1233,7 +1282,7 @@ export async function runCli(
           },
           () =>
             runSyncCommand({
-              repoDir: parsed.repoDir,
+              repoDir: parsed.repoDir ?? cwd,
               siteUrl: parsed.siteUrl,
               types,
               syncMissingMedia: parsed.syncMissingMedia,

@@ -381,7 +381,7 @@ export function computeTimeSnapshot(
         tier,
         activityTitle: sameYearNoPlace
           ? summarizeActivity(sameYearNoPlace, person.full_name, place.name).title
-          : cleanedBest.title,
+          : `Likely in ${place.name}`,
         activityNote: sameYearNoPlace
           ? summarizeActivity(sameYearNoPlace, person.full_name, place.name).note
           : `${direction} in ${bestEv.year}: ${cleanedBest.title}.`,
@@ -407,8 +407,8 @@ export function computeTimeSnapshot(
       age,
       place: null,
       tier: 'Unlocated',
-      activityTitle: fallbackEvent
-        ? summarizeActivity(fallbackEvent, person.full_name).title
+      activityTitle: sameYearEvents[0]
+        ? summarizeActivity(sameYearEvents[0], person.full_name).title
         : 'Location unrecorded',
       activityNote,
       nearestEventId: fallbackEvent?.id || null,

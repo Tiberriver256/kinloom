@@ -1,8 +1,10 @@
 import type { EntityPayload, EntityType, KinshipRelation } from '@kinloom/core';
 import { deriveKinshipEdgeId, isEditSummaryValid } from '@kinloom/core';
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { CitationBadge } from './WikiBadges.js';
+import { handleTablistKeyDown } from '../../lib/keyboardNav.js';
 import { useArchiveData } from '../../context/ArchiveDataContext.js';
+import { useDialogFocusTrap } from '../../lib/useDialogFocusTrap.js';
 
 export type CreatableKind = 'person' | 'event' | 'place' | 'kinship_edge';
 export type RelativeRelation = 'parent' | 'spouse' | 'child';
@@ -87,8 +89,8 @@ const PERSON_LINEAGE_OPTIONS: readonly {
   { value: 'ancestor', label: 'Ancestor' },
   { value: 'descendant', label: 'Descendant' },
   { value: 'descendant_spouse', label: 'Spouse' },
-  { value: 'collateral', label: 'Collateral Relative' },
-  { value: 'extended', label: 'Extended Relative' },
+  { value: 'collateral', label: 'Extended Relative' },
+  { value: 'extended', label: 'Extended Relative (Other)' },
 ];
 
 function slugify(value: string): string {
@@ -195,6 +197,13 @@ export const CreateEntityModal: React.FC<CreateEntityModalProps> = ({
   const [fromPersonId, setFromPersonId] = useState(defaultPersonId ?? '');
   const [toPersonId, setToPersonId] = useState('');
   const [relation, setRelation] = useState<KinshipRelation>('parent');
+
+  const closeBtnRef = useRef<HTMLButtonElement | null>(null);
+  const dialogRef = useDialogFocusTrap({
+    open,
+    onClose,
+    initialFocusRef: closeBtnRef,
+  });
 
   const anchorId = relativeContext?.anchorPersonId ?? null;
   const anchorRelation = relativeContext?.relation ?? null;
@@ -550,9 +559,16 @@ export const CreateEntityModal: React.FC<CreateEntityModalProps> = ({
       : 'Save to Archive';
 
   return (
-    <dialog open className="lightbox-backdrop" aria-label={modalTitle}>
+    <dialog
+      ref={dialogRef}
+      open
+      aria-modal="true"
+      className="lightbox-backdrop"
+      aria-label={modalTitle}
+    >
       <button
         type="button"
+        tabIndex={-1}
         className="lightbox-backdrop-close"
         aria-label="Close create record modal"
         onClick={onClose}
@@ -560,13 +576,28 @@ export const CreateEntityModal: React.FC<CreateEntityModalProps> = ({
       <div className="wiki-modal-card">
         <div className="wiki-modal-header">
           <h2>{modalTitle}</h2>
-          <button type="button" className="pill-btn" onClick={onClose}>
+          <button ref={closeBtnRef} type="button" className="pill-btn" onClick={onClose}>
             Close
           </button>
         </div>
 
         {relativeContext ? (
-          <div className="filter-bar" role="tablist" aria-label="How to add relative">
+          <div
+            className="filter-bar"
+            role="tablist"
+            aria-label="How to add relative"
+            onKeyDown={(event) => {
+              handleTablistKeyDown(
+                event,
+                ['create_new', 'link_existing'] as const,
+                relativeTab,
+                (next) => {
+                  setRelativeTab(next);
+                  setError(null);
+                },
+              );
+            }}
+          >
             {(
               [
                 ['create_new', 'Create new person'],
@@ -577,6 +608,7 @@ export const CreateEntityModal: React.FC<CreateEntityModalProps> = ({
                 key={tabId}
                 type="button"
                 role="tab"
+                tabIndex={relativeTab === tabId ? 0 : -1}
                 aria-selected={relativeTab === tabId}
                 className={`pill-btn ${relativeTab === tabId ? 'active' : ''}`}
                 onClick={() => {
@@ -589,7 +621,22 @@ export const CreateEntityModal: React.FC<CreateEntityModalProps> = ({
             ))}
           </div>
         ) : (
-          <div className="filter-bar" role="tablist" aria-label="Record type to create">
+          <div
+            className="filter-bar"
+            role="tablist"
+            aria-label="Record type to create"
+            onKeyDown={(event) => {
+              handleTablistKeyDown(
+                event,
+                ['person', 'event', 'place', 'kinship_edge'] as const,
+                kind,
+                (next) => {
+                  setKind(next);
+                  setError(null);
+                },
+              );
+            }}
+          >
             {(
               [
                 ['person', 'Person'],
@@ -602,6 +649,7 @@ export const CreateEntityModal: React.FC<CreateEntityModalProps> = ({
                 key={id}
                 type="button"
                 role="tab"
+                tabIndex={kind === id ? 0 : -1}
                 aria-selected={kind === id}
                 className={`pill-btn ${kind === id ? 'active' : ''}`}
                 onClick={() => {

@@ -20,6 +20,8 @@ export const ExplorerTopBar: React.FC = () => {
   const [signInOpen, setSignInOpen] = useState(false);
   const headerRef = useRef<HTMLElement | null>(null);
   const accountMenuRef = useRef<HTMLDivElement | null>(null);
+  const accountTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const accountDropdownRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     const headerEl = headerRef.current;
@@ -64,6 +66,9 @@ export const ExplorerTopBar: React.FC = () => {
     if (!accountOpen) {
       return undefined;
     }
+    const firstMenuItem =
+      accountDropdownRef.current?.querySelector<HTMLElement>('[role="menuitem"]:not([disabled])');
+    firstMenuItem?.focus();
     const onPointerDown = (event: PointerEvent): void => {
       if (accountMenuRef.current && !accountMenuRef.current.contains(event.target as Node)) {
         setAccountOpen(false);
@@ -71,7 +76,9 @@ export const ExplorerTopBar: React.FC = () => {
     };
     const onKeyDown = (event: KeyboardEvent): void => {
       if (event.key === 'Escape') {
+        event.preventDefault();
         setAccountOpen(false);
+        accountTriggerRef.current?.focus();
       }
     };
     document.addEventListener('pointerdown', onPointerDown);
@@ -103,40 +110,77 @@ export const ExplorerTopBar: React.FC = () => {
 
   return (
     <>
+      <a
+        href="#main-content"
+        className="skip-to-content"
+        onClick={() => {
+          const target = document.getElementById('main-content');
+          if (target) {
+            if (!target.hasAttribute('tabindex')) {
+              target.setAttribute('tabindex', '-1');
+            }
+            target.focus();
+          }
+        }}
+      >
+        Skip to content
+      </a>
       <header ref={headerRef} className="topbar">
       <div className="topbar-left">
         <Link to="/" className="brand-link">
           {siteConfig.site.title}
         </Link>
 
-        <nav className="nav-links" aria-label="Primary navigation">
-          <Link to="/" className={`nav-pill nav-axis ${isPeopleActive ? 'active' : ''}`}>
+        <nav className="nav-links" aria-label="Primary">
+          <Link
+            to="/"
+            className={`nav-pill nav-axis ${isPeopleActive ? 'active' : ''}`}
+            aria-current={isPeopleActive ? 'page' : undefined}
+          >
             {KINLOOM_VOCABULARY.nav.people}
           </Link>
-          <Link to="/places" className={`nav-pill nav-axis ${isPlacesActive ? 'active' : ''}`}>
+          <Link
+            to="/places"
+            className={`nav-pill nav-axis ${isPlacesActive ? 'active' : ''}`}
+            aria-current={isPlacesActive ? 'page' : undefined}
+          >
             {KINLOOM_VOCABULARY.nav.places}
           </Link>
-          <Link to="/time" className={`nav-pill nav-axis ${isTimeActive ? 'active' : ''}`}>
+          <Link
+            to="/time"
+            className={`nav-pill nav-axis ${isTimeActive ? 'active' : ''}`}
+            aria-current={isTimeActive ? 'page' : undefined}
+          >
             {KINLOOM_VOCABULARY.nav.time}
           </Link>
 
           <span className="nav-divider nav-pill-desktop-only" aria-hidden="true" />
 
-          <Link to="/tree" className={`nav-pill ${location.pathname === '/tree' ? 'active' : ''}`}>
+          <Link
+            to="/tree"
+            className={`nav-pill ${location.pathname === '/tree' ? 'active' : ''}`}
+            aria-current={location.pathname === '/tree' ? 'page' : undefined}
+          >
             {KINLOOM_VOCABULARY.nav.tree}
           </Link>
-          <Link to="/map" className={`nav-pill ${location.pathname === '/map' ? 'active' : ''}`}>
+          <Link
+            to="/map"
+            className={`nav-pill ${location.pathname === '/map' ? 'active' : ''}`}
+            aria-current={location.pathname === '/map' ? 'page' : undefined}
+          >
             {KINLOOM_VOCABULARY.nav.map}
           </Link>
           <Link
             to="/kinship"
             className={`nav-pill nav-pill-desktop-only ${location.pathname === '/kinship' ? 'active' : ''}`}
+            aria-current={location.pathname === '/kinship' ? 'page' : undefined}
           >
             {KINLOOM_VOCABULARY.nav.kinship}
           </Link>
           <Link
             to="/evidence"
             className={`nav-pill nav-pill-desktop-only ${location.pathname === '/evidence' ? 'active' : ''}`}
+            aria-current={location.pathname === '/evidence' ? 'page' : undefined}
           >
             {KINLOOM_VOCABULARY.nav.evidence}
           </Link>
@@ -146,6 +190,7 @@ export const ExplorerTopBar: React.FC = () => {
               key={`${route.pluginId}:${route.path}`}
               to={route.path}
               className={`nav-pill ${location.pathname === route.path ? 'active' : ''}`}
+              aria-current={location.pathname === route.path ? 'page' : undefined}
             >
               {route.navLabel}
             </Link>
@@ -220,6 +265,7 @@ export const ExplorerTopBar: React.FC = () => {
         <div className={`topbar-account ${isSignedInMember ? '' : 'topbar-account-mobile-only'}`} ref={accountMenuRef}>
           {isSignedInMember ? (
             <button
+              ref={accountTriggerRef}
               type="button"
               className={`topbar-account-btn ${accountOpen ? 'is-open' : ''}`}
               aria-expanded={accountOpen}
@@ -250,6 +296,7 @@ export const ExplorerTopBar: React.FC = () => {
             </button>
           ) : (
             <button
+              ref={accountTriggerRef}
               type="button"
               className={`topbar-mobile-icon-btn ${accountOpen ? 'is-open' : ''}`}
               aria-expanded={accountOpen}
@@ -277,6 +324,7 @@ export const ExplorerTopBar: React.FC = () => {
 
           {accountOpen && (
             <div
+              ref={accountDropdownRef}
               className="topbar-account-menu"
               role="menu"
               aria-label={isSignedInMember ? 'Account options' : 'Archive menu'}

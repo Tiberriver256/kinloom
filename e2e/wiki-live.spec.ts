@@ -339,7 +339,7 @@ test('6. media upload supports PNG and HTTP 206 WebM video streaming while block
 
   // 1. Upload a valid PNG photograph via UI
   await page.getByRole('button', { name: 'Add Photo' }).click();
-  const modal = page.getByRole('dialog', { name: 'Upload archival media' });
+  const modal = page.getByRole('dialog', { name: 'Upload photo or document' });
   await expect(modal).toBeVisible();
 
   await modal.locator('input[type="file"]').setInputFiles({
@@ -383,9 +383,9 @@ test('6. media upload supports PNG and HTTP 206 WebM video streaming while block
 
   // 4. Verify living-person portrait upload is blocked in UI and returns HTTP 422 on server without leaking
   await page.getByRole('button', { name: 'Add Photo' }).click();
-  const livingModal = page.getByRole('dialog', { name: 'Upload archival media' });
+  const livingModal = page.getByRole('dialog', { name: 'Upload photo or document' });
   await livingModal.getByLabel('Who is in this photo? (deceased only)').selectOption('p_jordan_mercer_living');
-  await expect(livingModal).toContainText('Living-person privacy rule');
+  await expect(livingModal).toContainText('Living Privacy Rule');
   await livingModal.locator('input[type="file"]').setInputFiles({
     name: 'living-portrait.png',
     mimeType: 'image/png',
@@ -503,7 +503,7 @@ test('8. Family Notes panel supports posting a discussion note and soft-deleting
   await page.goto(`${wiki.baseUrl}/person/abraham-lincoln-1809`);
 
   await page.getByRole('button', { name: /Family Notes/ }).click();
-  const talkPanel = page.getByRole('region', { name: 'Record discussion' });
+  const talkPanel = page.getByRole('region', { name: 'Family Notes' });
   await expect(talkPanel).toBeVisible();
 
   await talkPanel
@@ -514,7 +514,7 @@ test('8. Family Notes panel supports posting a discussion note and soft-deleting
 
   await page.reload();
   await page.getByRole('button', { name: /Family Notes/ }).click();
-  const reloadedTalk = page.getByRole('region', { name: 'Record discussion' });
+  const reloadedTalk = page.getByRole('region', { name: 'Family Notes' });
   await expect(reloadedTalk).toContainText('Cross-check 1850 Springfield census dwelling number 442.');
 
   await reloadedTalk.getByRole('button', { name: 'Delete' }).click();
@@ -524,7 +524,7 @@ test('8. Family Notes panel supports posting a discussion note and soft-deleting
 
   await page.reload();
   await page.getByRole('button', { name: /Family Notes/ }).click();
-  await expect(page.getByRole('region', { name: 'Record discussion' })).not.toContainText(
+  await expect(page.getByRole('region', { name: 'Family Notes' })).not.toContainText(
     'Cross-check 1850 Springfield census dwelling number 442.',
   );
 });

@@ -5,7 +5,7 @@ import {
   buildPersonThumbMap,
 } from '@kinloom/core';
 import React, { useMemo, useState } from 'react';
-import { initialsOf, resolveAssetUrl } from '../components/Atoms.js';
+import { EmptyStateNotice, initialsOf, resolveAssetUrl } from '../components/Atoms.js';
 import { CreateEntityModal } from '../components/wiki/CreateEntityModal.js';
 import { ExplorerTopBar } from '../components/ExplorerTopBar.js';
 import { KinloomFooter } from '../components/KinloomFooter.js';
@@ -181,7 +181,7 @@ export const IndexPage: React.FC = () => {
   return (
     <div>
       <ExplorerTopBar />
-      <main className="index-page">
+      <main id="main-content" className="index-page">
         <section className="wire-banner index-banner">
           <div>
             <h1>{siteConfig.site.familyName}</h1>
@@ -286,9 +286,27 @@ export const IndexPage: React.FC = () => {
             )}
 
             {sections.length === 0 ? (
-              <p style={{ color: 'var(--text-secondary)', marginBottom: 24 }}>
-                No people match the active filters.
-              </p>
+              <EmptyStateNotice
+                title={
+                  bundle.people.length === 0
+                    ? 'No people have been added to this archive yet.'
+                    : 'No people match the active filters.'
+                }
+                action={
+                  query.trim() || onlyWithMedia ? (
+                    <button
+                      type="button"
+                      className="pill-btn"
+                      onClick={() => {
+                        setQuery('');
+                        setOnlyWithMedia(false);
+                      }}
+                    >
+                      Clear filters
+                    </button>
+                  ) : undefined
+                }
+              />
             ) : (
               sections.map((section, idx) => (
                 <section key={section.id} aria-label={section.heading}>

@@ -1185,8 +1185,15 @@ select.pill-btn option {
 
 .time-anchor-count {
   font-family: var(--font-mono);
-  font-size: 0.68rem;
+  font-size: 0.75rem;
   color: var(--text-secondary);
+}
+
+.time-anchor-caption {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  margin-bottom: 4px;
 }
 
 .time-macro-ribbon {
@@ -1388,7 +1395,7 @@ select.pill-btn option {
 
 .time-person-tier {
   font-family: var(--font-mono);
-  font-size: 0.68rem;
+  font-size: 0.75rem;
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: var(--text-secondary);
@@ -1714,7 +1721,7 @@ select.pill-btn option {
 .place-history-figure {
   margin: 0;
   border: 1px solid var(--border-decorative);
-  background: rgba(250, 245, 236, 0.7);
+  background: rgba(252, 249, 242, 0.78);
   padding: 8px;
 }
 
@@ -1733,7 +1740,7 @@ select.pill-btn option {
   color: var(--text-secondary);
 }
 
-@media (max-width: 760px) {
+@media (max-width: 768px) {
   .place-history-grid {
     grid-template-columns: minmax(0, 1fr);
   }
@@ -2423,9 +2430,9 @@ html.tree-viewport-lock body {
 
 .tree-focus-living-pill {
   font-family: var(--font-mono);
-  font-size: 0.68rem;
+  font-size: 0.75rem;
   font-weight: 600;
-  padding: 1px 6px;
+  padding: 4px 8px;
   border-radius: 999px;
   background: var(--badge-cited-bg);
   color: var(--badge-cited-fg);
@@ -2448,10 +2455,10 @@ html.tree-viewport-lock body {
   gap: 3px 5px;
   margin-bottom: 8px;
   padding: 4px 7px;
-  border-radius: 3px;
+  border-radius: var(--radius-sm);
   background: var(--surface-linen);
   font-family: var(--font-mono);
-  font-size: 0.72rem;
+  font-size: 0.75rem;
   color: var(--text-secondary);
 }
 
@@ -2615,6 +2622,7 @@ html.tree-viewport-lock body {
 .tree-gen-jump-bar {
   display: flex;
   align-items: center;
+  justify-content: safe center;
   gap: 6px;
   overflow-x: auto;
   scrollbar-width: none;
@@ -3275,7 +3283,7 @@ html.tree-viewport-lock body {
 
 .map-page .maplibregl-ctrl-attrib {
   background: rgba(252, 249, 242, 0.92);
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .map-toolbar {
@@ -3299,15 +3307,16 @@ html.tree-viewport-lock body {
   display: flex;
   align-items: center;
   gap: 6px;
-  flex: 0 1 230px;
-  min-width: 140px;
+  flex: 0 0 auto;
+  min-width: 11rem;
   font-size: 0.78rem;
   font-family: var(--font-mono);
 }
 
-.map-trace-label > select.pill-btn {
-  min-width: 0;
-  max-width: 100%;
+.map-trace-label > select.pill-btn,
+.map-trace-select {
+  min-width: 11rem;
+  max-width: 240px;
   overflow: hidden;
   text-overflow: ellipsis;
 }
@@ -3797,7 +3806,7 @@ dialog.global-search-backdrop {
   overflow-y: auto;
   overscroll-behavior: contain;
   padding: 20px;
-  box-shadow: 0 18px 44px rgba(15, 23, 42, 0.35);
+  box-shadow: 0 18px 44px rgba(27, 42, 65, 0.35);
 }
 
 /* ==========================================================================
@@ -3904,7 +3913,7 @@ dialog.global-search-backdrop {
   border: 1px solid var(--border-control);
   border-radius: var(--radius-sm);
   overflow: hidden;
-  box-shadow: 0 18px 44px rgba(15, 23, 42, 0.45);
+  box-shadow: 0 18px 44px rgba(27, 42, 65, 0.45);
 }
 
 .scan-lightbox-header {
@@ -3982,6 +3991,10 @@ dialog.global-search-backdrop {
   padding: 12px 16px;
   background: var(--surface-canvas);
   border-bottom: 1px solid var(--border-decorative);
+}
+
+.global-search-header:focus-within {
+  box-shadow: inset 0 0 0 2px var(--action-focus);
 }
 
 .global-search-input {
@@ -4227,7 +4240,7 @@ dialog.global-search-backdrop {
 
 .person-card-branch {
   font-family: var(--font-mono);
-  font-size: 0.68rem;
+  font-size: 0.75rem;
   text-transform: uppercase;
   letter-spacing: 0.05em;
   color: var(--radar-local);
@@ -4630,7 +4643,7 @@ dialog.global-search-backdrop {
   background: var(--surface-card);
   color: var(--text-primary);
   border: 1px solid var(--border-control);
-  border-radius: 3px;
+  border-radius: var(--radius-md);
   box-shadow: 0 10px 28px rgba(27, 42, 65, 0.18), 0 2px 6px rgba(27, 42, 65, 0.08);
   padding: 12px 13px;
   display: flex;
@@ -4863,18 +4876,18 @@ dialog.global-search-backdrop {
   position: absolute;
   top: 9px;
   left: 9px;
-  padding: 1px 6px;
+  padding: 4px 8px;
   font-family: var(--font-mono);
-  font-size: 0.62rem;
+  font-size: 0.75rem;
   font-weight: 600;
   letter-spacing: 0.03em;
-  border-radius: 1px;
-  background: rgba(27, 42, 65, 0.88);
+  border-radius: var(--radius-sm);
+  background: rgba(27, 42, 65, 0.9);
   color: var(--text-inverse);
 }
 
 .media-kind-badge.kind-portrait {
-  background: rgba(54, 89, 76, 0.92);
+  background: rgba(47, 82, 69, 0.92);
 }
 
 .media-kind-badge.kind-headstone {
@@ -4882,7 +4895,7 @@ dialog.global-search-backdrop {
 }
 
 .media-kind-badge.kind-record_scan {
-  background: rgba(140, 83, 25, 0.92);
+  background: rgba(122, 70, 18, 0.92);
 }
 
 .person-media-caption {
@@ -5282,7 +5295,7 @@ dialog.global-search-backdrop {
   }
 }
 
-@media (max-width: 767px) {
+@media (max-width: 768px) {
   .topbar-switcher-label {
     flex: 1 1 auto;
     min-width: 0;
@@ -5326,19 +5339,40 @@ dialog.global-search-backdrop {
     margin-bottom: 8px;
   }
 
+  .search-input,
   .index-filter-bar .search-input {
-    padding: 6px 4px;
+    padding: 8px 10px;
     font-size: 1rem;
-    min-height: 38px;
+    min-height: 44px;
     width: 100%;
     min-width: 0;
+  }
+
+  .pill-btn,
+  .ink-link-btn,
+  .tree-gen-jump-chip,
+  .map-bordered-btn,
+  .source-read-inline,
+  .person-family-chip,
+  .person-section-jump-link,
+  .pronunciation-variant-btn {
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+  }
+
+  .pronunciation-play-btn {
+    width: 44px;
+    height: 44px;
+    min-width: 44px;
+    min-height: 44px;
   }
 
   .index-filter-actions {
     width: 100%;
     flex-wrap: wrap;
     justify-content: flex-start;
-    gap: 6px 12px;
+    gap: 8px 10px;
   }
 
   .index-export-btn {
@@ -5418,23 +5452,13 @@ dialog.global-search-backdrop {
   }
 
   .kinship-examples-bar {
-    flex-wrap: nowrap;
-    overflow-x: auto;
-    scrollbar-width: none;
-    padding-right: 20px;
-    gap: 6px;
-    -webkit-overflow-scrolling: touch;
-    mask-image: linear-gradient(to right, black 90%, transparent 100%);
-    -webkit-mask-image: linear-gradient(to right, black 90%, transparent 100%);
-  }
-
-  .kinship-examples-bar::-webkit-scrollbar {
-    display: none;
+    flex-wrap: wrap;
+    gap: 8px;
   }
 
   .kinship-examples-bar .pill-btn {
-    flex-shrink: 0;
-    white-space: nowrap;
+    white-space: normal;
+    text-align: left;
     min-height: 44px;
     border: 1px solid var(--border-control);
     border-radius: var(--radius-sm);
@@ -5444,6 +5468,7 @@ dialog.global-search-backdrop {
 
   .kinship-examples-label {
     flex-shrink: 0;
+    width: 100%;
     font-family: var(--font-mono);
     font-size: 0.75rem;
     color: var(--text-secondary);
@@ -5508,7 +5533,7 @@ dialog.global-search-backdrop {
   }
 
   .time-header-summary {
-    font-size: 0.68rem;
+    font-size: 0.75rem;
   }
 
   .handwritten-year-hero {
@@ -5626,7 +5651,7 @@ dialog.global-search-backdrop {
 
   .time-sheet-title {
     font-family: var(--font-mono);
-    font-size: 0.7rem;
+    font-size: 0.75rem;
     letter-spacing: 0.08em;
     text-transform: uppercase;
     color: var(--surface-header);
@@ -5634,13 +5659,13 @@ dialog.global-search-backdrop {
   }
 
   .time-sheet-close {
-    min-height: 36px;
-    padding: 4px 10px;
+    min-height: 44px;
+    padding: 6px 12px;
     border: 1px solid var(--border-decorative);
     border-radius: var(--radius-sm);
     background: var(--surface-canvas);
     font-family: var(--font-mono);
-    font-size: 0.7rem;
+    font-size: 0.75rem;
     color: var(--text-secondary);
     cursor: pointer;
   }
@@ -5714,7 +5739,7 @@ dialog.global-search-backdrop {
 
   .time-macro-toggle-tag {
     font-family: var(--font-mono);
-    font-size: 0.64rem;
+    font-size: 0.75rem;
     letter-spacing: 0.08em;
     text-transform: uppercase;
     color: var(--radar-macro);
@@ -5733,7 +5758,7 @@ dialog.global-search-backdrop {
 
   .time-macro-toggle-more {
     font-family: var(--font-mono);
-    font-size: 0.68rem;
+    font-size: 0.75rem;
     color: var(--text-secondary);
     flex-shrink: 0;
   }
@@ -5743,7 +5768,7 @@ dialog.global-search-backdrop {
     align-items: center;
     gap: 3px;
     font-family: var(--font-mono);
-    font-size: 0.7rem;
+    font-size: 0.75rem;
     color: var(--radar-copresence);
     flex-shrink: 0;
   }
@@ -6199,7 +6224,7 @@ dialog.global-search-backdrop {
     display: block;
     width: 34px;
     height: 4px;
-    border-radius: 99px;
+    border-radius: 999px;
     background: var(--border-control);
     opacity: 0.45;
     margin: 0 auto 6px;
@@ -6305,27 +6330,72 @@ dialog.global-search-backdrop {
 }
 
 /* ==========================================================================
-   Print-Friendly Biographical Dossier
+   Print-Friendly Archival Folio
    ========================================================================== */
 @media print {
+  html,
   body {
-    background: white !important;
-    color: var(--text-primary) !important;
+    background: #ffffff !important;
+    color: #000000 !important;
     font-size: 10.5pt;
   }
 
   .topbar,
+  .skip-to-content,
   .mobile-decade-strip,
   .timeline-spine,
   .print-hide,
+  .drawer-backdrop,
+  .lightbox-backdrop,
+  .source-inspector-backdrop,
+  .wiki-edit-drawer-backdrop,
   .global-search-backdrop,
   .source-reader-backdrop,
   .tree-toolbar-shell,
   .tree-toolbar,
   .tree-controls,
   .tree-gen-jump-bar,
-  .tree-focus-drawer {
+  .tree-focus-drawer,
+  .person-header-actions,
+  .person-section-jump-bar,
+  .wiki-action-bar,
+  .source-toggle,
+  .source-read-btn,
+  .source-action-btn,
+  .also-here,
+  .wireframe-photo:not(.has-real-photo),
+  .filter-bar,
+  .place-scope-bar,
+  .place-decade-bar,
+  .local-survey-nearby-strip,
+  .time-scrubber-wrap,
+  .map-overlay,
+  .kinship-selector-card,
+  .kinship-examples-bar,
+  .narrative-audio-margin-bar,
+  .narrative-audio-dock {
     display: none !important;
+  }
+
+  .person-biography-body.is-collapsed {
+    max-height: none !important;
+    overflow: visible !important;
+  }
+
+  .person-biography-body.is-collapsed::after {
+    display: none !important;
+  }
+
+  .is-collapsed-screen {
+    display: block !important;
+  }
+
+  .person-biography-source-btn {
+    border: none !important;
+    background: transparent !important;
+    padding: 0 !important;
+    text-align: left;
+    color: #000000 !important;
   }
 
   .kinloom-app:has(.tree-shell-diagram),
@@ -6336,10 +6406,16 @@ dialog.global-search-backdrop {
     overflow: visible !important;
   }
 
+  .tree-stage {
+    transform: none !important;
+    position: static !important;
+  }
+
   .tree-roll-unit {
     break-inside: avoid;
     page-break-inside: avoid;
     box-shadow: none !important;
+    background: #ffffff !important;
     border-color: var(--border-control) !important;
   }
 
@@ -6358,18 +6434,50 @@ dialog.global-search-backdrop {
     display: block !important;
   }
 
-  .person-header,
-  .story-card {
-    background: white !important;
+  h1,
+  h2,
+  h3,
+  h4,
+  .section-heading {
+    break-after: avoid;
+    page-break-after: avoid;
+    color: #000000 !important;
+  }
+
+  p {
+    orphans: 3;
+    widows: 3;
+  }
+
+  .person-header {
+    background: #ffffff !important;
     border-bottom: 1px solid var(--border-control) !important;
+    box-shadow: none !important;
+    margin-bottom: 10pt !important;
+  }
+
+  .person-header-top,
+  .person-family-row,
+  .story-card,
+  .person-media-card,
+  .citation-item-card,
+  .place-map-box,
+  .occupancy-row,
+  .time-lane,
+  .evidence-source-row {
+    background: #ffffff !important;
     box-shadow: none !important;
     break-inside: avoid;
     page-break-inside: avoid;
+  }
+
+  .story-card {
+    border-bottom: 1px solid var(--border-control) !important;
     margin-bottom: 10pt !important;
   }
 
   a {
-    color: var(--text-primary) !important;
+    color: #000000 !important;
     text-decoration: none !important;
   }
 }
@@ -6833,7 +6941,7 @@ dialog.global-search-backdrop {
   color: var(--text-secondary);
 }
 
-@media (max-width: 767px) {
+@media (max-width: 768px) {
   .kinloom-footer {
     padding: 14px 14px 28px;
   }
@@ -7221,7 +7329,7 @@ dialog.global-search-backdrop {
 .private-archive-gate-card {
   background: var(--surface-card);
   border: 1px solid var(--border-control);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   box-shadow: 0 12px 32px rgba(27, 42, 65, 0.08);
   padding: clamp(1.35rem, 4vw, 2rem);
 }
@@ -8087,9 +8195,18 @@ dialog.global-search-backdrop {
 
 .kinship-examples-bar .pill-btn {
   text-align: left;
+  border: 1px solid var(--border-decorative);
+  border-radius: var(--radius-sm);
+  padding: 5px 10px;
+  background: var(--surface-card);
 }
 
-@media (max-width: 767px) {
+.kinship-examples-bar .pill-btn:hover {
+  border-color: var(--accent-primary);
+  background: var(--surface-linen);
+}
+
+@media (max-width: 768px) {
   .wiki-action-bar {
     gap: 6px 12px;
     margin: 0 0 14px;
@@ -8243,13 +8360,12 @@ dialog.global-search-backdrop {
   margin: 10px 0 14px;
   padding: 10px 14px;
   background: var(--surface-card);
-  border-top: 1px solid var(--border-decorative);
-  border-bottom: 1px solid var(--border-decorative);
-  border-left: 3px solid var(--accent-primary);
+  border: 1px solid var(--border-decorative);
+  border-radius: var(--radius-md);
 }
 
 .narrative-audio-margin-bar.is-notes {
-  border-left-color: var(--accent-secondary);
+  border-color: var(--accent-secondary);
 }
 
 .narrative-audio-play-btn {
@@ -8286,7 +8402,7 @@ dialog.global-search-backdrop {
 }
 
 .narrative-audio-bar-main {
-  flex: 1 1 200px;
+  flex: 1 1 250px;
   min-width: 0;
 }
 
@@ -8304,6 +8420,9 @@ dialog.global-search-backdrop {
   font-weight: 600;
   color: var(--accent-primary);
   min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .narrative-audio-voice-label.is-notes {
@@ -8313,7 +8432,7 @@ dialog.global-search-backdrop {
 .narrative-audio-time {
   font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
-  font-size: 0.72rem;
+  font-size: 0.75rem;
   color: var(--text-secondary);
   white-space: nowrap;
   flex-shrink: 0;
@@ -8330,7 +8449,7 @@ dialog.global-search-backdrop {
   position: relative;
   width: 100%;
   height: 6px;
-  border-radius: 3px;
+  border-radius: var(--radius-sm);
   overflow: hidden;
   background: var(--surface-muted);
 }
@@ -8382,7 +8501,7 @@ dialog.global-search-backdrop {
 .narrative-audio-scrub-wrap:has(.narrative-audio-scrub-input:focus-visible) {
   outline: 2px solid var(--action-focus);
   outline-offset: 2px;
-  border-radius: 3px;
+  border-radius: var(--radius-sm);
 }
 
 .narrative-audio-bar-controls {
@@ -8571,7 +8690,15 @@ dialog.global-search-backdrop {
   outline-offset: 2px;
 }
 
-@media (max-width: 767px) {
+@media (max-width: 768px) {
+  .narrative-audio-scrub-wrap {
+    height: 44px;
+  }
+
+  .narrative-audio-scrub-input {
+    min-height: 44px;
+  }
+
   .narrative-audio-play-btn {
     width: 44px;
     height: 44px;
@@ -8649,7 +8776,7 @@ dialog.global-search-backdrop {
   }
 }
 
-@media (pointer: coarse), (max-width: 767px) {
+@media (pointer: coarse), (max-width: 768px) {
   .archival-footnote-ref {
     padding: 8px 6px;
     margin: -8px 0;
@@ -8712,11 +8839,11 @@ dialog.global-search-backdrop {
 
 .pronunciation-lang {
   font-family: var(--font-mono);
-  font-size: 0.68rem;
+  font-size: 0.75rem;
   text-transform: uppercase;
   letter-spacing: 0.05em;
   color: var(--text-secondary);
-  opacity: 0.8;
+  opacity: 0.85;
 }
 
 .pronunciation-play-btn {
@@ -8748,7 +8875,7 @@ dialog.global-search-backdrop {
   margin-left: 4px;
   padding: 2px 6px;
   border: none;
-  border-radius: 3px;
+  border-radius: var(--radius-sm);
   background: transparent;
   color: var(--text-secondary);
   font-family: var(--font-mono);
@@ -8810,7 +8937,7 @@ dialog.global-search-backdrop {
   margin-left: 4px;
   padding: 2px 8px;
   border: 1px solid var(--border-control);
-  border-radius: 3px;
+  border-radius: var(--radius-sm);
   background: var(--surface-card);
   color: var(--accent-primary);
   font-family: var(--font-mono);
@@ -8930,6 +9057,7 @@ dialog.global-search-backdrop {
   width: 24px;
   height: 24px;
   min-width: 24px;
+  min-height: 24px;
   padding: 0;
 }
 
@@ -9041,12 +9169,12 @@ dialog.global-search-backdrop {
 
 .entity-popover-kind {
   font-family: var(--font-mono);
-  font-size: 0.68rem;
+  font-size: 0.75rem;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  padding: 2px 6px;
-  border-radius: 2px;
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
   background: var(--surface-linen);
   border: 1px solid var(--border-decorative);
   color: var(--text-secondary);
@@ -9112,12 +9240,177 @@ dialog.global-search-backdrop {
 }
 
 /* ==========================================================================
-   Archival Not Found Page (*)
+   Archival Not Found Page (*) & Wave 52B Utilities
    ========================================================================== */
 .not-found-page {
-  max-width: 780px;
+  max-width: 1120px;
   margin: 0 auto;
   padding: 48px 26px 72px;
+}
+
+.skip-to-content {
+  position: fixed;
+  top: 8px;
+  left: 8px;
+  z-index: 300;
+  padding: 10px 16px;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  background: var(--surface-header);
+  color: var(--text-inverse);
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+  font-weight: 600;
+  text-decoration: none;
+  border-radius: var(--radius-md);
+  border: 2px solid var(--text-inverse);
+  box-shadow: var(--shadow-active);
+  transform: translateY(-200%);
+}
+
+.skip-to-content:focus,
+.skip-to-content:focus-visible {
+  transform: translateY(0);
+  outline: 2px solid var(--action-focus);
+  outline-offset: 2px;
+}
+
+dialog[open] {
+  overscroll-behavior: contain;
+}
+
+.is-collapsed-screen {
+  display: none;
+}
+
+.empty-state-notice {
+  padding: 22px 20px;
+  border: 1px solid var(--border-decorative);
+  border-radius: var(--radius-md);
+  background: var(--surface-card);
+  margin: 12px 0 24px;
+}
+
+.empty-state-notice-title {
+  margin: 0;
+  font-family: var(--font-serif);
+  font-size: 1.02rem;
+  font-weight: 600;
+  color: var(--surface-header);
+}
+
+.empty-state-notice-body {
+  margin: 6px 0 0;
+  font-size: 0.92rem;
+  color: var(--text-secondary);
+  max-width: 56ch;
+}
+
+.empty-state-notice-action {
+  margin-top: 12px;
+}
+
+.person-alt-names {
+  font-size: 0.84rem;
+  color: var(--text-secondary);
+  margin-top: 4px;
+  grid-column: 1 / -1;
+}
+
+.person-section-jump-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 14px;
+  padding: 8px 0 12px;
+  margin-bottom: 14px;
+  border-bottom: 1px solid var(--border-decorative);
+}
+
+.person-section-jump-link {
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--accent-primary);
+  text-decoration: none;
+  padding: 2px 4px;
+}
+
+.person-section-jump-link:hover,
+.person-section-jump-link:focus-visible {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.person-timeline-heading {
+  margin: 0 0 12px;
+}
+
+.timeline-layout.no-spine {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.tree-zoom-readout {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  padding: 0 6px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.tree-empty-wrap {
+  max-width: 680px;
+  margin: 48px auto;
+  padding: 0 18px;
+}
+
+.tree-roll-branch-caption {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  margin-bottom: 6px;
+}
+
+.kinship-result-heading {
+  font-family: var(--font-serif);
+  font-size: 1.5rem;
+  margin: 0 0 4px;
+  color: var(--surface-header);
+}
+
+.map-empty-notice {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  margin-bottom: 6px;
+}
+
+@media (max-width: 480px) {
+  .index-filter-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .index-filter-toggles {
+    display: contents;
+  }
+
+  .index-filter-actions .pill-btn,
+  .index-filter-actions .wiki-btn-sm {
+    justify-content: center;
+    width: 100%;
+  }
 }
 
 .not-found-title {

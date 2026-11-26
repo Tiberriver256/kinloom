@@ -966,7 +966,7 @@ function inspectPronunciationQuality(
       key,
       code: 'empty_entry',
       ...(language ? { language } : {}),
-      message: `Entry '${key}' has no phonetic guide, IPA, or audio_url.`,
+      message: `Entry '${key}' has no Respelling, IPA, or audio_url.`,
     });
     return;
   }
@@ -992,7 +992,7 @@ function inspectPronunciationQuality(
           code: 'malformed_ipa',
           ...(language ? { language } : {}),
           ipa,
-          message: `Entry '${key}' IPA '${ipa}' looks malformed or contains uppercase phonetic respelling.`,
+          message: `Entry '${key}' IPA '${ipa}' looks malformed or contains uppercase Respelling.`,
         });
       }
     }
@@ -1045,9 +1045,9 @@ function hasPronunciationValues(entry?: Pronunciation | null): boolean {
 function formatAuditText(result: Omit<PronounceAuditResult, 'rendered'>): string {
   const s = result.summary;
   const lines: string[] = [
-    `Pronunciation audit (${result.repo})`,
+    `Pronunciation Audit (${result.repo})`,
     `  Pronunciation Lexicon entries: ${s.lexicon_entries} | Living excluded: ${s.living_people_excluded}`,
-    `  Deceased full-name coverage: ${s.deceasedFullCoverage}/${s.deceasedTotal} (partial/surname-only: ${s.deceasedPartialOnly}, missing: ${s.deceasedMissing})`,
+    `  Deceased Full-Name Pronunciation coverage: ${s.deceasedFullCoverage}/${s.deceasedTotal} (Surname/Partial: ${s.deceasedPartialOnly}, missing: ${s.deceasedMissing})`,
     `  Places coverage: ${s.placesCovered}/${s.placesTotal} (missing: ${s.placesMissing})`,
     `  Living pronunciation leaks: ${s.livingLeaks}`,
     `  Homonymous bare place collisions: ${s.homonymous_place_collisions}`,
@@ -1077,7 +1077,7 @@ function formatAuditText(result: Omit<PronounceAuditResult, 'rendered'>): string
   if (result.coverage_gaps.people_partial.length > 0) {
     lines.push(
       '',
-      `Deceased people with surname-only or partial pronunciation (${result.coverage_gaps.people_partial.length}):`,
+      `Deceased people with Surname Pronunciation or Partial Pronunciation (${result.coverage_gaps.people_partial.length}):`,
     );
     for (const p of result.coverage_gaps.people_partial.slice(0, 25)) {
       const missingStr =

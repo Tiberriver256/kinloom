@@ -7,7 +7,7 @@ description: Research historical and genealogical records in California archives
 
 This skill covers California repositories for historical and family-history research across finding aids, digitized photographs, state archive catalogs, and historical newspapers.
 
-It includes a standalone executable Python CLI at `skills/california-archives/scripts/ca-archives` using a PEP 723 `#!/usr/bin/env -S uv run --script` shebang with inline dependencies (`click`, `httpx`, `playwright`). No virtualenv setup or API key is required. The CLI needs a Chromium/Chrome executable for the two browser sources (auto-detected as `chromium`, `chromium-browser`, `google-chrome`, or `google-chrome-stable`; override with `CA_ARCHIVES_BROWSER`).
+It includes a standalone executable Python CLI invoked as `kinloom ca-archives` using a PEP 723 `#!/usr/bin/env -S uv run --script` shebang with inline dependencies (`click`, `httpx`, `playwright`). No virtualenv setup or API key is required. The CLI needs a Chromium/Chrome executable for the two browser sources (auto-detected as `chromium`, `chromium-browser`, `google-chrome`, or `google-chrome-stable`; override with `CA_ARCHIVES_BROWSER`).
 
 No account or API key is needed to search any source in this skill. Fees apply only to ordering copies, noted per source.
 
@@ -15,23 +15,23 @@ No account or API key is needed to search any source in this skill. Fees apply o
 
 ```bash
 # Search all four machine-searchable sources (OAC and Calisphere share one browser session)
-skills/california-archives/scripts/ca-archives search "Samuel Clemens" --limit 5
+kinloom ca-archives search "Samuel Clemens" --limit 5
 
 # Search a surname across every source
-skills/california-archives/scripts/ca-archives search Lincoln --limit 3
+kinloom ca-archives search Lincoln --limit 3
 
 # Only the plain-HTTP sources (fast, no browser)
-skills/california-archives/scripts/ca-archives search Sacramento --source portal --source exhibits --limit 3
+kinloom ca-archives search Sacramento --source portal --source exhibits --limit 3
 
 # JSON output
-skills/california-archives/scripts/ca-archives search Sacramento --json
+kinloom ca-archives search Sacramento --json
 
 # Print verified search URLs without running any search (includes CDNC and Minerva)
-skills/california-archives/scripts/ca-archives url "Clara Barton"
+kinloom ca-archives url "Clara Barton"
 
 # Inspect one item found by search
-skills/california-archives/scripts/ca-archives get --portal <portal-id>
-skills/california-archives/scripts/ca-archives get --exhibits <exhibits-id>
+kinloom ca-archives get --portal <portal-id>
+kinloom ca-archives get --exhibits <exhibits-id>
 ```
 
 ### Disk cache and environment variables
@@ -119,7 +119,7 @@ Worked order for tracing a person or family in a California county:
 1. Pick the source for the record type: finding aid (OAC), digitized item or photo (Calisphere, Portal, exhibits), catalog description (Minerva), newspaper (CDNC).
 2. Run the CLI search first; it is faster than clicking through four portals and gives totals per source.
 3. For CDNC and Minerva, use `ca-archives url <query>` and search in the browser.
-4. Record the repository, collection, and exact citation (collection identifier, Portal item ID, Calisphere item UUID, or CDNC paper/date/page) in `data/`. Portals rename and redesign; the citation is what survives. An index hit is not the record: order the copy or plan the visit as the section above says.
+4. Stage the repository, collection, and exact citation (collection identifier, Portal item ID, Calisphere item UUID, or CDNC paper/date/page) in a **Research Package** (`research/people/<person_id>/patch.json`). Portals rename and redesign; the citation is what survives. An index hit is not the record: order the copy or plan the visit as the section above says.
 5. When a portal has no online index for the record you need, check the subscription indexes named on the state pages (FamilySearch, Ancestry) before assuming the record is visit-only. The state page usually says which one holds the digitized copy.
 
 ## What this skill does not cover
@@ -128,3 +128,22 @@ Worked order for tracing a person or family in a California county:
 - Subscription indexes (Ancestry, FamilySearch, MyHeritage). They are named above only where a state portal itself points to them as the holder of a digitized copy.
 - County courthouses and county historical societies. County records are usually the follow-up once a state index gives a book and page.
 - No public, key-free API was verified live for OAC, Calisphere, the Portal, Minerva, or CDNC on 2026-11-24. Do not invent one. The exhibits Omeka S API is the only API in this skill.
+
+## Kinloom Research Package workflow
+
+Never edit `data/*.yaml` directly from a research session. Follow Kinloom's staged **Research Package** workflow and **Living Privacy Rule** (never include living people's portraits, exact birth dates, street addresses, or pronunciations in public archives):
+
+1. Discover research targets with `kinloom status --missing-biography` or `kinloom status --end-of-line`.
+2. Gather privacy-fenced context with `kinloom context <person_id> --include-family`.
+3. Stage any downloaded images or documents under `research/people/<person_id>/scans/` and prepare them with `kinloom prep-scan` or `kinloom ocr` when needed.
+4. Write cited findings into `research/people/<person_id>/patch.json`.
+5. Audit, integrate, verify, and sync:
+
+```bash
+kinloom audit --all-staged --pending-only --strict
+kinloom integrate --all-staged --pending-only
+kinloom pronounce audit --strict
+kinloom verify
+kinloom migrate
+kinloom sync --sync-missing-media --verify-live
+```

@@ -57,12 +57,18 @@ Arguments:
   person_id              One person id, or several person ids. Use a positional id or --person for one person.
 
 Options:
-  --person <person_id>   One person id. Do not combine --person with positional ids.
+  --person <person_id>   One person id (alias: --person-id). Do not combine with positional ids.
   --all-staged           Audit every research/people/<id>/patch.json package. Ids are sorted. Do not pass person ids with this flag.
   --pending-only         With --all-staged, skip already-integrated packages and list them in skippedAlreadyIntegrated (broken packages stay pending).
   --repo <dir>           Archive repository root (default: current working directory)
-  --package-dir <dir>    Custom research package directory for a single person (default: <repo>/research/people/<person_id>)
-  --strict               Exit non-zero when a package fails its strict scorecard (uncited prose, an em dash, or newly introduced tree-hygiene warnings such as duplicate vital events, child marriage, parent-child chronology anomalies, excess non-adoptive parents, or placeholder event titles). A single person and a batch both exit non-zero when a staged file already belongs to a different id in data/media.yaml. In a batch, also exit non-zero when two packages stage the same scan basename with different SHA-256 bytes, point the same media file path at different media ids, define the same patch.people id with conflicting fields, reuse the same patch.people slug for different person ids, or contradict each other by adding a kinship edge that another package lists in remove_kinship. Identical scan bytes, a shared media id, identical patch.people rows, and an update of the same live media id do not fail --strict.
+  --package <dir>        Custom Research Package directory or patch.json path for a single person (aliases: --package-dir, --patch)
+  --package-dir <dir>    Custom Research Package directory or patch.json path for a single person (default: <repo>/research/people/<person_id>)
+  --strict               Exit non-zero when a package fails its strict scorecard:
+                           - Uncited biographical prose or em-dash style violations
+                           - Newly introduced tree-hygiene warnings (duplicate vital events, child marriage, parent-child chronology anomalies, excess non-adoptive parents, or placeholder event titles)
+                           - Live-media file collision when a staged file already belongs to a different id in data/media.yaml
+                           - In batch mode: conflicting scan SHA-256 bytes for the same basename, conflicting media ids on one file path, conflicting patch.people fields/slugs, or contradictory kinship add vs remove_kinship edges
+                           (Identical scan bytes, shared media ids, identical patch.people rows, and updates to the same live media id pass.)
   --json                 Emit structured JSON. A batch object is { ok, strictOk, repo, people, overlaps, summary, skippedAlreadyIntegrated?, duration_ms }.
   -h, --help             Show this help message`;
 
@@ -155,7 +161,7 @@ Synchronize local YAML and media files to a live Cloudflare D1 + R2 Kinloom arch
 
 Options:
   --repo <dir>              Archive repository root (default: current working directory)
-  --site-url <url>          Live archive URL (default: derived from wrangler.jsonc routes[0].pattern)
+  --site-url <url>          Live archive URL (alias: --site; default: derived from wrangler.jsonc/json/toml routes[0].pattern)
   --types <csv>             Comma-separated entity types to sync (default: all 7 in dependency order)
   --sync-missing-media      Probe live /media/* paths from media.yaml and upload missing files to R2
   --upload-media <paths...> Upload one or more local media files to R2 in parallel
@@ -224,7 +230,10 @@ Options:
   --repo <dir>       Archive repository root for \`audit\` (default: current directory)
   --strict           Exit non-zero if any deceased person lacks full-name coverage, any place lacks coverage, any homonymous collision exists, or any living leak exists
   --json             Emit structured JSON output
-  -h, --help         Show this help message`;
+  -h, --help         Show this help message
+
+Environment variables:
+  KINLOOM_PRONOUNCE_CACHE_DIR  Override disk cache directory (default ~/.cache/kinloom-pronounce)`;
 
 export const MIGRATE_HELP = `Usage: kinloom migrate [options]
 
@@ -232,7 +241,7 @@ Inspect a Kinloom Cloudflare D1 database and idempotently apply only pending SQL
 Checks sqlite_master and PRAGMA table_info(...) so existing databases created before d1_migrations tracking existed never fail on already-present tables or columns.
 
 Options:
-  --repo <dir>       Archive repository root containing wrangler.jsonc or wrangler.toml (default: current directory)
+  --repo <dir>       Archive repository root containing wrangler.jsonc, wrangler.json, or wrangler.toml (default: current directory)
   --remote           Target the remote Cloudflare D1 database (default)
   --local            Target the local Wrangler D1 database
   --dry-run          Inspect schema and report applied vs pending migrations without executing any writes

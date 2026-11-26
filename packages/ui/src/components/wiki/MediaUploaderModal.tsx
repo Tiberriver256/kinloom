@@ -1,6 +1,7 @@
 import type { ArchivalMediaKind } from '@kinloom/core';
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { KINLOOM_VOCABULARY, MEDIA_KIND_LABELS } from '../../lib/vocabulary.js';
+import { useDialogFocusTrap } from '../../lib/useDialogFocusTrap.js';
 import { mediaUploadMachine } from '../../machines/mediaUploadMachine.js';
 import { useArchiveData } from '../../context/ArchiveDataContext.js';
 import { useMachine } from '@xstate/react';
@@ -45,13 +46,28 @@ export const MediaUploaderModal: React.FC<MediaUploaderModalProps> = ({
     }
   }, [snapshot, reloadArchive, onUploaded]);
 
+  const closeBtnRef = useRef<HTMLButtonElement | null>(null);
+  const isBusy = snapshot.hasTag('busy');
+
+  const handleClose = useCallback((): void => {
+    if (isBusy) {
+      send({ type: 'CANCEL' });
+    }
+    onClose();
+  }, [isBusy, send, onClose]);
+
+  const dialogRef = useDialogFocusTrap({
+    open,
+    onClose: handleClose,
+    initialFocusRef: closeBtnRef,
+  });
+
   if (!open) {
     return null;
   }
 
   const targetPerson = personId ? peopleById.get(personId) : undefined;
   const targetIsLiving = Boolean(targetPerson?.is_living);
-  const isBusy = snapshot.hasTag('busy');
   const isComplete = snapshot.matches('complete');
   const isRejected = snapshot.matches('rejectedInvalid');
   const isRetryable = snapshot.matches('failedRetryable');
@@ -84,30 +100,28 @@ export const MediaUploaderModal: React.FC<MediaUploaderModalProps> = ({
   };
 
   return (
-    <dialog open className="lightbox-backdrop" aria-label="Upload archival media">
+    <dialog
+      ref={dialogRef}
+      open
+      aria-modal="true"
+      className="lightbox-backdrop"
+      aria-label={KINLOOM_VOCABULARY.wiki.uploadDialogAria}
+    >
       <button
         type="button"
+        tabIndex={-1}
         className="lightbox-backdrop-close"
         aria-label="Close media uploader"
-        onClick={() => {
-          if (isBusy) {
-            send({ type: 'CANCEL' });
-          }
-          onClose();
-        }}
+        onClick={handleClose}
       />
       <div className="wiki-modal-card">
         <div className="wiki-modal-header">
           <h2>{KINLOOM_VOCABULARY.wiki.uploadDialogTitle}</h2>
           <button
+            ref={closeBtnRef}
             type="button"
             className="pill-btn"
-            onClick={() => {
-              if (isBusy) {
-                send({ type: 'CANCEL' });
-              }
-              onClose();
-            }}
+            onClick={handleClose}
           >
             Close
           </button>
@@ -116,8 +130,9 @@ export const MediaUploaderModal: React.FC<MediaUploaderModalProps> = ({
         {targetIsLiving && (
           <div className="wiki-status-banner is-warning" role="alert">
             <p>
-              <strong>Living-person privacy rule:</strong> Portraits and photographs cannot be
-              attached to living relatives. Choose a deceased ancestor or historical record instead.
+              <strong>{KINLOOM_VOCABULARY.wiki.livingPrivacyRuleTitle}</strong> Portraits and
+              photographs cannot be attached to living people. Choose a deceased ancestor or
+              historical record instead.
             </p>
           </div>
         )}

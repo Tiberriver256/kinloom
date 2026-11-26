@@ -32,6 +32,7 @@ import {
 } from '../lib/treeGestures.js';
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import { EmptyStateNotice } from '../components/Atoms.js';
 import { ExplorerTopBar } from '../components/ExplorerTopBar.js';
 import { TreeFocusDrawer } from '../components/tree/TreeFocusDrawer.js';
 import { TreeOrthogonalCanvas } from '../components/tree/TreeOrthogonalCanvas.js';
@@ -83,6 +84,7 @@ export const TreePage: React.FC = () => {
   const [semanticZoom, setSemanticZoom] = useState<SemanticZoomLevel>(
     resolveSemanticZoomLevel(INITIAL_TRANSFORM.zoom),
   );
+  const [zoomPercent, setZoomPercent] = useState<number>(Math.round(INITIAL_TRANSFORM.zoom * 100));
   const [liveAnnouncement, setLiveAnnouncement] = useState<string>('');
   const [createPersonOpen, setCreatePersonOpen] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -95,6 +97,8 @@ export const TreePage: React.FC = () => {
   const pendingFocusPersonIdRef = useRef<string | null>(null);
   const lastFitKeyRef = useRef<string | null>(null);
   const semanticZoomRef = useRef<SemanticZoomLevel>(semanticZoom);
+  const zoomPercentRef = useRef<number>(Math.round(INITIAL_TRANSFORM.zoom * 100));
+  const lastFocusedNodeRef = useRef<Element | null>(null);
 
   const transformRef = useRef<CanvasTransform>(INITIAL_TRANSFORM);
   const animationTargetRef = useRef<CanvasTransform | null>(null);
@@ -280,6 +284,11 @@ export const TreePage: React.FC = () => {
         container.dataset.panY = String(next.pan.y);
       }
       syncSemanticZoom(next.zoom);
+      const nextPercent = Math.round(next.zoom * 100);
+      if (nextPercent !== zoomPercentRef.current) {
+        zoomPercentRef.current = nextPercent;
+        setZoomPercent(nextPercent);
+      }
     },
     [syncSemanticZoom],
   );
@@ -347,7 +356,15 @@ export const TreePage: React.FC = () => {
     };
   }, [surface]);
 
-  // Escape key clears active lineage focus
+  const restoreFocusedNode = useCallback((): void => {
+    const prev = lastFocusedNodeRef.current;
+    if (prev && prev.isConnected && typeof (prev as HTMLElement).focus === 'function') {
+      (prev as HTMLElement).focus();
+    }
+    lastFocusedNodeRef.current = null;
+  }, []);
+
+  // Escape key clears active lineage focus and restores trigger focus
   useEffect(() => {
     if (!selectedPersonId || createPersonOpen) {
       return undefined;
@@ -356,13 +373,14 @@ export const TreePage: React.FC = () => {
       if (e.key === 'Escape') {
         setSelectedPersonId(null);
         setLiveAnnouncement('Lineage focus cleared.');
+        restoreFocusedNode();
       }
     };
     window.addEventListener('keydown', onKeyDown);
     return (): void => {
       window.removeEventListener('keydown', onKeyDown);
     };
-  }, [selectedPersonId, createPersonOpen]);
+  }, [selectedPersonId, createPersonOpen, restoreFocusedNode]);
 
   const readContainerOffset = useCallback((forceRefresh: boolean) => {
     const now = performance.now();
@@ -539,6 +557,9 @@ export const TreePage: React.FC = () => {
       if (surface === 'diagram' && !fromKeyboard && didDragMoveRef.current) {
         return;
       }
+      if (typeof document !== 'undefined' && document.activeElement) {
+        lastFocusedNodeRef.current = document.activeElement;
+      }
       setSelectedPersonId(person.id);
       setLiveAnnouncement(`Focused ${person.full_name} and traced direct lineage.`);
     },
@@ -548,7 +569,8 @@ export const TreePage: React.FC = () => {
   const handleClearFocus = useCallback((): void => {
     setSelectedPersonId(null);
     setLiveAnnouncement('Lineage focus cleared.');
-  }, []);
+    restoreFocusedNode();
+  }, [restoreFocusedNode]);
 
   const centerDiagramOnPerson = useCallback(
     (personId: string, animate: boolean): boolean => {
@@ -999,11 +1021,112 @@ export const TreePage: React.FC = () => {
     ],
   );
 
+  const handleDiagramZoomBy = useCallback(
+    (factor: number): void => {
+      const el = containerRef.current;
+      const focal = {
+        x: (el?.clientWidth ?? 800) / 2,
+        y: (el?.clientHeight ?? 600) / 2,
+      };
+      const base = animationTargetRef.current ?? transformRef.current;
+      animateToTransform(
+        computeZoomAroundPoint({
+          currentPan: base.pan,
+          currentZoom: base.zoom,
+          targetZoom: base.zoom * factor,
+          focalPoint: focal,
+        }),
+        180,
+      );
+    },
+    [animateToTransform],
+  );
+
+  const handleDiagramResetZoom = useCallback((): void => {
+    const el = containerRef.current;
+    const focal = {
+      x: (el?.clientWidth ?? 800) / 2,
+      y: (el?.clientHeight ?? 600) / 2,
+    };
+    const base = animationTargetRef.current ?? transformRef.current;
+    animateToTransform(
+      computeZoomAroundPoint({
+        currentPan: base.pan,
+        currentZoom: base.zoom,
+        targetZoom: 1,
+        focalPoint: focal,
+      }),
+      180,
+    );
+  }, [animateToTransform]);
+
+  useEffect(() => {
+    if (surface !== 'diagram' || createPersonOpen) {
+      return undefined;
+    }
+    const onKeyDown = (e: KeyboardEvent): void => {
+      if (e.metaKey || e.ctrlKey || e.altKey) {
+        return;
+      }
+      const targetEl = e.target instanceof Element ? e.target : null;
+      const tag = targetEl?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') {
+        return;
+      }
+      if (targetEl?.closest('dialog')) {
+        return;
+      }
+      if (e.key === '+' || e.key === '=') {
+        e.preventDefault();
+        handleDiagramZoomBy(1.28);
+      } else if (e.key === '-' || e.key === '_') {
+        e.preventDefault();
+        handleDiagramZoomBy(1 / 1.28);
+      } else if (e.key === '0') {
+        e.preventDefault();
+        animateFitToViewport();
+      } else if (e.key === '1') {
+        e.preventDefault();
+        handleDiagramResetZoom();
+      } else if (
+        (e.key === 'ArrowLeft' ||
+          e.key === 'ArrowRight' ||
+          e.key === 'ArrowUp' ||
+          e.key === 'ArrowDown') &&
+        !targetEl?.closest('.tree-toolbar, .tree-toolbar-shell, .tree-popover, .topbar')
+      ) {
+        e.preventDefault();
+        const step = 80;
+        const base = animationTargetRef.current ?? transformRef.current;
+        const dx = e.key === 'ArrowLeft' ? step : e.key === 'ArrowRight' ? -step : 0;
+        const dy = e.key === 'ArrowUp' ? step : e.key === 'ArrowDown' ? -step : 0;
+        animateToTransform(
+          {
+            zoom: base.zoom,
+            pan: { x: base.pan.x + dx, y: base.pan.y + dy },
+          },
+          120,
+        );
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return (): void => {
+      window.removeEventListener('keydown', onKeyDown);
+    };
+  }, [
+    surface,
+    createPersonOpen,
+    handleDiagramZoomBy,
+    handleDiagramResetZoom,
+    animateFitToViewport,
+    animateToTransform,
+  ]);
+
   if (loading || !bundle) {
     return (
       <div>
         <ExplorerTopBar />
-        <main className="index-page">
+        <main id="main-content" className="index-page">
           <output className="archive-loading-shell" aria-live="polite">
             <span className="archive-loading-spinner" aria-hidden="true" />
             <span>{KINLOOM_VOCABULARY.tree.loading}</span>
@@ -1020,6 +1143,7 @@ export const TreePage: React.FC = () => {
       <ExplorerTopBar />
       {/* oxlint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-noninteractive-element-interactions -- interactive pan/zoom container clears selection on background click */}
       <main
+        id="main-content"
         ref={containerRef}
         className={`tree-page tree-page-${surface}`}
         data-surface={surface}
@@ -1079,7 +1203,36 @@ export const TreePage: React.FC = () => {
           }}
         />
 
-        {surface === 'roll' ? (
+        {model.totalVisibleCount === 0 ? (
+          <div className="tree-empty-wrap">
+            <EmptyStateNotice
+              title={
+                bundle.people.length === 0
+                  ? 'No people have been added to this archive yet.'
+                  : 'No people appear in this branch or lineage view.'
+              }
+              body={
+                bundle.people.length > 0
+                  ? 'Switch to All Branches or Full Tree to view the documented family lines.'
+                  : undefined
+              }
+              action={
+                branchFilter !== 'all' || mode !== 'full' ? (
+                  <button
+                    type="button"
+                    className="pill-btn"
+                    onClick={() => {
+                      setBranchFilter('all');
+                      setMode('full');
+                    }}
+                  >
+                    Show Full Tree
+                  </button>
+                ) : undefined
+              }
+            />
+          </div>
+        ) : surface === 'roll' ? (
           <TreePedigreeRoll
             model={model}
             spotlight={spotlight}
@@ -1087,6 +1240,8 @@ export const TreePage: React.FC = () => {
             personThumbMap={personThumbMap}
             baseUrl={baseUrl}
             familyLabel={activeBranchLabel}
+            branchLabelsById={branchLabelsById}
+            showBranchLabels={branchFilter === 'all' && populatedBranches.length > 1}
             onSelectPerson={(person) => {
               handleSelectPerson(person, true);
             }}
@@ -1117,20 +1272,9 @@ export const TreePage: React.FC = () => {
                 type="button"
                 className="pill-btn"
                 aria-label="Zoom in"
+                title="Zoom in (+)"
                 onClick={() => {
-                  const el = containerRef.current;
-                  const focal = {
-                    x: (el?.clientWidth ?? 800) / 2,
-                    y: (el?.clientHeight ?? 600) / 2,
-                  };
-                  const base = animationTargetRef.current ?? transformRef.current;
-                  const next = computeZoomAroundPoint({
-                    currentPan: base.pan,
-                    currentZoom: base.zoom,
-                    targetZoom: base.zoom * 1.28,
-                    focalPoint: focal,
-                  });
-                  animateToTransform(next, 180);
+                  handleDiagramZoomBy(1.28);
                 }}
               >
                 +
@@ -1139,51 +1283,37 @@ export const TreePage: React.FC = () => {
                 type="button"
                 className="pill-btn"
                 aria-label="Zoom out"
+                title="Zoom out (-)"
                 onClick={() => {
-                  const el = containerRef.current;
-                  const focal = {
-                    x: (el?.clientWidth ?? 800) / 2,
-                    y: (el?.clientHeight ?? 600) / 2,
-                  };
-                  const base = animationTargetRef.current ?? transformRef.current;
-                  const next = computeZoomAroundPoint({
-                    currentPan: base.pan,
-                    currentZoom: base.zoom,
-                    targetZoom: base.zoom / 1.28,
-                    focalPoint: focal,
-                  });
-                  animateToTransform(next, 180);
+                  handleDiagramZoomBy(1 / 1.28);
                 }}
               >
                 −
               </button>
-              <button type="button" className="pill-btn" onClick={animateFitToViewport}>
+              <button
+                type="button"
+                className="pill-btn"
+                title="Fit full chart (0)"
+                onClick={animateFitToViewport}
+              >
                 Fit
               </button>
               <button
                 type="button"
                 className="pill-btn"
                 aria-label="Reset zoom to 100%"
-                onClick={() => {
-                  const el = containerRef.current;
-                  const focal = {
-                    x: (el?.clientWidth ?? 800) / 2,
-                    y: (el?.clientHeight ?? 600) / 2,
-                  };
-                  const base = animationTargetRef.current ?? transformRef.current;
-                  animateToTransform(
-                    computeZoomAroundPoint({
-                      currentPan: base.pan,
-                      currentZoom: base.zoom,
-                      targetZoom: 1,
-                      focalPoint: focal,
-                    }),
-                    180,
-                  );
-                }}
+                title="Reset zoom to 100% (1)"
+                onClick={handleDiagramResetZoom}
               >
                 1:1
               </button>
+              <span
+                className="tree-zoom-readout"
+                aria-live="polite"
+                aria-label={`Zoom ${zoomPercent}%`}
+              >
+                {zoomPercent}%
+              </span>
             </div>
           </>
         )}

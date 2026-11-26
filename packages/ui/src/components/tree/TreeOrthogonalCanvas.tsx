@@ -62,7 +62,7 @@ const GenBandsLayer: React.FC<{
           x={71}
           y={band.y + 29}
           textAnchor="middle"
-          fontSize="10"
+          fontSize="10.5"
           fontWeight="600"
           fontFamily="var(--font-mono)"
           fill="var(--text-secondary)"
@@ -266,13 +266,15 @@ const DiagramNodeCard: React.FC<{
       strokeWidth = 2.1;
     } else if (node.isDirect) {
       stroke = 'var(--surface-header)';
-      strokeWidth = 1.9;
+      strokeWidth = 2;
     }
 
     const fill = isSelected ? 'var(--surface-header)' : 'var(--surface-card)';
     const primaryTextFill = isSelected ? 'var(--text-inverse)' : 'var(--surface-header)';
     const secondaryTextFill = isSelected ? 'var(--surface-linen)' : 'var(--text-secondary)';
-    const clipId = `tree-avatar-clip-${person.id.replace(/[^a-zA-Z0-9_-]/g, '_')}`;
+    const safeId = person.id.replace(/[^a-zA-Z0-9_-]/g, '_');
+    const clipId = `tree-avatar-clip-${safeId}`;
+    const cardClipId = `tree-card-clip-${safeId}`;
 
     return (
       // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role -- SVG <g> requires role="button" with keyboard Enter/Space support
@@ -303,45 +305,54 @@ const DiagramNodeCard: React.FC<{
         }}
       >
         <title>{person.full_name}</title>
+        <defs>
+          <clipPath id={cardClipId}>
+            <rect x={2} y={2} width={node.width - 4} height={node.height - 4} rx={2} />
+          </clipPath>
+          {semanticZoom === 'detail' && thumbUrl && (
+            <clipPath id={clipId}>
+              <circle cx={24} cy={26} r={13} />
+            </clipPath>
+          )}
+        </defs>
         <rect
           width={node.width}
           height={node.height}
-          rx={3}
+          rx={4}
           fill={fill}
           stroke={stroke}
           strokeWidth={strokeWidth}
           strokeDasharray={node.isDirect || isSelected || isLit ? undefined : '4 2'}
         />
 
-        {node.isDirect && !isSelected && (
-          <rect
-            x={0}
-            y={0}
-            width={4}
-            height={node.height}
-            rx={1}
-            fill={isLit ? 'var(--accent-primary)' : 'var(--surface-header)'}
-          />
-        )}
-
         {semanticZoom === 'overview' ? (
-          <g>
+          <g clipPath={`url(#${cardClipId})`}>
             <text
               x={node.width / 2}
-              y={node.height / 2 + 5}
+              y={22}
               textAnchor="middle"
-              fontSize="13.5"
+              fontSize="12"
               fontWeight="700"
               fontFamily="var(--font-serif)"
               fill={primaryTextFill}
             >
               {surnameOrGiven}
             </text>
+            <text
+              x={node.width / 2}
+              y={39}
+              textAnchor="middle"
+              fontSize="10.5"
+              fontFamily="var(--font-mono)"
+              fill={secondaryTextFill}
+            >
+              {lifespan}
+            </text>
           </g>
         ) : semanticZoom === 'compact' ? (
-          <g>
+          <g clipPath={`url(#${cardClipId})`}>
             <text
-              x={14}
+              x={12}
               y={22}
               fontSize="11.5"
               fontWeight="700"
@@ -351,9 +362,9 @@ const DiagramNodeCard: React.FC<{
               {displayName}
             </text>
             <text
-              x={14}
+              x={12}
               y={39}
-              fontSize="9.5"
+              fontSize="10.5"
               fontFamily="var(--font-mono)"
               fill={secondaryTextFill}
             >
@@ -361,14 +372,7 @@ const DiagramNodeCard: React.FC<{
             </text>
           </g>
         ) : (
-          <g>
-            {thumbUrl && (
-              <defs>
-                <clipPath id={clipId}>
-                  <circle cx={24} cy={26} r={13} />
-                </clipPath>
-              </defs>
-            )}
+          <g clipPath={`url(#${cardClipId})`}>
             <circle
               cx={24}
               cy={26}
@@ -392,7 +396,7 @@ const DiagramNodeCard: React.FC<{
                 x={24}
                 y={29.5}
                 textAnchor="middle"
-                fontSize="9"
+                fontSize="10"
                 fontWeight="700"
                 fontFamily="var(--font-mono)"
                 fill={isSelected ? 'var(--text-inverse)' : 'var(--accent-primary)'}
@@ -403,7 +407,7 @@ const DiagramNodeCard: React.FC<{
             <text
               x={44}
               y={22}
-              fontSize="11"
+              fontSize="11.5"
               fontWeight="700"
               fontFamily="var(--font-serif)"
               fill={primaryTextFill}
@@ -413,7 +417,7 @@ const DiagramNodeCard: React.FC<{
             <text
               x={44}
               y={38}
-              fontSize="9"
+              fontSize="10.5"
               fontFamily="var(--font-mono)"
               fill={secondaryTextFill}
             >
@@ -464,7 +468,7 @@ const EarlyLossStripLayer: React.FC<{
         <text
           x={strip.x + 12}
           y={strip.y + 13}
-          fontSize="8.5"
+          fontSize="10"
           fontWeight="600"
           fontFamily="var(--font-mono)"
           fill="var(--text-secondary)"
@@ -515,7 +519,7 @@ const EarlyLossStripLayer: React.FC<{
             <text
               x={8}
               y={13}
-              fontSize="9.2"
+              fontSize="10.5"
               fontWeight="600"
               fontFamily="var(--font-serif)"
               fill={isSelected ? 'var(--text-inverse)' : 'var(--text-primary)'}
@@ -524,8 +528,8 @@ const EarlyLossStripLayer: React.FC<{
             </text>
             <text
               x={8}
-              y={24}
-              fontSize="8"
+              y={25}
+              fontSize="9.5"
               fontFamily="var(--font-mono)"
               fill={isSelected ? 'var(--surface-linen)' : 'var(--text-secondary)'}
             >
@@ -632,10 +636,11 @@ export const TreeOrthogonalCanvas: React.FC<TreeOrthogonalCanvasProps> = ({
       layout.nodes.map((node) => {
         const p = node.person;
         const rawThumb = personThumbMap.get(p.id) || p.portrait_url;
+        const fullLabel = formatTreeCardName(p.full_name, 20);
         return {
           node,
           displayName: formatTreeCardName(p.full_name, 19),
-          surnameOrGiven: formatTreeCardName(p.given_name || p.surname || p.full_name, 13),
+          surnameOrGiven: fullLabel,
           lifespan: formatCardLifespan(p),
           thumbUrl: rawThumb ? resolveAssetUrl(rawThumb, baseUrl) : null,
           initials: initialsOf(p.full_name),
@@ -650,7 +655,7 @@ export const TreeOrthogonalCanvas: React.FC<TreeOrthogonalCanvasProps> = ({
       width={layout.bounds.maxX}
       height={layout.bounds.maxY}
       viewBox={`${layout.bounds.minX} ${layout.bounds.minY} ${layout.bounds.maxX - layout.bounds.minX} ${layout.bounds.maxY - layout.bounds.minY}`}
-      role="img"
+      role="group"
       aria-label={`${activeBranchLabel} ${KINLOOM_VOCABULARY.tree.chartCanvasSuffix}`}
     >
       <GenBandsLayer genBands={layout.genBands} maxX={layout.bounds.maxX} />

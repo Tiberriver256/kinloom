@@ -16,17 +16,16 @@ No account or API key is needed for anything the CLI runs. Texas was not a U.S. 
 
 ## Bundled CLI (`scripts/texas-archives`)
 
-Path: `skills/texas-archives/scripts/texas-archives`
-
+Command: `kinloom texas-archives`
 Executable Python CLI with PEP 723 `#!/usr/bin/env -S uv run --script`, dependencies `click` and `httpx`. Run from the repo root, for example:
 
 ```bash
-skills/texas-archives/scripts/texas-archives portal search "Sam Houston" --county Travis --limit 5
-skills/texas-archives/scripts/texas-archives portal search Houston --county Harris --limit 5 --json
-skills/texas-archives/scripts/texas-archives portal search "Texas Rangers" --type text_newspaper --limit 5
-skills/texas-archives/scripts/texas-archives portal item <metapth-id> --json
-skills/texas-archives/scripts/texas-archives tda Houston --limit 10
-skills/texas-archives/scripts/texas-archives url Austin
+kinloom texas-archives portal search "Sam Houston" --county Travis --limit 5
+kinloom texas-archives portal search Houston --county Harris --limit 5 --json
+kinloom texas-archives portal search "Texas Rangers" --type text_newspaper --limit 5
+kinloom texas-archives portal item <metapth-id> --json
+kinloom texas-archives tda Houston --limit 10
+kinloom texas-archives url Austin
 ```
 
 | Command | Machine interface (verified 2026-11-24) |
@@ -100,3 +99,22 @@ Worked order for tracing a person or family in Texas:
 - FamilySearch, Ancestry, or Fold3 indexes; cite them only when a Texas portal points there.
 - County clerk vital records and deed books. The Portal and TDA may name people in newspapers or books, but they do not replace certified copies.
 - Do not claim a machine API for Portal HTML, GLO grant search, or Ranger muster rolls without a live verified endpoint.
+
+## Kinloom Research Package workflow
+
+Never edit `data/*.yaml` directly from a research session. Follow Kinloom's staged **Research Package** workflow and **Living Privacy Rule** (never include living people's portraits, exact birth dates, street addresses, or pronunciations in public archives):
+
+1. Discover research targets with `kinloom status --missing-biography` or `kinloom status --end-of-line`.
+2. Gather privacy-fenced context with `kinloom context <person_id> --include-family`.
+3. Stage any downloaded images or documents under `research/people/<person_id>/scans/` and prepare them with `kinloom prep-scan` or `kinloom ocr` when needed.
+4. Write cited findings into `research/people/<person_id>/patch.json`.
+5. Audit, integrate, verify, and sync:
+
+```bash
+kinloom audit --all-staged --pending-only --strict
+kinloom integrate --all-staged --pending-only
+kinloom pronounce audit --strict
+kinloom verify
+kinloom migrate
+kinloom sync --sync-missing-media --verify-live
+```

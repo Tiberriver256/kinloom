@@ -350,7 +350,7 @@ describe('TreePage', () => {
     expect(main?.getAttribute('data-mode')).toBe('full');
     expect(document.documentElement.classList.contains('tree-viewport-lock')).toBe(true);
 
-    const svg = container.querySelector('svg[role="img"]');
+    const svg = container.querySelector('svg[role="group"]');
     expect(svg?.getAttribute('aria-label')).toBe('Hale family tree chart');
 
     // Discrete remarriage hubs I and II exist inside SVG
@@ -490,7 +490,7 @@ describe('TreePage', () => {
     // Collapsed sibling tray expanded automatically, Martha Hale is focused & spotlighted
     expect(container.querySelectorAll('.tree-hanging-rail')).toHaveLength(1);
     expect(container.querySelector('.tree-focus-name')?.textContent).toBe('Martha Hale');
-    const svg = container.querySelector('svg[role="img"]');
+    const svg = container.querySelector('svg[role="group"]');
     expect(svg?.classList.contains('has-selection')).toBe(true);
     const marthaNode = container.querySelector('.tree-node-card[aria-label="Inspect Martha Hale"]');
     expect(marthaNode?.classList.contains('is-selected')).toBe(true);

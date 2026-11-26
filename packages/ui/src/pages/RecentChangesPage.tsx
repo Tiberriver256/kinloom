@@ -2,6 +2,7 @@ import type { AuthorType, RevisionRecord } from '@kinloom/core';
 import { asBatchId, asRevisionId } from '@kinloom/core';
 import { AuthorPill, CitationBadge } from '../components/wiki/WikiBadges.js';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { handleTablistKeyDown } from '../lib/keyboardNav.js';
 import { ExplorerTopBar } from '../components/ExplorerTopBar.js';
 import { KinloomFooter } from '../components/KinloomFooter.js';
 import { RevisionDiffView } from '../components/wiki/RevisionDiffView.js';
@@ -142,7 +143,7 @@ export const RecentChangesPage: React.FC<RecentChangesPageProps> = ({ initialRev
   return (
     <div>
       <ExplorerTopBar />
-      <main className="place-page">
+      <main id="main-content" className="place-page">
         <section className="wire-banner" style={{ marginBottom: 18 }}>
           <div>
             <h1>Revision History</h1>
@@ -163,7 +164,21 @@ export const RecentChangesPage: React.FC<RecentChangesPageProps> = ({ initialRev
           </div>
         </section>
 
-        <div className="filter-bar" role="tablist" aria-label="Filter recent changes by author type">
+        <div
+          className="filter-bar"
+          role="tablist"
+          aria-label="Filter recent changes by author type"
+          onKeyDown={(event) => {
+            handleTablistKeyDown(
+              event,
+              ['all', 'human', 'agent', 'system_seed'] as const,
+              authorFilter,
+              (next) => {
+                setAuthorFilter(next);
+              },
+            );
+          }}
+        >
           {(
             [
               ['all', 'All Authors'],
@@ -176,6 +191,7 @@ export const RecentChangesPage: React.FC<RecentChangesPageProps> = ({ initialRev
               key={id}
               type="button"
               role="tab"
+              tabIndex={authorFilter === id ? 0 : -1}
               aria-selected={authorFilter === id}
               className={`pill-btn ${authorFilter === id ? 'active' : ''}`}
               onClick={() => {

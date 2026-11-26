@@ -1,5 +1,6 @@
 import type { EntityType, TalkComment } from '@kinloom/core';
 import React, { useCallback, useEffect, useState } from 'react';
+import { KINLOOM_VOCABULARY } from '../../lib/vocabulary.js';
 import { useArchiveData } from '../../context/ArchiveDataContext.js';
 
 export interface TalkPanelProps {
@@ -83,7 +84,7 @@ export const TalkPanel: React.FC<TalkPanelProps> = ({
   };
 
   return (
-    <section className="wiki-panel" aria-label="Record discussion">
+    <section className="wiki-panel" aria-label={KINLOOM_VOCABULARY.wiki.familyNotes}>
       <div className="wiki-panel-header">
         <h2>Family Notes{entityTitle ? ` · ${entityTitle}` : ''}</h2>
         <span className="wiki-panel-meta">

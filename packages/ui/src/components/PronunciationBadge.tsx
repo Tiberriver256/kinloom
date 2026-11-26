@@ -324,6 +324,7 @@ export const PronunciationBadge: React.FC<PronunciationBadgeProps> = ({
       {!iconOnly && !compact && variants.length > 0 && (
         <span
           className="pronunciation-variants print-hide"
+          role="group"
           aria-label={KINLOOM_VOCABULARY.pronunciation.variantsAria}
         >
           <button
