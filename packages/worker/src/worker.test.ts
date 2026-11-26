@@ -871,6 +871,149 @@ describe('createCloudflareWorker full HTTP lifecycle (Miniflare)', () => {
     }
   });
 
+  it('guards R2 bundle cache against out-of-order concurrent writes and heals stale R2 reads from D1', async () => {
+    const fixture = await createMiniflareFixture();
+    try {
+      const siteConfig = createSyntheticSiteConfig();
+      const clock = new FixedClock('2026-08-05T10:00:00.000Z');
+      const repo = new D1ArchiveRepository(fixture.db, { privacyConfig: siteConfig.privacy });
+      const author = {
+        author_id: 'admin@example.test',
+        author_name: 'Admin',
+        author_type: 'human' as const,
+      };
+
+      const p1 = createSyntheticHistoricalPerson({ id: 'per_race_1', slug: 'race-one' });
+      const p2 = createSyntheticHistoricalPerson({
+        id: 'per_race_2',
+        slug: 'race-two',
+        full_name: 'Martha Alder',
+        given_name: 'Martha',
+      });
+
+      const commit1 = await repo.commitAtomicMutations({
+        batch_id: null,
+        author,
+        nowIso: clock.nowIso(),
+        operations: [
+          {
+            entity_type: 'person',
+            entity_id: p1.id,
+            slug: p1.slug,
+            action: 'create',
+            expected_parent_revision_id: null,
+            summary: 'Add person 1',
+            has_primary_source: true,
+            before_json: null,
+            after_json: p1 as unknown as Record<string, unknown>,
+          },
+        ],
+      });
+      expect(commit1.kind).toBe('committed');
+      const snapshot1 = await repo.loadActiveSnapshot();
+
+      const commit2 = await repo.commitAtomicMutations({
+        batch_id: null,
+        author,
+        nowIso: clock.nowIso(),
+        operations: [
+          {
+            entity_type: 'person',
+            entity_id: p2.id,
+            slug: p2.slug,
+            action: 'create',
+            expected_parent_revision_id: null,
+            summary: 'Add person 2',
+            has_primary_source: true,
+            before_json: null,
+            after_json: p2 as unknown as Record<string, unknown>,
+          },
+        ],
+      });
+      expect(commit2.kind).toBe('committed');
+      const snapshot2 = await repo.loadActiveSnapshot();
+
+      // 1. Interleaved concurrent race: rev 2 lands in R2 right between rev 1's head() and put()
+      const cacheRev2 = new R2IncrementalPatchBundleCache({
+        bucket: fixture.bucket,
+        siteConfig,
+        clock,
+        mode: 'private',
+      });
+      let injectedRace = false;
+      const racingBucket: R2Bucket = {
+        head: (key) => fixture.bucket.head(key),
+        get: (key, options) => fixture.bucket.get(key, options),
+        delete: (keys) => fixture.bucket.delete(keys),
+        put: async (key, value, options) => {
+          if (!injectedRace) {
+            injectedRace = true;
+            await cacheRev2.rebuildAndStore(snapshot2);
+          }
+          return fixture.bucket.put(key, value, options);
+        },
+      };
+      const cacheRev1 = new R2IncrementalPatchBundleCache({
+        bucket: racingBucket,
+        siteConfig,
+        clock,
+        mode: 'private',
+      });
+
+      const staleWriterResult = await cacheRev1.rebuildAndStore(snapshot1);
+      expect(injectedRace).toBe(true);
+      expect(staleWriterResult.revision_id).toBe(asRevisionId(2));
+
+      // R2 must still hold revision 2 (never downgraded to revision 1)
+      const headAfterRace = await fixture.bucket.head(DEFAULT_COMPILED_BUNDLE_KEY);
+      expect(headAfterRace?.customMetadata?.revision).toBe('2');
+
+      // Direct out-of-order write of rev 1 after rev 2 is also ignored
+      const outOfOrderResult = await cacheRev2.rebuildAndStore(snapshot1);
+      expect(outOfOrderResult.revision_id).toBe(asRevisionId(2));
+      expect((await fixture.bucket.head(DEFAULT_COMPILED_BUNDLE_KEY))?.customMetadata?.revision).toBe('2');
+
+      // 2. Stale R2 read healing via createCloudflareWorker:
+      // Reset R2 to rev 1 while D1 is at rev 2, then verify both plain GET and stale If-None-Match heal R2 to rev 2
+      await fixture.bucket.delete(DEFAULT_COMPILED_BUNDLE_KEY);
+      const staleSeedCache = new R2IncrementalPatchBundleCache({
+        bucket: fixture.bucket,
+        siteConfig,
+        clock,
+        mode: 'private',
+      });
+      const seededStale = await staleSeedCache.rebuildAndStore(snapshot1);
+      expect(seededStale.revision_id).toBe(asRevisionId(1));
+
+      const env: KinloomWorkerEnv = {
+        DB: fixture.db,
+        MEDIA_BUCKET: fixture.bucket,
+        SESSION_SECRET: CONTRACT_SESSION_SECRET,
+        ARCHIVE_MODE: 'public',
+      };
+      const worker = createCloudflareWorker({ siteConfig, clock });
+
+      // Client sends If-None-Match matching stale R2 rev 1 ETag -> must NOT get stale 304, must heal to rev 2
+      const healedRes = await worker.fetch(
+        new Request(`${CONTRACT_TEST_ORIGIN}/api/bundle`, {
+          headers: { 'if-none-match': seededStale.etag },
+        }),
+        env
+      );
+      expect(healedRes.status).toBe(200);
+      expect(healedRes.headers.get('etag')).toMatch(/^"r2-[a-f0-9]{8}"$/);
+      const healedBundle = (await healedRes.json()) as ArchiveBundle;
+      expect(healedBundle.meta.max_revision_id).toBe(2);
+      expect(healedBundle.people.map((p) => p.id)).toEqual(['per_race_1', 'per_race_2']);
+
+      // R2 object is now healed to revision 2
+      const healedHead = await fixture.bucket.head(DEFAULT_COMPILED_BUNDLE_KEY);
+      expect(healedHead?.customMetadata?.revision).toBe('2');
+    } finally {
+      await fixture.dispose();
+    }
+  });
+
   it('uses incremental R2 bundle patching on warm writes and falls back to full rebuild on cache miss', async () => {
     const fixture = await createMiniflareFixture();
     try {

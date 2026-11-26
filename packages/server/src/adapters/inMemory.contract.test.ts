@@ -7,6 +7,7 @@ import {
   createSyntheticSiteConfig,
   runBackendAdapterContractTests,
 } from '../testing/adapterContractSuite.js';
+import { BundleReadService } from '../services/bundleReadService.js';
 import { WikiWriteService } from '../services/wikiWriteService.js';
 
 runBackendAdapterContractTests('InMemory Reference Adapters', (siteConfig) => {
@@ -191,5 +192,85 @@ describe('Portable built-in adapters', () => {
     expect(second.deduplicated).toBe(true);
     expect(first.url).toBe(second.url);
     expect(ports.mediaStore.putCount).toBe(1);
+  });
+
+  it('guards InMemoryIncrementalBundleCache against lower-revision overwrites and heals stale cache hits in BundleReadService', async () => {
+    const siteConfig = createSyntheticSiteConfig();
+    const ports = createInMemoryServerPorts(siteConfig);
+    const writer = new WikiWriteService({
+      repository: ports.repository,
+      bundleCache: ports.bundleCache,
+      clock: ports.clock,
+      siteConfig,
+    });
+    const reader = new BundleReadService({
+      repository: ports.repository,
+      bundleCache: ports.bundleCache,
+      clock: ports.clock,
+      siteConfig,
+    });
+    const author = {
+      author_id: 'admin@example.test',
+      author_name: 'Archive Admin',
+      author_type: 'human' as const,
+    };
+
+    const p1 = createSyntheticHistoricalPerson({ id: 'per_stale_1', slug: 'stale-one' });
+    await writer.createEntity({
+      entityType: 'person',
+      entityId: p1.id,
+      data: p1,
+      summary: 'Create person 1',
+      hasPrimarySource: true,
+      author,
+    });
+    const snapshotRev1 = await ports.repository.loadActiveSnapshot();
+    const rev1Etag = (await ports.bundleCache.getCached(null));
+    expect(rev1Etag.status).toBe('hit');
+    const staleEtag = rev1Etag.status === 'hit' ? rev1Etag.object.etag : '';
+
+    // Write rev 2 directly to repository without updating bundleCache -> cache is now stale at rev 1
+    const p2 = createSyntheticHistoricalPerson({
+      id: 'per_stale_2',
+      slug: 'stale-two',
+      full_name: 'Hannah Alder',
+      given_name: 'Hannah',
+    });
+    const commit2 = await ports.repository.commitAtomicMutations({
+      batch_id: null,
+      author,
+      nowIso: ports.clock.nowIso(),
+      operations: [
+        {
+          entity_type: 'person',
+          entity_id: p2.id,
+          slug: p2.slug,
+          action: 'create',
+          expected_parent_revision_id: null,
+          summary: 'Commit person 2 directly',
+          has_primary_source: true,
+          before_json: null,
+          after_json: p2 as unknown as Record<string, unknown>,
+        },
+      ],
+    });
+    expect(commit2.kind).toBe('committed');
+
+    // Even with If-None-Match matching the stale rev 1 ETag, BundleReadService must detect head=2 and rebuild
+    const healed = await reader.getBundle({ ifNoneMatch: staleEtag });
+    expect(healed.status).toBe('hit');
+    if (healed.status === 'hit') {
+      expect(healed.object.revision_id).toBe(2);
+      expect(healed.object.etag).toBe('"r2"');
+    }
+
+    // Attempting to store an older snapshot (rev 1) over rev 2 must NOT downgrade the cache
+    const outOfOrder = await ports.bundleCache.rebuildAndStore(snapshotRev1);
+    expect(outOfOrder.revision_id).toBe(2);
+    const afterOutOfOrder = await ports.bundleCache.getCached(null);
+    expect(afterOutOfOrder.status).toBe('hit');
+    if (afterOutOfOrder.status === 'hit') {
+      expect(afterOutOfOrder.object.revision_id).toBe(2);
+    }
   });
 });
