@@ -16,6 +16,7 @@ import {
   classifyRecordCommandIntent,
   formatRecordCommandsHelp,
   isRecordCommand,
+  isUvOfflineCacheMiss,
   parseSkillDocument,
   renderRecordCommandHelp,
   resolveRecordCommand,
@@ -91,15 +92,22 @@ interface FakeSpawnCall {
   env: NodeJS.ProcessEnv | undefined;
 }
 
-function createFakeSpawn(response: {
+interface FakeSpawnResponse {
   exitCode?: number;
   stdout?: string;
   stderr?: string;
   errorCode?: string;
-}): { spawnImpl: RecordSpawnFn; calls: FakeSpawnCall[] } {
+}
+
+function createFakeSpawnSequence(
+  responses: readonly FakeSpawnResponse[]
+): { spawnImpl: RecordSpawnFn; calls: FakeSpawnCall[] } {
   const calls: FakeSpawnCall[] = [];
+  let index = 0;
   const spawnImpl: RecordSpawnFn = (command, args, options) => {
-    calls.push({ command, args: [...args], env: options.env });
+    const response = responses[Math.min(index, responses.length - 1)] ?? {};
+    index += 1;
+    calls.push({ command, args: [...args], env: options.env ? { ...options.env } : undefined });
     const child = new EventEmitter() as ChildProcess;
     const outStream = new PassThrough();
     const errStream = new PassThrough();
@@ -132,6 +140,46 @@ function createFakeSpawn(response: {
     return child;
   };
   return { spawnImpl, calls };
+}
+
+function createFakeSpawn(response: FakeSpawnResponse): {
+  spawnImpl: RecordSpawnFn;
+  calls: FakeSpawnCall[];
+} {
+  return createFakeSpawnSequence([response]);
+}
+
+function spawnPythonSync(
+  cmd: string,
+  args: readonly string[],
+  env: NodeJS.ProcessEnv = process.env
+) {
+  const tryOffline = cmd === 'uv' && env.UV_OFFLINE === undefined;
+  const first = spawnSync(cmd, args, {
+    encoding: 'utf8',
+    env: tryOffline ? { ...env, UV_OFFLINE: '1' } : env,
+  });
+  if (tryOffline && first.status !== 0 && isUvOfflineCacheMiss(first.stderr ?? '')) {
+    const retryEnv = { ...env };
+    delete retryEnv.UV_OFFLINE;
+    return spawnSync(cmd, args, { encoding: 'utf8', env: retryEnv });
+  }
+  return first;
+}
+
+function execPythonSync(
+  cmd: string,
+  args: readonly string[],
+  env: NodeJS.ProcessEnv = process.env
+): string {
+  const result = spawnPythonSync(cmd, args, env);
+  if (result.error) {
+    throw result.error;
+  }
+  if (result.status !== 0) {
+    throw new Error(`Command failed (${cmd} ${args.join(' ')}): ${result.stderr}`);
+  }
+  return result.stdout ?? '';
 }
 
 afterEach(async () => {
@@ -581,6 +629,239 @@ describe('help vs subcommand routing and guide-only commands', () => {
   });
 });
 
+describe('offline-first uv fast-path with cold-cache online retry', () => {
+  const UV_SCRIPT_CACHE_MISS_STDERR = [
+    'error: No solution found when resolving script dependencies',
+    '  cause: Because click was not found in the cache and you require click>=8.1, we',
+    '         can conclude that your requirements are unsatisfiable.',
+    '',
+    'hint: Packages were unavailable because the network was disabled. When the network is disabled, registry packages may only be read from the cache.',
+    '',
+  ].join('\n');
+
+  const cleanEnv = (): NodeJS.ProcessEnv => {
+    const env: NodeJS.ProcessEnv = { ...process.env };
+    delete env.UV_OFFLINE;
+    return env;
+  };
+
+  it('injects UV_OFFLINE=1 on default uv calls and succeeds in 1 spawn', async () => {
+    const tmp = await makeTempDir('kinloom-uv-offline-hit-');
+    const telemetryFile = path.join(tmp, 'calls.jsonl');
+    const { io, stdout, stderr } = createCaptureIo();
+    const { spawnImpl, calls } = createFakeSpawn({
+      exitCode: 0,
+      stdout: '{"results":[],"cache_hit":true}\n',
+    });
+
+    const result = await runRecordCommand('nara', ['search', 'Alder'], {
+      io,
+      env: cleanEnv(),
+      spawnImpl,
+      telemetryFilePath: telemetryFile,
+    });
+
+    expect(result.exitCode).toBe(0);
+    expect(stdout).toEqual(['{"results":[],"cache_hit":true}']);
+    expect(stderr).toEqual([]);
+    expect(calls).toHaveLength(1);
+    expect(calls[0].command).toBe('uv');
+    expect(calls[0].env?.UV_OFFLINE).toBe('1');
+  });
+
+  it('retries once without UV_OFFLINE on cold-cache uv miss and succeeds', async () => {
+    const tmp = await makeTempDir('kinloom-uv-offline-retry-');
+    const telemetryFile = path.join(tmp, 'calls.jsonl');
+    const { io, stdout, stderr } = createCaptureIo();
+    const { spawnImpl, calls } = createFakeSpawnSequence([
+      {
+        exitCode: 1,
+        stderr: UV_SCRIPT_CACHE_MISS_STDERR,
+      },
+      {
+        exitCode: 0,
+        stdout: '{"results":[{"id":"1"}],"cache_hit":false}\n',
+      },
+    ]);
+
+    const result = await runRecordCommand('nara', ['search', 'Alder'], {
+      io,
+      env: cleanEnv(),
+      spawnImpl,
+      telemetryFilePath: telemetryFile,
+    });
+
+    expect(result.exitCode).toBe(0);
+    expect(stdout).toEqual(['{"results":[{"id":"1"}],"cache_hit":false}']);
+    expect(stderr).toEqual([]);
+    expect(calls).toHaveLength(2);
+    expect(calls[0].command).toBe('uv');
+    expect(calls[0].env?.UV_OFFLINE).toBe('1');
+    expect(calls[1].command).toBe('uv');
+    expect(calls[1].env?.UV_OFFLINE).toBeUndefined();
+
+    const events = (await readFile(telemetryFile, 'utf8'))
+      .trim()
+      .split('\n')
+      .map((line) => JSON.parse(line) as TelemetryEvent);
+    expect(events).toHaveLength(1);
+    expect(events[0].exit_code).toBe(0);
+    expect(events[0].cache_hit).toBe(false);
+  });
+
+  it('does not retry script runtime errors or failures after stdout bytes were emitted', async () => {
+    const tmp = await makeTempDir('kinloom-uv-no-retry-');
+    const telemetryFile = path.join(tmp, 'calls.jsonl');
+
+    const runtimeCapture = createCaptureIo();
+    const runtimeSpawn = createFakeSpawnSequence([
+      { exitCode: 2, stderr: 'Usage: nara search <query>\nError: Missing argument.\n' },
+      { exitCode: 0, stdout: 'should-not-run\n' },
+    ]);
+    const runtimeResult = await runRecordCommand('nara', ['search'], {
+      io: runtimeCapture.io,
+      env: cleanEnv(),
+      spawnImpl: runtimeSpawn.spawnImpl,
+      telemetryFilePath: telemetryFile,
+    });
+    expect(runtimeResult.exitCode).toBe(2);
+    expect(runtimeSpawn.calls).toHaveLength(1);
+    expect(runtimeSpawn.calls[0].env?.UV_OFFLINE).toBe('1');
+    expect(runtimeCapture.stderr[0]).toContain('Usage: nara search');
+
+    const partialOutCapture = createCaptureIo();
+    const partialOutSpawn = createFakeSpawnSequence([
+      {
+        exitCode: 1,
+        stdout: '{"partial":true}\n',
+        stderr: UV_SCRIPT_CACHE_MISS_STDERR,
+      },
+      { exitCode: 0, stdout: 'should-not-run\n' },
+    ]);
+    const partialOutResult = await runRecordCommand('nara', ['search', 'Alder'], {
+      io: partialOutCapture.io,
+      env: cleanEnv(),
+      spawnImpl: partialOutSpawn.spawnImpl,
+      telemetryFilePath: telemetryFile,
+    });
+    expect(partialOutResult.exitCode).toBe(1);
+    expect(partialOutResult.bytesOut).toBe('{"partial":true}\n'.length);
+    expect(partialOutSpawn.calls).toHaveLength(1);
+  });
+
+  it('respects explicit UV_OFFLINE=0 and UV_OFFLINE=1 without automatic retry', async () => {
+    const tmp = await makeTempDir('kinloom-uv-explicit-env-');
+    const telemetryFile = path.join(tmp, 'calls.jsonl');
+
+    const onlineCapture = createCaptureIo();
+    const onlineSpawn = createFakeSpawn({ exitCode: 0, stdout: 'ok\n' });
+    const onlineResult = await runRecordCommand('nara', ['search', 'Alder'], {
+      io: onlineCapture.io,
+      env: { ...cleanEnv(), UV_OFFLINE: '0' },
+      spawnImpl: onlineSpawn.spawnImpl,
+      telemetryFilePath: telemetryFile,
+    });
+    expect(onlineResult.exitCode).toBe(0);
+    expect(onlineSpawn.calls).toHaveLength(1);
+    expect(onlineSpawn.calls[0].env?.UV_OFFLINE).toBe('0');
+
+    const offlineCapture = createCaptureIo();
+    const offlineSpawn = createFakeSpawnSequence([
+      { exitCode: 1, stderr: UV_SCRIPT_CACHE_MISS_STDERR },
+      { exitCode: 0, stdout: 'should-not-run\n' },
+    ]);
+    const offlineResult = await runRecordCommand('nara', ['search', 'Alder'], {
+      io: offlineCapture.io,
+      env: { ...cleanEnv(), UV_OFFLINE: '1' },
+      spawnImpl: offlineSpawn.spawnImpl,
+      telemetryFilePath: telemetryFile,
+    });
+    expect(offlineResult.exitCode).toBe(1);
+    expect(offlineSpawn.calls).toHaveLength(1);
+    expect(offlineSpawn.calls[0].env?.UV_OFFLINE).toBe('1');
+  });
+
+  it('leaves non-uv python3 scripts unaffected', async () => {
+    const tmp = await makeTempDir('kinloom-python3-unaffected-');
+    const telemetryFile = path.join(tmp, 'calls.jsonl');
+    const { io } = createCaptureIo();
+    const { spawnImpl, calls } = createFakeSpawnSequence([
+      { exitCode: 1, stderr: UV_SCRIPT_CACHE_MISS_STDERR },
+      { exitCode: 0, stdout: 'should-not-run\n' },
+    ]);
+
+    const result = await runRecordCommand('ia', ['grep', '--help'], {
+      io,
+      env: cleanEnv(),
+      spawnImpl,
+      telemetryFilePath: telemetryFile,
+    });
+
+    expect(result.exitCode).toBe(1);
+    expect(calls).toHaveLength(1);
+    expect(calls[0].command).toBe('python3');
+    expect(calls[0].env?.UV_OFFLINE).toBeUndefined();
+  });
+
+  it('detects real uv offline cache-miss diagnostics and ignores script errors', () => {
+    expect(isUvOfflineCacheMiss(UV_SCRIPT_CACHE_MISS_STDERR)).toBe(true);
+    expect(
+      isUvOfflineCacheMiss(
+        "error: Failed to resolve `--with` requirement\n  cause: Network connectivity is disabled, but the requested data wasn't found\n         in the cache: https://example.invalid/a.whl\n"
+      )
+    ).toBe(true);
+    expect(
+      isUvOfflineCacheMiss(
+        'error: No interpreter found for Python >=3.11\nhint: A managed Python download is available for Python >=3.11, but uv is set to offline mode\n'
+      )
+    ).toBe(true);
+    expect(isUvOfflineCacheMiss('httpx.ConnectError: network unreachable\n')).toBe(false);
+    expect(isUvOfflineCacheMiss('')).toBe(false);
+  });
+
+  it('retries cold-cache uv miss in streaming mode without buffering stdout', async () => {
+    const tmp = await makeTempDir('kinloom-uv-stream-retry-');
+    const telemetryFile = path.join(tmp, 'calls.jsonl');
+    const pad = 'y'.repeat(300_000);
+    const payload = `{"pad":"${pad}","cache_hit":false}\n`;
+    const streamedOut: Buffer[] = [];
+    const streamedErr: Buffer[] = [];
+    const originalOutWrite = process.stdout.write.bind(process.stdout);
+    const originalErrWrite = process.stderr.write.bind(process.stderr);
+    process.stdout.write = ((chunk: string | Uint8Array) => {
+      streamedOut.push(Buffer.isBuffer(chunk) ? Buffer.from(chunk) : Buffer.from(chunk));
+      return true;
+    }) as typeof process.stdout.write;
+    process.stderr.write = ((chunk: string | Uint8Array) => {
+      streamedErr.push(Buffer.isBuffer(chunk) ? Buffer.from(chunk) : Buffer.from(chunk));
+      return true;
+    }) as typeof process.stderr.write;
+
+    const { spawnImpl, calls } = createFakeSpawnSequence([
+      { exitCode: 1, stderr: UV_SCRIPT_CACHE_MISS_STDERR },
+      { exitCode: 0, stdout: payload },
+    ]);
+    try {
+      const result = await runRecordCommand('nara', ['search', 'Alder'], {
+        env: cleanEnv(),
+        spawnImpl,
+        telemetryFilePath: telemetryFile,
+      });
+      expect(result.exitCode).toBe(0);
+      expect(result.bytesOut).toBe(Buffer.byteLength(payload));
+      expect(Buffer.concat(streamedOut).toString('utf8')).toBe(payload);
+      expect(Buffer.concat(streamedErr).toString('utf8')).toContain('network was disabled');
+    } finally {
+      process.stdout.write = originalOutWrite;
+      process.stderr.write = originalErrWrite;
+    }
+
+    expect(calls).toHaveLength(2);
+    expect(calls[0].env?.UV_OFFLINE).toBe('1');
+    expect(calls[1].env?.UV_OFFLINE).toBeUndefined();
+  });
+});
+
 describe('bundle-skills.mjs and dual-mode bundled resolution', () => {
   it('bundles all 20 skills and 4 assets into a temp dist dir with executable script bits', async () => {
     const tmpOut = await makeTempDir('kinloom-bundle-test-');
@@ -722,9 +1003,7 @@ describe('bundled Python utilities and live script execution', () => {
       pyCmd = 'uv';
       pyPrefix = ['run', '--with', 'click', '--with', 'httpx', 'python3'];
     }
-    const result = spawnSync(pyCmd, [...pyPrefix, '-m', 'unittest', '-v', ...testFiles], {
-      encoding: 'utf8',
-    });
+    const result = spawnPythonSync(pyCmd, [...pyPrefix, '-m', 'unittest', '-v', ...testFiles]);
     expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(0);
     expect(result.stderr).toMatch(/Ran [1-9]\d* tests/);
     expect(result.stderr).toMatch(/\bOK\b/);
@@ -740,9 +1019,7 @@ describe('bundled Python utilities and live script execution', () => {
       pyCmd = 'uv';
       pyPrefix = ['run', '--with', 'click', '--with', 'httpx', 'python3'];
     }
-    const result = spawnSync(pyCmd, [...pyPrefix, '-m', 'unittest', '-v', testFile], {
-      encoding: 'utf8',
-    });
+    const result = spawnPythonSync(pyCmd, [...pyPrefix, '-m', 'unittest', '-v', testFile]);
     expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(0);
     expect(result.stderr).toMatch(/Ran [1-9]\d* tests/);
     expect(result.stderr).toMatch(/\bOK\b/);
@@ -915,9 +1192,7 @@ describe('bundled Python utilities and live script execution', () => {
       prepPrefix = [prepScript];
     } catch {
       try {
-        execFileSync('uv', ['run', '--with', 'pillow', 'python3', '-c', 'import PIL'], {
-          stdio: 'ignore',
-        });
+        execPythonSync('uv', ['run', '--with', 'pillow', 'python3', '-c', 'import PIL']);
         pyCmd = 'uv';
         pyPrefix = ['run', '--with', 'pillow', 'python3'];
         prepPrefix = ['run', '--script', prepScript];
@@ -933,9 +1208,10 @@ describe('bundled Python utilities and live script execution', () => {
     const srcImg = path.join(tmp, 'synthetic-sheet.png');
     const gridOut = path.join(tmp, 'grid.jpg');
     const stitchOut = path.join(tmp, 'stitched.jpg');
+    const testEnv = { ...process.env, KINLOOM_TELEMETRY_PARENT: '1' };
 
     // Generate a 2000x1200 light-cream synthetic sheet with colored marker stripes.
-    execFileSync(pyCmd, [
+    execPythonSync(pyCmd, [
       ...pyPrefix,
       '-c',
       [
@@ -950,10 +1226,10 @@ describe('bundled Python utilities and live script execution', () => {
       srcImg,
     ]);
 
-    const gridStdout = execFileSync(
+    const gridStdout = execPythonSync(
       pyCmd,
       [...prepPrefix, 'grid', srcImg, gridOut, '--step', '200', '--max-width', '1000', '--max-kb', '200'],
-      { encoding: 'utf8', env: { ...process.env, KINLOOM_TELEMETRY_PARENT: '1' } }
+      testEnv
     );
     const gridMeta = JSON.parse(gridStdout) as {
       original_width: number;
@@ -973,7 +1249,7 @@ describe('bundled Python utilities and live script execution', () => {
     expect(fs.statSync(gridOut).size).toBeLessThanOrEqual(200 * 1024);
 
     // Stitch header band (width 1800, height 160) + household band (width 1600, height 220) with redaction and 8px gap.
-    const stitchStdout = execFileSync(
+    const stitchStdout = execPythonSync(
       pyCmd,
       [
         ...prepPrefix,
@@ -993,7 +1269,7 @@ describe('bundled Python utilities and live script execution', () => {
         '--quality',
         '90',
       ],
-      { encoding: 'utf8', env: { ...process.env, KINLOOM_TELEMETRY_PARENT: '1' } }
+      testEnv
     );
     const stitchMeta = JSON.parse(stitchStdout) as {
       width: number;
@@ -1011,25 +1287,21 @@ describe('bundled Python utilities and live script execution', () => {
     expect(stitchMeta.out).toBe(stitchOut);
 
     // Verify actual image dimensions, dark divider band, and redacted black region inside band #2.
-    const pixelCheck = execFileSync(
-      pyCmd,
+    const pixelCheck = execPythonSync(pyCmd, [
+      ...pyPrefix,
+      '-c',
       [
-        ...pyPrefix,
-        '-c',
-        [
-          'from PIL import Image',
-          'import json, sys',
-          'im = Image.open(sys.argv[1])',
-          '# Divider pixel at y=164 (middle of 8px gap) should be dark (#222222 -> ~34)',
-          'div_px = im.getpixel((900, 164))',
-          '# Band #2 is centered at x_offset=100, y_offset=168; original redact (250,750)-(600,830) maps to band x=50..400, y=30..110 -> canvas x=150..500, y=198..278',
-          'red_px = im.getpixel((300, 230))',
-          'print(json.dumps({"size": list(im.size), "div": list(div_px), "red": list(red_px)}))',
-        ].join('\n'),
-        stitchOut,
-      ],
-      { encoding: 'utf8' }
-    );
+        'from PIL import Image',
+        'import json, sys',
+        'im = Image.open(sys.argv[1])',
+        '# Divider pixel at y=164 (middle of 8px gap) should be dark (#222222 -> ~34)',
+        'div_px = im.getpixel((900, 164))',
+        '# Band #2 is centered at x_offset=100, y_offset=168; original redact (250,750)-(600,830) maps to band x=50..400, y=30..110 -> canvas x=150..500, y=198..278',
+        'red_px = im.getpixel((300, 230))',
+        'print(json.dumps({"size": list(im.size), "div": list(div_px), "red": list(red_px)}))',
+      ].join('\n'),
+      stitchOut,
+    ]);
     const pixels = JSON.parse(pixelCheck) as { size: number[]; div: number[]; red: number[] };
     expect(pixels.size).toEqual([1800, 388]);
     expect(Math.max(...pixels.div)).toBeLessThan(55);
@@ -1039,18 +1311,14 @@ describe('bundled Python utilities and live script execution', () => {
     // and space-split boxes (`--box 100, 20, 1900, 180`) are rejoined.
     const gridAliasOut = path.join(tmp, 'grid-alias.jpg');
     const gridAlias = JSON.parse(
-      execFileSync(
-        pyCmd,
-        [...prepPrefix, 'grid', srcImg, '--out', gridAliasOut, '--step', '400'],
-        { encoding: 'utf8', env: { ...process.env, KINLOOM_TELEMETRY_PARENT: '1' } }
-      )
+      execPythonSync(pyCmd, [...prepPrefix, 'grid', srcImg, '--out', gridAliasOut, '--step', '400'], testEnv)
     ) as { out: string };
     expect(gridAlias.out).toBe(gridAliasOut);
     expect(fs.existsSync(gridAliasOut)).toBe(true);
 
     const stitchAliasOut = path.join(tmp, 'stitch-alias.jpg');
     const stitchAlias = JSON.parse(
-      execFileSync(
+      execPythonSync(
         pyCmd,
         [
           ...prepPrefix,
@@ -1066,7 +1334,7 @@ describe('bundled Python utilities and live script execution', () => {
           '--box',
           '200 720 1800 940',
         ],
-        { encoding: 'utf8', env: { ...process.env, KINLOOM_TELEMETRY_PARENT: '1' } }
+        testEnv
       )
     ) as { out: string; width: number; height: number };
     expect(stitchAlias.out).toBe(stitchAliasOut);
@@ -1074,7 +1342,7 @@ describe('bundled Python utilities and live script execution', () => {
 
     const cropAliasOut = path.join(tmp, 'crop-alias.jpg');
     const cropAlias = JSON.parse(
-      execFileSync(
+      execPythonSync(
         pyCmd,
         [
           ...prepPrefix,
@@ -1090,17 +1358,14 @@ describe('bundled Python utilities and live script execution', () => {
           path.join(tmp, 'crop-alias.preview.jpg'),
           '--json',
         ],
-        { encoding: 'utf8', env: { ...process.env, KINLOOM_TELEMETRY_PARENT: '1' } }
+        testEnv
       )
     ) as { output: { path: string; width: number } };
     expect(cropAlias.output.path).toBe(cropAliasOut);
     expect(cropAlias.output.width).toBe(1000);
 
     const previewDir = path.join(tmp, 'previews-alias');
-    execFileSync(pyCmd, [...prepPrefix, 'preview', srcImg, '--out', previewDir, '--json'], {
-      encoding: 'utf8',
-      env: { ...process.env, KINLOOM_TELEMETRY_PARENT: '1' },
-    });
+    execPythonSync(pyCmd, [...prepPrefix, 'preview', srcImg, '--out', previewDir, '--json'], testEnv);
     expect(fs.readdirSync(previewDir).length).toBe(1);
   });
 
@@ -1116,9 +1381,7 @@ describe('bundled Python utilities and live script execution', () => {
       prepPrefix = [prepScript];
     } catch {
       try {
-        execFileSync('uv', ['run', '--with', 'pillow', 'python3', '-c', 'import PIL'], {
-          stdio: 'ignore',
-        });
+        execPythonSync('uv', ['run', '--with', 'pillow', 'python3', '-c', 'import PIL']);
         pyCmd = 'uv';
         pyPrefix = ['run', '--with', 'pillow', 'python3'];
         prepPrefix = ['run', '--script', prepScript];
@@ -1131,7 +1394,7 @@ describe('bundled Python utilities and live script execution', () => {
     }
     const python = pyCmd;
 
-    const cropHelp = execFileSync(python, [...prepPrefix, 'crop', '--help'], { encoding: 'utf8' });
+    const cropHelp = execPythonSync(python, [...prepPrefix, 'crop', '--help']);
     expect(cropHelp).toContain('--redact-orig');
     expect(cropHelp).toContain('[--box BOX]');
     expect(cropHelp.replace(/\s+/g, ' ')).toContain('Omit --box to keep the full rotated frame.');
@@ -1139,7 +1402,7 @@ describe('bundled Python utilities and live script execution', () => {
     const env = { ...process.env, KINLOOM_TELEMETRY_PARENT: '1' };
     const tmp = await makeTempDir('kinloom-prep-crop-redact-');
     const srcImg = path.join(tmp, 'sheet.png');
-    execFileSync(pyCmd, [
+    execPythonSync(pyCmd, [
       ...pyPrefix,
       '-c',
       [
@@ -1152,23 +1415,19 @@ describe('bundled Python utilities and live script execution', () => {
     ]);
 
     const readPixels = (file: string, points: string): { size: number[]; px: number[][] } => {
-      const raw = execFileSync(
-        pyCmd,
+      const raw = execPythonSync(pyCmd, [
+        ...pyPrefix,
+        '-c',
         [
-          ...pyPrefix,
-          '-c',
-          [
-            'from PIL import Image',
-            'import json, sys',
-            'im = Image.open(sys.argv[1])',
-            'pts = json.loads(sys.argv[2])',
-            'print(json.dumps({"size": list(im.size), "px": [list(im.getpixel(tuple(p))) for p in pts]}))',
-          ].join('\n'),
-          file,
-          points,
-        ],
-        { encoding: 'utf8' }
-      );
+          'from PIL import Image',
+          'import json, sys',
+          'im = Image.open(sys.argv[1])',
+          'pts = json.loads(sys.argv[2])',
+          'print(json.dumps({"size": list(im.size), "px": [list(im.getpixel(tuple(p))) for p in pts]}))',
+        ].join('\n'),
+        file,
+        points,
+      ]);
       const parsed: unknown = JSON.parse(raw);
       if (
         typeof parsed !== 'object' ||
@@ -1186,7 +1445,7 @@ describe('bundled Python utilities and live script execution', () => {
 
     const origOut = path.join(tmp, 'orig.png');
     const origMeta = JSON.parse(
-      execFileSync(
+      execPythonSync(
         pyCmd,
         [
           ...prepPrefix,
@@ -1206,7 +1465,7 @@ describe('bundled Python utilities and live script execution', () => {
           '--preview-out',
           path.join(tmp, 'orig.preview.jpg'),
         ],
-        { encoding: 'utf8', env }
+        env
       )
     ) as {
       box: number[];
@@ -1229,7 +1488,7 @@ describe('bundled Python utilities and live script execution', () => {
 
     const legacyOut = path.join(tmp, 'legacy.png');
     const legacyMeta = JSON.parse(
-      execFileSync(
+      execPythonSync(
         pyCmd,
         [
           ...prepPrefix,
@@ -1244,7 +1503,7 @@ describe('bundled Python utilities and live script execution', () => {
           '--preview-out',
           path.join(tmp, 'legacy.preview.jpg'),
         ],
-        { encoding: 'utf8', env }
+        env
       )
     ) as { redactions: number[][]; redactions_orig: number[][] };
     expect(legacyMeta.redactions).toEqual([[5, 5, 12, 12]]);
@@ -1253,7 +1512,7 @@ describe('bundled Python utilities and live script execution', () => {
     expect(legacyPx.px).toEqual([black, black, cream, cream]);
 
     const turned = path.join(tmp, 'turned.png');
-    execFileSync(pyCmd, [
+    execPythonSync(pyCmd, [
       ...pyPrefix,
       '-c',
       [
@@ -1265,7 +1524,7 @@ describe('bundled Python utilities and live script execution', () => {
     ]);
     const rotOut = path.join(tmp, 'rotated.png');
     const rotMeta = JSON.parse(
-      execFileSync(
+      execPythonSync(
         pyCmd,
         [
           ...prepPrefix,
@@ -1280,7 +1539,7 @@ describe('bundled Python utilities and live script execution', () => {
           '--preview-out',
           path.join(tmp, 'rotated.preview.jpg'),
         ],
-        { encoding: 'utf8', env }
+        env
       )
     ) as { box: number[]; rotate: number; redactions: number[][]; redactions_orig: number[][] };
     expect(rotMeta.rotate).toBe(90);
@@ -1293,7 +1552,7 @@ describe('bundled Python utilities and live script execution', () => {
 
     const redactOnly = path.join(tmp, 'redact-only.png');
     const redactOnlyMeta = JSON.parse(
-      execFileSync(
+      execPythonSync(
         pyCmd,
         [
           ...prepPrefix,
@@ -1308,7 +1567,7 @@ describe('bundled Python utilities and live script execution', () => {
           '--preview-out',
           path.join(tmp, 'redact-only.preview.jpg'),
         ],
-        { encoding: 'utf8', env }
+        env
       )
     ) as { box: number[]; redactions: number[][]; redactions_orig: number[][] };
     expect(redactOnlyMeta.box).toEqual([0, 0, 20, 40]);
@@ -1317,7 +1576,7 @@ describe('bundled Python utilities and live script execution', () => {
     const redactOnlyPx = readPixels(redactOnly, '[[2,4],[6,8],[1,4]]');
     expect(redactOnlyPx.px).toEqual([black, black, cream]);
 
-    const oob = spawnSync(
+    const oob = spawnPythonSync(
       pyCmd,
       [
         ...prepPrefix,
@@ -1331,7 +1590,7 @@ describe('bundled Python utilities and live script execution', () => {
         '--preview-out',
         path.join(tmp, 'oob.preview.jpg'),
       ],
-      { encoding: 'utf8', env }
+      env
     );
     expect(oob.status).toBe(2);
     expect(oob.stderr).toContain('--redact #1 (40,5,50,15) starts outside 30x40 image.');
@@ -1352,9 +1611,7 @@ describe('bundled Python utilities and live script execution', () => {
       prepPrefix = [prepScript];
     } catch {
       try {
-        execFileSync('uv', ['run', '--with', 'pillow', 'python3', '-c', 'import PIL'], {
-          stdio: 'ignore',
-        });
+        execPythonSync('uv', ['run', '--with', 'pillow', 'python3', '-c', 'import PIL']);
         pyCmd = 'uv';
         pyPrefix = ['run', '--with', 'pillow', 'python3'];
         prepPrefix = ['run', '--script', prepScript];
@@ -1366,9 +1623,9 @@ describe('bundled Python utilities and live script execution', () => {
       return;
     }
     const env = { ...process.env, KINLOOM_TELEMETRY_PARENT: '1' };
-    const infoHelp = execFileSync(pyCmd, [...prepPrefix, 'info', '--help'], { encoding: 'utf8' });
+    const infoHelp = execPythonSync(pyCmd, [...prepPrefix, 'info', '--help']);
     expect(infoHelp).toContain('--json');
-    const joinHelp = execFileSync(pyCmd, [...prepPrefix, 'join', '--help'], { encoding: 'utf8' });
+    const joinHelp = execPythonSync(pyCmd, [...prepPrefix, 'join', '--help']);
     expect(joinHelp).toContain('--direction');
     expect(joinHelp).toContain('--align');
     expect(joinHelp).toContain('--preview-out');
@@ -1379,7 +1636,7 @@ describe('bundled Python utilities and live script execution', () => {
     const turned = path.join(tmp, 'turned.jpg');
     const note = path.join(tmp, 'note.txt');
     await writeFile(note, 'not an image');
-    execFileSync(pyCmd, [
+    execPythonSync(pyCmd, [
       ...pyPrefix,
       '-c',
       [
@@ -1397,17 +1654,14 @@ describe('bundled Python utilities and live script execution', () => {
       turned,
     ]);
 
-    const infoText = execFileSync(pyCmd, [...prepPrefix, 'info', red, blue], {
-      encoding: 'utf8',
-      env,
-    });
+    const infoText = execPythonSync(pyCmd, [...prepPrefix, 'info', red, blue], env);
     expect(infoText).toBe(
       `${red}: 80x30 PNG (${(fs.statSync(red).size / 1024).toFixed(1)} KB)\n` +
         `${blue}: 40x20 PNG (${(fs.statSync(blue).size / 1024).toFixed(1)} KB)\n`
     );
 
     const infoJson = JSON.parse(
-      execFileSync(pyCmd, [...prepPrefix, 'info', red, turned, '--json'], { encoding: 'utf8', env })
+      execPythonSync(pyCmd, [...prepPrefix, 'info', red, turned, '--json'], env)
     ) as {
       count: number;
       files: Array<{
@@ -1439,15 +1693,12 @@ describe('bundled Python utilities and live script execution', () => {
       bytes: fs.statSync(turned).size,
     });
 
-    const missing = spawnSync(pyCmd, [...prepPrefix, 'info', path.join(tmp, 'missing.png')], {
-      encoding: 'utf8',
-      env,
-    });
+    const missing = spawnPythonSync(pyCmd, [...prepPrefix, 'info', path.join(tmp, 'missing.png')], env);
     expect(missing.status).toBe(1);
     expect(missing.stderr).toContain('input file not found');
     expect(missing.stdout).toBe('');
 
-    const notImage = spawnSync(pyCmd, [...prepPrefix, 'info', note], { encoding: 'utf8', env });
+    const notImage = spawnPythonSync(pyCmd, [...prepPrefix, 'info', note], env);
     expect(notImage.status).toBe(1);
     expect(notImage.stderr).toContain('cannot read image');
     expect(notImage.stderr).toContain(note);
@@ -1456,7 +1707,7 @@ describe('bundled Python utilities and live script execution', () => {
     const verticalOut = path.join(tmp, 'vertical.png');
     const previewOut = path.join(tmp, 'vertical.preview.jpg');
     const vertical = JSON.parse(
-      execFileSync(
+      execPythonSync(
         pyCmd,
         [
           ...prepPrefix,
@@ -1479,7 +1730,7 @@ describe('bundled Python utilities and live script execution', () => {
           previewOut,
           '--json',
         ],
-        { encoding: 'utf8', env }
+        env
       )
     ) as {
       width: number;
@@ -1502,7 +1753,7 @@ describe('bundled Python utilities and live script execution', () => {
 
     const horizontalOut = path.join(tmp, 'horizontal.png');
     const horizontal = JSON.parse(
-      execFileSync(
+      execPythonSync(
         pyCmd,
         [
           ...prepPrefix,
@@ -1518,7 +1769,7 @@ describe('bundled Python utilities and live script execution', () => {
           '--align',
           'end',
         ],
-        { encoding: 'utf8', env }
+        env
       )
     ) as { width: number; height: number; direction: string; out: string; count: number };
     expect(horizontal).toMatchObject({
@@ -1530,7 +1781,7 @@ describe('bundled Python utilities and live script execution', () => {
     });
 
     const startOut = path.join(tmp, 'start.png');
-    execFileSync(
+    execPythonSync(
       pyCmd,
       [
         ...prepPrefix,
@@ -1546,53 +1797,49 @@ describe('bundled Python utilities and live script execution', () => {
         '--align',
         'start',
       ],
-      { encoding: 'utf8', env }
+      env
     );
 
     const pixels = JSON.parse(
-      execFileSync(
-        pyCmd,
+      execPythonSync(pyCmd, [
+        ...pyPrefix,
+        '-c',
         [
-          ...pyPrefix,
-          '-c',
-          [
-            'from PIL import Image',
-            'import json, sys',
-            'vertical = Image.open(sys.argv[1]).convert("RGB")',
-            'horizontal = Image.open(sys.argv[2]).convert("RGB")',
-            'start = Image.open(sys.argv[3]).convert("RGB")',
-            'preview = Image.open(sys.argv[4])',
-            'print(json.dumps({',
-            '  "vertical": {',
-            '    "size": list(vertical.size),',
-            '    "red": list(vertical.getpixel((0, 0))),',
-            '    "gap": list(vertical.getpixel((0, 33))),',
-            '    "pad": list(vertical.getpixel((0, 38))),',
-            '    "blue": list(vertical.getpixel((20, 38))),',
-            '    "blue_end": list(vertical.getpixel((59, 57))),',
-            '    "right_pad": list(vertical.getpixel((60, 38))),',
-            '  },',
-            '  "horizontal": {',
-            '    "size": list(horizontal.size),',
-            '    "gap": list(horizontal.getpixel((84, 0))),',
-            '    "above": list(horizontal.getpixel((88, 0))),',
-            '    "blue": list(horizontal.getpixel((88, 10))),',
-            '    "blue_corner": list(horizontal.getpixel((127, 29))),',
-            '  },',
-            '  "start": {',
-            '    "blue": list(start.getpixel((88, 0))),',
-            '    "below": list(start.getpixel((88, 20))),',
-            '  },',
-            '  "preview": {"size": list(preview.size), "format": preview.format},',
-            '}))',
-          ].join('\n'),
-          verticalOut,
-          horizontalOut,
-          startOut,
-          previewOut,
-        ],
-        { encoding: 'utf8' }
-      )
+          'from PIL import Image',
+          'import json, sys',
+          'vertical = Image.open(sys.argv[1]).convert("RGB")',
+          'horizontal = Image.open(sys.argv[2]).convert("RGB")',
+          'start = Image.open(sys.argv[3]).convert("RGB")',
+          'preview = Image.open(sys.argv[4])',
+          'print(json.dumps({',
+          '  "vertical": {',
+          '    "size": list(vertical.size),',
+          '    "red": list(vertical.getpixel((0, 0))),',
+          '    "gap": list(vertical.getpixel((0, 33))),',
+          '    "pad": list(vertical.getpixel((0, 38))),',
+          '    "blue": list(vertical.getpixel((20, 38))),',
+          '    "blue_end": list(vertical.getpixel((59, 57))),',
+          '    "right_pad": list(vertical.getpixel((60, 38))),',
+          '  },',
+          '  "horizontal": {',
+          '    "size": list(horizontal.size),',
+          '    "gap": list(horizontal.getpixel((84, 0))),',
+          '    "above": list(horizontal.getpixel((88, 0))),',
+          '    "blue": list(horizontal.getpixel((88, 10))),',
+          '    "blue_corner": list(horizontal.getpixel((127, 29))),',
+          '  },',
+          '  "start": {',
+          '    "blue": list(start.getpixel((88, 0))),',
+          '    "below": list(start.getpixel((88, 20))),',
+          '  },',
+          '  "preview": {"size": list(preview.size), "format": preview.format},',
+          '}))',
+        ].join('\n'),
+        verticalOut,
+        horizontalOut,
+        startOut,
+        previewOut,
+      ])
     ) as {
       vertical: {
         size: number[];
@@ -1623,16 +1870,16 @@ describe('bundled Python utilities and live script execution', () => {
     expect(pixels.start.below).toEqual([34, 34, 34]);
     expect(pixels.preview).toEqual({ size: [80, 58], format: 'JPEG' });
 
-    const tooFew = spawnSync(
+    const tooFew = spawnPythonSync(
       pyCmd,
       [...prepPrefix, 'join', red, '--out', path.join(tmp, 'one.jpg')],
-      { encoding: 'utf8', env }
+      env
     );
     expect(tooFew.status).toBe(2);
     expect(tooFew.stderr).toContain('at least 2');
     expect(fs.existsSync(path.join(tmp, 'one.jpg'))).toBe(false);
 
-    const noOut = spawnSync(pyCmd, [...prepPrefix, 'join', red, blue], { encoding: 'utf8', env });
+    const noOut = spawnPythonSync(pyCmd, [...prepPrefix, 'join', red, blue], env);
     expect(noOut.status).toBe(2);
     expect(noOut.stderr.toLowerCase()).toContain('out');
   });
@@ -1819,9 +2066,7 @@ describe('bundled Python utilities and live script execution', () => {
       pyCmd = 'uv';
       pyPrefix = ['run', '--with', 'click', '--with', 'httpx', 'python3'];
     }
-    const result = spawnSync(pyCmd, [...pyPrefix, '-m', 'unittest', '-v', ...testFiles], {
-      encoding: 'utf8',
-    });
+    const result = spawnPythonSync(pyCmd, [...pyPrefix, '-m', 'unittest', '-v', ...testFiles]);
     expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(0);
     expect(result.stderr).toMatch(/Ran [1-9]\d* tests/);
     expect(result.stderr).toMatch(/\bOK\b/);
@@ -1844,9 +2089,7 @@ describe('bundled Python utilities and live script execution', () => {
       pyCmd = 'uv';
       pyPrefix = ['run', '--with', 'click', '--with', 'httpx', 'python3'];
     }
-    const result = spawnSync(pyCmd, [...pyPrefix, '-m', 'unittest', '-v', ...testFiles], {
-      encoding: 'utf8',
-    });
+    const result = spawnPythonSync(pyCmd, [...pyPrefix, '-m', 'unittest', '-v', ...testFiles]);
     expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(0);
     expect(result.stderr).toMatch(/Ran [1-9]\d* tests/);
     expect(result.stderr).toMatch(/\bOK\b/);
@@ -1867,9 +2110,7 @@ describe('bundled Python utilities and live script execution', () => {
       pyCmd = 'uv';
       pyPrefix = ['run', '--with', 'click', '--with', 'httpx', 'python3'];
     }
-    const result = spawnSync(pyCmd, [...pyPrefix, '-m', 'unittest', '-v', ...testFiles], {
-      encoding: 'utf8',
-    });
+    const result = spawnPythonSync(pyCmd, [...pyPrefix, '-m', 'unittest', '-v', ...testFiles]);
     expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(0);
     expect(result.stderr).toMatch(/Ran [1-9]\d* tests/);
     expect(result.stderr).toMatch(/\bOK\b/);

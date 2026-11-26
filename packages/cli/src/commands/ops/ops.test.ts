@@ -2134,13 +2134,13 @@ describe('ops/status', () => {
     expect(twoPending.rendered).toContain('... and 1 more pending');
 
     const staged = await runStatusCommand({ repoDir, filter: 'staged' });
-    expect(staged.rendered).toContain('Staged:');
+    expect(staged.rendered).toContain('Staged (sparsest first):');
     expect(staged.rendered).toContain('Helen Maple (per_helen_maple)');
     expect(staged.rendered).not.toContain('Edmund Alder');
     expect(staged.rendered).not.toContain('Arthur Alder (per_arthur_alder)');
 
     const doneLive = await runStatusCommand({ repoDir, filter: 'done_live' });
-    expect(doneLive.rendered).toContain('Done live:');
+    expect(doneLive.rendered).toContain('Done live (sparsest first):');
     expect(doneLive.rendered).toContain('Arthur Alder (per_arthur_alder)');
     expect(doneLive.rendered).not.toContain('Helen Maple');
     expect(doneLive.rendered).not.toContain('Edmund Alder');
@@ -2152,9 +2152,11 @@ describe('ops/status', () => {
       })
     ).toBe(EXIT_OK);
     const parsed = JSON.parse(jsonCli.stdout.join('\n')) as {
+      sort: string;
       queue: { done_live: number; staged: number; pending: number };
       deceased: Array<{ id: string }>;
     };
+    expect(parsed.sort).toBe('sparsest');
     expect(parsed.queue).toEqual({ done_live: 1, staged: 1, pending: 3 });
     expect(parsed.deceased.map((person) => person.id)).toEqual([
       'per_edmund_alder',
@@ -2175,6 +2177,363 @@ describe('ops/status', () => {
     expect(badLimit.stderr.join('\n')).toContain(
       'Option `--limit` must be an integer greater than or equal to 0.'
     );
+  });
+
+  it('sorts pending, staged, and done_live queues by sparsest, richest, and chronological and rejects invalid --sort', async () => {
+    const repoDir = await createSyntheticRepo();
+    const dataDir = path.join(repoDir, 'data');
+
+    const people: RawPerson[] = [
+      {
+        id: 'per_pending_rich',
+        slug: 'pending-rich',
+        gedcom_xref: '@I200001@',
+        full_name: 'Martha Alder',
+        given_name: 'Martha',
+        surname: 'Alder',
+        alt_names: [],
+        sex: 'F',
+        is_living: false,
+        lineage_group: 'ancestor',
+        birth_edtf: '1850-05-01',
+        death_edtf: '1930-01-01',
+        portrait_url: null,
+      },
+      {
+        id: 'per_pending_mid_a',
+        slug: 'pending-mid-a',
+        gedcom_xref: '@I200002@',
+        full_name: 'Samuel Alder',
+        given_name: 'Samuel',
+        surname: 'Alder',
+        alt_names: [],
+        sex: 'M',
+        is_living: false,
+        lineage_group: 'ancestor',
+        birth_edtf: '1850-09-12',
+        death_edtf: '1910-04-04',
+        portrait_url: null,
+      },
+      {
+        id: 'per_pending_sparse_no_birth',
+        slug: 'pending-sparse-no-birth',
+        gedcom_xref: '@I200003@',
+        full_name: 'Grace Maple',
+        given_name: 'Grace',
+        surname: 'Maple',
+        alt_names: [],
+        sex: 'F',
+        is_living: false,
+        lineage_group: 'ancestor',
+        birth_edtf: '',
+        death_edtf: '1895-02-02',
+        portrait_url: null,
+      },
+      {
+        id: 'per_pending_sparse_early',
+        slug: 'pending-sparse-early',
+        gedcom_xref: '@I200004@',
+        full_name: 'Henry Alder',
+        given_name: 'Henry',
+        surname: 'Alder',
+        alt_names: [],
+        sex: 'M',
+        is_living: false,
+        lineage_group: 'ancestor',
+        birth_edtf: '1820~',
+        death_edtf: '1888-07-07',
+        portrait_url: null,
+      },
+      {
+        id: 'per_staged_sparse',
+        slug: 'staged-sparse',
+        gedcom_xref: '@I200005@',
+        full_name: 'Ruth Maple',
+        given_name: 'Ruth',
+        surname: 'Maple',
+        alt_names: [],
+        sex: 'F',
+        is_living: false,
+        lineage_group: 'ancestor',
+        birth_edtf: '1875-03-03',
+        death_edtf: '1945-06-06',
+        portrait_url: null,
+      },
+      {
+        id: 'per_staged_rich',
+        slug: 'staged-rich',
+        gedcom_xref: '@I200006@',
+        full_name: 'Daniel Maple',
+        given_name: 'Daniel',
+        surname: 'Maple',
+        alt_names: [],
+        sex: 'M',
+        is_living: false,
+        lineage_group: 'ancestor',
+        birth_edtf: '1840-08-08',
+        death_edtf: '1915-09-09',
+        portrait_url: null,
+      },
+      {
+        id: 'per_done_sparse',
+        slug: 'done-sparse',
+        gedcom_xref: '@I200007@',
+        full_name: 'Alice Alder',
+        given_name: 'Alice',
+        surname: 'Alder',
+        alt_names: [],
+        sex: 'F',
+        is_living: false,
+        lineage_group: 'ancestor',
+        birth_edtf: '1865-01-10',
+        death_edtf: '1938-11-11',
+        portrait_url: null,
+      },
+      {
+        id: 'per_done_rich',
+        slug: 'done-rich',
+        gedcom_xref: '@I200008@',
+        full_name: 'Owen Alder',
+        given_name: 'Owen',
+        surname: 'Alder',
+        alt_names: [],
+        sex: 'M',
+        is_living: false,
+        lineage_group: 'ancestor',
+        birth_edtf: '1835-12-01',
+        death_edtf: '1905-05-05',
+        portrait_url: null,
+      },
+    ];
+
+    const events: RawEvent[] = [
+      {
+        id: 'evt_rich_1',
+        title: 'Martha census 1880',
+        scope: 'personal',
+        event_kind: 'point_event',
+        edtf_date: '1880-06-01',
+        place_id: 'plc_oak_county_ohio',
+        summary: 'Martha Alder recorded.',
+        participants: [{ person_id: 'per_pending_rich', role: 'principal' }],
+        sources: [
+          { source_id: 'src_1880_census', confidence: 'high' },
+          { source_id: 'src_1932_death_cert', confidence: 'high' },
+        ],
+      },
+      {
+        id: 'evt_rich_2',
+        title: 'Martha deed 1890',
+        scope: 'personal',
+        event_kind: 'point_event',
+        edtf_date: '1890-06-01',
+        place_id: 'plc_oak_county_ohio',
+        summary: 'Martha Alder land deed.',
+        participants: [{ person_id: 'per_pending_rich', role: 'principal' }],
+        sources: [{ source_id: 'src_1880_census', confidence: 'high' }],
+      },
+      {
+        id: 'evt_mid_1',
+        title: 'Samuel census 1880',
+        scope: 'personal',
+        event_kind: 'point_event',
+        edtf_date: '1880-06-02',
+        place_id: 'plc_oak_county_ohio',
+        summary: 'Samuel Alder recorded.',
+        participants: [{ person_id: 'per_pending_mid_a', role: 'principal' }],
+        sources: [{ source_id: 'src_1880_census', confidence: 'high' }],
+      },
+      {
+        id: 'evt_staged_rich_1',
+        title: 'Daniel census 1880',
+        scope: 'personal',
+        event_kind: 'point_event',
+        edtf_date: '1880-06-03',
+        place_id: 'plc_oak_county_ohio',
+        summary: 'Daniel Maple recorded.',
+        participants: [{ person_id: 'per_staged_rich', role: 'principal' }],
+        sources: [{ source_id: 'src_1880_census', confidence: 'high' }],
+      },
+      {
+        id: 'evt_done_rich_1',
+        title: 'Owen census 1880',
+        scope: 'personal',
+        event_kind: 'point_event',
+        edtf_date: '1880-06-04',
+        place_id: 'plc_oak_county_ohio',
+        summary: 'Owen Alder recorded.',
+        participants: [{ person_id: 'per_done_rich', role: 'principal' }],
+        sources: [{ source_id: 'src_1880_census', confidence: 'high' }],
+      },
+    ];
+
+    const media: MediaItem[] = [
+      {
+        id: 'med_rich_photo',
+        kind: 'family_photo',
+        person_id: 'per_pending_rich',
+        file: '/media/martha.png',
+        caption: 'Martha Alder portrait',
+      },
+    ];
+
+    const narratives: Narrative[] = [
+      {
+        id: 'nar_done_sparse',
+        slug: 'alice-alder-bio',
+        kind: 'biography',
+        subject_person_id: 'per_done_sparse',
+        title: 'Alice Alder Biography',
+        person_ids: ['per_done_sparse'],
+        place_ids: [],
+        event_ids: [],
+        source_ids: [],
+        body_md: 'Alice Alder lived in Oak County.',
+      },
+      {
+        id: 'nar_done_rich',
+        slug: 'owen-alder-bio',
+        kind: 'biography',
+        subject_person_id: 'per_done_rich',
+        title: 'Owen Alder Biography',
+        person_ids: ['per_done_rich'],
+        place_ids: [],
+        event_ids: [],
+        source_ids: [],
+        body_md: 'Owen Alder farmed in Oak County.',
+      },
+    ];
+
+    for (const stagedId of ['per_staged_sparse', 'per_staged_rich']) {
+      await mkdir(path.join(repoDir, 'research', 'people', stagedId), { recursive: true });
+      await writeFile(path.join(repoDir, 'research', 'people', stagedId, 'patch.json'), '{}\n', 'utf8');
+    }
+
+    await Promise.all([
+      writeFile(path.join(dataDir, 'people.yaml'), serializePeopleYaml(people, { sortById: true }), 'utf8'),
+      writeFile(path.join(dataDir, 'events.yaml'), serializeEventsYaml(events, { sortById: true }), 'utf8'),
+      writeFile(path.join(dataDir, 'media.yaml'), serializeMediaYaml(media, { sortById: true }), 'utf8'),
+      writeFile(
+        path.join(dataDir, 'narratives.yaml'),
+        serializeNarrativesYaml(narratives, { sortById: true }),
+        'utf8'
+      ),
+    ]);
+
+    const sparsest = await runStatusCommand({ repoDir, sort: 'sparsest' });
+    expect(sparsest.sort).toBe('sparsest');
+    expect(sparsest.rendered).toContain('Pending (sparsest first):');
+    expect(sparsest.deceased.map((p) => p.id)).toEqual([
+      'per_pending_sparse_early',
+      'per_pending_sparse_no_birth',
+      'per_pending_mid_a',
+      'per_pending_rich',
+      'per_staged_sparse',
+      'per_staged_rich',
+      'per_done_sparse',
+      'per_done_rich',
+    ]);
+
+    const richest = await runStatusCommand({ repoDir, sort: 'richest' });
+    expect(richest.sort).toBe('richest');
+    expect(richest.rendered).toContain('Pending (richest first):');
+    expect(richest.deceased.map((p) => p.id)).toEqual([
+      'per_pending_rich',
+      'per_pending_mid_a',
+      'per_pending_sparse_early',
+      'per_pending_sparse_no_birth',
+      'per_staged_rich',
+      'per_staged_sparse',
+      'per_done_rich',
+      'per_done_sparse',
+    ]);
+
+    const stagedRichest = await runStatusCommand({ repoDir, filter: 'staged', sort: 'richest' });
+    expect(stagedRichest.rendered).toContain('Staged (richest first):');
+    expect(stagedRichest.rendered.indexOf('per_staged_rich')).toBeLessThan(
+      stagedRichest.rendered.indexOf('per_staged_sparse')
+    );
+
+    const chronological = await runStatusCommand({ repoDir, sort: 'chronological' });
+    expect(chronological.sort).toBe('chronological');
+    expect(chronological.rendered).toContain('Pending (chronological):');
+    // 1820, then 1850 (death 1910 before death 1930), then null birth last; same within staged & done_live.
+    expect(chronological.deceased.map((p) => p.id)).toEqual([
+      'per_pending_sparse_early',
+      'per_pending_mid_a',
+      'per_pending_rich',
+      'per_pending_sparse_no_birth',
+      'per_staged_rich',
+      'per_staged_sparse',
+      'per_done_rich',
+      'per_done_sparse',
+    ]);
+
+    const doneChrono = await runStatusCommand({ repoDir, filter: 'done_live', sort: 'chronological' });
+    expect(doneChrono.rendered).toContain('Done live (chronological):');
+    expect(doneChrono.rendered.indexOf('per_done_rich')).toBeLessThan(
+      doneChrono.rendered.indexOf('per_done_sparse')
+    );
+
+    // CLI flag parsing for both `--sort <mode>` and `--sort=<mode>` plus JSON output.
+    const cliRichest = createCaptureIo();
+    expect(
+      await runCli(['status', '--repo', repoDir, '--sort', 'richest', '--json'], { io: cliRichest.io })
+    ).toBe(EXIT_OK);
+    const parsedRichest = JSON.parse(cliRichest.stdout.join('\n')) as {
+      sort: string;
+      deceased: Array<{ id: string }>;
+    };
+    expect(parsedRichest.sort).toBe('richest');
+    expect(parsedRichest.deceased.slice(0, 4).map((p) => p.id)).toEqual([
+      'per_pending_rich',
+      'per_pending_mid_a',
+      'per_pending_sparse_early',
+      'per_pending_sparse_no_birth',
+    ]);
+
+    const cliChronoEq = createCaptureIo();
+    expect(
+      await runCli(['status', '--repo', repoDir, '--sort=chronological', '--json'], {
+        io: cliChronoEq.io,
+      })
+    ).toBe(EXIT_OK);
+    const parsedChrono = JSON.parse(cliChronoEq.stdout.join('\n')) as {
+      sort: string;
+      deceased: Array<{ id: string }>;
+    };
+    expect(parsedChrono.sort).toBe('chronological');
+    expect(parsedChrono.deceased.slice(0, 4).map((p) => p.id)).toEqual([
+      'per_pending_sparse_early',
+      'per_pending_mid_a',
+      'per_pending_rich',
+      'per_pending_sparse_no_birth',
+    ]);
+
+    // Invalid --sort is rejected with CliValidationError (exit code 2).
+    const badSort = createCaptureIo();
+    expect(await runCli(['status', '--repo', repoDir, '--sort', 'newest'], { io: badSort.io })).toBe(
+      EXIT_USAGE
+    );
+    expect(badSort.stderr.join('\n')).toBe(
+      'Validation error: Option `--sort` must be `sparsest`, `richest`, or `chronological`.'
+    );
+
+    const badSortEq = createCaptureIo();
+    expect(await runCli(['status', '--repo', repoDir, '--sort=random'], { io: badSortEq.io })).toBe(
+      EXIT_USAGE
+    );
+    expect(badSortEq.stderr.join('\n')).toBe(
+      'Validation error: Option `--sort` must be `sparsest`, `richest`, or `chronological`.'
+    );
+
+    await expect(
+      runStatusCommand({ repoDir, sort: 'invalid' as unknown as 'sparsest' })
+    ).rejects.toBeInstanceOf(CliValidationError);
+
+    const help = createCaptureIo();
+    expect(await runCli(['status', '--help'], { io: help.io })).toBe(EXIT_OK);
+    expect(help.stdout.join('\n')).toContain('--sort <sparsest|richest|chronological>');
   });
 });
 

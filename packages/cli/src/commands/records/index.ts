@@ -31,6 +31,7 @@ export {
 
 export {
   buildTelemetrySubcmd,
+  isUvOfflineCacheMiss,
   resolveScriptInvocation,
   runRecordCommand,
   type RecordSpawnFn,

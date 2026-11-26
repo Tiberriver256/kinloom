@@ -59,19 +59,21 @@ Living people affect only the integer people.living count.
 The command does not print a living person's id, name, or birth date.
 
 Options:
-  --repo <dir>                         Archive repository root (default: current working directory)
-  --limit <N>                          Text list length. Default 8. 0 shows every matching row.
-  --filter <pending|staged|done_live>  Text list status. Default pending.
-  --json                               Emit the status object as JSON
-  -h, --help                           Show this help message
+  --repo <dir>                             Archive repository root (default: current working directory)
+  --limit <N>                              Text list length. Default 8. 0 shows every matching row.
+  --filter <pending|staged|done_live>      Text list status. Default pending.
+  --sort <sparsest|richest|chronological>  Queue sort order. Default sparsest.
+  --json                                   Emit the status object as JSON
+  -h, --help                               Show this help message
 
 Text output prints the totals, the queue counts, and a list of deceased people.
-The list uses --filter and stops after --limit rows.
+The list uses --filter, --sort, and stops after --limit rows.
 JSON ignores --limit and --filter.
-JSON still returns the full deceased array and the full queue counts.
+JSON applies --sort, includes the sort field, and returns the full deceased array and queue counts.
 
 JSON object:
   repo                 Absolute repository path
+  sort                 Active queue sort mode (sparsest, richest, or chronological)
   people.total         Rows in data/people.yaml
   people.deceased      People who are not effective-living
   people.living        People who are effective-living (count only)
@@ -96,8 +98,10 @@ Each deceased item has:
   has_staged_patch     true when research/people/<id>/patch.json exists
   status               done_live if has_biography, else staged if has_staged_patch, else pending
 
-Pending items sort by events, then sources, then media, then birth_edtf (an empty birth sorts as 9999), then id.
-Staged items and done_live items sort by id.
+Within each status group (pending, staged, done_live), items sort by --sort:
+  sparsest       events asc, sources asc, media asc, birthYear asc (null last), id asc
+  richest        events desc, sources desc, media desc, birthYear asc (null last), id asc
+  chronological  birthYear asc (null last), deathYear asc (null last), events asc, id asc
 Effective living status uses resolveEffectiveLiving with privacy.referenceYear and privacy.livingCutoffYears from kinloom.config.yaml.
 When that file is absent, the defaults are referenceYear 2026 and livingCutoffYears 101.`;
 

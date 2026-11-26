@@ -966,15 +966,17 @@ export async function runCli(
             repo: { type: 'string' },
             limit: { type: 'string' },
             filter: { type: 'string' },
+            sort: { type: 'string' },
             json: { type: 'boolean', default: false },
           },
         });
         const limit = parseStatusLimit(values.limit);
         const filter = parseStatusFilter(values.filter);
-        const [{ runStatusCommand }, { measureCommand }] = await Promise.all([
+        const [{ parseStatusSort, runStatusCommand }, { measureCommand }] = await Promise.all([
           import('./commands/ops/status.js'),
           import('./commands/ops/telemetry.js'),
         ]);
+        const sort = parseStatusSort(values.sort);
         const result = await measureCommand(
           {
             subcmd: 'status',
@@ -989,6 +991,7 @@ export async function runCli(
               json: values.json,
               limit,
               filter,
+              sort,
             })
         );
         writeRenderedOutput(io, result.rendered);

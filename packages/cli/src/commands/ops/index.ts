@@ -124,12 +124,14 @@ export {
   STATUS_HELP,
   buildDeceasedQueue,
   formatStatusTextReport,
+  parseStatusSort,
   runStatusCommand,
   type BiographyQueueStatus,
   type DeceasedQueueItem,
   type StatusCommandOptions,
   type StatusCommandResult,
   type StatusReport,
+  type StatusSortMode,
 } from './status.js';
 
 export {

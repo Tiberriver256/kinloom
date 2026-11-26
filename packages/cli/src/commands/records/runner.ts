@@ -98,6 +98,47 @@ const SAFE_SUBCMD_TOKEN_RE = /^[a-z][a-z0-9_-]*$/i;
 /** Full JSON.parse above this size would stall the process on a large stdout. */
 const CACHE_HIT_PARSE_MAX_BYTES = 256 * 1024;
 const CACHE_HIT_EDGE_BYTES = 8 * 1024;
+const UV_OFFLINE_STDERR_TAIL_BYTES = 8 * 1024;
+
+const UV_OFFLINE_CACHE_MISS_PATTERNS: readonly RegExp[] = [
+  /packages were unavailable because the network was disabled/i,
+  /when the network is disabled,\s*registry packages may only be read from the cache/i,
+  /network connectivity is disabled,\s*but the requested data wasn't found in the cache/i,
+  /no solution found when resolving (?:script|`--with`) dependencies/i,
+  /no interpreter found\b.*\buv is set to offline mode/i,
+  /cannot perform a network request in offline mode/i,
+];
+
+export function isUvOfflineCacheMiss(stderr: string): boolean {
+  if (stderr.length === 0) {
+    return false;
+  }
+  const normalized = stderr.replace(/\s+/g, ' ');
+  return UV_OFFLINE_CACHE_MISS_PATTERNS.some((pattern) => pattern.test(normalized));
+}
+
+class StderrTailWindow {
+  private tail: Buffer = Buffer.alloc(0);
+
+  push(buf: Buffer): void {
+    if (buf.length === 0) {
+      return;
+    }
+    if (buf.length >= UV_OFFLINE_STDERR_TAIL_BYTES) {
+      this.tail = buf.subarray(buf.length - UV_OFFLINE_STDERR_TAIL_BYTES);
+      return;
+    }
+    const combined = this.tail.length === 0 ? buf : Buffer.concat([this.tail, buf]);
+    this.tail =
+      combined.length > UV_OFFLINE_STDERR_TAIL_BYTES
+        ? combined.subarray(combined.length - UV_OFFLINE_STDERR_TAIL_BYTES)
+        : combined;
+  }
+
+  text(): string {
+    return this.tail.toString('utf8');
+  }
+}
 
 function isJsonRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -296,6 +337,145 @@ function formatSpawnErrorMessage(
   return `Error: failed to launch 'kinloom ${commandName}': ${err.message}`;
 }
 
+interface SpawnAttemptResult {
+  readonly exitCode: number;
+  readonly signal: NodeJS.Signals | null;
+  readonly spawnError: boolean;
+  readonly bytesOut: number;
+  readonly cacheHit: boolean | undefined;
+  readonly stderrTail: string;
+  readonly capturedStdout: string;
+  readonly capturedStderr: string;
+}
+
+function executeSpawnAttempt(params: {
+  spawnFn: RecordSpawnFn;
+  invocation: ScriptInvocation;
+  commandName: string;
+  cwd: string | undefined;
+  env: NodeJS.ProcessEnv;
+  captureOutput: boolean;
+  inspectStderr: boolean;
+  io: OpsIo;
+}): Promise<SpawnAttemptResult> {
+  const { spawnFn, invocation, commandName, cwd, env, captureOutput, inspectStderr, io } = params;
+  return new Promise<SpawnAttemptResult>((resolve) => {
+    let bytesOut = 0;
+    const cacheHitWindow = new CacheHitWindow();
+    const stderrTail = inspectStderr ? new StderrTailWindow() : undefined;
+    const stdoutChunks: Buffer[] = [];
+    const stderrChunks: Buffer[] = [];
+
+    const child = spawnFn(invocation.command, [...invocation.args], {
+      cwd,
+      env,
+      stdio:
+        captureOutput || inspectStderr
+          ? ['inherit', 'pipe', 'pipe']
+          : ['inherit', 'pipe', 'inherit'],
+    });
+
+    const forwardSigInt = () => {
+      if (!child.killed) {
+        child.kill('SIGINT');
+      }
+    };
+    const forwardSigTerm = () => {
+      if (!child.killed) {
+        child.kill('SIGTERM');
+      }
+    };
+
+    process.on('SIGINT', forwardSigInt);
+    process.on('SIGTERM', forwardSigTerm);
+
+    const cleanupSignals = () => {
+      process.off('SIGINT', forwardSigInt);
+      process.off('SIGTERM', forwardSigTerm);
+    };
+
+    const resolveExitCode = (code: number | null, signal: NodeJS.Signals | null): number => {
+      if (typeof code === 'number') {
+        return code;
+      }
+      if (signal === 'SIGINT') {
+        return 130;
+      }
+      if (signal === 'SIGTERM') {
+        return 143;
+      }
+      return 1;
+    };
+
+    if (captureOutput) {
+      child.stdout?.on('data', (chunk: Buffer | string) => {
+        const buf = asBuffer(chunk);
+        bytesOut += buf.length;
+        stdoutChunks.push(buf);
+        cacheHitWindow.push(buf);
+      });
+      child.stderr?.on('data', (chunk: Buffer | string) => {
+        const buf = asBuffer(chunk);
+        stderrChunks.push(buf);
+        stderrTail?.push(buf);
+      });
+    } else {
+      child.stdout?.on('data', (chunk: Buffer | string) => {
+        const buf = asBuffer(chunk);
+        bytesOut += buf.length;
+        cacheHitWindow.push(buf);
+        if (!process.stdout.write(buf)) {
+          child.stdout?.pause();
+          process.stdout.once('drain', () => {
+            child.stdout?.resume();
+          });
+        }
+      });
+      if (inspectStderr) {
+        child.stderr?.on('data', (chunk: Buffer | string) => {
+          const buf = asBuffer(chunk);
+          stderrTail?.push(buf);
+          if (!process.stderr.write(buf)) {
+            child.stderr?.pause();
+            process.stderr.once('drain', () => {
+              child.stderr?.resume();
+            });
+          }
+        });
+      }
+    }
+
+    child.on('close', (code, signal) => {
+      cleanupSignals();
+      resolve({
+        exitCode: resolveExitCode(code, signal),
+        signal,
+        spawnError: false,
+        bytesOut,
+        cacheHit: cacheHitWindow.finish(),
+        stderrTail: stderrTail?.text() ?? '',
+        capturedStdout: captureOutput ? Buffer.concat(stdoutChunks).toString('utf8') : '',
+        capturedStderr: captureOutput ? Buffer.concat(stderrChunks).toString('utf8') : '',
+      });
+    });
+
+    child.on('error', (err: NodeJS.ErrnoException) => {
+      cleanupSignals();
+      io.stderr(formatSpawnErrorMessage(err, invocation, commandName));
+      resolve({
+        exitCode: 1,
+        signal: null,
+        spawnError: true,
+        bytesOut,
+        cacheHit: undefined,
+        stderrTail: '',
+        capturedStdout: '',
+        capturedStderr: '',
+      });
+    });
+  });
+}
+
 export async function runRecordCommand(
   commandName: string,
   args: readonly string[],
@@ -351,106 +531,61 @@ export async function runRecordCommand(
   const spawnFn: RecordSpawnFn = options?.spawnImpl ?? spawn;
   const captureOutput = options?.io !== undefined;
 
-  const childEnv: NodeJS.ProcessEnv = {
-    ...(options?.env ?? process.env),
+  const callerEnv: NodeJS.ProcessEnv = options?.env ?? process.env;
+  const childBaseEnv: NodeJS.ProcessEnv = {
+    ...callerEnv,
     KINLOOM_TELEMETRY_ACTIVE: '1',
     KINLOOM_TELEMETRY_PARENT: '1',
   };
+  const tryOfflineFirst = invocation.command === 'uv' && callerEnv.UV_OFFLINE === undefined;
 
-  let bytesOut = 0;
-  let cacheHit: boolean | undefined;
-  const cacheHitWindow = new CacheHitWindow();
-  const exitCode = await new Promise<number>((resolve) => {
-    const child = spawnFn(invocation.command, [...invocation.args], {
-      cwd: options?.cwd,
-      env: childEnv,
-      stdio: captureOutput ? ['inherit', 'pipe', 'pipe'] : ['inherit', 'pipe', 'inherit'],
-    });
+  const firstAttemptEnv: NodeJS.ProcessEnv = tryOfflineFirst
+    ? { ...childBaseEnv, UV_OFFLINE: '1' }
+    : childBaseEnv;
 
-    const forwardSigInt = () => {
-      if (!child.killed) {
-        child.kill('SIGINT');
-      }
-    };
-    const forwardSigTerm = () => {
-      if (!child.killed) {
-        child.kill('SIGTERM');
-      }
-    };
-
-    process.on('SIGINT', forwardSigInt);
-    process.on('SIGTERM', forwardSigTerm);
-
-    const cleanupSignals = () => {
-      process.off('SIGINT', forwardSigInt);
-      process.off('SIGTERM', forwardSigTerm);
-    };
-
-    const resolveClose = (code: number | null, signal: NodeJS.Signals | null) => {
-      cleanupSignals();
-      cacheHit = cacheHitWindow.finish();
-      if (typeof code === 'number') {
-        resolve(code);
-        return;
-      }
-      if (signal === 'SIGINT') {
-        resolve(130);
-        return;
-      }
-      if (signal === 'SIGTERM') {
-        resolve(143);
-        return;
-      }
-      resolve(1);
-    };
-
-    if (captureOutput) {
-      const stdoutChunks: Buffer[] = [];
-      const stderrChunks: Buffer[] = [];
-      child.stdout?.on('data', (chunk: Buffer | string) => {
-        const buf = asBuffer(chunk);
-        bytesOut += buf.length;
-        stdoutChunks.push(buf);
-        cacheHitWindow.push(buf);
-      });
-      child.stderr?.on('data', (chunk: Buffer | string) => {
-        stderrChunks.push(asBuffer(chunk));
-      });
-
-      child.on('close', (code, signal) => {
-        const outText = Buffer.concat(stdoutChunks).toString('utf8');
-        const errText = Buffer.concat(stderrChunks).toString('utf8');
-        if (outText.length > 0) {
-          io.stdout(outText.replace(/\r?\n$/, ''));
-        }
-        if (errText.length > 0) {
-          io.stderr(errText.replace(/\r?\n$/, ''));
-        }
-        resolveClose(code, signal);
-      });
-    } else {
-      child.stdout?.on('data', (chunk: Buffer | string) => {
-        const buf = asBuffer(chunk);
-        bytesOut += buf.length;
-        cacheHitWindow.push(buf);
-        if (!process.stdout.write(buf)) {
-          child.stdout?.pause();
-          process.stdout.once('drain', () => {
-            child.stdout?.resume();
-          });
-        }
-      });
-      child.on('close', (code, signal) => {
-        resolveClose(code, signal);
-      });
-    }
-
-    child.on('error', (err: NodeJS.ErrnoException) => {
-      cleanupSignals();
-      io.stderr(formatSpawnErrorMessage(err, invocation, spec.command));
-      resolve(1);
-    });
+  let finalAttempt = await executeSpawnAttempt({
+    spawnFn,
+    invocation,
+    commandName: spec.command,
+    cwd: options?.cwd,
+    env: firstAttemptEnv,
+    captureOutput,
+    inspectStderr: tryOfflineFirst,
+    io,
   });
+
+  if (
+    tryOfflineFirst &&
+    !finalAttempt.spawnError &&
+    finalAttempt.signal === null &&
+    finalAttempt.exitCode !== 0 &&
+    finalAttempt.bytesOut === 0 &&
+    isUvOfflineCacheMiss(finalAttempt.stderrTail)
+  ) {
+    const retryEnv: NodeJS.ProcessEnv = { ...childBaseEnv };
+    delete retryEnv.UV_OFFLINE;
+    finalAttempt = await executeSpawnAttempt({
+      spawnFn,
+      invocation,
+      commandName: spec.command,
+      cwd: options?.cwd,
+      env: retryEnv,
+      captureOutput,
+      inspectStderr: false,
+      io,
+    });
+  }
+
+  if (captureOutput && !finalAttempt.spawnError) {
+    if (finalAttempt.capturedStdout.length > 0) {
+      io.stdout(finalAttempt.capturedStdout.replace(/\r?\n$/, ''));
+    }
+    if (finalAttempt.capturedStderr.length > 0) {
+      io.stderr(finalAttempt.capturedStderr.replace(/\r?\n$/, ''));
+    }
+  }
+
+  const { exitCode, bytesOut, cacheHit } = finalAttempt;
 
   if (shouldRecordTelemetry) {
     recordTelemetryEvent(

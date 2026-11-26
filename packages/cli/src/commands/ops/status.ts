@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import {
+  edtfYear,
   getMediaPersonIds,
   parseEventsYaml,
   parseKinloomConfigYaml,
@@ -26,10 +27,12 @@ const ZERO_COORD_EPSILON = 1e-9;
 const DEFAULT_STATUS_TEXT_LIMIT = 8;
 
 export type BiographyQueueStatus = 'pending' | 'staged' | 'done_live';
+export type StatusSortMode = 'sparsest' | 'richest' | 'chronological';
 
 export interface StatusTextDisplay {
   limit?: number;
   filter?: BiographyQueueStatus;
+  sort?: StatusSortMode;
 }
 
 export interface StatusCommandOptions extends StatusTextDisplay {
@@ -52,6 +55,7 @@ export interface DeceasedQueueItem {
 
 export interface StatusReport {
   repo: string;
+  sort: StatusSortMode;
   people: { total: number; deceased: number; living: number };
   events: number;
   places: number;
@@ -74,6 +78,19 @@ const STATUS_RANK: Record<BiographyQueueStatus, number> = {
   done_live: 2,
 };
 
+export function parseStatusSort(value: string | undefined): StatusSortMode {
+  if (value === undefined) {
+    return 'sparsest';
+  }
+  const trimmed = value.trim();
+  if (trimmed === 'sparsest' || trimmed === 'richest' || trimmed === 'chronological') {
+    return trimmed;
+  }
+  throw new CliValidationError(
+    'Option `--sort` must be `sparsest`, `richest`, or `chronological`.'
+  );
+}
+
 async function readOptionalUtf8(filePath: string): Promise<string | null> {
   try {
     return await readFile(filePath, 'utf8');
@@ -89,9 +106,17 @@ function isZeroCoordPlace(place: Place): boolean {
   return Math.abs(place.lat) < ZERO_COORD_EPSILON && Math.abs(place.lng) < ZERO_COORD_EPSILON;
 }
 
-function birthSortKey(birthEdtf: string): string {
-  const trimmed = birthEdtf.trim();
-  return trimmed.length > 0 ? trimmed : '9999';
+function compareNullableYear(a: number | null, b: number | null): number {
+  if (a === b) {
+    return 0;
+  }
+  if (a === null) {
+    return 1;
+  }
+  if (b === null) {
+    return -1;
+  }
+  return a - b;
 }
 
 function queueStatus(hasBiography: boolean, hasStagedPatch: boolean): BiographyQueueStatus {
@@ -104,21 +129,38 @@ function queueStatus(hasBiography: boolean, hasStagedPatch: boolean): BiographyQ
   return 'pending';
 }
 
-function compareDeceased(a: DeceasedQueueItem, b: DeceasedQueueItem): number {
-  const byStatus = STATUS_RANK[a.status] - STATUS_RANK[b.status];
-  if (byStatus !== 0) {
-    return byStatus;
-  }
-  if (a.status === 'pending') {
-    return (
-      a.events - b.events ||
-      a.sources - b.sources ||
-      a.media - b.media ||
-      birthSortKey(a.birth_edtf).localeCompare(birthSortKey(b.birth_edtf)) ||
-      a.id.localeCompare(b.id)
-    );
-  }
-  return a.id.localeCompare(b.id);
+const STATUS_SORT_COMPARATORS: Record<
+  StatusSortMode,
+  (a: DeceasedQueueItem, b: DeceasedQueueItem) => number
+> = {
+  sparsest: (a, b) =>
+    a.events - b.events ||
+    a.sources - b.sources ||
+    a.media - b.media ||
+    compareNullableYear(edtfYear(a.birth_edtf), edtfYear(b.birth_edtf)) ||
+    a.id.localeCompare(b.id),
+  richest: (a, b) =>
+    b.events - a.events ||
+    b.sources - a.sources ||
+    b.media - a.media ||
+    compareNullableYear(edtfYear(a.birth_edtf), edtfYear(b.birth_edtf)) ||
+    a.id.localeCompare(b.id),
+  chronological: (a, b) =>
+    compareNullableYear(edtfYear(a.birth_edtf), edtfYear(b.birth_edtf)) ||
+    compareNullableYear(edtfYear(a.death_edtf), edtfYear(b.death_edtf)) ||
+    a.events - b.events ||
+    a.id.localeCompare(b.id),
+};
+
+function compareDeceased(sort: StatusSortMode): (a: DeceasedQueueItem, b: DeceasedQueueItem) => number {
+  const compareItems = STATUS_SORT_COMPARATORS[sort];
+  return (a, b) => {
+    const byStatus = STATUS_RANK[a.status] - STATUS_RANK[b.status];
+    if (byStatus !== 0) {
+      return byStatus;
+    }
+    return compareItems(a, b);
+  };
 }
 
 interface PersonResearchCounts {
@@ -187,7 +229,9 @@ export function buildDeceasedQueue(input: {
   media: readonly MediaItem[];
   narratives: readonly Narrative[];
   privacy?: Partial<PrivacyConfig>;
+  sort?: StatusSortMode;
 }): DeceasedQueueItem[] {
+  const sort = parseStatusSort(input.sort);
   const research = indexResearchCounts(input.events, input.media);
   const biographies = biographySubjectIds(input.narratives);
   const items: DeceasedQueueItem[] = [];
@@ -213,15 +257,25 @@ export function buildDeceasedQueue(input: {
       status: queueStatus(hasBiography, hasStagedPatch),
     });
   }
-  items.sort(compareDeceased);
+  items.sort(compareDeceased(sort));
   return items;
 }
 
-const STATUS_LIST_HEADING: Record<BiographyQueueStatus, string> = {
-  pending: 'Pending (sparsest first):',
-  staged: 'Staged:',
-  done_live: 'Done live:',
+const STATUS_FILTER_TITLE: Record<BiographyQueueStatus, string> = {
+  pending: 'Pending',
+  staged: 'Staged',
+  done_live: 'Done live',
 };
+
+const STATUS_SORT_LABEL: Record<StatusSortMode, string> = {
+  sparsest: 'sparsest first',
+  richest: 'richest first',
+  chronological: 'chronological',
+};
+
+function formatQueueHeading(filter: BiographyQueueStatus, sort: StatusSortMode): string {
+  return `${STATUS_FILTER_TITLE[filter]} (${STATUS_SORT_LABEL[sort]}):`;
+}
 
 export function formatStatusTextReport(
   report: StatusReport,
@@ -229,6 +283,7 @@ export function formatStatusTextReport(
 ): string {
   const limit = display.limit ?? DEFAULT_STATUS_TEXT_LIMIT;
   const filter = display.filter ?? 'pending';
+  const sort = parseStatusSort(display.sort ?? report.sort);
   const lines = [
     `Status ${report.repo}`,
     `People: ${report.people.total} total, ${report.people.deceased} deceased, ${report.people.living} living`,
@@ -242,7 +297,7 @@ export function formatStatusTextReport(
     `Queue: done_live=${report.queue.done_live} staged=${report.queue.staged} pending=${report.queue.pending}`,
   ];
   const matching = report.deceased.filter((person) => person.status === filter);
-  lines.push(STATUS_LIST_HEADING[filter]);
+  lines.push(formatQueueHeading(filter, sort));
   if (matching.length === 0) {
     lines.push('  (none)');
   } else {
@@ -264,6 +319,7 @@ export function formatStatusTextReport(
 export async function runStatusCommand(
   options: StatusCommandOptions = {}
 ): Promise<StatusCommandResult> {
+  const sort = parseStatusSort(options.sort);
   const repoDir = path.resolve(options.repoDir?.trim() || process.cwd());
   if (!fs.existsSync(repoDir) || !fs.statSync(repoDir).isDirectory()) {
     throw new CliValidationError(`Repository directory does not exist: ${repoDir}`);
@@ -291,11 +347,20 @@ export async function runStatusCommand(
   const sources = sourcesText ? parseSourcesYaml(sourcesText) : [];
   const media = mediaText ? parseMediaYaml(mediaText) : [];
   const narratives = narrativesText ? parseNarrativesYaml(narrativesText) : [];
-  const deceased = buildDeceasedQueue({ repoDir, people, events, media, narratives, privacy });
+  const deceased = buildDeceasedQueue({
+    repoDir,
+    people,
+    events,
+    media,
+    narratives,
+    privacy,
+    sort,
+  });
   const livingCount = people.length - deceased.length;
 
   const report: StatusReport = {
     repo: repoDir,
+    sort,
     people: {
       total: people.length,
       deceased: deceased.length,
@@ -318,7 +383,7 @@ export async function runStatusCommand(
 
   const rendered = options.json
     ? `${JSON.stringify(report, null, 2)}\n`
-    : formatStatusTextReport(report, { limit: options.limit, filter: options.filter });
+    : formatStatusTextReport(report, { limit: options.limit, filter: options.filter, sort });
 
   return { ...report, rendered };
 }
