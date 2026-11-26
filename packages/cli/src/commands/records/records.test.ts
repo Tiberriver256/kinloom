@@ -1415,11 +1415,16 @@ describe('bundled Python utilities and live script execution', () => {
         'LINCOLN, A. page 1',
       ];
       await writeFile(pdfPath, buildTextPdf(pageTexts));
+      const env = {
+        ...process.env,
+        KINLOOM_OCR_CACHE_DIR: path.join(tmp, 'ocr-cache'),
+        KINLOOM_TELEMETRY_PARENT: '1',
+      };
 
       const hit = spawnSync(
         'python3',
         [prepScript, 'pdf-grep', pdfPath, '--pattern', 'lincoln', '-i', '--context', '10', '--json'],
-        { encoding: 'utf8' }
+        { encoding: 'utf8', env }
       );
       expect(hit.status, hit.stderr).toBe(0);
       const parsed = JSON.parse(hit.stdout);
@@ -1432,7 +1437,7 @@ describe('bundled Python utilities and live script execution', () => {
       const caseSensitive = spawnSync(
         'python3',
         [prepScript, 'pdf-grep', pdfPath, '--pattern', 'Lincoln', '--limit', '1'],
-        { encoding: 'utf8' }
+        { encoding: 'utf8', env }
       );
       expect(caseSensitive.status, caseSensitive.stderr).toBe(0);
       expect(caseSensitive.stdout).toContain('p.1 L1:');
@@ -1441,15 +1446,105 @@ describe('bundled Python utilities and live script execution', () => {
 
       const miss = spawnSync('python3', [prepScript, 'pdf-grep', pdfPath, '--pattern', 'Washington'], {
         encoding: 'utf8',
+        env,
       });
       expect(miss.status).toBe(1);
       expect(miss.stdout).toContain('0 match(es)');
 
       const badRegex = spawnSync('python3', [prepScript, 'pdf-grep', pdfPath, '--pattern', '('], {
         encoding: 'utf8',
+        env,
       });
       expect(badRegex.status).toBe(2);
       expect(badRegex.stderr).toContain('Invalid --pattern');
+    }
+  );
+
+  it.skipIf(spawnSync('pdftotext', ['-v']).error !== undefined)(
+    'prep-scan pdf-grep caches page text, skips pdftotext on the next pattern, and extracts again with --refresh',
+    async () => {
+      const prepScript = path.join(ASSETS_ROOT, 'prep-scan.py');
+      const tmp = await makeTempDir('kinloom-pdf-grep-cache-');
+      const pdfPath = path.join(tmp, 'synthetic.pdf');
+      const cacheRoot = path.join(tmp, 'ocr-cache');
+      const binDir = path.join(tmp, 'bin');
+      const counterPath = path.join(tmp, 'pdftotext-count');
+      const pageTexts = [
+        'Abraham Lincoln born 1809 Hardin County',
+        'Nothing relevant on this page',
+      ];
+      const pdfBytes = buildTextPdf(pageTexts);
+      await writeFile(pdfPath, pdfBytes);
+      const digest = crypto.createHash('sha256').update(pdfBytes).digest('hex');
+      const cacheFile = path.join(cacheRoot, 'pdf-text', `${digest}.json`);
+      fs.mkdirSync(binDir, { recursive: true });
+      const realPdftotext = execFileSync('which', ['pdftotext'], { encoding: 'utf8' }).trim();
+      await writeFile(
+        path.join(binDir, 'pdftotext'),
+        `#!/bin/sh\nprintf 'x\\n' >> ${JSON.stringify(counterPath)}\nexec ${JSON.stringify(realPdftotext)} "$@"\n`
+      );
+      fs.chmodSync(path.join(binDir, 'pdftotext'), 0o755);
+      const env = {
+        ...process.env,
+        PATH: `${binDir}${path.delimiter}${process.env.PATH ?? ''}`,
+        KINLOOM_OCR_CACHE_DIR: cacheRoot,
+        KINLOOM_TELEMETRY_PARENT: '1',
+      };
+      const countExtracts = () => {
+        if (!fs.existsSync(counterPath)) return 0;
+        return fs.readFileSync(counterPath, 'utf8').split('\n').filter(Boolean).length;
+      };
+      const run = (pattern: string, extra: string[] = []) =>
+        spawnSync(
+          'python3',
+          [prepScript, 'pdf-grep', pdfPath, '--pattern', pattern, '--json', ...extra],
+          { encoding: 'utf8', env }
+        );
+
+      const first = run('lincoln', ['-i']);
+      expect(first.status, first.stderr).toBe(0);
+      const firstBody = JSON.parse(first.stdout);
+      expect(firstBody.cache_hit).toBe(false);
+      expect(firstBody.pages).toEqual([1]);
+      expect(countExtracts()).toBe(1);
+      const cached = JSON.parse(fs.readFileSync(cacheFile, 'utf8')) as { pages: string[] };
+      expect(cached.pages).toEqual([
+        expect.stringContaining('Lincoln'),
+        expect.stringContaining('Nothing relevant'),
+      ]);
+
+      const second = run('Hardin');
+      expect(second.status, second.stderr).toBe(0);
+      const secondBody = JSON.parse(second.stdout);
+      expect(secondBody.cache_hit).toBe(true);
+      expect(secondBody.pages).toEqual([1]);
+      expect(secondBody.match_count).toBe(1);
+      expect(countExtracts()).toBe(1);
+
+      const refreshed = run('lincoln', ['-i', '--refresh']);
+      expect(refreshed.status, refreshed.stderr).toBe(0);
+      expect(JSON.parse(refreshed.stdout).cache_hit).toBe(false);
+      expect(countExtracts()).toBe(2);
+
+      await writeFile(cacheFile, '{\n');
+      const repaired = run('Hardin');
+      expect(repaired.status, repaired.stderr).toBe(0);
+      expect(JSON.parse(repaired.stdout).cache_hit).toBe(false);
+      expect(countExtracts()).toBe(3);
+      const repairedCache = JSON.parse(fs.readFileSync(cacheFile, 'utf8')) as { pages: string[] };
+      expect(repairedCache.pages).toHaveLength(2);
+
+      const badPath = path.join(tmp, 'not-a.pdf');
+      const badBytes = Buffer.from('this is not a pdf');
+      await writeFile(badPath, badBytes);
+      const badDigest = crypto.createHash('sha256').update(badBytes).digest('hex');
+      const bad = spawnSync(
+        'python3',
+        [prepScript, 'pdf-grep', badPath, '--pattern', 'pdf', '--json'],
+        { encoding: 'utf8', env }
+      );
+      expect(bad.status).toBe(1);
+      expect(fs.existsSync(path.join(cacheRoot, 'pdf-text', `${badDigest}.json`))).toBe(false);
     }
   );
 

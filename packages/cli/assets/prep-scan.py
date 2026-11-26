@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import argparse
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timezone
 import hashlib
@@ -24,7 +25,7 @@ import shutil
 import subprocess
 import sys
 import time
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Iterator
 from urllib.parse import urlparse
 
 if TYPE_CHECKING:
@@ -45,6 +46,43 @@ def default_cache_root() -> Path:
     if xdg:
         return Path(xdg).expanduser() / "kinloom-ocr"
     return Path.home() / ".cache" / "kinloom-ocr"
+
+
+@contextmanager
+def file_lock(lock_path: Path) -> Iterator[None]:
+    """Advisory exclusive lock so two extractions of one PDF do not write the same cache file."""
+    try:
+        import fcntl
+    except ImportError:
+        yield
+        return
+
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(lock_path, "a+b") as lock_file:
+        fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
+
+
+def atomic_write_text(dest: Path, text: str) -> None:
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    tmp = dest.with_name(f".{dest.name}.{os.getpid()}.{time.time_ns()}.tmp")
+    try:
+        tmp.write_text(text, encoding="utf-8")
+        os.replace(tmp, dest)
+    except Exception:
+        tmp.unlink(missing_ok=True)
+        raise
+
+
+def sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
 
 
 def default_telemetry_file() -> Path:
@@ -867,6 +905,50 @@ def extract_pdf_pages_text(pdf_path: Path, timeout_s: int = 600) -> list[str]:
     return [page.extract_text() or "" for page in PdfReader(str(pdf_path)).pages]
 
 
+def pdf_text_cache_paths(pdf_path: Path, cache_root: Path) -> tuple[Path, Path]:
+    digest = sha256_file(pdf_path)
+    directory = cache_root / "pdf-text"
+    return directory / f"{digest}.json", directory / f"{digest}.lock"
+
+
+def read_cached_pdf_pages(path: Path) -> list[str] | None:
+    if not path.is_file():
+        return None
+    try:
+        parsed = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError):
+        return None
+    if not isinstance(parsed, dict):
+        return None
+    pages = parsed.get("pages")
+    if not isinstance(pages, list) or any(not isinstance(page, str) for page in pages):
+        return None
+    return pages
+
+
+def load_pdf_page_texts(pdf_path: Path, *, refresh: bool) -> tuple[list[str], bool]:
+    """Return page texts and whether they came from the disk cache.
+
+    Failed extractions raise and leave the cache unchanged. Corrupt JSON is a miss.
+    """
+    data_path, lock_path = pdf_text_cache_paths(pdf_path, default_cache_root())
+    if not refresh:
+        cached = read_cached_pdf_pages(data_path)
+        if cached is not None:
+            return cached, True
+    with file_lock(lock_path):
+        if not refresh:
+            cached = read_cached_pdf_pages(data_path)
+            if cached is not None:
+                return cached, True
+        pages = extract_pdf_pages_text(pdf_path)
+        atomic_write_text(
+            data_path,
+            json.dumps({"pages": pages}, indent=2, ensure_ascii=False) + "\n",
+        )
+        return pages, False
+
+
 def format_page_spec(pages: list[int]) -> str:
     if not pages:
         return ""
@@ -885,7 +967,7 @@ def cmd_pdf_grep(args: argparse.Namespace) -> tuple[int, int]:
     except re.error as exc:
         raise ValueError(f"Invalid --pattern regex {args.pattern!r}: {exc}") from exc
 
-    page_texts = extract_pdf_pages_text(pdf_path)
+    page_texts, cache_hit = load_pdf_page_texts(pdf_path, refresh=bool(args.refresh))
     matches: list[dict[str, Any]] = []
     hit_pages: list[int] = []
     total = 0
@@ -921,6 +1003,7 @@ def cmd_pdf_grep(args: argparse.Namespace) -> tuple[int, int]:
         "pages": hit_pages,
         "pages_arg": pages_arg,
         "matches": matches,
+        "cache_hit": cache_hit,
     }
     if args.json:
         out_bytes = emit_output(json.dumps(result, ensure_ascii=False, indent=2) + "\n")
@@ -1343,6 +1426,11 @@ def build_parser() -> argparse.ArgumentParser:
     p_pgrep.add_argument("--limit", type=int, default=25,
                          help="Maximum matches to print (default: 25); all matches still count.")
     p_pgrep.add_argument("--json", action="store_true", help="Emit JSON output.")
+    p_pgrep.add_argument(
+        "--refresh",
+        action="store_true",
+        help="Ignore cached page text and extract the PDF again.",
+    )
     p_pgrep.set_defaults(func=cmd_pdf_grep)
 
     p_grid = sub.add_parser(

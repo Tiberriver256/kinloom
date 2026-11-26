@@ -25,7 +25,7 @@ Cache layout:
 - `objects/<naid>/<page>_<safe_filename>`: individual downloaded page scans, so overlapping page slices (for example `--pages 315-350` followed by `--pages 340-360` or another biographer working the same census roll) reuse already-fetched pages straight from disk.
 - `_queries/<sha256>.json`: cached `search` query payloads keyed by canonical query parameters with a 168-hour (7-day) default TTL (`--cache-ttl-hours` or `KINLOOM_NARA_QUERY_TTL_HOURS`).
 - `census1950/<sha256>.json`: cached `census1950` responses, same TTL and the same `--cache-ttl-hours` / `KINLOOM_NARA_QUERY_TTL_HOURS` knobs. `0` skips cached reads.
-- `census1950-images/<sha256>.jpg`: cached `census1950-image` JPEGs. The key is the schedule `image` path plus the requested width (`full` when `--width` is omitted). The same TTL knobs apply. `0` skips cached reads. The command writes a file only after the body starts with the JPEG bytes `FF D8 FF`. HTML and HTTP errors are not cached.
+- `census1950-images/<sha256>.jpg`: cached `census1950-image` JPEGs. The key is the schedule `image` path plus the requested width (`full` when `--width` is omitted). The same TTL knobs apply. `0` skips cached reads. The command writes a file only after the body starts with the JPEG bytes `FF D8 FF`. HTML, HTTP errors, and non-JPEG bodies are not cached. Each image has its own cache file and its own lock, including when one command downloads several sheets.
 
 ### Search records (single or batched in one browser session)
 
@@ -85,9 +85,9 @@ skills/nara-catalog-search/scripts/nara census1950 --state IL --name Lincoln --p
 
 Give at least one of `--state`, `--county`, `--name`, or `--ed`. `--limit` is 1 through 100 (default 25). `--page` is an integer greater than or equal to 1 (default 1). `--json` adds `"cache_hit": true` or `false` and leaves each result object as the API returned it. Text output adds `image <path>` on the schedule line. Pass that path to `census1950-image`. State names and the codes published by `GET /api/state` both work, including territories such as `PR` and `PC` (Panama Canal Zone).
 
-### Download one 1950 Census schedule JPEG
+### Download 1950 Census schedule JPEGs
 
-`census1950-image` downloads one schedule image from the public IIIF Image API 2 server. Measured 2026-11-26, these URLs return `image/jpeg` and do not redirect:
+`census1950-image` downloads one or more schedule images from the public IIIF Image API 2 server. Measured 2026-11-26, these URLs return `image/jpeg` and do not redirect:
 
 - `https://1950census.archives.gov/iiif/2/<url-encoded-image>/full/full/0/default.jpg` (full resolution)
 - `https://1950census.archives.gov/iiif/2/<url-encoded-image>/full/<width>,/0/default.jpg` (width in pixels)
@@ -116,7 +116,11 @@ skills/nara-catalog-search/scripts/nara census1950-image \
   --width 2400 --out ./schedules/page.jpg
 ```
 
-`--out` / `--output` is a `.jpg` file path or a directory. The default directory is `.`. A directory receives `<basename>.jpg` from the image path. `--width` is an integer from 1 through 10000. Omit it for the IIIF `full` size. `--json` prints `image`, `url`, `path`, `bytes`, `width` (`null` when you omit `--width`), and `cache_hit`. `--refresh` downloads again and replaces the cache file. `--cache-ttl-hours` matches `census1950`.
+`--out` / `--output` is a `.jpg` file path or a directory when you pass one image. The default directory is `.`. A directory receives `<basename>.jpg` from the image path. `--width` is an integer from 1 through 10000. Omit it for the IIIF `full` size. For one image, `--json` prints `image`, `url`, `path`, `bytes`, `width` (`null` when you omit `--width`), and `cache_hit`. `--refresh` downloads again and replaces the cache file. `--cache-ttl-hours` matches `census1950`.
+
+You can pass up to 25 paths or URLs in one command. The command checks every path before it starts a download. Two or more images require `--out` to be a directory. If `--out` is a `.jpg` file in that case, the command stops and tells you to pass a directory. It does not download. JSON for two or more images is an object with `count`, `files`, and `cache_hit`. Each item in `files` has the same fields as the one-image JSON object. `cache_hit` is true only when every image was read from the disk cache. Images that are not in the cache download at the same time, with at most 4 downloads at once. The `files` array stays in the order of the arguments.
+
+The download tries up to 3 times when the status is 429, 500, 502, 503, or 504, or when httpx raises `TimeoutException` or `TransportError`. If the response has a numeric `Retry-After` header, the command waits that many seconds, but never more than 5. If the header is absent, the command waits 0.25 seconds after the first failure and 0.5 seconds after the second. Status 400, 403, and 404 fail on the first response. A failed attempt is not written to the cache.
 
 ### Build verified search URLs offline
 

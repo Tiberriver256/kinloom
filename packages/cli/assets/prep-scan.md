@@ -50,6 +50,8 @@ kinloom prep-scan pdf-grep ./archive/county-history.pdf --pattern "Hardin County
 
 `pdf-grep` matches line by line (no cross-line backtracking), exits `0` when one or more matches are found, `1` when zero matches are found, and `2` on invalid regex/flags.
 
+The command stores the extracted page texts at `<cache>/pdf-text/<sha256>.json`. `<sha256>` is the SHA-256 of the PDF bytes. `<cache>` is `KINLOOM_OCR_CACHE_DIR`, or `$XDG_CACHE_HOME/kinloom-ocr`, or `~/.cache/kinloom-ocr`. The next search of the same file reads that JSON and does not run `pdftotext` or `pypdf` again. `--json` adds `"cache_hit": true` or `false`. `--refresh` extracts the text again and replaces the cache file. A failed extraction does not write a cache file. Corrupt JSON is ignored and extracted again.
+
 Render only the requested PDF page numbers via `pdftoppm`, build compact previews in parallel, and optionally emit a labeled contact strip:
 
 ```bash
@@ -139,7 +141,7 @@ Stdout is JSON: `width`, `height`, `bytes`, `count`, `direction`, `out`, and `pr
 
 ## Environment variables
 
-- `KINLOOM_OCR_CACHE_DIR` (optional): overrides the default preview cache root (`$XDG_CACHE_HOME/kinloom-ocr` or `~/.cache/kinloom-ocr`).
+- `KINLOOM_OCR_CACHE_DIR` (optional): overrides the cache root for previews and for `pdf-grep` page text (`$XDG_CACHE_HOME/kinloom-ocr` or `~/.cache/kinloom-ocr`).
 - `XDG_CACHE_HOME` (optional): standard cache base directory used when `KINLOOM_OCR_CACHE_DIR` is unset.
 
 ## Requirements

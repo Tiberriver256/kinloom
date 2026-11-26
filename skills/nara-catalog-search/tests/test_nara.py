@@ -985,6 +985,283 @@ class TestCensus1950Image(unittest.TestCase):
         finally:
             self._fetch.start()
 
+    def test_transient_503_retries_then_returns_jpeg(self) -> None:
+        self._fetch.stop()
+        calls = 0
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            nonlocal calls
+            del request
+            calls += 1
+            if calls == 1:
+                return httpx.Response(503, headers={"Retry-After": "12"}, text="busy")
+            return httpx.Response(
+                200,
+                headers={"content-type": "image/jpeg"},
+                content=JPEG_FULL,
+            )
+
+        try:
+            with (
+                patch.object(nara.time, "sleep") as slept,
+                httpx.Client(transport=httpx.MockTransport(handler)) as client,
+            ):
+                data = nara._census1950_fetch_jpeg(
+                    "https://1950census.archives.gov/iiif/2/x/full/full/0/default.jpg",
+                    client=client,
+                )
+            self.assertEqual(data, JPEG_FULL)
+            self.assertEqual(calls, 2)
+            slept.assert_called_once_with(5.0)
+        finally:
+            self._fetch.start()
+
+    def test_timeout_retries_then_returns_jpeg(self) -> None:
+        self._fetch.stop()
+        calls = 0
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            nonlocal calls
+            calls += 1
+            if calls == 1:
+                raise httpx.ReadTimeout("slow", request=request)
+            return httpx.Response(
+                200,
+                headers={"content-type": "image/jpeg"},
+                content=JPEG_PREVIEW,
+            )
+
+        try:
+            with (
+                patch.object(nara.time, "sleep") as slept,
+                httpx.Client(transport=httpx.MockTransport(handler)) as client,
+            ):
+                data = nara._census1950_fetch_jpeg(
+                    "https://1950census.archives.gov/iiif/2/x/full/2400,/0/default.jpg",
+                    client=client,
+                )
+            self.assertEqual(data, JPEG_PREVIEW)
+            self.assertEqual(calls, 2)
+            slept.assert_called_once_with(0.25)
+        finally:
+            self._fetch.start()
+
+    def test_permanent_4xx_and_exhausted_503_do_not_keep_retrying(self) -> None:
+        self._fetch.stop()
+        try:
+            for status in (400, 403, 404):
+                calls = 0
+
+                def handler(request: httpx.Request, status: int = status) -> httpx.Response:
+                    nonlocal calls
+                    del request
+                    calls += 1
+                    return httpx.Response(status, text="no")
+
+                with (
+                    patch.object(nara.time, "sleep") as slept,
+                    httpx.Client(transport=httpx.MockTransport(handler)) as client,
+                ):
+                    with self.assertRaises(httpx.HTTPStatusError):
+                        nara._census1950_fetch_jpeg(
+                            "https://1950census.archives.gov/iiif/2/x/full/full/0/default.jpg",
+                            client=client,
+                        )
+                self.assertEqual(calls, 1, status)
+                slept.assert_not_called()
+
+            exhausted = 0
+
+            def always_503(request: httpx.Request) -> httpx.Response:
+                nonlocal exhausted
+                del request
+                exhausted += 1
+                return httpx.Response(503, text="busy")
+
+            with (
+                patch.object(nara.time, "sleep") as slept,
+                httpx.Client(transport=httpx.MockTransport(always_503)) as client,
+            ):
+                with self.assertRaises(httpx.HTTPStatusError) as caught:
+                    nara._census1950_fetch_jpeg(
+                        "https://1950census.archives.gov/iiif/2/x/full/full/0/default.jpg",
+                        client=client,
+                    )
+            self.assertEqual(caught.exception.response.status_code, 503)
+            self.assertEqual(exhausted, 3)
+            self.assertEqual(slept.call_count, 2)
+            self.assertEqual(
+                [call.args[0] for call in slept.call_args_list],
+                [0.25, 0.5],
+            )
+        finally:
+            self._fetch.start()
+
+    def test_failed_fetch_does_not_write_cache_or_output(self) -> None:
+        def boom(url: str, *, client: httpx.Client | None = None) -> bytes:
+            del client
+            request = httpx.Request("GET", url)
+            response = httpx.Response(404, request=request, text="missing")
+            raise httpx.HTTPStatusError("missing", request=request, response=response)
+
+        with patch.object(nara, "_census1950_fetch_jpeg", side_effect=boom):
+            result = CliRunner().invoke(
+                nara.cli,
+                ["census1950-image", LINCOLN_ED_IMAGE, "--out", str(self.out_dir), "--json"],
+            )
+        self.assertNotEqual(result.exit_code, 0)
+        self.assertEqual(self._cached_jpegs(), [])
+        self.assertFalse((self.out_dir / "43290879-Illinois-087558-0002.jpg").exists())
+
+    def test_batch_rejects_jpg_out_and_bad_paths_before_download(self) -> None:
+        runner = CliRunner()
+        jpg_out = self.out_dir / "batch.jpg"
+        rejected = runner.invoke(
+            nara.cli,
+            [
+                "census1950-image",
+                LINCOLN_ED_IMAGE,
+                _census_sheet(3),
+                "--out",
+                str(jpg_out),
+                "--json",
+            ],
+        )
+        self.assertNotEqual(rejected.exit_code, 0, rejected.output)
+        self.assertIn("directory", rejected.output.lower())
+        self.assertFalse(jpg_out.exists())
+        self.assertEqual(self.urls, [])
+        self.assertEqual(self._cached_jpegs(), [])
+
+        invalid = runner.invoke(
+            nara.cli,
+            [
+                "census1950-image",
+                LINCOLN_ED_IMAGE,
+                "1950census/../secret.jpg",
+                "--out",
+                str(self.out_dir),
+                "--json",
+            ],
+        )
+        self.assertNotEqual(invalid.exit_code, 0, invalid.output)
+        self.assertEqual(self.urls, [])
+
+        too_many = runner.invoke(
+            nara.cli,
+            [
+                "census1950-image",
+                *[_census_sheet(index) for index in range(1, 27)],
+                "--out",
+                str(self.out_dir),
+            ],
+        )
+        self.assertNotEqual(too_many.exit_code, 0, too_many.output)
+        self.assertIn("25", too_many.output)
+        self.assertEqual(self.urls, [])
+        self.assertEqual(self._cached_jpegs(), [])
+
+    def test_batch_downloads_overlap_keep_order_and_then_hit_cache(self) -> None:
+        self._fetch.stop()
+        slow = _census_sheet(4)
+        fast = _census_sheet(3)
+        slow_bytes = b"\xff\xd8\xff\xd9sheet-0004"
+        fast_bytes = b"\xff\xd8\xff\xd9sheet-0003"
+        barrier = threading.Barrier(2)
+        fast_recorded = threading.Event()
+        order: list[str] = []
+        lock = threading.Lock()
+        slow_name = slow.rsplit("/", 1)[-1]
+        fast_name = fast.rsplit("/", 1)[-1]
+
+        def fake_fetch(url: str, *, client: httpx.Client | None = None) -> bytes:
+            del client
+            barrier.wait(timeout=5)
+            if slow_name in url:
+                if not fast_recorded.wait(timeout=5):
+                    raise AssertionError("sheet downloads did not overlap")
+                body = slow_bytes
+            elif fast_name in url:
+                body = fast_bytes
+            else:
+                raise AssertionError(url)
+            with lock:
+                order.append(url)
+            if fast_name in url:
+                fast_recorded.set()
+            return body
+
+        try:
+            with patch.object(nara, "_census1950_fetch_jpeg", side_effect=fake_fetch):
+                runner = CliRunner()
+                args = [
+                    "census1950-image",
+                    slow,
+                    fast,
+                    "--out",
+                    str(self.out_dir),
+                    "--json",
+                ]
+                first = runner.invoke(nara.cli, args)
+                self.assertEqual(first.exit_code, 0, first.output)
+                body = json.loads(first.output)
+                self.assertEqual(body["count"], 2)
+                self.assertFalse(body["cache_hit"])
+                self.assertEqual([item["image"] for item in body["files"]], [slow, fast])
+                self.assertEqual([item["cache_hit"] for item in body["files"]], [False, False])
+                self.assertEqual(body["files"][0]["bytes"], len(slow_bytes))
+                self.assertEqual(body["files"][1]["bytes"], len(fast_bytes))
+                self.assertEqual((self.out_dir / slow.rsplit("/", 1)[-1]).read_bytes(), slow_bytes)
+                self.assertEqual((self.out_dir / fast.rsplit("/", 1)[-1]).read_bytes(), fast_bytes)
+                self.assertIn("0003", order[0])
+                self.assertIn("0004", order[1])
+
+                second = runner.invoke(nara.cli, args)
+                self.assertEqual(second.exit_code, 0, second.output)
+                again = json.loads(second.output)
+                self.assertTrue(again["cache_hit"])
+                self.assertEqual([item["cache_hit"] for item in again["files"]], [True, True])
+                self.assertEqual([item["image"] for item in again["files"]], [slow, fast])
+                self.assertEqual(len(order), 2)
+        finally:
+            self._fetch.start()
+
+    def test_batch_cache_hit_is_false_when_any_sheet_is_downloaded(self) -> None:
+        runner = CliRunner()
+        cached_sheet = _census_sheet(3)
+        fresh_sheet = _census_sheet(5)
+        first = runner.invoke(
+            nara.cli,
+            ["census1950-image", cached_sheet, "--out", str(self.out_dir), "--json"],
+        )
+        self.assertEqual(first.exit_code, 0, first.output)
+        self.assertFalse(json.loads(first.output)["cache_hit"])
+        mixed = runner.invoke(
+            nara.cli,
+            [
+                "census1950-image",
+                fresh_sheet,
+                cached_sheet,
+                "--out",
+                str(self.out_dir),
+                "--json",
+            ],
+        )
+        self.assertEqual(mixed.exit_code, 0, mixed.output)
+        body = json.loads(mixed.output)
+        self.assertEqual(body["count"], 2)
+        self.assertFalse(body["cache_hit"])
+        self.assertEqual([item["image"] for item in body["files"]], [fresh_sheet, cached_sheet])
+        self.assertEqual([item["cache_hit"] for item in body["files"]], [False, True])
+        self.assertEqual(len(self.urls), 2)
+
+
+def _census_sheet(index: int) -> str:
+    return (
+        "1950census/43290879-Illinois/43290879-Illinois-087558/"
+        f"43290879-Illinois-087558-{index:04d}.jpg"
+    )
+
 
 if __name__ == "__main__":
     unittest.main()

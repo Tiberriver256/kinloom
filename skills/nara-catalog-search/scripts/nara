@@ -1692,6 +1692,11 @@ def cmd_census1950(
 # both return image/jpeg beginning with ff d8 ff, with no redirect.
 CENSUS1950_IIIF_ORIGIN = "https://1950census.archives.gov"
 CENSUS1950_IMAGE_MAX_WIDTH = 10000
+CENSUS1950_IMAGE_MAX_PER_CALL = 25
+CENSUS1950_IMAGE_FETCH_WORKERS = 4
+CENSUS1950_IMAGE_ATTEMPTS = 3
+CENSUS1950_RETRY_AFTER_CAP_S = 5.0
+CENSUS1950_TRANSIENT_STATUS = frozenset({429, 500, 502, 503, 504})
 CENSUS1950_IMAGE_PATH_RE = re.compile(r"^1950census/[A-Za-z0-9._/-]+\.jpg$")
 JPEG_MAGIC = b"\xff\xd8\xff"
 
@@ -1804,6 +1809,20 @@ def _read_cached_census1950_image(path: Path, *, ttl_hours: float) -> bytes | No
     return data
 
 
+def _census1950_retry_delay(attempt: int, response: httpx.Response | None) -> float:
+    """Seconds to wait after a failed attempt. attempt is 1 for the first failure."""
+    if response is not None:
+        raw = response.headers.get("Retry-After", "").strip()
+        if raw:
+            try:
+                parsed = float(raw)
+            except ValueError:
+                parsed = None
+            if parsed is not None and math.isfinite(parsed):
+                return min(CENSUS1950_RETRY_AFTER_CAP_S, max(0.0, parsed))
+    return min(CENSUS1950_RETRY_AFTER_CAP_S, 0.25 * (2 ** (attempt - 1)))
+
+
 def _census1950_fetch_jpeg(url: str, *, client: httpx.Client | None = None) -> bytes:
     headers = {
         "Accept": "image/jpeg",
@@ -1820,10 +1839,28 @@ def _census1950_fetch_jpeg(url: str, *, client: httpx.Client | None = None) -> b
             )
         return require_jpeg_bytes(resp.content)
 
+    def _read_with_retries(active: httpx.Client) -> bytes:
+        for attempt in range(1, CENSUS1950_IMAGE_ATTEMPTS + 1):
+            try:
+                return _read(active)
+            except httpx.HTTPStatusError as exc:
+                status = exc.response.status_code
+                if (
+                    status not in CENSUS1950_TRANSIENT_STATUS
+                    or attempt >= CENSUS1950_IMAGE_ATTEMPTS
+                ):
+                    raise
+                time.sleep(_census1950_retry_delay(attempt, exc.response))
+            except (httpx.TimeoutException, httpx.TransportError):
+                if attempt >= CENSUS1950_IMAGE_ATTEMPTS:
+                    raise
+                time.sleep(_census1950_retry_delay(attempt, None))
+        raise RuntimeError("census1950-image retries ended without a JPEG or an error.")
+
     if client is None:
         with httpx.Client(timeout=120.0, follow_redirects=False) as local:
-            return _read(local)
-    return _read(client)
+            return _read_with_retries(local)
+    return _read_with_retries(client)
 
 
 def _emit_census1950_image(
@@ -1856,8 +1893,66 @@ def _emit_census1950_image(
     click.echo(f"{verb}: {dest} ({nbytes:,} bytes)")
 
 
+def _load_census1950_image_bytes(
+    image_path: str,
+    *,
+    width: int | None,
+    refresh: bool,
+    ttl_hours: float,
+    cache_root: Path,
+) -> tuple[bytes, bool]:
+    """Return JPEG bytes and whether they came from the disk cache.
+
+    The per-image lock is the one from census1950_image_cache_paths. A failed
+    download raises before any cache write.
+    """
+    url = census1950_image_jpeg_url(image_path, width)
+    data_path, lock_path = census1950_image_cache_paths(image_path, width, cache_root)
+    if not refresh:
+        cached = _read_cached_census1950_image(data_path, ttl_hours=ttl_hours)
+        if cached is not None:
+            return cached, True
+    with file_lock(lock_path):
+        if not refresh:
+            cached = _read_cached_census1950_image(data_path, ttl_hours=ttl_hours)
+            if cached is not None:
+                return cached, True
+        fetched = require_jpeg_bytes(_census1950_fetch_jpeg(url))
+        atomic_write_bytes(data_path, fetched)
+        return fetched, False
+
+
+def _store_census1950_image(
+    image_path: str,
+    *,
+    out_path: Path,
+    width: int | None,
+    refresh: bool,
+    ttl_hours: float,
+    cache_root: Path,
+) -> dict[str, Any]:
+    data, cache_hit = _load_census1950_image_bytes(
+        image_path,
+        width=width,
+        refresh=refresh,
+        ttl_hours=ttl_hours,
+        cache_root=cache_root,
+    )
+    jpeg = require_jpeg_bytes(data)
+    dest = resolve_census1950_image_output(out_path, image_path)
+    atomic_write_bytes(dest, jpeg)
+    return {
+        "image": image_path,
+        "url": census1950_image_jpeg_url(image_path, width),
+        "path": str(dest),
+        "bytes": len(jpeg),
+        "width": width,
+        "cache_hit": cache_hit,
+    }
+
+
 @cli.command("census1950-image")
-@click.argument("image_or_url")
+@click.argument("image_or_urls", nargs=-1, required=True, metavar="IMAGE_OR_URL...")
 @click.option(
     "-o",
     "--out",
@@ -1866,7 +1961,7 @@ def _emit_census1950_image(
     default=".",
     show_default=True,
     type=click.Path(path_type=Path),
-    help="Output .jpg file, or a directory that receives <basename>.jpg.",
+    help="Directory for one or more images, or a .jpg file when you pass one image.",
 )
 @click.option(
     "--width",
@@ -1883,52 +1978,81 @@ def _emit_census1950_image(
     help=f"Cache TTL in hours (default {DEFAULT_QUERY_TTL_HOURS:g}; env KINLOOM_NARA_QUERY_TTL_HOURS).",
 )
 def cmd_census1950_image(
-    image_or_url: str,
+    image_or_urls: tuple[str, ...],
     out_path: Path,
     width: int | None,
     as_json: bool,
     refresh: bool,
     cache_ttl_hours: float | None,
 ) -> None:
-    """Download one 1950 Census schedule JPEG from the NARA IIIF server.
+    """Download one or more 1950 Census schedule JPEGs from the NARA IIIF server.
 
-    Accepts the image path printed by census1950, or that row's iiifUrl.
+    Accepts image paths printed by census1950, or those rows' iiifUrl values.
+    One image prints the same text line or JSON object as before.
+    Two or more images need a directory for --out.
+    Pass at most 25 images. Uncached images download together, at most 4 at a time.
+    Transient HTTP 429 and 500, 502, 503, 504, plus timeouts and transport errors,
+    are tried up to 3 times. Permanent 400, 403, and 404 are not retried.
     Files are cached under ~/.cache/kinloom-nara/census1950-images/.
     """
-    image_path = parse_census1950_image_source(image_or_url)
-    url = census1950_image_jpeg_url(image_path, width)
-    dest = resolve_census1950_image_output(out_path, image_path)
+    if len(image_or_urls) > CENSUS1950_IMAGE_MAX_PER_CALL:
+        raise click.BadParameter(
+            "Pass at most "
+            f"{CENSUS1950_IMAGE_MAX_PER_CALL} images per census1950-image call "
+            f"(got {len(image_or_urls)})."
+        )
+    image_paths = [parse_census1950_image_source(raw) for raw in image_or_urls]
+    batch = len(image_paths) > 1
+    looks_like_jpg = out_path.suffix.lower() == ".jpg" and not out_path.is_dir()
+    if batch and looks_like_jpg:
+        raise click.BadParameter(
+            "--out is a .jpg file, but this command received multiple images. "
+            "Pass a directory, for example --out ./schedules."
+        )
     ttl_hours = resolve_query_ttl_hours(cache_ttl_hours)
     cache_root = get_cache_root()
-    data_path, lock_path = census1950_image_cache_paths(image_path, width, cache_root)
 
-    def deliver(data: bytes, *, cache_hit: bool) -> None:
-        jpeg = require_jpeg_bytes(data)
-        atomic_write_bytes(dest, jpeg)
-        _emit_census1950_image(
-            image_path=image_path,
-            url=url,
-            dest=dest,
-            nbytes=len(jpeg),
+    def store(image_path: str) -> dict[str, Any]:
+        return _store_census1950_image(
+            image_path,
+            out_path=out_path,
             width=width,
-            cache_hit=cache_hit,
-            as_json=as_json,
+            refresh=refresh,
+            ttl_hours=ttl_hours,
+            cache_root=cache_root,
         )
 
-    if not refresh:
-        cached = _read_cached_census1950_image(data_path, ttl_hours=ttl_hours)
-        if cached is not None:
-            deliver(cached, cache_hit=True)
-            return
-    with file_lock(lock_path):
-        if not refresh:
-            cached = _read_cached_census1950_image(data_path, ttl_hours=ttl_hours)
-            if cached is not None:
-                deliver(cached, cache_hit=True)
-                return
-        fetched = require_jpeg_bytes(_census1950_fetch_jpeg(url))
-        atomic_write_bytes(data_path, fetched)
-    deliver(fetched, cache_hit=False)
+    if not batch:
+        record = store(image_paths[0])
+        _emit_census1950_image(
+            image_path=record["image"],
+            url=record["url"],
+            dest=Path(record["path"]),
+            nbytes=int(record["bytes"]),
+            width=record["width"],
+            cache_hit=bool(record["cache_hit"]),
+            as_json=as_json,
+        )
+        return
+
+    with ThreadPoolExecutor(max_workers=CENSUS1950_IMAGE_FETCH_WORKERS) as pool:
+        records = list(pool.map(store, image_paths))
+    if as_json:
+        click.echo(
+            json.dumps(
+                {
+                    "count": len(records),
+                    "files": records,
+                    "cache_hit": all(bool(item["cache_hit"]) for item in records),
+                },
+                indent=2,
+                ensure_ascii=False,
+            )
+        )
+        return
+    for item in records:
+        verb = "Cached" if item["cache_hit"] else "Downloaded"
+        click.echo(f"{verb}: {item['path']} ({int(item['bytes']):,} bytes)")
 
 
 if __name__ == "__main__":
