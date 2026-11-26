@@ -10,6 +10,7 @@ import {
   getMediaPersonIds,
   orderNarrativeSources,
   partitionPersonNarratives,
+  resolvePersonPronunciation,
 } from '@kinloom/core';
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -569,15 +570,52 @@ export const PersonPage: React.FC = () => {
                 )}
                 <div>
                   <h1>{person.full_name}</h1>
-                  {!person.is_living && person.full_name !== 'Living' && person.pronunciation && (
-                    <div className="person-pronunciation-row">
-                      <PronunciationBadge
-                        pronunciation={person.pronunciation}
-                        label={person.full_name}
-                        baseUrl={baseUrl}
-                      />
-                    </div>
-                  )}
+                  {!person.is_living &&
+                    person.full_name !== 'Living' &&
+                    (() => {
+                      const effectivePronunciation = resolvePersonPronunciation(
+                        person,
+                        siteConfig.pronunciations,
+                      );
+                      if (!effectivePronunciation && !capabilities.canEdit) {
+                        return null;
+                      }
+                      return (
+                        <div className="person-pronunciation-row">
+                          {effectivePronunciation ? (
+                            <>
+                              <PronunciationBadge
+                                pronunciation={effectivePronunciation}
+                                label={person.full_name}
+                                baseUrl={baseUrl}
+                              />
+                              {capabilities.canEdit && (
+                                <button
+                                  type="button"
+                                  className="person-family-add-btn print-hide"
+                                  onClick={() => {
+                                    setWikiTab('edit');
+                                  }}
+                                  aria-label={`Edit pronunciation for ${person.full_name}`}
+                                >
+                                  Edit pronunciation
+                                </button>
+                              )}
+                            </>
+                          ) : (
+                            <button
+                              type="button"
+                              className="person-family-add-btn print-hide"
+                              onClick={() => {
+                                setWikiTab('edit');
+                              }}
+                            >
+                              + Add pronunciation
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })()}
                   <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '4px 8px', fontFamily: 'var(--font-mono)', fontSize: '0.84rem', color: 'var(--text-secondary)' }}>
                     <span>
                       {person.birth_edtf || '?'} — {person.death_edtf || (person.is_living ? 'Living' : '?')}

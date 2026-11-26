@@ -1,5 +1,5 @@
 import type { ArchiveEvent, Person } from '@kinloom/core';
-import { haversineMiles } from '@kinloom/core';
+import { haversineMiles, resolvePlacePronunciation } from '@kinloom/core';
 import { DateStamp, SourceCitationTag, resolveAssetUrl } from '../components/Atoms.js';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import React, { useMemo, useState } from 'react';
@@ -20,7 +20,8 @@ type ScopeMode = 'exact' | 'radius15' | 'county';
 export const PlacePage: React.FC = () => {
   const { slug } = useParams<{ slug: string }>();
   const navigate = useNavigate();
-  const { bundle, baseUrl, placesBySlug, placesById, peopleById, sourcesById, loading } = useArchiveData();
+  const { bundle, siteConfig, baseUrl, capabilities, placesBySlug, placesById, peopleById, sourcesById, loading } =
+    useArchiveData();
 
   const [scopeMode, setScopeMode] = useState<ScopeMode>('radius15');
   const [decadeFilter, setDecadeFilter] = useState<string>('all');
@@ -240,15 +241,50 @@ export const PlacePage: React.FC = () => {
           <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
             <div>
               <h1 className="place-dossier-title">{place.full_name}</h1>
-              {place.pronunciation && (
-                <div className="place-pronunciation-row">
-                  <PronunciationBadge
-                    pronunciation={place.pronunciation}
-                    label={place.name}
-                    baseUrl={baseUrl}
-                  />
-                </div>
-              )}
+              {(() => {
+                const effectivePronunciation = resolvePlacePronunciation(
+                  place,
+                  siteConfig.pronunciations,
+                );
+                if (!effectivePronunciation && !capabilities.canEdit) {
+                  return null;
+                }
+                return (
+                  <div className="place-pronunciation-row">
+                    {effectivePronunciation ? (
+                      <>
+                        <PronunciationBadge
+                          pronunciation={effectivePronunciation}
+                          label={place.name}
+                          baseUrl={baseUrl}
+                        />
+                        {capabilities.canEdit && (
+                          <button
+                            type="button"
+                            className="person-family-add-btn print-hide"
+                            onClick={() => {
+                              setWikiTab('edit');
+                            }}
+                            aria-label={`Edit pronunciation for ${place.name}`}
+                          >
+                            Edit pronunciation
+                          </button>
+                        )}
+                      </>
+                    ) : (
+                      <button
+                        type="button"
+                        className="person-family-add-btn print-hide"
+                        onClick={() => {
+                          setWikiTab('edit');
+                        }}
+                      >
+                        + Add pronunciation
+                      </button>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
 
             {/* oxlint-disable-next-line jsx-a11y/prefer-tag-over-role -- role="group" is the correct grouping pattern for a button toolbar */}
