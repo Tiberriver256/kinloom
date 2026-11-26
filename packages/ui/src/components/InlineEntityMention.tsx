@@ -286,6 +286,7 @@ export const InlineEntityMention: React.FC<InlineEntityMentionProps> = (props) =
           label={pronunciationLabel}
           baseUrl={baseUrl}
           compact
+          iconOnly
           className="inline-entity-pronunciation"
         />
       )}

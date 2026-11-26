@@ -412,6 +412,7 @@ export const ArchiveBundleSchema = z.object({
   sources: z.array(SourceRecordSchema),
   media: z.array(MediaItemSchema).optional(),
   narratives: z.array(NarrativeSchema).optional(),
+  pronunciations: z.record(z.string(), PronunciationSchema).optional(),
 });
 
 export type EventScope = z.infer<typeof EventScopeSchema>;

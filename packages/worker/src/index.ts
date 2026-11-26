@@ -10,9 +10,11 @@ import {
   GoogleOAuthProvider,
   SystemClock,
   type PronunciationAudioGenerator,
+  type PronunciationLexiconStore,
 } from '@kinloom/server';
 import { createCloudflareAssetHandler } from './adapters/cloudflareAssets.js';
 import { CloudflareEmailSender } from './adapters/cloudflareEmailSender.js';
+import { D1PronunciationLexiconStore } from './adapters/d1PronunciationLexiconStore.js';
 import { D1ArchiveRepository } from './adapters/d1Repository.js';
 import { GeminiPronunciationAudioGenerator } from './adapters/geminiPronunciationGenerator.js';
 import { R2IncrementalPatchBundleCache } from './adapters/r2BundleCache.js';
@@ -29,6 +31,7 @@ export {
   DEFAULT_EMAIL_FROM,
   type CloudflareEmailSenderOptions,
 } from './adapters/cloudflareEmailSender.js';
+export { D1PronunciationLexiconStore } from './adapters/d1PronunciationLexiconStore.js';
 export { D1ArchiveRepository, type D1ArchiveRepositoryOptions } from './adapters/d1Repository.js';
 export {
   buildPronunciationPrompt,
@@ -75,6 +78,7 @@ export interface CreateCloudflareWorkerOptions {
   emailSender?: EmailSender;
   authProvider?: AuthProvider;
   pronunciationGenerator?: PronunciationAudioGenerator;
+  pronunciationLexiconStore?: PronunciationLexiconStore;
   onPluginError?: (pluginId: string, error: unknown) => void;
 }
 
@@ -273,9 +277,12 @@ export function createCloudflareWorker(
               model: env.GEMINI_TTS_MODEL,
             })
           : undefined);
+      const pronunciationLexiconStore =
+        options.pronunciationLexiconStore ?? new D1PronunciationLexiconStore(env.DB);
 
       const server = createKinloomServer({
         siteConfig: options.siteConfig,
+        mode,
         sessionSecret: env.SESSION_SECRET,
         bootstrapAdminEmail: env.BOOTSTRAP_ADMIN_EMAIL,
         onPluginError: options.onPluginError,
@@ -288,6 +295,7 @@ export function createCloudflareWorker(
           clock,
           assetHandler,
           pronunciationGenerator,
+          pronunciationLexiconStore,
           plugins: options.plugins,
         },
       });

@@ -14,6 +14,7 @@ import { createRoot } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ArchivalMarkdown } from './ArchivalMarkdown.js';
 import { ArchiveProvider } from '../context/ArchiveProvider.js';
+import { useArchiveData } from '../context/ArchiveDataContext.js';
 import { EntityEditDrawer } from './wiki/EntityEditDrawer.js';
 import { PersonPage } from '../pages/PersonPage.js';
 import { PlacePage } from '../pages/PlacePage.js';
@@ -635,6 +636,154 @@ describe('EntityEditDrawer pronunciation editing and audio generation', () => {
     expect(emptySaveSnapshots).toHaveLength(1);
     expect(emptySaveSnapshots[0].pronunciation).toBeNull();
     secondRender.unmount();
+  });
+
+  it('edits shared surname pronunciation via PUT /api/pronunciations/:term and updates ArchiveDataContext live', async () => {
+    const sharedSiteConfig: KinloomSiteConfig = parseKinloomConfig({
+      site: {
+        title: 'Mercer Synthetic Archive',
+        familyName: 'Mercer Family',
+        gedcomSourceName: 'MERCER_TEST',
+      },
+      pronunciations: {
+        Mercer: {
+          phonetic: 'MER-ser',
+          ipa: '/ˈmɜːr.sər/',
+          language: 'en-US',
+        },
+      },
+    });
+    const bundle = buildTestBundle();
+
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === 'string' ? input : input.toString();
+      if (url === '/api/pronunciations/Mercer' && init?.method === 'PUT') {
+        return new Response(
+          JSON.stringify({
+            term: 'Mercer',
+            pronunciation: {
+              phonetic: 'MUR-ser',
+              ipa: '/ˈmɜːr.sər/',
+              language: 'en-US',
+              audio_url: '/audio/shared-mercer.mp3',
+            },
+            pronunciations: {
+              Mercer: {
+                phonetic: 'MUR-ser',
+                ipa: '/ˈmɜːr.sər/',
+                language: 'en-US',
+                audio_url: '/audio/shared-mercer.mp3',
+              },
+            },
+          }),
+          {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          },
+        );
+      }
+      return new Response(JSON.stringify({ pronunciations: {} }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const LexiconProbe: React.FC = () => {
+      const { pronunciations } = useArchiveData();
+      return (
+        <div data-testid="lexicon-probe">
+          {pronunciations.Mercer?.phonetic ?? 'none'}|{pronunciations.Mercer?.audio_url ?? ''}
+        </div>
+      );
+    };
+
+    const { container, unmount } = renderIntoDom(
+      <ArchiveProvider siteConfig={sharedSiteConfig} initialBundle={bundle}>
+        <LexiconProbe />
+        <EntityEditDrawer
+          open
+          entityType="person"
+          entityId="per_thomas"
+          revisionId={1}
+          initialData={{
+            id: 'per_thomas',
+            slug: 'thomas-mercer',
+            full_name: 'Thomas Mercer',
+            given_name: 'Thomas',
+            surname: 'Mercer',
+            alt_names: [],
+            sex: 'M',
+            is_living: false,
+            lineage_group: 'pivot_ancestor',
+            birth_edtf: '1842-05-10',
+            death_edtf: '1911-08-19',
+            portrait_url: null,
+            pronunciation: null,
+          }}
+          title="Thomas Mercer"
+          onClose={() => {}}
+        />
+      </ArchiveProvider>,
+    );
+
+    expect(container.textContent).toContain('Personal override (first / middle / full name)');
+    expect(container.querySelector('[data-testid="lexicon-probe"]')?.textContent).toBe('MER-ser|');
+
+    const editSharedBtn = Array.from(container.querySelectorAll('button')).find(
+      (b) => b.textContent?.trim() === 'Edit shared "Mercer"',
+    );
+    expect(editSharedBtn).toBeDefined();
+
+    act(() => {
+      editSharedBtn!.click();
+    });
+
+    const sharedEditor = container.querySelector('.wiki-pronunciation-shared-editor');
+    expect(sharedEditor).not.toBeNull();
+
+    const sharedPhoneticInput = sharedEditor!.querySelector<HTMLInputElement>(
+      'input[placeholder="e.g. MER-ser"]',
+    );
+    expect(sharedPhoneticInput).not.toBeNull();
+    expect(sharedPhoneticInput!.value).toBe('MER-ser');
+
+    act(() => {
+      setNativeInputValue(sharedPhoneticInput!, 'MUR-ser');
+    });
+
+    const saveSharedBtn = Array.from(sharedEditor!.querySelectorAll('button')).find(
+      (b) => b.textContent?.trim() === 'Save for all Mercer records',
+    );
+    expect(saveSharedBtn).toBeDefined();
+
+    await act(async () => {
+      saveSharedBtn!.click();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const putCall = fetchMock.mock.calls.find(
+      ([url, init]) => url === '/api/pronunciations/Mercer' && init?.method === 'PUT',
+    );
+    expect(putCall).toBeDefined();
+    expect(putCall![1]?.credentials).toBe('include');
+    expect(JSON.parse(String(putCall![1]?.body))).toEqual({
+      phonetic: 'MUR-ser',
+      ipa: '/ˈmɜːr.sər/',
+      language: 'en-US',
+    });
+
+    // Context and breakdown card both update live without reload
+    expect(container.querySelector('[data-testid="lexicon-probe"]')?.textContent).toBe(
+      'MUR-ser|/audio/shared-mercer.mp3',
+    );
+    expect(container.querySelector('.wiki-pronunciation-part-shared')?.textContent).toContain(
+      'MUR-ser',
+    );
+    expect(container.textContent).toContain('Saved shared pronunciation for "Mercer"');
+
+    unmount();
   });
 });
 

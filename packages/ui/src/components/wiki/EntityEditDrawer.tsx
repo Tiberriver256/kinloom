@@ -102,7 +102,8 @@ export const EntityEditDrawer: React.FC<EntityEditDrawerProps> = ({
   onSaved,
   onDeleted,
 }) => {
-  const { dataSource, bundle, siteConfig, baseUrl, reloadArchive } = useArchiveData();
+  const { dataSource, bundle, baseUrl, reloadArchive, pronunciations, setPronunciations } =
+    useArchiveData();
   const [syncingRevision, setSyncingRevision] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [deleteSummary, setDeleteSummary] = useState('');
@@ -112,6 +113,15 @@ export const EntityEditDrawer: React.FC<EntityEditDrawerProps> = ({
     'idle',
   );
   const [audioGenMessage, setAudioGenMessage] = useState<string | null>(null);
+  const [sharedEditorOpen, setSharedEditorOpen] = useState(false);
+  const [sharedPhonetic, setSharedPhonetic] = useState('');
+  const [sharedIpa, setSharedIpa] = useState('');
+  const [sharedLanguage, setSharedLanguage] = useState('');
+  const [sharedNote, setSharedNote] = useState('');
+  const [sharedSaveStatus, setSharedSaveStatus] = useState<'idle' | 'saving' | 'success' | 'error'>(
+    'idle',
+  );
+  const [sharedSaveMessage, setSharedSaveMessage] = useState<string | null>(null);
 
   const [snapshot, send] = useMachine(entityEditorMachine, {
     input: {
@@ -199,6 +209,14 @@ export const EntityEditDrawer: React.FC<EntityEditDrawerProps> = ({
       onSaved?.(snapshot.context.baseRevisionId, snapshot.context.baseSnapshot);
     }
   }, [snapshot, reloadArchive, onSaved]);
+
+  useEffect(() => {
+    if (!open) {
+      setSharedEditorOpen(false);
+      setSharedSaveStatus('idle');
+      setSharedSaveMessage(null);
+    }
+  }, [open, entityId]);
 
   if (!open) {
     return null;
@@ -305,6 +323,59 @@ export const EntityEditDrawer: React.FC<EntityEditDrawerProps> = ({
     } catch (err) {
       setAudioGenStatus('error');
       setAudioGenMessage(err instanceof Error ? err.message : String(err));
+    }
+  };
+
+  const handleSaveSharedSurname = async (term: string): Promise<void> => {
+    const trimmedTerm = term.trim();
+    if (!trimmedTerm || sharedSaveStatus === 'saving') {
+      return;
+    }
+    setSharedSaveStatus('saving');
+    setSharedSaveMessage(null);
+    try {
+      const response = await fetch(`/api/pronunciations/${encodeURIComponent(trimmedTerm)}`, {
+        method: 'PUT',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          phonetic: sharedPhonetic.trim() || undefined,
+          ipa: sharedIpa.trim() || undefined,
+          language: sharedLanguage.trim() || undefined,
+          note: sharedNote.trim() || undefined,
+        }),
+      });
+      if (!response.ok) {
+        let errorMessage = `Failed to save shared pronunciation (HTTP ${response.status}).`;
+        try {
+          const errBody = (await response.json()) as {
+            error?: { message?: string };
+            message?: string;
+          };
+          errorMessage = errBody.error?.message || errBody.message || errorMessage;
+        } catch {
+          // Non-JSON error response; keep HTTP status fallback.
+        }
+        setSharedSaveStatus('error');
+        setSharedSaveMessage(errorMessage);
+        return;
+      }
+      const data = (await response.json()) as {
+        term?: string;
+        pronunciation?: Pronunciation | null;
+        pronunciations?: Record<string, Pronunciation>;
+      };
+      if (data.pronunciations && typeof data.pronunciations === 'object') {
+        setPronunciations(data.pronunciations);
+      }
+      setSharedSaveStatus('success');
+      setSharedSaveMessage(
+        `Saved shared pronunciation for "${trimmedTerm}". Applies to all ${trimmedTerm} records and auto-generates audio.`,
+      );
+      setSharedEditorOpen(false);
+    } catch (err) {
+      setSharedSaveStatus('error');
+      setSharedSaveMessage(err instanceof Error ? err.message : String(err));
     }
   };
 
@@ -702,42 +773,174 @@ export const EntityEditDrawer: React.FC<EntityEditDrawerProps> = ({
                 const firstName = givenTokens[0] ?? '';
                 const middleNames = givenTokens.slice(1).join(' ');
                 const surname = asString(draft.surname).trim();
-                const sharedSurname =
-                  surname && siteConfig.pronunciations
-                    ? (siteConfig.pronunciations[surname] ??
-                      Object.entries(siteConfig.pronunciations).find(
-                        ([k]) => k.toLowerCase() === surname.toLowerCase(),
-                      )?.[1])
-                    : undefined;
+                const sharedSurname = surname
+                  ? (pronunciations[surname] ??
+                    Object.entries(pronunciations).find(
+                      ([k]) => k.toLowerCase() === surname.toLowerCase(),
+                    )?.[1])
+                  : undefined;
+                const hasSharedSurname = hasPronunciationContent(sharedSurname);
                 return (
                   <div className="wiki-pronunciation-breakdown">
-                    {firstName && (
-                      <span className="wiki-pronunciation-part">
-                        <span className="wiki-pronunciation-part-label">First</span>
-                        <strong>{firstName}</strong>
-                      </span>
-                    )}
-                    {middleNames && (
-                      <span className="wiki-pronunciation-part">
-                        <span className="wiki-pronunciation-part-label">Middle</span>
-                        <strong>{middleNames}</strong>
-                      </span>
-                    )}
-                    {surname && (
-                      <span className="wiki-pronunciation-part">
-                        <span className="wiki-pronunciation-part-label">Surname</span>
-                        <strong>{surname}</strong>
-                        {sharedSurname?.phonetic && (
-                          <span className="wiki-pronunciation-part-shared">
-                            → {sharedSurname.phonetic}
-                            {sharedSurname.ipa ? ` ${sharedSurname.ipa}` : ''} (shared)
+                    <div className="wiki-pronunciation-breakdown-parts">
+                      {firstName && (
+                        <span className="wiki-pronunciation-part">
+                          <span className="wiki-pronunciation-part-label">First</span>
+                          <strong>{firstName}</strong>
+                        </span>
+                      )}
+                      {middleNames && (
+                        <span className="wiki-pronunciation-part">
+                          <span className="wiki-pronunciation-part-label">Middle</span>
+                          <strong>{middleNames}</strong>
+                        </span>
+                      )}
+                      {surname && (
+                        <span className="wiki-pronunciation-part">
+                          <span className="wiki-pronunciation-part-label">Surname</span>
+                          <strong>{surname}</strong>
+                          {sharedSurname?.phonetic && (
+                            <span className="wiki-pronunciation-part-shared">
+                              → {sharedSurname.phonetic}
+                              {sharedSurname.ipa ? ` ${sharedSurname.ipa}` : ''} (shared)
+                            </span>
+                          )}
+                          <button
+                            type="button"
+                            className="wiki-pronunciation-shared-toggle"
+                            disabled={isBusy}
+                            aria-expanded={sharedEditorOpen}
+                            onClick={() => {
+                              if (sharedEditorOpen) {
+                                setSharedEditorOpen(false);
+                              } else {
+                                setSharedPhonetic(sharedSurname?.phonetic ?? '');
+                                setSharedIpa(sharedSurname?.ipa ?? '');
+                                setSharedLanguage(sharedSurname?.language ?? '');
+                                setSharedNote(sharedSurname?.note ?? '');
+                                setSharedSaveStatus('idle');
+                                setSharedSaveMessage(null);
+                                setSharedEditorOpen(true);
+                              }
+                            }}
+                          >
+                            {hasSharedSurname
+                              ? `Edit shared "${surname}"`
+                              : `+ Set shared "${surname}"`}
+                          </button>
+                        </span>
+                      )}
+                    </div>
+
+                    {surname && sharedEditorOpen && (
+                      <div className="wiki-pronunciation-shared-editor">
+                        <div className="wiki-pronunciation-shared-header">
+                          <strong>Shared pronunciation for &ldquo;{surname}&rdquo;</strong>
+                          <span className="wiki-pronunciation-shared-hint">
+                            Applies to every record with this surname and automatically generates audio.
                           </span>
-                        )}
-                      </span>
+                        </div>
+                        <div className="wiki-field-grid">
+                          <label className="wiki-field">
+                            <span className="wiki-field-label">Phonetic guide</span>
+                            <input
+                              type="text"
+                              className="wiki-input"
+                              placeholder="e.g. MER-ser"
+                              value={sharedPhonetic}
+                              onChange={(e) => {
+                                setSharedPhonetic(e.target.value);
+                              }}
+                              disabled={sharedSaveStatus === 'saving'}
+                            />
+                          </label>
+                          <label className="wiki-field">
+                            <span className="wiki-field-label">IPA (optional)</span>
+                            <input
+                              type="text"
+                              className="wiki-input"
+                              placeholder="e.g. /ˈmɜːr.sər/"
+                              value={sharedIpa}
+                              onChange={(e) => {
+                                setSharedIpa(e.target.value);
+                              }}
+                              disabled={sharedSaveStatus === 'saving'}
+                            />
+                          </label>
+                          <label className="wiki-field">
+                            <span className="wiki-field-label">Language</span>
+                            <input
+                              type="text"
+                              className="wiki-input"
+                              placeholder="e.g. en-US, nl, pl"
+                              value={sharedLanguage}
+                              onChange={(e) => {
+                                setSharedLanguage(e.target.value);
+                              }}
+                              disabled={sharedSaveStatus === 'saving'}
+                            />
+                          </label>
+                          <label className="wiki-field">
+                            <span className="wiki-field-label">Note</span>
+                            <input
+                              type="text"
+                              className="wiki-input"
+                              placeholder="e.g. Stress on first syllable"
+                              value={sharedNote}
+                              onChange={(e) => {
+                                setSharedNote(e.target.value);
+                              }}
+                              disabled={sharedSaveStatus === 'saving'}
+                            />
+                          </label>
+                        </div>
+                        <div className="wiki-pronunciation-shared-actions">
+                          <button
+                            type="button"
+                            className="wiki-pronunciation-shared-save-btn"
+                            disabled={sharedSaveStatus === 'saving'}
+                            onClick={() => {
+                              void handleSaveSharedSurname(surname);
+                            }}
+                          >
+                            {sharedSaveStatus === 'saving'
+                              ? 'Saving…'
+                              : `Save for all ${surname} records`}
+                          </button>
+                          <button
+                            type="button"
+                            className="pill-btn"
+                            disabled={sharedSaveStatus === 'saving'}
+                            onClick={() => {
+                              setSharedEditorOpen(false);
+                              if (sharedSaveStatus === 'error') {
+                                setSharedSaveStatus('idle');
+                                setSharedSaveMessage(null);
+                              }
+                            }}
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {sharedSaveMessage && (
+                      <div
+                        className={`wiki-pronunciation-status ${sharedSaveStatus === 'error' ? 'is-error' : 'is-success'}`}
+                        role={sharedSaveStatus === 'error' ? 'alert' : 'status'}
+                      >
+                        {sharedSaveMessage}
+                      </div>
                     )}
                   </div>
                 );
               })()}
+              {entityType === 'person' && (
+                <div className="wiki-pronunciation-override-heading">
+                  Personal override (first / middle / full name)
+                </div>
+              )}
               <div className="wiki-field-grid">
                 <label className="wiki-field">
                   <span className="wiki-field-label">Phonetic guide</span>

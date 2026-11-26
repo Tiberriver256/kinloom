@@ -14,6 +14,7 @@ import {
   type EntityType,
   type KinloomServerPluginRoute,
   type KinloomSiteConfig,
+  type Pronunciation,
   type RevisionQuery,
 } from '@kinloom/core';
 import { KinloomHttpError, toErrorResponseData } from '../errors.js';
@@ -48,6 +49,7 @@ export interface KinloomServerConfig {
   siteConfig: KinloomSiteConfig;
   ports: KinloomServerPorts;
   sessionSecret: string;
+  mode?: 'private' | 'public';
   bootstrapAdminEmail?: string;
   sessionTtlSeconds?: number;
   oauthCookieTtlSeconds?: number;
@@ -101,6 +103,25 @@ const GeneratePronunciationBodySchema = z.object({
   ipa: z.string().trim().min(1).optional(),
   language: z.string().trim().min(1).optional(),
   voice: z.string().trim().min(1).optional(),
+});
+
+const OptionalTrimmedStringSchema = z
+  .union([z.string(), z.null()])
+  .optional()
+  .transform((val) => {
+    if (typeof val !== 'string') {
+      return undefined;
+    }
+    const trimmed = val.trim();
+    return trimmed.length > 0 ? trimmed : undefined;
+  });
+
+const UpsertPronunciationLexiconBodySchema = z.object({
+  phonetic: OptionalTrimmedStringSchema,
+  ipa: OptionalTrimmedStringSchema,
+  language: OptionalTrimmedStringSchema,
+  note: OptionalTrimmedStringSchema,
+  audio_url: OptionalTrimmedStringSchema,
 });
 
 const DEFAULT_SESSION_TTL_SECONDS = 30 * 24 * 60 * 60;
@@ -295,8 +316,20 @@ export function createKinloomServer(config: KinloomServerConfig): KinloomServer 
     throw new RangeError('sessionSecret must be at least 16 characters.');
   }
 
+  const mode = config.mode ?? 'private';
   const sessionTtlSeconds = config.sessionTtlSeconds ?? DEFAULT_SESSION_TTL_SECONDS;
   const oauthCookieTtlSeconds = config.oauthCookieTtlSeconds ?? DEFAULT_OAUTH_COOKIE_TTL_SECONDS;
+
+  async function loadMergedPronunciations(): Promise<Record<string, Pronunciation>> {
+    const staticLexicon = config.siteConfig.pronunciations ?? {};
+    const dynamicLexicon = config.ports.pronunciationLexiconStore
+      ? await config.ports.pronunciationLexiconStore.list()
+      : {};
+    return {
+      ...staticLexicon,
+      ...dynamicLexicon,
+    };
+  }
   const plugins = config.ports.plugins ?? [];
   const pluginRoutes: KinloomServerPluginRoute[] = plugins.flatMap((plugin) =>
     plugin.routes ? [...plugin.routes] : []
@@ -861,6 +894,88 @@ export function createKinloomServer(config: KinloomServerConfig): KinloomServer 
       });
 
       return jsonResponse(stored, 200);
+    }
+
+    // -------------------------------------------------------------------------
+    // Shared Pronunciation Lexicon endpoints
+    // -------------------------------------------------------------------------
+    if (method === 'GET' && pathname === '/api/pronunciations') {
+      if (mode !== 'public') {
+        requireMinRole(auth.principal, 'viewer', {
+          allowAgentScopes: ['write_batch', 'read_backup'],
+        });
+      }
+      const pronunciations = await loadMergedPronunciations();
+      return jsonResponse({ pronunciations }, 200, {
+        'cache-control': mode === 'public' ? 'no-store' : 'private, no-store',
+      });
+    }
+
+    if (
+      method === 'PUT' &&
+      segments.length === 3 &&
+      segments[0] === 'api' &&
+      segments[1] === 'pronunciations'
+    ) {
+      enforceCsrfOrigin(request, url, auth.authMethod);
+      requireMinRole(auth.principal, 'editor', { allowAgentScopes: ['write_batch'] });
+
+      const term = decodeSegment(segments[2]).trim();
+      if (!term) {
+        throw new KinloomHttpError(400, 'VALIDATION_ERROR', 'Pronunciation term is required.');
+      }
+
+      if (!config.ports.pronunciationLexiconStore) {
+        throw new KinloomHttpError(
+          503,
+          'PRONUNCIATION_STORE_UNAVAILABLE',
+          'Pronunciation lexicon persistence is not configured on this server.'
+        );
+      }
+
+      const body = UpsertPronunciationLexiconBodySchema.parse(await readJsonBody(request));
+      const isEmpty =
+        !body.phonetic && !body.ipa && !body.language && !body.note && !body.audio_url;
+
+      if (isEmpty) {
+        await config.ports.pronunciationLexiconStore.delete(term);
+        const pronunciations = await loadMergedPronunciations();
+        return jsonResponse({ term, pronunciation: null, pronunciations }, 200);
+      }
+
+      const entry: Pronunciation = {};
+      if (body.phonetic) entry.phonetic = body.phonetic;
+      if (body.ipa) entry.ipa = body.ipa;
+      if (body.language) entry.language = body.language;
+      if (body.note) entry.note = body.note;
+      if (body.audio_url) entry.audio_url = body.audio_url;
+
+      if (config.ports.pronunciationGenerator && config.ports.mediaStore) {
+        try {
+          const stored = await generateAndStorePronunciationAudio({
+            generator: config.ports.pronunciationGenerator,
+            mediaStore: config.ports.mediaStore,
+            entityType: 'person',
+            text: term,
+            phonetic: entry.phonetic,
+            ipa: entry.ipa,
+            language: entry.language,
+          });
+          entry.audio_url = stored.audio_url;
+        } catch {
+          // Degrade gracefully when TTS is unavailable so lexicon text still saves
+        }
+      }
+
+      const author = principalToRevisionAuthor(auth.principal);
+      const pronunciation = await config.ports.pronunciationLexiconStore.upsert(
+        term,
+        entry,
+        author.author_id,
+        config.ports.clock.nowIso()
+      );
+      const pronunciations = await loadMergedPronunciations();
+      return jsonResponse({ term, pronunciation, pronunciations }, 200);
     }
 
     // -------------------------------------------------------------------------

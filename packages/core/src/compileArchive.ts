@@ -745,6 +745,9 @@ export function compileArchive(input: CompileArchiveInput): CompileArchiveResult
     kinship,
     sources: uniqueSources,
     ...(narratives !== undefined ? { narratives } : {}),
+    ...(pronunciationLexicon && Object.keys(pronunciationLexicon).length > 0
+      ? { pronunciations: structuredClone(pronunciationLexicon) }
+      : {}),
   };
 
   return {

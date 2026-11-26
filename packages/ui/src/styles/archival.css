@@ -7072,9 +7072,9 @@ dialog.global-search-backdrop {
 
 .wiki-pronunciation-breakdown {
   display: flex;
-  flex-wrap: wrap;
-  gap: 8px 14px;
-  padding: 8px 10px;
+  flex-direction: column;
+  gap: 10px;
+  padding: 10px 12px;
   margin-bottom: 12px;
   border: 1px solid var(--border-decorative);
   border-radius: 4px;
@@ -7082,8 +7082,16 @@ dialog.global-search-backdrop {
   font-size: 0.8rem;
 }
 
+.wiki-pronunciation-breakdown-parts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+}
+
 .wiki-pronunciation-part {
   display: inline-flex;
+  flex-wrap: wrap;
   align-items: baseline;
   gap: 5px;
 }
@@ -7100,6 +7108,102 @@ dialog.global-search-backdrop {
   font-family: var(--font-mono);
   font-size: 0.74rem;
   color: var(--accent-primary);
+}
+
+.wiki-pronunciation-shared-toggle {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 4px;
+  padding: 2px 8px;
+  border: 1px solid var(--border-control);
+  border-radius: 3px;
+  background: var(--surface-card);
+  color: var(--accent-primary);
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease;
+}
+
+.wiki-pronunciation-shared-toggle:hover:not(:disabled) {
+  border-color: var(--accent-primary);
+  background: var(--accent-primary);
+  color: var(--text-inverse);
+}
+
+.wiki-pronunciation-shared-toggle:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.wiki-pronunciation-shared-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--border-control);
+  border-radius: 4px;
+  background: var(--surface-card);
+}
+
+.wiki-pronunciation-shared-header {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.wiki-pronunciation-shared-header strong {
+  font-family: var(--font-serif);
+  font-size: 0.88rem;
+  color: var(--text-primary);
+}
+
+.wiki-pronunciation-shared-hint {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+
+.wiki-pronunciation-shared-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.wiki-pronunciation-shared-save-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border: 1px solid var(--accent-primary);
+  border-radius: 4px;
+  background: var(--accent-primary);
+  color: var(--text-inverse);
+  font-family: var(--font-mono);
+  font-size: 0.76rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 120ms ease;
+}
+
+.wiki-pronunciation-shared-save-btn:hover:not(:disabled) {
+  opacity: 0.9;
+}
+
+.wiki-pronunciation-shared-save-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.wiki-pronunciation-override-heading {
+  margin: 0 0 8px;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-secondary);
 }
 
 .wiki-pronunciation-gen-btn {
@@ -7129,21 +7233,24 @@ dialog.global-search-backdrop {
 }
 
 .pronunciation-badge.is-compact .pronunciation-play-btn {
-  min-width: 20px;
-  height: 20px;
-  padding: 0 3px;
-  font-size: 0.7rem;
+  width: 24px;
+  height: 24px;
+  min-width: 24px;
+  padding: 0;
 }
 
-.pronunciation-play-btn:hover {
-  background: var(--surface-canvas);
-  border-color: var(--accent-primary);
+.pronunciation-play-btn:focus-visible,
+.pronunciation-edit-link:focus-visible,
+.wiki-pronunciation-gen-btn:focus-visible {
+  outline: 2px solid var(--action-focus);
+  outline-offset: 2px;
 }
 
-.pronunciation-play-btn.is-playing {
-  background: var(--accent-primary);
-  border-color: var(--accent-primary);
-  color: var(--text-inverse);
+@media (prefers-reduced-motion: reduce) {
+  .pronunciation-play-btn,
+  .wiki-pronunciation-gen-btn {
+    transition: none;
+  }
 }
 
 .pronunciation-note {

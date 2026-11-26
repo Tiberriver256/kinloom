@@ -10,6 +10,7 @@ import type {
   MediaChecklistItem,
   Person,
   Place,
+  Pronunciation,
   ReadingsBundle,
   SourceRecord,
 } from '@kinloom/core';
@@ -87,6 +88,8 @@ export interface ArchiveDataContextValue {
   session: ArchiveSessionState | null;
   capabilities: CoreArchiveCapabilities;
   authProviders: ArchiveAuthProviders;
+  pronunciations: Readonly<Record<string, Pronunciation>>;
+  setPronunciations: (next: Record<string, Pronunciation>) => void;
 }
 
 const DEFAULT_CAPABILITIES: CoreArchiveCapabilities = {
@@ -109,6 +112,19 @@ function isMediaChecklistResponse(data: unknown): data is { items: MediaChecklis
     data !== null &&
     'items' in data &&
     Array.isArray((data as { items: unknown }).items)
+  );
+}
+
+function isPronunciationsResponse(
+  data: unknown,
+): data is { pronunciations: Record<string, Pronunciation> } {
+  return (
+    typeof data === 'object' &&
+    data !== null &&
+    'pronunciations' in data &&
+    typeof (data as { pronunciations: unknown }).pronunciations === 'object' &&
+    (data as { pronunciations: unknown }).pronunciations !== null &&
+    !Array.isArray((data as { pronunciations: unknown }).pronunciations)
   );
 }
 
@@ -248,9 +264,15 @@ export const ArchiveDataProvider: React.FC<ArchiveDataProviderProps> = ({
   const [readings, setReadings] = useState<ReadingsBundle | null>(initialReadings);
   const [readingsLoading, setReadingsLoading] = useState(false);
   const [readingsError, setReadingsError] = useState<string | null>(null);
+  const [livePronunciations, setLivePronunciations] = useState<Record<string, Pronunciation>>({});
+  const [archiveLoadedOverHttp, setArchiveLoadedOverHttp] = useState(false);
   const readingsFetchedRef = useRef(initialReadings !== null);
   const etagRef = useRef<string | null>(null);
   const hasBundleRef = useRef(initialBundle !== null);
+
+  const setPronunciations = useCallback((next: Record<string, Pronunciation>) => {
+    setLivePronunciations(next);
+  }, []);
 
   useEffect(() => {
     if (sessionProp !== undefined) {
@@ -356,6 +378,7 @@ export const ArchiveDataProvider: React.FC<ArchiveDataProviderProps> = ({
         etagRef.current = result.etag;
         setEtag(result.etag);
         setBundle(result.bundle);
+        setArchiveLoadedOverHttp(true);
         setLoading(false);
       })
       .catch((error_: unknown) => {
@@ -377,6 +400,48 @@ export const ArchiveDataProvider: React.FC<ArchiveDataProviderProps> = ({
       ensureReadings();
     }
   }, [loading, bundle, ensureReadings]);
+
+  // Fetch live D1 pronunciation overrides when editing is enabled or archive loads over HTTP.
+  // Fails silently in static/offline mode.
+  useEffect(() => {
+    if (!liveCapabilities.canEdit && !archiveLoadedOverHttp) {
+      return;
+    }
+    if (typeof fetch !== 'function') {
+      return;
+    }
+    let cancelled = false;
+    void fetch('/api/pronunciations', { credentials: 'include' })
+      .then(async (res) => {
+        if (!res.ok) {
+          return null;
+        }
+        return (await res.json()) as unknown;
+      })
+      .then((raw) => {
+        if (!cancelled && isPronunciationsResponse(raw)) {
+          setLivePronunciations((prev) => ({
+            ...prev,
+            ...raw.pronunciations,
+          }));
+        }
+      })
+      .catch(() => {
+        // Static or offline mode: keep static siteConfig + bundle pronunciations.
+      });
+    return (): void => {
+      cancelled = true;
+    };
+  }, [liveCapabilities.canEdit, archiveLoadedOverHttp, reloadTick]);
+
+  const pronunciations = useMemo<Readonly<Record<string, Pronunciation>>>(
+    () => ({
+      ...siteConfig.pronunciations,
+      ...bundle?.pronunciations,
+      ...livePronunciations,
+    }),
+    [siteConfig.pronunciations, bundle?.pronunciations, livePronunciations],
+  );
 
   const status = deriveArchiveStatus({ loading, error, bundle });
 
@@ -465,6 +530,8 @@ export const ArchiveDataProvider: React.FC<ArchiveDataProviderProps> = ({
       session: liveSession,
       capabilities: liveCapabilities,
       authProviders: liveAuthProviders,
+      pronunciations,
+      setPronunciations,
     }),
     [
       siteConfig,
@@ -488,6 +555,8 @@ export const ArchiveDataProvider: React.FC<ArchiveDataProviderProps> = ({
       liveSession,
       liveCapabilities,
       liveAuthProviders,
+      pronunciations,
+      setPronunciations,
     ],
   );
 

@@ -22,7 +22,6 @@ import {
   type EntityPayload,
   type EntityType,
   type InviteRecord,
-  type KinloomServerPorts,
   type KinloomSiteConfig,
   type KinshipEdge,
   type MagicLinkRecord,
@@ -33,6 +32,7 @@ import {
   type OptimisticConflictError,
   type Place,
   type PrivacyConfig,
+  type Pronunciation,
   type RawEvent,
   type RawPerson,
   type RevisionAuthor,
@@ -51,6 +51,7 @@ import {
 } from '@kinloom/core';
 import { bytesToStream, matchesIfNoneMatch, readStreamToBytes } from '../crypto.js';
 import { KinloomHttpError } from '../errors.js';
+import type { KinloomServerPorts, PronunciationLexiconStore } from '../ports.js';
 import { FixedClock } from './systemClock.js';
 
 function entityCompositeKey(entityType: EntityType, entityId: string): string {
@@ -891,6 +892,35 @@ export class FakeAuthProvider implements AuthProvider {
   }
 }
 
+export class InMemoryPronunciationLexiconStore implements PronunciationLexiconStore {
+  private readonly entries = new Map<string, Pronunciation>();
+
+  async list(): Promise<Record<string, Pronunciation>> {
+    const out: Record<string, Pronunciation> = {};
+    for (const [term, entry] of [...this.entries.entries()].toSorted(([a], [b]) =>
+      a.localeCompare(b)
+    )) {
+      out[term] = structuredClone(entry);
+    }
+    return out;
+  }
+
+  async upsert(
+    term: string,
+    entry: Pronunciation,
+    _updatedBy: string,
+    _updatedAt: string
+  ): Promise<Pronunciation> {
+    const clone = structuredClone(entry);
+    this.entries.set(term, clone);
+    return structuredClone(clone);
+  }
+
+  async delete(term: string): Promise<void> {
+    this.entries.delete(term);
+  }
+}
+
 export interface InMemoryServerPortsBundle extends KinloomServerPorts {
   repository: InMemoryArchiveRepository;
   bundleCache: InMemoryIncrementalBundleCache;
@@ -898,6 +928,7 @@ export interface InMemoryServerPortsBundle extends KinloomServerPorts {
   emailSender: InMemoryEmailSender;
   authProvider: FakeAuthProvider;
   clock: FixedClock;
+  pronunciationLexiconStore: InMemoryPronunciationLexiconStore;
 }
 
 export function createInMemoryServerPorts(
@@ -910,6 +941,7 @@ export function createInMemoryServerPorts(
   const mediaStore = new InMemoryMediaStore();
   const emailSender = new InMemoryEmailSender();
   const authProvider = new FakeAuthProvider();
+  const pronunciationLexiconStore = new InMemoryPronunciationLexiconStore();
 
   return {
     repository,
@@ -918,5 +950,6 @@ export function createInMemoryServerPorts(
     emailSender,
     authProvider,
     clock,
+    pronunciationLexiconStore,
   };
 }

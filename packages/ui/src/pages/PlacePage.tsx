@@ -20,8 +20,17 @@ type ScopeMode = 'exact' | 'radius15' | 'county';
 export const PlacePage: React.FC = () => {
   const { slug } = useParams<{ slug: string }>();
   const navigate = useNavigate();
-  const { bundle, siteConfig, baseUrl, capabilities, placesBySlug, placesById, peopleById, sourcesById, loading } =
-    useArchiveData();
+  const {
+    bundle,
+    baseUrl,
+    capabilities,
+    placesBySlug,
+    placesById,
+    peopleById,
+    sourcesById,
+    pronunciations,
+    loading,
+  } = useArchiveData();
 
   const [scopeMode, setScopeMode] = useState<ScopeMode>('radius15');
   const [decadeFilter, setDecadeFilter] = useState<string>('all');
@@ -244,7 +253,7 @@ export const PlacePage: React.FC = () => {
               {(() => {
                 const effectivePronunciation = resolvePlacePronunciation(
                   place,
-                  siteConfig.pronunciations,
+                  pronunciations,
                 );
                 if (!effectivePronunciation && !capabilities.canEdit) {
                   return null;

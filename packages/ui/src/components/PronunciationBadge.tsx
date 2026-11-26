@@ -9,6 +9,8 @@ export interface PronunciationBadgeProps {
   prefix?: string;
   baseUrl?: string;
   compact?: boolean;
+  /** Render only the speaker play button (hides inline phonetic/IPA/language text for quiet prose reading). */
+  iconOnly?: boolean;
   className?: string;
 }
 
@@ -57,6 +59,7 @@ export const PronunciationBadge: React.FC<PronunciationBadgeProps> = ({
   prefix,
   baseUrl,
   compact = false,
+  iconOnly = false,
   className,
 }) => {
   const [playing, setPlaying] = useState(false);
@@ -207,8 +210,8 @@ export const PronunciationBadge: React.FC<PronunciationBadgeProps> = ({
           {!compact && <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />}
         </svg>
       </button>
-      {prefix && <span className="pronunciation-prefix">{prefix}:</span>}
-      {primaryGuide && (
+      {!iconOnly && prefix && <span className="pronunciation-prefix">{prefix}:</span>}
+      {!iconOnly && primaryGuide && (
         <span
           className="pronunciation-guide"
           title={secondaryIpa ? `IPA: ${secondaryIpa}` : undefined}
@@ -216,17 +219,17 @@ export const PronunciationBadge: React.FC<PronunciationBadgeProps> = ({
           {primaryGuide}
         </span>
       )}
-      {!compact && secondaryIpa && (
+      {!iconOnly && !compact && secondaryIpa && (
         <span className="pronunciation-ipa" aria-label={`IPA ${secondaryIpa}`}>
           {secondaryIpa}
         </span>
       )}
-      {language && (
+      {!iconOnly && language && (
         <span className="pronunciation-lang" title={`Language: ${language}`}>
           {language}
         </span>
       )}
-      {!compact && note && <span className="pronunciation-note">{note}</span>}
+      {!iconOnly && !compact && note && <span className="pronunciation-note">{note}</span>}
     </span>
   );
 };

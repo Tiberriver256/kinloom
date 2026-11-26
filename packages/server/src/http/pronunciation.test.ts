@@ -428,3 +428,247 @@ describe('Pronunciation audio generation endpoint and auto-regeneration', () => 
     expect(generateSpy).toHaveBeenCalledTimes(3);
   });
 });
+
+describe('Shared pronunciation lexicon endpoints (GET /api/pronunciations, PUT /api/pronunciations/:term)', () => {
+  it('merges static config with persisted overrides, auto-generates deduplicated audio, and deletes overrides when cleared', async () => {
+    const baseConfig = createSyntheticSiteConfig();
+    const siteConfig = {
+      ...baseConfig,
+      pronunciations: {
+        Mercer: { phonetic: 'MER-ser', language: 'en-US' },
+        Alder: { phonetic: 'AWL-der', language: 'en-US' },
+      },
+    };
+    const ports = createInMemoryServerPorts(siteConfig);
+    let shouldFailTts = false;
+
+    const generateSpy = vi.fn(async (params: Parameters<PronunciationAudioGenerator['generate']>[0]) => {
+      if (shouldFailTts) {
+        throw new Error('Upstream TTS temporarily down');
+      }
+      return {
+        bytes: makeFakeWavBytes(`lexicon|${params.text}|${params.phonetic ?? ''}|${params.ipa ?? ''}`),
+        contentType: 'audio/wav',
+        ext: 'wav' as const,
+      };
+    });
+
+    const server = createKinloomServer({
+      siteConfig,
+      ports: {
+        ...ports,
+        pronunciationGenerator: { generate: generateSpy },
+      },
+      sessionSecret: SECRET,
+    });
+
+    const editorCookie = await createUserCookie(ports, {
+      email: 'editor@example.test',
+      display_name: 'Archive Editor',
+      role: 'editor',
+    });
+
+    // 1. Unauthenticated GET in private mode -> 401
+    const unauthGetRes = await server.fetch(new Request(`${ORIGIN}/api/pronunciations`));
+    expect(unauthGetRes.status).toBe(401);
+
+    // 2. Authenticated GET returns static siteConfig pronunciations initially
+    const initialGetRes = await server.fetch(
+      new Request(`${ORIGIN}/api/pronunciations`, {
+        headers: { cookie: editorCookie },
+      })
+    );
+    expect(initialGetRes.status).toBe(200);
+    const initialBody = (await initialGetRes.json()) as {
+      pronunciations: Record<string, { phonetic?: string; ipa?: string; audio_url?: string }>;
+    };
+    expect(initialBody.pronunciations).toEqual({
+      Mercer: { phonetic: 'MER-ser', language: 'en-US' },
+      Alder: { phonetic: 'AWL-der', language: 'en-US' },
+    });
+
+    // 3. Unauthenticated PUT -> 401; CSRF mismatch -> 403
+    const unauthPutRes = await server.fetch(
+      new Request(`${ORIGIN}/api/pronunciations/Springfield`, {
+        method: 'PUT',
+        headers: { 'content-type': 'application/json', origin: ORIGIN },
+        body: JSON.stringify({ phonetic: 'SPRING-feeld' }),
+      })
+    );
+    expect(unauthPutRes.status).toBe(401);
+
+    const csrfPutRes = await server.fetch(
+      new Request(`${ORIGIN}/api/pronunciations/Springfield`, {
+        method: 'PUT',
+        headers: {
+          'content-type': 'application/json',
+          origin: 'https://evil.example.test',
+          cookie: editorCookie,
+        },
+        body: JSON.stringify({ phonetic: 'SPRING-feeld' }),
+      })
+    );
+    expect(csrfPutRes.status).toBe(403);
+
+    // 4. PUT new term -> upserts + auto-generates audio and returns merged lexicon
+    const putNewRes = await server.fetch(
+      new Request(`${ORIGIN}/api/pronunciations/${encodeURIComponent('New Salem')}`, {
+        method: 'PUT',
+        headers: { 'content-type': 'application/json', origin: ORIGIN, cookie: editorCookie },
+        body: JSON.stringify({
+          phonetic: 'NOO SAY-lum',
+          language: 'en-US',
+          note: 'Historic Illinois village',
+        }),
+      })
+    );
+    expect(putNewRes.status).toBe(200);
+    const putNewBody = (await putNewRes.json()) as {
+      term: string;
+      pronunciation: { phonetic?: string; language?: string; note?: string; audio_url?: string } | null;
+      pronunciations: Record<string, { phonetic?: string; audio_url?: string }>;
+    };
+    expect(putNewBody.term).toBe('New Salem');
+    expect(putNewBody.pronunciation?.phonetic).toBe('NOO SAY-lum');
+    expect(putNewBody.pronunciation?.note).toBe('Historic Illinois village');
+    expect(putNewBody.pronunciation?.audio_url).toMatch(/^\/media\/pronunciation-[a-f0-9]{16}\.wav$/);
+    expect(putNewBody.pronunciations['New Salem']?.audio_url).toBe(
+      putNewBody.pronunciation?.audio_url
+    );
+    expect(putNewBody.pronunciations.Mercer?.phonetic).toBe('MER-ser');
+    expect(generateSpy).toHaveBeenCalledTimes(1);
+
+    // 5. PUT same phonetic again (different casing) -> deduplicates R2 audio with 0 extra TTS calls
+    const putDedupRes = await server.fetch(
+      new Request(`${ORIGIN}/api/pronunciations/${encodeURIComponent('New Salem')}`, {
+        method: 'PUT',
+        headers: { 'content-type': 'application/json', origin: ORIGIN, cookie: editorCookie },
+        body: JSON.stringify({
+          phonetic: 'noo say-lum',
+          language: 'en-US',
+          note: 'Updated note',
+        }),
+      })
+    );
+    expect(putDedupRes.status).toBe(200);
+    const putDedupBody = (await putDedupRes.json()) as {
+      pronunciation: { audio_url?: string; note?: string };
+    };
+    expect(putDedupBody.pronunciation.audio_url).toBe(putNewBody.pronunciation?.audio_url);
+    expect(putDedupBody.pronunciation.note).toBe('Updated note');
+    expect(generateSpy).toHaveBeenCalledTimes(1);
+
+    // 6. PUT overriding a static config term (Mercer) -> dynamic override wins in merged lexicon
+    const overrideRes = await server.fetch(
+      new Request(`${ORIGIN}/api/pronunciations/Mercer`, {
+        method: 'PUT',
+        headers: { 'content-type': 'application/json', origin: ORIGIN, cookie: editorCookie },
+        body: JSON.stringify({
+          phonetic: 'MUR-sur',
+          ipa: 'ˈmɜːrsər',
+          language: 'en-US',
+        }),
+      })
+    );
+    expect(overrideRes.status).toBe(200);
+    const overrideBody = (await overrideRes.json()) as {
+      term: string;
+      pronunciation: { phonetic?: string; ipa?: string; audio_url?: string };
+      pronunciations: Record<string, { phonetic?: string; ipa?: string; audio_url?: string }>;
+    };
+    expect(overrideBody.pronunciation.phonetic).toBe('MUR-sur');
+    expect(overrideBody.pronunciations.Mercer.phonetic).toBe('MUR-sur');
+    expect(overrideBody.pronunciations.Mercer.ipa).toBe('ˈmɜːrsər');
+    expect(overrideBody.pronunciations.Mercer.audio_url).toMatch(
+      /^\/media\/pronunciation-[a-f0-9]{16}\.wav$/
+    );
+    expect(generateSpy).toHaveBeenCalledTimes(2);
+
+    // 7. Graceful degradation when TTS fails: text still persists
+    shouldFailTts = true;
+    const failTtsPutRes = await server.fetch(
+      new Request(`${ORIGIN}/api/pronunciations/Springfield`, {
+        method: 'PUT',
+        headers: { 'content-type': 'application/json', origin: ORIGIN, cookie: editorCookie },
+        body: JSON.stringify({ phonetic: 'SPRING-feeld' }),
+      })
+    );
+    expect(failTtsPutRes.status).toBe(200);
+    const failTtsBody = (await failTtsPutRes.json()) as {
+      pronunciation: { phonetic?: string; audio_url?: string };
+    };
+    expect(failTtsBody.pronunciation.phonetic).toBe('SPRING-feeld');
+    expect(failTtsBody.pronunciation.audio_url).toBeUndefined();
+    shouldFailTts = false;
+
+    // 8. Clearing all fields deletes the override -> Mercer reverts to static config, Springfield disappears
+    const clearMercerRes = await server.fetch(
+      new Request(`${ORIGIN}/api/pronunciations/Mercer`, {
+        method: 'PUT',
+        headers: { 'content-type': 'application/json', origin: ORIGIN, cookie: editorCookie },
+        body: JSON.stringify({ phonetic: '   ', ipa: '', language: null, note: '' }),
+      })
+    );
+    expect(clearMercerRes.status).toBe(200);
+    const clearMercerBody = (await clearMercerRes.json()) as {
+      term: string;
+      pronunciation: null;
+      pronunciations: Record<string, { phonetic?: string }>;
+    };
+    expect(clearMercerBody.term).toBe('Mercer');
+    expect(clearMercerBody.pronunciation).toBeNull();
+    expect(clearMercerBody.pronunciations.Mercer).toEqual({
+      phonetic: 'MER-ser',
+      language: 'en-US',
+    });
+
+    const clearSpringfieldRes = await server.fetch(
+      new Request(`${ORIGIN}/api/pronunciations/Springfield`, {
+        method: 'PUT',
+        headers: { 'content-type': 'application/json', origin: ORIGIN, cookie: editorCookie },
+        body: JSON.stringify({}),
+      })
+    );
+    expect(clearSpringfieldRes.status).toBe(200);
+    const clearSpringfieldBody = (await clearSpringfieldRes.json()) as {
+      pronunciation: null;
+      pronunciations: Record<string, unknown>;
+    };
+    expect(clearSpringfieldBody.pronunciation).toBeNull();
+    expect(clearSpringfieldBody.pronunciations.Springfield).toBeUndefined();
+  });
+
+  it('allows unauthenticated GET /api/pronunciations in public mode', async () => {
+    const baseConfig = createSyntheticSiteConfig();
+    const siteConfig = {
+      ...baseConfig,
+      pronunciations: {
+        Alder: { phonetic: 'AWL-der' },
+      },
+    };
+    const ports = createInMemoryServerPorts(siteConfig);
+    await ports.pronunciationLexiconStore.upsert(
+      'Springfield',
+      { phonetic: 'SPRING-feeld' },
+      'editor@example.test',
+      ports.clock.nowIso()
+    );
+
+    const publicServer = createKinloomServer({
+      siteConfig,
+      mode: 'public',
+      ports,
+      sessionSecret: SECRET,
+    });
+
+    const res = await publicServer.fetch(new Request(`${ORIGIN}/api/pronunciations`));
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      pronunciations: Record<string, { phonetic?: string }>;
+    };
+    expect(body.pronunciations).toEqual({
+      Alder: { phonetic: 'AWL-der' },
+      Springfield: { phonetic: 'SPRING-feeld' },
+    });
+  });
+});

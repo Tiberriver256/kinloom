@@ -769,11 +769,11 @@ export const ArchivalMarkdown: React.FC<ArchivalMarkdownProps> = ({
           case 'heading':
             return block.level === 3 ? (
               <h4 key={blockKey} className="archival-md-heading">
-                {parseInlineNodes(block.text, blockKey, citationCtx, entityCtx, new Set())}
+                {parseInlineNodes(block.text, blockKey, citationCtx)}
               </h4>
             ) : (
               <h5 key={blockKey} className="archival-md-subheading">
-                {parseInlineNodes(block.text, blockKey, citationCtx, entityCtx, new Set())}
+                {parseInlineNodes(block.text, blockKey, citationCtx)}
               </h5>
             );
           case 'blockquote':

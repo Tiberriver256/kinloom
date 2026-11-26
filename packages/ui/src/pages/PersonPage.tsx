@@ -73,6 +73,7 @@ export const PersonPage: React.FC = () => {
     peopleBySlug,
     placesById,
     sourcesById,
+    pronunciations,
   } = useArchiveData();
   const { setActiveYear, pushPivot, openSourceInspector } = useArchiveUi();
 
@@ -575,7 +576,7 @@ export const PersonPage: React.FC = () => {
                     (() => {
                       const effectivePronunciation = resolvePersonPronunciation(
                         person,
-                        siteConfig.pronunciations,
+                        pronunciations,
                       );
                       const isInheritedSurnameOnly =
                         Boolean(effectivePronunciation) && !person.pronunciation && Boolean(person.surname);

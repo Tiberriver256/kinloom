@@ -31,6 +31,7 @@ import {
   createCloudflareAssetHandler,
   createCloudflareWorker,
   D1ArchiveRepository,
+  D1PronunciationLexiconStore,
   DEFAULT_COMPILED_BUNDLE_KEY,
   R2IncrementalPatchBundleCache,
   R2MediaStore,
@@ -45,6 +46,10 @@ import {
 const THIS_DIR = dirname(fileURLToPath(import.meta.url));
 const INITIAL_MIGRATION_SQL = readFileSync(
   resolve(THIS_DIR, '../migrations/0001_initial.sql'),
+  'utf8'
+);
+const PRONUNCIATIONS_MIGRATION_SQL = readFileSync(
+  resolve(THIS_DIR, '../migrations/0002_pronunciations.sql'),
   'utf8'
 );
 
@@ -83,6 +88,7 @@ async function createMiniflareFixture(): Promise<MiniflareFixture> {
   const db = (await mf.getD1Database('DB')) as unknown as D1Database;
   const bucket = (await mf.getR2Bucket('MEDIA_BUCKET')) as unknown as R2Bucket;
   await applySqlScript(db, INITIAL_MIGRATION_SQL);
+  await applySqlScript(db, PRONUNCIATIONS_MIGRATION_SQL);
 
   return {
     mf,
@@ -1263,5 +1269,59 @@ describe('createCloudflareWorker full HTTP lifecycle (Miniflare)', () => {
     expect(headRes.status).toBe(200);
     expect(headRes.headers.get('content-type')).toBe('text/html; charset=utf-8');
     expect(await headRes.text()).toBe('');
+  });
+
+  it('D1PronunciationLexiconStore returns {} before migration and persists/updates/deletes after 0002_pronunciations.sql', async () => {
+    const mf = new Miniflare({
+      modules: true,
+      script: 'export default { fetch() { return new Response("ok"); } };',
+      d1Databases: { DB: 'kinloom-pron-test-db' },
+    });
+    try {
+      const db = (await mf.getD1Database('DB')) as unknown as D1Database;
+      const store = new D1PronunciationLexiconStore(db);
+
+      // Before migration 0002, list() degrades gracefully to {}
+      expect(await store.list()).toEqual({});
+
+      // Apply migration 0002
+      await applySqlScript(db, PRONUNCIATIONS_MIGRATION_SQL);
+
+      const saved = await store.upsert(
+        'Mercer',
+        { phonetic: 'MER-ser', language: 'en-US', audio_url: '/media/pronunciation-abc123.wav' },
+        'editor@example.test',
+        '2026-07-01T12:00:00.000Z'
+      );
+      expect(saved).toEqual({
+        phonetic: 'MER-ser',
+        language: 'en-US',
+        audio_url: '/media/pronunciation-abc123.wav',
+      });
+      expect(await store.list()).toEqual({
+        Mercer: {
+          phonetic: 'MER-ser',
+          language: 'en-US',
+          audio_url: '/media/pronunciation-abc123.wav',
+        },
+      });
+
+      // Upsert existing term updates in place
+      await store.upsert(
+        'Mercer',
+        { phonetic: 'MUR-sur', ipa: 'ˈmɜːrsər' },
+        'editor@example.test',
+        '2026-07-01T12:05:00.000Z'
+      );
+      expect(await store.list()).toEqual({
+        Mercer: { phonetic: 'MUR-sur', ipa: 'ˈmɜːrsər' },
+      });
+
+      // Delete removes entry
+      await store.delete('Mercer');
+      expect(await store.list()).toEqual({});
+    } finally {
+      await mf.dispose();
+    }
   });
 });

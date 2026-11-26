@@ -9,6 +9,7 @@ export type {
   KinloomServerPorts,
   PronunciationAudioGenerator,
   PronunciationAudioResult,
+  PronunciationLexiconStore,
 } from './ports.js';
 
 export const KINLOOM_SERVER_VERSION = '0.29.0';
@@ -108,6 +109,7 @@ export {
   InMemoryEmailSender,
   InMemoryIncrementalBundleCache,
   InMemoryMediaStore,
+  InMemoryPronunciationLexiconStore,
   createInMemoryServerPorts,
   extractCollectionsFromSnapshot,
   type FakeOAuthProfile,
