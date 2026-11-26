@@ -13,23 +13,26 @@ Path: `skills/uk-archives/scripts/uk-archives`
 
 A standalone executable Python CLI with a PEP 723 `#!/usr/bin/env -S uv run --script` shebang and inline dependencies (`click`, `httpx`). No virtualenv setup, no API key, no account.
 
-### The National Archives Discovery
+### The National Archives (TNA) Discovery API (`tna` / `discovery`)
 
 ```bash
-# Search Discovery catalogue hits filtered by county text
+# Search PCC wills (PROB 11) in Norfolk for 1550-1620
+skills/uk-archives/scripts/uk-archives tna search --query "Smith Norfolk" \
+  --collection "PROB 11" --start-date 1550 --end-date 1620 --limit 10 --json
+
+# Inspect one TNA Discovery record by IAID (verified /API/records/v1/details/<iaid>)
+skills/uk-archives/scripts/uk-archives tna get D980036 --json
+
+# Alias group `discovery` remains supported (discovery search / discovery detail)
 skills/uk-archives/scripts/uk-archives discovery search Lincoln --held-by Norfolk --limit 10
-
-# PCC wills (PROB 11) for a surname and date range
-skills/uk-archives/scripts/uk-archives discovery search Lincoln \
-  --date-from 1550 --date-to 1660 --collection "PROB 11" --limit 20 --json
-
-# One record (verified detail endpoint uses /API/records/v1/details/<id>; aliases: inspect, get)
-skills/uk-archives/scripts/uk-archives discovery detail <record-id> --json
+skills/uk-archives/scripts/uk-archives discovery detail D980036 --json
 ```
 
-Search options: `--held-by` (free text appended to the query), `--date-from` / `--from-year` and `--date-to` / `--to-year` (YYYY or YYYY-MM-DD, mapped to `sps.dateFrom` / `sps.dateTo`), `--collection` (appended to the query and used to post-filter by catalogue reference), `--limit` (the API returns at most 15 rows per request; the CLI slices to your limit), `--query` / `-q` (alias for positional query). Each hit prints id, reference, dates, title, places, and a Discovery web URL.
+Search options: `--query` / `-q` (or positional `QUERY`), `--collection` (series or department reference such as `"PROB 11"`, appended to the query, mapped to `sps.departments` when applicable, and post-filtered by catalogue reference), `--held-by` (extra repository or county text appended to the query), `--start-date` / `--date-from` / `--from-year` and `--end-date` / `--date-to` / `--to-year` (`YYYY` or `YYYY-MM-DD`, mapped to `sps.dateFrom` / `sps.dateTo`), `--limit` (integer `>= 1`), `--page` (`sps.page`), `--refresh`, `--cache-ttl-hours`, and `--json` (returns boolean `cache_hit`).
 
-The detail route verified live is `https://discovery.nationalarchives.gov.uk/API/records/v1/details/<id>` (not `.../search/v1/records/v1/details/...`, which returns 404).
+All TNA requests enforce a strict `discovery.nationalarchives.gov.uk` HTTPS host allowlist (before and after redirects), validate IAIDs against path traversal, and retry transient `429`/`5xx` and network errors with `Retry-After` backoff.
+
+The detail route verified live is `https://discovery.nationalarchives.gov.uk/API/records/v1/details/<iaid>` (not `.../search/v1/records/v1/details/...`, which returns 404).
 
 ### FreeREG parish registers
 
@@ -86,15 +89,14 @@ Priority order for English pre-emigration and parish research:
 4. **BHO / GENUKI** for parish history, boundary changes, and manorial context.
 5. Cross-check transcribed parish entries against original register images or Bishop's Transcripts on FamilySearch, Ancestry UK, or Findmypast before recording them as proved in `data/`.
 
-## Verification log (verified live 2026-11-24)
+## Verification log (verified live 2026-11-26)
 
-- Discovery search GET `https://discovery.nationalarchives.gov.uk/API/search/v1/records?sps.searchQuery=...&rows=15`: HTTP 200 JSON with `count` and `records[]`.
-- Discovery date filtering (`sps.dateFrom`, `sps.dateTo`) and `PROB 11` post-filtering: HTTP 200 JSON with valid catalogue references.
-- Discovery detail GET `https://discovery.nationalarchives.gov.uk/API/records/v1/details/<id>`: HTTP 200 JSON with `digitised` and `citableReference`. Path `.../API/search/v1/records/v1/details/<id>` returned **404** (do not use).
+- TNA Discovery search GET `https://discovery.nationalarchives.gov.uk/API/search/v1/records?sps.searchQuery=Smith+Norfolk+%22PROB+11%22&sps.dateFrom=1550-01-01&sps.dateTo=1620-12-31&rows=5`: HTTP 200 JSON (`count: 18`, `PROB 11` wills including `D980036` / `PROB 11/44/39`). Passing bare 4-digit years (`1550`) without `-01-01` / `-12-31` returns HTTP 500, so the CLI normalizes `YYYY` to `YYYY-01-01` / `YYYY-12-31`.
+- TNA Discovery detail GET `https://discovery.nationalarchives.gov.uk/API/records/v1/details/D980036`: HTTP 200 JSON with `citableReference`, `coveringDates`, `digitised`, `scopeContent.description`, and `heldBy`. Path `.../API/search/v1/records/v1/details/<id>` returned **404** (do not use).
 - FreeREG GET `https://www.freereg.org.uk/`: HTTP **200**, CSRF token present; POST `/search_queries` returned HTTP **200** with parseable HTML table rows.
 - British History Online GET `https://www.british-history.ac.uk/`: HTTP **302** (site up; no search API wired).
 - Nottinghamshire CalmView GET `https://nawcat.nottinghamshire.gov.uk/CalmView/`: connection timeout at 45s (browser-only note; no machine search).
-- CLI: `uv run --script skills/uk-archives/scripts/uk-archives --help`, `discovery search`, `discovery detail`, `freereg search`, and `url` all exited **0** on 2026-11-24.
+- CLI: `tna search`, `tna get`, `discovery search`, `discovery detail`, `freereg search`, and `url` all exited **0**.
 
 ## Disk cache and environment variables
 

@@ -30,6 +30,7 @@ os.environ["KINLOOM_OPENARCHIEVEN_CACHE_DIR"] = _TEST_CACHE.name
 
 oa = load_module()
 oa.MIN_INTERVAL_S = 0.0
+oa.RETRY_BASE_SECONDS = 0.0
 
 SEARCH_PAYLOAD = {
     "response": {
@@ -153,20 +154,23 @@ class TestOpenArchievenCache(unittest.TestCase):
 
     def test_http_and_api_errors_are_never_cached(self) -> None:
         calls = 0
+        mode = {"step": "http500"}
 
         def handler(request: httpx.Request) -> httpx.Response:
             nonlocal calls
             calls += 1
-            if calls == 1:
+            if mode["step"] == "http500":
                 return httpx.Response(500, text="server error")
-            if calls == 2:
+            if mode["step"] == "api_error":
                 return httpx.Response(200, json={"error_code": 1, "error_description": "Invalid archive"})
             return httpx.Response(200, json=SEARCH_PAYLOAD)
 
         with patch.object(oa, "_client", self._mock_client(handler)):
             r1 = self.runner.invoke(oa.cli, ["search", "--name", "Jan Jansen"], env=self.env)
+            mode["step"] = "api_error"
             r2 = self.runner.invoke(oa.cli, ["search", "--name", "Jan Jansen"], env=self.env)
             self.assertEqual(list(Path(self.tmp.name).glob("*.json")), [])
+            mode["step"] = "ok"
             r3 = self.runner.invoke(oa.cli, ["search", "--name", "Jan Jansen", "--json"], env=self.env)
 
         self.assertEqual(r1.exit_code, 1)
@@ -174,7 +178,8 @@ class TestOpenArchievenCache(unittest.TestCase):
         self.assertEqual(r2.exit_code, 1)
         self.assertNotIn("Traceback", r2.output)
         self.assertEqual(r3.exit_code, 0, r3.output)
-        self.assertEqual(calls, 3)
+        # 3 attempts on persistent 500 + 1 non-retried API error + 1 ok = 5
+        self.assertEqual(calls, 5)
 
     def test_page_matches_start_cache_and_rejects_conflicts(self) -> None:
         calls = 0
@@ -448,7 +453,8 @@ class TestOpenArchievenDownload(unittest.TestCase):
         self.assertEqual(ok.exit_code, 0, self._combined(ok))
         self.assertEqual(out.read_bytes(), JPEG_ONE)
         image_calls = [url for url in calls if "scans.invalid" in url]
-        self.assertEqual(len(image_calls), 4)
+        # 2 html (non-retried 200) + 3 retries on 502 + 1 ok = 6
+        self.assertEqual(len(image_calls), 6)
 
     def test_zero_scan_record_lists_empty_and_download_fails(self) -> None:
         def handler(request: httpx.Request) -> httpx.Response:
@@ -470,6 +476,120 @@ class TestOpenArchievenDownload(unittest.TestCase):
         self.assertEqual(failed.exit_code, 1)
         self.assertIn("No scans", self._combined(failed))
         self.assertNotIn("Traceback", self._combined(failed))
+
+
+class TestOpenArchievenHardening(unittest.TestCase):
+    def setUp(self) -> None:
+        self.tmp = tempfile.TemporaryDirectory()
+        self.runner = CliRunner()
+        self.env = {"KINLOOM_OPENARCHIEVEN_CACHE_DIR": self.tmp.name}
+
+    def tearDown(self) -> None:
+        self.tmp.cleanup()
+
+    def _clients(self, handler):
+        transport = httpx.MockTransport(handler)
+        return lambda: httpx.Client(transport=transport, follow_redirects=True)
+
+    def test_search_and_show_retry_transient_429_503_and_timeout(self) -> None:
+        search_calls = 0
+        show_calls = 0
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            nonlocal search_calls, show_calls
+            if request.url.path.endswith("search.json"):
+                search_calls += 1
+                if search_calls == 1:
+                    return httpx.Response(429, headers={"Retry-After": "0"}, text="rate limited")
+                if search_calls == 2:
+                    raise httpx.ReadTimeout("transient timeout")
+                return httpx.Response(200, json=SEARCH_PAYLOAD)
+            if request.url.path.endswith("show.json"):
+                show_calls += 1
+                if show_calls == 1:
+                    return httpx.Response(503, text="service unavailable")
+                return httpx.Response(200, json=[SHOW_PAYLOAD])
+            return httpx.Response(404, text="missing")
+
+        factory = self._clients(handler)
+        with patch.object(oa, "_client", factory):
+            r_search = self.runner.invoke(oa.cli, ["search", "--name", "Jan Bakker", "--json"], env=self.env)
+            r_show = self.runner.invoke(
+                oa.cli, ["show", f"bhi:{RECORD_REF}", "--json"], env=self.env
+            )
+            r_show_cached = self.runner.invoke(
+                oa.cli, ["show", f"bhi:{RECORD_REF}", "--json"], env=self.env
+            )
+
+        self.assertEqual(r_search.exit_code, 0, r_search.output)
+        self.assertEqual(r_show.exit_code, 0, r_show.output)
+        self.assertEqual(r_show_cached.exit_code, 0, r_show_cached.output)
+        self.assertEqual(search_calls, 3)
+        self.assertEqual(show_calls, 2)
+        self.assertIs(json.loads(r_search.output)["cache_hit"], False)
+        self.assertIs(json.loads(r_show.output)["cache_hit"], False)
+        self.assertIs(json.loads(r_show_cached.output)["cache_hit"], True)
+
+    def test_download_retries_transient_503_scan_response(self) -> None:
+        scan_calls = 0
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            nonlocal scan_calls
+            if request.url.path.endswith("show.json"):
+                return httpx.Response(200, json=[SCAN_RECORD])
+            if str(request.url) == FULL_ONE:
+                scan_calls += 1
+                if scan_calls == 1:
+                    return httpx.Response(503, text="busy")
+                return httpx.Response(200, content=JPEG_ONE, headers={"content-type": "image/jpeg"})
+            return httpx.Response(404, text="missing")
+
+        out = Path(self.tmp.name) / "retried.jpg"
+        factory = self._clients(handler)
+        with patch.object(oa, "_client", factory), patch.object(oa, "_binary_client", factory):
+            res = self.runner.invoke(
+                oa.cli, ["download", f"bhi:{RECORD_REF}", "--out", str(out), "--json"], env=self.env
+            )
+
+        self.assertEqual(res.exit_code, 0, res.output)
+        self.assertEqual(scan_calls, 2)
+        self.assertEqual(out.read_bytes(), JPEG_ONE)
+        self.assertIs(json.loads(res.output)["cache_hit"], False)
+
+    def test_host_allowlist_ssrf_and_broken_pipe_handling(self) -> None:
+        with self.assertRaises(SystemExit) as cm1:
+            oa.validate_api_url("https://evil.example/1.0/records/search.json")
+        self.assertEqual(cm1.exception.code, 1)
+
+        with self.assertRaises(SystemExit) as cm2:
+            oa.validate_api_url("http://api.openarch.nl/1.0/records/search.json")
+        self.assertEqual(cm2.exception.code, 1)
+
+        with self.assertRaises(SystemExit) as cm3:
+            oa.validate_scan_url("http://127.0.0.1/secret.jpg")
+        self.assertEqual(cm3.exception.code, 1)
+
+        with self.assertRaises(SystemExit) as cm4:
+            oa.validate_scan_url("http://169.254.169.254/latest/meta-data/")
+        self.assertEqual(cm4.exception.code, 1)
+
+        def redirect_api(request: httpx.Request) -> httpx.Response:
+            if request.url.host == "api.openarch.nl":
+                return httpx.Response(302, headers={"Location": "https://evil.example/hijack"})
+            return httpx.Response(200, json=SEARCH_PAYLOAD)
+
+        with patch.object(oa, "_client", self._clients(redirect_api)):
+            blocked = self.runner.invoke(oa.cli, ["search", "--name", "Jan Bakker"], env=self.env)
+        self.assertEqual(blocked.exit_code, 1)
+        self.assertIn("Refusing API host", blocked.output)
+
+        bad_ref = self.runner.invoke(oa.cli, ["show", "../etc", "passwd"], env=self.env)
+        self.assertEqual(bad_ref.exit_code, 2)
+
+        with patch.object(oa, "cli", side_effect=BrokenPipeError), patch("os.dup2"):
+            with self.assertRaises(SystemExit) as pipe_cm:
+                oa.main()
+        self.assertEqual(pipe_cm.exception.code, 0)
 
 
 if __name__ == "__main__":

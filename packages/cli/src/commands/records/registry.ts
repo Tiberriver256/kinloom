@@ -196,7 +196,16 @@ export const RECORD_COMMAND_SPECS: readonly RecordCommandSpec[] = [
     summary: 'Search Library of Virginia Chancery Records Index and Primo catalog',
   },
 
-  // International archives (3)
+  // International archives (4)
+  {
+    kind: 'skill-script',
+    command: 'fi-archives',
+    aliases: [],
+    category: 'international',
+    skillDir: 'finnish-archives',
+    scriptName: 'fi_archives.py',
+    summary: 'Search Finnish HisKi parish registers and National Archives Digihakemisto index',
+  },
   {
     kind: 'skill-script',
     command: 'openarchieven',

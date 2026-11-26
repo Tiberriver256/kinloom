@@ -29,6 +29,7 @@ _TEST_CACHE = tempfile.TemporaryDirectory()
 os.environ["KINLOOM_UK_ARCHIVES_CACHE_DIR"] = _TEST_CACHE.name
 
 uk = load_module()
+uk.RETRY_BASE_SECONDS = 0.0
 
 DISCOVERY_SEARCH_PAYLOAD = {
     "count": 1,
@@ -263,23 +264,27 @@ class TestUkArchivesCache(unittest.TestCase):
 
     def test_errors_and_empty_payloads_are_never_cached(self) -> None:
         calls = 0
+        mode = {"step": "http500"}
 
         def handler(request: httpx.Request) -> httpx.Response:
             nonlocal calls
             calls += 1
-            if calls == 1:
+            if mode["step"] == "http500":
                 return httpx.Response(500, text="server error")
-            if calls == 2:
+            if mode["step"] == "freereg_no_token":
                 return httpx.Response(200, text="<html>no token here</html>")
-            if calls == 3:
+            if mode["step"] == "empty":
                 return httpx.Response(200, json={"count": 0, "records": []})
             return httpx.Response(200, json=DISCOVERY_SEARCH_PAYLOAD)
 
         with patch.object(uk, "_client", self._mock_client(handler)):
             r1 = self.runner.invoke(uk.cli, ["discovery", "search", "Smith"], env=self.env)
+            mode["step"] = "freereg_no_token"
             r2 = self.runner.invoke(uk.cli, ["freereg", "search", "--surname", "Smith"], env=self.env)
+            mode["step"] = "empty"
             r3 = self.runner.invoke(uk.cli, ["discovery", "search", "Smith", "--json"], env=self.env)
             self.assertEqual(list(Path(self.tmp.name).glob("*.json")), [])
+            mode["step"] = "ok"
             r4 = self.runner.invoke(uk.cli, ["discovery", "search", "Smith", "--json"], env=self.env)
 
         self.assertEqual(r1.exit_code, 1)
@@ -289,8 +294,178 @@ class TestUkArchivesCache(unittest.TestCase):
         self.assertEqual(r3.exit_code, 0, r3.output)
         self.assertFalse(json.loads(r3.output)["cache_hit"])
         self.assertEqual(r4.exit_code, 0, r4.output)
-        self.assertEqual(calls, 4)
+        # 3 attempts on persistent 500 + 1 FreeREG GET + 1 empty + 1 ok = 6
+        self.assertEqual(calls, 6)
         self.assertEqual(len(list(Path(self.tmp.name).glob("*.json"))), 1)
+
+    def test_tna_search_and_get_cache_dates_and_collection_filter(self) -> None:
+        seen: list[httpx.Request] = []
+        multi_payload = {
+            "count": 2,
+            "records": [
+                {
+                    "id": "D980036",
+                    "reference": "PROB 11/44/39",
+                    "title": "Will of Richard Smith of Norfolk",
+                    "description": "Probate copy of will.",
+                    "coveringDates": "04 February 1561",
+                    "department": "PROB",
+                    "places": ["Norfolk"],
+                    "heldBy": ["The National Archives, Kew"],
+                },
+                {
+                    "id": "C999999",
+                    "reference": "WARD 7/29/17",
+                    "title": "Inquisition post mortem",
+                    "description": "Non-PROB record that should be filtered out.",
+                    "coveringDates": "1590",
+                    "department": "WARD",
+                    "places": ["Norfolk"],
+                    "heldBy": ["The National Archives, Kew"],
+                },
+            ],
+        }
+        detail_payload = {
+            "id": "D980036",
+            "citableReference": "PROB 11/44/39",
+            "coveringDates": "04 February 1561",
+            "coveringFromDate": 15610204,
+            "coveringToDate": 15610204,
+            "scopeContent": {
+                "description": '<emph altrender="doctype">W</emph><persname>Richard Smith</persname><geogname>Norfolk</geogname>'
+            },
+            "heldBy": [{"xReferenceName": "The National Archives, Kew"}],
+            "digitised": True,
+            "legalStatus": "Public Record(s)",
+            "catalogueLevel": 7,
+            "parentId": "C1903347",
+        }
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            seen.append(request)
+            if "/API/records/v1/details/D980036" in str(request.url):
+                return httpx.Response(200, json=detail_payload)
+            return httpx.Response(200, json=multi_payload)
+
+        with patch.object(uk, "_client", self._mock_client(handler)):
+            s1 = self.runner.invoke(
+                uk.cli,
+                [
+                    "tna",
+                    "search",
+                    "--query",
+                    "Smith Norfolk",
+                    "--collection",
+                    "PROB 11",
+                    "--start-date",
+                    "1550",
+                    "--end-date",
+                    "1620",
+                    "--limit",
+                    "5",
+                    "--json",
+                ],
+                env=self.env,
+            )
+            s2 = self.runner.invoke(
+                uk.cli,
+                [
+                    "tna",
+                    "search",
+                    "--query",
+                    "Smith Norfolk",
+                    "--collection",
+                    "PROB 11",
+                    "--start-date",
+                    "1550",
+                    "--end-date",
+                    "1620",
+                    "--limit",
+                    "5",
+                    "--json",
+                ],
+                env=self.env,
+            )
+            g1 = self.runner.invoke(uk.cli, ["tna", "get", "D980036", "--json"], env=self.env)
+            g2 = self.runner.invoke(uk.cli, ["tna", "get", "D980036", "--json"], env=self.env)
+
+        self.assertEqual(s1.exit_code, 0, s1.output)
+        self.assertEqual(s2.exit_code, 0, s2.output)
+        self.assertEqual(g1.exit_code, 0, g1.output)
+        self.assertEqual(g2.exit_code, 0, g2.output)
+        self.assertEqual(len(seen), 2)
+        search_params = seen[0].url.params
+        self.assertEqual(search_params["sps.dateFrom"], "1550-01-01")
+        self.assertEqual(search_params["sps.dateTo"], "1620-12-31")
+        self.assertEqual(search_params["sps.departments"], "PROB")
+
+        body1 = json.loads(s1.output)
+        body2 = json.loads(s2.output)
+        self.assertIs(body1["cache_hit"], False)
+        self.assertIs(body2["cache_hit"], True)
+        self.assertEqual(body1["returned"], 1)
+        self.assertEqual(body1["records"][0]["reference"], "PROB 11/44/39")
+        self.assertEqual(body1["records"][0]["iaid"], "D980036")
+
+        det1 = json.loads(g1.output)
+        det2 = json.loads(g2.output)
+        self.assertIs(det1["cache_hit"], False)
+        self.assertIs(det2["cache_hit"], True)
+        self.assertEqual(det1["citable_reference"], "PROB 11/44/39")
+        self.assertEqual(det1["description"], "W Richard Smith Norfolk")
+        self.assertEqual(det1["parent_id"], "C1903347")
+
+    def test_tna_retries_transient_429_and_503_with_retry_after(self) -> None:
+        calls = 0
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            nonlocal calls
+            calls += 1
+            if calls == 1:
+                return httpx.Response(429, headers={"Retry-After": "0"}, text="rate limited")
+            if calls == 2:
+                return httpx.Response(503, text="temporarily unavailable")
+            return httpx.Response(200, json=DISCOVERY_SEARCH_PAYLOAD)
+
+        with patch.object(uk, "_client", self._mock_client(handler)):
+            res = self.runner.invoke(
+                uk.cli, ["tna", "search", "--query", "Smith", "--json"], env=self.env
+            )
+
+        self.assertEqual(res.exit_code, 0, res.output)
+        self.assertEqual(calls, 3)
+        payload = json.loads(res.output)
+        self.assertIs(payload["cache_hit"], False)
+        self.assertEqual(payload["returned"], 1)
+
+    def test_tna_host_allowlist_and_iaid_validation(self) -> None:
+        bad_iaid = self.runner.invoke(uk.cli, ["tna", "get", "../etc/passwd"], env=self.env)
+        self.assertEqual(bad_iaid.exit_code, 2)
+
+        bad_dates = self.runner.invoke(
+            uk.cli,
+            ["tna", "search", "--query", "Smith", "--start-date", "1620", "--end-date", "1550"],
+            env=self.env,
+        )
+        self.assertEqual(bad_dates.exit_code, 2)
+
+        with self.assertRaises(uk.click.ClickException):
+            uk.validate_url("http://discovery.nationalarchives.gov.uk/API/search/v1/records", allowed_hosts=uk.ALLOWED_TNA_HOSTS)
+        with self.assertRaises(uk.click.ClickException):
+            uk.validate_url("https://evil.example/API/search/v1/records", allowed_hosts=uk.ALLOWED_TNA_HOSTS)
+        with self.assertRaises(uk.click.ClickException):
+            uk.validate_url("https://user:pass@discovery.nationalarchives.gov.uk/API/search/v1/records", allowed_hosts=uk.ALLOWED_TNA_HOSTS)
+
+        # Redirect to an off-allowlist host must be rejected before returning data.
+        def redirect_handler(request: httpx.Request) -> httpx.Response:
+            if request.url.host == "discovery.nationalarchives.gov.uk":
+                return httpx.Response(302, headers={"Location": "https://evil.example/leak"})
+            return httpx.Response(200, json=DISCOVERY_SEARCH_PAYLOAD)
+
+        with patch.object(uk, "_client", self._mock_client(redirect_handler)):
+            blocked = self.runner.invoke(uk.cli, ["tna", "search", "--query", "Smith"], env=self.env)
+        self.assertEqual(blocked.exit_code, 1)
+        self.assertIn("Refusing host", blocked.output)
 
 
 if __name__ == "__main__":
