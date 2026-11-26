@@ -197,12 +197,13 @@ export const PronunciationBadge: React.FC<PronunciationBadgeProps> = ({
         <svg
           width={compact ? 12 : 14}
           height={compact ? 12 : 14}
-          viewBox="0 0 24 24"
+          viewBox={compact ? '-0.5 0 20 24' : '0 0 24 24'}
           fill="none"
           stroke="currentColor"
           strokeWidth="2"
           strokeLinecap="round"
           strokeLinejoin="round"
+          style={{ display: 'block' }}
           aria-hidden="true"
         >
           <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
