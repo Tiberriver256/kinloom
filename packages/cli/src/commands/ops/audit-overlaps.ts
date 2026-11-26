@@ -2,13 +2,29 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { performance } from 'node:perf_hooks';
-import { parseMediaYaml } from '@kinloom/core';
 import { CliValidationError } from '../../errors.js';
 import {
   inspectImageBuffer,
   runAuditCommand,
   type AuditCommandResult,
 } from './audit.js';
+import {
+  collectLiveMediaCollisions,
+  loadLiveMedia,
+  normalizeMediaFilePath,
+  readStagedMediaRefs,
+  type LiveMediaFileCollision,
+  type StagedMediaRef,
+} from './live-media-collisions.js';
+
+export {
+  collectLiveMediaCollisions,
+  loadLiveMedia,
+  normalizeMediaFilePath,
+  readStagedMediaRefs,
+  type LiveMediaFileCollision,
+  type StagedMediaRef,
+};
 
 const SAFE_PERSON_ID_RE = /^[a-zA-Z0-9_-]+$/;
 
@@ -66,12 +82,6 @@ export interface SharedEventOverlap {
   packages: SharedEventPackage[];
 }
 
-export interface LiveMediaFileCollision {
-  file: string;
-  live_media_id: string;
-  staged: Array<{ person_id: string; media_id: string; file: string }>;
-}
-
 export interface AuditOverlaps {
   scanFileCollisions: ScanFileCollision[];
   mediaFileCollisions: MediaFileCollision[];
@@ -110,12 +120,6 @@ export interface AuditBatchResult {
   rendered: string;
 }
 
-interface StagedMediaRef {
-  id: string;
-  file: string;
-  normalizedFile: string;
-}
-
 interface StagedSourceRef {
   id: string;
 }
@@ -142,15 +146,6 @@ function nullableText(value: unknown): string | null {
   }
   const trimmed = value.trim();
   return trimmed.length === 0 ? null : trimmed;
-}
-
-export function normalizeMediaFilePath(file: string): string {
-  const parts = file
-    .trim()
-    .replaceAll('\\', '/')
-    .split('/')
-    .filter((part) => part.length > 0 && part !== '.');
-  return parts.join('/');
 }
 
 function comparePersonId(a: { person_id: string }, b: { person_id: string }): number {
@@ -190,18 +185,7 @@ function readPatchObject(patchPath: string): Record<string, unknown> {
 
 function loadStagedPackage(personId: string, packageDir: string): ParsedPackage {
   const patch = readPatchObject(path.join(packageDir, 'patch.json'));
-  const media: StagedMediaRef[] = [];
-  for (const rawItem of Array.isArray(patch.media) ? patch.media : []) {
-    if (!isPlainRecord(rawItem) || typeof rawItem.id !== 'string' || typeof rawItem.file !== 'string') {
-      continue;
-    }
-    const id = rawItem.id.trim();
-    const file = rawItem.file.trim();
-    if (!id || !file) {
-      continue;
-    }
-    media.push({ id, file, normalizedFile: normalizeMediaFilePath(file) });
-  }
+  const media = readStagedMediaRefs(patch.media);
 
   const sources: StagedSourceRef[] = [];
   for (const rawItem of Array.isArray(patch.sources) ? patch.sources : []) {
@@ -437,57 +421,6 @@ function collectSharedEvents(packages: readonly ParsedPackage[]): SharedEventOve
   return overlaps.toSorted((a, b) => a.id.localeCompare(b.id));
 }
 
-function collectLiveMediaCollisions(
-  packages: readonly ParsedPackage[],
-  liveMedia: readonly { id: string; file: string }[]
-): LiveMediaFileCollision[] {
-  const liveByFile = new Map<string, string[]>();
-  for (const item of liveMedia) {
-    const normalized = normalizeMediaFilePath(item.file);
-    if (!normalized) {
-      continue;
-    }
-    const ids = liveByFile.get(normalized) ?? [];
-    ids.push(item.id);
-    liveByFile.set(normalized, ids);
-  }
-
-  const grouped = new Map<string, LiveMediaFileCollision>();
-  for (const staged of packages) {
-    for (const item of staged.media) {
-      const liveIds = liveByFile.get(item.normalizedFile) ?? [];
-      for (const liveId of liveIds) {
-        if (liveId === item.id) {
-          continue;
-        }
-        const key = `${item.normalizedFile}\0${liveId}`;
-        const existing = grouped.get(key) ?? {
-          file: item.normalizedFile,
-          live_media_id: liveId,
-          staged: [],
-        };
-        existing.staged.push({
-          person_id: staged.personId,
-          media_id: item.id,
-          file: item.file,
-        });
-        grouped.set(key, existing);
-      }
-    }
-  }
-
-  return [...grouped.values()]
-    .map((collision) => ({
-      ...collision,
-      staged: collision.staged.toSorted(
-        (a, b) => a.person_id.localeCompare(b.person_id) || a.media_id.localeCompare(b.media_id)
-      ),
-    }))
-    .toSorted(
-      (a, b) => a.file.localeCompare(b.file) || a.live_media_id.localeCompare(b.live_media_id)
-    );
-}
-
 function computeAuditOverlaps(input: {
   packages: readonly ParsedPackage[];
   liveMedia: readonly { id: string; file: string }[];
@@ -500,17 +433,6 @@ function computeAuditOverlaps(input: {
     sharedEventOverlaps: collectSharedEvents(input.packages),
     liveMediaFileCollisions: collectLiveMediaCollisions(input.packages, input.liveMedia),
   };
-}
-
-function loadLiveMedia(repoDir: string): Array<{ id: string; file: string }> {
-  const mediaPath = path.join(repoDir, 'data', 'media.yaml');
-  if (!fs.existsSync(mediaPath)) {
-    return [];
-  }
-  return parseMediaYaml(fs.readFileSync(mediaPath, 'utf8')).map((item) => ({
-    id: item.id,
-    file: item.file,
-  }));
 }
 
 function summarizeBatch(

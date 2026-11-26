@@ -14,6 +14,11 @@ import {
   splitTopLevelYamlList,
 } from './context.js';
 import { runIntegrateCommand, type IntegrateCommandResult } from './integrate.js';
+import {
+  collectLiveMediaCollisions,
+  loadLiveMedia,
+  readStagedMediaRefs,
+} from './live-media-collisions.js';
 
 const SAFE_PERSON_ID_RE = /^[a-zA-Z0-9_-]+$/;
 const SSN_RE = /\b\d{3}-\d{2}-\d{4}\b/g;
@@ -1189,6 +1194,16 @@ export async function runAuditCommand(options: AuditCommandOptions): Promise<Aud
     ...zeroCoordinatePlaces.map((id) => `places: zero or missing coordinates on '${id}'`),
     ...(dryRun.error ? [`dryRun: ${dryRun.error}`] : []),
   ];
+  const liveMediaFileCollisions = collectLiveMediaCollisions(
+    [{ personId, media: readStagedMediaRefs(patch.media) }],
+    loadLiveMedia(repoDir)
+  );
+  const liveMediaWarnings = liveMediaFileCollisions.flatMap((collision) =>
+    collision.staged.map(
+      (staged) =>
+        `media: file '${collision.file}' already belongs to live media id '${collision.live_media_id}' (staged media id '${staged.media_id}')`
+    )
+  );
   const allWarnings: string[] = [
     ...chronology.warnings.map((w) => `chronology: ${w}`),
     ...privacy.warnings.map((w) => `style: ${w}`),
@@ -1196,12 +1211,17 @@ export async function runAuditCommand(options: AuditCommandOptions): Promise<Aud
       ? [`citations: ${citations.uncitedCount} uncited prose sentence(s) in body_md`]
       : []),
     ...scans.warnings.map((w) => `scans: ${w}`),
+    ...liveMediaWarnings,
   ];
 
   const durationMs = Math.round(performance.now() - t0);
   const baseReport: Omit<AuditCommandResult, 'rendered'> = {
     ok: allErrors.length === 0,
-    strictOk: allErrors.length === 0 && citations.uncitedCount === 0 && privacy.emDashCount === 0,
+    strictOk:
+      allErrors.length === 0 &&
+      citations.uncitedCount === 0 &&
+      privacy.emDashCount === 0 &&
+      liveMediaFileCollisions.length === 0,
     repo: repoDir,
     person_id: personId,
     package_dir: packageDir,

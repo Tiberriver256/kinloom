@@ -245,7 +245,7 @@ def _load_or_fetch_memorials(
     cache_root: Path,
     ttl_hours: float,
     refresh: bool,
-) -> list[dict[str, Any]]:
+) -> tuple[list[dict[str, Any]], bool]:
     clean_ids = [validate_entity_id(mid, "memorial id") for mid in memorial_ids]
     by_id: dict[str, dict[str, Any]] = {}
     missing_ids: list[str] = []
@@ -261,7 +261,9 @@ def _load_or_fetch_memorials(
                 continue
         missing_ids.append(mid)
 
+    fetched = False
     if missing_ids:
+        fetched = True
         data = gql(GET_QUERY, {"ids": missing_ids})
         for raw_mem in data.get("memorialsById") or []:
             mem = enrich_memorial(raw_mem)
@@ -278,7 +280,7 @@ def _load_or_fetch_memorials(
                     cache_path, {"cached_at": time.time(), "data": mem}
                 )
 
-    return [by_id[mid] for mid in clean_ids if mid in by_id]
+    return [by_id[mid] for mid in clean_ids if mid in by_id], not fetched
 
 
 def _load_or_fetch_cemetery_by_id(
@@ -670,7 +672,7 @@ def get(memorial_ids, refresh, cache_ttl_hours, as_json, full, photos):
     """
     ttl_hours = resolve_cache_ttl_hours(cache_ttl_hours)
     cache_root = get_cache_root()
-    memorials = _load_or_fetch_memorials(
+    memorials, _memorial_cache_hit = _load_or_fetch_memorials(
         list(memorial_ids),
         cache_root=cache_root,
         ttl_hours=ttl_hours,
@@ -846,6 +848,91 @@ def place(name, limit, refresh, cache_ttl_hours, as_json):
         click.echo(f"{loc.get('id')} | {kind} | {shown}{suffix}")
 
 
+_IMAGE_CONTENT_TYPES = frozenset(
+    {"image/jpeg", "image/jpg", "image/png", "image/gif", "image/webp"}
+)
+
+
+def _image_content_type(content_type: str | None) -> str | None:
+    if not content_type:
+        return None
+    base = content_type.split(";", 1)[0].strip().lower()
+    if base in _IMAGE_CONTENT_TYPES:
+        return base
+    return None
+
+
+def _has_image_magic(content: bytes) -> bool:
+    if content.startswith(b"\xff\xd8\xff"):
+        return True
+    if content.startswith(b"\x89PNG\r\n\x1a\n"):
+        return True
+    if content.startswith(b"GIF87a") or content.startswith(b"GIF89a"):
+        return True
+    return len(content) >= 12 and content.startswith(b"RIFF") and content[8:12] == b"WEBP"
+
+
+def _looks_like_html(content: bytes) -> bool:
+    sample = content.lstrip()[:64].lower()
+    return (
+        sample.startswith(b"<html")
+        or sample.startswith(b"<!doctype")
+        or sample.startswith(b"<head")
+        or sample.startswith(b"<body")
+    )
+
+
+def _photo_bytes_accepted(content: bytes, content_type: str | None) -> bool:
+    if not content or _looks_like_html(content):
+        return False
+    if _has_image_magic(content):
+        return True
+    return _image_content_type(content_type) is not None
+
+
+def _photo_type_note(path: Path) -> Path:
+    return path.with_name(path.name + ".type")
+
+
+def _cached_photo_bytes_ok(path: Path, content: bytes) -> bool:
+    if not content or _looks_like_html(content):
+        return False
+    if _has_image_magic(content):
+        return True
+    note = _photo_type_note(path)
+    if not note.is_file():
+        return False
+    try:
+        stored = note.read_text(encoding="utf-8")
+    except OSError:
+        return False
+    return _image_content_type(stored) is not None
+
+
+def _photo_cache_fresh(path: Path, ttl_hours: float) -> bool:
+    ttl_seconds = ttl_hours * 3600.0
+    if ttl_seconds <= 0 or not path.is_file():
+        return False
+    try:
+        modified = path.stat().st_mtime
+        content = path.read_bytes()
+    except OSError:
+        return False
+    if (time.time() - modified) > ttl_seconds:
+        return False
+    return _cached_photo_bytes_ok(path, content)
+
+
+def _store_photo_cache(path: Path, content: bytes, content_type: str | None) -> None:
+    atomic_write_bytes(path, content)
+    note = _photo_type_note(path)
+    image_type = _image_content_type(content_type)
+    if image_type and not _has_image_magic(content):
+        atomic_write_text(note, image_type + "\n")
+    elif note.is_file():
+        note.unlink()
+
+
 def _new_photo_client() -> httpx.Client:
     return httpx.Client(timeout=60.0, follow_redirects=True)
 
@@ -858,20 +945,24 @@ def _new_photo_client() -> httpx.Client:
               help="Only download this photo type, e.g. Grave.")
 @click.option("--prefix", default=None,
               help="Optional filename prefix, e.g. 'lincoln-abraham' -> '<prefix>_<photo-id>.jpg'.")
+@click.option("--all", "all_types", is_flag=True,
+              help="Download every photo type. This is the default when --type is omitted.")
 @click.option("--metadata", "save_metadata", is_flag=True,
               help="Also write a sidecar JSON file with memorial and photo provenance.")
 @click.option("--refresh", is_flag=True,
               help="Bypass local memorial and photo caches and re-download fresh files.")
 @click.option("--cache-ttl-hours", type=float, default=None,
-              help="Override memorial metadata cache TTL in hours (default: 168 or $KINLOOM_FINDAGRAVE_CACHE_TTL_HOURS).")
-def photo(memorial_id, out, photo_type, prefix, save_metadata, refresh, cache_ttl_hours):
+              help="Override cache TTL in hours for memorial JSON and photo files (default: 168 or $KINLOOM_FINDAGRAVE_CACHE_TTL_HOURS).")
+@click.option("--json", "as_json", is_flag=True,
+              help="Print memorial_id, files, and cache_hit instead of text lines.")
+def photo(memorial_id, out, photo_type, all_types, prefix, save_metadata, refresh, cache_ttl_hours, as_json):
     """Download a memorial's photos (grave, portrait, family, other)."""
     clean_id = validate_entity_id(memorial_id, "memorial id")
     stem_prefix = sanitize_prefix(prefix)
     ttl_hours = resolve_cache_ttl_hours(cache_ttl_hours)
     cache_root = get_cache_root()
 
-    memorials = _load_or_fetch_memorials(
+    memorials, memorial_cache_hit = _load_or_fetch_memorials(
         [clean_id],
         cache_root=cache_root,
         ttl_hours=ttl_hours,
@@ -882,15 +973,24 @@ def photo(memorial_id, out, photo_type, prefix, save_metadata, refresh, cache_tt
         raise SystemExit(1)
     memorial = memorials[0]
     photo_list = (memorial.get("photos") or {}).get("photos") or []
-    if photo_type:
+    if photo_type and not all_types:
         photo_list = [p for p in photo_list if p.get("type") == photo_type]
     if not photo_list:
+        if as_json:
+            click.echo(json.dumps({
+                "memorial_id": clean_id,
+                "files": [],
+                "cache_hit": memorial_cache_hit,
+            }, indent=2))
+            return
         click.echo("No photos found.")
         return
     out_dir = Path(out)
     out_dir.mkdir(parents=True, exist_ok=True)
     photos_cache_dir = cache_root / "photos" / clean_id
     saved_items = []
+    file_hits: list[bool] = []
+    rejected = False
     client: httpx.Client | None = None
     try:
         for item in photo_list:
@@ -899,39 +999,60 @@ def photo(memorial_id, out, photo_type, prefix, save_metadata, refresh, cache_tt
             cached_path = resolve_safe_child(photos_cache_dir, cache_filename)
             dest = resolve_safe_child(out_dir, f"{stem_prefix}{cache_filename}")
 
-            if not refresh and cached_path.is_file():
+            def copy_cached(from_cache: bool) -> int:
                 atomic_copy_file(cached_path, dest)
                 size = dest.stat().st_size
-                click.echo(f"{dest} ({size} bytes, cached)")
+                if not as_json:
+                    suffix_note = ", cached" if from_cache else ""
+                    click.echo(f"{dest} ({size} bytes{suffix_note})")
+                return size
+
+            if not refresh and _photo_cache_fresh(cached_path, ttl_hours):
+                size = copy_cached(True)
+                from_cache = True
             else:
                 lock_path = resolve_safe_child(
                     cache_root / "_locks", f"photo_{clean_id}_{cache_filename}.lock"
                 )
-                served_from_cache = False
+                from_cache = False
                 with file_lock(lock_path):
-                    if not refresh and cached_path.is_file():
-                        served_from_cache = True
+                    if not refresh and _photo_cache_fresh(cached_path, ttl_hours):
+                        from_cache = True
                     else:
                         if client is None:
                             client = _new_photo_client()
                         resp = client.get(url, headers={"User-Agent": USER_AGENT})
                         resp.raise_for_status()
-                        atomic_write_bytes(cached_path, resp.content)
-                atomic_copy_file(cached_path, dest)
-                size = dest.stat().st_size
-                suffix_note = ", cached" if served_from_cache else ""
-                click.echo(f"{dest} ({size} bytes{suffix_note})")
+                        if not _photo_bytes_accepted(resp.content, resp.headers.get("content-type")):
+                            rejected = True
+                            click.echo(
+                                f"Rejected non-image body for photo {item.get('id') or url}",
+                                err=True,
+                            )
+                            continue
+                        _store_photo_cache(
+                            cached_path, resp.content, resp.headers.get("content-type")
+                        )
+                if rejected and not cached_path.is_file():
+                    continue
+                if not cached_path.is_file():
+                    continue
+                size = copy_cached(from_cache)
 
+            file_hits.append(from_cache)
             saved_items.append({
                 "id": item.get("id"),
                 "type": item.get("type"),
                 "caption": item.get("caption"),
                 "url": url,
                 "file": dest.name,
+                "bytes": size,
+                "cache_hit": from_cache,
             })
     finally:
         if client is not None:
             client.close()
+    metadata_path = None
     if save_metadata:
         meta_path = resolve_safe_child(out_dir, f"{stem_prefix}{clean_id}.metadata.json")
         meta_payload = {
@@ -940,10 +1061,33 @@ def photo(memorial_id, out, photo_type, prefix, save_metadata, refresh, cache_tt
             "url": memorial_url(str(memorial.get("id"))),
             "cemetery": fmt_cemetery(memorial.get("cemetery")),
             "plot": memorial.get("plot"),
-            "photos": saved_items,
+            "photos": [
+                {
+                    "id": item["id"],
+                    "type": item["type"],
+                    "caption": item["caption"],
+                    "url": item["url"],
+                    "file": item["file"],
+                }
+                for item in saved_items
+            ],
         }
         atomic_write_text(meta_path, json.dumps(meta_payload, indent=2) + "\n")
-        click.echo(f"{meta_path} (metadata)")
+        metadata_path = str(meta_path)
+        if not as_json:
+            click.echo(f"{meta_path} (metadata)")
+    cache_hit = memorial_cache_hit and not rejected and all(file_hits) and len(file_hits) == len(photo_list)
+    if as_json:
+        payload: dict[str, Any] = {
+            "memorial_id": clean_id,
+            "files": saved_items,
+            "cache_hit": cache_hit,
+        }
+        if metadata_path is not None:
+            payload["metadata_file"] = metadata_path
+        click.echo(json.dumps(payload, indent=2))
+    if rejected:
+        raise SystemExit(1)
 
 
 @cli.command()

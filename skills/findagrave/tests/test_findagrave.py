@@ -225,7 +225,8 @@ class TestFindAGraveCli(unittest.TestCase):
 
         def handler(request: httpx.Request) -> httpx.Response:
             http_calls.append(str(request.url))
-            return httpx.Response(200, content=f"JPEG-BYTES-v{img_rev['n']}".encode())
+            body = b"\xff\xd8\xff" + f"JPEG-BYTES-v{img_rev['n']}".encode()
+            return httpx.Response(200, content=body, headers={"content-type": "image/jpeg"})
 
         def fake_photo_client() -> httpx.Client:
             return httpx.Client(transport=httpx.MockTransport(handler))
@@ -256,7 +257,7 @@ class TestFindAGraveCli(unittest.TestCase):
             self.assertEqual(len(http_calls), 1)
             self.assertTrue((self.cache_root / "photos" / "627" / "9901.jpg").is_file())
             self.assertEqual(
-                (out1 / "lincoln-abraham_9901.jpg").read_bytes(), b"JPEG-BYTES-v1"
+                (out1 / "lincoln-abraham_9901.jpg").read_bytes(), b"\xff\xd8\xffJPEG-BYTES-v1"
             )
 
             # Different --out and --prefix reuses BOTH memorial and photo caches -> ZERO HTTP requests!
@@ -268,7 +269,7 @@ class TestFindAGraveCli(unittest.TestCase):
             self.assertEqual(len(gql_calls), 1)
             self.assertEqual(len(http_calls), 1)
             self.assertEqual(
-                (out2 / "lincoln-mary_9901.jpg").read_bytes(), b"JPEG-BYTES-v1"
+                (out2 / "lincoln-mary_9901.jpg").read_bytes(), b"\xff\xd8\xffJPEG-BYTES-v1"
             )
 
             # --refresh bypasses both memorial and photo caches.
@@ -280,7 +281,149 @@ class TestFindAGraveCli(unittest.TestCase):
             self.assertEqual(r3.exit_code, 0, r3.output)
             self.assertEqual(len(gql_calls), 2)
             self.assertEqual(len(http_calls), 2)
-            self.assertEqual((out3 / "9901.jpg").read_bytes(), b"JPEG-BYTES-v2")
+            self.assertEqual((out3 / "9901.jpg").read_bytes(), b"\xff\xd8\xffJPEG-BYTES-v2")
+
+    def test_photo_json_cache_hit_refresh_ttl_and_html_rejection(self) -> None:
+        gql_calls: list[dict] = []
+        http_calls: list[str] = []
+        mode = {"body": b"\xff\xd8\xffJPEG-OK", "type": "image/jpeg"}
+
+        photo_meta = [
+            {
+                "id": "9901",
+                "type": "Grave",
+                "caption": "Headstone",
+                "path": "https://images.findagrave.com/photos/9901.jpg",
+            },
+            {
+                "id": "9902",
+                "type": "Portrait",
+                "caption": "Portrait",
+                "path": "https://images.findagrave.com/photos/9902.jpg",
+            },
+        ]
+
+        def fake_gql(_query: str, variables: dict) -> dict:
+            gql_calls.append(variables)
+            return {"memorialsById": [_sample_memorial("700", photos=photo_meta)]}
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            http_calls.append(str(request.url))
+            return httpx.Response(200, content=mode["body"], headers={"content-type": mode["type"]})
+
+        def fake_photo_client() -> httpx.Client:
+            return httpx.Client(transport=httpx.MockTransport(handler))
+
+        out = self.work_dir / "photos-json"
+        runner = CliRunner()
+        with (
+            patch.object(fg, "gql", side_effect=fake_gql),
+            patch.object(fg, "_new_photo_client", side_effect=fake_photo_client),
+        ):
+            first = runner.invoke(
+                fg.cli, ["photo", "700", "--out", str(out), "--type", "Grave", "--json"]
+            )
+            self.assertEqual(first.exit_code, 0, first.output)
+            first_body = json.loads(first.output)
+            self.assertEqual(first_body["memorial_id"], "700")
+            self.assertFalse(first_body["cache_hit"])
+            self.assertEqual(len(gql_calls), 1)
+            self.assertEqual(len(http_calls), 1)
+            self.assertEqual(first_body["files"], [
+                {
+                    "id": "9901",
+                    "type": "Grave",
+                    "caption": "Headstone",
+                    "url": "https://images.findagrave.com/photos/9901.jpg",
+                    "file": "9901.jpg",
+                    "bytes": len(b"\xff\xd8\xffJPEG-OK"),
+                    "cache_hit": False,
+                }
+            ])
+            self.assertEqual((out / "9901.jpg").read_bytes(), b"\xff\xd8\xffJPEG-OK")
+
+            second = runner.invoke(
+                fg.cli, ["photo", "700", "--out", str(out), "--type", "Grave", "--json"]
+            )
+            self.assertEqual(second.exit_code, 0, second.output)
+            second_body = json.loads(second.output)
+            self.assertTrue(second_body["cache_hit"])
+            self.assertTrue(second_body["files"][0]["cache_hit"])
+            self.assertEqual(len(gql_calls), 1)
+            self.assertEqual(len(http_calls), 1)
+
+            refreshed = runner.invoke(
+                fg.cli,
+                ["photo", "700", "--out", str(out), "--type", "Grave", "--json", "--refresh"],
+            )
+            self.assertEqual(refreshed.exit_code, 0, refreshed.output)
+            self.assertFalse(json.loads(refreshed.output)["cache_hit"])
+            self.assertEqual(len(gql_calls), 2)
+            self.assertEqual(len(http_calls), 2)
+
+            expired = runner.invoke(
+                fg.cli,
+                [
+                    "photo",
+                    "700",
+                    "--out",
+                    str(out),
+                    "--type",
+                    "Grave",
+                    "--json",
+                    "--cache-ttl-hours",
+                    "0",
+                ],
+            )
+            self.assertEqual(expired.exit_code, 0, expired.output)
+            self.assertFalse(json.loads(expired.output)["cache_hit"])
+            self.assertEqual(len(gql_calls), 3)
+            self.assertEqual(len(http_calls), 3)
+
+            mode["body"] = b"<!DOCTYPE html><html><body>blocked</body></html>"
+            mode["type"] = "text/html"
+            html_out = self.work_dir / "photos-html"
+            rejected = runner.invoke(
+                fg.cli, ["photo", "700", "--out", str(html_out), "--type", "Portrait", "--json"]
+            )
+            self.assertNotEqual(rejected.exit_code, 0)
+            self.assertFalse((self.cache_root / "photos" / "700" / "9902.jpg").exists())
+            self.assertFalse((html_out / "9902.jpg").exists())
+            start = rejected.output.find("{")
+            end = rejected.output.rfind("}")
+            self.assertGreaterEqual(start, 0, rejected.output)
+            rejected_body = json.loads(rejected.output[start:end + 1])
+            self.assertEqual(rejected_body["memorial_id"], "700")
+            self.assertEqual(rejected_body["files"], [])
+            self.assertFalse(rejected_body["cache_hit"])
+
+            mode["body"] = b""
+            mode["type"] = "image/jpeg"
+            empty = runner.invoke(
+                fg.cli, ["photo", "700", "--out", str(html_out), "--type", "Portrait", "--refresh"]
+            )
+            self.assertNotEqual(empty.exit_code, 0)
+            self.assertFalse((self.cache_root / "photos" / "700" / "9902.jpg").exists())
+
+            mode["body"] = b"portrait-bytes"
+            mode["type"] = "image/jpeg"
+            typed = runner.invoke(
+                fg.cli, ["photo", "700", "--out", str(html_out), "--type", "Portrait", "--json"]
+            )
+            self.assertEqual(typed.exit_code, 0, typed.output)
+            self.assertFalse(json.loads(typed.output)["cache_hit"])
+            self.assertTrue((self.cache_root / "photos" / "700" / "9902.jpg.type").is_file())
+            again = runner.invoke(
+                fg.cli, ["photo", "700", "--out", str(html_out), "--all", "--json"]
+            )
+            self.assertEqual(again.exit_code, 0, again.output)
+            again_body = json.loads(again.output)
+            self.assertTrue(again_body["cache_hit"])
+            self.assertEqual(
+                [item["file"] for item in again_body["files"]], ["9901.jpg", "9902.jpg"]
+            )
+            self.assertEqual(len(http_calls), 6)
+            self.assertEqual(len(gql_calls), 4)
 
     def test_id_prefix_and_filename_path_safety(self) -> None:
         runner = CliRunner()

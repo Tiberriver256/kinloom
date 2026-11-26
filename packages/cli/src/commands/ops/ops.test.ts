@@ -2286,6 +2286,80 @@ describe('ops/audit', () => {
     ]);
   });
 
+  it('fails a single-person strict audit when a new media id reuses a live file', async () => {
+    const repoDir = await createSyntheticRepo();
+    process.env.KINLOOM_TELEMETRY_FILE = path.join(repoDir, 'telemetry.jsonl');
+    const mediaPath = path.join(repoDir, 'data', 'media.yaml');
+    const media = parseMediaYaml(await readFile(mediaPath, 'utf8'));
+    media.push({
+      id: 'med_oak_register',
+      kind: 'document_scan',
+      person_id: 'per_thomas_alder',
+      file: '/media/oak-register.png',
+      caption: 'Oak County register',
+    });
+    await writeFile(mediaPath, serializeMediaYaml(media, { sortById: true }), 'utf8');
+    await writeCitedPackage({
+      repoDir,
+      personId: 'per_helen_maple',
+      fullName: 'Helen Maple',
+      scanName: 'oak-register.png',
+      scan: makeMinimalPng(640, 480, 12_000),
+      mediaId: 'med_staged_oak_register',
+      mediaFile: '/media/oak-register.png',
+      eventId: 'evt_helen_register',
+      eventDate: '1884-03-01',
+      eventTitle: 'Helen Maple register entry',
+    });
+
+    const strict = createCaptureIo();
+    const strictCode = await runCli(
+      ['audit', 'per_helen_maple', '--repo', repoDir, '--strict', '--json'],
+      { io: strict.io }
+    );
+    expect(strictCode, `${strict.stderr.join('\n')}\n${strict.stdout.join('\n')}`).toBe(EXIT_ERROR);
+    const strictBody = JSON.parse(strict.stdout.join('\n')) as {
+      ok: boolean;
+      strictOk: boolean;
+      warnings: string[];
+      overlaps?: unknown;
+    };
+    expect(strictBody.ok).toBe(true);
+    expect(strictBody.strictOk).toBe(false);
+    expect(strictBody.overlaps).toBeUndefined();
+    expect(strictBody.warnings).toEqual([
+      "media: file 'media/oak-register.png' already belongs to live media id 'med_oak_register' (staged media id 'med_staged_oak_register')",
+    ]);
+
+    const loose = createCaptureIo();
+    expect(
+      await runCli(['audit', 'per_helen_maple', '--repo', repoDir, '--json'], { io: loose.io })
+    ).toBe(EXIT_OK);
+
+    const liveIndex = media.findIndex((item) => item.id === 'med_oak_register');
+    expect(liveIndex).toBeGreaterThanOrEqual(0);
+    const liveItem = media[liveIndex];
+    if (!liveItem) {
+      throw new Error('missing med_oak_register');
+    }
+    media[liveIndex] = { ...liveItem, id: 'med_staged_oak_register' };
+    await writeFile(mediaPath, serializeMediaYaml(media, { sortById: true }), 'utf8');
+    const sameId = createCaptureIo();
+    const sameCode = await runCli(
+      ['audit', 'per_helen_maple', '--repo', repoDir, '--strict', '--json'],
+      { io: sameId.io }
+    );
+    expect(sameCode, `${sameId.stderr.join('\n')}\n${sameId.stdout.join('\n')}`).toBe(EXIT_OK);
+    const sameBody = JSON.parse(sameId.stdout.join('\n')) as {
+      ok: boolean;
+      strictOk: boolean;
+      warnings: string[];
+    };
+    expect(sameBody.ok).toBe(true);
+    expect(sameBody.strictOk).toBe(true);
+    expect(sameBody.warnings).toEqual([]);
+  });
+
   function chronologyFor(birth: string, death: string, eventDate: string, title = 'Household register') {
     return runChronologyCheck(
       { birth_edtf: birth, death_edtf: death },

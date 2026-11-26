@@ -13,13 +13,13 @@ Path: `skills/findagrave/scripts/findagrave`
 
 ### Persistent local disk cache
 
-`get`/`memorial`, `cemetery`, `photo`, `search`, and `place` cache responses atomically under `~/.cache/kinloom-findagrave/` (overrideable via `KINLOOM_FINDAGRAVE_CACHE_DIR`) using advisory file locks (`fcntl.flock` on POSIX, safe fallback elsewhere) so concurrent research threads never re-download shared memorials, cemeteries, or gravestone photos. Pass `--refresh` on any command to bypass the local cache and fetch fresh data. `--json` on `search`, `cemetery`, and `place` adds a top-level boolean `cache_hit`. `get` and `memorial` keep a JSON list, so they do not add `cache_hit`.
+`get`/`memorial`, `cemetery`, `photo`, `search`, and `place` cache responses atomically under `~/.cache/kinloom-findagrave/` (overrideable via `KINLOOM_FINDAGRAVE_CACHE_DIR`) using advisory file locks (`fcntl.flock` on POSIX, safe fallback elsewhere) so concurrent research threads never re-download shared memorials, cemeteries, or gravestone photos. Pass `--refresh` on any command to bypass the local cache and fetch fresh data. `--json` on `search`, `cemetery`, `place`, and `photo` adds a top-level boolean `cache_hit`. `get` and `memorial` keep a JSON list, so they do not add `cache_hit`. For `photo`, `cache_hit` is true only when the memorial record and every saved photo file came from disk.
 
 Cache layout:
 
 - `memorials/<id>.json`: parsed memorial JSON shared by `get`/`memorial` and `photo` (168-hour default TTL via `--cache-ttl-hours` or `KINLOOM_FINDAGRAVE_CACHE_TTL_HOURS`).
 - `cemeteries/<id>.json`: parsed cemetery JSON for `cemetery <id>` (168-hour default TTL).
-- `photos/<memorial_id>/<photo_id><ext>`: downloaded gravestone and portrait image files reused across `--out` directories and `--prefix` flags with zero HTTP requests.
+- `photos/<memorial_id>/<photo_id><ext>`: downloaded gravestone, portrait, family, and other image files. A file is stored only when the body is a non-empty JPEG, PNG, GIF, or WebP, or the response content type is one of those image types. HTML and empty bodies are not stored. The photo file uses the same TTL as memorial JSON (`--cache-ttl-hours` or `KINLOOM_FINDAGRAVE_CACHE_TTL_HOURS`, default 168). A later `photo` call copies the cached file into `--out` and does not send a second HTTP request.
 - `_queries/<search|cemetery_search|place>/<sha256>.json`: cached search and typeahead JSON responses (168-hour default TTL).
 
 ### Search memorials
@@ -79,12 +79,17 @@ Place ids look like `city_<id>`, `county_<id>`, or a plain cemetery id. Resolve 
 # Downloads a memorial's photos into ./photos
 skills/findagrave/scripts/findagrave photo <memorial-id> --out ./photos
 skills/findagrave/scripts/findagrave photo <memorial-id> --type Grave --out ./photos
+skills/findagrave/scripts/findagrave photo <memorial-id> --all --out ./photos
 
 # Add a self-describing filename prefix and a provenance sidecar JSON file
 skills/findagrave/scripts/findagrave photo <memorial-id> --type Grave --prefix lincoln-abraham --metadata --out ./photos
+
+# Print memorial_id, files, and cache_hit. cache_hit is true only when the memorial and every photo came from disk.
+skills/findagrave/scripts/findagrave photo <memorial-id> --out ./photos --json
+skills/findagrave/scripts/findagrave photo <memorial-id> --out ./photos --refresh --json
 ```
 
-Files are saved as `<photo-id>.jpg` by default, or `<prefix>_<photo-id>.jpg` when `--prefix` is set (`--metadata` writes `<prefix>_<memorial-id>.metadata.json`). Read a gravestone photo before trusting a memorial's transcribed dates: the stone is the better source.
+Files are saved as `<photo-id>.jpg` by default, or `<prefix>_<photo-id>.jpg` when `--prefix` is set (`--metadata` writes `<prefix>_<memorial-id>.metadata.json`). `--type` keeps one photo type, such as `Grave`, `Portrait`, `Family`, or `Other`. `--all` downloads every type, which is also the default when you omit `--type`. `--refresh` bypasses the memorial cache and the photo cache. `--cache-ttl-hours` sets the age limit for both. Read a gravestone photo before trusting a memorial's transcribed dates. The stone is the better source.
 
 ### Build a website search URL offline
 
