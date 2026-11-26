@@ -193,6 +193,8 @@ describe('ExplorerTopBar mobile & account menu behavior', () => {
 
     const menu = container.querySelector('[role="menu"]');
     expect(menu?.textContent).toContain('Sources');
+    expect(menu?.textContent).toContain('Evidence & Sources');
+    expect(menu?.textContent).toContain('Kinship Finder');
     expect(menu?.textContent).not.toContain('Sign Out');
 
     unmount();

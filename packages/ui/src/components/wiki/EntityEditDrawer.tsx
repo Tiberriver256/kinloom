@@ -5,7 +5,7 @@ import type {
   Pronunciation,
 } from '@kinloom/core';
 import { asRevisionId, isEditSummaryValid } from '@kinloom/core';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { CitationBadge } from './WikiBadges.js';
 import { ConflictMergeDialog } from './ConflictMergeDialog.js';
 import { PronunciationBadge, hasPronunciationContent } from '../PronunciationBadge.js';
@@ -13,8 +13,11 @@ import { entityEditorMachine } from '../../machines/entityEditorMachine.js';
 import { useArchiveData } from '../../context/ArchiveDataContext.js';
 import { useMachine } from '@xstate/react';
 
+export type EntityEditDrawerSection = 'pronunciation';
+
 export interface EntityEditDrawerProps {
   open: boolean;
+  initialSection?: EntityEditDrawerSection;
   entityType: EntityType;
   entityId: string;
   revisionId: number;
@@ -127,6 +130,7 @@ function cleanPronunciation(
 
 export const EntityEditDrawer: React.FC<EntityEditDrawerProps> = ({
   open,
+  initialSection,
   entityType,
   entityId,
   revisionId,
@@ -139,6 +143,9 @@ export const EntityEditDrawer: React.FC<EntityEditDrawerProps> = ({
 }) => {
   const { dataSource, bundle, baseUrl, reloadArchive, pronunciations, setPronunciations } =
     useArchiveData();
+  const pronunciationFieldsetRef = useRef<HTMLFieldSetElement | null>(null);
+  const pronunciationInputRef = useRef<HTMLInputElement | null>(null);
+  const hasScrolledInitialSectionRef = useRef(false);
   const [syncingRevision, setSyncingRevision] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [deleteSummary, setDeleteSummary] = useState('');
@@ -253,8 +260,32 @@ export const EntityEditDrawer: React.FC<EntityEditDrawerProps> = ({
       setSharedEditorOpen(false);
       setSharedSaveStatus('idle');
       setSharedSaveMessage(null);
+      hasScrolledInitialSectionRef.current = false;
     }
   }, [open, entityId]);
+
+  useEffect(() => {
+    if (!open || initialSection !== 'pronunciation') {
+      return undefined;
+    }
+    const scrollAndFocus = (): void => {
+      const fieldset = pronunciationFieldsetRef.current;
+      if (fieldset && !hasScrolledInitialSectionRef.current) {
+        hasScrolledInitialSectionRef.current = true;
+        if (typeof fieldset.scrollIntoView === 'function') {
+          fieldset.scrollIntoView({ block: 'center', behavior: 'auto' });
+        }
+      }
+      const input = pronunciationInputRef.current;
+      if (input && !input.disabled) {
+        input.focus({ preventScroll: true });
+      }
+    };
+    const timer = window.setTimeout(scrollAndFocus, 20);
+    return (): void => {
+      window.clearTimeout(timer);
+    };
+  }, [open, initialSection, syncingRevision]);
 
   if (!open) {
     return null;
@@ -739,7 +770,7 @@ export const EntityEditDrawer: React.FC<EntityEditDrawerProps> = ({
                   disabled={isBusy}
                 />
                 <span>
-                  Living relative (strictly hides portraits, street addresses, and exact birth dates)
+                  Living person (strictly hides portraits, street addresses, and exact birth dates)
                 </span>
               </label>
             </>
@@ -813,19 +844,33 @@ export const EntityEditDrawer: React.FC<EntityEditDrawerProps> = ({
           )}
 
           {canEditPronunciation && (
-            <fieldset className="wiki-citation-fieldset wiki-pronunciation-fieldset">
+            <fieldset
+              ref={pronunciationFieldsetRef}
+              className="wiki-citation-fieldset wiki-pronunciation-fieldset"
+            >
               <legend className="wiki-field-label">Pronunciation</legend>
               {entityType === 'person' && (() => {
+                const lookupLexicon = (token: string): Pronunciation | undefined => {
+                  const trimmed = token.trim();
+                  if (!trimmed) {
+                    return undefined;
+                  }
+                  return (
+                    pronunciations[trimmed] ??
+                    Object.entries(pronunciations).find(
+                      ([k]) => k.toLowerCase() === trimmed.toLowerCase(),
+                    )?.[1]
+                  );
+                };
                 const givenTokens = asString(draft.given_name).trim().split(/\s+/).filter(Boolean);
                 const firstName = givenTokens[0] ?? '';
-                const middleNames = givenTokens.slice(1).join(' ');
+                const middleTokens = givenTokens.slice(1);
+                const middleNames = middleTokens.join(' ');
                 const surname = asString(draft.surname).trim();
-                const sharedSurname = surname
-                  ? (pronunciations[surname] ??
-                    Object.entries(pronunciations).find(
-                      ([k]) => k.toLowerCase() === surname.toLowerCase(),
-                    )?.[1])
-                  : undefined;
+                const sharedFirst = lookupLexicon(firstName);
+                const sharedMiddle =
+                  middleNames ? (lookupLexicon(middleNames) ?? lookupLexicon(middleTokens[0] ?? '')) : undefined;
+                const sharedSurname = lookupLexicon(surname);
                 const hasSharedSurname = hasPronunciationContent(sharedSurname);
                 return (
                   <div className="wiki-pronunciation-breakdown">
@@ -834,12 +879,30 @@ export const EntityEditDrawer: React.FC<EntityEditDrawerProps> = ({
                         <span className="wiki-pronunciation-part">
                           <span className="wiki-pronunciation-part-label">First</span>
                           <strong>{firstName}</strong>
+                          {(sharedFirst?.phonetic || sharedFirst?.ipa) && (
+                            <span className="wiki-pronunciation-part-shared">
+                              → {sharedFirst.phonetic ?? sharedFirst.ipa}
+                              {sharedFirst.phonetic && sharedFirst.ipa
+                                ? ` ${sharedFirst.ipa}`
+                                : ''}{' '}
+                              (lexicon)
+                            </span>
+                          )}
                         </span>
                       )}
                       {middleNames && (
                         <span className="wiki-pronunciation-part">
                           <span className="wiki-pronunciation-part-label">Middle</span>
                           <strong>{middleNames}</strong>
+                          {(sharedMiddle?.phonetic || sharedMiddle?.ipa) && (
+                            <span className="wiki-pronunciation-part-shared">
+                              → {sharedMiddle.phonetic ?? sharedMiddle.ipa}
+                              {sharedMiddle.phonetic && sharedMiddle.ipa
+                                ? ` ${sharedMiddle.ipa}`
+                                : ''}{' '}
+                              (lexicon)
+                            </span>
+                          )}
                         </span>
                       )}
                       {surname && (
@@ -912,7 +975,7 @@ export const EntityEditDrawer: React.FC<EntityEditDrawerProps> = ({
                         </div>
                         <div className="wiki-field-grid">
                           <label className="wiki-field">
-                            <span className="wiki-field-label">Phonetic guide</span>
+                            <span className="wiki-field-label">Respelling</span>
                             <input
                               type="text"
                               className="wiki-input"
@@ -1039,8 +1102,9 @@ export const EntityEditDrawer: React.FC<EntityEditDrawerProps> = ({
               )}
               <div className="wiki-field-grid">
                 <label className="wiki-field">
-                  <span className="wiki-field-label">Phonetic guide</span>
+                  <span className="wiki-field-label">Respelling</span>
                   <input
+                    ref={pronunciationInputRef}
                     type="text"
                     className="wiki-input"
                     placeholder="e.g. MER-ser or LAY-den"

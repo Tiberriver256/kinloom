@@ -1,7 +1,7 @@
 import type { ArchiveEvent, Person } from '@kinloom/core';
 import { haversineMiles, resolvePlacePronunciation } from '@kinloom/core';
 import { DateStamp, SourceCitationTag, resolveAssetUrl } from '../components/Atoms.js';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
 import React, { useMemo, useState } from 'react';
 import { ExplorerTopBar } from '../components/ExplorerTopBar.js';
 import { KinloomFooter } from '../components/KinloomFooter.js';
@@ -10,17 +10,16 @@ import { MediaPlayer } from '../components/MediaPlayer.js';
 import { PluginSlot } from '../plugins/PluginContext.js';
 import { PronunciationBadge } from '../components/PronunciationBadge.js';
 import { useArchiveData } from '../context/ArchiveDataContext.js';
-import { EntityEditDrawer } from '../components/wiki/EntityEditDrawer.js';
+import { EntityEditDrawer, type EntityEditDrawerSection } from '../components/wiki/EntityEditDrawer.js';
 import { RevisionHistoryPanel } from '../components/wiki/RevisionHistoryPanel.js';
 import { TalkPanel } from '../components/wiki/TalkPanel.js';
 import { WikiActionBar, type WikiEntityTab } from '../components/wiki/WikiActionBar.js';
-import { KINLOOM_VOCABULARY } from '../lib/vocabulary.js';
+import { KINLOOM_VOCABULARY, formatReaderLoadError } from '../lib/vocabulary.js';
 
 type ScopeMode = 'exact' | 'radius15' | 'county';
 
 export const PlacePage: React.FC = () => {
   const { slug } = useParams<{ slug: string }>();
-  const navigate = useNavigate();
   const {
     bundle,
     baseUrl,
@@ -31,11 +30,16 @@ export const PlacePage: React.FC = () => {
     sourcesById,
     pronunciations,
     loading,
+    error,
+    reloadArchive,
   } = useArchiveData();
 
   const [scopeMode, setScopeMode] = useState<ScopeMode>('radius15');
   const [decadeFilter, setDecadeFilter] = useState<string>('all');
   const [wikiTab, setWikiTab] = useState<WikiEntityTab>('read');
+  const [editInitialSection, setEditInitialSection] = useState<EntityEditDrawerSection | undefined>(
+    undefined,
+  );
 
   const place = slug ? placesBySlug.get(slug) : undefined;
 
@@ -209,15 +213,29 @@ export const PlacePage: React.FC = () => {
       </div>
     );
   }
-  if (!bundle || !place) {
+  if (error || !bundle || !place) {
     return (
       <div>
         <ExplorerTopBar />
         <main className="place-page">
-          <h1>Place Not Found</h1>
-          <Link to="/places" className="pill-btn">
-            Return to places
-          </Link>
+          <h1>{KINLOOM_VOCABULARY.place.notFoundHeading}</h1>
+          <p>{formatReaderLoadError(error, 'We could not find that place in the archive.')}</p>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center' }}>
+            {error && (
+              <button
+                type="button"
+                className="pill-btn"
+                onClick={() => {
+                  reloadArchive();
+                }}
+              >
+                Try again
+              </button>
+            )}
+            <Link to="/places" className="pill-btn">
+              {KINLOOM_VOCABULARY.place.returnToPlaces}
+            </Link>
+          </div>
         </main>
         <KinloomFooter />
       </div>
@@ -273,6 +291,7 @@ export const PlacePage: React.FC = () => {
                             type="button"
                             className="pronunciation-edit-link print-hide"
                             onClick={() => {
+                              setEditInitialSection('pronunciation');
                               setWikiTab('edit');
                             }}
                             aria-label={`Edit pronunciation for ${place.name}`}
@@ -286,6 +305,7 @@ export const PlacePage: React.FC = () => {
                         type="button"
                         className="pronunciation-edit-link print-hide"
                         onClick={() => {
+                          setEditInitialSection('pronunciation');
                           setWikiTab('edit');
                         }}
                       >
@@ -335,6 +355,9 @@ export const PlacePage: React.FC = () => {
           <WikiActionBar
             activeTab={wikiTab}
             onSelectTab={(nextTab) => {
+              if (nextTab === 'edit') {
+                setEditInitialSection(undefined);
+              }
               setWikiTab(nextTab);
             }}
             entityLabel={place.full_name}
@@ -416,32 +439,29 @@ export const PlacePage: React.FC = () => {
           ) : (
             <div>
               {occupancyRows.rows.map((row) => {
-                const leftPct = ((row.startYear - occupancyRows.minYear) / spanYears) * 100;
+                const rawLeftPct = ((row.startYear - occupancyRows.minYear) / spanYears) * 100;
                 const widthPct = Math.max(4, (Math.max(1, row.endYear - row.startYear) / spanYears) * 100);
+                const leftPct = Math.max(0, Math.min(100 - widthPct, rawLeftPct));
                 const yearLabel =
                   row.startYear === row.endYear ? String(row.startYear) : `${row.startYear}–${row.endYear}`;
                 return (
-                  <div key={row.person.id} className="occupancy-row">
-                    <Link
-                      to={`/person/${row.person.slug}?event=${row.firstEventId}`}
-                      style={{ fontSize: '0.86rem', fontWeight: 600 }}
-                    >
-                      {row.person.full_name}
-                    </Link>
-                    <div className="occupancy-track">
-                      <button
-                        type="button"
+                  <Link
+                    key={row.person.id}
+                    to={`/person/${row.person.slug}?event=${row.firstEventId}`}
+                    className="occupancy-row"
+                    aria-label={`Jump to ${row.person.full_name} (${yearLabel})`}
+                  >
+                    <span className="occupancy-row-header">
+                      <span className="occupancy-person-name">{row.person.full_name}</span>
+                      <span className="occupancy-year-label">{yearLabel}</span>
+                    </span>
+                    <span className="occupancy-track" aria-hidden="true">
+                      <span
                         className={`occupancy-bar ${row.tier.toLowerCase()}`}
                         style={{ left: `${leftPct}%`, width: `${Math.min(100 - leftPct, widthPct)}%` }}
-                        onClick={() => {
-                          void navigate(`/person/${row.person.slug}?event=${row.firstEventId}`);
-                        }}
-                        title={`Jump to ${row.person.full_name} (${yearLabel})`}
-                      >
-                        {yearLabel}
-                      </button>
-                    </div>
-                  </div>
+                      />
+                    </span>
+                  </Link>
                 );
               })}
             </div>
@@ -516,6 +536,7 @@ export const PlacePage: React.FC = () => {
       </main>
       <EntityEditDrawer
         open={wikiTab === 'edit'}
+        initialSection={editInitialSection}
         entityType="place"
         entityId={place.id}
         revisionId={bundle.meta.max_revision_id ?? 1}
@@ -537,6 +558,7 @@ export const PlacePage: React.FC = () => {
         hasPrimarySource={place.has_primary_source ?? true}
         title={place.full_name}
         onClose={() => {
+          setEditInitialSection(undefined);
           setWikiTab('read');
         }}
       />

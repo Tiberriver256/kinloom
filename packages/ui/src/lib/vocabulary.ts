@@ -40,6 +40,10 @@ export const KINLOOM_VOCABULARY = {
     time: 'Time',
     tree: 'Tree',
     map: 'Map',
+    kinship: 'Kinship',
+    kinshipFull: 'Kinship Finder',
+    evidence: 'Evidence',
+    evidenceFull: 'Evidence & Sources',
     sources: 'Sources',
     searchDesktop: 'Search (/)',
     searchAria: 'Search archive',
@@ -214,6 +218,29 @@ export const KINLOOM_VOCABULARY = {
 
 export function formatPhotoDocumentCount(count: number): string {
   return `${count} ${count === 1 ? 'photo or document' : 'photos & documents'}`;
+}
+
+export function formatReaderLoadError(
+  rawError: string | null | undefined,
+  fallback: string,
+): string {
+  const trimmed = rawError?.trim();
+  if (!trimmed) {
+    return fallback;
+  }
+  const lower = trimmed.toLowerCase();
+  if (lower.includes('404') || lower.includes('not found')) {
+    return fallback;
+  }
+  if (
+    lower.includes('apiclienterror') ||
+    /^http\s+\d{3}\b/i.test(trimmed) ||
+    lower.includes('failed to fetch') ||
+    lower.includes('networkerror')
+  ) {
+    return 'Unable to load archive records right now. Please try again.';
+  }
+  return trimmed;
 }
 
 export function formatPronunciationScopePrefix(

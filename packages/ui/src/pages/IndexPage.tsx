@@ -10,7 +10,7 @@ import { CreateEntityModal } from '../components/wiki/CreateEntityModal.js';
 import { ExplorerTopBar } from '../components/ExplorerTopBar.js';
 import { KinloomFooter } from '../components/KinloomFooter.js';
 import { Link } from 'react-router-dom';
-import { KINLOOM_VOCABULARY, formatPhotoDocumentCount } from '../lib/vocabulary.js';
+import { KINLOOM_VOCABULARY, formatPhotoDocumentCount, formatReaderLoadError } from '../lib/vocabulary.js';
 import { PluginSlot } from '../plugins/PluginContext.js';
 import { useArchiveData } from '../context/ArchiveDataContext.js';
 
@@ -35,7 +35,7 @@ interface ResolvedSection {
 }
 
 export const IndexPage: React.FC = () => {
-  const { siteConfig, baseUrl, bundle, placesById, sourcesById, capabilities, loading, error } =
+  const { siteConfig, baseUrl, bundle, placesById, sourcesById, capabilities, loading, error, reloadArchive } =
     useArchiveData();
   const [onlyWithMedia, setOnlyWithMedia] = useState<boolean>(false);
   const [query, setQuery] = useState<string>('');
@@ -195,7 +195,20 @@ export const IndexPage: React.FC = () => {
         <PluginSlot name="indexHero" />
 
         {loading && <p>Loading family archive…</p>}
-        {error && <p>Error loading archive: {error}</p>}
+        {error && (
+          <div style={{ marginBottom: 18 }}>
+            <p>{formatReaderLoadError(error, 'Unable to load archive records right now.')}</p>
+            <button
+              type="button"
+              className="pill-btn"
+              onClick={() => {
+                reloadArchive();
+              }}
+            >
+              Try again
+            </button>
+          </div>
+        )}
 
         {bundle && (
           <>
@@ -274,7 +287,7 @@ export const IndexPage: React.FC = () => {
 
             {sections.length === 0 ? (
               <p style={{ color: 'var(--text-secondary)', marginBottom: 24 }}>
-                No archived relatives match the active filters.
+                No people match the active filters.
               </p>
             ) : (
               sections.map((section, idx) => (

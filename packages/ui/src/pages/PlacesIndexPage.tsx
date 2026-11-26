@@ -3,7 +3,7 @@ import { DEFAULT_MIGRATION_ERAS, buildPlacesDirectory } from '@kinloom/core';
 import React, { useMemo, useState } from 'react';
 import { ExplorerTopBar } from '../components/ExplorerTopBar.js';
 import { KinloomFooter } from '../components/KinloomFooter.js';
-import { KINLOOM_VOCABULARY } from '../lib/vocabulary.js';
+import { KINLOOM_VOCABULARY, formatReaderLoadError } from '../lib/vocabulary.js';
 import { Link } from 'react-router-dom';
 import { useArchiveData } from '../context/ArchiveDataContext.js';
 
@@ -81,7 +81,7 @@ const PlaceLedgerEntry: React.FC<{
 };
 
 export const PlacesIndexPage: React.FC = () => {
-  const { siteConfig, bundle, placesById, peopleById, loading, error } = useArchiveData();
+  const { siteConfig, bundle, placesById, peopleById, loading, error, reloadArchive } = useArchiveData();
   const [stage, setStage] = useState<string>('all');
   const [query, setQuery] = useState<string>('');
 
@@ -119,9 +119,11 @@ export const PlacesIndexPage: React.FC = () => {
   const stageFilters = useMemo(
     () => [
       { id: 'all', label: KINLOOM_VOCABULARY.place.placesFilterAll },
-      ...migrationEras.map((era) => ({ id: era.id, label: era.label })),
+      ...migrationEras
+        .filter((era) => (stageCounts[era.id] ?? 0) > 0)
+        .map((era) => ({ id: era.id, label: era.label })),
     ],
-    [migrationEras],
+    [migrationEras, stageCounts],
   );
 
   const filtered = useMemo(() => {
@@ -163,7 +165,22 @@ export const PlacesIndexPage: React.FC = () => {
         </header>
 
         {loading && <p className="empty-ring-note">Loading places directory…</p>}
-        {error && <p className="empty-ring-note">Error loading archive: {error}</p>}
+        {error && (
+          <div style={{ marginBottom: 18 }}>
+            <p className="empty-ring-note">
+              {formatReaderLoadError(error, 'Unable to load archive records right now.')}
+            </p>
+            <button
+              type="button"
+              className="pill-btn"
+              onClick={() => {
+                reloadArchive();
+              }}
+            >
+              Try again
+            </button>
+          </div>
+        )}
 
         {bundle && (
           <>

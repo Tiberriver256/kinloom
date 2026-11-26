@@ -51,99 +51,105 @@ export const TreeToolbar: React.FC<TreeToolbarProps> = ({
 }) => (
   <div className="tree-toolbar-shell">
     <div className="tree-toolbar" role="toolbar" aria-label={KINLOOM_VOCABULARY.tree.toolbarAria}>
-      <TreePersonSearch
-        query={searchQuery}
-        onQueryChange={onSearchQueryChange}
-        candidates={searchCandidates}
-        onSelectCandidate={onSelectSearchPerson}
-        mobileOpen={mobileSearchOpen}
-        onMobileOpenChange={onMobileSearchOpenChange}
-      />
+      <div className="tree-toolbar-row tree-toolbar-row-primary">
+        <TreePersonSearch
+          query={searchQuery}
+          onQueryChange={onSearchQueryChange}
+          candidates={searchCandidates}
+          onSelectCandidate={onSelectSearchPerson}
+          mobileOpen={mobileSearchOpen}
+          onMobileOpenChange={onMobileSearchOpenChange}
+        />
 
-      {populatedBranches.length > 1 && (
-        <select
-          className="pill-btn tree-branch-select"
-          aria-label={KINLOOM_VOCABULARY.tree.branchSelectAria}
-          value={branchFilter}
-          onChange={(e) => {
-            onBranchFilterChange(e.target.value);
-          }}
-        >
-          <option value="all">
-            {KINLOOM_VOCABULARY.tree.allBranches} ({branchCounts.all || 0})
-          </option>
-          {populatedBranches.map((branch) => (
-            <option key={branch.id} value={branch.id}>
-              {branch.label} ({branchCounts[branch.id] || 0})
+        {populatedBranches.length > 1 && (
+          <select
+            className="pill-btn tree-branch-select"
+            aria-label={KINLOOM_VOCABULARY.tree.branchSelectAria}
+            value={branchFilter}
+            onChange={(e) => {
+              onBranchFilterChange(e.target.value);
+            }}
+          >
+            <option value="all">
+              {KINLOOM_VOCABULARY.tree.allBranches} ({branchCounts.all || 0})
             </option>
-          ))}
-        </select>
-      )}
+            {populatedBranches.map((branch) => (
+              <option key={branch.id} value={branch.id}>
+                {branch.label} ({branchCounts[branch.id] || 0})
+              </option>
+            ))}
+          </select>
+        )}
 
-      {showDirectToggle && (
         <div
-          className="tree-segmented"
+          className="tree-segmented tree-layout-segmented"
           role="group"
-          aria-label={KINLOOM_VOCABULARY.tree.scopeGroupAria}
+          aria-label={KINLOOM_VOCABULARY.tree.layoutGroupAria}
         >
           <button
             type="button"
-            className={`pill-btn tree-seg-btn${mode === 'spine' ? ' active' : ''}`}
-            aria-pressed={mode === 'spine'}
+            className={`pill-btn tree-seg-btn${surface === 'roll' ? ' active' : ''}`}
+            aria-pressed={surface === 'roll'}
             onClick={() => {
-              onModeChange('spine');
+              onSurfaceChange('roll');
             }}
           >
-            {KINLOOM_VOCABULARY.tree.directLine}
+            {KINLOOM_VOCABULARY.tree.listViewShort}
           </button>
           <button
             type="button"
-            className={`pill-btn tree-seg-btn${mode === 'full' ? ' active' : ''}`}
-            aria-pressed={mode === 'full'}
+            className={`pill-btn tree-seg-btn${surface === 'diagram' ? ' active' : ''}`}
+            aria-pressed={surface === 'diagram'}
             onClick={() => {
-              onModeChange('full');
+              onSurfaceChange('diagram');
             }}
           >
-            {KINLOOM_VOCABULARY.tree.fullTree} ({activeCount})
+            {KINLOOM_VOCABULARY.tree.chartViewShort}
           </button>
         </div>
-      )}
-
-      <div
-        className="tree-segmented"
-        role="group"
-        aria-label={KINLOOM_VOCABULARY.tree.layoutGroupAria}
-      >
-        <button
-          type="button"
-          className={`pill-btn tree-seg-btn${surface === 'roll' ? ' active' : ''}`}
-          aria-pressed={surface === 'roll'}
-          onClick={() => {
-            onSurfaceChange('roll');
-          }}
-        >
-          {KINLOOM_VOCABULARY.tree.listViewShort}
-        </button>
-        <button
-          type="button"
-          className={`pill-btn tree-seg-btn${surface === 'diagram' ? ' active' : ''}`}
-          aria-pressed={surface === 'diagram'}
-          onClick={() => {
-            onSurfaceChange('diagram');
-          }}
-        >
-          {KINLOOM_VOCABULARY.tree.chartViewShort}
-        </button>
       </div>
 
-      {canEdit && (
-        <button
-          type="button"
-          className="pill-btn tree-add-person-btn"
-          onClick={onAddPerson}
-        >
-          {KINLOOM_VOCABULARY.tree.addPerson}
-        </button>
+      {(showDirectToggle || canEdit) && (
+        <div className="tree-toolbar-row tree-toolbar-row-secondary">
+          {showDirectToggle && (
+            <div
+              className="tree-segmented tree-scope-segmented"
+              role="group"
+              aria-label={KINLOOM_VOCABULARY.tree.scopeGroupAria}
+            >
+              <button
+                type="button"
+                className={`pill-btn tree-seg-btn${mode === 'spine' ? ' active' : ''}`}
+                aria-pressed={mode === 'spine'}
+                onClick={() => {
+                  onModeChange('spine');
+                }}
+              >
+                {KINLOOM_VOCABULARY.tree.directLine}
+              </button>
+              <button
+                type="button"
+                className={`pill-btn tree-seg-btn${mode === 'full' ? ' active' : ''}`}
+                aria-pressed={mode === 'full'}
+                onClick={() => {
+                  onModeChange('full');
+                }}
+              >
+                {KINLOOM_VOCABULARY.tree.fullTree} ({activeCount})
+              </button>
+            </div>
+          )}
+
+          {canEdit && (
+            <button
+              type="button"
+              className="pill-btn tree-add-person-btn"
+              onClick={onAddPerson}
+            >
+              {KINLOOM_VOCABULARY.tree.addPerson}
+            </button>
+          )}
+        </div>
       )}
     </div>
   </div>

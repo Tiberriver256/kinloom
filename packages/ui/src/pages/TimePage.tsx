@@ -12,7 +12,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import React, { useEffect, useMemo, useState } from 'react';
 import { initialsOf, resolveAssetUrl } from '../components/Atoms.js';
 import { ExplorerTopBar } from '../components/ExplorerTopBar.js';
-import { KINLOOM_VOCABULARY } from '../lib/vocabulary.js';
+import { KINLOOM_VOCABULARY, formatReaderLoadError } from '../lib/vocabulary.js';
 import { KinloomFooter } from '../components/KinloomFooter.js';
 import { useArchiveData } from '../context/ArchiveDataContext.js';
 
@@ -95,7 +95,7 @@ const ChevronIcon: React.FC<{ direction: 'left' | 'right' | 'up' | 'down' }> = (
 };
 
 export const TimePage: React.FC = () => {
-  const { siteConfig, baseUrl, bundle, placesById, loading, error } = useArchiveData();
+  const { siteConfig, baseUrl, bundle, placesById, loading, error, reloadArchive } = useArchiveData();
   const [searchParams] = useSearchParams();
   const [year, setYear] = useState<number | null>(null);
   const [yearSheetOpen, setYearSheetOpen] = useState(false);
@@ -248,7 +248,7 @@ export const TimePage: React.FC = () => {
                         setYear(m.year);
                         setYearSheetOpen(false);
                       }}
-                      title={`${m.year}: ${m.locatedCount} located of ${m.aliveCount} living relatives`}
+                      title={`${m.year}: ${m.locatedCount} located of ${m.aliveCount} alive in ${m.year}`}
                     >
                       <span className="time-anchor-year">{m.label}</span>
                       <span className="time-anchor-count">{m.locatedCount}</span>
@@ -336,7 +336,22 @@ export const TimePage: React.FC = () => {
         </header>
 
         {loading && <p className="empty-ring-note">Loading archival snapshot…</p>}
-        {error && <p className="empty-ring-note">Error loading archive: {error}</p>}
+        {error && (
+          <div style={{ marginBottom: 18 }}>
+            <p className="empty-ring-note">
+              {formatReaderLoadError(error, 'Unable to load archive records right now.')}
+            </p>
+            <button
+              type="button"
+              className="pill-btn"
+              onClick={() => {
+                reloadArchive();
+              }}
+            >
+              Try again
+            </button>
+          </div>
+        )}
 
         {snapshot && (
           <>
@@ -383,7 +398,7 @@ export const TimePage: React.FC = () => {
             {snapshot.lanes.length === 0 ? (
               <section className="time-empty-state">
                 <p>
-                  No archived relatives have a documented town location in <strong>{activeYear}</strong>.
+                  {KINLOOM_VOCABULARY.time.emptyStatePrefix} <strong>{activeYear}</strong>.
                   {fallbackAnchorA !== undefined && (
                     <>
                       {' '}

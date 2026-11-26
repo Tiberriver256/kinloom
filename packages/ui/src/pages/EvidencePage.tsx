@@ -241,7 +241,8 @@ export const EvidencePage: React.FC = () => {
             </div>
             <div style={{ color: 'var(--radar-copresence)' }}>
               <strong>{allMedia.length}</strong> photos &amp; documents ·{' '}
-              <strong>{unverifiedEvents.length}</strong> entries needing citation
+              <strong>{unverifiedEvents.length}</strong>{' '}
+              {unverifiedEvents.length === 1 ? 'entry' : 'entries'} needing citation
             </div>
           </div>
         </section>
@@ -249,7 +250,7 @@ export const EvidencePage: React.FC = () => {
         <PluginSlot name="evidenceExtra" />
 
         <div
-          className="filter-bar"
+          className="filter-bar evidence-tabs"
           role="tablist"
           aria-label={KINLOOM_VOCABULARY.evidence.tablistAria}
         >
@@ -458,7 +459,7 @@ export const EvidencePage: React.FC = () => {
                               openSourceReader({ sourceId: s.id });
                             }}
                           >
-                            Open Reader →
+                            {KINLOOM_VOCABULARY.sources.openReaderCta}
                           </button>
                         )}
                         {s.url && (
@@ -536,8 +537,8 @@ export const EvidencePage: React.FC = () => {
                     }}
                   >
                     {showAllUnverified
-                      ? 'Show Fewer Unverified Entries'
-                      : `Show All ${unverifiedEvents.length} Unverified Entries`}
+                      ? 'Show Fewer Entries Needing Citation'
+                      : `Show All ${unverifiedEvents.length} Entries Needing Citation`}
                   </button>
                 </div>
               )}
@@ -663,7 +664,7 @@ export const EvidencePage: React.FC = () => {
             {mediaChecklist.length > 0 && (
               <section className="place-map-box" style={{ marginBottom: 0 }}>
                 <h2 style={{ fontFamily: 'var(--font-serif)', margin: '0 0 6px', color: 'var(--surface-header)' }}>
-                  Remaining Un-digitized Archival Media Entries ({missingChecklistItems.length} missing of {mediaChecklist.length} cataloged)
+                  Remaining Un-digitized Photos &amp; Documents Entries ({missingChecklistItems.length} missing of {mediaChecklist.length} cataloged)
                 </h2>
                 <p style={{ margin: '0 0 12px', fontSize: '0.92rem', color: 'var(--text-secondary)' }}>
                   Cataloged media attachments for deceased ancestors whose image files have not yet been digitized.

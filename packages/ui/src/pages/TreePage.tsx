@@ -46,12 +46,19 @@ const INITIAL_TRANSFORM: CanvasTransform = {
   zoom: 0.85,
 };
 
-function readInitialPreferences(): {
+function readInitialPreferences(searchParams: URLSearchParams): {
   readonly surface: TreeViewSurface;
   readonly mode: TreeLineageMode;
 } {
   const width = typeof window !== 'undefined' ? window.innerWidth : 1200;
-  return resolveInitialTreePreferences(width);
+  const fallback = resolveInitialTreePreferences(width);
+  const surfaceParam = searchParams.get('surface');
+  const modeParam = searchParams.get('mode');
+  const surface: TreeViewSurface =
+    surfaceParam === 'diagram' || surfaceParam === 'roll' ? surfaceParam : fallback.surface;
+  const mode: TreeLineageMode =
+    modeParam === 'spine' || modeParam === 'full' ? modeParam : fallback.mode;
+  return { surface, mode };
 }
 
 export const TreePage: React.FC = () => {
@@ -63,7 +70,7 @@ export const TreePage: React.FC = () => {
     [bundle],
   );
 
-  const initialPrefs = useMemo(readInitialPreferences, []);
+  const initialPrefs = useMemo(() => readInitialPreferences(searchParams), [searchParams]);
   const defaultBranchId = useMemo(() => resolveDefaultBranchId(siteConfig), [siteConfig]);
 
   const [surface, setSurface] = useState<TreeViewSurface>(initialPrefs.surface);
@@ -516,10 +523,10 @@ export const TreePage: React.FC = () => {
         const next = new Set(prev);
         if (next.has(unionId)) {
           next.delete(unionId);
-          setLiveAnnouncement('Collapsed collateral siblings.');
+          setLiveAnnouncement('Collapsed sibling group.');
         } else {
           next.add(unionId);
-          setLiveAnnouncement('Expanded collateral siblings.');
+          setLiveAnnouncement('Expanded sibling group.');
         }
         return next;
       });

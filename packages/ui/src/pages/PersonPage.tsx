@@ -34,12 +34,12 @@ import {
   CreateEntityModal,
   type RelativeCreateContext,
 } from '../components/wiki/CreateEntityModal.js';
-import { EntityEditDrawer } from '../components/wiki/EntityEditDrawer.js';
+import { EntityEditDrawer, type EntityEditDrawerSection } from '../components/wiki/EntityEditDrawer.js';
 import { MediaUploaderModal } from '../components/wiki/MediaUploaderModal.js';
 import { RevisionHistoryPanel } from '../components/wiki/RevisionHistoryPanel.js';
 import { TalkPanel } from '../components/wiki/TalkPanel.js';
 import { WikiActionBar, type WikiEntityTab } from '../components/wiki/WikiActionBar.js';
-import { KINLOOM_VOCABULARY, MEDIA_KIND_LABELS } from '../lib/vocabulary.js';
+import { KINLOOM_VOCABULARY, MEDIA_KIND_LABELS, formatReaderLoadError } from '../lib/vocabulary.js';
 
 type PersonLightboxState =
   | { kind: 'closed' }
@@ -64,6 +64,7 @@ export const PersonPage: React.FC = () => {
     placesById,
     sourcesById,
     pronunciations,
+    reloadArchive,
   } = useArchiveData();
   const { setActiveYear, pushPivot, openSourceInspector } = useArchiveUi();
 
@@ -81,6 +82,9 @@ export const PersonPage: React.FC = () => {
     () => new Set(),
   );
   const [wikiTab, setWikiTab] = useState<WikiEntityTab>('read');
+  const [editInitialSection, setEditInitialSection] = useState<EntityEditDrawerSection | undefined>(
+    undefined,
+  );
   const [uploadModalOpen, setUploadModalOpen] = useState(false);
   const [relativeModal, setRelativeModal] = useState<RelativeCreateContext | null>(null);
 
@@ -94,6 +98,7 @@ export const PersonPage: React.FC = () => {
     setExpandedNarrativeIds(new Set());
     setExpandedSourceNarrativeIds(new Set());
     setWikiTab('read');
+    setEditInitialSection(undefined);
     setRelativeModal(null);
   }
 
@@ -463,7 +468,7 @@ export const PersonPage: React.FC = () => {
       placesById,
       sourcesById,
       siteConfig,
-      filterDescription: `Individual dossier: ${person.full_name}`,
+      filterDescription: `Person Profile: ${person.full_name}`,
     });
     const filename = buildGedcomExportFilename({
       familySlug: person.slug,
@@ -517,10 +522,23 @@ export const PersonPage: React.FC = () => {
         <ExplorerTopBar />
         <main className="index-page">
           <h1>{KINLOOM_VOCABULARY.person.notFoundHeading}</h1>
-          <p>{error || 'We could not find that person in the archive.'}</p>
-          <Link to="/" className="pill-btn">
-            {KINLOOM_VOCABULARY.person.returnToPeople}
-          </Link>
+          <p>{formatReaderLoadError(error, 'We could not find that person in the archive.')}</p>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center' }}>
+            {error && (
+              <button
+                type="button"
+                className="pill-btn"
+                onClick={() => {
+                  reloadArchive();
+                }}
+              >
+                Try again
+              </button>
+            )}
+            <Link to="/" className="pill-btn">
+              {KINLOOM_VOCABULARY.person.returnToPeople}
+            </Link>
+          </div>
         </main>
         <KinloomFooter />
       </div>
@@ -540,8 +558,8 @@ export const PersonPage: React.FC = () => {
       <div className="explorer-split">
         <main className="narrative-pane">
           <header className="person-header">
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+            <div className="person-header-top">
+              <div className={`person-header-identity${person.portrait_url ? ' has-portrait' : ''}`}>
                 {person.portrait_url && (
                   <button
                     type="button"
@@ -559,69 +577,69 @@ export const PersonPage: React.FC = () => {
                     />
                   </button>
                 )}
-                <div>
-                  <h1>{person.full_name}</h1>
-                  {!person.is_living &&
-                    person.full_name !== 'Living' &&
-                    (() => {
-                      const effectivePronunciation = resolvePersonPronunciation(
-                        person,
-                        pronunciations,
-                      );
-                      const isFullCoverage = effectivePronunciation?.coverage === 'full';
-                      const badgeLabel = isFullCoverage
-                        ? person.full_name
-                        : effectivePronunciation?.matchedPart || person.surname || person.full_name;
-                      if (!effectivePronunciation && !capabilities.canEdit) {
-                        return null;
-                      }
-                      return (
-                        <div className="person-pronunciation-row">
-                          {effectivePronunciation ? (
-                            <>
-                              <PronunciationBadge
-                                pronunciation={effectivePronunciation}
-                                label={badgeLabel}
-                                coverage={effectivePronunciation.coverage}
-                                matchedPart={effectivePronunciation.matchedPart}
-                                baseUrl={baseUrl}
-                              />
-                              {capabilities.canEdit && (
-                                <button
-                                  type="button"
-                                  className="pronunciation-edit-link print-hide"
-                                  onClick={() => {
-                                    setWikiTab('edit');
-                                  }}
-                                  aria-label={`Edit pronunciation for ${person.full_name}`}
-                                >
-                                  {KINLOOM_VOCABULARY.person.editPronunciation}
-                                </button>
-                              )}
-                            </>
-                          ) : (
-                            <button
-                              type="button"
-                              className="pronunciation-edit-link print-hide"
-                              onClick={() => {
-                                setWikiTab('edit');
-                              }}
-                            >
-                              {KINLOOM_VOCABULARY.person.addPronunciation}
-                            </button>
-                          )}
-                        </div>
-                      );
-                    })()}
-                  <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '4px 8px', fontFamily: 'var(--font-mono)', fontSize: '0.84rem', color: 'var(--text-secondary)' }}>
-                    <span>
-                      {person.birth_edtf || '?'} — {person.death_edtf || (person.is_living ? 'Living' : '?')}
-                    </span>
-                    {branchLabel && <span className="person-branch-badge">{branchLabel}</span>}
-                    {person.has_primary_source !== undefined && (
-                      <CitationBadge hasPrimarySource={person.has_primary_source} />
-                    )}
-                  </div>
+                <h1 className="person-header-title">{person.full_name}</h1>
+                {!person.is_living &&
+                  person.full_name !== 'Living' &&
+                  (() => {
+                    const effectivePronunciation = resolvePersonPronunciation(
+                      person,
+                      pronunciations,
+                    );
+                    const isFullCoverage = effectivePronunciation?.coverage === 'full';
+                    const badgeLabel = isFullCoverage
+                      ? person.full_name
+                      : effectivePronunciation?.matchedPart || person.surname || person.full_name;
+                    if (!effectivePronunciation && !capabilities.canEdit) {
+                      return null;
+                    }
+                    return (
+                      <div className="person-pronunciation-row">
+                        {effectivePronunciation ? (
+                          <>
+                            <PronunciationBadge
+                              pronunciation={effectivePronunciation}
+                              label={badgeLabel}
+                              coverage={effectivePronunciation.coverage}
+                              matchedPart={effectivePronunciation.matchedPart}
+                              baseUrl={baseUrl}
+                            />
+                            {capabilities.canEdit && (
+                              <button
+                                type="button"
+                                className="pronunciation-edit-link print-hide"
+                                onClick={() => {
+                                  setEditInitialSection('pronunciation');
+                                  setWikiTab('edit');
+                                }}
+                                aria-label={`Edit pronunciation for ${person.full_name}`}
+                              >
+                                {KINLOOM_VOCABULARY.person.editPronunciation}
+                              </button>
+                            )}
+                          </>
+                        ) : (
+                          <button
+                            type="button"
+                            className="pronunciation-edit-link print-hide"
+                            onClick={() => {
+                              setEditInitialSection('pronunciation');
+                              setWikiTab('edit');
+                            }}
+                          >
+                            {KINLOOM_VOCABULARY.person.addPronunciation}
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })()}
+                <div className="person-header-dates">
+                  <span>
+                    {person.birth_edtf || '?'} — {person.death_edtf || (person.is_living ? 'Living' : '?')}
+                  </span>
+                  {branchLabel && <span className="person-branch-badge">{branchLabel}</span>}
+                  {person.has_primary_source !== undefined && (
+                    <CitationBadge hasPrimarySource={person.has_primary_source} />
+                  )}
                 </div>
               </div>
               <div className="person-header-actions">
@@ -783,6 +801,9 @@ export const PersonPage: React.FC = () => {
           <WikiActionBar
             activeTab={wikiTab}
             onSelectTab={(nextTab) => {
+              if (nextTab === 'edit') {
+                setEditInitialSection(undefined);
+              }
               setWikiTab(nextTab);
             }}
             onUploadMedia={() => {
@@ -1196,6 +1217,7 @@ export const PersonPage: React.FC = () => {
 
       <EntityEditDrawer
         open={wikiTab === 'edit'}
+        initialSection={editInitialSection}
         entityType="person"
         entityId={person.id}
         revisionId={bundle.meta.max_revision_id ?? 1}
@@ -1219,6 +1241,7 @@ export const PersonPage: React.FC = () => {
         hasPrimarySource={person.has_primary_source ?? true}
         title={person.full_name}
         onClose={() => {
+          setEditInitialSection(undefined);
           setWikiTab('read');
         }}
       />

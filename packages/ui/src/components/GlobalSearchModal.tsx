@@ -166,8 +166,14 @@ export const GlobalSearchModal: React.FC = () => {
             }}
             aria-label={KINLOOM_VOCABULARY.search.inputAria}
           />
-          <button type="button" className="pill-btn" onClick={closeSearch}>
-            Esc
+          <button
+            type="button"
+            className="pill-btn global-search-close-btn"
+            aria-label="Close search"
+            onClick={closeSearch}
+          >
+            <span className="global-search-close-desktop">Esc</span>
+            <span className="global-search-close-mobile">Close</span>
           </button>
         </div>
 
@@ -217,7 +223,8 @@ export const GlobalSearchModal: React.FC = () => {
           ) : (
             <div style={{ padding: '14px 16px' }}>
               <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: 8 }}>
-                TRY SEARCHING ACROSS PEOPLE, PLACES, EVENTS &amp; {totalSourcePages || 'PRIMARY'} ARCHIVAL SOURCE PAGES:
+                TRY SEARCHING ACROSS PEOPLE, PLACES, EVENTS &amp;{' '}
+                {totalSourcePages > 0 ? `${totalSourcePages} SOURCE PAGES:` : 'SOURCE PAGES:'}
               </div>
               {quickQueries.length > 0 && (
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
@@ -245,7 +252,7 @@ export const GlobalSearchModal: React.FC = () => {
         </div>
 
         <div className="global-search-footer">
-          <span>↑↓ navigate · Enter open · Esc close</span>
+          <span className="global-search-kbd-hint">↑↓ navigate · Enter open · Esc close</span>
           <span>{readings ? `${totalSourcePages} source pages searchable` : 'Archive ready'}</span>
         </div>
       </div>

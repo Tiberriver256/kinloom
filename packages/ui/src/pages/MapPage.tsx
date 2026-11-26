@@ -111,7 +111,10 @@ const PAPER_STYLE = {
 
 type HistoricalMapStatus = { kind: 'pending' } | { kind: 'ready' } | { kind: 'failed' };
 
-function getFitOptions(hasSelectedStop: boolean): {
+function getFitOptions(
+  hasSelectedStop: boolean,
+  drawerBottomPx?: number,
+): {
   padding: { top: number; right: number; bottom: number; left: number };
   duration: number;
   maxZoom: number;
@@ -119,15 +122,21 @@ function getFitOptions(hasSelectedStop: boolean): {
 } {
   const isMobile = typeof window !== 'undefined' && window.innerWidth <= 767;
   if (isMobile) {
+    const defaultBottom = hasSelectedStop ? 210 : 116;
     return {
-      padding: { top: 68, right: 58, bottom: hasSelectedStop ? 188 : 108, left: 16 },
+      padding: {
+        top: 72,
+        right: 76,
+        bottom: drawerBottomPx !== undefined ? Math.max(defaultBottom, drawerBottomPx) : defaultBottom,
+        left: 20,
+      },
       duration: 0,
       maxZoom: 6.5,
       absolutePadding: true,
     };
   }
   return {
-    padding: { top: 86, right: hasSelectedStop ? 336 : 56, bottom: 108, left: 28 },
+    padding: { top: 82, right: hasSelectedStop ? 344 : 110, bottom: 108, left: 28 },
     duration: 0,
     maxZoom: 6.5,
     absolutePadding: true,
@@ -470,6 +479,7 @@ export const MapPage: React.FC = () => {
   const [historicalMap, setHistoricalMap] = useState<HistoricalMapStatus>({ kind: 'pending' });
   const [cardSide, setCardSide] = useState<'left' | 'right'>('right');
   const cardRef = useRef<HTMLDivElement | null>(null);
+  const dockRef = useRef<HTMLDivElement | null>(null);
 
   const migrationEras = useMemo<readonly MigrationEraConfig[]>(
     () => (siteConfig.migrationEras.length > 0 ? siteConfig.migrationEras : DEFAULT_MIGRATION_ERAS),
@@ -789,10 +799,11 @@ export const MapPage: React.FC = () => {
     }
     const point = map.project([selectedStop.place.lng, selectedStop.place.lat]);
     const isMobile = window.innerWidth <= 767;
-    const marginTop = isMobile ? 64 : 76;
-    const marginBottom = isMobile ? 186 : 108;
+    const dockHeight = isMobile ? (dockRef.current?.getBoundingClientRect().height ?? 0) : 0;
+    const marginTop = isMobile ? 72 : 76;
+    const marginBottom = isMobile ? Math.max(drawerExpanded ? 320 : 196, Math.ceil(dockHeight) + 28) : 108;
     const marginLeft = 28;
-    const marginRight = 56;
+    const marginRight = isMobile ? 68 : 56;
     const outOfView =
       point.x < marginLeft ||
       point.x > canvas.width - marginRight ||
@@ -804,13 +815,13 @@ export const MapPage: React.FC = () => {
     programmaticMoveRef.current = true;
     map.easeTo({
       center: [selectedStop.place.lng, selectedStop.place.lat],
-      padding: getFitOptions(true).padding,
-      duration: playing ? 360 : 260,
+      padding: getFitOptions(true, marginBottom).padding,
+      duration: playing ? 360 : 220,
     });
     window.setTimeout(() => {
       programmaticMoveRef.current = false;
     }, 420);
-  }, [selectedStop, playing]);
+  }, [selectedStop, playing, drawerExpanded]);
 
   useLayoutEffect(() => {
     const map = mapRef.current;
@@ -1079,6 +1090,26 @@ export const MapPage: React.FC = () => {
             </select>
           </label>
 
+          <select
+            className="pill-btn map-era-select-mobile"
+            aria-label={KINLOOM_VOCABULARY.map.filterByEraAria}
+            value={selectedEraId}
+            onChange={(event) => {
+              setSelectedEraId(event.target.value);
+            }}
+          >
+            <option value="all">
+              {KINLOOM_VOCABULARY.map.allEras} ({allStopsForPerson.length})
+            </option>
+            {migrationEras
+              .filter((era) => (eraStopCounts.get(era.id) ?? 0) > 0)
+              .map((era) => (
+                <option key={era.id} value={era.id}>
+                  {era.label} ({eraStopCounts.get(era.id) ?? 0})
+                </option>
+              ))}
+          </select>
+
           <fieldset className="map-toolbar-presets" aria-label="Filter migration map by era">
             <button
               type="button"
@@ -1108,28 +1139,42 @@ export const MapPage: React.FC = () => {
           </fieldset>
 
           {selectedPersonId === 'all' && (
-            <fieldset className="map-route-mode" aria-label="Full lineage route mode">
+            <>
               <button
                 type="button"
-                className={`pill-btn map-bordered-btn ${routeMode === 'per-person' ? 'active' : ''}`}
-                aria-pressed={routeMode === 'per-person'}
+                className="pill-btn map-bordered-btn map-route-mode-mobile"
+                aria-label={`Route order: ${routeMode === 'per-person' ? KINLOOM_VOCABULARY.map.byPersonMode : KINLOOM_VOCABULARY.map.chronologicalMode}. Click to switch.`}
                 onClick={() => {
-                  setRouteMode('per-person');
+                  setRouteMode((prev) => (prev === 'per-person' ? 'chronological' : 'per-person'));
                 }}
               >
-                By person
+                {routeMode === 'per-person'
+                  ? KINLOOM_VOCABULARY.map.byPersonMode
+                  : KINLOOM_VOCABULARY.map.chronologicalMode}
               </button>
-              <button
-                type="button"
-                className={`pill-btn map-bordered-btn ${routeMode === 'chronological' ? 'active' : ''}`}
-                aria-pressed={routeMode === 'chronological'}
-                onClick={() => {
-                  setRouteMode('chronological');
-                }}
-              >
-                Chronological
-              </button>
-            </fieldset>
+              <fieldset className="map-route-mode" aria-label="Full lineage route mode">
+                <button
+                  type="button"
+                  className={`pill-btn map-bordered-btn ${routeMode === 'per-person' ? 'active' : ''}`}
+                  aria-pressed={routeMode === 'per-person'}
+                  onClick={() => {
+                    setRouteMode('per-person');
+                  }}
+                >
+                  By person
+                </button>
+                <button
+                  type="button"
+                  className={`pill-btn map-bordered-btn ${routeMode === 'chronological' ? 'active' : ''}`}
+                  aria-pressed={routeMode === 'chronological'}
+                  onClick={() => {
+                    setRouteMode('chronological');
+                  }}
+                >
+                  Chronological
+                </button>
+              </fieldset>
+            </>
           )}
         </div>
 
@@ -1146,8 +1191,8 @@ export const MapPage: React.FC = () => {
           ))}
         </aside>
 
-        <div className={`map-bottom-dock${selectedStop ? ' has-stop' : ''}`}>
-          <div className="map-drawer-handle" aria-hidden="true" />
+        <div ref={dockRef} className={`map-bottom-dock${selectedStop ? ' has-stop' : ''}`}>
+          {selectedStop && <div className="map-drawer-handle" aria-hidden="true" />}
 
           {selectedStop && (
             <section

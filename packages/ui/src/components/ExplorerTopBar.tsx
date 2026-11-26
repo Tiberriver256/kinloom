@@ -18,7 +18,33 @@ export const ExplorerTopBar: React.FC = () => {
   const [accountOpen, setAccountOpen] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
   const [signInOpen, setSignInOpen] = useState(false);
+  const headerRef = useRef<HTMLElement | null>(null);
   const accountMenuRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    const headerEl = headerRef.current;
+    if (!headerEl || typeof window === 'undefined') {
+      return undefined;
+    }
+    const syncTopbarHeight = (): void => {
+      const measured = Math.ceil(headerEl.getBoundingClientRect().height);
+      if (measured > 0) {
+        document.documentElement.style.setProperty('--topbar-height', `${measured}px`);
+      }
+    };
+    syncTopbarHeight();
+    if (typeof ResizeObserver === 'undefined') {
+      window.addEventListener('resize', syncTopbarHeight);
+      return (): void => {
+        window.removeEventListener('resize', syncTopbarHeight);
+      };
+    }
+    const observer = new ResizeObserver(syncTopbarHeight);
+    observer.observe(headerEl);
+    return (): void => {
+      observer.disconnect();
+    };
+  }, []);
 
   const isPeopleActive =
     location.pathname === '/' || location.pathname.startsWith('/person/');
@@ -77,7 +103,7 @@ export const ExplorerTopBar: React.FC = () => {
 
   return (
     <>
-      <header className="topbar">
+      <header ref={headerRef} className="topbar">
       <div className="topbar-left">
         <Link to="/" className="brand-link">
           {siteConfig.site.title}
@@ -85,22 +111,34 @@ export const ExplorerTopBar: React.FC = () => {
 
         <nav className="nav-links" aria-label="Primary navigation">
           <Link to="/" className={`nav-pill nav-axis ${isPeopleActive ? 'active' : ''}`}>
-            People
+            {KINLOOM_VOCABULARY.nav.people}
           </Link>
           <Link to="/places" className={`nav-pill nav-axis ${isPlacesActive ? 'active' : ''}`}>
-            Places
+            {KINLOOM_VOCABULARY.nav.places}
           </Link>
           <Link to="/time" className={`nav-pill nav-axis ${isTimeActive ? 'active' : ''}`}>
-            Time
+            {KINLOOM_VOCABULARY.nav.time}
           </Link>
 
           <span className="nav-divider nav-pill-desktop-only" aria-hidden="true" />
 
           <Link to="/tree" className={`nav-pill ${location.pathname === '/tree' ? 'active' : ''}`}>
-            Tree
+            {KINLOOM_VOCABULARY.nav.tree}
           </Link>
           <Link to="/map" className={`nav-pill ${location.pathname === '/map' ? 'active' : ''}`}>
-            Map
+            {KINLOOM_VOCABULARY.nav.map}
+          </Link>
+          <Link
+            to="/kinship"
+            className={`nav-pill nav-pill-desktop-only ${location.pathname === '/kinship' ? 'active' : ''}`}
+          >
+            {KINLOOM_VOCABULARY.nav.kinship}
+          </Link>
+          <Link
+            to="/evidence"
+            className={`nav-pill nav-pill-desktop-only ${location.pathname === '/evidence' ? 'active' : ''}`}
+          >
+            {KINLOOM_VOCABULARY.nav.evidence}
           </Link>
 
           {navPluginRoutes.map((route) => (
@@ -283,6 +321,28 @@ export const ExplorerTopBar: React.FC = () => {
               >
                 {KINLOOM_VOCABULARY.nav.sources}
               </button>
+
+              <Link
+                to="/evidence"
+                role="menuitem"
+                className={`topbar-account-item topbar-account-item-mobile-only ${location.pathname === '/evidence' ? 'active' : ''}`}
+                onClick={() => {
+                  setAccountOpen(false);
+                }}
+              >
+                {KINLOOM_VOCABULARY.nav.evidenceFull}
+              </Link>
+
+              <Link
+                to="/kinship"
+                role="menuitem"
+                className={`topbar-account-item topbar-account-item-mobile-only ${location.pathname === '/kinship' ? 'active' : ''}`}
+                onClick={() => {
+                  setAccountOpen(false);
+                }}
+              >
+                {KINLOOM_VOCABULARY.nav.kinshipFull}
+              </Link>
 
               {isSignedInMember && capabilities.hasRevisionHistory && (
                 <Link

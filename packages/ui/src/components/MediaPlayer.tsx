@@ -119,7 +119,7 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
             ♫
           </span>
           <span className="media-audio-label">
-            Audio Oral History{durationLabel ? ` · ${durationLabel}` : ''}
+            Oral History{durationLabel ? ` · ${durationLabel}` : ''}
           </span>
         </div>
       );

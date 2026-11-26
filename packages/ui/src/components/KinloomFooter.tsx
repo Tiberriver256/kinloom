@@ -1,4 +1,6 @@
 import React from 'react';
+import { Link, useInRouterContext } from 'react-router-dom';
+import { KINLOOM_VOCABULARY } from '../lib/vocabulary.js';
 import { useArchiveData } from '../context/ArchiveDataContext.js';
 
 export const KinloomMark: React.FC<{ size?: number }> = ({ size = 18 }) => (
@@ -18,12 +20,23 @@ export const KinloomMark: React.FC<{ size?: number }> = ({ size = 18 }) => (
   </svg>
 );
 
-export const KinloomFooter: React.FC = () => {
+export const KinloomFooter: React.FC<{ hideNav?: boolean }> = ({ hideNav = false }) => {
   const { siteConfig } = useArchiveData();
+  const inRouter = useInRouterContext();
   const credit = siteConfig.site.footerCredit || 'Built with Kinloom';
 
   return (
     <footer className="kinloom-footer print-hide" aria-label="Archive colophon">
+      {inRouter && !hideNav && (
+        <nav className="kinloom-footer-nav" aria-label="Archive tools">
+          <Link to="/kinship" className="kinloom-footer-link">
+            {KINLOOM_VOCABULARY.nav.kinshipFull}
+          </Link>
+          <Link to="/evidence" className="kinloom-footer-link">
+            {KINLOOM_VOCABULARY.nav.evidenceFull}
+          </Link>
+        </nav>
+      )}
       <span className="kinloom-footer-credit">
         <KinloomMark size={16} />
         <span>{credit}</span>

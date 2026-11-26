@@ -1,0 +1,553 @@
+import { expect, test } from '@playwright/test';
+import type { Page } from '@playwright/test';
+import fs from 'node:fs';
+import path from 'node:path';
+import { startLiveWikiTestServer, type LiveWikiTestHarness } from './helpers/wikiTestServer.js';
+
+const VIEWPORTS = [
+  { name: '360x800', width: 360, height: 800 },
+  { name: '390x844', width: 390, height: 844 },
+  { name: '768x1024', width: 768, height: 1024 },
+  { name: '1280x800', width: 1280, height: 800 },
+] as const;
+
+const SCREENSHOT_DIR = process.env.KINLOOM_UX_SCREENSHOT_DIR || '';
+
+async function maybeScreenshot(page: Page, filename: string): Promise<void> {
+  if (!SCREENSHOT_DIR) {
+    return;
+  }
+  fs.mkdirSync(SCREENSHOT_DIR, { recursive: true });
+  await page.screenshot({ path: path.join(SCREENSHOT_DIR, filename), fullPage: false });
+}
+
+async function blockExternalMapTiles(page: Page): Promise<void> {
+  await page.route('https://www.openhistoricalmap.org/**', (route) => route.abort());
+  await page.route('https://vtiles.openhistoricalmap.org/**', (route) => route.abort());
+}
+
+test.describe('Wave 50B UX regression suite', () => {
+  test('P0-1: Family Tree toolbar has zero overflow, zero topbar overlap, all controls visible, and parses ?surface/?mode', async ({
+    page,
+  }) => {
+    for (const vp of VIEWPORTS) {
+      // oxlint-disable-next-line eslint/no-await-in-loop -- sequential viewport matrix
+      await page.setViewportSize({ width: vp.width, height: vp.height });
+
+      for (const surfaceParam of ['roll', 'diagram'] as const) {
+        // oxlint-disable-next-line eslint/no-await-in-loop -- test both List and Chart deep links
+        await page.goto(`/tree?surface=${surfaceParam}&mode=full`);
+        // oxlint-disable-next-line eslint/no-await-in-loop -- wait for tree main
+        const main = page.locator('main.tree-page');
+        // oxlint-disable-next-line eslint/no-await-in-loop -- verify query param parsing
+        await expect(main).toHaveAttribute('data-surface', surfaceParam);
+        // oxlint-disable-next-line eslint/no-await-in-loop -- verify mode query param parsing
+        await expect(main).toHaveAttribute('data-mode', 'full');
+
+        // oxlint-disable-next-line eslint/no-await-in-loop -- measure layout geometry
+        const metrics = await page.evaluate(() => {
+          const overflow = document.documentElement.scrollWidth - window.innerWidth;
+          const header = document.querySelector('header.topbar');
+          const toolbar = document.querySelector('.tree-toolbar');
+          const headerRect = header?.getBoundingClientRect();
+          const toolbarRect = toolbar?.getBoundingClientRect();
+          const controls = [
+            ...(toolbar?.querySelectorAll('.tree-search-desktop input, .tree-search-toggle-btn') ?? []),
+            toolbar?.querySelector('select.tree-branch-select'),
+            ...(toolbar?.querySelectorAll('button.tree-seg-btn') ?? []),
+          ].filter((el): el is Element => {
+            if (!el) {
+              return false;
+            }
+            const style = window.getComputedStyle(el);
+            const rect = el.getBoundingClientRect();
+            return style.display !== 'none' && style.visibility !== 'hidden' && rect.width > 0;
+          });
+
+          const controlBoxes = controls.map((el) => {
+            const r = el.getBoundingClientRect();
+            return {
+              text: el.textContent?.trim() || el.getAttribute('aria-label') || el.tagName,
+              left: Math.round(r.left),
+              right: Math.round(r.right),
+              width: Math.round(r.width),
+              height: Math.round(r.height),
+            };
+          });
+
+          return {
+            overflow,
+            innerWidth: window.innerWidth,
+            headerBottom: headerRect ? Math.round(headerRect.bottom) : 0,
+            toolbarTop: toolbarRect ? Math.round(toolbarRect.top) : 0,
+            toolbarScrollOverflow: toolbar
+              ? Math.round(toolbar.scrollWidth - toolbar.clientWidth)
+              : 0,
+            controlBoxes,
+          };
+        });
+
+        expect(metrics.overflow, `Overflow on /tree?surface=${surfaceParam} at ${vp.name}`).toBeLessThanOrEqual(0);
+        expect(
+          metrics.toolbarTop,
+          `Toolbar overlaps topbar on /tree?surface=${surfaceParam} at ${vp.name}`,
+        ).toBeGreaterThanOrEqual(metrics.headerBottom - 1);
+        expect(
+          metrics.toolbarScrollOverflow,
+          `Toolbar inner scroll overflow on /tree?surface=${surfaceParam} at ${vp.name}`,
+        ).toBeLessThanOrEqual(2);
+        expect(metrics.controlBoxes.length).toBeGreaterThanOrEqual(6);
+
+        for (const box of metrics.controlBoxes) {
+          expect(box.left, `${box.text} clipped left at ${vp.name}`).toBeGreaterThanOrEqual(0);
+          expect(box.right, `${box.text} clipped right at ${vp.name}`).toBeLessThanOrEqual(
+            metrics.innerWidth + 1,
+          );
+          if (vp.width <= 768) {
+            expect(box.height, `${box.text} height < 44px at ${vp.name}`).toBeGreaterThanOrEqual(44);
+          }
+        }
+      }
+
+      if (vp.width === 360 || vp.width === 768) {
+        // oxlint-disable-next-line eslint/no-await-in-loop -- capture visual proof
+        await page.goto('/tree?surface=roll&mode=full');
+        // oxlint-disable-next-line eslint/no-await-in-loop -- screenshot
+        await maybeScreenshot(page, `tree-roll-${vp.name}.png`);
+      }
+    }
+  });
+
+  test('P0-2 & P1-4: Place Profile occupancy dates never clip and LocalSurveyMap stays legible on mobile', async ({
+    page,
+  }) => {
+    for (const vp of VIEWPORTS) {
+      // oxlint-disable-next-line eslint/no-await-in-loop -- sequential viewport matrix
+      await page.setViewportSize({ width: vp.width, height: vp.height });
+      // oxlint-disable-next-line eslint/no-await-in-loop -- navigate to Hingham
+      await page.goto('/place/hingham-massachusetts');
+      // oxlint-disable-next-line eslint/no-await-in-loop -- wait for heading
+      await expect(page.getByRole('heading', { name: 'Who Passed Through' })).toBeVisible();
+
+      // oxlint-disable-next-line eslint/no-await-in-loop -- inspect occupancy rows and survey map
+      const report = await page.evaluate(() => {
+        const rows = [...document.querySelectorAll('.occupancy-row')];
+        const clipped: string[] = [];
+        const rowHeights: number[] = [];
+        const yearLabels: string[] = [];
+
+        for (const row of rows) {
+          const rect = row.getBoundingClientRect();
+          rowHeights.push(Math.round(rect.height));
+          const yearEl = row.querySelector('.occupancy-year-label');
+          if (yearEl) {
+            const yrRect = yearEl.getBoundingClientRect();
+            if (yrRect.width > 0 && yrRect.height > 0) {
+              yearLabels.push(yearEl.textContent?.trim() ?? '');
+            }
+          }
+          const descendants = [row, ...row.querySelectorAll('*')];
+          for (const el of descendants) {
+            if (el.scrollWidth > el.clientWidth + 2) {
+              clipped.push(`${el.className}: ${el.scrollWidth} > ${el.clientWidth}`);
+            }
+          }
+        }
+
+        const centerLabel = document.querySelector('.local-survey-center-label');
+        const centerLabelHeight = centerLabel
+          ? Math.round(centerLabel.getBoundingClientRect().height * 10) / 10
+          : 0;
+        const nearbyLinks = [...document.querySelectorAll('.local-survey-nearby-link')].map((el) =>
+          Math.round(el.getBoundingClientRect().height),
+        );
+
+        return {
+          rowCount: rows.length,
+          clipped,
+          minRowHeight: rowHeights.length > 0 ? Math.min(...rowHeights) : 0,
+          yearLabels,
+          centerLabelHeight,
+          nearbyLinks,
+        };
+      });
+
+      expect(report.rowCount).toBeGreaterThan(0);
+      expect(report.clipped, `Clipped occupancy elements at ${vp.name}`).toEqual([]);
+      expect(report.yearLabels.some((lbl) => /\d{4}/.test(lbl))).toBe(true);
+      if (vp.width <= 390) {
+        expect(report.minRowHeight, `Occupancy row height < 44px at ${vp.name}`).toBeGreaterThanOrEqual(44);
+        expect(
+          report.centerLabelHeight,
+          `LocalSurveyMap center label height < 10px at ${vp.name}`,
+        ).toBeGreaterThanOrEqual(10);
+        if (report.nearbyLinks.length > 0) {
+          expect(Math.min(...report.nearbyLinks)).toBeGreaterThanOrEqual(44);
+        }
+      }
+
+      if (vp.width === 360 || vp.width === 1280) {
+        // oxlint-disable-next-line eslint/no-await-in-loop -- capture survey map proof
+        await maybeScreenshot(page, `place-hingham-${vp.name}.png`);
+        // oxlint-disable-next-line eslint/no-await-in-loop -- scroll to occupancy section for visual proof
+        await page.getByRole('heading', { name: 'Who Passed Through' }).scrollIntoViewIfNeeded();
+        // oxlint-disable-next-line eslint/no-await-in-loop -- capture occupancy rows proof
+        await maybeScreenshot(page, `place-hingham-occupancy-${vp.name}.png`);
+      }
+    }
+  });
+
+  test('P0-4, P1-1, P1-3, P1-4, P1-5, P2: touch targets, nav discovery, map toolbar, contrast, copy, and polish', async ({
+    page,
+  }) => {
+    await blockExternalMapTiles(page);
+
+    // 1. Time slider >= 44px on mobile + desktop single-resident card width >= 340px
+    for (const vp of [VIEWPORTS[0], VIEWPORTS[1], VIEWPORTS[3]]) {
+      // oxlint-disable-next-line eslint/no-await-in-loop -- sequential viewports
+      await page.setViewportSize({ width: vp.width, height: vp.height });
+      // oxlint-disable-next-line eslint/no-await-in-loop -- open time page
+      await page.goto('/time?year=1860');
+      // oxlint-disable-next-line eslint/no-await-in-loop -- wait for slider
+      const slider = page.locator('input.ink-range-slider');
+      // oxlint-disable-next-line eslint/no-await-in-loop -- check visible
+      await expect(slider).toBeVisible();
+      // oxlint-disable-next-line eslint/no-await-in-loop -- measure slider box
+      const sliderBox = await slider.boundingBox();
+      expect(sliderBox?.height ?? 0, `Time slider height at ${vp.name}`).toBeGreaterThanOrEqual(44);
+
+      if (vp.width === 1280) {
+        // oxlint-disable-next-line eslint/no-await-in-loop -- measure single-resident card width
+        const cardWidths = await page.evaluate(() =>
+          [...document.querySelectorAll('.time-lane')].flatMap((lane) => {
+            const cards = lane.querySelectorAll('.time-person-item');
+            return cards.length === 1 ? [Math.round(cards[0].getBoundingClientRect().width)] : [];
+          }),
+        );
+        if (cardWidths.length > 0) {
+          expect(Math.min(...cardWidths)).toBeGreaterThanOrEqual(340);
+        }
+      }
+      if (vp.width === 360) {
+        // oxlint-disable-next-line eslint/no-await-in-loop -- capture time mobile proof
+        await maybeScreenshot(page, 'time-360x800.png');
+      }
+    }
+
+    // 2. Discoverable /evidence and /kinship navigation on mobile (360x800) and desktop (1280x800)
+    await page.setViewportSize({ width: 360, height: 800 });
+    await page.goto('/');
+    const archiveMenuBtn = page.getByRole('button', { name: 'Archive menu' });
+    await expect(archiveMenuBtn).toBeVisible();
+    const archiveBtnBox = await archiveMenuBtn.boundingBox();
+    expect(archiveBtnBox?.width ?? 0).toBeGreaterThanOrEqual(44);
+    expect(archiveBtnBox?.height ?? 0).toBeGreaterThanOrEqual(44);
+
+    await archiveMenuBtn.click();
+    const menuItems = page.locator('.topbar-account-menu [role="menuitem"]');
+    await expect(menuItems).toHaveCount(3);
+    await expect(page.getByRole('menuitem', { name: 'Sources', exact: true })).toBeVisible();
+    await expect(page.getByRole('menuitem', { name: 'Evidence & Sources' })).toBeVisible();
+    await expect(page.getByRole('menuitem', { name: 'Kinship Finder' })).toBeVisible();
+    await page.getByRole('menuitem', { name: 'Evidence & Sources' }).click();
+    await expect(page).toHaveURL(/\/evidence$/);
+
+    // P1-5: Evidence singular/plural grammar + 44px touch targets on mobile
+    await expect(page.locator('main')).not.toContainText('1 entries needing citation');
+    await page.getByRole('tab', { name: /Sources & Citations/ }).click();
+    const inspectBtnBox = await page.locator('.source-action-btn').first().boundingBox();
+    expect(inspectBtnBox?.height ?? 0).toBeGreaterThanOrEqual(44);
+    await maybeScreenshot(page, 'evidence-360x800.png');
+
+    // Desktop direct nav discovery
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.goto('/');
+    await page.locator('header.topbar').getByRole('link', { name: 'Kinship' }).click();
+    await expect(page).toHaveURL(/\/kinship$/);
+    await page.locator('header.topbar').getByRole('link', { name: 'Evidence' }).click();
+    await expect(page).toHaveURL(/\/evidence$/);
+
+    // 3. P1-2: Map toolbar on 360x800 and 1280x800 + details drawer pin clearance
+    await page.setViewportSize({ width: 360, height: 800 });
+    await page.goto('/map');
+    await expect(page.locator('.map-toolbar')).toBeVisible();
+    const mobileMapMetrics = await page.evaluate(() => {
+      const tb = document.querySelector('.map-toolbar');
+      const handleCount = document.querySelectorAll('.map-drawer-handle').length;
+      return {
+        scrollDiff: tb ? Math.round(tb.scrollWidth - tb.clientWidth) : 999,
+        handleCount,
+      };
+    });
+    expect(mobileMapMetrics.scrollDiff).toBeLessThanOrEqual(2);
+    expect(mobileMapMetrics.handleCount).toBe(0);
+    await maybeScreenshot(page, 'map-360x800.png');
+
+    await page.goto('/map?place=springfield-illinois');
+    const detailsBtn = page.getByRole('button', { name: /Details/ });
+    await expect(detailsBtn).toBeVisible();
+    await detailsBtn.click();
+    await expect(page.getByRole('button', { name: /Hide/ })).toBeVisible();
+    await page.waitForTimeout(300);
+    await maybeScreenshot(page, 'map-springfield-expanded-360x800.png');
+
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.goto('/map');
+    const desktopMapToolbarBox = await page.locator('.map-toolbar').boundingBox();
+    expect(desktopMapToolbarBox?.height ?? 999).toBeLessThanOrEqual(64);
+    await maybeScreenshot(page, 'map-1280x800.png');
+
+    // 4. P1-3: Person Profile mobile header pronunciation width, inline residence chip, single-line audio time
+    await page.setViewportSize({ width: 360, height: 800 });
+    await page.goto('/person/abraham-lincoln-1809');
+    await expect(page.getByRole('heading', { name: 'Abraham Lincoln', exact: true })).toBeVisible();
+    const personMobileMetrics = await page.evaluate(() => {
+      const pronRow = document.querySelector('.person-pronunciation-row');
+      const playBtn = document.querySelector('.person-pronunciation-row .pronunciation-play-btn');
+      const audioTime = document.querySelector('.narrative-audio-time');
+      const audioPlayBtn = document.querySelector('.narrative-audio-play-btn');
+      const chip = document.querySelector('.person-family-chip');
+      const chipDisplay = chip ? window.getComputedStyle(chip).display : '';
+      return {
+        pronWidth: pronRow ? Math.round(pronRow.getBoundingClientRect().width) : 0,
+        playWidth: playBtn ? Math.round(playBtn.getBoundingClientRect().width) : 0,
+        playHeight: playBtn ? Math.round(playBtn.getBoundingClientRect().height) : 0,
+        audioTimeHeight: audioTime ? Math.round(audioTime.getBoundingClientRect().height) : 0,
+        audioPlayHeight: audioPlayBtn ? Math.round(audioPlayBtn.getBoundingClientRect().height) : 0,
+        chipDisplay,
+      };
+    });
+    expect(personMobileMetrics.pronWidth).toBeGreaterThanOrEqual(300);
+    expect(personMobileMetrics.playWidth).toBeGreaterThanOrEqual(44);
+    expect(personMobileMetrics.playHeight).toBeGreaterThanOrEqual(44);
+    if (personMobileMetrics.audioTimeHeight > 0) {
+      expect(personMobileMetrics.audioTimeHeight).toBeLessThanOrEqual(22);
+      expect(personMobileMetrics.audioPlayHeight).toBeGreaterThanOrEqual(44);
+    }
+    expect(personMobileMetrics.chipDisplay).not.toBe('inline-flex');
+    await maybeScreenshot(page, 'person-lincoln-360x800.png');
+
+    // 5. P0-4 & P1-5: Global Search mobile input >= 44px, Close label, no deprecated copy
+    await page.getByRole('button', { name: 'Search archive' }).click();
+    const searchInputBox = await page.locator('.global-search-input').boundingBox();
+    expect(searchInputBox?.height ?? 0).toBeGreaterThanOrEqual(44);
+    await expect(page.locator('.global-search-close-mobile')).toBeVisible();
+    await expect(page.locator('.global-search-kbd-hint')).toBeHidden();
+    await expect(page.locator('.global-search-card')).not.toContainText('PRIMARY ARCHIVAL SOURCE PAGES');
+    await page.locator('.global-search-close-btn').click();
+
+    // 6. P2-1: Places Index hides zero-count eras & search box above y=420px
+    await page.goto('/places');
+    await expect(page.locator('.places-search-bar input')).toBeVisible();
+    const placesMetrics = await page.evaluate(() => {
+      const zeroButtons = [...document.querySelectorAll('.ink-filter-bar button')].filter((b) =>
+        b.textContent?.includes('(0)'),
+      );
+      const searchBox = document.querySelector('.places-search-bar input')?.getBoundingClientRect();
+      return {
+        zeroCount: zeroButtons.length,
+        searchTop: searchBox ? Math.round(searchBox.top) : 999,
+      };
+    });
+    expect(placesMetrics.zeroCount).toBe(0);
+    expect(placesMetrics.searchTop).toBeLessThanOrEqual(420);
+
+    // 7. P2-1: Kinship Person A & Person B both visible in initial 800px viewport + no double years
+    await page.goto('/kinship');
+    await expect(page.locator('select[aria-label="Select first relative"]')).toBeVisible();
+    const kinshipMetrics = await page.evaluate(() => {
+      const selA = document.querySelector('select[aria-label="Select first relative"]');
+      const selB = document.querySelector('select[aria-label="Select second relative"]');
+      const doubleYears = [...document.querySelectorAll('option')]
+        .map((o) => o.textContent ?? '')
+        .filter((t) => /\(\d{4}\)\s*\(\d{4}/.test(t));
+      return {
+        selABottom: selA ? Math.round(selA.getBoundingClientRect().bottom) : 9999,
+        selBBottom: selB ? Math.round(selB.getBoundingClientRect().bottom) : 9999,
+        doubleYears,
+      };
+    });
+    expect(kinshipMetrics.selABottom).toBeLessThanOrEqual(800);
+    expect(kinshipMetrics.selBBottom).toBeLessThanOrEqual(800);
+    expect(kinshipMetrics.doubleYears).toEqual([]);
+    await maybeScreenshot(page, 'kinship-360x800.png');
+
+    // 8. P1-4: TreeFocusDrawer breadcrumb separator WCAG AA contrast >= 4.5
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.goto('/tree?surface=roll&mode=full');
+    await page.locator('[aria-label="Inspect Abraham Lincoln"]').first().click();
+    await expect(page.locator('.tree-focus-drawer')).toBeVisible();
+    const crumbContrast = await page.evaluate(() => {
+      const sep = document.querySelector('.tree-focus-crumb-sep');
+      const crumb = document.querySelector('.tree-focus-breadcrumb');
+      if (!sep || !crumb) {
+        return null;
+      }
+      const parseRgb = (str: string): [number, number, number] => {
+        const m = str.match(/\d+/g);
+        return [Number(m?.[0] ?? 0), Number(m?.[1] ?? 0), Number(m?.[2] ?? 0)];
+      };
+      const lum = ([r, g, b]: [number, number, number]): number => {
+        const lin = [r, g, b].map((c) => {
+          const s = c / 255;
+          return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
+        });
+        return 0.2126 * lin[0] + 0.7152 * lin[1] + 0.0722 * lin[2];
+      };
+      const fg = parseRgb(window.getComputedStyle(sep).color);
+      const bg = parseRgb(window.getComputedStyle(crumb).backgroundColor);
+      const l1 = Math.max(lum(fg), lum(bg));
+      const l2 = Math.min(lum(fg), lum(bg));
+      return (l1 + 0.05) / (l2 + 0.05);
+    });
+    expect(crumbContrast ?? 0).toBeGreaterThanOrEqual(4.5);
+
+    // 9. P2-2: SourceReaderDrawer transcript sheet starts at y <= 280px on 1280x800
+    await page.getByRole('button', { name: 'Sources' }).click();
+    await expect(page.locator('.transcript-sheet')).toBeVisible();
+    const sheetBox = await page.locator('.transcript-sheet').boundingBox();
+    expect(sheetBox?.y ?? 999).toBeLessThanOrEqual(280);
+    await maybeScreenshot(page, 'source-reader-1280x800.png');
+    await page.keyboard.press('Escape');
+
+    // 10. P1-5: Deprecated ubiquitous-language check across rendered pages
+    const deprecatedPatterns = [
+      /\bIndividual dossier\b/i,
+      /\bDate Conflict\b/i,
+      /\bPlace Conflict\b/i,
+      /\bFact Conflict\b/i,
+      /\bRead Primary Text\b/i,
+      /\bPrimary Record Scan\b/i,
+      /\bAudio Oral History\b/i,
+      /\barchived relatives\b/i,
+      /\bcommunity match/i,
+      /\bUnverified Entries\b/i,
+      /\bArchival Media Entries\b/i,
+    ];
+    for (const route of [
+      '/person/abraham-lincoln-1809',
+      '/places',
+      '/place/hingham-massachusetts',
+      '/time?year=1860',
+      '/kinship',
+      '/evidence',
+    ]) {
+      // oxlint-disable-next-line eslint/no-await-in-loop -- check each route text
+      await page.goto(route);
+      // oxlint-disable-next-line eslint/no-await-in-loop -- read visible text
+      const bodyText = await page.locator('main').innerText();
+      for (const re of deprecatedPatterns) {
+        expect(bodyText, `Deprecated term ${re} found on ${route}`).not.toMatch(re);
+      }
+    }
+  });
+
+  test('P0-3: NarrativeAudioDock sits strictly below EntityEditDrawer and Pronunciation Edit scrolls & focuses Pronunciation', async ({
+    page,
+  }) => {
+    const wiki: LiveWikiTestHarness = await startLiveWikiTestServer();
+    try {
+      await page.setViewportSize({ width: 360, height: 800 });
+
+      // Enroll as editor via invite + magic link
+      await page.goto(`${wiki.baseUrl}/api/auth/invite/${wiki.inviteToken}`);
+      await page.getByRole('region', { name: 'Invite access notice' }).getByRole('button', { name: 'Sign in to edit' }).click();
+      const signInDialog = page.getByRole('dialog', { name: 'Sign in to family archive' });
+      await signInDialog.getByLabel('Email address').fill('wave50b.editor@archive.example');
+      await signInDialog.getByRole('button', { name: 'Email Magic Link' }).click();
+      const magicEmail = wiki.ports.emailSender.sentMessages.at(-1);
+      expect(magicEmail).toBeDefined();
+      await page.goto(magicEmail!.magicLinkUrl);
+      await expect(page.getByRole('button', { name: /Account menu for/ })).toBeVisible();
+
+      await page.goto(`${wiki.baseUrl}/person/abraham-lincoln-1809`);
+      await expect(page.getByRole('heading', { name: 'Abraham Lincoln', exact: true })).toBeVisible();
+
+      // Start narrative audio so NarrativeAudioDock mounts (if margin bar exists)
+      const listenBtn = page.locator('.narrative-audio-play-btn').first();
+      const hasNarrativeAudio = (await listenBtn.count()) > 0;
+      if (hasNarrativeAudio) {
+        await listenBtn.click();
+        const dock = page.getByTestId('narrative-audio-dock');
+        await expect(dock).toBeVisible();
+
+        const dockMetrics = await page.evaluate(() => {
+          const el = document.querySelector('[data-testid="narrative-audio-dock"]');
+          const buttons = [...(el?.querySelectorAll('button') ?? [])].map((b) => {
+            const r = b.getBoundingClientRect();
+            return {
+              label: b.getAttribute('aria-label') || b.textContent?.trim() || '',
+              width: Math.round(r.width),
+              height: Math.round(r.height),
+            };
+          });
+          return {
+            height: el ? Math.round(el.getBoundingClientRect().height) : 0,
+            zIndex: el ? Number(window.getComputedStyle(el).zIndex) : 0,
+            buttons,
+          };
+        });
+        expect(dockMetrics.height).toBeLessThanOrEqual(112);
+        for (const btn of dockMetrics.buttons) {
+          expect(btn.width, `Audio dock button ${btn.label} width < 44px`).toBeGreaterThanOrEqual(44);
+          expect(btn.height, `Audio dock button ${btn.label} height < 44px`).toBeGreaterThanOrEqual(44);
+        }
+      }
+
+      // Click Edit pronunciation button -> opens EntityEditDrawer scrolled to Pronunciation with Respelling focused
+      const editPronBtn = page.getByRole('button', { name: /Edit pronunciation for Abraham Lincoln/ });
+      await expect(editPronBtn).toBeVisible();
+      await editPronBtn.click();
+
+      const drawerBackdrop = page.locator('.drawer-backdrop').first();
+      await expect(drawerBackdrop).toBeVisible();
+      const pronFieldset = page.locator('.wiki-pronunciation-fieldset');
+      await expect(pronFieldset).toBeVisible();
+      await expect(pronFieldset).toContainText('Respelling');
+      await expect(pronFieldset).not.toContainText('Phonetic guide');
+
+      // Wait briefly for scroll & focus settle
+      await page.waitForTimeout(150);
+
+      const stackingAndFocus = await page.evaluate(() => {
+        const backdrop = document.querySelector('.drawer-backdrop');
+        const dock = document.querySelector('[data-testid="narrative-audio-dock"]');
+        const fieldset = document.querySelector('.wiki-pronunciation-fieldset');
+        const saveBtn = document.querySelector('.wiki-form-actions button[type="submit"]');
+        const fieldsetRect = fieldset?.getBoundingClientRect();
+        const saveRect = saveBtn?.getBoundingClientRect();
+        const hitAtSave =
+          saveRect && saveRect.top >= 0 && saveRect.bottom <= window.innerHeight
+            ? document.elementFromPoint(
+                saveRect.left + saveRect.width / 2,
+                saveRect.top + saveRect.height / 2,
+              )
+            : null;
+
+        return {
+          backdropZ: backdrop ? Number(window.getComputedStyle(backdrop).zIndex) : 0,
+          dockZ: dock ? Number(window.getComputedStyle(dock).zIndex) : 0,
+          fieldsetInView: Boolean(
+            fieldsetRect && fieldsetRect.top < window.innerHeight && fieldsetRect.bottom > 0,
+          ),
+          activeTag: document.activeElement?.tagName ?? '',
+          activeInsidePronunciation: Boolean(
+            fieldset && document.activeElement && fieldset.contains(document.activeElement),
+          ),
+          hitIsDock: Boolean(hitAtSave?.closest('[data-testid="narrative-audio-dock"]')),
+        };
+      });
+
+      if (hasNarrativeAudio) {
+        expect(stackingAndFocus.backdropZ).toBeGreaterThan(stackingAndFocus.dockZ);
+      }
+      expect(stackingAndFocus.fieldsetInView).toBe(true);
+      expect(stackingAndFocus.activeInsidePronunciation).toBe(true);
+      expect(stackingAndFocus.hitIsDock).toBe(false);
+
+      await maybeScreenshot(page, 'drawer-over-audio-360x800.png');
+    } finally {
+      await wiki.close();
+    }
+  });
+});

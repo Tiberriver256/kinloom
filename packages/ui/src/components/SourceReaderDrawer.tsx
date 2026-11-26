@@ -286,44 +286,6 @@ export const SourceReaderDrawer: React.FC = () => {
 
         {currentDoc && currentPage && (
           <>
-            <div className="source-download-bar">
-              <button
-                type="button"
-                className="pill-btn map-bordered-btn active"
-                onClick={handleDownloadFullText}
-              >
-                Download Text ({currentDoc.pages.length} {currentDoc.pages.length === 1 ? 'p.' : 'pp.'})
-              </button>
-              <button
-                type="button"
-                className="pill-btn map-bordered-btn"
-                onClick={() => {
-                  void handleCopyFullText();
-                }}
-              >
-                {copyFeedback || 'Copy All Text'}
-              </button>
-              {pdfSrc && (
-                <a
-                  href={pdfSrc}
-                  download
-                  className="pill-btn map-bordered-btn"
-                  style={{ textDecoration: 'none' }}
-                >
-                  Download PDF{pdfSizeLabel ? ` (${pdfSizeLabel})` : ''}
-                </a>
-              )}
-              {orderedDocs.length > 1 && (
-                <button
-                  type="button"
-                  className="pill-btn map-bordered-btn"
-                  onClick={handleDownloadAllSources}
-                >
-                  All Sources (.txt)
-                </button>
-              )}
-            </div>
-
             <div className="source-reader-controls">
               <div className="source-reader-toolbar-row">
                 <div className="source-pager-group">
@@ -476,6 +438,44 @@ export const SourceReaderDrawer: React.FC = () => {
                     {renderHighlightedText(currentPage.text, searchTerm)}
                   </pre>
                 </div>
+              )}
+            </div>
+
+            <div className="source-download-bar source-download-footer">
+              <button
+                type="button"
+                className="pill-btn map-bordered-btn active"
+                onClick={handleDownloadFullText}
+              >
+                Download Text ({currentDoc.pages.length} {currentDoc.pages.length === 1 ? 'p.' : 'pp.'})
+              </button>
+              <button
+                type="button"
+                className="pill-btn map-bordered-btn"
+                onClick={() => {
+                  void handleCopyFullText();
+                }}
+              >
+                {copyFeedback || 'Copy All Text'}
+              </button>
+              {pdfSrc && (
+                <a
+                  href={pdfSrc}
+                  download
+                  className="pill-btn map-bordered-btn"
+                  style={{ textDecoration: 'none' }}
+                >
+                  Download PDF{pdfSizeLabel ? ` (${pdfSizeLabel})` : ''}
+                </a>
+              )}
+              {orderedDocs.length > 1 && (
+                <button
+                  type="button"
+                  className="pill-btn map-bordered-btn"
+                  onClick={handleDownloadAllSources}
+                >
+                  All Sources (.txt)
+                </button>
               )}
             </div>
 

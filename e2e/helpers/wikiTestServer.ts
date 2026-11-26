@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import http from 'node:http';
 import path from 'node:path';
-import type { AddressInfo } from 'node:net';
+import type { AddressInfo, Socket } from 'node:net';
 import type {
   AtomicMutationOp,
   EntityPayload,
@@ -407,6 +407,15 @@ export async function startLiveWikiTestServer(): Promise<LiveWikiTestHarness> {
     })();
   });
 
+  const openSockets = new Set<Socket>();
+  httpServer.keepAliveTimeout = 1000;
+  httpServer.on('connection', (socket) => {
+    openSockets.add(socket);
+    socket.once('close', () => {
+      openSockets.delete(socket);
+    });
+  });
+
   await new Promise<void>((resolve) => {
     httpServer.listen(0, '127.0.0.1', () => {
       resolve();
@@ -415,6 +424,7 @@ export async function startLiveWikiTestServer(): Promise<LiveWikiTestHarness> {
 
   const address = httpServer.address() as AddressInfo;
   const baseUrl = `http://127.0.0.1:${address.port}`;
+  let closePromise: Promise<void> | null = null;
 
   return {
     baseUrl,
@@ -425,15 +435,41 @@ export async function startLiveWikiTestServer(): Promise<LiveWikiTestHarness> {
     ports,
     server,
     close: async () => {
-      await new Promise<void>((resolve, reject) => {
-        httpServer.close((err) => {
-          if (err) {
-            reject(err);
-          } else {
-            resolve();
+      if (closePromise) {
+        return closePromise;
+      }
+      closePromise = new Promise<void>((resolve) => {
+        let settled = false;
+        const finish = (): void => {
+          if (settled) {
+            return;
           }
+          settled = true;
+          clearTimeout(forceTimer);
+          resolve();
+        };
+
+        const forceTimer = setTimeout(() => {
+          for (const socket of openSockets) {
+            socket.destroy();
+          }
+          openSockets.clear();
+          httpServer.closeAllConnections?.();
+          finish();
+        }, 2500);
+        forceTimer.unref();
+
+        httpServer.close(() => {
+          finish();
         });
+        httpServer.closeIdleConnections?.();
+        for (const socket of openSockets) {
+          socket.destroy();
+        }
+        openSockets.clear();
+        httpServer.closeAllConnections?.();
       });
+      return closePromise;
     },
   };
 }

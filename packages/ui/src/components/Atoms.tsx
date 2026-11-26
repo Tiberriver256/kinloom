@@ -14,6 +14,7 @@ import {
 } from '@kinloom/core';
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
+import { KINLOOM_VOCABULARY } from '../lib/vocabulary.js';
 import { useArchiveData } from '../context/ArchiveDataContext.js';
 import { useArchiveUi } from '../context/ArchiveUiContext.js';
 
@@ -382,17 +383,17 @@ export const SourceCitationTag: React.FC<{
           </span>
           {alternateDates.length > 0 && (
             <span className="conflict-pill">
-              ! {alternateDates.length} Date Conflict{alternateDates.length > 1 ? 's' : ''}
+              ! {alternateDates.length} Date Discrepanc{alternateDates.length > 1 ? 'ies' : 'y'}
             </span>
           )}
           {alternatePlaces.length > 0 && (
             <span className="conflict-pill">
-              ! {alternatePlaces.length} Place Conflict{alternatePlaces.length > 1 ? 's' : ''}
+              ! {alternatePlaces.length} Place Discrepanc{alternatePlaces.length > 1 ? 'ies' : 'y'}
             </span>
           )}
           {factConflicts.length > 0 && (
             <span className="conflict-pill">
-              ! {factConflicts.length} Fact Conflict{factConflicts.length > 1 ? 's' : ''}
+              ! {factConflicts.length} Fact Discrepanc{factConflicts.length > 1 ? 'ies' : 'y'}
             </span>
           )}
         </button>
@@ -406,7 +407,7 @@ export const SourceCitationTag: React.FC<{
               openSourceReader({ sourceId: firstReadable.source_id, eventId });
             }}
           >
-            Read Primary Text →
+            {KINLOOM_VOCABULARY.sources.readSourceCta}
           </button>
         )}
 
@@ -419,12 +420,12 @@ export const SourceCitationTag: React.FC<{
               const rec = sourcesById.get(firstScan.source_id);
               setActiveScan({
                 url: resolveAssetUrl(firstScan.scan_url, baseUrl),
-                title: firstScan.scan_title || (rec ? formatPublicCitation(rec.citation) : 'Primary Record Scan'),
+                title: firstScan.scan_title || (rec ? formatPublicCitation(rec.citation) : 'Record Scan'),
                 citation: firstScan.citation_detail || (rec ? formatPublicCitation(rec.citation) : undefined),
               });
             }}
           >
-            View Record Scan ↗
+            {KINLOOM_VOCABULARY.sources.viewRecordScanCta}
           </button>
         )}
       </div>
@@ -512,7 +513,7 @@ export const SourceCitationTag: React.FC<{
                             e.stopPropagation();
                             setActiveScan({
                               url: resolveAssetUrl(ref.scan_url, baseUrl),
-                              title: ref.scan_title || cit.title || 'Primary Record Scan',
+                              title: ref.scan_title || cit.title || 'Record Scan',
                               citation: ref.citation_detail || cit.bibliographicString,
                             });
                           }}
@@ -640,12 +641,12 @@ export const SourceCitationTag: React.FC<{
         <dialog
           open
           className="lightbox-backdrop photo-lightbox-overlay"
-          aria-label="Primary archival record scan lightbox"
+          aria-label="Record scan lightbox"
         >
           <button
             type="button"
             className="lightbox-backdrop-close"
-            aria-label="Close primary archival record scan lightbox"
+            aria-label="Close record scan lightbox"
             onClick={() => {
               setActiveScan(null);
             }}
@@ -653,7 +654,7 @@ export const SourceCitationTag: React.FC<{
           <div className="scan-lightbox-card">
             <div className="scan-lightbox-header">
               <strong style={{ fontFamily: 'var(--font-mono)', fontSize: '0.8rem' }}>
-                PRIMARY RECORD SCAN · {activeScan.title}
+                RECORD SCAN · {activeScan.title}
               </strong>
               <button
                 ref={scanCloseRef}

@@ -57,7 +57,7 @@ export const PrivateArchiveGate: React.FC<PrivateArchiveGateProps> = ({ onNaviga
           />
         </section>
       </main>
-      <KinloomFooter />
+      <KinloomFooter hideNav />
     </div>
   );
 };

@@ -7,6 +7,19 @@ import { KinloomFooter } from '../components/KinloomFooter.js';
 import { initialsOf } from '../components/Atoms.js';
 import { useArchiveData } from '../context/ArchiveDataContext.js';
 
+function formatKinshipPersonOption(person: {
+  full_name: string;
+  birth_year: number | null;
+  death_year: number | null;
+}): string {
+  const trimmed = person.full_name.trim();
+  const years = `${person.birth_year || '?'}–${person.death_year || '?'}`;
+  if (/\(\d{4}(?:[–-]\d{4})?\)$/.test(trimmed)) {
+    return trimmed.replace(/\(\d{4}(?:[–-]\d{4})?\)$/, `(${years})`);
+  }
+  return `${trimmed} (${years})`;
+}
+
 export const KinshipPage: React.FC = () => {
   const { siteConfig, bundle, peopleById, peopleBySlug, placesById, loading } = useArchiveData();
   const [searchParams] = useSearchParams();
@@ -103,28 +116,6 @@ export const KinshipPage: React.FC = () => {
           </div>
         </section>
 
-        {resolvedPresets.length > 0 && (
-          <div className="filter-bar kinship-examples-bar" style={{ marginBottom: 14 }}>
-            <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
-              Examples:
-            </span>
-            {resolvedPresets.map((preset) => (
-              <button
-                key={preset.label}
-                type="button"
-                className="pill-btn"
-                title={preset.note}
-                onClick={() => {
-                  setFromId(preset.fromId);
-                  setToId(preset.toId);
-                }}
-              >
-                {preset.label}
-              </button>
-            ))}
-          </div>
-        )}
-
         <section className="kinship-selector-card">
           <div className="kinship-selector-grid">
             <label className="kinship-field">
@@ -139,7 +130,7 @@ export const KinshipPage: React.FC = () => {
               >
                 {selectablePeople.map((p) => (
                   <option key={p.id} value={p.id}>
-                    {p.full_name} ({p.birth_year || '?'}–{p.death_year || '?'})
+                    {formatKinshipPersonOption(p)}
                   </option>
                 ))}
               </select>
@@ -170,13 +161,35 @@ export const KinshipPage: React.FC = () => {
               >
                 {selectablePeople.map((p) => (
                   <option key={p.id} value={p.id}>
-                    {p.full_name} ({p.birth_year || '?'}–{p.death_year || '?'})
+                    {formatKinshipPersonOption(p)}
                   </option>
                 ))}
               </select>
             </label>
           </div>
         </section>
+
+        {resolvedPresets.length > 0 && (
+          <div className="filter-bar kinship-examples-bar" style={{ marginTop: 12, marginBottom: 14 }}>
+            <span className="kinship-examples-label">
+              Examples:
+            </span>
+            {resolvedPresets.map((preset) => (
+              <button
+                key={preset.label}
+                type="button"
+                className="pill-btn"
+                title={preset.note}
+                onClick={() => {
+                  setFromId(preset.fromId);
+                  setToId(preset.toId);
+                }}
+              >
+                {preset.label}
+              </button>
+            ))}
+          </div>
+        )}
 
         {result && personA && personB && (
           <section className="place-map-box" style={{ marginTop: 18 }}>
@@ -206,7 +219,7 @@ export const KinshipPage: React.FC = () => {
                 <div className="kinship-stat-label">SHARED ARCHIVED PLACES</div>
                 <div className="kinship-stat-value">
                   {result.sharedPlaces.length > 0
-                    ? `${result.sharedPlaces.length} community match${result.sharedPlaces.length === 1 ? '' : 'es'}`
+                    ? `${result.sharedPlaces.length} shared place${result.sharedPlaces.length === 1 ? '' : 's'}`
                     : 'Distinct migration eras'}
                 </div>
               </div>
