@@ -44,6 +44,8 @@ import {
 import {
   TREE_HYGIENE_CATEGORIES,
   analyzeTreeHygiene,
+  diffTreeHygieneWarnings,
+  formatAuditHygieneWarningMessage,
   type TreeHygieneCategory,
   type TreeHygieneSummary,
   type TreeHygieneWarning,
@@ -53,6 +55,8 @@ export { VERIFY_HELP } from './help.js';
 export {
   TREE_HYGIENE_CATEGORIES,
   analyzeTreeHygiene,
+  diffTreeHygieneWarnings,
+  formatAuditHygieneWarningMessage,
   type TreeHygieneCategory,
   type TreeHygieneSummary,
   type TreeHygieneWarning,

@@ -47,32 +47,44 @@ const PLACEHOLDER_EVENT_PREFIX = 'Recorded event for ';
 const ADOPTIVE_MARKER_RE = /\badopt(?:ed|ion|ive)?\b|\badop\b/i;
 const ADOPTIVE_XREF_RE = /adopt|adop/i;
 
-const BAPTISM_OR_CHRISTENING_RE = /\b(baptis\w*|christen\w*)\b/i;
+const BIRTH_ID_RE = /(?:^|[_-])(?:birt|birth)(?:[_-]|$)/i;
 const BIRTH_TITLE_RE = /\b(birth|born)\b/i;
+const NON_PRIMARY_BIRTH_TITLE_RE =
+  /\b(baptis\w*|christen\w*|affidavit\w*|delayed|petition\w*|correction\w*|amend\w*|census|enumerat\w*)\b|\bcourt\b(?!\s+house\b|\s+st(?:reet|\.)?\b)/i;
+const NON_PRIMARY_BIRTH_ID_RE =
+  /(?:^|[_-])(?:baptis\w*|bapt|christen\w*|chr|affidavit\w*|delayed|petition\w*|court|correction\w*|amend\w*|census)(?:[_-]|$)/i;
 const BIRTH_SUBJECT_ROLES = new Set([
   'birth_subject',
-  'principal',
   'subject',
+  'principal',
+  'child',
   'infant',
   'newborn',
 ]);
 
-const POST_DEATH_EVENT_RE =
-  /\b(burial|buried|interment|interred|funeral|probate|estate|will|obituary|memorial|headstone|gravestone|cemetery|tombstone|cremation|inquest)\b/i;
-const DEATH_TITLE_RE = /\b(death|died)\b/i;
+const DEATH_ID_RE = /(?:^|[_-])(?:deat|death)(?:[_-]|$)/i;
+const DEATH_TITLE_RE = /\b(death|died|passing|passed\s+away)\b/i;
+const NON_DEATH_TITLE_RE =
+  /\b(burial|buried|interment|interred|funeral|probate\w*|estate|obituary|headstone|gravestone|cemetery|tombstone|cremation|inquest|widow\w*|traged\w*|newspaper\w*|article|clipping|census|enumerat\w*)\b|\bmemorial\b(?!\s+(?:hospital|medical|clinic|center)\b)|\blast\s+will\b|\bwill\s+(?:and\s+testament|probated?|proved?|filed|recorded|executed|contested)\b|\b(?:his|her|their)\s+will\b|\bnews\s+(?:report|article|clipping|item|story|account|notice|brief)\b/i;
+const NON_DEATH_ID_RE =
+  /(?:^|[_-])(?:burial|buri|interment|funeral|probate\w*|estate|last_will|will_probate|obituary|obit|memorial|headstone|gravestone|cemetery|tombstone|cremation|inquest|widow\w*|traged\w*|newspaper\w*|news_report|news_article|news_clipping|census)(?:[_-]|$)/i;
 const DEATH_SUBJECT_ROLES = new Set([
   'death_subject',
   'deceased',
   'decedent',
-  'principal',
   'subject',
+  'principal',
 ]);
 
+const MARRIAGE_ID_RE = /(?:^|[_-])(?:marr|marriage|wedding)(?:[_-]|$)/i;
 const MARRIAGE_TITLE_RE = /\b(marr(?:iage|ied)?|wedding|nuptial)\b/i;
-const DIVORCE_TITLE_RE = /\bdivorc\w*\b/i;
+const NON_MARRIAGE_TITLE_RE =
+  /\b(divorc\w*|annul\w*|caregiv\w*|travel\w*|newspaper\w*|naturaliz\w*|declaration\w*|widow\w*|census|enumerat\w*|anniversar\w*)\b/i;
+const NON_MARRIAGE_ID_RE =
+  /(?:^|[_-])(?:divorc\w*|annul\w*|caregiv\w*|travel\w*|newspaper\w*|news|naturaliz\w*|declaration\w*|decl|widow\w*|census|anniversar\w*|anniv)(?:[_-]|$)/i;
 const NON_SPOUSE_ROLE_RE =
   /\b(parent|father|mother|witness|officiant|minister|clergy|bondsman|surety|clerk|mentioned|child|informant|guest)\b/i;
-const SPOUSE_ROLE_RE = /\b(spouse|bride|groom|husband|wife|partner|principal|subject|co_principal)\b/i;
+const SPOUSE_ROLE_RE = /\b(spouse|bride|groom|husband|wife|partner|principal|subject|co\s+principal)\b/i;
 
 function parseDatePart(raw: string): ParsedDatePart | null {
   const clean = raw.trim().replaceAll(/[~?%]+$/g, '');
@@ -275,64 +287,64 @@ function isAdoptionEvent(event: RawEvent): boolean {
   return event.participants.some((p) => ADOPTIVE_MARKER_RE.test(p.role));
 }
 
+function normalizeRole(role: string): string {
+  return role.trim().toLowerCase().replaceAll(/[\s-]+/g, '_');
+}
+
+function isBirthEvent(event: RawEvent): boolean {
+  if (NON_PRIMARY_BIRTH_TITLE_RE.test(event.title) || NON_PRIMARY_BIRTH_ID_RE.test(event.id)) {
+    return false;
+  }
+  if (BIRTH_ID_RE.test(event.id) || BIRTH_TITLE_RE.test(event.title)) {
+    return true;
+  }
+  return event.category?.trim().toLowerCase() === 'birth';
+}
+
 function isBirthEventForParticipant(event: RawEvent, role: string): boolean {
-  const normalizedRole = role.trim().toLowerCase();
+  const normalizedRole = normalizeRole(role);
   if (!BIRTH_SUBJECT_ROLES.has(normalizedRole)) {
     return false;
   }
-  if (BAPTISM_OR_CHRISTENING_RE.test(event.title) && !BIRTH_TITLE_RE.test(event.title)) {
+  return isBirthEvent(event);
+}
+
+function isDeathEvent(event: RawEvent): boolean {
+  if (NON_DEATH_TITLE_RE.test(event.title) || NON_DEATH_ID_RE.test(event.id)) {
     return false;
   }
-  if (normalizedRole === 'birth_subject') {
+  if (DEATH_ID_RE.test(event.id) || DEATH_TITLE_RE.test(event.title)) {
     return true;
   }
-  if (event.category?.trim().toLowerCase() === 'birth') {
-    return true;
-  }
-  return BIRTH_TITLE_RE.test(event.title);
+  return event.category?.trim().toLowerCase() === 'death';
 }
 
 function isDeathEventForParticipant(event: RawEvent, role: string): boolean {
-  const normalizedRole = role.trim().toLowerCase();
+  const normalizedRole = normalizeRole(role);
   if (!DEATH_SUBJECT_ROLES.has(normalizedRole)) {
     return false;
   }
-  if (POST_DEATH_EVENT_RE.test(event.title) && !DEATH_TITLE_RE.test(event.title)) {
-    return false;
-  }
-  if (normalizedRole === 'death_subject') {
-    return true;
-  }
-  if (event.category?.trim().toLowerCase() === 'death') {
-    return true;
-  }
-  return DEATH_TITLE_RE.test(event.title);
+  return isDeathEvent(event);
 }
 
 function isMarriageEvent(event: RawEvent): boolean {
-  if (DIVORCE_TITLE_RE.test(event.title) && !MARRIAGE_TITLE_RE.test(event.title)) {
+  if (NON_MARRIAGE_TITLE_RE.test(event.title) || NON_MARRIAGE_ID_RE.test(event.id)) {
     return false;
   }
-  if (event.category?.trim().toLowerCase() === 'marriage') {
+  if (MARRIAGE_ID_RE.test(event.id)) {
     return true;
   }
-  if (MARRIAGE_TITLE_RE.test(event.title)) {
-    return true;
-  }
-  return event.participants.some((p) => {
-    const r = p.role.trim();
-    return /\b(spouse|bride|groom|husband|wife)\b/i.test(r) && !NON_SPOUSE_ROLE_RE.test(r);
-  });
+  return MARRIAGE_TITLE_RE.test(event.title);
 }
 
 function getMarriageSpouseIds(event: RawEvent): string[] {
   const spouses = new Set<string>();
   for (const participant of event.participants) {
-    const role = participant.role.trim();
-    if (NON_SPOUSE_ROLE_RE.test(role)) {
+    const roleTokens = participant.role.trim().replaceAll(/[_-]+/g, ' ');
+    if (NON_SPOUSE_ROLE_RE.test(roleTokens)) {
       continue;
     }
-    if (SPOUSE_ROLE_RE.test(role)) {
+    if (SPOUSE_ROLE_RE.test(roleTokens)) {
       spouses.add(participant.person_id);
     }
   }
@@ -667,4 +679,136 @@ export function analyzeTreeHygiene(input: {
   }
 
   return { warnings, counts };
+}
+
+function isSubsetOf(candidate: readonly string[], superset: ReadonlySet<string>): boolean {
+  for (const item of candidate) {
+    if (!superset.has(item)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function parentChildSubkind(message: string): string {
+  if (message.includes('was born after mother')) {
+    return 'after_mother_death';
+  }
+  if (message.includes('was born more than 1 year after')) {
+    return 'after_parent_death';
+  }
+  return 'young_parent';
+}
+
+function warningTouchesScope(
+  warning: TreeHygieneWarning,
+  touchedPersonIds: ReadonlySet<string>,
+  touchedEventIds: ReadonlySet<string>
+): boolean {
+  if (warning.personIds.some((id) => touchedPersonIds.has(id))) {
+    return true;
+  }
+  if ((warning.eventIds ?? []).some((id) => touchedEventIds.has(id))) {
+    return true;
+  }
+  return false;
+}
+
+function isPreExistingHygieneWarning(
+  postWarning: TreeHygieneWarning,
+  preWarnings: readonly TreeHygieneWarning[]
+): boolean {
+  switch (postWarning.category) {
+    case 'duplicate_vital_event': {
+      const postPeopleKey = postWarning.personIds.join(',');
+      const postEvents = postWarning.eventIds ?? [];
+      if (postEvents.length === 0) {
+        return false;
+      }
+      return preWarnings.some((pre) => {
+        if (pre.category !== 'duplicate_vital_event') {
+          return false;
+        }
+        if (pre.personIds.join(',') !== postPeopleKey) {
+          return false;
+        }
+        return isSubsetOf(postEvents, new Set(pre.eventIds ?? []));
+      });
+    }
+    case 'excess_parents': {
+      const postChildId = postWarning.personIds[0] ?? '';
+      const postParents = postWarning.personIds.slice(1);
+      return preWarnings.some((pre) => {
+        if (pre.category !== 'excess_parents' || pre.personIds[0] !== postChildId) {
+          return false;
+        }
+        return isSubsetOf(postParents, new Set(pre.personIds.slice(1)));
+      });
+    }
+    case 'child_marriage': {
+      const postPeopleKey = postWarning.personIds.join(',');
+      const postEventsKey = (postWarning.eventIds ?? []).join(',');
+      return preWarnings.some(
+        (pre) =>
+          pre.category === 'child_marriage' &&
+          pre.personIds.join(',') === postPeopleKey &&
+          (pre.eventIds ?? []).join(',') === postEventsKey
+      );
+    }
+    case 'parent_child_chronology': {
+      const postPeopleKey = postWarning.personIds.join(',');
+      const postSubkind = parentChildSubkind(postWarning.message);
+      return preWarnings.some(
+        (pre) =>
+          pre.category === 'parent_child_chronology' &&
+          pre.personIds.join(',') === postPeopleKey &&
+          parentChildSubkind(pre.message) === postSubkind
+      );
+    }
+    case 'placeholder_event': {
+      const postEventsKey = (postWarning.eventIds ?? []).join(',');
+      return preWarnings.some(
+        (pre) =>
+          pre.category === 'placeholder_event' &&
+          (pre.eventIds ?? []).join(',') === postEventsKey
+      );
+    }
+    default: {
+      const _exhaustive: never = postWarning.category;
+      return _exhaustive;
+    }
+  }
+}
+
+export function diffTreeHygieneWarnings(input: {
+  preWarnings: readonly TreeHygieneWarning[];
+  postWarnings: readonly TreeHygieneWarning[];
+  touchedPersonIds: ReadonlySet<string>;
+  touchedEventIds: ReadonlySet<string>;
+}): TreeHygieneWarning[] {
+  return input.postWarnings.filter(
+    (warning) =>
+      warningTouchesScope(warning, input.touchedPersonIds, input.touchedEventIds) &&
+      !isPreExistingHygieneWarning(warning, input.preWarnings)
+  );
+}
+
+export function formatAuditHygieneWarningMessage(warning: TreeHygieneWarning): string {
+  const detail = warning.message.replace(/\.$/, '');
+  switch (warning.category) {
+    case 'duplicate_vital_event':
+      return `Staged patch introduces duplicate vital event (${detail}); update the existing event ID in place or include it in remove_event_ids.`;
+    case 'child_marriage':
+      return `Staged patch introduces child marriage warning (${detail}); verify the birth/marriage dates or participant roles.`;
+    case 'parent_child_chronology':
+      return `Staged patch introduces parent-child chronology anomaly (${detail}); verify parent/child dates or kinship edges.`;
+    case 'excess_parents':
+      return `Staged patch introduces excess non-adoptive parents (${detail}); verify kinship edges or mark adoptive links.`;
+    case 'placeholder_event':
+      return `Staged patch introduces placeholder event (${detail}); replace the generic "${PLACEHOLDER_EVENT_PREFIX}" title with a descriptive title.`;
+    default: {
+      const _exhaustive: never = warning.category;
+      return _exhaustive;
+    }
+  }
 }

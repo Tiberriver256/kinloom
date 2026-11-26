@@ -32,6 +32,7 @@ import { runCli } from '../../cli.js';
 import { CliValidationError, EXIT_ERROR, EXIT_OK, EXIT_USAGE } from '../../errors.js';
 import {
   REDACTED_RELATIVE_LABEL,
+  analyzeTreeHygiene,
   buildSanitizedLocalEntries,
   buildTempTokenCleanupSql,
   buildTempTokenInsertSql,
@@ -6006,5 +6007,1001 @@ describe('ops/verify', () => {
     const verifyHelp = createCaptureIo();
     expect(await runCli(['verify', '--help'], { io: verifyHelp.io })).toBe(EXIT_OK);
     expect(verifyHelp.stdout.join('\n')).toContain('--strict-hygiene');
+  });
+
+  it('tightens vital-event classification to prevent false positives while keeping 100% recall on real duplicates', () => {
+    const people: RawPerson[] = [
+      {
+        id: 'per_will_alder',
+        slug: 'will-alder',
+        full_name: 'Will Alder',
+        given_name: 'Will',
+        surname: 'Alder',
+        alt_names: [],
+        sex: 'M',
+        is_living: false,
+        lineage_group: 'ancestor',
+        birth_edtf: '1850-05-01',
+        death_edtf: '1910-08-12',
+        portrait_url: null,
+      },
+      {
+        id: 'per_clara_birch',
+        slug: 'clara-birch',
+        full_name: 'Clara Birch',
+        given_name: 'Clara',
+        surname: 'Birch',
+        alt_names: [],
+        sex: 'F',
+        is_living: false,
+        lineage_group: 'ancestor',
+        birth_edtf: '1854-09-15',
+        death_edtf: '1935-02-20',
+        portrait_url: null,
+      },
+      {
+        id: 'per_nora_alder',
+        slug: 'nora-alder',
+        full_name: 'Nora Alder',
+        given_name: 'Nora',
+        surname: 'Alder',
+        alt_names: [],
+        sex: 'F',
+        is_living: false,
+        lineage_group: 'descendant',
+        birth_edtf: '1880-04-10',
+        death_edtf: '1962-11-03',
+        portrait_url: null,
+      },
+      {
+        id: 'per_rowan_alder',
+        slug: 'rowan-alder',
+        full_name: 'Rowan Alder',
+        given_name: 'Rowan',
+        surname: 'Alder',
+        alt_names: [],
+        sex: 'M',
+        is_living: false,
+        lineage_group: 'descendant',
+        birth_edtf: '1884-07-01',
+        death_edtf: '1950-01-01',
+        portrait_url: null,
+      },
+      {
+        id: 'per_young_bride',
+        slug: 'young-bride',
+        full_name: 'Mabel Cedar',
+        given_name: 'Mabel',
+        surname: 'Cedar',
+        alt_names: [],
+        sex: 'F',
+        is_living: false,
+        lineage_group: 'extended',
+        birth_edtf: '1888-03-01',
+        death_edtf: '1965-01-01',
+        portrait_url: null,
+      },
+      {
+        id: 'per_adult_groom',
+        slug: 'adult-groom',
+        full_name: 'Jonas Linden',
+        given_name: 'Jonas',
+        surname: 'Linden',
+        alt_names: [],
+        sex: 'M',
+        is_living: false,
+        lineage_group: 'extended',
+        birth_edtf: '1872-01-01',
+        death_edtf: '1945-01-01',
+        portrait_url: null,
+      },
+      {
+        id: 'per_extra_mother',
+        slug: 'extra-mother',
+        full_name: 'Ruth Maple',
+        given_name: 'Ruth',
+        surname: 'Maple',
+        alt_names: [],
+        sex: 'F',
+        is_living: false,
+        lineage_group: 'extended',
+        birth_edtf: '1856-01-01',
+        death_edtf: '1930-01-01',
+        portrait_url: null,
+      },
+    ];
+
+    const nonVitalEvents: RawEvent[] = [
+      // One real marriage for Will + Clara, plus many non-marriage events where both hold role: spouse.
+      {
+        id: 'evt_marr_will_clara',
+        title: 'Marriage of Will Alder and Clara Birch',
+        scope: 'family',
+        event_kind: 'point_event',
+        edtf_date: '1876-06-15',
+        place_id: 'plc_oak_county_ohio',
+        summary: 'Will Alder and Clara Birch married.',
+        participants: [
+          { person_id: 'per_will_alder', role: 'spouse' },
+          { person_id: 'per_clara_birch', role: 'spouse' },
+          { person_id: 'per_nora_alder', role: 'parent_of_bride' },
+        ],
+        sources: [],
+      },
+      {
+        id: 'evt_travel_will_clara',
+        title: 'Travel to Oak County',
+        scope: 'family',
+        event_kind: 'point_event',
+        edtf_date: '1885-05-01',
+        place_id: 'plc_oak_county_ohio',
+        summary: 'Will and Clara traveled together.',
+        participants: [
+          { person_id: 'per_will_alder', role: 'spouse' },
+          { person_id: 'per_clara_birch', role: 'spouse' },
+          { person_id: 'per_nora_alder', role: 'spouse' },
+        ],
+        sources: [],
+      },
+      {
+        id: 'evt_caregiving_will_clara',
+        title: 'Caregiving during married years',
+        scope: 'family',
+        event_kind: 'point_event',
+        edtf_date: '1892-01-01',
+        place_id: 'plc_oak_county_ohio',
+        summary: 'Caregiving at home.',
+        participants: [
+          { person_id: 'per_will_alder', role: 'spouse' },
+          { person_id: 'per_clara_birch', role: 'spouse' },
+        ],
+        sources: [],
+      },
+      {
+        id: 'evt_nat_decl_will_clara',
+        title: 'Naturalization Declaration of Intention (married to Clara)',
+        scope: 'personal',
+        event_kind: 'point_event',
+        edtf_date: '1888-03-12',
+        place_id: 'plc_oak_county_ohio',
+        summary: 'Declaration of intention filed.',
+        participants: [
+          { person_id: 'per_will_alder', role: 'spouse' },
+          { person_id: 'per_clara_birch', role: 'spouse' },
+        ],
+        sources: [],
+      },
+      {
+        id: 'evt_census_1900_will_clara',
+        title: '1900 US Census (married household)',
+        scope: 'family',
+        event_kind: 'point_event',
+        edtf_date: '1900-06-01',
+        place_id: 'plc_oak_county_ohio',
+        summary: 'Household enumerated in 1900.',
+        participants: [
+          { person_id: 'per_will_alder', role: 'spouse' },
+          { person_id: 'per_clara_birch', role: 'spouse' },
+          { person_id: 'per_nora_alder', role: 'child' },
+        ],
+        sources: [],
+      },
+      {
+        id: 'evt_newspaper_married_note',
+        title: 'Newspaper note on married couple',
+        scope: 'family',
+        event_kind: 'point_event',
+        edtf_date: '1901-04-04',
+        place_id: 'plc_oak_county_ohio',
+        summary: 'Local paper reported a visit.',
+        participants: [
+          { person_id: 'per_will_alder', role: 'spouse' },
+          { person_id: 'per_clara_birch', role: 'spouse' },
+        ],
+        sources: [],
+      },
+      {
+        id: 'evt_wedding_anniversary_1901',
+        title: '25th Wedding Anniversary of Will Alder and Clara Birch',
+        scope: 'family',
+        event_kind: 'point_event',
+        edtf_date: '1901-06-15',
+        place_id: 'plc_oak_county_ohio',
+        summary: 'Silver anniversary celebration.',
+        participants: [
+          { person_id: 'per_will_alder', role: 'spouse' },
+          { person_id: 'per_clara_birch', role: 'spouse' },
+        ],
+        sources: [],
+      },
+      {
+        id: 'evt_widowed_clara_1910',
+        title: 'Widowed after 34 years of marriage upon death of Will Alder',
+        scope: 'personal',
+        event_kind: 'point_event',
+        edtf_date: '1910-08-12',
+        place_id: 'plc_oak_county_ohio',
+        summary: 'Clara Birch was widowed.',
+        participants: [
+          { person_id: 'per_clara_birch', role: 'subject' },
+          { person_id: 'per_will_alder', role: 'spouse' },
+        ],
+        sources: [],
+      },
+      // One real birth on Nora + delayed affidavit, court petition, correction, baptism, christening,
+      // and parent/informant/witness roles on another child's birth.
+      {
+        id: 'evt_nora_birth',
+        title: 'Birth of Nora Alder in Washington Court House',
+        scope: 'personal',
+        event_kind: 'point_event',
+        edtf_date: '1880-04-10',
+        place_id: 'plc_oak_county_ohio',
+        summary: 'Nora Alder was born.',
+        participants: [
+          { person_id: 'per_nora_alder', role: 'child' },
+          { person_id: 'per_will_alder', role: 'parent' },
+          { person_id: 'per_clara_birch', role: 'informant' },
+        ],
+        sources: [],
+      },
+      {
+        id: 'evt_nora_delayed_birth_1941',
+        title: 'Delayed Birth Certificate of Nora Alder',
+        scope: 'personal',
+        event_kind: 'point_event',
+        edtf_date: '1941-05-01',
+        place_id: 'plc_oak_county_ohio',
+        summary: 'Delayed birth certificate filed for Social Security.',
+        participants: [{ person_id: 'per_nora_alder', role: 'birth_subject' }],
+        sources: [],
+      },
+      {
+        id: 'evt_nora_birth_affidavit',
+        title: 'Birth Affidavit for Nora Alder',
+        scope: 'personal',
+        event_kind: 'point_event',
+        edtf_date: '1941-05-02',
+        place_id: 'plc_oak_county_ohio',
+        summary: 'Affidavit signed by older sibling.',
+        participants: [{ person_id: 'per_nora_alder', role: 'subject' }],
+        sources: [],
+      },
+      {
+        id: 'evt_nora_birth_petition',
+        title: 'Court Petition to Establish Birth Record of Nora Alder',
+        scope: 'personal',
+        event_kind: 'point_event',
+        edtf_date: '1941-06-01',
+        place_id: 'plc_oak_county_ohio',
+        summary: 'Probate court petition.',
+        participants: [{ person_id: 'per_nora_alder', role: 'principal' }],
+        sources: [],
+      },
+      {
+        id: 'evt_nora_birth_correction',
+        title: 'Birth Record Correction for Nora Alder',
+        scope: 'personal',
+        event_kind: 'point_event',
+        edtf_date: '1942-01-01',
+        place_id: 'plc_oak_county_ohio',
+        summary: 'Spelling correction.',
+        participants: [{ person_id: 'per_nora_alder', role: 'birth_subject' }],
+        sources: [],
+      },
+      {
+        id: 'evt_nora_baptism',
+        title: 'Baptism of Nora Alder (born 1880)',
+        scope: 'personal',
+        event_kind: 'point_event',
+        edtf_date: '1880-05-15',
+        place_id: 'plc_oak_county_ohio',
+        summary: 'Baptized at parish church.',
+        participants: [{ person_id: 'per_nora_alder', role: 'birth_subject' }],
+        sources: [],
+      },
+      {
+        id: 'evt_nora_christening',
+        title: 'Christening of Nora Alder',
+        scope: 'personal',
+        event_kind: 'point_event',
+        edtf_date: '1880-05-16',
+        place_id: 'plc_oak_county_ohio',
+        summary: 'Christened at parish church.',
+        participants: [{ person_id: 'per_nora_alder', role: 'child' }],
+        sources: [],
+      },
+      {
+        id: 'evt_rowan_birth',
+        title: 'Birth of Rowan Alder',
+        scope: 'personal',
+        event_kind: 'point_event',
+        edtf_date: '1884-07-01',
+        place_id: 'plc_oak_county_ohio',
+        summary: 'Rowan Alder was born.',
+        participants: [
+          { person_id: 'per_rowan_alder', role: 'birth_subject' },
+          { person_id: 'per_will_alder', role: 'parent' },
+          { person_id: 'per_clara_birch', role: 'witness' },
+        ],
+        sources: [],
+      },
+      // One real death on Will (including "Will", "Memorial Hospital", "Newport News") + burial/funeral/obit/probate/tragedy/news,
+      // plus Clara as widow/informant/survivor on deaths of others.
+      {
+        id: 'evt_will_death',
+        title: 'Death of Will Alder at Memorial Hospital in Newport News',
+        scope: 'personal',
+        event_kind: 'point_event',
+        edtf_date: '1910-08-12',
+        place_id: 'plc_oak_county_ohio',
+        summary: 'Will Alder died.',
+        participants: [
+          { person_id: 'per_will_alder', role: 'deceased' },
+          { person_id: 'per_clara_birch', role: 'widow' },
+          { person_id: 'per_nora_alder', role: 'informant' },
+          { person_id: 'per_rowan_alder', role: 'survivor' },
+        ],
+        sources: [],
+      },
+      {
+        id: 'evt_will_burial',
+        title: 'Burial following Death of Will Alder',
+        scope: 'personal',
+        event_kind: 'point_event',
+        edtf_date: '1910-08-15',
+        place_id: 'plc_oak_county_ohio',
+        summary: 'Interred at Oak Cemetery.',
+        participants: [{ person_id: 'per_will_alder', role: 'death_subject' }],
+        sources: [],
+      },
+      {
+        id: 'evt_will_funeral',
+        title: 'Funeral after Death of Will Alder',
+        scope: 'personal',
+        event_kind: 'point_event',
+        edtf_date: '1910-08-14',
+        place_id: 'plc_oak_county_ohio',
+        summary: 'Funeral service held.',
+        participants: [{ person_id: 'per_will_alder', role: 'deceased' }],
+        sources: [],
+      },
+      {
+        id: 'evt_will_obituary',
+        title: 'Obituary and Death Notice of Will Alder',
+        scope: 'personal',
+        event_kind: 'point_event',
+        edtf_date: '1910-08-16',
+        place_id: 'plc_oak_county_ohio',
+        summary: 'Published obituary.',
+        participants: [{ person_id: 'per_will_alder', role: 'deceased' }],
+        sources: [],
+      },
+      {
+        id: 'evt_will_probate',
+        title: 'Probate of Estate after Death of Will Alder',
+        scope: 'personal',
+        event_kind: 'point_event',
+        edtf_date: '1910-09-01',
+        place_id: 'plc_oak_county_ohio',
+        summary: 'Estate entered probate.',
+        participants: [{ person_id: 'per_will_alder', role: 'deceased' }],
+        sources: [],
+      },
+      {
+        id: 'evt_tragedy_1895',
+        title: 'Tragedy: Death of Neighbor in Mill Accident',
+        scope: 'personal',
+        event_kind: 'point_event',
+        edtf_date: '1895-11-01',
+        place_id: 'plc_oak_county_ohio',
+        summary: 'Will Alder witnessed the mill tragedy.',
+        participants: [
+          { person_id: 'per_will_alder', role: 'subject' },
+          { person_id: 'per_clara_birch', role: 'mentioned' },
+        ],
+        sources: [],
+      },
+      {
+        id: 'evt_news_death_1898',
+        title: 'Newspaper Report on Factory Death',
+        scope: 'personal',
+        event_kind: 'point_event',
+        edtf_date: '1898-03-01',
+        place_id: 'plc_oak_county_ohio',
+        summary: 'News item referencing Will Alder.',
+        participants: [{ person_id: 'per_will_alder', role: 'principal' }],
+        sources: [],
+      },
+      {
+        id: 'evt_clara_death',
+        title: 'Death of Clara Birch',
+        scope: 'personal',
+        event_kind: 'point_event',
+        edtf_date: '1935-02-20',
+        place_id: 'plc_oak_county_ohio',
+        summary: 'Clara Birch died.',
+        participants: [
+          { person_id: 'per_clara_birch', role: 'death_subject' },
+          { person_id: 'per_nora_alder', role: 'child' },
+          { person_id: 'per_rowan_alder', role: 'witness' },
+        ],
+        sources: [],
+      },
+      {
+        id: 'evt_rowan_death',
+        title: 'Death of Rowan Alder',
+        scope: 'personal',
+        event_kind: 'point_event',
+        edtf_date: '1950-01-01',
+        place_id: 'plc_oak_county_ohio',
+        summary: 'Rowan Alder died.',
+        participants: [
+          { person_id: 'per_rowan_alder', role: 'death_subject' },
+          { person_id: 'per_nora_alder', role: 'survivor' },
+        ],
+        sources: [],
+      },
+    ];
+
+    const cleanSummary = analyzeTreeHygiene({
+      people,
+      events: nonVitalEvents,
+      kinship: [
+        { from: 'per_will_alder', to: 'per_nora_alder', relation: 'parent', family_xref: '@F1@' },
+        { from: 'per_clara_birch', to: 'per_nora_alder', relation: 'parent', family_xref: '@F1@' },
+      ],
+    });
+    expect(cleanSummary.warnings).toEqual([]);
+    expect(cleanSummary.counts).toEqual({
+      excess_parents: 0,
+      parent_child_chronology: 0,
+      child_marriage: 0,
+      duplicate_vital_event: 0,
+      placeholder_event: 0,
+    });
+
+    // Now add true duplicates and anomalies and verify 100% recall.
+    const trueRegressionEvents: RawEvent[] = [
+      ...nonVitalEvents,
+      {
+        id: 'evt_nora_birth_dup',
+        title: 'Birth of Nora Alder',
+        scope: 'personal',
+        event_kind: 'point_event',
+        edtf_date: '1880-04-10',
+        place_id: 'plc_oak_county_ohio',
+        summary: 'Second birth record.',
+        participants: [{ person_id: 'per_nora_alder', role: 'birth_subject' }],
+        sources: [],
+      },
+      {
+        id: 'evt_will_deat_dup',
+        title: 'Passing of Will Alder',
+        scope: 'personal',
+        event_kind: 'point_event',
+        edtf_date: '1910-08-12',
+        place_id: 'plc_oak_county_ohio',
+        summary: 'Second death record.',
+        participants: [{ person_id: 'per_will_alder', role: 'death_subject' }],
+        sources: [],
+      },
+      {
+        id: 'evt_wedding_will_clara_dup',
+        title: 'Wedding of Will Alder and Clara Birch',
+        scope: 'family',
+        event_kind: 'point_event',
+        edtf_date: '1876-06-15',
+        place_id: 'plc_oak_county_ohio',
+        summary: 'Second marriage record.',
+        participants: [
+          { person_id: 'per_will_alder', role: 'spouse' },
+          { person_id: 'per_clara_birch', role: 'spouse' },
+        ],
+        sources: [],
+      },
+      {
+        id: 'evt_marr_mabel_jonas',
+        title: 'Marriage of Jonas Linden and Mabel Cedar',
+        scope: 'family',
+        event_kind: 'point_event',
+        edtf_date: '1900-06-01',
+        place_id: 'plc_oak_county_ohio',
+        summary: 'Mabel was age 12.',
+        participants: [
+          { person_id: 'per_young_bride', role: 'bride' },
+          { person_id: 'per_adult_groom', role: 'groom' },
+        ],
+        sources: [],
+      },
+      {
+        id: 'evt_stub_will',
+        title: 'Recorded event for Will Alder',
+        scope: 'personal',
+        event_kind: 'point_event',
+        edtf_date: '1882',
+        place_id: 'plc_oak_county_ohio',
+        summary: 'Generic placeholder.',
+        participants: [{ person_id: 'per_will_alder', role: 'subject' }],
+        sources: [],
+      },
+    ];
+
+    const regressionSummary = analyzeTreeHygiene({
+      people,
+      events: trueRegressionEvents,
+      kinship: [
+        { from: 'per_will_alder', to: 'per_nora_alder', relation: 'parent', family_xref: '@F1@' },
+        { from: 'per_clara_birch', to: 'per_nora_alder', relation: 'parent', family_xref: '@F1@' },
+        { from: 'per_extra_mother', to: 'per_nora_alder', relation: 'parent', family_xref: '@F2@' },
+      ],
+    });
+    expect(regressionSummary.counts).toEqual({
+      excess_parents: 1,
+      parent_child_chronology: 0,
+      child_marriage: 1,
+      duplicate_vital_event: 3,
+      placeholder_event: 1,
+    });
+    expect(
+      regressionSummary.warnings
+        .filter((w) => w.category === 'duplicate_vital_event')
+        .map((w) => w.eventIds)
+    ).toEqual([
+      ['evt_marr_will_clara', 'evt_wedding_will_clara_dup'],
+      ['evt_nora_birth', 'evt_nora_birth_dup'],
+      ['evt_will_deat_dup', 'evt_will_death'],
+    ]);
+  });
+
+  it('catches newly introduced duplicate vital events and hygiene regressions in kinloom audit --strict while ignoring unrelated legacy warnings', async () => {
+    const repoDir = await createSyntheticRepo();
+    const dataDir = path.join(repoDir, 'data');
+
+    const existingPeople = parsePeopleYaml(await readFile(path.join(dataDir, 'people.yaml'), 'utf8'));
+    const existingEvents = parseEventsYaml(await readFile(path.join(dataDir, 'events.yaml'), 'utf8')).filter(
+      (ev) => ev.id !== 'evt_arthur_living_visit'
+    );
+
+    const legacyPerson: RawPerson = {
+      id: 'per_legacy_unrelated',
+      slug: 'legacy-unrelated',
+      full_name: 'Ezra Willow',
+      given_name: 'Ezra',
+      surname: 'Willow',
+      alt_names: [],
+      sex: 'M',
+      is_living: false,
+      lineage_group: 'extended',
+      birth_edtf: '1842-02-01',
+      death_edtf: '1908-11-11',
+      portrait_url: null,
+    };
+
+    const seededEvents: RawEvent[] = [
+      ...existingEvents,
+      // Pre-existing vital events on Arthur and Helen.
+      {
+        id: 'evt_arthur_birth_live',
+        title: 'Birth of Arthur Alder',
+        scope: 'personal',
+        event_kind: 'point_event',
+        edtf_date: '1858-04-12',
+        place_id: 'plc_oak_county_ohio',
+        summary: 'Arthur Alder was born.',
+        participants: [{ person_id: 'per_arthur_alder', role: 'birth_subject' }],
+        sources: [{ source_id: 'src_1880_census', confidence: 'medium' }],
+      },
+      {
+        id: 'evt_arthur_death_live',
+        title: 'Death of Arthur Alder',
+        scope: 'personal',
+        event_kind: 'point_event',
+        edtf_date: '1932-09-18',
+        place_id: 'plc_oak_county_ohio',
+        summary: 'Arthur Alder died.',
+        participants: [{ person_id: 'per_arthur_alder', role: 'death_subject' }],
+        sources: [{ source_id: 'src_1932_death_cert', confidence: 'high' }],
+      },
+      {
+        id: 'evt_marr_arthur_helen_live',
+        title: 'Marriage of Arthur Alder and Helen Maple',
+        scope: 'family',
+        event_kind: 'point_event',
+        edtf_date: '1882-06-10',
+        place_id: 'plc_oak_county_ohio',
+        summary: 'Arthur Alder and Helen Maple married.',
+        participants: [
+          { person_id: 'per_arthur_alder', role: 'spouse' },
+          { person_id: 'per_helen_maple', role: 'spouse' },
+        ],
+        sources: [{ source_id: 'src_1880_census', confidence: 'medium' }],
+      },
+      // Pre-existing unrelated legacy hygiene issues on Ezra Willow (must NOT block Arthur's audit).
+      {
+        id: 'evt_legacy_ezra_birth_1',
+        title: 'Birth of Ezra Willow',
+        scope: 'personal',
+        event_kind: 'point_event',
+        edtf_date: '1842-02-01',
+        place_id: 'plc_oak_county_ohio',
+        summary: 'Legacy birth 1.',
+        participants: [{ person_id: 'per_legacy_unrelated', role: 'birth_subject' }],
+        sources: [{ source_id: 'src_1880_census', confidence: 'low' }],
+      },
+      {
+        id: 'evt_legacy_ezra_birth_2',
+        title: 'Birth of Ezra Willow',
+        scope: 'personal',
+        event_kind: 'point_event',
+        edtf_date: '1842-02-01',
+        place_id: 'plc_oak_county_ohio',
+        summary: 'Legacy birth 2.',
+        participants: [{ person_id: 'per_legacy_unrelated', role: 'birth_subject' }],
+        sources: [{ source_id: 'src_1880_census', confidence: 'low' }],
+      },
+      {
+        id: 'evt_legacy_ezra_stub',
+        title: 'Recorded event for Ezra Willow',
+        scope: 'personal',
+        event_kind: 'point_event',
+        edtf_date: '1870',
+        place_id: 'plc_oak_county_ohio',
+        summary: 'Legacy placeholder.',
+        participants: [{ person_id: 'per_legacy_unrelated', role: 'subject' }],
+        sources: [{ source_id: 'src_1880_census', confidence: 'low' }],
+      },
+    ];
+
+    await Promise.all([
+      writeFile(
+        path.join(dataDir, 'people.yaml'),
+        serializePeopleYaml([...existingPeople, legacyPerson], { sortById: true }),
+        'utf8'
+      ),
+      writeFile(
+        path.join(dataDir, 'events.yaml'),
+        serializeEventsYaml(seededEvents, { sortById: true }),
+        'utf8'
+      ),
+    ]);
+
+    const pkgDir = path.join(repoDir, 'research', 'people', 'per_arthur_alder');
+    await mkdir(pkgDir, { recursive: true });
+    await writeFile(path.join(pkgDir, 'dossier.md'), '# Arthur Alder\n', 'utf8');
+
+    const writeArthurPatch = async (extra: Record<string, unknown>): Promise<void> => {
+      await writeFile(
+        path.join(pkgDir, 'patch.json'),
+        JSON.stringify(
+          {
+            person_id: 'per_arthur_alder',
+            narratives: [
+              {
+                id: 'nar_arthur_bio',
+                slug: 'arthur-alder-bio',
+                kind: 'biography',
+                subject_person_id: 'per_arthur_alder',
+                title: 'Arthur Alder',
+                summary: 'Biography of Arthur Alder.',
+                body_md: 'Arthur Alder lived in Oak County, Ohio in 1880.[^src_1880_census]',
+                person_ids: ['per_arthur_alder'],
+                place_ids: ['plc_oak_county_ohio'],
+                event_ids: [],
+                source_ids: ['src_1880_census'],
+              },
+            ],
+            ...extra,
+          },
+          null,
+          2
+        ),
+        'utf8'
+      );
+    };
+
+    // 1. Clean patch updating existing birth in place passes --strict despite legacy Ezra warnings.
+    await writeArthurPatch({
+      events: [
+        {
+          id: 'evt_arthur_birth_live',
+          title: 'Birth of Arthur Alder',
+          scope: 'personal',
+          event_kind: 'point_event',
+          edtf_date: '1858-04-12',
+          place_id: 'plc_oak_county_ohio',
+          summary: 'Updated birth entry in place.',
+          participants: [{ person_id: 'per_arthur_alder', role: 'birth_subject' }],
+          sources: [{ source_id: 'src_1880_census', confidence: 'high' }],
+        },
+      ],
+    });
+    const cleanCli = createCaptureIo();
+    expect(
+      await runCli(['audit', 'per_arthur_alder', '--repo', repoDir, '--strict', '--json'], {
+        io: cleanCli.io,
+      })
+    ).toBe(EXIT_OK);
+    const cleanParsed = JSON.parse(cleanCli.stdout.join('\n')) as {
+      ok: boolean;
+      strictOk: boolean;
+      hygieneWarnings: Array<{ category: string; eventIds?: string[] }>;
+    };
+    expect(cleanParsed.ok).toBe(true);
+    expect(cleanParsed.strictOk).toBe(true);
+    expect(cleanParsed.hygieneWarnings).toEqual([]);
+
+    // 2. Patch adding duplicate birth, death, marriage, and placeholder fails --strict cleanly.
+    await writeArthurPatch({
+      events: [
+        {
+          id: 'evt_arthur_birth_dup',
+          title: 'Birth of Arthur Alder',
+          scope: 'personal',
+          event_kind: 'point_event',
+          edtf_date: '1858-04-12',
+          place_id: 'plc_oak_county_ohio',
+          summary: 'Newly introduced duplicate birth.',
+          participants: [{ person_id: 'per_arthur_alder', role: 'birth_subject' }],
+          sources: [{ source_id: 'src_1880_census', confidence: 'medium' }],
+        },
+        {
+          id: 'evt_arthur_death_dup',
+          title: 'Death of Arthur Alder',
+          scope: 'personal',
+          event_kind: 'point_event',
+          edtf_date: '1932-09-18',
+          place_id: 'plc_oak_county_ohio',
+          summary: 'Newly introduced duplicate death.',
+          participants: [{ person_id: 'per_arthur_alder', role: 'death_subject' }],
+          sources: [{ source_id: 'src_1932_death_cert', confidence: 'high' }],
+        },
+        {
+          id: 'evt_marr_arthur_helen_dup',
+          title: 'Marriage of Arthur Alder and Helen Maple',
+          scope: 'family',
+          event_kind: 'point_event',
+          edtf_date: '1882-06-10',
+          place_id: 'plc_oak_county_ohio',
+          summary: 'Newly introduced duplicate marriage.',
+          participants: [
+            { person_id: 'per_arthur_alder', role: 'spouse' },
+            { person_id: 'per_helen_maple', role: 'spouse' },
+          ],
+          sources: [{ source_id: 'src_1880_census', confidence: 'medium' }],
+        },
+        {
+          id: 'evt_arthur_stub_new',
+          title: 'Recorded event for Arthur Alder',
+          scope: 'personal',
+          event_kind: 'point_event',
+          edtf_date: '1890',
+          place_id: 'plc_oak_county_ohio',
+          summary: 'Placeholder event.',
+          participants: [{ person_id: 'per_arthur_alder', role: 'subject' }],
+          sources: [{ source_id: 'src_1880_census', confidence: 'low' }],
+        },
+      ],
+    });
+
+    const strictDupCli = createCaptureIo();
+    expect(
+      await runCli(['audit', 'per_arthur_alder', '--repo', repoDir, '--strict', '--json'], {
+        io: strictDupCli.io,
+      })
+    ).toBe(EXIT_ERROR);
+    const dupParsed = JSON.parse(strictDupCli.stdout.join('\n')) as {
+      ok: boolean;
+      strictOk: boolean;
+      hygieneWarnings: Array<{ category: string; personIds: string[]; eventIds?: string[] }>;
+      warnings: string[];
+    };
+    expect(dupParsed.ok).toBe(true);
+    expect(dupParsed.strictOk).toBe(false);
+    expect(dupParsed.hygieneWarnings).toHaveLength(4);
+    expect(dupParsed.hygieneWarnings.map((w) => w.category)).toEqual([
+      'duplicate_vital_event',
+      'duplicate_vital_event',
+      'duplicate_vital_event',
+      'placeholder_event',
+    ]);
+    expect(
+      dupParsed.warnings.some(
+        (w) =>
+          w.startsWith('hygiene(duplicate_vital_event): Staged patch introduces duplicate vital event') &&
+          w.includes('update the existing event ID in place or include it in remove_event_ids.')
+      )
+    ).toBe(true);
+
+    // Non-strict audit still succeeds while surfacing the WARN lines in text output.
+    const nonStrictAudit = await runAuditCommand({ repoDir, personId: 'per_arthur_alder' });
+    expect(nonStrictAudit.ok).toBe(true);
+    expect(nonStrictAudit.strictOk).toBe(false);
+    expect(nonStrictAudit.rendered).toContain('WARN: hygiene(duplicate_vital_event):');
+    expect(nonStrictAudit.rendered).toContain('WARN: hygiene(placeholder_event):');
+
+    // 3. Replacing the old birth/death/marriage IDs via remove_event_ids clears the duplicates.
+    await writeArthurPatch({
+      remove_event_ids: [
+        'evt_arthur_birth_live',
+        'evt_arthur_death_live',
+        'evt_marr_arthur_helen_live',
+      ],
+      events: [
+        {
+          id: 'evt_arthur_birth_dup',
+          title: 'Birth of Arthur Alder',
+          scope: 'personal',
+          event_kind: 'point_event',
+          edtf_date: '1858-04-12',
+          place_id: 'plc_oak_county_ohio',
+          summary: 'Replacement birth event.',
+          participants: [{ person_id: 'per_arthur_alder', role: 'birth_subject' }],
+          sources: [{ source_id: 'src_1880_census', confidence: 'medium' }],
+        },
+        {
+          id: 'evt_arthur_death_dup',
+          title: 'Death of Arthur Alder',
+          scope: 'personal',
+          event_kind: 'point_event',
+          edtf_date: '1932-09-18',
+          place_id: 'plc_oak_county_ohio',
+          summary: 'Replacement death event.',
+          participants: [{ person_id: 'per_arthur_alder', role: 'death_subject' }],
+          sources: [{ source_id: 'src_1932_death_cert', confidence: 'high' }],
+        },
+        {
+          id: 'evt_marr_arthur_helen_dup',
+          title: 'Marriage of Arthur Alder and Helen Maple',
+          scope: 'family',
+          event_kind: 'point_event',
+          edtf_date: '1882-06-10',
+          place_id: 'plc_oak_county_ohio',
+          summary: 'Replacement marriage event.',
+          participants: [
+            { person_id: 'per_arthur_alder', role: 'spouse' },
+            { person_id: 'per_helen_maple', role: 'spouse' },
+          ],
+          sources: [{ source_id: 'src_1880_census', confidence: 'medium' }],
+        },
+      ],
+    });
+    const replacedAudit = await runAuditCommand({ repoDir, personId: 'per_arthur_alder' });
+    expect(replacedAudit.ok).toBe(true);
+    expect(replacedAudit.strictOk).toBe(true);
+    expect(replacedAudit.hygieneWarnings).toEqual([]);
+
+    // 4. Pre-existing duplicate on target person is ignored when untouched, and flagged if worsened.
+    const liveWithArthurDup: RawEvent[] = [
+      ...seededEvents,
+      {
+        id: 'evt_arthur_birth_legacy_2',
+        title: 'Birth of Arthur Alder',
+        scope: 'personal',
+        event_kind: 'point_event',
+        edtf_date: '1858-04-12',
+        place_id: 'plc_oak_county_ohio',
+        summary: 'Pre-existing legacy duplicate birth on target.',
+        participants: [{ person_id: 'per_arthur_alder', role: 'birth_subject' }],
+        sources: [{ source_id: 'src_1880_census', confidence: 'low' }],
+      },
+    ];
+    await writeFile(
+      path.join(dataDir, 'events.yaml'),
+      serializeEventsYaml(liveWithArthurDup, { sortById: true }),
+      'utf8'
+    );
+
+    // Patch touching only an unrelated census does not re-flag the pre-existing duplicate.
+    await writeArthurPatch({
+      events: [
+        {
+          id: 'evt_arthur_census_1900',
+          title: '1900 US Census for Arthur Alder',
+          scope: 'personal',
+          event_kind: 'point_event',
+          edtf_date: '1900-06-01',
+          place_id: 'plc_oak_county_ohio',
+          summary: 'Arthur Alder enumerated in Oak County.',
+          participants: [{ person_id: 'per_arthur_alder', role: 'resident' }],
+          sources: [{ source_id: 'src_1880_census', confidence: 'medium' }],
+        },
+      ],
+    });
+    const untouchedDupAudit = await runAuditCommand({ repoDir, personId: 'per_arthur_alder' });
+    expect(untouchedDupAudit.ok).toBe(true);
+    expect(untouchedDupAudit.strictOk).toBe(true);
+    expect(untouchedDupAudit.hygieneWarnings).toEqual([]);
+
+    // Adding a third birth event worsens the duplicate and fails --strict.
+    await writeArthurPatch({
+      events: [
+        {
+          id: 'evt_arthur_birth_third',
+          title: 'Birth of Arthur Alder',
+          scope: 'personal',
+          event_kind: 'point_event',
+          edtf_date: '1858-04-12',
+          place_id: 'plc_oak_county_ohio',
+          summary: 'Third birth event worsening legacy duplicate.',
+          participants: [{ person_id: 'per_arthur_alder', role: 'birth_subject' }],
+          sources: [{ source_id: 'src_1880_census', confidence: 'medium' }],
+        },
+      ],
+    });
+    const worsenedDupAudit = await runAuditCommand({ repoDir, personId: 'per_arthur_alder' });
+    expect(worsenedDupAudit.ok).toBe(true);
+    expect(worsenedDupAudit.strictOk).toBe(false);
+    expect(worsenedDupAudit.hygieneWarnings).toHaveLength(1);
+    expect(worsenedDupAudit.hygieneWarnings[0]?.eventIds).toEqual([
+      'evt_arthur_birth_legacy_2',
+      'evt_arthur_birth_live',
+      'evt_arthur_birth_third',
+    ]);
+
+    // 5. Patch introducing excess_parents, parent_child_chronology, and child_marriage fails --strict.
+    await writeArthurPatch({
+      people: [
+        {
+          id: 'per_staged_second_father',
+          slug: 'staged-second-father',
+          full_name: 'Caleb Birch',
+          given_name: 'Caleb',
+          surname: 'Birch',
+          alt_names: [],
+          sex: 'M',
+          is_living: false,
+          lineage_group: 'ancestor',
+          birth_edtf: '1850-01-01',
+          death_edtf: '1920-01-01',
+          portrait_url: null,
+        },
+        {
+          id: 'per_staged_young_spouse',
+          slug: 'staged-young-spouse',
+          full_name: 'Eleanor Rowan',
+          given_name: 'Eleanor',
+          surname: 'Rowan',
+          alt_names: [],
+          sex: 'F',
+          is_living: false,
+          lineage_group: 'extended',
+          birth_edtf: '1878-01-01',
+          death_edtf: '1955-01-01',
+          portrait_url: null,
+        },
+      ],
+      kinship: [
+        {
+          from: 'per_staged_second_father',
+          to: 'per_arthur_alder',
+          relation: 'parent',
+          family_xref: '@F99@',
+        },
+      ],
+      events: [
+        {
+          id: 'evt_marr_arthur_eleanor_young',
+          title: 'Marriage of Arthur Alder and Eleanor Rowan',
+          scope: 'family',
+          event_kind: 'point_event',
+          edtf_date: '1890-06-01',
+          place_id: 'plc_oak_county_ohio',
+          summary: 'Eleanor was age 12 at marriage.',
+          participants: [
+            { person_id: 'per_arthur_alder', role: 'spouse' },
+            { person_id: 'per_staged_young_spouse', role: 'spouse' },
+          ],
+          sources: [{ source_id: 'src_1880_census', confidence: 'low' }],
+        },
+      ],
+    });
+    const structuralAudit = await runAuditCommand({ repoDir, personId: 'per_arthur_alder' });
+    expect(structuralAudit.strictOk).toBe(false);
+    expect(structuralAudit.hygieneWarnings.map((w) => w.category)).toEqual([
+      'excess_parents',
+      'parent_child_chronology',
+      'child_marriage',
+    ]);
   });
 });
