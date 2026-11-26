@@ -9,7 +9,11 @@ import {
 } from '@kinloom/core';
 import { CliValidationError } from '../../errors.js';
 import { parseMatchingYamlBlocks, splitTopLevelYamlList } from './context.js';
-import { runIntegrateCommand, type IntegrateCommandResult } from './integrate.js';
+import {
+  parseValidDeathEdtf,
+  runIntegrateCommand,
+  type IntegrateCommandResult,
+} from './integrate.js';
 import {
   collectLiveMediaCollisions,
   loadLiveMedia,
@@ -34,6 +38,14 @@ const INLINE_CITATION_RE = /\[\^src_[A-Za-z0-9._:-]+(?:\|[A-Za-z0-9._:-]+)?\]/;
 
 const POST_MORTEM_RE =
   /\b(burial|buried|funeral|probate|will|estate|obituary|memorial|gravestone|headstone|cemetery|cenotaph|interment|interred|administration|inventory|tombstone|inquest|posthumous|heirs?|executors?|widow)\b/i;
+const POST_MORTEM_PASSIVE_ROLES = new Set([
+  'mentioned',
+  'deceased_parent',
+  'parent_of_groom',
+  'parent_of_bride',
+  'cited_parent',
+  'subject_parent',
+]);
 const PRE_BIRTH_CONTEXT_RE =
   /\b(father|mother|parents?|ancestors?|pre-birth|prior to birth|before birth|family origin)\b/i;
 const CENSUS_RE = /\b(census|enumerat\w*)\b/i;
@@ -44,17 +56,40 @@ const MIN_SCAN_WARN_BYTES = 10 * 1024;
 const MAX_SCAN_WARN_BYTES = 10 * 1024 * 1024;
 
 const ABBREVIATIONS = [
-  'Mr.', 'Mrs.', 'Ms.', 'Dr.', 'Capt.', 'Col.', 'Lt.', 'Gen.', 'Sgt.', 'Cpl.', 'Pvt.',
-  'Rev.', 'Hon.', 'St.', 'Jr.', 'Sr.', 'Prof.', 'Gov.', 'Pres.', 'Vol.', 'Vols.',
-  'No.', 'Nos.', 'Lib.', 'Fol.', 'Fols.', 'fol.', 'fols.', 'Ch.', 'Sec.', 'Fig.',
-  'Ed.', 'Eds.', 'p.', 'pp.', 'c.', 'ca.', 'cf.', 'e.g.', 'i.e.', 'et al.', 'etc.',
-  'vs.', 'v.', 'viz.',
+  'Mr.', 'Mrs.', 'Ms.', 'Dr.', 'Prof.', 'Rev.', 'Hon.', 'Gov.', 'Pres.', 'Sen.', 'Rep.',
+  'Esq.', 'Fr.', 'Br.', 'Mme.', 'Mlle.', 'Messrs.', 'Supt.', 'Jr.', 'Sr.',
+  'Gen.', 'Col.', 'Maj.', 'Capt.', 'Lt.', 'Lieut.', 'Sgt.', 'Sergt.', 'Cpl.', 'Corpl.',
+  'Pfc.', 'PFC.', 'Pvt.', 'Adm.', 'Brig.', 'Cmdr.', 'Ens.', 'Spc.', 'Spec.',
+  'Nr.', 'Nrs.', 'nr.', 'nrs.', 'No.', 'Nos.', 'Vol.', 'Vols.', 'vol.', 'vols.',
+  'Lib.', 'Fol.', 'Fols.', 'fol.', 'fols.', 'Reg.', 'reg.', 'Inv.', 'inv.',
+  'Afd.', 'afd.', 'Blz.', 'blz.', 'Hfdst.', 'Vgl.', 'vgl.',
+  'Geb.', 'geb.', 'Ged.', 'ged.', 'Overl.', 'overl.', 'Begr.', 'begr.',
+  'Ch.', 'ch.', 'Sec.', 'sec.', 'Par.', 'par.', 'Pars.', 'pars.',
+  'Fig.', 'Figs.', 'fig.', 'figs.', 'Art.', 'art.', 'Bk.', 'bk.', 'Pt.', 'pt.', 'Ser.', 'ser.',
+  'Ed.', 'Eds.', 'ed.', 'eds.', 'p.', 'pp.', 'c.', 'ca.', 'cf.', 'fl.',
+  'abt.', 'bef.', 'aft.', 'est.', 'approx.', 'e.g.', 'i.e.', 'et al.', 'etc.', 'vs.', 'v.', 'viz.',
+  'Twp.', 'twp.', 'Co.', 'St.', 'Ste.', 'Ave.', 'Blvd.', 'Rd.', 'Ln.', 'Ct.', 'Pl.', 'Sq.',
+  'Dist.', 'Pct.', 'Mt.', 'Ft.', 'Isl.', 'R.F.D.', 'R.R.', 'P.O.', 'Bldg.', 'Dept.', 'Assn.',
+  'Bros.', 'Inc.', 'Ltd.', 'Corp.', 'Mfg.',
   'Jan.', 'Feb.', 'Mar.', 'Apr.', 'Jun.', 'Jul.', 'Aug.', 'Sep.', 'Sept.', 'Oct.', 'Nov.', 'Dec.',
   'JAN.', 'FEB.', 'MAR.', 'APR.', 'JUN.', 'JUL.', 'AUG.', 'SEP.', 'SEPT.', 'OCT.', 'NOV.', 'DEC.',
-  'U.S.', 'U.S.A.', 'N.J.', 'N.Y.', 'Pa.', 'Va.', 'Md.', 'Mass.', 'Conn.', 'Calif.',
-  'Ind.', 'Ill.', 'Mo.', 'Ky.', 'Tenn.', 'N.C.', 'S.C.', 'Inc.', 'Co.', 'Ltd.',
+  'U.S.', 'U.S.A.', 'D.C.', 'Ala.', 'Ariz.', 'Ark.', 'Calif.', 'Colo.', 'Conn.', 'Del.', 'Fla.',
+  'Ga.', 'Ill.', 'Ind.', 'Kan.', 'Kans.', 'Ky.', 'La.', 'Mass.', 'Md.', 'Mich.', 'Minn.', 'Miss.',
+  'Mo.', 'Mont.', 'N.C.', 'N.D.', 'N.H.', 'N.J.', 'N.M.', 'N.Y.', 'Neb.', 'Nebr.', 'Nev.', 'Okla.',
+  'Ore.', 'Oreg.', 'Pa.', 'R.I.', 'S.C.', 'S.D.', 'Tenn.', 'Tex.', 'Va.', 'Vt.', 'W.Va.', 'Wash.',
+  'Wis.', 'Wisc.', 'Wyo.', 'Ont.', 'Que.', 'N.S.', 'N.B.',
   'B.C.', 'A.D.', 'a.m.', 'p.m.', 'b.', 'd.', 'm.', 'bur.', 'bap.', 'chr.',
 ] as const;
+
+const ABBREVIATION_RE = new RegExp(
+  `(?<![A-Za-z])(?:${[...ABBREVIATIONS]
+    .toSorted((a, b) => b.length - a.length)
+    .map((abbr) => abbr.replaceAll(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+    .join('|')})`,
+  'g'
+);
+const LOWERCASE_NUMBER_ABBR_RE = /(?<![A-Za-z])nos?\.(?=\s+(?:\d|[IVX]+\b|[A-Za-z]\d))/g;
+const CITATION_FOLLOWS_RE = /^["”’')]*\[\^[^\]]+\]/;
 
 export { AUDIT_HELP } from './help.js';
 
@@ -393,6 +428,8 @@ function checkEventChronologyForPerson(params: {
   const evId = asString(ev.id);
   const textBlob = `${evId} ${asString(ev.event_kind)} ${asString(ev.title)} ${asString(ev.summary)}`;
   const isPostMortemAllowed = POST_MORTEM_RE.test(textBlob);
+  const normalizedRole = role.trim().toLowerCase().replaceAll(/[\s-]+/g, '_');
+  const isPassivePostMortemRole = POST_MORTEM_PASSIVE_ROLES.has(normalizedRole);
   const isPreBirthContext = PRE_BIRTH_CONTEXT_RE.test(textBlob);
   const isCensus = CENSUS_RE.test(`${evId} ${asString(ev.title)}`);
   const isMarriage = MARRIAGE_RE.test(`${evId} ${asString(ev.event_kind)} ${asString(ev.title)}`);
@@ -414,7 +451,7 @@ function checkEventChronologyForPerson(params: {
     }
   }
 
-  if (death && deathMaxMs !== null && dt.startMs > deathMaxMs) {
+  if (death && deathMaxMs !== null && dt.startMs > deathMaxMs && !isPassivePostMortemRole) {
     if (isCensus) {
       if (!isPostMortemAllowed) {
         errors.push(`${labelPrefix}Event ${evId} (${dt.raw}): census postdates death (${death.raw}) without explicit posthumous/widow label.`);
@@ -427,7 +464,7 @@ function checkEventChronologyForPerson(params: {
   }
 
   if (birth && isMarriage) {
-    const isPrincipalSpouse = !role || SPOUSE_ROLE_RE.test(role);
+    const isPrincipalSpouse = !isPassivePostMortemRole && (!role || SPOUSE_ROLE_RE.test(role));
     if (isPrincipalSpouse) {
       let ageAtEvent: number | null;
       if (birth.raw.includes('/') || dt.raw.includes('/')) {
@@ -869,12 +906,16 @@ export function splitParagraphIntoSentences(paragraph: string): string[] {
     m.replaceAll('.', '\u0001').replaceAll('!', '\u0002').replaceAll('?', '\u0003')
   );
 
-  // Mask common abbreviations and single-letter initials (e.g. "C. P. and Emma Alder").
-  for (const abbr of ABBREVIATIONS) {
-    const escaped = abbr.replaceAll(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const re = new RegExp(`(?<![A-Za-z])${escaped}`, 'g');
-    protectedText = protectedText.replaceAll(re, (m) => m.replaceAll('.', '\u0001'));
-  }
+  // Mask abbreviations without hiding a final period that ends a cited sentence.
+  const maskAbbreviation = (match: string, offset: number, full: string): string => {
+    const after = full.slice(offset + match.length);
+    if (CITATION_FOLLOWS_RE.test(after) && match.endsWith('.')) {
+      return `${match.slice(0, -1).replaceAll('.', '\u0001')}.`;
+    }
+    return match.replaceAll('.', '\u0001');
+  };
+  protectedText = protectedText.replaceAll(ABBREVIATION_RE, maskAbbreviation);
+  protectedText = protectedText.replaceAll(LOWERCASE_NUMBER_ABBR_RE, maskAbbreviation);
   protectedText = protectedText.replaceAll(
     /(?<![A-Za-z])([A-Z])\.(?=\s+[A-Za-z&(])/g,
     '$1\u0001'
@@ -1392,6 +1433,22 @@ export async function runAuditCommand(options: AuditCommandOptions): Promise<Aud
     stagedPeopleById.set(rawPerson.id.trim(), rawPerson);
   }
 
+  const personUpdates = isPlainRecord(patch.person_updates) ? patch.person_updates : null;
+  let targetDeathUpdate: string | null = null;
+  if (personUpdates) {
+    const hasConflict =
+      personUpdates.death_edtf !== undefined &&
+      personUpdates.death_date !== undefined &&
+      String(personUpdates.death_edtf) !== String(personUpdates.death_date);
+    if (!hasConflict) {
+      const rawDeath =
+        personUpdates.death_edtf !== undefined
+          ? personUpdates.death_edtf
+          : personUpdates.death_date;
+      targetDeathUpdate = parseValidDeathEdtf(rawDeath);
+    }
+  }
+
   const mergedAuditPeople: LooseRecord[] = [];
   const seenAuditPersonIds = new Set<string>();
   for (const person of parsedPeople) {
@@ -1399,11 +1456,19 @@ export async function runAuditCommand(options: AuditCommandOptions): Promise<Aud
     if (id) {
       seenAuditPersonIds.add(id);
     }
+    const explicitlyLiving = person.is_living === true || person.living === true;
+    let effectivePerson: LooseRecord = person;
+    if (id === personId && !explicitlyLiving && targetDeathUpdate !== null) {
+      const candidate = { ...person, death_edtf: targetDeathUpdate };
+      if (!isEffectiveLivingPerson(candidate)) {
+        effectivePerson = candidate;
+      }
+    }
     const staged = id ? stagedPeopleById.get(id) : undefined;
-    if (staged && !isEffectiveLivingPerson(person)) {
-      mergedAuditPeople.push({ ...person, ...staged });
+    if (staged && !isEffectiveLivingPerson(effectivePerson)) {
+      mergedAuditPeople.push({ ...effectivePerson, ...staged });
     } else {
-      mergedAuditPeople.push(person);
+      mergedAuditPeople.push(effectivePerson);
     }
   }
   for (const [id, stagedPerson] of stagedPeopleById) {

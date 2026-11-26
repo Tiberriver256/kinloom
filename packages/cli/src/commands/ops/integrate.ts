@@ -11,6 +11,7 @@ import {
   RawPersonSchema,
   SourceRecordSchema,
   compileArchive,
+  edtfToBounds,
   extractNarrativeCitations,
   getMediaPersonIds,
   mergeEventSources,
@@ -474,6 +475,33 @@ function assertValidPlaceCoordinates(place: unknown, label: string): Record<stri
   const copy: Record<string, unknown> = { ...place, lat, lng };
   delete copy.lon;
   return copy;
+}
+
+export function parseValidDeathEdtf(raw: unknown): string | null {
+  if (raw === undefined || raw === null) {
+    return null;
+  }
+  const trimmed = String(raw).trim();
+  const slashIdx = trimmed.indexOf('/');
+  if (!trimmed || (slashIdx !== -1 && trimmed.indexOf('/', slashIdx + 1) !== -1)) {
+    return null;
+  }
+  return edtfToBounds(trimmed) !== null ? trimmed : null;
+}
+
+function resolveValidDeathEdtfUpdate(updates: Record<string, unknown> | null): string | null {
+  if (!updates) {
+    return null;
+  }
+  if (
+    updates.death_edtf !== undefined &&
+    updates.death_date !== undefined &&
+    String(updates.death_edtf) !== String(updates.death_date)
+  ) {
+    throw new Error('person_updates has conflicting death_edtf and death_date.');
+  }
+  const raw = updates.death_edtf !== undefined ? updates.death_edtf : updates.death_date;
+  return parseValidDeathEdtf(raw);
 }
 
 function mergePersonUpdates(
@@ -1116,7 +1144,15 @@ export async function runIntegrateCommand(
     );
   }
   const targetPerson = mergedPeople[targetIdx];
-  if (targetPerson.is_living || resolveEffectiveLiving(targetPerson, siteConfig.privacy)) {
+  if (targetPerson.is_living) {
+    throw new Error(
+      `PRIVACY REFUSAL: Target person '${personId}' resolves as living. Living people cannot be researched or patched.`
+    );
+  }
+  const updatedDeathEdtf = resolveValidDeathEdtfUpdate(patch.person_updates);
+  const candidateTargetPerson =
+    updatedDeathEdtf !== null ? { ...targetPerson, death_edtf: updatedDeathEdtf } : targetPerson;
+  if (resolveEffectiveLiving(candidateTargetPerson, siteConfig.privacy)) {
     throw new Error(
       `PRIVACY REFUSAL: Target person '${personId}' resolves as living. Living people cannot be researched or patched.`
     );

@@ -56,8 +56,10 @@ import {
   runStatusCommand,
   runSyncCommand,
   runTelemetryReportCommand,
+  runUncitedSentenceCheck,
   runVerifyCommand,
   scanYamlFilesForSsns,
+  splitParagraphIntoSentences,
   stripJsoncCommentsAndTrailingCommas,
   type OpsIo,
   type WranglerExecutor,
@@ -1998,6 +2000,143 @@ describe('ops/integrate', () => {
     await expect(
       runIntegrateCommand({ repoDir, personId: 'per_thomas_alder', dryRun: true })
     ).rejects.toThrow("Duplicate person id 'per_william_alder'");
+  });
+
+  it('applies person_updates.death_edtf before cutoff checks when existing.is_living is false and still rejects is_living true', async () => {
+    const repoDir = await createSyntheticRepo();
+    const peoplePath = path.join(repoDir, 'data', 'people.yaml');
+    const existingPeople = parsePeopleYaml(await readFile(peoplePath, 'utf8'));
+    existingPeople.push(
+      {
+        id: 'per_edward_birch',
+        slug: 'edward-birch',
+        full_name: 'Edward Birch',
+        given_name: 'Edward',
+        surname: 'Birch',
+        alt_names: [],
+        sex: 'M',
+        is_living: false,
+        lineage_group: 'ancestor',
+        birth_edtf: '1926',
+        death_edtf: '',
+        portrait_url: null,
+      },
+      {
+        id: 'per_nora_birch_living',
+        slug: 'nora-birch',
+        full_name: 'Nora Birch',
+        given_name: 'Nora',
+        surname: 'Birch',
+        alt_names: [],
+        sex: 'F',
+        is_living: true,
+        lineage_group: 'descendant',
+        birth_edtf: '1926',
+        death_edtf: '',
+        portrait_url: null,
+      }
+    );
+    await writeFile(peoplePath, serializePeopleYaml(existingPeople, { sortById: true }), 'utf8');
+
+    const edwardDir = path.join(repoDir, 'research', 'people', 'per_edward_birch');
+    await mkdir(edwardDir, { recursive: true });
+    const edwardPatchPath = path.join(edwardDir, 'patch.json');
+
+    await writeFile(
+      edwardPatchPath,
+      JSON.stringify({
+        person_id: 'per_edward_birch',
+        person_updates: {
+          death_edtf: 'not-a-date',
+        },
+      }),
+      'utf8'
+    );
+    await expect(
+      runIntegrateCommand({ repoDir, personId: 'per_edward_birch', dryRun: true })
+    ).rejects.toThrow('PRIVACY REFUSAL');
+
+    await writeFile(
+      edwardPatchPath,
+      JSON.stringify({
+        person_id: 'per_edward_birch',
+        person_updates: {
+          death_edtf: '2015-04-23',
+        },
+        narratives: [
+          {
+            id: 'nar_edward_birch_bio',
+            slug: 'edward-birch-bio',
+            title: 'Edward Birch Biography',
+            person_ids: ['per_edward_birch'],
+            place_ids: ['plc_oak_county_ohio'],
+            event_ids: [],
+            source_ids: ['src_1932_death_cert'],
+            body_md: 'Edward Birch was born in 1926 and died on April 23, 2015.[^src_1932_death_cert]',
+          },
+        ],
+      }),
+      'utf8'
+    );
+
+    const audit = await runAuditCommand({ repoDir, personId: 'per_edward_birch' });
+    expect(audit.ok).toBe(true);
+    expect(audit.strictOk).toBe(true);
+    expect(audit.checks.chronology.death_edtf).toBe('2015-04-23');
+    expect(audit.checks.dryRun.ok).toBe(true);
+
+    const applyRes = await runIntegrateCommand({
+      repoDir,
+      personId: 'per_edward_birch',
+      dryRun: false,
+    });
+    expect(applyRes.ok).toBe(true);
+    expect(applyRes.counts.personUpdated).toBe(true);
+
+    const updatedPeople = parsePeopleYaml(await readFile(peoplePath, 'utf8'));
+    expect(updatedPeople.find((p) => p.id === 'per_edward_birch')?.death_edtf).toBe('2015-04-23');
+
+    const noraDir = path.join(repoDir, 'research', 'people', 'per_nora_birch_living');
+    await mkdir(noraDir, { recursive: true });
+    const noraPatchPath = path.join(noraDir, 'patch.json');
+
+    await writeFile(
+      noraPatchPath,
+      JSON.stringify({
+        person_id: 'per_nora_birch_living',
+        person_updates: {
+          death_edtf: '2015-04-23',
+        },
+      }),
+      'utf8'
+    );
+    await expect(
+      runIntegrateCommand({ repoDir, personId: 'per_nora_birch_living', dryRun: true })
+    ).rejects.toThrow('PRIVACY REFUSAL');
+
+    const noraAuditWithDeath = await runAuditCommand({
+      repoDir,
+      personId: 'per_nora_birch_living',
+    });
+    expect(noraAuditWithDeath.ok).toBe(false);
+    expect(noraAuditWithDeath.strictOk).toBe(false);
+    expect(noraAuditWithDeath.checks.dryRun.ok).toBe(false);
+    expect(noraAuditWithDeath.checks.dryRun.error).toContain('PRIVACY REFUSAL');
+
+    await writeFile(
+      noraPatchPath,
+      JSON.stringify({
+        person_id: 'per_nora_birch_living',
+        person_updates: {
+          is_living: false,
+          death_edtf: '2015-04-23',
+        },
+      }),
+      'utf8'
+    );
+    await expect(
+      runIntegrateCommand({ repoDir, personId: 'per_nora_birch_living', dryRun: true })
+    ).rejects.toThrow('PRIVACY REFUSAL');
   });
 });
 
@@ -4235,6 +4374,131 @@ describe('ops/audit', () => {
         personIdsConflict: true,
       })
     );
+  });
+
+  it('keeps genealogical and archival abbreviations inside one cited sentence while catching uncited follow-up sentences', () => {
+    const single =
+      'He lived at Wijk Nr. 22, Vol. 3, p. 14 with Cpl. John A. Maple.[^src_1]';
+    expect(splitParagraphIntoSentences(single)).toEqual([single]);
+    expect(
+      runUncitedSentenceCheck({
+        narratives: [{ id: 'nar_abbr_ok', body_md: single }],
+      })
+    ).toEqual({
+      ok: true,
+      totalSentences: 1,
+      citedSentences: 1,
+      uncitedCount: 0,
+      uncitedSentences: [],
+    });
+
+    const withUncitedSecond =
+      'He lived at Wijk Nr. 22, Vol. 3, p. 14 with Cpl. John A. Maple.[^src_1] Later he moved to Pine Twp. without a source.';
+    const checkSecond = runUncitedSentenceCheck({
+      narratives: [{ id: 'nar_abbr_uncited', body_md: withUncitedSecond }],
+    });
+    expect(checkSecond.ok).toBe(false);
+    expect(checkSecond.totalSentences).toBe(2);
+    expect(checkSecond.citedSentences).toBe(1);
+    expect(checkSecond.uncitedCount).toBe(1);
+    expect(checkSecond.uncitedSentences[0]?.text).toBe(
+      'Later he moved to Pine Twp. without a source.'
+    );
+
+    const endsAtAbbrCitation =
+      'He worked for Alder Co. in the U.S.A.[^src_1] He later moved to Oak County.';
+    const splitAbbrEnd = splitParagraphIntoSentences(endsAtAbbrCitation);
+    expect(splitAbbrEnd).toEqual([
+      'He worked for Alder Co. in the U.S.A.[^src_1]',
+      'He later moved to Oak County.',
+    ]);
+    const checkAbbrEnd = runUncitedSentenceCheck({
+      narratives: [{ id: 'nar_abbr_end', body_md: endsAtAbbrCitation }],
+    });
+    expect(checkAbbrEnd.ok).toBe(false);
+    expect(checkAbbrEnd.totalSentences).toBe(2);
+    expect(checkAbbrEnd.citedSentences).toBe(1);
+    expect(checkAbbrEnd.uncitedCount).toBe(1);
+
+    const denseArchiveRef =
+      'Recorded in Reg. 4, Fol. 9, sec. 2, ch. 1, par. 3, ed. 2, Ste. Genevieve, Aug. 1890, fl. 1880, with Maj. Arthur J. Alder and Pfc. Thomas B. Maple Jr., et al.[^src_2]';
+    expect(splitParagraphIntoSentences(denseArchiveRef)).toEqual([denseArchiveRef]);
+  });
+
+  it('allows passive post-death parent roles on child records while rejecting active post-death participation', () => {
+    const targetPerson = {
+      id: 'per_arthur_alder',
+      birth_edtf: '1858-04-12',
+      death_edtf: '1932-09-18',
+    };
+
+    const passiveResult = runChronologyCheck(
+      targetPerson,
+      {
+        person_id: 'per_arthur_alder',
+        events: [
+          {
+            id: 'evt_child_marriage_mentioned',
+            title: 'Marriage of Samuel Alder and Grace Pine',
+            event_kind: 'point_event',
+            edtf_date: '1942-06-14',
+            summary: 'Child marriage certificate naming both parents.',
+            participants: [{ person_id: 'per_arthur_alder', role: 'mentioned' }],
+          },
+          {
+            id: 'evt_child_marriage_deceased_parent',
+            title: 'Marriage of Evelyn Alder and Henry Cedar',
+            event_kind: 'point_event',
+            edtf_date: '1945-10-02',
+            summary: 'Marriage register entry listing bride father.',
+            participants: [{ person_id: 'per_arthur_alder', role: 'deceased_parent' }],
+          },
+          {
+            id: 'evt_child_marriage_parent_of_groom',
+            title: 'Marriage of George Alder and Clara Birch',
+            event_kind: 'point_event',
+            edtf_date: '1948-05-11',
+            summary: 'County marriage record.',
+            participants: [{ person_id: 'per_arthur_alder', role: 'parent_of_groom' }],
+          },
+        ],
+      },
+      []
+    );
+    expect(passiveResult.ok).toBe(true);
+    expect(passiveResult.errors).toEqual([]);
+
+    const activeCensusResult = runChronologyCheck(
+      targetPerson,
+      {
+        person_id: 'per_arthur_alder',
+        events: [
+          {
+            id: 'evt_1942_census_principal',
+            title: '1942 Special Census in Oak County',
+            event_kind: 'residence_anchor',
+            edtf_date: '1942-04-01',
+            summary: 'Enumerated as head of household.',
+            participants: [{ person_id: 'per_arthur_alder', role: 'principal' }],
+          },
+          {
+            id: 'evt_1942_census_resident',
+            title: '1942 County Census in Pine Township',
+            event_kind: 'residence_anchor',
+            edtf_date: '1942-05-01',
+            summary: 'Enumerated as resident.',
+            participants: [{ person_id: 'per_arthur_alder', role: 'resident' }],
+          },
+        ],
+      },
+      []
+    );
+    expect(activeCensusResult.ok).toBe(false);
+    expect(activeCensusResult.errors).toHaveLength(2);
+    expect(activeCensusResult.errors[0]).toContain('evt_1942_census_principal');
+    expect(activeCensusResult.errors[0]).toContain('census postdates death');
+    expect(activeCensusResult.errors[1]).toContain('evt_1942_census_resident');
+    expect(activeCensusResult.errors[1]).toContain('census postdates death');
   });
 });
 
