@@ -24,7 +24,7 @@ import { ScrollMemory } from './components/ScrollMemory.js';
 import { SourceInspectorDrawer } from './components/SourceInspectorDrawer.js';
 import { SourceReaderDrawer } from './components/SourceReaderDrawer.js';
 import { useArchiveData } from './context/ArchiveDataContext.js';
-import { useKinloomPlugins } from './plugins/PluginContext.js';
+import { PluginSlot, useKinloomPlugins } from './plugins/PluginContext.js';
 
 const AdminPage = lazy(async () => {
   const module = await import('./pages/AdminPage.js');
@@ -149,6 +149,7 @@ const RoutedAppShell: React.FC<{ siteTitle: string; baseUrl: string }> = ({
       <SourceReaderDrawer />
       <SourceInspectorDrawer />
       <GlobalSearchModal />
+      <PluginSlot name="appShell" className="kinloom-app-shell-slot" />
     </>
   );
 };

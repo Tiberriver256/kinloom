@@ -793,6 +793,8 @@ export const PersonPage: React.FC = () => {
                           <p className="person-biography-summary">{narrative.summary}</p>
                         )}
 
+                        <PluginSlot name="narrativeHeader" person={person} narrative={narrative} />
+
                         <div
                           className={`person-biography-body ${isLong && !isExpanded ? 'is-collapsed' : ''}`}
                         >
@@ -931,6 +933,8 @@ export const PersonPage: React.FC = () => {
                       {story.summary && (
                         <p className="person-biography-summary">{story.summary}</p>
                       )}
+
+                      <PluginSlot name="narrativeHeader" person={person} narrative={story} />
 
                       {isExpanded && (
                         <div className="person-biography-body">

@@ -26,6 +26,15 @@ export type {
   KinloomPluginProviderProps,
   PluginSlotProps,
 } from './plugins/PluginContext.js';
+export {
+  createNarrativeAudioPlugin,
+  readNarrativeAudioMeta,
+} from './plugins/narrativeAudioPlugin.js';
+export type {
+  ActiveNarrativeAudioTrack,
+  NarrativeAudioPluginOptions,
+  NarrativeAudioTrackMeta,
+} from './plugins/narrativeAudioPlugin.js';
 export type {
   KinloomMediaRenderer,
   KinloomMediaRendererProps,

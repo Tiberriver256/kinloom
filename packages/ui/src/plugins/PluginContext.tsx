@@ -1,4 +1,4 @@
-import type { Person, Place } from '@kinloom/core';
+import type { Narrative, Person, Place } from '@kinloom/core';
 import type {
   KinloomMediaRenderer,
   KinloomUiPlugin,
@@ -48,8 +48,16 @@ export const KinloomPluginProvider: React.FC<KinloomPluginProviderProps> = ({
     return { plugins, routes, mediaRenderers };
   }, [plugins]);
 
+  const wrappedChildren = plugins.reduceRight<React.ReactNode>((acc, plugin) => {
+    if (!plugin.provider) {
+      return acc;
+    }
+    const Provider = plugin.provider;
+    return <Provider>{acc}</Provider>;
+  }, children);
+
   return (
-    <KinloomPluginContext.Provider value={value}>{children}</KinloomPluginContext.Provider>
+    <KinloomPluginContext.Provider value={value}>{wrappedChildren}</KinloomPluginContext.Provider>
   );
 };
 
@@ -61,6 +69,7 @@ export interface PluginSlotProps {
   name: KinloomUiPluginSlotName;
   person?: Person;
   place?: Place;
+  narrative?: Narrative;
   className?: string;
 }
 
@@ -68,9 +77,15 @@ export interface PluginSlotProps {
  * Renders every plugin contribution registered for `name`.
  * Returns `null` when no plugins contribute output so empty slots add zero DOM clutter.
  */
-export const PluginSlot: React.FC<PluginSlotProps> = ({ name, person, place, className }) => {
+export const PluginSlot: React.FC<PluginSlotProps> = ({
+  name,
+  person,
+  place,
+  narrative,
+  className,
+}) => {
   const { plugins } = useKinloomPlugins();
-  const { bundle, siteConfig, session, capabilities } = useArchiveData();
+  const { bundle, siteConfig, baseUrl, session, capabilities } = useArchiveData();
 
   if (plugins.length === 0) {
     return null;
@@ -79,10 +94,12 @@ export const PluginSlot: React.FC<PluginSlotProps> = ({ name, person, place, cla
   const slotCtx: KinloomUiPluginSlotContext = {
     bundle,
     siteConfig,
+    baseUrl,
     session,
     capabilities,
     person,
     place,
+    narrative,
   };
 
   const rendered: React.ReactNode[] = [];
