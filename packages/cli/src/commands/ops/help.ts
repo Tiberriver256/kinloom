@@ -90,3 +90,23 @@ Options:
   --file <path>      Override telemetry JSONL file path (default: KINLOOM_TELEMETRY_FILE or ~/.cache/kinloom-telemetry/calls.jsonl)
   --json             Emit structured JSON report instead of a ranked table
   -h, --help         Show this help message`;
+
+export const DATES_HELP = `Usage: kinloom dates <subcommand> [arguments] [options]
+
+Deterministic UTC Gregorian calendar arithmetic (leap-year safe across 1600-2100+).
+
+Subcommands:
+  weekday <YYYY-MM-DD> [--json]
+      Print the weekday and formatted date (e.g., Monday, 7 February 1898)
+
+  diff <start-YYYY-MM-DD> <end-YYYY-MM-DD> [--json]
+      Compute exact totalDays, years, remainingDays, yearsMonthsDays, weekdays, and direction
+
+  age <birth-YYYY-MM-DD> --at <YYYY-MM-DD> [--at <YYYY-MM-DD> ...] [--json]
+      Compute completed age in years, remaining days, and total days at one or more dates
+      (also accepts positional event date(s) when --at is omitted)
+
+Options:
+  --at <YYYY-MM-DD>  Target event date for \`age\` (repeatable)
+  --json             Emit structured JSON output
+  -h, --help         Show this help message`;

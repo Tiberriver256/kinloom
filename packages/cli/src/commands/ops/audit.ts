@@ -323,6 +323,11 @@ export function runChronologyCheck(
       eventMap.set(rawEv.id, rawEv);
     }
   }
+  for (const rawId of Array.isArray(patch.remove_event_ids) ? patch.remove_event_ids : []) {
+    if (typeof rawId === 'string' && rawId.trim()) {
+      eventMap.delete(rawId.trim());
+    }
+  }
 
   const personId = typeof patch.person_id === 'string' ? patch.person_id : '';
   let checkedEvents = 0;

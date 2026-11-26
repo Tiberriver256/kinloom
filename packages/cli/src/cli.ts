@@ -5,6 +5,7 @@ import { parseArgs, type ParseArgsConfig } from 'node:util';
 import {
   AUDIT_HELP,
   CONTEXT_HELP,
+  DATES_HELP,
   INTEGRATE_HELP,
   SYNC_HELP,
   TELEMETRY_HELP,
@@ -58,6 +59,7 @@ Research & archive ops:
   audit              Run 5-check deterministic audit on a person research package
   verify             Run full-archive invariant checks over local data/*.yaml files
   sync               Diff and sync local YAML + R2 media to a live Cloudflare archive
+  dates              Compute exact Gregorian weekdays, date diffs, and ages
   telemetry          Report local CLI latency, cache hit rate, and failure summary
 
 ${formatRecordCommandsHelp()}
@@ -160,6 +162,7 @@ Options:
   audit: AUDIT_HELP,
   verify: VERIFY_HELP,
   sync: SYNC_HELP,
+  dates: DATES_HELP,
   telemetry: TELEMETRY_HELP,
 };
 
@@ -903,6 +906,87 @@ export async function runCli(
         );
         writeRenderedOutput(io, result.rendered);
         return result.liveVerification && !result.liveVerification.ok ? EXIT_ERROR : EXIT_OK;
+      }
+
+      case 'dates': {
+        const sub = rest[0];
+        if (sub !== 'weekday' && sub !== 'diff' && sub !== 'age') {
+          throw new CliValidationError(
+            sub
+              ? `Unknown dates subcommand '${sub}'. Expected \`weekday\`, \`diff\`, or \`age\`.`
+              : 'Missing dates subcommand. Expected `weekday`, `diff`, or `age`.'
+          );
+        }
+        const subArgs = rest.slice(1);
+        const { values, positionals } = safeParseArgs({
+          args: subArgs,
+          allowPositionals: true,
+          options: {
+            at: { type: 'string', multiple: true },
+            json: { type: 'boolean', default: false },
+          },
+        });
+        const [{ runDatesCommand }, { measureCommand }] = await Promise.all([
+          import('./commands/ops/dates.js'),
+          import('./commands/ops/telemetry.js'),
+        ]);
+        const result = await measureCommand(
+          {
+            subcmd: `dates ${sub}`,
+            extractResultMeta: (res) => ({
+              exitCode: EXIT_OK,
+              bytesOut: Buffer.byteLength(res.rendered, 'utf8'),
+            }),
+          },
+          async () => {
+            if (sub === 'weekday') {
+              if (values.at && values.at.length > 0) {
+                throw new CliValidationError('Option `--at` is only valid with `kinloom dates age`.');
+              }
+              if (positionals.length !== 1) {
+                throw new CliValidationError(
+                  'Usage: kinloom dates weekday <YYYY-MM-DD> [--json]'
+                );
+              }
+              return runDatesCommand({
+                subcommand: 'weekday',
+                date: positionals[0],
+                json: values.json,
+              });
+            }
+            if (sub === 'diff') {
+              if (values.at && values.at.length > 0) {
+                throw new CliValidationError('Option `--at` is only valid with `kinloom dates age`.');
+              }
+              if (positionals.length !== 2) {
+                throw new CliValidationError(
+                  'Usage: kinloom dates diff <start-YYYY-MM-DD> <end-YYYY-MM-DD> [--json]'
+                );
+              }
+              return runDatesCommand({
+                subcommand: 'diff',
+                startDate: positionals[0],
+                endDate: positionals[1],
+                json: values.json,
+              });
+            }
+            if (positionals.length < 1) {
+              throw new CliValidationError(
+                'Usage: kinloom dates age <birth-YYYY-MM-DD> --at <YYYY-MM-DD> [--at ...] [--json]'
+              );
+            }
+            const [birthDate, ...positionalAts] = positionals;
+            const atDates = [...(values.at ?? []), ...positionalAts];
+            return runDatesCommand({
+              subcommand: 'age',
+              birthDate,
+              atDates,
+              json: values.json,
+            });
+          }
+        );
+        writeRenderedOutput(io, result.rendered);
+        return EXIT_OK;
       }
 
       case 'telemetry': {

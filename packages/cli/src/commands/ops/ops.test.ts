@@ -4,6 +4,7 @@ import path from 'node:path';
 import {
   parseEventsYaml,
   parseKinloomConfigYaml,
+  parseMediaYaml,
   parseNarrativesYaml,
   parsePeopleYaml,
   parseSourcesYaml,
@@ -43,6 +44,7 @@ import {
   recordTelemetryEvent,
   runAuditCommand,
   runContextCommand,
+  runDatesCommand,
   runIntegrateCommand,
   runSyncCommand,
   runTelemetryReportCommand,
@@ -856,6 +858,392 @@ describe('ops/integrate', () => {
     await expect(
       runIntegrateCommand({ repoDir, personId: 'per_arthur_alder', dryRun: true })
     ).rejects.toThrow("cannot both attach and remove source 'src_1880_census'");
+  });
+
+  it('retires duplicate events and legacy media via remove_event_ids and remove_media_ids with dangling-ref guards', async () => {
+    const repoDir = await createSyntheticRepo();
+    const eventsPath = path.join(repoDir, 'data', 'events.yaml');
+    const mediaPath = path.join(repoDir, 'data', 'media.yaml');
+    const narrativesPath = path.join(repoDir, 'data', 'narratives.yaml');
+
+    // Seed a duplicate event stub, a legacy media record linked to it, and a narrative citing both.
+    const baseEvents = parseEventsYaml(await readFile(eventsPath, 'utf8'));
+    baseEvents.push({
+      id: 'evt_arthur_1880_dup',
+      title: 'Duplicate 1880 census stub',
+      scope: 'personal',
+      event_kind: 'point_event',
+      edtf_date: '1880',
+      place_id: 'plc_oak_county_ohio',
+      summary: 'Duplicate GEDCOM stub to retire.',
+      participants: [{ person_id: 'per_arthur_alder', role: 'principal' }],
+      sources: [{ source_id: 'src_1880_census', confidence: 'low' }],
+    });
+    await writeFile(eventsPath, serializeEventsYaml(baseEvents, { sortById: true }), 'utf8');
+
+    const baseMedia = parseMediaYaml(await readFile(mediaPath, 'utf8'));
+    baseMedia.push({
+      id: 'med_legacy_uncropped',
+      kind: 'document_scan',
+      source_id: 'src_1880_census',
+      person_id: 'per_arthur_alder',
+      event_id: 'evt_arthur_1880_dup',
+      file: '/media/legacy-uncropped.png',
+      caption: 'Legacy uncropped scan',
+    });
+    await writeFile(mediaPath, serializeMediaYaml(baseMedia, { sortById: true }), 'utf8');
+
+    const baseNarratives: Narrative[] = [
+      {
+        id: 'nar_arthur_bio',
+        slug: 'arthur-alder-bio',
+        kind: 'biography',
+        subject_person_id: 'per_arthur_alder',
+        title: 'Arthur Alder Biography',
+        person_ids: ['per_arthur_alder'],
+        place_ids: ['plc_oak_county_ohio'],
+        event_ids: ['evt_arthur_1880_census', 'evt_arthur_1880_dup'],
+        source_ids: ['src_1880_census'],
+        body_md: 'Arthur Alder farmed in Oak County.[^src_1880_census|med_legacy_uncropped]',
+      },
+    ];
+    await writeFile(
+      narrativesPath,
+      serializeNarrativesYaml(baseNarratives, { sortById: true }),
+      'utf8'
+    );
+
+    const packageDir = path.join(repoDir, 'research', 'people', 'per_arthur_alder');
+    await mkdir(packageDir, { recursive: true });
+    const patchPath = path.join(packageDir, 'patch.json');
+
+    // 1. Refuse conflicting add/update + remove in the same patch.
+    await writeFile(
+      patchPath,
+      JSON.stringify({
+        person_id: 'per_arthur_alder',
+        events: [
+          {
+            id: 'evt_arthur_1880_dup',
+            title: 'Duplicate 1880 census stub',
+            scope: 'personal',
+            event_kind: 'point_event',
+            edtf_date: '1880',
+            place_id: 'plc_oak_county_ohio',
+            summary: 'Updated stub.',
+            participants: [{ person_id: 'per_arthur_alder', role: 'principal' }],
+            sources: [{ source_id: 'src_1880_census', confidence: 'low' }],
+          },
+        ],
+        remove_event_ids: ['evt_arthur_1880_dup'],
+      }),
+      'utf8'
+    );
+    await expect(
+      runIntegrateCommand({ repoDir, personId: 'per_arthur_alder', dryRun: true })
+    ).rejects.toThrow("cannot both add/update and remove event 'evt_arthur_1880_dup'");
+
+    await writeFile(
+      patchPath,
+      JSON.stringify({
+        person_id: 'per_arthur_alder',
+        media: [
+          {
+            id: 'med_legacy_uncropped',
+            kind: 'document_scan',
+            source_id: 'src_1880_census',
+            person_id: 'per_arthur_alder',
+            file: '/media/legacy-uncropped.png',
+            caption: 'Legacy scan',
+          },
+        ],
+        remove_media_ids: ['med_legacy_uncropped'],
+      }),
+      'utf8'
+    );
+    await expect(
+      runIntegrateCommand({ repoDir, personId: 'per_arthur_alder', dryRun: true })
+    ).rejects.toThrow("cannot both add/update and remove media 'med_legacy_uncropped'");
+
+    // 2. Refuse removing an event still referenced by surviving media.event_id.
+    await writeFile(
+      patchPath,
+      JSON.stringify({
+        person_id: 'per_arthur_alder',
+        remove_event_ids: ['evt_arthur_1880_dup'],
+      }),
+      'utf8'
+    );
+    await expect(
+      runIntegrateCommand({ repoDir, personId: 'per_arthur_alder', dryRun: true })
+    ).rejects.toThrow("Cannot remove event 'evt_arthur_1880_dup': media 'med_legacy_uncropped' still references it");
+
+    // 3. Refuse removing a media item still cited inline by a surviving narrative.
+    await writeFile(
+      patchPath,
+      JSON.stringify({
+        person_id: 'per_arthur_alder',
+        remove_media_ids: ['med_legacy_uncropped'],
+      }),
+      'utf8'
+    );
+    await expect(
+      runIntegrateCommand({ repoDir, personId: 'per_arthur_alder', dryRun: true })
+    ).rejects.toThrow("Cannot remove media 'med_legacy_uncropped': narrative 'nar_arthur_bio' still cites it inline");
+
+    // 4. Refuse removing an event still listed in surviving narrative.event_ids (even after removing media & updating inline citation).
+    await writeFile(
+      patchPath,
+      JSON.stringify({
+        person_id: 'per_arthur_alder',
+        remove_event_ids: ['evt_arthur_1880_dup'],
+        remove_media_ids: ['med_legacy_uncropped'],
+        narratives: [
+          {
+            id: 'nar_arthur_bio',
+            slug: 'arthur-alder-bio',
+            kind: 'biography',
+            subject_person_id: 'per_arthur_alder',
+            title: 'Arthur Alder Biography',
+            person_ids: ['per_arthur_alder'],
+            place_ids: ['plc_oak_county_ohio'],
+            event_ids: ['evt_arthur_1880_census', 'evt_arthur_1880_dup'],
+            source_ids: ['src_1880_census'],
+            body_md: 'Arthur Alder farmed in Oak County.[^src_1880_census]',
+          },
+        ],
+      }),
+      'utf8'
+    );
+    await expect(
+      runIntegrateCommand({ repoDir, personId: 'per_arthur_alder', dryRun: true })
+    ).rejects.toThrow("Narrative 'nar_arthur_bio' references missing event_id 'evt_arthur_1880_dup'");
+
+    // 5. Dry-run and apply succeed once narrative drops the retired event and media references.
+    const cleanRetirePatch = {
+      person_id: 'per_arthur_alder',
+      remove_event_ids: ['evt_arthur_1880_dup'],
+      remove_media_ids: ['med_legacy_uncropped'],
+      narratives: [
+        {
+          id: 'nar_arthur_bio',
+          slug: 'arthur-alder-bio',
+          kind: 'biography',
+          subject_person_id: 'per_arthur_alder',
+          title: 'Arthur Alder Biography',
+          person_ids: ['per_arthur_alder'],
+          place_ids: ['plc_oak_county_ohio'],
+          event_ids: ['evt_arthur_1880_census'],
+          source_ids: ['src_1880_census'],
+          body_md: 'Arthur Alder farmed in Oak County.[^src_1880_census]',
+        },
+      ],
+    };
+    await writeFile(patchPath, JSON.stringify(cleanRetirePatch, null, 2), 'utf8');
+
+    const dryRes = await runIntegrateCommand({
+      repoDir,
+      personId: 'per_arthur_alder',
+      dryRun: true,
+      json: true,
+    });
+    expect(dryRes.ok).toBe(true);
+    expect(dryRes.removedEvents).toBe(1);
+    expect(dryRes.removedMedia).toBe(1);
+    expect(dryRes.removedEventIds).toEqual(['evt_arthur_1880_dup']);
+    expect(dryRes.removedMediaIds).toEqual(['med_legacy_uncropped']);
+    expect(dryRes.writtenYamlFiles).toEqual([]);
+
+    // Files on disk are untouched after dry-run.
+    expect(
+      parseEventsYaml(await readFile(eventsPath, 'utf8')).some(
+        (e) => e.id === 'evt_arthur_1880_dup'
+      )
+    ).toBe(true);
+    expect(
+      parseMediaYaml(await readFile(mediaPath, 'utf8')).some(
+        (m) => m.id === 'med_legacy_uncropped'
+      )
+    ).toBe(true);
+
+    const applied = await runIntegrateCommand({
+      repoDir,
+      personId: 'per_arthur_alder',
+      dryRun: false,
+      json: true,
+    });
+    expect(applied.ok).toBe(true);
+    expect(applied.removedEvents).toBe(1);
+    expect(applied.removedMedia).toBe(1);
+    expect(applied.writtenYamlFiles.some((f) => f.endsWith('events.yaml'))).toBe(true);
+    expect(applied.writtenYamlFiles.some((f) => f.endsWith('media.yaml'))).toBe(true);
+
+    const finalEvents = parseEventsYaml(await readFile(eventsPath, 'utf8'));
+    expect(finalEvents.some((e) => e.id === 'evt_arthur_1880_dup')).toBe(false);
+    expect(finalEvents.some((e) => e.id === 'evt_arthur_1880_census')).toBe(true);
+
+    const finalMedia = parseMediaYaml(await readFile(mediaPath, 'utf8'));
+    expect(finalMedia.some((m) => m.id === 'med_legacy_uncropped')).toBe(false);
+    expect(finalMedia.some((m) => m.id === 'med_living_photo')).toBe(true);
+  });
+});
+
+describe('ops/dates', () => {
+  it('computes exact historical weekdays across 1600-2100 including leap days', () => {
+    const cases: Array<[string, string, string, boolean]> = [
+      ['1600-02-29', 'Tuesday', 'Tuesday, 29 February 1600', true],
+      ['1776-07-04', 'Thursday', 'Thursday, 4 July 1776', true],
+      ['1898-02-07', 'Monday', 'Monday, 7 February 1898', false],
+      ['1904-02-29', 'Monday', 'Monday, 29 February 1904', true],
+      ['1980-11-05', 'Wednesday', 'Wednesday, 5 November 1980', true],
+      ['2000-02-29', 'Tuesday', 'Tuesday, 29 February 2000', true],
+      ['2026-11-25', 'Wednesday', 'Wednesday, 25 November 2026', false],
+      ['2100-03-01', 'Monday', 'Monday, 1 March 2100', false],
+    ];
+
+    for (const [date, weekday, formatted, leap] of cases) {
+      const res = runDatesCommand({ subcommand: 'weekday', date });
+      expect(res.subcommand).toBe('weekday');
+      if (res.subcommand === 'weekday') {
+        expect(res.weekday).toBe(weekday);
+        expect(res.formatted).toBe(formatted);
+        expect(res.isLeapYear).toBe(leap);
+        expect(res.rendered).toBe(formatted);
+      }
+    }
+
+    // Century non-leap years must reject Feb 29.
+    expect(() => runDatesCommand({ subcommand: 'weekday', date: '1900-02-29' })).toThrow(
+      CliValidationError
+    );
+    expect(() => runDatesCommand({ subcommand: 'weekday', date: '2100-02-29' })).toThrow(
+      CliValidationError
+    );
+  });
+
+  it('computes exact forward, reversed, same-day, and leap-day boundary diffs', () => {
+    const forward = runDatesCommand({
+      subcommand: 'diff',
+      startDate: '1898-02-07',
+      endDate: '1980-11-05',
+      json: true,
+    });
+    expect(forward.subcommand).toBe('diff');
+    if (forward.subcommand === 'diff') {
+      expect(forward.totalDays).toBe(30221);
+      expect(forward.absDays).toBe(30221);
+      expect(forward.years).toBe(82);
+      expect(forward.remainingDays).toBe(272);
+      expect(forward.yearsMonthsDays).toEqual({ years: 82, months: 8, days: 29 });
+      expect(forward.startWeekday).toBe('Monday');
+      expect(forward.endWeekday).toBe('Wednesday');
+      expect(forward.direction).toBe('forward');
+      expect(forward.reversed).toBe(false);
+    }
+
+    const reversed = runDatesCommand({
+      subcommand: 'diff',
+      startDate: '1980-11-05',
+      endDate: '1898-02-07',
+    });
+    expect(reversed.subcommand).toBe('diff');
+    if (reversed.subcommand === 'diff') {
+      expect(reversed.totalDays).toBe(-30221);
+      expect(reversed.absDays).toBe(30221);
+      expect(reversed.years).toBe(82);
+      expect(reversed.remainingDays).toBe(272);
+      expect(reversed.yearsMonthsDays).toEqual({ years: 82, months: 8, days: 29 });
+      expect(reversed.direction).toBe('reversed');
+      expect(reversed.reversed).toBe(true);
+      expect(reversed.rendered.startsWith('-82 years, 272 days (-30221 total days;')).toBe(true);
+    }
+
+    const leapBefore = runDatesCommand({
+      subcommand: 'diff',
+      startDate: '1904-02-29',
+      endDate: '1905-02-28',
+    });
+    if (leapBefore.subcommand === 'diff') {
+      expect(leapBefore.totalDays).toBe(365);
+      expect(leapBefore.years).toBe(0);
+      expect(leapBefore.remainingDays).toBe(365);
+      expect(leapBefore.yearsMonthsDays).toEqual({ years: 0, months: 11, days: 30 });
+    }
+
+    const leapAfter = runDatesCommand({
+      subcommand: 'diff',
+      startDate: '1904-02-29',
+      endDate: '1905-03-01',
+    });
+    if (leapAfter.subcommand === 'diff') {
+      expect(leapAfter.totalDays).toBe(366);
+      expect(leapAfter.years).toBe(1);
+      expect(leapAfter.remainingDays).toBe(0);
+      expect(leapAfter.yearsMonthsDays).toEqual({ years: 1, months: 0, days: 0 });
+    }
+
+    const leapQuad = runDatesCommand({
+      subcommand: 'diff',
+      startDate: '1904-02-29',
+      endDate: '1908-02-29',
+    });
+    if (leapQuad.subcommand === 'diff') {
+      expect(leapQuad.totalDays).toBe(1461);
+      expect(leapQuad.years).toBe(4);
+      expect(leapQuad.remainingDays).toBe(0);
+      expect(leapQuad.yearsMonthsDays).toEqual({ years: 4, months: 0, days: 0 });
+    }
+
+    const jan31ToMar1 = runDatesCommand({
+      subcommand: 'diff',
+      startDate: '2024-01-31',
+      endDate: '2024-03-01',
+    });
+    if (jan31ToMar1.subcommand === 'diff') {
+      expect(jan31ToMar1.totalDays).toBe(30);
+      expect(jan31ToMar1.yearsMonthsDays).toEqual({ years: 0, months: 1, days: 1 });
+    }
+  });
+
+  it('computes completed ages for one or multiple event dates including pre-birth dates', () => {
+    const res = runDatesCommand({
+      subcommand: 'age',
+      birthDate: '1898-02-07',
+      atDates: ['1920-01-01', '1940-04-01', '1980-11-05', '1897-02-07'],
+      json: true,
+    });
+    expect(res.subcommand).toBe('age');
+    if (res.subcommand === 'age') {
+      expect(res.birthWeekday).toBe('Monday');
+      expect(res.ages).toHaveLength(4);
+      expect(res.ages[0]).toMatchObject({
+        at: '1920-01-01',
+        years: 21,
+        remainingDays: 328,
+        totalDays: 7997,
+        beforeBirth: false,
+      });
+      expect(res.ages[1]).toMatchObject({
+        at: '1940-04-01',
+        years: 42,
+        remainingDays: 54,
+        totalDays: 15393,
+        beforeBirth: false,
+      });
+      expect(res.ages[2]).toMatchObject({
+        at: '1980-11-05',
+        years: 82,
+        remainingDays: 272,
+        totalDays: 30221,
+        beforeBirth: false,
+      });
+      expect(res.ages[3]).toMatchObject({
+        at: '1897-02-07',
+        years: -1,
+        totalDays: -365,
+        beforeBirth: true,
+      });
+    }
   });
 });
 

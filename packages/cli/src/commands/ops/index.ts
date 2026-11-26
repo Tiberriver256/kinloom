@@ -129,3 +129,27 @@ export {
   type VerifySsnHit,
   type VerifySsnResult,
 } from './verify.js';
+
+export {
+  DATES_HELP,
+  MONTH_NAMES,
+  WEEKDAY_NAMES,
+  computeDateDiff,
+  daysFromCivil,
+  daysInMonth,
+  formatLongDate,
+  getIsoWeekday,
+  getWeekdayName,
+  isLeapYear,
+  parseCalendarDate,
+  runDatesCommand,
+  type CalendarDate,
+  type DatesAgeEntry,
+  type DatesAgeResult,
+  type DatesCommandOptions,
+  type DatesCommandResult,
+  type DatesDiffResult,
+  type DatesWeekdayResult,
+  type WeekdayName,
+  type YearsMonthsDays,
+} from './dates.js';

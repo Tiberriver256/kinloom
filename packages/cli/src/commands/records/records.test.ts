@@ -468,6 +468,8 @@ describe('bundled Python utilities and live script execution', () => {
     expect(prepHelp).toContain('crop');
     expect(prepHelp).toContain('sheet-strip');
     expect(prepHelp).toContain('pdf-pages');
+    expect(prepHelp).toContain('grid');
+    expect(prepHelp).toContain('stitch');
 
     const ocrHelp = execFileSync('python3', [ocrScript, '--help'], { encoding: 'utf8' });
     expect(ocrHelp).toContain('Usage: kinloom ocr <image> [options]');
@@ -606,5 +608,138 @@ describe('bundled Python utilities and live script execution', () => {
     expect(timeoutResult.exitCode).toBe(1);
     expect(elapsedMs).toBeLessThan(8000);
     expect(timeoutCapture.stderr.join('\n')).toContain('timed out after 1s');
+  });
+
+  it('runs prep-scan grid and prep-scan stitch on a synthetic image when Pillow is available', async () => {
+    const prepScript = path.join(ASSETS_ROOT, 'prep-scan.py');
+    let pyCmd: string | null = null;
+    let pyPrefix: string[] = [];
+    let prepPrefix: string[] = [];
+    try {
+      execFileSync('python3', ['-c', 'import PIL'], { stdio: 'ignore' });
+      pyCmd = 'python3';
+      pyPrefix = [];
+      prepPrefix = [prepScript];
+    } catch {
+      try {
+        execFileSync('uv', ['run', '--with', 'pillow', 'python3', '-c', 'import PIL'], {
+          stdio: 'ignore',
+        });
+        pyCmd = 'uv';
+        pyPrefix = ['run', '--with', 'pillow', 'python3'];
+        prepPrefix = ['run', '--script', prepScript];
+      } catch {
+        pyCmd = null;
+      }
+    }
+    if (!pyCmd) {
+      return;
+    }
+
+    const tmp = await makeTempDir('kinloom-prep-grid-stitch-');
+    const srcImg = path.join(tmp, 'synthetic-sheet.png');
+    const gridOut = path.join(tmp, 'grid.jpg');
+    const stitchOut = path.join(tmp, 'stitched.jpg');
+
+    // Generate a 2000x1200 light-cream synthetic sheet with colored marker stripes.
+    execFileSync(pyCmd, [
+      ...pyPrefix,
+      '-c',
+      [
+        'from PIL import Image, ImageDraw',
+        'import sys',
+        'im = Image.new("RGB", (2000, 1200), (248, 244, 232))',
+        'd = ImageDraw.Draw(im)',
+        'd.rectangle((0, 0, 1999, 180), fill=(210, 225, 240))',
+        'd.rectangle((0, 700, 1999, 960), fill=(225, 240, 215))',
+        'im.save(sys.argv[1])',
+      ].join('\n'),
+      srcImg,
+    ]);
+
+    const gridStdout = execFileSync(
+      pyCmd,
+      [...prepPrefix, 'grid', srcImg, gridOut, '--step', '200', '--max-width', '1000', '--max-kb', '200'],
+      { encoding: 'utf8', env: { ...process.env, KINLOOM_TELEMETRY_PARENT: '1' } }
+    );
+    const gridMeta = JSON.parse(gridStdout) as {
+      original_width: number;
+      original_height: number;
+      preview_width: number;
+      preview_height: number;
+      step: number;
+      bytes: number;
+      out: string;
+    };
+    expect(gridMeta.original_width).toBe(2000);
+    expect(gridMeta.original_height).toBe(1200);
+    expect(gridMeta.preview_width).toBeLessThanOrEqual(1000);
+    expect(gridMeta.preview_height).toBeLessThanOrEqual(600);
+    expect(gridMeta.step).toBe(200);
+    expect(gridMeta.out).toBe(gridOut);
+    expect(fs.statSync(gridOut).size).toBeLessThanOrEqual(200 * 1024);
+
+    // Stitch header band (width 1800, height 160) + household band (width 1600, height 220) with redaction and 8px gap.
+    const stitchStdout = execFileSync(
+      pyCmd,
+      [
+        ...prepPrefix,
+        'stitch',
+        srcImg,
+        stitchOut,
+        '--box',
+        '100,20,1900,180',
+        '--box',
+        '200,720,1800,940',
+        '--redact',
+        '250,750,600,830',
+        '--gap',
+        '8',
+        '--divider-color',
+        '#222222',
+        '--quality',
+        '90',
+      ],
+      { encoding: 'utf8', env: { ...process.env, KINLOOM_TELEMETRY_PARENT: '1' } }
+    );
+    const stitchMeta = JSON.parse(stitchStdout) as {
+      width: number;
+      height: number;
+      bytes: number;
+      bands: Array<{ box: number[]; width: number; height: number; y_offset: number }>;
+      out: string;
+    };
+    expect(stitchMeta.width).toBe(1800);
+    expect(stitchMeta.height).toBe(160 + 8 + 220);
+    expect(stitchMeta.bytes).toBeGreaterThan(0);
+    expect(stitchMeta.bands).toHaveLength(2);
+    expect(stitchMeta.bands[0]).toMatchObject({ width: 1800, height: 160, y_offset: 0 });
+    expect(stitchMeta.bands[1]).toMatchObject({ width: 1600, height: 220, y_offset: 168 });
+    expect(stitchMeta.out).toBe(stitchOut);
+
+    // Verify actual image dimensions, dark divider band, and redacted black region inside band #2.
+    const pixelCheck = execFileSync(
+      pyCmd,
+      [
+        ...pyPrefix,
+        '-c',
+        [
+          'from PIL import Image',
+          'import json, sys',
+          'im = Image.open(sys.argv[1])',
+          '# Divider pixel at y=164 (middle of 8px gap) should be dark (#222222 -> ~34)',
+          'div_px = im.getpixel((900, 164))',
+          '# Band #2 is centered at x_offset=100, y_offset=168; original redact (250,750)-(600,830) maps to band x=50..400, y=30..110 -> canvas x=150..500, y=198..278',
+          'red_px = im.getpixel((300, 230))',
+          'print(json.dumps({"size": list(im.size), "div": list(div_px), "red": list(red_px)}))',
+        ].join('\n'),
+        stitchOut,
+      ],
+      { encoding: 'utf8' }
+    );
+    const pixels = JSON.parse(pixelCheck) as { size: number[]; div: number[]; red: number[] };
+    expect(pixels.size).toEqual([1800, 388]);
+    expect(Math.max(...pixels.div)).toBeLessThan(55);
+    expect(Math.max(...pixels.red)).toBeLessThan(20);
   });
 });

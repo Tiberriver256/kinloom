@@ -49,10 +49,12 @@ const ALLOWED_PATCH_KEYS = new Set([
   'person_id',
   'person_updates',
   'events',
+  'remove_event_ids',
   'places',
   'sources',
   'remove_source_ids',
   'media',
+  'remove_media_ids',
   'kinship',
   'narratives',
 ]);
@@ -129,6 +131,10 @@ export interface IntegrateCommandResult {
     narratives: UpsertCounts;
   };
   removedSourceIds: string[];
+  removedEventIds: string[];
+  removedMediaIds: string[];
+  removedEvents: number;
+  removedMedia: number;
   inlineCitationCount: number;
   stagedScans: StagedScanReportItem[];
   wouldWriteYamlFiles: string[];
@@ -166,10 +172,12 @@ interface NormalizedPatch {
   person_id: string;
   person_updates: Record<string, unknown> | null;
   events: unknown[];
+  remove_event_ids: string[];
   places: unknown[];
   sources: unknown[];
   remove_source_ids: string[];
   media: unknown[];
+  remove_media_ids: string[];
   kinship: unknown[];
   narratives: unknown[];
 }
@@ -326,6 +334,10 @@ function normalizeAndValidatePatch(rawPatch: unknown, expectedPersonId: string):
     person_id: rawPatch.person_id,
     person_updates: rawUpdates,
     events: readArrayField('events'),
+    remove_event_ids: parseOptionalStringList(
+      rawPatch.remove_event_ids,
+      'patch.json remove_event_ids'
+    ),
     places: readArrayField('places'),
     sources: readArrayField('sources'),
     remove_source_ids: parseOptionalStringList(
@@ -333,6 +345,10 @@ function normalizeAndValidatePatch(rawPatch: unknown, expectedPersonId: string):
       'patch.json remove_source_ids'
     ),
     media: readArrayField('media'),
+    remove_media_ids: parseOptionalStringList(
+      rawPatch.remove_media_ids,
+      'patch.json remove_media_ids'
+    ),
     kinship: readArrayField('kinship'),
     narratives: readArrayField('narratives'),
   };
@@ -936,9 +952,47 @@ export async function runIntegrateCommand(
       };
     }
   );
+  const topLevelRemoveEventIds = new Set(patch.remove_event_ids);
+  if (topLevelRemoveEventIds.size > 0) {
+    const patchedEventIds = new Set(cleanedPatchEvents.map((ev) => RawEventSchema.parse(ev).id));
+    for (const removeId of topLevelRemoveEventIds) {
+      if (patchedEventIds.has(removeId)) {
+        throw new Error(
+          `patch.json cannot both add/update and remove event '${removeId}' in the same patch.`
+        );
+      }
+    }
+  }
+  const removedEventIds: string[] = [];
+  const finalEvents = eventsMerge.items.filter((ev) => {
+    if (topLevelRemoveEventIds.has(ev.id)) {
+      removedEventIds.push(ev.id);
+      return false;
+    }
+    return true;
+  });
 
-  // Media upsert.
+  // Media upsert + optional top-level media retirement.
   const mediaMerge = upsertById(existingMedia, patch.media, (m) => MediaItemSchema.parse(m));
+  const topLevelRemoveMediaIds = new Set(patch.remove_media_ids);
+  if (topLevelRemoveMediaIds.size > 0) {
+    const patchedMediaIds = new Set(patch.media.map((m) => MediaItemSchema.parse(m).id));
+    for (const removeId of topLevelRemoveMediaIds) {
+      if (patchedMediaIds.has(removeId)) {
+        throw new Error(
+          `patch.json cannot both add/update and remove media '${removeId}' in the same patch.`
+        );
+      }
+    }
+  }
+  const removedMediaIds: string[] = [];
+  const finalMedia = mediaMerge.items.filter((item) => {
+    if (topLevelRemoveMediaIds.has(item.id)) {
+      removedMediaIds.push(item.id);
+      return false;
+    }
+    return true;
+  });
 
   // Kinship upsert keyed by from|to|relation.
   const kinshipMerge = upsertKinship(existingKinship, patch.kinship);
@@ -946,8 +1000,8 @@ export async function runIntegrateCommand(
   // Lookup sets before narrative normalization so inline citations are validated and auto-linked.
   const placeIds = new Set(placesMerge.items.map((p) => p.id));
   const sourceIds = new Set(finalSources.map((s) => s.id));
-  const mediaIds = new Set(mediaMerge.items.map((m) => m.id));
-  const eventsById = new Map(eventsMerge.items.map((e) => [e.id, e]));
+  const mediaIds = new Set(finalMedia.map((m) => m.id));
+  const eventsById = new Map(finalEvents.map((e) => [e.id, e]));
 
   let inlineCitationCount = 0;
   const normalizedPatchNarratives = patch.narratives.map((rawNar) => {
@@ -1063,9 +1117,43 @@ export async function runIntegrateCommand(
     }
   }
 
+  // Ensure top-level event removal never leaves dangling references in surviving media or narratives.
+  if (topLevelRemoveEventIds.size > 0) {
+    for (const item of finalMedia) {
+      if (item.event_id && topLevelRemoveEventIds.has(item.event_id)) {
+        throw new Error(
+          `Cannot remove event '${item.event_id}': media '${item.id}' still references it.`
+        );
+      }
+    }
+    for (const nar of narrativesMerge.items) {
+      for (const evId of nar.event_ids) {
+        if (topLevelRemoveEventIds.has(evId)) {
+          throw new Error(
+            `Cannot remove event '${evId}': narrative '${nar.id}' still references it in event_ids.`
+          );
+        }
+      }
+    }
+  }
+
+  // Ensure top-level media removal never breaks surviving narrative inline citations.
+  if (topLevelRemoveMediaIds.size > 0) {
+    for (const nar of narrativesMerge.items) {
+      const extracted = extractNarrativeCitations(nar.body_md);
+      for (const occ of extracted.occurrences) {
+        if (occ.mediaId && topLevelRemoveMediaIds.has(occ.mediaId)) {
+          throw new Error(
+            `Cannot remove media '${occ.mediaId}': narrative '${nar.id}' still cites it inline.`
+          );
+        }
+      }
+    }
+  }
+
   // Ensure top-level source removal never breaks citations or references anywhere in the archive.
   if (topLevelRemoveSourceIds.size > 0) {
-    for (const ev of eventsMerge.items) {
+    for (const ev of finalEvents) {
       for (const ref of ev.sources) {
         if (topLevelRemoveSourceIds.has(ref.source_id)) {
           throw new Error(
@@ -1074,7 +1162,7 @@ export async function runIntegrateCommand(
         }
       }
     }
-    for (const item of mediaMerge.items) {
+    for (const item of finalMedia) {
       if (item.source_id && topLevelRemoveSourceIds.has(item.source_id)) {
         throw new Error(
           `Cannot remove source '${item.source_id}': media '${item.id}' still references it.`
@@ -1152,11 +1240,11 @@ export async function runIntegrateCommand(
   // Compile merged archive in both private and public modes before writing anything.
   const compileBase = {
     people: mergedPeople,
-    events: eventsMerge.items,
+    events: finalEvents,
     places: placesMerge.items,
     sources: finalSources,
     kinship: kinshipMerge.items,
-    media: mediaMerge.items,
+    media: finalMedia,
     narratives: narrativesMerge.items,
     ...(enrichments.length > 0 ? { enrichments } : {}),
     siteConfig,
@@ -1216,10 +1304,10 @@ export async function runIntegrateCommand(
       content: serializePeopleYaml(mergedPeople, { sortById: true }),
     });
   }
-  if (eventsMerge.counts.added > 0 || eventsMerge.counts.updated > 0) {
+  if (eventsMerge.counts.added > 0 || eventsMerge.counts.updated > 0 || removedEventIds.length > 0) {
     pendingWrites.push({
       file: 'events.yaml',
-      content: serializeEventsYaml(eventsMerge.items, { sortById: true }),
+      content: serializeEventsYaml(finalEvents, { sortById: true }),
     });
   }
   if (placesMerge.counts.added > 0 || placesMerge.counts.updated > 0) {
@@ -1240,10 +1328,10 @@ export async function runIntegrateCommand(
       content: serializeKinshipYaml(kinshipMerge.items, { sortDeterministic: true }),
     });
   }
-  if (mediaMerge.counts.added > 0 || mediaMerge.counts.updated > 0) {
+  if (mediaMerge.counts.added > 0 || mediaMerge.counts.updated > 0 || removedMediaIds.length > 0) {
     pendingWrites.push({
       file: 'media.yaml',
-      content: serializeMediaYaml(mediaMerge.items, { sortById: true }),
+      content: serializeMediaYaml(finalMedia, { sortById: true }),
     });
   }
   if (narrativesMerge.counts.added > 0 || narrativesMerge.counts.updated > 0) {
@@ -1279,6 +1367,10 @@ export async function runIntegrateCommand(
       narratives: narrativesMerge.counts,
     },
     removedSourceIds,
+    removedEventIds,
+    removedMediaIds,
+    removedEvents: removedEventIds.length,
+    removedMedia: removedMediaIds.length,
     inlineCitationCount,
     stagedScans: stagedScansReport,
     wouldWriteYamlFiles: pendingWrites.map((w) => path.join(dataDir, w.file)),
@@ -1296,10 +1388,10 @@ export async function runIntegrateCommand(
     ? JSON.stringify(summaryBase, null, 2)
     : `Integrate ${dryRun ? 'dry-run ' : ''}OK for ${personId}: ` +
       `person=${personMerge.changed ? 'updated' : 'unchanged'}, ` +
-      `events=+${eventsMerge.counts.added}/~${eventsMerge.counts.updated}, ` +
+      `events=+${eventsMerge.counts.added}/~${eventsMerge.counts.updated}${removedEventIds.length > 0 ? `/-${removedEventIds.length}` : ''}, ` +
       `places=+${placesMerge.counts.added}/~${placesMerge.counts.updated}, ` +
-      `sources=+${sourcesMerge.counts.added}/~${sourcesMerge.counts.updated}, ` +
-      `media=+${mediaMerge.counts.added}/~${mediaMerge.counts.updated}, ` +
+      `sources=+${sourcesMerge.counts.added}/~${sourcesMerge.counts.updated}${removedSourceIds.length > 0 ? `/-${removedSourceIds.length}` : ''}, ` +
+      `media=+${mediaMerge.counts.added}/~${mediaMerge.counts.updated}${removedMediaIds.length > 0 ? `/-${removedMediaIds.length}` : ''}, ` +
       `narratives=+${narrativesMerge.counts.added}/~${narrativesMerge.counts.updated}, ` +
       `inlineCitations=${inlineCitationCount}, scans=${stagedScansReport.length}, ` +
       `written=${writtenYamlFiles.length}`;

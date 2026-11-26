@@ -271,19 +271,38 @@ def save_compact_jpeg(
     return SavedImage(path=out_path, width=width, height=height, bytes=len(data))
 
 
-def save_archival_image(im: PILImageModule.Image, out_path: Path) -> SavedImage:
+def save_archival_image(
+    im: PILImageModule.Image, out_path: Path, quality: int = 92
+) -> SavedImage:
     rgb = to_rgb(im)
     ext = out_path.suffix.lower()
     buf = io.BytesIO()
     if ext == ".png":
         rgb.save(buf, format="PNG", optimize=True)
     elif ext == ".webp":
-        rgb.save(buf, format="WEBP", quality=92)
+        rgb.save(buf, format="WEBP", quality=quality)
     else:
-        rgb.save(buf, format="JPEG", quality=92, optimize=True)
+        rgb.save(buf, format="JPEG", quality=quality, optimize=True)
     data = buf.getvalue()
     atomic_write_bytes(out_path, data)
     return SavedImage(path=out_path, width=rgb.size[0], height=rgb.size[1], bytes=len(data))
+
+
+def parse_rgb_color(raw: str) -> tuple[int, int, int]:
+    try:
+        from PIL import ImageColor
+
+        rgb = ImageColor.getrgb(raw.strip())
+    except Exception as exc:
+        raise ValueError(f"Invalid --divider-color '{raw}': expected hex or named RGB color.") from exc
+    return (int(rgb[0]), int(rgb[1]), int(rgb[2]))
+
+
+def load_label_font(image_font_mod: Any, size: int = 14) -> Any:
+    try:
+        return image_font_mod.load_default(size=size)
+    except TypeError:
+        return image_font_mod.load_default()
 
 
 def safe_stem(name: str) -> str:
@@ -737,6 +756,158 @@ def cmd_pdf_pages(args: argparse.Namespace) -> tuple[int, int]:
     return 0, out_bytes
 
 
+def cmd_grid(args: argparse.Namespace) -> tuple[int, int]:
+    Image, ImageDraw, ImageFont, _ = require_pillow()
+    if args.step <= 0:
+        raise ValueError(f"--step must be a positive integer, got {args.step}.")
+    if args.max_width <= 0:
+        raise ValueError(f"--max-width must be a positive integer, got {args.max_width}.")
+    if args.max_kb <= 0:
+        raise ValueError(f"--max-kb must be a positive integer, got {args.max_kb}.")
+
+    src = Path(args.image).resolve()
+    out_path = Path(args.out).resolve()
+    if not src.is_file():
+        print(f"Error: input file not found: {src}", file=sys.stderr)
+        return 1, 0
+
+    with Image.open(src) as raw_im:
+        rgb = rotate_clockwise(to_rgb(raw_im), args.rotate)
+
+    orig_w, orig_h = rgb.size
+    if orig_w > args.max_width:
+        scaled_h = max(1, int(round(orig_h * (args.max_width / orig_w))))
+        base = rgb.resize((args.max_width, scaled_h), Image.Resampling.LANCZOS)
+    else:
+        base = rgb.copy()
+
+    scale_x = base.width / orig_w
+    scale_y = base.height / orig_h
+    overlay = Image.new("RGBA", base.size, (0, 0, 0, 0))
+    draw = ImageDraw.Draw(overlay)
+    font = load_label_font(ImageFont, size=14)
+
+    def draw_pill(x_pos: int, y_pos: int, label: str, accent: tuple[int, int, int, int]) -> None:
+        bbox = draw.textbbox((0, 0), label, font=font)
+        tw = bbox[2] - bbox[0]
+        th = bbox[3] - bbox[1]
+        pad_x = 4
+        pad_y = 2
+        left = max(0, min(base.width - (tw + pad_x * 2), x_pos))
+        top = max(0, min(base.height - (th + pad_y * 2), y_pos))
+        draw.rectangle(
+            (left, top, left + tw + pad_x * 2, top + th + pad_y * 2),
+            fill=(15, 18, 24, 195),
+            outline=accent,
+            width=1,
+        )
+        draw.text((left + pad_x - bbox[0], top + pad_y - bbox[1]), label, fill=(255, 255, 255, 255), font=font)
+
+    major_step = args.step * 5
+    last_x_label = -1000
+    for orig_x in range(0, orig_w, args.step):
+        px = min(base.width - 1, int(round(orig_x * scale_x)))
+        is_major = orig_x % major_step == 0
+        line_color = (220, 38, 38, 175) if is_major else (220, 38, 38, 110)
+        draw.line([(px, 0), (px, base.height - 1)], fill=line_color, width=2 if is_major else 1)
+        if orig_x == 0 or px - last_x_label >= 48:
+            draw_pill(px + 2, 2, str(orig_x), (220, 38, 38, 220))
+            last_x_label = px
+
+    last_y_label = -1000
+    for orig_y in range(0, orig_h, args.step):
+        py = min(base.height - 1, int(round(orig_y * scale_y)))
+        is_major = orig_y % major_step == 0
+        line_color = (37, 99, 235, 175) if is_major else (37, 99, 235, 110)
+        draw.line([(0, py), (base.width - 1, py)], fill=line_color, width=2 if is_major else 1)
+        if orig_y > 0 and py - last_y_label >= 24:
+            draw_pill(2, py + 2, str(orig_y), (37, 99, 235, 220))
+            last_y_label = py
+
+    composited = Image.alpha_composite(base.convert("RGBA"), overlay).convert("RGB")
+    saved = save_compact_jpeg(composited, out_path, max_width=args.max_width, max_kb=args.max_kb)
+
+    payload = {
+        "original_width": orig_w,
+        "original_height": orig_h,
+        "preview_width": saved.width,
+        "preview_height": saved.height,
+        "step": args.step,
+        "bytes": saved.bytes,
+        "out": str(saved.path),
+    }
+    out_bytes = emit_output(json.dumps(payload, indent=2) + "\n")
+    return 0, out_bytes
+
+
+def cmd_stitch(args: argparse.Namespace) -> tuple[int, int]:
+    Image, ImageDraw, _, _ = require_pillow()
+    if len(args.box) < 2:
+        raise ValueError("stitch requires at least 2 --box regions (for example header + target band).")
+    if args.gap < 0:
+        raise ValueError(f"--gap must be >= 0, got {args.gap}.")
+    if args.quality < 1 or args.quality > 100:
+        raise ValueError(f"--quality must be between 1 and 100, got {args.quality}.")
+
+    divider_rgb = parse_rgb_color(args.divider_color)
+    src = Path(args.image).resolve()
+    out_path = Path(args.out).resolve()
+    if not src.is_file():
+        print(f"Error: input file not found: {src}", file=sys.stderr)
+        return 1, 0
+
+    with Image.open(src) as raw_im:
+        img = rotate_clockwise(to_rgb(raw_im), args.rotate)
+
+    redactions: list[list[int]] = []
+    if args.redact:
+        draw_src = ImageDraw.Draw(img)
+        for idx, rbox in enumerate(args.redact, 1):
+            clamped = clamp_box(rbox, img.width, img.height, f"--redact #{idx}")
+            draw_src.rectangle((clamped.x0, clamped.y0, clamped.x1, clamped.y1), fill=(0, 0, 0))
+            redactions.append([clamped.x0, clamped.y0, clamped.x1, clamped.y1])
+
+    cropped_bands: list[tuple[Box, Any]] = []
+    for idx, box in enumerate(args.box, 1):
+        clamped = clamp_box(box, img.width, img.height, f"--box #{idx}")
+        cropped_bands.append((clamped, img.crop((clamped.x0, clamped.y0, clamped.x1, clamped.y1))))
+
+    canvas_w = max(band.width for _, band in cropped_bands)
+    canvas_h = sum(band.height for _, band in cropped_bands) + args.gap * (len(cropped_bands) - 1)
+    canvas = Image.new("RGB", (canvas_w, max(1, canvas_h)), divider_rgb)
+    draw = ImageDraw.Draw(canvas)
+
+    y = 0
+    band_reports: list[dict[str, object]] = []
+    for cbox, band in cropped_bands:
+        if band.width < canvas_w:
+            draw.rectangle((0, y, canvas_w - 1, y + band.height - 1), fill=(255, 255, 255))
+        x_offset = (canvas_w - band.width) // 2
+        canvas.paste(band, (x_offset, y))
+        band_reports.append(
+            {
+                "box": [cbox.x0, cbox.y0, cbox.x1, cbox.y1],
+                "width": band.width,
+                "height": band.height,
+                "x_offset": x_offset,
+                "y_offset": y,
+            }
+        )
+        y += band.height + args.gap
+
+    saved = save_archival_image(canvas, out_path, quality=args.quality)
+    payload = {
+        "width": saved.width,
+        "height": saved.height,
+        "bytes": saved.bytes,
+        "bands": band_reports,
+        "redactions": redactions,
+        "out": str(saved.path),
+    }
+    out_bytes = emit_output(json.dumps(payload, indent=2) + "\n")
+    return 0, out_bytes
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="kinloom prep-scan",
@@ -860,6 +1031,89 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p_pdf.add_argument("--json", action="store_true", help="Emit JSON output.")
     p_pdf.set_defaults(func=cmd_pdf_pages)
+
+    p_grid = sub.add_parser(
+        "grid",
+        help="Draw an original-pixel coordinate grid overlay onto a compact JPEG preview.",
+    )
+    p_grid.add_argument("image", help="Source scan image path.")
+    p_grid.add_argument("out", help="Output JPEG path for the coordinate-grid preview.")
+    p_grid.add_argument(
+        "--step",
+        type=int,
+        default=200,
+        help="Grid line interval in original image pixels (default: 200).",
+    )
+    p_grid.add_argument(
+        "--max-width",
+        type=int,
+        default=1600,
+        help="Maximum preview width in pixels (default: 1600).",
+    )
+    p_grid.add_argument(
+        "--max-kb",
+        type=int,
+        default=280,
+        help="Maximum preview file size in KB (default: 280).",
+    )
+    p_grid.add_argument(
+        "--rotate",
+        type=int,
+        choices=(90, 180, 270),
+        default=None,
+        help="Optional clockwise rotation applied before measuring coordinates.",
+    )
+    p_grid.add_argument("--json", action="store_true", help="Emit JSON output (always enabled).")
+    p_grid.set_defaults(func=cmd_grid)
+
+    p_stitch = sub.add_parser(
+        "stitch",
+        help="Crop 2+ boxes from one scan, apply optional redactions, and stack bands vertically.",
+    )
+    p_stitch.add_argument("image", help="Source scan image path.")
+    p_stitch.add_argument("out", help="Output stitched JPEG path.")
+    p_stitch.add_argument(
+        "--box",
+        action="extend",
+        nargs="+",
+        type=parse_box,
+        required=True,
+        help="Crop box x0,y0,x1,y1 in original image coordinates (repeatable; at least 2 required).",
+    )
+    p_stitch.add_argument(
+        "--redact",
+        action="extend",
+        nargs="+",
+        type=parse_box,
+        default=[],
+        help="Optional x0,y0,x1,y1 black redaction boxes in original image coordinates applied before cropping.",
+    )
+    p_stitch.add_argument(
+        "--rotate",
+        type=int,
+        choices=(90, 180, 270),
+        default=None,
+        help="Optional clockwise rotation applied before redacting and cropping.",
+    )
+    p_stitch.add_argument(
+        "--gap",
+        type=int,
+        default=6,
+        help="Divider gap height in pixels between stacked bands (default: 6).",
+    )
+    p_stitch.add_argument(
+        "--divider-color",
+        default="#222222",
+        help='Divider fill color as hex or RGB name (default: "#222222").',
+    )
+    p_stitch.add_argument(
+        "--quality",
+        type=int,
+        default=90,
+        help="Output JPEG quality 1..100 (default: 90).",
+    )
+    p_stitch.add_argument("--json", action="store_true", help="Emit JSON output (always enabled).")
+    p_stitch.set_defaults(func=cmd_stitch)
 
     return parser
 

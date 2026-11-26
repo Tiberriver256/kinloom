@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import {
@@ -66,6 +66,7 @@ describe('unified kinloom CLI dispatch', () => {
     expect(output).toContain('audit');
     expect(output).toContain('verify');
     expect(output).toContain('sync');
+    expect(output).toContain('dates');
     expect(output).toContain('telemetry');
     expect(output).toContain('nara');
     expect(output).toContain('archive-org');
@@ -107,6 +108,7 @@ describe('unified kinloom CLI dispatch', () => {
       [['verify', '--help'], 'Usage: kinloom verify'],
       [['integrate', '--help'], 'Usage: kinloom integrate'],
       [['sync', '--help'], '--verify-live'],
+      [['dates', '--help'], 'Usage: kinloom dates'],
       [['telemetry', '--help'], 'Usage: kinloom telemetry report'],
       [['prep-scan', '--help'], '# Scan Preparation'],
       [['ocr', '--help'], '# Cached OCR'],
@@ -309,5 +311,74 @@ describe('unified kinloom CLI dispatch', () => {
     const unknownHelp = createCaptureIo();
     expect(await runCli(['help', 'nonexistent-command'], { io: unknownHelp.io })).toBe(EXIT_USAGE);
     expect(unknownHelp.stderr.join('\n')).toContain("Unknown command 'nonexistent-command'");
+  });
+
+  it('dispatches dates weekday, diff, and age and logs clean telemetry without date arguments', async () => {
+    const tmp = await makeTempDir('kinloom-cli-dates-');
+    const telPath = path.join(tmp, 'calls.jsonl');
+    process.env.KINLOOM_TELEMETRY_FILE = telPath;
+
+    const wkCap = createCaptureIo();
+    expect(await runCli(['dates', 'weekday', '1898-02-07'], { io: wkCap.io })).toBe(EXIT_OK);
+    expect(wkCap.stdout).toEqual(['Monday, 7 February 1898']);
+
+    const diffCap = createCaptureIo();
+    expect(
+      await runCli(['dates', 'diff', '1898-02-07', '1980-11-05', '--json'], { io: diffCap.io })
+    ).toBe(EXIT_OK);
+    const diffJson = JSON.parse(diffCap.stdout.join('\n')) as {
+      totalDays: number;
+      years: number;
+      remainingDays: number;
+      yearsMonthsDays: { years: number; months: number; days: number };
+      startWeekday: string;
+      endWeekday: string;
+    };
+    expect(diffJson.totalDays).toBe(30221);
+    expect(diffJson.years).toBe(82);
+    expect(diffJson.remainingDays).toBe(272);
+    expect(diffJson.yearsMonthsDays).toEqual({ years: 82, months: 8, days: 29 });
+    expect(diffJson.startWeekday).toBe('Monday');
+    expect(diffJson.endWeekday).toBe('Wednesday');
+
+    // Positional event date when --at is omitted.
+    const agePosCap = createCaptureIo();
+    expect(
+      await runCli(['dates', 'age', '1898-02-07', '1980-11-05', '--json'], { io: agePosCap.io })
+    ).toBe(EXIT_OK);
+    const agePosJson = JSON.parse(agePosCap.stdout.join('\n')) as {
+      ages: Array<{ at: string; years: number; remainingDays: number; totalDays: number }>;
+    };
+    expect(agePosJson.ages).toHaveLength(1);
+    expect(agePosJson.ages[0]).toMatchObject({
+      at: '1980-11-05',
+      years: 82,
+      remainingDays: 272,
+      totalDays: 30221,
+    });
+
+    // Repeatable --at flags.
+    const ageMultiCap = createCaptureIo();
+    expect(
+      await runCli(
+        ['dates', 'age', '1898-02-07', '--at', '1920-01-01', '--at', '1940-04-01'],
+        { io: ageMultiCap.io }
+      )
+    ).toBe(EXIT_OK);
+    expect(ageMultiCap.stdout.join('\n')).toContain('1920-01-01 (Thursday): 21 years, 328 days');
+    expect(ageMultiCap.stdout.join('\n')).toContain('1940-04-01 (Monday): 42 years, 54 days');
+
+    // Unknown subcommand fails with EXIT_USAGE and is not recorded into telemetry.
+    const badSubCap = createCaptureIo();
+    expect(await runCli(['dates', 'secret-token'], { io: badSubCap.io })).toBe(EXIT_USAGE);
+
+    const rawTelemetry = await readFile(telPath, 'utf8');
+    expect(rawTelemetry).not.toContain('1898-02-07');
+    expect(rawTelemetry).not.toContain('secret-token');
+    const subcmds = rawTelemetry
+      .trim()
+      .split('\n')
+      .map((line) => (JSON.parse(line) as { subcmd: string }).subcmd);
+    expect(subcmds).toEqual(['dates weekday', 'dates diff', 'dates age', 'dates age']);
   });
 });
