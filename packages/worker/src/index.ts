@@ -17,7 +17,7 @@ import { R2IncrementalPatchBundleCache } from './adapters/r2BundleCache.js';
 import { R2MediaStore } from './adapters/r2MediaStore.js';
 import type { ExportedHandler, KinloomWorkerEnv } from './types.js';
 
-export const KINLOOM_WORKER_VERSION = '0.22.0';
+export const KINLOOM_WORKER_VERSION = '0.23.0';
 
 export { createCloudflareAssetHandler } from './adapters/cloudflareAssets.js';
 export {
