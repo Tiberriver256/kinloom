@@ -231,7 +231,7 @@ export function formatStatusTextReport(report: StatusReport): string {
     lines.push('  (none)');
   } else {
     for (const person of pending.slice(0, PENDING_TEXT_LIMIT)) {
-      const birth = person.birth_edtf.trim() || '9999';
+      const birth = person.birth_edtf.trim() || '?';
       lines.push(
         `  ${person.full_name} (${person.id}) birth=${birth} death=${person.death_edtf || '?'} events=${person.events} sources=${person.sources} media=${person.media}`
       );
