@@ -35,6 +35,7 @@ export {
   type ContextRecordImage,
   type ContextRelativeEntry,
   type ContextRelativeListItem,
+  type ContextRelativeArchiveMedia,
   type ContextRelativeRecordImage,
   type PersonContextPayload,
 } from './context.js';

@@ -50,6 +50,14 @@ export interface ContextRelativeRecordImage extends ContextRecordImage {
   personDbId: string;
 }
 
+export interface ContextRelativeArchiveMedia {
+  id: string;
+  file: string;
+  caption: string;
+  relation: ContextRelativeRelation;
+  relativeId: string;
+}
+
 export interface ContextAncestryFact {
   type: string;
   date?: string;
@@ -113,6 +121,7 @@ export interface PersonContextPayload {
   narratives: Record<string, unknown>[];
   ancestry: ContextAncestrySummary | null;
   relativeRecordImages: ContextRelativeRecordImage[];
+  relativeArchiveMedia: ContextRelativeArchiveMedia[];
 }
 
 export interface ContextCommandResult {
@@ -476,6 +485,155 @@ function collectSiblingIds(
   return siblingIds;
 }
 
+function linkedMediaPersonIds(item: LooseYamlRecord): string[] {
+  const ids: string[] = [];
+  if (typeof item.person_id === 'string' && item.person_id) {
+    ids.push(item.person_id);
+  }
+  if (Array.isArray(item.person_ids)) {
+    for (const pid of item.person_ids) {
+      if (typeof pid === 'string' && pid) {
+        ids.push(pid);
+      }
+    }
+  }
+  return ids;
+}
+
+function eventHasLivingParticipant(event: LooseYamlRecord, livingIds: ReadonlySet<string>): boolean {
+  const participants = Array.isArray(event.participants) ? event.participants : [];
+  return participants.some(
+    (pt) => isPlainRecord(pt) && typeof pt.person_id === 'string' && livingIds.has(pt.person_id)
+  );
+}
+
+const RELATIVE_RELATION_RANK: Record<ContextRelativeRelation, number> = {
+  parent: 0,
+  spouse: 1,
+  child: 2,
+  sibling: 3,
+};
+
+function collectRelativeArchiveMedia(params: {
+  includeFamily: boolean;
+  parentIds: ReadonlySet<string>;
+  spouseIds: ReadonlySet<string>;
+  childIds: ReadonlySet<string>;
+  siblingIds: ReadonlySet<string>;
+  peopleById: ReadonlyMap<string, LooseYamlRecord>;
+  livingIds: ReadonlySet<string>;
+  privacy: Partial<PrivacyConfig>;
+  mediaBlocks: readonly string[];
+  eventBlocks: readonly string[];
+  ownMediaIds: ReadonlySet<string>;
+  livingNamePattern: RegExp | null;
+}): ContextRelativeArchiveMedia[] {
+  if (!params.includeFamily) {
+    return [];
+  }
+
+  const deceasedById = new Map<string, ContextRelativeRelation>();
+  const groups: ReadonlyArray<readonly [ContextRelativeRelation, ReadonlySet<string>]> = [
+    ['parent', params.parentIds],
+    ['spouse', params.spouseIds],
+    ['child', params.childIds],
+    ['sibling', params.siblingIds],
+  ];
+  for (const [relation, ids] of groups) {
+    for (const id of [...ids].toSorted()) {
+      if (deceasedById.has(id)) {
+        continue;
+      }
+      if (!isConfirmedDeceasedRelative(params.peopleById.get(id), params.livingIds, params.privacy)) {
+        continue;
+      }
+      deceasedById.set(id, relation);
+    }
+  }
+  if (deceasedById.size === 0) {
+    return [];
+  }
+
+  const candidateBlocks = params.mediaBlocks.filter((block) => {
+    for (const id of deceasedById.keys()) {
+      if (block.includes(id)) {
+        return true;
+      }
+    }
+    return false;
+  });
+  const parsed = parseMatchingYamlBlocks(candidateBlocks);
+  const wantedEventIds = new Set<string>();
+  for (const item of parsed) {
+    if (typeof item.event_id === 'string' && item.event_id) {
+      wantedEventIds.add(item.event_id);
+    }
+  }
+  const eventsById = new Map<string, LooseYamlRecord>();
+  if (wantedEventIds.size > 0) {
+    const eventBlocks = params.eventBlocks.filter((block) => {
+      const id = extractYamlBlockId(block);
+      return id !== null && wantedEventIds.has(id);
+    });
+    for (const event of parseMatchingYamlBlocks(eventBlocks)) {
+      if (typeof event.id === 'string') {
+        eventsById.set(event.id, event);
+      }
+    }
+  }
+
+  const rows: ContextRelativeArchiveMedia[] = [];
+  const seenMediaIds = new Set<string>();
+  for (const item of parsed) {
+    if (typeof item.id !== 'string' || !item.id || seenMediaIds.has(item.id)) {
+      continue;
+    }
+    if (params.ownMediaIds.has(item.id)) {
+      continue;
+    }
+    const linked = linkedMediaPersonIds(item);
+    if (linked.some((id) => params.livingIds.has(id))) {
+      continue;
+    }
+    const eventId = typeof item.event_id === 'string' ? item.event_id : '';
+    const event = eventId ? eventsById.get(eventId) : undefined;
+    if (event && eventHasLivingParticipant(event, params.livingIds)) {
+      continue;
+    }
+
+    let best: { relativeId: string; relation: ContextRelativeRelation } | null = null;
+    for (const id of linked) {
+      const relation = deceasedById.get(id);
+      if (!relation) {
+        continue;
+      }
+      if (
+        !best ||
+        RELATIVE_RELATION_RANK[relation] < RELATIVE_RELATION_RANK[best.relation] ||
+        (relation === best.relation && id.localeCompare(best.relativeId) < 0)
+      ) {
+        best = { relativeId: id, relation };
+      }
+    }
+    if (!best) {
+      continue;
+    }
+    if (typeof item.file !== 'string' || !item.file) {
+      continue;
+    }
+    seenMediaIds.add(item.id);
+    rows.push({
+      id: item.id,
+      file: scrubText(item.file, params.livingNamePattern),
+      caption: scrubText(typeof item.caption === 'string' ? item.caption : '', params.livingNamePattern),
+      relation: best.relation,
+      relativeId: best.relativeId,
+    });
+  }
+
+  return rows.toSorted((a, b) => a.id.localeCompare(b.id));
+}
+
 async function collectDeceasedRelativeRecordImages(params: {
   parentIds: ReadonlySet<string>;
   spouseIds: ReadonlySet<string>;
@@ -808,6 +966,15 @@ export function formatPersonContextMarkdown(ctx: PersonContextPayload): string {
     lines.push('```json');
     lines.push(JSON.stringify(ctx.media, null, 2));
     lines.push('```');
+  }
+  if (ctx.relativeArchiveMedia.length > 0) {
+    lines.push('');
+    lines.push('### Existing live archive media on confirmed-deceased relatives (reusable IDs)');
+    for (const item of ctx.relativeArchiveMedia) {
+      lines.push(
+        `- \`${item.id}\` file=\`${item.file}\` caption=${item.caption} [${item.relation}: \`${item.relativeId}\`]`
+      );
+    }
   }
   lines.push('');
 
@@ -1309,6 +1476,24 @@ export async function runContextCommand(
     narratives: personNarratives,
     ancestry: ancestrySummary,
     relativeRecordImages,
+    relativeArchiveMedia: collectRelativeArchiveMedia({
+      includeFamily,
+      parentIds,
+      spouseIds,
+      childIds,
+      siblingIds,
+      peopleById,
+      livingIds,
+      privacy,
+      mediaBlocks,
+      eventBlocks,
+      ownMediaIds: new Set(
+        personMedia
+          .map((item) => (typeof item.id === 'string' ? item.id : ''))
+          .filter((id) => id.length > 0)
+      ),
+      livingNamePattern,
+    }),
   };
 
   const rendered = options.json

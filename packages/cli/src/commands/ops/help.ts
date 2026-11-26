@@ -9,7 +9,7 @@ Options:
   --person <person_id>   Target person ID in data/people.yaml (required if positional omitted)
   --repo <dir>           Archive repository root (default: current working directory)
   --ancestry-dir <dir>   Optional external facts JSON export directory (or set KINLOOM_ANCESTRY_FACTS_DIR)
-  --include-family       Also include record images for confirmed-deceased children and siblings
+  --include-family       Also include record images for confirmed-deceased children and siblings, plus live data/media.yaml items for confirmed-deceased parents, spouses, children, and siblings
   --json                 Emit structured JSON instead of compact Markdown
   -h, --help             Show this help message`;
 
@@ -48,7 +48,7 @@ Options:
   --all-staged           Audit every research/people/<id>/patch.json package. Ids are sorted. Do not pass person ids with this flag.
   --repo <dir>           Archive repository root (default: current working directory)
   --package-dir <dir>    Custom research package directory for a single person (default: <repo>/research/people/<person_id>)
-  --strict               Exit non-zero when a package fails its strict scorecard (uncited prose or an em dash). In a batch, also exit non-zero when two packages stage the same scan basename with different SHA-256 bytes, or when two packages point the same media file path at different media ids. Identical scan bytes and a shared media id do not fail --strict. A staged file that already belongs to a different id in data/media.yaml is reported and does not change the exit code.
+  --strict               Exit non-zero when a package fails its strict scorecard (uncited prose or an em dash). In a batch, also exit non-zero when two packages stage the same scan basename with different SHA-256 bytes, when two packages point the same media file path at different media ids, or when a staged file already belongs to a different id in data/media.yaml. Identical scan bytes and a shared media id do not fail --strict.
   --json                 Emit structured JSON. A batch object is { ok, strictOk, repo, people, overlaps, summary, duration_ms }.
   -h, --help             Show this help message`;
 

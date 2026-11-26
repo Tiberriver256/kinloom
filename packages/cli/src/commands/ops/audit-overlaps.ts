@@ -671,7 +671,8 @@ export async function runAuditBatchCommand(options: {
     strictOk:
       people.every((person) => person.strictOk) &&
       summary.differingScanCollisions === 0 &&
-      summary.conflictingMediaFileCollisions === 0,
+      summary.conflictingMediaFileCollisions === 0 &&
+      summary.liveMediaFileCollisions === 0,
     repo: repoDir,
     people,
     overlaps,

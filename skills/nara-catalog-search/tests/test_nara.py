@@ -6,7 +6,7 @@ import json
 import os
 from pathlib import Path
 import tempfile
-import time
+import threading
 import unittest
 from unittest.mock import patch
 
@@ -174,41 +174,55 @@ class TestNaraWafAndParallelism(unittest.TestCase):
         self.assertEqual([p["results"][0]["naId"] for p in payloads], ["111", "222", "333"])
 
     def test_cmd_search_and_cmd_get_parallelize_and_preserve_order(self) -> None:
-        def slow_api_get_json(url: str, _api_key: str, *, client: httpx.Client | None = None):
-            time.sleep(0.15)
-            for tag in ("300398", "300357", "595367", "Harriet", "Clara", "Frederick"):
-                if tag in url:
-                    return {
-                        "body": {
-                            "hits": {
-                                "total": {"value": 1},
-                                "hits": [{"_source": {"record": {"naId": tag, "title": f"Title {tag}"}}}],
+        def overlapping_api(expected_inflight: int):
+            lock = threading.Lock()
+            state = {"current": 0, "peak": 0}
+            release = threading.Event()
+
+            def fake(url: str, _api_key: str, *, client: httpx.Client | None = None):
+                with lock:
+                    state["current"] += 1
+                    state["peak"] = max(state["peak"], state["current"])
+                    if state["current"] >= expected_inflight:
+                        release.set()
+                if not release.wait(5):
+                    raise AssertionError(
+                        f"catalog calls did not overlap (peak {state['peak']} of {expected_inflight})"
+                    )
+                with lock:
+                    state["current"] -= 1
+                for tag in ("300398", "300357", "595367", "Harriet", "Clara", "Frederick"):
+                    if tag in url:
+                        return {
+                            "body": {
+                                "hits": {
+                                    "total": {"value": 1},
+                                    "hits": [{"_source": {"record": {"naId": tag, "title": f"Title {tag}"}}}],
+                                }
                             }
                         }
-                    }
-            raise AssertionError(f"Unexpected URL: {url}")
+                raise AssertionError(f"Unexpected URL: {url}")
 
+            return fake, state
+
+        search_fake, search_state = overlapping_api(3)
+        get_fake, get_state = overlapping_api(3)
         runner = CliRunner()
-        with patch.object(nara, "_api_get_json", side_effect=slow_api_get_json):
-            t0 = time.perf_counter()
+        with patch.object(nara, "_api_get_json", side_effect=search_fake):
             res_search = runner.invoke(
                 nara.cli,
                 ["search", "Harriet", "Clara", "Frederick", "--api-key", "test-key", "--json"],
             )
-            dt_search = time.perf_counter() - t0
-
-            t1 = time.perf_counter()
+        with patch.object(nara, "_api_get_json", side_effect=get_fake):
             res_get = runner.invoke(
                 nara.cli,
                 ["get", "300398", "300357", "595367", "--api-key", "test-key", "--json"],
             )
-            dt_get = time.perf_counter() - t1
 
         self.assertEqual(res_search.exit_code, 0, res_search.output)
         self.assertEqual(res_get.exit_code, 0, res_get.output)
-        # Three 150ms calls run concurrently should complete well under 0.40s (serial would be >= 0.45s).
-        self.assertLess(dt_search, 0.40)
-        self.assertLess(dt_get, 0.40)
+        self.assertEqual(search_state["peak"], 3)
+        self.assertEqual(get_state["peak"], 3)
         search_payloads = nara.json.loads(res_search.output)
         self.assertEqual([p["query"] for p in search_payloads], ["Harriet", "Clara", "Frederick"])
         get_records = nara.json.loads(res_get.output)

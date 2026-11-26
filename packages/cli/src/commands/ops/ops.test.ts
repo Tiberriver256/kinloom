@@ -764,6 +764,232 @@ describe('ops/context', () => {
     expect(opened.rendered).not.toContain('Iris Alder');
     expect(opened.rendered).not.toContain('Clara Maple');
   });
+
+  it('lists reusable live archive media for confirmed-deceased relatives only with --include-family', async () => {
+    const repoDir = await createSyntheticRepo();
+    const peoplePath = path.join(repoDir, 'data', 'people.yaml');
+    const kinshipPath = path.join(repoDir, 'data', 'kinship.yaml');
+    const eventsPath = path.join(repoDir, 'data', 'events.yaml');
+    const mediaPath = path.join(repoDir, 'data', 'media.yaml');
+
+    const people = parsePeopleYaml(await readFile(peoplePath, 'utf8'));
+    const extra: RawPerson[] = [
+      {
+        id: 'per_walter_alder',
+        slug: 'walter-alder',
+        gedcom_xref: '@I100005@',
+        full_name: 'Walter Alder',
+        given_name: 'Walter',
+        surname: 'Alder',
+        alt_names: [],
+        sex: 'M',
+        is_living: false,
+        lineage_group: 'ancestor',
+        birth_edtf: '1855-02-02',
+        death_edtf: '1920-03-03',
+        portrait_url: null,
+      },
+      {
+        id: 'per_nora_maple_living',
+        slug: 'nora-maple',
+        gedcom_xref: '@I100006@',
+        full_name: 'Nora Maple',
+        given_name: 'Nora',
+        surname: 'Maple',
+        alt_names: [],
+        sex: 'F',
+        is_living: true,
+        lineage_group: 'ancestor',
+        birth_edtf: '1864-04-04',
+        death_edtf: '',
+        portrait_url: null,
+      },
+      {
+        id: 'per_edwin_alder',
+        slug: 'edwin-alder',
+        gedcom_xref: '@I100007@',
+        full_name: 'Edwin Alder',
+        given_name: 'Edwin',
+        surname: 'Alder',
+        alt_names: [],
+        sex: 'M',
+        is_living: false,
+        lineage_group: 'descendant',
+        birth_edtf: '1888-05-05',
+        death_edtf: '1914-06-06',
+        portrait_url: null,
+      },
+      {
+        id: 'per_iris_alder',
+        slug: 'iris-alder',
+        gedcom_xref: '@I100008@',
+        full_name: 'Iris Alder',
+        given_name: 'Iris',
+        surname: 'Alder',
+        alt_names: [],
+        sex: 'F',
+        is_living: false,
+        lineage_group: 'descendant',
+        birth_edtf: '2010-01-01',
+        death_edtf: '',
+        portrait_url: null,
+      },
+    ];
+    await writeFile(peoplePath, serializePeopleYaml([...people, ...extra], { sortById: true }), 'utf8');
+
+    const kinship = parseKinshipYaml(await readFile(kinshipPath, 'utf8'));
+    kinship.push(
+      { from: 'per_thomas_alder', to: 'per_walter_alder', relation: 'parent' },
+      { from: 'per_thomas_alder', to: 'per_nora_maple_living', relation: 'parent' },
+      { from: 'per_arthur_alder', to: 'per_edwin_alder', relation: 'parent' },
+      { from: 'per_arthur_alder', to: 'per_iris_alder', relation: 'parent' }
+    );
+    await writeFile(kinshipPath, serializeKinshipYaml(kinship, { sortDeterministic: true }), 'utf8');
+
+    const events = parseEventsYaml(await readFile(eventsPath, 'utf8'));
+    events.push({
+      id: 'evt_helen_living_visit',
+      title: 'Visit recorded with a living relative',
+      scope: 'family',
+      event_kind: 'point_event',
+      edtf_date: '1956-01-02',
+      place_id: 'plc_oak_county_ohio',
+      summary: 'A living relative attended.',
+      participants: [
+        { person_id: 'per_helen_maple', role: 'ancestor' },
+        { person_id: 'per_clara_maple_living', role: 'descendant' },
+      ],
+      sources: [{ source_id: 'src_1880_census', confidence: 'low' }],
+    });
+    await writeFile(eventsPath, serializeEventsYaml(events, { sortById: true }), 'utf8');
+
+    const media = parseMediaYaml(await readFile(mediaPath, 'utf8'));
+    const added: MediaItem[] = [
+      {
+        id: 'med_thomas_deed',
+        kind: 'document_scan',
+        person_id: 'per_thomas_alder',
+        file: '/media/thomas-deed.png',
+        caption: 'Thomas Alder land deed',
+      },
+      {
+        id: 'med_helen_obit',
+        kind: 'document_scan',
+        person_id: 'per_helen_maple',
+        file: '/media/helen-obit.png',
+        caption: 'Helen Maple obituary clipping',
+      },
+      {
+        id: 'med_edwin_baptism',
+        kind: 'document_scan',
+        person_id: 'per_edwin_alder',
+        file: '/media/edwin-baptism.png',
+        caption: 'Edwin Alder baptism entry',
+      },
+      {
+        id: 'med_walter_deed',
+        kind: 'document_scan',
+        person_id: 'per_walter_alder',
+        file: '/media/walter-deed.png',
+        caption: 'Walter Alder land deed',
+      },
+      {
+        id: 'med_arthur_and_helen',
+        kind: 'document_scan',
+        person_id: 'per_arthur_alder',
+        person_ids: ['per_helen_maple'],
+        file: '/media/arthur-helen.png',
+        caption: 'Arthur Alder and Helen Maple certificate',
+      },
+      {
+        id: 'med_thomas_with_clara',
+        kind: 'document_scan',
+        person_id: 'per_thomas_alder',
+        person_ids: ['per_clara_maple_living'],
+        file: '/media/thomas-clara.png',
+        caption: 'Thomas Alder with Clara Maple',
+      },
+      {
+        id: 'med_helen_reunion',
+        kind: 'document_scan',
+        person_id: 'per_helen_maple',
+        event_id: 'evt_helen_living_visit',
+        file: '/media/helen-reunion.png',
+        caption: 'Helen Maple reunion scan',
+      },
+      {
+        id: 'med_nora_portrait',
+        kind: 'portrait',
+        person_id: 'per_nora_maple_living',
+        file: '/media/nora-portrait.png',
+        caption: 'Nora Maple portrait',
+      },
+      {
+        id: 'med_iris_card',
+        kind: 'document_scan',
+        person_id: 'per_iris_alder',
+        file: '/media/iris-card.png',
+        caption: 'Iris Alder card',
+      },
+    ];
+    await writeFile(mediaPath, serializeMediaYaml([...media, ...added], { sortById: true }), 'utf8');
+
+    const closed = await runContextCommand({ repoDir, personId: 'per_arthur_alder' });
+    expect(closed.context.relativeArchiveMedia).toEqual([]);
+    expect(closed.rendered).not.toContain('reusable IDs');
+
+    const opened = await runContextCommand({
+      repoDir,
+      personId: 'per_arthur_alder',
+      includeFamily: true,
+    });
+    expect(opened.context.media.map((item) => item.id)).toContain('med_arthur_and_helen');
+    expect(opened.context.relativeArchiveMedia).toEqual([
+      {
+        id: 'med_edwin_baptism',
+        file: '/media/edwin-baptism.png',
+        caption: 'Edwin Alder baptism entry',
+        relation: 'child',
+        relativeId: 'per_edwin_alder',
+      },
+      {
+        id: 'med_helen_obit',
+        file: '/media/helen-obit.png',
+        caption: 'Helen Maple obituary clipping',
+        relation: 'spouse',
+        relativeId: 'per_helen_maple',
+      },
+      {
+        id: 'med_thomas_deed',
+        file: '/media/thomas-deed.png',
+        caption: 'Thomas Alder land deed',
+        relation: 'parent',
+        relativeId: 'per_thomas_alder',
+      },
+      {
+        id: 'med_walter_deed',
+        file: '/media/walter-deed.png',
+        caption: 'Walter Alder land deed',
+        relation: 'sibling',
+        relativeId: 'per_walter_alder',
+      },
+    ]);
+    expect(opened.rendered).toContain(
+      '### Existing live archive media on confirmed-deceased relatives (reusable IDs)'
+    );
+    expect(opened.rendered).toContain(
+      '- `med_thomas_deed` file=`/media/thomas-deed.png` caption=Thomas Alder land deed [parent: `per_thomas_alder`]'
+    );
+    expect(opened.context.relativeArchiveMedia.map((item) => item.id)).not.toContain('med_arthur_and_helen');
+    expect(opened.rendered).not.toContain('med_living_photo');
+    expect(opened.rendered).not.toContain('med_thomas_with_clara');
+    expect(opened.rendered).not.toContain('med_helen_reunion');
+    expect(opened.rendered).not.toContain('med_nora_portrait');
+    expect(opened.rendered).not.toContain('med_iris_card');
+    expect(opened.rendered).not.toContain('Clara Maple');
+    expect(opened.rendered).not.toContain('Nora Maple');
+    expect(opened.rendered).not.toContain('Iris Alder');
+  });
 });
 
 describe('ops/integrate', () => {
@@ -1867,6 +2093,9 @@ describe('ops/audit', () => {
     expect(await runCli(['audit', '--help'], { io: help.io })).toBe(EXIT_OK);
     expect(help.stdout.join('\n')).toContain('--all-staged');
     expect(help.stdout.join('\n')).toContain('--strict');
+    expect(help.stdout.join('\n')).toContain(
+      'when a staged file already belongs to a different id in data/media.yaml'
+    );
 
     const ordered = createCaptureIo();
     const orderedCode = await runCli(
@@ -2032,14 +2261,16 @@ describe('ops/audit', () => {
     const liveCode = await runCli(['audit', '--all-staged', '--repo', repoDir, '--strict', '--json'], {
       io: cap.io,
     });
-    expect(liveCode, `${cap.stderr.join('\n')}\n${cap.stdout.join('\n')}`).toBe(EXIT_OK);
+    expect(liveCode, `${cap.stderr.join('\n')}\n${cap.stdout.join('\n')}`).toBe(EXIT_ERROR);
     const body = JSON.parse(cap.stdout.join('\n')) as {
+      ok: boolean;
       strictOk: boolean;
       overlaps: {
         liveMediaFileCollisions: Array<{ file: string; live_media_id: string; staged: Array<{ media_id: string }> }>;
       };
     };
-    expect(body.strictOk).toBe(true);
+    expect(body.ok).toBe(true);
+    expect(body.strictOk).toBe(false);
     expect(body.overlaps.liveMediaFileCollisions).toEqual([
       {
         file: 'media/oak-register.png',
