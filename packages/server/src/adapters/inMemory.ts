@@ -516,12 +516,27 @@ export class InMemoryArchiveRepository implements ArchiveRepository {
   }
 
   async insertMagicLink(record: MagicLinkRecord): Promise<void> {
-    this.magicLinks.set(record.token_hash, structuredClone(record));
+    const normalized: MagicLinkRecord = {
+      ...structuredClone(record),
+      email: record.email.trim().toLowerCase(),
+    };
+    this.magicLinks.set(normalized.token_hash, normalized);
   }
 
   async getMagicLink(tokenHash: Sha256Hex): Promise<MagicLinkRecord | null> {
     const record = this.magicLinks.get(tokenHash);
     return record ? structuredClone(record) : null;
+  }
+
+  async countRecentMagicLinks(email: string, sinceIso: string): Promise<number> {
+    const normalized = email.trim().toLowerCase();
+    let count = 0;
+    for (const record of this.magicLinks.values()) {
+      if (record.email.trim().toLowerCase() === normalized && record.expires_at > sinceIso) {
+        count += 1;
+      }
+    }
+    return count;
   }
 
   async consumeMagicLink(tokenHash: Sha256Hex, nowIso: string): Promise<MagicLinkRecord | null> {

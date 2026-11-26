@@ -1123,6 +1123,92 @@ export function runBackendAdapterContractTests(
       });
     });
 
+    it('persists magic-link rate limiting in repository across separate server instances', async () => {
+      await withHarness(async ({ siteConfig, ports, advanceClockMs }) => {
+        const makeFreshServer = () =>
+          createKinloomServer({
+            siteConfig,
+            ports,
+            sessionSecret: CONTRACT_SESSION_SECRET,
+            bootstrapAdminEmail: 'bootstrap-admin@example.test',
+          });
+
+        // Direct countRecentMagicLinks contract verification
+        expect(
+          await ports.repository.countRecentMagicLinks(
+            'bootstrap-admin@example.test',
+            '2026-06-15T11:15:00.000Z'
+          )
+        ).toBe(0);
+
+        // 10 requests across 10 separate server instances succeed for the bootstrap admin
+        for (let i = 0; i < 10; i += 1) {
+          const freshServer = makeFreshServer();
+          const res = await freshServer.fetch(
+            new Request(`${CONTRACT_TEST_ORIGIN}/api/auth/magic-link/request`, {
+              method: 'POST',
+              headers: {
+                'content-type': 'application/json',
+                origin: CONTRACT_TEST_ORIGIN,
+              },
+              body: JSON.stringify({ email: 'Bootstrap-Admin@example.test' }),
+            })
+          );
+          expect(res.status).toBe(202);
+        }
+
+        // Repository count reflects all 10 recorded attempts (case-insensitive)
+        expect(
+          await ports.repository.countRecentMagicLinks(
+            'BOOTSTRAP-ADMIN@example.test',
+            new Date(ports.clock.now().getTime() - 45 * 60_000).toISOString()
+          )
+        ).toBe(10);
+
+        // 11th request on a brand-new server instance is rejected with 429 RATE_LIMITED
+        const blockedRes = await makeFreshServer().fetch(
+          new Request(`${CONTRACT_TEST_ORIGIN}/api/auth/magic-link/request`, {
+            method: 'POST',
+            headers: {
+              'content-type': 'application/json',
+              origin: CONTRACT_TEST_ORIGIN,
+            },
+            body: JSON.stringify({ email: 'bootstrap-admin@example.test' }),
+          })
+        );
+        expect(blockedRes.status).toBe(429);
+        const blockedBody = (await blockedRes.json()) as { error: { code: string } };
+        expect(blockedBody.error.code).toBe('RATE_LIMITED');
+
+        // Different email is unaffected by bootstrap-admin's rate limit
+        const otherRes = await makeFreshServer().fetch(
+          new Request(`${CONTRACT_TEST_ORIGIN}/api/auth/magic-link/request`, {
+            method: 'POST',
+            headers: {
+              'content-type': 'application/json',
+              origin: CONTRACT_TEST_ORIGIN,
+            },
+            body: JSON.stringify({ email: 'other.relative@example.test' }),
+          })
+        );
+        expect(otherRes.status).toBe(202);
+
+        // Advancing clock past the 1-hour window resets the rate limit
+        advanceClockMs(60 * 60 * 1000);
+        const resetRes = await makeFreshServer().fetch(
+          new Request(`${CONTRACT_TEST_ORIGIN}/api/auth/magic-link/request`, {
+            method: 'POST',
+            headers: {
+              'content-type': 'application/json',
+              origin: CONTRACT_TEST_ORIGIN,
+            },
+            body: JSON.stringify({ email: 'bootstrap-admin@example.test' }),
+          })
+        );
+        expect(resetRes.status).toBe(202);
+      });
+    });
+
     it('enforces scoped agent tokens (write_batch vs read_backup)', async () => {
       await withHarness(async ({ ports, server }) => {
         const adminCookie = await seedAdminCookie(ports);

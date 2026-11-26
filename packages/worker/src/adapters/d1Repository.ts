@@ -1477,13 +1477,14 @@ export class D1ArchiveRepository implements ArchiveRepository {
   }
 
   async insertMagicLink(record: MagicLinkRecord): Promise<void> {
+    const normalizedEmail = record.email.trim().toLowerCase();
     await this.prepare(
         `INSERT INTO magic_links (token_hash, email, invite_token, expires_at, used_at)
          VALUES (?, ?, ?, ?, ?)`
       )
       .bind(
         record.token_hash,
-        record.email,
+        normalizedEmail,
         record.invite_token,
         record.expires_at,
         record.used_at
@@ -1500,6 +1501,18 @@ export class D1ArchiveRepository implements ArchiveRepository {
       .bind(tokenHash)
       .first<RawDbMagicLinkRow>();
     return row ? mapMagicLinkRow(row) : null;
+  }
+
+  async countRecentMagicLinks(email: string, sinceIso: string): Promise<number> {
+    const normalized = email.trim().toLowerCase();
+    const row = await this.prepare(
+        `SELECT COUNT(*) AS count
+         FROM magic_links
+         WHERE email = ? AND expires_at > ?`
+      )
+      .bind(normalized, sinceIso)
+      .first<{ count: number }>();
+    return row?.count ?? 0;
   }
 
   async consumeMagicLink(tokenHash: Sha256Hex, nowIso: string): Promise<MagicLinkRecord | null> {

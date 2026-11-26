@@ -91,7 +91,6 @@ export class AuthService {
   private readonly magicLinkTtlMinutes: number;
   private readonly magicLinkMaxPerWindow: number;
   private readonly magicLinkWindowMs: number;
-  private readonly magicLinkAttempts = new Map<string, number[]>();
 
   constructor(deps: AuthServiceDeps) {
     this.repository = deps.repository;
@@ -277,19 +276,19 @@ export class AuthService {
   }): Promise<{ sent: true }> {
     const parsedEmail = EmailSchema.parse(params.email).toLowerCase();
     const nowMs = this.clock.now().getTime();
-    const cutoffMs = nowMs - this.magicLinkWindowMs;
-    const recent = (this.magicLinkAttempts.get(parsedEmail) ?? []).filter((ts) => ts > cutoffMs);
-    if (recent.length >= this.magicLinkMaxPerWindow) {
+    const magicLinkTtlMs = this.magicLinkTtlMinutes * 60_000;
+    const sinceIso = new Date(nowMs - this.magicLinkWindowMs + magicLinkTtlMs).toISOString();
+    const recentCount = await this.repository.countRecentMagicLinks(parsedEmail, sinceIso);
+    if (recentCount >= this.magicLinkMaxPerWindow) {
       throw new KinloomHttpError(
         429,
         'RATE_LIMITED',
         'Too many sign-in link requests. Please wait before trying again.'
       );
     }
-    recent.push(nowMs);
-    this.magicLinkAttempts.set(parsedEmail, recent);
 
     const nowIso = this.clock.nowIso();
+    const expiresAt = new Date(nowMs + magicLinkTtlMs).toISOString();
     const existingUser = await this.repository.getUser(parsedEmail);
     const isBootstrap =
       this.bootstrapAdminEmail !== null && parsedEmail === this.bootstrapAdminEmail;
@@ -302,14 +301,21 @@ export class AuthService {
       }
     }
 
-    // Constant 202 response prevents email enumeration: send only for enrolled members, bootstrap admin, or active invites.
-    if (!existingUser && !isBootstrap && !activeInviteToken) {
-      return { sent: true };
-    }
-
     const rawToken = randomBase64Url(32);
     const tokenHash = await sha256Hex(rawToken);
-    const expiresAt = new Date(nowMs + this.magicLinkTtlMinutes * 60_000).toISOString();
+
+    // Constant 202 response prevents email enumeration: record a pre-consumed marker row so rate limiting
+    // persists identically for unenrolled addresses, without sending mail or issuing a usable token.
+    if (!existingUser && !isBootstrap && !activeInviteToken) {
+      await this.repository.insertMagicLink({
+        token_hash: tokenHash,
+        email: parsedEmail,
+        invite_token: null,
+        expires_at: expiresAt,
+        used_at: nowIso,
+      });
+      return { sent: true };
+    }
 
     await this.repository.insertMagicLink({
       token_hash: tokenHash,

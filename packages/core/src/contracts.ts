@@ -237,6 +237,7 @@ export interface ArchiveRepository {
 
   insertMagicLink(record: MagicLinkRecord): Promise<void>;
   getMagicLink?(tokenHash: Sha256Hex): Promise<MagicLinkRecord | null>;
+  countRecentMagicLinks(email: string, sinceIso: string): Promise<number>;
   consumeMagicLink(tokenHash: Sha256Hex, nowIso: string): Promise<MagicLinkRecord | null>;
 
   findActiveAgentTokenByHash(tokenHash: Sha256Hex): Promise<AgentTokenRecord | null>;

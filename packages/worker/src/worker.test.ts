@@ -272,6 +272,14 @@ describe('D1 migration 0001_initial.sql EXPLAIN QUERY PLAN checks', () => {
           forbiddenScans: ['SCAN magic_links'],
           forbidTempSort: true,
         },
+        {
+          name: 'magic-link rate-limit count by email and expires_at window',
+          sql: `SELECT COUNT(*) AS count FROM magic_links WHERE email = ? AND expires_at > ?`,
+          bindings: ['editor@example.test', '2026-07-01T08:15:00.000Z'],
+          expectedIndex: 'idx_magic_links_email_expires',
+          forbiddenScans: ['SCAN magic_links'],
+          forbidTempSort: true,
+        },
       ];
 
       for (const check of queries) {
@@ -776,6 +784,88 @@ describe('createCloudflareWorker full HTTP lifecycle (Miniflare)', () => {
       const missingJsRes = await worker.fetch(new Request(`${CONTRACT_TEST_ORIGIN}/assets/missing.js`), env);
       expect(missingJsRes.status).toBe(404);
       expect(missingJsRes.headers.get('content-type')).not.toContain('text/html');
+    } finally {
+      await fixture.dispose();
+    }
+  });
+
+  it('persists magic-link rate limiting in D1 across per-request Worker fetch() invocations', async () => {
+    const fixture = await createMiniflareFixture();
+    try {
+      const siteConfig = createSyntheticSiteConfig();
+      const clock = new FixedClock('2026-07-01T09:00:00.000Z');
+      const sentEmails: SendEmailMessageBuilder[] = [];
+      const env: KinloomWorkerEnv = {
+        DB: fixture.db,
+        MEDIA_BUCKET: fixture.bucket,
+        ASSETS: {
+          async fetch(): Promise<Response> {
+            return new Response('Not found', { status: 404 });
+          },
+        },
+        SEND_EMAIL: {
+          async send(message: SendEmailMessageBuilder): Promise<{ messageId: string }> {
+            sentEmails.push(message);
+            return { messageId: `<msg-${sentEmails.length}@familyloom.org>` };
+          },
+        },
+        SESSION_SECRET: CONTRACT_SESSION_SECRET,
+        BOOTSTRAP_ADMIN_EMAIL: 'founder@example.test',
+        EMAIL_FROM: 'noreply@familyloom.org',
+        ARCHIVE_MODE: 'private',
+      };
+
+      const worker = createCloudflareWorker({ siteConfig, clock });
+
+      // 10 separate worker.fetch() calls instantiate 10 separate AuthService instances
+      for (let i = 0; i < 10; i += 1) {
+        const res = await worker.fetch(
+          new Request(`${CONTRACT_TEST_ORIGIN}/api/auth/magic-link/request`, {
+            method: 'POST',
+            headers: {
+              'content-type': 'application/json',
+              origin: CONTRACT_TEST_ORIGIN,
+            },
+            body: JSON.stringify({ email: 'founder@example.test' }),
+          }),
+          env
+        );
+        expect(res.status).toBe(202);
+      }
+      expect(sentEmails).toHaveLength(10);
+
+      // 11th worker.fetch() must be rate limited via D1
+      const rateLimitedRes = await worker.fetch(
+        new Request(`${CONTRACT_TEST_ORIGIN}/api/auth/magic-link/request`, {
+          method: 'POST',
+          headers: {
+            'content-type': 'application/json',
+            origin: CONTRACT_TEST_ORIGIN,
+          },
+          body: JSON.stringify({ email: 'founder@example.test' }),
+        }),
+        env
+      );
+      expect(rateLimitedRes.status).toBe(429);
+      const errBody = (await rateLimitedRes.json()) as { error: { code: string } };
+      expect(errBody.error.code).toBe('RATE_LIMITED');
+      expect(sentEmails).toHaveLength(10);
+
+      // Advancing clock past 1 hour allows new requests again
+      clock.advanceMs(60 * 60 * 1000);
+      const afterWindowRes = await worker.fetch(
+        new Request(`${CONTRACT_TEST_ORIGIN}/api/auth/magic-link/request`, {
+          method: 'POST',
+          headers: {
+            'content-type': 'application/json',
+            origin: CONTRACT_TEST_ORIGIN,
+          },
+          body: JSON.stringify({ email: 'founder@example.test' }),
+        }),
+        env
+      );
+      expect(afterWindowRes.status).toBe(202);
+      expect(sentEmails).toHaveLength(11);
     } finally {
       await fixture.dispose();
     }
