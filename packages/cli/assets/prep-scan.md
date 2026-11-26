@@ -80,12 +80,14 @@ kinloom prep-scan pdf-grep ./archive/county-history.pdf --pattern "Hardin County
 
 The command stores the extracted page texts at `<cache>/pdf-text/<sha256>.json`. `<sha256>` is the SHA-256 of the PDF bytes. `<cache>` is `KINLOOM_OCR_CACHE_DIR`, or `$XDG_CACHE_HOME/kinloom-ocr`, or `~/.cache/kinloom-ocr`. The next search of the same file reads that JSON and does not run `pdftotext` or `pypdf` again. `--json` adds `"cache_hit": true` or `false`. `--refresh` extracts the text again and replaces the cache file. A failed extraction does not write a cache file. Corrupt JSON is ignored and extracted again.
 
-Render only the requested PDF page numbers via `pdftoppm`, build compact previews in parallel, and optionally emit a labeled contact strip:
+Render only the requested PDF page numbers via `pdftoppm` in parallel (up to 4 workers), cache rendered pages on disk under `<cache>/pdf-pages/` keyed by `(sha256, page, dpi, format)`, build compact previews, and optionally emit a labeled contact strip:
 
 ```bash
 kinloom prep-scan pdf-pages ./archive/county-history.pdf --pages 1-4,18,42-45 --out-dir ./rendered --dpi 150
-kinloom prep-scan pdf-pages ./archive/packet.pdf --pages 1-6 --out-dir ./rendered --strip ./rendered/contact.jpg --json
+kinloom prep-scan pdf-pages ./archive/packet.pdf --pages 1,3,5-6 --format png --out-dir ./rendered --strip ./rendered/contact.jpg --json
 ```
+
+`--pages` (aliases `--page`, `-p`) accepts 1-based page numbers and inclusive ranges (deduplicated in requested order, maximum 25 pages per call). Out-of-bounds, reversed, non-positive, or over-limit page specs exit `2` with an actionable error. Repeat calls copy cached renders into `--out-dir` without invoking `pdftoppm` again. Pass `--refresh` to bypass the page-render cache and `--json` to emit top-level boolean `cache_hit` plus per-page `cache_hit`, `path`, `width`, `height`, and `bytes`.
 
 ### 5. Coordinate-grid inspection preview (`grid`)
 

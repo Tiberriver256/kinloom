@@ -1053,5 +1053,222 @@ class TestArchiveOrgTextAndLookup(unittest.TestCase):
                 self.assertEqual(seen, [])
 
 
+class TestArchiveOrgHardening(unittest.TestCase):
+    def test_grep_retries_429_500_503_incomplete_read_and_http_date_retry_after(self) -> None:
+        from datetime import datetime, timedelta, timezone
+        from email.utils import format_datetime
+        from http.client import IncompleteRead
+
+        item_id = "synthetic_retry_gazetteer_1885"
+        fake_meta = {
+            "metadata": {"identifier": item_id, "title": "Retry Gazetteer"},
+            "files": [
+                {"name": f"{item_id}_scandata.xml", "format": "Scandata"},
+                {"name": f"{item_id}_djvu.txt", "format": "DjVuTXT"},
+            ],
+        }
+        fake_djvu = "\x0c".join(
+            ["", "Cover", "Title", "Intro", "Harriet Tubman spoke at Oakridge.", "Closing"]
+        ).encode("utf-8")
+
+        counts = {"meta": 0, "scandata": 0, "djvu": 0}
+        sleeps: list[float] = []
+        future_date = format_datetime(datetime.now(timezone.utc) + timedelta(seconds=2), usegmt=True)
+
+        def fake_urlopen(req, timeout=25.0):
+            url = req.full_url
+            if url.endswith(f"/metadata/{item_id}"):
+                counts["meta"] += 1
+                if counts["meta"] == 1:
+                    raise make_http_error(url, 429, retry_after="1.25")
+                return FakeHttpResponse(json.dumps(fake_meta).encode("utf-8"))
+            if url.endswith(f"/{item_id}_scandata.xml"):
+                counts["scandata"] += 1
+                if counts["scandata"] == 1:
+                    raise make_http_error(url, 503, retry_after=future_date)
+                return FakeHttpResponse(SYNTHETIC_SCANDATA)
+            if url.endswith(f"/{item_id}_djvu.txt"):
+                counts["djvu"] += 1
+                if counts["djvu"] == 1:
+                    raise make_http_error(url, 500)
+                if counts["djvu"] == 2:
+                    raise IncompleteRead(b"partial")
+                return FakeHttpResponse(fake_djvu)
+            raise AssertionError(f"Unexpected URL: {url}")
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with patch.dict(os.environ, {"KINLOOM_IA_CACHE_DIR": tmpdir}, clear=False), patch(
+                "urllib.request.urlopen", side_effect=fake_urlopen
+            ), patch.object(ao.time, "sleep", side_effect=sleeps.append):
+                buf1 = io.StringIO()
+                with patch("sys.stdout", buf1):
+                    rc1 = ao.main(["grep", item_id, "-e", "Harriet Tubman", "--json"])
+                self.assertEqual(rc1, 0)
+                out1 = json.loads(buf1.getvalue())
+                self.assertFalse(out1["cache_hit"])
+                self.assertEqual(out1["total_matches"], 1)
+                self.assertEqual(out1["hits"][0]["printed_page"], "1")
+                self.assertEqual(counts, {"meta": 2, "scandata": 2, "djvu": 3})
+                self.assertEqual(len(sleeps), 4)
+                self.assertTrue(all(0.0 <= s <= ao.MAX_RETRY_AFTER_SECONDS for s in sleeps))
+
+                # Second call hits disk cache with zero HTTP attempts.
+                buf2 = io.StringIO()
+                with patch("sys.stdout", buf2):
+                    rc2 = ao.main(["grep", item_id, "-e", "Oakridge", "--json"])
+                self.assertEqual(rc2, 0)
+                out2 = json.loads(buf2.getvalue())
+                self.assertTrue(out2["cache_hit"])
+                self.assertEqual(out2["total_matches"], 1)
+                self.assertEqual(counts, {"meta": 2, "scandata": 2, "djvu": 3})
+
+    def test_grep_handles_aliases_zero_matches_non_utf8_corrupt_scandata_and_partial_batch(self) -> None:
+        good_id = "synthetic_good_almanac_1870"
+        bad_id = "synthetic_borrow_only_1871"
+        corrupt_xml = b"<html><body>503 Service Unavailable</body></html>"
+        # Include invalid UTF-8 bytes in metadata description and djvu text.
+        meta_bytes = (
+            b'{"metadata":{"identifier":"'
+            + good_id.encode("ascii")
+            + b'","title":"Almanac \xff\xfe"},"files":['
+            + b'{"name":"' + good_id.encode("ascii") + b'_SCANDATA.XML","format":"Scandata"},'
+            + b'{"name":"' + good_id.encode("ascii") + b'_DJVU.TXT","format":"DjVuTXT"}]}'
+        )
+        djvu_bytes = b"Page zero \xff\xfe Frederick Douglass\x0cPage one Clara Barton"
+
+        def fake_urlopen(req, timeout=25.0):
+            url = req.full_url
+            if url.endswith(f"/metadata/{good_id}"):
+                return FakeHttpResponse(meta_bytes)
+            if url.endswith(f"/{good_id}_SCANDATA.XML"):
+                return FakeHttpResponse(corrupt_xml)
+            if url.endswith(f"/{good_id}_DJVU.TXT"):
+                return FakeHttpResponse(djvu_bytes)
+            if url.endswith(f"/metadata/{bad_id}"):
+                raise make_http_error(url, 403)
+            raise AssertionError(f"Unexpected URL: {url}")
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with patch.dict(os.environ, {"KINLOOM_IA_CACHE_DIR": tmpdir}, clear=False), patch(
+                "urllib.request.urlopen", side_effect=fake_urlopen
+            ):
+                # Multi-item grep with repeatable -e, -C, -m survives 403 on one item and reports errors.
+                buf = io.StringIO()
+                with patch("sys.stdout", buf):
+                    rc = ao.main(
+                        [
+                            "grep",
+                            good_id,
+                            bad_id,
+                            "-e",
+                            "Douglass",
+                            "-e",
+                            "Barton",
+                            "-C",
+                            "80",
+                            "-m",
+                            "10",
+                            "--json",
+                        ]
+                    )
+                self.assertEqual(rc, 0)
+                payload = json.loads(buf.getvalue())
+                self.assertEqual(payload["total_matches"], 2)
+                self.assertFalse(payload["cache_hit"])
+                self.assertEqual(len(payload["errors"]), 1)
+                self.assertEqual(payload["errors"][0]["identifier"], bad_id)
+                self.assertIn("HTTP 403", payload["errors"][0]["error"])
+                # Corrupt scandata XML was NOT written to cache.
+                self.assertFalse((Path(tmpdir) / good_id / "scandata.xml").exists())
+
+                # Zero-match grep exits 0 cleanly and reports cache_hit: True.
+                buf_zero = io.StringIO()
+                with patch("sys.stdout", buf_zero):
+                    rc_zero = ao.main(["grep", good_id, "-e", "NonexistentTermXYZ", "--json"])
+                self.assertEqual(rc_zero, 0)
+                zero_payload = json.loads(buf_zero.getvalue())
+                self.assertEqual(zero_payload["total_matches"], 0)
+                self.assertEqual(zero_payload["returned"], 0)
+                self.assertEqual(zero_payload["hits"], [])
+                self.assertTrue(zero_payload["cache_hit"])
+
+                # Zero-width regex yields 0 matches instead of matching every character boundary.
+                buf_zw = io.StringIO()
+                with patch("sys.stdout", buf_zw):
+                    rc_zw = ao.main(["grep", good_id, "--pattern", "^", "--json"])
+                self.assertEqual(rc_zw, 0)
+                self.assertEqual(json.loads(buf_zw.getvalue())["total_matches"], 0)
+
+                # All-failing batch exits 1.
+                err = io.StringIO()
+                with patch("sys.stderr", err):
+                    with self.assertRaises(SystemExit) as cm:
+                        ao.main(["grep", bad_id, "--pattern", "Douglass", "--json"])
+                self.assertEqual(cm.exception.code, 1)
+
+    def test_page_json_emits_boolean_cache_hit_with_dedup_and_out_dir_alias(self) -> None:
+        item_id = "synthetic_page_telemetry_1890"
+        seen: list[str] = []
+
+        def fake_http_get_bytes(url: str, timeout: float = 25.0) -> bytes:
+            seen.append(url)
+            match = re.search(r"/page/n(\d+)_", url)
+            assert match is not None
+            return b"\xff\xd8" + bytes([int(match.group(1))]) + (b"\x11" * 32)
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            out_dir = Path(tmpdir) / "out"
+            with patch.dict(os.environ, {"KINLOOM_IA_CACHE_DIR": tmpdir}, clear=False), patch.object(
+                ao, "http_get_bytes", side_effect=fake_http_get_bytes
+            ):
+                # Single-page via --leaves with duplicate leaf deduplicates to 1 fetch.
+                buf1 = io.StringIO()
+                with patch("sys.stdout", buf1):
+                    rc1 = ao.main(["page", item_id, "--leaves", "4,4", "--out-dir", str(out_dir), "--json"])
+                self.assertEqual(rc1, 0)
+                p1 = json.loads(buf1.getvalue())
+                self.assertIs(p1["cache_hit"], False)
+                self.assertEqual(p1["leaf"], 4)
+                self.assertEqual(len(seen), 1)
+
+                # Repeat single-page hits cache.
+                buf2 = io.StringIO()
+                with patch("sys.stdout", buf2):
+                    rc2 = ao.main(["page", item_id, "--leaf", "4", "--out-dir", str(out_dir), "--json"])
+                self.assertEqual(rc2, 0)
+                p2 = json.loads(buf2.getvalue())
+                self.assertIs(p2["cache_hit"], True)
+                self.assertEqual(len(seen), 1)
+
+                # Multi-page partial hit (leaf 4 cached, leaf 5 uncached) -> cache_hit is False.
+                buf3 = io.StringIO()
+                with patch("sys.stdout", buf3):
+                    rc3 = ao.main(["page", item_id, "--leaves", "4,5,4", "-o", str(out_dir), "--json"])
+                self.assertEqual(rc3, 0)
+                p3 = json.loads(buf3.getvalue())
+                self.assertIs(p3["cache_hit"], False)
+                self.assertEqual([page["leaf"] for page in p3["pages"]], [4, 5])
+                self.assertEqual([page["page_cached"] for page in p3["pages"]], [True, False])
+                self.assertEqual(len(seen), 2)
+
+                # Repeat multi-page -> cache_hit is True and zero new HTTP calls.
+                buf4 = io.StringIO()
+                with patch("sys.stdout", buf4):
+                    rc4 = ao.main(["page", item_id, "--leaves", "4-5", "-o", str(out_dir), "--json"])
+                self.assertEqual(rc4, 0)
+                p4 = json.loads(buf4.getvalue())
+                self.assertIs(p4["cache_hit"], True)
+                self.assertEqual([page["page_cached"] for page in p4["pages"]], [True, True])
+                self.assertEqual(len(seen), 2)
+
+    def test_broken_pipe_exits_zero(self) -> None:
+        def raise_pipe(_args):
+            raise BrokenPipeError(32, "Broken pipe")
+
+        with patch.object(ao, "cmd_url", side_effect=raise_pipe):
+            rc = ao.main(["url", "title:(Oakridge)"])
+        self.assertEqual(rc, 0)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -24,6 +24,7 @@ import re
 import shutil
 import subprocess
 import sys
+import threading
 import time
 from typing import TYPE_CHECKING, Any, Iterator
 from urllib.parse import urlparse
@@ -34,8 +35,11 @@ if TYPE_CHECKING:
 DEFAULT_MAX_WORKERS = 8
 DEFAULT_TIMEOUT_S = 12.0
 DEFAULT_PDF_TIMEOUT_S = 60
+PDF_PAGE_BATCH_LIMIT = 25
+PDF_PAGE_MAX_WORKERS = 4
 USER_AGENT = "kinloom-prep-scan/1.0 (genealogy archival tooling)"
-PDF_PAGE_NUM_RE = re.compile(r"-(\d+)\.jpg$", re.IGNORECASE)
+PDF_PAGE_NUM_RE = re.compile(r"-(\d+)\.(?:jpe?g|png)$", re.IGNORECASE)
+PDFINFO_PAGES_RE = re.compile(r"^Pages:\s*(\d+)\s*$", re.MULTILINE)
 
 
 def default_cache_root() -> Path:
@@ -106,7 +110,13 @@ def require_pillow() -> tuple[Any, Any, Any, Any]:
     return Image, ImageDraw, ImageFont, ImageOps
 
 
-def append_telemetry(subcmd: str, duration_ms: float, exit_code: int, bytes_out: int) -> None:
+def append_telemetry(
+    subcmd: str,
+    duration_ms: float,
+    exit_code: int,
+    bytes_out: int,
+    cache_hit: bool | None = None,
+) -> None:
     if (
         os.environ.get("KINLOOM_TELEMETRY_PARENT") == "1"
         or os.environ.get("KINLOOM_TELEMETRY_ACTIVE") == "1"
@@ -121,7 +131,7 @@ def append_telemetry(subcmd: str, duration_ms: float, exit_code: int, bytes_out:
             "subcmd": f"prep-scan {subcmd}" if subcmd else "prep-scan",
             "person_id": None,
             "duration_ms": max(0, int(round(duration_ms))),
-            "cache_hit": None,
+            "cache_hit": cache_hit if isinstance(cache_hit, bool) else None,
             "exit_code": int(exit_code),
             "bytes_out": max(0, int(bytes_out)),
         }
@@ -172,35 +182,82 @@ def parse_box(raw: str) -> Box:
     return Box(x0, y0, x1, y1)
 
 
-def parse_page_spec(raw: str) -> list[int]:
-    pages: set[int] = set()
-    for part in raw.split(","):
+def parse_page_spec(raw: str, *, max_pages: int = PDF_PAGE_BATCH_LIMIT) -> list[int]:
+    """Parse 1-based page numbers and inclusive ranges (e.g. `1,3,10-12`), deduplicated in order."""
+    cleaned = raw.strip()
+    if not cleaned:
+        raise ValueError(
+            "Empty --pages spec. Pass 1-based page numbers or inclusive ranges like 1,3,10-12."
+        )
+    seen: set[int] = set()
+    ordered: list[int] = []
+    parts = cleaned.split(",")
+    for part in parts:
         token = part.strip()
         if not token:
-            continue
+            raise ValueError(
+                f"Invalid --pages spec '{raw}': empty page entry. "
+                "Use 1-based page numbers or inclusive ranges like 1,3,10-12."
+            )
         if "-" in token:
-            bounds = token.split("-", 1)
+            bounds = token.split("-")
+            if len(bounds) != 2 or not bounds[0].strip() or not bounds[1].strip():
+                raise ValueError(
+                    f"Invalid page range '{token}' in --pages '{raw}'. "
+                    "Use positive 1-based bounds like 10-12."
+                )
             try:
                 start = int(bounds[0].strip())
                 end = int(bounds[1].strip())
             except ValueError as exc:
-                raise ValueError(f"Invalid page range '{token}' in --pages '{raw}'.") from exc
-            if start < 1 or end < start:
-                raise ValueError(f"Invalid page range '{token}': require 1 <= start <= end.")
-            if end - start > 500:
-                raise ValueError(f"Page range '{token}' exceeds 500-page safety limit.")
-            pages.update(range(start, end + 1))
+                raise ValueError(
+                    f"Invalid page range '{token}' in --pages '{raw}'. "
+                    "Use integer bounds like 10-12."
+                ) from exc
+            if start < 1 or end < 1:
+                raise ValueError(
+                    f"Invalid page range '{token}' in --pages '{raw}': page numbers must be >= 1."
+                )
+            if end < start:
+                raise ValueError(
+                    f"Invalid page range '{token}' in --pages '{raw}': start ({start}) exceeds end ({end})."
+                )
+            span = end - start + 1
+            if span > max_pages:
+                raise ValueError(
+                    f"Page range '{token}' requests {span} pages, exceeding the {max_pages}-page limit per call. "
+                    f"Split into batches of {max_pages} or fewer pages."
+                )
+            for num in range(start, end + 1):
+                if num not in seen:
+                    seen.add(num)
+                    ordered.append(num)
+                    if len(ordered) > max_pages:
+                        raise ValueError(
+                            f"--pages '{raw}' requests more than {max_pages} pages per call. "
+                            f"Split into batches of {max_pages} or fewer pages."
+                        )
         else:
             try:
                 num = int(token)
             except ValueError as exc:
-                raise ValueError(f"Invalid page number '{token}' in --pages '{raw}'.") from exc
+                raise ValueError(
+                    f"Invalid page number '{token}' in --pages '{raw}'. "
+                    "Use 1-based page numbers or ranges like 1,3,10-12."
+                ) from exc
             if num < 1:
-                raise ValueError(f"Page number must be >= 1, got {num}.")
-            pages.add(num)
-    if not pages:
-        raise ValueError(f"No valid pages parsed from --pages '{raw}'.")
-    return sorted(pages)
+                raise ValueError(
+                    f"Page number must be >= 1, got {num} in --pages '{raw}'."
+                )
+            if num not in seen:
+                seen.add(num)
+                ordered.append(num)
+                if len(ordered) > max_pages:
+                    raise ValueError(
+                        f"--pages '{raw}' requests more than {max_pages} pages per call. "
+                        f"Split into batches of {max_pages} or fewer pages."
+                    )
+    return ordered
 
 
 def coalesce_ranges(pages: list[int]) -> list[tuple[int, int]]:
@@ -280,7 +337,7 @@ def rotate_clockwise(im: PILImageModule.Image, degrees: int | None) -> PILImageM
 
 def atomic_write_bytes(dest: Path, data: bytes) -> None:
     dest.parent.mkdir(parents=True, exist_ok=True)
-    tmp = dest.with_name(f".{dest.name}.{os.getpid()}.tmp")
+    tmp = dest.with_name(f".{dest.name}.{os.getpid()}.{threading.get_ident()}.{time.time_ns()}.tmp")
     try:
         tmp.write_bytes(data)
         os.replace(tmp, dest)
@@ -751,45 +808,91 @@ def cmd_sheet_strip(args: argparse.Namespace) -> tuple[int, int]:
     return 0, out_bytes
 
 
-def cmd_pdf_pages(args: argparse.Namespace) -> tuple[int, int]:
-    Image, _, _, ImageOps = require_pillow()
-    pdf_path = Path(args.pdf_path).resolve()
-    if not pdf_path.is_file():
-        print(f"Error: PDF file not found: {pdf_path}", file=sys.stderr)
-        return 1, 0
+def normalize_pdf_format(raw: str) -> str:
+    fmt = raw.strip().lower()
+    if fmt in ("jpg", "jpeg"):
+        return "jpg"
+    if fmt == "png":
+        return "png"
+    raise ValueError(f"Invalid --format '{raw}': expected jpg or png.")
 
-    pdftoppm_bin = shutil.which("pdftoppm")
-    if not pdftoppm_bin:
-        print(
-            "Error: pdftoppm executable not found on PATH. Install poppler-utils "
-            "(for example `apt install poppler-utils` or `brew install poppler`).",
-            file=sys.stderr,
-        )
-        return 1, 0
-    timeout_bin = shutil.which("timeout")
 
-    requested_pages = parse_page_spec(args.pages)
-    ranges = coalesce_ranges(requested_pages)
-
-    out_dir = Path(args.out_dir).resolve()
-    out_dir.mkdir(parents=True, exist_ok=True)
-    # Keep intermediate files inside out_dir instead of /tmp tmpfs RAM.
-    stage_dir = out_dir / f".pdf_stage_{os.getpid()}_{time.time_ns()}"
-    stage_dir.mkdir(parents=True, exist_ok=True)
-
-    rendered_by_page: dict[int, Path] = {}
+def get_pdf_page_count(pdf_path: Path) -> int | None:
+    pdfinfo_bin = shutil.which("pdfinfo")
+    if pdfinfo_bin:
+        try:
+            proc = subprocess.run(
+                [pdfinfo_bin, str(pdf_path)],
+                capture_output=True,
+                text=True,
+                timeout=15,
+            )
+            if proc.returncode == 0:
+                match = PDFINFO_PAGES_RE.search(proc.stdout)
+                if match:
+                    count = int(match.group(1))
+                    if count > 0:
+                        return count
+        except (OSError, subprocess.TimeoutExpired, ValueError):
+            pass
     try:
-        for r_idx, (start_p, end_p) in enumerate(ranges):
-            prefix = stage_dir / f"r{r_idx}"
+        from pypdf import PdfReader  # type: ignore[import-not-found]
+
+        count = len(PdfReader(str(pdf_path)).pages)
+        return count if count > 0 else None
+    except Exception:
+        return None
+
+
+def pdf_page_cache_paths(
+    pdf_sha256: str, page_num: int, dpi: int, fmt: str, cache_root: Path
+) -> tuple[Path, Path]:
+    directory = cache_root / "pdf-pages"
+    filename = f"{pdf_sha256}_p{page_num}_dpi{dpi}.{fmt}"
+    return directory / filename, directory / f".{filename}.lock"
+
+
+def render_or_load_pdf_page(
+    pdf_path: Path,
+    pdf_sha256: str,
+    page_num: int,
+    dpi: int,
+    fmt: str,
+    *,
+    cache_root: Path,
+    refresh: bool,
+) -> tuple[bytes, bool]:
+    """Return rendered page bytes and cache_hit flag using per-page atomic flock cache."""
+    cache_path, lock_path = pdf_page_cache_paths(pdf_sha256, page_num, dpi, fmt, cache_root)
+    if not refresh and cache_path.is_file() and cache_path.stat().st_size > 0:
+        return cache_path.read_bytes(), True
+
+    with file_lock(lock_path):
+        if not refresh and cache_path.is_file() and cache_path.stat().st_size > 0:
+            return cache_path.read_bytes(), True
+
+        pdftoppm_bin = shutil.which("pdftoppm")
+        if not pdftoppm_bin:
+            raise RuntimeError(
+                "pdftoppm executable not found on PATH. Install poppler-utils "
+                "(for example `apt install poppler-utils` or `brew install poppler`)."
+            )
+        timeout_bin = shutil.which("timeout")
+        cache_path.parent.mkdir(parents=True, exist_ok=True)
+        stage_dir = cache_path.parent / f".stage_{os.getpid()}_{threading.get_ident()}_{time.time_ns()}"
+        stage_dir.mkdir(parents=True, exist_ok=True)
+        try:
+            prefix = stage_dir / f"p{page_num}"
+            fmt_flag = "-png" if fmt == "png" else "-jpeg"
             base_cmd = [
                 pdftoppm_bin,
-                "-jpeg",
+                fmt_flag,
                 "-r",
-                str(args.dpi),
+                str(dpi),
                 "-f",
-                str(start_p),
+                str(page_num),
                 "-l",
-                str(end_p),
+                str(page_num),
                 str(pdf_path),
                 str(prefix),
             ]
@@ -802,62 +905,97 @@ def cmd_pdf_pages(args: argparse.Namespace) -> tuple[int, int]:
                 proc = subprocess.run(
                     cmd, capture_output=True, text=True, timeout=DEFAULT_PDF_TIMEOUT_S + 5
                 )
-            except subprocess.TimeoutExpired:
-                print(
-                    f"Error: pdftoppm timed out after {DEFAULT_PDF_TIMEOUT_S}s on pages {start_p}-{end_p}.",
-                    file=sys.stderr,
-                )
-                return 1, 0
+            except subprocess.TimeoutExpired as exc:
+                raise RuntimeError(
+                    f"pdftoppm timed out after {DEFAULT_PDF_TIMEOUT_S}s on page {page_num}."
+                ) from exc
             if proc.returncode != 0:
                 detail = (proc.stderr or proc.stdout).strip()[:300]
-                print(
-                    f"Error: pdftoppm failed (exit {proc.returncode}) on pages {start_p}-{end_p}: {detail}",
-                    file=sys.stderr,
+                raise RuntimeError(
+                    f"pdftoppm failed (exit {proc.returncode}) on page {page_num}: {detail}"
                 )
-                return 1, 0
 
-            for img_file in sorted(stage_dir.glob(f"r{r_idx}-*.jpg")):
-                m = PDF_PAGE_NUM_RE.search(img_file.name)
-                if not m:
-                    continue
-                page_num = int(m.group(1))
-                dest_page = out_dir / f"page-{page_num:03d}.jpg"
-                os.replace(img_file, dest_page)
-                rendered_by_page[page_num] = dest_page
-    finally:
-        shutil.rmtree(stage_dir, ignore_errors=True)
+            rendered_files = sorted(
+                p for p in stage_dir.iterdir() if p.is_file() and PDF_PAGE_NUM_RE.search(p.name)
+            )
+            if not rendered_files or rendered_files[0].stat().st_size == 0:
+                raise ValueError(
+                    f"Page {page_num} is out of range or could not be rendered from {pdf_path.name}."
+                )
+            os.replace(rendered_files[0], cache_path)
+            return cache_path.read_bytes(), False
+        finally:
+            shutil.rmtree(stage_dir, ignore_errors=True)
 
-    if not rendered_by_page:
-        print(
-            f"Error: no pages were rendered for --pages '{args.pages}' from {pdf_path}.",
-            file=sys.stderr,
+
+def cmd_pdf_pages(args: argparse.Namespace) -> tuple[int, int, bool | None]:
+    if args.dpi < 1:
+        raise ValueError(f"--dpi must be >= 1, got {args.dpi}.")
+    if args.max_width < 1:
+        raise ValueError(f"--max-width must be >= 1, got {args.max_width}.")
+    if args.max_kb < 1:
+        raise ValueError(f"--max-kb must be >= 1, got {args.max_kb}.")
+    fmt = normalize_pdf_format(args.format)
+    requested_pages = parse_page_spec(args.pages)
+
+    Image, _, _, ImageOps = require_pillow()
+    pdf_path = Path(args.pdf_path).resolve()
+    if not pdf_path.is_file():
+        print(f"Error: PDF file not found: {pdf_path}", file=sys.stderr)
+        return 1, 0, None
+
+    page_count = get_pdf_page_count(pdf_path)
+    if page_count is not None:
+        out_of_bounds = [p for p in requested_pages if p > page_count]
+        if out_of_bounds:
+            bad_spec = ", ".join(str(p) for p in out_of_bounds)
+            raise ValueError(
+                f"Page(s) {bad_spec} out of range for {pdf_path.name} "
+                f"(PDF has {page_count} page(s): 1..{page_count})."
+            )
+
+    pdf_sha256 = sha256_file(pdf_path)
+    cache_root = default_cache_root()
+    out_dir = Path(args.out_dir).resolve()
+    out_dir.mkdir(parents=True, exist_ok=True)
+    refresh = bool(args.refresh)
+
+    def render_and_preview(page_num: int) -> dict[str, Any]:
+        page_data, page_cache_hit = render_or_load_pdf_page(
+            pdf_path,
+            pdf_sha256,
+            page_num,
+            args.dpi,
+            fmt,
+            cache_root=cache_root,
+            refresh=refresh,
         )
-        return 1, 0
-
-    ordered_pages = [(p, rendered_by_page[p]) for p in requested_pages if p in rendered_by_page]
-
-    def build_preview(item: tuple[int, Path]) -> dict[str, Any]:
-        page_num, page_path = item
+        dest_page = out_dir / f"page-{page_num:03d}.{fmt}"
+        atomic_write_bytes(dest_page, page_data)
         preview_path = out_dir / f"page-{page_num:03d}.preview.jpg"
-        page_bytes = page_path.stat().st_size
-        with Image.open(page_path) as im:
+        page_bytes = len(page_data)
+        with Image.open(io.BytesIO(page_data)) as im:
             orig_w, orig_h = ImageOps.exif_transpose(im).size
             saved_prev = save_compact_jpeg(
                 im, preview_path, max_width=args.max_width, max_kb=args.max_kb
             )
         return {
             "page": page_num,
-            "path": str(page_path),
+            "path": str(dest_page),
             "width": orig_w,
             "height": orig_h,
             "bytes": page_bytes,
             "kb": round(page_bytes / 1024.0, 1),
+            "cache_hit": page_cache_hit,
             "preview": saved_prev.to_dict(),
         }
 
-    workers = min(DEFAULT_MAX_WORKERS, max(1, len(ordered_pages)))
-    with ThreadPoolExecutor(max_workers=workers) as pool:
-        page_records = list(pool.map(build_preview, ordered_pages))
+    workers = min(PDF_PAGE_MAX_WORKERS, max(1, len(requested_pages)))
+    if workers == 1:
+        page_records = [render_and_preview(requested_pages[0])]
+    else:
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            page_records = list(pool.map(render_and_preview, requested_pages))
 
     strip_info: dict[str, Any] | None = None
     if args.strip:
@@ -875,16 +1013,18 @@ def cmd_pdf_pages(args: argparse.Namespace) -> tuple[int, int]:
         )
         strip_info = strip_saved.to_dict()
 
-    missing_pages = [p for p in requested_pages if p not in rendered_by_page]
+    all_cache_hit = bool(page_records) and all(bool(rec["cache_hit"]) for rec in page_records)
     payload: dict[str, object] = {
         "pdf": str(pdf_path),
         "dpi": args.dpi,
+        "format": fmt,
         "requested_pages": requested_pages,
-        "missing_pages": missing_pages,
+        "missing_pages": [],
         "pages": page_records,
     }
     if strip_info is not None:
         payload["strip"] = strip_info
+    payload["cache_hit"] = all_cache_hit
 
     if args.json:
         out_bytes = emit_output(json.dumps(payload, indent=2) + "\n")
@@ -902,7 +1042,7 @@ def cmd_pdf_pages(args: argparse.Namespace) -> tuple[int, int]:
                 f"{strip_info['kb']:.1f} KB"
             )
         out_bytes = emit_output("\n".join(lines) + "\n")
-    return 0, out_bytes
+    return 0, out_bytes, all_cache_hit
 
 
 def extract_pdf_pages_text(pdf_path: Path, timeout_s: int = 600) -> list[str]:
@@ -985,11 +1125,11 @@ def format_page_spec(pages: list[int]) -> str:
     return ",".join(str(a) if a == b else f"{a}-{b}" for a, b in coalesce_ranges(pages))
 
 
-def cmd_pdf_grep(args: argparse.Namespace) -> tuple[int, int]:
+def cmd_pdf_grep(args: argparse.Namespace) -> tuple[int, int, bool | None]:
     pdf_path = Path(args.pdf_path).resolve()
     if not pdf_path.is_file():
         print(f"Error: PDF file not found: {pdf_path}", file=sys.stderr)
-        return 1, 0
+        return 1, 0, None
     if args.limit < 1 or args.context < 0:
         raise ValueError("--limit must be >= 1 and --context must be >= 0.")
     try:
@@ -1045,7 +1185,7 @@ def cmd_pdf_grep(args: argparse.Namespace) -> tuple[int, int]:
         if pages_arg:
             lines.append(f"next: kinloom prep-scan pdf-pages {pdf_path} --pages {pages_arg} --out-dir <dir>")
         out_bytes = emit_output("\n".join(lines) + "\n")
-    return (0 if total else 1), out_bytes
+    return (0 if total else 1), out_bytes, cache_hit
 
 
 def cmd_grid(args: argparse.Namespace) -> tuple[int, int]:
@@ -1440,16 +1580,25 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_pdf = sub.add_parser(
         "pdf-pages",
-        help="Render only requested PDF pages via pdftoppm, build < 280 KB previews in parallel, and optionally build a contact strip.",
+        help="Render requested PDF pages in parallel via pdftoppm with disk caching, compact previews, and optional contact strip.",
     )
     p_pdf.add_argument("pdf_path", help="Path to source PDF file.")
-    p_pdf.add_argument("--pages", required=True, help="Page range spec, e.g. 1-5,8.")
+    p_pdf.add_argument(
+        "--pages", "--page", "-p", dest="pages", required=True,
+        help="1-based page numbers and inclusive ranges, e.g. 1,3,10-12 (max 25 per call).",
+    )
     p_pdf.add_argument(
         "--out-dir", "--out", "-o", "--output-dir", "--output", dest="out_dir", required=True,
         help="Output directory for rendered pages and previews (--out/-o are aliases).",
     )
     p_pdf.add_argument(
         "--dpi", type=int, default=150, help="Rendering DPI for pdftoppm (default: 150)."
+    )
+    p_pdf.add_argument(
+        "--format",
+        choices=("jpg", "jpeg", "png"),
+        default="jpg",
+        help="Rendered page image format: jpg or png (default: jpg).",
     )
     p_pdf.add_argument(
         "--max-width", type=int, default=1400, help="Preview maximum pixel width (default: 1400)."
@@ -1459,6 +1608,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p_pdf.add_argument(
         "--strip", default=None, help="Optional output JPEG path for a labeled contact strip."
+    )
+    p_pdf.add_argument(
+        "--refresh",
+        action="store_true",
+        help="Ignore cached rendered pages and re-render via pdftoppm.",
     )
     p_pdf.add_argument("--json", action="store_true", help="Emit JSON output.")
     p_pdf.set_defaults(func=cmd_pdf_pages)
@@ -1630,11 +1784,11 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-_BOX_FRAGMENT = re.compile(r"^-?[\d.]+(?:\s*,\s*-?[\d.]+)*\s*,$")
+_BOX_FRAGMENT = re.compile(r"^-?[\d.]+(?:-[\d.]+)?(?:\s*,\s*-?[\d.]+(?:-[\d.]+)?)*\s*,$")
 
 
 def normalize_argv(argv: list[str]) -> list[str]:
-    """Rejoin box values the shell split on spaces: `--box 10, 20, 30, 40`."""
+    """Rejoin comma-split numeric/range values: `--box 10, 20, 30, 40` or `--pages 1-3, 5`."""
     out: list[str] = []
     for token in argv:
         if out and _BOX_FRAGMENT.match(out[-1]) and re.match(r"^-?[\d.]", token):
@@ -1672,8 +1826,13 @@ def main(argv: list[str] | None = None) -> int:
     resolve_output_alias(parser, args)
     rc = 1
     bytes_out = 0
+    cache_hit: bool | None = None
     try:
-        rc, bytes_out = args.func(args)
+        result = args.func(args)
+        if len(result) == 3:
+            rc, bytes_out, cache_hit = result
+        else:
+            rc, bytes_out = result
         return rc
     except ValueError as exc:
         print(f"Error: {exc}", file=sys.stderr)
@@ -1685,7 +1844,11 @@ def main(argv: list[str] | None = None) -> int:
         return rc
     finally:
         append_telemetry(
-            getattr(args, "command", ""), (time.perf_counter() - t0) * 1000.0, rc, bytes_out
+            getattr(args, "command", ""),
+            (time.perf_counter() - t0) * 1000.0,
+            rc,
+            bytes_out,
+            cache_hit=cache_hit,
         )
 
 

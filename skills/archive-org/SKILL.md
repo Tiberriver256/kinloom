@@ -25,11 +25,11 @@ Cache layout:
 - `<item_id>/files/<relpath>`: cached item files downloaded via `download` (with path-traversal validation; exact raw `scandata.xml` and `_djvu.txt` artifacts are also reused without re-downloading).
 - `_queries/<search|fulltext>/<sha256>.json`: cached JSON responses for `search` and `fulltext` keyed by canonical query parameters with a 168-hour (7-day) default TTL (`--cache-ttl-hours` or `KINLOOM_IA_QUERY_TTL_HOURS`).
 
-Transient HTTP `429`, `502`, `503`, and `504` responses retry politely up to 2 times (honoring numeric `Retry-After` capped at 5s), while `403`, `404`, and socket timeouts fail fast with 0 retries.
+Transient HTTP `429`, `500`, `502`, `503`, and `504` responses (plus `IncompleteRead` / `RemoteDisconnected`) retry politely up to 2 times (honoring numeric or HTTP-date `Retry-After` capped at 5s), while `403`, `404`, and socket timeouts fail fast with 0 retries.
 
 ### Search inside cached digitized books (`grep`)
 
-Downloads missing metadata, `scandata.xml`, and OCR text in parallel (`max_workers=6`, `timeout=25`) on cache miss, then searches line by line (never `re.S` + `.*`) and maps every match to its exact BookReader `leaf`, `printed_page`, snippet, and direct JPEG URL:
+Downloads missing metadata, `scandata.xml`, and OCR text in parallel (`max_workers=6`, `timeout=25`) on cache miss, then searches line by line (never `re.S` + `.*`) and maps every match to its exact BookReader `leaf`, `printed_page`, snippet, and direct JPEG URL. Accepts `--pattern` or `-e` (repeatable), `--context` or `-C`, and `--limit` or `-m`. Exits `0` on zero matches. In multi-item batches, per-item download errors are reported in `errors` (or stderr warnings) instead of discarding matches from healthy items:
 
 ```bash
 # Search one or more digitized books (cache miss populates ~/.cache/kinloom-ia/<id>/)

@@ -560,6 +560,24 @@ describe('help vs subcommand routing and guide-only commands', () => {
         cacheHit: false,
       },
       {
+        command: 'archive-org',
+        args: ['page', 'synthetic_atlas_1888', '--leaf', '4', '--json'],
+        stdout: '{"identifier":"synthetic_atlas_1888","leaf":4,"page_cached":true,"cache_hit":true}\n',
+        cacheHit: true,
+      },
+      {
+        command: 'archive-org',
+        args: ['page', 'synthetic_atlas_1888', '--leaves', '1,2', '--json'],
+        stdout: '{"identifier":"synthetic_atlas_1888","count":2,"pages":[{"leaf":1,"page_cached":true},{"leaf":2,"page_cached":false}],"cache_hit":false}\n',
+        cacheHit: false,
+      },
+      {
+        command: 'archive-org',
+        args: ['grep', 'synthetic_atlas_1888', '-e', 'Oakridge', '--json'],
+        stdout: '{"pattern":"Oakridge","total_matches":0,"returned":0,"hits":[],"cache_hit":true}\n',
+        cacheHit: true,
+      },
+      {
         command: 'findagrave',
         args: ['search', '--last', 'Alder', '--json'],
         stdout: '{"total":0,"memorials":[],"cache_hit":true}\n',
@@ -604,11 +622,20 @@ describe('help vs subcommand routing and guide-only commands', () => {
     expect(recorded.map((event) => event.cache_hit)).toEqual(cases.map((item) => item.cacheHit));
     expect(recorded.map((event) => event.cmd)).toEqual([
       'records:archive-org',
+      'records:archive-org',
+      'records:archive-org',
+      'records:archive-org',
       'records:findagrave',
       'records:gnis',
       'records:va-archives',
       'records:nara',
       'records:chronam',
+    ]);
+    expect(recorded.slice(0, 4).map((event) => event.subcmd)).toEqual([
+      'archive-org search',
+      'archive-org page',
+      'archive-org page',
+      'archive-org grep',
     ]);
   });
 
@@ -2042,6 +2069,234 @@ describe('bundled Python utilities and live script execution', () => {
       );
       expect(bad.status).toBe(1);
       expect(fs.existsSync(path.join(cacheRoot, 'pdf-text', `${badDigest}.json`))).toBe(false);
+    }
+  );
+
+  it.skipIf(spawnSync('pdftoppm', ['-v']).error !== undefined)(
+    'prep-scan pdf-pages parses ranges in order, renders in parallel, caches per page, and rejects bad specs with exit 2',
+    async () => {
+      const prepScript = path.join(ASSETS_ROOT, 'prep-scan.py');
+      let pyCmd: string | null = null;
+      let prepPrefix: string[] = [];
+      try {
+        execFileSync('python3', ['-c', 'import PIL'], { stdio: 'ignore' });
+        pyCmd = 'python3';
+        prepPrefix = [prepScript];
+      } catch {
+        try {
+          execPythonSync('uv', ['run', '--with', 'pillow', 'python3', '-c', 'import PIL']);
+          pyCmd = 'uv';
+          prepPrefix = ['run', '--script', prepScript];
+        } catch {
+          pyCmd = null;
+        }
+      }
+      if (!pyCmd) {
+        return;
+      }
+
+      const tmp = await makeTempDir('kinloom-pdf-pages-cache-');
+      const pdfPath = path.join(tmp, 'synthetic-book.pdf');
+      const cacheRoot = path.join(tmp, 'ocr-cache');
+      const binDir = path.join(tmp, 'bin');
+      const counterPath = path.join(tmp, 'pdftoppm-calls.log');
+      const inflightDir = path.join(tmp, 'inflight');
+      const maxConcPath = path.join(tmp, 'max-conc.log');
+      const telemetryFile = path.join(tmp, 'telemetry.jsonl');
+
+      const pdfBytes = buildTextPdf([
+        'Page one: Oakridge Township 1850',
+        'Page two: Maple Creek Survey',
+        'Page three: Pine Hill Cemetery',
+        'Page four: River Bend Ferry',
+        'Page five: Index of Settlers',
+      ]);
+      await writeFile(pdfPath, pdfBytes);
+      const pdfDigest = crypto.createHash('sha256').update(pdfBytes).digest('hex');
+
+      fs.mkdirSync(binDir, { recursive: true });
+      fs.mkdirSync(inflightDir, { recursive: true });
+      const realPdftoppm = execFileSync('which', ['pdftoppm'], { encoding: 'utf8' }).trim();
+      await writeFile(
+        path.join(binDir, 'pdftoppm'),
+        [
+          '#!/bin/sh',
+          `printf '%s\\n' "$*" >> ${JSON.stringify(counterPath)}`,
+          `marker=${JSON.stringify(inflightDir)}/p_$$`,
+          'touch "$marker"',
+          `conc=$(ls -1 ${JSON.stringify(inflightDir)} | wc -l)`,
+          `printf '%s\\n' "$conc" >> ${JSON.stringify(maxConcPath)}`,
+          'sleep 0.15',
+          `${JSON.stringify(realPdftoppm)} "$@"`,
+          'rc=$?',
+          'rm -f "$marker"',
+          'exit $rc',
+        ].join('\n') + '\n',
+        { mode: 0o755 }
+      );
+
+      const env: NodeJS.ProcessEnv = {
+        ...process.env,
+        PATH: `${binDir}${path.delimiter}${process.env.PATH ?? ''}`,
+        KINLOOM_OCR_CACHE_DIR: cacheRoot,
+        KINLOOM_TELEMETRY_PARENT: '1',
+      };
+      const countRenders = (): number => {
+        if (!fs.existsSync(counterPath)) return 0;
+        return fs.readFileSync(counterPath, 'utf8').split('\n').filter(Boolean).length;
+      };
+
+      // 1. Cold parallel multi-page render with range + dedup in requested order (4, 1-3, 2 -> [4, 1, 2, 3]).
+      const outDir1 = path.join(tmp, 'out1');
+      const first = spawnPythonSync(
+        pyCmd,
+        [...prepPrefix, 'pdf-pages', pdfPath, '--pages', '4, 1-3, 2', '--dpi', '72', '--out-dir', outDir1, '--json'],
+        env
+      );
+      expect(first.status, first.stderr).toBe(0);
+      const body1 = JSON.parse(first.stdout) as {
+        dpi: number;
+        format: string;
+        requested_pages: number[];
+        cache_hit: boolean;
+        pages: Array<{ page: number; path: string; width: number; height: number; bytes: number; cache_hit: boolean }>;
+      };
+      expect(body1.dpi).toBe(72);
+      expect(body1.format).toBe('jpg');
+      expect(body1.requested_pages).toEqual([4, 1, 2, 3]);
+      expect(body1.cache_hit).toBe(false);
+      expect(body1.pages.map((p) => [p.page, p.cache_hit])).toEqual([
+        [4, false],
+        [1, false],
+        [2, false],
+        [3, false],
+      ]);
+      for (const page of body1.pages) {
+        expect(page.width).toBeGreaterThan(0);
+        expect(page.height).toBeGreaterThan(0);
+        expect(page.bytes).toBe(fs.statSync(page.path).size);
+      }
+      expect(countRenders()).toBe(4);
+      const maxObservedConcurrency = Math.max(
+        ...fs.readFileSync(maxConcPath, 'utf8').trim().split('\n').map((n) => Number(n.trim()))
+      );
+      expect(maxObservedConcurrency).toBeGreaterThanOrEqual(2);
+      expect(maxObservedConcurrency).toBeLessThanOrEqual(4);
+      expect(fs.existsSync(path.join(cacheRoot, 'pdf-pages', `${pdfDigest}_p1_dpi72.jpg`))).toBe(true);
+
+      // 2. Warm cache hit into a brand-new output directory invokes pdftoppm 0 times and emits cache_hit: true.
+      const outDir2 = path.join(tmp, 'out2');
+      const second = spawnPythonSync(
+        pyCmd,
+        [...prepPrefix, 'pdf-pages', pdfPath, '--pages', '1,2-3', '--dpi', '72', '--out-dir', outDir2, '--json'],
+        env
+      );
+      expect(second.status, second.stderr).toBe(0);
+      const body2 = JSON.parse(second.stdout) as {
+        requested_pages: number[];
+        cache_hit: boolean;
+        pages: Array<{ page: number; path: string; cache_hit: boolean }>;
+      };
+      expect(body2.requested_pages).toEqual([1, 2, 3]);
+      expect(body2.cache_hit).toBe(true);
+      expect(body2.pages.map((p) => [p.page, p.cache_hit])).toEqual([
+        [1, true],
+        [2, true],
+        [3, true],
+      ]);
+      expect(countRenders()).toBe(4);
+      expect(fs.existsSync(path.join(outDir2, 'page-001.jpg'))).toBe(true);
+      expect(fs.existsSync(path.join(outDir2, 'page-003.jpg'))).toBe(true);
+
+      // 3. Partial overlap (page 1 cached, page 5 uncached) -> top-level cache_hit: false, only 1 new pdftoppm call.
+      const outDir3 = path.join(tmp, 'out3');
+      const partial = spawnPythonSync(
+        pyCmd,
+        [...prepPrefix, 'pdf-pages', pdfPath, '--pages', '1,5', '--dpi', '72', '--out-dir', outDir3, '--json'],
+        env
+      );
+      expect(partial.status, partial.stderr).toBe(0);
+      const body3 = JSON.parse(partial.stdout) as {
+        cache_hit: boolean;
+        pages: Array<{ page: number; cache_hit: boolean }>;
+      };
+      expect(body3.cache_hit).toBe(false);
+      expect(body3.pages.map((p) => [p.page, p.cache_hit])).toEqual([
+        [1, true],
+        [5, false],
+      ]);
+      expect(countRenders()).toBe(5);
+
+      // 4. --refresh bypasses disk cache and re-renders.
+      const refreshed = spawnPythonSync(
+        pyCmd,
+        [...prepPrefix, 'pdf-pages', pdfPath, '--page', '1', '--dpi', '72', '--out-dir', outDir3, '--refresh', '--json'],
+        env
+      );
+      expect(refreshed.status, refreshed.stderr).toBe(0);
+      expect(JSON.parse(refreshed.stdout).cache_hit).toBe(false);
+      expect(countRenders()).toBe(6);
+
+      // 5. PNG format caches separately and writes .png output.
+      const outDirPng = path.join(tmp, 'out-png');
+      const pngRun = spawnPythonSync(
+        pyCmd,
+        [...prepPrefix, 'pdf-pages', pdfPath, '--pages', '1', '--dpi', '72', '--format', 'png', '--out-dir', outDirPng, '--json'],
+        env
+      );
+      expect(pngRun.status, pngRun.stderr).toBe(0);
+      const pngBody = JSON.parse(pngRun.stdout) as { format: string; cache_hit: boolean; pages: Array<{ path: string }> };
+      expect(pngBody.format).toBe('png');
+      expect(pngBody.cache_hit).toBe(false);
+      expect(pngBody.pages[0].path.endsWith('page-001.png')).toBe(true);
+      expect(countRenders()).toBe(7);
+
+      // 6. Backward-compatible text mode works on cache hit.
+      const textRun = spawnPythonSync(
+        pyCmd,
+        [...prepPrefix, 'pdf-pages', pdfPath, '--pages', '1', '--dpi', '72', '--out-dir', outDir2],
+        env
+      );
+      expect(textRun.status, textRun.stderr).toBe(0);
+      expect(textRun.stdout).toContain('p.001');
+      expect(textRun.stdout).toContain('preview:');
+      expect(countRenders()).toBe(7);
+
+      // 7. Telemetry capture through runRecordCommand records boolean cache_hit.
+      const runEnv: NodeJS.ProcessEnv = { ...env };
+      delete runEnv.KINLOOM_TELEMETRY_PARENT;
+      const runRes = await runRecordCommand(
+        'prep-scan',
+        ['pdf-pages', pdfPath, '--pages', '1,2', '--dpi', '72', '--out-dir', outDir2, '--json'],
+        {
+          io: createCaptureIo().io,
+          env: runEnv,
+          telemetryFilePath: telemetryFile,
+        }
+      );
+      expect(runRes.exitCode).toBe(0);
+      const recordedEvent = JSON.parse((await readFile(telemetryFile, 'utf8')).trim()) as TelemetryEvent;
+      expect(recordedEvent.subcmd).toBe('prep-scan pdf-pages');
+      expect(recordedEvent.cache_hit).toBe(true);
+
+      // 8. Invalid, reversed, non-positive, >25-page, and out-of-bounds specs exit 2 with zero new pdftoppm calls.
+      const badSpecs = [
+        { pages: '3-1', expectText: 'exceeds end' },
+        { pages: '0', expectText: '>= 1' },
+        { pages: '1,,3', expectText: 'empty page entry' },
+        { pages: '1-26', expectText: '25' },
+        { pages: '99', expectText: 'out of range' },
+      ];
+      for (const spec of badSpecs) {
+        const badRun = spawnPythonSync(
+          pyCmd,
+          [...prepPrefix, 'pdf-pages', pdfPath, '--pages', spec.pages, '--out-dir', outDir2],
+          env
+        );
+        expect(badRun.status, `spec=${spec.pages} stderr=${badRun.stderr}`).toBe(2);
+        expect(badRun.stderr).toContain(spec.expectText);
+      }
+      expect(countRenders()).toBe(7);
     }
   );
 

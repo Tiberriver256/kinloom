@@ -32,7 +32,7 @@ DEFAULT_QUERY_TTL_HOURS = 168.0
 MAX_WORKERS = 6
 PAGE_BATCH_LIMIT = 25
 PAGE_BATCH_WORKERS = 4
-RETRYABLE_HTTP_CODES = frozenset({429, 502, 503, 504})
+RETRYABLE_HTTP_CODES = frozenset({429, 500, 502, 503, 504})
 MAX_HTTP_RETRIES = 2
 MAX_RETRY_AFTER_SECONDS = 5.0
 SAFE_ID_RE = re.compile(r"^[A-Za-z0-9._-]+$")
@@ -146,16 +146,29 @@ def parse_retry_after_seconds(headers: object, attempt: int) -> float:
     raw = headers.get("Retry-After")
     if raw is None:
         return default_delay
-    try:
-        parsed = float(str(raw).strip())
-    except ValueError:
+    raw_str = str(raw).strip()
+    if not raw_str:
         return default_delay
+    try:
+        parsed = float(raw_str)
+    except ValueError:
+        try:
+            from datetime import timezone
+            from email.utils import parsedate_to_datetime
+
+            dt = parsedate_to_datetime(raw_str)
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+            parsed = max(0.0, dt.timestamp() - time.time())
+        except Exception:
+            return default_delay
     if not math.isfinite(parsed) or parsed < 0:
         return default_delay
     return min(MAX_RETRY_AFTER_SECONDS, parsed)
 
 
 def http_get_bytes(url: str, timeout: float = DEFAULT_TIMEOUT) -> bytes:
+    from http.client import HTTPException, IncompleteRead, RemoteDisconnected
     from urllib.error import HTTPError, URLError
     from urllib.request import Request, urlopen
 
@@ -181,6 +194,13 @@ def http_get_bytes(url: str, timeout: float = DEFAULT_TIMEOUT) -> bytes:
                 time.sleep(parse_retry_after_seconds(headers, attempt))
                 continue
             raise RuntimeError(f"HTTP {code} from {url}") from exc
+        except (IncompleteRead, RemoteDisconnected) as exc:
+            if attempt < MAX_HTTP_RETRIES:
+                time.sleep(parse_retry_after_seconds(None, attempt))
+                continue
+            raise RuntimeError(f"Incomplete response from {url}: {exc}") from exc
+        except HTTPException as exc:
+            raise RuntimeError(f"HTTP protocol error for {url}: {exc}") from exc
         except (URLError, TimeoutError, OSError) as exc:
             # Stay fail-fast on ReadTimeout and socket/connection errors.
             raise RuntimeError(f"Request failed for {url}: {exc}") from exc
@@ -190,8 +210,8 @@ def http_get_bytes(url: str, timeout: float = DEFAULT_TIMEOUT) -> bytes:
 def http_get_json(url: str, timeout: float = DEFAULT_TIMEOUT) -> dict:
     raw = http_get_bytes(url, timeout=timeout)
     try:
-        data = json.loads(raw.decode("utf-8"))
-    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        data = json.loads(raw.decode("utf-8", errors="replace"))
+    except json.JSONDecodeError as exc:
         raise RuntimeError(f"Invalid JSON response from {url}: {exc}") from exc
     if not isinstance(data, dict):
         raise RuntimeError(f"Expected JSON object from {url}")
@@ -427,9 +447,10 @@ def short(text: object, limit: int = 300) -> str:
 
 
 def find_item_file(files: list[dict], *, suffixes: tuple[str, ...], formats: tuple[str, ...] = ()) -> str | None:
+    lower_suffixes = tuple(suf.lower() for suf in suffixes)
     for entry in files:
         name = entry.get("name") or ""
-        if any(name.endswith(suf) for suf in suffixes):
+        if any(name.lower().endswith(suf) for suf in lower_suffixes):
             return str(name)
     if formats:
         fmt_set = {f.lower() for f in formats}
@@ -451,6 +472,8 @@ def parse_scandata_xml(xml_bytes: bytes) -> dict:
     import xml.etree.ElementTree as ET
 
     root = ET.fromstring(xml_bytes)
+    if root.find(".//pageData") is None:
+        raise ValueError("scandata.xml is missing <pageData>.")
     pages = root.findall(".//pageData/page")
     scandata_to_bookreader: dict[str, int] = {}
     bookreader_to_scandata: dict[str, int] = {}
@@ -519,11 +542,17 @@ def empty_page_index() -> dict:
     }
 
 
-def synthesize_djvu_from_hocr(searchtext_gz: bytes, pageindex_gz: bytes) -> str:
-    import gzip
+def _maybe_gunzip(raw: bytes) -> bytes:
+    if raw.startswith(b"\x1f\x8b"):
+        import gzip
 
-    text = gzip.decompress(searchtext_gz).decode("utf-8", errors="replace")
-    offsets = json.loads(gzip.decompress(pageindex_gz).decode("utf-8"))
+        return gzip.decompress(raw)
+    return raw
+
+
+def synthesize_djvu_from_hocr(searchtext_gz: bytes, pageindex_gz: bytes) -> str:
+    text = _maybe_gunzip(searchtext_gz).decode("utf-8", errors="replace")
+    offsets = json.loads(_maybe_gunzip(pageindex_gz).decode("utf-8", errors="replace"))
     if not isinstance(offsets, list) or not offsets:
         return text
     segments: list[str] = []
@@ -657,8 +686,12 @@ def ensure_item_cache(
             if scandata_bytes is None and not refresh and scandata_path.is_file():
                 scandata_bytes = scandata_path.read_bytes()
             if scandata_bytes is not None:
-                atomic_write_bytes(scandata_path, scandata_bytes)
-                page_index = parse_scandata_xml(scandata_bytes)
+                try:
+                    page_index = parse_scandata_xml(scandata_bytes)
+                except Exception:
+                    page_index = empty_page_index()
+                else:
+                    atomic_write_bytes(scandata_path, scandata_bytes)
             else:
                 page_index = empty_page_index()
 
@@ -694,12 +727,16 @@ def ensure_item_cache(
                 else:
                     segment_mode = "scandata"
             elif "hocr_text" in fetched and "hocr_idx" in fetched:
-                djvu_bytes_out = synthesize_djvu_from_hocr(
-                    fetched["hocr_text"], fetched["hocr_idx"]
-                ).encode("utf-8")
-                djvu_source = "hocr"
-                segment_mode = "scandata"
-            elif djvu_raw is not None:
+                try:
+                    djvu_bytes_out = synthesize_djvu_from_hocr(
+                        fetched["hocr_text"], fetched["hocr_idx"]
+                    ).encode("utf-8")
+                    djvu_source = "hocr"
+                    segment_mode = "scandata"
+                except (OSError, EOFError, ValueError, json.JSONDecodeError) as exc:
+                    fetch_errors["hocr"] = exc
+
+            if djvu_bytes_out is None and djvu_raw is not None:
                 djvu_bytes_out = djvu_raw
                 djvu_source = "djvu_txt"
                 segment_mode = "flat"
@@ -885,6 +922,8 @@ def grep_cached_item(
         offset = 0
         for line in page_text.splitlines(keepends=True):
             for match in compiled.finditer(line):
+                if match.end() == match.start():
+                    continue
                 total_matches += 1
                 if len(hits) < limit:
                     leaf_n, scandata_leaf, printed_page = resolve_segment_page(seg_idx, page_index)
@@ -1279,13 +1318,31 @@ def cmd_fulltext(args: argparse.Namespace) -> int:
 
 def cmd_grep(args: argparse.Namespace) -> int:
     t0 = time.perf_counter()
+    if args.context < 0:
+        fail(f"--context must be >= 0, got {args.context}.", code=2)
+    if args.limit < 0:
+        fail(f"--limit must be >= 0, got {args.limit}.", code=2)
+    if not math.isfinite(args.timeout) or args.timeout <= 0:
+        fail(f"--timeout must be > 0, got {args.timeout!r}.", code=2)
+
+    raw_patterns = [p for p in (args.patterns or []) if p is not None]
+    if not raw_patterns:
+        fail("Pass --pattern <regex> (or -e <regex>) to search inside items.", code=2)
+    pattern = raw_patterns[0] if len(raw_patterns) == 1 else "|".join(f"(?:{p})" for p in raw_patterns)
+
     flags = re.IGNORECASE if args.ignore_case else 0
     try:
-        compiled = re.compile(args.pattern, flags)
+        compiled = re.compile(pattern, flags)
     except re.error as exc:
-        fail(f"Invalid regex pattern {args.pattern!r}: {exc}", code=2)
+        fail(f"Invalid regex pattern {pattern!r}: {exc}", code=2)
 
-    identifiers = [validate_identifier(item) for item in args.identifiers]
+    seen_ids: set[str] = set()
+    identifiers: list[str] = []
+    for raw_item in args.identifiers:
+        item_id = validate_identifier(raw_item)
+        if item_id not in seen_ids:
+            seen_ids.add(item_id)
+            identifiers.append(item_id)
     cache_root = get_cache_root()
 
     # Fetch missing items in parallel (max_workers=6, timeout=25).
@@ -1298,6 +1355,9 @@ def cmd_grep(args: argparse.Namespace) -> int:
             refresh=args.refresh,
         )
 
+    cache_entries: list[dict] = []
+    item_errors: list[dict[str, str]] = []
+
     if len(identifiers) == 1:
         try:
             cache_entries = [prepare(identifiers[0])]
@@ -1306,20 +1366,22 @@ def cmd_grep(args: argparse.Namespace) -> int:
     else:
         from concurrent.futures import ThreadPoolExecutor
 
-        cache_entries = []
         with ThreadPoolExecutor(max_workers=min(MAX_WORKERS, len(identifiers))) as pool:
             futures = [(item_id, pool.submit(prepare, item_id)) for item_id in identifiers]
             for item_id, fut in futures:
                 try:
                     cache_entries.append(fut.result())
                 except Exception as exc:
-                    fail(f"{item_id}: {exc}")
+                    item_errors.append({"identifier": item_id, "error": str(exc)})
+        if not cache_entries:
+            detail = "; ".join(f"{err['identifier']}: {err['error']}" for err in item_errors)
+            fail(detail)
 
     all_hits: list[dict] = []
     item_summaries: list[dict] = []
     remaining = max(0, args.limit)
     total_matches = 0
-    all_cached = True
+    all_cached = len(item_errors) == 0
 
     for entry in cache_entries:
         item_id = entry["identifier"]
@@ -1351,8 +1413,8 @@ def cmd_grep(args: argparse.Namespace) -> int:
         )
 
     elapsed_ms = round((time.perf_counter() - t0) * 1000.0, 2)
-    payload = {
-        "pattern": args.pattern,
+    payload: dict[str, object] = {
+        "pattern": pattern,
         "ignore_case": bool(args.ignore_case),
         "cached": all_cached,
         "elapsed_ms": elapsed_ms,
@@ -1361,53 +1423,68 @@ def cmd_grep(args: argparse.Namespace) -> int:
         "items": item_summaries,
         "hits": all_hits,
     }
+    if item_errors:
+        payload["errors"] = item_errors
 
     if args.as_json:
         print(json.dumps(json_with_cache_hit(payload, all_cached), indent=2, ensure_ascii=False))
         return 0
 
     status = "cache-hit" if all_cached else "fetched"
-    print(f"{total_matches} matches across {len(identifiers)} item(s) (showing {len(all_hits)}, {status}, {elapsed_ms} ms)")
+    print(f"{total_matches} matches across {len(cache_entries)} item(s) (showing {len(all_hits)}, {status}, {elapsed_ms} ms)")
     for hit in all_hits:
         pp = f"p.{hit['printed_page']}" if hit["printed_page"] else "p.?"
         lf = f"n{hit['leaf']}" if hit["leaf"] is not None else "n?"
         print(f"- {hit['identifier']} | {lf} ({pp}) | {hit['image_url'] or hit['details_url']}")
         print(f"  {hit['snippet']}")
+    for err in item_errors:
+        sys.stderr.write(f"warning: {err['identifier']}: {err['error']}\n")
     return 0
 
 
 def parse_leaf_spec(spec: str) -> list[int]:
-    """Parse `--leaves` integers and inclusive ranges such as `120-123,130`."""
+    """Parse `--leaves` integers and inclusive ranges such as `120-123,130`, deduplicated in order."""
     leaves: list[int] = []
+    seen: set[int] = set()
     parts = [part.strip() for part in spec.split(",")]
     if not spec.strip() or not parts or any(not part for part in parts):
         fail("Invalid --leaves value. Use integers or inclusive ranges like 120-123,130.", code=2)
     for part in parts:
-        range_match = re.fullmatch(r"(\d+)-(\d+)", part)
+        range_match = re.fullmatch(r"(\d+)\s*-\s*(\d+)", part)
         if range_match:
             start = int(range_match.group(1))
             end = int(range_match.group(2))
             if end < start:
                 fail(f"Invalid --leaves range {part!r}: {end} precedes {start}.", code=2)
-            span = end - start + 1
+            if (end - start + 1) > PAGE_BATCH_LIMIT:
+                fail(
+                    f"--leaves asks for more than {PAGE_BATCH_LIMIT} pages. "
+                    f"Split the request into batches of {PAGE_BATCH_LIMIT} or fewer.",
+                    code=2,
+                )
+            chunk = range(start, end + 1)
         elif re.fullmatch(r"\d+", part):
-            start = end = int(part)
-            span = 1
+            num = int(part)
+            chunk = range(num, num + 1)
         else:
             fail(f"Invalid --leaves token {part!r}. Use integers or inclusive ranges like 120-123,130.", code=2)
-        if len(leaves) + span > PAGE_BATCH_LIMIT:
-            fail(
-                f"--leaves asks for more than {PAGE_BATCH_LIMIT} pages. "
-                f"Split the request into batches of {PAGE_BATCH_LIMIT} or fewer.",
-                code=2,
-            )
-        leaves.extend(range(start, end + 1))
+        for leaf in chunk:
+            if leaf not in seen:
+                seen.add(leaf)
+                leaves.append(leaf)
+                if len(leaves) > PAGE_BATCH_LIMIT:
+                    fail(
+                        f"--leaves asks for more than {PAGE_BATCH_LIMIT} pages. "
+                        f"Split the request into batches of {PAGE_BATCH_LIMIT} or fewer.",
+                        code=2,
+                    )
     return leaves
 
 
 def parse_printed_page_spec(spec: str) -> list[str]:
-    """Parse `--printed-pages` labels and inclusive integer ranges such as `670-674,707`."""
+    """Parse `--printed-pages` labels and inclusive integer ranges such as `670-674,707`, deduplicated in order."""
     labels: list[str] = []
+    seen: set[str] = set()
     parts = [part.strip() for part in spec.split(",")]
     if not spec.strip() or not parts or any(not part for part in parts):
         fail(
@@ -1415,22 +1492,31 @@ def parse_printed_page_spec(spec: str) -> list[str]:
             code=2,
         )
     for part in parts:
-        range_match = re.fullmatch(r"(\d+)-(\d+)", part)
+        range_match = re.fullmatch(r"(\d+)\s*-\s*(\d+)", part)
         if range_match:
             start = int(range_match.group(1))
             end = int(range_match.group(2))
             if end < start:
                 fail(f"Invalid --printed-pages range {part!r}: {end} precedes {start}.", code=2)
+            if (end - start + 1) > PAGE_BATCH_LIMIT:
+                fail(
+                    f"--printed-pages asks for more than {PAGE_BATCH_LIMIT} pages. "
+                    f"Split the request into batches of {PAGE_BATCH_LIMIT} or fewer.",
+                    code=2,
+                )
             chunk = [str(number) for number in range(start, end + 1)]
         else:
             chunk = [part]
-        if len(labels) + len(chunk) > PAGE_BATCH_LIMIT:
-            fail(
-                f"--printed-pages asks for more than {PAGE_BATCH_LIMIT} pages. "
-                f"Split the request into batches of {PAGE_BATCH_LIMIT} or fewer.",
-                code=2,
-            )
-        labels.extend(chunk)
+        for label in chunk:
+            if label not in seen:
+                seen.add(label)
+                labels.append(label)
+                if len(labels) > PAGE_BATCH_LIMIT:
+                    fail(
+                        f"--printed-pages asks for more than {PAGE_BATCH_LIMIT} pages. "
+                        f"Split the request into batches of {PAGE_BATCH_LIMIT} or fewer.",
+                        code=2,
+                    )
     return labels
 
 
@@ -1473,6 +1559,12 @@ def _fetch_page_jobs(
 def cmd_page(args: argparse.Namespace) -> int:
     t0 = time.perf_counter()
     identifier = validate_identifier(args.identifier)
+    if args.scale is not None and args.scale < 1:
+        fail(f"--scale must be >= 1, got {args.scale}.", code=2)
+    if args.width is not None and args.width < 1:
+        fail(f"--width must be >= 1, got {args.width}.", code=2)
+    if not math.isfinite(args.timeout) or args.timeout <= 0:
+        fail(f"--timeout must be > 0, got {args.timeout!r}.", code=2)
     cache_root = get_cache_root()
 
     leaf_from_pos = args.leaf_pos
@@ -1719,7 +1811,10 @@ def build_parser() -> argparse.ArgumentParser:
     p_dl = sub.add_parser("download", help="Download files of an item, or list them with no FILE given.")
     p_dl.add_argument("identifier")
     p_dl.add_argument("files", nargs="*")
-    p_dl.add_argument("--out", default=".", help="Directory to save files into (default: .).")
+    p_dl.add_argument(
+        "--out", "-o", "--out-dir", "--output", dest="out", default=".",
+        help="Directory to save files into (default: .).",
+    )
     p_dl.add_argument("--list", dest="list_only", action="store_true", help="Only list files, do not download.")
     p_dl.add_argument("--timeout", type=float, default=DOWNLOAD_TIMEOUT, help="HTTP timeout seconds on cache miss (default: 60).")
     p_dl.add_argument("--refresh", action="store_true", help="Bypass local cache and re-download metadata and files.")
@@ -1736,9 +1831,12 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_grep = sub.add_parser("grep", help="Search cached full-text OCR inside one or more items with exact page mapping.")
     p_grep.add_argument("identifiers", nargs="+", help="One or more Internet Archive item identifiers.")
-    p_grep.add_argument("--pattern", required=True, help="Regular expression pattern (searched line by line).")
-    p_grep.add_argument("--context", type=int, default=240, help="Context characters per hit snippet (default: 240).")
-    p_grep.add_argument("--limit", type=int, default=25, help="Maximum hits returned (default: 25).")
+    p_grep.add_argument(
+        "--pattern", "-e", dest="patterns", action="append", required=True,
+        help="Regular expression pattern (searched line by line; repeatable).",
+    )
+    p_grep.add_argument("--context", "-C", type=int, default=240, help="Context characters per hit snippet (default: 240).")
+    p_grep.add_argument("--limit", "-m", type=int, default=25, help="Maximum hits returned (default: 25).")
     p_grep.add_argument("-i", "--ignore-case", action="store_true", help="Case-insensitive regex matching.")
     p_grep.add_argument("--timeout", type=float, default=DEFAULT_TIMEOUT, help="HTTP timeout seconds on cache miss (default: 25).")
     p_grep.add_argument("--refresh", action="store_true", help="Bypass local cache and re-fetch metadata, scandata, and OCR text.")
@@ -1754,7 +1852,10 @@ def build_parser() -> argparse.ArgumentParser:
     p_page.add_argument("--leaves", default=None, help="Comma-separated BookReader leaves and inclusive ranges, e.g. 120-123,130 (max 25).")
     p_page.add_argument("--scale", type=int, default=None, help="BookReader scale factor (e.g. 1=full, 2=half, 4=quarter).")
     p_page.add_argument("--width", type=int, default=None, help="Rendered JPEG width in pixels (default 2400 when --scale is omitted).")
-    p_page.add_argument("--out", default=".", help="Output file path (.jpg) or directory (default: .).")
+    p_page.add_argument(
+        "--out", "-o", "--out-dir", "--output", dest="out", default=".",
+        help="Output file path (.jpg) or directory (default: .).",
+    )
     p_page.add_argument("--timeout", type=float, default=DEFAULT_TIMEOUT, help="HTTP timeout seconds (default: 25).")
     p_page.add_argument("--refresh", action="store_true", help="Bypass local cache and re-fetch index and page JPEG.")
     p_page.add_argument("--json", dest="as_json", action="store_true", help="Structured JSON output.")
@@ -1791,7 +1892,16 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
-    return int(args.func(args))
+    try:
+        return int(args.func(args))
+    except BrokenPipeError:
+        try:
+            devnull = os.open(os.devnull, os.O_WRONLY)
+            os.dup2(devnull, sys.stdout.fileno())
+            os.close(devnull)
+        except Exception:
+            pass
+        return 0
 
 
 if __name__ == "__main__":
