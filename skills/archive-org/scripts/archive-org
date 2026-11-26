@@ -63,11 +63,33 @@ def resolve_query_ttl_hours(cli_ttl: float | None) -> float:
     return DEFAULT_QUERY_TTL_HOURS
 
 
+_ARCHIVE_URL_RE = re.compile(
+    r"^https?://(?:www\.)?archive\.org/(?:details|metadata|download)/([^/?#]+)(?:/.*)?(?:[?#].*)?$",
+    re.IGNORECASE,
+)
+
+
 def validate_identifier(identifier: str) -> str:
     cleaned = identifier.strip()
+    url_match = _ARCHIVE_URL_RE.fullmatch(cleaned)
+    if url_match:
+        cleaned = url_match.group(1).strip()
     if not cleaned or not SAFE_ID_RE.match(cleaned) or cleaned in (".", ".."):
         fail(f"Invalid Internet Archive identifier: {identifier!r}")
     return cleaned
+
+
+def parse_leaf_int(raw: str) -> int:
+    """Parse a BookReader leaf index accepting '12' or 'n12'/'N12'."""
+    text = str(raw).strip()
+    if text.lower().startswith("n") and len(text) > 1 and text[1:].isdigit():
+        return int(text[1:])
+    try:
+        return int(text)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError(
+            f"invalid leaf value: {raw!r} (expected integer like 12 or n12)"
+        ) from exc
 
 
 def validate_relative_item_path(name: str, files_root: Path) -> tuple[Path, Path]:
@@ -1090,36 +1112,77 @@ def segment_for_leaf(page_index: dict, leaf_n: int, scandata_leaf: int | None) -
 
 
 def parse_printed_range(page_index: dict, spec: str) -> list[int]:
-    """Resolve a printed page range `p1-p2` (or a single label) to inclusive BookReader leaves."""
+    """Resolve printed page labels or inclusive ranges (`p1-p2`, `12,14`, `iv-2,5`) to BookReader leaves."""
     cleaned = spec.strip()
     if not cleaned:
         raise ValueError("Empty --pages range.")
-    try:
-        leaf, _ = resolve_printed_page_to_leaf(page_index, cleaned)
-        return [leaf]
-    except KeyError:
-        pass
-    if "-" not in cleaned:
-        leaf, _ = resolve_printed_page_to_leaf(page_index, cleaned)
-        return [leaf]
-    start_label, _, end_label = cleaned.partition("-")
-    if not start_label.strip() or not end_label.strip():
-        raise ValueError(f"Invalid --pages range {spec!r}; expected <p1>-<p2>.")
-    start_leaf, _ = resolve_printed_page_to_leaf(page_index, start_label)
-    end_leaf, _ = resolve_printed_page_to_leaf(page_index, end_label)
-    if end_leaf < start_leaf:
-        raise ValueError(
-            f"Invalid --pages range {spec!r}: printed page {end_label.strip()!r} (n{end_leaf}) precedes "
-            f"{start_label.strip()!r} (n{start_leaf})."
-        )
-    return list(range(start_leaf, end_leaf + 1))
+    parts = [part.strip() for part in cleaned.split(",")]
+    if any(not part for part in parts):
+        raise ValueError(f"Invalid --pages range {spec!r}; expected labels or ranges like 12-14 or 12,14.")
+    leaves: list[int] = []
+    seen: set[int] = set()
+    for part in parts:
+        resolved_single: int | None = None
+        try:
+            resolved_single, _ = resolve_printed_page_to_leaf(page_index, part)
+        except KeyError:
+            resolved_single = None
+        if resolved_single is not None:
+            chunk = [resolved_single]
+        elif "-" not in part:
+            leaf, _ = resolve_printed_page_to_leaf(page_index, part)
+            chunk = [leaf]
+        else:
+            start_label, _, end_label = part.partition("-")
+            if not start_label.strip() or not end_label.strip():
+                raise ValueError(f"Invalid --pages range {spec!r}; expected <p1>-<p2>.")
+            start_leaf, _ = resolve_printed_page_to_leaf(page_index, start_label)
+            end_leaf, _ = resolve_printed_page_to_leaf(page_index, end_label)
+            if end_leaf < start_leaf:
+                raise ValueError(
+                    f"Invalid --pages range {spec!r}: printed page {end_label.strip()!r} (n{end_leaf}) precedes "
+                    f"{start_label.strip()!r} (n{start_leaf})."
+                )
+            chunk = list(range(start_leaf, end_leaf + 1))
+        for leaf in chunk:
+            if leaf not in seen:
+                seen.add(leaf)
+                leaves.append(leaf)
+    return leaves
 
 
 def cmd_text(args: argparse.Namespace) -> int:
-    identifier = validate_identifier(args.identifier)
-    selectors = [s for s in (args.printed_page, args.leaf, args.pages) if s is not None]
+    raw_id = args.item_flag or args.identifier
+    if args.item_flag and args.identifier and args.page_pos is None:
+        # Handle `text --item <id> <page>` cleanly.
+        args.page_pos = args.identifier
+        raw_id = args.item_flag
+    if not raw_id:
+        fail("Pass an Internet Archive item identifier (positional or --item/--id).", code=2)
+    identifier = validate_identifier(raw_id)
+
+    printed_page = args.printed_page
+    leaf_arg = args.leaf
+    pages_arg = args.pages
+    leaves_arg = args.leaves
+    if args.page_pos is not None:
+        explicit = [s for s in (printed_page, leaf_arg, pages_arg, leaves_arg) if s is not None]
+        if explicit:
+            fail(
+                "Pass either a positional page/leaf or one of --printed-page/--page, --leaf, --pages, or --leaves, not both.",
+                code=2,
+            )
+        token = args.page_pos.strip()
+        if re.fullmatch(r"[nN]\d+", token):
+            leaf_arg = int(token[1:])
+        elif "-" in token or "," in token:
+            pages_arg = token
+        else:
+            printed_page = token
+
+    selectors = [s for s in (printed_page, leaf_arg, pages_arg, leaves_arg) if s is not None]
     if len(selectors) != 1:
-        fail("Pass exactly one of --printed-page <p>, --leaf <n>, or --pages <p1-p2>.", code=2)
+        fail("Pass exactly one of --printed-page/--page <p>, --leaf <n>, --pages <p1-p2>, or --leaves <n1-n2>.", code=2)
 
     try:
         cache_entry = ensure_item_cache(
@@ -1135,13 +1198,16 @@ def cmd_text(args: argparse.Namespace) -> int:
         fail(str(exc))
 
     try:
-        if args.printed_page is not None:
-            leaf, _ = resolve_printed_page_to_leaf(page_index, args.printed_page)
+        if printed_page is not None:
+            leaf, _ = resolve_printed_page_to_leaf(page_index, printed_page)
             leaves = [leaf]
-        elif args.leaf is not None:
-            leaves = [args.leaf]
+        elif leaf_arg is not None:
+            leaves = [leaf_arg]
+        elif leaves_arg is not None:
+            leaves = parse_leaf_spec(leaves_arg)
         else:
-            leaves = parse_printed_range(page_index, args.pages)
+            assert pages_arg is not None
+            leaves = parse_printed_range(page_index, pages_arg)
         for leaf in leaves:
             validate_leaf_in_index(page_index, leaf)
     except (KeyError, ValueError) as exc:
@@ -1449,6 +1515,15 @@ def cmd_fulltext(args: argparse.Namespace) -> int:
     return 0
 
 
+def _looks_like_identifier_token(token: str) -> bool:
+    cleaned = token.strip()
+    if not cleaned:
+        return False
+    if _ARCHIVE_URL_RE.fullmatch(cleaned):
+        return True
+    return bool(SAFE_ID_RE.match(cleaned)) and cleaned not in (".", "..")
+
+
 def cmd_grep(args: argparse.Namespace) -> int:
     t0 = time.perf_counter()
     if args.context < 0:
@@ -1459,8 +1534,35 @@ def cmd_grep(args: argparse.Namespace) -> int:
         fail(f"--timeout must be > 0, got {args.timeout!r}.", code=2)
 
     raw_patterns = [p for p in (args.patterns or []) if p is not None]
+    raw_items: list[str] = [item for item in (args.item_flags or []) if item]
+    pos_args = [tok for tok in (args.identifiers or []) if tok]
+
     if not raw_patterns:
-        fail("Pass --pattern <regex> (or -e <regex>) to search inside items.", code=2)
+        if raw_items and len(pos_args) == 1:
+            raw_patterns = [pos_args[0]]
+            pos_args = []
+        elif not raw_items and len(pos_args) == 2:
+            first_is_id = _looks_like_identifier_token(pos_args[0])
+            second_is_id = _looks_like_identifier_token(pos_args[1])
+            if first_is_id and not second_is_id:
+                raw_items = [pos_args[0]]
+                raw_patterns = [pos_args[1]]
+                pos_args = []
+            elif second_is_id and not first_is_id:
+                raw_patterns = [pos_args[0]]
+                raw_items = [pos_args[1]]
+                pos_args = []
+        if not raw_patterns:
+            fail(
+                "Pass --pattern <regex> (or -e / -q <regex>) and at least one item identifier. "
+                "Example: archive-org grep <item_id> -e '<regex>'.",
+                code=2,
+            )
+
+    raw_items.extend(pos_args)
+    if not raw_items:
+        fail("Pass at least one Internet Archive item identifier (positional or --item/--id).", code=2)
+
     pattern = raw_patterns[0] if len(raw_patterns) == 1 else "|".join(f"(?:{p})" for p in raw_patterns)
 
     flags = re.IGNORECASE if args.ignore_case else 0
@@ -1471,7 +1573,7 @@ def cmd_grep(args: argparse.Namespace) -> int:
 
     seen_ids: set[str] = set()
     identifiers: list[str] = []
-    for raw_item in args.identifiers:
+    for raw_item in raw_items:
         item_id = validate_identifier(raw_item)
         if item_id not in seen_ids:
             seen_ids.add(item_id)
@@ -1583,7 +1685,7 @@ def parse_leaf_spec(spec: str) -> list[int]:
     if not spec.strip() or not parts or any(not part for part in parts):
         fail("Invalid --leaves value. Use integers or inclusive ranges like 120-123,130.", code=2)
     for part in parts:
-        range_match = re.fullmatch(r"(\d+)\s*-\s*(\d+)", part)
+        range_match = re.fullmatch(r"[nN]?(\d+)\s*-\s*[nN]?(\d+)", part)
         if range_match:
             start = int(range_match.group(1))
             end = int(range_match.group(2))
@@ -1596,8 +1698,8 @@ def parse_leaf_spec(spec: str) -> list[int]:
                     code=2,
                 )
             chunk = range(start, end + 1)
-        elif re.fullmatch(r"\d+", part):
-            num = int(part)
+        elif re.fullmatch(r"[nN]?\d+", part):
+            num = int(part[1:] if part[0] in ("n", "N") else part)
             chunk = range(num, num + 1)
         else:
             fail(f"Invalid --leaves token {part!r}. Use integers or inclusive ranges like 120-123,130.", code=2)
@@ -1939,7 +2041,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_search.add_argument("--json", dest="as_json", action="store_true", help="Full JSON output.")
     p_search.set_defaults(func=cmd_search)
 
-    p_get = sub.add_parser("get", aliases=["metadata"], help="Read an item's metadata and file list by identifier (alias: metadata).")
+    p_get = sub.add_parser("get", aliases=["metadata", "show"], help="Read an item's metadata and file list by identifier (aliases: metadata, show).")
     p_get.add_argument("identifier")
     p_get.add_argument("--json", dest="as_json", action="store_true", help="Full JSON output.")
     p_get.add_argument("--files", action="store_true", help="List the item's files.")
@@ -1971,13 +2073,17 @@ def build_parser() -> argparse.ArgumentParser:
     p_ft.set_defaults(func=cmd_fulltext)
 
     p_grep = sub.add_parser("grep", help="Search cached full-text OCR inside one or more items with exact page mapping.")
-    p_grep.add_argument("identifiers", nargs="+", help="One or more Internet Archive item identifiers.")
+    p_grep.add_argument("identifiers", nargs="*", help="One or more Internet Archive item identifiers.")
     p_grep.add_argument(
-        "--pattern", "-e", dest="patterns", action="append", required=True,
+        "--item", "--id", dest="item_flags", action="append", default=[],
+        help="Internet Archive item identifier (repeatable alternative to positional identifier).",
+    )
+    p_grep.add_argument(
+        "--pattern", "-e", "-q", "--query", "--regex", dest="patterns", action="append", default=[],
         help="Regular expression pattern (searched line by line; repeatable).",
     )
     p_grep.add_argument("--context", "-C", type=int, default=240, help="Context characters per hit snippet (default: 240).")
-    p_grep.add_argument("--limit", "-m", type=int, default=25, help="Maximum hits returned (default: 25).")
+    p_grep.add_argument("--limit", "-m", "-n", "--max", "--max-count", dest="limit", type=int, default=25, help="Maximum hits returned (default: 25).")
     p_grep.add_argument("-i", "--ignore-case", action="store_true", help="Case-insensitive regex matching.")
     p_grep.add_argument("--timeout", type=float, default=DEFAULT_TIMEOUT, help="HTTP timeout seconds on cache miss (default: 25).")
     p_grep.add_argument("--refresh", action="store_true", help="Bypass local cache and re-fetch metadata, scandata, and OCR text.")
@@ -1986,10 +2092,10 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_page = sub.add_parser("page", help="Download one or more rendered page JPEGs by printed page number or BookReader leaf.")
     p_page.add_argument("identifier")
-    p_page.add_argument("leaf_pos", nargs="?", type=int, default=None, help="Legacy positional BookReader leaf index.")
-    p_page.add_argument("--printed-page", default=None, help="Printed page label resolved via cached page_index.json.")
-    p_page.add_argument("--printed-pages", default=None, help="Comma-separated printed labels and inclusive integer ranges, e.g. 674,707 or 670-674 (max 25).")
-    p_page.add_argument("--leaf", type=int, default=None, help="BookReader leaf index (n<LEAF>).")
+    p_page.add_argument("leaf_pos", nargs="?", type=parse_leaf_int, default=None, help="Legacy positional BookReader leaf index (e.g. 12 or n12).")
+    p_page.add_argument("--printed-page", "--page", "-p", dest="printed_page", default=None, help="Printed page label resolved via cached page_index.json.")
+    p_page.add_argument("--printed-pages", "--pages", dest="printed_pages", default=None, help="Comma-separated printed labels and inclusive integer ranges, e.g. 674,707 or 670-674 (max 25).")
+    p_page.add_argument("--leaf", type=parse_leaf_int, default=None, help="BookReader leaf index (e.g. 12 or n12).")
     p_page.add_argument("--leaves", default=None, help="Comma-separated BookReader leaves and inclusive ranges, e.g. 120-123,130 (max 25).")
     p_page.add_argument("--scale", type=int, default=None, help="BookReader scale factor (e.g. 1=full, 2=half, 4=quarter).")
     p_page.add_argument("--width", type=int, default=None, help="Rendered JPEG width in pixels (default 2400 when --scale is omitted).")
@@ -2003,10 +2109,13 @@ def build_parser() -> argparse.ArgumentParser:
     p_page.set_defaults(func=cmd_page)
 
     p_text = sub.add_parser("text", help="Print cached OCR text for a printed page, leaf, or printed-page range (no JPEG download).")
-    p_text.add_argument("identifier")
-    p_text.add_argument("--printed-page", default=None, help="Printed page label resolved via cached page_index.json.")
-    p_text.add_argument("--leaf", type=int, default=None, help="BookReader leaf index (n<LEAF>).")
-    p_text.add_argument("--pages", default=None, help="Inclusive printed-page range, e.g. 12-14.")
+    p_text.add_argument("identifier", nargs="?", default=None)
+    p_text.add_argument("page_pos", nargs="?", default=None, help="Optional positional printed page, range (12-14), or leaf (n12).")
+    p_text.add_argument("--item", "--id", dest="item_flag", default=None, help="Item identifier (alternative to positional identifier).")
+    p_text.add_argument("--printed-page", "--page", "-p", dest="printed_page", default=None, help="Printed page label resolved via cached page_index.json.")
+    p_text.add_argument("--leaf", type=parse_leaf_int, default=None, help="BookReader leaf index (e.g. 12 or n12).")
+    p_text.add_argument("--leaves", default=None, help="Comma-separated BookReader leaves and inclusive ranges, e.g. 12-14 or n12-n14.")
+    p_text.add_argument("--pages", "--printed-pages", dest="pages", default=None, help="Printed page range or comma-separated labels, e.g. 12-14 or 12,14.")
     p_text.add_argument("--timeout", type=float, default=DEFAULT_TIMEOUT, help="HTTP timeout seconds on cache miss (default: 25).")
     p_text.add_argument("--refresh", action="store_true", help="Bypass local cache and re-fetch metadata, scandata, and OCR text.")
     p_text.add_argument("--json", dest="as_json", action="store_true", help="Structured JSON output.")
@@ -2014,8 +2123,8 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_lookup = sub.add_parser("lookup", help="Resolve printed page <-> BookReader leaf <-> scandata leaf from cached page_index.json.")
     p_lookup.add_argument("identifier")
-    p_lookup.add_argument("--printed-page", default=None, help="Printed page label.")
-    p_lookup.add_argument("--leaf", type=int, default=None, help="BookReader leaf index (n<LEAF>).")
+    p_lookup.add_argument("--printed-page", "--page", "-p", dest="printed_page", default=None, help="Printed page label.")
+    p_lookup.add_argument("--leaf", type=parse_leaf_int, default=None, help="BookReader leaf index (e.g. 12 or n12).")
     p_lookup.add_argument("--scandata-leaf", type=int, default=None, help="Raw scandata.xml leafNum.")
     p_lookup.add_argument("--timeout", type=float, default=DEFAULT_TIMEOUT, help="HTTP timeout seconds on cache miss (default: 25).")
     p_lookup.add_argument("--refresh", action="store_true", help="Bypass local cache and re-fetch metadata and scandata.")

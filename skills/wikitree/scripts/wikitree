@@ -19,6 +19,7 @@ import hashlib
 import json
 import math
 import os
+import re
 import sys
 import time
 from contextlib import contextmanager
@@ -254,36 +255,89 @@ def show_person(person: dict) -> None:
     click.echo(line.strip())
 
 
-@click.group()
+_WIKITREE_URL_RE = re.compile(
+    r"^https?://(?:www\.)?wikitree\.com/wiki/([^/?#]+)(?:[?#].*)?$",
+    re.IGNORECASE,
+)
+
+
+def _normalize_profile_key(raw: str) -> str:
+    cleaned = raw.strip()
+    match = _WIKITREE_URL_RE.fullmatch(cleaned)
+    if match:
+        return match.group(1)
+    return cleaned
+
+
+def _resolve_search_name(
+    query_parts: tuple[str, ...],
+    full_name: str | None,
+    first_name: str | None,
+    last_name: str | None,
+) -> tuple[str | None, str | None]:
+    pos_tokens = [tok for part in query_parts for tok in part.strip().split() if tok]
+    name_tokens = [tok for tok in (full_name or "").strip().split() if tok]
+    if pos_tokens and name_tokens:
+        raise click.UsageError("Pass either positional name arguments or --name, not both.")
+    tokens = name_tokens or pos_tokens
+    if not tokens:
+        return first_name, last_name
+    if first_name and last_name:
+        raise click.UsageError(
+            "Pass either positional name / --name or --first/--last, not both."
+        )
+    if first_name and not last_name:
+        return first_name, " ".join(tokens)
+    if last_name and not first_name:
+        return " ".join(tokens), last_name
+    if len(tokens) == 1:
+        return None, tokens[0]
+    return " ".join(tokens[:-1]), tokens[-1]
+
+
+@click.group(context_settings={"help_option_names": ["-h", "--help"]})
 def cli() -> None:
-    """Read public WikiTree profiles (search, person, ancestors, bio)."""
+    """Read public WikiTree profiles (search, person/get/show/profile, ancestors, bio)."""
 
 
 @cli.command()
-@click.option("--first", "first_name", default=None, help="First name.")
-@click.option("--last", "last_name", default=None, help="Last name.")
-@click.option("--birth-date", default=None, help="Birth date, YYYY-MM-DD.")
-@click.option("--death-date", default=None, help="Death date, YYYY-MM-DD.")
-@click.option("--birth-location", default=None, help="Birth location.")
-@click.option("--death-location", default=None, help="Death location.")
+@click.argument("query_parts", nargs=-1, metavar="[NAME...]")
+@click.option("--name", "full_name", default=None, help="Full name (split into first and last name).")
+@click.option("--first", "--first-name", "--given", "--given-name", "first_name", default=None, help="First name.")
+@click.option("--last", "--last-name", "--surname", "last_name", default=None, help="Last name.")
+@click.option("--birth-date", "--birth-year", "--born", "birth_date", default=None, help="Birth date or year (YYYY or YYYY-MM-DD).")
+@click.option("--death-date", "--death-year", "--died", "death_date", default=None, help="Death date or year (YYYY or YYYY-MM-DD).")
+@click.option("--birth-location", "--birth-place", "--place", "birth_location", default=None, help="Birth location.")
+@click.option("--death-location", "--death-place", "death_location", default=None, help="Death location.")
 @click.option("--date-include", type=click.Choice(["both", "neither"]),
               default=None, help="'both' requires dates on matches.")
-@click.option("--limit", type=click.IntRange(1, 100), default=10,
+@click.option("-n", "--limit", "--rows", "limit", type=click.IntRange(1, 100), default=10,
               show_default=True, help="Results to return (1-100).")
-@click.option("--start", type=int, default=0, show_default=True,
-              help="Result offset for paging.")
+@click.option("--start", "--offset", "start", type=int, default=None,
+              help="0-based result offset for paging (default: 0).")
+@click.option("--page", type=click.IntRange(min=1), default=None,
+              help="1-based page number (alternative to --start/--offset).")
 @click.option("--fields", default=DEFAULT_FIELDS, show_default=True,
               help="Comma-separated profile fields, or '*'.")
 @click.option("--json", "as_json", is_flag=True, help="Print raw JSON.")
 @cache_options
-def search(first_name, last_name, birth_date, death_date, birth_location,
-           death_location, date_include, limit, start, fields, as_json,
+def search(query_parts, full_name, first_name, last_name, birth_date, death_date, birth_location,
+           death_location, date_include, limit, start, page, fields, as_json,
            refresh, cache_ttl_hours):
     """Search person profiles, e.g. search --first Abraham --last Lincoln."""
+    if start is not None and start < 0:
+        raise click.BadParameter(f"Invalid --start/--offset value: {start!r} (must be >= 0).")
+    if page is not None and start is not None:
+        raise click.UsageError("Pass either --page or --start/--offset, not both.")
+    resolved_start = start if start is not None else ((page - 1) * limit if page is not None else 0)
+    first_name, last_name = _resolve_search_name(query_parts, full_name, first_name, last_name)
     if not any([first_name, last_name, birth_date, death_date,
                 birth_location, death_location]):
-        raise click.BadParameter("give at least one of --first/--last/--birth-date/--death-date/--birth-location/--death-location.")
-    params: dict = {"action": "searchPerson", "limit": limit, "start": start,
+        raise click.UsageError(
+            "Provide a name or filter: e.g. `search Abraham Lincoln`, `search --first Abraham --last Lincoln`, "
+            "or --birth-date/--death-date/--birth-location/--death-location."
+        )
+    params: dict = {"action": "searchPerson", "limit": limit, "start": resolved_start,
                     "fields": fields}
     if first_name:
         params["FirstName"] = first_name
@@ -335,7 +389,8 @@ def search(first_name, last_name, birth_date, death_date, birth_location,
 @click.option("--json", "as_json", is_flag=True, help="Print raw JSON.")
 @cache_options
 def person(key, fields, bio_format, resolve_redirect, as_json, refresh, cache_ttl_hours):
-    """Fetch one person by WikiTree ID (e.g. <Surname>-<Number>) or numeric Id."""
+    """Fetch one person by WikiTree ID (e.g. <Surname>-<Number>), numeric Id, or URL (aliases: get, show, profile)."""
+    key = _normalize_profile_key(key)
     params: dict = {"action": "getPerson", "key": key, "fields": fields}
     if bio_format:
         params["bioFormat"] = bio_format
@@ -382,6 +437,11 @@ def person(key, fields, bio_format, resolve_redirect, as_json, refresh, cache_tt
         click.echo(profile["Bio"])
 
 
+cli.add_command(person, name="get")
+cli.add_command(person, name="show")
+cli.add_command(person, name="profile")
+
+
 @cli.command()
 @click.argument("key")
 @click.option("--depth", type=click.IntRange(1, 10), default=4,
@@ -398,6 +458,7 @@ def ancestors(key, depth, fields, as_json, refresh, cache_ttl_hours):
     getPeople instead). The people dict includes the subject profile
     itself, so it is excluded from the listing.
     """
+    key = _normalize_profile_key(key)
     params = {"action": "getPeople", "keys": key, "ancestors": depth, "fields": fields}
     ttl = resolve_ttl_hours(cache_ttl_hours)
     data, first, hit = _cached_api(
@@ -431,6 +492,7 @@ def ancestors(key, depth, fields, as_json, refresh, cache_ttl_hours):
 @cache_options
 def bio(key, bio_format, as_json, refresh, cache_ttl_hours):
     """Fetch the biography text of KEY (default wiki markup)."""
+    key = _normalize_profile_key(key)
     params = {"action": "getBio", "key": key, "bioFormat": bio_format}
     ttl = resolve_ttl_hours(cache_ttl_hours)
     data, first, hit = _cached_api(

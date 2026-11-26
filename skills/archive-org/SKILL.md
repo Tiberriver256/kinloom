@@ -29,7 +29,7 @@ Transient HTTP `429`, `500`, `502`, `503`, `504`, `520`, `522`, and `524` respon
 
 ### Search inside cached digitized books (`grep`)
 
-Downloads missing metadata, `scandata.xml`, and OCR text in parallel (`max_workers=6`, `timeout=25`) on cache miss, then searches line by line (never `re.S` + `.*`) and maps every match to its exact BookReader `leaf`, `printed_page`, snippet, and direct JPEG URL. Accepts `--pattern` or `-e` (repeatable), `--context` or `-C`, and `--limit` or `-m`. Exits `0` on zero matches. In multi-item batches, per-item download errors are reported in `errors` (or stderr warnings) instead of discarding matches from healthy items:
+Downloads missing metadata, `scandata.xml`, and OCR text in parallel (`max_workers=6`, `timeout=25`) on cache miss, then searches line by line (never `re.S` + `.*`) and maps every match to its exact BookReader `leaf`, `printed_page`, snippet, and direct JPEG URL. Accepts `--pattern`, `-e`, `-q`, `--query`, or `--regex` (repeatable), `--item`/`--id` or positional identifiers (including `https://archive.org/details/<id>` URLs), `--context` or `-C`, and `--limit`, `-m`, `-n`, or `--max`. Exits `0` on zero matches. In multi-item batches, per-item download errors are reported in `errors` (or stderr warnings) instead of discarding matches from healthy items:
 
 ```bash
 # Search one or more digitized books (cache miss populates ~/.cache/kinloom-ia/<id>/)
@@ -66,7 +66,7 @@ A single page keeps the existing text line and the existing JSON object. More th
 
 ### Read OCR text for specific pages (`text`) and resolve page numbers (`lookup`)
 
-`text` reads the cached `djvu.txt` + `page_index.json` (populating them on a cache miss, same as `grep`), resolves printed page labels to BookReader leaves, and prints that page's OCR text with its leaf / printed-page / scandata-leaf metadata plus `image_url` and `details_url`. It never downloads a JPEG; use `page` only when you need to look at the scan. Pass exactly one of `--printed-page`, `--leaf`, or `--pages <p1-p2>` (inclusive printed-page range, which also covers unnumbered leaves between the endpoints):
+`text` reads the cached `djvu.txt` + `page_index.json` (populating them on a cache miss, same as `grep`), resolves printed page labels to BookReader leaves, and prints that page's OCR text with its leaf / printed-page / scandata-leaf metadata plus `image_url` and `details_url`. It never downloads a JPEG; use `page` only when you need to look at the scan. Pass exactly one of `--printed-page` (`--page`, `-p`), `--leaf` (accepts `7` or `n7`), `--leaves`, `--pages` (`--printed-pages`, ranges like `12-14` or comma lists like `12,14`), or a positional page/leaf after `<identifier>` (`--item`/`--id` also accepted):
 
 ```bash
 # OCR text of printed page 12 (cache-hit repeat calls make zero HTTP requests)

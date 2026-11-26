@@ -727,13 +727,18 @@ def _resolve_positional_name(
     query_parts: tuple[str, ...],
     first_name: str | None,
     last_name: str | None,
+    full_name: str | None = None,
 ) -> tuple[str | None, str | None]:
-    tokens = [tok for part in query_parts for tok in part.strip().split() if tok]
+    pos_tokens = [tok for part in query_parts for tok in part.strip().split() if tok]
+    name_tokens = [tok for tok in (full_name or "").strip().split() if tok]
+    if pos_tokens and name_tokens:
+        raise click.UsageError("Pass either positional name arguments or --name, not both.")
+    tokens = name_tokens or pos_tokens
     if not tokens:
         return first_name, last_name
     if first_name and last_name:
         raise click.UsageError(
-            "Pass either positional name arguments or --first/--last, not both."
+            "Pass either positional name / --name or --first/--last, not both."
         )
     if first_name and not last_name:
         return first_name, " ".join(tokens)
@@ -751,14 +756,17 @@ def cli() -> None:
 
 @cli.command()
 @click.argument("query_parts", nargs=-1, metavar="[NAME...]")
-@click.option("--first", "--first-name", "first_name", default=None, help="First name.")
-@click.option("--last", "--last-name", "last_name", default=None, help="Last name.")
-@click.option("--birth-year", type=int, default=None)
-@click.option("--death-year", type=int, default=None)
+@click.option("--name", "full_name", default=None, help="Full name (split into first and last name).")
+@click.option("--first", "--first-name", "--given", "--given-name", "first_name", default=None, help="First name.")
+@click.option("--last", "--last-name", "--surname", "last_name", default=None, help="Last name.")
+@click.option("--birth-year", "--birth", "--born", "birth_year", type=int, default=None)
+@click.option("--death-year", "--death", "--died", "death_year", type=int, default=None)
 @click.option(
     "--year-range",
     "--birth-range",
     "--death-range",
+    "--birth-year-range",
+    "--death-year-range",
     "--date-spread",
     "year_range",
     type=int,
@@ -788,7 +796,7 @@ def cli() -> None:
 @click.option("--cache-ttl-hours", type=float, default=None,
               help="Override cache TTL in hours (default: 168 or $KINLOOM_FINDAGRAVE_CACHE_TTL_HOURS).")
 @click.option("--json", "as_json", is_flag=True, help="Full JSON output.")
-def search(query_parts, first_name, last_name, birth_year, death_year, year_range,
+def search(query_parts, full_name, first_name, last_name, birth_year, death_year, year_range,
             birth_year_filter, death_year_filter, cemetery_id, location_id,
             bio, text, relative, exact, include_maiden, limit, page, offset,
             refresh, cache_ttl_hours, as_json):
@@ -801,7 +809,7 @@ def search(query_parts, first_name, last_name, birth_year, death_year, year_rang
         raise click.BadParameter(f"Invalid --page value: {page!r} (must be >= 1).")
     if page is not None and offset is not None:
         raise click.UsageError("Pass either --page or --offset, not both.")
-    first_name, last_name = _resolve_positional_name(query_parts, first_name, last_name)
+    first_name, last_name = _resolve_positional_name(query_parts, first_name, last_name, full_name)
     norm_birth_filter = _normalize_year_filter(birth_year_filter, "--birth-year-filter")
     norm_death_filter = _normalize_year_filter(death_year_filter, "--death-year-filter")
     ttl_hours = resolve_cache_ttl_hours(cache_ttl_hours)
@@ -968,6 +976,7 @@ def get(memorial_ids, refresh, cache_ttl_hours, as_json, full, photos):
 
 
 cli.add_command(get, name="memorial")
+cli.add_command(get, name="show")
 
 
 @cli.command()
@@ -1403,10 +1412,10 @@ cli.add_command(photo, name="photos")
 
 
 @cli.command()
-@click.option("--first", "--first-name", "first_name", default=None)
-@click.option("--last", "--last-name", "last_name", default=None)
-@click.option("--birth-year", type=int, default=None)
-@click.option("--death-year", type=int, default=None)
+@click.option("--first", "--first-name", "--given", "--given-name", "first_name", default=None)
+@click.option("--last", "--last-name", "--surname", "last_name", default=None)
+@click.option("--birth-year", "--birth", "--born", "birth_year", type=int, default=None)
+@click.option("--death-year", "--death", "--died", "death_year", type=int, default=None)
 def url(first_name, last_name, birth_year, death_year):
     """Print the website search URL for a name (open it in a browser)."""
     params = []

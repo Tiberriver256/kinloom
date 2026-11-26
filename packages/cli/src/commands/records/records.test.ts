@@ -2823,4 +2823,70 @@ describe('bundled Python utilities and live script execution', () => {
       expect(cap.stderr.join('\n')).toContain(tc.expectText);
     }
   });
+
+  it('routes openarchieven get, findagrave show, wikitree get/show/profile, nara show, and archive-org show with boolean cache_hit telemetry', async () => {
+    const tmp = await makeTempDir('kinloom-wave45-aliases-');
+    const telemetryFile = path.join(tmp, 'calls.jsonl');
+    const cases: Array<{ command: string; args: string[]; stdout: string; expectedSubcmd: string; expectedHit: boolean }> = [
+      {
+        command: 'openarchieven',
+        args: ['get', 'bhi:11111111-2222-3333-4444-555555555555', '--json'],
+        stdout: '{"records":[],"cache_hit":true}\n',
+        expectedSubcmd: 'openarchieven get',
+        expectedHit: true,
+      },
+      {
+        command: 'findagrave',
+        args: ['show', '627', '--json'],
+        stdout: '[{"id":"627","cache_hit":false}]\n',
+        expectedSubcmd: 'findagrave show',
+        expectedHit: false,
+      },
+      {
+        command: 'wikitree',
+        args: ['get', 'Lincoln-1', '--json'],
+        stdout: '[{"status":0,"cache_hit":true}]\n',
+        expectedSubcmd: 'wikitree get',
+        expectedHit: true,
+      },
+      {
+        command: 'wikitree',
+        args: ['profile', 'Lincoln-1', '--json'],
+        stdout: '[{"status":0,"cache_hit":true}]\n',
+        expectedSubcmd: 'wikitree profile',
+        expectedHit: true,
+      },
+      {
+        command: 'nara',
+        args: ['show', '595367', '--json'],
+        stdout: '{"naId":"595367","cache_hit":true}\n',
+        expectedSubcmd: 'nara show',
+        expectedHit: true,
+      },
+      {
+        command: 'ia',
+        args: ['show', 'synthetic_book_1895', '--json'],
+        stdout: '{"metadata":{"identifier":"synthetic_book_1895"},"cache_hit":false}\n',
+        expectedSubcmd: 'archive-org show',
+        expectedHit: false,
+      },
+    ];
+
+    for (const tc of cases) {
+      const cap = createCaptureIo();
+      const res = await runRecordCommand(tc.command, tc.args, {
+        io: cap.io,
+        spawnImpl: createFakeSpawn({ exitCode: 0, stdout: tc.stdout }).spawnImpl,
+        telemetryFilePath: telemetryFile,
+      });
+      expect(res.exitCode, tc.expectedSubcmd).toBe(0);
+    }
+
+    const events = (await readFile(telemetryFile, 'utf8'))
+      .trim()
+      .split('\n')
+      .map((line) => JSON.parse(line) as TelemetryEvent);
+    expect(events.map((e) => e.subcmd)).toEqual(cases.map((tc) => tc.expectedSubcmd));
+    expect(events.map((e) => e.cache_hit)).toEqual(cases.map((tc) => tc.expectedHit));
+  });
 });

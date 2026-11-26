@@ -1299,4 +1299,56 @@ describe('kinloom batch integrate and --pending-only', () => {
     expect(parseKinshipYaml(afterKinshipBytes.toString('utf8'))).toEqual(seededKinship);
     expect(existsSync(path.join(repoDir, 'media', 'arthur-rb.png'))).toBe(false);
   });
+
+  it('handles forgiving integrate --dry-run flag ordering, --person-id, --package/--patch file paths, and clear missing-target hints', async () => {
+    const repoDir = await createSyntheticRepo();
+    const pkgDir = await writeStagedPackage({
+      repoDir,
+      personId: 'per_arthur_alder',
+      fullName: 'Arthur Alder',
+      eventId: 'evt_arthur_order',
+      eventDate: '1904-06-01',
+      eventTitle: 'Arthur Alder 1904 residence',
+      scanName: 'arthur-order.png',
+      scanBytes: makeMinimalPng(640, 480, 12_000),
+    });
+    const patchFile = path.join(pkgDir, 'patch.json');
+
+    const validInvocations: string[][] = [
+      ['integrate', '--dry-run', 'per_arthur_alder', '--repo', repoDir, '--json'],
+      ['integrate', '--repo', repoDir, '--dry-run', '--json', 'per_arthur_alder'],
+      ['integrate', '--dry-run', '--person-id', 'per_arthur_alder', '--repo', repoDir, '--json'],
+      ['integrate', '--dry-run', '--package', patchFile, '--repo', repoDir, '--json'],
+      ['integrate', '--dry-run', '--patch', pkgDir, '--repo', repoDir, '--json'],
+      ['integrate', '--dry-run', pkgDir, '--repo', repoDir, '--json'],
+      ['integrate', '--dry-run', patchFile, '--repo', repoDir, '--json'],
+    ];
+
+    for (const args of validInvocations) {
+      const cap = createCaptureIo();
+      const code = await runCli(args, { io: cap.io });
+      expect(code, `args=${args.join(' ')} stderr=${cap.stderr.join('\n')}`).toBe(EXIT_OK);
+      const body = JSON.parse(cap.stdout.join('\n')) as { ok: boolean; dryRun: boolean; personId: string };
+      expect(body.ok).toBe(true);
+      expect(body.dryRun).toBe(true);
+      expect(body.personId).toBe('per_arthur_alder');
+    }
+
+    // Also works when cwd is the archive repo root and --repo is omitted.
+    const cwdCap = createCaptureIo();
+    const cwdCode = await runCli(['integrate', '--dry-run', 'research/people/per_arthur_alder', '--json'], {
+      io: cwdCap.io,
+      cwd: repoDir,
+    });
+    expect(cwdCode, cwdCap.stderr.join('\n')).toBe(EXIT_OK);
+    expect(JSON.parse(cwdCap.stdout.join('\n')).personId).toBe('per_arthur_alder');
+
+    // Missing target with --dry-run exits 2 with a clear hint mentioning <person_id> and --all-staged.
+    const missingCap = createCaptureIo();
+    const missingCode = await runCli(['integrate', '--dry-run', '--repo', repoDir], { io: missingCap.io });
+    expect(missingCode).toBe(EXIT_USAGE);
+    const errText = missingCap.stderr.join('\n');
+    expect(errText).toContain('<person_id>');
+    expect(errText).toContain('--all-staged');
+  });
 });

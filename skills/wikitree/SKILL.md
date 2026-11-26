@@ -25,8 +25,9 @@ Path: `skills/wikitree/scripts/wikitree`
 ### Search for people
 
 ```bash
-# Search public profiles by first and last name
+# Search public profiles by first and last name (or positional name / --given / --surname)
 skills/wikitree/scripts/wikitree search --first Abraham --last Lincoln
+skills/wikitree/scripts/wikitree search Abraham Lincoln --birth-year 1809
 
 # Same search, raw JSON
 skills/wikitree/scripts/wikitree search --first Abraham --last Lincoln --limit 5 --json
@@ -41,8 +42,9 @@ skills/wikitree/scripts/wikitree search --first Clara --last Barton --date-inclu
 ### Look up one profile
 
 ```bash
-# By WikiTree ID (<Surname>-<Number> from search output)
+# By WikiTree ID (<Surname>-<Number> from search output) or profile URL (aliases: get, show, profile)
 skills/wikitree/scripts/wikitree person <WikiTree-ID>
+skills/wikitree/scripts/wikitree get <WikiTree-ID>
 
 # Raw JSON, all fields
 skills/wikitree/scripts/wikitree person <WikiTree-ID> --fields '*' --json

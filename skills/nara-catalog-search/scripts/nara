@@ -1455,6 +1455,9 @@ def cmd_get(
         click.echo(_format_record_text(rec))
 
 
+cli.add_command(cmd_get, name="show")
+
+
 def _new_download_client(timeout: float = DEFAULT_DOWNLOAD_TIMEOUT) -> httpx.Client:
     effective = max(1.0, float(timeout))
     return httpx.Client(
@@ -2256,13 +2259,16 @@ def _emit_census1950(data: dict[str, Any], *, cache_hit: bool, as_json: bool) ->
 
 
 @cli.command("census1950")
+@click.argument("name_parts", nargs=-1, metavar="[NAME...]")
 @click.option("--state", default=None, help="State or territory code (IL) or name (Illinois).")
 @click.option("--county", default=None, help="County name, as the 1950 Census site spells it.")
-@click.option("--name", default=None, help="Person name. Sent as the site name= parameter.")
-@click.option("--ed", default=None, help="Enumeration district, for example 49-16.")
+@click.option("--name", "--surname", "name", default=None, help="Person name. Sent as the site name= parameter.")
+@click.option("--ed", "--district", "ed", default=None, help="Enumeration district, for example 49-16.")
 @click.option(
     "-n",
     "--limit",
+    "--rows",
+    "limit",
     default=CENSUS1950_DEFAULT_LIMIT,
     show_default=True,
     type=int,
@@ -2278,6 +2284,7 @@ def _emit_census1950(data: dict[str, Any], *, cache_hit: bool, as_json: bool) ->
     help=f"Cache TTL in hours (default {DEFAULT_QUERY_TTL_HOURS:g}; env KINLOOM_NARA_QUERY_TTL_HOURS).",
 )
 def cmd_census1950(
+    name_parts: tuple[str, ...],
     state: str | None,
     county: str | None,
     name: str | None,
@@ -2295,8 +2302,12 @@ def cmd_census1950(
     Text output prints each result's image path for census1950-image.
     JSON results stay the API objects, including image and iiifUrl.
     """
+    pos_name = " ".join(part.strip() for part in name_parts if part and part.strip()).strip()
+    if pos_name and name and name.strip():
+        raise click.UsageError("Pass either a positional name or --name/--surname, not both.")
+    resolved_name = name if (name and name.strip()) else (pos_name or None)
     canonical = canonical_census1950_query(
-        state=state, county=county, name=name, ed=ed, limit=limit, page=page
+        state=state, county=county, name=resolved_name, ed=ed, limit=limit, page=page
     )
     ttl_hours = resolve_query_ttl_hours(cache_ttl_hours)
     cache_root = get_cache_root()
@@ -2332,7 +2343,7 @@ CENSUS1950_IMAGE_TIMEOUT = 45.0
 CENSUS1950_IMAGE_CONNECT_TIMEOUT = 15.0
 CENSUS1950_RETRY_AFTER_CAP_S = 5.0
 CENSUS1950_TRANSIENT_STATUS = frozenset({429, 500, 502, 503, 504, 520, 522, 524})
-CENSUS1950_IMAGE_PATH_RE = re.compile(r"^1950census/[A-Za-z0-9._/-]+\.jpg$")
+CENSUS1950_IMAGE_PATH_RE = re.compile(r"^1950census/[A-Za-z0-9._/-]+\.jpg$", re.IGNORECASE)
 CENSUS1950_JPEG_SUFFIXES = frozenset({".jpg", ".jpeg"})
 JPEG_MAGIC = b"\xff\xd8\xff"
 
@@ -2515,6 +2526,10 @@ def _new_census1950_image_client(timeout: float = CENSUS1950_IMAGE_TIMEOUT) -> h
     )
 
 
+class _TransientNonJpegError(RuntimeError):
+    """Raised when a 1950 Census IIIF response returns a transient HTML or non-JPEG body."""
+
+
 def _census1950_fetch_jpeg(url: str, *, client: httpx.Client | None = None) -> bytes:
     headers = {
         "Accept": "image/jpeg",
@@ -2526,7 +2541,7 @@ def _census1950_fetch_jpeg(url: str, *, client: httpx.Client | None = None) -> b
             resp.raise_for_status()
             content_type = resp.headers.get("content-type", "")
             if "html" in content_type.lower():
-                raise click.ClickException(
+                raise _TransientNonJpegError(
                     "1950 Census image response was HTML, not a JPEG."
                 )
             content_encoding = resp.headers.get("content-encoding", "").strip().lower()
@@ -2549,12 +2564,19 @@ def _census1950_fetch_jpeg(url: str, *, client: httpx.Client | None = None) -> b
             raise _IncompleteDownloadError(
                 f"Incomplete 1950 Census JPEG download: received {received} of {expected_len} bytes"
             )
-        return require_jpeg_bytes(b"".join(chunks))
+        body = b"".join(chunks)
+        if not body.startswith(JPEG_MAGIC):
+            raise _TransientNonJpegError("1950 Census image response is not a JPEG.")
+        return body
 
     def _read_with_retries(active: httpx.Client) -> bytes:
         for attempt in range(1, CENSUS1950_IMAGE_ATTEMPTS + 1):
             try:
                 return _read(active)
+            except _TransientNonJpegError as exc:
+                if attempt >= CENSUS1950_IMAGE_ATTEMPTS:
+                    raise click.ClickException(str(exc)) from exc
+                time.sleep(_census1950_retry_delay(attempt, None))
             except httpx.HTTPStatusError as exc:
                 status = exc.response.status_code
                 if (
@@ -2746,33 +2768,53 @@ def cmd_census1950_image(
     ttl_hours = resolve_query_ttl_hours(cache_ttl_hours)
     cache_root = get_cache_root()
 
-    with _new_census1950_image_client(timeout) as shared_client:
-        def store(image_path: str) -> dict[str, Any]:
-            return _store_census1950_image(
-                image_path,
-                out_path=out_path,
-                width=width,
-                refresh=refresh,
-                ttl_hours=ttl_hours,
-                cache_root=cache_root,
-                client=shared_client,
-            )
+    try:
+        with _new_census1950_image_client(timeout) as shared_client:
+            def store(image_path: str) -> dict[str, Any]:
+                return _store_census1950_image(
+                    image_path,
+                    out_path=out_path,
+                    width=width,
+                    refresh=refresh,
+                    ttl_hours=ttl_hours,
+                    cache_root=cache_root,
+                    client=shared_client,
+                )
 
-        if not batch:
-            record = store(image_paths[0])
-            _emit_census1950_image(
-                image_path=record["image"],
-                url=record["url"],
-                dest=Path(record["path"]),
-                nbytes=int(record["bytes"]),
-                width=record["width"],
-                cache_hit=bool(record["cache_hit"]),
-                as_json=as_json,
-            )
-            return
+            if not batch:
+                record = store(image_paths[0])
+                _emit_census1950_image(
+                    image_path=record["image"],
+                    url=record["url"],
+                    dest=Path(record["path"]),
+                    nbytes=int(record["bytes"]),
+                    width=record["width"],
+                    cache_hit=bool(record["cache_hit"]),
+                    as_json=as_json,
+                )
+                return
 
-        with ThreadPoolExecutor(max_workers=CENSUS1950_IMAGE_FETCH_WORKERS) as pool:
-            records = list(pool.map(store, image_paths))
+            with ThreadPoolExecutor(max_workers=CENSUS1950_IMAGE_FETCH_WORKERS) as pool:
+                records = list(pool.map(store, image_paths))
+    except httpx.HTTPStatusError as exc:
+        status = exc.response.status_code
+        url = str(exc.request.url)
+        if status == 404:
+            raise click.ClickException(
+                f"1950 Census schedule image not found (HTTP 404) for {url}. "
+                "Verify the exact image path or sheet number via `nara census1950`."
+            ) from exc
+        if status in CENSUS1950_TRANSIENT_STATUS:
+            raise click.ClickException(
+                f"1950 Census IIIF server returned HTTP {status} for {url} after "
+                f"{CENSUS1950_IMAGE_ATTEMPTS} attempts. Retry shortly or pass --width 2400."
+            ) from exc
+        raise click.ClickException(f"HTTP {status} downloading 1950 Census image {url}") from exc
+    except (httpx.TimeoutException, httpx.TransportError, _IncompleteDownloadError) as exc:
+        raise click.ClickException(
+            f"1950 Census image download failed after {CENSUS1950_IMAGE_ATTEMPTS} attempts: {exc}. "
+            "Retry shortly or pass --width 2400."
+        ) from exc
     if as_json:
         click.echo(
             json.dumps(

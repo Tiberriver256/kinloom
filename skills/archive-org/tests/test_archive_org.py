@@ -1475,6 +1475,77 @@ class TestArchiveOrgHardening(unittest.TestCase):
                     self.assertEqual(ao.main(["search", "title:(Oakridge)", "--json"]), 0)
             self.assertEqual(calls["n"], 2)
 
+    def test_text_and_grep_cli_aliases_leaf_n_prefix_and_url_identifiers(self) -> None:
+        item_id = "synthetic_wave45_book_1895"
+        fake_meta = {
+            "metadata": {"identifier": item_id, "title": "Wave 45 Synthetic Book"},
+            "files": [
+                {"name": f"{item_id}_scandata.xml", "format": "Scandata"},
+                {"name": f"{item_id}_djvu.txt", "format": "DjVuTXT"},
+            ],
+        }
+        fake_djvu = "\x0c".join(SYNTHETIC_TEXT_PAGES).encode("utf-8")
+
+        def fake_http_get_bytes(url: str, timeout: float = 25.0) -> bytes:
+            if url.endswith(f"/metadata/{item_id}"):
+                return json.dumps(fake_meta).encode("utf-8")
+            if url.endswith(f"/{item_id}_scandata.xml"):
+                return SYNTHETIC_SCANDATA
+            if url.endswith(f"/{item_id}_djvu.txt"):
+                return fake_djvu
+            raise AssertionError(f"Unexpected URL: {url}")
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with patch.dict(os.environ, {"KINLOOM_IA_CACHE_DIR": tmpdir}, clear=False), patch.object(
+                ao, "http_get_bytes", side_effect=fake_http_get_bytes
+            ):
+                # `show` aliases `get` and accepts full archive.org/details/<id> URLs.
+                buf_show = io.StringIO()
+                with patch("sys.stdout", buf_show):
+                    self.assertEqual(ao.main(["show", f"https://archive.org/details/{item_id}", "--json"]), 0)
+                self.assertEqual(json.loads(buf_show.getvalue())["metadata"]["identifier"], item_id)
+
+                # `text`: --page / -p, --printed-pages comma list, --leaf n3, --leaves n2-n3, --item, positional page/leaf.
+                for argv, expected_leaves in (
+                    (["text", item_id, "--page", "1", "--json"], [3]),
+                    (["text", item_id, "-p", "iv", "--json"], [2]),
+                    (["text", item_id, "--printed-pages", "iv,2", "--json"], [2, 4]),
+                    (["text", item_id, "--leaf", "n3", "--json"], [3]),
+                    (["text", item_id, "--leaves", "n2-n3", "--json"], [2, 3]),
+                    (["text", "--item", item_id, "--page", "2", "--json"], [4]),
+                    (["text", item_id, "n4", "--json"], [4]),
+                    (["text", item_id, "1-2", "--json"], [3, 4]),
+                ):
+                    buf = io.StringIO()
+                    with patch("sys.stdout", buf):
+                        rc = ao.main(argv)
+                    self.assertEqual(rc, 0, argv)
+                    self.assertEqual([p["leaf"] for p in json.loads(buf.getvalue())["pages"]], expected_leaves, argv)
+
+                # `grep`: -q / --query / --regex, -n / --max, --item / --id, and positional pattern disambiguation.
+                for argv in (
+                    ["grep", item_id, "-q", "Clara Barton", "-n", "5", "--json"],
+                    ["grep", "--item", item_id, "--regex", "Clara Barton", "--max", "5", "--json"],
+                    ["grep", item_id, "Clara Barton", "--json"],
+                    ["grep", "Clara Barton", f"https://archive.org/details/{item_id}", "--json"],
+                    ["grep", "--id", item_id, "Clara Barton", "--json"],
+                ):
+                    buf = io.StringIO()
+                    with patch("sys.stdout", buf):
+                        rc = ao.main(argv)
+                    self.assertEqual(rc, 0, argv)
+                    payload = json.loads(buf.getvalue())
+                    self.assertEqual(payload["total_matches"], 1, argv)
+                    self.assertEqual(payload["hits"][0]["printed_page"], "iv", argv)
+
+                # `grep` with no pattern exits 2 with a helpful hint.
+                err = io.StringIO()
+                with patch("sys.stderr", err):
+                    with self.assertRaises(SystemExit) as cm:
+                        ao.main(["grep", item_id])
+                self.assertEqual(cm.exception.code, 2)
+                self.assertIn("--pattern", err.getvalue())
+
 
 if __name__ == "__main__":
     unittest.main()

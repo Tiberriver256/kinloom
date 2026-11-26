@@ -40,22 +40,23 @@ skills/openarchieven/scripts/openarchieven search --name "Vincent van Gogh" --li
 
 `--page` is an integer of 1 or more. The CLI sets `start` to `(page - 1)` times the limit it sends (`number_show`, from 1 to 100). Do not pass `--page` and `--start` in the same command. Omit `--page` to keep `--start` (default 0). Page 1 uses the same cache file as `start` 0. The cache key stores `start` and `number_show`. It does not store `page`.
 
-### Inspect one full record (`show`)
+### Inspect one full record (`show` / `get`)
 
 ```bash
-# By archive code and UUID from search output
+# By archive code and UUID from search output (`get` is an alias for `show`)
 skills/openarchieven/scripts/openarchieven show bhi 78a37833-d731-ffe5-184c-f9f424826871
+skills/openarchieven/scripts/openarchieven get "bhi:78a37833-d731-ffe5-184c-f9f424826871" --json
 
 # Or by compact archive:uuid token or full OpenArchieven URL
 skills/openarchieven/scripts/openarchieven show "bhi:78a37833-d731-ffe5-184c-f9f424826871"
 skills/openarchieven/scripts/openarchieven show "https://www.openarchieven.nl/bhi:78a37833-d731-ffe5-184c-f9f424826871" --json
 ```
 
-`show` queries `show.json` and parses the returned A2A (Archives-to-Archives) record: source type, archive institution, inventory/book/document numbers, event date and place, every person named on the deed with their role (`Kind`, `Vader`, `Moeder`, `Bruid`, `Bruidegom`, `Overledene`, `Geregistreerde`), scan image URLs, and the digital original link.
+`show` (or `get`) queries `show.json` and parses the returned A2A (Archives-to-Archives) record: source type, archive institution, inventory/book/document numbers, event date and place, every person named on the deed with their role (`Kind`, `Vader`, `Moeder`, `Bruid`, `Bruidegom`, `Overledene`, `Geregistreerde`), scan image URLs, and the digital original link.
 
 ### Download scan images
 
-`download` reads the same cached `show` record. It does not call `show.json` again when that cache is fresh. It saves the full-resolution `a2a_Uri` (or a flat `uri`). Pass `--preview` to save `a2a_UriPreview` (or `uri_preview`) instead.
+`download` reads the same cached `show` record. It does not call `show.json` again when that cache is fresh. It saves the full-resolution `a2a_Uri` (or a flat `uri`). When `a2a_Uri` points to an HTML viewer page (such as `www.archieven.nl`, `www.zeeuwsarchief.nl`, or `hdl.handle.net`) or returns HTML, `download` upgrades `proxy.archieven.nl/thumb/...` to full-resolution `proxy.archieven.nl/download/...` and falls back to `a2a_UriPreview` automatically. Direct scan image URLs are also accepted. Pass `--preview` to save `a2a_UriPreview` (or `uri_preview`) directly.
 
 ```bash
 # List scan index, order, label, and URL. This does not download files.

@@ -739,6 +739,80 @@ class TestFindAGraveCli(unittest.TestCase):
             fg._exit_broken_pipe()
         self.assertEqual(cm.exception.code, 0)
 
+    def test_wave45_show_alias_and_search_given_surname_name_year_aliases(self) -> None:
+        seen_vars: list[dict] = []
+
+        def fake_gql(_query: str, variables: dict) -> dict:
+            seen_vars.append(variables)
+            if "ids" in variables:
+                return {"memorialsById": [_sample_memorial(mid) for mid in variables["ids"]]}
+            return {"memorialSearch": {"total": 1, "memorials": [_sample_memorial("627")]}}
+
+        runner = CliRunner()
+        with patch.object(fg, "gql", side_effect=fake_gql):
+            r_search = runner.invoke(
+                fg.cli,
+                [
+                    "search",
+                    "--given",
+                    "Abraham",
+                    "--surname",
+                    "Lincoln",
+                    "--born",
+                    "1809",
+                    "--died",
+                    "1865",
+                    "--birth-year-range",
+                    "2",
+                    "--json",
+                ],
+            )
+            self.assertEqual(r_search.exit_code, 0, r_search.output)
+            self.assertIs(json.loads(r_search.output)["cache_hit"], False)
+            sent = seen_vars[-1]["s"]
+            self.assertEqual(sent["firstName"], "Abraham")
+            self.assertEqual(sent["lastName"], "Lincoln")
+            self.assertEqual(sent["birthYear"], 1809)
+            self.assertEqual(sent["deathYear"], 1865)
+            self.assertEqual(sent["birthYearRange"], 2)
+            self.assertEqual(sent["deathYearRange"], 2)
+
+            # `--name` splits into the identical query and hits disk cache with zero new GraphQL calls.
+            r_name = runner.invoke(
+                fg.cli,
+                [
+                    "search",
+                    "--name",
+                    "Abraham Lincoln",
+                    "--birth",
+                    "1809",
+                    "--death",
+                    "1865",
+                    "--death-year-range",
+                    "2",
+                    "--json",
+                ],
+            )
+            self.assertEqual(r_name.exit_code, 0, r_name.output)
+            self.assertIs(json.loads(r_name.output)["cache_hit"], True)
+            self.assertEqual(len(seen_vars), 1)
+
+            # `show` aliases `get` and shares the memorial disk cache.
+            s1 = runner.invoke(fg.cli, ["show", "627", "--json"])
+            s2 = runner.invoke(fg.cli, ["get", "627", "--json"])
+            self.assertEqual(s1.exit_code, 0, s1.output)
+            self.assertEqual(s2.exit_code, 0, s2.output)
+            self.assertIs(json.loads(s1.output)[0]["cache_hit"], False)
+            self.assertIs(json.loads(s2.output)[0]["cache_hit"], True)
+            self.assertEqual(len(seen_vars), 2)
+
+            # `url` accepts --given/--surname/--born/--died.
+            u = runner.invoke(
+                fg.cli, ["url", "--given", "Clara", "--surname", "Barton", "--born", "1821", "--died", "1912"]
+            )
+            self.assertEqual(u.exit_code, 0, u.output)
+            self.assertIn("firstname=Clara&lastname=Barton&birthyear=1821&deathyear=1912", u.output)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -1,5 +1,6 @@
 #!/usr/bin/env node
-import { realpathSync } from 'node:fs';
+import fs, { realpathSync } from 'node:fs';
+import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs, type ParseArgsConfig } from 'node:util';
 import {
@@ -261,6 +262,62 @@ function safeParseArgs<const T extends ParseArgsConfig>(
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
     throw new CliValidationError(message);
+  }
+}
+
+function normalizeIntegratePackageDir(rawPath: string, baseDir: string): string {
+  const resolved = path.resolve(baseDir, rawPath.trim());
+  try {
+    if (fs.statSync(resolved).isFile() && path.basename(resolved) === 'patch.json') {
+      return path.dirname(resolved);
+    }
+  } catch {
+    // Missing paths stay as-is so executeIntegrateSingle reports the exact missing path.
+  }
+  return resolved;
+}
+
+function readPersonIdFromPackageDir(packageDir: string): string | undefined {
+  const patchPath = path.join(packageDir, 'patch.json');
+  try {
+    const raw: unknown = JSON.parse(fs.readFileSync(patchPath, 'utf8'));
+    if (typeof raw === 'object' && raw !== null && !Array.isArray(raw)) {
+      const personId = (raw as Record<string, unknown>).person_id;
+      if (typeof personId === 'string' && personId.trim().length > 0) {
+        return personId.trim();
+      }
+    }
+  } catch {
+    // Missing or malformed patch.json is reported downstream by executeIntegrateSingle.
+  }
+  return undefined;
+}
+
+function resolvePositionalIntegratePackage(
+  token: string,
+  baseDir: string
+): { packageDir: string; personId: string } | undefined {
+  const looksLikePath =
+    token.includes('/') || token.includes('\\') || token.endsWith('.json') || token.startsWith('.');
+  const resolved = path.resolve(baseDir, token);
+  if (!looksLikePath && !fs.existsSync(resolved)) {
+    return undefined;
+  }
+  try {
+    const stat = fs.statSync(resolved);
+    const pkgDir =
+      stat.isFile() && path.basename(resolved) === 'patch.json'
+        ? path.dirname(resolved)
+        : stat.isDirectory() && fs.existsSync(path.join(resolved, 'patch.json'))
+          ? resolved
+          : undefined;
+    if (!pkgDir) {
+      return undefined;
+    }
+    const inferredPersonId = readPersonIdFromPackageDir(pkgDir) ?? path.basename(pkgDir);
+    return { packageDir: pkgDir, personId: inferredPersonId };
+  } catch {
+    return undefined;
   }
 }
 
@@ -834,9 +891,11 @@ export async function runCli(
           allowPositionals: true,
           options: {
             person: { type: 'string' },
+            'person-id': { type: 'string' },
             repo: { type: 'string' },
             package: { type: 'string' },
             'package-dir': { type: 'string' },
+            patch: { type: 'string' },
             'all-staged': { type: 'boolean', default: false },
             'pending-only': { type: 'boolean', default: false },
             'dry-run': { type: 'boolean', default: false },
@@ -846,19 +905,41 @@ export async function runCli(
         const positionalIds = positionals
           .map((id) => id.trim())
           .filter((id) => id.length > 0);
-        if (values.package !== undefined && values['package-dir'] !== undefined) {
-          throw new CliValidationError('Specify either `--package` or `--package-dir`, not both.');
+        const packageFlags = [
+          values.package !== undefined ? '--package' : undefined,
+          values['package-dir'] !== undefined ? '--package-dir' : undefined,
+          values.patch !== undefined ? '--patch' : undefined,
+        ].filter((flag): flag is string => flag !== undefined);
+        if (packageFlags.length > 1) {
+          throw new CliValidationError(
+            `Specify only one of ${packageFlags.map((flag) => `\`${flag}\``).join(' or ')}, not both.`
+          );
         }
-        const packageDir = values['package-dir'] ?? values.package;
+        if (
+          values.person !== undefined &&
+          values['person-id'] !== undefined &&
+          values.person.trim() !== values['person-id'].trim()
+        ) {
+          throw new CliValidationError(
+            'Specify either `--person` or `--person-id` with matching values, not conflicting ids.'
+          );
+        }
+        const personFlag = values.person?.trim() || values['person-id']?.trim() || undefined;
+        const rawPackageDir = values['package-dir'] ?? values.package ?? values.patch;
+        const effectiveRepoDir = values.repo?.trim() || cwd;
+        let packageDir = rawPackageDir
+          ? normalizeIntegratePackageDir(rawPackageDir, effectiveRepoDir)
+          : undefined;
+
         if (values['pending-only'] && !values['all-staged']) {
           throw new CliValidationError('Option `--pending-only` requires `--all-staged`.');
         }
-        if (values['all-staged'] && (positionalIds.length > 0 || values.person)) {
+        if (values['all-staged'] && (positionalIds.length > 0 || personFlag)) {
           throw new CliValidationError(
             '`--all-staged` discovers person ids from research/people and does not take person ids.'
           );
         }
-        if (values.person && positionalIds.length > 0) {
+        if (personFlag && positionalIds.length > 0) {
           throw new CliValidationError('Pass person ids as positionals or with `--person`, not both.');
         }
 
@@ -870,7 +951,26 @@ export async function runCli(
         }
 
         if (!useBatch) {
-          const personId = requireStringFlag(values.person ?? positionalIds[0], '--person');
+          let resolvedPersonId: string | undefined = personFlag ?? positionalIds[0];
+          if (!personFlag && !packageDir && positionalIds.length === 1) {
+            const fromPositionalPath = resolvePositionalIntegratePackage(
+              positionalIds[0],
+              effectiveRepoDir
+            );
+            if (fromPositionalPath) {
+              packageDir = fromPositionalPath.packageDir;
+              resolvedPersonId = fromPositionalPath.personId;
+            }
+          }
+          if (!resolvedPersonId && packageDir) {
+            resolvedPersonId = readPersonIdFromPackageDir(packageDir);
+          }
+          if (!resolvedPersonId) {
+            throw new CliValidationError(
+              'Missing target person_id. Pass `<person_id>`, `--person <person_id>`, `--package <dir>`, or `--all-staged` (example: `kinloom integrate <person_id> --dry-run`).'
+            );
+          }
+          const personId = resolvedPersonId;
           const [{ runIntegrateCommand }, { measureCommand }] = await Promise.all([
             import('./commands/ops/integrate.js'),
             import('./commands/ops/telemetry.js'),
@@ -887,7 +987,7 @@ export async function runCli(
             },
             () =>
               runIntegrateCommand({
-                repoDir: values.repo,
+                repoDir: values.repo ?? cwd,
                 personId,
                 packageDir,
                 dryRun: values['dry-run'],
@@ -914,7 +1014,7 @@ export async function runCli(
           },
           () =>
             runIntegrateBatchCommand({
-              repoDir: values.repo,
+              repoDir: values.repo ?? cwd,
               personIds: values['all-staged'] ? undefined : positionalIds,
               allStaged: values['all-staged'],
               pendingOnly: values['pending-only'],

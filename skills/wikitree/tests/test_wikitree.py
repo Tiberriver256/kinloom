@@ -162,6 +162,94 @@ class TestWikiTreeCache(unittest.TestCase):
         self.assertEqual(r3.exit_code, 0, r3.output)
         self.assertEqual(calls, 3)
 
+    def test_aliases_for_get_show_profile_search_flags_urls_and_help(self) -> None:
+        seen_params: list[dict[str, str]] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            seen_params.append(dict(request.url.params))
+            action = request.url.params.get("action")
+            if action == "searchPerson":
+                return httpx.Response(200, json=SEARCH_RESP)
+            if action == "getPerson":
+                return httpx.Response(200, json=PERSON_RESP)
+            return httpx.Response(200, json=BIO_RESP)
+
+        with patch.object(wt, "_client", self._mock_client(handler)):
+            # Positional full name + --birth-year + --birth-place + -n + --page.
+            s1 = self.runner.invoke(
+                wt.cli,
+                [
+                    "search",
+                    "Abraham",
+                    "Lincoln",
+                    "--birth-year",
+                    "1809",
+                    "--birth-place",
+                    "Kentucky",
+                    "-n",
+                    "5",
+                    "--page",
+                    "2",
+                    "--json",
+                ],
+                env=self.env,
+            )
+            self.assertEqual(s1.exit_code, 0, s1.output)
+            self.assertFalse(json.loads(s1.output)[0]["cache_hit"])
+            self.assertEqual(seen_params[-1]["FirstName"], "Abraham")
+            self.assertEqual(seen_params[-1]["LastName"], "Lincoln")
+            self.assertEqual(seen_params[-1]["BirthDate"], "1809")
+            self.assertEqual(seen_params[-1]["BirthLocation"], "Kentucky")
+            self.assertEqual(seen_params[-1]["limit"], "5")
+            self.assertEqual(seen_params[-1]["start"], "5")
+
+            # Equivalent call using --given/--surname/--born/--place/--rows/--offset hits disk cache.
+            s2 = self.runner.invoke(
+                wt.cli,
+                [
+                    "search",
+                    "--given",
+                    "Abraham",
+                    "--surname",
+                    "Lincoln",
+                    "--born",
+                    "1809",
+                    "--place",
+                    "Kentucky",
+                    "--rows",
+                    "5",
+                    "--offset",
+                    "5",
+                    "--json",
+                ],
+                env=self.env,
+            )
+            self.assertEqual(s2.exit_code, 0, s2.output)
+            self.assertTrue(json.loads(s2.output)[0]["cache_hit"])
+            self.assertEqual(len(seen_params), 1)
+
+            # `get`, `show`, and `profile` alias `person` and normalize WikiTree profile URLs.
+            p_get = self.runner.invoke(
+                wt.cli, ["get", "https://www.wikitree.com/wiki/Lincoln-1", "--json"], env=self.env
+            )
+            p_show = self.runner.invoke(wt.cli, ["show", "Lincoln-1", "--json"], env=self.env)
+            p_prof = self.runner.invoke(wt.cli, ["profile", "Lincoln-1", "--json"], env=self.env)
+            self.assertEqual(p_get.exit_code, 0, p_get.output)
+            self.assertEqual(p_show.exit_code, 0, p_show.output)
+            self.assertEqual(p_prof.exit_code, 0, p_prof.output)
+            self.assertFalse(json.loads(p_get.output)[0]["cache_hit"])
+            self.assertTrue(json.loads(p_show.output)[0]["cache_hit"])
+            self.assertTrue(json.loads(p_prof.output)[0]["cache_hit"])
+            self.assertEqual(seen_params[-1]["key"], "Lincoln-1")
+            self.assertEqual(len(seen_params), 2)
+
+            # Missing search filters exits 2 with a concrete example; -h works on root CLI.
+            bad = self.runner.invoke(wt.cli, ["search"], env=self.env)
+            self.assertEqual(bad.exit_code, 2)
+            self.assertIn("search Abraham Lincoln", bad.output)
+            help_res = self.runner.invoke(wt.cli, ["-h"], env=self.env)
+            self.assertEqual(help_res.exit_code, 0)
+
 
 if __name__ == "__main__":
     unittest.main()

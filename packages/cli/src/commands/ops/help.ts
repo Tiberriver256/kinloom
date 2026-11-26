@@ -30,12 +30,12 @@ Arguments:
   person_id              One person id, or several person ids. Use a positional id or --person for one person.
 
 Options:
-  --person <person_id>   Single target person ID in data/people.yaml or patch.people. Do not combine with positional ids or --all-staged.
+  --person <person_id>   Single target person ID in data/people.yaml or patch.people (alias: --person-id). Do not combine with positional ids or --all-staged.
   --all-staged           Integrate every research/people/<id>/patch.json package in sorted order. Do not pass person ids with this flag.
   --pending-only         With --all-staged, skip packages whose dry-run diff has no unintegrated changes (broken packages stay pending).
   --repo <dir>           Archive repository root (default: current working directory)
-  --package <dir>        Custom research package directory for a single person (alias of --package-dir)
-  --package-dir <dir>    Custom research package directory for a single person (default: <repo>/research/people/<person_id>)
+  --package <dir>        Custom research package directory or patch.json path for a single person (aliases: --package-dir, --patch)
+  --package-dir <dir>    Custom research package directory or patch.json path for a single person (default: <repo>/research/people/<person_id>)
   --dry-run              Validate schemas, citations, scans, and privacy without writing files
   --json                 Emit structured JSON summary (single-person object, or batch object with mode: "batch")
   -h, --help             Show this help message`;

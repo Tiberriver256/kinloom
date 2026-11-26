@@ -453,8 +453,8 @@ class TestOpenArchievenDownload(unittest.TestCase):
         self.assertEqual(ok.exit_code, 0, self._combined(ok))
         self.assertEqual(out.read_bytes(), JPEG_ONE)
         image_calls = [url for url in calls if "scans.invalid" in url]
-        # 2 html (non-retried 200) + 3 retries on 502 + 1 ok = 6
-        self.assertEqual(len(image_calls), 6)
+        # 2 html runs x (full + preview fallback) = 4, + 3 retries on 502 + 1 ok = 8
+        self.assertEqual(len(image_calls), 8)
 
     def test_zero_scan_record_lists_empty_and_download_fails(self) -> None:
         def handler(request: httpx.Request) -> httpx.Response:
@@ -590,6 +590,151 @@ class TestOpenArchievenHardening(unittest.TestCase):
             with self.assertRaises(SystemExit) as pipe_cm:
                 oa.main()
         self.assertEqual(pipe_cm.exception.code, 0)
+
+    def test_get_alias_viewer_fallbacks_proxy_upgrade_direct_url_and_search_aliases(self) -> None:
+        calls: list[str] = []
+        viewer_files_record = {
+            "a2a_Source": {
+                "a2a_SourceAvailableScans": {
+                    "a2a_Scan": {
+                        "a2a_Uri": "http://www.archieven.nl/nl/zoeken?mivast=239&mizig=210",
+                        "a2a_UriPreview": "http://files.archieven.nl/php/show_file.php?adt_id=239&file=demo.jpg",
+                    }
+                }
+            }
+        }
+        hdl_proxy_record = {
+            "a2a_Source": {
+                "a2a_SourceAvailableScans": {
+                    "a2a_Scan": {
+                        "a2a_Uri": "https://hdl.handle.net/21.12133/DEMO-1234",
+                        "a2a_UriPreview": "https://proxy.archieven.nl/thumb/239/AABBCCDD",
+                    }
+                }
+            }
+        }
+        unknown_html_record = {
+            "a2a_Source": {
+                "a2a_SourceAvailableScans": {
+                    "a2a_Scan": {
+                        "a2a_Uri": "https://viewer.example/page/42",
+                        "a2a_UriPreview": "https://images.example/scan-42.jpg",
+                    }
+                }
+            }
+        }
+        proxy_mode = {"fail_full": False}
+        proto_attempts = {"n": 0}
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            url = str(request.url)
+            calls.append(url)
+            if request.url.path.endswith("search.json"):
+                self.assertEqual(request.url.params.get("name"), "Jan Bakker")
+                self.assertEqual(request.url.params.get("number_show"), "5")
+                self.assertEqual(request.url.params.get("start"), "10")
+                return httpx.Response(200, json=SEARCH_PAYLOAD)
+            if request.url.path.endswith("show.json"):
+                ident = request.url.params.get("identifier")
+                if ident == "zar-files-1":
+                    return httpx.Response(200, json=[viewer_files_record])
+                if ident == "zar-proxy-1":
+                    return httpx.Response(200, json=[hdl_proxy_record])
+                if ident == "unk-html-1":
+                    return httpx.Response(200, json=[unknown_html_record])
+                return httpx.Response(200, json=[SHOW_PAYLOAD])
+            if url == "http://www.archieven.nl/nl/zoeken?mivast=239&mizig=210":
+                raise AssertionError("Known HTML viewer URL should be skipped when preview image exists")
+            if url == "http://files.archieven.nl/php/show_file.php?adt_id=239&file=demo.jpg":
+                proto_attempts["n"] += 1
+                if proto_attempts["n"] == 1:
+                    raise httpx.RemoteProtocolError("server disconnected", request=request)
+                return httpx.Response(200, content=JPEG_ONE, headers={"content-type": "image/jpeg"})
+            if url == "https://proxy.archieven.nl/download/239/AABBCCDD":
+                if proxy_mode["fail_full"]:
+                    return httpx.Response(404, text="not found")
+                return httpx.Response(200, content=JPEG_TWO, headers={"content-type": "image/jpeg"})
+            if url == "https://proxy.archieven.nl/thumb/239/AABBCCDD":
+                return httpx.Response(200, content=JPEG_ONE, headers={"content-type": "image/jpeg"})
+            if url == "https://viewer.example/page/42":
+                return httpx.Response(200, content=b"<!doctype html><html>viewer</html>", headers={"content-type": "text/html"})
+            if url == "https://images.example/scan-42.jpg":
+                return httpx.Response(200, content=JPEG_ONE, headers={"content-type": "image/jpeg"})
+            if url == "https://images.memorix.nl/bhic/iiif/demo/full/full/0/default.jpg":
+                return httpx.Response(200, content=JPEG_TWO, headers={"content-type": "image/jpeg"})
+            return httpx.Response(404, text="missing")
+
+        factory = self._clients(handler)
+        with patch.object(oa, "_client", factory), patch.object(oa, "_binary_client", factory):
+            # 1. `openarchieven get` aliases `show` and shares the disk cache.
+            g1 = self.runner.invoke(oa.cli, ["get", f"bhi:{RECORD_REF}", "--json"], env=self.env)
+            g2 = self.runner.invoke(oa.cli, ["show", f"bhi:{RECORD_REF}", "--json"], env=self.env)
+            self.assertEqual(g1.exit_code, 0, g1.output)
+            self.assertEqual(g2.exit_code, 0, g2.output)
+            self.assertIs(json.loads(g1.output)["cache_hit"], False)
+            self.assertIs(json.loads(g2.output)["cache_hit"], True)
+
+            # 2. `search` accepts --given/--surname, --rows, --offset.
+            s1 = self.runner.invoke(
+                oa.cli,
+                ["search", "--given", "Jan", "--surname", "Bakker", "--rows", "5", "--offset", "10", "--json"],
+                env=self.env,
+            )
+            self.assertEqual(s1.exit_code, 0, s1.output)
+            self.assertIs(json.loads(s1.output)["cache_hit"], False)
+
+            # 3. Known archieven.nl viewer URL skips HTML, retries RemoteProtocolError, and downloads files.archieven.nl.
+            out_files = Path(self.tmp.name) / "zar-files.jpg"
+            d1 = self.runner.invoke(
+                oa.cli, ["download", "zar:zar-files-1", str(out_files), "--json"], env=self.env
+            )
+            self.assertEqual(d1.exit_code, 0, d1.output)
+            d1_body = json.loads(d1.output)
+            self.assertIs(d1_body["cache_hit"], False)
+            self.assertEqual(d1_body["files"][0]["url"], "http://files.archieven.nl/php/show_file.php?adt_id=239&file=demo.jpg")
+            self.assertEqual(out_files.read_bytes(), JPEG_ONE)
+            self.assertEqual(proto_attempts["n"], 2)
+
+            # 4. hdl.handle.net + proxy.archieven.nl/thumb upgrades to /download/ full-res, then falls back on 404.
+            out_proxy = Path(self.tmp.name) / "zar-proxy.jpg"
+            d2 = self.runner.invoke(
+                oa.cli, ["download", "zar:zar-proxy-1", "--out", str(out_proxy), "--json"], env=self.env
+            )
+            self.assertEqual(d2.exit_code, 0, d2.output)
+            self.assertEqual(json.loads(d2.output)["files"][0]["url"], "https://proxy.archieven.nl/download/239/AABBCCDD")
+            self.assertEqual(out_proxy.read_bytes(), JPEG_TWO)
+
+            proxy_mode["fail_full"] = True
+            d2_fb = self.runner.invoke(
+                oa.cli, ["download", "zar:zar-proxy-1", "--out", str(out_proxy), "--refresh", "--json"], env=self.env
+            )
+            self.assertEqual(d2_fb.exit_code, 0, d2_fb.output)
+            self.assertEqual(json.loads(d2_fb.output)["files"][0]["url"], "https://proxy.archieven.nl/thumb/239/AABBCCDD")
+            self.assertEqual(out_proxy.read_bytes(), JPEG_ONE)
+
+            # 5. Unknown host returning HTML on a2a_Uri falls back to a2a_UriPreview JPEG without caching HTML.
+            out_unk = Path(self.tmp.name) / "unk.jpg"
+            d3 = self.runner.invoke(
+                oa.cli, ["download", "bhi:unk-html-1", "--out", str(out_unk), "--json"], env=self.env
+            )
+            self.assertEqual(d3.exit_code, 0, d3.output)
+            self.assertEqual(json.loads(d3.output)["files"][0]["url"], "https://images.example/scan-42.jpg")
+            self.assertEqual(out_unk.read_bytes(), JPEG_ONE)
+
+            # 6. Direct IIIF .jp2 URL upgrades to .jpg and caches cleanly (miss -> hit).
+            out_direct = Path(self.tmp.name) / "direct.jpg"
+            direct_in = "https://images.memorix.nl/bhic/iiif/demo/full/full/0/default.jp2"
+            d4 = self.runner.invoke(
+                oa.cli, ["download", direct_in, "--out", str(out_direct), "--json"], env=self.env
+            )
+            d5 = self.runner.invoke(
+                oa.cli, ["download", direct_in, "--out", str(out_direct), "--json"], env=self.env
+            )
+            self.assertEqual(d4.exit_code, 0, d4.output)
+            self.assertEqual(d5.exit_code, 0, d5.output)
+            self.assertIs(json.loads(d4.output)["cache_hit"], False)
+            self.assertIs(json.loads(d5.output)["cache_hit"], True)
+            self.assertEqual(out_direct.read_bytes(), JPEG_TWO)
 
 
 if __name__ == "__main__":

@@ -41,13 +41,14 @@ skills/findagrave/scripts/findagrave search --last Lincoln --bio president --lim
 skills/findagrave/scripts/findagrave search --first Harriet --last Tubman --json
 ```
 
-Names match the site's default matching unless `--exact` is passed. You may pass `--first`/`--first-name` and `--last`/`--last-name`, or pass a name positionally (`search Abraham Lincoln`). Married women are also found under their maiden name by default (`--no-include-maiden` turns that off). A search returns at most 50 rows per call; use `-n`/`--limit`/`--rows`/`--size` with `--offset` or `--page` to page. `get`/`memorial`, `photo`/`photos`, and `cemetery` accept either numeric IDs or full `https://www.findagrave.com/...` URLs. `photo`/`photos` accepts `-o`/`--out`/`--out-dir`/`--output`. `place` accepts a place name either positionally or via `--name`. The site only reaches the first 10,000 results of a search, so narrow by place, years, or cemetery when totals are large.
+Names match the site's default matching unless `--exact` is passed. You may pass `--first`/`--first-name`/`--given`, `--last`/`--last-name`/`--surname`, `--name "First Last"`, or a positional name (`search Abraham Lincoln`). Year options accept `--birth-year`/`--birth`/`--born`, `--death-year`/`--death`/`--died`, and `--year-range`/`--birth-year-range`/`--death-year-range`. Married women are also found under their maiden name by default (`--no-include-maiden` turns that off). A search returns at most 50 rows per call; use `-n`/`--limit`/`--rows`/`--size` with `--offset` or `--page` to page. `get`/`memorial`/`show`, `photo`/`photos`, and `cemetery` accept either numeric IDs or full `https://www.findagrave.com/...` URLs. `photo`/`photos` accepts `-o`/`--out`/`--out-dir`/`--output`. `place` accepts a place name either positionally or via `--name`. The site only reaches the first 10,000 results of a search, so narrow by place, years, or cemetery when totals are large.
 
 ### Read one or more memorials in full
 
 ```bash
-# Read one memorial by id from search output (alias: memorial)
+# Read one memorial by id from search output (aliases: memorial, show)
 skills/findagrave/scripts/findagrave get <memorial-id>
+skills/findagrave/scripts/findagrave show <memorial-id>
 
 # Full bio/inscription text, photo list, and JSON output (includes cemetery_lat / cemetery_lng and coordinates)
 skills/findagrave/scripts/findagrave get <memorial-id> --full --photos

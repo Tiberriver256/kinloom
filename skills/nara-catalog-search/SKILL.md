@@ -45,8 +45,9 @@ skills/nara-catalog-search/scripts/nara search '"Abraham Lincoln"' --level fileU
 ### Inspect one or more NAIDs
 
 ```bash
-# Compact metadata and file counts for multiple NAIDs (reuses one browser)
+# Compact metadata and file counts for multiple NAIDs (reuses one browser; alias: show)
 skills/nara-catalog-search/scripts/nara get <naid-1> <naid-2> --json
+skills/nara-catalog-search/scripts/nara show <naid> --json
 
 # Include sliced digital object URLs for large rolls
 skills/nara-catalog-search/scripts/nara get <naid> --objects --pages 1-10 --json

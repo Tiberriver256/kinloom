@@ -1383,22 +1383,36 @@ export async function executeIntegrateSingle(
     throw new CliValidationError(`Repository directory does not exist: ${repoDir}`);
   }
 
-  const packageDir = path.resolve(
+  let packageDir = path.resolve(
     options.packageDir?.trim() || path.join(repoDir, 'research', 'people', personId)
   );
+  if (
+    options.packageDir?.trim() &&
+    fs.existsSync(packageDir) &&
+    fs.statSync(packageDir).isFile() &&
+    path.basename(packageDir) === 'patch.json'
+  ) {
+    packageDir = path.dirname(packageDir);
+  }
   const realDataDir = path.join(repoDir, 'data');
   const dataDir = overlay ? overlay.dataDirOverride : realDataDir;
   const configPath = path.join(repoDir, 'kinloom.config.yaml');
   const patchPath = path.join(packageDir, 'patch.json');
 
   if (!fs.existsSync(path.join(dataDir, 'people.yaml'))) {
-    throw new CliValidationError(`Missing ${path.join(realDataDir, 'people.yaml')}.`);
+    throw new CliValidationError(
+      `Missing ${path.join(realDataDir, 'people.yaml')} (pass --repo <archive-root> if running outside the archive root).`
+    );
   }
   if (!fs.existsSync(configPath)) {
-    throw new CliValidationError(`Missing ${configPath}.`);
+    throw new CliValidationError(
+      `Missing ${configPath} (pass --repo <archive-root> if running outside the archive root).`
+    );
   }
   if (!fs.existsSync(patchPath)) {
-    throw new CliValidationError(`Missing person patch file: ${patchPath}`);
+    throw new CliValidationError(
+      `Missing person patch file: ${patchPath} (pass --package <dir> if the package lives outside research/people/${personId}).`
+    );
   }
 
   const siteConfig = parseKinloomConfigYaml(fs.readFileSync(configPath, 'utf8'));

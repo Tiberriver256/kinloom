@@ -151,11 +151,40 @@ def cached_call(kind: str, payload: dict, fetch: Callable[[], dict], *,
 API_BASE = "https://api.openarch.nl/1.0/records"
 WEB_BASE = "https://www.openarchieven.nl"
 ALLOWED_API_HOSTS = frozenset({"api.openarch.nl"})
-TRANSIENT_STATUS_CODES = frozenset({429, 500, 502, 503, 504})
+TRANSIENT_STATUS_CODES = frozenset({429, 500, 502, 503, 504, 520, 522, 524})
 MAX_HTTP_ATTEMPTS = 3
 RETRY_BASE_SECONDS = 0.5
 ARCHIVE_CODE_RE = re.compile(r"^[A-Za-z0-9_-]{1,32}$")
 RECORD_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
+PROXY_THUMB_RE = re.compile(
+    r"^https?://proxy\.archieven\.nl/thumb/([^/?#]+)/([^/?#]+)(?:[?#].*)?$",
+    re.IGNORECASE,
+)
+IIIF_INFO_RE = re.compile(r"^(https?://.+)/info\.json(?:[?#].*)?$", re.IGNORECASE)
+IIIF_JP2_RE = re.compile(r"^(https?://.+/full/[^/?#]+/[^/?#]+/default)\.jp2(?:[?#].*)?$", re.IGNORECASE)
+VIEWER_HOSTS = frozenset({
+    "www.archieven.nl",
+    "archieven.nl",
+    "www.zeeuwsarchief.nl",
+    "zeeuwsarchief.nl",
+    "www.zeeuwengezocht.nl",
+    "zeeuwengezocht.nl",
+    "hdl.handle.net",
+    "collectie-delft.nl",
+    "www.collectie-delft.nl",
+    "allefriezen.nl",
+    "www.allefriezen.nl",
+    "westbrabantsarchief.nl",
+    "www.westbrabantsarchief.nl",
+    "stadsarchief.rotterdam.nl",
+    "www.stadsarchief.rotterdam.nl",
+    "hetutrechtsarchief.nl",
+    "www.hetutrechtsarchief.nl",
+    "www.bhic.nl",
+    "bhic.nl",
+    "www.allegroningers.nl",
+    "allegroningers.nl",
+})
 USER_AGENT = "kinloom/1.0 (genealogy research; https://github.com/tiberriver256/kinloom)"
 MIN_INTERVAL_S = 0.25
 TIMEOUT = 30.0
@@ -261,6 +290,9 @@ def _retry_delay(attempt: int, resp: httpx.Response | None = None) -> float:
             except ValueError:
                 try:
                     dt = email.utils.parsedate_to_datetime(stripped)
+                    if dt.tzinfo is None:
+                        from datetime import timezone
+                        dt = dt.replace(tzinfo=timezone.utc)
                     delta = dt.timestamp() - time.time()
                     if math.isfinite(delta) and 0 <= delta <= 30:
                         return delta
@@ -287,7 +319,7 @@ def _request_with_retry(
         for attempt in range(1, MAX_HTTP_ATTEMPTS + 1):
             try:
                 resp = client.get(url, params=params)
-            except (httpx.TimeoutException, httpx.NetworkError) as exc:
+            except (httpx.TimeoutException, httpx.TransportError) as exc:
                 last_exc = exc
                 if attempt < MAX_HTTP_ATTEMPTS:
                     delay = _retry_delay(attempt)
@@ -373,6 +405,57 @@ class ScanPayloadError(Exception):
     """The HTTP body is not a non-empty image or PDF."""
 
 
+class _ScanHttpError(Exception):
+    """Non-200 HTTP response while downloading a scan candidate."""
+
+    def __init__(self, status_code: int, url: str) -> None:
+        self.status_code = status_code
+        self.url = url
+        super().__init__(
+            f"Scan download failed with HTTP {status_code} for {url}. The response was not cached."
+        )
+
+
+def _is_viewer_url(url: str) -> bool:
+    parsed = urlparse(url)
+    host = (parsed.hostname or "").lower()
+    if host in VIEWER_HOSTS:
+        return True
+    if host == "sgen.schiedam.nl" and not parsed.path.lower().startswith("/scans/"):
+        return True
+    return False
+
+
+def _derive_proxy_download_url(url: str) -> str | None:
+    if not url:
+        return None
+    match = PROXY_THUMB_RE.fullmatch(url.strip())
+    if not match:
+        return None
+    return f"https://proxy.archieven.nl/download/{match.group(1)}/{match.group(2)}"
+
+
+def _derive_iiif_jpeg_url(url: str) -> str | None:
+    if not url:
+        return None
+    cleaned = url.strip()
+    info_match = IIIF_INFO_RE.fullmatch(cleaned)
+    if info_match:
+        return f"{info_match.group(1)}/full/full/0/default.jpg"
+    jp2_match = IIIF_JP2_RE.fullmatch(cleaned)
+    if jp2_match:
+        return f"{jp2_match.group(1)}.jpg"
+    return None
+
+
+def _append_unique_url(items: list[str], candidate: str | None) -> None:
+    if not candidate:
+        return
+    cleaned = candidate.strip()
+    if cleaned and cleaned not in items:
+        items.append(cleaned)
+
+
 class ScanImage:
     """One scan image from an A2A record, after order normalization."""
 
@@ -387,6 +470,38 @@ class ScanImage:
         if preview:
             return self.uri_preview or self.uri
         return self.uri or self.uri_preview
+
+    def candidate_urls(self, preview: bool) -> list[tuple[str, bool]]:
+        """Return ordered (url, allow_http_5xx_fallback) download candidates."""
+        if preview:
+            urls: list[str] = []
+            _append_unique_url(urls, self.uri_preview)
+            _append_unique_url(urls, self.uri)
+            return [(u, False) for u in urls]
+
+        proxy_full = _derive_proxy_download_url(self.uri_preview) or _derive_proxy_download_url(self.uri)
+        iiif_jpg = _derive_iiif_jpeg_url(self.uri)
+        candidates: list[tuple[str, bool]] = []
+        seen: set[str] = set()
+
+        def add(url: str | None, fallback_on_5xx: bool) -> None:
+            if not url:
+                return
+            cleaned = url.strip()
+            if cleaned and cleaned not in seen:
+                seen.add(cleaned)
+                candidates.append((cleaned, fallback_on_5xx))
+
+        if self.uri and _is_viewer_url(self.uri) and (proxy_full or self.uri_preview):
+            add(proxy_full, True)
+            add(self.uri_preview, False)
+            return candidates
+
+        add(iiif_jpg, True)
+        add(self.uri, False)
+        add(proxy_full, True)
+        add(self.uri_preview, False)
+        return candidates
 
 
 _CONTENT_TYPE_EXT = {
@@ -499,7 +614,7 @@ def _magic_extension(content: bytes) -> str | None:
         return "webp"
     if content.startswith((b"II*\x00", b"MM\x00*")):
         return "tif"
-    if content.startswith(b"\x00\x00\x00\x0cjP"):
+    if content.startswith(b"\x00\x00\x00\x0cjP") or content.startswith(b"\xff\x4f\xff\x51"):
         return "jp2"
     return None
 
@@ -577,15 +692,12 @@ def _fetch_scan_bytes(url: str) -> tuple[bytes, str]:
         label=f"Scan download for {url}",
     )
     if resp.status_code != 200:
-        _fail(
-            f"Scan download failed with HTTP {resp.status_code} for {url}. "
-            "The response was not cached."
-        )
+        raise _ScanHttpError(resp.status_code, url)
     return bytes(resp.content), resp.headers.get("content-type", "")
 
 
-def cached_scan_bytes(url: str, *, refresh: bool, ttl_hours: float) -> tuple[bytes, str, bool]:
-    """Return (body, extension, cache_hit). Only a non-empty image or PDF is stored."""
+def _cached_scan_bytes_checked(url: str, *, refresh: bool, ttl_hours: float) -> tuple[bytes, str, bool]:
+    """Return (body, extension, cache_hit), raising ScanPayloadError or _ScanHttpError on failure."""
     bin_path, meta_path, lock_path = _scan_cache_paths(url)
     if not refresh:
         hit = _read_cached_scan(bin_path, meta_path, ttl_hours)
@@ -597,16 +709,50 @@ def cached_scan_bytes(url: str, *, refresh: bool, ttl_hours: float) -> tuple[byt
             if hit is not None:
                 return hit[0], hit[1], True
         body, content_type = _fetch_scan_bytes(url)
-        try:
-            ext = classify_scan_payload(body, content_type)
-        except ScanPayloadError as exc:
-            _fail(f"{exc} URL: {url}. Nothing was saved or cached.")
+        ext = classify_scan_payload(body, content_type)
         atomic_write_bytes(bin_path, body)
         atomic_write_json(
             meta_path,
             {"schema": CACHE_SCHEMA, "fetched_at": time.time(), "nbytes": len(body), "ext": ext},
         )
         return body, ext, False
+
+
+def cached_scan_bytes(url: str, *, refresh: bool, ttl_hours: float) -> tuple[bytes, str, bool]:
+    """Return (body, extension, cache_hit). Only a non-empty image or PDF is stored."""
+    try:
+        return _cached_scan_bytes_checked(url, refresh=refresh, ttl_hours=ttl_hours)
+    except ScanPayloadError as exc:
+        _fail(f"{exc} URL: {url}. Nothing was saved or cached.")
+    except _ScanHttpError as exc:
+        _fail(str(exc))
+    raise AssertionError("unreachable")
+
+
+def download_scan_candidates(
+    candidates: list[tuple[str, bool]], *, refresh: bool, ttl_hours: float
+) -> tuple[bytes, str, str, bool]:
+    """Try ordered scan URL candidates and return (body, ext, resolved_url, cache_hit)."""
+    last_error: str | None = None
+    for idx, (candidate_url, fallback_on_5xx) in enumerate(candidates):
+        has_next = idx + 1 < len(candidates)
+        try:
+            body, ext, hit = _cached_scan_bytes_checked(
+                candidate_url, refresh=refresh, ttl_hours=ttl_hours
+            )
+            return body, ext, candidate_url, hit
+        except ScanPayloadError as exc:
+            last_error = f"{exc} URL: {candidate_url}. Nothing was saved or cached."
+            if has_next:
+                continue
+            _fail(last_error)
+        except _ScanHttpError as exc:
+            last_error = str(exc)
+            if has_next and (fallback_on_5xx or exc.status_code in {403, 404, 410}):
+                continue
+            _fail(last_error)
+    _fail(last_error or "No downloadable scan URL was found.")
+    raise AssertionError("unreachable")
 
 
 def _load_show(code: str, ident: str, lang: str, *, refresh: bool, ttl_hours: float) -> tuple[Any, bool]:
@@ -838,9 +984,27 @@ def cli() -> None:
     """Search and inspect Dutch and Belgian archive records on OpenArchieven."""
 
 
+def _is_direct_scan_url(value: str) -> bool:
+    cleaned = value.strip()
+    if not cleaned.lower().startswith(("http://", "https://")):
+        return False
+    return re.search(r"openarchieven\.nl/([a-z0-9_-]+):([A-Za-z0-9_-]+)", cleaned, re.I) is None
+
+
+def _is_complete_record_ref(value: str) -> bool:
+    cleaned = value.strip()
+    if _is_direct_scan_url(cleaned):
+        return True
+    if re.search(r"openarchieven\.nl/([a-z0-9_-]+):([A-Za-z0-9_-]+)", cleaned, re.I):
+        return True
+    return ":" in cleaned
+
+
 @cli.command()
 @click.argument("name_arg", required=False, default=None)
-@click.option("--name", "name_opt", default=None, help="Person name query (may include '&' for two names).")
+@click.option("--name", "--query", "-q", "name_opt", default=None, help="Person name query (may include '&' for two names).")
+@click.option("--first", "--first-name", "--given", "--given-name", "first_name", default=None, help="Given name (combined with --last/--surname).")
+@click.option("--last", "--last-name", "--surname", "last_name", default=None, help="Surname (combined with --first/--given).")
 @click.option("--place", default=None, help="Filter by event place (eventplace), e.g. Zundert or Rotterdam.")
 @click.option("--birth-place", default=None, help="Filter by person birth place (birthplace).")
 @click.option(
@@ -868,8 +1032,8 @@ def cli() -> None:
     type=click.Choice(["nl", "en", "de", "fr"]),
     help="Language for returned archive and type labels.",
 )
-@click.option("--limit", "-n", type=int, default=10, show_default=True, help="Results to return (max 100).")
-@click.option("--start", type=int, default=0, show_default=True, help="Offset for paging (max 10000).")
+@click.option("--limit", "-n", "--rows", "limit", type=int, default=10, show_default=True, help="Results to return (max 100).")
+@click.option("--start", "--offset", "start", type=int, default=0, show_default=True, help="Offset for paging (max 10000).")
 @click.option(
     "--page",
     type=click.IntRange(min=1),
@@ -881,6 +1045,8 @@ def cli() -> None:
 def search(
     name_arg: str | None,
     name_opt: str | None,
+    first_name: str | None,
+    last_name: str | None,
     place: str | None,
     birth_place: str | None,
     event_type: str | None,
@@ -901,9 +1067,10 @@ def search(
 
     Example: openarchieven search --name "Vincent van Gogh" --place Zundert --year 1853
     """
-    raw_name = (name_opt or name_arg or "").strip()
+    combined_parts = " ".join(part.strip() for part in (first_name, last_name) if part and part.strip())
+    raw_name = (name_opt or name_arg or combined_parts).strip()
     if not raw_name:
-        raise click.UsageError("Provide a name via --name or a positional argument.")
+        raise click.UsageError("Provide a name via --name, --first/--last, or a positional argument.")
     if year:
         raw_name = f"{raw_name} {year.strip()}"
 
@@ -1022,6 +1189,9 @@ def show(
             click.echo(formatted)
 
 
+cli.add_command(show, name="get")
+
+
 def _emit_download_json(payload: dict[str, Any]) -> None:
     click.echo(json.dumps(payload, indent=2, ensure_ascii=False))
 
@@ -1053,13 +1223,65 @@ def download(
     refresh: bool,
     cache_ttl_hours: float | None,
 ) -> None:
-    """Download scan images for one OpenArchieven record.
+    """Download scan images for one OpenArchieven record or a direct scan URL.
 
-    Accepts ARCHIVE IDENTIFIER, archive:uuid, or an openarchieven.nl record URL.
-    The record metadata comes from the same disk cache as `show`.
+    Accepts ARCHIVE IDENTIFIER, archive:uuid, an openarchieven.nl record URL,
+    or a direct scan image URL. Record metadata comes from the same disk cache as `show`.
     """
-    code, ident = _parse_record_ref(archive, identifier)
+    if identifier and not dest and _is_complete_record_ref(archive):
+        dest = identifier
+        identifier = None
+
     ttl = resolve_ttl_hours(cache_ttl_hours)
+
+    if not identifier and _is_direct_scan_url(archive):
+        direct_url = validate_scan_url(archive.strip())
+        if list_only:
+            rows = [{"index": 1, "order": 1, "label": "", "url": direct_url}]
+            if as_json:
+                _emit_download_json({"url": direct_url, "scans": rows, "cache_hit": False})
+                return
+            click.echo(f"1. order=1\n   {direct_url}")
+            return
+        if not dest:
+            raise click.UsageError("Pass --out FILE (or a positional output path) to download a direct scan URL.")
+        dest_path = Path(dest).expanduser()
+        if not (dest_path.exists() and dest_path.is_dir()):
+            dest_path.parent.mkdir(parents=True, exist_ok=True)
+        candidates: list[tuple[str, bool]] = []
+        iiif_jpg = _derive_iiif_jpeg_url(direct_url)
+        if iiif_jpg:
+            candidates.append((iiif_jpg, True))
+        proxy_full = _derive_proxy_download_url(direct_url)
+        if proxy_full and not preview:
+            candidates.append((proxy_full, True))
+        candidates.append((direct_url, False))
+        body, ext, resolved_url, file_hit = download_scan_candidates(
+            candidates, refresh=refresh, ttl_hours=ttl
+        )
+        if dest_path.exists() and dest_path.is_dir():
+            digest = hashlib.sha256(resolved_url.encode("utf-8")).hexdigest()[:8]
+            out_file = dest_path / f"scan-{digest}.{ext}"
+        else:
+            out_file = dest_path
+        atomic_write_bytes(out_file, body)
+        item = {
+            "index": 1,
+            "order": 1,
+            "label": "",
+            "url": resolved_url,
+            "path": str(out_file),
+            "bytes": len(body),
+            "cache_hit": file_hit,
+        }
+        if as_json:
+            _emit_download_json({"url": resolved_url, "files": [item], "cache_hit": bool(file_hit)})
+            return
+        marker = " [cache]" if file_hit else ""
+        click.echo(f"scan 1: {item['path']} ({item['bytes']} bytes){marker}")
+        return
+
+    code, ident = _parse_record_ref(archive, identifier)
     data, show_hit = _load_show(code, ident, lang, refresh=refresh, ttl_hours=ttl)
     scans = extract_scans_from_show(data)
     if list_only:
@@ -1117,8 +1339,10 @@ def download(
     files: list[dict[str, Any]] = []
     file_hits: list[bool] = []
     for scan in selected:
-        url = scan.chosen_url(preview)
-        body, ext, file_hit = cached_scan_bytes(url, refresh=refresh, ttl_hours=ttl)
+        candidates = scan.candidate_urls(preview)
+        body, ext, resolved_url, file_hit = download_scan_candidates(
+            candidates, refresh=refresh, ttl_hours=ttl
+        )
         filename = _scan_filename(code, ident, scan.index, ext)
         if download_all or (dest_path.exists() and dest_path.is_dir()):
             out_file = dest_path / filename
@@ -1130,7 +1354,7 @@ def download(
             "index": scan.index,
             "order": scan.order,
             "label": scan.label,
-            "url": url,
+            "url": resolved_url,
             "path": str(out_file),
             "bytes": len(body),
             "cache_hit": file_hit,

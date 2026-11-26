@@ -1766,6 +1766,90 @@ class TestCensus1950Wave38Reliability(unittest.TestCase):
             nara._exit_broken_pipe()
         self.assertEqual(cm.exception.code, 0)
 
+    def test_show_alias_census1950_aliases_and_census1950_image_html_retry_and_404_guidance(self) -> None:
+        api_calls: list[str] = []
+
+        def fake_api_get_json(url: str, _api_key: str, *, client: httpx.Client | None = None):
+            del client
+            api_calls.append(url)
+            return TestNaraDiskCaching._sample_record_response("595367", "Census Roll", page_count=2)
+
+        runner = CliRunner()
+        with patch.object(nara, "_api_get_json", side_effect=fake_api_get_json):
+            s1 = runner.invoke(nara.cli, ["show", "595367", "--api-key", "k", "--json"])
+            s2 = runner.invoke(nara.cli, ["get", "595367", "--api-key", "k", "--json"])
+        self.assertEqual(s1.exit_code, 0, s1.output)
+        self.assertEqual(s2.exit_code, 0, s2.output)
+        self.assertIs(json.loads(s1.output)["cache_hit"], False)
+        self.assertIs(json.loads(s2.output)["cache_hit"], True)
+        self.assertEqual(len(api_calls), 1)
+
+        # census1950 positional name, --district, and --rows aliases hit same cache as --surname/--ed/--limit.
+        c_urls: list[str] = []
+
+        def fake_census_fetch(url: str) -> dict:
+            c_urls.append(url)
+            return {"total": 1, "page": 1, "size": 10, "results": [{"scheduleId": "77"}]}
+
+        with patch.object(nara, "_census1950_fetch_json", side_effect=fake_census_fetch):
+            c1 = runner.invoke(
+                nara.cli, ["census1950", "Lincoln", "--state", "IL", "--district", "84-1", "--rows", "10", "--json"]
+            )
+            c2 = runner.invoke(
+                nara.cli, ["census1950", "--surname", "Lincoln", "--state", "IL", "--ed", "84-1", "--limit", "10", "--json"]
+            )
+        self.assertEqual(c1.exit_code, 0, c1.output)
+        self.assertEqual(c2.exit_code, 0, c2.output)
+        self.assertIs(json.loads(c1.output)["cache_hit"], False)
+        self.assertIs(json.loads(c2.output)["cache_hit"], True)
+        self.assertEqual(len(c_urls), 1)
+
+        # Transient HTTP 200 HTML outage page on census1950-image retries and recovers.
+        attempts = {"n": 0}
+        sleeps: list[float] = []
+
+        def html_then_jpeg(_request: httpx.Request) -> httpx.Response:
+            attempts["n"] += 1
+            if attempts["n"] == 1:
+                return httpx.Response(
+                    200,
+                    headers={"content-type": "text/html"},
+                    text="<!doctype html><html><body>Temporary outage</body></html>",
+                )
+            return httpx.Response(200, headers={"content-type": "image/jpeg"}, content=JPEG_FULL)
+
+        with (
+            patch.object(nara.time, "sleep", side_effect=sleeps.append),
+            patch.object(
+                nara,
+                "_new_census1950_image_client",
+                side_effect=lambda _t=45.0: httpx.Client(transport=httpx.MockTransport(html_then_jpeg)),
+            ),
+        ):
+            rec = runner.invoke(
+                nara.cli,
+                ["census1950-image", LINCOLN_ED_IMAGE.replace(".jpg", ".JPG"), "--out", str(self.out_dir), "--json"],
+            )
+        self.assertEqual(rec.exit_code, 0, rec.output)
+        self.assertEqual(attempts["n"], 2)
+        self.assertEqual(sleeps, [0.25])
+
+        # Permanent 404 produces clean ClickException guidance pointing to `nara census1950`.
+        def not_found(_request: httpx.Request) -> httpx.Response:
+            return httpx.Response(404, text="not found")
+
+        with patch.object(
+            nara,
+            "_new_census1950_image_client",
+            side_effect=lambda _t=45.0: httpx.Client(transport=httpx.MockTransport(not_found)),
+        ):
+            missing = runner.invoke(
+                nara.cli, ["census1950-image", _census_sheet(999), "--out", str(self.out_dir)]
+            )
+        self.assertEqual(missing.exit_code, 1)
+        self.assertIn("HTTP 404", missing.output)
+        self.assertIn("nara census1950", missing.output)
+
 
 if __name__ == "__main__":
     unittest.main()
