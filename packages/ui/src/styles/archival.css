@@ -5683,6 +5683,160 @@ dialog.global-search-backdrop {
   justify-content: center;
 }
 
+.wiki-auth-flow {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  min-width: 0;
+}
+
+.wiki-auth-feedback {
+  gap: 8px;
+  padding: 12px 14px;
+  margin-bottom: 14px;
+}
+
+.wiki-auth-feedback-title {
+  font-size: 0.94rem;
+  line-height: 1.35;
+}
+
+.wiki-auth-feedback-hint {
+  font-size: 0.84rem;
+  opacity: 0.92;
+}
+
+.wiki-auth-feedback-actions {
+  margin-top: 4px;
+}
+
+.wiki-auth-sent {
+  gap: 8px;
+  padding: 14px;
+}
+
+.wiki-auth-sent-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 14px;
+  margin-top: 6px;
+}
+
+.wiki-btn-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 8px 6px;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font-family: var(--font-mono);
+  font-size: 0.84rem;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.wiki-btn-link:hover:not(:disabled) {
+  opacity: 0.82;
+}
+
+.wiki-btn-link:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.wiki-field-hint {
+  font-size: 0.82rem;
+  line-height: 1.45;
+  color: var(--text-secondary);
+}
+
+.wiki-field-error {
+  margin: 4px 0 0;
+  font-size: 0.84rem;
+  line-height: 1.4;
+  font-weight: 600;
+  color: var(--diff-del-fg);
+}
+
+.wiki-input[aria-invalid='true'] {
+  border-color: var(--diff-del-fg);
+  background: var(--diff-del-bg);
+}
+
+.wiki-invite-helper {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border-decorative);
+}
+
+.wiki-invite-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 44px;
+  padding: 8px 12px;
+  border: 1px dashed var(--border-control);
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--surface-header);
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.14s ease, border-color 0.14s ease;
+}
+
+.wiki-invite-toggle:hover {
+  background: var(--surface-linen);
+  border-color: var(--surface-header);
+}
+
+.wiki-invite-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.wiki-auth-notice-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px 14px;
+  padding: 10px 26px;
+  border-bottom: 1px solid var(--border-control);
+  font-size: 0.86rem;
+  line-height: 1.45;
+}
+
+.wiki-auth-notice-bar.is-error {
+  background: var(--diff-del-bg);
+  color: var(--diff-del-fg);
+  border-bottom-color: var(--diff-del-fg);
+}
+
+.wiki-auth-notice-bar.is-warning {
+  background: var(--badge-memory-bg);
+  color: var(--badge-memory-fg);
+  border-bottom-color: var(--badge-memory-fg);
+}
+
+.wiki-auth-notice-bar.is-info {
+  background: var(--surface-linen);
+  color: var(--surface-header);
+}
+
+.wiki-auth-notice-copy {
+  min-width: 0;
+  overflow-wrap: break-word;
+}
+
 /* Auth & Invite Strip (Whisper-thin, Single-line, Dismissible for Invite Guests) */
 .wiki-auth-banner {
   display: flex;
@@ -6444,6 +6598,20 @@ dialog.global-search-backdrop {
     min-height: 32px;
     padding: 4px 12px;
     font-size: 0.72rem;
+  }
+
+  .wiki-auth-notice-bar {
+    padding: 10px 14px;
+  }
+
+  .wiki-auth-sent-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .wiki-auth-sent-actions .wiki-btn-secondary,
+  .wiki-auth-sent-actions .wiki-btn-link {
+    width: 100%;
   }
 }
 

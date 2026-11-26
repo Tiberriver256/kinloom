@@ -35,6 +35,17 @@ export interface AuthServiceDeps {
   magicLinkWindowMs?: number;
 }
 
+const STRIPPED_NEXT_PARAMS = [
+  'auth_error',
+  'auth_provider',
+  'code',
+  'state',
+  'token',
+  'email',
+  'error',
+  'error_description',
+] as const;
+
 export function sanitizeNextPath(rawNext: string | null | undefined): string {
   if (!rawNext) {
     return '/';
@@ -43,7 +54,19 @@ export function sanitizeNextPath(rawNext: string | null | undefined): string {
   if (!trimmed.startsWith('/') || trimmed.startsWith('//') || trimmed.includes('\\')) {
     return '/';
   }
-  return trimmed;
+  try {
+    const parsed = new URL(trimmed, 'https://kinloom.local');
+    if (parsed.origin !== 'https://kinloom.local') {
+      return '/';
+    }
+    for (const key of STRIPPED_NEXT_PARAMS) {
+      parsed.searchParams.delete(key);
+    }
+    const sanitized = `${parsed.pathname}${parsed.search}${parsed.hash}`;
+    return sanitized.startsWith('/') && !sanitized.startsWith('//') ? sanitized : '/';
+  } catch {
+    return '/';
+  }
 }
 
 function defaultDisplayNameForEmail(email: string): string {
@@ -143,7 +166,12 @@ export class AuthService {
   async redeemInvite(token: string): Promise<{ invite: InviteRecord }> {
     const trimmed = token.trim();
     if (!trimmed) {
-      throw new KinloomHttpError(404, 'INVITE_INVALID_OR_REVOKED', 'Invite link is invalid or revoked.');
+      throw new KinloomHttpError(
+        404,
+        'INVITE_INVALID_OR_REVOKED',
+        'Invite link is invalid or revoked.',
+        { invite_status: 'missing' }
+      );
     }
     const invite = await this.repository.getInvite(trimmed);
     const nowIso = this.clock.nowIso();
@@ -169,6 +197,7 @@ export class AuthService {
     redirectUri: string;
     inviteToken: string | null;
     nextPath?: string | null;
+    selectAccount?: boolean;
   }): Promise<{
     authorizationUrl: string;
     state: string;
@@ -193,6 +222,7 @@ export class AuthService {
       state,
       codeChallenge,
       redirectUri: params.redirectUri,
+      ...(params.selectAccount ? { prompt: 'select_account' as const } : {}),
     });
 
     return {
@@ -296,12 +326,23 @@ export class AuthService {
       verifyUrl.searchParams.set('next', safeNext);
     }
 
-    await this.emailSender.sendMagicLink({
-      toEmail: parsedEmail,
-      siteTitle: this.siteConfig.site.title,
-      magicLinkUrl: verifyUrl.toString(),
-      expiresMinutes: this.magicLinkTtlMinutes,
-    });
+    try {
+      await this.emailSender.sendMagicLink({
+        toEmail: parsedEmail,
+        siteTitle: this.siteConfig.site.title,
+        magicLinkUrl: verifyUrl.toString(),
+        expiresMinutes: this.magicLinkTtlMinutes,
+      });
+    } catch (error) {
+      if (error instanceof KinloomHttpError) {
+        throw error;
+      }
+      throw new KinloomHttpError(
+        502,
+        'EMAIL_DELIVERY_FAILED',
+        'Unable to send sign-in email right now. Please try again later.'
+      );
+    }
 
     return { sent: true };
   }
@@ -314,7 +355,8 @@ export class AuthService {
       throw new KinloomHttpError(
         400,
         'TOKEN_INVALID_OR_EXPIRED',
-        'Sign-in link is invalid or expired.'
+        'Sign-in link is invalid.',
+        { token_status: 'invalid' }
       );
     }
 
@@ -322,11 +364,24 @@ export class AuthService {
     const nowIso = this.clock.nowIso();
     const consumed = await this.repository.consumeMagicLink(tokenHash, nowIso);
     if (!consumed) {
-      throw new KinloomHttpError(
-        400,
-        'TOKEN_INVALID_OR_EXPIRED',
-        'Sign-in link has expired or has already been used.'
-      );
+      let tokenStatus: 'used' | 'expired' | 'invalid' = 'expired';
+      let message = 'Sign-in link has expired or has already been used.';
+      if (this.repository.getMagicLink) {
+        const existing = await this.repository.getMagicLink(tokenHash);
+        if (!existing) {
+          tokenStatus = 'invalid';
+          message = 'This sign-in link is invalid.';
+        } else if (existing.used_at !== null) {
+          tokenStatus = 'used';
+          message = 'This sign-in link has already been used.';
+        } else {
+          tokenStatus = 'expired';
+          message = 'This sign-in link has expired.';
+        }
+      }
+      throw new KinloomHttpError(400, 'TOKEN_INVALID_OR_EXPIRED', message, {
+        token_status: tokenStatus,
+      });
     }
 
     return this.resolveOrEnrollUser({

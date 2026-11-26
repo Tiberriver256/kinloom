@@ -816,4 +816,368 @@ describe('createKinloomServer end-to-end HTTP transport', () => {
     );
     expect(yaml304Res.status).toBe(304);
   });
+
+  it('redirects browser navigations cleanly on all auth/invite unhappy paths while preserving JSON errors for API callers', async () => {
+    const siteConfig = createSyntheticSiteConfig();
+    const ports = createInMemoryServerPorts(siteConfig);
+    const server = createKinloomServer({
+      siteConfig,
+      ports,
+      sessionSecret: SECRET,
+      bootstrapAdminEmail: 'founder@example.test',
+    });
+
+    const browserHtmlHeaders = { accept: 'text/html,application/xhtml+xml' };
+    const browserNavHeaders = { 'sec-fetch-mode': 'navigate' };
+
+    const adminCookie = await createSessionCookie(ports, {
+      email: 'founder@example.test',
+      display_name: 'Archive Founder',
+      role: 'admin',
+    });
+
+    // 1. select_account=1 and prompt=select_account pass prompt=select_account to Google authorization URL
+    const selectRes = await server.fetch(
+      new Request(`${ORIGIN}/api/auth/google/start?select_account=1&next=%2Fpeople%3Fauth_error%3DOLD`)
+    );
+    expect(selectRes.status).toBe(302);
+    const selectLocation = new URL(selectRes.headers.get('location') ?? '');
+    expect(selectLocation.searchParams.get('prompt')).toBe('select_account');
+    expect(ports.authProvider.lastAuthorizationParams?.prompt).toBe('select_account');
+
+    const promptRes = await server.fetch(
+      new Request(`${ORIGIN}/api/auth/google/start?prompt=select_account&next=//evil.example.test`)
+    );
+    expect(promptRes.status).toBe(302);
+    expect(ports.authProvider.lastAuthorizationParams?.prompt).toBe('select_account');
+
+    // 2. Unconfigured Google OAuth -> browser 302 redirect, API 503 JSON
+    const unconfiguredServer = createKinloomServer({
+      siteConfig,
+      ports: { ...ports, authProvider: undefined },
+      sessionSecret: SECRET,
+    });
+    const unconfBrowserRes = await unconfiguredServer.fetch(
+      new Request(`${ORIGIN}/api/auth/google/start?next=%2Fplaces`, { headers: browserHtmlHeaders })
+    );
+    expect(unconfBrowserRes.status).toBe(302);
+    expect(unconfBrowserRes.headers.get('location')).toBe(
+      '/places?auth_error=AUTH_PROVIDER_UNCONFIGURED&auth_provider=google'
+    );
+    const unconfApiRes = await unconfiguredServer.fetch(
+      new Request(`${ORIGIN}/api/auth/google/start?next=%2Fplaces`)
+    );
+    expect(unconfApiRes.status).toBe(503);
+    expect(((await unconfApiRes.json()) as { error: { code: string } }).error.code).toBe(
+      'AUTH_PROVIDER_UNCONFIGURED'
+    );
+
+    // 3. Google callback INVITE_REQUIRED (unenrolled Gmail) -> 302 redirect for browser, OAuth cookie cleared, zero email leakage
+    const startForUnenrolled = await server.fetch(
+      new Request(`${ORIGIN}/api/auth/google/start?next=%2Fperson%2Farthur%3Ftab%3Dlife%26auth_error%3DSTALE`)
+    );
+    const unenrolledOAuthCookie = extractCookiePair(startForUnenrolled, '__Host-kinloom_oauth');
+    const unenrolledState =
+      new URL(startForUnenrolled.headers.get('location') ?? '').searchParams.get('state') ?? '';
+    ports.authProvider.registerCode('code_stranger_gmail', {
+      email: 'stranger.person@example.test',
+      displayName: 'Stranger Person',
+      emailVerified: true,
+    });
+
+    const inviteReqBrowserRes = await server.fetch(
+      new Request(
+        `${ORIGIN}/api/auth/google/callback?code=code_stranger_gmail&state=${encodeURIComponent(unenrolledState)}`,
+        { headers: { ...browserHtmlHeaders, cookie: unenrolledOAuthCookie } }
+      )
+    );
+    expect(inviteReqBrowserRes.status).toBe(302);
+    const inviteReqLocation = inviteReqBrowserRes.headers.get('location') ?? '';
+    expect(inviteReqLocation).toBe(
+      '/person/arthur?tab=life&auth_error=INVITE_REQUIRED&auth_provider=google'
+    );
+    expect(inviteReqLocation).not.toContain('stranger.person');
+    expect(inviteReqLocation).not.toContain('STALE');
+    expect(getSetCookies(inviteReqBrowserRes).some((c) => c.includes('__Host-kinloom_oauth=;') && c.includes('Max-Age=0'))).toBe(true);
+
+    // Same INVITE_REQUIRED via API caller returns 403 JSON
+    const inviteReqApiRes = await server.fetch(
+      new Request(
+        `${ORIGIN}/api/auth/google/callback?code=code_stranger_gmail&state=${encodeURIComponent(unenrolledState)}`,
+        { headers: { cookie: unenrolledOAuthCookie } }
+      )
+    );
+    expect(inviteReqApiRes.status).toBe(403);
+    expect(((await inviteReqApiRes.json()) as { error: { code: string } }).error.code).toBe(
+      'INVITE_REQUIRED'
+    );
+
+    // 4. Google callback error=access_denied (checked BEFORE !code) -> GOOGLE_CANCELLED + clears OAuth cookie + preserves next
+    const cancelStart = await server.fetch(
+      new Request(`${ORIGIN}/api/auth/google/start?next=%2Ftree`)
+    );
+    const cancelOAuthCookie = extractCookiePair(cancelStart, '__Host-kinloom_oauth');
+    const cancelBrowserRes = await server.fetch(
+      new Request(`${ORIGIN}/api/auth/google/callback?error=access_denied`, {
+        headers: { ...browserNavHeaders, cookie: cancelOAuthCookie },
+      })
+    );
+    expect(cancelBrowserRes.status).toBe(302);
+    expect(cancelBrowserRes.headers.get('location')).toBe(
+      '/tree?auth_error=GOOGLE_CANCELLED&auth_provider=google'
+    );
+    expect(getSetCookies(cancelBrowserRes).some((c) => c.includes('__Host-kinloom_oauth=;') && c.includes('Max-Age=0'))).toBe(true);
+
+    const cancelApiRes = await server.fetch(
+      new Request(`${ORIGIN}/api/auth/google/callback?error=access_denied`, {
+        headers: { cookie: cancelOAuthCookie },
+      })
+    );
+    expect(cancelApiRes.status).toBe(400);
+    expect(((await cancelApiRes.json()) as { error: { code: string } }).error.code).toBe(
+      'GOOGLE_CANCELLED'
+    );
+
+    // 5. Google callback other error=server_error -> GOOGLE_AUTH_FAILED
+    const otherErrBrowserRes = await server.fetch(
+      new Request(`${ORIGIN}/api/auth/google/callback?error=server_error`, {
+        headers: { ...browserHtmlHeaders, cookie: cancelOAuthCookie },
+      })
+    );
+    expect(otherErrBrowserRes.status).toBe(302);
+    expect(otherErrBrowserRes.headers.get('location')).toBe(
+      '/tree?auth_error=GOOGLE_AUTH_FAILED&auth_provider=google'
+    );
+
+    // 6. Missing / mismatched OAuth state -> INVALID_OAUTH_STATE + clears OAuth cookie
+    const badStateBrowserRes = await server.fetch(
+      new Request(`${ORIGIN}/api/auth/google/callback?code=abc&state=wrong_state`, {
+        headers: { ...browserHtmlHeaders, cookie: cancelOAuthCookie },
+      })
+    );
+    expect(badStateBrowserRes.status).toBe(302);
+    expect(badStateBrowserRes.headers.get('location')).toBe(
+      '/tree?auth_error=INVALID_OAUTH_STATE&auth_provider=google'
+    );
+    expect(getSetCookies(badStateBrowserRes).some((c) => c.includes('__Host-kinloom_oauth=;') && c.includes('Max-Age=0'))).toBe(true);
+
+    // 7. Invite unhappy paths (expired, revoked, invalid) on both /invite/:token and /api/auth/invite/:token
+    const expiredInvRes = await server.fetch(
+      new Request(`${ORIGIN}/api/admin/invites`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', origin: ORIGIN, cookie: adminCookie },
+        body: JSON.stringify({ label: 'Expiring invite', expires_in_days: 1 }),
+      })
+    );
+    const expiredInvite = (await expiredInvRes.json()) as { invite: { token: string } };
+
+    const revocableInvRes = await server.fetch(
+      new Request(`${ORIGIN}/api/admin/invites`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', origin: ORIGIN, cookie: adminCookie },
+        body: JSON.stringify({ label: 'Revoked invite' }),
+      })
+    );
+    const revocableInvite = (await revocableInvRes.json()) as { invite: { token: string } };
+
+    // Redeem revocable invite to get a viewer cookie, start Google OAuth, then revoke invite
+    const redeemRevocable = await server.fetch(
+      new Request(`${ORIGIN}/invite/${revocableInvite.invite.token}`)
+    );
+    const staleViewerCookie = extractCookiePair(redeemRevocable, '__Host-kinloom_session');
+    const midFlightStart = await server.fetch(
+      new Request(`${ORIGIN}/api/auth/google/start`, { headers: { cookie: staleViewerCookie } })
+    );
+    const midFlightOAuthCookie = extractCookiePair(midFlightStart, '__Host-kinloom_oauth');
+    const midFlightState =
+      new URL(midFlightStart.headers.get('location') ?? '').searchParams.get('state') ?? '';
+
+    await server.fetch(
+      new Request(`${ORIGIN}/api/admin/invites/${revocableInvite.invite.token}`, {
+        method: 'DELETE',
+        headers: { origin: ORIGIN, cookie: adminCookie },
+      })
+    );
+
+    // Mid-flight revoked invite during Google browser callback redirects with INVITE_REVOKED and clears stale cookies
+    ports.authProvider.registerCode('code_midflight', {
+      email: 'midflight@example.test',
+      displayName: 'Mid Flight',
+      emailVerified: true,
+    });
+    const midFlightCbRes = await server.fetch(
+      new Request(
+        `${ORIGIN}/api/auth/google/callback?code=code_midflight&state=${encodeURIComponent(midFlightState)}`,
+        { headers: { ...browserHtmlHeaders, cookie: `${midFlightOAuthCookie}; ${staleViewerCookie}` } }
+      )
+    );
+    expect(midFlightCbRes.status).toBe(302);
+    expect(midFlightCbRes.headers.get('location')).toBe(
+      '/?auth_error=INVITE_REVOKED&auth_provider=google'
+    );
+    const midFlightClearCookies = getSetCookies(midFlightCbRes);
+    expect(midFlightClearCookies.some((c) => c.includes('__Host-kinloom_oauth=;') && c.includes('Max-Age=0'))).toBe(true);
+    expect(midFlightClearCookies.some((c) => c.includes('__Host-kinloom_session=;') && c.includes('Max-Age=0'))).toBe(true);
+
+    // Revoked invite on /invite/:token -> browser 302 INVITE_REVOKED, clears stale session cookie
+    const revokedInviteBrowserRes = await server.fetch(
+      new Request(`${ORIGIN}/invite/${revocableInvite.invite.token}`, {
+        headers: { ...browserHtmlHeaders, cookie: staleViewerCookie },
+      })
+    );
+    expect(revokedInviteBrowserRes.status).toBe(302);
+    expect(revokedInviteBrowserRes.headers.get('location')).toBe(
+      '/?auth_error=INVITE_REVOKED&auth_provider=invite'
+    );
+    expect(revokedInviteBrowserRes.headers.get('location')).not.toContain(revocableInvite.invite.token);
+    expect(getSetCookies(revokedInviteBrowserRes).some((c) => c.includes('__Host-kinloom_session=;') && c.includes('Max-Age=0'))).toBe(true);
+
+    // Unknown invite on /api/auth/invite/:token -> browser 302 INVITE_INVALID, API 404 JSON
+    const unknownInviteBrowserRes = await server.fetch(
+      new Request(`${ORIGIN}/api/auth/invite/does_not_exist_token`, { headers: browserNavHeaders })
+    );
+    expect(unknownInviteBrowserRes.status).toBe(302);
+    expect(unknownInviteBrowserRes.headers.get('location')).toBe(
+      '/?auth_error=INVITE_INVALID&auth_provider=invite'
+    );
+    const unknownInviteApiRes = await server.fetch(
+      new Request(`${ORIGIN}/api/auth/invite/does_not_exist_token`)
+    );
+    expect(unknownInviteApiRes.status).toBe(404);
+    expect(((await unknownInviteApiRes.json()) as { error: { code: string } }).error.code).toBe(
+      'INVITE_INVALID_OR_REVOKED'
+    );
+
+    // Advance clock past 1 day -> expired invite on /invite/:token -> browser 302 INVITE_EXPIRED
+    ports.clock.advanceMs(25 * 60 * 60 * 1000);
+    const expiredInviteBrowserRes = await server.fetch(
+      new Request(`${ORIGIN}/invite/${expiredInvite.invite.token}`, { headers: browserHtmlHeaders })
+    );
+    expect(expiredInviteBrowserRes.status).toBe(302);
+    expect(expiredInviteBrowserRes.headers.get('location')).toBe(
+      '/?auth_error=INVITE_EXPIRED&auth_provider=invite'
+    );
+
+    // 8. Magic-link verify unhappy paths: invalid, already-used, expired (browser 302 vs API 400 JSON)
+    const freshMagicRes = await server.fetch(
+      new Request(`${ORIGIN}/api/auth/magic-link/request`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', origin: ORIGIN },
+        body: JSON.stringify({ email: 'founder@example.test', next: '/changes' }),
+      })
+    );
+    expect(freshMagicRes.status).toBe(202);
+    const usedLinkUrl = ports.emailSender.sentMessages[ports.emailSender.sentMessages.length - 1]!.magicLinkUrl;
+    const firstVerify = await server.fetch(new Request(usedLinkUrl, { headers: browserHtmlHeaders }));
+    expect(firstVerify.status).toBe(302);
+    expect(firstVerify.headers.get('location')).toBe('/changes');
+
+    // Second click in browser -> MAGIC_LINK_USED, zero token leaked
+    const usedBrowserRes = await server.fetch(new Request(usedLinkUrl, { headers: browserHtmlHeaders }));
+    expect(usedBrowserRes.status).toBe(302);
+    const usedLocation = usedBrowserRes.headers.get('location') ?? '';
+    expect(usedLocation).toBe('/changes?auth_error=MAGIC_LINK_USED&auth_provider=magic_link');
+    expect(usedLocation).not.toContain('token=');
+
+    // Second click as API caller -> 400 TOKEN_INVALID_OR_EXPIRED with details.token_status: 'used'
+    const usedApiRes = await server.fetch(new Request(usedLinkUrl));
+    expect(usedApiRes.status).toBe(400);
+    expect(await usedApiRes.json()).toMatchObject({
+      error: { code: 'TOKEN_INVALID_OR_EXPIRED', details: { token_status: 'used' } },
+    });
+
+    // Expired magic link -> MAGIC_LINK_EXPIRED for browser, 400 with token_status: 'expired' for API
+    await server.fetch(
+      new Request(`${ORIGIN}/api/auth/magic-link/request`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', origin: ORIGIN },
+        body: JSON.stringify({ email: 'founder@example.test', next: '/places' }),
+      })
+    );
+    const expLinkUrl = ports.emailSender.sentMessages[ports.emailSender.sentMessages.length - 1]!.magicLinkUrl;
+    ports.clock.advanceMs(16 * 60 * 1000);
+    const expiredMagicBrowserRes = await server.fetch(
+      new Request(expLinkUrl, { headers: browserNavHeaders })
+    );
+    expect(expiredMagicBrowserRes.status).toBe(302);
+    expect(expiredMagicBrowserRes.headers.get('location')).toBe(
+      '/places?auth_error=MAGIC_LINK_EXPIRED&auth_provider=magic_link'
+    );
+    const expiredMagicApiRes = await server.fetch(new Request(expLinkUrl));
+    expect(expiredMagicApiRes.status).toBe(400);
+    expect(await expiredMagicApiRes.json()).toMatchObject({
+      error: { code: 'TOKEN_INVALID_OR_EXPIRED', details: { token_status: 'expired' } },
+    });
+
+    // Unknown / short magic link -> MAGIC_LINK_INVALID for browser, 400 with token_status: 'invalid' for API
+    const invalidMagicBrowserRes = await server.fetch(
+      new Request(`${ORIGIN}/api/auth/magic-link/verify?token=unknown_token_12345678&next=//evil.test`, {
+        headers: browserHtmlHeaders,
+      })
+    );
+    expect(invalidMagicBrowserRes.status).toBe(302);
+    expect(invalidMagicBrowserRes.headers.get('location')).toBe(
+      '/?auth_error=MAGIC_LINK_INVALID&auth_provider=magic_link'
+    );
+
+    // 9. POST /api/auth/magic-link/request unhappy paths: validation error, rate limit, mail delivery error
+    const badEmailRes = await server.fetch(
+      new Request(`${ORIGIN}/api/auth/magic-link/request`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', origin: ORIGIN },
+        body: JSON.stringify({ email: 'not-an-email' }),
+      })
+    );
+    expect(badEmailRes.status).toBe(400);
+    expect(((await badEmailRes.json()) as { error: { code: string } }).error.code).toBe(
+      'VALIDATION_ERROR'
+    );
+
+    const failingMailServer = createKinloomServer({
+      siteConfig,
+      ports: {
+        ...ports,
+        emailSender: {
+          async sendMagicLink() {
+            throw new Error('SMTP connection refused');
+          },
+        },
+      },
+      sessionSecret: SECRET,
+      bootstrapAdminEmail: 'founder@example.test',
+    });
+    const mailFailRes = await failingMailServer.fetch(
+      new Request(`${ORIGIN}/api/auth/magic-link/request`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', origin: ORIGIN },
+        body: JSON.stringify({ email: 'founder@example.test' }),
+      })
+    );
+    expect(mailFailRes.status).toBe(502);
+    expect(((await mailFailRes.json()) as { error: { code: string } }).error.code).toBe(
+      'EMAIL_DELIVERY_FAILED'
+    );
+
+    // Exhaust rate limit window (10 attempts per hour)
+    for (let i = 0; i < 10; i += 1) {
+      await server.fetch(
+        new Request(`${ORIGIN}/api/auth/magic-link/request`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', origin: ORIGIN },
+          body: JSON.stringify({ email: 'ratelimit.guest@example.test' }),
+        })
+      );
+    }
+    const rateLimitedRes = await server.fetch(
+      new Request(`${ORIGIN}/api/auth/magic-link/request`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', origin: ORIGIN },
+        body: JSON.stringify({ email: 'ratelimit.guest@example.test' }),
+      })
+    );
+    expect(rateLimitedRes.status).toBe(429);
+    expect(((await rateLimitedRes.json()) as { error: { code: string } }).error.code).toBe(
+      'RATE_LIMITED'
+    );
+  });
 });

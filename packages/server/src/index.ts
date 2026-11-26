@@ -87,7 +87,11 @@ export {
   type ResolvedAuthContext,
 } from './http/authMiddleware.js';
 export {
+  buildAuthErrorRedirectUrl,
   createKinloomServer,
+  isBrowserNavigation,
+  mapAuthErrorToBrowserCode,
+  type AuthBrowserProvider,
   type KinloomServer,
   type KinloomServerConfig,
 } from './http/router.js';

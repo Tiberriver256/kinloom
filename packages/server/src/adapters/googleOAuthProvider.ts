@@ -51,6 +51,7 @@ export class GoogleOAuthProvider implements AuthProvider {
     state: string;
     codeChallenge: string;
     redirectUri: string;
+    prompt?: 'select_account' | 'consent';
   }): string {
     const url = new URL(this.authorizationEndpoint);
     url.searchParams.set('client_id', this.clientId);
@@ -60,7 +61,7 @@ export class GoogleOAuthProvider implements AuthProvider {
     url.searchParams.set('state', params.state);
     url.searchParams.set('code_challenge', params.codeChallenge);
     url.searchParams.set('code_challenge_method', 'S256');
-    url.searchParams.set('prompt', 'select_account');
+    url.searchParams.set('prompt', params.prompt ?? 'select_account');
     return url.toString();
   }
 
@@ -78,19 +79,28 @@ export class GoogleOAuthProvider implements AuthProvider {
       client_secret: this.clientSecret,
     });
 
-    const tokenRes = await this.fetchFn(this.tokenEndpoint, {
-      method: 'POST',
-      headers: {
-        'content-type': 'application/x-www-form-urlencoded',
-        accept: 'application/json',
-      },
-      body: body.toString(),
-    });
+    let tokenRes: Response;
+    try {
+      tokenRes = await this.fetchFn(this.tokenEndpoint, {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/x-www-form-urlencoded',
+          accept: 'application/json',
+        },
+        body: body.toString(),
+      });
+    } catch {
+      throw new KinloomHttpError(
+        502,
+        'GOOGLE_AUTH_FAILED',
+        'Could not reach Google to complete sign-in.'
+      );
+    }
 
     if (!tokenRes.ok) {
       throw new KinloomHttpError(
-        400,
-        'INVALID_OAUTH_STATE',
+        tokenRes.status >= 500 ? 502 : 400,
+        tokenRes.status >= 500 ? 'GOOGLE_AUTH_FAILED' : 'INVALID_OAUTH_STATE',
         `OAuth token exchange failed with status ${tokenRes.status}.`
       );
     }
@@ -99,24 +109,33 @@ export class GoogleOAuthProvider implements AuthProvider {
     const tokenParsed = GoogleTokenResponseSchema.safeParse(tokenJson);
     if (!tokenParsed.success) {
       throw new KinloomHttpError(
-        400,
-        'INVALID_OAUTH_STATE',
+        502,
+        'GOOGLE_AUTH_FAILED',
         'OAuth provider returned an invalid token payload.'
       );
     }
 
-    const userRes = await this.fetchFn(this.userInfoEndpoint, {
-      method: 'GET',
-      headers: {
-        authorization: `Bearer ${tokenParsed.data.access_token}`,
-        accept: 'application/json',
-      },
-    });
+    let userRes: Response;
+    try {
+      userRes = await this.fetchFn(this.userInfoEndpoint, {
+        method: 'GET',
+        headers: {
+          authorization: `Bearer ${tokenParsed.data.access_token}`,
+          accept: 'application/json',
+        },
+      });
+    } catch {
+      throw new KinloomHttpError(
+        502,
+        'GOOGLE_AUTH_FAILED',
+        'Could not load your Google account profile.'
+      );
+    }
 
     if (!userRes.ok) {
       throw new KinloomHttpError(
-        400,
-        'INVALID_OAUTH_STATE',
+        userRes.status >= 500 ? 502 : 400,
+        userRes.status >= 500 ? 'GOOGLE_AUTH_FAILED' : 'INVALID_OAUTH_STATE',
         `OAuth userinfo request failed with status ${userRes.status}.`
       );
     }
@@ -125,8 +144,8 @@ export class GoogleOAuthProvider implements AuthProvider {
     const userParsed = GoogleUserInfoSchema.safeParse(userJson);
     if (!userParsed.success) {
       throw new KinloomHttpError(
-        400,
-        'INVALID_OAUTH_STATE',
+        502,
+        'GOOGLE_AUTH_FAILED',
         'OAuth provider returned an invalid user profile.'
       );
     }

@@ -167,6 +167,27 @@ export { SignInModal } from './components/wiki/SignInModal.js';
 export type { SignInModalProps } from './components/wiki/SignInModal.js';
 export { AuthStatusBanner } from './components/wiki/AuthStatusBanner.js';
 export { PrivateArchiveGate } from './components/wiki/PrivateArchiveGate.js';
+export type { PrivateArchiveGateProps } from './components/wiki/PrivateArchiveGate.js';
+export {
+  consumeAuthErrorFromWindow,
+  getCleanNextPath,
+  normalizeAuthErrorCode,
+  normalizeAuthProvider,
+  parseInviteInput,
+  readAuthErrorFromSearch,
+  resolveAuthFeedback,
+  resolveClientAuthError,
+  stripAuthErrorParams,
+  validateEmailInput,
+} from './components/wiki/authErrorCopy.js';
+export type {
+  AuthErrorCode,
+  AuthErrorTone,
+  AuthFeedback,
+  AuthProviderKind,
+  AuthUrlError,
+  ParsedInviteInput,
+} from './components/wiki/authErrorCopy.js';
 
 // UI-Only Helpers
 export * from './lib/ohmStyle.js';

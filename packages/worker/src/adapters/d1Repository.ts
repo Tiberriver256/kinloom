@@ -1491,6 +1491,17 @@ export class D1ArchiveRepository implements ArchiveRepository {
       .run();
   }
 
+  async getMagicLink(tokenHash: Sha256Hex): Promise<MagicLinkRecord | null> {
+    const row = await this.prepare(
+        `SELECT token_hash, email, invite_token, expires_at, used_at
+         FROM magic_links
+         WHERE token_hash = ?`
+      )
+      .bind(tokenHash)
+      .first<RawDbMagicLinkRow>();
+    return row ? mapMagicLinkRow(row) : null;
+  }
+
   async consumeMagicLink(tokenHash: Sha256Hex, nowIso: string): Promise<MagicLinkRecord | null> {
     // Single atomic UPDATE prevents replay races across concurrent verification requests.
     const row = await this.prepare(

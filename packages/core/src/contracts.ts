@@ -236,6 +236,7 @@ export interface ArchiveRepository {
   revokeInvite(token: string, atIso: string): Promise<boolean>;
 
   insertMagicLink(record: MagicLinkRecord): Promise<void>;
+  getMagicLink?(tokenHash: Sha256Hex): Promise<MagicLinkRecord | null>;
   consumeMagicLink(tokenHash: Sha256Hex, nowIso: string): Promise<MagicLinkRecord | null>;
 
   findActiveAgentTokenByHash(tokenHash: Sha256Hex): Promise<AgentTokenRecord | null>;
@@ -329,6 +330,7 @@ export interface AuthProvider {
     state: string;
     codeChallenge: string;
     redirectUri: string;
+    prompt?: 'select_account' | 'consent';
   }): string;
   exchangeCode(params: {
     code: string;

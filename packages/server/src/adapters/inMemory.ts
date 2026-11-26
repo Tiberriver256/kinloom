@@ -518,6 +518,11 @@ export class InMemoryArchiveRepository implements ArchiveRepository {
     this.magicLinks.set(record.token_hash, structuredClone(record));
   }
 
+  async getMagicLink(tokenHash: Sha256Hex): Promise<MagicLinkRecord | null> {
+    const record = this.magicLinks.get(tokenHash);
+    return record ? structuredClone(record) : null;
+  }
+
   async consumeMagicLink(tokenHash: Sha256Hex, nowIso: string): Promise<MagicLinkRecord | null> {
     const record = this.magicLinks.get(tokenHash);
     if (!record || record.used_at !== null) {
@@ -843,6 +848,7 @@ export class FakeAuthProvider implements AuthProvider {
     state: string;
     codeChallenge: string;
     redirectUri: string;
+    prompt?: 'select_account' | 'consent';
   } | null = null;
   public lastExchangeParams: {
     code: string;
@@ -858,12 +864,16 @@ export class FakeAuthProvider implements AuthProvider {
     state: string;
     codeChallenge: string;
     redirectUri: string;
+    prompt?: 'select_account' | 'consent';
   }): string {
     this.lastAuthorizationParams = { ...params };
     const url = new URL('https://accounts.example.test/oauth/authorize');
     url.searchParams.set('state', params.state);
     url.searchParams.set('code_challenge', params.codeChallenge);
     url.searchParams.set('redirect_uri', params.redirectUri);
+    if (params.prompt) {
+      url.searchParams.set('prompt', params.prompt);
+    }
     return url.toString();
   }
 

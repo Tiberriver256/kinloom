@@ -494,9 +494,16 @@ export class HttpWikiDataSource implements ArchiveDataSource {
     }
   }
 
-  getGoogleSignInUrl(nextPath?: string): string {
-    const qs = nextPath ? `?next=${encodeURIComponent(nextPath)}` : '';
-    return this.apiUrl(`/api/auth/google/start${qs}`);
+  getGoogleSignInUrl(nextPath?: string, options?: { selectAccount?: boolean }): string {
+    const params = new URLSearchParams();
+    if (nextPath) {
+      params.set('next', nextPath);
+    }
+    if (options?.selectAccount) {
+      params.set('select_account', '1');
+    }
+    const qs = params.toString();
+    return this.apiUrl(`/api/auth/google/start${qs ? `?${qs}` : ''}`);
   }
 
   // --- Admin helper endpoints ---

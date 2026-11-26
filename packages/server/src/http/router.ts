@@ -36,6 +36,7 @@ import {
   getSessionCookieName,
   isSecureRequestUrl,
   readOAuthCookieRaw,
+  readSessionCookieRaw,
   serializeClearCookie,
   serializeSetCookie,
   signOAuthStateToken,
@@ -120,6 +121,97 @@ function jsonResponse(
     }
   }
   return new Response(JSON.stringify(data), { status, headers });
+}
+
+export type AuthBrowserProvider = 'google' | 'magic_link' | 'invite';
+
+const CANONICAL_ERROR_CODE_PATTERN = /^[A-Z][A-Z0-9_]{1,63}$/;
+
+export function isBrowserNavigation(request: Request): boolean {
+  const secFetchMode = request.headers.get('sec-fetch-mode')?.trim().toLowerCase();
+  if (secFetchMode === 'navigate') {
+    return true;
+  }
+  const accept = request.headers.get('accept')?.toLowerCase() ?? '';
+  return accept.includes('text/html');
+}
+
+function readDetailString(details: unknown, key: string): string | null {
+  if (typeof details !== 'object' || details === null || !(key in details)) {
+    return null;
+  }
+  const value = (details as Record<string, unknown>)[key];
+  return typeof value === 'string' ? value : null;
+}
+
+export function mapAuthErrorToBrowserCode(
+  error: unknown,
+  provider: AuthBrowserProvider
+): string {
+  if (error instanceof KinloomHttpError) {
+    if (error.code === 'INVITE_INVALID_OR_REVOKED') {
+      const inviteStatus = readDetailString(error.details, 'invite_status');
+      if (inviteStatus === 'expired') {
+        return 'INVITE_EXPIRED';
+      }
+      if (inviteStatus === 'revoked') {
+        return 'INVITE_REVOKED';
+      }
+      return 'INVITE_INVALID';
+    }
+
+    if (error.code === 'INVITE_REQUIRED') {
+      const inviteStatus = readDetailString(error.details, 'invite_status');
+      if (inviteStatus === 'expired') {
+        return 'INVITE_EXPIRED';
+      }
+      if (inviteStatus === 'revoked') {
+        return 'INVITE_REVOKED';
+      }
+      return 'INVITE_REQUIRED';
+    }
+
+    if (error.code === 'TOKEN_INVALID_OR_EXPIRED') {
+      const tokenStatus = readDetailString(error.details, 'token_status');
+      if (tokenStatus === 'used') {
+        return 'MAGIC_LINK_USED';
+      }
+      if (tokenStatus === 'invalid') {
+        return 'MAGIC_LINK_INVALID';
+      }
+      return 'MAGIC_LINK_EXPIRED';
+    }
+
+    if (CANONICAL_ERROR_CODE_PATTERN.test(error.code)) {
+      return error.code;
+    }
+  }
+
+  switch (provider) {
+    case 'google':
+      return 'GOOGLE_AUTH_FAILED';
+    case 'magic_link':
+      return 'MAGIC_LINK_INVALID';
+    case 'invite':
+      return 'INVITE_INVALID';
+    default: {
+      const _exhaustive: never = provider;
+      return String(_exhaustive);
+    }
+  }
+}
+
+export function buildAuthErrorRedirectUrl(
+  nextPath: string | null | undefined,
+  errorCode: string,
+  provider: AuthBrowserProvider
+): string {
+  const safePath = sanitizeNextPath(nextPath);
+  const parsed = new URL(safePath, 'https://kinloom.local');
+  const safeCode = CANONICAL_ERROR_CODE_PATTERN.test(errorCode) ? errorCode : 'AUTH_ERROR';
+  parsed.searchParams.set('auth_error', safeCode);
+  parsed.searchParams.set('auth_provider', provider);
+  return `${parsed.pathname}${parsed.search}${parsed.hash}`;
 }
 
 function redirectResponse(location: string, setCookies: readonly string[] = []): Response {
@@ -279,84 +371,126 @@ export function createKinloomServer(config: KinloomServerConfig): KinloomServer 
     }
 
     if (method === 'GET' && pathname === '/api/auth/google/start') {
-      const redirectUri = `${url.origin}/api/auth/google/callback`;
-      const started = await authService.startGoogleAuth({
-        redirectUri,
-        inviteToken: auth.inviteToken,
-        nextPath: url.searchParams.get('next'),
-      });
-      const oauthToken = await signOAuthStateToken({
-        secret: config.sessionSecret,
-        clock: config.ports.clock,
-        ttlSeconds: oauthCookieTtlSeconds,
-        state: started.state,
-        code_verifier: started.codeVerifier,
-        invite_token: started.inviteToken,
-        next_path: started.nextPath,
-      });
-      const oauthCookie = serializeSetCookie({
-        name: getOAuthCookieName(isSecure),
-        value: oauthToken,
-        maxAgeSeconds: oauthCookieTtlSeconds,
-        isSecure,
-      });
-      return redirectResponse(started.authorizationUrl, [oauthCookie]);
+      const requestedNext = url.searchParams.get('next');
+      const selectAccountParam = url.searchParams.get('select_account')?.trim().toLowerCase();
+      const promptParam = url.searchParams.get('prompt')?.trim().toLowerCase();
+      const selectAccount =
+        selectAccountParam === '1' ||
+        selectAccountParam === 'true' ||
+        promptParam === 'select_account';
+      try {
+        const redirectUri = `${url.origin}/api/auth/google/callback`;
+        const started = await authService.startGoogleAuth({
+          redirectUri,
+          inviteToken: auth.inviteToken,
+          nextPath: requestedNext,
+          selectAccount,
+        });
+        const oauthToken = await signOAuthStateToken({
+          secret: config.sessionSecret,
+          clock: config.ports.clock,
+          ttlSeconds: oauthCookieTtlSeconds,
+          state: started.state,
+          code_verifier: started.codeVerifier,
+          invite_token: started.inviteToken,
+          next_path: started.nextPath,
+        });
+        const oauthCookie = serializeSetCookie({
+          name: getOAuthCookieName(isSecure),
+          value: oauthToken,
+          maxAgeSeconds: oauthCookieTtlSeconds,
+          isSecure,
+        });
+        return redirectResponse(started.authorizationUrl, [oauthCookie]);
+      } catch (error) {
+        if (isBrowserNavigation(request)) {
+          const errorCode = mapAuthErrorToBrowserCode(error, 'google');
+          return redirectResponse(buildAuthErrorRedirectUrl(requestedNext, errorCode, 'google'));
+        }
+        throw error;
+      }
     }
 
     if (method === 'GET' && pathname === '/api/auth/google/callback') {
+      const oauthError = url.searchParams.get('error')?.trim() ?? '';
       const code = url.searchParams.get('code')?.trim() ?? '';
       const state = url.searchParams.get('state')?.trim() ?? '';
       const rawOAuthCookie = readOAuthCookieRaw(request, isSecure);
+      const oauthState = rawOAuthCookie
+        ? await verifyOAuthStateToken(config.sessionSecret, rawOAuthCookie, config.ports.clock)
+        : null;
+      const fallbackNextPath = sanitizeNextPath(oauthState?.next_path);
 
-      if (!code || !state || !rawOAuthCookie) {
-        throw new KinloomHttpError(
-          400,
-          'INVALID_OAUTH_STATE',
-          'Missing or expired OAuth state.'
-        );
+      try {
+        if (oauthError) {
+          if (oauthError === 'access_denied') {
+            throw new KinloomHttpError(400, 'GOOGLE_CANCELLED', 'Google sign-in was canceled.');
+          }
+          throw new KinloomHttpError(
+            400,
+            'GOOGLE_AUTH_FAILED',
+            'Google sign-in could not be completed.'
+          );
+        }
+
+        if (!code || !state || !rawOAuthCookie) {
+          throw new KinloomHttpError(
+            400,
+            'INVALID_OAUTH_STATE',
+            'Missing or expired OAuth state.'
+          );
+        }
+
+        if (!oauthState || oauthState.state !== state) {
+          throw new KinloomHttpError(
+            400,
+            'INVALID_OAUTH_STATE',
+            'OAuth state verification failed.'
+          );
+        }
+
+        const { user } = await authService.completeGoogleAuth({
+          code,
+          codeVerifier: oauthState.code_verifier,
+          redirectUri: `${url.origin}/api/auth/google/callback`,
+          inviteToken: oauthState.invite_token,
+        });
+
+        const sessionToken = await signSessionToken({
+          secret: config.sessionSecret,
+          clock: config.ports.clock,
+          ttlSeconds: sessionTtlSeconds,
+          payload: {
+            kind: 'user',
+            email: user.email,
+            display_name: user.display_name,
+            role: user.role,
+          },
+        });
+
+        return redirectResponse(sanitizeNextPath(oauthState.next_path), [
+          serializeClearCookie(getOAuthCookieName(isSecure), isSecure),
+          serializeSetCookie({
+            name: getSessionCookieName(isSecure),
+            value: sessionToken,
+            maxAgeSeconds: sessionTtlSeconds,
+            isSecure,
+          }),
+        ]);
+      } catch (error) {
+        if (isBrowserNavigation(request)) {
+          const errorCode = mapAuthErrorToBrowserCode(error, 'google');
+          const clearCookies = [serializeClearCookie(getOAuthCookieName(isSecure), isSecure)];
+          if (auth.principal.kind === 'anonymous' && readSessionCookieRaw(request, isSecure)) {
+            clearCookies.push(serializeClearCookie(getSessionCookieName(isSecure), isSecure));
+          }
+          return redirectResponse(
+            buildAuthErrorRedirectUrl(fallbackNextPath, errorCode, 'google'),
+            clearCookies
+          );
+        }
+        throw error;
       }
-
-      const oauthState = await verifyOAuthStateToken(
-        config.sessionSecret,
-        rawOAuthCookie,
-        config.ports.clock
-      );
-      if (!oauthState || oauthState.state !== state) {
-        throw new KinloomHttpError(
-          400,
-          'INVALID_OAUTH_STATE',
-          'OAuth state verification failed.'
-        );
-      }
-
-      const { user } = await authService.completeGoogleAuth({
-        code,
-        codeVerifier: oauthState.code_verifier,
-        redirectUri: `${url.origin}/api/auth/google/callback`,
-        inviteToken: oauthState.invite_token,
-      });
-
-      const sessionToken = await signSessionToken({
-        secret: config.sessionSecret,
-        clock: config.ports.clock,
-        ttlSeconds: sessionTtlSeconds,
-        payload: {
-          kind: 'user',
-          email: user.email,
-          display_name: user.display_name,
-          role: user.role,
-        },
-      });
-
-      return redirectResponse(sanitizeNextPath(oauthState.next_path), [
-        serializeClearCookie(getOAuthCookieName(isSecure), isSecure),
-        serializeSetCookie({
-          name: getSessionCookieName(isSecure),
-          value: sessionToken,
-          maxAgeSeconds: sessionTtlSeconds,
-          isSecure,
-        }),
-      ]);
     }
 
     if (method === 'POST' && pathname === '/api/auth/magic-link/request') {
@@ -374,26 +508,41 @@ export function createKinloomServer(config: KinloomServerConfig): KinloomServer 
     if (method === 'GET' && pathname === '/api/auth/magic-link/verify') {
       const rawToken = url.searchParams.get('token') ?? '';
       const nextPath = sanitizeNextPath(url.searchParams.get('next'));
-      const { user } = await authService.verifyMagicLink({ rawToken });
-      const sessionToken = await signSessionToken({
-        secret: config.sessionSecret,
-        clock: config.ports.clock,
-        ttlSeconds: sessionTtlSeconds,
-        payload: {
-          kind: 'user',
-          email: user.email,
-          display_name: user.display_name,
-          role: user.role,
-        },
-      });
-      return redirectResponse(nextPath, [
-        serializeSetCookie({
-          name: getSessionCookieName(isSecure),
-          value: sessionToken,
-          maxAgeSeconds: sessionTtlSeconds,
-          isSecure,
-        }),
-      ]);
+      try {
+        const { user } = await authService.verifyMagicLink({ rawToken });
+        const sessionToken = await signSessionToken({
+          secret: config.sessionSecret,
+          clock: config.ports.clock,
+          ttlSeconds: sessionTtlSeconds,
+          payload: {
+            kind: 'user',
+            email: user.email,
+            display_name: user.display_name,
+            role: user.role,
+          },
+        });
+        return redirectResponse(nextPath, [
+          serializeSetCookie({
+            name: getSessionCookieName(isSecure),
+            value: sessionToken,
+            maxAgeSeconds: sessionTtlSeconds,
+            isSecure,
+          }),
+        ]);
+      } catch (error) {
+        if (isBrowserNavigation(request)) {
+          const errorCode = mapAuthErrorToBrowserCode(error, 'magic_link');
+          const clearCookies: string[] = [];
+          if (auth.principal.kind === 'anonymous' && readSessionCookieRaw(request, isSecure)) {
+            clearCookies.push(serializeClearCookie(getSessionCookieName(isSecure), isSecure));
+          }
+          return redirectResponse(
+            buildAuthErrorRedirectUrl(nextPath, errorCode, 'magic_link'),
+            clearCookies
+          );
+        }
+        throw error;
+      }
     }
 
     if (
@@ -404,26 +553,38 @@ export function createKinloomServer(config: KinloomServerConfig): KinloomServer 
         segments[2] === 'invite') ||
         (segments.length === 2 && segments[0] === 'invite'))
     ) {
-      const inviteToken = decodeSegment(segments[segments.length - 1]);
-      const { invite } = await authService.redeemInvite(inviteToken);
-      const sessionToken = await signSessionToken({
-        secret: config.sessionSecret,
-        clock: config.ports.clock,
-        ttlSeconds: sessionTtlSeconds,
-        payload: {
-          kind: 'invite_viewer',
-          invite_token: invite.token,
-          label: invite.label,
-        },
-      });
-      return redirectResponse('/', [
-        serializeSetCookie({
-          name: getSessionCookieName(isSecure),
-          value: sessionToken,
-          maxAgeSeconds: sessionTtlSeconds,
-          isSecure,
-        }),
-      ]);
+      try {
+        const inviteToken = decodeSegment(segments[segments.length - 1]);
+        const { invite } = await authService.redeemInvite(inviteToken);
+        const sessionToken = await signSessionToken({
+          secret: config.sessionSecret,
+          clock: config.ports.clock,
+          ttlSeconds: sessionTtlSeconds,
+          payload: {
+            kind: 'invite_viewer',
+            invite_token: invite.token,
+            label: invite.label,
+          },
+        });
+        return redirectResponse('/', [
+          serializeSetCookie({
+            name: getSessionCookieName(isSecure),
+            value: sessionToken,
+            maxAgeSeconds: sessionTtlSeconds,
+            isSecure,
+          }),
+        ]);
+      } catch (error) {
+        if (isBrowserNavigation(request)) {
+          const errorCode = mapAuthErrorToBrowserCode(error, 'invite');
+          const clearCookies: string[] = [];
+          if (auth.principal.kind === 'anonymous' && readSessionCookieRaw(request, isSecure)) {
+            clearCookies.push(serializeClearCookie(getSessionCookieName(isSecure), isSecure));
+          }
+          return redirectResponse(buildAuthErrorRedirectUrl('/', errorCode, 'invite'), clearCookies);
+        }
+        throw error;
+      }
     }
 
     if (method === 'POST' && pathname === '/api/auth/logout') {
