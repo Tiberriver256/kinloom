@@ -630,6 +630,8 @@ describe('bundled Python utilities and live script execution', () => {
     expect(prepHelp).toContain('pdf-pages');
     expect(prepHelp).toContain('grid');
     expect(prepHelp).toContain('stitch');
+    expect(prepHelp).toContain('info');
+    expect(prepHelp).toContain('join');
 
     const ocrHelp = execFileSync('python3', [ocrScript, '--help'], { encoding: 'utf8' });
     expect(ocrHelp).toContain('Usage: kinloom ocr <image> [image ...] [options]');
@@ -1100,6 +1102,303 @@ describe('bundled Python utilities and live script execution', () => {
       env: { ...process.env, KINLOOM_TELEMETRY_PARENT: '1' },
     });
     expect(fs.readdirSync(previewDir).length).toBe(1);
+  });
+
+  it('runs prep-scan info and prep-scan join on synthetic images when Pillow is available', async () => {
+    const prepScript = path.join(ASSETS_ROOT, 'prep-scan.py');
+    let pyCmd: string | null = null;
+    let pyPrefix: string[] = [];
+    let prepPrefix: string[] = [];
+    try {
+      execFileSync('python3', ['-c', 'import PIL'], { stdio: 'ignore' });
+      pyCmd = 'python3';
+      pyPrefix = [];
+      prepPrefix = [prepScript];
+    } catch {
+      try {
+        execFileSync('uv', ['run', '--with', 'pillow', 'python3', '-c', 'import PIL'], {
+          stdio: 'ignore',
+        });
+        pyCmd = 'uv';
+        pyPrefix = ['run', '--with', 'pillow', 'python3'];
+        prepPrefix = ['run', '--script', prepScript];
+      } catch {
+        pyCmd = null;
+      }
+    }
+    if (!pyCmd) {
+      return;
+    }
+    const env = { ...process.env, KINLOOM_TELEMETRY_PARENT: '1' };
+    const infoHelp = execFileSync(pyCmd, [...prepPrefix, 'info', '--help'], { encoding: 'utf8' });
+    expect(infoHelp).toContain('--json');
+    const joinHelp = execFileSync(pyCmd, [...prepPrefix, 'join', '--help'], { encoding: 'utf8' });
+    expect(joinHelp).toContain('--direction');
+    expect(joinHelp).toContain('--align');
+    expect(joinHelp).toContain('--preview-out');
+
+    const tmp = await makeTempDir('kinloom-prep-info-join-');
+    const red = path.join(tmp, 'red.png');
+    const blue = path.join(tmp, 'blue.png');
+    const turned = path.join(tmp, 'turned.jpg');
+    const note = path.join(tmp, 'note.txt');
+    await writeFile(note, 'not an image');
+    execFileSync(pyCmd, [
+      ...pyPrefix,
+      '-c',
+      [
+        'from PIL import Image',
+        'import sys',
+        'Image.new("RGB", (80, 30), (255, 0, 0)).save(sys.argv[1])',
+        'Image.new("RGB", (40, 20), (0, 0, 255)).save(sys.argv[2])',
+        'turned = Image.new("RGB", (20, 40), (1, 2, 3))',
+        'exif = turned.getexif()',
+        'exif[274] = 6',
+        'turned.save(sys.argv[3], exif=exif)',
+      ].join('\n'),
+      red,
+      blue,
+      turned,
+    ]);
+
+    const infoText = execFileSync(pyCmd, [...prepPrefix, 'info', red, blue], {
+      encoding: 'utf8',
+      env,
+    });
+    expect(infoText).toBe(
+      `${red}: 80x30 PNG (${(fs.statSync(red).size / 1024).toFixed(1)} KB)\n` +
+        `${blue}: 40x20 PNG (${(fs.statSync(blue).size / 1024).toFixed(1)} KB)\n`
+    );
+
+    const infoJson = JSON.parse(
+      execFileSync(pyCmd, [...prepPrefix, 'info', red, turned, '--json'], { encoding: 'utf8', env })
+    ) as {
+      count: number;
+      files: Array<{
+        path: string;
+        width: number;
+        height: number;
+        format: string;
+        mode: string;
+        bytes: number;
+        kb: number;
+      }>;
+    };
+    expect(infoJson.count).toBe(2);
+    expect(infoJson.files[0]).toEqual({
+      path: red,
+      width: 80,
+      height: 30,
+      format: 'PNG',
+      mode: 'RGB',
+      bytes: fs.statSync(red).size,
+      kb: Number((fs.statSync(red).size / 1024).toFixed(1)),
+    });
+    expect(infoJson.files[1]).toMatchObject({
+      path: turned,
+      width: 40,
+      height: 20,
+      format: 'JPEG',
+      mode: 'RGB',
+      bytes: fs.statSync(turned).size,
+    });
+
+    const missing = spawnSync(pyCmd, [...prepPrefix, 'info', path.join(tmp, 'missing.png')], {
+      encoding: 'utf8',
+      env,
+    });
+    expect(missing.status).toBe(1);
+    expect(missing.stderr).toContain('input file not found');
+    expect(missing.stdout).toBe('');
+
+    const notImage = spawnSync(pyCmd, [...prepPrefix, 'info', note], { encoding: 'utf8', env });
+    expect(notImage.status).toBe(1);
+    expect(notImage.stderr).toContain('cannot read image');
+    expect(notImage.stderr).toContain(note);
+    expect(notImage.stdout).toBe('');
+
+    const verticalOut = path.join(tmp, 'vertical.png');
+    const previewOut = path.join(tmp, 'vertical.preview.jpg');
+    const vertical = JSON.parse(
+      execFileSync(
+        pyCmd,
+        [
+          ...prepPrefix,
+          'join',
+          red,
+          blue,
+          '--out',
+          verticalOut,
+          '--direction',
+          'v',
+          '--gap',
+          '8',
+          '--align',
+          'center',
+          '--divider-color',
+          '#222222',
+          '--quality',
+          '92',
+          '--preview-out',
+          previewOut,
+          '--json',
+        ],
+        { encoding: 'utf8', env }
+      )
+    ) as {
+      width: number;
+      height: number;
+      bytes: number;
+      count: number;
+      direction: string;
+      out: string;
+      preview_out: string;
+    };
+    expect(vertical).toEqual({
+      width: 80,
+      height: 58,
+      bytes: fs.statSync(verticalOut).size,
+      count: 2,
+      direction: 'vertical',
+      out: verticalOut,
+      preview_out: previewOut,
+    });
+
+    const horizontalOut = path.join(tmp, 'horizontal.png');
+    const horizontal = JSON.parse(
+      execFileSync(
+        pyCmd,
+        [
+          ...prepPrefix,
+          'join',
+          red,
+          blue,
+          '-o',
+          horizontalOut,
+          '--direction',
+          'horizontal',
+          '--gap',
+          '8',
+          '--align',
+          'end',
+        ],
+        { encoding: 'utf8', env }
+      )
+    ) as { width: number; height: number; direction: string; out: string; count: number };
+    expect(horizontal).toMatchObject({
+      width: 128,
+      height: 30,
+      count: 2,
+      direction: 'horizontal',
+      out: horizontalOut,
+    });
+
+    const startOut = path.join(tmp, 'start.png');
+    execFileSync(
+      pyCmd,
+      [
+        ...prepPrefix,
+        'join',
+        red,
+        blue,
+        '--output',
+        startOut,
+        '--direction',
+        'h',
+        '--gap',
+        '8',
+        '--align',
+        'start',
+      ],
+      { encoding: 'utf8', env }
+    );
+
+    const pixels = JSON.parse(
+      execFileSync(
+        pyCmd,
+        [
+          ...pyPrefix,
+          '-c',
+          [
+            'from PIL import Image',
+            'import json, sys',
+            'vertical = Image.open(sys.argv[1]).convert("RGB")',
+            'horizontal = Image.open(sys.argv[2]).convert("RGB")',
+            'start = Image.open(sys.argv[3]).convert("RGB")',
+            'preview = Image.open(sys.argv[4])',
+            'print(json.dumps({',
+            '  "vertical": {',
+            '    "size": list(vertical.size),',
+            '    "red": list(vertical.getpixel((0, 0))),',
+            '    "gap": list(vertical.getpixel((0, 33))),',
+            '    "pad": list(vertical.getpixel((0, 38))),',
+            '    "blue": list(vertical.getpixel((20, 38))),',
+            '    "blue_end": list(vertical.getpixel((59, 57))),',
+            '    "right_pad": list(vertical.getpixel((60, 38))),',
+            '  },',
+            '  "horizontal": {',
+            '    "size": list(horizontal.size),',
+            '    "gap": list(horizontal.getpixel((84, 0))),',
+            '    "above": list(horizontal.getpixel((88, 0))),',
+            '    "blue": list(horizontal.getpixel((88, 10))),',
+            '    "blue_corner": list(horizontal.getpixel((127, 29))),',
+            '  },',
+            '  "start": {',
+            '    "blue": list(start.getpixel((88, 0))),',
+            '    "below": list(start.getpixel((88, 20))),',
+            '  },',
+            '  "preview": {"size": list(preview.size), "format": preview.format},',
+            '}))',
+          ].join('\n'),
+          verticalOut,
+          horizontalOut,
+          startOut,
+          previewOut,
+        ],
+        { encoding: 'utf8' }
+      )
+    ) as {
+      vertical: {
+        size: number[];
+        red: number[];
+        gap: number[];
+        pad: number[];
+        blue: number[];
+        blue_end: number[];
+        right_pad: number[];
+      };
+      horizontal: { size: number[]; gap: number[]; above: number[]; blue: number[]; blue_corner: number[] };
+      start: { blue: number[]; below: number[] };
+      preview: { size: number[]; format: string };
+    };
+    expect(pixels.vertical.size).toEqual([80, 58]);
+    expect(pixels.vertical.red).toEqual([255, 0, 0]);
+    expect(pixels.vertical.gap).toEqual([34, 34, 34]);
+    expect(pixels.vertical.pad).toEqual([34, 34, 34]);
+    expect(pixels.vertical.blue).toEqual([0, 0, 255]);
+    expect(pixels.vertical.blue_end).toEqual([0, 0, 255]);
+    expect(pixels.vertical.right_pad).toEqual([34, 34, 34]);
+    expect(pixels.horizontal.size).toEqual([128, 30]);
+    expect(pixels.horizontal.gap).toEqual([34, 34, 34]);
+    expect(pixels.horizontal.above).toEqual([34, 34, 34]);
+    expect(pixels.horizontal.blue).toEqual([0, 0, 255]);
+    expect(pixels.horizontal.blue_corner).toEqual([0, 0, 255]);
+    expect(pixels.start.blue).toEqual([0, 0, 255]);
+    expect(pixels.start.below).toEqual([34, 34, 34]);
+    expect(pixels.preview).toEqual({ size: [80, 58], format: 'JPEG' });
+
+    const tooFew = spawnSync(
+      pyCmd,
+      [...prepPrefix, 'join', red, '--out', path.join(tmp, 'one.jpg')],
+      { encoding: 'utf8', env }
+    );
+    expect(tooFew.status).toBe(2);
+    expect(tooFew.stderr).toContain('at least 2');
+    expect(fs.existsSync(path.join(tmp, 'one.jpg'))).toBe(false);
+
+    const noOut = spawnSync(pyCmd, [...prepPrefix, 'join', red, blue], { encoding: 'utf8', env });
+    expect(noOut.status).toBe(2);
+    expect(noOut.stderr.toLowerCase()).toContain('out');
   });
 
   it.skipIf(spawnSync('pdftotext', ['-v']).error !== undefined)(

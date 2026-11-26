@@ -242,7 +242,7 @@ export const RECORD_COMMAND_SPECS: readonly RecordCommandSpec[] = [
     category: 'media-ocr',
     assetScript: 'prep-scan.py',
     assetGuide: 'prep-scan.md',
-    summary: 'Build compact scan previews, redacted crops, strips, and PDF pages',
+    summary: 'Report scan size, join page images, build previews, crops, strips, and PDF pages',
   },
   {
     kind: 'asset-script',

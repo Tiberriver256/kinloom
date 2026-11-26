@@ -6,7 +6,7 @@
 #   "pillow>=10.0",
 # ]
 # ///
-"""Scan preparation CLI: compact previews, redacted crops, census strips, and selective PDF page renders."""
+"""Scan preparation CLI: image info, multi-file joins, compact previews, redacted crops, census strips, and selective PDF page renders."""
 
 from __future__ import annotations
 
@@ -287,6 +287,84 @@ def save_archival_image(
     data = buf.getvalue()
     atomic_write_bytes(out_path, data)
     return SavedImage(path=out_path, width=rgb.size[0], height=rgb.size[1], bytes=len(data))
+
+
+def parse_join_direction(raw: str) -> str:
+    key = raw.strip().lower()
+    table = {
+        "v": "vertical",
+        "vertical": "vertical",
+        "h": "horizontal",
+        "horizontal": "horizontal",
+    }
+    if key not in table:
+        raise argparse.ArgumentTypeError(
+            f"Invalid --direction '{raw}': expected vertical, horizontal, v, or h."
+        )
+    return table[key]
+
+
+def parse_join_align(raw: str) -> str:
+    key = raw.strip().lower()
+    if key not in ("start", "center", "end"):
+        raise argparse.ArgumentTypeError(
+            f"Invalid --align '{raw}': expected start, center, or end."
+        )
+    return key
+
+
+def align_offset(outer: int, inner: int, align: str) -> int:
+    slack = outer - inner
+    if slack <= 0 or align == "start":
+        return 0
+    if align == "end":
+        return slack
+    return slack // 2
+
+
+def join_frames(
+    frames: list[Any],
+    *,
+    direction: str,
+    gap: int,
+    align: str,
+    background: tuple[int, int, int],
+) -> Any:
+    Image, _, _, _ = require_pillow()
+    if direction == "horizontal":
+        width = sum(frame.width for frame in frames) + gap * (len(frames) - 1)
+        height = max(frame.height for frame in frames)
+    else:
+        width = max(frame.width for frame in frames)
+        height = sum(frame.height for frame in frames) + gap * (len(frames) - 1)
+    canvas = Image.new("RGB", (max(1, width), max(1, height)), background)
+    cursor = 0
+    for frame in frames:
+        if direction == "horizontal":
+            x = cursor
+            y = align_offset(canvas.height, frame.height, align)
+            cursor += frame.width + gap
+        else:
+            x = align_offset(canvas.width, frame.width, align)
+            y = cursor
+            cursor += frame.height + gap
+        canvas.paste(frame, (x, y))
+    return canvas
+
+
+def load_rgb_image(src: Path) -> Any:
+    Image, _, _, _ = require_pillow()
+    try:
+        with Image.open(src) as raw:
+            raw.load()
+            rgb = to_rgb(raw)
+            if rgb is raw:
+                rgb = raw.copy()
+            return rgb
+    except Exception as exc:
+        raise ValueError(
+            f"Cannot read image '{src}': {exc}. Use a JPEG, PNG, WEBP, or TIFF file."
+        ) from exc
 
 
 def parse_rgb_color(raw: str) -> tuple[int, int, int]:
@@ -1009,12 +1087,121 @@ def cmd_stitch(args: argparse.Namespace) -> tuple[int, int]:
     return 0, out_bytes
 
 
+def cmd_info(args: argparse.Namespace) -> tuple[int, int]:
+    Image, _, _, ImageOps = require_pillow()
+    files: list[dict[str, object]] = []
+    errors: list[str] = []
+    for raw in args.images:
+        src = Path(raw).expanduser().resolve()
+        if not src.is_file():
+            errors.append(f"input file not found: {src}")
+            continue
+        try:
+            nbytes = src.stat().st_size
+            with Image.open(src) as im:
+                im.load()
+                image_format = im.format or "UNKNOWN"
+                mode = im.mode
+                oriented = ImageOps.exif_transpose(im)
+                try:
+                    width, height = oriented.size
+                finally:
+                    if oriented is not im:
+                        oriented.close()
+        except Exception as exc:
+            errors.append(
+                f"cannot read image {src}: {exc}. Use a JPEG, PNG, WEBP, or TIFF file."
+            )
+            continue
+        files.append(
+            {
+                "path": str(src),
+                "width": width,
+                "height": height,
+                "format": image_format,
+                "mode": mode,
+                "bytes": nbytes,
+                "kb": round(nbytes / 1024.0, 1),
+            }
+        )
+    if errors:
+        for message in errors:
+            print(f"Error: {message}", file=sys.stderr)
+        return 1, 0
+    if args.json:
+        payload = {"count": len(files), "files": files}
+        return 0, emit_output(json.dumps(payload, indent=2) + "\n")
+    lines = [
+        f"{item['path']}: {item['width']}x{item['height']} {item['format']} ({item['kb']:.1f} KB)"
+        for item in files
+    ]
+    return 0, emit_output("\n".join(lines) + ("\n" if lines else ""))
+
+
+def cmd_join(args: argparse.Namespace) -> tuple[int, int]:
+    if len(args.images) < 2:
+        raise ValueError(
+            "join requires at least 2 images. Pass two or more paths and --out <file>."
+        )
+    if args.gap < 0:
+        raise ValueError(f"--gap must be >= 0, got {args.gap}.")
+    if args.quality < 1 or args.quality > 100:
+        raise ValueError(f"--quality must be between 1 and 100, got {args.quality}.")
+
+    background = parse_rgb_color(args.divider_color)
+    frames: list[Any] = []
+    try:
+        for raw in args.images:
+            src = Path(raw).expanduser().resolve()
+            if not src.is_file():
+                print(f"Error: input file not found: {src}", file=sys.stderr)
+                return 1, 0
+            try:
+                frames.append(load_rgb_image(src))
+            except ValueError as exc:
+                print(f"Error: {exc}", file=sys.stderr)
+                return 1, 0
+        canvas = join_frames(
+            frames,
+            direction=args.direction,
+            gap=args.gap,
+            align=args.align,
+            background=background,
+        )
+        saved = save_archival_image(canvas, Path(args.out).resolve(), quality=args.quality)
+        preview_path: str | None = None
+        if args.preview_out:
+            preview = save_compact_jpeg(
+                canvas,
+                Path(args.preview_out).resolve(),
+                max_width=1400,
+                max_kb=280,
+            )
+            preview_path = str(preview.path)
+    finally:
+        for frame in frames:
+            frame.close()
+
+    payload: dict[str, object] = {
+        "width": saved.width,
+        "height": saved.height,
+        "bytes": saved.bytes,
+        "count": len(args.images),
+        "direction": args.direction,
+        "out": str(saved.path),
+    }
+    if preview_path is not None:
+        payload["preview_out"] = preview_path
+    return 0, emit_output(json.dumps(payload, indent=2) + "\n")
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="kinloom prep-scan",
         description=(
-            "Generate compact inspection previews, redacted archival crops, "
-            "census sheet-strip contact sheets, and selective PDF page renders."
+            "Report image dimensions, join separate page scans, generate compact "
+            "inspection previews, redacted archival crops, census sheet-strip "
+            "contact sheets, and selective PDF page renders."
         ),
     )
     sub = parser.add_subparsers(dest="command", required=True)
@@ -1246,6 +1433,60 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p_stitch.add_argument("--json", action="store_true", help="Emit JSON output (always enabled).")
     p_stitch.set_defaults(func=cmd_stitch)
+
+    p_info = sub.add_parser(
+        "info",
+        help="Print pixel size, format, mode, and file size for one or more local images.",
+    )
+    p_info.add_argument("images", nargs="+", help="Local image path(s).")
+    p_info.add_argument("--json", action="store_true", help="Emit JSON output.")
+    p_info.set_defaults(func=cmd_info)
+
+    p_join = sub.add_parser(
+        "join",
+        help="Join 2 or more images into one archival JPEG or PNG, in input order.",
+    )
+    p_join.add_argument("images", nargs="+", help="Local image paths, in join order (at least 2).")
+    p_join.add_argument(
+        "--out", "-o", "--output", dest="out", required=True,
+        help="Archival JPEG or PNG output path.",
+    )
+    p_join.add_argument(
+        "--direction",
+        type=parse_join_direction,
+        default="vertical",
+        help="Stack direction: vertical or horizontal (aliases v, h). Default: vertical.",
+    )
+    p_join.add_argument(
+        "--gap",
+        type=int,
+        default=8,
+        help="Pixels of divider color between images (default: 8).",
+    )
+    p_join.add_argument(
+        "--divider-color",
+        default="#222222",
+        help='Gap and margin fill color as hex or a named RGB color (default: "#222222").',
+    )
+    p_join.add_argument(
+        "--align",
+        type=parse_join_align,
+        default="center",
+        help="Place a shorter image at start, center, or end of the cross axis (default: center).",
+    )
+    p_join.add_argument(
+        "--quality",
+        type=int,
+        default=92,
+        help="Archival JPEG/WEBP quality 1..100 (default: 92). Ignored for PNG.",
+    )
+    p_join.add_argument(
+        "--preview-out",
+        default=None,
+        help="Optional compact JPEG preview path (max width 1400, max size 280 KB).",
+    )
+    p_join.add_argument("--json", action="store_true", help="Emit JSON output (always enabled).")
+    p_join.set_defaults(func=cmd_join)
 
     return parser
 
