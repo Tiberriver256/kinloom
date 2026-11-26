@@ -84,6 +84,13 @@
     - src_census_1860_springfield
     - src_nara_emancipation_1863
     - src_chronam_evening_star_1865
+  extensions:
+    narrative_audio:
+      file: media/audio-abraham-lincoln-bio.mp3
+      duration_seconds: 36
+      editor_notes_start_seconds: 26
+      story_voice: Charon
+      notes_voice: Kore
   body_md: |
     In December 1859 Abraham Lincoln sketched his frontier upbringing from Hardin County, Kentucky through Indiana to Illinois for Jesse W. Fell.[^src_lincoln_autobiography_1859]
     After settling in Springfield he married Mary Ann Todd on November 4, 1842,[^src_sangamon_marriage_1842] and in May 1849 received U.S. Patent No. 6,469 for buoying river vessels over shoals.[^src_nara_patent_6469|med_scan_nara_patent_6469_petition]
