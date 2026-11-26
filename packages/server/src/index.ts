@@ -7,7 +7,7 @@ export type {
   PluginRouteMinRole,
 } from '@kinloom/core';
 
-export const KINLOOM_SERVER_VERSION = '0.17.0';
+export const KINLOOM_SERVER_VERSION = '0.18.0';
 
 // Errors & Web-Standard Crypto Helpers
 export { KinloomHttpError, toErrorResponseData } from './errors.js';
