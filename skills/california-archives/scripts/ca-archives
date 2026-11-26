@@ -23,17 +23,186 @@ two are URL builders only (see the `url` command).
 
 from __future__ import annotations
 
+import hashlib
 import json
+import math
 import os
 import re
 import shutil
 import sys
+import time
+from contextlib import contextmanager
 from html.parser import HTMLParser
 from pathlib import Path
+from typing import Any, Callable, Iterator
 from urllib.parse import quote, urlencode
 
 import click
 import httpx
+
+DEFAULT_CACHE_TTL_HOURS = 168.0
+CACHE_SCHEMA = 1
+
+
+def cache_dir() -> Path:
+    override = os.environ.get("KINLOOM_CA_ARCHIVES_CACHE_DIR")
+    if override:
+        return Path(override).expanduser()
+    return Path.home() / ".cache" / "kinloom-ca-archives"
+
+
+def resolve_ttl_hours(cli_ttl: float | None) -> float:
+    if cli_ttl is not None:
+        if not math.isfinite(cli_ttl) or cli_ttl < 0:
+            raise click.BadParameter(f"Invalid --cache-ttl-hours value: {cli_ttl!r} (must be >= 0).")
+        return float(cli_ttl)
+    raw = os.environ.get("KINLOOM_CA_ARCHIVES_CACHE_TTL_HOURS")
+    if raw is not None and raw.strip():
+        try:
+            parsed = float(raw.strip())
+        except ValueError as exc:
+            raise click.BadParameter(f"Invalid KINLOOM_CA_ARCHIVES_CACHE_TTL_HOURS value: {raw!r}.") from exc
+        if not math.isfinite(parsed) or parsed < 0:
+            raise click.BadParameter(
+                f"Invalid KINLOOM_CA_ARCHIVES_CACHE_TTL_HOURS value: {raw!r} (must be >= 0)."
+            )
+        return parsed
+    return DEFAULT_CACHE_TTL_HOURS
+
+
+@contextmanager
+def file_lock(lock_path: Path) -> Iterator[None]:
+    """Advisory exclusive lock (POSIX flock); no-op where fcntl is missing."""
+    try:
+        import fcntl
+    except ImportError:
+        yield
+        return
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(lock_path, "a+b") as lock_file:
+        fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
+
+
+def atomic_write_json(dest: Path, payload: Any) -> None:
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    tmp = dest.with_name(f".{dest.name}.{os.getpid()}.{time.time_ns()}.tmp")
+    try:
+        tmp.write_text(json.dumps(payload, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
+        os.replace(tmp, dest)
+    except Exception:
+        tmp.unlink(missing_ok=True)
+        raise
+
+
+def cache_key(kind: str, payload: dict) -> str:
+    canonical = json.dumps([kind, payload], sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
+def read_cache(path: Path, ttl_hours: float) -> dict | None:
+    if not path.is_file():
+        return None
+    try:
+        entry = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+        return None
+    if not isinstance(entry, dict) or entry.get("schema") != CACHE_SCHEMA:
+        return None
+    fetched = entry.get("fetched_at")
+    if not isinstance(fetched, (int, float)):
+        return None
+    if ttl_hours <= 0 or (time.time() - fetched) > ttl_hours * 3600:
+        return None
+    result = entry.get("result")
+    return result if isinstance(result, dict) else None
+
+
+def cached_call(
+    kind: str,
+    payload: dict,
+    fetch: Callable[[], dict],
+    *,
+    refresh: bool,
+    ttl_hours: float,
+    cacheable: Callable[[dict], bool] = lambda _r: True,
+) -> tuple[dict, bool]:
+    """Return (result, cache_hit) with per-key flock and atomic JSON writes."""
+    key = cache_key(kind, payload)
+    root = cache_dir()
+    path = root / f"{key}.json"
+    if not refresh:
+        hit = read_cache(path, ttl_hours)
+        if hit is not None:
+            return hit, True
+    with file_lock(root / f"{key}.lock"):
+        if not refresh:
+            hit = read_cache(path, ttl_hours)
+            if hit is not None:
+                return hit, True
+        result = fetch()
+        if cacheable(result):
+            atomic_write_json(
+                path,
+                {
+                    "schema": CACHE_SCHEMA,
+                    "fetched_at": time.time(),
+                    "kind": kind,
+                    "query": payload,
+                    "result": result,
+                },
+            )
+        return result, False
+
+
+def write_cache_entry(kind: str, payload: dict, result: dict) -> None:
+    key = cache_key(kind, payload)
+    root = cache_dir()
+    path = root / f"{key}.json"
+    with file_lock(root / f"{key}.lock"):
+        atomic_write_json(
+            path,
+            {
+                "schema": CACHE_SCHEMA,
+                "fetched_at": time.time(),
+                "kind": kind,
+                "query": payload,
+                "result": result,
+            },
+        )
+
+
+def cache_options(func: Callable) -> Callable:
+    func = click.option(
+        "--cache-ttl-hours",
+        type=float,
+        default=None,
+        help="Cache TTL in hours (default 168, env KINLOOM_CA_ARCHIVES_CACHE_TTL_HOURS; 0 disables reads).",
+    )(func)
+    func = click.option(
+        "--refresh",
+        is_flag=True,
+        help="Bypass the disk cache for this request (the fresh result is still cached).",
+    )(func)
+    return func
+
+
+def _client() -> httpx.Client:
+    return httpx.Client(timeout=30.0, follow_redirects=True, headers={"User-Agent": USER_AGENT})
+
+
+def _http_get(url: str, headers: dict[str, str] | None = None) -> httpx.Response:
+    try:
+        with _client() as client:
+            resp = client.get(url, headers=headers)
+    except httpx.HTTPError as exc:
+        raise click.ClickException(f"California Archives request failed: {exc}") from exc
+    if resp.status_code != 200:
+        raise click.ClickException(f"California Archives returned HTTP {resp.status_code} for {url}")
+    return resp
 
 OAC_BASE = "https://oac.cdlib.org"
 CALISPHERE_BASE = "https://calisphere.org"
@@ -133,10 +302,8 @@ class PortalLinkParser(HTMLParser):
 
 def search_portal(query, limit=10):
     url = portal_url(query)
-    with httpx.Client(timeout=30.0, follow_redirects=True, headers={"User-Agent": USER_AGENT}) as client:
-        resp = client.get(url)
-        resp.raise_for_status()
-        html = resp.text
+    resp = _http_get(url)
+    html = resp.text
     total = None
     m = re.search(r"Search Results \d+ to \d+ of (\d+)", html)
     if m:
@@ -158,14 +325,17 @@ def _omeka_title(item):
 
 def search_exhibits(query, limit=10):
     url = exhibits_url(query, limit)
-    with httpx.Client(timeout=30.0, follow_redirects=True, headers={"User-Agent": USER_AGENT}) as client:
-        resp = client.get(url, headers={"Accept": "application/ld+json"})
-        resp.raise_for_status()
+    resp = _http_get(url, headers={"Accept": "application/ld+json"})
+    try:
         items = resp.json()
-        hdr = resp.headers.get("Omeka-S-Total-Results")
-        total = int(hdr) if hdr else (len(items) if isinstance(items, list) else 0)
+    except ValueError as exc:
+        raise click.ClickException(f"Invalid JSON from {url}: {exc}") from exc
+    if not isinstance(items, list):
+        raise click.ClickException(f"Unexpected JSON response from {url}")
+    hdr = resp.headers.get("Omeka-S-Total-Results")
+    total = int(hdr) if hdr else len(items)
     results = []
-    for item in items if isinstance(items, list) else []:
+    for item in items:
         item_id = item.get("o:id")
         types = item.get("@type", [])
         results.append({
@@ -268,6 +438,8 @@ def _print_source(entry, limit_note=True):
             header += ")"
     else:
         header += " (showing %d)" % shown
+    if entry.get("cache_hit"):
+        header += " [cache]"
     click.echo(header)
     click.echo("  " + entry["url"])
     if not entry["results"]:
@@ -282,6 +454,42 @@ def _print_source(entry, limit_note=True):
         click.echo("     " + r["url"])
 
 
+def _source_cacheable(entry: dict) -> bool:
+    return bool(entry.get("results")) or entry.get("total") is not None
+
+
+def _fetch_portal_item(portal_id: str) -> dict:
+    url = PORTAL_BASE + "/Items/Details/" + portal_id
+    resp = _http_get(url)
+    m = re.search(r"<title>([^<]+)</title>", resp.text)
+    title = (m.group(1).strip() if m else "(no title)").replace(" | California Archives Search", "")
+    return {"source": "portal", "id": portal_id, "title": title, "url": url}
+
+
+def _fetch_exhibits_item(exhibits_id: str) -> dict:
+    url = EXHIBITS_BASE + "/api/items/" + exhibits_id
+    resp = _http_get(url, headers={"Accept": "application/ld+json"})
+    try:
+        item = resp.json()
+    except ValueError as exc:
+        raise click.ClickException(f"Invalid JSON from {url}: {exc}") from exc
+    if not isinstance(item, dict):
+        raise click.ClickException(f"Unexpected JSON response from {url}")
+    desc = ""
+    for val in item.get("dcterms:description", []) or []:
+        if val.get("@value"):
+            desc = val["@value"]
+            break
+    return {
+        "source": "exhibits",
+        "id": exhibits_id,
+        "title": _omeka_title(item),
+        "type": ", ".join(t for t in item.get("@type", []) if t != "o:Item"),
+        "description": desc[:500],
+        "url": EXHIBITS_BASE + "/s/exhibits/item/" + exhibits_id,
+    }
+
+
 @click.group()
 def cli():
     """Search California archives portals (OAC, Calisphere, State Archives)."""
@@ -293,21 +501,54 @@ def cli():
               help="Only search this source (repeatable). Default: all four.")
 @click.option("--limit", default=10, show_default=True, help="Results per source.")
 @click.option("--json", "as_json", is_flag=True, help="Emit JSON instead of text.")
-def search(query, sources, limit, as_json):
+@cache_options
+def search(query, sources, limit, as_json, refresh, cache_ttl_hours):
     """Search the California archives portals for QUERY."""
     q = " ".join(query)
     wanted = list(sources) if sources else list(SEARCHABLE)
+    ttl = resolve_ttl_hours(cache_ttl_hours)
+    payload = {"query": q, "limit": limit}
     browser_sources = [s for s in wanted if s in ("oac", "calisphere")]
     out = {}
-    if browser_sources:
-        out.update(browser_search(browser_sources, q, limit))
+    uncached_browser: list[str] = []
+    for src in browser_sources:
+        key = cache_key(f"search:{src}", payload)
+        path = cache_dir() / f"{key}.json"
+        hit = None if refresh else read_cache(path, ttl)
+        if hit is not None:
+            out[src] = {**hit, "cache_hit": True}
+        else:
+            uncached_browser.append(src)
+    if uncached_browser:
+        fetched = browser_search(uncached_browser, q, limit)
+        for src, entry in fetched.items():
+            if _source_cacheable(entry):
+                write_cache_entry(f"search:{src}", payload, entry)
+            out[src] = {**entry, "cache_hit": False}
     if "portal" in wanted:
-        out["portal"] = search_portal(q, limit)
+        entry, hit = cached_call(
+            "search:portal",
+            payload,
+            lambda: search_portal(q, limit),
+            refresh=refresh,
+            ttl_hours=ttl,
+            cacheable=_source_cacheable,
+        )
+        out["portal"] = {**entry, "cache_hit": hit}
     if "exhibits" in wanted:
-        out["exhibits"] = search_exhibits(q, limit)
+        entry, hit = cached_call(
+            "search:exhibits",
+            payload,
+            lambda: search_exhibits(q, limit),
+            refresh=refresh,
+            ttl_hours=ttl,
+            cacheable=_source_cacheable,
+        )
+        out["exhibits"] = {**entry, "cache_hit": hit}
     ordered = [out[s] for s in wanted if s in out]
     if as_json:
-        click.echo(json.dumps({"query": q, "sources": ordered}, indent=2))
+        all_cached = bool(ordered) and all(e.get("cache_hit") for e in ordered)
+        click.echo(json.dumps({"query": q, "cache_hit": all_cached, "sources": ordered}, indent=2))
         return
     for entry in ordered:
         _print_source(entry)
@@ -334,39 +575,39 @@ def url(query, sources):
 @click.option("--portal", "portal_id", default=None, help="Portal item ID (from search results).")
 @click.option("--exhibits", "exhibits_id", default=None, help="Exhibits item ID (from search results).")
 @click.option("--json", "as_json", is_flag=True, help="Emit JSON instead of text.")
-def get(portal_id, exhibits_id, as_json):
+@cache_options
+def get(portal_id, exhibits_id, as_json, refresh, cache_ttl_hours):
     """Fetch one Portal or exhibits item by ID."""
     if bool(portal_id) == bool(exhibits_id):
         raise click.UsageError("Pass exactly one of --portal ID or --exhibits ID.")
+    ttl = resolve_ttl_hours(cache_ttl_hours)
     if portal_id:
-        url = PORTAL_BASE + "/Items/Details/" + portal_id
-        with httpx.Client(timeout=30.0, follow_redirects=True, headers={"User-Agent": USER_AGENT}) as client:
-            resp = client.get(url)
-            resp.raise_for_status()
-        m = re.search(r"<title>([^<]+)</title>", resp.text)
-        title = (m.group(1).strip() if m else "(no title)").replace(" | California Archives Search", "")
-        data = {"source": "portal", "id": portal_id, "title": title, "url": url}
+        data, hit = cached_call(
+            "get:portal",
+            {"id": portal_id},
+            lambda: _fetch_portal_item(portal_id),
+            refresh=refresh,
+            ttl_hours=ttl,
+            cacheable=lambda r: bool(r.get("title") and r.get("title") != "(no title)"),
+        )
     else:
-        url = EXHIBITS_BASE + "/api/items/" + exhibits_id
-        with httpx.Client(timeout=30.0, follow_redirects=True, headers={"User-Agent": USER_AGENT}) as client:
-            resp = client.get(url, headers={"Accept": "application/ld+json"})
-            resp.raise_for_status()
-            item = resp.json()
-        desc = ""
-        for val in item.get("dcterms:description", []) or []:
-            if val.get("@value"):
-                desc = val["@value"]
-                break
-        data = {"source": "exhibits", "id": exhibits_id, "title": _omeka_title(item),
-                "type": ", ".join(t for t in item.get("@type", []) if t != "o:Item"),
-                "description": desc[:500],
-                "url": EXHIBITS_BASE + "/s/exhibits/item/" + exhibits_id}
+        data, hit = cached_call(
+            "get:exhibits",
+            {"id": exhibits_id},
+            lambda: _fetch_exhibits_item(exhibits_id),
+            refresh=refresh,
+            ttl_hours=ttl,
+            cacheable=lambda r: bool(r.get("id")),
+        )
     if as_json:
-        click.echo(json.dumps(data, indent=2))
+        click.echo(json.dumps({**data, "cache_hit": hit}, indent=2))
         return
+    first = True
     for key, val in data.items():
         if val:
-            click.echo("%s: %s" % (key, val))
+            suffix = " [cache]" if first and hit else ""
+            click.echo("%s: %s%s" % (key, val, suffix))
+            first = False
 
 
 if __name__ == "__main__":

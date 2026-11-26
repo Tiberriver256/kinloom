@@ -36,6 +36,36 @@ const BUNDLE_SCRIPT = path.join(CLI_PKG_ROOT, 'scripts', 'bundle-skills.mjs');
 
 const tempDirs: string[] = [];
 
+/** Build a minimal valid PDF with one line of Helvetica text per page. */
+function buildTextPdf(pageTexts: string[]): Buffer {
+  const objects: string[] = [];
+  const pageIds = pageTexts.map((_, i) => 4 + i * 2);
+  objects[1] = '<< /Type /Catalog /Pages 2 0 R >>';
+  objects[2] = `<< /Type /Pages /Kids [${pageIds.map((id) => `${id} 0 R`).join(' ')}] /Count ${pageTexts.length} >>`;
+  objects[3] = '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>';
+  pageTexts.forEach((text, i) => {
+    const pageId = pageIds[i]!;
+    const stream = `BT /F1 12 Tf 72 720 Td (${text.replace(/([()\\])/g, '\\$1')}) Tj ET`;
+    objects[pageId] =
+      `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] ` +
+      `/Resources << /Font << /F1 3 0 R >> >> /Contents ${pageId + 1} 0 R >>`;
+    objects[pageId + 1] = `<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`;
+  });
+  let body = '%PDF-1.4\n';
+  const offsets: number[] = [];
+  for (let id = 1; id < objects.length; id++) {
+    offsets[id] = body.length;
+    body += `${id} 0 obj\n${objects[id]}\nendobj\n`;
+  }
+  const xrefAt = body.length;
+  body += `xref\n0 ${objects.length}\n0000000000 65535 f \n`;
+  for (let id = 1; id < objects.length; id++) {
+    body += `${String(offsets[id]).padStart(10, '0')} 00000 n \n`;
+  }
+  body += `trailer\n<< /Size ${objects.length} /Root 1 0 R >>\nstartxref\n${xrefAt}\n%%EOF\n`;
+  return Buffer.from(body, 'latin1');
+}
+
 async function makeTempDir(prefix: string): Promise<string> {
   const dir = await mkdtemp(path.join(os.tmpdir(), prefix));
   tempDirs.push(dir);
@@ -942,6 +972,58 @@ describe('bundled Python utilities and live script execution', () => {
     expect(fs.readdirSync(previewDir).length).toBe(1);
   });
 
+  it.skipIf(spawnSync('pdftotext', ['-v']).error !== undefined)(
+    'prep-scan pdf-grep reports exact 1-based page numbers and a pdf-pages --pages argument',
+    async () => {
+      const prepScript = path.join(ASSETS_ROOT, 'prep-scan.py');
+      const tmp = await makeTempDir('kinloom-pdf-grep-');
+      const pdfPath = path.join(tmp, 'synthetic.pdf');
+      const pageTexts = [
+        'Abraham Lincoln born 1809 Hardin County',
+        'Nothing relevant on this page',
+        'Jansen family moved to Lincoln County',
+        'Index of names',
+        'LINCOLN, A. page 1',
+      ];
+      await writeFile(pdfPath, buildTextPdf(pageTexts));
+
+      const hit = spawnSync(
+        'python3',
+        [prepScript, 'pdf-grep', pdfPath, '--pattern', 'lincoln', '-i', '--context', '10', '--json'],
+        { encoding: 'utf8' }
+      );
+      expect(hit.status, hit.stderr).toBe(0);
+      const parsed = JSON.parse(hit.stdout);
+      expect(parsed.page_count).toBe(5);
+      expect(parsed.pages).toEqual([1, 3, 5]);
+      expect(parsed.pages_arg).toBe('1,3,5');
+      expect(parsed.match_count).toBe(3);
+      expect(parsed.matches[0]).toMatchObject({ page: 1, line: 1, match: 'Lincoln' });
+
+      const caseSensitive = spawnSync(
+        'python3',
+        [prepScript, 'pdf-grep', pdfPath, '--pattern', 'Lincoln', '--limit', '1'],
+        { encoding: 'utf8' }
+      );
+      expect(caseSensitive.status, caseSensitive.stderr).toBe(0);
+      expect(caseSensitive.stdout).toContain('p.1 L1:');
+      expect(caseSensitive.stdout).toContain('2 match(es) on 2 of 5 page(s)');
+      expect(caseSensitive.stdout).toContain('--pages 1,3');
+
+      const miss = spawnSync('python3', [prepScript, 'pdf-grep', pdfPath, '--pattern', 'Washington'], {
+        encoding: 'utf8',
+      });
+      expect(miss.status).toBe(1);
+      expect(miss.stdout).toContain('0 match(es)');
+
+      const badRegex = spawnSync('python3', [prepScript, 'pdf-grep', pdfPath, '--pattern', '('], {
+        encoding: 'utf8',
+      });
+      expect(badRegex.status).toBe(2);
+      expect(badRegex.stderr).toContain('Invalid --pattern');
+    }
+  );
+
   it('prep-scan rejects a missing or doubled output path with an actionable exit-2 message', () => {
     const prepScript = path.join(ASSETS_ROOT, 'prep-scan.py');
     const env = { ...process.env, KINLOOM_TELEMETRY_PARENT: '1' };
@@ -968,6 +1050,31 @@ describe('bundled Python utilities and live script execution', () => {
     const testFiles = [
       path.join(SKILLS_ROOT, 'chronicling-america', 'tests', 'test_chronam.py'),
       path.join(SKILLS_ROOT, 'new-jersey-archives', 'tests', 'test_nj_archives.py'),
+    ];
+    let pyCmd = 'python3';
+    let pyPrefix: string[] = [];
+    try {
+      execFileSync('python3', ['-c', 'import click, httpx'], { stdio: 'ignore' });
+    } catch {
+      pyCmd = 'uv';
+      pyPrefix = ['run', '--with', 'click', '--with', 'httpx', 'python3'];
+    }
+    const result = spawnSync(pyCmd, [...pyPrefix, '-m', 'unittest', '-v', ...testFiles], {
+      encoding: 'utf8',
+    });
+    expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(0);
+    expect(result.stderr).toMatch(/Ran [1-9]\d* tests/);
+    expect(result.stderr).toMatch(/\bOK\b/);
+  });
+
+  it('passes openarchieven, michiganology, ca/mo/ky-archives, and wikitree disk-caching unit tests', () => {
+    const testFiles = [
+      path.join(SKILLS_ROOT, 'openarchieven', 'tests', 'test_openarchieven.py'),
+      path.join(SKILLS_ROOT, 'library-of-michigan', 'tests', 'test_michiganology.py'),
+      path.join(SKILLS_ROOT, 'california-archives', 'tests', 'test_ca_archives.py'),
+      path.join(SKILLS_ROOT, 'missouri-archives', 'tests', 'test_mo_archives.py'),
+      path.join(SKILLS_ROOT, 'kentucky-archives', 'tests', 'test_ky_archives.py'),
+      path.join(SKILLS_ROOT, 'wikitree', 'tests', 'test_wikitree.py'),
     ];
     let pyCmd = 'python3';
     let pyPrefix: string[] = [];

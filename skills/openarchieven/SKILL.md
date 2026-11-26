@@ -85,6 +85,13 @@ skills/openarchieven/scripts/openarchieven url --record "bhi:78a37833-d731-ffe5-
 - **Follow `Bevolkingsregisters` across municipalities:** When a civil record shows a move or emigration, inspect the household entry with `show` to capture destination columns (`vertrokken naar`) before checking Rotterdam `Passagiersregisters` (`--archive srt`).
 - **Verify against the original scan:** Indexed A2A transcripts occasionally misread handwritten dates or ages; open the `a2a_SourceAvailableScans` or `Original` URL from `show` before treating a date as final.
 
-## Environment variables
+## Disk cache and environment variables
 
-None. No key or account is needed for OpenArchieven read queries.
+`search` and `show` cache successful responses on disk under `~/.cache/kinloom-openarchieven/` (default TTL `168` hours, advisory `flock` per cache key, atomic temp-file writes). HTTP errors, API `error_code` responses, and invalid payloads are never cached.
+
+- `--refresh`: bypass cached reads and write the fresh response to disk.
+- `--cache-ttl-hours <hours>`: override TTL for one call (`0` disables cached reads).
+- `KINLOOM_OPENARCHIEVEN_CACHE_DIR`: override the cache directory path.
+- `KINLOOM_OPENARCHIEVEN_CACHE_TTL_HOURS`: override the default TTL in hours.
+
+No key or account is needed for OpenArchieven read queries.

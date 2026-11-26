@@ -64,8 +64,14 @@ skills/wikitree/scripts/wikitree bio <WikiTree-ID>
 skills/wikitree/scripts/wikitree bio <WikiTree-ID> --format html
 ```
 
-### Environment variables
+### Disk cache and environment variables
 
+`search`, `person`, `ancestors`, and `bio` cache successful API responses on disk under `~/.cache/kinloom-wikitree/` (default TTL `168` hours, advisory `flock` per cache key, atomic temp-file writes). HTTP errors and non-zero WikiTree API status errors are never cached.
+
+- `--refresh`: bypass cached reads and write the fresh response to disk.
+- `--cache-ttl-hours <hours>`: override TTL for one call (`0` disables cached reads).
+- `KINLOOM_WIKITREE_CACHE_DIR`: override the cache directory path.
+- `KINLOOM_WIKITREE_CACHE_TTL_HOURS`: override the default TTL in hours.
 - `WIKITREE_APP_ID`: application id sent with every API call (default
   `Kinloom`). WikiTree asks every client to send one; calls without an id
   are subject to strict rate limits.

@@ -102,9 +102,16 @@ Michigan residents can use the Library of Michigan's subscription databases remo
 5. For land and neighborhood context, pair surveyor maps and the map collection with county plat maps and atlases held in Lansing or digitized at the University of Michigan.
 6. Record every hit in `data/` with its Michiganology item URL; item URLs are stable (`michigan.access.preservica.com/uncategorized/SO_<uuid>` or `IO_<uuid>`).
 
-## Environment variables
+## Disk cache and environment variables
 
-None. No key or account is needed for Michiganology search.
+`search` and `get` cache successful responses on disk under `~/.cache/kinloom-michiganology/` (default TTL `168` hours, advisory `flock` per cache key, atomic temp-file writes). HTTP/curl errors and unparsed or blocked pages are never cached.
+
+- `--refresh`: bypass cached reads and write the fresh response to disk.
+- `--cache-ttl-hours <hours>`: override TTL for one call (`0` disables cached reads).
+- `KINLOOM_MICHIGANOLOGY_CACHE_DIR`: override the cache directory path.
+- `KINLOOM_MICHIGANOLOGY_CACHE_TTL_HOURS`: override the default TTL in hours.
+
+No key or account is needed for Michiganology search.
 
 ## Verified-live note
 

@@ -34,6 +34,16 @@ skills/california-archives/scripts/ca-archives get --portal <portal-id>
 skills/california-archives/scripts/ca-archives get --exhibits <exhibits-id>
 ```
 
+### Disk cache and environment variables
+
+`search` (per source) and `get` cache successful responses on disk under `~/.cache/kinloom-ca-archives/` (default TTL `168` hours, advisory `flock` per cache key, atomic temp-file writes). HTTP errors and blocked/empty pages without a parsed total are never cached.
+
+- `--refresh`: bypass cached reads and write the fresh response to disk.
+- `--cache-ttl-hours <hours>`: override TTL for one call (`0` disables cached reads).
+- `KINLOOM_CA_ARCHIVES_CACHE_DIR`: override the cache directory path.
+- `KINLOOM_CA_ARCHIVES_CACHE_TTL_HOURS`: override the default TTL in hours.
+- `CA_ARCHIVES_BROWSER`: override the Chromium/Chrome executable path for `oac` and `calisphere`.
+
 ## Verification log (verified live 2026-11-24)
 
 - OAC home page `oac.cdlib.org/` returns 200. Its search page `https://oac.cdlib.org/search?q=<query>` returns an AWS WAF JavaScript challenge (HTTP 202, empty body) to plain curl, but loads and returns real results in headless Chromium. The `q` parameter is the search form's own field (verified in the home-page form markup).

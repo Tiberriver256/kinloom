@@ -1,11 +1,11 @@
 ---
 name: prep-scan
-description: Prepare archival scans for inspection and publication: generate compact JPEG previews in parallel, overlay original-pixel coordinate grids, rotate/crop/redact scans, stack multi-band header+household crops, stitch census sheet header strips, and render selective PDF pages via pdftoppm.
+description: Prepare archival scans for inspection and publication: generate compact JPEG previews in parallel, overlay original-pixel coordinate grids, rotate/crop/redact scans, stack multi-band header+household crops, stitch census sheet header strips, search PDF text by page via pdftotext, and render selective PDF pages via pdftoppm.
 ---
 
 # Scan Preparation (`kinloom prep-scan`)
 
-Generate lightweight inspection previews, original-pixel coordinate grids, redacted archival crops, vertically stitched multi-band crops, census header contact strips, and selective PDF page renders. The bundled Python script uses a PEP 723 `uv run --script` header (`pillow`, `httpx`), and `pdf-pages` uses `pdftoppm` from Poppler.
+Generate lightweight inspection previews, original-pixel coordinate grids, redacted archival crops, vertically stitched multi-band crops, census header contact strips, page-indexed PDF regex searches, and selective PDF page renders. The bundled Python script uses a PEP 723 `uv run --script` header (`pillow`, `httpx`), `pdf-pages` uses `pdftoppm`, and `pdf-grep` uses `pdftotext` (or `pypdf` fallback).
 
 ## Subcommands
 
@@ -39,7 +39,16 @@ kinloom prep-scan sheet-strip ./sheets/ed-12-*.jpg --out ./strips/ed-12-headers.
 kinloom prep-scan sheet-strip ./sheets/ed-12-*.jpg --out ./strips/ed-12-streets.jpg --band left --band-pct 12 --max-kb 250
 ```
 
-### 4. Selective PDF page rendering (`pdf-pages`)
+### 4. Selective PDF page rendering (`pdf-pages`) and page-indexed text search (`pdf-grep`)
+
+Search a multi-page PDF's text layer page by page (`pdftotext`, falling back to `pypdf`) to find exact 1-based page numbers, text snippets, and a ready-to-use `--pages` argument before rendering:
+
+```bash
+kinloom prep-scan pdf-grep ./archive/county-history.pdf --pattern "Lincoln" -i --context 200 --limit 25
+kinloom prep-scan pdf-grep ./archive/county-history.pdf --pattern "Hardin County" --json
+```
+
+`pdf-grep` matches line by line (no cross-line backtracking), exits `0` when one or more matches are found, `1` when zero matches are found, and `2` on invalid regex/flags.
 
 Render only the requested PDF page numbers via `pdftoppm`, build compact previews in parallel, and optionally emit a labeled contact strip:
 
@@ -85,4 +94,4 @@ kinloom prep-scan stitch ./raw/census-1930.jpg ./scans/census-1930-household.jpg
 ## Requirements
 
 - `uv` (or Python 3.11+ with `pillow`, plus `httpx` for URL inputs in `sheet-strip`).
-- `pdftoppm` (`poppler-utils` on Linux or `poppler` on macOS) for `pdf-pages`.
+- `pdftoppm` and `pdftotext` (`poppler-utils` on Linux or `poppler` on macOS) for `pdf-pages` and `pdf-grep` (`pdf-grep` falls back to `pypdf` if `pdftotext` is unavailable).

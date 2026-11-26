@@ -29,6 +29,7 @@ Notes on the interfaces:
 - The Land Office form is ASP.NET with `__VIEWSTATE`/`__EVENTVALIDATION`; the CLI does the three-request dance (GET, postback to reveal the advanced panel, search POST) and parses the results table into patent, grantee, grant book/page, acreage, county, watercourse, survey name, survey/grant dates, and grant note.
 - The Preservica host has no public Preservica search API (`/wp-json/` returns a Preservica "Page Not Found" page). The WordPress search RSS feed is the machine route; it returns up to 100 items per query. The site's search is full-text over titles, descriptions, creators, and document contents, so a hit's title often does not show why it matched: open the hit to confirm. Viewing a packet's scans needs the browser.
 - No account or API key is needed to search any portal in this skill. Fees apply only to ordering copies, noted per repository below.
+- **Disk cache:** `cdm`, `cdm-item`, `collections`, `land`, `land-patent`, and `preservica` cache successful responses under `~/.cache/kinloom-ky-archives/` (default TTL `168` hours, per-key `flock`, atomic JSON writes). Pass `--refresh` to force a fresh fetch or `--cache-ttl-hours <hours>` (`0` disables reads). Override with `KINLOOM_KY_ARCHIVES_CACHE_DIR` and `KINLOOM_KY_ARCHIVES_CACHE_TTL_HOURS`. HTTP errors and unverified 0-hit error pages are never cached.
 
 ## Kentucky Historical Society (KHS)
 

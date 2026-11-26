@@ -15,14 +15,124 @@ the 4 requests/second IP rate limit.
 
 from __future__ import annotations
 
+import hashlib
 import json
+import math
+import os
 import re
 import time
-from typing import Any
+from contextlib import contextmanager
+from pathlib import Path
+from typing import Any, Callable, Iterator
 from urllib.parse import urlencode
 
 import click
 import httpx
+
+DEFAULT_CACHE_TTL_HOURS = 168.0
+CACHE_SCHEMA = 1
+
+
+def cache_dir() -> Path:
+    override = os.environ.get("KINLOOM_OPENARCHIEVEN_CACHE_DIR")
+    if override:
+        return Path(override).expanduser()
+    return Path.home() / ".cache" / "kinloom-openarchieven"
+
+
+def resolve_ttl_hours(cli_ttl: float | None) -> float:
+    if cli_ttl is not None:
+        if not math.isfinite(cli_ttl) or cli_ttl < 0:
+            raise click.BadParameter(f"Invalid --cache-ttl-hours value: {cli_ttl!r} (must be >= 0).")
+        return float(cli_ttl)
+    raw = os.environ.get("KINLOOM_OPENARCHIEVEN_CACHE_TTL_HOURS")
+    if raw is not None and raw.strip():
+        try:
+            parsed = float(raw.strip())
+        except ValueError as exc:
+            raise click.BadParameter(f"Invalid KINLOOM_OPENARCHIEVEN_CACHE_TTL_HOURS value: {raw!r}.") from exc
+        if not math.isfinite(parsed) or parsed < 0:
+            raise click.BadParameter(
+                f"Invalid KINLOOM_OPENARCHIEVEN_CACHE_TTL_HOURS value: {raw!r} (must be >= 0).")
+        return parsed
+    return DEFAULT_CACHE_TTL_HOURS
+
+
+@contextmanager
+def file_lock(lock_path: Path) -> Iterator[None]:
+    """Advisory exclusive lock (POSIX flock); no-op where fcntl is missing."""
+    try:
+        import fcntl
+    except ImportError:
+        yield
+        return
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(lock_path, "a+b") as lock_file:
+        fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
+
+
+def atomic_write_json(dest: Path, payload: Any) -> None:
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    tmp = dest.with_name(f".{dest.name}.{os.getpid()}.{time.time_ns()}.tmp")
+    try:
+        tmp.write_text(json.dumps(payload, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
+        os.replace(tmp, dest)
+    except Exception:
+        tmp.unlink(missing_ok=True)
+        raise
+
+
+def cache_key(kind: str, payload: dict) -> str:
+    canonical = json.dumps([kind, payload], sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
+def read_cache(path: Path, ttl_hours: float) -> dict | None:
+    if not path.is_file():
+        return None
+    try:
+        entry = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+        return None
+    if not isinstance(entry, dict) or entry.get("schema") != CACHE_SCHEMA:
+        return None
+    fetched = entry.get("fetched_at")
+    if not isinstance(fetched, (int, float)):
+        return None
+    if ttl_hours <= 0 or (time.time() - fetched) > ttl_hours * 3600:
+        return None
+    result = entry.get("result")
+    return result if isinstance(result, dict) else None
+
+
+def cached_call(kind: str, payload: dict, fetch: Callable[[], dict], *,
+                refresh: bool, ttl_hours: float,
+                cacheable: Callable[[dict], bool] = lambda _r: True) -> tuple[dict, bool]:
+    """Return (result, cache_hit). Concurrent callers of one query serialize
+    on a per-key flock, so the second caller reads the first caller's file.
+    Failures raise out of fetch() and are never written; results rejected by
+    `cacheable` are returned but not stored."""
+    key = cache_key(kind, payload)
+    root = cache_dir()
+    path = root / f"{key}.json"
+    if not refresh:
+        hit = read_cache(path, ttl_hours)
+        if hit is not None:
+            return hit, True
+    with file_lock(root / f"{key}.lock"):
+        if not refresh:
+            hit = read_cache(path, ttl_hours)
+            if hit is not None:
+                return hit, True
+        result = fetch()
+        if cacheable(result):
+            atomic_write_json(path, {"schema": CACHE_SCHEMA, "fetched_at": time.time(),
+                                     "kind": kind, "query": payload, "result": result})
+        return result, False
 
 API_BASE = "https://api.openarch.nl/1.0/records"
 WEB_BASE = "https://www.openarchieven.nl"
@@ -49,16 +159,36 @@ def _fail(message: str) -> None:
     raise SystemExit(1)
 
 
+def cache_options(func: Callable) -> Callable:
+    func = click.option(
+        "--cache-ttl-hours",
+        type=float,
+        default=None,
+        help="Cache TTL in hours (default 168, env KINLOOM_OPENARCHIEVEN_CACHE_TTL_HOURS; 0 disables reads).",
+    )(func)
+    func = click.option(
+        "--refresh",
+        is_flag=True,
+        help="Bypass the disk cache for this request (the fresh result is still cached).",
+    )(func)
+    return func
+
+
+def _client() -> httpx.Client:
+    return httpx.Client(
+        timeout=TIMEOUT,
+        follow_redirects=True,
+        headers={"User-Agent": USER_AGENT, "Accept": "application/json"},
+    )
+
+
 def _get_json(endpoint: str, params: dict[str, Any]) -> Any:
     """Fetch one JSON response from api.openarch.nl with boundary validation."""
-    time.sleep(MIN_INTERVAL_S)
+    if MIN_INTERVAL_S > 0:
+        time.sleep(MIN_INTERVAL_S)
     url = f"{API_BASE}/{endpoint}"
     try:
-        with httpx.Client(
-            timeout=TIMEOUT,
-            follow_redirects=True,
-            headers={"User-Agent": USER_AGENT, "Accept": "application/json"},
-        ) as client:
+        with _client() as client:
             resp = client.get(url, params=params)
     except httpx.HTTPError as exc:
         _fail(f"OpenArchieven request failed: {exc}")
@@ -72,6 +202,24 @@ def _get_json(endpoint: str, params: dict[str, Any]) -> Any:
         desc = data.get("error_description") or data.get("error") or "Unknown API error"
         _fail(f"OpenArchieven API error {data['error_code']}: {desc}")
     return data
+
+
+def _search_cacheable(result: dict[str, Any]) -> bool:
+    resp = result.get("response")
+    if not isinstance(resp, dict):
+        return False
+    docs = resp.get("docs")
+    found = resp.get("number_found")
+    return isinstance(docs, list) and isinstance(found, int) and found >= 0 and (bool(docs) or found == 0)
+
+
+def _show_cacheable(result: dict[str, Any]) -> bool:
+    data = result.get("data")
+    if isinstance(data, dict):
+        return bool(data)
+    if isinstance(data, list):
+        return len(data) > 0
+    return False
 
 
 def _is_source_type(value: str) -> bool:
@@ -304,6 +452,7 @@ def cli() -> None:
 @click.option("--limit", "-n", type=int, default=10, show_default=True, help="Results to return (max 100).")
 @click.option("--start", type=int, default=0, show_default=True, help="Offset for paging (max 10000).")
 @click.option("--json", "as_json", is_flag=True, help="Emit raw API JSON output.")
+@cache_options
 def search(
     name_arg: str | None,
     name_opt: str | None,
@@ -319,6 +468,8 @@ def search(
     limit: int,
     start: int,
     as_json: bool,
+    refresh: bool,
+    cache_ttl_hours: float | None,
 ) -> None:
     """Search OpenArchieven records.
 
@@ -354,15 +505,31 @@ def search(
     if country:
         params["country_code"] = country
 
-    data = _get_json("search.json", params)
+    ttl = resolve_ttl_hours(cache_ttl_hours)
+
+    def _fetch() -> dict[str, Any]:
+        fetched = _get_json("search.json", params)
+        if not isinstance(fetched, dict):
+            _fail(f"Unexpected non-object search response from {API_BASE}/search.json")
+        return fetched
+
+    data, hit = cached_call(
+        "search",
+        params,
+        _fetch,
+        refresh=refresh,
+        ttl_hours=ttl,
+        cacheable=_search_cacheable,
+    )
     if as_json:
-        click.echo(json.dumps(data, indent=2, ensure_ascii=False))
+        click.echo(json.dumps({**data, "cache_hit": hit}, indent=2, ensure_ascii=False))
         return
 
     resp = data.get("response") or {}
     total = resp.get("number_found", 0)
     docs = resp.get("docs") or []
-    click.echo(f"Found {total} records (showing {len(docs)} from offset {start})")
+    marker = " [cache]" if hit else ""
+    click.echo(f"Found {total} records (showing {len(docs)} from offset {start}){marker}")
     for doc in docs:
         code = doc.get("archive_code") or ""
         ident = doc.get("identifier") or ""
@@ -390,12 +557,33 @@ def search(
     help="Language for returned labels.",
 )
 @click.option("--json", "as_json", is_flag=True, help="Emit raw A2A JSON output.")
-def show(archive: str, identifier: str | None, lang: str, as_json: bool) -> None:
+@cache_options
+def show(
+    archive: str,
+    identifier: str | None,
+    lang: str,
+    as_json: bool,
+    refresh: bool,
+    cache_ttl_hours: float | None,
+) -> None:
     """Fetch full A2A details for one record by ARCHIVE IDENTIFIER, archive:uuid, or URL."""
     code, ident = _parse_record_ref(archive, identifier)
-    data = _get_json("show.json", {"archive": code, "identifier": ident, "lang": lang})
+    params = {"archive": code, "identifier": ident, "lang": lang}
+    ttl = resolve_ttl_hours(cache_ttl_hours)
+    wrapped, hit = cached_call(
+        "show",
+        params,
+        lambda: {"data": _get_json("show.json", params)},
+        refresh=refresh,
+        ttl_hours=ttl,
+        cacheable=_show_cacheable,
+    )
+    data = wrapped.get("data")
     if as_json:
-        click.echo(json.dumps(data, indent=2, ensure_ascii=False))
+        if isinstance(data, dict):
+            click.echo(json.dumps({**data, "cache_hit": hit}, indent=2, ensure_ascii=False))
+        else:
+            click.echo(json.dumps({"records": data, "cache_hit": hit}, indent=2, ensure_ascii=False))
         return
     records = data if isinstance(data, list) else [data]
     if not records:
@@ -405,7 +593,11 @@ def show(archive: str, identifier: str | None, lang: str, as_json: bool) -> None
         if idx > 0:
             click.echo("")
         if isinstance(rec, dict):
-            click.echo(_format_a2a_record(code, ident, rec))
+            formatted = _format_a2a_record(code, ident, rec)
+            if idx == 0 and hit:
+                first_line, sep, rest = formatted.partition("\n")
+                formatted = f"{first_line} [cache]{sep}{rest}"
+            click.echo(formatted)
 
 
 @cli.command()

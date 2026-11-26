@@ -28,13 +28,152 @@ ukcc.uky.edu/vitalrec URL did not resolve live 2026-11-24).
 
 from __future__ import annotations
 
+import hashlib
 import html as htmlmod
 import json
+import math
+import os
 import re
+import time
+from contextlib import contextmanager
+from pathlib import Path
+from typing import Any, Callable, Iterator
 from urllib.parse import quote
 
 import click
 import httpx
+
+DEFAULT_CACHE_TTL_HOURS = 168.0
+CACHE_SCHEMA = 1
+
+
+def cache_dir() -> Path:
+    override = os.environ.get("KINLOOM_KY_ARCHIVES_CACHE_DIR")
+    if override:
+        return Path(override).expanduser()
+    return Path.home() / ".cache" / "kinloom-ky-archives"
+
+
+def resolve_ttl_hours(cli_ttl: float | None) -> float:
+    if cli_ttl is not None:
+        if not math.isfinite(cli_ttl) or cli_ttl < 0:
+            raise click.BadParameter(f"Invalid --cache-ttl-hours value: {cli_ttl!r} (must be >= 0).")
+        return float(cli_ttl)
+    raw = os.environ.get("KINLOOM_KY_ARCHIVES_CACHE_TTL_HOURS")
+    if raw is not None and raw.strip():
+        try:
+            parsed = float(raw.strip())
+        except ValueError as exc:
+            raise click.BadParameter(f"Invalid KINLOOM_KY_ARCHIVES_CACHE_TTL_HOURS value: {raw!r}.") from exc
+        if not math.isfinite(parsed) or parsed < 0:
+            raise click.BadParameter(
+                f"Invalid KINLOOM_KY_ARCHIVES_CACHE_TTL_HOURS value: {raw!r} (must be >= 0)."
+            )
+        return parsed
+    return DEFAULT_CACHE_TTL_HOURS
+
+
+@contextmanager
+def file_lock(lock_path: Path) -> Iterator[None]:
+    """Advisory exclusive lock (POSIX flock); no-op where fcntl is missing."""
+    try:
+        import fcntl
+    except ImportError:
+        yield
+        return
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(lock_path, "a+b") as lock_file:
+        fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
+
+
+def atomic_write_json(dest: Path, payload: Any) -> None:
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    tmp = dest.with_name(f".{dest.name}.{os.getpid()}.{time.time_ns()}.tmp")
+    try:
+        tmp.write_text(json.dumps(payload, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
+        os.replace(tmp, dest)
+    except Exception:
+        tmp.unlink(missing_ok=True)
+        raise
+
+
+def cache_key(kind: str, payload: dict) -> str:
+    canonical = json.dumps([kind, payload], sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
+def read_cache(path: Path, ttl_hours: float) -> dict | None:
+    if not path.is_file():
+        return None
+    try:
+        entry = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+        return None
+    if not isinstance(entry, dict) or entry.get("schema") != CACHE_SCHEMA:
+        return None
+    fetched = entry.get("fetched_at")
+    if not isinstance(fetched, (int, float)):
+        return None
+    if ttl_hours <= 0 or (time.time() - fetched) > ttl_hours * 3600:
+        return None
+    result = entry.get("result")
+    return result if isinstance(result, dict) else None
+
+
+def cached_call(
+    kind: str,
+    payload: dict,
+    fetch: Callable[[], dict],
+    *,
+    refresh: bool,
+    ttl_hours: float,
+    cacheable: Callable[[dict], bool] = lambda _r: True,
+) -> tuple[dict, bool]:
+    """Return (result, cache_hit) with per-key flock and atomic JSON writes."""
+    key = cache_key(kind, payload)
+    root = cache_dir()
+    path = root / f"{key}.json"
+    if not refresh:
+        hit = read_cache(path, ttl_hours)
+        if hit is not None:
+            return hit, True
+    with file_lock(root / f"{key}.lock"):
+        if not refresh:
+            hit = read_cache(path, ttl_hours)
+            if hit is not None:
+                return hit, True
+        result = fetch()
+        if cacheable(result):
+            atomic_write_json(
+                path,
+                {
+                    "schema": CACHE_SCHEMA,
+                    "fetched_at": time.time(),
+                    "kind": kind,
+                    "query": payload,
+                    "result": result,
+                },
+            )
+        return result, False
+
+
+def cache_options(func: Callable) -> Callable:
+    func = click.option(
+        "--cache-ttl-hours",
+        type=float,
+        default=None,
+        help="Cache TTL in hours (default 168, env KINLOOM_KY_ARCHIVES_CACHE_TTL_HOURS; 0 disables reads).",
+    )(func)
+    func = click.option(
+        "--refresh",
+        is_flag=True,
+        help="Bypass the disk cache for this request (the fresh result is still cached).",
+    )(func)
+    return func
 
 CDM_BASE = "https://www.kyhistory.com"
 CDM_API = CDM_BASE + "/digital/api"
@@ -83,6 +222,35 @@ def _clean(text: str) -> str:
     return re.sub(r"\s+", " ", text).strip()
 
 
+def _get_json(client: httpx.Client, url: str) -> dict[str, Any]:
+    resp = _get(client, url)
+    try:
+        data = resp.json()
+    except ValueError as exc:
+        raise click.ClickException(f"Invalid JSON from {url}: {exc}") from exc
+    if not isinstance(data, dict):
+        raise click.ClickException(f"Unexpected JSON response from {url}")
+    return data
+
+
+def _fetch_cdm(query: str, alias: str, field: str, limit: int) -> dict[str, Any]:
+    url = (
+        f"{CDM_API}/search/collection/{alias}/searchterm/{quote(query)}/"
+        f"field/{field}/maxRecords/{limit}"
+    )
+    with _client() as client:
+        data = _get_json(client, url)
+    total = data.get("totalResults", 0)
+    items = data.get("items", [])
+    trimmed = [
+        {k: it.get(k) for k in ("collectionAlias", "itemId", "title", "filetype", "itemLink")}
+        | {"fields": {f["field"]: f["value"] for f in it.get("metadataFields", [])}}
+        for it in items
+    ]
+    verified = isinstance(data.get("items"), list) and isinstance(data.get("totalResults"), int)
+    return {"totalResults": total, "items": trimmed, "verified": verified}
+
+
 # ---------------------------------------------------------------- CONTENTdm
 @click.command("cdm")
 @click.argument("query")
@@ -92,65 +260,114 @@ def _clean(text: str) -> str:
               help="Search field: all, title, descri, date, subjec, publis, source (default: all).")
 @click.option("--limit", default=10, type=int, show_default=True)
 @click.option("--json", "as_json", is_flag=True, help="Print raw trimmed JSON.")
-def cdm_cmd(query: str, alias: str, field: str, limit: int, as_json: bool) -> None:
+@cache_options
+def cdm_cmd(
+    query: str,
+    alias: str,
+    field: str,
+    limit: int,
+    as_json: bool,
+    refresh: bool,
+    cache_ttl_hours: float | None,
+) -> None:
     """Search KHS Digital Collections (CONTENTdm API)."""
-    url = (
-        f"{CDM_API}/search/collection/{alias}/searchterm/{quote(query)}/"
-        f"field/{field}/maxRecords/{limit}"
+    ttl = resolve_ttl_hours(cache_ttl_hours)
+    data, hit = cached_call(
+        "cdm",
+        {"query": query, "alias": alias, "field": field, "limit": limit},
+        lambda: _fetch_cdm(query, alias, field, limit),
+        refresh=refresh,
+        ttl_hours=ttl,
+        cacheable=lambda r: bool(r.get("verified")),
     )
-    with _client() as client:
-        data = _get(client, url).json()
     total = data.get("totalResults", 0)
     items = data.get("items", [])
     if as_json:
-        click.echo(json.dumps(
-            {"totalResults": total,
-             "items": [{k: it.get(k) for k in
-                        ("collectionAlias", "itemId", "title", "filetype", "itemLink")
-                        } | {"fields": {f["field"]: f["value"]
-                                        for f in it.get("metadataFields", [])}}
-                       for it in items]},
-            indent=2))
+        click.echo(json.dumps({"totalResults": total, "items": items, "cache_hit": hit}, indent=2))
         return
-    click.echo(f"{total} result(s) for {query!r} in KHS Digital Collections")
+    marker = " [cache]" if hit else ""
+    click.echo(f"{total} result(s) for {query!r} in KHS Digital Collections{marker}")
     for it in items:
-        fields = {f["field"]: f["value"] for f in it.get("metadataFields", [])}
+        fields = it.get("fields") or {}
         date = fields.get("date", "")
         click.echo(f"- [{it.get('collectionAlias')}:{it.get('itemId')}] "
                    f"{it.get('title')}" + (f" ({date})" if date else ""))
         click.echo(f"  {CDM_BASE}/digital{it.get('itemLink', '')}")
 
 
+def _fetch_cdm_item(alias: str, item_id: str) -> dict[str, Any]:
+    url = f"{CDM_API}/singleitem/collection/{alias}/id/{item_id}"
+    with _client() as client:
+        return _get_json(client, url)
+
+
 @click.command("cdm-item")
 @click.argument("alias")
 @click.argument("item_id")
 @click.option("--json", "as_json", is_flag=True, help="Print raw JSON.")
-def cdm_item_cmd(alias: str, item_id: str, as_json: bool) -> None:
+@cache_options
+def cdm_item_cmd(
+    alias: str,
+    item_id: str,
+    as_json: bool,
+    refresh: bool,
+    cache_ttl_hours: float | None,
+) -> None:
     """Show full metadata for one CONTENTdm item: ALIAS ITEM_ID."""
-    url = f"{CDM_API}/singleitem/collection/{alias}/id/{item_id}"
-    with _client() as client:
-        data = _get(client, url).json()
+    ttl = resolve_ttl_hours(cache_ttl_hours)
+    data, hit = cached_call(
+        "cdm-item",
+        {"alias": alias, "item_id": item_id},
+        lambda: _fetch_cdm_item(alias, item_id),
+        refresh=refresh,
+        ttl_hours=ttl,
+        cacheable=lambda r: bool(r.get("fields") or r.get("title") or r.get("contentType")),
+    )
     if as_json:
-        click.echo(json.dumps(data, indent=2))
+        click.echo(json.dumps({**data, "cache_hit": hit}, indent=2))
         return
-    click.echo(f"{CDM_BASE}/digital/singleitem/collection/{alias}/id/{item_id}")
+    marker = " [cache]" if hit else ""
+    click.echo(f"{CDM_BASE}/digital/singleitem/collection/{alias}/id/{item_id}{marker}")
     for f in data.get("fields", []):
         click.echo(f"{f.get('label', f.get('key'))}: {f.get('value')}")
     if data.get("contentType"):
         click.echo(f"Content-Type: {data['contentType']}")
 
 
+def _fetch_collections() -> dict[str, Any]:
+    with _client() as client:
+        return _get_json(client, f"{CDM_API}/collections")
+
+
 @click.command("collections")
 @click.option("--json", "as_json", is_flag=True, help="Print raw JSON.")
-def collections_cmd(as_json: bool) -> None:
+@cache_options
+def collections_cmd(as_json: bool, refresh: bool, cache_ttl_hours: float | None) -> None:
     """List the KHS Digital Collections (CONTENTdm aliases)."""
-    with _client() as client:
-        data = _get(client, f"{CDM_API}/collections").json()
+    ttl = resolve_ttl_hours(cache_ttl_hours)
+    data, hit = cached_call(
+        "collections",
+        {},
+        _fetch_collections,
+        refresh=refresh,
+        ttl_hours=ttl,
+        cacheable=lambda r: bool(r.get("cards")),
+    )
     cards = data.get("cards", [])
     if as_json:
-        click.echo(json.dumps(cards, indent=2))
+        click.echo(
+            json.dumps(
+                {
+                    "totalCollections": data.get("totalCollections", len(cards)),
+                    "cards": cards,
+                    "cache_hit": hit,
+                },
+                indent=2,
+            )
+        )
         return
-    click.echo(f"{data.get('totalCollections', len(cards))} collections")
+    marker = " [cache]" if hit else ""
+    click.echo(f"{data.get('totalCollections', len(cards))} collections{marker}")
     for c in cards:
         click.echo(f"- {c.get('alias')}: {c.get('title')}")
 
@@ -184,7 +401,7 @@ def _land_post(client: httpx.Client, data: dict[str, str]) -> str:
     return resp.text
 
 
-def _parse_land_results(page_html: str) -> tuple[int, list[dict[str, str]]]:
+def _parse_land_results(page_html: str) -> tuple[int, list[dict[str, str]], bool]:
     text = _clean(page_html)
     m = re.search(r"(\d+) Results found", text)
     total = int(m.group(1)) if m else 0
@@ -205,14 +422,16 @@ def _parse_land_results(page_html: str) -> tuple[int, list[dict[str, str]]]:
                 "watercourse", "survey_name", "survey_date", "grant_date",
                 "grant_note")
         results.append(dict(zip(keys, (g.strip() for g in fm.groups()))))
-    return total, results
+    verified = bool(results) or (m is not None)
+    return total, results, verified
 
 
-def _print_land(total: int, results: list[dict[str, str]], as_json: bool) -> None:
+def _print_land(total: int, results: list[dict[str, str]], as_json: bool, cache_hit: bool = False) -> None:
     if as_json:
-        click.echo(json.dumps({"totalResults": total, "results": results}, indent=2))
+        click.echo(json.dumps({"totalResults": total, "results": results, "cache_hit": cache_hit}, indent=2))
         return
-    click.echo(f"{total} patent(s) found")
+    marker = " [cache]" if cache_hit else ""
+    click.echo(f"{total} patent(s) found{marker}")
     for r in results:
         click.echo(f"- Patent #{r['patent']}: {r['grantee']} "
                    f"({r['county']} Co., grant {r['grant_date']}, "
@@ -222,21 +441,9 @@ def _print_land(total: int, results: list[dict[str, str]], as_json: bool) -> Non
                    f"survey name: {r['survey_name']}")
 
 
-@click.command("land")
-@click.argument("term")
-@click.option("--by", "by", default="grantee", type=click.Choice(sorted(LAND_BY)),
-              show_default=True, help="Advanced-search field.")
-@click.option("--limit", default=10, type=click.Choice(["10", "25", "50", "100"]),
-              show_default=True, help="Results per page.")
-@click.option("--json", "as_json", is_flag=True, help="Print JSON.")
-def land_cmd(term: str, by: str, limit: str, as_json: bool) -> None:
-    """Advanced search of County Court Orders patents (1835-2000).
-
-    Example: ky-archives land Lincoln --by grantee
-    """
+def _fetch_land(term: str, by: str, limit: str) -> dict[str, Any]:
     with _client() as client:
         page = _get(client, LAND_URL).text
-        # Open the advanced-search panel (postback), then search from it.
         adv = _land_post(client, _asp_state(page) | {
             "__EVENTTARGET": "ctl00$ContentPlaceHolder1$LbAdvSearch",
             "__EVENTARGUMENT": ""})
@@ -249,20 +456,11 @@ def land_cmd(term: str, by: str, limit: str, as_json: bool) -> None:
             "ctl00$ContentPlaceHolder1$ddlSortBy": "",
             "ctl00$ContentPlaceHolder1$ddlSortDir": "ASC",
             "ctl00$ContentPlaceHolder1$BtnAdvSearch": "Search"})
-    total, results = _parse_land_results(results_html)
-    _print_land(total, results, as_json)
+    total, results, verified = _parse_land_results(results_html)
+    return {"totalResults": total, "results": results, "verified": verified}
 
 
-@click.command("land-patent")
-@click.argument("number")
-@click.option("--book", default=None, help="Grant book number (quick search).")
-@click.option("--page", default=None, help="Grant book page (quick search).")
-@click.option("--json", "as_json", is_flag=True, help="Print JSON.")
-def land_patent_cmd(number: str, book: str | None, page: str | None, as_json: bool) -> None:
-    """Quick search of County Court Orders patents by patent number.
-
-    Example: ky-archives land-patent <patent-number>
-    """
+def _fetch_land_patent(number: str, book: str | None, page: str | None) -> dict[str, Any]:
     with _client() as client:
         state = _asp_state(_get(client, LAND_URL).text)
         data = state | {
@@ -272,24 +470,73 @@ def land_patent_cmd(number: str, book: str | None, page: str | None, as_json: bo
             "ctl00$ContentPlaceHolder1$TxtSPage": page or "",
             "ctl00$ContentPlaceHolder1$BtnSearch": "Search"}
         results_html = _land_post(client, data)
-    total, results = _parse_land_results(results_html)
-    _print_land(total, results, as_json)
+    total, results, verified = _parse_land_results(results_html)
+    return {"totalResults": total, "results": results, "verified": verified}
 
 
-# ---------------------------------------------------------------- Preservica
-@click.command("preservica")
-@click.argument("query")
-@click.option("--limit", default=10, type=int, show_default=True)
+@click.command("land")
+@click.argument("term")
+@click.option("--by", "by", default="grantee", type=click.Choice(sorted(LAND_BY)),
+              show_default=True, help="Advanced-search field.")
+@click.option("--limit", default="10", type=click.Choice(["10", "25", "50", "100"]),
+              show_default=True, help="Results per page.")
 @click.option("--json", "as_json", is_flag=True, help="Print JSON.")
-def preservica_cmd(query: str, limit: int, as_json: bool) -> None:
-    """Search the KDLA Preservica e-archives (WordPress search RSS feed).
+@cache_options
+def land_cmd(
+    term: str,
+    by: str,
+    limit: str,
+    as_json: bool,
+    refresh: bool,
+    cache_ttl_hours: float | None,
+) -> None:
+    """Advanced search of County Court Orders patents (1835-2000).
 
-    Returns the matching record pages (title + URL). The site's search
-    is full-text (titles, descriptions, creators, document contents),
-    so open a hit to confirm why it matched. Opening a packet and
-    viewing its scans needs the browser; there is no public Preservica
-    search API on this host (verified 2026-11-24).
+    Example: ky-archives land Lincoln --by grantee
     """
+    ttl = resolve_ttl_hours(cache_ttl_hours)
+    data, hit = cached_call(
+        "land",
+        {"term": term, "by": by, "limit": limit},
+        lambda: _fetch_land(term, by, limit),
+        refresh=refresh,
+        ttl_hours=ttl,
+        cacheable=lambda r: bool(r.get("verified")),
+    )
+    _print_land(data["totalResults"], data["results"], as_json, cache_hit=hit)
+
+
+@click.command("land-patent")
+@click.argument("number")
+@click.option("--book", default=None, help="Grant book number (quick search).")
+@click.option("--page", default=None, help="Grant book page (quick search).")
+@click.option("--json", "as_json", is_flag=True, help="Print JSON.")
+@cache_options
+def land_patent_cmd(
+    number: str,
+    book: str | None,
+    page: str | None,
+    as_json: bool,
+    refresh: bool,
+    cache_ttl_hours: float | None,
+) -> None:
+    """Quick search of County Court Orders patents by patent number.
+
+    Example: ky-archives land-patent <patent-number>
+    """
+    ttl = resolve_ttl_hours(cache_ttl_hours)
+    data, hit = cached_call(
+        "land-patent",
+        {"number": number, "book": book or "", "page": page or ""},
+        lambda: _fetch_land_patent(number, book, page),
+        refresh=refresh,
+        ttl_hours=ttl,
+        cacheable=lambda r: bool(r.get("verified")),
+    )
+    _print_land(data["totalResults"], data["results"], as_json, cache_hit=hit)
+
+
+def _fetch_preservica(query: str, limit: int) -> dict[str, Any]:
     url = f"{PRESERVICA_BASE}/search/{quote(query)}/feed/rss2/"
     with _client() as client:
         feed = _get(client, url).text
@@ -309,12 +556,53 @@ def preservica_cmd(query: str, limit: int, as_json: bool) -> None:
             results.append({"title": title, "url": link})
         if len(results) >= limit:
             break
+    is_rss = "<rss" in feed.lower() or "<channel>" in feed.lower()
+    return {
+        "search_url": f"{PRESERVICA_BASE}/?s={quote(query)}",
+        "feed_url": url,
+        "results": results,
+        "verified": bool(results) or is_rss,
+    }
+
+
+# ---------------------------------------------------------------- Preservica
+@click.command("preservica")
+@click.argument("query")
+@click.option("--limit", default=10, type=int, show_default=True)
+@click.option("--json", "as_json", is_flag=True, help="Print JSON.")
+@cache_options
+def preservica_cmd(
+    query: str,
+    limit: int,
+    as_json: bool,
+    refresh: bool,
+    cache_ttl_hours: float | None,
+) -> None:
+    """Search the KDLA Preservica e-archives (WordPress search RSS feed).
+
+    Returns the matching record pages (title + URL). The site's search
+    is full-text (titles, descriptions, creators, document contents),
+    so open a hit to confirm why it matched. Opening a packet and
+    viewing its scans needs the browser; there is no public Preservica
+    search API on this host (verified 2026-11-24).
+    """
+    ttl = resolve_ttl_hours(cache_ttl_hours)
+    data, hit = cached_call(
+        "preservica",
+        {"query": query, "limit": limit},
+        lambda: _fetch_preservica(query, limit),
+        refresh=refresh,
+        ttl_hours=ttl,
+        cacheable=lambda r: bool(r.get("verified")),
+    )
+    results = data["results"]
     if as_json:
         click.echo(json.dumps(
-            {"search_url": f"{PRESERVICA_BASE}/?s={quote(query)}",
-             "feed_url": url, "results": results}, indent=2))
+            {"search_url": data["search_url"],
+             "feed_url": data["feed_url"], "results": results, "cache_hit": hit}, indent=2))
         return
-    click.echo(f"KDLA Preservica search: {PRESERVICA_BASE}/?s={quote(query)}")
+    marker = " [cache]" if hit else ""
+    click.echo(f"KDLA Preservica search: {data['search_url']}{marker}")
     if not results:
         click.echo("No results in the search feed.")
         return

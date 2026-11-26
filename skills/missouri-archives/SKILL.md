@@ -64,6 +64,15 @@ skills/missouri-archives/scripts/mo-archives mdh
 
 Prints the MDH home page, Advanced Search, and Archives URLs. MDH has no verified machine interface; do the search in the browser.
 
+### Disk cache and environment variables
+
+`death`, `pre1910`, and `detail` cache successful responses on disk under `~/.cache/kinloom-mo-archives/` (default TTL `168` hours, advisory `flock` per cache key, atomic temp-file writes). HTTP errors and unverified 0-hit error pages are never cached.
+
+- `--refresh`: bypass cached reads and write the fresh response to disk.
+- `--cache-ttl-hours <hours>`: override TTL for one call (`0` disables cached reads).
+- `KINLOOM_MO_ARCHIVES_CACHE_DIR`: override the cache directory path.
+- `KINLOOM_MO_ARCHIVES_CACHE_TTL_HOURS`: override the default TTL in hours.
+
 ## Verified interface (verified live 2026-11-24)
 
 - Portal: https://www.sos.mo.gov/mdh. Missouri State Archives: https://www.sos.mo.gov/archives. Address: 600 West Main Street, Jefferson City, MO 65102. Research room open Monday-Friday 8:00 AM-5:00 PM. Email archref@sos.mo.gov.

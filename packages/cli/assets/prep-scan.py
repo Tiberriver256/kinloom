@@ -759,6 +759,104 @@ def cmd_pdf_pages(args: argparse.Namespace) -> tuple[int, int]:
     return 0, out_bytes
 
 
+def extract_pdf_pages_text(pdf_path: Path, timeout_s: int = 600) -> list[str]:
+    """Return one text string per PDF page (index 0 = page 1).
+
+    pdftotext emits a form feed after every page, so splitting on \\x0c keeps
+    page numbers exact even when a page has no text layer.
+    """
+    pdftotext_bin = shutil.which("pdftotext")
+    if pdftotext_bin:
+        proc = subprocess.run(
+            [pdftotext_bin, "-enc", "UTF-8", str(pdf_path), "-"],
+            capture_output=True,
+            timeout=timeout_s,
+        )
+        if proc.returncode != 0:
+            detail = proc.stderr.decode("utf-8", "replace").strip()
+            raise RuntimeError(f"pdftotext failed (exit {proc.returncode}): {detail}")
+        pages = proc.stdout.decode("utf-8", "replace").split("\x0c")
+        if pages and not pages[-1].strip():
+            pages.pop()
+        return pages
+    try:
+        from pypdf import PdfReader  # type: ignore[import-not-found]
+    except ImportError as exc:
+        raise RuntimeError(
+            "pdftotext not found on PATH and pypdf is not installed. Install poppler-utils "
+            "(for example `apt install poppler-utils` or `brew install poppler`)."
+        ) from exc
+    return [page.extract_text() or "" for page in PdfReader(str(pdf_path)).pages]
+
+
+def format_page_spec(pages: list[int]) -> str:
+    if not pages:
+        return ""
+    return ",".join(str(a) if a == b else f"{a}-{b}" for a, b in coalesce_ranges(pages))
+
+
+def cmd_pdf_grep(args: argparse.Namespace) -> tuple[int, int]:
+    pdf_path = Path(args.pdf_path).resolve()
+    if not pdf_path.is_file():
+        print(f"Error: PDF file not found: {pdf_path}", file=sys.stderr)
+        return 1, 0
+    if args.limit < 1 or args.context < 0:
+        raise ValueError("--limit must be >= 1 and --context must be >= 0.")
+    try:
+        regex = re.compile(args.pattern, re.IGNORECASE if args.ignore_case else 0)
+    except re.error as exc:
+        raise ValueError(f"Invalid --pattern regex {args.pattern!r}: {exc}") from exc
+
+    page_texts = extract_pdf_pages_text(pdf_path)
+    matches: list[dict[str, Any]] = []
+    hit_pages: list[int] = []
+    total = 0
+    ctx = args.context
+    for page_no, text in enumerate(page_texts, start=1):
+        page_hit = False
+        offset = 0
+        for line_no, line in enumerate(text.split("\n"), start=1):
+            for m in regex.finditer(line):
+                if m.end() == m.start():
+                    continue
+                total += 1
+                page_hit = True
+                if len(matches) < args.limit:
+                    start = offset + m.start()
+                    end = offset + m.end()
+                    snippet = " ".join(text[max(0, start - ctx):end + ctx].split())
+                    matches.append({"page": page_no, "line": line_no,
+                                    "match": m.group(0), "snippet": snippet})
+            offset += len(line) + 1
+        if page_hit:
+            hit_pages.append(page_no)
+
+    pages_arg = format_page_spec(hit_pages)
+    result = {
+        "pdf": str(pdf_path),
+        "pattern": args.pattern,
+        "ignore_case": bool(args.ignore_case),
+        "page_count": len(page_texts),
+        "match_count": total,
+        "returned": len(matches),
+        "truncated": total > len(matches),
+        "pages": hit_pages,
+        "pages_arg": pages_arg,
+        "matches": matches,
+    }
+    if args.json:
+        out_bytes = emit_output(json.dumps(result, ensure_ascii=False, indent=2) + "\n")
+    else:
+        lines = [f"p.{m['page']} L{m['line']}: {m['snippet']}" for m in matches]
+        summary = (f"{total} match(es) on {len(hit_pages)} of {len(page_texts)} page(s)"
+                   + (f"; showing first {len(matches)} (raise --limit)" if result["truncated"] else ""))
+        lines.append(summary)
+        if pages_arg:
+            lines.append(f"next: kinloom prep-scan pdf-pages {pdf_path} --pages {pages_arg} --out-dir <dir>")
+        out_bytes = emit_output("\n".join(lines) + "\n")
+    return (0 if total else 1), out_bytes
+
+
 def cmd_grid(args: argparse.Namespace) -> tuple[int, int]:
     Image, ImageDraw, ImageFont, _ = require_pillow()
     if args.step <= 0:
@@ -1043,6 +1141,22 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p_pdf.add_argument("--json", action="store_true", help="Emit JSON output.")
     p_pdf.set_defaults(func=cmd_pdf_pages)
+
+    p_pgrep = sub.add_parser(
+        "pdf-grep",
+        help="Search PDF text page by page (pdftotext, pypdf fallback) and print 1-based page "
+             "numbers + snippets to feed `pdf-pages --pages`. Exit 1 when nothing matches.",
+    )
+    p_pgrep.add_argument("pdf_path", help="Path to source PDF file.")
+    p_pgrep.add_argument("--pattern", "-e", required=True,
+                         help="Python regex, matched within each text line.")
+    p_pgrep.add_argument("-i", "--ignore-case", action="store_true", help="Case-insensitive match.")
+    p_pgrep.add_argument("--context", type=int, default=200,
+                         help="Characters of page text to show on each side of a match (default: 200).")
+    p_pgrep.add_argument("--limit", type=int, default=25,
+                         help="Maximum matches to print (default: 25); all matches still count.")
+    p_pgrep.add_argument("--json", action="store_true", help="Emit JSON output.")
+    p_pgrep.set_defaults(func=cmd_pdf_grep)
 
     p_grid = sub.add_parser(
         "grid",
