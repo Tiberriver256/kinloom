@@ -184,6 +184,7 @@ export interface AuditBatchResult {
   overlaps: AuditOverlaps;
   summary: AuditBatchSummary;
   skippedAlreadyIntegrated?: string[];
+  skippedDrifted?: string[];
   duration_ms: number;
   rendered: string;
 }
@@ -858,8 +859,15 @@ function showNullable(value: string | null): string {
 export function formatAuditBatchTextReport(report: Omit<AuditBatchResult, 'rendered'>): string {
   const lines: string[] = [];
   const skipped = report.skippedAlreadyIntegrated ?? [];
-  const skippedSuffix =
-    skipped.length > 0 ? ` (${skipped.length} already integrated skipped)` : '';
+  const skippedDrifted = report.skippedDrifted ?? [];
+  const skippedParts: string[] = [];
+  if (skipped.length > 0) {
+    skippedParts.push(`${skipped.length} already integrated skipped`);
+  }
+  if (skippedDrifted.length > 0) {
+    skippedParts.push(`${skippedDrifted.length} drifted legacy skipped`);
+  }
+  const skippedSuffix = skippedParts.length > 0 ? ` (${skippedParts.join(', ')})` : '';
   lines.push(
     `Batch audit [${report.ok ? 'PASS' : 'FAIL'}] strict [${report.strictOk ? 'PASS' : 'FAIL'}] ` +
       `${report.summary.people} people${skippedSuffix} (${report.duration_ms} ms)`
@@ -867,6 +875,11 @@ export function formatAuditBatchTextReport(report: Omit<AuditBatchResult, 'rende
   lines.push(`  Repo: ${report.repo}`);
   if (skipped.length > 0) {
     lines.push(`  Skipped already integrated (${skipped.length}): ${skipped.join(', ')}`);
+  }
+  if (skippedDrifted.length > 0) {
+    lines.push(
+      `  Skipped drifted legacy (${skippedDrifted.length}): ${skippedDrifted.join(', ')}`
+    );
   }
   if (report.people.length === 0) {
     lines.push('  No pending staged packages remain to audit.');
@@ -1000,6 +1013,7 @@ export async function runAuditBatchCommand(options: {
   json?: boolean;
   pendingOnly?: boolean;
   skippedAlreadyIntegrated?: readonly string[];
+  skippedDrifted?: readonly string[];
 }): Promise<AuditBatchResult> {
   const started = performance.now();
   const repoDir = path.resolve(options.repoDir?.trim() || process.cwd());
@@ -1009,6 +1023,10 @@ export async function runAuditBatchCommand(options: {
   const skippedAlreadyIntegrated = includeSkipped
     ? [...(options.skippedAlreadyIntegrated ?? [])]
     : undefined;
+  const skippedDrifted =
+    Boolean(options.pendingOnly) || options.skippedDrifted !== undefined
+      ? [...(options.skippedDrifted ?? [])]
+      : undefined;
 
   if (personIds.length === 0 && !options.pendingOnly) {
     throw new CliValidationError('Batch audit requires at least one staged person id.');
@@ -1043,6 +1061,7 @@ export async function runAuditBatchCommand(options: {
     overlaps,
     summary,
     ...(skippedAlreadyIntegrated !== undefined ? { skippedAlreadyIntegrated } : {}),
+    ...(skippedDrifted !== undefined ? { skippedDrifted } : {}),
     duration_ms: Math.round(performance.now() - started),
   };
   const rendered = options.json

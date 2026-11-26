@@ -223,11 +223,11 @@ export const IndexPage: React.FC = () => {
                 }}
                 aria-label={`Search ${siteConfig.site.familyName} relatives by name or place`}
               />
-              <div className="index-filter-actions">
+              <div className={`index-filter-actions${capabilities.canEdit ? ' has-editor-actions' : ''}`}>
                 <div className="index-filter-toggles">
                   <button
                     type="button"
-                    className={`pill-btn ${onlyWithMedia ? 'active' : ''}`}
+                    className={`pill-btn index-media-filter-btn ${onlyWithMedia ? 'active' : ''}`}
                     aria-pressed={onlyWithMedia}
                     onClick={() => {
                       setOnlyWithMedia((v) => !v);
@@ -238,7 +238,7 @@ export const IndexPage: React.FC = () => {
                   {(query.trim() || onlyWithMedia) && (
                     <button
                       type="button"
-                      className="pill-btn"
+                      className="pill-btn index-clear-btn"
                       onClick={() => {
                         setQuery('');
                         setOnlyWithMedia(false);
@@ -251,7 +251,7 @@ export const IndexPage: React.FC = () => {
                 {capabilities.canEdit && (
                   <button
                     type="button"
-                    className="wiki-btn-secondary wiki-btn-sm"
+                    className="wiki-btn-secondary wiki-btn-sm index-add-person-btn"
                     onClick={() => {
                       setCreateOpen(true);
                     }}

@@ -680,7 +680,8 @@ export async function runVerifyCommand(
       (m) => `media: '${m.id}' (${m.file}) ${m.reason} at ${m.expectedPath}`
     ),
     ...mediaCheck.duplicateFiles.map(
-      (dup) => `media: duplicate file '${dup.file}' on ${dup.mediaIds.join(', ')}`
+      (dup) =>
+        `media: duplicate file '${dup.file}' on ${dup.mediaIds.join(', ')}. Run 'kinloom media dedupe' to preview a safe merge plan (pass '--apply' to write).`
     ),
     ...livingNames.hits.map((hit) => `living-name: ${hit.location} matched '${hit.match}'`),
     ...(strictHygiene

@@ -31,8 +31,8 @@ test('tree route filters branches, toggles direct line, and opens focus drawer',
 
   // Switch back to all and test Direct Line toggle
   await branchSelect.selectOption('all');
-  await page.getByRole('button', { name: 'Direct Line' }).click();
-  await expect(page.getByRole('button', { name: 'Direct Line' })).toHaveClass(/active/);
+  await page.getByRole('button', { name: 'Direct Line', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Direct Line', exact: true })).toHaveClass(/active/);
 
   // Select a person node to open focus drawer
   await page.locator('.tree-node-card[aria-label="Inspect Abraham Lincoln"]').click();

@@ -143,8 +143,58 @@ export interface DiagramSiblingToggle {
   readonly stemFromY: number;
   readonly hiddenCount: number;
   readonly totalCollateralCount: number;
+  readonly visibleChildCount: number;
+  readonly mode: TreeLineageMode;
   readonly isExpanded: boolean;
   readonly isDirect: boolean;
+}
+
+export interface UnionOtherChildrenLabels {
+  readonly buttonLabel: string;
+  readonly compactLabel: string;
+  readonly ariaLabel: string;
+}
+
+export function formatUnionOtherChildrenLabel(params: {
+  readonly hiddenCount: number;
+  readonly totalCollateralCount: number;
+  readonly visibleChildCount: number;
+  readonly isExpanded: boolean;
+  readonly mode: TreeLineageMode;
+}): UnionOtherChildrenLabels {
+  const { hiddenCount, totalCollateralCount, visibleChildCount, isExpanded, mode } = params;
+  const count = isExpanded ? totalCollateralCount : hiddenCount;
+  const childWord = count === 1 ? 'child' : 'children';
+  if (visibleChildCount > 0) {
+    const belowDetail =
+      mode === 'spine'
+        ? `${visibleChildCount} in direct line below`
+        : `${visibleChildCount} shown below`;
+    if (isExpanded) {
+      return {
+        buttonLabel: `Hide ${totalCollateralCount} other ${childWord} (${belowDetail})`,
+        compactLabel: `▾ Hide ${totalCollateralCount} other ${childWord}`,
+        ariaLabel: `Hide ${totalCollateralCount} other ${childWord} (${belowDetail})`,
+      };
+    }
+    return {
+      buttonLabel: `+${hiddenCount} other ${childWord} (${belowDetail})`,
+      compactLabel: `▸ +${hiddenCount} other ${childWord}`,
+      ariaLabel: `Show ${hiddenCount} other ${childWord} (${belowDetail})`,
+    };
+  }
+  if (isExpanded) {
+    return {
+      buttonLabel: `Hide ${totalCollateralCount} ${childWord}`,
+      compactLabel: `▾ Hide ${totalCollateralCount} ${childWord}`,
+      ariaLabel: `Hide ${totalCollateralCount} ${childWord}`,
+    };
+  }
+  return {
+    buttonLabel: `+${hiddenCount} ${childWord}`,
+    compactLabel: `▸ +${hiddenCount} ${childWord}`,
+    ariaLabel: `Show ${hiddenCount} ${childWord}`,
+  };
 }
 
 export interface DiagramEarlyLossChip {
@@ -1281,10 +1331,17 @@ export function computeArchivalDiagramLayout(model: ArchivalTreeModel): Archival
           rowBottomY = Math.max(rowBottomY, stripY + stripH);
         }
 
-        // Place collapsible sibling disclosure pill (+N siblings) when collateral siblings exist
+        // Place collapsible other-children disclosure pill when collateral children exist
         const totalCollateral = union.collapsedSiblingIds.length + union.hangingChildIds.length;
         if (totalCollateral > 0) {
-          const pillW = 148;
+          const toggleLabels = formatUnionOtherChildrenLabel({
+            hiddenCount: union.collapsedSiblingIds.length,
+            totalCollateralCount: totalCollateral,
+            visibleChildCount: union.visibleChildIds.length,
+            isExpanded: union.isExpanded,
+            mode: model.effectiveMode,
+          });
+          const pillW = Math.max(156, Math.round(toggleLabels.compactLabel.length * 6.4 + 26));
           const pillH = 28;
           const pillX = Math.round(hub.x - pillW / 2);
           const pillY = Math.round(attachmentY);
@@ -1299,6 +1356,8 @@ export function computeArchivalDiagramLayout(model: ArchivalTreeModel): Archival
             stemFromY: hub.y + 8,
             hiddenCount: union.collapsedSiblingIds.length,
             totalCollateralCount: totalCollateral,
+            visibleChildCount: union.visibleChildIds.length,
+            mode: model.effectiveMode,
             isExpanded: union.isExpanded,
             isDirect: union.isDirect,
           });

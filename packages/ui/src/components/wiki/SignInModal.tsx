@@ -19,12 +19,19 @@ export const SignInModal: React.FC<SignInModalProps> = ({
   initialUrlError = null,
   onNavigateToInvite,
 }) => {
-  const { siteConfig } = useArchiveData();
+  const { siteConfig, authProviders } = useArchiveData();
   const closeBtnRef = useRef<HTMLButtonElement | null>(null);
+  const emailInputRef = useRef<HTMLInputElement | null>(null);
+  const feedbackRef = useRef<HTMLDivElement | null>(null);
+  const preferredFocusRef = initialUrlError
+    ? feedbackRef
+    : authProviders.magicLink
+      ? emailInputRef
+      : closeBtnRef;
   const dialogRef = useDialogFocusTrap({
     open,
     onClose,
-    initialFocusRef: closeBtnRef,
+    initialFocusRef: preferredFocusRef,
   });
 
   if (!open) {
@@ -59,6 +66,8 @@ export const SignInModal: React.FC<SignInModalProps> = ({
           inviteLabel={inviteLabel}
           showInviteHelper
           onNavigateToInvite={onNavigateToInvite}
+          emailInputRef={emailInputRef}
+          feedbackRef={feedbackRef}
         />
       </div>
     </dialog>

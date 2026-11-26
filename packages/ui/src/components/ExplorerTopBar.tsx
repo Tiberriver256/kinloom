@@ -401,7 +401,7 @@ export const ExplorerTopBar: React.FC = () => {
                     setAccountOpen(false);
                   }}
                 >
-                  Recent Changes
+                  {KINLOOM_VOCABULARY.nav.recentChanges}
                 </Link>
               )}
 
@@ -414,7 +414,7 @@ export const ExplorerTopBar: React.FC = () => {
                     setAccountOpen(false);
                   }}
                 >
-                  Site Settings
+                  {KINLOOM_VOCABULARY.nav.siteSettings}
                 </Link>
               )}
 

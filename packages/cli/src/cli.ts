@@ -8,6 +8,7 @@ import {
   CONTEXT_HELP,
   DATES_HELP,
   INTEGRATE_HELP,
+  MEDIA_HELP,
   MIGRATE_HELP,
   PRONOUNCE_HELP,
   STATUS_HELP,
@@ -71,6 +72,7 @@ Research & archive ops:
   integrate          Validate and merge one or more person research packages into local YAML
   audit              Run 5-check package audits for one person or a staged batch
   verify             Run full-archive invariant checks over local data/*.yaml files
+  media              Inspect and deduplicate local archive media records (dry-run by default)
   status             Report archive totals and the deceased biography queue
   sync               Diff and sync local YAML + R2 media to a live Cloudflare archive
   migrate            Idempotently inspect and apply pending Cloudflare D1 SQL migrations
@@ -179,6 +181,7 @@ Options:
   integrate: INTEGRATE_HELP,
   audit: AUDIT_HELP,
   verify: VERIFY_HELP,
+  media: MEDIA_HELP,
   status: STATUS_HELP,
   sync: SYNC_HELP,
   migrate: MIGRATE_HELP,
@@ -912,6 +915,8 @@ export async function runCli(
             patch: { type: 'string' },
             'all-staged': { type: 'boolean', default: false },
             'pending-only': { type: 'boolean', default: false },
+            'mark-integrated': { type: 'boolean', default: false },
+            'reconcile-receipts': { type: 'boolean', default: false },
             'dry-run': { type: 'boolean', default: false },
             json: { type: 'boolean', default: false },
           },
@@ -947,6 +952,12 @@ export async function runCli(
 
         if (values['pending-only'] && !values['all-staged']) {
           throw new CliValidationError('Option `--pending-only` requires `--all-staged`.');
+        }
+        const markIntegrated = Boolean(values['mark-integrated'] || values['reconcile-receipts']);
+        if (markIntegrated && (!values['all-staged'] || !values['pending-only'])) {
+          throw new CliValidationError(
+            'Option `--mark-integrated` requires both `--all-staged` and `--pending-only`.'
+          );
         }
         if (values['all-staged'] && (positionalIds.length > 0 || personFlag)) {
           throw new CliValidationError(
@@ -1032,6 +1043,7 @@ export async function runCli(
               personIds: values['all-staged'] ? undefined : positionalIds,
               allStaged: values['all-staged'],
               pendingOnly: values['pending-only'],
+              markIntegrated,
               dryRun: values['dry-run'],
               json: values.json,
             })
@@ -1108,6 +1120,7 @@ export async function runCli(
           ? listStagedAuditPersonIds(resolvedRepoDir)
           : positionalIds;
         let skippedAlreadyIntegrated: string[] | undefined;
+        let skippedDrifted: string[] | undefined;
         if (values['all-staged'] && !values['pending-only'] && batchIds.length === 0) {
           throw new CliValidationError(
             'No staged packages with patch.json were found under research/people/.'
@@ -1117,6 +1130,7 @@ export async function runCli(
           const classified = await classifyStagedPackages(resolvedRepoDir, batchIds);
           batchIds = classified.pending;
           skippedAlreadyIntegrated = classified.alreadyIntegrated;
+          skippedDrifted = classified.alreadyIntegratedDrifted;
         }
         const useBatch = values['all-staged'] || batchIds.length > 1;
         if (useBatch && packageDir) {
@@ -1176,10 +1190,55 @@ export async function runCli(
               json: values.json,
               pendingOnly: values['pending-only'],
               skippedAlreadyIntegrated,
+              skippedDrifted,
             })
         );
         writeRenderedOutput(io, result.rendered);
         return (values.strict ? result.strictOk : result.ok) ? EXIT_OK : EXIT_ERROR;
+      }
+
+      case 'media': {
+        const sub = rest[0];
+        if (sub !== 'dedupe') {
+          throw new CliValidationError(
+            sub
+              ? `Unknown media subcommand '${sub}'. Expected \`dedupe\`.`
+              : 'Missing media subcommand. Expected `dedupe` (usage: `kinloom media dedupe [--repo <dir>] [--prefer <id>...] [--apply] [--json]`).'
+          );
+        }
+        const subArgs = rest.slice(1);
+        const { values } = safeParseArgs({
+          args: subArgs,
+          allowPositionals: false,
+          options: {
+            repo: { type: 'string' },
+            prefer: { type: 'string', multiple: true },
+            apply: { type: 'boolean', default: false },
+            json: { type: 'boolean', default: false },
+          },
+        });
+        const [{ runMediaDedupeCommand }, { measureCommand }] = await Promise.all([
+          import('./commands/ops/media-dedupe.js'),
+          import('./commands/ops/telemetry.js'),
+        ]);
+        const result = await measureCommand(
+          {
+            subcmd: values.apply ? 'media dedupe --apply' : 'media dedupe',
+            extractResultMeta: (res) => ({
+              exitCode: EXIT_OK,
+              bytesOut: Buffer.byteLength(res.rendered, 'utf8'),
+            }),
+          },
+          () =>
+            runMediaDedupeCommand({
+              repoDir: values.repo ?? cwd,
+              preferIds: values.prefer,
+              apply: values.apply,
+              json: values.json,
+            })
+        );
+        writeRenderedOutput(io, result.rendered);
+        return EXIT_OK;
       }
 
       case 'verify': {

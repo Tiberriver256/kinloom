@@ -306,7 +306,7 @@ export const PlacePage: React.FC = () => {
                             }}
                             aria-label={`Edit pronunciation for ${place.name}`}
                           >
-                            Edit
+                            {KINLOOM_VOCABULARY.person.editPronunciation}
                           </button>
                         )}
                       </>
@@ -319,7 +319,7 @@ export const PlacePage: React.FC = () => {
                           setWikiTab('edit');
                         }}
                       >
-                        + Add pronunciation
+                        {KINLOOM_VOCABULARY.person.addPronunciation}
                       </button>
                     )}
                   </div>

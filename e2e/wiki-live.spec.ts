@@ -79,8 +79,8 @@ test('backend modularity: same KinloomApp responds to Static Files vs Live HTTP 
   await expect(page.getByRole('button', { name: 'Add Photo' })).toBeVisible();
 
   await page.getByRole('button', { name: /Account menu for/ }).click();
-  await expect(page.getByRole('menuitem', { name: 'Recent Changes' })).toBeVisible();
-  await expect(page.getByRole('menuitem', { name: 'Site Settings' })).toHaveCount(0);
+  await expect(page.getByRole('menuitem', { name: 'Revision History' })).toBeVisible();
+  await expect(page.getByRole('menuitem', { name: 'Site Administration' })).toHaveCount(0);
 });
 
 test('1. read-only invite shows viewer banner and magic-link sign-in auto-enrolls strictly as editor', async ({
@@ -117,7 +117,7 @@ test('1. read-only invite shows viewer banner and magic-link sign-in auto-enroll
   await accountBtn.click();
   const accountMenu = page.getByRole('menu', { name: 'Account options' });
   await expect(accountMenu.locator('.wiki-role-chip')).toHaveText('Editor');
-  await expect(accountMenu).not.toContainText('Site Settings');
+  await expect(accountMenu).not.toContainText('Site Administration');
 
   const meRes = await page.request.get(`${wiki.baseUrl}/api/auth/me`);
   expect(meRes.status()).toBe(200);
@@ -287,6 +287,7 @@ test('4. History tab renders visual side-by-side diff and one-click Undo / Rever
 
   const latestItem = historyPanel.locator('article.wiki-revision-item').first();
   await latestItem.getByRole('button', { name: 'Undo / Revert' }).click();
+  await latestItem.getByRole('button', { name: 'Confirm Revert' }).click();
   await expect(historyPanel).toContainText(/Reverted r\d+ in new revision r\d+/);
   await expect(historyPanel.locator('.wiki-action-tag.action-revert').first()).toHaveText('revert');
 
@@ -325,6 +326,7 @@ test('5. soft-delete hides record from active views and restore brings it back c
     .first();
   await expect(deleteRow).toBeVisible();
   await deleteRow.getByRole('button', { name: 'Revert' }).click();
+  await deleteRow.getByRole('button', { name: 'Confirm Revert' }).click();
   await expect(page.locator('.wiki-status-banner.is-success')).toContainText(/Reverted r\d+/);
 
   await page.goto(`${wiki.baseUrl}/person/samuel-lincoln-jr`);
@@ -481,6 +483,7 @@ test('7. AI agent batch submit shows Research agent badge in /changes and one-cl
   await expect(batchSection).toContainText('2 changes');
 
   await batchSection.getByRole('button', { name: 'Revert Entire Batch' }).click();
+  await batchSection.getByRole('button', { name: 'Confirm Batch Revert' }).click();
   await expect(page.locator('.wiki-status-banner.is-success')).toContainText(
     `Reverted batch ${batchId} across 2 revisions`,
   );

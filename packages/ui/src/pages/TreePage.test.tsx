@@ -319,7 +319,7 @@ describe('TreePage', () => {
     // Collateral siblings start collapsed behind +4 siblings pill
     expect(container.querySelector('.tree-hanging-grid')).toBeNull();
     const sibToggle = container.querySelector<HTMLButtonElement>('button.tree-sibling-pill');
-    expect(sibToggle?.textContent).toContain('+4 siblings');
+    expect(sibToggle?.textContent).toContain('+4 other children (1 in direct line below)');
     expect(sibToggle?.getAttribute('aria-expanded')).toBe('false');
 
     act(() => {
@@ -481,7 +481,7 @@ describe('TreePage', () => {
     const options = [...container.querySelectorAll<HTMLButtonElement>('[role="option"]')];
     expect(options).toHaveLength(1);
     expect(options[0]?.textContent).toContain('Martha Hale');
-    expect(options[0]?.textContent).toContain('More siblings');
+    expect(options[0]?.textContent).toContain('Other children');
 
     act(() => {
       options[0]?.click();

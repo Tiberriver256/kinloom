@@ -9,9 +9,11 @@ import React from 'react';
 import {
   formatCardLifespan,
   formatEarlyLossAgeLabel,
+  formatUnionOtherChildrenLabel,
   toRomanNumeral,
 } from '../../lib/archivalTreeModel.js';
 import { scrollBehaviorForMotion } from '../../lib/keyboardNav.js';
+import { formatTreeCardName } from '../../lib/treeNodeDisplay.js';
 import { KINLOOM_VOCABULARY } from '../../lib/vocabulary.js';
 import { initialsOf, resolveAssetUrl } from '../Atoms.js';
 
@@ -36,6 +38,7 @@ interface RollPersonCardProps {
   readonly hasSelection: boolean;
   readonly thumbUrl: string | null;
   readonly badgeLabel?: string;
+  readonly spouseLabel?: string;
   readonly onSelect: (person: Person) => void;
 }
 
@@ -47,6 +50,7 @@ const RollPersonCard: React.FC<RollPersonCardProps> = ({
   hasSelection,
   thumbUrl,
   badgeLabel,
+  spouseLabel,
   onSelect,
 }) => {
   const dimmed = hasSelection && !isLit;
@@ -85,6 +89,7 @@ const RollPersonCard: React.FC<RollPersonCardProps> = ({
           {formatCardLifespan(person)}
           {badgeLabel ? ` · ${badgeLabel}` : ''}
         </span>
+        {spouseLabel && <span className="tree-roll-card-spouse">{spouseLabel}</span>}
       </span>
     </button>
   );
@@ -191,55 +196,67 @@ const UnionAttachments: React.FC<UnionAttachmentsProps> = ({
         </div>
       )}
 
-      {totalCollateral > 0 && (
-        <div className="tree-roll-siblings-block">
-          <button
-            type="button"
-            className={`tree-sibling-pill${union.isExpanded ? ' is-expanded' : ''}`}
-            aria-expanded={union.isExpanded}
-            onClick={() => {
-              onToggleUnionSiblings(union.id);
-            }}
-          >
-            <span className="tree-sibling-pill-chevron" aria-hidden="true">
-              {union.isExpanded ? '▾' : '▸'}
-            </span>
-            {union.isExpanded
-              ? `Hide ${totalCollateral} ${totalCollateral === 1 ? 'sibling' : 'siblings'}`
-              : `+${union.collapsedSiblingIds.length} ${union.collapsedSiblingIds.length === 1 ? 'sibling' : 'siblings'}`}
-          </button>
-
-          {union.isExpanded && hangingChildren.length > 0 && (
-            <div
-              className="tree-hanging-grid"
-              role="list"
-              aria-label={KINLOOM_VOCABULARY.tree.otherSiblingsAria}
+      {totalCollateral > 0 && (() => {
+        const toggleLabels = formatUnionOtherChildrenLabel({
+          hiddenCount: union.collapsedSiblingIds.length,
+          totalCollateralCount: totalCollateral,
+          visibleChildCount: union.visibleChildIds.length,
+          isExpanded: union.isExpanded,
+          mode: model.effectiveMode,
+        });
+        return (
+          <div className="tree-roll-siblings-block">
+            <button
+              type="button"
+              className={`tree-sibling-pill${union.isExpanded ? ' is-expanded' : ''}`}
+              aria-expanded={union.isExpanded}
+              aria-label={toggleLabels.ariaLabel}
+              onClick={() => {
+                onToggleUnionSiblings(union.id);
+              }}
             >
-              {hangingChildren.map((sibling) => {
-                const rawThumb = personThumbMap.get(sibling.id) || sibling.portrait_url;
-                const thumbUrl = rawThumb ? resolveAssetUrl(rawThumb, baseUrl) : null;
-                const siblingSpouses = (model.spouseMap.get(sibling.id) ?? [])
-                  .map((sid) => model.peopleById.get(sid)?.given_name)
-                  .filter((name): name is string => Boolean(name));
-                return (
-                  <div key={sibling.id} className="tree-hanging-grid-item" role="listitem">
-                    <RollPersonCard
-                      person={sibling}
-                      isDirect={false}
-                      isSelected={selectedPersonId === sibling.id}
-                      isLit={Boolean(spotlight?.highlightedPersonIds.has(sibling.id))}
-                      hasSelection={hasSelection}
-                      thumbUrl={thumbUrl}
-                      badgeLabel={siblingSpouses.length > 0 ? `m. ${siblingSpouses[0]}` : undefined}
-                      onSelect={onSelectPerson}
-                    />
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-      )}
+              <span className="tree-sibling-pill-chevron" aria-hidden="true">
+                {union.isExpanded ? '▾' : '▸'}
+              </span>
+              <span>{toggleLabels.buttonLabel}</span>
+            </button>
+
+            {union.isExpanded && hangingChildren.length > 0 && (
+              <div
+                className="tree-hanging-grid"
+                role="list"
+                aria-label={KINLOOM_VOCABULARY.tree.otherSiblingsAria}
+              >
+                {hangingChildren.map((sibling) => {
+                  const rawThumb = personThumbMap.get(sibling.id) || sibling.portrait_url;
+                  const thumbUrl = rawThumb ? resolveAssetUrl(rawThumb, baseUrl) : null;
+                  const siblingSpouses = (model.spouseMap.get(sibling.id) ?? [])
+                    .map((sid) => model.peopleById.get(sid)?.full_name?.trim())
+                    .filter((name): name is string => Boolean(name));
+                  const spouseLabel =
+                    siblingSpouses.length > 0
+                      ? `m. ${formatTreeCardName(siblingSpouses[0], 26)}${siblingSpouses.length > 1 ? ` (+${siblingSpouses.length - 1})` : ''}`
+                      : undefined;
+                  return (
+                    <div key={sibling.id} className="tree-hanging-grid-item" role="listitem">
+                      <RollPersonCard
+                        person={sibling}
+                        isDirect={false}
+                        isSelected={selectedPersonId === sibling.id}
+                        isLit={Boolean(spotlight?.highlightedPersonIds.has(sibling.id))}
+                        hasSelection={hasSelection}
+                        thumbUrl={thumbUrl}
+                        spouseLabel={spouseLabel}
+                        onSelect={onSelectPerson}
+                      />
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        );
+      })()}
     </div>
   );
 };

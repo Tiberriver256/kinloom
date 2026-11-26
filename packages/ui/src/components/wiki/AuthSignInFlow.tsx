@@ -1,6 +1,7 @@
 import React, { useEffect, useId, useRef, useState } from 'react';
 import { HttpWikiDataSource } from '../../adapters/httpWikiDataSource.js';
 import { useArchiveData } from '../../context/ArchiveDataContext.js';
+import { scrollBehaviorForMotion } from '../../lib/keyboardNav.js';
 import {
   getCleanNextPath,
   parseInviteInput,
@@ -16,6 +17,8 @@ export interface AuthSignInFlowProps {
   inviteLabel?: string;
   showInviteHelper?: boolean;
   onNavigateToInvite?: (invitePath: string) => void;
+  emailInputRef?: React.RefObject<HTMLInputElement | null>;
+  feedbackRef?: React.RefObject<HTMLDivElement | null>;
 }
 
 function buildGoogleUrl(
@@ -48,11 +51,19 @@ export const AuthSignInFlow: React.FC<AuthSignInFlowProps> = ({
   inviteLabel,
   showInviteHelper = true,
   onNavigateToInvite = defaultNavigateToInvite,
+  emailInputRef: externalEmailInputRef,
+  feedbackRef: externalFeedbackRef,
 }) => {
   const { dataSource, authProviders } = useArchiveData();
   const baseId = useId();
-  const emailInputRef = useRef<HTMLInputElement | null>(null);
+  const internalEmailInputRef = useRef<HTMLInputElement | null>(null);
+  const internalFeedbackRef = useRef<HTMLDivElement | null>(null);
+  const emailInputRef = externalEmailInputRef ?? internalEmailInputRef;
+  const feedbackRef = externalFeedbackRef ?? internalFeedbackRef;
   const inviteInputRef = useRef<HTMLInputElement | null>(null);
+  const inviteFormRef = useRef<HTMLFormElement | null>(null);
+  const sentTitleRef = useRef<HTMLParagraphElement | null>(null);
+  const inviteOpenedByUserRef = useRef(false);
 
   const [email, setEmail] = useState('');
   const [emailTouched, setEmailTouched] = useState(false);
@@ -88,15 +99,36 @@ export const AuthSignInFlow: React.FC<AuthSignInFlowProps> = ({
 
   useEffect(() => {
     if (activeFeedback?.showInvitePaste && showInviteHelper) {
+      inviteOpenedByUserRef.current = false;
       setInviteOpen(true);
     }
   }, [activeFeedback?.showInvitePaste, showInviteHelper]);
 
   useEffect(() => {
+    if (!inviteOpen) {
+      return;
+    }
+    if (inviteOpenedByUserRef.current) {
+      inviteInputRef.current?.focus();
+    } else if (typeof inviteFormRef.current?.scrollIntoView === 'function') {
+      inviteFormRef.current.scrollIntoView({
+        block: 'nearest',
+        behavior: scrollBehaviorForMotion(),
+      });
+    }
+  }, [inviteOpen]);
+
+  useEffect(() => {
+    if (sentTo !== null) {
+      sentTitleRef.current?.focus();
+    }
+  }, [sentTo]);
+
+  useEffect(() => {
     if (activeFeedback?.focusEmailInput && !sentTo && authProviders.magicLink) {
       emailInputRef.current?.focus();
     }
-  }, [activeFeedback?.focusEmailInput, activeFeedback?.code, sentTo, authProviders.magicLink]);
+  }, [activeFeedback?.focusEmailInput, activeFeedback?.code, sentTo, authProviders.magicLink, emailInputRef]);
 
   const nextPath = getCleanNextPath();
   const googleStartUrl = buildGoogleUrl(dataSource, nextPath, false);
@@ -183,7 +215,7 @@ export const AuthSignInFlow: React.FC<AuthSignInFlowProps> = ({
 
   return (
     <div className="wiki-auth-flow">
-      {inviteLabel && !activeFeedback && (
+      {inviteLabel && !activeFeedback && !sentTo && (
         <div className="wiki-status-banner is-info">
           <p>
             Invited via <strong>{inviteLabel}</strong>.{' '}
@@ -196,6 +228,8 @@ export const AuthSignInFlow: React.FC<AuthSignInFlowProps> = ({
 
       {activeFeedback && (
         <div
+          ref={feedbackRef}
+          tabIndex={-1}
           className={`wiki-status-banner is-${activeFeedback.tone} wiki-auth-feedback`}
           role={activeFeedback.tone === 'info' ? 'status' : 'alert'}
           aria-live={activeFeedback.tone === 'info' ? 'polite' : 'assertive'}
@@ -222,7 +256,7 @@ export const AuthSignInFlow: React.FC<AuthSignInFlowProps> = ({
       {authProviders.magicLink &&
         (sentTo ? (
           <output className="wiki-status-banner is-success wiki-auth-sent" aria-live="polite">
-            <p className="wiki-auth-feedback-title">
+            <p ref={sentTitleRef} tabIndex={-1} className="wiki-auth-feedback-title">
               <strong>
                 {resendCount > 0 ? 'Fresh sign-in link sent' : 'Check your email for a sign-in link'}
               </strong>
@@ -345,6 +379,7 @@ export const AuthSignInFlow: React.FC<AuthSignInFlowProps> = ({
             aria-expanded={inviteOpen}
             aria-controls={invitePanelId}
             onClick={() => {
+              inviteOpenedByUserRef.current = !inviteOpen;
               setInviteOpen((prev) => !prev);
               setInviteError(null);
             }}
@@ -354,6 +389,7 @@ export const AuthSignInFlow: React.FC<AuthSignInFlowProps> = ({
 
           {inviteOpen && (
             <form
+              ref={inviteFormRef}
               id={invitePanelId}
               className="wiki-invite-form"
               noValidate

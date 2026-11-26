@@ -311,12 +311,20 @@ export const EntityEditDrawer: React.FC<EntityEditDrawerProps> = ({
     validationErrors,
     networkError,
   } = snapshot.context;
-  const isBusy = snapshot.hasTag('busy') || syncingRevision;
+  const isSaving = snapshot.hasTag('busy');
+  const isBusy = isSaving || syncingRevision;
   const isConflict = snapshot.matches('conflict409');
   const isSaved = snapshot.matches('saved');
   const isConfirmingLeave = snapshot.matches('confirmingLeave');
   const isNetworkError = snapshot.matches('networkErrorRetryable');
   const summaryValid = isEditSummaryValid(summary);
+  const saveDisabledHint = syncingRevision
+    ? 'Loading latest revision…'
+    : !isSaving && !snapshot.context.dirty
+      ? 'Change any field to save.'
+      : !isSaving && !summaryValid
+        ? 'Add a short edit summary (3+ characters) to save.'
+        : null;
 
   const updateField = (key: string, value: unknown): void => {
     send({
@@ -551,127 +559,8 @@ export const EntityEditDrawer: React.FC<EntityEditDrawerProps> = ({
           </button>
         </div>
 
-        {isConfirmingLeave && (
-          <div className="wiki-status-banner is-warning" role="alert">
-            <div>
-              <strong>Unsaved changes.</strong> Leaving will discard your local edits.
-            </div>
-            <div className="wiki-inline-actions">
-              <button
-                type="button"
-                className="pill-btn active"
-                onClick={() => {
-                  send({ type: 'STAY_EDITING' });
-                }}
-              >
-                Keep Editing
-              </button>
-              <button
-                type="button"
-                className="pill-btn"
-                onClick={() => {
-                  send({ type: 'CONFIRM_LEAVE' });
-                  onClose();
-                }}
-              >
-                Discard &amp; Close
-              </button>
-            </div>
-          </div>
-        )}
-
-        {isSaved && (
-          <output className="wiki-status-banner is-success" aria-live="polite">
-            <div>
-              Saved revision <code>r{snapshot.context.baseRevisionId}</code>.
-            </div>
-            <div className="wiki-inline-actions">
-              <button
-                type="button"
-                className="pill-btn"
-                onClick={() => {
-                  send({ type: 'START_EDIT' });
-                }}
-              >
-                Edit Again
-              </button>
-              <button
-                type="button"
-                className="pill-btn active"
-                onClick={() => {
-                  send({ type: 'DISMISS_SAVED' });
-                  onClose();
-                }}
-              >
-                Done
-              </button>
-            </div>
-          </output>
-        )}
-
-        {isConflict && conflict && (
-          <ConflictMergeDialog
-            conflict={conflict}
-            localDraft={draft}
-            onAcceptServer={() => {
-              send({ type: 'ACCEPT_SERVER' });
-              reloadArchive();
-              onClose();
-            }}
-            onRebaseAndRetry={() => {
-              send({ type: 'REBASE_AND_RETRY' });
-            }}
-            onRebaseToEdit={() => {
-              send({ type: 'REBASE_TO_EDIT' });
-            }}
-            onDiscardDraft={() => {
-              send({ type: 'DISCARD_DRAFT' });
-              onClose();
-            }}
-          />
-        )}
-
-        {isNetworkError && networkError && (
-          <div className="wiki-status-banner is-error" role="alert">
-            <div>
-              <strong>Save failed:</strong> {networkError}
-            </div>
-            <div className="wiki-inline-actions">
-              <button
-                type="button"
-                className="pill-btn active"
-                onClick={() => {
-                  send({ type: 'RETRY_SAVE' });
-                }}
-              >
-                Retry Save
-              </button>
-              <button
-                type="button"
-                className="pill-btn"
-                onClick={() => {
-                  send({ type: 'RETURN_TO_EDIT' });
-                }}
-              >
-                Back to Editor
-              </button>
-            </div>
-          </div>
-        )}
-
-        {validationErrors.length > 0 && (
-          <div className="wiki-status-banner is-error" role="alert">
-            <strong>Fix before saving:</strong>
-            <ul className="wiki-error-list">
-              {validationErrors.map((err) => (
-                <li key={err}>{err}</li>
-              ))}
-            </ul>
-          </div>
-        )}
-
         <form
-          className="wiki-edit-form"
+          className="wiki-edit-drawer-form"
           onSubmit={(e) => {
             e.preventDefault();
             if (entityType === 'person' || entityType === 'place') {
@@ -692,6 +581,133 @@ export const EntityEditDrawer: React.FC<EntityEditDrawerProps> = ({
             send({ type: 'SUBMIT' });
           }}
         >
+          <div className="wiki-edit-drawer-body">
+            {syncingRevision && !isSaving && (
+              <div className="wiki-status-banner is-info" role="status" aria-live="polite">
+                Loading latest revision…
+              </div>
+            )}
+
+            {isConfirmingLeave && (
+              <div className="wiki-status-banner is-warning" role="alert">
+                <div>
+                  <strong>Unsaved changes.</strong> Leaving will discard your local edits.
+                </div>
+                <div className="wiki-inline-actions">
+                  <button
+                    type="button"
+                    className="pill-btn active"
+                    onClick={() => {
+                      send({ type: 'STAY_EDITING' });
+                    }}
+                  >
+                    Keep Editing
+                  </button>
+                  <button
+                    type="button"
+                    className="pill-btn"
+                    onClick={() => {
+                      send({ type: 'CONFIRM_LEAVE' });
+                      onClose();
+                    }}
+                  >
+                    Discard &amp; Close
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {isSaved && (
+              <output className="wiki-status-banner is-success" aria-live="polite">
+                <div>
+                  Saved revision <code>r{snapshot.context.baseRevisionId}</code>.
+                </div>
+                <div className="wiki-inline-actions">
+                  <button
+                    type="button"
+                    className="pill-btn"
+                    onClick={() => {
+                      send({ type: 'START_EDIT' });
+                    }}
+                  >
+                    Edit Again
+                  </button>
+                  <button
+                    type="button"
+                    className="pill-btn active"
+                    onClick={() => {
+                      send({ type: 'DISMISS_SAVED' });
+                      onClose();
+                    }}
+                  >
+                    Done
+                  </button>
+                </div>
+              </output>
+            )}
+
+            {isConflict && conflict && (
+              <ConflictMergeDialog
+                conflict={conflict}
+                localDraft={draft}
+                onAcceptServer={() => {
+                  send({ type: 'ACCEPT_SERVER' });
+                  reloadArchive();
+                  onClose();
+                }}
+                onRebaseAndRetry={() => {
+                  send({ type: 'REBASE_AND_RETRY' });
+                }}
+                onRebaseToEdit={() => {
+                  send({ type: 'REBASE_TO_EDIT' });
+                }}
+                onDiscardDraft={() => {
+                  send({ type: 'DISCARD_DRAFT' });
+                  onClose();
+                }}
+              />
+            )}
+
+            {isNetworkError && networkError && (
+              <div className="wiki-status-banner is-error" role="alert">
+                <div>
+                  <strong>Save failed:</strong> {networkError}
+                </div>
+                <div className="wiki-inline-actions">
+                  <button
+                    type="button"
+                    className="pill-btn active"
+                    onClick={() => {
+                      send({ type: 'RETRY_SAVE' });
+                    }}
+                  >
+                    Retry Save
+                  </button>
+                  <button
+                    type="button"
+                    className="pill-btn"
+                    onClick={() => {
+                      send({ type: 'RETURN_TO_EDIT' });
+                    }}
+                  >
+                    Back to Editor
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {validationErrors.length > 0 && (
+              <div className="wiki-status-banner is-error" role="alert">
+                <strong>Fix before saving:</strong>
+                <ul className="wiki-error-list">
+                  {validationErrors.map((err) => (
+                    <li key={err}>{err}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            <div className="wiki-edit-form">
           {entityType === 'person' && (
             <>
               <div className="wiki-field-grid">
@@ -1372,7 +1388,7 @@ export const EntityEditDrawer: React.FC<EntityEditDrawerProps> = ({
                 />
                 <CitationBadge hasPrimarySource={false} />
                 <span className="wiki-radio-desc">
-                  Oral recollection or family note (labeled as uncited until verified)
+                  Oral recollection or family note (labeled as Family memory until a primary source is cited)
                 </span>
               </label>
             </div>
@@ -1428,90 +1444,96 @@ export const EntityEditDrawer: React.FC<EntityEditDrawerProps> = ({
             )}
           </label>
 
-          <div className="wiki-form-actions">
-            <button
-              type="submit"
-              className="wiki-btn-primary wiki-btn-sm"
-              disabled={isBusy || !snapshot.context.dirty || !summaryValid}
-            >
-              {isBusy ? 'Saving…' : 'Save Changes'}
-            </button>
-            {isBusy ? (
-              <button
-                type="button"
-                className="pill-btn"
-                onClick={() => {
-                  send({ type: 'CANCEL_SAVE' });
-                }}
-              >
-                Cancel Save
-              </button>
-            ) : (
-              <button type="button" className="pill-btn" onClick={handleCloseAttempt}>
-                Cancel
-              </button>
-            )}
-          </div>
-        </form>
+            </div>
 
-        {dataSource.deleteEntity && (
-          <div className="wiki-danger-zone">
-            {!deleteConfirmOpen ? (
-              <button
-                type="button"
-                className="pill-btn wiki-danger-btn"
-                onClick={() => {
-                  setDeleteConfirmOpen(true);
-                }}
-              >
-                Remove from Archive
-              </button>
-            ) : (
-              <div className="wiki-danger-confirm">
-                <p>
-                  Removing hides this page from the archive while keeping its full history so it
-                  can be restored anytime.
-                </p>
-                {deleteError && (
-                  <div className="wiki-status-banner is-error" role="alert">
-                    <p>{deleteError}</p>
-                  </div>
-                )}
-                <input
-                  type="text"
-                  className="wiki-input"
-                  placeholder="Why are you removing this? (at least 3 characters)"
-                  value={deleteSummary}
-                  onChange={(e) => {
-                    setDeleteSummary(e.target.value);
-                  }}
-                  disabled={deleteBusy}
-                />
-                <div className="wiki-inline-actions" style={{ marginTop: 8 }}>
+            {dataSource.deleteEntity && (
+              <div className="wiki-danger-zone">
+                {!deleteConfirmOpen ? (
                   <button
                     type="button"
                     className="pill-btn wiki-danger-btn"
-                    disabled={deleteBusy || !isEditSummaryValid(deleteSummary)}
                     onClick={() => {
-                      void handleSoftDelete();
+                      setDeleteConfirmOpen(true);
                     }}
                   >
-                    {deleteBusy ? 'Removing…' : 'Confirm Removal'}
+                    Remove from Archive
                   </button>
-                  <button
-                    type="button"
-                    className="pill-btn"
-                    onClick={() => {
-                      setDeleteConfirmOpen(false);
-                    }}
-                  >
-                    Cancel
-                  </button>
-                </div>
+                ) : (
+                  <div className="wiki-danger-confirm">
+                    <p>
+                      Removing hides this page from the archive while keeping its full history so it
+                      can be restored anytime.
+                    </p>
+                    {deleteError && (
+                      <div className="wiki-status-banner is-error" role="alert">
+                        <p>{deleteError}</p>
+                      </div>
+                    )}
+                    <input
+                      type="text"
+                      className="wiki-input"
+                      placeholder="Why are you removing this? (at least 3 characters)"
+                      value={deleteSummary}
+                      onChange={(e) => {
+                        setDeleteSummary(e.target.value);
+                      }}
+                      disabled={deleteBusy}
+                    />
+                    <div className="wiki-inline-actions" style={{ marginTop: 8 }}>
+                      <button
+                        type="button"
+                        className="pill-btn wiki-danger-btn"
+                        disabled={deleteBusy || !isEditSummaryValid(deleteSummary)}
+                        onClick={() => {
+                          void handleSoftDelete();
+                        }}
+                      >
+                        {deleteBusy ? 'Removing…' : 'Confirm Removal'}
+                      </button>
+                      <button
+                        type="button"
+                        className="pill-btn"
+                        onClick={() => {
+                          setDeleteConfirmOpen(false);
+                        }}
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>
-        )}
+
+          <div className="wiki-drawer-footer">
+            {saveDisabledHint && <span className="wiki-drawer-footer-hint">{saveDisabledHint}</span>}
+            <div className="wiki-form-actions">
+              <button
+                type="submit"
+                className="wiki-btn-primary wiki-btn-sm"
+                disabled={isBusy || !snapshot.context.dirty || !summaryValid}
+              >
+                {isSaving ? 'Saving…' : 'Save Changes'}
+              </button>
+              {isSaving ? (
+                <button
+                  type="button"
+                  className="pill-btn"
+                  onClick={() => {
+                    send({ type: 'CANCEL_SAVE' });
+                  }}
+                >
+                  Cancel Save
+                </button>
+              ) : (
+                <button type="button" className="pill-btn" onClick={handleCloseAttempt}>
+                  Cancel
+                </button>
+              )}
+            </div>
+          </div>
+        </form>
       </aside>
     </dialog>
   );

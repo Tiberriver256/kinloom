@@ -9,25 +9,39 @@ import {
   type StagedOverlapAnalysis,
 } from './audit-overlaps.js';
 import {
+  INTEGRATION_RECEIPT_FILENAME,
   INTEGRATE_YAML_FILES,
+  buildIntegrationReceiptForPackage,
+  computePackageFingerprints,
   detectMediaLayout,
+  doesReceiptMatchPackage,
   executeIntegrateSingle,
+  readIntegrationReceipt,
   runIntegrateCommand,
+  writeIntegrationReceipt,
   type IntegrateCommandResult,
   type IntegrateExecutionOverlay,
+  type IntegrationReceipt,
   type UpsertCounts,
 } from './integrate.js';
 
 const SAFE_PERSON_ID_RE = /^[a-zA-Z0-9_-]+$/;
 
 export type StagedPackageStatus =
-  | { kind: 'pending'; personId: string; reason: 'changes' | 'error'; error?: string }
-  | { kind: 'already_integrated'; personId: string };
+  | {
+      kind: 'pending';
+      personId: string;
+      reason: 'changes' | 'package_modified' | 'error';
+      error?: string;
+    }
+  | { kind: 'already_integrated'; personId: string; reason: 'receipt_match' | 'exact_match' }
+  | { kind: 'already_integrated_drifted'; personId: string; reason: 'live_superseded' };
 
 export interface ClassifiedStagedPackages {
   allStaged: string[];
   pending: string[];
   alreadyIntegrated: string[];
+  alreadyIntegratedDrifted: string[];
   statuses: StagedPackageStatus[];
 }
 
@@ -36,6 +50,7 @@ export interface IntegrateBatchCommandOptions {
   personIds?: readonly string[];
   allStaged?: boolean;
   pendingOnly?: boolean;
+  markIntegrated?: boolean;
   dryRun?: boolean;
   json?: boolean;
 }
@@ -67,6 +82,8 @@ export interface IntegrateBatchCommandResult {
   requested: string[];
   integrated: string[];
   skippedAlreadyIntegrated: string[];
+  skippedDrifted: string[];
+  markedIntegrated?: string[];
   preFlightOverlaps: StagedOverlapAnalysis;
   results: IntegrateBatchItemResult[];
   totals: IntegrateBatchTotals;
@@ -78,12 +95,14 @@ export interface IntegrateBatchCommandResult {
 interface BatchSnapshot {
   yamlFiles: Map<string, Buffer | null>;
   mediaFiles: Map<string, Buffer | null>;
+  receiptFiles: Map<string, Buffer | null>;
 }
 
 interface RollbackStats {
   restoredYamlFiles: number;
   removedMediaFiles: number;
   restoredMediaFiles: number;
+  restoredReceiptFiles: number;
 }
 
 function emptyUpsertCounts(): UpsertCounts {
@@ -169,19 +188,52 @@ export function hasUnintegratedEffect(result: IntegrateCommandResult): boolean {
   return false;
 }
 
-export async function isPackagePending(repoDir: string, personId: string): Promise<boolean> {
-  try {
-    const dryRunResult = await runIntegrateCommand({
-      repoDir,
-      personId,
-      dryRun: true,
-      json: false,
-    });
-    return hasUnintegratedEffect(dryRunResult);
-  } catch {
-    // Never silently skip a broken or cross-package-dependent staged package.
+function hasAllReceiptScansLive(repoDir: string, receipt: IntegrationReceipt): boolean {
+  const scanNames = Object.keys(receipt.scans_sha256);
+  if (scanNames.length === 0) {
     return true;
   }
+  const mediaLayout = detectMediaLayout(repoDir);
+  for (const filename of scanNames) {
+    const destPath = path.resolve(mediaLayout.scanDestDir, filename);
+    if (!fs.existsSync(destPath)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function isLegacyLiveSuperseded(result: IntegrateCommandResult): boolean {
+  const { counts } = result;
+  const buckets = [
+    counts.people,
+    counts.events,
+    counts.places,
+    counts.sources,
+    counts.media,
+    counts.kinship,
+    counts.narratives,
+  ];
+  if (buckets.some((bucket) => bucket.added > 0)) {
+    return false;
+  }
+  if (
+    result.removedSourceIds.length > 0 ||
+    result.removedEventIds.length > 0 ||
+    result.removedMediaIds.length > 0 ||
+    result.removedKinshipCount > 0
+  ) {
+    return false;
+  }
+  if (result.stagedScans.some((scan) => scan.status !== 'unchanged')) {
+    return false;
+  }
+  return hasUnintegratedEffect(result);
+}
+
+export async function isPackagePending(repoDir: string, personId: string): Promise<boolean> {
+  const classified = await classifyStagedPackages(repoDir, [personId]);
+  return classified.pending.includes(personId);
 }
 
 export async function classifyStagedPackages(
@@ -196,22 +248,50 @@ export async function classifyStagedPackages(
 
   const pending: string[] = [];
   const alreadyIntegrated: string[] = [];
+  const alreadyIntegratedDrifted: string[] = [];
   const statuses: StagedPackageStatus[] = [];
 
   for (const personId of allStaged) {
+    const packageDir = path.join(resolvedRepo, 'research', 'people', personId);
     try {
+      const receipt = readIntegrationReceipt(packageDir);
+      if (receipt !== null) {
+        const fingerprints = computePackageFingerprints(packageDir);
+        if (doesReceiptMatchPackage(receipt, fingerprints)) {
+          if (hasAllReceiptScansLive(resolvedRepo, receipt)) {
+            alreadyIntegrated.push(personId);
+            statuses.push({ kind: 'already_integrated', personId, reason: 'receipt_match' });
+            continue;
+          }
+          // Live media scan was deleted after integration; re-queue as pending to restore it.
+          pending.push(personId);
+          statuses.push({ kind: 'pending', personId, reason: 'changes' });
+          continue;
+        }
+        pending.push(personId);
+        statuses.push({ kind: 'pending', personId, reason: 'package_modified' });
+        continue;
+      }
+
       const dryRunResult = await runIntegrateCommand({
         repoDir: resolvedRepo,
         personId,
         dryRun: true,
         json: false,
       });
-      if (hasUnintegratedEffect(dryRunResult)) {
+      if (!hasUnintegratedEffect(dryRunResult)) {
+        alreadyIntegrated.push(personId);
+        statuses.push({ kind: 'already_integrated', personId, reason: 'exact_match' });
+      } else if (isLegacyLiveSuperseded(dryRunResult)) {
+        alreadyIntegratedDrifted.push(personId);
+        statuses.push({
+          kind: 'already_integrated_drifted',
+          personId,
+          reason: 'live_superseded',
+        });
+      } else {
         pending.push(personId);
         statuses.push({ kind: 'pending', personId, reason: 'changes' });
-      } else {
-        alreadyIntegrated.push(personId);
-        statuses.push({ kind: 'already_integrated', personId });
       }
     } catch (err: unknown) {
       const error = err instanceof Error ? err.message : String(err);
@@ -220,7 +300,7 @@ export async function classifyStagedPackages(
     }
   }
 
-  return { allStaged, pending, alreadyIntegrated, statuses };
+  return { allStaged, pending, alreadyIntegrated, alreadyIntegratedDrifted, statuses };
 }
 
 export function formatBlockingOverlapError(analysis: StagedOverlapAnalysis): string {
@@ -313,7 +393,17 @@ function captureBatchSnapshot(repoDir: string, personIds: readonly string[]): Ba
 
   const mediaLayout = detectMediaLayout(repoDir);
   const mediaFiles = new Map<string, Buffer | null>();
+  const receiptFiles = new Map<string, Buffer | null>();
   for (const personId of personIds) {
+    const receiptPath = path.join(
+      repoDir,
+      'research',
+      'people',
+      personId,
+      INTEGRATION_RECEIPT_FILENAME
+    );
+    receiptFiles.set(receiptPath, fs.existsSync(receiptPath) ? fs.readFileSync(receiptPath) : null);
+
     const scansDir = path.join(repoDir, 'research', 'people', personId, 'scans');
     if (!fs.existsSync(scansDir)) {
       continue;
@@ -339,13 +429,14 @@ function captureBatchSnapshot(repoDir: string, personIds: readonly string[]): Ba
     }
   }
 
-  return { yamlFiles, mediaFiles };
+  return { yamlFiles, mediaFiles, receiptFiles };
 }
 
 function restoreBatchSnapshot(snapshot: BatchSnapshot): RollbackStats {
   let restoredYamlFiles = 0;
   let removedMediaFiles = 0;
   let restoredMediaFiles = 0;
+  let restoredReceiptFiles = 0;
 
   for (const [filePath, originalBytes] of snapshot.yamlFiles) {
     if (originalBytes === null) {
@@ -375,7 +466,21 @@ function restoreBatchSnapshot(snapshot: BatchSnapshot): RollbackStats {
     }
   }
 
-  return { restoredYamlFiles, removedMediaFiles, restoredMediaFiles };
+  for (const [receiptPath, originalBytes] of snapshot.receiptFiles) {
+    if (originalBytes === null) {
+      if (fs.existsSync(receiptPath)) {
+        fs.unlinkSync(receiptPath);
+        restoredReceiptFiles += 1;
+      }
+      continue;
+    }
+    if (!fs.existsSync(receiptPath) || !fs.readFileSync(receiptPath).equals(originalBytes)) {
+      writeFileAtomicBuffer(receiptPath, originalBytes);
+      restoredReceiptFiles += 1;
+    }
+  }
+
+  return { restoredYamlFiles, removedMediaFiles, restoredMediaFiles, restoredReceiptFiles };
 }
 
 function createDryRunDataDirCopy(repoDir: string): string {
@@ -397,10 +502,14 @@ export function formatIntegrateBatchTextReport(
 ): string {
   const lines: string[] = [];
   const dryLabel = report.dryRun ? 'dry-run ' : '';
-  const skippedSuffix =
-    report.skippedAlreadyIntegrated.length > 0
-      ? ` (${report.skippedAlreadyIntegrated.length} already integrated skipped)`
-      : '';
+  const skippedParts: string[] = [];
+  if (report.skippedAlreadyIntegrated.length > 0) {
+    skippedParts.push(`${report.skippedAlreadyIntegrated.length} already integrated skipped`);
+  }
+  if (report.skippedDrifted.length > 0) {
+    skippedParts.push(`${report.skippedDrifted.length} drifted legacy skipped`);
+  }
+  const skippedSuffix = skippedParts.length > 0 ? ` (${skippedParts.join(', ')})` : '';
   lines.push(
     `Batch integrate ${dryLabel}OK: ${report.integrated.length} package(s)${skippedSuffix}`
   );
@@ -408,6 +517,16 @@ export function formatIntegrateBatchTextReport(
   if (report.skippedAlreadyIntegrated.length > 0) {
     lines.push(
       `  Skipped already integrated (${report.skippedAlreadyIntegrated.length}): ${report.skippedAlreadyIntegrated.join(', ')}`
+    );
+  }
+  if (report.skippedDrifted.length > 0) {
+    lines.push(
+      `  Warning: Skipped ${report.skippedDrifted.length} legacy already-integrated package(s) whose live YAML has diverged (${report.skippedDrifted.join(', ')}); run 'kinloom integrate <person_id>' explicitly to re-apply or '--mark-integrated' to record receipts.`
+    );
+  }
+  if (report.markedIntegrated && report.markedIntegrated.length > 0) {
+    lines.push(
+      `  Recorded receipts (${report.markedIntegrated.length}): ${report.markedIntegrated.join(', ')}`
     );
   }
   if (report.integrated.length === 0) {
@@ -449,10 +568,16 @@ export async function runIntegrateBatchCommand(
   const repoDir = path.resolve(options.repoDir?.trim() || process.cwd());
   const allStaged = Boolean(options.allStaged);
   const pendingOnly = Boolean(options.pendingOnly);
+  const markIntegrated = Boolean(options.markIntegrated);
   const dryRun = Boolean(options.dryRun);
 
   if (pendingOnly && !allStaged) {
     throw new CliValidationError('Option `--pending-only` requires `--all-staged`.');
+  }
+  if (markIntegrated && (!allStaged || !pendingOnly)) {
+    throw new CliValidationError(
+      'Option `--mark-integrated` requires both `--all-staged` and `--pending-only`.'
+    );
   }
   const explicitIds = (options.personIds ?? [])
     .map((id) => id.trim())
@@ -497,10 +622,32 @@ export async function runIntegrateBatchCommand(
 
   let targetIds = requested;
   let skippedAlreadyIntegrated: string[] = [];
+  let skippedDrifted: string[] = [];
+  let markedIntegrated: string[] | undefined;
   if (pendingOnly) {
     const classified = await classifyStagedPackages(repoDir, requested);
     targetIds = classified.pending;
     skippedAlreadyIntegrated = classified.alreadyIntegrated;
+    skippedDrifted = classified.alreadyIntegratedDrifted;
+    if (markIntegrated) {
+      const legacyToMark = classified.statuses
+        .filter(
+          (status) =>
+            (status.kind === 'already_integrated' && status.reason === 'exact_match') ||
+            status.kind === 'already_integrated_drifted'
+        )
+        .map((status) => status.personId);
+      markedIntegrated = legacyToMark;
+      if (!dryRun) {
+        for (const personId of legacyToMark) {
+          const packageDir = path.join(repoDir, 'research', 'people', personId);
+          writeIntegrationReceipt(
+            packageDir,
+            buildIntegrationReceiptForPackage(packageDir, personId)
+          );
+        }
+      }
+    }
   }
 
   const preFlightOverlaps = analyzeStagedOverlaps(repoDir, targetIds);
@@ -596,6 +743,8 @@ export async function runIntegrateBatchCommand(
     requested,
     integrated: targetIds,
     skippedAlreadyIntegrated,
+    skippedDrifted,
+    ...(markedIntegrated !== undefined ? { markedIntegrated } : {}),
     preFlightOverlaps,
     results,
     totals: aggregateTotals(results),

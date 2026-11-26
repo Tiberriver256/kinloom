@@ -15,6 +15,7 @@ import React, { useMemo } from 'react';
 import {
   formatCardLifespan,
   formatEarlyLossAgeLabel,
+  formatUnionOtherChildrenLabel,
   toRomanNumeral,
 } from '../../lib/archivalTreeModel.js';
 import { formatTreeCardName } from '../../lib/treeNodeDisplay.js';
@@ -547,9 +548,13 @@ const SiblingToggleItem: React.FC<{
   readonly isLit: boolean;
   readonly onToggle: (unionId: string) => void;
 }> = React.memo(({ toggle, isLit, onToggle }) => {
-  const label = toggle.isExpanded
-    ? `▾ Hide ${toggle.totalCollateralCount} ${toggle.totalCollateralCount === 1 ? 'sibling' : 'siblings'}`
-    : `▸ +${toggle.hiddenCount} ${toggle.hiddenCount === 1 ? 'sibling' : 'siblings'}`;
+  const toggleLabels = formatUnionOtherChildrenLabel({
+    hiddenCount: toggle.hiddenCount,
+    totalCollateralCount: toggle.totalCollateralCount,
+    visibleChildCount: toggle.visibleChildCount,
+    isExpanded: toggle.isExpanded,
+    mode: toggle.mode,
+  });
 
   return (
     <g className={`tree-diagram-sibling-toggle${isLit ? ' is-lit' : ''}`}>
@@ -567,11 +572,7 @@ const SiblingToggleItem: React.FC<{
         tabIndex={0}
         className="tree-diagram-sibling-btn"
         aria-expanded={toggle.isExpanded}
-        aria-label={
-          toggle.isExpanded
-            ? `Hide ${toggle.totalCollateralCount} other siblings`
-            : `Show ${toggle.hiddenCount} more siblings`
-        }
+        aria-label={toggleLabels.ariaLabel}
         transform={`translate(${toggle.x}, ${toggle.y})`}
         onClick={(e) => {
           e.stopPropagation();
@@ -592,6 +593,7 @@ const SiblingToggleItem: React.FC<{
           }
         }}
       >
+        <title>{toggleLabels.ariaLabel}</title>
         <rect
           width={toggle.width}
           height={toggle.height}
@@ -609,7 +611,7 @@ const SiblingToggleItem: React.FC<{
           fontFamily="var(--font-mono)"
           fill={toggle.isExpanded ? 'var(--text-inverse)' : 'var(--accent-primary)'}
         >
-          {label}
+          {toggleLabels.compactLabel}
         </text>
       </g>
     </g>

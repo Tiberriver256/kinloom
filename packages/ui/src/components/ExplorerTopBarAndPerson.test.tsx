@@ -158,8 +158,8 @@ describe('ExplorerTopBar mobile & account menu behavior', () => {
     const menu = container.querySelector('[role="menu"]');
     expect(menu?.textContent).toContain('Morgan Reid');
     expect(menu?.textContent).toContain('Sources');
-    expect(menu?.textContent).toContain('Recent Changes');
-    expect(menu?.textContent).toContain('Site Settings');
+    expect(menu?.textContent).toContain('Revision History');
+    expect(menu?.textContent).toContain('Site Administration');
     expect(menu?.textContent).toContain('Sign Out');
 
     const sourcesItem = [...(menu?.querySelectorAll('button') ?? [])].find((b) =>

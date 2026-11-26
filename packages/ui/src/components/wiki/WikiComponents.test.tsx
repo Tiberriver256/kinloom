@@ -321,6 +321,15 @@ describe('Wiki UI components and tree display polish helpers', () => {
       revertBatchBtn?.click();
       await new Promise((r) => setTimeout(r, 20));
     });
+    expect(revertedBatches).toEqual([]);
+    const confirmBatchBtn = [...container.querySelectorAll('button')].find((b) =>
+      b.textContent?.includes('Confirm Batch Revert'),
+    );
+    expect(confirmBatchBtn).toBeDefined();
+    await act(async () => {
+      confirmBatchBtn?.click();
+      await new Promise((r) => setTimeout(r, 20));
+    });
     expect(revertedBatches).toEqual(['wave_census_1880']);
     unmount();
   });

@@ -195,6 +195,31 @@ export interface IntegrateCommandResult {
   rendered: string;
 }
 
+export const INTEGRATION_RECEIPT_FILENAME = '.integrated.json';
+
+export interface IntegrationReceiptEntityIds {
+  people: string[];
+  events: string[];
+  places: string[];
+  sources: string[];
+  media: string[];
+  narratives: string[];
+}
+
+export interface IntegrationReceipt {
+  schema_version: 1;
+  person_id: string;
+  patch_sha256: string;
+  scans_sha256: Record<string, string>;
+  integrated_at: string;
+  integrated_entity_ids: IntegrationReceiptEntityIds;
+}
+
+export interface PackageFingerprints {
+  patch_sha256: string;
+  scans_sha256: Record<string, string>;
+}
+
 export const INTEGRATE_YAML_FILES = [
   'people.yaml',
   'events.yaml',
@@ -1078,7 +1103,7 @@ function upsertPatchPeople(
         `Slug collision: ${label} ('${merged.id}') reuses slug '${merged.slug}' already owned by '${slugOwner}'.`
       );
     }
-    if (JSON.stringify(existing) === JSON.stringify(merged)) {
+    if (canonicalJsonStringify(existing) === canonicalJsonStringify(merged)) {
       unchanged += 1;
     } else {
       if (existing.slug !== merged.slug && slugToId.get(existing.slug) === existing.id) {
@@ -1091,6 +1116,178 @@ function upsertPatchPeople(
   }
 
   return { items, idxById, slugToId, counts: { added, updated, unchanged } };
+}
+
+function canonicalizeJsonValue(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map((item) => canonicalizeJsonValue(item));
+  }
+  if (value !== null && typeof value === 'object') {
+    const sorted: Record<string, unknown> = {};
+    for (const key of Object.keys(value as Record<string, unknown>).toSorted((a, b) =>
+      a.localeCompare(b)
+    )) {
+      const prop = (value as Record<string, unknown>)[key];
+      if (prop !== undefined) {
+        sorted[key] = canonicalizeJsonValue(prop);
+      }
+    }
+    return sorted;
+  }
+  return value;
+}
+
+function canonicalJsonStringify(value: unknown): string {
+  return JSON.stringify(canonicalizeJsonValue(value));
+}
+
+function mergeRecordExtensions(
+  prevExt?: Readonly<Record<string, unknown>>,
+  incomingExt?: Readonly<Record<string, unknown>>
+): Record<string, unknown> | undefined {
+  if (!prevExt && !incomingExt) {
+    return undefined;
+  }
+  return {
+    ...(prevExt ? structuredClone(prevExt) : {}),
+    ...(incomingExt ? structuredClone(incomingExt) : {}),
+  };
+}
+
+export function computePackageFingerprints(packageDir: string): PackageFingerprints {
+  const patchPath = path.join(packageDir, 'patch.json');
+  const patch_sha256 = sha256File(patchPath).sha256;
+  const scans_sha256: Record<string, string> = {};
+  const scansDir = path.join(packageDir, 'scans');
+  if (fs.existsSync(scansDir) && fs.statSync(scansDir).isDirectory()) {
+    const entries = fs
+      .readdirSync(scansDir, { withFileTypes: true })
+      .filter((entry) => entry.isFile())
+      .map((entry) => entry.name)
+      .filter(
+        (name) => !name.includes('/') && !name.includes('\\') && name !== '.' && name !== '..'
+      )
+      .toSorted((a, b) => a.localeCompare(b));
+    for (const name of entries) {
+      scans_sha256[name] = sha256File(path.join(scansDir, name)).sha256;
+    }
+  }
+  return { patch_sha256, scans_sha256 };
+}
+
+export function readIntegrationReceipt(packageDir: string): IntegrationReceipt | null {
+  const receiptPath = path.join(packageDir, INTEGRATION_RECEIPT_FILENAME);
+  if (!fs.existsSync(receiptPath)) {
+    return null;
+  }
+  try {
+    const parsed: unknown = JSON.parse(fs.readFileSync(receiptPath, 'utf8'));
+    if (!isPlainObject(parsed)) {
+      return null;
+    }
+    if (
+      parsed.schema_version !== 1 ||
+      typeof parsed.person_id !== 'string' ||
+      typeof parsed.patch_sha256 !== 'string' ||
+      !isPlainObject(parsed.scans_sha256) ||
+      typeof parsed.integrated_at !== 'string' ||
+      !isPlainObject(parsed.integrated_entity_ids)
+    ) {
+      return null;
+    }
+    const scans: Record<string, string> = {};
+    for (const [k, v] of Object.entries(parsed.scans_sha256)) {
+      if (typeof v !== 'string') {
+        return null;
+      }
+      scans[k] = v;
+    }
+    const readIds = (field: unknown): string[] =>
+      Array.isArray(field) ? field.filter((item): item is string => typeof item === 'string') : [];
+    const ids = parsed.integrated_entity_ids;
+    return {
+      schema_version: 1,
+      person_id: parsed.person_id,
+      patch_sha256: parsed.patch_sha256,
+      scans_sha256: scans,
+      integrated_at: parsed.integrated_at,
+      integrated_entity_ids: {
+        people: readIds(ids.people),
+        events: readIds(ids.events),
+        places: readIds(ids.places),
+        sources: readIds(ids.sources),
+        media: readIds(ids.media),
+        narratives: readIds(ids.narratives),
+      },
+    };
+  } catch {
+    return null;
+  }
+}
+
+export function doesReceiptMatchPackage(
+  receipt: IntegrationReceipt,
+  fingerprints: PackageFingerprints
+): boolean {
+  if (receipt.patch_sha256 !== fingerprints.patch_sha256) {
+    return false;
+  }
+  const receiptKeys = Object.keys(receipt.scans_sha256).toSorted((a, b) => a.localeCompare(b));
+  const currentKeys = Object.keys(fingerprints.scans_sha256).toSorted((a, b) => a.localeCompare(b));
+  if (receiptKeys.length !== currentKeys.length) {
+    return false;
+  }
+  for (let i = 0; i < receiptKeys.length; i += 1) {
+    const key = receiptKeys[i];
+    if (key !== currentKeys[i] || receipt.scans_sha256[key] !== fingerprints.scans_sha256[key]) {
+      return false;
+    }
+  }
+  return true;
+}
+
+export function writeIntegrationReceipt(packageDir: string, receipt: IntegrationReceipt): string {
+  const receiptPath = path.join(packageDir, INTEGRATION_RECEIPT_FILENAME);
+  writeFileAtomic(receiptPath, `${JSON.stringify(receipt, null, 2)}\n`);
+  return receiptPath;
+}
+
+function collectIdsFromRawList(list: readonly unknown[]): string[] {
+  const out = new Set<string>();
+  for (const item of list) {
+    if (isPlainObject(item) && typeof item.id === 'string' && item.id.trim().length > 0) {
+      out.add(item.id.trim());
+    }
+  }
+  return [...out].toSorted((a, b) => a.localeCompare(b));
+}
+
+export function buildIntegrationReceiptForPackage(
+  packageDir: string,
+  personId: string,
+  integratedAt = new Date().toISOString()
+): IntegrationReceipt {
+  const fingerprints = computePackageFingerprints(packageDir);
+  const patchPath = path.join(packageDir, 'patch.json');
+  const raw: unknown = JSON.parse(fs.readFileSync(patchPath, 'utf8'));
+  const obj = isPlainObject(raw) ? raw : {};
+  const peopleIds = new Set<string>(collectIdsFromRawList(Array.isArray(obj.people) ? obj.people : []));
+  peopleIds.add(personId);
+  return {
+    schema_version: 1,
+    person_id: personId,
+    patch_sha256: fingerprints.patch_sha256,
+    scans_sha256: fingerprints.scans_sha256,
+    integrated_at: integratedAt,
+    integrated_entity_ids: {
+      people: [...peopleIds].toSorted((a, b) => a.localeCompare(b)),
+      events: collectIdsFromRawList(Array.isArray(obj.events) ? obj.events : []),
+      places: collectIdsFromRawList(Array.isArray(obj.places) ? obj.places : []),
+      sources: collectIdsFromRawList(Array.isArray(obj.sources) ? obj.sources : []),
+      media: collectIdsFromRawList(Array.isArray(obj.media) ? obj.media : []),
+      narratives: collectIdsFromRawList(Array.isArray(obj.narratives) ? obj.narratives : []),
+    },
+  };
 }
 
 function upsertById<T extends { id: string }>(
@@ -1116,7 +1313,7 @@ function upsertById<T extends { id: string }>(
     }
     const prev = result[existingIdx];
     const merged = mergeExisting ? parseItem(mergeExisting(prev, incoming)) : incoming;
-    if (JSON.stringify(prev) === JSON.stringify(merged)) {
+    if (canonicalJsonStringify(prev) === canonicalJsonStringify(merged)) {
       unchanged += 1;
     } else {
       result[existingIdx] = merged;
@@ -1154,7 +1351,7 @@ function upsertKinship(
       ...incoming,
       family_xref: incoming.family_xref !== undefined ? incoming.family_xref : prev.family_xref,
     });
-    if (JSON.stringify(prev) === JSON.stringify(merged)) {
+    if (canonicalJsonStringify(prev) === canonicalJsonStringify(merged)) {
       unchanged += 1;
     } else {
       result[existingIdx] = merged;
@@ -1504,26 +1701,66 @@ export async function executeIntegrateSingle(
     validatedPatchPlaces,
     (p) => PlaceSchema.parse(p),
     (prev, incoming) => {
+      const merged: Record<string, unknown> = { ...incoming };
       if (
         !placeIdsWithExplicitPronunciation.has(incoming.id) &&
         incoming.pronunciation === undefined &&
         prev.pronunciation !== undefined
       ) {
-        return {
-          ...incoming,
-          pronunciation: structuredClone(prev.pronunciation),
-        };
+        merged.pronunciation = structuredClone(prev.pronunciation);
       }
-      return incoming;
+      const hasPrimary = mergedPrimarySourceFlag(
+        prev.has_primary_source,
+        incoming.has_primary_source
+      );
+      if (hasPrimary !== undefined) {
+        merged.has_primary_source = hasPrimary;
+      }
+      if (incoming.sources === undefined && prev.sources !== undefined) {
+        merged.sources = structuredClone(prev.sources);
+      }
+      const mergedExt = mergeRecordExtensions(prev.extensions, incoming.extensions);
+      if (mergedExt !== undefined) {
+        merged.extensions = mergedExt;
+      }
+      return merged;
     }
   );
   for (const pl of placesMerge.items) {
     assertValidPlaceCoordinates(pl, `merged place '${pl.id}'`);
   }
 
-  // Sources upsert + optional top-level source retirement.
-  const sourcesMerge = upsertById(existingSources, patch.sources, (s) =>
-    SourceRecordSchema.parse(s)
+  // Sources upsert + optional top-level source retirement (preserving live-only optional fields).
+  const sourcesMerge = upsertById(
+    existingSources,
+    patch.sources,
+    (s) => SourceRecordSchema.parse(s),
+    (prev, incoming) => {
+      const merged: Record<string, unknown> = { ...incoming };
+      const hasPrimary = mergedPrimarySourceFlag(
+        prev.has_primary_source,
+        incoming.has_primary_source
+      );
+      if (hasPrimary !== undefined) {
+        merged.has_primary_source = hasPrimary;
+      }
+      if (incoming.author === undefined && prev.author !== undefined) {
+        merged.author = prev.author;
+      }
+      if (incoming.publisher === undefined && prev.publisher !== undefined) {
+        merged.publisher = prev.publisher;
+      }
+      if (incoming.repository === undefined && prev.repository !== undefined) {
+        merged.repository = prev.repository;
+      }
+      if (incoming.url === undefined && prev.url !== undefined) {
+        merged.url = prev.url;
+      }
+      if (incoming.gedcom_xref === undefined && prev.gedcom_xref !== undefined) {
+        merged.gedcom_xref = prev.gedcom_xref;
+      }
+      return merged;
+    }
   );
   const topLevelRemoveSourceIds = new Set(patch.remove_source_ids);
   if (topLevelRemoveSourceIds.size > 0) {
@@ -1609,8 +1846,42 @@ export async function executeIntegrateSingle(
     return true;
   });
 
-  // Media upsert + optional top-level media retirement.
-  const mediaMerge = upsertById(existingMedia, patch.media, (m) => MediaItemSchema.parse(m));
+  // Media upsert + optional top-level media retirement (preserving live-only optional fields).
+  const mediaMerge = upsertById(
+    existingMedia,
+    patch.media,
+    (m) => MediaItemSchema.parse(m),
+    (prev, incoming) => {
+      const merged: Record<string, unknown> = { ...incoming };
+      const hasPrimary = mergedPrimarySourceFlag(
+        prev.has_primary_source,
+        incoming.has_primary_source
+      );
+      if (hasPrimary !== undefined) {
+        merged.has_primary_source = hasPrimary;
+      }
+      const optionalKeys = [
+        'thumb_file',
+        'provenance',
+        'date_edtf',
+        'page',
+        'mime_type',
+        'duration_seconds',
+        'poster_url',
+        'transcript_url',
+      ] as const;
+      for (const key of optionalKeys) {
+        if (incoming[key] === undefined && prev[key] !== undefined) {
+          merged[key] = prev[key];
+        }
+      }
+      const mergedExt = mergeRecordExtensions(prev.extensions, incoming.extensions);
+      if (mergedExt !== undefined) {
+        merged.extensions = mergedExt;
+      }
+      return merged;
+    }
+  );
   const topLevelRemoveMediaIds = new Set(patch.remove_media_ids);
   if (topLevelRemoveMediaIds.size > 0) {
     const patchedMediaIds = new Set(patch.media.map((m) => MediaItemSchema.parse(m).id));
@@ -1686,8 +1957,31 @@ export async function executeIntegrateSingle(
     return copy;
   });
 
-  const narrativesMerge = upsertById(existingNarratives, normalizedPatchNarratives, (n) =>
-    NarrativeSchema.parse(n)
+  const narrativesMerge = upsertById(
+    existingNarratives,
+    normalizedPatchNarratives,
+    (n) => NarrativeSchema.parse(n),
+    (prev, incoming) => {
+      const merged: Record<string, unknown> = { ...incoming };
+      const hasPrimary = mergedPrimarySourceFlag(
+        prev.has_primary_source,
+        incoming.has_primary_source
+      );
+      if (hasPrimary !== undefined) {
+        merged.has_primary_source = hasPrimary;
+      }
+      if (incoming.updated_at === undefined && prev.updated_at !== undefined) {
+        merged.updated_at = prev.updated_at;
+      }
+      if (incoming.summary === undefined && prev.summary !== undefined) {
+        merged.summary = prev.summary;
+      }
+      const mergedExt = mergeRecordExtensions(prev.extensions, incoming.extensions);
+      if (mergedExt !== undefined) {
+        merged.extensions = mergedExt;
+      }
+      return merged;
+    }
   );
 
   // Referential integrity & privacy checks on patch additions/updates.
@@ -2015,6 +2309,8 @@ export async function executeIntegrateSingle(
       writeFileAtomic(fullPath, item.content);
       writtenYamlFiles.push(fullPath);
     }
+    const receipt = buildIntegrationReceiptForPackage(packageDir, personId);
+    writeIntegrationReceipt(packageDir, receipt);
   }
 
   const summaryBase = {

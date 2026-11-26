@@ -41,15 +41,38 @@ export {
 } from './context.js';
 
 export {
+  MEDIA_HELP,
+  formatMediaDedupeTextReport,
+  mergeDuplicateMediaGroup,
+  rewriteNarrativeMediaCitations,
+  runMediaDedupeCommand,
+  type MediaDedupeCitationRewrite,
+  type MediaDedupeCommandOptions,
+  type MediaDedupeCommandResult,
+  type MediaDedupeExtensionRewrite,
+  type MediaDedupeGroupPlan,
+  type MediaDedupeStagedWarning,
+} from './media-dedupe.js';
+
+export {
+  INTEGRATION_RECEIPT_FILENAME,
   INTEGRATE_HELP,
   applyKinshipRemovals,
   auditBundlePrivacy,
+  buildIntegrationReceiptForPackage,
+  computePackageFingerprints,
+  doesReceiptMatchPackage,
   expandRemoveKinshipTargets,
   getReciprocalKinshipRelation,
   parseRemoveKinshipEntries,
+  readIntegrationReceipt,
   runIntegrateCommand,
+  writeIntegrationReceipt,
   type IntegrateCommandOptions,
   type IntegrateCommandResult,
+  type IntegrationReceipt,
+  type IntegrationReceiptEntityIds,
+  type PackageFingerprints,
   type RemoveKinshipEntry,
   type RemoveKinshipTarget,
   type RemovedKinshipEdge,

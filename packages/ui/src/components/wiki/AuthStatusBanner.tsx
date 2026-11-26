@@ -43,14 +43,16 @@ export const AuthStatusBanner: React.FC = () => {
 
   useEffect(() => {
     const consumed = consumeAuthErrorFromWindow();
-    if (!consumed) {
-      return;
+    if (consumed) {
+      setUrlAuthError(consumed);
     }
-    setUrlAuthError(consumed);
-    if (session?.principal_kind === 'invite_viewer') {
+  }, []);
+
+  useEffect(() => {
+    if (session?.principal_kind === 'invite_viewer' && urlAuthError !== null) {
       setSignInOpen(true);
     }
-  }, [session?.principal_kind]);
+  }, [session?.principal_kind, urlAuthError]);
 
   if (!session) {
     return null;
@@ -60,7 +62,7 @@ export const AuthStatusBanner: React.FC = () => {
     const storageKey = getInviteStripDismissKey(session.inviteLabel);
     const isDismissed = dismissedKey === storageKey || readDismissedState(storageKey);
 
-    if (isDismissed && !signInOpen) {
+    if (isDismissed && !signInOpen && urlAuthError === null) {
       return null;
     }
 

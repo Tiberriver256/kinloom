@@ -81,6 +81,29 @@ export const TreeToolbar: React.FC<TreeToolbarProps> = ({
           </select>
         )}
 
+        {canEdit && (
+          <button
+            type="button"
+            className="pill-btn tree-add-person-mobile-btn"
+            aria-label="Add person"
+            title={KINLOOM_VOCABULARY.tree.addPerson}
+            onClick={onAddPerson}
+          >
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 16 16"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.9"
+              strokeLinecap="round"
+              aria-hidden="true"
+            >
+              <path d="M8 3v10M3 8h10" />
+            </svg>
+          </button>
+        )}
+
         <div
           className="tree-segmented tree-layout-segmented"
           role="group"
@@ -110,7 +133,9 @@ export const TreeToolbar: React.FC<TreeToolbarProps> = ({
       </div>
 
       {(showDirectToggle || canEdit) && (
-        <div className="tree-toolbar-row tree-toolbar-row-secondary">
+        <div
+          className={`tree-toolbar-row tree-toolbar-row-secondary${showDirectToggle ? '' : ' is-desktop-only'}`}
+        >
           {showDirectToggle && (
             <div
               className="tree-segmented tree-scope-segmented"

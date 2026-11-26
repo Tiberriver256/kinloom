@@ -70,46 +70,54 @@ export const RevisionDiffView: React.FC<RevisionDiffViewProps> = ({
         <span className="wiki-diff-stat wiki-diff-stat-chg">~{summary.changedCount} changed</span>
       </div>
 
-      <table className="wiki-diff-table">
-        <thead>
-          <tr>
-            <th scope="col">Field</th>
-            <th scope="col">{beforeLabel}</th>
-            <th scope="col">{afterLabel}</th>
-          </tr>
-        </thead>
-        <tbody>
-          {summary.fields.map((field) => {
-            const sym = symbolForKind(field.kind);
-            return (
-              <tr key={field.path} className={`wiki-diff-row kind-${field.kind}`}>
-                <th scope="row" className="wiki-diff-field-cell">
-                  <span className="wiki-diff-glyph" aria-label={sym.label}>
-                    {sym.glyph}
-                  </span>
-                  <code>{field.path}</code>
-                </th>
-                <td className={field.kind === 'added' ? 'wiki-diff-cell-empty' : 'wiki-diff-cell-del'}>
-                  {field.kind !== 'added' && (
-                    <span className="wiki-diff-prefix" aria-hidden="true">
-                      −{' '}
+      <div className="wiki-diff-table-region" role="region" aria-label="Field differences" tabIndex={0}>
+        <table className="wiki-diff-table">
+          <thead>
+            <tr>
+              <th scope="col">Field</th>
+              <th scope="col">{beforeLabel}</th>
+              <th scope="col">{afterLabel}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {summary.fields.map((field) => {
+              const sym = symbolForKind(field.kind);
+              return (
+                <tr key={field.path} className={`wiki-diff-row kind-${field.kind}`}>
+                  <th scope="row" className="wiki-diff-field-cell">
+                    <span className="wiki-diff-glyph" aria-label={sym.label}>
+                      {sym.glyph}
                     </span>
-                  )}
-                  <span className="wiki-diff-value">{formatDiffValue(field.before)}</span>
-                </td>
-                <td className={field.kind === 'removed' ? 'wiki-diff-cell-empty' : 'wiki-diff-cell-add'}>
-                  {field.kind !== 'removed' && (
-                    <span className="wiki-diff-prefix" aria-hidden="true">
-                      +{' '}
-                    </span>
-                  )}
-                  <span className="wiki-diff-value">{formatDiffValue(field.after)}</span>
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
+                    <code>{field.path}</code>
+                  </th>
+                  <td
+                    data-label={beforeLabel}
+                    className={field.kind === 'added' ? 'wiki-diff-cell-empty' : 'wiki-diff-cell-del'}
+                  >
+                    {field.kind !== 'added' && (
+                      <span className="wiki-diff-prefix" aria-hidden="true">
+                        −{' '}
+                      </span>
+                    )}
+                    <span className="wiki-diff-value">{formatDiffValue(field.before)}</span>
+                  </td>
+                  <td
+                    data-label={afterLabel}
+                    className={field.kind === 'removed' ? 'wiki-diff-cell-empty' : 'wiki-diff-cell-add'}
+                  >
+                    {field.kind !== 'removed' && (
+                      <span className="wiki-diff-prefix" aria-hidden="true">
+                        +{' '}
+                      </span>
+                    )}
+                    <span className="wiki-diff-value">{formatDiffValue(field.after)}</span>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 };

@@ -9,6 +9,21 @@ import { ExplorerTopBar } from '../components/ExplorerTopBar.js';
 import { HttpWikiDataSource } from '../adapters/httpWikiDataSource.js';
 import { KinloomFooter } from '../components/KinloomFooter.js';
 import { useArchiveData } from '../context/ArchiveDataContext.js';
+import { formatArchivalTimestamp } from '../lib/formatTimestamp.js';
+
+type AdminConfirmState =
+  | { readonly kind: 'demote'; readonly email: string }
+  | { readonly kind: 'revoke_invite'; readonly token: string }
+  | { readonly kind: 'revoke_token'; readonly tokenId: string };
+
+function formatTokenScopeLabel(scope: AgentTokenScope): string {
+  return scope === 'read_backup' ? 'Read-only backup' : 'Research updates';
+}
+
+function buildInviteUrl(token: string): string {
+  const origin = typeof window !== 'undefined' ? window.location.origin : '';
+  return `${origin}/invite/${token}`;
+}
 
 export interface AdminApiClient {
   listUsers(): Promise<readonly UserRecord[]>;
@@ -29,7 +44,7 @@ export interface AdminPageProps {
 }
 
 export const AdminPage: React.FC<AdminPageProps> = ({ adminClient }) => {
-  const { dataSource, capabilities } = useArchiveData();
+  const { session, dataSource, capabilities } = useArchiveData();
   const client: AdminApiClient | null =
     adminClient ?? (dataSource instanceof HttpWikiDataSource ? dataSource : null);
 
@@ -38,6 +53,9 @@ export const AdminPage: React.FC<AdminPageProps> = ({ adminClient }) => {
   const [tokens, setTokens] = useState<readonly PublicAgentTokenRecord[]>([]);
   const [loading, setLoading] = useState<boolean>(Boolean(client && capabilities.canManageSite));
   const [error, setError] = useState<string | null>(null);
+  const [busyKey, setBusyKey] = useState<string | null>(null);
+  const [pendingConfirm, setPendingConfirm] = useState<AdminConfirmState | null>(null);
+  const [copiedKey, setCopiedKey] = useState<string | null>(null);
 
   // Invite form state
   const [inviteLabel, setInviteLabel] = useState('');
@@ -49,6 +67,28 @@ export const AdminPage: React.FC<AdminPageProps> = ({ adminClient }) => {
   const [tokenScope, setTokenScope] = useState<AgentTokenScope>('write_batch');
   const [revealedSecret, setRevealedSecret] = useState<CreatedAgentTokenResponse | null>(null);
   const [copiedSecret, setCopiedSecret] = useState(false);
+
+  const copyText = (key: string, text: string): void => {
+    const clipboard = typeof navigator !== 'undefined' ? navigator.clipboard : undefined;
+    if (!clipboard?.writeText) {
+      setCopiedKey(key);
+      window.setTimeout(() => {
+        setCopiedKey((current) => (current === key ? null : current));
+      }, 2000);
+      return;
+    }
+    void clipboard
+      .writeText(text)
+      .then(() => {
+        setCopiedKey(key);
+        window.setTimeout(() => {
+          setCopiedKey((current) => (current === key ? null : current));
+        }, 2000);
+      })
+      .catch(() => {
+        setCopiedKey(null);
+      });
+  };
 
   const loadAll = useCallback(async (): Promise<void> => {
     if (!client || !capabilities.canManageSite) {
@@ -82,12 +122,16 @@ export const AdminPage: React.FC<AdminPageProps> = ({ adminClient }) => {
       return;
     }
     const nextRole: UserRole = user.role === 'admin' ? 'editor' : 'admin';
+    setBusyKey(`role:${user.email}`);
+    setPendingConfirm(null);
     setError(null);
     try {
       const updated = await client.updateUserRole(user.email, { role: nextRole });
       setUsers((prev) => prev.map((u) => (u.email === updated.email ? updated : u)));
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusyKey(null);
     }
   };
 
@@ -96,6 +140,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ adminClient }) => {
     if (!client || !inviteLabel.trim()) {
       return;
     }
+    setBusyKey('create_invite');
     setError(null);
     try {
       const parsedDays = Number(inviteDays);
@@ -108,6 +153,8 @@ export const AdminPage: React.FC<AdminPageProps> = ({ adminClient }) => {
       setInvites((prev) => [res.invite, ...prev]);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusyKey(null);
     }
   };
 
@@ -115,6 +162,8 @@ export const AdminPage: React.FC<AdminPageProps> = ({ adminClient }) => {
     if (!client) {
       return;
     }
+    setBusyKey(`revoke_invite:${token}`);
+    setPendingConfirm(null);
     setError(null);
     try {
       await client.revokeInvite(token);
@@ -125,6 +174,8 @@ export const AdminPage: React.FC<AdminPageProps> = ({ adminClient }) => {
       );
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusyKey(null);
     }
   };
 
@@ -133,6 +184,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ adminClient }) => {
     if (!client || !tokenLabel.trim()) {
       return;
     }
+    setBusyKey('create_token');
     setError(null);
     try {
       const created = await client.createAgentToken({
@@ -145,6 +197,8 @@ export const AdminPage: React.FC<AdminPageProps> = ({ adminClient }) => {
       await loadAll();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusyKey(null);
     }
   };
 
@@ -152,6 +206,8 @@ export const AdminPage: React.FC<AdminPageProps> = ({ adminClient }) => {
     if (!client) {
       return;
     }
+    setBusyKey(`revoke_token:${tokenId}`);
+    setPendingConfirm(null);
     setError(null);
     try {
       await client.revokeAgentToken(tokenId);
@@ -162,8 +218,13 @@ export const AdminPage: React.FC<AdminPageProps> = ({ adminClient }) => {
       );
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusyKey(null);
     }
   };
+
+  const adminCount = users.filter((u) => u.role === 'admin').length;
+  const currentAdminEmail = session?.email?.toLowerCase() ?? null;
 
   if (!capabilities.canManageSite) {
     return (
@@ -222,26 +283,84 @@ export const AdminPage: React.FC<AdminPageProps> = ({ adminClient }) => {
             <p className="empty-ring-note">No enrolled members found.</p>
           ) : (
             <div className="wiki-admin-list">
-              {users.map((user) => (
-                <div key={user.email} className="wiki-admin-row">
-                  <div>
-                    <strong>{user.display_name}</strong>{' '}
-                    <span className="wiki-role-chip">{user.role}</span>
-                    <div className="wiki-panel-meta">
-                      {user.email} · Added {user.added_at}
+              {users.map((user) => {
+                const isSelf =
+                  currentAdminEmail !== null && user.email.toLowerCase() === currentAdminEmail;
+                const demoteBlocked = user.role === 'admin' && (isSelf || adminCount <= 1);
+                const demoteBlockedReason = isSelf
+                  ? 'You cannot demote your own admin account.'
+                  : 'At least one administrator is required.';
+                const confirmingDemote =
+                  pendingConfirm?.kind === 'demote' && pendingConfirm.email === user.email;
+                const isRowBusy = busyKey === `role:${user.email}`;
+
+                return (
+                  <div key={user.email} className="wiki-admin-row">
+                    <div>
+                      <strong>{user.display_name}</strong>{' '}
+                      <span className="wiki-role-chip">
+                        {user.role === 'admin' ? 'Admin' : 'Editor'}
+                      </span>
+                      {isSelf && <span className="wiki-role-chip is-self">You</span>}
+                      <div className="wiki-panel-meta">
+                        {user.email} · Added{' '}
+                        <time dateTime={user.added_at} title={user.added_at}>
+                          {formatArchivalTimestamp(user.added_at, false)}
+                        </time>
+                      </div>
+                      {demoteBlocked && (
+                        <div className="wiki-panel-meta">{demoteBlockedReason}</div>
+                      )}
+                    </div>
+                    <div className="wiki-inline-actions">
+                      {confirmingDemote ? (
+                        <>
+                          <button
+                            type="button"
+                            className="pill-btn wiki-danger-btn"
+                            disabled={busyKey !== null}
+                            onClick={() => {
+                              void handleToggleRole(user);
+                            }}
+                          >
+                            Confirm Demote
+                          </button>
+                          <button
+                            type="button"
+                            className="pill-btn"
+                            disabled={busyKey !== null}
+                            onClick={() => {
+                              setPendingConfirm(null);
+                            }}
+                          >
+                            Cancel
+                          </button>
+                        </>
+                      ) : (
+                        <button
+                          type="button"
+                          className="wiki-btn-secondary wiki-btn-sm"
+                          disabled={busyKey !== null || demoteBlocked}
+                          title={demoteBlocked ? demoteBlockedReason : undefined}
+                          onClick={() => {
+                            if (user.role === 'admin') {
+                              setPendingConfirm({ kind: 'demote', email: user.email });
+                            } else {
+                              void handleToggleRole(user);
+                            }
+                          }}
+                        >
+                          {isRowBusy
+                            ? 'Updating…'
+                            : user.role === 'admin'
+                              ? 'Demote to Editor'
+                              : 'Promote to Admin'}
+                        </button>
+                      )}
                     </div>
                   </div>
-                  <button
-                    type="button"
-                    className="pill-btn"
-                    onClick={() => {
-                      void handleToggleRole(user);
-                    }}
-                  >
-                    {user.role === 'admin' ? 'Demote to Editor' : 'Promote to Admin'}
-                  </button>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </section>
@@ -284,9 +403,9 @@ export const AdminPage: React.FC<AdminPageProps> = ({ adminClient }) => {
             <button
               type="submit"
               className="wiki-btn-primary wiki-btn-sm"
-              disabled={!inviteLabel.trim()}
+              disabled={!inviteLabel.trim() || busyKey !== null}
             >
-              Generate Invite Link
+              {busyKey === 'create_invite' ? 'Creating…' : 'Generate Invite Link'}
             </button>
           </form>
 
@@ -295,37 +414,112 @@ export const AdminPage: React.FC<AdminPageProps> = ({ adminClient }) => {
               <p>
                 <strong>New invite link:</strong> <code>{createdInviteUrl}</code>
               </p>
+              <div className="wiki-inline-actions" style={{ marginTop: 4 }}>
+                <button
+                  type="button"
+                  className="pill-btn active"
+                  onClick={() => {
+                    copyText('created_invite', createdInviteUrl);
+                  }}
+                >
+                  {copiedKey === 'created_invite' ? 'Copied' : 'Copy Invite Link'}
+                </button>
+                <button
+                  type="button"
+                  className="pill-btn"
+                  onClick={() => {
+                    setCreatedInviteUrl(null);
+                  }}
+                >
+                  Dismiss
+                </button>
+              </div>
             </output>
           )}
 
           <div className="wiki-admin-list" style={{ marginTop: 12 }}>
-            {invites.map((inv) => (
-              <div key={inv.token} className="wiki-admin-row">
-                <div>
-                  <strong>{inv.label}</strong>{' '}
-                  {inv.revoked_at ? (
-                    <span className="wiki-badge wiki-badge-conflict">Revoked</span>
-                  ) : (
-                    <span className="wiki-badge wiki-badge-cited">Active</span>
-                  )}
-                  <div className="wiki-panel-meta">
-                    Uses: {inv.uses}
-                    {inv.expires_at ? ` · Expires ${inv.expires_at}` : ' · No expiry'}
+            {invites.map((inv) => {
+              const confirmingRevoke =
+                pendingConfirm?.kind === 'revoke_invite' && pendingConfirm.token === inv.token;
+              const isRowBusy = busyKey === `revoke_invite:${inv.token}`;
+              const copyId = `invite:${inv.token}`;
+              return (
+                <div key={inv.token} className="wiki-admin-row">
+                  <div>
+                    <strong>{inv.label}</strong>{' '}
+                    {inv.revoked_at ? (
+                      <span className="wiki-badge wiki-badge-conflict">Revoked</span>
+                    ) : (
+                      <span className="wiki-badge wiki-badge-cited">Active</span>
+                    )}
+                    <div className="wiki-panel-meta">
+                      Uses: {inv.uses}
+                      {inv.expires_at ? (
+                        <>
+                          {' '}
+                          · Expires{' '}
+                          <time dateTime={inv.expires_at} title={inv.expires_at}>
+                            {formatArchivalTimestamp(inv.expires_at, false)}
+                          </time>
+                        </>
+                      ) : (
+                        ' · No expiry'
+                      )}
+                    </div>
                   </div>
+                  {!inv.revoked_at && (
+                    <div className="wiki-inline-actions">
+                      {confirmingRevoke ? (
+                        <>
+                          <button
+                            type="button"
+                            className="pill-btn wiki-danger-btn"
+                            disabled={busyKey !== null}
+                            onClick={() => {
+                              void handleRevokeInvite(inv.token);
+                            }}
+                          >
+                            Confirm Revoke
+                          </button>
+                          <button
+                            type="button"
+                            className="pill-btn"
+                            disabled={busyKey !== null}
+                            onClick={() => {
+                              setPendingConfirm(null);
+                            }}
+                          >
+                            Cancel
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          <button
+                            type="button"
+                            className="wiki-btn-secondary wiki-btn-sm"
+                            onClick={() => {
+                              copyText(copyId, buildInviteUrl(inv.token));
+                            }}
+                          >
+                            {copiedKey === copyId ? 'Copied' : 'Copy Link'}
+                          </button>
+                          <button
+                            type="button"
+                            className="pill-btn wiki-danger-btn"
+                            disabled={busyKey !== null}
+                            onClick={() => {
+                              setPendingConfirm({ kind: 'revoke_invite', token: inv.token });
+                            }}
+                          >
+                            {isRowBusy ? 'Revoking…' : 'Revoke'}
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  )}
                 </div>
-                {!inv.revoked_at && (
-                  <button
-                    type="button"
-                    className="pill-btn wiki-danger-btn"
-                    onClick={() => {
-                      void handleRevokeInvite(inv.token);
-                    }}
-                  >
-                    Revoke
-                  </button>
-                )}
-              </div>
-            ))}
+              );
+            })}
           </div>
         </section>
 
@@ -367,9 +561,9 @@ export const AdminPage: React.FC<AdminPageProps> = ({ adminClient }) => {
             <button
               type="submit"
               className="wiki-btn-primary wiki-btn-sm"
-              disabled={!tokenLabel.trim()}
+              disabled={!tokenLabel.trim() || busyKey !== null}
             >
-              Create Token
+              {busyKey === 'create_token' ? 'Creating…' : 'Create Token'}
             </button>
           </form>
 
@@ -412,32 +606,70 @@ export const AdminPage: React.FC<AdminPageProps> = ({ adminClient }) => {
           )}
 
           <div className="wiki-admin-list" style={{ marginTop: 12 }}>
-            {tokens.map((tok) => (
-              <div key={tok.token_id} className="wiki-admin-row">
-                <div>
-                  <strong>{tok.label}</strong> <code className="wiki-batch-chip">{tok.scope}</code>{' '}
-                  {tok.revoked_at ? (
-                    <span className="wiki-badge wiki-badge-conflict">Revoked</span>
-                  ) : (
-                    <span className="wiki-badge wiki-badge-cited">Active</span>
-                  )}
-                  <div className="wiki-panel-meta">
-                    ID: {tok.token_id} · Created {tok.created_at}
+            {tokens.map((tok) => {
+              const confirmingRevoke =
+                pendingConfirm?.kind === 'revoke_token' &&
+                pendingConfirm.tokenId === tok.token_id;
+              const isRowBusy = busyKey === `revoke_token:${tok.token_id}`;
+              return (
+                <div key={tok.token_id} className="wiki-admin-row">
+                  <div>
+                    <strong>{tok.label}</strong>{' '}
+                    <span className="wiki-batch-chip">{formatTokenScopeLabel(tok.scope)}</span>{' '}
+                    {tok.revoked_at ? (
+                      <span className="wiki-badge wiki-badge-conflict">Revoked</span>
+                    ) : (
+                      <span className="wiki-badge wiki-badge-cited">Active</span>
+                    )}
+                    <div className="wiki-panel-meta">
+                      ID: {tok.token_id} · Created{' '}
+                      <time dateTime={tok.created_at} title={tok.created_at}>
+                        {formatArchivalTimestamp(tok.created_at, false)}
+                      </time>
+                    </div>
                   </div>
+                  {!tok.revoked_at && (
+                    <div className="wiki-inline-actions">
+                      {confirmingRevoke ? (
+                        <>
+                          <button
+                            type="button"
+                            className="pill-btn wiki-danger-btn"
+                            disabled={busyKey !== null}
+                            onClick={() => {
+                              void handleRevokeToken(tok.token_id);
+                            }}
+                          >
+                            Confirm Revoke
+                          </button>
+                          <button
+                            type="button"
+                            className="pill-btn"
+                            disabled={busyKey !== null}
+                            onClick={() => {
+                              setPendingConfirm(null);
+                            }}
+                          >
+                            Cancel
+                          </button>
+                        </>
+                      ) : (
+                        <button
+                          type="button"
+                          className="pill-btn wiki-danger-btn"
+                          disabled={busyKey !== null}
+                          onClick={() => {
+                            setPendingConfirm({ kind: 'revoke_token', tokenId: tok.token_id });
+                          }}
+                        >
+                          {isRowBusy ? 'Revoking…' : 'Revoke'}
+                        </button>
+                      )}
+                    </div>
+                  )}
                 </div>
-                {!tok.revoked_at && (
-                  <button
-                    type="button"
-                    className="pill-btn wiki-danger-btn"
-                    onClick={() => {
-                      void handleRevokeToken(tok.token_id);
-                    }}
-                  >
-                    Revoke
-                  </button>
-                )}
-              </div>
-            ))}
+              );
+            })}
           </div>
         </section>
       </main>

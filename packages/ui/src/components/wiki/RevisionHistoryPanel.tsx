@@ -2,6 +2,7 @@ import type { EntityType, RevisionRecord } from '@kinloom/core';
 import { asRevisionId } from '@kinloom/core';
 import { AuthorPill, CitationBadge } from './WikiBadges.js';
 import React, { useCallback, useEffect, useState } from 'react';
+import { formatArchivalTimestamp } from '../../lib/formatTimestamp.js';
 import { RevisionDiffView } from './RevisionDiffView.js';
 import { useArchiveData } from '../../context/ArchiveDataContext.js';
 
@@ -26,6 +27,7 @@ export const RevisionHistoryPanel: React.FC<RevisionHistoryPanelProps> = ({
     initialRevisions && initialRevisions.length > 0 ? initialRevisions[0].revision_id : null,
   );
   const [revertingId, setRevertingId] = useState<number | null>(null);
+  const [confirmingRevertId, setConfirmingRevertId] = useState<number | null>(null);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
 
   const loadRevisions = useCallback(async (): Promise<void> => {
@@ -64,6 +66,7 @@ export const RevisionHistoryPanel: React.FC<RevisionHistoryPanelProps> = ({
       return;
     }
     setRevertingId(rev.revision_id);
+    setConfirmingRevertId(null);
     setError(null);
     setStatusMessage(null);
     try {
@@ -121,7 +124,11 @@ export const RevisionHistoryPanel: React.FC<RevisionHistoryPanelProps> = ({
                     {rev.batch_id && <code className="wiki-batch-chip">batch:{rev.batch_id}</code>}
                   </div>
                   <div className="wiki-revision-summary">{rev.summary}</div>
-                  <div className="wiki-revision-time">{rev.created_at}</div>
+                  <div className="wiki-revision-time">
+                    <time dateTime={rev.created_at} title={rev.created_at}>
+                      {formatArchivalTimestamp(rev.created_at)}
+                    </time>
+                  </div>
                 </div>
 
                 <div className="wiki-revision-actions">
@@ -135,20 +142,53 @@ export const RevisionHistoryPanel: React.FC<RevisionHistoryPanelProps> = ({
                   >
                     {isExpanded ? 'Hide Diff' : 'View Diff'}
                   </button>
-                  {capabilities.canEdit && dataSource.revertRevision && (
+                  {capabilities.canEdit &&
+                    dataSource.revertRevision &&
+                    confirmingRevertId !== rev.revision_id && (
+                      <button
+                        type="button"
+                        className="pill-btn wiki-danger-btn"
+                        disabled={revertingId !== null}
+                        onClick={() => {
+                          setConfirmingRevertId(rev.revision_id);
+                        }}
+                      >
+                        {revertingId === rev.revision_id ? 'Reverting…' : 'Undo / Revert'}
+                      </button>
+                    )}
+                </div>
+              </div>
+
+              {confirmingRevertId === rev.revision_id && (
+                <div className="wiki-confirm-inline" role="alert">
+                  <p className="wiki-confirm-inline-text">
+                    Revert revision <code>r{rev.revision_id}</code>? This appends a new revision
+                    restoring the prior version.
+                  </p>
+                  <div className="wiki-inline-actions">
                     <button
                       type="button"
-                      className="pill-btn"
+                      className="pill-btn wiki-danger-btn"
                       disabled={revertingId !== null}
                       onClick={() => {
                         void handleRevert(rev);
                       }}
                     >
-                      {revertingId === rev.revision_id ? 'Reverting…' : 'Undo / Revert'}
+                      Confirm Revert
                     </button>
-                  )}
+                    <button
+                      type="button"
+                      className="pill-btn"
+                      disabled={revertingId !== null}
+                      onClick={() => {
+                        setConfirmingRevertId(null);
+                      }}
+                    >
+                      Cancel
+                    </button>
+                  </div>
                 </div>
-              </div>
+              )}
 
               {isExpanded && (
                 <div className="wiki-revision-diff-body">

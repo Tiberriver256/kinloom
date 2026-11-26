@@ -1,3 +1,18 @@
+export const MEDIA_HELP = `Usage: kinloom media dedupe [options]
+
+Inspect and safely merge duplicate normalized file paths in data/media.yaml.
+Runs in read-only dry-run mode by default; pass --apply to write changes atomically with rollback.
+
+Subcommands:
+  dedupe                 Detect duplicate file paths, select a deterministic canonical record per group, merge metadata, and rewire narrative citations and extension refs
+
+Options:
+  --repo <dir>           Archive repository root (default: current working directory)
+  --prefer <media_id>    Prefer a specific media_id as canonical survivor (repeatable; conflicting IDs in one group exit 2)
+  --apply                Write merged YAML atomically after full in-memory validation (default: dry-run)
+  --json                 Emit structured JSON merge and rewrite report
+  -h, --help             Show this help message`;
+
 export const CONTEXT_HELP = `Usage: kinloom context [person_id] [options]
 
 Produce a privacy-fenced single-shot research context brief for a deceased person.
@@ -32,7 +47,8 @@ Arguments:
 Options:
   --person <person_id>   Single target person ID in data/people.yaml or patch.people (alias: --person-id). Do not combine with positional ids or --all-staged.
   --all-staged           Integrate every research/people/<id>/patch.json package in sorted order. Do not pass person ids with this flag.
-  --pending-only         With --all-staged, skip packages whose dry-run diff has no unintegrated changes (broken packages stay pending).
+  --pending-only         With --all-staged, skip already-integrated packages (matching .integrated.json receipts or legacy live-superseded packages; broken or modified packages stay pending).
+  --mark-integrated      With --all-staged --pending-only, backfill .integrated.json receipts for legacy already-integrated packages without mutating data/*.yaml (alias: --reconcile-receipts).
   --repo <dir>           Archive repository root (default: current working directory)
   --package <dir>        Custom research package directory or patch.json path for a single person (aliases: --package-dir, --patch)
   --package-dir <dir>    Custom research package directory or patch.json path for a single person (default: <repo>/research/people/<person_id>)

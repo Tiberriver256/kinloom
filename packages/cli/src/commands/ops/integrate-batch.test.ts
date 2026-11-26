@@ -943,7 +943,7 @@ describe('kinloom batch integrate and --pending-only', () => {
     expect(classified.alreadyIntegrated).toEqual(['per_arthur_alder']);
     expect(classified.pending).toEqual(['per_clara_birch', 'per_helen_maple']);
     expect(classified.statuses).toEqual([
-      { kind: 'already_integrated', personId: 'per_arthur_alder' },
+      { kind: 'already_integrated', personId: 'per_arthur_alder', reason: 'receipt_match' },
       expect.objectContaining({ kind: 'pending', personId: 'per_clara_birch', reason: 'error' }),
       { kind: 'pending', personId: 'per_helen_maple', reason: 'changes' },
     ]);
@@ -1350,5 +1350,186 @@ describe('kinloom batch integrate and --pending-only', () => {
     const errText = missingCap.stderr.join('\n');
     expect(errText).toContain('<person_id>');
     expect(errText).toContain('--all-staged');
+  });
+
+  it('writes .integrated.json receipts, skips receipt-matched packages after live YAML mutations, re-queues modified patches, classifies legacy drifted packages, and rolls back receipts on failure', async () => {
+    const repoDir = await createSyntheticRepo();
+
+    await writeStagedPackage({
+      repoDir,
+      personId: 'per_arthur_alder',
+      fullName: 'Arthur Alder',
+      eventId: 'evt_arthur_receipt',
+      eventDate: '1900-06-01',
+      eventTitle: 'Arthur Alder 1900 census',
+      scanName: 'arthur-receipt.png',
+      scanBytes: makeMinimalPng(640, 480, 12_000),
+    });
+
+    // 1. Integrate package -> verify .integrated.json receipt is written with matching patch_sha256 & scans_sha256.
+    const intCap = createCaptureIo();
+    expect(
+      await runCli(['integrate', 'per_arthur_alder', '--repo', repoDir, '--json'], {
+        io: intCap.io,
+      })
+    ).toBe(EXIT_OK);
+
+    const pkgDir = path.join(repoDir, 'research', 'people', 'per_arthur_alder');
+    const receiptPath = path.join(pkgDir, '.integrated.json');
+    expect(existsSync(receiptPath)).toBe(true);
+    const receipt = JSON.parse(await readFile(receiptPath, 'utf8')) as {
+      schema_version: number;
+      person_id: string;
+      patch_sha256: string;
+      scans_sha256: Record<string, string>;
+      integrated_entity_ids: { people: string[]; events: string[]; narratives: string[] };
+    };
+    expect(receipt.schema_version).toBe(1);
+    expect(receipt.person_id).toBe('per_arthur_alder');
+    expect(receipt.patch_sha256).toMatch(/^[a-f0-9]{64}$/);
+    expect(receipt.scans_sha256['arthur-receipt.png']).toMatch(/^[a-f0-9]{64}$/);
+    expect(receipt.integrated_entity_ids.people).toContain('per_arthur_alder');
+    expect(receipt.integrated_entity_ids.events).toContain('evt_arthur_receipt');
+
+    // 2. Mutate live data/narratives.yaml to add has_primary_source: true and an updated prose sentence.
+    const narrativesPath = path.join(repoDir, 'data', 'narratives.yaml');
+    const liveNarratives = parseNarrativesYaml(await readFile(narrativesPath, 'utf8'));
+    const updatedNarratives = liveNarratives.map((nar) =>
+      nar.subject_person_id === 'per_arthur_alder'
+        ? {
+            ...nar,
+            has_primary_source: true,
+            body_md: `${nar.body_md}\n\nLater live editorial polish kept intact.`,
+          }
+        : nar
+    );
+    await writeFile(
+      narrativesPath,
+      serializeNarrativesYaml(updatedNarratives, { sortById: true }),
+      'utf8'
+    );
+
+    const classifiedAfterLiveEdit = await classifyStagedPackages(repoDir);
+    expect(classifiedAfterLiveEdit.alreadyIntegrated).toEqual(['per_arthur_alder']);
+    expect(classifiedAfterLiveEdit.pending).toEqual([]);
+    expect(classifiedAfterLiveEdit.statuses).toEqual([
+      { kind: 'already_integrated', personId: 'per_arthur_alder', reason: 'receipt_match' },
+    ]);
+
+    const integratePendingCap = createCaptureIo();
+    expect(
+      await runCli(['integrate', '--all-staged', '--pending-only', '--repo', repoDir, '--json'], {
+        io: integratePendingCap.io,
+      })
+    ).toBe(EXIT_OK);
+    const integratePendingBody = JSON.parse(integratePendingCap.stdout.join('\n')) as {
+      integrated: string[];
+      skippedAlreadyIntegrated: string[];
+      writtenYamlFiles: string[];
+    };
+    expect(integratePendingBody.integrated).toEqual([]);
+    expect(integratePendingBody.skippedAlreadyIntegrated).toEqual(['per_arthur_alder']);
+    expect(integratePendingBody.writtenYamlFiles).toEqual([]);
+
+    const auditPendingCap = createCaptureIo();
+    expect(
+      await runCli(['audit', '--all-staged', '--pending-only', '--repo', repoDir, '--json'], {
+        io: auditPendingCap.io,
+      })
+    ).toBe(EXIT_OK);
+    const auditPendingBody = JSON.parse(auditPendingCap.stdout.join('\n')) as {
+      people: unknown[];
+      skippedAlreadyIntegrated: string[];
+    };
+    expect(auditPendingBody.people).toEqual([]);
+    expect(auditPendingBody.skippedAlreadyIntegrated).toEqual(['per_arthur_alder']);
+
+    // Verify the live edit is untouched.
+    const liveNarrativeText = await readFile(narrativesPath, 'utf8');
+    expect(liveNarrativeText).toContain('Later live editorial polish kept intact.');
+    expect(liveNarrativeText).toContain('has_primary_source: true');
+
+    // 3. Delete .integrated.json (legacy pre-receipt archive simulation) after live mutation ->
+    //    classifyStagedPackages marks it already_integrated_drifted (live_superseded) and skips overwriting live YAML.
+    await rm(receiptPath);
+    const classifiedLegacyDrifted = await classifyStagedPackages(repoDir);
+    expect(classifiedLegacyDrifted.pending).toEqual([]);
+    expect(classifiedLegacyDrifted.alreadyIntegratedDrifted).toEqual(['per_arthur_alder']);
+    expect(classifiedLegacyDrifted.statuses).toEqual([
+      { kind: 'already_integrated_drifted', personId: 'per_arthur_alder', reason: 'live_superseded' },
+    ]);
+
+    const driftedRunCap = createCaptureIo();
+    expect(
+      await runCli(['integrate', '--all-staged', '--pending-only', '--repo', repoDir, '--json'], {
+        io: driftedRunCap.io,
+      })
+    ).toBe(EXIT_OK);
+    const driftedBody = JSON.parse(driftedRunCap.stdout.join('\n')) as {
+      integrated: string[];
+      skippedDrifted: string[];
+      writtenYamlFiles: string[];
+    };
+    expect(driftedBody.integrated).toEqual([]);
+    expect(driftedBody.skippedDrifted).toEqual(['per_arthur_alder']);
+    expect(driftedBody.writtenYamlFiles).toEqual([]);
+    expect(await readFile(narrativesPath, 'utf8')).toContain('Later live editorial polish kept intact.');
+
+    // --mark-integrated backfills .integrated.json without touching live YAML.
+    const markCap = createCaptureIo();
+    expect(
+      await runCli(
+        [
+          'integrate',
+          '--all-staged',
+          '--pending-only',
+          '--mark-integrated',
+          '--repo',
+          repoDir,
+          '--json',
+        ],
+        { io: markCap.io }
+      )
+    ).toBe(EXIT_OK);
+    expect(existsSync(receiptPath)).toBe(true);
+    expect(JSON.parse(markCap.stdout.join('\n')).markedIntegrated).toEqual(['per_arthur_alder']);
+
+    // 4. Edit patch.json -> classifyStagedPackages marks it pending (reason: 'package_modified').
+    const patchPath = path.join(pkgDir, 'patch.json');
+    const rawPatch = JSON.parse(await readFile(patchPath, 'utf8')) as Record<string, unknown>;
+    rawPatch.person_updates = { alt_names: ['Artie Alder'] };
+    await writeFile(patchPath, JSON.stringify(rawPatch, null, 2), 'utf8');
+
+    const classifiedModified = await classifyStagedPackages(repoDir);
+    expect(classifiedModified.pending).toEqual(['per_arthur_alder']);
+    expect(classifiedModified.statuses).toEqual([
+      { kind: 'pending', personId: 'per_arthur_alder', reason: 'package_modified' },
+    ]);
+
+    // 5. Batch rollback restores .integrated.json receipts alongside data/*.yaml when a later package fails.
+    const prevReceiptBytes = await readFile(receiptPath);
+    await writeStagedPackage({
+      repoDir,
+      personId: 'per_helen_maple',
+      fullName: 'Helen Maple',
+      eventId: 'evt_helen_fail_receipt_rb',
+      eventDate: '1903-05-01',
+      eventTitle: 'Helen Maple missing place failure',
+      placeId: 'plc_missing_receipt_rb',
+      scanName: 'helen-rb-receipt.png',
+      scanBytes: makeMinimalPng(640, 480, 12_000),
+    });
+
+    const rbCap = createCaptureIo();
+    const rbCode = await runCli(
+      ['integrate', 'per_arthur_alder', 'per_helen_maple', '--repo', repoDir],
+      { io: rbCap.io }
+    );
+    expect(rbCode).toBe(EXIT_ERROR);
+    expect(rbCap.stderr.join('\n')).toContain('Rollback succeeded:');
+    expect((await readFile(receiptPath)).equals(prevReceiptBytes)).toBe(true);
+    expect(
+      existsSync(path.join(repoDir, 'research', 'people', 'per_helen_maple', '.integrated.json'))
+    ).toBe(false);
   });
 });

@@ -5589,7 +5589,7 @@ describe('ops/verify', () => {
       { file: 'media/shared-scan.png', mediaIds: ['med_a', 'med_b'] },
     ]);
     expect(result.errors).toContain(
-      "media: duplicate file 'media/shared-scan.png' on med_a, med_b"
+      "media: duplicate file 'media/shared-scan.png' on med_a, med_b. Run 'kinloom media dedupe' to preview a safe merge plan (pass '--apply' to write)."
     );
     expect(result.ok).toBe(false);
   });
