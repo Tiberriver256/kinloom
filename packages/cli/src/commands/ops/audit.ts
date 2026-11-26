@@ -378,6 +378,81 @@ export function computeLifespan(
   };
 }
 
+function checkEventChronologyForPerson(params: {
+  ev: LooseRecord;
+  dt: ParsedAuditEdtf;
+  personId: string;
+  birth: ParsedAuditEdtf | null;
+  death: ParsedAuditEdtf | null;
+  role: string;
+  labelPrefix: string;
+  errors: string[];
+  warnings: string[];
+}): void {
+  const { ev, dt, birth, death, role, labelPrefix, errors, warnings } = params;
+  const evId = asString(ev.id);
+  const textBlob = `${evId} ${asString(ev.event_kind)} ${asString(ev.title)} ${asString(ev.summary)}`;
+  const isPostMortemAllowed = POST_MORTEM_RE.test(textBlob);
+  const isPreBirthContext = PRE_BIRTH_CONTEXT_RE.test(textBlob);
+  const isCensus = CENSUS_RE.test(`${evId} ${asString(ev.title)}`);
+  const isMarriage = MARRIAGE_RE.test(`${evId} ${asString(ev.event_kind)} ${asString(ev.title)}`);
+
+  const birthMinMs = birth ? auditLowerMs(birth) : null;
+  const deathMaxMs = death ? auditUpperMs(death) : null;
+
+  if (birth && birthMinMs !== null && dt.endMs < birthMinMs) {
+    if (isCensus) {
+      if (!isPreBirthContext) {
+        errors.push(`${labelPrefix}Event ${evId} (${dt.raw}): census predates birth (${birth.raw}) without context label.`);
+      } else {
+        warnings.push(`${labelPrefix}Event ${evId} (${dt.raw}): labeled pre-birth census context before birth (${birth.raw}).`);
+      }
+    } else if (isPreBirthContext) {
+      warnings.push(`${labelPrefix}Event ${evId} (${dt.raw}): pre-birth family context before birth (${birth.raw}).`);
+    } else {
+      errors.push(`${labelPrefix}Event ${evId} (${dt.raw}): predates birth (${birth.raw}).`);
+    }
+  }
+
+  if (death && deathMaxMs !== null && dt.startMs > deathMaxMs) {
+    if (isCensus) {
+      if (!isPostMortemAllowed) {
+        errors.push(`${labelPrefix}Event ${evId} (${dt.raw}): census postdates death (${death.raw}) without explicit posthumous/widow label.`);
+      } else {
+        warnings.push(`${labelPrefix}Event ${evId} (${dt.raw}): labeled post-mortem census entry after death (${death.raw}).`);
+      }
+    } else if (!isPostMortemAllowed) {
+      errors.push(`${labelPrefix}Event ${evId} (${dt.raw}): postdates death (${death.raw}) and is not a burial/probate/obituary/memorial event.`);
+    }
+  }
+
+  if (birth && isMarriage) {
+    const isPrincipalSpouse = !role || SPOUSE_ROLE_RE.test(role);
+    if (isPrincipalSpouse) {
+      let ageAtEvent: number | null;
+      if (birth.raw.includes('/') || dt.raw.includes('/')) {
+        ageAtEvent =
+          Number.isFinite(birth.startMs) && Number.isFinite(dt.endMs)
+            ? new Date(dt.endMs).getUTCFullYear() - new Date(birth.startMs).getUTCFullYear()
+            : null;
+      } else {
+        const beforeBirthday =
+          birth.precision === 'day' &&
+          dt.precision === 'day' &&
+          birth.month !== null &&
+          birth.day !== null &&
+          dt.month !== null &&
+          dt.day !== null &&
+          (dt.month < birth.month || (dt.month === birth.month && dt.day < birth.day));
+        ageAtEvent = dt.year - birth.year - (beforeBirthday ? 1 : 0);
+      }
+      if (ageAtEvent !== null && ageAtEvent < 12) {
+        errors.push(`${labelPrefix}Event ${evId} (${dt.raw}): marriage at implausible age ${ageAtEvent} (birth ${birth.raw}).`);
+      }
+    }
+  }
+}
+
 export function runChronologyCheck(
   targetPerson: LooseRecord | null,
   patch: LooseRecord,
@@ -400,6 +475,36 @@ export function runChronologyCheck(
     errors.push(`Implausible lifespan: ${lifespan.label} (${birth?.raw} to ${death?.raw}).`);
   }
 
+  const personId = typeof patch.person_id === 'string' ? patch.person_id : '';
+  const stagedPeopleBounds = new Map<
+    string,
+    { birth: ParsedAuditEdtf | null; death: ParsedAuditEdtf | null }
+  >();
+  for (const rawPerson of Array.isArray(patch.people) ? patch.people : []) {
+    if (!isPlainRecord(rawPerson) || typeof rawPerson.id !== 'string' || !rawPerson.id.trim()) {
+      continue;
+    }
+    const stagedId = rawPerson.id.trim();
+    if (stagedId === personId) {
+      continue;
+    }
+    const stagedBirth = parseAuditEdtf(asString(rawPerson.birth_edtf));
+    const stagedDeath = parseAuditEdtf(asString(rawPerson.death_edtf));
+    const stagedLifespan = computeLifespan(stagedBirth, stagedDeath);
+    if (stagedBirth && stagedDeath && stagedBirth.startMs > stagedDeath.endMs) {
+      errors.push(`[${stagedId}] Birth (${stagedBirth.raw}) is after death (${stagedDeath.raw}).`);
+    }
+    if (
+      stagedLifespan.years !== null &&
+      (stagedLifespan.years < 0 || stagedLifespan.years > 118)
+    ) {
+      errors.push(
+        `[${stagedId}] Implausible lifespan: ${stagedLifespan.label} (${stagedBirth?.raw} to ${stagedDeath?.raw}).`
+      );
+    }
+    stagedPeopleBounds.set(stagedId, { birth: stagedBirth, death: stagedDeath });
+  }
+
   const eventMap = new Map<string, LooseRecord>();
   for (const ev of existingPersonEvents) {
     if (typeof ev.id === 'string' && ev.id) {
@@ -417,7 +522,6 @@ export function runChronologyCheck(
     }
   }
 
-  const personId = typeof patch.person_id === 'string' ? patch.person_id : '';
   let checkedEvents = 0;
 
   for (const ev of eventMap.values()) {
@@ -427,71 +531,45 @@ export function runChronologyCheck(
     }
     checkedEvents += 1;
 
-    const evId = asString(ev.id);
-    const textBlob = `${evId} ${asString(ev.event_kind)} ${asString(ev.title)} ${asString(ev.summary)}`;
-    const isPostMortemAllowed = POST_MORTEM_RE.test(textBlob);
-    const isPreBirthContext = PRE_BIRTH_CONTEXT_RE.test(textBlob);
-    const isCensus = CENSUS_RE.test(`${evId} ${asString(ev.title)}`);
-    const isMarriage = MARRIAGE_RE.test(`${evId} ${asString(ev.event_kind)} ${asString(ev.title)}`);
+    const participants = Array.isArray(ev.participants) ? ev.participants : [];
+    const participantRecords = participants.filter((pt): pt is LooseRecord => isPlainRecord(pt));
+    const subjectPart = participantRecords.find((pt) => pt.person_id === personId);
+    const appliesToTarget = participantRecords.length === 0 || subjectPart !== undefined;
 
-    const birthMinMs = birth ? auditLowerMs(birth) : null;
-    const deathMaxMs = death ? auditUpperMs(death) : null;
-
-    if (birth && birthMinMs !== null && dt.endMs < birthMinMs) {
-      if (isCensus) {
-        if (!isPreBirthContext) {
-          errors.push(`Event ${evId} (${dt.raw}): census predates birth (${birth.raw}) without context label.`);
-        } else {
-          warnings.push(`Event ${evId} (${dt.raw}): labeled pre-birth census context before birth (${birth.raw}).`);
-        }
-      } else if (isPreBirthContext) {
-        warnings.push(`Event ${evId} (${dt.raw}): pre-birth family context before birth (${birth.raw}).`);
-      } else {
-        errors.push(`Event ${evId} (${dt.raw}): predates birth (${birth.raw}).`);
-      }
+    if (appliesToTarget) {
+      checkEventChronologyForPerson({
+        ev,
+        dt,
+        personId,
+        birth,
+        death,
+        role: subjectPart ? asString(subjectPart.role) : '',
+        labelPrefix: '',
+        errors,
+        warnings,
+      });
     }
 
-    if (death && deathMaxMs !== null && dt.startMs > deathMaxMs) {
-      if (isCensus) {
-        if (!isPostMortemAllowed) {
-          errors.push(`Event ${evId} (${dt.raw}): census postdates death (${death.raw}) without explicit posthumous/widow label.`);
-        } else {
-          warnings.push(`Event ${evId} (${dt.raw}): labeled post-mortem census entry after death (${death.raw}).`);
-        }
-      } else if (!isPostMortemAllowed) {
-        errors.push(`Event ${evId} (${dt.raw}): postdates death (${death.raw}) and is not a burial/probate/obituary/memorial event.`);
+    for (const pt of participantRecords) {
+      const ptId = typeof pt.person_id === 'string' ? pt.person_id : '';
+      if (!ptId || ptId === personId) {
+        continue;
       }
-    }
-
-    if (birth && isMarriage) {
-      const participants = Array.isArray(ev.participants) ? ev.participants : [];
-      const subjectPart = participants.find(
-        (pt) => isPlainRecord(pt) && pt.person_id === personId
-      );
-      const role = isPlainRecord(subjectPart) ? asString(subjectPart.role) : '';
-      const isPrincipalSpouse = !role || SPOUSE_ROLE_RE.test(role);
-      if (isPrincipalSpouse) {
-        let ageAtEvent: number | null;
-        if (birth.raw.includes('/') || dt.raw.includes('/')) {
-          ageAtEvent =
-            Number.isFinite(birth.startMs) && Number.isFinite(dt.endMs)
-              ? new Date(dt.endMs).getUTCFullYear() - new Date(birth.startMs).getUTCFullYear()
-              : null;
-        } else {
-          const beforeBirthday =
-            birth.precision === 'day' &&
-            dt.precision === 'day' &&
-            birth.month !== null &&
-            birth.day !== null &&
-            dt.month !== null &&
-            dt.day !== null &&
-            (dt.month < birth.month || (dt.month === birth.month && dt.day < birth.day));
-          ageAtEvent = dt.year - birth.year - (beforeBirthday ? 1 : 0);
-        }
-        if (ageAtEvent !== null && ageAtEvent < 12) {
-          errors.push(`Event ${evId} (${dt.raw}): marriage at implausible age ${ageAtEvent} (birth ${birth.raw}).`);
-        }
+      const stagedBounds = stagedPeopleBounds.get(ptId);
+      if (!stagedBounds) {
+        continue;
       }
+      checkEventChronologyForPerson({
+        ev,
+        dt,
+        personId: ptId,
+        birth: stagedBounds.birth,
+        death: stagedBounds.death,
+        role: asString(pt.role),
+        labelPrefix: `[${ptId}] `,
+        errors,
+        warnings,
+      });
     }
   }
 
@@ -662,6 +740,27 @@ export function runPrivacyAndStyleScan(
   for (const [key, value] of Object.entries(patch)) {
     if (key === 'person_updates') {
       collectStringsWithPath(value, 'patch.person_updates', subjectMaxYear, patchStrings);
+      continue;
+    }
+    if (key === 'people' && Array.isArray(value)) {
+      for (let i = 0; i < value.length; i += 1) {
+        const rawPerson = value[i];
+        let personMaxYear: number | null = null;
+        if (isPlainRecord(rawPerson)) {
+          const stagedId = typeof rawPerson.id === 'string' ? rawPerson.id.trim() : '';
+          const stagedIsLiving =
+            (stagedId !== '' && livingIds.has(stagedId)) ||
+            rawPerson.is_living === true ||
+            rawPerson.living === true;
+          const stagedDeathYear =
+            extractLatestEdtfYear(rawPerson.death_edtf) ??
+            (stagedId ? deathYearByPersonId.get(stagedId) ?? null : null);
+          if (!stagedIsLiving && stagedDeathYear !== null) {
+            personMaxYear = stagedDeathYear + NARRATIVE_POSTHUMOUS_HORIZON_YEARS;
+          }
+        }
+        collectStringsWithPath(rawPerson, `patch.people[${i}]`, personMaxYear, patchStrings);
+      }
       continue;
     }
     if (key === 'events' && Array.isArray(value)) {
@@ -1270,7 +1369,6 @@ export async function runAuditCommand(options: AuditCommandOptions): Promise<Aud
 
   const peopleBlocks = splitTopLevelYamlList(peopleText);
   const parsedPeople = parseMatchingYamlBlocks(peopleBlocks);
-  const targetPerson = parsedPeople.find((p) => p.id === personId) ?? null;
 
   const isEffectiveLivingPerson = (person: LooseRecord): boolean => {
     if (person.is_living === true || person.living === true) {
@@ -1286,10 +1384,40 @@ export async function runAuditCommand(options: AuditCommandOptions): Promise<Aud
     );
   };
 
+  const stagedPeopleById = new Map<string, LooseRecord>();
+  for (const rawPerson of Array.isArray(patch.people) ? patch.people : []) {
+    if (!isPlainRecord(rawPerson) || typeof rawPerson.id !== 'string' || !rawPerson.id.trim()) {
+      continue;
+    }
+    stagedPeopleById.set(rawPerson.id.trim(), rawPerson);
+  }
+
+  const mergedAuditPeople: LooseRecord[] = [];
+  const seenAuditPersonIds = new Set<string>();
+  for (const person of parsedPeople) {
+    const id = typeof person.id === 'string' ? person.id : '';
+    if (id) {
+      seenAuditPersonIds.add(id);
+    }
+    const staged = id ? stagedPeopleById.get(id) : undefined;
+    if (staged && !isEffectiveLivingPerson(person)) {
+      mergedAuditPeople.push({ ...person, ...staged });
+    } else {
+      mergedAuditPeople.push(person);
+    }
+  }
+  for (const [id, stagedPerson] of stagedPeopleById) {
+    if (!seenAuditPersonIds.has(id)) {
+      mergedAuditPeople.push(stagedPerson);
+    }
+  }
+
+  const targetPerson = mergedAuditPeople.find((p) => p.id === personId) ?? null;
+
   const livingPeople = parsedPeople.filter(
     (person) => person.id !== personId && isEffectiveLivingPerson(person)
   );
-  const deceasedPeople = parsedPeople.filter((person) => !isEffectiveLivingPerson(person));
+  const deceasedPeople = mergedAuditPeople.filter((person) => !isEffectiveLivingPerson(person));
 
   const allLiveEvents = parseMatchingYamlBlocks(splitTopLevelYamlList(eventsText));
   const existingPersonEvents = allLiveEvents.filter(
@@ -1301,7 +1429,7 @@ export async function runAuditCommand(options: AuditCommandOptions): Promise<Aud
   const chronology = runChronologyCheck(targetPerson, patch, existingPersonEvents);
   const privacy = runPrivacyAndStyleScan(dossierText, patch, livingPeople, deceasedPeople, {
     targetPerson,
-    allPeople: parsedPeople,
+    allPeople: mergedAuditPeople,
     liveEvents: allLiveEvents,
   });
   const citations = runUncitedSentenceCheck(patch);

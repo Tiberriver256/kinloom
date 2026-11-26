@@ -46,10 +46,12 @@ import { CliValidationError } from '../../errors.js';
 
 const YEAR_ONLY_RE = /^\d{4}$/;
 const SAFE_PERSON_ID_RE = /^[a-zA-Z0-9_-]+$/;
+const SAFE_SLUG_RE = /^[a-z0-9]+(?:[-_][a-z0-9]+)*$/;
 
 const ALLOWED_PATCH_KEYS = new Set([
   'person_id',
   'person_updates',
+  'people',
   'events',
   'remove_event_ids',
   'places',
@@ -125,6 +127,7 @@ export interface IntegrateCommandResult {
   mediaLayout: 'archive-media' | 'media';
   counts: {
     personUpdated: boolean;
+    people: UpsertCounts;
     events: UpsertCounts;
     places: UpsertCounts;
     sources: UpsertCounts;
@@ -173,6 +176,7 @@ interface PlannedScan {
 interface NormalizedPatch {
   person_id: string;
   person_updates: Record<string, unknown> | null;
+  people: unknown[];
   events: unknown[];
   remove_event_ids: string[];
   places: unknown[];
@@ -419,6 +423,7 @@ function normalizeAndValidatePatch(rawPatch: unknown, expectedPersonId: string):
   return {
     person_id: rawPatch.person_id,
     person_updates: rawUpdates,
+    people: readArrayField('people'),
     events: readArrayField('events'),
     remove_event_ids: parseOptionalStringList(
       rawPatch.remove_event_ids,
@@ -606,6 +611,181 @@ function mergePersonUpdates(
 
   const changed = JSON.stringify(existingPerson) !== JSON.stringify(parsed);
   return { updated: parsed, changed };
+}
+
+function assertPersonAllowedForPatch(
+  person: RawPerson,
+  label: string,
+  privacyConfig: Partial<PrivacyConfig>
+): void {
+  if (person.full_name.trim().length === 0) {
+    throw new CliValidationError(`${label} ('${person.id}') must have a non-empty full_name.`);
+  }
+  if (!SAFE_SLUG_RE.test(person.slug)) {
+    throw new CliValidationError(
+      `${label} ('${person.id}') has invalid slug '${person.slug}'. Use lowercase ASCII letters, digits, hyphens, or underscores.`
+    );
+  }
+  if (person.is_living || resolveEffectiveLiving(person, privacyConfig)) {
+    throw new CliValidationError(
+      `PRIVACY REFUSAL: ${label} ('${person.id}') resolves as living under archive privacy rules (birth_edtf='${person.birth_edtf}', death_edtf='${person.death_edtf}').`
+    );
+  }
+}
+
+function mergeStagedPersonWithExisting(
+  existing: RawPerson,
+  rawObj: Record<string, unknown>,
+  parsedIncoming: RawPerson,
+  label: string,
+  privacyConfig: Partial<PrivacyConfig>
+): RawPerson {
+  const next: Record<string, unknown> = structuredClone(existing);
+  const directFields = [
+    'slug',
+    'gedcom_xref',
+    'full_name',
+    'given_name',
+    'surname',
+    'sex',
+    'is_living',
+    'lineage_group',
+    'branch',
+    'birth_edtf',
+    'death_edtf',
+    'portrait_url',
+    'thumb_url',
+    'has_primary_source',
+  ] as const;
+
+  for (const field of directFields) {
+    if (Object.hasOwn(rawObj, field) && rawObj[field] !== undefined) {
+      next[field] = parsedIncoming[field];
+    }
+  }
+
+  if (Object.hasOwn(rawObj, 'alt_names') && rawObj.alt_names !== undefined) {
+    next.alt_names = dedupeStrings(existing.alt_names, parsedIncoming.alt_names);
+  }
+
+  if (Object.hasOwn(rawObj, 'extensions') && rawObj.extensions !== undefined) {
+    const existingExt: Record<string, unknown> = isPlainObject(existing.extensions)
+      ? structuredClone(existing.extensions)
+      : {};
+    for (const [k, v] of Object.entries(parsedIncoming.extensions ?? {})) {
+      if (k === 'sources' && Array.isArray(v)) {
+        existingExt.sources = dedupeExtensionSources(
+          Array.isArray(existingExt.sources) ? existingExt.sources : [],
+          v
+        );
+      } else {
+        existingExt[k] = structuredClone(v);
+      }
+    }
+    next.extensions = existingExt;
+  }
+
+  const parsedMerged = RawPersonSchema.parse(next);
+  assertPersonAllowedForPatch(parsedMerged, label, privacyConfig);
+  return parsedMerged;
+}
+
+function upsertPatchPeople(
+  existingPeople: readonly RawPerson[],
+  incomingPeople: readonly unknown[],
+  privacyConfig: Partial<PrivacyConfig>
+): {
+  items: RawPerson[];
+  idxById: Map<string, number>;
+  slugToId: Map<string, string>;
+  counts: UpsertCounts;
+} {
+  const items = existingPeople.map((p) => structuredClone(p));
+  const idxById = new Map<string, number>();
+  const slugToId = new Map<string, string>();
+  for (let i = 0; i < items.length; i += 1) {
+    const person = items[i];
+    idxById.set(person.id, i);
+    slugToId.set(person.slug, person.id);
+  }
+
+  let added = 0;
+  let updated = 0;
+  let unchanged = 0;
+  const seenPatchIds = new Set<string>();
+
+  for (let i = 0; i < incomingPeople.length; i += 1) {
+    const label = `patch.people[${i}]`;
+    const raw = incomingPeople[i];
+    if (!isPlainObject(raw)) {
+      throw new CliValidationError(`${label} must be a JSON object.`);
+    }
+    if (raw.is_living === true || raw.living === true) {
+      throw new CliValidationError(
+        `PRIVACY REFUSAL: ${label} ('${String(raw.id ?? 'unknown')}') cannot insert or mark a person as living.`
+      );
+    }
+    if (typeof raw.id !== 'string' || !SAFE_PERSON_ID_RE.test(raw.id) || raw.id !== raw.id.trim()) {
+      throw new CliValidationError(
+        `${label} has invalid id '${String(raw.id)}'. Only ASCII letters, digits, _, and - are allowed.`
+      );
+    }
+    if (seenPatchIds.has(raw.id)) {
+      throw new CliValidationError(`Duplicate person id '${raw.id}' in patch.people.`);
+    }
+    seenPatchIds.add(raw.id);
+
+    const parsedResult = RawPersonSchema.safeParse(raw);
+    if (!parsedResult.success) {
+      const detail = parsedResult.error.issues
+        .map((issue) => `${issue.path.join('.') || 'root'}: ${issue.message}`)
+        .join('; ');
+      throw new CliValidationError(`Invalid person in ${label}: ${detail}`);
+    }
+    const parsed = parsedResult.data;
+    assertPersonAllowedForPatch(parsed, label, privacyConfig);
+
+    const existingIdx = idxById.get(parsed.id);
+    if (existingIdx === undefined) {
+      const slugOwner = slugToId.get(parsed.slug);
+      if (slugOwner !== undefined && slugOwner !== parsed.id) {
+        throw new CliValidationError(
+          `Slug collision: ${label} ('${parsed.id}') reuses slug '${parsed.slug}' already owned by '${slugOwner}'.`
+        );
+      }
+      idxById.set(parsed.id, items.length);
+      slugToId.set(parsed.slug, parsed.id);
+      items.push(parsed);
+      added += 1;
+      continue;
+    }
+
+    const existing = items[existingIdx];
+    if (existing.is_living || resolveEffectiveLiving(existing, privacyConfig)) {
+      throw new CliValidationError(
+        `PRIVACY REFUSAL: ${label} cannot modify existing living person '${existing.id}'.`
+      );
+    }
+    const merged = mergeStagedPersonWithExisting(existing, raw, parsed, label, privacyConfig);
+    const slugOwner = slugToId.get(merged.slug);
+    if (slugOwner !== undefined && slugOwner !== merged.id) {
+      throw new CliValidationError(
+        `Slug collision: ${label} ('${merged.id}') reuses slug '${merged.slug}' already owned by '${slugOwner}'.`
+      );
+    }
+    if (JSON.stringify(existing) === JSON.stringify(merged)) {
+      unchanged += 1;
+    } else {
+      if (existing.slug !== merged.slug && slugToId.get(existing.slug) === existing.id) {
+        slugToId.delete(existing.slug);
+      }
+      slugToId.set(merged.slug, merged.id);
+      items[existingIdx] = merged;
+      updated += 1;
+    }
+  }
+
+  return { items, idxById, slugToId, counts: { added, updated, unchanged } };
 }
 
 function upsertById<T extends { id: string }>(
@@ -924,14 +1104,18 @@ export async function runIntegrateCommand(
     readOptionalUtf8(path.join(dataDir, 'narrative_enrichments.yaml'))
   );
 
-  // Invariant 1: Target person must exist and must not be living.
-  const targetIdx = existingPeople.findIndex((p) => p.id === personId);
-  if (targetIdx === -1) {
+  // Upsert optional patch.people first so upward ancestor patches can also introduce patch.person_id.
+  const peopleMerge = upsertPatchPeople(existingPeople, patch.people, siteConfig.privacy);
+  const mergedPeople = peopleMerge.items;
+
+  // Invariant 1: Target person must exist (in people.yaml or patch.people) and must not be living.
+  const targetIdx = peopleMerge.idxById.get(personId);
+  if (targetIdx === undefined) {
     throw new Error(
-      `Target person '${personId}' does not exist in ${path.join(dataDir, 'people.yaml')}.`
+      `Target person '${personId}' does not exist in ${path.join(dataDir, 'people.yaml')} or patch.people.`
     );
   }
-  const targetPerson = existingPeople[targetIdx];
+  const targetPerson = mergedPeople[targetIdx];
   if (targetPerson.is_living || resolveEffectiveLiving(targetPerson, siteConfig.privacy)) {
     throw new Error(
       `PRIVACY REFUSAL: Target person '${personId}' resolves as living. Living people cannot be researched or patched.`
@@ -939,8 +1123,24 @@ export async function runIntegrateCommand(
   }
 
   // Merge person_updates.
-  const mergedPeople = existingPeople.map((p) => structuredClone(p));
   const personMerge = mergePersonUpdates(targetPerson, patch.person_updates, siteConfig.privacy);
+  if (personMerge.updated.slug !== targetPerson.slug) {
+    if (!SAFE_SLUG_RE.test(personMerge.updated.slug)) {
+      throw new CliValidationError(
+        `person_updates ('${personId}') has invalid slug '${personMerge.updated.slug}'.`
+      );
+    }
+    const slugOwner = peopleMerge.slugToId.get(personMerge.updated.slug);
+    if (slugOwner !== undefined && slugOwner !== personId) {
+      throw new CliValidationError(
+        `Slug collision: person_updates ('${personId}') reuses slug '${personMerge.updated.slug}' already owned by '${slugOwner}'.`
+      );
+    }
+    if (peopleMerge.slugToId.get(targetPerson.slug) === personId) {
+      peopleMerge.slugToId.delete(targetPerson.slug);
+    }
+    peopleMerge.slugToId.set(personMerge.updated.slug, personId);
+  }
   mergedPeople[targetIdx] = personMerge.updated;
 
   const peopleById = new Map(mergedPeople.map((p) => [p.id, p]));
@@ -1373,7 +1573,7 @@ export async function runIntegrateCommand(
   }
 
   const pendingWrites: Array<{ file: string; content: string }> = [];
-  if (personMerge.changed) {
+  if (personMerge.changed || peopleMerge.counts.added > 0 || peopleMerge.counts.updated > 0) {
     pendingWrites.push({
       file: 'people.yaml',
       content: serializePeopleYaml(mergedPeople, { sortById: true }),
@@ -1434,6 +1634,7 @@ export async function runIntegrateCommand(
     mediaLayout: mediaLayout.layout,
     counts: {
       personUpdated: personMerge.changed,
+      people: peopleMerge.counts,
       events: eventsMerge.counts,
       places: placesMerge.counts,
       sources: sourcesMerge.counts,
@@ -1463,6 +1664,7 @@ export async function runIntegrateCommand(
     ? JSON.stringify(summaryBase, null, 2)
     : `Integrate ${dryRun ? 'dry-run ' : ''}OK for ${personId}: ` +
       `person=${personMerge.changed ? 'updated' : 'unchanged'}, ` +
+      `people=+${peopleMerge.counts.added}/~${peopleMerge.counts.updated}, ` +
       `events=+${eventsMerge.counts.added}/~${eventsMerge.counts.updated}${removedEventIds.length > 0 ? `/-${removedEventIds.length}` : ''}, ` +
       `places=+${placesMerge.counts.added}/~${placesMerge.counts.updated}, ` +
       `sources=+${sourcesMerge.counts.added}/~${sourcesMerge.counts.updated}${removedSourceIds.length > 0 ? `/-${removedSourceIds.length}` : ''}, ` +

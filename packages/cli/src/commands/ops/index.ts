@@ -57,6 +57,11 @@ export {
   runAuditBatchCommand,
   type AuditBatchResult,
   type AuditOverlaps,
+  type PersonDiffField,
+  type PersonSlugCollision,
+  type PersonSlugCollisionEntry,
+  type SharedPersonOverlap,
+  type SharedPersonPackage,
 } from './audit-overlaps.js';
 
 export {
@@ -124,6 +129,7 @@ export {
   STATUS_HELP,
   buildDeceasedQueue,
   formatStatusTextReport,
+  indexEndOfLinePersonIds,
   parseStatusSort,
   runStatusCommand,
   type BiographyQueueStatus,

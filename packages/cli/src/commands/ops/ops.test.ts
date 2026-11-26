@@ -1655,6 +1655,350 @@ describe('ops/integrate', () => {
     expect(finalMedia.some((m) => m.id === 'med_legacy_uncropped')).toBe(false);
     expect(finalMedia.some((m) => m.id === 'med_living_photo')).toBe(true);
   });
+
+  it('adds newly proven deceased parents via patch.people (including new person_id) and stays idempotent', async () => {
+    const repoDir = await createSyntheticRepo();
+    const packageDir = path.join(repoDir, 'research', 'people', 'per_william_alder');
+    const scansDir = path.join(packageDir, 'scans');
+    await mkdir(scansDir, { recursive: true });
+    await writeFile(
+      path.join(scansDir, 'william-1825-marriage.png'),
+      makeMinimalPng(640, 480, 12_000)
+    );
+
+    const patch = {
+      person_id: 'per_william_alder',
+      people: [
+        {
+          id: 'per_william_alder',
+          slug: 'william-alder',
+          full_name: 'William Alder',
+          given_name: 'William',
+          surname: 'Alder',
+          alt_names: ['Wm. Alder'],
+          sex: 'M',
+          is_living: false,
+          lineage_group: 'ancestor',
+          birth_edtf: '1798~',
+          death_edtf: '1872-04-11',
+          portrait_url: null,
+        },
+        {
+          id: 'per_mary_birch',
+          slug: 'mary-birch',
+          full_name: 'Mary Birch',
+          given_name: 'Mary',
+          surname: 'Birch',
+          alt_names: ['Mary Alder'],
+          sex: 'F',
+          is_living: false,
+          lineage_group: 'ancestor',
+          birth_edtf: '1802~',
+          death_edtf: '1880-09-03',
+          portrait_url: null,
+        },
+      ],
+      kinship: [
+        { from: 'per_william_alder', to: 'per_thomas_alder', relation: 'parent' },
+        { from: 'per_mary_birch', to: 'per_thomas_alder', relation: 'parent' },
+        { from: 'per_william_alder', to: 'per_mary_birch', relation: 'spouse' },
+      ],
+      sources: [
+        {
+          id: 'src_1825_parish_marriage',
+          citation: 'Oak County Marriage Register, Vol. 1, p. 14, William Alder and Mary Birch, 1825',
+          source_type: 'vital_record',
+          repository: 'Oak County Clerk',
+        },
+      ],
+      media: [
+        {
+          id: 'med_william_1825_marriage',
+          kind: 'document_scan',
+          source_id: 'src_1825_parish_marriage',
+          person_ids: ['per_william_alder', 'per_mary_birch'],
+          date_edtf: '1825-05-10',
+          file: '/media/william-1825-marriage.png',
+          caption: '1825 marriage register entry for William Alder and Mary Birch',
+        },
+      ],
+      events: [
+        {
+          id: 'evt_william_mary_marriage_1825',
+          title: 'Marriage of William Alder and Mary Birch',
+          scope: 'family',
+          event_kind: 'point_event',
+          edtf_date: '1825-05-10',
+          place_id: 'plc_oak_county_ohio',
+          summary: 'William Alder married Mary Birch in Oak County.',
+          participants: [
+            { person_id: 'per_william_alder', role: 'groom' },
+            { person_id: 'per_mary_birch', role: 'bride' },
+          ],
+          sources: [{ source_id: 'src_1825_parish_marriage', confidence: 'high' }],
+        },
+        {
+          id: 'evt_mary_burial_1880',
+          title: 'Burial of Mary Birch',
+          scope: 'personal',
+          event_kind: 'point_event',
+          edtf_date: '1880-09-06',
+          place_id: 'plc_oak_county_ohio',
+          summary: 'Mary Birch was buried in Oak County after her death in 1880.',
+          participants: [{ person_id: 'per_mary_birch', role: 'principal' }],
+          sources: [{ source_id: 'src_1825_parish_marriage', confidence: 'medium' }],
+        },
+      ],
+      narratives: [
+        {
+          id: 'nar_william_alder_bio',
+          slug: 'william-alder-bio',
+          title: 'William Alder (1798-1872)',
+          summary: 'Upward ancestor biography for William Alder.',
+          person_ids: ['per_william_alder', 'per_mary_birch', 'per_thomas_alder'],
+          place_ids: ['plc_oak_county_ohio'],
+          event_ids: ['evt_william_mary_marriage_1825'],
+          source_ids: ['src_1825_parish_marriage'],
+          body_md:
+            'William Alder married Mary Birch in Oak County on May 10, 1825.[^src_1825_parish_marriage|med_william_1825_marriage] They were the parents of Thomas Alder.[^src_1825_parish_marriage]',
+        },
+      ],
+    };
+
+    await writeFile(path.join(packageDir, 'patch.json'), JSON.stringify(patch, null, 2), 'utf8');
+
+    // Audit strict passes even though per_william_alder is not yet in data/people.yaml.
+    const auditCli = createCaptureIo();
+    const auditCode = await runCli(
+      ['audit', 'per_william_alder', '--repo', repoDir, '--strict', '--json'],
+      { io: auditCli.io }
+    );
+    expect(auditCode, `${auditCli.stderr.join('\n')}\n${auditCli.stdout.join('\n')}`).toBe(EXIT_OK);
+    const auditReport = JSON.parse(auditCli.stdout.join('\n')) as {
+      ok: boolean;
+      strictOk: boolean;
+      checks: {
+        chronology: { ok: boolean; birth_edtf: string | null; death_edtf: string | null };
+        dryRun: { ok: boolean; counts: { people: { added: number; updated: number; unchanged: number } } | null };
+      };
+    };
+    expect(auditReport.ok).toBe(true);
+    expect(auditReport.strictOk).toBe(true);
+    expect(auditReport.checks.chronology.ok).toBe(true);
+    expect(auditReport.checks.chronology.birth_edtf).toBe('1798~');
+    expect(auditReport.checks.chronology.death_edtf).toBe('1872-04-11');
+    expect(auditReport.checks.dryRun.ok).toBe(true);
+    expect(auditReport.checks.dryRun.counts?.people).toEqual({
+      added: 2,
+      updated: 0,
+      unchanged: 0,
+    });
+
+    // Live apply writes people.yaml, kinship.yaml, events, sources, media, narratives.
+    const applied = await runIntegrateCommand({
+      repoDir,
+      personId: 'per_william_alder',
+      dryRun: false,
+    });
+    expect(applied.ok).toBe(true);
+    expect(applied.counts.people).toEqual({ added: 2, updated: 0, unchanged: 0 });
+    expect(applied.counts.kinship).toEqual({ added: 3, updated: 0, unchanged: 0 });
+    expect(applied.writtenYamlFiles.some((f) => f.endsWith('people.yaml'))).toBe(true);
+    expect(applied.writtenYamlFiles.some((f) => f.endsWith('kinship.yaml'))).toBe(true);
+
+    const writtenPeople = parsePeopleYaml(
+      await readFile(path.join(repoDir, 'data', 'people.yaml'), 'utf8')
+    );
+    expect(writtenPeople.some((p) => p.id === 'per_william_alder')).toBe(true);
+    expect(writtenPeople.some((p) => p.id === 'per_mary_birch')).toBe(true);
+
+    const writtenKinship = parseKinshipYaml(
+      await readFile(path.join(repoDir, 'data', 'kinship.yaml'), 'utf8')
+    );
+    expect(
+      writtenKinship.some(
+        (edge) =>
+          edge.from === 'per_william_alder' &&
+          edge.to === 'per_thomas_alder' &&
+          edge.relation === 'parent'
+      )
+    ).toBe(true);
+
+    // Re-running integrate is strictly idempotent.
+    const rerun = await runIntegrateCommand({
+      repoDir,
+      personId: 'per_william_alder',
+      dryRun: false,
+    });
+    expect(rerun.counts.people).toEqual({ added: 0, updated: 0, unchanged: 2 });
+    expect(rerun.writtenYamlFiles).toEqual([]);
+    expect(rerun.stagedScans[0]?.status).toBe('unchanged');
+
+    // Updating an existing deceased person via patch.people cleanly merges and converges.
+    const updatedPatch = structuredClone(patch);
+    updatedPatch.people[0].alt_names = ['William H. Alder'];
+    await writeFile(
+      path.join(packageDir, 'patch.json'),
+      JSON.stringify(updatedPatch, null, 2),
+      'utf8'
+    );
+    const updateApply = await runIntegrateCommand({
+      repoDir,
+      personId: 'per_william_alder',
+      dryRun: false,
+    });
+    expect(updateApply.counts.people).toEqual({ added: 0, updated: 1, unchanged: 1 });
+    expect(updateApply.writtenYamlFiles.some((f) => f.endsWith('people.yaml'))).toBe(true);
+    const mergedWilliam = parsePeopleYaml(
+      await readFile(path.join(repoDir, 'data', 'people.yaml'), 'utf8')
+    ).find((p) => p.id === 'per_william_alder');
+    expect(mergedWilliam?.alt_names).toEqual(['Wm. Alder', 'William H. Alder']);
+
+    const postUpdateRerun = await runIntegrateCommand({
+      repoDir,
+      personId: 'per_william_alder',
+      dryRun: false,
+    });
+    expect(postUpdateRerun.counts.people).toEqual({ added: 0, updated: 0, unchanged: 2 });
+    expect(postUpdateRerun.writtenYamlFiles).toEqual([]);
+  });
+
+  it('rejects living people and slug collisions in patch.people with CliValidationError', async () => {
+    const repoDir = await createSyntheticRepo();
+    const packageDir = path.join(repoDir, 'research', 'people', 'per_thomas_alder');
+    await mkdir(packageDir, { recursive: true });
+    const patchPath = path.join(packageDir, 'patch.json');
+
+    // 1. Explicit is_living: true rejected.
+    await writeFile(
+      patchPath,
+      JSON.stringify({
+        person_id: 'per_thomas_alder',
+        people: [
+          {
+            id: 'per_living_parent',
+            slug: 'living-parent',
+            full_name: 'Owen Alder',
+            given_name: 'Owen',
+            surname: 'Alder',
+            is_living: true,
+            birth_edtf: '1800',
+            death_edtf: '1870',
+          },
+        ],
+      }),
+      'utf8'
+    );
+    await expect(
+      runIntegrateCommand({ repoDir, personId: 'per_thomas_alder', dryRun: true })
+    ).rejects.toBeInstanceOf(CliValidationError);
+
+    // 2. Recent birth without death_edtf (resolves as living under cutoff) rejected.
+    await writeFile(
+      patchPath,
+      JSON.stringify({
+        person_id: 'per_thomas_alder',
+        people: [
+          {
+            id: 'per_recent_unknown',
+            slug: 'recent-unknown',
+            full_name: 'Evelyn Alder',
+            given_name: 'Evelyn',
+            surname: 'Alder',
+            is_living: false,
+            birth_edtf: '1980-06-15',
+            death_edtf: '',
+          },
+        ],
+      }),
+      'utf8'
+    );
+    await expect(
+      runIntegrateCommand({ repoDir, personId: 'per_thomas_alder', dryRun: true })
+    ).rejects.toThrow('PRIVACY REFUSAL');
+
+    // 3. Modifying an existing living person via patch.people rejected.
+    await writeFile(
+      patchPath,
+      JSON.stringify({
+        person_id: 'per_thomas_alder',
+        people: [
+          {
+            id: 'per_clara_maple_living',
+            slug: 'clara-maple',
+            full_name: 'Clara Maple',
+            given_name: 'Clara',
+            surname: 'Maple',
+            is_living: false,
+            birth_edtf: '1954-07-08',
+            death_edtf: '2020-01-01',
+          },
+        ],
+      }),
+      'utf8'
+    );
+    await expect(
+      runIntegrateCommand({ repoDir, personId: 'per_thomas_alder', dryRun: true })
+    ).rejects.toThrow("cannot modify existing living person 'per_clara_maple_living'");
+
+    // 4. Slug collision with a different existing person rejected.
+    await writeFile(
+      patchPath,
+      JSON.stringify({
+        person_id: 'per_thomas_alder',
+        people: [
+          {
+            id: 'per_william_alder',
+            slug: 'arthur-alder',
+            full_name: 'William Alder',
+            given_name: 'William',
+            surname: 'Alder',
+            is_living: false,
+            birth_edtf: '1798',
+            death_edtf: '1872',
+          },
+        ],
+      }),
+      'utf8'
+    );
+    await expect(
+      runIntegrateCommand({ repoDir, personId: 'per_thomas_alder', dryRun: true })
+    ).rejects.toThrow("reuses slug 'arthur-alder' already owned by 'per_arthur_alder'");
+
+    // 5. Duplicate person id inside patch.people rejected.
+    await writeFile(
+      patchPath,
+      JSON.stringify({
+        person_id: 'per_thomas_alder',
+        people: [
+          {
+            id: 'per_william_alder',
+            slug: 'william-alder',
+            full_name: 'William Alder',
+            given_name: 'William',
+            surname: 'Alder',
+            is_living: false,
+            birth_edtf: '1798',
+            death_edtf: '1872',
+          },
+          {
+            id: 'per_william_alder',
+            slug: 'william-alder-dup',
+            full_name: 'William Alder',
+            given_name: 'William',
+            surname: 'Alder',
+            is_living: false,
+            birth_edtf: '1798',
+            death_edtf: '1872',
+          },
+        ],
+      }),
+      'utf8'
+    );
+    await expect(
+      runIntegrateCommand({ repoDir, personId: 'per_thomas_alder', dryRun: true })
+    ).rejects.toThrow("Duplicate person id 'per_william_alder'");
+  });
 });
 
 describe('ops/dates', () => {
@@ -2534,6 +2878,203 @@ describe('ops/status', () => {
     const help = createCaptureIo();
     expect(await runCli(['status', '--help'], { io: help.io })).toBe(EXIT_OK);
     expect(help.stdout.join('\n')).toContain('--sort <sparsest|richest|chronological>');
+    expect(help.stdout.join('\n')).toContain('--end-of-line');
+  });
+
+  it('filters confirmed-deceased end-of-line ancestors with --end-of-line and honors --sort and --limit', async () => {
+    const repoDir = await createSyntheticRepo();
+    const dataDir = path.join(repoDir, 'data');
+
+    const people: RawPerson[] = [
+      {
+        id: 'per_samuel_alder',
+        slug: 'samuel-alder',
+        full_name: 'Samuel Alder',
+        given_name: 'Samuel',
+        surname: 'Alder',
+        alt_names: [],
+        sex: 'M',
+        is_living: false,
+        lineage_group: 'ancestor',
+        birth_edtf: '1760~',
+        death_edtf: '1835-02-14',
+        portrait_url: null,
+      },
+      {
+        id: 'per_hannah_birch',
+        slug: 'hannah-birch',
+        full_name: 'Hannah Birch',
+        given_name: 'Hannah',
+        surname: 'Birch',
+        alt_names: [],
+        sex: 'F',
+        is_living: false,
+        lineage_group: 'ancestor',
+        birth_edtf: '1795-04-02',
+        death_edtf: '1868-11-20',
+        portrait_url: null,
+      },
+      {
+        id: 'per_thomas_alder',
+        slug: 'thomas-alder',
+        full_name: 'Thomas Alder',
+        given_name: 'Thomas',
+        surname: 'Alder',
+        alt_names: [],
+        sex: 'M',
+        is_living: false,
+        lineage_group: 'ancestor',
+        birth_edtf: '1830-03-10',
+        death_edtf: '1902-11-04',
+        portrait_url: null,
+      },
+      {
+        id: 'per_arthur_alder',
+        slug: 'arthur-alder',
+        full_name: 'Arthur Alder',
+        given_name: 'Arthur',
+        surname: 'Alder',
+        alt_names: [],
+        sex: 'M',
+        is_living: false,
+        lineage_group: 'ancestor',
+        birth_edtf: '1858-04-12',
+        death_edtf: '1932-09-18',
+        portrait_url: null,
+      },
+      {
+        id: 'per_childless_uncle',
+        slug: 'childless-uncle',
+        full_name: 'Gideon Alder',
+        given_name: 'Gideon',
+        surname: 'Alder',
+        alt_names: [],
+        sex: 'M',
+        is_living: false,
+        lineage_group: 'extended',
+        birth_edtf: '1780',
+        death_edtf: '1840',
+        portrait_url: null,
+      },
+      {
+        id: 'per_living_parent',
+        slug: 'living-parent',
+        full_name: 'Clara Maple',
+        given_name: 'Clara',
+        surname: 'Maple',
+        alt_names: [],
+        sex: 'F',
+        is_living: true,
+        lineage_group: 'descendant',
+        birth_edtf: '1954-07-08',
+        death_edtf: '',
+        portrait_url: null,
+      },
+      {
+        id: 'per_living_child',
+        slug: 'living-child',
+        full_name: 'Nora Maple',
+        given_name: 'Nora',
+        surname: 'Maple',
+        alt_names: [],
+        sex: 'F',
+        is_living: true,
+        lineage_group: 'descendant',
+        birth_edtf: '1985-05-05',
+        death_edtf: '',
+        portrait_url: null,
+      },
+    ];
+
+    const kinship: KinshipEdge[] = [
+      // Samuel (0 parents, 1 child) -> end-of-line via relation: 'parent'
+      { from: 'per_samuel_alder', to: 'per_thomas_alder', relation: 'parent' },
+      // Hannah (0 parents, 1 child) -> end-of-line via relation: 'child'
+      { from: 'per_thomas_alder', to: 'per_hannah_birch', relation: 'child' },
+      // Thomas (2 parents, 1 child) -> NOT end-of-line
+      { from: 'per_thomas_alder', to: 'per_arthur_alder', relation: 'parent' },
+      // Living parent (0 parents, 1 child, living) -> MUST be excluded by privacy
+      { from: 'per_living_parent', to: 'per_living_child', relation: 'parent' },
+    ];
+
+    const narratives: Narrative[] = [
+      {
+        id: 'nar_samuel_bio',
+        slug: 'samuel-alder-bio',
+        kind: 'biography',
+        subject_person_id: 'per_samuel_alder',
+        title: 'Samuel Alder Biography',
+        person_ids: ['per_samuel_alder'],
+        place_ids: [],
+        event_ids: [],
+        source_ids: [],
+        body_md: 'Samuel Alder settled in Oak County.',
+      },
+    ];
+
+    await Promise.all([
+      writeFile(path.join(dataDir, 'people.yaml'), serializePeopleYaml(people, { sortById: true }), 'utf8'),
+      writeFile(path.join(dataDir, 'kinship.yaml'), serializeKinshipYaml(kinship, { sortDeterministic: true }), 'utf8'),
+      writeFile(path.join(dataDir, 'narratives.yaml'), serializeNarrativesYaml(narratives, { sortById: true }), 'utf8'),
+    ]);
+
+    // Default status keeps all deceased while reporting endOfLineCount.
+    const defaultRes = await runStatusCommand({ repoDir, json: true });
+    expect(defaultRes.endOfLine).toBe(false);
+    expect(defaultRes.endOfLineCount).toBe(2);
+    expect(defaultRes.deceased.map((p) => p.id)).toContain('per_thomas_alder');
+    expect(defaultRes.deceased.map((p) => p.id)).toContain('per_childless_uncle');
+
+    // --end-of-line --sort chronological returns Samuel (1760, done_live) before Hannah (1795, pending).
+    const cliJson = createCaptureIo();
+    expect(
+      await runCli(['status', '--repo', repoDir, '--end-of-line', '--sort', 'chronological', '--json'], {
+        io: cliJson.io,
+      })
+    ).toBe(EXIT_OK);
+    const parsed = JSON.parse(cliJson.stdout.join('\n')) as {
+      endOfLine: boolean;
+      endOfLineCount: number;
+      people: { total: number; deceased: number; living: number };
+      queue: { done_live: number; staged: number; pending: number };
+      deceased: Array<{ id: string; status: string }>;
+    };
+    expect(parsed.endOfLine).toBe(true);
+    expect(parsed.endOfLineCount).toBe(2);
+    expect(parsed.people).toEqual({ total: 7, deceased: 5, living: 2 });
+    expect(parsed.queue).toEqual({ done_live: 1, staged: 0, pending: 1 });
+    expect(parsed.deceased.map((p) => p.id)).toEqual(['per_samuel_alder', 'per_hannah_birch']);
+    expect(cliJson.stdout.join('\n')).not.toContain('Clara Maple');
+    expect(cliJson.stdout.join('\n')).not.toContain('per_living_parent');
+
+    // Text output with --end-of-line --sort chronological --limit 1 shows Samuel and truncates Hannah.
+    const cliText = createCaptureIo();
+    expect(
+      await runCli(
+        ['status', '--repo', repoDir, '--end-of-line', '--sort', 'chronological', '--limit', '1'],
+        { io: cliText.io }
+      )
+    ).toBe(EXIT_OK);
+    const rendered = cliText.stdout.join('\n');
+    expect(rendered).toContain('End-of-line ancestors: 2');
+    expect(rendered).toContain('End-of-line ancestors (chronological):');
+    expect(rendered).toContain('Samuel Alder (per_samuel_alder)');
+    expect(rendered).toContain('status=done_live');
+    expect(rendered).not.toContain('Hannah Birch');
+    expect(rendered).toContain('... and 1 more end-of-line');
+    expect(rendered).not.toContain('Clara Maple');
+    expect(rendered).not.toContain('Gideon Alder');
+
+    // Explicit --filter pending with --end-of-line narrows text list to pending end-of-line ancestors only.
+    const filteredText = await runStatusCommand({
+      repoDir,
+      endOfLine: true,
+      filter: 'pending',
+      sort: 'chronological',
+    });
+    expect(filteredText.rendered).toContain('End-of-line pending (chronological):');
+    expect(filteredText.rendered).toContain('Hannah Birch (per_hannah_birch)');
+    expect(filteredText.rendered).not.toContain('Samuel Alder');
   });
 });
 
@@ -3563,6 +4104,137 @@ describe('ops/audit', () => {
       { location: 'patch.events[1].title', match: 'Clara Maple' },
       { location: 'patch.events[2].title', match: 'Clara Maple' },
     ]);
+  });
+
+  it('detects conflicting new patch.people ids and slugs across concurrent staged packages', async () => {
+    const repoDir = await createSyntheticRepo();
+    process.env.KINLOOM_TELEMETRY_FILE = path.join(repoDir, 'telemetry.jsonl');
+    await dropArthurLivingVisit(repoDir);
+
+    const writePackageWithPeople = async (
+      ownerId: string,
+      stagedPeople: Array<Record<string, unknown>>
+    ) => {
+      const packageDir = path.join(repoDir, 'research', 'people', ownerId);
+      await mkdir(packageDir, { recursive: true });
+      await writeFile(
+        path.join(packageDir, 'patch.json'),
+        JSON.stringify(
+          {
+            person_id: ownerId,
+            people: stagedPeople,
+          },
+          null,
+          2
+        ),
+        'utf8'
+      );
+    };
+
+    const sharedFather = {
+      id: 'per_william_alder',
+      slug: 'william-alder',
+      full_name: 'William Alder',
+      given_name: 'William',
+      surname: 'Alder',
+      sex: 'M',
+      is_living: false,
+      lineage_group: 'ancestor',
+      birth_edtf: '1798~',
+      death_edtf: '1872-04-11',
+      portrait_url: null,
+    };
+
+    // 1. Identical staged new person in two packages does not fail --strict.
+    await writePackageWithPeople('per_thomas_alder', [sharedFather]);
+    await writePackageWithPeople('per_helen_maple', [sharedFather]);
+    const identical = await runAuditBatchCommand({
+      repoDir,
+      personIds: ['per_thomas_alder', 'per_helen_maple'],
+      json: true,
+    });
+    expect(identical.ok).toBe(true);
+    expect(identical.strictOk).toBe(true);
+    expect(identical.overlaps.sharedPersonOverlaps).toEqual([
+      expect.objectContaining({
+        id: 'per_william_alder',
+        fieldDiffs: [],
+      }),
+    ]);
+    expect(identical.summary.conflictingPersonOverlaps).toBe(0);
+    expect(identical.summary.conflictingPersonSlugCollisions).toBe(0);
+
+    // 2. Conflicting fields on same staged new person id + conflicting slug across different ids fail --strict.
+    await writePackageWithPeople('per_helen_maple', [
+      {
+        ...sharedFather,
+        full_name: 'William Henry Alder',
+        birth_edtf: '1796~',
+      },
+      {
+        id: 'per_mary_birch_alt',
+        slug: 'mary-birch',
+        full_name: 'Mary Birch',
+        given_name: 'Mary',
+        surname: 'Birch',
+        sex: 'F',
+        is_living: false,
+        lineage_group: 'ancestor',
+        birth_edtf: '1802~',
+        death_edtf: '1880',
+        portrait_url: null,
+      },
+    ]);
+    await writePackageWithPeople('per_thomas_alder', [
+      sharedFather,
+      {
+        id: 'per_mary_birch',
+        slug: 'mary-birch',
+        full_name: 'Mary Birch',
+        given_name: 'Mary',
+        surname: 'Birch',
+        sex: 'F',
+        is_living: false,
+        lineage_group: 'ancestor',
+        birth_edtf: '1802~',
+        death_edtf: '1880',
+        portrait_url: null,
+      },
+    ]);
+
+    const strictCap = createCaptureIo();
+    const exitCode = await runCli(['audit', '--all-staged', '--repo', repoDir, '--strict', '--json'], {
+      io: strictCap.io,
+    });
+    expect(exitCode).toBe(EXIT_ERROR);
+    const conflict = JSON.parse(strictCap.stdout.join('\n')) as {
+      ok: boolean;
+      strictOk: boolean;
+      overlaps: {
+        sharedPersonOverlaps: Array<{ id: string; fieldDiffs: string[] }>;
+        personSlugCollisions: Array<{ slug: string; personIdsConflict: boolean }>;
+      };
+      summary: {
+        conflictingPersonOverlaps: number;
+        conflictingPersonSlugCollisions: number;
+      };
+    };
+    expect(conflict.ok).toBe(true);
+    expect(conflict.strictOk).toBe(false);
+    expect(conflict.summary.conflictingPersonOverlaps).toBe(1);
+    expect(conflict.summary.conflictingPersonSlugCollisions).toBe(1);
+    expect(conflict.overlaps.sharedPersonOverlaps).toEqual([
+      expect.objectContaining({
+        id: 'per_william_alder',
+        fieldDiffs: ['full_name', 'birth_edtf'],
+      }),
+    ]);
+    expect(conflict.overlaps.personSlugCollisions).toContainEqual(
+      expect.objectContaining({
+        slug: 'mary-birch',
+        personIdsConflict: true,
+      })
+    );
   });
 });
 

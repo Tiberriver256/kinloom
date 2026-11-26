@@ -6,12 +6,14 @@ import {
   getMediaPersonIds,
   parseEventsYaml,
   parseKinloomConfigYaml,
+  parseKinshipYaml,
   parseMediaYaml,
   parseNarrativesYaml,
   parsePeopleYaml,
   parsePlacesYaml,
   parseSourcesYaml,
   resolveEffectiveLiving,
+  type KinshipEdge,
   type MediaItem,
   type Narrative,
   type Place,
@@ -33,6 +35,7 @@ export interface StatusTextDisplay {
   limit?: number;
   filter?: BiographyQueueStatus;
   sort?: StatusSortMode;
+  endOfLine?: boolean;
 }
 
 export interface StatusCommandOptions extends StatusTextDisplay {
@@ -56,6 +59,8 @@ export interface DeceasedQueueItem {
 export interface StatusReport {
   repo: string;
   sort: StatusSortMode;
+  endOfLine: boolean;
+  endOfLineCount: number;
   people: { total: number; deceased: number; living: number };
   events: number;
   places: number;
@@ -222,21 +227,58 @@ function biographySubjectIds(narratives: readonly Narrative[]): Set<string> {
   return subjects;
 }
 
+export function indexEndOfLinePersonIds(kinship: readonly KinshipEdge[]): Set<string> {
+  const parentsByPerson = new Map<string, Set<string>>();
+  const childrenByPerson = new Map<string, Set<string>>();
+  const addLink = (map: Map<string, Set<string>>, key: string, value: string): void => {
+    let set = map.get(key);
+    if (!set) {
+      set = new Set<string>();
+      map.set(key, set);
+    }
+    set.add(value);
+  };
+
+  for (const edge of kinship) {
+    if (edge.relation === 'parent') {
+      addLink(parentsByPerson, edge.to, edge.from);
+      addLink(childrenByPerson, edge.from, edge.to);
+    } else if (edge.relation === 'child') {
+      addLink(parentsByPerson, edge.from, edge.to);
+      addLink(childrenByPerson, edge.to, edge.from);
+    }
+  }
+
+  const endOfLine = new Set<string>();
+  for (const [personId, children] of childrenByPerson) {
+    if (children.size > 0 && (parentsByPerson.get(personId)?.size ?? 0) === 0) {
+      endOfLine.add(personId);
+    }
+  }
+  return endOfLine;
+}
+
 export function buildDeceasedQueue(input: {
   repoDir: string;
   people: readonly RawPerson[];
   events: readonly RawEvent[];
   media: readonly MediaItem[];
   narratives: readonly Narrative[];
+  kinship?: readonly KinshipEdge[];
   privacy?: Partial<PrivacyConfig>;
   sort?: StatusSortMode;
+  endOfLine?: boolean;
 }): DeceasedQueueItem[] {
   const sort = parseStatusSort(input.sort);
+  const endOfLineIds = input.endOfLine ? indexEndOfLinePersonIds(input.kinship ?? []) : null;
   const research = indexResearchCounts(input.events, input.media);
   const biographies = biographySubjectIds(input.narratives);
   const items: DeceasedQueueItem[] = [];
   for (const person of input.people) {
     if (resolveEffectiveLiving(person, input.privacy)) {
+      continue;
+    }
+    if (endOfLineIds && !endOfLineIds.has(person.id)) {
       continue;
     }
     const counts = research.get(person.id) ?? { events: 0, sources: 0, media: 0 };
@@ -257,7 +299,7 @@ export function buildDeceasedQueue(input: {
       status: queueStatus(hasBiography, hasStagedPatch),
     });
   }
-  items.sort(compareDeceased(sort));
+  items.sort(input.endOfLine ? STATUS_SORT_COMPARATORS[sort] : compareDeceased(sort));
   return items;
 }
 
@@ -273,8 +315,19 @@ const STATUS_SORT_LABEL: Record<StatusSortMode, string> = {
   chronological: 'chronological',
 };
 
-function formatQueueHeading(filter: BiographyQueueStatus, sort: StatusSortMode): string {
-  return `${STATUS_FILTER_TITLE[filter]} (${STATUS_SORT_LABEL[sort]}):`;
+function formatQueueHeading(
+  filter: BiographyQueueStatus | undefined,
+  sort: StatusSortMode,
+  endOfLine: boolean
+): string {
+  if (endOfLine) {
+    if (filter) {
+      return `End-of-line ${STATUS_FILTER_TITLE[filter].toLowerCase()} (${STATUS_SORT_LABEL[sort]}):`;
+    }
+    return `End-of-line ancestors (${STATUS_SORT_LABEL[sort]}):`;
+  }
+  const activeFilter = filter ?? 'pending';
+  return `${STATUS_FILTER_TITLE[activeFilter]} (${STATUS_SORT_LABEL[sort]}):`;
 }
 
 export function formatStatusTextReport(
@@ -282,7 +335,8 @@ export function formatStatusTextReport(
   display: StatusTextDisplay = {}
 ): string {
   const limit = display.limit ?? DEFAULT_STATUS_TEXT_LIMIT;
-  const filter = display.filter ?? 'pending';
+  const endOfLine = display.endOfLine ?? report.endOfLine;
+  const filter = endOfLine ? display.filter : (display.filter ?? 'pending');
   const sort = parseStatusSort(display.sort ?? report.sort);
   const lines = [
     `Status ${report.repo}`,
@@ -294,23 +348,28 @@ export function formatStatusTextReport(
     `Media: ${report.media}`,
     `Narratives: ${report.narratives}`,
     `Biographies: ${report.biographies}`,
+    `End-of-line ancestors: ${report.endOfLineCount}`,
     `Queue: done_live=${report.queue.done_live} staged=${report.queue.staged} pending=${report.queue.pending}`,
   ];
-  const matching = report.deceased.filter((person) => person.status === filter);
-  lines.push(formatQueueHeading(filter, sort));
+  const matching = filter
+    ? report.deceased.filter((person) => person.status === filter)
+    : report.deceased;
+  lines.push(formatQueueHeading(filter, sort, endOfLine));
   if (matching.length === 0) {
     lines.push('  (none)');
   } else {
     const shown = limit === 0 ? matching : matching.slice(0, limit);
     for (const person of shown) {
       const birth = person.birth_edtf.trim() || '?';
+      const statusSuffix = endOfLine && !filter ? ` status=${person.status}` : '';
       lines.push(
-        `  ${person.full_name} (${person.id}) birth=${birth} death=${person.death_edtf || '?'} events=${person.events} sources=${person.sources} media=${person.media}`
+        `  ${person.full_name} (${person.id}) birth=${birth} death=${person.death_edtf || '?'} events=${person.events} sources=${person.sources} media=${person.media}${statusSuffix}`
       );
     }
     const hidden = matching.length - shown.length;
     if (hidden > 0) {
-      lines.push(`  ... and ${hidden} more ${filter}`);
+      const label = endOfLine ? (filter ? `end-of-line ${filter}` : 'end-of-line') : (filter ?? 'pending');
+      lines.push(`  ... and ${hidden} more ${label}`);
     }
   }
   return `${lines.join('\n')}\n`;
@@ -320,6 +379,7 @@ export async function runStatusCommand(
   options: StatusCommandOptions = {}
 ): Promise<StatusCommandResult> {
   const sort = parseStatusSort(options.sort);
+  const endOfLine = Boolean(options.endOfLine);
   const repoDir = path.resolve(options.repoDir?.trim() || process.cwd());
   if (!fs.existsSync(repoDir) || !fs.statSync(repoDir).isDirectory()) {
     throw new CliValidationError(`Repository directory does not exist: ${repoDir}`);
@@ -329,16 +389,25 @@ export async function runStatusCommand(
     throw new CliValidationError(`Missing data/ directory at ${dataDir}.`);
   }
 
-  const [configText, peopleText, eventsText, placesText, sourcesText, mediaText, narrativesText] =
-    await Promise.all([
-      readOptionalUtf8(path.join(repoDir, 'kinloom.config.yaml')),
-      readOptionalUtf8(path.join(dataDir, 'people.yaml')),
-      readOptionalUtf8(path.join(dataDir, 'events.yaml')),
-      readOptionalUtf8(path.join(dataDir, 'places.yaml')),
-      readOptionalUtf8(path.join(dataDir, 'sources.yaml')),
-      readOptionalUtf8(path.join(dataDir, 'media.yaml')),
-      readOptionalUtf8(path.join(dataDir, 'narratives.yaml')),
-    ]);
+  const [
+    configText,
+    peopleText,
+    eventsText,
+    placesText,
+    sourcesText,
+    mediaText,
+    narrativesText,
+    kinshipText,
+  ] = await Promise.all([
+    readOptionalUtf8(path.join(repoDir, 'kinloom.config.yaml')),
+    readOptionalUtf8(path.join(dataDir, 'people.yaml')),
+    readOptionalUtf8(path.join(dataDir, 'events.yaml')),
+    readOptionalUtf8(path.join(dataDir, 'places.yaml')),
+    readOptionalUtf8(path.join(dataDir, 'sources.yaml')),
+    readOptionalUtf8(path.join(dataDir, 'media.yaml')),
+    readOptionalUtf8(path.join(dataDir, 'narratives.yaml')),
+    readOptionalUtf8(path.join(dataDir, 'kinship.yaml')),
+  ]);
 
   const privacy: Partial<PrivacyConfig> = configText ? parseKinloomConfigYaml(configText).privacy : {};
   const people = peopleText ? parsePeopleYaml(peopleText) : [];
@@ -347,23 +416,33 @@ export async function runStatusCommand(
   const sources = sourcesText ? parseSourcesYaml(sourcesText) : [];
   const media = mediaText ? parseMediaYaml(mediaText) : [];
   const narratives = narrativesText ? parseNarrativesYaml(narrativesText) : [];
-  const deceased = buildDeceasedQueue({
+  const kinship = kinshipText ? parseKinshipYaml(kinshipText) : [];
+  const endOfLineIds = indexEndOfLinePersonIds(kinship);
+  const allDeceased = buildDeceasedQueue({
     repoDir,
     people,
     events,
     media,
     narratives,
+    kinship,
     privacy,
     sort,
+    endOfLine: false,
   });
-  const livingCount = people.length - deceased.length;
+  const endOfLineDeceased = allDeceased
+    .filter((person) => endOfLineIds.has(person.id))
+    .toSorted(STATUS_SORT_COMPARATORS[sort]);
+  const deceased = endOfLine ? endOfLineDeceased : allDeceased;
+  const livingCount = people.length - allDeceased.length;
 
   const report: StatusReport = {
     repo: repoDir,
     sort,
+    endOfLine,
+    endOfLineCount: endOfLineDeceased.length,
     people: {
       total: people.length,
-      deceased: deceased.length,
+      deceased: allDeceased.length,
       living: livingCount,
     },
     events: events.length,
@@ -383,7 +462,12 @@ export async function runStatusCommand(
 
   const rendered = options.json
     ? `${JSON.stringify(report, null, 2)}\n`
-    : formatStatusTextReport(report, { limit: options.limit, filter: options.filter, sort });
+    : formatStatusTextReport(report, {
+        limit: options.limit,
+        filter: options.filter,
+        sort,
+        endOfLine,
+      });
 
   return { ...report, rendered };
 }

@@ -32,6 +32,20 @@ const EVENT_DIFF_FIELDS = ['edtf_date', 'place_id', 'place_precision', 'title'] 
 
 export type EventDiffField = (typeof EVENT_DIFF_FIELDS)[number];
 
+const PERSON_DIFF_FIELDS = [
+  'slug',
+  'full_name',
+  'given_name',
+  'surname',
+  'sex',
+  'birth_edtf',
+  'death_edtf',
+  'lineage_group',
+  'branch',
+] as const;
+
+export type PersonDiffField = (typeof PERSON_DIFF_FIELDS)[number];
+
 export interface ScanCollisionPackage {
   person_id: string;
   bytes: number;
@@ -82,12 +96,45 @@ export interface SharedEventOverlap {
   packages: SharedEventPackage[];
 }
 
+export interface SharedPersonPackage {
+  person_id: string;
+  slug: string | null;
+  full_name: string | null;
+  given_name: string | null;
+  surname: string | null;
+  sex: string | null;
+  birth_edtf: string | null;
+  death_edtf: string | null;
+  lineage_group: string | null;
+  branch: string | null;
+}
+
+export interface SharedPersonOverlap {
+  id: string;
+  fieldDiffs: PersonDiffField[];
+  packages: SharedPersonPackage[];
+}
+
+export interface PersonSlugCollisionEntry {
+  package_person_id: string;
+  person_id: string;
+  slug: string;
+}
+
+export interface PersonSlugCollision {
+  slug: string;
+  personIdsConflict: boolean;
+  entries: PersonSlugCollisionEntry[];
+}
+
 export interface AuditOverlaps {
   scanFileCollisions: ScanFileCollision[];
   mediaFileCollisions: MediaFileCollision[];
   sharedMediaIds: SharedMediaId[];
   sharedSourceIds: SharedSourceId[];
   sharedEventOverlaps: SharedEventOverlap[];
+  sharedPersonOverlaps: SharedPersonOverlap[];
+  personSlugCollisions: PersonSlugCollision[];
   liveMediaFileCollisions: LiveMediaFileCollision[];
 }
 
@@ -104,6 +151,10 @@ export interface AuditBatchSummary {
   sharedSourceIds: number;
   sharedEventOverlaps: number;
   sharedEventFieldDiffs: number;
+  sharedPersonOverlaps: number;
+  conflictingPersonOverlaps: number;
+  personSlugCollisions: number;
+  conflictingPersonSlugCollisions: number;
   liveMediaFileCollisions: number;
 }
 
@@ -128,12 +179,17 @@ interface StagedEventRow extends SharedEventPackage {
   id: string;
 }
 
+interface StagedPersonRow extends SharedPersonPackage {
+  id: string;
+}
+
 interface ParsedPackage {
   personId: string;
   packageDir: string;
   media: StagedMediaRef[];
   sources: StagedSourceRef[];
   eventRows: StagedEventRow[];
+  stagedPeople: StagedPersonRow[];
 }
 
 function isPlainRecord(value: unknown): value is Record<string, unknown> {
@@ -217,7 +273,31 @@ function loadStagedPackage(personId: string, packageDir: string): ParsedPackage 
     });
   }
 
-  return { personId, packageDir, media, sources, eventRows };
+  const stagedPeople: StagedPersonRow[] = [];
+  for (const rawItem of Array.isArray(patch.people) ? patch.people : []) {
+    if (!isPlainRecord(rawItem) || typeof rawItem.id !== 'string') {
+      continue;
+    }
+    const id = rawItem.id.trim();
+    if (!id) {
+      continue;
+    }
+    stagedPeople.push({
+      id,
+      person_id: personId,
+      slug: nullableText(rawItem.slug),
+      full_name: nullableText(rawItem.full_name),
+      given_name: nullableText(rawItem.given_name),
+      surname: nullableText(rawItem.surname),
+      sex: nullableText(rawItem.sex),
+      birth_edtf: nullableText(rawItem.birth_edtf),
+      death_edtf: nullableText(rawItem.death_edtf),
+      lineage_group: nullableText(rawItem.lineage_group),
+      branch: nullableText(rawItem.branch),
+    });
+  }
+
+  return { personId, packageDir, media, sources, eventRows, stagedPeople };
 }
 
 function hashAndMeasure(diskPath: string): ScanCollisionPackage & { person_id: string } {
@@ -421,6 +501,87 @@ function collectSharedEvents(packages: readonly ParsedPackage[]): SharedEventOve
   return overlaps.toSorted((a, b) => a.id.localeCompare(b.id));
 }
 
+function collectSharedPeople(packages: readonly ParsedPackage[]): SharedPersonOverlap[] {
+  const grouped = new Map<string, StagedPersonRow[]>();
+  for (const staged of packages) {
+    const seenInPackage = new Set<string>();
+    for (const person of staged.stagedPeople) {
+      if (seenInPackage.has(person.id)) {
+        continue;
+      }
+      seenInPackage.add(person.id);
+      const rows = grouped.get(person.id) ?? [];
+      rows.push(person);
+      grouped.set(person.id, rows);
+    }
+  }
+  const overlaps: SharedPersonOverlap[] = [];
+  for (const [id, rows] of grouped) {
+    if (uniquePersonCount(rows.map((row) => row.person_id)) < 2) {
+      continue;
+    }
+    const sorted = rows.toSorted(comparePersonId);
+    const fieldDiffs = PERSON_DIFF_FIELDS.filter((field) => {
+      const first = sorted[0]?.[field] ?? null;
+      return sorted.some((row) => row[field] !== first);
+    });
+    overlaps.push({
+      id,
+      fieldDiffs: [...fieldDiffs],
+      packages: sorted.map((row) => ({
+        person_id: row.person_id,
+        slug: row.slug,
+        full_name: row.full_name,
+        given_name: row.given_name,
+        surname: row.surname,
+        sex: row.sex,
+        birth_edtf: row.birth_edtf,
+        death_edtf: row.death_edtf,
+        lineage_group: row.lineage_group,
+        branch: row.branch,
+      })),
+    });
+  }
+  return overlaps.toSorted((a, b) => a.id.localeCompare(b.id));
+}
+
+function collectPersonSlugCollisions(packages: readonly ParsedPackage[]): PersonSlugCollision[] {
+  const grouped = new Map<string, PersonSlugCollisionEntry[]>();
+  for (const staged of packages) {
+    for (const person of staged.stagedPeople) {
+      if (!person.slug) {
+        continue;
+      }
+      const key = person.slug.toLowerCase();
+      const rows = grouped.get(key) ?? [];
+      rows.push({
+        package_person_id: staged.personId,
+        person_id: person.id,
+        slug: person.slug,
+      });
+      grouped.set(key, rows);
+    }
+  }
+  const collisions: PersonSlugCollision[] = [];
+  for (const [slug, entries] of grouped) {
+    if (uniquePersonCount(entries.map((entry) => entry.package_person_id)) < 2) {
+      continue;
+    }
+    const sorted = entries.toSorted(
+      (a, b) =>
+        a.package_person_id.localeCompare(b.package_person_id) ||
+        a.person_id.localeCompare(b.person_id)
+    );
+    const personIds = new Set(sorted.map((entry) => entry.person_id));
+    collisions.push({
+      slug,
+      personIdsConflict: personIds.size > 1,
+      entries: sorted,
+    });
+  }
+  return collisions.toSorted((a, b) => a.slug.localeCompare(b.slug));
+}
+
 function computeAuditOverlaps(input: {
   packages: readonly ParsedPackage[];
   liveMedia: readonly { id: string; file: string }[];
@@ -431,6 +592,8 @@ function computeAuditOverlaps(input: {
     sharedMediaIds: collectSharedMediaIds(input.packages),
     sharedSourceIds: collectSharedSourceIds(input.packages),
     sharedEventOverlaps: collectSharedEvents(input.packages),
+    sharedPersonOverlaps: collectSharedPeople(input.packages),
+    personSlugCollisions: collectPersonSlugCollisions(input.packages),
     liveMediaFileCollisions: collectLiveMediaCollisions(input.packages, input.liveMedia),
   };
 }
@@ -454,6 +617,14 @@ function summarizeBatch(
     sharedEventOverlaps: overlaps.sharedEventOverlaps.length,
     sharedEventFieldDiffs: overlaps.sharedEventOverlaps.filter((row) => row.fieldDiffs.length > 0)
       .length,
+    sharedPersonOverlaps: overlaps.sharedPersonOverlaps.length,
+    conflictingPersonOverlaps: overlaps.sharedPersonOverlaps.filter(
+      (row) => row.fieldDiffs.length > 0
+    ).length,
+    personSlugCollisions: overlaps.personSlugCollisions.length,
+    conflictingPersonSlugCollisions: overlaps.personSlugCollisions.filter(
+      (row) => row.personIdsConflict
+    ).length,
     liveMediaFileCollisions: overlaps.liveMediaFileCollisions.length,
   };
 }
@@ -538,6 +709,36 @@ export function formatAuditBatchTextReport(report: Omit<AuditBatchResult, 'rende
     }
   }
 
+  if (report.overlaps.sharedPersonOverlaps.length === 0) {
+    lines.push('  Shared people: none');
+  }
+  for (const overlap of report.overlaps.sharedPersonOverlaps) {
+    const diff =
+      overlap.fieldDiffs.length === 0
+        ? 'same fields'
+        : `differs in ${overlap.fieldDiffs.join(', ')}`;
+    lines.push(`  Person ${overlap.id}: ${diff}`);
+    for (const staged of overlap.packages) {
+      lines.push(
+        `    ${staged.person_id} name=${showNullable(staged.full_name)} slug=${showNullable(staged.slug)} birth=${showNullable(staged.birth_edtf)} death=${showNullable(staged.death_edtf)}`
+      );
+    }
+  }
+
+  if (report.overlaps.personSlugCollisions.length === 0) {
+    lines.push('  Person slugs: none');
+  }
+  for (const collision of report.overlaps.personSlugCollisions) {
+    lines.push(
+      `  Person slug ${collision.slug}: ${collision.personIdsConflict ? 'conflicting person ids' : 'same person id'}`
+    );
+    for (const entry of collision.entries) {
+      lines.push(
+        `    ${entry.package_person_id} person_id=${entry.person_id} slug=${entry.slug}`
+      );
+    }
+  }
+
   if (report.overlaps.liveMediaFileCollisions.length === 0) {
     lines.push('  Live media files: none');
   }
@@ -594,6 +795,8 @@ export async function runAuditBatchCommand(options: {
       people.every((person) => person.strictOk) &&
       summary.differingScanCollisions === 0 &&
       summary.conflictingMediaFileCollisions === 0 &&
+      summary.conflictingPersonOverlaps === 0 &&
+      summary.conflictingPersonSlugCollisions === 0 &&
       summary.liveMediaFileCollisions === 0,
     repo: repoDir,
     people,

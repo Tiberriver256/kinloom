@@ -16,12 +16,14 @@ Options:
 export const INTEGRATE_HELP = `Usage: kinloom integrate [person_id] [options]
 
 Validate and integrate a person research package (patch.json + scans/) into local YAML files.
+Supports patch.people to add newly proven deceased ancestors (including when person_id itself is introduced by patch.people).
+Living people and slug collisions are always rejected.
 
 Arguments:
-  person_id              Target person ID in data/people.yaml (positional or --person)
+  person_id              Target person ID in data/people.yaml or patch.people (positional or --person)
 
 Options:
-  --person <person_id>   Target person ID in data/people.yaml (required if positional omitted)
+  --person <person_id>   Target person ID in data/people.yaml or patch.people (required if positional omitted)
   --repo <dir>           Archive repository root (default: current working directory)
   --package-dir <dir>    Custom research package directory (default: <repo>/research/people/<person_id>)
   --dry-run              Validate schemas, citations, scans, and privacy without writing files
@@ -31,12 +33,13 @@ Options:
 export const AUDIT_HELP = `Usage: kinloom audit [person_id ...] [options]
 
 Run all 5 deterministic package checks in one pass:
-  1. Chronology and lifespan arithmetic
+  1. Chronology and lifespan arithmetic (including staged patch.people entries)
   2. Living-person privacy, SSN, phone, and em-dash style scan
   3. Uncited biographical prose sentence audit on body_md
   4. Pure-Node scan inventory and magic-header/dimension verification
   5. In-process integrate dry-run schema, citation, and privacy check
 
+Accepts person_id defined in data/people.yaml or newly staged in patch.people.
 One person id keeps the original text report and the original JSON scorecard.
 Two or more person ids, or --all-staged, audit each package in order and then report cross-package overlaps.
 
@@ -48,7 +51,7 @@ Options:
   --all-staged           Audit every research/people/<id>/patch.json package. Ids are sorted. Do not pass person ids with this flag.
   --repo <dir>           Archive repository root (default: current working directory)
   --package-dir <dir>    Custom research package directory for a single person (default: <repo>/research/people/<person_id>)
-  --strict               Exit non-zero when a package fails its strict scorecard (uncited prose or an em dash). A single person and a batch both exit non-zero when a staged file already belongs to a different id in data/media.yaml. In a batch, also exit non-zero when two packages stage the same scan basename with different SHA-256 bytes, or when two packages point the same media file path at different media ids. Identical scan bytes, a shared media id, and an update of the same live media id do not fail --strict.
+  --strict               Exit non-zero when a package fails its strict scorecard (uncited prose or an em dash). A single person and a batch both exit non-zero when a staged file already belongs to a different id in data/media.yaml. In a batch, also exit non-zero when two packages stage the same scan basename with different SHA-256 bytes, point the same media file path at different media ids, define the same patch.people id with conflicting fields, or reuse the same patch.people slug for different person ids. Identical scan bytes, a shared media id, identical patch.people rows, and an update of the same live media id do not fail --strict.
   --json                 Emit structured JSON. A batch object is { ok, strictOk, repo, people, overlaps, summary, duration_ms }.
   -h, --help             Show this help message`;
 
@@ -61,19 +64,22 @@ The command does not print a living person's id, name, or birth date.
 Options:
   --repo <dir>                             Archive repository root (default: current working directory)
   --limit <N>                              Text list length. Default 8. 0 shows every matching row.
-  --filter <pending|staged|done_live>      Text list status. Default pending.
+  --filter <pending|staged|done_live>      Text list status. Default pending (or all statuses when --end-of-line is set without --filter).
   --sort <sparsest|richest|chronological>  Queue sort order. Default sparsest.
+  --end-of-line                            Filter queue to confirmed-deceased end-of-line ancestors (>= 1 child and 0 parents in kinship.yaml).
   --json                                   Emit the status object as JSON
   -h, --help                               Show this help message
 
 Text output prints the totals, the queue counts, and a list of deceased people.
-The list uses --filter, --sort, and stops after --limit rows.
+The list uses --filter, --sort, --end-of-line, and stops after --limit rows.
 JSON ignores --limit and --filter.
-JSON applies --sort, includes the sort field, and returns the full deceased array and queue counts.
+JSON applies --sort and --end-of-line, includes sort, endOfLine, and endOfLineCount, and returns the matching deceased array and queue counts.
 
 JSON object:
   repo                 Absolute repository path
   sort                 Active queue sort mode (sparsest, richest, or chronological)
+  endOfLine            true when --end-of-line filtering is active
+  endOfLineCount       Confirmed-deceased ancestors with >= 1 child and 0 parents in data/kinship.yaml
   people.total         Rows in data/people.yaml
   people.deceased      People who are not effective-living
   people.living        People who are effective-living (count only)
@@ -84,10 +90,10 @@ JSON object:
   media                Rows in data/media.yaml
   narratives           Rows in data/narratives.yaml
   biographies          Narratives whose kind is biography
-  queue.done_live      Deceased people with a biography narrative
-  queue.staged         Deceased people with research/people/<id>/patch.json and no biography
-  queue.pending        Deceased people with neither a biography nor a staged patch
-  deceased             Deceased people only, ordered pending, then staged, then done_live
+  queue.done_live      Deceased people in the active queue with a biography narrative
+  queue.staged         Deceased people in the active queue with research/people/<id>/patch.json and no biography
+  queue.pending        Deceased people in the active queue with neither a biography nor a staged patch
+  deceased             Deceased people only (ordered pending, staged, done_live; or directly by --sort when --end-of-line is set)
 
 Each deceased item has:
   id, full_name, birth_edtf, death_edtf

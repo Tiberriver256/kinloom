@@ -204,9 +204,11 @@ function parseStatusLimit(value: string | undefined): number {
   return Number.parseInt(trimmed, 10);
 }
 
-function parseStatusFilter(value: string | undefined): 'pending' | 'staged' | 'done_live' {
+function parseStatusFilter(
+  value: string | undefined
+): 'pending' | 'staged' | 'done_live' | undefined {
   if (value === undefined) {
-    return 'pending';
+    return undefined;
   }
   const trimmed = value.trim();
   if (trimmed === 'pending' || trimmed === 'staged' || trimmed === 'done_live') {
@@ -967,6 +969,7 @@ export async function runCli(
             limit: { type: 'string' },
             filter: { type: 'string' },
             sort: { type: 'string' },
+            'end-of-line': { type: 'boolean', default: false },
             json: { type: 'boolean', default: false },
           },
         });
@@ -992,6 +995,7 @@ export async function runCli(
               limit,
               filter,
               sort,
+              endOfLine: values['end-of-line'],
             })
         );
         writeRenderedOutput(io, result.rendered);
