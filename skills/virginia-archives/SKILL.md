@@ -17,7 +17,7 @@ Path: `skills/virginia-archives/scripts/va-archives`
 
 A standalone executable Python CLI with a PEP 723 `#!/usr/bin/env -S uv run --script` shebang and inline dependencies (`click`, `httpx`, `pillow`). No virtualenv setup, no API key, no account. Run it from the repo root, e.g. `skills/virginia-archives/scripts/va-archives chancery search Lincoln`.
 
-The Library of Virginia exposes real machine interfaces, verified live on 2026-11-24 (see Verification log). The CLI uses plain HTTP for everything it does; no browser automation is bundled.
+The Library of Virginia exposes real machine interfaces, verified live on 2026-11-24 (see Verification log). The CLI uses plain HTTP for everything it does; no browser automation is bundled. `--json` objects from `chancery search`, `chancery case`, `catalog`, `grant-tif`, `lva-tif`, `dunmore`, and `download-rosetta` include a boolean `cache_hit`. It is true only when every fetch in that command was read from disk. `chancery localities --json` stays a list and does not include `cache_hit`.
 
 ### Chancery Records Index
 

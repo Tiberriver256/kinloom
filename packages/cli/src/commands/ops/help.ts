@@ -28,7 +28,7 @@ Options:
   --json                 Emit structured JSON summary
   -h, --help             Show this help message`;
 
-export const AUDIT_HELP = `Usage: kinloom audit [person_id] [options]
+export const AUDIT_HELP = `Usage: kinloom audit [person_id ...] [options]
 
 Run all 5 deterministic package checks in one pass:
   1. Chronology and lifespan arithmetic
@@ -37,14 +37,19 @@ Run all 5 deterministic package checks in one pass:
   4. Pure-Node scan inventory and magic-header/dimension verification
   5. In-process integrate dry-run schema, citation, and privacy check
 
+One person id keeps the original text report and the original JSON scorecard.
+Two or more person ids, or --all-staged, audit each package in order and then report cross-package overlaps.
+
 Arguments:
-  person_id              Target person ID in data/people.yaml (positional or --person)
+  person_id              One person id, or several person ids. Use a positional id or --person for one person.
 
 Options:
-  --person <person_id>   Target person ID in data/people.yaml (required if positional omitted)
+  --person <person_id>   One person id. Do not combine --person with positional ids.
+  --all-staged           Audit every research/people/<id>/patch.json package. Ids are sorted. Do not pass person ids with this flag.
   --repo <dir>           Archive repository root (default: current working directory)
-  --package-dir <dir>    Custom research package directory (default: <repo>/research/people/<person_id>)
-  --json                 Emit structured JSON scorecard
+  --package-dir <dir>    Custom research package directory for a single person (default: <repo>/research/people/<person_id>)
+  --strict               Exit non-zero when a package fails its strict scorecard (uncited prose or an em dash). In a batch, also exit non-zero when two packages stage the same scan basename with different SHA-256 bytes, or when two packages point the same media file path at different media ids. Identical scan bytes and a shared media id do not fail --strict. A staged file that already belongs to a different id in data/media.yaml is reported and does not change the exit code.
+  --json                 Emit structured JSON. A batch object is { ok, strictOk, repo, people, overlaps, summary, duration_ms }.
   -h, --help             Show this help message`;
 
 export const VERIFY_HELP = `Usage: kinloom verify [options]

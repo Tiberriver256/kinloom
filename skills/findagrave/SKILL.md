@@ -13,7 +13,7 @@ Path: `skills/findagrave/scripts/findagrave`
 
 ### Persistent local disk cache
 
-`get`/`memorial`, `cemetery`, `photo`, `search`, and `place` cache responses atomically under `~/.cache/kinloom-findagrave/` (overrideable via `KINLOOM_FINDAGRAVE_CACHE_DIR`) using advisory file locks (`fcntl.flock` on POSIX, safe fallback elsewhere) so concurrent research threads never re-download shared memorials, cemeteries, or gravestone photos. Pass `--refresh` on any command to bypass the local cache and fetch fresh data.
+`get`/`memorial`, `cemetery`, `photo`, `search`, and `place` cache responses atomically under `~/.cache/kinloom-findagrave/` (overrideable via `KINLOOM_FINDAGRAVE_CACHE_DIR`) using advisory file locks (`fcntl.flock` on POSIX, safe fallback elsewhere) so concurrent research threads never re-download shared memorials, cemeteries, or gravestone photos. Pass `--refresh` on any command to bypass the local cache and fetch fresh data. `--json` on `search`, `cemetery`, and `place` adds a top-level boolean `cache_hit`. `get` and `memorial` keep a JSON list, so they do not add `cache_hit`.
 
 Cache layout:
 

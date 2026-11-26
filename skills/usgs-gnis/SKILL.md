@@ -17,7 +17,7 @@ Path: `skills/usgs-gnis/scripts/gnis`
 
 ### Persistent local disk cache
 
-Downloaded state/historical files and `search` query results are cached atomically under `~/.cache/kinloom-gnis/` (overrideable via `KINLOOM_GNIS_CACHE_DIR`, with legacy `GNIS_CACHE_DIR` fallback) using advisory file locks (`fcntl.flock` on POSIX, safe fallback elsewhere) so concurrent processes never race on downloads and repeated searches return immediately with zero HTTP requests or re-parsing.
+Downloaded state/historical files and `search` query results are cached atomically under `~/.cache/kinloom-gnis/` (overrideable via `KINLOOM_GNIS_CACHE_DIR`, with legacy `GNIS_CACHE_DIR` fallback) using advisory file locks (`fcntl.flock` on POSIX, safe fallback elsewhere) so concurrent processes never race on downloads and repeated searches return immediately with zero HTTP requests or re-parsing. `--json` on `search` and `get` adds a boolean `cache_hit`. For `search` it is true only when the query JSON was read from disk. For `get` it is true when the state or historical table was already on disk and `--refresh` was not set.
 
 Cache layout:
 

@@ -27,7 +27,8 @@ import {
   type SourceRecord,
 } from '@kinloom/core';
 import { afterEach, describe, expect, it } from 'vitest';
-import { CliValidationError, EXIT_USAGE } from '../../errors.js';
+import { runCli } from '../../cli.js';
+import { CliValidationError, EXIT_ERROR, EXIT_OK, EXIT_USAGE } from '../../errors.js';
 import {
   REDACTED_RELATIVE_LABEL,
   buildSanitizedLocalEntries,
@@ -45,6 +46,7 @@ import {
   parseDeleteTargets,
   parseEntityTypeList,
   recordTelemetryEvent,
+  runAuditBatchCommand,
   runAuditCommand,
   runChronologyCheck,
   runContextCommand,
@@ -1734,6 +1736,11 @@ describe('ops/audit', () => {
     expect(audit.checks.dryRun.ok).toBe(false);
     expect(audit.checks.dryRun.error).toContain("unknown inline source_id 'src_missing'");
 
+    const single = JSON.parse(audit.rendered) as { person_id: string; overlaps?: unknown; people?: unknown };
+    expect(single.person_id).toBe('per_arthur_alder');
+    expect(single.overlaps).toBeUndefined();
+    expect(single.people).toBeUndefined();
+
     const jpegHeader = inspectImageBuffer(makeMinimalJpeg(320, 240));
     expect(jpegHeader).toEqual({
       valid: true,
@@ -1742,6 +1749,310 @@ describe('ops/audit', () => {
       height: 240,
       error: null,
     });
+  });
+
+  async function dropArthurLivingVisit(repoDir: string): Promise<void> {
+    const eventsPath = path.join(repoDir, 'data', 'events.yaml');
+    const filteredEvents = parseEventsYaml(await readFile(eventsPath, 'utf8')).filter(
+      (event) => event.id !== 'evt_arthur_living_visit'
+    );
+    await writeFile(eventsPath, serializeEventsYaml(filteredEvents, { sortById: true }), 'utf8');
+  }
+
+  async function writeCitedPackage(options: {
+    repoDir: string;
+    personId: string;
+    fullName: string;
+    scanName: string;
+    scan: Buffer;
+    mediaId: string;
+    mediaFile: string;
+    eventId: string;
+    eventDate: string;
+    eventTitle: string;
+    placePrecision?: string;
+    sourceId?: string;
+  }): Promise<void> {
+    const packageDir = path.join(options.repoDir, 'research', 'people', options.personId);
+    await mkdir(path.join(packageDir, 'scans'), { recursive: true });
+    await writeFile(path.join(packageDir, 'scans', options.scanName), options.scan);
+    const event: Record<string, unknown> = {
+      id: options.eventId,
+      title: options.eventTitle,
+      scope: 'personal',
+      event_kind: 'point_event',
+      edtf_date: options.eventDate,
+      place_id: 'plc_oak_county_ohio',
+      summary: 'Recorded in Oak County.',
+      participants: [{ person_id: options.personId, role: 'principal' }],
+      sources: [{ source_id: 'src_1880_census', confidence: 'high' }],
+    };
+    if (options.placePrecision) {
+      event.place_precision = options.placePrecision;
+    }
+    const patch: Record<string, unknown> = {
+      person_id: options.personId,
+      media: [
+        {
+          id: options.mediaId,
+          kind: 'document_scan',
+          source_id: 'src_1880_census',
+          person_id: options.personId,
+          file: options.mediaFile,
+          caption: 'Synthetic certificate',
+        },
+      ],
+      events: [event],
+      narratives: [
+        {
+          id: `nar_${options.personId}_bio`,
+          slug: `${options.personId}-bio`,
+          title: `${options.fullName} biography`,
+          person_ids: [options.personId],
+          place_ids: ['plc_oak_county_ohio'],
+          event_ids: [options.eventId],
+          source_ids: ['src_1880_census'],
+          body_md: `${options.fullName} resided in Oak County in 1880.[^src_1880_census]`,
+        },
+      ],
+    };
+    if (options.sourceId) {
+      patch.sources = [
+        {
+          id: options.sourceId,
+          citation: 'Synthetic Oak County register',
+          source_type: 'census',
+          repository: 'County archive',
+        },
+      ];
+    }
+    await writeFile(path.join(packageDir, 'patch.json'), JSON.stringify(patch, null, 2), 'utf8');
+  }
+
+  it('audits several staged packages and reports identical and conflicting overlaps', async () => {
+    const repoDir = await createSyntheticRepo();
+    process.env.KINLOOM_TELEMETRY_FILE = path.join(repoDir, 'telemetry.jsonl');
+    await dropArthurLivingVisit(repoDir);
+    const sharedScan = makeMinimalPng(640, 480, 12_000);
+    await writeCitedPackage({
+      repoDir,
+      personId: 'per_helen_maple',
+      fullName: 'Helen Maple',
+      scanName: 'shared-certificate.png',
+      scan: sharedScan,
+      mediaId: 'med_shared_certificate',
+      mediaFile: '/media/shared-certificate.png',
+      eventId: 'evt_shared_move',
+      eventDate: '1900-04-01',
+      eventTitle: 'Move to Oak County',
+      placePrecision: 'county',
+      sourceId: 'src_shared_register',
+    });
+    await writeCitedPackage({
+      repoDir,
+      personId: 'per_arthur_alder',
+      fullName: 'Arthur Alder',
+      scanName: 'shared-certificate.png',
+      scan: sharedScan,
+      mediaId: 'med_shared_certificate',
+      mediaFile: '/media/shared-certificate.png',
+      eventId: 'evt_shared_move',
+      eventDate: '1900-04-01',
+      eventTitle: 'Move to Oak County',
+      placePrecision: 'county',
+      sourceId: 'src_shared_register',
+    });
+
+    const help = createCaptureIo();
+    expect(await runCli(['audit', '--help'], { io: help.io })).toBe(EXIT_OK);
+    expect(help.stdout.join('\n')).toContain('--all-staged');
+    expect(help.stdout.join('\n')).toContain('--strict');
+
+    const ordered = createCaptureIo();
+    const orderedCode = await runCli(
+      ['audit', 'per_helen_maple', 'per_arthur_alder', '--repo', repoDir, '--json'],
+      { io: ordered.io }
+    );
+    expect(orderedCode, `${ordered.stderr.join('\n')}\n${ordered.stdout.join('\n')}`).toBe(EXIT_OK);
+    const givenOrder = JSON.parse(ordered.stdout.join('\n')) as {
+      ok: boolean;
+      strictOk: boolean;
+      people: Array<{ person_id: string }>;
+      overlaps: {
+        scanFileCollisions: Array<{ basename: string; bytesIdentical: boolean; packages: Array<{ person_id: string; width: number; height: number }> }>;
+        mediaFileCollisions: Array<{ file: string; mediaIdsConflict: boolean }>;
+        sharedMediaIds: Array<{ id: string }>;
+        sharedSourceIds: Array<{ id: string; person_ids: string[] }>;
+      };
+      summary: { people: number; differingScanCollisions: number; conflictingMediaFileCollisions: number };
+    };
+    expect(givenOrder.ok).toBe(true);
+    expect(givenOrder.strictOk).toBe(true);
+    expect(givenOrder.people.map((person) => person.person_id)).toEqual([
+      'per_helen_maple',
+      'per_arthur_alder',
+    ]);
+    expect(givenOrder.overlaps.scanFileCollisions).toEqual([
+      expect.objectContaining({
+        basename: 'shared-certificate.png',
+        bytesIdentical: true,
+        packages: [
+          expect.objectContaining({ person_id: 'per_arthur_alder', width: 640, height: 480 }),
+          expect.objectContaining({ person_id: 'per_helen_maple', width: 640, height: 480 }),
+        ],
+      }),
+    ]);
+    expect(givenOrder.overlaps.mediaFileCollisions).toEqual([
+      expect.objectContaining({ file: 'media/shared-certificate.png', mediaIdsConflict: false }),
+    ]);
+    expect(givenOrder.overlaps.sharedMediaIds.map((row) => row.id)).toEqual(['med_shared_certificate']);
+    expect(givenOrder.overlaps.sharedSourceIds).toEqual([
+      { id: 'src_shared_register', person_ids: ['per_arthur_alder', 'per_helen_maple'] },
+    ]);
+    expect(givenOrder.summary.differingScanCollisions).toBe(0);
+    expect(givenOrder.summary.conflictingMediaFileCollisions).toBe(0);
+
+    const staged = createCaptureIo();
+    expect(await runCli(['audit', '--all-staged', '--repo', repoDir, '--strict'], { io: staged.io })).toBe(
+      EXIT_OK
+    );
+    expect(staged.stdout.join('\n')).toContain('Batch audit [PASS] strict [PASS] 2 people');
+    expect(staged.stdout.join('\n')).toContain('identical bytes');
+
+    const single = createCaptureIo();
+    expect(await runCli(['audit', 'per_helen_maple', '--repo', repoDir, '--json'], { io: single.io })).toBe(
+      EXIT_OK
+    );
+    const singleBody = JSON.parse(single.stdout.join('\n')) as { person_id: string; overlaps?: unknown };
+    expect(singleBody.person_id).toBe('per_helen_maple');
+    expect(singleBody.overlaps).toBeUndefined();
+
+    await writeCitedPackage({
+      repoDir,
+      personId: 'per_arthur_alder',
+      fullName: 'Arthur Alder',
+      scanName: 'shared-certificate.png',
+      scan: makeMinimalPng(320, 200, 13_000),
+      mediaId: 'med_arthur_certificate',
+      mediaFile: '/media/shared-certificate.png',
+      eventId: 'evt_shared_move',
+      eventDate: '1901-05-02',
+      eventTitle: 'Arthur leaves Oak County',
+      placePrecision: 'town',
+      sourceId: 'src_shared_register',
+    });
+    const conflict = await runAuditBatchCommand({
+      repoDir,
+      personIds: ['per_helen_maple', 'per_arthur_alder'],
+      json: true,
+    });
+    expect(conflict.ok).toBe(true);
+    expect(conflict.strictOk).toBe(false);
+    expect(conflict.overlaps.scanFileCollisions[0]).toEqual(
+      expect.objectContaining({ basename: 'shared-certificate.png', bytesIdentical: false })
+    );
+    expect(conflict.overlaps.scanFileCollisions[0]?.packages.map((row) => row.person_id)).toEqual([
+      'per_arthur_alder',
+      'per_helen_maple',
+    ]);
+    expect(conflict.overlaps.scanFileCollisions[0]?.packages[0]?.width).toBe(320);
+    expect(conflict.overlaps.scanFileCollisions[0]?.packages[1]?.width).toBe(640);
+    expect(conflict.overlaps.mediaFileCollisions).toEqual([
+      expect.objectContaining({
+        file: 'media/shared-certificate.png',
+        mediaIdsConflict: true,
+        entries: [
+          expect.objectContaining({ person_id: 'per_arthur_alder', media_id: 'med_arthur_certificate' }),
+          expect.objectContaining({ person_id: 'per_helen_maple', media_id: 'med_shared_certificate' }),
+        ],
+      }),
+    ]);
+    expect(conflict.overlaps.sharedEventOverlaps).toEqual([
+      {
+        id: 'evt_shared_move',
+        fieldDiffs: ['edtf_date', 'place_precision', 'title'],
+        packages: [
+          {
+            person_id: 'per_arthur_alder',
+            edtf_date: '1901-05-02',
+            place_id: 'plc_oak_county_ohio',
+            place_precision: 'town',
+            title: 'Arthur leaves Oak County',
+          },
+          {
+            person_id: 'per_helen_maple',
+            edtf_date: '1900-04-01',
+            place_id: 'plc_oak_county_ohio',
+            place_precision: 'county',
+            title: 'Move to Oak County',
+          },
+        ],
+      },
+    ]);
+
+    const strictExit = createCaptureIo();
+    expect(
+      await runCli(['audit', '--all-staged', '--repo', repoDir, '--strict', '--json'], { io: strictExit.io })
+    ).toBe(EXIT_ERROR);
+    const strictBody = JSON.parse(strictExit.stdout.join('\n')) as { ok: boolean; strictOk: boolean };
+    expect(strictBody.ok).toBe(true);
+    expect(strictBody.strictOk).toBe(false);
+
+    const looseExit = createCaptureIo();
+    expect(await runCli(['audit', '--all-staged', '--repo', repoDir], { io: looseExit.io })).toBe(EXIT_OK);
+  });
+
+  it('reports a staged media file that already belongs to another live media id', async () => {
+    const repoDir = await createSyntheticRepo();
+    process.env.KINLOOM_TELEMETRY_FILE = path.join(repoDir, 'telemetry.jsonl');
+    const mediaPath = path.join(repoDir, 'data', 'media.yaml');
+    const media = parseMediaYaml(await readFile(mediaPath, 'utf8'));
+    media.push({
+      id: 'med_oak_register',
+      kind: 'document_scan',
+      person_id: 'per_thomas_alder',
+      file: '/media/oak-register.png',
+      caption: 'Oak County register',
+    });
+    await writeFile(mediaPath, serializeMediaYaml(media, { sortById: true }), 'utf8');
+    await writeCitedPackage({
+      repoDir,
+      personId: 'per_helen_maple',
+      fullName: 'Helen Maple',
+      scanName: 'oak-register.png',
+      scan: makeMinimalPng(640, 480, 12_000),
+      mediaId: 'med_staged_oak_register',
+      mediaFile: '/media/oak-register.png',
+      eventId: 'evt_helen_register',
+      eventDate: '1884-03-01',
+      eventTitle: 'Helen Maple register entry',
+    });
+
+    const cap = createCaptureIo();
+    const liveCode = await runCli(['audit', '--all-staged', '--repo', repoDir, '--strict', '--json'], {
+      io: cap.io,
+    });
+    expect(liveCode, `${cap.stderr.join('\n')}\n${cap.stdout.join('\n')}`).toBe(EXIT_OK);
+    const body = JSON.parse(cap.stdout.join('\n')) as {
+      strictOk: boolean;
+      overlaps: {
+        liveMediaFileCollisions: Array<{ file: string; live_media_id: string; staged: Array<{ media_id: string }> }>;
+      };
+    };
+    expect(body.strictOk).toBe(true);
+    expect(body.overlaps.liveMediaFileCollisions).toEqual([
+      {
+        file: 'media/oak-register.png',
+        live_media_id: 'med_oak_register',
+        staged: [
+          {
+            person_id: 'per_helen_maple',
+            media_id: 'med_staged_oak_register',
+            file: '/media/oak-register.png',
+          },
+        ],
+      },
+    ]);
   });
 
   function chronologyFor(birth: string, death: string, eventDate: string, title = 'Household register') {

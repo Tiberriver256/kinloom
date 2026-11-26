@@ -123,13 +123,16 @@ class TestUsgsGnisCaching(unittest.TestCase):
             p1 = json.loads(r1.stdout)
             self.assertEqual(p1["matches"], 1)
             self.assertEqual(p1["results"][0]["feature_id"], "277544")
+            self.assertFalse(p1["cache_hit"])
 
             # Warm JSON search hits _queries/<sha256>.json: ZERO HTTP and ZERO table parses.
             r2 = runner.invoke(gnis.cli, ["search", "Merced", "--state", "CA", "--json"])
             self.assertEqual(r2.exit_code, 0, r2.output)
             self.assertEqual(len(download_urls), 1)
             self.assertEqual(len(load_calls), 1)
-            self.assertEqual(json.loads(r2.stdout), p1)
+            p2 = json.loads(r2.stdout)
+            self.assertTrue(p2["cache_hit"])
+            self.assertEqual({k: v for k, v in p2.items() if k != "cache_hit"}, {k: v for k, v in p1.items() if k != "cache_hit"})
 
             # Warm text search reuses the same cached query JSON with ZERO HTTP and ZERO table parses.
             r3 = runner.invoke(gnis.cli, ["search", "Merced", "--state", "CA"])

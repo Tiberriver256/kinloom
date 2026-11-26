@@ -132,6 +132,7 @@ class TestFindAGraveCli(unittest.TestCase):
         with patch.object(fg, "gql", side_effect=fake_gql):
             r1 = runner.invoke(fg.cli, ["get", "627", "--json"])
             self.assertEqual(r1.exit_code, 0, r1.output)
+            self.assertIsInstance(json.loads(r1.output), list)
             self.assertEqual(len(gql_calls), 1)
             self.assertTrue((self.cache_root / "memorials" / "627.json").is_file())
 
@@ -182,11 +183,13 @@ class TestFindAGraveCli(unittest.TestCase):
             self.assertEqual(r1.exit_code, 0, r1.output)
             self.assertEqual(len(gql_calls), 1)
             self.assertTrue((self.cache_root / "cemeteries" / "107259.json").is_file())
+            self.assertFalse(json.loads(r1.output)["cache_hit"])
 
             # Second call makes ZERO GraphQL requests.
             r2 = runner.invoke(fg.cli, ["cemetery", "107259", "--json"])
             self.assertEqual(r2.exit_code, 0, r2.output)
             self.assertEqual(len(gql_calls), 1)
+            self.assertTrue(json.loads(r2.output)["cache_hit"])
             self.assertEqual(
                 json.loads(r2.output)["cemeteries"][0]["names"][0]["name"],
                 "Oak Ridge Cemetery v1",

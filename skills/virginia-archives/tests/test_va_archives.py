@@ -147,6 +147,7 @@ class TestCacheRoot(unittest.TestCase):
 class TestHtmlCaching(VaArchivesTestBase):
     def test_localities_cache_hit_avoids_network_and_refresh_refetches(self) -> None:
         r1 = self.invoke("chancery", "localities", "--json")
+        self.assertIsInstance(json.loads(r1.output), list)
         self.assertEqual(r1.exit_code, 0, r1.output)
         self.assertEqual(len(self.mock.calls), 1)
         self.assertEqual(json.loads(r1.output)[0]["viewing_status"], "Scanned v1")
@@ -177,10 +178,14 @@ class TestHtmlCaching(VaArchivesTestBase):
 
     def test_ttl_zero_env_forces_refetch(self) -> None:
         with patch.dict(os.environ, {va.TTL_ENV: "0"}):
-            self.assertEqual(self.invoke("catalog", "Synthetic", "--json").exit_code, 0)
+            cold = self.invoke("catalog", "Synthetic", "--json")
+            self.assertEqual(cold.exit_code, 0, cold.output)
+            self.assertFalse(json.loads(cold.output)["cache_hit"])
             self.assertEqual(self.invoke("catalog", "Synthetic", "--json").exit_code, 0)
         self.assertEqual(len(self.mock.calls), 2)
-        self.assertEqual(self.invoke("catalog", "Synthetic", "--json").exit_code, 0)
+        warm = self.invoke("catalog", "Synthetic", "--json")
+        self.assertEqual(warm.exit_code, 0, warm.output)
+        self.assertTrue(json.loads(warm.output)["cache_hit"])
         self.assertEqual(len(self.mock.calls), 2)
 
     def test_cache_writes_are_atomic_no_tmp_leftovers(self) -> None:
@@ -249,6 +254,7 @@ class TestGrantTif(VaArchivesTestBase):
         self.assertEqual(r1.exit_code, 0, r1.output)
         self.assertEqual(out.read_bytes(), FAKE_TIFF)
         self.assertEqual(json.loads(r1.output)["mode"], "raw")
+        self.assertFalse(json.loads(r1.output)["cache_hit"])
         self.assertEqual(len(self.mock.calls), 1)
 
         # Alias + cache hit: zero HTTP.
@@ -258,6 +264,10 @@ class TestGrantTif(VaArchivesTestBase):
         self.assertEqual(r2.exit_code, 0, r2.output)
         self.assertEqual(len(self.mock.calls), 1)
         self.assertEqual(out2.read_bytes(), FAKE_TIFF)
+        r_hit = self.invoke("grant-tif", "/LONN/LO-3/372/372_0195.tif", "--json")
+        self.assertEqual(r_hit.exit_code, 0, r_hit.output)
+        self.assertTrue(json.loads(r_hit.output)["cache_hit"])
+        self.assertEqual(len(self.mock.calls), 1)
 
         # --refresh refetches.
         r3 = self.invoke("grant-tif", "/LONN/LO-3/372/372_0195.tif", "--out", str(out2), "--refresh")

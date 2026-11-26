@@ -1055,7 +1055,7 @@ def cmd_text(args: argparse.Namespace) -> int:
         "pages": pages_out,
     }
     if args.as_json:
-        print(json.dumps(payload, indent=2, ensure_ascii=False))
+        print(json.dumps(json_with_cache_hit(payload, bool(cache_entry["cached"])), indent=2, ensure_ascii=False))
         return 0
     for idx, page in enumerate(pages_out):
         if idx:
@@ -1107,7 +1107,7 @@ def cmd_lookup(args: argparse.Namespace) -> int:
         "details_url": page_details_url(identifier, leaf),
     }
     if args.as_json:
-        print(json.dumps(payload, indent=2, ensure_ascii=False))
+        print(json.dumps(json_with_cache_hit(payload, bool(cache_entry["cached"])), indent=2, ensure_ascii=False))
         return 0
     pp = info["printed_page"] if info["printed_page"] else "?"
     sc = info["scandata_leaf"] if info["scandata_leaf"] is not None else "?"
@@ -1115,6 +1115,13 @@ def cmd_lookup(args: argparse.Namespace) -> int:
     print(f"  image: {payload['image_url']}")
     print(f"  details: {payload['details_url']}")
     return 0
+
+
+def json_with_cache_hit(payload: dict, cache_hit: bool) -> dict:
+    """Copy a JSON object and set the telemetry cache_hit flag without mutating cache files."""
+    body = dict(payload)
+    body["cache_hit"] = bool(cache_hit)
+    return body
 
 
 def cmd_search(args: argparse.Namespace) -> int:
@@ -1134,7 +1141,7 @@ def cmd_search(args: argparse.Namespace) -> int:
     )
     response = data.get("response") or {}
     if args.as_json:
-        print(json.dumps(data, indent=2))
+        print(json.dumps(json_with_cache_hit(data, cached), indent=2))
         return 0
     status = "cache-hit" if cached else "fetched"
     print(f"{response.get('numFound')} items ({status})")
@@ -1155,7 +1162,7 @@ def cmd_get(args: argparse.Namespace) -> int:
     identifier = validate_identifier(args.identifier)
     data, cached = metadata_api(identifier, timeout=args.timeout, refresh=args.refresh)
     if args.as_json:
-        print(json.dumps(data, indent=2))
+        print(json.dumps(json_with_cache_hit(data, cached), indent=2))
         return 0
     meta = data.get("metadata") or {}
     status = "cache-hit" if cached else "fetched"
@@ -1246,7 +1253,7 @@ def cmd_fulltext(args: argparse.Namespace) -> int:
         refresh=args.refresh,
     )
     if args.as_json:
-        print(json.dumps(data, indent=2, ensure_ascii=False))
+        print(json.dumps(json_with_cache_hit(data, cached), indent=2, ensure_ascii=False))
         return 0
     hits_block = ((data.get("response") or {}).get("body") or {}).get("hits") or {}
     total = hits_block.get("total", 0)
@@ -1352,7 +1359,7 @@ def cmd_grep(args: argparse.Namespace) -> int:
     }
 
     if args.as_json:
-        print(json.dumps(payload, indent=2, ensure_ascii=False))
+        print(json.dumps(json_with_cache_hit(payload, all_cached), indent=2, ensure_ascii=False))
         return 0
 
     status = "cache-hit" if all_cached else "fetched"
@@ -1452,8 +1459,9 @@ def cmd_page(args: argparse.Namespace) -> int:
         "page_cached": page_cached,
         "elapsed_ms": elapsed_ms,
     }
+    page_hit = page_cached if index_cached is None else bool(page_cached and index_cached)
     if args.as_json:
-        print(json.dumps(payload, indent=2))
+        print(json.dumps(json_with_cache_hit(payload, page_hit), indent=2))
     else:
         extra = f" [p.{resolved_printed} -> n{target_leaf}]" if resolved_printed is not None else f" [n{target_leaf}]"
         status = "cache-hit" if page_cached else "fetched"

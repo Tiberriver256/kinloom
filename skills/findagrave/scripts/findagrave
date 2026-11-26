@@ -215,7 +215,7 @@ def _cached_gql_query(
     cache_root: Path,
     ttl_hours: float,
     refresh: bool,
-) -> dict[str, Any]:
+) -> tuple[dict[str, Any], bool]:
     canonical = json.dumps(
         canonical_params, sort_keys=True, separators=(",", ":"), ensure_ascii=False
     )
@@ -224,19 +224,19 @@ def _cached_gql_query(
     if not refresh:
         cached = _read_fresh_envelope(cache_path, ttl_hours)
         if cached is not None:
-            return cached
+            return cached, True
     lock_path = resolve_safe_child(cache_root / "_locks", f"query_{kind}_{digest}.lock")
     with file_lock(lock_path):
         if not refresh:
             cached = _read_fresh_envelope(cache_path, ttl_hours)
             if cached is not None:
-                return cached
+                return cached, True
         data = gql(query, variables)
         atomic_write_json(
             cache_path,
             {"cached_at": time.time(), "params": canonical_params, "data": data},
         )
-        return data
+        return data, False
 
 
 def _load_or_fetch_memorials(
@@ -287,14 +287,14 @@ def _load_or_fetch_cemetery_by_id(
     cache_root: Path,
     ttl_hours: float,
     refresh: bool,
-) -> dict[str, Any]:
+) -> tuple[dict[str, Any], bool]:
     clean_id = validate_entity_id(cemetery_id, "cemetery id")
     cache_path = resolve_safe_child(cache_root / "cemeteries", f"{clean_id}.json")
     if not refresh:
         cached = _read_fresh_envelope(cache_path, ttl_hours)
         if cached is not None:
             cem = enrich_cemetery(cached)
-            return {"total": 1, "cemeteries": [cem]}
+            return {"total": 1, "cemeteries": [cem]}, True
 
     lock_path = resolve_safe_child(cache_root / "_locks", f"cemetery_{clean_id}.lock")
     with file_lock(lock_path):
@@ -302,7 +302,7 @@ def _load_or_fetch_cemetery_by_id(
             cached = _read_fresh_envelope(cache_path, ttl_hours)
             if cached is not None:
                 cem = enrich_cemetery(cached)
-                return {"total": 1, "cemeteries": [cem]}
+                return {"total": 1, "cemeteries": [cem]}, True
         data = gql(CEMETERY_BY_ID_QUERY, {"ids": [clean_id]})
         result = data.get("cemeteries") or {}
         cemeteries_list = [enrich_cemetery(c) for c in (result.get("cemeteries") or [])]
@@ -311,7 +311,7 @@ def _load_or_fetch_cemetery_by_id(
             atomic_write_json(
                 cache_path, {"cached_at": time.time(), "data": cemeteries_list[0]}
             )
-        return result
+        return result, False
 
 SEARCH_QUERY = """
 query($s: MemorialSearchInput) {
@@ -619,7 +619,7 @@ def search(first_name, last_name, birth_year, death_year, year_range,
     search_input["includeMaidenName"] = include_maiden
     search_input["from"] = offset
     search_input["size"] = min(limit, 50)
-    data = _cached_gql_query(
+    data, hit = _cached_gql_query(
         "search",
         search_input,
         SEARCH_QUERY,
@@ -632,7 +632,7 @@ def search(first_name, last_name, birth_year, death_year, year_range,
     memorials = [enrich_memorial(m) for m in (result.get("memorials") or [])]
     result["memorials"] = memorials
     if as_json:
-        click.echo(json.dumps(result, indent=2))
+        click.echo(json.dumps({**result, "cache_hit": hit}, indent=2))
         return
     total = result.get("total")
     click.echo(f"{total} memorials")
@@ -662,7 +662,12 @@ def search(first_name, last_name, birth_year, death_year, year_range,
 @click.option("--photos", is_flag=True,
               help="List photo ids, types, and image URLs.")
 def get(memorial_ids, refresh, cache_ttl_hours, as_json, full, photos):
-    """Read one or more memorials in full by memorial id (alias: memorial)."""
+    """Read one or more memorials in full by memorial id (alias: memorial).
+
+    --json prints a list of memorial objects. That list has no top-level cache_hit
+    field, because a list is the existing contract. search, cemetery, and place
+    print objects and include cache_hit.
+    """
     ttl_hours = resolve_cache_ttl_hours(cache_ttl_hours)
     cache_root = get_cache_root()
     memorials = _load_or_fetch_memorials(
@@ -757,7 +762,7 @@ def cemetery(cemetery_id_arg, name, cemetery_id, place, limit, offset, refresh, 
     cache_root = get_cache_root()
     resolved_id = cemetery_id or cemetery_id_arg
     if resolved_id:
-        result = _load_or_fetch_cemetery_by_id(
+        result, hit = _load_or_fetch_cemetery_by_id(
             resolved_id,
             cache_root=cache_root,
             ttl_hours=ttl_hours,
@@ -772,7 +777,7 @@ def cemetery(cemetery_id_arg, name, cemetery_id, place, limit, offset, refresh, 
             search_input["containingLocationName"] = place
         search_input["from"] = offset
         search_input["size"] = min(limit, 100)
-        data = _cached_gql_query(
+        data, hit = _cached_gql_query(
             "cemetery_search",
             search_input,
             CEMETERY_QUERY,
@@ -785,7 +790,7 @@ def cemetery(cemetery_id_arg, name, cemetery_id, place, limit, offset, refresh, 
         cemeteries_list = [enrich_cemetery(c) for c in (result.get("cemeteries") or [])]
         result["cemeteries"] = cemeteries_list
     if as_json:
-        click.echo(json.dumps(result, indent=2))
+        click.echo(json.dumps({**result, "cache_hit": hit}, indent=2))
         return
     click.echo(f"{result.get('total')} cemeteries")
     for cem in cemeteries_list:
@@ -818,7 +823,7 @@ def place(name, limit, refresh, cache_ttl_hours, as_json):
     ttl_hours = resolve_cache_ttl_hours(cache_ttl_hours)
     cache_root = get_cache_root()
     search_input = {"name": name, "size": min(limit, 50)}
-    data = _cached_gql_query(
+    data, hit = _cached_gql_query(
         "place",
         search_input,
         PLACE_QUERY,
@@ -829,7 +834,7 @@ def place(name, limit, refresh, cache_ttl_hours, as_json):
     )
     result = data.get("locationsByTypeahead") or {}
     if as_json:
-        click.echo(json.dumps(result, indent=2))
+        click.echo(json.dumps({**result, "cache_hit": hit}, indent=2))
         return
     click.echo(f"{result.get('total')} places")
     for loc in result.get("locations") or []:

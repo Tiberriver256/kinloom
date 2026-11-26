@@ -13,7 +13,7 @@ Path: `skills/archive-org/scripts/archive-org`
 
 ### Persistent local disk cache (all network commands)
 
-Every network command (`get`, `grep`, `text`, `lookup`, `page`, `download`, `search`, and `fulltext`) writes atomically under `~/.cache/kinloom-ia/` (overrideable via `KINLOOM_IA_CACHE_DIR`) using per-item advisory locks (`fcntl.flock`) so concurrent processes never duplicate downloads and repeat calls make zero HTTP requests. Pass `--refresh` on any command to bypass the local cache and fetch fresh data.
+Every network command (`get`, `grep`, `text`, `lookup`, `page`, `download`, `search`, and `fulltext`) writes atomically under `~/.cache/kinloom-ia/` (overrideable via `KINLOOM_IA_CACHE_DIR`) using per-item advisory locks (`fcntl.flock`) so concurrent processes never duplicate downloads and repeat calls make zero HTTP requests. Pass `--refresh` on any command to bypass the local cache and fetch fresh data. `--json` on `search`, `get`, `fulltext`, `grep`, `text`, `lookup`, and `page` adds a top-level boolean `cache_hit`. `download` and `url` do not print that object.
 
 Cache layout:
 

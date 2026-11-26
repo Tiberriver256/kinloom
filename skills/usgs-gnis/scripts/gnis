@@ -340,8 +340,10 @@ def search(name, state, exact, feature_class, county, historical, limit, refresh
     }
 
     payload: dict[str, Any] | None = None
+    cache_hit = False
     if not refresh:
         payload = _read_cached_search(canonical_params, cdir=cdir, ttl_hours=ttl_hours)
+        cache_hit = payload is not None
 
     if payload is None:
         digest, cache_path = query_cache_path(canonical_params, cdir)
@@ -349,7 +351,10 @@ def search(name, state, exact, feature_class, county, historical, limit, refresh
         with file_lock(lock_path):
             if not refresh:
                 payload = _read_cached_search(canonical_params, cdir=cdir, ttl_hours=ttl_hours)
+                if payload is not None:
+                    cache_hit = True
             if payload is None:
+                cache_hit = False
                 if historical:
                     rows = _load_rows(_ensure_historical_file(refresh=refresh))
                     source = "HistoricalFeatures (national)"
@@ -369,7 +374,7 @@ def search(name, state, exact, feature_class, county, historical, limit, refresh
                 )
 
     if as_json:
-        click.echo(json.dumps(payload, indent=2, ensure_ascii=False))
+        click.echo(json.dumps({**payload, "cache_hit": cache_hit}, indent=2, ensure_ascii=False))
         return
     click.echo(f"source: {payload['source']} | matches shown: {payload['matches']}")
     for c in payload["results"]:
@@ -386,15 +391,19 @@ def search(name, state, exact, feature_class, county, historical, limit, refresh
 def get(feature_id, state, historical, refresh, as_json):
     """Show one feature by its GNIS feature_id."""
     if historical:
+        data_path = resolve_safe_child(cache_dir(), "HistoricalFeatures.txt")
+        already_cached = data_path.is_file() and not refresh
         rows = _load_rows(_ensure_historical_file(refresh=refresh))
     else:
         if not state:
             raise click.UsageError("Give --state or --historical.")
+        data_path = resolve_safe_child(cache_dir(), f"{state.upper()}.txt")
+        already_cached = data_path.is_file() and not refresh
         rows = _load_rows(_ensure_state_file(state, refresh=refresh))
     for row in rows:
         if (row.get("feature_id") or "") == str(feature_id):
             if as_json:
-                click.echo(json.dumps(row, indent=2, ensure_ascii=False))
+                click.echo(json.dumps({**row, "cache_hit": already_cached}, indent=2, ensure_ascii=False))
             else:
                 for key, value in row.items():
                     if value != "":

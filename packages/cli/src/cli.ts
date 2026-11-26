@@ -56,7 +56,7 @@ Archive lifecycle:
 Research & archive ops:
   context            Dump privacy-fenced YAML context, relatives, and leads for a person
   integrate          Validate and merge a person research package into local YAML
-  audit              Run 5-check deterministic audit on a person research package
+  audit              Run 5-check package audits for one person or a staged batch
   verify             Run full-archive invariant checks over local data/*.yaml files
   sync               Diff and sync local YAML + R2 media to a live Cloudflare archive
   dates              Compute exact Gregorian weekdays, date diffs, and ages
@@ -806,33 +806,81 @@ export async function runCli(
             repo: { type: 'string' },
             'package-dir': { type: 'string' },
             json: { type: 'boolean', default: false },
+            strict: { type: 'boolean', default: false },
+            'all-staged': { type: 'boolean', default: false },
           },
         });
-        const personId = requireStringFlag(values.person ?? positionals[0], '--person');
-        const [{ runAuditCommand }, { measureCommand }] = await Promise.all([
+        const positionalIds = positionals.map((personId) => personId.trim()).filter((personId) => personId.length > 0);
+        if (values['all-staged'] && (positionalIds.length > 0 || values.person)) {
+          throw new CliValidationError(
+            '`--all-staged` discovers person ids from research/people and does not take person ids.'
+          );
+        }
+        if (values.person && positionalIds.length > 0) {
+          throw new CliValidationError('Pass person ids as positionals or with `--person`, not both.');
+        }
+        const [auditMod, batchMod, { measureCommand }] = await Promise.all([
           import('./commands/ops/audit.js'),
+          import('./commands/ops/audit-overlaps.js'),
           import('./commands/ops/telemetry.js'),
         ]);
+        const { runAuditCommand } = auditMod;
+        const { runAuditBatchCommand, listStagedAuditPersonIds } = batchMod;
+        const singlePersonId = values['all-staged'] ? undefined : (values.person ?? positionalIds[0]);
+        const batchIds = values['all-staged']
+          ? listStagedAuditPersonIds(values.repo?.trim() || process.cwd())
+          : positionalIds;
+        if (values['all-staged'] && batchIds.length === 0) {
+          throw new CliValidationError(
+            'No staged packages with patch.json were found under research/people/.'
+          );
+        }
+        const useBatch = values['all-staged'] || batchIds.length > 1;
+        if (useBatch && values['package-dir']) {
+          throw new CliValidationError('`--package-dir` applies to a single person audit only.');
+        }
+        if (!useBatch) {
+          const personId = requireStringFlag(singlePersonId, '--person');
+          const result = await measureCommand(
+            {
+              subcmd: 'audit',
+              personId,
+              extractResultMeta: (res) => ({
+                personId,
+                exitCode: (values.strict ? res.strictOk : res.ok) ? EXIT_OK : EXIT_ERROR,
+                bytesOut: Buffer.byteLength(res.rendered, 'utf8'),
+              }),
+            },
+            () =>
+              runAuditCommand({
+                repoDir: values.repo,
+                personId,
+                packageDir: values['package-dir'],
+                json: values.json,
+              })
+          );
+          writeRenderedOutput(io, result.rendered);
+          return (values.strict ? result.strictOk : result.ok) ? EXIT_OK : EXIT_ERROR;
+        }
         const result = await measureCommand(
           {
             subcmd: 'audit',
-            personId,
+            personId: null,
             extractResultMeta: (res) => ({
-              personId,
-              exitCode: res.ok ? EXIT_OK : EXIT_ERROR,
+              personId: null,
+              exitCode: (values.strict ? res.strictOk : res.ok) ? EXIT_OK : EXIT_ERROR,
               bytesOut: Buffer.byteLength(res.rendered, 'utf8'),
             }),
           },
           () =>
-            runAuditCommand({
+            runAuditBatchCommand({
               repoDir: values.repo,
-              personId,
-              packageDir: values['package-dir'],
+              personIds: batchIds,
               json: values.json,
             })
         );
         writeRenderedOutput(io, result.rendered);
-        return result.ok ? EXIT_OK : EXIT_ERROR;
+        return (values.strict ? result.strictOk : result.ok) ? EXIT_OK : EXIT_ERROR;
       }
 
       case 'verify': {

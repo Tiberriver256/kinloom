@@ -123,6 +123,7 @@ class TestArchiveOrgCachedGrepAndPage(unittest.TestCase):
                 self.assertEqual(rc1, 0)
                 out1 = json.loads(buf1.getvalue())
                 self.assertFalse(out1["cached"])
+                self.assertFalse(out1["cache_hit"])
                 self.assertEqual(out1["total_matches"], 1)
                 # Only metadata, scandata, and _djvu.txt; zero hOCR downloads.
                 self.assertEqual(len(fetch_calls), 3)
@@ -150,6 +151,7 @@ class TestArchiveOrgCachedGrepAndPage(unittest.TestCase):
                 self.assertEqual(fetch_calls, [])
                 out2 = json.loads(buf2.getvalue())
                 self.assertTrue(out2["cached"])
+                self.assertTrue(out2["cache_hit"])
                 self.assertEqual(out2["hits"][0]["leaf"], 2)
                 self.assertEqual(out2["hits"][0]["printed_page"], "iv")
                 self.assertTrue(out2["hits"][0]["cached"])
@@ -238,6 +240,7 @@ class TestArchiveOrgCachedGrepAndPage(unittest.TestCase):
                 with patch("sys.stdout", buf1):
                     self.assertEqual(ao.main(["get", item_id, "--json"]), 0)
                 self.assertEqual(json.loads(buf1.getvalue())["metadata"]["title"], "First Edition Gazetteer")
+                self.assertFalse(json.loads(buf1.getvalue())["cache_hit"])
                 self.assertEqual(len(fetch_calls), 1)
                 self.assertTrue((Path(tmpdir) / item_id / "metadata.json").is_file())
 
@@ -247,6 +250,7 @@ class TestArchiveOrgCachedGrepAndPage(unittest.TestCase):
                 with patch("sys.stdout", buf2):
                     self.assertEqual(ao.main(["get", item_id, "--json"]), 0)
                 self.assertEqual(json.loads(buf2.getvalue())["metadata"]["title"], "First Edition Gazetteer")
+                self.assertTrue(json.loads(buf2.getvalue())["cache_hit"])
                 self.assertEqual(len(fetch_calls), 1)
 
                 # --refresh fetches updated metadata and overwrites metadata.json.
@@ -294,6 +298,7 @@ class TestArchiveOrgCachedGrepAndPage(unittest.TestCase):
                 self.assertEqual(payload1["printed_page"], "2")
                 self.assertEqual(payload1["url"], f"https://archive.org/download/{item_id}/page/n4_s2.jpg")
                 self.assertFalse(payload1["page_cached"])
+                self.assertFalse(payload1["cache_hit"])
                 self.assertEqual(out_file1.read_bytes(), jpeg_state["bytes"])
                 self.assertTrue((Path(tmpdir) / item_id / "pages" / "n4_s2.jpg").is_file())
                 call_count_after_first = len(seen_urls)
@@ -310,6 +315,7 @@ class TestArchiveOrgCachedGrepAndPage(unittest.TestCase):
                 payload2 = json.loads(buf2.getvalue())
                 self.assertTrue(payload2["index_cached"])
                 self.assertTrue(payload2["page_cached"])
+                self.assertTrue(payload2["cache_hit"])
                 self.assertEqual(out_file2.read_bytes(), jpeg_state["bytes"])
 
                 # Text output reports cache-hit on cached leaf fetch.
@@ -486,6 +492,7 @@ class TestArchiveOrgCachedGrepAndPage(unittest.TestCase):
                 with patch("sys.stdout", buf_s1):
                     self.assertEqual(ao.main(["search", "title:(Oakridge)", "--json"]), 0)
                 self.assertEqual(json.loads(buf_s1.getvalue())["response"]["numFound"], 1)
+                self.assertFalse(json.loads(buf_s1.getvalue())["cache_hit"])
                 self.assertEqual(len(fetch_calls), 1)
                 self.assertEqual(len(list((Path(tmpdir) / "_queries" / "search").glob("*.json"))), 1)
 
@@ -494,12 +501,14 @@ class TestArchiveOrgCachedGrepAndPage(unittest.TestCase):
                 with patch("sys.stdout", buf_s2):
                     self.assertEqual(ao.main(["search", "title:(Oakridge)", "--json"]), 0)
                 self.assertEqual(json.loads(buf_s2.getvalue())["response"]["numFound"], 1)
+                self.assertTrue(json.loads(buf_s2.getvalue())["cache_hit"])
                 self.assertEqual(len(fetch_calls), 1)
 
                 buf_s3 = io.StringIO()
                 with patch("sys.stdout", buf_s3):
                     self.assertEqual(ao.main(["search", "title:(Oakridge)", "--refresh", "--json"]), 0)
                 self.assertEqual(json.loads(buf_s3.getvalue())["response"]["numFound"], 9)
+                self.assertFalse(json.loads(buf_s3.getvalue())["cache_hit"])
                 self.assertEqual(len(fetch_calls), 2)
 
                 # fulltext: first call fetches, second hits cache, TTL=0 bypasses cache.
@@ -508,6 +517,7 @@ class TestArchiveOrgCachedGrepAndPage(unittest.TestCase):
                 with patch("sys.stdout", buf_f1):
                     self.assertEqual(ao.main(["fulltext", '"Oakridge Mill"', "--json"]), 0)
                 self.assertEqual(json.loads(buf_f1.getvalue())["response"]["body"]["hits"]["total"], 2)
+                self.assertFalse(json.loads(buf_f1.getvalue())["cache_hit"])
                 self.assertEqual(len(fetch_calls), 1)
                 self.assertEqual(len(list((Path(tmpdir) / "_queries" / "fulltext").glob("*.json"))), 1)
 
@@ -516,6 +526,7 @@ class TestArchiveOrgCachedGrepAndPage(unittest.TestCase):
                 with patch("sys.stdout", buf_f2):
                     self.assertEqual(ao.main(["fulltext", '"Oakridge Mill"', "--json"]), 0)
                 self.assertEqual(json.loads(buf_f2.getvalue())["response"]["body"]["hits"]["total"], 2)
+                self.assertTrue(json.loads(buf_f2.getvalue())["cache_hit"])
                 self.assertEqual(len(fetch_calls), 1)
 
                 buf_f3 = io.StringIO()

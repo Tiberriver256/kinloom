@@ -50,6 +50,15 @@ export {
 } from './integrate.js';
 
 export {
+  formatAuditBatchTextReport,
+  listStagedAuditPersonIds,
+  normalizeMediaFilePath,
+  runAuditBatchCommand,
+  type AuditBatchResult,
+  type AuditOverlaps,
+} from './audit-overlaps.js';
+
+export {
   AUDIT_HELP,
   computeLifespan,
   formatAuditTextReport,

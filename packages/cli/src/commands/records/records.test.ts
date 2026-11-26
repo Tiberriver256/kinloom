@@ -501,6 +501,55 @@ describe('help vs subcommand routing and guide-only commands', () => {
     expect(events.map((event) => event.cache_hit)).toEqual([true, false, null]);
   });
 
+  it('records cache_hit from archive-org, findagrave, gnis, and va-archives JSON', async () => {
+    const tmp = await makeTempDir('kinloom-cache-hit-archives-');
+    const telemetryFile = path.join(tmp, 'calls.jsonl');
+    const cases: Array<{ command: string; args: string[]; stdout: string; cacheHit: boolean }> = [
+      {
+        command: 'archive-org',
+        args: ['search', 'title:(Oak)', '--json'],
+        stdout: '{"response":{"numFound":1},"cache_hit":false}\n',
+        cacheHit: false,
+      },
+      {
+        command: 'findagrave',
+        args: ['search', '--last', 'Alder', '--json'],
+        stdout: '{"total":0,"memorials":[],"cache_hit":true}\n',
+        cacheHit: true,
+      },
+      {
+        command: 'gnis',
+        args: ['search', 'Oak', '--state', 'OH', '--json'],
+        stdout: '{"source":"DomesticNames_OH","matches":0,"results":[],"cache_hit":false}\n',
+        cacheHit: false,
+      },
+      {
+        command: 'va-archives',
+        args: ['catalog', 'Alder', '--json'],
+        stdout: '{"total":0,"records":[],"cache_hit":true}\n',
+        cacheHit: true,
+      },
+    ];
+    for (const item of cases) {
+      await runRecordCommand(item.command, item.args, {
+        io: createCaptureIo().io,
+        spawnImpl: createFakeSpawn({ exitCode: 0, stdout: item.stdout }).spawnImpl,
+        telemetryFilePath: telemetryFile,
+      });
+    }
+    const recorded = (await readFile(telemetryFile, 'utf8'))
+      .trim()
+      .split('\n')
+      .map((line) => JSON.parse(line) as TelemetryEvent);
+    expect(recorded.map((event) => event.cache_hit)).toEqual(cases.map((item) => item.cacheHit));
+    expect(recorded.map((event) => event.cmd)).toEqual([
+      'records:archive-org',
+      'records:findagrave',
+      'records:gnis',
+      'records:va-archives',
+    ]);
+  });
+
   it('streams stdout bytes unchanged while reading a trailing cache_hit', async () => {
     const tmp = await makeTempDir('kinloom-cache-hit-stream-');
     const telemetryFile = path.join(tmp, 'calls.jsonl');
