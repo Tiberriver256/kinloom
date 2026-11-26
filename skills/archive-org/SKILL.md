@@ -11,14 +11,21 @@ This skill includes a standalone executable Python 3.11+ standard-library CLI at
 
 Path: `skills/archive-org/scripts/archive-org`
 
-### Persistent local disk cache (`grep` & `page`)
+### Persistent local disk cache (all network commands)
 
-`grep` and `page --printed-page` cache each item atomically at `~/.cache/kinloom-ia/<item_id>/` (overrideable via `KINLOOM_IA_CACHE_DIR`):
+Every network command (`get`, `grep`, `page`, `download`, `search`, and `fulltext`) writes atomically under `~/.cache/kinloom-ia/` (overrideable via `KINLOOM_IA_CACHE_DIR`) using per-item advisory locks (`fcntl.flock`) so concurrent processes never duplicate downloads and repeat calls make zero HTTP requests. Pass `--refresh` on any command to bypass the local cache and fetch fresh data.
 
-- `metadata.json`: item metadata and file inventory from `/metadata/<item_id>`.
-- `scandata.xml`: raw IA leaf/page scan metadata (when present).
-- `page_index.json`: pre-parsed bidirectional lookup table mapping `scandata` `leafNum`, BookReader `n<leaf>` index (skipping deleted/non-access leaves), and `printed_page` label so cache hits never re-parse XML.
-- `djvu.txt`: form-feed (`\x0c`) page-delimited OCR text (taken verbatim from `_djvu.txt` when form-feed delimited, or reconstructed from `_hocr_searchtext.txt.gz` + `_hocr_pageindex.json.gz` when raw `_djvu.txt` lacks page breaks).
+Cache layout:
+
+- `<item_id>/metadata.json`: item metadata and file inventory from `/metadata/<item_id>`, shared by `get`, `grep`, `page`, and `download`.
+- `<item_id>/scandata.xml`: raw IA leaf/page scan metadata (when present).
+- `<item_id>/page_index.json`: pre-parsed bidirectional lookup table mapping `scandata` `leafNum`, BookReader `n<leaf>` index (skipping deleted/non-access leaves), and `printed_page` label so cache hits never re-parse XML.
+- `<item_id>/djvu.txt`: form-feed (`\x0c`) page-delimited OCR text (fetched from `_djvu.txt` first; falls back to `_hocr_searchtext.txt.gz` + `_hocr_pageindex.json.gz` only when `_djvu.txt` is absent, fails, or lacks `\x0c` page breaks).
+- `<item_id>/pages/n<leaf>_<suffix>.jpg`: cached rendered page JPEGs (for example `n127_w2400.jpg` or `n127_s2.jpg`) served directly to `--out` on repeat `page` calls.
+- `<item_id>/files/<relpath>`: cached item files downloaded via `download` (with path-traversal validation; exact raw `scandata.xml` and `_djvu.txt` artifacts are also reused without re-downloading).
+- `_queries/<search|fulltext>/<sha256>.json`: cached JSON responses for `search` and `fulltext` keyed by canonical query parameters with a 168-hour (7-day) default TTL (`--cache-ttl-hours` or `KINLOOM_IA_QUERY_TTL_HOURS`).
+
+Transient HTTP `429`, `502`, `503`, and `504` responses retry politely up to 2 times (honoring numeric `Retry-After` capped at 5s), while `403`, `404`, and socket timeouts fail fast with 0 retries.
 
 ### Search inside cached digitized books (`grep`)
 
@@ -126,4 +133,5 @@ skills/archive-org/scripts/archive-org url 'title:(Lincoln)' --mediatype texts
 
 ## Environment variables
 
-- `KINLOOM_IA_CACHE_DIR` (optional): overrides the default `~/.cache/kinloom-ia` cache directory used by `grep` and `page`. No API key or login is required.
+- `KINLOOM_IA_CACHE_DIR` (optional): overrides the default `~/.cache/kinloom-ia` cache directory used by all network commands.
+- `KINLOOM_IA_QUERY_TTL_HOURS` (optional): overrides the default `168` hour (7-day) TTL for cached `search` and `fulltext` responses. No API key or login is required.

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
+from email.message import Message
 import gzip
 from importlib.machinery import SourceFileLoader
 from importlib.util import module_from_spec, spec_from_loader
@@ -8,8 +10,11 @@ import json
 import os
 from pathlib import Path
 import tempfile
+import threading
+import time
 import unittest
 from unittest.mock import patch
+from urllib.error import HTTPError
 
 
 SCRIPT_PATH = Path(__file__).resolve().parent.parent / "scripts" / "archive-org"
@@ -41,12 +46,32 @@ SYNTHETIC_SCANDATA = b"""<?xml version="1.0" encoding="UTF-8"?>
 """
 
 
+class FakeHttpResponse:
+    def __init__(self, body: bytes) -> None:
+        self._body = body
+
+    def read(self) -> bytes:
+        return self._body
+
+    def __enter__(self) -> "FakeHttpResponse":
+        return self
+
+    def __exit__(self, exc_type, exc, tb) -> None:
+        return None
+
+
+def make_http_error(url: str, code: int, retry_after: str | None = None) -> HTTPError:
+    headers = Message()
+    if retry_after is not None:
+        headers["Retry-After"] = retry_after
+    return HTTPError(url, code, f"HTTP {code}", headers, io.BytesIO(b""))
+
+
 class TestArchiveOrgCachedGrepAndPage(unittest.TestCase):
     def test_parse_scandata_xml_handles_deleted_leaf_offset(self) -> None:
         idx = ao.parse_scandata_xml(SYNTHETIC_SCANDATA)
         self.assertEqual(idx["leaf_count"], 6)
         self.assertEqual(idx["access_leaf_count"], 5)
-        # leafNum 4 is printed page "1", which is BookReader n3 because leafNum 0 is deleted.
         self.assertEqual(idx["printed_to_bookreader"]["1"], 3)
         self.assertEqual(idx["printed_to_bookreader"]["2"], 4)
         self.assertEqual(idx["printed_to_bookreader_ci"]["iv"], 2)
@@ -54,16 +79,17 @@ class TestArchiveOrgCachedGrepAndPage(unittest.TestCase):
         self.assertEqual(idx["scandata_to_bookreader"]["4"], 3)
         self.assertEqual(idx["bookreader_to_scandata"]["3"], 4)
 
-    def test_grep_populates_cache_and_hits_cache_on_second_call(self) -> None:
+    def test_grep_populates_cache_skips_hocr_when_djvu_has_breaks_and_hits_cache(self) -> None:
         item_id = "synthetic_town_history_1892"
         fake_meta = {
             "metadata": {"identifier": item_id, "title": "Synthetic Town History"},
             "files": [
                 {"name": f"{item_id}_scandata.xml", "format": "Scandata"},
                 {"name": f"{item_id}_djvu.txt", "format": "DjVuTXT"},
+                {"name": f"{item_id}_hocr_searchtext.txt.gz", "format": "OCR Search Text"},
+                {"name": f"{item_id}_hocr_pageindex.json.gz", "format": "OCR Page Index"},
             ],
         }
-        # 6 form-feed delimited leaves matching leafNum 0..5.
         fake_djvu = "\x0c".join(
             [
                 "",
@@ -85,11 +111,12 @@ class TestArchiveOrgCachedGrepAndPage(unittest.TestCase):
                 return SYNTHETIC_SCANDATA
             if url.endswith(f"/{item_id}_djvu.txt"):
                 return fake_djvu
-            raise AssertionError(f"Unexpected URL: {url}")
+            raise AssertionError(f"Unexpected eager URL fetch: {url}")
 
         with tempfile.TemporaryDirectory() as tmpdir:
-            env = {"KINLOOM_IA_CACHE_DIR": tmpdir}
-            with patch.dict(os.environ, env, clear=False), patch.object(ao, "http_get_bytes", side_effect=fake_http_get_bytes):
+            with patch.dict(os.environ, {"KINLOOM_IA_CACHE_DIR": tmpdir}, clear=False), patch.object(
+                ao, "http_get_bytes", side_effect=fake_http_get_bytes
+            ):
                 buf1 = io.StringIO()
                 with patch("sys.stdout", buf1):
                     rc1 = ao.main(["grep", item_id, "--pattern", "Frederick Douglass", "--json"])
@@ -97,9 +124,10 @@ class TestArchiveOrgCachedGrepAndPage(unittest.TestCase):
                 out1 = json.loads(buf1.getvalue())
                 self.assertFalse(out1["cached"])
                 self.assertEqual(out1["total_matches"], 1)
+                # Only metadata, scandata, and _djvu.txt; zero hOCR downloads.
                 self.assertEqual(len(fetch_calls), 3)
+                self.assertFalse(any("hocr" in u for u in fetch_calls))
                 hit = out1["hits"][0]
-                # Segment 4 -> scandata_leaf 4 -> BookReader leaf 3 -> printed_page "1".
                 self.assertEqual(hit["leaf"], 3)
                 self.assertEqual(hit["scandata_leaf"], 4)
                 self.assertEqual(hit["printed_page"], "1")
@@ -109,12 +137,11 @@ class TestArchiveOrgCachedGrepAndPage(unittest.TestCase):
                 )
                 self.assertFalse(hit["cached"])
 
-                # Verify all 4 cache artifacts exist on disk.
                 item_dir = Path(tmpdir) / item_id
                 for fname in ("metadata.json", "scandata.xml", "page_index.json", "djvu.txt"):
                     self.assertTrue((item_dir / fname).is_file(), f"Missing cache file {fname}")
 
-                # Second call must not touch network at all.
+                # Second grep call makes zero HTTP requests.
                 fetch_calls.clear()
                 buf2 = io.StringIO()
                 with patch("sys.stdout", buf2):
@@ -127,17 +154,16 @@ class TestArchiveOrgCachedGrepAndPage(unittest.TestCase):
                 self.assertEqual(out2["hits"][0]["printed_page"], "iv")
                 self.assertTrue(out2["hits"][0]["cached"])
 
-    def test_grep_synthesizes_form_feeds_from_hocr_when_djvu_lacks_breaks(self) -> None:
-        item_id = "synthetic_flat_djvu_1901"
-        fake_meta = {
-            "metadata": {"identifier": item_id, "title": "Synthetic Flat DjVu"},
-            "files": [
-                {"name": f"{item_id}_scandata.xml", "format": "Scandata"},
-                {"name": f"{item_id}_djvu.txt", "format": "DjVuTXT"},
-                {"name": f"{item_id}_hocr_searchtext.txt.gz", "format": "OCR Search Text"},
-                {"name": f"{item_id}_hocr_pageindex.json.gz", "format": "OCR Page Index"},
-            ],
-        }
+                # --refresh forces fresh fetches and updates cached content.
+                buf3 = io.StringIO()
+                with patch("sys.stdout", buf3):
+                    rc3 = ao.main(["grep", item_id, "--pattern", "Clara Barton", "--refresh", "--json"])
+                self.assertEqual(rc3, 0)
+                self.assertEqual(len(fetch_calls), 3)
+                out3 = json.loads(buf3.getvalue())
+                self.assertFalse(out3["cached"])
+
+    def test_grep_falls_back_to_hocr_when_djvu_lacks_breaks_or_is_missing(self) -> None:
         pages = ["", "Cover", "Title", "Intro iv", "Page one alpha", "Page two Harriet Tubman"]
         joined = "".join(pages)
         offsets = []
@@ -146,39 +172,97 @@ class TestArchiveOrgCachedGrepAndPage(unittest.TestCase):
             offsets.append([pos, pos + len(p), 0, 0])
             pos += len(p)
 
+        for case_name, include_djvu in (("flat_djvu", True), ("missing_djvu", False)):
+            with self.subTest(case=case_name):
+                item_id = f"synthetic_{case_name}_1901"
+                files = [
+                    {"name": f"{item_id}_scandata.xml", "format": "Scandata"},
+                    {"name": f"{item_id}_hocr_searchtext.txt.gz", "format": "OCR Search Text"},
+                    {"name": f"{item_id}_hocr_pageindex.json.gz", "format": "OCR Page Index"},
+                ]
+                if include_djvu:
+                    files.append({"name": f"{item_id}_djvu.txt", "format": "DjVuTXT"})
+                fake_meta = {"metadata": {"identifier": item_id, "title": "Synthetic"}, "files": files}
+                seen_urls: list[str] = []
+
+                def fake_http_get_bytes(url: str, timeout: float = 25.0) -> bytes:
+                    seen_urls.append(url)
+                    if url.endswith(f"/metadata/{item_id}"):
+                        return json.dumps(fake_meta).encode("utf-8")
+                    if url.endswith(f"/{item_id}_scandata.xml"):
+                        return SYNTHETIC_SCANDATA
+                    if url.endswith(f"/{item_id}_djvu.txt"):
+                        return b"Flat text with zero form feeds Harriet Tubman"
+                    if url.endswith(f"/{item_id}_hocr_searchtext.txt.gz"):
+                        return gzip.compress(joined.encode("utf-8"))
+                    if url.endswith(f"/{item_id}_hocr_pageindex.json.gz"):
+                        return gzip.compress(json.dumps(offsets).encode("utf-8"))
+                    raise AssertionError(f"Unexpected URL: {url}")
+
+                with tempfile.TemporaryDirectory() as tmpdir:
+                    with patch.dict(os.environ, {"KINLOOM_IA_CACHE_DIR": tmpdir}, clear=False), patch.object(
+                        ao, "http_get_bytes", side_effect=fake_http_get_bytes
+                    ):
+                        buf = io.StringIO()
+                        with patch("sys.stdout", buf):
+                            rc = ao.main(["grep", item_id, "--pattern", "Harriet Tubman", "--json"])
+                        self.assertEqual(rc, 0)
+                        out = json.loads(buf.getvalue())
+                        self.assertEqual(out["hits"][0]["leaf"], 4)
+                        self.assertEqual(out["hits"][0]["scandata_leaf"], 5)
+                        self.assertEqual(out["hits"][0]["printed_page"], "2")
+                        self.assertTrue(any(u.endswith("_hocr_searchtext.txt.gz") for u in seen_urls))
+                        self.assertTrue(any(u.endswith("_hocr_pageindex.json.gz") for u in seen_urls))
+
+    def test_get_caches_metadata_and_refreshes_on_flag(self) -> None:
+        item_id = "synthetic_get_item_1875"
+        version = {"title": "First Edition Gazetteer"}
+        fetch_calls: list[str] = []
+
         def fake_http_get_bytes(url: str, timeout: float = 25.0) -> bytes:
+            fetch_calls.append(url)
             if url.endswith(f"/metadata/{item_id}"):
-                return json.dumps(fake_meta).encode("utf-8")
-            if url.endswith(f"/{item_id}_scandata.xml"):
-                return SYNTHETIC_SCANDATA
-            if url.endswith(f"/{item_id}_djvu.txt"):
-                return b"Flat text with zero form feeds Harriet Tubman"
-            if url.endswith(f"/{item_id}_hocr_searchtext.txt.gz"):
-                return gzip.compress(joined.encode("utf-8"))
-            if url.endswith(f"/{item_id}_hocr_pageindex.json.gz"):
-                return gzip.compress(json.dumps(offsets).encode("utf-8"))
+                return json.dumps(
+                    {
+                        "metadata": {"identifier": item_id, "title": version["title"]},
+                        "files": [{"name": f"{item_id}.pdf", "format": "Text PDF", "size": "123"}],
+                    }
+                ).encode("utf-8")
             raise AssertionError(f"Unexpected URL: {url}")
 
         with tempfile.TemporaryDirectory() as tmpdir:
             with patch.dict(os.environ, {"KINLOOM_IA_CACHE_DIR": tmpdir}, clear=False), patch.object(
                 ao, "http_get_bytes", side_effect=fake_http_get_bytes
             ):
-                buf = io.StringIO()
-                with patch("sys.stdout", buf):
-                    rc = ao.main(["grep", item_id, "--pattern", "Harriet Tubman", "--json"])
-                self.assertEqual(rc, 0)
-                out = json.loads(buf.getvalue())
-                self.assertEqual(out["hits"][0]["leaf"], 4)
-                self.assertEqual(out["hits"][0]["scandata_leaf"], 5)
-                self.assertEqual(out["hits"][0]["printed_page"], "2")
+                buf1 = io.StringIO()
+                with patch("sys.stdout", buf1):
+                    self.assertEqual(ao.main(["get", item_id, "--json"]), 0)
+                self.assertEqual(json.loads(buf1.getvalue())["metadata"]["title"], "First Edition Gazetteer")
+                self.assertEqual(len(fetch_calls), 1)
+                self.assertTrue((Path(tmpdir) / item_id / "metadata.json").is_file())
 
-    def test_page_resolves_printed_page_and_legacy_leaf_flag(self) -> None:
+                # Second call hits disk cache with zero HTTP requests.
+                version["title"] = "Updated Edition Gazetteer"
+                buf2 = io.StringIO()
+                with patch("sys.stdout", buf2):
+                    self.assertEqual(ao.main(["get", item_id, "--json"]), 0)
+                self.assertEqual(json.loads(buf2.getvalue())["metadata"]["title"], "First Edition Gazetteer")
+                self.assertEqual(len(fetch_calls), 1)
+
+                # --refresh fetches updated metadata and overwrites metadata.json.
+                buf3 = io.StringIO()
+                with patch("sys.stdout", buf3):
+                    self.assertEqual(ao.main(["get", item_id, "--refresh", "--json"]), 0)
+                self.assertEqual(json.loads(buf3.getvalue())["metadata"]["title"], "Updated Edition Gazetteer")
+                self.assertEqual(len(fetch_calls), 2)
+
+    def test_page_caches_jpeg_and_respects_refresh(self) -> None:
         item_id = "synthetic_atlas_1888"
         fake_meta = {
             "metadata": {"identifier": item_id, "title": "Synthetic Atlas"},
             "files": [{"name": f"{item_id}_scandata.xml", "format": "Scandata"}],
         }
-        fake_jpeg = b"\xff\xd8\xff\xe0" + b"\x00" * 64
+        jpeg_state = {"bytes": b"\xff\xd8\xff\xe0" + b"\x01" * 64}
         seen_urls: list[str] = []
 
         def fake_http_get_bytes(url: str, timeout: float = 25.0) -> bytes:
@@ -188,36 +272,396 @@ class TestArchiveOrgCachedGrepAndPage(unittest.TestCase):
             if url.endswith(f"/{item_id}_scandata.xml"):
                 return SYNTHETIC_SCANDATA
             if "/page/n" in url:
-                return fake_jpeg
+                return jpeg_state["bytes"]
             raise AssertionError(f"Unexpected URL: {url}")
 
         with tempfile.TemporaryDirectory() as tmpdir:
-            out_file = Path(tmpdir) / "page2.jpg"
+            out_file1 = Path(tmpdir) / "page2_first.jpg"
+            out_file2 = Path(tmpdir) / "page2_second.jpg"
             legacy_dir = Path(tmpdir) / "legacy_out"
             with patch.dict(os.environ, {"KINLOOM_IA_CACHE_DIR": tmpdir}, clear=False), patch.object(
                 ao, "http_get_bytes", side_effect=fake_http_get_bytes
             ):
-                buf = io.StringIO()
-                with patch("sys.stdout", buf):
-                    rc = ao.main(
-                        ["page", item_id, "--printed-page", "2", "--scale", "2", "--out", str(out_file), "--json"]
+                buf1 = io.StringIO()
+                with patch("sys.stdout", buf1):
+                    rc1 = ao.main(
+                        ["page", item_id, "--printed-page", "2", "--scale", "2", "--out", str(out_file1), "--json"]
                     )
-                self.assertEqual(rc, 0)
-                payload = json.loads(buf.getvalue())
-                self.assertEqual(payload["leaf"], 4)
-                self.assertEqual(payload["scandata_leaf"], 5)
-                self.assertEqual(payload["printed_page"], "2")
-                self.assertEqual(payload["url"], f"https://archive.org/download/{item_id}/page/n4_s2.jpg")
-                self.assertEqual(out_file.read_bytes(), fake_jpeg)
+                self.assertEqual(rc1, 0)
+                payload1 = json.loads(buf1.getvalue())
+                self.assertEqual(payload1["leaf"], 4)
+                self.assertEqual(payload1["scandata_leaf"], 5)
+                self.assertEqual(payload1["printed_page"], "2")
+                self.assertEqual(payload1["url"], f"https://archive.org/download/{item_id}/page/n4_s2.jpg")
+                self.assertFalse(payload1["page_cached"])
+                self.assertEqual(out_file1.read_bytes(), jpeg_state["bytes"])
+                self.assertTrue((Path(tmpdir) / item_id / "pages" / "n4_s2.jpg").is_file())
+                call_count_after_first = len(seen_urls)
+                self.assertEqual(call_count_after_first, 3)
 
-                # Legacy positional leaf + --width + directory --out stays backward compatible.
+                # Second call to same page (different --out path) makes zero HTTP calls.
                 buf2 = io.StringIO()
                 with patch("sys.stdout", buf2):
-                    rc2 = ao.main(["page", item_id, "3", "--width", "1200", "--out", str(legacy_dir)])
+                    rc2 = ao.main(
+                        ["page", item_id, "--printed-page", "2", "--scale", "2", "--out", str(out_file2), "--json"]
+                    )
                 self.assertEqual(rc2, 0)
+                self.assertEqual(len(seen_urls), call_count_after_first)
+                payload2 = json.loads(buf2.getvalue())
+                self.assertTrue(payload2["index_cached"])
+                self.assertTrue(payload2["page_cached"])
+                self.assertEqual(out_file2.read_bytes(), jpeg_state["bytes"])
+
+                # Text output reports cache-hit on cached leaf fetch.
+                buf_txt = io.StringIO()
+                with patch("sys.stdout", buf_txt):
+                    rc_txt = ao.main(["page", item_id, "--leaf", "4", "--scale", "2", "--out", str(out_file2)])
+                self.assertEqual(rc_txt, 0)
+                self.assertIn("cache-hit", buf_txt.getvalue())
+                self.assertEqual(len(seen_urls), call_count_after_first)
+
+                # --refresh forces fresh page JPEG fetch and updates cache.
+                jpeg_state["bytes"] = b"\xff\xd8\xff\xe0" + b"\x02" * 80
+                buf_ref = io.StringIO()
+                with patch("sys.stdout", buf_ref):
+                    rc_ref = ao.main(
+                        ["page", item_id, "--leaf", "4", "--scale", "2", "--out", str(out_file2), "--refresh", "--json"]
+                    )
+                self.assertEqual(rc_ref, 0)
+                payload_ref = json.loads(buf_ref.getvalue())
+                self.assertFalse(payload_ref["page_cached"])
+                self.assertEqual(len(seen_urls), call_count_after_first + 1)
+                self.assertEqual(out_file2.read_bytes(), jpeg_state["bytes"])
+
+                # Legacy positional leaf + --width + directory --out caches n3_w1200.jpg.
+                buf3 = io.StringIO()
+                with patch("sys.stdout", buf3):
+                    rc3 = ao.main(["page", item_id, "3", "--width", "1200", "--out", str(legacy_dir)])
+                self.assertEqual(rc3, 0)
                 expected_legacy = legacy_dir / f"{item_id}_n3_w1200.jpg"
                 self.assertTrue(expected_legacy.is_file())
+                self.assertTrue((Path(tmpdir) / item_id / "pages" / "n3_w1200.jpg").is_file())
                 self.assertIn(f"https://archive.org/download/{item_id}/page/n3_w1200.jpg", seen_urls)
+
+    def test_download_caches_files_reuses_metadata_and_artifacts_and_rejects_traversal(self) -> None:
+        item_id = "synthetic_county_record_1865"
+        pdf_bytes = {"data": b"%PDF-1.4 synthetic county record v1"}
+        djvu_bytes = b"Page zero\x0cPage one Oakridge\x0cPage two"
+        fake_meta = {
+            "metadata": {"identifier": item_id, "title": "County Record"},
+            "files": [
+                {"name": f"{item_id}_scandata.xml", "format": "Scandata", "size": str(len(SYNTHETIC_SCANDATA))},
+                {"name": f"{item_id}_djvu.txt", "format": "DjVuTXT", "size": str(len(djvu_bytes))},
+                {"name": f"{item_id}.pdf", "format": "Text PDF", "size": str(len(pdf_bytes["data"]))},
+                {"name": "../evil.txt", "format": "Text", "size": "4"},
+            ],
+        }
+        fetch_calls: list[str] = []
+
+        def fake_http_get_bytes(url: str, timeout: float = 25.0) -> bytes:
+            fetch_calls.append(url)
+            if url.endswith(f"/metadata/{item_id}"):
+                return json.dumps(fake_meta).encode("utf-8")
+            if url.endswith(f"/{item_id}_scandata.xml"):
+                return SYNTHETIC_SCANDATA
+            if url.endswith(f"/{item_id}_djvu.txt"):
+                return djvu_bytes
+            if url.endswith(f"/{item_id}.pdf"):
+                return pdf_bytes["data"]
+            raise AssertionError(f"Unexpected URL: {url}")
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            out1 = Path(tmpdir) / "out1"
+            out2 = Path(tmpdir) / "out2"
+            with patch.dict(os.environ, {"KINLOOM_IA_CACHE_DIR": tmpdir}, clear=False), patch.object(
+                ao, "http_get_bytes", side_effect=fake_http_get_bytes
+            ):
+                # Populate metadata + scandata + djvu via grep first.
+                with patch("sys.stdout", io.StringIO()):
+                    self.assertEqual(ao.main(["grep", item_id, "--pattern", "Oakridge", "--json"]), 0)
+                self.assertEqual(len(fetch_calls), 3)
+
+                # Downloading scandata.xml and _djvu.txt reuses cached item artifacts with zero HTTP calls.
+                fetch_calls.clear()
+                buf_reuse = io.StringIO()
+                with patch("sys.stdout", buf_reuse):
+                    rc = ao.main(
+                        [
+                            "download",
+                            item_id,
+                            f"{item_id}_scandata.xml",
+                            f"{item_id}_djvu.txt",
+                            "--out",
+                            str(out1),
+                        ]
+                    )
+                self.assertEqual(rc, 0)
+                self.assertEqual(fetch_calls, [])
+                self.assertEqual((out1 / f"{item_id}_scandata.xml").read_bytes(), SYNTHETIC_SCANDATA)
+                self.assertEqual((out1 / f"{item_id}_djvu.txt").read_bytes(), djvu_bytes)
+                self.assertIn("cache-hit", buf_reuse.getvalue())
+
+                # Downloading PDF fetches once into files/<name>, reusing cached metadata.json.
+                buf_pdf1 = io.StringIO()
+                with patch("sys.stdout", buf_pdf1):
+                    self.assertEqual(ao.main(["download", item_id, f"{item_id}.pdf", "--out", str(out1)]), 0)
+                self.assertEqual(len(fetch_calls), 1)
+                self.assertTrue(fetch_calls[0].endswith(f"/{item_id}.pdf"))
+                self.assertTrue((Path(tmpdir) / item_id / "files" / f"{item_id}.pdf").is_file())
+                self.assertEqual((out1 / f"{item_id}.pdf").read_bytes(), pdf_bytes["data"])
+
+                # Second download of PDF into another directory makes zero HTTP calls.
+                fetch_calls.clear()
+                buf_pdf2 = io.StringIO()
+                with patch("sys.stdout", buf_pdf2):
+                    self.assertEqual(ao.main(["download", item_id, f"{item_id}.pdf", "--out", str(out2)]), 0)
+                self.assertEqual(fetch_calls, [])
+                self.assertEqual((out2 / f"{item_id}.pdf").read_bytes(), pdf_bytes["data"])
+                self.assertIn("cache-hit", buf_pdf2.getvalue())
+
+                # --refresh re-fetches metadata and PDF and updates cache.
+                pdf_bytes["data"] = b"%PDF-1.4 synthetic county record v2"
+                buf_ref = io.StringIO()
+                with patch("sys.stdout", buf_ref):
+                    self.assertEqual(
+                        ao.main(["download", item_id, f"{item_id}.pdf", "--out", str(out2), "--refresh"]), 0
+                    )
+                self.assertEqual(len(fetch_calls), 2)
+                self.assertEqual((out2 / f"{item_id}.pdf").read_bytes(), pdf_bytes["data"])
+
+                # Path traversal filenames are rejected with exit code 2 and zero HTTP calls.
+                fetch_calls.clear()
+                for bad_name in ("../evil.txt", "/etc/passwd", "sub/../../escape.txt", "a\\b.txt", "C:drive.txt"):
+                    err_buf = io.StringIO()
+                    with patch("sys.stderr", err_buf):
+                        with self.assertRaises(SystemExit) as cm:
+                            ao.main(["download", item_id, bad_name, "--out", str(out2)])
+                    self.assertEqual(cm.exception.code, 2, f"Expected exit 2 for {bad_name!r}")
+                    self.assertIn("Unsafe file path", err_buf.getvalue())
+                self.assertEqual(fetch_calls, [])
+
+    def test_search_and_fulltext_cache_with_ttl_and_refresh(self) -> None:
+        search_version = {"numFound": 1}
+        ft_version = {"total": 2}
+        fetch_calls: list[str] = []
+
+        def fake_http_get_bytes(url: str, timeout: float = 45.0) -> bytes:
+            fetch_calls.append(url)
+            if "advancedsearch.php" in url:
+                return json.dumps(
+                    {
+                        "responseHeader": {"status": 0},
+                        "response": {
+                            "numFound": search_version["numFound"],
+                            "docs": [{"identifier": "demo_book_1", "title": "Demo Book"}],
+                        },
+                    }
+                ).encode("utf-8")
+            if "page_production" in url:
+                return json.dumps(
+                    {
+                        "response": {
+                            "body": {
+                                "hits": {
+                                    "total": ft_version["total"],
+                                    "hits": [
+                                        {
+                                            "fields": {"identifier": "demo_book_1", "title": "Demo Book", "year": 1890},
+                                            "highlight": {"text": ["Sample {{{Oakridge}}} match"]},
+                                        }
+                                    ],
+                                }
+                            }
+                        }
+                    }
+                ).encode("utf-8")
+            raise AssertionError(f"Unexpected URL: {url}")
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with patch.dict(os.environ, {"KINLOOM_IA_CACHE_DIR": tmpdir}, clear=False), patch.object(
+                ao, "http_get_bytes", side_effect=fake_http_get_bytes
+            ):
+                # search: first call fetches, second hits cache, --refresh fetches again.
+                buf_s1 = io.StringIO()
+                with patch("sys.stdout", buf_s1):
+                    self.assertEqual(ao.main(["search", "title:(Oakridge)", "--json"]), 0)
+                self.assertEqual(json.loads(buf_s1.getvalue())["response"]["numFound"], 1)
+                self.assertEqual(len(fetch_calls), 1)
+                self.assertEqual(len(list((Path(tmpdir) / "_queries" / "search").glob("*.json"))), 1)
+
+                search_version["numFound"] = 9
+                buf_s2 = io.StringIO()
+                with patch("sys.stdout", buf_s2):
+                    self.assertEqual(ao.main(["search", "title:(Oakridge)", "--json"]), 0)
+                self.assertEqual(json.loads(buf_s2.getvalue())["response"]["numFound"], 1)
+                self.assertEqual(len(fetch_calls), 1)
+
+                buf_s3 = io.StringIO()
+                with patch("sys.stdout", buf_s3):
+                    self.assertEqual(ao.main(["search", "title:(Oakridge)", "--refresh", "--json"]), 0)
+                self.assertEqual(json.loads(buf_s3.getvalue())["response"]["numFound"], 9)
+                self.assertEqual(len(fetch_calls), 2)
+
+                # fulltext: first call fetches, second hits cache, TTL=0 bypasses cache.
+                fetch_calls.clear()
+                buf_f1 = io.StringIO()
+                with patch("sys.stdout", buf_f1):
+                    self.assertEqual(ao.main(["fulltext", '"Oakridge Mill"', "--json"]), 0)
+                self.assertEqual(json.loads(buf_f1.getvalue())["response"]["body"]["hits"]["total"], 2)
+                self.assertEqual(len(fetch_calls), 1)
+                self.assertEqual(len(list((Path(tmpdir) / "_queries" / "fulltext").glob("*.json"))), 1)
+
+                ft_version["total"] = 7
+                buf_f2 = io.StringIO()
+                with patch("sys.stdout", buf_f2):
+                    self.assertEqual(ao.main(["fulltext", '"Oakridge Mill"', "--json"]), 0)
+                self.assertEqual(json.loads(buf_f2.getvalue())["response"]["body"]["hits"]["total"], 2)
+                self.assertEqual(len(fetch_calls), 1)
+
+                buf_f3 = io.StringIO()
+                with patch("sys.stdout", buf_f3):
+                    self.assertEqual(
+                        ao.main(["fulltext", '"Oakridge Mill"', "--cache-ttl-hours", "0", "--json"]), 0
+                    )
+                self.assertEqual(json.loads(buf_f3.getvalue())["response"]["body"]["hits"]["total"], 7)
+                self.assertEqual(len(fetch_calls), 2)
+
+                # Stale cache entry older than TTL triggers fresh fetch.
+                ft_cache_file = next((Path(tmpdir) / "_queries" / "fulltext").glob("*.json"))
+                envelope = json.loads(ft_cache_file.read_text(encoding="utf-8"))
+                envelope["cached_at"] = time.time() - (200 * 3600)
+                ft_cache_file.write_text(json.dumps(envelope), encoding="utf-8")
+
+                ft_version["total"] = 11
+                buf_f4 = io.StringIO()
+                with patch("sys.stdout", buf_f4):
+                    self.assertEqual(ao.main(["fulltext", '"Oakridge Mill"', "--json"]), 0)
+                self.assertEqual(json.loads(buf_f4.getvalue())["response"]["body"]["hits"]["total"], 11)
+                self.assertEqual(len(fetch_calls), 3)
+
+    def test_http_get_bytes_retries_429_503_politely_and_fails_fast_on_403_404_timeout(self) -> None:
+        url = "https://archive.org/metadata/demo_item"
+
+        # 429 (Retry-After: 12 capped to 5.0) -> 503 (Retry-After: 1.5) -> 200 OK.
+        attempts = {"count": 0}
+        sleeps: list[float] = []
+
+        def fake_urlopen_retry(req, timeout=25.0):
+            attempts["count"] += 1
+            if attempts["count"] == 1:
+                raise make_http_error(url, 429, retry_after="12")
+            if attempts["count"] == 2:
+                raise make_http_error(url, 503, retry_after="1.5")
+            return FakeHttpResponse(b'{"ok":true}')
+
+        with patch("urllib.request.urlopen", side_effect=fake_urlopen_retry), patch.object(
+            ao.time, "sleep", side_effect=sleeps.append
+        ):
+            data = ao.http_get_bytes(url)
+        self.assertEqual(data, b'{"ok":true}')
+        self.assertEqual(attempts["count"], 3)
+        self.assertEqual(sleeps, [5.0, 1.5])
+
+        # 504 exhausts max 2 retries (3 total attempts) and raises RuntimeError.
+        attempts["count"] = 0
+        sleeps.clear()
+
+        def fake_urlopen_504(req, timeout=25.0):
+            attempts["count"] += 1
+            raise make_http_error(url, 504)
+
+        with patch("urllib.request.urlopen", side_effect=fake_urlopen_504), patch.object(
+            ao.time, "sleep", side_effect=sleeps.append
+        ):
+            with self.assertRaises(RuntimeError) as cm:
+                ao.http_get_bytes(url)
+        self.assertIn("HTTP 504", str(cm.exception))
+        self.assertEqual(attempts["count"], 3)
+        self.assertEqual(sleeps, [0.5, 1.0])
+
+        # 403 fails immediately with 0 retries.
+        attempts["count"] = 0
+        sleeps.clear()
+
+        def fake_urlopen_403(req, timeout=25.0):
+            attempts["count"] += 1
+            raise make_http_error(url, 403)
+
+        with patch("urllib.request.urlopen", side_effect=fake_urlopen_403), patch.object(
+            ao.time, "sleep", side_effect=sleeps.append
+        ):
+            with self.assertRaises(RuntimeError) as cm:
+                ao.http_get_bytes(url)
+        self.assertIn("HTTP 403", str(cm.exception))
+        self.assertEqual(attempts["count"], 1)
+        self.assertEqual(sleeps, [])
+
+        # 404 fails immediately with FileNotFoundError and 0 retries.
+        attempts["count"] = 0
+        sleeps.clear()
+
+        def fake_urlopen_404(req, timeout=25.0):
+            attempts["count"] += 1
+            raise make_http_error(url, 404)
+
+        with patch("urllib.request.urlopen", side_effect=fake_urlopen_404), patch.object(
+            ao.time, "sleep", side_effect=sleeps.append
+        ):
+            with self.assertRaises(FileNotFoundError):
+                ao.http_get_bytes(url)
+        self.assertEqual(attempts["count"], 1)
+        self.assertEqual(sleeps, [])
+
+        # ReadTimeout / TimeoutError fails immediately with 0 retries.
+        attempts["count"] = 0
+        sleeps.clear()
+
+        def fake_urlopen_timeout(req, timeout=25.0):
+            attempts["count"] += 1
+            raise TimeoutError("The read operation timed out")
+
+        with patch("urllib.request.urlopen", side_effect=fake_urlopen_timeout), patch.object(
+            ao.time, "sleep", side_effect=sleeps.append
+        ):
+            with self.assertRaises(RuntimeError) as cm:
+                ao.http_get_bytes(url)
+        self.assertIn("timed out", str(cm.exception))
+        self.assertEqual(attempts["count"], 1)
+        self.assertEqual(sleeps, [])
+
+    def test_concurrent_page_requests_deduplicate_via_item_lock(self) -> None:
+        item_id = "synthetic_concurrent_book_1880"
+        jpeg_bytes = b"\xff\xd8\xff\xe0" + b"\x09" * 48
+        fetch_count = 0
+        count_lock = threading.Lock()
+        barrier = threading.Barrier(4)
+
+        def fake_http_get_bytes(url: str, timeout: float = 25.0) -> bytes:
+            nonlocal fetch_count
+            time.sleep(0.05)
+            with count_lock:
+                fetch_count += 1
+            return jpeg_bytes
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            cache_root = Path(tmpdir)
+            url = ao.page_image_url(item_id, 7, width=2400)
+
+            def worker(_idx: int) -> tuple[bytes, bool]:
+                barrier.wait(timeout=5.0)
+                content, _, cached = ao.ensure_page_image_cache(
+                    item_id, 7, "w2400", url, cache_root=cache_root
+                )
+                return content, cached
+
+            with patch.object(ao, "http_get_bytes", side_effect=fake_http_get_bytes):
+                with ThreadPoolExecutor(max_workers=4) as pool:
+                    results = list(pool.map(worker, range(4)))
+
+            self.assertEqual(fetch_count, 1)
+            self.assertEqual([r[0] for r in results], [jpeg_bytes] * 4)
+            self.assertEqual(sum(1 for _, cached in results if not cached), 1)
+            self.assertEqual(sum(1 for _, cached in results if cached), 3)
 
 
 if __name__ == "__main__":

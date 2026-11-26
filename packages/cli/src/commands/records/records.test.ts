@@ -1,4 +1,4 @@
-import { execFileSync, type ChildProcess } from 'node:child_process';
+import { execFileSync, spawnSync, type ChildProcess } from 'node:child_process';
 import crypto from 'node:crypto';
 import { EventEmitter } from 'node:events';
 import fs from 'node:fs';
@@ -534,6 +534,16 @@ describe('bundled Python utilities and live script execution', () => {
     expect(stderr).toEqual([]);
     expect(stdout.join('\n')).toContain('grep');
     expect(stdout.join('\n')).toContain('page');
+  });
+
+  it('passes archive-org full-stack caching, lazy hOCR fallback, retry, and path-safety unit tests', () => {
+    const testFile = path.join(SKILLS_ROOT, 'archive-org', 'tests', 'test_archive_org.py');
+    const result = spawnSync('python3', ['-m', 'unittest', '-v', testFile], {
+      encoding: 'utf8',
+    });
+    expect(result.status).toBe(0);
+    expect(result.stderr).toMatch(/Ran [1-9]\d* tests/);
+    expect(result.stderr).toMatch(/\bOK\b/);
   });
 
   it('forces OMP_THREAD_LIMIT=1 and enforces --timeout on tesseract subprocesses', async () => {

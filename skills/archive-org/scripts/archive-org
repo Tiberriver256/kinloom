@@ -1,7 +1,7 @@
 #!/usr/bin/env -S python3 -S
 """Internet Archive CLI: search items, inspect metadata, grep cached books, and fetch pages.
 
-Uses Python 3.11+ standard library only with lazy network/XML imports for fast
+Uses Python 3.11+ standard library only with lazy network/XML/lock imports for fast
 cache-hit startup (~50 ms) and zero external dependency installation.
 All APIs are public and read-only.
 """
@@ -9,12 +9,15 @@ All APIs are public and read-only.
 from __future__ import annotations
 
 import argparse
+from contextlib import contextmanager
 import json
+import math
 import os
 from pathlib import Path
 import re
 import sys
 import time
+from typing import Iterator
 from urllib.parse import quote, urlencode
 
 BASE = "https://archive.org"
@@ -24,7 +27,12 @@ USER_AGENT = "kinloom archive-org skill (research use)"
 DEFAULT_FIELDS = ["identifier", "title", "creator", "date", "mediatype"]
 DEFAULT_TIMEOUT = 25.0
 SEARCH_TIMEOUT = 45.0
+DOWNLOAD_TIMEOUT = 60.0
+DEFAULT_QUERY_TTL_HOURS = 168.0
 MAX_WORKERS = 6
+RETRYABLE_HTTP_CODES = frozenset({429, 502, 503, 504})
+MAX_HTTP_RETRIES = 2
+MAX_RETRY_AFTER_SECONDS = 5.0
 SAFE_ID_RE = re.compile(r"^[A-Za-z0-9._-]+$")
 IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".webp"}
 
@@ -36,6 +44,23 @@ def get_cache_root() -> Path:
     return Path.home() / ".cache" / "kinloom-ia"
 
 
+def resolve_query_ttl_hours(cli_ttl: float | None) -> float:
+    if cli_ttl is not None:
+        if not math.isfinite(cli_ttl) or cli_ttl < 0:
+            fail(f"Invalid --cache-ttl-hours value: {cli_ttl!r} (must be >= 0).", code=2)
+        return float(cli_ttl)
+    raw = os.environ.get("KINLOOM_IA_QUERY_TTL_HOURS")
+    if raw is not None and raw.strip():
+        try:
+            parsed = float(raw.strip())
+        except ValueError:
+            fail(f"Invalid KINLOOM_IA_QUERY_TTL_HOURS value: {raw!r}.", code=2)
+        if not math.isfinite(parsed) or parsed < 0:
+            fail(f"Invalid KINLOOM_IA_QUERY_TTL_HOURS value: {raw!r} (must be >= 0).", code=2)
+        return parsed
+    return DEFAULT_QUERY_TTL_HOURS
+
+
 def validate_identifier(identifier: str) -> str:
     cleaned = identifier.strip()
     if not cleaned or not SAFE_ID_RE.match(cleaned) or cleaned in (".", ".."):
@@ -43,9 +68,53 @@ def validate_identifier(identifier: str) -> str:
     return cleaned
 
 
+def validate_relative_item_path(name: str, files_root: Path) -> tuple[Path, Path]:
+    """Validate an item-relative filename and resolve it strictly inside files_root."""
+    if not name or "\x00" in name or "\\" in name or name.startswith("/"):
+        raise ValueError(f"Unsafe file path in item: {name!r}")
+    parts = name.split("/")
+    for part in parts:
+        if not part or part in (".", "..") or ":" in part:
+            raise ValueError(f"Unsafe file path in item: {name!r}")
+    rel = Path(*parts)
+    root_resolved = files_root.resolve()
+    dest = (root_resolved / rel).resolve()
+    if dest == root_resolved or not dest.is_relative_to(root_resolved):
+        raise ValueError(f"Unsafe file path in item: {name!r}")
+    return rel, dest
+
+
 def fail(message: str, code: int = 1) -> None:
     sys.stderr.write(f"{message}\n")
     raise SystemExit(code)
+
+
+@contextmanager
+def file_lock(lock_path: Path) -> Iterator[None]:
+    """Advisory exclusive file lock (POSIX flock) with safe fallback on non-POSIX."""
+    try:
+        import fcntl
+    except ImportError:
+        yield
+        return
+
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(lock_path, "a+b") as lock_file:
+        fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
+
+
+def read_json_if_valid(path: Path) -> dict | None:
+    if not path.is_file():
+        return None
+    try:
+        parsed = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+        return None
+    return parsed if isinstance(parsed, dict) else None
 
 
 def atomic_write_bytes(dest: Path, data: bytes) -> None:
@@ -68,24 +137,52 @@ def atomic_write_json(dest: Path, payload: object) -> None:
     atomic_write_text(dest, json.dumps(payload, ensure_ascii=False, separators=(",", ":")))
 
 
+def parse_retry_after_seconds(headers: object, attempt: int) -> float:
+    default_delay = min(MAX_RETRY_AFTER_SECONDS, 0.5 * (2**attempt))
+    if headers is None or not hasattr(headers, "get"):
+        return default_delay
+    raw = headers.get("Retry-After")
+    if raw is None:
+        return default_delay
+    try:
+        parsed = float(str(raw).strip())
+    except ValueError:
+        return default_delay
+    if not math.isfinite(parsed) or parsed < 0:
+        return default_delay
+    return min(MAX_RETRY_AFTER_SECONDS, parsed)
+
+
 def http_get_bytes(url: str, timeout: float = DEFAULT_TIMEOUT) -> bytes:
     from urllib.error import HTTPError, URLError
     from urllib.request import Request, urlopen
 
     req = Request(url, headers={"User-Agent": USER_AGENT})
-    try:
-        with urlopen(req, timeout=timeout) as resp:
-            return resp.read()
-    except HTTPError as exc:
-        if exc.code == 403:
-            raise RuntimeError(
-                f"HTTP 403 from {url}. This item may be access-restricted or borrow-only."
-            ) from exc
-        if exc.code == 404:
-            raise FileNotFoundError(f"HTTP 404 from {url}") from exc
-        raise RuntimeError(f"HTTP {exc.code} from {url}") from exc
-    except (URLError, TimeoutError, OSError) as exc:
-        raise RuntimeError(f"Request failed for {url}: {exc}") from exc
+    for attempt in range(MAX_HTTP_RETRIES + 1):
+        try:
+            with urlopen(req, timeout=timeout) as resp:
+                return resp.read()
+        except HTTPError as exc:
+            code = exc.code
+            headers = exc.headers
+            try:
+                exc.close()
+            except Exception:
+                pass
+            if code == 403:
+                raise RuntimeError(
+                    f"HTTP 403 from {url}. This item may be access-restricted or borrow-only."
+                ) from exc
+            if code == 404:
+                raise FileNotFoundError(f"HTTP 404 from {url}") from exc
+            if code in RETRYABLE_HTTP_CODES and attempt < MAX_HTTP_RETRIES:
+                time.sleep(parse_retry_after_seconds(headers, attempt))
+                continue
+            raise RuntimeError(f"HTTP {code} from {url}") from exc
+        except (URLError, TimeoutError, OSError) as exc:
+            # Stay fail-fast on ReadTimeout and socket/connection errors.
+            raise RuntimeError(f"Request failed for {url}: {exc}") from exc
+    raise RuntimeError(f"Request failed for {url}")
 
 
 def http_get_json(url: str, timeout: float = DEFAULT_TIMEOUT) -> dict:
@@ -99,7 +196,68 @@ def http_get_json(url: str, timeout: float = DEFAULT_TIMEOUT) -> dict:
     return data
 
 
-def fulltext_api(query: str, rows: int, page: int) -> dict:
+def query_cache_path(kind: str, canonical_params: dict, cache_root: Path) -> tuple[str, Path]:
+    import hashlib
+
+    canonical = json.dumps(canonical_params, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    digest = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+    return digest, cache_root / "_queries" / kind / f"{digest}.json"
+
+
+def cached_query_json(
+    kind: str,
+    canonical_params: dict,
+    url: str,
+    *,
+    cache_root: Path | None = None,
+    ttl_hours: float = DEFAULT_QUERY_TTL_HOURS,
+    refresh: bool = False,
+    timeout: float = SEARCH_TIMEOUT,
+) -> tuple[dict, bool]:
+    root = cache_root if cache_root is not None else get_cache_root()
+    digest, cache_path = query_cache_path(kind, canonical_params, root)
+    ttl_seconds = ttl_hours * 3600.0
+
+    def read_fresh() -> dict | None:
+        if refresh or ttl_seconds <= 0:
+            return None
+        envelope = read_json_if_valid(cache_path)
+        if envelope is None:
+            return None
+        cached_at = envelope.get("cached_at")
+        data = envelope.get("data")
+        if not isinstance(cached_at, (int, float)) or not isinstance(data, dict):
+            return None
+        if (time.time() - float(cached_at)) <= ttl_seconds:
+            return data
+        return None
+
+    cached = read_fresh()
+    if cached is not None:
+        return cached, True
+
+    lock_path = root / "_queries" / "_locks" / f"{kind}_{digest}.lock"
+    with file_lock(lock_path):
+        cached = read_fresh()
+        if cached is not None:
+            return cached, True
+        data = http_get_json(url, timeout=timeout)
+        atomic_write_json(
+            cache_path,
+            {"cached_at": time.time(), "params": canonical_params, "data": data},
+        )
+        return data, False
+
+
+def fulltext_api(
+    query: str,
+    rows: int,
+    page: int,
+    *,
+    cache_root: Path | None = None,
+    ttl_hours: float = DEFAULT_QUERY_TTL_HOURS,
+    refresh: bool = False,
+) -> tuple[dict, bool]:
     qs = urlencode(
         [
             ("user_query", query),
@@ -108,14 +266,38 @@ def fulltext_api(query: str, rows: int, page: int) -> dict:
             ("page", str(page)),
         ]
     )
+    canonical_params = {
+        "kind": "fulltext",
+        "query": query,
+        "rows": rows,
+        "page": page,
+    }
     try:
-        return http_get_json(f"{FULLTEXT_SEARCH}?{qs}", timeout=SEARCH_TIMEOUT)
+        return cached_query_json(
+            "fulltext",
+            canonical_params,
+            f"{FULLTEXT_SEARCH}?{qs}",
+            cache_root=cache_root,
+            ttl_hours=ttl_hours,
+            refresh=refresh,
+            timeout=SEARCH_TIMEOUT,
+        )
     except (RuntimeError, FileNotFoundError) as exc:
         fail(str(exc))
-    return {}
+    return {}, False
 
 
-def search_api(query: str, fields: list[str], rows: int, page: int, sorts: list[str]) -> dict:
+def search_api(
+    query: str,
+    fields: list[str],
+    rows: int,
+    page: int,
+    sorts: list[str],
+    *,
+    cache_root: Path | None = None,
+    ttl_hours: float = DEFAULT_QUERY_TTL_HOURS,
+    refresh: bool = False,
+) -> tuple[dict, bool]:
     params: list[tuple[str, str]] = [
         ("q", query),
         ("output", "json"),
@@ -128,24 +310,94 @@ def search_api(query: str, fields: list[str], rows: int, page: int, sorts: list[
     for sort in sorts:
         params.append(("sort[]", sort))
     qs = urlencode(params)
+    canonical_params = {
+        "kind": "search",
+        "query": query,
+        "fields": list(fields),
+        "rows": rows,
+        "page": page,
+        "sorts": list(sorts),
+    }
     try:
-        return http_get_json(f"{ADVANCED_SEARCH}?{qs}", timeout=SEARCH_TIMEOUT)
+        return cached_query_json(
+            "search",
+            canonical_params,
+            f"{ADVANCED_SEARCH}?{qs}",
+            cache_root=cache_root,
+            ttl_hours=ttl_hours,
+            refresh=refresh,
+            timeout=SEARCH_TIMEOUT,
+        )
     except (RuntimeError, FileNotFoundError) as exc:
         fail(str(exc))
-    return {}
+    return {}, False
 
 
-def metadata_api(identifier: str, timeout: float = DEFAULT_TIMEOUT) -> dict:
-    url = f"{BASE}/metadata/{quote(identifier)}"
+def _is_valid_metadata(data: dict | None) -> bool:
+    return bool(data and (data.get("metadata") or data.get("files")))
+
+
+def _load_or_fetch_metadata_unlocked(
+    item_id: str,
+    meta_path: Path,
+    *,
+    timeout: float = DEFAULT_TIMEOUT,
+    refresh: bool = False,
+) -> tuple[dict, bool]:
+    if not refresh:
+        cached = read_json_if_valid(meta_path)
+        if _is_valid_metadata(cached):
+            assert cached is not None
+            return cached, True
+    url = f"{BASE}/metadata/{quote(item_id)}"
+    data = http_get_json(url, timeout=timeout)
+    if not _is_valid_metadata(data):
+        raise FileNotFoundError(f"No item with identifier {item_id}")
+    atomic_write_json(meta_path, data)
+    return data, False
+
+
+def ensure_item_metadata(
+    identifier: str,
+    *,
+    cache_root: Path | None = None,
+    timeout: float = DEFAULT_TIMEOUT,
+    refresh: bool = False,
+) -> tuple[dict, bool]:
+    """Return cached or freshly fetched /metadata/<id> JSON and cache-hit flag."""
+    item_id = validate_identifier(identifier)
+    root = cache_root if cache_root is not None else get_cache_root()
+    item_dir = root / item_id
+    meta_path = item_dir / "metadata.json"
+
+    if not refresh:
+        cached = read_json_if_valid(meta_path)
+        if _is_valid_metadata(cached):
+            assert cached is not None
+            return cached, True
+
+    with file_lock(item_dir / ".lock"):
+        return _load_or_fetch_metadata_unlocked(
+            item_id, meta_path, timeout=timeout, refresh=refresh
+        )
+
+
+def metadata_api(
+    identifier: str,
+    timeout: float = DEFAULT_TIMEOUT,
+    *,
+    cache_root: Path | None = None,
+    refresh: bool = False,
+) -> tuple[dict, bool]:
     try:
-        data = http_get_json(url, timeout=timeout)
+        return ensure_item_metadata(
+            identifier, cache_root=cache_root, timeout=timeout, refresh=refresh
+        )
     except FileNotFoundError:
         fail(f"No item with identifier {identifier}")
     except RuntimeError as exc:
         fail(str(exc))
-    if not data or (not data.get("metadata") and not data.get("files")):
-        fail(f"No item with identifier {identifier}")
-    return data
+    return {}, False
 
 
 def item_url(identifier: str) -> str:
@@ -284,12 +536,42 @@ def synthesize_djvu_from_hocr(searchtext_gz: bytes, pageindex_gz: bytes) -> str:
     return "\x0c".join(segments)
 
 
+def _fetch_urls_map(
+    tasks: dict[str, str], timeout: float
+) -> tuple[dict[str, bytes], dict[str, Exception]]:
+    fetched: dict[str, bytes] = {}
+    fetch_errors: dict[str, Exception] = {}
+    if not tasks:
+        return fetched, fetch_errors
+    if len(tasks) == 1:
+        key, url = next(iter(tasks.items()))
+        try:
+            fetched[key] = http_get_bytes(url, timeout=timeout)
+        except Exception as exc:
+            fetch_errors[key] = exc
+        return fetched, fetch_errors
+
+    from concurrent.futures import ThreadPoolExecutor
+
+    with ThreadPoolExecutor(max_workers=min(MAX_WORKERS, len(tasks))) as pool:
+        future_map = {
+            key: pool.submit(http_get_bytes, url, timeout) for key, url in tasks.items()
+        }
+        for key, fut in future_map.items():
+            try:
+                fetched[key] = fut.result()
+            except Exception as exc:
+                fetch_errors[key] = exc
+    return fetched, fetch_errors
+
+
 def ensure_item_cache(
     identifier: str,
     *,
     need_djvu: bool,
     cache_root: Path | None = None,
     timeout: float = DEFAULT_TIMEOUT,
+    refresh: bool = False,
 ) -> dict:
     """Populate and return cached metadata, page_index, and optional djvu.txt."""
     item_id = validate_identifier(identifier)
@@ -300,11 +582,15 @@ def ensure_item_cache(
     page_index_path = item_dir / "page_index.json"
     djvu_path = item_dir / "djvu.txt"
 
-    has_meta = meta_path.is_file()
-    has_page_index = page_index_path.is_file()
-    has_djvu = djvu_path.is_file()
+    def cache_ready() -> bool:
+        return (
+            not refresh
+            and _is_valid_metadata(read_json_if_valid(meta_path))
+            and read_json_if_valid(page_index_path) is not None
+            and (not need_djvu or djvu_path.is_file())
+        )
 
-    if has_meta and has_page_index and (not need_djvu or has_djvu):
+    if cache_ready():
         return {
             "identifier": item_id,
             "item_dir": item_dir,
@@ -315,69 +601,90 @@ def ensure_item_cache(
             "cached": True,
         }
 
-    # Fetch metadata if missing.
-    if has_meta:
-        meta_data = json.loads(meta_path.read_text(encoding="utf-8"))
-    else:
-        url = f"{BASE}/metadata/{quote(item_id)}"
-        meta_data = http_get_json(url, timeout=timeout)
-        if not meta_data or (not meta_data.get("metadata") and not meta_data.get("files")):
-            raise FileNotFoundError(f"No item with identifier {item_id}")
-        atomic_write_json(meta_path, meta_data)
-
-    files = meta_data.get("files") or []
-    scandata_name = find_item_file(files, suffixes=("_scandata.xml", "scandata.xml"), formats=("scandata",))
-    djvu_name = find_item_file(files, suffixes=("_djvu.txt",), formats=("djvutxt",))
-    hocr_text_name = find_item_file(files, suffixes=("_hocr_searchtext.txt.gz",), formats=("ocr search text",))
-    hocr_idx_name = find_item_file(files, suffixes=("_hocr_pageindex.json.gz",), formats=("ocr page index",))
-
-    tasks: dict[str, str] = {}
-    if not has_page_index and scandata_name and not scandata_path.is_file():
-        tasks["scandata"] = f"{BASE}/download/{quote(item_id)}/{quote(scandata_name)}"
-    if need_djvu and not has_djvu:
-        if djvu_name:
-            tasks["djvu"] = f"{BASE}/download/{quote(item_id)}/{quote(djvu_name)}"
-        if hocr_text_name and hocr_idx_name:
-            tasks["hocr_text"] = f"{BASE}/download/{quote(item_id)}/{quote(hocr_text_name)}"
-            tasks["hocr_idx"] = f"{BASE}/download/{quote(item_id)}/{quote(hocr_idx_name)}"
-
-    fetched: dict[str, bytes] = {}
-    fetch_errors: dict[str, Exception] = {}
-    if tasks:
-        from concurrent.futures import ThreadPoolExecutor
-
-        with ThreadPoolExecutor(max_workers=min(MAX_WORKERS, len(tasks))) as pool:
-            future_map = {
-                key: pool.submit(http_get_bytes, url, timeout) for key, url in tasks.items()
+    with file_lock(item_dir / ".lock"):
+        if cache_ready():
+            return {
+                "identifier": item_id,
+                "item_dir": item_dir,
+                "metadata_path": meta_path,
+                "scandata_path": scandata_path,
+                "page_index_path": page_index_path,
+                "djvu_path": djvu_path,
+                "cached": True,
             }
-            for key, fut in future_map.items():
-                try:
-                    fetched[key] = fut.result()
-                except Exception as exc:
-                    fetch_errors[key] = exc
 
-    page_index: dict
-    if has_page_index:
-        page_index = json.loads(page_index_path.read_text(encoding="utf-8"))
-    else:
-        scandata_bytes = fetched.get("scandata")
-        if scandata_bytes is None and scandata_path.is_file():
-            scandata_bytes = scandata_path.read_bytes()
-        if scandata_bytes is not None:
-            atomic_write_bytes(scandata_path, scandata_bytes)
-            page_index = parse_scandata_xml(scandata_bytes)
+        meta_data, _ = _load_or_fetch_metadata_unlocked(
+            item_id, meta_path, timeout=timeout, refresh=refresh
+        )
+        existing_page_index = None if refresh else read_json_if_valid(page_index_path)
+        has_page_index = existing_page_index is not None
+        has_djvu = (not refresh) and djvu_path.is_file()
+
+        files = meta_data.get("files") or []
+        scandata_name = find_item_file(
+            files, suffixes=("_scandata.xml", "scandata.xml"), formats=("scandata",)
+        )
+        djvu_name = find_item_file(files, suffixes=("_djvu.txt",), formats=("djvutxt",))
+        hocr_text_name = find_item_file(
+            files, suffixes=("_hocr_searchtext.txt.gz",), formats=("ocr search text",)
+        )
+        hocr_idx_name = find_item_file(
+            files, suffixes=("_hocr_pageindex.json.gz",), formats=("ocr page index",)
+        )
+
+        # Stage 1: fetch scandata and _djvu.txt first. Only fetch hOCR immediately when
+        # _djvu.txt is absent, avoiding eager triple-downloads on healthy items.
+        stage1_tasks: dict[str, str] = {}
+        if not has_page_index and scandata_name and (refresh or not scandata_path.is_file()):
+            stage1_tasks["scandata"] = f"{BASE}/download/{quote(item_id)}/{quote(scandata_name)}"
+        if need_djvu and not has_djvu:
+            if djvu_name:
+                stage1_tasks["djvu"] = f"{BASE}/download/{quote(item_id)}/{quote(djvu_name)}"
+            elif hocr_text_name and hocr_idx_name:
+                stage1_tasks["hocr_text"] = f"{BASE}/download/{quote(item_id)}/{quote(hocr_text_name)}"
+                stage1_tasks["hocr_idx"] = f"{BASE}/download/{quote(item_id)}/{quote(hocr_idx_name)}"
+
+        fetched, fetch_errors = _fetch_urls_map(stage1_tasks, timeout=timeout)
+
+        page_index: dict
+        if has_page_index:
+            assert existing_page_index is not None
+            page_index = existing_page_index
         else:
-            page_index = empty_page_index()
+            scandata_bytes = fetched.get("scandata")
+            if scandata_bytes is None and not refresh and scandata_path.is_file():
+                scandata_bytes = scandata_path.read_bytes()
+            if scandata_bytes is not None:
+                atomic_write_bytes(scandata_path, scandata_bytes)
+                page_index = parse_scandata_xml(scandata_bytes)
+            else:
+                page_index = empty_page_index()
 
-    if need_djvu and not has_djvu:
-        djvu_raw = fetched.get("djvu")
-        djvu_text: str | None = None
-        segment_mode = page_index.get("segment_mode", "scandata")
-        if djvu_raw is not None:
-            decoded = djvu_raw.decode("utf-8", errors="replace")
-            if "\x0c" in decoded:
-                djvu_text = decoded
-                seg_count = decoded.count("\x0c") + 1
+        if need_djvu and not has_djvu:
+            djvu_raw = fetched.get("djvu")
+            decoded_djvu = djvu_raw.decode("utf-8", errors="replace") if djvu_raw is not None else None
+            has_form_feeds = decoded_djvu is not None and "\x0c" in decoded_djvu
+
+            # Stage 2 fallback: fetch hOCR pair only when _djvu.txt failed or lacked \x0c breaks.
+            if not has_form_feeds and hocr_text_name and hocr_idx_name:
+                hocr_tasks: dict[str, str] = {}
+                if "hocr_text" not in fetched:
+                    hocr_tasks["hocr_text"] = f"{BASE}/download/{quote(item_id)}/{quote(hocr_text_name)}"
+                if "hocr_idx" not in fetched:
+                    hocr_tasks["hocr_idx"] = f"{BASE}/download/{quote(item_id)}/{quote(hocr_idx_name)}"
+                if hocr_tasks:
+                    hocr_fetched, hocr_errors = _fetch_urls_map(hocr_tasks, timeout=timeout)
+                    fetched.update(hocr_fetched)
+                    fetch_errors.update(hocr_errors)
+
+            djvu_bytes_out: bytes | None = None
+            djvu_source: str | None = None
+            segment_mode = page_index.get("segment_mode", "scandata")
+
+            if has_form_feeds and djvu_raw is not None and decoded_djvu is not None:
+                djvu_bytes_out = djvu_raw
+                djvu_source = "djvu_txt"
+                seg_count = decoded_djvu.count("\x0c") + 1
                 access_count = int(page_index.get("access_leaf_count") or 0)
                 leaf_count = int(page_index.get("leaf_count") or 0)
                 if access_count and abs(seg_count - access_count) < abs(seg_count - leaf_count):
@@ -385,26 +692,29 @@ def ensure_item_cache(
                 else:
                     segment_mode = "scandata"
             elif "hocr_text" in fetched and "hocr_idx" in fetched:
-                djvu_text = synthesize_djvu_from_hocr(fetched["hocr_text"], fetched["hocr_idx"])
+                djvu_bytes_out = synthesize_djvu_from_hocr(
+                    fetched["hocr_text"], fetched["hocr_idx"]
+                ).encode("utf-8")
+                djvu_source = "hocr"
                 segment_mode = "scandata"
-            else:
-                djvu_text = decoded
+            elif djvu_raw is not None:
+                djvu_bytes_out = djvu_raw
+                djvu_source = "djvu_txt"
                 segment_mode = "flat"
-        elif "hocr_text" in fetched and "hocr_idx" in fetched:
-            djvu_text = synthesize_djvu_from_hocr(fetched["hocr_text"], fetched["hocr_idx"])
-            segment_mode = "scandata"
 
-        if djvu_text is None:
-            err_detail = "; ".join(f"{k}: {v}" for k, v in fetch_errors.items())
-            raise RuntimeError(
-                f"Item {item_id} has no downloadable OCR text (_djvu.txt or _hocr_searchtext.txt.gz)"
-                + (f" ({err_detail})" if err_detail else "")
-            )
-        page_index["segment_mode"] = segment_mode
-        atomic_write_text(djvu_path, djvu_text)
-        atomic_write_json(page_index_path, page_index)
-    elif not has_page_index:
-        atomic_write_json(page_index_path, page_index)
+            if djvu_bytes_out is None:
+                err_detail = "; ".join(f"{k}: {v}" for k, v in fetch_errors.items())
+                raise RuntimeError(
+                    f"Item {item_id} has no downloadable OCR text (_djvu.txt or _hocr_searchtext.txt.gz)"
+                    + (f" ({err_detail})" if err_detail else "")
+                )
+            page_index["segment_mode"] = segment_mode
+            if djvu_source is not None:
+                page_index["djvu_source"] = djvu_source
+            atomic_write_bytes(djvu_path, djvu_bytes_out)
+            atomic_write_json(page_index_path, page_index)
+        elif not has_page_index:
+            atomic_write_json(page_index_path, page_index)
 
     return {
         "identifier": item_id,
@@ -415,6 +725,107 @@ def ensure_item_cache(
         "djvu_path": djvu_path,
         "cached": False,
     }
+
+
+def _reuse_existing_item_artifact(
+    item_dir: Path,
+    file_name: str,
+    file_list: list[dict],
+    file_entry: dict,
+) -> bytes | None:
+    """Reuse scandata.xml or djvu.txt from item cache when it matches the raw file."""
+    scandata_name = find_item_file(
+        file_list, suffixes=("_scandata.xml", "scandata.xml"), formats=("scandata",)
+    )
+    scandata_path = item_dir / "scandata.xml"
+    if scandata_name and file_name == scandata_name and scandata_path.is_file():
+        return scandata_path.read_bytes()
+
+    djvu_name = find_item_file(file_list, suffixes=("_djvu.txt",), formats=("djvutxt",))
+    djvu_path = item_dir / "djvu.txt"
+    if djvu_name and file_name == djvu_name and djvu_path.is_file():
+        page_index = read_json_if_valid(item_dir / "page_index.json") or {}
+        djvu_source = page_index.get("djvu_source")
+        if djvu_source == "djvu_txt":
+            return djvu_path.read_bytes()
+        if djvu_source is None:
+            raw_size = file_entry.get("size")
+            if raw_size is not None:
+                try:
+                    if djvu_path.stat().st_size == int(raw_size):
+                        return djvu_path.read_bytes()
+                except (ValueError, OSError):
+                    pass
+            elif not find_item_file(
+                file_list, suffixes=("_hocr_searchtext.txt.gz",), formats=("ocr search text",)
+            ):
+                return djvu_path.read_bytes()
+    return None
+
+
+def ensure_downloaded_file(
+    identifier: str,
+    file_name: str,
+    file_list: list[dict],
+    file_entry: dict,
+    *,
+    cache_root: Path | None = None,
+    timeout: float = DOWNLOAD_TIMEOUT,
+    refresh: bool = False,
+) -> tuple[bytes, Path, bool]:
+    """Return file bytes, cache path, and cache-hit flag for an item file."""
+    item_id = validate_identifier(identifier)
+    root = cache_root if cache_root is not None else get_cache_root()
+    item_dir = root / item_id
+    files_root = item_dir / "files"
+    _, cache_path = validate_relative_item_path(file_name, files_root)
+
+    if not refresh:
+        if cache_path.is_file():
+            return cache_path.read_bytes(), cache_path, True
+        reused = _reuse_existing_item_artifact(item_dir, file_name, file_list, file_entry)
+        if reused is not None:
+            return reused, item_dir, True
+
+    with file_lock(item_dir / ".lock"):
+        if not refresh:
+            if cache_path.is_file():
+                return cache_path.read_bytes(), cache_path, True
+            reused = _reuse_existing_item_artifact(item_dir, file_name, file_list, file_entry)
+            if reused is not None:
+                return reused, item_dir, True
+
+        url = f"{BASE}/download/{quote(item_id)}/{quote(file_name)}"
+        content = http_get_bytes(url, timeout=timeout)
+        atomic_write_bytes(cache_path, content)
+        return content, cache_path, False
+
+
+def ensure_page_image_cache(
+    identifier: str,
+    leaf_n: int,
+    suffix_tag: str,
+    url: str,
+    *,
+    cache_root: Path | None = None,
+    timeout: float = DEFAULT_TIMEOUT,
+    refresh: bool = False,
+) -> tuple[bytes, Path, bool]:
+    """Return rendered page JPEG bytes, cache path, and cache-hit flag."""
+    item_id = validate_identifier(identifier)
+    root = cache_root if cache_root is not None else get_cache_root()
+    item_dir = root / item_id
+    page_cache_path = item_dir / "pages" / f"n{leaf_n}_{suffix_tag}.jpg"
+
+    if not refresh and page_cache_path.is_file() and page_cache_path.stat().st_size > 0:
+        return page_cache_path.read_bytes(), page_cache_path, True
+
+    with file_lock(item_dir / ".lock"):
+        if not refresh and page_cache_path.is_file() and page_cache_path.stat().st_size > 0:
+            return page_cache_path.read_bytes(), page_cache_path, True
+        content = http_get_bytes(url, timeout=timeout)
+        atomic_write_bytes(page_cache_path, content)
+        return content, page_cache_path, False
 
 
 def resolve_segment_page(seg_idx: int, page_index: dict) -> tuple[int | None, int | None, str | None]:
@@ -514,7 +925,11 @@ def resolve_printed_page_to_leaf(page_index: dict, printed_page: str) -> tuple[i
         sc_leaf = int(p2s[target])
         return sc_leaf, sc_leaf
     sample_pages = list(p2b.keys())
-    hint = f" (known printed pages: {sample_pages[0]}..{sample_pages[-1]}, total {len(sample_pages)})" if sample_pages else " (no printed page numbers in scandata.xml)"
+    hint = (
+        f" (known printed pages: {sample_pages[0]}..{sample_pages[-1]}, total {len(sample_pages)})"
+        if sample_pages
+        else " (no printed page numbers in scandata.xml)"
+    )
     raise KeyError(f"Printed page {printed_page!r} not found in page_index.json{hint}")
 
 
@@ -523,12 +938,22 @@ def cmd_search(args: argparse.Namespace) -> int:
     if args.mediatype:
         query = f"{query} AND mediatype:({args.mediatype})"
     chosen = list(args.fields) if args.fields else DEFAULT_FIELDS
-    data = search_api(query, chosen, args.rows, args.page, list(args.sorts))
+    ttl_hours = resolve_query_ttl_hours(args.cache_ttl_hours)
+    data, cached = search_api(
+        query,
+        chosen,
+        args.rows,
+        args.page,
+        list(args.sorts),
+        ttl_hours=ttl_hours,
+        refresh=args.refresh,
+    )
     response = data.get("response") or {}
     if args.as_json:
         print(json.dumps(data, indent=2))
         return 0
-    print(f"{response.get('numFound')} items")
+    status = "cache-hit" if cached else "fetched"
+    print(f"{response.get('numFound')} items ({status})")
     for doc in response.get("docs") or []:
         identifier = doc.get("identifier") or ""
         title = doc.get("title") or ""
@@ -543,12 +968,14 @@ def cmd_search(args: argparse.Namespace) -> int:
 
 
 def cmd_get(args: argparse.Namespace) -> int:
-    data = metadata_api(validate_identifier(args.identifier))
+    identifier = validate_identifier(args.identifier)
+    data, cached = metadata_api(identifier, timeout=args.timeout, refresh=args.refresh)
     if args.as_json:
         print(json.dumps(data, indent=2))
         return 0
     meta = data.get("metadata") or {}
-    print(f"{meta.get('title') or args.identifier}")
+    status = "cache-hit" if cached else "fetched"
+    print(f"{meta.get('title') or identifier}")
     print(f"  Identifier: {meta.get('identifier')}")
     if meta.get("creator"):
         print(f"  Creator: {meta.get('creator')}")
@@ -564,7 +991,7 @@ def cmd_get(args: argparse.Namespace) -> int:
     if meta.get("description"):
         print(f"  Description: {short(meta.get('description'))}")
     file_list = data.get("files") or []
-    print(f"  Files: {len(file_list)} | {item_url(args.identifier)}")
+    print(f"  Files: {len(file_list)} | {item_url(identifier)} ({status})")
     if args.files:
         for entry in file_list:
             size = entry.get("size") or ""
@@ -574,39 +1001,74 @@ def cmd_get(args: argparse.Namespace) -> int:
 
 def cmd_download(args: argparse.Namespace) -> int:
     identifier = validate_identifier(args.identifier)
-    data = metadata_api(identifier)
+    cache_root = get_cache_root()
+    files_root = cache_root / identifier / "files"
+
+    # Validate requested filenames at the CLI boundary before hitting metadata or disk.
+    validated_names: list[tuple[str, Path]] = []
+    if not args.list_only and args.files:
+        for name in args.files:
+            try:
+                rel, _ = validate_relative_item_path(name, files_root)
+            except ValueError as exc:
+                fail(str(exc), code=2)
+            validated_names.append((name, rel))
+
+    data, _ = metadata_api(
+        identifier, cache_root=cache_root, timeout=args.timeout, refresh=args.refresh
+    )
     file_list = data.get("files") or []
     if args.list_only or not args.files:
         for entry in file_list:
             size = entry.get("size") or ""
             print(f"{entry.get('name')} | {entry.get('format')} | {size} bytes")
         return 0
-    available = {entry.get("name") for entry in file_list}
+
+    by_name = {entry.get("name"): entry for entry in file_list if entry.get("name")}
     out_dir = Path(args.out)
     out_dir.mkdir(parents=True, exist_ok=True)
-    for name in args.files:
-        if name not in available:
+    for name, rel in validated_names:
+        file_entry = by_name.get(name)
+        if file_entry is None:
             fail(f"File not in item {identifier}: {name}")
-        url = f"{BASE}/download/{quote(identifier)}/{quote(name)}"
         try:
-            content = http_get_bytes(url, timeout=60.0)
+            content, _, cached = ensure_downloaded_file(
+                identifier,
+                name,
+                file_list,
+                file_entry,
+                cache_root=cache_root,
+                timeout=args.timeout,
+                refresh=args.refresh,
+            )
+        except ValueError as exc:
+            fail(str(exc), code=2)
         except (RuntimeError, FileNotFoundError) as exc:
             fail(str(exc))
-        dest = out_dir / Path(name).name
+        dest = out_dir / rel.name
         atomic_write_bytes(dest, content)
-        print(f"{dest} ({len(content)} bytes)")
+        status = "cache-hit" if cached else "fetched"
+        print(f"{dest} ({len(content)} bytes, {status})")
     return 0
 
 
 def cmd_fulltext(args: argparse.Namespace) -> int:
-    data = fulltext_api(args.query, args.rows, args.page)
+    ttl_hours = resolve_query_ttl_hours(args.cache_ttl_hours)
+    data, cached = fulltext_api(
+        args.query,
+        args.rows,
+        args.page,
+        ttl_hours=ttl_hours,
+        refresh=args.refresh,
+    )
     if args.as_json:
         print(json.dumps(data, indent=2, ensure_ascii=False))
         return 0
     hits_block = ((data.get("response") or {}).get("body") or {}).get("hits") or {}
     total = hits_block.get("total", 0)
     hits = hits_block.get("hits") or []
-    print(f"{total} full-text matches (showing {len(hits)})")
+    status = "cache-hit" if cached else "fetched"
+    print(f"{total} full-text matches (showing {len(hits)}, {status})")
     for hit in hits:
         fields = hit.get("fields") or {}
         identifier = fields.get("identifier") or ""
@@ -633,7 +1095,13 @@ def cmd_grep(args: argparse.Namespace) -> int:
 
     # Fetch missing items in parallel (max_workers=6, timeout=25).
     def prepare(item_id: str) -> dict:
-        return ensure_item_cache(item_id, need_djvu=True, cache_root=cache_root, timeout=args.timeout)
+        return ensure_item_cache(
+            item_id,
+            need_djvu=True,
+            cache_root=cache_root,
+            timeout=args.timeout,
+            refresh=args.refresh,
+        )
 
     if len(identifiers) == 1:
         try:
@@ -716,6 +1184,7 @@ def cmd_grep(args: argparse.Namespace) -> int:
 def cmd_page(args: argparse.Namespace) -> int:
     t0 = time.perf_counter()
     identifier = validate_identifier(args.identifier)
+    cache_root = get_cache_root()
 
     # Support both legacy positional `<leaf>` and new `--leaf` / `--printed-page`.
     leaf_from_pos = args.leaf_pos
@@ -737,8 +1206,9 @@ def cmd_page(args: argparse.Namespace) -> int:
             cache_entry = ensure_item_cache(
                 identifier,
                 need_djvu=False,
-                cache_root=get_cache_root(),
+                cache_root=cache_root,
                 timeout=args.timeout,
+                refresh=args.refresh,
             )
             index_cached = bool(cache_entry["cached"])
             page_index = json.loads(cache_entry["page_index_path"].read_text(encoding="utf-8"))
@@ -762,7 +1232,15 @@ def cmd_page(args: argparse.Namespace) -> int:
         suffix_tag = f"w{width}"
 
     try:
-        content = http_get_bytes(url, timeout=args.timeout)
+        content, page_cache_path, page_cached = ensure_page_image_cache(
+            identifier,
+            target_leaf,
+            suffix_tag,
+            url,
+            cache_root=cache_root,
+            timeout=args.timeout,
+            refresh=args.refresh,
+        )
     except (RuntimeError, FileNotFoundError) as exc:
         fail(str(exc))
 
@@ -773,7 +1251,9 @@ def cmd_page(args: argparse.Namespace) -> int:
         out_path.mkdir(parents=True, exist_ok=True)
         dest = out_path / f"{identifier}_n{target_leaf}_{suffix_tag}.jpg"
 
-    atomic_write_bytes(dest, content)
+    if dest.resolve() != page_cache_path.resolve():
+        atomic_write_bytes(dest, content)
+
     elapsed_ms = round((time.perf_counter() - t0) * 1000.0, 2)
     payload = {
         "identifier": identifier,
@@ -782,15 +1262,18 @@ def cmd_page(args: argparse.Namespace) -> int:
         "printed_page": resolved_printed,
         "url": url,
         "path": str(dest),
+        "cache_path": str(page_cache_path),
         "bytes": len(content),
         "index_cached": index_cached,
+        "page_cached": page_cached,
         "elapsed_ms": elapsed_ms,
     }
     if args.as_json:
         print(json.dumps(payload, indent=2))
     else:
         extra = f" [p.{resolved_printed} -> n{target_leaf}]" if resolved_printed is not None else f" [n{target_leaf}]"
-        print(f"{dest} ({len(content)} bytes){extra}")
+        status = "cache-hit" if page_cached else "fetched"
+        print(f"{dest} ({len(content)} bytes){extra} ({status})")
     return 0
 
 
@@ -816,6 +1299,8 @@ def build_parser() -> argparse.ArgumentParser:
     p_search.add_argument("--page", type=int, default=1, help="Results page (default: 1).")
     p_search.add_argument("--sort", dest="sorts", action="append", default=[], help="Repeatable, e.g. --sort 'downloads desc'.")
     p_search.add_argument("--field", dest="fields", action="append", default=[], help="Repeatable metadata field.")
+    p_search.add_argument("--cache-ttl-hours", type=float, default=None, help="Query cache TTL in hours (default: 168 or KINLOOM_IA_QUERY_TTL_HOURS).")
+    p_search.add_argument("--refresh", action="store_true", help="Bypass local cache and fetch fresh results.")
     p_search.add_argument("--json", dest="as_json", action="store_true", help="Full JSON output.")
     p_search.set_defaults(func=cmd_search)
 
@@ -823,6 +1308,8 @@ def build_parser() -> argparse.ArgumentParser:
     p_get.add_argument("identifier")
     p_get.add_argument("--json", dest="as_json", action="store_true", help="Full JSON output.")
     p_get.add_argument("--files", action="store_true", help="List the item's files.")
+    p_get.add_argument("--timeout", type=float, default=DEFAULT_TIMEOUT, help="HTTP timeout seconds on cache miss (default: 25).")
+    p_get.add_argument("--refresh", action="store_true", help="Bypass local metadata cache and fetch fresh metadata.")
     p_get.set_defaults(func=cmd_get)
 
     p_dl = sub.add_parser("download", help="Download files of an item, or list them with no FILE given.")
@@ -830,12 +1317,16 @@ def build_parser() -> argparse.ArgumentParser:
     p_dl.add_argument("files", nargs="*")
     p_dl.add_argument("--out", default=".", help="Directory to save files into (default: .).")
     p_dl.add_argument("--list", dest="list_only", action="store_true", help="Only list files, do not download.")
+    p_dl.add_argument("--timeout", type=float, default=DOWNLOAD_TIMEOUT, help="HTTP timeout seconds on cache miss (default: 60).")
+    p_dl.add_argument("--refresh", action="store_true", help="Bypass local cache and re-download metadata and files.")
     p_dl.set_defaults(func=cmd_download)
 
     p_ft = sub.add_parser("fulltext", help="Search OCR full text across digitized books and periodicals.")
     p_ft.add_argument("query")
     p_ft.add_argument("--rows", type=int, default=10, help="Hits per page (default: 10).")
     p_ft.add_argument("--page", type=int, default=1, help="Results page, 1-based (default: 1).")
+    p_ft.add_argument("--cache-ttl-hours", type=float, default=None, help="Query cache TTL in hours (default: 168 or KINLOOM_IA_QUERY_TTL_HOURS).")
+    p_ft.add_argument("--refresh", action="store_true", help="Bypass local cache and fetch fresh results.")
     p_ft.add_argument("--json", dest="as_json", action="store_true", help="Full JSON output.")
     p_ft.set_defaults(func=cmd_fulltext)
 
@@ -846,6 +1337,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_grep.add_argument("--limit", type=int, default=25, help="Maximum hits returned (default: 25).")
     p_grep.add_argument("-i", "--ignore-case", action="store_true", help="Case-insensitive regex matching.")
     p_grep.add_argument("--timeout", type=float, default=DEFAULT_TIMEOUT, help="HTTP timeout seconds on cache miss (default: 25).")
+    p_grep.add_argument("--refresh", action="store_true", help="Bypass local cache and re-fetch metadata, scandata, and OCR text.")
     p_grep.add_argument("--json", dest="as_json", action="store_true", help="Structured JSON output.")
     p_grep.set_defaults(func=cmd_grep)
 
@@ -858,6 +1350,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_page.add_argument("--width", type=int, default=None, help="Rendered JPEG width in pixels (default 2400 when --scale is omitted).")
     p_page.add_argument("--out", default=".", help="Output file path (.jpg) or directory (default: .).")
     p_page.add_argument("--timeout", type=float, default=DEFAULT_TIMEOUT, help="HTTP timeout seconds (default: 25).")
+    p_page.add_argument("--refresh", action="store_true", help="Bypass local cache and re-fetch index and page JPEG.")
     p_page.add_argument("--json", dest="as_json", action="store_true", help="Structured JSON output.")
     p_page.set_defaults(func=cmd_page)
 
