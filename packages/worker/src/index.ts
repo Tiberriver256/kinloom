@@ -6,6 +6,7 @@ import type {
   KinloomSiteConfig,
 } from '@kinloom/core';
 import {
+  applySecurityHeaders,
   createKinloomServer,
   GoogleOAuthProvider,
   SystemClock,
@@ -211,17 +212,23 @@ export function renderPrivacyPolicyHtml(siteConfig: KinloomSiteConfig): string {
 `;
 }
 
-function createPrivacyPolicyResponse(siteConfig: KinloomSiteConfig, headOnly: boolean): Response {
+function createPrivacyPolicyResponse(
+  siteConfig: KinloomSiteConfig,
+  headOnly: boolean,
+  isSecure: boolean
+): Response {
   const html = renderPrivacyPolicyHtml(siteConfig);
-  return new Response(headOnly ? null : html, {
-    status: 200,
-    headers: {
-      'content-type': 'text/html; charset=utf-8',
-      'cache-control': 'public, max-age=3600',
-      'x-content-type-options': 'nosniff',
-      'referrer-policy': 'same-origin',
-    },
-  });
+  return applySecurityHeaders(
+    new Response(headOnly ? null : html, {
+      status: 200,
+      headers: {
+        'content-type': 'text/html; charset=utf-8',
+        'cache-control': 'public, max-age=3600',
+        'referrer-policy': 'same-origin',
+      },
+    }),
+    { isSecure }
+  );
 }
 
 /**
@@ -238,7 +245,11 @@ export function createCloudflareWorker(
         (request.method === 'GET' || request.method === 'HEAD') &&
         (url.pathname === '/privacy' || url.pathname === '/privacy/')
       ) {
-        return createPrivacyPolicyResponse(options.siteConfig, request.method === 'HEAD');
+        return createPrivacyPolicyResponse(
+          options.siteConfig,
+          request.method === 'HEAD',
+          url.protocol === 'https:'
+        );
       }
 
       const clock = options.clock ?? new SystemClock();

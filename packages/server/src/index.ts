@@ -47,6 +47,7 @@ export {
   type GetBundleResult,
 } from './services/bundleReadService.js';
 export {
+  matchesMagicBytesForMime,
   MediaService,
   parseHttpByteRange,
   type MediaServiceDeps,
@@ -87,6 +88,13 @@ export {
   type AuthMethod,
   type ResolvedAuthContext,
 } from './http/authMiddleware.js';
+export {
+  applySecurityHeaders,
+  DEFAULT_CONTENT_SECURITY_POLICY,
+  MEDIA_CONTENT_SECURITY_POLICY,
+  STRICT_TRANSPORT_SECURITY_VALUE,
+  type ApplySecurityHeadersOptions,
+} from './http/securityHeaders.js';
 export {
   buildAuthErrorRedirectUrl,
   createKinloomServer,

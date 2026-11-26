@@ -34,6 +34,7 @@ import {
   requireMinRole,
   resolveCallerPrincipal,
 } from './authMiddleware.js';
+import { applySecurityHeaders } from './securityHeaders.js';
 import {
   getOAuthCookieName,
   getSessionCookieName,
@@ -1342,11 +1343,21 @@ export function createKinloomServer(config: KinloomServerConfig): KinloomServer 
 
   return {
     async fetch(request: Request): Promise<Response> {
+      const url = new URL(request.url);
+      const isSecure = isSecureRequestUrl(url);
+      const isMediaPath =
+        url.pathname.startsWith('/media/') || url.pathname.startsWith('/sources/');
       try {
-        return await handleRequest(request);
+        const response = await handleRequest(request);
+        const isMediaResponse =
+          isMediaPath && (response.status === 200 || response.status === 206);
+        return applySecurityHeaders(response, { isSecure, isMedia: isMediaResponse });
       } catch (error) {
         const mapped = toErrorResponseData(error);
-        return jsonResponse(mapped.body, mapped.status, mapped.headers);
+        return applySecurityHeaders(
+          jsonResponse(mapped.body, mapped.status, mapped.headers),
+          { isSecure, isMedia: false }
+        );
       }
     },
   };
