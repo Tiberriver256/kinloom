@@ -20,7 +20,15 @@ kinloom prep-scan preview ./raw/*.jpg --out-dir ./previews --max-width 1600 --ma
 
 ### 2. Rotate, crop, and redact (`crop`)
 
-Apply optional clockwise rotation (`90`, `180`, `270`), crop to `x0,y0,x1,y1`, draw solid black redaction boxes in cropped coordinates, write the archival output image, and automatically generate a compact verification preview:
+`crop` rotates the scan, draws black rectangles, crops, and writes the archival image. It also writes a compact preview.
+
+`--rotate` is optional. The allowed values are `90`, `180`, and `270`. The turn is clockwise. `crop` rotates the image before it draws boxes and before it crops.
+
+`--box` is optional. The value is `x0,y0,x1,y1` on the rotated image. If you omit `--box`, `crop` keeps the full rotated frame. Use that when you only want to rotate, redact, or do both.
+
+`--redact` draws black boxes on the cropped image. Those coordinates start at the top-left corner of the crop.
+
+`--redact-orig` draws black boxes on the rotated image before the crop. Pass the same numbers that you read from `prep-scan grid` or that you pass to `prep-scan stitch`. You can pass `--redact` and `--redact-orig` in one command. Repeat either flag to draw more than one box.
 
 ```bash
 kinloom prep-scan crop ./raw/certificate.jpg ./media/certificate.jpg \
@@ -29,6 +37,26 @@ kinloom prep-scan crop ./raw/certificate.jpg ./media/certificate.jpg \
   --redact 40,2100,900,2250 \
   --preview-out ./previews/certificate.preview.jpg
 ```
+
+Read a box from the grid and black it out before the crop:
+
+```bash
+kinloom prep-scan crop ./raw/census-1930.jpg ./media/census-1930.jpg \
+  --box 80,140,3200,1800 \
+  --redact-orig 900,1500,1600,1680
+```
+
+Rotate and redact the full scan. Omit `--box`.
+
+```bash
+kinloom prep-scan crop ./raw/certificate.jpg ./media/certificate.jpg \
+  --rotate 90 \
+  --redact-orig 40,80,900,400
+```
+
+`--json` prints `source`, `rotate`, `box`, `redactions`, `redactions_orig`, `output`, and `preview`. `redactions` lists boxes on the cropped image. `redactions_orig` lists boxes drawn on the rotated image before the crop. Both lists use the clamped coordinates. A missing flag produces an empty list.
+
+If a `--redact` box starts outside the cropped image, `crop` exits `2`. The error tells you to pass those numbers to `--redact-orig` when you copied them from `prep-scan grid`.
 
 ### 3. Census header or street contact strip (`sheet-strip`)
 
@@ -136,7 +164,7 @@ Stdout is JSON: `width`, `height`, `bytes`, `count`, `direction`, `out`, and `pr
 - `grid`, `stitch`, and `crop` take the output path positionally (`<in> <out.jpg>`) or as `--out <out.jpg>` (aliases `-o`, `--output`). Giving both with different paths exits 2.
 - `join` takes only `--out <file>` (aliases `-o`, `--output`). The image paths stay positional.
 - `preview` and `pdf-pages` take `--out-dir <dir>`; `--out`, `-o`, `--output-dir`, and `--output` are aliases.
-- `--box` and `--redact` accept `x0,y0,x1,y1`, `"x0, y0, x1, y1"`, `"x0 y0 x1 y1"`, and shell-split `--box 10, 20, 30, 40`.
+- `--box`, `--redact`, and `--redact-orig` accept `x0,y0,x1,y1`, `"x0, y0, x1, y1"`, `"x0 y0 x1 y1"`, and shell-split tokens such as `--box 10, 20, 30, 40`.
 - `crop` accepts `--quality 1..100` for the archival output (default `92`).
 
 ## Environment variables

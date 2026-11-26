@@ -1104,6 +1104,242 @@ describe('bundled Python utilities and live script execution', () => {
     expect(fs.readdirSync(previewDir).length).toBe(1);
   });
 
+  it('prep-scan crop blacks out --redact-orig in pre-crop pixels, allows a missing --box, and names --redact-orig on an out-of-bounds --redact', async () => {
+    const prepScript = path.join(ASSETS_ROOT, 'prep-scan.py');
+    let pyCmd: string | null = null;
+    let pyPrefix: string[] = [];
+    let prepPrefix: string[] = [];
+    try {
+      execFileSync('python3', ['-c', 'import PIL'], { stdio: 'ignore' });
+      pyCmd = 'python3';
+      pyPrefix = [];
+      prepPrefix = [prepScript];
+    } catch {
+      try {
+        execFileSync('uv', ['run', '--with', 'pillow', 'python3', '-c', 'import PIL'], {
+          stdio: 'ignore',
+        });
+        pyCmd = 'uv';
+        pyPrefix = ['run', '--with', 'pillow', 'python3'];
+        prepPrefix = ['run', '--script', prepScript];
+      } catch {
+        pyCmd = null;
+      }
+    }
+    if (!pyCmd) {
+      return;
+    }
+    const python = pyCmd;
+
+    const cropHelp = execFileSync(python, [...prepPrefix, 'crop', '--help'], { encoding: 'utf8' });
+    expect(cropHelp).toContain('--redact-orig');
+    expect(cropHelp).toContain('[--box BOX]');
+    expect(cropHelp.replace(/\s+/g, ' ')).toContain('Omit --box to keep the full rotated frame.');
+
+    const env = { ...process.env, KINLOOM_TELEMETRY_PARENT: '1' };
+    const tmp = await makeTempDir('kinloom-prep-crop-redact-');
+    const srcImg = path.join(tmp, 'sheet.png');
+    execFileSync(pyCmd, [
+      ...pyPrefix,
+      '-c',
+      [
+        'from PIL import Image',
+        'import sys',
+        'im = Image.new("RGB", (80, 60), (200, 180, 160))',
+        'im.save(sys.argv[1])',
+      ].join('\n'),
+      srcImg,
+    ]);
+
+    const readPixels = (file: string, points: string): { size: number[]; px: number[][] } => {
+      const raw = execFileSync(
+        pyCmd,
+        [
+          ...pyPrefix,
+          '-c',
+          [
+            'from PIL import Image',
+            'import json, sys',
+            'im = Image.open(sys.argv[1])',
+            'pts = json.loads(sys.argv[2])',
+            'print(json.dumps({"size": list(im.size), "px": [list(im.getpixel(tuple(p))) for p in pts]}))',
+          ].join('\n'),
+          file,
+          points,
+        ],
+        { encoding: 'utf8' }
+      );
+      const parsed: unknown = JSON.parse(raw);
+      if (
+        typeof parsed !== 'object' ||
+        parsed === null ||
+        !('size' in parsed) ||
+        !('px' in parsed)
+      ) {
+        throw new Error(`pixel probe returned ${raw}`);
+      }
+      return parsed as { size: number[]; px: number[][] };
+    };
+
+    const cream = [200, 180, 160];
+    const black = [0, 0, 0];
+
+    const origOut = path.join(tmp, 'orig.png');
+    const origMeta = JSON.parse(
+      execFileSync(
+        pyCmd,
+        [
+          ...prepPrefix,
+          'crop',
+          srcImg,
+          origOut,
+          '--box',
+          '10,20,50,50',
+          '--redact-orig',
+          '8,',
+          '22,',
+          '18,',
+          '28',
+          '--redact',
+          '20,10,24,14',
+          '--json',
+          '--preview-out',
+          path.join(tmp, 'orig.preview.jpg'),
+        ],
+        { encoding: 'utf8', env }
+      )
+    ) as {
+      box: number[];
+      redactions: number[][];
+      redactions_orig: number[][];
+      output: { width: number; height: number };
+    };
+    expect(origMeta.box).toEqual([10, 20, 50, 50]);
+    expect(origMeta.output).toMatchObject({ width: 40, height: 30 });
+    expect(origMeta.redactions_orig).toEqual([[8, 22, 18, 28]]);
+    expect(origMeta.redactions).toEqual([[20, 10, 24, 14]]);
+    const origPx = readPixels(origOut, '[[0,4],[9,4],[0,0],[20,10],[24,14],[25,10]]');
+    expect(origPx.size).toEqual([40, 30]);
+    expect(origPx.px[0]).toEqual(black);
+    expect(origPx.px[1]).toEqual(cream);
+    expect(origPx.px[2]).toEqual(cream);
+    expect(origPx.px[3]).toEqual(black);
+    expect(origPx.px[4]).toEqual(black);
+    expect(origPx.px[5]).toEqual(cream);
+
+    const legacyOut = path.join(tmp, 'legacy.png');
+    const legacyMeta = JSON.parse(
+      execFileSync(
+        pyCmd,
+        [
+          ...prepPrefix,
+          'crop',
+          srcImg,
+          legacyOut,
+          '--box',
+          '10,20,50,50',
+          '--redact',
+          '5,5,12,12',
+          '--json',
+          '--preview-out',
+          path.join(tmp, 'legacy.preview.jpg'),
+        ],
+        { encoding: 'utf8', env }
+      )
+    ) as { redactions: number[][]; redactions_orig: number[][] };
+    expect(legacyMeta.redactions).toEqual([[5, 5, 12, 12]]);
+    expect(legacyMeta.redactions_orig).toEqual([]);
+    const legacyPx = readPixels(legacyOut, '[[5,5],[12,12],[13,5],[4,5]]');
+    expect(legacyPx.px).toEqual([black, black, cream, cream]);
+
+    const turned = path.join(tmp, 'turned.png');
+    execFileSync(pyCmd, [
+      ...pyPrefix,
+      '-c',
+      [
+        'from PIL import Image',
+        'import sys',
+        'Image.new("RGB", (40, 20), (200, 180, 160)).save(sys.argv[1])',
+      ].join('\n'),
+      turned,
+    ]);
+    const rotOut = path.join(tmp, 'rotated.png');
+    const rotMeta = JSON.parse(
+      execFileSync(
+        pyCmd,
+        [
+          ...prepPrefix,
+          'crop',
+          turned,
+          rotOut,
+          '--rotate',
+          '90',
+          '--redact-orig',
+          '2,4,6,8',
+          '--json',
+          '--preview-out',
+          path.join(tmp, 'rotated.preview.jpg'),
+        ],
+        { encoding: 'utf8', env }
+      )
+    ) as { box: number[]; rotate: number; redactions: number[][]; redactions_orig: number[][] };
+    expect(rotMeta.rotate).toBe(90);
+    expect(rotMeta.box).toEqual([0, 0, 20, 40]);
+    expect(rotMeta.redactions).toEqual([]);
+    expect(rotMeta.redactions_orig).toEqual([[2, 4, 6, 8]]);
+    const rotPx = readPixels(rotOut, '[[2,4],[6,8],[1,4],[7,4],[2,3],[2,9]]');
+    expect(rotPx.size).toEqual([20, 40]);
+    expect(rotPx.px).toEqual([black, black, cream, cream, cream, cream]);
+
+    const redactOnly = path.join(tmp, 'redact-only.png');
+    const redactOnlyMeta = JSON.parse(
+      execFileSync(
+        pyCmd,
+        [
+          ...prepPrefix,
+          'crop',
+          turned,
+          redactOnly,
+          '--rotate',
+          '90',
+          '--redact',
+          '2 4 6 8',
+          '--json',
+          '--preview-out',
+          path.join(tmp, 'redact-only.preview.jpg'),
+        ],
+        { encoding: 'utf8', env }
+      )
+    ) as { box: number[]; redactions: number[][]; redactions_orig: number[][] };
+    expect(redactOnlyMeta.box).toEqual([0, 0, 20, 40]);
+    expect(redactOnlyMeta.redactions).toEqual([[2, 4, 6, 8]]);
+    expect(redactOnlyMeta.redactions_orig).toEqual([]);
+    const redactOnlyPx = readPixels(redactOnly, '[[2,4],[6,8],[1,4]]');
+    expect(redactOnlyPx.px).toEqual([black, black, cream]);
+
+    const oob = spawnSync(
+      pyCmd,
+      [
+        ...prepPrefix,
+        'crop',
+        srcImg,
+        path.join(tmp, 'oob.png'),
+        '--box',
+        '0,0,30,40',
+        '--redact',
+        '40,5,50,15',
+        '--preview-out',
+        path.join(tmp, 'oob.preview.jpg'),
+      ],
+      { encoding: 'utf8', env }
+    );
+    expect(oob.status).toBe(2);
+    expect(oob.stderr).toContain('--redact #1 (40,5,50,15) starts outside 30x40 image.');
+    expect(oob.stderr).toContain('--redact-orig');
+    expect(oob.stderr).toContain('prep-scan grid');
+    expect(fs.existsSync(path.join(tmp, 'oob.png'))).toBe(false);
+  });
+
   it('runs prep-scan info and prep-scan join on synthetic images when Pillow is available', async () => {
     const prepScript = path.join(ASSETS_ROOT, 'prep-scan.py');
     let pyCmd: string | null = null;

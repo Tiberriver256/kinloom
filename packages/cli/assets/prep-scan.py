@@ -216,16 +216,40 @@ def coalesce_ranges(pages: list[int]) -> list[tuple[int, int]]:
     return ranges
 
 
-def clamp_box(box: Box, width: int, height: int, label: str) -> Box:
+def clamp_box(
+    box: Box, width: int, height: int, label: str, outside_hint: str = ""
+) -> Box:
     if box.x0 >= width or box.y0 >= height:
+        extra = f" {outside_hint}" if outside_hint else ""
         raise ValueError(
-            f"{label} ({box.x0},{box.y0},{box.x1},{box.y1}) starts outside {width}x{height} image."
+            f"{label} ({box.x0},{box.y0},{box.x1},{box.y1}) starts outside {width}x{height} image.{extra}"
         )
     x1 = min(box.x1, width)
     y1 = min(box.y1, height)
     if x1 <= box.x0 or y1 <= box.y0:
         raise ValueError(f"{label} collapses to empty area inside {width}x{height} image.")
     return Box(box.x0, box.y0, x1, y1)
+
+
+def paint_black_boxes(
+    image: Any,
+    boxes: list[Box],
+    label: str,
+    outside_hint: str = "",
+) -> list[list[int]]:
+    """Fill each box with black. Coordinates are pixels of `image`, inclusive of both corners."""
+    painted: list[list[int]] = []
+    if not boxes:
+        return painted
+    _, ImageDraw, _, _ = require_pillow()
+    draw = ImageDraw.Draw(image)
+    for idx, rbox in enumerate(boxes, 1):
+        clamped = clamp_box(
+            rbox, image.width, image.height, f"{label} #{idx}", outside_hint=outside_hint
+        )
+        draw.rectangle((clamped.x0, clamped.y0, clamped.x1, clamped.y1), fill=(0, 0, 0))
+        painted.append([clamped.x0, clamped.y0, clamped.x1, clamped.y1])
+    return painted
 
 
 def to_rgb(im: PILImageModule.Image) -> PILImageModule.Image:
@@ -484,7 +508,7 @@ def cmd_preview(args: argparse.Namespace) -> tuple[int, int]:
 def cmd_crop(args: argparse.Namespace) -> tuple[int, int]:
     if not 1 <= args.quality <= 100:
         raise ValueError(f"--quality must be between 1 and 100, got {args.quality}.")
-    Image, ImageDraw, _, _ = require_pillow()
+    Image, _, _, _ = require_pillow()
     src = Path(args.input).resolve()
     out_path = Path(args.output).resolve()
     if not src.is_file():
@@ -494,16 +518,21 @@ def cmd_crop(args: argparse.Namespace) -> tuple[int, int]:
     with Image.open(src) as raw_im:
         img = rotate_clockwise(to_rgb(raw_im), args.rotate)
 
-    crop_box = clamp_box(args.box, img.width, img.height, "crop --box")
+    redactions_orig = paint_black_boxes(img, list(args.redact_orig), "--redact-orig")
+
+    requested = args.box if args.box is not None else Box(0, 0, img.width, img.height)
+    crop_box = clamp_box(requested, img.width, img.height, "crop --box")
     cropped = img.crop((crop_box.x0, crop_box.y0, crop_box.x1, crop_box.y1))
 
-    redactions: list[list[int]] = []
-    if args.redact:
-        draw = ImageDraw.Draw(cropped)
-        for idx, rbox in enumerate(args.redact, 1):
-            clamped = clamp_box(rbox, cropped.width, cropped.height, f"--redact #{idx}")
-            draw.rectangle((clamped.x0, clamped.y0, clamped.x1, clamped.y1), fill=(0, 0, 0))
-            redactions.append([clamped.x0, clamped.y0, clamped.x1, clamped.y1])
+    redactions = paint_black_boxes(
+        cropped,
+        list(args.redact),
+        "--redact",
+        outside_hint=(
+            "If you read the box from prep-scan grid, pass the same numbers to --redact-orig. "
+            "--redact uses coordinates on the cropped image."
+        ),
+    )
 
     saved = save_archival_image(cropped, out_path, quality=args.quality)
 
@@ -524,6 +553,7 @@ def cmd_crop(args: argparse.Namespace) -> tuple[int, int]:
         "rotate": args.rotate or 0,
         "box": [crop_box.x0, crop_box.y0, crop_box.x1, crop_box.y1],
         "redactions": redactions,
+        "redactions_orig": redactions_orig,
         "output": saved.to_dict(),
         "preview": preview.to_dict(),
     }
@@ -1306,7 +1336,10 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_crop = sub.add_parser(
         "crop",
-        help="Rotate, crop, apply solid black redaction boxes (in cropped coordinates), and auto-write a verification preview.",
+        help=(
+            "Rotate, optionally crop, draw black redaction boxes, and write a verification preview. "
+            "--redact-orig uses rotated-image coordinates. --redact uses cropped-image coordinates."
+        ),
     )
     p_crop.add_argument("input", help="Source scan path.")
     p_crop.add_argument("output", nargs="?", default=None,
@@ -1316,7 +1349,13 @@ def build_parser() -> argparse.ArgumentParser:
     p_crop.add_argument("--quality", type=int, default=92,
                         help="Archival output JPEG/WEBP quality 1..100 (default: 92).")
     p_crop.add_argument(
-        "--box", required=True, type=parse_box, help="Crop box x0,y0,x1,y1 after optional --rotate."
+        "--box",
+        type=parse_box,
+        default=None,
+        help=(
+            "Crop box x0,y0,x1,y1 on the rotated image. "
+            "Omit --box to keep the full rotated frame."
+        ),
     )
     p_crop.add_argument(
         "--rotate",
@@ -1332,6 +1371,18 @@ def build_parser() -> argparse.ArgumentParser:
         type=parse_box,
         default=[],
         help="One or more x0,y0,x1,y1 black redaction boxes in cropped-image coordinates.",
+    )
+    p_crop.add_argument(
+        "--redact-orig",
+        action="extend",
+        nargs="+",
+        type=parse_box,
+        default=[],
+        help=(
+            "One or more x0,y0,x1,y1 black boxes in rotated-image coordinates "
+            "(the same coordinates as prep-scan grid and prep-scan stitch). "
+            "Drawn before the crop. Repeatable."
+        ),
     )
     p_crop.add_argument(
         "--preview-out",
