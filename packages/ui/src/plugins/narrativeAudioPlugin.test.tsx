@@ -102,6 +102,21 @@ const { bundle: testBundle }: { bundle: ArchiveBundle } = compileArchive({
   narratives: [narratedBio, plainBio],
 });
 
+async function waitForCondition(
+  predicate: () => boolean,
+  timeoutMs = 3000,
+): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (predicate()) {
+      return;
+    }
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 15));
+    });
+  }
+}
+
 describe('createNarrativeAudioPlugin (Idea 1 + Idea 4)', () => {
   it('validates narrative_audio metadata cleanly', () => {
     expect(readNarrativeAudioMeta(narratedBio)).toEqual({
@@ -130,8 +145,11 @@ describe('createNarrativeAudioPlugin (Idea 1 + Idea 4)', () => {
           initialEntries={['/person/thomas-mercer']}
         />,
       );
-      await new Promise((r) => setTimeout(r, 40));
     });
+
+    await waitForCondition(
+      () => container.querySelector('[data-testid="narrative-audio-margin-bar"]') !== null,
+    );
 
     // Inline Archival Margin Bar renders inside the biography entry
     const marginBar = container.querySelector('[data-testid="narrative-audio-margin-bar"]');
@@ -179,8 +197,12 @@ describe('createNarrativeAudioPlugin (Idea 1 + Idea 4)', () => {
     expect(placesLink).not.toBeNull();
     await act(async () => {
       placesLink?.click();
-      await new Promise((r) => setTimeout(r, 40));
     });
+    await waitForCondition(
+      () =>
+        container.querySelector('[data-testid="narrative-audio-margin-bar"]') === null &&
+        container.querySelector('.archive-loading-shell') === null,
+    );
     expect(container.querySelector('[data-testid="narrative-audio-margin-bar"]')).toBeNull();
     expect(container.querySelector('[data-testid="narrative-audio-dock"]')).not.toBeNull();
 
@@ -213,9 +235,15 @@ describe('createNarrativeAudioPlugin (Idea 1 + Idea 4)', () => {
           initialEntries={['/person/hannah-mercer']}
         />,
       );
-      await new Promise((r) => setTimeout(r, 40));
     });
 
+    await waitForCondition(
+      () =>
+        container.querySelector('.archive-loading-shell') === null &&
+        (container.textContent?.includes('Hannah Caldwell Mercer') ?? false),
+    );
+
+    expect(container.textContent).toContain('Hannah Caldwell Mercer');
     expect(container.querySelector('[data-testid="narrative-audio-margin-bar"]')).toBeNull();
 
     act(() => {
