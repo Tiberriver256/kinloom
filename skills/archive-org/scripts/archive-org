@@ -30,6 +30,8 @@ SEARCH_TIMEOUT = 45.0
 DOWNLOAD_TIMEOUT = 60.0
 DEFAULT_QUERY_TTL_HOURS = 168.0
 MAX_WORKERS = 6
+PAGE_BATCH_LIMIT = 25
+PAGE_BATCH_WORKERS = 4
 RETRYABLE_HTTP_CODES = frozenset({429, 502, 503, 504})
 MAX_HTTP_RETRIES = 2
 MAX_RETRY_AFTER_SECONDS = 5.0
@@ -820,7 +822,9 @@ def ensure_page_image_cache(
     if not refresh and page_cache_path.is_file() and page_cache_path.stat().st_size > 0:
         return page_cache_path.read_bytes(), page_cache_path, True
 
-    with file_lock(item_dir / ".lock"):
+    # One lock per JPEG so different leaves download together. The same leaf still waits.
+    page_lock = page_cache_path.with_name(f".{page_cache_path.name}.lock")
+    with file_lock(page_lock):
         if not refresh and page_cache_path.is_file() and page_cache_path.stat().st_size > 0:
             return page_cache_path.read_bytes(), page_cache_path, True
         content = http_get_bytes(url, timeout=timeout)
@@ -1372,27 +1376,161 @@ def cmd_grep(args: argparse.Namespace) -> int:
     return 0
 
 
+def parse_leaf_spec(spec: str) -> list[int]:
+    """Parse `--leaves` integers and inclusive ranges such as `120-123,130`."""
+    leaves: list[int] = []
+    parts = [part.strip() for part in spec.split(",")]
+    if not spec.strip() or not parts or any(not part for part in parts):
+        fail("Invalid --leaves value. Use integers or inclusive ranges like 120-123,130.", code=2)
+    for part in parts:
+        range_match = re.fullmatch(r"(\d+)-(\d+)", part)
+        if range_match:
+            start = int(range_match.group(1))
+            end = int(range_match.group(2))
+            if end < start:
+                fail(f"Invalid --leaves range {part!r}: {end} precedes {start}.", code=2)
+            span = end - start + 1
+        elif re.fullmatch(r"\d+", part):
+            start = end = int(part)
+            span = 1
+        else:
+            fail(f"Invalid --leaves token {part!r}. Use integers or inclusive ranges like 120-123,130.", code=2)
+        if len(leaves) + span > PAGE_BATCH_LIMIT:
+            fail(
+                f"--leaves asks for more than {PAGE_BATCH_LIMIT} pages. "
+                f"Split the request into batches of {PAGE_BATCH_LIMIT} or fewer.",
+                code=2,
+            )
+        leaves.extend(range(start, end + 1))
+    return leaves
+
+
+def parse_printed_page_spec(spec: str) -> list[str]:
+    """Parse `--printed-pages` labels and inclusive integer ranges such as `670-674,707`."""
+    labels: list[str] = []
+    parts = [part.strip() for part in spec.split(",")]
+    if not spec.strip() or not parts or any(not part for part in parts):
+        fail(
+            "Invalid --printed-pages value. Use printed labels or inclusive integer ranges like 670-674,707.",
+            code=2,
+        )
+    for part in parts:
+        range_match = re.fullmatch(r"(\d+)-(\d+)", part)
+        if range_match:
+            start = int(range_match.group(1))
+            end = int(range_match.group(2))
+            if end < start:
+                fail(f"Invalid --printed-pages range {part!r}: {end} precedes {start}.", code=2)
+            chunk = [str(number) for number in range(start, end + 1)]
+        else:
+            chunk = [part]
+        if len(labels) + len(chunk) > PAGE_BATCH_LIMIT:
+            fail(
+                f"--printed-pages asks for more than {PAGE_BATCH_LIMIT} pages. "
+                f"Split the request into batches of {PAGE_BATCH_LIMIT} or fewer.",
+                code=2,
+            )
+        labels.extend(chunk)
+    return labels
+
+
+def _page_suffix_and_url(identifier: str, leaf: int, scale: int | None, width: int | None) -> tuple[str, str]:
+    if scale is not None:
+        return f"s{scale}", page_image_url(identifier, leaf, scale=scale)
+    chosen_width = width if width is not None else 2400
+    return f"w{chosen_width}", page_image_url(identifier, leaf, width=chosen_width)
+
+
+def _fetch_page_jobs(
+    identifier: str,
+    jobs: list[dict],
+    *,
+    cache_root: Path,
+    timeout: float,
+    refresh: bool,
+) -> list[tuple[bytes, Path, bool]]:
+    def fetch_one(job: dict) -> tuple[bytes, Path, bool]:
+        return ensure_page_image_cache(
+            identifier,
+            job["leaf"],
+            job["suffix"],
+            job["url"],
+            cache_root=cache_root,
+            timeout=timeout,
+            refresh=refresh,
+        )
+
+    if len(jobs) <= 1:
+        return [fetch_one(job) for job in jobs]
+    from concurrent.futures import ThreadPoolExecutor
+
+    workers = min(PAGE_BATCH_WORKERS, len(jobs))
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        futures = [pool.submit(fetch_one, job) for job in jobs]
+        return [future.result() for future in futures]
+
+
 def cmd_page(args: argparse.Namespace) -> int:
     t0 = time.perf_counter()
     identifier = validate_identifier(args.identifier)
     cache_root = get_cache_root()
 
-    # Support both legacy positional `<leaf>` and new `--leaf` / `--printed-page`.
     leaf_from_pos = args.leaf_pos
     leaf_from_flag = args.leaf
     printed_page = args.printed_page
+    leaves_spec = args.leaves
+    printed_pages_spec = args.printed_pages
 
     if printed_page is not None and (leaf_from_pos is not None or leaf_from_flag is not None):
         fail("Pass either --printed-page or --leaf (not both).", code=2)
     if leaf_from_pos is not None and leaf_from_flag is not None:
         fail("Pass either positional <leaf> or --leaf (not both).", code=2)
+    if leaves_spec is not None and printed_pages_spec is not None:
+        fail("Pass either --leaves or --printed-pages, not both.", code=2)
+    single_names: list[str] = []
+    if leaf_from_pos is not None:
+        single_names.append("positional <leaf>")
+    if leaf_from_flag is not None:
+        single_names.append("--leaf")
+    if printed_page is not None:
+        single_names.append("--printed-page")
+    if leaves_spec is not None and single_names:
+        fail(f"Pass either --leaves or {' or '.join(single_names)}, not both.", code=2)
+    if printed_pages_spec is not None and single_names:
+        fail(f"Pass either --printed-pages or {' or '.join(single_names)}, not both.", code=2)
 
-    target_leaf: int | None = leaf_from_flag if leaf_from_flag is not None else leaf_from_pos
-    scandata_leaf: int | None = None
-    resolved_printed: str | None = printed_page
+    jobs: list[dict] = []
     index_cached: bool | None = None
 
-    if printed_page is not None:
+    if printed_pages_spec is not None:
+        labels = parse_printed_page_spec(printed_pages_spec)
+        try:
+            cache_entry = ensure_item_cache(
+                identifier,
+                need_djvu=False,
+                cache_root=cache_root,
+                timeout=args.timeout,
+                refresh=args.refresh,
+            )
+            index_cached = bool(cache_entry["cached"])
+            page_index = json.loads(cache_entry["page_index_path"].read_text(encoding="utf-8"))
+            for label in labels:
+                leaf, _scandata = resolve_printed_page_to_leaf(page_index, label)
+                validate_leaf_in_index(page_index, leaf)
+                info = describe_leaf(page_index, leaf)
+                jobs.append(
+                    {
+                        "leaf": leaf,
+                        "scandata_leaf": info["scandata_leaf"],
+                        "printed_page": info["printed_page"],
+                    }
+                )
+        except Exception as exc:
+            fail(str(exc))
+    elif leaves_spec is not None:
+        for leaf in parse_leaf_spec(leaves_spec):
+            jobs.append({"leaf": leaf, "scandata_leaf": None, "printed_page": None})
+    elif printed_page is not None:
         try:
             cache_entry = ensure_item_cache(
                 identifier,
@@ -1406,28 +1544,37 @@ def cmd_page(args: argparse.Namespace) -> int:
             target_leaf, scandata_leaf = resolve_printed_page_to_leaf(page_index, printed_page)
         except Exception as exc:
             fail(str(exc))
-    elif target_leaf is None:
-        fail("Specify a target page with --printed-page <str>, --leaf <int>, or positional <leaf>.", code=2)
-
-    assert target_leaf is not None
-    if target_leaf < 0:
-        fail(f"Leaf index must be >= 0, got {target_leaf}.", code=2)
-
-    # Determine URL: explicit --scale uses _s<scale>.jpg; otherwise --width uses _w<width>.jpg.
-    if args.scale is not None:
-        url = page_image_url(identifier, target_leaf, scale=args.scale)
-        suffix_tag = f"s{args.scale}"
+        jobs.append(
+            {"leaf": target_leaf, "scandata_leaf": scandata_leaf, "printed_page": printed_page}
+        )
     else:
-        width = args.width if args.width is not None else 2400
-        url = page_image_url(identifier, target_leaf, width=width)
-        suffix_tag = f"w{width}"
+        target_leaf = leaf_from_flag if leaf_from_flag is not None else leaf_from_pos
+        if target_leaf is None:
+            fail(
+                "Specify a target page with --printed-page <str>, --leaf <int>, positional <leaf>, "
+                "--leaves, or --printed-pages.",
+                code=2,
+            )
+        if target_leaf < 0:
+            fail(f"Leaf index must be >= 0, got {target_leaf}.", code=2)
+        jobs.append({"leaf": target_leaf, "scandata_leaf": None, "printed_page": None})
+
+    for job in jobs:
+        suffix, url = _page_suffix_and_url(identifier, int(job["leaf"]), args.scale, args.width)
+        job["suffix"] = suffix
+        job["url"] = url
+
+    out_path = Path(args.out)
+    if len(jobs) > 1 and out_path.suffix.lower() in IMAGE_EXTS and not out_path.is_dir():
+        fail(
+            f"--out {args.out} is a single image file. Pass a directory when fetching {len(jobs)} pages.",
+            code=2,
+        )
 
     try:
-        content, page_cache_path, page_cached = ensure_page_image_cache(
+        fetched = _fetch_page_jobs(
             identifier,
-            target_leaf,
-            suffix_tag,
-            url,
+            jobs,
             cache_root=cache_root,
             timeout=args.timeout,
             refresh=args.refresh,
@@ -1435,37 +1582,102 @@ def cmd_page(args: argparse.Namespace) -> int:
     except (RuntimeError, FileNotFoundError) as exc:
         fail(str(exc))
 
-    out_path = Path(args.out)
-    if out_path.suffix.lower() in IMAGE_EXTS and not out_path.is_dir():
-        dest = out_path
+    written: list[dict] = []
+    if len(jobs) == 1:
+        job = jobs[0]
+        content, page_cache_path, page_cached = fetched[0]
+        if out_path.suffix.lower() in IMAGE_EXTS and not out_path.is_dir():
+            dest = out_path
+        else:
+            out_path.mkdir(parents=True, exist_ok=True)
+            dest = out_path / f"{identifier}_n{job['leaf']}_{job['suffix']}.jpg"
+        if dest.resolve() != page_cache_path.resolve():
+            atomic_write_bytes(dest, content)
+        written.append(
+            {
+                "leaf": job["leaf"],
+                "scandata_leaf": job["scandata_leaf"],
+                "printed_page": job["printed_page"],
+                "url": job["url"],
+                "path": str(dest),
+                "cache_path": str(page_cache_path),
+                "bytes": len(content),
+                "page_cached": page_cached,
+            }
+        )
     else:
         out_path.mkdir(parents=True, exist_ok=True)
-        dest = out_path / f"{identifier}_n{target_leaf}_{suffix_tag}.jpg"
+        for job, (content, page_cache_path, page_cached) in zip(jobs, fetched, strict=True):
+            dest = out_path / f"{identifier}_n{job['leaf']}_{job['suffix']}.jpg"
+            if dest.resolve() != page_cache_path.resolve():
+                atomic_write_bytes(dest, content)
+            written.append(
+                {
+                    "leaf": job["leaf"],
+                    "scandata_leaf": job["scandata_leaf"],
+                    "printed_page": job["printed_page"],
+                    "url": job["url"],
+                    "path": str(dest),
+                    "cache_path": str(page_cache_path),
+                    "bytes": len(content),
+                    "page_cached": page_cached,
+                }
+            )
 
-    if dest.resolve() != page_cache_path.resolve():
-        atomic_write_bytes(dest, content)
+    if len(written) == 1:
+        row = written[0]
+        elapsed_ms = round((time.perf_counter() - t0) * 1000.0, 2)
+        payload = {
+            "identifier": identifier,
+            "leaf": row["leaf"],
+            "scandata_leaf": row["scandata_leaf"],
+            "printed_page": row["printed_page"],
+            "url": row["url"],
+            "path": row["path"],
+            "cache_path": row["cache_path"],
+            "bytes": row["bytes"],
+            "index_cached": index_cached,
+            "page_cached": row["page_cached"],
+            "elapsed_ms": elapsed_ms,
+        }
+        page_hit = row["page_cached"] if index_cached is None else bool(row["page_cached"] and index_cached)
+        if args.as_json:
+            print(json.dumps(json_with_cache_hit(payload, page_hit), indent=2))
+        else:
+            extra = (
+                f" [p.{row['printed_page']} -> n{row['leaf']}]"
+                if row["printed_page"] is not None
+                else f" [n{row['leaf']}]"
+            )
+            status = "cache-hit" if row["page_cached"] else "fetched"
+            print(f"{row['path']} ({row['bytes']} bytes){extra} ({status})")
+        return 0
 
-    elapsed_ms = round((time.perf_counter() - t0) * 1000.0, 2)
-    payload = {
-        "identifier": identifier,
-        "leaf": target_leaf,
-        "scandata_leaf": scandata_leaf,
-        "printed_page": resolved_printed,
-        "url": url,
-        "path": str(dest),
-        "cache_path": str(page_cache_path),
-        "bytes": len(content),
-        "index_cached": index_cached,
-        "page_cached": page_cached,
-        "elapsed_ms": elapsed_ms,
-    }
-    page_hit = page_cached if index_cached is None else bool(page_cached and index_cached)
+    cache_hit = all(row["page_cached"] for row in written) and index_cached is not False
+    pages_payload = [
+        {
+            "leaf": row["leaf"],
+            "scandata_leaf": row["scandata_leaf"],
+            "printed_page": row["printed_page"],
+            "url": row["url"],
+            "path": row["path"],
+            "bytes": row["bytes"],
+            "page_cached": row["page_cached"],
+        }
+        for row in written
+    ]
+    payload = {"identifier": identifier, "count": len(pages_payload), "pages": pages_payload}
     if args.as_json:
-        print(json.dumps(json_with_cache_hit(payload, page_hit), indent=2))
+        print(json.dumps(json_with_cache_hit(payload, cache_hit), indent=2))
     else:
-        extra = f" [p.{resolved_printed} -> n{target_leaf}]" if resolved_printed is not None else f" [n{target_leaf}]"
-        status = "cache-hit" if page_cached else "fetched"
-        print(f"{dest} ({len(content)} bytes){extra} ({status})")
+        for row in written:
+            extra = (
+                f" [p.{row['printed_page']} -> n{row['leaf']}]"
+                if row["printed_page"] is not None
+                else f" [n{row['leaf']}]"
+            )
+            status = "cache-hit" if row["page_cached"] else "fetched"
+            print(f"{row['path']} ({row['bytes']} bytes){extra} ({status})")
     return 0
 
 
@@ -1533,11 +1745,13 @@ def build_parser() -> argparse.ArgumentParser:
     p_grep.add_argument("--json", dest="as_json", action="store_true", help="Structured JSON output.")
     p_grep.set_defaults(func=cmd_grep)
 
-    p_page = sub.add_parser("page", help="Download one rendered page JPEG by printed page number or BookReader leaf.")
+    p_page = sub.add_parser("page", help="Download one or more rendered page JPEGs by printed page number or BookReader leaf.")
     p_page.add_argument("identifier")
     p_page.add_argument("leaf_pos", nargs="?", type=int, default=None, help="Legacy positional BookReader leaf index.")
     p_page.add_argument("--printed-page", default=None, help="Printed page label resolved via cached page_index.json.")
+    p_page.add_argument("--printed-pages", default=None, help="Comma-separated printed labels and inclusive integer ranges, e.g. 674,707 or 670-674 (max 25).")
     p_page.add_argument("--leaf", type=int, default=None, help="BookReader leaf index (n<LEAF>).")
+    p_page.add_argument("--leaves", default=None, help="Comma-separated BookReader leaves and inclusive ranges, e.g. 120-123,130 (max 25).")
     p_page.add_argument("--scale", type=int, default=None, help="BookReader scale factor (e.g. 1=full, 2=half, 4=quarter).")
     p_page.add_argument("--width", type=int, default=None, help="Rendered JPEG width in pixels (default 2400 when --scale is omitted).")
     p_page.add_argument("--out", default=".", help="Output file path (.jpg) or directory (default: .).")

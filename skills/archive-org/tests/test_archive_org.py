@@ -9,6 +9,7 @@ import io
 import json
 import os
 from pathlib import Path
+import re
 import tempfile
 import threading
 import time
@@ -348,6 +349,179 @@ class TestArchiveOrgCachedGrepAndPage(unittest.TestCase):
                 self.assertTrue(expected_legacy.is_file())
                 self.assertTrue((Path(tmpdir) / item_id / "pages" / "n3_w1200.jpg").is_file())
                 self.assertIn(f"https://archive.org/download/{item_id}/page/n3_w1200.jpg", seen_urls)
+
+    def test_page_batch_is_parallel_bounded_and_cached_repeat_hits(self) -> None:
+        item_id = "synthetic_city_directory_1894"
+        leaves = [5, 1, 3, 8, 2, 6]
+        state = {"inflight": 0, "max": 0}
+        lock = threading.Lock()
+        seen: list[str] = []
+
+        def fake_http_get_bytes(url: str, timeout: float = 25.0) -> bytes:
+            if "/page/n" not in url:
+                raise AssertionError(f"Unexpected URL: {url}")
+            with lock:
+                state["inflight"] += 1
+                state["max"] = max(state["max"], state["inflight"])
+                seen.append(url)
+            try:
+                time.sleep(0.25)
+                match = re.search(r"/page/n(\d+)_", url)
+                assert match is not None
+                leaf = int(match.group(1))
+                return b"\xff\xd8" + bytes([leaf]) + (b"\x00" * 24)
+            finally:
+                with lock:
+                    state["inflight"] -= 1
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            out_dir = Path(tmpdir) / "pages"
+            with patch.dict(os.environ, {"KINLOOM_IA_CACHE_DIR": tmpdir}, clear=False), patch.object(
+                ao, "http_get_bytes", side_effect=fake_http_get_bytes
+            ):
+                buf1 = io.StringIO()
+                with patch("sys.stdout", buf1):
+                    rc1 = ao.main(
+                        ["page", item_id, "--leaves", "5,1,3,8,2,6", "--scale", "2", "--out", str(out_dir), "--json"]
+                    )
+                self.assertEqual(rc1, 0)
+                payload1 = json.loads(buf1.getvalue())
+                self.assertEqual(payload1["count"], 6)
+                self.assertFalse(payload1["cache_hit"])
+                self.assertEqual([page["leaf"] for page in payload1["pages"]], leaves)
+                self.assertEqual([page["page_cached"] for page in payload1["pages"]], [False] * 6)
+                for page in payload1["pages"]:
+                    leaf = page["leaf"]
+                    self.assertEqual(Path(page["path"]).read_bytes(), b"\xff\xd8" + bytes([leaf]) + (b"\x00" * 24))
+                    self.assertTrue(page["path"].endswith(f"{item_id}_n{leaf}_s2.jpg"))
+                self.assertGreaterEqual(state["max"], 2)
+                self.assertLessEqual(state["max"], ao.PAGE_BATCH_WORKERS)
+                self.assertEqual(len(seen), 6)
+                calls_after_miss = len(seen)
+
+                buf2 = io.StringIO()
+                with patch("sys.stdout", buf2):
+                    rc2 = ao.main(
+                        ["page", item_id, "--leaves", "5,1,3,8,2,6", "--scale", "2", "--out", str(out_dir), "--json"]
+                    )
+                self.assertEqual(rc2, 0)
+                payload2 = json.loads(buf2.getvalue())
+                self.assertTrue(payload2["cache_hit"])
+                self.assertEqual([page["page_cached"] for page in payload2["pages"]], [True] * 6)
+                self.assertEqual(len(seen), calls_after_miss)
+
+                buf_range = io.StringIO()
+                with patch("sys.stdout", buf_range):
+                    rc_range = ao.main(
+                        ["page", item_id, "--leaves", "1-3,5", "--scale", "2", "--out", str(out_dir), "--json"]
+                    )
+                self.assertEqual(rc_range, 0, buf_range.getvalue())
+                ranged = json.loads(buf_range.getvalue())
+                self.assertEqual([page["leaf"] for page in ranged["pages"]], [1, 2, 3, 5])
+                self.assertTrue(ranged["cache_hit"])
+                self.assertEqual(len(seen), calls_after_miss)
+
+                err = io.StringIO()
+                with patch("sys.stderr", err):
+                    with self.assertRaises(SystemExit) as conflict:
+                        ao.main(["page", item_id, "--leaf", "1", "--leaves", "2,3", "--out", str(out_dir)])
+                self.assertEqual(conflict.exception.code, 2)
+                self.assertIn("--leaves", err.getvalue())
+
+                err_both = io.StringIO()
+                with patch("sys.stderr", err_both):
+                    with self.assertRaises(SystemExit) as both:
+                        ao.main(["page", item_id, "--leaves", "1,2", "--printed-pages", "1,2", "--out", str(out_dir)])
+                self.assertEqual(both.exception.code, 2)
+                self.assertIn("--printed-pages", err_both.getvalue())
+
+                err_jpg = io.StringIO()
+                with patch("sys.stderr", err_jpg):
+                    with self.assertRaises(SystemExit) as jpg:
+                        ao.main(["page", item_id, "--leaves", "1,2", "--out", str(Path(tmpdir) / "batch.jpg")])
+                self.assertEqual(jpg.exception.code, 2)
+                self.assertIn("directory", err_jpg.getvalue())
+                self.assertFalse((Path(tmpdir) / "batch.jpg").exists())
+
+                err_cap = io.StringIO()
+                with patch("sys.stderr", err_cap):
+                    with self.assertRaises(SystemExit) as cap:
+                        ao.main(["page", item_id, "--leaves", "0-25", "--out", str(out_dir)])
+                self.assertEqual(cap.exception.code, 2)
+                self.assertIn("25", err_cap.getvalue())
+                self.assertEqual(len(seen), calls_after_miss)
+
+                err_range = io.StringIO()
+                with patch("sys.stderr", err_range):
+                    with self.assertRaises(SystemExit) as bad_range:
+                        ao.main(["page", item_id, "--leaves", "4-2", "--out", str(out_dir)])
+                self.assertEqual(bad_range.exception.code, 2)
+                self.assertIn("precedes", err_range.getvalue())
+
+    def test_printed_pages_range_resolves_once_and_second_call_is_a_cache_hit(self) -> None:
+        item_id = "synthetic_atlas_pages_1888"
+        fake_meta = {
+            "metadata": {"identifier": item_id, "title": "Synthetic Atlas"},
+            "files": [{"name": f"{item_id}_scandata.xml", "format": "Scandata"}],
+        }
+        seen: list[str] = []
+
+        def fake_http_get_bytes(url: str, timeout: float = 25.0) -> bytes:
+            seen.append(url)
+            if url.endswith(f"/metadata/{item_id}"):
+                return json.dumps(fake_meta).encode("utf-8")
+            if url.endswith(f"/{item_id}_scandata.xml"):
+                return SYNTHETIC_SCANDATA
+            if "/page/n" in url:
+                match = re.search(r"/page/n(\d+)_", url)
+                assert match is not None
+                return b"\xff\xd8" + bytes([int(match.group(1))]) + (b"\xab" * 16)
+            raise AssertionError(f"Unexpected URL: {url}")
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            out_dir = Path(tmpdir) / "printed"
+            with patch.dict(os.environ, {"KINLOOM_IA_CACHE_DIR": tmpdir}, clear=False), patch.object(
+                ao, "http_get_bytes", side_effect=fake_http_get_bytes
+            ):
+                buf1 = io.StringIO()
+                with patch("sys.stdout", buf1):
+                    rc1 = ao.main(
+                        ["page", item_id, "--printed-pages", "1-2", "--scale", "2", "--out", str(out_dir), "--json"]
+                    )
+                self.assertEqual(rc1, 0, buf1.getvalue())
+                payload1 = json.loads(buf1.getvalue())
+                self.assertEqual(payload1["count"], 2)
+                self.assertFalse(payload1["cache_hit"])
+                self.assertEqual([page["printed_page"] for page in payload1["pages"]], ["1", "2"])
+                self.assertEqual([page["leaf"] for page in payload1["pages"]], [3, 4])
+                self.assertEqual([page["scandata_leaf"] for page in payload1["pages"]], [4, 5])
+                self.assertEqual(sum(1 for url in seen if url.endswith(f"/metadata/{item_id}")), 1)
+                self.assertEqual(sum(1 for url in seen if url.endswith("_scandata.xml")), 1)
+                calls_after_miss = len(seen)
+
+                buf2 = io.StringIO()
+                with patch("sys.stdout", buf2):
+                    rc2 = ao.main(
+                        ["page", item_id, "--printed-pages", "1,2", "--scale", "2", "--out", str(out_dir), "--json"]
+                    )
+                self.assertEqual(rc2, 0, buf2.getvalue())
+                payload2 = json.loads(buf2.getvalue())
+                self.assertTrue(payload2["cache_hit"])
+                self.assertEqual(payload2["count"], 2)
+                self.assertEqual(len(seen), calls_after_miss)
+                self.assertEqual(Path(payload2["pages"][0]["path"]).read_bytes()[:2], b"\xff\xd8")
+
+                buf_single = io.StringIO()
+                with patch("sys.stdout", buf_single):
+                    rc_single = ao.main(
+                        ["page", item_id, "--printed-page", "2", "--scale", "2", "--out", str(out_dir / "one.jpg"), "--json"]
+                    )
+                self.assertEqual(rc_single, 0, buf_single.getvalue())
+                single = json.loads(buf_single.getvalue())
+                self.assertEqual(single["leaf"], 4)
+                self.assertNotIn("count", single)
+                self.assertTrue(single["cache_hit"])
+                self.assertEqual(len(seen), calls_after_miss)
 
     def test_download_caches_files_reuses_metadata_and_artifacts_and_rejects_traversal(self) -> None:
         item_id = "synthetic_county_record_1865"

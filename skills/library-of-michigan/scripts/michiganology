@@ -83,6 +83,17 @@ def file_lock(lock_path: Path) -> Iterator[None]:
             fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
 
 
+def atomic_write_bytes(dest: Path, data: bytes) -> None:
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    tmp = dest.with_name(f".{dest.name}.{os.getpid()}.{time.time_ns()}.tmp")
+    try:
+        tmp.write_bytes(data)
+        os.replace(tmp, dest)
+    except Exception:
+        tmp.unlink(missing_ok=True)
+        raise
+
+
 def atomic_write_json(dest: Path, payload: Any) -> None:
     dest.parent.mkdir(parents=True, exist_ok=True)
     tmp = dest.with_name(f".{dest.name}.{os.getpid()}.{time.time_ns()}.tmp")
@@ -316,6 +327,22 @@ def _resolve_item_ref(url_or_id: str) -> tuple[str, str]:
     )
 
 
+DOWNLOAD_FILE_EXTS = {".jpg", ".jpeg", ".png", ".tif", ".tiff", ".pdf"}
+
+
+def _content_type_from_headers(headers_text: str) -> str:
+    matches = re.findall(r"(?im)^content-type:\s*([^\r\n]+)", headers_text)
+    return matches[-1].strip() if matches else ""
+
+
+def _is_html_payload(content_type: str, body: bytes) -> bool:
+    media = content_type.split(";", 1)[0].strip().lower()
+    if media in {"text/html", "application/xhtml+xml"}:
+        return True
+    sniff = body.lstrip()[:256].lower()
+    return sniff.startswith((b"<!doctype", b"<html", b"<head"))
+
+
 def _filename_from_headers(headers_text: str, fallback: str) -> str:
     match_star = re.search(r"filename\*\s*=\s*UTF-8''([^\r\n;]+)", headers_text, re.I)
     if match_star:
@@ -345,6 +372,123 @@ def search_page(query: str) -> dict:
     parser = ResultParser()
     parser.feed(page)
     return {"query": query, "total": total_results(page), "results": parser.results}
+
+
+def _file_cache_paths(item_id: str) -> tuple[Path, Path, Path]:
+    root = cache_dir() / "files" / item_id
+    return root / "body", root / "meta.json", root / ".lock"
+
+
+def _read_file_cache(item_id: str, ttl_hours: float) -> dict[str, Any] | None:
+    if ttl_hours <= 0:
+        return None
+    body_path, meta_path, _lock = _file_cache_paths(item_id)
+    if not body_path.is_file() or not meta_path.is_file():
+        return None
+    try:
+        size = body_path.stat().st_size
+    except OSError:
+        return None
+    if size <= 0:
+        return None
+    try:
+        meta = json.loads(meta_path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+        return None
+    if not isinstance(meta, dict) or meta.get("schema") != CACHE_SCHEMA:
+        return None
+    fetched = meta.get("fetched_at")
+    filename = meta.get("filename")
+    content_type = meta.get("content_type")
+    if not isinstance(fetched, (int, float)) or not isinstance(filename, str) or not filename:
+        return None
+    if not isinstance(content_type, str) or not content_type:
+        return None
+    if meta.get("bytes") != size:
+        return None
+    if (time.time() - float(fetched)) > ttl_hours * 3600:
+        return None
+    try:
+        body = body_path.read_bytes()
+    except OSError:
+        return None
+    if not body or _is_html_payload(content_type, body):
+        return None
+    return {"body": body, "filename": filename, "content_type": content_type}
+
+
+def _fetch_download_bytes(item_id: str, item_url: str) -> dict[str, Any]:
+    """Download one IO_ file. Failures raise and leave the file cache untouched."""
+    download_url = f"{BASE}/download/file/{item_id}"
+    curl = _require_curl()
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        hdr_path = Path(tmp_dir) / "headers.txt"
+        body_path = Path(tmp_dir) / "body.bin"
+        try:
+            proc = subprocess.run(
+                [
+                    curl, "-sSL", "-A", USER_AGENT, "--max-time", "120",
+                    "-D", str(hdr_path), "-o", str(body_path),
+                    "-w", "%{http_code}", download_url,
+                ],
+                capture_output=True,
+                text=True,
+                timeout=130,
+            )
+        except (subprocess.SubprocessError, OSError) as exc:
+            raise click.ClickException(f"Michiganology download failed: {exc}") from exc
+        if proc.returncode != 0:
+            raise click.ClickException(
+                f"Michiganology download failed (curl exit {proc.returncode}): "
+                f"{proc.stderr.strip()[:300]}"
+            )
+        status = proc.stdout.strip()
+        if status != "200":
+            raise click.ClickException(
+                f"Michiganology download returned HTTP {status} for {download_url} (source page: {item_url})"
+            )
+        headers_text = hdr_path.read_text(encoding="utf-8", errors="replace") if hdr_path.is_file() else ""
+        body = body_path.read_bytes() if body_path.is_file() else b""
+        content_type = _content_type_from_headers(headers_text) or "application/octet-stream"
+        filename = _filename_from_headers(headers_text, f"{item_id}.bin")
+        if not body:
+            raise click.ClickException(
+                f"Michiganology download returned an empty file for {item_id}. The response was not cached."
+            )
+        if _is_html_payload(content_type, body):
+            raise click.ClickException(
+                f"Michiganology download returned an HTML page for {item_id}, not a file. "
+                "The response was not cached."
+            )
+        return {"body": body, "filename": filename, "content_type": content_type}
+
+
+def cached_download(item_id: str, item_url: str, *, refresh: bool, ttl_hours: float) -> tuple[dict[str, Any], bool]:
+    """Return ({body, filename, content_type}, cache_hit) for one IO_ file.
+
+    Callers of the same item share one flock. A crash before the atomic
+    replace leaves the previous good file in place.
+    """
+    body_path, meta_path, lock_path = _file_cache_paths(item_id)
+    if not refresh:
+        hit = _read_file_cache(item_id, ttl_hours)
+        if hit is not None:
+            return hit, True
+    with file_lock(lock_path):
+        if not refresh:
+            hit = _read_file_cache(item_id, ttl_hours)
+            if hit is not None:
+                return hit, True
+        fetched = _fetch_download_bytes(item_id, item_url)
+        atomic_write_bytes(body_path, fetched["body"])
+        atomic_write_json(meta_path, {
+            "schema": CACHE_SCHEMA,
+            "fetched_at": time.time(),
+            "filename": fetched["filename"],
+            "content_type": fetched["content_type"],
+            "bytes": len(fetched["body"]),
+        })
+        return fetched, False
 
 
 def _search_cacheable(result: dict) -> bool:
@@ -443,52 +587,49 @@ def get(url_or_id: str, as_json: bool, refresh: bool, cache_ttl_hours: float | N
         click.echo(f"  {key}: {val}")
 
 
+def _download_dest(out: str, filename: str | None, resolved_name: str) -> Path:
+    out_path = Path(out)
+    if filename is None and out_path.suffix.lower() in DOWNLOAD_FILE_EXTS:
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        return out_path
+    out_path.mkdir(parents=True, exist_ok=True)
+    return out_path / Path(filename or resolved_name).name
+
+
 @cli.command()
 @click.argument("url_or_id")
-@click.option("--out", "-o", default=".", show_default=True, help="Output directory.")
+@click.option("--out", "-o", default=".", show_default=True,
+              help="Output directory, or a .jpg/.jpeg/.png/.tif/.tiff/.pdf file path when --filename is omitted.")
 @click.option("--filename", default=None, help="Override output filename (default: from Content-Disposition).")
-def download(url_or_id: str, out: str, filename: str | None) -> None:
+@click.option("--json", "as_json", is_flag=True, help="Emit JSON.")
+@cache_options
+def download(url_or_id: str, out: str, filename: str | None, as_json: bool,
+             refresh: bool, cache_ttl_hours: float | None) -> None:
     """Download the full-resolution file for a Michiganology IO_ item."""
     item_id, item_url = _resolve_item_ref(url_or_id)
     if not item_id.startswith("IO_"):
         raise click.ClickException(
             f"{item_id} is a folder/collection object (SO_); pass an IO_ item URL or ID to download."
         )
-    download_url = f"{BASE}/download/file/{item_id}"
-    curl = _require_curl()
-    out_dir = Path(out)
-    out_dir.mkdir(parents=True, exist_ok=True)
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        hdr_path = Path(tmp_dir) / "headers.txt"
-        body_path = Path(tmp_dir) / "body.bin"
-        try:
-            proc = subprocess.run(
-                [
-                    curl, "-sSL", "-A", USER_AGENT, "--max-time", "120",
-                    "-D", str(hdr_path), "-o", str(body_path),
-                    "-w", "%{http_code}", download_url,
-                ],
-                capture_output=True,
-                text=True,
-                timeout=130,
-            )
-        except (subprocess.SubprocessError, OSError) as exc:
-            raise click.ClickException(f"Michiganology download failed: {exc}") from exc
-        if proc.returncode != 0:
-            raise click.ClickException(
-                f"Michiganology download failed (curl exit {proc.returncode}): "
-                f"{proc.stderr.strip()[:300]}"
-            )
-        status = proc.stdout.strip()
-        if status != "200":
-            raise click.ClickException(
-                f"Michiganology download returned HTTP {status} for {download_url} (source page: {item_url})"
-            )
-        headers_text = hdr_path.read_text(encoding="utf-8", errors="replace")
-        chosen_name = filename or _filename_from_headers(headers_text, f"{item_id}.bin")
-        dest = out_dir / Path(chosen_name).name
-        dest.write_bytes(body_path.read_bytes())
-        click.echo(f"{dest} ({dest.stat().st_size} bytes)")
+    ttl = resolve_ttl_hours(cache_ttl_hours)
+    fetched, hit = cached_download(item_id, item_url, refresh=refresh, ttl_hours=ttl)
+    body = fetched["body"]
+    resolved_name = fetched["filename"]
+    content_type = fetched["content_type"]
+    dest = _download_dest(out, filename, resolved_name)
+    dest.write_bytes(body)
+    payload = {
+        "item_id": item_id,
+        "path": str(dest),
+        "bytes": len(body),
+        "filename": resolved_name,
+        "content_type": content_type,
+        "cache_hit": hit,
+    }
+    if as_json:
+        click.echo(json.dumps(payload, indent=2))
+        return
+    click.echo(f"{dest} ({len(body)} bytes)")
 
 
 @cli.command()

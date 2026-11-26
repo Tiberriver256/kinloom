@@ -39,7 +39,12 @@ skills/library-of-michigan/scripts/michiganology get "https://michigan.access.pr
 
 # Download the full-resolution file (filename inferred from Content-Disposition)
 skills/library-of-michigan/scripts/michiganology download IO_<uuid> --out ./downloads/michiganology
+
+# Or write a specific file when --filename is omitted and --out ends in an image or PDF extension
+skills/library-of-michigan/scripts/michiganology download IO_<uuid> --out ./downloads/certificate.jpg --json
 ```
+
+`download` accepts the same `--refresh` and `--cache-ttl-hours` flags as `search`. `--json` prints `item_id`, `path`, `bytes`, `filename`, `content_type`, and `cache_hit`. `filename` is the Content-Disposition name. `path` is the file written this time, which follows `--filename` when you pass it. A repeat call copies the cached bytes and does not run curl.
 
 ### List the digital collections
 
@@ -105,6 +110,8 @@ Michigan residents can use the Library of Michigan's subscription databases remo
 ## Disk cache and environment variables
 
 `search` and `get` cache successful responses on disk under `~/.cache/kinloom-michiganology/` (default TTL `168` hours, advisory `flock` per cache key, atomic temp-file writes). HTTP/curl errors and unparsed or blocked pages are never cached.
+
+`download` caches the file bytes at `files/<IO_ item id>/body` in that same directory. A sidecar `meta.json` stores the Content-Disposition filename, the content type, and the byte count. The lock is per item id. Empty bodies, non-zero curl exits, HTTP errors, and HTML error pages are not written to the cache, and the command exits 1. `--out` is a directory unless it ends in `.jpg`, `.jpeg`, `.png`, `.tif`, `.tiff`, or `.pdf` and you omit `--filename`. In that case `--out` is the output file.
 
 - `--refresh`: bypass cached reads and write the fresh response to disk.
 - `--cache-ttl-hours <hours>`: override TTL for one call (`0` disables cached reads).

@@ -148,5 +148,152 @@ class TestMichiganologyCache(unittest.TestCase):
         self.assertEqual(len(list(Path(self.tmp.name).glob("*.json"))), 1)
 
 
+JPEG_BYTES = b"\xff\xd8\xff\xe0" + b"\x11" * 32
+JPEG_BYTES_V2 = b"\xff\xd8\xff\xe0" + b"\x22" * 40
+JPEG_HEADERS = (
+    "HTTP/1.1 200 OK\r\n"
+    "Content-Type: image/jpeg\r\n"
+    'Content-Disposition: attachment; filename="certificate.jpg"\r\n'
+    "\r\n"
+)
+HTML_HEADERS = "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\n\r\n"
+HTML_BODY = b"<!DOCTYPE html><html><body>Just a moment</body></html>"
+
+
+class TestMichiganologyDownloadCache(unittest.TestCase):
+    def setUp(self) -> None:
+        self.tmp = tempfile.TemporaryDirectory()
+        self.runner = CliRunner()
+        self.env = {"KINLOOM_MICHIGANOLOGY_CACHE_DIR": self.tmp.name}
+        self.calls = 0
+
+    def tearDown(self) -> None:
+        self.tmp.cleanup()
+
+    def _patch_curl(self, body: bytes, headers: str, *, returncode: int = 0, status: str = "200"):
+        def fake_run(cmd, **kwargs):
+            self.calls += 1
+            out_idx = cmd.index("-o")
+            hdr_idx = cmd.index("-D")
+            Path(cmd[hdr_idx + 1]).write_text(headers, encoding="utf-8")
+            Path(cmd[out_idx + 1]).write_bytes(body)
+            stdout = status if returncode == 0 else ""
+            return subprocess.CompletedProcess(args=cmd, returncode=returncode, stdout=stdout, stderr="")
+
+        return (
+            patch.object(mich.shutil, "which", return_value="/usr/bin/curl"),
+            patch.object(mich.subprocess, "run", side_effect=fake_run),
+        )
+
+    def _invoke(self, args: list[str]):
+        return self.runner.invoke(mich.cli, args, env=self.env)
+
+    def test_download_caches_then_hits_with_zero_second_curl(self) -> None:
+        out1 = Path(self.tmp.name) / "first"
+        out2 = Path(self.tmp.name) / "second"
+        which, run = self._patch_curl(JPEG_BYTES, JPEG_HEADERS)
+        with which, run:
+            r1 = self._invoke(["download", "IO_abc123", "--out", str(out1), "--json"])
+            r2 = self._invoke(["download", "IO_abc123", "--out", str(out2), "--json"])
+            r3 = self._invoke(["download", "IO_abc123", "--out", str(out2), "--filename", "custom.jpg", "--json"])
+
+        self.assertEqual(r1.exit_code, 0, r1.output)
+        self.assertEqual(r2.exit_code, 0, r2.output)
+        self.assertEqual(r3.exit_code, 0, r3.output)
+        self.assertEqual(self.calls, 1)
+        first = json.loads(r1.output)
+        second = json.loads(r2.output)
+        third = json.loads(r3.output)
+        self.assertEqual(first["item_id"], "IO_abc123")
+        self.assertEqual(first["bytes"], len(JPEG_BYTES))
+        self.assertEqual(first["filename"], "certificate.jpg")
+        self.assertEqual(first["content_type"], "image/jpeg")
+        self.assertFalse(first["cache_hit"])
+        self.assertTrue(second["cache_hit"])
+        self.assertEqual(second["filename"], "certificate.jpg")
+        self.assertEqual((out1 / "certificate.jpg").read_bytes(), JPEG_BYTES)
+        self.assertEqual((out2 / "certificate.jpg").read_bytes(), JPEG_BYTES)
+        self.assertEqual(third["filename"], "certificate.jpg")
+        self.assertEqual((out2 / "custom.jpg").read_bytes(), JPEG_BYTES)
+        self.assertTrue((Path(self.tmp.name) / "files" / "IO_abc123" / "body").is_file())
+        meta = json.loads((Path(self.tmp.name) / "files" / "IO_abc123" / "meta.json").read_text(encoding="utf-8"))
+        self.assertEqual(meta["filename"], "certificate.jpg")
+        self.assertEqual(meta["content_type"], "image/jpeg")
+
+    def test_refresh_refetches_and_zero_ttl_does_not_read_cache(self) -> None:
+        state = {"body": JPEG_BYTES}
+        out = Path(self.tmp.name) / "out"
+
+        def fake_run(cmd, **kwargs):
+            self.calls += 1
+            out_idx = cmd.index("-o")
+            hdr_idx = cmd.index("-D")
+            Path(cmd[hdr_idx + 1]).write_text(JPEG_HEADERS, encoding="utf-8")
+            Path(cmd[out_idx + 1]).write_bytes(state["body"])
+            return subprocess.CompletedProcess(args=cmd, returncode=0, stdout="200", stderr="")
+
+        with patch.object(mich.shutil, "which", return_value="/usr/bin/curl"), \
+             patch.object(mich.subprocess, "run", side_effect=fake_run):
+            self._invoke(["download", "IO_abc123", "--out", str(out), "--json"])
+            state["body"] = JPEG_BYTES_V2
+            refreshed = self._invoke(["download", "IO_abc123", "--out", str(out), "--refresh", "--json"])
+            ttl = self._invoke(
+                ["download", "IO_abc123", "--out", str(out), "--cache-ttl-hours", "0", "--json"]
+            )
+
+        self.assertEqual(self.calls, 3)
+        self.assertEqual(refreshed.exit_code, 0, refreshed.output)
+        self.assertFalse(json.loads(refreshed.output)["cache_hit"])
+        self.assertEqual((out / "certificate.jpg").read_bytes(), JPEG_BYTES_V2)
+        self.assertEqual(json.loads(ttl.output)["bytes"], len(JPEG_BYTES_V2))
+        self.assertFalse(json.loads(ttl.output)["cache_hit"])
+
+    def test_html_empty_and_curl_errors_are_not_cached(self) -> None:
+        out = Path(self.tmp.name) / "out"
+        which, run = self._patch_curl(HTML_BODY, HTML_HEADERS)
+        with which, run:
+            html_result = self._invoke(["download", "IO_abc123", "--out", str(out), "--json"])
+            again = self._invoke(["download", "IO_abc123", "--out", str(out)])
+        self.assertEqual(html_result.exit_code, 1, html_result.output)
+        self.assertEqual(again.exit_code, 1, again.output)
+        self.assertNotIn("Traceback", html_result.output)
+        self.assertIn("HTML", html_result.output)
+        self.assertEqual(self.calls, 2)
+        self.assertFalse((Path(self.tmp.name) / "files" / "IO_abc123" / "body").exists())
+        self.assertFalse((Path(self.tmp.name) / "files" / "IO_abc123" / "meta.json").exists())
+        self.assertFalse(out.exists())
+
+        self.calls = 0
+        which, run = self._patch_curl(b"", JPEG_HEADERS)
+        with which, run:
+            empty = self._invoke(["download", "IO_empty1", "--out", str(out)])
+        self.assertEqual(empty.exit_code, 1, empty.output)
+        self.assertIn("empty", empty.output)
+        self.assertFalse((Path(self.tmp.name) / "files" / "IO_empty1" / "body").exists())
+
+        self.calls = 0
+        which, run = self._patch_curl(JPEG_BYTES, JPEG_HEADERS, returncode=7)
+        with which, run:
+            failed = self._invoke(["download", "IO_fail1", "--out", str(out)])
+        self.assertEqual(failed.exit_code, 1, failed.output)
+        self.assertIn("curl exit 7", failed.output)
+        self.assertFalse((Path(self.tmp.name) / "files" / "IO_fail1" / "meta.json").exists())
+
+    def test_explicit_file_out_writes_that_path(self) -> None:
+        dest = Path(self.tmp.name) / "scans" / "plate.tiff"
+        which, run = self._patch_curl(JPEG_BYTES, JPEG_HEADERS)
+        with which, run:
+            result = self._invoke(["download", "IO_abc123", "--out", str(dest)])
+            text = self._invoke(["download", "IO_abc123", "--out", str(Path(self.tmp.name) / "dir")])
+        self.assertEqual(result.exit_code, 0, result.output)
+        self.assertEqual(dest.read_bytes(), JPEG_BYTES)
+        self.assertFalse(dest.is_dir())
+        self.assertIn(str(dest), result.output)
+        self.assertIn(f"({len(JPEG_BYTES)} bytes)", result.output)
+        self.assertEqual(text.exit_code, 0, text.output)
+        self.assertEqual(self.calls, 1)
+        self.assertTrue((Path(self.tmp.name) / "dir" / "certificate.jpg").is_file())
+
+
 if __name__ == "__main__":
     unittest.main()

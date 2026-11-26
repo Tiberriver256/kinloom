@@ -50,9 +50,19 @@ skills/archive-org/scripts/archive-org page ourmartyrpreside00banc --printed-pag
 # Fetch an explicit BookReader leaf n0 into a file or directory
 skills/archive-org/scripts/archive-org page ourmartyrpreside00banc --leaf 0 --scale 2 --out ./cover.jpg
 skills/archive-org/scripts/archive-org page ourmartyrpreside00banc 0 --width 1200 --out ./downloads
+
+# Fetch several BookReader leaves in one call (max 25). --out must be a directory.
+skills/archive-org/scripts/archive-org page ourmartyrpreside00banc --leaves 120-123,130 --scale 2 --out ./pages
+
+# Fetch several printed pages. Ranges such as 670-674 are inclusive printed labels.
+skills/archive-org/scripts/archive-org page ourmartyrpreside00banc --printed-pages 674,707,732 --out ./pages --json
 ```
 
 Single-page URL patterns: `https://archive.org/download/<identifier>/page/n<leaf>_s<scale>.jpg` and `https://archive.org/download/<identifier>/page/n<leaf>_w<width>.jpg`. Returns HTTP 403 on borrow-only / `inlibrary` items.
+
+`--leaves` and `--printed-pages` download the uncached JPEGs together, at most 4 at a time, and print them in the order you asked. Cached pages make no network request. Do not combine `--leaves` with `--printed-pages`. Do not combine either flag with `--leaf`, `--printed-page`, or a positional leaf. A call that asks for more than 25 pages exits with an error and does not fetch. When the call asks for more than one page, `--out` must be a directory. A `.jpg` path is rejected with an error that tells you to pass a directory.
+
+A single page keeps the existing text line and the existing JSON object. More than one page with `--json` prints `identifier`, `count`, `pages`, and `cache_hit`. `cache_hit` is true only when every requested page came from disk. When the call uses `--printed-pages`, the page index must come from disk too.
 
 ### Read OCR text for specific pages (`text`) and resolve page numbers (`lookup`)
 
