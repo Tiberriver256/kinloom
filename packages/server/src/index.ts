@@ -12,7 +12,7 @@ export type {
   PronunciationLexiconStore,
 } from './ports.js';
 
-export const KINLOOM_SERVER_VERSION = '0.30.2';
+export const KINLOOM_SERVER_VERSION = '0.30.3';
 
 // Errors & Web-Standard Crypto Helpers
 export { KinloomHttpError, toErrorResponseData } from './errors.js';
