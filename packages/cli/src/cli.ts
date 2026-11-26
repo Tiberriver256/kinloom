@@ -810,31 +810,89 @@ export async function runCli(
           options: {
             person: { type: 'string' },
             repo: { type: 'string' },
+            package: { type: 'string' },
             'package-dir': { type: 'string' },
+            'all-staged': { type: 'boolean', default: false },
+            'pending-only': { type: 'boolean', default: false },
             'dry-run': { type: 'boolean', default: false },
             json: { type: 'boolean', default: false },
           },
         });
-        const personId = requireStringFlag(values.person ?? positionals[0], '--person');
-        const [{ runIntegrateCommand }, { measureCommand }] = await Promise.all([
-          import('./commands/ops/integrate.js'),
+        const positionalIds = positionals
+          .map((id) => id.trim())
+          .filter((id) => id.length > 0);
+        if (values.package !== undefined && values['package-dir'] !== undefined) {
+          throw new CliValidationError('Specify either `--package` or `--package-dir`, not both.');
+        }
+        const packageDir = values['package-dir'] ?? values.package;
+        if (values['pending-only'] && !values['all-staged']) {
+          throw new CliValidationError('Option `--pending-only` requires `--all-staged`.');
+        }
+        if (values['all-staged'] && (positionalIds.length > 0 || values.person)) {
+          throw new CliValidationError(
+            '`--all-staged` discovers person ids from research/people and does not take person ids.'
+          );
+        }
+        if (values.person && positionalIds.length > 0) {
+          throw new CliValidationError('Pass person ids as positionals or with `--person`, not both.');
+        }
+
+        const useBatch = Boolean(values['all-staged']) || positionalIds.length > 1;
+        if (useBatch && packageDir) {
+          throw new CliValidationError(
+            '`--package` / `--package-dir` applies to a single person integrate only.'
+          );
+        }
+
+        if (!useBatch) {
+          const personId = requireStringFlag(values.person ?? positionalIds[0], '--person');
+          const [{ runIntegrateCommand }, { measureCommand }] = await Promise.all([
+            import('./commands/ops/integrate.js'),
+            import('./commands/ops/telemetry.js'),
+          ]);
+          const result = await measureCommand(
+            {
+              subcmd: values['dry-run'] ? 'integrate --dry-run' : 'integrate',
+              personId,
+              extractResultMeta: (res) => ({
+                personId,
+                exitCode: EXIT_OK,
+                bytesOut: Buffer.byteLength(res.rendered, 'utf8'),
+              }),
+            },
+            () =>
+              runIntegrateCommand({
+                repoDir: values.repo,
+                personId,
+                packageDir,
+                dryRun: values['dry-run'],
+                json: values.json,
+              })
+          );
+          writeRenderedOutput(io, result.rendered);
+          return EXIT_OK;
+        }
+
+        const [{ runIntegrateBatchCommand }, { measureCommand }] = await Promise.all([
+          import('./commands/ops/integrate-batch.js'),
           import('./commands/ops/telemetry.js'),
         ]);
         const result = await measureCommand(
           {
             subcmd: values['dry-run'] ? 'integrate --dry-run' : 'integrate',
-            personId,
+            personId: null,
             extractResultMeta: (res) => ({
-              personId,
+              personId: null,
               exitCode: EXIT_OK,
               bytesOut: Buffer.byteLength(res.rendered, 'utf8'),
             }),
           },
           () =>
-            runIntegrateCommand({
+            runIntegrateBatchCommand({
               repoDir: values.repo,
-              personId,
-              packageDir: values['package-dir'],
+              personIds: values['all-staged'] ? undefined : positionalIds,
+              allStaged: values['all-staged'],
+              pendingOnly: values['pending-only'],
               dryRun: values['dry-run'],
               json: values.json,
             })
@@ -854,9 +912,13 @@ export async function runCli(
             json: { type: 'boolean', default: false },
             strict: { type: 'boolean', default: false },
             'all-staged': { type: 'boolean', default: false },
+            'pending-only': { type: 'boolean', default: false },
           },
         });
         const positionalIds = positionals.map((personId) => personId.trim()).filter((personId) => personId.length > 0);
+        if (values['pending-only'] && !values['all-staged']) {
+          throw new CliValidationError('Option `--pending-only` requires `--all-staged`.');
+        }
         if (values['all-staged'] && (positionalIds.length > 0 || values.person)) {
           throw new CliValidationError(
             '`--all-staged` discovers person ids from research/people and does not take person ids.'
@@ -865,21 +927,30 @@ export async function runCli(
         if (values.person && positionalIds.length > 0) {
           throw new CliValidationError('Pass person ids as positionals or with `--person`, not both.');
         }
-        const [auditMod, batchMod, { measureCommand }] = await Promise.all([
+        const [auditMod, batchMod, integrateBatchMod, { measureCommand }] = await Promise.all([
           import('./commands/ops/audit.js'),
           import('./commands/ops/audit-overlaps.js'),
+          import('./commands/ops/integrate-batch.js'),
           import('./commands/ops/telemetry.js'),
         ]);
         const { runAuditCommand } = auditMod;
         const { runAuditBatchCommand, listStagedAuditPersonIds } = batchMod;
+        const { classifyStagedPackages } = integrateBatchMod;
+        const resolvedRepoDir = values.repo?.trim() || process.cwd();
         const singlePersonId = values['all-staged'] ? undefined : (values.person ?? positionalIds[0]);
-        const batchIds = values['all-staged']
-          ? listStagedAuditPersonIds(values.repo?.trim() || process.cwd())
+        let batchIds = values['all-staged']
+          ? listStagedAuditPersonIds(resolvedRepoDir)
           : positionalIds;
-        if (values['all-staged'] && batchIds.length === 0) {
+        let skippedAlreadyIntegrated: string[] | undefined;
+        if (values['all-staged'] && !values['pending-only'] && batchIds.length === 0) {
           throw new CliValidationError(
             'No staged packages with patch.json were found under research/people/.'
           );
+        }
+        if (values['all-staged'] && values['pending-only']) {
+          const classified = await classifyStagedPackages(resolvedRepoDir, batchIds);
+          batchIds = classified.pending;
+          skippedAlreadyIntegrated = classified.alreadyIntegrated;
         }
         const useBatch = values['all-staged'] || batchIds.length > 1;
         if (useBatch && values['package-dir']) {
@@ -923,6 +994,8 @@ export async function runCli(
               repoDir: values.repo,
               personIds: batchIds,
               json: values.json,
+              pendingOnly: values['pending-only'],
+              skippedAlreadyIntegrated,
             })
         );
         writeRenderedOutput(io, result.rendered);

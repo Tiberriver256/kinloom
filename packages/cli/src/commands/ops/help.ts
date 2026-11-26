@@ -13,21 +13,30 @@ Options:
   --json                 Emit structured JSON instead of compact Markdown
   -h, --help             Show this help message`;
 
-export const INTEGRATE_HELP = `Usage: kinloom integrate [person_id] [options]
+export const INTEGRATE_HELP = `Usage: kinloom integrate [person_id ...] [options]
 
-Validate and integrate a person research package (patch.json + scans/) into local YAML files.
+Validate and integrate one or more person research packages (patch.json + scans/) into local YAML files.
 Supports patch.people to add newly proven deceased ancestors (including when person_id itself is introduced by patch.people).
 Living people and slug collisions are always rejected.
 
+One person id keeps the original single-person text summary and JSON output.
+Two or more person ids, or --all-staged, run in batch mode with:
+  - Pre-flight cross-package and live-media overlap checking before any file is mutated
+  - Sequential dry-run isolation so later packages see earlier packages' staged changes
+  - All-or-nothing transactional rollback of data/*.yaml and newly staged scans if any package fails
+
 Arguments:
-  person_id              Target person ID in data/people.yaml or patch.people (positional or --person)
+  person_id              One person id, or several person ids. Use a positional id or --person for one person.
 
 Options:
-  --person <person_id>   Target person ID in data/people.yaml or patch.people (required if positional omitted)
+  --person <person_id>   Single target person ID in data/people.yaml or patch.people. Do not combine with positional ids or --all-staged.
+  --all-staged           Integrate every research/people/<id>/patch.json package in sorted order. Do not pass person ids with this flag.
+  --pending-only         With --all-staged, skip packages whose dry-run diff has no unintegrated changes (broken packages stay pending).
   --repo <dir>           Archive repository root (default: current working directory)
-  --package-dir <dir>    Custom research package directory (default: <repo>/research/people/<person_id>)
+  --package <dir>        Custom research package directory for a single person (alias of --package-dir)
+  --package-dir <dir>    Custom research package directory for a single person (default: <repo>/research/people/<person_id>)
   --dry-run              Validate schemas, citations, scans, and privacy without writing files
-  --json                 Emit structured JSON summary
+  --json                 Emit structured JSON summary (single-person object, or batch object with mode: "batch")
   -h, --help             Show this help message`;
 
 export const AUDIT_HELP = `Usage: kinloom audit [person_id ...] [options]
@@ -49,10 +58,11 @@ Arguments:
 Options:
   --person <person_id>   One person id. Do not combine --person with positional ids.
   --all-staged           Audit every research/people/<id>/patch.json package. Ids are sorted. Do not pass person ids with this flag.
+  --pending-only         With --all-staged, skip already-integrated packages and list them in skippedAlreadyIntegrated (broken packages stay pending).
   --repo <dir>           Archive repository root (default: current working directory)
   --package-dir <dir>    Custom research package directory for a single person (default: <repo>/research/people/<person_id>)
   --strict               Exit non-zero when a package fails its strict scorecard (uncited prose or an em dash). A single person and a batch both exit non-zero when a staged file already belongs to a different id in data/media.yaml. In a batch, also exit non-zero when two packages stage the same scan basename with different SHA-256 bytes, point the same media file path at different media ids, define the same patch.people id with conflicting fields, or reuse the same patch.people slug for different person ids. Identical scan bytes, a shared media id, identical patch.people rows, and an update of the same live media id do not fail --strict.
-  --json                 Emit structured JSON. A batch object is { ok, strictOk, repo, people, overlaps, summary, duration_ms }.
+  --json                 Emit structured JSON. A batch object is { ok, strictOk, repo, people, overlaps, summary, skippedAlreadyIntegrated?, duration_ms }.
   -h, --help             Show this help message`;
 
 export const STATUS_HELP = `Usage: kinloom status [options]

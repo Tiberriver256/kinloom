@@ -51,17 +51,37 @@ export {
 } from './integrate.js';
 
 export {
+  classifyStagedPackages,
+  formatBlockingOverlapError,
+  formatIntegrateBatchTextReport,
+  hasUnintegratedEffect,
+  isPackagePending,
+  runIntegrateBatchCommand,
+  type ClassifiedStagedPackages,
+  type IntegrateBatchCommandOptions,
+  type IntegrateBatchCommandResult,
+  type IntegrateBatchItemResult,
+  type IntegrateBatchTotals,
+  type StagedPackageStatus,
+} from './integrate-batch.js';
+
+export {
+  analyzeStagedOverlaps,
+  countBlockingOverlaps,
+  createEmptyAuditOverlaps,
   formatAuditBatchTextReport,
   listStagedAuditPersonIds,
   normalizeMediaFilePath,
   runAuditBatchCommand,
   type AuditBatchResult,
   type AuditOverlaps,
+  type OverlapBlockingCounts,
   type PersonDiffField,
   type PersonSlugCollision,
   type PersonSlugCollisionEntry,
   type SharedPersonOverlap,
   type SharedPersonPackage,
+  type StagedOverlapAnalysis,
 } from './audit-overlaps.js';
 
 export {

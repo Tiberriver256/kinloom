@@ -167,8 +167,23 @@ export interface AuditBatchResult {
   people: AuditBatchPerson[];
   overlaps: AuditOverlaps;
   summary: AuditBatchSummary;
+  skippedAlreadyIntegrated?: string[];
   duration_ms: number;
   rendered: string;
+}
+
+export interface OverlapBlockingCounts {
+  differingScanCollisions: number;
+  conflictingMediaFileCollisions: number;
+  conflictingPersonOverlaps: number;
+  conflictingPersonSlugCollisions: number;
+  liveMediaFileCollisions: number;
+}
+
+export interface StagedOverlapAnalysis {
+  overlaps: AuditOverlaps;
+  blocking: OverlapBlockingCounts;
+  hasBlockingConflicts: boolean;
 }
 
 interface StagedSourceRef {
@@ -226,6 +241,9 @@ export function listStagedAuditPersonIds(repoDir: string): string[] {
 }
 
 function readPatchObject(patchPath: string): Record<string, unknown> {
+  if (!fs.existsSync(patchPath)) {
+    throw new CliValidationError(`Missing person patch file: ${patchPath}`);
+  }
   let parsed: unknown;
   try {
     parsed = JSON.parse(fs.readFileSync(patchPath, 'utf8'));
@@ -582,6 +600,61 @@ function collectPersonSlugCollisions(packages: readonly ParsedPackage[]): Person
   return collisions.toSorted((a, b) => a.slug.localeCompare(b.slug));
 }
 
+export function createEmptyAuditOverlaps(): AuditOverlaps {
+  return {
+    scanFileCollisions: [],
+    mediaFileCollisions: [],
+    sharedMediaIds: [],
+    sharedSourceIds: [],
+    sharedEventOverlaps: [],
+    sharedPersonOverlaps: [],
+    personSlugCollisions: [],
+    liveMediaFileCollisions: [],
+  };
+}
+
+export function countBlockingOverlaps(overlaps: AuditOverlaps): OverlapBlockingCounts {
+  return {
+    differingScanCollisions: overlaps.scanFileCollisions.filter((row) => !row.bytesIdentical).length,
+    conflictingMediaFileCollisions: overlaps.mediaFileCollisions.filter((row) => row.mediaIdsConflict)
+      .length,
+    conflictingPersonOverlaps: overlaps.sharedPersonOverlaps.filter(
+      (row) => row.fieldDiffs.length > 0
+    ).length,
+    conflictingPersonSlugCollisions: overlaps.personSlugCollisions.filter(
+      (row) => row.personIdsConflict
+    ).length,
+    liveMediaFileCollisions: overlaps.liveMediaFileCollisions.length,
+  };
+}
+
+export function analyzeStagedOverlaps(
+  repoDir: string,
+  personIds: readonly string[]
+): StagedOverlapAnalysis {
+  const resolvedRepo = path.resolve(repoDir);
+  if (personIds.length === 0) {
+    const overlaps = createEmptyAuditOverlaps();
+    const blocking = countBlockingOverlaps(overlaps);
+    return { overlaps, blocking, hasBlockingConflicts: false };
+  }
+  const packages = personIds.map((personId) =>
+    loadStagedPackage(personId, path.join(resolvedRepo, 'research', 'people', personId))
+  );
+  const overlaps = computeAuditOverlaps({
+    packages,
+    liveMedia: loadLiveMedia(resolvedRepo),
+  });
+  const blocking = countBlockingOverlaps(overlaps);
+  const hasBlockingConflicts =
+    blocking.differingScanCollisions > 0 ||
+    blocking.conflictingMediaFileCollisions > 0 ||
+    blocking.conflictingPersonOverlaps > 0 ||
+    blocking.conflictingPersonSlugCollisions > 0 ||
+    blocking.liveMediaFileCollisions > 0;
+  return { overlaps, blocking, hasBlockingConflicts };
+}
+
 function computeAuditOverlaps(input: {
   packages: readonly ParsedPackage[];
   liveMedia: readonly { id: string; file: string }[];
@@ -635,11 +708,21 @@ function showNullable(value: string | null): string {
 
 export function formatAuditBatchTextReport(report: Omit<AuditBatchResult, 'rendered'>): string {
   const lines: string[] = [];
+  const skipped = report.skippedAlreadyIntegrated ?? [];
+  const skippedSuffix =
+    skipped.length > 0 ? ` (${skipped.length} already integrated skipped)` : '';
   lines.push(
     `Batch audit [${report.ok ? 'PASS' : 'FAIL'}] strict [${report.strictOk ? 'PASS' : 'FAIL'}] ` +
-      `${report.summary.people} people (${report.duration_ms} ms)`
+      `${report.summary.people} people${skippedSuffix} (${report.duration_ms} ms)`
   );
   lines.push(`  Repo: ${report.repo}`);
+  if (skipped.length > 0) {
+    lines.push(`  Skipped already integrated (${skipped.length}): ${skipped.join(', ')}`);
+  }
+  if (report.people.length === 0) {
+    lines.push('  No pending staged packages remain to audit.');
+    return `${lines.join('\n')}\n`;
+  }
   for (const person of report.people) {
     lines.push(
       `  ${person.person_id}: ${person.ok ? 'PASS' : 'FAIL'} strict ${person.strictOk ? 'PASS' : 'FAIL'}`
@@ -756,11 +839,19 @@ export async function runAuditBatchCommand(options: {
   repoDir?: string;
   personIds: readonly string[];
   json?: boolean;
+  pendingOnly?: boolean;
+  skippedAlreadyIntegrated?: readonly string[];
 }): Promise<AuditBatchResult> {
   const started = performance.now();
   const repoDir = path.resolve(options.repoDir?.trim() || process.cwd());
   const personIds = options.personIds.map((personId) => personId.trim()).filter((personId) => personId.length > 0);
-  if (personIds.length === 0) {
+  const includeSkipped =
+    Boolean(options.pendingOnly) || options.skippedAlreadyIntegrated !== undefined;
+  const skippedAlreadyIntegrated = includeSkipped
+    ? [...(options.skippedAlreadyIntegrated ?? [])]
+    : undefined;
+
+  if (personIds.length === 0 && !options.pendingOnly) {
     throw new CliValidationError('Batch audit requires at least one staged person id.');
   }
   const seen = new Set<string>();
@@ -781,27 +872,18 @@ export async function runAuditBatchCommand(options: {
     people.push(person);
   }
 
-  const packages = personIds.map((personId) =>
-    loadStagedPackage(personId, path.join(repoDir, 'research', 'people', personId))
-  );
-  const overlaps = computeAuditOverlaps({
-    packages,
-    liveMedia: loadLiveMedia(repoDir),
-  });
+  const analysis = analyzeStagedOverlaps(repoDir, personIds);
+  const overlaps = analysis.overlaps;
   const summary = summarizeBatch(people, overlaps);
   const report: Omit<AuditBatchResult, 'rendered'> = {
     ok: people.every((person) => person.ok),
     strictOk:
-      people.every((person) => person.strictOk) &&
-      summary.differingScanCollisions === 0 &&
-      summary.conflictingMediaFileCollisions === 0 &&
-      summary.conflictingPersonOverlaps === 0 &&
-      summary.conflictingPersonSlugCollisions === 0 &&
-      summary.liveMediaFileCollisions === 0,
+      people.every((person) => person.strictOk) && !analysis.hasBlockingConflicts,
     repo: repoDir,
     people,
     overlaps,
     summary,
+    ...(skippedAlreadyIntegrated !== undefined ? { skippedAlreadyIntegrated } : {}),
     duration_ms: Math.round(performance.now() - started),
   };
   const rendered = options.json

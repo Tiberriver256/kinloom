@@ -155,7 +155,22 @@ export interface IntegrateCommandResult {
   rendered: string;
 }
 
-interface MediaLayout {
+export const INTEGRATE_YAML_FILES = [
+  'people.yaml',
+  'events.yaml',
+  'places.yaml',
+  'sources.yaml',
+  'kinship.yaml',
+  'media.yaml',
+  'narratives.yaml',
+] as const;
+
+export interface IntegrateExecutionOverlay {
+  dataDirOverride: string;
+  virtualStagedScans: Map<string, string>;
+}
+
+export interface MediaLayout {
   layout: 'archive-media' | 'media';
   mediaUrlRoot: string;
   scanDestDir: string;
@@ -888,7 +903,7 @@ function upsertKinship(
   return { items: result, counts: { added, updated, unchanged } };
 }
 
-function detectMediaLayout(repoDir: string): MediaLayout {
+export function detectMediaLayout(repoDir: string): MediaLayout {
   const archiveMediaRoot = path.join(repoDir, 'archive-media');
   if (fs.existsSync(archiveMediaRoot) && fs.statSync(archiveMediaRoot).isDirectory()) {
     // Archives with an `archive-media/` directory store `/media/scans/<file>` at
@@ -934,7 +949,8 @@ function resolveMediaDiskPath(fileUrl: string, repoDir: string, mediaLayout: Med
 function planScanStaging(
   repoDir: string,
   packageDir: string,
-  mediaLayout: MediaLayout
+  mediaLayout: MediaLayout,
+  virtualStagedScans?: ReadonlyMap<string, string>
 ): PlannedScan[] {
   const scansSourceDir = path.join(packageDir, 'scans');
   if (!fs.existsSync(scansSourceDir)) {
@@ -974,7 +990,10 @@ function planScanStaging(
       throw new Error(`Scan file '${sourcePath}' is empty (0 bytes).`);
     }
     let alreadyIdentical = false;
-    if (fs.existsSync(destPath)) {
+    const virtualHash = virtualStagedScans?.get(destPath);
+    if (virtualHash !== undefined) {
+      alreadyIdentical = virtualHash === sha256;
+    } else if (fs.existsSync(destPath)) {
       const existing = sha256File(destPath);
       alreadyIdentical = existing.sha256 === sha256;
     }
@@ -1082,9 +1101,16 @@ function writeFileAtomic(filePath: string, content: string): void {
 export async function runIntegrateCommand(
   options: IntegrateCommandOptions
 ): Promise<IntegrateCommandResult> {
+  return executeIntegrateSingle(options);
+}
+
+export async function executeIntegrateSingle(
+  options: IntegrateCommandOptions,
+  overlay?: IntegrateExecutionOverlay
+): Promise<IntegrateCommandResult> {
   const repoDir = path.resolve(options.repoDir?.trim() || process.cwd());
   const personId = options.personId.trim();
-  const dryRun = Boolean(options.dryRun);
+  const dryRun = Boolean(options.dryRun || overlay);
 
   if (!personId) {
     throw new CliValidationError('Missing required option `--person <person_id>`.');
@@ -1101,12 +1127,13 @@ export async function runIntegrateCommand(
   const packageDir = path.resolve(
     options.packageDir?.trim() || path.join(repoDir, 'research', 'people', personId)
   );
-  const dataDir = path.join(repoDir, 'data');
+  const realDataDir = path.join(repoDir, 'data');
+  const dataDir = overlay ? overlay.dataDirOverride : realDataDir;
   const configPath = path.join(repoDir, 'kinloom.config.yaml');
   const patchPath = path.join(packageDir, 'patch.json');
 
   if (!fs.existsSync(path.join(dataDir, 'people.yaml'))) {
-    throw new CliValidationError(`Missing ${path.join(dataDir, 'people.yaml')}.`);
+    throw new CliValidationError(`Missing ${path.join(realDataDir, 'people.yaml')}.`);
   }
   if (!fs.existsSync(configPath)) {
     throw new CliValidationError(`Missing ${configPath}.`);
@@ -1519,7 +1546,12 @@ export async function runIntegrateCommand(
 
   // Scan staging plan & verify every patch.media[].file exists on disk or in packageDir/scans/.
   const mediaLayout = detectMediaLayout(repoDir);
-  const plannedScans = planScanStaging(repoDir, packageDir, mediaLayout);
+  const plannedScans = planScanStaging(
+    repoDir,
+    packageDir,
+    mediaLayout,
+    overlay?.virtualStagedScans
+  );
   const stagedDestSet = new Set(plannedScans.map((s) => s.destPath));
 
   for (const rawMedia of patch.media) {
@@ -1541,7 +1573,11 @@ export async function runIntegrateCommand(
     }
 
     const expectedDiskPath = resolveMediaDiskPath(item.file, repoDir, mediaLayout);
-    if (!fs.existsSync(expectedDiskPath) && !stagedDestSet.has(expectedDiskPath)) {
+    if (
+      !fs.existsSync(expectedDiskPath) &&
+      !stagedDestSet.has(expectedDiskPath) &&
+      !overlay?.virtualStagedScans.has(expectedDiskPath)
+    ) {
       throw new Error(
         `Missing scan file for media '${item.id}': '${item.file}' expected at '${expectedDiskPath}' (not on disk and not staged from ${path.join(packageDir, 'scans')}).`
       );
@@ -1589,6 +1625,9 @@ export async function runIntegrateCommand(
     let status: StagedScanReportItem['status'];
     if (dryRun) {
       status = scan.alreadyIdentical ? 'unchanged' : 'would_stage';
+      if (overlay && !scan.alreadyIdentical) {
+        overlay.virtualStagedScans.set(scan.destPath, scan.sha256);
+      }
     } else if (scan.alreadyIdentical) {
       status = 'unchanged';
     } else {
@@ -1653,7 +1692,11 @@ export async function runIntegrateCommand(
   }
 
   const writtenYamlFiles: string[] = [];
-  if (!dryRun) {
+  if (overlay) {
+    for (const item of pendingWrites) {
+      writeFileAtomic(path.join(dataDir, item.file), item.content);
+    }
+  } else if (!dryRun) {
     for (const item of pendingWrites) {
       const fullPath = path.join(dataDir, item.file);
       writeFileAtomic(fullPath, item.content);
@@ -1685,7 +1728,7 @@ export async function runIntegrateCommand(
     removedMedia: removedMediaIds.length,
     inlineCitationCount,
     stagedScans: stagedScansReport,
-    wouldWriteYamlFiles: pendingWrites.map((w) => path.join(dataDir, w.file)),
+    wouldWriteYamlFiles: pendingWrites.map((w) => path.join(realDataDir, w.file)),
     writtenYamlFiles,
     validation: {
       privateCounts: privateResult.bundle.meta.counts,
