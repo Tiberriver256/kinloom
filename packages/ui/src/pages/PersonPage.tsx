@@ -577,6 +577,8 @@ export const PersonPage: React.FC = () => {
                         person,
                         siteConfig.pronunciations,
                       );
+                      const isInheritedSurnameOnly =
+                        Boolean(effectivePronunciation) && !person.pronunciation && Boolean(person.surname);
                       if (!effectivePronunciation && !capabilities.canEdit) {
                         return null;
                       }
@@ -586,26 +588,27 @@ export const PersonPage: React.FC = () => {
                             <>
                               <PronunciationBadge
                                 pronunciation={effectivePronunciation}
-                                label={person.full_name}
+                                label={isInheritedSurnameOnly ? person.surname : person.full_name}
+                                prefix={isInheritedSurnameOnly ? person.surname : undefined}
                                 baseUrl={baseUrl}
                               />
                               {capabilities.canEdit && (
                                 <button
                                   type="button"
-                                  className="person-family-add-btn print-hide"
+                                  className="pronunciation-edit-link print-hide"
                                   onClick={() => {
                                     setWikiTab('edit');
                                   }}
                                   aria-label={`Edit pronunciation for ${person.full_name}`}
                                 >
-                                  Edit pronunciation
+                                  Edit
                                 </button>
                               )}
                             </>
                           ) : (
                             <button
                               type="button"
-                              className="person-family-add-btn print-hide"
+                              className="pronunciation-edit-link print-hide"
                               onClick={() => {
                                 setWikiTab('edit');
                               }}

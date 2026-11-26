@@ -56,6 +56,21 @@ function parseRevisionMetadata(raw: string | undefined): RevisionId | null {
 }
 
 /**
+ * Deterministic 8-char hex fingerprint of siteConfig so any deploy that changes
+ * kinloom.config.yaml (pronunciations, branches, privacy, etc.) automatically
+ * invalidates both the R2 bundle cache and browser HTTP 304 ETag caches.
+ */
+export function computeSiteConfigHash(siteConfig: KinloomSiteConfig): string {
+  const input = JSON.stringify(siteConfig);
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < input.length; i += 1) {
+    hash ^= input.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return (hash >>> 0).toString(16).padStart(8, '0');
+}
+
+/**
  * Cloudflare R2 BundleCache that applies O(affected_people) incremental patches on writes
  * and falls back to full compileArchive on cold misses.
  */
@@ -65,6 +80,7 @@ export class R2IncrementalPatchBundleCache implements BundleCache {
   private readonly clock: Clock;
   private readonly mode: BuildMode;
   private readonly key: string;
+  private readonly configHash: string;
   public rebuildCount = 0;
   public incrementalPatchCount = 0;
 
@@ -74,10 +90,11 @@ export class R2IncrementalPatchBundleCache implements BundleCache {
     this.clock = options.clock;
     this.mode = options.mode ?? 'private';
     this.key = options.key ?? DEFAULT_COMPILED_BUNDLE_KEY;
+    this.configHash = computeSiteConfigHash(options.siteConfig);
   }
 
   private get memoKey(): string {
-    return `${this.mode}:${this.key}`;
+    return `${this.mode}:${this.configHash}:${this.key}`;
   }
 
   async getCached(ifNoneMatch: string | null): Promise<
@@ -92,10 +109,10 @@ export class R2IncrementalPatchBundleCache implements BundleCache {
         return { status: 'miss' };
       }
       const headRev = parseRevisionMetadata(headObj.customMetadata?.revision);
-      if (headRev === null) {
+      if (headRev === null || headObj.customMetadata?.config_hash !== this.configHash) {
         return { status: 'miss' };
       }
-      const headEtag = headObj.customMetadata?.etag ?? `"r${headRev}"`;
+      const headEtag = headObj.customMetadata?.etag ?? `"r${headRev}-${this.configHash}"`;
       if (ifNoneMatch && matchesIfNoneMatch(ifNoneMatch, headEtag)) {
         return { status: 'not_modified', etag: headEtag };
       }
@@ -125,12 +142,12 @@ export class R2IncrementalPatchBundleCache implements BundleCache {
     }
 
     const revId = parseRevisionMetadata(obj.customMetadata?.revision);
-    if (revId === null) {
+    if (revId === null || obj.customMetadata?.config_hash !== this.configHash) {
       await obj.body.cancel().catch(() => undefined);
       return { status: 'miss' };
     }
 
-    const etag = obj.customMetadata?.etag ?? `"r${revId}"`;
+    const etag = obj.customMetadata?.etag ?? `"r${revId}-${this.configHash}"`;
     if (ifNoneMatch && matchesIfNoneMatch(ifNoneMatch, etag)) {
       await obj.body.cancel().catch(() => undefined);
       return { status: 'not_modified', etag };
@@ -188,7 +205,7 @@ export class R2IncrementalPatchBundleCache implements BundleCache {
   ): Promise<CachedBundleObject> {
     const serialized = JSON.stringify(bundle);
     const encoded = new TextEncoder().encode(serialized);
-    const etag = `"r${headRevisionId}"`;
+    const etag = `"r${headRevisionId}-${this.configHash}"`;
 
     await this.bucket.put(this.key, encoded, {
       httpMetadata: {
@@ -196,6 +213,7 @@ export class R2IncrementalPatchBundleCache implements BundleCache {
       },
       customMetadata: {
         revision: String(headRevisionId),
+        config_hash: this.configHash,
         etag,
         generated_at: generatedAt,
       },

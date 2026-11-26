@@ -261,20 +261,20 @@ export const PlacePage: React.FC = () => {
                         {capabilities.canEdit && (
                           <button
                             type="button"
-                            className="person-family-add-btn print-hide"
+                            className="pronunciation-edit-link print-hide"
                             onClick={() => {
                               setWikiTab('edit');
                             }}
                             aria-label={`Edit pronunciation for ${place.name}`}
                           >
-                            Edit pronunciation
+                            Edit
                           </button>
                         )}
                       </>
                     ) : (
                       <button
                         type="button"
-                        className="person-family-add-btn print-hide"
+                        className="pronunciation-edit-link print-hide"
                         onClick={() => {
                           setWikiTab('edit');
                         }}

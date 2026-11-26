@@ -102,7 +102,7 @@ export const EntityEditDrawer: React.FC<EntityEditDrawerProps> = ({
   onSaved,
   onDeleted,
 }) => {
-  const { dataSource, bundle, baseUrl, reloadArchive } = useArchiveData();
+  const { dataSource, bundle, siteConfig, baseUrl, reloadArchive } = useArchiveData();
   const [syncingRevision, setSyncingRevision] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [deleteSummary, setDeleteSummary] = useState('');
@@ -697,6 +697,47 @@ export const EntityEditDrawer: React.FC<EntityEditDrawerProps> = ({
           {canEditPronunciation && (
             <fieldset className="wiki-citation-fieldset wiki-pronunciation-fieldset">
               <legend className="wiki-field-label">Pronunciation</legend>
+              {entityType === 'person' && (() => {
+                const givenTokens = asString(draft.given_name).trim().split(/\s+/).filter(Boolean);
+                const firstName = givenTokens[0] ?? '';
+                const middleNames = givenTokens.slice(1).join(' ');
+                const surname = asString(draft.surname).trim();
+                const sharedSurname =
+                  surname && siteConfig.pronunciations
+                    ? (siteConfig.pronunciations[surname] ??
+                      Object.entries(siteConfig.pronunciations).find(
+                        ([k]) => k.toLowerCase() === surname.toLowerCase(),
+                      )?.[1])
+                    : undefined;
+                return (
+                  <div className="wiki-pronunciation-breakdown">
+                    {firstName && (
+                      <span className="wiki-pronunciation-part">
+                        <span className="wiki-pronunciation-part-label">First</span>
+                        <strong>{firstName}</strong>
+                      </span>
+                    )}
+                    {middleNames && (
+                      <span className="wiki-pronunciation-part">
+                        <span className="wiki-pronunciation-part-label">Middle</span>
+                        <strong>{middleNames}</strong>
+                      </span>
+                    )}
+                    {surname && (
+                      <span className="wiki-pronunciation-part">
+                        <span className="wiki-pronunciation-part-label">Surname</span>
+                        <strong>{surname}</strong>
+                        {sharedSurname?.phonetic && (
+                          <span className="wiki-pronunciation-part-shared">
+                            → {sharedSurname.phonetic}
+                            {sharedSurname.ipa ? ` ${sharedSurname.ipa}` : ''} (shared)
+                          </span>
+                        )}
+                      </span>
+                    )}
+                  </div>
+                );
+              })()}
               <div className="wiki-field-grid">
                 <label className="wiki-field">
                   <span className="wiki-field-label">Phonetic guide</span>
@@ -755,12 +796,27 @@ export const EntityEditDrawer: React.FC<EntityEditDrawerProps> = ({
               <div className="wiki-pronunciation-actions">
                 <button
                   type="button"
-                  className="pill-btn"
+                  className="wiki-pronunciation-gen-btn"
                   disabled={isBusy || audioGenStatus === 'loading'}
                   onClick={() => {
                     void handleGeneratePronunciationAudio();
                   }}
                 >
+                  <svg
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                  >
+                    <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+                    <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
+                    <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
+                  </svg>
                   {audioGenStatus === 'loading'
                     ? 'Generating…'
                     : draftPronunciation?.audio_url

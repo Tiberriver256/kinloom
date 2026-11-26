@@ -439,21 +439,22 @@ describe('createCloudflareWorker full HTTP lifecycle (Miniflare)', () => {
 
       const r2BundleHead = await fixture.bucket.head(DEFAULT_COMPILED_BUNDLE_KEY);
       expect(r2BundleHead?.customMetadata?.revision).toBe('2');
-      expect(r2BundleHead?.customMetadata?.etag).toBe('"r2"');
+      expect(r2BundleHead?.customMetadata?.etag).toMatch(/^"r2-[a-f0-9]{8}"$/);
 
       const bundleRes = await worker.fetch(
         new Request(`${CONTRACT_TEST_ORIGIN}/api/bundle`, { headers: { cookie: adminCookie } }),
         env
       );
       expect(bundleRes.status).toBe(200);
-      expect(bundleRes.headers.get('etag')).toBe('"r2"');
+      const bundleEtag = bundleRes.headers.get('etag') ?? '';
+      expect(bundleEtag).toMatch(/^"r2-[a-f0-9]{8}"$/);
       const bundle = (await bundleRes.json()) as ArchiveBundle;
       expect(bundle.meta.max_revision_id).toBe(2);
       expect(bundle.people.find((p) => p.id === arthur.id)?.full_name).toBe('Arthur W. Alder');
 
       const notModRes = await worker.fetch(
         new Request(`${CONTRACT_TEST_ORIGIN}/api/bundle`, {
-          headers: { cookie: adminCookie, 'if-none-match': '"r2"' },
+          headers: { cookie: adminCookie, 'if-none-match': bundleEtag },
         }),
         env
       );
@@ -815,7 +816,7 @@ describe('createCloudflareWorker full HTTP lifecycle (Miniflare)', () => {
       expect((await cache.getCached(null)).status).toBe('miss');
       const snapshot1 = await repo.loadActiveSnapshot();
       const coldBuilt = await cache.rebuildAndStore(snapshot1);
-      expect(coldBuilt.etag).toBe('"r1"');
+      expect(coldBuilt.etag).toMatch(/^"r1-[a-f0-9]{8}"$/);
       expect(cache.rebuildCount).toBe(1);
       expect(cache.incrementalPatchCount).toBe(0);
 
@@ -839,17 +840,33 @@ describe('createCloudflareWorker full HTTP lifecycle (Miniflare)', () => {
         ],
       });
       expect(commit2.kind).toBe('committed');
+      let patchedEtag = '';
       if (commit2.kind === 'committed') {
         const prevBundle = JSON.parse(String(coldBuilt.body)) as ArchiveBundle;
         const patched = await cache.applyMutationsAndStore(prevBundle, commit2.revisions);
-        expect(patched.etag).toBe('"r2"');
+        patchedEtag = patched.etag;
+        expect(patched.etag).toMatch(/^"r2-[a-f0-9]{8}"$/);
         expect(cache.rebuildCount).toBe(1);
         expect(cache.incrementalPatchCount).toBe(1);
       }
 
       // Verify R2 stored metadata & ETag short-circuit without downloading body
-      const notMod = await cache.getCached('"r2"');
-      expect(notMod).toEqual({ status: 'not_modified', etag: '"r2"' });
+      const notMod = await cache.getCached(patchedEtag);
+      expect(notMod).toEqual({ status: 'not_modified', etag: patchedEtag });
+
+      // Changing siteConfig must bust both R2 cache and HTTP 304 ETag
+      const updatedConfig = {
+        ...siteConfig,
+        pronunciations: { Mercer: { phonetic: 'MER-ser' } },
+      };
+      const updatedCache = new R2IncrementalPatchBundleCache({
+        bucket: fixture.bucket,
+        siteConfig: updatedConfig,
+        clock,
+        mode: 'private',
+      });
+      const afterConfigChange = await updatedCache.getCached(patchedEtag);
+      expect(afterConfigChange.status).toBe('miss');
 
       const hit = await cache.getCached('"r1"');
       expect(hit.status).toBe('hit');

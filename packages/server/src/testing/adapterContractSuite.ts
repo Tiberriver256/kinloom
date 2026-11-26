@@ -256,7 +256,7 @@ export function runBackendAdapterContractTests(
         };
         expect(created.entity.full_name).toBe('Arthur Alder');
         expect(created.revision.revision_id).toBe(1);
-        expect(created.etag).toBe('"r1"');
+        expect(created.etag).toMatch(/^"r1(-[a-f0-9]{8})?"$/);
 
         // Update entity
         const updateRes = await server.fetch(
@@ -283,7 +283,7 @@ export function runBackendAdapterContractTests(
         };
         expect(updated.entity.full_name).toBe('Arthur Benjamin Alder');
         expect(updated.revision.revision_id).toBe(2);
-        expect(updated.etag).toBe('"r2"');
+        expect(updated.etag).toMatch(/^"r2(-[a-f0-9]{8})?"$/);
 
         // Soft delete
         const deleteRes = await server.fetch(
@@ -1021,7 +1021,7 @@ export function runBackendAdapterContractTests(
         );
         expect(bundleRes.status).toBe(200);
         const etag = bundleRes.headers.get('etag');
-        expect(etag).toBe('"r0"');
+        expect(etag).toMatch(/^"r0(-[a-f0-9]{8})?"$/);
 
         // Repeat GET /api/bundle with If-None-Match -> 304 Not Modified
         const notModifiedRes = await server.fetch(

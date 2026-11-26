@@ -5,6 +5,8 @@ import { resolveAssetUrl } from './Atoms.js';
 export interface PronunciationBadgeProps {
   pronunciation?: Pronunciation | null;
   label: string;
+  /** Optional prefix when the guide applies to a specific name part (e.g. shared surname "Mercer"). */
+  prefix?: string;
   baseUrl?: string;
   compact?: boolean;
   className?: string;
@@ -52,6 +54,7 @@ export function hasPronunciationContent(pronunciation?: Pronunciation | null): b
 export const PronunciationBadge: React.FC<PronunciationBadgeProps> = ({
   pronunciation,
   label,
+  prefix,
   baseUrl,
   compact = false,
   className,
@@ -180,6 +183,31 @@ export const PronunciationBadge: React.FC<PronunciationBadgeProps> = ({
 
   return (
     <span className={rootClassName}>
+      <button
+        type="button"
+        className={`pronunciation-play-btn print-hide${playing ? ' is-playing' : ''}`}
+        aria-label={`Listen to pronunciation of ${label}`}
+        aria-pressed={playing}
+        title={playing ? `Stop pronunciation of ${label}` : `Listen to pronunciation of ${label}`}
+        onClick={handleTogglePlay}
+      >
+        <svg
+          width={compact ? 12 : 14}
+          height={compact ? 12 : 14}
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden="true"
+        >
+          <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+          <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
+          {!compact && <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />}
+        </svg>
+      </button>
+      {prefix && <span className="pronunciation-prefix">{prefix}:</span>}
       {primaryGuide && (
         <span
           className="pronunciation-guide"
@@ -198,16 +226,6 @@ export const PronunciationBadge: React.FC<PronunciationBadgeProps> = ({
           {language}
         </span>
       )}
-      <button
-        type="button"
-        className={`pronunciation-play-btn print-hide${playing ? ' is-playing' : ''}`}
-        aria-label={`Listen to pronunciation of ${label}`}
-        aria-pressed={playing}
-        title={playing ? `Stop pronunciation of ${label}` : `Listen to pronunciation of ${label}`}
-        onClick={handleTogglePlay}
-      >
-        <span aria-hidden="true">🔊</span>
-      </button>
       {!compact && note && <span className="pronunciation-note">{note}</span>}
     </span>
   );
