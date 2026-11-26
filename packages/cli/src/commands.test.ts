@@ -964,10 +964,17 @@ describe('kinloom CLI commands', () => {
               headers: { 'content-type': 'application/json', etag: '"r4"' },
             });
           }
-          return new Response(JSON.stringify(snapshot), {
-            status: 200,
-            headers: { 'content-type': 'application/json', etag: '"r4"' },
-          });
+          return new Response(
+            JSON.stringify({
+              head_revision_id: snapshot.head_revision_id,
+              exported_at: '2026-01-05T00:00:00.000Z',
+              snapshot,
+            }),
+            {
+              status: 200,
+              headers: { 'content-type': 'application/json', etag: '"r4"' },
+            }
+          );
         },
       }
     );

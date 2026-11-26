@@ -8,6 +8,7 @@ import {
   INTEGRATE_HELP,
   SYNC_HELP,
   TELEMETRY_HELP,
+  VERIFY_HELP,
 } from './commands/ops/help.js';
 import { formatRecordCommandsHelp, renderRecordCommandHelp } from './commands/records/help.js';
 import { resolveRecordCommand } from './commands/records/registry.js';
@@ -55,6 +56,7 @@ Research & archive ops:
   context            Dump privacy-fenced YAML context, relatives, and leads for a person
   integrate          Validate and merge a person research package into local YAML
   audit              Run 5-check deterministic audit on a person research package
+  verify             Run full-archive invariant checks over local data/*.yaml files
   sync               Diff and sync local YAML + R2 media to a live Cloudflare archive
   telemetry          Report local CLI latency, cache hit rate, and failure summary
 
@@ -156,6 +158,7 @@ Options:
   context: CONTEXT_HELP,
   integrate: INTEGRATE_HELP,
   audit: AUDIT_HELP,
+  verify: VERIFY_HELP,
   sync: SYNC_HELP,
   telemetry: TELEMETRY_HELP,
 };
@@ -222,6 +225,7 @@ interface ParsedSyncArgs {
   allowDeletes: boolean;
   deleteTokens: string[];
   includeLiving: boolean;
+  verifyLive: boolean;
   dryRun: boolean;
   json: boolean;
 }
@@ -233,6 +237,7 @@ function parseSyncArgs(argv: readonly string[]): ParsedSyncArgs {
     allowDeletes: false,
     deleteTokens: [],
     includeLiving: false,
+    verifyLive: false,
     dryRun: false,
     json: false,
   };
@@ -264,6 +269,10 @@ function parseSyncArgs(argv: readonly string[]): ParsedSyncArgs {
     }
     if (arg === '--include-living') {
       parsed.includeLiving = true;
+      continue;
+    }
+    if (arg === '--verify-live') {
+      parsed.verifyLive = true;
       continue;
     }
     if (arg === '--dry-run') {
@@ -821,6 +830,37 @@ export async function runCli(
         return result.ok ? EXIT_OK : EXIT_ERROR;
       }
 
+      case 'verify': {
+        const { values } = safeParseArgs({
+          args: rest,
+          allowPositionals: false,
+          options: {
+            repo: { type: 'string' },
+            json: { type: 'boolean', default: false },
+          },
+        });
+        const [{ runVerifyCommand }, { measureCommand }] = await Promise.all([
+          import('./commands/ops/verify.js'),
+          import('./commands/ops/telemetry.js'),
+        ]);
+        const result = await measureCommand(
+          {
+            subcmd: 'verify',
+            extractResultMeta: (res) => ({
+              exitCode: res.ok ? EXIT_OK : EXIT_ERROR,
+              bytesOut: Buffer.byteLength(res.rendered, 'utf8'),
+            }),
+          },
+          () =>
+            runVerifyCommand({
+              repoDir: values.repo,
+              json: values.json,
+            })
+        );
+        writeRenderedOutput(io, result.rendered);
+        return result.ok ? EXIT_OK : EXIT_ERROR;
+      }
+
       case 'sync': {
         const parsed = parseSyncArgs(rest);
         const [{ parseDeleteTargets, parseEntityTypeList, runSyncCommand }, { measureCommand }] =
@@ -837,7 +877,8 @@ export async function runCli(
           {
             subcmd: parsed.dryRun ? 'sync --dry-run' : 'sync',
             extractResultMeta: (res) => ({
-              exitCode: EXIT_OK,
+              exitCode:
+                res.liveVerification && !res.liveVerification.ok ? EXIT_ERROR : EXIT_OK,
               bytesOut: Buffer.byteLength(res.rendered, 'utf8'),
             }),
           },
@@ -854,13 +895,14 @@ export async function runCli(
               allowDeletes: parsed.allowDeletes,
               explicitDeletes,
               includeLiving: parsed.includeLiving,
+              verifyLive: parsed.verifyLive,
               dryRun: parsed.dryRun,
               json: parsed.json,
               fetchImpl,
             })
         );
         writeRenderedOutput(io, result.rendered);
-        return EXIT_OK;
+        return result.liveVerification && !result.liveVerification.ok ? EXIT_ERROR : EXIT_OK;
       }
 
       case 'telemetry': {

@@ -364,10 +364,13 @@ describe('help vs subcommand routing and guide-only commands', () => {
 describe('bundle-skills.mjs and dual-mode bundled resolution', () => {
   it('bundles all 20 skills and 4 assets into a temp dist dir with executable script bits', async () => {
     const tmpOut = await makeTempDir('kinloom-bundle-test-');
+    const cliStubPath = path.join(tmpOut, 'cli.js');
+    await writeFile(cliStubPath, '#!/usr/bin/env node\n', { encoding: 'utf8', mode: 0o644 });
     const output = execFileSync(process.execPath, [BUNDLE_SCRIPT, '--out-dir', tmpOut], {
       encoding: 'utf8',
     });
     expect(output).toContain('Bundled 20 skills (18 scripts, 1 references) and 4 assets');
+    expect(fs.statSync(cliStubPath).mode & 0o111).not.toBe(0);
 
     const fakeDistModuleDir = path.join(tmpOut, 'commands', 'records');
 

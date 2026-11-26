@@ -99,6 +99,8 @@ export {
   type SyncCommandOptions,
   type SyncCommandResult,
   type SyncDeleteTarget,
+  type SyncLiveVerificationFailure,
+  type SyncLiveVerificationSummary,
   type SyncPlan,
   type SyncRecompileSummary,
   type SyncSubmittedBatch,
@@ -107,3 +109,23 @@ export {
   type WranglerExecOptions,
   type WranglerExecutor,
 } from './sync.js';
+
+export {
+  VERIFY_HELP,
+  findDuplicateResidenceSpans,
+  formatVerifyTextReport,
+  runVerifyCommand,
+  scanYamlFilesForSsns,
+  validatePlaceCoordinates,
+  verifyMediaFilesOnDisk,
+  type VerifyCitationsResult,
+  type VerifyCommandOptions,
+  type VerifyCommandResult,
+  type VerifyCompileResult,
+  type VerifyInvalidPlace,
+  type VerifyMediaResult,
+  type VerifyMissingMediaFile,
+  type VerifyPlacesResult,
+  type VerifySsnHit,
+  type VerifySsnResult,
+} from './verify.js';

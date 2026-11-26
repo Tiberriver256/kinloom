@@ -77,6 +77,27 @@ const ArchiveRawSnapshotPayloadSchema = z.object({
   kinship: z.array(StoredKinshipRowSchema),
 });
 
+const WrappedArchiveSnapshotResponseSchema = z
+  .object({
+    head_revision_id: z.number().int().nonnegative().optional(),
+    exported_at: z.string().min(1).optional(),
+    snapshot: z.object({
+      head_revision_id: z.number().int().nonnegative().optional(),
+      entities: z.array(StoredEntityRowSchema),
+      kinship: z.array(StoredKinshipRowSchema),
+    }),
+  })
+  .refine(
+    (value) =>
+      value.snapshot.head_revision_id !== undefined || value.head_revision_id !== undefined,
+    { message: 'Missing head_revision_id in snapshot response.' }
+  );
+
+const ExportSnapshotResponseSchema = z.union([
+  WrappedArchiveSnapshotResponseSchema,
+  ArchiveRawSnapshotPayloadSchema,
+]);
+
 export type ExportSnapshotResult =
   | { status: 'not_modified'; etag: string | null }
   | { status: 'ok'; snapshot: ArchiveRawSnapshot; etag: string | null };
@@ -298,17 +319,28 @@ export class KinloomApiClient {
       throw await parseErrorResponse(response);
     }
 
-    const parsed = await parseJsonBody(response, ArchiveRawSnapshotPayloadSchema, endpoint);
-    const entities: StoredEntityRow[] = parsed.entities.map((row) => ({
+    const parsed = await parseJsonBody(response, ExportSnapshotResponseSchema, endpoint);
+    const rawSnapshot = 'snapshot' in parsed ? parsed.snapshot : parsed;
+    const headRevisionId =
+      rawSnapshot.head_revision_id ??
+      ('snapshot' in parsed ? parsed.head_revision_id : undefined);
+    if (headRevisionId === undefined) {
+      throw new KinloomApiError({
+        status: response.status,
+        code: 'INVALID_RESPONSE_SCHEMA',
+        message: `Unexpected response shape from ${endpoint}: missing head_revision_id`,
+      });
+    }
+    const entities: StoredEntityRow[] = rawSnapshot.entities.map((row) => ({
       ...row,
       current_revision_id: asRevisionId(row.current_revision_id),
     }));
-    const kinship: StoredKinshipRow[] = parsed.kinship.map((row) => ({
+    const kinship: StoredKinshipRow[] = rawSnapshot.kinship.map((row) => ({
       ...row,
       current_revision_id: asRevisionId(row.current_revision_id),
     }));
     const snapshot: ArchiveRawSnapshot = {
-      head_revision_id: asRevisionId(parsed.head_revision_id),
+      head_revision_id: asRevisionId(headRevisionId),
       entities,
       kinship,
     };

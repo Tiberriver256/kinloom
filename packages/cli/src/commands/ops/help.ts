@@ -46,6 +46,20 @@ Options:
   --json                 Emit structured JSON scorecard
   -h, --help             Show this help message`;
 
+export const VERIFY_HELP = `Usage: kinloom verify [options]
+
+Run full-archive invariants across local data/*.yaml files:
+  1. Narrative inline citation integrity (0 dangling src_id or med_id)
+  2. Place coordinate validation (-90..90, -180..180, finite, no (0, 0))
+  3. SSN pattern scan across all data/*.yaml files
+  4. Dual-mode compilation (private and public) with 0 review flags, 0 living leaks, and 0 duplicate residence_spans
+  5. Media file presence on disk under archive-media/ or media/
+
+Options:
+  --repo <dir>   Archive repository root (default: current working directory)
+  --json         Emit structured JSON scorecard
+  -h, --help     Show this help message`;
+
 export const SYNC_HELP = `Usage: kinloom sync [options]
 
 Synchronize local YAML and media files to a live Cloudflare D1 + R2 Kinloom archive.
@@ -62,6 +76,7 @@ Options:
   --allow-deletes           Emit delete patches for remote entities absent locally
   --delete <type:id,...>    Explicitly soft-delete specific remote entities (e.g. narrative:nar_old)
   --include-living          Include living person records in diff and sync
+  --verify-live             Probe live /api/bundle and every newly uploaded R2 object before revoking temp tokens
   --dry-run                 Compute diff and planned actions without mutating remote D1 or R2
   --json                    Emit structured JSON report
   -h, --help                Show this help message`;

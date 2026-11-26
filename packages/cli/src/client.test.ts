@@ -198,4 +198,102 @@ describe('KinloomApiClient', () => {
       ]);
     }
   });
+
+  it('unwraps wrapped { snapshot } responses and preserves root-level snapshot compatibility in exportSnapshot', async () => {
+    const client = new KinloomApiClient({ baseUrl, token: 'snap-tok' });
+    const sampleEntity = {
+      entity_type: 'place',
+      entity_id: 'plc_oak_county_ohio',
+      slug: 'oak-county-ohio',
+      data: {
+        id: 'plc_oak_county_ohio',
+        slug: 'oak-county-ohio',
+        name: 'Oak County',
+        full_name: 'Oak County, Ohio, USA',
+        place_type: 'county',
+        parent_id: null,
+        lat: 40.25,
+        lng: -82.85,
+        historical_names: [],
+      },
+      current_revision_id: 7,
+      has_primary_source: true,
+      deleted_at: null,
+      updated_at: '2026-01-05T00:00:00.000Z',
+    };
+
+    // 1. Wrapped server response ({ head_revision_id, exported_at, snapshot: { ... } }).
+    responder = (_req, _body, res) => {
+      res.writeHead(200, { 'content-type': 'application/json', etag: '"r7"' });
+      res.end(
+        JSON.stringify({
+          head_revision_id: 7,
+          exported_at: '2026-01-05T00:00:00.000Z',
+          snapshot: {
+            head_revision_id: 7,
+            entities: [sampleEntity],
+            kinship: [],
+          },
+        })
+      );
+    };
+    const wrapped = await client.exportSnapshot();
+    expect(wrapped.status).toBe('ok');
+    if (wrapped.status === 'ok') {
+      expect(wrapped.etag).toBe('"r7"');
+      expect(wrapped.snapshot.head_revision_id).toBe(7);
+      expect(wrapped.snapshot.entities).toHaveLength(1);
+      expect(wrapped.snapshot.entities[0].entity_id).toBe('plc_oak_county_ohio');
+      expect(wrapped.snapshot.kinship).toEqual([]);
+    }
+
+    // 2. Wrapped response where head_revision_id is only on the outer envelope.
+    responder = (_req, _body, res) => {
+      res.writeHead(200, { 'content-type': 'application/json', etag: '"r8"' });
+      res.end(
+        JSON.stringify({
+          head_revision_id: 8,
+          exported_at: '2026-01-06T00:00:00.000Z',
+          snapshot: {
+            entities: [sampleEntity],
+            kinship: [],
+          },
+        })
+      );
+    };
+    const outerRevWrapped = await client.exportSnapshot();
+    expect(outerRevWrapped.status).toBe('ok');
+    if (outerRevWrapped.status === 'ok') {
+      expect(outerRevWrapped.snapshot.head_revision_id).toBe(8);
+    }
+
+    // 3. Unwrapped root-level snapshot payload remains backward-compatible.
+    responder = (_req, _body, res) => {
+      res.writeHead(200, { 'content-type': 'application/json', etag: '"r9"' });
+      res.end(
+        JSON.stringify({
+          head_revision_id: 9,
+          entities: [sampleEntity],
+          kinship: [],
+        })
+      );
+    };
+    const unwrapped = await client.exportSnapshot();
+    expect(unwrapped.status).toBe('ok');
+    if (unwrapped.status === 'ok') {
+      expect(unwrapped.snapshot.head_revision_id).toBe(9);
+      expect(unwrapped.snapshot.entities).toHaveLength(1);
+    }
+
+    // 4. Invalid shape still fails with INVALID_RESPONSE_SCHEMA.
+    responder = (_req, _body, res) => {
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({ snapshot: { entities: [] } }));
+    };
+    await expect(client.exportSnapshot()).rejects.toMatchObject({
+      name: 'KinloomApiError',
+      status: 200,
+      code: 'INVALID_RESPONSE_SCHEMA',
+    });
+  });
 });

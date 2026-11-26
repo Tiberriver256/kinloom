@@ -6,6 +6,7 @@ import {
   parseKinloomConfigYaml,
   parseNarrativesYaml,
   parsePeopleYaml,
+  parseSourcesYaml,
   serializeEventsYaml,
   serializeKinloomConfigYaml,
   serializeKinshipYaml,
@@ -45,6 +46,8 @@ import {
   runIntegrateCommand,
   runSyncCommand,
   runTelemetryReportCommand,
+  runVerifyCommand,
+  scanYamlFilesForSsns,
   stripJsoncCommentsAndTrailingCommas,
   type OpsIo,
   type WranglerExecutor,
@@ -728,6 +731,132 @@ describe('ops/integrate', () => {
       runIntegrateCommand({ repoDir, personId: 'per_arthur_alder', dryRun: true })
     ).rejects.toThrow('forbidden (0, 0) coordinates');
   });
+
+  it('retires superseded source stubs via per-event and top-level remove_source_ids without breaking citations', async () => {
+    const repoDir = await createSyntheticRepo();
+    const sourcesPath = path.join(repoDir, 'data', 'sources.yaml');
+    const eventsPath = path.join(repoDir, 'data', 'events.yaml');
+
+    // Add a synthetic GEDCOM stub source attached to Arthur's 1880 census event.
+    const baseSources = parseSourcesYaml(await readFile(sourcesPath, 'utf8'));
+    baseSources.push({
+      id: 'src_ged_stub_1880',
+      citation: 'Unsourced GEDCOM import stub',
+      source_type: 'other',
+    });
+    await writeFile(sourcesPath, serializeSourcesYaml(baseSources, { sortById: true }), 'utf8');
+
+    const baseEvents = parseEventsYaml(await readFile(eventsPath, 'utf8'));
+    const censusEvent = baseEvents.find((e) => e.id === 'evt_arthur_1880_census');
+    expect(censusEvent).toBeDefined();
+    censusEvent!.sources = [
+      { source_id: 'src_ged_stub_1880', confidence: 'low' },
+      { source_id: 'src_1880_census', confidence: 'high' },
+    ];
+    await writeFile(eventsPath, serializeEventsYaml(baseEvents, { sortById: true }), 'utf8');
+
+    const packageDir = path.join(repoDir, 'research', 'people', 'per_arthur_alder');
+    await mkdir(packageDir, { recursive: true });
+    const patchPath = path.join(packageDir, 'patch.json');
+
+    // 1. Dry-run and apply: retire src_ged_stub_1880 from event AND remove unreferenced stub from sources.yaml.
+    const retirePatch = {
+      person_id: 'per_arthur_alder',
+      sources: [
+        {
+          id: 'src_1880_census_schedule',
+          citation: '1880 U.S. Federal Census Schedule 1, Oak County, Ohio, ED 4, Sheet 9',
+          source_type: 'census',
+          repository: 'NARA',
+        },
+      ],
+      remove_source_ids: ['src_ged_stub_1880'],
+      events: [
+        {
+          id: 'evt_arthur_1880_census',
+          title: '1880 Federal Census household in Oak County',
+          scope: 'personal',
+          event_kind: 'residence_anchor',
+          edtf_date: '1880-06-15',
+          place_id: 'plc_oak_county_ohio',
+          summary: 'Arthur Alder farmed in Oak County.',
+          participants: [{ person_id: 'per_arthur_alder', role: 'principal' }],
+          sources: [{ source_id: 'src_1880_census_schedule', confidence: 'high' }],
+          remove_source_ids: ['src_ged_stub_1880'],
+        },
+      ],
+    };
+    await writeFile(patchPath, JSON.stringify(retirePatch, null, 2), 'utf8');
+
+    const dryRun = await runIntegrateCommand({
+      repoDir,
+      personId: 'per_arthur_alder',
+      dryRun: true,
+    });
+    expect(dryRun.ok).toBe(true);
+    expect(dryRun.removedSourceIds).toEqual(['src_ged_stub_1880']);
+    expect(dryRun.writtenYamlFiles).toEqual([]);
+
+    // Audit also accepts remove_source_ids cleanly.
+    const eventsAfterDry = parseEventsYaml(await readFile(eventsPath, 'utf8'));
+    expect(
+      eventsAfterDry
+        .find((e) => e.id === 'evt_arthur_1880_census')
+        ?.sources.map((s) => s.source_id)
+    ).toEqual(['src_ged_stub_1880', 'src_1880_census']);
+
+    const applied = await runIntegrateCommand({
+      repoDir,
+      personId: 'per_arthur_alder',
+      dryRun: false,
+    });
+    expect(applied.ok).toBe(true);
+    expect(applied.removedSourceIds).toEqual(['src_ged_stub_1880']);
+
+    const updatedEvents = parseEventsYaml(await readFile(eventsPath, 'utf8'));
+    expect(
+      updatedEvents
+        .find((e) => e.id === 'evt_arthur_1880_census')
+        ?.sources.map((s) => s.source_id)
+    ).toEqual(['src_1880_census', 'src_1880_census_schedule']);
+
+    const updatedSources = parseSourcesYaml(await readFile(sourcesPath, 'utf8'));
+    expect(updatedSources.some((s) => s.id === 'src_ged_stub_1880')).toBe(false);
+    expect(updatedSources.some((s) => s.id === 'src_1880_census_schedule')).toBe(true);
+
+    // 2. Reject top-level removal of a source still cited by an event or narrative.
+    const brokenRemovePatch = {
+      person_id: 'per_arthur_alder',
+      remove_source_ids: ['src_1880_census'],
+    };
+    await writeFile(patchPath, JSON.stringify(brokenRemovePatch, null, 2), 'utf8');
+    await expect(
+      runIntegrateCommand({ repoDir, personId: 'per_arthur_alder', dryRun: true })
+    ).rejects.toThrow("Cannot remove source 'src_1880_census'");
+
+    // 3. Reject conflicting add + remove on the same event.
+    const conflictingEventPatch = {
+      person_id: 'per_arthur_alder',
+      events: [
+        {
+          id: 'evt_arthur_1880_census',
+          title: '1880 Federal Census household in Oak County',
+          scope: 'personal',
+          event_kind: 'residence_anchor',
+          edtf_date: '1880-06-15',
+          place_id: 'plc_oak_county_ohio',
+          summary: 'Arthur Alder farmed in Oak County.',
+          participants: [{ person_id: 'per_arthur_alder', role: 'principal' }],
+          sources: [{ source_id: 'src_1880_census', confidence: 'high' }],
+          remove_source_ids: ['src_1880_census'],
+        },
+      ],
+    };
+    await writeFile(patchPath, JSON.stringify(conflictingEventPatch, null, 2), 'utf8');
+    await expect(
+      runIntegrateCommand({ repoDir, personId: 'per_arthur_alder', dryRun: true })
+    ).rejects.toThrow("cannot both attach and remove source 'src_1880_census'");
+  });
 });
 
 describe('ops/audit', () => {
@@ -1210,5 +1339,322 @@ describe('ops/sync', () => {
       runSyncCommand({ repoDir, fetchImpl: failingFetch, execWrangler })
     ).rejects.toThrow('GET /api/export/snapshot failed with HTTP 500');
     expect(sawCleanupDelete).toBe(true);
+  });
+
+  it('supports --verify-live for both passing and failing probes while always revoking temp tokens', async () => {
+    const repoDir = await createSyntheticRepo();
+    await mkdir(path.join(repoDir, 'media'), { recursive: true });
+    await writeFile(path.join(repoDir, 'media', 'arthur-scan.png'), makeMinimalPng(100, 100));
+    await writeFile(
+      path.join(repoDir, 'data', 'media.yaml'),
+      serializeMediaYaml(
+        [
+          {
+            id: 'med_arthur_scan',
+            kind: 'document_scan',
+            person_id: 'per_arthur_alder',
+            file: '/media/arthur-scan.png',
+            caption: 'Arthur census scan',
+          },
+        ],
+        { sortById: true }
+      ),
+      'utf8'
+    );
+    await writeFile(
+      path.join(repoDir, 'wrangler.jsonc'),
+      JSON.stringify({
+        d1_databases: [{ database_name: 'alder-db' }],
+        r2_buckets: [{ bucket_name: 'alder-media' }],
+        routes: [{ pattern: 'alder.example.org/*' }],
+      }),
+      'utf8'
+    );
+
+    const makeWranglerMock = () => {
+      const events: string[] = [];
+      const execWrangler: WranglerExecutor = async (_bin, args) => {
+        if (args[0] === 'd1') {
+          const sql = args[args.indexOf('--command') + 1] ?? '';
+          if (sql.includes('DELETE FROM agent_tokens')) {
+            events.push('cleanup');
+            return {
+              stdout: JSON.stringify([
+                { success: true, results: [] },
+                { success: true, results: [] },
+                { success: true, results: [{ count: 1 }] },
+                { success: true, results: [{ count: 0 }] },
+              ]),
+              stderr: '',
+            };
+          }
+          events.push('mint');
+          return {
+            stdout: JSON.stringify([
+              { success: true, results: [] },
+              { success: true, results: [] },
+            ]),
+            stderr: '',
+          };
+        }
+        events.push(`r2:${args[2]}`);
+        return { stdout: 'ok', stderr: '' };
+      };
+      return { events, execWrangler };
+    };
+
+    // 1. Passing --verify-live probes /api/bundle and uploaded R2 key BEFORE temp token cleanup.
+    const passMock = makeWranglerMock();
+    let mediaProbeCalls = 0;
+    const passFetch: typeof fetch = async (input, init) => {
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+      if (url.endsWith('/api/export/snapshot')) {
+        return new Response(
+          JSON.stringify({
+            head_revision_id: 5,
+            snapshot: { head_revision_id: 5, entities: [], kinship: [] },
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json', etag: '"rev-5"' } }
+        );
+      }
+      if (url.endsWith('/api/batches')) {
+        const body = JSON.parse(String(init?.body ?? '{}')) as { batch_id: string };
+        return new Response(
+          JSON.stringify({ batch_id: body.batch_id, head_revision_id: 6, etag: '"rev-6"' }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } }
+        );
+      }
+      if (url.endsWith('/api/bundle')) {
+        passMock.events.push('probe:bundle');
+        return new Response(
+          JSON.stringify({
+            meta: {
+              max_revision_id: 6,
+              counts: { people: 4, living_redacted: 1, events: 2, residence_spans: 0, places: 1, sources: 2 },
+            },
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json', etag: '"rev-6"' } }
+        );
+      }
+      if (url.endsWith('/media/arthur-scan.png')) {
+        mediaProbeCalls += 1;
+        // First call is --sync-missing-media check (404); second call is --verify-live check (200 non-empty).
+        if (mediaProbeCalls === 1) {
+          return new Response(null, { status: 404 });
+        }
+        passMock.events.push('probe:media');
+        return new Response(new Uint8Array([0x89, 0x50, 0x4e, 0x47]), {
+          status: 200,
+          headers: { 'Content-Type': 'image/png', 'Content-Length': '4' },
+        });
+      }
+      return new Response('not found', { status: 404 });
+    };
+
+    const passRes = await runSyncCommand({
+      repoDir,
+      syncMissingMedia: true,
+      verifyLive: true,
+      json: true,
+      fetchImpl: passFetch,
+      execWrangler: passMock.execWrangler,
+    });
+    expect(passRes.liveVerification).toEqual({
+      ok: true,
+      bundleStatus: 200,
+      bundleRevision: 6,
+      expectedRevision: 6,
+      mediaChecked: 1,
+      mediaFailed: 0,
+      failures: [],
+    });
+    expect(passRes.cleanup?.remainingTmpCount).toBe(0);
+    expect(passRes.cleanup?.backupCount).toBe(1);
+    expect(passMock.events.indexOf('probe:media')).toBeLessThan(passMock.events.indexOf('cleanup'));
+
+    // 2. Failing --verify-live (stale bundle rev + empty R2 response) reports failures AND cleans up temp tokens.
+    const failMock = makeWranglerMock();
+    let failMediaCalls = 0;
+    const failFetch: typeof fetch = async (input, init) => {
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+      if (url.endsWith('/api/export/snapshot')) {
+        return new Response(
+          JSON.stringify({ head_revision_id: 5, entities: [], kinship: [] }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } }
+        );
+      }
+      if (url.endsWith('/api/batches')) {
+        const body = JSON.parse(String(init?.body ?? '{}')) as { batch_id: string };
+        return new Response(
+          JSON.stringify({ batch_id: body.batch_id, head_revision_id: 6, etag: '"rev-6"' }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } }
+        );
+      }
+      if (url.endsWith('/api/bundle')) {
+        return new Response(
+          JSON.stringify({
+            meta: {
+              max_revision_id: 5,
+              counts: { people: 4, living_redacted: 1, events: 2, residence_spans: 0, places: 1, sources: 2 },
+            },
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } }
+        );
+      }
+      if (url.endsWith('/media/arthur-scan.png')) {
+        failMediaCalls += 1;
+        if (failMediaCalls === 1) {
+          return new Response(null, { status: 404 });
+        }
+        return new Response(new Uint8Array(0), {
+          status: 200,
+          headers: { 'Content-Type': 'image/png', 'Content-Length': '0' },
+        });
+      }
+      return new Response('not found', { status: 404 });
+    };
+
+    const failRes = await runSyncCommand({
+      repoDir,
+      syncMissingMedia: true,
+      verifyLive: true,
+      json: true,
+      fetchImpl: failFetch,
+      execWrangler: failMock.execWrangler,
+    });
+    expect(failRes.liveVerification?.ok).toBe(false);
+    expect(failRes.liveVerification?.bundleRevision).toBe(5);
+    expect(failRes.liveVerification?.expectedRevision).toBe(6);
+    expect(failRes.liveVerification?.mediaChecked).toBe(1);
+    expect(failRes.liveVerification?.mediaFailed).toBe(1);
+    expect(failRes.liveVerification?.failures).toHaveLength(2);
+    expect(failRes.cleanup?.remainingTmpCount).toBe(0);
+    expect(failRes.cleanup?.backupCount).toBe(1);
+    expect(failMock.events).toContain('cleanup');
+  });
+});
+
+describe('ops/verify', () => {
+  it('passes all 5 invariants on a valid synthetic archive and flags violations', async () => {
+    const repoDir = await createSyntheticRepo();
+    await mkdir(path.join(repoDir, 'media'), { recursive: true });
+    await writeFile(path.join(repoDir, 'media', 'clara-photo.png'), makeMinimalPng(40, 40));
+    await writeFile(path.join(repoDir, 'media', 'arthur-census.png'), makeMinimalPng(40, 40));
+
+    await writeFile(
+      path.join(repoDir, 'data', 'media.yaml'),
+      serializeMediaYaml(
+        [
+          {
+            id: 'med_arthur_census',
+            kind: 'document_scan',
+            source_id: 'src_1880_census',
+            person_id: 'per_arthur_alder',
+            file: '/media/arthur-census.png',
+            caption: 'Arthur Alder 1880 census scan',
+          },
+        ],
+        { sortById: true }
+      ),
+      'utf8'
+    );
+    await writeFile(
+      path.join(repoDir, 'data', 'narratives.yaml'),
+      serializeNarrativesYaml(
+        [
+          {
+            id: 'nar_arthur_bio',
+            slug: 'arthur-alder-bio',
+            kind: 'biography',
+            subject_person_id: 'per_arthur_alder',
+            title: 'Arthur Alder Biography',
+            person_ids: ['per_arthur_alder'],
+            place_ids: ['plc_oak_county_ohio'],
+            event_ids: ['evt_arthur_1880_census'],
+            source_ids: ['src_1880_census'],
+            body_md: 'Arthur Alder farmed in Oak County.[^src_1880_census|med_arthur_census]',
+          },
+        ],
+        { sortById: true }
+      ),
+      'utf8'
+    );
+
+    const clean = await runVerifyCommand({ repoDir, json: true });
+    expect(clean.ok).toBe(true);
+    expect(clean.checks.citations.ok).toBe(true);
+    expect(clean.checks.places.ok).toBe(true);
+    expect(clean.checks.ssn.ok).toBe(true);
+    expect(clean.checks.compile.ok).toBe(true);
+    expect(clean.checks.compile.publicCounts.living_redacted).toBe(1);
+    expect(clean.checks.media.ok).toBe(true);
+    expect(clean.checks.media.checkedCount).toBe(1);
+    expect(clean.errors).toEqual([]);
+
+    // Confirm SSN scanner ignores URLs and YAML id/url keys while catching real SSNs.
+    const ssnScan = scanYamlFilesForSsns([
+      {
+        name: 'data/sources.yaml',
+        content: [
+          '- id: src_123-45-6789',
+          '  url: https://example.org/record/123-45-6789/page',
+          '  citation: Clean citation with https://example.org/987-65-4321 and id foo_111-22-3333',
+          '  note: Contains real SSN 123-45-6789 in prose.',
+        ].join('\n'),
+      },
+    ]);
+    expect(ssnScan.ok).toBe(false);
+    expect(ssnScan.hits).toEqual([
+      { file: 'data/sources.yaml', line: 4, match: '123-45-6789' },
+    ]);
+
+    // Introduce 4 simultaneous violations: dangling citation, (0, 0) place, SSN in YAML, missing media file.
+    await writeFile(
+      path.join(repoDir, 'data', 'places.yaml'),
+      serializePlacesYaml([
+        {
+          id: 'plc_oak_county_ohio',
+          slug: 'oak-county-ohio',
+          name: 'Oak County',
+          full_name: 'Oak County, Ohio, USA',
+          place_type: 'county',
+          parent_id: null,
+          lat: 0,
+          lng: 0,
+          historical_names: [],
+        },
+      ]),
+      'utf8'
+    );
+    await writeFile(
+      path.join(repoDir, 'data', 'narratives.yaml'),
+      serializeNarrativesYaml([
+        {
+          id: 'nar_arthur_bio',
+          slug: 'arthur-alder-bio',
+          kind: 'biography',
+          subject_person_id: 'per_arthur_alder',
+          title: 'Arthur Alder Biography',
+          person_ids: ['per_arthur_alder'],
+          place_ids: ['plc_oak_county_ohio'],
+          event_ids: ['evt_arthur_1880_census'],
+          source_ids: ['src_1880_census'],
+          body_md: 'Broken ref.[^src_missing_stub|med_missing] SSN 123-45-6789.',
+        },
+      ]),
+      'utf8'
+    );
+    await rm(path.join(repoDir, 'media', 'arthur-census.png'));
+
+    const broken = await runVerifyCommand({ repoDir });
+    expect(broken.ok).toBe(false);
+    expect(broken.checks.citations.ok).toBe(false);
+    expect(broken.checks.citations.errors).toHaveLength(2);
+    expect(broken.checks.places.ok).toBe(false);
+    expect(broken.checks.places.invalidPlaces[0]?.reason).toContain('(0, 0)');
+    expect(broken.checks.ssn.ok).toBe(false);
+    expect(broken.checks.ssn.hits[0]?.match).toBe('123-45-6789');
+    expect(broken.checks.media.ok).toBe(false);
+    expect(broken.checks.media.missingFiles[0]?.id).toBe('med_arthur_census');
   });
 });

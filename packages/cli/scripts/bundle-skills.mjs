@@ -19,12 +19,43 @@ function shouldSkipEntry(name) {
   return false;
 }
 
-function copyDirectoryFiles(srcDir, destDir, executable) {
+function copyFileAtomic(srcPath, destPath, executable) {
+  const dir = path.dirname(destPath);
+  fs.mkdirSync(dir, { recursive: true });
+  const tmpPath = path.join(dir, `.${path.basename(destPath)}.tmp.${process.pid}.${Date.now()}`);
+  fs.copyFileSync(srcPath, tmpPath);
+  if (executable) {
+    fs.chmodSync(tmpPath, 0o755);
+  }
+  fs.renameSync(tmpPath, destPath);
+}
+
+function pruneStaleEntries(rootDir, expectedPaths) {
+  if (!fs.existsSync(rootDir)) {
+    return;
+  }
+  for (const entry of fs.readdirSync(rootDir, { withFileTypes: true })) {
+    const fullPath = path.join(rootDir, entry.name);
+    if (entry.isDirectory()) {
+      pruneStaleEntries(fullPath, expectedPaths);
+      if (!expectedPaths.has(fullPath) && fs.readdirSync(fullPath).length === 0) {
+        fs.rmdirSync(fullPath);
+      }
+      continue;
+    }
+    if (!expectedPaths.has(fullPath)) {
+      fs.rmSync(fullPath, { force: true });
+    }
+  }
+}
+
+function copyDirectoryFiles(srcDir, destDir, executable, expectedPaths) {
   let count = 0;
   if (!fs.existsSync(srcDir)) {
     return count;
   }
   fs.mkdirSync(destDir, { recursive: true });
+  expectedPaths.add(destDir);
   for (const entry of fs.readdirSync(srcDir, { withFileTypes: true })) {
     if (shouldSkipEntry(entry.name)) {
       continue;
@@ -32,16 +63,14 @@ function copyDirectoryFiles(srcDir, destDir, executable) {
     const srcPath = path.join(srcDir, entry.name);
     const destPath = path.join(destDir, entry.name);
     if (entry.isDirectory()) {
-      count += copyDirectoryFiles(srcPath, destPath, executable);
+      count += copyDirectoryFiles(srcPath, destPath, executable, expectedPaths);
       continue;
     }
     if (!entry.isFile()) {
       continue;
     }
-    fs.copyFileSync(srcPath, destPath);
-    if (executable) {
-      fs.chmodSync(destPath, 0o755);
-    }
+    copyFileAtomic(srcPath, destPath, executable);
+    expectedPaths.add(destPath);
     count += 1;
   }
   return count;
@@ -64,10 +93,12 @@ export function bundleSkills(options = {}) {
     throw new Error(`CLI assets source directory not found: ${assetsSrcRoot}`);
   }
 
-  fs.rmSync(skillsDestRoot, { recursive: true, force: true });
-  fs.rmSync(assetsDestRoot, { recursive: true, force: true });
+  // Overwrite in place via atomic rename so concurrent CLI readers never see missing files.
   fs.mkdirSync(skillsDestRoot, { recursive: true });
   fs.mkdirSync(assetsDestRoot, { recursive: true });
+
+  const expectedSkillsPaths = new Set([skillsDestRoot]);
+  const expectedAssetsPaths = new Set([assetsDestRoot]);
 
   const bundledSkills = [];
   let copiedScripts = 0;
@@ -87,16 +118,29 @@ export function bundleSkills(options = {}) {
 
     const skillDest = path.join(skillsDestRoot, entry.name);
     fs.mkdirSync(skillDest, { recursive: true });
-    fs.copyFileSync(skillMdSrc, path.join(skillDest, 'SKILL.md'));
+    expectedSkillsPaths.add(skillDest);
+    const skillMdDest = path.join(skillDest, 'SKILL.md');
+    copyFileAtomic(skillMdSrc, skillMdDest, false);
+    expectedSkillsPaths.add(skillMdDest);
 
     const scriptsSrc = path.join(skillDir, 'scripts');
     if (fs.existsSync(scriptsSrc)) {
-      copiedScripts += copyDirectoryFiles(scriptsSrc, path.join(skillDest, 'scripts'), true);
+      copiedScripts += copyDirectoryFiles(
+        scriptsSrc,
+        path.join(skillDest, 'scripts'),
+        true,
+        expectedSkillsPaths
+      );
     }
 
     const refsSrc = path.join(skillDir, 'references');
     if (fs.existsSync(refsSrc)) {
-      copiedReferences += copyDirectoryFiles(refsSrc, path.join(skillDest, 'references'), false);
+      copiedReferences += copyDirectoryFiles(
+        refsSrc,
+        path.join(skillDest, 'references'),
+        false,
+        expectedSkillsPaths
+      );
     }
 
     bundledSkills.push(entry.name);
@@ -109,13 +153,19 @@ export function bundleSkills(options = {}) {
     }
     const srcPath = path.join(assetsSrcRoot, entry.name);
     const destPath = path.join(assetsDestRoot, entry.name);
-    fs.copyFileSync(srcPath, destPath);
-    if (entry.name.endsWith('.py')) {
-      fs.chmodSync(destPath, 0o755);
-    }
+    copyFileAtomic(srcPath, destPath, entry.name.endsWith('.py'));
+    expectedAssetsPaths.add(destPath);
     copiedAssets.push(entry.name);
   }
   copiedAssets.sort();
+
+  pruneStaleEntries(skillsDestRoot, expectedSkillsPaths);
+  pruneStaleEntries(assetsDestRoot, expectedAssetsPaths);
+
+  const cliJsPath = path.join(outDir, 'cli.js');
+  if (fs.existsSync(cliJsPath)) {
+    fs.chmodSync(cliJsPath, 0o755);
+  }
 
   return {
     outDir,

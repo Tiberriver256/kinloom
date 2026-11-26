@@ -84,6 +84,8 @@ const MIME_BY_EXT: Readonly<Record<string, string>> = {
 const DEFAULT_CHUNK_SIZE = 25;
 const DEFAULT_UPLOAD_CONCURRENCY = 6;
 const MEDIA_PROBE_CONCURRENCY = 12;
+const LIVE_VERIFY_CONCURRENCY = 6;
+const LIVE_VERIFY_TIMEOUT_MS = 15_000;
 const DEFAULT_BACKUP_TOKEN_LABEL = 'github-actions-nightly-backup';
 const TEMP_TOKEN_LABEL = 'tmp-kinloom-sync';
 const TEMP_TOKEN_ID_PREFIX = 'tmp_sync_';
@@ -127,6 +129,7 @@ export interface SyncCommandOptions {
   allowDeletes?: boolean;
   explicitDeletes?: readonly SyncDeleteTarget[];
   includeLiving?: boolean;
+  verifyLive?: boolean;
   dryRun?: boolean;
   json?: boolean;
   backupTokenLabel?: string;
@@ -193,6 +196,23 @@ export interface SyncCleanupSummary {
   backupCount: number;
 }
 
+export interface SyncLiveVerificationFailure {
+  target: string;
+  url: string;
+  status: number | null;
+  reason: string;
+}
+
+export interface SyncLiveVerificationSummary {
+  ok: boolean;
+  bundleStatus: number | null;
+  bundleRevision: number | null;
+  expectedRevision: number | null;
+  mediaChecked: number;
+  mediaFailed: number;
+  failures: SyncLiveVerificationFailure[];
+}
+
 export interface SyncCommandResult {
   repoDir: string;
   baseUrl: string;
@@ -216,6 +236,7 @@ export interface SyncCommandResult {
   };
   batchesSubmitted: SyncSubmittedBatch[];
   recompile: SyncRecompileSummary | null;
+  liveVerification: SyncLiveVerificationSummary | null;
   cleanup: SyncCleanupSummary | null;
   rendered: string;
 }
@@ -1326,6 +1347,170 @@ async function purgeCompiledBundleAndRecompile(
   };
 }
 
+async function verifyLiveEndpoints(params: {
+  ctx: SyncExecutionContext;
+  writeToken: string;
+  expectedRevision: number | null;
+  uploadedKeys: readonly string[];
+  concurrency: number;
+}): Promise<SyncLiveVerificationSummary> {
+  const failures: SyncLiveVerificationFailure[] = [];
+  let bundleStatus: number | null = null;
+  let bundleRevision: number | null = null;
+
+  const bundleUrl = `${params.ctx.bindings.baseUrl}/api/bundle`;
+  try {
+    const response = await params.ctx.fetchImpl(bundleUrl, {
+      method: 'GET',
+      headers: {
+        Accept: 'application/json',
+        Authorization: `Bearer ${params.writeToken}`,
+        'Cache-Control': 'no-cache',
+      },
+      signal: AbortSignal.timeout(LIVE_VERIFY_TIMEOUT_MS),
+    });
+    bundleStatus = response.status;
+    if (response.status !== 200) {
+      const text = await response.text().catch(() => '');
+      failures.push({
+        target: 'bundle',
+        url: bundleUrl,
+        status: response.status,
+        reason: `Expected HTTP 200 from /api/bundle, got HTTP ${response.status}${text.trim() ? `: ${text.trim().slice(0, 160)}` : ''}`,
+      });
+    } else {
+      let body: unknown;
+      try {
+        body = await response.json();
+      } catch (err: unknown) {
+        failures.push({
+          target: 'bundle',
+          url: bundleUrl,
+          status: response.status,
+          reason: `Invalid JSON from /api/bundle: ${err instanceof Error ? err.message : String(err)}`,
+        });
+        body = null;
+      }
+      if (body !== null) {
+        const meta = isPlainRecord(body) && isPlainRecord(body.meta) ? body.meta : null;
+        bundleRevision = typeof meta?.max_revision_id === 'number' ? meta.max_revision_id : null;
+        if (
+          params.expectedRevision !== null &&
+          bundleRevision !== params.expectedRevision
+        ) {
+          failures.push({
+            target: 'bundle',
+            url: bundleUrl,
+            status: response.status,
+            reason: `Bundle revision mismatch: expected r${params.expectedRevision}, got ${bundleRevision !== null ? `r${bundleRevision}` : 'none'}`,
+          });
+        }
+      }
+    }
+  } catch (err: unknown) {
+    failures.push({
+      target: 'bundle',
+      url: bundleUrl,
+      status: null,
+      reason: err instanceof Error ? err.message : String(err),
+    });
+  }
+
+  let mediaFailed = 0;
+  const probeConcurrency = Math.max(1, Math.min(params.concurrency, LIVE_VERIFY_CONCURRENCY));
+  const mediaProbeFailures = await runWithConcurrency(
+    params.uploadedKeys,
+    probeConcurrency,
+    async (r2Key): Promise<SyncLiveVerificationFailure | null> => {
+      const mediaUrl = `${params.ctx.bindings.baseUrl}/${r2Key}`;
+      try {
+        const response = await params.ctx.fetchImpl(mediaUrl, {
+          method: 'GET',
+          headers: {
+            Authorization: `Bearer ${params.writeToken}`,
+            'Cache-Control': 'no-cache',
+          },
+          signal: AbortSignal.timeout(LIVE_VERIFY_TIMEOUT_MS),
+        });
+        if (response.status !== 200) {
+          await response.body?.cancel().catch(() => undefined);
+          return {
+            target: r2Key,
+            url: mediaUrl,
+            status: response.status,
+            reason: `Expected HTTP 200, got HTTP ${response.status}`,
+          };
+        }
+
+        const contentLengthHeader = response.headers.get('content-length');
+        if (contentLengthHeader !== null && Number(contentLengthHeader) === 0) {
+          await response.body?.cancel().catch(() => undefined);
+          return {
+            target: r2Key,
+            url: mediaUrl,
+            status: response.status,
+            reason: 'Empty response (content-length: 0)',
+          };
+        }
+
+        let firstChunkBytes = 0;
+        const reader = response.body?.getReader();
+        if (reader) {
+          try {
+            while (firstChunkBytes === 0) {
+              const chunk = await reader.read();
+              if (chunk.done) {
+                break;
+              }
+              firstChunkBytes = chunk.value ? chunk.value.byteLength : 0;
+            }
+          } finally {
+            await reader.cancel().catch(() => undefined);
+          }
+        } else {
+          const buf = await response.arrayBuffer();
+          firstChunkBytes = buf.byteLength;
+        }
+
+        if (firstChunkBytes === 0) {
+          return {
+            target: r2Key,
+            url: mediaUrl,
+            status: response.status,
+            reason: 'Empty response body (0 bytes)',
+          };
+        }
+
+        return null;
+      } catch (err: unknown) {
+        return {
+          target: r2Key,
+          url: mediaUrl,
+          status: null,
+          reason: err instanceof Error ? err.message : String(err),
+        };
+      }
+    }
+  );
+
+  for (const failure of mediaProbeFailures) {
+    if (failure) {
+      mediaFailed += 1;
+      failures.push(failure);
+    }
+  }
+
+  return {
+    ok: failures.length === 0,
+    bundleStatus,
+    bundleRevision,
+    expectedRevision: params.expectedRevision,
+    mediaChecked: params.uploadedKeys.length,
+    mediaFailed,
+    failures,
+  };
+}
+
 export function formatSyncReport(report: Omit<SyncCommandResult, 'rendered'>): string {
   const lines: string[] = [
     `Archive: ${report.baseUrl}`,
@@ -1386,6 +1571,18 @@ export function formatSyncReport(report: Omit<SyncCommandResult, 'rendered'>): s
     );
   }
 
+  if (report.liveVerification) {
+    const lv = report.liveVerification;
+    lines.push(
+      `Live verification [${lv.ok ? 'PASS' : 'FAIL'}]: bundle=HTTP ${lv.bundleStatus ?? 'error'} (rev=${lv.bundleRevision ?? 'none'}, expected=${lv.expectedRevision ?? 'none'}), media=${lv.mediaChecked - lv.mediaFailed}/${lv.mediaChecked} ok`
+    );
+    for (const failure of lv.failures) {
+      lines.push(
+        `  VERIFY FAIL [${failure.target}] ${failure.url}: ${failure.reason}`
+      );
+    }
+  }
+
   if (report.cleanup) {
     lines.push(
       `Token cleanup: deleted ${report.cleanup.deletedTokenIds.length} temp token(s), verified ${report.cleanup.remainingTmpCount} remaining; active '${report.cleanup.backupTokenLabel}' count=${report.cleanup.backupCount}`
@@ -1404,6 +1601,7 @@ export async function runSyncCommand(options: SyncCommandOptions = {}): Promise<
   const concurrency = options.concurrency ?? DEFAULT_UPLOAD_CONCURRENCY;
   const chunkSize = options.chunkSize ?? DEFAULT_CHUNK_SIZE;
   const dryRun = Boolean(options.dryRun);
+  const verifyLive = Boolean(options.verifyLive);
   const includeLiving = Boolean(options.includeLiving);
   const allowDeletes = Boolean(options.allowDeletes);
   const syncMissingMedia = Boolean(options.syncMissingMedia);
@@ -1482,6 +1680,7 @@ export async function runSyncCommand(options: SyncCommandOptions = {}): Promise<
     let uploadedKeys: string[] = [];
     let batchesSubmitted: SyncSubmittedBatch[] = [];
     let recompile: SyncRecompileSummary | null = null;
+    let liveVerification: SyncLiveVerificationSummary | null = null;
 
     if (!dryRun) {
       if (mediaUploadTargets.length > 0) {
@@ -1497,6 +1696,19 @@ export async function runSyncCommand(options: SyncCommandOptions = {}): Promise<
           chunkSize,
         });
         recompile = await purgeCompiledBundleAndRecompile(ctx, minted.write_batch.rawToken);
+      }
+      if (verifyLive) {
+        const expectedRevision =
+          batchesSubmitted.length > 0
+            ? batchesSubmitted[batchesSubmitted.length - 1].head_revision_id
+            : remoteSnap.headRevisionId;
+        liveVerification = await verifyLiveEndpoints({
+          ctx,
+          writeToken: minted.write_batch.rawToken,
+          expectedRevision,
+          uploadedKeys,
+          concurrency,
+        });
       }
     }
 
@@ -1523,6 +1735,7 @@ export async function runSyncCommand(options: SyncCommandOptions = {}): Promise<
       },
       batchesSubmitted,
       recompile,
+      liveVerification,
       cleanup: null,
     };
   } catch (err: unknown) {

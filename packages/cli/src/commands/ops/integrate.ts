@@ -51,6 +51,7 @@ const ALLOWED_PATCH_KEYS = new Set([
   'events',
   'places',
   'sources',
+  'remove_source_ids',
   'media',
   'kinship',
   'narratives',
@@ -127,6 +128,7 @@ export interface IntegrateCommandResult {
     kinship: UpsertCounts;
     narratives: UpsertCounts;
   };
+  removedSourceIds: string[];
   inlineCitationCount: number;
   stagedScans: StagedScanReportItem[];
   wouldWriteYamlFiles: string[];
@@ -166,9 +168,33 @@ interface NormalizedPatch {
   events: unknown[];
   places: unknown[];
   sources: unknown[];
+  remove_source_ids: string[];
   media: unknown[];
   kinship: unknown[];
   narratives: unknown[];
+}
+
+function parseOptionalStringList(raw: unknown, label: string): string[] {
+  if (raw === undefined) {
+    return [];
+  }
+  if (!Array.isArray(raw)) {
+    throw new Error(`${label} must be an array of non-empty strings.`);
+  }
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (let i = 0; i < raw.length; i += 1) {
+    const item = raw[i];
+    if (typeof item !== 'string' || item.trim().length === 0) {
+      throw new Error(`${label}[${i}] must be a non-empty string.`);
+    }
+    const trimmed = item.trim();
+    if (!seen.has(trimmed)) {
+      seen.add(trimmed);
+      out.push(trimmed);
+    }
+  }
+  return out;
 }
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
@@ -302,6 +328,10 @@ function normalizeAndValidatePatch(rawPatch: unknown, expectedPersonId: string):
     events: readArrayField('events'),
     places: readArrayField('places'),
     sources: readArrayField('sources'),
+    remove_source_ids: parseOptionalStringList(
+      rawPatch.remove_source_ids,
+      'patch.json remove_source_ids'
+    ),
     media: readArrayField('media'),
     kinship: readArrayField('kinship'),
     narratives: readArrayField('narratives'),
@@ -827,22 +857,84 @@ export async function runIntegrateCommand(
     assertValidPlaceCoordinates(pl, `merged place '${pl.id}'`);
   }
 
-  // Sources upsert.
+  // Sources upsert + optional top-level source retirement.
   const sourcesMerge = upsertById(existingSources, patch.sources, (s) =>
     SourceRecordSchema.parse(s)
   );
+  const topLevelRemoveSourceIds = new Set(patch.remove_source_ids);
+  if (topLevelRemoveSourceIds.size > 0) {
+    const patchedSourceIds = new Set(
+      patch.sources.map((s) => SourceRecordSchema.parse(s).id)
+    );
+    for (const removeId of topLevelRemoveSourceIds) {
+      if (patchedSourceIds.has(removeId)) {
+        throw new Error(
+          `patch.json cannot both add/update and remove source '${removeId}' in the same patch.`
+        );
+      }
+    }
+  }
+  const removedSourceIds: string[] = [];
+  const finalSources = sourcesMerge.items.filter((src) => {
+    if (topLevelRemoveSourceIds.has(src.id)) {
+      removedSourceIds.push(src.id);
+      return false;
+    }
+    return true;
+  });
 
-  // Events upsert preserving existing participants and sources on partial updates.
+  // Extract optional per-event remove_source_ids before schema parsing.
+  const eventRemoveSourceIds = new Map<string, Set<string>>();
+  const cleanedPatchEvents = patch.events.map((rawEv, idx) => {
+    if (!isPlainObject(rawEv)) {
+      return rawEv;
+    }
+    const removeIds = parseOptionalStringList(
+      rawEv.remove_source_ids,
+      `patch.events[${idx}].remove_source_ids`
+    );
+    const copy: Record<string, unknown> = { ...rawEv };
+    delete copy.remove_source_ids;
+    const parsedEv = RawEventSchema.parse(copy);
+    if (removeIds.length > 0) {
+      const removeSet = new Set(removeIds);
+      for (const ref of parsedEv.sources) {
+        if (removeSet.has(ref.source_id)) {
+          throw new Error(
+            `Event '${parsedEv.id}' cannot both attach and remove source '${ref.source_id}'.`
+          );
+        }
+      }
+      const existingSet = eventRemoveSourceIds.get(parsedEv.id);
+      if (existingSet) {
+        for (const id of removeSet) {
+          existingSet.add(id);
+        }
+      } else {
+        eventRemoveSourceIds.set(parsedEv.id, removeSet);
+      }
+    }
+    return parsedEv;
+  });
+
+  // Events upsert preserving existing participants and sources on partial updates,
+  // while pruning any source IDs explicitly listed in remove_source_ids.
   const eventsMerge = upsertById(
     existingEvents,
-    patch.events,
+    cleanedPatchEvents,
     (ev) => RawEventSchema.parse(ev),
-    (prev, incoming) => ({
-      ...prev,
-      ...incoming,
-      participants: dedupeParticipants(prev.participants, incoming.participants),
-      sources: mergeEventSources(prev.sources, incoming.sources),
-    })
+    (prev, incoming) => {
+      const toRemove = eventRemoveSourceIds.get(incoming.id);
+      const retainedPrevSources = toRemove
+        ? prev.sources.filter((ref) => !toRemove.has(ref.source_id))
+        : prev.sources;
+      return {
+        ...prev,
+        ...incoming,
+        participants: dedupeParticipants(prev.participants, incoming.participants),
+        sources: mergeEventSources(retainedPrevSources, incoming.sources),
+      };
+    }
   );
 
   // Media upsert.
@@ -853,7 +945,7 @@ export async function runIntegrateCommand(
 
   // Lookup sets before narrative normalization so inline citations are validated and auto-linked.
   const placeIds = new Set(placesMerge.items.map((p) => p.id));
-  const sourceIds = new Set(sourcesMerge.items.map((s) => s.id));
+  const sourceIds = new Set(finalSources.map((s) => s.id));
   const mediaIds = new Set(mediaMerge.items.map((m) => m.id));
   const eventsById = new Map(eventsMerge.items.map((e) => [e.id, e]));
 
@@ -898,7 +990,7 @@ export async function runIntegrateCommand(
   );
 
   // Referential integrity & privacy checks on patch additions/updates.
-  for (const rawEv of patch.events) {
+  for (const rawEv of cleanedPatchEvents) {
     const ev = RawEventSchema.parse(rawEv);
     if (ev.place_id && !placeIds.has(ev.place_id)) {
       throw new Error(`Event '${ev.id}' references missing place_id '${ev.place_id}'.`);
@@ -971,6 +1063,61 @@ export async function runIntegrateCommand(
     }
   }
 
+  // Ensure top-level source removal never breaks citations or references anywhere in the archive.
+  if (topLevelRemoveSourceIds.size > 0) {
+    for (const ev of eventsMerge.items) {
+      for (const ref of ev.sources) {
+        if (topLevelRemoveSourceIds.has(ref.source_id)) {
+          throw new Error(
+            `Cannot remove source '${ref.source_id}': event '${ev.id}' still cites it.`
+          );
+        }
+      }
+    }
+    for (const item of mediaMerge.items) {
+      if (item.source_id && topLevelRemoveSourceIds.has(item.source_id)) {
+        throw new Error(
+          `Cannot remove source '${item.source_id}': media '${item.id}' still references it.`
+        );
+      }
+    }
+    for (const nar of narrativesMerge.items) {
+      for (const srcId of nar.source_ids) {
+        if (topLevelRemoveSourceIds.has(srcId)) {
+          throw new Error(
+            `Cannot remove source '${srcId}': narrative '${nar.id}' still lists it in source_ids.`
+          );
+        }
+      }
+    }
+    const allCitationErrors = validateNarrativeCitations(
+      narrativesMerge.items,
+      sourceIds,
+      mediaIds
+    );
+    if (allCitationErrors.length > 0) {
+      throw new Error(allCitationErrors[0]);
+    }
+    for (const person of mergedPeople) {
+      const extSources = isPlainObject(person.extensions) && Array.isArray(person.extensions.sources)
+        ? person.extensions.sources
+        : [];
+      for (const entry of extSources) {
+        const refId =
+          typeof entry === 'string'
+            ? entry.trim()
+            : isPlainObject(entry) && typeof entry.source_id === 'string'
+              ? entry.source_id
+              : null;
+        if (refId && topLevelRemoveSourceIds.has(refId)) {
+          throw new Error(
+            `Cannot remove source '${refId}': person '${person.id}' still cites it in extensions.sources.`
+          );
+        }
+      }
+    }
+  }
+
   // Scan staging plan & verify every patch.media[].file exists on disk or in packageDir/scans/.
   const mediaLayout = detectMediaLayout(repoDir);
   const plannedScans = planScanStaging(repoDir, packageDir, mediaLayout);
@@ -1007,7 +1154,7 @@ export async function runIntegrateCommand(
     people: mergedPeople,
     events: eventsMerge.items,
     places: placesMerge.items,
-    sources: sourcesMerge.items,
+    sources: finalSources,
     kinship: kinshipMerge.items,
     media: mediaMerge.items,
     narratives: narrativesMerge.items,
@@ -1081,10 +1228,10 @@ export async function runIntegrateCommand(
       content: serializePlacesYaml(placesMerge.items, { sortById: true }),
     });
   }
-  if (sourcesMerge.counts.added > 0 || sourcesMerge.counts.updated > 0) {
+  if (sourcesMerge.counts.added > 0 || sourcesMerge.counts.updated > 0 || removedSourceIds.length > 0) {
     pendingWrites.push({
       file: 'sources.yaml',
-      content: serializeSourcesYaml(sourcesMerge.items, { sortById: true }),
+      content: serializeSourcesYaml(finalSources, { sortById: true }),
     });
   }
   if (kinshipMerge.counts.added > 0 || kinshipMerge.counts.updated > 0) {
@@ -1131,6 +1278,7 @@ export async function runIntegrateCommand(
       kinship: kinshipMerge.counts,
       narratives: narrativesMerge.counts,
     },
+    removedSourceIds,
     inlineCitationCount,
     stagedScans: stagedScansReport,
     wouldWriteYamlFiles: pendingWrites.map((w) => path.join(dataDir, w.file)),
