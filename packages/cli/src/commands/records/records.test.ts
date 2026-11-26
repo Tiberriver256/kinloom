@@ -584,6 +584,18 @@ describe('help vs subcommand routing and guide-only commands', () => {
         cacheHit: true,
       },
       {
+        command: 'findagrave',
+        args: ['get', '627', '--json'],
+        stdout: '[{"id":"627","cache_hit":true}]\n',
+        cacheHit: true,
+      },
+      {
+        command: 'findagrave',
+        args: ['photo', '627', '--json'],
+        stdout: '{"memorial_id":"627","files":[],"cache_hit":false}\n',
+        cacheHit: false,
+      },
+      {
         command: 'gnis',
         args: ['search', 'Oak', '--state', 'OH', '--json'],
         stdout: '{"source":"DomesticNames_OH","matches":0,"results":[],"cache_hit":false}\n',
@@ -600,6 +612,18 @@ describe('help vs subcommand routing and guide-only commands', () => {
         args: ['download', '595367', '--json'],
         stdout: '{"naId":"595367","bytes":128,"path":"/tmp/out","url":"https://catalog.archives.gov/id/595367","content_type":"image/jpeg","cache_hit":true}\n',
         cacheHit: true,
+      },
+      {
+        command: 'nara',
+        args: ['census1950-image', '1950census/a/b.jpg', '--json'],
+        stdout: '{"image":"1950census/a/b.jpg","bytes":64,"width":null,"cache_hit":true}\n',
+        cacheHit: true,
+      },
+      {
+        command: 'nara',
+        args: ['census1950-image', '1950census/a/b.jpg', '1950census/a/c.jpg', '--json'],
+        stdout: '{"count":2,"files":[{"cache_hit":true},{"cache_hit":false}],"cache_hit":false}\n',
+        cacheHit: false,
       },
       {
         command: 'chronam',
@@ -626,8 +650,12 @@ describe('help vs subcommand routing and guide-only commands', () => {
       'records:archive-org',
       'records:archive-org',
       'records:findagrave',
+      'records:findagrave',
+      'records:findagrave',
       'records:gnis',
       'records:va-archives',
+      'records:nara',
+      'records:nara',
       'records:nara',
       'records:chronam',
     ]);
@@ -636,6 +664,16 @@ describe('help vs subcommand routing and guide-only commands', () => {
       'archive-org page',
       'archive-org page',
       'archive-org grep',
+    ]);
+    expect(recorded.slice(4, 7).map((event) => event.subcmd)).toEqual([
+      'findagrave search',
+      'findagrave get',
+      'findagrave photo',
+    ]);
+    expect(recorded.slice(9, 12).map((event) => event.subcmd)).toEqual([
+      'nara download',
+      'nara census1950-image',
+      'nara census1950-image',
     ]);
   });
 

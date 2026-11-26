@@ -1600,5 +1600,172 @@ class TestNaraDownloadHardeningAndTelemetry(unittest.TestCase):
         self.assertEqual(list((self.cache_root / "downloads").glob("*.bin")), [])
 
 
+class TestCensus1950Wave38Reliability(unittest.TestCase):
+    def setUp(self) -> None:
+        self._tmp = tempfile.TemporaryDirectory(prefix="kinloom-nara-w38-")
+        self.cache_root = Path(self._tmp.name) / "cache"
+        self.out_dir = Path(self._tmp.name) / "out"
+        self.out_dir.mkdir(parents=True, exist_ok=True)
+        self._env_patch = patch.dict(
+            os.environ, {"KINLOOM_NARA_CACHE_DIR": str(self.cache_root)}
+        )
+        self._env_patch.start()
+
+    def tearDown(self) -> None:
+        self._env_patch.stop()
+        self._tmp.cleanup()
+
+    def test_census1950_image_url_normalization_aliases_and_jpeg_output(self) -> None:
+        encoded = (
+            "1950census%2F43290879-Illinois%2F43290879-Illinois-087558%2F"
+            "43290879-Illinois-087558-0002.jpg"
+        )
+        variants = [
+            f"/{LINCOLN_ED_IMAGE}",
+            encoded,
+            f"https://1950census.archives.gov/iiif/2/{encoded}",
+            f"https://1950census.archives.gov/iiif/2/{encoded}/",
+            f"HTTPS://1950CENSUS.ARCHIVES.GOV/iiif/2/{encoded}/full/1200,/0/default.jpg",
+            f"https://1950census.archives.gov/iiif/2/{LINCOLN_ED_IMAGE}/info.json",
+        ]
+        for raw in variants:
+            self.assertEqual(nara.parse_census1950_image_source(raw), LINCOLN_ED_IMAGE, raw)
+
+        calls: list[str] = []
+
+        def fake_fetch(url: str, *, client: httpx.Client | None = None) -> bytes:
+            del client
+            calls.append(url)
+            return JPEG_PREVIEW if "/full/1800,/0/default.jpg" in url else JPEG_FULL
+
+        runner = CliRunner()
+        with patch.object(nara, "_census1950_fetch_jpeg", side_effect=fake_fetch):
+            r1 = runner.invoke(
+                nara.cli,
+                [
+                    "census1950-image",
+                    f"https://1950census.archives.gov/iiif/2/{encoded}",
+                    "--out-dir",
+                    str(self.out_dir),
+                    "--max-width",
+                    "1800",
+                    "--timeout",
+                    "20",
+                    "--json",
+                ],
+            )
+            self.assertEqual(r1.exit_code, 0, r1.output)
+            p1 = json.loads(r1.output)
+            self.assertFalse(p1["cache_hit"])
+            self.assertEqual(p1["width"], 1800)
+            self.assertEqual(p1["image"], LINCOLN_ED_IMAGE)
+            self.assertEqual(len(calls), 1)
+
+            # Second call with leading slash and .jpeg target reuses cache with zero HTTP calls.
+            jpeg_dest = self.out_dir / "sheet.jpeg"
+            r2 = runner.invoke(
+                nara.cli,
+                [
+                    "census1950-image",
+                    f"/{LINCOLN_ED_IMAGE}",
+                    "-o",
+                    str(jpeg_dest),
+                    "--width",
+                    "1800",
+                    "--json",
+                ],
+            )
+            self.assertEqual(r2.exit_code, 0, r2.output)
+            p2 = json.loads(r2.output)
+            self.assertTrue(p2["cache_hit"])
+            self.assertEqual(p2["path"], str(jpeg_dest))
+            self.assertTrue(jpeg_dest.is_file())
+            self.assertEqual(jpeg_dest.read_bytes(), JPEG_PREVIEW)
+            self.assertEqual(len(calls), 1)
+
+            # Relative traversal in --out and non-positive --timeout fail before HTTP.
+            bad_out = runner.invoke(
+                nara.cli, ["census1950-image", LINCOLN_ED_IMAGE, "--out", "../escape.jpg"]
+            )
+            self.assertNotEqual(bad_out.exit_code, 0)
+            bad_timeout = runner.invoke(
+                nara.cli, ["census1950-image", LINCOLN_ED_IMAGE, "--timeout", "0"]
+            )
+            self.assertEqual(bad_timeout.exit_code, 2)
+            self.assertEqual(len(calls), 1)
+
+    def test_census1950_image_retries_522_truncated_stream_and_http_date_retry_after(self) -> None:
+        from datetime import datetime, timedelta, timezone
+        from email.utils import format_datetime
+
+        future_date = format_datetime(datetime.now(timezone.utc) + timedelta(seconds=2), usegmt=True)
+        attempts = 0
+
+        def handler(_request: httpx.Request) -> httpx.Response:
+            nonlocal attempts
+            attempts += 1
+            if attempts == 1:
+                return httpx.Response(522, headers={"Retry-After": future_date}, text="origin timeout")
+            if attempts == 2:
+                return httpx.Response(
+                    200,
+                    headers={"content-type": "image/jpeg", "content-length": "500"},
+                    content=JPEG_FULL[:8],
+                )
+            return httpx.Response(
+                200,
+                headers={"content-type": "image/jpeg", "content-length": str(len(JPEG_FULL))},
+                content=JPEG_FULL,
+            )
+
+        sleeps: list[float] = []
+        with (
+            patch.object(nara.time, "sleep", side_effect=sleeps.append),
+            httpx.Client(transport=httpx.MockTransport(handler)) as client,
+        ):
+            body = nara._census1950_fetch_jpeg(
+                "https://1950census.archives.gov/iiif/2/x/full/full/0/default.jpg",
+                client=client,
+            )
+        self.assertEqual(body, JPEG_FULL)
+        self.assertEqual(attempts, 3)
+        self.assertEqual(len(sleeps), 2)
+        self.assertTrue(0.0 <= sleeps[0] <= nara.CENSUS1950_RETRY_AFTER_CAP_S)
+        self.assertEqual(sleeps[1], 0.5)
+
+    def test_census1950_search_retries_transient_503_and_timeout(self) -> None:
+        attempts = 0
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            nonlocal attempts
+            attempts += 1
+            if attempts == 1:
+                return httpx.Response(503, headers={"Retry-After": "1"}, text="busy")
+            if attempts == 2:
+                raise httpx.ReadTimeout("slow", request=request)
+            return httpx.Response(
+                200,
+                json={"total": 1, "page": 1, "size": 25, "results": [{"scheduleId": "42"}]},
+            )
+
+        sleeps: list[float] = []
+        with (
+            patch.object(nara.time, "sleep", side_effect=sleeps.append),
+            httpx.Client(transport=httpx.MockTransport(handler)) as client,
+        ):
+            data = nara._census1950_fetch_json(
+                "https://1950census.archives.gov/api/search?state=IL&name=Lincoln",
+                client=client,
+            )
+        self.assertEqual(attempts, 3)
+        self.assertEqual(sleeps[0], 1.0)
+        self.assertEqual(data["results"][0]["scheduleId"], "42")
+
+    def test_exit_broken_pipe_exits_zero(self) -> None:
+        with self.assertRaises(SystemExit) as cm:
+            nara._exit_broken_pipe()
+        self.assertEqual(cm.exception.code, 0)
+
+
 if __name__ == "__main__":
     unittest.main()

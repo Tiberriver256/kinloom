@@ -446,6 +446,299 @@ class TestFindAGraveCli(unittest.TestCase):
             with self.assertRaises(ValueError):
                 fg.resolve_safe_child(self.cache_root, unsafe)
 
+    def test_search_and_subcommand_aliases_urls_and_get_cache_hit_items(self) -> None:
+        seen_vars: list[dict] = []
+
+        def fake_gql(_query: str, variables: dict) -> dict:
+            seen_vars.append(variables)
+            if "ids" in variables:
+                ids = variables["ids"]
+                if ids == ["107259"]:
+                    return {
+                        "cemeteries": {
+                            "total": 1,
+                            "cemeteries": [
+                                {
+                                    "id": "107259",
+                                    "names": [{"name": "Oak Ridge Cemetery"}],
+                                    "memorialCount": 10,
+                                }
+                            ],
+                        }
+                    }
+                return {"memorialsById": [_sample_memorial(mid) for mid in ids]}
+            if "s" in variables and "firstName" in variables["s"] or "lastName" in variables.get("s", {}):
+                return {"memorialSearch": {"total": 1, "memorials": [_sample_memorial("627")]}}
+            return {
+                "locationsByTypeahead": {
+                    "total": 1,
+                    "locations": [{"__typename": "Location", "id": "city_1", "names": [{"name": "Springfield"}]}],
+                }
+            }
+
+        runner = CliRunner()
+        with patch.object(fg, "gql", side_effect=fake_gql):
+            # Positional full name + -n + --page + --death-range + cemetery URL + case-insensitive filter.
+            r1 = runner.invoke(
+                fg.cli,
+                [
+                    "search",
+                    "Abraham",
+                    "Lincoln",
+                    "-n",
+                    "5",
+                    "--page",
+                    "2",
+                    "--death-year",
+                    "1865",
+                    "--death-range",
+                    "2",
+                    "--death-year-filter",
+                    "EXACT",
+                    "--cemetery",
+                    "https://www.findagrave.com/cemetery/107259/oak-ridge-cemetery",
+                    "--location",
+                    "city_1",
+                    "--json",
+                ],
+            )
+            self.assertEqual(r1.exit_code, 0, r1.output)
+            p1 = json.loads(r1.output)
+            self.assertIs(p1["cache_hit"], False)
+            sent = seen_vars[-1]["s"]
+            self.assertEqual(sent["firstName"], "Abraham")
+            self.assertEqual(sent["lastName"], "Lincoln")
+            self.assertEqual(sent["size"], 5)
+            self.assertEqual(sent["from"], 5)
+            self.assertEqual(sent["deathYearRange"], 2)
+            self.assertEqual(sent["deathYearFilter"], "exact")
+            self.assertEqual(sent["cemeteryIds"], ["107259"])
+            self.assertEqual(sent["locationId"], "city_1")
+
+            # Equivalent call using --first-name / --last-name / --rows / --offset hits cache.
+            r2 = runner.invoke(
+                fg.cli,
+                [
+                    "search",
+                    "--first-name",
+                    "Abraham",
+                    "--last-name",
+                    "Lincoln",
+                    "--rows",
+                    "5",
+                    "--offset",
+                    "5",
+                    "--death-year",
+                    "1865",
+                    "--year-range",
+                    "2",
+                    "--death-year-filter",
+                    "exact",
+                    "--cemetery-id",
+                    "107259",
+                    "--location-id",
+                    "city_1",
+                    "--json",
+                ],
+            )
+            self.assertEqual(r2.exit_code, 0, r2.output)
+            self.assertIs(json.loads(r2.output)["cache_hit"], True)
+            self.assertEqual(len(seen_vars), 1)
+
+            # get accepts full memorial URL and emits per-item boolean cache_hit while keeping list shape.
+            g1 = runner.invoke(
+                fg.cli,
+                ["get", "https://www.findagrave.com/memorial/627/abraham-lincoln", "--json"],
+            )
+            self.assertEqual(g1.exit_code, 0, g1.output)
+            g1_list = json.loads(g1.output)
+            self.assertIsInstance(g1_list, list)
+            self.assertIs(g1_list[0]["cache_hit"], False)
+
+            g2 = runner.invoke(fg.cli, ["memorial", "627", "--json"])
+            self.assertEqual(g2.exit_code, 0, g2.output)
+            g2_list = json.loads(g2.output)
+            self.assertIs(g2_list[0]["cache_hit"], True)
+
+            # cemetery accepts full cemetery URL; place accepts positional name.
+            c1 = runner.invoke(
+                fg.cli,
+                ["cemetery", "https://www.findagrave.com/cemetery/107259/oak-ridge", "--json"],
+            )
+            self.assertEqual(c1.exit_code, 0, c1.output)
+            self.assertIs(json.loads(c1.output)["cache_hit"], False)
+
+            pl1 = runner.invoke(fg.cli, ["place", "Springfield", "-n", "5", "--json"])
+            self.assertEqual(pl1.exit_code, 0, pl1.output)
+            self.assertIs(json.loads(pl1.output)["cache_hit"], False)
+
+            # Invalid year filter exits 2 before making a GraphQL call.
+            before = len(seen_vars)
+            bad = runner.invoke(fg.cli, ["search", "--last", "Lincoln", "--birth-year-filter", "bogus"])
+            self.assertEqual(bad.exit_code, 2)
+            self.assertEqual(len(seen_vars), before)
+
+            # -h works on root CLI.
+            help_res = runner.invoke(fg.cli, ["-h"])
+            self.assertEqual(help_res.exit_code, 0)
+            self.assertIn("Search and read Find a Grave", help_res.output)
+
+    def test_gql_retries_429_503_timeout_and_html_and_fails_fast_on_403(self) -> None:
+        from datetime import datetime, timedelta, timezone
+        from email.utils import format_datetime
+
+        future_date = format_datetime(datetime.now(timezone.utc) + timedelta(seconds=2), usegmt=True)
+        attempts = {"n": 0}
+        sleeps: list[float] = []
+
+        def flaky_handler(request: httpx.Request) -> httpx.Response:
+            attempts["n"] += 1
+            if attempts["n"] == 1:
+                return httpx.Response(429, headers={"Retry-After": future_date}, text="rate limited")
+            if attempts["n"] == 2:
+                return httpx.Response(
+                    200,
+                    headers={"content-type": "text/html"},
+                    text="<!DOCTYPE html><html><body>Temporary outage</body></html>",
+                )
+            return httpx.Response(200, json={"data": {"memorialSearch": {"total": 1, "memorials": []}}})
+
+        with (
+            patch.object(fg.time, "sleep", side_effect=sleeps.append),
+            patch.object(
+                fg,
+                "_new_gql_client",
+                side_effect=lambda: httpx.Client(transport=httpx.MockTransport(flaky_handler)),
+            ),
+        ):
+            data = fg.gql("query {}", {})
+        self.assertEqual(attempts["n"], 3)
+        self.assertEqual(data["memorialSearch"]["total"], 1)
+        # 1 initial rate-limit sleep + 2 retry sleeps.
+        self.assertEqual(len(sleeps), 3)
+
+        # Timeout recovers on retry.
+        attempts["n"] = 0
+        sleeps.clear()
+
+        def timeout_then_ok(request: httpx.Request) -> httpx.Response:
+            attempts["n"] += 1
+            if attempts["n"] == 1:
+                raise httpx.ReadTimeout("slow", request=request)
+            return httpx.Response(200, json={"data": {"ok": True}})
+
+        with (
+            patch.object(fg.time, "sleep", side_effect=sleeps.append),
+            patch.object(
+                fg,
+                "_new_gql_client",
+                side_effect=lambda: httpx.Client(transport=httpx.MockTransport(timeout_then_ok)),
+            ),
+        ):
+            self.assertEqual(fg.gql("query {}", {}), {"ok": True})
+        self.assertEqual(attempts["n"], 2)
+
+        # 403 Cloudflare fails fast with 0 retries.
+        attempts["n"] = 0
+        sleeps.clear()
+
+        def cf_403(_request: httpx.Request) -> httpx.Response:
+            attempts["n"] += 1
+            return httpx.Response(403, text="challenge")
+
+        with (
+            patch.object(fg.time, "sleep", side_effect=sleeps.append),
+            patch.object(
+                fg,
+                "_new_gql_client",
+                side_effect=lambda: httpx.Client(transport=httpx.MockTransport(cf_403)),
+            ),
+        ):
+            with self.assertRaises(SystemExit) as cm:
+                fg.gql("query {}", {})
+        self.assertEqual(cm.exception.code, 1)
+        self.assertEqual(attempts["n"], 1)
+
+    def test_photo_retries_host_allowlist_aliases_and_broken_pipe(self) -> None:
+        jpeg = b"\xff\xd8\xff\xe0HEADSTONE-OK"
+        photo_meta = [
+            {
+                "id": "5501",
+                "type": "Grave",
+                "caption": "Stone",
+                "path": "https://images.findagrave.com/photos/5501.jpg",
+            }
+        ]
+        attempts = {"n": 0}
+        sleeps: list[float] = []
+
+        def flaky_photo(request: httpx.Request) -> httpx.Response:
+            attempts["n"] += 1
+            if attempts["n"] == 1:
+                return httpx.Response(503, headers={"Retry-After": "1"}, text="busy")
+            if attempts["n"] == 2:
+                return httpx.Response(
+                    200,
+                    headers={"content-type": "image/jpeg", "content-length": "500"},
+                    content=jpeg[:6],
+                )
+            return httpx.Response(
+                200,
+                headers={"content-type": "image/jpeg", "content-length": str(len(jpeg))},
+                content=jpeg,
+            )
+
+        out = self.work_dir / "photos-alias"
+        runner = CliRunner()
+        with (
+            patch.object(fg.time, "sleep", side_effect=sleeps.append),
+            patch.object(
+                fg,
+                "gql",
+                return_value={"memorialsById": [_sample_memorial("808", photos=photo_meta)]},
+            ),
+            patch.object(
+                fg,
+                "_new_photo_client",
+                side_effect=lambda: httpx.Client(transport=httpx.MockTransport(flaky_photo)),
+            ),
+        ):
+            # Invoke via `photos` plural alias + memorial URL + `--out-dir`.
+            res = runner.invoke(
+                fg.cli,
+                [
+                    "photos",
+                    "https://www.findagrave.com/memorial/808/abraham-lincoln",
+                    "--out-dir",
+                    str(out),
+                    "--json",
+                ],
+            )
+            self.assertEqual(res.exit_code, 0, res.output)
+            body = json.loads(res.output)
+            self.assertEqual(body["memorial_id"], "808")
+            self.assertFalse(body["cache_hit"])
+            self.assertEqual(attempts["n"], 3)
+            self.assertEqual((out / "5501.jpg").read_bytes(), jpeg)
+
+        # Disallowed hosts and non-HTTPS URLs are refused without fetching.
+        for bad_url in (
+            "http://images.findagrave.com/photos/5501.jpg",
+            "https://evil.example/photos/5501.jpg",
+            "https://user@images.findagrave.com/photos/5501.jpg",
+        ):
+            with self.assertRaises(fg.click.ClickException):
+                fg.validate_photo_url(bad_url)
+
+        # Relative traversal in --out is refused.
+        bad_out = runner.invoke(fg.cli, ["photo", "808", "--out", "../escape"])
+        self.assertNotEqual(bad_out.exit_code, 0)
+
+        # BrokenPipeError helper exits 0 cleanly.
+        with self.assertRaises(SystemExit) as cm:
+            fg._exit_broken_pipe()
+        self.assertEqual(cm.exception.code, 0)
+
 
 if __name__ == "__main__":
     unittest.main()

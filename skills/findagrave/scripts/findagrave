@@ -17,6 +17,8 @@ login is needed, but it can change without notice. Requests are spaced
 from __future__ import annotations
 
 from contextlib import contextmanager
+from datetime import datetime, timezone
+from email.utils import parsedate_to_datetime
 import hashlib
 import json
 import math
@@ -27,7 +29,7 @@ import sys
 import time
 from pathlib import Path
 from typing import Any, Iterator
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlsplit
 
 import click
 import httpx
@@ -40,12 +42,33 @@ USER_AGENT = (
 )
 MIN_INTERVAL_S = 0.3
 DEFAULT_CACHE_TTL_HOURS = 168.0
+GQL_ATTEMPTS = 3
+PHOTO_ATTEMPTS = 3
+GQL_TIMEOUT_S = 30.0
+PHOTO_TIMEOUT_S = 60.0
+CONNECT_TIMEOUT_S = 15.0
+RETRY_AFTER_CAP_S = 10.0
+TRANSIENT_STATUS_CODES = frozenset({429, 500, 502, 503, 504, 520, 522, 524})
+VALID_YEAR_FILTERS = frozenset({"before", "after", "exact", "unknown"})
 SAFE_ID_RE = re.compile(r"^[A-Za-z0-9_-]+$")
 SAFE_EXT_RE = re.compile(r"^\.[A-Za-z0-9]{1,8}$")
+_MEMORIAL_URL_RE = re.compile(
+    r"^https://(?:www\.)?findagrave\.com/memorial/(\d+)(?:/[^?#]*)?(?:[?#].*)?$",
+    re.IGNORECASE,
+)
+_CEMETERY_URL_RE = re.compile(
+    r"^https://(?:www\.)?findagrave\.com/cemetery/(\d+)(?:/[^?#]*)?(?:[?#].*)?$",
+    re.IGNORECASE,
+)
+_PHOTO_ALLOWED_SUFFIXES = ("findagrave.com", "ancestrycdn.com", "cloudfront.net")
 MONTHS = [
     "Jan", "Feb", "Mar", "Apr", "May", "Jun",
     "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
 ]
+
+
+class _IncompletePhotoError(RuntimeError):
+    """Raised when a streamed photo stops before Content-Length bytes arrive."""
 
 
 def get_cache_root() -> Path:
@@ -80,9 +103,74 @@ def resolve_cache_ttl_hours(cli_ttl: float | None) -> float:
 
 def validate_entity_id(raw_id: str, label: str = "id") -> str:
     cleaned = str(raw_id).strip()
-    if not cleaned or not SAFE_ID_RE.match(cleaned) or cleaned in (".", ".."):
+    if not cleaned or "\x00" in cleaned:
+        raise click.BadParameter(f"Invalid {label}: {raw_id!r}")
+    if cleaned.lower().startswith("https://"):
+        label_lower = label.lower()
+        if "cemetery" in label_lower:
+            match = _CEMETERY_URL_RE.fullmatch(cleaned)
+        elif "memorial" in label_lower:
+            match = _MEMORIAL_URL_RE.fullmatch(cleaned)
+        else:
+            match = _MEMORIAL_URL_RE.fullmatch(cleaned) or _CEMETERY_URL_RE.fullmatch(cleaned)
+        if match:
+            return match.group(1)
+        raise click.BadParameter(f"Invalid {label}: {raw_id!r}")
+    if not SAFE_ID_RE.match(cleaned) or cleaned in (".", ".."):
         raise click.BadParameter(f"Invalid {label}: {raw_id!r}")
     return cleaned
+
+
+def validate_photo_url(raw_url: str) -> str:
+    """Allow only HTTPS URLs on Find a Grave or its image CDNs."""
+    text = str(raw_url or "").strip()
+    if not text or "\x00" in text or any(ord(ch) < 32 for ch in text):
+        raise click.ClickException(f"Invalid photo URL: {raw_url!r}")
+    parts = urlsplit(text)
+    host = (parts.hostname or "").lower()
+    if (
+        parts.scheme.lower() != "https"
+        or not host
+        or parts.port not in (None, 443)
+        or parts.username
+        or parts.password
+    ):
+        raise click.ClickException(f"Refusing non-HTTPS or disallowed photo URL: {text}")
+    allowed = any(
+        host == suffix or host.endswith(f".{suffix}")
+        for suffix in _PHOTO_ALLOWED_SUFFIXES
+    )
+    if not allowed:
+        raise click.ClickException(f"Refusing photo download from disallowed host {host!r}: {text}")
+    return text
+
+
+def _retry_delay_seconds(
+    attempt: int,
+    response: httpx.Response | None,
+    *,
+    base_delay: float = 0.5,
+    cap: float = RETRY_AFTER_CAP_S,
+) -> float:
+    """Compute retry wait seconds, honoring numeric or HTTP-date Retry-After."""
+    if response is not None:
+        raw = response.headers.get("Retry-After", "").strip()
+        if raw:
+            try:
+                parsed = float(raw)
+                if math.isfinite(parsed):
+                    return min(cap, max(0.0, parsed))
+            except ValueError:
+                try:
+                    dt = parsedate_to_datetime(raw)
+                    if dt.tzinfo is None:
+                        dt = dt.replace(tzinfo=timezone.utc)
+                    delta = (dt - datetime.now(timezone.utc)).total_seconds()
+                    if math.isfinite(delta):
+                        return min(cap, max(0.0, delta))
+                except (TypeError, ValueError, OverflowError):
+                    pass
+    return min(cap, base_delay * (2 ** (attempt - 1)))
 
 
 def sanitize_prefix(prefix: str | None) -> str:
@@ -239,15 +327,16 @@ def _cached_gql_query(
         return data, False
 
 
-def _load_or_fetch_memorials(
+def _load_or_fetch_memorials_with_hits(
     memorial_ids: list[str],
     *,
     cache_root: Path,
     ttl_hours: float,
     refresh: bool,
-) -> tuple[list[dict[str, Any]], bool]:
+) -> tuple[list[dict[str, Any]], list[bool], bool]:
     clean_ids = [validate_entity_id(mid, "memorial id") for mid in memorial_ids]
     by_id: dict[str, dict[str, Any]] = {}
+    hit_by_id: dict[str, bool] = {}
     missing_ids: list[str] = []
 
     for mid in clean_ids:
@@ -258,6 +347,7 @@ def _load_or_fetch_memorials(
             cached = _read_fresh_envelope(cache_path, ttl_hours)
             if cached is not None:
                 by_id[mid] = enrich_memorial(cached)
+                hit_by_id[mid] = True
                 continue
         missing_ids.append(mid)
 
@@ -271,6 +361,7 @@ def _load_or_fetch_memorials(
             if not fetched_id or not SAFE_ID_RE.match(fetched_id):
                 continue
             by_id[fetched_id] = mem
+            hit_by_id[fetched_id] = False
             cache_path = resolve_safe_child(cache_root / "memorials", f"{fetched_id}.json")
             lock_path = resolve_safe_child(
                 cache_root / "_locks", f"memorial_{fetched_id}.lock"
@@ -280,7 +371,29 @@ def _load_or_fetch_memorials(
                     cache_path, {"cached_at": time.time(), "data": mem}
                 )
 
-    return [by_id[mid] for mid in clean_ids if mid in by_id], not fetched
+    ordered: list[dict[str, Any]] = []
+    ordered_hits: list[bool] = []
+    for mid in clean_ids:
+        if mid in by_id:
+            ordered.append(by_id[mid])
+            ordered_hits.append(bool(hit_by_id.get(mid, False)))
+    return ordered, ordered_hits, not fetched
+
+
+def _load_or_fetch_memorials(
+    memorial_ids: list[str],
+    *,
+    cache_root: Path,
+    ttl_hours: float,
+    refresh: bool,
+) -> tuple[list[dict[str, Any]], bool]:
+    ordered, _hits, all_hit = _load_or_fetch_memorials_with_hits(
+        memorial_ids,
+        cache_root=cache_root,
+        ttl_hours=ttl_hours,
+        refresh=refresh,
+    )
+    return ordered, all_hit
 
 
 def _load_or_fetch_cemetery_by_id(
@@ -406,40 +519,93 @@ query($s: LocationSearchInput) {
 """
 
 
+def _new_gql_client() -> httpx.Client:
+    return httpx.Client(
+        timeout=httpx.Timeout(
+            connect=CONNECT_TIMEOUT_S,
+            read=GQL_TIMEOUT_S,
+            write=15.0,
+            pool=15.0,
+        ),
+        follow_redirects=True,
+    )
+
+
 def gql(query: str, variables: dict) -> dict:
-    """Run one GraphQL query and return its data dict."""
-    time.sleep(MIN_INTERVAL_S)
+    """Run one GraphQL query with transient HTTP/timeout/HTML retries and return its data dict."""
     headers = {
         "Content-Type": "application/json",
         "User-Agent": USER_AGENT,
         "Accept": "application/json",
     }
-    try:
-        with httpx.Client(timeout=30.0, follow_redirects=True) as client:
-            resp = client.post(
-                GRAPHQL_URL,
-                json={"query": query, "variables": variables},
-                headers=headers,
-            )
-    except httpx.HTTPError as exc:
-        click.echo(f"Request failed: {exc}", err=True)
-        raise SystemExit(1)
-    if resp.status_code == 403:
-        click.echo(
-            "Find a Grave returned 403 (Cloudflare challenge). "
-            "Wait a few minutes and retry, or use the website in a browser.",
-            err=True,
-        )
-        raise SystemExit(1)
-    if resp.status_code != 200:
-        click.echo(f"HTTP {resp.status_code} from {GRAPHQL_URL}", err=True)
-        raise SystemExit(1)
-    body = resp.json()
-    if body.get("errors"):
-        for err in body["errors"]:
-            click.echo(f"GraphQL error: {err.get('message')}", err=True)
-        raise SystemExit(1)
-    return body.get("data") or {}
+    time.sleep(MIN_INTERVAL_S)
+    with _new_gql_client() as client:
+        for attempt in range(1, GQL_ATTEMPTS + 1):
+            try:
+                resp = client.post(
+                    GRAPHQL_URL,
+                    json={"query": query, "variables": variables},
+                    headers=headers,
+                )
+            except (httpx.TimeoutException, httpx.TransportError) as exc:
+                if attempt < GQL_ATTEMPTS:
+                    time.sleep(_retry_delay_seconds(attempt, None))
+                    continue
+                click.echo(f"Request failed after {GQL_ATTEMPTS} attempts: {exc}", err=True)
+                raise SystemExit(1)
+            except httpx.HTTPError as exc:
+                click.echo(f"Request failed: {exc}", err=True)
+                raise SystemExit(1)
+
+            if resp.status_code == 403:
+                click.echo(
+                    "Find a Grave returned 403 (Cloudflare challenge). "
+                    "Wait a few minutes and retry, or use the website in a browser.",
+                    err=True,
+                )
+                raise SystemExit(1)
+            if resp.status_code in TRANSIENT_STATUS_CODES:
+                if attempt < GQL_ATTEMPTS:
+                    time.sleep(_retry_delay_seconds(attempt, resp))
+                    continue
+                click.echo(
+                    f"HTTP {resp.status_code} from {GRAPHQL_URL} after {GQL_ATTEMPTS} attempts",
+                    err=True,
+                )
+                raise SystemExit(1)
+            if resp.status_code != 200:
+                click.echo(f"HTTP {resp.status_code} from {GRAPHQL_URL}", err=True)
+                raise SystemExit(1)
+
+            content_type = resp.headers.get("content-type", "").lower()
+            raw_bytes = resp.content
+            if "html" in content_type or _looks_like_html(raw_bytes):
+                if attempt < GQL_ATTEMPTS:
+                    time.sleep(_retry_delay_seconds(attempt, resp))
+                    continue
+                click.echo(
+                    f"Find a Grave returned an HTML error page instead of JSON from {GRAPHQL_URL}",
+                    err=True,
+                )
+                raise SystemExit(1)
+            try:
+                body = resp.json()
+            except ValueError as exc:
+                if attempt < GQL_ATTEMPTS:
+                    time.sleep(_retry_delay_seconds(attempt, resp))
+                    continue
+                click.echo(f"Invalid JSON from {GRAPHQL_URL}: {exc}", err=True)
+                raise SystemExit(1)
+            if not isinstance(body, dict):
+                click.echo(f"Unexpected GraphQL payload from {GRAPHQL_URL}", err=True)
+                raise SystemExit(1)
+            if body.get("errors"):
+                for err in body["errors"]:
+                    click.echo(f"GraphQL error: {err.get('message')}", err=True)
+                raise SystemExit(1)
+            return body.get("data") or {}
+    click.echo(f"Request failed for {GRAPHQL_URL}", err=True)
+    raise SystemExit(1)
 
 
 def primary_name(memorial: dict) -> str:
@@ -547,24 +713,64 @@ def emit(data: dict, as_json: bool) -> None:
         click.echo(json.dumps(data, indent=2))
 
 
-@click.group()
+def _normalize_year_filter(raw: str | None, flag: str) -> str | None:
+    if raw is None:
+        return None
+    cleaned = raw.strip().lower()
+    if cleaned not in VALID_YEAR_FILTERS:
+        choices = ", ".join(sorted(VALID_YEAR_FILTERS))
+        raise click.BadParameter(f"Invalid {flag} value {raw!r}. Choose from: {choices}.")
+    return cleaned
+
+
+def _resolve_positional_name(
+    query_parts: tuple[str, ...],
+    first_name: str | None,
+    last_name: str | None,
+) -> tuple[str | None, str | None]:
+    tokens = [tok for part in query_parts for tok in part.strip().split() if tok]
+    if not tokens:
+        return first_name, last_name
+    if first_name and last_name:
+        raise click.UsageError(
+            "Pass either positional name arguments or --first/--last, not both."
+        )
+    if first_name and not last_name:
+        return first_name, " ".join(tokens)
+    if last_name and not first_name:
+        return " ".join(tokens), last_name
+    if len(tokens) == 1:
+        return None, tokens[0]
+    return " ".join(tokens[:-1]), tokens[-1]
+
+
+@click.group(context_settings={"help_option_names": ["-h", "--help"]})
 def cli() -> None:
     """Search and read Find a Grave memorials, cemeteries, and places."""
 
 
 @cli.command()
+@click.argument("query_parts", nargs=-1, metavar="[NAME...]")
 @click.option("--first", "--first-name", "first_name", default=None, help="First name.")
 @click.option("--last", "--last-name", "last_name", default=None, help="Last name.")
 @click.option("--birth-year", type=int, default=None)
 @click.option("--death-year", type=int, default=None)
-@click.option("--year-range", "--birth-range", "--date-spread", "year_range", type=int, default=None,
-              help="Plus/minus years around a birth/death year.")
+@click.option(
+    "--year-range",
+    "--birth-range",
+    "--death-range",
+    "--date-spread",
+    "year_range",
+    type=int,
+    default=None,
+    help="Plus/minus years around a birth/death year.",
+)
 @click.option("--birth-year-filter", default=None,
               help="before, after, exact, or unknown.")
 @click.option("--death-year-filter", default=None,
               help="before, after, exact, or unknown.")
-@click.option("--cemetery-id", multiple=True, help="Repeatable.")
-@click.option("--location-id", default=None,
+@click.option("--cemetery-id", "--cemetery", "cemetery_id", multiple=True, help="Repeatable cemetery id or URL.")
+@click.option("--location-id", "--location", "location_id", default=None,
               help="Place id, e.g. city_<id> (see the place command).")
 @click.option("--bio", default=None, help="Words in the biography.")
 @click.option("--text", "--full-text", "text", default=None, help="Words anywhere on the memorial.")
@@ -574,20 +780,34 @@ def cli() -> None:
               help="Exact name match (default: site matching).")
 @click.option("--include-maiden/--no-include-maiden", default=True,
               help="Also match married women under maiden names.")
-@click.option("--limit", type=int, default=10, show_default=True,
+@click.option("-n", "--limit", "--rows", "--size", "limit", type=int, default=10, show_default=True,
               help="Rows per call (max 50).")
-@click.option("--offset", type=int, default=0, show_default=True)
+@click.option("--page", type=int, default=None, help="1-based result page (alternative to --offset).")
+@click.option("--offset", type=int, default=None, help="0-based result offset (default: 0).")
 @click.option("--refresh", is_flag=True, help="Bypass local disk cache and query Find a Grave fresh.")
 @click.option("--cache-ttl-hours", type=float, default=None,
               help="Override cache TTL in hours (default: 168 or $KINLOOM_FINDAGRAVE_CACHE_TTL_HOURS).")
 @click.option("--json", "as_json", is_flag=True, help="Full JSON output.")
-def search(first_name, last_name, birth_year, death_year, year_range,
+def search(query_parts, first_name, last_name, birth_year, death_year, year_range,
             birth_year_filter, death_year_filter, cemetery_id, location_id,
-            bio, text, relative, exact, include_maiden, limit, offset,
+            bio, text, relative, exact, include_maiden, limit, page, offset,
             refresh, cache_ttl_hours, as_json):
     """Search memorials. Example: search --first Abraham --last Lincoln."""
+    if limit < 1:
+        raise click.BadParameter(f"Invalid --limit value: {limit!r} (must be >= 1).")
+    if offset is not None and offset < 0:
+        raise click.BadParameter(f"Invalid --offset value: {offset!r} (must be >= 0).")
+    if page is not None and page < 1:
+        raise click.BadParameter(f"Invalid --page value: {page!r} (must be >= 1).")
+    if page is not None and offset is not None:
+        raise click.UsageError("Pass either --page or --offset, not both.")
+    first_name, last_name = _resolve_positional_name(query_parts, first_name, last_name)
+    norm_birth_filter = _normalize_year_filter(birth_year_filter, "--birth-year-filter")
+    norm_death_filter = _normalize_year_filter(death_year_filter, "--death-year-filter")
     ttl_hours = resolve_cache_ttl_hours(cache_ttl_hours)
     cache_root = get_cache_root()
+    page_size = min(limit, 50)
+    resolved_offset = offset if offset is not None else ((page - 1) * page_size if page is not None else 0)
     search_input: dict = {}
     if first_name:
         search_input["firstName"] = first_name
@@ -602,12 +822,14 @@ def search(first_name, last_name, birth_year, death_year, year_range,
             search_input["birthYearRange"] = year_range
         if death_year is not None:
             search_input["deathYearRange"] = year_range
-    if birth_year_filter:
-        search_input["birthYearFilter"] = birth_year_filter
-    if death_year_filter:
-        search_input["deathYearFilter"] = death_year_filter
+    if norm_birth_filter:
+        search_input["birthYearFilter"] = norm_birth_filter
+    if norm_death_filter:
+        search_input["deathYearFilter"] = norm_death_filter
     if cemetery_id:
-        search_input["cemeteryIds"] = list(cemetery_id)
+        search_input["cemeteryIds"] = [
+            validate_entity_id(cid, "cemetery id") for cid in cemetery_id
+        ]
     if location_id:
         search_input["locationId"] = location_id
     if bio:
@@ -619,8 +841,8 @@ def search(first_name, last_name, birth_year, death_year, year_range,
     if exact:
         search_input["exactName"] = True
     search_input["includeMaidenName"] = include_maiden
-    search_input["from"] = offset
-    search_input["size"] = min(limit, 50)
+    search_input["from"] = resolved_offset
+    search_input["size"] = page_size
     data, hit = _cached_gql_query(
         "search",
         search_input,
@@ -664,22 +886,25 @@ def search(first_name, last_name, birth_year, death_year, year_range,
 @click.option("--photos", is_flag=True,
               help="List photo ids, types, and image URLs.")
 def get(memorial_ids, refresh, cache_ttl_hours, as_json, full, photos):
-    """Read one or more memorials in full by memorial id (alias: memorial).
+    """Read one or more memorials in full by memorial id or URL (alias: memorial).
 
-    --json prints a list of memorial objects. That list has no top-level cache_hit
-    field, because a list is the existing contract. search, cemetery, and place
-    print objects and include cache_hit.
+    --json prints a list of memorial objects, each carrying a boolean cache_hit
+    field so CLI telemetry tracks cache hits without breaking the list contract.
     """
     ttl_hours = resolve_cache_ttl_hours(cache_ttl_hours)
     cache_root = get_cache_root()
-    memorials, _memorial_cache_hit = _load_or_fetch_memorials(
+    memorials, item_hits, _all_hit = _load_or_fetch_memorials_with_hits(
         list(memorial_ids),
         cache_root=cache_root,
         ttl_hours=ttl_hours,
         refresh=refresh,
     )
     if as_json:
-        click.echo(json.dumps(memorials, indent=2))
+        emitted = [
+            {**mem, "cache_hit": bool(hit)}
+            for mem, hit in zip(memorials, item_hits, strict=True)
+        ]
+        click.echo(json.dumps(emitted, indent=2))
         return
     for mem in memorials:
         mid = str(mem.get("id"))
@@ -749,10 +974,10 @@ cli.add_command(get, name="memorial")
 @click.argument("cemetery_id_arg", required=False, default=None)
 @click.option("--name", default=None, help="Cemetery name to search.")
 @click.option("--id", "cemetery_id", default=None,
-              help="Read one cemetery by id (or pass id as a positional argument).")
+              help="Read one cemetery by id or URL (or pass id as a positional argument).")
 @click.option("--place", default=None,
               help="Containing place name, e.g. 'Sangamon County, Illinois'.")
-@click.option("--limit", type=int, default=10, show_default=True)
+@click.option("-n", "--limit", "limit", type=int, default=10, show_default=True)
 @click.option("--offset", type=int, default=0, show_default=True)
 @click.option("--refresh", is_flag=True, help="Bypass local disk cache and fetch fresh cemetery data.")
 @click.option("--cache-ttl-hours", type=float, default=None,
@@ -760,6 +985,10 @@ cli.add_command(get, name="memorial")
 @click.option("--json", "as_json", is_flag=True, help="Full JSON output.")
 def cemetery(cemetery_id_arg, name, cemetery_id, place, limit, offset, refresh, cache_ttl_hours, as_json):
     """Search cemeteries by name, or read one by id."""
+    if limit < 1:
+        raise click.BadParameter(f"Invalid --limit value: {limit!r} (must be >= 1).")
+    if offset < 0:
+        raise click.BadParameter(f"Invalid --offset value: {offset!r} (must be >= 0).")
     ttl_hours = resolve_cache_ttl_hours(cache_ttl_hours)
     cache_root = get_cache_root()
     resolved_id = cemetery_id or cemetery_id_arg
@@ -811,20 +1040,29 @@ def cemetery(cemetery_id_arg, name, cemetery_id, place, limit, offset, refresh, 
 
 
 @cli.command()
-@click.option("--name", required=True, help="Place name, e.g. Springfield.")
-@click.option("--limit", type=int, default=10, show_default=True)
+@click.argument("name_parts", nargs=-1, metavar="[PLACE...]")
+@click.option("--name", default=None, help="Place name, e.g. Springfield.")
+@click.option("-n", "--limit", "limit", type=int, default=10, show_default=True)
 @click.option("--refresh", is_flag=True, help="Bypass local disk cache and fetch fresh places.")
 @click.option("--cache-ttl-hours", type=float, default=None,
               help="Override cache TTL in hours (default: 168 or $KINLOOM_FINDAGRAVE_CACHE_TTL_HOURS).")
 @click.option("--json", "as_json", is_flag=True, help="Full JSON output.")
-def place(name, limit, refresh, cache_ttl_hours, as_json):
+def place(name_parts, name, limit, refresh, cache_ttl_hours, as_json):
     """Resolve a place name to Find a Grave place ids.
 
     Use the returned id (e.g. city_<id>) with search --location-id.
     """
+    if limit < 1:
+        raise click.BadParameter(f"Invalid --limit value: {limit!r} (must be >= 1).")
+    pos_name = " ".join(p for p in name_parts if p).strip()
+    if pos_name and name:
+        raise click.UsageError("Pass either a positional place name or --name, not both.")
+    resolved_name = (name or pos_name).strip()
+    if not resolved_name:
+        raise click.UsageError("Pass a place name positionally or with --name.")
     ttl_hours = resolve_cache_ttl_hours(cache_ttl_hours)
     cache_root = get_cache_root()
-    search_input = {"name": name, "size": min(limit, 50)}
+    search_input = {"name": resolved_name, "size": min(limit, 50)}
     data, hit = _cached_gql_query(
         "place",
         search_input,
@@ -934,13 +1172,83 @@ def _store_photo_cache(path: Path, content: bytes, content_type: str | None) -> 
 
 
 def _new_photo_client() -> httpx.Client:
-    return httpx.Client(timeout=60.0, follow_redirects=True)
+    return httpx.Client(
+        timeout=httpx.Timeout(
+            connect=CONNECT_TIMEOUT_S,
+            read=PHOTO_TIMEOUT_S,
+            write=15.0,
+            pool=15.0,
+        ),
+        follow_redirects=True,
+    )
+
+
+def _fetch_photo_bytes(client: httpx.Client, url: str) -> tuple[bytes, str | None]:
+    validated_url = validate_photo_url(url)
+    for attempt in range(1, PHOTO_ATTEMPTS + 1):
+        try:
+            with client.stream("GET", validated_url, headers={"User-Agent": USER_AGENT}) as resp:
+                if resp.url is not None:
+                    validate_photo_url(str(resp.url))
+                if resp.status_code in TRANSIENT_STATUS_CODES:
+                    if attempt < PHOTO_ATTEMPTS:
+                        wait = _retry_delay_seconds(attempt, resp)
+                        time.sleep(wait)
+                        continue
+                    resp.raise_for_status()
+                resp.raise_for_status()
+                content_type = resp.headers.get("content-type")
+                content_encoding = resp.headers.get("content-encoding", "").strip().lower()
+                raw_len = resp.headers.get("content-length", "").strip()
+                expected_len: int | None = None
+                if raw_len and (not content_encoding or content_encoding == "identity"):
+                    try:
+                        parsed_len = int(raw_len)
+                        if parsed_len > 0:
+                            expected_len = parsed_len
+                    except ValueError:
+                        expected_len = None
+                chunks: list[bytes] = []
+                received = 0
+                for chunk in resp.iter_bytes():
+                    if chunk:
+                        chunks.append(chunk)
+                        received += len(chunk)
+            if expected_len is not None and received < expected_len:
+                raise _IncompletePhotoError(
+                    f"Incomplete photo download for {validated_url}: received {received} of {expected_len} bytes"
+                )
+            return b"".join(chunks), content_type
+        except click.ClickException:
+            raise
+        except httpx.HTTPStatusError as exc:
+            status = exc.response.status_code
+            if status in TRANSIENT_STATUS_CODES and attempt < PHOTO_ATTEMPTS:
+                time.sleep(_retry_delay_seconds(attempt, exc.response))
+                continue
+            raise click.ClickException(f"HTTP {status} downloading {validated_url}") from exc
+        except (httpx.TimeoutException, httpx.TransportError, _IncompletePhotoError) as exc:
+            if attempt < PHOTO_ATTEMPTS:
+                time.sleep(_retry_delay_seconds(attempt, None))
+                continue
+            raise click.ClickException(
+                f"Failed downloading {validated_url} after {PHOTO_ATTEMPTS} attempts: {exc}"
+            ) from exc
+    raise click.ClickException(f"Failed downloading {validated_url}")
 
 
 @cli.command()
 @click.argument("memorial_id")
-@click.option("--out", default=".", show_default=True,
-              help="Directory to save photos into.")
+@click.option(
+    "-o",
+    "--out",
+    "--out-dir",
+    "--output",
+    "out",
+    default=".",
+    show_default=True,
+    help="Directory to save photos into.",
+)
 @click.option("--type", "photo_type", default=None,
               help="Only download this photo type, e.g. Grave.")
 @click.option("--prefix", default=None,
@@ -956,7 +1264,12 @@ def _new_photo_client() -> httpx.Client:
 @click.option("--json", "as_json", is_flag=True,
               help="Print memorial_id, files, and cache_hit instead of text lines.")
 def photo(memorial_id, out, photo_type, all_types, prefix, save_metadata, refresh, cache_ttl_hours, as_json):
-    """Download a memorial's photos (grave, portrait, family, other)."""
+    """Download a memorial's photos (grave, portrait, family, other; alias: photos)."""
+    if "\x00" in str(out):
+        raise click.BadParameter(f"Invalid --out path: {out!r}")
+    out_dir = Path(out)
+    if ".." in out_dir.parts and not out_dir.is_absolute():
+        raise click.ClickException(f"Unsafe output directory containing '..': {out_dir}")
     clean_id = validate_entity_id(memorial_id, "memorial id")
     stem_prefix = sanitize_prefix(prefix)
     ttl_hours = resolve_cache_ttl_hours(cache_ttl_hours)
@@ -985,7 +1298,6 @@ def photo(memorial_id, out, photo_type, all_types, prefix, save_metadata, refres
             return
         click.echo("No photos found.")
         return
-    out_dir = Path(out)
     out_dir.mkdir(parents=True, exist_ok=True)
     photos_cache_dir = cache_root / "photos" / clean_id
     saved_items = []
@@ -994,7 +1306,7 @@ def photo(memorial_id, out, photo_type, all_types, prefix, save_metadata, refres
     client: httpx.Client | None = None
     try:
         for item in photo_list:
-            url = item.get("path") or ""
+            url = validate_photo_url(item.get("path") or "")
             cache_filename = safe_photo_filename(item.get("id"), url)
             cached_path = resolve_safe_child(photos_cache_dir, cache_filename)
             dest = resolve_safe_child(out_dir, f"{stem_prefix}{cache_filename}")
@@ -1015,27 +1327,24 @@ def photo(memorial_id, out, photo_type, all_types, prefix, save_metadata, refres
                     cache_root / "_locks", f"photo_{clean_id}_{cache_filename}.lock"
                 )
                 from_cache = False
+                item_rejected = False
                 with file_lock(lock_path):
                     if not refresh and _photo_cache_fresh(cached_path, ttl_hours):
                         from_cache = True
                     else:
                         if client is None:
                             client = _new_photo_client()
-                        resp = client.get(url, headers={"User-Agent": USER_AGENT})
-                        resp.raise_for_status()
-                        if not _photo_bytes_accepted(resp.content, resp.headers.get("content-type")):
+                        content, content_type = _fetch_photo_bytes(client, url)
+                        if not _photo_bytes_accepted(content, content_type):
                             rejected = True
+                            item_rejected = True
                             click.echo(
                                 f"Rejected non-image body for photo {item.get('id') or url}",
                                 err=True,
                             )
                             continue
-                        _store_photo_cache(
-                            cached_path, resp.content, resp.headers.get("content-type")
-                        )
-                if rejected and not cached_path.is_file():
-                    continue
-                if not cached_path.is_file():
+                        _store_photo_cache(cached_path, content, content_type)
+                if item_rejected or not cached_path.is_file():
                     continue
                 size = copy_cached(from_cache)
 
@@ -1090,9 +1399,12 @@ def photo(memorial_id, out, photo_type, all_types, prefix, save_metadata, refres
         raise SystemExit(1)
 
 
+cli.add_command(photo, name="photos")
+
+
 @cli.command()
-@click.option("--first", "first_name", default=None)
-@click.option("--last", "last_name", default=None)
+@click.option("--first", "--first-name", "first_name", default=None)
+@click.option("--last", "--last-name", "last_name", default=None)
 @click.option("--birth-year", type=int, default=None)
 @click.option("--death-year", type=int, default=None)
 def url(first_name, last_name, birth_year, death_year):
@@ -1110,5 +1422,19 @@ def url(first_name, last_name, birth_year, death_year):
     click.echo(f"{base}?{urlencode(params)}" if params else base)
 
 
+def _exit_broken_pipe() -> None:
+    try:
+        devnull = os.open(os.devnull, os.O_WRONLY)
+        os.dup2(devnull, sys.stdout.fileno())
+        os.close(devnull)
+    except Exception:
+        pass
+    sys.exit(0)
+
+
 if __name__ == "__main__":
-    cli()
+    try:
+        cli()
+        sys.stdout.flush()
+    except BrokenPipeError:
+        _exit_broken_pipe()

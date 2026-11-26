@@ -26,13 +26,13 @@ FULLTEXT_SEARCH = f"{BASE}/services/search/beta/page_production/"
 USER_AGENT = "kinloom archive-org skill (research use)"
 DEFAULT_FIELDS = ["identifier", "title", "creator", "date", "mediatype"]
 DEFAULT_TIMEOUT = 25.0
-SEARCH_TIMEOUT = 45.0
+SEARCH_TIMEOUT = 30.0
 DOWNLOAD_TIMEOUT = 60.0
 DEFAULT_QUERY_TTL_HOURS = 168.0
 MAX_WORKERS = 6
 PAGE_BATCH_LIMIT = 25
 PAGE_BATCH_WORKERS = 4
-RETRYABLE_HTTP_CODES = frozenset({429, 500, 502, 503, 504})
+RETRYABLE_HTTP_CODES = frozenset({429, 500, 502, 503, 504, 520, 522, 524})
 MAX_HTTP_RETRIES = 2
 MAX_RETRY_AFTER_SECONDS = 5.0
 SAFE_ID_RE = re.compile(r"^[A-Za-z0-9._-]+$")
@@ -207,15 +207,63 @@ def http_get_bytes(url: str, timeout: float = DEFAULT_TIMEOUT) -> bytes:
     raise RuntimeError(f"Request failed for {url}")
 
 
-def http_get_json(url: str, timeout: float = DEFAULT_TIMEOUT) -> dict:
-    raw = http_get_bytes(url, timeout=timeout)
-    try:
-        data = json.loads(raw.decode("utf-8", errors="replace"))
-    except json.JSONDecodeError as exc:
-        raise RuntimeError(f"Invalid JSON response from {url}: {exc}") from exc
-    if not isinstance(data, dict):
-        raise RuntimeError(f"Expected JSON object from {url}")
-    return data
+def _is_valid_query_payload(kind: str, data: dict) -> bool:
+    if not isinstance(data, dict) or data.get("error"):
+        return False
+    if kind == "search":
+        header = data.get("responseHeader")
+        if isinstance(header, dict):
+            status = header.get("status")
+            if status is not None and status != 0:
+                return False
+        return isinstance(data.get("response"), dict)
+    if kind == "fulltext":
+        return isinstance(data.get("response"), dict)
+    return True
+
+
+def _looks_like_html_bytes(raw: bytes) -> bool:
+    sample = raw[:256].lstrip(b"\xef\xbb\xbf \t\r\n").lower()
+    return any(sample.startswith(prefix) for prefix in (b"<!doctype", b"<html", b"<head", b"<body"))
+
+
+def http_get_json(
+    url: str,
+    timeout: float = DEFAULT_TIMEOUT,
+    *,
+    retry_transient_json: bool = False,
+    retry_on_timeout: bool = False,
+) -> dict:
+    attempts = (MAX_HTTP_RETRIES + 1) if (retry_transient_json or retry_on_timeout) else 1
+    for attempt in range(attempts):
+        try:
+            raw = http_get_bytes(url, timeout=timeout)
+        except RuntimeError as exc:
+            msg = str(exc).lower()
+            is_timeout = "timed out" in msg or "timeout" in msg or "reset by peer" in msg
+            if retry_on_timeout and is_timeout and attempt + 1 < attempts:
+                time.sleep(parse_retry_after_seconds(None, attempt))
+                continue
+            raise
+        if _looks_like_html_bytes(raw):
+            if retry_transient_json and attempt + 1 < attempts:
+                time.sleep(parse_retry_after_seconds(None, attempt))
+                continue
+            raise RuntimeError(f"HTML error or outage page returned from {url}")
+        try:
+            data = json.loads(raw.decode("utf-8", errors="replace"))
+        except json.JSONDecodeError as exc:
+            if retry_transient_json and attempt + 1 < attempts:
+                time.sleep(parse_retry_after_seconds(None, attempt))
+                continue
+            raise RuntimeError(f"Invalid JSON response from {url}: {exc}") from exc
+        if not isinstance(data, dict):
+            if retry_transient_json and attempt + 1 < attempts:
+                time.sleep(parse_retry_after_seconds(None, attempt))
+                continue
+            raise RuntimeError(f"Expected JSON object from {url}")
+        return data
+    raise RuntimeError(f"Invalid JSON response from {url}")
 
 
 def query_cache_path(kind: str, canonical_params: dict, cache_root: Path) -> tuple[str, Path]:
@@ -250,6 +298,8 @@ def cached_query_json(
         data = envelope.get("data")
         if not isinstance(cached_at, (int, float)) or not isinstance(data, dict):
             return None
+        if not _is_valid_query_payload(kind, data):
+            return None
         if (time.time() - float(cached_at)) <= ttl_seconds:
             return data
         return None
@@ -263,7 +313,27 @@ def cached_query_json(
         cached = read_fresh()
         if cached is not None:
             return cached, True
-        data = http_get_json(url, timeout=timeout)
+        last_error: RuntimeError | None = None
+        data: dict | None = None
+        for attempt in range(MAX_HTTP_RETRIES + 1):
+            candidate = http_get_json(
+                url,
+                timeout=timeout,
+                retry_transient_json=True,
+                retry_on_timeout=True,
+            )
+            if _is_valid_query_payload(kind, candidate):
+                data = candidate
+                break
+            err_msg = candidate.get("error") or (candidate.get("responseHeader") or {}).get("status")
+            last_error = RuntimeError(
+                f"Internet Archive {kind} API returned an error response ({err_msg}) from {url}"
+            )
+            if attempt < MAX_HTTP_RETRIES:
+                time.sleep(parse_retry_after_seconds(None, attempt))
+        if data is None:
+            assert last_error is not None
+            raise last_error
         atomic_write_json(
             cache_path,
             {"cached_at": time.time(), "params": canonical_params, "data": data},
@@ -279,6 +349,7 @@ def fulltext_api(
     cache_root: Path | None = None,
     ttl_hours: float = DEFAULT_QUERY_TTL_HOURS,
     refresh: bool = False,
+    timeout: float = SEARCH_TIMEOUT,
 ) -> tuple[dict, bool]:
     qs = urlencode(
         [
@@ -302,7 +373,7 @@ def fulltext_api(
             cache_root=cache_root,
             ttl_hours=ttl_hours,
             refresh=refresh,
-            timeout=SEARCH_TIMEOUT,
+            timeout=timeout,
         )
     except (RuntimeError, FileNotFoundError) as exc:
         fail(str(exc))
@@ -319,6 +390,7 @@ def search_api(
     cache_root: Path | None = None,
     ttl_hours: float = DEFAULT_QUERY_TTL_HOURS,
     refresh: bool = False,
+    timeout: float = SEARCH_TIMEOUT,
 ) -> tuple[dict, bool]:
     params: list[tuple[str, str]] = [
         ("q", query),
@@ -348,7 +420,7 @@ def search_api(
             cache_root=cache_root,
             ttl_hours=ttl_hours,
             refresh=refresh,
-            timeout=SEARCH_TIMEOUT,
+            timeout=timeout,
         )
     except (RuntimeError, FileNotFoundError) as exc:
         fail(str(exc))
@@ -1167,11 +1239,63 @@ def json_with_cache_hit(payload: dict, cache_hit: bool) -> dict:
     return body
 
 
+def _resolve_search_query(
+    query_parts: list[str] | None,
+    query_flag: str | None,
+    *,
+    mediatype: str | None = None,
+    collections: list[str] | None = None,
+) -> str:
+    pos_text = " ".join(part for part in (query_parts or []) if part).strip()
+    flag_text = (query_flag or "").strip()
+    if pos_text and flag_text:
+        fail("Pass either a positional query or --query/-q, not both.", code=2)
+    base = flag_text or pos_text
+    clauses: list[str] = []
+    if base:
+        clauses.append(base)
+    if mediatype and mediatype.strip():
+        clauses.append(f"mediatype:({mediatype.strip()})")
+    flat_collections = [
+        c.strip()
+        for item in (collections or [])
+        for c in item.split(",")
+        if c.strip()
+    ]
+    if len(flat_collections) == 1:
+        clauses.append(f"collection:({flat_collections[0]})")
+    elif len(flat_collections) > 1:
+        joined = " OR ".join(flat_collections)
+        clauses.append(f"collection:({joined})")
+    if not clauses:
+        fail("Pass a search query (or --collection / --mediatype).", code=2)
+    return " AND ".join(clauses)
+
+
+def _flatten_fields(raw_fields: list[str] | None) -> list[str]:
+    fields: list[str] = []
+    for item in raw_fields or []:
+        for part in item.split(","):
+            cleaned = part.strip()
+            if cleaned and cleaned not in fields:
+                fields.append(cleaned)
+    return fields or list(DEFAULT_FIELDS)
+
+
 def cmd_search(args: argparse.Namespace) -> int:
-    query = args.query
-    if args.mediatype:
-        query = f"{query} AND mediatype:({args.mediatype})"
-    chosen = list(args.fields) if args.fields else DEFAULT_FIELDS
+    if args.rows < 1:
+        fail(f"--rows/--limit must be >= 1, got {args.rows}.", code=2)
+    if args.page < 1:
+        fail(f"--page must be >= 1, got {args.page}.", code=2)
+    if not math.isfinite(args.timeout) or args.timeout <= 0:
+        fail(f"--timeout must be > 0, got {args.timeout!r}.", code=2)
+    query = _resolve_search_query(
+        args.query,
+        args.query_flag,
+        mediatype=args.mediatype,
+        collections=args.collections,
+    )
+    chosen = _flatten_fields(args.fields)
     ttl_hours = resolve_query_ttl_hours(args.cache_ttl_hours)
     data, cached = search_api(
         query,
@@ -1181,6 +1305,7 @@ def cmd_search(args: argparse.Namespace) -> int:
         list(args.sorts),
         ttl_hours=ttl_hours,
         refresh=args.refresh,
+        timeout=args.timeout,
     )
     response = data.get("response") or {}
     if args.as_json:
@@ -1287,13 +1412,21 @@ def cmd_download(args: argparse.Namespace) -> int:
 
 
 def cmd_fulltext(args: argparse.Namespace) -> int:
+    if args.rows < 1:
+        fail(f"--rows/--limit must be >= 1, got {args.rows}.", code=2)
+    if args.page < 1:
+        fail(f"--page must be >= 1, got {args.page}.", code=2)
+    if not math.isfinite(args.timeout) or args.timeout <= 0:
+        fail(f"--timeout must be > 0, got {args.timeout!r}.", code=2)
+    query = _resolve_search_query(args.query, args.query_flag)
     ttl_hours = resolve_query_ttl_hours(args.cache_ttl_hours)
     data, cached = fulltext_api(
-        args.query,
+        query,
         args.rows,
         args.page,
         ttl_hours=ttl_hours,
         refresh=args.refresh,
+        timeout=args.timeout,
     )
     if args.as_json:
         print(json.dumps(json_with_cache_hit(data, cached), indent=2, ensure_ascii=False))
@@ -1774,9 +1907,12 @@ def cmd_page(args: argparse.Namespace) -> int:
 
 
 def cmd_url(args: argparse.Namespace) -> int:
-    full = args.query
-    if args.mediatype:
-        full = f"{args.query} AND mediatype:({args.mediatype})"
+    full = _resolve_search_query(
+        args.query,
+        args.query_flag,
+        mediatype=args.mediatype,
+        collections=args.collections,
+    )
     print(f"{ADVANCED_SEARCH}?q={quote(full)}")
     return 0
 
@@ -1789,18 +1925,21 @@ def build_parser() -> argparse.ArgumentParser:
     sub = parser.add_subparsers(dest="command", required=True)
 
     p_search = sub.add_parser("search", help="Search items with a Lucene query.")
-    p_search.add_argument("query")
-    p_search.add_argument("--mediatype", default=None, help="e.g. texts, movies, audio, software, collection.")
-    p_search.add_argument("--rows", type=int, default=10, help="Results per page (default: 10).")
+    p_search.add_argument("query", nargs="*", help="Lucene query string (multi-word queries are joined with spaces).")
+    p_search.add_argument("-q", "--query", dest="query_flag", default=None, help="Lucene query string (alternative to positional query).")
+    p_search.add_argument("--mediatype", "--type", dest="mediatype", default=None, help="e.g. texts, movies, audio, software, collection.")
+    p_search.add_argument("--collection", dest="collections", action="append", default=[], help="Filter by collection identifier (repeatable or comma-separated).")
+    p_search.add_argument("--rows", "--limit", "-n", dest="rows", type=int, default=10, help="Results per page (default: 10).")
     p_search.add_argument("--page", type=int, default=1, help="Results page (default: 1).")
     p_search.add_argument("--sort", dest="sorts", action="append", default=[], help="Repeatable, e.g. --sort 'downloads desc'.")
-    p_search.add_argument("--field", dest="fields", action="append", default=[], help="Repeatable metadata field.")
+    p_search.add_argument("--field", "--fields", dest="fields", action="append", default=[], help="Repeatable or comma-separated metadata field(s).")
+    p_search.add_argument("--timeout", type=float, default=SEARCH_TIMEOUT, help=f"HTTP timeout seconds on cache miss (default: {int(SEARCH_TIMEOUT)}).")
     p_search.add_argument("--cache-ttl-hours", type=float, default=None, help="Query cache TTL in hours (default: 168 or KINLOOM_IA_QUERY_TTL_HOURS).")
     p_search.add_argument("--refresh", action="store_true", help="Bypass local cache and fetch fresh results.")
     p_search.add_argument("--json", dest="as_json", action="store_true", help="Full JSON output.")
     p_search.set_defaults(func=cmd_search)
 
-    p_get = sub.add_parser("get", help="Read an item's metadata and file list by identifier.")
+    p_get = sub.add_parser("get", aliases=["metadata"], help="Read an item's metadata and file list by identifier (alias: metadata).")
     p_get.add_argument("identifier")
     p_get.add_argument("--json", dest="as_json", action="store_true", help="Full JSON output.")
     p_get.add_argument("--files", action="store_true", help="List the item's files.")
@@ -1821,9 +1960,11 @@ def build_parser() -> argparse.ArgumentParser:
     p_dl.set_defaults(func=cmd_download)
 
     p_ft = sub.add_parser("fulltext", help="Search OCR full text across digitized books and periodicals.")
-    p_ft.add_argument("query")
-    p_ft.add_argument("--rows", type=int, default=10, help="Hits per page (default: 10).")
+    p_ft.add_argument("query", nargs="*", help="Full-text search query (multi-word queries are joined with spaces).")
+    p_ft.add_argument("-q", "--query", dest="query_flag", default=None, help="Full-text search query (alternative to positional query).")
+    p_ft.add_argument("--rows", "--limit", "-n", dest="rows", type=int, default=10, help="Hits per page (default: 10).")
     p_ft.add_argument("--page", type=int, default=1, help="Results page, 1-based (default: 1).")
+    p_ft.add_argument("--timeout", type=float, default=SEARCH_TIMEOUT, help=f"HTTP timeout seconds on cache miss (default: {int(SEARCH_TIMEOUT)}).")
     p_ft.add_argument("--cache-ttl-hours", type=float, default=None, help="Query cache TTL in hours (default: 168 or KINLOOM_IA_QUERY_TTL_HOURS).")
     p_ft.add_argument("--refresh", action="store_true", help="Bypass local cache and fetch fresh results.")
     p_ft.add_argument("--json", dest="as_json", action="store_true", help="Full JSON output.")
@@ -1882,8 +2023,10 @@ def build_parser() -> argparse.ArgumentParser:
     p_lookup.set_defaults(func=cmd_lookup)
 
     p_url = sub.add_parser("url", help="Print the website advanced-search URL for a query.")
-    p_url.add_argument("query")
-    p_url.add_argument("--mediatype", default=None)
+    p_url.add_argument("query", nargs="*")
+    p_url.add_argument("-q", "--query", dest="query_flag", default=None)
+    p_url.add_argument("--mediatype", "--type", dest="mediatype", default=None)
+    p_url.add_argument("--collection", dest="collections", action="append", default=[])
     p_url.set_defaults(func=cmd_url)
 
     return parser
@@ -1893,7 +2036,9 @@ def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
     try:
-        return int(args.func(args))
+        rc = int(args.func(args))
+        sys.stdout.flush()
+        return rc
     except BrokenPipeError:
         try:
             devnull = os.open(os.devnull, os.O_WRONLY)

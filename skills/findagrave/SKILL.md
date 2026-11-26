@@ -13,7 +13,7 @@ Path: `skills/findagrave/scripts/findagrave`
 
 ### Persistent local disk cache
 
-`get`/`memorial`, `cemetery`, `photo`, `search`, and `place` cache responses atomically under `~/.cache/kinloom-findagrave/` (overrideable via `KINLOOM_FINDAGRAVE_CACHE_DIR`) using advisory file locks (`fcntl.flock` on POSIX, safe fallback elsewhere) so concurrent research threads never re-download shared memorials, cemeteries, or gravestone photos. Pass `--refresh` on any command to bypass the local cache and fetch fresh data. `--json` on `search`, `cemetery`, `place`, and `photo` adds a top-level boolean `cache_hit`. `get` and `memorial` keep a JSON list, so they do not add `cache_hit`. For `photo`, `cache_hit` is true only when the memorial record and every saved photo file came from disk.
+`get`/`memorial`, `cemetery`, `photo`/`photos`, `search`, and `place` cache responses atomically under `~/.cache/kinloom-findagrave/` (overrideable via `KINLOOM_FINDAGRAVE_CACHE_DIR`) using advisory file locks (`fcntl.flock` on POSIX, safe fallback elsewhere) so concurrent research threads never re-download shared memorials, cemeteries, or gravestone photos. Pass `--refresh` on any command to bypass the local cache and fetch fresh data. `--json` on `search`, `cemetery`, `place`, and `photo` adds a top-level boolean `cache_hit`. `get` and `memorial` keep a JSON list contract and attach a boolean `cache_hit` field to each returned memorial object. For `photo`, `cache_hit` is true only when the memorial record and every saved photo file came from disk. Transient HTTP `429`/`5xx`/`520`/`522`/`524`, timeouts, transport errors, incomplete photo reads, and HTML outage pages on HTTP 200 retry up to 3 times honoring numeric or HTTP-date `Retry-After`. Photo downloads enforce an HTTPS host allowlist (`findagrave.com`, `ancestrycdn.com`, `cloudfront.net`).
 
 Cache layout:
 
@@ -41,7 +41,7 @@ skills/findagrave/scripts/findagrave search --last Lincoln --bio president --lim
 skills/findagrave/scripts/findagrave search --first Harriet --last Tubman --json
 ```
 
-Names match the site's default matching unless `--exact` is passed. Married women are also found under their maiden name by default (`--no-include-maiden` turns that off). A search returns at most 50 rows per call; use `--limit` and `--offset` to page. The site only reaches the first 10,000 results of a search, so narrow by place, years, or cemetery when totals are large.
+Names match the site's default matching unless `--exact` is passed. You may pass `--first`/`--first-name` and `--last`/`--last-name`, or pass a name positionally (`search Abraham Lincoln`). Married women are also found under their maiden name by default (`--no-include-maiden` turns that off). A search returns at most 50 rows per call; use `-n`/`--limit`/`--rows`/`--size` with `--offset` or `--page` to page. `get`/`memorial`, `photo`/`photos`, and `cemetery` accept either numeric IDs or full `https://www.findagrave.com/...` URLs. `photo`/`photos` accepts `-o`/`--out`/`--out-dir`/`--output`. `place` accepts a place name either positionally or via `--name`. The site only reaches the first 10,000 results of a search, so narrow by place, years, or cemetery when totals are large.
 
 ### Read one or more memorials in full
 

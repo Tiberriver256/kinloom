@@ -1269,6 +1269,212 @@ class TestArchiveOrgHardening(unittest.TestCase):
             rc = ao.main(["url", "title:(Oakridge)"])
         self.assertEqual(rc, 0)
 
+    def test_search_aliases_multiword_collection_metadata_alias_and_transient_outage_recovery(self) -> None:
+        from http.client import IncompleteRead
+
+        seen_urls: list[str] = []
+        search_payload = {
+            "responseHeader": {"status": 0},
+            "response": {
+                "numFound": 1,
+                "docs": [
+                    {
+                        "identifier": "oakridge_history_1880",
+                        "title": "Oakridge County History",
+                        "creator": "Alder",
+                        "date": "1880",
+                        "mediatype": "texts",
+                    }
+                ],
+            },
+        }
+        meta_payload = {
+            "metadata": {"identifier": "oakridge_history_1880", "title": "Oakridge County History"},
+            "files": [{"name": "oakridge_history_1880.pdf", "format": "Text PDF", "size": "42"}],
+        }
+
+        def fake_urlopen(req, timeout=30.0):
+            url = req.full_url
+            seen_urls.append(url)
+            if "/metadata/oakridge_history_1880" in url:
+                return FakeHttpResponse(json.dumps(meta_payload).encode("utf-8"))
+            if "advancedsearch.php" in url:
+                return FakeHttpResponse(json.dumps(search_payload).encode("utf-8"))
+            if "page_production" in url:
+                return FakeHttpResponse(
+                    json.dumps(
+                        {
+                            "response": {
+                                "body": {
+                                    "hits": {
+                                        "total": 1,
+                                        "hits": [
+                                            {
+                                                "fields": {"identifier": "oakridge_history_1880", "title": "Oakridge"},
+                                                "highlight": {"text": ["Oakridge"]},
+                                            }
+                                        ],
+                                    }
+                                }
+                            }
+                        }
+                    ).encode("utf-8")
+                )
+            raise AssertionError(f"Unexpected URL: {url}")
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with patch.dict(os.environ, {"KINLOOM_IA_CACHE_DIR": tmpdir}, clear=False), patch(
+                "urllib.request.urlopen", side_effect=fake_urlopen
+            ):
+                # Multi-word positional query + -n/--limit + --collection + --type + --fields CSV.
+                buf = io.StringIO()
+                with patch("sys.stdout", buf):
+                    rc = ao.main(
+                        [
+                            "search",
+                            "Oakridge",
+                            "county",
+                            "history",
+                            "-n",
+                            "5",
+                            "--page",
+                            "2",
+                            "--collection",
+                            "americana",
+                            "--type",
+                            "texts",
+                            "--fields",
+                            "identifier,title",
+                            "--json",
+                        ]
+                    )
+                self.assertEqual(rc, 0)
+                body = json.loads(buf.getvalue())
+                self.assertIs(body["cache_hit"], False)
+                self.assertEqual(body["response"]["numFound"], 1)
+                req_url = seen_urls[-1]
+                self.assertIn("rows=5", req_url)
+                self.assertIn("page=2", req_url)
+                self.assertIn("Oakridge+county+history+AND+mediatype%3A%28texts%29+AND+collection%3A%28americana%29", req_url)
+                self.assertIn("fl%5B%5D=identifier", req_url)
+                self.assertIn("fl%5B%5D=title", req_url)
+
+                # Equivalent invocation via --limit and -q hits disk cache with zero HTTP calls.
+                buf_hit = io.StringIO()
+                with patch("sys.stdout", buf_hit):
+                    rc_hit = ao.main(
+                        [
+                            "search",
+                            "-q",
+                            "Oakridge county history",
+                            "--limit",
+                            "5",
+                            "--page",
+                            "2",
+                            "--collection",
+                            "americana",
+                            "--mediatype",
+                            "texts",
+                            "--field",
+                            "identifier",
+                            "--field",
+                            "title",
+                            "--json",
+                        ]
+                    )
+                self.assertEqual(rc_hit, 0)
+                self.assertIs(json.loads(buf_hit.getvalue())["cache_hit"], True)
+                self.assertEqual(len(seen_urls), 1)
+
+                # fulltext accepts multi-word query and --limit.
+                buf_ft = io.StringIO()
+                with patch("sys.stdout", buf_ft):
+                    rc_ft = ao.main(["fulltext", "Oakridge", "Mill", "--limit", "3", "--json"])
+                self.assertEqual(rc_ft, 0)
+                self.assertIs(json.loads(buf_ft.getvalue())["cache_hit"], False)
+                self.assertIn("hits_per_page=3", seen_urls[-1])
+
+                # metadata subcommand alias maps to get.
+                buf_meta = io.StringIO()
+                with patch("sys.stdout", buf_meta):
+                    rc_meta = ao.main(["metadata", "oakridge_history_1880", "--json"])
+                self.assertEqual(rc_meta, 0)
+                meta_out = json.loads(buf_meta.getvalue())
+                self.assertEqual(meta_out["metadata"]["title"], "Oakridge County History")
+                self.assertIs(meta_out["cache_hit"], False)
+
+                # Invalid --rows and empty query exit 2 with no HTTP requests.
+                before = len(seen_urls)
+                for bad_argv in (["search"], ["search", "Oak", "--limit", "0"], ["search", "Oak", "--page", "0"]):
+                    with patch("sys.stderr", io.StringIO()):
+                        with self.assertRaises(SystemExit) as cm:
+                            ao.main(bad_argv)
+                    self.assertEqual(cm.exception.code, 2, bad_argv)
+                self.assertEqual(len(seen_urls), before)
+
+        # Transient HTML outage page, truncated JSON, timeout, and 503/IncompleteRead retry and never cache errors.
+        with tempfile.TemporaryDirectory() as tmpdir:
+            sleeps: list[float] = []
+            outcomes: list[object] = [
+                FakeHttpResponse(b"<!DOCTYPE html><html><body>Temporarily Offline</body></html>"),
+                TimeoutError("The read operation timed out"),
+                FakeHttpResponse(json.dumps(search_payload).encode("utf-8")),
+            ]
+            idx = {"n": 0}
+
+            def flaky_urlopen(req, timeout=30.0):
+                item = outcomes[idx["n"]]
+                idx["n"] += 1
+                if isinstance(item, Exception):
+                    raise item
+                return item
+
+            with patch.dict(os.environ, {"KINLOOM_IA_CACHE_DIR": tmpdir}, clear=False), patch(
+                "urllib.request.urlopen", side_effect=flaky_urlopen
+            ), patch.object(ao.time, "sleep", side_effect=sleeps.append):
+                buf_ok = io.StringIO()
+                with patch("sys.stdout", buf_ok):
+                    rc_ok = ao.main(["search", "title:(Oakridge)", "--json"])
+                self.assertEqual(rc_ok, 0)
+                self.assertEqual(idx["n"], 3)
+                self.assertEqual(len(sleeps), 2)
+                self.assertIs(json.loads(buf_ok.getvalue())["cache_hit"], False)
+
+        # Persistent HTML outage or Solr error JSON fails with exit 1 and writes NOTHING to cache.
+        with tempfile.TemporaryDirectory() as tmpdir:
+            for bad_body in (
+                b"<!DOCTYPE html><html><body>503 Outage</body></html>",
+                b'{"responseHeader":{"status":500},"error":"backend error"}',
+                b"{truncated-json",
+            ):
+                with patch.dict(os.environ, {"KINLOOM_IA_CACHE_DIR": tmpdir}, clear=False), patch(
+                    "urllib.request.urlopen", return_value=FakeHttpResponse(bad_body)
+                ), patch.object(ao.time, "sleep"):
+                    err = io.StringIO()
+                    with patch("sys.stderr", err):
+                        with self.assertRaises(SystemExit) as cm:
+                            ao.main(["search", "title:(OutageTest)", "--json"])
+                    self.assertEqual(cm.exception.code, 1)
+                self.assertEqual(list((Path(tmpdir) / "_queries" / "search").glob("*.json")), [])
+
+        # IncompleteRead on search recovers cleanly.
+        with tempfile.TemporaryDirectory() as tmpdir:
+            calls = {"n": 0}
+
+            def incomplete_then_ok(req, timeout=30.0):
+                calls["n"] += 1
+                if calls["n"] == 1:
+                    raise IncompleteRead(b"partial")
+                return FakeHttpResponse(json.dumps(search_payload).encode("utf-8"))
+
+            with patch.dict(os.environ, {"KINLOOM_IA_CACHE_DIR": tmpdir}, clear=False), patch(
+                "urllib.request.urlopen", side_effect=incomplete_then_ok
+            ), patch.object(ao.time, "sleep"):
+                buf_inc = io.StringIO()
+                with patch("sys.stdout", buf_inc):
+                    self.assertEqual(ao.main(["search", "title:(Oakridge)", "--json"]), 0)
+            self.assertEqual(calls["n"], 2)
+
 
 if __name__ == "__main__":
     unittest.main()

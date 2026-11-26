@@ -960,7 +960,7 @@ def _common_search_options(fn: Any) -> Any:
         click.option("--start-date", default=None, help="Beginning date (YYYY, YYYY-MM, or YYYY-MM-DD)."),
         click.option("--end-date", default=None, help="Ending date (YYYY, YYYY-MM, or YYYY-MM-DD)."),
         click.option("--page", default=1, show_default=True, type=int, help="Result page number."),
-        click.option("--limit", default=20, show_default=True, type=int, help="Results per page."),
+        click.option("-n", "--limit", default=20, show_default=True, type=int, help="Results per page."),
     ]
     for opt in reversed(options):
         fn = opt(fn)
@@ -2164,13 +2164,18 @@ def _read_cached_census1950(
     return None
 
 
-def _census1950_fetch_json(url: str) -> dict[str, Any]:
+def _census1950_fetch_json(url: str, *, client: httpx.Client | None = None) -> dict[str, Any]:
     headers = {
         "Accept": "application/json",
         "User-Agent": "kinloom/1.0 (genealogy research)",
     }
-    with httpx.Client(timeout=30.0, follow_redirects=True) as client:
-        resp = client.get(url, headers=headers)
+
+    def _read_once(active: httpx.Client) -> dict[str, Any]:
+        resp = active.get(url, headers=headers)
+        if resp.status_code in TRANSIENT_STATUS_CODES:
+            raise httpx.HTTPStatusError(
+                f"HTTP {resp.status_code}", request=resp.request, response=resp
+            )
         resp.raise_for_status()
         content_type = resp.headers.get("content-type", "")
         if "json" not in content_type.lower():
@@ -2181,9 +2186,32 @@ def _census1950_fetch_json(url: str) -> dict[str, Any]:
             data = resp.json()
         except ValueError as exc:
             raise click.ClickException("1950 Census API returned invalid JSON.") from exc
-    if not isinstance(data, dict) or not isinstance(data.get("results"), list):
-        raise click.ClickException("1950 Census API returned an unexpected payload.")
-    return data
+        if not isinstance(data, dict) or not isinstance(data.get("results"), list):
+            raise click.ClickException("1950 Census API returned an unexpected payload.")
+        return data
+
+    def _read_with_retries(active: httpx.Client) -> dict[str, Any]:
+        for attempt in range(1, CENSUS1950_IMAGE_ATTEMPTS + 1):
+            try:
+                return _read_once(active)
+            except httpx.HTTPStatusError as exc:
+                status = exc.response.status_code
+                if status not in TRANSIENT_STATUS_CODES or attempt >= CENSUS1950_IMAGE_ATTEMPTS:
+                    raise
+                time.sleep(_census1950_retry_delay(attempt, exc.response))
+            except (httpx.TimeoutException, httpx.TransportError):
+                if attempt >= CENSUS1950_IMAGE_ATTEMPTS:
+                    raise
+                time.sleep(_census1950_retry_delay(attempt, None))
+        raise RuntimeError("1950 Census search retries ended without a response or error.")
+
+    if client is None:
+        with httpx.Client(
+            timeout=httpx.Timeout(connect=10.0, read=30.0, write=15.0, pool=15.0),
+            follow_redirects=True,
+        ) as local:
+            return _read_with_retries(local)
+    return _read_with_retries(client)
 
 
 def _emit_census1950(data: dict[str, Any], *, cache_hit: bool, as_json: bool) -> None:
@@ -2233,6 +2261,7 @@ def _emit_census1950(data: dict[str, Any], *, cache_hit: bool, as_json: bool) ->
 @click.option("--name", default=None, help="Person name. Sent as the site name= parameter.")
 @click.option("--ed", default=None, help="Enumeration district, for example 49-16.")
 @click.option(
+    "-n",
     "--limit",
     default=CENSUS1950_DEFAULT_LIMIT,
     show_default=True,
@@ -2299,9 +2328,12 @@ CENSUS1950_IMAGE_MAX_WIDTH = 10000
 CENSUS1950_IMAGE_MAX_PER_CALL = 25
 CENSUS1950_IMAGE_FETCH_WORKERS = 4
 CENSUS1950_IMAGE_ATTEMPTS = 3
+CENSUS1950_IMAGE_TIMEOUT = 45.0
+CENSUS1950_IMAGE_CONNECT_TIMEOUT = 15.0
 CENSUS1950_RETRY_AFTER_CAP_S = 5.0
-CENSUS1950_TRANSIENT_STATUS = frozenset({429, 500, 502, 503, 504})
+CENSUS1950_TRANSIENT_STATUS = frozenset({429, 500, 502, 503, 504, 520, 522, 524})
 CENSUS1950_IMAGE_PATH_RE = re.compile(r"^1950census/[A-Za-z0-9._/-]+\.jpg$")
+CENSUS1950_JPEG_SUFFIXES = frozenset({".jpg", ".jpeg"})
 JPEG_MAGIC = b"\xff\xd8\xff"
 
 
@@ -2326,16 +2358,20 @@ def parse_census1950_image_source(raw: str) -> str:
     text = raw.strip()
     if not text or "\x00" in text:
         raise click.BadParameter(f"Invalid 1950 Census image: {raw!r}")
+    if text.startswith("/1950census/"):
+        text = text.lstrip("/")
     if text.startswith("1950census/"):
         return validate_census1950_image_path(text)
-    if not text.startswith("https://"):
+    if text.lower().startswith("1950census%2f"):
+        return validate_census1950_image_path(unquote(text))
+    if not text.lower().startswith("https://"):
         raise click.BadParameter(
             "Pass a 1950census/...jpg path or an https://1950census.archives.gov/iiif/2/ URL."
         )
     parts = urlsplit(text)
-    host = parts.hostname or ""
+    host = (parts.hostname or "").lower()
     if (
-        parts.scheme != "https"
+        parts.scheme.lower() != "https"
         or host != "1950census.archives.gov"
         or parts.port not in (None, 443)
         or parts.username
@@ -2347,14 +2383,31 @@ def parse_census1950_image_source(raw: str) -> str:
             "1950 Census image URLs must be https://1950census.archives.gov/iiif/2/..."
         )
     prefix = "/iiif/2/"
-    if not parts.path.startswith(prefix) or "/" not in parts.path[len(prefix) :]:
+    if not parts.path.startswith(prefix):
         raise click.BadParameter(
             "1950 Census image URLs must be https://1950census.archives.gov/iiif/2/..."
         )
-    encoded, suffix = parts.path[len(prefix) :].split("/", 1)
-    if suffix != "info.json" and not suffix.endswith("/default.jpg"):
+    rest = parts.path[len(prefix) :].rstrip("/")
+    if not rest:
         raise click.BadParameter(
-            "Pass an IIIF info.json URL or a default.jpg URL from 1950census.archives.gov."
+            "1950 Census image URLs must be https://1950census.archives.gov/iiif/2/..."
+        )
+    if rest.endswith("/info.json"):
+        encoded = rest[: -len("/info.json")]
+    elif rest.endswith("/default.jpg"):
+        if "/full/" in rest:
+            encoded = rest.split("/full/", 1)[0]
+        elif rest.count("/") >= 4:
+            encoded = rest.rsplit("/", 4)[0]
+        else:
+            raise click.BadParameter(
+                "Pass an IIIF info.json URL, base URL, or default.jpg URL from 1950census.archives.gov."
+            )
+    elif rest.lower().endswith(".jpg"):
+        encoded = rest
+    else:
+        raise click.BadParameter(
+            "Pass an IIIF info.json URL, base URL, or default.jpg URL from 1950census.archives.gov."
         )
     return validate_census1950_image_path(unquote(encoded))
 
@@ -2383,10 +2436,20 @@ def census1950_image_cache_paths(
 
 
 def resolve_census1950_image_output(out_path: Path, image_path: str) -> Path:
-    """Write basename.jpg when out_path is a directory or has no .jpg suffix."""
+    """Write basename.jpg when out_path is a directory or has no .jpg/.jpeg suffix."""
+    raw_out = str(out_path)
+    if "\x00" in raw_out:
+        raise click.BadParameter(f"Invalid output path: {out_path}")
+    if ".." in out_path.parts and not out_path.is_absolute():
+        raise click.ClickException(f"Unsafe output path containing '..': {out_path}")
     filename = image_path.rsplit("/", 1)[-1]
-    looks_like_file = out_path.suffix.lower() == ".jpg" and not out_path.is_dir()
-    dest = out_path if looks_like_file else out_path / filename
+    looks_like_file = (
+        out_path.suffix.lower() in CENSUS1950_JPEG_SUFFIXES and not out_path.is_dir()
+    )
+    if looks_like_file:
+        dest = out_path
+    else:
+        dest = out_path / filename
     if "\x00" in str(dest):
         raise click.BadParameter(f"Invalid output path: {out_path}")
     return dest
@@ -2420,11 +2483,36 @@ def _census1950_retry_delay(attempt: int, response: httpx.Response | None) -> fl
         if raw:
             try:
                 parsed = float(raw)
+                if math.isfinite(parsed):
+                    return min(CENSUS1950_RETRY_AFTER_CAP_S, max(0.0, parsed))
             except ValueError:
-                parsed = None
-            if parsed is not None and math.isfinite(parsed):
-                return min(CENSUS1950_RETRY_AFTER_CAP_S, max(0.0, parsed))
+                try:
+                    dt = parsedate_to_datetime(raw)
+                    if dt.tzinfo is None:
+                        dt = dt.replace(tzinfo=timezone.utc)
+                    delta = (dt - datetime.now(timezone.utc)).total_seconds()
+                    if math.isfinite(delta):
+                        return min(CENSUS1950_RETRY_AFTER_CAP_S, max(0.0, delta))
+                except (TypeError, ValueError, OverflowError):
+                    pass
     return min(CENSUS1950_RETRY_AFTER_CAP_S, 0.25 * (2 ** (attempt - 1)))
+
+
+def _new_census1950_image_client(timeout: float = CENSUS1950_IMAGE_TIMEOUT) -> httpx.Client:
+    effective = max(1.0, float(timeout))
+    return httpx.Client(
+        timeout=httpx.Timeout(
+            connect=min(CENSUS1950_IMAGE_CONNECT_TIMEOUT, effective),
+            read=effective,
+            write=min(15.0, effective),
+            pool=min(15.0, effective),
+        ),
+        follow_redirects=False,
+        limits=httpx.Limits(
+            max_connections=CENSUS1950_IMAGE_FETCH_WORKERS * 2,
+            max_keepalive_connections=CENSUS1950_IMAGE_FETCH_WORKERS,
+        ),
+    )
 
 
 def _census1950_fetch_jpeg(url: str, *, client: httpx.Client | None = None) -> bytes:
@@ -2434,14 +2522,34 @@ def _census1950_fetch_jpeg(url: str, *, client: httpx.Client | None = None) -> b
     }
 
     def _read(active: httpx.Client) -> bytes:
-        resp = active.get(url, headers=headers)
-        resp.raise_for_status()
-        content_type = resp.headers.get("content-type", "")
-        if "html" in content_type.lower():
-            raise click.ClickException(
-                "1950 Census image response was HTML, not a JPEG."
+        with active.stream("GET", url, headers=headers) as resp:
+            resp.raise_for_status()
+            content_type = resp.headers.get("content-type", "")
+            if "html" in content_type.lower():
+                raise click.ClickException(
+                    "1950 Census image response was HTML, not a JPEG."
+                )
+            content_encoding = resp.headers.get("content-encoding", "").strip().lower()
+            raw_len = resp.headers.get("content-length", "").strip()
+            expected_len: int | None = None
+            if raw_len and (not content_encoding or content_encoding == "identity"):
+                try:
+                    parsed_len = int(raw_len)
+                    if parsed_len > 0:
+                        expected_len = parsed_len
+                except ValueError:
+                    expected_len = None
+            chunks: list[bytes] = []
+            received = 0
+            for chunk in resp.iter_bytes():
+                if chunk:
+                    chunks.append(chunk)
+                    received += len(chunk)
+        if expected_len is not None and received < expected_len:
+            raise _IncompleteDownloadError(
+                f"Incomplete 1950 Census JPEG download: received {received} of {expected_len} bytes"
             )
-        return require_jpeg_bytes(resp.content)
+        return require_jpeg_bytes(b"".join(chunks))
 
     def _read_with_retries(active: httpx.Client) -> bytes:
         for attempt in range(1, CENSUS1950_IMAGE_ATTEMPTS + 1):
@@ -2455,14 +2563,14 @@ def _census1950_fetch_jpeg(url: str, *, client: httpx.Client | None = None) -> b
                 ):
                     raise
                 time.sleep(_census1950_retry_delay(attempt, exc.response))
-            except (httpx.TimeoutException, httpx.TransportError):
+            except (httpx.TimeoutException, httpx.TransportError, _IncompleteDownloadError):
                 if attempt >= CENSUS1950_IMAGE_ATTEMPTS:
                     raise
                 time.sleep(_census1950_retry_delay(attempt, None))
         raise RuntimeError("census1950-image retries ended without a JPEG or an error.")
 
     if client is None:
-        with httpx.Client(timeout=120.0, follow_redirects=False) as local:
+        with _new_census1950_image_client() as local:
             return _read_with_retries(local)
     return _read_with_retries(client)
 
@@ -2504,6 +2612,7 @@ def _load_census1950_image_bytes(
     refresh: bool,
     ttl_hours: float,
     cache_root: Path,
+    client: httpx.Client | None = None,
 ) -> tuple[bytes, bool]:
     """Return JPEG bytes and whether they came from the disk cache.
 
@@ -2521,7 +2630,9 @@ def _load_census1950_image_bytes(
             cached = _read_cached_census1950_image(data_path, ttl_hours=ttl_hours)
             if cached is not None:
                 return cached, True
-        fetched = require_jpeg_bytes(_census1950_fetch_jpeg(url))
+        fetched = require_jpeg_bytes(
+            _census1950_fetch_jpeg(url) if client is None else _census1950_fetch_jpeg(url, client=client)
+        )
         atomic_write_bytes(data_path, fetched)
         return fetched, False
 
@@ -2534,16 +2645,18 @@ def _store_census1950_image(
     refresh: bool,
     ttl_hours: float,
     cache_root: Path,
+    client: httpx.Client | None = None,
 ) -> dict[str, Any]:
+    dest = resolve_census1950_image_output(out_path, image_path)
     data, cache_hit = _load_census1950_image_bytes(
         image_path,
         width=width,
         refresh=refresh,
         ttl_hours=ttl_hours,
         cache_root=cache_root,
+        client=client,
     )
     jpeg = require_jpeg_bytes(data)
-    dest = resolve_census1950_image_output(out_path, image_path)
     atomic_write_bytes(dest, jpeg)
     return {
         "image": image_path,
@@ -2560,18 +2673,28 @@ def _store_census1950_image(
 @click.option(
     "-o",
     "--out",
+    "--out-dir",
     "--output",
     "out_path",
     default=".",
     show_default=True,
     type=click.Path(path_type=Path),
-    help="Directory for one or more images, or a .jpg file when you pass one image.",
+    help="Directory for one or more images, or a .jpg/.jpeg file when you pass one image.",
 )
 @click.option(
     "--width",
+    "--max-width",
+    "width",
     default=None,
     type=click.IntRange(1, CENSUS1950_IMAGE_MAX_WIDTH),
     help=f"IIIF pixel width (1..{CENSUS1950_IMAGE_MAX_WIDTH}). Omit for full resolution.",
+)
+@click.option(
+    "--timeout",
+    default=CENSUS1950_IMAGE_TIMEOUT,
+    show_default=True,
+    type=float,
+    help="Per-image HTTP read timeout in seconds.",
 )
 @click.option("--json", "as_json", is_flag=True, help="Emit JSON instead of text.")
 @click.option("--refresh", is_flag=True, help="Bypass the disk cache and download the JPEG again.")
@@ -2585,6 +2708,7 @@ def cmd_census1950_image(
     image_or_urls: tuple[str, ...],
     out_path: Path,
     width: int | None,
+    timeout: float,
     as_json: bool,
     refresh: bool,
     cache_ttl_hours: float | None,
@@ -2595,10 +2719,12 @@ def cmd_census1950_image(
     One image prints the same text line or JSON object as before.
     Two or more images need a directory for --out.
     Pass at most 25 images. Uncached images download together, at most 4 at a time.
-    Transient HTTP 429 and 500, 502, 503, 504, plus timeouts and transport errors,
+    Transient HTTP 429 and 5xx, plus timeouts, transport errors, and truncated bodies,
     are tried up to 3 times. Permanent 400, 403, and 404 are not retried.
     Files are cached under ~/.cache/kinloom-nara/census1950-images/.
     """
+    if not math.isfinite(timeout) or timeout <= 0:
+        raise click.BadParameter(f"Invalid --timeout value: {timeout!r} (must be > 0).")
     if len(image_or_urls) > CENSUS1950_IMAGE_MAX_PER_CALL:
         raise click.BadParameter(
             "Pass at most "
@@ -2607,40 +2733,46 @@ def cmd_census1950_image(
         )
     image_paths = [parse_census1950_image_source(raw) for raw in image_or_urls]
     batch = len(image_paths) > 1
-    looks_like_jpg = out_path.suffix.lower() == ".jpg" and not out_path.is_dir()
+    looks_like_jpg = (
+        out_path.suffix.lower() in CENSUS1950_JPEG_SUFFIXES and not out_path.is_dir()
+    )
     if batch and looks_like_jpg:
         raise click.BadParameter(
             "--out is a .jpg file, but this command received multiple images. "
             "Pass a directory, for example --out ./schedules."
         )
+    for image_path in image_paths:
+        resolve_census1950_image_output(out_path, image_path)
     ttl_hours = resolve_query_ttl_hours(cache_ttl_hours)
     cache_root = get_cache_root()
 
-    def store(image_path: str) -> dict[str, Any]:
-        return _store_census1950_image(
-            image_path,
-            out_path=out_path,
-            width=width,
-            refresh=refresh,
-            ttl_hours=ttl_hours,
-            cache_root=cache_root,
-        )
+    with _new_census1950_image_client(timeout) as shared_client:
+        def store(image_path: str) -> dict[str, Any]:
+            return _store_census1950_image(
+                image_path,
+                out_path=out_path,
+                width=width,
+                refresh=refresh,
+                ttl_hours=ttl_hours,
+                cache_root=cache_root,
+                client=shared_client,
+            )
 
-    if not batch:
-        record = store(image_paths[0])
-        _emit_census1950_image(
-            image_path=record["image"],
-            url=record["url"],
-            dest=Path(record["path"]),
-            nbytes=int(record["bytes"]),
-            width=record["width"],
-            cache_hit=bool(record["cache_hit"]),
-            as_json=as_json,
-        )
-        return
+        if not batch:
+            record = store(image_paths[0])
+            _emit_census1950_image(
+                image_path=record["image"],
+                url=record["url"],
+                dest=Path(record["path"]),
+                nbytes=int(record["bytes"]),
+                width=record["width"],
+                cache_hit=bool(record["cache_hit"]),
+                as_json=as_json,
+            )
+            return
 
-    with ThreadPoolExecutor(max_workers=CENSUS1950_IMAGE_FETCH_WORKERS) as pool:
-        records = list(pool.map(store, image_paths))
+        with ThreadPoolExecutor(max_workers=CENSUS1950_IMAGE_FETCH_WORKERS) as pool:
+            records = list(pool.map(store, image_paths))
     if as_json:
         click.echo(
             json.dumps(
@@ -2659,9 +2791,25 @@ def cmd_census1950_image(
         click.echo(f"{verb}: {item['path']} ({int(item['bytes']):,} bytes)")
 
 
+def _exit_broken_pipe() -> None:
+    try:
+        devnull = os.open(os.devnull, os.O_WRONLY)
+        os.dup2(devnull, sys.stdout.fileno())
+        os.close(devnull)
+    except Exception:
+        pass
+    sys.exit(0)
+
+
 if __name__ == "__main__":
     try:
         cli()
+        sys.stdout.flush()
+    except BrokenPipeError:
+        _exit_broken_pipe()
+    except _IncompleteDownloadError as exc:
+        click.echo(f"Download error: {exc}", err=True)
+        sys.exit(1)
     except httpx.HTTPStatusError as exc:
         click.echo(f"HTTP error {exc.response.status_code}: {exc.request.url}", err=True)
         sys.exit(1)

@@ -99,8 +99,8 @@ Give at least one of `--state`, `--county`, `--name`, or `--ed`. `--limit` is 1 
 
 The command accepts either value:
 
-- The `image` path from `census1950`, for example `1950census/43290879-Illinois/43290879-Illinois-087558/43290879-Illinois-087558-0002.jpg`.
-- The `iiifUrl` from the same row (`.../info.json`), or a `.../default.jpg` URL on `https://1950census.archives.gov/iiif/2/`.
+- The `image` path from `census1950`, for example `1950census/43290879-Illinois/43290879-Illinois-087558/43290879-Illinois-087558-0002.jpg` (leading `/` or URL-encoded `%2F` paths are normalized).
+- The `iiifUrl` from the same row (`.../info.json`, bare `/iiif/2/<encoded>` URL, or a `.../default.jpg` URL on `https://1950census.archives.gov/iiif/2/`).
 
 Both forms use the same cache entry when `--width` is the same. The command rebuilds the JPEG URL from the path. It does not request any other host. It rejects `..` path segments, a non-`1950census.archives.gov` host, and any URL that is not under `/iiif/2/`. It does not follow redirects.
 
@@ -121,11 +121,11 @@ skills/nara-catalog-search/scripts/nara census1950-image \
   --width 2400 --out ./schedules/page.jpg
 ```
 
-`--out` / `--output` is a `.jpg` file path or a directory when you pass one image. The default directory is `.`. A directory receives `<basename>.jpg` from the image path. `--width` is an integer from 1 through 10000. Omit it for the IIIF `full` size. For one image, `--json` prints `image`, `url`, `path`, `bytes`, `width` (`null` when you omit `--width`), and `cache_hit`. `--refresh` downloads again and replaces the cache file. `--cache-ttl-hours` matches `census1950`.
+`-o` / `--out` / `--out-dir` / `--output` is a `.jpg`/`.jpeg` file path or a directory when you pass one image. The default directory is `.`. A directory receives `<basename>.jpg` from the image path. `--width` / `--max-width` is an integer from 1 through 10000. Omit it for the IIIF `full` size. `--timeout` sets the per-image read timeout in seconds (default 45). For one image, `--json` prints `image`, `url`, `path`, `bytes`, `width` (`null` when you omit `--width`), and `cache_hit`. `--refresh` downloads again and replaces the cache file. `--cache-ttl-hours` matches `census1950`.
 
-You can pass up to 25 paths or URLs in one command. The command checks every path before it starts a download. Two or more images require `--out` to be a directory. If `--out` is a `.jpg` file in that case, the command stops and tells you to pass a directory. It does not download. JSON for two or more images is an object with `count`, `files`, and `cache_hit`. Each item in `files` has the same fields as the one-image JSON object. `cache_hit` is true only when every image was read from the disk cache. Images that are not in the cache download at the same time, with at most 4 downloads at once. The `files` array stays in the order of the arguments.
+You can pass up to 25 paths or URLs in one command. The command checks every path before it starts a download. Two or more images require `--out` to be a directory. If `--out` is a `.jpg` or `.jpeg` file in that case, the command stops and tells you to pass a directory. It does not download. JSON for two or more images is an object with `count`, `files`, and `cache_hit`. Each item in `files` has the same fields as the one-image JSON object. `cache_hit` is true only when every image was read from the disk cache. Images that are not in the cache download at the same time through a pooled client, with at most 4 downloads at once. The `files` array stays in the order of the arguments.
 
-The download tries up to 3 times when the status is 429, 500, 502, 503, or 504, or when httpx raises `TimeoutException` or `TransportError`. If the response has a numeric `Retry-After` header, the command waits that many seconds, but never more than 5. If the header is absent, the command waits 0.25 seconds after the first failure and 0.5 seconds after the second. Status 400, 403, and 404 fail on the first response. A failed attempt is not written to the cache.
+The download tries up to 3 times when the status is 429, 500, 502, 503, 504, 520, 522, or 524, or when httpx raises `TimeoutException` or `TransportError`, or when a streamed body stops before `Content-Length`. If the response has a numeric or HTTP-date `Retry-After` header, the command waits that many seconds, capped at 5. If the header is absent, the command waits 0.25 seconds after the first failure and 0.5 seconds after the second. Status 400, 403, and 404 fail on the first response. A failed attempt is not written to the cache.
 
 ### Build verified search URLs offline
 

@@ -25,7 +25,7 @@ Cache layout:
 - `<item_id>/files/<relpath>`: cached item files downloaded via `download` (with path-traversal validation; exact raw `scandata.xml` and `_djvu.txt` artifacts are also reused without re-downloading).
 - `_queries/<search|fulltext>/<sha256>.json`: cached JSON responses for `search` and `fulltext` keyed by canonical query parameters with a 168-hour (7-day) default TTL (`--cache-ttl-hours` or `KINLOOM_IA_QUERY_TTL_HOURS`).
 
-Transient HTTP `429`, `500`, `502`, `503`, and `504` responses (plus `IncompleteRead` / `RemoteDisconnected`) retry politely up to 2 times (honoring numeric or HTTP-date `Retry-After` capped at 5s), while `403`, `404`, and socket timeouts fail fast with 0 retries.
+Transient HTTP `429`, `500`, `502`, `503`, `504`, `520`, `522`, and `524` responses (plus `IncompleteRead` / `RemoteDisconnected`) retry politely up to 2 times (honoring numeric or HTTP-date `Retry-After` capped at 5s). On `search` and `fulltext`, transient timeouts, HTML outage pages, malformed JSON, and non-zero Solr status responses also retry politely and are never written to disk cache. `403`, `404`, and socket timeouts on direct item fetches fail fast with 0 retries.
 
 ### Search inside cached digitized books (`grep`)
 
@@ -110,7 +110,7 @@ skills/archive-org/scripts/archive-org fulltext '"Abraham Lincoln" Gettysburg' -
 skills/archive-org/scripts/archive-org fulltext '"Clara Barton" Red Cross' --json
 ```
 
-The `search` query is Lucene syntax (see below). Default returned fields are `identifier`, `title`, `creator`, `date`, `mediatype`; pass `--field` (repeatable) to change them. A zero-hit `search` means no item metadata matched; run `fulltext` before concluding a name is absent from digitized directories or county histories.
+The `search` query is Lucene syntax (see below). Multi-word positional queries are joined with spaces, and `-q` / `--query`, `--limit` / `-n` (aliases for `--rows`), `--type` (alias for `--mediatype`), `--collection` (repeatable or comma-separated), `--fields` (comma-separated or repeatable alias for `--field`), and `--timeout` are supported. `get` also accepts the `metadata` subcommand alias. Default returned fields are `identifier`, `title`, `creator`, `date`, `mediatype`. A zero-hit `search` means no item metadata matched; run `fulltext` before concluding a name is absent from digitized directories or county histories.
 
 ### Read an item's metadata and files
 
