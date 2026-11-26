@@ -119,11 +119,12 @@ class SavedImage:
 
 
 def parse_box(raw: str) -> Box:
-    parts = [p.strip() for p in raw.split(",")]
+    # Accept "x0,y0,x1,y1", "x0, y0, x1, y1", and "x0 y0 x1 y1".
+    parts = [p for p in re.split(r"[,\s]+", raw.strip()) if p]
     if len(parts) != 4:
         raise argparse.ArgumentTypeError(f"Invalid box '{raw}': expected x0,y0,x1,y1.")
     try:
-        x0, y0, x1, y1 = (int(p) for p in parts)
+        x0, y0, x1, y1 = (int(round(float(p))) for p in parts)
     except ValueError as exc:
         raise argparse.ArgumentTypeError(f"Invalid integer coordinates in box '{raw}'.") from exc
     if x0 < 0 or y0 < 0 or x1 <= x0 or y1 <= y0:
@@ -365,6 +366,8 @@ def cmd_preview(args: argparse.Namespace) -> tuple[int, int]:
 
 
 def cmd_crop(args: argparse.Namespace) -> tuple[int, int]:
+    if not 1 <= args.quality <= 100:
+        raise ValueError(f"--quality must be between 1 and 100, got {args.quality}.")
     Image, ImageDraw, _, _ = require_pillow()
     src = Path(args.input).resolve()
     out_path = Path(args.output).resolve()
@@ -386,7 +389,7 @@ def cmd_crop(args: argparse.Namespace) -> tuple[int, int]:
             draw.rectangle((clamped.x0, clamped.y0, clamped.x1, clamped.y1), fill=(0, 0, 0))
             redactions.append([clamped.x0, clamped.y0, clamped.x1, clamped.y1])
 
-    saved = save_archival_image(cropped, out_path)
+    saved = save_archival_image(cropped, out_path, quality=args.quality)
 
     if args.preview_out:
         preview_path = Path(args.preview_out).resolve()
@@ -920,7 +923,10 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_prev = sub.add_parser("preview", help="Generate compact JPEG inspection previews in parallel.")
     p_prev.add_argument("images", nargs="+", help="Input image path(s).")
-    p_prev.add_argument("--out-dir", required=True, help="Output directory for preview JPEGs.")
+    p_prev.add_argument(
+        "--out-dir", "--out", "-o", "--output-dir", "--output", dest="out_dir", required=True,
+        help="Output directory for preview JPEGs (--out/-o are aliases).",
+    )
     p_prev.add_argument(
         "--max-width", type=int, default=1400, help="Maximum pixel width (default: 1400)."
     )
@@ -935,7 +941,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="Rotate, crop, apply solid black redaction boxes (in cropped coordinates), and auto-write a verification preview.",
     )
     p_crop.add_argument("input", help="Source scan path.")
-    p_crop.add_argument("output", help="Final archival output scan path.")
+    p_crop.add_argument("output", nargs="?", default=None,
+                        help="Final archival output scan path (or pass --out).")
+    p_crop.add_argument("--out", "-o", "--output", dest="output_opt", default=None,
+                        help="Alias for the positional output path.")
+    p_crop.add_argument("--quality", type=int, default=92,
+                        help="Archival output JPEG/WEBP quality 1..100 (default: 92).")
     p_crop.add_argument(
         "--box", required=True, type=parse_box, help="Crop box x0,y0,x1,y1 after optional --rotate."
     )
@@ -1015,7 +1026,8 @@ def build_parser() -> argparse.ArgumentParser:
     p_pdf.add_argument("pdf_path", help="Path to source PDF file.")
     p_pdf.add_argument("--pages", required=True, help="Page range spec, e.g. 1-5,8.")
     p_pdf.add_argument(
-        "--out-dir", required=True, help="Output directory for rendered pages and previews."
+        "--out-dir", "--out", "-o", "--output-dir", "--output", dest="out_dir", required=True,
+        help="Output directory for rendered pages and previews (--out/-o are aliases).",
     )
     p_pdf.add_argument(
         "--dpi", type=int, default=150, help="Rendering DPI for pdftoppm (default: 150)."
@@ -1037,7 +1049,10 @@ def build_parser() -> argparse.ArgumentParser:
         help="Draw an original-pixel coordinate grid overlay onto a compact JPEG preview.",
     )
     p_grid.add_argument("image", help="Source scan image path.")
-    p_grid.add_argument("out", help="Output JPEG path for the coordinate-grid preview.")
+    p_grid.add_argument("out", nargs="?", default=None,
+                        help="Output JPEG path for the coordinate-grid preview (or pass --out).")
+    p_grid.add_argument("--out", "-o", "--output", dest="out_opt", default=None,
+                        help="Alias for the positional output path.")
     p_grid.add_argument(
         "--step",
         type=int,
@@ -1071,7 +1086,10 @@ def build_parser() -> argparse.ArgumentParser:
         help="Crop 2+ boxes from one scan, apply optional redactions, and stack bands vertically.",
     )
     p_stitch.add_argument("image", help="Source scan image path.")
-    p_stitch.add_argument("out", help="Output stitched JPEG path.")
+    p_stitch.add_argument("out", nargs="?", default=None,
+                          help="Output stitched JPEG path (or pass --out).")
+    p_stitch.add_argument("--out", "-o", "--output", dest="out_opt", default=None,
+                          help="Alias for the positional output path.")
     p_stitch.add_argument(
         "--box",
         action="extend",
@@ -1118,10 +1136,46 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+_BOX_FRAGMENT = re.compile(r"^-?[\d.]+(?:\s*,\s*-?[\d.]+)*\s*,$")
+
+
+def normalize_argv(argv: list[str]) -> list[str]:
+    """Rejoin box values the shell split on spaces: `--box 10, 20, 30, 40`."""
+    out: list[str] = []
+    for token in argv:
+        if out and _BOX_FRAGMENT.match(out[-1]) and re.match(r"^-?[\d.]", token):
+            out[-1] = out[-1] + token
+        else:
+            out.append(token)
+    return out
+
+
+# Subcommand -> (positional dest, --out alias dest).
+OUTPUT_ALIASES = {"crop": ("output", "output_opt"), "grid": ("out", "out_opt"),
+                  "stitch": ("out", "out_opt")}
+
+
+def resolve_output_alias(parser: argparse.ArgumentParser, args: argparse.Namespace) -> None:
+    dests = OUTPUT_ALIASES.get(getattr(args, "command", ""))
+    if not dests:
+        return
+    positional, alias = dests
+    pos_val, alias_val = getattr(args, positional), getattr(args, alias)
+    if pos_val and alias_val and Path(pos_val) != Path(alias_val):
+        parser.error(f"{args.command}: output given twice ({pos_val!r} and --out {alias_val!r}); "
+                     "pass it once.")
+    value = pos_val or alias_val
+    if not value:
+        parser.error(f"{args.command}: missing output path; pass it positionally "
+                     f"(`prep-scan {args.command} <in> <out.jpg>`) or with --out <out.jpg>.")
+    setattr(args, positional, value)
+
+
 def main(argv: list[str] | None = None) -> int:
     t0 = time.perf_counter()
     parser = build_parser()
-    args = parser.parse_args(argv)
+    args = parser.parse_args(normalize_argv(list(sys.argv[1:] if argv is None else argv)))
+    resolve_output_alias(parser, args)
     rc = 1
     bytes_out = 0
     try:

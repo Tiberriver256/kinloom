@@ -872,5 +872,116 @@ describe('bundled Python utilities and live script execution', () => {
     expect(pixels.size).toEqual([1800, 388]);
     expect(Math.max(...pixels.div)).toBeLessThan(55);
     expect(Math.max(...pixels.red)).toBeLessThan(20);
+
+    // Poka-yoke: `--out <file>` works the same as the positional output on grid/stitch/crop,
+    // and space-split boxes (`--box 100, 20, 1900, 180`) are rejoined.
+    const gridAliasOut = path.join(tmp, 'grid-alias.jpg');
+    const gridAlias = JSON.parse(
+      execFileSync(
+        pyCmd,
+        [...prepPrefix, 'grid', srcImg, '--out', gridAliasOut, '--step', '400'],
+        { encoding: 'utf8', env: { ...process.env, KINLOOM_TELEMETRY_PARENT: '1' } }
+      )
+    ) as { out: string };
+    expect(gridAlias.out).toBe(gridAliasOut);
+    expect(fs.existsSync(gridAliasOut)).toBe(true);
+
+    const stitchAliasOut = path.join(tmp, 'stitch-alias.jpg');
+    const stitchAlias = JSON.parse(
+      execFileSync(
+        pyCmd,
+        [
+          ...prepPrefix,
+          'stitch',
+          srcImg,
+          '-o',
+          stitchAliasOut,
+          '--box',
+          '100,',
+          '20,',
+          '1900,',
+          '180',
+          '--box',
+          '200 720 1800 940',
+        ],
+        { encoding: 'utf8', env: { ...process.env, KINLOOM_TELEMETRY_PARENT: '1' } }
+      )
+    ) as { out: string; width: number; height: number };
+    expect(stitchAlias.out).toBe(stitchAliasOut);
+    expect(stitchAlias.width).toBe(1800);
+
+    const cropAliasOut = path.join(tmp, 'crop-alias.jpg');
+    const cropAlias = JSON.parse(
+      execFileSync(
+        pyCmd,
+        [
+          ...prepPrefix,
+          'crop',
+          srcImg,
+          '--out',
+          cropAliasOut,
+          '--box',
+          '0,0,1000,600',
+          '--quality',
+          '85',
+          '--preview-out',
+          path.join(tmp, 'crop-alias.preview.jpg'),
+          '--json',
+        ],
+        { encoding: 'utf8', env: { ...process.env, KINLOOM_TELEMETRY_PARENT: '1' } }
+      )
+    ) as { output: { path: string; width: number } };
+    expect(cropAlias.output.path).toBe(cropAliasOut);
+    expect(cropAlias.output.width).toBe(1000);
+
+    const previewDir = path.join(tmp, 'previews-alias');
+    execFileSync(pyCmd, [...prepPrefix, 'preview', srcImg, '--out', previewDir, '--json'], {
+      encoding: 'utf8',
+      env: { ...process.env, KINLOOM_TELEMETRY_PARENT: '1' },
+    });
+    expect(fs.readdirSync(previewDir).length).toBe(1);
+  });
+
+  it('prep-scan rejects a missing or doubled output path with an actionable exit-2 message', () => {
+    const prepScript = path.join(ASSETS_ROOT, 'prep-scan.py');
+    const env = { ...process.env, KINLOOM_TELEMETRY_PARENT: '1' };
+    const missing = spawnSync('python3', [prepScript, 'grid', 'scan.jpg'], { encoding: 'utf8', env });
+    expect(missing.status).toBe(2);
+    expect(missing.stderr).toContain('missing output path');
+    expect(missing.stderr).toContain('--out');
+
+    const doubled = spawnSync(
+      'python3',
+      [prepScript, 'stitch', 'scan.jpg', 'a.jpg', '--out', 'b.jpg', '--box', '0,0,10,10'],
+      { encoding: 'utf8', env }
+    );
+    expect(doubled.status).toBe(2);
+    expect(doubled.stderr).toContain('output given twice');
+
+    const gridHelp = execFileSync('python3', [prepScript, 'grid', '--help'], { encoding: 'utf8' });
+    expect(gridHelp).toContain('--out');
+    const previewHelp = execFileSync('python3', [prepScript, 'preview', '--help'], { encoding: 'utf8' });
+    expect(previewHelp).toContain('--out-dir');
+  });
+
+  it('passes chronam and nj-archives caching, retry, alias, and parsing unit tests', () => {
+    const testFiles = [
+      path.join(SKILLS_ROOT, 'chronicling-america', 'tests', 'test_chronam.py'),
+      path.join(SKILLS_ROOT, 'new-jersey-archives', 'tests', 'test_nj_archives.py'),
+    ];
+    let pyCmd = 'python3';
+    let pyPrefix: string[] = [];
+    try {
+      execFileSync('python3', ['-c', 'import click, httpx'], { stdio: 'ignore' });
+    } catch {
+      pyCmd = 'uv';
+      pyPrefix = ['run', '--with', 'click', '--with', 'httpx', 'python3'];
+    }
+    const result = spawnSync(pyCmd, [...pyPrefix, '-m', 'unittest', '-v', ...testFiles], {
+      encoding: 'utf8',
+    });
+    expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(0);
+    expect(result.stderr).toMatch(/Ran [1-9]\d* tests/);
+    expect(result.stderr).toMatch(/\bOK\b/);
   });
 });

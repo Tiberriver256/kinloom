@@ -38,7 +38,18 @@ skills/new-jersey-archives/scripts/nj-archives url land
 skills/new-jersey-archives/scripts/nj-archives url births-1848-1925
 ```
 
-`search` options: `--surname` (required except `natguard-photos`, which uses `--keyword`), `--given` (alias `--first`), `--spouse-surname` / `--spouse-given` (marriage databases), `--county`, `--location`, `--from-year`, `--to-year`, `--role` (land: Grantor/Grantee/Named/Official; supreme-court: Plaintiff/Defendant/Official/Victim/Other), `--case-type` / `--case-number` (supreme-court), `--keyword` (natguard-photos), `--limit`, `--pages` (stops cleanly when no further pager link exists), `--json`. County and role values are matched case-insensitively (and with or without a trailing `" County"`) against the live dropdown options on the search page. `search` refuses order-form-only databases with the form URL; use `url` for those.
+`search` options: `--surname` (alias `--last`; required except for `natguard-photos`, which uses `--keyword`, and for the two marriage databases, which also accept `--spouse-surname` alone), `--given` (alias `--first`), `--spouse-surname` (alias `--spouse`) / `--spouse-given` (marriage databases), `--county`, `--location`, `--from-year`, `--to-year`, `--role` (land: Grantor/Grantee/Named/Official; supreme-court: Plaintiff/Defendant/Official/Victim/Other), `--case-type` / `--case-number` (supreme-court), `--keyword` (natguard-photos), `--limit`, `--pages` (stops cleanly when no further pager link exists), `--refresh`, `--cache-ttl-hours`, `--json`. County and role values are matched case-insensitively (and with or without a trailing `" County"`) against the live dropdown options on the search page. `search` refuses order-form-only databases with the form URL; use `url` for those.
+
+Database names are forgiving: case, spaces, and underscores are normalized, and common variants resolve (`marriages-colonial`, `marriage-colonial`, `colonial-marriage` → `colonial-marriages`; `marriages` → `marriages-1848-1900`; `deeds` → `land`). A typo exits 2 with a "Did you mean" hint and makes no network call.
+
+### Disk cache
+
+`search` and `monmouth` cache each result on disk, keyed by database, every criterion, and `--pages`. A repeat search reads the cache file and makes no network call. JSON output carries `"cache_hit": true|false`, and text output marks hits with `[cache]`.
+
+- Location: `~/.cache/kinloom-nj-archives/` (override with `KINLOOM_NJ_ARCHIVES_CACHE_DIR`).
+- TTL: 168 hours (override with `--cache-ttl-hours` or `KINLOOM_NJ_ARCHIVES_CACHE_TTL_HOURS`; `0` disables reads).
+- `--refresh` re-queries the portal and rewrites the entry.
+- Writes are atomic (temp file + rename). A per-query `flock` makes concurrent agents that run the same search wait for the first one and then read its file.
 
 ## How the machine interface works (verified live 2026-11-24)
 
@@ -109,6 +120,12 @@ Inferred, not verified: the Monmouth results page shows pager links whose postba
 - Monmouth OPRS 1875 census search fetched over HTTPS and returned parsed rows with census-page PDF links.
 - Every searchable database's search page and field list was read live by navigating its portal row (see the table above); births and probate request forms were confirmed to be order forms (`btnAddToCart`, no `Search` button).
 - Portal counts update continuously as staff enter records; re-run `nj-archives databases` rather than quoting counts from memory.
+
+### Re-verification 2026-11-25
+
+- All 13 searchable databases returned exit 0 live with surname `Smith` (natguard-photos with a keyword) in 0.8-1.9 s each. Paged searches with `--role`, `--from-year`/`--to-year`, and `--county` (up to `--pages 12`, 132 rows) also returned exit 0.
+- The earlier HTTP 500 failures came from posting `Page$N` past the last page (ASP.NET EventValidation rejects it). The CLI now pages only when the grid renders a link for the next page, and it retries a transient 5xx once with a fresh session.
+- The other failures were exit-2 usage errors: a spouse-only marriage search (`--spouse-surname` without `--surname`) and guessed database names (`marriages-colonial`). Both now work.
 
 ## What this skill does not cover
 

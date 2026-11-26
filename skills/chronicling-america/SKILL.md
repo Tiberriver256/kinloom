@@ -9,7 +9,10 @@ This skill includes a standalone executable Python CLI at `skills/chronicling-am
 
 - **Coverage:** millions of digitized U.S. newspaper pages, 1736 through 1963 (per the collection record; the site describes it as "through 1963").
 - **Access:** the public loc.gov JSON API. No key, no account, no sign-in.
-- **Rate limits & timeouts:** be gentle. LoC asks users to stay within limits; search queries returning more than 100,000 results are too big for the API, so narrow with `--dates`, `--state`, or `--lccn` first. The CLI sends `at=search,results` (reducing response size from ~1.9 MB to ~15 KB) and uses a fail-fast 8-second default `--timeout` so stalled loc.gov queries fail quickly with an actionable error instead of hanging.
+- **Latency (measured 2026-11-25):** every loc.gov collection search takes **20-45 s** on the server side. Connect + TLS take under 0.1 s, but time-to-first-byte was 19-43 s for every query shape tried (with or without `q`, `dates`, `fa=location_state`, `dl=page`, `at=results` vs `at=search,results`, HTTP/1.1 vs HTTP/2, kinloom vs browser User-Agent). One probe under 6 parallel requests took 70 s. The old 8 s default timeout therefore failed 80%+ of searches. The default `--timeout` is now **120 s**. `/newspapers/?fo=json` returned 0 hits for the same query, and `/search/?fa=partof:chronicling+america` 302-redirects to the collection endpoint, so neither is faster.
+- **Disk cache:** every successful search (and every `get`/`download` item lookup) is cached, so a repeat returns in well under a second with no network call. See [Disk cache](#disk-cache).
+- **Rate limits:** be gentle. LoC asks users to stay within limits; search queries returning more than 100,000 results are too big for the API, so narrow with `--dates`, `--state`, or `--lccn` first. The CLI retries HTTP 429/503 once after the `Retry-After` delay (capped at 30 s) and retries 5xx and dropped connections once.
+- **Unstable hit counts (measured 2026-11-25):** loc.gov can return very different `hits` for byte-identical requests. `Merced` + California + 1900/1920 returned 32, then 34,133, then 35,404. `Abraham Lincoln` returned 0, then 25,392, then 77,301. So a low or zero count is **not** evidence of absence. The CLI never caches a zero-hit answer. To recheck a suspiciously low count, rerun with `--refresh`.
 
 ## Bundled CLI (`scripts/chronam`)
 
@@ -21,6 +24,9 @@ Path: `skills/chronicling-america/scripts/chronam`
 # Full-text search for a surname, page level, 10 results
 skills/chronicling-america/scripts/chronam search Lincoln
 
+# Multi-word queries need no quotes; postal codes work for --state
+skills/chronicling-america/scripts/chronam search Abraham Lincoln --state IL --dates 1860/1865
+
 # Surname search narrowed to 1860-1865 (or --date-from 1860 --date-to 1865)
 skills/chronicling-america/scripts/chronam search Lincoln --dates 1860/1865
 
@@ -28,13 +34,23 @@ skills/chronicling-america/scripts/chronam search Lincoln --dates 1860/1865
 skills/chronicling-america/scripts/chronam search Lincoln --dates 1860/1865 --state Illinois --json
 
 # One newspaper title only, by LCCN (Evening Star, Washington, D.C.)
-skills/chronicling-america/scripts/chronam search "Clara Barton" --lccn sn83045462
+# Use one distinctive word with --lccn: measured 2026-11-25, "Clara Barton" + this LCCN
+# returned 0 hits on three tries, while "Barton" + the same LCCN returned 38,628.
+skills/chronicling-america/scripts/chronam search Barton --lccn sn83045462
 
 # Second page of results, 25 per page (--per-page is an alias for --limit)
 skills/chronicling-america/scripts/chronam search "Frederick Douglass" --dates 1870/1895 --limit 25 --page 2
 ```
 
-Options: `--dates YYYY/YYYY` (or `--date-from` / `--date-to`), `--state`, `--lccn`, `--level` (`page`/`issue`/`title`/`all`), `--limit` / `--per-page` / `-n`, `--page` / `-p`, `--timeout` (seconds, default `8.0`), `--terms` / `-q` (alias for positional query), `--json`.
+Options: `--dates YYYY/YYYY` or `YYYY` (or `--date-from`/`--from-year`/`--date1`/`--year1` and `--date-to`/`--to-year`/`--date2`/`--year2`), `--state` (name or postal code), `--lccn`, `--level` (`page`/`issue`/`title`/`all`), `--limit` / `--per-page` / `--rows` / `-n`, `--page` / `-p`, `--timeout` (seconds, default `120`), `--terms` / `--query` / `-q` (alias for positional query), `--refresh`, `--cache-ttl-hours`, `--json`. JSON output carries `"cache_hit": true|false`; text output marks hits with `[cache]`.
+
+### Disk cache
+
+- Location: `~/.cache/kinloom-chronam/` (override with `KINLOOM_CHRONAM_CACHE_DIR`). One JSON file per request, keyed by the SHA-256 of the URL and sorted query parameters.
+- TTL: 168 hours (override with `--cache-ttl-hours` or `KINLOOM_CHRONAM_CACHE_TTL_HOURS`; `0` disables reads).
+- `--refresh` re-queries loc.gov and rewrites the entry.
+- Zero-hit answers are never cached (see unstable hit counts above).
+- Writes are atomic (temp file + rename). A per-query `flock` makes concurrent agents that run the same search wait for the first one and then read its file, so loc.gov sees one request.
 
 ### Inspect one page
 
@@ -87,13 +103,15 @@ skills/chronicling-america/scripts/chronam url "Susan B. Anthony" --dates 1870/1
 
 ## What is dead (verified 2026-11-24)
 
-- The old Chronicling America API at `chroniclingamerica.loc.gov/search/pages/results/?...&format=json` returns **404**. Third-party API directories (publicapi.dev, publicapis.io) still document it, including claims that an API key is required. Both claims are wrong now: the endpoint is gone, and the loc.gov API never needs a key.
+- The old Chronicling America API at `chroniclingamerica.loc.gov/search/pages/results/?...&format=json` returned **404** on 2026-11-24 and a Cloudflare **308** redirect on 2026-11-25. Third-party API directories (publicapi.dev, publicapis.io) still document it, including claims that an API key is required. Both claims are wrong now: the endpoint is gone, and the loc.gov API never needs a key.
 - `chroniclingamerica.loc.gov/about/api/` returns 403.
 - The loc.gov HTML pages return 403 to plain scripted requests; use the `fo=json` endpoints for machine access.
 
 ## Environment variables
 
-- None. No key or account is needed.
+- No key or account is needed.
+- `KINLOOM_CHRONAM_CACHE_DIR` (optional): cache directory (default `~/.cache/kinloom-chronam`).
+- `KINLOOM_CHRONAM_CACHE_TTL_HOURS` (optional): cache TTL in hours (default `168`).
 
 ## Research workflow notes
 

@@ -9,17 +9,28 @@
 """Search Library of Congress Chronicling America historic newspapers.
 
 Uses the public loc.gov JSON API (no key, no account). The retired
-chroniclingamerica.loc.gov search API returns 404 as of 2026-11-24;
-do not use it or third-party docs that describe it.
+chroniclingamerica.loc.gov search API now 308-redirects away; do not use it
+or third-party docs that describe it.
+
+loc.gov collection searches are slow on the server side: measured
+2026-11-25, connect + TLS took < 0.1 s but time-to-first-byte was 19-43 s
+for every search (with or without q, dates, state, dl, at). The default
+timeout budget is therefore 120 s, and every successful search is cached on
+disk so a repeat never hits loc.gov again.
 """
 
 from __future__ import annotations
 
+import hashlib
 import json
+import math
+import os
 import re
 import sys
 import time
+from contextlib import contextmanager
 from pathlib import Path
+from typing import Any, Iterator
 from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
 
 import click
@@ -33,21 +44,151 @@ HEADERS = {
 # tile.loc.gov (storage-services PDFs) rejects hotlinking: it requires a
 # loc.gov Referer. Send one for all file downloads; harmless elsewhere.
 DOWNLOAD_HEADERS = dict(HEADERS, Referer="https://www.loc.gov/")
-DEFAULT_TIMEOUT = 8.0
-DOWNLOAD_TIMEOUT = 20.0
-RETRYABLE_STATUS_CODES = {502, 503, 504, 520, 522, 524}
+# Measured 2026-11-25: loc.gov search TTFB is 19-43 s. An 8 s budget made
+# 80%+ of searches fail. One probe under 6 parallel requests took 70 s,
+# so 120 s covers the observed tail with headroom.
+DEFAULT_TIMEOUT = 120.0
+DOWNLOAD_TIMEOUT = 60.0
+RETRYABLE_STATUS_CODES = {429, 500, 502, 503, 504, 520, 522, 524}
+MAX_RETRY_AFTER_S = 30.0
 COLLECTION_START_YEAR = "1736"
 COLLECTION_END_YEAR = "1963"
+DEFAULT_CACHE_TTL_HOURS = 168.0
+CACHE_SCHEMA = 1
+
+US_STATES = {
+    "AL": "alabama", "AK": "alaska", "AZ": "arizona", "AR": "arkansas",
+    "CA": "california", "CO": "colorado", "CT": "connecticut", "DE": "delaware",
+    "DC": "district of columbia", "FL": "florida", "GA": "georgia", "HI": "hawaii",
+    "ID": "idaho", "IL": "illinois", "IN": "indiana", "IA": "iowa", "KS": "kansas",
+    "KY": "kentucky", "LA": "louisiana", "ME": "maine", "MD": "maryland",
+    "MA": "massachusetts", "MI": "michigan", "MN": "minnesota", "MS": "mississippi",
+    "MO": "missouri", "MT": "montana", "NE": "nebraska", "NV": "nevada",
+    "NH": "new hampshire", "NJ": "new jersey", "NM": "new mexico", "NY": "new york",
+    "NC": "north carolina", "ND": "north dakota", "OH": "ohio", "OK": "oklahoma",
+    "OR": "oregon", "PA": "pennsylvania", "PR": "puerto rico", "RI": "rhode island",
+    "SC": "south carolina", "SD": "south dakota", "TN": "tennessee", "TX": "texas",
+    "UT": "utah", "VT": "vermont", "VA": "virginia", "VI": "virgin islands",
+    "WA": "washington", "WV": "west virginia", "WI": "wisconsin", "WY": "wyoming",
+}
 
 
-def _resolve_dates(dates: str | None, date_from: str | None, date_to: str | None) -> str | None:
-    if dates:
-        return dates
-    if date_from or date_to:
-        start = (date_from or COLLECTION_START_YEAR).strip()
-        end = (date_to or COLLECTION_END_YEAR).strip()
-        return f"{start}/{end}"
-    return None
+# --- disk cache ---------------------------------------------------------------
+
+def cache_dir() -> Path:
+    override = os.environ.get("KINLOOM_CHRONAM_CACHE_DIR")
+    if override:
+        return Path(override).expanduser()
+    return Path.home() / ".cache" / "kinloom-chronam"
+
+
+def resolve_ttl_hours(cli_ttl: float | None) -> float:
+    if cli_ttl is not None:
+        if not math.isfinite(cli_ttl) or cli_ttl < 0:
+            raise click.BadParameter(f"Invalid --cache-ttl-hours value: {cli_ttl!r} (must be >= 0).")
+        return float(cli_ttl)
+    raw = os.environ.get("KINLOOM_CHRONAM_CACHE_TTL_HOURS")
+    if raw is not None and raw.strip():
+        try:
+            parsed = float(raw.strip())
+        except ValueError as exc:
+            raise click.BadParameter(f"Invalid KINLOOM_CHRONAM_CACHE_TTL_HOURS value: {raw!r}.") from exc
+        if not math.isfinite(parsed) or parsed < 0:
+            raise click.BadParameter(
+                f"Invalid KINLOOM_CHRONAM_CACHE_TTL_HOURS value: {raw!r} (must be >= 0).")
+        return parsed
+    return DEFAULT_CACHE_TTL_HOURS
+
+
+@contextmanager
+def file_lock(lock_path: Path) -> Iterator[None]:
+    """Advisory exclusive lock (POSIX flock); no-op where fcntl is missing."""
+    try:
+        import fcntl
+    except ImportError:
+        yield
+        return
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(lock_path, "a+b") as lock_file:
+        fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
+
+
+def atomic_write_json(dest: Path, payload: Any) -> None:
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    tmp = dest.with_name(f".{dest.name}.{os.getpid()}.{time.time_ns()}.tmp")
+    try:
+        tmp.write_text(json.dumps(payload, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
+        os.replace(tmp, dest)
+    except Exception:
+        tmp.unlink(missing_ok=True)
+        raise
+
+
+def cache_key(url: str, params: list[tuple[str, str]] | None) -> str:
+    canonical = json.dumps([url, sorted(params or [])], separators=(",", ":"))
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
+def read_cache(path: Path, ttl_hours: float) -> dict | None:
+    if not path.is_file():
+        return None
+    try:
+        entry = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+        return None
+    if not isinstance(entry, dict) or entry.get("schema") != CACHE_SCHEMA:
+        return None
+    fetched = entry.get("fetched_at")
+    if not isinstance(fetched, (int, float)):
+        return None
+    if ttl_hours <= 0 or (time.time() - fetched) > ttl_hours * 3600:
+        return None
+    data = entry.get("data")
+    return data if isinstance(data, dict) else None
+
+
+def cached_get_json(
+    url: str,
+    params: list[tuple[str, str]] | None,
+    *,
+    timeout: float,
+    refresh: bool,
+    ttl_hours: float,
+    cacheable=lambda data: True,
+) -> tuple[dict, bool]:
+    """Return (data, cache_hit). Concurrent callers of one query serialize on
+    a per-key flock, so the second caller reads the first caller's result."""
+    key = cache_key(url, params)
+    root = cache_dir()
+    path = root / f"{key}.json"
+    if not refresh:
+        hit = read_cache(path, ttl_hours)
+        if hit is not None:
+            return hit, True
+    with file_lock(root / f"{key}.lock"):
+        if not refresh:
+            hit = read_cache(path, ttl_hours)
+            if hit is not None:
+                return hit, True
+        data = _get_json(url, params=params, timeout=timeout)
+        if cacheable(data):
+            atomic_write_json(path, {"schema": CACHE_SCHEMA, "fetched_at": time.time(),
+                                     "url": url, "params": params or [], "data": data})
+        return data, False
+
+
+# --- HTTP -----------------------------------------------------------------------
+
+def _retry_after_seconds(resp: httpx.Response) -> float:
+    raw = resp.headers.get("retry-after", "").strip()
+    try:
+        return max(0.0, min(float(raw), MAX_RETRY_AFTER_S))
+    except ValueError:
+        return 1.0
 
 
 def _get_json(
@@ -71,7 +212,8 @@ def _get_json(
             except httpx.TimeoutException as exc:
                 raise click.ClickException(
                     f"loc.gov request timed out after {timeout:.1f}s ({exc}). "
-                    "Narrow with --state, --dates, or --lccn, increase --timeout, "
+                    "loc.gov searches normally take 20-45 s; increase --timeout, "
+                    "narrow with --state, --dates, or --lccn, "
                     "or open the browser URL from `chronam url`."
                 ) from exc
             except (httpx.RemoteProtocolError, httpx.ConnectError) as exc:
@@ -90,12 +232,14 @@ def _get_json(
                 last_exc = httpx.HTTPStatusError(
                     f"HTTP {resp.status_code}", request=resp.request, response=resp
                 )
-                if attempt == 0 and (deadline - time.monotonic()) >= 2.0:
-                    time.sleep(0.4)
+                wait = _retry_after_seconds(resp) if resp.status_code in (429, 503) else 0.4
+                if attempt == 0 and (deadline - time.monotonic()) >= wait + 2.0:
+                    time.sleep(wait)
                     continue
+                kind = "rate limited" if resp.status_code == 429 else "transient service error"
                 raise click.ClickException(
-                    f"loc.gov returned HTTP {resp.status_code} (transient service error). "
-                    "Narrow with --state/--dates/--lccn or open `chronam url` in a browser."
+                    f"loc.gov returned HTTP {resp.status_code} ({kind}). "
+                    "Wait and retry, narrow with --state/--dates/--lccn, or open `chronam url` in a browser."
                 )
 
             try:
@@ -123,8 +267,56 @@ def _get_json(
         return _run(managed_client)
 
 
-def _as_jsonable(value):
-    return value
+# --- query building ----------------------------------------------------------
+
+def _resolve_query(words: tuple[str, ...], terms_opt: str | None) -> str:
+    query = " ".join(w for w in words if w).strip() or (terms_opt or "").strip()
+    if not query:
+        raise click.UsageError("Provide QUERY words as positional arguments or via --terms/--query.")
+    return query
+
+
+def _resolve_dates(dates: str | None, date_from: str | None, date_to: str | None) -> str | None:
+    if dates:
+        cleaned = dates.strip().replace("-", "/")
+        if re.fullmatch(r"\d{4}", cleaned):
+            return f"{cleaned}/{cleaned}"
+        if not re.fullmatch(r"\d{4}/\d{4}", cleaned):
+            raise click.BadParameter(f"--dates {dates!r}: expected YYYY/YYYY (or YYYY).", param_hint="--dates")
+        return cleaned
+    if date_from or date_to:
+        start = (date_from or COLLECTION_START_YEAR).strip()[:4]
+        end = (date_to or COLLECTION_END_YEAR).strip()[:4]
+        for label, year in (("start", start), ("end", end)):
+            if not re.fullmatch(r"\d{4}", year):
+                raise click.BadParameter(f"{label} year {year!r}: expected YYYY.")
+        return f"{start}/{end}"
+    return None
+
+
+def normalize_state(state: str) -> str:
+    cleaned = state.strip()
+    return US_STATES.get(cleaned.upper(), cleaned).lower()
+
+
+def build_search_params(query: str, *, dates: str | None, level: str, limit: int, page: int,
+                        state: str | None, lccn: str | None) -> list[tuple[str, str]]:
+    params: list[tuple[str, str]] = [
+        ("q", query),
+        ("fo", "json"),
+        ("at", "search,results"),
+        ("c", str(limit)),
+        ("sp", str(page)),
+    ]
+    if level != "all":
+        params.append(("dl", level))
+    if dates:
+        params.append(("dates", dates))
+    if state:
+        params.append(("fa", f"location_state:{normalize_state(state)}"))
+    if lccn:
+        params.append(("fa", f"number_lccn:{lccn.strip()}"))
+    return params
 
 
 def _first(value):
@@ -147,31 +339,66 @@ def _compact_result(item: dict) -> dict:
     }
 
 
-def _print_search(data: dict, as_json: bool) -> None:
+def _print_search(data: dict, as_json: bool, cache_hit: bool) -> None:
     search = data.get("search") or {}
     hits = search.get("hits")
     results = data.get("results") or []
     if as_json:
         click.echo(json.dumps(
-            {"hits": hits, "results": [_compact_result(r) for r in results]},
+            {"hits": hits, "cache_hit": cache_hit, "results": [_compact_result(r) for r in results]},
             indent=2, ensure_ascii=False))
         return
-    click.echo(f"hits: {hits} (showing {len(results)} on this page)")
+    click.echo(f"hits: {hits} (showing {len(results)} on this page){' [cache]' if cache_hit else ''}")
     for item in results:
         c = _compact_result(item)
         click.echo(f"- {c['date']} | {c['title']} | {c['state']} | {c['url']}")
 
 
-def _resource_json(resource_url: str, *, timeout: float = DEFAULT_TIMEOUT) -> dict:
+def _search_cacheable(data: dict) -> bool:
+    # loc.gov sometimes answers a valid query with a transient 0-hit page
+    # (measured 2026-11-25: "Abraham Lincoln" gave 0, then 25,392 on rerun).
+    # Never cache an empty answer, so the next call asks loc.gov again.
+    hits = (data.get("search") or {}).get("hits")
+    return bool(hits) and bool(data.get("results"))
+
+
+def _resource_url_json(resource_url: str) -> str:
     parsed = urlparse(resource_url)
     qs = parse_qs(parsed.query)
     qs["fo"] = ["json"]
-    url = urlunparse(parsed._replace(query=urlencode(qs, doseq=True)))
-    return _get_json(url, timeout=timeout)
+    return urlunparse(parsed._replace(query=urlencode(qs, doseq=True)))
 
 
 def _build_resource_url(lccn: str, date: str, edition: str, seq: str) -> str:
     return f"https://www.loc.gov/resource/{lccn}/{date}/ed-{edition}/?sp={seq}"
+
+
+def _cache_options(f):
+    f = click.option("--cache-ttl-hours", type=float, default=None,
+                     help=f"Cache TTL in hours (default {DEFAULT_CACHE_TTL_HOURS:g}; "
+                          "env KINLOOM_CHRONAM_CACHE_TTL_HOURS).")(f)
+    f = click.option("--refresh", is_flag=True, help="Bypass the disk cache and re-query loc.gov.")(f)
+    return f
+
+
+def _query_options(f):
+    for decorator in reversed([
+        click.argument("query", nargs=-1),
+        click.option("--terms", "--query", "-q", "terms_opt", default=None,
+                     help="Alias for positional QUERY."),
+        click.option("--dates", default=None, help="Date range YYYY/YYYY (or one year YYYY)."),
+        click.option("--date-from", "--from-year", "--date1", "--year1", "--start", "date_from",
+                     default=None, help="Start year YYYY (alternative to --dates)."),
+        click.option("--date-to", "--to-year", "--date2", "--year2", "--end", "date_to",
+                     default=None, help="End year YYYY (alternative to --dates)."),
+        click.option("--level", default="page", type=click.Choice(["page", "issue", "title", "all"]),
+                     show_default=True, help="Display level (dl=)."),
+        click.option("--state", default=None,
+                     help="State name or postal code (CA, NJ); sent as fa=location_state:<state>."),
+        click.option("--lccn", default=None, help="Filter by newspaper LCCN via fa=number_lccn:<lccn>."),
+    ]):
+        f = decorator(f)
+    return f
 
 
 @click.group()
@@ -180,42 +407,27 @@ def cli() -> None:
 
 
 @cli.command()
-@click.argument("query", required=False, default=None)
-@click.option("--terms", "-q", "terms_opt", default=None, help="Alias for positional QUERY.")
-@click.option("--dates", default=None, help="Date range YYYY/YYYY, e.g. 1880/1920.")
-@click.option("--date-from", "--from-year", "date_from", default=None, help="Start year YYYY (alternative to --dates).")
-@click.option("--date-to", "--to-year", "date_to", default=None, help="End year YYYY (alternative to --dates).")
-@click.option("--level", default="page", type=click.Choice(["page", "issue", "title", "all"]),
-              show_default=True, help="Display level (dl=).")
-@click.option("--limit", "--per-page", "-n", default=10, show_default=True, help="Results per page (c=).")
+@_query_options
+@click.option("--limit", "--per-page", "--rows", "-n", default=10, show_default=True,
+              help="Results per page (c=).")
 @click.option("--page", "-p", default=1, show_default=True, help="Results page (sp=).")
-@click.option("--state", default=None, help="Filter by state server-side via fa=location_state:<state>.")
-@click.option("--lccn", default=None, help="Filter by newspaper LCCN server-side via fa=number_lccn:<lccn>.")
 @click.option("--timeout", default=DEFAULT_TIMEOUT, show_default=True, type=float,
-              help="Request timeout budget in seconds (fail-fast default avoids 50s+ hangs).")
+              help="Request timeout budget in seconds (loc.gov search takes 20-45 s).")
+@_cache_options
 @click.option("--json", "as_json", is_flag=True, help="Emit JSON instead of compact text.")
-def search(query, terms_opt, dates, date_from, date_to, level, limit, page, state, lccn, timeout, as_json):
-    """Search newspaper pages for QUERY (full-text, e.g. a surname)."""
-    resolved_query = query if query is not None else terms_opt
-    if not resolved_query:
-        raise click.UsageError("Provide QUERY as a positional argument or via --terms.")
-    resolved_dates = _resolve_dates(dates, date_from, date_to)
-    params: list[tuple[str, str]] = [
-        ("q", resolved_query),
-        ("fo", "json"),
-        ("at", "search,results"),
-        ("c", str(limit)),
-        ("sp", str(page)),
-    ]
-    if level != "all":
-        params.append(("dl", level))
-    if resolved_dates:
-        params.append(("dates", resolved_dates))
-    if state:
-        params.append(("fa", f"location_state:{state.strip().lower()}"))
-    if lccn:
-        params.append(("fa", f"number_lccn:{lccn.strip()}"))
-    data = _get_json(COLLECTION_BASE, params=params, timeout=timeout)
+def search(query, terms_opt, dates, date_from, date_to, level, state, lccn, limit, page,
+           timeout, refresh, cache_ttl_hours, as_json):
+    """Search newspaper pages for QUERY (full-text, e.g. a surname).
+
+    Multi-word queries need no quotes: `chronam search Abraham Lincoln`.
+    Results are cached on disk (~/.cache/kinloom-chronam, 168 h TTL).
+    """
+    resolved_query = _resolve_query(query, terms_opt)
+    params = build_search_params(resolved_query, dates=_resolve_dates(dates, date_from, date_to),
+                                 level=level, limit=limit, page=page, state=state, lccn=lccn)
+    ttl = resolve_ttl_hours(cache_ttl_hours)
+    data, cache_hit = cached_get_json(COLLECTION_BASE, params, timeout=timeout, refresh=refresh,
+                                      ttl_hours=ttl, cacheable=_search_cacheable)
     results = data.get("results") or []
     hits = (data.get("search") or {}).get("hits")
     if hits and not results:
@@ -224,8 +436,14 @@ def search(query, terms_opt, dates, date_from, date_to, level, limit, page, stat
             "Check --page or retry once if loc.gov dropped facet results.",
             err=True,
         )
+    elif not hits:
+        click.echo(
+            "Note: 0 hits. loc.gov sometimes returns a transient empty answer; empty results are "
+            "never cached, so one rerun confirms a true zero.",
+            err=True,
+        )
     data["results"] = results
-    _print_search(data, as_json)
+    _print_search(data, as_json, cache_hit)
 
 
 @cli.command()
@@ -236,8 +454,9 @@ def search(query, terms_opt, dates, date_from, date_to, level, limit, page, stat
 @click.option("--seq", default="1", show_default=True, help="Page sequence within the issue (?sp=).")
 @click.option("--timeout", default=DEFAULT_TIMEOUT, show_default=True, type=float,
               help="Request timeout budget in seconds.")
+@_cache_options
 @click.option("--json", "as_json", is_flag=True, help="Emit the raw item JSON.")
-def get(resource_url, lccn, date, edition, seq, timeout, as_json):
+def get(resource_url, lccn, date, edition, seq, timeout, refresh, cache_ttl_hours, as_json):
     """Show metadata and download links for one newspaper page.
 
     Give a loc.gov resource URL, or build one with --lccn --date [--edition --seq].
@@ -246,7 +465,8 @@ def get(resource_url, lccn, date, edition, seq, timeout, as_json):
         if not lccn or not date:
             raise click.UsageError("Give a resource URL or both --lccn and --date.")
         resource_url = _build_resource_url(lccn, date, edition, seq)
-    data = _resource_json(resource_url, timeout=timeout)
+    data, _hit = cached_get_json(_resource_url_json(resource_url), None, timeout=timeout,
+                                 refresh=refresh, ttl_hours=resolve_ttl_hours(cache_ttl_hours))
     if as_json:
         click.echo(json.dumps(data, indent=2, ensure_ascii=False))
         return
@@ -269,7 +489,7 @@ def get(resource_url, lccn, date, edition, seq, timeout, as_json):
 @click.option("--date", default=None, help="Issue date YYYY-MM-DD.")
 @click.option("--edition", default="1", show_default=True)
 @click.option("--seq", default="1", show_default=True)
-@click.option("--out", "-o", default=".", show_default=True, help="Output directory.")
+@click.option("--out", "--out-dir", "-o", "out", default=".", show_default=True, help="Output directory.")
 @click.option("--pdf/--no-pdf", default=True, show_default=True, help="Download the page PDF.")
 @click.option("--image/--no-image", default=False, show_default=True,
               help="Download the IIIF image URL as served (reduced-size rendition).")
@@ -277,13 +497,16 @@ def get(resource_url, lccn, date, edition, seq, timeout, as_json):
               help="Download the ALTO XML word-coordinates file (OCR full text).")
 @click.option("--timeout", default=DOWNLOAD_TIMEOUT, show_default=True, type=float,
               help="Download timeout in seconds.")
-def download(resource_url, lccn, date, edition, seq, out, pdf, image, text, timeout):
+@_cache_options
+def download(resource_url, lccn, date, edition, seq, out, pdf, image, text, timeout, refresh,
+             cache_ttl_hours):
     """Download a newspaper page (PDF, image, OCR) plus metadata.json."""
     if resource_url is None:
         if not lccn or not date:
             raise click.UsageError("Give a resource URL or both --lccn and --date.")
         resource_url = _build_resource_url(lccn, date, edition, seq)
-    data = _resource_json(resource_url, timeout=timeout)
+    data, _hit = cached_get_json(_resource_url_json(resource_url), None, timeout=timeout,
+                                 refresh=refresh, ttl_hours=resolve_ttl_hours(cache_ttl_hours))
     item = data.get("item") or {}
     outdir = Path(out)
     outdir.mkdir(parents=True, exist_ok=True)
@@ -316,31 +539,14 @@ def download(resource_url, lccn, date, edition, seq, out, pdf, image, text, time
 
 
 @cli.command()
-@click.argument("query", required=False, default=None)
-@click.option("--terms", "-q", "terms_opt", default=None, help="Alias for positional QUERY.")
-@click.option("--dates", default=None, help="Date range YYYY/YYYY.")
-@click.option("--date-from", "--from-year", "date_from", default=None, help="Start year YYYY.")
-@click.option("--date-to", "--to-year", "date_to", default=None, help="End year YYYY.")
-@click.option("--level", default="page", type=click.Choice(["page", "issue", "title", "all"]),
-              show_default=True)
-@click.option("--state", default=None, help="Filter by state via fa=location_state:<state>.")
-@click.option("--lccn", default=None, help="Filter by newspaper LCCN via fa=number_lccn:<lccn>.")
+@_query_options
 def url(query, terms_opt, dates, date_from, date_to, level, state, lccn):
     """Print the loc.gov website search URL for QUERY (open in a browser)."""
-    resolved_query = query if query is not None else terms_opt
-    if not resolved_query:
-        raise click.UsageError("Provide QUERY as a positional argument or via --terms.")
-    resolved_dates = _resolve_dates(dates, date_from, date_to)
-    params: list[tuple[str, str]] = [("q", resolved_query)]
-    if level != "all":
-        params.append(("dl", level))
-    if resolved_dates:
-        params.append(("dates", resolved_dates))
-    if state:
-        params.append(("fa", f"location_state:{state.strip().lower()}"))
-    if lccn:
-        params.append(("fa", f"number_lccn:{lccn.strip()}"))
-    click.echo(COLLECTION_BASE + "?" + urlencode(params))
+    resolved_query = _resolve_query(query, terms_opt)
+    params = build_search_params(resolved_query, dates=_resolve_dates(dates, date_from, date_to),
+                                 level=level, limit=10, page=1, state=state, lccn=lccn)
+    browser = [(k, v) for k, v in params if k not in ("fo", "at", "c", "sp")]
+    click.echo(COLLECTION_BASE + "?" + urlencode(browser))
 
 
 if __name__ == "__main__":

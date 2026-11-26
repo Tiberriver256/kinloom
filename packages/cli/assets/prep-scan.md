@@ -70,6 +70,13 @@ kinloom prep-scan stitch ./raw/census-1930.jpg ./scans/census-1930-household.jpg
   --quality 90
 ```
 
+### Output flags (forgiving)
+
+- `grid`, `stitch`, and `crop` take the output path positionally (`<in> <out.jpg>`) or as `--out <out.jpg>` (aliases `-o`, `--output`). Giving both with different paths exits 2.
+- `preview` and `pdf-pages` take `--out-dir <dir>`; `--out`, `-o`, `--output-dir`, and `--output` are aliases.
+- `--box` and `--redact` accept `x0,y0,x1,y1`, `"x0, y0, x1, y1"`, `"x0 y0 x1 y1"`, and shell-split `--box 10, 20, 30, 40`.
+- `crop` accepts `--quality 1..100` for the archival output (default `92`).
+
 ## Environment variables
 
 - `KINLOOM_OCR_CACHE_DIR` (optional): overrides the default preview cache root (`$XDG_CACHE_HOME/kinloom-ocr` or `~/.cache/kinloom-ocr`).

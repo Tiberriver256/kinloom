@@ -22,14 +22,122 @@ verification log and the per-database field maps.
 
 from __future__ import annotations
 
+import difflib
+import hashlib
 import html as html_mod
 import json
+import math
+import os
 import re
 import sys
 import time
+from contextlib import contextmanager
+from pathlib import Path
+from typing import Any, Callable, Iterator
 
 import click
 import httpx
+
+DEFAULT_CACHE_TTL_HOURS = 168.0
+CACHE_SCHEMA = 1
+
+
+def cache_dir() -> Path:
+    override = os.environ.get("KINLOOM_NJ_ARCHIVES_CACHE_DIR")
+    if override:
+        return Path(override).expanduser()
+    return Path.home() / ".cache" / "kinloom-nj-archives"
+
+
+def resolve_ttl_hours(cli_ttl: float | None) -> float:
+    if cli_ttl is not None:
+        if not math.isfinite(cli_ttl) or cli_ttl < 0:
+            raise click.BadParameter(f"Invalid --cache-ttl-hours value: {cli_ttl!r} (must be >= 0).")
+        return float(cli_ttl)
+    raw = os.environ.get("KINLOOM_NJ_ARCHIVES_CACHE_TTL_HOURS")
+    if raw is not None and raw.strip():
+        try:
+            parsed = float(raw.strip())
+        except ValueError as exc:
+            raise click.BadParameter(f"Invalid KINLOOM_NJ_ARCHIVES_CACHE_TTL_HOURS value: {raw!r}.") from exc
+        if not math.isfinite(parsed) or parsed < 0:
+            raise click.BadParameter(
+                f"Invalid KINLOOM_NJ_ARCHIVES_CACHE_TTL_HOURS value: {raw!r} (must be >= 0).")
+        return parsed
+    return DEFAULT_CACHE_TTL_HOURS
+
+
+@contextmanager
+def file_lock(lock_path: Path) -> Iterator[None]:
+    """Advisory exclusive lock (POSIX flock); no-op where fcntl is missing."""
+    try:
+        import fcntl
+    except ImportError:
+        yield
+        return
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(lock_path, "a+b") as lock_file:
+        fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
+
+
+def atomic_write_json(dest: Path, payload: Any) -> None:
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    tmp = dest.with_name(f".{dest.name}.{os.getpid()}.{time.time_ns()}.tmp")
+    try:
+        tmp.write_text(json.dumps(payload, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
+        os.replace(tmp, dest)
+    except Exception:
+        tmp.unlink(missing_ok=True)
+        raise
+
+
+def cache_key(kind: str, payload: dict) -> str:
+    canonical = json.dumps([kind, payload], sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
+def read_cache(path: Path, ttl_hours: float) -> dict | None:
+    if not path.is_file():
+        return None
+    try:
+        entry = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+        return None
+    if not isinstance(entry, dict) or entry.get("schema") != CACHE_SCHEMA:
+        return None
+    fetched = entry.get("fetched_at")
+    if not isinstance(fetched, (int, float)):
+        return None
+    if ttl_hours <= 0 or (time.time() - fetched) > ttl_hours * 3600:
+        return None
+    result = entry.get("result")
+    return result if isinstance(result, dict) else None
+
+
+def cached_call(kind: str, payload: dict, fetch: Callable[[], dict], *,
+                refresh: bool, ttl_hours: float) -> tuple[dict, bool]:
+    """Return (result, cache_hit). Concurrent callers of one query serialize
+    on a per-key flock, so the second caller reads the first caller's file."""
+    key = cache_key(kind, payload)
+    root = cache_dir()
+    path = root / f"{key}.json"
+    if not refresh:
+        hit = read_cache(path, ttl_hours)
+        if hit is not None:
+            return hit, True
+    with file_lock(root / f"{key}.lock"):
+        if not refresh:
+            hit = read_cache(path, ttl_hours)
+            if hit is not None:
+                return hit, True
+        result = fetch()
+        atomic_write_json(path, {"schema": CACHE_SCHEMA, "fetched_at": time.time(),
+                                 "kind": kind, "query": payload, "result": result})
+        return result, False
 
 PORTAL_BASE = "https://wwwdnet-dos.nj.gov/DOS_ArchivesDBPortal/"
 PORTAL_INDEX = PORTAL_BASE + "index.aspx"
@@ -180,6 +288,52 @@ ORDER_ONLY = {
     "wwi-search": ("World War I Record Search",
                   "WorldWarIRecordRequest.aspx", "GridView6", "ctl03"),
 }
+
+MARRIAGE_DATABASES = {"colonial-marriages", "marriages-1848-1900"}
+
+# Names agents actually typed (telemetry 2026-11-25) plus obvious variants.
+DATABASE_ALIASES = {
+    "colonial-marriage": "colonial-marriages",
+    "marriages-colonial": "colonial-marriages",
+    "marriage-colonial": "colonial-marriages",
+    "colonial-marriage-bonds": "colonial-marriages",
+    "marriage-bonds": "colonial-marriages",
+    "marriages": "marriages-1848-1900",
+    "marriage": "marriages-1848-1900",
+    "marriages-1848": "marriages-1848-1900",
+    "deaths": "deaths-1878-1900",
+    "deaths-1848": "deaths-1848-1878",
+    "deaths-1878": "deaths-1878-1900",
+    "land-records": "land",
+    "early-land-records": "land",
+    "deeds": "land",
+    "supreme": "supreme-court",
+    "court": "supreme-court",
+    "name-change": "name-changes",
+    "census": "census-1885",
+    "revwar": "revwar-damage",
+    "revwar-damages": "revwar-damage",
+    "civilwar": "civilwar-service",
+    "wwi": "wwi-deaths",
+    "natguard": "natguard-photos",
+}
+
+
+def resolve_database(name: str) -> str:
+    """Map a typed database name to a registry key, or raise a helpful error."""
+    key = re.sub(r"[\s_]+", "-", name.strip().lower())
+    if key in DATABASES or key in ORDER_ONLY or key == "monmouth":
+        return key
+    if key in DATABASE_ALIASES:
+        return DATABASE_ALIASES[key]
+    known = [*DATABASES, *ORDER_ONLY, *DATABASE_ALIASES]
+    close = difflib.get_close_matches(key, known, n=3, cutoff=0.6)
+    hint = f" Did you mean: {', '.join(DATABASE_ALIASES.get(c, c) for c in close)}?" if close else ""
+    raise click.UsageError(
+        f"unknown database {name!r}.{hint} Valid: {', '.join(DATABASES)}. "
+        "Run `nj-archives databases` for the live list."
+    )
+
 
 MONMOUTH_TOWNS = ["Atlantic", "Freehold", "Holmdel", "Howell", "Marlboro",
                   "Middletown", "Ocean", "Shrewsbury", "Upper Freehold", "Wall"]
@@ -511,6 +665,7 @@ def emit(result: dict, as_json: bool, limit: int | None = None) -> None:
         click.echo(f"{title}: no records found.")
         return
     click.echo(f"{title}: {len(rows)} result(s)" +
+                (" [cache]" if result.get("cache_hit") else "") +
                 (" (search capped at 500 records; narrow the criteria)"
                  if result.get("capped_500") and total >= 500 else "") +
                 (f" (pages read: {result.get('pages_read')})"
@@ -550,14 +705,18 @@ def databases_cmd(as_json: bool) -> None:
 
 @cli.command("search")
 @click.argument("database")
-@click.option("--surname", default=None, help="Surname to search (required for all databases except natguard-photos).")
-@click.option("--given", "--first", "given", default=None, help="Given name.")
-@click.option("--spouse-surname", default=None, help="Spouse surname (marriage databases).")
-@click.option("--spouse-given", default=None, help="Spouse given name (marriage databases).")
+@click.option("--surname", "--last", "--last-name", "surname", default=None,
+              help="Surname to search. Marriage databases accept --spouse-surname alone; "
+                   "natguard-photos uses --keyword.")
+@click.option("--given", "--first", "--first-name", "given", default=None, help="Given name.")
+@click.option("--spouse-surname", "--spouse", "--bride-surname", "spouse_surname", default=None,
+              help="Spouse surname (marriage databases).")
+@click.option("--spouse-given", "--bride-given", "spouse_given", default=None,
+              help="Spouse given name (marriage databases).")
 @click.option("--county", default=None, help="County filter.")
 @click.option("--location", default=None, help="Location filter.")
-@click.option("--from-year", type=int, default=None, help="Earliest year.")
-@click.option("--to-year", type=int, default=None, help="Latest year.")
+@click.option("--from-year", "--start-year", "from_year", type=int, default=None, help="Earliest year.")
+@click.option("--to-year", "--end-year", "to_year", type=int, default=None, help="Latest year.")
 @click.option("--role", default=None, help="Role, e.g. Grantee (land) or Defendant (supreme-court).")
 @click.option("--case-type", default=None, help="Case type (supreme-court).")
 @click.option("--case-number", default=None, help="Case number (supreme-court).")
@@ -565,6 +724,10 @@ def databases_cmd(as_json: bool) -> None:
 @click.option("--limit", type=int, default=None, help="Max rows to show.")
 @click.option("--pages", type=int, default=1, show_default=True,
               help="Result pages to read (stops cleanly if fewer pages exist).")
+@click.option("--refresh", is_flag=True, help="Bypass the disk cache and re-query the portal.")
+@click.option("--cache-ttl-hours", type=float, default=None,
+              help=f"Cache TTL in hours (default {DEFAULT_CACHE_TTL_HOURS:g}; "
+                   "env KINLOOM_NJ_ARCHIVES_CACHE_TTL_HOURS).")
 @click.option("--json", "as_json", is_flag=True, help="Emit JSON.")
 def search_cmd(database: str, surname: str | None, given: str | None,
                spouse_surname: str | None, spouse_given: str | None,
@@ -572,17 +735,21 @@ def search_cmd(database: str, surname: str | None, given: str | None,
                from_year: int | None, to_year: int | None,
                role: str | None, case_type: str | None,
                case_number: str | None, keyword: str | None,
-               limit: int | None, pages: int, as_json: bool) -> None:
-    """Search one portal database, e.g. `nj-archives search land --surname Lincoln`."""
+               limit: int | None, pages: int, refresh: bool,
+               cache_ttl_hours: float | None, as_json: bool) -> None:
+    """Search one portal database, e.g. `nj-archives search land --surname Lincoln`.
+
+    Results are cached on disk (~/.cache/kinloom-nj-archives, 168 h TTL).
+    """
+    database = resolve_database(database)
+    if database == "monmouth":
+        raise click.UsageError("Monmouth 1875 census is its own command: "
+                               "`nj-archives monmouth --surname <name>`.")
     if database in ORDER_ONLY:
         title, page, _grid, _ctl = ORDER_ONLY[database]
         raise click.UsageError(
             f"{title} has no online search; it is a records-request (order) form. "
             f"Open it in a browser: {PORTAL_BASE}{page}"
-        )
-    if database not in DATABASES:
-        raise click.UsageError(
-            f"unknown database {database!r}; run `nj-archives databases` for the list"
         )
     if database == "natguard-photos":
         if not keyword and not surname:
@@ -590,7 +757,12 @@ def search_cmd(database: str, surname: str | None, given: str | None,
         if not keyword and surname:
             keyword = surname
     elif not surname:
-        raise click.UsageError("Missing option '--surname'.")
+        if not (database in MARRIAGE_DATABASES and spouse_surname):
+            raise click.UsageError(
+                "Missing option '--surname'"
+                + (" (or --spouse-surname for marriage databases)." if database in MARRIAGE_DATABASES
+                   else ".")
+            )
     criteria = {
         "surname": surname, "given": given,
         "spouse_surname": spouse_surname, "spouse_given": spouse_given,
@@ -600,13 +772,20 @@ def search_cmd(database: str, surname: str | None, given: str | None,
         "role": role, "case_type": case_type, "case_number": case_number,
         "keyword": keyword,
     }
-    try:
+    pages = max(1, pages)
+
+    def fetch() -> dict:
         with Portal() as portal:
-            result = portal.search(database, criteria, pages=max(1, pages))
+            return portal.search(database, criteria, pages=pages)
+
+    try:
+        result, cache_hit = cached_call(
+            "search", {"database": database, "criteria": criteria, "pages": pages}, fetch,
+            refresh=refresh, ttl_hours=resolve_ttl_hours(cache_ttl_hours))
     except httpx.HTTPStatusError as exc:
         raise click.ClickException(
-            f"portal returned HTTP {exc.response.status_code} for {database}; "
-            "the portal may be down or blocking automated access"
+            f"portal returned HTTP {exc.response.status_code} for {database} after one retry; "
+            "the portal may be briefly down. Retry later or drop --pages/--from-year filters."
         ) from exc
     except httpx.TimeoutException as exc:
         raise click.ClickException(
@@ -616,10 +795,10 @@ def search_cmd(database: str, surname: str | None, given: str | None,
         raise click.ClickException(
             f"portal request failed for {database}: {exc}"
         ) from exc
-    emit(result, as_json, limit)
+    emit({**result, "cache_hit": cache_hit}, as_json, limit)
 
 @cli.command("monmouth")
-@click.option("--surname", required=True, help="Person name to search.")
+@click.option("--surname", "--last", "--name", "surname", required=True, help="Person name to search.")
 @click.option("--town", default="ALL", show_default=True,
               help="Town, or ALL. Choices: " + ", ".join(MONMOUTH_TOWNS))
 @click.option("--category", default="ALL", show_default=True,
@@ -627,27 +806,38 @@ def search_cmd(database: str, surname: str | None, given: str | None,
 @click.option("--match", type=click.Choice(["starts", "contains"]),
               default="contains", show_default=True)
 @click.option("--limit", type=int, default=None, help="Max rows to show.")
+@click.option("--refresh", is_flag=True, help="Bypass the disk cache and re-query Monmouth OPRS.")
+@click.option("--cache-ttl-hours", type=float, default=None, help="Cache TTL in hours (default 168).")
 @click.option("--json", "as_json", is_flag=True, help="Emit JSON.")
 def monmouth_cmd(surname: str, town: str, category: str, match: str,
-                 limit: int | None, as_json: bool) -> None:
+                 limit: int | None, refresh: bool, cache_ttl_hours: float | None,
+                 as_json: bool) -> None:
     """Search the Monmouth County OPRS 1875 census by person name."""
-    if town != "ALL" and town not in MONMOUTH_TOWNS:
+    town_match = match_option_value(town, ["ALL", *MONMOUTH_TOWNS])
+    if town_match is None:
         raise click.UsageError(
             f"--town {town!r} is not valid; valid: ALL, " + ", ".join(MONMOUTH_TOWNS)
         )
-    if category != "ALL" and category not in MONMOUTH_CATEGORIES:
+    category_match = match_option_value(category, ["ALL", *MONMOUTH_CATEGORIES])
+    if category_match is None:
         raise click.UsageError(
             f"--category {category!r} is not valid; valid: ALL, "
             + ", ".join(MONMOUTH_CATEGORIES)
         )
     try:
-        result = monmouth_search(surname, town, category, match, limit)
+        result, cache_hit = cached_call(
+            "monmouth", {"surname": surname, "town": town_match, "category": category_match,
+                         "match": match},
+            lambda: monmouth_search(surname, town_match, category_match, match, None),
+            refresh=refresh, ttl_hours=resolve_ttl_hours(cache_ttl_hours))
     except httpx.HTTPStatusError as exc:
         raise click.ClickException(
             f"Monmouth OPRS returned HTTP {exc.response.status_code}; "
             "the site may be down or blocking automated access"
         ) from exc
-    emit(result, as_json, limit)
+    except httpx.HTTPError as exc:
+        raise click.ClickException(f"Monmouth OPRS request failed: {exc}") from exc
+    emit({**result, "cache_hit": cache_hit}, as_json, limit)
 
 
 @cli.command("url")
@@ -658,6 +848,7 @@ def url_cmd(database: str | None) -> None:
         click.echo(f"Portal index: {PORTAL_INDEX}")
         click.echo(f"Monmouth County OPRS 1875 census: {MONMOUTH_SEARCH}")
         return
+    database = resolve_database(database)
     if database == "monmouth":
         click.echo(MONMOUTH_SEARCH)
         return
