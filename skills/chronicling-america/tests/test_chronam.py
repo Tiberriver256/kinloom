@@ -269,5 +269,145 @@ class TestChronamCacheAndAliases(unittest.TestCase):
         self.assertIn("QUERY", res.output)
 
 
+class TestChronamGetAndDownloadCache(unittest.TestCase):
+    def setUp(self) -> None:
+        self._tmp = tempfile.TemporaryDirectory()
+        self._env = patch.dict(os.environ, {"KINLOOM_CHRONAM_CACHE_DIR": self._tmp.name})
+        self._env.start()
+        self.get_calls: list[str] = []
+        self.download_calls: list[str] = []
+        self.item = {
+            "item": {
+                "title": "Evening Star",
+                "date": "1865-04-15",
+                "number_lccn": ["sn83045462"],
+                "location_city": ["washington"],
+                "location_state": ["district of columbia"],
+            },
+            "resource": {"title": "Evening Star"},
+            "resources": [
+                {
+                    "pdf": "https://tile.loc.gov/storage-services/service/ndnp/sn83045462/print.pdf",
+                    "image": "https://tile.loc.gov/image-services/iiif/example/full/pct:50/0/default.jpg",
+                    "fulltext_file": "https://tile.loc.gov/storage-services/service/ndnp/sn83045462/ocr.xml",
+                }
+            ],
+        }
+
+        def fake_get_json(url, params=None, *, timeout=chronam.DEFAULT_TIMEOUT, client=None):
+            self.get_calls.append(url)
+            return json.loads(json.dumps(self.item))
+
+        def fake_download(url, *, timeout):
+            self.download_calls.append(url)
+            return b"%PDF-1.4 Lincoln"
+
+        self._get = patch.object(chronam, "_get_json", side_effect=fake_get_json)
+        self._download = patch.object(chronam, "_download_bytes", side_effect=fake_download)
+        self._get.start()
+        self._download.start()
+
+    def tearDown(self) -> None:
+        self._download.stop()
+        self._get.stop()
+        self._env.stop()
+        self._tmp.cleanup()
+
+    def test_get_repeat_is_a_cache_hit_and_refresh_fetches(self) -> None:
+        runner = CliRunner()
+        args = ["get", "--lccn", "sn83045462", "--date", "1865-04-15", "--seq", "1"]
+        first = runner.invoke(chronam.cli, args)
+        second = runner.invoke(chronam.cli, args)
+        self.assertEqual(first.exit_code, 0, first.output)
+        self.assertEqual(second.exit_code, 0, second.output)
+        self.assertIn("Evening Star", second.output)
+        self.assertEqual(self.get_calls, [
+            "https://www.loc.gov/resource/sn83045462/1865-04-15/ed-1/?sp=1&fo=json"
+        ])
+        self.assertEqual(len(self.get_calls), 1)
+        self.assertEqual(self.download_calls, [])
+
+        refreshed = runner.invoke(chronam.cli, [*args, "--refresh"])
+        self.assertEqual(refreshed.exit_code, 0, refreshed.output)
+        self.assertIn("Evening Star", refreshed.output)
+        self.assertEqual(len(self.get_calls), 2)
+
+    def test_download_repeat_copies_bytes_with_no_http_and_refresh_bypasses(self) -> None:
+        runner = CliRunner()
+        with tempfile.TemporaryDirectory() as work:
+            out = Path(work) / "papers"
+            args = [
+                "download",
+                "--lccn",
+                "sn83045462",
+                "--date",
+                "1865-04-15",
+                "--seq",
+                "1",
+                "--out",
+                str(out),
+                "--no-image",
+                "--no-text",
+            ]
+            first = runner.invoke(chronam.cli, args)
+            self.assertEqual(first.exit_code, 0, first.output)
+            pdfs = list(out.glob("*.pdf"))
+            self.assertEqual(len(pdfs), 1)
+            self.assertEqual(pdfs[0].read_bytes(), b"%PDF-1.4 Lincoln")
+            self.assertNotIn("[cache]", first.output)
+            self.assertEqual(len(self.get_calls), 1)
+            self.assertEqual(len(self.download_calls), 1)
+            self.assertTrue(self.download_calls[0].startswith("https://tile.loc.gov/"))
+
+            second = runner.invoke(chronam.cli, args)
+            self.assertEqual(second.exit_code, 0, second.output)
+            self.assertIn("[cache]", second.output)
+            self.assertEqual(pdfs[0].read_bytes(), b"%PDF-1.4 Lincoln")
+            self.assertEqual(len(self.get_calls), 1)
+            self.assertEqual(len(self.download_calls), 1)
+
+            refreshed = runner.invoke(chronam.cli, [*args, "--refresh"])
+            self.assertEqual(refreshed.exit_code, 0, refreshed.output)
+            self.assertNotIn("[cache]", refreshed.output)
+            self.assertEqual(pdfs[0].read_bytes(), b"%PDF-1.4 Lincoln")
+            self.assertEqual(len(self.get_calls), 2)
+            self.assertEqual(len(self.download_calls), 2)
+
+            expired = runner.invoke(chronam.cli, [*args, "--cache-ttl-hours", "0"])
+            self.assertEqual(expired.exit_code, 0, expired.output)
+            self.assertEqual(len(self.download_calls), 3)
+            self.assertEqual(pdfs[0].read_bytes(), b"%PDF-1.4 Lincoln")
+
+    def test_download_rejects_path_traversal_in_item_fields(self) -> None:
+        self.item["item"]["date"] = "../../outside"
+        self.item["item"]["number_lccn"] = ["../sn83045462"]
+        runner = CliRunner()
+        with tempfile.TemporaryDirectory() as work:
+            root = Path(work)
+            out = root / "out"
+            res = runner.invoke(
+                chronam.cli,
+                [
+                    "download",
+                    "--lccn",
+                    "sn83045462",
+                    "--date",
+                    "1865-04-15",
+                    "--seq",
+                    "1",
+                    "--out",
+                    str(out),
+                ],
+            )
+            self.assertEqual(res.exit_code, 0, res.output)
+            written = [path for path in root.rglob("*") if path.is_file()]
+            pdfs = [path for path in written if path.suffix == ".pdf"]
+            self.assertEqual(len(pdfs), 1)
+            self.assertEqual(pdfs[0].read_bytes(), b"%PDF-1.4 Lincoln")
+            for path in written:
+                self.assertTrue(path.resolve().is_relative_to(out.resolve()), path)
+                self.assertNotIn("..", path.name)
+
+
 if __name__ == "__main__":
     unittest.main()

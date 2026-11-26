@@ -10,7 +10,7 @@ This skill includes a standalone executable Python CLI at `skills/chronicling-am
 - **Coverage:** millions of digitized U.S. newspaper pages, 1736 through 1963 (per the collection record; the site describes it as "through 1963").
 - **Access:** the public loc.gov JSON API. No key, no account, no sign-in.
 - **Latency (measured 2026-11-25):** every loc.gov collection search takes **20-45 s** on the server side. Connect + TLS take under 0.1 s, but time-to-first-byte was 19-43 s for every query shape tried (with or without `q`, `dates`, `fa=location_state`, `dl=page`, `at=results` vs `at=search,results`, HTTP/1.1 vs HTTP/2, kinloom vs browser User-Agent). One probe under 6 parallel requests took 70 s. The old 8 s default timeout therefore failed 80%+ of searches. The default `--timeout` is now **120 s**. `/newspapers/?fo=json` returned 0 hits for the same query, and `/search/?fa=partof:chronicling+america` 302-redirects to the collection endpoint, so neither is faster.
-- **Disk cache:** every successful search (and every `get`/`download` item lookup) is cached, so a repeat returns in well under a second with no network call. See [Disk cache](#disk-cache).
+- **Disk cache:** every successful search, every `get` item record, and every `download` file is cached, so a repeat returns with no network call. See [Disk cache](#disk-cache).
 - **Rate limits:** be gentle. LoC asks users to stay within limits; search queries returning more than 100,000 results are too big for the API, so narrow with `--dates`, `--state`, or `--lccn` first. The CLI retries HTTP 429/503 once after the `Retry-After` delay (capped at 30 s) and retries 5xx and dropped connections once.
 - **Unstable hit counts (measured 2026-11-25):** loc.gov can return very different `hits` for byte-identical requests. `Merced` + California + 1900/1920 returned 32, then 34,133, then 35,404. `Abraham Lincoln` returned 0, then 25,392, then 77,301. So a low or zero count is **not** evidence of absence. The CLI never caches a zero-hit answer. To recheck a suspiciously low count, rerun with `--refresh`.
 
@@ -46,11 +46,13 @@ Options: `--dates YYYY/YYYY` or `YYYY` (or `--date-from`/`--from-year`/`--date1`
 
 ### Disk cache
 
-- Location: `~/.cache/kinloom-chronam/` (override with `KINLOOM_CHRONAM_CACHE_DIR`). One JSON file per request, keyed by the SHA-256 of the URL and sorted query parameters.
-- TTL: 168 hours (override with `--cache-ttl-hours` or `KINLOOM_CHRONAM_CACHE_TTL_HOURS`; `0` disables reads).
-- `--refresh` re-queries loc.gov and rewrites the entry.
-- Zero-hit answers are never cached (see unstable hit counts above).
-- Writes are atomic (temp file + rename). A per-query `flock` makes concurrent agents that run the same search wait for the first one and then read its file, so loc.gov sees one request.
+- Location: `~/.cache/kinloom-chronam/` (override with `KINLOOM_CHRONAM_CACHE_DIR`).
+- Search and `get` store one JSON file per request, keyed by the SHA-256 of the URL and sorted query parameters.
+- `download` stores each HTTPS file under `files/<sha256>.bin` with a sidecar `files/<sha256>.json`. A cache hit copies those bytes to `--out` and does not open a connection. Output names are a single path segment, so a date or LCCN that contains `..` or a slash cannot write outside `--out`.
+- TTL: 168 hours (override with `--cache-ttl-hours` or `KINLOOM_CHRONAM_CACHE_TTL_HOURS`; `0` disables reads). The same TTL covers search JSON, `get` JSON, and downloaded files.
+- `--refresh` re-queries loc.gov and rewrites the entry, including downloaded files.
+- Zero-hit search answers are never cached (see unstable hit counts above). Empty downloads are not cached.
+- Writes are atomic (temp file + rename). A per-key `flock` makes concurrent agents that run the same request wait for the first one and then read its file, so loc.gov sees one request.
 
 ### Inspect one page
 
@@ -74,7 +76,7 @@ skills/chronicling-america/scripts/chronam download --lccn sn83045462 --date 186
 skills/chronicling-america/scripts/chronam download --lccn sn83045462 --date 1865-04-15 --seq 1 --out ./downloads/chronam --text --image
 ```
 
-Files are named `<lccn>_<date>_sp<seq>.pdf` (etc.) with a matching `<stem>.metadata.json`.
+Files are named `<lccn>_<date>_sp<seq>.pdf` (etc.) with a matching `<stem>.metadata.json`. The first download fetches the file. The next download of the same URL copies it from `~/.cache/kinloom-chronam/files/` and makes no HTTP request. `--refresh` fetches again. A hit line ends with `[cache]`.
 
 ### Build a website search URL
 

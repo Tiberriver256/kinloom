@@ -151,6 +151,122 @@ def read_cache(path: Path, ttl_hours: float) -> dict | None:
     return data if isinstance(data, dict) else None
 
 
+def atomic_write_bytes(dest: Path, data: bytes) -> None:
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    tmp = dest.with_name(f".{dest.name}.{os.getpid()}.{time.time_ns()}.tmp")
+    try:
+        tmp.write_bytes(data)
+        os.replace(tmp, dest)
+    except Exception:
+        tmp.unlink(missing_ok=True)
+        raise
+
+
+def resolve_safe_child(root: Path, filename: str) -> Path:
+    """Resolve one filename strictly inside root."""
+    if (
+        not filename
+        or "\x00" in filename
+        or "/" in filename
+        or "\\" in filename
+        or ":" in filename
+        or filename in (".", "..")
+        or ".." in filename
+    ):
+        raise click.ClickException(f"Unsafe filename: {filename!r}")
+    root_resolved = root.resolve()
+    dest = (root_resolved / filename).resolve()
+    if dest == root_resolved or not dest.is_relative_to(root_resolved):
+        raise click.ClickException(f"Unsafe path escaping {root}: {filename!r}")
+    return dest
+
+
+def safe_output_filename(raw: str) -> str:
+    """Turn an output name into one path segment. Reject traversal."""
+    candidate = (raw or "").replace("\\", "/")
+    base = candidate.rsplit("/", 1)[-1].strip().replace("..", "_")
+    base = re.sub(r"[^A-Za-z0-9._-]+", "_", base).strip("._")
+    if not base or base in {".", ".."} or ".." in base or "/" in base or "\\" in base:
+        base = "page.bin"
+    return base
+
+
+def _file_cache_paths(url: str) -> tuple[Path, Path, Path]:
+    key = hashlib.sha256(url.encode("utf-8")).hexdigest()
+    root = cache_dir() / "files"
+    return (
+        resolve_safe_child(root, f"{key}.bin"),
+        resolve_safe_child(root, f"{key}.json"),
+        resolve_safe_child(root, f"{key}.lock"),
+    )
+
+
+def _read_cached_file(bin_path: Path, meta_path: Path, ttl_hours: float) -> bytes | None:
+    if ttl_hours <= 0 or not bin_path.is_file():
+        return None
+    try:
+        entry = json.loads(meta_path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+        return None
+    if not isinstance(entry, dict) or entry.get("schema") != CACHE_SCHEMA:
+        return None
+    fetched = entry.get("fetched_at")
+    nbytes = entry.get("nbytes")
+    if not isinstance(fetched, (int, float)) or not isinstance(nbytes, int):
+        return None
+    if (time.time() - fetched) > ttl_hours * 3600:
+        return None
+    try:
+        data = bin_path.read_bytes()
+    except OSError:
+        return None
+    if len(data) != nbytes or nbytes <= 0:
+        return None
+    return data
+
+
+def _download_bytes(url: str, *, timeout: float) -> bytes:
+    parsed = urlparse(url)
+    if parsed.scheme != "https" or not parsed.netloc:
+        raise click.ClickException(f"Refusing to download non-HTTPS URL: {url}")
+    try:
+        with httpx.Client(headers=DOWNLOAD_HEADERS, timeout=timeout, follow_redirects=True) as client:
+            resp = client.get(url)
+            resp.raise_for_status()
+    except httpx.HTTPError as exc:
+        raise click.ClickException(f"Failed downloading {url}: {exc}") from exc
+    if not resp.content:
+        raise click.ClickException(f"Download was empty: {url}")
+    return resp.content
+
+
+def cached_download_bytes(
+    url: str,
+    *,
+    timeout: float,
+    refresh: bool,
+    ttl_hours: float,
+) -> tuple[bytes, bool]:
+    """Return (bytes, cache_hit). A hit copies from disk and makes no HTTP request."""
+    bin_path, meta_path, lock_path = _file_cache_paths(url)
+    if not refresh:
+        hit = _read_cached_file(bin_path, meta_path, ttl_hours)
+        if hit is not None:
+            return hit, True
+    with file_lock(lock_path):
+        if not refresh:
+            hit = _read_cached_file(bin_path, meta_path, ttl_hours)
+            if hit is not None:
+                return hit, True
+        data = _download_bytes(url, timeout=timeout)
+        atomic_write_bytes(bin_path, data)
+        atomic_write_json(
+            meta_path,
+            {"schema": CACHE_SCHEMA, "fetched_at": time.time(), "url": url, "nbytes": len(data)},
+        )
+        return data, False
+
+
 def cached_get_json(
     url: str,
     params: list[tuple[str, str]] | None,
@@ -505,13 +621,15 @@ def download(resource_url, lccn, date, edition, seq, out, pdf, image, text, time
         if not lccn or not date:
             raise click.UsageError("Give a resource URL or both --lccn and --date.")
         resource_url = _build_resource_url(lccn, date, edition, seq)
+    ttl = resolve_ttl_hours(cache_ttl_hours)
     data, _hit = cached_get_json(_resource_url_json(resource_url), None, timeout=timeout,
-                                 refresh=refresh, ttl_hours=resolve_ttl_hours(cache_ttl_hours))
+                                 refresh=refresh, ttl_hours=ttl)
     item = data.get("item") or {}
     outdir = Path(out)
     outdir.mkdir(parents=True, exist_ok=True)
-    stem = re.sub(r"[^A-Za-z0-9._-]+", "_",
-                  f"{_first(item.get('number_lccn')) or 'loc'}_{item.get('date') or 'nodate'}_sp{seq}")
+    stem = safe_output_filename(
+        f"{_first(item.get('number_lccn')) or 'loc'}_{item.get('date') or 'nodate'}_sp{seq}"
+    )
     resources = (data.get("resources") or [{}])[0]
     jobs = []
     if pdf and resources.get("pdf"):
@@ -523,19 +641,24 @@ def download(resource_url, lccn, date, edition, seq, out, pdf, image, text, time
     if not jobs:
         click.echo("No downloadable resources found for this page.", err=True)
         sys.exit(1)
-    with httpx.Client(headers=DOWNLOAD_HEADERS, timeout=timeout, follow_redirects=True) as client:
-        for kind, url, filename in jobs:
-            try:
-                resp = client.get(url)
-                resp.raise_for_status()
-            except httpx.HTTPError as exc:
-                raise click.ClickException(f"Failed downloading {kind} from {url}: {exc}") from exc
-            (outdir / filename).write_bytes(resp.content)
-            click.echo(f"{kind}: {outdir / filename} ({len(resp.content)} bytes)")
-    (outdir / f"{stem}.metadata.json").write_text(
-        json.dumps({"resource_url": resource_url, "item": item,
-                    "resources": data.get("resources")}, indent=2, ensure_ascii=False))
-    click.echo(f"metadata: {outdir / (stem + '.metadata.json')}")
+    for kind, url, filename in jobs:
+        safe_name = safe_output_filename(filename)
+        dest = resolve_safe_child(outdir, safe_name)
+        body, file_hit = cached_download_bytes(url, timeout=timeout, refresh=refresh, ttl_hours=ttl)
+        atomic_write_bytes(dest, body)
+        marker = " [cache]" if file_hit else ""
+        click.echo(f"{kind}: {dest} ({len(body)} bytes){marker}")
+    meta_name = safe_output_filename(f"{stem}.metadata.json")
+    meta_path = resolve_safe_child(outdir, meta_name)
+    atomic_write_bytes(
+        meta_path,
+        json.dumps(
+            {"resource_url": resource_url, "item": item, "resources": data.get("resources")},
+            indent=2,
+            ensure_ascii=False,
+        ).encode("utf-8"),
+    )
+    click.echo(f"metadata: {meta_path}")
 
 
 @cli.command()

@@ -11,6 +11,7 @@
 
 Uses the official NARA Catalog v2 API when NARA_API_KEY is set, and falls back
 to headless Chromium against catalog.archives.gov when no key is configured.
+`census1950` calls the public 1950 Census site API at 1950census.archives.gov.
 """
 
 from __future__ import annotations
@@ -1377,6 +1378,300 @@ def cmd_download(
         click.echo(f"Saved metadata: {meta_path}")
 
     click.echo(f"Done: {len(downloaded_manifest)} file(s) in {target_dir}")
+
+
+# Public 1950 Census population-schedule search (1950census.archives.gov/api).
+# Measured 2026-11-25: GET /api/search returns JSON. This host is not Catalog v2.
+CENSUS1950_API_BASE = "https://1950census.archives.gov/api"
+CENSUS1950_DEFAULT_LIMIT = 25
+CENSUS1950_STATES = {
+    "AL": "Alabama",
+    "AK": "Alaska",
+    "AS": "American Samoa",
+    "AZ": "Arizona",
+    "AR": "Arkansas",
+    "CA": "California",
+    "CN": "Canton Island",
+    "CO": "Colorado",
+    "CT": "Connecticut",
+    "DE": "Delaware",
+    "DC": "District of Columbia",
+    "FL": "Florida",
+    "GA": "Georgia",
+    "GU": "Guam",
+    "HI": "Hawaii",
+    "ID": "Idaho",
+    "IL": "Illinois",
+    "IN": "Indiana",
+    "IA": "Iowa",
+    "JN": "Johnston Island",
+    "KS": "Kansas",
+    "KY": "Kentucky",
+    "LA": "Louisiana",
+    "ME": "Maine",
+    "MD": "Maryland",
+    "MA": "Massachusetts",
+    "MI": "Michigan",
+    "MW": "Midway Island",
+    "MN": "Minnesota",
+    "MS": "Mississippi",
+    "MO": "Missouri",
+    "MT": "Montana",
+    "NE": "Nebraska",
+    "NV": "Nevada",
+    "NH": "New Hampshire",
+    "NJ": "New Jersey",
+    "NM": "New Mexico",
+    "NY": "New York",
+    "NC": "North Carolina",
+    "ND": "North Dakota",
+    "OH": "Ohio",
+    "OK": "Oklahoma",
+    "OR": "Oregon",
+    "OI": "Overseas Island Possessions",
+    "PC": "Panama Canal Zone",
+    "PA": "Pennsylvania",
+    "PR": "Puerto Rico",
+    "RI": "Rhode Island",
+    "SC": "South Carolina",
+    "SD": "South Dakota",
+    "TN": "Tennessee",
+    "TX": "Texas",
+    "UT": "Utah",
+    "VT": "Vermont",
+    "VI": "Virgin Islands",
+    "VA": "Virginia",
+    "WK": "Wake Island",
+    "WA": "Washington",
+    "WV": "West Virginia",
+    "WI": "Wisconsin",
+    "WY": "Wyoming",
+}
+_CENSUS1950_STATE_BY_NAME = {name.casefold(): abbr for abbr, name in CENSUS1950_STATES.items()}
+
+
+def normalize_census1950_state(raw: str) -> str:
+    text = raw.strip()
+    if not text or "\x00" in text:
+        raise click.BadParameter(f"Invalid --state value: {raw!r}")
+    upper = text.upper()
+    if upper in CENSUS1950_STATES:
+        return upper
+    found = _CENSUS1950_STATE_BY_NAME.get(text.casefold())
+    if found:
+        return found
+    raise click.BadParameter(
+        f"Unknown 1950 Census state: {raw!r}. Use a code such as IL or a name such as Illinois."
+    )
+
+
+def _census1950_plain_token(raw: str, flag: str, *, max_len: int) -> str:
+    text = raw.strip()
+    if (
+        not text
+        or len(text) > max_len
+        or "\x00" in text
+        or re.search(r"[\x00-\x1f\\/]|\.\.", text)
+    ):
+        raise click.BadParameter(f"Invalid {flag} value: {raw!r}")
+    return text
+
+
+def canonical_census1950_query(
+    *,
+    state: str | None,
+    county: str | None,
+    name: str | None,
+    ed: str | None,
+    limit: int,
+) -> dict[str, Any]:
+    """One search the 1950 Census site can run. Empty filters stay empty strings."""
+    if limit < 1 or limit > 100:
+        raise click.BadParameter(f"Invalid --limit value: {limit!r} (must be 1..100).")
+    state_code = normalize_census1950_state(state) if state and state.strip() else ""
+    county_text = _census1950_plain_token(county, "--county", max_len=80) if county and county.strip() else ""
+    name_text = _census1950_plain_token(name, "--name", max_len=120) if name and name.strip() else ""
+    ed_text = ""
+    if ed and ed.strip():
+        ed_text = _census1950_plain_token(ed, "--ed", max_len=32)
+        if not re.fullmatch(r"[0-9A-Za-z]+(?:-[0-9A-Za-z]+)*", ed_text):
+            raise click.BadParameter(f"Invalid --ed value: {ed!r}")
+    if not any((state_code, county_text, name_text, ed_text)):
+        raise click.UsageError("Give at least one of --state, --county, --name, or --ed.")
+    return {
+        "state": state_code,
+        "county": county_text,
+        "name": name_text,
+        "ed": ed_text,
+        "limit": int(limit),
+        "page": 1,
+    }
+
+
+def census1950_search_url(canonical: dict[str, Any]) -> str:
+    params = {
+        "state": canonical["state"],
+        "county": canonical["county"],
+        "name": canonical["name"],
+        "ed": canonical["ed"],
+        "size": str(canonical["limit"]),
+        "page": str(canonical["page"]),
+    }
+    query = urlencode({key: value for key, value in params.items() if value})
+    return f"{CENSUS1950_API_BASE}/search?{query}"
+
+
+def census1950_cache_paths(canonical: dict[str, Any], cache_root: Path) -> tuple[Path, Path]:
+    digest = hashlib.sha256(
+        json.dumps(canonical, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode(
+            "utf-8"
+        )
+    ).hexdigest()
+    directory = cache_root / "census1950"
+    return (
+        resolve_safe_child(directory, f"{digest}.json"),
+        resolve_safe_child(directory, f"{digest}.lock"),
+    )
+
+
+def _read_cached_census1950(
+    path: Path, *, ttl_hours: float
+) -> dict[str, Any] | None:
+    if ttl_hours <= 0:
+        return None
+    envelope = read_json_if_valid(path)
+    if envelope is None:
+        return None
+    cached_at = envelope.get("cached_at")
+    data = envelope.get("data")
+    if not isinstance(cached_at, (int, float)) or not isinstance(data, dict):
+        return None
+    if not isinstance(data.get("results"), list):
+        return None
+    if (time.time() - float(cached_at)) <= ttl_hours * 3600.0:
+        return data
+    return None
+
+
+def _census1950_fetch_json(url: str) -> dict[str, Any]:
+    headers = {
+        "Accept": "application/json",
+        "User-Agent": "kinloom/1.0 (genealogy research)",
+    }
+    with httpx.Client(timeout=30.0, follow_redirects=True) as client:
+        resp = client.get(url, headers=headers)
+        resp.raise_for_status()
+        content_type = resp.headers.get("content-type", "")
+        if "json" not in content_type.lower():
+            raise click.ClickException(
+                f"1950 Census API did not return JSON ({content_type or 'no content type'})."
+            )
+        try:
+            data = resp.json()
+        except ValueError as exc:
+            raise click.ClickException("1950 Census API returned invalid JSON.") from exc
+    if not isinstance(data, dict) or not isinstance(data.get("results"), list):
+        raise click.ClickException("1950 Census API returned an unexpected payload.")
+    return data
+
+
+def _emit_census1950(data: dict[str, Any], *, cache_hit: bool, as_json: bool) -> None:
+    if as_json:
+        payload = {
+            "cache_hit": cache_hit,
+            "total": data.get("total"),
+            "page": data.get("page"),
+            "size": data.get("size"),
+            "results": data.get("results") or [],
+        }
+        click.echo(json.dumps(payload, indent=2, ensure_ascii=False))
+        return
+    total = data.get("total")
+    header = f"1950 Census population schedules: {total} hit(s)"
+    if cache_hit:
+        header += " [cache]"
+    lines = [header]
+    for row in data.get("results") or []:
+        if not isinstance(row, dict):
+            continue
+        lines.append(
+            " ".join(
+                part
+                for part in (
+                    str(row.get("abbr") or row.get("state") or ""),
+                    str(row.get("county") or ""),
+                    f"ED {row.get('ed')}" if row.get("ed") else "",
+                    f"schedule {row.get('scheduleId')}" if row.get("scheduleId") else "",
+                )
+                if part
+            )
+        )
+        for person in row.get("names") or []:
+            if isinstance(person, dict) and person.get("name"):
+                row_no = person.get("row")
+                prefix = f"{row_no}: " if row_no else ""
+                lines.append(f"  {prefix}{person['name']}")
+    click.echo("\n".join(lines))
+
+
+@cli.command("census1950")
+@click.option("--state", default=None, help="State or territory code (IL) or name (Illinois).")
+@click.option("--county", default=None, help="County name, as the 1950 Census site spells it.")
+@click.option("--name", default=None, help="Person name. Sent as the site name= parameter.")
+@click.option("--ed", default=None, help="Enumeration district, for example 49-16.")
+@click.option(
+    "--limit",
+    default=CENSUS1950_DEFAULT_LIMIT,
+    show_default=True,
+    type=int,
+    help="Results per page (API size=, 1..100).",
+)
+@click.option("--json", "as_json", is_flag=True, help="Emit JSON instead of text.")
+@click.option("--refresh", is_flag=True, help="Bypass the disk cache and query the 1950 Census API.")
+@click.option(
+    "--cache-ttl-hours",
+    default=None,
+    type=float,
+    help=f"Cache TTL in hours (default {DEFAULT_QUERY_TTL_HOURS:g}; env KINLOOM_NARA_QUERY_TTL_HOURS).",
+)
+def cmd_census1950(
+    state: str | None,
+    county: str | None,
+    name: str | None,
+    ed: str | None,
+    limit: int,
+    as_json: bool,
+    refresh: bool,
+    cache_ttl_hours: float | None,
+) -> None:
+    """Search 1950 Census population schedules on 1950census.archives.gov.
+
+    Results are cached under ~/.cache/kinloom-nara/census1950/ (168 h TTL).
+    A repeat call with the same filters makes no HTTP request.
+    """
+    canonical = canonical_census1950_query(
+        state=state, county=county, name=name, ed=ed, limit=limit
+    )
+    ttl_hours = resolve_query_ttl_hours(cache_ttl_hours)
+    cache_root = get_cache_root()
+    data_path, lock_path = census1950_cache_paths(canonical, cache_root)
+    if not refresh:
+        cached = _read_cached_census1950(data_path, ttl_hours=ttl_hours)
+        if cached is not None:
+            _emit_census1950(cached, cache_hit=True, as_json=as_json)
+            return
+    with file_lock(lock_path):
+        if not refresh:
+            cached = _read_cached_census1950(data_path, ttl_hours=ttl_hours)
+            if cached is not None:
+                _emit_census1950(cached, cache_hit=True, as_json=as_json)
+                return
+        fetched = _census1950_fetch_json(census1950_search_url(canonical))
+        atomic_write_json(
+            data_path,
+            {"cached_at": time.time(), "params": canonical, "data": fetched},
+        )
+    _emit_census1950(fetched, cache_hit=False, as_json=as_json)
 
 
 if __name__ == "__main__":

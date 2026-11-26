@@ -522,5 +522,98 @@ class TestNaraDiskCaching(unittest.TestCase):
                 nara.resolve_safe_child(self.cache_root, unsafe)
 
 
+class TestCensus1950Cache(unittest.TestCase):
+    def setUp(self) -> None:
+        self._tmp = tempfile.TemporaryDirectory(prefix="kinloom-nara-census1950-")
+        self.cache_root = Path(self._tmp.name)
+        self._env_patch = patch.dict(
+            os.environ, {"KINLOOM_NARA_CACHE_DIR": str(self.cache_root)}
+        )
+        self._env_patch.start()
+        self.urls: list[str] = []
+        self.payload = {
+            "total": 1,
+            "size": 25,
+            "page": 1,
+            "results": [
+                {
+                    "scheduleId": "1001",
+                    "state": "Illinois",
+                    "abbr": "IL",
+                    "county": "Sangamon",
+                    "reservation": None,
+                    "ed": "84-1",
+                    "names": [{"row": 1, "name": "Lincoln Smith"}],
+                    "image": "https://1950census.archives.gov/example.jpg",
+                    "maps": "1",
+                    "transcribe": [],
+                    "highlight": {"transcribe.name": "Lincoln"},
+                    "iiifUrl": "https://1950census.archives.gov/iiif/example",
+                }
+            ],
+        }
+
+        def fake_fetch(url: str) -> dict:
+            self.urls.append(url)
+            return json.loads(json.dumps(self.payload))
+
+        self._fetch = patch.object(nara, "_census1950_fetch_json", side_effect=fake_fetch)
+        self._fetch.start()
+
+    def tearDown(self) -> None:
+        self._fetch.stop()
+        self._env_patch.stop()
+        self._tmp.cleanup()
+
+    def test_repeat_search_hits_disk_and_refresh_bypasses(self) -> None:
+        runner = CliRunner()
+        args = ["census1950", "--state", "Illinois", "--name", "Lincoln", "--json"]
+        first = runner.invoke(nara.cli, args)
+        self.assertEqual(first.exit_code, 0, first.output)
+        first_body = json.loads(first.output)
+        self.assertFalse(first_body["cache_hit"])
+        self.assertEqual(first_body["results"][0]["names"][0]["name"], "Lincoln Smith")
+        self.assertEqual(first_body["results"][0]["scheduleId"], "1001")
+        self.assertEqual(len(self.urls), 1)
+        self.assertIn("state=IL", self.urls[0])
+        self.assertIn("name=Lincoln", self.urls[0])
+        self.assertIn("size=25", self.urls[0])
+        self.assertTrue(self.urls[0].startswith("https://1950census.archives.gov/api/search?"))
+        cached_files = list((self.cache_root / "census1950").glob("*.json"))
+        self.assertEqual(len(cached_files), 1)
+        self.assertEqual(len(cached_files[0].stem), 64)
+
+        second = runner.invoke(nara.cli, args)
+        self.assertEqual(second.exit_code, 0, second.output)
+        second_body = json.loads(second.output)
+        self.assertTrue(second_body["cache_hit"])
+        self.assertEqual(second_body["results"], first_body["results"])
+        self.assertEqual(len(self.urls), 1)
+
+        refreshed = runner.invoke(nara.cli, [*args, "--refresh"])
+        self.assertEqual(refreshed.exit_code, 0, refreshed.output)
+        self.assertFalse(json.loads(refreshed.output)["cache_hit"])
+        self.assertEqual(json.loads(refreshed.output)["results"][0]["scheduleId"], "1001")
+        self.assertEqual(len(self.urls), 2)
+
+        expired = runner.invoke(nara.cli, [*args, "--cache-ttl-hours", "0"])
+        self.assertEqual(expired.exit_code, 0, expired.output)
+        self.assertFalse(json.loads(expired.output)["cache_hit"])
+        self.assertEqual(len(self.urls), 3)
+
+    def test_missing_filters_and_bad_state_make_no_request(self) -> None:
+        runner = CliRunner()
+        missing = runner.invoke(nara.cli, ["census1950", "--json"])
+        self.assertEqual(missing.exit_code, 2, missing.output)
+        bad_state = runner.invoke(nara.cli, ["census1950", "--state", "Atlantis", "--json"])
+        self.assertNotEqual(bad_state.exit_code, 0, bad_state.output)
+        traversal = runner.invoke(
+            nara.cli, ["census1950", "--state", "IL", "--county", "../secret", "--json"]
+        )
+        self.assertNotEqual(traversal.exit_code, 0, traversal.output)
+        self.assertEqual(self.urls, [])
+        self.assertEqual(list(self.cache_root.rglob("*.json")), [])
+
+
 if __name__ == "__main__":
     unittest.main()
