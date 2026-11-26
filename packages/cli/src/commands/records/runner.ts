@@ -95,6 +95,144 @@ export function resolveScriptInvocation(
 
 const SAFE_SUBCMD_TOKEN_RE = /^[a-z][a-z0-9_-]*$/i;
 
+/** Full JSON.parse above this size would stall the process on a large stdout. */
+const CACHE_HIT_PARSE_MAX_BYTES = 256 * 1024;
+const CACHE_HIT_EDGE_BYTES = 8 * 1024;
+
+function isJsonRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function startsLikeJson(text: string): boolean {
+  const sample = text.slice(0, 64).replace(/^\uFEFF/, '');
+  for (let i = 0; i < sample.length; i += 1) {
+    const ch = sample[i];
+    if (ch === ' ' || ch === '\t' || ch === '\r' || ch === '\n') {
+      continue;
+    }
+    return ch === '{' || ch === '[';
+  }
+  return false;
+}
+
+function booleanCacheHitField(record: Record<string, unknown>): boolean | undefined {
+  if (!Object.prototype.hasOwnProperty.call(record, 'cache_hit')) {
+    return undefined;
+  }
+  const hit = record.cache_hit;
+  return typeof hit === 'boolean' ? hit : undefined;
+}
+
+function readCacheHitValue(value: unknown): boolean | undefined {
+  if (Array.isArray(value)) {
+    const flags: boolean[] = [];
+    for (const item of value) {
+      if (!isJsonRecord(item)) {
+        continue;
+      }
+      const hit = booleanCacheHitField(item);
+      if (hit !== undefined) {
+        flags.push(hit);
+      }
+    }
+    if (flags.length === 0) {
+      return undefined;
+    }
+    return flags.every((flag) => flag);
+  }
+  if (!isJsonRecord(value)) {
+    return undefined;
+  }
+  return booleanCacheHitField(value);
+}
+
+function matchCacheHitLiteral(text: string): boolean | undefined {
+  const re = /"cache_hit"\s*:\s*(true|false)\b/g;
+  let last: string | undefined;
+  for (const match of text.matchAll(re)) {
+    last = match[1];
+  }
+  if (last === 'true') {
+    return true;
+  }
+  if (last === 'false') {
+    return false;
+  }
+  return undefined;
+}
+
+/**
+ * Read a top-level boolean cache_hit from record-command JSON.
+ * Non-JSON and binary stdout return undefined. Outputs larger than
+ * CACHE_HIT_PARSE_MAX_BYTES are scanned only at the head and the tail.
+ */
+export function extractRecordCacheHit(stdout: string): boolean | undefined {
+  if (stdout.length === 0 || !startsLikeJson(stdout)) {
+    return undefined;
+  }
+  if (Buffer.byteLength(stdout) > CACHE_HIT_PARSE_MAX_BYTES) {
+    const edge =
+      stdout.length <= CACHE_HIT_EDGE_BYTES * 2
+        ? stdout
+        : stdout.slice(0, CACHE_HIT_EDGE_BYTES) + stdout.slice(-CACHE_HIT_EDGE_BYTES);
+    return matchCacheHitLiteral(edge);
+  }
+  try {
+    const parsed: unknown = JSON.parse(stdout);
+    return readCacheHitValue(parsed);
+  } catch {
+    return undefined;
+  }
+}
+
+class CacheHitWindow {
+  private total = 0;
+  private overflow = false;
+  private chunks: Buffer[] = [];
+  private held = 0;
+  private head: Buffer = Buffer.alloc(0);
+  private tail: Buffer = Buffer.alloc(0);
+
+  push(buf: Buffer): void {
+    this.total += buf.length;
+    if (!this.overflow) {
+      this.chunks.push(buf);
+      this.held += buf.length;
+      if (this.held > CACHE_HIT_PARSE_MAX_BYTES) {
+        const all = Buffer.concat(this.chunks);
+        this.head = all.subarray(0, CACHE_HIT_EDGE_BYTES);
+        this.tail = all.subarray(Math.max(0, all.length - CACHE_HIT_EDGE_BYTES));
+        this.chunks = [];
+        this.overflow = true;
+      }
+      return;
+    }
+    const combined = Buffer.concat([this.tail, buf]);
+    this.tail =
+      combined.length > CACHE_HIT_EDGE_BYTES
+        ? combined.subarray(combined.length - CACHE_HIT_EDGE_BYTES)
+        : combined;
+  }
+
+  finish(): boolean | undefined {
+    if (this.total === 0) {
+      return undefined;
+    }
+    if (!this.overflow) {
+      return extractRecordCacheHit(Buffer.concat(this.chunks).toString('utf8'));
+    }
+    const headText = this.head.toString('utf8');
+    if (!startsLikeJson(headText)) {
+      return undefined;
+    }
+    return matchCacheHitLiteral(headText + this.tail.toString('utf8'));
+  }
+}
+
+function asBuffer(chunk: Buffer | string): Buffer {
+  return Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+}
+
 function isSafeSubcmdToken(token: string | undefined): token is string {
   return Boolean(token && SAFE_SUBCMD_TOKEN_RE.test(token));
 }
@@ -220,11 +358,13 @@ export async function runRecordCommand(
   };
 
   let bytesOut = 0;
+  let cacheHit: boolean | undefined;
+  const cacheHitWindow = new CacheHitWindow();
   const exitCode = await new Promise<number>((resolve) => {
     const child = spawnFn(invocation.command, [...invocation.args], {
       cwd: options?.cwd,
       env: childEnv,
-      stdio: captureOutput ? ['inherit', 'pipe', 'pipe'] : 'inherit',
+      stdio: captureOutput ? ['inherit', 'pipe', 'pipe'] : ['inherit', 'pipe', 'inherit'],
     });
 
     const forwardSigInt = () => {
@@ -246,21 +386,38 @@ export async function runRecordCommand(
       process.off('SIGTERM', forwardSigTerm);
     };
 
+    const resolveClose = (code: number | null, signal: NodeJS.Signals | null) => {
+      cleanupSignals();
+      cacheHit = cacheHitWindow.finish();
+      if (typeof code === 'number') {
+        resolve(code);
+        return;
+      }
+      if (signal === 'SIGINT') {
+        resolve(130);
+        return;
+      }
+      if (signal === 'SIGTERM') {
+        resolve(143);
+        return;
+      }
+      resolve(1);
+    };
+
     if (captureOutput) {
       const stdoutChunks: Buffer[] = [];
       const stderrChunks: Buffer[] = [];
       child.stdout?.on('data', (chunk: Buffer | string) => {
-        const buf = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+        const buf = asBuffer(chunk);
         bytesOut += buf.length;
         stdoutChunks.push(buf);
+        cacheHitWindow.push(buf);
       });
       child.stderr?.on('data', (chunk: Buffer | string) => {
-        const buf = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
-        stderrChunks.push(buf);
+        stderrChunks.push(asBuffer(chunk));
       });
 
       child.on('close', (code, signal) => {
-        cleanupSignals();
         const outText = Buffer.concat(stdoutChunks).toString('utf8');
         const errText = Buffer.concat(stderrChunks).toString('utf8');
         if (outText.length > 0) {
@@ -269,28 +426,22 @@ export async function runRecordCommand(
         if (errText.length > 0) {
           io.stderr(errText.replace(/\r?\n$/, ''));
         }
-        if (typeof code === 'number') {
-          resolve(code);
-        } else if (signal === 'SIGINT') {
-          resolve(130);
-        } else if (signal === 'SIGTERM') {
-          resolve(143);
-        } else {
-          resolve(1);
-        }
+        resolveClose(code, signal);
       });
     } else {
-      child.on('close', (code, signal) => {
-        cleanupSignals();
-        if (typeof code === 'number') {
-          resolve(code);
-        } else if (signal === 'SIGINT') {
-          resolve(130);
-        } else if (signal === 'SIGTERM') {
-          resolve(143);
-        } else {
-          resolve(1);
+      child.stdout?.on('data', (chunk: Buffer | string) => {
+        const buf = asBuffer(chunk);
+        bytesOut += buf.length;
+        cacheHitWindow.push(buf);
+        if (!process.stdout.write(buf)) {
+          child.stdout?.pause();
+          process.stdout.once('drain', () => {
+            child.stdout?.resume();
+          });
         }
+      });
+      child.on('close', (code, signal) => {
+        resolveClose(code, signal);
       });
     }
 
@@ -309,6 +460,7 @@ export async function runRecordCommand(
         duration_ms: performance.now() - startMs,
         exit_code: exitCode,
         bytes_out: bytesOut,
+        cache_hit: cacheHit,
       },
       { filePath: options?.telemetryFilePath, force: options?.forceTelemetry }
     );

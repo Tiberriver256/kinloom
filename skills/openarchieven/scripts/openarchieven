@@ -6,7 +6,7 @@
 #   "httpx>=0.27",
 # ]
 # ///
-"""Search and inspect Dutch and Belgian genealogical records via OpenArchieven.
+"""Search, inspect, and download Dutch and Belgian genealogical records via OpenArchieven.
 
 Uses the public OpenArchieven 1.0 JSON API (https://api.openarch.nl/1.0/records/):
 no API key or login is required for read access. Requests are spaced to respect
@@ -24,7 +24,7 @@ import time
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Callable, Iterator
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlparse
 
 import click
 import httpx
@@ -80,6 +80,17 @@ def atomic_write_json(dest: Path, payload: Any) -> None:
     tmp = dest.with_name(f".{dest.name}.{os.getpid()}.{time.time_ns()}.tmp")
     try:
         tmp.write_text(json.dumps(payload, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
+        os.replace(tmp, dest)
+    except Exception:
+        tmp.unlink(missing_ok=True)
+        raise
+
+
+def atomic_write_bytes(dest: Path, data: bytes) -> None:
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    tmp = dest.with_name(f".{dest.name}.{os.getpid()}.{time.time_ns()}.tmp")
+    try:
+        tmp.write_bytes(data)
         os.replace(tmp, dest)
     except Exception:
         tmp.unlink(missing_ok=True)
@@ -182,6 +193,14 @@ def _client() -> httpx.Client:
     )
 
 
+def _binary_client() -> httpx.Client:
+    return httpx.Client(
+        timeout=TIMEOUT,
+        follow_redirects=True,
+        headers={"User-Agent": USER_AGENT, "Accept": "image/*,application/pdf;q=0.9,*/*;q=0.1"},
+    )
+
+
 def _get_json(endpoint: str, params: dict[str, Any]) -> Any:
     """Fetch one JSON response from api.openarch.nl with boundary validation."""
     if MIN_INTERVAL_S > 0:
@@ -220,6 +239,274 @@ def _show_cacheable(result: dict[str, Any]) -> bool:
     if isinstance(data, list):
         return len(data) > 0
     return False
+
+
+class ScanPayloadError(Exception):
+    """The HTTP body is not a non-empty image or PDF."""
+
+
+class ScanImage:
+    """One scan image from an A2A record, after order normalization."""
+
+    def __init__(self, index: int, order: int | None, label: str, uri: str, uri_preview: str) -> None:
+        self.index = index
+        self.order = order
+        self.label = label
+        self.uri = uri
+        self.uri_preview = uri_preview
+
+    def chosen_url(self, preview: bool) -> str:
+        if preview:
+            return self.uri_preview or self.uri
+        return self.uri or self.uri_preview
+
+
+_CONTENT_TYPE_EXT = {
+    "image/jpeg": "jpg",
+    "image/jpg": "jpg",
+    "image/pjpeg": "jpg",
+    "image/png": "png",
+    "image/gif": "gif",
+    "image/webp": "webp",
+    "image/tiff": "tif",
+    "image/tif": "tif",
+    "image/jp2": "jp2",
+    "image/jpeg2000": "jp2",
+    "application/pdf": "pdf",
+}
+
+_HTML_CONTENT_TYPES = {"text/html", "application/xhtml+xml"}
+
+
+def _scan_value(scan: dict[str, Any], names: tuple[str, ...]) -> str:
+    lowered = {str(key).lower(): value for key, value in scan.items()}
+    for name in names:
+        if name in scan:
+            text = _a2a_text(scan.get(name))
+            if text:
+                return text
+        text = _a2a_text(lowered.get(name.lower()))
+        if text:
+            return text
+    return ""
+
+
+def _scan_order(scan: dict[str, Any]) -> int | None:
+    raw = _scan_value(scan, ("a2a_OrderSequenceNumber", "a2a_Order", "order", "Order"))
+    if not raw:
+        return None
+    try:
+        return int(raw)
+    except ValueError:
+        return None
+
+
+def _as_show_records(data: Any) -> list[dict[str, Any]]:
+    if isinstance(data, dict):
+        return [data]
+    if isinstance(data, list):
+        return [item for item in data if isinstance(item, dict)]
+    return []
+
+
+def extract_scans(record: dict[str, Any]) -> list[ScanImage]:
+    """Return full-resolution scan URLs in order. Preview URLs stay on the object."""
+    source = record.get("a2a_Source")
+    if not isinstance(source, dict):
+        return []
+    block = source.get("a2a_SourceAvailableScans")
+    raw_scans: list[Any]
+    if isinstance(block, dict):
+        raw = block.get("a2a_Scan")
+        if raw is None:
+            raw_scans = [block] if _scan_value(block, ("a2a_Uri", "uri", "Uri")) else []
+        else:
+            raw_scans = _as_list(raw)
+    elif isinstance(block, list):
+        raw_scans = block
+    else:
+        return []
+
+    found: list[tuple[int | None, str, str, str]] = []
+    for scan in raw_scans:
+        if not isinstance(scan, dict):
+            continue
+        uri = _scan_value(scan, ("a2a_Uri", "uri", "Uri"))
+        preview = _scan_value(scan, ("a2a_UriPreview", "uri_preview", "UriPreview"))
+        if not uri and not preview:
+            continue
+        label = _scan_value(
+            scan,
+            ("a2a_Label", "a2a_Caption", "a2a_Title", "a2a_Description", "label", "caption", "title"),
+        )
+        found.append((_scan_order(scan), label, uri, preview))
+
+    ordered = sorted(enumerate(found), key=lambda item: (item[1][0] is None, item[1][0] or 0, item[0]))
+    scans: list[ScanImage] = []
+    for index, (_pos, (order, label, uri, preview)) in enumerate(ordered, start=1):
+        scans.append(ScanImage(index, order, label, uri, preview))
+    return scans
+
+
+def extract_scans_from_show(data: Any) -> list[ScanImage]:
+    scans: list[ScanImage] = []
+    for record in _as_show_records(data):
+        scans.extend(extract_scans(record))
+    return [
+        ScanImage(index, scan.order, scan.label, scan.uri, scan.uri_preview)
+        for index, scan in enumerate(scans, start=1)
+    ]
+
+
+def _magic_extension(content: bytes) -> str | None:
+    if content.startswith(b"\xff\xd8\xff"):
+        return "jpg"
+    if content.startswith(b"\x89PNG\r\n\x1a\n") or content.startswith(b"\x89PNG"):
+        return "png"
+    if content.startswith((b"GIF87a", b"GIF89a")):
+        return "gif"
+    if content.startswith(b"%PDF"):
+        return "pdf"
+    if len(content) >= 12 and content.startswith(b"RIFF") and content[8:12] == b"WEBP":
+        return "webp"
+    if content.startswith((b"II*\x00", b"MM\x00*")):
+        return "tif"
+    if content.startswith(b"\x00\x00\x00\x0cjP"):
+        return "jp2"
+    return None
+
+
+def _looks_like_markup(content: bytes) -> bool:
+    head = content[:512].lstrip().lower()
+    return head.startswith((b"<html", b"<!doctype", b"<head", b"<body", b"<?xml", b"<"))
+
+
+def classify_scan_payload(content: bytes, content_type: str) -> str:
+    """Return a file extension for an image or PDF body."""
+    media = content_type.split(";", 1)[0].strip().lower()
+    if not content:
+        raise ScanPayloadError("The download was empty.")
+    if media in _HTML_CONTENT_TYPES:
+        shown = media or "unknown type"
+        raise ScanPayloadError(
+            f"The server returned HTML ({shown}), not an image or PDF. Open the scan URL in a browser."
+        )
+    magic = _magic_extension(content)
+    if magic:
+        return magic
+    if _looks_like_markup(content):
+        raise ScanPayloadError(
+            "The server returned HTML, not an image or PDF. Open the scan URL in a browser."
+        )
+    mapped = _CONTENT_TYPE_EXT.get(media)
+    if mapped:
+        return mapped
+    shown = media or "missing content-type"
+    raise ScanPayloadError(
+        f"The server did not return an image or PDF ({shown}). Open the scan URL in a browser."
+    )
+
+
+def _scan_cache_paths(url: str) -> tuple[Path, Path, Path]:
+    key = hashlib.sha256(url.encode("utf-8")).hexdigest()
+    root = cache_dir() / "scans"
+    return root / f"{key}.bin", root / f"{key}.json", root / f"{key}.lock"
+
+
+def _read_cached_scan(bin_path: Path, meta_path: Path, ttl_hours: float) -> tuple[bytes, str] | None:
+    if ttl_hours <= 0 or not bin_path.is_file():
+        return None
+    try:
+        entry = json.loads(meta_path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+        return None
+    if not isinstance(entry, dict) or entry.get("schema") != CACHE_SCHEMA:
+        return None
+    fetched = entry.get("fetched_at")
+    nbytes = entry.get("nbytes")
+    if not isinstance(fetched, (int, float)) or not isinstance(nbytes, int):
+        return None
+    if (time.time() - fetched) > ttl_hours * 3600:
+        return None
+    try:
+        data = bin_path.read_bytes()
+    except OSError:
+        return None
+    if len(data) != nbytes or nbytes <= 0:
+        return None
+    try:
+        ext = classify_scan_payload(data, "application/octet-stream")
+    except ScanPayloadError:
+        return None
+    return data, ext
+
+
+def _fetch_scan_bytes(url: str) -> tuple[bytes, str]:
+    parsed = urlparse(url)
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+        _fail(f"Refusing to download a scan URL that is not http or https: {url}")
+    if MIN_INTERVAL_S > 0:
+        time.sleep(MIN_INTERVAL_S)
+    try:
+        with _binary_client() as client:
+            resp = client.get(url)
+    except httpx.HTTPError as exc:
+        _fail(f"Scan download failed for {url}: {exc}")
+    if resp.status_code != 200:
+        _fail(
+            f"Scan download failed with HTTP {resp.status_code} for {url}. "
+            "The response was not cached."
+        )
+    return bytes(resp.content), resp.headers.get("content-type", "")
+
+
+def cached_scan_bytes(url: str, *, refresh: bool, ttl_hours: float) -> tuple[bytes, str, bool]:
+    """Return (body, extension, cache_hit). Only a non-empty image or PDF is stored."""
+    bin_path, meta_path, lock_path = _scan_cache_paths(url)
+    if not refresh:
+        hit = _read_cached_scan(bin_path, meta_path, ttl_hours)
+        if hit is not None:
+            return hit[0], hit[1], True
+    with file_lock(lock_path):
+        if not refresh:
+            hit = _read_cached_scan(bin_path, meta_path, ttl_hours)
+            if hit is not None:
+                return hit[0], hit[1], True
+        body, content_type = _fetch_scan_bytes(url)
+        try:
+            ext = classify_scan_payload(body, content_type)
+        except ScanPayloadError as exc:
+            _fail(f"{exc} URL: {url}. Nothing was saved or cached.")
+        atomic_write_bytes(bin_path, body)
+        atomic_write_json(
+            meta_path,
+            {"schema": CACHE_SCHEMA, "fetched_at": time.time(), "nbytes": len(body), "ext": ext},
+        )
+        return body, ext, False
+
+
+def _load_show(code: str, ident: str, lang: str, *, refresh: bool, ttl_hours: float) -> tuple[Any, bool]:
+    params = {"archive": code, "identifier": ident, "lang": lang}
+
+    def _fetch() -> dict[str, Any]:
+        return {"data": _get_json("show.json", params)}
+
+    wrapped, hit = cached_call(
+        "show",
+        params,
+        _fetch,
+        refresh=refresh,
+        ttl_hours=ttl_hours,
+        cacheable=_show_cacheable,
+    )
+    return wrapped.get("data"), hit
+
+
+def _scan_filename(archive: str, identifier: str, index: int, ext: str) -> str:
+    short = re.sub(r"[^A-Za-z0-9]", "", identifier)[:8].lower() or "record"
+    safe_archive = re.sub(r"[^A-Za-z0-9_-]", "", archive).lower() or "archive"
+    safe_ext = re.sub(r"[^A-Za-z0-9]", "", ext).lower() or "img"
+    return f"{safe_archive}-{short}-scan-{index:02d}.{safe_ext}"
 
 
 def _is_source_type(value: str) -> bool:
@@ -396,16 +683,13 @@ def _format_a2a_record(archive: str, identifier: str, record: dict[str, Any]) ->
             suffix = f" ({'; '.join(details)})" if details else ""
             lines.append(f"    - {name}{suffix}")
 
-    scans_block = source.get("a2a_SourceAvailableScans") or {}
-    scans = _as_list(scans_block.get("a2a_Scan")) if isinstance(scans_block, dict) else []
-    scan_uris = [_a2a_text(s.get("a2a_Uri")) for s in scans if isinstance(s, dict)]
-    scan_uris = [u for u in scan_uris if u]
-    if scan_uris:
+    scans = extract_scans(record)
+    if scans:
         lines.append("  Scans:")
-        for uri in scan_uris[:5]:
-            lines.append(f"    - {uri}")
-        if len(scan_uris) > 5:
-            lines.append(f"    - (+{len(scan_uris) - 5} more)")
+        for scan in scans[:5]:
+            lines.append(f"    - {scan.chosen_url(False)}")
+        if len(scans) > 5:
+            lines.append(f"    - (+{len(scans) - 5} more)")
 
     orig = _a2a_text(source.get("a2a_SourceDigitalOriginal"))
     if orig:
@@ -568,17 +852,8 @@ def show(
 ) -> None:
     """Fetch full A2A details for one record by ARCHIVE IDENTIFIER, archive:uuid, or URL."""
     code, ident = _parse_record_ref(archive, identifier)
-    params = {"archive": code, "identifier": ident, "lang": lang}
     ttl = resolve_ttl_hours(cache_ttl_hours)
-    wrapped, hit = cached_call(
-        "show",
-        params,
-        lambda: {"data": _get_json("show.json", params)},
-        refresh=refresh,
-        ttl_hours=ttl,
-        cacheable=_show_cacheable,
-    )
-    data = wrapped.get("data")
+    data, hit = _load_show(code, ident, lang, refresh=refresh, ttl_hours=ttl)
     if as_json:
         if isinstance(data, dict):
             click.echo(json.dumps({**data, "cache_hit": hit}, indent=2, ensure_ascii=False))
@@ -598,6 +873,134 @@ def show(
                 first_line, sep, rest = formatted.partition("\n")
                 formatted = f"{first_line} [cache]{sep}{rest}"
             click.echo(formatted)
+
+
+def _emit_download_json(payload: dict[str, Any]) -> None:
+    click.echo(json.dumps(payload, indent=2, ensure_ascii=False))
+
+
+@cli.command()
+@click.argument("archive")
+@click.argument("identifier", required=False, default=None)
+@click.option("--scan-index", type=click.IntRange(min=1), default=1, show_default=True,
+              help="1-based scan to download. Ignored with --all and with --list.")
+@click.option("--all", "download_all", is_flag=True, help="Download every scan into --out-dir.")
+@click.option("--list", "list_only", is_flag=True, help="Print scan index, label, and URL. Do not download.")
+@click.option("--preview", is_flag=True, help="Use uri_preview instead of the full-resolution scan uri.")
+@click.option("--out", "--output", "-o", "--out-dir", "--output-dir", "dest", default=None,
+              help="Output file for one scan, or the output directory when --all is set.")
+@click.option("--json", "as_json", is_flag=True, help="Emit JSON with cache_hit and files or scans.")
+@click.option("--lang", default="nl", show_default=True, type=click.Choice(["nl", "en", "de", "fr"]),
+              help="Language passed to the cached show lookup.")
+@cache_options
+def download(
+    archive: str,
+    identifier: str | None,
+    scan_index: int,
+    download_all: bool,
+    list_only: bool,
+    preview: bool,
+    dest: str | None,
+    as_json: bool,
+    lang: str,
+    refresh: bool,
+    cache_ttl_hours: float | None,
+) -> None:
+    """Download scan images for one OpenArchieven record.
+
+    Accepts ARCHIVE IDENTIFIER, archive:uuid, or an openarchieven.nl record URL.
+    The record metadata comes from the same disk cache as `show`.
+    """
+    code, ident = _parse_record_ref(archive, identifier)
+    ttl = resolve_ttl_hours(cache_ttl_hours)
+    data, show_hit = _load_show(code, ident, lang, refresh=refresh, ttl_hours=ttl)
+    scans = extract_scans_from_show(data)
+    if list_only:
+        rows = [
+            {"index": scan.index, "order": scan.order, "label": scan.label, "url": scan.chosen_url(preview)}
+            for scan in scans
+        ]
+        if as_json:
+            _emit_download_json({
+                "archive": code,
+                "identifier": ident,
+                "scans": rows,
+                "cache_hit": show_hit,
+            })
+            return
+        marker = " [cache]" if show_hit else ""
+        click.echo(f"Scans for {code}:{ident} ({len(rows)}){marker}")
+        if not rows:
+            click.echo("No scans.")
+            return
+        for row in rows:
+            order = "-" if row["order"] is None else str(row["order"])
+            label = f" {row['label']}" if row["label"] else ""
+            click.echo(f"{row['index']}. order={order}{label}")
+            click.echo(f"   {row['url']}")
+        return
+
+    if not scans:
+        _fail(
+            f"No scans are available for {code}:{ident}. "
+            "The record has no a2a_SourceAvailableScans image URL."
+        )
+    if not dest:
+        if download_all:
+            raise click.UsageError("Pass --out-dir DIR (or --out DIR) when using --all.")
+        raise click.UsageError("Pass --out FILE for one scan, or --all --out-dir DIR for every scan.")
+
+    selected = scans
+    if not download_all:
+        match = next((scan for scan in scans if scan.index == scan_index), None)
+        if match is None:
+            _fail(f"Scan index {scan_index} is outside 1-{len(scans)} for {code}:{ident}.")
+        selected = [match]
+
+    dest_path = Path(dest).expanduser()
+    if download_all:
+        if dest_path.exists() and not dest_path.is_dir():
+            _fail(f"--out-dir must be a directory. {dest_path} is a file.")
+        dest_path.mkdir(parents=True, exist_ok=True)
+    elif dest_path.exists() and dest_path.is_dir():
+        pass
+    else:
+        dest_path.parent.mkdir(parents=True, exist_ok=True)
+
+    files: list[dict[str, Any]] = []
+    file_hits: list[bool] = []
+    for scan in selected:
+        url = scan.chosen_url(preview)
+        body, ext, file_hit = cached_scan_bytes(url, refresh=refresh, ttl_hours=ttl)
+        filename = _scan_filename(code, ident, scan.index, ext)
+        if download_all or (dest_path.exists() and dest_path.is_dir()):
+            out_file = dest_path / filename
+        else:
+            out_file = dest_path
+        atomic_write_bytes(out_file, body)
+        file_hits.append(file_hit)
+        files.append({
+            "index": scan.index,
+            "order": scan.order,
+            "label": scan.label,
+            "url": url,
+            "path": str(out_file),
+            "bytes": len(body),
+            "cache_hit": file_hit,
+        })
+
+    overall_hit = show_hit and all(file_hits)
+    if as_json:
+        _emit_download_json({
+            "archive": code,
+            "identifier": ident,
+            "files": files,
+            "cache_hit": overall_hit,
+        })
+        return
+    for item in files:
+        marker = " [cache]" if item["cache_hit"] else ""
+        click.echo(f"scan {item['index']}: {item['path']} ({item['bytes']} bytes){marker}")
 
 
 @cli.command()

@@ -1,6 +1,6 @@
 ---
 name: openarchieven
-description: Search and inspect Dutch and Belgian genealogical archives via the bundled uv-based `openarchieven` CLI or the public OpenArchieven 1.0 JSON API (`api.openarch.nl`). Covers Dutch civil registration (`BS Geboorte`, `BS Huwelijk`, `BS Overlijden`), municipal population registers (`Bevolkingsregisters`), DTB parish registers, and Rotterdam Holland America Line passenger lists (`Passagiersregisters`). Use when researching Dutch or Belgian ancestors, tracing emigrants departing Rotterdam, or verifying primary vital records across Netherlands regional archives.
+description: Search, inspect, and download Dutch and Belgian genealogical archives via the bundled uv-based `openarchieven` CLI or the public OpenArchieven 1.0 JSON API (`api.openarch.nl`). Covers Dutch civil registration (`BS Geboorte`, `BS Huwelijk`, `BS Overlijden`), municipal population registers (`Bevolkingsregisters`), DTB parish registers, and Rotterdam Holland America Line passenger lists (`Passagiersregisters`). Use when researching Dutch or Belgian ancestors, tracing emigrants departing Rotterdam, downloading scan images, or verifying primary vital records across Netherlands regional archives.
 ---
 
 # OpenArchieven
@@ -48,6 +48,34 @@ skills/openarchieven/scripts/openarchieven show "https://www.openarchieven.nl/bh
 
 `show` queries `show.json` and parses the returned A2A (Archives-to-Archives) record: source type, archive institution, inventory/book/document numbers, event date and place, every person named on the deed with their role (`Kind`, `Vader`, `Moeder`, `Bruid`, `Bruidegom`, `Overledene`, `Geregistreerde`), scan image URLs, and the digital original link.
 
+### Download scan images
+
+`download` reads the same cached `show` record. It does not call `show.json` again when that cache is fresh. It saves the full-resolution `a2a_Uri` (or a flat `uri`). Pass `--preview` to save `a2a_UriPreview` (or `uri_preview`) instead.
+
+```bash
+# List scan index, order, label, and URL. This does not download files.
+skills/openarchieven/scripts/openarchieven download "bhi:78a37833-d731-ffe5-184c-f9f424826871" --list
+skills/openarchieven/scripts/openarchieven download "bhi:78a37833-d731-ffe5-184c-f9f424826871" --list --json
+
+# Download scan 1 (the default) to one file.
+skills/openarchieven/scripts/openarchieven download bhi 78a37833-d731-ffe5-184c-f9f424826871 --out /tmp/van-gogh-birth.jpg
+
+# Download every scan into a directory. File names look like bhi-78a37833-scan-01.jpg.
+skills/openarchieven/scripts/openarchieven download "https://www.openarchieven.nl/bhi:78a37833-d731-ffe5-184c-f9f424826871" --all --out-dir /tmp/van-gogh-scans --json
+```
+
+`--out`, `--output`, and `-o` are the same option. With `--all`, that option is the output directory. `--out-dir` and `--output-dir` are the same directory option.
+
+The command accepts the same record reference as `show`. Pass `ARCHIVE IDENTIFIER`, `archive:uuid`, or an `https://www.openarchieven.nl/...` record URL.
+
+`--scan-index` is 1-based. The default is `1`. `--all` downloads every scan and does not read `--scan-index`.
+
+JSON output includes `cache_hit`. A download also includes `files`. `--list --json` includes `scans` instead of `files`. `cache_hit` is true only when the record lookup and every saved file came from disk.
+
+If the record has no scan URL, `--list` prints an empty scan list and exits 0. A download exits 1.
+
+The command saves an image or a PDF only. If the URL returns HTML, another non-image body, or an HTTP error, the command exits 1 and does not write that response to the output file or to the scan cache.
+
 ### Build a shareable website URL offline
 
 ```bash
@@ -83,11 +111,11 @@ skills/openarchieven/scripts/openarchieven url --record "bhi:78a37833-d731-ffe5-
 - **Search two people at once with `&`:** OpenArchieven supports combining two names in `--name`, such as `"Theodorus van Gogh & Anna Cornelia Carbentus"`, to pull every civil record naming a married couple together.
 - **Mind Dutch tussenvoegsels and patronymics:** Prefixes (`van`, `van der`, `de`, `den`) are indexed alongside the surname; pre-1811 DTB records often index people by patronymic rather than a fixed surname (for example, 17th-century Leiden records before hereditary surnames became mandatory in 1811).
 - **Follow `Bevolkingsregisters` across municipalities:** When a civil record shows a move or emigration, inspect the household entry with `show` to capture destination columns (`vertrokken naar`) before checking Rotterdam `Passagiersregisters` (`--archive srt`).
-- **Verify against the original scan:** Indexed A2A transcripts occasionally misread handwritten dates or ages; open the `a2a_SourceAvailableScans` or `Original` URL from `show` before treating a date as final.
+- **Verify against the original scan:** Indexed A2A transcripts occasionally misread handwritten dates or ages. Download the scan with `download`, or open the scan URL from `show`, before you treat a date as final.
 
 ## Disk cache and environment variables
 
-`search` and `show` cache successful responses on disk under `~/.cache/kinloom-openarchieven/` (default TTL `168` hours, advisory `flock` per cache key, atomic temp-file writes). HTTP errors, API `error_code` responses, and invalid payloads are never cached.
+`search` and `show` cache successful responses on disk under `~/.cache/kinloom-openarchieven/` (default TTL `168` hours, advisory `flock` per cache key, atomic temp-file writes). `download` reuses the `show` cache. It stores image and PDF bodies under `~/.cache/kinloom-openarchieven/scans/`. HTTP errors, API `error_code` responses, invalid payloads, empty bodies, and HTML responses are never cached.
 
 - `--refresh`: bypass cached reads and write the fresh response to disk.
 - `--cache-ttl-hours <hours>`: override TTL for one call (`0` disables cached reads).

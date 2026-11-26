@@ -449,6 +449,87 @@ describe('help vs subcommand routing and guide-only commands', () => {
       'prep-scan preview'
     );
   });
+
+  it('records cache_hit from JSON stdout and leaves non-JSON output unset', async () => {
+    const tmp = await makeTempDir('kinloom-cache-hit-telemetry-');
+    const telemetryFile = path.join(tmp, 'calls.jsonl');
+    const secretUrl = 'https://scans.invalid/private-scan.jpg';
+    const secretPath = '/tmp/secret-scan.jpg';
+
+    const hitPayload = `{"cache_hit":true,"files":[{"cache_hit":false,"url":"${secretUrl}","path":"${secretPath}"}]}\n`;
+    const hitCapture = createCaptureIo();
+    const hitSpawn = createFakeSpawn({ exitCode: 0, stdout: hitPayload });
+    const hitResult = await runRecordCommand(
+      'openarchieven',
+      ['download', 'bhi:11111111-2222-3333-4444-555555555555'],
+      {
+        io: hitCapture.io,
+        spawnImpl: hitSpawn.spawnImpl,
+        telemetryFilePath: telemetryFile,
+      }
+    );
+    expect(hitResult.exitCode).toBe(0);
+    expect(hitResult.bytesOut).toBe(Buffer.byteLength(hitPayload));
+    expect(hitCapture.stdout).toEqual([hitPayload.replace(/\n$/, '')]);
+
+    const missPayload = '{"results":[],"cache_hit":false}\n';
+    const missCapture = createCaptureIo();
+    await runRecordCommand('nara', ['search', 'example'], {
+      io: missCapture.io,
+      spawnImpl: createFakeSpawn({ exitCode: 0, stdout: missPayload }).spawnImpl,
+      telemetryFilePath: telemetryFile,
+    });
+    expect(missCapture.stdout).toEqual([missPayload.replace(/\n$/, '')]);
+
+    const textPayload = 'note "cache_hit": true\n';
+    const textCapture = createCaptureIo();
+    await runRecordCommand('chronam', ['search', 'example'], {
+      io: textCapture.io,
+      spawnImpl: createFakeSpawn({ exitCode: 0, stdout: textPayload }).spawnImpl,
+      telemetryFilePath: telemetryFile,
+    });
+    expect(textCapture.stdout).toEqual([textPayload.replace(/\n$/, '')]);
+
+    const rawTelemetry = await readFile(telemetryFile, 'utf8');
+    expect(rawTelemetry).not.toContain(secretUrl);
+    expect(rawTelemetry).not.toContain(secretPath);
+    expect(rawTelemetry).not.toContain('private-scan');
+    const events = rawTelemetry
+      .trim()
+      .split('\n')
+      .map((line) => JSON.parse(line) as TelemetryEvent);
+    expect(events.map((event) => event.cache_hit)).toEqual([true, false, null]);
+  });
+
+  it('streams stdout bytes unchanged while reading a trailing cache_hit', async () => {
+    const tmp = await makeTempDir('kinloom-cache-hit-stream-');
+    const telemetryFile = path.join(tmp, 'calls.jsonl');
+    const pad = 'x'.repeat(300_000);
+    const payload = `{"pad":"${pad}","cache_hit":false}\n`;
+    const streamed: Buffer[] = [];
+    const originalWrite = process.stdout.write.bind(process.stdout);
+    process.stdout.write = ((chunk: string | Uint8Array) => {
+      streamed.push(Buffer.isBuffer(chunk) ? Buffer.from(chunk) : Buffer.from(chunk));
+      return true;
+    }) as typeof process.stdout.write;
+    try {
+      const result = await runRecordCommand(
+        'openarchieven',
+        ['show', 'bhi:11111111-2222-3333-4444-555555555555'],
+        {
+          spawnImpl: createFakeSpawn({ exitCode: 0, stdout: payload }).spawnImpl,
+          telemetryFilePath: telemetryFile,
+        }
+      );
+      expect(result.bytesOut).toBe(Buffer.byteLength(payload));
+      expect(Buffer.concat(streamed).toString('utf8')).toBe(payload);
+    } finally {
+      process.stdout.write = originalWrite;
+    }
+    const event = JSON.parse((await readFile(telemetryFile, 'utf8')).trim()) as TelemetryEvent;
+    expect(event.cache_hit).toBe(false);
+    expect(event.bytes_out).toBe(Buffer.byteLength(payload));
+  });
 });
 
 describe('bundle-skills.mjs and dual-mode bundled resolution', () => {
