@@ -2,12 +2,18 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { performance } from 'node:perf_hooks';
+import type { KinshipEdge } from '@kinloom/core';
 import { CliValidationError } from '../../errors.js';
 import {
   inspectImageBuffer,
   runAuditCommand,
   type AuditCommandResult,
 } from './audit.js';
+import {
+  expandRemoveKinshipTargets,
+  type RemoveKinshipEntry,
+  type RemoveKinshipTarget,
+} from './integrate.js';
 import {
   collectLiveMediaCollisions,
   loadLiveMedia,
@@ -127,6 +133,14 @@ export interface PersonSlugCollision {
   entries: PersonSlugCollisionEntry[];
 }
 
+export interface KinshipAddRemoveConflict {
+  from: string;
+  to: string;
+  relation: KinshipEdge['relation'];
+  addedBy: string[];
+  removedBy: string[];
+}
+
 export interface AuditOverlaps {
   scanFileCollisions: ScanFileCollision[];
   mediaFileCollisions: MediaFileCollision[];
@@ -136,6 +150,7 @@ export interface AuditOverlaps {
   sharedPersonOverlaps: SharedPersonOverlap[];
   personSlugCollisions: PersonSlugCollision[];
   liveMediaFileCollisions: LiveMediaFileCollision[];
+  kinshipAddRemoveConflicts: KinshipAddRemoveConflict[];
 }
 
 export interface AuditBatchSummary {
@@ -156,6 +171,7 @@ export interface AuditBatchSummary {
   personSlugCollisions: number;
   conflictingPersonSlugCollisions: number;
   liveMediaFileCollisions: number;
+  kinshipAddRemoveConflicts: number;
 }
 
 export type AuditBatchPerson = Omit<AuditCommandResult, 'rendered'>;
@@ -178,6 +194,7 @@ export interface OverlapBlockingCounts {
   conflictingPersonOverlaps: number;
   conflictingPersonSlugCollisions: number;
   liveMediaFileCollisions: number;
+  kinshipAddRemoveConflicts: number;
 }
 
 export interface StagedOverlapAnalysis {
@@ -198,6 +215,13 @@ interface StagedPersonRow extends SharedPersonPackage {
   id: string;
 }
 
+interface StagedKinshipAdd {
+  from: string;
+  to: string;
+  relation: KinshipEdge['relation'];
+  family_xref: string | null;
+}
+
 interface ParsedPackage {
   personId: string;
   packageDir: string;
@@ -205,6 +229,8 @@ interface ParsedPackage {
   sources: StagedSourceRef[];
   eventRows: StagedEventRow[];
   stagedPeople: StagedPersonRow[];
+  kinshipAdds: StagedKinshipAdd[];
+  kinshipRemoves: RemoveKinshipTarget[];
 }
 
 function isPlainRecord(value: unknown): value is Record<string, unknown> {
@@ -255,6 +281,10 @@ function readPatchObject(patchPath: string): Record<string, unknown> {
     throw new CliValidationError(`patch.json at ${patchPath} must contain a JSON object.`);
   }
   return parsed;
+}
+
+function isKinshipRelation(value: unknown): value is KinshipEdge['relation'] {
+  return value === 'parent' || value === 'child' || value === 'spouse';
 }
 
 function loadStagedPackage(personId: string, packageDir: string): ParsedPackage {
@@ -315,7 +345,55 @@ function loadStagedPackage(personId: string, packageDir: string): ParsedPackage 
     });
   }
 
-  return { personId, packageDir, media, sources, eventRows, stagedPeople };
+  const kinshipAdds: StagedKinshipAdd[] = [];
+  for (const rawItem of Array.isArray(patch.kinship) ? patch.kinship : []) {
+    if (!isPlainRecord(rawItem)) {
+      continue;
+    }
+    const from = nullableText(rawItem.from);
+    const to = nullableText(rawItem.to);
+    if (!from || !to || !isKinshipRelation(rawItem.relation)) {
+      continue;
+    }
+    kinshipAdds.push({
+      from,
+      to,
+      relation: rawItem.relation,
+      family_xref: nullableText(rawItem.family_xref),
+    });
+  }
+
+  const removeKinshipEntries: RemoveKinshipEntry[] = [];
+  for (const rawItem of Array.isArray(patch.remove_kinship) ? patch.remove_kinship : []) {
+    if (!isPlainRecord(rawItem)) {
+      continue;
+    }
+    const from = nullableText(rawItem.from);
+    const to = nullableText(rawItem.to);
+    if (!from || !to || !isKinshipRelation(rawItem.relation)) {
+      continue;
+    }
+    const familyXref = nullableText(rawItem.family_xref);
+    removeKinshipEntries.push({
+      from,
+      to,
+      relation: rawItem.relation,
+      ...(familyXref !== null ? { family_xref: familyXref } : {}),
+      symmetric: typeof rawItem.symmetric === 'boolean' ? rawItem.symmetric : true,
+    });
+  }
+  const kinshipRemoves = expandRemoveKinshipTargets(removeKinshipEntries);
+
+  return {
+    personId,
+    packageDir,
+    media,
+    sources,
+    eventRows,
+    stagedPeople,
+    kinshipAdds,
+    kinshipRemoves,
+  };
 }
 
 function hashAndMeasure(diskPath: string): ScanCollisionPackage & { person_id: string } {
@@ -600,6 +678,72 @@ function collectPersonSlugCollisions(packages: readonly ParsedPackage[]): Person
   return collisions.toSorted((a, b) => a.slug.localeCompare(b.slug));
 }
 
+function collectKinshipAddRemoveConflicts(
+  packages: readonly ParsedPackage[]
+): KinshipAddRemoveConflict[] {
+  const byEdgeKey = new Map<
+    string,
+    {
+      from: string;
+      to: string;
+      relation: KinshipEdge['relation'];
+      addedBy: Set<string>;
+      removedBy: Set<string>;
+    }
+  >();
+
+  for (const adder of packages) {
+    for (const add of adder.kinshipAdds) {
+      for (const remover of packages) {
+        if (remover.personId === adder.personId) {
+          continue;
+        }
+        const conflicts = remover.kinshipRemoves.some(
+          (rem) =>
+            rem.from === add.from &&
+            rem.to === add.to &&
+            rem.relation === add.relation &&
+            (rem.family_xref === undefined ||
+              add.family_xref === null ||
+              add.family_xref === rem.family_xref)
+        );
+        if (!conflicts) {
+          continue;
+        }
+        const key = `${add.from}|${add.to}|${add.relation}`;
+        let entry = byEdgeKey.get(key);
+        if (!entry) {
+          entry = {
+            from: add.from,
+            to: add.to,
+            relation: add.relation,
+            addedBy: new Set<string>(),
+            removedBy: new Set<string>(),
+          };
+          byEdgeKey.set(key, entry);
+        }
+        entry.addedBy.add(adder.personId);
+        entry.removedBy.add(remover.personId);
+      }
+    }
+  }
+
+  return [...byEdgeKey.values()]
+    .map((entry) => ({
+      from: entry.from,
+      to: entry.to,
+      relation: entry.relation,
+      addedBy: [...entry.addedBy].toSorted((a, b) => a.localeCompare(b)),
+      removedBy: [...entry.removedBy].toSorted((a, b) => a.localeCompare(b)),
+    }))
+    .toSorted(
+      (a, b) =>
+        a.from.localeCompare(b.from) ||
+        a.to.localeCompare(b.to) ||
+        a.relation.localeCompare(b.relation)
+    );
+}
+
 export function createEmptyAuditOverlaps(): AuditOverlaps {
   return {
     scanFileCollisions: [],
@@ -610,6 +754,7 @@ export function createEmptyAuditOverlaps(): AuditOverlaps {
     sharedPersonOverlaps: [],
     personSlugCollisions: [],
     liveMediaFileCollisions: [],
+    kinshipAddRemoveConflicts: [],
   };
 }
 
@@ -625,6 +770,7 @@ export function countBlockingOverlaps(overlaps: AuditOverlaps): OverlapBlockingC
       (row) => row.personIdsConflict
     ).length,
     liveMediaFileCollisions: overlaps.liveMediaFileCollisions.length,
+    kinshipAddRemoveConflicts: overlaps.kinshipAddRemoveConflicts.length,
   };
 }
 
@@ -651,7 +797,8 @@ export function analyzeStagedOverlaps(
     blocking.conflictingMediaFileCollisions > 0 ||
     blocking.conflictingPersonOverlaps > 0 ||
     blocking.conflictingPersonSlugCollisions > 0 ||
-    blocking.liveMediaFileCollisions > 0;
+    blocking.liveMediaFileCollisions > 0 ||
+    blocking.kinshipAddRemoveConflicts > 0;
   return { overlaps, blocking, hasBlockingConflicts };
 }
 
@@ -668,6 +815,7 @@ function computeAuditOverlaps(input: {
     sharedPersonOverlaps: collectSharedPeople(input.packages),
     personSlugCollisions: collectPersonSlugCollisions(input.packages),
     liveMediaFileCollisions: collectLiveMediaCollisions(input.packages, input.liveMedia),
+    kinshipAddRemoveConflicts: collectKinshipAddRemoveConflicts(input.packages),
   };
 }
 
@@ -699,6 +847,7 @@ function summarizeBatch(
       (row) => row.personIdsConflict
     ).length,
     liveMediaFileCollisions: overlaps.liveMediaFileCollisions.length,
+    kinshipAddRemoveConflicts: overlaps.kinshipAddRemoveConflicts.length,
   };
 }
 
@@ -830,6 +979,16 @@ export function formatAuditBatchTextReport(report: Omit<AuditBatchResult, 'rende
     for (const staged of collision.staged) {
       lines.push(`    ${staged.person_id} media_id=${staged.media_id} file=${staged.file}`);
     }
+  }
+
+  if (report.overlaps.kinshipAddRemoveConflicts.length === 0) {
+    lines.push('  Kinship add/remove conflicts: none');
+  }
+  for (const conflict of report.overlaps.kinshipAddRemoveConflicts) {
+    lines.push(
+      `  Kinship ${conflict.from} -> ${conflict.to} (${conflict.relation}): ` +
+        `added by ${conflict.addedBy.join(', ')}; removed by ${conflict.removedBy.join(', ')}`
+    );
   }
 
   return `${lines.join('\n')}\n`;

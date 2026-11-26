@@ -5,6 +5,7 @@ import path from 'node:path';
 import {
   parseEventsYaml,
   parseKinloomConfigYaml,
+  parseKinshipYaml,
   parseMediaYaml,
   parseNarrativesYaml,
   parsePeopleYaml,
@@ -19,6 +20,7 @@ import {
   serializePlacesYaml,
   serializeSourcesYaml,
   type KinloomSiteConfig,
+  type KinshipEdge,
   type Place,
   type RawEvent,
   type RawPerson,
@@ -253,6 +255,8 @@ interface PackageFixtureInput {
   people?: Array<Record<string, unknown>>;
   places?: Array<Record<string, unknown>>;
   removeEventIds?: string[];
+  kinship?: Array<Record<string, unknown>>;
+  removeKinship?: Array<Record<string, unknown>>;
   bodyMd?: string;
 }
 
@@ -303,6 +307,8 @@ async function writeStagedPackage(input: PackageFixtureInput): Promise<string> {
       },
     ],
     ...(input.removeEventIds ? { remove_event_ids: input.removeEventIds } : {}),
+    ...(input.kinship ? { kinship: input.kinship } : {}),
+    ...(input.removeKinship ? { remove_kinship: input.removeKinship } : {}),
     media: [
       {
         id: mediaId,
@@ -1087,5 +1093,210 @@ describe('kinloom batch integrate and --pending-only', () => {
       await readFile(path.join(repoDir, 'data', 'media.yaml'), 'utf8')
     );
     expect(liveMedia.map((m) => m.id)).toContain('med_per_helen_maple_scan');
+  });
+
+  it('classifies packages with live remove_kinship targets as pending and as already_integrated once removed', async () => {
+    const repoDir = await createSyntheticRepo();
+    const kinshipPath = path.join(repoDir, 'data', 'kinship.yaml');
+    const seededKinship: KinshipEdge[] = [
+      { from: 'per_helen_maple', to: 'per_arthur_alder', relation: 'parent', family_xref: '@F1@' },
+      { from: 'per_arthur_alder', to: 'per_helen_maple', relation: 'child', family_xref: '@F1@' },
+      { from: 'per_arthur_alder', to: 'per_clara_birch', relation: 'spouse', family_xref: '@F2@' },
+      { from: 'per_clara_birch', to: 'per_arthur_alder', relation: 'spouse', family_xref: '@F2@' },
+    ];
+    await writeFile(
+      kinshipPath,
+      serializeKinshipYaml(seededKinship, { sortDeterministic: true }),
+      'utf8'
+    );
+
+    const pkgDir = path.join(repoDir, 'research', 'people', 'per_arthur_alder');
+    await mkdir(pkgDir, { recursive: true });
+    await writeFile(
+      path.join(pkgDir, 'patch.json'),
+      JSON.stringify(
+        {
+          person_id: 'per_arthur_alder',
+          remove_kinship: [
+            { from: 'per_helen_maple', to: 'per_arthur_alder', relation: 'parent', family_xref: '@F1@' },
+          ],
+        },
+        null,
+        2
+      ),
+      'utf8'
+    );
+
+    expect(await isPackagePending(repoDir, 'per_arthur_alder')).toBe(true);
+    const beforeClassify = await classifyStagedPackages(repoDir);
+    expect(beforeClassify.pending).toEqual(['per_arthur_alder']);
+    expect(beforeClassify.alreadyIntegrated).toEqual([]);
+
+    const cap = createCaptureIo();
+    const code = await runCli(
+      ['integrate', '--all-staged', '--pending-only', '--repo', repoDir, '--json'],
+      { io: cap.io }
+    );
+    expect(code, `${cap.stderr.join('\n')}\n${cap.stdout.join('\n')}`).toBe(EXIT_OK);
+    const body = JSON.parse(cap.stdout.join('\n')) as {
+      integrated: string[];
+      totals: { removedKinship: number };
+      writtenYamlFiles: string[];
+    };
+    expect(body.integrated).toEqual(['per_arthur_alder']);
+    expect(body.totals.removedKinship).toBe(2);
+    expect(body.writtenYamlFiles).toEqual([kinshipPath]);
+
+    const liveAfter = parseKinshipYaml(await readFile(kinshipPath, 'utf8'));
+    expect(liveAfter).toEqual([
+      { from: 'per_arthur_alder', to: 'per_clara_birch', relation: 'spouse', family_xref: '@F2@' },
+      { from: 'per_clara_birch', to: 'per_arthur_alder', relation: 'spouse', family_xref: '@F2@' },
+    ]);
+
+    expect(await isPackagePending(repoDir, 'per_arthur_alder')).toBe(false);
+    const afterClassify = await classifyStagedPackages(repoDir);
+    expect(afterClassify.pending).toEqual([]);
+    expect(afterClassify.alreadyIntegrated).toEqual(['per_arthur_alder']);
+  });
+
+  it('blocks batch audit --strict and batch integrate when one package adds a kinship edge that another removes', async () => {
+    const repoDir = await createSyntheticRepo();
+    const kinshipPath = path.join(repoDir, 'data', 'kinship.yaml');
+    const beforeKinship = await readFile(kinshipPath, 'utf8');
+
+    // Package A adds (per_arthur_alder -> per_clara_birch, child); Package B removes the reciprocal parent edge (symmetric default).
+    await writeStagedPackage({
+      repoDir,
+      personId: 'per_arthur_alder',
+      fullName: 'Arthur Alder',
+      eventId: 'evt_arthur_kin',
+      eventDate: '1900-01-01',
+      eventTitle: 'Arthur Alder 1900 residence',
+      scanName: 'arthur-kin.png',
+      scanBytes: makeMinimalPng(640, 480, 12_000),
+      kinship: [
+        { from: 'per_clara_birch', to: 'per_arthur_alder', relation: 'parent', family_xref: '@F5@' },
+        { from: 'per_arthur_alder', to: 'per_clara_birch', relation: 'child', family_xref: '@F5@' },
+      ],
+    });
+    await writeStagedPackage({
+      repoDir,
+      personId: 'per_helen_maple',
+      fullName: 'Helen Maple',
+      eventId: 'evt_helen_kin',
+      eventDate: '1901-01-01',
+      eventTitle: 'Helen Maple 1901 residence',
+      scanName: 'helen-kin.png',
+      scanBytes: makeMinimalPng(640, 480, 12_000),
+      removeKinship: [
+        { from: 'per_clara_birch', to: 'per_arthur_alder', relation: 'parent' },
+      ],
+    });
+
+    const auditCap = createCaptureIo();
+    const auditCode = await runCli(
+      ['audit', '--all-staged', '--strict', '--repo', repoDir, '--json'],
+      { io: auditCap.io }
+    );
+    expect(auditCode).toBe(EXIT_ERROR);
+    const auditJson = JSON.parse(auditCap.stdout.join('\n')) as {
+      ok: boolean;
+      strictOk: boolean;
+      summary: { kinshipAddRemoveConflicts: number };
+      overlaps: {
+        kinshipAddRemoveConflicts: Array<{
+          from: string;
+          to: string;
+          relation: string;
+          addedBy: string[];
+          removedBy: string[];
+        }>;
+      };
+    };
+    expect(auditJson.ok).toBe(true);
+    expect(auditJson.strictOk).toBe(false);
+    expect(auditJson.summary.kinshipAddRemoveConflicts).toBe(2);
+    expect(auditJson.overlaps.kinshipAddRemoveConflicts).toEqual([
+      {
+        from: 'per_arthur_alder',
+        to: 'per_clara_birch',
+        relation: 'child',
+        addedBy: ['per_arthur_alder'],
+        removedBy: ['per_helen_maple'],
+      },
+      {
+        from: 'per_clara_birch',
+        to: 'per_arthur_alder',
+        relation: 'parent',
+        addedBy: ['per_arthur_alder'],
+        removedBy: ['per_helen_maple'],
+      },
+    ]);
+
+    const integrateCap = createCaptureIo();
+    const integrateCode = await runCli(['integrate', '--all-staged', '--repo', repoDir], {
+      io: integrateCap.io,
+    });
+    expect(integrateCode).toBe(EXIT_USAGE);
+    expect(integrateCap.stderr.join('\n')).toContain('kinshipAddRemoveConflicts=2');
+    expect(await readFile(kinshipPath, 'utf8')).toBe(beforeKinship);
+    expect(existsSync(path.join(repoDir, 'media', 'arthur-kin.png'))).toBe(false);
+  });
+
+  it('rolls back data/kinship.yaml byte-for-byte when package 1 removes kinship and package 2 fails mid-batch', async () => {
+    const repoDir = await createSyntheticRepo();
+    const kinshipPath = path.join(repoDir, 'data', 'kinship.yaml');
+    const seededKinship: KinshipEdge[] = [
+      { from: 'per_arthur_alder', to: 'per_helen_maple', relation: 'child', family_xref: '@F1@' },
+      { from: 'per_helen_maple', to: 'per_arthur_alder', relation: 'parent', family_xref: '@F1@' },
+    ];
+    await writeFile(
+      kinshipPath,
+      serializeKinshipYaml(seededKinship, { sortDeterministic: true }),
+      'utf8'
+    );
+    const beforeKinshipBytes = await readFile(kinshipPath);
+
+    await writeStagedPackage({
+      repoDir,
+      personId: 'per_arthur_alder',
+      fullName: 'Arthur Alder',
+      eventId: 'evt_arthur_rb',
+      eventDate: '1902-05-01',
+      eventTitle: 'Arthur Alder 1902 residence',
+      scanName: 'arthur-rb.png',
+      scanBytes: makeMinimalPng(640, 480, 12_000),
+      removeKinship: [
+        { from: 'per_helen_maple', to: 'per_arthur_alder', relation: 'parent', family_xref: '@F1@' },
+      ],
+      kinship: [
+        { from: 'per_clara_birch', to: 'per_arthur_alder', relation: 'parent', family_xref: '@F8@' },
+        { from: 'per_arthur_alder', to: 'per_clara_birch', relation: 'child', family_xref: '@F8@' },
+      ],
+    });
+    await writeStagedPackage({
+      repoDir,
+      personId: 'per_helen_maple',
+      fullName: 'Helen Maple',
+      eventId: 'evt_helen_rb_fail',
+      eventDate: '1903-05-01',
+      eventTitle: 'Helen Maple missing place failure',
+      placeId: 'plc_missing_rollback_county',
+      scanName: 'helen-rb.png',
+      scanBytes: makeMinimalPng(640, 480, 12_000),
+    });
+
+    const cap = createCaptureIo();
+    const code = await runCli(
+      ['integrate', 'per_arthur_alder', 'per_helen_maple', '--repo', repoDir],
+      { io: cap.io }
+    );
+    expect(code).toBe(EXIT_ERROR);
+    expect(cap.stderr.join('\n')).toContain('Rollback succeeded:');
+
+    const afterKinshipBytes = await readFile(kinshipPath);
+    expect(afterKinshipBytes.equals(beforeKinshipBytes)).toBe(true);
+    expect(parseKinshipYaml(afterKinshipBytes.toString('utf8'))).toEqual(seededKinship);
+    expect(existsSync(path.join(repoDir, 'media', 'arthur-rb.png'))).toBe(false);
   });
 });

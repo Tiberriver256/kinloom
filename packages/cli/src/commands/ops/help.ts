@@ -17,6 +17,7 @@ export const INTEGRATE_HELP = `Usage: kinloom integrate [person_id ...] [options
 
 Validate and integrate one or more person research packages (patch.json + scans/) into local YAML files.
 Supports patch.people to add newly proven deceased ancestors (including when person_id itself is introduced by patch.people).
+Supports patch.remove_kinship ([{ from, to, relation, family_xref?, symmetric? }]) to retire disproved parent, child, or spouse edges before upserting patch.kinship; symmetric defaults to true and removes the reciprocal edge automatically.
 Living people and slug collisions are always rejected.
 
 One person id keeps the original single-person text summary and JSON output.
@@ -61,7 +62,7 @@ Options:
   --pending-only         With --all-staged, skip already-integrated packages and list them in skippedAlreadyIntegrated (broken packages stay pending).
   --repo <dir>           Archive repository root (default: current working directory)
   --package-dir <dir>    Custom research package directory for a single person (default: <repo>/research/people/<person_id>)
-  --strict               Exit non-zero when a package fails its strict scorecard (uncited prose, an em dash, or newly introduced tree-hygiene warnings such as duplicate vital events, child marriage, parent-child chronology anomalies, excess non-adoptive parents, or placeholder event titles). A single person and a batch both exit non-zero when a staged file already belongs to a different id in data/media.yaml. In a batch, also exit non-zero when two packages stage the same scan basename with different SHA-256 bytes, point the same media file path at different media ids, define the same patch.people id with conflicting fields, or reuse the same patch.people slug for different person ids. Identical scan bytes, a shared media id, identical patch.people rows, and an update of the same live media id do not fail --strict.
+  --strict               Exit non-zero when a package fails its strict scorecard (uncited prose, an em dash, or newly introduced tree-hygiene warnings such as duplicate vital events, child marriage, parent-child chronology anomalies, excess non-adoptive parents, or placeholder event titles). A single person and a batch both exit non-zero when a staged file already belongs to a different id in data/media.yaml. In a batch, also exit non-zero when two packages stage the same scan basename with different SHA-256 bytes, point the same media file path at different media ids, define the same patch.people id with conflicting fields, reuse the same patch.people slug for different person ids, or contradict each other by adding a kinship edge that another package lists in remove_kinship. Identical scan bytes, a shared media id, identical patch.people rows, and an update of the same live media id do not fail --strict.
   --json                 Emit structured JSON. A batch object is { ok, strictOk, repo, people, overlaps, summary, skippedAlreadyIntegrated?, duration_ms }.
   -h, --help             Show this help message`;
 

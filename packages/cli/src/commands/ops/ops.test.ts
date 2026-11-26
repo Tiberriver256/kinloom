@@ -7004,4 +7004,333 @@ describe('ops/verify', () => {
       'child_marriage',
     ]);
   });
+
+  it('supports remove_kinship with symmetric default, family_xref scoping, strict validation, and symmetry enforcement', async () => {
+    const repoDir = await createSyntheticRepo();
+    const dataDir = path.join(repoDir, 'data');
+    const initialKinship: KinshipEdge[] = [
+      { from: 'per_thomas_alder', to: 'per_arthur_alder', relation: 'parent', family_xref: '@F1@' },
+      { from: 'per_arthur_alder', to: 'per_thomas_alder', relation: 'child', family_xref: '@F1@' },
+      { from: 'per_arthur_alder', to: 'per_helen_maple', relation: 'spouse', family_xref: '@F2@' },
+      { from: 'per_helen_maple', to: 'per_arthur_alder', relation: 'spouse', family_xref: '@F2@' },
+      { from: 'per_arthur_alder', to: 'per_clara_maple_living', relation: 'parent', family_xref: '@F3@' },
+      { from: 'per_clara_maple_living', to: 'per_arthur_alder', relation: 'child', family_xref: '@F3@' },
+    ];
+    await writeFile(
+      path.join(dataDir, 'kinship.yaml'),
+      serializeKinshipYaml(initialKinship, { sortDeterministic: true }),
+      'utf8'
+    );
+
+    const pkgDir = path.join(repoDir, 'research', 'people', 'per_arthur_alder');
+    await mkdir(pkgDir, { recursive: true });
+    const writePatch = async (payload: Record<string, unknown>): Promise<void> => {
+      await writeFile(
+        path.join(pkgDir, 'patch.json'),
+        JSON.stringify({ person_id: 'per_arthur_alder', ...payload }, null, 2),
+        'utf8'
+      );
+    };
+
+    // 1. Strict validation rejects malformed remove_kinship with CliValidationError.
+    const invalidPayloads: Array<{ label: string; remove_kinship: unknown; match: RegExp }> = [
+      { label: 'non-array', remove_kinship: 'not-an-array', match: /must be an array/i },
+      {
+        label: 'unknown key',
+        remove_kinship: [{ from: 'per_thomas_alder', to: 'per_arthur_alder', relation: 'parent', bogus: true }],
+        match: /Unknown key 'bogus'/i,
+      },
+      {
+        label: 'bad relation',
+        remove_kinship: [{ from: 'per_thomas_alder', to: 'per_arthur_alder', relation: 'sibling' }],
+        match: /relation must be 'parent', 'child', or 'spouse'/i,
+      },
+      {
+        label: 'bad from id',
+        remove_kinship: [{ from: 'bad id!', to: 'per_arthur_alder', relation: 'parent' }],
+        match: /\.from has invalid person_id/i,
+      },
+      {
+        label: 'empty family_xref',
+        remove_kinship: [{ from: 'per_thomas_alder', to: 'per_arthur_alder', relation: 'parent', family_xref: '  ' }],
+        match: /family_xref must be a non-empty string/i,
+      },
+      {
+        label: 'non-boolean symmetric',
+        remove_kinship: [{ from: 'per_thomas_alder', to: 'per_arthur_alder', relation: 'parent', symmetric: 'yes' }],
+        match: /symmetric must be a boolean/i,
+      },
+    ];
+    for (const invalid of invalidPayloads) {
+      await writePatch({ remove_kinship: invalid.remove_kinship });
+      await expect(
+        runIntegrateCommand({ repoDir, personId: 'per_arthur_alder', dryRun: true }),
+        invalid.label
+      ).rejects.toThrow(CliValidationError);
+      await expect(
+        runIntegrateCommand({ repoDir, personId: 'per_arthur_alder', dryRun: true }),
+        invalid.label
+      ).rejects.toThrow(invalid.match);
+    }
+
+    // CLI surfaces validation error with EXIT_USAGE.
+    const badCli = createCaptureIo();
+    expect(
+      await runCli(['integrate', 'per_arthur_alder', '--dry-run', '--repo', repoDir], {
+        io: badCli.io,
+      })
+    ).toBe(EXIT_USAGE);
+
+    // 2. family_xref scoping: non-matching family_xref removes nothing.
+    await writePatch({
+      remove_kinship: [
+        { from: 'per_thomas_alder', to: 'per_arthur_alder', relation: 'parent', family_xref: '@F99@' },
+      ],
+    });
+    const noMatchDry = await runIntegrateCommand({
+      repoDir,
+      personId: 'per_arthur_alder',
+      dryRun: true,
+    });
+    expect(noMatchDry.removedKinshipCount).toBe(0);
+    expect(noMatchDry.removedKinship).toEqual([]);
+    expect(noMatchDry.wouldWriteYamlFiles).toEqual([]);
+
+    // 3. symmetric: false on a symmetric live pair rejects the orphaned inverse edge cleanly.
+    await writePatch({
+      remove_kinship: [
+        { from: 'per_thomas_alder', to: 'per_arthur_alder', relation: 'parent', symmetric: false },
+      ],
+    });
+    await expect(
+      runIntegrateCommand({ repoDir, personId: 'per_arthur_alder', dryRun: true })
+    ).rejects.toThrow(/Asymmetric kinship graph after remove_kinship/i);
+
+    // 4. Default symmetric: true removes both parent/child for @F1@ and both spouse edges for @F2@, leaving @F3@ untouched.
+    await writePatch({
+      remove_kinship: [
+        { from: 'per_thomas_alder', to: 'per_arthur_alder', relation: 'parent', family_xref: '@F1@' },
+        { from: 'per_arthur_alder', to: 'per_helen_maple', relation: 'spouse' },
+      ],
+    });
+    const dryRes = await runIntegrateCommand({
+      repoDir,
+      personId: 'per_arthur_alder',
+      dryRun: true,
+    });
+    expect(dryRes.removedKinshipCount).toBe(4);
+    expect(dryRes.removedKinship).toEqual([
+      { from: 'per_arthur_alder', to: 'per_helen_maple', relation: 'spouse', family_xref: '@F2@' },
+      { from: 'per_arthur_alder', to: 'per_thomas_alder', relation: 'child', family_xref: '@F1@' },
+      { from: 'per_helen_maple', to: 'per_arthur_alder', relation: 'spouse', family_xref: '@F2@' },
+      { from: 'per_thomas_alder', to: 'per_arthur_alder', relation: 'parent', family_xref: '@F1@' },
+    ]);
+    expect(dryRes.wouldWriteYamlFiles).toEqual([path.join(dataDir, 'kinship.yaml')]);
+    expect(dryRes.writtenYamlFiles).toEqual([]);
+    expect(dryRes.rendered).toContain('kinship=+0/~0/-4');
+
+    const applyRes = await runIntegrateCommand({
+      repoDir,
+      personId: 'per_arthur_alder',
+      dryRun: false,
+    });
+    expect(applyRes.removedKinshipCount).toBe(4);
+    expect(applyRes.writtenYamlFiles).toEqual([path.join(dataDir, 'kinship.yaml')]);
+    const liveAfter = parseKinshipYaml(await readFile(path.join(dataDir, 'kinship.yaml'), 'utf8'));
+    expect(liveAfter).toEqual([
+      { from: 'per_arthur_alder', to: 'per_clara_maple_living', relation: 'parent', family_xref: '@F3@' },
+      { from: 'per_clara_maple_living', to: 'per_arthur_alder', relation: 'child', family_xref: '@F3@' },
+    ]);
+
+    // Re-running after removal is a clean idempotent no-op.
+    const rerunRes = await runIntegrateCommand({
+      repoDir,
+      personId: 'per_arthur_alder',
+      dryRun: false,
+    });
+    expect(rerunRes.removedKinshipCount).toBe(0);
+    expect(rerunRes.removedKinship).toEqual([]);
+    expect(rerunRes.writtenYamlFiles).toEqual([]);
+
+    // 5. symmetric: false succeeds when retiring an already-orphaned asymmetric half-edge.
+    await writeFile(
+      path.join(dataDir, 'kinship.yaml'),
+      serializeKinshipYaml(
+        [
+          ...liveAfter,
+          { from: 'per_thomas_alder', to: 'per_arthur_alder', relation: 'parent', family_xref: '@F9@' },
+        ],
+        { sortDeterministic: true }
+      ),
+      'utf8'
+    );
+    await writePatch({
+      remove_kinship: [
+        { from: 'per_thomas_alder', to: 'per_arthur_alder', relation: 'parent', symmetric: false },
+      ],
+    });
+    const orphanFix = await runIntegrateCommand({
+      repoDir,
+      personId: 'per_arthur_alder',
+      dryRun: false,
+    });
+    expect(orphanFix.removedKinshipCount).toBe(1);
+    expect(orphanFix.removedKinship).toEqual([
+      { from: 'per_thomas_alder', to: 'per_arthur_alder', relation: 'parent', family_xref: '@F9@' },
+    ]);
+  });
+
+  it('allows replacing a disproved parent with a newly proved father in one patch and passes audit --strict with 0 excess_parents warnings', async () => {
+    const repoDir = await createSyntheticRepo();
+    const dataDir = path.join(repoDir, 'data');
+
+    const basePeople = parsePeopleYaml(await readFile(path.join(dataDir, 'people.yaml'), 'utf8'));
+    const mother: RawPerson = {
+      id: 'per_martha_alder',
+      slug: 'martha-alder',
+      full_name: 'Martha Birch',
+      given_name: 'Martha',
+      surname: 'Birch',
+      alt_names: [],
+      sex: 'F',
+      is_living: false,
+      lineage_group: 'ancestor',
+      birth_edtf: '1834-03-02',
+      death_edtf: '1908-11-14',
+      portrait_url: null,
+    };
+    await writeFile(
+      path.join(dataDir, 'people.yaml'),
+      serializePeopleYaml([...basePeople, mother], { sortById: true }),
+      'utf8'
+    );
+    await writeFile(
+      path.join(dataDir, 'events.yaml'),
+      serializeEventsYaml(
+        [
+          {
+            id: 'evt_arthur_1880_census',
+            title: '1880 Federal Census household in Oak County',
+            scope: 'personal',
+            event_kind: 'residence_anchor',
+            edtf_date: '1880-06-15',
+            place_id: 'plc_oak_county_ohio',
+            summary: 'Arthur Alder farmed in Oak County.',
+            participants: [{ person_id: 'per_arthur_alder', role: 'principal' }],
+            sources: [{ source_id: 'src_1880_census', confidence: 'high' }],
+          },
+        ],
+        { sortById: true }
+      ),
+      'utf8'
+    );
+
+    const liveKinship: KinshipEdge[] = [
+      { from: 'per_thomas_alder', to: 'per_arthur_alder', relation: 'parent', family_xref: '@F1@' },
+      { from: 'per_arthur_alder', to: 'per_thomas_alder', relation: 'child', family_xref: '@F1@' },
+      { from: 'per_martha_alder', to: 'per_arthur_alder', relation: 'parent', family_xref: '@F1@' },
+      { from: 'per_arthur_alder', to: 'per_martha_alder', relation: 'child', family_xref: '@F1@' },
+    ];
+    await writeFile(
+      path.join(dataDir, 'kinship.yaml'),
+      serializeKinshipYaml(liveKinship, { sortDeterministic: true }),
+      'utf8'
+    );
+
+    const pkgDir = path.join(repoDir, 'research', 'people', 'per_arthur_alder');
+    await mkdir(pkgDir, { recursive: true });
+    await writeFile(path.join(pkgDir, 'dossier.md'), '# Arthur Alder\n', 'utf8');
+
+    const newFather: RawPerson = {
+      id: 'per_samuel_rowan',
+      slug: 'samuel-rowan',
+      full_name: 'Samuel Rowan',
+      given_name: 'Samuel',
+      surname: 'Rowan',
+      alt_names: [],
+      sex: 'M',
+      is_living: false,
+      lineage_group: 'ancestor',
+      birth_edtf: '1831-05-19',
+      death_edtf: '1902-07-08',
+      portrait_url: null,
+    };
+
+    const basePatch = {
+      person_id: 'per_arthur_alder',
+      people: [newFather],
+      kinship: [
+        { from: 'per_samuel_rowan', to: 'per_arthur_alder', relation: 'parent', family_xref: '@F20@' },
+        { from: 'per_arthur_alder', to: 'per_samuel_rowan', relation: 'child', family_xref: '@F20@' },
+      ],
+      narratives: [
+        {
+          id: 'nar_arthur_bio',
+          slug: 'arthur-alder-bio',
+          kind: 'biography',
+          subject_person_id: 'per_arthur_alder',
+          title: 'Arthur Alder',
+          summary: 'Verified parentage of Arthur Alder.',
+          body_md: 'Primary county records identify Samuel Rowan as the father of Arthur Alder.[^src_1880_census]',
+          person_ids: ['per_arthur_alder', 'per_samuel_rowan'],
+          place_ids: ['plc_oak_county_ohio'],
+          event_ids: [],
+          source_ids: ['src_1880_census'],
+        },
+      ],
+    };
+
+    // Without remove_kinship, adding Samuel Rowan creates a 3-parent excess_parents regression.
+    await writeFile(path.join(pkgDir, 'patch.json'), JSON.stringify(basePatch, null, 2), 'utf8');
+    const withoutRemove = await runAuditCommand({ repoDir, personId: 'per_arthur_alder' });
+    expect(withoutRemove.ok).toBe(true);
+    expect(withoutRemove.strictOk).toBe(false);
+    expect(withoutRemove.hygieneWarnings.map((w) => w.category)).toEqual(['excess_parents']);
+
+    // With remove_kinship retiring disproved father Thomas Alder, audit --strict passes with 0 hygiene warnings.
+    await writeFile(
+      path.join(pkgDir, 'patch.json'),
+      JSON.stringify(
+        {
+          ...basePatch,
+          remove_kinship: [
+            { from: 'per_thomas_alder', to: 'per_arthur_alder', relation: 'parent', family_xref: '@F1@' },
+          ],
+        },
+        null,
+        2
+      ),
+      'utf8'
+    );
+    const strictCap = createCaptureIo();
+    const strictCode = await runCli(
+      ['audit', 'per_arthur_alder', '--strict', '--repo', repoDir, '--json'],
+      { io: strictCap.io }
+    );
+    expect(strictCode, `${strictCap.stderr.join('\n')}\n${strictCap.stdout.join('\n')}`).toBe(EXIT_OK);
+    const strictJson = JSON.parse(strictCap.stdout.join('\n')) as {
+      ok: boolean;
+      strictOk: boolean;
+      hygieneWarnings: unknown[];
+    };
+    expect(strictJson.ok).toBe(true);
+    expect(strictJson.strictOk).toBe(true);
+    expect(strictJson.hygieneWarnings).toEqual([]);
+
+    // Integrating writes the clean symmetric 2-parent kinship graph.
+    const integrated = await runIntegrateCommand({
+      repoDir,
+      personId: 'per_arthur_alder',
+      dryRun: false,
+    });
+    expect(integrated.removedKinshipCount).toBe(2);
+    expect(integrated.counts.kinship).toEqual({ added: 2, updated: 0, unchanged: 0 });
+    const postKinship = parseKinshipYaml(await readFile(path.join(dataDir, 'kinship.yaml'), 'utf8'));
+    expect(postKinship).toEqual([
+      { from: 'per_arthur_alder', to: 'per_martha_alder', relation: 'child', family_xref: '@F1@' },
+      { from: 'per_arthur_alder', to: 'per_samuel_rowan', relation: 'child', family_xref: '@F20@' },
+      { from: 'per_martha_alder', to: 'per_arthur_alder', relation: 'parent', family_xref: '@F1@' },
+      { from: 'per_samuel_rowan', to: 'per_arthur_alder', relation: 'parent', family_xref: '@F20@' },
+    ]);
+  });
 });

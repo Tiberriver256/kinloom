@@ -42,10 +42,17 @@ export {
 
 export {
   INTEGRATE_HELP,
+  applyKinshipRemovals,
   auditBundlePrivacy,
+  expandRemoveKinshipTargets,
+  getReciprocalKinshipRelation,
+  parseRemoveKinshipEntries,
   runIntegrateCommand,
   type IntegrateCommandOptions,
   type IntegrateCommandResult,
+  type RemoveKinshipEntry,
+  type RemoveKinshipTarget,
+  type RemovedKinshipEdge,
   type StagedScanReportItem,
   type UpsertCounts,
 } from './integrate.js';
@@ -75,6 +82,7 @@ export {
   runAuditBatchCommand,
   type AuditBatchResult,
   type AuditOverlaps,
+  type KinshipAddRemoveConflict,
   type OverlapBlockingCounts,
   type PersonDiffField,
   type PersonSlugCollision,

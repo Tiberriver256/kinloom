@@ -52,6 +52,7 @@ export interface IntegrateBatchTotals {
   removedSources: number;
   removedEvents: number;
   removedMedia: number;
+  removedKinship: number;
   inlineCitations: number;
   stagedScans: number;
 }
@@ -108,6 +109,7 @@ function createEmptyTotals(): IntegrateBatchTotals {
     removedSources: 0,
     removedEvents: 0,
     removedMedia: 0,
+    removedKinship: 0,
     inlineCitations: 0,
     stagedScans: 0,
   };
@@ -129,6 +131,7 @@ function aggregateTotals(results: readonly IntegrateBatchItemResult[]): Integrat
     totals.removedSources += item.removedSourceIds.length;
     totals.removedEvents += item.removedEventIds.length;
     totals.removedMedia += item.removedMediaIds.length;
+    totals.removedKinship += item.removedKinshipCount;
     totals.inlineCitations += item.inlineCitationCount;
     totals.stagedScans += item.stagedScans.length;
   }
@@ -155,7 +158,8 @@ export function hasUnintegratedEffect(result: IntegrateCommandResult): boolean {
   if (
     result.removedSourceIds.length > 0 ||
     result.removedEventIds.length > 0 ||
-    result.removedMediaIds.length > 0
+    result.removedMediaIds.length > 0 ||
+    result.removedKinshipCount > 0
   ) {
     return true;
   }
@@ -271,6 +275,15 @@ export function formatBlockingOverlapError(analysis: StagedOverlapAnalysis): str
     );
     details.push(
       `liveMediaFileCollisions=${blocking.liveMediaFileCollisions}: ${items.join('; ')}`
+    );
+  }
+  if (blocking.kinshipAddRemoveConflicts > 0) {
+    const items = overlaps.kinshipAddRemoveConflicts.map(
+      (row) =>
+        `${row.from}->${row.to}:${row.relation} (added=${row.addedBy.join(',')}, removed=${row.removedBy.join(',')})`
+    );
+    details.push(
+      `kinshipAddRemoveConflicts=${blocking.kinshipAddRemoveConflicts}: ${items.join('; ')}`
     );
   }
 
@@ -409,6 +422,7 @@ export function formatIntegrateBatchTextReport(
         `places=+${item.counts.places.added}/~${item.counts.places.updated}, ` +
         `sources=+${item.counts.sources.added}/~${item.counts.sources.updated}${item.removedSourceIds.length > 0 ? `/-${item.removedSourceIds.length}` : ''}, ` +
         `media=+${item.counts.media.added}/~${item.counts.media.updated}${item.removedMediaIds.length > 0 ? `/-${item.removedMediaIds.length}` : ''}, ` +
+        `${item.counts.kinship.added > 0 || item.counts.kinship.updated > 0 || item.removedKinshipCount > 0 ? `kinship=+${item.counts.kinship.added}/~${item.counts.kinship.updated}${item.removedKinshipCount > 0 ? `/-${item.removedKinshipCount}` : ''}, ` : ''}` +
         `narratives=+${item.counts.narratives.added}/~${item.counts.narratives.updated}, ` +
         `scans=${item.stagedScans.length}`
     );
@@ -421,7 +435,7 @@ export function formatIntegrateBatchTextReport(
       `places=+${totals.places.added}/~${totals.places.updated}, ` +
       `sources=+${totals.sources.added}/~${totals.sources.updated}${totals.removedSources > 0 ? `/-${totals.removedSources}` : ''}, ` +
       `media=+${totals.media.added}/~${totals.media.updated}${totals.removedMedia > 0 ? `/-${totals.removedMedia}` : ''}, ` +
-      `kinship=+${totals.kinship.added}/~${totals.kinship.updated}, ` +
+      `kinship=+${totals.kinship.added}/~${totals.kinship.updated}${totals.removedKinship > 0 ? `/-${totals.removedKinship}` : ''}, ` +
       `narratives=+${totals.narratives.added}/~${totals.narratives.updated}, ` +
       `inlineCitations=${totals.inlineCitations}, scans=${totals.stagedScans}, ` +
       `written=${report.writtenYamlFiles.length}`

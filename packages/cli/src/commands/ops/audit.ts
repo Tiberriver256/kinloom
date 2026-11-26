@@ -13,9 +13,11 @@ import {
 import { CliValidationError } from '../../errors.js';
 import { parseMatchingYamlBlocks, splitTopLevelYamlList } from './context.js';
 import {
+  applyKinshipRemovals,
   parseValidDeathEdtf,
   runIntegrateCommand,
   type IntegrateCommandResult,
+  type RemoveKinshipEntry,
 } from './integrate.js';
 import {
   collectLiveMediaCollisions,
@@ -1400,6 +1402,27 @@ function toHygieneEvent(record: LooseRecord): RawEvent | null {
   };
 }
 
+function toHygieneRemoveKinship(record: LooseRecord): RemoveKinshipEntry | null {
+  const from = typeof record.from === 'string' ? record.from.trim() : '';
+  const to = typeof record.to === 'string' ? record.to.trim() : '';
+  const rawRelation = typeof record.relation === 'string' ? record.relation.trim() : '';
+  if (!from || !to || !isKinshipRelation(rawRelation)) {
+    return null;
+  }
+  const familyXref =
+    typeof record.family_xref === 'string' && record.family_xref.trim().length > 0
+      ? record.family_xref.trim()
+      : undefined;
+  const symmetric = typeof record.symmetric === 'boolean' ? record.symmetric : true;
+  return {
+    from,
+    to,
+    relation: rawRelation,
+    ...(familyXref !== undefined ? { family_xref: familyXref } : {}),
+    symmetric,
+  };
+}
+
 function toHygieneKinship(record: LooseRecord): KinshipEdge | null {
   const from = typeof record.from === 'string' ? record.from.trim() : '';
   const to = typeof record.to === 'string' ? record.to.trim() : '';
@@ -1528,9 +1551,23 @@ export function runAuditHygieneRegressionCheck(input: {
     }
   }
 
-  const postKinshipMap = new Map<string, KinshipEdge>(
-    preKinship.map((edge) => [`${edge.from}|${edge.to}|${edge.relation}`, structuredClone(edge)])
-  );
+  const removeKinshipEntries: RemoveKinshipEntry[] = [];
+  for (const rawEntry of Array.isArray(input.patch.remove_kinship)
+    ? input.patch.remove_kinship
+    : []) {
+    if (!isPlainRecord(rawEntry)) {
+      continue;
+    }
+    const entry = toHygieneRemoveKinship(rawEntry);
+    if (!entry) {
+      continue;
+    }
+    touchedPersonIds.add(entry.from);
+    touchedPersonIds.add(entry.to);
+    removeKinshipEntries.push(entry);
+  }
+
+  const stagedKinshipEdges: KinshipEdge[] = [];
   for (const rawEdge of Array.isArray(input.patch.kinship) ? input.patch.kinship : []) {
     if (!isPlainRecord(rawEdge)) {
       continue;
@@ -1541,6 +1578,21 @@ export function runAuditHygieneRegressionCheck(input: {
     }
     touchedPersonIds.add(edge.from);
     touchedPersonIds.add(edge.to);
+    stagedKinshipEdges.push(edge);
+  }
+
+  const { remaining: kinshipAfterRemovals } = applyKinshipRemovals(
+    preKinship,
+    removeKinshipEntries,
+    stagedKinshipEdges
+  );
+  const postKinshipMap = new Map<string, KinshipEdge>(
+    kinshipAfterRemovals.map((edge) => [
+      `${edge.from}|${edge.to}|${edge.relation}`,
+      structuredClone(edge),
+    ])
+  );
+  for (const edge of stagedKinshipEdges) {
     const key = `${edge.from}|${edge.to}|${edge.relation}`;
     const existing = postKinshipMap.get(key);
     postKinshipMap.set(key, {
