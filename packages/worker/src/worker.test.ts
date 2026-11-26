@@ -1145,6 +1145,42 @@ describe('createCloudflareWorker full HTTP lifecycle (Miniflare)', () => {
     }
   });
 
+  it('maps Cloudflare recipient rejections (E_RECIPIENT_PLAN_RESTRICTED) to 502 EMAIL_RECIPIENT_NOT_ALLOWED and logs the code', async () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const sender = new CloudflareEmailSender({
+        fromEmail: 'noreply@familyloom.org',
+        binding: {
+          async send() {
+            throw Object.assign(new Error('Recipient not allowed by plan'), {
+              code: 'E_RECIPIENT_PLAN_RESTRICTED',
+            });
+          },
+        },
+      });
+
+      await expect(
+        sender.sendMagicLink({
+          toEmail: 'alice.example@example.com',
+          siteTitle: 'Alder Archive',
+          magicLinkUrl: 'https://archive.example.test/api/auth/magic-link/verify?token=tok_abc',
+          expiresMinutes: 15,
+        })
+      ).rejects.toMatchObject({
+        status: 502,
+        code: 'EMAIL_RECIPIENT_NOT_ALLOWED',
+        message:
+          'This archive cannot send sign-in email to that address yet. Ask the archive owner for help.',
+      });
+
+      expect(String(errorSpy.mock.calls[0]?.[0] ?? '')).toBe(
+        '[kinloom/worker] SEND_EMAIL binding delivery failed (E_RECIPIENT_PLAN_RESTRICTED): Recipient not allowed by plan'
+      );
+    } finally {
+      errorSpy.mockRestore();
+    }
+  });
+
   it('delivers buildMagicLinkEmailMessage payloads through Miniflare native SEND_EMAIL binding', async () => {
     const payload = buildMagicLinkEmailMessage({
       fromEmail: 'noreply@familyloom.org',

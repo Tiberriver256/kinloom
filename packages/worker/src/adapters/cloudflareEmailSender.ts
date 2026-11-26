@@ -122,6 +122,22 @@ function formatDeliveryErrorDetail(error: unknown, magicLinkUrl: string): string
   return magicLinkUrl ? raw.split(magicLinkUrl).join('[redacted]') : raw;
 }
 
+// Cloudflare Email Service rejects these recipients before delivery. On the Workers Free plan,
+// E_RECIPIENT_PLAN_RESTRICTED means only verified destination addresses can receive mail.
+const RECIPIENT_REJECTION_CODES = new Set([
+  'E_RECIPIENT_PLAN_RESTRICTED',
+  'E_RECIPIENT_NOT_ALLOWED',
+  'E_RECIPIENT_SUPPRESSED',
+]);
+
+function readErrorCode(error: unknown): string | null {
+  if (typeof error !== 'object' || error === null || !('code' in error)) {
+    return null;
+  }
+  const code = (error as { code: unknown }).code;
+  return typeof code === 'string' && code ? code : null;
+}
+
 /**
  * Cloudflare SEND_EMAIL binding implementation of EmailSender.
  * Uses Cloudflare Email Service's native structured EmailMessageBuilder payload.
@@ -164,7 +180,17 @@ export class CloudflareEmailSender implements EmailSender {
         throw error;
       }
       const detail = formatDeliveryErrorDetail(error, params.magicLinkUrl);
-      console.error(`[kinloom/worker] SEND_EMAIL binding delivery failed: ${detail}`);
+      const code = readErrorCode(error);
+      console.error(
+        `[kinloom/worker] SEND_EMAIL binding delivery failed (${code ?? 'no code'}): ${detail}`
+      );
+      if (code && RECIPIENT_REJECTION_CODES.has(code)) {
+        throw new KinloomHttpError(
+          502,
+          'EMAIL_RECIPIENT_NOT_ALLOWED',
+          'This archive cannot send sign-in email to that address yet. Ask the archive owner for help.'
+        );
+      }
       throw new KinloomHttpError(
         502,
         'EMAIL_DELIVERY_FAILED',
