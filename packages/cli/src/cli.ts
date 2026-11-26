@@ -8,6 +8,7 @@ import {
   CONTEXT_HELP,
   DATES_HELP,
   INTEGRATE_HELP,
+  MIGRATE_HELP,
   PRONOUNCE_HELP,
   STATUS_HELP,
   SYNC_HELP,
@@ -72,6 +73,7 @@ Research & archive ops:
   verify             Run full-archive invariant checks over local data/*.yaml files
   status             Report archive totals and the deceased biography queue
   sync               Diff and sync local YAML + R2 media to a live Cloudflare archive
+  migrate            Idempotently inspect and apply pending Cloudflare D1 SQL migrations
   dates              Compute exact Gregorian weekdays, date diffs, and ages
   pronounce          Look up verified Wikimedia IPA/audio and audit pronunciation lexicons
   telemetry          Report local CLI latency, cache hit rate, and failure summary
@@ -177,6 +179,7 @@ Options:
   verify: VERIFY_HELP,
   status: STATUS_HELP,
   sync: SYNC_HELP,
+  migrate: MIGRATE_HELP,
   dates: DATES_HELP,
   pronounce: PRONOUNCE_HELP,
   telemetry: TELEMETRY_HELP,
@@ -1249,6 +1252,46 @@ export async function runCli(
         );
         writeRenderedOutput(io, result.rendered);
         return result.liveVerification && !result.liveVerification.ok ? EXIT_ERROR : EXIT_OK;
+      }
+
+      case 'migrate': {
+        const { values } = safeParseArgs({
+          args: rest,
+          allowPositionals: false,
+          options: {
+            repo: { type: 'string' },
+            remote: { type: 'boolean', default: false },
+            local: { type: 'boolean', default: false },
+            'dry-run': { type: 'boolean', default: false },
+            json: { type: 'boolean', default: false },
+          },
+        });
+        if (values.remote && values.local) {
+          throw new CliValidationError('Specify either `--remote` or `--local`, not both.');
+        }
+        const target = values.local ? 'local' : 'remote';
+        const [{ runMigrateCommand }, { measureCommand }] = await Promise.all([
+          import('./commands/ops/migrate.js'),
+          import('./commands/ops/telemetry.js'),
+        ]);
+        const result = await measureCommand(
+          {
+            subcmd: values['dry-run'] ? 'migrate --dry-run' : 'migrate',
+            extractResultMeta: (res) => ({
+              exitCode: res.ok ? EXIT_OK : EXIT_ERROR,
+              bytesOut: Buffer.byteLength(res.rendered, 'utf8'),
+            }),
+          },
+          () =>
+            runMigrateCommand({
+              repoDir: values.repo ?? cwd,
+              target,
+              dryRun: values['dry-run'],
+              json: values.json,
+            })
+        );
+        writeRenderedOutput(io, result.rendered);
+        return result.ok ? EXIT_OK : EXIT_ERROR;
       }
 
       case 'dates': {

@@ -209,6 +209,23 @@ export interface LineageSpotlight {
   readonly pivotName: string | null;
 }
 
+export interface TreeSearchCandidate {
+  readonly person: Person;
+  readonly lifespanLabel: string;
+  readonly branchId: string;
+  readonly branchLabel: string | null;
+  readonly genLabel: string | null;
+  readonly isCollapsed: boolean;
+  readonly isOutsideCurrentMode: boolean;
+  readonly isOutsideCurrentBranch: boolean;
+}
+
+export interface TreeFocusPlan {
+  readonly nextBranchFilter: string;
+  readonly nextMode: TreeLineageMode;
+  readonly expandUnionIds: readonly string[];
+}
+
 export interface BuildArchivalTreeInput {
   readonly people: readonly Person[];
   readonly kinship: readonly KinshipEdge[];
@@ -1219,7 +1236,7 @@ export function computeArchivalDiagramLayout(model: ArchivalTreeModel): Archival
           attachmentY = Math.max(attachmentY, priorHangingBottomY + 18);
         }
 
-        // Place dignified "Remembered Early" memorial strip below union hub
+        // Place concise "Died young" strip below union hub
         if (union.earlyLossChildIds.length > 0) {
           const chipW = 100;
           const chipGap = 8;
@@ -1600,4 +1617,229 @@ export function computeLineageSpotlight(params: {
     relationshipToPivot,
     pivotName,
   };
+}
+
+function normalizeSearchFold(value: string): string {
+  return value
+    .normalize('NFKD')
+    .replaceAll(/[\u0300-\u036F]/g, '')
+    .toLowerCase()
+    .trim();
+}
+
+export function isTreeSearchEligible(
+  person: Pick<Person, 'is_living' | 'full_name'>,
+  buildMode: 'public' | 'private' = 'public',
+): boolean {
+  const foldedName = person.full_name.trim().toLowerCase();
+  if (!foldedName || foldedName === 'living') {
+    return false;
+  }
+  if (isRedactedLivingPlaceholder(person)) {
+    return false;
+  }
+  if (person.is_living && buildMode !== 'private') {
+    return false;
+  }
+  return true;
+}
+
+export function isPersonVisibleOnCurrentSurface(
+  personId: string,
+  model: ArchivalTreeModel,
+): boolean {
+  if (!model.peopleById.has(personId)) {
+    return false;
+  }
+  if (model.earlyLossIds.has(personId)) {
+    return model.unions.some((u) => u.earlyLossChildIds.includes(personId));
+  }
+  for (const g of model.generations) {
+    if (g.personIds.includes(personId)) {
+      return true;
+    }
+  }
+  for (const u of model.unions) {
+    if (u.hangingChildIds.includes(personId)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+export function findCollapsedUnionForPerson(
+  personId: string,
+  model: ArchivalTreeModel,
+): TreeUnion | null {
+  return model.unions.find((u) => u.collapsedSiblingIds.includes(personId)) ?? null;
+}
+
+export function resolveTreeFocusPlan(params: {
+  readonly person: Person;
+  readonly model: ArchivalTreeModel;
+  readonly currentBranchFilter: string;
+  readonly defaultBranchId: string;
+  readonly currentMode: TreeLineageMode;
+}): TreeFocusPlan {
+  const { person, model, currentBranchFilter, defaultBranchId, currentMode } = params;
+  const personBranch = person.branch || defaultBranchId;
+  const needsBranchReset =
+    currentBranchFilter !== 'all' && personBranch !== currentBranchFilter;
+  const nextBranchFilter = needsBranchReset ? 'all' : currentBranchFilter;
+
+  const collapsedUnion = findCollapsedUnionForPerson(person.id, model);
+  if (!needsBranchReset && collapsedUnion) {
+    return {
+      nextBranchFilter,
+      nextMode: currentMode,
+      expandUnionIds: [collapsedUnion.id],
+    };
+  }
+
+  const alreadyVisible = !needsBranchReset && isPersonVisibleOnCurrentSurface(person.id, model);
+  if (alreadyVisible) {
+    return {
+      nextBranchFilter,
+      nextMode: currentMode,
+      expandUnionIds: [],
+    };
+  }
+
+  const needsFullMode = currentMode === 'spine' && !isDirectSpinePerson(person);
+  return {
+    nextBranchFilter,
+    nextMode: needsFullMode ? 'full' : currentMode,
+    expandUnionIds: collapsedUnion ? [collapsedUnion.id] : [],
+  };
+}
+
+export function searchTreePeople(params: {
+  readonly query: string;
+  readonly people: readonly Person[];
+  readonly buildMode: 'public' | 'private';
+  readonly model: ArchivalTreeModel;
+  readonly branchFilter: string;
+  readonly defaultBranchId: string;
+  readonly branchLabelsById: ReadonlyMap<string, string>;
+  readonly limit?: number;
+}): TreeSearchCandidate[] {
+  const {
+    query,
+    people,
+    buildMode,
+    model,
+    branchFilter,
+    defaultBranchId,
+    branchLabelsById,
+    limit = 10,
+  } = params;
+
+  const normalizedQuery = normalizeSearchFold(query);
+  const queryTokens = normalizedQuery.length > 0 ? normalizedQuery.split(/\s+/).filter(Boolean) : [];
+
+  const collapsedIds = new Set<string>();
+  for (const union of model.unions) {
+    for (const cid of union.collapsedSiblingIds) {
+      collapsedIds.add(cid);
+    }
+  }
+
+  const scored: { candidate: TreeSearchCandidate; score: number }[] = [];
+
+  for (const person of people) {
+    if (!isTreeSearchEligible(person, buildMode)) {
+      continue;
+    }
+
+    const personBranch = person.branch || defaultBranchId;
+    const isOutsideCurrentBranch =
+      branchFilter !== 'all' && personBranch !== branchFilter;
+    const isCollapsed = collapsedIds.has(person.id);
+    const inCurrentModel = model.peopleById.has(person.id);
+    const isOutsideCurrentMode =
+      !isOutsideCurrentBranch &&
+      inCurrentModel &&
+      !isCollapsed &&
+      !isPersonVisibleOnCurrentSurface(person.id, model);
+
+    const foldedFull = normalizeSearchFold(person.full_name);
+    const foldedGiven = normalizeSearchFold(person.given_name);
+    const foldedSurname = normalizeSearchFold(person.surname);
+    const foldedAlts = person.alt_names.map(normalizeSearchFold);
+    const yearStr = [
+      person.birth_year !== null ? String(person.birth_year) : '',
+      person.death_year !== null ? String(person.death_year) : '',
+    ]
+      .filter(Boolean)
+      .join(' ');
+    const haystack = [foldedFull, ...foldedAlts, yearStr].filter(Boolean).join(' ');
+
+    let score = 0;
+    if (queryTokens.length === 0) {
+      if (person.id === model.pivotPersonId) {
+        score += 120;
+      } else if (person.lineage_group === 'pivot_ancestor') {
+        score += 110;
+      } else if (model.directPersonIds.has(person.id)) {
+        score += 70;
+      } else {
+        score += 30;
+      }
+      score += Math.min(25, person.event_count);
+    } else {
+      if (!queryTokens.every((token) => haystack.includes(token))) {
+        continue;
+      }
+      if (foldedFull === normalizedQuery) {
+        score += 200;
+      } else if (foldedFull.startsWith(normalizedQuery)) {
+        score += 150;
+      } else if (
+        foldedGiven.startsWith(normalizedQuery) ||
+        foldedSurname.startsWith(normalizedQuery)
+      ) {
+        score += 125;
+      } else if (foldedFull.includes(normalizedQuery)) {
+        score += 100;
+      } else if (foldedAlts.some((alt) => alt.includes(normalizedQuery))) {
+        score += 80;
+      } else {
+        score += 60;
+      }
+      if (model.directPersonIds.has(person.id)) {
+        score += 10;
+      }
+    }
+
+    if (!isOutsideCurrentBranch) {
+      score += 12;
+    }
+    if (!isOutsideCurrentMode) {
+      score += 4;
+    }
+
+    const genIdx = model.genByPersonId.get(person.id);
+    scored.push({
+      score,
+      candidate: {
+        person,
+        lifespanLabel: formatCardLifespan(person),
+        branchId: personBranch,
+        branchLabel: branchLabelsById.get(personBranch) ?? null,
+        genLabel: genIdx !== undefined ? `G${genIdx + 1}` : null,
+        isCollapsed,
+        isOutsideCurrentMode,
+        isOutsideCurrentBranch,
+      },
+    });
+  }
+
+  scored.sort((a, b) => {
+    if (b.score !== a.score) {
+      return b.score - a.score;
+    }
+    return sortPeopleChronologically(a.candidate.person, b.candidate.person);
+  });
+
+  return scored.slice(0, limit).map((item) => item.candidate);
 }

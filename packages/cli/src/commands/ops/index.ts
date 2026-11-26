@@ -221,7 +221,26 @@ export {
   type YearsMonthsDays,
 } from './dates.js';
 
-export { PRONOUNCE_HELP } from './help.js';
+export { MIGRATE_HELP, PRONOUNCE_HELP } from './help.js';
+
+export {
+  discoverMigrations,
+  evaluateMigrationStatus,
+  formatMigrateReport,
+  parseMigrationSchemaRequirements,
+  resolveD1DatabaseBinding,
+  resolveMigrationsDir,
+  runMigrateCommand,
+  type D1DatabaseBinding,
+  type D1SchemaSnapshot,
+  type DiscoveredMigration,
+  type MigrateCommandOptions,
+  type MigrateCommandResult,
+  type MigrateTarget,
+  type MigrationColumnRequirement,
+  type MigrationSchemaRequirements,
+  type MigrationStatusEntry,
+} from './migrate.js';
 
 export {
   PRONOUNCE_SUPPORTED_LANGS,

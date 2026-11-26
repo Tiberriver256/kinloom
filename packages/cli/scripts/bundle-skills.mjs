@@ -83,8 +83,10 @@ export function bundleSkills(options = {}) {
 
   const skillsSrcRoot = path.join(repoRoot, 'skills');
   const assetsSrcRoot = path.join(cliPkgRoot, 'assets');
+  const migrationsSrcRoot = path.join(repoRoot, 'packages', 'worker', 'migrations');
   const skillsDestRoot = path.join(outDir, 'bundled-skills');
   const assetsDestRoot = path.join(outDir, 'assets');
+  const migrationsDestRoot = path.join(outDir, 'migrations');
 
   if (!fs.existsSync(skillsSrcRoot)) {
     throw new Error(`Skills source directory not found: ${skillsSrcRoot}`);
@@ -99,6 +101,7 @@ export function bundleSkills(options = {}) {
 
   const expectedSkillsPaths = new Set([skillsDestRoot]);
   const expectedAssetsPaths = new Set([assetsDestRoot]);
+  const expectedMigrationsPaths = new Set([migrationsDestRoot]);
 
   const bundledSkills = [];
   let copiedScripts = 0;
@@ -159,6 +162,23 @@ export function bundleSkills(options = {}) {
   }
   copiedAssets.sort();
 
+  const copiedMigrations = [];
+  if (fs.existsSync(migrationsSrcRoot)) {
+    fs.mkdirSync(migrationsDestRoot, { recursive: true });
+    for (const entry of fs.readdirSync(migrationsSrcRoot, { withFileTypes: true })) {
+      if (shouldSkipEntry(entry.name) || !entry.isFile() || !entry.name.endsWith('.sql')) {
+        continue;
+      }
+      const srcPath = path.join(migrationsSrcRoot, entry.name);
+      const destPath = path.join(migrationsDestRoot, entry.name);
+      copyFileAtomic(srcPath, destPath, false);
+      expectedMigrationsPaths.add(destPath);
+      copiedMigrations.push(entry.name);
+    }
+    copiedMigrations.sort();
+    pruneStaleEntries(migrationsDestRoot, expectedMigrationsPaths);
+  }
+
   pruneStaleEntries(skillsDestRoot, expectedSkillsPaths);
   pruneStaleEntries(assetsDestRoot, expectedAssetsPaths);
 
@@ -171,11 +191,13 @@ export function bundleSkills(options = {}) {
     outDir,
     skillsDestRoot,
     assetsDestRoot,
+    migrationsDestRoot,
     skillsCount: bundledSkills.length,
     bundledSkills,
     copiedScripts,
     copiedReferences,
     copiedAssets,
+    copiedMigrations,
   };
 }
 

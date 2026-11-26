@@ -61,6 +61,7 @@ const RollPersonCard: React.FC<RollPersonCardProps> = ({
     <button
       type="button"
       className={classes}
+      data-person-id={person.id}
       aria-label={`Inspect ${person.full_name}`}
       aria-pressed={isSelected}
       onClick={() => {
@@ -135,9 +136,10 @@ const UnionAttachments: React.FC<UnionAttachmentsProps> = ({
         <div
           className="tree-early-strip"
           role="group"
-          aria-label="Children remembered early"
+          aria-label="Children who died at age 5 or younger"
+          title="Children who died at age 5 or younger"
         >
-          <span className="tree-early-strip-heading">
+          <span className="tree-early-strip-heading" title="Children who died at age 5 or younger">
             <svg
               className="tree-early-sprig"
               viewBox="0 0 16 16"
@@ -154,7 +156,7 @@ const UnionAttachments: React.FC<UnionAttachmentsProps> = ({
                 strokeLinejoin="round"
               />
             </svg>
-            Remembered early ({earlyChildren.length})
+            Died young ({earlyChildren.length})
           </span>
           <div className="tree-early-chip-row">
             {earlyChildren.map((child) => {
@@ -165,6 +167,7 @@ const UnionAttachments: React.FC<UnionAttachmentsProps> = ({
                 <button
                   key={child.id}
                   type="button"
+                  data-person-id={child.id}
                   className={`tree-node-card tree-early-chip${isSelected ? ' is-selected' : ''}${isLit ? ' is-lit' : ''}${dimmed ? ' is-dimmed' : ''}`}
                   aria-label={`Inspect ${child.full_name}`}
                   aria-pressed={isSelected}

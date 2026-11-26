@@ -11,9 +11,12 @@ import {
   buildArchivalTreeModel,
   computeArchivalDiagramLayout,
   computeLineageSpotlight,
+  findCollapsedUnionForPerson,
   isRedactedLivingPlaceholder,
   resolveInitialTreePreferences,
   resolveSemanticZoomLevel,
+  resolveTreeFocusPlan,
+  searchTreePeople,
 } from '../lib/archivalTreeModel.js';
 import type { CanvasTransform, Point2D } from '../lib/treeGestures.js';
 import {
@@ -74,10 +77,15 @@ export const TreePage: React.FC = () => {
   );
   const [liveAnnouncement, setLiveAnnouncement] = useState<string>('');
   const [createPersonOpen, setCreatePersonOpen] = useState<boolean>(false);
+  const [searchQuery, setSearchQuery] = useState<string>('');
+  const [mobileSearchOpen, setMobileSearchOpen] = useState<boolean>(false);
+  const [focusRequestSeq, setFocusRequestSeq] = useState<number>(0);
 
   const containerRef = useRef<HTMLElement | null>(null);
   const stageRef = useRef<HTMLDivElement | null>(null);
   const appliedFocusSlugRef = useRef<string | null>(null);
+  const pendingFocusPersonIdRef = useRef<string | null>(null);
+  const lastFitKeyRef = useRef<string | null>(null);
   const semanticZoomRef = useRef<SemanticZoomLevel>(semanticZoom);
 
   const transformRef = useRef<CanvasTransform>(INITIAL_TRANSFORM);
@@ -141,6 +149,11 @@ export const TreePage: React.FC = () => {
     [siteConfig.branches, branchCounts],
   );
 
+  const branchLabelsById = useMemo(
+    () => new Map(siteConfig.branches.map((b) => [b.id, b.label])),
+    [siteConfig.branches],
+  );
+
   const directModeBranchIds = useMemo(
     () => siteConfig.branches.filter((b) => b.supportsDirectMode).map((b) => b.id),
     [siteConfig.branches],
@@ -201,6 +214,22 @@ export const TreePage: React.FC = () => {
         : null,
     [selectedPerson, model, bundle, placesById],
   );
+
+  const searchCandidates = useMemo(() => {
+    if (!bundle) {
+      return [];
+    }
+    return searchTreePeople({
+      query: searchQuery,
+      people: bundle.people,
+      buildMode: bundle.meta.build_mode,
+      model,
+      branchFilter,
+      defaultBranchId,
+      branchLabelsById,
+      limit: 10,
+    });
+  }, [bundle, searchQuery, model, branchFilter, defaultBranchId, branchLabelsById]);
 
   const syncSemanticZoom = useCallback((zoom: number): void => {
     const nextLevel = resolveSemanticZoomLevel(zoom);
@@ -513,58 +542,162 @@ export const TreePage: React.FC = () => {
     setLiveAnnouncement('Lineage focus cleared.');
   }, []);
 
-  // Handle ?focus=<slug> deep link and fit-to-viewport when layout/surface changes
+  const centerDiagramOnPerson = useCallback(
+    (personId: string, animate: boolean): boolean => {
+      let cx: number | null = null;
+      let cy: number | null = null;
+      const targetNode = diagramLayout.byId.get(personId);
+      if (targetNode) {
+        cx = targetNode.x + ARCHIVAL_NODE_W / 2;
+        cy = targetNode.y + ARCHIVAL_NODE_H / 2;
+      } else {
+        for (const strip of diagramLayout.earlyLossStrips) {
+          const chip = strip.chips.find((c) => c.person.id === personId);
+          if (chip) {
+            cx = chip.x + chip.width / 2;
+            cy = chip.y + chip.height / 2;
+            break;
+          }
+        }
+      }
+      if (cx === null || cy === null) {
+        return false;
+      }
+      const el = containerRef.current;
+      const vw = el?.clientWidth || (typeof window !== 'undefined' ? window.innerWidth : 1200);
+      const vh = el?.clientHeight || (typeof window !== 'undefined' ? window.innerHeight : 760);
+      const isCompact = vw < 768;
+      const targetZoom = isCompact
+        ? 0.88
+        : Number(Math.max(0.92, Math.min(1.05, transformRef.current.zoom)).toFixed(2));
+      const focalX = isCompact ? vw / 2 : Math.max(vw * 0.36, (vw - 320) / 2);
+      const focalY = isCompact ? vh * 0.36 : vh * 0.46;
+      const targetTransform: CanvasTransform = {
+        zoom: targetZoom,
+        pan: {
+          x: Math.round(focalX - cx * targetZoom),
+          y: Math.round(focalY - cy * targetZoom),
+        },
+      };
+      if (animate) {
+        animateToTransform(targetTransform, 240);
+      } else {
+        applyTransformNow(clampTransform(targetTransform));
+      }
+      return true;
+    },
+    [animateToTransform, applyTransformNow, clampTransform, diagramLayout.byId, diagramLayout.earlyLossStrips],
+  );
+
+  const scrollRollToPerson = useCallback((personId: string): boolean => {
+    const root = containerRef.current;
+    if (!root) {
+      return false;
+    }
+    const buttons = root.querySelectorAll<HTMLElement>('[data-person-id]');
+    let target: HTMLElement | null = null;
+    for (const el of buttons) {
+      if (el.dataset.personId === personId) {
+        target = el;
+        break;
+      }
+    }
+    if (!target) {
+      return false;
+    }
+    const prefersReduced =
+      typeof window !== 'undefined' &&
+      typeof window.matchMedia === 'function' &&
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (typeof target.scrollIntoView === 'function') {
+      target.scrollIntoView({
+        behavior: prefersReduced ? 'auto' : 'smooth',
+        block: 'center',
+      });
+    }
+    return true;
+  }, []);
+
+  const handleFocusAndCenterPerson = useCallback(
+    (person: Person): void => {
+      const plan = resolveTreeFocusPlan({
+        person,
+        model,
+        currentBranchFilter: branchFilter,
+        defaultBranchId,
+        currentMode: model.effectiveMode,
+      });
+      if (plan.nextBranchFilter !== branchFilter) {
+        setBranchFilter(plan.nextBranchFilter);
+      }
+      if (plan.nextMode !== mode) {
+        setMode(plan.nextMode);
+      }
+      if (plan.expandUnionIds.length > 0) {
+        setExpandedUnionIds((prev) => new Set([...prev, ...plan.expandUnionIds]));
+      }
+      pendingFocusPersonIdRef.current = person.id;
+      setSelectedPersonId(person.id);
+      setFocusRequestSeq((seq) => seq + 1);
+      setLiveAnnouncement(`Focused ${person.full_name} and centered them in the tree.`);
+    },
+    [branchFilter, defaultBranchId, mode, model],
+  );
+
+  // Handle ?focus=<slug> deep link, search-to-focus centering, and fit-to-viewport when layout/surface changes
   useLayoutEffect(() => {
     if (!bundle) {
       return;
     }
     const focusSlug = searchParams.get('focus');
     if (focusSlug && appliedFocusSlugRef.current !== focusSlug) {
-      const targetPerson = model.visiblePeople.find((p) => p.slug === focusSlug);
+      const targetPerson = bundle.people.find(
+        (p) => p.slug === focusSlug && !isRedactedLivingPlaceholder(p),
+      );
       if (targetPerson) {
         appliedFocusSlugRef.current = focusSlug;
-        const containingUnion = model.unions.find((u) =>
-          u.collapsedSiblingIds.includes(targetPerson.id),
-        );
-        if (containingUnion) {
-          setExpandedUnionIds((prev) => new Set([...prev, containingUnion.id]));
-        }
-        setSelectedPersonId(targetPerson.id);
-
-        if (surface === 'diagram') {
-          const targetNode = diagramLayout.byId.get(targetPerson.id);
-          if (targetNode) {
-            const el = containerRef.current;
-            const vw = el ? el.clientWidth : 1200;
-            const vh = el ? el.clientHeight : 760;
-            const nextZoom = 0.9;
-            const cx = targetNode.x + ARCHIVAL_NODE_W / 2;
-            const cy = targetNode.y + ARCHIVAL_NODE_H / 2;
-            applyTransformNow({
-              zoom: nextZoom,
-              pan: {
-                x: Math.round(vw / 2 - cx * nextZoom),
-                y: Math.round(vh / 2 - cy * nextZoom),
-              },
-            });
-            return;
-          }
-        }
+        handleFocusAndCenterPerson(targetPerson);
+        return;
       }
     }
 
-    if (surface === 'diagram' && diagramLayout.nodes.length > 0) {
+    const fitKey = `${branchFilter}|${model.effectiveMode}|${surface}`;
+    const pendingId = pendingFocusPersonIdRef.current;
+    if (pendingId) {
+      const collapsedUnion = findCollapsedUnionForPerson(pendingId, model);
+      if (collapsedUnion && !expandedUnionIds.has(collapsedUnion.id)) {
+        setExpandedUnionIds((prev) => new Set([...prev, collapsedUnion.id]));
+        return;
+      }
+      const centered =
+        surface === 'diagram'
+          ? centerDiagramOnPerson(pendingId, lastFitKeyRef.current === fitKey)
+          : scrollRollToPerson(pendingId);
+      if (centered) {
+        pendingFocusPersonIdRef.current = null;
+        lastFitKeyRef.current = fitKey;
+        return;
+      }
+    }
+
+    if (surface === 'diagram' && diagramLayout.nodes.length > 0 && lastFitKeyRef.current !== fitKey) {
+      lastFitKeyRef.current = fitKey;
       fitToViewport();
+    } else if (surface === 'roll') {
+      lastFitKeyRef.current = fitKey;
     }
   }, [
     bundle,
     searchParams,
-    model.visiblePeople,
-    model.unions,
+    branchFilter,
+    model,
     surface,
-    diagramLayout.byId,
+    expandedUnionIds,
+    focusRequestSeq,
     diagramLayout.nodes.length,
-    applyTransformNow,
+    centerDiagramOnPerson,
+    scrollRollToPerson,
+    handleFocusAndCenterPerson,
     fitToViewport,
   ]);
 
@@ -619,7 +752,7 @@ export const TreePage: React.FC = () => {
       if (
         e.target instanceof Element &&
         e.target.closest(
-          'button, a, select, .tree-toolbar, .tree-popover, .tree-controls, .tree-diagram-sibling-btn',
+          'button, a, select, input, .tree-toolbar, .tree-toolbar-shell, .tree-search-popover, .tree-popover, .tree-controls, .tree-diagram-sibling-btn',
         )
       ) {
         return;
@@ -891,7 +1024,7 @@ export const TreePage: React.FC = () => {
           if (
             e.target instanceof Element &&
             e.target.closest(
-              'button, a, select, .tree-toolbar, .tree-popover, .tree-controls, .tree-node-card, .tree-diagram-sibling-btn',
+              'button, a, select, input, .tree-toolbar, .tree-toolbar-shell, .tree-search-popover, .tree-popover, .tree-controls, .tree-node-card, .tree-diagram-sibling-btn',
             )
           ) {
             return;
@@ -911,6 +1044,7 @@ export const TreePage: React.FC = () => {
             setBranchFilter(nextBranch);
             setSelectedPersonId(null);
             setExpandedUnionIds(new Set());
+            setMobileSearchOpen(false);
           }}
           showDirectToggle={showDirectToggle}
           mode={model.effectiveMode}
@@ -918,11 +1052,19 @@ export const TreePage: React.FC = () => {
           onModeChange={(nextMode) => {
             setMode(nextMode);
             setExpandedUnionIds(new Set());
+            setMobileSearchOpen(false);
           }}
           surface={surface}
           onSurfaceChange={(nextSurface) => {
             setSurface(nextSurface);
+            setMobileSearchOpen(false);
           }}
+          searchQuery={searchQuery}
+          onSearchQueryChange={setSearchQuery}
+          searchCandidates={searchCandidates}
+          onSelectSearchPerson={handleFocusAndCenterPerson}
+          mobileSearchOpen={mobileSearchOpen}
+          onMobileSearchOpenChange={setMobileSearchOpen}
           canEdit={capabilities.canEdit}
           onAddPerson={() => {
             setCreatePersonOpen(true);
@@ -1042,9 +1184,7 @@ export const TreePage: React.FC = () => {
             placesById={placesById}
             thumbUrl={personThumbMap.get(selectedPerson.id) || selectedPerson.portrait_url || null}
             baseUrl={baseUrl}
-            onSelectPerson={(person) => {
-              handleSelectPerson(person, true);
-            }}
+            onSelectPerson={handleFocusAndCenterPerson}
             onClearFocus={handleClearFocus}
           />
         )}

@@ -1933,17 +1933,30 @@ html.tree-viewport-lock body {
   opacity: 1;
 }
 
-.tree-toolbar {
+.tree-toolbar-shell {
   position: absolute;
   top: 12px;
   left: 16px;
-  z-index: 20;
+  z-index: 26;
+  max-width: calc(100% - 32px);
+}
+
+.tree-page-roll .tree-toolbar-shell {
+  position: sticky;
+  top: calc(var(--topbar-height) + 8px);
+  left: auto;
+  margin: 10px auto 0;
+  width: fit-content;
+  max-width: calc(100% - 20px);
+}
+
+.tree-toolbar {
+  position: relative;
   display: flex;
   flex-wrap: nowrap;
   align-items: center;
   gap: 8px;
-  max-width: calc(100% - 32px);
-  overflow-x: auto;
+  overflow: visible;
   scrollbar-width: none;
   background: rgba(252, 249, 242, 0.96);
   border: 1px solid var(--border-control);
@@ -1956,13 +1969,195 @@ html.tree-viewport-lock body {
   display: none;
 }
 
-.tree-page-roll .tree-toolbar {
-  position: sticky;
-  top: calc(var(--topbar-height) + 8px);
-  left: auto;
-  margin: 10px auto 0;
-  width: fit-content;
-  max-width: calc(100% - 20px);
+.tree-search-desktop {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.tree-search-icon {
+  position: absolute;
+  left: 10px;
+  color: var(--text-secondary);
+  display: inline-flex;
+  align-items: center;
+  pointer-events: none;
+}
+
+.tree-search-input {
+  width: 176px;
+  min-height: 30px;
+  padding: 4px 26px 4px 30px;
+  border-radius: 999px;
+  border: 1px solid var(--border-control);
+  background: var(--surface-card);
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  line-height: 1.25;
+  transition: border-color 0.14s ease, width 0.16s ease;
+}
+
+.tree-search-input::-webkit-search-cancel-button {
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.tree-search-input::placeholder {
+  color: var(--text-secondary);
+}
+
+.tree-search-input:focus {
+  width: 212px;
+  border-color: var(--accent-primary);
+}
+
+.tree-search-input:focus-visible {
+  outline: 2px solid var(--action-focus);
+  outline-offset: 2px;
+}
+
+.tree-search-clear {
+  position: absolute;
+  right: 4px;
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 0.72rem;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.tree-search-clear:hover {
+  color: var(--surface-header);
+  background: var(--surface-linen);
+}
+
+.tree-search-toggle-btn {
+  display: none;
+  flex-shrink: 0;
+  border-radius: 999px;
+  border: 1px solid var(--border-control);
+  background: var(--surface-card);
+  color: var(--surface-header);
+  padding: 0;
+  align-items: center;
+  justify-content: center;
+}
+
+.tree-search-toggle-btn.active {
+  background: var(--surface-header);
+  color: var(--text-inverse);
+  border-color: var(--surface-header);
+}
+
+.tree-search-popover {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  z-index: 42;
+  width: 300px;
+  max-width: calc(100vw - 32px);
+  background: var(--surface-card);
+  border: 1px solid var(--border-control);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-active);
+  overflow: hidden;
+}
+
+.tree-search-listbox {
+  max-height: min(320px, 50dvh);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  display: flex;
+  flex-direction: column;
+  padding: 4px;
+}
+
+.tree-search-option {
+  width: 100%;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-primary);
+  text-align: left;
+  padding: 8px 10px;
+  min-height: 40px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.tree-search-option.is-active,
+.tree-search-option:hover {
+  background: var(--surface-linen);
+}
+
+.tree-search-option:focus-visible {
+  outline: 2px solid var(--action-focus);
+  outline-offset: -2px;
+}
+
+.tree-search-option-name {
+  font-family: var(--font-serif);
+  font-size: 0.92rem;
+  font-weight: 700;
+  color: var(--surface-header);
+  line-height: 1.2;
+}
+
+.tree-search-option-meta {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  color: var(--text-secondary);
+  line-height: 1.2;
+}
+
+.tree-search-empty {
+  padding: 12px 12px;
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+}
+
+.tree-search-mobile-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px;
+  border-bottom: 1px solid var(--border-decorative);
+  background: var(--surface-canvas);
+}
+
+.tree-search-mobile-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 44px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--border-control);
+  background: var(--surface-card);
+  color: var(--text-primary);
+  font-family: var(--font-serif);
+  font-size: 1rem;
+}
+
+.tree-search-mobile-close {
+  flex-shrink: 0;
+  min-height: 44px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid var(--border-control);
+  background: var(--surface-card);
+  color: var(--surface-header);
+  font-weight: 600;
 }
 
 .tree-segmented {
@@ -1998,13 +2193,14 @@ html.tree-viewport-lock body {
   font-weight: 600;
 }
 
-.tree-toolbar .tree-branch-select {
+.tree-toolbar select.pill-btn.tree-branch-select {
   border-radius: 999px;
   padding: 4px 10px;
   font-size: 0.78rem;
   border: 1px solid var(--border-control);
   background: var(--surface-card);
   color: var(--text-primary);
+  max-width: 196px;
   flex-shrink: 0;
 }
 
@@ -2268,16 +2464,32 @@ html.tree-viewport-lock body {
   gap: 8px;
 }
 
-.tree-focus-timeline-link {
+.tree-focus-timeline-link,
+.tree-focus-timeline-link.pill-btn.active {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   text-decoration: none;
   min-height: 36px;
+  padding: 0 14px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--surface-header);
+  background: var(--surface-header);
+  color: var(--text-inverse);
+  font-weight: 600;
+}
+
+.tree-focus-timeline-link:hover,
+.tree-focus-timeline-link.pill-btn.active:hover {
+  background: var(--accent-primary);
+  border-color: var(--accent-primary);
+  color: var(--text-inverse);
 }
 
 .tree-focus-clear-btn {
   min-height: 36px;
+  padding: 0 12px;
+  border-radius: var(--radius-sm);
   border: 1px solid var(--border-control);
   background: var(--surface-canvas);
   color: var(--text-primary);
@@ -2459,6 +2671,8 @@ html.tree-viewport-lock body {
   min-width: 0;
   max-width: 320px;
   min-height: 54px;
+  scroll-margin-top: 148px;
+  scroll-margin-bottom: 240px;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -5295,28 +5509,57 @@ dialog.global-search-backdrop {
     flex-direction: column;
   }
 
-  .tree-branch-select {
-    max-width: 170px;
+  .tree-toolbar select.pill-btn.tree-branch-select {
+    max-width: 146px;
     min-height: 44px;
     flex: 0 0 auto;
   }
 
   /* Responsive 2D Tree & Portrait Roll Controls on Mobile */
-  .tree-toolbar {
+  .tree-toolbar-shell {
     top: 8px;
     left: 10px;
     right: 10px;
     max-width: calc(100% - 20px);
-    padding: 4px 8px;
-    gap: 6px;
   }
 
-  .tree-page-roll .tree-toolbar {
+  .tree-page-roll .tree-toolbar-shell {
     top: calc(var(--topbar-height) + 6px);
     left: auto;
     right: auto;
     width: calc(100% - 20px);
+  }
+
+  .tree-toolbar {
+    overflow-x: auto;
+    padding: 4px 6px;
+    gap: 6px;
     justify-content: flex-start;
+  }
+
+  .tree-search-desktop {
+    display: none;
+  }
+
+  .tree-search-toggle-btn {
+    display: inline-flex;
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  .tree-search-popover.is-mobile-open {
+    position: fixed;
+    top: calc(var(--topbar-height) + 64px);
+    left: 10px;
+    right: 10px;
+    width: auto;
+    max-width: none;
+    z-index: 45;
+  }
+
+  .tree-search-option {
+    min-height: 44px;
+    padding: 9px 12px;
   }
 
   .tree-segmented .tree-seg-btn,
@@ -5326,8 +5569,38 @@ dialog.global-search-backdrop {
   .tree-gen-jump-chip,
   .tree-focus-close-btn,
   .tree-focus-timeline-link,
+  .tree-focus-timeline-link.pill-btn.active,
   .tree-focus-clear-btn {
     min-height: 44px;
+  }
+
+  .tree-gen-jump-chip,
+  .tree-focus-close-btn {
+    min-width: 44px;
+  }
+
+  .tree-focus-breadcrumb {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+    white-space: nowrap;
+    padding: 2px 8px;
+  }
+
+  .tree-focus-breadcrumb::-webkit-scrollbar {
+    display: none;
+  }
+
+  .tree-focus-crumb-btn {
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+    padding: 0 4px;
+    flex-shrink: 0;
+  }
+
+  .tree-focus-crumb-current {
+    flex-shrink: 0;
   }
 
   .tree-roll-viewport {
@@ -5614,6 +5887,7 @@ dialog.global-search-backdrop {
   .print-hide,
   .global-search-backdrop,
   .source-reader-backdrop,
+  .tree-toolbar-shell,
   .tree-toolbar,
   .tree-controls,
   .tree-gen-jump-bar,

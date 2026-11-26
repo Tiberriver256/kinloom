@@ -437,38 +437,39 @@ const EarlyLossStripLayer: React.FC<{
         strip.chips.some((chip) => highlightedIds.has(chip.person.id))),
   );
   return (
-    <g
-      className={`tree-diagram-early-strip${anyLit ? ' is-lit' : ''}`}
-      data-union-id={strip.unionId}
-    >
-      <path
-        className={`tree-edge${anyLit ? ' is-lit' : ''}`}
-        d={`M ${strip.stemFromX} ${strip.stemFromY} V ${strip.y}`}
-        fill="none"
-        stroke={anyLit ? 'var(--accent-primary)' : 'var(--border-control)'}
-        strokeWidth="1.2"
-        strokeDasharray="2 2"
-      />
-      <rect
-        x={strip.x}
-        y={strip.y}
-        width={strip.width}
-        height={strip.height}
-        rx={4}
-        fill="var(--surface-linen)"
-        stroke="var(--border-decorative)"
-        strokeWidth="1"
-      />
-      <text
-        x={strip.x + 12}
-        y={strip.y + 13}
-        fontSize="8.5"
-        fontWeight="600"
-        fontFamily="var(--font-mono)"
-        fill="var(--text-secondary)"
+      <g
+        className={`tree-diagram-early-strip${anyLit ? ' is-lit' : ''}`}
+        data-union-id={strip.unionId}
       >
-        ✿ Remembered early ({strip.chips.length})
-      </text>
+        <title>Children who died at age 5 or younger</title>
+        <path
+          className={`tree-edge${anyLit ? ' is-lit' : ''}`}
+          d={`M ${strip.stemFromX} ${strip.stemFromY} V ${strip.y}`}
+          fill="none"
+          stroke={anyLit ? 'var(--accent-primary)' : 'var(--border-control)'}
+          strokeWidth="1.2"
+          strokeDasharray="2 2"
+        />
+        <rect
+          x={strip.x}
+          y={strip.y}
+          width={strip.width}
+          height={strip.height}
+          rx={4}
+          fill="var(--surface-linen)"
+          stroke="var(--border-decorative)"
+          strokeWidth="1"
+        />
+        <text
+          x={strip.x + 12}
+          y={strip.y + 13}
+          fontSize="8.5"
+          fontWeight="600"
+          fontFamily="var(--font-mono)"
+          fill="var(--text-secondary)"
+        >
+          Died young ({strip.chips.length})
+        </text>
       {strip.chips.map((chip) => {
         const isSelected = selectedPersonId === chip.person.id;
         const isLit = Boolean(highlightedIds?.has(chip.person.id));

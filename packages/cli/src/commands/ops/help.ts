@@ -221,3 +221,16 @@ Options:
   --repo <dir>       Archive repository root for \`audit\` (default: current directory)
   --json             Emit structured JSON output
   -h, --help         Show this help message`;
+
+export const MIGRATE_HELP = `Usage: kinloom migrate [options]
+
+Inspect a Kinloom Cloudflare D1 database and idempotently apply only pending SQL migrations.
+Checks sqlite_master and PRAGMA table_info(...) so existing databases created before d1_migrations tracking existed never fail on already-present tables or columns.
+
+Options:
+  --repo <dir>       Archive repository root containing wrangler.jsonc or wrangler.toml (default: current directory)
+  --remote           Target the remote Cloudflare D1 database (default)
+  --local            Target the local Wrangler D1 database
+  --dry-run          Inspect schema and report applied vs pending migrations without executing any writes
+  --json             Emit structured JSON status and verification report
+  -h, --help         Show this help message`;

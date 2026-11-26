@@ -70,8 +70,11 @@ export const TreeFocusDrawer: React.FC<TreeFocusDrawerProps> = ({
       <div className="tree-focus-header">
         <div className="tree-focus-eyebrow-row">
           {gen !== undefined && <span className="tree-focus-gen-tag">G{gen + 1}</span>}
-          <span className="tree-focus-role-label">
-            {isEarlyLoss ? 'Remembered Early' : formatLineageGroupLabel(person.lineage_group)}
+          <span
+            className="tree-focus-role-label"
+            title={isEarlyLoss ? 'Children who died at age 5 or younger' : undefined}
+          >
+            {isEarlyLoss ? 'Died young' : formatLineageGroupLabel(person.lineage_group)}
           </span>
           {person.is_living && <span className="tree-focus-living-pill">Living</span>}
         </div>

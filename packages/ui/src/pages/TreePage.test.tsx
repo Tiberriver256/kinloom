@@ -306,8 +306,11 @@ describe('TreePage', () => {
     expect(container.textContent).toContain('Rowan Hale');
     expect(container.textContent).toContain('b. 1995 · Living');
 
-    // Early loss child renders as compact memorial chip inside "Remembered early" strip
-    expect(container.textContent).toContain('Remembered early (1)');
+    // Early loss child renders as compact chip inside "Died young" strip with accessible tooltip
+    expect(container.textContent).toContain('Died young (1)');
+    const earlyStrip = container.querySelector('.tree-early-strip');
+    expect(earlyStrip?.getAttribute('aria-label')).toBe('Children who died at age 5 or younger');
+    expect(earlyStrip?.getAttribute('title')).toBe('Children who died at age 5 or younger');
     const infantChip = container.querySelector<HTMLButtonElement>(
       'button.tree-early-chip[aria-label="Inspect Peter Hale"]',
     );
@@ -326,13 +329,13 @@ describe('TreePage', () => {
     const hangingItems = container.querySelectorAll('.tree-hanging-grid .tree-roll-card');
     expect(hangingItems).toHaveLength(4);
 
-    // Tapping an early-loss chip opens focus drawer with biography link and Remembered Early label
+    // Tapping an early-loss chip opens focus drawer with biography link and Died young label
     act(() => {
       infantChip?.click();
     });
     const drawer = container.querySelector('.tree-popover.tree-focus-drawer');
     expect(drawer).not.toBeNull();
-    expect(drawer?.textContent).toContain('Remembered Early');
+    expect(drawer?.textContent).toContain('Died young');
     expect(drawer?.textContent).toContain('Peter Hale');
     expect(drawer?.querySelector('a[href="/person/peter-hale"]')?.textContent).toContain(
       'Open Timeline →',
@@ -432,5 +435,118 @@ describe('TreePage', () => {
     });
     expect(container.textContent).toContain('Owen Vance');
     expect(container.textContent).not.toContain('Thomas Hale');
+  });
+
+  it('finds a collapsed sibling via desktop Find person combobox, auto-expands their sibling tray, spotlights lineage, and excludes living names', () => {
+    const { container } = mountTreeAtWidth(1280);
+
+    const searchInput = container.querySelector<HTMLInputElement>(
+      'input.tree-search-input[role="combobox"]',
+    );
+    expect(searchInput).not.toBeNull();
+
+    // Living names and redacted Living placeholders never appear in public search results
+    const setInputValue = (input: HTMLInputElement, nextVal: string): void => {
+      const setter = Object.getOwnPropertyDescriptor(
+        window.HTMLInputElement.prototype,
+        'value',
+      )?.set;
+      setter?.call(input, nextVal);
+      input.dispatchEvent(new window.Event('input', { bubbles: true }));
+    };
+
+    act(() => {
+      searchInput?.focus();
+      if (searchInput) {
+        setInputValue(searchInput, 'Rowan');
+      }
+    });
+    expect(container.querySelectorAll('[role="option"]')).toHaveLength(0);
+    expect(container.querySelector('.tree-search-empty')?.textContent).toContain('No matching people');
+
+    act(() => {
+      if (searchInput) {
+        setInputValue(searchInput, 'Living');
+      }
+    });
+    expect(container.querySelectorAll('[role="option"]')).toHaveLength(0);
+
+    // Searching for collapsed sibling Martha Hale shows her in the listbox and auto-expands her tray on selection
+    expect(container.querySelector('.tree-hanging-rail')).toBeNull();
+    act(() => {
+      if (searchInput) {
+        setInputValue(searchInput, 'Martha');
+      }
+    });
+    const options = [...container.querySelectorAll<HTMLButtonElement>('[role="option"]')];
+    expect(options).toHaveLength(1);
+    expect(options[0]?.textContent).toContain('Martha Hale');
+    expect(options[0]?.textContent).toContain('in sibling tray');
+
+    act(() => {
+      options[0]?.click();
+    });
+
+    // Collapsed sibling tray expanded automatically, Martha Hale is focused & spotlighted
+    expect(container.querySelectorAll('.tree-hanging-rail')).toHaveLength(1);
+    expect(container.querySelector('.tree-focus-name')?.textContent).toBe('Martha Hale');
+    const svg = container.querySelector('svg[role="img"]');
+    expect(svg?.classList.contains('has-selection')).toBe(true);
+    const marthaNode = container.querySelector('.tree-node-card[aria-label="Inspect Martha Hale"]');
+    expect(marthaNode?.classList.contains('is-selected')).toBe(true);
+    expect(marthaNode?.classList.contains('is-lit')).toBe(true);
+  });
+
+  it('opens compact mobile search toggle on roll surface, auto-expands collapsed sibling, and scrolls them into view', () => {
+    const scrollCalls: Array<{ id: string; block?: string }> = [];
+    const origScrollIntoView = Element.prototype.scrollIntoView;
+    Element.prototype.scrollIntoView = function mockScroll(arg?: boolean | ScrollIntoViewOptions) {
+      const id = (this as HTMLElement).dataset?.personId ?? '';
+      const block = typeof arg === 'object' && arg ? arg.block : undefined;
+      scrollCalls.push({ id, block });
+    };
+
+    try {
+      const { container } = mountTreeAtWidth(390);
+      const toggleBtn = container.querySelector<HTMLButtonElement>(
+        'button.tree-search-toggle-btn[aria-label="Find person in tree"]',
+      );
+      expect(toggleBtn).not.toBeNull();
+      expect(toggleBtn?.getAttribute('aria-expanded')).toBe('false');
+
+      act(() => {
+        toggleBtn?.click();
+      });
+      expect(toggleBtn?.getAttribute('aria-expanded')).toBe('true');
+
+      const mobileInput = container.querySelector<HTMLInputElement>('input.tree-search-mobile-input');
+      expect(mobileInput).not.toBeNull();
+
+      const setter = Object.getOwnPropertyDescriptor(
+        window.HTMLInputElement.prototype,
+        'value',
+      )?.set;
+      act(() => {
+        if (mobileInput) {
+          setter?.call(mobileInput, 'Walter');
+          mobileInput.dispatchEvent(new window.Event('input', { bubbles: true }));
+        }
+      });
+
+      const walterOpt = [...container.querySelectorAll<HTMLButtonElement>('[role="option"]')].find(
+        (el) => el.textContent?.includes('Walter Hale'),
+      );
+      expect(walterOpt).not.toBeUndefined();
+
+      act(() => {
+        walterOpt?.click();
+      });
+
+      expect(container.querySelector('.tree-hanging-grid')).not.toBeNull();
+      expect(container.querySelector('.tree-focus-name')?.textContent).toBe('Walter Hale');
+      expect(scrollCalls.some((c) => c.id === 'p_sib_4' && c.block === 'center')).toBe(true);
+    } finally {
+      Element.prototype.scrollIntoView = origScrollIntoView;
+    }
   });
 });

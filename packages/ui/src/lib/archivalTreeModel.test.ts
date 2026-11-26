@@ -6,8 +6,11 @@ import {
   computeLineageSpotlight,
   formatCardLifespan,
   isEarlyChildhoodLoss,
+  isTreeSearchEligible,
   resolveInitialTreePreferences,
   resolveSemanticZoomLevel,
+  resolveTreeFocusPlan,
+  searchTreePeople,
 } from './archivalTreeModel.js';
 import { describe, expect, it } from 'vitest';
 
@@ -429,5 +432,94 @@ describe('archivalTreeModel', () => {
     expect(spotlight!.breadcrumb.map((p) => p.id)).toEqual(['p_thomas', 'p_arthur', 'p_henry']);
     expect(spotlight!.relationshipToPivot).toBe('Child of');
     expect(spotlight!.pivotName).toBe('Arthur Hale');
+  });
+
+  it('filters living people out of public search, ranks matches, and resolves focus plans for collapsed siblings', () => {
+    const { people, kinship } = buildSyntheticFamilyFixture();
+    const model = buildArchivalTreeModel({
+      people,
+      kinship,
+      branchFilter: 'hale_line',
+      defaultBranchId: 'hale_line',
+      mode: 'full',
+    });
+    const branchLabelsById = new Map([
+      ['hale_line', 'Hale Line'],
+      ['vance_line', 'Vance Line'],
+    ]);
+
+    // Public mode strictly excludes both redacted Living placeholders and any is_living record
+    expect(isTreeSearchEligible(people.find((p) => p.id === 'p_living_redacted')!, 'public')).toBe(false);
+    expect(isTreeSearchEligible(people.find((p) => p.id === 'p_living_named')!, 'public')).toBe(false);
+    expect(isTreeSearchEligible(people.find((p) => p.id === 'p_living_redacted')!, 'private')).toBe(false);
+    expect(isTreeSearchEligible(people.find((p) => p.id === 'p_living_named')!, 'private')).toBe(true);
+
+    const livingQueryPublic = searchTreePeople({
+      query: 'Rowan',
+      people,
+      buildMode: 'public',
+      model,
+      branchFilter: 'hale_line',
+      defaultBranchId: 'hale_line',
+      branchLabelsById,
+    });
+    expect(livingQueryPublic).toHaveLength(0);
+
+    const livingPlaceholderQuery = searchTreePeople({
+      query: 'Living',
+      people,
+      buildMode: 'private',
+      model,
+      branchFilter: 'hale_line',
+      defaultBranchId: 'hale_line',
+      branchLabelsById,
+    });
+    expect(livingPlaceholderQuery).toHaveLength(0);
+
+    // Collapsed sibling Martha Hale is discoverable and flagged as collapsed
+    const marthaResults = searchTreePeople({
+      query: 'Martha',
+      people,
+      buildMode: 'public',
+      model,
+      branchFilter: 'hale_line',
+      defaultBranchId: 'hale_line',
+      branchLabelsById,
+    });
+    expect(marthaResults).toHaveLength(1);
+    expect(marthaResults[0].person.id).toBe('p_sib_1');
+    expect(marthaResults[0].isCollapsed).toBe(true);
+
+    const marthaPlan = resolveTreeFocusPlan({
+      person: marthaResults[0].person,
+      model,
+      currentBranchFilter: 'hale_line',
+      defaultBranchId: 'hale_line',
+      currentMode: 'full',
+    });
+    expect(marthaPlan.expandUnionIds).toHaveLength(1);
+    expect(marthaPlan.nextBranchFilter).toBe('hale_line');
+    expect(marthaPlan.nextMode).toBe('full');
+
+    // Cross-branch match resets branch filter to 'all'
+    const vanceResults = searchTreePeople({
+      query: 'Owen Vance',
+      people,
+      buildMode: 'public',
+      model,
+      branchFilter: 'hale_line',
+      defaultBranchId: 'hale_line',
+      branchLabelsById,
+    });
+    expect(vanceResults).toHaveLength(1);
+    expect(vanceResults[0].isOutsideCurrentBranch).toBe(true);
+    const vancePlan = resolveTreeFocusPlan({
+      person: vanceResults[0].person,
+      model,
+      currentBranchFilter: 'hale_line',
+      defaultBranchId: 'hale_line',
+      currentMode: 'full',
+    });
+    expect(vancePlan.nextBranchFilter).toBe('all');
   });
 });
