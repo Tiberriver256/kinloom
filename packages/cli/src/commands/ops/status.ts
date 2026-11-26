@@ -36,11 +36,18 @@ export interface StatusTextDisplay {
   filter?: BiographyQueueStatus;
   sort?: StatusSortMode;
   endOfLine?: boolean;
+  missingBiography?: boolean;
 }
 
 export interface StatusCommandOptions extends StatusTextDisplay {
   repoDir?: string;
   json?: boolean;
+}
+
+export interface BiographyCoverageSummary {
+  complete: number;
+  missing: number;
+  totalDeceased: number;
 }
 
 export interface DeceasedQueueItem {
@@ -52,6 +59,8 @@ export interface DeceasedQueueItem {
   sources: number;
   media: number;
   has_biography: boolean;
+  hasBiography: boolean;
+  biographyId: string | null;
   has_staged_patch: boolean;
   status: BiographyQueueStatus;
 }
@@ -61,6 +70,7 @@ export interface StatusReport {
   sort: StatusSortMode;
   endOfLine: boolean;
   endOfLineCount: number;
+  missingBiography: boolean;
   people: { total: number; deceased: number; living: number };
   events: number;
   places: number;
@@ -68,7 +78,7 @@ export interface StatusReport {
   sources: number;
   media: number;
   narratives: number;
-  biographies: number;
+  biographies: BiographyCoverageSummary;
   queue: { done_live: number; staged: number; pending: number };
   deceased: DeceasedQueueItem[];
 }
@@ -217,14 +227,17 @@ function indexResearchCounts(
   return flattened;
 }
 
-function biographySubjectIds(narratives: readonly Narrative[]): Set<string> {
-  const subjects = new Set<string>();
+function indexBiographyByPersonId(narratives: readonly Narrative[]): Map<string, string> {
+  const byPerson = new Map<string, string>();
   for (const narrative of narratives) {
     if (narrative.kind === 'biography' && narrative.subject_person_id) {
-      subjects.add(narrative.subject_person_id);
+      const existing = byPerson.get(narrative.subject_person_id);
+      if (!existing || narrative.id.localeCompare(existing) < 0) {
+        byPerson.set(narrative.subject_person_id, narrative.id);
+      }
     }
   }
-  return subjects;
+  return byPerson;
 }
 
 export function indexEndOfLinePersonIds(kinship: readonly KinshipEdge[]): Set<string> {
@@ -272,7 +285,7 @@ export function buildDeceasedQueue(input: {
   const sort = parseStatusSort(input.sort);
   const endOfLineIds = input.endOfLine ? indexEndOfLinePersonIds(input.kinship ?? []) : null;
   const research = indexResearchCounts(input.events, input.media);
-  const biographies = biographySubjectIds(input.narratives);
+  const biographiesByPerson = indexBiographyByPersonId(input.narratives);
   const items: DeceasedQueueItem[] = [];
   for (const person of input.people) {
     if (resolveEffectiveLiving(person, input.privacy)) {
@@ -282,7 +295,8 @@ export function buildDeceasedQueue(input: {
       continue;
     }
     const counts = research.get(person.id) ?? { events: 0, sources: 0, media: 0 };
-    const hasBiography = biographies.has(person.id);
+    const biographyId = biographiesByPerson.get(person.id) ?? null;
+    const hasBiography = biographyId !== null;
     const hasStagedPatch = fs.existsSync(
       path.join(input.repoDir, 'research', 'people', person.id, 'patch.json')
     );
@@ -295,6 +309,8 @@ export function buildDeceasedQueue(input: {
       sources: counts.sources,
       media: counts.media,
       has_biography: hasBiography,
+      hasBiography,
+      biographyId,
       has_staged_patch: hasStagedPatch,
       status: queueStatus(hasBiography, hasStagedPatch),
     });
@@ -318,8 +334,16 @@ const STATUS_SORT_LABEL: Record<StatusSortMode, string> = {
 function formatQueueHeading(
   filter: BiographyQueueStatus | undefined,
   sort: StatusSortMode,
-  endOfLine: boolean
+  endOfLine: boolean,
+  missingBiography: boolean
 ): string {
+  if (missingBiography) {
+    const scope = endOfLine ? 'End-of-line missing biography' : 'Missing biography';
+    if (filter) {
+      return `${scope} ${STATUS_FILTER_TITLE[filter].toLowerCase()} (${STATUS_SORT_LABEL[sort]}):`;
+    }
+    return `${scope} (${STATUS_SORT_LABEL[sort]}):`;
+  }
   if (endOfLine) {
     if (filter) {
       return `End-of-line ${STATUS_FILTER_TITLE[filter].toLowerCase()} (${STATUS_SORT_LABEL[sort]}):`;
@@ -336,7 +360,8 @@ export function formatStatusTextReport(
 ): string {
   const limit = display.limit ?? DEFAULT_STATUS_TEXT_LIMIT;
   const endOfLine = display.endOfLine ?? report.endOfLine;
-  const filter = endOfLine ? display.filter : (display.filter ?? 'pending');
+  const missingBiography = display.missingBiography ?? report.missingBiography;
+  const filter = endOfLine || missingBiography ? display.filter : (display.filter ?? 'pending');
   const sort = parseStatusSort(display.sort ?? report.sort);
   const lines = [
     `Status ${report.repo}`,
@@ -347,28 +372,45 @@ export function formatStatusTextReport(
     `Sources: ${report.sources}`,
     `Media: ${report.media}`,
     `Narratives: ${report.narratives}`,
-    `Biographies: ${report.biographies}`,
+    `Biographies: ${report.biographies.complete}/${report.biographies.totalDeceased} deceased (${report.biographies.missing} missing)`,
     `End-of-line ancestors: ${report.endOfLineCount}`,
     `Queue: done_live=${report.queue.done_live} staged=${report.queue.staged} pending=${report.queue.pending}`,
   ];
-  const matching = filter
-    ? report.deceased.filter((person) => person.status === filter)
+  const baseRows = missingBiography
+    ? report.deceased.filter((person) => !person.hasBiography)
     : report.deceased;
-  lines.push(formatQueueHeading(filter, sort, endOfLine));
+  const matching = filter
+    ? baseRows.filter((person) => person.status === filter)
+    : baseRows;
+  lines.push(formatQueueHeading(filter, sort, endOfLine, missingBiography));
   if (matching.length === 0) {
     lines.push('  (none)');
   } else {
     const shown = limit === 0 ? matching : matching.slice(0, limit);
+    const showStatus = (endOfLine || missingBiography) && !filter;
     for (const person of shown) {
       const birth = person.birth_edtf.trim() || '?';
-      const statusSuffix = endOfLine && !filter ? ` status=${person.status}` : '';
+      const bioValue = person.hasBiography ? 'yes' : 'no';
+      const statusSuffix = showStatus ? ` status=${person.status}` : '';
       lines.push(
-        `  ${person.full_name} (${person.id}) birth=${birth} death=${person.death_edtf || '?'} events=${person.events} sources=${person.sources} media=${person.media}${statusSuffix}`
+        `  ${person.full_name} (${person.id}) birth=${birth} death=${person.death_edtf || '?'} events=${person.events} sources=${person.sources} media=${person.media} Bio=${bioValue}${statusSuffix}`
       );
     }
     const hidden = matching.length - shown.length;
     if (hidden > 0) {
-      const label = endOfLine ? (filter ? `end-of-line ${filter}` : 'end-of-line') : (filter ?? 'pending');
+      const label = missingBiography
+        ? endOfLine
+          ? filter
+            ? `end-of-line missing-biography ${filter}`
+            : 'end-of-line missing-biography'
+          : filter
+            ? `missing-biography ${filter}`
+            : 'missing-biography'
+        : endOfLine
+          ? filter
+            ? `end-of-line ${filter}`
+            : 'end-of-line'
+          : (filter ?? 'pending');
       lines.push(`  ... and ${hidden} more ${label}`);
     }
   }
@@ -380,6 +422,7 @@ export async function runStatusCommand(
 ): Promise<StatusCommandResult> {
   const sort = parseStatusSort(options.sort);
   const endOfLine = Boolean(options.endOfLine);
+  const missingBiography = Boolean(options.missingBiography);
   const repoDir = path.resolve(options.repoDir?.trim() || process.cwd());
   if (!fs.existsSync(repoDir) || !fs.statSync(repoDir).isDirectory()) {
     throw new CliValidationError(`Repository directory does not exist: ${repoDir}`);
@@ -432,14 +475,19 @@ export async function runStatusCommand(
   const endOfLineDeceased = allDeceased
     .filter((person) => endOfLineIds.has(person.id))
     .toSorted(STATUS_SORT_COMPARATORS[sort]);
-  const deceased = endOfLine ? endOfLineDeceased : allDeceased;
+  const scopedDeceased = endOfLine ? endOfLineDeceased : allDeceased;
+  const deceased = missingBiography
+    ? scopedDeceased.filter((person) => !person.hasBiography)
+    : scopedDeceased;
   const livingCount = people.length - allDeceased.length;
+  const biographyCompleteCount = allDeceased.filter((person) => person.hasBiography).length;
 
   const report: StatusReport = {
     repo: repoDir,
     sort,
     endOfLine,
     endOfLineCount: endOfLineDeceased.length,
+    missingBiography,
     people: {
       total: people.length,
       deceased: allDeceased.length,
@@ -451,7 +499,11 @@ export async function runStatusCommand(
     sources: sources.length,
     media: media.length,
     narratives: narratives.length,
-    biographies: narratives.filter((narrative) => narrative.kind === 'biography').length,
+    biographies: {
+      complete: biographyCompleteCount,
+      missing: allDeceased.length - biographyCompleteCount,
+      totalDeceased: allDeceased.length,
+    },
     queue: {
       done_live: deceased.filter((person) => person.status === 'done_live').length,
       staged: deceased.filter((person) => person.status === 'staged').length,
@@ -467,6 +519,7 @@ export async function runStatusCommand(
         filter: options.filter,
         sort,
         endOfLine,
+        missingBiography,
       });
 
   return { ...report, rendered };

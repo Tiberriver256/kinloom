@@ -1008,6 +1008,7 @@ export async function runCli(
           allowPositionals: false,
           options: {
             repo: { type: 'string' },
+            'strict-hygiene': { type: 'boolean', default: false },
             json: { type: 'boolean', default: false },
           },
         });
@@ -1026,6 +1027,7 @@ export async function runCli(
           () =>
             runVerifyCommand({
               repoDir: values.repo,
+              strictHygiene: values['strict-hygiene'],
               json: values.json,
             })
         );
@@ -1043,6 +1045,7 @@ export async function runCli(
             filter: { type: 'string' },
             sort: { type: 'string' },
             'end-of-line': { type: 'boolean', default: false },
+            'missing-biography': { type: 'boolean', default: false },
             json: { type: 'boolean', default: false },
           },
         });
@@ -1069,6 +1072,7 @@ export async function runCli(
               filter,
               sort,
               endOfLine: values['end-of-line'],
+              missingBiography: values['missing-biography'],
             })
         );
         writeRenderedOutput(io, result.rendered);

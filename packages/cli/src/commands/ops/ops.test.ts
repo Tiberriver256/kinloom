@@ -2422,6 +2422,7 @@ describe('ops/status', () => {
     const jsonResult = await runStatusCommand({ repoDir, json: true });
     const parsed = JSON.parse(jsonResult.rendered) as {
       repo: string;
+      missingBiography: boolean;
       people: { total: number; deceased: number; living: number };
       events: number;
       places: number;
@@ -2429,7 +2430,7 @@ describe('ops/status', () => {
       sources: number;
       media: number;
       narratives: number;
-      biographies: number;
+      biographies: { complete: number; missing: number; totalDeceased: number };
       queue: { done_live: number; staged: number; pending: number };
       deceased: Array<{
         id: string;
@@ -2438,9 +2439,13 @@ describe('ops/status', () => {
         events: number;
         sources: number;
         media: number;
+        has_biography: boolean;
+        hasBiography: boolean;
+        biographyId: string | null;
       }>;
     };
     expect(parsed.repo).toBe(path.resolve(repoDir));
+    expect(parsed.missingBiography).toBe(false);
     expect(parsed.people).toEqual({ total: 6, deceased: 5, living: 1 });
     expect(parsed.events).toBe(3);
     expect(parsed.places).toBe(2);
@@ -2448,7 +2453,7 @@ describe('ops/status', () => {
     expect(parsed.sources).toBe(2);
     expect(parsed.media).toBe(2);
     expect(parsed.narratives).toBe(2);
-    expect(parsed.biographies).toBe(1);
+    expect(parsed.biographies).toEqual({ complete: 1, missing: 4, totalDeceased: 5 });
     expect(parsed.queue).toEqual({ done_live: 1, staged: 1, pending: 3 });
     expect(parsed.deceased).toEqual([
       {
@@ -2460,6 +2465,8 @@ describe('ops/status', () => {
         sources: 0,
         media: 0,
         has_biography: false,
+        hasBiography: false,
+        biographyId: null,
         has_staged_patch: false,
         status: 'pending',
       },
@@ -2472,6 +2479,8 @@ describe('ops/status', () => {
         sources: 0,
         media: 0,
         has_biography: false,
+        hasBiography: false,
+        biographyId: null,
         has_staged_patch: false,
         status: 'pending',
       },
@@ -2484,6 +2493,8 @@ describe('ops/status', () => {
         sources: 1,
         media: 1,
         has_biography: false,
+        hasBiography: false,
+        biographyId: null,
         has_staged_patch: false,
         status: 'pending',
       },
@@ -2496,6 +2507,8 @@ describe('ops/status', () => {
         sources: 0,
         media: 0,
         has_biography: false,
+        hasBiography: false,
+        biographyId: null,
         has_staged_patch: true,
         status: 'staged',
       },
@@ -2508,6 +2521,8 @@ describe('ops/status', () => {
         sources: 1,
         media: 0,
         has_biography: true,
+        hasBiography: true,
+        biographyId: 'nar_arthur_bio',
         has_staged_patch: false,
         status: 'done_live',
       },
@@ -2525,6 +2540,8 @@ describe('ops/status', () => {
     expect(edmundAt).toBeGreaterThan(-1);
     expect(edmundAt).toBeLessThan(thomasAt);
     expect(thomasAt).toBeLessThan(noraAt);
+    expect(textResult.rendered).toContain('Biographies: 1/5 deceased (4 missing)');
+    expect(textResult.rendered).toContain('Bio=no');
     expect(textResult.rendered).toContain('Queue: done_live=1 staged=1 pending=3');
     expect(textResult.rendered).toContain('1 living');
 
@@ -3214,6 +3231,129 @@ describe('ops/status', () => {
     expect(filteredText.rendered).toContain('End-of-line pending (chronological):');
     expect(filteredText.rendered).toContain('Hannah Birch (per_hannah_birch)');
     expect(filteredText.rendered).not.toContain('Samuel Alder');
+  });
+
+  it('tracks biography coverage and filters with --missing-biography across text and json', async () => {
+    const repoDir = await createSyntheticRepo();
+    const dataDir = path.join(repoDir, 'data');
+
+    const narratives: Narrative[] = [
+      {
+        id: 'nar_arthur_bio_b',
+        slug: 'arthur-alder-bio-b',
+        kind: 'biography',
+        subject_person_id: 'per_arthur_alder',
+        title: 'Arthur Alder Biography (Extended)',
+        person_ids: ['per_arthur_alder'],
+        place_ids: [],
+        event_ids: [],
+        source_ids: [],
+        body_md: 'Extended biography for Arthur Alder.',
+      },
+      {
+        id: 'nar_arthur_bio_a',
+        slug: 'arthur-alder-bio-a',
+        kind: 'biography',
+        subject_person_id: 'per_arthur_alder',
+        title: 'Arthur Alder Biography',
+        person_ids: ['per_arthur_alder'],
+        place_ids: [],
+        event_ids: [],
+        source_ids: [],
+        body_md: 'Primary biography for Arthur Alder.',
+      },
+      {
+        id: 'nar_thomas_research_note',
+        slug: 'thomas-alder-research-note',
+        kind: 'research_note',
+        subject_person_id: 'per_thomas_alder',
+        title: 'Alder Farm Research Note',
+        person_ids: ['per_thomas_alder', 'per_helen_maple'],
+        place_ids: [],
+        event_ids: [],
+        source_ids: [],
+        body_md: 'Collective research note mentioning Thomas Alder and Helen Maple.',
+      },
+    ];
+
+    await mkdir(path.join(repoDir, 'research', 'people', 'per_helen_maple'), { recursive: true });
+    await writeFile(path.join(repoDir, 'research', 'people', 'per_helen_maple', 'patch.json'), '{}\n', 'utf8');
+    await writeFile(
+      path.join(dataDir, 'narratives.yaml'),
+      serializeNarrativesYaml(narratives, { sortById: true }),
+      'utf8'
+    );
+
+    const fullJson = await runStatusCommand({ repoDir, json: true });
+    expect(fullJson.biographies).toEqual({ complete: 1, missing: 2, totalDeceased: 3 });
+    const arthurRow = fullJson.deceased.find((person) => person.id === 'per_arthur_alder');
+    const thomasRow = fullJson.deceased.find((person) => person.id === 'per_thomas_alder');
+    const helenRow = fullJson.deceased.find((person) => person.id === 'per_helen_maple');
+    expect(arthurRow).toMatchObject({ hasBiography: true, biographyId: 'nar_arthur_bio_a' });
+    expect(thomasRow).toMatchObject({ hasBiography: false, biographyId: null });
+    expect(helenRow).toMatchObject({ hasBiography: false, biographyId: null });
+
+    const doneText = await runStatusCommand({ repoDir, filter: 'done_live' });
+    expect(doneText.rendered).toContain('Biographies: 1/3 deceased (2 missing)');
+    expect(doneText.rendered).toContain('Arthur Alder (per_arthur_alder)');
+    expect(doneText.rendered).toContain('Bio=yes');
+
+    const missingCliJson = createCaptureIo();
+    expect(
+      await runCli(
+        ['status', '--repo', repoDir, '--missing-biography', '--sort', 'chronological', '--json'],
+        { io: missingCliJson.io }
+      )
+    ).toBe(EXIT_OK);
+    const missingParsed = JSON.parse(missingCliJson.stdout.join('\n')) as {
+      missingBiography: boolean;
+      biographies: { complete: number; missing: number; totalDeceased: number };
+      queue: { done_live: number; staged: number; pending: number };
+      deceased: Array<{ id: string; hasBiography: boolean; biographyId: string | null }>;
+    };
+    expect(missingParsed.missingBiography).toBe(true);
+    expect(missingParsed.biographies).toEqual({ complete: 1, missing: 2, totalDeceased: 3 });
+    expect(missingParsed.queue).toEqual({ done_live: 0, staged: 1, pending: 1 });
+    expect(missingParsed.deceased.map((person) => person.id)).toEqual([
+      'per_thomas_alder',
+      'per_helen_maple',
+    ]);
+    expect(missingParsed.deceased.every((person) => !person.hasBiography && person.biographyId === null)).toBe(
+      true
+    );
+    expect(missingCliJson.stdout.join('\n')).not.toContain('Clara Maple');
+
+    const missingCliText = createCaptureIo();
+    expect(
+      await runCli(
+        ['status', '--repo', repoDir, '--missing-biography', '--sort', 'chronological', '--limit', '1'],
+        { io: missingCliText.io }
+      )
+    ).toBe(EXIT_OK);
+    const missingRendered = missingCliText.stdout.join('\n');
+    expect(missingRendered).toContain('Biographies: 1/3 deceased (2 missing)');
+    expect(missingRendered).toContain('Missing biography (chronological):');
+    expect(missingRendered).toContain('Thomas Alder (per_thomas_alder)');
+    expect(missingRendered).toContain('Bio=no status=pending');
+    expect(missingRendered).not.toContain('Helen Maple');
+    expect(missingRendered).toContain('... and 1 more missing-biography');
+
+    const missingStagedText = await runStatusCommand({
+      repoDir,
+      missingBiography: true,
+      filter: 'staged',
+      limit: 0,
+    });
+    expect(missingStagedText.rendered).toContain('Missing biography staged (sparsest first):');
+    expect(missingStagedText.rendered).toContain('Helen Maple (per_helen_maple)');
+    expect(missingStagedText.rendered).toContain('Bio=no');
+    expect(missingStagedText.rendered).not.toContain('Thomas Alder');
+    expect(missingStagedText.rendered).not.toContain('Arthur Alder');
+
+    const help = createCaptureIo();
+    expect(await runCli(['status', '--help'], { io: help.io })).toBe(EXIT_OK);
+    expect(help.stdout.join('\n')).toContain('--missing-biography');
+    expect(help.stdout.join('\n')).toContain('biographies.totalDeceased');
   });
 });
 
@@ -5451,5 +5591,420 @@ describe('ops/verify', () => {
       "media: duplicate file 'media/shared-scan.png' on med_a, med_b"
     );
     expect(result.ok).toBe(false);
+  });
+
+  it('detects tree-hygiene warnings without breaking default verify and fails only under --strict-hygiene', async () => {
+    const repoDir = await createSyntheticRepo();
+    const dataDir = path.join(repoDir, 'data');
+
+    const people: RawPerson[] = [
+      {
+        id: 'per_father_valid',
+        slug: 'father-valid',
+        full_name: 'Samuel Alder',
+        given_name: 'Samuel',
+        surname: 'Alder',
+        alt_names: [],
+        sex: 'M',
+        is_living: false,
+        lineage_group: 'ancestor',
+        birth_edtf: '1830-03-10',
+        death_edtf: '1880-05-01',
+        portrait_url: null,
+      },
+      {
+        id: 'per_mother_one',
+        slug: 'mother-one',
+        full_name: 'Martha Birch',
+        given_name: 'Martha',
+        surname: 'Birch',
+        alt_names: [],
+        sex: 'F',
+        is_living: false,
+        lineage_group: 'ancestor',
+        birth_edtf: '1835-04-01',
+        death_edtf: '1875-06-15',
+        portrait_url: null,
+      },
+      {
+        id: 'per_mother_two',
+        slug: 'mother-two',
+        full_name: 'Hannah Cedar',
+        given_name: 'Hannah',
+        surname: 'Cedar',
+        alt_names: [],
+        sex: 'F',
+        is_living: false,
+        lineage_group: 'ancestor',
+        birth_edtf: '1836-02-02',
+        death_edtf: '1905-01-01',
+        portrait_url: null,
+      },
+      {
+        id: 'per_mother_adoptive',
+        slug: 'mother-adoptive',
+        full_name: 'Ruth Linden',
+        given_name: 'Ruth',
+        surname: 'Linden',
+        alt_names: [],
+        sex: 'F',
+        is_living: false,
+        lineage_group: 'ancestor',
+        birth_edtf: '1840-01-01',
+        death_edtf: '1910-01-01',
+        portrait_url: null,
+      },
+      {
+        id: 'per_young_parent',
+        slug: 'young-parent',
+        full_name: 'Caleb Alder',
+        given_name: 'Caleb',
+        surname: 'Alder',
+        alt_names: [],
+        sex: 'M',
+        is_living: false,
+        lineage_group: 'ancestor',
+        birth_edtf: '1870-06-01',
+        death_edtf: '1930-01-01',
+        portrait_url: null,
+      },
+      {
+        id: 'per_child_two_mothers',
+        slug: 'child-two-mothers',
+        full_name: 'Owen Alder',
+        given_name: 'Owen',
+        surname: 'Alder',
+        alt_names: [],
+        sex: 'M',
+        is_living: false,
+        lineage_group: 'descendant',
+        birth_edtf: '1878-08-01',
+        death_edtf: '1940-01-01',
+        portrait_url: null,
+      },
+      {
+        id: 'per_child_posthumous_late',
+        slug: 'child-posthumous-late',
+        full_name: 'Nora Alder',
+        given_name: 'Nora',
+        surname: 'Alder',
+        alt_names: [],
+        sex: 'F',
+        is_living: false,
+        lineage_group: 'descendant',
+        birth_edtf: '1882-09-01',
+        death_edtf: '1950-01-01',
+        portrait_url: null,
+      },
+      {
+        id: 'per_child_posthumous_ok',
+        slug: 'child-posthumous-ok',
+        full_name: 'Clara Alder',
+        given_name: 'Clara',
+        surname: 'Alder',
+        alt_names: [],
+        sex: 'F',
+        is_living: false,
+        lineage_group: 'descendant',
+        birth_edtf: '1881-01-15',
+        death_edtf: '1948-01-01',
+        portrait_url: null,
+      },
+      {
+        id: 'per_child_adoptive_ok',
+        slug: 'child-adoptive-ok',
+        full_name: 'Esther Alder',
+        given_name: 'Esther',
+        surname: 'Alder',
+        alt_names: [],
+        sex: 'F',
+        is_living: false,
+        lineage_group: 'descendant',
+        birth_edtf: '1870-05-01',
+        death_edtf: '1945-01-01',
+        portrait_url: null,
+      },
+      {
+        id: 'per_spouse_adult',
+        slug: 'spouse-adult',
+        full_name: 'Henry Maple',
+        given_name: 'Henry',
+        surname: 'Maple',
+        alt_names: [],
+        sex: 'M',
+        is_living: false,
+        lineage_group: 'extended',
+        birth_edtf: '1860-01-01',
+        death_edtf: '1935-01-01',
+        portrait_url: null,
+      },
+      {
+        id: 'per_witness_child',
+        slug: 'witness-child',
+        full_name: 'Daniel Maple',
+        given_name: 'Daniel',
+        surname: 'Maple',
+        alt_names: [],
+        sex: 'M',
+        is_living: false,
+        lineage_group: 'extended',
+        birth_edtf: '1884-01-01',
+        death_edtf: '1955-01-01',
+        portrait_url: null,
+      },
+    ];
+
+    const kinship: KinshipEdge[] = [
+      // Owen has 1 father + 2 non-adoptive mothers from two different family_xref groups,
+      // and was born in 1878 after mother Martha died in 1875.
+      { from: 'per_father_valid', to: 'per_child_two_mothers', relation: 'parent', family_xref: '@F1@' },
+      { from: 'per_child_two_mothers', to: 'per_father_valid', relation: 'child', family_xref: '@F1@' },
+      { from: 'per_mother_one', to: 'per_child_two_mothers', relation: 'parent', family_xref: '@F1@' },
+      { from: 'per_mother_two', to: 'per_child_two_mothers', relation: 'parent', family_xref: '@F2@' },
+      // Nora born 1882-09-01: father Samuel died 1880-05-01 (>1 year earlier), and Caleb was age 12 (<13).
+      { from: 'per_father_valid', to: 'per_child_posthumous_late', relation: 'parent', family_xref: '@F3@' },
+      { from: 'per_young_parent', to: 'per_child_posthumous_late', relation: 'parent', family_xref: '@F4@' },
+      // Clara born 1881-01-15: 8 months after father Samuel died 1880-05-01 (valid posthumous birth).
+      { from: 'per_father_valid', to: 'per_child_posthumous_ok', relation: 'parent', family_xref: '@F5@' },
+      { from: 'per_mother_two', to: 'per_child_posthumous_ok', relation: 'parent', family_xref: '@F5@' },
+      // Esther has biological parents + 1 adoptive mother tagged via adoptive family_xref (valid).
+      { from: 'per_father_valid', to: 'per_child_adoptive_ok', relation: 'parent', family_xref: '@F6@' },
+      { from: 'per_mother_one', to: 'per_child_adoptive_ok', relation: 'parent', family_xref: '@F6@' },
+      { from: 'per_mother_adoptive', to: 'per_child_adoptive_ok', relation: 'parent', family_xref: '@F_ADOPT_1@' },
+    ];
+
+    const events: RawEvent[] = [
+      // Duplicate births on Owen (plus a baptism that must NOT count as a third birth).
+      {
+        id: 'evt_owen_birth_1',
+        title: 'Birth of Owen Alder',
+        scope: 'personal',
+        event_kind: 'point_event',
+        edtf_date: '1878-08-01',
+        place_id: 'plc_oak_county_ohio',
+        summary: 'Owen Alder was born.',
+        participants: [{ person_id: 'per_child_two_mothers', role: 'birth_subject' }],
+        sources: [{ source_id: 'src_1880_census', confidence: 'medium' }],
+      },
+      {
+        id: 'evt_owen_birth_2',
+        title: 'Birth of Owen Alder',
+        scope: 'personal',
+        event_kind: 'point_event',
+        edtf_date: '1878-08-01',
+        place_id: 'plc_oak_county_ohio',
+        summary: 'Duplicate birth entry for Owen Alder.',
+        participants: [{ person_id: 'per_child_two_mothers', role: 'birth_subject' }],
+        sources: [{ source_id: 'src_1880_census', confidence: 'medium' }],
+      },
+      {
+        id: 'evt_owen_baptism',
+        title: 'Baptism of Owen Alder',
+        scope: 'personal',
+        event_kind: 'point_event',
+        edtf_date: '1878-09-01',
+        place_id: 'plc_oak_county_ohio',
+        summary: 'Owen Alder was baptized.',
+        participants: [{ person_id: 'per_child_two_mothers', role: 'birth_subject' }],
+        sources: [{ source_id: 'src_1880_census', confidence: 'medium' }],
+      },
+      // Single birth + single baptism + single death + single burial on Clara (clean, no duplicate warning).
+      {
+        id: 'evt_clara_birth',
+        title: 'Birth of Clara Alder',
+        scope: 'personal',
+        event_kind: 'point_event',
+        edtf_date: '1881-01-15',
+        place_id: 'plc_oak_county_ohio',
+        summary: 'Clara Alder was born.',
+        participants: [{ person_id: 'per_child_posthumous_ok', role: 'birth_subject' }],
+        sources: [{ source_id: 'src_1880_census', confidence: 'medium' }],
+      },
+      {
+        id: 'evt_clara_baptism',
+        title: 'Baptism of Clara Alder',
+        scope: 'personal',
+        event_kind: 'point_event',
+        edtf_date: '1881-02-01',
+        place_id: 'plc_oak_county_ohio',
+        summary: 'Clara Alder was baptized.',
+        participants: [{ person_id: 'per_child_posthumous_ok', role: 'birth_subject' }],
+        sources: [{ source_id: 'src_1880_census', confidence: 'medium' }],
+      },
+      {
+        id: 'evt_clara_death',
+        title: 'Death of Clara Alder',
+        scope: 'personal',
+        event_kind: 'point_event',
+        edtf_date: '1948-01-01',
+        place_id: 'plc_oak_county_ohio',
+        summary: 'Clara Alder died.',
+        participants: [{ person_id: 'per_child_posthumous_ok', role: 'death_subject' }],
+        sources: [{ source_id: 'src_1932_death_cert', confidence: 'high' }],
+      },
+      {
+        id: 'evt_clara_burial',
+        title: 'Burial of Clara Alder',
+        scope: 'personal',
+        event_kind: 'point_event',
+        edtf_date: '1948-01-04',
+        place_id: 'plc_oak_county_ohio',
+        summary: 'Clara Alder was buried.',
+        participants: [{ person_id: 'per_child_posthumous_ok', role: 'death_subject' }],
+        sources: [{ source_id: 'src_1932_death_cert', confidence: 'high' }],
+      },
+      // Duplicate deaths on Samuel.
+      {
+        id: 'evt_samuel_death_1',
+        title: 'Death of Samuel Alder',
+        scope: 'personal',
+        event_kind: 'point_event',
+        edtf_date: '1880-05-01',
+        place_id: 'plc_oak_county_ohio',
+        summary: 'Samuel Alder died.',
+        participants: [{ person_id: 'per_father_valid', role: 'death_subject' }],
+        sources: [{ source_id: 'src_1932_death_cert', confidence: 'high' }],
+      },
+      {
+        id: 'evt_samuel_death_2',
+        title: 'Death of Samuel Alder',
+        scope: 'personal',
+        event_kind: 'point_event',
+        edtf_date: '1880-05-01',
+        place_id: 'plc_oak_county_ohio',
+        summary: 'Duplicate death entry for Samuel Alder.',
+        participants: [{ person_id: 'per_father_valid', role: 'death_subject' }],
+        sources: [{ source_id: 'src_1932_death_cert', confidence: 'high' }],
+      },
+      // Child marriage: Nora (born 1882-09-01) married at age 12 on 1894-10-10; witness Daniel (age 10) must NOT trigger child_marriage.
+      // Also duplicate marriage for the exact same couple (Nora + Henry).
+      {
+        id: 'evt_marr_nora_henry_1',
+        title: 'Marriage of Henry Maple and Nora Alder',
+        scope: 'family',
+        event_kind: 'point_event',
+        edtf_date: '1894-10-10',
+        place_id: 'plc_oak_county_ohio',
+        summary: 'Henry Maple and Nora Alder married.',
+        participants: [
+          { person_id: 'per_spouse_adult', role: 'spouse' },
+          { person_id: 'per_child_posthumous_late', role: 'spouse' },
+          { person_id: 'per_witness_child', role: 'witness' },
+        ],
+        sources: [{ source_id: 'src_1880_census', confidence: 'low' }],
+      },
+      {
+        id: 'evt_marr_nora_henry_2',
+        title: 'Marriage of Henry Maple and Nora Alder',
+        scope: 'family',
+        event_kind: 'point_event',
+        edtf_date: '1894-10-10',
+        place_id: 'plc_oak_county_ohio',
+        summary: 'Duplicate marriage entry.',
+        participants: [
+          { person_id: 'per_spouse_adult', role: 'spouse' },
+          { person_id: 'per_child_posthumous_late', role: 'spouse' },
+        ],
+        sources: [{ source_id: 'src_1880_census', confidence: 'low' }],
+      },
+      // Empty GEDCOM EVEN placeholder event.
+      {
+        id: 'evt_even_stub_1',
+        title: 'Recorded event for Samuel Alder',
+        scope: 'personal',
+        event_kind: 'point_event',
+        edtf_date: '1872',
+        place_id: 'plc_oak_county_ohio',
+        summary: 'Recorded EVEN fact for Samuel Alder (1872).',
+        participants: [{ person_id: 'per_father_valid', role: 'resident' }],
+        sources: [{ source_id: 'src_1880_census', confidence: 'low' }],
+      },
+    ];
+
+    await Promise.all([
+      writeFile(path.join(dataDir, 'people.yaml'), serializePeopleYaml(people, { sortById: true }), 'utf8'),
+      writeFile(path.join(dataDir, 'kinship.yaml'), serializeKinshipYaml(kinship, { sortDeterministic: true }), 'utf8'),
+      writeFile(path.join(dataDir, 'events.yaml'), serializeEventsYaml(events, { sortById: true }), 'utf8'),
+      writeFile(path.join(dataDir, 'media.yaml'), serializeMediaYaml([], { sortById: true }), 'utf8'),
+      writeFile(path.join(dataDir, 'narratives.yaml'), serializeNarrativesYaml([], { sortById: true }), 'utf8'),
+    ]);
+
+    // Default verify is non-breaking: ok=true, exit 0, warnings surfaced in JSON and text.
+    const defaultCliJson = createCaptureIo();
+    expect(
+      await runCli(['verify', '--repo', repoDir, '--json'], { io: defaultCliJson.io })
+    ).toBe(EXIT_OK);
+    const parsedDefault = JSON.parse(defaultCliJson.stdout.join('\n')) as {
+      ok: boolean;
+      strictHygiene: boolean;
+      errors: string[];
+      warnings: string[];
+      hygiene: {
+        warnings: Array<{ category: string; personIds: string[]; eventIds?: string[]; message: string }>;
+        counts: Record<string, number>;
+      };
+    };
+    expect(parsedDefault.ok).toBe(true);
+    expect(parsedDefault.strictHygiene).toBe(false);
+    expect(parsedDefault.errors).toEqual([]);
+    expect(parsedDefault.hygiene.counts).toEqual({
+      excess_parents: 2,
+      parent_child_chronology: 3,
+      child_marriage: 2,
+      duplicate_vital_event: 3,
+      placeholder_event: 1,
+    });
+    expect(parsedDefault.warnings).toHaveLength(11);
+
+    // Confirm adoptive parent link on Esther was NOT flagged.
+    expect(
+      parsedDefault.hygiene.warnings.some((w) => w.personIds.includes('per_child_adoptive_ok'))
+    ).toBe(false);
+    // Confirm valid posthumous child Clara and her birth+baptism / death+burial were NOT flagged.
+    expect(
+      parsedDefault.hygiene.warnings.some((w) => w.personIds.includes('per_child_posthumous_ok'))
+    ).toBe(false);
+    // Confirm child witness Daniel was NOT flagged for child_marriage.
+    expect(
+      parsedDefault.hygiene.warnings.some((w) => w.personIds.includes('per_witness_child'))
+    ).toBe(false);
+
+    // Default text output displays WARN summary and warning details.
+    const defaultText = await runVerifyCommand({ repoDir });
+    expect(defaultText.ok).toBe(true);
+    expect(defaultText.rendered).toContain('7. Tree hygiene: WARN | warnings=11');
+    expect(defaultText.rendered).toContain('Tree hygiene warnings (11):');
+    expect(defaultText.rendered).toContain('[excess_parents]');
+    expect(defaultText.rendered).toContain('[parent_child_chronology]');
+    expect(defaultText.rendered).toContain('[child_marriage]');
+    expect(defaultText.rendered).toContain('[duplicate_vital_event]');
+    expect(defaultText.rendered).toContain('[placeholder_event]');
+
+    // --strict-hygiene fails verify with EXIT_ERROR and promotes warnings into errors.
+    const strictCliJson = createCaptureIo();
+    expect(
+      await runCli(['verify', '--repo', repoDir, '--strict-hygiene', '--json'], {
+        io: strictCliJson.io,
+      })
+    ).toBe(EXIT_ERROR);
+    const parsedStrict = JSON.parse(strictCliJson.stdout.join('\n')) as {
+      ok: boolean;
+      strictHygiene: boolean;
+      errors: string[];
+      hygiene: { counts: Record<string, number> };
+    };
+    expect(parsedStrict.ok).toBe(false);
+    expect(parsedStrict.strictHygiene).toBe(true);
+    expect(parsedStrict.errors).toHaveLength(11);
+    expect(parsedStrict.errors.some((e) => e.startsWith('hygiene(excess_parents):'))).toBe(true);
+    expect(parsedStrict.errors.some((e) => e.startsWith('hygiene(placeholder_event):'))).toBe(true);
+
+    const strictText = await runVerifyCommand({ repoDir, strictHygiene: true });
+    expect(strictText.ok).toBe(false);
+    expect(strictText.rendered).toContain('7. Tree hygiene: FAIL | warnings=11');
+
+    const verifyHelp = createCaptureIo();
+    expect(await runCli(['verify', '--help'], { io: verifyHelp.io })).toBe(EXIT_OK);
+    expect(verifyHelp.stdout.join('\n')).toContain('--strict-hygiene');
   });
 });

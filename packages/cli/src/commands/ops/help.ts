@@ -74,45 +74,50 @@ The command does not print a living person's id, name, or birth date.
 Options:
   --repo <dir>                             Archive repository root (default: current working directory)
   --limit <N>                              Text list length. Default 8. 0 shows every matching row.
-  --filter <pending|staged|done_live>      Text list status. Default pending (or all statuses when --end-of-line is set without --filter).
+  --filter <pending|staged|done_live>      Text list status. Default pending (or all statuses when --end-of-line or --missing-biography is set without --filter).
   --sort <sparsest|richest|chronological>  Queue sort order. Default sparsest.
   --end-of-line                            Filter queue to confirmed-deceased end-of-line ancestors (>= 1 child and 0 parents in kinship.yaml).
+  --missing-biography                      Filter queue to confirmed-deceased people lacking an individual biography narrative (combinable with --filter, --sort, --limit, --end-of-line, --json).
   --json                                   Emit the status object as JSON
   -h, --help                               Show this help message
 
-Text output prints the totals, the queue counts, and a list of deceased people.
-The list uses --filter, --sort, --end-of-line, and stops after --limit rows.
+Text output prints the totals, biography coverage, queue counts, and a list of deceased people with a Bio=yes/no column.
+The list uses --filter, --sort, --end-of-line, --missing-biography, and stops after --limit rows.
 JSON ignores --limit and --filter.
-JSON applies --sort and --end-of-line, includes sort, endOfLine, and endOfLineCount, and returns the matching deceased array and queue counts.
+JSON applies --sort, --end-of-line, and --missing-biography, includes sort, endOfLine, endOfLineCount, missingBiography, and biographies coverage, and returns the matching deceased array and queue counts.
 
 JSON object:
-  repo                 Absolute repository path
-  sort                 Active queue sort mode (sparsest, richest, or chronological)
-  endOfLine            true when --end-of-line filtering is active
-  endOfLineCount       Confirmed-deceased ancestors with >= 1 child and 0 parents in data/kinship.yaml
-  people.total         Rows in data/people.yaml
-  people.deceased      People who are not effective-living
-  people.living        People who are effective-living (count only)
-  events               Rows in data/events.yaml
-  places               Rows in data/places.yaml
-  zeroCoordPlaces      Places whose latitude and longitude are both within 1e-9 of 0
-  sources              Rows in data/sources.yaml
-  media                Rows in data/media.yaml
-  narratives           Rows in data/narratives.yaml
-  biographies          Narratives whose kind is biography
-  queue.done_live      Deceased people in the active queue with a biography narrative
-  queue.staged         Deceased people in the active queue with research/people/<id>/patch.json and no biography
-  queue.pending        Deceased people in the active queue with neither a biography nor a staged patch
-  deceased             Deceased people only (ordered pending, staged, done_live; or directly by --sort when --end-of-line is set)
+  repo                       Absolute repository path
+  sort                       Active queue sort mode (sparsest, richest, or chronological)
+  endOfLine                  true when --end-of-line filtering is active
+  endOfLineCount             Confirmed-deceased ancestors with >= 1 child and 0 parents in data/kinship.yaml
+  missingBiography           true when --missing-biography filtering is active
+  people.total               Rows in data/people.yaml
+  people.deceased            People who are not effective-living
+  people.living              People who are effective-living (count only)
+  events                     Rows in data/events.yaml
+  places                     Rows in data/places.yaml
+  zeroCoordPlaces            Places whose latitude and longitude are both within 1e-9 of 0
+  sources                    Rows in data/sources.yaml
+  media                      Rows in data/media.yaml
+  narratives                 Rows in data/narratives.yaml
+  biographies.complete       Confirmed-deceased people with an individual kind=biography narrative
+  biographies.missing        Confirmed-deceased people lacking an individual kind=biography narrative
+  biographies.totalDeceased  Total confirmed-deceased people in data/people.yaml
+  queue.done_live            Deceased people in the active queue with a biography narrative
+  queue.staged               Deceased people in the active queue with research/people/<id>/patch.json and no biography
+  queue.pending              Deceased people in the active queue with neither a biography nor a staged patch
+  deceased                   Deceased people only (ordered pending, staged, done_live; or directly by --sort when --end-of-line is set)
 
 Each deceased item has:
   id, full_name, birth_edtf, death_edtf
   events               Distinct events that list the person in participants
   sources              Distinct source ids on those events
   media                Distinct media rows whose person_id or person_ids include the person
-  has_biography        true when a biography narrative has subject_person_id equal to id
+  hasBiography         true when a biography narrative has subject_person_id equal to id (also exposed as has_biography)
+  biographyId          Matching biography narrative id, or null when missing
   has_staged_patch     true when research/people/<id>/patch.json exists
-  status               done_live if has_biography, else staged if has_staged_patch, else pending
+  status               done_live if hasBiography, else staged if has_staged_patch, else pending
 
 Within each status group (pending, staged, done_live), items sort by --sort:
   sparsest       events asc, sources asc, media asc, birthYear asc (null last), id asc
@@ -130,11 +135,18 @@ Run full-archive invariants across local data/*.yaml files:
   4. Dual-mode compilation (private and public) with 0 review flags, 0 living leaks, and 0 duplicate residence_spans
   5. Media file presence on disk under archive-media/ or media/, and no two media ids share one normalized file path
   6. Living-name scan of public text. The scan reads narrative title, summary, and body after public redaction. It reads captions and provenance of media that public export keeps. It reads source citations. It reads titles and summaries of events that have no living participant. Living-only events and other events with a living participant are omitted, because public export drops or redacts them.
+  7. Tree hygiene diagnostics (warnings by default; fail only with --strict-hygiene):
+     - Excess parents (>2 non-adoptive parents or >1 non-adoptive mother/father)
+     - Parent-child chronology (child born before parent age 13, after mother's death, or >1 year after father's death)
+     - Child marriage (spouse with known birth year under age 14 at marriage date)
+     - Duplicate vital events (multiple births/deaths on one person, or duplicate marriages for one couple)
+     - Empty GEDCOM placeholder events (title starting with "Recorded event for ")
 
 Options:
-  --repo <dir>   Archive repository root (default: current working directory)
-  --json         Emit structured JSON scorecard
-  -h, --help     Show this help message`;
+  --repo <dir>       Archive repository root (default: current working directory)
+  --strict-hygiene   Fail verification (exit 1) when any tree-hygiene warning is found
+  --json             Emit structured JSON scorecard (includes hygiene.warnings and hygiene.counts)
+  -h, --help         Show this help message`;
 
 export const SYNC_HELP = `Usage: kinloom sync [options]
 

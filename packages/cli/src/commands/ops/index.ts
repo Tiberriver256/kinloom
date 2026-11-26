@@ -152,6 +152,7 @@ export {
   indexEndOfLinePersonIds,
   parseStatusSort,
   runStatusCommand,
+  type BiographyCoverageSummary,
   type BiographyQueueStatus,
   type DeceasedQueueItem,
   type StatusCommandOptions,
@@ -161,13 +162,18 @@ export {
 } from './status.js';
 
 export {
+  TREE_HYGIENE_CATEGORIES,
   VERIFY_HELP,
+  analyzeTreeHygiene,
   findDuplicateResidenceSpans,
   formatVerifyTextReport,
   runVerifyCommand,
   scanYamlFilesForSsns,
   validatePlaceCoordinates,
   verifyMediaFilesOnDisk,
+  type TreeHygieneCategory,
+  type TreeHygieneSummary,
+  type TreeHygieneWarning,
   type VerifyCitationsResult,
   type VerifyCommandOptions,
   type VerifyCommandResult,

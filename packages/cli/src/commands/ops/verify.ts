@@ -41,8 +41,22 @@ import {
   type LivingNameHit,
   type LivingNameTarget,
 } from './living-name-matcher.js';
+import {
+  TREE_HYGIENE_CATEGORIES,
+  analyzeTreeHygiene,
+  type TreeHygieneCategory,
+  type TreeHygieneSummary,
+  type TreeHygieneWarning,
+} from './tree-hygiene.js';
 
 export { VERIFY_HELP } from './help.js';
+export {
+  TREE_HYGIENE_CATEGORIES,
+  analyzeTreeHygiene,
+  type TreeHygieneCategory,
+  type TreeHygieneSummary,
+  type TreeHygieneWarning,
+};
 
 const URL_RE = /https?:\/\/\S+/g;
 const SSN_LINE_RE = /(?<![A-Za-z0-9_/-])\d{3}-\d{2}-\d{4}(?![A-Za-z0-9_/-])/g;
@@ -52,6 +66,7 @@ const IGNORED_SSN_YAML_KEY_RE =
 export interface VerifyCommandOptions {
   repoDir?: string;
   json?: boolean;
+  strictHygiene?: boolean;
 }
 
 export interface VerifyCitationsResult {
@@ -123,6 +138,7 @@ export interface VerifyCommandResult {
   ok: boolean;
   repo: string;
   duration_ms: number;
+  strictHygiene: boolean;
   checks: {
     citations: VerifyCitationsResult;
     places: VerifyPlacesResult;
@@ -131,6 +147,8 @@ export interface VerifyCommandResult {
     media: VerifyMediaResult;
     livingNames: VerifyLivingNamesResult;
   };
+  hygiene: TreeHygieneSummary;
+  warnings: string[];
   errors: string[];
   rendered: string;
 }
@@ -467,6 +485,16 @@ export function scanPublicLivingNames(input: {
 
 export function formatVerifyTextReport(report: Omit<VerifyCommandResult, 'rendered'>): string {
   const status = report.ok ? 'PASS' : 'FAIL';
+  const hygieneWarningCount = report.hygiene.warnings.length;
+  const hygieneStatus =
+    hygieneWarningCount === 0 ? 'PASS' : report.strictHygiene ? 'FAIL' : 'WARN';
+  const hygieneCountDetail = TREE_HYGIENE_CATEGORIES.filter(
+    (category) => report.hygiene.counts[category] > 0
+  )
+    .map((category) => `${category}=${report.hygiene.counts[category]}`)
+    .join(', ');
+  const hygieneSuffix = hygieneCountDetail ? ` (${hygieneCountDetail})` : '';
+
   const lines: string[] = [
     `Verify [${status}] ${report.repo} (${report.duration_ms} ms)`,
     `  1. Citations: ${report.checks.citations.ok ? 'PASS' : 'FAIL'} | narratives=${report.checks.citations.narrativesChecked} errors=${report.checks.citations.errors.length}`,
@@ -475,6 +503,7 @@ export function formatVerifyTextReport(report: Omit<VerifyCommandResult, 'render
     `  4. Dual compile: ${report.checks.compile.ok ? 'PASS' : 'FAIL'} | private(people=${report.checks.compile.privateCounts.people}, events=${report.checks.compile.privateCounts.events}, spans=${report.checks.compile.privateCounts.residence_spans}, flags=${report.checks.compile.privateReviewFlags.length}, leaks=${report.checks.compile.privateLivingLeaks.length}) public(people=${report.checks.compile.publicCounts.people}, living_redacted=${report.checks.compile.publicCounts.living_redacted}, flags=${report.checks.compile.publicReviewFlags.length}, leaks=${report.checks.compile.publicLivingLeaks.length}) dupSpans=${report.checks.compile.duplicateResidenceSpans.length}`,
     `  5. Media disk: ${report.checks.media.ok ? 'PASS' : 'FAIL'} | layout=${report.checks.media.mediaLayout} checked=${report.checks.media.checkedCount} missing=${report.checks.media.missingFiles.length} duplicates=${report.checks.media.duplicateFiles.length}`,
     `  6. Living names: ${report.checks.livingNames.ok ? 'PASS' : 'FAIL'} | hits=${report.checks.livingNames.hits.length}`,
+    `  7. Tree hygiene: ${hygieneStatus} | warnings=${hygieneWarningCount}${hygieneSuffix}`,
   ];
 
   for (const err of report.errors.slice(0, 30)) {
@@ -482,6 +511,16 @@ export function formatVerifyTextReport(report: Omit<VerifyCommandResult, 'render
   }
   if (report.errors.length > 30) {
     lines.push(`  ... and ${report.errors.length - 30} more error(s).`);
+  }
+
+  if (report.warnings.length > 0) {
+    lines.push(`Tree hygiene warnings (${report.warnings.length}):`);
+    for (const warning of report.warnings.slice(0, 30)) {
+      lines.push(`  WARN: ${warning}`);
+    }
+    if (report.warnings.length > 30) {
+      lines.push(`  ... and ${report.warnings.length - 30} more warning(s).`);
+    }
   }
 
   return `${lines.join('\n')}\n`;
@@ -619,6 +658,11 @@ export async function runVerifyCommand(
     privacy: siteConfig.privacy,
   });
 
+  // 7. Non-breaking tree-hygiene diagnostics (fail only when --strict-hygiene is enabled).
+  const strictHygiene = Boolean(options.strictHygiene);
+  const hygiene = analyzeTreeHygiene({ people, events, kinship });
+  const warnings = hygiene.warnings.map((warning) => `[${warning.category}] ${warning.message}`);
+
   const errors: string[] = [
     ...citations.errors.map((e) => `citations: ${e}`),
     ...placesCheck.invalidPlaces.map((p) => `places: '${p.id}' ${p.reason}`),
@@ -635,6 +679,9 @@ export async function runVerifyCommand(
       (dup) => `media: duplicate file '${dup.file}' on ${dup.mediaIds.join(', ')}`
     ),
     ...livingNames.hits.map((hit) => `living-name: ${hit.location} matched '${hit.match}'`),
+    ...(strictHygiene
+      ? hygiene.warnings.map((warning) => `hygiene(${warning.category}): ${warning.message}`)
+      : []),
   ];
 
   const durationMs = Math.round(performance.now() - t0);
@@ -642,6 +689,7 @@ export async function runVerifyCommand(
     ok: errors.length === 0,
     repo: repoDir,
     duration_ms: durationMs,
+    strictHygiene,
     checks: {
       citations,
       places: placesCheck,
@@ -650,6 +698,8 @@ export async function runVerifyCommand(
       media: mediaCheck,
       livingNames,
     },
+    hygiene,
+    warnings,
     errors,
   };
 
