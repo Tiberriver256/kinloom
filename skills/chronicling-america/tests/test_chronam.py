@@ -119,7 +119,7 @@ class TestChronamCli(unittest.TestCase):
         self.assertIn("timed out after 5.0s", str(ctx.exception))
         self.assertIn("chronam url", str(ctx.exception))
 
-    def test_503_retries_once_and_raises_actionable_error(self) -> None:
+    def test_503_retries_until_exhausted_and_raises_actionable_error(self) -> None:
         attempts = 0
 
         def handler(request: httpx.Request) -> httpx.Response:
@@ -134,8 +134,52 @@ class TestChronamCli(unittest.TestCase):
             with self.assertRaises(chronam.click.ClickException) as ctx:
                 chronam._get_json(chronam.COLLECTION_BASE, params=[("q", "Lincoln")], timeout=8.0, client=client)
 
-        self.assertEqual(attempts, 2)
+        self.assertEqual(attempts, chronam.MAX_ATTEMPTS)
         self.assertIn("HTTP 503", str(ctx.exception))
+
+    def test_read_timeout_retries_inside_full_budget_and_recovers(self) -> None:
+        attempts = 0
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            nonlocal attempts
+            attempts += 1
+            if attempts == 1:
+                raise httpx.ReadTimeout("stalled socket", request=request)
+            return httpx.Response(200, json={"search": {"hits": 5}, "results": []})
+
+        with (
+            patch.object(chronam.time, "sleep", return_value=None),
+            httpx.Client(transport=httpx.MockTransport(handler)) as client,
+        ):
+            data = chronam._get_json(
+                chronam.COLLECTION_BASE, params=[("q", "Lincoln")], timeout=120.0, client=client
+            )
+
+        self.assertEqual(attempts, 2)
+        self.assertEqual(data["search"]["hits"], 5)
+
+    def test_multi_attempt_429_and_503_recover_with_retry_after(self) -> None:
+        attempts = 0
+        sleeps: list[float] = []
+
+        def handler(_request: httpx.Request) -> httpx.Response:
+            nonlocal attempts
+            attempts += 1
+            if attempts == 1:
+                return httpx.Response(429, headers={"Retry-After": "2"}, text="slow down")
+            if attempts == 2:
+                return httpx.Response(503, headers={"Retry-After": "3"}, text="busy")
+            return httpx.Response(200, json={"search": {"hits": 7}, "results": [{"date": "1902"}]})
+
+        with (
+            patch.object(chronam.time, "sleep", side_effect=sleeps.append),
+            httpx.Client(transport=httpx.MockTransport(handler)) as client,
+        ):
+            data = chronam._get_json(chronam.COLLECTION_BASE, params=[("q", "railroad")], timeout=60.0, client=client)
+
+        self.assertEqual(attempts, 3)
+        self.assertEqual(sleeps, [2.0, 3.0])
+        self.assertEqual(data["search"]["hits"], 7)
 
     def test_remote_protocol_error_recovers_on_retry(self) -> None:
         attempts = 0
@@ -407,6 +451,199 @@ class TestChronamGetAndDownloadCache(unittest.TestCase):
             for path in written:
                 self.assertTrue(path.resolve().is_relative_to(out.resolve()), path)
                 self.assertNotIn("..", path.name)
+
+    def test_get_and_page_emit_cache_hit_and_strip_query_highlight(self) -> None:
+        runner = CliRunner()
+        u1 = "https://www.loc.gov/resource/sn83045462/1865-04-15/ed-1/?sp=4&q=railroad"
+        u2 = "https://www.loc.gov/resource/sn83045462/1865-04-15/ed-1/?sp=4&q=lincoln"
+
+        first = runner.invoke(chronam.cli, ["get", u1, "--json"])
+        second = runner.invoke(chronam.cli, ["page", u2, "--json"])
+
+        self.assertEqual(first.exit_code, 0, first.output)
+        self.assertEqual(second.exit_code, 0, second.output)
+        self.assertIs(json.loads(first.output)["cache_hit"], False)
+        self.assertIs(json.loads(second.output)["cache_hit"], True)
+        self.assertEqual(
+            self.get_calls,
+            ["https://www.loc.gov/resource/sn83045462/1865-04-15/ed-1/?sp=4&fo=json"],
+        )
+
+    def test_download_json_emits_cache_hit_and_resolves_page_specific_iiif_and_sp(self) -> None:
+        self.item["page"] = [
+            {
+                "mimetype": "image/jp2",
+                "url": "https://tile.loc.gov/storage-services/service/ndnp/sn83045462/0004.jp2",
+                "info": "https://tile.loc.gov/image-services/iiif/service:ndnp:sn83045462:0004/info.json",
+            },
+            {
+                "mimetype": "application/pdf",
+                "url": "https://tile.loc.gov/storage-services/service/ndnp/sn83045462/0004.pdf",
+            },
+        ]
+
+        def fake_download(url, *, timeout):
+            del timeout
+            self.download_calls.append(url)
+            if url.endswith(".jpg"):
+                return b"\xff\xd8\xff\xe0page-4-jpeg"
+            return b"%PDF-1.4 page-4-pdf"
+
+        self._download.stop()
+        try:
+            with patch.object(chronam, "_download_bytes", side_effect=fake_download):
+                runner = CliRunner()
+                with tempfile.TemporaryDirectory() as work:
+                    out = Path(work) / "papers"
+                    url = "https://www.loc.gov/resource/sn83045462/1865-04-15/ed-1/?sp=4&q=railroad"
+                    args = [
+                        "download",
+                        url,
+                        "--out",
+                        str(out),
+                        "--no-pdf",
+                        "--image",
+                        "--image-width",
+                        "2000",
+                        "--json",
+                    ]
+                    r1 = runner.invoke(chronam.cli, args)
+                    self.assertEqual(r1.exit_code, 0, r1.output)
+                    p1 = json.loads(r1.output)
+                    self.assertIs(p1["cache_hit"], False)
+                    self.assertIs(p1["metadata_cache_hit"], False)
+                    self.assertEqual(
+                        p1["files"][0]["url"],
+                        "https://tile.loc.gov/image-services/iiif/service:ndnp:sn83045462:0004/full/2000,/0/default.jpg",
+                    )
+                    self.assertTrue(p1["files"][0]["path"].endswith("_sp4.jpg"))
+                    self.assertEqual(Path(p1["files"][0]["path"]).read_bytes(), b"\xff\xd8\xff\xe0page-4-jpeg")
+
+                    r2 = runner.invoke(chronam.cli, args)
+                    self.assertEqual(r2.exit_code, 0, r2.output)
+                    p2 = json.loads(r2.output)
+                    self.assertIs(p2["cache_hit"], True)
+                    self.assertIs(p2["metadata_cache_hit"], True)
+                    self.assertIs(p2["files"][0]["cache_hit"], True)
+                    self.assertEqual(len(self.download_calls), 1)
+        finally:
+            self._download.start()
+
+
+class TestChronamDownloadHardening(unittest.TestCase):
+    def setUp(self) -> None:
+        self._tmp = tempfile.TemporaryDirectory()
+        self._env = patch.dict(os.environ, {"KINLOOM_CHRONAM_CACHE_DIR": self._tmp.name})
+        self._env.start()
+
+    def tearDown(self) -> None:
+        self._env.stop()
+        self._tmp.cleanup()
+
+    def test_stream_download_retries_429_503_timeout_and_caches(self) -> None:
+        pdf_url = "https://tile.loc.gov/storage-services/service/ndnp/sn83045462/0001.pdf"
+        pdf_bytes = b"%PDF-1.4\nreliable-newspaper"
+        attempts = 0
+        sleeps: list[float] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            nonlocal attempts
+            attempts += 1
+            self.assertEqual(request.headers.get("referer"), "https://www.loc.gov/")
+            if attempts == 1:
+                return httpx.Response(429, headers={"Retry-After": "2"}, text="rate limited")
+            if attempts == 2:
+                raise httpx.ReadTimeout("slow tile server", request=request)
+            if attempts == 3:
+                return httpx.Response(503, text="busy")
+            return httpx.Response(
+                200,
+                headers={"content-type": "application/pdf", "content-length": str(len(pdf_bytes))},
+                content=pdf_bytes,
+            )
+
+        with (
+            patch.object(chronam.time, "sleep", side_effect=sleeps.append),
+            httpx.Client(transport=httpx.MockTransport(handler)) as client,
+        ):
+            path1, nbytes1, ct1, hit1 = chronam.cached_download_file(
+                pdf_url, timeout=60.0, refresh=False, ttl_hours=24.0, kind="pdf", client=client
+            )
+            path2, nbytes2, ct2, hit2 = chronam.cached_download_file(
+                pdf_url, timeout=60.0, refresh=False, ttl_hours=24.0, kind="pdf", client=client
+            )
+
+        self.assertEqual(attempts, 4)
+        self.assertEqual(sleeps[0], 2.0)
+        self.assertIs(hit1, False)
+        self.assertIs(hit2, True)
+        self.assertEqual(nbytes1, len(pdf_bytes))
+        self.assertEqual(nbytes2, len(pdf_bytes))
+        self.assertEqual(ct1, "application/pdf")
+        self.assertEqual(ct2, "application/pdf")
+        self.assertEqual(path1.read_bytes(), pdf_bytes)
+        self.assertEqual(path1, path2)
+
+    def test_download_refuses_html_error_pages_and_non_loc_hosts(self) -> None:
+        for bad_url in (
+            "https://evil.example/page.pdf",
+            "http://tile.loc.gov/storage-services/page.pdf",
+            "https://user@tile.loc.gov/storage-services/page.pdf",
+        ):
+            with self.assertRaises(chronam.click.ClickException):
+                chronam.cached_download_file(
+                    bad_url, timeout=10.0, refresh=False, ttl_hours=24.0, kind="pdf"
+                )
+
+        def html_handler(_request: httpx.Request) -> httpx.Response:
+            return httpx.Response(
+                200,
+                headers={"content-type": "text/html; charset=utf-8"},
+                text="<!doctype html><html><body>Rate limit page</body></html>",
+            )
+
+        with httpx.Client(transport=httpx.MockTransport(html_handler)) as client:
+            with self.assertRaises(chronam.click.ClickException) as pdf_err:
+                chronam.cached_download_file(
+                    "https://tile.loc.gov/storage-services/page.pdf",
+                    timeout=10.0,
+                    refresh=False,
+                    ttl_hours=24.0,
+                    kind="pdf",
+                    client=client,
+                )
+            with self.assertRaises(chronam.click.ClickException) as jpg_err:
+                chronam.cached_download_file(
+                    "https://tile.loc.gov/image-services/iiif/x/full/pct:50/0/default.jpg",
+                    timeout=10.0,
+                    refresh=False,
+                    ttl_hours=24.0,
+                    kind="image",
+                    client=client,
+                )
+
+        self.assertIn("HTML", str(pdf_err.exception))
+        self.assertIn("HTML", str(jpg_err.exception))
+        files_dir = Path(self._tmp.name) / "files"
+        cached_bins = list(files_dir.glob("*.bin")) if files_dir.exists() else []
+        self.assertEqual(cached_bins, [])
+
+    def test_download_cli_rejects_parent_traversal_out_dir(self) -> None:
+        runner = CliRunner()
+        res = runner.invoke(
+            chronam.cli,
+            [
+                "download",
+                "--lccn",
+                "sn83045462",
+                "--date",
+                "1865-04-15",
+                "--out",
+                "../escape-dir",
+            ],
+        )
+        self.assertNotEqual(res.exit_code, 0, res.output)
+        self.assertIn("Unsafe output directory", res.output)
 
 
 if __name__ == "__main__":

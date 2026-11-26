@@ -472,14 +472,21 @@ class TestNaraDiskCaching(unittest.TestCase):
             self.assertEqual(len(query_files), 1)
             self.assertEqual(len(query_files[0].stem), 64)
 
-            # Second identical call -> ZERO HTTP requests.
+            # Second identical call -> ZERO HTTP requests and cache_hit: True.
             r2 = runner.invoke(
                 nara.cli,
                 ["search", "Harriet Tubman", "--rg", "15", "--online", "--api-key", "k", "--json"],
             )
             self.assertEqual(r2.exit_code, 0, r2.output)
             self.assertEqual(len(api_calls), 1)
-            self.assertEqual(json.loads(r2.output), json.loads(r1.output))
+            p1 = json.loads(r1.output)
+            p2 = json.loads(r2.output)
+            self.assertIs(p1["cache_hit"], False)
+            self.assertIs(p2["cache_hit"], True)
+            self.assertEqual(
+                {k: v for k, v in p2.items() if k != "cache_hit"},
+                {k: v for k, v in p1.items() if k != "cache_hit"},
+            )
 
             # --refresh bypasses query cache.
             r3 = runner.invoke(
@@ -498,7 +505,9 @@ class TestNaraDiskCaching(unittest.TestCase):
             )
             self.assertEqual(r3.exit_code, 0, r3.output)
             self.assertEqual(len(api_calls), 2)
-            self.assertEqual(json.loads(r3.output)["results"][0]["naId"], "1002")
+            p3 = json.loads(r3.output)
+            self.assertIs(p3["cache_hit"], False)
+            self.assertEqual(p3["results"][0]["naId"], "1002")
 
             # --cache-ttl-hours 0 bypasses query cache.
             r4 = runner.invoke(
@@ -518,7 +527,9 @@ class TestNaraDiskCaching(unittest.TestCase):
             )
             self.assertEqual(r4.exit_code, 0, r4.output)
             self.assertEqual(len(api_calls), 3)
-            self.assertEqual(json.loads(r4.output)["results"][0]["naId"], "1003")
+            p4 = json.loads(r4.output)
+            self.assertIs(p4["cache_hit"], False)
+            self.assertEqual(p4["results"][0]["naId"], "1003")
 
     def test_naid_and_filename_path_safety(self) -> None:
         runner = CliRunner()
@@ -1261,6 +1272,332 @@ def _census_sheet(index: int) -> str:
         "1950census/43290879-Illinois/43290879-Illinois-087558/"
         f"43290879-Illinois-087558-{index:04d}.jpg"
     )
+
+
+class TestNaraDownloadHardeningAndTelemetry(unittest.TestCase):
+    def setUp(self) -> None:
+        self._tmp = tempfile.TemporaryDirectory(prefix="kinloom-nara-hardening-")
+        self.cache_root = Path(self._tmp.name) / "cache"
+        self.work_dir = Path(self._tmp.name) / "work"
+        self.work_dir.mkdir(parents=True, exist_ok=True)
+        self._env_patch = patch.dict(
+            os.environ, {"KINLOOM_NARA_CACHE_DIR": str(self.cache_root)}
+        )
+        self._env_patch.start()
+
+    def tearDown(self) -> None:
+        self._env_patch.stop()
+        self._tmp.cleanup()
+
+    def test_get_emits_boolean_cache_hit_in_json_mode(self) -> None:
+        api_calls: list[str] = []
+
+        def fake_api_get_json(url: str, _api_key: str, *, client: httpx.Client | None = None):
+            del client
+            api_calls.append(url)
+            return TestNaraDiskCaching._sample_record_response("595367", "Census Roll", page_count=2)
+
+        runner = CliRunner()
+        with patch.object(nara, "_api_get_json", side_effect=fake_api_get_json):
+            r1 = runner.invoke(nara.cli, ["get", "595367", "--api-key", "k", "--json"])
+            r2 = runner.invoke(nara.cli, ["get", "595367", "--api-key", "k", "--json"])
+            r3 = runner.invoke(nara.cli, ["get", "595367", "--refresh", "--api-key", "k", "--json"])
+
+        self.assertEqual(r1.exit_code, 0, r1.output)
+        self.assertEqual(r2.exit_code, 0, r2.output)
+        self.assertEqual(r3.exit_code, 0, r3.output)
+        self.assertEqual(len(api_calls), 2)
+        self.assertIs(json.loads(r1.output)["cache_hit"], False)
+        self.assertIs(json.loads(r2.output)["cache_hit"], True)
+        self.assertIs(json.loads(r3.output)["cache_hit"], False)
+
+    def test_direct_url_download_caches_atomically_emits_json_and_honors_refresh(self) -> None:
+        url = "https://s3.amazonaws.com/NARAprodstorage/opastorage/live/12/34/sheet_001.jpg"
+        calls: list[str] = []
+        version = {"v": 1}
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            calls.append(str(request.url))
+            body = b"\xff\xd8\xff\xe0" + f"scan-v{version['v']}".encode()
+            return httpx.Response(
+                200,
+                headers={"content-type": "image/jpeg", "content-length": str(len(body))},
+                content=body,
+            )
+
+        def fake_client() -> httpx.Client:
+            return httpx.Client(transport=httpx.MockTransport(handler))
+
+        out1 = self.work_dir / "first.jpg"
+        out2 = self.work_dir / "second.jpg"
+        out3 = self.work_dir / "third.jpg"
+        runner = CliRunner()
+
+        with patch.object(nara, "_new_download_client", side_effect=fake_client):
+            r1 = runner.invoke(nara.cli, ["download", url, "--out", str(out1), "--json"])
+            self.assertEqual(r1.exit_code, 0, r1.output)
+            p1 = json.loads(r1.output)
+            self.assertIs(p1["cache_hit"], False)
+            self.assertEqual(p1["url"], url)
+            self.assertEqual(p1["path"], str(out1))
+            self.assertEqual(p1["content_type"], "image/jpeg")
+            self.assertEqual(p1["bytes"], len(b"\xff\xd8\xff\xe0scan-v1"))
+            self.assertEqual(out1.read_bytes(), b"\xff\xd8\xff\xe0scan-v1")
+            self.assertEqual(len(calls), 1)
+            self.assertEqual(len(list((self.cache_root / "downloads").glob("*.bin"))), 1)
+
+            r2 = runner.invoke(nara.cli, ["download", url, "--out", str(out2), "--json"])
+            self.assertEqual(r2.exit_code, 0, r2.output)
+            p2 = json.loads(r2.output)
+            self.assertIs(p2["cache_hit"], True)
+            self.assertEqual(p2["content_type"], "image/jpeg")
+            self.assertEqual(p2["bytes"], len(b"\xff\xd8\xff\xe0scan-v1"))
+            self.assertEqual(out2.read_bytes(), b"\xff\xd8\xff\xe0scan-v1")
+            self.assertEqual(len(calls), 1)
+
+            version["v"] = 2
+            r3 = runner.invoke(nara.cli, ["download", url, "--out", str(out3), "--refresh", "--json"])
+            self.assertEqual(r3.exit_code, 0, r3.output)
+            p3 = json.loads(r3.output)
+            self.assertIs(p3["cache_hit"], False)
+            self.assertEqual(out3.read_bytes(), b"\xff\xd8\xff\xe0scan-v2")
+            self.assertEqual(len(calls), 2)
+
+    def test_naid_download_json_reports_cache_hit_and_accepts_catalog_url(self) -> None:
+        meta_calls: list[str] = []
+        obj_calls: list[str] = []
+
+        def fake_api_get_json(url: str, _api_key: str, *, client: httpx.Client | None = None):
+            del client
+            meta_calls.append(url)
+            return TestNaraDiskCaching._sample_record_response("595367", "Census Roll", page_count=2)
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            obj_calls.append(str(request.url))
+            return httpx.Response(
+                200,
+                headers={"content-type": "image/jpeg"},
+                content=b"\xff\xd8\xff\xe0valid-jpeg",
+            )
+
+        out1 = self.work_dir / "naid1"
+        out2 = self.work_dir / "naid2"
+        runner = CliRunner()
+        with (
+            patch.object(nara, "_api_get_json", side_effect=fake_api_get_json),
+            patch.object(
+                nara,
+                "_new_download_client",
+                side_effect=lambda: httpx.Client(transport=httpx.MockTransport(handler)),
+            ),
+        ):
+            r1 = runner.invoke(
+                nara.cli,
+                ["download", "https://catalog.archives.gov/id/595367", "--pages", "1", "--out", str(out1), "--api-key", "k", "--json"],
+            )
+            self.assertEqual(r1.exit_code, 0, r1.output)
+            p1 = json.loads(r1.output)
+            self.assertEqual(p1["naId"], "595367")
+            self.assertIs(p1["cache_hit"], False)
+            self.assertIs(p1["metadata_cache_hit"], False)
+            self.assertEqual(p1["content_type"], "image/jpeg")
+            self.assertEqual(p1["count"], 1)
+            self.assertIs(p1["files"][0]["cache_hit"], False)
+
+            r2 = runner.invoke(
+                nara.cli,
+                ["download", "595367", "--pages", "1", "--out", str(out2), "--api-key", "k", "--json"],
+            )
+            self.assertEqual(r2.exit_code, 0, r2.output)
+            p2 = json.loads(r2.output)
+            self.assertIs(p2["cache_hit"], True)
+            self.assertIs(p2["metadata_cache_hit"], True)
+            self.assertIs(p2["files"][0]["cache_hit"], True)
+            self.assertEqual(len(meta_calls), 1)
+            self.assertEqual(len(obj_calls), 1)
+
+    def test_download_retries_on_429_503_timeout_protocol_error_and_incomplete_body(self) -> None:
+        url = "https://s3.amazonaws.com/NARAprodstorage/opastorage/live/retry.pdf"
+        pdf_bytes = b"%PDF-1.4\nvalid-pdf-body"
+        cases: list[tuple[str, list[object], list[float] | None]] = [
+            (
+                "429",
+                [
+                    httpx.Response(429, headers={"Retry-After": "4"}, text="slow down"),
+                    httpx.Response(200, headers={"content-type": "application/pdf"}, content=pdf_bytes),
+                ],
+                [4.0],
+            ),
+            (
+                "503",
+                [
+                    httpx.Response(503, text="busy"),
+                    httpx.Response(200, headers={"content-type": "application/pdf"}, content=pdf_bytes),
+                ],
+                None,
+            ),
+            (
+                "timeout",
+                [
+                    httpx.ReadTimeout("timed out"),
+                    httpx.Response(200, headers={"content-type": "application/pdf"}, content=pdf_bytes),
+                ],
+                None,
+            ),
+            (
+                "protocol",
+                [
+                    httpx.RemoteProtocolError("peer reset"),
+                    httpx.Response(200, headers={"content-type": "application/pdf"}, content=pdf_bytes),
+                ],
+                None,
+            ),
+            (
+                "incomplete",
+                [
+                    httpx.Response(
+                        200,
+                        headers={"content-type": "application/pdf", "content-length": "200"},
+                        content=b"%PDF-1.4\ntrunc",
+                    ),
+                    httpx.Response(
+                        200,
+                        headers={"content-type": "application/pdf", "content-length": str(len(pdf_bytes))},
+                        content=pdf_bytes,
+                    ),
+                ],
+                None,
+            ),
+        ]
+
+        for label, outcomes, expected_sleeps in cases:
+            attempts = 0
+            sleeps: list[float] = []
+
+            def handler(request: httpx.Request, outcomes=outcomes) -> httpx.Response:
+                nonlocal attempts
+                item = outcomes[attempts]
+                attempts += 1
+                if isinstance(item, Exception):
+                    item.request = request
+                    raise item
+                return item
+
+            dest = self.work_dir / f"retry_{label}.pdf"
+            with (
+                patch.object(nara.time, "sleep", side_effect=sleeps.append),
+                patch.object(
+                    nara,
+                    "_new_download_client",
+                    side_effect=lambda: httpx.Client(transport=httpx.MockTransport(handler)),
+                ),
+            ):
+                res = CliRunner().invoke(
+                    nara.cli, ["download", url, "--out", str(dest), "--refresh", "--json"]
+                )
+            self.assertEqual(res.exit_code, 0, f"{label}: {res.output}")
+            self.assertEqual(attempts, 2, label)
+            self.assertEqual(dest.read_bytes(), pdf_bytes, label)
+            if expected_sleeps is not None:
+                self.assertEqual(sleeps, expected_sleeps, label)
+            else:
+                self.assertEqual(len(sleeps), 1, label)
+
+    def test_api_get_json_retries_transient_503_and_timeout(self) -> None:
+        attempts = 0
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            nonlocal attempts
+            attempts += 1
+            if attempts == 1:
+                return httpx.Response(503, headers={"Retry-After": "2"}, text="unavailable")
+            if attempts == 2:
+                raise httpx.ReadTimeout("slow api", request=request)
+            return httpx.Response(200, json={"body": {"hits": {"total": 1, "hits": []}}})
+
+        sleeps: list[float] = []
+        with (
+            patch.object(nara.time, "sleep", side_effect=sleeps.append),
+            httpx.Client(transport=httpx.MockTransport(handler)) as client,
+        ):
+            data = nara._api_get_json(
+                "https://catalog.archives.gov/api/v2/records/search?q=Lincoln",
+                "k",
+                client=client,
+            )
+        self.assertEqual(attempts, 3)
+        self.assertEqual(sleeps[0], 2.0)
+        self.assertEqual(data["body"]["hits"]["total"], 1)
+
+    def test_download_refuses_html_error_pages_and_disallowed_hosts_and_traversal(self) -> None:
+        runner = CliRunner()
+        bad_urls = [
+            "https://evil.example/NARAprodstorage/page.jpg",
+            "http://s3.amazonaws.com/NARAprodstorage/page.jpg",
+            "https://s3.amazonaws.com/unrelated-bucket/page.jpg",
+            "https://user@catalog.archives.gov/file.pdf",
+        ]
+        for bad_url in bad_urls:
+            res = runner.invoke(
+                nara.cli, ["download", bad_url, "--out", str(self.work_dir / "x.jpg"), "--json"]
+            )
+            self.assertNotEqual(res.exit_code, 0, bad_url)
+            self.assertFalse((self.work_dir / "x.jpg").exists())
+
+        traversal = runner.invoke(
+            nara.cli,
+            [
+                "download",
+                "https://s3.amazonaws.com/NARAprodstorage/mock/page.jpg",
+                "--out",
+                "../escape.jpg",
+                "--json",
+            ],
+        )
+        self.assertNotEqual(traversal.exit_code, 0, traversal.output)
+
+        def html_handler(_request: httpx.Request) -> httpx.Response:
+            return httpx.Response(
+                200,
+                headers={"content-type": "text/html; charset=utf-8"},
+                text="<!doctype html><html><body>Access Denied</body></html>",
+            )
+
+        out_pdf = self.work_dir / "bad.pdf"
+        out_jpg = self.work_dir / "bad.jpg"
+        with patch.object(
+            nara,
+            "_new_download_client",
+            side_effect=lambda: httpx.Client(transport=httpx.MockTransport(html_handler)),
+        ):
+            r_pdf = runner.invoke(
+                nara.cli,
+                [
+                    "download",
+                    "https://s3.amazonaws.com/NARAprodstorage/mock/doc.pdf",
+                    "--out",
+                    str(out_pdf),
+                    "--json",
+                ],
+            )
+            r_jpg = runner.invoke(
+                nara.cli,
+                [
+                    "download",
+                    "https://s3.amazonaws.com/NARAprodstorage/mock/scan.jpg",
+                    "--out",
+                    str(out_jpg),
+                    "--json",
+                ],
+            )
+
+        self.assertNotEqual(r_pdf.exit_code, 0, r_pdf.output)
+        self.assertNotEqual(r_jpg.exit_code, 0, r_jpg.output)
+        self.assertIn("HTML", r_pdf.output)
+        self.assertIn("HTML", r_jpg.output)
+        self.assertFalse(out_pdf.exists())
+        self.assertFalse(out_jpg.exists())
+        self.assertEqual(list((self.cache_root / "downloads").glob("*.bin")), [])
 
 
 if __name__ == "__main__":

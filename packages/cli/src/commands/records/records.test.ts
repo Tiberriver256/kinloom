@@ -577,6 +577,18 @@ describe('help vs subcommand routing and guide-only commands', () => {
         stdout: '{"total":0,"records":[],"cache_hit":true}\n',
         cacheHit: true,
       },
+      {
+        command: 'nara',
+        args: ['download', '595367', '--json'],
+        stdout: '{"naId":"595367","bytes":128,"path":"/tmp/out","url":"https://catalog.archives.gov/id/595367","content_type":"image/jpeg","cache_hit":true}\n',
+        cacheHit: true,
+      },
+      {
+        command: 'chronam',
+        args: ['download', '--lccn', 'sn83045462', '--date', '1865-04-15', '--json'],
+        stdout: '{"resource_url":"https://www.loc.gov/resource/sn83045462/1865-04-15/ed-1/?sp=1","bytes":512,"cache_hit":false,"files":[]}\n',
+        cacheHit: false,
+      },
     ];
     for (const item of cases) {
       await runRecordCommand(item.command, item.args, {
@@ -595,6 +607,8 @@ describe('help vs subcommand routing and guide-only commands', () => {
       'records:findagrave',
       'records:gnis',
       'records:va-archives',
+      'records:nara',
+      'records:chronam',
     ]);
   });
 

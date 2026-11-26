@@ -22,8 +22,10 @@ Path: `skills/nara-catalog-search/scripts/nara`
 Cache layout:
 
 - `records/<naid>.json`: full record metadata and digital object inventory shared by `get` and `download` (upgraded automatically if `--text` is requested later).
-- `objects/<naid>/<page>_<safe_filename>`: individual downloaded page scans, so overlapping page slices (for example `--pages 315-350` followed by `--pages 340-360` or another biographer working the same census roll) reuse already-fetched pages straight from disk.
+- `objects/<naid>/<page>_<safe_filename>`: individual downloaded page scans with sidecar `.meta.json`, so overlapping page slices (for example `--pages 315-350` followed by `--pages 340-360` or another biographer working the same census roll) reuse already-fetched pages straight from disk.
+- `downloads/<sha256>.bin` and `downloads/<sha256>.json`: cached direct NARA or NARA S3 URL downloads with stored content type and byte count.
 - `_queries/<sha256>.json`: cached `search` query payloads keyed by canonical query parameters with a 168-hour (7-day) default TTL (`--cache-ttl-hours` or `KINLOOM_NARA_QUERY_TTL_HOURS`).
+- `--json` on `search`, `get`, `download`, `census1950`, and `census1950-image` includes a boolean `cache_hit` field. `download` streams to a temporary file, retries transient HTTP 429/5xx, timeout, protocol, and incomplete-body errors up to 4 times (honoring `Retry-After`), enforces an `archives.gov` / NARA S3 host allowlist, and refuses HTML error pages or S3 XML errors before caching.
 - `census1950/<sha256>.json`: cached `census1950` responses, same TTL and the same `--cache-ttl-hours` / `KINLOOM_NARA_QUERY_TTL_HOURS` knobs. `0` skips cached reads.
 - `census1950-images/<sha256>.jpg`: cached `census1950-image` JPEGs. The key is the schedule `image` path plus the requested width (`full` when `--width` is omitted). The same TTL knobs apply. `0` skips cached reads. The command writes a file only after the body starts with the JPEG bytes `FF D8 FF`. HTML, HTTP errors, and non-JPEG bodies are not cached. Each image has its own cache file and its own lock, including when one command downloads several sheets.
 
@@ -58,11 +60,14 @@ Note on large multi-page file units: `nara get --text` prints text only when NAR
 ### Download digitized scans with compact provenance metadata
 
 ```bash
-# Download selected 1-based pages plus compact metadata.json
-skills/nara-catalog-search/scripts/nara download <naid> --pages 1-5 --out ./downloads/nara-<naid>
+# Download selected 1-based pages plus compact metadata.json (accepts NAID or catalog.archives.gov/id/<naid>)
+skills/nara-catalog-search/scripts/nara download <naid> --pages 1-5 --out ./downloads/nara-<naid> --json
 
-# Download all images in a file unit
+# Download all images in a file unit (concurrent up to 4 workers)
 skills/nara-catalog-search/scripts/nara download <naid> --out ./downloads/nara-<naid>
+
+# Download a direct NARA or NARA S3 file URL with atomic disk caching
+skills/nara-catalog-search/scripts/nara download "https://s3.amazonaws.com/NARAprodstorage/..." --out ./downloads/page.jpg --json
 ```
 
 ### Search the 1950 Census population schedules
