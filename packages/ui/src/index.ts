@@ -69,6 +69,7 @@ export type { ArchiveProviderProps } from './context/ArchiveProvider.js';
 
 // Pages
 export { IndexPage } from './pages/IndexPage.js';
+export { NotFoundPage } from './pages/NotFoundPage.js';
 export { PersonPage } from './pages/PersonPage.js';
 export { PlacePage } from './pages/PlacePage.js';
 export { PlacesIndexPage } from './pages/PlacesIndexPage.js';

@@ -124,8 +124,11 @@ test('all 9 archival routes render cleanly with zero console or page errors', as
   expect(errors).toEqual([]);
 });
 
-test('unknown route redirects back to the family index', async ({ page }) => {
+test('unknown route renders archival NotFoundPage with recovery links', async ({ page }) => {
   await page.goto('/nonexistent-route-check');
+  await expect(page).toHaveURL(/\/nonexistent-route-check$/);
+  await expect(page.getByRole('heading', { name: 'Page Not Found', exact: true })).toBeVisible();
+  await page.locator('.not-found-actions a[href="/"]').click();
   await expect(page).toHaveURL(/\/$/);
   await expect(page.getByRole('heading', { name: 'Lincoln & Todd Family' })).toBeVisible();
 });

@@ -10,6 +10,7 @@ import {
 } from 'maplibre-gl';
 import type { ErrorEvent, GeoJSONSource, Source, StyleSpecification } from 'maplibre-gl';
 import type { Feature, FeatureCollection } from 'geojson';
+import { KINLOOM_COLOR_TOKENS } from '../lib/tokens.js';
 import type {
   LineageRouteMode,
   MapJourneyState,
@@ -77,7 +78,7 @@ function setPeriodBasemap(map: MapLibreMap): void {
       type: 'fill',
       source: 'osm_land',
       'source-layer': 'land',
-      paint: { 'fill-color': '#EFE4C8' },
+      paint: { 'fill-color': KINLOOM_COLOR_TOKENS.warmLinen },
     },
     beforeId,
   );
@@ -87,12 +88,12 @@ const SOURCE_ID = 'kinloom-migration';
 const STOP_LAYER_ID = 'migration-stops';
 
 const FALLBACK_ERA_COLORS = [
-  '#1B2A41',
-  '#2F5245',
-  '#7A4612',
-  '#8F2D24',
-  '#1D4E89',
-  '#5A4B3C',
+  KINLOOM_COLOR_TOKENS.archivalIndigo,
+  KINLOOM_COLOR_TOKENS.pineMoss,
+  KINLOOM_COLOR_TOKENS.loomOchre,
+  KINLOOM_COLOR_TOKENS.sealCrimson,
+  KINLOOM_COLOR_TOKENS.cobaltInk,
+  KINLOOM_COLOR_TOKENS.warmSepia,
 ];
 
 const PAPER_STYLE = {
@@ -104,7 +105,7 @@ const PAPER_STYLE = {
     {
       id: 'paper',
       type: 'background',
-      paint: { 'background-color': '#ece4d2' },
+      paint: { 'background-color': KINLOOM_COLOR_TOKENS.warmLinen },
     },
   ],
 } satisfies StyleSpecification;
@@ -237,7 +238,7 @@ function buildFamilyOverlay(input: {
       properties: {
         kind: 'stop',
         id: stop.id,
-        color: input.stageColors.get(stop.lineageStage) ?? '#1B2A41',
+        color: input.stageColors.get(stop.lineageStage) ?? KINLOOM_COLOR_TOKENS.archivalIndigo,
         label: `${stop.year} · ${stop.place.name}`,
         selected: stop.id === input.selectedStopId,
         showLabel: wantsLabel(
@@ -286,7 +287,7 @@ function addFamilyLayers(map: MapLibreMap): void {
     filter: ['==', ['get', 'kind'], 'guide'],
     layout: { 'line-cap': 'round', 'line-join': 'round' },
     paint: {
-      'line-color': '#7A4612',
+      'line-color': KINLOOM_COLOR_TOKENS.loomOchre,
       'line-width': 1.2,
       'line-opacity': 0.32,
       'line-dasharray': [1.4, 1.2],
@@ -300,10 +301,10 @@ function addFamilyLayers(map: MapLibreMap): void {
     filter: ['==', ['get', 'kind'], 'future'],
     paint: {
       'circle-radius': 3.8,
-      'circle-color': '#736857',
+      'circle-color': KINLOOM_COLOR_TOKENS.slateTaupe,
       'circle-opacity': 0.78,
       'circle-stroke-width': 1,
-      'circle-stroke-color': '#5C5344',
+      'circle-stroke-color': KINLOOM_COLOR_TOKENS.warmSepia,
     },
   });
 
@@ -314,7 +315,7 @@ function addFamilyLayers(map: MapLibreMap): void {
     filter: ['all', ['==', ['get', 'kind'], 'route'], ['==', ['get', 'dashed'], false], ['==', ['get', 'latest'], false]],
     layout: { 'line-cap': 'round', 'line-join': 'round' },
     paint: {
-      'line-color': '#7A4612',
+      'line-color': KINLOOM_COLOR_TOKENS.loomOchre,
       'line-width': 1.8,
       'line-opacity': 0.78,
     },
@@ -327,7 +328,7 @@ function addFamilyLayers(map: MapLibreMap): void {
     filter: ['all', ['==', ['get', 'kind'], 'route'], ['==', ['get', 'dashed'], false], ['==', ['get', 'latest'], true]],
     layout: { 'line-cap': 'round', 'line-join': 'round' },
     paint: {
-      'line-color': '#8F2D24',
+      'line-color': KINLOOM_COLOR_TOKENS.sealCrimson,
       'line-width': 2.6,
       'line-opacity': 0.95,
     },
@@ -340,7 +341,7 @@ function addFamilyLayers(map: MapLibreMap): void {
     filter: ['all', ['==', ['get', 'kind'], 'route'], ['==', ['get', 'dashed'], true], ['==', ['get', 'latest'], false]],
     layout: { 'line-cap': 'round', 'line-join': 'round' },
     paint: {
-      'line-color': '#7A4612',
+      'line-color': KINLOOM_COLOR_TOKENS.loomOchre,
       'line-width': 1.8,
       'line-opacity': 0.78,
       'line-dasharray': [2, 1.4],
@@ -354,7 +355,7 @@ function addFamilyLayers(map: MapLibreMap): void {
     filter: ['all', ['==', ['get', 'kind'], 'route'], ['==', ['get', 'dashed'], true], ['==', ['get', 'latest'], true]],
     layout: { 'line-cap': 'round', 'line-join': 'round' },
     paint: {
-      'line-color': '#8F2D24',
+      'line-color': KINLOOM_COLOR_TOKENS.sealCrimson,
       'line-width': 2.6,
       'line-opacity': 0.95,
       'line-dasharray': [2, 1.4],
@@ -368,10 +369,10 @@ function addFamilyLayers(map: MapLibreMap): void {
     filter: ['all', ['==', ['get', 'kind'], 'stop'], ['==', ['get', 'selected'], true]],
     paint: {
       'circle-radius': 18,
-      'circle-color': '#7A4612',
+      'circle-color': KINLOOM_COLOR_TOKENS.loomOchre,
       'circle-opacity': 0.55,
       'circle-stroke-width': 2,
-      'circle-stroke-color': '#F4E2B8',
+      'circle-stroke-color': KINLOOM_COLOR_TOKENS.amberWash,
     },
   });
 
@@ -382,9 +383,9 @@ function addFamilyLayers(map: MapLibreMap): void {
     filter: ['==', ['get', 'kind'], 'stop'],
     paint: {
       'circle-radius': ['case', ['==', ['get', 'selected'], true], 9, 5],
-      'circle-color': ['coalesce', ['get', 'color'], '#1B2A41'],
+      'circle-color': ['coalesce', ['get', 'color'], KINLOOM_COLOR_TOKENS.archivalIndigo],
       'circle-stroke-width': 1.5,
-      'circle-stroke-color': '#FCF9F2',
+      'circle-stroke-color': KINLOOM_COLOR_TOKENS.ragCard,
     },
   });
 
@@ -409,8 +410,8 @@ function addFamilyLayers(map: MapLibreMap): void {
       'text-optional': true,
     },
     paint: {
-      'text-color': '#1B2A41',
-      'text-halo-color': '#FCF9F2',
+      'text-color': KINLOOM_COLOR_TOKENS.archivalIndigo,
+      'text-halo-color': KINLOOM_COLOR_TOKENS.ragCard,
       'text-halo-width': 1.4,
     },
   });
@@ -431,8 +432,8 @@ function addFamilyLayers(map: MapLibreMap): void {
       'text-padding': 4,
     },
     paint: {
-      'text-color': '#1B2A41',
-      'text-halo-color': '#FCF9F2',
+      'text-color': KINLOOM_COLOR_TOKENS.archivalIndigo,
+      'text-halo-color': KINLOOM_COLOR_TOKENS.ragCard,
       'text-halo-width': 1.6,
     },
   });
@@ -1183,7 +1184,7 @@ export const MapPage: React.FC = () => {
             <span key={era.id} className="map-legend-item">
               <span
                 className="map-legend-swatch"
-                style={{ backgroundColor: stageColorMap.get(era.id) ?? '#1B2A41' }}
+                style={{ backgroundColor: stageColorMap.get(era.id) ?? KINLOOM_COLOR_TOKENS.archivalIndigo }}
                 aria-hidden="true"
               />
               {era.label}
@@ -1205,7 +1206,7 @@ export const MapPage: React.FC = () => {
                 <div className="map-stop-meta">
                   <span
                     className="map-stop-eyebrow"
-                    style={{ color: stageColorMap.get(selectedStop.lineageStage) ?? '#1B2A41' }}
+                    style={{ color: stageColorMap.get(selectedStop.lineageStage) ?? KINLOOM_COLOR_TOKENS.archivalIndigo }}
                   >
                     <span>{selectedStop.displayDate}</span>
                     <span className="map-stop-stage">

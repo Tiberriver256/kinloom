@@ -82,7 +82,6 @@ export const LocalSurveyMap: React.FC<LocalSurveyMapProps> = ({
   const centerPlacement = useMemo<{
     x: number;
     titleY: number;
-    scopeY: number;
     anchor: 'start' | 'end' | 'middle';
     box: { x1: number; x2: number; y1: number; y2: number };
   }>(() => {
@@ -90,37 +89,32 @@ export const LocalSurveyMap: React.FC<LocalSurveyMapProps> = ({
     const candidates: {
       x: number;
       titleY: number;
-      scopeY: number;
       anchor: 'start' | 'end' | 'middle';
       box: { x1: number; x2: number; y1: number; y2: number };
     }[] = [
       {
         x: cx + pad,
-        titleY: cy - (compact ? 2 : 3),
-        scopeY: cy + (compact ? 10 : 12),
+        titleY: cy + (compact ? 4 : 4),
         anchor: 'start',
-        box: { x1: cx + 4, x2: cx + 175, y1: cy - 18, y2: cy + 20 },
+        box: { x1: cx + 4, x2: cx + 175, y1: cy - 14, y2: cy + 12 },
       },
       {
         x: cx - pad,
-        titleY: cy - (compact ? 2 : 3),
-        scopeY: cy + (compact ? 10 : 12),
+        titleY: cy + (compact ? 4 : 4),
         anchor: 'end',
-        box: { x1: cx - 175, x2: cx - 4, y1: cy - 18, y2: cy + 20 },
+        box: { x1: cx - 175, x2: cx - 4, y1: cy - 14, y2: cy + 12 },
       },
       {
         x: cx,
-        titleY: cy - (compact ? 18 : 26),
-        scopeY: cy - (compact ? 7 : 13),
+        titleY: cy - (compact ? 14 : 18),
         anchor: 'middle',
-        box: { x1: cx - 90, x2: cx + 90, y1: cy - 40, y2: cy - 8 },
+        box: { x1: cx - 90, x2: cx + 90, y1: cy - 32, y2: cy - 8 },
       },
       {
         x: cx,
-        titleY: cy + (compact ? 16 : 22),
-        scopeY: cy + (compact ? 26 : 34),
+        titleY: cy + (compact ? 18 : 24),
         anchor: 'middle',
-        box: { x1: cx - 90, x2: cx + 90, y1: cy + 8, y2: cy + 40 },
+        box: { x1: cx - 90, x2: cx + 90, y1: cy + 8, y2: cy + 32 },
       },
     ];
 
@@ -170,28 +164,29 @@ export const LocalSurveyMap: React.FC<LocalSurveyMapProps> = ({
       clusterCounts.set(markers[i].place.id, extras);
     }
 
-    const charW = isNarrow ? 6.2 : 5.6;
+    const charW = isNarrow ? 8.6 : 7.4;
     for (const m of markers) {
       if (skippedIds.has(m.place.id)) {
         continue;
       }
       const extras = clusterCounts.get(m.place.id) || 0;
-      const textLen = (m.place.name.length + (extras > 0 ? 11 : 8)) * charW;
+      const labelText = `${m.place.name} (${m.distanceMiles} mi${extras > 0 ? ` +${extras}` : ''})`;
+      const textLen = labelText.length * charW + 8;
 
       const preferredRight = m.x >= cx;
       const candidates: { anchor: 'start' | 'end'; lx: number; ly: number }[] = [
-        { anchor: preferredRight ? 'start' : 'end', lx: m.x + (preferredRight ? 8 : -8), ly: m.y + 3 },
-        { anchor: preferredRight ? 'end' : 'start', lx: m.x + (preferredRight ? -8 : 8), ly: m.y + 3 },
-        { anchor: preferredRight ? 'start' : 'end', lx: m.x + (preferredRight ? 8 : -8), ly: m.y - 10 },
-        { anchor: preferredRight ? 'start' : 'end', lx: m.x + (preferredRight ? 8 : -8), ly: m.y + 15 },
+        { anchor: preferredRight ? 'start' : 'end', lx: m.x + (preferredRight ? 8 : -8), ly: m.y + 4 },
+        { anchor: preferredRight ? 'end' : 'start', lx: m.x + (preferredRight ? -8 : 8), ly: m.y + 4 },
+        { anchor: preferredRight ? 'start' : 'end', lx: m.x + (preferredRight ? 8 : -8), ly: m.y - 12 },
+        { anchor: preferredRight ? 'start' : 'end', lx: m.x + (preferredRight ? 8 : -8), ly: m.y + 17 },
       ];
 
       for (const c of candidates) {
         const x1 = c.anchor === 'start' ? c.lx : c.lx - textLen;
         const x2 = c.anchor === 'start' ? c.lx + textLen : c.lx;
-        const y1 = c.ly - 11;
+        const y1 = c.ly - 13;
         const y2 = c.ly + 4;
-        if (x1 < 6 || x2 > width - 26 || y1 < 6 || y2 > height - 4) {
+        if (x1 < 8 || x2 > width - 28 || y1 < 6 || y2 > height - 4) {
           continue;
         }
         const overlaps = placed.some(
@@ -222,24 +217,44 @@ export const LocalSurveyMap: React.FC<LocalSurveyMapProps> = ({
         width="100%"
         style={{
           display: 'block',
-          background: '#F4EFE3',
-          border: '1px solid #D5CCB8',
-          borderRadius: 2,
+          background: 'var(--surface-canvas)',
+          border: '1px solid var(--border-decorative)',
+          borderRadius: 'var(--radius-sm)',
         }}
         role="img"
         aria-label={`Geographic survey map centered on ${center.full_name} with ${markers.length} nearby archived places`}
       >
         {Array.from({ length: compact || isNarrow ? 3 : 5 }).map((_, i) => {
           const x = ((i + 1) / (compact || isNarrow ? 4 : 6)) * width;
-          return <line key={`vx-${x}`} x1={x} y1={0} x2={x} y2={height} stroke="#E2D9C5" strokeWidth="1" />;
+          return (
+            <line
+              key={`vx-${x}`}
+              x1={x}
+              y1={0}
+              x2={x}
+              y2={height}
+              stroke="var(--surface-muted)"
+              strokeWidth="1"
+            />
+          );
         })}
         {Array.from({ length: compact ? 2 : 3 }).map((_, i) => {
           const y = ((i + 1) / (compact ? 3 : 4)) * height;
-          return <line key={`hz-${y}`} x1={0} y1={y} x2={width} y2={y} stroke="#E2D9C5" strokeWidth="1" />;
+          return (
+            <line
+              key={`hz-${y}`}
+              x1={0}
+              y1={y}
+              x2={width}
+              y2={y}
+              stroke="var(--surface-muted)"
+              strokeWidth="1"
+            />
+          );
         })}
 
-        <line x1={cx} y1={0} x2={cx} y2={height} stroke="#D5CCB8" strokeDasharray="3 3" />
-        <line x1={0} y1={cy} x2={width} y2={cy} stroke="#D5CCB8" strokeDasharray="3 3" />
+        <line x1={cx} y1={0} x2={cx} y2={height} stroke="var(--border-decorative)" strokeDasharray="3 3" />
+        <line x1={0} y1={cy} x2={width} y2={cy} stroke="var(--border-decorative)" strokeDasharray="3 3" />
 
         {scopeMode === 'county' && (
           <rect
@@ -248,7 +263,7 @@ export const LocalSurveyMap: React.FC<LocalSurveyMapProps> = ({
             width={radiusPx * 2.9}
             height={radiusPx * 2}
             fill="rgba(47, 82, 69, 0.08)"
-            stroke="#2F5245"
+            stroke="var(--accent-secondary)"
             strokeWidth="1.4"
             strokeDasharray="6 4"
           />
@@ -259,7 +274,7 @@ export const LocalSurveyMap: React.FC<LocalSurveyMapProps> = ({
             cy={cy}
             r={radiusPx}
             fill="rgba(47, 82, 69, 0.08)"
-            stroke="#2F5245"
+            stroke="var(--accent-secondary)"
             strokeWidth="1.4"
             strokeDasharray="5 3"
           />
@@ -292,7 +307,7 @@ export const LocalSurveyMap: React.FC<LocalSurveyMapProps> = ({
                 y1={cy}
                 x2={m.x}
                 y2={m.y}
-                stroke={m.inRadius ? '#7A4612' : '#9E9687'}
+                stroke={m.inRadius ? 'var(--accent-primary)' : 'var(--border-control)'}
                 strokeWidth={m.inRadius ? 1.1 : 0.75}
                 strokeDasharray="2 3"
                 opacity={0.7}
@@ -301,8 +316,8 @@ export const LocalSurveyMap: React.FC<LocalSurveyMapProps> = ({
                 cx={m.x}
                 cy={m.y}
                 r={compact ? 3.2 : 4.5}
-                fill={m.inRadius ? '#2F5245' : '#FCF9F2'}
-                stroke={m.inRadius ? '#FCF9F2' : '#4E4A42'}
+                fill={m.inRadius ? 'var(--accent-secondary)' : 'var(--surface-card)'}
+                stroke={m.inRadius ? 'var(--surface-card)' : 'var(--text-secondary)'}
                 strokeWidth="1.2"
               />
               {!compact && lbl && (
@@ -310,11 +325,11 @@ export const LocalSurveyMap: React.FC<LocalSurveyMapProps> = ({
                   x={lbl.lx}
                   y={lbl.ly}
                   textAnchor={lbl.anchor}
-                  fontSize={isNarrow ? '10' : '9.2'}
-                  fontFamily="IBM Plex Mono, monospace"
-                  fill={m.inRadius ? '#1B2A41' : '#4E4A42'}
+                  fontSize={isNarrow ? '13.5' : '11.5'}
+                  fontFamily="var(--font-mono)"
+                  fill={m.inRadius ? 'var(--surface-header)' : 'var(--text-secondary)'}
                   paintOrder="stroke"
-                  stroke="#F4EFE3"
+                  stroke="var(--surface-canvas)"
                   strokeWidth="4"
                   strokeLinejoin="round"
                 >
@@ -325,45 +340,48 @@ export const LocalSurveyMap: React.FC<LocalSurveyMapProps> = ({
           );
         })}
 
-        <circle cx={cx} cy={cy} r={compact ? 5 : 6.5} fill="#7A4612" stroke="#FCF9F2" strokeWidth="1.8" />
+        <circle
+          cx={cx}
+          cy={cy}
+          r={compact ? 5 : 6.5}
+          fill="var(--accent-primary)"
+          stroke="var(--surface-card)"
+          strokeWidth="1.8"
+        />
         <text
           className="local-survey-center-label"
           x={centerPlacement.x}
           y={centerPlacement.titleY}
           textAnchor={centerPlacement.anchor}
-          fontSize={compact ? '9.5' : isNarrow ? '12.5' : '11.5'}
+          fontSize={compact ? '12.5' : isNarrow ? '13.5' : '12'}
           fontWeight="700"
-          fontFamily="IBM Plex Mono, monospace"
-          fill="#1B2A41"
+          fontFamily="var(--font-mono)"
+          fill="var(--surface-header)"
           paintOrder="stroke"
-          stroke="#F4EFE3"
+          stroke="var(--surface-canvas)"
           strokeWidth="4"
           strokeLinejoin="round"
         >
           {center.name}
         </text>
-        <text
-          x={centerPlacement.x}
-          y={centerPlacement.scopeY}
-          textAnchor={centerPlacement.anchor}
-          fontSize={compact ? '7.8' : isNarrow ? '10.2' : '9'}
-          fontFamily="IBM Plex Mono, monospace"
-          fill="#4E4A42"
-          paintOrder="stroke"
-          stroke="#F4EFE3"
-          strokeWidth="4"
-          strokeLinejoin="round"
-        >
-          {scopeLabel}
-        </text>
 
         <g transform={`translate(${width - 18}, 16)`} aria-hidden="true">
-          <path d="M 0 -7 L 3 2 L 0 0 L -3 2 Z" fill="#1B2A41" />
-          <text x="0" y="10" textAnchor="middle" fontSize="7.5" fontWeight="700" fontFamily="IBM Plex Mono, monospace" fill="#1B2A41">
+          <path d="M 0 -7 L 3 2 L 0 0 L -3 2 Z" fill="var(--surface-header)" />
+          <text
+            x="0"
+            y="10"
+            textAnchor="middle"
+            fontSize="7.5"
+            fontWeight="700"
+            fontFamily="var(--font-mono)"
+            fill="var(--surface-header)"
+          >
             N
           </text>
         </g>
       </svg>
+
+      <div className="local-survey-caption">{scopeLabel}</div>
 
       {!compact && markers.length > 0 && (
         <nav className="local-survey-nearby-strip" aria-label={`Nearby places around ${center.name}`}>

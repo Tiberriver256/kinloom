@@ -38,7 +38,7 @@ p {
 }
 
 ::placeholder {
-  color: #6b6456;
+  color: var(--text-secondary);
   opacity: 1;
 }
 
@@ -245,7 +245,7 @@ select {
   margin: 0;
   color: var(--text-secondary);
   font-size: 1.02rem;
-  max-width: 64ch;
+  max-width: 56ch;
 }
 
 /* Compact axis headers (/places, /time) — matches index-banner rhythm */
@@ -540,12 +540,14 @@ select {
 .conflict-pill {
   display: inline-block;
   font-family: var(--font-mono);
-  font-size: 0.72rem;
+  font-size: 0.74rem;
   font-weight: 600;
-  padding: 1px 6px;
+  line-height: 1.3;
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
   border-bottom: 1.5px solid var(--status-conflict);
-  background: rgba(143, 45, 36, 0.08);
-  color: var(--status-conflict);
+  background: var(--diff-del-bg);
+  color: var(--diff-del-fg);
   margin-left: 6px;
 }
 
@@ -555,7 +557,7 @@ select {
   border-left: 2px solid var(--border-decorative);
   font-size: 0.9rem;
   color: var(--text-secondary);
-  max-width: 66ch;
+  max-width: 56ch;
 }
 
 .source-details ul {
@@ -608,7 +610,7 @@ select {
   margin: 0;
   color: var(--text-secondary);
   font-size: 1.02rem;
-  max-width: 62ch;
+  max-width: 56ch;
 }
 
 .filter-bar {
@@ -635,7 +637,7 @@ select {
 .index-banner p {
   font-size: 0.94rem;
   line-height: 1.4;
-  max-width: none;
+  max-width: 56ch;
 }
 
 .index-filter-bar {
@@ -956,12 +958,12 @@ select.pill-btn option {
   margin: 0;
   color: var(--text-primary);
   line-height: 1.68;
-  max-width: 66ch;
+  max-width: 56ch;
 }
 
 .also-here {
   margin-top: 14px;
-  max-width: 66ch;
+  max-width: 56ch;
 }
 
 .also-here summary {
@@ -1644,7 +1646,7 @@ select.pill-btn option {
 }
 
 .place-page p {
-  max-width: 66ch;
+  max-width: 56ch;
 }
 
 .place-dossier-title {
@@ -1741,6 +1743,13 @@ select.pill-btn option {
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+
+.local-survey-caption {
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  line-height: 1.4;
+  color: var(--text-secondary);
 }
 
 .local-survey-nearby-strip {
@@ -1853,8 +1862,8 @@ select.pill-btn option {
     45deg,
     var(--radar-local),
     var(--radar-local) 6px,
-    #4c7364 6px,
-    #4c7364 12px
+    color-mix(in srgb, var(--radar-local) 72%, var(--surface-card)) 6px,
+    color-mix(in srgb, var(--radar-local) 72%, var(--surface-card)) 12px
   );
 }
 
@@ -2714,7 +2723,7 @@ html.tree-viewport-lock body {
   width: 100%;
   background: var(--surface-card);
   border: 1px solid var(--border-decorative);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   padding: 10px;
   box-shadow: var(--shadow-card);
   display: flex;
@@ -2724,8 +2733,8 @@ html.tree-viewport-lock body {
 }
 
 .tree-roll-unit.is-direct {
-  border-color: var(--border-control);
-  border-left: 4px solid var(--surface-header);
+  border: 1.5px solid var(--surface-header);
+  box-shadow: var(--shadow-card);
 }
 
 .tree-roll-unit.is-dimmed {
@@ -2899,10 +2908,10 @@ html.tree-viewport-lock body {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  padding: 8px 10px;
-  border-radius: 4px;
-  background: var(--surface-linen);
-  border: 1px solid var(--border-decorative);
+  padding: 2px 0;
+  border-radius: 0;
+  background: transparent;
+  border: none;
 }
 
 .tree-early-strip-heading {
@@ -3228,7 +3237,7 @@ html.tree-viewport-lock body {
 }
 
 .map-page {
-  background-color: #ece4d2;
+  background-color: var(--surface-linen);
   background-image: none;
 }
 
@@ -3237,7 +3246,7 @@ html.tree-viewport-lock body {
   inset: 0;
   width: 100%;
   height: 100%;
-  background: #ece4d2;
+  background: var(--surface-linen);
 }
 
 .map-style-note {
@@ -3716,7 +3725,7 @@ html.tree-viewport-lock body {
 }
 
 .transcript-mark {
-  background: #f2d488;
+  background: var(--badge-memory-bg);
   color: var(--surface-header);
   padding: 0 2px;
   border-radius: 2px;
@@ -4360,7 +4369,7 @@ dialog.global-search-backdrop {
 }
 
 .person-biography-entry {
-  max-width: 68ch;
+  max-width: 56ch;
 }
 
 .person-biography-entry + .person-biography-entry {
@@ -5529,7 +5538,7 @@ dialog.global-search-backdrop {
     padding: 8px 14px calc(10px + env(safe-area-inset-bottom, 0px));
     background: rgba(252, 249, 242, 0.97);
     backdrop-filter: blur(8px);
-    border-top: 1px solid #c9bfa9;
+    border-top: 1px solid var(--border-decorative);
     box-shadow: 0 -6px 20px rgba(27, 42, 65, 0.1);
   }
 
@@ -6300,8 +6309,8 @@ dialog.global-search-backdrop {
    ========================================================================== */
 @media print {
   body {
-    background: #ffffff !important;
-    color: #111111 !important;
+    background: white !important;
+    color: var(--text-primary) !important;
     font-size: 10.5pt;
   }
 
@@ -6331,7 +6340,7 @@ dialog.global-search-backdrop {
     break-inside: avoid;
     page-break-inside: avoid;
     box-shadow: none !important;
-    border-color: #888888 !important;
+    border-color: var(--border-control) !important;
   }
 
   .explorer-split {
@@ -6351,8 +6360,8 @@ dialog.global-search-backdrop {
 
   .person-header,
   .story-card {
-    background: #ffffff !important;
-    border-bottom: 1px solid #aaaaaa !important;
+    background: white !important;
+    border-bottom: 1px solid var(--border-control) !important;
     box-shadow: none !important;
     break-inside: avoid;
     page-break-inside: avoid;
@@ -6360,7 +6369,7 @@ dialog.global-search-backdrop {
   }
 
   a {
-    color: #111111 !important;
+    color: var(--text-primary) !important;
     text-decoration: none !important;
   }
 }
@@ -6410,44 +6419,44 @@ dialog.global-search-backdrop {
 .evidence-tier-badge {
   display: inline-flex;
   align-items: center;
-  padding: 2px 7px;
-  border-radius: 2px;
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
   border: 1px solid currentColor;
   font-family: var(--font-mono);
-  font-size: 0.7rem;
+  font-size: 0.72rem;
   font-weight: 600;
   letter-spacing: 0.02em;
   line-height: 1.3;
 }
 
 .evidence-tier-badge.tier-primary {
-  color: #1f4d36;
-  background: #eaf4ee;
-  border-color: #9dc2ae;
+  color: var(--badge-cited-fg);
+  background: var(--badge-cited-bg);
+  border-color: var(--accent-secondary);
 }
 
 .evidence-tier-badge.tier-published {
-  color: #1b2a41;
-  background: #ebf0f6;
-  border-color: #9db0c9;
+  color: var(--surface-header);
+  background: var(--surface-linen);
+  border-color: var(--border-control);
 }
 
 .evidence-tier-badge.tier-family {
-  color: #6b4511;
-  background: #f8efdf;
-  border-color: #d6bc90;
+  color: var(--badge-memory-fg);
+  background: var(--badge-memory-bg);
+  border-color: var(--accent-primary);
 }
 
 .evidence-tier-badge.tier-derivative {
-  color: #464e5a;
-  background: #f0f1f3;
-  border-color: #c2c6ce;
+  color: var(--text-secondary);
+  background: var(--surface-muted);
+  border-color: var(--border-control);
 }
 
 .evidence-tier-badge.tier-unverified {
-  color: #84261f;
-  background: #fbeeed;
-  border-color: #ddb0ac;
+  color: var(--diff-del-fg);
+  background: var(--diff-del-bg);
+  border-color: var(--status-conflict);
 }
 
 .evidence-basis-tag {
@@ -7157,12 +7166,12 @@ dialog.global-search-backdrop {
 }
 
 .wiki-btn-primary:hover:not(:disabled) {
-  background: #273b59;
-  border-color: #273b59;
+  background: color-mix(in srgb, var(--surface-header) 86%, var(--surface-card));
+  border-color: color-mix(in srgb, var(--surface-header) 86%, var(--surface-card));
 }
 
 .wiki-btn-primary:active:not(:disabled) {
-  background: #132033;
+  background: color-mix(in srgb, var(--surface-header) 88%, var(--border-strong));
 }
 
 .wiki-btn-primary:disabled {
@@ -8440,11 +8449,11 @@ dialog.global-search-backdrop {
 }
 
 .narrative-audio-dock-progress-fill.is-story {
-  background: #e0a96d;
+  background: var(--badge-memory-bg);
 }
 
 .narrative-audio-dock-progress-fill.is-notes {
-  background: #6db59c;
+  background: var(--diff-add-bg);
 }
 
 .narrative-audio-dock-inner {
@@ -8683,7 +8692,7 @@ dialog.global-search-backdrop {
 }
 
 .pronunciation-prefix {
-  font-family: var(--font-body);
+  font-family: var(--font-serif);
   font-style: italic;
   color: var(--text-secondary);
 }
@@ -8974,13 +8983,14 @@ dialog.global-search-backdrop {
 .pronunciation-variant-btn {
   display: inline-flex;
   align-items: center;
-  padding: 1px 7px;
+  padding: 4px 8px;
   border: 1px solid var(--border-control);
   border-radius: 9999px;
   background: var(--surface-card);
   color: var(--text-secondary);
   font-family: var(--font-mono);
-  font-size: 0.68rem;
+  font-size: 0.72rem;
+  line-height: 1.3;
   cursor: pointer;
   transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease;
 }
@@ -9094,10 +9104,87 @@ dialog.global-search-backdrop {
 }
 
 .wiki-pronunciation-status.is-error {
-  color: var(--status-error, #991b1b);
+  color: var(--diff-del-fg);
 }
 
 .wiki-pronunciation-status.is-success {
-  color: var(--status-success, #166534);
+  color: var(--diff-add-fg);
+}
+
+/* ==========================================================================
+   Archival Not Found Page (*)
+   ========================================================================== */
+.not-found-page {
+  max-width: 780px;
+  margin: 0 auto;
+  padding: 48px 26px 72px;
+}
+
+.not-found-title {
+  font-family: var(--font-serif);
+  font-size: clamp(1.8rem, 3vw, 2.4rem);
+  font-weight: 600;
+  line-height: 1.15;
+  color: var(--surface-header);
+  margin: 0 0 12px;
+}
+
+.not-found-copy {
+  margin: 0 0 24px;
+  color: var(--text-secondary);
+  font-size: 1.02rem;
+  line-height: 1.64;
+  max-width: 56ch;
+}
+
+.not-found-path {
+  font-family: var(--font-mono);
+  font-size: 0.88em;
+  color: var(--text-primary);
+  background: var(--surface-linen);
+  padding: 2px 6px;
+  border-radius: var(--radius-sm);
+}
+
+.not-found-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 12px;
+  align-items: center;
+}
+
+.not-found-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 8px 16px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-control);
+  background: var(--surface-card);
+  color: var(--surface-header);
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background-color 0.14s ease, border-color 0.14s ease, color 0.14s ease;
+}
+
+.not-found-link:hover {
+  border-color: var(--accent-primary);
+  color: var(--accent-primary);
+  background: var(--surface-linen);
+}
+
+.not-found-link.is-primary {
+  background: var(--surface-header);
+  border-color: var(--surface-header);
+  color: var(--text-inverse);
+}
+
+.not-found-link.is-primary:hover {
+  background: color-mix(in srgb, var(--surface-header) 86%, var(--surface-card));
+  border-color: color-mix(in srgb, var(--surface-header) 86%, var(--surface-card));
+  color: var(--text-inverse);
 }
 

@@ -1,5 +1,6 @@
 import type { FilterSpecification, LayerSpecification, StyleSpecification } from 'maplibre-gl';
 import { constrainLayerToDateRange, dateRangeFromDate } from '@openhistoricalmap/maplibre-gl-dates';
+import { KINLOOM_COLOR_TOKENS } from './tokens.js';
 
 export const OHM_STYLE_URL = 'https://www.openhistoricalmap.org/map-styles/main/main.json';
 export const PAPER_LAND_LAYER_ID = 'kinloom-paper-land';
@@ -86,7 +87,7 @@ function transformLayer(layer: LayerSpecification): LayerSpecification | null {
     return {
       ...layer,
       id: PAPER_LAND_LAYER_ID,
-      paint: { 'fill-color': '#EFE4C8' },
+      paint: { 'fill-color': KINLOOM_COLOR_TOKENS.warmLinen },
     };
   }
 

@@ -19,6 +19,7 @@ import { BlankScreenWatchdog } from './components/BlankScreenWatchdog.js';
 import { ExplorerTopBar } from './components/ExplorerTopBar.js';
 import { GlobalSearchModal } from './components/GlobalSearchModal.js';
 import { IndexPage } from './pages/IndexPage.js';
+import { NotFoundPage } from './pages/NotFoundPage.js';
 import { PrivateArchiveGate } from './components/wiki/PrivateArchiveGate.js';
 import { ScrollMemory } from './components/ScrollMemory.js';
 import { SourceInspectorDrawer } from './components/SourceInspectorDrawer.js';
@@ -122,6 +123,7 @@ const RoutedAppShell: React.FC<{ siteTitle: string; baseUrl: string }> = ({
         <Suspense fallback={<RouteLoading />}>
           <Routes>
             <Route path="/" element={<IndexPage />} />
+            <Route path="/people" element={<Navigate to="/" replace />} />
             <Route path="/person/:slug" element={<PersonPage />} />
             <Route path="/places" element={<PlacesIndexPage />} />
             <Route path="/place/:slug" element={<PlacePage />} />
@@ -142,7 +144,7 @@ const RoutedAppShell: React.FC<{ siteTitle: string; baseUrl: string }> = ({
                 />
               );
             })}
-            <Route path="*" element={<Navigate to="/" replace />} />
+            <Route path="*" element={<NotFoundPage />} />
           </Routes>
         </Suspense>
       </AppErrorBoundary>

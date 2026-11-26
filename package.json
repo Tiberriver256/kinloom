@@ -15,6 +15,7 @@
     "test:e2e": "npm run build:data --workspace=@kinloom/demo && npm run build --workspace=@kinloom/demo && playwright test",
     "check:contrast": "node scripts/check-contrast.mjs",
     "check:leaks": "node scripts/check-public-leaks.mjs",
+    "audit:impeccable": "node scripts/audit-impeccable.mjs",
     "check": "npm run lint && npm run build && npm run typecheck && npm test && npm run check:contrast && npm run check:leaks"
   },
   "devDependencies": {

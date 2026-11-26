@@ -550,4 +550,180 @@ test.describe('Wave 50B UX regression suite', () => {
       await wiki.close();
     }
   });
+
+  test('Wave 51B: Impeccable design-quality regressions (tree framing, prose measure, survey map scale, conflict pills, NotFoundPage)', async ({
+    page,
+  }) => {
+    // 1. No side-tab stripe or nested card chrome on Family Tree List View
+    for (const vp of [
+      { name: '1280x800', width: 1280, height: 800 },
+      { name: '390x844', width: 390, height: 844 },
+    ]) {
+      // oxlint-disable-next-line eslint/no-await-in-loop -- check desktop and mobile viewports
+      await page.setViewportSize({ width: vp.width, height: vp.height });
+      // oxlint-disable-next-line eslint/no-await-in-loop -- open List View
+      await page.goto('/tree?surface=roll&mode=full');
+      // oxlint-disable-next-line eslint/no-await-in-loop -- wait for roll units
+      await expect(page.locator('.tree-roll-unit.is-direct').first()).toBeVisible();
+
+      // oxlint-disable-next-line eslint/no-await-in-loop -- measure computed borders and backgrounds
+      const treeMetrics = await page.evaluate(() => {
+        const directUnits = [...document.querySelectorAll('.tree-roll-unit.is-direct')].map((el) => {
+          const s = window.getComputedStyle(el);
+          return {
+            borderLeftWidth: s.borderLeftWidth,
+            borderRightWidth: s.borderRightWidth,
+            borderRadius: s.borderRadius,
+          };
+        });
+        const earlyStrips = [...document.querySelectorAll('.tree-early-strip')].map((el) => {
+          const s = window.getComputedStyle(el);
+          return {
+            borderTopWidth: s.borderTopWidth,
+            backgroundColor: s.backgroundColor,
+          };
+        });
+        return { directUnits, earlyStrips };
+      });
+
+      expect(treeMetrics.directUnits.length).toBeGreaterThan(0);
+      for (const unit of treeMetrics.directUnits) {
+        expect(unit.borderLeftWidth, `Direct unit left/right border mismatch at ${vp.name}`).toBe(
+          unit.borderRightWidth,
+        );
+        expect(unit.borderRadius, `Direct unit borderRadius at ${vp.name}`).toBe('4px');
+      }
+      expect(treeMetrics.earlyStrips.length).toBeGreaterThan(0);
+      for (const strip of treeMetrics.earlyStrips) {
+        expect(strip.borderTopWidth, `Early strip borderTopWidth at ${vp.name}`).toBe('0px');
+        expect(strip.backgroundColor, `Early strip backgroundColor at ${vp.name}`).toBe(
+          'rgba(0, 0, 0, 0)',
+        );
+      }
+
+      // oxlint-disable-next-line eslint/no-await-in-loop -- capture Wave 51B proof
+      await maybeScreenshot(page, `wave51b-tree-roll-${vp.name}.png`);
+    }
+
+    // 2. Editorial line measure on /, /changes, and /person/abraham-lincoln-1809 at 1280x800
+    await page.setViewportSize({ width: 1280, height: 800 });
+    for (const check of [
+      { route: '/', selector: '.index-banner p' },
+      { route: '/changes', selector: '.wire-banner p' },
+      { route: '/person/abraham-lincoln-1809', selector: '.story-card p' },
+    ]) {
+      // oxlint-disable-next-line eslint/no-await-in-loop -- check each editorial route
+      await page.goto(check.route);
+      // oxlint-disable-next-line eslint/no-await-in-loop -- wait for paragraph
+      await expect(page.locator(check.selector).first()).toBeVisible();
+      // oxlint-disable-next-line eslint/no-await-in-loop -- measure paragraph maxWidth and width
+      const proseMetrics = await page.evaluate((sel) => {
+        return [...document.querySelectorAll(sel)].map((el) => {
+          const s = window.getComputedStyle(el);
+          const r = el.getBoundingClientRect();
+          return {
+            maxWidth: s.maxWidth,
+            width: Math.round(r.width),
+          };
+        });
+      }, check.selector);
+      expect(proseMetrics.length).toBeGreaterThan(0);
+      for (const item of proseMetrics) {
+        expect(item.maxWidth, `Prose maxWidth on ${check.route} (${check.selector})`).not.toBe('none');
+        expect(item.width, `Prose rendered width on ${check.route} (${check.selector})`).toBeLessThanOrEqual(
+          620,
+        );
+      }
+    }
+
+    // 3. Survey map text legibility on mobile (390x844)
+    await page.setViewportSize({ width: 390, height: 844 });
+    for (const placeRoute of ['/place/springfield-illinois', '/place/hingham-massachusetts']) {
+      // oxlint-disable-next-line eslint/no-await-in-loop -- visit each Place Profile
+      await page.goto(placeRoute);
+      // oxlint-disable-next-line eslint/no-await-in-loop -- wait for survey map
+      await expect(page.locator('.local-survey-svg')).toBeVisible();
+      // oxlint-disable-next-line eslint/no-await-in-loop -- measure effective SVG text sizes and HTML caption
+      const surveyMetrics = await page.evaluate(() => {
+        const svg = document.querySelector<SVGSVGElement>('.local-survey-svg');
+        const vb = svg?.viewBox.baseVal;
+        const svgRect = svg?.getBoundingClientRect();
+        const scale = vb && vb.width > 0 && svgRect ? svgRect.width / vb.width : 1;
+        const textSizes = [...(svg?.querySelectorAll('text') ?? [])]
+          .filter((el) => !el.closest('[aria-hidden="true"]'))
+          .map((el) => {
+            const raw = Number.parseFloat(window.getComputedStyle(el).fontSize || '0');
+            return {
+              text: el.textContent?.trim() ?? '',
+              effectivePx: Math.round(raw * scale * 10) / 10,
+            };
+          });
+        const caption = document.querySelector('.local-survey-caption');
+        const captionFontPx = caption
+          ? Math.round(Number.parseFloat(window.getComputedStyle(caption).fontSize || '0') * 10) / 10
+          : 0;
+        return { textSizes, captionVisible: Boolean(caption), captionFontPx };
+      });
+      expect(surveyMetrics.captionVisible, `Missing .local-survey-caption on ${placeRoute}`).toBe(true);
+      expect(surveyMetrics.captionFontPx, `Caption fontSize on ${placeRoute}`).toBeGreaterThanOrEqual(12);
+      expect(surveyMetrics.textSizes.length).toBeGreaterThan(0);
+      for (const t of surveyMetrics.textSizes) {
+        expect(
+          t.effectivePx,
+          `SVG text "${t.text}" effective size on ${placeRoute}`,
+        ).toBeGreaterThanOrEqual(12);
+      }
+      if (placeRoute.includes('springfield')) {
+        // oxlint-disable-next-line eslint/no-await-in-loop -- capture survey map proof
+        await maybeScreenshot(page, 'wave51b-survey-springfield-390x844.png');
+      }
+    }
+
+    // 4. Source Discrepancy pill clearance on 390x844 and 1280x800
+    for (const vp of [
+      { name: '390x844', width: 390, height: 844 },
+      { name: '1280x800', width: 1280, height: 800 },
+    ]) {
+      // oxlint-disable-next-line eslint/no-await-in-loop -- check both viewports
+      await page.setViewportSize({ width: vp.width, height: vp.height });
+      // oxlint-disable-next-line eslint/no-await-in-loop -- open Abraham Lincoln profile
+      await page.goto('/person/abraham-lincoln-1809');
+      // oxlint-disable-next-line eslint/no-await-in-loop -- wait for conflict pill
+      await expect(page.locator('.conflict-pill').first()).toBeVisible();
+      // oxlint-disable-next-line eslint/no-await-in-loop -- measure padding
+      const pillPaddings = await page.evaluate(() =>
+        [...document.querySelectorAll('.conflict-pill')].map((el) => {
+          const s = window.getComputedStyle(el);
+          return {
+            top: Number.parseFloat(s.paddingTop || '0'),
+            bottom: Number.parseFloat(s.paddingBottom || '0'),
+          };
+        }),
+      );
+      expect(pillPaddings.length).toBeGreaterThan(0);
+      for (const pad of pillPaddings) {
+        expect(pad.top, `conflict-pill paddingTop at ${vp.name}`).toBeGreaterThanOrEqual(4);
+        expect(pad.bottom, `conflict-pill paddingBottom at ${vp.name}`).toBeGreaterThanOrEqual(4);
+      }
+      if (vp.width === 390) {
+        // oxlint-disable-next-line eslint/no-await-in-loop -- scroll to pill and screenshot
+        await page.locator('.conflict-pill').first().scrollIntoViewIfNeeded();
+        // oxlint-disable-next-line eslint/no-await-in-loop -- capture pill proof
+        await maybeScreenshot(page, 'wave51b-conflict-pill-390x844.png');
+      }
+    }
+
+    // 5. Archival NotFoundPage on unknown route (/does-not-exist)
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.goto('/does-not-exist');
+    await expect(page).toHaveURL(/\/does-not-exist$/);
+    await expect(page.getByRole('heading', { name: 'Page Not Found', exact: true })).toBeVisible();
+    const homeLink = page.locator('.not-found-actions a[href="/"]');
+    const treeLink = page.locator('.not-found-actions a[href="/tree"]');
+    await expect(homeLink).toBeVisible();
+    await expect(treeLink).toBeVisible();
+    await maybeScreenshot(page, 'wave51b-not-found-1280x800.png');
+    await treeLink.click();
+    await expect(page).toHaveURL(/\/tree$/);
+  });
 });

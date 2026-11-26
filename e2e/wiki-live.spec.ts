@@ -316,7 +316,7 @@ test('5. soft-delete hides record from active views and restore brings it back c
   await page.goto(`${wiki.baseUrl}/`);
   await expect(page.getByRole('link', { name: /Samuel Lincoln Jr\./ })).toHaveCount(0);
 
-  // Restore via Recent Changes one-click Undo / Revert on the delete revision
+  // Restore via Revision History one-click Revert on the delete revision
   await page.goto(`${wiki.baseUrl}/changes`);
   const deleteRow = page
     .locator('article.wiki-revision-item')
@@ -324,7 +324,7 @@ test('5. soft-delete hides record from active views and restore brings it back c
     .filter({ hasText: 'delete' })
     .first();
   await expect(deleteRow).toBeVisible();
-  await deleteRow.getByRole('button', { name: 'Undo / Revert' }).click();
+  await deleteRow.getByRole('button', { name: 'Revert' }).click();
   await expect(page.locator('.wiki-status-banner.is-success')).toContainText(/Reverted r\d+/);
 
   await page.goto(`${wiki.baseUrl}/person/samuel-lincoln-jr`);

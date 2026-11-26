@@ -164,3 +164,37 @@ test('KinloomApp applies white-label title, theme accent, custom loader, and qui
   });
   container.remove();
 });
+
+test('KinloomApp renders archival NotFoundPage on unknown routes with links back to People and Family Tree', async () => {
+  const container = document.createElement('div');
+  document.body.append(container);
+  const root = createRoot(container);
+
+  await act(async () => {
+    root.render(
+      <KinloomApp
+        siteConfig={customSiteConfig}
+        initialEntries={['/does-not-exist']}
+        loader={{
+          loadArchive: async () => testBundle,
+          loadReadings: async () => testReadings,
+        }}
+      />,
+    );
+    await new Promise((resolve) => setTimeout(resolve, 40));
+  });
+
+  const heading = container.querySelector('h1');
+  assert.equal(heading?.textContent, 'Page Not Found');
+  assert.match(container.textContent ?? '', /\/does-not-exist/);
+
+  const homeLink = container.querySelector<HTMLAnchorElement>('a[href="/"].not-found-link');
+  const treeLink = container.querySelector<HTMLAnchorElement>('a[href="/tree"].not-found-link');
+  assert.ok(homeLink, 'Expected link back to Archive home (/)');
+  assert.ok(treeLink, 'Expected link to Family Tree (/tree)');
+
+  act(() => {
+    root.unmount();
+  });
+  container.remove();
+});

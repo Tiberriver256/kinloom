@@ -145,11 +145,11 @@ export const RecentChangesPage: React.FC<RecentChangesPageProps> = ({ initialRev
       <main className="place-page">
         <section className="wire-banner" style={{ marginBottom: 18 }}>
           <div>
-            <h1>Recent Changes &amp; Research Waves</h1>
+            <h1>Revision History</h1>
             <p>
-              Complete append-only audit trail of human family edits, AI research batches, and
-              initial archive imports. Every single revision or batch wave can be reverted cleanly
-              without losing history.
+              Complete append-only revision history of family edits, research batches, and initial
+              archive imports. Every revision or research batch can be reverted cleanly without
+              losing history.
             </p>
           </div>
           <div className="folio-metrics">
@@ -331,7 +331,7 @@ export const RecentChangesPage: React.FC<RecentChangesPageProps> = ({ initialRev
                           void handleRevertRevision(rev);
                         }}
                       >
-                        {busyKey === `rev:${rev.revision_id}` ? 'Reverting…' : 'Undo / Revert'}
+                        {busyKey === `rev:${rev.revision_id}` ? 'Reverting…' : 'Revert'}
                       </button>
                     )}
                   </div>

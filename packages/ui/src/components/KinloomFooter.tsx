@@ -13,10 +13,10 @@ export const KinloomMark: React.FC<{ size?: number }> = ({ size = 18 }) => (
     role="img"
     aria-label="Kinloom mark"
   >
-    <path d="M8 2.5V13.5M8 18.5V21.5" stroke="#1B2A41" strokeWidth="2.5" strokeLinecap="round" />
-    <path d="M16 2.5V5.5M16 10.5V21.5" stroke="#1B2A41" strokeWidth="2.5" strokeLinecap="round" />
-    <path d="M2.5 8H5.5M10.5 8H21.5" stroke="var(--accent-primary, #7A4612)" strokeWidth="2.5" strokeLinecap="round" />
-    <path d="M2.5 16H13.5M18.5 16H21.5" stroke="#1B2A41" strokeWidth="2.5" strokeLinecap="round" />
+    <path d="M8 2.5V13.5M8 18.5V21.5" stroke="var(--surface-header)" strokeWidth="2.5" strokeLinecap="round" />
+    <path d="M16 2.5V5.5M16 10.5V21.5" stroke="var(--surface-header)" strokeWidth="2.5" strokeLinecap="round" />
+    <path d="M2.5 8H5.5M10.5 8H21.5" stroke="var(--accent-primary)" strokeWidth="2.5" strokeLinecap="round" />
+    <path d="M2.5 16H13.5M18.5 16H21.5" stroke="var(--surface-header)" strokeWidth="2.5" strokeLinecap="round" />
   </svg>
 );
 
