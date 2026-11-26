@@ -338,11 +338,11 @@ describe('TreePage', () => {
     expect(drawer?.textContent).toContain('Died young');
     expect(drawer?.textContent).toContain('Peter Hale');
     expect(drawer?.querySelector('a[href="/person/peter-hale"]')?.textContent).toContain(
-      'Open Timeline →',
+      'Open Profile →',
     );
   });
 
-  it('defaults to Orthogonal Union-Hub Diagram + Full Tree on desktop (1280px) with remarriage hubs, tap-to-trace spotlighting, and keyboard controls', () => {
+  it('defaults to Chart View + Full Tree on desktop (1280px) with remarriage hubs, tap-to-trace spotlighting, and keyboard controls', () => {
     const { container } = mountTreeAtWidth(1280);
 
     const main = container.querySelector('main.tree-page');
@@ -351,7 +351,7 @@ describe('TreePage', () => {
     expect(document.documentElement.classList.contains('tree-viewport-lock')).toBe(true);
 
     const svg = container.querySelector('svg[role="img"]');
-    expect(svg?.getAttribute('aria-label')).toBe('Hierarchical 2D Hale family tree canvas');
+    expect(svg?.getAttribute('aria-label')).toBe('Hale family tree chart');
 
     // Discrete remarriage hubs I and II exist inside SVG
     const hubs = container.querySelectorAll('.tree-union-hub');
@@ -410,21 +410,21 @@ describe('TreePage', () => {
     expect(svg?.classList.contains('has-selection')).toBe(false);
   });
 
-  it('switches between Roll and Diagram surfaces and filters branches cleanly', () => {
+  it('switches between List and Chart surfaces and filters branches cleanly', () => {
     const { container } = mountTreeAtWidth(1280);
 
-    const rollBtn = [...container.querySelectorAll<HTMLButtonElement>('button')].find(
-      (b) => b.textContent?.trim() === 'Roll',
+    const listBtn = [...container.querySelectorAll<HTMLButtonElement>('button')].find(
+      (b) => b.textContent?.trim() === 'List',
     );
-    expect(rollBtn).not.toBeNull();
+    expect(listBtn).not.toBeNull();
     act(() => {
-      rollBtn?.click();
+      listBtn?.click();
     });
     expect(container.querySelector('main.tree-page')?.getAttribute('data-surface')).toBe('roll');
     expect(document.documentElement.classList.contains('tree-viewport-lock')).toBe(false);
 
     const branchSelect = container.querySelector<HTMLSelectElement>(
-      'select[aria-label="Select family branch for 2D Tree"]',
+      'select[aria-label="Select family branch"]',
     );
     expect(branchSelect).not.toBeNull();
     act(() => {
@@ -481,7 +481,7 @@ describe('TreePage', () => {
     const options = [...container.querySelectorAll<HTMLButtonElement>('[role="option"]')];
     expect(options).toHaveLength(1);
     expect(options[0]?.textContent).toContain('Martha Hale');
-    expect(options[0]?.textContent).toContain('in sibling tray');
+    expect(options[0]?.textContent).toContain('More siblings');
 
     act(() => {
       options[0]?.click();

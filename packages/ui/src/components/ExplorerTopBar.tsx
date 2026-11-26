@@ -2,6 +2,7 @@ import { Link, useLocation } from 'react-router-dom';
 import React, { useEffect, useRef, useState } from 'react';
 import { SignInModal } from './wiki/SignInModal.js';
 import { initialsOf } from './Atoms.js';
+import { KINLOOM_VOCABULARY } from '../lib/vocabulary.js';
 import { useArchiveData } from '../context/ArchiveDataContext.js';
 import { useArchiveUi } from '../context/ArchiveUiContext.js';
 import { useKinloomPlugins } from '../plugins/PluginContext.js';
@@ -131,16 +132,16 @@ export const ExplorerTopBar: React.FC = () => {
           className="nav-pill nav-pill-desktop-only"
           onClick={handleOpenSources}
         >
-          Sources
+          {KINLOOM_VOCABULARY.nav.sources}
         </button>
 
         <button
           type="button"
           className="nav-pill nav-pill-desktop-only"
           onClick={openSearch}
-          title="Search people, places, events, and primary source transcriptions (/ or ⌘K)"
+          title={KINLOOM_VOCABULARY.nav.searchTooltip}
         >
-          Search (/)
+          {KINLOOM_VOCABULARY.nav.searchDesktop}
         </button>
 
         {isInviteViewer && (
@@ -151,7 +152,7 @@ export const ExplorerTopBar: React.FC = () => {
               setSignInOpen(true);
             }}
           >
-            Sign in to edit
+            {KINLOOM_VOCABULARY.nav.signInToEdit}
           </button>
         )}
 
@@ -159,8 +160,8 @@ export const ExplorerTopBar: React.FC = () => {
           type="button"
           className="topbar-mobile-icon-btn"
           onClick={openSearch}
-          aria-label="Search full archive"
-          title="Search full archive"
+          aria-label={KINLOOM_VOCABULARY.nav.searchAria}
+          title={KINLOOM_VOCABULARY.nav.searchAria}
         >
           <svg
             width="17"
@@ -280,7 +281,7 @@ export const ExplorerTopBar: React.FC = () => {
                 className="topbar-account-item topbar-account-item-mobile-only"
                 onClick={handleOpenSources}
               >
-                Primary Sources
+                {KINLOOM_VOCABULARY.nav.sources}
               </button>
 
               {isSignedInMember && capabilities.hasRevisionHistory && (

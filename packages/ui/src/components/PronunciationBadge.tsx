@@ -1,12 +1,21 @@
-import type { Pronunciation, PronunciationVariant } from '@kinloom/core';
+import type { Pronunciation, PronunciationCoverage, PronunciationVariant } from '@kinloom/core';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  KINLOOM_VOCABULARY,
+  formatPronunciationScopePrefix,
+  formatPronunciationScopeTitle,
+} from '../lib/vocabulary.js';
 import { resolveAssetUrl } from './Atoms.js';
 
 export interface PronunciationBadgeProps {
   pronunciation?: Pronunciation | null;
   label: string;
-  /** Optional prefix when the guide applies to a specific name part (e.g. shared surname "Mercer"). */
+  /** Optional prefix when the guide applies to a specific name part (e.g. "Surname"). */
   prefix?: string;
+  /** Coverage metadata from `resolvePersonPronunciation`. Omit or `'full'` for clean full-name display. */
+  coverage?: PronunciationCoverage;
+  /** Specific name part matched when coverage is not `'full'` (e.g. surname). */
+  matchedPart?: string;
   baseUrl?: string;
   compact?: boolean;
   /** Render only the speaker play button (hides inline phonetic/IPA/language text for quiet prose reading). */
@@ -87,6 +96,8 @@ export const PronunciationBadge: React.FC<PronunciationBadgeProps> = ({
   pronunciation,
   label,
   prefix,
+  coverage,
+  matchedPart,
   baseUrl,
   compact = false,
   iconOnly = false,
@@ -229,17 +240,22 @@ export const PronunciationBadge: React.FC<PronunciationBadgeProps> = ({
     pronunciation.region?.trim() ||
     (pronunciation.language?.trim() ? `Primary (${pronunciation.language.trim()})` : 'Primary');
 
+  const effectivePrefix =
+    coverage === 'full' ? undefined : (prefix ?? formatPronunciationScopePrefix(coverage));
+  const prefixTitle = formatPronunciationScopeTitle(coverage, matchedPart);
+
   const rootClassName = [
     'pronunciation-badge',
     compact ? 'is-compact' : '',
     playing ? 'is-playing' : '',
+    coverage && coverage !== 'full' ? `is-coverage-${coverage}` : '',
     className ?? '',
   ]
     .filter(Boolean)
     .join(' ');
 
   return (
-    <span className={rootClassName}>
+    <span className={rootClassName} data-coverage={coverage ?? undefined}>
       <button
         type="button"
         className={`pronunciation-play-btn print-hide${playing ? ' is-playing' : ''}`}
@@ -265,7 +281,11 @@ export const PronunciationBadge: React.FC<PronunciationBadgeProps> = ({
           {!compact && <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />}
         </svg>
       </button>
-      {!iconOnly && prefix && <span className="pronunciation-prefix">{prefix}:</span>}
+      {!iconOnly && effectivePrefix && (
+        <span className="pronunciation-prefix" title={prefixTitle}>
+          {effectivePrefix}:
+        </span>
+      )}
       {!iconOnly && primaryGuide && (
         <span
           className="pronunciation-guide"
@@ -294,7 +314,7 @@ export const PronunciationBadge: React.FC<PronunciationBadgeProps> = ({
               rel="noopener noreferrer"
               className="pronunciation-source-link"
             >
-              {sourceLabel || 'Source'}
+              {sourceLabel || KINLOOM_VOCABULARY.pronunciation.defaultSourceLabel}
             </a>
           ) : (
             sourceLabel
@@ -302,7 +322,10 @@ export const PronunciationBadge: React.FC<PronunciationBadgeProps> = ({
         </span>
       )}
       {!iconOnly && !compact && variants.length > 0 && (
-        <span className="pronunciation-variants print-hide" aria-label="Pronunciation variants">
+        <span
+          className="pronunciation-variants print-hide"
+          aria-label={KINLOOM_VOCABULARY.pronunciation.variantsAria}
+        >
           <button
             type="button"
             className={`pronunciation-variant-btn${effectiveVariantIdx === null ? ' is-active' : ''}`}

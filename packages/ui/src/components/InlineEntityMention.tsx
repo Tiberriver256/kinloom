@@ -71,20 +71,19 @@ export const InlineEntityMention: React.FC<InlineEntityMentionProps> = (props) =
   const href =
     kind === 'person' ? `/person/${props.person.slug}` : `/place/${props.place.slug}`;
   const entityTitle = kind === 'person' ? props.person.full_name : props.place.full_name;
-  const pronunciation = isLivingPerson
-    ? null
-    : kind === 'person'
+  const personPronunciation =
+    !isLivingPerson && kind === 'person'
       ? resolvePersonPronunciation(props.person, lexicon)
-      : resolvePlacePronunciation(props.place, lexicon);
-  const isInheritedSurnameOnly =
-    kind === 'person' &&
-    Boolean(pronunciation) &&
-    !props.person.pronunciation &&
-    Boolean(props.person.surname);
+      : null;
+  const placePronunciation =
+    kind === 'place' ? resolvePlacePronunciation(props.place, lexicon) : null;
+  const pronunciation = kind === 'person' ? personPronunciation : placePronunciation;
+  const pronunciationCoverage = personPronunciation?.coverage;
+  const pronunciationMatchedPart = personPronunciation?.matchedPart;
   const pronunciationLabel =
     kind === 'person'
-      ? isInheritedSurnameOnly
-        ? props.person.surname
+      ? pronunciationCoverage && pronunciationCoverage !== 'full'
+        ? pronunciationMatchedPart || props.person.surname || props.person.full_name
         : props.person.full_name
       : props.place.name;
   const showPronunciation = hasPronunciationContent(pronunciation);
@@ -264,6 +263,8 @@ export const InlineEntityMention: React.FC<InlineEntityMentionProps> = (props) =
           <PronunciationBadge
             pronunciation={pronunciation}
             label={pronunciationLabel}
+            coverage={pronunciationCoverage}
+            matchedPart={pronunciationMatchedPart}
             baseUrl={baseUrl}
             compact
           />

@@ -6,6 +6,7 @@ import {
 } from '@kinloom/core';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { KINLOOM_VOCABULARY } from '../lib/vocabulary.js';
 import { useArchiveData } from '../context/ArchiveDataContext.js';
 import { useArchiveUi } from '../context/ArchiveUiContext.js';
 
@@ -86,7 +87,7 @@ export const SourceInspectorDrawer: React.FC = () => {
     <dialog
       open
       className="drawer-backdrop source-inspector-backdrop"
-      aria-label="Source bibliographic inspector"
+      aria-label={KINLOOM_VOCABULARY.sources.inspectorAria}
     >
       <button
         type="button"
@@ -209,7 +210,7 @@ export const SourceInspectorDrawer: React.FC = () => {
                 });
               }}
             >
-              Open Primary Text Reader →
+              {KINLOOM_VOCABULARY.sources.openReaderCta}
             </button>
           )}
           {previewScanUrl && (
@@ -220,7 +221,9 @@ export const SourceInspectorDrawer: React.FC = () => {
                 setScanExpanded((v) => !v);
               }}
             >
-              {scanExpanded ? 'Hide Record Scan' : 'Preview Record Scan'}
+              {scanExpanded
+                ? KINLOOM_VOCABULARY.sources.hideScanCta
+                : KINLOOM_VOCABULARY.sources.previewScanCta}
             </button>
           )}
           {citation.url && (
@@ -240,7 +243,7 @@ export const SourceInspectorDrawer: React.FC = () => {
             style={{ textDecoration: 'none' }}
             onClick={closeSourceInspector}
           >
-            View in Evidence Ledger →
+            {KINLOOM_VOCABULARY.sources.viewInEvidenceCta}
           </Link>
         </div>
 

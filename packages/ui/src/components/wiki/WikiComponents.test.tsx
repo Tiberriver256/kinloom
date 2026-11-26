@@ -819,7 +819,7 @@ describe('Wiki UI components and tree display polish helpers', () => {
   });
 
   it('formats tree node labels, names, and generic census subdivisions without private strings', () => {
-    expect(formatLineageGroupLabel('pivot_ancestor')).toBe('Pivot Ancestor');
+    expect(formatLineageGroupLabel('pivot_ancestor')).toBe('Focus Ancestor');
     expect(formatLineageGroupLabel('descendant')).toBe('Descendant');
     expect(formatTreeCardName('Jonathan William Prescott Jr.', 22)).toBe(
       'Jonathan W. Prescott Jr.',

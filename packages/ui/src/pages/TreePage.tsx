@@ -38,6 +38,7 @@ import { TreeOrthogonalCanvas } from '../components/tree/TreeOrthogonalCanvas.js
 import { TreePedigreeRoll } from '../components/tree/TreePedigreeRoll.js';
 import { TreeToolbar } from '../components/tree/TreeToolbar.js';
 import { CreateEntityModal } from '../components/wiki/CreateEntityModal.js';
+import { KINLOOM_VOCABULARY } from '../lib/vocabulary.js';
 import { useArchiveData } from '../context/ArchiveDataContext.js';
 
 const INITIAL_TRANSFORM: CanvasTransform = {
@@ -998,7 +999,7 @@ export const TreePage: React.FC = () => {
         <main className="index-page">
           <output className="archive-loading-shell" aria-live="polite">
             <span className="archive-loading-spinner" aria-hidden="true" />
-            <span>Loading family lineage tree…</span>
+            <span>{KINLOOM_VOCABULARY.tree.loading}</span>
           </output>
         </main>
       </div>
@@ -1100,7 +1101,11 @@ export const TreePage: React.FC = () => {
               />
             </div>
 
-            <div className="tree-controls" role="group" aria-label="Diagram zoom controls">
+            <div
+              className="tree-controls"
+              role="group"
+              aria-label={KINLOOM_VOCABULARY.tree.zoomControlsAria}
+            >
               <button
                 type="button"
                 className="pill-btn"

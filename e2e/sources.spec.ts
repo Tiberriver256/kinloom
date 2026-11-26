@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 
-const READER_LABEL = 'Primary source transcription and scan reader';
-const INSPECTOR_LABEL = 'Source bibliographic inspector';
+const READER_LABEL = 'Source Reader';
+const INSPECTOR_LABEL = 'Source Inspector';
 
 test('source inspector and multi-document source reader work end to end', async ({ page }) => {
   await page.goto('/person/abraham-lincoln-1809');
@@ -18,8 +18,8 @@ test('source inspector and multi-document source reader work end to end', async 
   await expect(inspector.getByText('Formatted Reference')).toBeVisible();
   await expect(inspector.getByText(/Cited Across This Archive/)).toBeVisible();
 
-  // Transition directly from Inspector into Primary Text Reader
-  await inspector.getByRole('button', { name: 'Open Primary Text Reader →' }).click();
+  // Transition directly from Inspector into Source Reader
+  await inspector.getByRole('button', { name: 'Open Source Reader →' }).click();
   const reader = page.getByRole('dialog', { name: READER_LABEL });
   await expect(reader).toBeVisible();
   await expect(reader.locator('.transcript-body')).toContainText('SCHEDULE I');

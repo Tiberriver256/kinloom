@@ -23,7 +23,7 @@ test('map route filters by migration era, steps through journey stops, and handl
   await page.getByRole('button', { name: 'Next →' }).click();
   const stopCard = page.getByRole('region', { name: 'Selected stop details' });
   await expect(stopCard).toBeVisible();
-  await expect(stopCard.getByRole('link', { name: 'Place Dossier →' })).toBeVisible();
+  await expect(stopCard.getByRole('link', { name: 'Place Profile →' })).toBeVisible();
 
   await page.getByRole('button', { name: /All \(\d+\)/ }).click();
   await expect(stopCard).toHaveCount(0);
@@ -31,21 +31,21 @@ test('map route filters by migration era, steps through journey stops, and handl
   expect(pageErrors).toEqual([]);
 });
 
-test('evidence ledger displays preserved conflicts, source audit, and digitized media gallery', async ({ page }) => {
+test('evidence and sources displays discrepancies, source registry, and photos and documents', async ({ page }) => {
   await page.goto('/evidence');
-  await expect(page.getByRole('heading', { name: 'Evidence, Citations & Archival Media Ledger' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Evidence & Sources' })).toBeVisible();
 
-  // Conflicts tab
+  // Source Discrepancies tab
   await expect(page.getByText(/Preserved Discrepanc/).first()).toBeVisible();
   await expect(page.getByText(/Real estate valued at \$3,000/)).toBeVisible();
 
-  // Source Audit tab
-  await page.getByRole('tab', { name: /Source Audit & Citation Gaps/ }).click();
-  await expect(page.getByRole('heading', { name: /Archival Source Registry/ })).toBeVisible();
-  await expect(page.getByText(/Unverified Tree Entries Needing Primary Citation/)).toBeVisible();
+  // Sources & Citations tab
+  await page.getByRole('tab', { name: /Sources & Citations/ }).click();
+  await expect(page.getByRole('heading', { name: /Source Registry/ })).toBeVisible();
+  await expect(page.getByText(/Entries Needing Primary Citation/)).toBeVisible();
 
-  // Media Gallery tab
-  await page.getByRole('tab', { name: /Digitized Media Gallery/ }).click();
-  await expect(page.getByRole('heading', { name: /Digitized Archival Media Gallery/ })).toBeVisible();
+  // Photos & Documents tab
+  await page.getByRole('tab', { name: /Photos & Documents/ }).click();
+  await expect(page.getByRole('heading', { name: /Photos & Documents/ })).toBeVisible();
   await expect(page.getByText(/Oak Ridge Cemetery monument/)).toBeVisible();
 });

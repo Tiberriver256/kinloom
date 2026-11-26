@@ -149,7 +149,7 @@ describe('ExplorerTopBar mobile & account menu behavior', () => {
     // Old cluttered mobile "Find" button is removed in favor of compact icon search button
     const buttonTexts = [...container.querySelectorAll('button')].map((b) => b.textContent?.trim());
     expect(buttonTexts).not.toContain('Find');
-    expect(container.querySelector('button[aria-label="Search full archive"]')).not.toBeNull();
+    expect(container.querySelector('button[aria-label="Search archive"]')).not.toBeNull();
 
     act(() => {
       accountBtn?.click();
@@ -157,23 +157,23 @@ describe('ExplorerTopBar mobile & account menu behavior', () => {
 
     const menu = container.querySelector('[role="menu"]');
     expect(menu?.textContent).toContain('Morgan Reid');
-    expect(menu?.textContent).toContain('Primary Sources');
+    expect(menu?.textContent).toContain('Sources');
     expect(menu?.textContent).toContain('Recent Changes');
     expect(menu?.textContent).toContain('Site Settings');
     expect(menu?.textContent).toContain('Sign Out');
 
     const sourcesItem = [...(menu?.querySelectorAll('button') ?? [])].find((b) =>
-      b.textContent?.includes('Primary Sources'),
+      b.textContent?.trim() === 'Sources',
     );
     act(() => {
       sourcesItem?.click();
     });
-    expect(container.querySelector('[aria-label="Primary source transcription and scan reader"]')).not.toBeNull();
+    expect(container.querySelector('[aria-label="Source Reader"]')).not.toBeNull();
 
     unmount();
   });
 
-  it('renders mobile Archive menu with Primary Sources when signed out', () => {
+  it('renders mobile Archive menu with Sources when signed out', () => {
     const bundle = buildTestBundle([]);
     const { container, unmount } = renderIntoDom(
       <MemoryRouter initialEntries={['/']}>
@@ -192,7 +192,7 @@ describe('ExplorerTopBar mobile & account menu behavior', () => {
     });
 
     const menu = container.querySelector('[role="menu"]');
-    expect(menu?.textContent).toContain('Primary Sources');
+    expect(menu?.textContent).toContain('Sources');
     expect(menu?.textContent).not.toContain('Sign Out');
 
     unmount();
@@ -340,10 +340,10 @@ describe('PersonPage biography narratives and plain-English copy', () => {
     });
     expect(bioSection?.querySelector('.person-biography-body.is-collapsed')).toBeNull();
 
-    // Second narrative expands via "Read 1 more story"
+    // Second narrative expands via "Read 1 more biography"
     expect(bioSection?.textContent).not.toContain('Later Relief Work');
     const moreStoriesBtn = [...(bioSection?.querySelectorAll('button') ?? [])].find(
-      (b) => b.textContent?.trim() === 'Read 1 more story',
+      (b) => b.textContent?.trim() === 'Read 1 more biography',
     );
     expect(moreStoriesBtn).not.toBeNull();
     act(() => {

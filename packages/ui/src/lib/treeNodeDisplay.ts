@@ -1,15 +1,5 @@
 import type { Place } from '@kinloom/core';
-
-const LINEAGE_GROUP_LABELS: Record<string, string> = {
-  pivot_ancestor: 'Pivot Ancestor',
-  ancestor: 'Ancestor',
-  colonial_sibling: 'Sibling Line',
-  descendant: 'Descendant',
-  descendant_spouse: 'Spouse',
-  spouse: 'Spouse',
-  collateral: 'Collateral Relative',
-  extended: 'Extended Relative',
-};
+import { LINEAGE_GROUP_LABELS } from './vocabulary.js';
 
 const GENERIC_SUBDIVISION_RE = /^(Township|J Twp|Justice Precinct|District|Precinct|Ward)\b/i;
 const SUFFIX_RE = /^(Jr\.?|Sr\.?|II|III|IV)$/i;

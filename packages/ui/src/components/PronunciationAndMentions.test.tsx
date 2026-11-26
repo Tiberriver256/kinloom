@@ -518,6 +518,103 @@ describe('PersonPage and PlacePage pronunciation mounting & living-person redact
     expect(placeRender.container.textContent).toContain('LAY-den');
     placeRender.unmount();
   });
+
+  it('renders compositional full-name pronunciation without prefix clutter and labels surname-only fallbacks as Surname:', () => {
+    const composedConfig: KinloomSiteConfig = parseKinloomConfig({
+      site: {
+        title: 'Mercer Compositional Archive',
+        familyName: 'Mercer Family',
+        gedcomSourceName: 'MERCER_COMP',
+      },
+      pronunciations: {
+        Thomas: {
+          phonetic: 'TOM-us',
+          ipa: '/ˈtɒm.əs/',
+          language: 'en-US',
+          source_label: 'Wiktionary (English IPA)',
+        },
+        Mercer: {
+          phonetic: 'MER-ser',
+          ipa: '/ˈmɜːr.sər/',
+          language: 'en-US',
+          source_label: 'Wiktionary (English IPA)',
+        },
+      },
+    });
+    const { bundle } = compileArchive({
+      siteConfig: composedConfig,
+      mode: 'public',
+      people: [
+        {
+          id: 'per_thomas',
+          slug: 'thomas-mercer',
+          full_name: 'Thomas Mercer',
+          given_name: 'Thomas',
+          surname: 'Mercer',
+          alt_names: [],
+          sex: 'M',
+          is_living: false,
+          lineage_group: 'pivot_ancestor',
+          birth_edtf: '1842',
+          death_edtf: '1911',
+          portrait_url: null,
+        },
+        {
+          id: 'per_barnabas',
+          slug: 'barnabas-mercer',
+          full_name: 'Barnabas Mercer',
+          given_name: 'Barnabas',
+          surname: 'Mercer',
+          alt_names: [],
+          sex: 'M',
+          is_living: false,
+          lineage_group: 'ancestor',
+          birth_edtf: '1815',
+          death_edtf: '1888',
+          portrait_url: null,
+        },
+      ],
+      places: [],
+      events: [],
+      sources: [],
+      kinship: [],
+    });
+
+    // Full-name compositional match: no single-word prefix clutter, full respelling shown
+    const fullRender = renderIntoDom(
+      <MemoryRouter initialEntries={['/person/thomas-mercer']}>
+        <ArchiveProvider siteConfig={composedConfig} initialBundle={bundle}>
+          <Routes>
+            <Route path="/person/:slug" element={<PersonPage />} />
+          </Routes>
+        </ArchiveProvider>
+      </MemoryRouter>,
+    );
+    const fullBadge = fullRender.container.querySelector('.person-pronunciation-row .pronunciation-badge');
+    expect(fullBadge?.getAttribute('data-coverage')).toBe('full');
+    expect(fullBadge?.querySelector('.pronunciation-prefix')).toBeNull();
+    expect(fullBadge?.textContent).toContain('TOM-us MER-ser');
+    expect(fullBadge?.textContent).toContain('/ˈtɒm.əs ˈmɜːr.sər/');
+    fullRender.unmount();
+
+    // Surname-only fallback: clearly labeled with canonical "Surname:" prefix
+    const surnameRender = renderIntoDom(
+      <MemoryRouter initialEntries={['/person/barnabas-mercer']}>
+        <ArchiveProvider siteConfig={composedConfig} initialBundle={bundle}>
+          <Routes>
+            <Route path="/person/:slug" element={<PersonPage />} />
+          </Routes>
+        </ArchiveProvider>
+      </MemoryRouter>,
+    );
+    const surnameBadge = surnameRender.container.querySelector(
+      '.person-pronunciation-row .pronunciation-badge',
+    );
+    expect(surnameBadge?.getAttribute('data-coverage')).toBe('surname');
+    expect(surnameBadge?.querySelector('.pronunciation-prefix')?.textContent).toBe('Surname:');
+    expect(surnameBadge?.textContent).toContain('MER-ser');
+    surnameRender.unmount();
+  });
 });
 
 describe('EntityEditDrawer pronunciation editing and audio generation', () => {

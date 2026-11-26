@@ -168,6 +168,10 @@ describe('compileArchive live-lexicon cache isolation (regression)', () => {
       ipa: '/ˈmɜːr.sər.new/',
       language: 'en-GB',
       note: 'Updated in live lexicon',
+      coverage: 'surname',
+      matchedPart: 'Mercer',
+      resolvedFrom: 'lexicon_surname',
+      missingParts: ['Thomas'],
     });
   });
 
@@ -186,6 +190,282 @@ describe('compileArchive live-lexicon cache isolation (regression)', () => {
     });
     expect(resolved?.phonetic).toBe('TOM-us MER-ser');
     expect(resolved?.audio_url).toBeUndefined();
+    expect(resolved?.coverage).toBe('full');
+    expect(resolved?.resolvedFrom).toBe('person');
+  });
+});
+
+describe('resolvePersonPronunciation compositional full-name resolution', () => {
+  it('prefers explicit person.pronunciation over full-name and compositional lexicon entries', () => {
+    const person = makeDeceasedPerson({
+      pronunciation: {
+        phonetic: 'TOH-mas MER-ser',
+        ipa: '/ˈtoʊ.məs ˈmɜːr.sər/',
+        language: 'en-US',
+        source_label: 'Family oral tradition',
+      },
+    });
+    const resolved = resolvePersonPronunciation(person, {
+      per_thomas: { phonetic: 'ID-ENTRY' },
+      'Thomas Mercer': { phonetic: 'FULL-NAME-ENTRY' },
+      Thomas: { phonetic: 'TOM-us', language: 'en-US' },
+      Mercer: { phonetic: 'MER-ser', language: 'en-US' },
+    });
+    expect(resolved?.phonetic).toBe('TOH-mas MER-ser');
+    expect(resolved?.coverage).toBe('full');
+    expect(resolved?.resolvedFrom).toBe('person');
+  });
+
+  it('resolves exact person-ID and full-name lexicon entries with full coverage', () => {
+    const thomas = makeDeceasedPerson();
+    const byId = resolvePersonPronunciation(thomas, {
+      per_thomas: {
+        phonetic: 'TOM-us MER-ser (ID)',
+        ipa: '/ˈtɒm.əs ˈmɜːr.sər/',
+        language: 'en-US',
+      },
+      'Thomas Mercer': { phonetic: 'FULL-NAME-FALLBACK' },
+    });
+    expect(byId?.phonetic).toBe('TOM-us MER-ser (ID)');
+    expect(byId?.coverage).toBe('full');
+    expect(byId?.resolvedFrom).toBe('lexicon_id');
+
+    const byFullName = resolvePersonPronunciation(thomas, {
+      'thomas mercer': {
+        phonetic: 'TOM-us MER-ser',
+        ipa: '/ˈtɒm.əs ˈmɜːr.sər/',
+        language: 'en-US',
+        source_label: 'Wiktionary (English IPA)',
+      },
+    });
+    expect(byFullName?.phonetic).toBe('TOM-us MER-ser');
+    expect(byFullName?.coverage).toBe('full');
+    expect(byFullName?.resolvedFrom).toBe('lexicon_full_name');
+  });
+
+  it('composes 2-part and 3-part full names from shared lexicon tokens with unified respelling, IPA, and provenance', () => {
+    const lexicon: Record<string, Pronunciation> = {
+      Mary: {
+        phonetic: 'MAIR-ee',
+        ipa: '/ˈmɛə.ɹi/',
+        language: 'en-US',
+        source_label: 'Wiktionary (English IPA)',
+      },
+      Ann: {
+        phonetic: 'AN',
+        ipa: '/æn/',
+        language: 'en-US',
+        source_label: 'Wiktionary (English IPA)',
+      },
+      Mercer: {
+        phonetic: 'MER-ser',
+        ipa: '/ˈmɜːr.sər/',
+        language: 'en-US',
+        source_label: 'Family oral tradition',
+        audio_url: '/media/mercer-surname-only.wav',
+      },
+    };
+
+    const twoPart = resolvePersonPronunciation(
+      makeDeceasedPerson({
+        id: 'per_mary',
+        full_name: 'Mary Mercer',
+        given_name: 'Mary',
+        surname: 'Mercer',
+      }),
+      lexicon,
+    );
+    expect(twoPart).toEqual({
+      phonetic: 'MAIR-ee MER-ser',
+      ipa: '/ˈmɛə.ɹi ˈmɜːr.sər/',
+      language: 'en-US',
+      source_label: 'Wiktionary (English IPA) + Family oral tradition',
+      coverage: 'full',
+      resolvedFrom: 'composed',
+    });
+    // Composed full name never reuses single-word surname audio
+    expect(twoPart?.audio_url).toBeUndefined();
+
+    const threePart = resolvePersonPronunciation(
+      makeDeceasedPerson({
+        id: 'per_mary_ann',
+        full_name: 'Mary Ann Mercer',
+        given_name: 'Mary Ann',
+        surname: 'Mercer',
+      }),
+      lexicon,
+    );
+    expect(threePart?.phonetic).toBe('MAIR-ee AN MER-ser');
+    expect(threePart?.ipa).toBe('/ˈmɛə.ɹi æn ˈmɜːr.sər/');
+    expect(threePart?.coverage).toBe('full');
+    expect(threePart?.resolvedFrom).toBe('composed');
+  });
+
+  it('handles middle initials and generational suffixes cleanly during full-name composition', () => {
+    const lexicon: Record<string, Pronunciation> = {
+      William: {
+        phonetic: 'WIL-yum',
+        ipa: '/ˈwɪl.jəm/',
+        language: 'en-US',
+      },
+      Mercer: {
+        phonetic: 'MER-ser',
+        ipa: '/ˈmɜːr.sər/',
+        language: 'en-US',
+      },
+    };
+    const resolved = resolvePersonPronunciation(
+      makeDeceasedPerson({
+        id: 'per_william_e',
+        full_name: 'William E. Mercer Jr.',
+        given_name: 'William E.',
+        surname: 'Mercer',
+      }),
+      lexicon,
+    );
+    expect(resolved?.phonetic).toBe('WIL-yum E. MER-ser Jr.');
+    expect(resolved?.ipa).toBe('/ˈwɪl.jəm ˈmɜːr.sər/');
+    expect(resolved?.language).toBe('en-US');
+    expect(resolved?.coverage).toBe('full');
+    expect(resolved?.resolvedFrom).toBe('composed');
+  });
+
+  it('matches multi-word surnames atomically and composes hyphenated given names', () => {
+    const lexicon: Record<string, Pronunciation> = {
+      Jan: {
+        phonetic: 'YAHN',
+        ipa: '/jɑn/',
+        language: 'nl',
+        region: 'Netherlands',
+        source_label: 'Wiktionary (Dutch IPA)',
+      },
+      'van der Berg': {
+        phonetic: 'vahn der BERKH',
+        ipa: '/vɑn dər ˈbɛrx/',
+        language: 'nl',
+        region: 'Netherlands',
+        source_label: 'Wiktionary (Dutch IPA)',
+      },
+      Anne: {
+        phonetic: 'AHN-uh',
+        ipa: '/ˈɑn.ə/',
+        language: 'nl',
+      },
+      Marie: {
+        phonetic: 'mah-REE',
+        ipa: '/maːˈri/',
+        language: 'nl',
+      },
+    };
+
+    const multiWord = resolvePersonPronunciation(
+      makeDeceasedPerson({
+        id: 'per_jan_vdb',
+        full_name: 'Jan van der Berg',
+        given_name: 'Jan',
+        surname: 'van der Berg',
+      }),
+      lexicon,
+    );
+    expect(multiWord).toEqual({
+      phonetic: 'YAHN vahn der BERKH',
+      ipa: '/jɑn vɑn dər ˈbɛrx/',
+      language: 'nl',
+      region: 'Netherlands',
+      source_label: 'Wiktionary (Dutch IPA)',
+      coverage: 'full',
+      resolvedFrom: 'composed',
+    });
+
+    const hyphenated = resolvePersonPronunciation(
+      makeDeceasedPerson({
+        id: 'per_anne_marie',
+        full_name: 'Anne-Marie van der Berg',
+        given_name: 'Anne-Marie',
+        surname: 'van der Berg',
+      }),
+      lexicon,
+    );
+    expect(hyphenated?.phonetic).toBe('AHN-uh-mah-REE vahn der BERKH');
+    expect(hyphenated?.ipa).toBe('/ˈɑn.ə-maːˈri vɑn dər ˈbɛrx/');
+    expect(hyphenated?.coverage).toBe('full');
+  });
+
+  it('composes mixed-language names without forcing a conflicting single-language TTS tag', () => {
+    const lexicon: Record<string, Pronunciation> = {
+      Thomas: {
+        phonetic: 'TOM-us',
+        ipa: '/ˈtɒm.əs/',
+        language: 'en-US',
+        source_label: 'Wiktionary (English IPA)',
+      },
+      'van Dijk': {
+        phonetic: 'vahn DIKE',
+        ipa: '/vɑn ˈdɛik/',
+        language: 'nl',
+        source_label: 'Wiktionary (Dutch IPA)',
+      },
+    };
+    const mixed = resolvePersonPronunciation(
+      makeDeceasedPerson({
+        id: 'per_thomas_vd',
+        full_name: 'Thomas van Dijk',
+        given_name: 'Thomas',
+        surname: 'van Dijk',
+      }),
+      lexicon,
+    );
+    expect(mixed?.phonetic).toBe('TOM-us vahn DIKE');
+    expect(mixed?.ipa).toBe('/ˈtɒm.əs vɑn ˈdɛik/');
+    expect(mixed?.language).toBeUndefined();
+    expect(mixed?.source_label).toBe('Wiktionary (English IPA) + Wiktionary (Dutch IPA)');
+    expect(mixed?.coverage).toBe('full');
+    expect(mixed?.resolvedFrom).toBe('composed');
+  });
+
+  it('falls back to surname-only coverage when any meaningful given/middle name token is missing and respects match_full_name_contains', () => {
+    const lexicon: Record<string, Pronunciation> = {
+      Mercer: {
+        phonetic: 'MER-ser',
+        ipa: '/ˈmɜːr.sər/',
+        language: 'en-US',
+      },
+      Holland: {
+        phonetic: 'HOHL-ahnt',
+        language: 'nl',
+        match_full_name_contains: ['Netherlands', 'Nederland'],
+      },
+    };
+    const fallback = resolvePersonPronunciation(
+      makeDeceasedPerson({
+        id: 'per_barnabas',
+        full_name: 'Barnabas Mercer',
+        given_name: 'Barnabas',
+        surname: 'Mercer',
+      }),
+      lexicon,
+    );
+    expect(fallback).toEqual({
+      phonetic: 'MER-ser',
+      ipa: '/ˈmɜːr.sər/',
+      language: 'en-US',
+      coverage: 'surname',
+      matchedPart: 'Mercer',
+      resolvedFrom: 'lexicon_surname',
+      missingParts: ['Barnabas'],
+    });
+
+    // Place-scoped entry must not accidentally match a person surname
+    const personHolland = resolvePersonPronunciation(
+      makeDeceasedPerson({
+        id: 'per_john_holland',
+        full_name: 'John Holland',
+        given_name: 'John',
+        surname: 'Holland',
+      }),
+      lexicon,
+    );
+    expect(personHolland).toBeNull();
   });
 });
 

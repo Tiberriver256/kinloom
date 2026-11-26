@@ -3,6 +3,7 @@ import { DEFAULT_MIGRATION_ERAS, buildPlacesDirectory } from '@kinloom/core';
 import React, { useMemo, useState } from 'react';
 import { ExplorerTopBar } from '../components/ExplorerTopBar.js';
 import { KinloomFooter } from '../components/KinloomFooter.js';
+import { KINLOOM_VOCABULARY } from '../lib/vocabulary.js';
 import { Link } from 'react-router-dom';
 import { useArchiveData } from '../context/ArchiveDataContext.js';
 
@@ -38,7 +39,7 @@ const PlaceLedgerEntry: React.FC<{
               {entry.eventCount} {entry.eventCount === 1 ? 'event' : 'events'}
             </span>
             <Link to={`/place/${entry.place.slug}`} className="ink-link-btn">
-              Place Timeline →
+              {KINLOOM_VOCABULARY.place.placeProfileCta}
             </Link>
           </div>
         </div>
@@ -117,7 +118,7 @@ export const PlacesIndexPage: React.FC = () => {
 
   const stageFilters = useMemo(
     () => [
-      { id: 'all', label: 'All Communities' },
+      { id: 'all', label: KINLOOM_VOCABULARY.place.placesFilterAll },
       ...migrationEras.map((era) => ({ id: era.id, label: era.label })),
     ],
     [migrationEras],
@@ -187,20 +188,20 @@ export const PlacesIndexPage: React.FC = () => {
                 <input
                   type="search"
                   className="search-input"
-                  placeholder="Filter town, county, or relative…"
+                  placeholder={KINLOOM_VOCABULARY.place.filterPlaceholder}
                   value={query}
                   onChange={(e) => {
                     setQuery(e.target.value);
                   }}
-                  aria-label="Filter places by name or relative"
+                  aria-label={KINLOOM_VOCABULARY.place.filterAria}
                 />
               </div>
             </div>
 
             {filtered.length === 0 ? (
-              <p className="empty-ring-note">No documented communities match that filter.</p>
+              <p className="empty-ring-note">{KINLOOM_VOCABULARY.place.emptyPlacesFilter}</p>
             ) : (
-              <section className="places-ledger" aria-label="Archived communities and residents">
+              <section className="places-ledger" aria-label="Archived places and residents">
                 {filtered.map((entry) => (
                   <PlaceLedgerEntry
                     key={entry.place.id}

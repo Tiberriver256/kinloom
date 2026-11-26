@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 import React from 'react';
 import { formatCardLifespan } from '../../lib/archivalTreeModel.js';
 import { formatLineageGroupLabel } from '../../lib/treeNodeDisplay.js';
+import { KINLOOM_VOCABULARY, formatPhotoDocumentCount } from '../../lib/vocabulary.js';
 import { initialsOf, resolveAssetUrl } from '../Atoms.js';
 
 export interface TreeFocusDrawerProps {
@@ -72,11 +73,13 @@ export const TreeFocusDrawer: React.FC<TreeFocusDrawerProps> = ({
           {gen !== undefined && <span className="tree-focus-gen-tag">G{gen + 1}</span>}
           <span
             className="tree-focus-role-label"
-            title={isEarlyLoss ? 'Children who died at age 5 or younger' : undefined}
+            title={isEarlyLoss ? KINLOOM_VOCABULARY.tree.diedYoungTooltip : undefined}
           >
-            {isEarlyLoss ? 'Died young' : formatLineageGroupLabel(person.lineage_group)}
+            {isEarlyLoss ? KINLOOM_VOCABULARY.tree.diedYoung : formatLineageGroupLabel(person.lineage_group)}
           </span>
-          {person.is_living && <span className="tree-focus-living-pill">Living</span>}
+          {person.is_living && (
+            <span className="tree-focus-living-pill">{KINLOOM_VOCABULARY.tree.livingBadge}</span>
+          )}
         </div>
         <button
           type="button"
@@ -143,15 +146,15 @@ export const TreeFocusDrawer: React.FC<TreeFocusDrawerProps> = ({
 
       <div className="tree-focus-meta">
         <div>
-          <span className="tree-focus-meta-key">Primary place:</span> {primaryPlaceName}
+          <span className="tree-focus-meta-key">{KINLOOM_VOCABULARY.tree.primaryPlaceLabel}</span>{' '}
+          {primaryPlaceName}
         </div>
         {kinSummaryParts.length > 0 && (
           <div className="tree-focus-kin-summary">{kinSummaryParts.join(' · ')}</div>
         )}
         {(person.media_count ?? 0) > 0 && (
           <div className="tree-focus-media-count">
-            {person.media_count}{' '}
-            {person.media_count === 1 ? 'archival photo/scan' : 'archival photos & scans'} attached
+            {formatPhotoDocumentCount(person.media_count ?? 0)} attached
           </div>
         )}
       </div>
@@ -161,14 +164,14 @@ export const TreeFocusDrawer: React.FC<TreeFocusDrawerProps> = ({
           to={`/person/${person.slug}`}
           className="pill-btn active tree-focus-timeline-link"
         >
-          Open Timeline →
+          {KINLOOM_VOCABULARY.tree.openProfileCta}
         </Link>
         <button
           type="button"
           className="pill-btn tree-focus-clear-btn"
           onClick={onClearFocus}
         >
-          Clear focus
+          {KINLOOM_VOCABULARY.tree.clearFocus}
         </button>
       </div>
     </aside>

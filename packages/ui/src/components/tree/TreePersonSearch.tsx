@@ -1,6 +1,7 @@
 import type { Person } from '@kinloom/core';
 import type { TreeSearchCandidate } from '../../lib/archivalTreeModel.js';
 import React, { useId, useMemo, useRef, useState, useEffect } from 'react';
+import { KINLOOM_VOCABULARY } from '../../lib/vocabulary.js';
 import { searchNavNext, searchNavPrev, searchNavReset } from '../../lib/searchNavigation.js';
 
 export interface TreePersonSearchProps {
@@ -111,9 +112,9 @@ export const TreePersonSearch: React.FC<TreePersonSearchProps> = ({
           if (candidate.isOutsideCurrentBranch && candidate.branchLabel) {
             metaBits.push(candidate.branchLabel);
           } else if (candidate.isCollapsed) {
-            metaBits.push('in sibling tray');
+            metaBits.push(KINLOOM_VOCABULARY.tree.moreSiblingsTag);
           } else if (candidate.isOutsideCurrentMode) {
-            metaBits.push('Full Tree');
+            metaBits.push(KINLOOM_VOCABULARY.tree.fullTree);
           }
 
           return (

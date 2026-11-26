@@ -202,7 +202,7 @@ Options:
 
 export const PRONOUNCE_HELP = `Usage: kinloom pronounce <subcommand> [arguments] [options]
 
-Research verified IPA/audio from Wikimedia and audit archive pronunciation lexicons.
+Look up verified IPA and audio from Wikimedia and run Pronunciation Audits over an archive.
 
 Subcommands:
   lookup <term> [--lang nl|sv|fi|pl|de|en] [--refresh] [--json]
@@ -210,15 +210,19 @@ Subcommands:
       for verified IPA transcriptions, Wikimedia Commons native audio URLs, and
       canonical source citations. Never fabricates IPA when upstream has none.
 
-  audit [--repo <path>] [--json]
-      Audit kinloom.config.yaml, deceased people in data/people.yaml (zero living
-      names), and data/places.yaml for coverage gaps, unsourced entries, homonymous
-      bare place collisions, and IPA/linguistic quality warnings.
+  audit [--repo <path>] [--strict] [--json]
+      Run a 100%-coverage Pronunciation Audit over kinloom.config.yaml, every
+      confirmed-deceased person in data/people.yaml (full-name coverage), and
+      every place in data/places.yaml. Verifies 0 living people have any
+      pronunciation entry (fails loudly on any living leak), and reports
+      surname-only fallbacks, missing places, homonymous bare place collisions,
+      unsourced entries, and IPA quality warnings.
 
 Options:
   --lang <code>      Language filter for \`lookup\` (e.g. nl, sv, fi, pl, de, en)
   --refresh          Bypass disk cache on \`lookup\` and re-fetch from Wikimedia
   --repo <dir>       Archive repository root for \`audit\` (default: current directory)
+  --strict           Exit non-zero if any deceased person lacks full-name coverage, any place lacks coverage, any homonymous collision exists, or any living leak exists
   --json             Emit structured JSON output
   -h, --help         Show this help message`;
 

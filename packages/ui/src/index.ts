@@ -189,7 +189,8 @@ export type {
   ParsedInviteInput,
 } from './components/wiki/authErrorCopy.js';
 
-// UI-Only Helpers
+// UI-Only Helpers & Canonical Vocabulary
+export * from './lib/vocabulary.js';
 export * from './lib/archivalTreeModel.js';
 export * from './lib/ohmStyle.js';
 export * from './lib/scrollMemory.js';

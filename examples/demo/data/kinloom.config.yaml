@@ -182,3 +182,55 @@ privacy:
   stripLivingPortraits: true
   stripLivingResidenceSpans: true
   markGedcomLivingConfidential: true
+pronunciations:
+  Abraham:
+    phonetic: AY-bruh-ham
+    ipa: /ˈeɪ.bɹə.hæm/
+    language: en-US
+    source_label: Wiktionary (English IPA)
+    source_url: https://en.wiktionary.org/wiki/Abraham
+  Lincoln:
+    phonetic: LING-kun
+    ipa: /ˈlɪŋ.kən/
+    language: en-US
+    source_label: Wiktionary (English IPA)
+    source_url: https://en.wiktionary.org/wiki/Lincoln
+  Mary:
+    phonetic: MAIR-ee
+    ipa: /ˈmɛə.ɹi/
+    language: en-US
+    source_label: Wiktionary (English IPA)
+    source_url: https://en.wiktionary.org/wiki/Mary
+  Ann:
+    phonetic: AN
+    ipa: /æn/
+    language: en-US
+    source_label: Wiktionary (English IPA)
+    source_url: https://en.wiktionary.org/wiki/Ann
+  Todd:
+    phonetic: TAHD
+    ipa: /tɑd/
+    language: en-US
+    source_label: Wiktionary (English IPA)
+    source_url: https://en.wiktionary.org/wiki/Todd
+  Springfield, Illinois:
+    phonetic: SPRING-feeld
+    ipa: /ˈspɹɪŋ.fiːld/
+    language: en-US
+    region: Illinois
+    source_label: Wiktionary (English IPA)
+    source_url: https://en.wiktionary.org/wiki/Springfield
+  Hingham, England:
+    phonetic: HING-um
+    ipa: /ˈhɪŋ.əm/
+    language: en-GB
+    region: England
+    source_label: Wiktionary (English IPA)
+    source_url: https://en.wiktionary.org/wiki/Hingham
+  Hingham, Massachusetts:
+    phonetic: HING-um
+    ipa: /ˈhɪŋ.əm/
+    language: en-US
+    region: Massachusetts
+    source_label: Wiktionary (English IPA)
+    source_url: https://en.wiktionary.org/wiki/Hingham

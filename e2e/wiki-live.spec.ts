@@ -311,7 +311,7 @@ test('5. soft-delete hides record from active views and restore brings it back c
     .fill('Archive duplicate entry pending verification');
   await drawer.getByRole('button', { name: 'Confirm Removal' }).click();
 
-  await expect(page.getByRole('heading', { name: 'Relative Not Found' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Person Not Found' })).toBeVisible();
 
   await page.goto(`${wiki.baseUrl}/`);
   await expect(page.getByRole('link', { name: /Samuel Lincoln Jr\./ })).toHaveCount(0);

@@ -10,6 +10,10 @@ import {
   computePinchTransform,
   computeWheelTargetZoom,
   computeZoomAroundPoint,
+  formatPhotoDocumentCount,
+  formatPronunciationScopePrefix,
+  formatPronunciationScopeTitle,
+  KINLOOM_VOCABULARY,
   isChunkLoadError,
   isSearchableQuery,
   pickActiveTimelineEventId,
@@ -210,5 +214,22 @@ describe('clientTelemetry', () => {
       route: '/person/abraham-lincoln-1809?event=e1&secret=xyz',
     });
     assert.equal(report.route, '/person/abraham-lincoln-1809?event=e1');
+  });
+});
+
+describe('canonical UI vocabulary helpers', () => {
+  test('exposes canonical labels and formats pronunciation scope prefixes and photo/document counts', () => {
+    assert.equal(KINLOOM_VOCABULARY.tree.directLine, 'Direct Line');
+    assert.equal(KINLOOM_VOCABULARY.tree.diedYoung, 'Died young');
+    assert.equal(KINLOOM_VOCABULARY.nav.sources, 'Sources');
+
+    assert.equal(formatPronunciationScopePrefix('full'), undefined);
+    assert.equal(formatPronunciationScopePrefix('surname'), 'Surname');
+    assert.equal(formatPronunciationScopePrefix('partial'), 'Partial');
+    assert.equal(formatPronunciationScopeTitle('full', 'Lincoln'), undefined);
+    assert.equal(formatPronunciationScopeTitle('surname', 'Lincoln'), 'Surname pronunciation only (Lincoln)');
+
+    assert.equal(formatPhotoDocumentCount(1), '1 photo or document');
+    assert.equal(formatPhotoDocumentCount(4), '4 photos & documents');
   });
 });

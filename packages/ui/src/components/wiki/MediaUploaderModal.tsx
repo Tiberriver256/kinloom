@@ -1,5 +1,6 @@
 import type { ArchivalMediaKind } from '@kinloom/core';
 import React, { useEffect, useState } from 'react';
+import { KINLOOM_VOCABULARY, MEDIA_KIND_LABELS } from '../../lib/vocabulary.js';
 import { mediaUploadMachine } from '../../machines/mediaUploadMachine.js';
 import { useArchiveData } from '../../context/ArchiveDataContext.js';
 import { useMachine } from '@xstate/react';
@@ -97,7 +98,7 @@ export const MediaUploaderModal: React.FC<MediaUploaderModalProps> = ({
       />
       <div className="wiki-modal-card">
         <div className="wiki-modal-header">
-          <h2>Add a Photo or Scan</h2>
+          <h2>{KINLOOM_VOCABULARY.wiki.uploadDialogTitle}</h2>
           <button
             type="button"
             className="pill-btn"
@@ -248,14 +249,16 @@ export const MediaUploaderModal: React.FC<MediaUploaderModalProps> = ({
                   setKind(e.target.value as ArchivalMediaKind);
                 }}
               >
-                <option value="portrait">Portrait</option>
-                <option value="family_photo">Family Photo</option>
-                <option value="record_scan">Primary Record Scan</option>
-                <option value="headstone">Headstone</option>
-                <option value="document_scan">Document Scan</option>
-                <option value="milestone">Milestone Photo</option>
-                {allowAudioVideo && <option value="video_story">Video Story</option>}
-                {allowAudioVideo && <option value="audio_oral_history">Audio Oral History</option>}
+                <option value="portrait">{MEDIA_KIND_LABELS.portrait}</option>
+                <option value="family_photo">{MEDIA_KIND_LABELS.family_photo}</option>
+                <option value="record_scan">{MEDIA_KIND_LABELS.record_scan}</option>
+                <option value="headstone">{MEDIA_KIND_LABELS.headstone}</option>
+                <option value="document_scan">{MEDIA_KIND_LABELS.document_scan}</option>
+                <option value="milestone">{MEDIA_KIND_LABELS.milestone}</option>
+                {allowAudioVideo && <option value="video_story">{MEDIA_KIND_LABELS.video_story}</option>}
+                {allowAudioVideo && (
+                  <option value="audio_oral_history">{MEDIA_KIND_LABELS.audio_oral_history}</option>
+                )}
               </select>
             </label>
 

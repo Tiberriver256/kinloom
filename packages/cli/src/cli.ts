@@ -1432,6 +1432,7 @@ export async function runCli(
           allowPositionals: false,
           options: {
             repo: { type: 'string' },
+            strict: { type: 'boolean', default: false },
             json: { type: 'boolean', default: false },
           },
         });
@@ -1439,18 +1440,19 @@ export async function runCli(
           {
             subcmd: 'pronounce audit',
             extractResultMeta: (res) => ({
-              exitCode: EXIT_OK,
+              exitCode: res.ok ? EXIT_OK : EXIT_ERROR,
               bytesOut: Buffer.byteLength(res.rendered, 'utf8'),
             }),
           },
           async () =>
             runPronounceAuditCommand({
               repoDir: values.repo ?? cwd,
+              strict: values.strict,
               json: values.json,
             })
         );
         writeRenderedOutput(io, result.rendered);
-        return EXIT_OK;
+        return result.ok ? EXIT_OK : EXIT_ERROR;
       }
 
       case 'telemetry': {

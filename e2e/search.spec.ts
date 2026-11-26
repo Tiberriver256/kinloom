@@ -6,7 +6,7 @@ test('global search opens via / shortcut, searches people/places/readings, and n
 
   // Open via "/" keyboard shortcut and close via Escape
   await page.keyboard.press('/');
-  const dialog = page.getByRole('dialog', { name: 'Global archive search' });
+  const dialog = page.getByRole('dialog', { name: 'Search archive' });
   await expect(dialog).toBeVisible();
   await page.keyboard.press('Escape');
   await expect(dialog).toHaveCount(0);
@@ -14,7 +14,7 @@ test('global search opens via / shortcut, searches people/places/readings, and n
   // Open via button and search for a person
   await page.getByRole('button', { name: 'Search (/)' }).click();
   await expect(dialog).toBeVisible();
-  const input = page.getByLabel('Search the entire family archive');
+  const input = page.getByLabel('Search the archive');
   await input.fill('Mary Ann Todd');
   await expect(page.getByText(/People \(\d+\)/)).toBeVisible();
   await page.getByRole('button', { name: /Mary Ann Todd/ }).first().click();
@@ -23,17 +23,17 @@ test('global search opens via / shortcut, searches people/places/readings, and n
 
   // Search for a place and navigate
   await page.keyboard.press('/');
-  await page.getByLabel('Search the entire family archive').fill('Hodgenville');
+  await page.getByLabel('Search the archive').fill('Hodgenville');
   await expect(page.getByText(/Places \(\d+\)/)).toBeVisible();
   await page.getByRole('button', { name: /Hodgenville, Hardin County/ }).first().click();
   await expect(page).toHaveURL(/\/place\/hodgenville-kentucky$/);
 
-  // Search for a phrase in primary source readings and open SourceReaderDrawer
+  // Search for a phrase in source pages and open SourceReaderDrawer
   await page.keyboard.press('/');
-  await page.getByLabel('Search the entire family archive').fill('Rule of Three');
-  await expect(page.getByText(/Primary Source Pages \(\d+\)/)).toBeVisible();
+  await page.getByLabel('Search the archive').fill('Rule of Three');
+  await expect(page.getByText(/Source Pages \(\d+\)/)).toBeVisible();
   await page.getByRole('button', { name: /Autobiographical Sketch/ }).first().click();
-  const reader = page.getByRole('dialog', { name: 'Primary source transcription and scan reader' });
+  const reader = page.getByRole('dialog', { name: 'Source Reader' });
   await expect(reader).toBeVisible();
   await expect(reader.locator('.transcript-body')).toContainText('Rule of Three');
 });

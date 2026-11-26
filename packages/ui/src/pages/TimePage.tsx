@@ -12,6 +12,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import React, { useEffect, useMemo, useState } from 'react';
 import { initialsOf, resolveAssetUrl } from '../components/Atoms.js';
 import { ExplorerTopBar } from '../components/ExplorerTopBar.js';
+import { KINLOOM_VOCABULARY } from '../lib/vocabulary.js';
 import { KinloomFooter } from '../components/KinloomFooter.js';
 import { useArchiveData } from '../context/ArchiveDataContext.js';
 
@@ -197,8 +198,7 @@ export const TimePage: React.FC = () => {
                 </span>
               </h1>
               <p className="folio-lead">
-                Slide the year to see where each living relative stood, their age, and what the wider
-                world was reporting.
+                {KINLOOM_VOCABULARY.time.lead}
               </p>
             </div>
             {snapshot && (
@@ -463,9 +463,14 @@ export const TimePage: React.FC = () => {
             )}
 
             {snapshot.unlocatedPeople.length > 0 && (
-              <section className="time-unlocated-section" aria-label="Living relatives without a documented town in this year">
+              <section
+                className="time-unlocated-section"
+                aria-label={KINLOOM_VOCABULARY.time.unlocatedAria}
+              >
                 <h2 className="section-heading">
-                  Also Living in {activeYear} · Town Unrecorded ({snapshot.unlocatedPeople.length})
+                  {KINLOOM_VOCABULARY.time.unlocatedHeadingPrefix} {activeYear} ·{' '}
+                  {KINLOOM_VOCABULARY.time.unlocatedHeadingSuffix} (
+                  {snapshot.unlocatedPeople.length})
                 </h2>
                 <div className="time-unlocated-list">
                   {snapshot.unlocatedPeople.map((entry) => (

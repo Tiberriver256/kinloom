@@ -8,6 +8,7 @@ import {
   formatPublicCitation,
 } from '@kinloom/core';
 import { readerNextPage, readerPrevPage, resolveReaderPageIndex } from '../lib/sourceReaderNav.js';
+import { KINLOOM_VOCABULARY } from '../lib/vocabulary.js';
 import { PluginSlot } from '../plugins/PluginContext.js';
 import { resolveAssetUrl } from './Atoms.js';
 import { useArchiveData } from '../context/ArchiveDataContext.js';
@@ -224,7 +225,7 @@ export const SourceReaderDrawer: React.FC = () => {
     <dialog
       open
       className="drawer-backdrop source-reader-backdrop"
-      aria-label="Primary source transcription and scan reader"
+      aria-label={KINLOOM_VOCABULARY.sources.readerAria}
     >
       <button
         type="button"
@@ -238,7 +239,7 @@ export const SourceReaderDrawer: React.FC = () => {
         <div className="drawer-top">
           <div>
             <h2 className="drawer-title" style={{ marginTop: 0 }}>
-              {currentDoc?.title || 'Archival Source Reader'}
+              {currentDoc?.title || KINLOOM_VOCABULARY.sources.readerFallbackTitle}
             </h2>
             {currentDoc && (
               <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.78rem', color: 'var(--text-secondary)', marginTop: 2 }}>

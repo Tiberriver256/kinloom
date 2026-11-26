@@ -7,10 +7,12 @@ import {
   parsePeopleYaml,
   parsePlacesYaml,
   resolveEffectiveLiving,
+  resolvePersonPronunciation,
   resolvePlacePronunciation,
   type KinloomSiteConfig,
   type Place,
   type Pronunciation,
+  type PronunciationCoverage,
   type PronunciationVariant,
   type RawPerson,
 } from '@kinloom/core';
@@ -86,6 +88,26 @@ export interface PronounceCoverageGapPerson {
   deceased_count: number;
 }
 
+export interface PronounceMissingPersonGap {
+  id: string;
+  full_name: string;
+  surname: string;
+}
+
+export interface PronouncePartialPersonGap {
+  id: string;
+  full_name: string;
+  coverage: Exclude<PronunciationCoverage, 'full'>;
+  matched_part: string | null;
+  missing_parts: string[];
+}
+
+export interface PronounceLivingLeak {
+  scope: 'person' | 'lexicon';
+  location: string;
+  reason: string;
+}
+
 export interface PronounceCoverageGapPlace {
   id: string;
   name: string;
@@ -116,9 +138,18 @@ export interface PronounceQualityWarning {
 }
 
 export interface PronounceAuditResult {
-  ok: true;
+  ok: boolean;
+  strictOk: boolean;
   repo: string;
   summary: {
+    deceasedTotal: number;
+    deceasedFullCoverage: number;
+    deceasedPartialOnly: number;
+    deceasedMissing: number;
+    livingLeaks: number;
+    placesTotal: number;
+    placesCovered: number;
+    placesMissing: number;
     lexicon_entries: number;
     deceased_people: number;
     living_people_excluded: number;
@@ -129,7 +160,10 @@ export interface PronounceAuditResult {
     homonymous_place_collisions: number;
     ipa_quality_warnings: number;
   };
+  living_leaks: PronounceLivingLeak[];
   coverage_gaps: {
+    people_missing: PronounceMissingPersonGap[];
+    people_partial: PronouncePartialPersonGap[];
     surnames: PronounceCoverageGapPerson[];
     places: PronounceCoverageGapPlace[];
   };
@@ -142,6 +176,7 @@ export interface PronounceAuditResult {
 export interface PronounceAuditOptions {
   repoDir?: string;
   json?: boolean;
+  strict?: boolean;
 }
 
 function defaultSleep(ms: number): Promise<void> {
@@ -984,17 +1019,85 @@ function inspectPronunciationQuality(
   }
 }
 
+function hasPronunciationValues(entry?: Pronunciation | null): boolean {
+  if (!entry) {
+    return false;
+  }
+  if (
+    Boolean(entry.phonetic?.trim()) ||
+    Boolean(entry.ipa?.trim()) ||
+    Boolean(entry.audio_url?.trim()) ||
+    Boolean(entry.note?.trim())
+  ) {
+    return true;
+  }
+  return Boolean(
+    entry.variants?.some(
+      (v) =>
+        Boolean(v.phonetic?.trim()) ||
+        Boolean(v.ipa?.trim()) ||
+        Boolean(v.audio_url?.trim()) ||
+        Boolean(v.note?.trim()),
+    ),
+  );
+}
+
 function formatAuditText(result: Omit<PronounceAuditResult, 'rendered'>): string {
   const s = result.summary;
   const lines: string[] = [
     `Pronunciation audit (${result.repo})`,
-    `  Lexicon entries: ${s.lexicon_entries} | Deceased people: ${s.deceased_people} (living excluded: ${s.living_people_excluded}) | Places: ${s.places}`,
-    `  Missing deceased surnames: ${s.missing_surnames}`,
-    `  Missing non-trivial/foreign places: ${s.missing_non_trivial_places}`,
-    `  Unsourced entries: ${s.unsourced_entries}`,
+    `  Pronunciation Lexicon entries: ${s.lexicon_entries} | Living excluded: ${s.living_people_excluded}`,
+    `  Deceased full-name coverage: ${s.deceasedFullCoverage}/${s.deceasedTotal} (partial/surname-only: ${s.deceasedPartialOnly}, missing: ${s.deceasedMissing})`,
+    `  Places coverage: ${s.placesCovered}/${s.placesTotal} (missing: ${s.placesMissing})`,
+    `  Living pronunciation leaks: ${s.livingLeaks}`,
     `  Homonymous bare place collisions: ${s.homonymous_place_collisions}`,
-    `  IPA / quality warnings: ${s.ipa_quality_warnings}`,
+    `  Unsourced entries: ${s.unsourced_entries} | IPA / quality warnings: ${s.ipa_quality_warnings}`,
   ];
+
+  if (result.living_leaks.length > 0) {
+    lines.push('', `LIVING PRONUNCIATION LEAKS (${result.living_leaks.length}) [FAIL]:`);
+    for (const leak of result.living_leaks) {
+      lines.push(`  - [${leak.scope}] ${leak.location}: ${leak.reason}`);
+    }
+  }
+
+  if (result.coverage_gaps.people_missing.length > 0) {
+    lines.push(
+      '',
+      `Deceased people missing pronunciation (${result.coverage_gaps.people_missing.length}):`,
+    );
+    for (const p of result.coverage_gaps.people_missing.slice(0, 25)) {
+      lines.push(`  - ${p.id}: ${p.full_name}`);
+    }
+    if (result.coverage_gaps.people_missing.length > 25) {
+      lines.push(`  ... and ${result.coverage_gaps.people_missing.length - 25} more.`);
+    }
+  }
+
+  if (result.coverage_gaps.people_partial.length > 0) {
+    lines.push(
+      '',
+      `Deceased people with surname-only or partial pronunciation (${result.coverage_gaps.people_partial.length}):`,
+    );
+    for (const p of result.coverage_gaps.people_partial.slice(0, 25)) {
+      const missingStr =
+        p.missing_parts.length > 0 ? ` (missing: ${p.missing_parts.join(', ')})` : '';
+      lines.push(`  - ${p.id}: ${p.full_name} [${p.coverage}]${missingStr}`);
+    }
+    if (result.coverage_gaps.people_partial.length > 25) {
+      lines.push(`  ... and ${result.coverage_gaps.people_partial.length - 25} more.`);
+    }
+  }
+
+  if (result.coverage_gaps.places.length > 0) {
+    lines.push('', `Places missing pronunciation (${result.coverage_gaps.places.length}):`);
+    for (const p of result.coverage_gaps.places.slice(0, 25)) {
+      lines.push(`  - ${p.id}: ${p.full_name} (${p.reason})`);
+    }
+    if (result.coverage_gaps.places.length > 25) {
+      lines.push(`  ... and ${result.coverage_gaps.places.length - 25} more.`);
+    }
+  }
 
   if (result.homonymous_place_collisions.length > 0) {
     lines.push('', 'Homonymous bare place collisions:');
@@ -1016,7 +1119,7 @@ function formatAuditText(result: Omit<PronounceAuditResult, 'rendered'>): string
     lines.push('', `Unsourced entries (${result.unsourced_entries.length}):`);
     for (const u of result.unsourced_entries.slice(0, 25)) {
       lines.push(
-        `  - [${u.scope}] ${u.label}${u.missing_note ? ' (missing source and note)' : ' (missing source_url/source_label)'}`
+        `  - [${u.scope}] ${u.label}${u.missing_note ? ' (missing source and note)' : ' (missing source_url/source_label)'}`,
       );
     }
     if (result.unsourced_entries.length > 25) {
@@ -1034,21 +1137,11 @@ function formatAuditText(result: Omit<PronounceAuditResult, 'rendered'>): string
     }
   }
 
-  if (result.coverage_gaps.places.length > 0) {
-    lines.push('', `Missing non-trivial/foreign places (${result.coverage_gaps.places.length}):`);
-    for (const p of result.coverage_gaps.places.slice(0, 20)) {
-      lines.push(`  - ${p.id}: ${p.full_name} (${p.reason})`);
-    }
-    if (result.coverage_gaps.places.length > 20) {
-      lines.push(`  ... and ${result.coverage_gaps.places.length - 20} more.`);
-    }
-  }
-
   return lines.join('\n');
 }
 
 export function runPronounceAuditCommand(
-  options: PronounceAuditOptions
+  options: PronounceAuditOptions,
 ): PronounceAuditResult {
   const repoDir = path.resolve(options.repoDir?.trim() || process.cwd());
   if (!fs.existsSync(repoDir) || !fs.statSync(repoDir).isDirectory()) {
@@ -1061,7 +1154,7 @@ export function runPronounceAuditCommand(
 
   if (!fs.existsSync(configPath)) {
     throw new CliValidationError(
-      `Missing ${configPath} (pass --repo <archive-root> if running outside the archive root).`
+      `Missing ${configPath} (pass --repo <archive-root> if running outside the archive root).`,
     );
   }
 
@@ -1076,20 +1169,95 @@ export function runPronounceAuditCommand(
   const lexicon: Record<string, Pronunciation> = siteConfig.pronunciations ?? {};
   const lexiconLowerKeys = new Map<string, string>();
   for (const key of Object.keys(lexicon)) {
-    lexiconLowerKeys.set(key.toLowerCase(), key);
+    lexiconLowerKeys.set(key.trim().toLowerCase(), key);
   }
 
-  // Strictly exclude living people so zero living names or surnames ever appear in audit output.
+  // Strictly partition deceased vs living people; never print any living name, surname, or ID.
   const deceasedPeople: RawPerson[] = [];
-  let livingExcluded = 0;
-  for (const person of people) {
-    if (person.is_living || resolveEffectiveLiving(person, siteConfig.privacy)) {
-      livingExcluded += 1;
+  const livingPeople: Array<{ index: number; person: RawPerson }> = [];
+  for (let i = 0; i < people.length; i += 1) {
+    const person = people[i];
+    if (
+      person.is_living ||
+      person.full_name.trim() === 'Living' ||
+      resolveEffectiveLiving(person, siteConfig.privacy)
+    ) {
+      livingPeople.push({ index: i + 1, person });
       continue;
     }
     deceasedPeople.push(person);
   }
+  const livingExcluded = livingPeople.length;
 
+  // Verify 0 living people carry an explicit pronunciation or living-only lexicon entry.
+  const deceasedFullNamesLower = new Set(
+    deceasedPeople.map((p) => p.full_name.trim().toLowerCase()).filter(Boolean),
+  );
+  const deceasedIdsLower = new Set(deceasedPeople.map((p) => p.id.trim().toLowerCase()));
+  const livingLeaks: PronounceLivingLeak[] = [];
+
+  for (const { index, person } of livingPeople) {
+    if (hasPronunciationValues(person.pronunciation)) {
+      livingLeaks.push({
+        scope: 'person',
+        location: `data/people.yaml record #${index}`,
+        reason: 'Living person record contains a pronunciation entry (redacted for privacy).',
+      });
+    }
+    const idLower = person.id.trim().toLowerCase();
+    if (idLower && !deceasedIdsLower.has(idLower) && lexiconLowerKeys.has(idLower)) {
+      livingLeaks.push({
+        scope: 'lexicon',
+        location: `kinloom.config.yaml pronunciations (matches data/people.yaml record #${index})`,
+        reason: 'Pronunciation Lexicon contains a key matching a living person ID (redacted for privacy).',
+      });
+    }
+    const fullLower = person.full_name.trim().toLowerCase();
+    if (
+      fullLower &&
+      fullLower !== 'living' &&
+      !deceasedFullNamesLower.has(fullLower) &&
+      lexiconLowerKeys.has(fullLower)
+    ) {
+      livingLeaks.push({
+        scope: 'lexicon',
+        location: `kinloom.config.yaml pronunciations (matches data/people.yaml record #${index})`,
+        reason: 'Pronunciation Lexicon contains a full-name key matching a living person (redacted for privacy).',
+      });
+    }
+  }
+
+  // 100% full-name pronunciation coverage audit for every confirmed deceased person.
+  let deceasedFullCoverage = 0;
+  const peoplePartial: PronouncePartialPersonGap[] = [];
+  const peopleMissing: PronounceMissingPersonGap[] = [];
+
+  for (const person of deceasedPeople) {
+    const resolved = resolvePersonPronunciation(person, lexicon);
+    if (!resolved || !hasPronunciationValues(resolved)) {
+      peopleMissing.push({
+        id: person.id,
+        full_name: person.full_name,
+        surname: person.surname,
+      });
+      continue;
+    }
+    if (resolved.coverage === 'full') {
+      deceasedFullCoverage += 1;
+    } else {
+      peoplePartial.push({
+        id: person.id,
+        full_name: person.full_name,
+        coverage: resolved.coverage,
+        matched_part: resolved.matchedPart ?? null,
+        missing_parts: [...(resolved.missingParts ?? [])],
+      });
+    }
+  }
+  peopleMissing.sort((a, b) => a.full_name.localeCompare(b.full_name) || a.id.localeCompare(b.id));
+  peoplePartial.sort((a, b) => a.full_name.localeCompare(b.full_name) || a.id.localeCompare(b.id));
+
+  // Backward-compatible surname gap summary
   const surnameStats = new Map<
     string,
     { canonical: string; deceasedCount: number; hasExplicitOverride: boolean }
@@ -1101,9 +1269,7 @@ export function runPronounceAuditCommand(
     }
     const lower = surname.toLowerCase();
     const existing = surnameStats.get(lower);
-    const hasOwn = Boolean(
-      person.pronunciation?.phonetic || person.pronunciation?.ipa || person.pronunciation?.audio_url
-    );
+    const hasOwn = hasPronunciationValues(person.pronunciation);
     if (existing) {
       existing.deceasedCount += 1;
       if (hasOwn) {
@@ -1128,24 +1294,29 @@ export function runPronounceAuditCommand(
     }
   }
   missingSurnames.sort(
-    (a, b) => b.deceased_count - a.deceased_count || a.surname.localeCompare(b.surname)
+    (a, b) => b.deceased_count - a.deceased_count || a.surname.localeCompare(b.surname),
   );
 
+  // 100% coverage audit for every place in data/places.yaml.
+  let placesCovered = 0;
+  let nonTrivialMissingPlaces = 0;
   const missingPlaces: PronounceCoverageGapPlace[] = [];
   for (const place of places) {
     const resolved = resolvePlacePronunciation(place, lexicon);
     if (resolved && (resolved.phonetic || resolved.ipa || resolved.audio_url)) {
+      placesCovered += 1;
       continue;
     }
-    const reason = inspectNonTrivialPlaceReason(place);
-    if (reason) {
-      missingPlaces.push({
-        id: place.id,
-        name: place.name,
-        full_name: place.full_name,
-        reason,
-      });
+    const nonTrivialReason = inspectNonTrivialPlaceReason(place);
+    if (nonTrivialReason) {
+      nonTrivialMissingPlaces += 1;
     }
+    missingPlaces.push({
+      id: place.id,
+      name: place.name,
+      full_name: place.full_name,
+      reason: nonTrivialReason ?? 'missing pronunciation entry',
+    });
   }
   missingPlaces.sort((a, b) => a.full_name.localeCompare(b.full_name));
 
@@ -1157,7 +1328,7 @@ export function runPronounceAuditCommand(
     scope: 'lexicon' | 'person' | 'place',
     key: string,
     label: string,
-    entry: Pronunciation
+    entry: Pronunciation,
   ): void => {
     const hasSource = Boolean(entry.source_url?.trim() || entry.source_label?.trim());
     if (!hasSource) {
@@ -1202,7 +1373,6 @@ export function runPronounceAuditCommand(
 
   const homonymousCollisions: PronounceHomonymCollision[] = [];
   for (const [key] of Object.entries(lexicon).toSorted(([a], [b]) => a.localeCompare(b))) {
-    // Only inspect bare (non-comma-qualified, non-place-id) lexicon keys
     if (key.includes(',') || key.startsWith('plc_')) {
       continue;
     }
@@ -1215,7 +1385,7 @@ export function runPronounceAuditCommand(
       continue;
     }
     const sortedMatches = [...matchingPlaces].toSorted((a, b) =>
-      a.full_name.localeCompare(b.full_name)
+      a.full_name.localeCompare(b.full_name),
     );
     const exampleKeys = sortedMatches
       .slice(0, 2)
@@ -1233,21 +1403,41 @@ export function runPronounceAuditCommand(
     });
   }
 
+  const strictOk =
+    livingLeaks.length === 0 &&
+    peoplePartial.length === 0 &&
+    peopleMissing.length === 0 &&
+    missingPlaces.length === 0 &&
+    homonymousCollisions.length === 0;
+  const ok = livingLeaks.length === 0 && (!options.strict || strictOk);
+
   const resultBody: Omit<PronounceAuditResult, 'rendered'> = {
-    ok: true,
+    ok,
+    strictOk,
     repo: repoDir,
     summary: {
+      deceasedTotal: deceasedPeople.length,
+      deceasedFullCoverage,
+      deceasedPartialOnly: peoplePartial.length,
+      deceasedMissing: peopleMissing.length,
+      livingLeaks: livingLeaks.length,
+      placesTotal: places.length,
+      placesCovered,
+      placesMissing: missingPlaces.length,
       lexicon_entries: Object.keys(lexicon).length,
       deceased_people: deceasedPeople.length,
       living_people_excluded: livingExcluded,
       places: places.length,
       missing_surnames: missingSurnames.length,
-      missing_non_trivial_places: missingPlaces.length,
+      missing_non_trivial_places: nonTrivialMissingPlaces,
       unsourced_entries: unsourcedEntries.length,
       homonymous_place_collisions: homonymousCollisions.length,
       ipa_quality_warnings: qualityWarnings.length,
     },
+    living_leaks: livingLeaks,
     coverage_gaps: {
+      people_missing: peopleMissing,
+      people_partial: peoplePartial,
       surnames: missingSurnames,
       places: missingPlaces,
     },

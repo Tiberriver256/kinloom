@@ -10,6 +10,7 @@ import { CreateEntityModal } from '../components/wiki/CreateEntityModal.js';
 import { ExplorerTopBar } from '../components/ExplorerTopBar.js';
 import { KinloomFooter } from '../components/KinloomFooter.js';
 import { Link } from 'react-router-dom';
+import { KINLOOM_VOCABULARY, formatPhotoDocumentCount } from '../lib/vocabulary.js';
 import { PluginSlot } from '../plugins/PluginContext.js';
 import { useArchiveData } from '../context/ArchiveDataContext.js';
 
@@ -219,7 +220,7 @@ export const IndexPage: React.FC = () => {
                       setOnlyWithMedia((v) => !v);
                     }}
                   >
-                    Photos &amp; Scans ({withMediaCount})
+                    {KINLOOM_VOCABULARY.person.photosAndDocumentsHeading} ({withMediaCount})
                   </button>
                   {(query.trim() || onlyWithMedia) && (
                     <button
@@ -315,7 +316,7 @@ export const IndexPage: React.FC = () => {
                               </span>
                               {mediaCount > 0 && (
                                 <span className="person-card-media-badge">
-                                  {mediaCount} {mediaCount === 1 ? 'photo / scan' : 'photos & scans'}
+                                  {formatPhotoDocumentCount(mediaCount)}
                                 </span>
                               )}
                             </div>

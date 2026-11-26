@@ -14,6 +14,7 @@ import { EntityEditDrawer } from '../components/wiki/EntityEditDrawer.js';
 import { RevisionHistoryPanel } from '../components/wiki/RevisionHistoryPanel.js';
 import { TalkPanel } from '../components/wiki/TalkPanel.js';
 import { WikiActionBar, type WikiEntityTab } from '../components/wiki/WikiActionBar.js';
+import { KINLOOM_VOCABULARY } from '../lib/vocabulary.js';
 
 type ScopeMode = 'exact' | 'radius15' | 'county';
 
@@ -450,7 +451,7 @@ export const PlacePage: React.FC = () => {
         <section className="place-map-box">
           <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10, marginBottom: 12 }}>
             <h2 style={{ fontFamily: 'var(--font-serif)', margin: 0 }}>
-              Local Weather &amp; Historic Newspapers
+              {KINLOOM_VOCABULARY.place.localHistoryHeading}
             </h2>
             <div className="filter-bar" style={{ margin: 0 }}>
               <button
@@ -479,7 +480,7 @@ export const PlacePage: React.FC = () => {
 
           {localRecords.length === 0 ? (
             <p className="empty-ring-note">
-              No archived local weather anomalies or newspaper dispatches for this place and decade.
+              {KINLOOM_VOCABULARY.place.localHistoryEmpty}
             </p>
           ) : (
             <div style={{ display: 'grid', gap: 12 }}>

@@ -13,20 +13,10 @@ import { MediaPlayer } from '../components/MediaPlayer.js';
 import { PluginSlot } from '../plugins/PluginContext.js';
 import { useArchiveData } from '../context/ArchiveDataContext.js';
 import { useArchiveUi } from '../context/ArchiveUiContext.js';
+import { KINLOOM_VOCABULARY, MEDIA_KIND_LABELS } from '../lib/vocabulary.js';
 
 type EvidenceTab = 'conflicts' | 'citations' | 'media';
 type MediaKindFilter = 'all' | ArchivalMediaKind;
-
-const MEDIA_KIND_LABELS: Record<ArchivalMediaKind, string> = {
-  portrait: 'Portrait',
-  family_photo: 'Family Photo',
-  headstone: 'Headstone',
-  record_scan: 'Primary Record Scan',
-  document_scan: 'Document Scan',
-  milestone: 'Milestone Photo',
-  video_story: 'Video Story',
-  audio_oral_history: 'Audio Oral History',
-};
 
 export const EvidencePage: React.FC = () => {
   const {
@@ -221,7 +211,7 @@ export const EvidencePage: React.FC = () => {
     return (
       <div>
         <ExplorerTopBar />
-        <main className="index-page">Loading evidence ledger…</main>
+        <main className="index-page">{KINLOOM_VOCABULARY.evidence.loading}</main>
       </div>
     );
   }
@@ -234,23 +224,23 @@ export const EvidencePage: React.FC = () => {
       <main className="place-page">
         <section className="wire-banner" style={{ marginBottom: 18 }}>
           <div>
-            <h1>Evidence, Citations &amp; Archival Media Ledger</h1>
+            <h1>{KINLOOM_VOCABULARY.evidence.heading}</h1>
             <p>
-              Primary-source provenance audit separating real archival collections from unverified
-              tree entries, preserving date discrepancies, and cataloging all digitized portraits,
-              headstones, primary record scans, and manuscript pages.
+              Provenance audit separating primary sources from uncited tree entries, preserving
+              source discrepancies, and cataloging portraits, family photos, headstones, record
+              scans, and document scans.
             </p>
           </div>
           <div className="folio-metrics">
             <div>
-              <strong>{bundle.sources.length}</strong> distinct archival sources
+              <strong>{bundle.sources.length}</strong> cataloged sources
             </div>
             <div>
               <strong>{detailedCitationCount}</strong> page/roll citations ·{' '}
               <strong>{linkedRecordScanCount}</strong> linked record scans
             </div>
             <div style={{ color: 'var(--radar-copresence)' }}>
-              <strong>{allMedia.length}</strong> digitized media items ·{' '}
+              <strong>{allMedia.length}</strong> photos &amp; documents ·{' '}
               <strong>{unverifiedEvents.length}</strong> entries needing citation
             </div>
           </div>
@@ -258,7 +248,11 @@ export const EvidencePage: React.FC = () => {
 
         <PluginSlot name="evidenceExtra" />
 
-        <div className="filter-bar" role="tablist" aria-label="Evidence ledger sections">
+        <div
+          className="filter-bar"
+          role="tablist"
+          aria-label={KINLOOM_VOCABULARY.evidence.tablistAria}
+        >
           <button
             type="button"
             role="tab"
@@ -268,7 +262,7 @@ export const EvidencePage: React.FC = () => {
               setTab('conflicts');
             }}
           >
-            Date &amp; Fact Conflicts ({conflictEvents.length})
+            {KINLOOM_VOCABULARY.evidence.discrepanciesTab} ({conflictEvents.length})
           </button>
           <button
             type="button"
@@ -279,7 +273,7 @@ export const EvidencePage: React.FC = () => {
               setTab('citations');
             }}
           >
-            Source Audit &amp; Citation Gaps ({bundle.sources.length})
+            {KINLOOM_VOCABULARY.evidence.sourcesTab} ({bundle.sources.length})
           </button>
           <button
             type="button"
@@ -290,7 +284,7 @@ export const EvidencePage: React.FC = () => {
               setTab('media');
             }}
           >
-            Digitized Media Gallery ({allMedia.length})
+            {KINLOOM_VOCABULARY.evidence.mediaTab} ({allMedia.length})
           </button>
         </div>
 
@@ -326,7 +320,7 @@ export const EvidencePage: React.FC = () => {
                               openSourceReader({ sourceId: readableRef.source_id, eventId: ev.id });
                             }}
                           >
-                            Read Primary Text →
+                            {KINLOOM_VOCABULARY.sources.readSourceCta}
                           </button>
                         )}
                         {primaryPerson && (
@@ -335,7 +329,7 @@ export const EvidencePage: React.FC = () => {
                             className="pill-btn"
                             style={{ textDecoration: 'none' }}
                           >
-                            Open Timeline →
+                            {KINLOOM_VOCABULARY.evidence.openProfileCta}
                           </Link>
                         )}
                       </div>
@@ -405,7 +399,7 @@ export const EvidencePage: React.FC = () => {
             <section className="place-map-box" style={{ marginBottom: 0 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10, marginBottom: 12 }}>
                 <h2 style={{ fontFamily: 'var(--font-serif)', margin: 0, color: 'var(--surface-header)' }}>
-                  Archival Source Registry ({filteredSources.length})
+                  {KINLOOM_VOCABULARY.evidence.sourceRegistryHeading} ({filteredSources.length})
                 </h2>
                 <input
                   type="search"
@@ -487,7 +481,7 @@ export const EvidencePage: React.FC = () => {
 
             <section className="place-map-box" style={{ marginBottom: 0 }}>
               <h2 style={{ fontFamily: 'var(--font-serif)', margin: '0 0 6px', color: 'var(--surface-header)' }}>
-                Unverified Tree Entries Needing Primary Citation ({unverifiedEvents.length})
+                {KINLOOM_VOCABULARY.evidence.unverifiedHeading} ({unverifiedEvents.length})
               </h2>
               <p style={{ margin: '0 0 12px', fontSize: '0.9375rem', color: 'var(--text-secondary)' }}>
                 Because a GEDCOM export is a container rather than a primary source, events imported
@@ -557,28 +551,28 @@ export const EvidencePage: React.FC = () => {
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 10, marginBottom: 10 }}>
                 <div>
                   <h2 style={{ fontFamily: 'var(--font-serif)', margin: '0 0 4px', color: 'var(--surface-header)' }}>
-                    Digitized Archival Media Gallery ({filteredMedia.length})
+                    {KINLOOM_VOCABULARY.evidence.mediaGalleryHeading} ({filteredMedia.length})
                   </h2>
                   <p style={{ margin: 0, fontSize: '0.92rem', color: 'var(--text-secondary)' }}>
-                    Deceased-ancestor portraits, family photographs, headstones, primary record scans
-                    (strictly excluding living-person records), and manuscript pages.
+                    Portraits, family photographs, headstones, record scans (strictly excluding
+                    living people), and document scans.
                   </p>
                 </div>
                 <input
                   type="search"
                   className="search-input"
-                  placeholder="Search photos & scans…"
+                  placeholder={KINLOOM_VOCABULARY.evidence.mediaSearchPlaceholder}
                   value={mediaQuery}
                   onChange={(e) => {
                     setMediaQuery(e.target.value);
                     setMediaLimit(36);
                   }}
-                  aria-label="Search digitized media gallery"
+                  aria-label={KINLOOM_VOCABULARY.evidence.mediaSearchAria}
                 />
               </div>
 
               {/* oxlint-disable-next-line jsx-a11y/prefer-tag-over-role -- role="group" is the correct grouping pattern for a button toolbar */}
-              <div className="filter-bar" role="group" aria-label="Filter media by category" style={{ marginBottom: 14 }}>
+              <div className="filter-bar" role="group" aria-label="Filter photos and documents by category" style={{ marginBottom: 14 }}>
                 <button
                   type="button"
                   className={`pill-btn ${mediaKindFilter === 'all' ? 'active' : ''}`}
@@ -587,7 +581,7 @@ export const EvidencePage: React.FC = () => {
                     setMediaLimit(36);
                   }}
                 >
-                  All Media ({allMedia.length})
+                  {KINLOOM_VOCABULARY.evidence.allMediaItems} ({allMedia.length})
                 </button>
                 {(
                   [
@@ -622,7 +616,7 @@ export const EvidencePage: React.FC = () => {
               </div>
 
               {displayedMedia.length === 0 ? (
-                <p style={{ color: 'var(--text-secondary)' }}>No digitized media matches your search.</p>
+                <p style={{ color: 'var(--text-secondary)' }}>{KINLOOM_VOCABULARY.evidence.mediaEmpty}</p>
               ) : (
                 <>
                   <div className="person-media-grid">
@@ -658,7 +652,7 @@ export const EvidencePage: React.FC = () => {
                           setMediaLimit((n) => n + 36);
                         }}
                       >
-                        Load More Media ({filteredMedia.length - displayedMedia.length} remaining)
+                        {KINLOOM_VOCABULARY.evidence.loadMoreMedia} ({filteredMedia.length - displayedMedia.length} remaining)
                       </button>
                     </div>
                   )}
@@ -693,7 +687,7 @@ export const EvidencePage: React.FC = () => {
                           className="pill-btn"
                           style={{ textDecoration: 'none', fontSize: '0.8125rem' }}
                         >
-                          Person Timeline →
+                          {KINLOOM_VOCABULARY.evidence.openProfileCta}
                         </Link>
                       </div>
                     ))}

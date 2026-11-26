@@ -18,6 +18,7 @@ import {
   toRomanNumeral,
 } from '../../lib/archivalTreeModel.js';
 import { formatTreeCardName } from '../../lib/treeNodeDisplay.js';
+import { KINLOOM_VOCABULARY } from '../../lib/vocabulary.js';
 import { initialsOf, resolveAssetUrl } from '../Atoms.js';
 
 export interface TreeOrthogonalCanvasProps {
@@ -441,7 +442,7 @@ const EarlyLossStripLayer: React.FC<{
         className={`tree-diagram-early-strip${anyLit ? ' is-lit' : ''}`}
         data-union-id={strip.unionId}
       >
-        <title>Children who died at age 5 or younger</title>
+        <title>{KINLOOM_VOCABULARY.tree.diedYoungTooltip}</title>
         <path
           className={`tree-edge${anyLit ? ' is-lit' : ''}`}
           d={`M ${strip.stemFromX} ${strip.stemFromY} V ${strip.y}`}
@@ -468,7 +469,7 @@ const EarlyLossStripLayer: React.FC<{
           fontFamily="var(--font-mono)"
           fill="var(--text-secondary)"
         >
-          Died young ({strip.chips.length})
+          {KINLOOM_VOCABULARY.tree.diedYoung} ({strip.chips.length})
         </text>
       {strip.chips.map((chip) => {
         const isSelected = selectedPersonId === chip.person.id;
@@ -564,7 +565,7 @@ const SiblingToggleItem: React.FC<{
         aria-expanded={toggle.isExpanded}
         aria-label={
           toggle.isExpanded
-            ? `Hide ${toggle.totalCollateralCount} collateral siblings`
+            ? `Hide ${toggle.totalCollateralCount} other siblings`
             : `Show ${toggle.hiddenCount} more siblings`
         }
         transform={`translate(${toggle.x}, ${toggle.y})`}
@@ -650,7 +651,7 @@ export const TreeOrthogonalCanvas: React.FC<TreeOrthogonalCanvasProps> = ({
       height={layout.bounds.maxY}
       viewBox={`${layout.bounds.minX} ${layout.bounds.minY} ${layout.bounds.maxX - layout.bounds.minX} ${layout.bounds.maxY - layout.bounds.minY}`}
       role="img"
-      aria-label={`Hierarchical 2D ${activeBranchLabel} family tree canvas`}
+      aria-label={`${activeBranchLabel} ${KINLOOM_VOCABULARY.tree.chartCanvasSuffix}`}
     >
       <GenBandsLayer genBands={layout.genBands} maxX={layout.bounds.maxX} />
 

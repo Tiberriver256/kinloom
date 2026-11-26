@@ -37,7 +37,7 @@ export const CoordinatePill: React.FC<{ place: Place | undefined }> = ({ place }
   const latStr = `${Math.abs(place.lat).toFixed(2)}°${place.lat >= 0 ? 'N' : 'S'}`;
   const lngStr = `${Math.abs(place.lng).toFixed(2)}°${place.lng >= 0 ? 'E' : 'W'}`;
   return (
-    <Link to={`/place/${place.slug}`} className="coordinate-pill" title={`Open ${place.full_name} dossier`}>
+    <Link to={`/place/${place.slug}`} className="coordinate-pill" title={`Open ${place.full_name} profile`}>
       <span>
         {latStr}, {lngStr} · {place.name}
       </span>

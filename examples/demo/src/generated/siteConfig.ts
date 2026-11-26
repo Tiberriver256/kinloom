@@ -268,5 +268,66 @@ export const demoSiteConfig: KinloomSiteConfig = {
     "stripLivingPortraits": true,
     "stripLivingResidenceSpans": true,
     "markGedcomLivingConfidential": true
+  },
+  "pronunciations": {
+    "Abraham": {
+      "phonetic": "AY-bruh-ham",
+      "ipa": "/ˈeɪ.bɹə.hæm/",
+      "language": "en-US",
+      "source_url": "https://en.wiktionary.org/wiki/Abraham",
+      "source_label": "Wiktionary (English IPA)"
+    },
+    "Lincoln": {
+      "phonetic": "LING-kun",
+      "ipa": "/ˈlɪŋ.kən/",
+      "language": "en-US",
+      "source_url": "https://en.wiktionary.org/wiki/Lincoln",
+      "source_label": "Wiktionary (English IPA)"
+    },
+    "Mary": {
+      "phonetic": "MAIR-ee",
+      "ipa": "/ˈmɛə.ɹi/",
+      "language": "en-US",
+      "source_url": "https://en.wiktionary.org/wiki/Mary",
+      "source_label": "Wiktionary (English IPA)"
+    },
+    "Ann": {
+      "phonetic": "AN",
+      "ipa": "/æn/",
+      "language": "en-US",
+      "source_url": "https://en.wiktionary.org/wiki/Ann",
+      "source_label": "Wiktionary (English IPA)"
+    },
+    "Todd": {
+      "phonetic": "TAHD",
+      "ipa": "/tɑd/",
+      "language": "en-US",
+      "source_url": "https://en.wiktionary.org/wiki/Todd",
+      "source_label": "Wiktionary (English IPA)"
+    },
+    "Springfield, Illinois": {
+      "phonetic": "SPRING-feeld",
+      "ipa": "/ˈspɹɪŋ.fiːld/",
+      "language": "en-US",
+      "source_url": "https://en.wiktionary.org/wiki/Springfield",
+      "source_label": "Wiktionary (English IPA)",
+      "region": "Illinois"
+    },
+    "Hingham, England": {
+      "phonetic": "HING-um",
+      "ipa": "/ˈhɪŋ.əm/",
+      "language": "en-GB",
+      "source_url": "https://en.wiktionary.org/wiki/Hingham",
+      "source_label": "Wiktionary (English IPA)",
+      "region": "England"
+    },
+    "Hingham, Massachusetts": {
+      "phonetic": "HING-um",
+      "ipa": "/ˈhɪŋ.əm/",
+      "language": "en-US",
+      "source_url": "https://en.wiktionary.org/wiki/Hingham",
+      "source_label": "Wiktionary (English IPA)",
+      "region": "Massachusetts"
+    }
   }
 };

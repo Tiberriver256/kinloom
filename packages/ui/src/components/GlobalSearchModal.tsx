@@ -2,16 +2,10 @@ import type { ArchiveSearchResult, SearchResultKind } from '@kinloom/core';
 import { searchArchive } from '@kinloom/core';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { isSearchableQuery, searchNavNext, searchNavPrev, searchNavReset } from '../lib/searchNavigation.js';
+import { KINLOOM_VOCABULARY, SEARCH_KIND_LABELS } from '../lib/vocabulary.js';
 import { useArchiveData } from '../context/ArchiveDataContext.js';
 import { useArchiveUi } from '../context/ArchiveUiContext.js';
 import { useNavigate } from 'react-router-dom';
-
-const KIND_LABELS: Record<SearchResultKind, string> = {
-  person: 'People',
-  place: 'Places',
-  event: 'Milestones & Dispatches',
-  reading: 'Primary Source Pages',
-};
 
 export const GlobalSearchModal: React.FC = () => {
   const { bundle, placesById, readings, readingsLoading, siteConfig } = useArchiveData();
@@ -151,12 +145,12 @@ export const GlobalSearchModal: React.FC = () => {
     <dialog
       open
       className="lightbox-backdrop global-search-backdrop"
-      aria-label="Global archive search"
+      aria-label={KINLOOM_VOCABULARY.search.dialogAria}
     >
       <button
         type="button"
         className="lightbox-backdrop-close"
-        aria-label="Close global archive search"
+        aria-label="Close search"
         onClick={closeSearch}
       />
       <div className="global-search-card">
@@ -165,12 +159,12 @@ export const GlobalSearchModal: React.FC = () => {
             ref={inputRef}
             type="search"
             className="global-search-input"
-            placeholder="Search people, places, milestones, or primary transcriptions…"
+            placeholder={KINLOOM_VOCABULARY.search.placeholder}
             value={query}
             onChange={(e) => {
               setQuery(e.target.value);
             }}
-            aria-label="Search the entire family archive"
+            aria-label={KINLOOM_VOCABULARY.search.inputAria}
           />
           <button type="button" className="pill-btn" onClick={closeSearch}>
             Esc
@@ -182,7 +176,7 @@ export const GlobalSearchModal: React.FC = () => {
             <>
               {results.length === 0 && (
                 <div style={{ padding: '18px 16px', color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
-                  No matching people, places, events, or primary source passages for “{query}”.
+                  {KINLOOM_VOCABULARY.search.emptyPrefix} “{query}”.
                 </div>
               )}
               {results.length > 0 && (
@@ -190,7 +184,7 @@ export const GlobalSearchModal: React.FC = () => {
                   {grouped.map((group) => (
                     <div key={group.kind} className="global-search-group">
                       <div className="global-search-group-title">
-                        {KIND_LABELS[group.kind]} ({group.items.length})
+                        {SEARCH_KIND_LABELS[group.kind]} ({group.items.length})
                       </div>
                       {group.items.map((item) => {
                         const flatIdx = results.findIndex((r) => r.id === item.id);

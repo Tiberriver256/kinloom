@@ -433,9 +433,221 @@ describe('kinloom pronounce audit', () => {
     expect(exitCode).toBe(0);
     expect(err).toEqual([]);
     const parsedCli = JSON.parse(out.join('\n')) as {
-      summary: { homonymous_place_collisions: number };
+      ok: boolean;
+      strictOk: boolean;
+      summary: {
+        deceasedTotal: number;
+        deceasedFullCoverage: number;
+        deceasedPartialOnly: number;
+        deceasedMissing: number;
+        livingLeaks: number;
+        placesTotal: number;
+        placesCovered: number;
+        placesMissing: number;
+        homonymous_place_collisions: number;
+      };
     };
+    expect(parsedCli.ok).toBe(true);
+    expect(parsedCli.strictOk).toBe(false);
+    expect(parsedCli.summary.deceasedTotal).toBe(1);
+    expect(parsedCli.summary.deceasedFullCoverage).toBe(0);
+    expect(parsedCli.summary.deceasedMissing).toBe(1);
+    expect(parsedCli.summary.livingLeaks).toBe(0);
+    expect(parsedCli.summary.placesTotal).toBe(3);
+    expect(parsedCli.summary.placesCovered).toBe(1);
+    expect(parsedCli.summary.placesMissing).toBe(2);
     expect(parsedCli.summary.homonymous_place_collisions).toBe(1);
+
+    // --strict exits non-zero when coverage is below 100%
+    const strictOut: string[] = [];
+    const strictExit = await runCli(['pronounce', 'audit', '--repo', repoDir, '--strict', '--json'], {
+      io: {
+        stdout: (line) => strictOut.push(line),
+        stderr: () => {},
+      },
+    });
+    expect(strictExit).toBe(1);
+  });
+
+  it('passes --strict at 100% compositional full-name & place coverage, flags surname-only fallbacks, and fails loudly on living leaks without exposing living names', async () => {
+    const repoDir = await makeTempDir('kinloom-pron-audit-strict-');
+    fs.mkdirSync(path.join(repoDir, 'data'), { recursive: true });
+
+    const basePeople = [
+      {
+        id: 'per_thomas',
+        slug: 'thomas-mercer',
+        full_name: 'Thomas Mercer',
+        given_name: 'Thomas',
+        surname: 'Mercer',
+        alt_names: [],
+        sex: 'M',
+        is_living: false,
+        lineage_group: 'pivot_ancestor',
+        birth_edtf: '1842',
+        death_edtf: '1911',
+        portrait_url: null,
+      },
+      {
+        id: 'per_living_hidden',
+        slug: 'living-hidden',
+        full_name: 'Riley HiddenLivingName',
+        given_name: 'Riley',
+        surname: 'HiddenLivingName',
+        alt_names: [],
+        sex: 'U',
+        is_living: true,
+        lineage_group: 'descendant',
+        birth_edtf: '1998',
+        death_edtf: '',
+        portrait_url: null,
+      },
+    ];
+    const basePlaces = [
+      {
+        id: 'plc_oxford',
+        slug: 'oxford-ma',
+        name: 'Oxford',
+        full_name: 'Oxford, Worcester County, Massachusetts, United States',
+        place_type: 'town' as const,
+        parent_id: null,
+        lat: 42.12,
+        lng: -71.86,
+      },
+    ];
+
+    fs.writeFileSync(path.join(repoDir, 'data', 'people.yaml'), serializePeopleYaml(basePeople), 'utf8');
+    fs.writeFileSync(path.join(repoDir, 'data', 'places.yaml'), serializePlacesYaml(basePlaces), 'utf8');
+
+    // 1. Surname-only fallback: Thomas missing from lexicon -> deceasedPartialOnly = 1, --strict fails
+    fs.writeFileSync(
+      path.join(repoDir, 'kinloom.config.yaml'),
+      serializeKinloomConfigYaml(
+        parseKinloomConfig({
+          site: {
+            title: 'Strict Audit Archive',
+            familyName: 'Mercer Family',
+            gedcomSourceName: 'MERCER_STRICT',
+          },
+          pronunciations: {
+            Mercer: { phonetic: 'MER-ser', ipa: '/ˈmɜːr.sər/', language: 'en-US', source_label: 'Wiktionary' },
+            'Oxford, Massachusetts': {
+              phonetic: 'OX-ferd',
+              ipa: '/ˈɒks.fərd/',
+              language: 'en-US',
+              source_label: 'Wiktionary',
+            },
+          },
+        }),
+      ),
+      'utf8',
+    );
+
+    const partialAudit = runPronounceAuditCommand({ repoDir, strict: true, json: true });
+    expect(partialAudit.ok).toBe(false);
+    expect(partialAudit.strictOk).toBe(false);
+    expect(partialAudit.summary.deceasedTotal).toBe(1);
+    expect(partialAudit.summary.deceasedFullCoverage).toBe(0);
+    expect(partialAudit.summary.deceasedPartialOnly).toBe(1);
+    expect(partialAudit.summary.deceasedMissing).toBe(0);
+    expect(partialAudit.summary.placesTotal).toBe(1);
+    expect(partialAudit.summary.placesCovered).toBe(1);
+    expect(partialAudit.summary.placesMissing).toBe(0);
+    expect(partialAudit.coverage_gaps.people_partial).toEqual([
+      {
+        id: 'per_thomas',
+        full_name: 'Thomas Mercer',
+        coverage: 'surname',
+        matched_part: 'Mercer',
+        missing_parts: ['Thomas'],
+      },
+    ]);
+
+    // 2. Add "Thomas" -> compositional full-name coverage hits 100%, --strict exits 0
+    fs.writeFileSync(
+      path.join(repoDir, 'kinloom.config.yaml'),
+      serializeKinloomConfigYaml(
+        parseKinloomConfig({
+          site: {
+            title: 'Strict Audit Archive',
+            familyName: 'Mercer Family',
+            gedcomSourceName: 'MERCER_STRICT',
+          },
+          pronunciations: {
+            Thomas: { phonetic: 'TOM-us', ipa: '/ˈtɒm.əs/', language: 'en-US', source_label: 'Wiktionary' },
+            Mercer: { phonetic: 'MER-ser', ipa: '/ˈmɜːr.sər/', language: 'en-US', source_label: 'Wiktionary' },
+            'Oxford, Massachusetts': {
+              phonetic: 'OX-ferd',
+              ipa: '/ˈɒks.fərd/',
+              language: 'en-US',
+              source_label: 'Wiktionary',
+            },
+          },
+        }),
+      ),
+      'utf8',
+    );
+
+    const passOut: string[] = [];
+    const passExit = await runCli(['pronounce', 'audit', '--repo', repoDir, '--strict', '--json'], {
+      io: {
+        stdout: (line) => passOut.push(line),
+        stderr: () => {},
+      },
+    });
+    expect(passExit).toBe(0);
+    const passParsed = JSON.parse(passOut.join('\n')) as {
+      ok: boolean;
+      strictOk: boolean;
+      summary: {
+        deceasedTotal: number;
+        deceasedFullCoverage: number;
+        deceasedPartialOnly: number;
+        deceasedMissing: number;
+        livingLeaks: number;
+        placesTotal: number;
+        placesCovered: number;
+        placesMissing: number;
+      };
+    };
+    expect(passParsed.ok).toBe(true);
+    expect(passParsed.strictOk).toBe(true);
+    expect(passParsed.summary.deceasedTotal).toBe(1);
+    expect(passParsed.summary.deceasedFullCoverage).toBe(1);
+    expect(passParsed.summary.deceasedPartialOnly).toBe(0);
+    expect(passParsed.summary.deceasedMissing).toBe(0);
+    expect(passParsed.summary.livingLeaks).toBe(0);
+    expect(passParsed.summary.placesTotal).toBe(1);
+    expect(passParsed.summary.placesCovered).toBe(1);
+    expect(passParsed.summary.placesMissing).toBe(0);
+
+    // 3. Living pronunciation leak fails loudly (even without --strict) and never leaks living name/ID
+    const leakedPeople = [
+      basePeople[0],
+      {
+        ...basePeople[1],
+        pronunciation: { phonetic: 'LEAKED-GUIDE', language: 'en-US' },
+      },
+    ];
+    fs.writeFileSync(path.join(repoDir, 'data', 'people.yaml'), serializePeopleYaml(leakedPeople), 'utf8');
+
+    const leakOut: string[] = [];
+    const leakExit = await runCli(['pronounce', 'audit', '--repo', repoDir, '--json'], {
+      io: {
+        stdout: (line) => leakOut.push(line),
+        stderr: () => {},
+      },
+    });
+    expect(leakExit).toBe(1);
+    const leakRaw = leakOut.join('\n');
+    expect(leakRaw).not.toContain('HiddenLivingName');
+    expect(leakRaw).not.toContain('per_living_hidden');
+    const leakParsed = JSON.parse(leakRaw) as {
+      ok: boolean;
+      summary: { livingLeaks: number };
+    };
+    expect(leakParsed.ok).toBe(false);
+    expect(leakParsed.summary.livingLeaks).toBe(1);
   });
 });
 

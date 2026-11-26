@@ -451,33 +451,474 @@ function isBareLexiconEntryCompatibleWithPlace(
   return true;
 }
 
+export type PronunciationCoverage = 'full' | 'partial' | 'surname';
+
+export type PronunciationResolutionSource =
+  | 'person'
+  | 'lexicon_id'
+  | 'lexicon_full_name'
+  | 'composed'
+  | 'lexicon_surname';
+
+export interface ResolvedPersonPronunciation extends Pronunciation {
+  readonly coverage: PronunciationCoverage;
+  readonly matchedPart?: string;
+  readonly resolvedFrom?: PronunciationResolutionSource;
+  readonly missingParts?: readonly string[];
+}
+
+function hasPronunciationEntryContent(entry?: Pronunciation | null): boolean {
+  if (!entry) {
+    return false;
+  }
+  if (
+    Boolean(entry.phonetic?.trim()) ||
+    Boolean(entry.ipa?.trim()) ||
+    Boolean(entry.audio_url?.trim()) ||
+    Boolean(entry.note?.trim())
+  ) {
+    return true;
+  }
+  return Boolean(
+    entry.variants?.some(
+      (v) =>
+        Boolean(v.phonetic?.trim()) ||
+        Boolean(v.ipa?.trim()) ||
+        Boolean(v.audio_url?.trim()) ||
+        Boolean(v.note?.trim()),
+    ),
+  );
+}
+
+function lookupLexiconEntry(
+  lexicon: Readonly<Record<string, Pronunciation>>,
+  key: string,
+): Pronunciation | undefined {
+  const trimmed = key.trim();
+  if (!trimmed) {
+    return undefined;
+  }
+  if (Object.prototype.hasOwnProperty.call(lexicon, trimmed)) {
+    return lexicon[trimmed];
+  }
+  const lower = trimmed.toLowerCase();
+  for (const [candidateKey, entry] of Object.entries(lexicon)) {
+    if (candidateKey.trim().toLowerCase() === lower) {
+      return entry;
+    }
+  }
+  return undefined;
+}
+
+function isLexiconEntryCompatibleWithPerson(
+  entry: Pronunciation,
+  fullNameLower: string,
+): boolean {
+  if (entry.match_full_name_contains === undefined) {
+    return true;
+  }
+  const needles = Array.isArray(entry.match_full_name_contains)
+    ? entry.match_full_name_contains
+    : [entry.match_full_name_contains];
+  const validNeedles = needles.map((n) => n.trim().toLowerCase()).filter(Boolean);
+  if (validNeedles.length === 0) {
+    return true;
+  }
+  return Boolean(fullNameLower) && validNeedles.some((needle) => fullNameLower.includes(needle));
+}
+
+function lookupCompatiblePersonLexiconEntry(
+  lexicon: Readonly<Record<string, Pronunciation>>,
+  key: string,
+  fullNameLower: string,
+): Pronunciation | undefined {
+  const entry = lookupLexiconEntry(lexicon, key);
+  if (!entry || !hasPronunciationEntryContent(entry)) {
+    return undefined;
+  }
+  if (!isLexiconEntryCompatibleWithPerson(entry, fullNameLower)) {
+    return undefined;
+  }
+  return entry;
+}
+
+const SINGLE_LETTER_INITIAL_RE = /^[\p{L}]\.?$/u;
+const PERSON_NAME_DECORATION_RE = /^(?:jr\.?|sr\.?|ii|iii|iv|v|vi)$/i;
+
+function tokenizePersonName(person: {
+  readonly full_name?: string;
+  readonly given_name?: string;
+  readonly surname?: string;
+}): string[] {
+  const rawFull = person.full_name?.trim() ?? '';
+  const combined =
+    rawFull || [person.given_name?.trim(), person.surname?.trim()].filter(Boolean).join(' ');
+  if (!combined) {
+    return [];
+  }
+  const cleaned = combined
+    .replaceAll(/\([^)]*\)/g, ' ')
+    .replaceAll(/[“”"]/g, ' ')
+    .replaceAll(/,/g, ' ')
+    .trim();
+  if (!cleaned) {
+    return [];
+  }
+  return cleaned
+    .split(/\s+/)
+    .map((tok) => tok.replaceAll(/^[^A-Za-zÀ-ÖØ-öø-ÿ0-9]+|[^A-Za-zÀ-ÖØ-öø-ÿ0-9.]+$/g, ''))
+    .filter(Boolean);
+}
+
+function isSingleLetterInitial(token: string): boolean {
+  return SINGLE_LETTER_INITIAL_RE.test(token.trim());
+}
+
+function stripIpaDelimiters(ipa: string): string {
+  const trimmed = ipa.trim();
+  if (
+    (trimmed.startsWith('/') && trimmed.endsWith('/') && trimmed.length > 2) ||
+    (trimmed.startsWith('[') && trimmed.endsWith(']') && trimmed.length > 2)
+  ) {
+    return trimmed.slice(1, -1).trim();
+  }
+  return trimmed;
+}
+
+function normalizeBaseLanguage(language?: string | null): string | null {
+  const trimmed = language?.trim().toLowerCase();
+  if (!trimmed) {
+    return null;
+  }
+  return trimmed.split(/[-_]/)[0] || null;
+}
+
+interface ComposedTokenPart {
+  readonly kind: 'resolved' | 'initial' | 'decoration';
+  readonly token: string;
+  readonly entry?: Pronunciation;
+  readonly joinWithHyphen?: boolean;
+}
+
+function composeLanguageTag(entries: readonly Pronunciation[]): string | undefined {
+  const rawLangs = entries
+    .map((e) => e.language?.trim())
+    .filter((lang): lang is string => Boolean(lang));
+  if (rawLangs.length === 0) {
+    return undefined;
+  }
+  const uniqueExact = new Set(rawLangs.map((l) => l.toLowerCase()));
+  if (uniqueExact.size === 1) {
+    return rawLangs[0];
+  }
+  const baseLangs = new Set(
+    rawLangs.map((l) => normalizeBaseLanguage(l)).filter((b): b is string => Boolean(b)),
+  );
+  if (baseLangs.size === 1) {
+    // Prefer a region-qualified tag (e.g. en-US over en) if all share one base language.
+    const qualified = rawLangs.find((l) => /[-_]/.test(l));
+    return qualified ?? rawLangs[0];
+  }
+  // Mixed-language full names (e.g. English given name + Dutch surname) omit a single
+  // language tag so TTS speaks the composed respelling rather than mangling one half.
+  return undefined;
+}
+
+function composeProvenance(entries: readonly Pronunciation[]): {
+  readonly source_label?: string;
+  readonly source_url?: string;
+  readonly region?: string;
+} {
+  const labels: string[] = [];
+  const seenLabels = new Set<string>();
+  const urls = new Set<string>();
+  const regions = new Set<string>();
+
+  for (const entry of entries) {
+    const label = entry.source_label?.trim();
+    if (label && !seenLabels.has(label.toLowerCase())) {
+      seenLabels.add(label.toLowerCase());
+      labels.push(label);
+    }
+    const url = entry.source_url?.trim();
+    if (url) {
+      urls.add(url);
+    }
+    const region = entry.region?.trim();
+    if (region) {
+      regions.add(region);
+    }
+  }
+
+  return {
+    ...(labels.length > 0 ? { source_label: labels.join(' + ') } : {}),
+    ...(urls.size === 1 ? { source_url: [...urls][0] } : {}),
+    ...(regions.size === 1 ? { region: [...regions][0] } : {}),
+  };
+}
+
+function resolveCompositionalPersonPronunciation(
+  tokens: readonly string[],
+  lexicon: Readonly<Record<string, Pronunciation>>,
+  fullNameLower: string,
+): { readonly resolved: ResolvedPersonPronunciation | null; readonly missingParts: readonly string[] } {
+  if (tokens.length === 0) {
+    return { resolved: null, missingParts: [] };
+  }
+
+  const parts: ComposedTokenPart[] = [];
+  const missingParts: string[] = [];
+  let resolvedMeaningfulCount = 0;
+
+  let idx = 0;
+  while (idx < tokens.length) {
+    // Greedy longest-phrase match (up to 4 tokens) so multi-word surnames like "van der Berg" match atomically.
+    const maxSpan = Math.min(4, tokens.length - idx);
+    let matchedSpan = 0;
+    let matchedEntry: Pronunciation | undefined;
+    let matchedText = '';
+
+    for (let span = maxSpan; span >= 1; span -= 1) {
+      const phrase = tokens.slice(idx, idx + span).join(' ');
+      const candidate = lookupCompatiblePersonLexiconEntry(lexicon, phrase, fullNameLower);
+      if (candidate) {
+        matchedSpan = span;
+        matchedEntry = candidate;
+        matchedText = phrase;
+        break;
+      }
+    }
+
+    if (matchedSpan > 0 && matchedEntry) {
+      parts.push({ kind: 'resolved', token: matchedText, entry: matchedEntry });
+      resolvedMeaningfulCount += 1;
+      idx += matchedSpan;
+      continue;
+    }
+
+    const token = tokens[idx];
+
+    // Hyphenated name tokens (e.g. "Anne-Marie" or "Smith-Jones"): compose sub-parts when each resolves.
+    if (token.includes('-')) {
+      const subTokens = token.split('-').map((s) => s.trim()).filter(Boolean);
+      if (subTokens.length > 1) {
+        const subEntries: Pronunciation[] = [];
+        let allSubMatched = true;
+        for (const sub of subTokens) {
+          const subEntry = lookupCompatiblePersonLexiconEntry(lexicon, sub, fullNameLower);
+          if (!subEntry) {
+            allSubMatched = false;
+            missingParts.push(sub);
+          } else {
+            subEntries.push(subEntry);
+          }
+        }
+        if (allSubMatched) {
+          for (let s = 0; s < subTokens.length; s += 1) {
+            parts.push({
+              kind: 'resolved',
+              token: subTokens[s],
+              entry: subEntries[s],
+              joinWithHyphen: s > 0,
+            });
+          }
+          resolvedMeaningfulCount += 1;
+          idx += 1;
+          continue;
+        }
+        idx += 1;
+        continue;
+      }
+    }
+
+    if (tokens.length > 1 && isSingleLetterInitial(token)) {
+      parts.push({ kind: 'initial', token });
+      idx += 1;
+      continue;
+    }
+
+    if (tokens.length > 1 && PERSON_NAME_DECORATION_RE.test(token)) {
+      parts.push({ kind: 'decoration', token });
+      idx += 1;
+      continue;
+    }
+
+    missingParts.push(token);
+    idx += 1;
+  }
+
+  if (missingParts.length > 0 || resolvedMeaningfulCount === 0) {
+    return { resolved: null, missingParts };
+  }
+
+  const resolvedEntries = parts
+    .filter((p): p is ComposedTokenPart & { readonly entry: Pronunciation } => p.kind === 'resolved' && Boolean(p.entry))
+    .map((p) => p.entry);
+
+  const allHavePhonetic = resolvedEntries.every((e) => Boolean(e.phonetic?.trim()));
+  const allHaveIpa = resolvedEntries.every((e) => Boolean(e.ipa?.trim()));
+
+  let phonetic: string | undefined;
+  if (allHavePhonetic) {
+    let out = '';
+    for (const part of parts) {
+      const piece =
+        part.kind === 'resolved' ? (part.entry?.phonetic?.trim() ?? '') : part.token;
+      if (!piece) {
+        continue;
+      }
+      if (!out) {
+        out = piece;
+      } else if (part.joinWithHyphen) {
+        out += `-${piece}`;
+      } else {
+        out += ` ${piece}`;
+      }
+    }
+    phonetic = out || undefined;
+  }
+
+  let ipa: string | undefined;
+  if (allHaveIpa) {
+    let out = '';
+    for (const part of parts) {
+      if (part.kind !== 'resolved' || !part.entry?.ipa?.trim()) {
+        continue;
+      }
+      const piece = stripIpaDelimiters(part.entry.ipa);
+      if (!piece) {
+        continue;
+      }
+      if (!out) {
+        out = piece;
+      } else if (part.joinWithHyphen) {
+        out += `-${piece}`;
+      } else {
+        out += ` ${piece}`;
+      }
+    }
+    ipa = out ? `/${out}/` : undefined;
+  }
+
+  if (!phonetic && !ipa) {
+    return { resolved: null, missingParts: [] };
+  }
+
+  const language = composeLanguageTag(resolvedEntries);
+  const provenance = composeProvenance(resolvedEntries);
+
+  return {
+    resolved: {
+      ...(phonetic ? { phonetic } : {}),
+      ...(ipa ? { ipa } : {}),
+      ...(language ? { language } : {}),
+      ...provenance,
+      coverage: 'full',
+      resolvedFrom: 'composed',
+    },
+    missingParts: [],
+  };
+}
+
 /**
- * Resolve a person's effective pronunciation by falling back to a shared
- * archive-level surname/term lexicon (so shared surnames are defined once
- * in schema rather than duplicated across every person record).
+ * Resolve a person's effective pronunciation in strict precedence order:
+ * 1. Explicit `person.pronunciation` (`coverage: 'full'`)
+ * 2. Exact `lexicon[person.id]` or `lexicon[person.full_name]` (`coverage: 'full'`)
+ * 3. Compositional full-name resolution across all meaningful name tokens (`coverage: 'full'`)
+ * 4. Surname-only fallback (`coverage: 'surname'`, `matchedPart: surname`)
+ *
+ * Living people always resolve to `null`.
  */
 export function resolvePersonPronunciation(
   person: {
+    readonly id?: string;
     readonly is_living?: boolean;
     readonly full_name?: string;
+    readonly given_name?: string;
     readonly surname?: string;
     readonly pronunciation?: Pronunciation | null;
   },
   lexicon?: Readonly<Record<string, Pronunciation>> | null,
-): Pronunciation | null {
-  if (person.is_living || person.full_name === 'Living') {
+): ResolvedPersonPronunciation | null {
+  if (person.is_living || person.full_name?.trim() === 'Living') {
     return null;
   }
-  const surnameKey = person.surname?.trim();
-  const shared =
-    lexicon && surnameKey
-      ? (lexicon[surnameKey] ??
-        Object.entries(lexicon).find(
-          ([k]) => k.toLowerCase() === surnameKey.toLowerCase(),
-        )?.[1])
+
+  const fullNameTrimmed = person.full_name?.trim() ?? '';
+  const fullNameLower = fullNameTrimmed.toLowerCase();
+  const idKey = person.id?.trim() ?? '';
+
+  const exactIdEntry =
+    lexicon && idKey ? lookupLexiconEntry(lexicon, idKey) : undefined;
+  const exactFullNameEntry =
+    lexicon && fullNameTrimmed
+      ? lookupCompatiblePersonLexiconEntry(lexicon, fullNameTrimmed, fullNameLower)
       : undefined;
+  const exactShared =
+    exactIdEntry && hasPronunciationEntryContent(exactIdEntry)
+      ? exactIdEntry
+      : exactFullNameEntry;
+
+  // 1. Explicit person.pronunciation always wins with full coverage.
   const own = person.pronunciation ?? undefined;
-  return mergePronunciationEntry(shared, own);
+  if (own && hasPronunciationEntryContent(own)) {
+    const merged = mergePronunciationEntry(exactShared, own);
+    if (merged) {
+      return {
+        ...merged,
+        coverage: 'full',
+        resolvedFrom: 'person',
+      };
+    }
+  }
+
+  // 2. Exact person-ID or exact full-name entry in shared lexicon.
+  if (exactIdEntry && hasPronunciationEntryContent(exactIdEntry)) {
+    return {
+      ...exactIdEntry,
+      coverage: 'full',
+      resolvedFrom: 'lexicon_id',
+    };
+  }
+  if (exactFullNameEntry) {
+    return {
+      ...exactFullNameEntry,
+      coverage: 'full',
+      resolvedFrom: 'lexicon_full_name',
+    };
+  }
+
+  if (!lexicon) {
+    return null;
+  }
+
+  // 3. Compositional full-name resolution across every meaningful token.
+  const tokens = tokenizePersonName(person);
+  const { resolved: composed, missingParts } = resolveCompositionalPersonPronunciation(
+    tokens,
+    lexicon,
+    fullNameLower,
+  );
+  if (composed) {
+    return composed;
+  }
+
+  // 4. Surname-only fallback so existing archives never regress.
+  const surnameKey = person.surname?.trim() ?? '';
+  if (surnameKey) {
+    const surnameEntry = lookupCompatiblePersonLexiconEntry(lexicon, surnameKey, fullNameLower);
+    if (surnameEntry) {
+      return {
+        ...surnameEntry,
+        coverage: 'surname',
+        matchedPart: surnameKey,
+        resolvedFrom: 'lexicon_surname',
+        ...(missingParts.length > 0 ? { missingParts } : {}),
+      };
+    }
+  }
+
+  return null;
 }
 
 /**

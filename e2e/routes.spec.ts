@@ -90,7 +90,7 @@ test('all 9 archival routes render cleanly with zero console or page errors', as
     {
       url: '/tree',
       assertVisible: async () => {
-        await expect(page.getByRole('img', { name: /Hierarchical 2D .* family tree canvas/ })).toBeVisible();
+        await expect(page.getByRole('img', { name: /family tree chart/ })).toBeVisible();
       },
     },
     {
@@ -103,13 +103,13 @@ test('all 9 archival routes render cleanly with zero console or page errors', as
     {
       url: '/kinship',
       assertVisible: async () => {
-        await expect(page.getByRole('heading', { name: 'Kinship & Life-Overlap Finder' })).toBeVisible();
+        await expect(page.getByRole('heading', { name: 'Kinship Finder' })).toBeVisible();
       },
     },
     {
       url: '/evidence',
       assertVisible: async () => {
-        await expect(page.getByRole('heading', { name: 'Evidence, Citations & Archival Media Ledger' })).toBeVisible();
+        await expect(page.getByRole('heading', { name: 'Evidence & Sources' })).toBeVisible();
       },
     },
   ];

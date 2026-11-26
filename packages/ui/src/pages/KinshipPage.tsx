@@ -2,6 +2,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import React, { useMemo, useState } from 'react';
 import { findKinshipPath } from '@kinloom/core';
 import { ExplorerTopBar } from '../components/ExplorerTopBar.js';
+import { KINLOOM_VOCABULARY } from '../lib/vocabulary.js';
 import { KinloomFooter } from '../components/KinloomFooter.js';
 import { initialsOf } from '../components/Atoms.js';
 import { useArchiveData } from '../context/ArchiveDataContext.js';
@@ -89,18 +90,15 @@ export const KinshipPage: React.FC = () => {
       <main className="place-page">
         <section className="wire-banner" style={{ marginBottom: 18 }}>
           <div>
-            <h1>Kinship &amp; Life-Overlap Finder</h1>
-            <p>
-              Select any two relatives in the archive to trace their shortest documented kinship path,
-              overlapping years alive, and shared homestead communities.
-            </p>
+            <h1>{KINLOOM_VOCABULARY.kinship.heading}</h1>
+            <p>{KINLOOM_VOCABULARY.kinship.lead}</p>
           </div>
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
             <Link to="/tree" className="pill-btn" style={{ textDecoration: 'none' }}>
-              2D Family Tree →
+              {KINLOOM_VOCABULARY.kinship.familyTreeCta}
             </Link>
             <Link to="/map" className="pill-btn" style={{ textDecoration: 'none' }}>
-              Migration Map →
+              {KINLOOM_VOCABULARY.kinship.migrationMapCta}
             </Link>
           </div>
         </section>
@@ -217,7 +215,7 @@ export const KinshipPage: React.FC = () => {
             {result.connected && result.personIds.length > 0 && (
               <div style={{ marginTop: 18 }}>
                 <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: 10 }}>
-                  SHORTEST LINEAGE CHAIN (CLICK ANY RELATIVE TO OPEN TIMELINE):
+                  {KINLOOM_VOCABULARY.kinship.shortestPathHint}
                 </div>
                 <div className="kinship-chain">
                   {result.personIds.map((pid, idx) => {
@@ -258,7 +256,7 @@ export const KinshipPage: React.FC = () => {
             {result.sharedPlaces.length > 0 && (
               <div style={{ marginTop: 18, paddingTop: 14, borderTop: '1px solid var(--border-decorative)' }}>
                 <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: 8 }}>
-                  SHARED COMMUNITIES:
+                  {KINLOOM_VOCABULARY.kinship.sharedPlacesHeading}
                 </div>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                   {result.sharedPlaces.map(({ place }) => (

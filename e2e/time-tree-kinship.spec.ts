@@ -18,33 +18,33 @@ test('time route updates town lanes when selecting anchor years and scrubbing sl
   await expect(page.locator('.time-lanes')).toContainText('Little Pigeon Creek');
 });
 
-test('tree route filters branches, toggles direct spine, and opens node preview popover', async ({ page }) => {
+test('tree route filters branches, toggles direct line, and opens focus drawer', async ({ page }) => {
   await page.goto('/tree');
-  const canvas = page.getByRole('img', { name: /Hierarchical 2D .* family tree canvas/ });
+  const canvas = page.getByRole('img', { name: /family tree chart/ });
   await expect(canvas).toBeVisible();
 
   // Switch branch filter
-  const branchSelect = page.getByLabel('Select family branch for 2D Tree');
+  const branchSelect = page.getByLabel('Select family branch');
   await expect(branchSelect).toBeVisible();
   await branchSelect.selectOption('todd_edwards');
   await expect(page.locator('.tree-node-card', { hasText: 'Levi Todd' }).first()).toBeVisible();
 
-  // Switch back to all and test Direct Spine toggle
+  // Switch back to all and test Direct Line toggle
   await branchSelect.selectOption('all');
-  await page.getByRole('button', { name: 'Direct Spine' }).click();
-  await expect(page.getByRole('button', { name: 'Direct Spine' })).toHaveClass(/active/);
+  await page.getByRole('button', { name: 'Direct Line' }).click();
+  await expect(page.getByRole('button', { name: 'Direct Line' })).toHaveClass(/active/);
 
-  // Select a person node to open preview popover
+  // Select a person node to open focus drawer
   await page.locator('.tree-node-card[aria-label="Inspect Abraham Lincoln"]').click();
   const popover = page.locator('.tree-popover');
   await expect(popover).toBeVisible();
   await expect(popover).toContainText('Abraham Lincoln');
-  await expect(popover.getByRole('link', { name: 'Open Timeline →' })).toBeVisible();
+  await expect(popover.getByRole('link', { name: 'Open Profile →' })).toBeVisible();
 });
 
 test('kinship finder evaluates configured featured pairs and custom selections', async ({ page }) => {
   await page.goto('/kinship');
-  await expect(page.getByRole('heading', { name: 'Kinship & Life-Overlap Finder' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Kinship Finder' })).toBeVisible();
 
   // Click configured featured kinship pair
   await page.getByRole('button', { name: 'Abraham Lincoln ↔ Mary Ann Todd' }).click();

@@ -11,6 +11,7 @@ import {
   formatEarlyLossAgeLabel,
   toRomanNumeral,
 } from '../../lib/archivalTreeModel.js';
+import { KINLOOM_VOCABULARY } from '../../lib/vocabulary.js';
 import { initialsOf, resolveAssetUrl } from '../Atoms.js';
 
 export interface TreePedigreeRollProps {
@@ -136,10 +137,13 @@ const UnionAttachments: React.FC<UnionAttachmentsProps> = ({
         <div
           className="tree-early-strip"
           role="group"
-          aria-label="Children who died at age 5 or younger"
-          title="Children who died at age 5 or younger"
+          aria-label={KINLOOM_VOCABULARY.tree.diedYoungTooltip}
+          title={KINLOOM_VOCABULARY.tree.diedYoungTooltip}
         >
-          <span className="tree-early-strip-heading" title="Children who died at age 5 or younger">
+          <span
+            className="tree-early-strip-heading"
+            title={KINLOOM_VOCABULARY.tree.diedYoungTooltip}
+          >
             <svg
               className="tree-early-sprig"
               viewBox="0 0 16 16"
@@ -156,7 +160,7 @@ const UnionAttachments: React.FC<UnionAttachmentsProps> = ({
                 strokeLinejoin="round"
               />
             </svg>
-            Died young ({earlyChildren.length})
+            {KINLOOM_VOCABULARY.tree.diedYoung} ({earlyChildren.length})
           </span>
           <div className="tree-early-chip-row">
             {earlyChildren.map((child) => {
@@ -203,7 +207,11 @@ const UnionAttachments: React.FC<UnionAttachmentsProps> = ({
           </button>
 
           {union.isExpanded && hangingChildren.length > 0 && (
-            <div className="tree-hanging-grid" role="list" aria-label="Collateral siblings">
+            <div
+              className="tree-hanging-grid"
+              role="list"
+              aria-label={KINLOOM_VOCABULARY.tree.otherSiblingsAria}
+            >
               {hangingChildren.map((sibling) => {
                 const rawThumb = personThumbMap.get(sibling.id) || sibling.portrait_url;
                 const thumbUrl = rawThumb ? resolveAssetUrl(rawThumb, baseUrl) : null;
@@ -287,8 +295,8 @@ export const TreePedigreeRoll: React.FC<TreePedigreeRollProps> = ({
                     className={`tree-roll-union-hub${spotlight?.highlightedUnionIds.has(connectingUnion.id) ? ' is-lit' : ''}`}
                     title={
                       connectingUnion.totalMarriagesForPrimary > 1
-                        ? `Marriage ${toRomanNumeral(connectingUnion.marriageOrder)}`
-                        : 'Union'
+                        ? `${KINLOOM_VOCABULARY.tree.marriageLabel} ${toRomanNumeral(connectingUnion.marriageOrder)}`
+                        : KINLOOM_VOCABULARY.tree.marriageLabel
                     }
                     aria-hidden="true"
                   >
@@ -351,7 +359,7 @@ export const TreePedigreeRoll: React.FC<TreePedigreeRollProps> = ({
       <div
         className="tree-roll-scroll"
         role="region"
-        aria-label={`${familyLabel} vertical pedigree roll`}
+        aria-label={`${familyLabel} ${KINLOOM_VOCABULARY.tree.listRegionSuffix}`}
       >
         <div className="tree-roll-spine-rail" aria-hidden="true" />
         <ol className="tree-roll-generations">

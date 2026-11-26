@@ -39,17 +39,7 @@ import { MediaUploaderModal } from '../components/wiki/MediaUploaderModal.js';
 import { RevisionHistoryPanel } from '../components/wiki/RevisionHistoryPanel.js';
 import { TalkPanel } from '../components/wiki/TalkPanel.js';
 import { WikiActionBar, type WikiEntityTab } from '../components/wiki/WikiActionBar.js';
-
-const MEDIA_KIND_LABELS: Record<string, string> = {
-  portrait: 'Portrait',
-  family_photo: 'Family Photo',
-  headstone: 'Headstone',
-  record_scan: 'Primary Record Scan',
-  document_scan: 'Document Scan',
-  milestone: 'Milestone Photo',
-  video_story: 'Video Story',
-  audio_oral_history: 'Audio Oral History',
-};
+import { KINLOOM_VOCABULARY, MEDIA_KIND_LABELS } from '../lib/vocabulary.js';
 
 type PersonLightboxState =
   | { kind: 'closed' }
@@ -526,10 +516,10 @@ export const PersonPage: React.FC = () => {
       <div>
         <ExplorerTopBar />
         <main className="index-page">
-          <h1>Relative Not Found</h1>
+          <h1>{KINLOOM_VOCABULARY.person.notFoundHeading}</h1>
           <p>{error || 'We could not find that person in the archive.'}</p>
           <Link to="/" className="pill-btn">
-            Return to people
+            {KINLOOM_VOCABULARY.person.returnToPeople}
           </Link>
         </main>
         <KinloomFooter />
@@ -578,8 +568,10 @@ export const PersonPage: React.FC = () => {
                         person,
                         pronunciations,
                       );
-                      const isInheritedSurnameOnly =
-                        Boolean(effectivePronunciation) && !person.pronunciation && Boolean(person.surname);
+                      const isFullCoverage = effectivePronunciation?.coverage === 'full';
+                      const badgeLabel = isFullCoverage
+                        ? person.full_name
+                        : effectivePronunciation?.matchedPart || person.surname || person.full_name;
                       if (!effectivePronunciation && !capabilities.canEdit) {
                         return null;
                       }
@@ -589,8 +581,9 @@ export const PersonPage: React.FC = () => {
                             <>
                               <PronunciationBadge
                                 pronunciation={effectivePronunciation}
-                                label={isInheritedSurnameOnly ? person.surname : person.full_name}
-                                prefix={isInheritedSurnameOnly ? person.surname : undefined}
+                                label={badgeLabel}
+                                coverage={effectivePronunciation.coverage}
+                                matchedPart={effectivePronunciation.matchedPart}
                                 baseUrl={baseUrl}
                               />
                               {capabilities.canEdit && (
@@ -602,7 +595,7 @@ export const PersonPage: React.FC = () => {
                                   }}
                                   aria-label={`Edit pronunciation for ${person.full_name}`}
                                 >
-                                  Edit
+                                  {KINLOOM_VOCABULARY.person.editPronunciation}
                                 </button>
                               )}
                             </>
@@ -614,7 +607,7 @@ export const PersonPage: React.FC = () => {
                                 setWikiTab('edit');
                               }}
                             >
-                              + Add pronunciation
+                              {KINLOOM_VOCABULARY.person.addPronunciation}
                             </button>
                           )}
                         </div>
@@ -809,12 +802,15 @@ export const PersonPage: React.FC = () => {
           )}
 
           {wikiTab !== 'history' && wikiTab !== 'talk' && personBiographies.length > 0 && (
-            <section className="person-biography-section" aria-label="Biography">
+            <section
+              className="person-biography-section"
+              aria-label={KINLOOM_VOCABULARY.person.biographyHeading}
+            >
               <div className="person-biography-header">
-                <h2>Biography</h2>
+                <h2>{KINLOOM_VOCABULARY.person.biographyHeading}</h2>
                 {personBiographies.length > 1 && (
                   <span className="person-biography-count">
-                    {personBiographies.length} stories
+                    {personBiographies.length} biographies
                   </span>
                 )}
               </div>
@@ -945,8 +941,8 @@ export const PersonPage: React.FC = () => {
                     }}
                   >
                     {showAllNarratives
-                      ? 'Show fewer stories'
-                      : `Read ${personBiographies.length - 1} more ${personBiographies.length - 1 === 1 ? 'story' : 'stories'}`}
+                      ? 'Show fewer biographies'
+                      : `Read ${personBiographies.length - 1} more ${personBiographies.length - 1 === 1 ? 'biography' : 'biographies'}`}
                   </button>
                 </div>
               )}
@@ -1095,9 +1091,12 @@ export const PersonPage: React.FC = () => {
           )}
 
           {wikiTab !== 'history' && wikiTab !== 'talk' && personMedia.length > 0 && (
-            <section className="person-media-section" aria-label="Archival photos and primary record scans">
+            <section
+              className="person-media-section"
+              aria-label={KINLOOM_VOCABULARY.person.photosAndDocumentsAria}
+            >
               <div className="person-media-header">
-                <h2>Photos and scans</h2>
+                <h2>{KINLOOM_VOCABULARY.person.photosAndDocumentsHeading}</h2>
                 {personMedia.length > 8 && (
                   <button
                     type="button"
@@ -1164,7 +1163,10 @@ export const PersonPage: React.FC = () => {
                 </div>
               </nav>
 
-              <section className="story-stream" aria-label="Biographical timeline">
+              <section
+                className="story-stream"
+                aria-label={KINLOOM_VOCABULARY.person.lifeTimelineAria}
+              >
                 {personEvents.map((ev) => (
                   <MilestoneStoryCard
                     key={ev.id}
@@ -1251,7 +1253,7 @@ export const PersonPage: React.FC = () => {
           <dialog
             open
             className="lightbox-backdrop photo-lightbox-overlay print-hide"
-            aria-label="Archival media lightbox"
+            aria-label={KINLOOM_VOCABULARY.person.mediaLightboxAria}
           >
             <button
               type="button"

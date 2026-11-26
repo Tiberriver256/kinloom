@@ -40,6 +40,7 @@ import {
 } from '../lib/ohmStyle.js';
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { ExplorerTopBar } from '../components/ExplorerTopBar.js';
+import { KINLOOM_VOCABULARY } from '../lib/vocabulary.js';
 import { filterByDate } from '@openhistoricalmap/maplibre-gl-dates';
 import maplibreWorkerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?url';
 import { useArchiveData } from '../context/ArchiveDataContext.js';
@@ -1034,7 +1035,7 @@ export const MapPage: React.FC = () => {
         <main className="index-page">
           <output className="archive-loading-shell" aria-live="polite">
             <span className="archive-loading-spinner" aria-hidden="true" />
-            <span>Loading archival migration map…</span>
+            <span>{KINLOOM_VOCABULARY.map.loading}</span>
           </output>
         </main>
       </div>
@@ -1207,7 +1208,7 @@ export const MapPage: React.FC = () => {
                     className="pill-btn active"
                     style={{ textDecoration: 'none' }}
                   >
-                    Place Dossier →
+                    {KINLOOM_VOCABULARY.map.placeProfileCta}
                   </Link>
                   {selectedStop.personSlugs.slice(0, 2).map((personSlug, index) => (
                     <Link

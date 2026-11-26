@@ -356,7 +356,7 @@ describe('PersonPage synced footnote Sources (N), lightbox, and SourceInspectorD
     act(() => {
       mediaThumbBtn?.click();
     });
-    const lightbox = container.querySelector('dialog[aria-label="Archival media lightbox"]');
+    const lightbox = container.querySelector('dialog[aria-label="Photo and document lightbox"]');
     expect(lightbox).not.toBeNull();
     expect(lightbox?.textContent).toContain('Handwritten 1891 journal entry on Cedar Creek harvest');
 
@@ -364,7 +364,7 @@ describe('PersonPage synced footnote Sources (N), lightbox, and SourceInspectorD
     act(() => {
       window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
     });
-    expect(container.querySelector('dialog[aria-label="Archival media lightbox"]')).toBeNull();
+    expect(container.querySelector('dialog[aria-label="Photo and document lightbox"]')).toBeNull();
 
     act(() => {
       footnoteBtns[1].click();
@@ -373,7 +373,7 @@ describe('PersonPage synced footnote Sources (N), lightbox, and SourceInspectorD
     act(() => {
       inspectBtn?.click();
     });
-    const inspector = container.querySelector('dialog[aria-label="Source bibliographic inspector"]');
+    const inspector = container.querySelector('dialog[aria-label="Source Inspector"]');
     expect(inspector).not.toBeNull();
     expect(inspector?.textContent).toContain('1880 U.S. Federal Census, Riverdale Township');
 

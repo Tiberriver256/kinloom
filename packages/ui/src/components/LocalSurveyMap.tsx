@@ -189,7 +189,7 @@ export const LocalSurveyMap: React.FC<LocalSurveyMapProps> = ({
               }
             }}
           >
-            <title>{`${m.place.full_name} (${m.distanceMiles} mi) — Open Place Dossier`}</title>
+            <title>{`${m.place.full_name} (${m.distanceMiles} mi) — Open Place Profile`}</title>
             <line
               x1={cx}
               y1={cy}
