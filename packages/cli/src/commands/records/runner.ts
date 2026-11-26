@@ -93,12 +93,49 @@ export function resolveScriptInvocation(
   };
 }
 
-function buildTelemetrySubcmd(spec: RecordCommandSpec, args: readonly string[], mode: 'guide' | 'script'): string {
+const SAFE_SUBCMD_TOKEN_RE = /^[a-z][a-z0-9_-]*$/i;
+
+function isSafeSubcmdToken(token: string | undefined): token is string {
+  return Boolean(token && SAFE_SUBCMD_TOKEN_RE.test(token));
+}
+
+function extractOcrTelemetryMode(args: readonly string[]): string | undefined {
+  let mode: string | undefined;
+  for (let i = 0; i < args.length; i += 1) {
+    const arg = args[i];
+    if (arg === '--mode') {
+      const next = args[i + 1];
+      if (isSafeSubcmdToken(next)) {
+        mode = next.toLowerCase();
+      }
+      i += 1;
+    } else if (arg.startsWith('--mode=')) {
+      const value = arg.slice('--mode='.length);
+      if (isSafeSubcmdToken(value)) {
+        mode = value.toLowerCase();
+      }
+    }
+  }
+  return mode;
+}
+
+export function buildTelemetrySubcmd(
+  spec: RecordCommandSpec,
+  args: readonly string[],
+  mode: 'guide' | 'script'
+): string {
   if (mode === 'guide') {
     return `${spec.command} help`;
   }
+  if (spec.command === 'ocr') {
+    if (args.length === 0 || args.includes('--help') || args.includes('-h')) {
+      return 'ocr';
+    }
+    const ocrMode = extractOcrTelemetryMode(args) ?? 'printed';
+    return `ocr ${ocrMode}`;
+  }
   const firstArg = args[0];
-  if (firstArg && !firstArg.startsWith('-')) {
+  if (isSafeSubcmdToken(firstArg)) {
     return `${spec.command} ${firstArg}`;
   }
   return spec.command;

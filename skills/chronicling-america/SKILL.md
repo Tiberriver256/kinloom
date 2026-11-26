@@ -9,7 +9,7 @@ This skill includes a standalone executable Python CLI at `skills/chronicling-am
 
 - **Coverage:** millions of digitized U.S. newspaper pages, 1736 through 1963 (per the collection record; the site describes it as "through 1963").
 - **Access:** the public loc.gov JSON API. No key, no account, no sign-in.
-- **Rate limits:** be gentle. LoC asks users to stay within limits; search queries returning more than 100,000 results are too big for the API, so narrow with dates and other filters first. Loc.gov is also slow from some networks; allow up to 90 seconds per request.
+- **Rate limits & timeouts:** be gentle. LoC asks users to stay within limits; search queries returning more than 100,000 results are too big for the API, so narrow with `--dates`, `--state`, or `--lccn` first. The CLI sends `at=search,results` (reducing response size from ~1.9 MB to ~15 KB) and uses a fail-fast 8-second default `--timeout` so stalled loc.gov queries fail quickly with an actionable error instead of hanging.
 
 ## Bundled CLI (`scripts/chronam`)
 
@@ -21,7 +21,7 @@ Path: `skills/chronicling-america/scripts/chronam`
 # Full-text search for a surname, page level, 10 results
 skills/chronicling-america/scripts/chronam search Lincoln
 
-# Surname search narrowed to 1860-1865
+# Surname search narrowed to 1860-1865 (or --date-from 1860 --date-to 1865)
 skills/chronicling-america/scripts/chronam search Lincoln --dates 1860/1865
 
 # Illinois papers only (server-side state facet), JSON output
@@ -30,9 +30,11 @@ skills/chronicling-america/scripts/chronam search Lincoln --dates 1860/1865 --st
 # One newspaper title only, by LCCN (Evening Star, Washington, D.C.)
 skills/chronicling-america/scripts/chronam search "Clara Barton" --lccn sn83045462
 
-# Second page of results, 25 per page
+# Second page of results, 25 per page (--per-page is an alias for --limit)
 skills/chronicling-america/scripts/chronam search "Frederick Douglass" --dates 1870/1895 --limit 25 --page 2
 ```
+
+Options: `--dates YYYY/YYYY` (or `--date-from` / `--date-to`), `--state`, `--lccn`, `--level` (`page`/`issue`/`title`/`all`), `--limit` / `--per-page` / `-n`, `--page` / `-p`, `--timeout` (seconds, default `8.0`), `--terms` / `-q` (alias for positional query), `--json`.
 
 ### Inspect one page
 

@@ -26,6 +26,7 @@ import html as html_mod
 import json
 import re
 import sys
+import time
 
 import click
 import httpx
@@ -251,8 +252,13 @@ def parse_grid(page_html: str, table_hint: str) -> tuple[list[str], list[dict]]:
             continue
         if len(texts) == 1 and texts[0] == "No Records Found":
             return [], []
-        if len(texts) == 1 and re.fullmatch(r"[\d\s]+", texts[0]):
+        if len(texts) == 1 and re.fullmatch(r"[\d\s.]+", texts[0]):
             continue  # pager row ("1 2 3 4 5 6")
+        if (
+            "Page$" in row_html
+            and all(re.fullmatch(r"(?:\d+|\.{2,3})", t) for t in texts if t)
+        ):
+            continue  # multi-cell ASP.NET GridView pager row
         links = [
             {"text": clean(label), "href": html_mod.unescape(href)}
             for href, label in re.findall(
@@ -280,21 +286,64 @@ def parse_grid(page_html: str, table_hint: str) -> tuple[list[str], list[dict]]:
 def capped_notice(page_html: str) -> bool:
     return "Results are limited to 500 records per search" in clean(page_html)
 
+
+def has_page_link(page_html: str, page_num: int, grid_target: str = GRID_TARGET) -> bool:
+    """Return True if the ASP.NET GridView rendered a postback link for page_num."""
+    pattern = (
+        r"__doPostBack\((?:&#39;|')"
+        + re.escape(grid_target)
+        + r"(?:&#39;|'),\s*(?:&#39;|')Page\$"
+        + str(page_num)
+        + r"(?:&#39;|')\)"
+    )
+    return bool(re.search(pattern, page_html))
+
+
+def match_option_value(value: str, options: list[str]) -> str | None:
+    """Match a CLI option against ASP.NET <select> options (exact, case-insensitive, or County suffix)."""
+    if value in options:
+        return value
+    norm = value.strip().lower()
+    for opt in options:
+        if opt.strip().lower() == norm:
+            return opt
+    stripped = re.sub(r"\s+county$", "", norm)
+    for opt in options:
+        opt_norm = re.sub(r"\s+county$", "", opt.strip().lower())
+        if opt_norm and opt_norm == stripped:
+            return opt
+    return None
+
+
+RETRYABLE_HTTP_STATUSES = {500, 502, 503, 504}
+
+
 class Portal:
     """One cookie-carrying session against the NJ State Archives portal."""
 
-    def __init__(self) -> None:
-        self.client = httpx.Client(
+    def __init__(self, *, timeout: float = 25.0, client: httpx.Client | None = None) -> None:
+        self._timeout = timeout
+        self._external_client = client is not None
+        self.client = client or self._make_client()
+
+    def _make_client(self) -> httpx.Client:
+        return httpx.Client(
             headers={"User-Agent": USER_AGENT},
             follow_redirects=True,
-            timeout=60.0,
+            timeout=self._timeout,
         )
+
+    def _reset_session(self) -> None:
+        if not self._external_client:
+            self.client.close()
+            self.client = self._make_client()
 
     def __enter__(self) -> "Portal":
         return self
 
     def __exit__(self, *exc: object) -> None:
-        self.client.close()
+        if not self._external_client:
+            self.client.close()
 
     def _get(self, url: str) -> str:
         response = self.client.get(url)
@@ -339,17 +388,16 @@ class Portal:
         action = form_action(page_html) or spec["page"]
         return PORTAL_BASE + action.lstrip("./"), page_html
 
-    def search(self, key: str, criteria: dict[str, str | None], pages: int = 1) -> dict:
-        """Run a search and optionally page through GridView1 results."""
+    def _search_once(self, key: str, criteria: dict[str, str | None], pages: int) -> dict:
         spec = DATABASES[key]
         page_url, page_html = self.open_search_page(key)
-        self._validate(criteria, spec, page_html)
+        resolved = self._validate(criteria, spec, page_html)
         data: dict[str, str] = {
             **hidden_fields(page_html),
             "__EVENTTARGET": "",
             "__EVENTARGUMENT": "",
         }
-        for option, value in criteria.items():
+        for option, value in resolved.items():
             if value is not None and option in spec["fields"]:
                 data[PREFIX + spec["fields"][option]] = value
         data[PREFIX + SUBMIT_BUTTON.get(key, "Search")] = "Search"
@@ -358,11 +406,14 @@ class Portal:
         capped = capped_notice(result_html)
         seen_pages = 1
         while seen_pages < pages and rows:
+            next_page = seen_pages + 1
+            if not has_page_link(result_html, next_page):
+                break
             page_html = result_html
             data = {
                 **hidden_fields(page_html),
                 "__EVENTTARGET": GRID_TARGET,
-                "__EVENTARGUMENT": f"Page${seen_pages + 1}",
+                "__EVENTARGUMENT": f"Page${next_page}",
             }
             result_html = self._post(page_url, data)
             _h, more = parse_grid(result_html, "GridView1")
@@ -373,24 +424,51 @@ class Portal:
         return {"database": key, "title": spec["title"], "headers": headers,
                 "rows": rows, "capped_500": capped, "pages_read": seen_pages}
 
+    def search(self, key: str, criteria: dict[str, str | None], pages: int = 1) -> dict:
+        """Run a search and optionally page through GridView1 results (1 retry on transient 5xx/network error)."""
+        for attempt in range(2):
+            try:
+                return self._search_once(key, criteria, pages=pages)
+            except httpx.HTTPStatusError as exc:
+                if exc.response.status_code in RETRYABLE_HTTP_STATUSES and attempt == 0:
+                    time.sleep(0.5)
+                    self._reset_session()
+                    continue
+                raise
+            except (httpx.TimeoutException, httpx.RemoteProtocolError, httpx.ConnectError):
+                if attempt == 0:
+                    time.sleep(0.5)
+                    self._reset_session()
+                    continue
+                raise
+        raise RuntimeError("unreachable")
+
     @staticmethod
-    def _validate(criteria: dict[str, str | None], spec: dict, page_html: str) -> None:
+    def _validate(criteria: dict[str, str | None], spec: dict, page_html: str) -> dict[str, str | None]:
+        resolved = dict(criteria)
         for option, value in criteria.items():
             if value is None or option not in spec["fields"]:
                 continue
             short = spec["fields"][option]
             options = select_options(page_html, short)
-            if options and value not in options:
-                raise click.UsageError(
-                    f"--{option.replace('_', '-')} {value!r} is not a valid choice for "
-                    f"{spec['title']}; valid: {', '.join(o for o in options if o)}"
-                )
+            if options:
+                matched = match_option_value(value, options)
+                if matched is None:
+                    raise click.UsageError(
+                        f"--{option.replace('_', '-')} {value!r} is not a valid choice for "
+                        f"{spec['title']}; valid: {', '.join(o for o in options if o)}"
+                    )
+                resolved[option] = matched
         roles = spec.get("roles")
-        role = criteria.get("role")
-        if roles and role is not None and role not in roles:
-            raise click.UsageError(
-                f"--role {role!r} is not valid here; valid: {', '.join(roles)}"
-            )
+        role = resolved.get("role")
+        if roles and role is not None:
+            matched_role = match_option_value(role, roles)
+            if matched_role is None:
+                raise click.UsageError(
+                    f"--role {role!r} is not valid here; valid: {', '.join(roles)}"
+                )
+            resolved["role"] = matched_role
+        return resolved
 
 
 def monmouth_search(surname: str, town: str, category: str, match: str,
@@ -472,8 +550,8 @@ def databases_cmd(as_json: bool) -> None:
 
 @cli.command("search")
 @click.argument("database")
-@click.option("--surname", required=True, help="Surname to search.")
-@click.option("--given", default=None, help="Given name.")
+@click.option("--surname", default=None, help="Surname to search (required for all databases except natguard-photos).")
+@click.option("--given", "--first", "given", default=None, help="Given name.")
 @click.option("--spouse-surname", default=None, help="Spouse surname (marriage databases).")
 @click.option("--spouse-given", default=None, help="Spouse given name (marriage databases).")
 @click.option("--county", default=None, help="County filter.")
@@ -486,9 +564,9 @@ def databases_cmd(as_json: bool) -> None:
 @click.option("--keyword", default=None, help="Keyword (natguard-photos).")
 @click.option("--limit", type=int, default=None, help="Max rows to show.")
 @click.option("--pages", type=int, default=1, show_default=True,
-              help="Result pages to read (10 rows per page).")
+              help="Result pages to read (stops cleanly if fewer pages exist).")
 @click.option("--json", "as_json", is_flag=True, help="Emit JSON.")
-def search_cmd(database: str, surname: str, given: str | None,
+def search_cmd(database: str, surname: str | None, given: str | None,
                spouse_surname: str | None, spouse_given: str | None,
                county: str | None, location: str | None,
                from_year: int | None, to_year: int | None,
@@ -506,6 +584,13 @@ def search_cmd(database: str, surname: str, given: str | None,
         raise click.UsageError(
             f"unknown database {database!r}; run `nj-archives databases` for the list"
         )
+    if database == "natguard-photos":
+        if not keyword and not surname:
+            raise click.UsageError("natguard-photos requires --keyword (or --surname as keyword).")
+        if not keyword and surname:
+            keyword = surname
+    elif not surname:
+        raise click.UsageError("Missing option '--surname'.")
     criteria = {
         "surname": surname, "given": given,
         "spouse_surname": spouse_surname, "spouse_given": spouse_given,
@@ -522,6 +607,14 @@ def search_cmd(database: str, surname: str, given: str | None,
         raise click.ClickException(
             f"portal returned HTTP {exc.response.status_code} for {database}; "
             "the portal may be down or blocking automated access"
+        ) from exc
+    except httpx.TimeoutException as exc:
+        raise click.ClickException(
+            f"portal request timed out for {database}: {exc}"
+        ) from exc
+    except httpx.HTTPError as exc:
+        raise click.ClickException(
+            f"portal request failed for {database}: {exc}"
         ) from exc
     emit(result, as_json, limit)
 

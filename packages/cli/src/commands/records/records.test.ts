@@ -12,6 +12,7 @@ import type { OpsIo, TelemetryEvent } from '../ops/telemetry.js';
 import {
   RECORD_COMMAND_ALIASES,
   RECORD_COMMAND_SPECS,
+  buildTelemetrySubcmd,
   classifyRecordCommandIntent,
   formatRecordCommandsHelp,
   isRecordCommand,
@@ -358,6 +359,65 @@ describe('help vs subcommand routing and guide-only commands', () => {
       .map((line) => JSON.parse(line) as TelemetryEvent);
     expect(events).toHaveLength(1);
     expect(events[0].exit_code).toBe(3);
+  });
+
+  it('logs ocr telemetry subcmd by mode without leaking private file paths', async () => {
+    const tmp = await makeTempDir('kinloom-ocr-telemetry-');
+    const telemetryFile = path.join(tmp, 'calls.jsonl');
+    const secretPath = '/some/secret/private-scan-1890.jpg';
+
+    const cursiveSpawn = createFakeSpawn({ exitCode: 0, stdout: '{"text":"ok"}\n' });
+    const cursiveRes = await runRecordCommand('ocr', [secretPath, '--mode', 'cursive', '--json'], {
+      io: createCaptureIo().io,
+      spawnImpl: cursiveSpawn.spawnImpl,
+      telemetryFilePath: telemetryFile,
+    });
+    expect(cursiveRes.exitCode).toBe(0);
+
+    const printedEqSpawn = createFakeSpawn({ exitCode: 0, stdout: 'ok\n' });
+    await runRecordCommand('ocr', [secretPath, '--mode=printed'], {
+      io: createCaptureIo().io,
+      spawnImpl: printedEqSpawn.spawnImpl,
+      telemetryFilePath: telemetryFile,
+    });
+
+    const defaultModeSpawn = createFakeSpawn({ exitCode: 0, stdout: 'ok\n' });
+    await runRecordCommand('ocr', [secretPath], {
+      io: createCaptureIo().io,
+      spawnImpl: defaultModeSpawn.spawnImpl,
+      telemetryFilePath: telemetryFile,
+    });
+
+    const scriptHelpSpawn = createFakeSpawn({ exitCode: 0, stdout: 'Usage: kinloom ocr\n' });
+    await runRecordCommand('ocr', ['--script-help'], {
+      io: createCaptureIo().io,
+      spawnImpl: scriptHelpSpawn.spawnImpl,
+      telemetryFilePath: telemetryFile,
+    });
+
+    const rawTelemetry = await readFile(telemetryFile, 'utf8');
+    expect(rawTelemetry).not.toContain(secretPath);
+    expect(rawTelemetry).not.toContain('private-scan');
+
+    const events = rawTelemetry
+      .trim()
+      .split('\n')
+      .map((line) => JSON.parse(line) as TelemetryEvent);
+    expect(events.map((e) => e.subcmd)).toEqual([
+      'ocr cursive',
+      'ocr printed',
+      'ocr printed',
+      'ocr',
+    ]);
+
+    // General path-leak guard for every record command.
+    const prepSpec = resolveRecordCommand('prep-scan')!;
+    expect(buildTelemetrySubcmd(prepSpec, ['/abs/private/scan.jpg'], 'script')).toBe('prep-scan');
+    expect(buildTelemetrySubcmd(prepSpec, ['C:\\private\\scan.jpg'], 'script')).toBe('prep-scan');
+    expect(buildTelemetrySubcmd(prepSpec, ['./local-scan.png'], 'script')).toBe('prep-scan');
+    expect(buildTelemetrySubcmd(prepSpec, ['preview', '/abs/private/scan.jpg'], 'script')).toBe(
+      'prep-scan preview'
+    );
   });
 });
 

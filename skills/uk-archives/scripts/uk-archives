@@ -190,10 +190,11 @@ def discovery() -> None:
 
 
 @discovery.command("search")
-@click.argument("query")
+@click.argument("query", required=False, default=None)
+@click.option("--query", "-q", "query_opt", default=None, help="Alias for positional QUERY.")
 @click.option("--held-by", default=None, help="Extra text added to the query (e.g. Nottinghamshire).")
-@click.option("--date-from", "date_from", default=None, help="Covering date from (YYYY or YYYY-MM-DD).")
-@click.option("--date-to", "date_to", default=None, help="Covering date to (YYYY or YYYY-MM-DD).")
+@click.option("--date-from", "--from-year", "date_from", default=None, help="Covering date from (YYYY or YYYY-MM-DD).")
+@click.option("--date-to", "--to-year", "date_to", default=None, help="Covering date to (YYYY or YYYY-MM-DD).")
 @click.option(
     "--collection",
     default=None,
@@ -202,7 +203,8 @@ def discovery() -> None:
 @click.option("--limit", default=10, show_default=True, type=int, help="Maximum records to return (API rows).")
 @click.option("--json", "as_json", is_flag=True, help="Output compact structured JSON.")
 def cmd_discovery_search(
-    query: str,
+    query: str | None,
+    query_opt: str | None,
     held_by: str | None,
     date_from: str | None,
     date_to: str | None,
@@ -211,7 +213,10 @@ def cmd_discovery_search(
     as_json: bool,
 ) -> None:
     """Search Discovery for catalogue records."""
-    q = _discovery_query(query, held_by, collection)
+    resolved_query = query if query is not None else query_opt
+    if not resolved_query:
+        raise click.UsageError("Provide QUERY as a positional argument or via --query.")
+    q = _discovery_query(resolved_query, held_by, collection)
     params: dict[str, str | int] = {"sps.searchQuery": q, "rows": min(max(limit, 1), 100)}
     df = _date_from(date_from)
     dt = _date_to(date_to)
@@ -267,6 +272,10 @@ def cmd_discovery_detail(record_id: str, as_json: bool) -> None:
     click.echo(f'  {detail["record_url"]}')
 
 
+discovery.add_command(cmd_discovery_detail, name="inspect")
+discovery.add_command(cmd_discovery_detail, name="get")
+
+
 @cli.group("freereg")
 def freereg() -> None:
     """FreeREG parish register transcriptions (Rails form POST, no API key)."""
@@ -281,8 +290,8 @@ def freereg() -> None:
     show_default=True,
     help="Chapman county code or name (e.g. NTT / nottinghamshire).",
 )
-@click.option("--from-year", "from_year", default=None, help="Start year (YYYY).")
-@click.option("--to-year", "to_year", default=None, help="End year (YYYY).")
+@click.option("--from-year", "--date-from", "from_year", default=None, help="Start year (YYYY).")
+@click.option("--to-year", "--date-to", "to_year", default=None, help="End year (YYYY).")
 @click.option(
     "--record-type",
     "record_type",

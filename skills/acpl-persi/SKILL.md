@@ -18,12 +18,14 @@ Path: `skills/acpl-persi/scripts/persi`
 ### Search by surname
 
 ```bash
-# Lincoln articles, first 25 hits
+# Lincoln articles, first 25 hits (persi search <Surname> is also accepted as an alias)
 skills/acpl-persi/scripts/persi surname Lincoln
 
 # JSON output, 50 hits
 skills/acpl-persi/scripts/persi surname Lincoln --limit 50 --json
 ```
+
+Note: PERSI's surname and article-title forms do **not** accept a `--state` filter; use `persi location --state <ST>` for state/county category counts.
 
 ### Search by article-title keyword
 

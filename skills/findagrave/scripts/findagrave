@@ -46,7 +46,7 @@ query($s: MemorialSearchInput) {
       name { first last maiden }
       birth { date { year month day circa } place { names { name } } }
       death { date { year month day circa } place { names { name } } }
-      cemetery { id names { name } memorialCount }
+      cemetery { id names { name } memorialCount coordinates { lat lon } }
       plot
       hasGravePhoto
       isVeteran
@@ -62,7 +62,14 @@ query($ids: [ID!]!) {
     name { first last maiden }
     birth { date { year month day circa } place { names { name } } }
     death { date { year month day circa } place { names { name } } }
-    cemetery { id names { name } memorialCount }
+    coordinates { lat lon }
+    cemetery {
+      id
+      names { name }
+      memorialCount
+      coordinates { lat lon }
+      physicalAddress { full { value } }
+    }
     plot
     inscription { value }
     bio { value }
@@ -81,7 +88,13 @@ CEMETERY_QUERY = """
 query($s: CemeterySearchInput) {
   cemeteries(search: $s) {
     total
-    cemeteries { id names { name } memorialCount }
+    cemeteries {
+      id
+      names { name }
+      memorialCount
+      coordinates { lat lon }
+      physicalAddress { full { value } }
+    }
   }
 }
 """
@@ -90,7 +103,13 @@ CEMETERY_BY_ID_QUERY = """
 query($ids: [ID!]) {
   cemeteries(ids: $ids) {
     total
-    cemeteries { id names { name } memorialCount }
+    cemeteries {
+      id
+      names { name }
+      memorialCount
+      coordinates { lat lon }
+      physicalAddress { full { value } }
+    }
   }
 }
 """
@@ -200,6 +219,43 @@ def fmt_cemetery(cemetery: dict | None) -> str:
     return names[0].get("name") if names else ""
 
 
+def _coords_pair(obj: dict | None) -> tuple[float | None, float | None]:
+    if not isinstance(obj, dict):
+        return None, None
+    lat = obj.get("lat")
+    lon = obj.get("lon")
+    if lon is None:
+        lon = obj.get("lng")
+    if isinstance(lat, (int, float)) and isinstance(lon, (int, float)):
+        return float(lat), float(lon)
+    return None, None
+
+
+def enrich_cemetery(cemetery: dict | None) -> dict | None:
+    """Attach convenient lat/lng fields alongside GraphQL coordinates { lat lon }."""
+    if not isinstance(cemetery, dict):
+        return cemetery
+    lat, lon = _coords_pair(cemetery.get("coordinates"))
+    if lat is not None and lon is not None:
+        cemetery["lat"] = lat
+        cemetery["lng"] = lon
+    return cemetery
+
+
+def enrich_memorial(memorial: dict) -> dict:
+    """Attach cemetery_lat/cemetery_lng (and cemetery.lat/lng) from GraphQL GPS coordinates."""
+    cem = memorial.get("cemetery")
+    if isinstance(cem, dict):
+        enrich_cemetery(cem)
+        cem_lat, cem_lon = _coords_pair(cem.get("coordinates"))
+        memorial["cemetery_lat"] = cem_lat
+        memorial["cemetery_lng"] = cem_lon
+    else:
+        memorial["cemetery_lat"] = None
+        memorial["cemetery_lng"] = None
+    return memorial
+
+
 def memorial_url(memorial_id: str) -> str:
     return f"{WEBSITE_BASE}/memorial/{memorial_id}"
 
@@ -219,11 +275,11 @@ def cli() -> None:
 
 
 @cli.command()
-@click.option("--first", "first_name", default=None, help="First name.")
-@click.option("--last", "last_name", default=None, help="Last name.")
+@click.option("--first", "--first-name", "first_name", default=None, help="First name.")
+@click.option("--last", "--last-name", "last_name", default=None, help="Last name.")
 @click.option("--birth-year", type=int, default=None)
 @click.option("--death-year", type=int, default=None)
-@click.option("--year-range", type=int, default=None,
+@click.option("--year-range", "--birth-range", "--date-spread", "year_range", type=int, default=None,
               help="Plus/minus years around a birth/death year.")
 @click.option("--birth-year-filter", default=None,
               help="before, after, exact, or unknown.")
@@ -233,7 +289,7 @@ def cli() -> None:
 @click.option("--location-id", default=None,
               help="Place id, e.g. city_<id> (see the place command).")
 @click.option("--bio", default=None, help="Words in the biography.")
-@click.option("--text", default=None, help="Words anywhere on the memorial.")
+@click.option("--text", "--full-text", "text", default=None, help="Words anywhere on the memorial.")
 @click.option("--relative", default=None,
               help="Name of a linked relative.")
 @click.option("--exact/--no-exact", default=False,
@@ -284,11 +340,12 @@ def search(first_name, last_name, birth_year, death_year, year_range,
     search_input["size"] = min(limit, 50)
     data = gql(SEARCH_QUERY, {"s": search_input})
     result = data.get("memorialSearch") or {}
+    memorials = [enrich_memorial(m) for m in (result.get("memorials") or [])]
+    result["memorials"] = memorials
     if as_json:
         click.echo(json.dumps(result, indent=2))
         return
     total = result.get("total")
-    memorials = result.get("memorials") or []
     click.echo(f"{total} memorials")
     for mem in memorials:
         born = fmt_event(mem.get("birth"))
@@ -313,9 +370,9 @@ def search(first_name, last_name, birth_year, death_year, year_range,
 @click.option("--photos", is_flag=True,
               help="List photo ids, types, and image URLs.")
 def get(memorial_ids, as_json, full, photos):
-    """Read one or more memorials in full by memorial id."""
+    """Read one or more memorials in full by memorial id (alias: memorial)."""
     data = gql(GET_QUERY, {"ids": list(memorial_ids)})
-    memorials = data.get("memorialsById") or []
+    memorials = [enrich_memorial(m) for m in (data.get("memorialsById") or [])]
     if as_json:
         click.echo(json.dumps(memorials, indent=2))
         return
@@ -333,6 +390,12 @@ def get(memorial_ids, as_json, full, photos):
         cem_name = fmt_cemetery(cem)
         if cem_name:
             click.echo(f"  Cemetery: {cem_name} ({cem.get('id')})")
+        cem_lat, cem_lon = _coords_pair(cem.get("coordinates"))
+        if cem_lat is not None and cem_lon is not None:
+            click.echo(f"  Cemetery GPS: {cem_lat}, {cem_lon}")
+        grave_lat, grave_lon = _coords_pair(mem.get("coordinates"))
+        if grave_lat is not None and grave_lon is not None:
+            click.echo(f"  Grave GPS: {grave_lat}, {grave_lon}")
         if mem.get("plot"):
             click.echo(f"  Plot: {mem.get('plot')}")
         click.echo(
@@ -374,22 +437,27 @@ def get(memorial_ids, as_json, full, photos):
             )
 
 
+cli.add_command(get, name="memorial")
+
+
 @cli.command()
+@click.argument("cemetery_id_arg", required=False, default=None)
 @click.option("--name", default=None, help="Cemetery name to search.")
 @click.option("--id", "cemetery_id", default=None,
-              help="Read one cemetery by id.")
+              help="Read one cemetery by id (or pass id as a positional argument).")
 @click.option("--place", default=None,
               help="Containing place name, e.g. 'Sangamon County, Illinois'.")
 @click.option("--limit", type=int, default=10, show_default=True)
 @click.option("--offset", type=int, default=0, show_default=True)
 @click.option("--json", "as_json", is_flag=True, help="Full JSON output.")
-def cemetery(name, cemetery_id, place, limit, offset, as_json):
+def cemetery(cemetery_id_arg, name, cemetery_id, place, limit, offset, as_json):
     """Search cemeteries by name, or read one by id."""
-    if cemetery_id:
-        data = gql(CEMETERY_BY_ID_QUERY, {"ids": [cemetery_id]})
+    resolved_id = cemetery_id or cemetery_id_arg
+    if resolved_id:
+        data = gql(CEMETERY_BY_ID_QUERY, {"ids": [resolved_id]})
     else:
         if not name:
-            raise click.UsageError("Pass --name or --id.")
+            raise click.UsageError("Pass a cemetery id, --id, or --name.")
         search_input: dict = {"name": name}
         if place:
             search_input["containingLocationName"] = place
@@ -397,19 +465,23 @@ def cemetery(name, cemetery_id, place, limit, offset, as_json):
         search_input["size"] = min(limit, 100)
         data = gql(CEMETERY_QUERY, {"s": search_input})
     result = data.get("cemeteries") or {}
+    cemeteries_list = [enrich_cemetery(c) for c in (result.get("cemeteries") or [])]
+    result["cemeteries"] = cemeteries_list
     if as_json:
         click.echo(json.dumps(result, indent=2))
         return
     click.echo(f"{result.get('total')} cemeteries")
-    for cem in result.get("cemeteries") or []:
+    for cem in cemeteries_list:
         names = cem.get("names") or []
         shown = names[0].get("name") if names else ""
         extra = ""
         if len(names) > 1:
             extra = " (also: " + ", ".join(n.get("name") for n in names[1:]) + ")"
+        lat, lon = _coords_pair(cem.get("coordinates"))
+        gps = f" | GPS: {lat}, {lon}" if lat is not None and lon is not None else ""
         click.echo(
             f"{cem.get('id')} | {shown}{extra} | "
-            f"{cem.get('memorialCount')} memorials | "
+            f"{cem.get('memorialCount')} memorials{gps} | "
             f"{cemetery_url(str(cem.get('id')))}"
         )
 

@@ -38,7 +38,7 @@ skills/new-jersey-archives/scripts/nj-archives url land
 skills/new-jersey-archives/scripts/nj-archives url births-1848-1925
 ```
 
-`search` options: `--surname` (required), `--given`, `--spouse-surname` / `--spouse-given` (marriage databases), `--county`, `--location`, `--from-year`, `--to-year`, `--role` (land: Grantor/Grantee/Named/Official; supreme-court: Plaintiff/Defendant/Official/Victim/Other), `--case-type` / `--case-number` (supreme-court), `--keyword` (natguard-photos), `--limit`, `--pages`, `--json`. County and role values are validated against the live dropdown options on the search page. `search` refuses order-form-only databases with the form URL; use `url` for those.
+`search` options: `--surname` (required except `natguard-photos`, which uses `--keyword`), `--given` (alias `--first`), `--spouse-surname` / `--spouse-given` (marriage databases), `--county`, `--location`, `--from-year`, `--to-year`, `--role` (land: Grantor/Grantee/Named/Official; supreme-court: Plaintiff/Defendant/Official/Victim/Other), `--case-type` / `--case-number` (supreme-court), `--keyword` (natguard-photos), `--limit`, `--pages` (stops cleanly when no further pager link exists), `--json`. County and role values are matched case-insensitively (and with or without a trailing `" County"`) against the live dropdown options on the search page. `search` refuses order-form-only databases with the form URL; use `url` for those.
 
 ## How the machine interface works (verified live 2026-11-24)
 

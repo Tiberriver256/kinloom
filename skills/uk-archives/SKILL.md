@@ -23,11 +23,11 @@ skills/uk-archives/scripts/uk-archives discovery search Lincoln --held-by Norfol
 skills/uk-archives/scripts/uk-archives discovery search Lincoln \
   --date-from 1550 --date-to 1660 --collection "PROB 11" --limit 20 --json
 
-# One record (verified detail endpoint uses /API/records/v1/details/<id>)
+# One record (verified detail endpoint uses /API/records/v1/details/<id>; aliases: inspect, get)
 skills/uk-archives/scripts/uk-archives discovery detail <record-id> --json
 ```
 
-Search options: `--held-by` (free text appended to the query), `--date-from` / `--date-to` (YYYY or YYYY-MM-DD, mapped to `sps.dateFrom` / `sps.dateTo`), `--collection` (appended to the query and used to post-filter by catalogue reference), `--limit` (the API returns at most 15 rows per request; the CLI slices to your limit). Each hit prints id, reference, dates, title, places, and a Discovery web URL.
+Search options: `--held-by` (free text appended to the query), `--date-from` / `--from-year` and `--date-to` / `--to-year` (YYYY or YYYY-MM-DD, mapped to `sps.dateFrom` / `sps.dateTo`), `--collection` (appended to the query and used to post-filter by catalogue reference), `--limit` (the API returns at most 15 rows per request; the CLI slices to your limit), `--query` / `-q` (alias for positional query). Each hit prints id, reference, dates, title, places, and a Discovery web URL.
 
 The detail route verified live is `https://discovery.nationalarchives.gov.uk/API/records/v1/details/<id>` (not `.../search/v1/records/v1/details/...`, which returns 404).
 

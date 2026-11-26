@@ -26,28 +26,101 @@ import click
 import httpx
 
 COLLECTION_BASE = "https://www.loc.gov/collections/chronicling-america/"
-HEADERS = {"User-Agent": "kinloom/1.0 (genealogy research)"}
+HEADERS = {
+    "User-Agent": "kinloom/1.0 (genealogy research)",
+    "Accept": "application/json",
+}
 # tile.loc.gov (storage-services PDFs) rejects hotlinking: it requires a
 # loc.gov Referer. Send one for all file downloads; harmless elsewhere.
 DOWNLOAD_HEADERS = dict(HEADERS, Referer="https://www.loc.gov/")
-TIMEOUT = 25.0
+DEFAULT_TIMEOUT = 8.0
+DOWNLOAD_TIMEOUT = 20.0
+RETRYABLE_STATUS_CODES = {502, 503, 504, 520, 522, 524}
+COLLECTION_START_YEAR = "1736"
+COLLECTION_END_YEAR = "1963"
 
 
-def _get_json(url: str, params: dict | list[tuple[str, str]] | None = None) -> dict:
+def _resolve_dates(dates: str | None, date_from: str | None, date_to: str | None) -> str | None:
+    if dates:
+        return dates
+    if date_from or date_to:
+        start = (date_from or COLLECTION_START_YEAR).strip()
+        end = (date_to or COLLECTION_END_YEAR).strip()
+        return f"{start}/{end}"
+    return None
+
+
+def _get_json(
+    url: str,
+    params: dict | list[tuple[str, str]] | None = None,
+    *,
+    timeout: float = DEFAULT_TIMEOUT,
+    client: httpx.Client | None = None,
+) -> dict:
+    deadline = time.monotonic() + timeout
     last_exc: Exception | None = None
-    for attempt in range(2):
-        try:
-            with httpx.Client(headers=HEADERS, timeout=TIMEOUT, follow_redirects=True) as client:
-                resp = client.get(url, params=params)
+
+    def _run(http_client: httpx.Client) -> dict:
+        nonlocal last_exc
+        for attempt in range(2):
+            remaining = deadline - time.monotonic()
+            if remaining <= 0.25:
+                break
+            try:
+                resp = http_client.get(url, params=params, timeout=remaining)
+            except httpx.TimeoutException as exc:
+                raise click.ClickException(
+                    f"loc.gov request timed out after {timeout:.1f}s ({exc}). "
+                    "Narrow with --state, --dates, or --lccn, increase --timeout, "
+                    "or open the browser URL from `chronam url`."
+                ) from exc
+            except (httpx.RemoteProtocolError, httpx.ConnectError) as exc:
+                last_exc = exc
+                if attempt == 0 and (deadline - time.monotonic()) >= 2.0:
+                    time.sleep(0.4)
+                    continue
+                raise click.ClickException(
+                    f"loc.gov connection error: {exc}. "
+                    "Retry once or narrow with --state/--dates/--lccn."
+                ) from exc
+            except httpx.HTTPError as exc:
+                raise click.ClickException(f"loc.gov request failed: {exc}") from exc
+
+            if resp.status_code in RETRYABLE_STATUS_CODES:
+                last_exc = httpx.HTTPStatusError(
+                    f"HTTP {resp.status_code}", request=resp.request, response=resp
+                )
+                if attempt == 0 and (deadline - time.monotonic()) >= 2.0:
+                    time.sleep(0.4)
+                    continue
+                raise click.ClickException(
+                    f"loc.gov returned HTTP {resp.status_code} (transient service error). "
+                    "Narrow with --state/--dates/--lccn or open `chronam url` in a browser."
+                )
+
+            try:
                 resp.raise_for_status()
+            except httpx.HTTPStatusError as exc:
+                raise click.ClickException(
+                    f"loc.gov returned HTTP {resp.status_code} for {resp.request.url}"
+                ) from exc
+
+            try:
                 return resp.json()
-        except (httpx.RemoteProtocolError, httpx.ReadTimeout) as exc:
-            last_exc = exc
-            if attempt == 0:
-                time.sleep(1.5)
-                continue
-            raise click.ClickException(f"loc.gov request failed after retry: {exc}") from exc
-    raise click.ClickException(f"loc.gov request failed: {last_exc}")
+            except ValueError as exc:
+                raise click.ClickException(
+                    f"loc.gov returned non-JSON response (HTTP {resp.status_code}, "
+                    f"content-type={resp.headers.get('content-type', 'unknown')})."
+                ) from exc
+
+        raise click.ClickException(
+            f"loc.gov request failed after {timeout:.1f}s: {last_exc}"
+        )
+
+    if client is not None:
+        return _run(client)
+    with httpx.Client(headers=HEADERS, timeout=timeout, follow_redirects=True) as managed_client:
+        return _run(managed_client)
 
 
 def _as_jsonable(value):
@@ -89,12 +162,12 @@ def _print_search(data: dict, as_json: bool) -> None:
         click.echo(f"- {c['date']} | {c['title']} | {c['state']} | {c['url']}")
 
 
-def _resource_json(resource_url: str) -> dict:
+def _resource_json(resource_url: str, *, timeout: float = DEFAULT_TIMEOUT) -> dict:
     parsed = urlparse(resource_url)
     qs = parse_qs(parsed.query)
     qs["fo"] = ["json"]
     url = urlunparse(parsed._replace(query=urlencode(qs, doseq=True)))
-    return _get_json(url)
+    return _get_json(url, timeout=timeout)
 
 
 def _build_resource_url(lccn: str, date: str, edition: str, seq: str) -> str:
@@ -107,32 +180,42 @@ def cli() -> None:
 
 
 @cli.command()
-@click.argument("query")
+@click.argument("query", required=False, default=None)
+@click.option("--terms", "-q", "terms_opt", default=None, help="Alias for positional QUERY.")
 @click.option("--dates", default=None, help="Date range YYYY/YYYY, e.g. 1880/1920.")
+@click.option("--date-from", "--from-year", "date_from", default=None, help="Start year YYYY (alternative to --dates).")
+@click.option("--date-to", "--to-year", "date_to", default=None, help="End year YYYY (alternative to --dates).")
 @click.option("--level", default="page", type=click.Choice(["page", "issue", "title", "all"]),
               show_default=True, help="Display level (dl=).")
-@click.option("--limit", "-n", default=10, show_default=True, help="Results per page (c=).")
+@click.option("--limit", "--per-page", "-n", default=10, show_default=True, help="Results per page (c=).")
 @click.option("--page", "-p", default=1, show_default=True, help="Results page (sp=).")
 @click.option("--state", default=None, help="Filter by state server-side via fa=location_state:<state>.")
 @click.option("--lccn", default=None, help="Filter by newspaper LCCN server-side via fa=number_lccn:<lccn>.")
+@click.option("--timeout", default=DEFAULT_TIMEOUT, show_default=True, type=float,
+              help="Request timeout budget in seconds (fail-fast default avoids 50s+ hangs).")
 @click.option("--json", "as_json", is_flag=True, help="Emit JSON instead of compact text.")
-def search(query, dates, level, limit, page, state, lccn, as_json):
+def search(query, terms_opt, dates, date_from, date_to, level, limit, page, state, lccn, timeout, as_json):
     """Search newspaper pages for QUERY (full-text, e.g. a surname)."""
+    resolved_query = query if query is not None else terms_opt
+    if not resolved_query:
+        raise click.UsageError("Provide QUERY as a positional argument or via --terms.")
+    resolved_dates = _resolve_dates(dates, date_from, date_to)
     params: list[tuple[str, str]] = [
-        ("q", query),
+        ("q", resolved_query),
         ("fo", "json"),
+        ("at", "search,results"),
         ("c", str(limit)),
         ("sp", str(page)),
     ]
     if level != "all":
         params.append(("dl", level))
-    if dates:
-        params.append(("dates", dates))
+    if resolved_dates:
+        params.append(("dates", resolved_dates))
     if state:
         params.append(("fa", f"location_state:{state.strip().lower()}"))
     if lccn:
         params.append(("fa", f"number_lccn:{lccn.strip()}"))
-    data = _get_json(COLLECTION_BASE, params=params)
+    data = _get_json(COLLECTION_BASE, params=params, timeout=timeout)
     results = data.get("results") or []
     hits = (data.get("search") or {}).get("hits")
     if hits and not results:
@@ -151,8 +234,10 @@ def search(query, dates, level, limit, page, state, lccn, as_json):
 @click.option("--date", default=None, help="Issue date YYYY-MM-DD.")
 @click.option("--edition", default="1", show_default=True)
 @click.option("--seq", default="1", show_default=True, help="Page sequence within the issue (?sp=).")
+@click.option("--timeout", default=DEFAULT_TIMEOUT, show_default=True, type=float,
+              help="Request timeout budget in seconds.")
 @click.option("--json", "as_json", is_flag=True, help="Emit the raw item JSON.")
-def get(resource_url, lccn, date, edition, seq, as_json):
+def get(resource_url, lccn, date, edition, seq, timeout, as_json):
     """Show metadata and download links for one newspaper page.
 
     Give a loc.gov resource URL, or build one with --lccn --date [--edition --seq].
@@ -161,7 +246,7 @@ def get(resource_url, lccn, date, edition, seq, as_json):
         if not lccn or not date:
             raise click.UsageError("Give a resource URL or both --lccn and --date.")
         resource_url = _build_resource_url(lccn, date, edition, seq)
-    data = _resource_json(resource_url)
+    data = _resource_json(resource_url, timeout=timeout)
     if as_json:
         click.echo(json.dumps(data, indent=2, ensure_ascii=False))
         return
@@ -190,13 +275,15 @@ def get(resource_url, lccn, date, edition, seq, as_json):
               help="Download the IIIF image URL as served (reduced-size rendition).")
 @click.option("--text/--no-text", default=False, show_default=True,
               help="Download the ALTO XML word-coordinates file (OCR full text).")
-def download(resource_url, lccn, date, edition, seq, out, pdf, image, text):
+@click.option("--timeout", default=DOWNLOAD_TIMEOUT, show_default=True, type=float,
+              help="Download timeout in seconds.")
+def download(resource_url, lccn, date, edition, seq, out, pdf, image, text, timeout):
     """Download a newspaper page (PDF, image, OCR) plus metadata.json."""
     if resource_url is None:
         if not lccn or not date:
             raise click.UsageError("Give a resource URL or both --lccn and --date.")
         resource_url = _build_resource_url(lccn, date, edition, seq)
-    data = _resource_json(resource_url)
+    data = _resource_json(resource_url, timeout=timeout)
     item = data.get("item") or {}
     outdir = Path(out)
     outdir.mkdir(parents=True, exist_ok=True)
@@ -213,10 +300,13 @@ def download(resource_url, lccn, date, edition, seq, out, pdf, image, text):
     if not jobs:
         click.echo("No downloadable resources found for this page.", err=True)
         sys.exit(1)
-    with httpx.Client(headers=DOWNLOAD_HEADERS, timeout=TIMEOUT, follow_redirects=True) as client:
+    with httpx.Client(headers=DOWNLOAD_HEADERS, timeout=timeout, follow_redirects=True) as client:
         for kind, url, filename in jobs:
-            resp = client.get(url)
-            resp.raise_for_status()
+            try:
+                resp = client.get(url)
+                resp.raise_for_status()
+            except httpx.HTTPError as exc:
+                raise click.ClickException(f"Failed downloading {kind} from {url}: {exc}") from exc
             (outdir / filename).write_bytes(resp.content)
             click.echo(f"{kind}: {outdir / filename} ({len(resp.content)} bytes)")
     (outdir / f"{stem}.metadata.json").write_text(
@@ -226,19 +316,26 @@ def download(resource_url, lccn, date, edition, seq, out, pdf, image, text):
 
 
 @cli.command()
-@click.argument("query")
+@click.argument("query", required=False, default=None)
+@click.option("--terms", "-q", "terms_opt", default=None, help="Alias for positional QUERY.")
 @click.option("--dates", default=None, help="Date range YYYY/YYYY.")
+@click.option("--date-from", "--from-year", "date_from", default=None, help="Start year YYYY.")
+@click.option("--date-to", "--to-year", "date_to", default=None, help="End year YYYY.")
 @click.option("--level", default="page", type=click.Choice(["page", "issue", "title", "all"]),
               show_default=True)
 @click.option("--state", default=None, help="Filter by state via fa=location_state:<state>.")
 @click.option("--lccn", default=None, help="Filter by newspaper LCCN via fa=number_lccn:<lccn>.")
-def url(query, dates, level, state, lccn):
+def url(query, terms_opt, dates, date_from, date_to, level, state, lccn):
     """Print the loc.gov website search URL for QUERY (open in a browser)."""
-    params: list[tuple[str, str]] = [("q", query)]
+    resolved_query = query if query is not None else terms_opt
+    if not resolved_query:
+        raise click.UsageError("Provide QUERY as a positional argument or via --terms.")
+    resolved_dates = _resolve_dates(dates, date_from, date_to)
+    params: list[tuple[str, str]] = [("q", resolved_query)]
     if level != "all":
         params.append(("dl", level))
-    if dates:
-        params.append(("dates", dates))
+    if resolved_dates:
+        params.append(("dates", resolved_dates))
     if state:
         params.append(("fa", f"location_state:{state.strip().lower()}"))
     if lccn:

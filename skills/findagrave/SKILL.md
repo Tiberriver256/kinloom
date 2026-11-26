@@ -35,15 +35,15 @@ Names match the site's default matching unless `--exact` is passed. Married wome
 ### Read one or more memorials in full
 
 ```bash
-# Read one memorial by id from search output
+# Read one memorial by id from search output (alias: memorial)
 skills/findagrave/scripts/findagrave get <memorial-id>
 
-# Full bio/inscription text, photo list, and JSON output
+# Full bio/inscription text, photo list, and JSON output (includes cemetery_lat / cemetery_lng and coordinates)
 skills/findagrave/scripts/findagrave get <memorial-id> --full --photos
 skills/findagrave/scripts/findagrave get <memorial-id-1> <memorial-id-2> --json
 ```
 
-A `get` returns name (with maiden name separate), birth/death dates and places, cemetery, plot, inscription, bio, veteran flag, grave-photo flag, photo count, linked relationships (each with its own memorial id to read next), and created/modified dates. `familyRelations` is usually null in search-shaped responses; use `relationships` for linked family. In `--json` output, `bio` and `inscription` are returned as `{"value": "..."}` objects or `null` (matching the GraphQL schema).
+A `get` (or `memorial`) returns name (with maiden name separate), birth/death dates and places, memorial GPS `coordinates`, cemetery (with `coordinates`, `lat`/`lng`, `physicalAddress`, and top-level `cemetery_lat`/`cemetery_lng` in JSON), plot, inscription, bio, veteran flag, grave-photo flag, photo count, linked relationships (each with its own memorial id to read next), and created/modified dates. `familyRelations` is usually null in search-shaped responses; use `relationships` for linked family. In `--json` output, `bio` and `inscription` are returned as `{"value": "..."}` objects or `null` (matching the GraphQL schema).
 
 ### Cemeteries and places
 
@@ -52,7 +52,8 @@ A `get` returns name (with maiden name separate), birth/death dates and places, 
 skills/findagrave/scripts/findagrave cemetery --name "Oak Ridge"
 skills/findagrave/scripts/findagrave cemetery --name "Oak Ridge" --place "Sangamon County, Illinois"
 
-# One cemetery by id
+# One cemetery by id (positional id or --id both work; JSON includes coordinates, lat, lng, physicalAddress)
+skills/findagrave/scripts/findagrave cemetery <cemetery-id> --json
 skills/findagrave/scripts/findagrave cemetery --id <cemetery-id>
 
 # Resolve a place name to ids (for use with search --location-id)

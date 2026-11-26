@@ -30,6 +30,7 @@ export {
 } from './help.js';
 
 export {
+  buildTelemetrySubcmd,
   resolveScriptInvocation,
   runRecordCommand,
   type RecordSpawnFn,

@@ -252,6 +252,44 @@ def location(state: str, county: str, as_json: bool) -> None:
     emit(cats, as_json, len(cats))
 
 
+@cli.command("search")
+@click.argument("query", required=False, default=None)
+@click.option("--surname", "surname_opt", default=None, help="Search by surname (alias for `persi surname`).")
+@click.option("--title", "title_opt", default=None, help="Search by article-title keyword (alias for `persi title`).")
+@click.option("--state", default=None, help="Two-letter state code for location counts (alias for `persi location`).")
+@click.option("--county", default="", help="County name (used with --state).")
+@click.option("--limit", default=25, show_default=True, help="Max results to show.")
+@click.option("--json", "as_json", is_flag=True, help="Emit JSON.")
+@click.pass_context
+def search_cmd(
+    ctx: click.Context,
+    query: str | None,
+    surname_opt: str | None,
+    title_opt: str | None,
+    state: str | None,
+    county: str,
+    limit: int,
+    as_json: bool,
+) -> None:
+    """Convenience router to `surname`, `title`, or `location` search."""
+    if state and (query or surname_opt or title_opt):
+        raise click.UsageError(
+            "PERSI's surname and title forms do not accept a --state filter. "
+            "Use `persi surname <SURNAME>`, `persi title <KEYWORD>`, or `persi location --state <ST>` separately."
+        )
+    if state:
+        ctx.invoke(location, state=state, county=county, as_json=as_json)
+        return
+    if title_opt:
+        ctx.invoke(title, keyword=title_opt, limit=limit, as_json=as_json)
+        return
+    target_surname = surname_opt or query
+    if target_surname:
+        ctx.invoke(surname, surname=target_surname, limit=limit, as_json=as_json)
+        return
+    raise click.UsageError("Pass a surname, --title <KEYWORD>, or --state <ST>.")
+
+
 @cli.command()
 @click.argument("mode", type=click.Choice(["surname", "title", "location"]))
 def url(mode: str) -> None:
