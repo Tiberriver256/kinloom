@@ -23,11 +23,16 @@ import { CliValidationError } from '../../errors.js';
 export { STATUS_HELP } from './help.js';
 
 const ZERO_COORD_EPSILON = 1e-9;
-const PENDING_TEXT_LIMIT = 8;
+const DEFAULT_STATUS_TEXT_LIMIT = 8;
 
 export type BiographyQueueStatus = 'pending' | 'staged' | 'done_live';
 
-export interface StatusCommandOptions {
+export interface StatusTextDisplay {
+  limit?: number;
+  filter?: BiographyQueueStatus;
+}
+
+export interface StatusCommandOptions extends StatusTextDisplay {
   repoDir?: string;
   json?: boolean;
 }
@@ -212,7 +217,18 @@ export function buildDeceasedQueue(input: {
   return items;
 }
 
-export function formatStatusTextReport(report: StatusReport): string {
+const STATUS_LIST_HEADING: Record<BiographyQueueStatus, string> = {
+  pending: 'Pending (sparsest first):',
+  staged: 'Staged:',
+  done_live: 'Done live:',
+};
+
+export function formatStatusTextReport(
+  report: StatusReport,
+  display: StatusTextDisplay = {}
+): string {
+  const limit = display.limit ?? DEFAULT_STATUS_TEXT_LIMIT;
+  const filter = display.filter ?? 'pending';
   const lines = [
     `Status ${report.repo}`,
     `People: ${report.people.total} total, ${report.people.deceased} deceased, ${report.people.living} living`,
@@ -225,19 +241,21 @@ export function formatStatusTextReport(report: StatusReport): string {
     `Biographies: ${report.biographies}`,
     `Queue: done_live=${report.queue.done_live} staged=${report.queue.staged} pending=${report.queue.pending}`,
   ];
-  const pending = report.deceased.filter((person) => person.status === 'pending');
-  lines.push('Pending (sparsest first):');
-  if (pending.length === 0) {
+  const matching = report.deceased.filter((person) => person.status === filter);
+  lines.push(STATUS_LIST_HEADING[filter]);
+  if (matching.length === 0) {
     lines.push('  (none)');
   } else {
-    for (const person of pending.slice(0, PENDING_TEXT_LIMIT)) {
+    const shown = limit === 0 ? matching : matching.slice(0, limit);
+    for (const person of shown) {
       const birth = person.birth_edtf.trim() || '?';
       lines.push(
         `  ${person.full_name} (${person.id}) birth=${birth} death=${person.death_edtf || '?'} events=${person.events} sources=${person.sources} media=${person.media}`
       );
     }
-    if (pending.length > PENDING_TEXT_LIMIT) {
-      lines.push(`  ... and ${pending.length - PENDING_TEXT_LIMIT} more pending`);
+    const hidden = matching.length - shown.length;
+    if (hidden > 0) {
+      lines.push(`  ... and ${hidden} more ${filter}`);
     }
   }
   return `${lines.join('\n')}\n`;
@@ -300,7 +318,7 @@ export async function runStatusCommand(
 
   const rendered = options.json
     ? `${JSON.stringify(report, null, 2)}\n`
-    : formatStatusTextReport(report);
+    : formatStatusTextReport(report, { limit: options.limit, filter: options.filter });
 
   return { ...report, rendered };
 }

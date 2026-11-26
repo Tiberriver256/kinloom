@@ -59,11 +59,16 @@ Living people affect only the integer people.living count.
 The command does not print a living person's id, name, or birth date.
 
 Options:
-  --repo <dir>   Archive repository root (default: current working directory)
-  --json         Emit the status object as JSON
-  -h, --help     Show this help message
+  --repo <dir>                         Archive repository root (default: current working directory)
+  --limit <N>                          Text list length. Default 8. 0 shows every matching row.
+  --filter <pending|staged|done_live>  Text list status. Default pending.
+  --json                               Emit the status object as JSON
+  -h, --help                           Show this help message
 
-Text output prints the totals, the queue counts, and up to 8 pending people (sparsest first).
+Text output prints the totals, the queue counts, and a list of deceased people.
+The list uses --filter and stops after --limit rows.
+JSON ignores --limit and --filter.
+JSON still returns the full deceased array and the full queue counts.
 
 JSON object:
   repo                 Absolute repository path
@@ -103,7 +108,8 @@ Run full-archive invariants across local data/*.yaml files:
   2. Place coordinate validation (-90..90, -180..180, finite, no (0, 0))
   3. SSN pattern scan across all data/*.yaml files
   4. Dual-mode compilation (private and public) with 0 review flags, 0 living leaks, and 0 duplicate residence_spans
-  5. Media file presence on disk under archive-media/ or media/
+  5. Media file presence on disk under archive-media/ or media/, and no two media ids share one normalized file path
+  6. Living-name scan of public text. The scan reads narrative title, summary, and body after public redaction. It reads captions and provenance of media that public export keeps. It reads source citations. It reads titles and summaries of events that have no living participant. Living-only events and other events with a living participant are omitted, because public export drops or redacts them.
 
 Options:
   --repo <dir>   Archive repository root (default: current working directory)

@@ -2053,6 +2053,128 @@ describe('ops/status', () => {
     expect(await runCli(['status', '--help'], { io: help.io })).toBe(EXIT_OK);
     expect(help.stdout.join('\n')).toContain('queue.pending');
     expect(help.stdout.join('\n')).toContain('people.living');
+    expect(help.stdout.join('\n')).toContain('--limit <N>');
+    expect(help.stdout.join('\n')).toContain('--filter <pending|staged|done_live>');
+    expect(help.stdout.join('\n')).toContain('JSON ignores --limit and --filter');
+  });
+
+  it('limits and filters the text list and rejects invalid flags', async () => {
+    const repoDir = await createSyntheticRepo();
+    const dataDir = path.join(repoDir, 'data');
+    const people = parsePeopleYaml(await readFile(path.join(dataDir, 'people.yaml'), 'utf8'));
+    people.push(
+      {
+        id: 'per_edmund_alder',
+        slug: 'edmund-alder',
+        gedcom_xref: '@I100010@',
+        full_name: 'Edmund Alder',
+        given_name: 'Edmund',
+        surname: 'Alder',
+        alt_names: [],
+        sex: 'M',
+        is_living: false,
+        lineage_group: 'ancestor',
+        birth_edtf: '1701-01-02',
+        death_edtf: '1788-03-03',
+        portrait_url: null,
+      },
+      {
+        id: 'per_nora_alder',
+        slug: 'nora-alder',
+        gedcom_xref: '@I100011@',
+        full_name: 'Nora Alder',
+        given_name: 'Nora',
+        surname: 'Alder',
+        alt_names: [],
+        sex: 'F',
+        is_living: false,
+        lineage_group: 'ancestor',
+        birth_edtf: '1890-01-01',
+        death_edtf: '1960-02-02',
+        portrait_url: null,
+      }
+    );
+    const narratives: Narrative[] = [
+      {
+        id: 'nar_arthur_bio',
+        slug: 'arthur-alder-bio',
+        kind: 'biography',
+        subject_person_id: 'per_arthur_alder',
+        title: 'Arthur Alder Biography',
+        person_ids: ['per_arthur_alder'],
+        place_ids: [],
+        event_ids: [],
+        source_ids: [],
+        body_md: 'Arthur Alder farmed in Oak County.',
+      },
+    ];
+    await mkdir(path.join(repoDir, 'research', 'people', 'per_helen_maple'), { recursive: true });
+    await writeFile(path.join(repoDir, 'research', 'people', 'per_helen_maple', 'patch.json'), '{}\n', 'utf8');
+    await Promise.all([
+      writeFile(path.join(dataDir, 'people.yaml'), serializePeopleYaml(people, { sortById: true }), 'utf8'),
+      writeFile(
+        path.join(dataDir, 'narratives.yaml'),
+        serializeNarrativesYaml(narratives, { sortById: true }),
+        'utf8'
+      ),
+    ]);
+
+    const allPending = await runStatusCommand({ repoDir, limit: 0 });
+    expect(allPending.rendered).toContain('Edmund Alder (per_edmund_alder)');
+    expect(allPending.rendered).toContain('Thomas Alder (per_thomas_alder)');
+    expect(allPending.rendered).toContain('Nora Alder (per_nora_alder)');
+    expect(allPending.rendered).not.toContain('more pending');
+    expect(allPending.rendered).not.toContain('Helen Maple');
+    expect(allPending.rendered).not.toContain('Clara');
+
+    const twoPending = await runStatusCommand({ repoDir, limit: 2 });
+    expect(twoPending.rendered).toContain('Edmund Alder (per_edmund_alder)');
+    expect(twoPending.rendered).toContain('Thomas Alder (per_thomas_alder)');
+    expect(twoPending.rendered).not.toContain('Nora Alder');
+    expect(twoPending.rendered).toContain('... and 1 more pending');
+
+    const staged = await runStatusCommand({ repoDir, filter: 'staged' });
+    expect(staged.rendered).toContain('Staged:');
+    expect(staged.rendered).toContain('Helen Maple (per_helen_maple)');
+    expect(staged.rendered).not.toContain('Edmund Alder');
+    expect(staged.rendered).not.toContain('Arthur Alder (per_arthur_alder)');
+
+    const doneLive = await runStatusCommand({ repoDir, filter: 'done_live' });
+    expect(doneLive.rendered).toContain('Done live:');
+    expect(doneLive.rendered).toContain('Arthur Alder (per_arthur_alder)');
+    expect(doneLive.rendered).not.toContain('Helen Maple');
+    expect(doneLive.rendered).not.toContain('Edmund Alder');
+
+    const jsonCli = createCaptureIo();
+    expect(
+      await runCli(['status', '--repo', repoDir, '--json', '--limit', '2', '--filter', 'staged'], {
+        io: jsonCli.io,
+      })
+    ).toBe(EXIT_OK);
+    const parsed = JSON.parse(jsonCli.stdout.join('\n')) as {
+      queue: { done_live: number; staged: number; pending: number };
+      deceased: Array<{ id: string }>;
+    };
+    expect(parsed.queue).toEqual({ done_live: 1, staged: 1, pending: 3 });
+    expect(parsed.deceased.map((person) => person.id)).toEqual([
+      'per_edmund_alder',
+      'per_thomas_alder',
+      'per_nora_alder',
+      'per_helen_maple',
+      'per_arthur_alder',
+    ]);
+
+    const badFilter = createCaptureIo();
+    expect(await runCli(['status', '--filter', 'open'], { io: badFilter.io })).toBe(EXIT_USAGE);
+    expect(badFilter.stderr.join('\n')).toBe(
+      'Validation error: Option `--filter` must be `pending`, `staged`, or `done_live`.'
+    );
+
+    const badLimit = createCaptureIo();
+    expect(await runCli(['status', '--limit', '-1'], { io: badLimit.io })).toBe(EXIT_USAGE);
+    expect(badLimit.stderr.join('\n')).toContain(
+      'Option `--limit` must be an integer greater than or equal to 0.'
+    );
   });
 });
 
@@ -3519,5 +3641,316 @@ describe('ops/verify', () => {
     expect(broken.checks.ssn.hits[0]?.match).toBe('123-45-6789');
     expect(broken.checks.media.ok).toBe(false);
     expect(broken.checks.media.missingFiles[0]?.id).toBe('med_arthur_census');
+  });
+
+  it('flags a living First Surname in a public narrative and skips a deceased namesake', async () => {
+    const caughtRepo = await createSyntheticRepo();
+    const caughtPeople = parsePeopleYaml(
+      await readFile(path.join(caughtRepo, 'data', 'people.yaml'), 'utf8')
+    );
+    const caughtClara = caughtPeople.find((person) => person.id === 'per_clara_maple_living');
+    if (!caughtClara) {
+      throw new Error('fixture missing per_clara_maple_living');
+    }
+    caughtClara.full_name = 'Clara Elizabeth Maple';
+    caughtClara.given_name = 'Clara Elizabeth';
+    caughtClara.surname = 'Maple';
+    caughtClara.alt_names = [];
+    caughtClara.is_living = false;
+    caughtClara.birth_edtf = '1954-07-08';
+    caughtClara.death_edtf = '';
+    await writeFile(
+      path.join(caughtRepo, 'data', 'people.yaml'),
+      serializePeopleYaml(caughtPeople, { sortById: true }),
+      'utf8'
+    );
+    await writeFile(
+      path.join(caughtRepo, 'data', 'narratives.yaml'),
+      serializeNarrativesYaml(
+        [
+          {
+            id: 'nar_name_probe',
+            slug: 'name-probe',
+            kind: 'biography',
+            subject_person_id: 'per_arthur_alder',
+            title: 'Arthur Alder Biography',
+            person_ids: ['per_arthur_alder'],
+            place_ids: [],
+            event_ids: [],
+            source_ids: [],
+            body_md: 'Clara Elizabeth Maple wrote home. Clara Maple replied later.',
+          },
+        ],
+        { sortById: true }
+      ),
+      'utf8'
+    );
+
+    const caught = await runVerifyCommand({ repoDir: caughtRepo, json: true });
+    expect(caught.checks.livingNames.hits.map((hit) => hit.match)).toEqual([
+      'Clara Elizabeth Maple',
+      'Clara Maple',
+    ]);
+    expect(caught.checks.livingNames.hits.map((hit) => hit.location)).toEqual([
+      'narrative:nar_name_probe:body_md',
+      'narrative:nar_name_probe:body_md',
+    ]);
+    expect(caught.errors).toContain(
+      "living-name: narrative:nar_name_probe:body_md matched 'Clara Maple'"
+    );
+    expect(caught.checks.livingNames.hits.some((hit) => hit.location.includes('evt_arthur_living_visit'))).toBe(
+      false
+    );
+    expect(caught.checks.livingNames.hits.some((hit) => hit.location.includes('med_living_photo'))).toBe(
+      false
+    );
+
+    const sparedRepo = await createSyntheticRepo();
+    const sparedPeople = parsePeopleYaml(
+      await readFile(path.join(sparedRepo, 'data', 'people.yaml'), 'utf8')
+    );
+    const sparedClara = sparedPeople.find((person) => person.id === 'per_clara_maple_living');
+    if (!sparedClara) {
+      throw new Error('fixture missing per_clara_maple_living');
+    }
+    sparedClara.full_name = 'Clara Elizabeth Maple';
+    sparedClara.given_name = 'Clara Elizabeth';
+    sparedClara.surname = 'Maple';
+    sparedClara.alt_names = [];
+    sparedClara.is_living = false;
+    sparedClara.birth_edtf = '1954-07-08';
+    sparedClara.death_edtf = '';
+    sparedPeople.push({
+      id: 'per_clara_maple_1850',
+      slug: 'clara-maple-1850',
+      gedcom_xref: '@I100012@',
+      full_name: 'Clara Maple',
+      given_name: 'Clara',
+      surname: 'Maple',
+      alt_names: [],
+      sex: 'F',
+      is_living: false,
+      lineage_group: 'ancestor',
+      birth_edtf: '1850-02-02',
+      death_edtf: '1920-03-03',
+      portrait_url: null,
+    });
+    await writeFile(
+      path.join(sparedRepo, 'data', 'people.yaml'),
+      serializePeopleYaml(sparedPeople, { sortById: true }),
+      'utf8'
+    );
+    await writeFile(
+      path.join(sparedRepo, 'data', 'narratives.yaml'),
+      serializeNarrativesYaml(
+        [
+          {
+            id: 'nar_namesake_probe',
+            slug: 'namesake-probe',
+            kind: 'biography',
+            subject_person_id: 'per_arthur_alder',
+            title: 'Namesake Probe',
+            person_ids: ['per_arthur_alder'],
+            place_ids: [],
+            event_ids: [],
+            source_ids: [],
+            body_md: 'Clara Maple kept the letters. Clara Elizabeth Maple wrote them.',
+          },
+        ],
+        { sortById: true }
+      ),
+      'utf8'
+    );
+
+    const spared = await runVerifyCommand({ repoDir: sparedRepo, json: true });
+    expect(spared.checks.livingNames.hits.map((hit) => hit.match)).toEqual(['Clara Elizabeth Maple']);
+    expect(spared.checks.livingNames.hits.map((hit) => hit.location)).toEqual([
+      'narrative:nar_namesake_probe:body_md',
+    ]);
+  });
+
+  it('skips derived First Surname on records predating the living person while keeping exact matches', async () => {
+    const repoDir = await createSyntheticRepo();
+    await mkdir(path.join(repoDir, 'media'), { recursive: true });
+    await writeFile(path.join(repoDir, 'media', 'bond-1791.png'), makeMinimalPng(40, 40));
+
+    const people = parsePeopleYaml(await readFile(path.join(repoDir, 'data', 'people.yaml'), 'utf8'));
+    const clara = people.find((person) => person.id === 'per_clara_maple_living');
+    if (!clara) {
+      throw new Error('fixture missing per_clara_maple_living');
+    }
+    clara.full_name = 'Clara Elizabeth Maple';
+    clara.given_name = 'Clara Elizabeth';
+    clara.surname = 'Maple';
+    clara.alt_names = [];
+    clara.is_living = false;
+    clara.birth_edtf = '1954-07-08';
+    clara.death_edtf = '';
+    people.push({
+      id: 'per_ezra_maple_1720',
+      slug: 'ezra-maple-1720',
+      gedcom_xref: '@I100020@',
+      full_name: 'Ezra Maple',
+      given_name: 'Ezra',
+      surname: 'Maple',
+      alt_names: [],
+      sex: 'M',
+      is_living: false,
+      lineage_group: 'ancestor',
+      birth_edtf: '1720',
+      death_edtf: '1795-11-01',
+      portrait_url: null,
+    });
+    await writeFile(
+      path.join(repoDir, 'data', 'people.yaml'),
+      serializePeopleYaml(people, { sortById: true }),
+      'utf8'
+    );
+
+    const sources = parseSourcesYaml(
+      await readFile(path.join(repoDir, 'data', 'sources.yaml'), 'utf8')
+    );
+    sources.push({
+      id: 'src_1791_bond',
+      citation: 'Oak County Marriage Bond, 14 Feb 1791: Clara Maple married John Roe.',
+      source_type: 'vital_record',
+      repository: 'County Clerk',
+    });
+    await writeFile(
+      path.join(repoDir, 'data', 'sources.yaml'),
+      serializeSourcesYaml(sources, { sortById: true }),
+      'utf8'
+    );
+
+    const events = parseEventsYaml(await readFile(path.join(repoDir, 'data', 'events.yaml'), 'utf8'));
+    events.push({
+      id: 'evt_1791_marriage',
+      title: 'Marriage bond mentioning Clara Maple',
+      scope: 'family',
+      event_kind: 'point_event',
+      edtf_date: '1791-02-14',
+      place_id: 'plc_oak_county_ohio',
+      summary: 'Ezra Maple consented for daughter Clara Maple.',
+      participants: [{ person_id: 'per_ezra_maple_1720', role: 'witness' }],
+      sources: [{ source_id: 'src_1791_bond', confidence: 'high' }],
+    });
+    await writeFile(
+      path.join(repoDir, 'data', 'events.yaml'),
+      serializeEventsYaml(events, { sortById: true }),
+      'utf8'
+    );
+
+    await writeFile(
+      path.join(repoDir, 'data', 'media.yaml'),
+      serializeMediaYaml(
+        [
+          {
+            id: 'med_1791_bond',
+            kind: 'document_scan',
+            source_id: 'src_1791_bond',
+            person_id: 'per_ezra_maple_1720',
+            event_id: 'evt_1791_marriage',
+            date_edtf: '1791-02-14',
+            file: '/media/bond-1791.png',
+            caption: '1791 bond for Clara Maple',
+          },
+        ],
+        { sortById: true }
+      ),
+      'utf8'
+    );
+
+    await writeFile(
+      path.join(repoDir, 'data', 'narratives.yaml'),
+      serializeNarrativesYaml(
+        [
+          {
+            id: 'nar_ezra_bio',
+            slug: 'ezra-maple-bio',
+            kind: 'biography',
+            subject_person_id: 'per_ezra_maple_1720',
+            title: 'Ezra Maple (1720-1795)',
+            person_ids: ['per_ezra_maple_1720'],
+            place_ids: ['plc_oak_county_ohio'],
+            event_ids: ['evt_1791_marriage'],
+            source_ids: ['src_1791_bond'],
+            body_md: 'Ezra Maple witnessed Clara Maple marry in 1791.[^src_1791_bond|med_1791_bond]',
+          },
+        ],
+        { sortById: true }
+      ),
+      'utf8'
+    );
+
+    const historicalClean = await runVerifyCommand({ repoDir, json: true });
+    expect(historicalClean.checks.livingNames.ok).toBe(true);
+    expect(historicalClean.checks.livingNames.hits).toEqual([]);
+
+    // Exact full name still triggers on 1791 text, and derived First Surname still triggers on 1960 text.
+    events.push({
+      id: 'evt_1960_reunion',
+      title: 'Reunion attended by Clara Maple',
+      scope: 'family',
+      event_kind: 'point_event',
+      edtf_date: '1960-08-01',
+      place_id: 'plc_oak_county_ohio',
+      summary: 'Family gathering.',
+      participants: [{ person_id: 'per_arthur_alder', role: 'mentioned' }],
+      sources: [{ source_id: 'src_1880_census', confidence: 'low' }],
+    });
+    const colonialEvent = events.find((event) => event.id === 'evt_1791_marriage');
+    if (colonialEvent) {
+      colonialEvent.summary = 'Leaked exact name Clara Elizabeth Maple in 1791 text.';
+    }
+    await writeFile(
+      path.join(repoDir, 'data', 'events.yaml'),
+      serializeEventsYaml(events, { sortById: true }),
+      'utf8'
+    );
+
+    const flagged = await runVerifyCommand({ repoDir, json: true });
+    expect(flagged.checks.livingNames.ok).toBe(false);
+    expect(flagged.checks.livingNames.hits).toEqual([
+      { location: 'event:evt_1791_marriage:summary', match: 'Clara Elizabeth Maple' },
+      { location: 'event:evt_1960_reunion:title', match: 'Clara Maple' },
+    ]);
+  });
+
+  it('flags two media records that share one normalized file path', async () => {
+    const repoDir = await createSyntheticRepo();
+    await mkdir(path.join(repoDir, 'media'), { recursive: true });
+    await writeFile(path.join(repoDir, 'media', 'shared-scan.png'), makeMinimalPng(40, 40));
+    await writeFile(
+      path.join(repoDir, 'data', 'media.yaml'),
+      serializeMediaYaml(
+        [
+          {
+            id: 'med_b',
+            kind: 'document_scan',
+            person_id: 'per_arthur_alder',
+            file: 'media/shared-scan.png',
+            caption: 'Arthur Alder shared scan',
+          },
+          {
+            id: 'med_a',
+            kind: 'document_scan',
+            person_id: 'per_arthur_alder',
+            file: '/media/shared-scan.png',
+            caption: 'Arthur Alder shared scan',
+          },
+        ],
+        { sortById: true }
+      ),
+      'utf8'
+    );
+
+    const result = await runVerifyCommand({ repoDir, json: true });
+    expect(result.checks.media.duplicateFiles).toEqual([
+      { file: 'media/shared-scan.png', mediaIds: ['med_a', 'med_b'] },
+    ]);
+    expect(result.errors).toContain(
+      "media: duplicate file 'media/shared-scan.png' on med_a, med_b"
+    );
+    expect(result.ok).toBe(false);
   });
 });

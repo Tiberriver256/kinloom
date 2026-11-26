@@ -15,6 +15,7 @@ import {
   loadLiveMedia,
   readStagedMediaRefs,
 } from './live-media-collisions.js';
+import { compileLivingNameRegex } from './living-name-matcher.js';
 
 const SAFE_PERSON_ID_RE = /^[a-zA-Z0-9_-]+$/;
 const SSN_RE = /\b\d{3}-\d{2}-\d{4}\b/g;
@@ -519,120 +520,13 @@ function collectStringsWithPath(
   }
 }
 
-function trimmedNameTokens(value: unknown): string[] {
-  if (typeof value !== 'string') {
-    return [];
-  }
-  return value
-    .trim()
-    .split(/\s+/)
-    .filter((token) => token.length > 0);
-}
-
-/**
- * First token of given_name (or of full_name when given_name has fewer than two tokens)
- * plus the surname. Used only when at least two tokens sit before the surname and the
- * result is at least 6 characters, so "Clara Elizabeth Maple" also matches "Clara Maple".
- */
-function derivedFirstSurname(person: LooseRecord): string | null {
-  const surname = typeof person.surname === 'string' ? person.surname.trim() : '';
-  if (!surname) {
-    return null;
-  }
-  let tokensBeforeSurname = trimmedNameTokens(person.given_name);
-  if (tokensBeforeSurname.length < 2) {
-    const fullTokens = trimmedNameTokens(person.full_name);
-    const last = fullTokens[fullTokens.length - 1];
-    if (
-      fullTokens.length >= 3 &&
-      last !== undefined &&
-      last.toLowerCase() === surname.toLowerCase()
-    ) {
-      tokensBeforeSurname = fullTokens.slice(0, -1);
-    }
-  }
-  if (tokensBeforeSurname.length < 2) {
-    return null;
-  }
-  const first = tokensBeforeSurname[0];
-  if (!first) {
-    return null;
-  }
-  const derived = `${first} ${surname}`;
-  if (derived.length < 6) {
-    return null;
-  }
-  return derived;
-}
-
-function addExactNameKeys(person: LooseRecord, keys: Set<string>): void {
-  const alts = Array.isArray(person.alt_names) ? person.alt_names : [];
-  for (const raw of [person.full_name, ...alts]) {
-    if (typeof raw !== 'string') {
-      continue;
-    }
-    const cleaned = raw.trim();
-    if (cleaned.length > 0) {
-      keys.add(cleaned.toLowerCase());
-    }
-  }
-  const derived = derivedFirstSurname(person);
-  if (derived) {
-    keys.add(derived.toLowerCase());
-  }
-}
-
-function collectStoredMultiwordNames(person: LooseRecord): string[] {
-  const alts = Array.isArray(person.alt_names) ? person.alt_names : [];
-  const names: string[] = [];
-  for (const raw of [person.full_name, ...alts]) {
-    if (typeof raw !== 'string') {
-      continue;
-    }
-    const cleaned = raw.trim();
-    // Multi-word names >= 6 chars prevent common single-token false positives.
-    if (cleaned.length >= 6 && cleaned.includes(' ')) {
-      names.push(cleaned);
-    }
-  }
-  return names;
-}
-
-function compileAuditLivingNameRegex(
-  livingPeople: readonly LooseRecord[],
-  deceasedPeople: readonly LooseRecord[] = []
-): RegExp | null {
-  const deceasedNameKeys = new Set<string>();
-  for (const person of deceasedPeople) {
-    addExactNameKeys(person, deceasedNameKeys);
-  }
-  const names = new Set<string>();
-  for (const person of livingPeople) {
-    for (const stored of collectStoredMultiwordNames(person)) {
-      names.add(stored);
-    }
-    const derived = derivedFirstSurname(person);
-    // A deceased namesake with the same First Surname must not become a living-name hit.
-    if (derived && !deceasedNameKeys.has(derived.toLowerCase())) {
-      names.add(derived);
-    }
-  }
-  if (names.size === 0) {
-    return null;
-  }
-  const escaped = [...names]
-    .toSorted((a, b) => b.length - a.length)
-    .map((n) => n.replaceAll(/[.*+?^${}()|[\]\\]/g, '\\$&'));
-  return new RegExp(`(?<![A-Za-z])(?:${escaped.join('|')})(?![A-Za-z])`, 'gi');
-}
-
 export function runPrivacyAndStyleScan(
   dossierText: string,
   patch: LooseRecord,
   livingPeople: readonly LooseRecord[],
   deceasedPeople: readonly LooseRecord[] = []
 ): PrivacyAndStyleCheckResult {
-  const livingNameRegex = compileAuditLivingNameRegex(livingPeople, deceasedPeople);
+  const livingNameRegex = compileLivingNameRegex(livingPeople, deceasedPeople);
   const livingNameHits: Array<{ location: string; match: string }> = [];
   const ssnHits: Array<{ location: string; match: string }> = [];
   const phoneHits: Array<{ location: string; match: string }> = [];

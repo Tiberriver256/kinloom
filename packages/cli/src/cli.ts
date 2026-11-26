@@ -176,6 +176,47 @@ function requireStringFlag(value: string | undefined, flagName: string): string 
   return value.trim();
 }
 
+function bindSignedStatusLimit(args: readonly string[]): string[] {
+  const bound: string[] = [];
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index] ?? '';
+    const next = args[index + 1];
+    if (arg === '--limit' && next !== undefined && /^-?\d+$/.test(next)) {
+      bound.push(`--limit=${next}`);
+      index += 1;
+      continue;
+    }
+    bound.push(arg);
+  }
+  return bound;
+}
+
+function parseStatusLimit(value: string | undefined): number {
+  if (value === undefined) {
+    return 8;
+  }
+  const trimmed = value.trim();
+  if (!/^\d+$/.test(trimmed)) {
+    throw new CliValidationError(
+      'Option `--limit` must be an integer greater than or equal to 0.'
+    );
+  }
+  return Number.parseInt(trimmed, 10);
+}
+
+function parseStatusFilter(value: string | undefined): 'pending' | 'staged' | 'done_live' {
+  if (value === undefined) {
+    return 'pending';
+  }
+  const trimmed = value.trim();
+  if (trimmed === 'pending' || trimmed === 'staged' || trimmed === 'done_live') {
+    return trimmed;
+  }
+  throw new CliValidationError(
+    'Option `--filter` must be `pending`, `staged`, or `done_live`.'
+  );
+}
+
 function parseOptionalPositiveInt(value: string | undefined, flagName: string): number | undefined {
   if (value === undefined) {
     return undefined;
@@ -919,13 +960,17 @@ export async function runCli(
 
       case 'status': {
         const { values } = safeParseArgs({
-          args: rest,
+          args: bindSignedStatusLimit(rest),
           allowPositionals: false,
           options: {
             repo: { type: 'string' },
+            limit: { type: 'string' },
+            filter: { type: 'string' },
             json: { type: 'boolean', default: false },
           },
         });
+        const limit = parseStatusLimit(values.limit);
+        const filter = parseStatusFilter(values.filter);
         const [{ runStatusCommand }, { measureCommand }] = await Promise.all([
           import('./commands/ops/status.js'),
           import('./commands/ops/telemetry.js'),
@@ -942,6 +987,8 @@ export async function runCli(
             runStatusCommand({
               repoDir: values.repo,
               json: values.json,
+              limit,
+              filter,
             })
         );
         writeRenderedOutput(io, result.rendered);

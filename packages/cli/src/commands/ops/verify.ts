@@ -4,7 +4,11 @@ import path from 'node:path';
 import { performance } from 'node:perf_hooks';
 import {
   ArchiveBundleSchema,
+  collectLivingNames,
   compileArchive,
+  compileLivingNamePattern,
+  filterMediaForPrivacy,
+  filterNarrativesForPrivacy,
   parseEventsYaml,
   parseKinloomConfigYaml,
   parseKinshipYaml,
@@ -14,13 +18,26 @@ import {
   parsePeopleYaml,
   parsePlacesYaml,
   parseSourcesYaml,
+  resolveEffectiveLiving,
   validateNarrativeCitations,
   type ArchiveBundle,
   type MediaItem,
+  type Narrative,
   type Place,
+  type PrivacyConfig,
+  type RawEvent,
+  type RawPerson,
+  type SourceRecord,
 } from '@kinloom/core';
 import { CliValidationError } from '../../errors.js';
 import { auditBundlePrivacy } from './integrate.js';
+import { normalizeMediaFilePath } from './live-media-collisions.js';
+import {
+  collectLivingNameHitsWithMatcher,
+  compileLivingNameMatcher,
+  type LivingNameHit,
+  type LivingNameTarget,
+} from './living-name-matcher.js';
 
 export { VERIFY_HELP } from './help.js';
 
@@ -81,11 +98,22 @@ export interface VerifyMissingMediaFile {
   reason: string;
 }
 
+export interface VerifyDuplicateMediaFile {
+  file: string;
+  mediaIds: string[];
+}
+
 export interface VerifyMediaResult {
   ok: boolean;
   mediaLayout: 'archive-media' | 'media';
   checkedCount: number;
   missingFiles: VerifyMissingMediaFile[];
+  duplicateFiles: VerifyDuplicateMediaFile[];
+}
+
+export interface VerifyLivingNamesResult {
+  ok: boolean;
+  hits: LivingNameHit[];
 }
 
 export interface VerifyCommandResult {
@@ -98,6 +126,7 @@ export interface VerifyCommandResult {
     ssn: VerifySsnResult;
     compile: VerifyCompileResult;
     media: VerifyMediaResult;
+    livingNames: VerifyLivingNamesResult;
   };
   errors: string[];
   rendered: string;
@@ -195,6 +224,31 @@ export function findDuplicateResidenceSpans(
   return duplicates;
 }
 
+export function findDuplicateNormalizedMediaFiles(
+  mediaItems: readonly Pick<MediaItem, 'id' | 'file'>[]
+): VerifyDuplicateMediaFile[] {
+  const grouped = new Map<string, string[]>();
+  for (const item of mediaItems) {
+    const normalized = normalizeMediaFilePath(item.file);
+    if (!normalized) {
+      continue;
+    }
+    const ids = grouped.get(normalized) ?? [];
+    ids.push(item.id);
+    grouped.set(normalized, ids);
+  }
+
+  const duplicates: VerifyDuplicateMediaFile[] = [];
+  for (const [file, ids] of grouped) {
+    const mediaIds = [...new Set(ids)].toSorted((a, b) => a.localeCompare(b));
+    if (mediaIds.length > 1) {
+      duplicates.push({ file, mediaIds });
+    }
+  }
+  duplicates.sort((a, b) => a.file.localeCompare(b.file));
+  return duplicates;
+}
+
 export function verifyMediaFilesOnDisk(
   repoDir: string,
   mediaItems: readonly MediaItem[]
@@ -286,12 +340,177 @@ export function verifyMediaFilesOnDisk(
     }
   }
 
+  const duplicateFiles = findDuplicateNormalizedMediaFiles(mediaItems);
   return {
-    ok: missingFiles.length === 0,
+    ok: missingFiles.length === 0 && duplicateFiles.length === 0,
     mediaLayout,
     checkedCount,
     missingFiles,
+    duplicateFiles,
   };
+}
+
+const NARRATIVE_POSTHUMOUS_HORIZON_YEARS = 100;
+
+function extractLatestEdtfYear(raw: string | null | undefined): number | null {
+  if (typeof raw !== 'string') {
+    return null;
+  }
+  const years = [...raw.matchAll(/\b(\d{4})\b/g)].map((match) => Number(match[1]));
+  if (years.length === 0) {
+    return null;
+  }
+  return Math.max(...years);
+}
+
+function pushTextTarget(
+  targets: LivingNameTarget[],
+  location: string,
+  text: string | null | undefined,
+  maxYear?: number | null
+): void {
+  if (typeof text === 'string' && text.length > 0) {
+    targets.push({ location, text, maxYear: maxYear ?? null });
+  }
+}
+
+export function scanPublicLivingNames(input: {
+  people: readonly RawPerson[];
+  events: readonly RawEvent[];
+  sources: readonly SourceRecord[];
+  media: readonly MediaItem[];
+  narratives: readonly Narrative[];
+  privacy?: Partial<PrivacyConfig>;
+}): VerifyLivingNamesResult {
+  const livingIds = new Set<string>();
+  const livingPeople: RawPerson[] = [];
+  const deceasedPeople: RawPerson[] = [];
+  for (const person of input.people) {
+    if (resolveEffectiveLiving(person, input.privacy)) {
+      livingIds.add(person.id);
+      livingPeople.push(person);
+    } else {
+      deceasedPeople.push(person);
+    }
+  }
+
+  const scrubPattern = compileLivingNamePattern(
+    collectLivingNames(
+      livingPeople.map((person) => ({
+        is_living: true,
+        full_name: person.full_name,
+        alt_names: person.alt_names,
+      }))
+    )
+  );
+  const publicNarratives = filterNarrativesForPrivacy(
+    input.narratives,
+    livingIds,
+    scrubPattern,
+    'public'
+  );
+  const peopleById = new Map(
+    input.people.map((person) => [
+      person.id,
+      { ...person, is_living: livingIds.has(person.id) },
+    ])
+  );
+  const eventsById = new Map(
+    input.events.map((event) => [event.id, { id: event.id, participants: event.participants }])
+  );
+  const publicMedia = filterMediaForPrivacy(input.media, peopleById, eventsById, {
+    stripLivingPortraits: true,
+  });
+
+  const eventMaxYearById = new Map<string, number | null>();
+  const sourceEventYears = new Map<string, Array<number | null>>();
+  for (const event of input.events) {
+    const eventYear = extractLatestEdtfYear(event.edtf_date);
+    eventMaxYearById.set(event.id, eventYear);
+    for (const ref of event.sources) {
+      const years = sourceEventYears.get(ref.source_id) ?? [];
+      years.push(eventYear);
+      sourceEventYears.set(ref.source_id, years);
+    }
+  }
+
+  const sourceMaxYearById = new Map<string, number | null>();
+  for (const [sourceId, years] of sourceEventYears) {
+    if (years.length > 0 && years.every((year): year is number => typeof year === 'number')) {
+      sourceMaxYearById.set(sourceId, Math.max(...years));
+    } else {
+      sourceMaxYearById.set(sourceId, null);
+    }
+  }
+
+  const resolveNarrativeMaxYear = (narrative: Narrative): number | null => {
+    const subjectIds = [
+      ...(narrative.subject_person_id ? [narrative.subject_person_id] : []),
+      ...narrative.person_ids,
+    ];
+    if (subjectIds.length === 0) {
+      return null;
+    }
+    let maxDeathYear: number | null = null;
+    for (const personId of subjectIds) {
+      if (livingIds.has(personId)) {
+        return null;
+      }
+      const person = peopleById.get(personId);
+      const deathYear = extractLatestEdtfYear(person?.death_edtf);
+      if (deathYear === null) {
+        return null;
+      }
+      maxDeathYear = maxDeathYear === null ? deathYear : Math.max(maxDeathYear, deathYear);
+    }
+    if (maxDeathYear === null) {
+      return null;
+    }
+    let narrativeMaxYear = maxDeathYear + NARRATIVE_POSTHUMOUS_HORIZON_YEARS;
+    for (const eventId of narrative.event_ids) {
+      const eventYear = eventMaxYearById.get(eventId);
+      if (typeof eventYear === 'number' && eventYear > narrativeMaxYear) {
+        narrativeMaxYear = eventYear;
+      }
+    }
+    return narrativeMaxYear;
+  };
+
+  const targets: LivingNameTarget[] = [];
+  for (const narrative of [...publicNarratives].toSorted((a, b) => a.id.localeCompare(b.id))) {
+    const narrativeMaxYear = resolveNarrativeMaxYear(narrative);
+    pushTextTarget(targets, `narrative:${narrative.id}:title`, narrative.title, narrativeMaxYear);
+    pushTextTarget(targets, `narrative:${narrative.id}:summary`, narrative.summary, narrativeMaxYear);
+    pushTextTarget(targets, `narrative:${narrative.id}:body_md`, narrative.body_md, narrativeMaxYear);
+  }
+  for (const item of [...publicMedia].toSorted((a, b) => a.id.localeCompare(b.id))) {
+    const mediaMaxYear =
+      extractLatestEdtfYear(item.date_edtf) ??
+      (item.event_id ? eventMaxYearById.get(item.event_id) ?? null : null);
+    pushTextTarget(targets, `media:${item.id}:caption`, item.caption, mediaMaxYear);
+    pushTextTarget(targets, `media:${item.id}:provenance`, item.provenance, mediaMaxYear);
+  }
+  for (const source of [...input.sources].toSorted((a, b) => a.id.localeCompare(b.id))) {
+    const sourceMaxYear = sourceMaxYearById.get(source.id) ?? null;
+    pushTextTarget(targets, `source:${source.id}:citation`, source.citation, sourceMaxYear);
+  }
+  for (const event of [...input.events].toSorted((a, b) => a.id.localeCompare(b.id))) {
+    const hasLivingParticipant = event.participants.some((participant) =>
+      livingIds.has(participant.person_id)
+    );
+    if (hasLivingParticipant) {
+      continue;
+    }
+    const eventMaxYear = eventMaxYearById.get(event.id) ?? null;
+    pushTextTarget(targets, `event:${event.id}:title`, event.title, eventMaxYear);
+    pushTextTarget(targets, `event:${event.id}:summary`, event.summary, eventMaxYear);
+  }
+
+  const hits = collectLivingNameHitsWithMatcher(
+    compileLivingNameMatcher(livingPeople, deceasedPeople),
+    targets
+  );
+  return { ok: hits.length === 0, hits };
 }
 
 export function formatVerifyTextReport(report: Omit<VerifyCommandResult, 'rendered'>): string {
@@ -302,7 +521,8 @@ export function formatVerifyTextReport(report: Omit<VerifyCommandResult, 'render
     `  2. Places: ${report.checks.places.ok ? 'PASS' : 'FAIL'} | checked=${report.checks.places.placesChecked} invalid=${report.checks.places.invalidPlaces.length}`,
     `  3. SSN scan: ${report.checks.ssn.ok ? 'PASS' : 'FAIL'} | files=${report.checks.ssn.filesScanned} hits=${report.checks.ssn.hits.length}`,
     `  4. Dual compile: ${report.checks.compile.ok ? 'PASS' : 'FAIL'} | private(people=${report.checks.compile.privateCounts.people}, events=${report.checks.compile.privateCounts.events}, spans=${report.checks.compile.privateCounts.residence_spans}, flags=${report.checks.compile.privateReviewFlags.length}, leaks=${report.checks.compile.privateLivingLeaks.length}) public(people=${report.checks.compile.publicCounts.people}, living_redacted=${report.checks.compile.publicCounts.living_redacted}, flags=${report.checks.compile.publicReviewFlags.length}, leaks=${report.checks.compile.publicLivingLeaks.length}) dupSpans=${report.checks.compile.duplicateResidenceSpans.length}`,
-    `  5. Media disk: ${report.checks.media.ok ? 'PASS' : 'FAIL'} | layout=${report.checks.media.mediaLayout} checked=${report.checks.media.checkedCount} missing=${report.checks.media.missingFiles.length}`,
+    `  5. Media disk: ${report.checks.media.ok ? 'PASS' : 'FAIL'} | layout=${report.checks.media.mediaLayout} checked=${report.checks.media.checkedCount} missing=${report.checks.media.missingFiles.length} duplicates=${report.checks.media.duplicateFiles.length}`,
+    `  6. Living names: ${report.checks.livingNames.ok ? 'PASS' : 'FAIL'} | hits=${report.checks.livingNames.hits.length}`,
   ];
 
   for (const err of report.errors.slice(0, 30)) {
@@ -437,6 +657,16 @@ export async function runVerifyCommand(
   // 5. Verify every media.yaml file path exists on disk under archive-media/ or media/.
   const mediaCheck = verifyMediaFilesOnDisk(repoDir, media);
 
+  // 6. Living names on text that public export keeps.
+  const livingNames = scanPublicLivingNames({
+    people,
+    events,
+    sources,
+    media,
+    narratives,
+    privacy: siteConfig.privacy,
+  });
+
   const errors: string[] = [
     ...citations.errors.map((e) => `citations: ${e}`),
     ...placesCheck.invalidPlaces.map((p) => `places: '${p.id}' ${p.reason}`),
@@ -449,6 +679,10 @@ export async function runVerifyCommand(
     ...mediaCheck.missingFiles.map(
       (m) => `media: '${m.id}' (${m.file}) ${m.reason} at ${m.expectedPath}`
     ),
+    ...mediaCheck.duplicateFiles.map(
+      (dup) => `media: duplicate file '${dup.file}' on ${dup.mediaIds.join(', ')}`
+    ),
+    ...livingNames.hits.map((hit) => `living-name: ${hit.location} matched '${hit.match}'`),
   ];
 
   const durationMs = Math.round(performance.now() - t0);
@@ -462,6 +696,7 @@ export async function runVerifyCommand(
       ssn: ssnCheck,
       compile: compileCheck,
       media: mediaCheck,
+      livingNames,
     },
     errors,
   };
