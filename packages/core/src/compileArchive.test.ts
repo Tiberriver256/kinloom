@@ -492,6 +492,8 @@ describe('compileArchive and living-person privacy', () => {
         death_year: null,
         thumb_url: null,
         media_count: 0,
+        event_count: 0,
+        primary_place_id: null,
       };
       expect(isPersonAliveInYear(livingPerson, 2029)).toBe(true);
       expect(computeLifeOverlap(livingPerson, livingPerson)?.end).toBe(2030);
