@@ -132,4 +132,19 @@
     padding: 6px 10px;
     background: var(--surface-card);
   }
+
+  .kinship-examples-label {
+    flex-shrink: 0;
+    width: 100%;
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+  }
+}
+
+.kinship-result-heading {
+  font-family: var(--font-serif);
+  font-size: 1.5rem;
+  margin: 0 0 4px;
+  color: var(--surface-header);
 }

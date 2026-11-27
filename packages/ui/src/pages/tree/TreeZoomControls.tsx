@@ -1,10 +1,12 @@
 import type React from 'react';
+import canvasSurfaceStyles from '../../components/CanvasSurfacePrimitives.module.css';
 import { cx } from '../../lib/cx.js';
 import { KINLOOM_VOCABULARY } from '../../lib/vocabulary.js';
+import controlStyles from '../../styles/Controls.module.css';
+import treePageStyles from '../TreePage.module.css';
 
 export interface TreeZoomControlsProps {
   readonly zoomPercent: number;
-  readonly uiStyles: Readonly<Record<string, string>>;
   readonly onZoomIn: () => void;
   readonly onZoomOut: () => void;
   readonly onFit: () => void;
@@ -13,20 +15,19 @@ export interface TreeZoomControlsProps {
 
 export const TreeZoomControls: React.FC<TreeZoomControlsProps> = ({
   zoomPercent,
-  uiStyles,
   onZoomIn,
   onZoomOut,
   onFit,
   onResetZoom,
 }) => (
   <div
-    className={cx(uiStyles, 'tree-controls')}
+    className={cx(canvasSurfaceStyles, 'tree-controls')}
     role="group"
     aria-label={KINLOOM_VOCABULARY.tree.zoomControlsAria}
   >
     <button
       type="button"
-      className={cx(uiStyles, 'pill-btn')}
+      className={cx(controlStyles, 'pill-btn')}
       aria-label="Zoom in"
       title="Zoom in (+)"
       onClick={onZoomIn}
@@ -35,19 +36,24 @@ export const TreeZoomControls: React.FC<TreeZoomControlsProps> = ({
     </button>
     <button
       type="button"
-      className={cx(uiStyles, 'pill-btn')}
+      className={cx(controlStyles, 'pill-btn')}
       aria-label="Zoom out"
       title="Zoom out (-)"
       onClick={onZoomOut}
     >
       −
     </button>
-    <button type="button" className={cx(uiStyles, 'pill-btn')} title="Fit full chart (0)" onClick={onFit}>
+    <button
+      type="button"
+      className={cx(controlStyles, 'pill-btn')}
+      title="Fit full chart (0)"
+      onClick={onFit}
+    >
       Fit
     </button>
     <button
       type="button"
-      className={cx(uiStyles, 'pill-btn')}
+      className={cx(controlStyles, 'pill-btn')}
       aria-label="Reset zoom to 100%"
       title="Reset zoom to 100% (1)"
       onClick={onResetZoom}
@@ -55,7 +61,7 @@ export const TreeZoomControls: React.FC<TreeZoomControlsProps> = ({
       1:1
     </button>
     <output
-      className={cx(uiStyles, 'tree-zoom-readout')}
+      className={cx(treePageStyles, 'tree-zoom-readout')}
       aria-live="polite"
       aria-label={`Zoom ${zoomPercent}%`}
     >

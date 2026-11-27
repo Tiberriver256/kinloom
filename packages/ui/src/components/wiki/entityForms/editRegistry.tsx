@@ -2,10 +2,16 @@ import type { EntityPayload, EntityType } from '@kinloom/core';
 import type React from 'react';
 import { cx } from '../../../lib/cx.js';
 import { cleanPronunciation } from '../pronunciation/pronunciationDraft.js';
+import formStyles from '../WikiForms.module.css';
 import type { EntityEditFieldProps, EntityEditFormEntry } from './fieldTypes.js';
 import { asString, asStringArray } from './fieldTypes.js';
 
-const PersonEditFields: React.FC<EntityEditFieldProps> = ({ draft, isBusy, uiStyles, updateField }) => (
+const PersonEditFields: React.FC<EntityEditFieldProps> = ({
+  draft,
+  isBusy,
+  uiStyles = formStyles,
+  updateField,
+}) => (
   <>
     <div className={cx(uiStyles, 'wiki-field-grid')}>
       <label className={cx(uiStyles, 'wiki-field')}>
@@ -102,7 +108,12 @@ const PersonEditFields: React.FC<EntityEditFieldProps> = ({ draft, isBusy, uiSty
   </>
 );
 
-const PlaceEditFields: React.FC<EntityEditFieldProps> = ({ draft, isBusy, uiStyles, updateField }) => (
+const PlaceEditFields: React.FC<EntityEditFieldProps> = ({
+  draft,
+  isBusy,
+  uiStyles = formStyles,
+  updateField,
+}) => (
   <div className={cx(uiStyles, 'wiki-field-grid')}>
     <label className={cx(uiStyles, 'wiki-field')}>
       <span className={cx(uiStyles, 'wiki-field-label')}>Short name</span>
@@ -169,7 +180,12 @@ const PlaceEditFields: React.FC<EntityEditFieldProps> = ({ draft, isBusy, uiStyl
   </div>
 );
 
-const EventEditFields: React.FC<EntityEditFieldProps> = ({ draft, isBusy, uiStyles, updateField }) => (
+const EventEditFields: React.FC<EntityEditFieldProps> = ({
+  draft,
+  isBusy,
+  uiStyles = formStyles,
+  updateField,
+}) => (
   <div className={cx(uiStyles, 'wiki-field-grid')}>
     <label className={cx(uiStyles, 'wiki-field wiki-field-full')}>
       <span className={cx(uiStyles, 'wiki-field-label')}>Event title</span>
@@ -210,7 +226,12 @@ const EventEditFields: React.FC<EntityEditFieldProps> = ({ draft, isBusy, uiStyl
   </div>
 );
 
-const NarrativeEditFields: React.FC<EntityEditFieldProps> = ({ draft, isBusy, uiStyles, updateField }) => (
+const NarrativeEditFields: React.FC<EntityEditFieldProps> = ({
+  draft,
+  isBusy,
+  uiStyles = formStyles,
+  updateField,
+}) => (
   <div className={cx(uiStyles, 'wiki-field-grid')}>
     <label className={cx(uiStyles, 'wiki-field wiki-field-full')}>
       <span className={cx(uiStyles, 'wiki-field-label')}>Narrative title</span>
@@ -242,7 +263,7 @@ const NarrativeEditFields: React.FC<EntityEditFieldProps> = ({ draft, isBusy, ui
 const JsonFallbackEditFields: React.FC<EntityEditFieldProps> = ({
   draft,
   isBusy,
-  uiStyles,
+  uiStyles = formStyles,
   replaceDraft,
 }) => (
   <label className={cx(uiStyles, 'wiki-field wiki-field-full')}>
@@ -303,6 +324,9 @@ export const ENTITY_EDIT_FORM_REGISTRY: Readonly<Partial<Record<EntityType, Enti
   },
 };
 
-export function getEntityEditFormEntry(entityType: EntityType): EntityEditFormEntry {
-  return ENTITY_EDIT_FORM_REGISTRY[entityType] ?? FALLBACK_EDIT_FORM_ENTRY;
+export function getEntityEditFormEntry(
+  entityType: EntityType,
+  overrides?: Readonly<Partial<Record<EntityType, EntityEditFormEntry>>>
+): EntityEditFormEntry {
+  return overrides?.[entityType] ?? ENTITY_EDIT_FORM_REGISTRY[entityType] ?? FALLBACK_EDIT_FORM_ENTRY;
 }

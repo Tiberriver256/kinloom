@@ -1,5 +1,6 @@
 import type { Person } from '@kinloom/core';
 import React from 'react';
+import { scrollBehaviorForMotion } from '../../hooks/keyboardNav.js';
 import type {
   ArchivalTreeModel,
   LineageSpotlight,
@@ -13,14 +14,10 @@ import {
   toRomanNumeral,
 } from '../../lib/archivalTreeModel.js';
 import { cx } from '../../lib/cx.js';
-import { scrollBehaviorForMotion } from '../../lib/keyboardNav.js';
 import { formatTreeCardName } from '../../lib/treeNodeDisplay.js';
 import { KINLOOM_VOCABULARY } from '../../lib/vocabulary.js';
-import cssMod0 from '../../pages/NotFoundPage.module.css';
 import { initialsOf, resolveAssetUrl } from '../Atoms.js';
-import cssMod1 from './TreePedigreeRoll.module.css';
-
-const uiStyles: Readonly<Record<string, string>> = { ...cssMod0, ...cssMod1 };
+import pedigreeRollStyles from './TreePedigreeRoll.module.css';
 
 export interface TreePedigreeRollProps {
   readonly model: ArchivalTreeModel;
@@ -73,7 +70,7 @@ const RollPersonCard: React.FC<RollPersonCardProps> = ({
   return (
     <button
       type="button"
-      className={cx(uiStyles, classes)}
+      className={cx(pedigreeRollStyles, classes)}
       data-person-id={person.id}
       aria-label={`Inspect ${person.full_name}`}
       aria-pressed={isSelected}
@@ -81,20 +78,24 @@ const RollPersonCard: React.FC<RollPersonCardProps> = ({
         onSelect(person);
       }}
     >
-      <span className={cx(uiStyles, 'tree-roll-avatar')} aria-hidden="true">
+      <span className={cx(pedigreeRollStyles, 'tree-roll-avatar')} aria-hidden="true">
         {thumbUrl ? (
-          <img src={thumbUrl} alt="" className={cx(uiStyles, 'tree-roll-avatar-img')} />
+          <img src={thumbUrl} alt="" className={cx(pedigreeRollStyles, 'tree-roll-avatar-img')} />
         ) : (
-          <span className={cx(uiStyles, 'tree-roll-avatar-initials')}>{initialsOf(person.full_name)}</span>
+          <span className={cx(pedigreeRollStyles, 'tree-roll-avatar-initials')}>
+            {initialsOf(person.full_name)}
+          </span>
         )}
       </span>
-      <span className={cx(uiStyles, 'tree-roll-card-copy')}>
-        <span className={cx(uiStyles, 'tree-roll-card-name')}>{person.full_name}</span>
-        <span className={cx(uiStyles, 'tree-roll-card-dates')}>
+      <span className={cx(pedigreeRollStyles, 'tree-roll-card-copy')}>
+        <span className={cx(pedigreeRollStyles, 'tree-roll-card-name')}>{person.full_name}</span>
+        <span className={cx(pedigreeRollStyles, 'tree-roll-card-dates')}>
           {formatCardLifespan(person)}
           {badgeLabel ? ` · ${badgeLabel}` : ''}
         </span>
-        {spouseLabel && <span className={cx(uiStyles, 'tree-roll-card-spouse')}>{spouseLabel}</span>}
+        {spouseLabel && (
+          <span className={cx(pedigreeRollStyles, 'tree-roll-card-spouse')}>{spouseLabel}</span>
+        )}
       </span>
     </button>
   );
@@ -143,22 +144,24 @@ const UnionAttachments: React.FC<UnionAttachmentsProps> = ({
       : null;
 
   return (
-    <div className={cx(uiStyles, 'tree-roll-attachments')}>
-      {marriageCaption && <div className={cx(uiStyles, 'tree-roll-union-caption')}>{marriageCaption}</div>}
+    <div className={cx(pedigreeRollStyles, 'tree-roll-attachments')}>
+      {marriageCaption && (
+        <div className={cx(pedigreeRollStyles, 'tree-roll-union-caption')}>{marriageCaption}</div>
+      )}
 
       {earlyChildren.length > 0 && (
         <div
-          className={cx(uiStyles, 'tree-early-strip')}
+          className={cx(pedigreeRollStyles, 'tree-early-strip')}
           role="group"
           aria-label={KINLOOM_VOCABULARY.tree.diedYoungTooltip}
           title={KINLOOM_VOCABULARY.tree.diedYoungTooltip}
         >
           <span
-            className={cx(uiStyles, 'tree-early-strip-heading')}
+            className={cx(pedigreeRollStyles, 'tree-early-strip-heading')}
             title={KINLOOM_VOCABULARY.tree.diedYoungTooltip}
           >
             <svg
-              className={cx(uiStyles, 'tree-early-sprig')}
+              className={cx(pedigreeRollStyles, 'tree-early-sprig')}
               viewBox="0 0 16 16"
               width="13"
               height="13"
@@ -175,7 +178,7 @@ const UnionAttachments: React.FC<UnionAttachmentsProps> = ({
             </svg>
             {KINLOOM_VOCABULARY.tree.diedYoung} ({earlyChildren.length})
           </span>
-          <div className={cx(uiStyles, 'tree-early-chip-row')}>
+          <div className={cx(pedigreeRollStyles, 'tree-early-chip-row')}>
             {earlyChildren.map((child) => {
               const isSelected = selectedPersonId === child.id;
               const isLit = Boolean(spotlight?.highlightedPersonIds.has(child.id));
@@ -186,7 +189,7 @@ const UnionAttachments: React.FC<UnionAttachmentsProps> = ({
                   type="button"
                   data-person-id={child.id}
                   className={cx(
-                    uiStyles,
+                    pedigreeRollStyles,
                     `tree-node-card tree-early-chip${isSelected ? ' is-selected' : ''}${isLit ? ' is-lit' : ''}${dimmed ? ' is-dimmed' : ''}`
                   )}
                   aria-label={`Inspect ${child.full_name}`}
@@ -195,10 +198,10 @@ const UnionAttachments: React.FC<UnionAttachmentsProps> = ({
                     onSelectPerson(child);
                   }}
                 >
-                  <span className={cx(uiStyles, 'tree-early-chip-name')}>
+                  <span className={cx(pedigreeRollStyles, 'tree-early-chip-name')}>
                     {child.given_name || child.full_name}
                   </span>
-                  <span className={cx(uiStyles, 'tree-early-chip-years')}>
+                  <span className={cx(pedigreeRollStyles, 'tree-early-chip-years')}>
                     {formatEarlyLossAgeLabel(child)}
                   </span>
                 </button>
@@ -218,17 +221,20 @@ const UnionAttachments: React.FC<UnionAttachmentsProps> = ({
             mode: model.effectiveMode,
           });
           return (
-            <div className={cx(uiStyles, 'tree-roll-siblings-block')}>
+            <div className={cx(pedigreeRollStyles, 'tree-roll-siblings-block')}>
               <button
                 type="button"
-                className={cx(uiStyles, `tree-sibling-pill${union.isExpanded ? ' is-expanded' : ''}`)}
+                className={cx(
+                  pedigreeRollStyles,
+                  `tree-sibling-pill${union.isExpanded ? ' is-expanded' : ''}`
+                )}
                 aria-expanded={union.isExpanded}
                 aria-label={toggleLabels.ariaLabel}
                 onClick={() => {
                   onToggleUnionSiblings(union.id);
                 }}
               >
-                <span className={cx(uiStyles, 'tree-sibling-pill-chevron')} aria-hidden="true">
+                <span className={'tree-sibling-pill-chevron'} aria-hidden="true">
                   {union.isExpanded ? '▾' : '▸'}
                 </span>
                 <span>{toggleLabels.buttonLabel}</span>
@@ -236,7 +242,7 @@ const UnionAttachments: React.FC<UnionAttachmentsProps> = ({
 
               {union.isExpanded && hangingChildren.length > 0 && (
                 <div
-                  className={cx(uiStyles, 'tree-hanging-grid')}
+                  className={cx(pedigreeRollStyles, 'tree-hanging-grid')}
                   role="list"
                   aria-label={KINLOOM_VOCABULARY.tree.otherSiblingsAria}
                 >
@@ -253,7 +259,7 @@ const UnionAttachments: React.FC<UnionAttachmentsProps> = ({
                     return (
                       <div
                         key={sibling.id}
-                        className={cx(uiStyles, 'tree-hanging-grid-item')}
+                        className={cx(pedigreeRollStyles, 'tree-hanging-grid-item')}
                         role="listitem"
                       >
                         <RollPersonCard
@@ -320,12 +326,19 @@ export const TreePedigreeRoll: React.FC<TreePedigreeRollProps> = ({
       <div
         key={unit.id}
         className={cx(
-          uiStyles,
+          pedigreeRollStyles,
           `tree-roll-unit${unit.isDirect ? ' is-direct' : ' is-collateral'}${isRemarried ? ' is-remarried' : ''}${hasSelection && !isUnitLit ? ' is-dimmed' : ''}`
         )}
       >
-        {branchLabel && <div className={cx(uiStyles, 'tree-roll-branch-caption')}>{branchLabel}</div>}
-        <div className={cx(uiStyles, `tree-roll-couple-row${members.length === 1 ? ' is-single' : ''}`)}>
+        {branchLabel && (
+          <div className={cx(pedigreeRollStyles, 'tree-roll-branch-caption')}>{branchLabel}</div>
+        )}
+        <div
+          className={cx(
+            pedigreeRollStyles,
+            `tree-roll-couple-row${members.length === 1 ? ' is-single' : ''}`
+          )}
+        >
           {members.map((member, idx) => {
             const prevMember = idx > 0 ? members[idx - 1] : null;
             const connectingUnion = prevMember
@@ -341,7 +354,7 @@ export const TreePedigreeRoll: React.FC<TreePedigreeRollProps> = ({
                 {connectingUnion && (
                   <span
                     className={cx(
-                      uiStyles,
+                      pedigreeRollStyles,
                       `tree-roll-union-hub${spotlight?.highlightedUnionIds.has(connectingUnion.id) ? ' is-lit' : ''}`
                     )}
                     title={
@@ -388,14 +401,14 @@ export const TreePedigreeRoll: React.FC<TreePedigreeRollProps> = ({
   };
 
   return (
-    <div className={cx(uiStyles, 'tree-roll-viewport')}>
+    <div className={cx(pedigreeRollStyles, 'tree-roll-viewport')}>
       {model.generations.length >= 4 && (
-        <nav className={cx(uiStyles, 'tree-gen-jump-bar')} aria-label="Jump to generation">
+        <nav className={cx(pedigreeRollStyles, 'tree-gen-jump-bar')} aria-label="Jump to generation">
           {model.generations.map((g) => (
             <button
               key={g.gen}
               type="button"
-              className={cx(uiStyles, 'tree-gen-jump-chip')}
+              className={cx(pedigreeRollStyles, 'tree-gen-jump-chip')}
               onClick={() => {
                 const target = document.getElementById(`tree-roll-gen-${g.gen}`);
                 target?.scrollIntoView({ behavior: scrollBehaviorForMotion(), block: 'start' });
@@ -408,26 +421,26 @@ export const TreePedigreeRoll: React.FC<TreePedigreeRollProps> = ({
       )}
 
       <div
-        className={cx(uiStyles, 'tree-roll-scroll')}
+        className={cx(pedigreeRollStyles, 'tree-roll-scroll')}
         role="region"
         aria-label={`${familyLabel} ${KINLOOM_VOCABULARY.tree.listRegionSuffix}`}
       >
-        <ol className={cx(uiStyles, 'tree-roll-generations')}>
+        <ol className={cx(pedigreeRollStyles, 'tree-roll-generations')}>
           {model.generations.map((genGroup, idx) => (
             <li
               key={genGroup.gen}
               id={`tree-roll-gen-${genGroup.gen}`}
-              className={cx(uiStyles, 'tree-roll-generation')}
+              className={cx(pedigreeRollStyles, 'tree-roll-generation')}
             >
-              <header className={cx(uiStyles, 'tree-roll-gen-header')}>
-                <span className={cx(uiStyles, 'tree-roll-gen-badge')}>{genGroup.label}</span>
-                <span className={cx(uiStyles, 'tree-roll-gen-years')}>{genGroup.yearRange}</span>
+              <header className={cx(pedigreeRollStyles, 'tree-roll-gen-header')}>
+                <span className={cx(pedigreeRollStyles, 'tree-roll-gen-badge')}>{genGroup.label}</span>
+                <span className={cx(pedigreeRollStyles, 'tree-roll-gen-years')}>{genGroup.yearRange}</span>
               </header>
-              <div className={cx(uiStyles, 'tree-roll-gen-units')}>
+              <div className={cx(pedigreeRollStyles, 'tree-roll-gen-units')}>
                 {genGroup.units.map((unit) => renderUnit(unit, idx === 0))}
               </div>
               {idx < model.generations.length - 1 && (
-                <div className={cx(uiStyles, 'tree-roll-gen-connector')} aria-hidden="true" />
+                <div className={cx(pedigreeRollStyles, 'tree-roll-gen-connector')} aria-hidden="true" />
               )}
             </li>
           ))}

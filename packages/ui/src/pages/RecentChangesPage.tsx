@@ -1,43 +1,25 @@
-import type { AuthorType, RevisionRecord } from '@kinloom/core';
+import type { RevisionRecord } from '@kinloom/core';
 import { asBatchId, asRevisionId } from '@kinloom/core';
 import type React from 'react';
 import { useCallback, useEffect, useId, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
-import cssMod0 from '../components/Atoms.module.css';
+import atomStyles from '../components/Atoms.module.css';
 import { ExplorerTopBar } from '../components/ExplorerTopBar.js';
 import { KinloomFooter } from '../components/KinloomFooter.js';
-import { RevisionDiffView } from '../components/wiki/RevisionDiffView.js';
-import { AuthorPill, CitationBadge } from '../components/wiki/WikiBadges.js';
-import cssMod1_1 from '../components/wiki/WikiForms.module.css';
-import cssMod1_0 from '../components/wiki/WikiPanels.module.css';
+import { AuthorPill } from '../components/wiki/WikiBadges.js';
+import wikiFormStyles from '../components/wiki/WikiForms.module.css';
+import wikiPanelStyles from '../components/wiki/WikiPanels.module.css';
 import { useArchiveData } from '../context/ArchiveDataContext.js';
-import { cx } from '../lib/cx.js';
+import { handleTablistKeyDown } from '../hooks/keyboardNav.js';
+import { cx, joinClasses } from '../lib/cx.js';
 import { formatArchivalTimestamp } from '../lib/formatTimestamp.js';
-import { handleTablistKeyDown } from '../lib/keyboardNav.js';
-import cssMod2 from './IndexPage.module.css';
-import cssMod3 from './PersonPage.module.css';
-import cssMod4 from './PlacePage.module.css';
-
-const uiStyles: Readonly<Record<string, string>> = {
-  ...cssMod0,
-  ...cssMod1_0,
-  ...cssMod1_1,
-  ...cssMod2,
-  ...cssMod3,
-  ...cssMod4,
-};
-
-type AuthorFilter = 'all' | AuthorType;
-
-type PendingConfirm =
-  | { readonly kind: 'revision'; readonly rev: RevisionRecord }
-  | { readonly kind: 'batch'; readonly batchId: string; readonly count: number };
-
-interface FeedGroup {
-  key: string;
-  batchId: string | null;
-  revisions: RevisionRecord[];
-}
+import controlStyles from '../styles/Controls.module.css';
+import { RevisionFeedItem } from './recentChanges/RevisionFeedItem.js';
+import {
+  type AuthorFilter,
+  buildEntityLinkMap,
+  groupRevisionsByBatch,
+  type PendingRevertConfirm,
+} from './recentChanges/recentChangesViewModel.js';
 
 export interface RecentChangesPageProps {
   initialRevisions?: readonly RevisionRecord[];
@@ -53,48 +35,9 @@ export const RecentChangesPage: React.FC<RecentChangesPageProps> = ({ initialRev
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [busyKey, setBusyKey] = useState<string | null>(null);
-  const [pendingConfirm, setPendingConfirm] = useState<PendingConfirm | null>(null);
+  const [pendingConfirm, setPendingConfirm] = useState<PendingRevertConfirm | null>(null);
 
-  const entityLinkByKey = useMemo(() => {
-    const map = new Map<string, { label: string; to: string | null }>();
-    if (!bundle) {
-      return map;
-    }
-    for (const p of bundle.people) {
-      map.set(`person:${p.id}`, { label: p.full_name, to: `/person/${p.slug}` });
-    }
-    for (const pl of bundle.places) {
-      map.set(`place:${pl.id}`, { label: pl.full_name || pl.name, to: `/place/${pl.slug}` });
-    }
-    for (const src of bundle.sources) {
-      map.set(`source:${src.id}`, {
-        label: src.citation,
-        to: `/evidence?tab=citations&source=${encodeURIComponent(src.id)}`,
-      });
-    }
-    return map;
-  }, [bundle]);
-
-  const renderEntityRef = (rev: RevisionRecord): React.ReactNode => {
-    const resolved = entityLinkByKey.get(`${rev.entity_type}:${rev.entity_id}`);
-    if (resolved?.to) {
-      return (
-        <span className={cx(uiStyles, 'wiki-entity-ref')}>
-          <Link to={resolved.to} className={cx(uiStyles, 'wiki-entity-link')}>
-            {resolved.label}
-          </Link>
-          <code className={cx(uiStyles, 'wiki-entity-id')}>
-            {rev.entity_type}/{rev.entity_id}
-          </code>
-        </span>
-      );
-    }
-    return (
-      <code className={cx(uiStyles, 'wiki-entity-id')}>
-        {rev.entity_type}/{rev.entity_id}
-      </code>
-    );
-  };
+  const entityLinkByKey = useMemo(() => buildEntityLinkMap(bundle), [bundle]);
 
   const loadFeed = useCallback(async (): Promise<void> => {
     if (!dataSource.listRevisions) {
@@ -130,34 +73,7 @@ export const RecentChangesPage: React.FC<RecentChangesPageProps> = ({ initialRev
     return revisions.filter((r) => r.author_type === authorFilter);
   }, [revisions, authorFilter]);
 
-  const groupedFeed = useMemo<FeedGroup[]>(() => {
-    const groups: FeedGroup[] = [];
-    const batchMap = new Map<string, FeedGroup>();
-
-    for (const rev of filteredRevisions) {
-      if (rev.batch_id) {
-        const existing = batchMap.get(rev.batch_id);
-        if (existing) {
-          existing.revisions.push(rev);
-        } else {
-          const group: FeedGroup = {
-            key: `batch:${rev.batch_id}`,
-            batchId: rev.batch_id,
-            revisions: [rev],
-          };
-          batchMap.set(rev.batch_id, group);
-          groups.push(group);
-        }
-      } else {
-        groups.push({
-          key: `rev:${rev.revision_id}`,
-          batchId: null,
-          revisions: [rev],
-        });
-      }
-    }
-    return groups;
-  }, [filteredRevisions]);
+  const groupedFeed = useMemo(() => groupRevisionsByBatch(filteredRevisions), [filteredRevisions]);
 
   const handleRevertRevision = async (rev: RevisionRecord): Promise<void> => {
     if (!dataSource.revertRevision) {
@@ -210,12 +126,13 @@ export const RecentChangesPage: React.FC<RecentChangesPageProps> = ({ initialRev
 
   const tabpanelId = `${tabBaseId}-panel`;
   const activeTabId = `${tabBaseId}-tab-${authorFilter}`;
+  const canRevertRevision = Boolean(capabilities.canEdit && dataSource.revertRevision);
 
   return (
     <div>
       <ExplorerTopBar />
-      <main id="main-content" className={cx(uiStyles, 'place-page')}>
-        <section className={cx(uiStyles, 'wire-banner')} style={{ marginBottom: 18 }}>
+      <main id="main-content" className={cx(controlStyles, 'place-page')}>
+        <section className={cx(controlStyles, 'wire-banner')} style={{ marginBottom: 18 }}>
           <div>
             <h1>Revision History</h1>
             <p>
@@ -223,7 +140,7 @@ export const RecentChangesPage: React.FC<RecentChangesPageProps> = ({ initialRev
               imports. Every revision or research batch can be reverted cleanly without losing history.
             </p>
           </div>
-          <div className={cx(uiStyles, 'folio-metrics')}>
+          <div className={cx(atomStyles, 'folio-metrics')}>
             <div>
               <strong>{filteredRevisions.length}</strong> revisions shown
             </div>
@@ -234,7 +151,7 @@ export const RecentChangesPage: React.FC<RecentChangesPageProps> = ({ initialRev
         </section>
 
         <div
-          className={cx(uiStyles, 'filter-bar')}
+          className={cx(controlStyles, 'filter-bar')}
           role="tablist"
           aria-label="Filter revision history by author type"
           onKeyDown={(event) => {
@@ -264,7 +181,7 @@ export const RecentChangesPage: React.FC<RecentChangesPageProps> = ({ initialRev
               tabIndex={authorFilter === id ? 0 : -1}
               aria-selected={authorFilter === id}
               aria-controls={tabpanelId}
-              className={cx(uiStyles, `pill-btn ${authorFilter === id ? 'active' : ''}`)}
+              className={cx(controlStyles, `pill-btn ${authorFilter === id ? 'active' : ''}`)}
               onClick={() => {
                 setAuthorFilter(id);
               }}
@@ -276,38 +193,42 @@ export const RecentChangesPage: React.FC<RecentChangesPageProps> = ({ initialRev
 
         <div id={tabpanelId} role="tabpanel" aria-labelledby={activeTabId}>
           {statusMessage && (
-            <output className={cx(uiStyles, 'wiki-status-banner is-success')} aria-live="polite">
+            <output className={cx(wikiPanelStyles, 'wiki-status-banner is-success')} aria-live="polite">
               {statusMessage}
             </output>
           )}
           {error && (
-            <div className={cx(uiStyles, 'wiki-status-banner is-error')} role="alert">
+            <div className={cx(wikiPanelStyles, 'wiki-status-banner is-error')} role="alert">
               {error}
             </div>
           )}
-          {loading && <p className={cx(uiStyles, 'empty-ring-note')}>Loading revision history…</p>}
+          {loading && <p className={cx(controlStyles, 'empty-ring-note')}>Loading revision history…</p>}
           {!loading && groupedFeed.length === 0 && (
-            <p className={cx(uiStyles, 'empty-ring-note')}>No revisions match the active author filter.</p>
+            <p className={cx(controlStyles, 'empty-ring-note')}>
+              No revisions match the active author filter.
+            </p>
           )}
 
-          <div className={cx(uiStyles, 'wiki-changes-feed')}>
+          <div className={cx(wikiPanelStyles, 'wiki-changes-feed')}>
             {groupedFeed.map((group) => {
               if (group.batchId) {
                 const first = group.revisions[0];
                 const confirmingBatch =
                   pendingConfirm?.kind === 'batch' && pendingConfirm.batchId === group.batchId;
                 return (
-                  <section key={group.key} className={cx(uiStyles, 'place-map-box wiki-batch-group')}>
-                    <div className={cx(uiStyles, 'wiki-batch-header')}>
+                  <section key={group.key} className={cx(controlStyles, 'place-map-box wiki-batch-group')}>
+                    <div className={cx(wikiPanelStyles, 'wiki-batch-header')}>
                       <div>
-                        <div className={cx(uiStyles, 'wiki-revision-topline')}>
-                          <code className={cx(uiStyles, 'wiki-batch-chip')}>Batch {group.batchId}</code>
+                        <div className={cx(wikiPanelStyles, 'wiki-revision-topline')}>
+                          <code className={cx(wikiPanelStyles, 'wiki-batch-chip')}>
+                            Batch {group.batchId}
+                          </code>
                           <AuthorPill authorType={first.author_type} authorName={first.author_name} />
-                          <span className={cx(uiStyles, 'wiki-panel-meta')}>
+                          <span className={cx(wikiPanelStyles, 'wiki-panel-meta')}>
                             {group.revisions.length} change{group.revisions.length === 1 ? '' : 's'}
                           </span>
                         </div>
-                        <div className={cx(uiStyles, 'wiki-revision-time')}>
+                        <div className={cx(wikiPanelStyles, 'wiki-revision-time')}>
                           <time dateTime={first.created_at} title={first.created_at}>
                             {formatArchivalTimestamp(first.created_at)}
                           </time>
@@ -316,7 +237,10 @@ export const RecentChangesPage: React.FC<RecentChangesPageProps> = ({ initialRev
                       {capabilities.canEdit && dataSource.revertBatch && !confirmingBatch && (
                         <button
                           type="button"
-                          className={cx(uiStyles, 'pill-btn wiki-danger-btn')}
+                          className={joinClasses(
+                            cx(controlStyles, 'pill-btn'),
+                            cx(wikiFormStyles, 'wiki-danger-btn')
+                          )}
                           disabled={busyKey !== null}
                           onClick={() => {
                             setPendingConfirm({
@@ -332,16 +256,19 @@ export const RecentChangesPage: React.FC<RecentChangesPageProps> = ({ initialRev
                     </div>
 
                     {confirmingBatch && (
-                      <div className={cx(uiStyles, 'wiki-confirm-inline')} role="alert">
-                        <p className={cx(uiStyles, 'wiki-confirm-inline-text')}>
+                      <div className={cx(wikiPanelStyles, 'wiki-confirm-inline')} role="alert">
+                        <p className={cx(wikiPanelStyles, 'wiki-confirm-inline-text')}>
                           Revert all <strong>{group.revisions.length}</strong> change
                           {group.revisions.length === 1 ? '' : 's'} in batch <code>{group.batchId}</code>?
                           This appends new revert revisions without deleting history.
                         </p>
-                        <div className={cx(uiStyles, 'wiki-inline-actions')}>
+                        <div className={cx(wikiPanelStyles, 'wiki-inline-actions')}>
                           <button
                             type="button"
-                            className={cx(uiStyles, 'pill-btn wiki-danger-btn')}
+                            className={joinClasses(
+                              cx(controlStyles, 'pill-btn'),
+                              cx(wikiFormStyles, 'wiki-danger-btn')
+                            )}
                             disabled={busyKey !== null}
                             onClick={() => {
                               void handleRevertBatch(group.batchId!);
@@ -351,7 +278,7 @@ export const RecentChangesPage: React.FC<RecentChangesPageProps> = ({ initialRev
                           </button>
                           <button
                             type="button"
-                            className={cx(uiStyles, 'pill-btn')}
+                            className={cx(controlStyles, 'pill-btn')}
                             disabled={busyKey !== null}
                             onClick={() => {
                               setPendingConfirm(null);
@@ -363,195 +290,56 @@ export const RecentChangesPage: React.FC<RecentChangesPageProps> = ({ initialRev
                       </div>
                     )}
 
-                    <div className={cx(uiStyles, 'wiki-revision-list')}>
-                      {group.revisions.map((rev) => {
-                        const isExpanded = expandedId === rev.revision_id;
-                        const confirmingRev =
-                          pendingConfirm?.kind === 'revision' &&
-                          pendingConfirm.rev.revision_id === rev.revision_id;
-                        return (
-                          <article key={rev.revision_id} className={cx(uiStyles, 'wiki-revision-item')}>
-                            <div className={cx(uiStyles, 'wiki-revision-row')}>
-                              <div className={cx(uiStyles, 'wiki-revision-main')}>
-                                <div className={cx(uiStyles, 'wiki-revision-topline')}>
-                                  <code className={cx(uiStyles, 'wiki-rev-id')}>r{rev.revision_id}</code>
-                                  <span className={cx(uiStyles, `wiki-action-tag action-${rev.action}`)}>
-                                    {rev.action}
-                                  </span>
-                                  {renderEntityRef(rev)}
-                                  <CitationBadge hasPrimarySource={rev.has_primary_source} />
-                                </div>
-                                <div className={cx(uiStyles, 'wiki-revision-summary')}>{rev.summary}</div>
-                              </div>
-                              <div className={cx(uiStyles, 'wiki-revision-actions')}>
-                                <button
-                                  type="button"
-                                  className={cx(uiStyles, 'pill-btn')}
-                                  aria-expanded={isExpanded}
-                                  onClick={() => {
-                                    setExpandedId(isExpanded ? null : rev.revision_id);
-                                  }}
-                                >
-                                  {isExpanded ? 'Hide Diff' : 'View Diff'}
-                                </button>
-                                {capabilities.canEdit && dataSource.revertRevision && !confirmingRev && (
-                                  <button
-                                    type="button"
-                                    className={cx(uiStyles, 'pill-btn wiki-danger-btn')}
-                                    disabled={busyKey !== null}
-                                    onClick={() => {
-                                      setPendingConfirm({ kind: 'revision', rev });
-                                    }}
-                                  >
-                                    {busyKey === `rev:${rev.revision_id}` ? 'Reverting…' : 'Revert'}
-                                  </button>
-                                )}
-                              </div>
-                            </div>
-                            {confirmingRev && (
-                              <div className={cx(uiStyles, 'wiki-confirm-inline')} role="alert">
-                                <p className={cx(uiStyles, 'wiki-confirm-inline-text')}>
-                                  Revert revision <code>r{rev.revision_id}</code> on{' '}
-                                  <code>
-                                    {rev.entity_type}/{rev.entity_id}
-                                  </code>
-                                  ?
-                                </p>
-                                <div className={cx(uiStyles, 'wiki-inline-actions')}>
-                                  <button
-                                    type="button"
-                                    className={cx(uiStyles, 'pill-btn wiki-danger-btn')}
-                                    disabled={busyKey !== null}
-                                    onClick={() => {
-                                      void handleRevertRevision(rev);
-                                    }}
-                                  >
-                                    Confirm Revert
-                                  </button>
-                                  <button
-                                    type="button"
-                                    className={cx(uiStyles, 'pill-btn')}
-                                    disabled={busyKey !== null}
-                                    onClick={() => {
-                                      setPendingConfirm(null);
-                                    }}
-                                  >
-                                    Cancel
-                                  </button>
-                                </div>
-                              </div>
-                            )}
-                            {isExpanded && (
-                              <div className={cx(uiStyles, 'wiki-revision-diff-body')}>
-                                <RevisionDiffView
-                                  before={rev.before_json}
-                                  after={rev.after_json}
-                                  beforeLabel="Before"
-                                  afterLabel={`r${rev.revision_id}`}
-                                />
-                              </div>
-                            )}
-                          </article>
-                        );
-                      })}
+                    <div className={cx(wikiPanelStyles, 'wiki-revision-list')}>
+                      {group.revisions.map((rev) => (
+                        <RevisionFeedItem
+                          key={rev.revision_id}
+                          rev={rev}
+                          standalone={false}
+                          isExpanded={expandedId === rev.revision_id}
+                          canRevert={canRevertRevision}
+                          busyKey={busyKey}
+                          pendingConfirm={pendingConfirm}
+                          entityLinkByKey={entityLinkByKey}
+                          onToggleExpand={(id) => {
+                            setExpandedId(expandedId === id ? null : id);
+                          }}
+                          onRequestRevert={(target) => {
+                            setPendingConfirm({ kind: 'revision', rev: target });
+                          }}
+                          onCancelRevert={() => {
+                            setPendingConfirm(null);
+                          }}
+                          onConfirmRevert={handleRevertRevision}
+                        />
+                      ))}
                     </div>
                   </section>
                 );
               }
 
               const [rev] = group.revisions;
-              const isExpanded = expandedId === rev.revision_id;
-              const confirmingRev =
-                pendingConfirm?.kind === 'revision' && pendingConfirm.rev.revision_id === rev.revision_id;
               return (
-                <article key={group.key} className={cx(uiStyles, 'place-map-box wiki-revision-item')}>
-                  <div className={cx(uiStyles, 'wiki-revision-row')}>
-                    <div className={cx(uiStyles, 'wiki-revision-main')}>
-                      <div className={cx(uiStyles, 'wiki-revision-topline')}>
-                        <code className={cx(uiStyles, 'wiki-rev-id')}>r{rev.revision_id}</code>
-                        <span className={cx(uiStyles, `wiki-action-tag action-${rev.action}`)}>
-                          {rev.action}
-                        </span>
-                        {renderEntityRef(rev)}
-                        <AuthorPill authorType={rev.author_type} authorName={rev.author_name} />
-                        <CitationBadge hasPrimarySource={rev.has_primary_source} />
-                      </div>
-                      <div className={cx(uiStyles, 'wiki-revision-summary')}>{rev.summary}</div>
-                      <div className={cx(uiStyles, 'wiki-revision-time')}>
-                        <time dateTime={rev.created_at} title={rev.created_at}>
-                          {formatArchivalTimestamp(rev.created_at)}
-                        </time>
-                      </div>
-                    </div>
-                    <div className={cx(uiStyles, 'wiki-revision-actions')}>
-                      <button
-                        type="button"
-                        className={cx(uiStyles, 'pill-btn')}
-                        aria-expanded={isExpanded}
-                        onClick={() => {
-                          setExpandedId(isExpanded ? null : rev.revision_id);
-                        }}
-                      >
-                        {isExpanded ? 'Hide Diff' : 'View Diff'}
-                      </button>
-                      {capabilities.canEdit && dataSource.revertRevision && !confirmingRev && (
-                        <button
-                          type="button"
-                          className={cx(uiStyles, 'pill-btn wiki-danger-btn')}
-                          disabled={busyKey !== null}
-                          onClick={() => {
-                            setPendingConfirm({ kind: 'revision', rev });
-                          }}
-                        >
-                          {busyKey === `rev:${rev.revision_id}` ? 'Reverting…' : 'Revert'}
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                  {confirmingRev && (
-                    <div className={cx(uiStyles, 'wiki-confirm-inline')} role="alert">
-                      <p className={cx(uiStyles, 'wiki-confirm-inline-text')}>
-                        Revert revision <code>r{rev.revision_id}</code> on{' '}
-                        <code>
-                          {rev.entity_type}/{rev.entity_id}
-                        </code>
-                        ?
-                      </p>
-                      <div className={cx(uiStyles, 'wiki-inline-actions')}>
-                        <button
-                          type="button"
-                          className={cx(uiStyles, 'pill-btn wiki-danger-btn')}
-                          disabled={busyKey !== null}
-                          onClick={() => {
-                            void handleRevertRevision(rev);
-                          }}
-                        >
-                          Confirm Revert
-                        </button>
-                        <button
-                          type="button"
-                          className={cx(uiStyles, 'pill-btn')}
-                          disabled={busyKey !== null}
-                          onClick={() => {
-                            setPendingConfirm(null);
-                          }}
-                        >
-                          Cancel
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                  {isExpanded && (
-                    <div className={cx(uiStyles, 'wiki-revision-diff-body')}>
-                      <RevisionDiffView
-                        before={rev.before_json}
-                        after={rev.after_json}
-                        beforeLabel="Before"
-                        afterLabel={`r${rev.revision_id}`}
-                      />
-                    </div>
-                  )}
-                </article>
+                <RevisionFeedItem
+                  key={group.key}
+                  rev={rev}
+                  standalone
+                  isExpanded={expandedId === rev.revision_id}
+                  canRevert={canRevertRevision}
+                  busyKey={busyKey}
+                  pendingConfirm={pendingConfirm}
+                  entityLinkByKey={entityLinkByKey}
+                  onToggleExpand={(id) => {
+                    setExpandedId(expandedId === id ? null : id);
+                  }}
+                  onRequestRevert={(target) => {
+                    setPendingConfirm({ kind: 'revision', rev: target });
+                  }}
+                  onCancelRevert={() => {
+                    setPendingConfirm(null);
+                  }}
+                  onConfirmRevert={handleRevertRevision}
+                />
               );
             })}
           </div>

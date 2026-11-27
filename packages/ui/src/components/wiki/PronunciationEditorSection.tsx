@@ -2,9 +2,9 @@ import type { EntityType, InspectedPersonPronunciationToken, Pronunciation } fro
 import { inspectPersonPronunciationTokens } from '@kinloom/core';
 import type React from 'react';
 import { useEffect, useId, useState } from 'react';
-import { cx } from '../../lib/cx.js';
+import { cx, joinClasses } from '../../lib/cx.js';
 import { hasPronunciationContent } from '../PronunciationBadge.js';
-import cssMod0 from '../PronunciationBadge.module.css';
+import pronunciationBadgeStyles from '../PronunciationBadge.module.css';
 import localStyles from './PronunciationEditorSection.module.css';
 import { PersonalPronunciationOverrideForm } from './pronunciation/PersonalPronunciationOverrideForm.js';
 import type { PronunciationStringFieldKey, SharedTokenDraft } from './pronunciation/pronunciationDraft.js';
@@ -16,12 +16,10 @@ import {
   saveSharedTokenPronunciation,
 } from './pronunciation/pronunciationDraft.js';
 import { SharedTokenPronunciationEditor } from './pronunciation/SharedTokenPronunciationEditor.js';
-import cssMod2 from './WikiForms.module.css';
+import wikiFormStyles from './WikiForms.module.css';
 
 export type { PronunciationStringFieldKey };
 export { cleanPronunciation, PRONUNCIATION_STRING_KEYS, readDraftPronunciation };
-
-const uiStyles: Readonly<Record<string, string>> = { ...cssMod0, ...cssMod2 };
 
 export interface PronunciationEditorSectionProps {
   entityType: Extract<EntityType, 'person' | 'place'>;
@@ -204,9 +202,13 @@ export const PronunciationEditorSection: React.FC<PronunciationEditorSectionProp
   return (
     <fieldset
       ref={fieldsetRef}
-      className={`${cx(uiStyles, 'wiki-citation-fieldset wiki-pronunciation-fieldset')} ${localStyles['pronunciation-fieldset']}`}
+      className={joinClasses(
+        cx(wikiFormStyles, 'wiki-citation-fieldset'),
+        cx(pronunciationBadgeStyles, 'wiki-pronunciation-fieldset'),
+        localStyles['pronunciation-fieldset']
+      )}
     >
-      <legend className={cx(uiStyles, 'wiki-field-label')}>Pronunciation</legend>
+      <legend className={cx(wikiFormStyles, 'wiki-field-label')}>Pronunciation</legend>
 
       {entityType === 'person' && inspection && inspection.tokens.length > 0 && (
         <SharedTokenPronunciationEditor
@@ -220,7 +222,6 @@ export const PronunciationEditorSection: React.FC<PronunciationEditorSectionProp
           activeTokenDraft={activeTokenDraft}
           sharedSaveStatus={sharedSaveStatus}
           sharedSaveMessage={sharedSaveMessage}
-          uiStyles={uiStyles}
           onToggleToken={openOrToggleTokenEditor}
           onUpdateDraft={setActiveTokenDraft}
           onSaveSharedToken={handleSaveSharedToken}
@@ -236,7 +237,7 @@ export const PronunciationEditorSection: React.FC<PronunciationEditorSectionProp
 
       {entityType === 'person' && (
         <div className={localStyles['override-header-row']}>
-          <div className={cx(uiStyles, 'wiki-pronunciation-override-heading')}>
+          <div className={cx(pronunciationBadgeStyles, 'wiki-pronunciation-override-heading')}>
             Personal override (optional)
           </div>
 
@@ -286,7 +287,6 @@ export const PronunciationEditorSection: React.FC<PronunciationEditorSectionProp
           primaryFocusRef={primaryFocusRef}
           audioGenStatus={audioGenStatus}
           audioGenMessage={audioGenMessage}
-          uiStyles={uiStyles}
           onUpdateField={updatePronunciationField}
           onGenerateAudio={handleGeneratePronunciationAudio}
         />

@@ -12,10 +12,13 @@ export {
   deriveSessionFromAuthSnapshot,
 } from './authSessionMachine.js';
 export type {
+  DeleteEntityInput,
   EntityEditorConflict,
   EntityEditorContext,
   EntityEditorEvent,
   EntityEditorInput,
+  LoadLatestEntityInput,
+  LoadLatestEntityResult,
   PendingEntityTarget,
   SaveEntityInput,
   SaveEntityResult,

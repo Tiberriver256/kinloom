@@ -138,9 +138,9 @@ vi.mock('@openhistoricalmap/maplibre-gl-dates', () => ({
   filterByDate: vi.fn(),
 }));
 
+import { installGlobalErrorHandlers, reportClientError } from '../browser/clientTelemetry.js';
 import { useArchiveData } from '../context/ArchiveDataContext.js';
 import { ArchiveProvider } from '../context/ArchiveProvider.js';
-import { installGlobalErrorHandlers, reportClientError } from '../lib/clientTelemetry.js';
 import { EvidencePage } from './EvidencePage.js';
 import { MapPage } from './MapPage.js';
 import { PersonPage } from './PersonPage.js';

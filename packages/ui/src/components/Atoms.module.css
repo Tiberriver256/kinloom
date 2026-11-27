@@ -365,9 +365,6 @@
   padding-left: 18px;
 }
 
-/* ==========================================================================
-   Real Portraits, Silver-Gelatin Milestone Photos & Citation Specifics
-   ========================================================================== */
 .person-portrait-img {
   width: 72px;
   height: 86px;
@@ -411,8 +408,6 @@
   border-radius: 1px;
 }
 
-/* Responsive overrides */
-
 @media (max-width: 960px) {
   .folio-metrics {
     text-align: left;
@@ -422,38 +417,6 @@
 @media (max-width: 1023px) {
   :root {
     --topbar-height: 98px;
-  }
-}
-
-@media (max-width: 768px) {
-  :global(.tree-toolbar-row-primary) {
-    justify-content: space-between;
-  }
-
-  :global(.tree-toolbar-row-secondary) {
-    justify-content: stretch;
-  }
-
-  :global(.tree-toolbar-row-secondary):global(.is-desktop-only) {
-    display: none;
-  }
-
-  :global(.tree-layout-segmented) {
-    flex: 0 0 auto;
-  }
-
-  :global(.tree-scope-segmented) {
-    flex: 1 1 100%;
-    width: 100%;
-    min-width: 0;
-    overflow: hidden;
-  }
-
-  :global(.tree-scope-segmented) :global(.tree-seg-btn) {
-    flex: 1 1 auto;
-    min-width: 0;
-    justify-content: center;
-    white-space: nowrap;
   }
 }
 
@@ -506,14 +469,6 @@
     white-space: nowrap;
   }
 
-  :global(.kinship-examples-label) {
-    flex-shrink: 0;
-    width: 100%;
-    font-family: var(--font-mono);
-    font-size: 0.75rem;
-    color: var(--text-secondary);
-  }
-
   .places-search-bar :global(.search-input) {
     padding: 8px 4px;
     font-size: 1rem;
@@ -522,167 +477,7 @@
     min-width: 0;
   }
 
-  :global(.time-folio-header) {
-    padding-bottom: 6px;
-    margin-bottom: 0;
-  }
-
-  :global(.time-folio-header) .folio-title {
-    font-size: 1.24rem;
-    line-height: 1.2;
-    margin-bottom: 0;
-  }
-
-  :global(.time-folio-header) .folio-lead {
-    display: none;
-  }
-
-  :global(.time-dock-stepper) {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-  }
-
-  :global(.time-dock-step-btn) {
-    width: 44px;
-    height: 44px;
-    border: 1px solid var(--border-decorative);
-    border-radius: var(--radius-md);
-    background: var(--surface-canvas);
-    color: var(--surface-header);
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-    touch-action: manipulation;
-  }
-
-  :global(.time-dock-step-btn):disabled {
-    opacity: 0.36;
-    cursor: not-allowed;
-  }
-
-  :global(.time-dock-year-readout) {
-    font-family: var(--font-hand);
-    font-size: 1.42rem;
-    font-weight: 700;
-    color: var(--radar-copresence);
-    font-variant-numeric: tabular-nums;
-    min-width: 52px;
-    text-align: center;
-    line-height: 1;
-  }
-
-  :global(.time-dock-jump-btn) {
-    min-height: 44px;
-    padding: 6px 12px;
-    border: 1px solid var(--border-control);
-    border-radius: var(--radius-md);
-    background: var(--surface-canvas);
-    color: var(--surface-header);
-    font-family: var(--font-mono);
-    font-size: 0.72rem;
-    font-weight: 500;
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    cursor: pointer;
-    white-space: nowrap;
-    touch-action: manipulation;
-  }
-
-  :global(.time-anchor-sheet) {
-    display: none;
-  }
-
-  :global(.time-anchor-sheet):global(.open) {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    padding-bottom: 10px;
-    margin-bottom: 2px;
-    border-bottom: 1px solid var(--border-decorative);
-    max-height: 48vh;
-    overflow-y: auto;
-  }
-
-  :global(.time-sheet-title) {
-    font-family: var(--font-mono);
-    font-size: 0.75rem;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    color: var(--surface-header);
-    font-weight: 600;
-  }
-
-  :global(.time-sheet-close) {
-    min-height: 44px;
-    padding: 6px 12px;
-    border: 1px solid var(--border-decorative);
-    border-radius: var(--radius-sm);
-    background: var(--surface-canvas);
-    font-family: var(--font-mono);
-    font-size: 0.75rem;
-    color: var(--text-secondary);
-    cursor: pointer;
-  }
-
-  :global(.time-macro-toggle-main) {
-    display: flex;
-    align-items: baseline;
-    gap: 7px;
-    min-width: 0;
-    overflow: hidden;
-  }
-
-  :global(.time-macro-toggle-tag) {
-    font-family: var(--font-mono);
-    font-size: 0.75rem;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    color: var(--radar-macro);
-    font-weight: 600;
-    flex-shrink: 0;
-  }
-
-  :global(.time-macro-toggle-title) {
-    font-size: 0.88rem;
-    font-weight: 600;
-    color: var(--text-primary);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-
-  :global(.time-macro-toggle-more) {
-    font-family: var(--font-mono);
-    font-size: 0.75rem;
-    color: var(--text-secondary);
-    flex-shrink: 0;
-  }
-
-  :global(.time-macro-toggle-action) {
-    display: inline-flex;
-    align-items: center;
-    gap: 3px;
-    font-family: var(--font-mono);
-    font-size: 0.75rem;
-    color: var(--radar-copresence);
-    flex-shrink: 0;
-  }
-
   .folio-metrics {
     text-align: left;
-  }
-
-  :global(.map-zoom-controls) {
-    top: 66px;
-    right: 8px;
-    bottom: auto;
-    gap: 4px;
-  }
-
-  :global(.map-stop-details) {
-    margin-top: 8px;
   }
 }

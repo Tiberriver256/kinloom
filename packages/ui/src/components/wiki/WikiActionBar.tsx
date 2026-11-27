@@ -1,10 +1,8 @@
 import type React from 'react';
 import { useArchiveData } from '../../context/ArchiveDataContext.js';
 import { cx } from '../../lib/cx.js';
-import cssMod1 from '../../pages/IndexPage.module.css';
-import cssMod0 from './WikiChrome.module.css';
-
-const uiStyles: Readonly<Record<string, string>> = { ...cssMod0, ...cssMod1 };
+import controlStyles from '../../styles/Controls.module.css';
+import wikiChromeStyles from './WikiChrome.module.css';
 
 export type WikiEntityTab = 'read' | 'edit' | 'history' | 'talk';
 
@@ -47,15 +45,15 @@ export const WikiActionBar: React.FC<WikiActionBarProps> = ({
 
   return (
     <div
-      className={cx(uiStyles, 'wiki-action-bar print-hide')}
+      className={cx(wikiChromeStyles, 'wiki-action-bar print-hide')}
       role="region"
       aria-label={`Contribute to ${entityLabel}`}
     >
-      <div className={cx(uiStyles, 'wiki-action-primary')}>
+      <div className={cx(wikiChromeStyles, 'wiki-action-primary')}>
         {viewingSubPanel ? (
           <button
             type="button"
-            className={cx(uiStyles, 'wiki-btn-secondary wiki-btn-sm')}
+            className={cx(wikiChromeStyles, 'wiki-btn-secondary wiki-btn-sm')}
             onClick={() => {
               onSelectTab('read');
             }}
@@ -67,7 +65,7 @@ export const WikiActionBar: React.FC<WikiActionBarProps> = ({
             {capabilities.canEdit && (
               <button
                 type="button"
-                className={cx(uiStyles, 'wiki-btn-secondary wiki-btn-sm')}
+                className={cx(wikiChromeStyles, 'wiki-btn-secondary wiki-btn-sm')}
                 onClick={() => {
                   onSelectTab('edit');
                 }}
@@ -90,7 +88,7 @@ export const WikiActionBar: React.FC<WikiActionBarProps> = ({
             {capabilities.canUploadMedia && onUploadMedia && (
               <button
                 type="button"
-                className={cx(uiStyles, 'wiki-btn-secondary wiki-btn-sm')}
+                className={cx(wikiChromeStyles, 'wiki-btn-secondary wiki-btn-sm')}
                 onClick={onUploadMedia}
               >
                 <svg
@@ -113,12 +111,12 @@ export const WikiActionBar: React.FC<WikiActionBarProps> = ({
         )}
       </div>
 
-      <div className={cx(uiStyles, 'wiki-action-secondary')}>
+      <div className={cx(wikiChromeStyles, 'wiki-action-secondary')}>
         {capabilities.hasTalk && (
           <button
             type="button"
             aria-pressed={activeTab === 'talk'}
-            className={cx(uiStyles, `pill-btn ${activeTab === 'talk' ? 'active' : ''}`)}
+            className={cx(controlStyles, `pill-btn ${activeTab === 'talk' ? 'active' : ''}`)}
             onClick={() => {
               onSelectTab(activeTab === 'talk' ? 'read' : 'talk');
             }}
@@ -131,7 +129,7 @@ export const WikiActionBar: React.FC<WikiActionBarProps> = ({
           <button
             type="button"
             aria-pressed={activeTab === 'history'}
-            className={cx(uiStyles, `pill-btn ${activeTab === 'history' ? 'active' : ''}`)}
+            className={cx(controlStyles, `pill-btn ${activeTab === 'history' ? 'active' : ''}`)}
             onClick={() => {
               onSelectTab(activeTab === 'history' ? 'read' : 'history');
             }}

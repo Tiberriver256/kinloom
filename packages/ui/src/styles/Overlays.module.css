@@ -1,0 +1,90 @@
+/* ==========================================================================
+   Shared Slide-Over Drawer & Lightbox Modal Shell Primitives
+   ========================================================================== */
+.drawer-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(35, 39, 46, 0.42);
+  z-index: 60;
+  display: flex;
+  justify-content: flex-end;
+  padding: 0;
+}
+
+.drawer-panel {
+  position: relative;
+  width: min(470px, 95vw);
+  height: 100%;
+  background: var(--surface-card);
+  border-left: 1px solid var(--border-control);
+  padding: 24px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  box-shadow: -8px 0 28px rgba(35, 39, 46, 0.18);
+}
+
+.drawer-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 10px;
+  border-bottom: 1px solid var(--border-decorative);
+  padding-bottom: 12px;
+}
+
+.drawer-top h2 {
+  font-family: var(--font-serif);
+  margin: 0;
+  font-size: 1.32rem;
+  color: var(--surface-header);
+}
+
+.lightbox-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(27, 42, 65, 0.78);
+  z-index: 80;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+/* Native dialog defaults would shrink backdrops; backdrop classes control geometry. */
+dialog.lightbox-backdrop,
+dialog.drawer-backdrop,
+dialog:global(.global-search-backdrop) {
+  border: 0;
+  margin: 0;
+  width: auto;
+  height: auto;
+  max-width: none;
+  max-height: none;
+}
+
+/* Full-backdrop close button fills the backdrop behind the dialog card. */
+.lightbox-backdrop-close {
+  position: absolute;
+  inset: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: default;
+}
+
+.lightbox-card {
+  position: relative;
+  background: var(--surface-card);
+  border: 1px solid var(--border-control);
+  border-radius: var(--radius-sm);
+  max-width: 660px;
+  width: 100%;
+  max-height: calc(100vh - 40px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 20px;
+  box-shadow: 0 18px 44px rgba(27, 42, 65, 0.35);
+}

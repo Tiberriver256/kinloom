@@ -1,5 +1,5 @@
 import type { ArchiveBundle, ArchiveEvent, MediaItem, MigrationStop, Person, Place } from '@kinloom/core';
-import { UNVERIFIED_TREE_SOURCE_ID } from '@kinloom/core';
+import { ENTITY_ID_PREFIX, UNVERIFIED_TREE_SOURCE_ID } from '@kinloom/core';
 import { describe, expect, it } from 'vitest';
 import {
   CREATABLE_KIND_ORDER,
@@ -28,6 +28,13 @@ import {
   collectPersonMedia,
   resolvePortraitLightboxState,
 } from './person/personViewModel.js';
+import {
+  buildPlaceOccupancySummary,
+  collectPlaceLocalRecords,
+  collectRecordDecades,
+  filterLocalRecordsByDecade,
+  resolveMatchingPlaceIds,
+} from './place/placeViewModel.js';
 
 function makePerson(overrides: Partial<Person> & { id: string; slug: string; full_name: string }): Person {
   return {
@@ -339,5 +346,73 @@ describe('entityForms registry seam', () => {
       hasPrimarySource: true,
     });
     expect(emptyEvent).toEqual({ ok: false, error: 'Enter an event title.' });
+
+    const placeDraft = createInitialEntityDraft('per_a', null);
+    placeDraft.placeName = 'Springfield';
+    placeDraft.placeFullName = 'Springfield, Illinois';
+    placeDraft.placeLat = '39.7817';
+    placeDraft.placeLng = '-89.6501';
+    const builtPlace = ENTITY_CREATE_FORM_REGISTRY.place.validateAndBuild(placeDraft, {
+      people: [],
+      hasPrimarySource: true,
+    });
+    expect(builtPlace.ok).toBe(true);
+    if (builtPlace.ok) {
+      expect(builtPlace.entityId.startsWith(ENTITY_ID_PREFIX.place)).toBe(true);
+      expect(builtPlace.entityId).toBe('plc_springfield_illinois');
+    }
+  });
+});
+
+describe('placeViewModel', () => {
+  it('resolves place scope matching, occupancy summary, and local record decade filters cleanly', () => {
+    const bundle = makeBundle();
+    const nearbyPlace = makePlace({
+      id: 'plc_chatham',
+      slug: 'chatham',
+      name: 'Chatham',
+      lat: 39.68,
+      lng: -89.7,
+    });
+    const localRecord: ArchiveEvent = {
+      id: 'evt_local_1884',
+      title: 'County Courthouse Dedication',
+      scope: 'local',
+      event_kind: 'point_event',
+      edtf_date: '1884-06-01',
+      display_date: '1 Jun 1884',
+      year: 1884,
+      time_min: 18840601,
+      time_max: 18840601,
+      place_id: 'plc_chatham',
+      summary: 'Town gathering.',
+      participants: [],
+      sources: [],
+    };
+    const extendedBundle: ArchiveBundle = {
+      ...bundle,
+      places: [...bundle.places, nearbyPlace],
+      events: [...bundle.events, localRecord],
+    };
+    const placesById = new Map(extendedBundle.places.map((p) => [p.id, p]));
+    const peopleById = new Map(extendedBundle.people.map((p) => [p.id, p]));
+    const springfield = extendedBundle.places[0];
+
+    const exactIds = resolveMatchingPlaceIds(extendedBundle, springfield, 'exact', placesById);
+    expect([...exactIds]).toEqual(['pl_springfield']);
+
+    const radiusIds = resolveMatchingPlaceIds(extendedBundle, springfield, 'radius15', placesById);
+    expect(radiusIds.has('pl_springfield')).toBe(true);
+    expect(radiusIds.has('plc_chatham')).toBe(true);
+
+    const occupancy = buildPlaceOccupancySummary(extendedBundle, radiusIds, peopleById);
+    expect(occupancy.rows.map((r) => r.person.id)).toEqual(['per_subject']);
+    expect(occupancy.rows[0]?.startYear).toBe(1875);
+
+    const localRecords = collectPlaceLocalRecords(extendedBundle, radiusIds);
+    expect(localRecords.map((r) => r.id)).toEqual(['evt_local_1884']);
+    expect(collectRecordDecades(localRecords)).toEqual([1880]);
+    expect(filterLocalRecordsByDecade(localRecords, '1880')).toHaveLength(1);
+    expect(filterLocalRecordsByDecade(localRecords, '1870')).toHaveLength(0);
   });
 });

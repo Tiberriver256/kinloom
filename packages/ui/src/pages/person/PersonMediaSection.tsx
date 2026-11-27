@@ -4,16 +4,18 @@ import type React from 'react';
 import { useEffect, useRef } from 'react';
 import mediaGalleryStyles from '../../components/MediaGallery.module.css';
 import { MediaPlayer } from '../../components/MediaPlayer.js';
+import readerStyles from '../../components/SourceReaderDrawer.module.css';
+import { useDialogFocusTrap } from '../../hooks/useDialogFocusTrap.js';
 import { cx } from '../../lib/cx.js';
-import { useDialogFocusTrap } from '../../lib/useDialogFocusTrap.js';
 import { KINLOOM_VOCABULARY, MEDIA_KIND_LABELS } from '../../lib/vocabulary.js';
+import controlStyles from '../../styles/Controls.module.css';
+import overlayStyles from '../../styles/Overlays.module.css';
 import type { PersonLightboxState } from './personViewModel.js';
 
 export interface PersonMediaSectionProps {
   readonly personMedia: readonly MediaItem[];
   readonly baseUrl?: string;
   readonly showAllMedia: boolean;
-  readonly uiStyles: Readonly<Record<string, string>>;
   readonly onToggleShowAll: () => void;
   readonly onOpenGalleryIndex: (index: number) => void;
 }
@@ -22,7 +24,6 @@ export const PersonMediaSection: React.FC<PersonMediaSectionProps> = ({
   personMedia,
   baseUrl,
   showAllMedia,
-  uiStyles,
   onToggleShowAll,
   onOpenGalleryIndex,
 }) => {
@@ -30,36 +31,38 @@ export const PersonMediaSection: React.FC<PersonMediaSectionProps> = ({
     return null;
   }
 
-  const mergedStyles: Readonly<Record<string, string>> = { ...uiStyles, ...mediaGalleryStyles };
-
   return (
     <section
       id="person-media"
-      className={cx(mergedStyles, 'person-media-section')}
+      className={cx(mediaGalleryStyles, 'person-media-section')}
       aria-label={KINLOOM_VOCABULARY.person.photosAndDocumentsAria}
     >
-      <div className={cx(mergedStyles, 'person-media-header')}>
+      <div className={cx(mediaGalleryStyles, 'person-media-header')}>
         <h2>{KINLOOM_VOCABULARY.person.photosAndDocumentsHeading}</h2>
         {personMedia.length > 8 && (
-          <button type="button" className={cx(mergedStyles, 'pill-btn print-hide')} onClick={onToggleShowAll}>
+          <button
+            type="button"
+            className={cx(controlStyles, 'pill-btn print-hide')}
+            onClick={onToggleShowAll}
+          >
             {showAllMedia ? 'Show Fewer' : `Show All ${personMedia.length}`}
           </button>
         )}
       </div>
-      <div className={cx(mergedStyles, 'person-media-grid')}>
+      <div className={cx(mediaGalleryStyles, 'person-media-grid')}>
         {(showAllMedia ? personMedia : personMedia.slice(0, 8)).map((item, idx) => (
           <button
             key={item.id}
             type="button"
-            className={cx(mergedStyles, 'person-media-card')}
+            className={cx(mediaGalleryStyles, 'person-media-card')}
             onClick={() => {
               onOpenGalleryIndex(idx);
             }}
           >
-            <div className={cx(mergedStyles, 'person-media-thumb-wrap')}>
+            <div className={cx(mediaGalleryStyles, 'person-media-thumb-wrap')}>
               <MediaPlayer media={item} baseUrl={baseUrl} variant="preview" />
             </div>
-            <span className={cx(mergedStyles, 'person-media-caption')}>{item.caption}</span>
+            <span className={cx(mediaGalleryStyles, 'person-media-caption')}>{item.caption}</span>
           </button>
         ))}
       </div>
@@ -71,7 +74,6 @@ export interface PersonMediaLightboxProps {
   readonly lightbox: PersonLightboxState;
   readonly personMedia: readonly MediaItem[];
   readonly baseUrl?: string;
-  readonly uiStyles: Readonly<Record<string, string>>;
   readonly onSetLightbox: React.Dispatch<React.SetStateAction<PersonLightboxState>>;
 }
 
@@ -79,7 +81,6 @@ export const PersonMediaLightbox: React.FC<PersonMediaLightboxProps> = ({
   lightbox,
   personMedia,
   baseUrl,
-  uiStyles,
   onSetLightbox,
 }) => {
   const lightboxCloseBtnRef = useRef<HTMLButtonElement | null>(null);
@@ -128,30 +129,28 @@ export const PersonMediaLightbox: React.FC<PersonMediaLightboxProps> = ({
     return null;
   }
 
-  const mergedStyles: Readonly<Record<string, string>> = { ...uiStyles, ...mediaGalleryStyles };
-
   return (
     <dialog
       ref={lightboxDialogRef}
       open
       aria-modal="true"
-      className={cx(mergedStyles, 'lightbox-backdrop photo-lightbox-overlay print-hide')}
+      className={cx(overlayStyles, 'lightbox-backdrop photo-lightbox-overlay print-hide')}
       aria-label={KINLOOM_VOCABULARY.person.mediaLightboxAria}
     >
       <button
         type="button"
         tabIndex={-1}
-        className={cx(mergedStyles, 'lightbox-backdrop-close')}
+        className={cx(overlayStyles, 'lightbox-backdrop-close')}
         aria-label="Close lightbox"
         onClick={() => {
           onSetLightbox({ kind: 'closed' });
         }}
       />
-      <div className={cx(mergedStyles, 'scan-lightbox-card')}>
-        <div className={cx(mergedStyles, 'scan-lightbox-header')}>
+      <div className={cx(readerStyles, 'scan-lightbox-card')}>
+        <div className={cx(readerStyles, 'scan-lightbox-header')}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
             <span
-              className={cx(mergedStyles, `media-kind-badge kind-${activeLightboxMedia.kind}`)}
+              className={cx(mediaGalleryStyles, `media-kind-badge kind-${activeLightboxMedia.kind}`)}
               style={{ position: 'static' }}
             >
               {MEDIA_KIND_LABELS[activeLightboxMedia.kind] || activeLightboxMedia.kind}
@@ -168,12 +167,12 @@ export const PersonMediaLightbox: React.FC<PersonMediaLightboxProps> = ({
               </strong>
             )}
           </div>
-          <div className={cx(mergedStyles, 'media-lightbox-nav')}>
+          <div className={cx(mediaGalleryStyles, 'media-lightbox-nav')}>
             {lightbox.kind === 'gallery' && personMedia.length > 1 && (
               <>
                 <button
                   type="button"
-                  className={cx(mergedStyles, 'pill-btn')}
+                  className={cx(controlStyles, 'pill-btn')}
                   onClick={() => {
                     onSetLightbox({
                       kind: 'gallery',
@@ -185,7 +184,7 @@ export const PersonMediaLightbox: React.FC<PersonMediaLightboxProps> = ({
                 </button>
                 <button
                   type="button"
-                  className={cx(mergedStyles, 'pill-btn')}
+                  className={cx(controlStyles, 'pill-btn')}
                   onClick={() => {
                     onSetLightbox({
                       kind: 'gallery',
@@ -200,7 +199,7 @@ export const PersonMediaLightbox: React.FC<PersonMediaLightboxProps> = ({
             <button
               ref={lightboxCloseBtnRef}
               type="button"
-              className={cx(mergedStyles, 'pill-btn')}
+              className={cx(controlStyles, 'pill-btn')}
               onClick={() => {
                 onSetLightbox({ kind: 'closed' });
               }}
@@ -209,7 +208,7 @@ export const PersonMediaLightbox: React.FC<PersonMediaLightboxProps> = ({
             </button>
           </div>
         </div>
-        <div className={cx(mergedStyles, 'scan-lightbox-scroll')}>
+        <div className={cx(readerStyles, 'scan-lightbox-scroll')}>
           <MediaPlayer media={activeLightboxMedia} baseUrl={baseUrl} variant="full" />
           <div style={{ marginTop: 12, padding: '8px 4px' }}>
             <div

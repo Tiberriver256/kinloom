@@ -1,6 +1,6 @@
 import { constrainLayerToDateRange, dateRangeFromDate } from '@openhistoricalmap/maplibre-gl-dates';
 import type { FilterSpecification, LayerSpecification, StyleSpecification } from 'maplibre-gl';
-import { KINLOOM_COLOR_TOKENS } from './tokens.js';
+import { KINLOOM_COLOR_TOKENS } from '../lib/tokens.js';
 
 export const OHM_STYLE_URL = 'https://www.openhistoricalmap.org/map-styles/main/main.json';
 export const PAPER_LAND_LAYER_ID = 'kinloom-paper-land';

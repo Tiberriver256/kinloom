@@ -12,8 +12,6 @@ import { act, useEffect } from 'react';
 import { createRoot } from 'react-dom/client';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { ArchiveProvider } from '../context/ArchiveProvider.js';
-import { useArchiveUi } from '../context/ArchiveUiContext.js';
 import {
   CHUNK_RELOAD_STORAGE_KEY,
   installGlobalErrorHandlers,
@@ -22,7 +20,9 @@ import {
   sanitizeReport,
   sanitizeRoute,
   shouldAttemptChunkReload,
-} from '../lib/clientTelemetry.js';
+} from '../browser/clientTelemetry.js';
+import { ArchiveProvider } from '../context/ArchiveProvider.js';
+import { useArchiveUi } from '../context/ArchiveUiContext.js';
 import {
   formatPhotoDocumentCount,
   formatPronunciationScopePrefix,

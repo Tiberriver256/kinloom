@@ -32,11 +32,51 @@
   color: var(--surface-header);
 }
 
+.person-alt-names {
+  font-size: 0.84rem;
+  color: var(--text-secondary);
+  margin-top: 4px;
+  grid-column: 1 / -1;
+}
+
+.person-section-jump-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 14px;
+  padding: 8px 0 12px;
+  margin-bottom: 14px;
+  border-bottom: 1px solid var(--border-decorative);
+}
+
+.person-section-jump-link {
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--accent-primary);
+  text-decoration: none;
+  padding: 2px 4px;
+}
+
+.person-section-jump-link:hover,
+.person-section-jump-link:focus-visible {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.person-timeline-heading {
+  margin: 0 0 12px;
+}
+
 .timeline-layout {
   display: grid;
   grid-template-columns: 86px minmax(0, 1fr);
   gap: 20px;
   position: relative;
+}
+
+.timeline-layout:global(.no-spine) {
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .timeline-spine {
@@ -91,102 +131,6 @@
   gap: 4px;
 }
 
-/* Open-Ledger Unboxed Timeline Entry */
-.story-card {
-  background: transparent;
-  border: none;
-  border-left: 3px solid transparent;
-  border-bottom: 1px solid var(--border-decorative);
-  border-radius: 0;
-  padding: 18px 14px 20px 18px;
-  box-shadow: none;
-  transition:
-    border-left-color 0.18s ease,
-    background-color 0.18s ease;
-  scroll-margin-top: calc(var(--topbar-height) + 18px);
-}
-
-.story-card:global(.active) {
-  border-left-color: var(--radar-copresence);
-  background: rgba(234, 225, 206, 0.34);
-}
-
-.story-card-top {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 6px 14px;
-  margin-bottom: 8px;
-}
-
-.story-card h2 {
-  font-family: var(--font-serif);
-  font-size: 1.28rem;
-  font-weight: 600;
-  color: var(--surface-header);
-  margin: 0 0 8px;
-  line-height: 1.28;
-}
-
-.story-card p {
-  margin: 0;
-  color: var(--text-primary);
-  line-height: 1.68;
-  max-width: 56ch;
-}
-
-.also-here {
-  margin-top: 14px;
-  max-width: 56ch;
-}
-
-.also-here summary {
-  cursor: pointer;
-  font-size: 0.92rem;
-  color: var(--text-secondary);
-}
-
-.also-here ul {
-  list-style: none;
-  margin: 8px 0 0;
-  padding: 0;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px 14px;
-}
-
-.also-here button {
-  border: none;
-  border-bottom: 1px solid var(--border-control);
-  background: transparent;
-  padding: 2px 0;
-  cursor: pointer;
-  font-family: var(--font-serif);
-  font-size: 0.95rem;
-  color: var(--surface-header);
-}
-
-.also-here button span {
-  margin-left: 6px;
-  font-family: var(--font-mono);
-  font-size: 0.72rem;
-  color: var(--text-secondary);
-}
-
-.also-here button:hover {
-  color: var(--radar-copresence);
-  border-bottom-color: var(--radar-copresence);
-}
-
-.empty-ring-note {
-  font-size: 0.9rem;
-  color: var(--text-secondary);
-  font-style: italic;
-}
-
-/* ==========================================================================
-   Person Archival Media Strip & Immediate Family Ledger
-   ========================================================================== */
 .person-portrait-btn {
   padding: 0;
   border: none;
@@ -275,44 +219,6 @@
   align-items: center;
   gap: 10px;
   flex-wrap: wrap;
-}
-
-.person-header-actions :global(.pill-btn),
-:global(.index-filter-actions) :global(.pill-btn),
-:global(.ink-filter-bar) :global(.pill-btn),
-.evidence-tabs :global(.pill-btn) {
-  border: 1px solid var(--border-control);
-  border-radius: var(--radius-sm);
-  padding: 5px 11px;
-  background: var(--surface-card);
-  color: var(--text-primary);
-  transition:
-    background-color 0.14s ease,
-    border-color 0.14s ease,
-    color 0.14s ease;
-}
-
-.person-header-actions :global(.pill-btn):hover,
-:global(.index-filter-actions) :global(.pill-btn):hover,
-:global(.ink-filter-bar) :global(.pill-btn):hover,
-.evidence-tabs :global(.pill-btn):hover {
-  background: var(--surface-linen);
-  border-color: var(--surface-header);
-}
-
-.person-header-actions :global(.pill-btn):global(.active),
-:global(.index-filter-actions) :global(.pill-btn):global(.active),
-:global(.ink-filter-bar) :global(.pill-btn):global(.active),
-.evidence-tabs :global(.pill-btn):global(.active) {
-  background: var(--surface-linen);
-  border-color: var(--radar-copresence);
-  border-bottom: 2px solid var(--radar-copresence);
-  color: var(--radar-copresence);
-  font-weight: 600;
-}
-
-.tree-branch-select {
-  max-width: 260px;
 }
 
 .person-family-strip {
@@ -408,8 +314,6 @@
   color: var(--surface-header);
 }
 
-/* Responsive overrides */
-
 @media (max-width: 768px) {
   .explorer-split {
     display: block;
@@ -470,10 +374,5 @@
     padding: 4px 6px;
     min-height: 44px;
     text-align: center;
-  }
-
-  .story-card {
-    padding: 14px 6px 16px 12px;
-    scroll-margin-top: calc(var(--topbar-height) + 52px);
   }
 }

@@ -2,9 +2,7 @@ import type { AuthorType } from '@kinloom/core';
 import { deriveCitationBadge } from '@kinloom/core';
 import type React from 'react';
 import { cx } from '../../lib/cx.js';
-import cssMod0 from './WikiChrome.module.css';
-
-const uiStyles = cssMod0;
+import wikiChromeStyles from './WikiChrome.module.css';
 
 export interface CitationBadgeProps {
   hasPrimarySource?: boolean;
@@ -22,7 +20,7 @@ export const CitationBadge: React.FC<CitationBadgeProps> = ({ hasPrimarySource, 
   return (
     <span
       className={cx(
-        uiStyles,
+        wikiChromeStyles,
         `wiki-badge ${isCited ? 'wiki-badge-cited' : 'wiki-badge-memory'}${className ? ` ${className}` : ''}`
       )}
       title={
@@ -37,7 +35,7 @@ export const CitationBadge: React.FC<CitationBadgeProps> = ({ hasPrimarySource, 
         viewBox="0 0 16 16"
         fill="none"
         aria-hidden="true"
-        className={cx(uiStyles, 'wiki-badge-icon')}
+        className={cx(wikiChromeStyles, 'wiki-badge-icon')}
       >
         {isCited ? (
           <>
@@ -76,14 +74,14 @@ export interface ConflictBadgeProps {
  * Split-fork conflict badge used for preserved source discrepancies and 409 edit conflicts.
  */
 export const ConflictBadge: React.FC<ConflictBadgeProps> = ({ label = 'Conflict', className }) => (
-  <span className={cx(uiStyles, `wiki-badge wiki-badge-conflict${className ? ` ${className}` : ''}`)}>
+  <span className={cx(wikiChromeStyles, `wiki-badge wiki-badge-conflict${className ? ` ${className}` : ''}`)}>
     <svg
       width="13"
       height="13"
       viewBox="0 0 16 16"
       fill="none"
       aria-hidden="true"
-      className={cx(uiStyles, 'wiki-badge-icon')}
+      className={cx(wikiChromeStyles, 'wiki-badge-icon')}
     >
       <circle cx="4.5" cy="3.5" r="1.75" stroke="currentColor" strokeWidth="1.4" />
       <circle cx="11.5" cy="3.5" r="1.75" stroke="currentColor" strokeWidth="1.4" />
@@ -122,12 +120,12 @@ export const AuthorPill: React.FC<AuthorPillProps> = ({ authorType, authorName, 
   return (
     <span
       className={cx(
-        uiStyles,
+        wikiChromeStyles,
         `wiki-author-pill wiki-author-${authorType}${className ? ` ${className}` : ''}`
       )}
       title={`${typePrefix}: ${authorName || label}`}
     >
-      <span className={cx(uiStyles, 'wiki-author-glyph')} aria-hidden="true">
+      <span className={'wiki-author-glyph'} aria-hidden="true">
         {authorType === 'agent' ? '◈' : authorType === 'system_seed' ? '§' : '●'}
       </span>
       <span>{label}</span>

@@ -1,16 +1,6 @@
 /* ==========================================================================
    Page 4: Unboxed Place Dossier (/place/:slug)
    ========================================================================== */
-.place-page {
-  max-width: 1100px;
-  margin: 0 auto;
-  padding: 26px 26px 64px;
-}
-
-.place-page p {
-  max-width: 56ch;
-}
-
 .place-dossier-title {
   font-family: var(--font-hand);
   font-size: clamp(1.9rem, 3vw, 2.5rem);
@@ -18,16 +8,6 @@
   line-height: 1.08;
   color: var(--surface-header);
   margin: 0 0 4px;
-}
-
-.place-map-box {
-  background: transparent;
-  border: none;
-  border-bottom: 1px solid var(--border-decorative);
-  border-radius: 0;
-  box-shadow: none;
-  padding: 0 0 26px;
-  margin-bottom: 26px;
 }
 
 .place-history-grid {
@@ -93,63 +73,6 @@
   font-size: 0.8rem;
   line-height: 1.45;
   color: var(--text-secondary);
-}
-
-@media (max-width: 768px) {
-  .place-history-grid {
-    grid-template-columns: minmax(0, 1fr);
-  }
-}
-
-.local-survey-wrap {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.local-survey-caption {
-  font-family: var(--font-mono);
-  font-size: 0.78rem;
-  line-height: 1.4;
-  color: var(--text-secondary);
-}
-
-.local-survey-nearby-strip {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px 10px;
-}
-
-.local-survey-nearby-label {
-  font-family: var(--font-mono);
-  font-size: 0.72rem;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--text-secondary);
-}
-
-.local-survey-nearby-link {
-  display: inline-flex;
-  align-items: center;
-  padding: 3px 9px;
-  border: 1px solid var(--border-decorative);
-  border-radius: var(--radius-sm);
-  background: var(--surface-card);
-  color: var(--surface-header);
-  font-family: var(--font-mono);
-  font-size: 0.74rem;
-  text-decoration: none;
-  transition:
-    border-color 0.14s ease,
-    color 0.14s ease,
-    background-color 0.14s ease;
-}
-
-.local-survey-nearby-link:hover {
-  border-color: var(--radar-copresence);
-  color: var(--radar-copresence);
-  background: var(--surface-linen);
 }
 
 .occupancy-row {
@@ -236,12 +159,9 @@
   background: var(--border-control);
 }
 
-/* Responsive overrides */
-
 @media (max-width: 768px) {
-  .local-survey-nearby-link {
-    min-height: 44px;
-    padding: 6px 11px;
+  .place-history-grid {
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .occupancy-row {

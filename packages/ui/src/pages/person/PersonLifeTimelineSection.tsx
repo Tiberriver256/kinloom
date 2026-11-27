@@ -3,9 +3,11 @@ import type React from 'react';
 import { Link } from 'react-router-dom';
 import { EmptyStateNotice } from '../../components/Atoms.js';
 import { MilestoneStoryCard } from '../../components/MilestoneStoryCard.js';
-import { cx } from '../../lib/cx.js';
-import { scrollBehaviorForMotion } from '../../lib/keyboardNav.js';
+import { scrollBehaviorForMotion } from '../../hooks/keyboardNav.js';
+import { cx, joinClasses } from '../../lib/cx.js';
 import { KINLOOM_VOCABULARY } from '../../lib/vocabulary.js';
+import controlStyles from '../../styles/Controls.module.css';
+import personStyles from '../PersonPage.module.css';
 import type { TimelineScrubberTick } from './personViewModel.js';
 
 export interface PersonLifeTimelineSectionProps {
@@ -18,7 +20,6 @@ export interface PersonLifeTimelineSectionProps {
   readonly alsoHere: readonly CoPresenceItem[];
   readonly canEdit: boolean;
   readonly cardRefs: React.RefObject<Map<string, HTMLElement>>;
-  readonly uiStyles: Readonly<Record<string, string>>;
   readonly onSelectEventId: (eventId: string) => void;
   readonly onPivotPerson: (item: CoPresenceItem) => void;
   readonly onOpenEdit: () => void;
@@ -34,7 +35,6 @@ export const PersonLifeTimelineSection: React.FC<PersonLifeTimelineSectionProps>
   alsoHere,
   canEdit,
   cardRefs,
-  uiStyles,
   onSelectEventId,
   onPivotPerson,
   onOpenEdit,
@@ -47,13 +47,13 @@ export const PersonLifeTimelineSection: React.FC<PersonLifeTimelineSectionProps>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
             <Link
               to={`/tree?focus=${person.slug}`}
-              className={cx(uiStyles, 'pill-btn')}
+              className={cx(controlStyles, 'pill-btn')}
               style={{ textDecoration: 'none' }}
             >
               Open Family Tree →
             </Link>
             {canEdit && (
-              <button type="button" className={cx(uiStyles, 'pill-btn')} onClick={onOpenEdit}>
+              <button type="button" className={cx(controlStyles, 'pill-btn')} onClick={onOpenEdit}>
                 Edit Profile
               </button>
             )}
@@ -66,14 +66,21 @@ export const PersonLifeTimelineSection: React.FC<PersonLifeTimelineSectionProps>
   return (
     <section
       id="person-timeline"
-      className={cx(uiStyles, 'person-timeline-section')}
+      className={'person-timeline-section'}
       aria-label={KINLOOM_VOCABULARY.person.lifeTimelineAria}
     >
-      <h2 className={cx(uiStyles, 'section-heading person-timeline-heading')}>Life Timeline</h2>
-      <div className={cx(uiStyles, `timeline-layout${scrubberItems.length === 0 ? ' no-spine' : ''}`)}>
+      <h2
+        className={joinClasses(
+          cx(controlStyles, 'section-heading'),
+          cx(personStyles, 'person-timeline-heading')
+        )}
+      >
+        Life Timeline
+      </h2>
+      <div className={cx(personStyles, `timeline-layout${scrubberItems.length === 0 ? ' no-spine' : ''}`)}>
         {scrubberItems.length > 0 && (
-          <nav className={cx(uiStyles, 'timeline-spine')} aria-label="Jump to decade">
-            <div className={cx(uiStyles, 'scrubber-list')}>
+          <nav className={cx(personStyles, 'timeline-spine')} aria-label="Jump to decade">
+            <div className={cx(personStyles, 'scrubber-list')}>
               {scrubberItems.map((t) => {
                 const isAct =
                   activeEvent?.year !== null &&
@@ -83,7 +90,7 @@ export const PersonLifeTimelineSection: React.FC<PersonLifeTimelineSectionProps>
                   <button
                     key={t.decade}
                     type="button"
-                    className={cx(uiStyles, `scrubber-tick ${isAct ? 'active' : ''}`)}
+                    className={cx(personStyles, `scrubber-tick ${isAct ? 'active' : ''}`)}
                     aria-current={isAct ? 'true' : undefined}
                     onClick={() => {
                       onSelectEventId(t.eventId);
@@ -101,7 +108,7 @@ export const PersonLifeTimelineSection: React.FC<PersonLifeTimelineSectionProps>
           </nav>
         )}
 
-        <div className={cx(uiStyles, 'story-stream')}>
+        <div className={cx(personStyles, 'story-stream')}>
           {personEvents.map((ev) => (
             <MilestoneStoryCard
               key={ev.id}

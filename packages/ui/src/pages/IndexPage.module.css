@@ -7,53 +7,6 @@
   padding: 20px 26px 56px;
 }
 
-.wire-banner {
-  border: none;
-  border-bottom: 1px solid var(--border-decorative);
-  background: transparent;
-  padding: 0 0 22px;
-  margin-bottom: 22px;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: end;
-  gap: 18px 28px;
-}
-
-.section-heading {
-  font-family: var(--font-serif);
-  font-size: 1.24rem;
-  font-weight: 600;
-  color: var(--surface-header);
-  margin: 28px 0 12px;
-  padding-bottom: 6px;
-  border-bottom: 1px solid var(--border-decorative);
-}
-
-.wire-banner h1 {
-  font-family: var(--font-serif);
-  margin: 0 0 8px;
-  font-size: clamp(1.9rem, 3vw, 2.45rem);
-  font-weight: 600;
-  line-height: 1.15;
-  color: var(--surface-header);
-  letter-spacing: -0.015em;
-}
-
-.wire-banner p {
-  margin: 0;
-  color: var(--text-secondary);
-  font-size: 1.02rem;
-  max-width: 56ch;
-}
-
-.filter-bar {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px 14px;
-  align-items: center;
-  margin-bottom: 14px;
-}
-
 .index-banner {
   border-bottom: none;
   padding: 0 0 10px;
@@ -118,71 +71,6 @@
   color: var(--text-secondary);
   flex-shrink: 0;
   font-variant-numeric: tabular-nums;
-}
-
-/* Unboxed Ink Controls (Replaces Boxed Capsules) */
-.pill-btn {
-  padding: 5px 4px;
-  border: none;
-  border-bottom: 1.5px solid transparent;
-  background: transparent;
-  color: var(--text-secondary);
-  border-radius: 0;
-  font-size: 0.84rem;
-  font-family: var(--font-mono);
-  cursor: pointer;
-  transition:
-    color 0.14s ease,
-    border-color 0.14s ease,
-    background-color 0.14s ease;
-}
-
-.pill-btn:hover {
-  color: var(--surface-header);
-  border-bottom-color: var(--border-control);
-  background: rgba(234, 225, 206, 0.45);
-}
-
-.pill-btn:global(.active) {
-  background: rgba(234, 225, 206, 0.72);
-  color: var(--radar-copresence);
-  border-bottom: 2px solid var(--radar-copresence);
-  font-weight: 600;
-}
-
-.pill-btn:disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
-}
-
-select.pill-btn {
-  border-bottom: 1px solid var(--border-control);
-  color: var(--text-primary);
-  padding: 5px 6px;
-  min-width: 0;
-  max-width: 100%;
-  text-overflow: ellipsis;
-}
-
-select.pill-btn option {
-  background: var(--surface-card);
-  color: var(--text-primary);
-}
-
-.search-input {
-  padding: 6px 4px;
-  border: none;
-  border-bottom: 1.5px solid var(--border-control);
-  background: transparent;
-  border-radius: 0;
-  min-width: 260px;
-  font-family: var(--font-serif);
-  font-size: 0.98rem;
-  color: var(--text-primary);
-}
-
-.search-input:focus {
-  border-bottom-color: var(--radar-copresence);
 }
 
 /* Unboxed 3-Column Portrait Folio Grid */
@@ -268,26 +156,13 @@ select.pill-btn option {
   margin: 0 0 12px;
 }
 
-/* Responsive overrides */
-
 @media (max-width: 960px) {
-  .wire-banner {
-    grid-template-columns: 1fr;
-  }
-
   .person-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
 @media (max-width: 768px) {
-  .index-page,
-  :global(.time-page),
-  :global(.places-index-page),
-  :global(.place-page) {
-    padding: 12px 16px 48px;
-  }
-
   .index-banner {
     padding: 0 0 8px;
     margin-bottom: 2px;
@@ -308,28 +183,6 @@ select.pill-btn option {
     margin-bottom: 8px;
   }
 
-  .search-input,
-  .index-filter-bar .search-input {
-    padding: 8px 10px;
-    font-size: 1rem;
-    min-height: 44px;
-    width: 100%;
-    min-width: 0;
-  }
-
-  .pill-btn,
-  :global(.ink-link-btn),
-  :global(.tree-gen-jump-chip),
-  :global(.map-bordered-btn),
-  :global(.source-read-inline),
-  :global(.person-family-chip),
-  :global(.person-section-jump-link),
-  :global(.pronunciation-variant-btn) {
-    min-height: 44px;
-    display: inline-flex;
-    align-items: center;
-  }
-
   .index-filter-actions {
     width: 100%;
     flex-wrap: wrap;
@@ -341,7 +194,7 @@ select.pill-btn option {
     margin-left: 0;
   }
 
-  .index-filter-actions .pill-btn {
+  .index-filter-actions :global(.pill-btn) {
     font-size: 0.8rem;
     padding: 6px 11px;
     min-height: 44px;
@@ -367,11 +220,6 @@ select.pill-btn option {
     margin-top: 14px;
   }
 
-  .search-input {
-    min-width: 0;
-    width: 100%;
-  }
-
   .person-grid {
     grid-template-columns: 1fr;
     margin-bottom: 22px;
@@ -391,13 +239,42 @@ select.pill-btn option {
   .person-card-body h3 {
     font-size: 1.06rem;
   }
+}
 
-  :global(.map-zoom-controls) .pill-btn {
-    min-width: 44px;
-    min-height: 44px;
-    padding: 0;
-    display: inline-flex;
-    align-items: center;
+@media (max-width: 480px) {
+  .index-filter-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .index-filter-toggles {
+    display: flex;
+    flex: 1 0 100%;
+    gap: 8px;
+    min-width: 0;
+  }
+
+  .index-filter-toggles :global(.index-media-filter-btn) {
+    flex: 1 1 auto;
     justify-content: center;
+    white-space: normal;
+    text-align: center;
+    line-height: 1.25;
+  }
+
+  .index-filter-toggles :global(.index-clear-btn) {
+    flex: 0 0 auto;
+    justify-content: center;
+  }
+
+  .index-filter-actions :global(.index-add-person-btn),
+  .index-filter-actions .index-export-btn {
+    flex: 1 1 auto;
+    min-width: min(max-content, 100%);
+    justify-content: center;
+    white-space: normal;
+    text-align: center;
+    line-height: 1.25;
   }
 }

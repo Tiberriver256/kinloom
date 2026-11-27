@@ -1,6 +1,6 @@
 import React from 'react';
 import { useLocation } from 'react-router-dom';
-import { getAppBuildId, reportClientError } from '../lib/clientTelemetry.js';
+import { getAppBuildId, reportClientError } from '../browser/clientTelemetry.js';
 
 const BLANK_WATCH_DELAY_MS = 1800;
 const MIN_ROOT_HEIGHT_PX = 40;

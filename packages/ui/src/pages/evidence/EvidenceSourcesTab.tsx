@@ -3,8 +3,11 @@ import { buildLibrarianCitation, formatSourceTypeLabel } from '@kinloom/core';
 import type React from 'react';
 import { Link } from 'react-router-dom';
 import { EmptyStateNotice } from '../../components/Atoms.js';
+import inspectorStyles from '../../components/SourceInspectorDrawer.module.css';
 import { cx } from '../../lib/cx.js';
 import { KINLOOM_VOCABULARY } from '../../lib/vocabulary.js';
+import controlStyles from '../../styles/Controls.module.css';
+import evidenceStyles from '../EvidencePage.module.css';
 
 export interface EvidenceSourcesTabProps {
   readonly totalSourceCount: number;
@@ -15,7 +18,6 @@ export interface EvidenceSourcesTabProps {
   readonly unverifiedEvents: readonly ArchiveEvent[];
   readonly showAllUnverified: boolean;
   readonly peopleById: ReadonlyMap<string, Person>;
-  readonly uiStyles: Readonly<Record<string, string>>;
   readonly onSourceQueryChange: (value: string) => void;
   readonly onToggleShowAllUnverified: () => void;
   readonly onOpenSourceInspector: (params: { sourceId: string }) => void;
@@ -31,7 +33,6 @@ export const EvidenceSourcesTab: React.FC<EvidenceSourcesTabProps> = ({
   unverifiedEvents,
   showAllUnverified,
   peopleById,
-  uiStyles,
   onSourceQueryChange,
   onToggleShowAllUnverified,
   onOpenSourceInspector,
@@ -41,7 +42,7 @@ export const EvidenceSourcesTab: React.FC<EvidenceSourcesTabProps> = ({
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-      <section className={cx(uiStyles, 'place-map-box')} style={{ marginBottom: 0 }}>
+      <section className={cx(controlStyles, 'place-map-box')} style={{ marginBottom: 0 }}>
         <div
           style={{
             display: 'flex',
@@ -57,7 +58,7 @@ export const EvidenceSourcesTab: React.FC<EvidenceSourcesTabProps> = ({
           </h2>
           <input
             type="search"
-            className={cx(uiStyles, 'search-input')}
+            className={cx(controlStyles, 'search-input')}
             placeholder="Filter sources or repositories (e.g. Census, NARA, Vital, County)…"
             value={sourceQuery}
             onChange={(e) => {
@@ -78,7 +79,7 @@ export const EvidenceSourcesTab: React.FC<EvidenceSourcesTabProps> = ({
                 sourceQuery.trim() ? (
                   <button
                     type="button"
-                    className={cx(uiStyles, 'pill-btn')}
+                    className={cx(controlStyles, 'pill-btn')}
                     onClick={() => {
                       onSourceQueryChange('');
                     }}
@@ -94,7 +95,7 @@ export const EvidenceSourcesTab: React.FC<EvidenceSourcesTabProps> = ({
               const readable = readableSourceIds.has(s.id);
               const cit = buildLibrarianCitation(s);
               return (
-                <div key={s.id} className={cx(uiStyles, 'evidence-source-row')}>
+                <div key={s.id} className={cx(evidenceStyles, 'evidence-source-row')}>
                   <div>
                     <div
                       style={{
@@ -105,7 +106,7 @@ export const EvidenceSourcesTab: React.FC<EvidenceSourcesTabProps> = ({
                         marginBottom: 4,
                       }}
                     >
-                      <span className={cx(uiStyles, `evidence-tier-badge tier-${cit.tier}`)}>
+                      <span className={cx(inspectorStyles, `evidence-tier-badge tier-${cit.tier}`)}>
                         {cit.tierLabel}
                       </span>
                       {cit.author && (
@@ -149,7 +150,7 @@ export const EvidenceSourcesTab: React.FC<EvidenceSourcesTabProps> = ({
                     </span>
                     <button
                       type="button"
-                      className={cx(uiStyles, 'source-action-btn primary')}
+                      className={cx(inspectorStyles, 'source-action-btn primary')}
                       onClick={() => {
                         onOpenSourceInspector({ sourceId: s.id });
                       }}
@@ -159,7 +160,7 @@ export const EvidenceSourcesTab: React.FC<EvidenceSourcesTabProps> = ({
                     {readable && (
                       <button
                         type="button"
-                        className={cx(uiStyles, 'source-read-btn')}
+                        className={cx(controlStyles, 'source-read-btn')}
                         onClick={() => {
                           onOpenSourceReader({ sourceId: s.id });
                         }}
@@ -172,7 +173,7 @@ export const EvidenceSourcesTab: React.FC<EvidenceSourcesTabProps> = ({
                         href={s.url}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className={cx(uiStyles, 'source-read-btn')}
+                        className={cx(controlStyles, 'source-read-btn')}
                         style={{ textDecoration: 'none' }}
                       >
                         Open Archive ↗
@@ -186,7 +187,7 @@ export const EvidenceSourcesTab: React.FC<EvidenceSourcesTabProps> = ({
         </div>
       </section>
 
-      <section className={cx(uiStyles, 'place-map-box')} style={{ marginBottom: 0 }}>
+      <section className={cx(controlStyles, 'place-map-box')} style={{ marginBottom: 0 }}>
         {unverifiedEvents.length === 0 ? (
           <EmptyStateNotice title="All events have primary citations." />
         ) : (
@@ -239,7 +240,7 @@ export const EvidenceSourcesTab: React.FC<EvidenceSourcesTabProps> = ({
                     {p && (
                       <Link
                         to={`/person/${p.slug}?event=${ev.id}`}
-                        className={cx(uiStyles, 'pill-btn')}
+                        className={cx(controlStyles, 'pill-btn')}
                         style={{ textDecoration: 'none', fontSize: '0.8125rem' }}
                       >
                         Verify on {p.full_name} →
@@ -253,7 +254,7 @@ export const EvidenceSourcesTab: React.FC<EvidenceSourcesTabProps> = ({
               <div style={{ marginTop: 12 }}>
                 <button
                   type="button"
-                  className={cx(uiStyles, 'pill-btn')}
+                  className={cx(controlStyles, 'pill-btn')}
                   onClick={onToggleShowAllUnverified}
                 >
                   {showAllUnverified

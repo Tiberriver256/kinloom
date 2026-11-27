@@ -3,9 +3,7 @@ import { Link, useInRouterContext } from 'react-router-dom';
 import { useArchiveData } from '../context/ArchiveDataContext.js';
 import { cx } from '../lib/cx.js';
 import { KINLOOM_VOCABULARY } from '../lib/vocabulary.js';
-import cssMod0 from './KinloomFooter.module.css';
-
-const uiStyles = cssMod0;
+import footerStyles from './KinloomFooter.module.css';
 
 export const KinloomMark: React.FC<{ size?: number }> = ({ size = 18 }) => (
   <svg
@@ -45,18 +43,18 @@ export const KinloomFooter: React.FC<{ hideNav?: boolean }> = ({ hideNav = false
   const credit = siteConfig.site.footerCredit || 'Built with Kinloom';
 
   return (
-    <footer className={cx(uiStyles, 'kinloom-footer print-hide')}>
+    <footer className={cx(footerStyles, 'kinloom-footer print-hide')}>
       {inRouter && !hideNav && (
-        <nav className={cx(uiStyles, 'kinloom-footer-nav')} aria-label="Archive tools">
-          <Link to="/kinship" className={cx(uiStyles, 'kinloom-footer-link')}>
+        <nav className={cx(footerStyles, 'kinloom-footer-nav')} aria-label="Archive tools">
+          <Link to="/kinship" className={cx(footerStyles, 'kinloom-footer-link')}>
             {KINLOOM_VOCABULARY.nav.kinshipFull}
           </Link>
-          <Link to="/evidence" className={cx(uiStyles, 'kinloom-footer-link')}>
+          <Link to="/evidence" className={cx(footerStyles, 'kinloom-footer-link')}>
             {KINLOOM_VOCABULARY.nav.evidenceFull}
           </Link>
         </nav>
       )}
-      <span className={cx(uiStyles, 'kinloom-footer-credit')}>
+      <span className={cx(footerStyles, 'kinloom-footer-credit')}>
         <KinloomMark size={16} />
         <span>{credit}</span>
       </span>

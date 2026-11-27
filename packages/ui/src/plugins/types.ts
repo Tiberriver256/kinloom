@@ -2,6 +2,7 @@ import type {
   ArchiveBundle,
   ArchiveCapabilities,
   ArchiveSessionState,
+  EntityType,
   KinloomSiteConfig,
   MediaItem,
   Narrative,
@@ -9,6 +10,10 @@ import type {
   Place,
 } from '@kinloom/core';
 import type React from 'react';
+import type {
+  EntityCreateFormEntry,
+  EntityEditFormEntry,
+} from '../components/wiki/entityForms/fieldTypes.js';
 
 export interface KinloomUiPluginRoute {
   readonly path: string;
@@ -60,4 +65,6 @@ export interface KinloomUiPlugin {
   readonly routes?: readonly KinloomUiPluginRoute[];
   readonly slots?: KinloomUiPluginSlots;
   readonly mediaRenderers?: readonly KinloomMediaRenderer[];
+  readonly entityEditForms?: Readonly<Partial<Record<EntityType, EntityEditFormEntry>>>;
+  readonly entityCreateForms?: Readonly<Partial<Record<EntityType, EntityCreateFormEntry>>>;
 }

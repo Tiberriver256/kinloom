@@ -2,8 +2,11 @@ import type { InspectedPersonPronunciationToken, Pronunciation } from '@kinloom/
 import { findIpaGlyphsInPhonetic } from '@kinloom/core';
 import type React from 'react';
 import { cx } from '../../../lib/cx.js';
+import controlStyles from '../../../styles/Controls.module.css';
 import { hasPronunciationContent, PronunciationBadge } from '../../PronunciationBadge.js';
+import pronunciationBadgeStyles from '../../PronunciationBadge.module.css';
 import localStyles from '../PronunciationEditorSection.module.css';
+import wikiFormStyles from '../WikiForms.module.css';
 import type { SharedTokenDraft } from './pronunciationDraft.js';
 import { PRONUNCIATION_ROLE_LABELS, SAFE_EXTERNAL_URL_RE } from './pronunciationDraft.js';
 
@@ -18,7 +21,6 @@ export interface SharedTokenPronunciationEditorProps {
   readonly activeTokenDraft: SharedTokenDraft | null;
   readonly sharedSaveStatus: 'idle' | 'saving' | 'success' | 'error';
   readonly sharedSaveMessage: string | null;
-  readonly uiStyles: Readonly<Record<string, string>>;
   readonly onToggleToken: (token: InspectedPersonPronunciationToken) => void;
   readonly onUpdateDraft: React.Dispatch<React.SetStateAction<SharedTokenDraft | null>>;
   readonly onSaveSharedToken: () => Promise<void>;
@@ -36,7 +38,6 @@ export const SharedTokenPronunciationEditor: React.FC<SharedTokenPronunciationEd
   activeTokenDraft,
   sharedSaveStatus,
   sharedSaveMessage,
-  uiStyles,
   onToggleToken,
   onUpdateDraft,
   onSaveSharedToken,
@@ -48,13 +49,15 @@ export const SharedTokenPronunciationEditor: React.FC<SharedTokenPronunciationEd
   let firstEditableTokenAssigned = false;
 
   return (
-    <div className={`${cx(uiStyles, 'wiki-pronunciation-breakdown')} ${localStyles['token-section']}`}>
+    <div
+      className={`${cx(pronunciationBadgeStyles, 'wiki-pronunciation-breakdown')} ${localStyles['token-section']}`}
+    >
       <p className={localStyles['pronunciation-intro']}>
         Tap any name token to edit its shared Respelling and IPA across all matching records.
       </p>
 
       <div
-        className={`${cx(uiStyles, 'wiki-pronunciation-breakdown-parts')} ${localStyles['token-chip-list']}`}
+        className={`${cx(pronunciationBadgeStyles, 'wiki-pronunciation-breakdown-parts')} ${localStyles['token-chip-list']}`}
         data-testid="pronunciation-token-chips"
       >
         {tokens.map((token, idx) => {
@@ -91,7 +94,7 @@ export const SharedTokenPronunciationEditor: React.FC<SharedTokenPronunciationEd
             <div
               // biome-ignore lint/suspicious/noArrayIndexKey: a person can repeat a given/middle/surname token
               key={`${token.role}-${token.text}-${idx}`}
-              className={`${cx(uiStyles, 'wiki-pronunciation-part')} ${localStyles['token-chip-item']}`}
+              className={`${cx(pronunciationBadgeStyles, 'wiki-pronunciation-part')} ${localStyles['token-chip-item']}`}
             >
               <button
                 ref={
@@ -115,14 +118,14 @@ export const SharedTokenPronunciationEditor: React.FC<SharedTokenPronunciationEd
                 }}
               >
                 <span
-                  className={`${cx(uiStyles, 'wiki-pronunciation-part-label')} ${localStyles['token-role']}`}
+                  className={`${cx(pronunciationBadgeStyles, 'wiki-pronunciation-part-label')} ${localStyles['token-role']}`}
                 >
                   {roleLabel}
                 </span>
                 <strong className={localStyles['token-name']}>{token.text}</strong>
                 {hasShared && sharedGuideText ? (
                   <span
-                    className={`${cx(uiStyles, 'wiki-pronunciation-part-shared')} ${localStyles['token-guide']}`}
+                    className={`${cx(pronunciationBadgeStyles, 'wiki-pronunciation-part-shared')} ${localStyles['token-guide']}`}
                   >
                     {sharedGuideText}
                     {sharedSecondaryIpa}
@@ -134,7 +137,7 @@ export const SharedTokenPronunciationEditor: React.FC<SharedTokenPronunciationEd
 
               {(sourceLabel || hasSafeSourceUrl) && (
                 <span
-                  className={`${cx(uiStyles, 'pronunciation-source')} ${localStyles['token-source-meta']}`}
+                  className={`${cx(pronunciationBadgeStyles, 'pronunciation-source')} ${localStyles['token-source-meta']}`}
                 >
                   {hasSafeSourceUrl ? (
                     <a
@@ -165,7 +168,7 @@ export const SharedTokenPronunciationEditor: React.FC<SharedTokenPronunciationEd
       {activeTokenDraft && (
         <div
           id={sharedEditorId}
-          className={`${cx(uiStyles, 'wiki-pronunciation-shared-editor')} ${localStyles['shared-editor']}`}
+          className={`${cx(pronunciationBadgeStyles, 'wiki-pronunciation-shared-editor')} ${localStyles['shared-editor']}`}
         >
           <div className={localStyles['shared-editor-header']}>
             <strong>Shared pronunciation for &ldquo;{activeTokenDraft.displayText}&rdquo;</strong>
@@ -174,15 +177,18 @@ export const SharedTokenPronunciationEditor: React.FC<SharedTokenPronunciationEd
             </span>
           </div>
 
-          <div className={cx(uiStyles, 'wiki-field-grid')}>
-            <div className={cx(uiStyles, 'wiki-field')}>
-              <label htmlFor={`${idPrefix}-shared-phonetic`} className={cx(uiStyles, 'wiki-field-label')}>
+          <div className={cx(wikiFormStyles, 'wiki-field-grid')}>
+            <div className={cx(wikiFormStyles, 'wiki-field')}>
+              <label
+                htmlFor={`${idPrefix}-shared-phonetic`}
+                className={cx(wikiFormStyles, 'wiki-field-label')}
+              >
                 Respelling
               </label>
               <input
                 id={`${idPrefix}-shared-phonetic`}
                 type="text"
-                className={cx(uiStyles, 'wiki-input')}
+                className={cx(wikiFormStyles, 'wiki-input')}
                 placeholder="e.g. DAN-yuhl or MER-ser"
                 value={activeTokenDraft.phonetic}
                 aria-describedby={sharedPhoneticIpaGlyphs.length > 0 ? sharedPhoneticHintId : undefined}
@@ -200,14 +206,14 @@ export const SharedTokenPronunciationEditor: React.FC<SharedTokenPronunciationEd
               )}
             </div>
 
-            <div className={cx(uiStyles, 'wiki-field')}>
-              <label htmlFor={`${idPrefix}-shared-ipa`} className={cx(uiStyles, 'wiki-field-label')}>
+            <div className={cx(wikiFormStyles, 'wiki-field')}>
+              <label htmlFor={`${idPrefix}-shared-ipa`} className={cx(wikiFormStyles, 'wiki-field-label')}>
                 IPA (optional)
               </label>
               <input
                 id={`${idPrefix}-shared-ipa`}
                 type="text"
-                className={cx(uiStyles, 'wiki-input')}
+                className={cx(wikiFormStyles, 'wiki-input')}
                 placeholder="e.g. /ˈdæn.jəl/"
                 autoCorrect="off"
                 autoCapitalize="none"
@@ -221,14 +227,14 @@ export const SharedTokenPronunciationEditor: React.FC<SharedTokenPronunciationEd
               />
             </div>
 
-            <div className={cx(uiStyles, 'wiki-field')}>
-              <label htmlFor={`${idPrefix}-shared-lang`} className={cx(uiStyles, 'wiki-field-label')}>
+            <div className={cx(wikiFormStyles, 'wiki-field')}>
+              <label htmlFor={`${idPrefix}-shared-lang`} className={cx(wikiFormStyles, 'wiki-field-label')}>
                 Language
               </label>
               <input
                 id={`${idPrefix}-shared-lang`}
                 type="text"
-                className={cx(uiStyles, 'wiki-input')}
+                className={cx(wikiFormStyles, 'wiki-input')}
                 placeholder="e.g. en-US, nl, pl"
                 autoCorrect="off"
                 autoCapitalize="none"
@@ -242,14 +248,14 @@ export const SharedTokenPronunciationEditor: React.FC<SharedTokenPronunciationEd
               />
             </div>
 
-            <div className={cx(uiStyles, 'wiki-field')}>
-              <label htmlFor={`${idPrefix}-shared-note`} className={cx(uiStyles, 'wiki-field-label')}>
+            <div className={cx(wikiFormStyles, 'wiki-field')}>
+              <label htmlFor={`${idPrefix}-shared-note`} className={cx(wikiFormStyles, 'wiki-field-label')}>
                 Note
               </label>
               <input
                 id={`${idPrefix}-shared-note`}
                 type="text"
-                className={cx(uiStyles, 'wiki-input')}
+                className={cx(wikiFormStyles, 'wiki-input')}
                 placeholder="e.g. Stress on first syllable"
                 value={activeTokenDraft.note}
                 onChange={(e) => {
@@ -260,14 +266,17 @@ export const SharedTokenPronunciationEditor: React.FC<SharedTokenPronunciationEd
               />
             </div>
 
-            <div className={cx(uiStyles, 'wiki-field')}>
-              <label htmlFor={`${idPrefix}-shared-source-label`} className={cx(uiStyles, 'wiki-field-label')}>
+            <div className={cx(wikiFormStyles, 'wiki-field')}>
+              <label
+                htmlFor={`${idPrefix}-shared-source-label`}
+                className={cx(wikiFormStyles, 'wiki-field-label')}
+              >
                 Source label (optional)
               </label>
               <input
                 id={`${idPrefix}-shared-source-label`}
                 type="text"
-                className={cx(uiStyles, 'wiki-input')}
+                className={cx(wikiFormStyles, 'wiki-input')}
                 placeholder="e.g. Wiktionary (Dutch IPA) or Family oral tradition"
                 value={activeTokenDraft.source_label}
                 onChange={(e) => {
@@ -278,14 +287,17 @@ export const SharedTokenPronunciationEditor: React.FC<SharedTokenPronunciationEd
               />
             </div>
 
-            <div className={cx(uiStyles, 'wiki-field')}>
-              <label htmlFor={`${idPrefix}-shared-source-url`} className={cx(uiStyles, 'wiki-field-label')}>
+            <div className={cx(wikiFormStyles, 'wiki-field')}>
+              <label
+                htmlFor={`${idPrefix}-shared-source-url`}
+                className={cx(wikiFormStyles, 'wiki-field-label')}
+              >
                 Source URL (optional)
               </label>
               <input
                 id={`${idPrefix}-shared-source-url`}
                 type="url"
-                className={cx(uiStyles, 'wiki-input')}
+                className={cx(wikiFormStyles, 'wiki-input')}
                 placeholder="e.g. https://en.wiktionary.org/wiki/..."
                 autoCorrect="off"
                 autoCapitalize="none"
@@ -303,7 +315,7 @@ export const SharedTokenPronunciationEditor: React.FC<SharedTokenPronunciationEd
           <div className={localStyles['shared-editor-actions']}>
             <button
               type="button"
-              className={cx(uiStyles, 'wiki-pronunciation-shared-save-btn')}
+              className={'wiki-pronunciation-shared-save-btn'}
               disabled={sharedSaveStatus === 'saving'}
               onClick={() => {
                 void onSaveSharedToken();
@@ -315,7 +327,7 @@ export const SharedTokenPronunciationEditor: React.FC<SharedTokenPronunciationEd
             </button>
             <button
               type="button"
-              className={cx(uiStyles, 'pill-btn')}
+              className={cx(controlStyles, 'pill-btn')}
               disabled={sharedSaveStatus === 'saving'}
               onClick={onCancelSharedToken}
             >

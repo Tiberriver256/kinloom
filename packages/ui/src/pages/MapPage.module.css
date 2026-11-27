@@ -498,4 +498,26 @@
   .map-range-input {
     min-height: 44px;
   }
+
+  :global(.map-zoom-controls) {
+    top: 66px;
+    right: 8px;
+    bottom: auto;
+    gap: 4px;
+  }
+
+  :global(.map-stop-details) {
+    margin-top: 8px;
+  }
+}
+
+.map-empty-notice {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  margin-bottom: 6px;
 }

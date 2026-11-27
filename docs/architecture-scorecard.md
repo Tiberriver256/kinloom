@@ -432,3 +432,51 @@ Evaluated on `2026-11-27` (UTC via Python `datetime.now(timezone.utc)`) against 
 - `npm run check`: `lint` + `check:counts` (`614` files, `0` violations) + in-place `build` (`6/6` workspaces) + `typecheck` (`7/7` tsconfigs) + Vitest (`99/99` files, `737/737` tests) + `check:contrast` (`15/15`) + `check:leaks` (`0` leaks)
 - `npm run test:e2e`: **`40/40` Playwright E2E tests passed**
 - External leak check (`check-kinloom-leaks.sh`): **`0` leaks** across `11` external blocklist terms
+
+## Iteration 4B Remediation (UI Layering, CSS Ownership, Editor State, & Plugin Seams)
+
+Evaluated on `2026-11-27` (UTC via Python `datetime.now(timezone.utc)`) on top of Iteration 4A (`9c698b2`). Iteration 4B resolved every `@kinloom/ui` finding from Fresh-Eyes Review #1 (`#4`, `#5`, `#8`, `#12a`, `#13a/b/c/e`) while preserving 100% public export parity in `packages/ui/src/index.ts`, zero edits to `packages/cli`, and in-place builds of `packages/*/dist`.
+
+### Findings Remediated in Iteration 4B
+
+| Review Finding | Root Cause Before Iteration 4B | Measured Fix in Iteration 4B |
+| --- | --- | --- |
+| **#4 `instanceof HttpWikiDataSource` leak** | `AdminPage.tsx` and `AuthSignInFlow.tsx` imported concrete `HttpWikiDataSource` and narrowed with `instanceof`; `ArchiveDataContext.tsx` lacked an `adminDataSource` port and carried an `as unknown` cast. | Exposed `adminDataSource: AdminDataSource \| null` from `ArchiveDataContext.tsx` (removing the `as unknown` cast), typed `AdminPage.tsx` strictly against `AdminDataSource`, replaced `instanceof` in `AuthSignInFlow.tsx` with a structural `hasGoogleSignInUrl` guard, and proved plain-object `ArchiveDataSource.admin` wiring in `AdminPage.test.tsx`. `instanceof HttpWikiDataSource` across `packages/ui/src` = `0`. |
+| **#5 Pure `lib/` and `*ViewModel.ts` boundaries** | `packages/ui/src/lib/` mixed React hooks (`useDialogFocusTrap.ts`, `keyboardNav.ts`) and browser/MapLibre adapters (`clientTelemetry.ts`, `ohmStyle.ts`) alongside pure functions; `personViewModel.ts` touched `document` and `URL.createObjectURL`. | Relocated browser adapters into `packages/ui/src/browser/{clientTelemetry,ohmStyle,download,motion}.ts` and React/DOM hooks into `packages/ui/src/hooks/{useDialogFocusTrap,keyboardNav}.ts`; moved `triggerPersonGedcomDownload` out of `personViewModel.ts`; kept `packages/ui/src/index.ts` re-exports intact. Forbidden framework/browser imports or globals in `packages/ui/src/lib/` and `*ViewModel.ts` = `0`. |
+| **#8 CSS ownership, reverse-layer imports, & module spreads** | `23` component files imported `pages/*.module.css` upward; `39` files spread multiple CSS modules into flat `uiStyles` grab-bag objects; `TimePage.module.css` (`665` LOC), `Atoms.module.css` (`689` LOC), and `TreePage.module.css` (`609` LOC) held shared primitives. | Extracted shared primitives into `styles/{Controls,Overlays}.module.css` and co-located component styles (`LocalSurveyMap.module.css`, `MilestoneStoryCard.module.css`, `tree/{TreeCanvas,TreeToolbar}.module.css`, `time/TimeScrubber.module.css`); deduplicated `.wiki-role-chip:global(.is-self)` into `WikiChrome.module.css` (`0` duplicate local classes across `37` CSS modules, `745` classes); added `joinClasses` to `lib/cx.ts` and migrated all `73` TSX files to direct CSS module references (`0` reverse imports in `components/`, `0` multi-CSS-module spreads, `0` class-owner mismatches). |
+| **#12a `EntityEditDrawer` shadow state & canonical ID prefixes** | `EntityEditDrawer.tsx` kept 5 parallel `useState` flags (`syncingRevision`, `deleteConfirmOpen`, `deleteSummary`, `deleteBusy`, `deleteError`) and a `getEntity` `useEffect` outside `entityEditorMachine`; `createRegistry.tsx` hardcoded `pl_` instead of `ENTITY_ID_PREFIX.place` (`plc_`). | Moved `syncingRevision`, `confirmingDelete`, `deleting`, and `deleted` states plus `loadLatestEntity` and `deleteEntity` actors into `entityEditorMachine.ts` (with extracted `machines/entityEditor/{types,actors,reducers}.ts`), removing all 5 `useState` shadow states from `EntityEditDrawer.tsx`; switched `createRegistry.tsx` and `fieldTypes.ts` to canonical `buildEntityId` from `@kinloom/core` (`plc_`, `evt_`, `per_`), verified in `machines.test.ts` and `uiViewModels.test.ts`. |
+| **#13a/b/c/e Large UI decomposition & plugin-open entity forms** | `12` non-test TS/TSX files and `3` CSS modules exceeded `550` LOC (up to `743` LOC); `entityEditForms` and `entityCreateForms` registries were closed to `KinloomUiPlugin`. | Decomposed all `12` large TS/TSX files plus `TimePage.tsx` into focused domain/view-model/UI submodules (every non-test TS/TSX and CSS file in `packages/ui/src/` is now strictly `< 550` LOC; max `544` LOC across `184` files); opened `entityEditForms` and `entityCreateForms` on `KinloomUiPlugin`, merged them in `PluginContext.tsx`, consumed them in `EntityEditDrawer.tsx` and `CreateEntityModal.tsx`, and proved plugin registration in `PluginsAndMedia.test.tsx`. |
+
+### Iteration 4B Before/After LOC Table
+
+| Target UI Module | Before LOC (`9c698b2`) | After LOC | Extracted Submodules |
+| --- | ---: | ---: | --- |
+| `packages/ui/src/components/tree/TreeOrthogonalCanvas.tsx` | 743 | 153 | `components/tree/{TreeEdgesLayer,TreeNodesLayer}.tsx`, `TreeCanvas.module.css` |
+| `packages/ui/src/machines/authSessionMachine.ts` | 721 | 491 | `machines/authSession/{types,actors}.ts` |
+| `packages/ui/src/lib/tree/treeGraphBuilder.ts` | 712 | 290 | `lib/tree/{generationInference,unionAssembly}.ts` |
+| `packages/ui/src/pages/AdminPage.tsx` | 691 | 319 | `pages/admin/{adminHelpers.ts,MembersSection.tsx,InvitesSection.tsx,AgentTokensSection.tsx}` |
+| `packages/ui/src/components/Atoms.module.css` | 689 | 484 | Shared controls & overlays moved to `styles/{Controls,Overlays}.module.css` |
+| `packages/ui/src/pages/TimePage.module.css` | 665 | 436 | `pages/time/TimeScrubber.module.css` |
+| `packages/ui/src/pages/PlacePage.tsx` | 640 | 296 | `pages/place/{placeViewModel.ts,PlaceSections.tsx}` |
+| `packages/ui/src/plugins/narrativeAudioPlugin.tsx` | 622 | 105 | `plugins/narrativeAudio/{audioContext,NarrativeAudioPlayers}.tsx` |
+| `packages/ui/src/components/SourceReaderDrawer.tsx` | 609 | 514 | `components/sourceReader/SourceReaderStage.tsx` |
+| `packages/ui/src/pages/TreePage.module.css` | 609 | 136 | `components/tree/{TreeCanvas,TreeToolbar}.module.css` |
+| `packages/ui/src/machines/mediaUploadMachine.ts` | 601 | 332 | `machines/mediaUpload/{types,actors}.ts` |
+| `packages/ui/src/adapters/httpWikiDataSource.ts` | 579 | 446 | `adapters/httpWiki/{httpClient,adminClient}.ts` |
+| `packages/ui/src/components/wiki/authErrorCopy.ts` | 572 | 214 | `components/wiki/authError/feedbackCatalog.ts` |
+| `packages/ui/src/context/ArchiveDataContext.tsx` | 566 | 439 | `context/archiveDataHelpers.ts` |
+| `packages/ui/src/pages/RecentChangesPage.tsx` | 564 | 352 | `pages/recentChanges/{recentChangesViewModel.ts,RevisionFeedItem.tsx}` |
+| `packages/ui/src/pages/TimePage.tsx` | 545 | 477 | `pages/time/TimeEntryCards.tsx` |
+
+### Iteration 4B Measured Verification Snapshot
+
+- Reverse CSS imports (`pages/*.module.css` inside `packages/ui/src/components/`): **`0` matches**
+- Multi-CSS-module object spreads (`{ ...aStyles, ...bStyles }`) in `packages/ui/src/`: **`0` matches**
+- `instanceof HttpWikiDataSource` in `packages/ui/src/`: **`0` matches**
+- Framework/browser globals in `packages/ui/src/lib/` and `*ViewModel.ts`: **`0` violations**
+- Explicit `any`, `@ts-ignore`, `@ts-expect-error`, `as unknown as` in non-test `packages/ui/src/`: **`0` matches**
+- Runtime or type circular imports across `packages/ui/src/`: **`0` cycles**
+- Max non-test file LOC across all `184` TS/TSX/CSS files in `packages/ui/src/`: **`544` LOC** (`0` files `>= 550` LOC)
+- `npm run check`: `biome check` (`714` files, `0` errors, `0` warnings) + `check:counts` (`644` files, `0` violations) + in-place `build` (`6/6` workspaces) + `typecheck` (`7/7` tsconfigs) + Vitest (`100/100` files, `741/741` tests) + `check:contrast` (`15/15`) + `check:leaks` (`0` leaks)
+- `npm run audit:impeccable`: **`PASS` (`0` primary findings across static source and live desktop/mobile routes)**
+- `npm run test:e2e`: **`40/40` Playwright E2E tests passed**

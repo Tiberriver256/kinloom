@@ -3,10 +3,15 @@ import type React from 'react';
 import { useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { EmptyStateNotice } from '../../components/Atoms.js';
+import mediaGalleryStyles from '../../components/MediaGallery.module.css';
 import { MediaPlayer } from '../../components/MediaPlayer.js';
+import readerStyles from '../../components/SourceReaderDrawer.module.css';
+import { useDialogFocusTrap } from '../../hooks/useDialogFocusTrap.js';
 import { cx } from '../../lib/cx.js';
-import { useDialogFocusTrap } from '../../lib/useDialogFocusTrap.js';
 import { KINLOOM_VOCABULARY, MEDIA_KIND_LABELS } from '../../lib/vocabulary.js';
+import controlStyles from '../../styles/Controls.module.css';
+import overlayStyles from '../../styles/Overlays.module.css';
+import evidenceStyles from '../EvidencePage.module.css';
 import type { MediaKindFilter } from './evidenceViewModel.js';
 import { MEDIA_KIND_FILTER_ORDER } from './evidenceViewModel.js';
 
@@ -20,7 +25,6 @@ export interface EvidenceMediaTabProps {
   readonly mediaChecklist: readonly MediaChecklistItem[];
   readonly missingChecklistItems: readonly MediaChecklistItem[];
   readonly baseUrl?: string;
-  readonly uiStyles: Readonly<Record<string, string>>;
   readonly onMediaQueryChange: (value: string) => void;
   readonly onMediaKindFilterChange: (kind: MediaKindFilter) => void;
   readonly onClearMediaFilters: () => void;
@@ -38,7 +42,6 @@ export const EvidenceMediaTab: React.FC<EvidenceMediaTabProps> = ({
   mediaChecklist,
   missingChecklistItems,
   baseUrl,
-  uiStyles,
   onMediaQueryChange,
   onMediaKindFilterChange,
   onClearMediaFilters,
@@ -49,7 +52,7 @@ export const EvidenceMediaTab: React.FC<EvidenceMediaTabProps> = ({
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-      <section className={cx(uiStyles, 'place-map-box')} style={{ marginBottom: 0 }}>
+      <section className={cx(controlStyles, 'place-map-box')} style={{ marginBottom: 0 }}>
         <div
           style={{
             display: 'flex',
@@ -77,7 +80,7 @@ export const EvidenceMediaTab: React.FC<EvidenceMediaTabProps> = ({
           </div>
           <input
             type="search"
-            className={cx(uiStyles, 'search-input')}
+            className={cx(controlStyles, 'search-input')}
             placeholder={KINLOOM_VOCABULARY.evidence.mediaSearchPlaceholder}
             value={mediaQuery}
             onChange={(e) => {
@@ -88,14 +91,14 @@ export const EvidenceMediaTab: React.FC<EvidenceMediaTabProps> = ({
         </div>
 
         <div
-          className={cx(uiStyles, 'filter-bar')}
+          className={cx(controlStyles, 'filter-bar')}
           role="group"
           aria-label="Filter photos and documents by category"
           style={{ marginBottom: 14 }}
         >
           <button
             type="button"
-            className={cx(uiStyles, `pill-btn ${mediaKindFilter === 'all' ? 'active' : ''}`)}
+            className={cx(controlStyles, `pill-btn ${mediaKindFilter === 'all' ? 'active' : ''}`)}
             onClick={() => {
               onMediaKindFilterChange('all');
             }}
@@ -111,7 +114,7 @@ export const EvidenceMediaTab: React.FC<EvidenceMediaTabProps> = ({
               <button
                 key={k}
                 type="button"
-                className={cx(uiStyles, `pill-btn ${mediaKindFilter === k ? 'active' : ''}`)}
+                className={cx(controlStyles, `pill-btn ${mediaKindFilter === k ? 'active' : ''}`)}
                 onClick={() => {
                   onMediaKindFilterChange(k);
                 }}
@@ -131,7 +134,7 @@ export const EvidenceMediaTab: React.FC<EvidenceMediaTabProps> = ({
             }
             action={
               mediaKindFilter !== 'all' || mediaQuery.trim() ? (
-                <button type="button" className={cx(uiStyles, 'pill-btn')} onClick={onClearMediaFilters}>
+                <button type="button" className={cx(controlStyles, 'pill-btn')} onClick={onClearMediaFilters}>
                   Clear filters
                 </button>
               ) : undefined
@@ -139,29 +142,29 @@ export const EvidenceMediaTab: React.FC<EvidenceMediaTabProps> = ({
           />
         ) : (
           <>
-            <div className={cx(uiStyles, 'person-media-grid')}>
+            <div className={cx(mediaGalleryStyles, 'person-media-grid')}>
               {displayedMedia.map((m) => (
                 <button
                   key={m.id}
                   type="button"
-                  className={cx(uiStyles, 'person-media-card')}
+                  className={cx(mediaGalleryStyles, 'person-media-card')}
                   onClick={() => {
                     onOpenMediaItem(m);
                   }}
                 >
-                  <div className={cx(uiStyles, 'person-media-thumb-wrap')}>
+                  <div className={cx(mediaGalleryStyles, 'person-media-thumb-wrap')}>
                     <MediaPlayer media={m} baseUrl={baseUrl} variant="preview" />
-                    <span className={cx(uiStyles, `media-kind-badge kind-${m.kind}`)}>
+                    <span className={cx(mediaGalleryStyles, `media-kind-badge kind-${m.kind}`)}>
                       {MEDIA_KIND_LABELS[m.kind] || m.kind}
                     </span>
                   </div>
-                  <div className={cx(uiStyles, 'person-media-caption')}>{m.caption}</div>
+                  <div className={cx(mediaGalleryStyles, 'person-media-caption')}>{m.caption}</div>
                 </button>
               ))}
             </div>
             {filteredMedia.length > displayedMedia.length && (
               <div style={{ marginTop: 16, textAlign: 'center' }}>
-                <button type="button" className={cx(uiStyles, 'pill-btn')} onClick={onLoadMoreMedia}>
+                <button type="button" className={cx(controlStyles, 'pill-btn')} onClick={onLoadMoreMedia}>
                   {KINLOOM_VOCABULARY.evidence.loadMoreMedia} ({filteredMedia.length - displayedMedia.length}{' '}
                   remaining)
                 </button>
@@ -172,7 +175,7 @@ export const EvidenceMediaTab: React.FC<EvidenceMediaTabProps> = ({
       </section>
 
       {mediaChecklist.length > 0 && (
-        <section className={cx(uiStyles, 'place-map-box')} style={{ marginBottom: 0 }}>
+        <section className={cx(controlStyles, 'place-map-box')} style={{ marginBottom: 0 }}>
           <h2
             style={{
               fontFamily: 'var(--font-serif)',
@@ -201,7 +204,7 @@ export const EvidenceMediaTab: React.FC<EvidenceMediaTabProps> = ({
               {missingChecklistItems.map((item) => (
                 <div
                   key={`${item.person_id}-${item.obje_xref}`}
-                  className={cx(uiStyles, 'evidence-source-row')}
+                  className={cx(evidenceStyles, 'evidence-source-row')}
                 >
                   <div>
                     <strong style={{ fontSize: '0.94rem' }}>{item.title}</strong>
@@ -217,7 +220,7 @@ export const EvidenceMediaTab: React.FC<EvidenceMediaTabProps> = ({
                   </div>
                   <Link
                     to={`/person/${item.person_slug}`}
-                    className={cx(uiStyles, 'pill-btn')}
+                    className={cx(controlStyles, 'pill-btn')}
                     style={{ textDecoration: 'none', fontSize: '0.8125rem' }}
                   >
                     {KINLOOM_VOCABULARY.evidence.openProfileCta}
@@ -236,7 +239,6 @@ export interface EvidenceMediaLightboxProps {
   readonly lightboxItem: MediaItem | null;
   readonly navMedia: readonly MediaItem[];
   readonly baseUrl?: string;
-  readonly uiStyles: Readonly<Record<string, string>>;
   readonly onSetLightboxItem: React.Dispatch<React.SetStateAction<MediaItem | null>>;
 }
 
@@ -244,7 +246,6 @@ export const EvidenceMediaLightbox: React.FC<EvidenceMediaLightboxProps> = ({
   lightboxItem,
   navMedia,
   baseUrl,
-  uiStyles,
   onSetLightboxItem,
 }) => {
   const lightboxCloseRef = useRef<HTMLButtonElement | null>(null);
@@ -287,23 +288,23 @@ export const EvidenceMediaLightbox: React.FC<EvidenceMediaLightboxProps> = ({
       ref={lightboxDialogRef}
       open
       aria-modal="true"
-      className={cx(uiStyles, 'lightbox-backdrop')}
+      className={cx(overlayStyles, 'lightbox-backdrop')}
       aria-label={lightboxItem.caption}
     >
       <button
         type="button"
         tabIndex={-1}
-        className={cx(uiStyles, 'lightbox-backdrop-close')}
+        className={cx(overlayStyles, 'lightbox-backdrop-close')}
         aria-label="Close lightbox"
         onClick={() => {
           onSetLightboxItem(null);
         }}
       />
-      <div className={cx(uiStyles, 'scan-lightbox-card')}>
-        <div className={cx(uiStyles, 'scan-lightbox-header')}>
+      <div className={cx(readerStyles, 'scan-lightbox-card')}>
+        <div className={cx(readerStyles, 'scan-lightbox-header')}>
           <div>
             <span
-              className={cx(uiStyles, `media-kind-badge kind-${lightboxItem.kind}`)}
+              className={cx(mediaGalleryStyles, `media-kind-badge kind-${lightboxItem.kind}`)}
               style={{ position: 'static', marginRight: 8 }}
             >
               {MEDIA_KIND_LABELS[lightboxItem.kind] || lightboxItem.kind}
@@ -323,7 +324,7 @@ export const EvidenceMediaLightbox: React.FC<EvidenceMediaLightboxProps> = ({
               <>
                 <button
                   type="button"
-                  className={cx(uiStyles, 'pill-btn')}
+                  className={cx(controlStyles, 'pill-btn')}
                   onClick={() => {
                     onSetLightboxItem(navMedia[(curIdx - 1 + navMedia.length) % navMedia.length]);
                   }}
@@ -332,7 +333,7 @@ export const EvidenceMediaLightbox: React.FC<EvidenceMediaLightboxProps> = ({
                 </button>
                 <button
                   type="button"
-                  className={cx(uiStyles, 'pill-btn')}
+                  className={cx(controlStyles, 'pill-btn')}
                   onClick={() => {
                     onSetLightboxItem(navMedia[(curIdx + 1) % navMedia.length]);
                   }}
@@ -344,7 +345,7 @@ export const EvidenceMediaLightbox: React.FC<EvidenceMediaLightboxProps> = ({
             {lightboxItem.person_slug && (
               <Link
                 to={`/person/${lightboxItem.person_slug}`}
-                className={cx(uiStyles, 'pill-btn')}
+                className={cx(controlStyles, 'pill-btn')}
                 style={{ textDecoration: 'none' }}
                 onClick={() => {
                   onSetLightboxItem(null);
@@ -356,7 +357,7 @@ export const EvidenceMediaLightbox: React.FC<EvidenceMediaLightboxProps> = ({
             <button
               ref={lightboxCloseRef}
               type="button"
-              className={cx(uiStyles, 'pill-btn')}
+              className={cx(controlStyles, 'pill-btn')}
               onClick={() => {
                 onSetLightboxItem(null);
               }}
@@ -366,7 +367,7 @@ export const EvidenceMediaLightbox: React.FC<EvidenceMediaLightboxProps> = ({
             </button>
           </div>
         </div>
-        <div className={cx(uiStyles, 'scan-lightbox-scroll')}>
+        <div className={cx(readerStyles, 'scan-lightbox-scroll')}>
           <MediaPlayer media={lightboxItem} baseUrl={baseUrl} variant="full" />
         </div>
         {lightboxItem.provenance && (

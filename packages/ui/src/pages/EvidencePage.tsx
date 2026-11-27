@@ -2,19 +2,16 @@ import type { MediaChecklistItem, MediaItem } from '@kinloom/core';
 import type React from 'react';
 import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import cssMod0 from '../components/Atoms.module.css';
+import atomStyles from '../components/Atoms.module.css';
 import { ExplorerTopBar } from '../components/ExplorerTopBar.js';
 import { KinloomFooter } from '../components/KinloomFooter.js';
-import cssMod7 from '../components/MediaGallery.module.css';
-import cssMod1 from '../components/SourceInspectorDrawer.module.css';
-import cssMod2 from '../components/SourceReaderDrawer.module.css';
 import { useArchiveData } from '../context/ArchiveDataContext.js';
 import { useArchiveUi } from '../context/ArchiveUiContext.js';
+import { handleTablistKeyDown } from '../hooks/keyboardNav.js';
 import { cx } from '../lib/cx.js';
-import { handleTablistKeyDown } from '../lib/keyboardNav.js';
 import { KINLOOM_VOCABULARY } from '../lib/vocabulary.js';
 import { PluginSlot } from '../plugins/PluginContext.js';
-import cssMod3 from './EvidencePage.module.css';
+import controlStyles from '../styles/Controls.module.css';
 import { EvidenceDiscrepanciesTab } from './evidence/EvidenceDiscrepanciesTab.js';
 import { EvidenceMediaLightbox, EvidenceMediaTab } from './evidence/EvidenceMediaTab.js';
 import { EvidenceSourcesTab } from './evidence/EvidenceSourcesTab.js';
@@ -30,20 +27,7 @@ import {
   type MediaKindFilter,
   parseInitialEvidenceTab,
 } from './evidence/evidenceViewModel.js';
-import cssMod4 from './IndexPage.module.css';
-import cssMod5 from './PersonPage.module.css';
-import cssMod6 from './PlacePage.module.css';
-
-const uiStyles: Readonly<Record<string, string>> = {
-  ...cssMod0,
-  ...cssMod1,
-  ...cssMod2,
-  ...cssMod3,
-  ...cssMod4,
-  ...cssMod5,
-  ...cssMod6,
-  ...cssMod7,
-};
+import indexStyles from './IndexPage.module.css';
 
 export const EvidencePage: React.FC = () => {
   const { bundle, baseUrl, peopleById, sourcesById, readableSourceIds, loadMediaChecklist, loading } =
@@ -106,7 +90,7 @@ export const EvidencePage: React.FC = () => {
     return (
       <div>
         <ExplorerTopBar />
-        <main id="main-content" className={cx(uiStyles, 'index-page')}>
+        <main id="main-content" className={cx(indexStyles, 'index-page')}>
           {KINLOOM_VOCABULARY.evidence.loading}
         </main>
       </div>
@@ -116,8 +100,8 @@ export const EvidencePage: React.FC = () => {
   return (
     <div>
       <ExplorerTopBar />
-      <main id="main-content" className={cx(uiStyles, 'place-page')}>
-        <section className={cx(uiStyles, 'wire-banner')} style={{ marginBottom: 18 }}>
+      <main id="main-content" className={cx(controlStyles, 'place-page')}>
+        <section className={cx(controlStyles, 'wire-banner')} style={{ marginBottom: 18 }}>
           <div>
             <h1>{KINLOOM_VOCABULARY.evidence.heading}</h1>
             <p>
@@ -126,7 +110,7 @@ export const EvidencePage: React.FC = () => {
               scans.
             </p>
           </div>
-          <div className={cx(uiStyles, 'folio-metrics')}>
+          <div className={cx(atomStyles, 'folio-metrics')}>
             <div>
               <strong>{bundle.sources.length}</strong> cataloged sources
             </div>
@@ -145,7 +129,7 @@ export const EvidencePage: React.FC = () => {
         <PluginSlot name="evidenceExtra" />
 
         <div
-          className={cx(uiStyles, 'filter-bar evidence-tabs')}
+          className={cx(controlStyles, 'filter-bar evidence-tabs')}
           role="tablist"
           aria-label={KINLOOM_VOCABULARY.evidence.tablistAria}
           onKeyDown={(event) => {
@@ -159,7 +143,7 @@ export const EvidencePage: React.FC = () => {
             role="tab"
             tabIndex={tab === 'conflicts' ? 0 : -1}
             aria-selected={tab === 'conflicts'}
-            className={cx(uiStyles, `pill-btn ${tab === 'conflicts' ? 'active' : ''}`)}
+            className={cx(controlStyles, `pill-btn ${tab === 'conflicts' ? 'active' : ''}`)}
             onClick={() => {
               setTab('conflicts');
             }}
@@ -171,7 +155,7 @@ export const EvidencePage: React.FC = () => {
             role="tab"
             tabIndex={tab === 'citations' ? 0 : -1}
             aria-selected={tab === 'citations'}
-            className={cx(uiStyles, `pill-btn ${tab === 'citations' ? 'active' : ''}`)}
+            className={cx(controlStyles, `pill-btn ${tab === 'citations' ? 'active' : ''}`)}
             onClick={() => {
               setTab('citations');
             }}
@@ -183,7 +167,7 @@ export const EvidencePage: React.FC = () => {
             role="tab"
             tabIndex={tab === 'media' ? 0 : -1}
             aria-selected={tab === 'media'}
-            className={cx(uiStyles, `pill-btn ${tab === 'media' ? 'active' : ''}`)}
+            className={cx(controlStyles, `pill-btn ${tab === 'media' ? 'active' : ''}`)}
             onClick={() => {
               setTab('media');
             }}
@@ -198,7 +182,6 @@ export const EvidencePage: React.FC = () => {
             peopleById={peopleById}
             sourcesById={sourcesById}
             readableSourceIds={readableSourceIds}
-            uiStyles={uiStyles}
             onOpenSourceReader={openSourceReader}
           />
         )}
@@ -213,7 +196,6 @@ export const EvidencePage: React.FC = () => {
             unverifiedEvents={unverifiedEvents}
             showAllUnverified={showAllUnverified}
             peopleById={peopleById}
-            uiStyles={uiStyles}
             onSourceQueryChange={setSourceQuery}
             onToggleShowAllUnverified={() => {
               setShowAllUnverified((v) => !v);
@@ -234,7 +216,6 @@ export const EvidencePage: React.FC = () => {
             mediaChecklist={mediaChecklist}
             missingChecklistItems={missingChecklistItems}
             baseUrl={baseUrl}
-            uiStyles={uiStyles}
             onMediaQueryChange={(value) => {
               setMediaQuery(value);
               setMediaLimit(36);
@@ -264,7 +245,6 @@ export const EvidencePage: React.FC = () => {
           lightboxItem={lightboxItem}
           navMedia={navMedia}
           baseUrl={baseUrl}
-          uiStyles={uiStyles}
           onSetLightboxItem={setLightboxItem}
         />
       </main>

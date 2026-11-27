@@ -1,68 +1,35 @@
-import type { AgentTokenScope, InviteRecord, UserRecord, UserRole } from '@kinloom/core';
+import type {
+  AdminDataSource,
+  AgentTokenScope,
+  CreatedAgentTokenResponse,
+  InviteRecord,
+  PublicAgentTokenRecord,
+  UserRecord,
+  UserRole,
+} from '@kinloom/core';
 import type React from 'react';
 import { useCallback, useEffect, useState } from 'react';
-import type {
-  CreatedAgentTokenResponse,
-  CreatedInviteResponse,
-  PublicAgentTokenRecord,
-} from '../adapters/httpWikiDataSource.js';
-import { HttpWikiDataSource } from '../adapters/httpWikiDataSource.js';
-import cssMod0 from '../components/Atoms.module.css';
+import atomStyles from '../components/Atoms.module.css';
 import { ExplorerTopBar } from '../components/ExplorerTopBar.js';
 import { KinloomFooter } from '../components/KinloomFooter.js';
-import cssMod1_0 from '../components/wiki/WikiChrome.module.css';
-import cssMod1_2 from '../components/wiki/WikiForms.module.css';
-import cssMod1_1 from '../components/wiki/WikiPanels.module.css';
+import wikiPanelStyles from '../components/wiki/WikiPanels.module.css';
 import { useArchiveData } from '../context/ArchiveDataContext.js';
 import { cx } from '../lib/cx.js';
-import { formatArchivalTimestamp } from '../lib/formatTimestamp.js';
-import cssMod2 from './IndexPage.module.css';
-import cssMod3 from './PersonPage.module.css';
-import cssMod4 from './PlacePage.module.css';
+import controlStyles from '../styles/Controls.module.css';
+import { AgentTokensSection } from './admin/AgentTokensSection.js';
+import type { AdminConfirmState } from './admin/adminHelpers.js';
+import { InvitesSection } from './admin/InvitesSection.js';
+import { MembersSection } from './admin/MembersSection.js';
 
-const uiStyles: Readonly<Record<string, string>> = {
-  ...cssMod0,
-  ...cssMod1_0,
-  ...cssMod1_1,
-  ...cssMod1_2,
-  ...cssMod2,
-  ...cssMod3,
-  ...cssMod4,
-};
-
-type AdminConfirmState =
-  | { readonly kind: 'demote'; readonly email: string }
-  | { readonly kind: 'revoke_invite'; readonly token: string }
-  | { readonly kind: 'revoke_token'; readonly tokenId: string };
-
-function formatTokenScopeLabel(scope: AgentTokenScope): string {
-  return scope === 'read_backup' ? 'Read-only backup' : 'Research updates';
-}
-
-function buildInviteUrl(token: string): string {
-  const origin = typeof window !== 'undefined' ? window.location.origin : '';
-  return `${origin}/invite/${token}`;
-}
-
-export interface AdminApiClient {
-  listUsers(): Promise<readonly UserRecord[]>;
-  updateUserRole(email: string, input: { role: UserRole }): Promise<UserRecord>;
-  listInvites(): Promise<readonly InviteRecord[]>;
-  createInvite(input: { label: string; expires_in_days?: number }): Promise<CreatedInviteResponse>;
-  revokeInvite(token: string): Promise<void>;
-  listAgentTokens(): Promise<readonly PublicAgentTokenRecord[]>;
-  createAgentToken(input: { label: string; scope: AgentTokenScope }): Promise<CreatedAgentTokenResponse>;
-  revokeAgentToken(tokenId: string): Promise<void>;
-}
+export type AdminApiClient = AdminDataSource;
 
 export interface AdminPageProps {
-  adminClient?: AdminApiClient;
+  adminClient?: AdminDataSource;
 }
 
 export const AdminPage: React.FC<AdminPageProps> = ({ adminClient }) => {
-  const { session, dataSource, capabilities } = useArchiveData();
-  const client: AdminApiClient | null =
-    adminClient ?? (dataSource instanceof HttpWikiDataSource ? dataSource : null);
+  const { session, dataSource, adminDataSource, capabilities } = useArchiveData();
+  const client: AdminDataSource | null = adminClient ?? adminDataSource ?? dataSource.admin ?? null;
 
   const [users, setUsers] = useState<readonly UserRecord[]>([]);
   const [invites, setInvites] = useState<readonly InviteRecord[]>([]);
@@ -73,12 +40,10 @@ export const AdminPage: React.FC<AdminPageProps> = ({ adminClient }) => {
   const [pendingConfirm, setPendingConfirm] = useState<AdminConfirmState | null>(null);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
 
-  // Invite form state
   const [inviteLabel, setInviteLabel] = useState('');
   const [inviteDays, setInviteDays] = useState('30');
   const [createdInviteUrl, setCreatedInviteUrl] = useState<string | null>(null);
 
-  // Agent token form state
   const [tokenLabel, setTokenLabel] = useState('');
   const [tokenScope, setTokenScope] = useState<AgentTokenScope>('write_batch');
   const [revealedSecret, setRevealedSecret] = useState<CreatedAgentTokenResponse | null>(null);
@@ -242,10 +207,10 @@ export const AdminPage: React.FC<AdminPageProps> = ({ adminClient }) => {
     return (
       <div>
         <ExplorerTopBar />
-        <main id="main-content" className={cx(uiStyles, 'place-page')}>
-          <section className={cx(uiStyles, 'place-map-box')}>
+        <main id="main-content" className={cx(controlStyles, 'place-page')}>
+          <section className={cx(controlStyles, 'place-map-box')}>
             <h1>Site Administration</h1>
-            <p className={cx(uiStyles, 'empty-ring-note')}>
+            <p className={cx(controlStyles, 'empty-ring-note')}>
               Administrator permissions are required to manage members, invite links, and agent tokens.
             </p>
           </section>
@@ -258,8 +223,8 @@ export const AdminPage: React.FC<AdminPageProps> = ({ adminClient }) => {
   return (
     <div>
       <ExplorerTopBar />
-      <main id="main-content" className={cx(uiStyles, 'place-page')}>
-        <section className={cx(uiStyles, 'wire-banner')} style={{ marginBottom: 18 }}>
+      <main id="main-content" className={cx(controlStyles, 'place-page')}>
+        <section className={cx(controlStyles, 'wire-banner')} style={{ marginBottom: 18 }}>
           <div>
             <h1>Site Administration</h1>
             <p>
@@ -267,7 +232,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ adminClient }) => {
               research helpers or archive backups.
             </p>
           </div>
-          <div className={cx(uiStyles, 'folio-metrics')}>
+          <div className={cx(atomStyles, 'folio-metrics')}>
             <div>
               <strong>{users.length}</strong> enrolled members
             </div>
@@ -281,408 +246,71 @@ export const AdminPage: React.FC<AdminPageProps> = ({ adminClient }) => {
         </section>
 
         {error && (
-          <div className={cx(uiStyles, 'wiki-status-banner is-error')} role="alert">
+          <div className={cx(wikiPanelStyles, 'wiki-status-banner is-error')} role="alert">
             {error}
           </div>
         )}
-        {loading && <p className={cx(uiStyles, 'empty-ring-note')}>Loading administration records…</p>}
+        {loading && <p className={cx(controlStyles, 'empty-ring-note')}>Loading administration records…</p>}
 
-        {/* Members */}
-        <section className={cx(uiStyles, 'place-map-box')}>
-          <h2 className={cx(uiStyles, 'wiki-section-title')}>Enrolled Family Members</h2>
-          {users.length === 0 ? (
-            <p className={cx(uiStyles, 'empty-ring-note')}>No enrolled members found.</p>
-          ) : (
-            <div className={cx(uiStyles, 'wiki-admin-list')}>
-              {users.map((user) => {
-                const isSelf = currentAdminEmail !== null && user.email.toLowerCase() === currentAdminEmail;
-                const demoteBlocked = user.role === 'admin' && (isSelf || adminCount <= 1);
-                const demoteBlockedReason = isSelf
-                  ? 'You cannot demote your own admin account.'
-                  : 'At least one administrator is required.';
-                const confirmingDemote =
-                  pendingConfirm?.kind === 'demote' && pendingConfirm.email === user.email;
-                const isRowBusy = busyKey === `role:${user.email}`;
+        <MembersSection
+          users={users}
+          adminCount={adminCount}
+          currentAdminEmail={currentAdminEmail}
+          busyKey={busyKey}
+          pendingConfirm={pendingConfirm}
+          onSetPendingConfirm={setPendingConfirm}
+          onToggleRole={handleToggleRole}
+        />
 
-                return (
-                  <div key={user.email} className={cx(uiStyles, 'wiki-admin-row')}>
-                    <div>
-                      <strong>{user.display_name}</strong>{' '}
-                      <span className={cx(uiStyles, 'wiki-role-chip')}>
-                        {user.role === 'admin' ? 'Admin' : 'Editor'}
-                      </span>
-                      {isSelf && <span className={cx(uiStyles, 'wiki-role-chip is-self')}>You</span>}
-                      <div className={cx(uiStyles, 'wiki-panel-meta')}>
-                        {user.email} · Added{' '}
-                        <time dateTime={user.added_at} title={user.added_at}>
-                          {formatArchivalTimestamp(user.added_at, false)}
-                        </time>
-                      </div>
-                      {demoteBlocked && (
-                        <div className={cx(uiStyles, 'wiki-panel-meta')}>{demoteBlockedReason}</div>
-                      )}
-                    </div>
-                    <div className={cx(uiStyles, 'wiki-inline-actions')}>
-                      {confirmingDemote ? (
-                        <>
-                          <button
-                            type="button"
-                            className={cx(uiStyles, 'pill-btn wiki-danger-btn')}
-                            disabled={busyKey !== null}
-                            onClick={() => {
-                              void handleToggleRole(user);
-                            }}
-                          >
-                            Confirm Demote
-                          </button>
-                          <button
-                            type="button"
-                            className={cx(uiStyles, 'pill-btn')}
-                            disabled={busyKey !== null}
-                            onClick={() => {
-                              setPendingConfirm(null);
-                            }}
-                          >
-                            Cancel
-                          </button>
-                        </>
-                      ) : (
-                        <button
-                          type="button"
-                          className={cx(uiStyles, 'wiki-btn-secondary wiki-btn-sm')}
-                          disabled={busyKey !== null || demoteBlocked}
-                          title={demoteBlocked ? demoteBlockedReason : undefined}
-                          onClick={() => {
-                            if (user.role === 'admin') {
-                              setPendingConfirm({ kind: 'demote', email: user.email });
-                            } else {
-                              void handleToggleRole(user);
-                            }
-                          }}
-                        >
-                          {isRowBusy
-                            ? 'Updating…'
-                            : user.role === 'admin'
-                              ? 'Demote to Editor'
-                              : 'Promote to Admin'}
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </section>
+        <InvitesSection
+          invites={invites}
+          inviteLabel={inviteLabel}
+          inviteDays={inviteDays}
+          createdInviteUrl={createdInviteUrl}
+          busyKey={busyKey}
+          copiedKey={copiedKey}
+          pendingConfirm={pendingConfirm}
+          onInviteLabelChange={setInviteLabel}
+          onInviteDaysChange={setInviteDays}
+          onCreateInvite={handleCreateInvite}
+          onDismissCreatedInvite={() => {
+            setCreatedInviteUrl(null);
+          }}
+          onCopyText={copyText}
+          onSetPendingConfirm={setPendingConfirm}
+          onRevokeInvite={handleRevokeInvite}
+        />
 
-        {/* Invite links */}
-        <section className={cx(uiStyles, 'place-map-box')}>
-          <h2 className={cx(uiStyles, 'wiki-section-title')}>Family Invite Links</h2>
-          <form
-            className={cx(uiStyles, 'wiki-inline-form')}
-            onSubmit={(e) => {
-              void handleCreateInvite(e);
-            }}
-          >
-            <label className={cx(uiStyles, 'wiki-field wiki-inline-field-grow')}>
-              <span className={cx(uiStyles, 'wiki-field-label')}>Invite label</span>
-              <input
-                type="text"
-                className={cx(uiStyles, 'wiki-input')}
-                placeholder="e.g. Reunion cousins"
-                value={inviteLabel}
-                onChange={(e) => {
-                  setInviteLabel(e.target.value);
-                }}
-              />
-            </label>
-            <label className={cx(uiStyles, 'wiki-field wiki-inline-field-days')}>
-              <span className={cx(uiStyles, 'wiki-field-label')}>Expires (days)</span>
-              <input
-                type="number"
-                min="1"
-                max="365"
-                className={cx(uiStyles, 'wiki-input')}
-                aria-label="Expires in days"
-                value={inviteDays}
-                onChange={(e) => {
-                  setInviteDays(e.target.value);
-                }}
-              />
-            </label>
-            <button
-              type="submit"
-              className={cx(uiStyles, 'wiki-btn-primary wiki-btn-sm')}
-              disabled={!inviteLabel.trim() || busyKey !== null}
-            >
-              {busyKey === 'create_invite' ? 'Creating…' : 'Generate Invite Link'}
-            </button>
-          </form>
-
-          {createdInviteUrl && (
-            <output className={cx(uiStyles, 'wiki-status-banner is-success')} aria-live="polite">
-              <p>
-                <strong>New invite link:</strong> <code>{createdInviteUrl}</code>
-              </p>
-              <div className={cx(uiStyles, 'wiki-inline-actions')} style={{ marginTop: 4 }}>
-                <button
-                  type="button"
-                  className={cx(uiStyles, 'pill-btn active')}
-                  onClick={() => {
-                    copyText('created_invite', createdInviteUrl);
-                  }}
-                >
-                  {copiedKey === 'created_invite' ? 'Copied' : 'Copy Invite Link'}
-                </button>
-                <button
-                  type="button"
-                  className={cx(uiStyles, 'pill-btn')}
-                  onClick={() => {
-                    setCreatedInviteUrl(null);
-                  }}
-                >
-                  Dismiss
-                </button>
-              </div>
-            </output>
-          )}
-
-          <div className={cx(uiStyles, 'wiki-admin-list')} style={{ marginTop: 12 }}>
-            {invites.map((inv) => {
-              const confirmingRevoke =
-                pendingConfirm?.kind === 'revoke_invite' && pendingConfirm.token === inv.token;
-              const isRowBusy = busyKey === `revoke_invite:${inv.token}`;
-              const copyId = `invite:${inv.token}`;
-              return (
-                <div key={inv.token} className={cx(uiStyles, 'wiki-admin-row')}>
-                  <div>
-                    <strong>{inv.label}</strong>{' '}
-                    {inv.revoked_at ? (
-                      <span className={cx(uiStyles, 'wiki-badge wiki-badge-conflict')}>Revoked</span>
-                    ) : (
-                      <span className={cx(uiStyles, 'wiki-badge wiki-badge-cited')}>Active</span>
-                    )}
-                    <div className={cx(uiStyles, 'wiki-panel-meta')}>
-                      Uses: {inv.uses}
-                      {inv.expires_at ? (
-                        <>
-                          {' '}
-                          · Expires{' '}
-                          <time dateTime={inv.expires_at} title={inv.expires_at}>
-                            {formatArchivalTimestamp(inv.expires_at, false)}
-                          </time>
-                        </>
-                      ) : (
-                        ' · No expiry'
-                      )}
-                    </div>
-                  </div>
-                  {!inv.revoked_at && (
-                    <div className={cx(uiStyles, 'wiki-inline-actions')}>
-                      {confirmingRevoke ? (
-                        <>
-                          <button
-                            type="button"
-                            className={cx(uiStyles, 'pill-btn wiki-danger-btn')}
-                            disabled={busyKey !== null}
-                            onClick={() => {
-                              void handleRevokeInvite(inv.token);
-                            }}
-                          >
-                            Confirm Revoke
-                          </button>
-                          <button
-                            type="button"
-                            className={cx(uiStyles, 'pill-btn')}
-                            disabled={busyKey !== null}
-                            onClick={() => {
-                              setPendingConfirm(null);
-                            }}
-                          >
-                            Cancel
-                          </button>
-                        </>
-                      ) : (
-                        <>
-                          <button
-                            type="button"
-                            className={cx(uiStyles, 'wiki-btn-secondary wiki-btn-sm')}
-                            onClick={() => {
-                              copyText(copyId, buildInviteUrl(inv.token));
-                            }}
-                          >
-                            {copiedKey === copyId ? 'Copied' : 'Copy Link'}
-                          </button>
-                          <button
-                            type="button"
-                            className={cx(uiStyles, 'pill-btn wiki-danger-btn')}
-                            disabled={busyKey !== null}
-                            onClick={() => {
-                              setPendingConfirm({ kind: 'revoke_invite', token: inv.token });
-                            }}
-                          >
-                            {isRowBusy ? 'Revoking…' : 'Revoke'}
-                          </button>
-                        </>
-                      )}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </section>
-
-        {/* Agent tokens */}
-        <section className={cx(uiStyles, 'place-map-box')}>
-          <h2 className={cx(uiStyles, 'wiki-section-title')}>Scoped AI Agent &amp; Backup Tokens</h2>
-          <form
-            className={cx(uiStyles, 'wiki-inline-form')}
-            onSubmit={(e) => {
-              void handleCreateToken(e);
-            }}
-          >
-            <label className={cx(uiStyles, 'wiki-field wiki-inline-field-grow')}>
-              <span className={cx(uiStyles, 'wiki-field-label')}>Token label</span>
-              <input
-                type="text"
-                className={cx(uiStyles, 'wiki-input')}
-                placeholder="e.g. Research CLI or Nightly Backup"
-                value={tokenLabel}
-                onChange={(e) => {
-                  setTokenLabel(e.target.value);
-                }}
-              />
-            </label>
-            <label className={cx(uiStyles, 'wiki-field wiki-inline-field-scope')}>
-              <span className={cx(uiStyles, 'wiki-field-label')}>Permission scope</span>
-              <select
-                className={cx(uiStyles, 'wiki-input')}
-                aria-label="Agent token scope"
-                value={tokenScope}
-                onChange={(e) => {
-                  setTokenScope(e.target.value as AgentTokenScope);
-                }}
-              >
-                <option value="write_batch">Research assistant updates</option>
-                <option value="read_backup">Read-only archive backup</option>
-              </select>
-            </label>
-            <button
-              type="submit"
-              className={cx(uiStyles, 'wiki-btn-primary wiki-btn-sm')}
-              disabled={!tokenLabel.trim() || busyKey !== null}
-            >
-              {busyKey === 'create_token' ? 'Creating…' : 'Create Token'}
-            </button>
-          </form>
-
-          {revealedSecret && (
-            <div className={cx(uiStyles, 'wiki-status-banner is-warning')} role="alert">
-              <div>
-                <strong>Copy this secret now — it will never be shown again:</strong>
-                <div style={{ marginTop: 6 }}>
-                  <code className={cx(uiStyles, 'wiki-secret-box')}>{revealedSecret.plaintext_secret}</code>
-                </div>
-              </div>
-              <div className={cx(uiStyles, 'wiki-inline-actions')} style={{ marginTop: 8 }}>
-                <button
-                  type="button"
-                  className={cx(uiStyles, 'pill-btn active')}
-                  onClick={() => {
-                    void navigator.clipboard
-                      ?.writeText(revealedSecret.plaintext_secret)
-                      .then(() => {
-                        setCopiedSecret(true);
-                      })
-                      .catch(() => {
-                        setCopiedSecret(false);
-                      });
-                  }}
-                >
-                  {copiedSecret ? 'Copied' : 'Copy Secret'}
-                </button>
-                <button
-                  type="button"
-                  className={cx(uiStyles, 'pill-btn')}
-                  onClick={() => {
-                    setRevealedSecret(null);
-                  }}
-                >
-                  Dismiss
-                </button>
-              </div>
-            </div>
-          )}
-
-          <div className={cx(uiStyles, 'wiki-admin-list')} style={{ marginTop: 12 }}>
-            {tokens.map((tok) => {
-              const confirmingRevoke =
-                pendingConfirm?.kind === 'revoke_token' && pendingConfirm.tokenId === tok.token_id;
-              const isRowBusy = busyKey === `revoke_token:${tok.token_id}`;
-              return (
-                <div key={tok.token_id} className={cx(uiStyles, 'wiki-admin-row')}>
-                  <div>
-                    <strong>{tok.label}</strong>{' '}
-                    <span className={cx(uiStyles, 'wiki-batch-chip')}>
-                      {formatTokenScopeLabel(tok.scope)}
-                    </span>{' '}
-                    {tok.revoked_at ? (
-                      <span className={cx(uiStyles, 'wiki-badge wiki-badge-conflict')}>Revoked</span>
-                    ) : (
-                      <span className={cx(uiStyles, 'wiki-badge wiki-badge-cited')}>Active</span>
-                    )}
-                    <div className={cx(uiStyles, 'wiki-panel-meta')}>
-                      ID: {tok.token_id} · Created{' '}
-                      <time dateTime={tok.created_at} title={tok.created_at}>
-                        {formatArchivalTimestamp(tok.created_at, false)}
-                      </time>
-                    </div>
-                  </div>
-                  {!tok.revoked_at && (
-                    <div className={cx(uiStyles, 'wiki-inline-actions')}>
-                      {confirmingRevoke ? (
-                        <>
-                          <button
-                            type="button"
-                            className={cx(uiStyles, 'pill-btn wiki-danger-btn')}
-                            disabled={busyKey !== null}
-                            onClick={() => {
-                              void handleRevokeToken(tok.token_id);
-                            }}
-                          >
-                            Confirm Revoke
-                          </button>
-                          <button
-                            type="button"
-                            className={cx(uiStyles, 'pill-btn')}
-                            disabled={busyKey !== null}
-                            onClick={() => {
-                              setPendingConfirm(null);
-                            }}
-                          >
-                            Cancel
-                          </button>
-                        </>
-                      ) : (
-                        <button
-                          type="button"
-                          className={cx(uiStyles, 'pill-btn wiki-danger-btn')}
-                          disabled={busyKey !== null}
-                          onClick={() => {
-                            setPendingConfirm({ kind: 'revoke_token', tokenId: tok.token_id });
-                          }}
-                        >
-                          {isRowBusy ? 'Revoking…' : 'Revoke'}
-                        </button>
-                      )}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </section>
+        <AgentTokensSection
+          tokens={tokens}
+          tokenLabel={tokenLabel}
+          tokenScope={tokenScope}
+          revealedSecret={revealedSecret}
+          copiedSecret={copiedSecret}
+          busyKey={busyKey}
+          pendingConfirm={pendingConfirm}
+          onTokenLabelChange={setTokenLabel}
+          onTokenScopeChange={setTokenScope}
+          onCreateToken={handleCreateToken}
+          onCopySecret={() => {
+            if (!revealedSecret) {
+              return;
+            }
+            void navigator.clipboard
+              ?.writeText(revealedSecret.plaintext_secret)
+              .then(() => {
+                setCopiedSecret(true);
+              })
+              .catch(() => {
+                setCopiedSecret(false);
+              });
+          }}
+          onDismissSecret={() => {
+            setRevealedSecret(null);
+          }}
+          onSetPendingConfirm={setPendingConfirm}
+          onRevokeToken={handleRevokeToken}
+        />
       </main>
       <KinloomFooter />
     </div>

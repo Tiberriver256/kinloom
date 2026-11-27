@@ -1,9 +1,4 @@
-import type {
-  ArchiveCapabilities,
-  ArchiveDataSource,
-  ArchiveSessionState,
-  AuthMemberRole,
-} from '@kinloom/core';
+import type { ArchiveCapabilities, ArchiveSessionState } from '@kinloom/core';
 import {
   canAutoEnrollViaInvite,
   canCompleteAdminAuth,
@@ -12,108 +7,35 @@ import {
 } from '@kinloom/core';
 import { createActorContext } from '@xstate/react';
 import type { SnapshotFrom } from 'xstate';
-import { assign, fromPromise, setup } from 'xstate';
+import { assign, setup } from 'xstate';
+import { authSessionActors, readHydrateOutput, readVerifyOutput } from './authSession/actors.js';
+import type {
+  AuthSessionContext,
+  AuthSessionEvent,
+  AuthSessionInput,
+  HydrateOutcome,
+  VerifyOutcome,
+} from './authSession/types.js';
 
-export interface AuthSessionContext {
-  pendingInviteToken: string | null;
-  inviteLabel: string | null;
-  email: string | null;
-  displayName: string | null;
-  role: AuthMemberRole | null;
-  autoEnrolledViaInvite: boolean;
-  authError: string | null;
-  dataSource?: ArchiveDataSource;
-}
+export type { AuthSessionContext, AuthSessionEvent, AuthSessionInput, HydrateOutcome, VerifyOutcome };
 
-export type AuthSessionEvent =
-  | { type: 'OPEN_INVITE'; token: string; label: string; revoked: boolean }
-  | { type: 'SIGN_IN_GOOGLE' }
-  | { type: 'REQUEST_MAGIC_LINK'; email: string }
-  | { type: 'OPEN_MAGIC_LINK'; token: string }
-  | { type: 'RESEND_MAGIC_LINK'; email: string }
-  | { type: 'CANCEL_MAGIC_LINK' }
-  | { type: 'INVITE_REVOKED_SERVER' }
-  | { type: 'LEAVE_INVITE' }
-  | { type: 'DISMISS_INVITE' }
-  | { type: 'SESSION_EXPIRED' }
-  | { type: 'SIGN_OUT' }
-  | { type: 'REFRESH_SESSION' };
-
-export type HydrateOutcome =
-  | { kind: 'authenticated'; email: string; displayName: string; role: AuthMemberRole }
-  | { kind: 'invite_valid'; token: string; label: string }
-  | { kind: 'invite_revoked' }
-  | { kind: 'anonymous' };
-
-export type VerifyOutcome =
-  | {
-      kind: 'verified';
-      isMember: boolean;
-      role: AuthMemberRole;
-      email: string;
-      displayName: string;
-    }
-  | { kind: 'invite_revoked' }
-  | { kind: 'invalid'; message: string };
-
-export interface AuthSessionInput {
-  initialInviteToken?: string | null;
-  dataSource?: ArchiveDataSource;
-}
-
-function hydrateOutcomeFromSession(session: ArchiveSessionState): HydrateOutcome {
-  if (session.authenticated && session.principal_kind === 'user') {
-    const role: AuthMemberRole = session.role === 'admin' ? 'admin' : 'editor';
-    return {
-      kind: 'authenticated',
-      email: session.email ?? '',
-      displayName: session.displayName ?? session.email ?? 'Member',
-      role,
-    };
+function buildVerifiedAuthPatch(
+  output: VerifyOutcome,
+  role: 'admin' | 'editor',
+  autoEnrolledViaInvite: boolean
+): Partial<AuthSessionContext> {
+  if (output.kind !== 'verified') {
+    return {};
   }
-  if (session.principal_kind === 'invite_viewer') {
-    return {
-      kind: 'invite_valid',
-      token: 'cookie-invite',
-      label: session.inviteLabel ?? 'Family invite',
-    };
-  }
-  return { kind: 'anonymous' };
-}
-
-function readHydrateOutput(event: unknown): HydrateOutcome | null {
-  if (typeof event !== 'object' || event === null || !('output' in event)) {
-    return null;
-  }
-  const output = (event as { output: unknown }).output;
-  if (typeof output !== 'object' || output === null || !('kind' in output)) {
-    return null;
-  }
-  const kind = (output as { kind: unknown }).kind;
-  if (
-    kind === 'authenticated' ||
-    kind === 'invite_valid' ||
-    kind === 'invite_revoked' ||
-    kind === 'anonymous'
-  ) {
-    return output as HydrateOutcome;
-  }
-  return null;
-}
-
-function readVerifyOutput(event: unknown): VerifyOutcome | null {
-  if (typeof event !== 'object' || event === null || !('output' in event)) {
-    return null;
-  }
-  const output = (event as { output: unknown }).output;
-  if (typeof output !== 'object' || output === null || !('kind' in output)) {
-    return null;
-  }
-  const kind = (output as { kind: unknown }).kind;
-  if (kind === 'verified' || kind === 'invite_revoked' || kind === 'invalid') {
-    return output as VerifyOutcome;
-  }
-  return null;
+  return {
+    pendingInviteToken: null,
+    inviteLabel: null,
+    email: output.email,
+    displayName: output.displayName,
+    role,
+    autoEnrolledViaInvite,
+    authError: null,
+  };
 }
 
 export const authSessionMachine = setup({
@@ -122,84 +44,7 @@ export const authSessionMachine = setup({
     events: {} as AuthSessionEvent,
     input: {} as AuthSessionInput,
   },
-  actors: {
-    hydrateSession: fromPromise<
-      HydrateOutcome,
-      { inviteToken: string | null; dataSource?: ArchiveDataSource }
-    >(async ({ input, signal }) => {
-      if (input.dataSource?.getSession) {
-        const res = await input.dataSource.getSession();
-        return hydrateOutcomeFromSession(res.session);
-      }
-      const res = await fetch('/api/auth/me', {
-        credentials: 'same-origin',
-        headers: { accept: 'application/json' },
-        signal,
-      });
-      if (!res.ok) {
-        return { kind: 'anonymous' };
-      }
-      const data = (await res.json()) as { session?: ArchiveSessionState };
-      if (!data.session) {
-        return { kind: 'anonymous' };
-      }
-      return hydrateOutcomeFromSession(data.session);
-    }),
-    signInWithGoogle: fromPromise<VerifyOutcome, { inviteToken: string | null }>(
-      async ({ input, signal }) => {
-        const res = await fetch('/api/auth/google/verify', {
-          method: 'POST',
-          credentials: 'same-origin',
-          headers: { 'content-type': 'application/json', accept: 'application/json' },
-          body: JSON.stringify({ invite_token: input.inviteToken }),
-          signal,
-        });
-        if (res.status === 403) {
-          return { kind: 'invalid', message: 'This email is not enrolled in this family archive.' };
-        }
-        if (!res.ok) {
-          throw new Error(`HTTP ${res.status} verifying Google sign-in`);
-        }
-        return (await res.json()) as VerifyOutcome;
-      }
-    ),
-    requestMagicLink: fromPromise<
-      void,
-      { email: string; inviteToken: string | null; dataSource?: ArchiveDataSource }
-    >(async ({ input, signal }) => {
-      if (input.dataSource?.requestMagicLink) {
-        await input.dataSource.requestMagicLink(input.email);
-        return;
-      }
-      const res = await fetch('/api/auth/magic-link/request', {
-        method: 'POST',
-        credentials: 'same-origin',
-        headers: { 'content-type': 'application/json', accept: 'application/json' },
-        body: JSON.stringify({ email: input.email, invite_token: input.inviteToken }),
-        signal,
-      });
-      if (!res.ok) {
-        throw new Error(`HTTP ${res.status} requesting magic link`);
-      }
-    }),
-    verifyMagicLink: fromPromise<VerifyOutcome, { token: string; inviteToken: string | null }>(
-      async ({ input, signal }) => {
-        const res = await fetch(`/api/auth/magic-link/verify?token=${encodeURIComponent(input.token)}`, {
-          method: 'GET',
-          credentials: 'same-origin',
-          headers: { accept: 'application/json' },
-          signal,
-        });
-        if (res.status === 403) {
-          return { kind: 'invalid', message: 'This email is not enrolled in this family archive.' };
-        }
-        if (!res.ok) {
-          return { kind: 'invalid', message: 'Magic link is invalid or expired.' };
-        }
-        return (await res.json()) as VerifyOutcome;
-      }
-    ),
-  },
+  actors: authSessionActors,
   guards: {
     hasValidPendingInvite: ({ context }) => context.pendingInviteToken !== null,
     isAdminHydration: ({ event }) => {
@@ -398,53 +243,17 @@ export const authSessionMachine = setup({
           {
             guard: 'isAdminAuthSuccess',
             target: 'authenticated.admin',
-            actions: assign(({ event }) =>
-              event.output.kind === 'verified'
-                ? {
-                    pendingInviteToken: null,
-                    inviteLabel: null,
-                    email: event.output.email,
-                    displayName: event.output.displayName,
-                    role: 'admin' as const,
-                    autoEnrolledViaInvite: false,
-                    authError: null,
-                  }
-                : {}
-            ),
+            actions: assign(({ event }) => buildVerifiedAuthPatch(event.output, 'admin', false)),
           },
           {
             guard: 'isMemberEditorAuthSuccess',
             target: 'authenticated.editor',
-            actions: assign(({ event }) =>
-              event.output.kind === 'verified'
-                ? {
-                    pendingInviteToken: null,
-                    inviteLabel: null,
-                    email: event.output.email,
-                    displayName: event.output.displayName,
-                    role: 'editor' as const,
-                    autoEnrolledViaInvite: false,
-                    authError: null,
-                  }
-                : {}
-            ),
+            actions: assign(({ event }) => buildVerifiedAuthPatch(event.output, 'editor', false)),
           },
           {
             guard: 'isInviteAutoEnrollSuccess',
             target: 'authenticated.editor',
-            actions: assign(({ event }) =>
-              event.output.kind === 'verified'
-                ? {
-                    pendingInviteToken: null,
-                    inviteLabel: null,
-                    email: event.output.email,
-                    displayName: event.output.displayName,
-                    role: 'editor' as const,
-                    autoEnrolledViaInvite: true,
-                    authError: null,
-                  }
-                : {}
-            ),
+            actions: assign(({ event }) => buildVerifiedAuthPatch(event.output, 'editor', true)),
           },
           {
             guard: 'isVerifyInviteRevoked',
@@ -539,53 +348,17 @@ export const authSessionMachine = setup({
           {
             guard: 'isAdminAuthSuccess',
             target: 'authenticated.admin',
-            actions: assign(({ event }) =>
-              event.output.kind === 'verified'
-                ? {
-                    pendingInviteToken: null,
-                    inviteLabel: null,
-                    email: event.output.email,
-                    displayName: event.output.displayName,
-                    role: 'admin' as const,
-                    autoEnrolledViaInvite: false,
-                    authError: null,
-                  }
-                : {}
-            ),
+            actions: assign(({ event }) => buildVerifiedAuthPatch(event.output, 'admin', false)),
           },
           {
             guard: 'isMemberEditorAuthSuccess',
             target: 'authenticated.editor',
-            actions: assign(({ event }) =>
-              event.output.kind === 'verified'
-                ? {
-                    pendingInviteToken: null,
-                    inviteLabel: null,
-                    email: event.output.email,
-                    displayName: event.output.displayName,
-                    role: 'editor' as const,
-                    autoEnrolledViaInvite: false,
-                    authError: null,
-                  }
-                : {}
-            ),
+            actions: assign(({ event }) => buildVerifiedAuthPatch(event.output, 'editor', false)),
           },
           {
             guard: 'isInviteAutoEnrollSuccess',
             target: 'authenticated.editor',
-            actions: assign(({ event }) =>
-              event.output.kind === 'verified'
-                ? {
-                    pendingInviteToken: null,
-                    inviteLabel: null,
-                    email: event.output.email,
-                    displayName: event.output.displayName,
-                    role: 'editor' as const,
-                    autoEnrolledViaInvite: true,
-                    authError: null,
-                  }
-                : {}
-            ),
+            actions: assign(({ event }) => buildVerifiedAuthPatch(event.output, 'editor', true)),
           },
           {
             guard: 'isVerifyInviteRevoked',
@@ -644,10 +417,7 @@ export const authSessionMachine = setup({
             authError: 'Your session expired. Sign in again to keep editing.',
           })),
         },
-        SIGN_OUT: {
-          target: '#authSession.anonymous',
-          actions: [{ type: 'clearToAnonymous' }],
-        },
+        SIGN_OUT: { target: '#authSession.anonymous', actions: [{ type: 'clearToAnonymous' }] },
         REFRESH_SESSION: { target: '#authSession.hydrating' },
       },
     },

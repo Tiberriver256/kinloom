@@ -3,8 +3,10 @@ import { formatPublicCitation } from '@kinloom/core';
 import type React from 'react';
 import { Link } from 'react-router-dom';
 import { DateStamp, EmptyStateNotice } from '../../components/Atoms.js';
+import atomStyles from '../../components/Atoms.module.css';
 import { cx } from '../../lib/cx.js';
 import { KINLOOM_VOCABULARY } from '../../lib/vocabulary.js';
+import controlStyles from '../../styles/Controls.module.css';
 import { collectEventDiscrepancyClaims } from './evidenceViewModel.js';
 
 export interface EvidenceDiscrepanciesTabProps {
@@ -12,7 +14,6 @@ export interface EvidenceDiscrepanciesTabProps {
   readonly peopleById: ReadonlyMap<string, Person>;
   readonly sourcesById: ReadonlyMap<string, SourceRecord>;
   readonly readableSourceIds: ReadonlySet<string>;
-  readonly uiStyles: Readonly<Record<string, string>>;
   readonly onOpenSourceReader: (params: { sourceId: string; eventId?: string }) => void;
 }
 
@@ -21,7 +22,6 @@ export const EvidenceDiscrepanciesTab: React.FC<EvidenceDiscrepanciesTabProps> =
   peopleById,
   sourcesById,
   readableSourceIds,
-  uiStyles,
   onOpenSourceReader,
 }) => (
   <section style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -37,7 +37,7 @@ export const EvidenceDiscrepanciesTab: React.FC<EvidenceDiscrepanciesTabProps> =
         const totalDiscrepancies = claims.length;
 
         return (
-          <article key={ev.id} className={cx(uiStyles, 'place-map-box')} style={{ marginBottom: 0 }}>
+          <article key={ev.id} className={cx(controlStyles, 'place-map-box')} style={{ marginBottom: 0 }}>
             <div
               style={{
                 display: 'flex',
@@ -49,7 +49,7 @@ export const EvidenceDiscrepanciesTab: React.FC<EvidenceDiscrepanciesTabProps> =
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                 <DateStamp displayDate={ev.display_date} edtf={ev.edtf_date} />
-                <span className={cx(uiStyles, 'conflict-pill')}>
+                <span className={cx(atomStyles, 'conflict-pill')}>
                   ! {totalDiscrepancies} Preserved Discrepanc{totalDiscrepancies === 1 ? 'y' : 'ies'}
                 </span>
               </div>
@@ -57,7 +57,7 @@ export const EvidenceDiscrepanciesTab: React.FC<EvidenceDiscrepanciesTabProps> =
                 {readableRef && (
                   <button
                     type="button"
-                    className={cx(uiStyles, 'source-read-btn')}
+                    className={cx(controlStyles, 'source-read-btn')}
                     onClick={() => {
                       onOpenSourceReader({ sourceId: readableRef.source_id, eventId: ev.id });
                     }}
@@ -68,7 +68,7 @@ export const EvidenceDiscrepanciesTab: React.FC<EvidenceDiscrepanciesTabProps> =
                 {primaryPerson && (
                   <Link
                     to={`/person/${primaryPerson.slug}?event=${ev.id}`}
-                    className={cx(uiStyles, 'pill-btn')}
+                    className={cx(controlStyles, 'pill-btn')}
                     style={{ textDecoration: 'none' }}
                   >
                     {KINLOOM_VOCABULARY.evidence.openProfileCta}
@@ -87,7 +87,7 @@ export const EvidenceDiscrepanciesTab: React.FC<EvidenceDiscrepanciesTabProps> =
               {ev.title}
             </h2>
             <p style={{ margin: '0 0 10px', fontSize: '0.92rem' }}>{ev.summary}</p>
-            <div className={cx(uiStyles, 'source-details')}>
+            <div className={cx(atomStyles, 'source-details')}>
               <strong>Conflicting Claims Preserved Side-by-Side:</strong>
               <ul>
                 {claims.map((claim) => {
@@ -102,7 +102,7 @@ export const EvidenceDiscrepanciesTab: React.FC<EvidenceDiscrepanciesTabProps> =
                       {readableSourceIds.has(claim.sourceId) && (
                         <button
                           type="button"
-                          className={cx(uiStyles, 'source-read-inline')}
+                          className={cx(controlStyles, 'source-read-inline')}
                           onClick={() => {
                             onOpenSourceReader({ sourceId: claim.sourceId, eventId: ev.id });
                           }}

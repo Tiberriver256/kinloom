@@ -5,9 +5,12 @@ import {
   type AttachActorOutcome,
   type AttachMediaActorInput,
   authSessionMachine,
+  type DeleteEntityInput,
   deriveSessionFromAuthSnapshot,
   entityEditorMachine,
   type HydrateOutcome,
+  type LoadLatestEntityInput,
+  type LoadLatestEntityResult,
   mediaUploadMachine,
   type SaveEntityInput,
   type SaveEntityResult,
@@ -222,6 +225,85 @@ describe('entityEditorMachine', () => {
     expect(saved.context.baseRevisionId).toBe(13);
     expect(saved.context.baseSnapshot.alt_names).toEqual(['Angel of the Battlefield']);
     expect(saved.context.baseSnapshot.death_edtf).toBe('1912-04-12');
+    actor.stop();
+  });
+
+  it('syncs latest revision via OPEN_EDIT and owns delete confirmation, error recovery, and soft delete', async () => {
+    let deleteAttempts = 0;
+    const machine = entityEditorMachine.provide({
+      actors: {
+        loadLatestEntity: fromPromise<LoadLatestEntityResult | null, LoadLatestEntityInput>(async () => ({
+          revisionId: 15,
+          snapshot: { ...BASE_PERSON, alt_names: ['Angel of the Battlefield'] },
+          hasPrimarySource: true,
+        })),
+        deleteEntity: fromPromise<void, DeleteEntityInput>(async ({ input }) => {
+          deleteAttempts += 1;
+          if (deleteAttempts === 1) {
+            throw new Error('Temporary archive lock');
+          }
+          expect(input.expectedParentRevisionId).toBe(15);
+          expect(input.summary).toBe('Duplicate synthetic record');
+        }),
+      },
+    });
+
+    const syncCapableDataSource: ArchiveDataSource = {
+      loadArchive: async () => {
+        throw new Error('unused in test');
+      },
+      loadReadings: async () => null,
+      getEntity: async () => {
+        throw new Error('overridden by actor');
+      },
+      deleteEntity: async () => {
+        throw new Error('overridden by actor');
+      },
+    };
+
+    const actor = createActor(machine, {
+      input: {
+        entityType: 'person',
+        entityId: 'p_clara',
+        revisionId: 10,
+        snapshot: BASE_PERSON,
+        dataSource: syncCapableDataSource,
+      },
+    });
+    actor.start();
+
+    actor.send({
+      type: 'OPEN_EDIT',
+      entityType: 'person',
+      entityId: 'p_clara',
+      revisionId: 10,
+      snapshot: BASE_PERSON,
+    });
+    const synced = await waitFor(actor, (s) => s.matches({ editing: 'clean' }));
+    expect(synced.context.baseRevisionId).toBe(15);
+    expect(synced.context.draft.alt_names).toEqual(['Angel of the Battlefield']);
+
+    // Dirty edit, request delete, cancel delete -> must preserve dirty state
+    actor.send({ type: 'EDIT_FIELD', draft: { ...synced.context.draft, surname: 'Barton-Updated' } });
+    actor.send({ type: 'REQUEST_DELETE' });
+    expect(actor.getSnapshot().matches('confirmingDelete')).toBe(true);
+    actor.send({ type: 'CANCEL_DELETE' });
+    expect(actor.getSnapshot().matches({ editing: 'dirty' })).toBe(true);
+
+    // Delete flow with transient failure recovery -> deleted
+    actor.send({ type: 'REQUEST_DELETE' });
+    actor.send({ type: 'SET_DELETE_SUMMARY', summary: 'Duplicate synthetic record' });
+    actor.send({ type: 'CONFIRM_DELETE' });
+    const errored = await waitFor(
+      actor,
+      (s) => s.matches('confirmingDelete') && s.context.deleteError !== null
+    );
+    expect(errored.context.deleteError).toBe('Temporary archive lock');
+
+    actor.send({ type: 'CONFIRM_DELETE' });
+    const deleted = await waitFor(actor, (s) => s.matches('deleted'));
+    expect(deleted.context.dirty).toBe(false);
+    expect(deleteAttempts).toBe(2);
     actor.stop();
   });
 });

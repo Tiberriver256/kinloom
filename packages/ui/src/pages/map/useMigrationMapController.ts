@@ -5,7 +5,7 @@ import type { FeatureCollection } from 'geojson';
 import type { ErrorEvent, StyleSpecification } from 'maplibre-gl';
 import { AttributionControl, Map as MapLibreMap } from 'maplibre-gl';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { loadArchivalOhmStyle, OHM_STYLE_URL, OVERVIEW_REFERENCE_YEAR } from '../../lib/ohmStyle.js';
+import { loadArchivalOhmStyle, OHM_STYLE_URL, OVERVIEW_REFERENCE_YEAR } from '../../browser/ohmStyle.js';
 import {
   ensureMapLibreConfigured,
   getFitOptions,

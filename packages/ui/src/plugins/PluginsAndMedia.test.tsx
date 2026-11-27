@@ -5,9 +5,33 @@ import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { describe, expect, it } from 'vitest';
 import { MediaPlayer } from '../components/MediaPlayer.js';
+import { CreateEntityModal } from '../components/wiki/CreateEntityModal.js';
+import { EntityEditDrawer } from '../components/wiki/EntityEditDrawer.js';
+import type {
+  EntityCreateFieldProps,
+  EntityEditFieldProps,
+} from '../components/wiki/entityForms/fieldTypes.js';
 import { ArchiveProvider } from '../context/ArchiveProvider.js';
 import { KinloomApp } from '../KinloomApp.js';
 import type { KinloomUiPlugin } from './types.js';
+
+const PluginSourceEditFields: React.FC<EntityEditFieldProps> = ({ draft, updateField }) => (
+  <label>
+    <span>Plugin Source Citation</span>
+    <input
+      data-testid="plugin-edit-source-input"
+      type="text"
+      value={typeof draft.citation === 'string' ? draft.citation : ''}
+      onChange={(e) => {
+        updateField('citation', e.target.value);
+      }}
+    />
+  </label>
+);
+
+const PluginPlaceCreateFields: React.FC<EntityCreateFieldProps> = () => (
+  <div data-testid="plugin-create-place-fields">Plugin place form</div>
+);
 
 declare global {
   var IS_REACT_ACT_ENVIRONMENT: boolean | undefined;
@@ -185,6 +209,64 @@ describe('KinloomUiPlugin seam and MediaPlayer', () => {
       'Custom Player: Homestead Oral Story (/media/story.mp4)'
     );
     expect(container.querySelector('video')).toBeNull();
+
+    act(() => {
+      root.unmount();
+    });
+    container.remove();
+  });
+
+  it('allows a plugin to register custom entityEditForms and entityCreateForms', async () => {
+    const customFormPlugin: KinloomUiPlugin = {
+      id: 'custom-entity-forms',
+      name: 'Custom Entity Forms',
+      entityEditForms: {
+        source: {
+          Fields: PluginSourceEditFields,
+        },
+      },
+      entityCreateForms: {
+        place: {
+          kind: 'place',
+          tabLabel: 'Custom Place',
+          Fields: PluginPlaceCreateFields,
+          validateAndBuild: () => ({
+            ok: true,
+            entityId: 'plc_plugin_custom',
+            payload: { id: 'plc_plugin_custom', name: 'Plugin Place' },
+          }),
+        },
+      },
+    };
+
+    const container = document.createElement('div');
+    document.body.append(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(
+        <ArchiveProvider siteConfig={siteConfig} initialBundle={testBundle} plugins={[customFormPlugin]}>
+          <EntityEditDrawer
+            open
+            entityType="source"
+            entityId="src_custom"
+            revisionId={1}
+            initialData={{ id: 'src_custom', citation: 'Parish Roll 1840' }}
+            title="Parish Roll"
+            onClose={() => {}}
+          />
+          <CreateEntityModal open defaultKind="place" onClose={() => {}} />
+        </ArchiveProvider>
+      );
+      await new Promise((r) => setTimeout(r, 20));
+    });
+
+    const editInput = container.querySelector<HTMLInputElement>('[data-testid="plugin-edit-source-input"]');
+    expect(editInput?.value).toBe('Parish Roll 1840');
+    expect(container.querySelector('[data-testid="plugin-create-place-fields"]')?.textContent).toBe(
+      'Plugin place form'
+    );
+    expect(container.textContent).toContain('Custom Place');
 
     act(() => {
       root.unmount();

@@ -2,29 +2,24 @@ import type { ConfidenceTier, Place } from '@kinloom/core';
 import type React from 'react';
 import { Link } from 'react-router-dom';
 import { cx } from '../../lib/cx.js';
-import cssMod4 from '../../pages/NotFoundPage.module.css';
-import cssMod0 from '../Atoms.module.css';
+import controlStyles from '../../styles/Controls.module.css';
+import atomStyles from '../Atoms.module.css';
 import { initialsOf } from './formatters.js';
-
-const uiStyles: Readonly<Record<string, string>> = {
-  ...cssMod0,
-  ...cssMod4,
-};
 
 export const EmptyStateNotice: React.FC<{
   title: string;
   body?: string;
   action?: React.ReactNode;
 }> = ({ title, body, action }) => (
-  <div className={cx(uiStyles, 'empty-state-notice')} role="status">
-    <p className={cx(uiStyles, 'empty-state-notice-title')}>{title}</p>
-    {body && <p className={cx(uiStyles, 'empty-state-notice-body')}>{body}</p>}
-    {action && <div className={cx(uiStyles, 'empty-state-notice-action')}>{action}</div>}
+  <div className={cx(controlStyles, 'empty-state-notice')} role="status">
+    <p className={cx(controlStyles, 'empty-state-notice-title')}>{title}</p>
+    {body && <p className={cx(controlStyles, 'empty-state-notice-body')}>{body}</p>}
+    {action && <div className={cx(controlStyles, 'empty-state-notice-action')}>{action}</div>}
   </div>
 );
 
 export const DateStamp: React.FC<{ displayDate: string; edtf?: string }> = ({ displayDate, edtf }) => (
-  <span className={cx(uiStyles, 'date-stamp')} title={edtf ? `Recorded date: ${edtf}` : undefined}>
+  <span className={cx(atomStyles, 'date-stamp')} title={edtf ? `Recorded date: ${edtf}` : undefined}>
     {displayDate || 'Undated'}
   </span>
 );
@@ -38,7 +33,7 @@ export const CoordinatePill: React.FC<{ place: Place | undefined }> = ({ place }
   return (
     <Link
       to={`/place/${place.slug}`}
-      className={cx(uiStyles, 'coordinate-pill')}
+      className={cx(atomStyles, 'coordinate-pill')}
       title={`Open ${place.full_name} profile`}
     >
       <span>
@@ -170,11 +165,11 @@ export const RelativeAvatarChip: React.FC<{
   return (
     <button
       type="button"
-      className={cx(uiStyles, `avatar-chip ${tierClass}`)}
+      className={cx(atomStyles, `avatar-chip ${tierClass}`)}
       onClick={onClick}
       title={`${name} (${relationship}) — ${tier}${distLabel}. Open Person Profile.`}
     >
-      <span className={cx(uiStyles, 'avatar-circle')}>{initialsOf(name)}</span>
+      <span className={cx(atomStyles, 'avatar-circle')}>{initialsOf(name)}</span>
       <span>
         <strong>{name}</strong>{' '}
         <span style={{ color: 'var(--text-secondary)', fontSize: '0.78rem' }}>

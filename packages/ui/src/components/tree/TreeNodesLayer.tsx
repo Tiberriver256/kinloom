@@ -1,0 +1,379 @@
+import type { Person } from '@kinloom/core';
+import React from 'react';
+import type {
+  DiagramEarlyLossStrip,
+  DiagramPlacedNode,
+  DiagramSiblingToggle,
+  SemanticZoomLevel,
+} from '../../lib/archivalTreeModel.js';
+import { formatEarlyLossAgeLabel, formatUnionOtherChildrenLabel } from '../../lib/archivalTreeModel.js';
+import { formatTreeCardName } from '../../lib/treeNodeDisplay.js';
+import { KINLOOM_VOCABULARY } from '../../lib/vocabulary.js';
+
+export const DiagramNodeCard: React.FC<{
+  readonly node: DiagramPlacedNode;
+  readonly displayName: string;
+  readonly surnameOrGiven: string;
+  readonly lifespan: string;
+  readonly thumbUrl: string | null;
+  readonly initials: string;
+  readonly isSelected: boolean;
+  readonly isLit: boolean;
+  readonly semanticZoom: SemanticZoomLevel;
+  readonly onSelect: (person: Person, fromKeyboard: boolean) => void;
+}> = React.memo(
+  ({
+    node,
+    displayName,
+    surnameOrGiven,
+    lifespan,
+    thumbUrl,
+    initials,
+    isSelected,
+    isLit,
+    semanticZoom,
+    onSelect,
+  }) => {
+    const { person } = node;
+    let stroke = 'var(--border-control)';
+    let strokeWidth = 1.15;
+    if (isSelected) {
+      stroke = 'var(--accent-primary)';
+      strokeWidth = 2.6;
+    } else if (isLit) {
+      stroke = 'var(--accent-primary)';
+      strokeWidth = 2.1;
+    } else if (node.isDirect) {
+      stroke = 'var(--surface-header)';
+      strokeWidth = 2;
+    }
+
+    const fill = isSelected ? 'var(--surface-header)' : 'var(--surface-card)';
+    const primaryTextFill = isSelected ? 'var(--text-inverse)' : 'var(--surface-header)';
+    const secondaryTextFill = isSelected ? 'var(--surface-linen)' : 'var(--text-secondary)';
+    const safeId = person.id.replace(/[^a-zA-Z0-9_-]/g, '_');
+    const clipId = `tree-avatar-clip-${safeId}`;
+    const cardClipId = `tree-card-clip-${safeId}`;
+
+    return (
+      <g
+        role="button"
+        className={`tree-node-card${node.isDirect ? ' is-direct' : ' is-collateral'}${isSelected ? ' is-selected' : ''}${isLit ? ' is-lit' : ''}`}
+        tabIndex={0}
+        aria-label={`Inspect ${person.full_name}`}
+        aria-pressed={isSelected}
+        transform={`translate(${node.x}, ${node.y})`}
+        onClick={(e) => {
+          e.stopPropagation();
+          onSelect(person, false);
+        }}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            onSelect(person, true);
+          } else if (e.key === ' ') {
+            e.preventDefault();
+          }
+        }}
+        onKeyUp={(e) => {
+          if (e.key === ' ') {
+            e.preventDefault();
+            onSelect(person, true);
+          }
+        }}
+      >
+        <title>{person.full_name}</title>
+        <defs>
+          <clipPath id={cardClipId}>
+            <rect x={2} y={2} width={node.width - 4} height={node.height - 4} rx={2} />
+          </clipPath>
+          {semanticZoom === 'detail' && thumbUrl && (
+            <clipPath id={clipId}>
+              <circle cx={24} cy={26} r={13} />
+            </clipPath>
+          )}
+        </defs>
+        <rect
+          width={node.width}
+          height={node.height}
+          rx={4}
+          fill={fill}
+          stroke={stroke}
+          strokeWidth={strokeWidth}
+          strokeDasharray={node.isDirect || isSelected || isLit ? undefined : '4 2'}
+        />
+
+        {semanticZoom === 'overview' ? (
+          <g clipPath={`url(#${cardClipId})`}>
+            <text
+              x={node.width / 2}
+              y={22}
+              textAnchor="middle"
+              fontSize="12"
+              fontWeight="700"
+              fontFamily="var(--font-serif)"
+              fill={primaryTextFill}
+            >
+              {surnameOrGiven}
+            </text>
+            <text
+              x={node.width / 2}
+              y={39}
+              textAnchor="middle"
+              fontSize="10.5"
+              fontFamily="var(--font-mono)"
+              fill={secondaryTextFill}
+            >
+              {lifespan}
+            </text>
+          </g>
+        ) : semanticZoom === 'compact' ? (
+          <g clipPath={`url(#${cardClipId})`}>
+            <text
+              x={12}
+              y={22}
+              fontSize="11.5"
+              fontWeight="700"
+              fontFamily="var(--font-serif)"
+              fill={primaryTextFill}
+            >
+              {displayName}
+            </text>
+            <text x={12} y={39} fontSize="10.5" fontFamily="var(--font-mono)" fill={secondaryTextFill}>
+              {lifespan}
+            </text>
+          </g>
+        ) : (
+          <g clipPath={`url(#${cardClipId})`}>
+            <circle
+              cx={24}
+              cy={26}
+              r={13}
+              fill={isSelected ? 'var(--accent-primary)' : 'var(--surface-linen)'}
+              stroke={node.isDirect || isLit ? 'var(--accent-primary)' : 'var(--border-control)'}
+              strokeWidth="1.2"
+            />
+            {thumbUrl ? (
+              <image
+                href={thumbUrl}
+                x={11}
+                y={13}
+                width={26}
+                height={26}
+                preserveAspectRatio="xMidYMid slice"
+                clipPath={`url(#${clipId})`}
+              />
+            ) : (
+              <text
+                x={24}
+                y={29.5}
+                textAnchor="middle"
+                fontSize="10"
+                fontWeight="700"
+                fontFamily="var(--font-mono)"
+                fill={isSelected ? 'var(--text-inverse)' : 'var(--accent-primary)'}
+              >
+                {initials}
+              </text>
+            )}
+            <text
+              x={44}
+              y={22}
+              fontSize="11.5"
+              fontWeight="700"
+              fontFamily="var(--font-serif)"
+              fill={primaryTextFill}
+            >
+              {displayName}
+            </text>
+            <text x={44} y={38} fontSize="10.5" fontFamily="var(--font-mono)" fill={secondaryTextFill}>
+              {lifespan}
+            </text>
+          </g>
+        )}
+      </g>
+    );
+  }
+);
+
+export const EarlyLossStripLayer: React.FC<{
+  readonly strip: DiagramEarlyLossStrip;
+  readonly selectedPersonId: string | null;
+  readonly highlightedIds: ReadonlySet<string> | null;
+  readonly onSelect: (person: Person, fromKeyboard: boolean) => void;
+}> = React.memo(({ strip, selectedPersonId, highlightedIds, onSelect }) => {
+  const anyLit = Boolean(
+    highlightedIds &&
+      (strip.parentIds.some((pid) => highlightedIds.has(pid)) ||
+        strip.chips.some((chip) => highlightedIds.has(chip.person.id)))
+  );
+  return (
+    <g className={`tree-diagram-early-strip${anyLit ? ' is-lit' : ''}`} data-union-id={strip.unionId}>
+      <title>{KINLOOM_VOCABULARY.tree.diedYoungTooltip}</title>
+      <path
+        className={`tree-edge${anyLit ? ' is-lit' : ''}`}
+        d={`M ${strip.stemFromX} ${strip.stemFromY} V ${strip.y}`}
+        fill="none"
+        stroke={anyLit ? 'var(--accent-primary)' : 'var(--border-control)'}
+        strokeWidth="1.2"
+        strokeDasharray="2 2"
+      />
+      <rect
+        x={strip.x}
+        y={strip.y}
+        width={strip.width}
+        height={strip.height}
+        rx={4}
+        fill="var(--surface-linen)"
+        stroke="var(--border-decorative)"
+        strokeWidth="1"
+      />
+      <text
+        x={strip.x + 12}
+        y={strip.y + 13}
+        fontSize="10"
+        fontWeight="600"
+        fontFamily="var(--font-mono)"
+        fill="var(--text-secondary)"
+      >
+        {KINLOOM_VOCABULARY.tree.diedYoung} ({strip.chips.length})
+      </text>
+      {strip.chips.map((chip) => {
+        const isSelected = selectedPersonId === chip.person.id;
+        const isLit = Boolean(highlightedIds?.has(chip.person.id));
+        return (
+          <g
+            key={chip.person.id}
+            role="button"
+            tabIndex={0}
+            className={`tree-node-card tree-diagram-early-chip${isSelected ? ' is-selected' : ''}${isLit ? ' is-lit' : ''}`}
+            aria-label={`Inspect ${chip.person.full_name}`}
+            aria-pressed={isSelected}
+            transform={`translate(${chip.x}, ${chip.y})`}
+            onClick={(e) => {
+              e.stopPropagation();
+              onSelect(chip.person, false);
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                onSelect(chip.person, true);
+              } else if (e.key === ' ') {
+                e.preventDefault();
+              }
+            }}
+            onKeyUp={(e) => {
+              if (e.key === ' ') {
+                e.preventDefault();
+                onSelect(chip.person, true);
+              }
+            }}
+          >
+            <title>{chip.person.full_name}</title>
+            <rect
+              width={chip.width}
+              height={chip.height}
+              rx={3}
+              fill={isSelected ? 'var(--surface-header)' : 'var(--surface-card)'}
+              stroke={isSelected || isLit ? 'var(--accent-primary)' : 'var(--border-control)'}
+              strokeWidth={isSelected ? 1.8 : 1}
+            />
+            <text
+              x={8}
+              y={13}
+              fontSize="10.5"
+              fontWeight="600"
+              fontFamily="var(--font-serif)"
+              fill={isSelected ? 'var(--text-inverse)' : 'var(--text-primary)'}
+            >
+              {formatTreeCardName(chip.person.given_name || chip.person.full_name, 13)}
+            </text>
+            <text
+              x={8}
+              y={25}
+              fontSize="9.5"
+              fontFamily="var(--font-mono)"
+              fill={isSelected ? 'var(--surface-linen)' : 'var(--text-secondary)'}
+            >
+              {formatEarlyLossAgeLabel(chip.person)}
+            </text>
+          </g>
+        );
+      })}
+    </g>
+  );
+});
+
+export const SiblingToggleItem: React.FC<{
+  readonly toggle: DiagramSiblingToggle;
+  readonly isLit: boolean;
+  readonly onToggle: (unionId: string) => void;
+}> = React.memo(({ toggle, isLit, onToggle }) => {
+  const toggleLabels = formatUnionOtherChildrenLabel({
+    hiddenCount: toggle.hiddenCount,
+    totalCollateralCount: toggle.totalCollateralCount,
+    visibleChildCount: toggle.visibleChildCount,
+    isExpanded: toggle.isExpanded,
+    mode: toggle.mode,
+  });
+
+  return (
+    <g className={`tree-diagram-sibling-toggle${isLit ? ' is-lit' : ''}`}>
+      <path
+        className={`tree-edge${isLit ? ' is-lit' : ''}`}
+        d={`M ${toggle.stemFromX} ${toggle.stemFromY} V ${toggle.y}`}
+        fill="none"
+        stroke={isLit ? 'var(--accent-primary)' : 'var(--border-control)'}
+        strokeWidth="1.2"
+        strokeDasharray="3 2"
+      />
+      <g
+        role="button"
+        tabIndex={0}
+        className={'tree-diagram-sibling-btn'}
+        aria-expanded={toggle.isExpanded}
+        aria-label={toggleLabels.ariaLabel}
+        transform={`translate(${toggle.x}, ${toggle.y})`}
+        onClick={(e) => {
+          e.stopPropagation();
+          onToggle(toggle.unionId);
+        }}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            onToggle(toggle.unionId);
+          } else if (e.key === ' ') {
+            e.preventDefault();
+          }
+        }}
+        onKeyUp={(e) => {
+          if (e.key === ' ') {
+            e.preventDefault();
+            onToggle(toggle.unionId);
+          }
+        }}
+      >
+        <title>{toggleLabels.ariaLabel}</title>
+        <rect
+          width={toggle.width}
+          height={toggle.height}
+          rx={14}
+          fill={toggle.isExpanded ? 'var(--accent-primary)' : 'var(--surface-card)'}
+          stroke="var(--accent-primary)"
+          strokeWidth="1.5"
+        />
+        <text
+          x={toggle.width / 2}
+          y={toggle.height / 2 + 3.5}
+          textAnchor="middle"
+          fontSize="10"
+          fontWeight="600"
+          fontFamily="var(--font-mono)"
+          fill={toggle.isExpanded ? 'var(--text-inverse)' : 'var(--accent-primary)'}
+        >
+          {toggleLabels.compactLabel}
+        </text>
+      </g>
+    </g>
+  );
+});

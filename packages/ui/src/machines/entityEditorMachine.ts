@@ -1,232 +1,52 @@
-import type {
-  ArchiveDataSource,
-  ConflictPayload,
-  EditorCitationMode,
-  EntityPayload,
-  EntityType,
-  OptimisticConflictError,
-} from '@kinloom/core';
 import {
-  asRevisionId,
   hasPendingConflict,
   isEditSummaryValid,
   isMatchingSaveGeneration,
-  rebaseEntityDraft,
   validateEntityDraft,
 } from '@kinloom/core';
-import { assign, fromPromise, setup } from 'xstate';
+import { assign, setup } from 'xstate';
+import {
+  defaultCitationMode,
+  defaultDeleteEntityActor,
+  defaultLoadLatestEntityActor,
+  defaultSaveEntityActor,
+  readSaveEntityOutput,
+} from './entityEditor/actors.js';
+import {
+  buildEntityTargetPatch,
+  buildOpenEditPatch,
+  buildPendingLeavePatch,
+  buildRebasePatch,
+  buildResetDraftPatch,
+  collectValidationErrors,
+  createInitialEntityEditorContext,
+} from './entityEditor/reducers.js';
+import type {
+  DeleteEntityInput,
+  EntityEditorConflict,
+  EntityEditorContext,
+  EntityEditorEvent,
+  EntityEditorInput,
+  LoadLatestEntityInput,
+  LoadLatestEntityResult,
+  PendingEntityTarget,
+  SaveEntityInput,
+  SaveEntityResult,
+} from './entityEditor/types.js';
 
-export interface PendingEntityTarget {
-  entityType: EntityType;
-  entityId: string;
-  revisionId: number;
-  snapshot: EntityPayload;
-  hasPrimarySource?: boolean;
-}
-
-export interface EntityEditorConflict extends ConflictPayload {
-  diff?: OptimisticConflictError['diff'];
-  serverDeletedAt?: string | null;
-}
-
-export interface SaveEntityInput {
-  entityType: EntityType;
-  entityId: string;
-  expectedParentRevisionId: number;
-  draft: EntityPayload;
-  summary: string;
-  hasPrimarySource: boolean;
-  sourceIds: readonly string[];
-  reqGen: number;
-  dataSource?: ArchiveDataSource;
-}
-
-export type SaveEntityResult =
-  | {
-      kind: 'ok';
-      entityId: string;
-      revisionId: number;
-      snapshot: EntityPayload;
-      etag: string;
-      reqGen: number;
-    }
-  | {
-      kind: 'conflict409';
-      entityId: string;
-      conflict: EntityEditorConflict;
-      reqGen: number;
-    };
-
-export interface EntityEditorInput {
-  entityType: EntityType;
-  entityId: string;
-  revisionId: number;
-  snapshot: EntityPayload;
-  hasPrimarySource?: boolean;
-  dataSource?: ArchiveDataSource;
-}
-
-export interface EntityEditorContext {
-  entityType: EntityType;
-  entityId: string;
-  baseRevisionId: number;
-  baseSnapshot: EntityPayload;
-  draft: EntityPayload;
-  summary: string;
-  citationMode: EditorCitationMode;
-  sourceIds: readonly string[];
-  dirty: boolean;
-  saveGen: number;
-  lastAppliedGen: number;
-  lastSavedEntityId: string | null;
-  lastEtag: string | null;
-  conflict: EntityEditorConflict | null;
-  validationErrors: readonly string[];
-  networkError: string | null;
-  pendingEntityChange: PendingEntityTarget | null;
-  dataSource?: ArchiveDataSource;
-}
-
-export type EntityEditorEvent =
-  | { type: 'START_EDIT' }
-  | { type: 'EDIT_FIELD'; draft: EntityPayload }
-  | { type: 'SET_SUMMARY'; summary: string }
-  | { type: 'SET_CITATION'; mode: EditorCitationMode; sourceIds: readonly string[] }
-  | { type: 'SUBMIT' }
-  | { type: 'CANCEL_EDIT' }
-  | { type: 'CANCEL_SAVE' }
-  | { type: 'DISCARD_DRAFT' }
-  | {
-      type: 'ENTITY_CHANGED';
-      entityType: EntityType;
-      entityId: string;
-      revisionId: number;
-      snapshot: EntityPayload;
-      hasPrimarySource?: boolean;
-    }
-  | { type: 'CONFIRM_LEAVE' }
-  | { type: 'STAY_EDITING' }
-  | { type: 'ACCEPT_SERVER' }
-  | { type: 'REBASE_AND_RETRY' }
-  | { type: 'REBASE_TO_EDIT' }
-  | { type: 'RETRY_SAVE' }
-  | { type: 'RETURN_TO_EDIT' }
-  | { type: 'DISMISS_SAVED' };
-
-function mapConflictPayload(conflict: OptimisticConflictError): EntityEditorConflict {
-  return {
-    latestRevisionId: conflict.server_revision_id,
-    latestSnapshot: conflict.server_entity ?? {},
-    lastAuthorName: conflict.last_author_name,
-    lastUpdatedAt: conflict.last_updated_at,
-    diff: conflict.diff,
-    serverDeletedAt: conflict.server_deleted_at,
-  };
-}
-
-function defaultCitationMode(hasPrimarySource?: boolean): EditorCitationMode {
-  return hasPrimarySource ? 'cited' : 'familyMemory';
-}
-
-function readSaveEntityOutput(event: unknown): SaveEntityResult | null {
-  if (typeof event !== 'object' || event === null || !('output' in event)) {
-    return null;
-  }
-  const output = (event as { output: unknown }).output;
-  if (typeof output !== 'object' || output === null || !('kind' in output)) {
-    return null;
-  }
-  const kind = (output as { kind: unknown }).kind;
-  if (kind === 'ok' || kind === 'conflict409') {
-    return output as SaveEntityResult;
-  }
-  return null;
-}
-
-export const defaultSaveEntityActor = fromPromise<SaveEntityResult, SaveEntityInput>(
-  async ({ input, signal }) => {
-    if (input.dataSource?.updateEntity) {
-      const res = await input.dataSource.updateEntity(
-        input.entityType,
-        input.entityId,
-        {
-          data: input.draft,
-          expected_parent_revision_id: asRevisionId(input.expectedParentRevisionId),
-          summary: input.summary.trim(),
-          has_primary_source: input.hasPrimarySource,
-        },
-        { signal }
-      );
-
-      if (!res.ok) {
-        return {
-          kind: 'conflict409',
-          entityId: input.entityId,
-          conflict: mapConflictPayload(res.conflict),
-          reqGen: input.reqGen,
-        };
-      }
-      return {
-        kind: 'ok',
-        entityId: input.entityId,
-        revisionId: res.revision.revision_id,
-        snapshot: res.entity,
-        etag: res.etag,
-        reqGen: input.reqGen,
-      };
-    }
-
-    const response = await fetch(
-      `/api/entities/${encodeURIComponent(input.entityType)}/${encodeURIComponent(input.entityId)}`,
-      {
-        method: 'PUT',
-        credentials: 'same-origin',
-        headers: { 'content-type': 'application/json', accept: 'application/json' },
-        body: JSON.stringify({
-          expected_parent_revision_id: input.expectedParentRevisionId,
-          data: input.draft,
-          summary: input.summary.trim(),
-          has_primary_source: input.hasPrimarySource,
-        }),
-        signal,
-      }
-    );
-
-    if (response.status === 409) {
-      const envelope = (await response.json()) as {
-        error?: { details?: OptimisticConflictError };
-      };
-      const details = envelope.error?.details;
-      if (!details) {
-        throw new Error('HTTP 409 response missing conflict details');
-      }
-      return {
-        kind: 'conflict409',
-        entityId: input.entityId,
-        conflict: mapConflictPayload(details),
-        reqGen: input.reqGen,
-      };
-    }
-
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status} saving ${input.entityType}/${input.entityId}`);
-    }
-
-    const ok = (await response.json()) as {
-      entity: EntityPayload;
-      revision: { revision_id: number };
-      etag: string;
-    };
-    return {
-      kind: 'ok',
-      entityId: input.entityId,
-      revisionId: ok.revision.revision_id,
-      snapshot: ok.entity,
-      etag: ok.etag,
-      reqGen: input.reqGen,
-    };
-  }
-);
+export type {
+  DeleteEntityInput,
+  EntityEditorConflict,
+  EntityEditorContext,
+  EntityEditorEvent,
+  EntityEditorInput,
+  LoadLatestEntityInput,
+  LoadLatestEntityResult,
+  PendingEntityTarget,
+  SaveEntityInput,
+  SaveEntityResult,
+};
+export { defaultDeleteEntityActor, defaultLoadLatestEntityActor, defaultSaveEntityActor };
 
 export const entityEditorMachine = setup({
   types: {
@@ -235,13 +55,19 @@ export const entityEditorMachine = setup({
     input: {} as EntityEditorInput,
   },
   actors: {
+    loadLatestEntity: defaultLoadLatestEntityActor,
     saveEntity: defaultSaveEntityActor,
+    deleteEntity: defaultDeleteEntityActor,
   },
   guards: {
+    canSyncLatest: ({ context }) => Boolean(context.dataSource?.getEntity),
     canSubmit: ({ context }) =>
       context.dirty &&
       isEditSummaryValid(context.summary) &&
       validateEntityDraft(context.entityType, context.draft).ok,
+    canConfirmDelete: ({ context }) =>
+      Boolean(context.dataSource?.deleteEntity) && isEditSummaryValid(context.deleteSummary),
+    isDirty: ({ context }) => context.dirty,
     hasPendingConflict: ({ context }) => hasPendingConflict(context.conflict),
     isOkResult: ({ context, event }) => {
       const output = readSaveEntityOutput(event);
@@ -271,35 +97,9 @@ export const entityEditorMachine = setup({
     },
   },
   actions: {
-    resetDraftToBase: assign(({ context }) => ({
-      draft: structuredClone(context.baseSnapshot),
-      summary: '',
-      dirty: false,
-      conflict: null,
-      validationErrors: [],
-      networkError: null,
-      pendingEntityChange: null,
-    })),
-    applyEntityTarget: assign(({ event }) => {
-      if (event.type !== 'ENTITY_CHANGED') {
-        return {};
-      }
-      return {
-        entityType: event.entityType,
-        entityId: event.entityId,
-        baseRevisionId: event.revisionId,
-        baseSnapshot: structuredClone(event.snapshot),
-        draft: structuredClone(event.snapshot),
-        summary: '',
-        citationMode: defaultCitationMode(event.hasPrimarySource),
-        sourceIds: [],
-        dirty: false,
-        conflict: null,
-        validationErrors: [],
-        networkError: null,
-        pendingEntityChange: null,
-      };
-    }),
+    resetDraftToBase: assign(({ context }) => buildResetDraftPatch(context)),
+    applyOpenEditTarget: assign(({ context, event }) => buildOpenEditPatch(context, event)),
+    applyEntityTarget: assign(({ event }) => buildEntityTargetPatch(event)),
     stashPendingEntityChange: assign(({ event }) => {
       if (event.type !== 'ENTITY_CHANGED') {
         return {};
@@ -314,117 +114,92 @@ export const entityEditorMachine = setup({
         },
       };
     }),
-    applyPendingLeave: assign(({ context }) => {
-      const target = context.pendingEntityChange;
-      if (!target) {
-        return {
-          draft: structuredClone(context.baseSnapshot),
-          summary: '',
-          dirty: false,
-          conflict: null,
-          validationErrors: [],
-          networkError: null,
-          pendingEntityChange: null,
-        };
-      }
-      return {
-        entityType: target.entityType,
-        entityId: target.entityId,
-        baseRevisionId: target.revisionId,
-        baseSnapshot: structuredClone(target.snapshot),
-        draft: structuredClone(target.snapshot),
-        summary: '',
-        citationMode: defaultCitationMode(target.hasPrimarySource),
-        sourceIds: [],
-        dirty: false,
-        conflict: null,
-        validationErrors: [],
-        networkError: null,
-        pendingEntityChange: null,
-      };
-    }),
+    applyPendingLeave: assign(({ context }) => buildPendingLeavePatch(context)),
     clearPendingEntityChange: assign(() => ({ pendingEntityChange: null })),
-    recordValidationErrors: assign(({ context }) => {
-      const errors: string[] = [];
-      if (!context.dirty) {
-        errors.push('Make at least one change before saving.');
-      }
-      if (!isEditSummaryValid(context.summary)) {
-        errors.push('Edit summary must be at least 3 characters.');
-      }
-      const check = validateEntityDraft(context.entityType, context.draft);
-      if (!check.ok) {
-        errors.push(...check.errors);
-      }
-      return { validationErrors: errors };
-    }),
+    clearDeleteState: assign(() => ({ deleteSummary: '', deleteError: null })),
+    recordValidationErrors: assign(({ context }) => ({
+      validationErrors: collectValidationErrors(context),
+    })),
     incrementSaveGen: assign(({ context }) => ({
       saveGen: context.saveGen + 1,
       validationErrors: [],
       networkError: null,
     })),
-    rebaseOntoServer: assign(({ context }) => {
-      if (!context.conflict) {
-        return {};
-      }
-      return {
-        baseRevisionId: context.conflict.latestRevisionId,
-        baseSnapshot: structuredClone(context.conflict.latestSnapshot),
-        draft: rebaseEntityDraft(context.baseSnapshot, context.conflict.latestSnapshot, context.draft),
-        conflict: null,
-        dirty: true,
-      };
-    }),
+    rebaseOntoServer: assign(({ context }) => buildRebasePatch(context)),
   },
 }).createMachine({
   id: 'entityEditor',
   initial: 'viewing',
-  context: ({ input }) => ({
-    entityType: input.entityType,
-    entityId: input.entityId,
-    baseRevisionId: input.revisionId,
-    baseSnapshot: structuredClone(input.snapshot),
-    draft: structuredClone(input.snapshot),
-    summary: '',
-    citationMode: defaultCitationMode(input.hasPrimarySource),
-    sourceIds: [],
-    dirty: false,
-    saveGen: 0,
-    lastAppliedGen: 0,
-    lastSavedEntityId: null,
-    lastEtag: null,
-    conflict: null,
-    validationErrors: [],
-    networkError: null,
-    pendingEntityChange: null,
-    dataSource: input.dataSource,
-  }),
+  context: ({ input }) => createInitialEntityEditorContext(input),
   states: {
     viewing: {
       tags: ['readonly'],
       on: {
-        START_EDIT: {
-          target: 'editing',
-          actions: [{ type: 'resetDraftToBase' }],
+        OPEN_EDIT: [
+          { guard: 'canSyncLatest', target: 'syncingRevision', actions: [{ type: 'applyOpenEditTarget' }] },
+          { target: 'editing', actions: [{ type: 'applyOpenEditTarget' }] },
+        ],
+        START_EDIT: { target: 'editing', actions: [{ type: 'resetDraftToBase' }] },
+        ENTITY_CHANGED: { actions: [{ type: 'applyEntityTarget' }] },
+      },
+    },
+    syncingRevision: {
+      tags: ['busy', 'syncing'],
+      invoke: {
+        id: 'loadLatestEntity',
+        src: 'loadLatestEntity',
+        input: ({ context }) => ({
+          entityType: context.entityType,
+          entityId: context.entityId,
+          dataSource: context.dataSource,
+        }),
+        onDone: {
+          target: 'editing.clean',
+          actions: assign(({ event }) => {
+            if (!event.output) {
+              return {};
+            }
+            return {
+              baseRevisionId: event.output.revisionId,
+              baseSnapshot: structuredClone(event.output.snapshot),
+              draft: structuredClone(event.output.snapshot),
+              citationMode: defaultCitationMode(event.output.hasPrimarySource),
+              dirty: false,
+              conflict: null,
+              validationErrors: [],
+              networkError: null,
+            };
+          }),
         },
-        ENTITY_CHANGED: {
-          actions: [{ type: 'applyEntityTarget' }],
-        },
+        onError: { target: 'editing.clean' },
+      },
+      on: {
+        CANCEL_EDIT: { target: 'viewing' },
+        ENTITY_CHANGED: { target: 'viewing', actions: [{ type: 'applyEntityTarget' }] },
       },
     },
     editing: {
       initial: 'clean',
       tags: ['editing'],
+      on: {
+        REQUEST_DELETE: { target: 'confirmingDelete', actions: [{ type: 'clearDeleteState' }] },
+      },
       states: {
         clean: {
           on: {
+            OPEN_EDIT: [
+              {
+                guard: 'canSyncLatest',
+                target: '#entityEditor.syncingRevision',
+                actions: [{ type: 'applyOpenEditTarget' }],
+              },
+              { actions: [{ type: 'applyOpenEditTarget' }] },
+            ],
             EDIT_FIELD: {
               target: 'dirty',
               actions: assign(({ event }) => ({ draft: event.draft, dirty: true })),
             },
-            SET_SUMMARY: {
-              actions: assign(({ event }) => ({ summary: event.summary })),
-            },
+            SET_SUMMARY: { actions: assign(({ event }) => ({ summary: event.summary })) },
             SET_CITATION: {
               actions: assign(({ event }) => ({
                 citationMode: event.mode,
@@ -432,21 +207,14 @@ export const entityEditorMachine = setup({
               })),
             },
             CANCEL_EDIT: { target: '#entityEditor.viewing' },
-            ENTITY_CHANGED: {
-              target: '#entityEditor.viewing',
-              actions: [{ type: 'applyEntityTarget' }],
-            },
+            ENTITY_CHANGED: { target: '#entityEditor.viewing', actions: [{ type: 'applyEntityTarget' }] },
           },
         },
         dirty: {
           tags: ['dirty'],
           on: {
-            EDIT_FIELD: {
-              actions: assign(({ event }) => ({ draft: event.draft, dirty: true })),
-            },
-            SET_SUMMARY: {
-              actions: assign(({ event }) => ({ summary: event.summary })),
-            },
+            EDIT_FIELD: { actions: assign(({ event }) => ({ draft: event.draft, dirty: true })) },
+            SET_SUMMARY: { actions: assign(({ event }) => ({ summary: event.summary })) },
             SET_CITATION: {
               actions: assign(({ event }) => ({
                 citationMode: event.mode,
@@ -454,10 +222,7 @@ export const entityEditorMachine = setup({
               })),
             },
             SUBMIT: { target: '#entityEditor.validating' },
-            DISCARD_DRAFT: {
-              target: '#entityEditor.viewing',
-              actions: [{ type: 'resetDraftToBase' }],
-            },
+            DISCARD_DRAFT: { target: '#entityEditor.viewing', actions: [{ type: 'resetDraftToBase' }] },
             ENTITY_CHANGED: {
               target: '#entityEditor.confirmingLeave',
               actions: [{ type: 'stashPendingEntityChange' }],
@@ -469,34 +234,71 @@ export const entityEditorMachine = setup({
     confirmingLeave: {
       tags: ['dirty', 'confirming'],
       on: {
-        CONFIRM_LEAVE: {
-          target: 'viewing',
-          actions: [{ type: 'applyPendingLeave' }],
-        },
+        CONFIRM_LEAVE: { target: 'viewing', actions: [{ type: 'applyPendingLeave' }] },
         STAY_EDITING: [
           {
             guard: 'hasPendingConflict',
             target: 'conflict409.resolvingConflict',
             actions: [{ type: 'clearPendingEntityChange' }],
           },
-          {
-            target: 'editing.dirty',
-            actions: [{ type: 'clearPendingEntityChange' }],
-          },
+          { target: 'editing.dirty', actions: [{ type: 'clearPendingEntityChange' }] },
         ],
+      },
+    },
+    confirmingDelete: {
+      tags: ['confirmingDelete'],
+      on: {
+        SET_DELETE_SUMMARY: {
+          actions: assign(({ event }) => ({ deleteSummary: event.summary, deleteError: null })),
+        },
+        CONFIRM_DELETE: {
+          guard: 'canConfirmDelete',
+          target: 'deleting',
+          actions: assign(() => ({ deleteError: null })),
+        },
+        CANCEL_DELETE: [
+          { guard: 'isDirty', target: 'editing.dirty', actions: [{ type: 'clearDeleteState' }] },
+          { target: 'editing.clean', actions: [{ type: 'clearDeleteState' }] },
+        ],
+        CANCEL_EDIT: { target: 'viewing', actions: [{ type: 'resetDraftToBase' }] },
+        ENTITY_CHANGED: { target: 'viewing', actions: [{ type: 'applyEntityTarget' }] },
+      },
+    },
+    deleting: {
+      tags: ['busy', 'deleting'],
+      invoke: {
+        id: 'deleteEntity',
+        src: 'deleteEntity',
+        input: ({ context }) => ({
+          entityType: context.entityType,
+          entityId: context.entityId,
+          expectedParentRevisionId: context.baseRevisionId,
+          summary: context.deleteSummary,
+          dataSource: context.dataSource,
+        }),
+        onDone: {
+          target: 'deleted',
+          actions: assign(() => ({ dirty: false, deleteSummary: '', deleteError: null })),
+        },
+        onError: {
+          target: 'confirmingDelete',
+          actions: assign(({ event }) => ({
+            deleteError: event.error instanceof Error ? event.error.message : String(event.error),
+          })),
+        },
+      },
+    },
+    deleted: {
+      tags: ['deleted'],
+      on: {
+        DISMISS_DELETED: { target: 'viewing', actions: [{ type: 'resetDraftToBase' }] },
+        ENTITY_CHANGED: { target: 'viewing', actions: [{ type: 'applyEntityTarget' }] },
       },
     },
     validating: {
       always: [
-        {
-          guard: 'canSubmit',
-          target: 'saving',
-          actions: [{ type: 'incrementSaveGen' }],
-        },
-        {
-          target: 'validationError',
-          actions: [{ type: 'recordValidationErrors' }],
-        },
+        { guard: 'canSubmit', target: 'saving', actions: [{ type: 'incrementSaveGen' }] },
+        { target: 'validationError', actions: [{ type: 'recordValidationErrors' }] },
       ],
     },
     validationError: {
@@ -504,18 +306,11 @@ export const entityEditorMachine = setup({
       on: {
         EDIT_FIELD: {
           target: 'editing.dirty',
-          actions: assign(({ event }) => ({
-            draft: event.draft,
-            dirty: true,
-            validationErrors: [],
-          })),
+          actions: assign(({ event }) => ({ draft: event.draft, dirty: true, validationErrors: [] })),
         },
         SET_SUMMARY: {
           target: 'editing.dirty',
-          actions: assign(({ event }) => ({
-            summary: event.summary,
-            validationErrors: [],
-          })),
+          actions: assign(({ event }) => ({ summary: event.summary, validationErrors: [] })),
         },
         SET_CITATION: {
           target: 'editing.dirty',
@@ -526,14 +321,9 @@ export const entityEditorMachine = setup({
           })),
         },
         SUBMIT: { target: 'validating' },
-        DISCARD_DRAFT: {
-          target: 'viewing',
-          actions: [{ type: 'resetDraftToBase' }],
-        },
-        ENTITY_CHANGED: {
-          target: 'confirmingLeave',
-          actions: [{ type: 'stashPendingEntityChange' }],
-        },
+        REQUEST_DELETE: { target: 'confirmingDelete', actions: [{ type: 'clearDeleteState' }] },
+        DISCARD_DRAFT: { target: 'viewing', actions: [{ type: 'resetDraftToBase' }] },
+        ENTITY_CHANGED: { target: 'confirmingLeave', actions: [{ type: 'stashPendingEntityChange' }] },
       },
     },
     saving: {
@@ -577,18 +367,11 @@ export const entityEditorMachine = setup({
             target: 'conflict409',
             actions: assign(({ event }) =>
               event.output.kind === 'conflict409'
-                ? {
-                    conflict: event.output.conflict,
-                    dirty: true,
-                    networkError: null,
-                  }
+                ? { conflict: event.output.conflict, dirty: true, networkError: null }
                 : {}
             ),
           },
-          // Stale or mismatched saveGen response is safely ignored while returning editor to dirty draft.
-          {
-            target: 'editing.dirty',
-          },
+          { target: 'editing.dirty' },
         ],
         onError: {
           target: 'networkErrorRetryable',
@@ -599,24 +382,20 @@ export const entityEditorMachine = setup({
       },
       on: {
         CANCEL_SAVE: { target: 'editing.dirty' },
-        ENTITY_CHANGED: {
-          target: 'viewing',
-          actions: [{ type: 'applyEntityTarget' }],
-        },
+        ENTITY_CHANGED: { target: 'viewing', actions: [{ type: 'applyEntityTarget' }] },
       },
     },
     saved: {
       tags: ['saved'],
       on: {
         DISMISS_SAVED: { target: 'viewing' },
-        START_EDIT: {
-          target: 'editing',
-          actions: [{ type: 'resetDraftToBase' }],
-        },
-        ENTITY_CHANGED: {
-          target: 'viewing',
-          actions: [{ type: 'applyEntityTarget' }],
-        },
+        OPEN_EDIT: [
+          { guard: 'canSyncLatest', target: 'syncingRevision', actions: [{ type: 'applyOpenEditTarget' }] },
+          { target: 'editing', actions: [{ type: 'applyOpenEditTarget' }] },
+        ],
+        START_EDIT: { target: 'editing', actions: [{ type: 'resetDraftToBase' }] },
+        REQUEST_DELETE: { target: 'confirmingDelete', actions: [{ type: 'clearDeleteState' }] },
+        ENTITY_CHANGED: { target: 'viewing', actions: [{ type: 'applyEntityTarget' }] },
       },
     },
     conflict409: {
@@ -642,18 +421,12 @@ export const entityEditorMachine = setup({
                   : {}
               ),
             },
-            REBASE_AND_RETRY: {
-              target: '#entityEditor.validating',
-              actions: [{ type: 'rebaseOntoServer' }],
-            },
+            REBASE_AND_RETRY: { target: '#entityEditor.validating', actions: [{ type: 'rebaseOntoServer' }] },
             REBASE_TO_EDIT: {
               target: '#entityEditor.editing.dirty',
               actions: [{ type: 'rebaseOntoServer' }],
             },
-            DISCARD_DRAFT: {
-              target: '#entityEditor.viewing',
-              actions: [{ type: 'resetDraftToBase' }],
-            },
+            DISCARD_DRAFT: { target: '#entityEditor.viewing', actions: [{ type: 'resetDraftToBase' }] },
             ENTITY_CHANGED: {
               target: '#entityEditor.confirmingLeave',
               actions: [{ type: 'stashPendingEntityChange' }],
@@ -667,14 +440,9 @@ export const entityEditorMachine = setup({
       on: {
         RETRY_SAVE: { target: 'validating' },
         RETURN_TO_EDIT: { target: 'editing.dirty' },
-        DISCARD_DRAFT: {
-          target: 'viewing',
-          actions: [{ type: 'resetDraftToBase' }],
-        },
-        ENTITY_CHANGED: {
-          target: 'confirmingLeave',
-          actions: [{ type: 'stashPendingEntityChange' }],
-        },
+        REQUEST_DELETE: { target: 'confirmingDelete', actions: [{ type: 'clearDeleteState' }] },
+        DISCARD_DRAFT: { target: 'viewing', actions: [{ type: 'resetDraftToBase' }] },
+        ENTITY_CHANGED: { target: 'confirmingLeave', actions: [{ type: 'stashPendingEntityChange' }] },
       },
     },
   },

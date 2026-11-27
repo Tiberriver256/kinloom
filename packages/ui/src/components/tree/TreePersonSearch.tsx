@@ -2,13 +2,11 @@ import type { Person } from '@kinloom/core';
 import type React from 'react';
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import type { TreeSearchCandidate } from '../../lib/archivalTreeModel.js';
-import { cx } from '../../lib/cx.js';
+import { cx, joinClasses } from '../../lib/cx.js';
 import { searchNavNext, searchNavPrev, searchNavReset } from '../../lib/searchNavigation.js';
 import { KINLOOM_VOCABULARY } from '../../lib/vocabulary.js';
-import cssMod0 from '../../pages/IndexPage.module.css';
-import cssMod1 from '../../pages/TreePage.module.css';
-
-const uiStyles: Readonly<Record<string, string>> = { ...cssMod0, ...cssMod1 };
+import controlStyles from '../../styles/Controls.module.css';
+import treeToolbarStyles from './TreeToolbar.module.css';
 
 export interface TreePersonSearchProps {
   readonly query: string;
@@ -102,10 +100,12 @@ export const TreePersonSearch: React.FC<TreePersonSearchProps> = ({
       id={listboxId}
       role="listbox"
       aria-label="Matching people in family tree"
-      className={cx(uiStyles, 'tree-search-listbox')}
+      className={cx(treeToolbarStyles, 'tree-search-listbox')}
     >
       {candidates.length === 0 ? (
-        <div className={cx(uiStyles, 'tree-search-empty')}>No matching people for “{query.trim()}”.</div>
+        <div className={cx(treeToolbarStyles, 'tree-search-empty')}>
+          No matching people for “{query.trim()}”.
+        </div>
       ) : (
         candidates.map((candidate, idx) => {
           const isActive = idx === clampedActiveIdx;
@@ -128,7 +128,7 @@ export const TreePersonSearch: React.FC<TreePersonSearchProps> = ({
               type="button"
               role="option"
               aria-selected={isActive}
-              className={cx(uiStyles, `tree-search-option${isActive ? ' is-active' : ''}`)}
+              className={cx(treeToolbarStyles, `tree-search-option${isActive ? ' is-active' : ''}`)}
               onMouseEnter={() => {
                 setActiveIdx(idx);
               }}
@@ -136,8 +136,10 @@ export const TreePersonSearch: React.FC<TreePersonSearchProps> = ({
                 commitSelection(candidate.person);
               }}
             >
-              <span className={cx(uiStyles, 'tree-search-option-name')}>{candidate.person.full_name}</span>
-              <span className={cx(uiStyles, 'tree-search-option-meta')}>{metaBits.join(' · ')}</span>
+              <span className={cx(treeToolbarStyles, 'tree-search-option-name')}>
+                {candidate.person.full_name}
+              </span>
+              <span className={cx(treeToolbarStyles, 'tree-search-option-meta')}>{metaBits.join(' · ')}</span>
             </button>
           );
         })
@@ -147,11 +149,11 @@ export const TreePersonSearch: React.FC<TreePersonSearchProps> = ({
 
   return (
     <>
-      <div className={cx(uiStyles, 'tree-search-desktop')}>
-        <label htmlFor={inputId} className={cx(uiStyles, 'visually-hidden')}>
+      <div className={cx(treeToolbarStyles, 'tree-search-desktop')}>
+        <label htmlFor={inputId} className={'visually-hidden'}>
           Find person in family tree
         </label>
-        <span className={cx(uiStyles, 'tree-search-icon')} aria-hidden="true">
+        <span className={cx(treeToolbarStyles, 'tree-search-icon')} aria-hidden="true">
           <svg viewBox="0 0 20 20" width="14" height="14" focusable="false" aria-hidden="true">
             <circle cx="8.5" cy="8.5" r="5.5" fill="none" stroke="currentColor" strokeWidth="1.7" />
             <path d="M13 13l4 4" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
@@ -162,7 +164,7 @@ export const TreePersonSearch: React.FC<TreePersonSearchProps> = ({
           id={inputId}
           type="search"
           role="combobox"
-          className={cx(uiStyles, 'tree-search-input')}
+          className={cx(treeToolbarStyles, 'tree-search-input')}
           placeholder="Find person…"
           value={query}
           autoComplete="off"
@@ -187,7 +189,7 @@ export const TreePersonSearch: React.FC<TreePersonSearchProps> = ({
         {query.length > 0 && (
           <button
             type="button"
-            className={cx(uiStyles, 'tree-search-clear')}
+            className={cx(treeToolbarStyles, 'tree-search-clear')}
             aria-label="Clear person search"
             onMouseDown={(e) => {
               e.preventDefault();
@@ -203,7 +205,7 @@ export const TreePersonSearch: React.FC<TreePersonSearchProps> = ({
         {showDesktopDropdown && (
           // biome-ignore lint/a11y/noStaticElementInteractions: prevents input blur while clicking dropdown items
           <div
-            className={cx(uiStyles, 'tree-search-popover')}
+            className={cx(treeToolbarStyles, 'tree-search-popover')}
             onMouseDown={(e) => {
               e.preventDefault();
             }}
@@ -215,7 +217,11 @@ export const TreePersonSearch: React.FC<TreePersonSearchProps> = ({
 
       <button
         type="button"
-        className={cx(uiStyles, `pill-btn tree-search-toggle-btn${mobileOpen ? ' active' : ''}`)}
+        className={joinClasses(
+          cx(controlStyles, 'pill-btn'),
+          cx(treeToolbarStyles, 'tree-search-toggle-btn'),
+          mobileOpen ? ' active' : ''
+        )}
         aria-label="Find person in tree"
         aria-expanded={mobileOpen}
         aria-controls={mobileOpen ? listboxId : undefined}
@@ -233,15 +239,15 @@ export const TreePersonSearch: React.FC<TreePersonSearchProps> = ({
       {mobileOpen && (
         // biome-ignore lint/a11y/noStaticElementInteractions: prevents input blur while clicking dropdown items
         <div
-          className={cx(uiStyles, 'tree-search-popover is-mobile-open')}
+          className={cx(treeToolbarStyles, 'tree-search-popover is-mobile-open')}
           onMouseDown={(e) => {
             if (!(e.target instanceof HTMLInputElement)) {
               e.preventDefault();
             }
           }}
         >
-          <div className={cx(uiStyles, 'tree-search-mobile-bar')}>
-            <label htmlFor={`${inputId}-mobile`} className={cx(uiStyles, 'visually-hidden')}>
+          <div className={cx(treeToolbarStyles, 'tree-search-mobile-bar')}>
+            <label htmlFor={`${inputId}-mobile`} className={'visually-hidden'}>
               Find person in family tree
             </label>
             <input
@@ -249,7 +255,7 @@ export const TreePersonSearch: React.FC<TreePersonSearchProps> = ({
               id={`${inputId}-mobile`}
               type="search"
               role="combobox"
-              className={cx(uiStyles, 'tree-search-mobile-input')}
+              className={cx(treeToolbarStyles, 'tree-search-mobile-input')}
               placeholder="Find person by name or year…"
               value={query}
               autoComplete="off"
@@ -264,7 +270,10 @@ export const TreePersonSearch: React.FC<TreePersonSearchProps> = ({
             />
             <button
               type="button"
-              className={cx(uiStyles, 'pill-btn tree-search-mobile-close')}
+              className={joinClasses(
+                cx(controlStyles, 'pill-btn'),
+                cx(treeToolbarStyles, 'tree-search-mobile-close')
+              )}
               aria-label="Close person search"
               onClick={() => {
                 onMobileOpenChange(false);

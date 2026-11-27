@@ -4,7 +4,7 @@ import type React from 'react';
 import { useMemo } from 'react';
 import { useOptionalArchiveData } from '../context/ArchiveDataContext.js';
 import { cx } from '../lib/cx.js';
-import uiStyles from './ArchivalMarkdown.module.css';
+import markdownStyles from './ArchivalMarkdown.module.css';
 import { CitationPopover } from './CitationPopover.js';
 import {
   defaultResolveMediaUrl,
@@ -142,29 +142,29 @@ export const ArchivalMarkdown: React.FC<ArchivalMarkdownProps> = ({
   }
 
   return (
-    <div className={cx(uiStyles, className ? `archival-markdown ${className}` : 'archival-markdown')}>
+    <div className={cx(markdownStyles, className ? `archival-markdown ${className}` : 'archival-markdown')}>
       {blocks.map((block, idx) => {
         const blockKey = `b-${idx}`;
         switch (block.kind) {
           case 'heading':
             return block.level === 3 ? (
-              <h4 key={blockKey} className={cx(uiStyles, 'archival-md-heading')}>
+              <h4 key={blockKey} className={cx(markdownStyles, 'archival-md-heading')}>
                 {renderInlineMarkdownNodes(block.text, blockKey, citationCtx)}
               </h4>
             ) : (
-              <h5 key={blockKey} className={cx(uiStyles, 'archival-md-subheading')}>
+              <h5 key={blockKey} className={cx(markdownStyles, 'archival-md-subheading')}>
                 {renderInlineMarkdownNodes(block.text, blockKey, citationCtx)}
               </h5>
             );
           case 'blockquote':
             return (
-              <blockquote key={blockKey} className={cx(uiStyles, 'archival-md-quote')}>
+              <blockquote key={blockKey} className={cx(markdownStyles, 'archival-md-quote')}>
                 {renderInlineMarkdownNodes(block.text, blockKey, citationCtx, entityCtx, new Set())}
               </blockquote>
             );
           case 'list':
             return block.ordered ? (
-              <ol key={blockKey} className={cx(uiStyles, 'archival-md-list')}>
+              <ol key={blockKey} className={cx(markdownStyles, 'archival-md-list')}>
                 {block.items.map((item, itemIdx) => (
                   // biome-ignore lint/suspicious/noArrayIndexKey: markdown list items have no stable ID beyond block+index
                   <li key={`${blockKey}-li-${itemIdx}`}>
@@ -179,7 +179,7 @@ export const ArchivalMarkdown: React.FC<ArchivalMarkdownProps> = ({
                 ))}
               </ol>
             ) : (
-              <ul key={blockKey} className={cx(uiStyles, 'archival-md-list')}>
+              <ul key={blockKey} className={cx(markdownStyles, 'archival-md-list')}>
                 {block.items.map((item, itemIdx) => (
                   // biome-ignore lint/suspicious/noArrayIndexKey: markdown list items have no stable ID beyond block+index
                   <li key={`${blockKey}-li-${itemIdx}`}>
@@ -196,7 +196,7 @@ export const ArchivalMarkdown: React.FC<ArchivalMarkdownProps> = ({
             );
           case 'paragraph':
             return (
-              <p key={blockKey} className={cx(uiStyles, 'archival-md-p')}>
+              <p key={blockKey} className={cx(markdownStyles, 'archival-md-p')}>
                 {renderInlineMarkdownNodes(block.text, blockKey, citationCtx, entityCtx, new Set())}
               </p>
             );

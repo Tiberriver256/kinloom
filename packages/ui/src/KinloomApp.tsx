@@ -3,7 +3,7 @@ import type React from 'react';
 import { lazy, Suspense, useEffect } from 'react';
 import { BrowserRouter, MemoryRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { AppErrorBoundary } from './components/AppErrorBoundary.js';
-import cssMod1 from './components/ArchiveStatusShell.module.css';
+import statusShellStyles from './components/ArchiveStatusShell.module.css';
 import { BlankScreenWatchdog } from './components/BlankScreenWatchdog.js';
 import { ExplorerTopBar } from './components/ExplorerTopBar.js';
 import { GlobalSearchModal } from './components/GlobalSearchModal.js';
@@ -17,12 +17,10 @@ import { useArchiveData } from './context/ArchiveDataContext.js';
 import { ArchiveProvider } from './context/ArchiveProvider.js';
 import { cx } from './lib/cx.js';
 import { IndexPage } from './pages/IndexPage.js';
-import cssMod0 from './pages/IndexPage.module.css';
+import indexStyles from './pages/IndexPage.module.css';
 import { NotFoundPage } from './pages/NotFoundPage.js';
 import { PluginSlot, useKinloomPlugins } from './plugins/PluginContext.js';
 import type { KinloomUiPlugin } from './plugins/types.js';
-
-const uiStyles: Readonly<Record<string, string>> = { ...cssMod0, ...cssMod1 };
 
 const AdminPage = lazy(async () => {
   const module = await import('./pages/AdminPage.js');
@@ -85,9 +83,9 @@ export interface KinloomAppProps {
 const RouteLoading: React.FC = () => (
   <div>
     <ExplorerTopBar />
-    <main id="main-content" className={cx(uiStyles, 'index-page')}>
-      <output className={cx(uiStyles, 'archive-loading-shell')} aria-live="polite">
-        <span className={cx(uiStyles, 'archive-loading-spinner')} aria-hidden="true" />
+    <main id="main-content" className={cx(indexStyles, 'index-page')}>
+      <output className={cx(statusShellStyles, 'archive-loading-shell')} aria-live="polite">
+        <span className={cx(statusShellStyles, 'archive-loading-spinner')} aria-hidden="true" />
         <span>Loading archival view…</span>
       </output>
     </main>
@@ -145,7 +143,7 @@ const RoutedAppShell: React.FC<{ siteTitle: string; baseUrl: string }> = ({ site
       <SourceReaderDrawer />
       <SourceInspectorDrawer />
       <GlobalSearchModal />
-      <PluginSlot name="appShell" className={cx(uiStyles, 'kinloom-app-shell-slot')} />
+      <PluginSlot name="appShell" className={'kinloom-app-shell-slot'} />
     </>
   );
 };
@@ -181,7 +179,7 @@ export const KinloomApp: React.FC<KinloomAppProps> = ({
   const shell = <RoutedAppShell siteTitle={siteConfig.site.title} baseUrl={resolvedBase} />;
 
   return (
-    <div className={cx(uiStyles, 'kinloom-app')} style={rootStyle}>
+    <div className={cx(statusShellStyles, 'kinloom-app')} style={rootStyle}>
       <AppErrorBoundary siteTitle={siteConfig.site.title} baseUrl={resolvedBase}>
         <ArchiveProvider
           siteConfig={siteConfig}

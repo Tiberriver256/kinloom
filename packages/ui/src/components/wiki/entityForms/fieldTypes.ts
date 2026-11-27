@@ -1,4 +1,5 @@
 import type { EntityPayload, EntityType, KinshipRelation, Person, Place } from '@kinloom/core';
+import { buildEntityId } from '@kinloom/core';
 import type React from 'react';
 
 export type CreatableKind = 'person' | 'event' | 'place' | 'kinship_edge';
@@ -107,11 +108,11 @@ export function buildUniquePersonIdentity(
   const usedIds = new Set(existingPeople.map((p) => p.id));
   const usedSlugs = new Set(existingPeople.map((p) => p.slug));
   let candidateSlug = baseSlug;
-  let candidateId = `per_${candidateSlug.replaceAll('-', '_')}`;
+  let candidateId = buildEntityId('person', candidateSlug.replaceAll('-', '_'));
   let suffix = 2;
   while (usedIds.has(candidateId) || usedSlugs.has(candidateSlug)) {
     candidateSlug = `${baseSlug}-${suffix}`;
-    candidateId = `per_${candidateSlug.replaceAll('-', '_')}`;
+    candidateId = buildEntityId('person', candidateSlug.replaceAll('-', '_'));
     suffix += 1;
   }
   return { id: candidateId, slug: candidateSlug };
@@ -206,11 +207,11 @@ export interface EntityCreateFieldProps {
   readonly updateDraft: <K extends keyof CreateEntityDraft>(key: K, value: CreateEntityDraft[K]) => void;
   readonly people: readonly Person[];
   readonly places: readonly Place[];
-  readonly uiStyles: Readonly<Record<string, string>>;
+  readonly uiStyles?: Readonly<Record<string, string>>;
 }
 
 export interface EntityCreateFormEntry {
-  readonly kind: CreatableKind;
+  readonly kind: EntityType;
   readonly tabLabel: string;
   readonly Fields: React.FC<EntityCreateFieldProps>;
   readonly validateAndBuild: (
@@ -222,7 +223,7 @@ export interface EntityCreateFormEntry {
 export interface EntityEditFieldProps {
   readonly draft: EntityPayload;
   readonly isBusy: boolean;
-  readonly uiStyles: Readonly<Record<string, string>>;
+  readonly uiStyles?: Readonly<Record<string, string>>;
   readonly updateField: (key: string, value: unknown) => void;
   readonly replaceDraft: (nextDraft: EntityPayload) => void;
 }

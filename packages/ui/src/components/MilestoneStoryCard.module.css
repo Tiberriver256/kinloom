@@ -1,0 +1,93 @@
+/* Open-Ledger Unboxed Timeline Entry */
+.story-card {
+  background: transparent;
+  border: none;
+  border-left: 3px solid transparent;
+  border-bottom: 1px solid var(--border-decorative);
+  border-radius: 0;
+  padding: 18px 14px 20px 18px;
+  box-shadow: none;
+  transition:
+    border-left-color 0.18s ease,
+    background-color 0.18s ease;
+  scroll-margin-top: calc(var(--topbar-height) + 18px);
+}
+
+.story-card:global(.active) {
+  border-left-color: var(--radar-copresence);
+  background: rgba(234, 225, 206, 0.34);
+}
+
+.story-card-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px 14px;
+  margin-bottom: 8px;
+}
+
+.story-card h2 {
+  font-family: var(--font-serif);
+  font-size: 1.28rem;
+  font-weight: 600;
+  color: var(--surface-header);
+  margin: 0 0 8px;
+  line-height: 1.28;
+}
+
+.story-card p {
+  margin: 0;
+  color: var(--text-primary);
+  line-height: 1.68;
+  max-width: 56ch;
+}
+
+.also-here {
+  margin-top: 14px;
+  max-width: 56ch;
+}
+
+.also-here summary {
+  cursor: pointer;
+  font-size: 0.92rem;
+  color: var(--text-secondary);
+}
+
+.also-here ul {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+}
+
+.also-here button {
+  border: none;
+  border-bottom: 1px solid var(--border-control);
+  background: transparent;
+  padding: 2px 0;
+  cursor: pointer;
+  font-family: var(--font-serif);
+  font-size: 0.95rem;
+  color: var(--surface-header);
+}
+
+.also-here button span {
+  margin-left: 6px;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  color: var(--text-secondary);
+}
+
+.also-here button:hover {
+  color: var(--radar-copresence);
+  border-bottom-color: var(--radar-copresence);
+}
+
+@media (max-width: 768px) {
+  .story-card {
+    padding: 14px 6px 16px 12px;
+    scroll-margin-top: calc(var(--topbar-height) + 52px);
+  }
+}

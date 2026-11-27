@@ -2,19 +2,12 @@ import type { MediaItem } from '@kinloom/core';
 import type React from 'react';
 import { useArchiveData } from '../context/ArchiveDataContext.js';
 import { cx } from '../lib/cx.js';
-import cssMod3 from '../pages/IndexPage.module.css';
 import { useKinloomPlugins } from '../plugins/PluginContext.js';
+import controlStyles from '../styles/Controls.module.css';
 import { resolveAssetUrl } from './Atoms.js';
-import cssMod0 from './Atoms.module.css';
-import cssMod4 from './MediaGallery.module.css';
-import cssMod1 from './SourceReaderDrawer.module.css';
-
-const uiStyles: Readonly<Record<string, string>> = {
-  ...cssMod0,
-  ...cssMod1,
-  ...cssMod3,
-  ...cssMod4,
-};
+import atomStyles from './Atoms.module.css';
+import mediaGalleryStyles from './MediaGallery.module.css';
+import readerStyles from './SourceReaderDrawer.module.css';
 
 export interface MediaPlayerProps {
   media: MediaItem;
@@ -78,11 +71,7 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({ media, baseUrl, varian
   // 1. Check plugin mediaRenderers first so private family sites can mount custom players.
   for (const renderer of mediaRenderers) {
     if (renderer.match(media)) {
-      return (
-        <div className={cx(uiStyles, className ?? 'media-player-plugin-wrap')}>
-          {renderer.render({ media, src })}
-        </div>
-      );
+      return <div className={className ?? 'media-player-plugin-wrap'}>{renderer.render({ media, src })}</div>;
     }
   }
 
@@ -90,33 +79,37 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({ media, baseUrl, varian
   if (isVideoMedia(media)) {
     if (variant === 'preview' && posterSrc) {
       return (
-        <div className={cx(uiStyles, className ?? 'media-player-preview media-player-video-preview')}>
+        <div
+          className={cx(mediaGalleryStyles, className ?? 'media-player-preview media-player-video-preview')}
+        >
           <img
             src={posterSrc}
             alt={media.caption}
-            className={cx(uiStyles, 'person-media-thumb')}
+            className={cx(mediaGalleryStyles, 'person-media-thumb')}
             loading="lazy"
           />
-          <span className={cx(uiStyles, 'media-play-badge')} aria-hidden="true">
+          <span className={cx(mediaGalleryStyles, 'media-play-badge')} aria-hidden="true">
             ▶ {durationLabel ?? 'Video'}
           </span>
         </div>
       );
     }
     return (
-      <div className={cx(uiStyles, className ?? 'media-player-shell media-player-video')}>
+      <div className={cx(mediaGalleryStyles, className ?? 'media-player-shell media-player-video')}>
         <video
           controls
           playsInline
           preload="metadata"
           poster={posterSrc}
-          className={cx(uiStyles, 'media-player-video-el')}
+          className={cx(mediaGalleryStyles, 'media-player-video-el')}
           aria-label={media.caption}
         >
           <source src={src} type={media.mime_type ?? undefined} />
           {transcriptSrc && <track kind="captions" src={transcriptSrc} label="Transcript captions" default />}
         </video>
-        {durationLabel && <div className={cx(uiStyles, 'media-player-meta')}>Duration: {durationLabel}</div>}
+        {durationLabel && (
+          <div className={cx(mediaGalleryStyles, 'media-player-meta')}>Duration: {durationLabel}</div>
+        )}
       </div>
     );
   }
@@ -125,30 +118,37 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({ media, baseUrl, varian
   if (isAudioMedia(media)) {
     if (variant === 'preview') {
       return (
-        <div className={cx(uiStyles, className ?? 'media-player-preview media-player-audio-preview')}>
-          <span className={cx(uiStyles, 'media-audio-glyph')} aria-hidden="true">
+        <div
+          className={cx(mediaGalleryStyles, className ?? 'media-player-preview media-player-audio-preview')}
+        >
+          <span className={cx(mediaGalleryStyles, 'media-audio-glyph')} aria-hidden="true">
             ♫
           </span>
-          <span className={cx(uiStyles, 'media-audio-label')}>
+          <span className={cx(mediaGalleryStyles, 'media-audio-label')}>
             Oral History{durationLabel ? ` · ${durationLabel}` : ''}
           </span>
         </div>
       );
     }
     return (
-      <div className={cx(uiStyles, className ?? 'media-player-shell media-player-audio')}>
+      <div className={cx(mediaGalleryStyles, className ?? 'media-player-shell media-player-audio')}>
         <audio
           controls
           preload="metadata"
-          className={cx(uiStyles, 'media-player-audio-el')}
+          className={cx(mediaGalleryStyles, 'media-player-audio-el')}
           aria-label={media.caption}
         >
           <source src={src} type={media.mime_type ?? undefined} />
         </audio>
-        <div className={cx(uiStyles, 'media-player-meta')}>
+        <div className={cx(mediaGalleryStyles, 'media-player-meta')}>
           {durationLabel && <span>Duration: {durationLabel}</span>}
           {transcriptSrc && (
-            <a href={transcriptSrc} target="_blank" rel="noreferrer" className={cx(uiStyles, 'ink-link-btn')}>
+            <a
+              href={transcriptSrc}
+              target="_blank"
+              rel="noreferrer"
+              className={cx(atomStyles, 'ink-link-btn')}
+            >
               Read transcript ↗
             </a>
           )}
@@ -161,23 +161,27 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({ media, baseUrl, varian
   if (isPdfMedia(media)) {
     if (variant === 'preview') {
       return (
-        <div className={cx(uiStyles, className ?? 'media-player-preview media-player-pdf-preview')}>
-          <span className={cx(uiStyles, 'media-audio-glyph')} aria-hidden="true">
+        <div className={cx(mediaGalleryStyles, className ?? 'media-player-preview media-player-pdf-preview')}>
+          <span className={cx(mediaGalleryStyles, 'media-audio-glyph')} aria-hidden="true">
             PDF
           </span>
-          <span className={cx(uiStyles, 'media-audio-label')}>Archival Document</span>
+          <span className={cx(mediaGalleryStyles, 'media-audio-label')}>Archival Document</span>
         </div>
       );
     }
     return (
-      <div className={cx(uiStyles, className ?? 'media-player-shell media-player-pdf')}>
-        <iframe title={media.caption} src={src} className={cx(uiStyles, 'media-player-pdf-frame')} />
-        <div className={cx(uiStyles, 'media-player-meta')}>
+      <div className={cx(mediaGalleryStyles, className ?? 'media-player-shell media-player-pdf')}>
+        <iframe
+          title={media.caption}
+          src={src}
+          className={cx(mediaGalleryStyles, 'media-player-pdf-frame')}
+        />
+        <div className={cx(mediaGalleryStyles, 'media-player-meta')}>
           <a
             href={src}
             target="_blank"
             rel="noreferrer"
-            className={cx(uiStyles, 'pill-btn')}
+            className={cx(controlStyles, 'pill-btn')}
             style={{ textDecoration: 'none' }}
           >
             Open PDF in new tab ↗
@@ -195,10 +199,12 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({ media, baseUrl, varian
       src={imgSrc}
       alt={media.caption}
       loading="lazy"
-      className={cx(
-        uiStyles,
-        className ?? (variant === 'preview' ? 'person-media-thumb' : 'scan-page-img-full')
-      )}
+      className={
+        className ??
+        (variant === 'preview'
+          ? cx(mediaGalleryStyles, 'person-media-thumb')
+          : cx(readerStyles, 'scan-page-img-full'))
+      }
     />
   );
 };

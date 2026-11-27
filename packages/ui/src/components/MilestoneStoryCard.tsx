@@ -2,11 +2,9 @@ import type { ArchiveEvent, CoPresenceItem, Place, SourceRecord } from '@kinloom
 import type React from 'react';
 import { Link } from 'react-router-dom';
 import { cx } from '../lib/cx.js';
-import cssMod1 from '../pages/PersonPage.module.css';
 import { ArchivalPhotoFrame, DateStamp, SourceCitationTag } from './Atoms.js';
-import cssMod0 from './Atoms.module.css';
-
-const uiStyles: Readonly<Record<string, string>> = { ...cssMod0, ...cssMod1 };
+import atomStyles from './Atoms.module.css';
+import milestoneStyles from './MilestoneStoryCard.module.css';
 
 const EMPTY_ALSO_HERE: CoPresenceItem[] = [];
 
@@ -35,7 +33,7 @@ export const MilestoneStoryCard: React.FC<{
     id={event.id}
     ref={cardRef}
     data-event-id={event.id}
-    className={cx(uiStyles, `story-card ${isActive ? 'active' : ''}`)}
+    className={cx(milestoneStyles, `story-card ${isActive ? 'active' : ''}`)}
     onClick={(e) => {
       if (e.target instanceof HTMLElement && e.target.closest('details')) {
         return;
@@ -49,12 +47,12 @@ export const MilestoneStoryCard: React.FC<{
       }
     }}
   >
-    <div className={cx(uiStyles, 'story-card-top')}>
+    <div className={cx(milestoneStyles, 'story-card-top')}>
       <DateStamp displayDate={event.display_date} edtf={event.edtf_date} />
       {place && (
         <Link
           to={`/place/${place.slug}`}
-          className={cx(uiStyles, 'ink-link-btn')}
+          className={cx(atomStyles, 'ink-link-btn')}
           onClick={(e) => {
             e.stopPropagation();
           }}
@@ -84,7 +82,7 @@ export const MilestoneStoryCard: React.FC<{
     />
 
     {isActive && alsoHere.length > 0 && onPivotPerson && (
-      <details className={cx(uiStyles, 'also-here')}>
+      <details className={cx(milestoneStyles, 'also-here')}>
         <summary>Also here</summary>
         <ul>
           {alsoHere.map((item) => (

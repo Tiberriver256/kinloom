@@ -1,0 +1,77 @@
+.tree-canvas {
+  display: block;
+  touch-action: none;
+}
+
+.tree-canvas :global(.tree-edge) {
+  opacity: 0.68;
+  transition: opacity 0.16s ease;
+}
+
+.tree-canvas :global(.tree-edge):global(.is-direct) {
+  opacity: 0.94;
+}
+
+.tree-canvas:global(.has-selection) :global(.tree-edge) {
+  opacity: 0.14;
+}
+
+.tree-canvas:global(.has-selection) :global(.tree-edge):global(.is-lit),
+.tree-canvas:global(.has-selection) :global(.tree-edge):global(.is-lit):global(.is-direct) {
+  opacity: 1;
+}
+
+.tree-canvas :global(.tree-couple) {
+  opacity: 1;
+  transition: opacity 0.16s ease;
+}
+
+.tree-canvas:global(.has-selection) :global(.tree-couple) {
+  opacity: 0.16;
+}
+
+.tree-canvas:global(.has-selection) :global(.tree-couple):global(.is-lit) {
+  opacity: 1;
+}
+
+.tree-canvas :global(.tree-node-card),
+.tree-canvas :global(.tree-diagram-sibling-btn) {
+  cursor: pointer;
+  opacity: 1;
+  transition: opacity 0.16s ease;
+}
+
+.tree-canvas :global(.tree-node-card):focus-visible,
+.tree-canvas :global(.tree-diagram-sibling-btn):focus-visible {
+  outline: 2px solid var(--action-focus);
+  outline-offset: 2px;
+}
+
+.tree-canvas:global(.has-selection) :global(.tree-node-card) {
+  opacity: 0.16;
+}
+
+.tree-canvas:global(.has-selection) :global(.tree-node-card):global(.is-lit) {
+  opacity: 1;
+}
+
+.tree-canvas :global(.tree-diagram-early-strip),
+.tree-canvas :global(.tree-diagram-sibling-toggle) {
+  transition: opacity 0.16s ease;
+}
+
+.tree-canvas:global(.has-selection) :global(.tree-diagram-early-strip) {
+  opacity: 0.2;
+}
+
+.tree-canvas:global(.has-selection) :global(.tree-diagram-early-strip):global(.is-lit) {
+  opacity: 1;
+}
+
+.tree-canvas:global(.has-selection) :global(.tree-diagram-sibling-toggle) {
+  opacity: 0.24;
+}
+
+.tree-canvas:global(.has-selection) :global(.tree-diagram-sibling-toggle):global(.is-lit) {
+  opacity: 1;
+}

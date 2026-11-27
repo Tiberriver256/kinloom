@@ -1,7 +1,8 @@
-import type { EntityPayload, Person } from '@kinloom/core';
-import { deriveKinshipEdgeId } from '@kinloom/core';
+import type { EntityPayload, EntityType, Person } from '@kinloom/core';
+import { buildEntityId, deriveKinshipEdgeId } from '@kinloom/core';
 import type React from 'react';
 import { cx } from '../../../lib/cx.js';
+import formStyles from '../WikiForms.module.css';
 import type {
   BuildCreatePayloadResult,
   CreatableKind,
@@ -47,7 +48,11 @@ export function buildPersonCreatePayload(
   return { ok: true, entityId, payload };
 }
 
-export const PersonCreateFields: React.FC<EntityCreateFieldProps> = ({ draft, updateDraft, uiStyles }) => (
+export const PersonCreateFields: React.FC<EntityCreateFieldProps> = ({
+  draft,
+  updateDraft,
+  uiStyles = formStyles,
+}) => (
   <div className={cx(uiStyles, 'wiki-field-grid')}>
     <label className={cx(uiStyles, 'wiki-field')}>
       <span className={cx(uiStyles, 'wiki-field-label')}>Given name</span>
@@ -145,7 +150,7 @@ const EventCreateFields: React.FC<EntityCreateFieldProps> = ({
   updateDraft,
   people,
   places,
-  uiStyles,
+  uiStyles = formStyles,
 }) => (
   <div className={cx(uiStyles, 'wiki-field-grid')}>
     <label className={cx(uiStyles, 'wiki-field wiki-field-full')}>
@@ -219,7 +224,11 @@ const EventCreateFields: React.FC<EntityCreateFieldProps> = ({
   </div>
 );
 
-const PlaceCreateFields: React.FC<EntityCreateFieldProps> = ({ draft, updateDraft, uiStyles }) => (
+const PlaceCreateFields: React.FC<EntityCreateFieldProps> = ({
+  draft,
+  updateDraft,
+  uiStyles = formStyles,
+}) => (
   <div className={cx(uiStyles, 'wiki-field-grid')}>
     <label className={cx(uiStyles, 'wiki-field')}>
       <span className={cx(uiStyles, 'wiki-field-label')}>Short name</span>
@@ -271,7 +280,12 @@ const PlaceCreateFields: React.FC<EntityCreateFieldProps> = ({ draft, updateDraf
   </div>
 );
 
-const KinshipCreateFields: React.FC<EntityCreateFieldProps> = ({ draft, updateDraft, people, uiStyles }) => (
+const KinshipCreateFields: React.FC<EntityCreateFieldProps> = ({
+  draft,
+  updateDraft,
+  people,
+  uiStyles = formStyles,
+}) => (
   <div className={cx(uiStyles, 'wiki-field-grid')}>
     <label className={cx(uiStyles, 'wiki-field')}>
       <span className={cx(uiStyles, 'wiki-field-label')}>From person</span>
@@ -329,7 +343,7 @@ export const LinkExistingRelativeFields: React.FC<{
   readonly existingQuery: string;
   readonly existingPersonId: string;
   readonly candidates: readonly Person[];
-  readonly uiStyles: Readonly<Record<string, string>>;
+  readonly uiStyles?: Readonly<Record<string, string>>;
   readonly onQueryChange: (value: string) => void;
   readonly onPersonIdChange: (value: string) => void;
 }> = ({
@@ -337,7 +351,7 @@ export const LinkExistingRelativeFields: React.FC<{
   existingQuery,
   existingPersonId,
   candidates,
-  uiStyles,
+  uiStyles = formStyles,
   onQueryChange,
   onPersonIdChange,
 }) => (
@@ -393,7 +407,10 @@ export const ENTITY_CREATE_FORM_REGISTRY: Readonly<Record<CreatableKind, EntityC
         return { ok: false, error: 'Enter an event title.' };
       }
       const slug = slugify(draft.eventTitle);
-      const entityId = `evt_${draft.eventDate.trim().slice(0, 4) || 'undated'}_${slug.replaceAll('-', '_')}`;
+      const entityId = buildEntityId(
+        'event',
+        `${draft.eventDate.trim().slice(0, 4) || 'undated'}_${slug.replaceAll('-', '_')}`
+      );
       const payload: EntityPayload = {
         id: entityId,
         title: draft.eventTitle.trim(),
@@ -418,7 +435,7 @@ export const ENTITY_CREATE_FORM_REGISTRY: Readonly<Record<CreatableKind, EntityC
         return { ok: false, error: 'Enter a place name.' };
       }
       const slug = slugify(draft.placeFullName.trim() || draft.placeName.trim());
-      const entityId = `pl_${slug.replaceAll('-', '_')}`;
+      const entityId = buildEntityId('place', slug.replaceAll('-', '_'));
       const payload: EntityPayload = {
         id: entityId,
         slug,
@@ -446,3 +463,25 @@ export const ENTITY_CREATE_FORM_REGISTRY: Readonly<Record<CreatableKind, EntityC
     },
   },
 };
+
+export function resolveCreateFormRegistry(
+  overrides?: Readonly<Partial<Record<EntityType, EntityCreateFormEntry>>>
+): {
+  readonly order: readonly EntityType[];
+  readonly entries: Readonly<Partial<Record<EntityType, EntityCreateFormEntry>>>;
+} {
+  if (!overrides || Object.keys(overrides).length === 0) {
+    return { order: CREATABLE_KIND_ORDER, entries: ENTITY_CREATE_FORM_REGISTRY };
+  }
+  const merged: Partial<Record<EntityType, EntityCreateFormEntry>> = {
+    ...ENTITY_CREATE_FORM_REGISTRY,
+    ...overrides,
+  };
+  const order: EntityType[] = [...CREATABLE_KIND_ORDER];
+  for (const key of Object.keys(overrides) as EntityType[]) {
+    if (overrides[key] && !order.includes(key)) {
+      order.push(key);
+    }
+  }
+  return { order, entries: merged };
+}

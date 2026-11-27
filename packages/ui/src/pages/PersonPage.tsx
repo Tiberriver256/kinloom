@@ -8,11 +8,10 @@ import {
 import type React from 'react';
 import { useCallback, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
+import { triggerPersonGedcomDownload } from '../browser/download.js';
 import { resolveAssetUrl } from '../components/Atoms.js';
-import cssMod0 from '../components/Atoms.module.css';
 import { ExplorerTopBar } from '../components/ExplorerTopBar.js';
 import { KinloomFooter } from '../components/KinloomFooter.js';
-import cssMod1 from '../components/SourceReaderDrawer.module.css';
 import { CreateEntityModal, type RelativeCreateContext } from '../components/wiki/CreateEntityModal.js';
 import { EntityEditDrawer, type EntityEditDrawerSection } from '../components/wiki/EntityEditDrawer.js';
 import { MediaUploaderModal } from '../components/wiki/MediaUploaderModal.js';
@@ -24,9 +23,9 @@ import { useArchiveUi } from '../context/ArchiveUiContext.js';
 import { cx } from '../lib/cx.js';
 import { formatReaderLoadError, KINLOOM_VOCABULARY } from '../lib/vocabulary.js';
 import { PluginSlot } from '../plugins/PluginContext.js';
-import cssMod3 from './IndexPage.module.css';
-import cssMod4 from './NotFoundPage.module.css';
-import cssMod5 from './PersonPage.module.css';
+import controlStyles from '../styles/Controls.module.css';
+import indexStyles from './IndexPage.module.css';
+import personStyles from './PersonPage.module.css';
 import { PersonLifeTimelineSection } from './person/PersonLifeTimelineSection.js';
 import { PersonMediaLightbox, PersonMediaSection } from './person/PersonMediaSection.js';
 import { PersonNarrativesSection } from './person/PersonNarrativesSection.js';
@@ -41,17 +40,8 @@ import {
   countUniqueEventPlaces,
   type PersonLightboxState,
   resolvePortraitLightboxState,
-  triggerPersonGedcomDownload,
 } from './person/personViewModel.js';
 import { usePersonTimelineSync } from './person/usePersonTimelineSync.js';
-
-const uiStyles: Readonly<Record<string, string>> = {
-  ...cssMod0,
-  ...cssMod1,
-  ...cssMod3,
-  ...cssMod4,
-  ...cssMod5,
-};
 
 export const PersonPage: React.FC = () => {
   const { slug } = useParams<{ slug: string }>();
@@ -222,7 +212,7 @@ export const PersonPage: React.FC = () => {
     return (
       <div>
         <ExplorerTopBar />
-        <main id="main-content" className={cx(uiStyles, 'index-page')}>
+        <main id="main-content" className={cx(indexStyles, 'index-page')}>
           Loading archive…
         </main>
       </div>
@@ -233,14 +223,14 @@ export const PersonPage: React.FC = () => {
     return (
       <div>
         <ExplorerTopBar />
-        <main id="main-content" className={cx(uiStyles, 'index-page')}>
+        <main id="main-content" className={cx(indexStyles, 'index-page')}>
           <h1>{KINLOOM_VOCABULARY.person.notFoundHeading}</h1>
           <p>{formatReaderLoadError(error, 'We could not find that person in the archive.')}</p>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center' }}>
             {error && (
               <button
                 type="button"
-                className={cx(uiStyles, 'pill-btn')}
+                className={cx(controlStyles, 'pill-btn')}
                 onClick={() => {
                   reloadArchive();
                 }}
@@ -248,7 +238,7 @@ export const PersonPage: React.FC = () => {
                 Try again
               </button>
             )}
-            <Link to="/" className={cx(uiStyles, 'pill-btn')}>
+            <Link to="/" className={cx(controlStyles, 'pill-btn')}>
               {KINLOOM_VOCABULARY.person.returnToPeople}
             </Link>
           </div>
@@ -273,8 +263,8 @@ export const PersonPage: React.FC = () => {
     <div>
       <ExplorerTopBar />
 
-      <div className={cx(uiStyles, 'explorer-split')}>
-        <main id="main-content" className={cx(uiStyles, 'narrative-pane')}>
+      <div className={cx(personStyles, 'explorer-split')}>
+        <main id="main-content" className={cx(personStyles, 'narrative-pane')}>
           <PersonProfileHeader
             person={person}
             baseUrl={baseUrl}
@@ -285,7 +275,6 @@ export const PersonPage: React.FC = () => {
             immediateFamily={immediateFamily}
             residenceSpans={personResidenceSpans}
             placesById={placesById}
-            uiStyles={uiStyles}
             onOpenPortraitLightbox={() => {
               const next = resolvePortraitLightboxState(person, personMedia);
               if (next) {
@@ -324,11 +313,15 @@ export const PersonPage: React.FC = () => {
 
           {isReadingView && sectionJumpItems.length >= 2 && (
             <nav
-              className={cx(uiStyles, 'person-section-jump-bar print-hide')}
+              className={cx(personStyles, 'person-section-jump-bar print-hide')}
               aria-label="Jump to profile section"
             >
               {sectionJumpItems.map((item) => (
-                <a key={item.id} href={`#${item.id}`} className={cx(uiStyles, 'person-section-jump-link')}>
+                <a
+                  key={item.id}
+                  href={`#${item.id}`}
+                  className={cx(personStyles, 'person-section-jump-link')}
+                >
                   {item.label}
                 </a>
               ))}
@@ -356,7 +349,6 @@ export const PersonPage: React.FC = () => {
                 placesById={placesById}
                 sourcesById={sourcesById}
                 baseUrl={baseUrl}
-                uiStyles={uiStyles}
                 onInspectSource={(sourceId) => {
                   openSourceInspector({ sourceId });
                 }}
@@ -383,7 +375,6 @@ export const PersonPage: React.FC = () => {
                 placesById={placesById}
                 sourcesById={sourcesById}
                 baseUrl={baseUrl}
-                uiStyles={uiStyles}
                 onInspectSource={(sourceId) => {
                   openSourceInspector({ sourceId });
                 }}
@@ -395,7 +386,6 @@ export const PersonPage: React.FC = () => {
                 personMedia={personMedia}
                 baseUrl={baseUrl}
                 showAllMedia={showAllMedia}
-                uiStyles={uiStyles}
                 onToggleShowAll={() => {
                   setShowAllMedia((v) => !v);
                 }}
@@ -414,7 +404,6 @@ export const PersonPage: React.FC = () => {
                 alsoHere={alsoHere}
                 canEdit={capabilities.canEdit}
                 cardRefs={cardRefs}
-                uiStyles={uiStyles}
                 onSelectEventId={setActiveEventId}
                 onPivotPerson={handlePivotPerson}
                 onOpenEdit={() => {
@@ -462,7 +451,6 @@ export const PersonPage: React.FC = () => {
         lightbox={lightbox}
         personMedia={personMedia}
         baseUrl={baseUrl}
-        uiStyles={uiStyles}
         onSetLightbox={setLightbox}
       />
       <KinloomFooter />

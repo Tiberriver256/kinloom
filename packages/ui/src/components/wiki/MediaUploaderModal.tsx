@@ -3,23 +3,15 @@ import { useMachine } from '@xstate/react';
 import type React from 'react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useArchiveData } from '../../context/ArchiveDataContext.js';
+import { useDialogFocusTrap } from '../../hooks/useDialogFocusTrap.js';
 import { cx } from '../../lib/cx.js';
-import { useDialogFocusTrap } from '../../lib/useDialogFocusTrap.js';
 import { KINLOOM_VOCABULARY, MEDIA_KIND_LABELS } from '../../lib/vocabulary.js';
 import { mediaUploadMachine } from '../../machines/mediaUploadMachine.js';
-import cssMod2 from '../../pages/IndexPage.module.css';
-import cssMod0 from '../SourceReaderDrawer.module.css';
-import cssMod1_0 from './WikiChrome.module.css';
-import cssMod1_2 from './WikiForms.module.css';
-import cssMod1_1 from './WikiPanels.module.css';
-
-const uiStyles: Readonly<Record<string, string>> = {
-  ...cssMod0,
-  ...cssMod1_0,
-  ...cssMod1_1,
-  ...cssMod1_2,
-  ...cssMod2,
-};
+import controlStyles from '../../styles/Controls.module.css';
+import overlayStyles from '../../styles/Overlays.module.css';
+import wikiChromeStyles from './WikiChrome.module.css';
+import wikiFormStyles from './WikiForms.module.css';
+import wikiPanelStyles from './WikiPanels.module.css';
 
 export interface MediaUploaderModalProps {
   open: boolean;
@@ -119,26 +111,31 @@ export const MediaUploaderModal: React.FC<MediaUploaderModalProps> = ({
       ref={dialogRef}
       open
       aria-modal="true"
-      className={cx(uiStyles, 'lightbox-backdrop')}
+      className={cx(overlayStyles, 'lightbox-backdrop')}
       aria-label={KINLOOM_VOCABULARY.wiki.uploadDialogAria}
     >
       <button
         type="button"
         tabIndex={-1}
-        className={cx(uiStyles, 'lightbox-backdrop-close')}
+        className={cx(overlayStyles, 'lightbox-backdrop-close')}
         aria-label="Close media uploader"
         onClick={handleClose}
       />
-      <div className={cx(uiStyles, 'wiki-modal-card')}>
-        <div className={cx(uiStyles, 'wiki-modal-header')}>
+      <div className={cx(wikiFormStyles, 'wiki-modal-card')}>
+        <div className={cx(wikiFormStyles, 'wiki-modal-header')}>
           <h2>{KINLOOM_VOCABULARY.wiki.uploadDialogTitle}</h2>
-          <button ref={closeBtnRef} type="button" className={cx(uiStyles, 'pill-btn')} onClick={handleClose}>
+          <button
+            ref={closeBtnRef}
+            type="button"
+            className={cx(controlStyles, 'pill-btn')}
+            onClick={handleClose}
+          >
             Close
           </button>
         </div>
 
         {targetIsLiving && (
-          <div className={cx(uiStyles, 'wiki-status-banner is-warning')} role="alert">
+          <div className={cx(wikiPanelStyles, 'wiki-status-banner is-warning')} role="alert">
             <p>
               <strong>{KINLOOM_VOCABULARY.wiki.livingPrivacyRuleTitle}</strong> Portraits and photographs
               cannot be attached to living people. Choose a deceased ancestor or historical record instead.
@@ -147,7 +144,7 @@ export const MediaUploaderModal: React.FC<MediaUploaderModalProps> = ({
         )}
 
         {isBusy && (
-          <output className={cx(uiStyles, 'wiki-status-banner is-info')} aria-live="polite">
+          <output className={cx(wikiPanelStyles, 'wiki-status-banner is-info')} aria-live="polite">
             <p>
               {snapshot.matches('hashingSha256') && 'Preparing file for upload…'}
               {snapshot.matches('uploading') && 'Uploading file to the family archive…'}
@@ -155,7 +152,7 @@ export const MediaUploaderModal: React.FC<MediaUploaderModalProps> = ({
             </p>
             <button
               type="button"
-              className={cx(uiStyles, 'pill-btn')}
+              className={cx(controlStyles, 'pill-btn')}
               onClick={() => {
                 send({ type: 'CANCEL' });
               }}
@@ -166,15 +163,15 @@ export const MediaUploaderModal: React.FC<MediaUploaderModalProps> = ({
         )}
 
         {isRejected && (
-          <div className={cx(uiStyles, 'wiki-status-banner is-error')} role="alert">
+          <div className={cx(wikiPanelStyles, 'wiki-status-banner is-error')} role="alert">
             <p>
               <strong>Upload blocked:</strong>{' '}
               {snapshot.context.rejectionMessage ?? 'File failed archival upload validation.'}
             </p>
-            <div className={cx(uiStyles, 'wiki-inline-actions')} style={{ marginTop: 6 }}>
+            <div className={cx(wikiPanelStyles, 'wiki-inline-actions')} style={{ marginTop: 6 }}>
               <button
                 type="button"
-                className={cx(uiStyles, 'pill-btn')}
+                className={cx(controlStyles, 'pill-btn')}
                 onClick={() => {
                   send({ type: 'RESET' });
                 }}
@@ -186,14 +183,14 @@ export const MediaUploaderModal: React.FC<MediaUploaderModalProps> = ({
         )}
 
         {isRetryable && (
-          <div className={cx(uiStyles, 'wiki-status-banner is-error')} role="alert">
+          <div className={cx(wikiPanelStyles, 'wiki-status-banner is-error')} role="alert">
             <div>
               <strong>Upload interrupted:</strong> {snapshot.context.retryableError}
             </div>
-            <div className={cx(uiStyles, 'wiki-inline-actions')} style={{ marginTop: 6 }}>
+            <div className={cx(wikiPanelStyles, 'wiki-inline-actions')} style={{ marginTop: 6 }}>
               <button
                 type="button"
-                className={cx(uiStyles, 'pill-btn active')}
+                className={cx(controlStyles, 'pill-btn active')}
                 onClick={() => {
                   send({ type: 'RETRY' });
                 }}
@@ -202,7 +199,7 @@ export const MediaUploaderModal: React.FC<MediaUploaderModalProps> = ({
               </button>
               <button
                 type="button"
-                className={cx(uiStyles, 'pill-btn')}
+                className={cx(controlStyles, 'pill-btn')}
                 onClick={() => {
                   send({ type: 'CANCEL' });
                 }}
@@ -214,12 +211,12 @@ export const MediaUploaderModal: React.FC<MediaUploaderModalProps> = ({
         )}
 
         {isComplete && (
-          <output className={cx(uiStyles, 'wiki-status-banner is-success')} aria-live="polite">
+          <output className={cx(wikiPanelStyles, 'wiki-status-banner is-success')} aria-live="polite">
             <div>Uploaded and attached media to the archive.</div>
-            <div className={cx(uiStyles, 'wiki-inline-actions')}>
+            <div className={cx(wikiPanelStyles, 'wiki-inline-actions')}>
               <button
                 type="button"
-                className={cx(uiStyles, 'pill-btn')}
+                className={cx(controlStyles, 'pill-btn')}
                 onClick={() => {
                   setSelectedFile(null);
                   setCaption('');
@@ -228,22 +225,22 @@ export const MediaUploaderModal: React.FC<MediaUploaderModalProps> = ({
               >
                 Upload Another
               </button>
-              <button type="button" className={cx(uiStyles, 'pill-btn active')} onClick={onClose}>
+              <button type="button" className={cx(controlStyles, 'pill-btn active')} onClick={onClose}>
                 Done
               </button>
             </div>
           </output>
         )}
 
-        <form className={cx(uiStyles, 'wiki-edit-form')} onSubmit={handleStartUpload}>
-          <label className={cx(uiStyles, 'wiki-field')}>
-            <span className={cx(uiStyles, 'wiki-field-label')}>
+        <form className={cx(wikiFormStyles, 'wiki-edit-form')} onSubmit={handleStartUpload}>
+          <label className={cx(wikiFormStyles, 'wiki-field')}>
+            <span className={cx(wikiFormStyles, 'wiki-field-label')}>
               Choose a photo, document{allowAudioVideo ? ', or video' : ''}
             </span>
             <input
               type="file"
               accept={acceptAttr}
-              className={cx(uiStyles, 'wiki-input')}
+              className={cx(wikiFormStyles, 'wiki-input')}
               disabled={isBusy}
               onChange={(e) => {
                 const file = e.target.files?.[0] ?? null;
@@ -260,11 +257,11 @@ export const MediaUploaderModal: React.FC<MediaUploaderModalProps> = ({
             />
           </label>
 
-          <div className={cx(uiStyles, 'wiki-field-grid')}>
-            <label className={cx(uiStyles, 'wiki-field')}>
-              <span className={cx(uiStyles, 'wiki-field-label')}>Type of item</span>
+          <div className={cx(wikiFormStyles, 'wiki-field-grid')}>
+            <label className={cx(wikiFormStyles, 'wiki-field')}>
+              <span className={cx(wikiFormStyles, 'wiki-field-label')}>Type of item</span>
               <select
-                className={cx(uiStyles, 'wiki-input')}
+                className={cx(wikiFormStyles, 'wiki-input')}
                 value={kind}
                 disabled={isBusy}
                 onChange={(e) => {
@@ -284,10 +281,12 @@ export const MediaUploaderModal: React.FC<MediaUploaderModalProps> = ({
               </select>
             </label>
 
-            <label className={cx(uiStyles, 'wiki-field')}>
-              <span className={cx(uiStyles, 'wiki-field-label')}>Who is in this photo? (deceased only)</span>
+            <label className={cx(wikiFormStyles, 'wiki-field')}>
+              <span className={cx(wikiFormStyles, 'wiki-field-label')}>
+                Who is in this photo? (deceased only)
+              </span>
               <select
-                className={cx(uiStyles, 'wiki-input')}
+                className={cx(wikiFormStyles, 'wiki-input')}
                 value={personId}
                 disabled={isBusy}
                 onChange={(e) => {
@@ -304,11 +303,11 @@ export const MediaUploaderModal: React.FC<MediaUploaderModalProps> = ({
               </select>
             </label>
 
-            <label className={cx(uiStyles, 'wiki-field wiki-field-full')}>
-              <span className={cx(uiStyles, 'wiki-field-label')}>Caption</span>
+            <label className={cx(wikiFormStyles, 'wiki-field wiki-field-full')}>
+              <span className={cx(wikiFormStyles, 'wiki-field-label')}>Caption</span>
               <input
                 type="text"
-                className={cx(uiStyles, 'wiki-input')}
+                className={cx(wikiFormStyles, 'wiki-input')}
                 placeholder="Describe who or what appears in this photo"
                 value={caption}
                 disabled={isBusy}
@@ -318,11 +317,11 @@ export const MediaUploaderModal: React.FC<MediaUploaderModalProps> = ({
               />
             </label>
 
-            <label className={cx(uiStyles, 'wiki-field')}>
-              <span className={cx(uiStyles, 'wiki-field-label')}>Approximate date (optional)</span>
+            <label className={cx(wikiFormStyles, 'wiki-field')}>
+              <span className={cx(wikiFormStyles, 'wiki-field-label')}>Approximate date (optional)</span>
               <input
                 type="text"
-                className={cx(uiStyles, 'wiki-input')}
+                className={cx(wikiFormStyles, 'wiki-input')}
                 placeholder="e.g. 1918 or 1945-06"
                 value={dateEdtf}
                 disabled={isBusy}
@@ -332,11 +331,11 @@ export const MediaUploaderModal: React.FC<MediaUploaderModalProps> = ({
               />
             </label>
 
-            <label className={cx(uiStyles, 'wiki-field')}>
-              <span className={cx(uiStyles, 'wiki-field-label')}>Short note</span>
+            <label className={cx(wikiFormStyles, 'wiki-field')}>
+              <span className={cx(wikiFormStyles, 'wiki-field-label')}>Short note</span>
               <input
                 type="text"
-                className={cx(uiStyles, 'wiki-input')}
+                className={cx(wikiFormStyles, 'wiki-input')}
                 value={summary}
                 disabled={isBusy}
                 onChange={(e) => {
@@ -346,15 +345,15 @@ export const MediaUploaderModal: React.FC<MediaUploaderModalProps> = ({
             </label>
           </div>
 
-          <div className={cx(uiStyles, 'wiki-form-actions')}>
+          <div className={cx(wikiPanelStyles, 'wiki-form-actions')}>
             <button
               type="submit"
-              className={cx(uiStyles, 'wiki-btn-primary wiki-btn-sm')}
+              className={cx(wikiChromeStyles, 'wiki-btn-primary wiki-btn-sm')}
               disabled={!selectedFile || isBusy}
             >
               {isBusy ? 'Uploading…' : 'Upload Photo'}
             </button>
-            <button type="button" className={cx(uiStyles, 'pill-btn')} onClick={onClose}>
+            <button type="button" className={cx(controlStyles, 'pill-btn')} onClick={onClose}>
               Cancel
             </button>
           </div>

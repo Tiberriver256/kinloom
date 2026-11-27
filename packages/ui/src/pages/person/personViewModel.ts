@@ -2,14 +2,11 @@ import type {
   ArchiveBundle,
   ArchiveEvent,
   EntityPayload,
-  KinloomSiteConfig,
   MediaItem,
   Person,
-  Place,
   ResidenceSpan,
-  SourceRecord,
 } from '@kinloom/core';
-import { buildFilteredGedcom7, buildGedcomExportFilename, getMediaPersonIds } from '@kinloom/core';
+import { getMediaPersonIds } from '@kinloom/core';
 import { KINLOOM_VOCABULARY } from '../../lib/vocabulary.js';
 
 export type PersonLightboxState =
@@ -224,41 +221,4 @@ export function resolvePortraitLightboxState(
       person_slug: person.slug,
     },
   };
-}
-
-export function triggerPersonGedcomDownload(params: {
-  readonly person: Person;
-  readonly bundle: ArchiveBundle;
-  readonly placesById: ReadonlyMap<string, Place>;
-  readonly sourcesById: ReadonlyMap<string, SourceRecord>;
-  readonly siteConfig: KinloomSiteConfig;
-}): void {
-  const gedcomText = buildFilteredGedcom7({
-    people: [params.person],
-    bundle: params.bundle,
-    placesById: params.placesById,
-    sourcesById: params.sourcesById,
-    siteConfig: params.siteConfig,
-    filterDescription: `Person Profile: ${params.person.full_name}`,
-  });
-  const filename = buildGedcomExportFilename({
-    familySlug: params.person.slug,
-    lineageFilter: 'all',
-    selectedEra: 'all',
-    onlyWithMedia: false,
-    query: '',
-    sortBy: 'featured',
-    count: 1,
-  });
-  const blob = new Blob([gedcomText], { type: 'text/vnd.familysearch.gedcom;charset=utf-8' });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = filename;
-  document.body.append(link);
-  link.click();
-  link.remove();
-  window.setTimeout(() => {
-    URL.revokeObjectURL(url);
-  }, 1000);
 }

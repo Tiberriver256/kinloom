@@ -1,17 +1,11 @@
 import React, { useState } from 'react';
 import { useArchiveData } from '../../context/ArchiveDataContext.js';
+import { useDialogFocusTrap } from '../../hooks/useDialogFocusTrap.js';
 import { cx } from '../../lib/cx.js';
-import { useDialogFocusTrap } from '../../lib/useDialogFocusTrap.js';
-import cssMod3 from '../../pages/IndexPage.module.css';
-import cssMod0 from '../Atoms.module.css';
-import cssMod2 from '../SourceReaderDrawer.module.css';
+import controlStyles from '../../styles/Controls.module.css';
+import overlayStyles from '../../styles/Overlays.module.css';
+import atomStyles from '../Atoms.module.css';
 import { resolveAssetUrl } from './formatters.js';
-
-const uiStyles: Readonly<Record<string, string>> = {
-  ...cssMod0,
-  ...cssMod2,
-  ...cssMod3,
-};
 
 export const ArchivalPhotoFrame: React.FC<{ caption: string; photoUrl?: string | null }> = ({
   caption,
@@ -34,7 +28,7 @@ export const ArchivalPhotoFrame: React.FC<{ caption: string; photoUrl?: string |
       <button
         type="button"
         className={cx(
-          uiStyles,
+          atomStyles,
           `wireframe-photo photo-placeholder-frame ${resolvedUrl ? 'has-real-photo' : ''}`
         )}
         onClick={(e) => {
@@ -47,17 +41,17 @@ export const ArchivalPhotoFrame: React.FC<{ caption: string; photoUrl?: string |
             <img
               src={resolvedUrl}
               alt={caption}
-              className={cx(uiStyles, 'milestone-photo-img')}
+              className={cx(atomStyles, 'milestone-photo-img')}
               loading="lazy"
             />
-            <span className={cx(uiStyles, 'wireframe-photo-caption')}>{caption}</span>
+            <span className={cx(atomStyles, 'wireframe-photo-caption')}>{caption}</span>
           </>
         ) : (
           <>
-            <span className={cx(uiStyles, 'wireframe-photo-label')}>
+            <span className={cx(atomStyles, 'wireframe-photo-label')}>
               Archival Photograph Needed · Click for Details
             </span>
-            <span className={cx(uiStyles, 'wireframe-photo-caption')}>{caption}</span>
+            <span className={cx(atomStyles, 'wireframe-photo-caption')}>{caption}</span>
           </>
         )}
       </button>
@@ -66,19 +60,19 @@ export const ArchivalPhotoFrame: React.FC<{ caption: string; photoUrl?: string |
           ref={dialogRef}
           open
           aria-modal="true"
-          className={cx(uiStyles, 'lightbox-backdrop photo-lightbox-overlay')}
+          className={cx(overlayStyles, 'lightbox-backdrop photo-lightbox-overlay')}
           aria-label="Archival photograph lightbox"
         >
           <button
             type="button"
             tabIndex={-1}
-            className={cx(uiStyles, 'lightbox-backdrop-close')}
+            className={cx(overlayStyles, 'lightbox-backdrop-close')}
             aria-label="Close archival photograph lightbox"
             onClick={() => {
               setOpen(false);
             }}
           />
-          <div className={cx(uiStyles, 'lightbox-card')}>
+          <div className={cx(overlayStyles, 'lightbox-card')}>
             <div
               style={{
                 display: 'flex',
@@ -99,7 +93,7 @@ export const ArchivalPhotoFrame: React.FC<{ caption: string; photoUrl?: string |
               <button
                 ref={closeBtnRef}
                 type="button"
-                className={cx(uiStyles, 'pill-btn')}
+                className={cx(controlStyles, 'pill-btn')}
                 onClick={() => {
                   setOpen(false);
                 }}
@@ -132,9 +126,12 @@ export const ArchivalPhotoFrame: React.FC<{ caption: string; photoUrl?: string |
                 </figcaption>
               </figure>
             ) : (
-              <div className={cx(uiStyles, 'wireframe-photo')} style={{ minHeight: 180, cursor: 'default' }}>
-                <span className={cx(uiStyles, 'wireframe-photo-label')}>No Photograph Archived Yet</span>
-                <span className={cx(uiStyles, 'wireframe-photo-caption')}>{caption}</span>
+              <div
+                className={cx(atomStyles, 'wireframe-photo')}
+                style={{ minHeight: 180, cursor: 'default' }}
+              >
+                <span className={cx(atomStyles, 'wireframe-photo-label')}>No Photograph Archived Yet</span>
+                <span className={cx(atomStyles, 'wireframe-photo-caption')}>{caption}</span>
                 <span
                   style={{
                     fontFamily: 'var(--font-mono)',

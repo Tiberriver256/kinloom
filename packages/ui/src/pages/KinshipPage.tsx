@@ -2,25 +2,16 @@ import { findKinshipPath } from '@kinloom/core';
 import React, { useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { EmptyStateNotice, initialsOf } from '../components/Atoms.js';
-import cssMod0 from '../components/Atoms.module.css';
+import atomStyles from '../components/Atoms.module.css';
 import { ExplorerTopBar } from '../components/ExplorerTopBar.js';
 import { KinloomFooter } from '../components/KinloomFooter.js';
 import { useArchiveData } from '../context/ArchiveDataContext.js';
-import { cx } from '../lib/cx.js';
+import { cx, joinClasses } from '../lib/cx.js';
 import { formatKinshipPresentation } from '../lib/kinshipPresentation.js';
 import { KINLOOM_VOCABULARY } from '../lib/vocabulary.js';
-import cssMod2 from './IndexPage.module.css';
-import cssMod3 from './KinshipPage.module.css';
-import cssMod4 from './NotFoundPage.module.css';
-import cssMod5 from './PlacePage.module.css';
-
-const uiStyles: Readonly<Record<string, string>> = {
-  ...cssMod0,
-  ...cssMod2,
-  ...cssMod3,
-  ...cssMod4,
-  ...cssMod5,
-};
+import controlStyles from '../styles/Controls.module.css';
+import indexStyles from './IndexPage.module.css';
+import kinshipStyles from './KinshipPage.module.css';
 
 function formatKinshipPersonOption(person: {
   full_name: string;
@@ -111,7 +102,7 @@ export const KinshipPage: React.FC = () => {
     return (
       <div>
         <ExplorerTopBar />
-        <main id="main-content" className={cx(uiStyles, 'index-page')}>
+        <main id="main-content" className={cx(indexStyles, 'index-page')}>
           Loading kinship archive…
         </main>
       </div>
@@ -132,17 +123,17 @@ export const KinshipPage: React.FC = () => {
   return (
     <div>
       <ExplorerTopBar />
-      <main id="main-content" className={cx(uiStyles, 'place-page')}>
-        <section className={cx(uiStyles, 'wire-banner')} style={{ marginBottom: 18 }}>
+      <main id="main-content" className={cx(controlStyles, 'place-page')}>
+        <section className={cx(controlStyles, 'wire-banner')} style={{ marginBottom: 18 }}>
           <div>
             <h1>{KINLOOM_VOCABULARY.kinship.heading}</h1>
             <p>{KINLOOM_VOCABULARY.kinship.lead}</p>
           </div>
-          <div className={cx(uiStyles, 'print-hide')} style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-            <Link to="/tree" className={cx(uiStyles, 'pill-btn')} style={{ textDecoration: 'none' }}>
+          <div className={'print-hide'} style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+            <Link to="/tree" className={cx(controlStyles, 'pill-btn')} style={{ textDecoration: 'none' }}>
               {KINLOOM_VOCABULARY.kinship.familyTreeCta}
             </Link>
-            <Link to="/map" className={cx(uiStyles, 'pill-btn')} style={{ textDecoration: 'none' }}>
+            <Link to="/map" className={cx(controlStyles, 'pill-btn')} style={{ textDecoration: 'none' }}>
               {KINLOOM_VOCABULARY.kinship.migrationMapCta}
             </Link>
           </div>
@@ -153,19 +144,19 @@ export const KinshipPage: React.FC = () => {
             title="At least two people are needed to compare kinship."
             body="Add more family records to trace relationships, lifespan overlap, and shared places."
             action={
-              <Link to="/" className={cx(uiStyles, 'pill-btn')} style={{ textDecoration: 'none' }}>
+              <Link to="/" className={cx(controlStyles, 'pill-btn')} style={{ textDecoration: 'none' }}>
                 Return to People
               </Link>
             }
           />
         ) : (
           <>
-            <section className={cx(uiStyles, 'kinship-selector-card print-hide')}>
-              <div className={cx(uiStyles, 'kinship-selector-grid')}>
-                <label className={cx(uiStyles, 'kinship-field')}>
+            <section className={cx(kinshipStyles, 'kinship-selector-card print-hide')}>
+              <div className={cx(kinshipStyles, 'kinship-selector-grid')}>
+                <label className={cx(kinshipStyles, 'kinship-field')}>
                   <span>Person A</span>
                   <select
-                    className={cx(uiStyles, 'pill-btn')}
+                    className={cx(controlStyles, 'pill-btn')}
                     value={effectiveFromId}
                     onChange={(e) => {
                       setFromId(e.target.value);
@@ -182,7 +173,7 @@ export const KinshipPage: React.FC = () => {
 
                 <button
                   type="button"
-                  className={cx(uiStyles, 'pill-btn')}
+                  className={cx(controlStyles, 'pill-btn')}
                   onClick={() => {
                     setFromId(effectiveToId);
                     setToId(effectiveFromId);
@@ -193,10 +184,10 @@ export const KinshipPage: React.FC = () => {
                   ⇄ Swap
                 </button>
 
-                <label className={cx(uiStyles, 'kinship-field')}>
+                <label className={cx(kinshipStyles, 'kinship-field')}>
                   <span>Person B</span>
                   <select
-                    className={cx(uiStyles, 'pill-btn')}
+                    className={cx(controlStyles, 'pill-btn')}
                     value={effectiveToId}
                     onChange={(e) => {
                       setToId(e.target.value);
@@ -215,15 +206,18 @@ export const KinshipPage: React.FC = () => {
 
             {resolvedPresets.length > 0 && (
               <div
-                className={cx(uiStyles, 'filter-bar kinship-examples-bar print-hide')}
+                className={joinClasses(
+                  cx(controlStyles, 'filter-bar print-hide'),
+                  cx(kinshipStyles, 'kinship-examples-bar')
+                )}
                 style={{ marginTop: 12, marginBottom: 14 }}
               >
-                <span className={cx(uiStyles, 'kinship-examples-label')}>Examples:</span>
+                <span className={cx(kinshipStyles, 'kinship-examples-label')}>Examples:</span>
                 {resolvedPresets.map((preset) => (
                   <button
                     key={preset.label}
                     type="button"
-                    className={cx(uiStyles, 'pill-btn kinship-example-chip')}
+                    className={cx(controlStyles, 'pill-btn kinship-example-chip')}
                     title={preset.note}
                     onClick={() => {
                       setFromId(preset.fromId);
@@ -237,8 +231,8 @@ export const KinshipPage: React.FC = () => {
             )}
 
             {result && personA && personB && presentation && (
-              <section className={cx(uiStyles, 'place-map-box')} style={{ marginTop: 18 }}>
-                <h2 className={cx(uiStyles, 'kinship-result-heading')}>
+              <section className={cx(controlStyles, 'place-map-box')} style={{ marginTop: 18 }}>
+                <h2 className={cx(kinshipStyles, 'kinship-result-heading')}>
                   {presentation.headingPrefix}
                   <span style={{ color: 'var(--radar-copresence)' }}>{presentation.highlight}</span>
                   {presentation.headingSuffix}
@@ -254,22 +248,22 @@ export const KinshipPage: React.FC = () => {
                   {presentation.subtitle}
                 </p>
 
-                <div className={cx(uiStyles, 'kinship-stats-row')}>
-                  <div className={cx(uiStyles, 'kinship-stat-box')}>
-                    <div className={cx(uiStyles, 'kinship-stat-label')}>GENERATIONAL / KINSHIP HOPS</div>
-                    <div className={cx(uiStyles, 'kinship-stat-value')}>{presentation.hopsValue}</div>
+                <div className={cx(kinshipStyles, 'kinship-stats-row')}>
+                  <div className={cx(kinshipStyles, 'kinship-stat-box')}>
+                    <div className={cx(kinshipStyles, 'kinship-stat-label')}>GENERATIONAL / KINSHIP HOPS</div>
+                    <div className={cx(kinshipStyles, 'kinship-stat-value')}>{presentation.hopsValue}</div>
                   </div>
-                  <div className={cx(uiStyles, 'kinship-stat-box')}>
-                    <div className={cx(uiStyles, 'kinship-stat-label')}>OVERLAPPING YEARS ALIVE</div>
-                    <div className={cx(uiStyles, 'kinship-stat-value')}>
+                  <div className={cx(kinshipStyles, 'kinship-stat-box')}>
+                    <div className={cx(kinshipStyles, 'kinship-stat-label')}>OVERLAPPING YEARS ALIVE</div>
+                    <div className={cx(kinshipStyles, 'kinship-stat-value')}>
                       {result.overlapYears
                         ? `${result.overlapYears.start}–${result.overlapYears.end} (${result.overlapYears.durationYears} yrs)`
                         : 'No lifespan overlap'}
                     </div>
                   </div>
-                  <div className={cx(uiStyles, 'kinship-stat-box')}>
-                    <div className={cx(uiStyles, 'kinship-stat-label')}>SHARED PLACES</div>
-                    <div className={cx(uiStyles, 'kinship-stat-value')}>
+                  <div className={cx(kinshipStyles, 'kinship-stat-box')}>
+                    <div className={cx(kinshipStyles, 'kinship-stat-label')}>SHARED PLACES</div>
+                    <div className={cx(kinshipStyles, 'kinship-stat-value')}>
                       {result.sharedPlaces.length > 0
                         ? `${result.sharedPlaces.length} shared place${result.sharedPlaces.length === 1 ? '' : 's'}`
                         : presentation.sharedPlacesEmptyText}
@@ -289,7 +283,7 @@ export const KinshipPage: React.FC = () => {
                     >
                       {KINLOOM_VOCABULARY.kinship.shortestPathHint}
                     </div>
-                    <div className={cx(uiStyles, 'kinship-chain')}>
+                    <div className={cx(kinshipStyles, 'kinship-chain')}>
                       {result.personIds.map((pid, idx) => {
                         const p = peopleById.get(pid);
                         const step = idx > 0 ? result.steps[idx - 1] : null;
@@ -306,10 +300,12 @@ export const KinshipPage: React.FC = () => {
                         }
                         return (
                           <React.Fragment key={pid}>
-                            {step && <span className={cx(uiStyles, 'kinship-edge-badge')}>{edgeLabel}</span>}
-                            <Link to={`/person/${p.slug}`} className={cx(uiStyles, 'kinship-node-pill')}>
+                            {step && (
+                              <span className={cx(kinshipStyles, 'kinship-edge-badge')}>{edgeLabel}</span>
+                            )}
+                            <Link to={`/person/${p.slug}`} className={cx(kinshipStyles, 'kinship-node-pill')}>
                               <span
-                                className={cx(uiStyles, 'avatar-circle')}
+                                className={cx(atomStyles, 'avatar-circle')}
                                 style={{ width: 28, height: 28, fontSize: '0.75rem' }}
                               >
                                 {initialsOf(p.full_name)}
@@ -354,7 +350,7 @@ export const KinshipPage: React.FC = () => {
                         <Link
                           key={place.id}
                           to={`/place/${place.slug}`}
-                          className={cx(uiStyles, 'pill-btn')}
+                          className={cx(controlStyles, 'pill-btn')}
                           style={{ textDecoration: 'none' }}
                         >
                           {place.full_name} →

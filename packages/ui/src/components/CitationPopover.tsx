@@ -4,10 +4,8 @@ import type React from 'react';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { cx } from '../lib/cx.js';
-import cssMod1 from './ArchivalMarkdown.module.css';
-import cssMod0 from './SourceInspectorDrawer.module.css';
-
-const uiStyles: Readonly<Record<string, string>> = { ...cssMod0, ...cssMod1 };
+import markdownStyles from './ArchivalMarkdown.module.css';
+import inspectorStyles from './SourceInspectorDrawer.module.css';
 
 const SAFE_EXTERNAL_URL_RE = /^https?:\/\//i;
 
@@ -164,7 +162,7 @@ export const CitationPopover: React.FC<CitationPopoverProps> = ({
       id={id}
       role="dialog"
       aria-label={`Source citation ${footnoteNumber}`}
-      className={cx(uiStyles, `citation-popover is-${coords.placement} print-hide`)}
+      className={cx(markdownStyles, `citation-popover is-${coords.placement} print-hide`)}
       style={{
         top: coords.top,
         left: coords.left,
@@ -174,16 +172,16 @@ export const CitationPopover: React.FC<CitationPopoverProps> = ({
       onMouseLeave={onMouseLeave}
       onBlur={onBlur}
     >
-      <div className={cx(uiStyles, 'citation-popover-header')}>
-        <div className={cx(uiStyles, 'citation-popover-header-meta')}>
-          <span className={cx(uiStyles, 'citation-popover-num')}>[{footnoteNumber}]</span>
-          <span className={cx(uiStyles, `evidence-tier-badge tier-${citation.tier}`)}>
+      <div className={cx(markdownStyles, 'citation-popover-header')}>
+        <div className={cx(markdownStyles, 'citation-popover-header-meta')}>
+          <span className={cx(markdownStyles, 'citation-popover-num')}>[{footnoteNumber}]</span>
+          <span className={cx(inspectorStyles, `evidence-tier-badge tier-${citation.tier}`)}>
             {citation.tierLabel}
           </span>
         </div>
         <button
           type="button"
-          className={cx(uiStyles, 'citation-popover-close')}
+          className={cx(markdownStyles, 'citation-popover-close')}
           aria-label="Close citation preview"
           onClick={onClose}
         >
@@ -191,17 +189,17 @@ export const CitationPopover: React.FC<CitationPopoverProps> = ({
         </button>
       </div>
 
-      <p className={cx(uiStyles, 'citation-popover-body')}>{citation.title}</p>
+      <p className={cx(markdownStyles, 'citation-popover-body')}>{citation.title}</p>
 
       {(citation.repository || safeExternalUrl) && (
-        <div className={cx(uiStyles, 'citation-popover-meta')}>
+        <div className={cx(markdownStyles, 'citation-popover-meta')}>
           {citation.repository && <span>{citation.repository}</span>}
           {safeExternalUrl && (
             <a
               href={safeExternalUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className={cx(uiStyles, 'citation-popover-ext-link')}
+              className={cx(markdownStyles, 'citation-popover-ext-link')}
             >
               {citation.urlHost || 'External archive'} ↗
             </a>
@@ -210,22 +208,22 @@ export const CitationPopover: React.FC<CitationPopoverProps> = ({
       )}
 
       {showMediaPreview && media && mediaUrl && (
-        <div className={cx(uiStyles, 'citation-popover-media-wrap')}>
+        <div className={cx(markdownStyles, 'citation-popover-media-wrap')}>
           {onOpenMedia ? (
             <button
               type="button"
-              className={cx(uiStyles, 'citation-popover-media-btn')}
+              className={cx(markdownStyles, 'citation-popover-media-btn')}
               aria-label={`Open full archival scan: ${media.caption}`}
               onClick={() => {
                 onClose();
                 onOpenMedia(media);
               }}
             >
-              <span className={cx(uiStyles, 'citation-popover-media-frame')}>
+              <span className={cx(markdownStyles, 'citation-popover-media-frame')}>
                 <img
                   src={mediaUrl}
                   alt={media.caption}
-                  className={cx(uiStyles, 'citation-popover-media-img')}
+                  className={cx(markdownStyles, 'citation-popover-media-img')}
                   loading="lazy"
                   onLoad={reposition}
                   onError={() => {
@@ -233,15 +231,15 @@ export const CitationPopover: React.FC<CitationPopoverProps> = ({
                   }}
                 />
               </span>
-              <span className={cx(uiStyles, 'citation-popover-media-caption')}>{media.caption}</span>
+              <span className={cx(markdownStyles, 'citation-popover-media-caption')}>{media.caption}</span>
             </button>
           ) : (
-            <figure className={cx(uiStyles, 'citation-popover-media-figure')}>
-              <div className={cx(uiStyles, 'citation-popover-media-frame')}>
+            <figure className={cx(markdownStyles, 'citation-popover-media-figure')}>
+              <div className={cx(markdownStyles, 'citation-popover-media-frame')}>
                 <img
                   src={mediaUrl}
                   alt={media.caption}
-                  className={cx(uiStyles, 'citation-popover-media-img')}
+                  className={cx(markdownStyles, 'citation-popover-media-img')}
                   loading="lazy"
                   onLoad={reposition}
                   onError={() => {
@@ -249,7 +247,7 @@ export const CitationPopover: React.FC<CitationPopoverProps> = ({
                   }}
                 />
               </div>
-              <figcaption className={cx(uiStyles, 'citation-popover-media-caption')}>
+              <figcaption className={cx(markdownStyles, 'citation-popover-media-caption')}>
                 {media.caption}
               </figcaption>
             </figure>
@@ -258,10 +256,10 @@ export const CitationPopover: React.FC<CitationPopoverProps> = ({
       )}
 
       {onInspectSource && (
-        <div className={cx(uiStyles, 'citation-popover-footer')}>
+        <div className={cx(markdownStyles, 'citation-popover-footer')}>
           <button
             type="button"
-            className={cx(uiStyles, 'citation-popover-inspect-btn')}
+            className={cx(markdownStyles, 'citation-popover-inspect-btn')}
             onClick={() => {
               onClose();
               onInspectSource(source.id);

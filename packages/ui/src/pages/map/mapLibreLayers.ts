@@ -2,7 +2,7 @@ import type { FeatureCollection } from 'geojson';
 import type { GeoJSONSource, Map as MapLibreMap, Source, StyleSpecification } from 'maplibre-gl';
 import { setMaxParallelImageRequests, setWorkerCount, setWorkerUrl } from 'maplibre-gl';
 import maplibreWorkerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?url';
-import { PAPER_LAND_LAYER_ID } from '../../lib/ohmStyle.js';
+import { PAPER_LAND_LAYER_ID } from '../../browser/ohmStyle.js';
 import { KINLOOM_COLOR_TOKENS } from '../../lib/tokens.js';
 import { SOURCE_ID, STOP_LAYER_ID } from './mapOverlayData.js';
 

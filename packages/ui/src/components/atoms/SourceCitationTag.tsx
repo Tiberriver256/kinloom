@@ -9,21 +9,15 @@ import { buildLibrarianCitation, formatPublicCitation, summarizeEventCitations }
 import React, { useState } from 'react';
 import { useArchiveData } from '../../context/ArchiveDataContext.js';
 import { useArchiveUi } from '../../context/ArchiveUiContext.js';
+import { useDialogFocusTrap } from '../../hooks/useDialogFocusTrap.js';
 import { cx } from '../../lib/cx.js';
-import { useDialogFocusTrap } from '../../lib/useDialogFocusTrap.js';
 import { KINLOOM_VOCABULARY } from '../../lib/vocabulary.js';
-import cssMod3 from '../../pages/IndexPage.module.css';
-import cssMod0 from '../Atoms.module.css';
-import cssMod1 from '../SourceInspectorDrawer.module.css';
-import cssMod2 from '../SourceReaderDrawer.module.css';
+import controlStyles from '../../styles/Controls.module.css';
+import overlayStyles from '../../styles/Overlays.module.css';
+import atomStyles from '../Atoms.module.css';
+import inspectorStyles from '../SourceInspectorDrawer.module.css';
+import readerStyles from '../SourceReaderDrawer.module.css';
 import { resolveAssetUrl } from './formatters.js';
-
-const uiStyles: Readonly<Record<string, string>> = {
-  ...cssMod0,
-  ...cssMod1,
-  ...cssMod2,
-  ...cssMod3,
-};
 
 const EMPTY_ALTERNATE_DATES: AlternateDate[] = [];
 const EMPTY_ALTERNATE_PLACES: AlternatePlace[] = [];
@@ -91,11 +85,11 @@ export const SourceCitationTag: React.FC<{
   };
 
   return (
-    <div className={cx(uiStyles, 'source-tag')}>
+    <div className={cx(atomStyles, 'source-tag')}>
       <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8 }}>
         <button
           type="button"
-          className={cx(uiStyles, `source-toggle ${summary.onlyUnverified ? 'is-uncited' : ''}`)}
+          className={cx(atomStyles, `source-toggle ${summary.onlyUnverified ? 'is-uncited' : ''}`)}
           aria-expanded={expanded}
           onClick={(e) => {
             e.stopPropagation();
@@ -106,17 +100,17 @@ export const SourceCitationTag: React.FC<{
             {expanded ? '▾' : '▸'} {summary.label}
           </span>
           {alternateDates.length > 0 && (
-            <span className={cx(uiStyles, 'conflict-pill')}>
+            <span className={cx(atomStyles, 'conflict-pill')}>
               ! {alternateDates.length} Date Discrepanc{alternateDates.length > 1 ? 'ies' : 'y'}
             </span>
           )}
           {alternatePlaces.length > 0 && (
-            <span className={cx(uiStyles, 'conflict-pill')}>
+            <span className={cx(atomStyles, 'conflict-pill')}>
               ! {alternatePlaces.length} Place Discrepanc{alternatePlaces.length > 1 ? 'ies' : 'y'}
             </span>
           )}
           {factConflicts.length > 0 && (
-            <span className={cx(uiStyles, 'conflict-pill')}>
+            <span className={cx(atomStyles, 'conflict-pill')}>
               ! {factConflicts.length} Fact Discrepanc{factConflicts.length > 1 ? 'ies' : 'y'}
             </span>
           )}
@@ -125,7 +119,7 @@ export const SourceCitationTag: React.FC<{
         {firstReadable && (
           <button
             type="button"
-            className={cx(uiStyles, 'source-read-btn')}
+            className={cx(controlStyles, 'source-read-btn')}
             onClick={(e) => {
               e.stopPropagation();
               openSourceReader({ sourceId: firstReadable.source_id, eventId });
@@ -138,7 +132,7 @@ export const SourceCitationTag: React.FC<{
         {firstScan?.scan_url && (
           <button
             type="button"
-            className={cx(uiStyles, 'source-read-btn')}
+            className={cx(controlStyles, 'source-read-btn')}
             onClick={(e) => {
               e.stopPropagation();
               const rec = sourcesById.get(firstScan.source_id);
@@ -155,43 +149,43 @@ export const SourceCitationTag: React.FC<{
       </div>
 
       {expanded && (
-        <div className={cx(uiStyles, 'source-details')}>
+        <div className={cx(atomStyles, 'source-details')}>
           {sources.length > 0 && (
-            <div className={cx(uiStyles, 'citation-card-list')}>
+            <div className={cx(inspectorStyles, 'citation-card-list')}>
               {sources.map((ref) => {
                 const rec = sourcesById.get(ref.source_id);
                 const cit = buildLibrarianCitation(rec, ref);
                 const isReadable = readableSourceIds.has(ref.source_id);
                 const itemKey = `${ref.source_id}|${ref.claimed_date ?? ''}|${ref.citation_detail ?? ''}|${ref.scan_url ?? ''}`;
                 return (
-                  <div key={itemKey} className={cx(uiStyles, 'citation-item-card')}>
-                    <div className={cx(uiStyles, 'citation-item-top')}>
-                      <span className={cx(uiStyles, `evidence-tier-badge tier-${cit.tier}`)}>
+                  <div key={itemKey} className={cx(inspectorStyles, 'citation-item-card')}>
+                    <div className={cx(inspectorStyles, 'citation-item-top')}>
+                      <span className={cx(inspectorStyles, `evidence-tier-badge tier-${cit.tier}`)}>
                         {cit.tierLabel}
                       </span>
                       {cit.tier !== 'unverified' && (
-                        <span className={cx(uiStyles, 'evidence-basis-tag')}>{cit.evidenceBasis}</span>
+                        <span className={cx(inspectorStyles, 'evidence-basis-tag')}>{cit.evidenceBasis}</span>
                       )}
                     </div>
-                    <div className={cx(uiStyles, 'citation-item-title')}>{cit.title}</div>
+                    <div className={cx(inspectorStyles, 'citation-item-title')}>{cit.title}</div>
                     {(cit.author || cit.repository) && (
-                      <div className={cx(uiStyles, 'citation-item-meta')}>
+                      <div className={cx(inspectorStyles, 'citation-item-meta')}>
                         {[cit.author, cit.repository].filter(Boolean).join(' · ')}
                       </div>
                     )}
                     {cit.recordDetail ? (
-                      <div className={cx(uiStyles, 'citation-page-detail')}>{cit.recordDetail}</div>
+                      <div className={cx(inspectorStyles, 'citation-page-detail')}>{cit.recordDetail}</div>
                     ) : (
                       cit.tier !== 'unverified' && (
-                        <div className={cx(uiStyles, 'citation-missing-detail')}>
+                        <div className={cx(inspectorStyles, 'citation-missing-detail')}>
                           Collection-level reference (no page or roll number recorded)
                         </div>
                       )
                     )}
-                    <div className={cx(uiStyles, 'citation-item-actions')}>
+                    <div className={cx(inspectorStyles, 'citation-item-actions')}>
                       <button
                         type="button"
-                        className={cx(uiStyles, 'source-action-btn primary')}
+                        className={cx(inspectorStyles, 'source-action-btn primary')}
                         onClick={(e) => {
                           e.stopPropagation();
                           openSourceInspector({
@@ -209,7 +203,7 @@ export const SourceCitationTag: React.FC<{
                       </button>
                       <button
                         type="button"
-                        className={cx(uiStyles, 'source-action-btn')}
+                        className={cx(inspectorStyles, 'source-action-btn')}
                         onClick={(e) => {
                           e.stopPropagation();
                           handleCopyCitation(itemKey, cit.bibliographicString);
@@ -220,7 +214,7 @@ export const SourceCitationTag: React.FC<{
                       {isReadable && (
                         <button
                           type="button"
-                          className={cx(uiStyles, 'source-action-btn')}
+                          className={cx(inspectorStyles, 'source-action-btn')}
                           onClick={(e) => {
                             e.stopPropagation();
                             openSourceReader({ sourceId: ref.source_id, eventId });
@@ -232,7 +226,7 @@ export const SourceCitationTag: React.FC<{
                       {ref.scan_url && (
                         <button
                           type="button"
-                          className={cx(uiStyles, 'source-action-btn')}
+                          className={cx(inspectorStyles, 'source-action-btn')}
                           onClick={(e) => {
                             e.stopPropagation();
                             setActiveScan({
@@ -250,7 +244,7 @@ export const SourceCitationTag: React.FC<{
                           href={cit.url}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className={cx(uiStyles, 'source-action-btn')}
+                          className={cx(inspectorStyles, 'source-action-btn')}
                           onClick={(e) => {
                             e.stopPropagation();
                           }}
@@ -265,7 +259,7 @@ export const SourceCitationTag: React.FC<{
             </div>
           )}
           {alternateDates.length > 0 && (
-            <div className={cx(uiStyles, 'citation-conflicts-box')}>
+            <div className={cx(inspectorStyles, 'citation-conflicts-box')}>
               <strong>Preserved Date Discrepancies</strong>
               <ul>
                 {alternateDates.map((alt) => {
@@ -276,7 +270,7 @@ export const SourceCitationTag: React.FC<{
                       {rec && (
                         <button
                           type="button"
-                          className={cx(uiStyles, 'source-read-inline')}
+                          className={cx(controlStyles, 'source-read-inline')}
                           onClick={(e) => {
                             e.stopPropagation();
                             openSourceInspector({
@@ -297,7 +291,7 @@ export const SourceCitationTag: React.FC<{
             </div>
           )}
           {alternatePlaces.length > 0 && (
-            <div className={cx(uiStyles, 'citation-conflicts-box')}>
+            <div className={cx(inspectorStyles, 'citation-conflicts-box')}>
               <strong>Preserved Place Discrepancies</strong>
               <ul>
                 {alternatePlaces.map((alt) => {
@@ -308,7 +302,7 @@ export const SourceCitationTag: React.FC<{
                       {rec && (
                         <button
                           type="button"
-                          className={cx(uiStyles, 'source-read-inline')}
+                          className={cx(controlStyles, 'source-read-inline')}
                           onClick={(e) => {
                             e.stopPropagation();
                             openSourceInspector({
@@ -328,7 +322,7 @@ export const SourceCitationTag: React.FC<{
             </div>
           )}
           {factConflicts.length > 0 && (
-            <div className={cx(uiStyles, 'citation-conflicts-box')}>
+            <div className={cx(inspectorStyles, 'citation-conflicts-box')}>
               <strong>Preserved Fact Discrepancies</strong>
               <ul>
                 {factConflicts.map((alt) => {
@@ -339,7 +333,7 @@ export const SourceCitationTag: React.FC<{
                       {rec && (
                         <button
                           type="button"
-                          className={cx(uiStyles, 'source-read-inline')}
+                          className={cx(controlStyles, 'source-read-inline')}
                           onClick={(e) => {
                             e.stopPropagation();
                             openSourceInspector({
@@ -366,27 +360,27 @@ export const SourceCitationTag: React.FC<{
           ref={scanDialogRef}
           open
           aria-modal="true"
-          className={cx(uiStyles, 'lightbox-backdrop photo-lightbox-overlay')}
+          className={cx(overlayStyles, 'lightbox-backdrop photo-lightbox-overlay')}
           aria-label="Record scan lightbox"
         >
           <button
             type="button"
             tabIndex={-1}
-            className={cx(uiStyles, 'lightbox-backdrop-close')}
+            className={cx(overlayStyles, 'lightbox-backdrop-close')}
             aria-label="Close record scan lightbox"
             onClick={() => {
               setActiveScan(null);
             }}
           />
-          <div className={cx(uiStyles, 'scan-lightbox-card')}>
-            <div className={cx(uiStyles, 'scan-lightbox-header')}>
+          <div className={cx(readerStyles, 'scan-lightbox-card')}>
+            <div className={cx(readerStyles, 'scan-lightbox-header')}>
               <strong style={{ fontFamily: 'var(--font-mono)', fontSize: '0.8rem' }}>
                 RECORD SCAN · {activeScan.title}
               </strong>
               <button
                 ref={scanCloseRef}
                 type="button"
-                className={cx(uiStyles, 'pill-btn')}
+                className={cx(controlStyles, 'pill-btn')}
                 onClick={() => {
                   setActiveScan(null);
                 }}
@@ -394,11 +388,11 @@ export const SourceCitationTag: React.FC<{
                 Close [Esc]
               </button>
             </div>
-            <div className={cx(uiStyles, 'scan-lightbox-scroll')}>
+            <div className={cx(readerStyles, 'scan-lightbox-scroll')}>
               <img
                 src={activeScan.url}
                 alt={activeScan.title}
-                className={cx(uiStyles, 'scan-page-img-full')}
+                className={cx(readerStyles, 'scan-page-img-full')}
               />
               {activeScan.citation && (
                 <p

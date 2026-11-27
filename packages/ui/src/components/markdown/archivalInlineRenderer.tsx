@@ -2,7 +2,7 @@ import type { ArchiveEvent, MediaItem, SourceRecord } from '@kinloom/core';
 import { formatPublicCitation, resolveCitationMedia } from '@kinloom/core';
 import type React from 'react';
 import { cx } from '../../lib/cx.js';
-import uiStyles from '../ArchivalMarkdown.module.css';
+import markdownStyles from '../ArchivalMarkdown.module.css';
 import { resolveAssetUrl } from '../atoms/formatters.js';
 import { InlineEntityMention } from '../InlineEntityMention.js';
 import {
@@ -167,10 +167,10 @@ export function renderInlineMarkdownNodes(
         const isActive = citationCtx.activeKey === key;
 
         nodes.push(
-          <sup key={key} className={cx(uiStyles, 'archival-footnote-sup')}>
+          <sup key={key} className={cx(markdownStyles, 'archival-footnote-sup')}>
             <button
               type="button"
-              className={cx(uiStyles, `archival-footnote-ref${isActive ? ' is-active' : ''}`)}
+              className={cx(markdownStyles, `archival-footnote-ref${isActive ? ' is-active' : ''}`)}
               aria-label={`Source citation ${footnoteNumber}: ${formatPublicCitation(source.citation)}`}
               aria-expanded={isActive}
               aria-controls={isActive ? citationCtx.popoverId : undefined}
@@ -251,7 +251,7 @@ export function renderInlineMarkdownNodes(
           <a
             key={key}
             href={href}
-            className={cx(uiStyles, 'archival-md-link')}
+            className={cx(markdownStyles, 'archival-md-link')}
             target={isExternal ? '_blank' : undefined}
             rel={isExternal ? 'noopener noreferrer' : undefined}
           >

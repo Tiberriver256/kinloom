@@ -68,6 +68,12 @@
   color: var(--surface-header);
 }
 
+.wiki-role-chip:global(.is-self) {
+  background: var(--surface-linen);
+  color: var(--surface-header);
+  border: 1px solid var(--border-control);
+}
+
 /* Quiet Account Menu inside ExplorerTopBar */
 .topbar-account {
   position: relative;

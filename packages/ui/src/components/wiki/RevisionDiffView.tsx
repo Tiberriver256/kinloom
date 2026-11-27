@@ -3,9 +3,7 @@ import { computeEntityDiff } from '@kinloom/core';
 import type React from 'react';
 import { useMemo } from 'react';
 import { cx } from '../../lib/cx.js';
-import cssMod0 from './WikiPanels.module.css';
-
-const uiStyles = cssMod0;
+import wikiPanelStyles from './WikiPanels.module.css';
 
 export interface RevisionDiffViewProps {
   before?: EntityPayload | null;
@@ -61,32 +59,34 @@ export const RevisionDiffView: React.FC<RevisionDiffViewProps> = ({
 
   if (!summary.hasChanges || summary.fields.length === 0) {
     return (
-      <div className={cx(uiStyles, 'wiki-diff-empty')}>
+      <div className={cx(wikiPanelStyles, 'wiki-diff-empty')}>
         No field differences between {beforeLabel.toLowerCase()} and {afterLabel.toLowerCase()}.
       </div>
     );
   }
 
   return (
-    <div className={cx(uiStyles, `wiki-diff-wrap${compact ? ' is-compact' : ''}`)}>
-      <div className={cx(uiStyles, 'wiki-diff-summary-bar')}>
-        <span className={cx(uiStyles, 'wiki-diff-stat wiki-diff-stat-add')}>+{summary.addedCount} added</span>
-        <span className={cx(uiStyles, 'wiki-diff-stat wiki-diff-stat-del')}>
+    <div className={cx(wikiPanelStyles, `wiki-diff-wrap${compact ? ' is-compact' : ''}`)}>
+      <div className={cx(wikiPanelStyles, 'wiki-diff-summary-bar')}>
+        <span className={cx(wikiPanelStyles, 'wiki-diff-stat wiki-diff-stat-add')}>
+          +{summary.addedCount} added
+        </span>
+        <span className={cx(wikiPanelStyles, 'wiki-diff-stat wiki-diff-stat-del')}>
           −{summary.removedCount} removed
         </span>
-        <span className={cx(uiStyles, 'wiki-diff-stat wiki-diff-stat-chg')}>
+        <span className={cx(wikiPanelStyles, 'wiki-diff-stat wiki-diff-stat-chg')}>
           ~{summary.changedCount} changed
         </span>
       </div>
 
       <div
-        className={cx(uiStyles, 'wiki-diff-table-region')}
+        className={cx(wikiPanelStyles, 'wiki-diff-table-region')}
         role="region"
         aria-label="Field differences"
         // biome-ignore lint/a11y/noNoninteractiveTabindex: horizontally scrollable region needs keyboard focus
         tabIndex={0}
       >
-        <table className={cx(uiStyles, 'wiki-diff-table')}>
+        <table className={cx(wikiPanelStyles, 'wiki-diff-table')}>
           <thead>
             <tr>
               <th scope="col">Field</th>
@@ -98,9 +98,13 @@ export const RevisionDiffView: React.FC<RevisionDiffViewProps> = ({
             {summary.fields.map((field) => {
               const sym = symbolForKind(field.kind);
               return (
-                <tr key={field.path} className={cx(uiStyles, `wiki-diff-row kind-${field.kind}`)}>
-                  <th scope="row" className={cx(uiStyles, 'wiki-diff-field-cell')}>
-                    <span className={cx(uiStyles, 'wiki-diff-glyph')} role="img" aria-label={sym.label}>
+                <tr key={field.path} className={`wiki-diff-row kind-${field.kind}`}>
+                  <th scope="row" className={cx(wikiPanelStyles, 'wiki-diff-field-cell')}>
+                    <span
+                      className={cx(wikiPanelStyles, 'wiki-diff-glyph')}
+                      role="img"
+                      aria-label={sym.label}
+                    >
                       {sym.glyph}
                     </span>
                     <code>{field.path}</code>
@@ -108,30 +112,34 @@ export const RevisionDiffView: React.FC<RevisionDiffViewProps> = ({
                   <td
                     data-label={beforeLabel}
                     className={cx(
-                      uiStyles,
+                      wikiPanelStyles,
                       field.kind === 'added' ? 'wiki-diff-cell-empty' : 'wiki-diff-cell-del'
                     )}
                   >
                     {field.kind !== 'added' && (
-                      <span className={cx(uiStyles, 'wiki-diff-prefix')} aria-hidden="true">
+                      <span className={'wiki-diff-prefix'} aria-hidden="true">
                         −{' '}
                       </span>
                     )}
-                    <span className={cx(uiStyles, 'wiki-diff-value')}>{formatDiffValue(field.before)}</span>
+                    <span className={cx(wikiPanelStyles, 'wiki-diff-value')}>
+                      {formatDiffValue(field.before)}
+                    </span>
                   </td>
                   <td
                     data-label={afterLabel}
                     className={cx(
-                      uiStyles,
+                      wikiPanelStyles,
                       field.kind === 'removed' ? 'wiki-diff-cell-empty' : 'wiki-diff-cell-add'
                     )}
                   >
                     {field.kind !== 'removed' && (
-                      <span className={cx(uiStyles, 'wiki-diff-prefix')} aria-hidden="true">
+                      <span className={'wiki-diff-prefix'} aria-hidden="true">
                         +{' '}
                       </span>
                     )}
-                    <span className={cx(uiStyles, 'wiki-diff-value')}>{formatDiffValue(field.after)}</span>
+                    <span className={cx(wikiPanelStyles, 'wiki-diff-value')}>
+                      {formatDiffValue(field.after)}
+                    </span>
                   </td>
                 </tr>
               );

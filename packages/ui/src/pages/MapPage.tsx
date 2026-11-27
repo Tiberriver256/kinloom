@@ -10,27 +10,19 @@ import {
 import type React from 'react';
 import { useCallback, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import cssModArchive from '../components/ArchiveStatusShell.module.css';
-import cssModCanvas from '../components/CanvasSurfacePrimitives.module.css';
+import statusShellStyles from '../components/ArchiveStatusShell.module.css';
+import canvasSurfaceStyles from '../components/CanvasSurfacePrimitives.module.css';
 import { ExplorerTopBar } from '../components/ExplorerTopBar.js';
 import { useArchiveData } from '../context/ArchiveDataContext.js';
-import { cx } from '../lib/cx.js';
+import { cx, joinClasses } from '../lib/cx.js';
 import { KINLOOM_VOCABULARY } from '../lib/vocabulary.js';
-import cssMod0 from './IndexPage.module.css';
-import cssMod2 from './MapPage.module.css';
+import controlStyles from '../styles/Controls.module.css';
+import indexStyles from './IndexPage.module.css';
+import mapStyles from './MapPage.module.css';
 import { MapStageLegend, MapStopDrawerAndDock, MapZoomControls } from './map/MapStopDrawerAndDock.js';
 import { MapToolbar } from './map/MapToolbar.js';
 import { buildFamilyOverlay, computeDefaultMapBounds, FALLBACK_ERA_COLORS } from './map/mapOverlayData.js';
 import { useMigrationMapController } from './map/useMigrationMapController.js';
-import cssMod1 from './NotFoundPage.module.css';
-
-const uiStyles: Readonly<Record<string, string>> = {
-  ...cssMod0,
-  ...cssMod1,
-  ...cssModArchive,
-  ...cssModCanvas,
-  ...cssMod2,
-};
 
 export const MapPage: React.FC = () => {
   const { siteConfig, bundle, peopleById, placesById, placesBySlug, loading, error } = useArchiveData();
@@ -194,15 +186,15 @@ export const MapPage: React.FC = () => {
 
   if (error) {
     return (
-      <div className={cx(uiStyles, 'map-shell')}>
+      <div className={cx(mapStyles, 'map-shell')}>
         <ExplorerTopBar />
-        <main id="main-content" className={cx(uiStyles, 'index-page')}>
-          <div className={cx(uiStyles, 'archive-error-box')} role="alert">
+        <main id="main-content" className={cx(indexStyles, 'index-page')}>
+          <div className={cx(statusShellStyles, 'archive-error-box')} role="alert">
             <h2>Unable to load migration map</h2>
             <p>{error}</p>
             <button
               type="button"
-              className={cx(uiStyles, 'pill-btn active')}
+              className={cx(controlStyles, 'pill-btn active')}
               onClick={() => {
                 window.location.reload();
               }}
@@ -217,11 +209,11 @@ export const MapPage: React.FC = () => {
 
   if (loading || !bundle) {
     return (
-      <div className={cx(uiStyles, 'map-shell')}>
+      <div className={cx(mapStyles, 'map-shell')}>
         <ExplorerTopBar />
-        <main id="main-content" className={cx(uiStyles, 'index-page')}>
-          <output className={cx(uiStyles, 'archive-loading-shell')} aria-live="polite">
-            <span className={cx(uiStyles, 'archive-loading-spinner')} aria-hidden="true" />
+        <main id="main-content" className={cx(indexStyles, 'index-page')}>
+          <output className={cx(statusShellStyles, 'archive-loading-shell')} aria-live="polite">
+            <span className={cx(statusShellStyles, 'archive-loading-spinner')} aria-hidden="true" />
             <span>{KINLOOM_VOCABULARY.map.loading}</span>
           </output>
         </main>
@@ -230,16 +222,19 @@ export const MapPage: React.FC = () => {
   }
 
   return (
-    <div className={cx(uiStyles, 'map-shell')}>
+    <div className={cx(mapStyles, 'map-shell')}>
       <ExplorerTopBar />
-      <main id="main-content" className={cx(uiStyles, 'tree-page map-page')}>
+      <main
+        id="main-content"
+        className={joinClasses(cx(canvasSurfaceStyles, 'tree-page'), cx(mapStyles, 'map-page'))}
+      >
         <div
           ref={controller.mapHostRef}
-          className={cx(uiStyles, 'map-canvas')}
+          className={'map-canvas'}
           style={{ position: 'absolute', inset: 0 }}
         />
         {controller.historicalMap.kind === 'failed' && (
-          <output className={cx(uiStyles, 'map-style-note')}>Showing offline paper basemap.</output>
+          <output className={cx(mapStyles, 'map-style-note')}>Showing offline paper basemap.</output>
         )}
 
         <MapToolbar
@@ -250,13 +245,12 @@ export const MapPage: React.FC = () => {
           allStopsCount={allStopsForPerson.length}
           migrationEras={migrationEras}
           eraStopCounts={eraStopCounts}
-          uiStyles={uiStyles}
           onSelectPersonId={setSelectedPersonId}
           onSelectEraId={setSelectedEraId}
           onSetRouteMode={setRouteMode}
         />
 
-        <MapStageLegend migrationEras={migrationEras} stageColorMap={stageColorMap} uiStyles={uiStyles} />
+        <MapStageLegend migrationEras={migrationEras} stageColorMap={stageColorMap} />
 
         <MapStopDrawerAndDock
           dockRef={controller.dockRef}
@@ -275,7 +269,6 @@ export const MapPage: React.FC = () => {
           metricLabel={metricLabel}
           stageColorMap={stageColorMap}
           stageLabelMap={stageLabelMap}
-          uiStyles={uiStyles}
           onToggleDrawer={() => {
             setDrawerExpanded((open) => !open);
           }}
@@ -295,7 +288,6 @@ export const MapPage: React.FC = () => {
         />
 
         <MapZoomControls
-          uiStyles={uiStyles}
           onZoomIn={controller.handleZoomIn}
           onZoomOut={controller.handleZoomOut}
           onFit={controller.handleFitClick}

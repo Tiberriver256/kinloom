@@ -3,7 +3,9 @@ import { findIpaGlyphsInPhonetic } from '@kinloom/core';
 import type React from 'react';
 import { cx } from '../../../lib/cx.js';
 import { hasPronunciationContent, PronunciationBadge } from '../../PronunciationBadge.js';
+import pronunciationBadgeStyles from '../../PronunciationBadge.module.css';
 import localStyles from '../PronunciationEditorSection.module.css';
+import wikiFormStyles from '../WikiForms.module.css';
 import type { PronunciationStringFieldKey } from './pronunciationDraft.js';
 
 export interface PersonalPronunciationOverrideFormProps {
@@ -17,7 +19,6 @@ export interface PersonalPronunciationOverrideFormProps {
   readonly primaryFocusRef?: React.RefObject<HTMLElement | null>;
   readonly audioGenStatus: 'idle' | 'loading' | 'success' | 'error';
   readonly audioGenMessage: string | null;
-  readonly uiStyles: Readonly<Record<string, string>>;
   readonly onUpdateField: (key: PronunciationStringFieldKey, value: string) => void;
   readonly onGenerateAudio: () => Promise<void>;
 }
@@ -33,7 +34,6 @@ export const PersonalPronunciationOverrideForm: React.FC<PersonalPronunciationOv
   primaryFocusRef,
   audioGenStatus,
   audioGenMessage,
-  uiStyles,
   onUpdateField,
   onGenerateAudio,
 }) => {
@@ -42,9 +42,9 @@ export const PersonalPronunciationOverrideForm: React.FC<PersonalPronunciationOv
 
   return (
     <div id={overridePanelId}>
-      <div className={cx(uiStyles, 'wiki-field-grid')}>
-        <div className={cx(uiStyles, 'wiki-field')}>
-          <label htmlFor={`${idPrefix}-personal-phonetic`} className={cx(uiStyles, 'wiki-field-label')}>
+      <div className={cx(wikiFormStyles, 'wiki-field-grid')}>
+        <div className={cx(wikiFormStyles, 'wiki-field')}>
+          <label htmlFor={`${idPrefix}-personal-phonetic`} className={cx(wikiFormStyles, 'wiki-field-label')}>
             Respelling
           </label>
           <input
@@ -59,7 +59,7 @@ export const PersonalPronunciationOverrideForm: React.FC<PersonalPronunciationOv
             }
             id={`${idPrefix}-personal-phonetic`}
             type="text"
-            className={cx(uiStyles, 'wiki-input')}
+            className={cx(wikiFormStyles, 'wiki-input')}
             placeholder="e.g. MER-ser or LAY-den"
             value={draftPronunciation?.phonetic ?? ''}
             aria-describedby={personalPhoneticIpaGlyphs.length > 0 ? personalPhoneticHintId : undefined}
@@ -76,14 +76,14 @@ export const PersonalPronunciationOverrideForm: React.FC<PersonalPronunciationOv
           )}
         </div>
 
-        <div className={cx(uiStyles, 'wiki-field')}>
-          <label htmlFor={`${idPrefix}-personal-ipa`} className={cx(uiStyles, 'wiki-field-label')}>
+        <div className={cx(wikiFormStyles, 'wiki-field')}>
+          <label htmlFor={`${idPrefix}-personal-ipa`} className={cx(wikiFormStyles, 'wiki-field-label')}>
             IPA (optional)
           </label>
           <input
             id={`${idPrefix}-personal-ipa`}
             type="text"
-            className={cx(uiStyles, 'wiki-input')}
+            className={cx(wikiFormStyles, 'wiki-input')}
             placeholder="e.g. /ˈmɜːr.sər/"
             autoCorrect="off"
             autoCapitalize="none"
@@ -96,14 +96,14 @@ export const PersonalPronunciationOverrideForm: React.FC<PersonalPronunciationOv
           />
         </div>
 
-        <div className={cx(uiStyles, 'wiki-field')}>
-          <label htmlFor={`${idPrefix}-personal-lang`} className={cx(uiStyles, 'wiki-field-label')}>
+        <div className={cx(wikiFormStyles, 'wiki-field')}>
+          <label htmlFor={`${idPrefix}-personal-lang`} className={cx(wikiFormStyles, 'wiki-field-label')}>
             Language / origin
           </label>
           <input
             id={`${idPrefix}-personal-lang`}
             type="text"
-            className={cx(uiStyles, 'wiki-input')}
+            className={cx(wikiFormStyles, 'wiki-input')}
             placeholder="e.g. nl, pl, en-US"
             autoCorrect="off"
             autoCapitalize="none"
@@ -116,14 +116,14 @@ export const PersonalPronunciationOverrideForm: React.FC<PersonalPronunciationOv
           />
         </div>
 
-        <div className={cx(uiStyles, 'wiki-field')}>
-          <label htmlFor={`${idPrefix}-personal-note`} className={cx(uiStyles, 'wiki-field-label')}>
+        <div className={cx(wikiFormStyles, 'wiki-field')}>
+          <label htmlFor={`${idPrefix}-personal-note`} className={cx(wikiFormStyles, 'wiki-field-label')}>
             Pronunciation note (optional)
           </label>
           <input
             id={`${idPrefix}-personal-note`}
             type="text"
-            className={cx(uiStyles, 'wiki-input')}
+            className={cx(wikiFormStyles, 'wiki-input')}
             placeholder="e.g. Stress on first syllable"
             value={draftPronunciation?.note ?? ''}
             onChange={(e) => {
@@ -133,14 +133,17 @@ export const PersonalPronunciationOverrideForm: React.FC<PersonalPronunciationOv
           />
         </div>
 
-        <div className={cx(uiStyles, 'wiki-field')}>
-          <label htmlFor={`${idPrefix}-personal-source-label`} className={cx(uiStyles, 'wiki-field-label')}>
+        <div className={cx(wikiFormStyles, 'wiki-field')}>
+          <label
+            htmlFor={`${idPrefix}-personal-source-label`}
+            className={cx(wikiFormStyles, 'wiki-field-label')}
+          >
             Source label (optional)
           </label>
           <input
             id={`${idPrefix}-personal-source-label`}
             type="text"
-            className={cx(uiStyles, 'wiki-input')}
+            className={cx(wikiFormStyles, 'wiki-input')}
             placeholder="e.g. Wiktionary (Dutch IPA)"
             value={draftPronunciation?.source_label ?? ''}
             onChange={(e) => {
@@ -150,14 +153,17 @@ export const PersonalPronunciationOverrideForm: React.FC<PersonalPronunciationOv
           />
         </div>
 
-        <div className={cx(uiStyles, 'wiki-field')}>
-          <label htmlFor={`${idPrefix}-personal-source-url`} className={cx(uiStyles, 'wiki-field-label')}>
+        <div className={cx(wikiFormStyles, 'wiki-field')}>
+          <label
+            htmlFor={`${idPrefix}-personal-source-url`}
+            className={cx(wikiFormStyles, 'wiki-field-label')}
+          >
             Source URL (optional)
           </label>
           <input
             id={`${idPrefix}-personal-source-url`}
             type="url"
-            className={cx(uiStyles, 'wiki-input')}
+            className={cx(wikiFormStyles, 'wiki-input')}
             placeholder="e.g. https://en.wiktionary.org/wiki/Leiden"
             autoCorrect="off"
             autoCapitalize="none"
@@ -171,10 +177,10 @@ export const PersonalPronunciationOverrideForm: React.FC<PersonalPronunciationOv
         </div>
       </div>
 
-      <div className={cx(uiStyles, 'wiki-pronunciation-actions')}>
+      <div className={cx(pronunciationBadgeStyles, 'wiki-pronunciation-actions')}>
         <button
           type="button"
-          className={cx(uiStyles, 'wiki-pronunciation-gen-btn')}
+          className={'wiki-pronunciation-gen-btn'}
           disabled={isBusy || audioGenStatus === 'loading'}
           onClick={() => {
             void onGenerateAudio();
@@ -202,7 +208,7 @@ export const PersonalPronunciationOverrideForm: React.FC<PersonalPronunciationOv
               : 'Generate Audio'}
         </button>
         {hasPronunciationContent(draftPronunciation) && (
-          <div className={cx(uiStyles, 'wiki-pronunciation-preview')}>
+          <div className={cx(pronunciationBadgeStyles, 'wiki-pronunciation-preview')}>
             <PronunciationBadge pronunciation={draftPronunciation} label={previewLabel} baseUrl={baseUrl} />
           </div>
         )}

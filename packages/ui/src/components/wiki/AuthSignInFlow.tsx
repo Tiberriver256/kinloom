@@ -1,9 +1,9 @@
+import type { ArchiveDataSource } from '@kinloom/core';
 import type React from 'react';
 import { useEffect, useId, useRef, useState } from 'react';
-import { HttpWikiDataSource } from '../../adapters/httpWikiDataSource.js';
 import { useArchiveData } from '../../context/ArchiveDataContext.js';
-import { cx } from '../../lib/cx.js';
-import { scrollBehaviorForMotion } from '../../lib/keyboardNav.js';
+import { scrollBehaviorForMotion } from '../../hooks/keyboardNav.js';
+import { cx, joinClasses } from '../../lib/cx.js';
 import {
   type AuthFeedback,
   type AuthUrlError,
@@ -13,12 +13,10 @@ import {
   resolveClientAuthError,
   validateEmailInput,
 } from './authErrorCopy.js';
-import cssMod0_1 from './WikiAuth.module.css';
-import cssMod0_0 from './WikiChrome.module.css';
-import cssMod0_3 from './WikiForms.module.css';
-import cssMod0_2 from './WikiPanels.module.css';
-
-const uiStyles: Readonly<Record<string, string>> = { ...cssMod0_0, ...cssMod0_1, ...cssMod0_2, ...cssMod0_3 };
+import wikiAuthStyles from './WikiAuth.module.css';
+import wikiChromeStyles from './WikiChrome.module.css';
+import wikiFormStyles from './WikiForms.module.css';
+import wikiPanelStyles from './WikiPanels.module.css';
 
 export interface AuthSignInFlowProps {
   initialUrlError?: AuthUrlError | null;
@@ -29,8 +27,21 @@ export interface AuthSignInFlowProps {
   feedbackRef?: React.RefObject<HTMLDivElement | null>;
 }
 
-function buildGoogleUrl(dataSource: unknown, nextPath: string, selectAccount: boolean): string {
-  if (dataSource instanceof HttpWikiDataSource) {
+interface GoogleSignInUrlCapable {
+  getGoogleSignInUrl(nextPath?: string, options?: { selectAccount?: boolean }): string;
+}
+
+function hasGoogleSignInUrl(
+  dataSource: ArchiveDataSource
+): dataSource is ArchiveDataSource & GoogleSignInUrlCapable {
+  return (
+    'getGoogleSignInUrl' in dataSource &&
+    typeof (dataSource as { getGoogleSignInUrl?: unknown }).getGoogleSignInUrl === 'function'
+  );
+}
+
+function buildGoogleUrl(dataSource: ArchiveDataSource, nextPath: string, selectAccount: boolean): string {
+  if (hasGoogleSignInUrl(dataSource)) {
     return dataSource.getGoogleSignInUrl(nextPath, { selectAccount });
   }
   const params = new URLSearchParams();
@@ -218,9 +229,9 @@ export const AuthSignInFlow: React.FC<AuthSignInFlowProps> = ({
   const canShowInviteHelper = showInviteHelper && (!inviteLabel || Boolean(activeFeedback?.showInvitePaste));
 
   return (
-    <div className={cx(uiStyles, 'wiki-auth-flow')}>
+    <div className={cx(wikiAuthStyles, 'wiki-auth-flow')}>
       {inviteLabel && !activeFeedback && !sentTo && (
-        <div className={cx(uiStyles, 'wiki-status-banner is-info')}>
+        <div className={cx(wikiPanelStyles, 'wiki-status-banner is-info')}>
           <p>
             Invited via <strong>{inviteLabel}</strong>.{' '}
             {authProviders.google
@@ -234,22 +245,25 @@ export const AuthSignInFlow: React.FC<AuthSignInFlowProps> = ({
         <div
           ref={feedbackRef}
           tabIndex={-1}
-          className={cx(uiStyles, `wiki-status-banner is-${activeFeedback.tone} wiki-auth-feedback`)}
+          className={joinClasses(
+            cx(wikiPanelStyles, `wiki-status-banner is-${activeFeedback.tone}`),
+            cx(wikiAuthStyles, 'wiki-auth-feedback')
+          )}
           role={activeFeedback.tone === 'info' ? 'status' : 'alert'}
           aria-live={activeFeedback.tone === 'info' ? 'polite' : 'assertive'}
         >
-          <p className={cx(uiStyles, 'wiki-auth-feedback-title')}>
+          <p className={cx(wikiAuthStyles, 'wiki-auth-feedback-title')}>
             <strong>{activeFeedback.title}</strong>
           </p>
           <p>{activeFeedback.detail}</p>
           {activeFeedback.hint && (
-            <p className={cx(uiStyles, 'wiki-auth-feedback-hint')}>{activeFeedback.hint}</p>
+            <p className={cx(wikiAuthStyles, 'wiki-auth-feedback-hint')}>{activeFeedback.hint}</p>
           )}
           {activeFeedback.showSwitchGoogleAccount && (
-            <div className={cx(uiStyles, 'wiki-auth-feedback-actions')}>
+            <div className={cx(wikiAuthStyles, 'wiki-auth-feedback-actions')}>
               <a
                 href={googleSwitchAccountUrl}
-                className={cx(uiStyles, 'wiki-btn-secondary wiki-btn-full')}
+                className={cx(wikiChromeStyles, 'wiki-btn-secondary wiki-btn-full')}
                 onClick={clearFeedback}
               >
                 Try a different Google account
@@ -261,8 +275,14 @@ export const AuthSignInFlow: React.FC<AuthSignInFlowProps> = ({
 
       {authProviders.magicLink &&
         (sentTo ? (
-          <output className={cx(uiStyles, 'wiki-status-banner is-success wiki-auth-sent')} aria-live="polite">
-            <p ref={sentTitleRef} tabIndex={-1} className={cx(uiStyles, 'wiki-auth-feedback-title')}>
+          <output
+            className={joinClasses(
+              cx(wikiPanelStyles, 'wiki-status-banner is-success'),
+              cx(wikiAuthStyles, 'wiki-auth-sent')
+            )}
+            aria-live="polite"
+          >
+            <p ref={sentTitleRef} tabIndex={-1} className={cx(wikiAuthStyles, 'wiki-auth-feedback-title')}>
               <strong>
                 {resendCount > 0 ? 'Fresh sign-in link sent' : 'Check your email for a sign-in link'}
               </strong>
@@ -271,14 +291,14 @@ export const AuthSignInFlow: React.FC<AuthSignInFlowProps> = ({
               If <strong>{sentTo}</strong> is enrolled in this archive, a one-time sign-in link is on its way
               (valid for 15 minutes).
             </p>
-            <p className={cx(uiStyles, 'wiki-auth-feedback-hint')}>
+            <p className={cx(wikiAuthStyles, 'wiki-auth-feedback-hint')}>
               Do not see it yet? Check your spam folder, try another family email, or open a family invite
               link first.
             </p>
-            <div className={cx(uiStyles, 'wiki-auth-sent-actions')}>
+            <div className={cx(wikiAuthStyles, 'wiki-auth-sent-actions')}>
               <button
                 type="button"
-                className={cx(uiStyles, 'wiki-btn-secondary')}
+                className={cx(wikiChromeStyles, 'wiki-btn-secondary')}
                 disabled={sending}
                 onClick={() => {
                   void sendMagicLink(sentTo, true);
@@ -288,7 +308,7 @@ export const AuthSignInFlow: React.FC<AuthSignInFlowProps> = ({
               </button>
               <button
                 type="button"
-                className={cx(uiStyles, 'wiki-btn-link')}
+                className={cx(wikiChromeStyles, 'wiki-btn-link')}
                 disabled={sending}
                 onClick={handleUseDifferentEmail}
               >
@@ -298,14 +318,14 @@ export const AuthSignInFlow: React.FC<AuthSignInFlowProps> = ({
           </output>
         ) : (
           <form
-            className={cx(uiStyles, 'wiki-edit-form')}
+            className={cx(wikiFormStyles, 'wiki-edit-form')}
             noValidate
             onSubmit={(e) => {
               void handleMagicLinkSubmit(e);
             }}
           >
-            <div className={cx(uiStyles, 'wiki-field')}>
-              <label htmlFor={emailInputId} className={cx(uiStyles, 'wiki-field-label')}>
+            <div className={cx(wikiFormStyles, 'wiki-field')}>
+              <label htmlFor={emailInputId} className={cx(wikiFormStyles, 'wiki-field-label')}>
                 Email address
               </label>
               <input
@@ -320,7 +340,7 @@ export const AuthSignInFlow: React.FC<AuthSignInFlowProps> = ({
                 autoCapitalize="none"
                 spellCheck={false}
                 enterKeyHint="send"
-                className={cx(uiStyles, 'wiki-input wiki-input-lg')}
+                className={cx(wikiFormStyles, 'wiki-input wiki-input-lg')}
                 placeholder="relative@example.com"
                 value={email}
                 aria-invalid={emailError ? 'true' : 'false'}
@@ -344,15 +364,15 @@ export const AuthSignInFlow: React.FC<AuthSignInFlowProps> = ({
                 disabled={sending}
               />
               {emailError && (
-                <p id={emailErrorId} className={cx(uiStyles, 'wiki-field-error')} role="alert">
+                <p id={emailErrorId} className={cx(wikiAuthStyles, 'wiki-field-error')} role="alert">
                   {emailError}
                 </p>
               )}
             </div>
-            <div className={cx(uiStyles, 'wiki-form-actions')}>
+            <div className={cx(wikiPanelStyles, 'wiki-form-actions')}>
               <button
                 type="submit"
-                className={cx(uiStyles, 'wiki-btn-primary wiki-btn-full')}
+                className={cx(wikiChromeStyles, 'wiki-btn-primary wiki-btn-full')}
                 disabled={sending}
               >
                 {sending ? 'Sending link…' : 'Email Magic Link'}
@@ -364,13 +384,13 @@ export const AuthSignInFlow: React.FC<AuthSignInFlowProps> = ({
       {authProviders.google && (
         <>
           {authProviders.magicLink && (
-            <div className={cx(uiStyles, 'wiki-divider-label')} aria-hidden="true">
+            <div className={cx(wikiAuthStyles, 'wiki-divider-label')} aria-hidden="true">
               <span>or</span>
             </div>
           )}
 
-          <div className={cx(uiStyles, 'wiki-signin-section')}>
-            <a href={googleStartUrl} className={cx(uiStyles, 'wiki-btn-secondary wiki-btn-full')}>
+          <div className={'wiki-signin-section'}>
+            <a href={googleStartUrl} className={cx(wikiChromeStyles, 'wiki-btn-secondary wiki-btn-full')}>
               Continue with Google
             </a>
           </div>
@@ -378,10 +398,10 @@ export const AuthSignInFlow: React.FC<AuthSignInFlowProps> = ({
       )}
 
       {canShowInviteHelper && (
-        <div className={cx(uiStyles, 'wiki-invite-helper')}>
+        <div className={cx(wikiAuthStyles, 'wiki-invite-helper')}>
           <button
             type="button"
-            className={cx(uiStyles, 'wiki-invite-toggle')}
+            className={cx(wikiAuthStyles, 'wiki-invite-toggle')}
             aria-expanded={inviteOpen}
             aria-controls={invitePanelId}
             onClick={() => {
@@ -397,15 +417,15 @@ export const AuthSignInFlow: React.FC<AuthSignInFlowProps> = ({
             <form
               ref={inviteFormRef}
               id={invitePanelId}
-              className={cx(uiStyles, 'wiki-invite-form')}
+              className={cx(wikiAuthStyles, 'wiki-invite-form')}
               noValidate
               onSubmit={handleInviteSubmit}
             >
-              <div className={cx(uiStyles, 'wiki-field')}>
-                <label htmlFor={inviteInputId} className={cx(uiStyles, 'wiki-field-label')}>
+              <div className={cx(wikiFormStyles, 'wiki-field')}>
+                <label htmlFor={inviteInputId} className={cx(wikiFormStyles, 'wiki-field-label')}>
                   Family invite link or code
                 </label>
-                <span id={inviteHintId} className={cx(uiStyles, 'wiki-field-hint')}>
+                <span id={inviteHintId} className={cx(wikiAuthStyles, 'wiki-field-hint')}>
                   Paste the full link from your family message or just the invite code.
                 </span>
                 <input
@@ -418,7 +438,7 @@ export const AuthSignInFlow: React.FC<AuthSignInFlowProps> = ({
                   autoCapitalize="none"
                   spellCheck={false}
                   enterKeyHint="go"
-                  className={cx(uiStyles, 'wiki-input wiki-input-lg')}
+                  className={cx(wikiFormStyles, 'wiki-input wiki-input-lg')}
                   placeholder="https://.../invite/abc123 or abc123"
                   value={inviteValue}
                   aria-invalid={inviteError ? 'true' : 'false'}
@@ -431,12 +451,12 @@ export const AuthSignInFlow: React.FC<AuthSignInFlowProps> = ({
                   }}
                 />
                 {inviteError && (
-                  <p id={inviteErrorId} className={cx(uiStyles, 'wiki-field-error')} role="alert">
+                  <p id={inviteErrorId} className={cx(wikiAuthStyles, 'wiki-field-error')} role="alert">
                     {inviteError}
                   </p>
                 )}
               </div>
-              <button type="submit" className={cx(uiStyles, 'wiki-btn-secondary wiki-btn-full')}>
+              <button type="submit" className={cx(wikiChromeStyles, 'wiki-btn-secondary wiki-btn-full')}>
                 Open Invite Link
               </button>
             </form>

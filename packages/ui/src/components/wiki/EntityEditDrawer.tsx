@@ -1,34 +1,24 @@
 import type { EditorCitationMode, EntityPayload, EntityType } from '@kinloom/core';
-import { asRevisionId, isEditSummaryValid } from '@kinloom/core';
+import { isEditSummaryValid } from '@kinloom/core';
 import { useMachine } from '@xstate/react';
 import type React from 'react';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 import { useArchiveData } from '../../context/ArchiveDataContext.js';
-import { cx } from '../../lib/cx.js';
-import { useDialogFocusTrap } from '../../lib/useDialogFocusTrap.js';
+import { useDialogFocusTrap } from '../../hooks/useDialogFocusTrap.js';
+import { cx, joinClasses } from '../../lib/cx.js';
 import { entityEditorMachine } from '../../machines/entityEditorMachine.js';
-import cssMod3 from '../../pages/IndexPage.module.css';
-import cssMod0 from '../PronunciationBadge.module.css';
-import cssMod1 from '../SourceReaderDrawer.module.css';
+import { useKinloomPlugins } from '../../plugins/PluginContext.js';
+import controlStyles from '../../styles/Controls.module.css';
+import overlayStyles from '../../styles/Overlays.module.css';
 import { EntityDangerZone, EntityDrawerStatusBanners } from './entityForms/EntityDrawerChrome.js';
 import { getEntityEditFormEntry } from './entityForms/editRegistry.js';
 import { asString } from './entityForms/fieldTypes.js';
 import { PronunciationEditorSection, readDraftPronunciation } from './PronunciationEditorSection.js';
-import cssMod2_1 from './WikiAuth.module.css';
+import wikiAuthStyles from './WikiAuth.module.css';
 import { CitationBadge } from './WikiBadges.js';
-import cssMod2_0 from './WikiChrome.module.css';
-import cssMod2_3 from './WikiForms.module.css';
-import cssMod2_2 from './WikiPanels.module.css';
-
-const uiStyles: Readonly<Record<string, string>> = {
-  ...cssMod0,
-  ...cssMod1,
-  ...cssMod2_0,
-  ...cssMod2_1,
-  ...cssMod2_2,
-  ...cssMod2_3,
-  ...cssMod3,
-};
+import wikiChromeStyles from './WikiChrome.module.css';
+import wikiFormStyles from './WikiForms.module.css';
+import wikiPanelStyles from './WikiPanels.module.css';
 
 export type EntityEditDrawerSection = 'pronunciation';
 
@@ -60,14 +50,10 @@ export const EntityEditDrawer: React.FC<EntityEditDrawerProps> = ({
   onDeleted,
 }) => {
   const { dataSource, bundle, baseUrl, reloadArchive, pronunciations, setPronunciations } = useArchiveData();
+  const { entityEditForms } = useKinloomPlugins();
   const pronunciationFieldsetRef = useRef<HTMLFieldSetElement | null>(null);
   const pronunciationPrimaryFocusRef = useRef<HTMLElement | null>(null);
   const hasScrolledInitialSectionRef = useRef(false);
-  const [syncingRevision, setSyncingRevision] = useState(false);
-  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
-  const [deleteSummary, setDeleteSummary] = useState('');
-  const [deleteBusy, setDeleteBusy] = useState(false);
-  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const [snapshot, send] = useMachine(entityEditorMachine, {
     input: {
@@ -80,71 +66,20 @@ export const EntityEditDrawer: React.FC<EntityEditDrawerProps> = ({
     },
   });
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: machine send and snapshot.matches are intentionally omitted to avoid re-running load effect
+  // biome-ignore lint/correctness/useExhaustiveDependencies: trigger OPEN_EDIT when drawer opens or entity changes
   useEffect(() => {
     if (!open) {
-      return undefined;
+      return;
     }
-    if (!dataSource.getEntity) {
-      if (snapshot.matches('viewing')) {
-        send({ type: 'START_EDIT' });
-      }
-      return undefined;
-    }
-    let cancelled = false;
-    setSyncingRevision(true);
-    void dataSource
-      .getEntity(entityType, entityId)
-      .then((live) => {
-        if (cancelled) {
-          return;
-        }
-        send({
-          type: 'ENTITY_CHANGED',
-          entityType,
-          entityId,
-          revisionId: live.current_revision_id,
-          snapshot: live.entity,
-          hasPrimarySource: live.has_primary_source,
-        });
-        send({ type: 'START_EDIT' });
-      })
-      .catch(() => {
-        if (!cancelled) {
-          send({ type: 'START_EDIT' });
-        }
-      })
-      .finally(() => {
-        if (!cancelled) {
-          setSyncingRevision(false);
-        }
-      });
-    return (): void => {
-      cancelled = true;
-    };
+    send({
+      type: 'OPEN_EDIT',
+      entityType,
+      entityId,
+      revisionId,
+      snapshot: initialData,
+      hasPrimarySource,
+    });
   }, [open, entityType, entityId, dataSource]);
-
-  useEffect(() => {
-    if (snapshot.context.entityId !== entityId || snapshot.context.entityType !== entityType) {
-      send({
-        type: 'ENTITY_CHANGED',
-        entityType,
-        entityId,
-        revisionId,
-        snapshot: initialData,
-        hasPrimarySource,
-      });
-    }
-  }, [
-    entityType,
-    entityId,
-    revisionId,
-    initialData,
-    hasPrimarySource,
-    snapshot.context.entityId,
-    snapshot.context.entityType,
-    send,
-  ]);
 
   useEffect(() => {
     if (snapshot.matches('saved')) {
@@ -153,6 +88,17 @@ export const EntityEditDrawer: React.FC<EntityEditDrawerProps> = ({
     }
   }, [snapshot, reloadArchive, onSaved]);
 
+  useEffect(() => {
+    if (snapshot.matches('deleted')) {
+      reloadArchive();
+      send({ type: 'DISMISS_DELETED' });
+      onDeleted?.();
+      onClose();
+    }
+  }, [snapshot, reloadArchive, send, onDeleted, onClose]);
+
+  const syncingRevision = snapshot.hasTag('syncing');
+
   // biome-ignore lint/correctness/useExhaustiveDependencies: reset scroll flag when target entityId changes
   useEffect(() => {
     if (!open) {
@@ -160,7 +106,7 @@ export const EntityEditDrawer: React.FC<EntityEditDrawerProps> = ({
     }
   }, [open, entityId]);
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: sync drawer state when revision sync completes
+  // biome-ignore lint/correctness/useExhaustiveDependencies: focus pronunciation section once revision sync finishes
   useEffect(() => {
     if (!open || initialSection !== 'pronunciation') {
       return undefined;
@@ -198,12 +144,23 @@ export const EntityEditDrawer: React.FC<EntityEditDrawerProps> = ({
     return null;
   }
 
-  const { draft, summary, citationMode, sourceIds, conflict, validationErrors, networkError } =
-    snapshot.context;
-  const formEntry = getEntityEditFormEntry(entityType);
+  const {
+    draft,
+    summary,
+    citationMode,
+    sourceIds,
+    conflict,
+    validationErrors,
+    networkError,
+    deleteSummary,
+    deleteError,
+  } = snapshot.context;
+  const formEntry = getEntityEditFormEntry(entityType, entityEditForms);
   const EntityFields = formEntry.Fields;
-  const isSaving = snapshot.hasTag('busy');
-  const isBusy = isSaving || syncingRevision;
+  const isSaving = snapshot.matches('saving');
+  const isDeleting = snapshot.matches('deleting');
+  const deleteConfirmOpen = snapshot.matches('confirmingDelete') || isDeleting;
+  const isBusy = snapshot.hasTag('busy');
   const isConflict = snapshot.matches('conflict409');
   const isSaved = snapshot.matches('saved');
   const isConfirmingLeave = snapshot.matches('confirmingLeave');
@@ -258,28 +215,6 @@ export const EntityEditDrawer: React.FC<EntityEditDrawerProps> = ({
   };
   closeHandlerRef.current = handleCloseAttempt;
 
-  const handleSoftDelete = async (): Promise<void> => {
-    if (!dataSource.deleteEntity || !isEditSummaryValid(deleteSummary)) {
-      return;
-    }
-    setDeleteBusy(true);
-    setDeleteError(null);
-    try {
-      await dataSource.deleteEntity(entityType, entityId, {
-        expected_parent_revision_id: asRevisionId(snapshot.context.baseRevisionId),
-        summary: deleteSummary.trim(),
-      });
-      reloadArchive();
-      setDeleteConfirmOpen(false);
-      onDeleted?.();
-      onClose();
-    } catch (err) {
-      setDeleteError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setDeleteBusy(false);
-    }
-  };
-
   const availableSources = bundle?.sources ?? [];
 
   const handleCitationModeChange = (mode: EditorCitationMode): void => {
@@ -295,30 +230,35 @@ export const EntityEditDrawer: React.FC<EntityEditDrawerProps> = ({
       ref={dialogRef}
       open
       aria-modal="true"
-      className={cx(uiStyles, 'drawer-backdrop wiki-edit-drawer-backdrop')}
+      className={cx(overlayStyles, 'drawer-backdrop wiki-edit-drawer-backdrop')}
       aria-label={`Edit ${title ?? `${entityType} ${entityId}`}`}
     >
       <button
         type="button"
         tabIndex={-1}
-        className={cx(uiStyles, 'lightbox-backdrop-close')}
+        className={cx(overlayStyles, 'lightbox-backdrop-close')}
         aria-label="Close edit drawer"
         onClick={handleCloseAttempt}
       />
-      <aside className={cx(uiStyles, 'drawer-panel wiki-edit-drawer-panel')}>
-        <div className={cx(uiStyles, 'drawer-top')}>
+      <aside
+        className={joinClasses(
+          cx(overlayStyles, 'drawer-panel'),
+          cx(wikiFormStyles, 'wiki-edit-drawer-panel')
+        )}
+      >
+        <div className={cx(overlayStyles, 'drawer-top')}>
           <div>
-            <h2 className={cx(uiStyles, 'drawer-title')} style={{ marginTop: 0 }}>
+            <h2 className={'drawer-title'} style={{ marginTop: 0 }}>
               Edit {title ?? `${entityType}/${entityId}`}
             </h2>
-            <div className={cx(uiStyles, 'wiki-drawer-subtitle')}>
+            <div className={cx(wikiFormStyles, 'wiki-drawer-subtitle')}>
               Changes are saved to the family history and can always be undone.
             </div>
           </div>
           <button
             ref={closeBtnRef}
             type="button"
-            className={cx(uiStyles, 'pill-btn')}
+            className={cx(controlStyles, 'pill-btn')}
             onClick={handleCloseAttempt}
           >
             Close
@@ -326,7 +266,7 @@ export const EntityEditDrawer: React.FC<EntityEditDrawerProps> = ({
         </div>
 
         <form
-          className={cx(uiStyles, 'wiki-edit-drawer-form')}
+          className={cx(wikiFormStyles, 'wiki-edit-drawer-form')}
           onSubmit={(e) => {
             e.preventDefault();
             const preparedDraft = formEntry.prepareSubmitDraft?.(draft);
@@ -336,7 +276,7 @@ export const EntityEditDrawer: React.FC<EntityEditDrawerProps> = ({
             send({ type: 'SUBMIT' });
           }}
         >
-          <div className={cx(uiStyles, 'wiki-edit-drawer-body')}>
+          <div className={cx(wikiFormStyles, 'wiki-edit-drawer-body')}>
             <EntityDrawerStatusBanners
               syncingRevision={syncingRevision}
               isSaving={isSaving}
@@ -349,7 +289,6 @@ export const EntityEditDrawer: React.FC<EntityEditDrawerProps> = ({
               isNetworkError={isNetworkError}
               networkError={networkError}
               validationErrors={validationErrors}
-              uiStyles={uiStyles}
               onStayEditing={() => {
                 send({ type: 'STAY_EDITING' });
               }}
@@ -387,11 +326,10 @@ export const EntityEditDrawer: React.FC<EntityEditDrawerProps> = ({
               }}
             />
 
-            <div className={cx(uiStyles, 'wiki-edit-form')}>
+            <div className={cx(wikiFormStyles, 'wiki-edit-form')}>
               <EntityFields
                 draft={draft}
                 isBusy={isBusy}
-                uiStyles={uiStyles}
                 updateField={updateField}
                 replaceDraft={replaceDraft}
               />
@@ -418,10 +356,10 @@ export const EntityEditDrawer: React.FC<EntityEditDrawerProps> = ({
                 />
               )}
 
-              <fieldset className={cx(uiStyles, 'wiki-citation-fieldset')}>
-                <legend className={cx(uiStyles, 'wiki-field-label')}>Source Verification</legend>
-                <div className={cx(uiStyles, 'wiki-citation-options')}>
-                  <label className={cx(uiStyles, 'wiki-radio-card')}>
+              <fieldset className={cx(wikiFormStyles, 'wiki-citation-fieldset')}>
+                <legend className={cx(wikiFormStyles, 'wiki-field-label')}>Source Verification</legend>
+                <div className={cx(wikiFormStyles, 'wiki-citation-options')}>
+                  <label className={cx(wikiFormStyles, 'wiki-radio-card')}>
                     <input
                       type="radio"
                       name={`citation-mode-${entityId}`}
@@ -432,12 +370,12 @@ export const EntityEditDrawer: React.FC<EntityEditDrawerProps> = ({
                       disabled={isBusy}
                     />
                     <CitationBadge hasPrimarySource />
-                    <span className={cx(uiStyles, 'wiki-radio-desc')}>
+                    <span className={cx(wikiFormStyles, 'wiki-radio-desc')}>
                       Backed by a primary record or archive source
                     </span>
                   </label>
 
-                  <label className={cx(uiStyles, 'wiki-radio-card')}>
+                  <label className={cx(wikiFormStyles, 'wiki-radio-card')}>
                     <input
                       type="radio"
                       name={`citation-mode-${entityId}`}
@@ -448,7 +386,7 @@ export const EntityEditDrawer: React.FC<EntityEditDrawerProps> = ({
                       disabled={isBusy}
                     />
                     <CitationBadge hasPrimarySource={false} />
-                    <span className={cx(uiStyles, 'wiki-radio-desc')}>
+                    <span className={cx(wikiFormStyles, 'wiki-radio-desc')}>
                       Oral recollection or family note (labeled as Family memory until a primary source is
                       cited)
                     </span>
@@ -456,10 +394,12 @@ export const EntityEditDrawer: React.FC<EntityEditDrawerProps> = ({
                 </div>
 
                 {citationMode === 'cited' && availableSources.length > 0 && (
-                  <label className={cx(uiStyles, 'wiki-field')} style={{ marginTop: 8 }}>
-                    <span className={cx(uiStyles, 'wiki-field-label')}>Link primary source (optional)</span>
+                  <label className={cx(wikiFormStyles, 'wiki-field')} style={{ marginTop: 8 }}>
+                    <span className={cx(wikiFormStyles, 'wiki-field-label')}>
+                      Link primary source (optional)
+                    </span>
                     <select
-                      className={cx(uiStyles, 'wiki-input')}
+                      className={cx(wikiFormStyles, 'wiki-input')}
                       value={sourceIds[0] ?? ''}
                       onChange={(e) => {
                         const nextId = e.target.value;
@@ -482,13 +422,13 @@ export const EntityEditDrawer: React.FC<EntityEditDrawerProps> = ({
                 )}
               </fieldset>
 
-              <label className={cx(uiStyles, 'wiki-field')}>
-                <span className={cx(uiStyles, 'wiki-field-label')}>
+              <label className={cx(wikiFormStyles, 'wiki-field')}>
+                <span className={cx(wikiFormStyles, 'wiki-field-label')}>
                   What did you change? <span aria-hidden="true">*</span>
                 </span>
                 <input
                   type="text"
-                  className={cx(uiStyles, 'wiki-input')}
+                  className={cx(wikiFormStyles, 'wiki-input')}
                   required
                   minLength={3}
                   placeholder="e.g. Corrected birth year from 1880 census or family Bible"
@@ -499,7 +439,7 @@ export const EntityEditDrawer: React.FC<EntityEditDrawerProps> = ({
                   disabled={isBusy}
                 />
                 {summary.length > 0 && !summaryValid && (
-                  <span className={cx(uiStyles, 'wiki-field-hint is-error')}>
+                  <span className={cx(wikiAuthStyles, 'wiki-field-hint is-error')}>
                     Please write a short note (at least 3 characters).
                   </span>
                 )}
@@ -510,29 +450,32 @@ export const EntityEditDrawer: React.FC<EntityEditDrawerProps> = ({
               <EntityDangerZone
                 confirmOpen={deleteConfirmOpen}
                 summary={deleteSummary}
-                busy={deleteBusy}
+                busy={isDeleting}
                 error={deleteError}
-                uiStyles={uiStyles}
                 onOpenConfirm={() => {
-                  setDeleteConfirmOpen(true);
+                  send({ type: 'REQUEST_DELETE' });
                 }}
                 onCancelConfirm={() => {
-                  setDeleteConfirmOpen(false);
+                  send({ type: 'CANCEL_DELETE' });
                 }}
-                onSummaryChange={setDeleteSummary}
-                onConfirmDelete={handleSoftDelete}
+                onSummaryChange={(nextSummary) => {
+                  send({ type: 'SET_DELETE_SUMMARY', summary: nextSummary });
+                }}
+                onConfirmDelete={() => {
+                  send({ type: 'CONFIRM_DELETE' });
+                }}
               />
             )}
           </div>
 
-          <div className={cx(uiStyles, 'wiki-drawer-footer')}>
+          <div className={cx(wikiFormStyles, 'wiki-drawer-footer')}>
             {saveDisabledHint && (
-              <span className={cx(uiStyles, 'wiki-drawer-footer-hint')}>{saveDisabledHint}</span>
+              <span className={cx(wikiFormStyles, 'wiki-drawer-footer-hint')}>{saveDisabledHint}</span>
             )}
-            <div className={cx(uiStyles, 'wiki-form-actions')}>
+            <div className={cx(wikiPanelStyles, 'wiki-form-actions')}>
               <button
                 type="submit"
-                className={cx(uiStyles, 'wiki-btn-primary wiki-btn-sm')}
+                className={cx(wikiChromeStyles, 'wiki-btn-primary wiki-btn-sm')}
                 disabled={isBusy || !snapshot.context.dirty || !summaryValid}
               >
                 {isSaving ? 'Saving…' : 'Save Changes'}
@@ -540,7 +483,7 @@ export const EntityEditDrawer: React.FC<EntityEditDrawerProps> = ({
               {isSaving ? (
                 <button
                   type="button"
-                  className={cx(uiStyles, 'pill-btn')}
+                  className={cx(controlStyles, 'pill-btn')}
                   onClick={() => {
                     send({ type: 'CANCEL_SAVE' });
                   }}
@@ -548,7 +491,7 @@ export const EntityEditDrawer: React.FC<EntityEditDrawerProps> = ({
                   Cancel Save
                 </button>
               ) : (
-                <button type="button" className={cx(uiStyles, 'pill-btn')} onClick={handleCloseAttempt}>
+                <button type="button" className={cx(controlStyles, 'pill-btn')} onClick={handleCloseAttempt}>
                   Cancel
                 </button>
               )}

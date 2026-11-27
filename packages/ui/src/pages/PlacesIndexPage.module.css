@@ -1,6 +1,12 @@
 /* ==========================================================================
    Page 3B: Browse by Place Directory (/places)
    ========================================================================== */
+.places-index-page {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 20px 26px 56px;
+}
+
 .places-ledger {
   display: flex;
   flex-direction: column;

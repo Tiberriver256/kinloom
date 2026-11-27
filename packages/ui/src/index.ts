@@ -16,6 +16,8 @@ export {
   createStaticArchiveDataSource,
   StaticDemoDataSource,
 } from './adapters/staticDemoDataSource.js';
+export * from './browser/clientTelemetry.js';
+export * from './browser/ohmStyle.js';
 export type { AppErrorBoundaryProps } from './components/AppErrorBoundary.js';
 export { AppErrorBoundary } from './components/AppErrorBoundary.js';
 export type { ArchivalMarkdownProps } from './components/ArchivalMarkdown.js';
@@ -109,6 +111,14 @@ export type {
 export { buildUniquePersonIdentity, CreateEntityModal } from './components/wiki/CreateEntityModal.js';
 export type { EntityEditDrawerProps } from './components/wiki/EntityEditDrawer.js';
 export { EntityEditDrawer } from './components/wiki/EntityEditDrawer.js';
+export type {
+  BuildCreatePayloadResult,
+  CreateEntityDraft,
+  EntityCreateFieldProps,
+  EntityCreateFormEntry,
+  EntityEditFieldProps,
+  EntityEditFormEntry,
+} from './components/wiki/entityForms/fieldTypes.js';
 export type { MediaUploaderModalProps } from './components/wiki/MediaUploaderModal.js';
 export { MediaUploaderModal } from './components/wiki/MediaUploaderModal.js';
 export type { PrivateArchiveGateProps } from './components/wiki/PrivateArchiveGate.js';
@@ -152,8 +162,6 @@ export { ArchiveUiProvider, useArchiveUi } from './context/ArchiveUiContext.js';
 export type { KinloomAppProps } from './KinloomApp.js';
 export { KinloomApp } from './KinloomApp.js';
 export * from './lib/archivalTreeModel.js';
-export * from './lib/clientTelemetry.js';
-export * from './lib/ohmStyle.js';
 export * from './lib/scrollMemory.js';
 export * from './lib/searchNavigation.js';
 export * from './lib/sourceReaderNav.js';

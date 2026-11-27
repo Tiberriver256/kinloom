@@ -3,11 +3,10 @@ import { buildPersonThumbMap, resolveDefaultBranchId } from '@kinloom/core';
 import type React from 'react';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import cssModArchive from '../components/ArchiveStatusShell.module.css';
+import statusShellStyles from '../components/ArchiveStatusShell.module.css';
 import { EmptyStateNotice } from '../components/Atoms.js';
-import cssModCanvas from '../components/CanvasSurfacePrimitives.module.css';
+import canvasSurfaceStyles from '../components/CanvasSurfacePrimitives.module.css';
 import { ExplorerTopBar } from '../components/ExplorerTopBar.js';
-import cssMod0 from '../components/ExplorerTopBar.module.css';
 import { TreeFocusDrawer } from '../components/tree/TreeFocusDrawer.js';
 import { TreeOrthogonalCanvas } from '../components/tree/TreeOrthogonalCanvas.js';
 import { TreePedigreeRoll } from '../components/tree/TreePedigreeRoll.js';
@@ -26,22 +25,13 @@ import {
 } from '../lib/archivalTreeModel.js';
 import { cx } from '../lib/cx.js';
 import { KINLOOM_VOCABULARY } from '../lib/vocabulary.js';
-import cssMod1 from './IndexPage.module.css';
-import cssMod2 from './NotFoundPage.module.css';
-import cssMod3 from './TreePage.module.css';
+import controlStyles from '../styles/Controls.module.css';
+import indexStyles from './IndexPage.module.css';
+import treePageStyles from './TreePage.module.css';
 import { TreeZoomControls } from './tree/TreeZoomControls.js';
 import { computeTreeBranchCounts, readInitialTreePreferences } from './tree/treePageHelpers.js';
 import { useTreeCanvasInteractions } from './tree/useTreeCanvasInteractions.js';
 import { useTreeViewportTransform } from './tree/useTreeViewportTransform.js';
-
-const uiStyles: Readonly<Record<string, string>> = {
-  ...cssMod0,
-  ...cssMod1,
-  ...cssMod2,
-  ...cssModArchive,
-  ...cssModCanvas,
-  ...cssMod3,
-};
 
 export const TreePage: React.FC = () => {
   const { siteConfig, baseUrl, bundle, placesById, capabilities, loading } = useArchiveData();
@@ -342,9 +332,9 @@ export const TreePage: React.FC = () => {
     return (
       <div>
         <ExplorerTopBar />
-        <main id="main-content" className={cx(uiStyles, 'index-page')}>
-          <output className={cx(uiStyles, 'archive-loading-shell')} aria-live="polite">
-            <span className={cx(uiStyles, 'archive-loading-spinner')} aria-hidden="true" />
+        <main id="main-content" className={cx(indexStyles, 'index-page')}>
+          <output className={cx(statusShellStyles, 'archive-loading-shell')} aria-live="polite">
+            <span className={cx(statusShellStyles, 'archive-loading-spinner')} aria-hidden="true" />
             <span>{KINLOOM_VOCABULARY.tree.loading}</span>
           </output>
         </main>
@@ -355,13 +345,13 @@ export const TreePage: React.FC = () => {
   const activeCount = branchCounts[branchFilter] ?? model.totalVisibleCount;
 
   return (
-    <div className={cx(uiStyles, `tree-shell tree-shell-${surface}`)}>
+    <div className={cx(treePageStyles, `tree-shell tree-shell-${surface}`)}>
       <ExplorerTopBar />
       {/* biome-ignore lint/a11y/useKeyWithClickEvents: interactive pan/zoom container clears selection on background click */}
       <main
         id="main-content"
         ref={containerRef}
-        className={cx(uiStyles, `tree-page tree-page-${surface}`)}
+        className={cx(canvasSurfaceStyles, `tree-page tree-page-${surface}`)}
         data-surface={surface}
         data-mode={model.effectiveMode}
         onPointerDown={canvas.handlePointerDown}
@@ -382,7 +372,7 @@ export const TreePage: React.FC = () => {
           }
         }}
       >
-        <h1 className={cx(uiStyles, 'visually-hidden')}>{activeBranchLabel} Family Tree</h1>
+        <h1 className={'visually-hidden'}>{activeBranchLabel} Family Tree</h1>
 
         <TreeToolbar
           populatedBranches={populatedBranches}
@@ -420,7 +410,7 @@ export const TreePage: React.FC = () => {
         />
 
         {model.totalVisibleCount === 0 ? (
-          <div className={cx(uiStyles, 'tree-empty-wrap')}>
+          <div className={cx(treePageStyles, 'tree-empty-wrap')}>
             <EmptyStateNotice
               title={
                 bundle.people.length === 0
@@ -436,7 +426,7 @@ export const TreePage: React.FC = () => {
                 branchFilter !== 'all' || mode !== 'full' ? (
                   <button
                     type="button"
-                    className={cx(uiStyles, 'pill-btn')}
+                    className={cx(controlStyles, 'pill-btn')}
                     onClick={() => {
                       setBranchFilter('all');
                       setMode('full');
@@ -465,7 +455,7 @@ export const TreePage: React.FC = () => {
           />
         ) : (
           <>
-            <div ref={stageRef} className={cx(uiStyles, 'tree-stage')} style={stageStyle}>
+            <div ref={stageRef} className={cx(treePageStyles, 'tree-stage')} style={stageStyle}>
               <TreeOrthogonalCanvas
                 layout={diagramLayout}
                 spotlight={spotlight}
@@ -481,7 +471,6 @@ export const TreePage: React.FC = () => {
 
             <TreeZoomControls
               zoomPercent={canvas.zoomPercent}
-              uiStyles={uiStyles}
               onZoomIn={() => {
                 canvas.handleDiagramZoomBy(1.28);
               }}
@@ -507,7 +496,7 @@ export const TreePage: React.FC = () => {
           />
         )}
 
-        <output className={cx(uiStyles, 'visually-hidden')} aria-live="polite">
+        <output className={'visually-hidden'} aria-live="polite">
           {liveAnnouncement}
         </output>
       </main>

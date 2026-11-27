@@ -1,16 +1,7 @@
 import type React from 'react';
+import { prefersReducedMotion, scrollBehaviorForMotion } from '../browser/motion.js';
 
-export function prefersReducedMotion(): boolean {
-  return (
-    typeof window !== 'undefined' &&
-    typeof window.matchMedia === 'function' &&
-    window.matchMedia('(prefers-reduced-motion: reduce)').matches
-  );
-}
-
-export function scrollBehaviorForMotion(): ScrollBehavior {
-  return prefersReducedMotion() ? 'auto' : 'smooth';
-}
+export { prefersReducedMotion, scrollBehaviorForMotion };
 
 /**
  * Shared WAI-ARIA tablist keyboard navigation (ArrowRight, ArrowLeft, Home, End).

@@ -3,17 +3,17 @@ import { deriveKinshipEdgeId, isEditSummaryValid } from '@kinloom/core';
 import type React from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useArchiveData } from '../../context/ArchiveDataContext.js';
+import { handleTablistKeyDown } from '../../hooks/keyboardNav.js';
+import { useDialogFocusTrap } from '../../hooks/useDialogFocusTrap.js';
 import { cx } from '../../lib/cx.js';
-import { handleTablistKeyDown } from '../../lib/keyboardNav.js';
-import { useDialogFocusTrap } from '../../lib/useDialogFocusTrap.js';
-import cssMod2 from '../../pages/IndexPage.module.css';
-import cssMod0 from '../SourceReaderDrawer.module.css';
+import { useKinloomPlugins } from '../../plugins/PluginContext.js';
+import controlStyles from '../../styles/Controls.module.css';
+import overlayStyles from '../../styles/Overlays.module.css';
 import {
   buildPersonCreatePayload,
-  CREATABLE_KIND_ORDER,
-  ENTITY_CREATE_FORM_REGISTRY,
   LinkExistingRelativeFields,
   PersonCreateFields,
+  resolveCreateFormRegistry,
 } from './entityForms/createRegistry.js';
 import type {
   CreatableKind,
@@ -30,24 +30,16 @@ import {
   RELATIVE_RELATION_SPECS,
 } from './entityForms/fieldTypes.js';
 import { CitationBadge } from './WikiBadges.js';
-import cssMod1_0 from './WikiChrome.module.css';
-import cssMod1_2 from './WikiForms.module.css';
-import cssMod1_1 from './WikiPanels.module.css';
+import wikiChromeStyles from './WikiChrome.module.css';
+import wikiFormStyles from './WikiForms.module.css';
+import wikiPanelStyles from './WikiPanels.module.css';
 
 export type { CreatableKind, PersonLineageGroup, PersonSex, RelativeCreateContext, RelativeRelation };
 export { buildUniquePersonIdentity };
 
-const uiStyles: Readonly<Record<string, string>> = {
-  ...cssMod0,
-  ...cssMod1_0,
-  ...cssMod1_1,
-  ...cssMod1_2,
-  ...cssMod2,
-};
-
 export interface CreateEntityModalProps {
   open: boolean;
-  defaultKind?: CreatableKind;
+  defaultKind?: EntityType;
   defaultPersonId?: string;
   relativeContext?: RelativeCreateContext;
   onClose: () => void;
@@ -63,10 +55,12 @@ export const CreateEntityModal: React.FC<CreateEntityModalProps> = ({
   onCreated,
 }) => {
   const { dataSource, bundle, reloadArchive } = useArchiveData();
+  const { entityCreateForms } = useKinloomPlugins();
+  const createRegistry = useMemo(() => resolveCreateFormRegistry(entityCreateForms), [entityCreateForms]);
   const anchorId = relativeContext?.anchorPersonId ?? null;
   const anchorRelation = relativeContext?.relation ?? null;
 
-  const [kind, setKind] = useState<CreatableKind>(defaultKind);
+  const [kind, setKind] = useState<EntityType>(defaultKind);
   const [relativeTab, setRelativeTab] = useState<RelativeModalTab>('create_new');
   const [summary, setSummary] = useState('');
   const [hasPrimarySource, setHasPrimarySource] = useState(true);
@@ -129,7 +123,7 @@ export const CreateEntityModal: React.FC<CreateEntityModalProps> = ({
   }
 
   const relativeSpec = relativeContext ? RELATIVE_RELATION_SPECS[relativeContext.relation] : null;
-  const activeCreateEntry = ENTITY_CREATE_FORM_REGISTRY[kind];
+  const activeCreateEntry = createRegistry.entries[kind] ?? createRegistry.entries.person!;
   const ActiveFields = activeCreateEntry.Fields;
 
   const handleSubmit = async (e: React.FormEvent): Promise<void> => {
@@ -259,27 +253,27 @@ export const CreateEntityModal: React.FC<CreateEntityModalProps> = ({
       ref={dialogRef}
       open
       aria-modal="true"
-      className={cx(uiStyles, 'lightbox-backdrop')}
+      className={cx(overlayStyles, 'lightbox-backdrop')}
       aria-label={modalTitle}
     >
       <button
         type="button"
         tabIndex={-1}
-        className={cx(uiStyles, 'lightbox-backdrop-close')}
+        className={cx(overlayStyles, 'lightbox-backdrop-close')}
         aria-label="Close create record modal"
         onClick={onClose}
       />
-      <div className={cx(uiStyles, 'wiki-modal-card')}>
-        <div className={cx(uiStyles, 'wiki-modal-header')}>
+      <div className={cx(wikiFormStyles, 'wiki-modal-card')}>
+        <div className={cx(wikiFormStyles, 'wiki-modal-header')}>
           <h2>{modalTitle}</h2>
-          <button ref={closeBtnRef} type="button" className={cx(uiStyles, 'pill-btn')} onClick={onClose}>
+          <button ref={closeBtnRef} type="button" className={cx(controlStyles, 'pill-btn')} onClick={onClose}>
             Close
           </button>
         </div>
 
         {relativeContext ? (
           <div
-            className={cx(uiStyles, 'filter-bar')}
+            className={cx(controlStyles, 'filter-bar')}
             role="tablist"
             aria-label="How to add relative"
             onKeyDown={(event) => {
@@ -301,7 +295,7 @@ export const CreateEntityModal: React.FC<CreateEntityModalProps> = ({
                 role="tab"
                 tabIndex={relativeTab === tabId ? 0 : -1}
                 aria-selected={relativeTab === tabId}
-                className={cx(uiStyles, `pill-btn ${relativeTab === tabId ? 'active' : ''}`)}
+                className={cx(controlStyles, `pill-btn ${relativeTab === tabId ? 'active' : ''}`)}
                 onClick={() => {
                   setRelativeTab(tabId);
                   setError(null);
@@ -313,63 +307,62 @@ export const CreateEntityModal: React.FC<CreateEntityModalProps> = ({
           </div>
         ) : (
           <div
-            className={cx(uiStyles, 'filter-bar')}
+            className={cx(controlStyles, 'filter-bar')}
             role="tablist"
             aria-label="Record type to create"
             onKeyDown={(event) => {
-              handleTablistKeyDown(event, CREATABLE_KIND_ORDER, kind, (next) => {
+              handleTablistKeyDown(event, createRegistry.order, kind, (next) => {
                 setKind(next);
                 setError(null);
               });
             }}
           >
-            {CREATABLE_KIND_ORDER.map((id) => (
-              <button
-                key={id}
-                type="button"
-                role="tab"
-                tabIndex={kind === id ? 0 : -1}
-                aria-selected={kind === id}
-                className={cx(uiStyles, `pill-btn ${kind === id ? 'active' : ''}`)}
-                onClick={() => {
-                  setKind(id);
-                  setError(null);
-                }}
-              >
-                {ENTITY_CREATE_FORM_REGISTRY[id].tabLabel}
-              </button>
-            ))}
+            {createRegistry.order.map((id) => {
+              const entry = createRegistry.entries[id];
+              if (!entry) {
+                return null;
+              }
+              return (
+                <button
+                  key={id}
+                  type="button"
+                  role="tab"
+                  tabIndex={kind === id ? 0 : -1}
+                  aria-selected={kind === id}
+                  className={cx(controlStyles, `pill-btn ${kind === id ? 'active' : ''}`)}
+                  onClick={() => {
+                    setKind(id);
+                    setError(null);
+                  }}
+                >
+                  {entry.tabLabel}
+                </button>
+              );
+            })}
           </div>
         )}
 
         {error && (
-          <div className={cx(uiStyles, 'wiki-status-banner is-error')} role="alert">
+          <div className={cx(wikiPanelStyles, 'wiki-status-banner is-error')} role="alert">
             {error}
           </div>
         )}
 
         <form
-          className={cx(uiStyles, 'wiki-edit-form')}
+          className={cx(wikiFormStyles, 'wiki-edit-form')}
           onSubmit={(e) => {
             void handleSubmit(e);
           }}
         >
           {relativeContext && relativeSpec ? (
             relativeTab === 'create_new' ? (
-              <PersonCreateFields
-                draft={draft}
-                updateDraft={updateDraft}
-                people={people}
-                places={places}
-                uiStyles={uiStyles}
-              />
+              <PersonCreateFields draft={draft} updateDraft={updateDraft} people={people} places={places} />
             ) : (
               <LinkExistingRelativeFields
                 linkHint={relativeSpec.linkHint(relativeContext.anchorPersonName)}
                 existingQuery={draft.existingQuery}
                 existingPersonId={draft.existingPersonId}
                 candidates={filteredExistingCandidates}
-                uiStyles={uiStyles}
                 onQueryChange={(value) => {
                   updateDraft('existingQuery', value);
                 }}
@@ -379,16 +372,10 @@ export const CreateEntityModal: React.FC<CreateEntityModalProps> = ({
               />
             )
           ) : (
-            <ActiveFields
-              draft={draft}
-              updateDraft={updateDraft}
-              people={people}
-              places={places}
-              uiStyles={uiStyles}
-            />
+            <ActiveFields draft={draft} updateDraft={updateDraft} people={people} places={places} />
           )}
 
-          <label className={cx(uiStyles, 'wiki-checkbox-row')}>
+          <label className={cx(wikiFormStyles, 'wiki-checkbox-row')}>
             <input
               type="checkbox"
               checked={hasPrimarySource}
@@ -404,11 +391,11 @@ export const CreateEntityModal: React.FC<CreateEntityModalProps> = ({
             </span>
           </label>
 
-          <label className={cx(uiStyles, 'wiki-field')}>
-            <span className={cx(uiStyles, 'wiki-field-label')}>Note about this addition</span>
+          <label className={cx(wikiFormStyles, 'wiki-field')}>
+            <span className={cx(wikiFormStyles, 'wiki-field-label')}>Note about this addition</span>
             <input
               type="text"
-              className={cx(uiStyles, 'wiki-input')}
+              className={cx(wikiFormStyles, 'wiki-input')}
               required
               minLength={3}
               placeholder="e.g. From family photo album or 1880 census"
@@ -419,15 +406,15 @@ export const CreateEntityModal: React.FC<CreateEntityModalProps> = ({
             />
           </label>
 
-          <div className={cx(uiStyles, 'wiki-form-actions')}>
+          <div className={cx(wikiPanelStyles, 'wiki-form-actions')}>
             <button
               type="submit"
-              className={cx(uiStyles, 'wiki-btn-primary wiki-btn-sm')}
+              className={cx(wikiChromeStyles, 'wiki-btn-primary wiki-btn-sm')}
               disabled={submitting || !isEditSummaryValid(summary)}
             >
               {submitLabel}
             </button>
-            <button type="button" className={cx(uiStyles, 'pill-btn')} onClick={onClose}>
+            <button type="button" className={cx(controlStyles, 'pill-btn')} onClick={onClose}>
               Cancel
             </button>
           </div>

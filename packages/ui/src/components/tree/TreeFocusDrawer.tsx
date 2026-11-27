@@ -3,15 +3,13 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import type { ArchivalTreeModel, LineageSpotlight } from '../../lib/archivalTreeModel.js';
 import { formatCardLifespan } from '../../lib/archivalTreeModel.js';
-import { cx } from '../../lib/cx.js';
+import { cx, joinClasses } from '../../lib/cx.js';
 import { formatLineageGroupLabel } from '../../lib/treeNodeDisplay.js';
 import { formatPhotoDocumentCount, KINLOOM_VOCABULARY } from '../../lib/vocabulary.js';
-import cssMod0 from '../../pages/IndexPage.module.css';
+import controlStyles from '../../styles/Controls.module.css';
 import { initialsOf, resolveAssetUrl } from '../Atoms.js';
-import cssMod2 from '../CanvasSurfacePrimitives.module.css';
-import cssMod1 from './TreeFocusDrawer.module.css';
-
-const uiStyles: Readonly<Record<string, string>> = { ...cssMod0, ...cssMod2, ...cssMod1 };
+import canvasSurfaceStyles from '../CanvasSurfacePrimitives.module.css';
+import treeFocusStyles from './TreeFocusDrawer.module.css';
 
 export interface TreeFocusDrawerProps {
   readonly person: Person;
@@ -69,27 +67,27 @@ export const TreeFocusDrawer: React.FC<TreeFocusDrawerProps> = ({
 
   return (
     <aside
-      className={cx(uiStyles, 'tree-popover tree-focus-drawer')}
+      className={cx(canvasSurfaceStyles, 'tree-popover tree-focus-drawer')}
       aria-label={`Lineage focus for ${person.full_name}`}
     >
-      <div className={cx(uiStyles, 'tree-focus-header')}>
-        <div className={cx(uiStyles, 'tree-focus-eyebrow-row')}>
-          {gen !== undefined && <span className={cx(uiStyles, 'tree-focus-gen-tag')}>G{gen + 1}</span>}
+      <div className={cx(treeFocusStyles, 'tree-focus-header')}>
+        <div className={cx(treeFocusStyles, 'tree-focus-eyebrow-row')}>
+          {gen !== undefined && <span className={cx(treeFocusStyles, 'tree-focus-gen-tag')}>G{gen + 1}</span>}
           <span
-            className={cx(uiStyles, 'tree-focus-role-label')}
+            className={cx(treeFocusStyles, 'tree-focus-role-label')}
             title={isEarlyLoss ? KINLOOM_VOCABULARY.tree.diedYoungTooltip : undefined}
           >
             {isEarlyLoss ? KINLOOM_VOCABULARY.tree.diedYoung : formatLineageGroupLabel(person.lineage_group)}
           </span>
           {person.is_living && (
-            <span className={cx(uiStyles, 'tree-focus-living-pill')}>
+            <span className={cx(treeFocusStyles, 'tree-focus-living-pill')}>
               {KINLOOM_VOCABULARY.tree.livingBadge}
             </span>
           )}
         </div>
         <button
           type="button"
-          className={cx(uiStyles, 'pill-btn tree-focus-close-btn')}
+          className={joinClasses(cx(controlStyles, 'pill-btn'), cx(treeFocusStyles, 'tree-focus-close-btn'))}
           aria-label="Clear focus"
           onClick={onClearFocus}
         >
@@ -98,24 +96,24 @@ export const TreeFocusDrawer: React.FC<TreeFocusDrawerProps> = ({
       </div>
 
       {spotlight && spotlight.breadcrumb.length > 1 && (
-        <nav className={cx(uiStyles, 'tree-focus-breadcrumb')} aria-label="Direct ancestor trail">
+        <nav className={cx(treeFocusStyles, 'tree-focus-breadcrumb')} aria-label="Direct ancestor trail">
           {spotlight.breadcrumb.map((ancestor, idx) => {
             const isCurrent = ancestor.id === person.id;
             return (
               <React.Fragment key={ancestor.id}>
                 {idx > 0 && (
-                  <span className={cx(uiStyles, 'tree-focus-crumb-sep')} aria-hidden="true">
+                  <span className={cx(treeFocusStyles, 'tree-focus-crumb-sep')} aria-hidden="true">
                     ›
                   </span>
                 )}
                 {isCurrent ? (
-                  <span className={cx(uiStyles, 'tree-focus-crumb-current')}>
+                  <span className={cx(treeFocusStyles, 'tree-focus-crumb-current')}>
                     {ancestor.given_name || ancestor.full_name}
                   </span>
                 ) : (
                   <button
                     type="button"
-                    className={cx(uiStyles, 'tree-focus-crumb-btn')}
+                    className={cx(treeFocusStyles, 'tree-focus-crumb-btn')}
                     onClick={() => {
                       onSelectPerson(ancestor);
                     }}
@@ -129,52 +127,59 @@ export const TreeFocusDrawer: React.FC<TreeFocusDrawerProps> = ({
         </nav>
       )}
 
-      <div className={cx(uiStyles, 'tree-focus-identity')}>
+      <div className={cx(treeFocusStyles, 'tree-focus-identity')}>
         {resolvedThumb ? (
-          <img src={resolvedThumb} alt={person.full_name} className={cx(uiStyles, 'tree-focus-portrait')} />
+          <img
+            src={resolvedThumb}
+            alt={person.full_name}
+            className={cx(treeFocusStyles, 'tree-focus-portrait')}
+          />
         ) : (
-          <div className={cx(uiStyles, 'tree-focus-monogram')} aria-hidden="true">
+          <div className={cx(treeFocusStyles, 'tree-focus-monogram')} aria-hidden="true">
             {initialsOf(person.full_name)}
           </div>
         )}
-        <div className={cx(uiStyles, 'tree-focus-identity-copy')}>
-          <h2 className={cx(uiStyles, 'tree-focus-name')}>{person.full_name}</h2>
-          <div className={cx(uiStyles, 'tree-focus-dates')}>{vitalDates}</div>
+        <div className={cx(treeFocusStyles, 'tree-focus-identity-copy')}>
+          <h2 className={cx(treeFocusStyles, 'tree-focus-name')}>{person.full_name}</h2>
+          <div className={cx(treeFocusStyles, 'tree-focus-dates')}>{vitalDates}</div>
           {spotlight?.relationshipToPivot && spotlight.pivotName && (
-            <div className={cx(uiStyles, 'tree-focus-relation')}>
+            <div className={cx(treeFocusStyles, 'tree-focus-relation')}>
               {spotlight.relationshipToPivot} {spotlight.pivotName}
             </div>
           )}
         </div>
       </div>
 
-      <div className={cx(uiStyles, 'tree-focus-meta')}>
+      <div className={cx(treeFocusStyles, 'tree-focus-meta')}>
         <div>
-          <span className={cx(uiStyles, 'tree-focus-meta-key')}>
+          <span className={cx(treeFocusStyles, 'tree-focus-meta-key')}>
             {KINLOOM_VOCABULARY.tree.primaryPlaceLabel}
           </span>{' '}
           {primaryPlaceName}
         </div>
         {kinSummaryParts.length > 0 && (
-          <div className={cx(uiStyles, 'tree-focus-kin-summary')}>{kinSummaryParts.join(' · ')}</div>
+          <div className={cx(treeFocusStyles, 'tree-focus-kin-summary')}>{kinSummaryParts.join(' · ')}</div>
         )}
         {(person.media_count ?? 0) > 0 && (
-          <div className={cx(uiStyles, 'tree-focus-media-count')}>
+          <div className={cx(treeFocusStyles, 'tree-focus-media-count')}>
             {formatPhotoDocumentCount(person.media_count ?? 0)} attached
           </div>
         )}
       </div>
 
-      <div className={cx(uiStyles, 'tree-focus-actions')}>
+      <div className={cx(treeFocusStyles, 'tree-focus-actions')}>
         <Link
           to={`/person/${person.slug}`}
-          className={cx(uiStyles, 'pill-btn active tree-focus-timeline-link')}
+          className={joinClasses(
+            cx(controlStyles, 'pill-btn active'),
+            cx(treeFocusStyles, 'tree-focus-timeline-link')
+          )}
         >
           {KINLOOM_VOCABULARY.tree.openProfileCta}
         </Link>
         <button
           type="button"
-          className={cx(uiStyles, 'pill-btn tree-focus-clear-btn')}
+          className={joinClasses(cx(controlStyles, 'pill-btn'), cx(treeFocusStyles, 'tree-focus-clear-btn'))}
           onClick={onClearFocus}
         >
           {KINLOOM_VOCABULARY.tree.clearFocus}

@@ -5,11 +5,9 @@ import {
   reportClientError,
   safeSessionStorage,
   shouldAttemptChunkReload,
-} from '../lib/clientTelemetry.js';
+} from '../browser/clientTelemetry.js';
 import { cx } from '../lib/cx.js';
-import cssMod0 from './ArchiveStatusShell.module.css';
-
-const uiStyles = cssMod0;
+import statusShellStyles from './ArchiveStatusShell.module.css';
 
 interface BoundaryState {
   hasError: boolean;
@@ -81,34 +79,34 @@ export class AppErrorBoundary extends React.Component<AppErrorBoundaryProps, Bou
     const kicker = (this.props.siteTitle || 'Family Archive').toUpperCase();
 
     return (
-      <main className={cx(uiStyles, 'archive-recovery-page')} data-testid="archive-recovery-card">
-        <div className={cx(uiStyles, 'archive-recovery-card')} role="alert">
-          <div className={cx(uiStyles, 'archive-recovery-kicker')}>{kicker}</div>
-          <h1 className={cx(uiStyles, 'archive-recovery-title')}>{heading}</h1>
-          <p className={cx(uiStyles, 'archive-recovery-lead')}>
+      <main className={cx(statusShellStyles, 'archive-recovery-page')} data-testid="archive-recovery-card">
+        <div className={cx(statusShellStyles, 'archive-recovery-card')} role="alert">
+          <div className={cx(statusShellStyles, 'archive-recovery-kicker')}>{kicker}</div>
+          <h1 className={cx(statusShellStyles, 'archive-recovery-title')}>{heading}</h1>
+          <p className={cx(statusShellStyles, 'archive-recovery-lead')}>
             {chunkStale
               ? 'This page was updated since you opened it. Reload to view the latest version.'
               : 'Something interrupted loading this page. Reload the page or return to the family index.'}
           </p>
-          <div className={cx(uiStyles, 'archive-recovery-actions')}>
+          <div className={cx(statusShellStyles, 'archive-recovery-actions')}>
             <button
               type="button"
-              className={cx(uiStyles, 'archive-recovery-btn primary')}
+              className={cx(statusShellStyles, 'archive-recovery-btn primary')}
               onClick={reloadCurrentPage}
             >
               Reload page
             </button>
             <button
               type="button"
-              className={cx(uiStyles, 'archive-recovery-btn')}
+              className={cx(statusShellStyles, 'archive-recovery-btn')}
               onClick={this.returnToArchiveHome}
             >
               Return to Archive Home
             </button>
           </div>
-          <details className={cx(uiStyles, 'archive-recovery-details')}>
+          <details className={cx(statusShellStyles, 'archive-recovery-details')}>
             <summary>Technical details</summary>
-            <pre className={cx(uiStyles, 'archive-recovery-tech')}>
+            <pre className={cx(statusShellStyles, 'archive-recovery-tech')}>
               {error.message}
               {'\n'}
               build: {getAppBuildId()}
