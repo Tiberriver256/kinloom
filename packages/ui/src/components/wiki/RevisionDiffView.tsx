@@ -79,11 +79,11 @@ export const RevisionDiffView: React.FC<RevisionDiffViewProps> = ({
         </span>
       </div>
 
-      {/* biome-ignore lint/a11y/noNoninteractiveTabindex: horizontally scrollable region needs keyboard focus */}
       <div
         className={cx(uiStyles, 'wiki-diff-table-region')}
         role="region"
         aria-label="Field differences"
+        // biome-ignore lint/a11y/noNoninteractiveTabindex: horizontally scrollable region needs keyboard focus
         tabIndex={0}
       >
         <table className={cx(uiStyles, 'wiki-diff-table')}>
