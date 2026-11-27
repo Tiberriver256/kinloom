@@ -256,7 +256,7 @@ function isEffectiveLivingRecord(
     .filter((yr): yr is number => yr !== null);
   if (years.length > 0) {
     const earliest = Math.min(...years);
-    const refYear = privacy.referenceYear ?? 2026;
+    const refYear = privacy.referenceYear ?? new Date().getUTCFullYear();
     const cutoffYears = privacy.livingCutoffYears ?? 101;
     if (earliest > refYear - cutoffYears) {
       return true;
@@ -447,7 +447,7 @@ function isConfirmedDeceasedRelative(
     return true;
   }
   const birthYear = edtfYear(birthEdtf);
-  const refYear = privacy.referenceYear ?? 2026;
+  const refYear = privacy.referenceYear ?? new Date().getUTCFullYear();
   const cutoffYears = privacy.livingCutoffYears ?? 101;
   return birthYear !== null && birthYear <= refYear - cutoffYears;
 }
