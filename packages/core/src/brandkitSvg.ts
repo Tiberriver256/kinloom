@@ -6,6 +6,7 @@ export const KINLOOM_BRAND_PALETTE = {
   ivory: '#FCF9F2',
   linen: '#EAE1CE',
   navy: '#1B2A41',
+  navyElevated: '#20324D',
   ochre: '#7A4612',
   pine: '#2F5245',
   inkPrimary: '#23272E',
@@ -14,6 +15,7 @@ export const KINLOOM_BRAND_PALETTE = {
   inkInverseMuted: '#D6CEBE',
   ruleLight: '#D6CEBE',
   ruleDark: '#334663',
+  ruleDarkChrome: '#8FA6C4',
 } as const;
 
 export const KINLOOM_OG_DIMENSIONS = {
@@ -53,6 +55,123 @@ export function normalizeHex(candidate: string | undefined, fallback: string): s
   return fallback;
 }
 
+function parseHexRgb(hex: string): readonly [number, number, number] {
+  const normalized = normalizeHex(hex, KINLOOM_BRAND_PALETTE.ochre);
+  return [
+    Number.parseInt(normalized.slice(1, 3), 16),
+    Number.parseInt(normalized.slice(3, 5), 16),
+    Number.parseInt(normalized.slice(5, 7), 16),
+  ];
+}
+
+export function relativeLuminance(hex: string): number {
+  const [r, g, b] = parseHexRgb(hex);
+  const toLinear = (channel: number): number => {
+    const srgb = channel / 255;
+    return srgb <= 0.04045 ? srgb / 12.92 : ((srgb + 0.055) / 1.055) ** 2.4;
+  };
+  return 0.2126 * toLinear(r) + 0.7152 * toLinear(g) + 0.0722 * toLinear(b);
+}
+
+export function contrastRatio(hexA: string, hexB: string): number {
+  const lumA = relativeLuminance(hexA);
+  const lumB = relativeLuminance(hexB);
+  const lighter = Math.max(lumA, lumB);
+  const darker = Math.min(lumA, lumB);
+  return (lighter + 0.05) / (darker + 0.05);
+}
+
+function rgbToHsl(r: number, g: number, b: number): readonly [number, number, number] {
+  const rn = r / 255;
+  const gn = g / 255;
+  const bn = b / 255;
+  const max = Math.max(rn, gn, bn);
+  const min = Math.min(rn, gn, bn);
+  const l = (max + min) / 2;
+  if (max === min) {
+    return [0, 0, l];
+  }
+  const d = max - min;
+  const s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+  let h = 0;
+  if (max === rn) {
+    h = (gn - bn) / d + (gn < bn ? 6 : 0);
+  } else if (max === gn) {
+    h = (bn - rn) / d + 2;
+  } else {
+    h = (rn - gn) / d + 4;
+  }
+  return [h / 6, s, l];
+}
+
+function hslToHex(h: number, s: number, l: number): string {
+  const hue2rgb = (p: number, q: number, rawT: number): number => {
+    const t = rawT < 0 ? rawT + 1 : rawT > 1 ? rawT - 1 : rawT;
+    if (t < 1 / 6) {
+      return p + (q - p) * 6 * t;
+    }
+    if (t < 1 / 2) {
+      return q;
+    }
+    if (t < 2 / 3) {
+      return p + (q - p) * (2 / 3 - t) * 6;
+    }
+    return p;
+  };
+  let r: number;
+  let g: number;
+  let b: number;
+  if (s === 0) {
+    r = l;
+    g = l;
+    b = l;
+  } else {
+    const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+    const p = 2 * l - q;
+    r = hue2rgb(p, q, h + 1 / 3);
+    g = hue2rgb(p, q, h);
+    b = hue2rgb(p, q, h - 1 / 3);
+  }
+  const toByteHex = (unit: number): string =>
+    Math.round(Math.min(255, Math.max(0, unit * 255)))
+      .toString(16)
+      .padStart(2, '0')
+      .toUpperCase();
+  return `#${toByteHex(r)}${toByteHex(g)}${toByteHex(b)}`;
+}
+
+/**
+ * Lightens a dark site accent in HSL while preserving its hue so the favicon accent weave
+ * meets at least `minContrast` (default 6.0:1, strictly exceeding WCAG AA 4.5:1) on dark tiles.
+ */
+export function deriveDarkModeFaviconAccent(
+  hex: string,
+  bgHex: string = KINLOOM_BRAND_PALETTE.navyElevated,
+  minContrast = 6.0
+): string {
+  const normalized = normalizeHex(hex, KINLOOM_BRAND_PALETTE.ochre);
+  const normalizedBg = normalizeHex(bgHex, KINLOOM_BRAND_PALETTE.navyElevated);
+  if (contrastRatio(normalized, normalizedBg) >= minContrast) {
+    return normalized;
+  }
+  const [r, g, b] = parseHexRgb(normalized);
+  const [h, s, l] = rgbToHsl(r, g, b);
+  let lo = l;
+  let hi = 1;
+  let best = '#FFFFFF';
+  for (let i = 0; i < 24; i += 1) {
+    const mid = (lo + hi) / 2;
+    const candidate = hslToHex(h, s, mid);
+    if (contrastRatio(candidate, normalizedBg) >= minContrast) {
+      best = candidate;
+      hi = mid;
+    } else {
+      lo = mid;
+    }
+  }
+  return best;
+}
+
 export function renderKinloomMarkPaths(primaryColor: string, accentColor: string): string {
   return [
     `<path d="M8 2.5V13.5M8 18.5V21.5" stroke="${primaryColor}" stroke-width="2.5" stroke-linecap="round"/>`,
@@ -68,6 +187,7 @@ export function renderFaviconSvg(options?: {
   customMarkInnerSvg?: string;
 }): string {
   const accent = normalizeHex(options?.accent, KINLOOM_BRAND_PALETTE.ochre);
+  const darkAccent = deriveDarkModeFaviconAccent(accent, KINLOOM_BRAND_PALETTE.navyElevated);
   const label = escapeXml(options?.label?.trim() || 'Kinloom icon');
   const markContent = options?.customMarkInnerSvg
     ? options.customMarkInnerSvg
@@ -84,9 +204,9 @@ export function renderFaviconSvg(options?: {
     .kl-warp { stroke: ${KINLOOM_BRAND_PALETTE.navy}; }
     .kl-accent { stroke: ${accent}; }
     @media (prefers-color-scheme: dark) {
-      .kl-bg { fill: ${KINLOOM_BRAND_PALETTE.navy}; stroke: ${KINLOOM_BRAND_PALETTE.ruleDark}; }
+      .kl-bg { fill: ${KINLOOM_BRAND_PALETTE.navyElevated}; stroke: ${KINLOOM_BRAND_PALETTE.ruleDarkChrome}; }
       .kl-warp { stroke: ${KINLOOM_BRAND_PALETTE.ivory}; }
-      .kl-accent { stroke: ${accent}; }
+      .kl-accent { stroke: ${darkAccent}; }
     }
   </style>
   <rect class="kl-bg" x="0.75" y="0.75" width="30.5" height="30.5" rx="6" stroke-width="1.5"/>

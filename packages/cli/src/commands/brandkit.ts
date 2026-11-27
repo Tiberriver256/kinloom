@@ -202,7 +202,7 @@ export async function runBrandkitCommand(options: BrandkitCommandOptions): Promi
         variant: 'any',
         surface: 'parchment',
         accent: spec.accent,
-        transparentBackground: true,
+        transparentBackground: false,
         customMarkInnerSvg,
       });
       const png = await rasterizeSvgToPng(svg, size, size);

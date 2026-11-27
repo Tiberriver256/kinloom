@@ -770,6 +770,10 @@ describe('R2MediaStore, R2IncrementalPatchBundleCache, and CloudflareAssetHandle
     const svgRes = await noAssetsHandler.fetch(new Request('https://alder.test/favicon.svg'));
     expect(svgRes.status).toBe(200);
     expect(svgRes.headers.get('content-type')).toContain('image/svg+xml');
+    const svgText = await svgRes.text();
+    expect(svgText).toContain('@media (prefers-color-scheme: dark)');
+    expect(svgText).toContain('#8FA6C4');
+    expect(svgText).toContain('#E7A35E');
 
     const icoRes = await noAssetsHandler.fetch(new Request('https://alder.test/favicon.ico'));
     expect(icoRes.status).toBe(404);

@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
   buildWebManifest,
+  contrastRatio,
+  deriveDarkModeFaviconAccent,
+  KINLOOM_BRAND_PALETTE,
   KINLOOM_OG_DIMENSIONS,
+  relativeLuminance,
   renderBrandkitHeadTags,
   renderFaviconSvg,
   renderIconSvg,
@@ -11,6 +15,28 @@ import {
 } from './brandkit.js';
 import { parseKinloomConfig } from './schemas/config.js';
 import type { RawPerson } from './schemas/entities.js';
+
+function parseFaviconThemeColors(svg: string): {
+  light: { bgFill: string; bgStroke: string; warp: string; accent: string };
+  dark: { bgFill: string; bgStroke: string; warp: string; accent: string };
+} {
+  const [lightCss, darkCss = ''] = svg.split('@media (prefers-color-scheme: dark)');
+  const extract = (css: string) => {
+    const bgMatch = /\.kl-bg\s*\{\s*fill:\s*(#[0-9A-Fa-f]{6});\s*stroke:\s*(#[0-9A-Fa-f]{6});/.exec(css);
+    const warpMatch = /\.kl-warp\s*\{\s*stroke:\s*(#[0-9A-Fa-f]{6});/.exec(css);
+    const accentMatch = /\.kl-accent\s*\{\s*stroke:\s*(#[0-9A-Fa-f]{6});/.exec(css);
+    if (!bgMatch || !warpMatch || !accentMatch) {
+      throw new Error(`Missing favicon CSS rules in block:\n${css}`);
+    }
+    return {
+      bgFill: bgMatch[1],
+      bgStroke: bgMatch[2],
+      warp: warpMatch[1],
+      accent: accentMatch[1],
+    };
+  };
+  return { light: extract(lightCss), dark: extract(darkCss) };
+}
 
 function makeSampleConfig(brandOverrides?: Record<string, unknown>) {
   return parseKinloomConfig({
@@ -63,6 +89,53 @@ describe('brandkit core primitives', () => {
     expect(svg).toContain('@media (prefers-color-scheme: dark)');
     expect(svg).toContain('#2F5245');
     expect(svg).toContain('aria-label="Alder &amp; Co"');
+  });
+
+  it('meets WCAG contrast thresholds in both light and dark favicon themes across dark accents', () => {
+    const darkChromeHex = '#181818';
+    const accents = ['#7A4612', '#2F5245', '#1B2A41', '#8A2B2B'] as const;
+
+    for (const accent of accents) {
+      const svg = renderFaviconSvg({ accent });
+      const { light, dark } = parseFaviconThemeColors(svg);
+
+      expect(light.accent).toBe(accent);
+      expect(contrastRatio(light.accent, light.bgFill)).toBeGreaterThanOrEqual(4.5);
+      expect(contrastRatio(light.warp, light.bgFill)).toBeGreaterThanOrEqual(7.0);
+
+      expect(dark.accent).not.toBe(accent);
+      expect(contrastRatio(dark.accent, dark.bgFill)).toBeGreaterThanOrEqual(5.0);
+      expect(contrastRatio(dark.warp, dark.bgFill)).toBeGreaterThanOrEqual(7.0);
+      expect(contrastRatio(dark.bgStroke, darkChromeHex)).toBeGreaterThanOrEqual(3.0);
+    }
+  });
+
+  it('derives dark-mode favicon accents across hue sectors, achromatic colors, already-bright colors, and fallbacks', () => {
+    expect(relativeLuminance('#000000')).toBe(0);
+    expect(relativeLuminance('#FFFFFF')).toBe(1);
+    expect(contrastRatio('#000000', '#FFFFFF')).toBe(21);
+
+    const ochreDark = deriveDarkModeFaviconAccent('#7A4612');
+    expect(ochreDark).toBe('#E7A35E');
+    expect(contrastRatio(ochreDark, KINLOOM_BRAND_PALETTE.navyElevated)).toBeGreaterThanOrEqual(6.0);
+
+    const alreadyBright = deriveDarkModeFaviconAccent('#E8AD63', KINLOOM_BRAND_PALETTE.navyElevated, 5.0);
+    expect(alreadyBright).toBe('#E8AD63');
+
+    const achromatic = deriveDarkModeFaviconAccent('#000000', KINLOOM_BRAND_PALETTE.navyElevated, 5.0);
+    expect(contrastRatio(achromatic, KINLOOM_BRAND_PALETTE.navyElevated)).toBeGreaterThanOrEqual(5.0);
+
+    const magentaDark = deriveDarkModeFaviconAccent('#701A4E', KINLOOM_BRAND_PALETTE.navyElevated, 5.0);
+    expect(contrastRatio(magentaDark, KINLOOM_BRAND_PALETTE.navyElevated)).toBeGreaterThanOrEqual(5.0);
+
+    const pastelNeedBoost = deriveDarkModeFaviconAccent('#9A8B7A', KINLOOM_BRAND_PALETTE.navyElevated, 6.0);
+    expect(contrastRatio(pastelNeedBoost, KINLOOM_BRAND_PALETTE.navyElevated)).toBeGreaterThanOrEqual(6.0);
+
+    const fallbackHex = deriveDarkModeFaviconAccent('not-a-color', 'also-invalid', 5.0);
+    expect(contrastRatio(fallbackHex, KINLOOM_BRAND_PALETTE.navyElevated)).toBeGreaterThanOrEqual(5.0);
+
+    const clamped = deriveDarkModeFaviconAccent('#7A4612', '#FFFFFF', 21);
+    expect(clamped).toBe('#FFFFFF');
   });
 
   it('renders opaque apple-touch and maskable icon SVGs with safe-zone scaling', () => {

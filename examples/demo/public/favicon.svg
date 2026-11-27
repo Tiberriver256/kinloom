@@ -4,9 +4,9 @@
     .kl-warp { stroke: #1B2A41; }
     .kl-accent { stroke: #7A4612; }
     @media (prefers-color-scheme: dark) {
-      .kl-bg { fill: #1B2A41; stroke: #334663; }
+      .kl-bg { fill: #20324D; stroke: #8FA6C4; }
       .kl-warp { stroke: #FCF9F2; }
-      .kl-accent { stroke: #7A4612; }
+      .kl-accent { stroke: #E7A35E; }
     }
   </style>
   <rect class="kl-bg" x="0.75" y="0.75" width="30.5" height="30.5" rx="6" stroke-width="1.5"/>
