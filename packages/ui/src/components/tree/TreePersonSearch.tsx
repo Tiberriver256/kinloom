@@ -147,7 +147,7 @@ export const TreePersonSearch: React.FC<TreePersonSearchProps> = ({
           Find person in family tree
         </label>
         <span className="tree-search-icon" aria-hidden="true">
-          <svg viewBox="0 0 20 20" width="14" height="14" focusable="false">
+          <svg viewBox="0 0 20 20" width="14" height="14" focusable="false" aria-hidden="true">
             <circle cx="8.5" cy="8.5" r="5.5" fill="none" stroke="currentColor" strokeWidth="1.7" />
             <path d="M13 13l4 4" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
           </svg>
@@ -196,6 +196,7 @@ export const TreePersonSearch: React.FC<TreePersonSearchProps> = ({
           </button>
         )}
         {showDesktopDropdown && (
+          // biome-ignore lint/a11y/noStaticElementInteractions: prevents input blur while clicking dropdown items
           <div
             className="tree-search-popover"
             onMouseDown={(e) => {
@@ -225,6 +226,7 @@ export const TreePersonSearch: React.FC<TreePersonSearchProps> = ({
       </button>
 
       {mobileOpen && (
+        // biome-ignore lint/a11y/noStaticElementInteractions: prevents input blur while clicking dropdown items
         <div
           className="tree-search-popover is-mobile-open"
           onMouseDown={(e) => {

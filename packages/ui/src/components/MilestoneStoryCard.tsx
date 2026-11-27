@@ -24,8 +24,8 @@ export const MilestoneStoryCard: React.FC<{
   alsoHere = EMPTY_ALSO_HERE,
   onPivotPerson,
 }) => (
-  // oxlint-disable-next-line jsx-a11y/no-noninteractive-element-interactions, jsx-a11y/no-noninteractive-tabindex -- selectable story card containing links and buttons, so it cannot be a native button; keyboard activation is provided via onKeyDown and tabIndex
   <article
+    // biome-ignore lint/a11y/noNoninteractiveTabindex: selectable story card with keyboard activation
     tabIndex={0}
     id={event.id}
     ref={cardRef}

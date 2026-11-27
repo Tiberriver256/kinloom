@@ -1957,6 +1957,7 @@ html.tree-viewport-lock body {
 
 .tree-page-diagram {
   height: calc(100vh - var(--topbar-height));
+  /* biome-ignore lint/suspicious/noDuplicateProperties: 100vh fallback before 100dvh */
   height: calc(100dvh - var(--topbar-height));
   overflow: hidden;
   user-select: none;

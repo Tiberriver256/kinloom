@@ -38,7 +38,9 @@ function canonicalizeValue(value: unknown, preferredKeyOrder?: readonly string[]
   const keys = Object.keys(value).filter((k) => value[k] !== undefined);
   const rank = new Map<string, number>();
   if (preferredKeyOrder) {
-    preferredKeyOrder.forEach((k, idx) => rank.set(k, idx));
+    preferredKeyOrder.forEach((k, idx) => {
+      rank.set(k, idx);
+    });
   }
   keys.sort((a, b) => {
     const ra = rank.get(a);

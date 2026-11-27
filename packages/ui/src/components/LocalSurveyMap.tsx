@@ -374,6 +374,7 @@ export const LocalSurveyMap: React.FC<LocalSurveyMapProps> = ({
           {center.name}
         </text>
 
+        {/* biome-ignore lint/a11y/noAriaHiddenOnFocusable: decorative SVG compass rose */}
         <g transform={`translate(${width - 18}, 16)`} aria-hidden="true">
           <path d="M 0 -7 L 3 2 L 0 0 L -3 2 Z" fill="var(--surface-header)" />
           <text

@@ -290,7 +290,7 @@ export const PronunciationBadge: React.FC<PronunciationBadgeProps> = ({
         </span>
       )}
       {!iconOnly && !compact && secondaryIpa && (
-        <span className="pronunciation-ipa" aria-label={`IPA ${secondaryIpa}`}>
+        <span className="pronunciation-ipa" title={`IPA ${secondaryIpa}`}>
           {secondaryIpa}
         </span>
       )}
@@ -336,6 +336,7 @@ export const PronunciationBadge: React.FC<PronunciationBadgeProps> = ({
           </button>
           {variants.map((variant, idx) => (
             <button
+              // biome-ignore lint/suspicious/noArrayIndexKey: variant labels may repeat across locales
               key={`${variant.label}-${idx}`}
               type="button"
               className={`pronunciation-variant-btn${effectiveVariantIdx === idx ? ' is-active' : ''}`}

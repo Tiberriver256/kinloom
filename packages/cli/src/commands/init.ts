@@ -213,7 +213,7 @@ export async function runInitCommand(options: InitCommandOptions): Promise<InitC
   }
 
   const branchId = slugifyIdentifier(family);
-  let config;
+  let config: ReturnType<typeof parseKinloomConfig>;
   try {
     config = parseKinloomConfig({
       schemaVersion: 1,

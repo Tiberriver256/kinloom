@@ -41,7 +41,7 @@ export const KinloomFooter: React.FC<{ hideNav?: boolean }> = ({ hideNav = false
   const credit = siteConfig.site.footerCredit || 'Built with Kinloom';
 
   return (
-    <footer className="kinloom-footer print-hide" aria-label="Archive colophon">
+    <footer className="kinloom-footer print-hide">
       {inRouter && !hideNav && (
         <nav className="kinloom-footer-nav" aria-label="Archive tools">
           <Link to="/kinship" className="kinloom-footer-link">

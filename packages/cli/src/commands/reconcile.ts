@@ -73,7 +73,7 @@ export async function runReconcileCommand(options: ReconcileCommandOptions): Pro
   }
 
   const configText = await readFile(configPath, 'utf8');
-  let siteConfig;
+  let siteConfig: ReturnType<typeof parseKinloomConfigYaml>;
   try {
     siteConfig = parseKinloomConfigYaml(configText);
   } catch (err: unknown) {

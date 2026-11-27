@@ -71,6 +71,7 @@ export const RevisionDiffView: React.FC<RevisionDiffViewProps> = ({
         <span className="wiki-diff-stat wiki-diff-stat-chg">~{summary.changedCount} changed</span>
       </div>
 
+      {/* biome-ignore lint/a11y/noNoninteractiveTabindex: horizontally scrollable region needs keyboard focus */}
       <div className="wiki-diff-table-region" role="region" aria-label="Field differences" tabIndex={0}>
         <table className="wiki-diff-table">
           <thead>
@@ -86,7 +87,7 @@ export const RevisionDiffView: React.FC<RevisionDiffViewProps> = ({
               return (
                 <tr key={field.path} className={`wiki-diff-row kind-${field.kind}`}>
                   <th scope="row" className="wiki-diff-field-cell">
-                    <span className="wiki-diff-glyph" aria-label={sym.label}>
+                    <span className="wiki-diff-glyph" role="img" aria-label={sym.label}>
                       {sym.glyph}
                     </span>
                     <code>{field.path}</code>

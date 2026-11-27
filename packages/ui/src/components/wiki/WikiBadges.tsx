@@ -115,7 +115,7 @@ export const AuthorPill: React.FC<AuthorPillProps> = ({ authorType, authorName, 
   return (
     <span
       className={`wiki-author-pill wiki-author-${authorType}${className ? ` ${className}` : ''}`}
-      aria-label={`${typePrefix}: ${authorName || label}`}
+      title={`${typePrefix}: ${authorName || label}`}
     >
       <span className="wiki-author-glyph" aria-hidden="true">
         {authorType === 'agent' ? '◈' : authorType === 'system_seed' ? '§' : '●'}

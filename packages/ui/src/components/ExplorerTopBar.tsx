@@ -109,6 +109,7 @@ export const ExplorerTopBar: React.FC = () => {
 
   return (
     <>
+      {/* biome-ignore lint/a11y/useValidAnchor: skip-to-content landmark anchor */}
       <a
         href="#main-content"
         className="skip-to-content"
@@ -437,7 +438,7 @@ export const ExplorerTopBar: React.FC = () => {
 
         {pivotTrail.length > 1 && location.pathname.startsWith('/person/') && (
           <div className="topbar-right">
-            <div className="breadcrumb-strip" aria-label="Recent pivot trail">
+            <nav className="breadcrumb-strip" aria-label="Recent pivot trail">
               <span>Trail:</span>
               {pivotTrail.slice(-3).map((c, idx) => (
                 <React.Fragment key={c.slug}>
@@ -445,7 +446,7 @@ export const ExplorerTopBar: React.FC = () => {
                   <Link to={`/person/${c.slug}`}>{c.name}</Link>
                 </React.Fragment>
               ))}
-            </div>
+            </nav>
           </div>
         )}
       </header>

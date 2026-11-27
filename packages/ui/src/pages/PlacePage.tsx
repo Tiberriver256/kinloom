@@ -409,7 +409,11 @@ export const PlacePage: React.FC = () => {
                 <div className="place-history-copy">
                   {place.summary && <p className="place-history-summary">{place.summary}</p>}
                   {place.historical_names && place.historical_names.length > 0 && (
-                    <div className="place-historical-names" aria-label="Historical jurisdictions">
+                    <div
+                      className="place-historical-names"
+                      role="region"
+                      aria-label="Historical jurisdictions"
+                    >
                       <span className="place-historical-names-label">Jurisdictions:</span>
                       <div className="place-historical-names-list">
                         {place.historical_names.map((hn) => {

@@ -285,7 +285,7 @@ const NarrativeAudioProvider: React.FC<{ children: React.ReactNode }> = ({ child
     <NarrativeAudioContext.Provider value={ctxValue}>
       {children}
       {/* Single persistent audio element so playback survives route navigation */}
-      {/* oxlint-disable-next-line jsx-a11y/media-has-caption -- spoken biography mirrors the written narrative on the page */}
+      {/* biome-ignore lint/a11y/noAriaHiddenOnFocusable: persistent hidden audio element controlled by custom player buttons */}
       <audio
         ref={audioRef}
         src={activeTrack?.src}

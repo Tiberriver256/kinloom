@@ -710,7 +710,7 @@ export const PersonPage: React.FC = () => {
               immediateFamily.children.length > 0 ||
               immediateFamily.livingSpouseCount > 0 ||
               immediateFamily.livingChildCount > 0) && (
-              <div className="person-family-strip" aria-label="Immediate family connections">
+              <div className="person-family-strip" role="region" aria-label="Immediate family connections">
                 {(immediateFamily.parents.length > 0 || capabilities.canEdit) && (
                   <div className="person-family-row">
                     <span className="person-family-label">Parents</span>
@@ -815,7 +815,7 @@ export const PersonPage: React.FC = () => {
             )}
 
             {personResidenceSpans.length > 0 && (
-              <div className="person-family-strip" aria-label="Documented residence spans">
+              <div className="person-family-strip" role="region" aria-label="Documented residence spans">
                 <div className="person-family-row">
                   <span className="person-family-label">Residences</span>
                   <div className="person-family-chips">

@@ -802,6 +802,7 @@ export const ArchivalMarkdown: React.FC<ArchivalMarkdownProps> = ({
             return block.ordered ? (
               <ol key={blockKey} className="archival-md-list">
                 {block.items.map((item, itemIdx) => (
+                  // biome-ignore lint/suspicious/noArrayIndexKey: markdown list items have no stable ID beyond block+index
                   <li key={`${blockKey}-li-${itemIdx}`}>
                     {parseInlineNodes(item, `${blockKey}-li-${itemIdx}`, citationCtx, entityCtx, new Set())}
                   </li>
@@ -810,6 +811,7 @@ export const ArchivalMarkdown: React.FC<ArchivalMarkdownProps> = ({
             ) : (
               <ul key={blockKey} className="archival-md-list">
                 {block.items.map((item, itemIdx) => (
+                  // biome-ignore lint/suspicious/noArrayIndexKey: markdown list items have no stable ID beyond block+index
                   <li key={`${blockKey}-li-${itemIdx}`}>
                     {parseInlineNodes(item, `${blockKey}-li-${itemIdx}`, citationCtx, entityCtx, new Set())}
                   </li>

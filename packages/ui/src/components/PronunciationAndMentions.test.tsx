@@ -884,6 +884,7 @@ describe('EntityEditDrawer pronunciation editing and audio generation', () => {
     });
     vi.stubGlobal('fetch', fetchMock);
 
+    // biome-ignore lint/correctness/noComponentHookFactories: isolated test probe component
     const LexiconProbe: React.FC = () => {
       const { pronunciations } = useArchiveData();
       return (

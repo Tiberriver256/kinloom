@@ -54,7 +54,7 @@ export const KinloomPluginProvider: React.FC<KinloomPluginProviderProps> = ({
       return acc;
     }
     const Provider = plugin.provider;
-    return <Provider>{acc}</Provider>;
+    return <Provider key={plugin.id}>{acc}</Provider>;
   }, children);
 
   return <KinloomPluginContext.Provider value={value}>{wrappedChildren}</KinloomPluginContext.Provider>;

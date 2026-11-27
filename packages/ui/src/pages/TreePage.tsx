@@ -1113,7 +1113,7 @@ export const TreePage: React.FC = () => {
   return (
     <div className={`tree-shell tree-shell-${surface}`}>
       <ExplorerTopBar />
-      {/* oxlint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-noninteractive-element-interactions -- interactive pan/zoom container clears selection on background click */}
+      {/* biome-ignore lint/a11y/useKeyWithClickEvents: interactive pan/zoom container clears selection on background click */}
       <main
         id="main-content"
         ref={containerRef}
@@ -1275,9 +1275,9 @@ export const TreePage: React.FC = () => {
               >
                 1:1
               </button>
-              <span className="tree-zoom-readout" aria-live="polite" aria-label={`Zoom ${zoomPercent}%`}>
+              <output className="tree-zoom-readout" aria-live="polite" aria-label={`Zoom ${zoomPercent}%`}>
                 {zoomPercent}%
-              </span>
+              </output>
             </div>
           </>
         )}

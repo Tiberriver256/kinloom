@@ -51,6 +51,7 @@ const { bundle: testBundle }: { bundle: ArchiveBundle } = compileArchive({
 
 describe('KinloomUiPlugin seam and MediaPlayer', () => {
   it('mounts custom plugin routes, nav links, and indexHero slot cleanly', async () => {
+    // biome-ignore lint/correctness/noComponentHookFactories: isolated test page component
     const CustomStoryPage = () => <main data-testid="custom-story">Interactive Video Essay</main>;
     const storyPlugin: KinloomUiPlugin = {
       id: 'story-plugin',
