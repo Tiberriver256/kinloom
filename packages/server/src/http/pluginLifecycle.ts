@@ -68,8 +68,16 @@ export interface ServerRequestErrorEvent {
   readonly durationMs: number;
 }
 
+export interface ServerPluginObservabilityFlags {
+  readonly enabled: boolean;
+  readonly serverTiming: boolean;
+  readonly securityTelemetry: boolean;
+  readonly webAnalytics: boolean;
+}
+
 export interface KinloomServerPlugin extends CoreKinloomServerPlugin {
   readonly documentContributions?: ServerDocumentContributions;
+  readonly observabilityFlags?: ServerPluginObservabilityFlags;
   onRequestStart?(event: ServerRequestStartEvent): void | Promise<void>;
   onResponse?(event: ServerRequestResponseEvent): void | Promise<void>;
   onError?(event: ServerRequestErrorEvent): void | Promise<void>;
@@ -118,6 +126,7 @@ const EXACT_STATIC_ROUTES = new Set<string>([
   '/api/admin/invites',
   '/api/admin/agent-tokens',
   '/api/admin/users',
+  '/api/admin/system',
   '/privacy',
   '/og/site.svg',
   '/data/bundle.json',

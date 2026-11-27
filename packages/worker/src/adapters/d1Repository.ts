@@ -36,7 +36,7 @@ export function createD1ArchiveRepository(
   const atomicMutations = new D1AtomicMutationStore(db, entityReads);
   const accessAndTalk = new D1AccessAndTalkStore(db);
   return Object.assign(
-    {},
+    { adapterKind: 'd1' as const },
     bindPrototypeMethods(entityReads),
     bindPrototypeMethods(atomicMutations),
     bindPrototypeMethods(accessAndTalk)

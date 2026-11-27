@@ -1,5 +1,6 @@
 import type {
   AdminDataSource,
+  AdminDiagnosticsReport,
   AgentTokenScope,
   CreatedAgentTokenResponse,
   CreatedInviteResponse,
@@ -10,6 +11,7 @@ import type {
 } from '@kinloom/core';
 import { parseErrorEnvelope } from './httpClient.js';
 import {
+  parseAdminDiagnosticsReport,
   parseAgentTokensListResponse,
   parseCreatedAgentTokenResponse,
   parseCreatedInviteResponse,
@@ -87,6 +89,9 @@ export function createHttpAdminDataSource(transport: HttpTransportCallbacks): Ad
     },
     async revokeAgentToken(tokenId: string): Promise<void> {
       await deleteNoContent(`/api/admin/agent-tokens/${encodeURIComponent(tokenId)}`);
+    },
+    async getSystemDiagnostics(): Promise<AdminDiagnosticsReport> {
+      return transport.requestJson('/api/admin/system', parseAdminDiagnosticsReport);
     },
   };
 }

@@ -40,5 +40,6 @@ export * from './residenceSpans.js';
 export * from './revisions.js';
 export * from './schemas/index.js';
 export * from './validateArchive.js';
+export * from './version.js';
 // Deterministic YAML Loader & Serializer
 export * from './yaml.js';

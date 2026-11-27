@@ -7,6 +7,7 @@ import {
   ArchivalSection,
   ArchivalStoryCard,
   ExplorerTopBar,
+  KINLOOM_UI_VERSION,
   KinloomFooter,
   MediaPlayer,
   useArchiveData,
@@ -70,6 +71,8 @@ const DemoReelStoryPage: React.FC = () => {
 export const demoStoryPlugin: KinloomUiPlugin = {
   id: 'demo-story-reel',
   name: 'Archival Story Reel',
+  version: KINLOOM_UI_VERSION,
+  status: 'active',
   routes: [
     {
       path: '/stories/demo-reel',

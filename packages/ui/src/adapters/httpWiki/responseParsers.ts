@@ -1,4 +1,5 @@
 import type {
+  AdminDiagnosticsReport,
   AgentTokenScope,
   ArchiveAuthProviders,
   ArchiveCapabilities,
@@ -23,6 +24,7 @@ import type {
   UserRole,
 } from '@kinloom/core';
 import {
+  AdminDiagnosticsReportSchema,
   AgentTokenScopeSchema,
   AuthorTypeSchema,
   asRevisionId,
@@ -429,4 +431,8 @@ export function parseCreatedAgentTokenResponse(raw: unknown): CreatedAgentTokenR
     scope,
     plaintext_secret: expectNonEmptyString(obj.plaintext_secret, 'plaintext_secret'),
   };
+}
+
+export function parseAdminDiagnosticsReport(raw: unknown): AdminDiagnosticsReport {
+  return AdminDiagnosticsReportSchema.parse(raw);
 }

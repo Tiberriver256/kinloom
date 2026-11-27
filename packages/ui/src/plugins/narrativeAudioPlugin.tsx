@@ -1,6 +1,7 @@
 import type { Narrative, Person } from '@kinloom/core';
 import type React from 'react';
 import { initialsOf, resolveAssetUrl } from '../components/Atoms.js';
+import { KINLOOM_UI_VERSION } from '../version.js';
 import {
   type ActiveNarrativeAudioTrack,
   type NarrativeAudioPluginOptions,
@@ -95,6 +96,8 @@ export function createNarrativeAudioPlugin(options: NarrativeAudioPluginOptions 
   return {
     id,
     name: 'Narrative Audio',
+    version: KINLOOM_UI_VERSION,
+    status: 'active',
     provider: NarrativeAudioProvider,
     slots: {
       narrativeHeader: renderNarrativeHeader,

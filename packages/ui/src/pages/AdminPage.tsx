@@ -1,5 +1,6 @@
 import type {
   AdminDataSource,
+  AdminDiagnosticsReport,
   AgentTokenScope,
   CreatedAgentTokenResponse,
   InviteRecord,
@@ -17,6 +18,7 @@ import { useArchiveData } from '../context/ArchiveDataContext.js';
 import { cx } from '../lib/cx.js';
 import controlStyles from '../styles/Controls.module.css';
 import layoutStyles from '../styles/Layout.module.css';
+import { AdminSettingsShell } from './admin/AdminSettingsShell.js';
 import { AgentTokensSection } from './admin/AgentTokensSection.js';
 import type { AdminConfirmState } from './admin/adminHelpers.js';
 import { InvitesSection } from './admin/InvitesSection.js';
@@ -26,15 +28,19 @@ export type AdminApiClient = AdminDataSource;
 
 export interface AdminPageProps {
   adminClient?: AdminDataSource;
+  extraSettingsPanels?: React.ReactNode;
 }
 
-export const AdminPage: React.FC<AdminPageProps> = ({ adminClient }) => {
+export const AdminPage: React.FC<AdminPageProps> = ({ adminClient, extraSettingsPanels }) => {
   const { session, dataSource, adminDataSource, capabilities } = useArchiveData();
   const client: AdminDataSource | null = adminClient ?? adminDataSource ?? dataSource.admin ?? null;
 
   const [users, setUsers] = useState<readonly UserRecord[]>([]);
   const [invites, setInvites] = useState<readonly InviteRecord[]>([]);
   const [tokens, setTokens] = useState<readonly PublicAgentTokenRecord[]>([]);
+  const [diagnostics, setDiagnostics] = useState<AdminDiagnosticsReport | null>(null);
+  const [diagnosticsLoading, setDiagnosticsLoading] = useState<boolean>(false);
+  const [diagnosticsError, setDiagnosticsError] = useState<string | null>(null);
   const [loading, setLoading] = useState<boolean>(Boolean(client && capabilities.canManageSite));
   const [error, setError] = useState<string | null>(null);
   const [busyKey, setBusyKey] = useState<string | null>(null);
@@ -49,6 +55,27 @@ export const AdminPage: React.FC<AdminPageProps> = ({ adminClient }) => {
   const [tokenScope, setTokenScope] = useState<AgentTokenScope>('write_batch');
   const [revealedSecret, setRevealedSecret] = useState<CreatedAgentTokenResponse | null>(null);
   const [copiedSecret, setCopiedSecret] = useState(false);
+
+  const diagnosticsSupported = Boolean(client?.getSystemDiagnostics);
+
+  const loadDiagnostics = useCallback(async (): Promise<void> => {
+    if (!client?.getSystemDiagnostics || !capabilities.canManageSite) {
+      setDiagnostics(null);
+      setDiagnosticsLoading(false);
+      setDiagnosticsError(null);
+      return;
+    }
+    setDiagnosticsLoading(true);
+    setDiagnosticsError(null);
+    try {
+      const report = await client.getSystemDiagnostics();
+      setDiagnostics(report);
+    } catch (err) {
+      setDiagnosticsError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setDiagnosticsLoading(false);
+    }
+  }, [client, capabilities.canManageSite]);
 
   const copyText = (key: string, text: string): void => {
     const clipboard = typeof navigator !== 'undefined' ? navigator.clipboard : undefined;
@@ -97,7 +124,8 @@ export const AdminPage: React.FC<AdminPageProps> = ({ adminClient }) => {
 
   useEffect(() => {
     void loadAll();
-  }, [loadAll]);
+    void loadDiagnostics();
+  }, [loadAll, loadDiagnostics]);
 
   const handleToggleRole = async (user: UserRecord): Promise<void> => {
     if (!client) {
@@ -311,6 +339,15 @@ export const AdminPage: React.FC<AdminPageProps> = ({ adminClient }) => {
           }}
           onSetPendingConfirm={setPendingConfirm}
           onRevokeToken={handleRevokeToken}
+        />
+
+        <AdminSettingsShell
+          diagnostics={diagnostics}
+          diagnosticsLoading={diagnosticsLoading}
+          diagnosticsError={diagnosticsError}
+          diagnosticsSupported={diagnosticsSupported}
+          onRefreshDiagnostics={loadDiagnostics}
+          extraPanels={extraSettingsPanels}
         />
       </main>
       <KinloomFooter />

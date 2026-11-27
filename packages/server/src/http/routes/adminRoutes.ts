@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import type { AdminService } from '../../services/adminService.js';
+import type { SystemDiagnosticsService } from '../../services/systemDiagnosticsService.js';
 import { enforceCsrfOrigin, requireMinRole } from '../authMiddleware.js';
 import { decodeSegment, type HttpRouteHandler, jsonResponse, readJsonBody } from '../httpPrimitives.js';
 import { timeSpan } from '../pluginLifecycle.js';
@@ -25,7 +26,10 @@ const UpdateUserBodySchema = z.object({
   display_name: z.string().optional(),
 });
 
-export function createAdminRouteHandler(adminService: AdminService): HttpRouteHandler {
+export function createAdminRouteHandler(
+  adminService: AdminService,
+  systemDiagnosticsService?: SystemDiagnosticsService
+): HttpRouteHandler {
   return async (ctx) => {
     const { request, url, method, segments, auth, telemetry } = ctx;
 
@@ -40,6 +44,11 @@ export function createAdminRouteHandler(adminService: AdminService): HttpRouteHa
       bearerRejected: auth.bearerRejected,
     });
     const adminEmail = auth.principal.kind === 'user' ? auth.principal.email : 'admin';
+
+    if (segments[2] === 'system' && method === 'GET' && segments.length === 3 && systemDiagnosticsService) {
+      const report = await systemDiagnosticsService.getReport();
+      return jsonResponse(report, 200);
+    }
 
     if (segments[2] === 'invites') {
       if (method === 'GET' && segments.length === 3) {

@@ -69,6 +69,7 @@ function isMissingColumnError(error: unknown): boolean {
  * `pronunciation_lexicon` table (migrations 0002_pronunciations.sql + 0003_pronunciation_provenance.sql).
  */
 export class D1PronunciationLexiconStore implements PronunciationLexiconStore {
+  readonly adapterKind = 'd1';
   private readonly db: D1Database;
 
   constructor(db: D1Database) {

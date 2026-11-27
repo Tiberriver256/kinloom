@@ -25,6 +25,7 @@ function resolveSha256(key: string, obj: R2ObjectBody): Sha256Hex | undefined {
  * Cloudflare R2 implementation of content-addressed MediaStore with native HTTP 206 byte ranges.
  */
 export class R2MediaStore implements MediaStore {
+  readonly adapterKind = 'r2';
   private readonly bucket: R2Bucket;
 
   constructor(bucket: R2Bucket) {

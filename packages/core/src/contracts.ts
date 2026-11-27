@@ -16,6 +16,7 @@ import type {
   UserRecord,
 } from './contractsPrimitives.js';
 import type { KinloomSiteConfig } from './schemas/config.js';
+import type { PluginRuntimeStatus, PluginStatusProbeResult } from './schemas/diagnostics.js';
 import type { ArchiveBundle, Pronunciation } from './schemas/entities.js';
 import type {
   AgentTokenScope,
@@ -139,7 +140,9 @@ export interface ArchiveRepository
     AtomicMutationStore,
     RevisionLogStore,
     TalkCommentStore,
-    AccessControlStore {}
+    AccessControlStore {
+  readonly adapterKind?: string;
+}
 
 export interface CachedBundleObject {
   etag: string;
@@ -151,6 +154,7 @@ export interface CachedBundleObject {
 }
 
 export interface BundleCache {
+  readonly adapterKind?: string;
   getCached(
     ifNoneMatch: string | null
   ): Promise<
@@ -181,6 +185,7 @@ export interface StoredMediaObject {
 }
 
 export interface MediaStore {
+  readonly adapterKind?: string;
   head(key: string): Promise<{ exists: boolean; sizeBytes?: number; contentType?: string }>;
   put(params: {
     key: string;
@@ -196,6 +201,7 @@ export interface AssetHandler {
 }
 
 export interface EmailSender {
+  readonly adapterKind?: string;
   sendMagicLink(params: {
     toEmail: string;
     siteTitle: string;
@@ -246,7 +252,10 @@ export interface KinloomServerPluginRoute {
 export interface KinloomServerPlugin {
   readonly id: string;
   readonly name: string;
+  readonly version?: string;
+  readonly status?: PluginRuntimeStatus;
   readonly routes?: readonly KinloomServerPluginRoute[];
+  getStatus?(): PluginStatusProbeResult | Promise<PluginStatusProbeResult>;
   onRevisionCommitted?(event: {
     revisions: readonly RevisionRecord[];
     headRevisionId: RevisionId;
@@ -260,6 +269,7 @@ export interface PronunciationAudioResult {
 }
 
 export interface PronunciationAudioGenerator {
+  readonly adapterKind?: string;
   generate(params: {
     text: string;
     phonetic?: string;
@@ -270,6 +280,7 @@ export interface PronunciationAudioGenerator {
 }
 
 export interface PronunciationLexiconStore {
+  readonly adapterKind?: string;
   list(): Promise<Record<string, Pronunciation>>;
   upsert(term: string, entry: Pronunciation, updatedBy: string, updatedAt: string): Promise<Pronunciation>;
   delete(term: string): Promise<void>;

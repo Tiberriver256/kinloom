@@ -75,6 +75,7 @@ export function computeSiteConfigHash(siteConfig: KinloomSiteConfig): string {
  * and falls back to full compileArchive on cold misses.
  */
 export class R2IncrementalPatchBundleCache implements BundleCache {
+  readonly adapterKind = 'r2';
   private readonly bucket: R2Bucket;
   private readonly siteConfig: KinloomSiteConfig;
   private readonly clock: Clock;

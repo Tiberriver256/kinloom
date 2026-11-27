@@ -8,9 +8,6 @@ export type {
   PronunciationLexiconStore,
 } from '@kinloom/core';
 export { extractCollectionsFromSnapshot } from '@kinloom/core';
-
-export const KINLOOM_SERVER_VERSION = '0.43.0';
-
 export {
   GoogleOAuthProvider,
   type GoogleOAuthProviderConfig,
@@ -82,6 +79,7 @@ export {
   type RecordableServerTimingSpanName,
   SERVER_SECURITY_EVENT_TYPES,
   type ServerDocumentContributions,
+  type ServerPluginObservabilityFlags,
   type ServerPrivacyDisclosure,
   type ServerRequestErrorEvent,
   type ServerRequestResponseEvent,
@@ -96,6 +94,11 @@ export {
   sanitizeMediaContentType,
   type WriteForbiddenReason,
 } from './http/pluginLifecycle.js';
+export {
+  DEFAULT_RECENT_ERROR_CAPACITY,
+  RecentErrorRingBuffer,
+} from './http/recentErrorBuffer.js';
+export { sanitizeDiagnosticDetail } from './http/redaction.js';
 export {
   type AuthBrowserProvider,
   buildAuthErrorRedirectUrl,
@@ -207,5 +210,11 @@ export {
   type PronunciationServiceDeps,
   type UpsertLexiconTermInput,
 } from './services/pronunciationService.js';
+export {
+  type KinloomServerDiagnosticsConfig,
+  SystemDiagnosticsService,
+  type SystemDiagnosticsServiceDeps,
+} from './services/systemDiagnosticsService.js';
 export { TalkService, type TalkServiceDeps } from './services/talkService.js';
 export { WikiWriteService, type WikiWriteServiceDeps } from './services/wikiWriteService.js';
+export { KINLOOM_SERVER_VERSION } from './version.js';

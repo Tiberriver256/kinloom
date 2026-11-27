@@ -20,7 +20,7 @@ const scriptPath = path.resolve('scripts/release-version.mjs');
 const repoRoot = path.resolve('.');
 
 const serverRule = {
-  path: 'packages/server/src/index.ts',
+  path: 'packages/server/src/version.ts',
   pattern: /export const KINLOOM_SERVER_VERSION = '(\d+\.\d+\.\d+)';/g,
   replace(version: string) {
     return `export const KINLOOM_SERVER_VERSION = '${version}';`;
@@ -217,7 +217,7 @@ describe('version files', () => {
   });
 
   it('keeps a source file byte-stable when the version does not change', () => {
-    const serverPath = 'packages/server/src/index.ts';
+    const serverPath = 'packages/server/src/version.ts';
     const server = readFileSync(serverPath, 'utf8');
     const current = server.match(/KINLOOM_SERVER_VERSION = '(\d+\.\d+\.\d+)'/)?.[1];
     if (!current) throw new Error('missing KINLOOM_SERVER_VERSION');
@@ -244,8 +244,10 @@ describe('version files', () => {
         'packages/tokens/package.json': '{\n  "name": "@kinloom/tokens",\n  "version": "0.2.0"\n}\n',
         'examples/demo/package.json':
           '{\n  "name": "@kinloom/demo",\n  "version": "0.2.0",\n  "dependencies": {\n    "@kinloom/tokens": "0.2.0"\n  }\n}\n',
-        'packages/server/src/index.ts': "export const KINLOOM_SERVER_VERSION = '0.2.0';\n",
+        'packages/core/src/version.ts': "export const KINLOOM_CORE_VERSION = '0.2.0';\n",
+        'packages/server/src/version.ts': "export const KINLOOM_SERVER_VERSION = '0.2.0';\n",
         'packages/worker/src/index.ts': "export const KINLOOM_WORKER_VERSION = '0.2.0';\n",
+        'packages/ui/src/version.ts': "export const KINLOOM_UI_VERSION = '0.2.0';\n",
         'packages/cli/src/client.ts': "this.userAgent = options.userAgent ?? 'kinloom-cli/0.2.0';\n",
       };
       for (const [rel, text] of Object.entries(files)) {

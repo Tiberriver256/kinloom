@@ -534,3 +534,65 @@ test('9. KinloomUiPlugin mounts custom /stories/demo-reel route and personDetail
   await expect(page.getByTestId('demo-reel-page')).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Archival Story Reel' })).toBeVisible();
 });
+
+test('10. Admin Settings & Diagnostics enforces admin RBAC and renders redacted GitHub bug-report bundle', async ({
+  page,
+}) => {
+  // 1. Unauthenticated caller receives 401 on GET /api/admin/system
+  const unauthRes = await page.request.get(`${wiki.baseUrl}/api/admin/system`);
+  expect(unauthRes.status()).toBe(401);
+
+  // 2. Enrolled editor receives 403 ADMIN_REQUIRED
+  await enrollEditorViaInviteAndMagicLink(page, 'diag.editor@archive.example');
+  const editorRes = await page.request.get(`${wiki.baseUrl}/api/admin/system`);
+  expect(editorRes.status()).toBe(403);
+
+  // 3. Sign in as administrator via signed session cookie and verify AdminPage diagnostics
+  const sessionCookieName = getSessionCookieName(false);
+  const adminToken = await signSessionToken({
+    secret: SESSION_SECRET,
+    clock: wiki.ports.clock,
+    ttlSeconds: 3600,
+    payload: {
+      kind: 'user',
+      email: wiki.adminEmail,
+      display_name: 'Archive Steward',
+      role: 'admin',
+    },
+  });
+  await page.context().addCookies([
+    {
+      name: sessionCookieName,
+      value: adminToken,
+      url: wiki.baseUrl,
+    },
+  ]);
+
+  await page.goto(`${wiki.baseUrl}/admin`);
+  const diagSection = page.getByTestId('admin-system-diagnostics');
+  await expect(diagSection).toBeVisible();
+  await expect(diagSection).toContainText('Core Application Settings & Diagnostics');
+  await expect(diagSection).toContainText('Versions & Build Provenance');
+  await expect(diagSection).toContainText('Live Health Checks');
+  await expect(diagSection).toContainText('repository');
+  await expect(diagSection).toContainText('bundle_cache');
+  await expect(diagSection).toContainText('media_store');
+  await expect(diagSection).toContainText('Archival Story Reel');
+  await expect(diagSection).toContainText('demo-story-reel');
+
+  // Verify the collapsible Markdown preview contains diagnostics and zero admin email / living names / secrets
+  await diagSection.getByText('Preview Redacted GitHub Diagnostics Markdown').click();
+  const previewCode = diagSection.locator('pre code');
+  await expect(previewCode).toContainText('<summary>Kinloom Diagnostics</summary>');
+  const markdownText = (await previewCode.textContent()) ?? '';
+  expect(markdownText).not.toContain(wiki.adminEmail);
+  expect(markdownText).not.toContain(SESSION_SECRET);
+  expect(markdownText).not.toContain('Jordan Mercer');
+  expect(markdownText).not.toContain('jordan-mercer-living');
+
+  // Verify GitHub issue link points to the bug report form template
+  const ghLink = diagSection.getByRole('link', { name: 'Open GitHub Bug Report' });
+  await expect(ghLink).toBeVisible();
+  const href = await ghLink.getAttribute('href');
+  expect(href).toContain('https://github.com/Tiberriver256/kinloom/issues/new?template=bug_report.yml');
+});

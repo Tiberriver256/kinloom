@@ -9,6 +9,7 @@ export interface SentMagicLinkEmail {
 }
 
 export class InMemoryEmailSender implements EmailSender {
+  readonly adapterKind = 'in-memory';
   readonly sentMessages: SentMagicLinkEmail[] = [];
 
   async sendMagicLink(params: SentMagicLinkEmail): Promise<void> {

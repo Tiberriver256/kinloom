@@ -57,7 +57,11 @@ export function createInMemoryArchiveRepository(
 ): ArchiveRepository {
   const entityStore = new InMemoryEntityAndMutationStore(options);
   const accessStore = new InMemoryAccessAndTalkStore();
-  return Object.assign({}, bindPrototypeMethods(entityStore), bindPrototypeMethods(accessStore));
+  return Object.assign(
+    { adapterKind: 'in-memory' as const },
+    bindPrototypeMethods(entityStore),
+    bindPrototypeMethods(accessStore)
+  );
 }
 
 /**

@@ -10,11 +10,13 @@ import {
   createKinloomServer,
   GoogleOAuthProvider,
   type KinloomServerPlugin,
+  RecentErrorRingBuffer,
   SystemClock,
   validateAndCompilePluginRoutes,
 } from '@kinloom/server';
 import { createCloudflareAssetHandler } from './adapters/cloudflareAssets.js';
 import { CloudflareEmailSender } from './adapters/cloudflareEmailSender.js';
+import { probeD1SchemaMigrationLevel } from './adapters/d1/schemaProbe.js';
 import { D1PronunciationLexiconStore } from './adapters/d1PronunciationLexiconStore.js';
 import { createD1ArchiveRepository } from './adapters/d1Repository.js';
 import { GeminiPronunciationAudioGenerator } from './adapters/geminiPronunciationGenerator.js';
@@ -122,6 +124,10 @@ export interface CreateCloudflareWorkerOptions {
   pronunciationGenerator?: PronunciationAudioGenerator;
   pronunciationLexiconStore?: PronunciationLexiconStore;
   onPluginError?: (pluginId: string, error: unknown) => void;
+  buildCommitSha?: string;
+  buildTimestamp?: string;
+  workersCompatibilityDate?: string;
+  recentErrorsCapacity?: number;
 }
 
 /**
@@ -133,6 +139,7 @@ export function createCloudflareWorker(
 ): ExportedHandler<KinloomWorkerEnv> {
   const plugins = options.plugins ? [...options.plugins] : [];
   const compiledPluginRoutes = validateAndCompilePluginRoutes(plugins);
+  const isolateRecentErrors = new RecentErrorRingBuffer(options.recentErrorsCapacity);
 
   return {
     async fetch(request: Request, env: KinloomWorkerEnv, ctx?: ExecutionContext): Promise<Response> {
@@ -184,6 +191,16 @@ export function createCloudflareWorker(
         bootstrapAdminEmail: env.BOOTSTRAP_ADMIN_EMAIL,
         onPluginError: options.onPluginError,
         compiledPluginRoutes,
+        diagnostics: {
+          workerVersion: KINLOOM_WORKER_VERSION,
+          platform: 'cloudflare-workers',
+          buildCommitSha: options.buildCommitSha ?? env.KINLOOM_BUILD_SHA ?? null,
+          buildTimestamp: options.buildTimestamp ?? env.KINLOOM_BUILD_TIMESTAMP ?? null,
+          workersCompatibilityDate:
+            options.workersCompatibilityDate ?? env.KINLOOM_COMPATIBILITY_DATE ?? null,
+          getSchemaMigrationLevel: () => probeD1SchemaMigrationLevel(env.DB),
+          recentErrorBuffer: isolateRecentErrors,
+        },
         ports: {
           repository,
           bundleCache,

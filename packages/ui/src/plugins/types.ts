@@ -8,6 +8,7 @@ import type {
   Narrative,
   Person,
   Place,
+  PluginRuntimeStatus,
 } from '@kinloom/core';
 import type React from 'react';
 import type {
@@ -43,6 +44,8 @@ export interface KinloomUiPluginSlots {
   readonly evidenceExtra?: KinloomUiPluginSlotRenderer;
   /** Persistent shell-level slot rendered as a sibling to routes (survives navigation). */
   readonly appShell?: KinloomUiPluginSlotRenderer;
+  /** Admin-only settings slot rendered inside AdminSettingsShell alongside Core Application Settings. */
+  readonly adminSettings?: KinloomUiPluginSlotRenderer;
 }
 
 export type KinloomUiPluginSlotName = keyof KinloomUiPluginSlots;
@@ -60,6 +63,8 @@ export interface KinloomMediaRenderer {
 export interface KinloomUiPlugin {
   readonly id: string;
   readonly name: string;
+  readonly version?: string;
+  readonly status?: PluginRuntimeStatus;
   /** Optional React provider wrapping the app shell so plugin slots share persistent state across routes. */
   readonly provider?: React.ComponentType<{ children: React.ReactNode }>;
   readonly routes?: readonly KinloomUiPluginRoute[];

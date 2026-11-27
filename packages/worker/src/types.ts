@@ -154,4 +154,7 @@ export interface KinloomWorkerEnv {
   GEMINI_API_KEY?: string;
   GEMINI_TTS_MODEL?: string;
   CF_WEB_ANALYTICS_TOKEN?: string;
+  KINLOOM_BUILD_SHA?: string;
+  KINLOOM_BUILD_TIMESTAMP?: string;
+  KINLOOM_COMPATIBILITY_DATE?: string;
 }

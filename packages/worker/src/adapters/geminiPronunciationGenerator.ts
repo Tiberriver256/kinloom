@@ -193,6 +193,7 @@ export function buildPronunciationPrompt(params: {
 }
 
 export class GeminiPronunciationAudioGenerator implements PronunciationAudioGenerator {
+  readonly adapterKind = 'gemini-tts';
   private readonly apiKey: string;
   private readonly model: string;
   private readonly defaultVoice: string;

@@ -24,6 +24,7 @@ import { bytesToStream, matchesIfNoneMatch, readStreamToBytes } from '../../cryp
  * In-memory incremental BundleCache using @kinloom/core patchCompiledBundle + compileArchive.
  */
 export class InMemoryIncrementalBundleCache implements BundleCache {
+  readonly adapterKind = 'in-memory';
   private readonly siteConfig: KinloomSiteConfig;
   private readonly clock: Clock;
   private cached: CachedBundleObject | null = null;
@@ -124,6 +125,7 @@ interface StoredBlobEntry {
  * In-memory content-addressed MediaStore with HTTP 206 byte-range slice support.
  */
 export class InMemoryMediaStore implements MediaStore {
+  readonly adapterKind = 'in-memory';
   private readonly blobs = new Map<string, StoredBlobEntry>();
   public putCount = 0;
 
@@ -193,6 +195,7 @@ export class InMemoryMediaStore implements MediaStore {
 }
 
 export class InMemoryPronunciationLexiconStore implements PronunciationLexiconStore {
+  readonly adapterKind = 'in-memory';
   private readonly entries = new Map<string, Pronunciation>();
 
   async list(): Promise<Record<string, Pronunciation>> {

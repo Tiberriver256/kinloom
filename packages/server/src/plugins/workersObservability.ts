@@ -8,6 +8,8 @@ import type {
   ServerTelemetryCacheStatus,
   ServerTimingSpanName,
 } from '../http/pluginLifecycle.js';
+import { redactObservabilityText, sanitizeObservabilityErrorCode } from '../http/redaction.js';
+import { KINLOOM_SERVER_VERSION } from '../version.js';
 import { createSecurityTelemetryHandler, type WorkersSecurityTelemetryOption } from './securityTelemetry.js';
 import { createWebAnalyticsDocumentContributions, type WebAnalyticsOptions } from './webAnalytics.js';
 
@@ -37,6 +39,7 @@ export {
   validateCloudflareWebAnalyticsToken,
   type WebAnalyticsOptions,
 } from './webAnalytics.js';
+export { redactObservabilityText, sanitizeObservabilityErrorCode };
 
 export const WORKERS_OBSERVABILITY_PLUGIN_ID = 'kinloom-workers-observability';
 
@@ -98,14 +101,7 @@ interface PerRequestObservabilityState {
 const SAFE_REQUEST_ID_PATTERN = /^[A-Za-z0-9._:-]{1,128}$/;
 const SAFE_CF_RAY_PATTERN = /^[A-Za-z0-9-]{4,64}$/;
 const SUSPICIOUS_TOKEN_PREFIX_PATTERN = /^(?:kin_|tok_|sess_|bearer|jwt_|eyJ)/i;
-const CANONICAL_ERROR_CODE_PATTERN = /^[A-Z][A-Z0-9_]{1,63}$/;
 const CANONICAL_METHOD_PATTERN = /^[A-Z]{2,16}$/;
-
-const EMAIL_PATTERN = /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g;
-const BEARER_PATTERN = /\bBearer\s+[A-Za-z0-9._~+/=-]+/gi;
-const COOKIE_PAIR_PATTERN = /\b(?:__Host-)?kinloom_(?:session|oauth)=[^;\s]+/gi;
-const QUERY_SECRET_PATTERN = /([?&](?:token|code|state|secret|email|invite|api_key|key)=)[^&\s#]+/gi;
-const AGENT_TOKEN_PATTERN = /\b(?:kin|tok|sess)_[A-Za-z0-9._-]{8,}\b/gi;
 
 const SERVER_TIMING_ORDER: readonly ServerTimingSpanName[] = ['d1', 'r2', 'bundle', 'total'];
 
@@ -120,29 +116,6 @@ function roundDurationMs(value: number): number {
 function formatDurationNumber(value: number): string {
   const rounded = roundDurationMs(value);
   return String(Number(rounded.toFixed(2)));
-}
-
-/**
- * Redacts emails, bearer tokens, Kinloom session/OAuth cookies, agent tokens, and sensitive query parameters.
- */
-export function redactObservabilityText(raw: string): string {
-  return raw
-    .replace(BEARER_PATTERN, 'Bearer [REDACTED]')
-    .replace(COOKIE_PAIR_PATTERN, '[REDACTED_COOKIE]')
-    .replace(QUERY_SECRET_PATTERN, '$1[REDACTED]')
-    .replace(AGENT_TOKEN_PATTERN, '[REDACTED_TOKEN]')
-    .replace(EMAIL_PATTERN, '[REDACTED_EMAIL]');
-}
-
-export function sanitizeObservabilityErrorCode(code: string | null | undefined): string | null {
-  if (!code) {
-    return null;
-  }
-  const trimmed = code.trim();
-  if (CANONICAL_ERROR_CODE_PATTERN.test(trimmed)) {
-    return trimmed;
-  }
-  return 'INTERNAL_ERROR';
 }
 
 function sanitizeMethod(method: string): string {
@@ -278,6 +251,15 @@ export function createWorkersObservabilityPlugin(
     return {
       id: WORKERS_OBSERVABILITY_PLUGIN_ID,
       name: 'Cloudflare Workers Observability (disabled)',
+      version: KINLOOM_SERVER_VERSION,
+      status: 'disabled',
+      observabilityFlags: {
+        enabled: false,
+        serverTiming: false,
+        securityTelemetry: false,
+        webAnalytics: false,
+      },
+      getStatus: () => ({ status: 'disabled', detail: 'Disabled via plugin options' }),
     };
   }
 
@@ -310,10 +292,35 @@ export function createWorkersObservabilityPlugin(
     : undefined;
 
   const documentContributions = createWebAnalyticsDocumentContributions(options.webAnalytics);
+  const activeFeatures: string[] = [];
+  if (emitServerTiming) {
+    activeFeatures.push('server-timing');
+  }
+  if (includeRequestIdHeader) {
+    activeFeatures.push('request-id');
+  }
+  if (securityEventHandler) {
+    activeFeatures.push('security-telemetry');
+  }
+  if (documentContributions) {
+    activeFeatures.push('web-analytics');
+  }
 
   return {
     id: WORKERS_OBSERVABILITY_PLUGIN_ID,
     name: 'Cloudflare Workers Observability',
+    version: KINLOOM_SERVER_VERSION,
+    status: 'active',
+    observabilityFlags: {
+      enabled: true,
+      serverTiming: emitServerTiming,
+      securityTelemetry: Boolean(securityEventHandler),
+      webAnalytics: Boolean(documentContributions),
+    },
+    getStatus: () => ({
+      status: 'active',
+      detail: activeFeatures.length > 0 ? activeFeatures.join(', ') : 'structured-logs',
+    }),
     ...(documentContributions ? { documentContributions } : {}),
 
     onRequestStart(event: ServerRequestStartEvent): void {

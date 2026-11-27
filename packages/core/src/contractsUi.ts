@@ -7,6 +7,7 @@ import type {
   RevisionQuery,
   UserRecord,
 } from './contractsPrimitives.js';
+import type { AdminDiagnosticsReport } from './schemas/diagnostics.js';
 import type {
   ArchiveBundle,
   MediaChecklistItem,
@@ -129,6 +130,7 @@ export interface AdminDataSource {
   listAgentTokens(): Promise<readonly PublicAgentTokenRecord[]>;
   createAgentToken(input: { label: string; scope: AgentTokenScope }): Promise<CreatedAgentTokenResponse>;
   revokeAgentToken(tokenId: string): Promise<void>;
+  getSystemDiagnostics?(): Promise<AdminDiagnosticsReport>;
 }
 
 export interface ArchiveDataSource {

@@ -177,6 +177,7 @@ export type { ArchiveUiContextValue, PivotCrumb } from './context/ArchiveUiConte
 export { ArchiveUiProvider, useArchiveUi } from './context/ArchiveUiContext.js';
 export type { KinloomAppProps } from './KinloomApp.js';
 export { KinloomApp } from './KinloomApp.js';
+export * from './lib/adminDiagnostics.js';
 export * from './lib/archivalTreeModel.js';
 export * from './lib/scrollMemory.js';
 export * from './lib/searchNavigation.js';
@@ -190,6 +191,10 @@ export * from './lib/vocabulary.js';
 export * from './machines/index.js';
 export type { AdminApiClient, AdminPageProps } from './pages/AdminPage.js';
 export { AdminPage } from './pages/AdminPage.js';
+export type { AdminSettingsShellProps } from './pages/admin/AdminSettingsShell.js';
+export { AdminSettingsShell } from './pages/admin/AdminSettingsShell.js';
+export type { SystemDiagnosticsSectionProps } from './pages/admin/SystemDiagnosticsSection.js';
+export { SystemDiagnosticsSection } from './pages/admin/SystemDiagnosticsSection.js';
 export { EvidencePage } from './pages/EvidencePage.js';
 // Pages
 export { IndexPage } from './pages/IndexPage.js';
@@ -235,3 +240,4 @@ export type {
   KinloomUiPluginSlotRenderer,
   KinloomUiPluginSlots,
 } from './plugins/types.js';
+export { KINLOOM_UI_VERSION } from './version.js';

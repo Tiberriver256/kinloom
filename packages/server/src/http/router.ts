@@ -5,6 +5,10 @@ import { AuthService } from '../services/authService.js';
 import { BundleReadService } from '../services/bundleReadService.js';
 import { MediaService } from '../services/mediaService.js';
 import { PronunciationService } from '../services/pronunciationService.js';
+import {
+  type KinloomServerDiagnosticsConfig,
+  SystemDiagnosticsService,
+} from '../services/systemDiagnosticsService.js';
 import { TalkService } from '../services/talkService.js';
 import { WikiWriteService } from '../services/wikiWriteService.js';
 import { enforceCsrfOrigin, requireMinRole, resolveCallerPrincipal } from './authMiddleware.js';
@@ -21,6 +25,7 @@ import {
   type ServerRequestTelemetryTracker,
   timeSpan,
 } from './pluginLifecycle.js';
+import { RecentErrorRingBuffer } from './recentErrorBuffer.js';
 import { createAdminRouteHandler } from './routes/adminRoutes.js';
 import { createAuthRouteHandler } from './routes/authRoutes.js';
 import { createMediaAndTalkRouteHandler } from './routes/mediaAndTalkRoutes.js';
@@ -48,6 +53,7 @@ export interface KinloomServerConfig {
   magicLinkTtlMinutes?: number;
   onPluginError?: (pluginId: string, error: unknown) => void;
   compiledPluginRoutes?: readonly CompiledPluginRoute[];
+  diagnostics?: KinloomServerDiagnosticsConfig;
 }
 
 export interface KinloomServerFetchOptions {
@@ -250,6 +256,20 @@ export function createKinloomServer(config: KinloomServerConfig): KinloomServer 
     clock: config.ports.clock,
   });
 
+  const recentErrors =
+    config.diagnostics?.recentErrorBuffer ??
+    new RecentErrorRingBuffer(config.diagnostics?.recentErrorsCapacity);
+
+  const systemDiagnosticsService = new SystemDiagnosticsService({
+    siteConfig: config.siteConfig,
+    mode,
+    ports: config.ports,
+    plugins,
+    recentErrors,
+    diagnosticsConfig: config.diagnostics,
+    onPluginError: config.onPluginError,
+  });
+
   const pronunciationService = new PronunciationService({
     repository: config.ports.repository,
     mediaStore: config.ports.mediaStore,
@@ -277,7 +297,7 @@ export function createKinloomServer(config: KinloomServerConfig): KinloomServer 
     createWikiRouteHandler({ bundleReadService, wikiWriteService }),
     createPronunciationRouteHandler({ pronunciationService, mode }),
     createMediaAndTalkRouteHandler({ mediaService, talkService }),
-    createAdminRouteHandler(adminService),
+    createAdminRouteHandler(adminService, systemDiagnosticsService),
   ];
 
   async function handleRequest(
@@ -395,6 +415,12 @@ export function createKinloomServer(config: KinloomServerConfig): KinloomServer 
           });
         } catch (error) {
           const mapped = toErrorResponseData(error);
+          recentErrors.record({
+            timestamp: config.ports.clock.nowIso(),
+            route: normalizeServerRouteTemplate(url.pathname, pluginRoutes, request.method.toUpperCase()),
+            status: mapped.status,
+            errorCode: mapped.body.error.code,
+          });
           return applySecurityHeaders(jsonResponse(mapped.body, mapped.status, mapped.headers), {
             isSecure,
             isMedia: false,
@@ -453,6 +479,12 @@ export function createKinloomServer(config: KinloomServerConfig): KinloomServer 
         return tracker.applyResponseHeaders(secured);
       } catch (error) {
         const mapped = toErrorResponseData(error);
+        recentErrors.record({
+          timestamp: config.ports.clock.nowIso(),
+          route: tracker.snapshot().route,
+          status: mapped.status,
+          errorCode: mapped.body.error.code,
+        });
         const errorResponse = applySecurityHeaders(jsonResponse(mapped.body, mapped.status, mapped.headers), {
           isSecure,
           isMedia: false,

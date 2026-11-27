@@ -157,6 +157,7 @@ function readErrorCode(error: unknown): string | null {
  * Uses Cloudflare Email Service's native structured EmailMessageBuilder payload.
  */
 export class CloudflareEmailSender implements EmailSender {
+  readonly adapterKind = 'cloudflare-email';
   private readonly binding?: SendEmailBinding;
   private readonly fromEmail: string;
 

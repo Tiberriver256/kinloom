@@ -21,7 +21,14 @@ const LEVEL_RANK = { none: 0, patch: 1, minor: 2, major: 3 };
 
 const SOURCE_RULES = [
   {
-    path: 'packages/server/src/index.ts',
+    path: 'packages/core/src/version.ts',
+    pattern: /export const KINLOOM_CORE_VERSION = '(\d+\.\d+\.\d+)';/g,
+    replace(version) {
+      return `export const KINLOOM_CORE_VERSION = '${version}';`;
+    },
+  },
+  {
+    path: 'packages/server/src/version.ts',
     pattern: /export const KINLOOM_SERVER_VERSION = '(\d+\.\d+\.\d+)';/g,
     replace(version) {
       return `export const KINLOOM_SERVER_VERSION = '${version}';`;
@@ -32,6 +39,13 @@ const SOURCE_RULES = [
     pattern: /export const KINLOOM_WORKER_VERSION = '(\d+\.\d+\.\d+)';/g,
     replace(version) {
       return `export const KINLOOM_WORKER_VERSION = '${version}';`;
+    },
+  },
+  {
+    path: 'packages/ui/src/version.ts',
+    pattern: /export const KINLOOM_UI_VERSION = '(\d+\.\d+\.\d+)';/g,
+    replace(version) {
+      return `export const KINLOOM_UI_VERSION = '${version}';`;
     },
   },
   {
