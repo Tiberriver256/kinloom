@@ -1879,4 +1879,72 @@ describe('archive-org native client: hardening', () => {
     );
     expect(redirected.toString('utf8')).toBe('redirected-ok');
   });
+
+  it('supports archive-org pages alias with --pages, --out-dir, --scale, --concurrency, and skip-if-cached resume', async () => {
+    const tmp = await makeTempDir();
+    const cacheRoot = path.join(tmp, 'cache');
+    const outDir = path.join(tmp, 'out');
+    const itemId = 'demo_batch_book';
+    const fakeMeta = {
+      metadata: { identifier: itemId, title: 'Demo Batch Book' },
+      files: [{ name: `${itemId}_scandata.xml`, format: 'Scandata' }],
+    };
+    const fakeScandata = `<?xml version="1.0" encoding="UTF-8"?>
+<book><pageData>
+  <page leafNum="0"><pageType>Cover</pageType><addToAccessFormats>true</addToAccessFormats></page>
+  <page leafNum="1"><pageType>Normal</pageType><pageNumber>1</pageNumber><addToAccessFormats>true</addToAccessFormats></page>
+  <page leafNum="2"><pageType>Normal</pageType><pageNumber>2</pageNumber><addToAccessFormats>true</addToAccessFormats></page>
+  <page leafNum="3"><pageType>Normal</pageType><pageNumber>3</pageNumber><addToAccessFormats>true</addToAccessFormats></page>
+  <page leafNum="4"><pageType>Normal</pageType><pageNumber>4</pageNumber><addToAccessFormats>true</addToAccessFormats></page>
+  <page leafNum="5"><pageType>Normal</pageType><pageNumber>5</pageNumber><addToAccessFormats>true</addToAccessFormats></page>
+</pageData></book>`;
+
+    const jpegBytes = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46]);
+    const fetchedUrls: string[] = [];
+    const fetchImpl: typeof fetch = async (input) => {
+      const url = String(input);
+      if (url.includes('/metadata/')) {
+        return bytesResponse(JSON.stringify(fakeMeta), 200, { 'content-type': 'application/json' });
+      }
+      if (url.endsWith(`/${itemId}_scandata.xml`)) {
+        return bytesResponse(fakeScandata, 200, { 'content-type': 'application/xml' });
+      }
+      fetchedUrls.push(url);
+      return bytesResponse(jpegBytes, 200, { 'content-type': 'image/jpeg' });
+    };
+
+    const run1 = await invokeIa(
+      ['pages', itemId, '--pages', '1-3,5', '--out-dir', outDir, '--scale', '4', '--concurrency', '4', '--json'],
+      { cacheDir: cacheRoot, fetchImpl }
+    );
+    expect(run1.exitCode, run1.stderr).toBe(0);
+    const body1 = JSON.parse(run1.stdout) as { count: number; cache_hit: boolean; pages: Array<{ leaf: number; path: string; page_cached: boolean }> };
+    expect(body1.count).toBe(4);
+    expect(body1.cache_hit).toBe(false);
+    expect(body1.pages.map((p) => p.leaf)).toEqual([1, 2, 3, 5]);
+    expect(fetchedUrls).toHaveLength(4);
+    expect(fetchedUrls.every((u) => u.includes('_s4.jpg'))).toBe(true);
+    for (const p of body1.pages) {
+      expect(fs.existsSync(p.path)).toBe(true);
+    }
+
+    // Second run resumes cleanly from disk cache with 0 new HTTP fetches
+    const run2 = await invokeIa(
+      ['pages', itemId, '--pages', '1-3,5', '--out-dir', outDir, '--scale', '4', '--concurrency', '4', '--json'],
+      { cacheDir: cacheRoot, fetchImpl }
+    );
+    expect(run2.exitCode, run2.stderr).toBe(0);
+    const body2 = JSON.parse(run2.stdout) as { count: number; cache_hit: boolean };
+    expect(body2.count).toBe(4);
+    expect(body2.cache_hit).toBe(true);
+    expect(fetchedUrls).toHaveLength(4);
+
+    // Invalid --concurrency exits 2
+    const badConc = await invokeIa(
+      ['pages', itemId, '--pages', '1', '--out-dir', outDir, '--concurrency', '99'],
+      { cacheDir: cacheRoot, fetchImpl }
+    );
+    expect(badConc.exitCode).toBe(2);
+    expect(badConc.stderr).toContain('--concurrency');
+  });
 });

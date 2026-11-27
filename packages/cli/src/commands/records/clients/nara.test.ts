@@ -2140,4 +2140,25 @@ describe('NARA url subcommand, help, and env defaults', () => {
     expect(capturedKey).toBe('env-secret-key');
     expect(RecordRuntimeError.name).toBe('RecordRuntimeError');
   });
+
+  it('supports --series filter on nara search/url for 4-digit year, microform ID, NAID, and title', async () => {
+    const cacheDir = await makeTempDir('nara-series-');
+
+    const yearUrl = await invokeNara(['url', 'Mercer', '--series', '1940', '--api'], { cacheDir });
+    expect(yearUrl.exitCode, yearUrl.stderr).toBe(0);
+    expect(yearUrl.stdout).toContain('startDate=1940');
+    expect(yearUrl.stdout).toContain('endDate=1940');
+
+    const microUrl = await invokeNara(['url', 'Mercer', '--series', 'M593', '--api'], { cacheDir });
+    expect(microUrl.exitCode, microUrl.stderr).toBe(0);
+    expect(microUrl.stdout).toContain('controlNumbers=M593');
+
+    const naidUrl = await invokeNara(['url', 'Mercer', '--series', '589578', '--api'], { cacheDir });
+    expect(naidUrl.exitCode, naidUrl.stderr).toBe(0);
+    expect(naidUrl.stdout).toContain('ancestorNaIds=589578');
+
+    const titleUrl = await invokeNara(['url', 'Mercer', '--series', 'Population Schedules', '--api'], { cacheDir });
+    expect(titleUrl.exitCode, titleUrl.stderr).toBe(0);
+    expect(titleUrl.stdout).toContain('title=Population');
+  });
 });

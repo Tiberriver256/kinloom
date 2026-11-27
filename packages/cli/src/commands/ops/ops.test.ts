@@ -7333,4 +7333,35 @@ describe('ops/verify', () => {
       { from: 'per_samuel_rowan', to: 'per_arthur_alder', relation: 'parent', family_xref: '@F20@' },
     ]);
   });
+
+  it('kinloom context --full --json returns linked events, sources, media, kinship (living-redacted), and pronunciation', async () => {
+    const demoDir = path.resolve(process.cwd(), 'examples', 'demo');
+    const out: string[] = [];
+    const err: string[] = [];
+    const exitCode = await runCli(
+      ['context', 'p_abraham_lincoln_1809', '--repo', demoDir, '--full', '--json'],
+      {
+        io: {
+          stdout: (line) => out.push(line),
+          stderr: (line) => err.push(line),
+        },
+      }
+    );
+    expect(exitCode, err.join('\n')).toBe(0);
+    const payload = JSON.parse(out.join('\n')) as {
+      person: { id: string; full_name: string };
+      events: unknown[];
+      sources: unknown[];
+      media: unknown[];
+      kinship: Array<{ from: string; to: string; relation: string }>;
+      pronunciation: { phonetic?: string; ipa?: string } | null;
+    };
+    expect(payload.person.id).toBe('p_abraham_lincoln_1809');
+    expect(payload.events.length).toBeGreaterThan(0);
+    expect(payload.sources.length).toBeGreaterThan(0);
+    expect(payload.media.length).toBeGreaterThan(0);
+    expect(payload.kinship.length).toBeGreaterThan(0);
+    expect(payload.pronunciation).not.toBeNull();
+    expect(payload.pronunciation?.phonetic).toContain('LING');
+  });
 });
