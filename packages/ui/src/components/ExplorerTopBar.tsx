@@ -5,7 +5,7 @@ import { useArchiveUi } from '../context/ArchiveUiContext.js';
 import { cx, joinClasses } from '../lib/cx.js';
 import { KINLOOM_VOCABULARY } from '../lib/vocabulary.js';
 import { AuthSessionActorContext } from '../machines/authSessionMachine.js';
-import { useKinloomPlugins } from '../plugins/PluginContext.js';
+import { PluginSlot, useKinloomPlugins } from '../plugins/PluginContext.js';
 import controlStyles from '../styles/Controls.module.css';
 import { initialsOf } from './Atoms.js';
 import topBarStyles from './ExplorerTopBar.module.css';
@@ -201,6 +201,7 @@ export const ExplorerTopBar: React.FC = () => {
                 {route.navLabel}
               </Link>
             ))}
+            <PluginSlot name="topBarNav" className={cx(topBarStyles, 'topbar-nav-plugin-slot')} />
           </nav>
         </div>
 

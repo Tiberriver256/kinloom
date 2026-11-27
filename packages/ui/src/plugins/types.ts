@@ -44,6 +44,10 @@ export interface KinloomUiPluginSlots {
   readonly evidenceExtra?: KinloomUiPluginSlotRenderer;
   /** Persistent shell-level slot rendered as a sibling to routes (survives navigation). */
   readonly appShell?: KinloomUiPluginSlotRenderer;
+  /** Optional inline slot inside the primary ExplorerTopBar navigation bar. */
+  readonly topBarNav?: KinloomUiPluginSlotRenderer;
+  /** Optional inline slot inside the KinloomFooter navigation bar. */
+  readonly footer?: KinloomUiPluginSlotRenderer;
   /** Admin-only settings slot rendered inside AdminSettingsShell alongside Core Application Settings. */
   readonly adminSettings?: KinloomUiPluginSlotRenderer;
 }

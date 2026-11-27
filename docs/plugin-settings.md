@@ -185,6 +185,7 @@ Accepts partial non-secret `values` and explicit write-only `secrets` mutations 
 
 - **Cloudflare Workers Observability (`createWorkersObservabilityPlugin`):** Exposes read-only runtime platform, storage/email bindings, observability status, `Server-Timing`, security telemetry, and Web Analytics state, plus runtime toggles for `Server-Timing`, `X-Request-Id`, and minimum structured log level.
 - **Pronunciation & TTS (`createPronunciationPlugin`):** Exposes active TTS adapter and lexicon store status, primary and fallback TTS backends (`gemini`, `openai-speech`, `chirp3-hd`, `disabled`), OpenAI-compatible endpoint URL, default model and voice, phoneme mode (`ipa`, `arpabet`, `plain`), auto-generate toggle, and write-only masked provider API keys (`{ type: 'string', secret: true }` and `{ type: 'secret' }`).
+- **Open Finance & Donations (`createOpenFinancePlugin`):** Off by default. Exposes read-only ledger status and monthly/annual cost totals, visibility toggles, display currency, strictly allowlisted external donation URLs, primary CTA selection, and cost ledger JSON. See [docs/open-finance.md](open-finance.md).
 
 ## Cloudflare D1 migration
 

@@ -17,6 +17,11 @@ export type {
   ObservabilityStatsClient,
 } from './adapters/observabilityStatsClient.js';
 export { createHttpObservabilityStatsClient } from './adapters/observabilityStatsClient.js';
+export type {
+  HttpOpenFinanceClientOptions,
+  OpenFinanceClient,
+} from './adapters/openFinanceClient.js';
+export { createHttpOpenFinanceClient } from './adapters/openFinanceClient.js';
 export {
   createStaticArchiveDataSource,
   StaticDemoDataSource,
@@ -185,6 +190,7 @@ export { KinloomApp } from './KinloomApp.js';
 export * from './lib/adminDiagnostics.js';
 export * from './lib/archivalTreeModel.js';
 export * from './lib/observabilityStatsModel.js';
+export * from './lib/openFinanceModel.js';
 export * from './lib/pluginSettingsForm.js';
 export * from './lib/scrollMemory.js';
 export * from './lib/searchNavigation.js';
@@ -231,6 +237,11 @@ export {
   createObservabilityStatsPlugin,
   OBSERVABILITY_STATS_UI_PLUGIN_ID,
 } from './plugins/observabilityStatsPlugin.js';
+export type { OpenFinanceUiPluginOptions } from './plugins/openFinancePlugin.js';
+export {
+  createOpenFinancePlugin,
+  OPEN_FINANCE_UI_PLUGIN_ID,
+} from './plugins/openFinancePlugin.js';
 export type {
   KinloomPluginContextValue,
   KinloomPluginProviderProps,

@@ -3,6 +3,7 @@ import { Link, useInRouterContext } from 'react-router-dom';
 import { useArchiveData } from '../context/ArchiveDataContext.js';
 import { cx } from '../lib/cx.js';
 import { KINLOOM_VOCABULARY } from '../lib/vocabulary.js';
+import { PluginSlot } from '../plugins/PluginContext.js';
 import footerStyles from './KinloomFooter.module.css';
 
 export const KinloomMark: React.FC<{ size?: number }> = ({ size = 18 }) => (
@@ -52,6 +53,7 @@ export const KinloomFooter: React.FC<{ hideNav?: boolean }> = ({ hideNav = false
           <Link to="/evidence" className={cx(footerStyles, 'kinloom-footer-link')}>
             {KINLOOM_VOCABULARY.nav.evidenceFull}
           </Link>
+          <PluginSlot name="footer" className={cx(footerStyles, 'kinloom-footer-plugin-slot')} />
         </nav>
       )}
       <span className={cx(footerStyles, 'kinloom-footer-credit')}>

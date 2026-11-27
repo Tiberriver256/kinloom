@@ -20,6 +20,11 @@
   gap: 8px 16px;
 }
 
+.kinloom-footer-plugin-slot,
+.kinloom-footer-plugin-slot :global(.kinloom-plugin-slot-item) {
+  display: contents;
+}
+
 .kinloom-footer-link {
   font-family: var(--font-mono);
   font-size: 0.76rem;

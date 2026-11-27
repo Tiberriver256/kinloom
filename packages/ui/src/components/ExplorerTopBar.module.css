@@ -43,6 +43,11 @@
   gap: 14px;
 }
 
+.topbar-nav-plugin-slot,
+.topbar-nav-plugin-slot :global(.kinloom-plugin-slot-item) {
+  display: contents;
+}
+
 .nav-divider {
   width: 1px;
   height: 16px;
