@@ -1,12 +1,15 @@
 import fc from 'fast-check';
 import { describe, expect, it, vi } from 'vitest';
 import { compileArchive } from './compileArchive.js';
+import { computeLifeOverlap } from './domain/kinshipFinder.js';
+import { isPersonAliveInYear } from './domain/timeSnapshot.js';
 import {
   PrivacyViolationError,
   applyPrivacyFilter,
   assertMediaAllowedForPrivacy,
   isPersonLivingPublic,
   redactSinglePerson,
+  resolveEffectiveLiving,
   sanitizeEventForWrite,
   sanitizePersonForWrite,
 } from './privacy.js';
@@ -448,5 +451,52 @@ describe('compileArchive and living-person privacy', () => {
       ),
       { numRuns: 60 }
     );
+  });
+
+  it('advances default referenceYear dynamically from the runtime UTC clock when omitted', () => {
+    vi.useFakeTimers();
+    try {
+      const person1926 = {
+        is_living: false,
+        birth_edtf: '1926-03-14',
+        death_edtf: '',
+      };
+
+      vi.setSystemTime(new Date('2026-06-15T12:00:00.000Z'));
+      expect(
+        isPersonLivingPublic({ hasDeathOrBurial: false, birthYear: 1926, earliestEventYear: 1926 })
+      ).toBe(true);
+      expect(resolveEffectiveLiving(person1926)).toBe(true);
+
+      vi.setSystemTime(new Date('2027-01-01T00:00:00.000Z'));
+      expect(
+        isPersonLivingPublic({ hasDeathOrBurial: false, birthYear: 1926, earliestEventYear: 1926 })
+      ).toBe(false);
+      expect(resolveEffectiveLiving(person1926)).toBe(false);
+
+      vi.setSystemTime(new Date('2030-05-01T00:00:00.000Z'));
+      const livingPerson = {
+        id: 'p_living_clock',
+        slug: 'living-clock',
+        full_name: 'Jordan Alder',
+        given_name: 'Jordan',
+        surname: 'Alder',
+        alt_names: [],
+        sex: 'U' as const,
+        is_living: true,
+        lineage_group: 'core',
+        birth_edtf: '1990',
+        death_edtf: '',
+        portrait_url: null,
+        birth_year: 1990,
+        death_year: null,
+        thumb_url: null,
+        media_count: 0,
+      };
+      expect(isPersonAliveInYear(livingPerson, 2029)).toBe(true);
+      expect(computeLifeOverlap(livingPerson, livingPerson)?.end).toBe(2030);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
