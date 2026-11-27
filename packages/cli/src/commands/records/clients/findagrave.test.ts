@@ -918,4 +918,28 @@ describe('findagrave native client', () => {
     expect(u.exitCode, u.stderr).toBe(0);
     expect(u.stdout).toContain('firstname=Clara&lastname=Barton&birthyear=1821&deathyear=1912');
   });
+
+  it('supports findagrave memorial <id> alias sharing the get cache', async () => {
+    const { cacheRoot } = await makeTempEnv();
+    let calls = 0;
+    const fetchImpl: typeof fetch = async () => {
+      calls += 1;
+      return gqlJsonResponse({
+        memorialsById: [sampleMemorial('627', 'Abraham', 'Lincoln')],
+      });
+    };
+
+    const r1 = await invokeFindagrave(['memorial', '627', '--json'], { cacheRoot, fetchImpl });
+    expect(r1.exitCode, r1.stderr).toBe(0);
+    const parsed1 = JSON.parse(r1.stdout) as Array<{ id: string; cache_hit: boolean }>;
+    expect(parsed1[0]?.id).toBe('627');
+    expect(parsed1[0]?.cache_hit).toBe(false);
+    expect(calls).toBe(1);
+
+    const r2 = await invokeFindagrave(['memorial', '627', '--json'], { cacheRoot, fetchImpl });
+    expect(r2.exitCode, r2.stderr).toBe(0);
+    const parsed2 = JSON.parse(r2.stdout) as Array<{ cache_hit: boolean }>;
+    expect(parsed2[0]?.cache_hit).toBe(true);
+    expect(calls).toBe(1);
+  });
 });

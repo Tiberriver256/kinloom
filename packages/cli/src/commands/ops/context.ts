@@ -10,7 +10,7 @@ import {
   resolveEffectiveLiving,
   resolvePersonPronunciation,
   type PrivacyConfig,
-  type ResolvedPronunciation,
+  type ResolvedPersonPronunciation,
 } from '@kinloom/core';
 import { CliValidationError } from '../../errors.js';
 
@@ -125,7 +125,7 @@ export interface PersonContextPayload {
     children: ContextRelativeListItem[];
   };
   kinship: ContextKinshipEdge[];
-  pronunciation: ResolvedPronunciation | null;
+  pronunciation: ResolvedPersonPronunciation | null;
   events: Record<string, unknown>[];
   places: Record<string, unknown>[];
   sources: Record<string, unknown>[];
@@ -1101,7 +1101,7 @@ export async function runContextCommand(
     mediaText,
     narrativesText,
   ] = await Promise.all([
-    readOptionalUtf8(path.join(repoDir, 'kinloom.config.yaml')),
+    readOptionalUtf8(path.join(repoDir, 'kinloom.config.yaml')).then((t) => t || readOptionalUtf8(path.join(dataDir, 'kinloom.config.yaml'))),
     readOptionalUtf8(peopleYamlPath),
     readOptionalUtf8(path.join(dataDir, 'kinship.yaml')),
     readOptionalUtf8(path.join(dataDir, 'events.yaml')),
