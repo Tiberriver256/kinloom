@@ -21,7 +21,7 @@ export function cleanSourceCitationTitle(rawTitle: string): string {
 }
 
 export function inferSourceRepository(title: string, repoName?: string, publisher?: string): string {
-  if (repoName && repoName.trim() && !/^ancestry\.com$/i.test(repoName.trim())) {
+  if (repoName?.trim() && !/^ancestry\.com$/i.test(repoName.trim())) {
     return repoName.trim();
   }
   const t = title.toLowerCase();
@@ -59,7 +59,7 @@ export function inferSourceRepository(title: string, repoName?: string, publishe
   if (t.includes('church of england') || t.includes('parish records') || t.includes('england, select')) {
     return 'Church of England Parish Registers';
   }
-  if (publisher && publisher.trim()) {
+  if (publisher?.trim()) {
     return publisher.trim();
   }
   return 'Archival Record Collection (imported via Ancestry tree)';

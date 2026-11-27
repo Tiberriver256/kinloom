@@ -189,7 +189,7 @@ async function main() {
       console.error(`  - [${rule}] ${target} ${detail}`.trim());
     }
     if (previewStderr.trim()) {
-      console.error('\nPreview server stderr:\n' + previewStderr.trim());
+      console.error(`\nPreview server stderr:\n${previewStderr.trim()}`);
     }
     process.exit(1);
   }

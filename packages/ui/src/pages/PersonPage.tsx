@@ -441,6 +441,7 @@ export const PersonPage: React.FC = () => {
     }
   }, [activeEvent, person, setActiveYear]);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: push pivot breadcrumb only when person slug changes
   useEffect(() => {
     if (person) {
       pushPivot({ slug: person.slug, name: person.full_name, year: activeEvent?.year ?? null });

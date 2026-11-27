@@ -190,7 +190,7 @@ export function entryMatchesFilters(
 
 function buildPortalQuery(query: string, county: string | undefined): string {
   const parts = [query.trim()];
-  if (county && county.trim()) {
+  if (county?.trim()) {
     parts.push(county.trim());
   }
   return parts.filter(Boolean).join(' ');

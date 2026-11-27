@@ -412,6 +412,7 @@ test.describe('Wave 50B UX regression suite', () => {
       '/evidence',
     ]) {
       await page.goto(route);
+      // biome-ignore lint/performance/useDomNodeTextContent: E2E intentionally checks visible rendered text
       const bodyText = await page.locator('main').innerText();
       for (const re of deprecatedPatterns) {
         expect(bodyText, `Deprecated term ${re} found on ${route}`).not.toMatch(re);

@@ -394,6 +394,7 @@ export const ArchiveDataProvider: React.FC<ArchiveDataProviderProps> = ({
 
   // Fetch live D1 pronunciation overrides when editing is enabled or archive loads over HTTP.
   // Fails silently in static/offline mode.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: re-fetch live pronunciations when reloadTick increments
   useEffect(() => {
     if (!liveCapabilities.canEdit && !archiveLoadedOverHttp) {
       return;

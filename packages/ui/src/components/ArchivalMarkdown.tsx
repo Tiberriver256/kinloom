@@ -197,7 +197,7 @@ function renderPlainProseWithEntities(
     }
     const matchedText = match[1];
     const target = entityCtx.autoTargetsByText.get(matchedText);
-    if (target && (!seenAutoEntities || !seenAutoEntities.has(target.key))) {
+    if (target && !seenAutoEntities?.has(target.key)) {
       seenAutoEntities?.add(target.key);
       const key = `${keyPrefix}-ae-${matchIdx}`;
       matchIdx += 1;

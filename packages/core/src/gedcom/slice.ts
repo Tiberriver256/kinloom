@@ -266,7 +266,7 @@ function normalizePersonNames(
   const explicitBirth = ind.nameEntries.find(
     (entry) => entry.nameType === 'birth' || entry.nameType === 'maiden'
   );
-  if (explicitBirth && explicitBirth.fullName) {
+  if (explicitBirth?.fullName) {
     const alts = new Set<string>();
     for (const entry of ind.nameEntries) {
       if (entry.fullName && entry.fullName !== explicitBirth.fullName) {
@@ -286,7 +286,7 @@ function normalizePersonNames(
     const maidenEntry = ind.nameEntries.find(
       (entry) => entry.surname && fatherSurnames.has(entry.surname.toLowerCase())
     );
-    if (maidenEntry && maidenEntry.fullName) {
+    if (maidenEntry?.fullName) {
       const alts = new Set<string>();
       for (const entry of ind.nameEntries) {
         if (entry.fullName && entry.fullName !== maidenEntry.fullName) {

@@ -119,6 +119,7 @@ export const PronunciationBadge: React.FC<PronunciationBadgeProps> = ({
   const activeEntry: Pronunciation | PronunciationVariant | null | undefined =
     effectiveVariantIdx !== null ? variants[effectiveVariantIdx] : pronunciation;
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: reset audio playback when pronunciation entry changes
   useEffect(() => {
     setSelectedVariantIdx(null);
   }, [pronunciation]);

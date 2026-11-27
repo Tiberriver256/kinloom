@@ -529,8 +529,7 @@ export function filterMediaForPrivacy(
     if (stripLivingPortraits && item.event_id && eventsById) {
       const ev = eventsById.get(item.event_id);
       if (
-        ev &&
-        ev.participants.some((pt) => {
+        ev?.participants.some((pt) => {
           const participant = peopleById.get(pt.person_id);
           return participant?.is_living;
         })

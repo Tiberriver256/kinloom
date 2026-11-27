@@ -207,7 +207,7 @@ Options:
 };
 
 function requireStringFlag(value: string | undefined, flagName: string): string {
-  if (!value || !value.trim()) {
+  if (!value?.trim()) {
     throw new CliValidationError(`Missing required option \`${flagName}\`.`);
   }
   return value.trim();

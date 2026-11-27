@@ -141,14 +141,14 @@ export function parsePageSpec(raw: string, maxPages = PDF_PAGE_BATCH_LIMIT): num
       const bounds = token.split('-');
       if (bounds.length !== 2 || !bounds[0].trim() || !bounds[1].trim()) {
         throw new CliValidationError(
-          `Invalid page range '${token}' in --pages '${raw}'. ` + 'Use positive 1-based bounds like 10-12.'
+          `Invalid page range '${token}' in --pages '${raw}'. Use positive 1-based bounds like 10-12.`
         );
       }
       const startStr = bounds[0].trim();
       const endStr = bounds[1].trim();
       if (!/^[+-]?\d+$/.test(startStr) || !/^[+-]?\d+$/.test(endStr)) {
         throw new CliValidationError(
-          `Invalid page range '${token}' in --pages '${raw}'. ` + 'Use integer bounds like 10-12.'
+          `Invalid page range '${token}' in --pages '${raw}'. Use integer bounds like 10-12.`
         );
       }
       const start = Number.parseInt(startStr, 10);

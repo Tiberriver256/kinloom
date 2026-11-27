@@ -253,7 +253,7 @@ export function computeTimeSnapshot(
 
     const sameYearEvents = pEvents.filter((e) => e.year === year);
     const sameYearWithPlace = sameYearEvents.find((e) => e.place_id && placesById.has(e.place_id));
-    if (sameYearWithPlace && sameYearWithPlace.place_id) {
+    if (sameYearWithPlace?.place_id) {
       const place = resolveCanonicalPlace(placesById.get(sameYearWithPlace.place_id), placesById);
       if (!place) {
         continue;
@@ -353,7 +353,7 @@ export function computeTimeSnapshot(
       }
     }
 
-    if (bestEv && bestEv.place_id) {
+    if (bestEv?.place_id) {
       const place = resolveCanonicalPlace(placesById.get(bestEv.place_id), placesById);
       if (!place) {
         continue;

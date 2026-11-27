@@ -2243,13 +2243,11 @@ export function canonicalCensus1950Query(options: {
   if (!Number.isInteger(page) || page < 1) {
     throw new CliValidationError(`Invalid --page value: ${String(page)} (must be >= 1).`);
   }
-  const stateCode = options.state && options.state.trim() ? normalizeCensus1950State(options.state) : '';
-  const countyText =
-    options.county && options.county.trim() ? census1950PlainToken(options.county, '--county', 80) : '';
-  const nameText =
-    options.name && options.name.trim() ? census1950PlainToken(options.name, '--name', 120) : '';
+  const stateCode = options.state?.trim() ? normalizeCensus1950State(options.state) : '';
+  const countyText = options.county?.trim() ? census1950PlainToken(options.county, '--county', 80) : '';
+  const nameText = options.name?.trim() ? census1950PlainToken(options.name, '--name', 120) : '';
   let edText = '';
-  if (options.ed && options.ed.trim()) {
+  if (options.ed?.trim()) {
     edText = census1950PlainToken(options.ed, '--ed', 32);
     if (!/^[0-9A-Za-z]+(?:-[0-9A-Za-z]+)*$/.test(edText)) {
       throw new CliValidationError(`Invalid --ed value: '${options.ed}'`);
@@ -3755,10 +3753,10 @@ async function runCensus1950(
     .join(' ')
     .trim();
   const flagName = getStringOption(parsed, 'name');
-  if (posName && flagName && flagName.trim()) {
+  if (posName && flagName?.trim()) {
     throw new CliValidationError('Pass either a positional name or --name/--surname, not both.');
   }
-  const resolvedName = flagName && flagName.trim() ? flagName : posName || undefined;
+  const resolvedName = flagName?.trim() ? flagName : posName || undefined;
 
   const canonical = canonicalCensus1950Query({
     state: getStringOption(parsed, 'state'),

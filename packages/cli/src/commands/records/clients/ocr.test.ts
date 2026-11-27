@@ -222,13 +222,13 @@ describe('ocr native client', () => {
     const fakeTesseract = path.join(binDir, 'tesseract');
     await writeFile(
       fakeTesseract,
-      [
+      `${[
         '#!/usr/bin/env node',
         'const fs = require("node:fs");',
         `fs.writeFileSync(${JSON.stringify(pidFile)}, String(process.pid));`,
         'process.on("SIGTERM", () => { /* ignore SIGTERM to test SIGKILL escalation */ });',
         'setInterval(() => {}, 10000);',
-      ].join('\n') + '\n',
+      ].join('\n')}\n`,
       { mode: 0o755 }
     );
 
@@ -357,7 +357,7 @@ describe('ocr native client', () => {
 
     await writeFile(
       path.join(binDir, 'tesseract'),
-      [
+      `${[
         '#!/bin/sh',
         `echo "$1|$OMP_THREAD_LIMIT|$*" >> "${callLog}"`,
         'base=$(basename "$1")',
@@ -375,7 +375,7 @@ describe('ocr native client', () => {
         '    echo "TEXT:$base:OMP=$OMP_THREAD_LIMIT"',
         '    ;;',
         'esac',
-      ].join('\n') + '\n',
+      ].join('\n')}\n`,
       { mode: 0o755 }
     );
 

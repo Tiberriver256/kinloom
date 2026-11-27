@@ -601,7 +601,7 @@ describe('native TypeScript OCR, alias routing, and ubiquitous-language parity',
     // Pure-Node fake tesseract inspects PNG header dimensions and emits scaled TSV.
     await writeFile(
       path.join(binDir, 'tesseract'),
-      [
+      `${[
         `#!${process.execPath}`,
         'const fs = require("node:fs");',
         'const data = fs.readFileSync(process.argv[2]);',
@@ -610,14 +610,16 @@ describe('native TypeScript OCR, alias routing, and ubiquitous-language parity',
         `fs.appendFileSync(${JSON.stringify(seenSizesPath)}, w + "x" + h + "\\n");`,
         'if (process.argv.includes("tsv")) {',
         '  console.log("level\\tpage_num\\tblock_num\\tpar_num\\tline_num\\tword_num\\tleft\\ttop\\twidth\\theight\\tconf\\ttext");',
+        // biome-ignore lint/suspicious/noTemplateCurlyInString: shell variable expansion inside fake script
         '  console.log(`1\\t1\\t0\\t0\\t0\\t0\\t0\\t0\\t${w}\\t${h}\\t-1\\t`);',
         '  const x0 = Math.round(w * 0.10), y0 = Math.round(h * 0.20);',
         '  const bw = Math.round(w * 0.20), bh = Math.round(h * 0.05);',
+        // biome-ignore lint/suspicious/noTemplateCurlyInString: shell variable expansion inside fake script
         '  console.log(`5\\t1\\t1\\t1\\t1\\t1\\t${x0}\\t${y0}\\t${bw}\\t${bh}\\t93\\tProbate`);',
         '} else {',
         '  console.log("Probate");',
         '}',
-      ].join('\n') + '\n',
+      ].join('\n')}\n`,
       { mode: 0o755 }
     );
 

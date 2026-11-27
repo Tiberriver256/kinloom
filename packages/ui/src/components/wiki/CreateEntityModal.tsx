@@ -208,6 +208,7 @@ export const CreateEntityModal: React.FC<CreateEntityModalProps> = ({
   const anchorId = relativeContext?.anchorPersonId ?? null;
   const anchorRelation = relativeContext?.relation ?? null;
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: re-initialize form defaults when anchor entity changes
   useEffect(() => {
     if (!open) {
       return;

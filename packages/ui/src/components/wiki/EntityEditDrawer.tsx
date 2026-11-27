@@ -167,6 +167,7 @@ export const EntityEditDrawer: React.FC<EntityEditDrawerProps> = ({
     },
   });
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: machine send and snapshot.matches are intentionally omitted to avoid re-running load effect
   useEffect(() => {
     if (!open) {
       return undefined;
@@ -239,6 +240,7 @@ export const EntityEditDrawer: React.FC<EntityEditDrawerProps> = ({
     }
   }, [snapshot, reloadArchive, onSaved]);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: reset tab state when target entityId changes
   useEffect(() => {
     if (!open) {
       setSharedEditorOpen(false);
@@ -248,6 +250,7 @@ export const EntityEditDrawer: React.FC<EntityEditDrawerProps> = ({
     }
   }, [open, entityId]);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: sync drawer state when revision sync completes
   useEffect(() => {
     if (!open || initialSection !== 'pronunciation') {
       return undefined;

@@ -147,6 +147,7 @@ const NarrativeAudioProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }
   }, []);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: re-apply playbackRate when activeTrack mounts or changes
   useEffect(() => {
     const el = audioRef.current;
     if (!el) {

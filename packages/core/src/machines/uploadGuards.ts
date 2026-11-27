@@ -105,7 +105,7 @@ export function hasLivingUploadTarget(
   }
   if (targets.eventId && eventsById) {
     const ev = eventsById.get(targets.eventId);
-    if (ev && ev.participants.some((pt) => livingPersonIds.has(pt.person_id))) {
+    if (ev?.participants.some((pt) => livingPersonIds.has(pt.person_id))) {
       return true;
     }
   }

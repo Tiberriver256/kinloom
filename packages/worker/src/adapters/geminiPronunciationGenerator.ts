@@ -188,7 +188,7 @@ export class GeminiPronunciationAudioGenerator implements PronunciationAudioGene
   private readonly fetchFn: typeof fetch;
 
   constructor(options: GeminiPronunciationAudioGeneratorOptions) {
-    if (!options.apiKey || !options.apiKey.trim()) {
+    if (!options.apiKey?.trim()) {
       throw new Error('GeminiPronunciationAudioGenerator requires a non-empty apiKey.');
     }
     this.apiKey = options.apiKey.trim();

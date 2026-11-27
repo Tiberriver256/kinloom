@@ -638,7 +638,7 @@ export async function getJson(
         continue;
       }
       throw new RecordRuntimeError(
-        `loc.gov connection error: ${errMessage}. ` + 'Retry once or narrow with --state/--dates/--lccn.'
+        `loc.gov connection error: ${errMessage}. Retry once or narrow with --state/--dates/--lccn.`
       );
     } finally {
       clearTimeout(timer);
@@ -1078,7 +1078,7 @@ export function extractSeqFromUrl(resourceUrl: string, fallback = '1'): string {
 }
 
 export function iiifJpegFromInfo(infoUrl: string, imageWidth: number | undefined): string | null {
-  if (!infoUrl || !infoUrl.endsWith('/info.json')) {
+  if (!infoUrl?.endsWith('/info.json')) {
     return null;
   }
   const base = infoUrl.slice(0, -'/info.json'.length);

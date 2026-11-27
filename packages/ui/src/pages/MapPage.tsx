@@ -848,6 +848,7 @@ export const MapPage: React.FC = () => {
     }, 420);
   }, [selectedStop, playing, drawerExpanded]);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: re-measure map layout when cardSide or historicalMap toggles
   useLayoutEffect(() => {
     const map = mapRef.current;
     const card = cardRef.current;
@@ -915,6 +916,7 @@ export const MapPage: React.FC = () => {
     siteConfig.mapDefaults.minSpanDeg,
   ]);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: fit map camera only when filter selection or map readiness changes
   useEffect(() => {
     const key = `${selectedPersonId}:${selectedEraId}`;
     if (prevFilterKeyRef.current === key) {

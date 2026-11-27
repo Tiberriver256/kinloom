@@ -29,7 +29,7 @@ export async function resolveCallerPrincipal(params: {
   clock: Clock;
 }): Promise<ResolvedAuthContext> {
   const authHeader = params.request.headers.get('authorization');
-  if (authHeader && authHeader.trim().toLowerCase().startsWith('bearer ')) {
+  if (authHeader?.trim().toLowerCase().startsWith('bearer ')) {
     const rawBearer = authHeader.trim().slice(7).trim();
     if (rawBearer.length > 0) {
       const tokenHash = await sha256Hex(rawBearer);

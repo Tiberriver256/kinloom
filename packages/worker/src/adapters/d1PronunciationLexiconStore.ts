@@ -16,7 +16,7 @@ interface PronunciationLexiconRow {
 }
 
 function parseVariantsJson(raw: string | null | undefined): Pronunciation['variants'] {
-  if (!raw || !raw.trim()) {
+  if (!raw?.trim()) {
     return undefined;
   }
   try {

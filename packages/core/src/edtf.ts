@@ -74,7 +74,7 @@ export function lastDayOfMonth(year: number, month: number): number {
   if (month < 1 || month > 12) {
     return 31;
   }
-  const safeYear = year < 1 ? 1 : year;
+  const safeYear = Math.max(year, 1);
   return new Date(Date.UTC(safeYear, month, 0)).getUTCDate();
 }
 

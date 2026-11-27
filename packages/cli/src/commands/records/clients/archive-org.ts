@@ -1117,7 +1117,7 @@ export async function ensureItemCache(
       if (options.needDjvu && !hasDjvu) {
         const djvuRaw = fetched.djvu;
         const decodedDjvu = djvuRaw !== undefined ? djvuRaw.toString('utf8') : undefined;
-        const hasFormFeeds = decodedDjvu !== undefined && decodedDjvu.includes('\x0c');
+        const hasFormFeeds = decodedDjvu?.includes('\x0c');
 
         if (!hasFormFeeds && hocrTextName && hocrIdxName) {
           const hocrTasks: Record<string, string> = {};
@@ -1744,7 +1744,7 @@ function resolveSearchQuery(
   if (base) {
     clauses.push(base);
   }
-  if (options.mediatype && options.mediatype.trim()) {
+  if (options.mediatype?.trim()) {
     clauses.push(`mediatype:(${options.mediatype.trim()})`);
   }
   const flatCollections: string[] = [];

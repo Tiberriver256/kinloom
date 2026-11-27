@@ -724,7 +724,7 @@ async function runTnaSearch(
   }
 
   const resolvedQuery = parsed.positionals[0] ?? getStringOption(parsed, 'queryOpt');
-  if (!resolvedQuery || !resolvedQuery.trim()) {
+  if (!resolvedQuery?.trim()) {
     throw new CliValidationError('Provide QUERY as a positional argument or via --query.');
   }
 

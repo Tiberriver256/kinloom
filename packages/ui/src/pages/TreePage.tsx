@@ -353,7 +353,7 @@ export const TreePage: React.FC = () => {
 
   const restoreFocusedNode = useCallback((): void => {
     const prev = lastFocusedNodeRef.current;
-    if (prev && prev.isConnected && typeof (prev as HTMLElement).focus === 'function') {
+    if (prev?.isConnected && typeof (prev as HTMLElement).focus === 'function') {
       (prev as HTMLElement).focus();
     }
     lastFocusedNodeRef.current = null;
@@ -667,6 +667,7 @@ export const TreePage: React.FC = () => {
   );
 
   // Handle ?focus=<slug> deep link, search-to-focus centering, and fit-to-viewport when layout/surface changes
+  // biome-ignore lint/correctness/useExhaustiveDependencies: focusRequestSeq is an intentional re-centering trigger
   useLayoutEffect(() => {
     if (!bundle) {
       return;

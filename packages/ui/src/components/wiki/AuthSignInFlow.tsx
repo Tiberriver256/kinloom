@@ -125,6 +125,7 @@ export const AuthSignInFlow: React.FC<AuthSignInFlowProps> = ({
     }
   }, [sentTo]);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: focus feedback banner when feedback code changes
   useEffect(() => {
     if (activeFeedback?.focusEmailInput && !sentTo && authProviders.magicLink) {
       emailInputRef.current?.focus();

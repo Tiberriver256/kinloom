@@ -61,7 +61,7 @@ export function deriveCitationBadge(input: {
   if (input.hasPrimarySource === true) {
     return 'Cited';
   }
-  if (input.sourceIds && input.sourceIds.some((id) => id.trim().length > 0)) {
+  if (input.sourceIds?.some((id) => id.trim().length > 0)) {
     return 'Cited';
   }
   return 'Family memory';

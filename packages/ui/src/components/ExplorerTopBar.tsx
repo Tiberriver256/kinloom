@@ -63,6 +63,7 @@ export const ExplorerTopBar: React.FC = () => {
   const isInviteViewer = Boolean(session && session.principal_kind === 'invite_viewer');
   const memberLabel = session?.displayName || session?.email || 'Member';
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: close menus when route pathname changes
   useEffect(() => {
     setAccountOpen(false);
   }, [location.pathname]);

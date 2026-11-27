@@ -143,7 +143,7 @@ export function useDialogFocusTrap<T extends HTMLElement = HTMLDialogElement>({
       if (stackIdx !== -1) {
         activeDialogStack.splice(stackIdx, 1);
       }
-      if (previousFocus && previousFocus.isConnected) {
+      if (previousFocus?.isConnected) {
         previousFocus.focus();
       }
     };
