@@ -36,12 +36,25 @@ export const SourceReaderDrawer: React.FC = () => {
 
   const closeBtnRef = useRef<HTMLButtonElement | null>(null);
   const scanZoomCloseBtnRef = useRef<HTMLButtonElement | null>(null);
+  const copyTimerRef = useRef<number | null>(null);
+  const mountedRef = useRef<boolean>(true);
   const [activeDocId, setActiveDocId] = useState<string>('');
   const [pageIdx, setPageIdx] = useState<number>(0);
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [viewMode, setViewMode] = useState<ReaderViewMode>('text');
   const [scanZoomOpen, setScanZoomOpen] = useState<boolean>(false);
   const [copyFeedback, setCopyFeedback] = useState<string>('');
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      if (copyTimerRef.current !== null && typeof window !== 'undefined') {
+        window.clearTimeout(copyTimerRef.current);
+        copyTimerRef.current = null;
+      }
+    };
+  }, []);
 
   const dialogRef = useDialogFocusTrap({
     open: Boolean(sourceReader),
@@ -170,12 +183,27 @@ export const SourceReaderDrawer: React.FC = () => {
     }
     try {
       await navigator.clipboard.writeText(buildFullSourceText(currentDoc));
+      if (!mountedRef.current) {
+        return;
+      }
       setCopyFeedback('Copied all pages');
     } catch {
+      if (!mountedRef.current) {
+        return;
+      }
       setCopyFeedback('Copy blocked; use Download Text');
     }
-    window.setTimeout(() => {
-      setCopyFeedback('');
+    if (typeof window === 'undefined') {
+      return;
+    }
+    if (copyTimerRef.current !== null) {
+      window.clearTimeout(copyTimerRef.current);
+    }
+    copyTimerRef.current = window.setTimeout(() => {
+      copyTimerRef.current = null;
+      if (mountedRef.current) {
+        setCopyFeedback('');
+      }
     }, 2500);
   };
 

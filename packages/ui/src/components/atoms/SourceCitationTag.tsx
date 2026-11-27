@@ -6,7 +6,7 @@ import type {
   SourceRecord,
 } from '@kinloom/core';
 import { buildLibrarianCitation, formatPublicCitation, summarizeEventCitations } from '@kinloom/core';
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useArchiveData } from '../../context/ArchiveDataContext.js';
 import { useArchiveUi } from '../../context/ArchiveUiContext.js';
 import { useDialogFocusTrap } from '../../hooks/useDialogFocusTrap.js';
@@ -44,7 +44,20 @@ export const SourceCitationTag: React.FC<{
     null
   );
   const scanCloseRef = React.useRef<HTMLButtonElement | null>(null);
+  const copyTimerRef = useRef<number | null>(null);
+  const mountedRef = useRef<boolean>(true);
   const { openSourceReader, openSourceInspector } = useArchiveUi();
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      if (copyTimerRef.current !== null && typeof window !== 'undefined') {
+        window.clearTimeout(copyTimerRef.current);
+        copyTimerRef.current = null;
+      }
+    };
+  }, []);
   const scanDialogRef = useDialogFocusTrap({
     open: Boolean(activeScan),
     onClose: () => {
@@ -73,13 +86,27 @@ export const SourceCitationTag: React.FC<{
     navigator.clipboard
       .writeText(formatted)
       .then(() => {
+        if (!mountedRef.current) {
+          return;
+        }
         setCopiedKey(key);
-        window.setTimeout(() => {
-          setCopiedKey((prev) => (prev === key ? null : prev));
+        if (typeof window === 'undefined') {
+          return;
+        }
+        if (copyTimerRef.current !== null) {
+          window.clearTimeout(copyTimerRef.current);
+        }
+        copyTimerRef.current = window.setTimeout(() => {
+          copyTimerRef.current = null;
+          if (mountedRef.current) {
+            setCopiedKey((prev) => (prev === key ? null : prev));
+          }
         }, 1800);
       })
       .catch(() => {
-        setCopiedKey(null);
+        if (mountedRef.current) {
+          setCopiedKey(null);
+        }
       });
   };
 

@@ -11,7 +11,7 @@ import type {
   UserRole,
 } from '@kinloom/core';
 import type React from 'react';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import atomStyles from '../components/Atoms.module.css';
 import { ExplorerTopBar } from '../components/ExplorerTopBar.js';
 import { KinloomFooter } from '../components/KinloomFooter.js';
@@ -51,6 +51,19 @@ export const AdminPage: React.FC<AdminPageProps> = ({ adminClient, extraSettings
   const [busyKey, setBusyKey] = useState<string | null>(null);
   const [pendingConfirm, setPendingConfirm] = useState<AdminConfirmState | null>(null);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
+  const copyTimerRef = useRef<number | null>(null);
+  const mountedRef = useRef<boolean>(true);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      if (copyTimerRef.current !== null && typeof window !== 'undefined') {
+        window.clearTimeout(copyTimerRef.current);
+        copyTimerRef.current = null;
+      }
+    };
+  }, []);
 
   const [inviteLabel, setInviteLabel] = useState('');
   const [inviteDays, setInviteDays] = useState('30');
@@ -116,25 +129,41 @@ export const AdminPage: React.FC<AdminPageProps> = ({ adminClient, extraSettings
     [client]
   );
 
+  const scheduleCopyReset = (key: string): void => {
+    if (!mountedRef.current || typeof window === 'undefined') {
+      return;
+    }
+    if (copyTimerRef.current !== null) {
+      window.clearTimeout(copyTimerRef.current);
+    }
+    copyTimerRef.current = window.setTimeout(() => {
+      copyTimerRef.current = null;
+      if (mountedRef.current) {
+        setCopiedKey((current) => (current === key ? null : current));
+      }
+    }, 2000);
+  };
+
   const copyText = (key: string, text: string): void => {
     const clipboard = typeof navigator !== 'undefined' ? navigator.clipboard : undefined;
     if (!clipboard?.writeText) {
       setCopiedKey(key);
-      window.setTimeout(() => {
-        setCopiedKey((current) => (current === key ? null : current));
-      }, 2000);
+      scheduleCopyReset(key);
       return;
     }
     void clipboard
       .writeText(text)
       .then(() => {
+        if (!mountedRef.current) {
+          return;
+        }
         setCopiedKey(key);
-        window.setTimeout(() => {
-          setCopiedKey((current) => (current === key ? null : current));
-        }, 2000);
+        scheduleCopyReset(key);
       })
       .catch(() => {
-        setCopiedKey(null);
+        if (mountedRef.current) {
+          setCopiedKey(null);
+        }
       });
   };
 

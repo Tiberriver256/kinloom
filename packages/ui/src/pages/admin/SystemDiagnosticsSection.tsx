@@ -92,11 +92,15 @@ export const SystemDiagnosticsSection: React.FC<SystemDiagnosticsSectionProps> =
   const [copyFeedback, setCopyFeedback] = useState<CopyFeedbackState>({ kind: 'idle' });
   const lastAnnouncementRef = useRef<string>('');
   const resetTimerRef = useRef<number | null>(null);
+  const mountedRef = useRef<boolean>(true);
 
   useEffect(() => {
+    mountedRef.current = true;
     return () => {
+      mountedRef.current = false;
       if (resetTimerRef.current !== null && typeof window !== 'undefined') {
         window.clearTimeout(resetTimerRef.current);
+        resetTimerRef.current = null;
       }
     };
   }, []);
@@ -157,6 +161,9 @@ export const SystemDiagnosticsSection: React.FC<SystemDiagnosticsSectionProps> =
   );
 
   const announceCopy = (ok: boolean): void => {
+    if (!mountedRef.current) {
+      return;
+    }
     if (resetTimerRef.current !== null && typeof window !== 'undefined') {
       window.clearTimeout(resetTimerRef.current);
     }
@@ -167,7 +174,10 @@ export const SystemDiagnosticsSection: React.FC<SystemDiagnosticsSectionProps> =
     setCopyFeedback(ok ? { kind: 'success', message } : { kind: 'error', message });
     if (typeof window !== 'undefined') {
       resetTimerRef.current = window.setTimeout(() => {
-        setCopyFeedback({ kind: 'idle' });
+        resetTimerRef.current = null;
+        if (mountedRef.current) {
+          setCopyFeedback({ kind: 'idle' });
+        }
       }, 2500);
     }
   };

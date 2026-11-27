@@ -17,8 +17,21 @@ export const SourceInspectorDrawer: React.FC = () => {
   const { bundle, sourcesById, eventsById, readableSourceIds, baseUrl } = useArchiveData();
   const { sourceInspector, closeSourceInspector, openSourceReader } = useArchiveUi();
   const closeBtnRef = useRef<HTMLButtonElement | null>(null);
+  const copyTimerRef = useRef<number | null>(null);
+  const mountedRef = useRef<boolean>(true);
   const [copied, setCopied] = useState(false);
   const [scanExpanded, setScanExpanded] = useState(false);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      if (copyTimerRef.current !== null && typeof window !== 'undefined') {
+        window.clearTimeout(copyTimerRef.current);
+        copyTimerRef.current = null;
+      }
+    };
+  }, []);
 
   const activeSourceId = sourceInspector?.sourceId ?? '';
   const sourceRecord = activeSourceId ? sourcesById.get(activeSourceId) : undefined;
@@ -71,13 +84,27 @@ export const SourceInspectorDrawer: React.FC = () => {
     navigator.clipboard
       .writeText(citation.bibliographicString)
       .then(() => {
+        if (!mountedRef.current) {
+          return;
+        }
         setCopied(true);
-        window.setTimeout(() => {
-          setCopied(false);
+        if (typeof window === 'undefined') {
+          return;
+        }
+        if (copyTimerRef.current !== null) {
+          window.clearTimeout(copyTimerRef.current);
+        }
+        copyTimerRef.current = window.setTimeout(() => {
+          copyTimerRef.current = null;
+          if (mountedRef.current) {
+            setCopied(false);
+          }
         }, 2000);
       })
       .catch(() => {
-        setCopied(false);
+        if (mountedRef.current) {
+          setCopied(false);
+        }
       });
   };
 
