@@ -1066,3 +1066,14 @@
     scroll-margin-top: calc(var(--topbar-height) + 52px);
   }
 }
+
+@media print {
+  .person-biography-body:global(.is-collapsed) {
+    max-height: none;
+    overflow: visible;
+  }
+
+  .person-biography-body:global(.is-collapsed)::after {
+    display: none;
+  }
+}
