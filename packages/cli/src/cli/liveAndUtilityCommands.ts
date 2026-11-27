@@ -1,0 +1,455 @@
+import { type CliExitCode, CliValidationError, EXIT_ERROR, EXIT_OK } from '../errors.js';
+import {
+  type CliDispatchContext,
+  parseOptionalPositiveInt,
+  parseOptionalPositiveNumber,
+  safeParseArgs,
+  writeRenderedOutput,
+} from './types.js';
+
+interface ParsedSyncArgs {
+  repoDir?: string;
+  siteUrl?: string;
+  typesRaw?: string;
+  syncMissingMedia: boolean;
+  uploadMediaPaths: string[];
+  concurrency?: number;
+  chunkSize?: number;
+  summary?: string;
+  allowDeletes: boolean;
+  deleteTokens: string[];
+  includeLiving: boolean;
+  verifyLive: boolean;
+  dryRun: boolean;
+  json: boolean;
+}
+
+function parseSyncArgs(argv: readonly string[]): ParsedSyncArgs {
+  const parsed: ParsedSyncArgs = {
+    syncMissingMedia: false,
+    uploadMediaPaths: [],
+    allowDeletes: false,
+    deleteTokens: [],
+    includeLiving: false,
+    verifyLive: false,
+    dryRun: false,
+    json: false,
+  };
+
+  const readFlagValue = (arg: string, index: number, name: string): [string, number] => {
+    if (arg.includes('=')) {
+      const val = arg.slice(arg.indexOf('=') + 1).trim();
+      if (!val) {
+        throw new CliValidationError(`Option \`${name}\` requires a value.`);
+      }
+      return [val, index];
+    }
+    const next = argv[index + 1];
+    if (!next || next.startsWith('-')) {
+      throw new CliValidationError(`Option \`${name}\` requires a value.`);
+    }
+    return [next.trim(), index + 1];
+  };
+
+  for (let i = 0; i < argv.length; i += 1) {
+    const arg = argv[i];
+    if (arg === '--sync-missing-media') {
+      parsed.syncMissingMedia = true;
+      continue;
+    }
+    if (arg === '--allow-deletes') {
+      parsed.allowDeletes = true;
+      continue;
+    }
+    if (arg === '--include-living') {
+      parsed.includeLiving = true;
+      continue;
+    }
+    if (arg === '--verify-live') {
+      parsed.verifyLive = true;
+      continue;
+    }
+    if (arg === '--dry-run') {
+      parsed.dryRun = true;
+      continue;
+    }
+    if (arg === '--json') {
+      parsed.json = true;
+      continue;
+    }
+    if (arg === '--repo' || arg.startsWith('--repo=')) {
+      const [val, nextIdx] = readFlagValue(arg, i, '--repo');
+      parsed.repoDir = val;
+      i = nextIdx;
+      continue;
+    }
+    if (
+      arg === '--site-url' ||
+      arg.startsWith('--site-url=') ||
+      arg === '--site' ||
+      arg.startsWith('--site=')
+    ) {
+      const flagName = arg.startsWith('--site-url') ? '--site-url' : '--site';
+      const [val, nextIdx] = readFlagValue(arg, i, flagName);
+      parsed.siteUrl = val;
+      i = nextIdx;
+      continue;
+    }
+    if (arg === '--types' || arg.startsWith('--types=')) {
+      const [val, nextIdx] = readFlagValue(arg, i, '--types');
+      parsed.typesRaw = parsed.typesRaw ? `${parsed.typesRaw},${val}` : val;
+      i = nextIdx;
+      continue;
+    }
+    if (arg === '--summary' || arg.startsWith('--summary=')) {
+      const [val, nextIdx] = readFlagValue(arg, i, '--summary');
+      parsed.summary = val;
+      i = nextIdx;
+      continue;
+    }
+    if (arg === '--concurrency' || arg.startsWith('--concurrency=')) {
+      const [val, nextIdx] = readFlagValue(arg, i, '--concurrency');
+      parsed.concurrency = parseOptionalPositiveInt(val, '--concurrency');
+      i = nextIdx;
+      continue;
+    }
+    if (arg === '--chunk-size' || arg.startsWith('--chunk-size=')) {
+      const [val, nextIdx] = readFlagValue(arg, i, '--chunk-size');
+      parsed.chunkSize = parseOptionalPositiveInt(val, '--chunk-size');
+      i = nextIdx;
+      continue;
+    }
+    if (arg === '--delete' || arg.startsWith('--delete=')) {
+      const [val, nextIdx] = readFlagValue(arg, i, '--delete');
+      parsed.deleteTokens.push(val);
+      i = nextIdx;
+      continue;
+    }
+    if (arg === '--upload-media' || arg.startsWith('--upload-media=')) {
+      if (arg.startsWith('--upload-media=')) {
+        const raw = arg.slice('--upload-media='.length);
+        const items = raw
+          .split(',')
+          .map((item) => item.trim())
+          .filter(Boolean);
+        if (items.length === 0) {
+          throw new CliValidationError('Option `--upload-media` requires at least one file path.');
+        }
+        parsed.uploadMediaPaths.push(...items);
+      } else {
+        let consumed = 0;
+        while (i + 1 < argv.length && !argv[i + 1].startsWith('-')) {
+          i += 1;
+          for (const item of argv[i]
+            .split(',')
+            .map((part) => part.trim())
+            .filter(Boolean)) {
+            parsed.uploadMediaPaths.push(item);
+            consumed += 1;
+          }
+        }
+        if (consumed === 0) {
+          throw new CliValidationError('Option `--upload-media` requires at least one file path.');
+        }
+      }
+      continue;
+    }
+    throw new CliValidationError(`Unknown argument '${arg}' for \`kinloom sync\`.`);
+  }
+
+  return parsed;
+}
+
+async function runSync(rest: readonly string[], ctx: CliDispatchContext): Promise<CliExitCode> {
+  const parsed = parseSyncArgs(rest);
+  const [{ parseDeleteTargets, parseEntityTypeList, runSyncCommand }, { measureCommand }] = await Promise.all(
+    [import('../commands/ops/sync.js'), import('../commands/ops/telemetry.js')]
+  );
+  const types = parsed.typesRaw ? parseEntityTypeList(parsed.typesRaw) : undefined;
+  const explicitDeletes =
+    parsed.deleteTokens.length > 0 ? parseDeleteTargets(parsed.deleteTokens.join(',')) : undefined;
+  const result = await measureCommand(
+    {
+      subcmd: parsed.dryRun ? 'sync --dry-run' : 'sync',
+      extractResultMeta: (res) => ({
+        exitCode: res.liveVerification && !res.liveVerification.ok ? EXIT_ERROR : EXIT_OK,
+        bytesOut: Buffer.byteLength(res.rendered, 'utf8'),
+      }),
+    },
+    () =>
+      runSyncCommand({
+        repoDir: parsed.repoDir ?? ctx.cwd,
+        siteUrl: parsed.siteUrl,
+        types,
+        syncMissingMedia: parsed.syncMissingMedia,
+        uploadMediaPaths: parsed.uploadMediaPaths,
+        concurrency: parsed.concurrency,
+        chunkSize: parsed.chunkSize,
+        summary: parsed.summary,
+        allowDeletes: parsed.allowDeletes,
+        explicitDeletes,
+        includeLiving: parsed.includeLiving,
+        verifyLive: parsed.verifyLive,
+        dryRun: parsed.dryRun,
+        json: parsed.json,
+        fetchImpl: ctx.fetchImpl,
+      })
+  );
+  writeRenderedOutput(ctx.io, result.rendered);
+  return result.liveVerification && !result.liveVerification.ok ? EXIT_ERROR : EXIT_OK;
+}
+
+async function runMigrate(rest: readonly string[], ctx: CliDispatchContext): Promise<CliExitCode> {
+  const { values } = safeParseArgs({
+    args: rest,
+    allowPositionals: false,
+    options: {
+      repo: { type: 'string' },
+      remote: { type: 'boolean', default: false },
+      local: { type: 'boolean', default: false },
+      'dry-run': { type: 'boolean', default: false },
+      json: { type: 'boolean', default: false },
+    },
+  });
+  if (values.remote && values.local) {
+    throw new CliValidationError('Specify either `--remote` or `--local`, not both.');
+  }
+  const target = values.local ? 'local' : 'remote';
+  const [{ runMigrateCommand }, { measureCommand }] = await Promise.all([
+    import('../commands/ops/migrate.js'),
+    import('../commands/ops/telemetry.js'),
+  ]);
+  const result = await measureCommand(
+    {
+      subcmd: values['dry-run'] ? 'migrate --dry-run' : 'migrate',
+      extractResultMeta: (res) => ({
+        exitCode: res.ok ? EXIT_OK : EXIT_ERROR,
+        bytesOut: Buffer.byteLength(res.rendered, 'utf8'),
+      }),
+    },
+    () =>
+      runMigrateCommand({
+        repoDir: values.repo ?? ctx.cwd,
+        target,
+        dryRun: values['dry-run'],
+        json: values.json,
+      })
+  );
+  writeRenderedOutput(ctx.io, result.rendered);
+  return result.ok ? EXIT_OK : EXIT_ERROR;
+}
+
+async function runDates(rest: readonly string[], ctx: CliDispatchContext): Promise<CliExitCode> {
+  const sub = rest[0];
+  if (sub !== 'weekday' && sub !== 'diff' && sub !== 'age') {
+    throw new CliValidationError(
+      sub
+        ? `Unknown dates subcommand '${sub}'. Expected \`weekday\`, \`diff\`, or \`age\`.`
+        : 'Missing dates subcommand. Expected `weekday`, `diff`, or `age`.'
+    );
+  }
+  const subArgs = rest.slice(1);
+  const { values, positionals } = safeParseArgs({
+    args: subArgs,
+    allowPositionals: true,
+    options: {
+      at: { type: 'string', multiple: true },
+      json: { type: 'boolean', default: false },
+    },
+  });
+  const [{ runDatesCommand }, { measureCommand }] = await Promise.all([
+    import('../commands/ops/dates.js'),
+    import('../commands/ops/telemetry.js'),
+  ]);
+  const result = await measureCommand(
+    {
+      subcmd: `dates ${sub}`,
+      extractResultMeta: (res) => ({
+        exitCode: EXIT_OK,
+        bytesOut: Buffer.byteLength(res.rendered, 'utf8'),
+      }),
+    },
+    async () => {
+      if (sub === 'weekday') {
+        if (values.at && values.at.length > 0) {
+          throw new CliValidationError('Option `--at` is only valid with `kinloom dates age`.');
+        }
+        if (positionals.length !== 1) {
+          throw new CliValidationError('Usage: kinloom dates weekday <YYYY-MM-DD> [--json]');
+        }
+        return runDatesCommand({
+          subcommand: 'weekday',
+          date: positionals[0],
+          json: values.json,
+        });
+      }
+      if (sub === 'diff') {
+        if (values.at && values.at.length > 0) {
+          throw new CliValidationError('Option `--at` is only valid with `kinloom dates age`.');
+        }
+        if (positionals.length !== 2) {
+          throw new CliValidationError(
+            'Usage: kinloom dates diff <start-YYYY-MM-DD> <end-YYYY-MM-DD> [--json]'
+          );
+        }
+        return runDatesCommand({
+          subcommand: 'diff',
+          startDate: positionals[0],
+          endDate: positionals[1],
+          json: values.json,
+        });
+      }
+      if (positionals.length < 1) {
+        throw new CliValidationError(
+          'Usage: kinloom dates age <birth-YYYY-MM-DD> --at <YYYY-MM-DD> [--at ...] [--json]'
+        );
+      }
+      const [birthDate, ...positionalAts] = positionals;
+      const atDates = [...(values.at ?? []), ...positionalAts];
+      return runDatesCommand({
+        subcommand: 'age',
+        birthDate,
+        atDates,
+        json: values.json,
+      });
+    }
+  );
+  writeRenderedOutput(ctx.io, result.rendered);
+  return EXIT_OK;
+}
+
+async function runPronounce(rest: readonly string[], ctx: CliDispatchContext): Promise<CliExitCode> {
+  const sub = rest[0];
+  if (sub !== 'lookup' && sub !== 'audit') {
+    throw new CliValidationError(
+      sub
+        ? `Unknown pronounce subcommand '${sub}'. Expected \`lookup\` or \`audit\`.`
+        : 'Missing pronounce subcommand. Expected `lookup` or `audit`.'
+    );
+  }
+  const subArgs = rest.slice(1);
+  const [{ runPronounceAuditCommand, runPronounceLookupCommand }, { measureCommand }] = await Promise.all([
+    import('../commands/ops/pronounce.js'),
+    import('../commands/ops/telemetry.js'),
+  ]);
+  if (sub === 'lookup') {
+    const { values, positionals } = safeParseArgs({
+      args: subArgs,
+      allowPositionals: true,
+      options: {
+        lang: { type: 'string' },
+        refresh: { type: 'boolean', default: false },
+        json: { type: 'boolean', default: false },
+      },
+    });
+    const term = positionals.join(' ').trim();
+    if (!term) {
+      throw new CliValidationError(
+        'Usage: kinloom pronounce lookup <term> [--lang nl|sv|fi|pl|de|en] [--refresh] [--json]'
+      );
+    }
+    const result = await measureCommand(
+      {
+        subcmd: 'pronounce lookup',
+        extractResultMeta: (res) => ({
+          exitCode: EXIT_OK,
+          cacheHit: res.cache_hit,
+          bytesOut: Buffer.byteLength(res.rendered, 'utf8'),
+        }),
+      },
+      () =>
+        runPronounceLookupCommand({
+          term,
+          lang: values.lang,
+          refresh: values.refresh,
+          json: values.json,
+          fetchImpl: ctx.fetchImpl,
+        })
+    );
+    writeRenderedOutput(ctx.io, result.rendered);
+    return EXIT_OK;
+  }
+  const { values } = safeParseArgs({
+    args: subArgs,
+    allowPositionals: false,
+    options: {
+      repo: { type: 'string' },
+      strict: { type: 'boolean', default: false },
+      json: { type: 'boolean', default: false },
+    },
+  });
+  const result = await measureCommand(
+    {
+      subcmd: 'pronounce audit',
+      extractResultMeta: (res) => ({
+        exitCode: res.ok ? EXIT_OK : EXIT_ERROR,
+        bytesOut: Buffer.byteLength(res.rendered, 'utf8'),
+      }),
+    },
+    async () =>
+      runPronounceAuditCommand({
+        repoDir: values.repo ?? ctx.cwd,
+        strict: values.strict,
+        json: values.json,
+      })
+  );
+  writeRenderedOutput(ctx.io, result.rendered);
+  return result.ok ? EXIT_OK : EXIT_ERROR;
+}
+
+async function runTelemetry(rest: readonly string[], ctx: CliDispatchContext): Promise<CliExitCode> {
+  const sub = rest[0];
+  const subArgs = sub === 'report' ? rest.slice(1) : rest;
+  if (sub && sub !== 'report' && !sub.startsWith('-')) {
+    throw new CliValidationError(`Unknown telemetry subcommand '${sub}'. Use \`kinloom telemetry report\`.`);
+  }
+  const { values } = safeParseArgs({
+    args: subArgs,
+    allowPositionals: false,
+    options: {
+      'since-hours': { type: 'string' },
+      file: { type: 'string' },
+      json: { type: 'boolean', default: false },
+    },
+  });
+  const { measureCommand, runTelemetryReportCommand } = await import('../commands/ops/telemetry.js');
+  const result = await measureCommand(
+    {
+      subcmd: 'telemetry report',
+      filePath: values.file,
+      extractResultMeta: (res) => ({
+        exitCode: EXIT_OK,
+        bytesOut: Buffer.byteLength(res.rendered, 'utf8'),
+      }),
+    },
+    () =>
+      runTelemetryReportCommand({
+        filePath: values.file,
+        sinceHours: parseOptionalPositiveNumber(values['since-hours'], '--since-hours'),
+        json: values.json,
+      })
+  );
+  writeRenderedOutput(ctx.io, result.rendered);
+  return EXIT_OK;
+}
+
+export async function dispatchLiveAndUtilityCommand(
+  command: string,
+  rest: readonly string[],
+  ctx: CliDispatchContext
+): Promise<CliExitCode | undefined> {
+  switch (command) {
+    case 'sync':
+      return runSync(rest, ctx);
+    case 'migrate':
+      return runMigrate(rest, ctx);
+    case 'dates':
+      return runDates(rest, ctx);
+    case 'pronounce':
+      return runPronounce(rest, ctx);
+    case 'telemetry':
+      return runTelemetry(rest, ctx);
+    default:
+      return undefined;
+  }
+}

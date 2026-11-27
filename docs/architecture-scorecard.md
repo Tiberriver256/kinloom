@@ -94,16 +94,99 @@ Iteration 1 preserved 100% of exported symbols and runtime contracts while decom
 | **Modularity** | 4.0 / 10 | **9.0 / 10** | 6.8 / 10 | Zero files above 711 LOC across all 5 target areas (down from 1,325-1,879 LOC). Remaining 1K+ LOC files are in UI React pages/drawers, CSS modules, and CLI commands. |
 | **Extensibility** | 5.5 / 10 | **9.0 / 10** | 7.2 / 10 | Route handler array (`HttpRouteHandler[]`), independent D1 sub-stores, and separated tree stages make adding features additive rather than invasive. |
 
-## Iteration 2 Roadmap (Path to 10/10 Repo-Wide)
+## Iteration 2A Changes (CLI Entrypoint & Ops Monoliths)
 
-1. **UI Page & Drawer Monoliths (`packages/ui/src/pages/` & `packages/ui/src/components/wiki/`)**
-   - `PersonPage.tsx` (`1,541` LOC): Extract vital header, family grid, life timeline, story/narrative cards, and media gallery sections into focused view components + pure view-model hooks.
-   - `EntityEditDrawer.tsx` (`1,530` LOC) & `CreateEntityModal.tsx` (`943` LOC): Split entity-type-specific field editors (`person`, `place`, `event`, `source`, `media`, `narrative`) behind a typed registry seam instead of monolithic branching forms.
-   - `MapPage.tsx` (`1,430` LOC), `TreePage.tsx` (`1,326` LOC), and `EvidencePage.tsx` (`1,006` LOC): Separate map/tree controller hooks, toolbar/drawer state, and panel renderers.
-   - Split oversized CSS Modules (`TreeAndMapPage.module.css` `2,119` LOC, `WikiSurfaces.module.css` `1,693` LOC, `PersonPage.module.css` `1,068` LOC) by component boundary.
-2. **CLI Monoliths (`packages/cli/src/` — sequenced after Issue #22 merges)**
-   - Decompose `cli.ts` (`1,687` LOC) into command-group registration modules.
-   - Decompose large ops commands (`integrate.ts` `2,294` LOC, `audit.ts` `2,156` LOC, `pronounce.ts` `1,809` LOC, `sync.ts` `1,804` LOC, `context.ts` `1,522` LOC) into pure planning/validation seams vs. I/O executors.
-   - Extract shared archival record-client HTTP/parsing/citation helpers across `packages/cli/src/commands/records/clients/*.ts` (`nara.ts` `3,983` LOC, `archive-org.ts` `3,398` LOC, `prep-scan.ts` `2,988` LOC, `ocr.ts` `2,615` LOC).
-3. **Core Secondary Monoliths (`packages/core/src/`)**
-   - Evaluate `patchArchive.ts` (`1,098` LOC) and `gedcom/slice.ts` (`1,028` LOC) for entity-handler table extraction if they continue growing.
+Measured at commit `2f508a2` before decomposition (`11,305` LOC across 6 files) and verified after decomposition with zero `any`, `@ts-ignore`, or `@ts-expect-error` escape hatches, 0 Biome errors/warnings across 439 files, and 100% backward-compatible exports from every original file path.
+
+### Iteration 2A Before/After LOC Table
+
+| Target Monolith | Before LOC | After Entrypoint LOC | Extracted Submodules | Max Submodule LOC |
+| --- | ---: | ---: | ---: | ---: |
+| `packages/cli/src/commands/ops/integrate.ts` | 2,294 | 374 | 9 modules under `ops/integrate/` | 607 |
+| `packages/cli/src/commands/ops/audit.ts` | 2,156 | 365 | 7 modules under `ops/audit/` | 423 |
+| `packages/cli/src/commands/ops/pronounce.ts` | 1,841 | 33 | 4 modules under `ops/pronounce/` | 691 |
+| `packages/cli/src/commands/ops/sync.ts` | 1,804 | 257 | 6 modules under `ops/sync/` | 456 |
+| `packages/cli/src/cli.ts` | 1,688 | 123 | 5 modules under `cli/` | 596 |
+| `packages/cli/src/commands/ops/context.ts` | 1,522 | 215 | 6 modules under `ops/context/` | 514 |
+
+### 1. Research Package Integrator (`packages/cli/src/commands/ops/integrate.ts` & `ops/integrate/`)
+
+- `integrate.ts` (`2,294` -> `374` LOC): Coordinates single-package YAML load/write, receipt creation, and report rendering while re-exporting all 29 original public symbols.
+- `integrate/types.ts` (`165` LOC) & `integrate/primitives.ts` (`94` LOC): Shared option/receipt/kinship types, validation regexes, atomic file I/O, and SHA-256 helpers.
+- `integrate/receipts.ts` (`138` LOC): Package fingerprinting and `.integrated.json` receipt read/write/match lifecycle.
+- `integrate/kinship.ts` (`288` LOC): `remove_kinship` parsing, reciprocal expansion, removal, and symmetric edge upsert.
+- `integrate/people.ts` (`481` LOC): EDTF death-date parsing (`parseValidDeathEdtf`), living-person privacy guards, slug collision checks, and `person_updates`/`people` merging.
+- `integrate/entities.ts` (`607` LOC): `patch.json` normalization and merge/retirement rules for places, sources, events, media, and narratives.
+- `integrate/integrity.ts` (`215` LOC): Cross-entity referential integrity and retirement dangling-reference checks.
+- `integrate/media.ts` (`208` LOC): Media layout detection, scan staging planning, and live/dry-run/overlay scan staging.
+- `integrate/privacy.ts` (`121` LOC): `auditBundlePrivacy` and dual-mode (`private`/`public`) archive compilation checks.
+
+### 2. Research Package Auditor (`packages/cli/src/commands/ops/audit.ts` & `ops/audit/`)
+
+- `audit.ts` (`2,156` -> `365` LOC): Orchestrates `runAuditCommand`, in-process integrate dry-run, place coordinate checks, and plugin/pronunciation wiring while re-exporting all 25 original symbols.
+- `audit/types.ts` (`157` LOC): Public check result types and plain-record helpers.
+- `audit/chronology.ts` (`423` LOC): EDTF parsing (`parseAuditEdtf`), lifespan math (`computeLifespan`), and event chronology checks (`runChronologyCheck`).
+- `audit/citations.ts` (`371` LOC): Abbreviation-aware sentence splitting (`splitParagraphIntoSentences`) and uncited prose detection (`runUncitedSentenceCheck`).
+- `audit/hygiene.ts` (`333` LOC): Staged patch projection and tree hygiene regression diffing (`runAuditHygieneRegressionCheck`).
+- `audit/privacyStyle.ts` (`266` LOC): Living-relative name scanning, SSN/phone detection, and em-dash prose scanning (`runPrivacyAndStyleScan`).
+- `audit/scans.ts` (`246` LOC): Binary image header inspection (`inspectImageBuffer`) and scan inventory verification (`runScanInventoryCheck`).
+- `audit/report.ts` (`50` LOC): Text report formatting (`formatAuditTextReport`).
+
+### 3. Pronunciation Lookup & Audit (`packages/cli/src/commands/ops/pronounce.ts` & `ops/pronounce/`)
+
+- `pronounce.ts` (`1,841` -> `33` LOC): Pure backward-compatible barrel facade.
+- `pronounce/types.ts` (`202` LOC): Supported languages, tier rankings, lookup/audit interfaces, and language-code normalization.
+- `pronounce/mediaWiki.ts` (`334` LOC): Pure MediaWiki template parser, IPA/Commons audio extraction (`extractMediaWikiPronunciations`), and wiki target planning.
+- `pronounce/lookup.ts` (`691` LOC): MediaWiki and Forvo API fetchers with retry, disk cache (`getPronounceCacheDir`), manual source builders, ranking/corroboration, and `runPronounceLookupCommand`.
+- `pronounce/audit.ts` (`681` LOC): Lexicon loader (`loadArchivePronunciationLexicon`), shared foreign-IPA quality rules, living-leak detection, coverage checks, homonym collision checks, and `runPronounceAuditCommand`.
+
+### 4. Live Archive Sync (`packages/cli/src/commands/ops/sync.ts` & `ops/sync/`)
+
+- `sync.ts` (`1,804` -> `257` LOC): Orchestrates `runSyncCommand` with guaranteed temporary token cleanup and preserves all original exports.
+- `sync/types.ts` (`254` LOC): Public sync option/plan/report types, `SYNC_DEPENDENCY_ORDER`, and bounded concurrency runner.
+- `sync/wrangler.ts` (`385` LOC): JSONC/TOML Wrangler config parsing (`loadWranglerBindings`), D1 SQL builders, and temp token mint/cleanup lifecycle.
+- `sync/planner.ts` (`456` LOC): Type/delete arg parsers, local YAML loader, living-person sanitization (`buildSanitizedLocalEntries`), remote snapshot indexing, and diff planning (`computeSyncPlan`).
+- `sync/media.ts` (`176` LOC): Media layout detection, R2 target resolution, remote existence probing, and concurrent R2 uploads.
+- `sync/remoteClient.ts` (`328` LOC): Snapshot fetch, chunked batch submission, R2 bundle cache purge/recompile, and live endpoint verification.
+- `sync/report.ts` (`78` LOC): Human-readable sync report formatter (`formatSyncReport`).
+
+### 5. Person Research Context (`packages/cli/src/commands/ops/context.ts` & `ops/context/`)
+
+- `context.ts` (`1,522` -> `215` LOC): Orchestrates `runContextCommand` and re-exports all 20 original symbols.
+- `context/types.ts` (`155` LOC): Context payload types and `REDACTED_RELATIVE_LABEL`.
+- `context/yamlScanner.ts` (`118` LOC): Selective YAML block splitting/parsing (`splitTopLevelYamlList`, `extractYamlBlockId`, `parseMatchingYamlBlocks`) and parallel archive loading.
+- `context/privacy.ts` (`174` LOC): Living-person fence construction and recursive string/object redaction.
+- `context/graph.ts` (`514` LOC): Kinship traversal, event/media/narrative/place/source collection, and relative archive media assembly.
+- `context/ancestry.ts` (`457` LOC): External Ancestry JSON matching, fact/source redaction, and record image discovery.
+- `context/formatter.ts` (`173` LOC): Markdown and JSON context rendering (`formatPersonContextMarkdown`).
+
+### 6. CLI Entrypoint (`packages/cli/src/cli.ts` & `cli/`)
+
+- `cli.ts` (`1,688` -> `123` LOC): Thin executable entrypoint preserving the `#!/usr/bin/env node` shebang, `isExecutedDirectly()` guard with `EPIPE` handling, top-level error/exit-code mapping, and all original exports.
+- `cli/types.ts` (`84` LOC): Shared `CliIo`, `RunCliOptions`, `CliDispatchContext`, and arg-parsing/output boundary helpers.
+- `cli/pluginAndGuideCommands.ts` (`322` LOC): `ROOT_HELP`, site plugin discovery, help/guide dispatch, pre-help record command dispatch, and plugin fallback.
+- `cli/coreCommands.ts` (`319` LOC): Archive lifecycle and API command dispatch (`init`, `slice-gedcom`, `seed`, `submit-batch`, `export-yaml`, `upload-media`, `reconcile`).
+- `cli/researchOpsCommands.ts` (`596` LOC): Local research ops command dispatch (`context`, `integrate`, `audit`, `media`, `verify`, `status`) with shared package target parsing.
+- `cli/liveAndUtilityCommands.ts` (`455` LOC): Live deployment and utility command dispatch (`sync`, `migrate`, `dates`, `pronounce`, `telemetry`).
+
+## Post-Iteration 2A Scores
+
+| Axis | Post-It. 1 (Repo-Wide) | Post-It. 2A (It. 2A Scope) | Post-It. 2A (Repo-Wide) | Key Drivers & Remaining Gaps |
+| --- | :---: | :---: | :---: | --- |
+| **Decoupling** | 7.2 / 10 | **9.2 / 10** | **8.0 / 10** | CLI entrypoint dispatch, D1/R2 sync transport, MediaWiki parsers, audit checks, and integrate merge stages now depend on narrow typed seams; UI pages and CLI record clients remain for Iterations 2B and 3. |
+| **Cohesion** | 7.0 / 10 | **9.3 / 10** | **8.0 / 10** | Each CLI ops domain separates pure planning, validation, external I/O, and report rendering into single-responsibility modules. |
+| **Data flow** | 8.0 / 10 | **9.2 / 10** | **8.5 / 10** | Explicit pipelines across `load -> sanitize -> diff -> execute -> report` (sync), `parse -> merge -> integrity -> privacy -> write` (integrate), and `help -> records -> core -> ops -> plugins` (CLI). |
+| **Layering** | 8.5 / 10 | **9.4 / 10** | **8.9 / 10** | Pure parsers, validators, and formatters are separated from Wrangler/HTTP/filesystem shells across all 6 CLI ops/entrypoint domains. |
+| **Modularity** | 6.8 / 10 | **9.1 / 10** | **7.7 / 10** | All 6 Iteration 2A monoliths dropped from 1,522-2,294 LOC to 33-374 LOC entrypoints with every submodule under 700 LOC (max 691 LOC). Remaining 1K+ LOC files are UI pages/drawers/CSS and `records/clients/`. |
+| **Extensibility** | 7.2 / 10 | **9.2 / 10** | **8.0 / 10** | Adding a CLI command group, audit check, integrate entity merger, or pronunciation provider now targets one focused module rather than a 1.5K-2.3K LOC file. |
+
+## Remaining Roadmap (Iterations 2B & 3 to 10/10 Repo-Wide)
+
+1. **Iteration 2B: UI Page, Drawer & CSS Monoliths (`packages/ui/src/`)**
+   - `PersonPage.tsx` (`1,542` LOC): Extract vital header, family grid, life timeline, story/narrative cards, and media gallery sections into focused view components plus pure view-model hooks.
+   - `EntityEditDrawer.tsx` (`1,533` LOC) and `CreateEntityModal.tsx` (`944` LOC): Split entity-type-specific field editors (`person`, `place`, `event`, `source`, `media`, `narrative`) behind a typed registry seam.
+   - `MapPage.tsx` (`1,432` LOC), `TreePage.tsx` (`1,327` LOC), and `EvidencePage.tsx` (`1,006` LOC): Separate map/tree controller hooks, toolbar/drawer state, and panel renderers.
+   - Split oversized CSS Modules (`TreeAndMapPage.module.css` `2,119` LOC, `WikiSurfaces.module.css` `1,679` LOC, `PersonPage.module.css` `1,068` LOC) by component boundary.
+2. **Iteration 3: CLI Archival Record Clients & Secondary Monoliths**
+   - Extract shared HTTP, pagination, XML/HTML parsing, and citation formatting primitives across `packages/cli/src/commands/records/clients/*.ts` (`nara.ts` `3,981` LOC, `archive-org.ts` `3,398` LOC, `prep-scan.ts` `2,988` LOC, `ocr.ts` `2,615` LOC, `findagrave.ts` `2,185` LOC, `se-archives.ts` `2,140` LOC, `va-archives.ts` `2,100` LOC, `openarchieven.ts` `1,980` LOC, `chronam.ts` `1,817` LOC, `mn-archives.ts` `1,762` LOC, `fi-archives.ts` `1,680` LOC, plus 6 clients in the `941-1,314` LOC range).
+   - Evaluate secondary 1K+ LOC files: `packages/server/src/testing/adapterContractSuite.ts` (`1,332` LOC), `packages/core/src/patchArchive.ts` (`1,098` LOC), `packages/cli/src/commands/ops/audit-overlaps.ts` (`1,040` LOC), `packages/core/src/gedcom/slice.ts` (`1,028` LOC), `packages/server/src/adapters/inMemory.ts` (`964` LOC), and `packages/cli/src/commands/ops/media-dedupe.ts` (`956` LOC).
