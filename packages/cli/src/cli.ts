@@ -545,9 +545,11 @@ export async function runCli(
   const recordSpec = resolveRecordCommand(command);
   if (recordSpec) {
     try {
-      const { runRecordCommand } = await import('./commands/records/runner.js');
+      const { runRecordCommand } = await import('./commands/records/dispatch.js');
       const result = await runRecordCommand(recordSpec.command, rest, {
         io: options?.io,
+        fetchImpl,
+        cwd,
       });
       return normalizeExitCode(result.exitCode);
     } catch (err: unknown) {

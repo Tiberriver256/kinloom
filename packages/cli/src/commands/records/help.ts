@@ -97,7 +97,7 @@ export function rewriteSkillCommandExamples(body: string, spec: RecordCommandSpe
   const replacement = `kinloom ${spec.command}`;
   let rewritten = body;
 
-  if (spec.kind === 'skill-script') {
+  if (spec.kind === 'skill-script' || spec.kind === 'native') {
     const skillDirEsc = escapeRegExp(spec.skillDir);
     const scriptEsc = escapeRegExp(spec.scriptName);
 

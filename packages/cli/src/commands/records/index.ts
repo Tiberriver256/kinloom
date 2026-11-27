@@ -6,6 +6,7 @@ export {
   resolveRecordCommand,
   type AssetScriptCommandSpec,
   type BaseRecordCommandSpec,
+  type NativeRecordCommandSpec,
   type RecordCommandCategory,
   type RecordCommandCategoryInfo,
   type RecordCommandSpec,
@@ -30,12 +31,17 @@ export {
 } from './help.js';
 
 export {
+  runRecordCommand,
+  type RunRecordCommandOptions,
+  type RunRecordCommandResult,
+} from './dispatch.js';
+
+export {
   buildTelemetrySubcmd,
   isUvOfflineCacheMiss,
   resolveScriptInvocation,
-  runRecordCommand,
   type RecordSpawnFn,
-  type RunRecordCommandOptions,
-  type RunRecordCommandResult,
   type ScriptInvocation,
 } from './runner.js';
+
+export * from './runtime/index.js';
