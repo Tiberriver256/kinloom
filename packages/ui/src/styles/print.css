@@ -43,20 +43,20 @@
   .kinship-examples-bar,
   .narrative-audio-margin-bar,
   .narrative-audio-dock {
-    display: none;
+    display: none !important;
   }
 
   .person-biography-body.is-collapsed {
-    max-height: none;
-    overflow: visible;
+    max-height: none !important;
+    overflow: visible !important;
   }
 
   .person-biography-body.is-collapsed::after {
-    display: none;
+    display: none !important;
   }
 
   .is-collapsed-screen {
-    display: block;
+    display: block !important;
   }
 
   .person-biography-source-btn {

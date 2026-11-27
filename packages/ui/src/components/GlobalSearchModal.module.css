@@ -111,3 +111,14 @@
   font-size: 0.74rem;
   color: var(--text-secondary);
 }
+
+@media (max-width: 760px) {
+  .global-search-close-desktop,
+  .global-search-kbd-hint {
+    display: none;
+  }
+
+  .global-search-close-mobile {
+    display: inline;
+  }
+}
