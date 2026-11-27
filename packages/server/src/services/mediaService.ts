@@ -1,18 +1,18 @@
 import {
+  type ArchiveRepository,
   assertMediaAllowedForPrivacy,
   isEditSummaryValid,
-  MediaItemSchema,
-  parseEntityPayload,
-  validateMediaSelection,
-  type ArchiveRepository,
   type KinloomSiteConfig,
   type MediaByteRange,
   type MediaItem,
+  MediaItemSchema,
   type MediaStore,
+  parseEntityPayload,
   type RawEvent,
   type RevisionAuthor,
   type RevisionRecord,
   type StoredMediaObject,
+  validateMediaSelection,
 } from '@kinloom/core';
 import { generateEntityId, sha256Hex } from '../crypto.js';
 import { KinloomHttpError } from '../errors.js';
@@ -99,12 +99,7 @@ function isSafeRelativeMediaKey(key: string): boolean {
     return false;
   }
   for (const segment of segments) {
-    if (
-      !segment ||
-      segment === '.' ||
-      segment === '..' ||
-      !SAFE_MEDIA_SEGMENT_PATTERN.test(segment)
-    ) {
+    if (!segment || segment === '.' || segment === '..' || !SAFE_MEDIA_SEGMENT_PATTERN.test(segment)) {
       return false;
     }
   }
@@ -207,11 +202,7 @@ export class MediaService {
     deduplicated: boolean;
   }> {
     if (!isEditSummaryValid(params.summary)) {
-      throw new KinloomHttpError(
-        400,
-        'VALIDATION_ERROR',
-        'Edit summary must be at least 3 characters.'
-      );
+      throw new KinloomHttpError(400, 'VALIDATION_ERROR', 'Edit summary must be at least 3 characters.');
     }
 
     const normalizedMime = params.contentType.split(';')[0]?.trim().toLowerCase() ?? '';
@@ -333,12 +324,9 @@ export class MediaService {
 
       const parsedRange = parseHttpByteRange(params.rangeHeader, head.sizeBytes);
       if (!parsedRange) {
-        throw new KinloomHttpError(
-          416,
-          'RANGE_NOT_SATISFIABLE',
-          'Requested byte range is not satisfiable.',
-          { total: head.sizeBytes }
-        );
+        throw new KinloomHttpError(416, 'RANGE_NOT_SATISFIABLE', 'Requested byte range is not satisfiable.', {
+          total: head.sizeBytes,
+        });
       }
 
       const object = await this.mediaStore.get(storeKey, { range: parsedRange.range });

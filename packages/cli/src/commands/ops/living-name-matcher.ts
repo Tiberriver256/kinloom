@@ -96,10 +96,7 @@ export function computeSourceMaxYearById(
 }
 
 export function resolveNarrativeMaxYear(input: NarrativeMaxYearInput): number | null {
-  const subjectIds = [
-    ...(input.subjectPersonId ? [input.subjectPersonId] : []),
-    ...input.personIds,
-  ];
+  const subjectIds = [...(input.subjectPersonId ? [input.subjectPersonId] : []), ...input.personIds];
   if (subjectIds.length === 0) {
     return null;
   }
@@ -151,11 +148,7 @@ function derivedFirstSurname(person: LivingNamePerson): string | null {
   if (tokensBeforeSurname.length < 2) {
     const fullTokens = trimmedNameTokens(person.full_name);
     const last = fullTokens[fullTokens.length - 1];
-    if (
-      fullTokens.length >= 3 &&
-      last !== undefined &&
-      last.toLowerCase() === surname.toLowerCase()
-    ) {
+    if (fullTokens.length >= 3 && last !== undefined && last.toLowerCase() === surname.toLowerCase()) {
       tokensBeforeSurname = fullTokens.slice(0, -1);
     }
   }
@@ -363,11 +356,7 @@ export function collectLivingNameHitsWithMatcher(
       return hits;
     }
     for (const rule of matcher.derivedRules) {
-      if (
-        rule.minYear !== null &&
-        typeof target.maxYear === 'number' &&
-        target.maxYear < rule.minYear
-      ) {
+      if (rule.minYear !== null && typeof target.maxYear === 'number' && target.maxYear < rule.minYear) {
         continue;
       }
       if (scanPattern(rule.pattern, target)) {

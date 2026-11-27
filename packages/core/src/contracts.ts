@@ -187,13 +187,8 @@ export interface RevisionQuery {
  */
 export interface ArchiveRepository {
   getHeadRevisionId(): Promise<RevisionId>;
-  getEntity(
-    entityType: EntityType,
-    entityId: string
-  ): Promise<StoredEntityRecord | null>;
-  getEntitiesBatch?(
-    keys: readonly EntityLookupKey[]
-  ): Promise<Map<string, StoredEntityRecord | null>>;
+  getEntity(entityType: EntityType, entityId: string): Promise<StoredEntityRecord | null>;
+  getEntitiesBatch?(keys: readonly EntityLookupKey[]): Promise<Map<string, StoredEntityRecord | null>>;
   getLivingPersonIds(): Promise<ReadonlySet<string>>;
   loadActiveSnapshot(): Promise<ArchiveRawSnapshot>;
 
@@ -259,7 +254,9 @@ export interface CachedBundleObject {
 }
 
 export interface BundleCache {
-  getCached(ifNoneMatch: string | null): Promise<
+  getCached(
+    ifNoneMatch: string | null
+  ): Promise<
     | { status: 'not_modified'; etag: string }
     | { status: 'hit'; object: CachedBundleObject }
     | { status: 'miss' }
@@ -435,14 +432,20 @@ export interface ArchiveDataSource {
     authProviders?: ArchiveAuthProviders;
   }>;
 
-  getEntity?(entityType: EntityType, entityId: string): Promise<{
+  getEntity?(
+    entityType: EntityType,
+    entityId: string
+  ): Promise<{
     entity: EntityPayload;
     current_revision_id: RevisionId;
     has_primary_source: boolean;
     deleted_at: string | null;
     updated_at: string;
   }>;
-  createEntity?(entityType: EntityType, input: EntityWriteInput): Promise<{
+  createEntity?(
+    entityType: EntityType,
+    input: EntityWriteInput
+  ): Promise<{
     entity: EntityPayload;
     revision: RevisionRecord;
     etag: string;

@@ -1,26 +1,23 @@
 import {
-  asRevisionId,
-  compileArchive,
-  computeEntityDiff,
-  entityLookupCompositeKey,
-  parseEntityPayload,
-  patchCompiledBundle,
-  resolveEffectiveLiving,
   type AgentTokenRecord,
   type ArchiveBundle,
   type ArchiveRawSnapshot,
   type ArchiveRepository,
   type AtomicMutationOp,
   type AuthProvider,
+  asRevisionId,
   type BatchId,
   type BundleCache,
   type CachedBundleObject,
   type Clock,
   type CommitMutationsResult,
+  compileArchive,
+  computeEntityDiff,
   type EmailSender,
   type EntityLookupKey,
   type EntityPayload,
   type EntityType,
+  entityLookupCompositeKey,
   type InviteRecord,
   type KinloomSiteConfig,
   type KinshipEdge,
@@ -33,12 +30,15 @@ import {
   type Place,
   type PrivacyConfig,
   type Pronunciation,
+  parseEntityPayload,
+  patchCompiledBundle,
   type RawEvent,
   type RawPerson,
   type RevisionAuthor,
   type RevisionId,
   type RevisionQuery,
   type RevisionRecord,
+  resolveEffectiveLiving,
   type Sha256Hex,
   type SourceRecord,
   type StoredEntityRecord,
@@ -89,10 +89,7 @@ export class InMemoryArchiveRepository implements ArchiveRepository {
     return asRevisionId(last ? last.revision_id : 0);
   }
 
-  async getEntity(
-    entityType: EntityType,
-    entityId: string
-  ): Promise<StoredEntityRecord | null> {
+  async getEntity(entityType: EntityType, entityId: string): Promise<StoredEntityRecord | null> {
     if (entityType === 'kinship_edge') {
       const row = this.kinship.get(entityId);
       return row ? structuredClone(row) : null;
@@ -101,9 +98,7 @@ export class InMemoryArchiveRepository implements ArchiveRepository {
     return row ? structuredClone(row) : null;
   }
 
-  async getEntitiesBatch(
-    keys: readonly EntityLookupKey[]
-  ): Promise<Map<string, StoredEntityRecord | null>> {
+  async getEntitiesBatch(keys: readonly EntityLookupKey[]): Promise<Map<string, StoredEntityRecord | null>> {
     const result = new Map<string, StoredEntityRecord | null>();
     for (const key of keys) {
       const composite = entityLookupCompositeKey(key.entityType, key.entityId);
@@ -400,9 +395,7 @@ export class InMemoryArchiveRepository implements ArchiveRepository {
 
   async listTalkComments(entityType: EntityType, entityId: string): Promise<readonly TalkComment[]> {
     return this.talkComments
-      .filter(
-        (c) => c.entity_type === entityType && c.entity_id === entityId && c.deleted_at === null
-      )
+      .filter((c) => c.entity_type === entityType && c.entity_id === entityId && c.deleted_at === null)
       .toSorted((a, b) => a.comment_id - b.comment_id)
       .map((c) => structuredClone(c));
   }
@@ -686,7 +679,9 @@ export class InMemoryIncrementalBundleCache implements BundleCache {
     this.cached = null;
   }
 
-  async getCached(ifNoneMatch: string | null): Promise<
+  async getCached(
+    ifNoneMatch: string | null
+  ): Promise<
     | { status: 'not_modified'; etag: string }
     | { status: 'hit'; object: CachedBundleObject }
     | { status: 'miss' }
@@ -811,9 +806,7 @@ export class InMemoryMediaStore implements MediaStore {
     if (options?.range) {
       const start = Math.max(0, options.range.offset);
       const endExclusive =
-        options.range.length !== undefined
-          ? Math.min(total, start + options.range.length)
-          : total;
+        options.range.length !== undefined ? Math.min(total, start + options.range.length) : total;
       const slice = entry.bytes.slice(start, endExclusive);
       return {
         key,
@@ -915,9 +908,7 @@ export class InMemoryPronunciationLexiconStore implements PronunciationLexiconSt
 
   async list(): Promise<Record<string, Pronunciation>> {
     const out: Record<string, Pronunciation> = {};
-    for (const [term, entry] of [...this.entries.entries()].toSorted(([a], [b]) =>
-      a.localeCompare(b)
-    )) {
+    for (const [term, entry] of [...this.entries.entries()].toSorted(([a], [b]) => a.localeCompare(b))) {
       out[term] = structuredClone(entry);
     }
     return out;

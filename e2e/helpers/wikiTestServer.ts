@@ -1,13 +1,8 @@
 import fs from 'node:fs';
 import http from 'node:http';
-import path from 'node:path';
 import type { AddressInfo, Socket } from 'node:net';
-import type {
-  AtomicMutationOp,
-  EntityPayload,
-  KinloomSiteConfig,
-  RevisionAuthor,
-} from '@kinloom/core';
+import path from 'node:path';
+import type { AtomicMutationOp, EntityPayload, KinloomSiteConfig, RevisionAuthor } from '@kinloom/core';
 import {
   deriveKinshipEdgeId,
   parseEventsYaml,
@@ -25,9 +20,9 @@ import {
 import {
   createInMemoryServerPorts,
   createKinloomServer,
-  sha256Hex,
   type InMemoryServerPortsBundle,
   type KinloomServer,
+  sha256Hex,
 } from '@kinloom/server';
 
 const REPO_ROOT = path.resolve(import.meta.dirname, '../..');
@@ -80,7 +75,7 @@ function createDemoDistAssetHandler(distDir: string): {
   const indexHtmlPath = path.join(resolvedDist, 'index.html');
   if (!fs.existsSync(indexHtmlPath)) {
     throw new Error(
-      `Missing built demo SPA at ${indexHtmlPath}. Run "npm run build --workspace=@kinloom/demo" first.`,
+      `Missing built demo SPA at ${indexHtmlPath}. Run "npm run build --workspace=@kinloom/demo" first.`
     );
   }
   const indexHtml = injectLiveWikiMeta(fs.readFileSync(indexHtmlPath, 'utf8'));
@@ -130,7 +125,7 @@ function createDemoDistAssetHandler(distDir: string): {
 
 async function seedDemoRepository(
   siteConfig: KinloomSiteConfig,
-  ports: InMemoryServerPortsBundle,
+  ports: InMemoryServerPortsBundle
 ): Promise<void> {
   const people = parsePeopleYaml(readDemoYaml('people.yaml'));
   const places = parsePlacesYaml(readDemoYaml('places.yaml'));
@@ -274,9 +269,7 @@ async function seedDemoRepository(
         continue;
       }
       const bytes = new Uint8Array(fs.readFileSync(fullPath));
-      // oxlint-disable-next-line eslint/no-await-in-loop -- deterministic sequential media store hydration
       const digest = await sha256Hex(bytes);
-      // oxlint-disable-next-line eslint/no-await-in-loop -- deterministic sequential media store hydration
       await ports.mediaStore.put({
         key: `media/${filename}`,
         body: bytes.buffer,

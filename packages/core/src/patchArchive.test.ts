@@ -1,7 +1,7 @@
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
 import { compileArchive } from './compileArchive.js';
-import { patchCompiledBundle, type BundlePatchMutation } from './patchArchive.js';
+import { type BundlePatchMutation, patchCompiledBundle } from './patchArchive.js';
 import { parseKinloomConfig } from './schemas/config.js';
 import type {
   BuildMode,
@@ -33,7 +33,12 @@ const TEST_CONFIG = parseKinloomConfig({
   },
   defaultBranchId: 'alder_main',
   branches: [
-    { id: 'alder_main', label: 'Alder Lineage', surnames: ['Alder'], lineageGroups: ['ancestor', 'descendant'] },
+    {
+      id: 'alder_main',
+      label: 'Alder Lineage',
+      surnames: ['Alder'],
+      lineageGroups: ['ancestor', 'descendant'],
+    },
     { id: 'mercer_side', label: 'Mercer Side', surnames: ['Mercer'] },
   ],
   privacy: {

@@ -57,7 +57,7 @@ export function clampPan(
   zoom: number,
   bounds: ContentBounds,
   viewport: ViewportSize,
-  marginPx = 80,
+  marginPx = 80
 ): Point2D {
   const safeMarginX = Math.min(marginPx, Math.max(24, viewport.width * 0.25));
   const safeMarginY = Math.min(marginPx, Math.max(24, viewport.height * 0.25));
@@ -108,16 +108,8 @@ export function computePinchTransform(params: {
   minZoom?: number;
   maxZoom?: number;
 }): CanvasTransform {
-  const {
-    startDist,
-    currentDist,
-    startZoom,
-    startPan,
-    startMidpoint,
-    currentMidpoint,
-    minZoom,
-    maxZoom,
-  } = params;
+  const { startDist, currentDist, startZoom, startPan, startMidpoint, currentMidpoint, minZoom, maxZoom } =
+    params;
 
   const safeStartDist = Math.max(1, startDist);
   const nextZoom = clampZoom(startZoom * (currentDist / safeStartDist), minZoom, maxZoom);
@@ -135,7 +127,7 @@ export function computePinchTransform(params: {
 export function computeWheelTargetZoom(
   currentZoom: number,
   deltaY: number,
-  isTrackpadPinch: boolean,
+  isTrackpadPinch: boolean
 ): number {
   const clampedDelta = Math.max(-180, Math.min(180, deltaY));
   const sensitivity = isTrackpadPinch ? 0.0085 : 0.0018;
@@ -154,7 +146,7 @@ export function stepInertia(
   state: InertiaState,
   dtMs: number,
   frictionPerFrame = 0.925,
-  minSpeedPxPerMs = 0.025,
+  minSpeedPxPerMs = 0.025
 ): { next: InertiaState; done: boolean } {
   const safeDt = Math.max(0, Math.min(50, dtMs));
   const decay = frictionPerFrame ** (safeDt / 16.667);

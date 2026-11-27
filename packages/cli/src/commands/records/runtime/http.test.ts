@@ -1,17 +1,17 @@
 import { describe, expect, it } from 'vitest';
 import {
-  CURL_META_MARKER,
-  CookieJar,
-  HttpStatusError,
-  SsrfBlockedError,
   assertSafeUrl,
+  CookieJar,
+  CURL_META_MARKER,
   fetchWithCurl,
+  HttpStatusError,
   httpGetBytes,
   httpGetJson,
   httpRequest,
   isPrivateOrReservedIp,
   looksLikeHtmlErrorPage,
   parseRetryAfterMs,
+  SsrfBlockedError,
 } from './http.js';
 
 const instantSleep = async (): Promise<void> => {};
@@ -30,15 +30,13 @@ describe('records runtime http client', () => {
 
     expect(() => assertSafeUrl('http://catalog.archives.gov/api')).toThrow(SsrfBlockedError);
     expect(() => assertSafeUrl('https://localhost/secret')).toThrow(SsrfBlockedError);
-    expect(() => assertSafeUrl('https://169.254.169.254/latest/meta-data')).toThrow(
+    expect(() => assertSafeUrl('https://169.254.169.254/latest/meta-data')).toThrow(SsrfBlockedError);
+    expect(() => assertSafeUrl('https://evil.example/file.jpg', { allowedHosts: ['.archives.gov'] })).toThrow(
       SsrfBlockedError
     );
-    expect(() =>
-      assertSafeUrl('https://evil.example/file.jpg', { allowedHosts: ['.archives.gov'] })
-    ).toThrow(SsrfBlockedError);
-    expect(
-      assertSafeUrl('https://catalog.archives.gov/api', { allowedHosts: ['.archives.gov'] }).host
-    ).toBe('catalog.archives.gov');
+    expect(assertSafeUrl('https://catalog.archives.gov/api', { allowedHosts: ['.archives.gov'] }).host).toBe(
+      'catalog.archives.gov'
+    );
   });
 
   it('retries 429/503/522 and transient network failures, honoring Retry-After capped at 30s', async () => {

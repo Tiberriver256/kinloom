@@ -8,10 +8,7 @@ export type InviteStatus = 'active' | 'revoked' | 'expired' | 'missing';
  * Guard: only an already-enrolled member with role 'admin' may enter authenticated.admin.
  * Prevents non-member invite auto-enrollment from ever escalating to admin.
  */
-export function canCompleteAdminAuth(
-  isMember: boolean,
-  role: AuthMemberRole | null | undefined
-): boolean {
+export function canCompleteAdminAuth(isMember: boolean, role: AuthMemberRole | null | undefined): boolean {
   return isMember === true && role === 'admin';
 }
 

@@ -1,12 +1,10 @@
 import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { Miniflare } from 'miniflare';
-import { describe, expect, it, vi } from 'vitest';
 import {
+  type ArchiveBundle,
   asBatchId,
   asRevisionId,
-  type ArchiveBundle,
   type RawPerson,
   type RevisionRecord,
 } from '@kinloom/core';
@@ -25,6 +23,8 @@ import {
   createSyntheticSiteConfig,
   runBackendAdapterContractTests,
 } from '@kinloom/server/testing';
+import { Miniflare } from 'miniflare';
+import { describe, expect, it, vi } from 'vitest';
 import {
   buildMagicLinkEmailMessage,
   buildMagicLinkMimeMessage,
@@ -32,23 +32,20 @@ import {
   createCloudflareAssetHandler,
   createCloudflareWorker,
   D1ArchiveRepository,
+  type D1Database,
   D1PronunciationLexiconStore,
   DEFAULT_COMPILED_BUNDLE_KEY,
-  R2IncrementalPatchBundleCache,
-  R2MediaStore,
-  type D1Database,
   type Fetcher,
   type KinloomWorkerEnv,
   type R2Bucket,
+  R2IncrementalPatchBundleCache,
+  R2MediaStore,
   type SendEmailBinding,
   type SendEmailMessageBuilder,
 } from './index.js';
 
 const THIS_DIR = dirname(fileURLToPath(import.meta.url));
-const INITIAL_MIGRATION_SQL = readFileSync(
-  resolve(THIS_DIR, '../migrations/0001_initial.sql'),
-  'utf8'
-);
+const INITIAL_MIGRATION_SQL = readFileSync(resolve(THIS_DIR, '../migrations/0001_initial.sql'), 'utf8');
 const PRONUNCIATIONS_MIGRATION_SQL = readFileSync(
   resolve(THIS_DIR, '../migrations/0002_pronunciations.sql'),
   'utf8'
@@ -293,7 +290,10 @@ describe('D1 migration 0001_initial.sql EXPLAIN QUERY PLAN checks', () => {
           if (forbidden.endsWith(' ')) {
             // Ensure no full-table scan without USING INDEX
             const hasFullScan = plan.some(
-              (line) => line.startsWith(forbidden.trim()) && !line.includes('USING INDEX') && !line.includes('USING COVERING INDEX')
+              (line) =>
+                line.startsWith(forbidden.trim()) &&
+                !line.includes('USING INDEX') &&
+                !line.includes('USING COVERING INDEX')
             );
             expect(hasFullScan, `Unexpected full table scan for ${check.name}: ${joined}`).toBe(false);
           } else {
@@ -334,7 +334,9 @@ describe('createCloudflareWorker full HTTP lifecycle (Miniflare)', () => {
 
       const fakeAssets: Fetcher = {
         async fetch(input: Request | string | URL): Promise<Response> {
-          const url = new URL(typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url);
+          const url = new URL(
+            typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url
+          );
           if (url.pathname === '/index.html') {
             return new Response('<!doctype html><html><body>Kinloom SPA</body></html>', {
               status: 200,
@@ -1205,16 +1207,26 @@ describe('createCloudflareWorker full HTTP lifecycle (Miniflare)', () => {
       const siteConfig = createSyntheticSiteConfig();
 
       // Upload pre-seeded R2 objects directly (matching wrangler r2 object put without customMetadata.sha256)
-      await fixture.bucket.put('media/photos/portrait-1900.jpg', new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 1, 2, 3, 4]), {
-        httpMetadata: { contentType: 'image/jpeg' },
-      });
-      await fixture.bucket.put('sources/memoir-1999.pdf', new Uint8Array([0x25, 0x50, 0x44, 0x46, 0x2d, 0x31, 0x2e, 0x34]), {
-        httpMetadata: { contentType: 'application/pdf' },
-      });
+      await fixture.bucket.put(
+        'media/photos/portrait-1900.jpg',
+        new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 1, 2, 3, 4]),
+        {
+          httpMetadata: { contentType: 'image/jpeg' },
+        }
+      );
+      await fixture.bucket.put(
+        'sources/memoir-1999.pdf',
+        new Uint8Array([0x25, 0x50, 0x44, 0x46, 0x2d, 0x31, 0x2e, 0x34]),
+        {
+          httpMetadata: { contentType: 'application/pdf' },
+        }
+      );
 
       const fakeAssets: Fetcher = {
         async fetch(input) {
-          const reqUrl = new URL(typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url);
+          const reqUrl = new URL(
+            typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url
+          );
           if (reqUrl.pathname === '/data/readings.json') {
             return new Response(JSON.stringify({ documents: { doc1: { pages: [] } } }), {
               status: 200,
@@ -1243,11 +1255,20 @@ describe('createCloudflareWorker full HTTP lifecycle (Miniflare)', () => {
       const worker = createCloudflareWorker({ siteConfig, clock, emailSender });
 
       // Unauthenticated requests to /media/*, /sources/*, and /data/* must all fail with 401
-      const unauthMedia = await worker.fetch(new Request(`${CONTRACT_TEST_ORIGIN}/media/photos/portrait-1900.jpg`), env);
+      const unauthMedia = await worker.fetch(
+        new Request(`${CONTRACT_TEST_ORIGIN}/media/photos/portrait-1900.jpg`),
+        env
+      );
       expect(unauthMedia.status).toBe(401);
-      const unauthSource = await worker.fetch(new Request(`${CONTRACT_TEST_ORIGIN}/sources/memoir-1999.pdf`), env);
+      const unauthSource = await worker.fetch(
+        new Request(`${CONTRACT_TEST_ORIGIN}/sources/memoir-1999.pdf`),
+        env
+      );
       expect(unauthSource.status).toBe(401);
-      const unauthReadings = await worker.fetch(new Request(`${CONTRACT_TEST_ORIGIN}/data/readings.json`), env);
+      const unauthReadings = await worker.fetch(
+        new Request(`${CONTRACT_TEST_ORIGIN}/data/readings.json`),
+        env
+      );
       expect(unauthReadings.status).toBe(401);
 
       // Sign in as bootstrap admin
@@ -1291,7 +1312,9 @@ describe('createCloudflareWorker full HTTP lifecycle (Miniflare)', () => {
 
       // Traversal attempt must return 404
       const traversalRes = await worker.fetch(
-        new Request(`${CONTRACT_TEST_ORIGIN}/media/photos/%2e%2e/%2e%2e/compiled/archive.json`, { headers: { cookie } }),
+        new Request(`${CONTRACT_TEST_ORIGIN}/media/photos/%2e%2e/%2e%2e/compiled/archive.json`, {
+          headers: { cookie },
+        }),
         env
       );
       expect(traversalRes.status).toBe(404);
@@ -1411,9 +1434,7 @@ describe('createCloudflareWorker full HTTP lifecycle (Miniflare)', () => {
         expect(res.status).toBe(502);
         const body = (await res.json()) as { error: { code: string; message: string } };
         expect(body.error.code).toBe('EMAIL_DELIVERY_FAILED');
-        expect(body.error.message).toBe(
-          'Unable to send sign-in email right now. Please try again later.'
-        );
+        expect(body.error.message).toBe('Unable to send sign-in email right now. Please try again later.');
       } finally {
         await fixture.dispose();
       }

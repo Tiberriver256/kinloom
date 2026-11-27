@@ -1,11 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import type {
-  AssetScriptCommandSpec,
-  RecordCommandSpec,
-  SkillScriptCommandSpec,
-} from './registry.js';
+import type { AssetScriptCommandSpec, RecordCommandSpec, SkillScriptCommandSpec } from './registry.js';
 
 export interface ResolveRootsOptions {
   /** Override the directory of this module (defaults to directory of resolve.ts/js). */
@@ -61,15 +57,10 @@ function findExistingFile(candidates: readonly string[], label: string): string 
       return filePath;
     }
   }
-  throw new Error(
-    `Could not locate ${label}. Searched:\n${candidates.map((c) => `  - ${c}`).join('\n')}`
-  );
+  throw new Error(`Could not locate ${label}. Searched:\n${candidates.map((c) => `  - ${c}`).join('\n')}`);
 }
 
-export function resolveRecordGuidePath(
-  spec: RecordCommandSpec,
-  options?: ResolveRootsOptions
-): string {
+export function resolveRecordGuidePath(spec: RecordCommandSpec, options?: ResolveRootsOptions): string {
   if (spec.kind === 'asset-script' || (spec.kind === 'native' && spec.assetGuide)) {
     const assetGuide = spec.assetGuide ?? `${spec.command}.md`;
     const candidates = candidateAssetDirs(options).map((dir) => path.join(dir, assetGuide));
@@ -77,9 +68,7 @@ export function resolveRecordGuidePath(
   }
 
   const skillDir = spec.skillDir ?? spec.command;
-  const candidates = candidateSkillDirs(options).map((dir) =>
-    path.join(dir, skillDir, 'SKILL.md')
-  );
+  const candidates = candidateSkillDirs(options).map((dir) => path.join(dir, skillDir, 'SKILL.md'));
   return findExistingFile(candidates, `SKILL.md for '${spec.command}' (${skillDir})`);
 }
 
@@ -95,8 +84,5 @@ export function resolveRecordScriptPath(
   const candidates = candidateSkillDirs(options).map((dir) =>
     path.join(dir, spec.skillDir, 'scripts', spec.scriptName)
   );
-  return findExistingFile(
-    candidates,
-    `script '${spec.scriptName}' for '${spec.command}' (${spec.skillDir})`
-  );
+  return findExistingFile(candidates, `script '${spec.scriptName}' for '${spec.command}' (${spec.skillDir})`);
 }

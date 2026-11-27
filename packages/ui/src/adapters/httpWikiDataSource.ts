@@ -25,9 +25,9 @@ import type {
 import {
   ApiErrorEnvelopeSchema,
   ArchiveBundleMetaSchema,
+  asRevisionId,
   OptimisticConflictErrorSchema,
   ReadingsBundleSchema,
-  asRevisionId,
 } from '@kinloom/core';
 
 export class ApiClientError extends Error {
@@ -84,7 +84,7 @@ async function parseErrorEnvelope(res: Response): Promise<ApiClientError> {
         res.status,
         parsed.data.error.code,
         parsed.data.error.message,
-        parsed.data.error.details,
+        parsed.data.error.details
       );
     }
   } catch {
@@ -98,9 +98,7 @@ function normalizeConflict(details: unknown): OptimisticConflictError {
   return {
     ...parsed,
     expected_parent_revision_id:
-      parsed.expected_parent_revision_id === null
-        ? null
-        : asRevisionId(parsed.expected_parent_revision_id),
+      parsed.expected_parent_revision_id === null ? null : asRevisionId(parsed.expected_parent_revision_id),
     server_revision_id: asRevisionId(parsed.server_revision_id),
   };
 }
@@ -211,9 +209,7 @@ export class HttpWikiDataSource implements ArchiveDataSource {
     }
   }
 
-  async getSession(options?: {
-    signal?: AbortSignal;
-  }): Promise<{
+  async getSession(options?: { signal?: AbortSignal }): Promise<{
     session: ArchiveSessionState;
     capabilities: ArchiveCapabilities;
     authProviders?: ArchiveAuthProviders;
@@ -228,7 +224,7 @@ export class HttpWikiDataSource implements ArchiveDataSource {
   async getEntity(
     entityType: EntityType,
     entityId: string,
-    options?: { signal?: AbortSignal },
+    options?: { signal?: AbortSignal }
   ): Promise<{
     entity: EntityPayload;
     current_revision_id: RevisionId;
@@ -253,7 +249,7 @@ export class HttpWikiDataSource implements ArchiveDataSource {
 
   async createEntity(
     entityType: EntityType,
-    input: EntityWriteInput,
+    input: EntityWriteInput
   ): Promise<{
     entity: EntityPayload;
     revision: RevisionRecord;
@@ -270,7 +266,7 @@ export class HttpWikiDataSource implements ArchiveDataSource {
     entityType: EntityType,
     entityId: string,
     input: EntityWriteInput,
-    options?: { signal?: AbortSignal },
+    options?: { signal?: AbortSignal }
   ): Promise<
     | { ok: true; entity: EntityPayload; revision: RevisionRecord; etag: string }
     | { ok: false; conflict: OptimisticConflictError }
@@ -286,7 +282,7 @@ export class HttpWikiDataSource implements ArchiveDataSource {
         },
         body: JSON.stringify(input),
         signal: options?.signal,
-      },
+      }
     );
 
     if (res.status === 409) {
@@ -312,7 +308,7 @@ export class HttpWikiDataSource implements ArchiveDataSource {
   async deleteEntity(
     entityType: EntityType,
     entityId: string,
-    input: { expected_parent_revision_id: RevisionId; summary: string },
+    input: { expected_parent_revision_id: RevisionId; summary: string }
   ): Promise<{ revision: RevisionRecord; etag: string }> {
     return this.requestJson(
       `/api/entities/${encodeURIComponent(entityType)}/${encodeURIComponent(entityId)}`,
@@ -320,14 +316,14 @@ export class HttpWikiDataSource implements ArchiveDataSource {
         method: 'DELETE',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify(input),
-      },
+      }
     );
   }
 
   async restoreEntity(
     entityType: EntityType,
     entityId: string,
-    input: { expected_parent_revision_id: RevisionId; data?: EntityPayload; summary: string },
+    input: { expected_parent_revision_id: RevisionId; data?: EntityPayload; summary: string }
   ): Promise<{ entity: EntityPayload; revision: RevisionRecord; etag: string }> {
     return this.requestJson(
       `/api/entities/${encodeURIComponent(entityType)}/${encodeURIComponent(entityId)}/restore`,
@@ -335,7 +331,7 @@ export class HttpWikiDataSource implements ArchiveDataSource {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify(input),
-      },
+      }
     );
   }
 
@@ -375,7 +371,7 @@ export class HttpWikiDataSource implements ArchiveDataSource {
 
   async revertRevision(
     revisionId: RevisionId,
-    summary?: string,
+    summary?: string
   ): Promise<{
     revision: RevisionRecord;
     etag: string;
@@ -389,7 +385,7 @@ export class HttpWikiDataSource implements ArchiveDataSource {
 
   async revertBatch(
     batchId: BatchId,
-    summary?: string,
+    summary?: string
   ): Promise<{
     revisions: readonly RevisionRecord[];
     etag: string;
@@ -403,7 +399,7 @@ export class HttpWikiDataSource implements ArchiveDataSource {
 
   async uploadMedia(
     formData: FormData,
-    options?: { signal?: AbortSignal },
+    options?: { signal?: AbortSignal }
   ): Promise<{
     media: MediaItem;
     url: string;
@@ -427,45 +423,32 @@ export class HttpWikiDataSource implements ArchiveDataSource {
     };
   }
 
-  async listTalkComments(
-    entityType: EntityType,
-    entityId: string,
-  ): Promise<readonly TalkComment[]> {
+  async listTalkComments(entityType: EntityType, entityId: string): Promise<readonly TalkComment[]> {
     const data = await this.requestJson<{ comments: TalkComment[] }>(
-      `/api/talk/${encodeURIComponent(entityType)}/${encodeURIComponent(entityId)}`,
+      `/api/talk/${encodeURIComponent(entityType)}/${encodeURIComponent(entityId)}`
     );
     return data.comments;
   }
 
-  async postTalkComment(
-    entityType: EntityType,
-    entityId: string,
-    bodyMd: string,
-  ): Promise<TalkComment> {
+  async postTalkComment(entityType: EntityType, entityId: string, bodyMd: string): Promise<TalkComment> {
     const data = await this.requestJson<{ comment: TalkComment }>(
       `/api/talk/${encodeURIComponent(entityType)}/${encodeURIComponent(entityId)}`,
       {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ body_md: bodyMd }),
-      },
+      }
     );
     return data.comment;
   }
 
-  async deleteTalkComment(
-    entityType: EntityType,
-    entityId: string,
-    commentId: number,
-  ): Promise<void> {
+  async deleteTalkComment(entityType: EntityType, entityId: string, commentId: number): Promise<void> {
     const res = await this.fetchImpl(
-      this.apiUrl(
-        `/api/talk/${encodeURIComponent(entityType)}/${encodeURIComponent(entityId)}/${commentId}`,
-      ),
+      this.apiUrl(`/api/talk/${encodeURIComponent(entityType)}/${encodeURIComponent(entityId)}/${commentId}`),
       {
         method: 'DELETE',
         credentials: 'same-origin',
-      },
+      }
     );
     if (!res.ok && res.status !== 204) {
       throw await parseErrorEnvelope(res);
@@ -474,7 +457,7 @@ export class HttpWikiDataSource implements ArchiveDataSource {
 
   async requestMagicLink(
     email: string,
-    options?: { next?: string; signal?: AbortSignal },
+    options?: { next?: string; signal?: AbortSignal }
   ): Promise<{ sent: boolean }> {
     return this.requestJson<{ sent: boolean }>('/api/auth/magic-link/request', {
       method: 'POST',
@@ -513,11 +496,7 @@ export class HttpWikiDataSource implements ArchiveDataSource {
     return data.users;
   }
 
-  async createUser(input: {
-    email: string;
-    display_name: string;
-    role: UserRole;
-  }): Promise<UserRecord> {
+  async createUser(input: { email: string; display_name: string; role: UserRole }): Promise<UserRecord> {
     const data = await this.requestJson<{ user: UserRecord }>('/api/admin/users', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
@@ -526,17 +505,14 @@ export class HttpWikiDataSource implements ArchiveDataSource {
     return data.user;
   }
 
-  async updateUserRole(
-    email: string,
-    input: { role: UserRole; display_name?: string },
-  ): Promise<UserRecord> {
+  async updateUserRole(email: string, input: { role: UserRole; display_name?: string }): Promise<UserRecord> {
     const data = await this.requestJson<{ user: UserRecord }>(
       `/api/admin/users/${encodeURIComponent(email)}`,
       {
         method: 'PATCH',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify(input),
-      },
+      }
     );
     return data.user;
   }
@@ -556,10 +532,7 @@ export class HttpWikiDataSource implements ArchiveDataSource {
     return data.invites;
   }
 
-  async createInvite(input: {
-    label: string;
-    expires_in_days?: number;
-  }): Promise<CreatedInviteResponse> {
+  async createInvite(input: { label: string; expires_in_days?: number }): Promise<CreatedInviteResponse> {
     return this.requestJson<CreatedInviteResponse>('/api/admin/invites', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
@@ -568,22 +541,17 @@ export class HttpWikiDataSource implements ArchiveDataSource {
   }
 
   async revokeInvite(token: string): Promise<void> {
-    const res = await this.fetchImpl(
-      this.apiUrl(`/api/admin/invites/${encodeURIComponent(token)}`),
-      {
-        method: 'DELETE',
-        credentials: 'same-origin',
-      },
-    );
+    const res = await this.fetchImpl(this.apiUrl(`/api/admin/invites/${encodeURIComponent(token)}`), {
+      method: 'DELETE',
+      credentials: 'same-origin',
+    });
     if (!res.ok && res.status !== 204) {
       throw await parseErrorEnvelope(res);
     }
   }
 
   async listAgentTokens(): Promise<readonly PublicAgentTokenRecord[]> {
-    const data = await this.requestJson<{ tokens: PublicAgentTokenRecord[] }>(
-      '/api/admin/agent-tokens',
-    );
+    const data = await this.requestJson<{ tokens: PublicAgentTokenRecord[] }>('/api/admin/agent-tokens');
     return data.tokens;
   }
 
@@ -599,21 +567,16 @@ export class HttpWikiDataSource implements ArchiveDataSource {
   }
 
   async revokeAgentToken(tokenId: string): Promise<void> {
-    const res = await this.fetchImpl(
-      this.apiUrl(`/api/admin/agent-tokens/${encodeURIComponent(tokenId)}`),
-      {
-        method: 'DELETE',
-        credentials: 'same-origin',
-      },
-    );
+    const res = await this.fetchImpl(this.apiUrl(`/api/admin/agent-tokens/${encodeURIComponent(tokenId)}`), {
+      method: 'DELETE',
+      credentials: 'same-origin',
+    });
     if (!res.ok && res.status !== 204) {
       throw await parseErrorEnvelope(res);
     }
   }
 }
 
-export function createHttpWikiDataSource(
-  options?: HttpWikiDataSourceOptions,
-): HttpWikiDataSource {
+export function createHttpWikiDataSource(options?: HttpWikiDataSourceOptions): HttpWikiDataSource {
   return new HttpWikiDataSource(options);
 }

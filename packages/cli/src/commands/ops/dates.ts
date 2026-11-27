@@ -153,17 +153,13 @@ export function parseCalendarDate(raw: string, label = 'date'): CalendarDate {
   const trimmed = raw.trim();
   const match = ISO_DATE_RE.exec(trimmed);
   if (!match) {
-    throw new CliValidationError(
-      `Invalid ${label} '${raw}'. Expected ISO calendar date YYYY-MM-DD.`
-    );
+    throw new CliValidationError(`Invalid ${label} '${raw}'. Expected ISO calendar date YYYY-MM-DD.`);
   }
   const year = Number.parseInt(match[1], 10);
   const month = Number.parseInt(match[2], 10);
   const day = Number.parseInt(match[3], 10);
   if (year < 1 || month < 1 || month > 12) {
-    throw new CliValidationError(
-      `Invalid ${label} '${raw}'. Month must be 01..12 and year must be >= 0001.`
-    );
+    throw new CliValidationError(`Invalid ${label} '${raw}'. Month must be 01..12 and year must be >= 0001.`);
   }
   const maxDay = daysInMonth(year, month);
   if (day < 1 || day > maxDay) {
@@ -217,8 +213,7 @@ export function computeDateDiff(
 ): Omit<DatesDiffResult, 'subcommand' | 'rendered'> {
   const rawDays = end.epochDay - start.epochDay;
   const reversed = rawDays < 0;
-  const direction: DatesDiffResult['direction'] =
-    rawDays > 0 ? 'forward' : rawDays < 0 ? 'reversed' : 'same';
+  const direction: DatesDiffResult['direction'] = rawDays > 0 ? 'forward' : rawDays < 0 ? 'reversed' : 'same';
   const lo = reversed ? end : start;
   const hi = reversed ? start : end;
   const absDays = hi.epochDay - lo.epochDay;

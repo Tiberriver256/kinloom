@@ -1,6 +1,7 @@
 import path from 'node:path';
 import { CliValidationError } from '../../../errors.js';
 import {
+  type CommandParseSpec,
   cachedJsonCall,
   collapseWhitespace,
   DEFAULT_USER_AGENT,
@@ -13,16 +14,15 @@ import {
   getStringOption,
   httpRequest,
   loadHtml,
+  type OptionSpec,
   parseCacheTtlHours,
   parseCommandArgs,
-  RecordRuntimeError,
-  resolveCacheDir,
-  SsrfBlockedError,
-  type CommandParseSpec,
-  type OptionSpec,
   type RecordCommandContext,
   type RecordCommandOutcome,
   type RecordHandler,
+  RecordRuntimeError,
+  resolveCacheDir,
+  SsrfBlockedError,
 } from '../runtime/index.js';
 
 const DEFAULT_CACHE_TTL_HOURS = 168;
@@ -253,14 +253,9 @@ export function encodeIso88591Form(formData: Readonly<Record<string, string>>): 
 
 function checkNotChallenged(headers: Headers, text: string, label: string): void {
   if ((headers.get('cf-mitigated') ?? '').toLowerCase() === 'challenge') {
-    throw new RecordRuntimeError(
-      `${label} returned a Cloudflare challenge; open it in a browser instead.`
-    );
+    throw new RecordRuntimeError(`${label} returned a Cloudflare challenge; open it in a browser instead.`);
   }
-  if (
-    text.includes('Processing JavaScript challenge') ||
-    text.includes('<title>Just a moment...</title>')
-  ) {
+  if (text.includes('Processing JavaScript challenge') || text.includes('<title>Just a moment...</title>')) {
     throw new RecordRuntimeError(
       `${label} returned a JavaScript anti-bot challenge; open it in a browser instead.`
     );
@@ -450,9 +445,8 @@ export function parseHiskiResults(page: string): HiskiSearchResult {
       ? currentHeading.split(' - ', 1)[0].trim()
       : currentHeading;
 
-    const rows = $(el).children('tbody').length > 0
-      ? $(el).children('tbody').children('tr')
-      : $(el).children('tr');
+    const rows =
+      $(el).children('tbody').length > 0 ? $(el).children('tbody').children('tr') : $(el).children('tr');
 
     rows.each((_rIdx, trEl) => {
       const cellEls = $(trEl).children('td, th');
@@ -534,8 +528,7 @@ export function parseHiskiEventDetail(
 ): HiskiEventDetail {
   const $ = loadHtml(page);
   const parishName = cleanText($('h2').first().text());
-  const bookTitle =
-    cleanText($('h3').first().text()) || BOOK_LABELS[ref.bookCode] || ref.bookCode;
+  const bookTitle = cleanText($('h3').first().text()) || BOOK_LABELS[ref.bookCode] || ref.bookCode;
 
   const permalinkMatch = HISKI_PERMALINK_RE.exec(page);
   const permalinkId = permalinkMatch ? permalinkMatch[1] : '';
@@ -613,10 +606,7 @@ export function parseDigihakemistoSearch(page: string): DigihakemistoArchiveRow[
   return results;
 }
 
-export function parseDigihakemistoArchive(
-  page: string,
-  archiveId: string
-): DigihakemistoArchiveDetail {
+export function parseDigihakemistoArchive(page: string, archiveId: string): DigihakemistoArchiveDetail {
   const $ = loadHtml(page);
   const title = cleanText($('title').first().text());
   const astiaAttr = $('a#alkup[href]').attr('href') ?? '';
@@ -804,10 +794,7 @@ async function resolveParishSpec(
   return resolved.join(',');
 }
 
-function validateYears(
-  fromYear: string | undefined,
-  toYear: string | undefined
-): readonly [string, string] {
+function validateYears(fromYear: string | undefined, toYear: string | undefined): readonly [string, string] {
   const fy = (fromYear ?? '').trim();
   const ty = (toYear ?? '').trim();
   if (fy && !YEAR_RE.test(fy)) {
@@ -871,9 +858,7 @@ function parseArchiveId(raw: string): string {
     if (parts.length >= 2 && parts[0] === 'aineisto' && SAFE_ARCHIVE_ID_RE.test(parts[1])) {
       return parts[1];
     }
-    throw new CliValidationError(
-      `Expected https://digihakemisto.net/aineisto/<id>, got '${raw}'.`
-    );
+    throw new CliValidationError(`Expected https://digihakemisto.net/aineisto/<id>, got '${raw}'.`);
   }
   if (text.toLowerCase().startsWith('id:')) {
     text = text.slice(3).trim();
@@ -902,25 +887,73 @@ const CACHE_OPTIONS: readonly OptionSpec[] = [
 ];
 
 const PARISHES_OPTIONS: readonly OptionSpec[] = [
-  { key: 'query', kind: 'string', flags: ['--query', '-q'], help: 'Filter parish names or codes (Finnish or Swedish).' },
+  {
+    key: 'query',
+    kind: 'string',
+    flags: ['--query', '-q'],
+    help: 'Filter parish names or codes (Finnish or Swedish).',
+  },
   { key: 'limit', kind: 'integer', flags: ['--limit'], help: 'Maximum parishes to display.' },
   { key: 'asJson', kind: 'boolean', flags: ['--json'], help: 'Emit JSON with boolean cache_hit.' },
   ...CACHE_OPTIONS,
 ];
 
 const HISKI_OPTIONS: readonly OptionSpec[] = [
-  { key: 'book', kind: 'string', flags: ['--book'], default: 'christened', help: 'Book type: christened|births, married|marriages, buried|burials, moved-in, moved-out, or all.' },
-  { key: 'parish', kind: 'string', flags: ['--parish'], default: '*', help: "4-digit HisKi parish code, parish name, comma-separated codes, or '*' for all parishes." },
-  { key: 'surname', kind: 'string', flags: ['--surname'], help: 'Father / groom / person surname (isukunimi).' },
-  { key: 'given', kind: 'string', flags: ['--given'], help: 'Child first name (christened) or person first name (other books).' },
+  {
+    key: 'book',
+    kind: 'string',
+    flags: ['--book'],
+    default: 'christened',
+    help: 'Book type: christened|births, married|marriages, buried|burials, moved-in, moved-out, or all.',
+  },
+  {
+    key: 'parish',
+    kind: 'string',
+    flags: ['--parish'],
+    default: '*',
+    help: "4-digit HisKi parish code, parish name, comma-separated codes, or '*' for all parishes.",
+  },
+  {
+    key: 'surname',
+    kind: 'string',
+    flags: ['--surname'],
+    help: 'Father / groom / person surname (isukunimi).',
+  },
+  {
+    key: 'given',
+    kind: 'string',
+    flags: ['--given'],
+    help: 'Child first name (christened) or person first name (other books).',
+  },
   { key: 'fatherGiven', kind: 'string', flags: ['--father-given'], help: 'Father first name (ietunimi).' },
-  { key: 'fatherPatronymic', kind: 'string', flags: ['--father-patronymic'], help: 'Father / person patronymic (ipatronyymi).' },
-  { key: 'motherGiven', kind: 'string', flags: ['--mother-given'], help: 'Mother / bride / relative first name (aetunimi).' },
-  { key: 'motherSurname', kind: 'string', flags: ['--mother-surname'], help: 'Mother / bride / relative surname (asukunimi).' },
+  {
+    key: 'fatherPatronymic',
+    kind: 'string',
+    flags: ['--father-patronymic'],
+    help: 'Father / person patronymic (ipatronyymi).',
+  },
+  {
+    key: 'motherGiven',
+    kind: 'string',
+    flags: ['--mother-given'],
+    help: 'Mother / bride / relative first name (aetunimi).',
+  },
+  {
+    key: 'motherSurname',
+    kind: 'string',
+    flags: ['--mother-surname'],
+    help: 'Mother / bride / relative surname (asukunimi).',
+  },
   { key: 'village', kind: 'string', flags: ['--village'], help: 'Village or farm name (ikyla).' },
   { key: 'fromYear', kind: 'string', flags: ['--from-year', '--start-year'], help: 'Start year (YYYY).' },
   { key: 'toYear', kind: 'string', flags: ['--to-year', '--end-year'], help: 'End year (YYYY).' },
-  { key: 'limit', kind: 'integer', flags: ['--limit'], default: 30, help: 'Maximum records to return (1-1000, default 30).' },
+  {
+    key: 'limit',
+    kind: 'integer',
+    flags: ['--limit'],
+    default: 30,
+    help: 'Maximum records to return (1-1000, default 30).',
+  },
   { key: 'asJson', kind: 'boolean', flags: ['--json'], help: 'Emit JSON with boolean cache_hit.' },
   ...CACHE_OPTIONS,
 ];
@@ -938,26 +971,68 @@ const ARCHIVES_OPTIONS: readonly OptionSpec[] = [
     choices: Object.keys(DIGIHAKEMISTO_PRESETS).toSorted(),
     help: 'Built-in query preset (parishes, henkikirjat, tax, court, inventories, say).',
   },
-  { key: 'digitized', kind: 'boolean', flags: ['--digitized'], help: 'Show only archives marked as digitized.' },
-  { key: 'limit', kind: 'integer', flags: ['--limit'], default: 30, help: 'Maximum archive rows to return (default 30).' },
+  {
+    key: 'digitized',
+    kind: 'boolean',
+    flags: ['--digitized'],
+    help: 'Show only archives marked as digitized.',
+  },
+  {
+    key: 'limit',
+    kind: 'integer',
+    flags: ['--limit'],
+    default: 30,
+    help: 'Maximum archive rows to return (default 30).',
+  },
   { key: 'asJson', kind: 'boolean', flags: ['--json'], help: 'Emit JSON with boolean cache_hit.' },
   ...CACHE_OPTIONS,
 ];
 
 const ARCHIVE_OPTIONS: readonly OptionSpec[] = [
-  { key: 'digitized', kind: 'boolean', flags: ['--digitized'], help: 'Show only digitized child series/volumes.' },
-  { key: 'limit', kind: 'integer', flags: ['--limit'], default: 50, help: 'Maximum child rows to return (default 50).' },
+  {
+    key: 'digitized',
+    kind: 'boolean',
+    flags: ['--digitized'],
+    help: 'Show only digitized child series/volumes.',
+  },
+  {
+    key: 'limit',
+    kind: 'integer',
+    flags: ['--limit'],
+    default: 50,
+    help: 'Maximum child rows to return (default 50).',
+  },
   { key: 'asJson', kind: 'boolean', flags: ['--json'], help: 'Emit JSON with boolean cache_hit.' },
   ...CACHE_OPTIONS,
 ];
 
 const URL_OPTIONS: readonly OptionSpec[] = [
-  { key: 'finna', kind: 'string', flags: ['--finna'], help: 'Finna browser search URL (Finna API is Cloudflare-challenged).' },
-  { key: 'astia', kind: 'boolean', flags: ['--astia'], help: 'National Archives of Finland Astia search page.' },
+  {
+    key: 'finna',
+    kind: 'string',
+    flags: ['--finna'],
+    help: 'Finna browser search URL (Finna API is Cloudflare-challenged).',
+  },
+  {
+    key: 'astia',
+    kind: 'boolean',
+    flags: ['--astia'],
+    help: 'National Archives of Finland Astia search page.',
+  },
   { key: 'hiski', kind: 'string', flags: ['--hiski'], help: 'HisKi portal or 4-digit parish page.' },
   { key: 'digihakemisto', kind: 'string', flags: ['--digihakemisto'], help: 'Digihakemisto home page.' },
-  { key: 'digi', kind: 'string', flags: ['--digi'], help: 'National Library of Finland Digi newspapers search URL.' },
-  { key: 'sshy', kind: 'boolean', flags: ['--sshy'], help: "Finland's Family History Association (SSHY) portal." },
+  {
+    key: 'digi',
+    kind: 'string',
+    flags: ['--digi'],
+    help: 'National Library of Finland Digi newspapers search URL.',
+  },
+  {
+    key: 'sshy',
+    kind: 'boolean',
+    flags: ['--sshy'],
+    help: "Finland's Family History Association (SSHY) portal.",
+  },
 ];
 
 const PARISHES_SPEC: CommandParseSpec = { options: PARISHES_OPTIONS, allowPositionals: false };
@@ -994,7 +1069,10 @@ function renderRootHelp(): string {
       { name: 'event', summary: 'Inspect one HisKi event detail page (with SSHY scan link).' },
       { name: 'archives', summary: 'Search National Archives of Finland (Astia) via Digihakemisto.' },
       { name: 'archive', summary: 'Inspect one Digihakemisto/Astia archive series or volume list.' },
-      { name: 'url', summary: 'Build verified browser URLs for Finna, Astia, HisKi, Digihakemisto, Digi, SSHY.' },
+      {
+        name: 'url',
+        summary: 'Build verified browser URLs for Finna, Astia, HisKi, Digihakemisto, Digi, SSHY.',
+      },
     ],
   });
 }
@@ -1032,9 +1110,7 @@ async function runParishes(
   let parishes = allParishes;
   if (query) {
     const needle = query.trim().toLowerCase();
-    parishes = parishes.filter(
-      (p) => p.name.toLowerCase().includes(needle) || needle === p.code
-    );
+    parishes = parishes.filter((p) => p.name.toLowerCase().includes(needle) || needle === p.code);
   }
   if (limit !== undefined) {
     parishes = parishes.slice(0, limit);
@@ -1062,10 +1138,7 @@ async function runParishes(
   return { exitCode: 0, bytesOut: emitStdout(ctx.io, lines.join('\n')), cacheHit };
 }
 
-async function runHiski(
-  argv: readonly string[],
-  ctx: RecordCommandContext
-): Promise<RecordCommandOutcome> {
+async function runHiski(argv: readonly string[], ctx: RecordCommandContext): Promise<RecordCommandOutcome> {
   const parsed = parseCommandArgs(argv, HISKI_SPEC);
   if (parsed.helpRequested) {
     return {
@@ -1094,18 +1167,10 @@ async function runHiski(
     );
   }
 
-  const [fy, ty] = validateYears(
-    getStringOption(parsed, 'fromYear'),
-    getStringOption(parsed, 'toYear')
-  );
+  const [fy, ty] = validateYears(getStringOption(parsed, 'fromYear'), getStringOption(parsed, 'toYear'));
   const refresh = getBooleanOption(parsed, 'refresh');
   const ttlHours = resolveTtlHours(getNumberOption(parsed, 'cacheTtlHours'), ctx);
-  const srk = await resolveParishSpec(
-    ctx,
-    getStringOption(parsed, 'parish') ?? '*',
-    refresh,
-    ttlHours
-  );
+  const srk = await resolveParishSpec(ctx, getStringOption(parsed, 'parish') ?? '*', refresh, ttlHours);
 
   if (srk === '*' && bookCode === 'kaikki') {
     throw new CliValidationError(
@@ -1229,9 +1294,7 @@ async function runHiski(
       );
     } else if (rec.book_code === 'vihityt') {
       const dateS = String(rec.married || rec.announced || '');
-      lines.push(
-        `- ${dateS} | ${parishTag} | ${String(rec.groom ?? '')} & ${String(rec.bride ?? '')}`
-      );
+      lines.push(`- ${dateS} | ${parishTag} | ${String(rec.groom ?? '')} & ${String(rec.bride ?? '')}`);
     } else if (rec.book_code === 'haudatut') {
       const dateS = String(rec.died || rec.buried || '');
       lines.push(
@@ -1248,10 +1311,7 @@ async function runHiski(
   return { exitCode: 0, bytesOut: emitStdout(ctx.io, lines.join('\n')), cacheHit };
 }
 
-async function runEvent(
-  argv: readonly string[],
-  ctx: RecordCommandContext
-): Promise<RecordCommandOutcome> {
+async function runEvent(argv: readonly string[], ctx: RecordCommandContext): Promise<RecordCommandOutcome> {
   const parsed = parseCommandArgs(argv, EVENT_SPEC);
   if (parsed.helpRequested) {
     return {
@@ -1508,10 +1568,7 @@ async function runArchiveInspect(
   return { exitCode: 0, bytesOut: emitStdout(ctx.io, lines.join('\n')), cacheHit };
 }
 
-function normalizeOptionalValueFlags(
-  argv: readonly string[],
-  optionalFlags: ReadonlySet<string>
-): string[] {
+function normalizeOptionalValueFlags(argv: readonly string[], optionalFlags: ReadonlySet<string>): string[] {
   const out: string[] = [];
   for (let i = 0; i < argv.length; i += 1) {
     const token = argv[i];
@@ -1536,8 +1593,7 @@ function runUrl(argv: readonly string[], ctx: RecordCommandContext): RecordComma
         ctx.io,
         formatCommandUsage({
           usage: 'kinloom fi-archives url [options]',
-          summary:
-            'Build verified browser URLs for Finna, Astia, HisKi, Digihakemisto, Digi, SSHY.',
+          summary: 'Build verified browser URLs for Finna, Astia, HisKi, Digihakemisto, Digi, SSHY.',
           options: URL_OPTIONS,
         })
       ),
@@ -1567,9 +1623,7 @@ function runUrl(argv: readonly string[], ctx: RecordCommandContext): RecordComma
   }
   const digi = getStringOption(parsed, 'digi');
   if (digi) {
-    lines.push(
-      `${DIGI_NEWSPAPERS_URL}?${new URLSearchParams({ query: digi.trim() }).toString()}`
-    );
+    lines.push(`${DIGI_NEWSPAPERS_URL}?${new URLSearchParams({ query: digi.trim() }).toString()}`);
   }
   if (getBooleanOption(parsed, 'sshy')) {
     lines.push(SSHY_BASE_URL);
@@ -1588,10 +1642,7 @@ function runUrl(argv: readonly string[], ctx: RecordCommandContext): RecordComma
   return { exitCode: 0, bytesOut: emitStdout(ctx.io, lines.join('\n')) };
 }
 
-export const runFiArchivesCommand: RecordHandler = async (
-  args,
-  ctx
-): Promise<RecordCommandOutcome> => {
+export const runFiArchivesCommand: RecordHandler = async (args, ctx): Promise<RecordCommandOutcome> => {
   try {
     if (args.length === 0 || args[0] === '--help' || args[0] === '-h') {
       return { exitCode: 0, bytesOut: emitStdout(ctx.io, renderRootHelp()) };
@@ -1611,9 +1662,7 @@ export const runFiArchivesCommand: RecordHandler = async (
       case 'url':
         return runUrl(rest, ctx);
       default:
-        throw new CliValidationError(
-          `No such command '${subcmd}'. Run 'kinloom fi-archives --script-help'.`
-        );
+        throw new CliValidationError(`No such command '${subcmd}'. Run 'kinloom fi-archives --script-help'.`);
     }
   } catch (err: unknown) {
     if (err instanceof CliValidationError) {

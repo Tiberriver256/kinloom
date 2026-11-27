@@ -69,7 +69,7 @@ export function parseInlineCitationToken(rawToken: string): ParsedInlineCitation
  */
 export function extractNarrativeCitations(
   markdown: string,
-  options?: ExtractNarrativeCitationsOptions,
+  options?: ExtractNarrativeCitationsOptions
 ): ExtractedNarrativeCitations {
   const knownSourceIds = options?.knownSourceIds;
   const numberBySourceId = new Map<string, number>();
@@ -128,7 +128,7 @@ export function extractNarrativeCitations(
 export function orderNarrativeSources(
   markdown: string,
   narrativeSourceIds: readonly string[],
-  sourcesById: ReadonlyMap<string, SourceRecord>,
+  sourcesById: ReadonlyMap<string, SourceRecord>
 ): OrderedNarrativeSource[] {
   const extracted = extractNarrativeCitations(markdown, { knownSourceIds: sourcesById });
   const ordered: OrderedNarrativeSource[] = [];
@@ -188,7 +188,7 @@ function mediaMatchesEvent(media: ResolvableCitationMedia, eventId: string): boo
 
 function pickPreferredMedia(
   candidates: readonly ResolvableCitationMedia[],
-  subjectPersonId?: string | null,
+  subjectPersonId?: string | null
 ): MediaItem | null {
   if (candidates.length === 0) {
     return null;
@@ -210,7 +210,7 @@ export function resolveCitationMedia(
   explicitMediaId?: string | null,
   allMedia: readonly ResolvableCitationMedia[] = [],
   subjectPersonId?: string | null,
-  allEvents: readonly Pick<ArchiveEvent, 'id' | 'participants' | 'sources'>[] = [],
+  allEvents: readonly Pick<ArchiveEvent, 'id' | 'participants' | 'sources'>[] = []
 ): MediaItem | null {
   if (allMedia.length === 0) {
     return null;
@@ -224,7 +224,7 @@ export function resolveCitationMedia(
   }
 
   const directMatches = allMedia.filter(
-    (item) => item.source_id === sourceId && isPreviewableCitationImage(item),
+    (item) => item.source_id === sourceId && isPreviewableCitationImage(item)
   );
   const directPick = pickPreferredMedia(directMatches, subjectPersonId);
   if (directPick) {
@@ -232,23 +232,17 @@ export function resolveCitationMedia(
   }
 
   if (allEvents.length > 0) {
-    const matchingEvents = allEvents.filter((ev) =>
-      ev.sources.some((ref) => ref.source_id === sourceId),
-    );
+    const matchingEvents = allEvents.filter((ev) => ev.sources.some((ref) => ref.source_id === sourceId));
     const orderedEvents = subjectPersonId
       ? [
-          ...matchingEvents.filter((ev) =>
-            ev.participants.some((pt) => pt.person_id === subjectPersonId),
-          ),
-          ...matchingEvents.filter(
-            (ev) => !ev.participants.some((pt) => pt.person_id === subjectPersonId),
-          ),
+          ...matchingEvents.filter((ev) => ev.participants.some((pt) => pt.person_id === subjectPersonId)),
+          ...matchingEvents.filter((ev) => !ev.participants.some((pt) => pt.person_id === subjectPersonId)),
         ]
       : matchingEvents;
 
     for (const ev of orderedEvents) {
       const eventMatches = allMedia.filter(
-        (item) => mediaMatchesEvent(item, ev.id) && isPreviewableCitationImage(item),
+        (item) => mediaMatchesEvent(item, ev.id) && isPreviewableCitationImage(item)
       );
       const eventPick = pickPreferredMedia(eventMatches, subjectPersonId);
       if (eventPick) {
@@ -267,7 +261,7 @@ export function resolveCitationMedia(
 export function validateNarrativeCitations(
   narratives: readonly (Pick<Narrative, 'id'> & { body_md?: string })[],
   knownSourceIds: ReadonlySet<string>,
-  knownMediaIds?: ReadonlySet<string> | null,
+  knownMediaIds?: ReadonlySet<string> | null
 ): string[] {
   const errors: string[] = [];
 
@@ -282,9 +276,7 @@ export function validateNarrativeCitations(
     for (const occ of extracted.occurrences) {
       if (!knownSourceIds.has(occ.sourceId) && !reportedSources.has(occ.sourceId)) {
         reportedSources.add(occ.sourceId);
-        errors.push(
-          `Narrative '${narrative.id}' cites unknown inline source_id '${occ.sourceId}'.`,
-        );
+        errors.push(`Narrative '${narrative.id}' cites unknown inline source_id '${occ.sourceId}'.`);
       }
       if (
         occ.mediaId &&
@@ -294,7 +286,7 @@ export function validateNarrativeCitations(
       ) {
         reportedMedia.add(occ.mediaId);
         errors.push(
-          `Narrative '${narrative.id}' cites unknown inline media_id '${occ.mediaId}' for source '${occ.sourceId}'.`,
+          `Narrative '${narrative.id}' cites unknown inline media_id '${occ.mediaId}' for source '${occ.sourceId}'.`
         );
       }
     }

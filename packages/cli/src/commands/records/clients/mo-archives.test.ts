@@ -140,11 +140,9 @@ describe('mo-archives native client', () => {
     });
     const d1 = await invokeMo(['detail', '555', '--json'], cacheDir, { fetchImpl });
     const d2 = await invokeMo(['detail', '555'], cacheDir, { fetchImpl });
-    const dTtl = await invokeMo(
-      ['detail', '555', '--cache-ttl-hours', '0', '--json'],
-      cacheDir,
-      { fetchImpl }
-    );
+    const dTtl = await invokeMo(['detail', '555', '--cache-ttl-hours', '0', '--json'], cacheDir, {
+      fetchImpl,
+    });
 
     expect((JSON.parse(p1.stdout) as { cache_hit: boolean }).cache_hit).toBe(false);
     expect((JSON.parse(p2.stdout) as { cache_hit: boolean }).cache_hit).toBe(true);

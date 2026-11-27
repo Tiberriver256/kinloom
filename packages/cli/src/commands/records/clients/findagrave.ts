@@ -4,6 +4,7 @@ import { CliValidationError } from '../../../errors.js';
 import {
   assertSafeUrl,
   atomicWriteFileSync,
+  type CommandParseSpec,
   canonicalJsonStringify,
   emitJsonStdout,
   emitStdout,
@@ -12,25 +13,23 @@ import {
   getNumberOption,
   getStringListOption,
   getStringOption,
+  type OptionSpec,
   parseCacheTtlHours,
   parseCommandArgs,
   parseRetryAfterMs,
+  type RecordCommandContext,
+  type RecordCommandOutcome,
+  type RecordHandler,
   RecordRuntimeError,
   resolveCacheDir,
   resolveSubcommandAlias,
   sha256Hex,
   withAdvisoryLock,
-  type CommandParseSpec,
-  type OptionSpec,
-  type RecordCommandContext,
-  type RecordCommandOutcome,
-  type RecordHandler,
 } from '../runtime/index.js';
 
 export const GRAPHQL_URL = 'https://www.findagrave.com/orc/graphql';
 export const WEBSITE_BASE = 'https://www.findagrave.com';
-const USER_AGENT =
-  'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/131.0 Safari/537.36';
+const USER_AGENT = 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/131.0 Safari/537.36';
 const MIN_INTERVAL_MS = 300;
 const DEFAULT_CACHE_TTL_HOURS = 168;
 const GQL_ATTEMPTS = 3;
@@ -40,33 +39,16 @@ const PHOTO_TIMEOUT_MS = 60_000;
 const RETRY_AFTER_CAP_MS = 10_000;
 const MAX_REDIRECTS = 10;
 
-const TRANSIENT_STATUS_CODES: ReadonlySet<number> = new Set([
-  429, 500, 502, 503, 504, 520, 522, 524,
-]);
+const TRANSIENT_STATUS_CODES: ReadonlySet<number> = new Set([429, 500, 502, 503, 504, 520, 522, 524]);
 const REDIRECT_STATUSES: ReadonlySet<number> = new Set([301, 302, 303, 307, 308]);
 const VALID_YEAR_FILTERS: ReadonlySet<string> = new Set(['before', 'after', 'exact', 'unknown']);
 const SAFE_ID_RE = /^[A-Za-z0-9_-]+$/;
 const SAFE_EXT_RE = /^\.[A-Za-z0-9]{1,8}$/;
-const MEMORIAL_URL_RE =
-  /^https:\/\/(?:www\.)?findagrave\.com\/memorial\/(\d+)(?:\/[^?#]*)?(?:[?#].*)?$/i;
-const CEMETERY_URL_RE =
-  /^https:\/\/(?:www\.)?findagrave\.com\/cemetery\/(\d+)(?:\/[^?#]*)?(?:[?#].*)?$/i;
+const MEMORIAL_URL_RE = /^https:\/\/(?:www\.)?findagrave\.com\/memorial\/(\d+)(?:\/[^?#]*)?(?:[?#].*)?$/i;
+const CEMETERY_URL_RE = /^https:\/\/(?:www\.)?findagrave\.com\/cemetery\/(\d+)(?:\/[^?#]*)?(?:[?#].*)?$/i;
 const PHOTO_ALLOWED_SUFFIXES = ['findagrave.com', 'ancestrycdn.com', 'cloudfront.net'] as const;
 const GQL_ALLOWED_HOSTS = ['.findagrave.com'] as const;
-const MONTHS = [
-  'Jan',
-  'Feb',
-  'Mar',
-  'Apr',
-  'May',
-  'Jun',
-  'Jul',
-  'Aug',
-  'Sep',
-  'Oct',
-  'Nov',
-  'Dec',
-] as const;
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'] as const;
 const IMAGE_CONTENT_TYPES: ReadonlySet<string> = new Set([
   'image/jpeg',
   'image/jpg',
@@ -205,21 +187,14 @@ export function getCacheRoot(env: NodeJS.ProcessEnv): string {
   });
 }
 
-export function resolveCacheTtlHours(
-  cliTtl: number | undefined,
-  env: NodeJS.ProcessEnv
-): number {
+export function resolveCacheTtlHours(cliTtl: number | undefined, env: NodeJS.ProcessEnv): number {
   if (cliTtl !== undefined) {
     return parseCacheTtlHours(cliTtl, DEFAULT_CACHE_TTL_HOURS, '--cache-ttl-hours');
   }
   const rawEnv = env.KINLOOM_FINDAGRAVE_CACHE_TTL_HOURS;
   const trimmed = rawEnv !== undefined ? rawEnv.trim() : '';
   if (trimmed.length > 0) {
-    return parseCacheTtlHours(
-      trimmed,
-      DEFAULT_CACHE_TTL_HOURS,
-      'KINLOOM_FINDAGRAVE_CACHE_TTL_HOURS'
-    );
+    return parseCacheTtlHours(trimmed, DEFAULT_CACHE_TTL_HOURS, 'KINLOOM_FINDAGRAVE_CACHE_TTL_HOURS');
   }
   return DEFAULT_CACHE_TTL_HOURS;
 }
@@ -271,13 +246,9 @@ export function validatePhotoUrl(rawUrl: string): string {
   ) {
     throw new RecordRuntimeError(`Refusing non-HTTPS or disallowed photo URL: ${text}`);
   }
-  const allowed = PHOTO_ALLOWED_SUFFIXES.some(
-    (suffix) => host === suffix || host.endsWith(`.${suffix}`)
-  );
+  const allowed = PHOTO_ALLOWED_SUFFIXES.some((suffix) => host === suffix || host.endsWith(`.${suffix}`));
   if (!allowed) {
-    throw new RecordRuntimeError(
-      `Refusing photo download from disallowed host '${host}': ${text}`
-    );
+    throw new RecordRuntimeError(`Refusing photo download from disallowed host '${host}': ${text}`);
   }
   return text;
 }
@@ -306,8 +277,7 @@ export function sanitizePrefix(prefix: string | undefined): string {
 
 export function safePhotoFilename(photoId: unknown, url: string): string {
   const rawId = String(photoId ?? '').trim();
-  const safeId =
-    !rawId || !SAFE_ID_RE.test(rawId) ? sha256Hex(url || rawId).slice(0, 16) : rawId;
+  const safeId = !rawId || !SAFE_ID_RE.test(rawId) ? sha256Hex(url || rawId).slice(0, 16) : rawId;
   const withoutQuery = url.split('?', 1)[0] ?? '';
   const rawSuffix = path.extname(withoutQuery).toLowerCase();
   const suffix = SAFE_EXT_RE.test(rawSuffix) ? rawSuffix : '.jpg';
@@ -356,11 +326,7 @@ function atomicCopyFile(src: string, dest: string): void {
   atomicWriteFileSync(dest, data);
 }
 
-function readFreshEnvelope(
-  filePath: string,
-  ttlHours: number,
-  nowMs: () => number
-): JsonRecord | undefined {
+function readFreshEnvelope(filePath: string, ttlHours: number, nowMs: () => number): JsonRecord | undefined {
   const ttlSeconds = ttlHours * 3600;
   if (ttlSeconds <= 0) {
     return undefined;
@@ -371,11 +337,7 @@ function readFreshEnvelope(
   }
   const cachedAt = envelope.cached_at;
   const data = envelope.data;
-  if (
-    typeof cachedAt !== 'number' ||
-    !Number.isFinite(cachedAt) ||
-    !isPlainRecord(data)
-  ) {
+  if (typeof cachedAt !== 'number' || !Number.isFinite(cachedAt) || !isPlainRecord(data)) {
     return undefined;
   }
   if (nowMs() / 1000 - cachedAt <= ttlSeconds) {
@@ -386,11 +348,7 @@ function readFreshEnvelope(
 
 function retryDelayMs(attempt: number, response: Response | undefined, nowMs: () => number): number {
   if (response) {
-    const parsed = parseRetryAfterMs(
-      response.headers.get('retry-after'),
-      nowMs(),
-      RETRY_AFTER_CAP_MS
-    );
+    const parsed = parseRetryAfterMs(response.headers.get('retry-after'), nowMs(), RETRY_AFTER_CAP_MS);
     if (parsed !== undefined) {
       return parsed;
     }
@@ -619,9 +577,7 @@ export async function runGraphqlQuery(
         await ctx.sleepFn(retryDelayMs(attempt, resp, ctx.nowMs));
         continue;
       }
-      throw new RecordRuntimeError(
-        `HTTP ${resp.status} from ${GRAPHQL_URL} after ${GQL_ATTEMPTS} attempts`
-      );
+      throw new RecordRuntimeError(`HTTP ${resp.status} from ${GRAPHQL_URL} after ${GQL_ATTEMPTS} attempts`);
     }
 
     if (resp.status !== 200) {
@@ -769,12 +725,7 @@ function coordsPair(obj: unknown): readonly [number | null, number | null] {
   }
   const lat = obj.lat;
   const lon = obj.lon !== undefined && obj.lon !== null ? obj.lon : obj.lng;
-  if (
-    typeof lat === 'number' &&
-    Number.isFinite(lat) &&
-    typeof lon === 'number' &&
-    Number.isFinite(lon)
-  ) {
+  if (typeof lat === 'number' && Number.isFinite(lat) && typeof lon === 'number' && Number.isFinite(lon)) {
     return [lat, lon];
   }
   return [null, null];
@@ -903,10 +854,7 @@ async function cachedGqlQuery(
 ): Promise<{ readonly data: JsonRecord; readonly cacheHit: boolean }> {
   const canonical = canonicalJsonStringify(canonicalParams);
   const digest = sha256Hex(canonical);
-  const cachePath = resolveSafeChild(
-    path.join(options.cacheRoot, '_queries', kind),
-    `${digest}.json`
-  );
+  const cachePath = resolveSafeChild(path.join(options.cacheRoot, '_queries', kind), `${digest}.json`);
 
   if (!options.refresh) {
     const cached = readFreshEnvelope(cachePath, options.ttlHours, ctx.nowMs);
@@ -915,10 +863,7 @@ async function cachedGqlQuery(
     }
   }
 
-  const lockPath = resolveSafeChild(
-    path.join(options.cacheRoot, '_locks'),
-    `query_${kind}_${digest}.lock`
-  );
+  const lockPath = resolveSafeChild(path.join(options.cacheRoot, '_locks'), `query_${kind}_${digest}.lock`);
 
   return withAdvisoryLock(
     lockPath,
@@ -991,14 +936,8 @@ async function loadOrFetchMemorialsWithHits(
       }
       byId.set(fetchedId, mem);
       hitById.set(fetchedId, false);
-      const cachePath = resolveSafeChild(
-        path.join(options.cacheRoot, 'memorials'),
-        `${fetchedId}.json`
-      );
-      const lockPath = resolveSafeChild(
-        path.join(options.cacheRoot, '_locks'),
-        `memorial_${fetchedId}.lock`
-      );
+      const cachePath = resolveSafeChild(path.join(options.cacheRoot, 'memorials'), `${fetchedId}.json`);
+      const lockPath = resolveSafeChild(path.join(options.cacheRoot, '_locks'), `memorial_${fetchedId}.lock`);
       await withAdvisoryLock(
         lockPath,
         async () => {
@@ -1045,10 +984,7 @@ async function loadOrFetchCemeteryById(
     }
   }
 
-  const lockPath = resolveSafeChild(
-    path.join(options.cacheRoot, '_locks'),
-    `cemetery_${cleanId}.lock`
-  );
+  const lockPath = resolveSafeChild(path.join(options.cacheRoot, '_locks'), `cemetery_${cleanId}.lock`);
 
   return withAdvisoryLock(
     lockPath,
@@ -1095,9 +1031,7 @@ function resolvePositionalName(
   lastName: string | undefined,
   fullName: string | undefined
 ): readonly [string | undefined, string | undefined] {
-  const posTokens = queryParts
-    .flatMap((part) => part.trim().split(/\s+/))
-    .filter((tok) => tok.length > 0);
+  const posTokens = queryParts.flatMap((part) => part.trim().split(/\s+/)).filter((tok) => tok.length > 0);
   const nameTokens = (fullName ?? '')
     .trim()
     .split(/\s+/)
@@ -1111,9 +1045,7 @@ function resolvePositionalName(
     return [firstName, lastName];
   }
   if (firstName && lastName) {
-    throw new CliValidationError(
-      'Pass either positional name / --name or --first/--last, not both.'
-    );
+    throw new CliValidationError('Pass either positional name / --name or --first/--last, not both.');
   }
   if (firstName && !lastName) {
     return [firstName, tokens.join(' ')];
@@ -1613,10 +1545,7 @@ function renderUrlHelp(): string {
   });
 }
 
-async function runSearch(
-  argv: readonly string[],
-  ctx: RecordCommandContext
-): Promise<RecordCommandOutcome> {
+async function runSearch(argv: readonly string[], ctx: RecordCommandContext): Promise<RecordCommandOutcome> {
   const parsed = parseCommandArgs(argv, SEARCH_PARSE_SPEC);
   if (parsed.helpRequested) {
     return { exitCode: 0, bytesOut: emitStdout(ctx.io, renderSearchHelp()) };
@@ -1659,8 +1588,7 @@ async function runSearch(
   const cacheRoot = getCacheRoot(ctx.env);
 
   const pageSize = Math.min(limit, 50);
-  const resolvedOffset =
-    offset !== undefined ? offset : page !== undefined ? (page - 1) * pageSize : 0;
+  const resolvedOffset = offset !== undefined ? offset : page !== undefined ? (page - 1) * pageSize : 0;
 
   const searchInput: JsonRecord = {};
   if (firstName) {
@@ -1749,10 +1677,7 @@ async function runSearch(
   return { exitCode: 0, bytesOut, cacheHit };
 }
 
-async function runGet(
-  argv: readonly string[],
-  ctx: RecordCommandContext
-): Promise<RecordCommandOutcome> {
+async function runGet(argv: readonly string[], ctx: RecordCommandContext): Promise<RecordCommandOutcome> {
   const parsed = parseCommandArgs(argv, GET_PARSE_SPEC);
   if (parsed.helpRequested) {
     return { exitCode: 0, bytesOut: emitStdout(ctx.io, renderGetHelp()) };
@@ -1765,11 +1690,11 @@ async function runGet(
   const ttlHours = resolveCacheTtlHours(getNumberOption(parsed, 'cacheTtlHours'), ctx.env);
   const cacheRoot = getCacheRoot(ctx.env);
 
-  const { memorials, hits, allHit } = await loadOrFetchMemorialsWithHits(
-    ctx,
-    parsed.positionals,
-    { cacheRoot, ttlHours, refresh }
-  );
+  const { memorials, hits, allHit } = await loadOrFetchMemorialsWithHits(ctx, parsed.positionals, {
+    cacheRoot,
+    ttlHours,
+    refresh,
+  });
 
   if (asJson) {
     const emitted = memorials.map((mem, idx) => ({
@@ -1831,9 +1756,7 @@ async function runGet(
           continue;
         }
         const target = isPlainRecord(rel.memorial) ? rel.memorial : {};
-        lines.push(
-          `    ${String(rel.type ?? '')}: ${primaryName(target)} (${String(target.id ?? '')})`
-        );
+        lines.push(`    ${String(rel.type ?? '')}: ${primaryName(target)} (${String(target.id ?? '')})`);
       }
     }
     if (photos) {
@@ -1851,9 +1774,7 @@ async function runGet(
       }
     }
     if (typeof mem.dateCreated === 'string' && mem.dateCreated.length > 0) {
-      lines.push(
-        `  Created: ${mem.dateCreated} | Modified: ${String(mem.dateModified ?? '')}`
-      );
+      lines.push(`  Created: ${mem.dateCreated} | Modified: ${String(mem.dateModified ?? '')}`);
     }
   }
 
@@ -1917,9 +1838,7 @@ async function runCemetery(
     cacheHit = queried.cacheHit;
     const rawResult = isPlainRecord(queried.data.cemeteries) ? queried.data.cemeteries : {};
     const rawCems = Array.isArray(rawResult.cemeteries) ? rawResult.cemeteries : [];
-    cemeteriesList = rawCems
-      .map((c) => enrichCemetery(c))
-      .filter((c): c is JsonRecord => isPlainRecord(c));
+    cemeteriesList = rawCems.map((c) => enrichCemetery(c)).filter((c): c is JsonRecord => isPlainRecord(c));
     result = { ...rawResult, cemeteries: cemeteriesList };
   }
 
@@ -1932,9 +1851,7 @@ async function runCemetery(
   for (const cem of cemeteriesList) {
     const names = Array.isArray(cem.names) ? cem.names : [];
     const shown =
-      names.length > 0 && isPlainRecord(names[0]) && typeof names[0].name === 'string'
-        ? names[0].name
-        : '';
+      names.length > 0 && isPlainRecord(names[0]) && typeof names[0].name === 'string' ? names[0].name : '';
     let extra = '';
     if (names.length > 1) {
       const altNames = names
@@ -1956,10 +1873,7 @@ async function runCemetery(
   return { exitCode: 0, bytesOut, cacheHit };
 }
 
-async function runPlace(
-  argv: readonly string[],
-  ctx: RecordCommandContext
-): Promise<RecordCommandOutcome> {
+async function runPlace(argv: readonly string[], ctx: RecordCommandContext): Promise<RecordCommandOutcome> {
   const parsed = parseCommandArgs(argv, PLACE_PARSE_SPEC);
   if (parsed.helpRequested) {
     return { exitCode: 0, bytesOut: emitStdout(ctx.io, renderPlaceHelp()) };
@@ -1967,7 +1881,10 @@ async function runPlace(
 
   const limit = getNumberOption(parsed, 'limit') ?? 10;
   const nameOpt = getStringOption(parsed, 'name');
-  const posName = parsed.positionals.filter((p) => p.length > 0).join(' ').trim();
+  const posName = parsed.positionals
+    .filter((p) => p.length > 0)
+    .join(' ')
+    .trim();
   if (posName && nameOpt) {
     throw new CliValidationError('Pass either a positional place name or --name, not both.');
   }
@@ -2005,9 +1922,7 @@ async function runPlace(
     }
     const names = Array.isArray(loc.names) ? loc.names : [];
     const shown =
-      names.length > 0 && isPlainRecord(names[0]) && typeof names[0].name === 'string'
-        ? names[0].name
-        : '';
+      names.length > 0 && isPlainRecord(names[0]) && typeof names[0].name === 'string' ? names[0].name : '';
     const kind = String(loc.__typename ?? '');
     const count = loc.memorialCount;
     const suffix = count !== null && count !== undefined ? ` | ${String(count)} memorials` : '';
@@ -2017,10 +1932,7 @@ async function runPlace(
   return { exitCode: 0, bytesOut, cacheHit };
 }
 
-async function runPhoto(
-  argv: readonly string[],
-  ctx: RecordCommandContext
-): Promise<RecordCommandOutcome> {
+async function runPhoto(argv: readonly string[], ctx: RecordCommandContext): Promise<RecordCommandOutcome> {
   const parsed = parseCommandArgs(argv, PHOTO_PARSE_SPEC);
   if (parsed.helpRequested) {
     return { exitCode: 0, bytesOut: emitStdout(ctx.io, renderPhotoHelp()) };
@@ -2045,11 +1957,11 @@ async function runPhoto(
   const ttlHours = resolveCacheTtlHours(getNumberOption(parsed, 'cacheTtlHours'), ctx.env);
   const cacheRoot = getCacheRoot(ctx.env);
 
-  const { memorials, allHit: memorialCacheHit } = await loadOrFetchMemorialsWithHits(
-    ctx,
-    [cleanId],
-    { cacheRoot, ttlHours, refresh }
-  );
+  const { memorials, allHit: memorialCacheHit } = await loadOrFetchMemorialsWithHits(ctx, [cleanId], {
+    cacheRoot,
+    ttlHours,
+    refresh,
+  });
 
   if (memorials.length === 0) {
     ctx.io.stderr(`No memorial found with id ${cleanId}`);
@@ -2058,8 +1970,8 @@ async function runPhoto(
 
   const memorial = memorials[0];
   const photosObj = isPlainRecord(memorial.photos) ? memorial.photos : {};
-  let photoList = (Array.isArray(photosObj.photos) ? photosObj.photos : []).filter(
-    (p): p is JsonRecord => isPlainRecord(p)
+  let photoList = (Array.isArray(photosObj.photos) ? photosObj.photos : []).filter((p): p is JsonRecord =>
+    isPlainRecord(p)
   );
   if (photoType && !allTypes) {
     photoList = photoList.filter((p) => p.type === photoType);
@@ -2175,10 +2087,7 @@ async function runPhoto(
   }
 
   const cacheHit =
-    memorialCacheHit &&
-    !rejected &&
-    fileHits.every(Boolean) &&
-    fileHits.length === photoList.length;
+    memorialCacheHit && !rejected && fileHits.every(Boolean) && fileHits.length === photoList.length;
 
   if (asJson) {
     const payload: JsonRecord = {
@@ -2235,10 +2144,7 @@ const SUBCOMMAND_ALIASES: Readonly<Record<string, string>> = {
   photos: 'photo',
 };
 
-export const runFindagraveCommand: RecordHandler = async (
-  args,
-  ctx
-): Promise<RecordCommandOutcome> => {
+export const runFindagraveCommand: RecordHandler = async (args, ctx): Promise<RecordCommandOutcome> => {
   try {
     if (args.length === 0 || args[0] === '--help' || args[0] === '-h') {
       return { exitCode: 0, bytesOut: emitStdout(ctx.io, renderRootHelp()) };
@@ -2261,9 +2167,7 @@ export const runFindagraveCommand: RecordHandler = async (
       case 'url':
         return runUrl(rest, ctx);
       default:
-        throw new CliValidationError(
-          `No such command '${rawSubcmd}'. Run 'kinloom findagrave --help'.`
-        );
+        throw new CliValidationError(`No such command '${rawSubcmd}'. Run 'kinloom findagrave --help'.`);
     }
   } catch (err: unknown) {
     if (err instanceof CliValidationError) {

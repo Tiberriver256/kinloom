@@ -251,10 +251,7 @@ database_name = "example-toml-db" # archive database
     expect(first.ok).toBe(true);
     expect(first.verified).toBe(true);
     expect(first.pending).toEqual([]);
-    expect(first.executed).toEqual([
-      '0002_pronunciations.sql',
-      '0003_pronunciation_provenance.sql',
-    ]);
+    expect(first.executed).toEqual(['0002_pronunciations.sql', '0003_pronunciation_provenance.sql']);
     expect(first.applied.map((m) => [m.id, m.satisfiedBy])).toEqual([
       ['0001_initial.sql', 'schema'],
       ['0002_pronunciations.sql', 'applied_now'],
@@ -317,9 +314,7 @@ database_name = "example-toml-db" # archive database
     expect(result.executed).toEqual(['0003_pronunciation_provenance.sql']);
 
     const alterCall = calls.find(
-      (c) =>
-        c.args.includes('--command') &&
-        c.args[c.args.indexOf('--command') + 1].includes('ALTER TABLE')
+      (c) => c.args.includes('--command') && c.args[c.args.indexOf('--command') + 1].includes('ALTER TABLE')
     );
     expect(alterCall).toBeDefined();
     expect(alterCall?.args).toContain('--local');

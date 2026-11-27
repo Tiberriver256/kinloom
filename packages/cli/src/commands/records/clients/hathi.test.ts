@@ -124,10 +124,9 @@ describe('hathi native client', () => {
     const fetchImpl: typeof fetch = async (input) => {
       const url = String(input);
       urls.push(url);
-      return new Response(
-        JSON.stringify(url.includes('424023') ? BIB_PAYLOAD_A : BIB_PAYLOAD_B),
-        { status: 200 }
-      );
+      return new Response(JSON.stringify(url.includes('424023') ? BIB_PAYLOAD_A : BIB_PAYLOAD_B), {
+        status: 200,
+      });
     };
 
     const r1 = await invokeHathi(['bib', 'oclc', '424023', '--json'], cacheDir, fetchImpl);
@@ -161,11 +160,7 @@ describe('hathi native client', () => {
     };
 
     await invokeHathi(['bib', 'oclc', '424023', '--json'], cacheDir, fetchImpl);
-    const rRef = await invokeHathi(
-      ['bib', 'oclc', '424023', '--refresh', '--json'],
-      cacheDir,
-      fetchImpl
-    );
+    const rRef = await invokeHathi(['bib', 'oclc', '424023', '--refresh', '--json'], cacheDir, fetchImpl);
     const rTtl = await invokeHathi(
       ['bib', 'oclc', '424023', '--cache-ttl-hours', '0', '--json'],
       cacheDir,

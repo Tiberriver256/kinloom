@@ -10,9 +10,9 @@ import {
   canCompleteMemberEditorAuth,
   resolveCapabilities,
 } from '@kinloom/core';
-import { assign, fromPromise, setup } from 'xstate';
-import type { SnapshotFrom } from 'xstate';
 import { createActorContext } from '@xstate/react';
+import type { SnapshotFrom } from 'xstate';
+import { assign, fromPromise, setup } from 'xstate';
 
 export interface AuthSessionContext {
   pendingInviteToken: string | null;
@@ -161,7 +161,7 @@ export const authSessionMachine = setup({
           throw new Error(`HTTP ${res.status} verifying Google sign-in`);
         }
         return (await res.json()) as VerifyOutcome;
-      },
+      }
     ),
     requestMagicLink: fromPromise<
       void,
@@ -182,27 +182,23 @@ export const authSessionMachine = setup({
         throw new Error(`HTTP ${res.status} requesting magic link`);
       }
     }),
-    verifyMagicLink: fromPromise<
-      VerifyOutcome,
-      { token: string; inviteToken: string | null }
-    >(async ({ input, signal }) => {
-      const res = await fetch(
-        `/api/auth/magic-link/verify?token=${encodeURIComponent(input.token)}`,
-        {
+    verifyMagicLink: fromPromise<VerifyOutcome, { token: string; inviteToken: string | null }>(
+      async ({ input, signal }) => {
+        const res = await fetch(`/api/auth/magic-link/verify?token=${encodeURIComponent(input.token)}`, {
           method: 'GET',
           credentials: 'same-origin',
           headers: { accept: 'application/json' },
           signal,
-        },
-      );
-      if (res.status === 403) {
-        return { kind: 'invalid', message: 'This email is not enrolled in this family archive.' };
+        });
+        if (res.status === 403) {
+          return { kind: 'invalid', message: 'This email is not enrolled in this family archive.' };
+        }
+        if (!res.ok) {
+          return { kind: 'invalid', message: 'Magic link is invalid or expired.' };
+        }
+        return (await res.json()) as VerifyOutcome;
       }
-      if (!res.ok) {
-        return { kind: 'invalid', message: 'Magic link is invalid or expired.' };
-      }
-      return (await res.json()) as VerifyOutcome;
-    }),
+    ),
   },
   guards: {
     hasValidPendingInvite: ({ context }) => context.pendingInviteToken !== null,
@@ -225,9 +221,7 @@ export const authSessionMachine = setup({
     isAdminAuthSuccess: ({ event }) => {
       const output = readVerifyOutput(event);
       return (
-        output !== null &&
-        output.kind === 'verified' &&
-        canCompleteAdminAuth(output.isMember, output.role)
+        output !== null && output.kind === 'verified' && canCompleteAdminAuth(output.isMember, output.role)
       );
     },
     isMemberEditorAuthSuccess: ({ event }) => {
@@ -248,11 +242,7 @@ export const authSessionMachine = setup({
     },
     isVerifyInviteRevoked: ({ context, event }) => {
       const output = readVerifyOutput(event);
-      return (
-        context.pendingInviteToken !== null &&
-        output !== null &&
-        output.kind === 'invite_revoked'
-      );
+      return context.pendingInviteToken !== null && output !== null && output.kind === 'invite_revoked';
     },
   },
   actions: {
@@ -312,7 +302,7 @@ export const authSessionMachine = setup({
                     autoEnrolledViaInvite: false,
                     authError: null,
                   }
-                : {},
+                : {}
             ),
           },
           {
@@ -329,7 +319,7 @@ export const authSessionMachine = setup({
                     autoEnrolledViaInvite: false,
                     authError: null,
                   }
-                : {},
+                : {}
             ),
           },
           {
@@ -344,7 +334,7 @@ export const authSessionMachine = setup({
                     autoEnrolledViaInvite: false,
                     authError: null,
                   }
-                : {},
+                : {}
             ),
           },
           {
@@ -419,7 +409,7 @@ export const authSessionMachine = setup({
                     autoEnrolledViaInvite: false,
                     authError: null,
                   }
-                : {},
+                : {}
             ),
           },
           {
@@ -436,7 +426,7 @@ export const authSessionMachine = setup({
                     autoEnrolledViaInvite: false,
                     authError: null,
                   }
-                : {},
+                : {}
             ),
           },
           {
@@ -453,7 +443,7 @@ export const authSessionMachine = setup({
                     autoEnrolledViaInvite: true,
                     authError: null,
                   }
-                : {},
+                : {}
             ),
           },
           {
@@ -465,8 +455,7 @@ export const authSessionMachine = setup({
             guard: 'hasValidPendingInvite',
             target: 'readOnlyInvite',
             actions: assign(({ event }) => ({
-              authError:
-                event.output.kind === 'invalid' ? event.output.message : 'Google sign-in failed.',
+              authError: event.output.kind === 'invalid' ? event.output.message : 'Google sign-in failed.',
             })),
           },
           {
@@ -561,7 +550,7 @@ export const authSessionMachine = setup({
                     autoEnrolledViaInvite: false,
                     authError: null,
                   }
-                : {},
+                : {}
             ),
           },
           {
@@ -578,7 +567,7 @@ export const authSessionMachine = setup({
                     autoEnrolledViaInvite: false,
                     authError: null,
                   }
-                : {},
+                : {}
             ),
           },
           {
@@ -595,7 +584,7 @@ export const authSessionMachine = setup({
                     autoEnrolledViaInvite: true,
                     authError: null,
                   }
-                : {},
+                : {}
             ),
           },
           {
@@ -608,9 +597,7 @@ export const authSessionMachine = setup({
             target: 'readOnlyInvite',
             actions: assign(({ event }) => ({
               authError:
-                event.output.kind === 'invalid'
-                  ? event.output.message
-                  : 'Magic link verification failed.',
+                event.output.kind === 'invalid' ? event.output.message : 'Magic link verification failed.',
             })),
           },
           {
@@ -693,7 +680,7 @@ export type AuthSessionSnapshot = SnapshotFrom<typeof authSessionMachine>;
  */
 export function deriveSessionFromAuthSnapshot(
   snapshot: AuthSessionSnapshot,
-  options?: { allowTalk?: boolean; hasRevisionHistory?: boolean },
+  options?: { allowTalk?: boolean; hasRevisionHistory?: boolean }
 ): { session: ArchiveSessionState; capabilities: ArchiveCapabilities } {
   let session: ArchiveSessionState;
   if (snapshot.matches({ authenticated: 'admin' })) {

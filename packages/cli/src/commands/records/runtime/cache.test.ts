@@ -5,11 +5,11 @@ import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { CliValidationError } from '../../../errors.js';
 import {
-  CacheHitTracker,
   atomicWriteFileSync,
   atomicWriteJsonSync,
-  cacheKeyFor,
+  CacheHitTracker,
   cachedJsonCall,
+  cacheKeyFor,
   canonicalJsonStringify,
   parseCacheTtlHours,
   readBinaryCache,
@@ -118,9 +118,7 @@ describe('records runtime cache', () => {
     if (binHit.hit) {
       expect(Array.from(binHit.value)).toEqual([1, 2, 3, 4]);
     }
-    expect(sha256Hex('abc')).toBe(
-      'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad'
-    );
+    expect(sha256Hex('abc')).toBe('ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad');
   });
 
   it('acquires and releases advisory lockfile and reclaims stale locks', async () => {

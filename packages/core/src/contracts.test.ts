@@ -1,21 +1,21 @@
 import { describe, expect, it } from 'vitest';
 import {
   ArchivalMediaKindSchema,
-  KinloomSiteConfigSchema,
-  MediaItemSchema,
-  NarrativeSchema,
-  PlaceSchema,
-  RawEventSchema,
-  RawPersonSchema,
+  type AssetHandler,
   asRevisionId,
   asSha256Hex,
-  type AssetHandler,
   type KinloomServerPlugin,
   type KinloomServerPluginContext,
   type KinloomServerPluginRoute,
   type KinloomServerPorts,
+  KinloomSiteConfigSchema,
   type MediaByteRange,
+  MediaItemSchema,
   type MediaStore,
+  NarrativeSchema,
+  PlaceSchema,
+  RawEventSchema,
+  RawPersonSchema,
   type StoredMediaObject,
 } from './index.js';
 
@@ -141,7 +141,11 @@ describe('Extension & plugin seam schemas and contracts', () => {
     const payload = new TextEncoder().encode('0123456789abcdef');
     const store: MediaStore = {
       async head(key) {
-        return { exists: key === 'media/sample.mp4', sizeBytes: payload.byteLength, contentType: 'video/mp4' };
+        return {
+          exists: key === 'media/sample.mp4',
+          sizeBytes: payload.byteLength,
+          contentType: 'video/mp4',
+        };
       },
       async put() {
         return;

@@ -77,8 +77,7 @@ export function useDialogFocusTrap<T extends HTMLElement = HTMLDialogElement>({
       return undefined;
     }
 
-    const previousFocus =
-      document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
 
     activeDialogStack.push(container);
 

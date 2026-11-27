@@ -1,7 +1,7 @@
 import {
-  safeParseEntityPayload,
   type EntityPayload,
   type EntityType,
+  safeParseEntityPayload,
   type TypedEntityByType,
 } from '../schemas/revisions.js';
 

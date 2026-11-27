@@ -1,3 +1,4 @@
+import { validateNarrativeCitations } from './citations.js';
 import type {
   KinshipEdge,
   MediaItem,
@@ -8,7 +9,6 @@ import type {
   SourceRecord,
 } from './schemas/entities.js';
 import { getMediaPersonIds } from './schemas/entities.js';
-import { validateNarrativeCitations } from './citations.js';
 
 export interface ValidateArchiveInput {
   people: readonly Pick<RawPerson, 'id'>[];
@@ -59,10 +59,14 @@ export function validateArchive(input: ValidateArchiveInput): ArchiveValidationR
 
   for (const edge of input.kinship ?? []) {
     if (!personIds.has(edge.from)) {
-      errors.push(`Kinship edge '${edge.from}|${edge.to}|${edge.relation}' references missing 'from' person '${edge.from}'.`);
+      errors.push(
+        `Kinship edge '${edge.from}|${edge.to}|${edge.relation}' references missing 'from' person '${edge.from}'.`
+      );
     }
     if (!personIds.has(edge.to)) {
-      errors.push(`Kinship edge '${edge.from}|${edge.to}|${edge.relation}' references missing 'to' person '${edge.to}'.`);
+      errors.push(
+        `Kinship edge '${edge.from}|${edge.to}|${edge.relation}' references missing 'to' person '${edge.to}'.`
+      );
     }
   }
 

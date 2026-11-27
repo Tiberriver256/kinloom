@@ -2,6 +2,11 @@ import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises
 import os from 'node:os';
 import path from 'node:path';
 import {
+  type KinloomSiteConfig,
+  type KinshipEdge,
+  type MediaItem,
+  type Narrative,
+  type Place,
   parseEventsYaml,
   parseKinloomConfigYaml,
   parseKinshipYaml,
@@ -10,6 +15,9 @@ import {
   parsePeopleYaml,
   parsePlacesYaml,
   parseSourcesYaml,
+  type RawEvent,
+  type RawPerson,
+  type SourceRecord,
   serializeEventsYaml,
   serializeKinloomConfigYaml,
   serializeKinshipYaml,
@@ -18,20 +26,11 @@ import {
   serializePeopleYaml,
   serializePlacesYaml,
   serializeSourcesYaml,
-  type KinloomSiteConfig,
-  type KinshipEdge,
-  type MediaItem,
-  type Narrative,
-  type Place,
-  type RawEvent,
-  type RawPerson,
-  type SourceRecord,
 } from '@kinloom/core';
 import { afterEach, describe, expect, it } from 'vitest';
 import { runCli } from '../../cli.js';
 import { CliValidationError, EXIT_ERROR, EXIT_OK, EXIT_USAGE } from '../../errors.js';
 import {
-  REDACTED_RELATIVE_LABEL,
   analyzeTreeHygiene,
   buildSanitizedLocalEntries,
   buildTempTokenCleanupSql,
@@ -44,9 +43,11 @@ import {
   inspectImageBuffer,
   loadWranglerBindings,
   measureCommand,
+  type OpsIo,
   parseAuditEdtf,
   parseDeleteTargets,
   parseEntityTypeList,
+  REDACTED_RELATIVE_LABEL,
   recordTelemetryEvent,
   runAuditBatchCommand,
   runAuditCommand,
@@ -62,7 +63,6 @@ import {
   scanYamlFilesForSsns,
   splitParagraphIntoSentences,
   stripJsoncCommentsAndTrailingCommas,
-  type OpsIo,
   type WranglerExecutor,
 } from './index.js';
 
@@ -177,11 +177,7 @@ async function createSyntheticRepo(): Promise<string> {
   await mkdir(dataDir, { recursive: true });
 
   const config = makeSampleSiteConfig();
-  await writeFile(
-    path.join(repoDir, 'kinloom.config.yaml'),
-    serializeKinloomConfigYaml(config),
-    'utf8'
-  );
+  await writeFile(path.join(repoDir, 'kinloom.config.yaml'), serializeKinloomConfigYaml(config), 'utf8');
 
   const places: Place[] = [
     {
@@ -329,9 +325,17 @@ async function createSyntheticRepo(): Promise<string> {
     writeFile(path.join(dataDir, 'sources.yaml'), serializeSourcesYaml(sources, { sortById: true }), 'utf8'),
     writeFile(path.join(dataDir, 'people.yaml'), serializePeopleYaml(people, { sortById: true }), 'utf8'),
     writeFile(path.join(dataDir, 'events.yaml'), serializeEventsYaml(events, { sortById: true }), 'utf8'),
-    writeFile(path.join(dataDir, 'kinship.yaml'), serializeKinshipYaml(kinship, { sortDeterministic: true }), 'utf8'),
+    writeFile(
+      path.join(dataDir, 'kinship.yaml'),
+      serializeKinshipYaml(kinship, { sortDeterministic: true }),
+      'utf8'
+    ),
     writeFile(path.join(dataDir, 'media.yaml'), serializeMediaYaml(media, { sortById: true }), 'utf8'),
-    writeFile(path.join(dataDir, 'narratives.yaml'), serializeNarrativesYaml(narratives, { sortById: true }), 'utf8'),
+    writeFile(
+      path.join(dataDir, 'narratives.yaml'),
+      serializeNarrativesYaml(narratives, { sortById: true }),
+      'utf8'
+    ),
   ]);
 
   return repoDir;
@@ -391,10 +395,7 @@ describe('ops/telemetry', () => {
     );
 
     const { io, stdout } = createCaptureIo();
-    const report = await runTelemetryReportCommand(
-      { filePath: telemetryFile, sinceHours: 2, nowMs },
-      io
-    );
+    const report = await runTelemetryReportCommand({ filePath: telemetryFile, sinceHours: 2, nowMs }, io);
 
     expect(report.totalEvents).toBe(3);
     expect(report.rows).toEqual([
@@ -573,9 +574,7 @@ describe('ops/context', () => {
     if (result.context.ancestry && !result.context.ancestry.redacted) {
       expect(result.context.ancestry.redactedLivingFactsCount).toBe(1);
       expect(result.context.ancestry.facts).toHaveLength(1);
-      expect(result.context.ancestry.recordImages.map((i) => i.recordImageId)).toEqual([
-        'img_census',
-      ]);
+      expect(result.context.ancestry.recordImages.map((i) => i.recordImageId)).toEqual(['img_census']);
     }
     // Duplicate img_census on spouse is deduplicated; parent deed + spouse obituary remain.
     expect(result.context.relativeRecordImages.map((i) => i.recordImageId)).toEqual([
@@ -651,11 +650,7 @@ describe('ops/context', () => {
         portrait_url: null,
       },
     ];
-    await writeFile(
-      peoplePath,
-      serializePeopleYaml([...people, ...extra], { sortById: true }),
-      'utf8'
-    );
+    await writeFile(peoplePath, serializePeopleYaml([...people, ...extra], { sortById: true }), 'utf8');
     const kinship = parseKinshipYaml(await readFile(kinshipPath, 'utf8'));
     kinship.push(
       { from: 'per_thomas_alder', to: 'per_walter_alder', relation: 'parent' },
@@ -663,11 +658,7 @@ describe('ops/context', () => {
       { from: 'per_arthur_alder', to: 'per_edwin_alder', relation: 'parent' },
       { from: 'per_arthur_alder', to: 'per_iris_alder', relation: 'parent' }
     );
-    await writeFile(
-      kinshipPath,
-      serializeKinshipYaml(kinship, { sortDeterministic: true }),
-      'utf8'
-    );
+    await writeFile(kinshipPath, serializeKinshipYaml(kinship, { sortDeterministic: true }), 'utf8');
 
     const factsDir = await makeTempDir('kinloom-family-facts-');
     const recordImagesDir = path.join(factsDir, 'record_images');
@@ -1110,15 +1101,11 @@ describe('ops/integrate', () => {
     expect(writtenNarratives[0].subject_person_id).toBe('per_arthur_alder');
     expect(writtenNarratives[0].source_ids).toEqual(['src_1880_census', 'src_1932_death_cert']);
 
-    const writtenPeople = parsePeopleYaml(
-      await readFile(path.join(repoDir, 'data', 'people.yaml'), 'utf8')
-    );
+    const writtenPeople = parsePeopleYaml(await readFile(path.join(repoDir, 'data', 'people.yaml'), 'utf8'));
     const arthur = writtenPeople.find((p) => p.id === 'per_arthur_alder');
     expect(arthur?.alt_names).toEqual(['Art Alder', 'Arthur J. Alder']);
 
-    const writtenEvents = parseEventsYaml(
-      await readFile(path.join(repoDir, 'data', 'events.yaml'), 'utf8')
-    );
+    const writtenEvents = parseEventsYaml(await readFile(path.join(repoDir, 'data', 'events.yaml'), 'utf8'));
     expect(writtenEvents.some((e) => e.id === 'evt_arthur_burial_1932')).toBe(true);
 
     // Re-running apply is idempotent.
@@ -1218,7 +1205,7 @@ describe('ops/integrate', () => {
           },
         ],
       }),
-      'utf8',
+      'utf8'
     );
     await runIntegrateCommand({ repoDir, personId: 'per_arthur_alder', dryRun: false });
 
@@ -1265,7 +1252,7 @@ describe('ops/integrate', () => {
           },
         ],
       }),
-      'utf8',
+      'utf8'
     );
     const omitRes = await runIntegrateCommand({
       repoDir,
@@ -1374,9 +1361,7 @@ describe('ops/integrate', () => {
     // Audit also accepts remove_source_ids cleanly.
     const eventsAfterDry = parseEventsYaml(await readFile(eventsPath, 'utf8'));
     expect(
-      eventsAfterDry
-        .find((e) => e.id === 'evt_arthur_1880_census')
-        ?.sources.map((s) => s.source_id)
+      eventsAfterDry.find((e) => e.id === 'evt_arthur_1880_census')?.sources.map((s) => s.source_id)
     ).toEqual(['src_ged_stub_1880', 'src_1880_census']);
 
     const applied = await runIntegrateCommand({
@@ -1389,9 +1374,7 @@ describe('ops/integrate', () => {
 
     const updatedEvents = parseEventsYaml(await readFile(eventsPath, 'utf8'));
     expect(
-      updatedEvents
-        .find((e) => e.id === 'evt_arthur_1880_census')
-        ?.sources.map((s) => s.source_id)
+      updatedEvents.find((e) => e.id === 'evt_arthur_1880_census')?.sources.map((s) => s.source_id)
     ).toEqual(['src_1880_census', 'src_1880_census_schedule']);
 
     const updatedSources = parseSourcesYaml(await readFile(sourcesPath, 'utf8'));
@@ -1479,11 +1462,7 @@ describe('ops/integrate', () => {
         body_md: 'Arthur Alder farmed in Oak County.[^src_1880_census|med_legacy_uncropped]',
       },
     ];
-    await writeFile(
-      narrativesPath,
-      serializeNarrativesYaml(baseNarratives, { sortById: true }),
-      'utf8'
-    );
+    await writeFile(narrativesPath, serializeNarrativesYaml(baseNarratives, { sortById: true }), 'utf8');
 
     const packageDir = path.join(repoDir, 'research', 'people', 'per_arthur_alder');
     await mkdir(packageDir, { recursive: true });
@@ -1548,7 +1527,9 @@ describe('ops/integrate', () => {
     );
     await expect(
       runIntegrateCommand({ repoDir, personId: 'per_arthur_alder', dryRun: true })
-    ).rejects.toThrow("Cannot remove event 'evt_arthur_1880_dup': media 'med_legacy_uncropped' still references it");
+    ).rejects.toThrow(
+      "Cannot remove event 'evt_arthur_1880_dup': media 'med_legacy_uncropped' still references it"
+    );
 
     // 3. Refuse removing a media item still cited inline by a surviving narrative.
     await writeFile(
@@ -1561,7 +1542,9 @@ describe('ops/integrate', () => {
     );
     await expect(
       runIntegrateCommand({ repoDir, personId: 'per_arthur_alder', dryRun: true })
-    ).rejects.toThrow("Cannot remove media 'med_legacy_uncropped': narrative 'nar_arthur_bio' still cites it inline");
+    ).rejects.toThrow(
+      "Cannot remove media 'med_legacy_uncropped': narrative 'nar_arthur_bio' still cites it inline"
+    );
 
     // 4. Refuse removing an event still listed in surviving narrative.event_ids (even after removing media & updating inline citation).
     await writeFile(
@@ -1628,14 +1611,10 @@ describe('ops/integrate', () => {
 
     // Files on disk are untouched after dry-run.
     expect(
-      parseEventsYaml(await readFile(eventsPath, 'utf8')).some(
-        (e) => e.id === 'evt_arthur_1880_dup'
-      )
+      parseEventsYaml(await readFile(eventsPath, 'utf8')).some((e) => e.id === 'evt_arthur_1880_dup')
     ).toBe(true);
     expect(
-      parseMediaYaml(await readFile(mediaPath, 'utf8')).some(
-        (m) => m.id === 'med_legacy_uncropped'
-      )
+      parseMediaYaml(await readFile(mediaPath, 'utf8')).some((m) => m.id === 'med_legacy_uncropped')
     ).toBe(true);
 
     const applied = await runIntegrateCommand({
@@ -1664,10 +1643,7 @@ describe('ops/integrate', () => {
     const packageDir = path.join(repoDir, 'research', 'people', 'per_william_alder');
     const scansDir = path.join(packageDir, 'scans');
     await mkdir(scansDir, { recursive: true });
-    await writeFile(
-      path.join(scansDir, 'william-1825-marriage.png'),
-      makeMinimalPng(640, 480, 12_000)
-    );
+    await writeFile(path.join(scansDir, 'william-1825-marriage.png'), makeMinimalPng(640, 480, 12_000));
 
     const patch = {
       person_id: 'per_william_alder',
@@ -1772,17 +1748,19 @@ describe('ops/integrate', () => {
 
     // Audit strict passes even though per_william_alder is not yet in data/people.yaml.
     const auditCli = createCaptureIo();
-    const auditCode = await runCli(
-      ['audit', 'per_william_alder', '--repo', repoDir, '--strict', '--json'],
-      { io: auditCli.io }
-    );
+    const auditCode = await runCli(['audit', 'per_william_alder', '--repo', repoDir, '--strict', '--json'], {
+      io: auditCli.io,
+    });
     expect(auditCode, `${auditCli.stderr.join('\n')}\n${auditCli.stdout.join('\n')}`).toBe(EXIT_OK);
     const auditReport = JSON.parse(auditCli.stdout.join('\n')) as {
       ok: boolean;
       strictOk: boolean;
       checks: {
         chronology: { ok: boolean; birth_edtf: string | null; death_edtf: string | null };
-        dryRun: { ok: boolean; counts: { people: { added: number; updated: number; unchanged: number } } | null };
+        dryRun: {
+          ok: boolean;
+          counts: { people: { added: number; updated: number; unchanged: number } } | null;
+        };
       };
     };
     expect(auditReport.ok).toBe(true);
@@ -1809,9 +1787,7 @@ describe('ops/integrate', () => {
     expect(applied.writtenYamlFiles.some((f) => f.endsWith('people.yaml'))).toBe(true);
     expect(applied.writtenYamlFiles.some((f) => f.endsWith('kinship.yaml'))).toBe(true);
 
-    const writtenPeople = parsePeopleYaml(
-      await readFile(path.join(repoDir, 'data', 'people.yaml'), 'utf8')
-    );
+    const writtenPeople = parsePeopleYaml(await readFile(path.join(repoDir, 'data', 'people.yaml'), 'utf8'));
     expect(writtenPeople.some((p) => p.id === 'per_william_alder')).toBe(true);
     expect(writtenPeople.some((p) => p.id === 'per_mary_birch')).toBe(true);
 
@@ -1821,9 +1797,7 @@ describe('ops/integrate', () => {
     expect(
       writtenKinship.some(
         (edge) =>
-          edge.from === 'per_william_alder' &&
-          edge.to === 'per_thomas_alder' &&
-          edge.relation === 'parent'
+          edge.from === 'per_william_alder' && edge.to === 'per_thomas_alder' && edge.relation === 'parent'
       )
     ).toBe(true);
 
@@ -1840,11 +1814,7 @@ describe('ops/integrate', () => {
     // Updating an existing deceased person via patch.people cleanly merges and converges.
     const updatedPatch = structuredClone(patch);
     updatedPatch.people[0].alt_names = ['William H. Alder'];
-    await writeFile(
-      path.join(packageDir, 'patch.json'),
-      JSON.stringify(updatedPatch, null, 2),
-      'utf8'
-    );
+    await writeFile(path.join(packageDir, 'patch.json'), JSON.stringify(updatedPatch, null, 2), 'utf8');
     const updateApply = await runIntegrateCommand({
       repoDir,
       personId: 'per_william_alder',
@@ -2166,12 +2136,8 @@ describe('ops/dates', () => {
     }
 
     // Century non-leap years must reject Feb 29.
-    expect(() => runDatesCommand({ subcommand: 'weekday', date: '1900-02-29' })).toThrow(
-      CliValidationError
-    );
-    expect(() => runDatesCommand({ subcommand: 'weekday', date: '2100-02-29' })).toThrow(
-      CliValidationError
-    );
+    expect(() => runDatesCommand({ subcommand: 'weekday', date: '1900-02-29' })).toThrow(CliValidationError);
+    expect(() => runDatesCommand({ subcommand: 'weekday', date: '2100-02-29' })).toThrow(CliValidationError);
   });
 
   it('computes exact forward, reversed, same-day, and leap-day boundary diffs', () => {
@@ -2407,7 +2373,11 @@ describe('ops/status', () => {
     ];
 
     await mkdir(path.join(repoDir, 'research', 'people', 'per_helen_maple'), { recursive: true });
-    await writeFile(path.join(repoDir, 'research', 'people', 'per_helen_maple', 'patch.json'), '{}\n', 'utf8');
+    await writeFile(
+      path.join(repoDir, 'research', 'people', 'per_helen_maple', 'patch.json'),
+      '{}\n',
+      'utf8'
+    );
     await Promise.all([
       writeFile(path.join(dataDir, 'people.yaml'), serializePeopleYaml(people, { sortById: true }), 'utf8'),
       writeFile(path.join(dataDir, 'places.yaml'), serializePlacesYaml(places, { sortById: true }), 'utf8'),
@@ -2610,7 +2580,11 @@ describe('ops/status', () => {
       },
     ];
     await mkdir(path.join(repoDir, 'research', 'people', 'per_helen_maple'), { recursive: true });
-    await writeFile(path.join(repoDir, 'research', 'people', 'per_helen_maple', 'patch.json'), '{}\n', 'utf8');
+    await writeFile(
+      path.join(repoDir, 'research', 'people', 'per_helen_maple', 'patch.json'),
+      '{}\n',
+      'utf8'
+    );
     await Promise.all([
       writeFile(path.join(dataDir, 'people.yaml'), serializePeopleYaml(people, { sortById: true }), 'utf8'),
       writeFile(
@@ -3171,8 +3145,16 @@ describe('ops/status', () => {
 
     await Promise.all([
       writeFile(path.join(dataDir, 'people.yaml'), serializePeopleYaml(people, { sortById: true }), 'utf8'),
-      writeFile(path.join(dataDir, 'kinship.yaml'), serializeKinshipYaml(kinship, { sortDeterministic: true }), 'utf8'),
-      writeFile(path.join(dataDir, 'narratives.yaml'), serializeNarrativesYaml(narratives, { sortById: true }), 'utf8'),
+      writeFile(
+        path.join(dataDir, 'kinship.yaml'),
+        serializeKinshipYaml(kinship, { sortDeterministic: true }),
+        'utf8'
+      ),
+      writeFile(
+        path.join(dataDir, 'narratives.yaml'),
+        serializeNarrativesYaml(narratives, { sortById: true }),
+        'utf8'
+      ),
     ]);
 
     // Default status keeps all deceased while reporting endOfLineCount.
@@ -3278,7 +3260,11 @@ describe('ops/status', () => {
     ];
 
     await mkdir(path.join(repoDir, 'research', 'people', 'per_helen_maple'), { recursive: true });
-    await writeFile(path.join(repoDir, 'research', 'people', 'per_helen_maple', 'patch.json'), '{}\n', 'utf8');
+    await writeFile(
+      path.join(repoDir, 'research', 'people', 'per_helen_maple', 'patch.json'),
+      '{}\n',
+      'utf8'
+    );
     await writeFile(
       path.join(dataDir, 'narratives.yaml'),
       serializeNarrativesYaml(narratives, { sortById: true }),
@@ -3319,9 +3305,9 @@ describe('ops/status', () => {
       'per_thomas_alder',
       'per_helen_maple',
     ]);
-    expect(missingParsed.deceased.every((person) => !person.hasBiography && person.biographyId === null)).toBe(
-      true
-    );
+    expect(
+      missingParsed.deceased.every((person) => !person.hasBiography && person.biographyId === null)
+    ).toBe(true);
     expect(missingCliJson.stdout.join('\n')).not.toContain('Clara Maple');
 
     const missingCliText = createCaptureIo();
@@ -3652,7 +3638,11 @@ describe('ops/audit', () => {
       strictOk: boolean;
       people: Array<{ person_id: string }>;
       overlaps: {
-        scanFileCollisions: Array<{ basename: string; bytesIdentical: boolean; packages: Array<{ person_id: string; width: number; height: number }> }>;
+        scanFileCollisions: Array<{
+          basename: string;
+          bytesIdentical: boolean;
+          packages: Array<{ person_id: string; width: number; height: number }>;
+        }>;
         mediaFileCollisions: Array<{ file: string; mediaIdsConflict: boolean }>;
         sharedMediaIds: Array<{ id: string }>;
         sharedSourceIds: Array<{ id: string; person_ids: string[] }>;
@@ -3810,7 +3800,11 @@ describe('ops/audit', () => {
       ok: boolean;
       strictOk: boolean;
       overlaps: {
-        liveMediaFileCollisions: Array<{ file: string; live_media_id: string; staged: Array<{ media_id: string }> }>;
+        liveMediaFileCollisions: Array<{
+          file: string;
+          live_media_id: string;
+          staged: Array<{ media_id: string }>;
+        }>;
       };
     };
     expect(body.ok).toBe(true);
@@ -3857,10 +3851,9 @@ describe('ops/audit', () => {
     });
 
     const strict = createCaptureIo();
-    const strictCode = await runCli(
-      ['audit', 'per_helen_maple', '--repo', repoDir, '--strict', '--json'],
-      { io: strict.io }
-    );
+    const strictCode = await runCli(['audit', 'per_helen_maple', '--repo', repoDir, '--strict', '--json'], {
+      io: strict.io,
+    });
     expect(strictCode, `${strict.stderr.join('\n')}\n${strict.stdout.join('\n')}`).toBe(EXIT_ERROR);
     const strictBody = JSON.parse(strict.stdout.join('\n')) as {
       ok: boolean;
@@ -3876,9 +3869,9 @@ describe('ops/audit', () => {
     ]);
 
     const loose = createCaptureIo();
-    expect(
-      await runCli(['audit', 'per_helen_maple', '--repo', repoDir, '--json'], { io: loose.io })
-    ).toBe(EXIT_OK);
+    expect(await runCli(['audit', 'per_helen_maple', '--repo', repoDir, '--json'], { io: loose.io })).toBe(
+      EXIT_OK
+    );
 
     const liveIndex = media.findIndex((item) => item.id === 'med_oak_register');
     expect(liveIndex).toBeGreaterThanOrEqual(0);
@@ -3889,10 +3882,9 @@ describe('ops/audit', () => {
     media[liveIndex] = { ...liveItem, id: 'med_staged_oak_register' };
     await writeFile(mediaPath, serializeMediaYaml(media, { sortById: true }), 'utf8');
     const sameId = createCaptureIo();
-    const sameCode = await runCli(
-      ['audit', 'per_helen_maple', '--repo', repoDir, '--strict', '--json'],
-      { io: sameId.io }
-    );
+    const sameCode = await runCli(['audit', 'per_helen_maple', '--repo', repoDir, '--strict', '--json'], {
+      io: sameId.io,
+    });
     expect(sameCode, `${sameId.stderr.join('\n')}\n${sameId.stdout.join('\n')}`).toBe(EXIT_OK);
     const sameBody = JSON.parse(sameId.stdout.join('\n')) as {
       ok: boolean;
@@ -3945,9 +3937,7 @@ describe('ops/audit', () => {
 
     const before = chronologyFor('1896-12-17', '1950-01-01', '1880-01-01/1890-12-31');
     expect(before.checkedEvents).toBe(1);
-    expect(before.errors).toEqual([
-      'Event evt_span (1880-01-01/1890-12-31): predates birth (1896-12-17).',
-    ]);
+    expect(before.errors).toEqual(['Event evt_span (1880-01-01/1890-12-31): predates birth (1896-12-17).']);
   });
 
   it('accepts an interval that covers the death and rejects one that starts after it', () => {
@@ -3972,19 +3962,13 @@ describe('ops/audit', () => {
     expect(openEndDots.errors).toEqual([]);
 
     const openStartEvent = chronologyFor('1896-12-17', '1950-01-01', '/1890-12-31');
-    expect(openStartEvent.errors).toEqual([
-      'Event evt_span (/1890-12-31): predates birth (1896-12-17).',
-    ]);
+    expect(openStartEvent.errors).toEqual(['Event evt_span (/1890-12-31): predates birth (1896-12-17).']);
 
     const openStartDots = chronologyFor('1896-12-17', '1950-01-01', '../1890-12-31');
-    expect(openStartDots.errors).toEqual([
-      'Event evt_span (../1890-12-31): predates birth (1896-12-17).',
-    ]);
+    expect(openStartDots.errors).toEqual(['Event evt_span (../1890-12-31): predates birth (1896-12-17).']);
 
     const bornOnOrAfter = chronologyFor('1879-03-03/', '1950-01-01', '1870-01-01');
-    expect(bornOnOrAfter.errors).toEqual([
-      'Event evt_span (1870-01-01): predates birth (1879-03-03/).',
-    ]);
+    expect(bornOnOrAfter.errors).toEqual(['Event evt_span (1870-01-01): predates birth (1879-03-03/).']);
     const bornOnOrAfterLater = chronologyFor('1879-03-03/', '1950-01-01', '1880-06-01');
     expect(bornOnOrAfterLater.errors).toEqual([]);
 
@@ -4069,10 +4053,20 @@ describe('ops/audit', () => {
   });
 
   it('does not call a long marriage interval an underage marriage', () => {
-    const lateEnough = chronologyFor('1896-12-17', '1950-01-01', '1900-01-01/1920-01-01', 'Marriage of Alder');
+    const lateEnough = chronologyFor(
+      '1896-12-17',
+      '1950-01-01',
+      '1900-01-01/1920-01-01',
+      'Marriage of Alder'
+    );
     expect(lateEnough.errors).toEqual([]);
 
-    const stillYoung = chronologyFor('1896-12-17', '1950-01-01', '1900-01-01/1905-01-01', 'Marriage of Alder');
+    const stillYoung = chronologyFor(
+      '1896-12-17',
+      '1950-01-01',
+      '1900-01-01/1905-01-01',
+      'Marriage of Alder'
+    );
     expect(stillYoung.errors).toEqual([
       'Event evt_span (1900-01-01/1905-01-01): marriage at implausible age 9 (birth 1896-12-17).',
     ]);
@@ -4177,9 +4171,7 @@ describe('ops/audit', () => {
       'utf8'
     );
     const spared = await runAuditCommand({ repoDir: sparedRepo, personId: 'per_arthur_alder' });
-    expect(spared.checks.privacy.livingNameHits.map((hit) => hit.match)).toEqual([
-      'Clara Elizabeth Maple',
-    ]);
+    expect(spared.checks.privacy.livingNameHits.map((hit) => hit.match)).toEqual(['Clara Elizabeth Maple']);
   });
 
   it('skips derived First Surname on 1791 patch records while still flagging exact names and 1960/undated derived hits', async () => {
@@ -4218,9 +4210,7 @@ describe('ops/audit', () => {
     );
 
     // Add a live 1789 event so patch media without date_edtf inherits its date from live events.yaml.
-    const liveEvents = parseEventsYaml(
-      await readFile(path.join(repoDir, 'data', 'events.yaml'), 'utf8')
-    );
+    const liveEvents = parseEventsYaml(await readFile(path.join(repoDir, 'data', 'events.yaml'), 'utf8'));
     liveEvents.push({
       id: 'evt_1789_deed',
       title: 'Ezra Maple land deed',
@@ -4326,11 +4316,7 @@ describe('ops/audit', () => {
     // Exact full name on 1791 text still fails audit.
     const exactLeakPatch = structuredClone(basePatch);
     exactLeakPatch.events[0]!.summary = 'Leaked exact name Clara Elizabeth Maple in 1791 text.';
-    await writeFile(
-      path.join(packageDir, 'patch.json'),
-      JSON.stringify(exactLeakPatch, null, 2),
-      'utf8'
-    );
+    await writeFile(path.join(packageDir, 'patch.json'), JSON.stringify(exactLeakPatch, null, 2), 'utf8');
     const exactLeakAudit = await runAuditCommand({
       repoDir,
       personId: 'per_ezra_maple_1720',
@@ -4391,10 +4377,7 @@ describe('ops/audit', () => {
     process.env.KINLOOM_TELEMETRY_FILE = path.join(repoDir, 'telemetry.jsonl');
     await dropArthurLivingVisit(repoDir);
 
-    const writePackageWithPeople = async (
-      ownerId: string,
-      stagedPeople: Array<Record<string, unknown>>
-    ) => {
+    const writePackageWithPeople = async (ownerId: string, stagedPeople: Array<Record<string, unknown>>) => {
       const packageDir = path.join(repoDir, 'research', 'people', ownerId);
       await mkdir(packageDir, { recursive: true });
       await writeFile(
@@ -4518,8 +4501,7 @@ describe('ops/audit', () => {
   });
 
   it('keeps genealogical and archival abbreviations inside one cited sentence while catching uncited follow-up sentences', () => {
-    const single =
-      'He lived at Wijk Nr. 22, Vol. 3, p. 14 with Cpl. John A. Maple.[^src_1]';
+    const single = 'He lived at Wijk Nr. 22, Vol. 3, p. 14 with Cpl. John A. Maple.[^src_1]';
     expect(splitParagraphIntoSentences(single)).toEqual([single]);
     expect(
       runUncitedSentenceCheck({
@@ -4542,12 +4524,9 @@ describe('ops/audit', () => {
     expect(checkSecond.totalSentences).toBe(2);
     expect(checkSecond.citedSentences).toBe(1);
     expect(checkSecond.uncitedCount).toBe(1);
-    expect(checkSecond.uncitedSentences[0]?.text).toBe(
-      'Later he moved to Pine Twp. without a source.'
-    );
+    expect(checkSecond.uncitedSentences[0]?.text).toBe('Later he moved to Pine Twp. without a source.');
 
-    const endsAtAbbrCitation =
-      'He worked for Alder Co. in the U.S.A.[^src_1] He later moved to Oak County.';
+    const endsAtAbbrCitation = 'He worked for Alder Co. in the U.S.A.[^src_1] He later moved to Oak County.';
     const splitAbbrEnd = splitParagraphIntoSentences(endsAtAbbrCitation);
     expect(splitAbbrEnd).toEqual([
       'He worked for Alder Co. in the U.S.A.[^src_1]',
@@ -4861,7 +4840,9 @@ describe('ops/sync', () => {
 
     // Verify R2 compiled bundle was purged and raw tokens never appear in output.
     expect(
-      wranglerCalls.some((c) => c[0] === 'r2' && c[2] === 'delete' && c[3] === 'alder-media/compiled/archive.json')
+      wranglerCalls.some(
+        (c) => c[0] === 'r2' && c[2] === 'delete' && c[3] === 'alder-media/compiled/archive.json'
+      )
     ).toBe(true);
     const serialized = JSON.stringify(result);
     for (const authHeader of seenAuthHeaders) {
@@ -4957,12 +4938,11 @@ describe('ops/sync', () => {
       };
     };
 
-    const failingFetch: typeof fetch = async () =>
-      new Response('upstream failure', { status: 500 });
+    const failingFetch: typeof fetch = async () => new Response('upstream failure', { status: 500 });
 
-    await expect(
-      runSyncCommand({ repoDir, fetchImpl: failingFetch, execWrangler })
-    ).rejects.toThrow('GET /api/export/snapshot failed with HTTP 500');
+    await expect(runSyncCommand({ repoDir, fetchImpl: failingFetch, execWrangler })).rejects.toThrow(
+      'GET /api/export/snapshot failed with HTTP 500'
+    );
     expect(sawCleanupDelete).toBe(true);
   });
 
@@ -5103,10 +5083,10 @@ describe('ops/sync', () => {
     const failFetch: typeof fetch = async (input, init) => {
       const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
       if (url.endsWith('/api/export/snapshot')) {
-        return new Response(
-          JSON.stringify({ head_revision_id: 5, entities: [], kinship: [] }),
-          { status: 200, headers: { 'Content-Type': 'application/json' } }
-        );
+        return new Response(JSON.stringify({ head_revision_id: 5, entities: [], kinship: [] }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
       }
       if (url.endsWith('/api/batches')) {
         const body = JSON.parse(String(init?.body ?? '{}')) as { batch_id: string };
@@ -5229,9 +5209,7 @@ describe('ops/verify', () => {
       },
     ]);
     expect(ssnScan.ok).toBe(false);
-    expect(ssnScan.hits).toEqual([
-      { file: 'data/sources.yaml', line: 4, match: '123-45-6789' },
-    ]);
+    expect(ssnScan.hits).toEqual([{ file: 'data/sources.yaml', line: 4, match: '123-45-6789' }]);
 
     // Introduce 4 simultaneous violations: dangling citation, (0, 0) place, SSN in YAML, missing media file.
     await writeFile(
@@ -5335,12 +5313,10 @@ describe('ops/verify', () => {
       'narrative:nar_name_probe:body_md',
       'narrative:nar_name_probe:body_md',
     ]);
-    expect(caught.errors).toContain(
-      "living-name: narrative:nar_name_probe:body_md matched 'Clara Maple'"
-    );
-    expect(caught.checks.livingNames.hits.some((hit) => hit.location.includes('evt_arthur_living_visit'))).toBe(
-      false
-    );
+    expect(caught.errors).toContain("living-name: narrative:nar_name_probe:body_md matched 'Clara Maple'");
+    expect(
+      caught.checks.livingNames.hits.some((hit) => hit.location.includes('evt_arthur_living_visit'))
+    ).toBe(false);
     expect(caught.checks.livingNames.hits.some((hit) => hit.location.includes('med_living_photo'))).toBe(
       false
     );
@@ -5447,9 +5423,7 @@ describe('ops/verify', () => {
       'utf8'
     );
 
-    const sources = parseSourcesYaml(
-      await readFile(path.join(repoDir, 'data', 'sources.yaml'), 'utf8')
-    );
+    const sources = parseSourcesYaml(await readFile(path.join(repoDir, 'data', 'sources.yaml'), 'utf8'));
     sources.push({
       id: 'src_1791_bond',
       citation: 'Oak County Marriage Bond, 14 Feb 1791: Clara Maple married John Roe.',
@@ -5771,7 +5745,12 @@ describe('ops/verify', () => {
       // Esther has biological parents + 1 adoptive mother tagged via adoptive family_xref (valid).
       { from: 'per_father_valid', to: 'per_child_adoptive_ok', relation: 'parent', family_xref: '@F6@' },
       { from: 'per_mother_one', to: 'per_child_adoptive_ok', relation: 'parent', family_xref: '@F6@' },
-      { from: 'per_mother_adoptive', to: 'per_child_adoptive_ok', relation: 'parent', family_xref: '@F_ADOPT_1@' },
+      {
+        from: 'per_mother_adoptive',
+        to: 'per_child_adoptive_ok',
+        relation: 'parent',
+        family_xref: '@F_ADOPT_1@',
+      },
     ];
 
     const events: RawEvent[] = [
@@ -5924,17 +5903,23 @@ describe('ops/verify', () => {
 
     await Promise.all([
       writeFile(path.join(dataDir, 'people.yaml'), serializePeopleYaml(people, { sortById: true }), 'utf8'),
-      writeFile(path.join(dataDir, 'kinship.yaml'), serializeKinshipYaml(kinship, { sortDeterministic: true }), 'utf8'),
+      writeFile(
+        path.join(dataDir, 'kinship.yaml'),
+        serializeKinshipYaml(kinship, { sortDeterministic: true }),
+        'utf8'
+      ),
       writeFile(path.join(dataDir, 'events.yaml'), serializeEventsYaml(events, { sortById: true }), 'utf8'),
       writeFile(path.join(dataDir, 'media.yaml'), serializeMediaYaml([], { sortById: true }), 'utf8'),
-      writeFile(path.join(dataDir, 'narratives.yaml'), serializeNarrativesYaml([], { sortById: true }), 'utf8'),
+      writeFile(
+        path.join(dataDir, 'narratives.yaml'),
+        serializeNarrativesYaml([], { sortById: true }),
+        'utf8'
+      ),
     ]);
 
     // Default verify is non-breaking: ok=true, exit 0, warnings surfaced in JSON and text.
     const defaultCliJson = createCaptureIo();
-    expect(
-      await runCli(['verify', '--repo', repoDir, '--json'], { io: defaultCliJson.io })
-    ).toBe(EXIT_OK);
+    expect(await runCli(['verify', '--repo', repoDir, '--json'], { io: defaultCliJson.io })).toBe(EXIT_OK);
     const parsedDefault = JSON.parse(defaultCliJson.stdout.join('\n')) as {
       ok: boolean;
       strictHygiene: boolean;
@@ -5958,17 +5943,15 @@ describe('ops/verify', () => {
     expect(parsedDefault.warnings).toHaveLength(11);
 
     // Confirm adoptive parent link on Esther was NOT flagged.
-    expect(
-      parsedDefault.hygiene.warnings.some((w) => w.personIds.includes('per_child_adoptive_ok'))
-    ).toBe(false);
+    expect(parsedDefault.hygiene.warnings.some((w) => w.personIds.includes('per_child_adoptive_ok'))).toBe(
+      false
+    );
     // Confirm valid posthumous child Clara and her birth+baptism / death+burial were NOT flagged.
-    expect(
-      parsedDefault.hygiene.warnings.some((w) => w.personIds.includes('per_child_posthumous_ok'))
-    ).toBe(false);
+    expect(parsedDefault.hygiene.warnings.some((w) => w.personIds.includes('per_child_posthumous_ok'))).toBe(
+      false
+    );
     // Confirm child witness Daniel was NOT flagged for child_marriage.
-    expect(
-      parsedDefault.hygiene.warnings.some((w) => w.personIds.includes('per_witness_child'))
-    ).toBe(false);
+    expect(parsedDefault.hygiene.warnings.some((w) => w.personIds.includes('per_witness_child'))).toBe(false);
 
     // Default text output displays WARN summary and warning details.
     const defaultText = await runVerifyCommand({ repoDir });
@@ -6544,9 +6527,7 @@ describe('ops/verify', () => {
       placeholder_event: 1,
     });
     expect(
-      regressionSummary.warnings
-        .filter((w) => w.category === 'duplicate_vital_event')
-        .map((w) => w.eventIds)
+      regressionSummary.warnings.filter((w) => w.category === 'duplicate_vital_event').map((w) => w.eventIds)
     ).toEqual([
       ['evt_marr_will_clara', 'evt_wedding_will_clara_dup'],
       ['evt_nora_birth', 'evt_nora_birth_dup'],
@@ -6822,11 +6803,7 @@ describe('ops/verify', () => {
 
     // 3. Replacing the old birth/death/marriage IDs via remove_event_ids clears the duplicates.
     await writeArthurPatch({
-      remove_event_ids: [
-        'evt_arthur_birth_live',
-        'evt_arthur_death_live',
-        'evt_marr_arthur_helen_live',
-      ],
+      remove_event_ids: ['evt_arthur_birth_live', 'evt_arthur_death_live', 'evt_marr_arthur_helen_live'],
       events: [
         {
           id: 'evt_arthur_birth_dup',
@@ -7037,7 +7014,9 @@ describe('ops/verify', () => {
       { label: 'non-array', remove_kinship: 'not-an-array', match: /must be an array/i },
       {
         label: 'unknown key',
-        remove_kinship: [{ from: 'per_thomas_alder', to: 'per_arthur_alder', relation: 'parent', bogus: true }],
+        remove_kinship: [
+          { from: 'per_thomas_alder', to: 'per_arthur_alder', relation: 'parent', bogus: true },
+        ],
         match: /Unknown key 'bogus'/i,
       },
       {
@@ -7052,12 +7031,16 @@ describe('ops/verify', () => {
       },
       {
         label: 'empty family_xref',
-        remove_kinship: [{ from: 'per_thomas_alder', to: 'per_arthur_alder', relation: 'parent', family_xref: '  ' }],
+        remove_kinship: [
+          { from: 'per_thomas_alder', to: 'per_arthur_alder', relation: 'parent', family_xref: '  ' },
+        ],
         match: /family_xref must be a non-empty string/i,
       },
       {
         label: 'non-boolean symmetric',
-        remove_kinship: [{ from: 'per_thomas_alder', to: 'per_arthur_alder', relation: 'parent', symmetric: 'yes' }],
+        remove_kinship: [
+          { from: 'per_thomas_alder', to: 'per_arthur_alder', relation: 'parent', symmetric: 'yes' },
+        ],
         match: /symmetric must be a boolean/i,
       },
     ];
@@ -7271,7 +7254,8 @@ describe('ops/verify', () => {
           subject_person_id: 'per_arthur_alder',
           title: 'Arthur Alder',
           summary: 'Verified parentage of Arthur Alder.',
-          body_md: 'Primary county records identify Samuel Rowan as the father of Arthur Alder.[^src_1880_census]',
+          body_md:
+            'Primary county records identify Samuel Rowan as the father of Arthur Alder.[^src_1880_census]',
           person_ids: ['per_arthur_alder', 'per_samuel_rowan'],
           place_ids: ['plc_oak_county_ohio'],
           event_ids: [],
@@ -7303,10 +7287,9 @@ describe('ops/verify', () => {
       'utf8'
     );
     const strictCap = createCaptureIo();
-    const strictCode = await runCli(
-      ['audit', 'per_arthur_alder', '--strict', '--repo', repoDir, '--json'],
-      { io: strictCap.io }
-    );
+    const strictCode = await runCli(['audit', 'per_arthur_alder', '--strict', '--repo', repoDir, '--json'], {
+      io: strictCap.io,
+    });
     expect(strictCode, `${strictCap.stderr.join('\n')}\n${strictCap.stdout.join('\n')}`).toBe(EXIT_OK);
     const strictJson = JSON.parse(strictCap.stdout.join('\n')) as {
       ok: boolean;

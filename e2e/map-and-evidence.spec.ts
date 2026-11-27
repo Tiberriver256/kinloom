@@ -1,6 +1,8 @@
 import { expect, test } from '@playwright/test';
 
-test('map route filters by migration era, steps through journey stops, and handles offline tiles gracefully', async ({ page }) => {
+test('map route filters by migration era, steps through journey stops, and handles offline tiles gracefully', async ({
+  page,
+}) => {
   const pageErrors: string[] = [];
   page.on('pageerror', (err) => pageErrors.push(err.message));
 
@@ -31,7 +33,9 @@ test('map route filters by migration era, steps through journey stops, and handl
   expect(pageErrors).toEqual([]);
 });
 
-test('evidence and sources displays discrepancies, source registry, and photos and documents', async ({ page }) => {
+test('evidence and sources displays discrepancies, source registry, and photos and documents', async ({
+  page,
+}) => {
   await page.goto('/evidence');
   await expect(page.getByRole('heading', { name: 'Evidence & Sources' })).toBeVisible();
 

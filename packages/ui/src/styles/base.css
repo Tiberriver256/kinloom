@@ -1,0 +1,83 @@
+/* Kinloom Archival Stylesheet — Paper & Ink Edition
+ * Unboxed Cotton Rag Paper, Newsreader Editorial Serif & IBM Plex Mono.
+ * Consumes canonical WCAG 2.2 AA/AAA DTCG tokens from @kinloom/tokens/kinloom.css.
+ */
+@import "@kinloom/tokens/kinloom.css";
+
+:root {
+  --font-hand: var(--font-serif);
+  --font-sans: var(--font-serif);
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background-color: var(--surface-canvas);
+  color: var(--text-primary);
+  font-family: var(--font-serif);
+  font-size: 16.5px;
+  line-height: 1.64;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1,
+h2,
+h3 {
+  text-wrap: balance;
+}
+
+p {
+  text-wrap: pretty;
+}
+
+::placeholder {
+  color: var(--text-secondary);
+  opacity: 1;
+}
+
+a {
+  color: inherit;
+}
+
+button,
+input,
+select {
+  font-family: inherit;
+  font-size: inherit;
+  color: inherit;
+}
+
+:focus-visible {
+  outline: 2px solid var(--action-focus);
+  outline-offset: 2px;
+}
+
+.visually-hidden:where(:not(:focus-within, :active)) {
+  position: absolute;
+  clip-path: inset(50%);
+  overflow: hidden;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  white-space: nowrap;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms;
+    animation-iteration-count: 1;
+    transition-duration: 0.01ms;
+    scroll-behavior: auto;
+  }
+}

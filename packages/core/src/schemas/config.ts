@@ -1,9 +1,7 @@
 import { z } from 'zod';
 import { PronunciationSchema } from './entities.js';
 
-const HexColorSchema = z
-  .string()
-  .regex(/^#[0-9a-fA-F]{6}$/, 'Expected a 6-digit hex color such as #7A4612');
+const HexColorSchema = z.string().regex(/^#[0-9a-fA-F]{6}$/, 'Expected a 6-digit hex color such as #7A4612');
 
 export const SiteMetadataSchema = z.object({
   title: z.string().min(1),
@@ -81,7 +79,11 @@ export const PrivacyConfigSchema = z.object({
 export const WikiConfigSchema = z.object({
   allowTalk: z.boolean().default(true),
   allowWatchlists: z.boolean().default(false),
-  maxUploadBytes: z.number().int().positive().default(15 * 1024 * 1024),
+  maxUploadBytes: z
+    .number()
+    .int()
+    .positive()
+    .default(15 * 1024 * 1024),
 });
 
 export const KinloomSiteConfigSchema = z.object({

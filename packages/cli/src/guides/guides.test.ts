@@ -77,16 +77,15 @@ describe('embedded workflow guides', () => {
   });
 
   it('scrubs all legacy Python, uv, script-path, and frontmatter artifacts from every guide and subguide', () => {
-    const forbiddenLegacyPatterns: ReadonlyArray<{ readonly label: string; readonly regex: RegExp }> =
-      [
-        { label: 'uv run invocation', regex: /\buv run\b/ },
-        { label: 'raw monorepo script path', regex: /skills\/[a-z0-9-]+\/scripts\// },
-        { label: 'prep-scan.py reference', regex: /prep-scan\.py/ },
-        { label: 'cached-ocr.py reference', regex: /cached-ocr\.py/ },
-        { label: 'python3 -m unittest command', regex: /\bpython3 -m unittest\b/ },
-        { label: 'raw references/script-rules.md path', regex: /references\/script-rules\.md/ },
-        { label: 'raw YAML frontmatter delimiter', regex: /^---\r?\n/ },
-      ];
+    const forbiddenLegacyPatterns: ReadonlyArray<{ readonly label: string; readonly regex: RegExp }> = [
+      { label: 'uv run invocation', regex: /\buv run\b/ },
+      { label: 'raw monorepo script path', regex: /skills\/[a-z0-9-]+\/scripts\// },
+      { label: 'prep-scan.py reference', regex: /prep-scan\.py/ },
+      { label: 'cached-ocr.py reference', regex: /cached-ocr\.py/ },
+      { label: 'python3 -m unittest command', regex: /\bpython3 -m unittest\b/ },
+      { label: 'raw references/script-rules.md path', regex: /references\/script-rules\.md/ },
+      { label: 'raw YAML frontmatter delimiter', regex: /^---\r?\n/ },
+    ];
 
     for (const guide of EMBEDDED_GUIDES) {
       for (const { label, regex } of forbiddenLegacyPatterns) {
@@ -96,10 +95,7 @@ describe('embedded workflow guides', () => {
       if (guide.subguides) {
         for (const [subKey, subBody] of Object.entries(guide.subguides)) {
           for (const { label, regex } of forbiddenLegacyPatterns) {
-            expect(
-              subBody,
-              `subguide '${guide.id}/${subKey}' contains ${label}`
-            ).not.toMatch(regex);
+            expect(subBody, `subguide '${guide.id}/${subKey}' contains ${label}`).not.toMatch(regex);
           }
         }
       }

@@ -1,19 +1,19 @@
 import {
   ApiErrorEnvelopeSchema,
+  type ArchiveBundle,
   ArchiveBundleSchema,
+  type ArchiveRawSnapshot,
+  asRevisionId,
+  type BatchSubmission,
   EntityPayloadSchema,
   EntityTypeSchema,
   KinshipEdgeSchema,
-  MediaItemSchema,
-  OptimisticConflictErrorSchema,
-  RevisionRecordSchema,
-  asRevisionId,
-  type ArchiveBundle,
-  type ArchiveRawSnapshot,
-  type BatchSubmission,
   type MediaItem,
+  MediaItemSchema,
   type OptimisticConflictError,
+  OptimisticConflictErrorSchema,
   type RevisionRecord,
+  RevisionRecordSchema,
   type StoredEntityRow,
   type StoredKinshipRow,
 } from '@kinloom/core';
@@ -87,11 +87,9 @@ const WrappedArchiveSnapshotResponseSchema = z
       kinship: z.array(StoredKinshipRowSchema),
     }),
   })
-  .refine(
-    (value) =>
-      value.snapshot.head_revision_id !== undefined || value.head_revision_id !== undefined,
-    { message: 'Missing head_revision_id in snapshot response.' }
-  );
+  .refine((value) => value.snapshot.head_revision_id !== undefined || value.head_revision_id !== undefined, {
+    message: 'Missing head_revision_id in snapshot response.',
+  });
 
 const ExportSnapshotResponseSchema = z.union([
   WrappedArchiveSnapshotResponseSchema,
@@ -168,9 +166,7 @@ async function parseErrorResponse(response: Response): Promise<KinloomApiError> 
           entity_type: c.entity_type,
           entity_id: c.entity_id,
           expected_parent_revision_id:
-            c.expected_parent_revision_id !== null
-              ? asRevisionId(c.expected_parent_revision_id)
-              : null,
+            c.expected_parent_revision_id !== null ? asRevisionId(c.expected_parent_revision_id) : null,
           server_revision_id: asRevisionId(c.server_revision_id),
           server_entity: c.server_entity,
           server_deleted_at: c.server_deleted_at,
@@ -322,8 +318,7 @@ export class KinloomApiClient {
     const parsed = await parseJsonBody(response, ExportSnapshotResponseSchema, endpoint);
     const rawSnapshot = 'snapshot' in parsed ? parsed.snapshot : parsed;
     const headRevisionId =
-      rawSnapshot.head_revision_id ??
-      ('snapshot' in parsed ? parsed.head_revision_id : undefined);
+      rawSnapshot.head_revision_id ?? ('snapshot' in parsed ? parsed.head_revision_id : undefined);
     if (headRevisionId === undefined) {
       throw new KinloomApiError({
         status: response.status,

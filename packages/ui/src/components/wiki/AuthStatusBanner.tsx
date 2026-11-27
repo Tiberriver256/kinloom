@@ -1,11 +1,12 @@
-import React, { useEffect, useState } from 'react';
+import type React from 'react';
+import { useEffect, useState } from 'react';
 import { useArchiveData } from '../../context/ArchiveDataContext.js';
-import {
-  consumeAuthErrorFromWindow,
-  resolveAuthFeedback,
-  type AuthUrlError,
-} from './authErrorCopy.js';
+import { cx } from '../../lib/cx.js';
+import { type AuthUrlError, consumeAuthErrorFromWindow, resolveAuthFeedback } from './authErrorCopy.js';
 import { SignInModal } from './SignInModal.js';
+import cssMod0 from './WikiSurfaces.module.css';
+
+const uiStyles = cssMod0;
 
 export function getInviteStripDismissKey(inviteLabel?: string): string {
   const normalized = inviteLabel?.trim() || 'default';
@@ -75,20 +76,20 @@ export const AuthStatusBanner: React.FC = () => {
       <>
         {!isDismissed && (
           <div
-            className="wiki-auth-banner is-invite print-hide"
+            className={cx(uiStyles, 'wiki-auth-banner is-invite print-hide')}
             role="region"
             aria-label="Invite access notice"
           >
-            <div className="wiki-auth-banner-copy">
-              <span className="wiki-auth-banner-label">
+            <div className={cx(uiStyles, 'wiki-auth-banner-copy')}>
+              <span className={cx(uiStyles, 'wiki-auth-banner-label')}>
                 Family invite{session.inviteLabel ? ` (${session.inviteLabel})` : ''}
               </span>
-              <span className="wiki-auth-banner-sep" aria-hidden="true">
+              <span className={cx(uiStyles, 'wiki-auth-banner-sep')} aria-hidden="true">
                 ·
               </span>
               <button
                 type="button"
-                className="wiki-auth-banner-link"
+                className={cx(uiStyles, 'wiki-auth-banner-link')}
                 onClick={() => {
                   setSignInOpen(true);
                 }}
@@ -98,7 +99,7 @@ export const AuthStatusBanner: React.FC = () => {
             </div>
             <button
               type="button"
-              className="wiki-auth-banner-dismiss"
+              className={cx(uiStyles, 'wiki-auth-banner-dismiss')}
               aria-label="Dismiss family invite notice"
               title="Dismiss notice"
               onClick={handleDismiss}
@@ -132,16 +133,16 @@ export const AuthStatusBanner: React.FC = () => {
 
   return (
     <div
-      className={`wiki-auth-notice-bar is-${feedback.tone} print-hide`}
+      className={cx(uiStyles, `wiki-auth-notice-bar is-${feedback.tone} print-hide`)}
       role={feedback.tone === 'info' ? 'status' : 'alert'}
       aria-live={feedback.tone === 'info' ? 'polite' : 'assertive'}
     >
-      <div className="wiki-auth-notice-copy">
+      <div className={cx(uiStyles, 'wiki-auth-notice-copy')}>
         <strong>{feedback.title}.</strong> {feedback.detail}
       </div>
       <button
         type="button"
-        className="wiki-auth-banner-dismiss"
+        className={cx(uiStyles, 'wiki-auth-banner-dismiss')}
         aria-label="Dismiss sign-in notice"
         title="Dismiss notice"
         onClick={() => {

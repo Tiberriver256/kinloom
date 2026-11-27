@@ -10,12 +10,12 @@ import {
   AgentTokenScopeSchema,
   ApiErrorEnvelopeSchema,
   BatchSubmissionSchema,
+  deriveKinshipEdgeId,
   ENTITY_SCHEMA_BY_TYPE,
   EntityWriteInputSchema,
   OptimisticConflictErrorSchema,
-  RevisionRecordSchema,
-  deriveKinshipEdgeId,
   parseEntityPayload,
+  RevisionRecordSchema,
 } from './schemas/revisions.js';
 
 describe('revision diff and revert engine', () => {
@@ -115,9 +115,9 @@ describe('revision diff and revert engine', () => {
     expect(parsedSource.citation).toBe('1880 Census');
     expect(() => parseEntityPayload('place', { id: 'plc_bad', lat: 999 })).toThrow();
 
-    expect(
-      deriveKinshipEdgeId({ from: 'per_a', relation: 'parent', to: 'per_b' })
-    ).toBe('per_a:parent:per_b');
+    expect(deriveKinshipEdgeId({ from: 'per_a', relation: 'parent', to: 'per_b' })).toBe(
+      'per_a:parent:per_b'
+    );
 
     expect(AgentTokenScopeSchema.parse('write_batch')).toBe('write_batch');
     expect(AgentTokenScopeSchema.parse('read_backup')).toBe('read_backup');
@@ -199,10 +199,7 @@ describe('revision diff and revert engine', () => {
     expect(singleRevert.reverted_revision_id).toBe(11);
     expect(singleRevert.after_json).toEqual({ id: 'per_1', birth_edtf: '1851' });
 
-    const batchReverts = buildBatchRevertPayloads(
-      new Map([['person:per_1', rev2.after_json]]),
-      [rev1, rev2]
-    );
+    const batchReverts = buildBatchRevertPayloads(new Map([['person:per_1', rev2.after_json]]), [rev1, rev2]);
     expect(batchReverts.map((r) => r.reverted_revision_id)).toEqual([11, 10]);
     expect(batchReverts[1].after_json).toEqual({ id: 'per_1', birth_edtf: '1850' });
 

@@ -63,10 +63,7 @@ function sampleRows(version = 1): SampleRow[] {
 }
 
 function makeGnisZip(rows: readonly SampleRow[], entryName = 'DomesticNames_CA.txt'): Buffer {
-  const lines = [
-    COLUMNS.join('|'),
-    ...rows.map((row) => COLUMNS.map((col) => row[col]).join('|')),
-  ];
+  const lines = [COLUMNS.join('|'), ...rows.map((row) => COLUMNS.map((col) => row[col]).join('|'))];
   const content = Buffer.from(`${lines.join('\n')}\n`, 'utf8');
   return Buffer.from(zipSync({ [entryName]: new Uint8Array(content) }));
 }
@@ -142,9 +139,7 @@ describe('gnis native client', () => {
     expect(downloadUrls).toHaveLength(1);
     expect(stateTableReads).toBe(1);
     expect(fs.existsSync(path.join(cacheRoot, 'CA.txt'))).toBe(true);
-    const queryFiles = fs
-      .readdirSync(path.join(cacheRoot, '_queries'))
-      .filter((f) => f.endsWith('.json'));
+    const queryFiles = fs.readdirSync(path.join(cacheRoot, '_queries')).filter((f) => f.endsWith('.json'));
     expect(queryFiles).toHaveLength(1);
     expect(path.basename(queryFiles[0], '.json')).toHaveLength(64);
     const p1 = JSON.parse(r1.stdout) as {
@@ -200,22 +195,18 @@ describe('gnis native client', () => {
     const r1 = await invokeGnis(['search', 'Merced', '--state', 'CA', '--json'], env, fetchImpl);
     expect(r1.exitCode).toBe(0);
     expect(downloadUrls).toHaveLength(1);
-    expect(
-      (JSON.parse(r1.stdout) as { results: { map_name: string }[] }).results[0].map_name
-    ).toBe('Merced v1');
+    expect((JSON.parse(r1.stdout) as { results: { map_name: string }[] }).results[0].map_name).toBe(
+      'Merced v1'
+    );
 
     // --refresh bypasses query and state caches to fetch updated USGS data.
     version = 2;
-    const r2 = await invokeGnis(
-      ['search', 'Merced', '--state', 'CA', '--refresh', '--json'],
-      env,
-      fetchImpl
-    );
+    const r2 = await invokeGnis(['search', 'Merced', '--state', 'CA', '--refresh', '--json'], env, fetchImpl);
     expect(r2.exitCode).toBe(0);
     expect(downloadUrls).toHaveLength(2);
-    expect(
-      (JSON.parse(r2.stdout) as { results: { map_name: string }[] }).results[0].map_name
-    ).toBe('Merced v2');
+    expect((JSON.parse(r2.stdout) as { results: { map_name: string }[] }).results[0].map_name).toBe(
+      'Merced v2'
+    );
 
     // --cache-ttl-hours 0 bypasses query cache (re-reads cached state table, 0 HTTP).
     const realReadFileSync = fs.readFileSync.bind(fs);
@@ -235,9 +226,9 @@ describe('gnis native client', () => {
     expect(r3.exitCode).toBe(0);
     expect(downloadUrls).toHaveLength(2);
     expect(tableReads).toBe(1);
-    expect(
-      (JSON.parse(r3.stdout) as { results: { map_name: string }[] }).results[0].map_name
-    ).toBe('Merced v2');
+    expect((JSON.parse(r3.stdout) as { results: { map_name: string }[] }).results[0].map_name).toBe(
+      'Merced v2'
+    );
 
     // Negative TTL rejected with exit code 2.
     const rBad = await invokeGnis(
@@ -274,10 +265,9 @@ describe('gnis native client', () => {
       calls += 1;
       const url = String(input);
       if (url.includes('HistoricalFeatures')) {
-        return new Response(
-          new Uint8Array(makeGnisZip(sampleRows(1), 'HistoricalFeatures_National.txt')),
-          { status: 200 }
-        );
+        return new Response(new Uint8Array(makeGnisZip(sampleRows(1), 'HistoricalFeatures_National.txt')), {
+          status: 200,
+        });
       }
       return new Response(new Uint8Array(makeGnisZip(sampleRows(1))), { status: 200 });
     };
@@ -303,9 +293,7 @@ describe('gnis native client', () => {
     const hist = await invokeGnis(['search', 'Merced', '--historical', '--exact', '--json'], env, fetchImpl);
     expect(hist.exitCode).toBe(0);
     expect(calls).toBe(2);
-    expect((JSON.parse(hist.stdout) as { source: string }).source).toBe(
-      'HistoricalFeatures (national)'
-    );
+    expect((JSON.parse(hist.stdout) as { source: string }).source).toBe('HistoricalFeatures (national)');
 
     const u = await invokeGnis(['url', 'Merced'], env, fetchImpl);
     expect(u.exitCode).toBe(0);

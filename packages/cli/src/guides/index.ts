@@ -116,7 +116,10 @@ export function resolveEmbeddedGuide(topic: string): ResolvedEmbeddedGuide | und
   }
 
   const primary = normalized.slice(0, slashIndex).trim().toLowerCase();
-  const subKey = normalized.slice(slashIndex + 1).trim().toLowerCase();
+  const subKey = normalized
+    .slice(slashIndex + 1)
+    .trim()
+    .toLowerCase();
   if (!primary || !subKey) {
     return undefined;
   }
@@ -126,9 +129,7 @@ export function resolveEmbeddedGuide(topic: string): ResolvedEmbeddedGuide | und
     return undefined;
   }
 
-  const exactSubguide = Object.entries(guide.subguides).find(
-    ([key]) => key.toLowerCase() === subKey
-  );
+  const exactSubguide = Object.entries(guide.subguides).find(([key]) => key.toLowerCase() === subKey);
   if (!exactSubguide) {
     return undefined;
   }
@@ -163,9 +164,7 @@ export function formatGuidesCatalog(): string {
       if (guide.subguides) {
         const subKeys = Object.keys(guide.subguides);
         if (subKeys.length > 0) {
-          tags.push(
-            `subguide: ${subKeys.map((key) => `${guide.command}/${key}`).join(', ')}`
-          );
+          tags.push(`subguide: ${subKeys.map((key) => `${guide.command}/${key}`).join(', ')}`);
         }
       }
       const suffix = tags.length > 0 ? ` (${tags.join('; ')})` : '';

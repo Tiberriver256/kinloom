@@ -140,7 +140,9 @@ type ArchiveCountTarget =
   | { kind: 'metaObject'; label: string };
 
 function isAstNode(value: unknown): value is AstNode {
-  return typeof value === 'object' && value !== null && typeof (value as { type?: unknown }).type === 'string';
+  return (
+    typeof value === 'object' && value !== null && typeof (value as { type?: unknown }).type === 'string'
+  );
 }
 
 function unwrapExpression(node: AstNode): AstNode {
@@ -340,9 +342,7 @@ function isExpectCall(node: AstNode): node is CallExpressionNode {
   return false;
 }
 
-function collectHardcodedCountObjectViolations(
-  objExpr: ObjectExpressionNode
-): ReportDescriptor[] {
+function collectHardcodedCountObjectViolations(objExpr: ObjectExpressionNode): ReportDescriptor[] {
   const reports: ReportDescriptor[] = [];
   for (const prop of objExpr.properties) {
     if (prop.type !== 'Property') {

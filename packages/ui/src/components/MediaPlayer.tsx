@@ -1,8 +1,22 @@
 import type { MediaItem } from '@kinloom/core';
-import React from 'react';
-import { resolveAssetUrl } from './Atoms.js';
+import type React from 'react';
 import { useArchiveData } from '../context/ArchiveDataContext.js';
+import { cx } from '../lib/cx.js';
+import cssMod3 from '../pages/IndexPage.module.css';
+import cssMod4 from '../pages/PersonPage.module.css';
 import { useKinloomPlugins } from '../plugins/PluginContext.js';
+import { resolveAssetUrl } from './Atoms.js';
+import cssMod0 from './Atoms.module.css';
+import cssMod1 from './SourceReaderDrawer.module.css';
+import cssMod2 from './wiki/WikiSurfaces.module.css';
+
+const uiStyles: Readonly<Record<string, string>> = {
+  ...cssMod0,
+  ...cssMod1,
+  ...cssMod2,
+  ...cssMod3,
+  ...cssMod4,
+};
 
 export interface MediaPlayerProps {
   media: MediaItem;
@@ -52,12 +66,7 @@ export function formatDurationSeconds(seconds: number | null | undefined): strin
   return `${mins}:${String(secs).padStart(2, '0')}`;
 }
 
-export const MediaPlayer: React.FC<MediaPlayerProps> = ({
-  media,
-  baseUrl,
-  variant = 'full',
-  className,
-}) => {
+export const MediaPlayer: React.FC<MediaPlayerProps> = ({ media, baseUrl, variant = 'full', className }) => {
   const { mediaRenderers } = useKinloomPlugins();
   const { baseUrl: contextBaseUrl } = useArchiveData();
   const effectiveBase = baseUrl ?? contextBaseUrl;
@@ -71,7 +80,11 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
   // 1. Check plugin mediaRenderers first so private family sites can mount custom players.
   for (const renderer of mediaRenderers) {
     if (renderer.match(media)) {
-      return <div className={className ?? 'media-player-plugin-wrap'}>{renderer.render({ media, src })}</div>;
+      return (
+        <div className={cx(uiStyles, className ?? 'media-player-plugin-wrap')}>
+          {renderer.render({ media, src })}
+        </div>
+      );
     }
   }
 
@@ -79,33 +92,33 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
   if (isVideoMedia(media)) {
     if (variant === 'preview' && posterSrc) {
       return (
-        <div className={className ?? 'media-player-preview media-player-video-preview'}>
-          <img src={posterSrc} alt={media.caption} className="person-media-thumb" loading="lazy" />
-          <span className="media-play-badge" aria-hidden="true">
+        <div className={cx(uiStyles, className ?? 'media-player-preview media-player-video-preview')}>
+          <img
+            src={posterSrc}
+            alt={media.caption}
+            className={cx(uiStyles, 'person-media-thumb')}
+            loading="lazy"
+          />
+          <span className={cx(uiStyles, 'media-play-badge')} aria-hidden="true">
             ▶ {durationLabel ?? 'Video'}
           </span>
         </div>
       );
     }
     return (
-      <div className={className ?? 'media-player-shell media-player-video'}>
-        {/* oxlint-disable-next-line jsx-a11y/media-has-caption -- track element is conditionally rendered when transcript_url is present */}
+      <div className={cx(uiStyles, className ?? 'media-player-shell media-player-video')}>
         <video
           controls
           playsInline
           preload="metadata"
           poster={posterSrc}
-          className="media-player-video-el"
+          className={cx(uiStyles, 'media-player-video-el')}
           aria-label={media.caption}
         >
           <source src={src} type={media.mime_type ?? undefined} />
-          {transcriptSrc && (
-            <track kind="captions" src={transcriptSrc} label="Transcript captions" default />
-          )}
+          {transcriptSrc && <track kind="captions" src={transcriptSrc} label="Transcript captions" default />}
         </video>
-        {durationLabel && (
-          <div className="media-player-meta">Duration: {durationLabel}</div>
-        )}
+        {durationLabel && <div className={cx(uiStyles, 'media-player-meta')}>Duration: {durationLabel}</div>}
       </div>
     );
   }
@@ -114,26 +127,30 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
   if (isAudioMedia(media)) {
     if (variant === 'preview') {
       return (
-        <div className={className ?? 'media-player-preview media-player-audio-preview'}>
-          <span className="media-audio-glyph" aria-hidden="true">
+        <div className={cx(uiStyles, className ?? 'media-player-preview media-player-audio-preview')}>
+          <span className={cx(uiStyles, 'media-audio-glyph')} aria-hidden="true">
             ♫
           </span>
-          <span className="media-audio-label">
+          <span className={cx(uiStyles, 'media-audio-label')}>
             Oral History{durationLabel ? ` · ${durationLabel}` : ''}
           </span>
         </div>
       );
     }
     return (
-      <div className={className ?? 'media-player-shell media-player-audio'}>
-        {/* oxlint-disable-next-line jsx-a11y/media-has-caption -- oral history transcript link provided alongside audio element when available */}
-        <audio controls preload="metadata" className="media-player-audio-el" aria-label={media.caption}>
+      <div className={cx(uiStyles, className ?? 'media-player-shell media-player-audio')}>
+        <audio
+          controls
+          preload="metadata"
+          className={cx(uiStyles, 'media-player-audio-el')}
+          aria-label={media.caption}
+        >
           <source src={src} type={media.mime_type ?? undefined} />
         </audio>
-        <div className="media-player-meta">
+        <div className={cx(uiStyles, 'media-player-meta')}>
           {durationLabel && <span>Duration: {durationLabel}</span>}
           {transcriptSrc && (
-            <a href={transcriptSrc} target="_blank" rel="noreferrer" className="ink-link-btn">
+            <a href={transcriptSrc} target="_blank" rel="noreferrer" className={cx(uiStyles, 'ink-link-btn')}>
               Read transcript ↗
             </a>
           )}
@@ -146,19 +163,25 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
   if (isPdfMedia(media)) {
     if (variant === 'preview') {
       return (
-        <div className={className ?? 'media-player-preview media-player-pdf-preview'}>
-          <span className="media-audio-glyph" aria-hidden="true">
+        <div className={cx(uiStyles, className ?? 'media-player-preview media-player-pdf-preview')}>
+          <span className={cx(uiStyles, 'media-audio-glyph')} aria-hidden="true">
             PDF
           </span>
-          <span className="media-audio-label">Archival Document</span>
+          <span className={cx(uiStyles, 'media-audio-label')}>Archival Document</span>
         </div>
       );
     }
     return (
-      <div className={className ?? 'media-player-shell media-player-pdf'}>
-        <iframe title={media.caption} src={src} className="media-player-pdf-frame" />
-        <div className="media-player-meta">
-          <a href={src} target="_blank" rel="noreferrer" className="pill-btn" style={{ textDecoration: 'none' }}>
+      <div className={cx(uiStyles, className ?? 'media-player-shell media-player-pdf')}>
+        <iframe title={media.caption} src={src} className={cx(uiStyles, 'media-player-pdf-frame')} />
+        <div className={cx(uiStyles, 'media-player-meta')}>
+          <a
+            href={src}
+            target="_blank"
+            rel="noreferrer"
+            className={cx(uiStyles, 'pill-btn')}
+            style={{ textDecoration: 'none' }}
+          >
             Open PDF in new tab ↗
           </a>
         </div>
@@ -167,15 +190,17 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
   }
 
   // 5. Standard archival image.
-  const imgSrc = variant === 'preview' && media.thumb_file
-    ? resolveAssetUrl(media.thumb_file, effectiveBase)
-    : src;
+  const imgSrc =
+    variant === 'preview' && media.thumb_file ? resolveAssetUrl(media.thumb_file, effectiveBase) : src;
   return (
     <img
       src={imgSrc}
       alt={media.caption}
       loading="lazy"
-      className={className ?? (variant === 'preview' ? 'person-media-thumb' : 'scan-page-img-full')}
+      className={cx(
+        uiStyles,
+        className ?? (variant === 'preview' ? 'person-media-thumb' : 'scan-page-img-full')
+      )}
     />
   );
 };

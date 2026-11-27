@@ -1,5 +1,6 @@
 import { CliValidationError } from '../../../errors.js';
 import {
+  type CommandParseSpec,
   cachedJsonCall,
   emitJsonStdout,
   emitStdout,
@@ -9,15 +10,14 @@ import {
   getStringListOption,
   getStringOption,
   httpGetJson,
+  type OptionSpec,
   parseCacheTtlHours,
   parseCommandArgs,
-  RecordRuntimeError,
-  resolveCacheDir,
-  type CommandParseSpec,
-  type OptionSpec,
   type RecordCommandContext,
   type RecordCommandOutcome,
   type RecordHandler,
+  RecordRuntimeError,
+  resolveCacheDir,
 } from '../runtime/index.js';
 
 const DEFAULT_CACHE_TTL_HOURS = 168;
@@ -27,14 +27,7 @@ const HATHI_USER_AGENT =
   'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
 const HATHI_ALLOWED_HOSTS = ['catalog.hathitrust.org'] as const;
 
-export const VALID_ID_TYPES = [
-  'oclc',
-  'lccn',
-  'issn',
-  'isbn',
-  'htid',
-  'recordnumber',
-] as const;
+export const VALID_ID_TYPES = ['oclc', 'lccn', 'issn', 'isbn', 'htid', 'recordnumber'] as const;
 
 export type HathiIdType = (typeof VALID_ID_TYPES)[number];
 
@@ -128,9 +121,7 @@ async function fetchBib(
   if (!isPlainRecord(data)) {
     throw new RecordRuntimeError(`Bib API returned unexpected JSON shape for ${url}`);
   }
-  const records = isPlainRecord(data.records)
-    ? (data.records as Record<string, HathiRecord>)
-    : {};
+  const records = isPlainRecord(data.records) ? (data.records as Record<string, HathiRecord>) : {};
   const items = Array.isArray(data.items) ? (data.items as HathiItem[]) : [];
   return {
     records,
@@ -139,11 +130,7 @@ async function fetchBib(
   };
 }
 
-export function compactBib(
-  data: HathiBibPayload,
-  full: boolean,
-  cacheHit = false
-): string {
+export function compactBib(data: HathiBibPayload, full: boolean, cacheHit = false): string {
   const marker = cacheHit ? ' [cache]' : '';
   const lines: string[] = [];
   const recordEntries = Object.entries(data.records);
@@ -178,9 +165,7 @@ export function compactBib(
   for (const item of items) {
     const suffix = first ? marker : '';
     first = false;
-    lines.push(
-      `Item ${item.htid ?? ''} (${item.orig ?? ''}): ${item.usRightsString ?? ''}${suffix}`
-    );
+    lines.push(`Item ${item.htid ?? ''} (${item.orig ?? ''}): ${item.usRightsString ?? ''}${suffix}`);
     lines.push(`  item URL: ${item.itemURL ?? ''}`);
     if (item.enumcron) {
       lines.push(`  enumcron: ${item.enumcron}`);
@@ -260,7 +245,10 @@ function renderRootHelp(): string {
     usage: 'kinloom hathi <command> [options]',
     summary: 'HathiTrust Digital Library lookups (Bibliographic API, no key).',
     subcommands: [
-      { name: 'bib', summary: 'Look up record(s) by identifier (oclc, lccn, issn, isbn, htid, recordnumber).' },
+      {
+        name: 'bib',
+        summary: 'Look up record(s) by identifier (oclc, lccn, issn, isbn, htid, recordnumber).',
+      },
       { name: 'url', summary: 'Print a verified catalog search URL for QUERY.' },
     ],
   });
@@ -288,10 +276,7 @@ function renderUrlHelp(): string {
   });
 }
 
-async function runBib(
-  argv: readonly string[],
-  ctx: RecordCommandContext
-): Promise<RecordCommandOutcome> {
+async function runBib(argv: readonly string[], ctx: RecordCommandContext): Promise<RecordCommandOutcome> {
   const parsed = parseCommandArgs(argv, BIB_PARSE_SPEC);
   if (parsed.helpRequested) {
     return { exitCode: 0, bytesOut: emitStdout(ctx.io, renderBibHelp()) };
@@ -310,9 +295,7 @@ async function runBib(
     const idType = parsed.positionals[0].trim().toLowerCase();
     const value = parsed.positionals[1].trim();
     if (!isValidIdType(idType) || !value) {
-      throw new CliValidationError(
-        `Invalid id type '${idType}'. Choose from: ${VALID_ID_TYPES.join(', ')}`
-      );
+      throw new CliValidationError(`Invalid id type '${idType}'. Choose from: ${VALID_ID_TYPES.join(', ')}`);
     }
     specs = [[idType, value]];
   } else {
@@ -377,10 +360,7 @@ function runUrl(argv: readonly string[], ctx: RecordCommandContext): RecordComma
   return { exitCode: 0, bytesOut };
 }
 
-export const runHathiCommand: RecordHandler = async (
-  args,
-  ctx
-): Promise<RecordCommandOutcome> => {
+export const runHathiCommand: RecordHandler = async (args, ctx): Promise<RecordCommandOutcome> => {
   try {
     if (args.length === 0 || args[0] === '--help' || args[0] === '-h') {
       return { exitCode: 0, bytesOut: emitStdout(ctx.io, renderRootHelp()) };

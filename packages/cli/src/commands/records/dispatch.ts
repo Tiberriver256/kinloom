@@ -1,22 +1,10 @@
 import { performance } from 'node:perf_hooks';
-import {
-  isTelemetrySuppressedByParent,
-  recordTelemetryEvent,
-  type OpsIo,
-} from '../ops/telemetry.js';
+import { isTelemetrySuppressedByParent, type OpsIo, recordTelemetryEvent } from '../ops/telemetry.js';
 import { classifyRecordCommandIntent, renderRecordCommandHelp } from './help.js';
 import { resolveRecordCommand } from './registry.js';
 import type { ResolveRootsOptions } from './resolve.js';
-import {
-  buildTelemetrySubcmd,
-  executeLegacyScriptCommand,
-  type RecordSpawnFn,
-} from './runner.js';
-import {
-  createRecordContext,
-  DEFAULT_RECORD_IO,
-  type ExecFileFn,
-} from './runtime/types.js';
+import { buildTelemetrySubcmd, executeLegacyScriptCommand, type RecordSpawnFn } from './runner.js';
+import { createRecordContext, DEFAULT_RECORD_IO, type ExecFileFn } from './runtime/types.js';
 
 export interface RunRecordCommandOptions extends ResolveRootsOptions {
   io?: OpsIo;
@@ -57,8 +45,7 @@ export async function runRecordCommand(
 
   const startMs = performance.now();
   const intent = classifyRecordCommandIntent(spec, args);
-  const shouldRecordTelemetry =
-    Boolean(options?.forceTelemetry) || !isTelemetrySuppressedByParent();
+  const shouldRecordTelemetry = Boolean(options?.forceTelemetry) || !isTelemetrySuppressedByParent();
 
   if (intent.mode === 'render-guide') {
     const rendered = renderRecordCommandHelp(spec, options);
@@ -120,12 +107,5 @@ export async function runRecordCommand(
     };
   }
 
-  return executeLegacyScriptCommand(
-    spec,
-    intent.scriptArgs,
-    options,
-    startMs,
-    shouldRecordTelemetry,
-    io
-  );
+  return executeLegacyScriptCommand(spec, intent.scriptArgs, options, startMs, shouldRecordTelemetry, io);
 }

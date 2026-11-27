@@ -15,11 +15,7 @@ describe('KinloomApiClient', () => {
   let baseUrl = '';
   let lastRequest: RecordedRequest | null = null;
   let server: ReturnType<typeof createServer>;
-  let responder: (req: IncomingMessage, body: string, res: ServerResponse) => void = (
-    _req,
-    _body,
-    res
-  ) => {
+  let responder: (req: IncomingMessage, body: string, res: ServerResponse) => void = (_req, _body, res) => {
     res.writeHead(404, { 'content-type': 'application/json' });
     res.end(JSON.stringify({ error: { code: 'NOT_FOUND', message: 'Not found' } }));
   };

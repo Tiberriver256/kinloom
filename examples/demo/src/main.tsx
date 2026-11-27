@@ -1,19 +1,18 @@
 // Side-effect CSS import for Kinloom archival styles and design tokens.
-// oxlint-disable-next-line import/no-unassigned-import
 import '@kinloom/ui/styles/archival.css';
 import type { ArchiveDataSource } from '@kinloom/core';
 import type { KinloomUiPlugin } from '@kinloom/ui';
 import {
-  KinloomApp,
   createHttpWikiDataSource,
   createNarrativeAudioPlugin,
   createStaticArchiveDataSource,
   installGlobalErrorHandlers,
+  KinloomApp,
 } from '@kinloom/ui';
 import React from 'react';
 import ReactDOM from 'react-dom/client';
-import { demoSiteConfig } from './generated/siteConfig.js';
 import { demoStoryPlugin } from './demoStoryPlugin.js';
+import { demoSiteConfig } from './generated/siteConfig.js';
 
 installGlobalErrorHandlers();
 
@@ -55,10 +54,7 @@ const dataSource: ArchiveDataSource =
         assetBaseUrl: import.meta.env.BASE_URL,
         fetchImpl: (input, init) => globalThis.fetch(input, init),
       })
-    : createStaticArchiveDataSource(
-        import.meta.env.BASE_URL,
-        (input, init) => globalThis.fetch(input, init),
-      );
+    : createStaticArchiveDataSource(import.meta.env.BASE_URL, (input, init) => globalThis.fetch(input, init));
 
 const plugins = resolveDemoPlugins();
 
@@ -70,5 +66,5 @@ ReactDOM.createRoot(rootElement).render(
       plugins={plugins}
       baseUrl={import.meta.env.BASE_URL}
     />
-  </React.StrictMode>,
+  </React.StrictMode>
 );

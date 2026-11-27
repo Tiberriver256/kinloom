@@ -27,9 +27,7 @@ export interface SavedImageInfo {
   readonly kb: number;
 }
 
-export const DEFAULT_COMPACT_SCALES: readonly number[] = [
-  1.0, 0.88, 0.76, 0.64, 0.52, 0.42, 0.34, 0.25,
-];
+export const DEFAULT_COMPACT_SCALES: readonly number[] = [1.0, 0.88, 0.76, 0.64, 0.52, 0.42, 0.34, 0.25];
 export const DEFAULT_COMPACT_QUALITIES: readonly number[] = [84, 76, 68, 60, 52, 44, 36];
 
 function mapChannelsToMode(channels: number | undefined, space: string | undefined): string {
@@ -159,11 +157,7 @@ export function escapeSvgText(text: string): string {
     .replaceAll("'", '&apos;');
 }
 
-export function buildBlackBoxesSvg(
-  width: number,
-  height: number,
-  boxes: readonly ImageBox[]
-): Buffer {
+export function buildBlackBoxesSvg(width: number, height: number, boxes: readonly ImageBox[]): Buffer {
   const rects = boxes
     .map((b) => {
       const x = Math.max(0, Math.min(width, b.x0));
@@ -213,10 +207,7 @@ export async function applyBlackBoxes(
   if (overlays.length === 0) {
     return input;
   }
-  return sharp(input, { limitInputPixels: false })
-    .composite(overlays)
-    .png()
-    .toBuffer();
+  return sharp(input, { limitInputPixels: false }).composite(overlays).png().toBuffer();
 }
 
 export function chooseDefaultGridStep(origWidth: number, origHeight: number): number {
@@ -344,12 +335,9 @@ export async function buildLabeledContactStrip(
   let canvasH = 0;
   if (direction === 'vertical') {
     canvasW = Math.max(...panels.map((p) => p.width), 1);
-    canvasH =
-      panels.reduce((sum, p) => sum + p.height + headerH, 0) +
-      Math.max(0, panels.length - 1) * gap;
+    canvasH = panels.reduce((sum, p) => sum + p.height + headerH, 0) + Math.max(0, panels.length - 1) * gap;
   } else {
-    canvasW =
-      panels.reduce((sum, p) => sum + p.width, 0) + Math.max(0, panels.length - 1) * gap;
+    canvasW = panels.reduce((sum, p) => sum + p.width, 0) + Math.max(0, panels.length - 1) * gap;
     canvasH = Math.max(...panels.map((p) => p.height + headerH), 1);
   }
 

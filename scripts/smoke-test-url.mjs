@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { createRequire } from 'node:module';
 /**
  * Reusable post-deploy Playwright browser smoke test for Kinloom archives.
  * Usage:
@@ -6,7 +7,6 @@
  *   node scripts/smoke-test-url.mjs --url https://example.org/ --expect-archive
  */
 import path from 'node:path';
-import { createRequire } from 'node:module';
 
 const require = createRequire(path.join(import.meta.dirname, '../package.json'));
 const { chromium } = require('@playwright/test');
@@ -25,7 +25,7 @@ function parseArgs(argv) {
       mode = 'archive';
     } else if (arg === '--help' || arg === '-h') {
       console.log(
-        'Usage: node scripts/smoke-test-url.mjs --url <https://...> [--expect-gate | --expect-archive]',
+        'Usage: node scripts/smoke-test-url.mjs --url <https://...> [--expect-gate | --expect-archive]'
       );
       process.exit(0);
     }
@@ -69,7 +69,7 @@ async function inspectViewport(page, mode, phaseLabel) {
 
     const emailInput = document.querySelector('input[type="email"]');
     const magicLinkBtn = [...document.querySelectorAll('button')].find((b) =>
-      /magic link/i.test(b.textContent ?? ''),
+      /magic link/i.test(b.textContent ?? '')
     );
     const personLinks = document.querySelectorAll('a[href*="/person/"]').length;
 
@@ -112,9 +112,7 @@ async function inspectViewport(page, mode, phaseLabel) {
     failures.push(`${phaseLabel}: expected >100 CSS rules loaded, measured ${summary.cssRules}`);
   }
   if (summary.scrollWidth > summary.clientWidth) {
-    failures.push(
-      `${phaseLabel}: horizontal overflow (${summary.scrollWidth}px > ${summary.clientWidth}px)`,
-    );
+    failures.push(`${phaseLabel}: horizontal overflow (${summary.scrollWidth}px > ${summary.clientWidth}px)`);
   }
   if (mode === 'gate') {
     if (!summary.hasEmailInput) {
@@ -129,7 +127,7 @@ async function inspectViewport(page, mode, phaseLabel) {
     }
     if (summary.brokenImages.length > 0) {
       failures.push(
-        `${phaseLabel}: ${summary.brokenImages.length} broken image(s): ${summary.brokenImages.slice(0, 5).join(', ')}`,
+        `${phaseLabel}: ${summary.brokenImages.length} broken image(s): ${summary.brokenImages.slice(0, 5).join(', ')}`
       );
     }
   }
@@ -169,11 +167,13 @@ async function run() {
 
       const initialRes = await page.goto(url, { waitUntil: 'networkidle', timeout: 30_000 });
       if (!initialRes || initialRes.status() >= 400) {
-        allFailures.push(
-          `[${vp.name} initial] HTTP ${initialRes?.status() ?? 'NO_RESPONSE'} loading ${url}`,
-        );
+        allFailures.push(`[${vp.name} initial] HTTP ${initialRes?.status() ?? 'NO_RESPONSE'} loading ${url}`);
       }
-      await page.locator('h1').first().waitFor({ state: 'visible', timeout: 15_000 }).catch(() => {});
+      await page
+        .locator('h1')
+        .first()
+        .waitFor({ state: 'visible', timeout: 15_000 })
+        .catch(() => {});
 
       const initialCheck = await inspectViewport(page, mode, `[${vp.name} initial]`);
       allFailures.push(...initialCheck.failures);
@@ -183,19 +183,23 @@ async function run() {
 
       // Explicit reload catches 304 -> 404 Cloudflare ASSETS / SPA fallback regressions.
       await page.reload({ waitUntil: 'networkidle', timeout: 30_000 });
-      await page.locator('h1').first().waitFor({ state: 'visible', timeout: 15_000 }).catch(() => {});
+      await page
+        .locator('h1')
+        .first()
+        .waitFor({ state: 'visible', timeout: 15_000 })
+        .catch(() => {});
 
       const reloadCheck = await inspectViewport(page, mode, `[${vp.name} reload]`);
       allFailures.push(...reloadCheck.failures);
 
       if (pageerrors.length > 0) {
         allFailures.push(
-          `[${vp.name}] ${pageerrors.length} pageerror(s) (${pageerrors.length - errorsBeforeReload} after reload): ${pageerrors[0]}`,
+          `[${vp.name}] ${pageerrors.length} pageerror(s) (${pageerrors.length - errorsBeforeReload} after reload): ${pageerrors[0]}`
         );
       }
       if (failedAssets.length > 0) {
         allFailures.push(
-          `[${vp.name}] ${failedAssets.length} failed /assets/* response(s) (${failedAssets.length - assetsBeforeReload} after reload): ${failedAssets.join(', ')}`,
+          `[${vp.name}] ${failedAssets.length} failed /assets/* response(s) (${failedAssets.length - assetsBeforeReload} after reload): ${failedAssets.join(', ')}`
         );
       }
 
@@ -207,7 +211,7 @@ async function run() {
           ? 'PASS'
           : 'FAIL';
       console.log(
-        `${statusTag} [${vp.name} ${vp.width}x${vp.height}] h1="${reloadCheck.summary.h1 ?? ''}" css=${reloadCheck.summary.cssRules} width=${reloadCheck.summary.scrollWidth}/${reloadCheck.summary.clientWidth} links=${reloadCheck.summary.personLinks} pageerrors=${pageerrors.length} failedAssets=${failedAssets.length}`,
+        `${statusTag} [${vp.name} ${vp.width}x${vp.height}] h1="${reloadCheck.summary.h1 ?? ''}" css=${reloadCheck.summary.cssRules} width=${reloadCheck.summary.scrollWidth}/${reloadCheck.summary.clientWidth} links=${reloadCheck.summary.personLinks} pageerrors=${pageerrors.length} failedAssets=${failedAssets.length}`
       );
 
       await context.close();

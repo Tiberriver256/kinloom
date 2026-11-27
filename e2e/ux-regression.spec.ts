@@ -1,8 +1,8 @@
-import { expect, test } from '@playwright/test';
-import type { Page } from '@playwright/test';
 import fs from 'node:fs';
 import path from 'node:path';
-import { startLiveWikiTestServer, type LiveWikiTestHarness } from './helpers/wikiTestServer.js';
+import type { Page } from '@playwright/test';
+import { expect, test } from '@playwright/test';
+import { type LiveWikiTestHarness, startLiveWikiTestServer } from './helpers/wikiTestServer.js';
 
 const VIEWPORTS = [
   { name: '360x800', width: 360, height: 800 },
@@ -31,20 +31,14 @@ test.describe('Wave 50B UX regression suite', () => {
     page,
   }) => {
     for (const vp of VIEWPORTS) {
-      // oxlint-disable-next-line eslint/no-await-in-loop -- sequential viewport matrix
       await page.setViewportSize({ width: vp.width, height: vp.height });
 
       for (const surfaceParam of ['roll', 'diagram'] as const) {
-        // oxlint-disable-next-line eslint/no-await-in-loop -- test both List and Chart deep links
         await page.goto(`/tree?surface=${surfaceParam}&mode=full`);
-        // oxlint-disable-next-line eslint/no-await-in-loop -- wait for tree main
         const main = page.locator('main.tree-page');
-        // oxlint-disable-next-line eslint/no-await-in-loop -- verify query param parsing
         await expect(main).toHaveAttribute('data-surface', surfaceParam);
-        // oxlint-disable-next-line eslint/no-await-in-loop -- verify mode query param parsing
         await expect(main).toHaveAttribute('data-mode', 'full');
 
-        // oxlint-disable-next-line eslint/no-await-in-loop -- measure layout geometry
         const metrics = await page.evaluate(() => {
           const overflow = document.documentElement.scrollWidth - window.innerWidth;
           const header = document.querySelector('header.topbar');
@@ -80,28 +74,29 @@ test.describe('Wave 50B UX regression suite', () => {
             innerWidth: window.innerWidth,
             headerBottom: headerRect ? Math.round(headerRect.bottom) : 0,
             toolbarTop: toolbarRect ? Math.round(toolbarRect.top) : 0,
-            toolbarScrollOverflow: toolbar
-              ? Math.round(toolbar.scrollWidth - toolbar.clientWidth)
-              : 0,
+            toolbarScrollOverflow: toolbar ? Math.round(toolbar.scrollWidth - toolbar.clientWidth) : 0,
             controlBoxes,
           };
         });
 
-        expect(metrics.overflow, `Overflow on /tree?surface=${surfaceParam} at ${vp.name}`).toBeLessThanOrEqual(0);
+        expect(
+          metrics.overflow,
+          `Overflow on /tree?surface=${surfaceParam} at ${vp.name}`
+        ).toBeLessThanOrEqual(0);
         expect(
           metrics.toolbarTop,
-          `Toolbar overlaps topbar on /tree?surface=${surfaceParam} at ${vp.name}`,
+          `Toolbar overlaps topbar on /tree?surface=${surfaceParam} at ${vp.name}`
         ).toBeGreaterThanOrEqual(metrics.headerBottom - 1);
         expect(
           metrics.toolbarScrollOverflow,
-          `Toolbar inner scroll overflow on /tree?surface=${surfaceParam} at ${vp.name}`,
+          `Toolbar inner scroll overflow on /tree?surface=${surfaceParam} at ${vp.name}`
         ).toBeLessThanOrEqual(2);
         expect(metrics.controlBoxes.length).toBeGreaterThanOrEqual(6);
 
         for (const box of metrics.controlBoxes) {
           expect(box.left, `${box.text} clipped left at ${vp.name}`).toBeGreaterThanOrEqual(0);
           expect(box.right, `${box.text} clipped right at ${vp.name}`).toBeLessThanOrEqual(
-            metrics.innerWidth + 1,
+            metrics.innerWidth + 1
           );
           if (vp.width <= 768) {
             expect(box.height, `${box.text} height < 44px at ${vp.name}`).toBeGreaterThanOrEqual(44);
@@ -110,9 +105,7 @@ test.describe('Wave 50B UX regression suite', () => {
       }
 
       if (vp.width === 360 || vp.width === 768) {
-        // oxlint-disable-next-line eslint/no-await-in-loop -- capture visual proof
         await page.goto('/tree?surface=roll&mode=full');
-        // oxlint-disable-next-line eslint/no-await-in-loop -- screenshot
         await maybeScreenshot(page, `tree-roll-${vp.name}.png`);
       }
     }
@@ -122,14 +115,10 @@ test.describe('Wave 50B UX regression suite', () => {
     page,
   }) => {
     for (const vp of VIEWPORTS) {
-      // oxlint-disable-next-line eslint/no-await-in-loop -- sequential viewport matrix
       await page.setViewportSize({ width: vp.width, height: vp.height });
-      // oxlint-disable-next-line eslint/no-await-in-loop -- navigate to Hingham
       await page.goto('/place/hingham-massachusetts');
-      // oxlint-disable-next-line eslint/no-await-in-loop -- wait for heading
       await expect(page.getByRole('heading', { name: 'Who Passed Through' })).toBeVisible();
 
-      // oxlint-disable-next-line eslint/no-await-in-loop -- inspect occupancy rows and survey map
       const report = await page.evaluate(() => {
         const rows = [...document.querySelectorAll('.occupancy-row')];
         const clipped: string[] = [];
@@ -159,7 +148,7 @@ test.describe('Wave 50B UX regression suite', () => {
           ? Math.round(centerLabel.getBoundingClientRect().height * 10) / 10
           : 0;
         const nearbyLinks = [...document.querySelectorAll('.local-survey-nearby-link')].map((el) =>
-          Math.round(el.getBoundingClientRect().height),
+          Math.round(el.getBoundingClientRect().height)
         );
 
         return {
@@ -179,7 +168,7 @@ test.describe('Wave 50B UX regression suite', () => {
         expect(report.minRowHeight, `Occupancy row height < 44px at ${vp.name}`).toBeGreaterThanOrEqual(44);
         expect(
           report.centerLabelHeight,
-          `LocalSurveyMap center label height < 10px at ${vp.name}`,
+          `LocalSurveyMap center label height < 10px at ${vp.name}`
         ).toBeGreaterThanOrEqual(10);
         if (report.nearbyLinks.length > 0) {
           expect(Math.min(...report.nearbyLinks)).toBeGreaterThanOrEqual(44);
@@ -187,11 +176,8 @@ test.describe('Wave 50B UX regression suite', () => {
       }
 
       if (vp.width === 360 || vp.width === 1280) {
-        // oxlint-disable-next-line eslint/no-await-in-loop -- capture survey map proof
         await maybeScreenshot(page, `place-hingham-${vp.name}.png`);
-        // oxlint-disable-next-line eslint/no-await-in-loop -- scroll to occupancy section for visual proof
         await page.getByRole('heading', { name: 'Who Passed Through' }).scrollIntoViewIfNeeded();
-        // oxlint-disable-next-line eslint/no-await-in-loop -- capture occupancy rows proof
         await maybeScreenshot(page, `place-hingham-occupancy-${vp.name}.png`);
       }
     }
@@ -204,32 +190,25 @@ test.describe('Wave 50B UX regression suite', () => {
 
     // 1. Time slider >= 44px on mobile + desktop single-resident card width >= 340px
     for (const vp of [VIEWPORTS[0], VIEWPORTS[1], VIEWPORTS[3]]) {
-      // oxlint-disable-next-line eslint/no-await-in-loop -- sequential viewports
       await page.setViewportSize({ width: vp.width, height: vp.height });
-      // oxlint-disable-next-line eslint/no-await-in-loop -- open time page
       await page.goto('/time?year=1860');
-      // oxlint-disable-next-line eslint/no-await-in-loop -- wait for slider
       const slider = page.locator('input.ink-range-slider');
-      // oxlint-disable-next-line eslint/no-await-in-loop -- check visible
       await expect(slider).toBeVisible();
-      // oxlint-disable-next-line eslint/no-await-in-loop -- measure slider box
       const sliderBox = await slider.boundingBox();
       expect(sliderBox?.height ?? 0, `Time slider height at ${vp.name}`).toBeGreaterThanOrEqual(44);
 
       if (vp.width === 1280) {
-        // oxlint-disable-next-line eslint/no-await-in-loop -- measure single-resident card width
         const cardWidths = await page.evaluate(() =>
           [...document.querySelectorAll('.time-lane')].flatMap((lane) => {
             const cards = lane.querySelectorAll('.time-person-item');
             return cards.length === 1 ? [Math.round(cards[0].getBoundingClientRect().width)] : [];
-          }),
+          })
         );
         if (cardWidths.length > 0) {
           expect(Math.min(...cardWidths)).toBeGreaterThanOrEqual(340);
         }
       }
       if (vp.width === 360) {
-        // oxlint-disable-next-line eslint/no-await-in-loop -- capture time mobile proof
         await maybeScreenshot(page, 'time-360x800.png');
       }
     }
@@ -341,7 +320,7 @@ test.describe('Wave 50B UX regression suite', () => {
     await expect(page.locator('.places-search-bar input')).toBeVisible();
     const placesMetrics = await page.evaluate(() => {
       const zeroButtons = [...document.querySelectorAll('.ink-filter-bar button')].filter((b) =>
-        b.textContent?.includes('(0)'),
+        b.textContent?.includes('(0)')
       );
       const searchBox = document.querySelector('.places-search-bar input')?.getBoundingClientRect();
       return {
@@ -432,9 +411,7 @@ test.describe('Wave 50B UX regression suite', () => {
       '/kinship',
       '/evidence',
     ]) {
-      // oxlint-disable-next-line eslint/no-await-in-loop -- check each route text
       await page.goto(route);
-      // oxlint-disable-next-line eslint/no-await-in-loop -- read visible text
       const bodyText = await page.locator('main').innerText();
       for (const re of deprecatedPatterns) {
         expect(bodyText, `Deprecated term ${re} found on ${route}`).not.toMatch(re);
@@ -451,7 +428,10 @@ test.describe('Wave 50B UX regression suite', () => {
 
       // Enroll as editor via invite + magic link
       await page.goto(`${wiki.baseUrl}/api/auth/invite/${wiki.inviteToken}`);
-      await page.getByRole('region', { name: 'Invite access notice' }).getByRole('button', { name: 'Sign in to edit' }).click();
+      await page
+        .getByRole('region', { name: 'Invite access notice' })
+        .getByRole('button', { name: 'Sign in to edit' })
+        .click();
       const signInDialog = page.getByRole('dialog', { name: 'Sign in to family archive' });
       await signInDialog.getByLabel('Email address').fill('wave50b.editor@archive.example');
       await signInDialog.getByRole('button', { name: 'Email Magic Link' }).click();
@@ -520,7 +500,7 @@ test.describe('Wave 50B UX regression suite', () => {
           saveRect && saveRect.top >= 0 && saveRect.bottom <= window.innerHeight
             ? document.elementFromPoint(
                 saveRect.left + saveRect.width / 2,
-                saveRect.top + saveRect.height / 2,
+                saveRect.top + saveRect.height / 2
               )
             : null;
 
@@ -528,11 +508,11 @@ test.describe('Wave 50B UX regression suite', () => {
           backdropZ: backdrop ? Number(window.getComputedStyle(backdrop).zIndex) : 0,
           dockZ: dock ? Number(window.getComputedStyle(dock).zIndex) : 0,
           fieldsetInView: Boolean(
-            fieldsetRect && fieldsetRect.top < window.innerHeight && fieldsetRect.bottom > 0,
+            fieldsetRect && fieldsetRect.top < window.innerHeight && fieldsetRect.bottom > 0
           ),
           activeTag: document.activeElement?.tagName ?? '',
           activeInsidePronunciation: Boolean(
-            fieldset && document.activeElement && fieldset.contains(document.activeElement),
+            fieldset && document.activeElement && fieldset.contains(document.activeElement)
           ),
           hitIsDock: Boolean(hitAtSave?.closest('[data-testid="narrative-audio-dock"]')),
         };
@@ -559,14 +539,10 @@ test.describe('Wave 50B UX regression suite', () => {
       { name: '1280x800', width: 1280, height: 800 },
       { name: '390x844', width: 390, height: 844 },
     ]) {
-      // oxlint-disable-next-line eslint/no-await-in-loop -- check desktop and mobile viewports
       await page.setViewportSize({ width: vp.width, height: vp.height });
-      // oxlint-disable-next-line eslint/no-await-in-loop -- open List View
       await page.goto('/tree?surface=roll&mode=full');
-      // oxlint-disable-next-line eslint/no-await-in-loop -- wait for roll units
       await expect(page.locator('.tree-roll-unit.is-direct').first()).toBeVisible();
 
-      // oxlint-disable-next-line eslint/no-await-in-loop -- measure computed borders and backgrounds
       const treeMetrics = await page.evaluate(() => {
         const directUnits = [...document.querySelectorAll('.tree-roll-unit.is-direct')].map((el) => {
           const s = window.getComputedStyle(el);
@@ -589,19 +565,16 @@ test.describe('Wave 50B UX regression suite', () => {
       expect(treeMetrics.directUnits.length).toBeGreaterThan(0);
       for (const unit of treeMetrics.directUnits) {
         expect(unit.borderLeftWidth, `Direct unit left/right border mismatch at ${vp.name}`).toBe(
-          unit.borderRightWidth,
+          unit.borderRightWidth
         );
         expect(unit.borderRadius, `Direct unit borderRadius at ${vp.name}`).toBe('4px');
       }
       expect(treeMetrics.earlyStrips.length).toBeGreaterThan(0);
       for (const strip of treeMetrics.earlyStrips) {
         expect(strip.borderTopWidth, `Early strip borderTopWidth at ${vp.name}`).toBe('0px');
-        expect(strip.backgroundColor, `Early strip backgroundColor at ${vp.name}`).toBe(
-          'rgba(0, 0, 0, 0)',
-        );
+        expect(strip.backgroundColor, `Early strip backgroundColor at ${vp.name}`).toBe('rgba(0, 0, 0, 0)');
       }
 
-      // oxlint-disable-next-line eslint/no-await-in-loop -- capture Wave 51B proof
       await maybeScreenshot(page, `wave51b-tree-roll-${vp.name}.png`);
     }
 
@@ -612,11 +585,8 @@ test.describe('Wave 50B UX regression suite', () => {
       { route: '/changes', selector: '.wire-banner p' },
       { route: '/person/abraham-lincoln-1809', selector: '.story-card p' },
     ]) {
-      // oxlint-disable-next-line eslint/no-await-in-loop -- check each editorial route
       await page.goto(check.route);
-      // oxlint-disable-next-line eslint/no-await-in-loop -- wait for paragraph
       await expect(page.locator(check.selector).first()).toBeVisible();
-      // oxlint-disable-next-line eslint/no-await-in-loop -- measure paragraph maxWidth and width
       const proseMetrics = await page.evaluate((sel) => {
         return [...document.querySelectorAll(sel)].map((el) => {
           const s = window.getComputedStyle(el);
@@ -631,7 +601,7 @@ test.describe('Wave 50B UX regression suite', () => {
       for (const item of proseMetrics) {
         expect(item.maxWidth, `Prose maxWidth on ${check.route} (${check.selector})`).not.toBe('none');
         expect(item.width, `Prose rendered width on ${check.route} (${check.selector})`).toBeLessThanOrEqual(
-          620,
+          620
         );
       }
     }
@@ -639,11 +609,8 @@ test.describe('Wave 50B UX regression suite', () => {
     // 3. Survey map text legibility on mobile (390x844)
     await page.setViewportSize({ width: 390, height: 844 });
     for (const placeRoute of ['/place/springfield-illinois', '/place/hingham-massachusetts']) {
-      // oxlint-disable-next-line eslint/no-await-in-loop -- visit each Place Profile
       await page.goto(placeRoute);
-      // oxlint-disable-next-line eslint/no-await-in-loop -- wait for survey map
       await expect(page.locator('.local-survey-svg')).toBeVisible();
-      // oxlint-disable-next-line eslint/no-await-in-loop -- measure effective SVG text sizes and HTML caption
       const surveyMetrics = await page.evaluate(() => {
         const svg = document.querySelector<SVGSVGElement>('.local-survey-svg');
         const vb = svg?.viewBox.baseVal;
@@ -668,13 +635,11 @@ test.describe('Wave 50B UX regression suite', () => {
       expect(surveyMetrics.captionFontPx, `Caption fontSize on ${placeRoute}`).toBeGreaterThanOrEqual(12);
       expect(surveyMetrics.textSizes.length).toBeGreaterThan(0);
       for (const t of surveyMetrics.textSizes) {
-        expect(
-          t.effectivePx,
-          `SVG text "${t.text}" effective size on ${placeRoute}`,
-        ).toBeGreaterThanOrEqual(12);
+        expect(t.effectivePx, `SVG text "${t.text}" effective size on ${placeRoute}`).toBeGreaterThanOrEqual(
+          12
+        );
       }
       if (placeRoute.includes('springfield')) {
-        // oxlint-disable-next-line eslint/no-await-in-loop -- capture survey map proof
         await maybeScreenshot(page, 'wave51b-survey-springfield-390x844.png');
       }
     }
@@ -684,13 +649,9 @@ test.describe('Wave 50B UX regression suite', () => {
       { name: '390x844', width: 390, height: 844 },
       { name: '1280x800', width: 1280, height: 800 },
     ]) {
-      // oxlint-disable-next-line eslint/no-await-in-loop -- check both viewports
       await page.setViewportSize({ width: vp.width, height: vp.height });
-      // oxlint-disable-next-line eslint/no-await-in-loop -- open Abraham Lincoln profile
       await page.goto('/person/abraham-lincoln-1809');
-      // oxlint-disable-next-line eslint/no-await-in-loop -- wait for conflict pill
       await expect(page.locator('.conflict-pill').first()).toBeVisible();
-      // oxlint-disable-next-line eslint/no-await-in-loop -- measure padding
       const pillPaddings = await page.evaluate(() =>
         [...document.querySelectorAll('.conflict-pill')].map((el) => {
           const s = window.getComputedStyle(el);
@@ -698,7 +659,7 @@ test.describe('Wave 50B UX regression suite', () => {
             top: Number.parseFloat(s.paddingTop || '0'),
             bottom: Number.parseFloat(s.paddingBottom || '0'),
           };
-        }),
+        })
       );
       expect(pillPaddings.length).toBeGreaterThan(0);
       for (const pad of pillPaddings) {
@@ -706,9 +667,7 @@ test.describe('Wave 50B UX regression suite', () => {
         expect(pad.bottom, `conflict-pill paddingBottom at ${vp.name}`).toBeGreaterThanOrEqual(4);
       }
       if (vp.width === 390) {
-        // oxlint-disable-next-line eslint/no-await-in-loop -- scroll to pill and screenshot
         await page.locator('.conflict-pill').first().scrollIntoViewIfNeeded();
-        // oxlint-disable-next-line eslint/no-await-in-loop -- capture pill proof
         await maybeScreenshot(page, 'wave51b-conflict-pill-390x844.png');
       }
     }
@@ -757,9 +716,7 @@ test.describe('Wave 50B UX regression suite', () => {
     await expect(searchDialog).toHaveAttribute('aria-modal', 'true');
 
     for (let i = 0; i < 12; i += 1) {
-      // oxlint-disable-next-line eslint/no-await-in-loop -- sequential keyboard navigation
       await page.keyboard.press(i < 6 ? 'Tab' : 'Shift+Tab');
-      // oxlint-disable-next-line eslint/no-await-in-loop -- verify focus remains trapped
       const inside = await page.evaluate(() => {
         const dlg = document.querySelector('dialog.global-search-backdrop[open]');
         const active = document.activeElement;
@@ -774,9 +731,7 @@ test.describe('Wave 50B UX regression suite', () => {
 
     await page.keyboard.press('Escape');
     await expect(searchDialog).toHaveCount(0);
-    const searchRestored = await page.evaluate(() =>
-      document.activeElement?.textContent?.includes('Search'),
-    );
+    const searchRestored = await page.evaluate(() => document.activeElement?.textContent?.includes('Search'));
     expect(searchRestored).toBe(true);
 
     // SourceReaderDrawer: aria-modal, Tab trap, tablist ArrowRight without turning pages, Escape restore
@@ -788,9 +743,7 @@ test.describe('Wave 50B UX regression suite', () => {
     await expect(readerDialog).toHaveAttribute('aria-modal', 'true');
 
     for (let i = 0; i < 10; i += 1) {
-      // oxlint-disable-next-line eslint/no-await-in-loop -- sequential Tab loop
       await page.keyboard.press(i < 5 ? 'Tab' : 'Shift+Tab');
-      // oxlint-disable-next-line eslint/no-await-in-loop -- check containment
       const inside = await page.evaluate(() => {
         const dlg = document.querySelector('dialog.source-reader-backdrop[open]');
         const active = document.activeElement;
@@ -813,7 +766,7 @@ test.describe('Wave 50B UX regression suite', () => {
     await page.keyboard.press('Escape');
     await expect(readerDialog).toHaveCount(0);
     const sourcesRestored = await page.evaluate(() =>
-      document.activeElement?.textContent?.includes('Sources'),
+      document.activeElement?.textContent?.includes('Sources')
     );
     expect(sourcesRestored).toBe(true);
 
@@ -896,9 +849,7 @@ test.describe('Wave 50B UX regression suite', () => {
     await page.goto('/place/springfield-illinois');
     const placePrint = await page.evaluate(() => {
       const checkHidden = (sel: string): boolean =>
-        [...document.querySelectorAll(sel)].every(
-          (el) => window.getComputedStyle(el).display === 'none',
-        );
+        [...document.querySelectorAll(sel)].every((el) => window.getComputedStyle(el).display === 'none');
       return {
         scopeHidden: checkHidden('.place-scope-bar'),
         decadeHidden: checkHidden('.place-decade-bar'),
@@ -922,7 +873,7 @@ test.describe('Wave 50B UX regression suite', () => {
     const chartAudit = await page.evaluate(() => {
       const sideTabs = document.querySelectorAll('.tree-node-card rect[width="4"]').length;
       const nodeTexts = [...document.querySelectorAll('.tree-node-card text')].map(
-        (el) => el.textContent?.trim() ?? '',
+        (el) => el.textContent?.trim() ?? ''
       );
       const hasAbrahamLincoln = nodeTexts.some((t) => t.includes('Abraham Lincoln'));
       const zoomText = document.querySelector('.tree-zoom-readout')?.textContent?.trim() ?? '';
@@ -952,7 +903,7 @@ test.describe('Wave 50B UX regression suite', () => {
       [...document.querySelectorAll('.time-person-item')].map((card) => ({
         status: card.querySelector('.time-person-status')?.textContent?.trim() ?? '',
         note: card.querySelector('.time-person-note')?.textContent?.trim() ?? '',
-      })),
+      }))
     );
     expect(timeAudit.length).toBeGreaterThan(0);
     for (const item of timeAudit) {
@@ -993,40 +944,33 @@ test.describe('Wave 50B UX regression suite', () => {
       { name: '360x800', width: 360, height: 800 },
       { name: '768x1024', width: 768, height: 1024 },
     ]) {
-      // oxlint-disable-next-line eslint/no-await-in-loop -- sequential viewport checks
       await page.setViewportSize({ width: vp.width, height: vp.height });
 
-      // oxlint-disable-next-line eslint/no-await-in-loop -- check People Index
       await page.goto('/');
-      // oxlint-disable-next-line eslint/no-await-in-loop -- wait for lazy route hydration
       await expect(page.locator('.search-input').first()).toBeVisible();
-      // oxlint-disable-next-line eslint/no-await-in-loop -- verify search input and pill buttons
       const indexHeights = await page.evaluate(() =>
         [...document.querySelectorAll('.search-input, .index-filter-actions .pill-btn')].map((el) => ({
           cls: el.className,
           height: Math.round(el.getBoundingClientRect().height),
-        })),
+        }))
       );
       expect(indexHeights.length, `no index controls found at ${vp.name}`).toBeGreaterThan(0);
       for (const item of indexHeights) {
         expect(item.height, `${item.cls} < 44px at ${vp.name}`).toBeGreaterThanOrEqual(44);
       }
 
-      // oxlint-disable-next-line eslint/no-await-in-loop -- check Person Profile
       await page.goto('/person/abraham-lincoln-1809');
-      // oxlint-disable-next-line eslint/no-await-in-loop -- wait for lazy PersonPage hydration
       await expect(page.getByRole('heading', { name: 'Abraham Lincoln', exact: true })).toBeVisible();
-      // oxlint-disable-next-line eslint/no-await-in-loop -- verify pronunciation & family chips + typography
       const personCheck = await page.evaluate(() => {
         const targets = [
-          ...document.querySelectorAll('.person-header .pronunciation-play-btn, .person-header .pill-btn, .person-header .ink-link-btn'),
+          ...document.querySelectorAll(
+            '.person-header .pronunciation-play-btn, .person-header .pill-btn, .person-header .ink-link-btn'
+          ),
         ].map((el) => ({
           cls: el.className,
           height: Math.round(el.getBoundingClientRect().height),
         }));
-        const smallFonts = [
-          ...document.querySelectorAll('.media-kind-badge, .pronunciation-lang'),
-        ]
+        const smallFonts = [...document.querySelectorAll('.media-kind-badge, .pronunciation-lang')]
           .filter((el) => window.getComputedStyle(el).display !== 'none')
           .map((el) => ({
             cls: el.className,
@@ -1041,35 +985,27 @@ test.describe('Wave 50B UX regression suite', () => {
       for (const f of personCheck.smallFonts) {
         expect(f.fontSize, `${f.cls} < 12px at ${vp.name}`).toBeGreaterThanOrEqual(12);
       }
-      // oxlint-disable-next-line eslint/no-await-in-loop -- capture person visual proof
       await maybeScreenshot(page, `wave52b-person-${vp.name}.png`);
 
-      // oxlint-disable-next-line eslint/no-await-in-loop -- check Tree List View
       await page.goto('/tree?surface=roll&mode=full');
-      // oxlint-disable-next-line eslint/no-await-in-loop -- wait for lazy TreePage hydration
       await expect(page.locator('.tree-gen-jump-chip').first()).toBeVisible();
-      // oxlint-disable-next-line eslint/no-await-in-loop -- verify jump chips
       const treeChipHeights = await page.evaluate(() =>
         [...document.querySelectorAll('.tree-gen-jump-chip')].map((el) =>
-          Math.round(el.getBoundingClientRect().height),
-        ),
+          Math.round(el.getBoundingClientRect().height)
+        )
       );
       expect(treeChipHeights.length, `no tree jump chips found at ${vp.name}`).toBeGreaterThan(0);
       for (const h of treeChipHeights) {
         expect(h, `tree-gen-jump-chip < 44px at ${vp.name}`).toBeGreaterThanOrEqual(44);
       }
-      // oxlint-disable-next-line eslint/no-await-in-loop -- capture tree visual proof
       await maybeScreenshot(page, `wave52b-tree-${vp.name}.png`);
 
-      // oxlint-disable-next-line eslint/no-await-in-loop -- check Time View typography
       await page.goto('/time?year=1860');
-      // oxlint-disable-next-line eslint/no-await-in-loop -- wait for lazy TimePage hydration
       await expect(page.locator('.time-person-item').first()).toBeVisible();
-      // oxlint-disable-next-line eslint/no-await-in-loop -- check time fonts
       const timeFonts = await page.evaluate(() =>
         [...document.querySelectorAll('.time-anchor-count, .time-person-tier')]
           .filter((el) => window.getComputedStyle(el).display !== 'none')
-          .map((el) => Number.parseFloat(window.getComputedStyle(el).fontSize)),
+          .map((el) => Number.parseFloat(window.getComputedStyle(el).fontSize))
       );
       expect(timeFonts.length, `no time micro fonts found at ${vp.name}`).toBeGreaterThan(0);
       for (const fs of timeFonts) {

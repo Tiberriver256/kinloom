@@ -1,15 +1,14 @@
 import { describe, expect, it } from 'vitest';
+import { RevisionRecordSchema } from '../schemas/revisions.js';
 import {
   ALLOWED_AUDIO_VIDEO_MIMES,
   ALLOWED_MEDIA_MIMES,
-  MAX_AUDIO_VIDEO_BYTES,
-  MAX_IMAGE_BYTES,
-  MAX_PDF_BYTES,
   canAutoEnrollViaInvite,
   canCompleteAdminAuth,
   canCompleteMediaAttach,
   canCompleteMemberEditorAuth,
   deriveCitationBadge,
+  type EntityLifecycleState,
   evaluateInviteStatus,
   hasLivingUploadTarget,
   hasPendingConflict,
@@ -19,15 +18,16 @@ import {
   isMatchingSaveGeneration,
   isMatchingUploadGeneration,
   isWithinMediaSizeLimit,
+  MAX_AUDIO_VIDEO_BYTES,
+  MAX_IMAGE_BYTES,
+  MAX_PDF_BYTES,
   rebaseEntityDraft,
   resolveCapabilities,
   transitionBatchRevertLifecycle,
   transitionEntityLifecycle,
   validateEntityDraft,
   validateMediaSelection,
-  type EntityLifecycleState,
 } from './index.js';
-import { RevisionRecordSchema } from '../schemas/revisions.js';
 
 describe('editorGuards (Machine 1)', () => {
   it('enforces minimum trimmed summary length of 3 characters', () => {
@@ -149,23 +149,19 @@ describe('authGuards (Machine 2)', () => {
     expect(evaluateInviteStatus(null, now)).toBe('missing');
     expect(isInviteActive(null, now)).toBe(false);
 
-    expect(
-      evaluateInviteStatus({ revoked_at: '2026-11-24T11:00:00.000Z', expires_at: null }, now)
-    ).toBe('revoked');
-    expect(
-      isInviteActive({ revoked_at: '2026-11-24T11:00:00.000Z', expires_at: null }, now)
-    ).toBe(false);
+    expect(evaluateInviteStatus({ revoked_at: '2026-11-24T11:00:00.000Z', expires_at: null }, now)).toBe(
+      'revoked'
+    );
+    expect(isInviteActive({ revoked_at: '2026-11-24T11:00:00.000Z', expires_at: null }, now)).toBe(false);
 
-    expect(
-      evaluateInviteStatus({ revoked_at: null, expires_at: '2026-11-24T11:59:59.000Z' }, now)
-    ).toBe('expired');
-    expect(
-      isInviteActive({ revoked_at: null, expires_at: '2026-11-24T12:00:00.000Z' }, now)
-    ).toBe(false);
+    expect(evaluateInviteStatus({ revoked_at: null, expires_at: '2026-11-24T11:59:59.000Z' }, now)).toBe(
+      'expired'
+    );
+    expect(isInviteActive({ revoked_at: null, expires_at: '2026-11-24T12:00:00.000Z' }, now)).toBe(false);
 
-    expect(
-      evaluateInviteStatus({ revoked_at: null, expires_at: '2026-12-01T00:00:00.000Z' }, now)
-    ).toBe('active');
+    expect(evaluateInviteStatus({ revoked_at: null, expires_at: '2026-12-01T00:00:00.000Z' }, now)).toBe(
+      'active'
+    );
     expect(isInviteActive({ revoked_at: null, expires_at: null }, now)).toBe(true);
   });
 
@@ -316,9 +312,9 @@ describe('uploadGuards (Machine 3)', () => {
     ).toBe(false);
 
     // Cancelled upload or stale upload generation cannot complete attach
-    expect(
-      isMatchingUploadGeneration({ activeUploadGen: 2, eventUploadGen: 1, cancelled: false })
-    ).toBe(false);
+    expect(isMatchingUploadGeneration({ activeUploadGen: 2, eventUploadGen: 1, cancelled: false })).toBe(
+      false
+    );
     expect(
       canCompleteMediaAttach({
         activeUploadGen: 2,

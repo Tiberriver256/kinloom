@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
-import { sliceGedcom, type SliceGedcomOptions, type SliceGedcomResult } from '@kinloom/core';
+import { type SliceGedcomOptions, type SliceGedcomResult, sliceGedcom } from '@kinloom/core';
 import { CliValidationError } from '../errors.js';
 import { writeArchiveDataDir } from './dataFiles.js';
 

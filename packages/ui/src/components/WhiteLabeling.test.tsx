@@ -1,11 +1,12 @@
 /** @vitest-environment jsdom */
+
+import assert from 'node:assert/strict';
 import type { ArchiveBundle, KinloomSiteConfig, ReadingsBundle } from '@kinloom/core';
 import { compileArchive, parseKinloomConfig } from '@kinloom/core';
 import { act } from 'react';
-import { KinloomApp } from '../KinloomApp.js';
-import assert from 'node:assert/strict';
 import { createRoot } from 'react-dom/client';
 import { test } from 'vitest';
+import { KinloomApp } from '../KinloomApp.js';
 
 declare global {
   var IS_REACT_ACT_ENVIRONMENT: boolean | undefined;
@@ -135,7 +136,7 @@ test('KinloomApp applies white-label title, theme accent, custom loader, and qui
           loadArchive: async () => testBundle,
           loadReadings: async () => testReadings,
         }}
-      />,
+      />
     );
     await new Promise((resolve) => setTimeout(resolve, 40));
   });
@@ -179,7 +180,7 @@ test('KinloomApp renders archival NotFoundPage on unknown routes with links back
           loadArchive: async () => testBundle,
           loadReadings: async () => testReadings,
         }}
-      />,
+      />
     );
     await new Promise((resolve) => setTimeout(resolve, 40));
   });

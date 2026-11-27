@@ -2,15 +2,15 @@ import fs from 'node:fs';
 import { mkdtemp, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
+  parseKinloomConfig,
   parsePeopleYaml,
   parsePlacesYaml,
   serializeKinloomConfigYaml,
   serializePeopleYaml,
   serializePlacesYaml,
-  parseKinloomConfig,
 } from '@kinloom/core';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { runCli } from '../../cli.js';
 import { runIntegrateCommand } from './integrate.js';
 import {
@@ -77,12 +77,7 @@ describe('kinloom pronounce lookup', () => {
     const requestedUrls: string[] = [];
 
     const mockFetch = vi.fn<typeof fetch>(async (input) => {
-      const url =
-        typeof input === 'string'
-          ? input
-          : input instanceof URL
-            ? input.toString()
-            : input.url;
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
       requestedUrls.push(url);
 
       if (url.startsWith('https://nl.wiktionary.org/')) {
@@ -133,10 +128,10 @@ describe('kinloom pronounce lookup', () => {
         );
       }
 
-      return new Response(
-        JSON.stringify({ query: { pages: [{ title: 'Goes', missing: true }] } }),
-        { status: 200, headers: { 'content-type': 'application/json' } }
-      );
+      return new Response(JSON.stringify({ query: { pages: [{ title: 'Goes', missing: true }] } }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      });
     });
 
     const first = await runPronounceLookupCommand({
@@ -200,12 +195,7 @@ describe('kinloom pronounce lookup', () => {
     let enWiktAttempts = 0;
 
     const mockFetch = vi.fn<typeof fetch>(async (input) => {
-      const url =
-        typeof input === 'string'
-          ? input
-          : input instanceof URL
-            ? input.toString()
-            : input.url;
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
       if (url.startsWith('https://en.wiktionary.org/')) {
         enWiktAttempts += 1;
         if (enWiktAttempts === 1) {
@@ -237,10 +227,10 @@ describe('kinloom pronounce lookup', () => {
           { status: 200, headers: { 'content-type': 'application/json' } }
         );
       }
-      return new Response(
-        JSON.stringify({ query: { pages: [{ title: 'Mercer', missing: true }] } }),
-        { status: 200, headers: { 'content-type': 'application/json' } }
-      );
+      return new Response(JSON.stringify({ query: { pages: [{ title: 'Mercer', missing: true }] } }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      });
     });
 
     const retried = await runPronounceLookupCommand({
@@ -258,11 +248,12 @@ describe('kinloom pronounce lookup', () => {
     expect(retried.primary_ipa).toBe('/ˈmɜː(ɹ)sə(ɹ)/');
 
     // Term with zero upstream IPA returns verified=false and never fabricates IPA
-    const emptyFetch = vi.fn<typeof fetch>(async () =>
-      new Response(
-        JSON.stringify({ query: { pages: [{ title: 'Nonexistenthamlet', missing: true }] } }),
-        { status: 200, headers: { 'content-type': 'application/json' } }
-      )
+    const emptyFetch = vi.fn<typeof fetch>(
+      async () =>
+        new Response(JSON.stringify({ query: { pages: [{ title: 'Nonexistenthamlet', missing: true }] } }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        })
     );
     const missing = await runPronounceLookupCommand({
       term: 'Nonexistenthamlet',
@@ -331,10 +322,10 @@ describe('kinloom pronounce lookup', () => {
           { status: 200, headers: { 'content-type': 'application/json' } }
         );
       }
-      return new Response(
-        JSON.stringify({ query: { pages: [{ title: 'Zeeland', missing: true }] } }),
-        { status: 200, headers: { 'content-type': 'application/json' } }
-      );
+      return new Response(JSON.stringify({ query: { pages: [{ title: 'Zeeland', missing: true }] } }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      });
     });
 
     const result = await runPronounceLookupCommand({
@@ -440,11 +431,7 @@ describe('kinloom pronounce audit', () => {
         },
       },
     });
-    fs.writeFileSync(
-      path.join(repoDir, 'kinloom.config.yaml'),
-      serializeKinloomConfigYaml(config),
-      'utf8'
-    );
+    fs.writeFileSync(path.join(repoDir, 'kinloom.config.yaml'), serializeKinloomConfigYaml(config), 'utf8');
 
     fs.writeFileSync(
       path.join(repoDir, 'data', 'people.yaml'),
@@ -535,9 +522,7 @@ describe('kinloom pronounce audit', () => {
     ]);
 
     // IPA / quality warnings detect foreign-IPA mismatch, malformed IPA, and empty entry
-    const warningCodesByKey = new Map(
-      audit.ipa_quality_warnings.map((w) => [`${w.key}:${w.code}`, w])
-    );
+    const warningCodesByKey = new Map(audit.ipa_quality_warnings.map((w) => [`${w.key}:${w.code}`, w]));
     expect(warningCodesByKey.has('Ellewoutsdijk:suspicious_english_ipa_for_foreign_lang')).toBe(true);
     expect(warningCodesByKey.has('MalformedTerm:malformed_ipa')).toBe(true);
     expect(warningCodesByKey.has('EmptyTerm:empty_entry')).toBe(true);
@@ -658,7 +643,12 @@ describe('kinloom pronounce audit', () => {
             gedcomSourceName: 'MERCER_STRICT',
           },
           pronunciations: {
-            Mercer: { phonetic: 'MER-ser', ipa: '/ˈmɜːr.sər/', language: 'en-US', source_label: 'Wiktionary' },
+            Mercer: {
+              phonetic: 'MER-ser',
+              ipa: '/ˈmɜːr.sər/',
+              language: 'en-US',
+              source_label: 'Wiktionary',
+            },
             'Oxford, Massachusetts': {
               phonetic: 'OX-ferd',
               ipa: '/ˈɒks.fərd/',
@@ -666,9 +656,9 @@ describe('kinloom pronounce audit', () => {
               source_label: 'Wiktionary',
             },
           },
-        }),
+        })
       ),
-      'utf8',
+      'utf8'
     );
 
     const partialAudit = runPronounceAuditCommand({ repoDir, strict: true, json: true });
@@ -703,7 +693,12 @@ describe('kinloom pronounce audit', () => {
           },
           pronunciations: {
             Thomas: { phonetic: 'TOM-us', ipa: '/ˈtɒm.əs/', language: 'en-US', source_label: 'Wiktionary' },
-            Mercer: { phonetic: 'MER-ser', ipa: '/ˈmɜːr.sər/', language: 'en-US', source_label: 'Wiktionary' },
+            Mercer: {
+              phonetic: 'MER-ser',
+              ipa: '/ˈmɜːr.sər/',
+              language: 'en-US',
+              source_label: 'Wiktionary',
+            },
             'Oxford, Massachusetts': {
               phonetic: 'OX-ferd',
               ipa: '/ˈɒks.fərd/',
@@ -711,9 +706,9 @@ describe('kinloom pronounce audit', () => {
               source_label: 'Wiktionary',
             },
           },
-        }),
+        })
       ),
-      'utf8',
+      'utf8'
     );
 
     const passOut: string[] = [];
@@ -793,11 +788,7 @@ describe('kinloom integrate pronunciation support', () => {
         gedcomSourceName: 'MERCER_INT',
       },
     });
-    fs.writeFileSync(
-      path.join(repoDir, 'kinloom.config.yaml'),
-      serializeKinloomConfigYaml(config),
-      'utf8'
-    );
+    fs.writeFileSync(path.join(repoDir, 'kinloom.config.yaml'), serializeKinloomConfigYaml(config), 'utf8');
     fs.writeFileSync(
       path.join(repoDir, 'data', 'people.yaml'),
       serializePeopleYaml([
@@ -841,7 +832,13 @@ describe('kinloom integrate pronunciation support', () => {
       ]),
       'utf8'
     );
-    for (const emptyYaml of ['events.yaml', 'sources.yaml', 'kinship.yaml', 'media.yaml', 'narratives.yaml']) {
+    for (const emptyYaml of [
+      'events.yaml',
+      'sources.yaml',
+      'kinship.yaml',
+      'media.yaml',
+      'narratives.yaml',
+    ]) {
       fs.writeFileSync(path.join(repoDir, 'data', emptyYaml), '[]\n', 'utf8');
     }
 
@@ -894,16 +891,12 @@ describe('kinloom integrate pronunciation support', () => {
     expect(result.ok).toBe(true);
     expect(result.counts.personUpdated).toBe(true);
 
-    const updatedPeople = parsePeopleYaml(
-      fs.readFileSync(path.join(repoDir, 'data', 'people.yaml'), 'utf8')
-    );
+    const updatedPeople = parsePeopleYaml(fs.readFileSync(path.join(repoDir, 'data', 'people.yaml'), 'utf8'));
     expect(updatedPeople[0]?.pronunciation?.phonetic).toBe('TOM-us MER-ser');
     expect(updatedPeople[0]?.pronunciation?.source_label).toBe('Family oral tradition');
     expect(updatedPeople[0]?.pronunciation?.variants?.[0]?.label).toBe('British English');
 
-    const updatedPlaces = parsePlacesYaml(
-      fs.readFileSync(path.join(repoDir, 'data', 'places.yaml'), 'utf8')
-    );
+    const updatedPlaces = parsePlacesYaml(fs.readFileSync(path.join(repoDir, 'data', 'places.yaml'), 'utf8'));
     expect(updatedPlaces[0]?.summary).toBe('Historic market town in Zeeland.');
     expect(updatedPlaces[0]?.pronunciation).toEqual({
       phonetic: 'HOOS',

@@ -25,10 +25,7 @@ describe('edtf utilities', () => {
   });
 
   it('parses exact, approximate, uncertain, decade, and interval EDTF bounds', () => {
-    expect(edtfToBounds('1852-09-09')).toEqual([
-      daysSinceEpoch(1852, 9, 9),
-      daysSinceEpoch(1852, 9, 9),
-    ]);
+    expect(edtfToBounds('1852-09-09')).toEqual([daysSinceEpoch(1852, 9, 9), daysSinceEpoch(1852, 9, 9)]);
     expect(edtfToBounds('1852-09-09~')).toEqual([
       daysSinceEpoch(1852, 9, 9) - 365,
       daysSinceEpoch(1852, 9, 9) + 365,
@@ -37,14 +34,8 @@ describe('edtf utilities', () => {
       daysSinceEpoch(1852, 9, 9) - 30,
       daysSinceEpoch(1852, 9, 9) + 30,
     ]);
-    expect(edtfToBounds('189X')).toEqual([
-      daysSinceEpoch(1890, 1, 1),
-      daysSinceEpoch(1899, 12, 31),
-    ]);
-    expect(edtfToBounds('1850/1860')).toEqual([
-      daysSinceEpoch(1850, 1, 1),
-      daysSinceEpoch(1860, 12, 31),
-    ]);
+    expect(edtfToBounds('189X')).toEqual([daysSinceEpoch(1890, 1, 1), daysSinceEpoch(1899, 12, 31)]);
+    expect(edtfToBounds('1850/1860')).toEqual([daysSinceEpoch(1850, 1, 1), daysSinceEpoch(1860, 12, 31)]);
     expect(edtfToBounds('/1850')).toEqual([
       daysSinceEpoch(1850, 1, 1) - 5 * 365,
       daysSinceEpoch(1850, 12, 31),

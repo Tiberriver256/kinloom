@@ -4,6 +4,7 @@ import path from 'node:path';
 import { CliValidationError } from '../../../errors.js';
 import {
   atomicWriteFileSync,
+  type CommandParseSpec,
   cachedJsonCall,
   collapseWhitespace,
   emitJsonStdout,
@@ -15,19 +16,17 @@ import {
   getStringOption,
   httpRequest,
   loadHtml,
+  type OptionSpec,
   parseCacheTtlHours,
   parseCommandArgs,
-  RecordRuntimeError,
-  type CommandParseSpec,
-  type OptionSpec,
   type RecordCommandContext,
   type RecordCommandOutcome,
   type RecordHandler,
+  RecordRuntimeError,
 } from '../runtime/index.js';
 
 const DEFAULT_CACHE_TTL_HOURS = 168;
-const USER_AGENT =
-  'Kinloom/0.18 (genealogy research CLI; +https://github.com/tiberriver256/kinloom)';
+const USER_AGENT = 'Kinloom/0.18 (genealogy research CLI; +https://github.com/tiberriver256/kinloom)';
 
 const MNHS_BASE = 'https://www.mnhs.org';
 const MNHS_PEOPLE_API = `${MNHS_BASE}/_hcms/api`;
@@ -283,10 +282,7 @@ function resolveTtl(cliTtl: number | undefined, ctx: RecordCommandContext): numb
   );
 }
 
-export function validateMnUrl(
-  rawUrl: string,
-  allowedHosts: ReadonlySet<string> = ALLOWED_HOSTS
-): string {
+export function validateMnUrl(rawUrl: string, allowedHosts: ReadonlySet<string> = ALLOWED_HOSTS): string {
   let parsed: URL;
   try {
     parsed = new URL(rawUrl);
@@ -321,9 +317,7 @@ export function normalizeIsoDate(raw: string, endOfPeriod = false): string {
   const text = raw.trim();
   const match = ISO_DATE_RE.exec(text);
   if (!match) {
-    throw new CliValidationError(
-      `Invalid date '${raw}'; expected YYYY, YYYY-MM, or YYYY-MM-DD.`
-    );
+    throw new CliValidationError(`Invalid date '${raw}'; expected YYYY, YYYY-MM, or YYYY-MM-DD.`);
   }
   const year = Number.parseInt(match[1], 10);
   const month = match[2] ? Number.parseInt(match[2], 10) : endOfPeriod ? 12 : 1;
@@ -339,11 +333,7 @@ export function normalizeIsoDate(raw: string, endOfPeriod = false): string {
     day = 1;
   }
   const dt = new Date(Date.UTC(year, month - 1, day));
-  if (
-    dt.getUTCFullYear() !== year ||
-    dt.getUTCMonth() !== month - 1 ||
-    dt.getUTCDate() !== day
-  ) {
+  if (dt.getUTCFullYear() !== year || dt.getUTCMonth() !== month - 1 || dt.getUTCDate() !== day) {
     throw new CliValidationError(`Invalid calendar date '${raw}'.`);
   }
   const y = String(year).padStart(4, '0');
@@ -413,10 +403,7 @@ export interface PeopleQueryParams {
   readonly certId?: string;
 }
 
-export function buildPeopleQuery(
-  recordType: string,
-  params: PeopleQueryParams
-): PeopleQueryBody {
+export function buildPeopleQuery(recordType: string, params: PeopleQueryParams): PeopleQueryBody {
   const filters: (PeopleQueryClause | PeopleQueryGroup)[] = [];
   const certId = (params.certId ?? '').trim();
   if (certId) {
@@ -507,10 +494,7 @@ function stringField(raw: Record<string, unknown>, key: string): string {
   return typeof val === 'string' ? val : val !== null && val !== undefined ? String(val) : '';
 }
 
-function normalizePeopleHit(
-  recordType: string,
-  raw: Record<string, unknown>
-): NormalizedPeopleHit {
+function normalizePeopleHit(recordType: string, raw: Record<string, unknown>): NormalizedPeopleHit {
   const recordId = stringField(raw, 'id').trim();
   const nameParts = [raw.firstName, raw.middleName, raw.familyName, raw.suffix]
     .filter((p): p is string => typeof p === 'string' && p.trim().length > 0)
@@ -518,8 +502,7 @@ function normalizePeopleHit(
   const fullName = nameParts.join(' ');
   const dateField = RECORD_TYPE_SPECS[recordType]?.dateField ?? null;
   const primaryDate = dateField ? trimIsoDate(raw[dateField]) : '';
-  const countyRaw =
-    raw.county ?? raw.burialLocation ?? raw.residencePriorToService ?? raw.residence ?? '';
+  const countyRaw = raw.county ?? raw.burialLocation ?? raw.residencePriorToService ?? raw.residence ?? '';
   const county = String(countyRaw ?? '').trim();
   const recordUrl = recordId
     ? `${MNHS_PEOPLE_RECORD_URL}?uuid=${encodeURIComponent(recordId)}&recordType=${encodeURIComponent(recordType)}`
@@ -536,18 +519,14 @@ function normalizePeopleHit(
     date: primaryDate,
     county,
     url: recordUrl,
-    ...(raw.mothersMaidenName
-      ? { mothers_maiden_name: String(raw.mothersMaidenName) }
-      : {}),
+    ...(raw.mothersMaidenName ? { mothers_maiden_name: String(raw.mothersMaidenName) } : {}),
     ...(raw.birthDate ? { birth_date: trimIsoDate(raw.birthDate) } : {}),
     ...(raw.birthPlace ? { birth_place: String(raw.birthPlace) } : {}),
     ...(raw.age !== null && raw.age !== undefined && String(raw.age).trim()
       ? { age: String(raw.age).trim() }
       : {}),
     ...(raw.locality ? { locality: String(raw.locality).trim() } : {}),
-    ...(raw.lineInImage !== null && raw.lineInImage !== undefined
-      ? { line: raw.lineInImage }
-      : {}),
+    ...(raw.lineInImage !== null && raw.lineInImage !== undefined ? { line: raw.lineInImage } : {}),
   };
 
   if (Array.isArray(raw.militaryServices) && raw.militaryServices.length > 0) {
@@ -686,9 +665,7 @@ function extractDocIdFromHref(href: string): string {
   }
 }
 
-export function parseNewspapersSearchHtml(
-  html: string
-): readonly [number | null, NewspaperSearchItem[]] {
+export function parseNewspapersSearchHtml(html: string): readonly [number | null, NewspaperSearchItem[]] {
   const countMatch = /\bpsRecCnt\s*=\s*(\d+)\b/.exec(html);
   const total = countMatch ? Number.parseInt(countMatch[1], 10) : null;
   const $ = loadHtml(html);
@@ -792,9 +769,7 @@ async function fetchNewspapersSearch(
 ): Promise<NewspaperSearchResult> {
   const cleanQuery = opts.query.trim();
   if (cleanQuery.replace(/[*?]/g, '').length < 2) {
-    throw new CliValidationError(
-      'Newspaper query must contain at least 2 non-wildcard characters.'
-    );
+    throw new CliValidationError('Newspaper query must contain at least 2 non-wildcard characters.');
   }
   if (cleanQuery.includes(':') || cleanQuery.includes(';')) {
     throw new CliValidationError("Newspaper query cannot contain ':' or ';' characters.");
@@ -947,31 +922,22 @@ function looksLikeHtml(data: Uint8Array, contentType: string): boolean {
   );
 }
 
-function resolveSafeOutputPath(
-  out: string,
-  defaultName: string,
-  ctx: RecordCommandContext
-): string {
+function resolveSafeOutputPath(out: string, defaultName: string, ctx: RecordCommandContext): string {
   const raw = out.trim();
   if (!raw || raw.includes('\0')) {
     throw new CliValidationError('Invalid output path.');
   }
   const normalizedSegments = raw.split(/[\\/]+/);
   if (normalizedSegments.includes('..')) {
-    throw new CliValidationError(
-      `Refusing output path with parent traversal segment ('..'): '${raw}'`
-    );
+    throw new CliValidationError(`Refusing output path with parent traversal segment ('..'): '${raw}'`);
   }
   const expanded = expandHomePath(raw, ctx.env);
-  const resolved = path.isAbsolute(expanded)
-    ? path.resolve(expanded)
-    : path.resolve(ctx.cwd, expanded);
+  const resolved = path.isAbsolute(expanded) ? path.resolve(expanded) : path.resolve(ctx.cwd, expanded);
 
   const isExistingDir = fs.existsSync(resolved) && fs.statSync(resolved).isDirectory();
   if (raw.endsWith('/') || raw.endsWith('\\') || isExistingDir) {
     const safeLeaf =
-      defaultName.replace(/[^A-Za-z0-9._-]+/g, '_').replace(/^[._]+|[._]+$/g, '') ||
-      'image.jpg';
+      defaultName.replace(/[^A-Za-z0-9._-]+/g, '_').replace(/^[._]+|[._]+$/g, '') || 'image.jpg';
     const candidate = path.resolve(resolved, safeLeaf);
     if (!candidate.startsWith(`${resolved}${path.sep}`)) {
       throw new CliValidationError(`Output path escapes target directory: ${candidate}`);
@@ -1268,11 +1234,7 @@ const MDL_OPTIONS: readonly OptionSpec[] = [
 ];
 
 function isPeopleSearchResult(value: unknown): value is PeopleSearchResult {
-  return (
-    isPlainRecord(value) &&
-    typeof value.record_type === 'string' &&
-    Array.isArray(value.results)
-  );
+  return isPlainRecord(value) && typeof value.record_type === 'string' && Array.isArray(value.results);
 }
 
 function isPeopleRecordDetailResult(value: unknown): value is PeopleRecordDetailResult {
@@ -1432,10 +1394,7 @@ async function runRecordCommand(
   const marker = cacheHit ? ' [cache]' : '';
   const summary = result.summary;
   const label = RECORD_TYPE_SPECS[recordType]?.label ?? recordType;
-  const lines: string[] = [
-    `${label}${marker}`,
-    `  Name: ${summary.name || '(unnamed)'}`,
-  ];
+  const lines: string[] = [`${label}${marker}`, `  Name: ${summary.name || '(unnamed)'}`];
   if (summary.date) lines.push(`  Date: ${summary.date}`);
   if (summary.county) lines.push(`  County: ${summary.county}`);
   if (summary.certificate_id) lines.push(`  Certificate ID: ${summary.certificate_id}`);
@@ -1670,10 +1629,7 @@ async function runNewspapersCommand(
   }
 }
 
-function runMdlCommand(
-  ctx: RecordCommandContext,
-  rest: readonly string[]
-): RecordCommandOutcome {
+function runMdlCommand(ctx: RecordCommandContext, rest: readonly string[]): RecordCommandOutcome {
   const parsed = parseCommandArgs(rest, {
     options: MDL_OPTIONS,
     allowPositionals: false,
@@ -1694,8 +1650,7 @@ function runMdlCommand(
   const payload = {
     name: 'Minnesota Digital Library',
     status: 'browser-only',
-    reason:
-      'Automated HTTP requests to collection.mndigital.org receive HTTP 403 (Cloudflare challenge).',
+    reason: 'Automated HTTP requests to collection.mndigital.org receive HTTP 403 (Cloudflare challenge).',
     home_url: MDL_HOME_URL,
     dpla_url: MDL_DPLA_URL,
   };
@@ -1734,10 +1689,7 @@ function renderRootHelp(): string {
   });
 }
 
-export const runMnArchivesCommand: RecordHandler = async (
-  args,
-  ctx
-): Promise<RecordCommandOutcome> => {
+export const runMnArchivesCommand: RecordHandler = async (args, ctx): Promise<RecordCommandOutcome> => {
   try {
     if (args.length === 0 || args[0] === '--help' || args[0] === '-h') {
       return { exitCode: 0, bytesOut: emitStdout(ctx.io, renderRootHelp()) };
@@ -1796,9 +1748,7 @@ export const runMnArchivesCommand: RecordHandler = async (
       case 'mdl':
         return runMdlCommand(ctx, rest);
       default:
-        throw new CliValidationError(
-          `No such command '${subcmd}'. Run 'kinloom mn-archives --script-help'.`
-        );
+        throw new CliValidationError(`No such command '${subcmd}'. Run 'kinloom mn-archives --script-help'.`);
     }
   } catch (err: unknown) {
     if (err instanceof CliValidationError) {

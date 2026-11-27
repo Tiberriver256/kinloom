@@ -1,5 +1,5 @@
+import { type Clock, type UserRole, UserRoleSchema } from '@kinloom/core';
 import { z } from 'zod';
-import { UserRoleSchema, type Clock, type UserRole } from '@kinloom/core';
 import {
   base64UrlDecodeString,
   base64UrlEncodeString,

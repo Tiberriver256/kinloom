@@ -1,16 +1,16 @@
 /** @vitest-environment jsdom */
 import type { ArchiveBundle, ArchiveDataSource, KinloomSiteConfig, Narrative } from '@kinloom/core';
-import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { compileArchive, parseKinloomConfig } from '@kinloom/core';
-import { ArchiveProvider } from '../context/ArchiveProvider.js';
-import { AuthStatusBanner, getInviteStripDismissKey } from './wiki/AuthStatusBanner.js';
-import { ExplorerTopBar } from './ExplorerTopBar.js';
-import { PersonPage } from '../pages/PersonPage.js';
-import { SourceReaderDrawer } from './SourceReaderDrawer.js';
-import { TreePage } from '../pages/TreePage.js';
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
+import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { describe, expect, it } from 'vitest';
+import { ArchiveProvider } from '../context/ArchiveProvider.js';
+import { PersonPage } from '../pages/PersonPage.js';
+import { TreePage } from '../pages/TreePage.js';
+import { ExplorerTopBar } from './ExplorerTopBar.js';
+import { SourceReaderDrawer } from './SourceReaderDrawer.js';
+import { AuthStatusBanner, getInviteStripDismissKey } from './wiki/AuthStatusBanner.js';
 
 declare global {
   var IS_REACT_ACT_ENVIRONMENT: boolean | undefined;
@@ -138,11 +138,11 @@ describe('ExplorerTopBar mobile & account menu behavior', () => {
           <ExplorerTopBar />
           <SourceReaderDrawer />
         </ArchiveProvider>
-      </MemoryRouter>,
+      </MemoryRouter>
     );
 
     const accountBtn = container.querySelector<HTMLButtonElement>(
-      'button[aria-label="Account menu for Morgan Reid"]',
+      'button[aria-label="Account menu for Morgan Reid"]'
     );
     expect(accountBtn).not.toBeNull();
     expect(accountBtn?.querySelector('.topbar-account-avatar')?.textContent).toBe('MR');
@@ -162,8 +162,8 @@ describe('ExplorerTopBar mobile & account menu behavior', () => {
     expect(menu?.textContent).toContain('Site Administration');
     expect(menu?.textContent).toContain('Sign Out');
 
-    const sourcesItem = [...(menu?.querySelectorAll('button') ?? [])].find((b) =>
-      b.textContent?.trim() === 'Sources',
+    const sourcesItem = [...(menu?.querySelectorAll('button') ?? [])].find(
+      (b) => b.textContent?.trim() === 'Sources'
     );
     act(() => {
       sourcesItem?.click();
@@ -180,7 +180,7 @@ describe('ExplorerTopBar mobile & account menu behavior', () => {
         <ArchiveProvider siteConfig={siteConfig} initialBundle={bundle}>
           <ExplorerTopBar />
         </ArchiveProvider>
-      </MemoryRouter>,
+      </MemoryRouter>
     );
 
     expect(container.querySelector('button[aria-label^="Account menu for"]')).toBeNull();
@@ -218,11 +218,11 @@ describe('ExplorerTopBar mobile & account menu behavior', () => {
           <AuthStatusBanner />
           <ExplorerTopBar />
         </ArchiveProvider>
-      </MemoryRouter>,
+      </MemoryRouter>
     );
 
     const dismissBtn = container.querySelector<HTMLButtonElement>(
-      'button[aria-label="Dismiss family invite notice"]',
+      'button[aria-label="Dismiss family invite notice"]'
     );
     act(() => {
       dismissBtn?.click();
@@ -236,7 +236,7 @@ describe('ExplorerTopBar mobile & account menu behavior', () => {
       menuBtn?.click();
     });
     const menuSignInBtn = [...container.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].find(
-      (b) => b.textContent?.trim() === 'Sign in to edit',
+      (b) => b.textContent?.trim() === 'Sign in to edit'
     );
     expect(menuSignInBtn).not.toBeNull();
     act(() => {
@@ -298,7 +298,7 @@ describe('PersonPage biography narratives and plain-English copy', () => {
             <Route path="/person/:slug" element={<PersonPage />} />
           </Routes>
         </ArchiveProvider>
-      </MemoryRouter>,
+      </MemoryRouter>
     );
 
     const bioSection = container.querySelector('section[aria-label="Biography"]');
@@ -313,7 +313,7 @@ describe('PersonPage biography narratives and plain-English copy', () => {
     // Sources are collapsed on screen (kept in DOM for @media print) behind a Sources (N) toggle and expand on click
     expect(bioSection?.querySelector('.person-biography-sources.is-collapsed-screen')).not.toBeNull();
     const sourcesToggleBtn = [...(bioSection?.querySelectorAll('button') ?? [])].find((b) =>
-      b.textContent?.includes('Sources (1)'),
+      b.textContent?.includes('Sources (1)')
     );
     expect(sourcesToggleBtn?.getAttribute('aria-expanded')).toBe('false');
     act(() => {
@@ -323,7 +323,7 @@ describe('PersonPage biography narratives and plain-English copy', () => {
     expect(bioSection?.querySelector('.person-biography-sources.is-collapsed-screen')).toBeNull();
     expect(bioSection?.querySelectorAll('.person-biography-source-list li').length).toBe(1);
     expect(bioSection?.querySelector('.person-biography-source-text')?.textContent).toContain(
-      'Oxford Vital Register (1821)',
+      'Oxford Vital Register (1821)'
     );
 
     // Unsafe javascript: URL must NOT produce an <a> tag, while https:// link renders safely
@@ -335,7 +335,7 @@ describe('PersonPage biography narratives and plain-English copy', () => {
     const collapsedBody = bioSection?.querySelector('.person-biography-body.is-collapsed');
     expect(collapsedBody).not.toBeNull();
     const expandBtn = [...(bioSection?.querySelectorAll('button') ?? [])].find(
-      (b) => b.textContent?.trim() === 'Read full biography',
+      (b) => b.textContent?.trim() === 'Read full biography'
     );
     expect(expandBtn).not.toBeNull();
     act(() => {
@@ -346,7 +346,7 @@ describe('PersonPage biography narratives and plain-English copy', () => {
     // Second narrative expands via "Read 1 more biography"
     expect(bioSection?.textContent).not.toContain('Later Relief Work');
     const moreStoriesBtn = [...(bioSection?.querySelectorAll('button') ?? [])].find(
-      (b) => b.textContent?.trim() === 'Read 1 more biography',
+      (b) => b.textContent?.trim() === 'Read 1 more biography'
     );
     expect(moreStoriesBtn).not.toBeNull();
     act(() => {
@@ -400,7 +400,7 @@ describe('PersonPage biography narratives and plain-English copy', () => {
             <Route path="/person/:slug" element={<PersonPage />} />
           </Routes>
         </ArchiveProvider>
-      </MemoryRouter>,
+      </MemoryRouter>
     );
 
     const claraBio = claraView.container.querySelector('section[aria-label="Biography"]');
@@ -409,7 +409,7 @@ describe('PersonPage biography narratives and plain-English copy', () => {
     expect(claraBio?.querySelector('.person-biography-sources.is-collapsed-screen')).not.toBeNull();
 
     const claraSourcesBtn = [...(claraBio?.querySelectorAll('button') ?? [])].find((b) =>
-      b.textContent?.includes('Sources (2)'),
+      b.textContent?.includes('Sources (2)')
     );
     expect(claraSourcesBtn?.getAttribute('aria-expanded')).toBe('false');
     act(() => {
@@ -425,7 +425,7 @@ describe('PersonPage biography narratives and plain-English copy', () => {
     expect(claraStories?.textContent).not.toContain('Multi-generation account of the Barton family farm');
 
     const readStoryBtn = [...(claraStories?.querySelectorAll('button') ?? [])].find(
-      (b) => b.textContent?.trim() === 'Read story',
+      (b) => b.textContent?.trim() === 'Read story'
     );
     expect(readStoryBtn?.getAttribute('aria-expanded')).toBe('false');
     act(() => {
@@ -443,7 +443,7 @@ describe('PersonPage biography narratives and plain-English copy', () => {
             <Route path="/person/:slug" element={<PersonPage />} />
           </Routes>
         </ArchiveProvider>
-      </MemoryRouter>,
+      </MemoryRouter>
     );
 
     expect(stephenView.container.querySelector('section[aria-label="Biography"]')).toBeNull();
@@ -465,7 +465,7 @@ describe('PersonPage biography narratives and plain-English copy', () => {
             <Route path="/person/:slug" element={<PersonPage />} />
           </Routes>
         </ArchiveProvider>
-      </MemoryRouter>,
+      </MemoryRouter>
     );
     expect(viewerRender.container.querySelector('.person-family-strip')).toBeNull();
     expect(viewerRender.container.textContent).not.toContain('+ Add parent');
@@ -488,18 +488,16 @@ describe('PersonPage biography narratives and plain-English copy', () => {
             <Route path="/person/:slug" element={<PersonPage />} />
           </Routes>
         </ArchiveProvider>
-      </MemoryRouter>,
+      </MemoryRouter>
     );
 
     const familyStrip = editorRender.container.querySelector('[aria-label="Immediate family connections"]');
     expect(familyStrip).not.toBeNull();
-    const addButtons = [...(familyStrip?.querySelectorAll('button') ?? [])].map((b) =>
-      b.textContent?.trim(),
-    );
+    const addButtons = [...(familyStrip?.querySelectorAll('button') ?? [])].map((b) => b.textContent?.trim());
     expect(addButtons).toEqual(['+ Add parent', '+ Add spouse', '+ Add child']);
 
     const addParentBtn = [...(familyStrip?.querySelectorAll('button') ?? [])].find(
-      (b) => b.textContent?.trim() === '+ Add parent',
+      (b) => b.textContent?.trim() === '+ Add parent'
     );
     act(() => {
       addParentBtn?.click();
@@ -521,7 +519,7 @@ describe('PersonPage biography narratives and plain-English copy', () => {
         <ArchiveProvider siteConfig={siteConfig} initialBundle={bundle}>
           <TreePage />
         </ArchiveProvider>
-      </MemoryRouter>,
+      </MemoryRouter>
     );
     expect(viewerTree.container.textContent).not.toContain('+ Add Person');
     viewerTree.unmount();
@@ -540,10 +538,10 @@ describe('PersonPage biography narratives and plain-English copy', () => {
         >
           <TreePage />
         </ArchiveProvider>
-      </MemoryRouter>,
+      </MemoryRouter>
     );
     const addPersonBtn = [...editorTree.container.querySelectorAll('button')].find(
-      (b) => b.textContent?.trim() === '+ Add Person',
+      (b) => b.textContent?.trim() === '+ Add Person'
     );
     expect(addPersonBtn).not.toBeNull();
 
@@ -551,7 +549,7 @@ describe('PersonPage biography narratives and plain-English copy', () => {
       addPersonBtn?.click();
     });
     expect(
-      editorTree.container.querySelector('dialog[aria-label="Add to the Family Archive"]'),
+      editorTree.container.querySelector('dialog[aria-label="Add to the Family Archive"]')
     ).not.toBeNull();
 
     editorTree.unmount();

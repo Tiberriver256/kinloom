@@ -1,7 +1,12 @@
-import { ArchivalPhotoFrame, DateStamp, SourceCitationTag } from './Atoms.js';
 import type { ArchiveEvent, CoPresenceItem, Place, SourceRecord } from '@kinloom/core';
+import type React from 'react';
 import { Link } from 'react-router-dom';
-import React from 'react';
+import { cx } from '../lib/cx.js';
+import cssMod1 from '../pages/PersonPage.module.css';
+import { ArchivalPhotoFrame, DateStamp, SourceCitationTag } from './Atoms.js';
+import cssMod0 from './Atoms.module.css';
+
+const uiStyles: Readonly<Record<string, string>> = { ...cssMod0, ...cssMod1 };
 
 const EMPTY_ALSO_HERE: CoPresenceItem[] = [];
 
@@ -24,13 +29,13 @@ export const MilestoneStoryCard: React.FC<{
   alsoHere = EMPTY_ALSO_HERE,
   onPivotPerson,
 }) => (
-  // oxlint-disable-next-line jsx-a11y/no-noninteractive-element-interactions, jsx-a11y/no-noninteractive-tabindex -- selectable story card containing links and buttons, so it cannot be a native button; keyboard activation is provided via onKeyDown and tabIndex
   <article
+    // biome-ignore lint/a11y/noNoninteractiveTabindex: selectable story card with keyboard activation
     tabIndex={0}
     id={event.id}
     ref={cardRef}
     data-event-id={event.id}
-    className={`story-card ${isActive ? 'active' : ''}`}
+    className={cx(uiStyles, `story-card ${isActive ? 'active' : ''}`)}
     onClick={(e) => {
       if (e.target instanceof HTMLElement && e.target.closest('details')) {
         return;
@@ -44,12 +49,12 @@ export const MilestoneStoryCard: React.FC<{
       }
     }}
   >
-    <div className="story-card-top">
+    <div className={cx(uiStyles, 'story-card-top')}>
       <DateStamp displayDate={event.display_date} edtf={event.edtf_date} />
       {place && (
         <Link
           to={`/place/${place.slug}`}
-          className="ink-link-btn"
+          className={cx(uiStyles, 'ink-link-btn')}
           onClick={(e) => {
             e.stopPropagation();
           }}
@@ -79,7 +84,7 @@ export const MilestoneStoryCard: React.FC<{
     />
 
     {isActive && alsoHere.length > 0 && onPivotPerson && (
-      <details className="also-here">
+      <details className={cx(uiStyles, 'also-here')}>
         <summary>Also here</summary>
         <ul>
           {alsoHere.map((item) => (

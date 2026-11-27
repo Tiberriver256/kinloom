@@ -1,9 +1,9 @@
 /** @vitest-environment jsdom */
 import type { ArchiveBundle, KinloomSiteConfig, KinshipEdge, Person, Place } from '@kinloom/core';
 import { parseKinloomConfig } from '@kinloom/core';
-import { MemoryRouter } from 'react-router-dom';
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
+import { MemoryRouter } from 'react-router-dom';
 import { afterEach, describe, expect, it } from 'vitest';
 import { ArchiveProvider } from '../context/ArchiveProvider.js';
 import { TreePage } from './TreePage.js';
@@ -41,9 +41,7 @@ const TEST_SITE_CONFIG: KinloomSiteConfig = parseKinloomConfig({
   ],
 });
 
-function makePerson(
-  overrides: Partial<Person> & Pick<Person, 'id' | 'slug' | 'full_name'>,
-): Person {
+function makePerson(overrides: Partial<Person> & Pick<Person, 'id' | 'slug' | 'full_name'>): Person {
   const parts = overrides.full_name.split(' ');
   return {
     given_name: parts[0] ?? overrides.full_name,
@@ -216,12 +214,10 @@ function buildTestBundle(): ArchiveBundle {
     { from: 'p_clara', to: 'p_arthur', relation: 'spouse' },
     { from: 'p_arthur', to: 'p_nora', relation: 'spouse' },
     { from: 'p_nora', to: 'p_arthur', relation: 'spouse' },
-    ...['p_henry', 'p_sib_1', 'p_sib_2', 'p_sib_3', 'p_sib_4', 'p_infant_1'].flatMap(
-      (cid): KinshipEdge[] => [
-        { from: 'p_arthur', to: cid, relation: 'parent' },
-        { from: 'p_clara', to: cid, relation: 'parent' },
-      ],
-    ),
+    ...['p_henry', 'p_sib_1', 'p_sib_2', 'p_sib_3', 'p_sib_4', 'p_infant_1'].flatMap((cid): KinshipEdge[] => [
+      { from: 'p_arthur', to: cid, relation: 'parent' },
+      { from: 'p_clara', to: cid, relation: 'parent' },
+    ]),
     { from: 'p_henry', to: 'p_living_named', relation: 'parent' },
     { from: 'p_henry', to: 'p_living_redacted', relation: 'parent' },
   ];
@@ -272,7 +268,7 @@ function mountTreeAtWidth(width: number, initialEntry = '/tree'): { container: H
         <ArchiveProvider siteConfig={TEST_SITE_CONFIG} initialBundle={bundle}>
           <TreePage />
         </ArchiveProvider>
-      </MemoryRouter>,
+      </MemoryRouter>
     );
   });
 
@@ -312,7 +308,7 @@ describe('TreePage', () => {
     expect(earlyStrip?.getAttribute('aria-label')).toBe('Children who died at age 5 or younger');
     expect(earlyStrip?.getAttribute('title')).toBe('Children who died at age 5 or younger');
     const infantChip = container.querySelector<HTMLButtonElement>(
-      'button.tree-early-chip[aria-label="Inspect Peter Hale"]',
+      'button.tree-early-chip[aria-label="Inspect Peter Hale"]'
     );
     expect(infantChip).not.toBeNull();
 
@@ -337,9 +333,7 @@ describe('TreePage', () => {
     expect(drawer).not.toBeNull();
     expect(drawer?.textContent).toContain('Died young');
     expect(drawer?.textContent).toContain('Peter Hale');
-    expect(drawer?.querySelector('a[href="/person/peter-hale"]')?.textContent).toContain(
-      'Open Profile →',
-    );
+    expect(drawer?.querySelector('a[href="/person/peter-hale"]')?.textContent).toContain('Open Profile →');
   });
 
   it('defaults to Chart View + Full Tree on desktop (1280px) with remarriage hubs, tap-to-trace spotlighting, and keyboard controls', () => {
@@ -377,13 +371,11 @@ describe('TreePage', () => {
 
     // Keyboard Enter selects Henry Hale, spotlights direct lineage, and displays clickable ancestor breadcrumb
     const henryNode = container.querySelector<SVGGElement>(
-      '.tree-node-card[aria-label="Inspect Henry Hale"]',
+      '.tree-node-card[aria-label="Inspect Henry Hale"]'
     );
     expect(henryNode).not.toBeNull();
     act(() => {
-      henryNode?.dispatchEvent(
-        new window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }),
-      );
+      henryNode?.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
     });
     expect(svg?.classList.contains('has-selection')).toBe(true);
     expect(henryNode?.classList.contains('is-lit')).toBe(true);
@@ -391,9 +383,7 @@ describe('TreePage', () => {
     const drawer = container.querySelector('.tree-popover.tree-focus-drawer');
     expect(drawer?.textContent).toContain('Henry Hale');
     expect(drawer?.textContent).toContain('Child of Arthur Hale');
-    const crumbButtons = [
-      ...(drawer?.querySelectorAll<HTMLButtonElement>('.tree-focus-crumb-btn') ?? []),
-    ];
+    const crumbButtons = [...(drawer?.querySelectorAll<HTMLButtonElement>('.tree-focus-crumb-btn') ?? [])];
     expect(crumbButtons.map((b) => b.textContent)).toEqual(['Thomas', 'Arthur']);
 
     // Clicking ancestor breadcrumb shifts focus to Thomas Hale
@@ -414,7 +404,7 @@ describe('TreePage', () => {
     const { container } = mountTreeAtWidth(1280);
 
     const listBtn = [...container.querySelectorAll<HTMLButtonElement>('button')].find(
-      (b) => b.textContent?.trim() === 'List',
+      (b) => b.textContent?.trim() === 'List'
     );
     expect(listBtn).not.toBeNull();
     act(() => {
@@ -424,7 +414,7 @@ describe('TreePage', () => {
     expect(document.documentElement.classList.contains('tree-viewport-lock')).toBe(false);
 
     const branchSelect = container.querySelector<HTMLSelectElement>(
-      'select[aria-label="Select family branch"]',
+      'select[aria-label="Select family branch"]'
     );
     expect(branchSelect).not.toBeNull();
     act(() => {
@@ -440,17 +430,12 @@ describe('TreePage', () => {
   it('finds a collapsed sibling via desktop Find person combobox, auto-expands their sibling tray, spotlights lineage, and excludes living names', () => {
     const { container } = mountTreeAtWidth(1280);
 
-    const searchInput = container.querySelector<HTMLInputElement>(
-      'input.tree-search-input[role="combobox"]',
-    );
+    const searchInput = container.querySelector<HTMLInputElement>('input.tree-search-input[role="combobox"]');
     expect(searchInput).not.toBeNull();
 
     // Living names and redacted Living placeholders never appear in public search results
     const setInputValue = (input: HTMLInputElement, nextVal: string): void => {
-      const setter = Object.getOwnPropertyDescriptor(
-        window.HTMLInputElement.prototype,
-        'value',
-      )?.set;
+      const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set;
       setter?.call(input, nextVal);
       input.dispatchEvent(new window.Event('input', { bubbles: true }));
     };
@@ -509,7 +494,7 @@ describe('TreePage', () => {
     try {
       const { container } = mountTreeAtWidth(390);
       const toggleBtn = container.querySelector<HTMLButtonElement>(
-        'button.tree-search-toggle-btn[aria-label="Find person in tree"]',
+        'button.tree-search-toggle-btn[aria-label="Find person in tree"]'
       );
       expect(toggleBtn).not.toBeNull();
       expect(toggleBtn?.getAttribute('aria-expanded')).toBe('false');
@@ -522,10 +507,7 @@ describe('TreePage', () => {
       const mobileInput = container.querySelector<HTMLInputElement>('input.tree-search-mobile-input');
       expect(mobileInput).not.toBeNull();
 
-      const setter = Object.getOwnPropertyDescriptor(
-        window.HTMLInputElement.prototype,
-        'value',
-      )?.set;
+      const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set;
       act(() => {
         if (mobileInput) {
           setter?.call(mobileInput, 'Walter');
@@ -533,8 +515,8 @@ describe('TreePage', () => {
         }
       });
 
-      const walterOpt = [...container.querySelectorAll<HTMLButtonElement>('[role="option"]')].find(
-        (el) => el.textContent?.includes('Walter Hale'),
+      const walterOpt = [...container.querySelectorAll<HTMLButtonElement>('[role="option"]')].find((el) =>
+        el.textContent?.includes('Walter Hale')
       );
       expect(walterOpt).not.toBeUndefined();
 

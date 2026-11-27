@@ -101,9 +101,6 @@ export class StaticDemoDataSource implements ArchiveDataSource {
   }
 }
 
-export function createStaticArchiveDataSource(
-  baseUrl?: string,
-  fetchImpl?: typeof fetch,
-): ArchiveDataSource {
+export function createStaticArchiveDataSource(baseUrl?: string, fetchImpl?: typeof fetch): ArchiveDataSource {
   return new StaticDemoDataSource(baseUrl, fetchImpl);
 }

@@ -1,9 +1,11 @@
 /** @vitest-environment jsdom */
-import React, { act } from 'react';
-import { AppErrorBoundary } from './AppErrorBoundary.js';
+
 import assert from 'node:assert/strict';
+import type React from 'react';
+import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { test } from 'vitest';
+import { AppErrorBoundary } from './AppErrorBoundary.js';
 
 declare global {
   var IS_REACT_ACT_ENVIRONMENT: boolean | undefined;
@@ -29,7 +31,7 @@ test('AppErrorBoundary shows site-branded recovery card and resets when key chan
       root.render(
         <AppErrorBoundary key="/broken" siteTitle="Barton Historical Archive">
           <BrokenChild />
-        </AppErrorBoundary>,
+        </AppErrorBoundary>
       );
     });
   } finally {
@@ -46,7 +48,7 @@ test('AppErrorBoundary shows site-branded recovery card and resets when key chan
     root.render(
       <AppErrorBoundary key="/recovered" siteTitle="Barton Historical Archive">
         <HealthyChild />
-      </AppErrorBoundary>,
+      </AppErrorBoundary>
     );
   });
   assert.equal(container.querySelector('[role="alert"]'), null);

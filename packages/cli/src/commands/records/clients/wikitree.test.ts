@@ -138,11 +138,7 @@ describe('wikitree native client', () => {
     };
 
     await invokeWikiTree(['person', 'Lincoln-1', '--json'], cacheDir, fetchImpl);
-    const rRef = await invokeWikiTree(
-      ['person', 'Lincoln-1', '--refresh', '--json'],
-      cacheDir,
-      fetchImpl
-    );
+    const rRef = await invokeWikiTree(['person', 'Lincoln-1', '--refresh', '--json'], cacheDir, fetchImpl);
     const rTtl = await invokeWikiTree(
       ['person', 'Lincoln-1', '--cache-ttl-hours', '0', '--json'],
       cacheDir,

@@ -1,16 +1,9 @@
 // Side-effect CSS import: the standard Vite pattern for loading library styles.
-// oxlint-disable-next-line import/no-unassigned-import
+import { cx } from '../lib/cx.js';
+import cssMod0 from './IndexPage.module.css';
+import cssMod1 from './NotFoundPage.module.css';
+import cssMod2 from './TreeAndMapPage.module.css';
 import 'maplibre-gl/dist/maplibre-gl.css';
-import {
-  AttributionControl,
-  Map as MapLibreMap,
-  setMaxParallelImageRequests,
-  setWorkerCount,
-  setWorkerUrl,
-} from 'maplibre-gl';
-import type { ErrorEvent, GeoJSONSource, Source, StyleSpecification } from 'maplibre-gl';
-import type { Feature, FeatureCollection } from 'geojson';
-import { KINLOOM_COLOR_TOKENS } from '../lib/tokens.js';
 import type {
   LineageRouteMode,
   MapJourneyState,
@@ -20,11 +13,11 @@ import type {
   Place,
 } from '@kinloom/core';
 import {
-  DEFAULT_MIGRATION_ERAS,
   buildMigrationSegments,
   buildMigrationStops,
   buildPerPersonMigrationSegments,
   computeStopsBounds,
+  DEFAULT_MIGRATION_ERAS,
   journeyNext,
   journeyPlayToggle,
   journeyPrev,
@@ -32,19 +25,32 @@ import {
   journeyScrub,
   journeyTick,
 } from '@kinloom/core';
-import { Link, useSearchParams } from 'react-router-dom';
+import { filterByDate } from '@openhistoricalmap/maplibre-gl-dates';
+import type { Feature, FeatureCollection } from 'geojson';
+import type { ErrorEvent, GeoJSONSource, Source, StyleSpecification } from 'maplibre-gl';
 import {
+  AttributionControl,
+  Map as MapLibreMap,
+  setMaxParallelImageRequests,
+  setWorkerCount,
+  setWorkerUrl,
+} from 'maplibre-gl';
+import maplibreWorkerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?url';
+import type React from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
+import { ExplorerTopBar } from '../components/ExplorerTopBar.js';
+import { useArchiveData } from '../context/ArchiveDataContext.js';
+import {
+  loadArchivalOhmStyle,
   OHM_STYLE_URL,
   OVERVIEW_REFERENCE_YEAR,
   PAPER_LAND_LAYER_ID,
-  loadArchivalOhmStyle,
 } from '../lib/ohmStyle.js';
-import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { ExplorerTopBar } from '../components/ExplorerTopBar.js';
+import { KINLOOM_COLOR_TOKENS } from '../lib/tokens.js';
 import { KINLOOM_VOCABULARY } from '../lib/vocabulary.js';
-import { filterByDate } from '@openhistoricalmap/maplibre-gl-dates';
-import maplibreWorkerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?url';
-import { useArchiveData } from '../context/ArchiveDataContext.js';
+
+const uiStyles: Readonly<Record<string, string>> = { ...cssMod0, ...cssMod1, ...cssMod2 };
 
 let maplibreConfigured = false;
 
@@ -80,7 +86,7 @@ function setPeriodBasemap(map: MapLibreMap): void {
       'source-layer': 'land',
       paint: { 'fill-color': KINLOOM_COLOR_TOKENS.warmLinen },
     },
-    beforeId,
+    beforeId
   );
 }
 
@@ -114,7 +120,7 @@ type HistoricalMapStatus = { kind: 'pending' } | { kind: 'ready' } | { kind: 'fa
 
 function getFitOptions(
   hasSelectedStop: boolean,
-  drawerBottomPx?: number,
+  drawerBottomPx?: number
 ): {
   padding: { top: number; right: number; bottom: number; left: number };
   duration: number;
@@ -173,7 +179,7 @@ function wantsLabel(
   count: number,
   stopId: string,
   selectedStopId: string | null,
-  personFilter: string,
+  personFilter: string
 ): boolean {
   if (stopId === selectedStopId) {
     return true;
@@ -246,7 +252,7 @@ function buildFamilyOverlay(input: {
           input.visibleStops.length,
           stop.id,
           input.selectedStopId,
-          input.personFilter,
+          input.personFilter
         ),
       },
       geometry: { type: 'Point', coordinates: [stop.place.lng, stop.place.lat] },
@@ -312,7 +318,12 @@ function addFamilyLayers(map: MapLibreMap): void {
     id: 'migration-route',
     type: 'line',
     source: SOURCE_ID,
-    filter: ['all', ['==', ['get', 'kind'], 'route'], ['==', ['get', 'dashed'], false], ['==', ['get', 'latest'], false]],
+    filter: [
+      'all',
+      ['==', ['get', 'kind'], 'route'],
+      ['==', ['get', 'dashed'], false],
+      ['==', ['get', 'latest'], false],
+    ],
     layout: { 'line-cap': 'round', 'line-join': 'round' },
     paint: {
       'line-color': KINLOOM_COLOR_TOKENS.loomOchre,
@@ -325,7 +336,12 @@ function addFamilyLayers(map: MapLibreMap): void {
     id: 'migration-route-latest',
     type: 'line',
     source: SOURCE_ID,
-    filter: ['all', ['==', ['get', 'kind'], 'route'], ['==', ['get', 'dashed'], false], ['==', ['get', 'latest'], true]],
+    filter: [
+      'all',
+      ['==', ['get', 'kind'], 'route'],
+      ['==', ['get', 'dashed'], false],
+      ['==', ['get', 'latest'], true],
+    ],
     layout: { 'line-cap': 'round', 'line-join': 'round' },
     paint: {
       'line-color': KINLOOM_COLOR_TOKENS.sealCrimson,
@@ -338,7 +354,12 @@ function addFamilyLayers(map: MapLibreMap): void {
     id: 'migration-route-dash',
     type: 'line',
     source: SOURCE_ID,
-    filter: ['all', ['==', ['get', 'kind'], 'route'], ['==', ['get', 'dashed'], true], ['==', ['get', 'latest'], false]],
+    filter: [
+      'all',
+      ['==', ['get', 'kind'], 'route'],
+      ['==', ['get', 'dashed'], true],
+      ['==', ['get', 'latest'], false],
+    ],
     layout: { 'line-cap': 'round', 'line-join': 'round' },
     paint: {
       'line-color': KINLOOM_COLOR_TOKENS.loomOchre,
@@ -352,7 +373,12 @@ function addFamilyLayers(map: MapLibreMap): void {
     id: 'migration-route-dash-latest',
     type: 'line',
     source: SOURCE_ID,
-    filter: ['all', ['==', ['get', 'kind'], 'route'], ['==', ['get', 'dashed'], true], ['==', ['get', 'latest'], true]],
+    filter: [
+      'all',
+      ['==', ['get', 'kind'], 'route'],
+      ['==', ['get', 'dashed'], true],
+      ['==', ['get', 'latest'], true],
+    ],
     layout: { 'line-cap': 'round', 'line-join': 'round' },
     paint: {
       'line-color': KINLOOM_COLOR_TOKENS.sealCrimson,
@@ -446,7 +472,7 @@ function isGeoJsonSource(source: Source | undefined): source is GeoJSONSource {
 function syncFamilyOverlay(
   map: MapLibreMap,
   data: FeatureCollection,
-  onSelect: (id: string | null) => void,
+  onSelect: (id: string | null) => void
 ): void {
   const source = map.getSource(SOURCE_ID);
   if (isGeoJsonSource(source)) {
@@ -484,7 +510,7 @@ export const MapPage: React.FC = () => {
 
   const migrationEras = useMemo<readonly MigrationEraConfig[]>(
     () => (siteConfig.migrationEras.length > 0 ? siteConfig.migrationEras : DEFAULT_MIGRATION_ERAS),
-    [siteConfig.migrationEras],
+    [siteConfig.migrationEras]
   );
 
   const stageColorMap = useMemo(() => {
@@ -510,7 +536,9 @@ export const MapPage: React.FC = () => {
     return bundle.people
       .filter((person) => !person.is_living || person.full_name !== 'Living')
       .filter((person) => (person.event_count || 0) >= 2)
-      .toSorted((a, b) => (b.event_count || 0) - (a.event_count || 0) || a.full_name.localeCompare(b.full_name));
+      .toSorted(
+        (a, b) => (b.event_count || 0) - (a.event_count || 0) || a.full_name.localeCompare(b.full_name)
+      );
   }, [bundle]);
 
   const allStopsForPerson = useMemo(() => {
@@ -549,22 +577,18 @@ export const MapPage: React.FC = () => {
 
   const allSegments = useMemo(
     () =>
-      usePerPersonSegments
-        ? buildPerPersonMigrationSegments(stops, 18)
-        : buildMigrationSegments(stops, 18),
-    [stops, usePerPersonSegments],
+      usePerPersonSegments ? buildPerPersonMigrationSegments(stops, 18) : buildMigrationSegments(stops, 18),
+    [stops, usePerPersonSegments]
   );
   const segments = useMemo(
     () =>
       usePerPersonSegments
         ? buildPerPersonMigrationSegments(visibleStops, 18)
         : buildMigrationSegments(visibleStops, 18),
-    [visibleStops, usePerPersonSegments],
+    [visibleStops, usePerPersonSegments]
   );
 
-  const selectedStop = selectedStopId
-    ? stops.find((stop) => stop.id === selectedStopId) ?? null
-    : null;
+  const selectedStop = selectedStopId ? (stops.find((stop) => stop.id === selectedStopId) ?? null) : null;
 
   const stopIds = useMemo(() => stops.map((stop) => stop.id), [stops]);
   const journey: MapJourneyState = { stepIndex, playing, selectedStopId };
@@ -593,7 +617,7 @@ export const MapPage: React.FC = () => {
         personFilter: selectedPersonId,
         stageColors: stageColorMap,
       }),
-    [stops, visibleStops, segments, allSegments, stepIndex, selectedStop?.id, selectedPersonId, stageColorMap],
+    [stops, visibleStops, segments, allSegments, stepIndex, selectedStop?.id, selectedPersonId, stageColorMap]
   );
   const overlayRef = useRef(overlay);
   useLayoutEffect(() => {
@@ -627,7 +651,7 @@ export const MapPage: React.FC = () => {
         programmaticMoveRef.current = false;
       }, 60);
     },
-    [],
+    []
   );
 
   useEffect(() => {
@@ -686,7 +710,7 @@ export const MapPage: React.FC = () => {
             '<a href="https://maplibre.org/" target="_blank" rel="noopener noreferrer">MapLibre</a>',
           ],
         }),
-        'bottom-left',
+        'bottom-left'
       );
       mapRef.current = map;
       host.kinloomMigrationMap = map;
@@ -855,7 +879,9 @@ export const MapPage: React.FC = () => {
     }
     const personSlug = searchParams.get('person');
     const targetPerson = personSlug
-      ? bundle.people.find((person) => person.slug === personSlug && (!person.is_living || person.full_name !== 'Living'))
+      ? bundle.people.find(
+          (person) => person.slug === personSlug && (!person.is_living || person.full_name !== 'Living')
+        )
       : undefined;
     if (targetPerson) {
       setSelectedPersonId(targetPerson.id);
@@ -874,12 +900,20 @@ export const MapPage: React.FC = () => {
           [targetPlace.lng - span, targetPlace.lat - span],
           [targetPlace.lng + span, targetPlace.lat + span],
         ],
-        match !== undefined,
+        match !== undefined
       );
     } else {
       fitCameraBounds(defaultBounds, false);
     }
-  }, [bundle, fitCameraBounds, allStopsForPerson, searchParams, placesBySlug, defaultBounds, siteConfig.mapDefaults.minSpanDeg]);
+  }, [
+    bundle,
+    fitCameraBounds,
+    allStopsForPerson,
+    searchParams,
+    placesBySlug,
+    defaultBounds,
+    siteConfig.mapDefaults.minSpanDeg,
+  ]);
 
   useEffect(() => {
     const key = `${selectedPersonId}:${selectedEraId}`;
@@ -894,7 +928,6 @@ export const MapPage: React.FC = () => {
     setSelectedStopId(nextStopId);
     const bounds = computeStopsBounds(stops, siteConfig.mapDefaults) ?? defaultBounds;
     fitCameraBounds(bounds, nextStopId !== null);
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- stops and defaultBounds are read when the filter key changes
   }, [selectedPersonId, selectedEraId]);
 
   useEffect(() => {
@@ -995,7 +1028,7 @@ export const MapPage: React.FC = () => {
 
   const totalMiles = useMemo(
     () => segments.reduce((sum, segment) => sum + segment.distanceMiles, 0),
-    [segments],
+    [segments]
   );
 
   const handleFitClick = useCallback(() => {
@@ -1010,24 +1043,22 @@ export const MapPage: React.FC = () => {
     : 'No stops';
 
   const yearSpanLabel =
-    visibleStops.length > 0
-      ? `${visibleStops[0].year}–${visibleStops.at(-1)?.year}`
-      : '—';
+    visibleStops.length > 0 ? `${visibleStops[0].year}–${visibleStops.at(-1)?.year}` : '—';
   const metricLabel = usePerPersonSegments
     ? `${visibleStops.length} ${visibleStops.length === 1 ? 'stop' : 'stops'}`
     : `${totalMiles.toLocaleString()} mi`;
 
   if (error) {
     return (
-      <div className="map-shell">
+      <div className={cx(uiStyles, 'map-shell')}>
         <ExplorerTopBar />
-        <main id="main-content" className="index-page">
-          <div className="archive-error-box" role="alert">
+        <main id="main-content" className={cx(uiStyles, 'index-page')}>
+          <div className={cx(uiStyles, 'archive-error-box')} role="alert">
             <h2>Unable to load migration map</h2>
             <p>{error}</p>
             <button
               type="button"
-              className="pill-btn active"
+              className={cx(uiStyles, 'pill-btn active')}
               onClick={() => {
                 window.location.reload();
               }}
@@ -1042,11 +1073,11 @@ export const MapPage: React.FC = () => {
 
   if (loading || !bundle) {
     return (
-      <div className="map-shell">
+      <div className={cx(uiStyles, 'map-shell')}>
         <ExplorerTopBar />
-        <main id="main-content" className="index-page">
-          <output className="archive-loading-shell" aria-live="polite">
-            <span className="archive-loading-spinner" aria-hidden="true" />
+        <main id="main-content" className={cx(uiStyles, 'index-page')}>
+          <output className={cx(uiStyles, 'archive-loading-shell')} aria-live="polite">
+            <span className={cx(uiStyles, 'archive-loading-spinner')} aria-hidden="true" />
             <span>{KINLOOM_VOCABULARY.map.loading}</span>
           </output>
         </main>
@@ -1055,34 +1086,30 @@ export const MapPage: React.FC = () => {
   }
 
   return (
-    <div className="map-shell">
+    <div className={cx(uiStyles, 'map-shell')}>
       <ExplorerTopBar />
-      <main id="main-content" className="tree-page map-page">
+      <main id="main-content" className={cx(uiStyles, 'tree-page map-page')}>
         <div
           ref={mapHostRef}
-          className="map-canvas"
+          className={cx(uiStyles, 'map-canvas')}
           style={{ position: 'absolute', inset: 0 }}
         />
         {historicalMap.kind === 'failed' && (
-          <output className="map-style-note">
-            Showing offline paper basemap.
-          </output>
+          <output className={cx(uiStyles, 'map-style-note')}>Showing offline paper basemap.</output>
         )}
 
-        <div className="map-overlay map-toolbar">
-          <label className="map-trace-label">
+        <div className={cx(uiStyles, 'map-overlay map-toolbar')}>
+          <label className={cx(uiStyles, 'map-trace-label')}>
             <span>Trace:</span>
             <select
-              className="pill-btn map-trace-select"
+              className={cx(uiStyles, 'pill-btn map-trace-select')}
               aria-label="Filter migration map by person"
               value={selectedPersonId}
               onChange={(event) => {
                 setSelectedPersonId(event.target.value);
               }}
             >
-              <option value="all">
-                All People ({selectablePeople.length})
-              </option>
+              <option value="all">All People ({selectablePeople.length})</option>
               {selectablePeople.map((person) => (
                 <option key={person.id} value={person.id}>
                   {person.full_name} ({person.birth_year || '?'}–{person.death_year || '?'})
@@ -1092,7 +1119,7 @@ export const MapPage: React.FC = () => {
           </label>
 
           <select
-            className="pill-btn map-era-select-mobile"
+            className={cx(uiStyles, 'pill-btn map-era-select-mobile')}
             aria-label={KINLOOM_VOCABULARY.map.filterByEraAria}
             value={selectedEraId}
             onChange={(event) => {
@@ -1111,10 +1138,10 @@ export const MapPage: React.FC = () => {
               ))}
           </select>
 
-          <fieldset className="map-toolbar-presets" aria-label="Filter migration map by era">
+          <fieldset className={cx(uiStyles, 'map-toolbar-presets')} aria-label="Filter migration map by era">
             <button
               type="button"
-              className={`pill-btn map-bordered-btn ${selectedEraId === 'all' ? 'active' : ''}`}
+              className={cx(uiStyles, `pill-btn map-bordered-btn ${selectedEraId === 'all' ? 'active' : ''}`)}
               aria-pressed={selectedEraId === 'all'}
               onClick={() => {
                 setSelectedEraId('all');
@@ -1128,7 +1155,10 @@ export const MapPage: React.FC = () => {
                 <button
                   key={era.id}
                   type="button"
-                  className={`pill-btn map-bordered-btn ${selectedEraId === era.id ? 'active' : ''}`}
+                  className={cx(
+                    uiStyles,
+                    `pill-btn map-bordered-btn ${selectedEraId === era.id ? 'active' : ''}`
+                  )}
                   aria-pressed={selectedEraId === era.id}
                   onClick={() => {
                     setSelectedEraId(era.id);
@@ -1143,7 +1173,7 @@ export const MapPage: React.FC = () => {
             <>
               <button
                 type="button"
-                className="pill-btn map-bordered-btn map-route-mode-mobile"
+                className={cx(uiStyles, 'pill-btn map-bordered-btn map-route-mode-mobile')}
                 aria-label={`Route order: ${routeMode === 'per-person' ? KINLOOM_VOCABULARY.map.byPersonMode : KINLOOM_VOCABULARY.map.chronologicalMode}. Click to switch.`}
                 onClick={() => {
                   setRouteMode((prev) => (prev === 'per-person' ? 'chronological' : 'per-person'));
@@ -1153,10 +1183,13 @@ export const MapPage: React.FC = () => {
                   ? KINLOOM_VOCABULARY.map.byPersonMode
                   : KINLOOM_VOCABULARY.map.chronologicalMode}
               </button>
-              <fieldset className="map-route-mode" aria-label="Full lineage route mode">
+              <fieldset className={cx(uiStyles, 'map-route-mode')} aria-label="Full lineage route mode">
                 <button
                   type="button"
-                  className={`pill-btn map-bordered-btn ${routeMode === 'per-person' ? 'active' : ''}`}
+                  className={cx(
+                    uiStyles,
+                    `pill-btn map-bordered-btn ${routeMode === 'per-person' ? 'active' : ''}`
+                  )}
                   aria-pressed={routeMode === 'per-person'}
                   onClick={() => {
                     setRouteMode('per-person');
@@ -1166,7 +1199,10 @@ export const MapPage: React.FC = () => {
                 </button>
                 <button
                   type="button"
-                  className={`pill-btn map-bordered-btn ${routeMode === 'chronological' ? 'active' : ''}`}
+                  className={cx(
+                    uiStyles,
+                    `pill-btn map-bordered-btn ${routeMode === 'chronological' ? 'active' : ''}`
+                  )}
                   aria-pressed={routeMode === 'chronological'}
                   onClick={() => {
                     setRouteMode('chronological');
@@ -1179,11 +1215,14 @@ export const MapPage: React.FC = () => {
           )}
         </div>
 
-        <aside className="map-overlay map-stage-legend" aria-label="Migration stage color legend">
+        <aside
+          className={cx(uiStyles, 'map-overlay map-stage-legend')}
+          aria-label="Migration stage color legend"
+        >
           {migrationEras.map((era) => (
-            <span key={era.id} className="map-legend-item">
+            <span key={era.id} className={cx(uiStyles, 'map-legend-item')}>
               <span
-                className="map-legend-swatch"
+                className={cx(uiStyles, 'map-legend-swatch')}
                 style={{ backgroundColor: stageColorMap.get(era.id) ?? KINLOOM_COLOR_TOKENS.archivalIndigo }}
                 aria-hidden="true"
               />
@@ -1192,33 +1231,41 @@ export const MapPage: React.FC = () => {
           ))}
         </aside>
 
-        <div ref={dockRef} className={`map-bottom-dock${selectedStop ? ' has-stop' : ''}`}>
-          {selectedStop && <div className="map-drawer-handle" aria-hidden="true" />}
+        <div ref={dockRef} className={cx(uiStyles, `map-bottom-dock${selectedStop ? ' has-stop' : ''}`)}>
+          {selectedStop && <div className={cx(uiStyles, 'map-drawer-handle')} aria-hidden="true" />}
 
           {selectedStop && (
             <section
               ref={cardRef}
-              className={`map-overlay tree-popover map-stop-popover${cardSide === 'left' ? ' is-left' : ''}${drawerExpanded ? ' is-expanded' : ''}`}
+              className={cx(
+                uiStyles,
+                `map-overlay tree-popover map-stop-popover${cardSide === 'left' ? ' is-left' : ''}${drawerExpanded ? ' is-expanded' : ''}`
+              )}
               aria-label="Selected stop details"
               aria-live="polite"
             >
-              <div className="map-stop-header">
-                <div className="map-stop-meta">
+              <div className={cx(uiStyles, 'map-stop-header')}>
+                <div className={cx(uiStyles, 'map-stop-meta')}>
                   <span
-                    className="map-stop-eyebrow"
-                    style={{ color: stageColorMap.get(selectedStop.lineageStage) ?? KINLOOM_COLOR_TOKENS.archivalIndigo }}
+                    className={cx(uiStyles, 'map-stop-eyebrow')}
+                    style={{
+                      color:
+                        stageColorMap.get(selectedStop.lineageStage) ?? KINLOOM_COLOR_TOKENS.archivalIndigo,
+                    }}
                   >
                     <span>{selectedStop.displayDate}</span>
-                    <span className="map-stop-stage">
-                      {(stageLabelMap.get(selectedStop.lineageStage) ?? selectedStop.lineageStage).toUpperCase()}
+                    <span className={cx(uiStyles, 'map-stop-stage')}>
+                      {(
+                        stageLabelMap.get(selectedStop.lineageStage) ?? selectedStop.lineageStage
+                      ).toUpperCase()}
                     </span>
                   </span>
-                  <h2 className="map-stop-title">{selectedStop.place.full_name}</h2>
+                  <h2 className={cx(uiStyles, 'map-stop-title')}>{selectedStop.place.full_name}</h2>
                 </div>
-                <div className="map-stop-header-actions">
+                <div className={cx(uiStyles, 'map-stop-header-actions')}>
                   <button
                     type="button"
-                    className="pill-btn map-bordered-btn map-drawer-toggle"
+                    className={cx(uiStyles, 'pill-btn map-bordered-btn map-drawer-toggle')}
                     aria-expanded={drawerExpanded}
                     onClick={() => {
                       setDrawerExpanded((open) => !open);
@@ -1228,7 +1275,7 @@ export const MapPage: React.FC = () => {
                   </button>
                   <button
                     type="button"
-                    className="pill-btn map-bordered-btn map-close-btn"
+                    className={cx(uiStyles, 'pill-btn map-bordered-btn map-close-btn')}
                     onClick={() => {
                       setPlaying(false);
                       setSelectedStopId(null);
@@ -1241,17 +1288,16 @@ export const MapPage: React.FC = () => {
                 </div>
               </div>
 
-              <div className="map-stop-details">
-                <p className="map-stop-summary">{selectedStop.title}</p>
-                <div className="map-stop-coords">
+              <div className={cx(uiStyles, 'map-stop-details')}>
+                <p className={cx(uiStyles, 'map-stop-summary')}>{selectedStop.title}</p>
+                <div className={cx(uiStyles, 'map-stop-coords')}>
                   {selectedStop.place.lat.toFixed(2)}°{selectedStop.place.lat >= 0 ? 'N' : 'S'},{' '}
-                  {Math.abs(selectedStop.place.lng).toFixed(2)}°
-                  {selectedStop.place.lng >= 0 ? 'E' : 'W'}
+                  {Math.abs(selectedStop.place.lng).toFixed(2)}°{selectedStop.place.lng >= 0 ? 'E' : 'W'}
                 </div>
-                <div className="map-stop-links">
+                <div className={cx(uiStyles, 'map-stop-links')}>
                   <Link
                     to={`/place/${selectedStop.place.slug}`}
-                    className="pill-btn active"
+                    className={cx(uiStyles, 'pill-btn active')}
                     style={{ textDecoration: 'none' }}
                   >
                     {KINLOOM_VOCABULARY.map.placeProfileCta}
@@ -1260,7 +1306,7 @@ export const MapPage: React.FC = () => {
                     <Link
                       key={personSlug}
                       to={`/person/${personSlug}?event=${selectedStop.eventId}`}
-                      className="pill-btn map-bordered-btn"
+                      className={cx(uiStyles, 'pill-btn map-bordered-btn')}
                       style={{ textDecoration: 'none' }}
                     >
                       {selectedStop.personNames[index]} →
@@ -1271,14 +1317,14 @@ export const MapPage: React.FC = () => {
             </section>
           )}
 
-          <div className="map-overlay map-playback-bar">
+          <div className={cx(uiStyles, 'map-overlay map-playback-bar')}>
             {stops.length === 0 ? (
-              <div className="map-empty-notice" role="status">
+              <div className={cx(uiStyles, 'map-empty-notice')} role="status">
                 No geocoded stops match the active filter.
                 {(selectedPersonId !== 'all' || selectedEraId !== 'all') && (
                   <button
                     type="button"
-                    className="pill-btn map-bordered-btn"
+                    className={cx(uiStyles, 'pill-btn map-bordered-btn')}
                     onClick={() => {
                       setSelectedPersonId('all');
                       setSelectedEraId('all');
@@ -1289,10 +1335,10 @@ export const MapPage: React.FC = () => {
                 )}
               </div>
             ) : null}
-            <div className="map-playback-buttons">
+            <div className={cx(uiStyles, 'map-playback-buttons')}>
               <button
                 type="button"
-                className={`pill-btn map-bordered-btn ${playing ? 'active' : ''}`}
+                className={cx(uiStyles, `pill-btn map-bordered-btn ${playing ? 'active' : ''}`)}
                 aria-pressed={playing}
                 disabled={stops.length === 0}
                 onClick={() => {
@@ -1303,7 +1349,7 @@ export const MapPage: React.FC = () => {
               </button>
               <button
                 type="button"
-                className="pill-btn map-bordered-btn"
+                className={cx(uiStyles, 'pill-btn map-bordered-btn')}
                 disabled={stops.length === 0 || stepIndex === 0}
                 onClick={() => {
                   applyJourney(journeyPrev(journey, stopIds));
@@ -1313,7 +1359,7 @@ export const MapPage: React.FC = () => {
               </button>
               <button
                 type="button"
-                className="pill-btn map-bordered-btn"
+                className={cx(uiStyles, 'pill-btn map-bordered-btn')}
                 disabled={stops.length === 0 || stepIndex >= stops.length - 1}
                 onClick={() => {
                   applyJourney(journeyNext(journey, stopIds));
@@ -1323,7 +1369,7 @@ export const MapPage: React.FC = () => {
               </button>
               <button
                 type="button"
-                className={`pill-btn map-bordered-btn ${stepIndex < 0 ? 'active' : ''}`}
+                className={cx(uiStyles, `pill-btn map-bordered-btn ${stepIndex < 0 ? 'active' : ''}`)}
                 onClick={() => {
                   setDrawerExpanded(false);
                   applyJourney(journeyReset(journey));
@@ -1333,7 +1379,7 @@ export const MapPage: React.FC = () => {
               </button>
             </div>
 
-            <div className="map-playback-slider">
+            <div className={cx(uiStyles, 'map-playback-slider')}>
               <input
                 type="range"
                 min={0}
@@ -1344,19 +1390,19 @@ export const MapPage: React.FC = () => {
                 }}
                 aria-label="Scrub migration timeline stop"
                 aria-valuetext={sliderValueText}
-                className="map-range-input"
+                className={cx(uiStyles, 'map-range-input')}
               />
-              <span className="map-playback-stat">
+              <span className={cx(uiStyles, 'map-playback-stat')}>
                 {yearSpanLabel} · {metricLabel}
               </span>
             </div>
           </div>
         </div>
 
-        <div className="map-overlay tree-controls map-zoom-controls">
+        <div className={cx(uiStyles, 'map-overlay tree-controls map-zoom-controls')}>
           <button
             type="button"
-            className="pill-btn"
+            className={cx(uiStyles, 'pill-btn')}
             aria-label="Zoom in map"
             onClick={() => {
               mapRef.current?.zoomIn({ duration: 180 });
@@ -1366,7 +1412,7 @@ export const MapPage: React.FC = () => {
           </button>
           <button
             type="button"
-            className="pill-btn"
+            className={cx(uiStyles, 'pill-btn')}
             aria-label="Zoom out map"
             onClick={() => {
               mapRef.current?.zoomOut({ duration: 180 });
@@ -1374,7 +1420,7 @@ export const MapPage: React.FC = () => {
           >
             −
           </button>
-          <button type="button" className="pill-btn" onClick={handleFitClick}>
+          <button type="button" className={cx(uiStyles, 'pill-btn')} onClick={handleFitClick}>
             Fit
           </button>
         </div>

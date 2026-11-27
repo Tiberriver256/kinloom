@@ -1,3 +1,5 @@
+import { edtfYear, parseGedcomDateToEdtf } from '../edtf.js';
+import { getCurrentReferenceYear, isPersonLivingPublic } from '../privacy.js';
 import type {
   AlternateDate,
   EventSourceRef,
@@ -8,14 +10,8 @@ import type {
   RawPerson,
   SourceRecord,
 } from '../schemas/entities.js';
-import { edtfYear, parseGedcomDateToEdtf } from '../edtf.js';
-import { getCurrentReferenceYear, isPersonLivingPublic } from '../privacy.js';
-import {
-  cleanSourceCitationTitle,
-  inferSourceRepository,
-  UNVERIFIED_TREE_SOURCE_ID,
-} from './citations.js';
-import { parseGedcomText, type GedcomFam, type GedcomIndi } from './parse.js';
+import { cleanSourceCitationTitle, inferSourceRepository, UNVERIFIED_TREE_SOURCE_ID } from './citations.js';
+import { type GedcomFam, type GedcomIndi, parseGedcomText } from './parse.js';
 
 export interface KnownPlaceCoords {
   lat: number;
@@ -178,8 +174,7 @@ function buildPlacesFromRaw(
     const slug = slugify(fullName);
     const id = `plc_${slug}`;
     const known = knownPlaces?.[key];
-    const placeType =
-      known?.place_type ?? inferPlaceType(segments.length, segments.length - 1, name);
+    const placeType = known?.place_type ?? inferPlaceType(segments.length, segments.length - 1, name);
 
     const place: Place = {
       id,
@@ -308,9 +303,7 @@ function normalizePersonNames(
   }
 
   // 3. Parenthetical maiden name pattern like "Jane (Smith) Doe" -> primary "Jane Smith", alt "Jane Doe".
-  const parenMatch = /^(.+?)\s*\(([A-Za-z][A-Za-z'-]+)\)\s+([A-Za-z][A-Za-z'-]+)$/.exec(
-    fallbackName
-  );
+  const parenMatch = /^(.+?)\s*\(([A-Za-z][A-Za-z'-]+)\)\s+([A-Za-z][A-Za-z'-]+)$/.exec(fallbackName);
   if (parenMatch) {
     const given = parenMatch[1].trim();
     const maiden = parenMatch[2].trim();
@@ -335,7 +328,7 @@ function normalizePersonNames(
     !fatherSurnames.has(fallbackSplit.surname.toLowerCase())
   ) {
     const fatherFam = ind.famc.map((fid) => fams.get(fid)).find((f) => f?.husb && indis.has(f.husb));
-    const fatherSurname = fatherFam ? indis.get(fatherFam.husb)?.surname ?? '' : '';
+    const fatherSurname = fatherFam ? (indis.get(fatherFam.husb)?.surname ?? '') : '';
     if (fatherSurname) {
       // Remove duplicate maiden surname from end of given name if present (e.g. "Mary Smith" + "Doe")
       const givenTokens = fallbackSplit.givenName.split(/\s+/).filter(Boolean);
@@ -494,10 +487,7 @@ export function sliceGedcom(gedcomText: string, options: SliceGedcomOptions): Sl
   if (!rootXref && options.rootName) {
     const needle = options.rootName.trim().toLowerCase();
     for (const ind of indis.values()) {
-      if (
-        ind.fullName.toLowerCase() === needle ||
-        ind.altNames.some((alt) => alt.toLowerCase() === needle)
-      ) {
+      if (ind.fullName.toLowerCase() === needle || ind.altNames.some((alt) => alt.toLowerCase() === needle)) {
         rootXref = ind.xref;
         break;
       }
@@ -520,9 +510,7 @@ export function sliceGedcom(gedcomText: string, options: SliceGedcomOptions): Sl
     }
     const lowerFull = ind.fullName.toLowerCase();
     const lowerSur = ind.surname.toLowerCase();
-    return ancestorSurnamesLower.some(
-      (target) => lowerSur === target || lowerFull.includes(target)
-    );
+    return ancestorSurnamesLower.some((target) => lowerSur === target || lowerFull.includes(target));
   };
 
   const walkAncestors = (xref: string, expandParents: boolean, depth: number): void => {
@@ -559,9 +547,7 @@ export function sliceGedcom(gedcomText: string, options: SliceGedcomOptions): Sl
         }
         const keepWalking =
           expandSpouseAncestors ||
-          (ancestorSurnamesLower.length > 0
-            ? matchesAncestorSurname(parentInd)
-            : parentXref === fam.husb);
+          (ancestorSurnamesLower.length > 0 ? matchesAncestorSurname(parentInd) : parentXref === fam.husb);
         walkAncestors(parentXref, keepWalking, depth + 1);
       }
     }
@@ -731,8 +717,7 @@ export function sliceGedcom(gedcomText: string, options: SliceGedcomOptions): Sl
   const sourcesById = new Map<string, SourceRecord>();
   sourcesById.set(UNVERIFIED_TREE_SOURCE_ID, {
     id: UNVERIFIED_TREE_SOURCE_ID,
-    citation:
-      'Citation needed — unverified family tree entry (imported without an attached primary record)',
+    citation: 'Citation needed — unverified family tree entry (imported without an attached primary record)',
     source_type: 'unverified_tree_entry',
     repository: 'Needs primary verification',
   });
@@ -999,9 +984,7 @@ export function sliceGedcom(gedcomText: string, options: SliceGedcomOptions): Sl
       const placePhrase = ev.place ? ` in ${normalizeRawPlace(ev.place)}` : '';
 
       const famRefs =
-        ev.sources.length > 0
-          ? ev.sources
-          : fam.sources.map((s) => ({ sourXref: s, page: '' }));
+        ev.sources.length > 0 ? ev.sources : fam.sources.map((s) => ({ sourXref: s, page: '' }));
 
       events.push({
         id: nextEvtId(ev.tag.toLowerCase(), yr),

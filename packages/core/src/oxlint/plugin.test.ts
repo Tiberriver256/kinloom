@@ -1,36 +1,26 @@
 import { execFile } from 'node:child_process';
-import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { promisify } from 'node:util';
 import { afterEach, describe, expect, it } from 'vitest';
+import { kinloomOxlintPlugin } from './plugin.js';
 
 const execFileAsync = promisify(execFile);
 
 const REPO_ROOT = path.resolve(import.meta.dirname, '../../../..');
-const CORE_PKG_DIR = path.resolve(import.meta.dirname, '../..');
-const OXLINT_BIN = path.join(REPO_ROOT, 'node_modules', '.bin', 'oxlint');
-const SOURCE_PLUGIN_PATH = path.resolve(import.meta.dirname, 'plugin.ts');
+const CHECKER_SCRIPT = path.join(REPO_ROOT, 'scripts', 'check-archive-counts.mjs');
 
-interface OxlintDiagnostic {
+interface CountDiagnostic {
   code?: string;
   message?: string;
-  severity?: string;
-  labels?: Array<{
-    span?: {
-      line?: number;
-      column?: number;
-    };
-  }>;
+  line?: number;
+  column?: number;
 }
 
-interface OxlintJsonOutput {
-  diagnostics?: OxlintDiagnostic[];
-}
-
-interface OxlintRunResult {
+interface CountCheckResult {
   exitCode: number;
-  diagnostics: OxlintDiagnostic[];
+  diagnostics: CountDiagnostic[];
   stderr: string;
 }
 
@@ -51,44 +41,16 @@ afterEach(async () => {
   }
 });
 
-async function runOxlintWithPlugin(
-  pluginSpecifier: string,
-  testFileSource: string,
-  options?: { linkCorePackage?: boolean }
-): Promise<OxlintRunResult> {
-  const dir = await makeTempDir('kinloom-oxlint-');
-  const configPath = path.join(dir, '.oxlintrc.json');
+async function runArchiveCountCheck(testFileSource: string): Promise<CountCheckResult> {
+  const dir = await makeTempDir('kinloom-count-check-');
   const targetPath = path.join(dir, 'archive.test.ts');
-
-  if (options?.linkCorePackage) {
-    const scopeDir = path.join(dir, 'node_modules', '@kinloom');
-    await mkdir(scopeDir, { recursive: true });
-    await symlink(CORE_PKG_DIR, path.join(scopeDir, 'core'), 'dir');
-  }
-
-  await writeFile(
-    configPath,
-    JSON.stringify(
-      {
-        jsPlugins: [pluginSpecifier],
-        rules: {
-          'kinloom/no-hardcoded-archive-counts': 'error',
-        },
-      },
-      null,
-      2
-    ),
-    'utf8'
-  );
   await writeFile(targetPath, testFileSource, 'utf8');
 
   try {
-    const { stdout, stderr } = await execFileAsync(
-      OXLINT_BIN,
-      ['-c', configPath, '--format', 'json', targetPath],
-      { cwd: dir }
-    );
-    const parsed = JSON.parse(stdout) as OxlintJsonOutput;
+    const { stdout, stderr } = await execFileAsync(process.execPath, [CHECKER_SCRIPT, '--json', targetPath], {
+      cwd: REPO_ROOT,
+    });
+    const parsed = JSON.parse(stdout) as { diagnostics?: CountDiagnostic[] };
     return {
       exitCode: 0,
       diagnostics: parsed.diagnostics ?? [],
@@ -97,11 +59,11 @@ async function runOxlintWithPlugin(
   } catch (err: unknown) {
     const execErr = err as { code?: number | string; stdout?: string; stderr?: string };
     const stdout = execErr.stdout ?? '';
-    let parsed: OxlintJsonOutput = {};
+    let parsed: { diagnostics?: CountDiagnostic[] } = {};
     if (stdout.trim().startsWith('{')) {
-      parsed = JSON.parse(stdout) as OxlintJsonOutput;
+      parsed = JSON.parse(stdout) as { diagnostics?: CountDiagnostic[] };
     } else if (stdout.trim().length > 0) {
-      throw new Error(`oxlint failed before producing JSON diagnostics: ${stdout}\n${execErr.stderr ?? ''}`);
+      throw new Error(`check-archive-counts failed before JSON output: ${stdout}\n${execErr.stderr ?? ''}`);
     }
     return {
       exitCode: typeof execErr.code === 'number' ? execErr.code : 1,
@@ -111,7 +73,7 @@ async function runOxlintWithPlugin(
   }
 }
 
-describe('kinloom/no-hardcoded-archive-counts oxlint rule', () => {
+describe('kinloom/no-hardcoded-archive-counts rule', () => {
   it('flags hardcoded positive archive counts across collections, .length, and meta.counts', async () => {
     const badCode = `
 declare const expect: any;
@@ -147,7 +109,7 @@ expect(bundle.meta).toMatchObject({ counts: { sources: 14 } });
 expect.soft(bundle.people).toHaveLength(54);
 `;
 
-    const result = await runOxlintWithPlugin(SOURCE_PLUGIN_PATH, badCode);
+    const result = await runArchiveCountCheck(badCode);
     const ruleDiagnostics = result.diagnostics.filter(
       (d) => d.code === 'kinloom(no-hardcoded-archive-counts)'
     );
@@ -159,12 +121,8 @@ expect.soft(bundle.people).toHaveLength(54);
     expect(ruleDiagnostics.some((d) => d.message?.includes('media === 126'))).toBe(true);
     expect(ruleDiagnostics.some((d) => d.message?.includes('narratives === 20'))).toBe(true);
     expect(ruleDiagnostics.some((d) => d.message?.includes('people.length === 35'))).toBe(true);
-    expect(
-      ruleDiagnostics.some((d) => d.message?.includes('meta.counts.living_redacted === 4'))
-    ).toBe(true);
-    expect(
-      ruleDiagnostics.some((d) => d.message?.includes('meta.counts.living_redacted === 0'))
-    ).toBe(false);
+    expect(ruleDiagnostics.some((d) => d.message?.includes('meta.counts.living_redacted === 4'))).toBe(true);
+    expect(ruleDiagnostics.some((d) => d.message?.includes('meta.counts.living_redacted === 0'))).toBe(false);
   });
 
   it('allows zero invariants, data-derived expressions, non-empty checks, and non-archive arrays', async () => {
@@ -199,28 +157,13 @@ expect(items).toHaveLength(3);
 expect(person.events).toHaveLength(2);
 `;
 
-    const result = await runOxlintWithPlugin(SOURCE_PLUGIN_PATH, goodCode);
+    const result = await runArchiveCountCheck(goodCode);
     expect(result.exitCode).toBe(0);
     expect(result.diagnostics).toEqual([]);
   });
 
-  it('resolves cleanly via the published @kinloom/core/oxlint-plugin package export', async () => {
-    const sample = `
-declare const expect: any;
-declare const bundle: any;
-expect(bundle.media).toHaveLength(126);
-`;
-
-    const result = await runOxlintWithPlugin('@kinloom/core/oxlint-plugin', sample, {
-      linkCorePackage: true,
-    });
-    expect(result.exitCode).toBe(1);
-    expect(
-      result.diagnostics.some(
-        (d) =>
-          d.code === 'kinloom(no-hardcoded-archive-counts)' &&
-          d.message?.includes('media === 126')
-      )
-    ).toBe(true);
+  it('exports the canonical plugin metadata and rule definition', () => {
+    expect(kinloomOxlintPlugin.meta.name).toBe('kinloom');
+    expect(kinloomOxlintPlugin.rules['no-hardcoded-archive-counts'].meta.type).toBe('problem');
   });
 });

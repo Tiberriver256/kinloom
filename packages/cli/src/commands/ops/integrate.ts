@@ -2,19 +2,22 @@ import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import {
+  type AlternateDate,
+  type ArchiveBundle,
   ArchiveBundleSchema,
-  KinshipEdgeSchema,
-  MediaItemSchema,
-  NarrativeSchema,
-  PlaceSchema,
-  RawEventSchema,
-  RawPersonSchema,
-  SourceRecordSchema,
+  type BuildMode,
   compileArchive,
+  type EventParticipant,
   edtfToBounds,
   extractNarrativeCitations,
   getMediaPersonIds,
+  type KinshipEdge,
+  KinshipEdgeSchema,
+  MediaItemSchema,
   mergeEventSources,
+  NarrativeSchema,
+  PlaceSchema,
+  type PrivacyConfig,
   parseEventsYaml,
   parseKinloomConfigYaml,
   parseKinshipYaml,
@@ -24,7 +27,12 @@ import {
   parsePeopleYaml,
   parsePlacesYaml,
   parseSourcesYaml,
+  type RawEvent,
+  RawEventSchema,
+  type RawPerson,
+  RawPersonSchema,
   resolveEffectiveLiving,
+  SourceRecordSchema,
   serializeEventsYaml,
   serializeKinshipYaml,
   serializeMediaYaml,
@@ -34,14 +42,6 @@ import {
   serializeSourcesYaml,
   validateMediaForPrivacy,
   validateNarrativeCitations,
-  type AlternateDate,
-  type ArchiveBundle,
-  type BuildMode,
-  type EventParticipant,
-  type KinshipEdge,
-  type PrivacyConfig,
-  type RawEvent,
-  type RawPerson,
 } from '@kinloom/core';
 import { CliValidationError } from '../../errors.js';
 
@@ -65,13 +65,7 @@ const ALLOWED_PATCH_KEYS = new Set([
   'narratives',
 ]);
 
-const ALLOWED_REMOVE_KINSHIP_KEYS = new Set([
-  'from',
-  'to',
-  'relation',
-  'family_xref',
-  'symmetric',
-]);
+const ALLOWED_REMOVE_KINSHIP_KEYS = new Set(['from', 'to', 'relation', 'family_xref', 'symmetric']);
 
 const RECIPROCAL_KINSHIP_RELATION: Record<KinshipEdge['relation'], KinshipEdge['relation']> = {
   parent: 'child',
@@ -274,9 +268,7 @@ function isKinshipRelationValue(value: unknown): value is KinshipEdge['relation'
   return value === 'parent' || value === 'child' || value === 'spouse';
 }
 
-export function getReciprocalKinshipRelation(
-  relation: KinshipEdge['relation']
-): KinshipEdge['relation'] {
+export function getReciprocalKinshipRelation(relation: KinshipEdge['relation']): KinshipEdge['relation'] {
   return RECIPROCAL_KINSHIP_RELATION[relation];
 }
 
@@ -327,9 +319,7 @@ export function parseRemoveKinshipEntries(raw: unknown, label: string): RemoveKi
     let familyXref: string | undefined;
     if (item.family_xref !== undefined) {
       if (typeof item.family_xref !== 'string' || item.family_xref.trim().length === 0) {
-        throw new CliValidationError(
-          `${itemLabel}.family_xref must be a non-empty string when provided.`
-        );
+        throw new CliValidationError(`${itemLabel}.family_xref must be a non-empty string when provided.`);
       }
       familyXref = item.family_xref.trim();
     }
@@ -351,9 +341,7 @@ export function parseRemoveKinshipEntries(raw: unknown, label: string): RemoveKi
   return entries;
 }
 
-export function expandRemoveKinshipTargets(
-  entries: readonly RemoveKinshipEntry[]
-): RemoveKinshipTarget[] {
+export function expandRemoveKinshipTargets(entries: readonly RemoveKinshipEntry[]): RemoveKinshipTarget[] {
   const targets: RemoveKinshipTarget[] = [];
   const seen = new Set<string>();
   const pushTarget = (target: RemoveKinshipTarget): void => {
@@ -457,7 +445,8 @@ function verifyKinshipSymmetryForRemovedPairs(
     const forwardKey = `${entry.from}|${entry.to}|${entry.relation}`;
     const reciprocalRelation = getReciprocalKinshipRelation(entry.relation);
     const reciprocalKey = `${entry.to}|${entry.from}|${reciprocalRelation}`;
-    const pairKey = forwardKey < reciprocalKey ? `${forwardKey}<>${reciprocalKey}` : `${reciprocalKey}<>${forwardKey}`;
+    const pairKey =
+      forwardKey < reciprocalKey ? `${forwardKey}<>${reciprocalKey}` : `${reciprocalKey}<>${forwardKey}`;
     if (checked.has(pairKey)) {
       continue;
     }
@@ -603,7 +592,7 @@ function alternateDateKey(entry: AlternateDate): string {
 
 function mergeAlternateDates(
   existing: readonly AlternateDate[] | undefined,
-  incoming: readonly AlternateDate[] | undefined,
+  incoming: readonly AlternateDate[] | undefined
 ): AlternateDate[] | undefined {
   if (incoming === undefined) {
     return existing?.map((entry) => ({ ...entry }));
@@ -627,7 +616,7 @@ function mergeAlternateDates(
 
 function mergedPrimarySourceFlag(
   existing: boolean | undefined,
-  incoming: boolean | undefined,
+  incoming: boolean | undefined
 ): boolean | undefined {
   if (existing === true || incoming === true) {
     return true;
@@ -638,7 +627,11 @@ function mergedPrimarySourceFlag(
   return undefined;
 }
 
-function mergeSharedEvent(prev: RawEvent, incoming: RawEvent, removeSourceIds: Set<string> | undefined): RawEvent {
+function mergeSharedEvent(
+  prev: RawEvent,
+  incoming: RawEvent,
+  removeSourceIds: Set<string> | undefined
+): RawEvent {
   const retainedPrevSources = removeSourceIds
     ? prev.sources.filter((ref) => !removeSourceIds.has(ref.source_id))
     : prev.sources;
@@ -649,10 +642,7 @@ function mergeSharedEvent(prev: RawEvent, incoming: RawEvent, removeSourceIds: S
     sources: mergeEventSources(retainedPrevSources, incoming.sources),
   };
 
-  const hasPrimarySource = mergedPrimarySourceFlag(
-    prev.has_primary_source,
-    incoming.has_primary_source,
-  );
+  const hasPrimarySource = mergedPrimarySourceFlag(prev.has_primary_source, incoming.has_primary_source);
   if (hasPrimarySource === undefined) {
     delete merged.has_primary_source;
   } else {
@@ -722,26 +712,14 @@ function normalizeAndValidatePatch(rawPatch: unknown, expectedPersonId: string):
     person_updates: rawUpdates,
     people: readArrayField('people'),
     events: readArrayField('events'),
-    remove_event_ids: parseOptionalStringList(
-      rawPatch.remove_event_ids,
-      'patch.json remove_event_ids'
-    ),
+    remove_event_ids: parseOptionalStringList(rawPatch.remove_event_ids, 'patch.json remove_event_ids'),
     places: readArrayField('places'),
     sources: readArrayField('sources'),
-    remove_source_ids: parseOptionalStringList(
-      rawPatch.remove_source_ids,
-      'patch.json remove_source_ids'
-    ),
+    remove_source_ids: parseOptionalStringList(rawPatch.remove_source_ids, 'patch.json remove_source_ids'),
     media: readArrayField('media'),
-    remove_media_ids: parseOptionalStringList(
-      rawPatch.remove_media_ids,
-      'patch.json remove_media_ids'
-    ),
+    remove_media_ids: parseOptionalStringList(rawPatch.remove_media_ids, 'patch.json remove_media_ids'),
     kinship: readArrayField('kinship'),
-    remove_kinship: parseRemoveKinshipEntries(
-      rawPatch.remove_kinship,
-      'patch.json remove_kinship'
-    ),
+    remove_kinship: parseRemoveKinshipEntries(rawPatch.remove_kinship, 'patch.json remove_kinship'),
     narratives: readArrayField('narratives'),
   };
 }
@@ -933,9 +911,7 @@ function mergePersonUpdates(
 
   const parsed = RawPersonSchema.parse(next);
   if (resolveEffectiveLiving(parsed, privacyConfig)) {
-    throw new Error(
-      `Refusing update: merged person '${parsed.id}' resolves as living under privacy rules.`
-    );
+    throw new Error(`Refusing update: merged person '${parsed.id}' resolves as living under privacy rules.`);
   }
 
   const changed = JSON.stringify(existingPerson) !== JSON.stringify(parsed);
@@ -1124,9 +1100,7 @@ function canonicalizeJsonValue(value: unknown): unknown {
   }
   if (value !== null && typeof value === 'object') {
     const sorted: Record<string, unknown> = {};
-    for (const key of Object.keys(value as Record<string, unknown>).toSorted((a, b) =>
-      a.localeCompare(b)
-    )) {
+    for (const key of Object.keys(value as Record<string, unknown>).toSorted((a, b) => a.localeCompare(b))) {
       const prop = (value as Record<string, unknown>)[key];
       if (prop !== undefined) {
         sorted[key] = canonicalizeJsonValue(prop);
@@ -1164,9 +1138,7 @@ export function computePackageFingerprints(packageDir: string): PackageFingerpri
       .readdirSync(scansDir, { withFileTypes: true })
       .filter((entry) => entry.isFile())
       .map((entry) => entry.name)
-      .filter(
-        (name) => !name.includes('/') && !name.includes('\\') && name !== '.' && name !== '..'
-      )
+      .filter((name) => !name.includes('/') && !name.includes('\\') && name !== '.' && name !== '..')
       .toSorted((a, b) => a.localeCompare(b));
     for (const name of entries) {
       scans_sha256[name] = sha256File(path.join(scansDir, name)).sha256;
@@ -1431,12 +1403,7 @@ function planScanStaging(
     if (!entry.isFile()) {
       continue;
     }
-    if (
-      entry.name.includes('/') ||
-      entry.name.includes('\\') ||
-      entry.name === '..' ||
-      entry.name === '.'
-    ) {
+    if (entry.name.includes('/') || entry.name.includes('\\') || entry.name === '..' || entry.name === '.') {
       throw new Error(`Unsafe scan filename '${entry.name}'.`);
     }
     const sourcePath = path.join(scansSourceDir, entry.name);
@@ -1557,9 +1524,7 @@ function writeFileAtomic(filePath: string, content: string): void {
   fs.renameSync(tmpPath, filePath);
 }
 
-export async function runIntegrateCommand(
-  options: IntegrateCommandOptions
-): Promise<IntegrateCommandResult> {
+export async function runIntegrateCommand(options: IntegrateCommandOptions): Promise<IntegrateCommandResult> {
   return executeIntegrateSingle(options);
 }
 
@@ -1625,9 +1590,7 @@ export async function executeIntegrateSingle(
   const existingSources = parseSourcesYaml(readOptionalUtf8(path.join(dataDir, 'sources.yaml')));
   const existingKinship = parseKinshipYaml(readOptionalUtf8(path.join(dataDir, 'kinship.yaml')));
   const existingMedia = parseMediaYaml(readOptionalUtf8(path.join(dataDir, 'media.yaml')));
-  const existingNarratives = parseNarrativesYaml(
-    readOptionalUtf8(path.join(dataDir, 'narratives.yaml'))
-  );
+  const existingNarratives = parseNarrativesYaml(readOptionalUtf8(path.join(dataDir, 'narratives.yaml')));
   const enrichments = parseNarrativeEnrichmentsYaml(
     readOptionalUtf8(path.join(dataDir, 'narrative_enrichments.yaml'))
   );
@@ -1681,9 +1644,7 @@ export async function executeIntegrateSingle(
 
   const peopleById = new Map(mergedPeople.map((p) => [p.id, p]));
   const livingIds = new Set(
-    mergedPeople
-      .filter((p) => p.is_living || resolveEffectiveLiving(p, siteConfig.privacy))
-      .map((p) => p.id)
+    mergedPeople.filter((p) => p.is_living || resolveEffectiveLiving(p, siteConfig.privacy)).map((p) => p.id)
   );
 
   // Invariant 2: Every place in patch.places and merged places must have valid non-(0, 0) coordinates.
@@ -1709,10 +1670,7 @@ export async function executeIntegrateSingle(
       ) {
         merged.pronunciation = structuredClone(prev.pronunciation);
       }
-      const hasPrimary = mergedPrimarySourceFlag(
-        prev.has_primary_source,
-        incoming.has_primary_source
-      );
+      const hasPrimary = mergedPrimarySourceFlag(prev.has_primary_source, incoming.has_primary_source);
       if (hasPrimary !== undefined) {
         merged.has_primary_source = hasPrimary;
       }
@@ -1737,10 +1695,7 @@ export async function executeIntegrateSingle(
     (s) => SourceRecordSchema.parse(s),
     (prev, incoming) => {
       const merged: Record<string, unknown> = { ...incoming };
-      const hasPrimary = mergedPrimarySourceFlag(
-        prev.has_primary_source,
-        incoming.has_primary_source
-      );
+      const hasPrimary = mergedPrimarySourceFlag(prev.has_primary_source, incoming.has_primary_source);
       if (hasPrimary !== undefined) {
         merged.has_primary_source = hasPrimary;
       }
@@ -1764,9 +1719,7 @@ export async function executeIntegrateSingle(
   );
   const topLevelRemoveSourceIds = new Set(patch.remove_source_ids);
   if (topLevelRemoveSourceIds.size > 0) {
-    const patchedSourceIds = new Set(
-      patch.sources.map((s) => SourceRecordSchema.parse(s).id)
-    );
+    const patchedSourceIds = new Set(patch.sources.map((s) => SourceRecordSchema.parse(s).id));
     for (const removeId of topLevelRemoveSourceIds) {
       if (patchedSourceIds.has(removeId)) {
         throw new Error(
@@ -1801,9 +1754,7 @@ export async function executeIntegrateSingle(
       const removeSet = new Set(removeIds);
       for (const ref of parsedEv.sources) {
         if (removeSet.has(ref.source_id)) {
-          throw new Error(
-            `Event '${parsedEv.id}' cannot both attach and remove source '${ref.source_id}'.`
-          );
+          throw new Error(`Event '${parsedEv.id}' cannot both attach and remove source '${ref.source_id}'.`);
         }
       }
       const existingSet = eventRemoveSourceIds.get(parsedEv.id);
@@ -1853,10 +1804,7 @@ export async function executeIntegrateSingle(
     (m) => MediaItemSchema.parse(m),
     (prev, incoming) => {
       const merged: Record<string, unknown> = { ...incoming };
-      const hasPrimary = mergedPrimarySourceFlag(
-        prev.has_primary_source,
-        incoming.has_primary_source
-      );
+      const hasPrimary = mergedPrimarySourceFlag(prev.has_primary_source, incoming.has_primary_source);
       if (hasPrimary !== undefined) {
         merged.has_primary_source = hasPrimary;
       }
@@ -1904,11 +1852,7 @@ export async function executeIntegrateSingle(
 
   // Apply remove_kinship before upserting patch.kinship so parent/spouse/xref replacements work in one patch.
   const parsedPatchKinship = patch.kinship.map((rawEdge) => KinshipEdgeSchema.parse(rawEdge));
-  const kinshipRemovals = applyKinshipRemovals(
-    existingKinship,
-    patch.remove_kinship,
-    parsedPatchKinship
-  );
+  const kinshipRemovals = applyKinshipRemovals(existingKinship, patch.remove_kinship, parsedPatchKinship);
   const removedKinship = kinshipRemovals.removed;
 
   // Kinship upsert keyed by from|to|relation.
@@ -1963,10 +1907,7 @@ export async function executeIntegrateSingle(
     (n) => NarrativeSchema.parse(n),
     (prev, incoming) => {
       const merged: Record<string, unknown> = { ...incoming };
-      const hasPrimary = mergedPrimarySourceFlag(
-        prev.has_primary_source,
-        incoming.has_primary_source
-      );
+      const hasPrimary = mergedPrimarySourceFlag(prev.has_primary_source, incoming.has_primary_source);
       if (hasPrimary !== undefined) {
         merged.has_primary_source = hasPrimary;
       }
@@ -2062,9 +2003,7 @@ export async function executeIntegrateSingle(
   if (topLevelRemoveEventIds.size > 0) {
     for (const item of finalMedia) {
       if (item.event_id && topLevelRemoveEventIds.has(item.event_id)) {
-        throw new Error(
-          `Cannot remove event '${item.event_id}': media '${item.id}' still references it.`
-        );
+        throw new Error(`Cannot remove event '${item.event_id}': media '${item.id}' still references it.`);
       }
     }
     for (const nar of narrativesMerge.items) {
@@ -2097,17 +2036,13 @@ export async function executeIntegrateSingle(
     for (const ev of finalEvents) {
       for (const ref of ev.sources) {
         if (topLevelRemoveSourceIds.has(ref.source_id)) {
-          throw new Error(
-            `Cannot remove source '${ref.source_id}': event '${ev.id}' still cites it.`
-          );
+          throw new Error(`Cannot remove source '${ref.source_id}': event '${ev.id}' still cites it.`);
         }
       }
     }
     for (const item of finalMedia) {
       if (item.source_id && topLevelRemoveSourceIds.has(item.source_id)) {
-        throw new Error(
-          `Cannot remove source '${item.source_id}': media '${item.id}' still references it.`
-        );
+        throw new Error(`Cannot remove source '${item.source_id}': media '${item.id}' still references it.`);
       }
     }
     for (const nar of narrativesMerge.items) {
@@ -2119,18 +2054,15 @@ export async function executeIntegrateSingle(
         }
       }
     }
-    const allCitationErrors = validateNarrativeCitations(
-      narrativesMerge.items,
-      sourceIds,
-      mediaIds
-    );
+    const allCitationErrors = validateNarrativeCitations(narrativesMerge.items, sourceIds, mediaIds);
     if (allCitationErrors.length > 0) {
       throw new Error(allCitationErrors[0]);
     }
     for (const person of mergedPeople) {
-      const extSources = isPlainObject(person.extensions) && Array.isArray(person.extensions.sources)
-        ? person.extensions.sources
-        : [];
+      const extSources =
+        isPlainObject(person.extensions) && Array.isArray(person.extensions.sources)
+          ? person.extensions.sources
+          : [];
       for (const entry of extSources) {
         const refId =
           typeof entry === 'string'
@@ -2149,12 +2081,7 @@ export async function executeIntegrateSingle(
 
   // Scan staging plan & verify every patch.media[].file exists on disk or in packageDir/scans/.
   const mediaLayout = detectMediaLayout(repoDir);
-  const plannedScans = planScanStaging(
-    repoDir,
-    packageDir,
-    mediaLayout,
-    overlay?.virtualStagedScans
-  );
+  const plannedScans = planScanStaging(repoDir, packageDir, mediaLayout, overlay?.virtualStagedScans);
   const stagedDestSet = new Set(plannedScans.map((s) => s.destPath));
 
   for (const rawMedia of patch.media) {
@@ -2275,11 +2202,7 @@ export async function executeIntegrateSingle(
       content: serializeSourcesYaml(finalSources, { sortById: true }),
     });
   }
-  if (
-    kinshipMerge.counts.added > 0 ||
-    kinshipMerge.counts.updated > 0 ||
-    removedKinship.length > 0
-  ) {
+  if (kinshipMerge.counts.added > 0 || kinshipMerge.counts.updated > 0 || removedKinship.length > 0) {
     pendingWrites.push({
       file: 'kinship.yaml',
       content: serializeKinshipYaml(kinshipMerge.items, { sortDeterministic: true }),

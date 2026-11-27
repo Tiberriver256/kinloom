@@ -2,7 +2,7 @@ import { readdir, readFile, stat } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { parseKinloomConfigYaml, type KinloomSiteConfig } from '@kinloom/core';
+import { type KinloomSiteConfig, parseKinloomConfigYaml } from '@kinloom/core';
 import type { CliIo } from './cli.js';
 import { isRecordCommand } from './commands/records/registry.js';
 import type { CliExitCode } from './errors.js';
@@ -169,9 +169,7 @@ async function resolvePluginImportTarget(cwd: string, specifier: string): Promis
   }
 }
 
-export function resolvePluginCommands(
-  plugins: readonly KinloomCliPlugin[]
-): ResolvedPluginCommands {
+export function resolvePluginCommands(plugins: readonly KinloomCliPlugin[]): ResolvedPluginCommands {
   const seenPluginIds = new Set<string>();
   const commands = new Map<string, KinloomCliCommand>();
   const acceptedPlugins: KinloomCliPlugin[] = [];
@@ -189,19 +187,14 @@ export function resolvePluginCommands(
     for (const cmd of plugin.commands) {
       const cmdName = cmd.name.trim();
       if (isBuiltInCliCommand(cmdName)) {
-        warnings.push(
-          `Plugin '${pluginId}' attempted to shadow built-in command '${cmdName}'; ignoring.`
-        );
+        warnings.push(`Plugin '${pluginId}' attempted to shadow built-in command '${cmdName}'; ignoring.`);
         continue;
       }
       if (commands.has(cmdName)) {
-        warnings.push(
-          `Plugin '${pluginId}' attempted to register duplicate command '${cmdName}'; ignoring.`
-        );
+        warnings.push(`Plugin '${pluginId}' attempted to register duplicate command '${cmdName}'; ignoring.`);
         continue;
       }
-      const normalizedCmd: KinloomCliCommand =
-        cmdName === cmd.name ? cmd : { ...cmd, name: cmdName };
+      const normalizedCmd: KinloomCliCommand = cmdName === cmd.name ? cmd : { ...cmd, name: cmdName };
       commands.set(cmdName, normalizedCmd);
       acceptedCommands.push(normalizedCmd);
     }
@@ -236,9 +229,7 @@ export function formatPluginCommandsHelp(plugins: readonly KinloomCliPlugin[]): 
   return `Site plugin commands:\n${rows.join('\n')}`;
 }
 
-export async function discoverSiteCliPlugins(
-  cwd: string
-): Promise<DiscoverSiteCliPluginsResult> {
+export async function discoverSiteCliPlugins(cwd: string): Promise<DiscoverSiteCliPluginsResult> {
   const warnings: string[] = [];
   let siteConfig: KinloomSiteConfig | null = null;
 

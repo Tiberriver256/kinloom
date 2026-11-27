@@ -1,8 +1,13 @@
-import React, { useEffect, useState } from 'react';
+import type React from 'react';
+import { useEffect, useState } from 'react';
 import { useArchiveData } from '../../context/ArchiveDataContext.js';
+import { cx } from '../../lib/cx.js';
 import { KinloomFooter, KinloomMark } from '../KinloomFooter.js';
-import { consumeAuthErrorFromWindow, type AuthUrlError } from './authErrorCopy.js';
 import { AuthSignInFlow } from './AuthSignInFlow.js';
+import { type AuthUrlError, consumeAuthErrorFromWindow } from './authErrorCopy.js';
+import cssMod0 from './WikiSurfaces.module.css';
+
+const uiStyles = cssMod0;
 
 export interface PrivateArchiveGateProps {
   onNavigateToInvite?: (invitePath: string) => void;
@@ -31,24 +36,24 @@ export const PrivateArchiveGate: React.FC<PrivateArchiveGateProps> = ({ onNaviga
         : 'Enter your invited family email address. No password is needed, and we will email you a one-click sign-in link.';
 
   return (
-    <div className="private-archive-gate">
-      <main className="private-archive-gate-main">
+    <div className={cx(uiStyles, 'private-archive-gate')}>
+      <main className={cx(uiStyles, 'private-archive-gate-main')}>
         <section
-          className="private-archive-gate-card"
+          className={cx(uiStyles, 'private-archive-gate-card')}
           aria-label={`Sign in to ${siteConfig.site.title}`}
         >
-          <div className="private-archive-gate-brand">
+          <div className={cx(uiStyles, 'private-archive-gate-brand')}>
             <KinloomMark size={26} />
-            <span className="private-archive-gate-kicker">Private Family Archive</span>
+            <span className={cx(uiStyles, 'private-archive-gate-kicker')}>Private Family Archive</span>
           </div>
 
-          <h1 className="private-archive-gate-title">{siteConfig.site.title}</h1>
+          <h1 className={cx(uiStyles, 'private-archive-gate-title')}>{siteConfig.site.title}</h1>
 
           {siteConfig.site.description && (
-            <p className="private-archive-gate-desc">{siteConfig.site.description}</p>
+            <p className={cx(uiStyles, 'private-archive-gate-desc')}>{siteConfig.site.description}</p>
           )}
 
-          <p className="private-archive-gate-note">{leadCopy}</p>
+          <p className={cx(uiStyles, 'private-archive-gate-note')}>{leadCopy}</p>
 
           <AuthSignInFlow
             initialUrlError={urlError}

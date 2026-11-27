@@ -3,11 +3,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import {
-  CURL_META_MARKER,
-  createRecordContext,
-  type ExecFileFn,
-} from '../runtime/index.js';
+import { CURL_META_MARKER, createRecordContext, type ExecFileFn } from '../runtime/index.js';
 import { runMichiganologyCommand } from './michiganology.js';
 
 const SEARCH_HTML =
@@ -49,11 +45,7 @@ async function makeTempDir(): Promise<string> {
   return dir;
 }
 
-function curlStdout(
-  body: string | Buffer,
-  status: number,
-  effectiveUrl: string
-): Buffer {
+function curlStdout(body: string | Buffer, status: number, effectiveUrl: string): Buffer {
   const bodyBuf = Buffer.isBuffer(body) ? body : Buffer.from(body, 'utf8');
   const tail = Buffer.from(`\n${CURL_META_MARKER}\n${status}\n${effectiveUrl}`, 'utf8');
   return Buffer.concat([bodyBuf, tail]);
@@ -134,11 +126,9 @@ describe('michiganology native client', () => {
     const rRef = await invokeMich(['search', 'Lincoln', '--refresh', '--json'], cacheDir, {
       execFileImpl,
     });
-    const rTtl = await invokeMich(
-      ['search', 'Lincoln', '--cache-ttl-hours', '0', '--json'],
-      cacheDir,
-      { execFileImpl }
-    );
+    const rTtl = await invokeMich(['search', 'Lincoln', '--cache-ttl-hours', '0', '--json'], cacheDir, {
+      execFileImpl,
+    });
 
     expect(calls).toBe(3);
     expect((JSON.parse(rRef.stdout) as { cache_hit: boolean }).cache_hit).toBe(false);
@@ -460,16 +450,12 @@ describe('michiganology native client', () => {
       return { stdout: curlStdout(JPEG_BYTES, 200, target), stderr: Buffer.alloc(0) };
     };
 
-    const r1 = await invokeMich(
-      ['download', 'IO_abc123', '--output', outDir, '--json'],
-      cacheDir,
-      {
-        execFileImpl,
-        sleepFn: async (ms) => {
-          sleeps.push(ms);
-        },
-      }
-    );
+    const r1 = await invokeMich(['download', 'IO_abc123', '--output', outDir, '--json'], cacheDir, {
+      execFileImpl,
+      sleepFn: async (ms) => {
+        sleeps.push(ms);
+      },
+    });
     const r2 = await invokeMich(['fetch', 'IO_abc123', '-o', outDir, '--json'], cacheDir, {
       execFileImpl,
     });
@@ -495,11 +481,9 @@ describe('michiganology native client', () => {
       };
     };
 
-    const badHost = await invokeMich(
-      ['get', 'https://evil.invalid/uncategorized/IO_abc123/'],
-      cacheDir,
-      { execFileImpl }
-    );
+    const badHost = await invokeMich(['get', 'https://evil.invalid/uncategorized/IO_abc123/'], cacheDir, {
+      execFileImpl,
+    });
     const badScheme = await invokeMich(
       ['get', 'http://michigan.access.preservica.com/uncategorized/IO_abc123/'],
       cacheDir,
@@ -547,16 +531,12 @@ describe('michiganology native client', () => {
       cacheDir,
       { execFileImpl }
     );
-    const badOut = await invokeMich(
-      ['download', 'IO_abc123', '--out', `${outDir}/../escape.jpg`],
-      cacheDir,
-      { execFileImpl }
-    );
-    const sanitized = await invokeMich(
-      ['download', 'IO_abc123', '--out', outDir, '--json'],
-      cacheDir,
-      { execFileImpl }
-    );
+    const badOut = await invokeMich(['download', 'IO_abc123', '--out', `${outDir}/../escape.jpg`], cacheDir, {
+      execFileImpl,
+    });
+    const sanitized = await invokeMich(['download', 'IO_abc123', '--out', outDir, '--json'], cacheDir, {
+      execFileImpl,
+    });
 
     expect(badName.exitCode).toBe(2);
     expect(badSlash.exitCode).toBe(2);
@@ -579,11 +559,9 @@ describe('michiganology native client', () => {
       return { stdout: curlStdout(ITEM_HTML, 200, target), stderr: Buffer.alloc(0) };
     };
 
-    const multiWord = await invokeMich(
-      ['search', 'Abraham', 'Lincoln', '-n', '1', '--json'],
-      cacheDir,
-      { execFileImpl }
-    );
+    const multiWord = await invokeMich(['search', 'Abraham', 'Lincoln', '-n', '1', '--json'], cacheDir, {
+      execFileImpl,
+    });
     const qOpt = await invokeMich(['search', '-q', 'Lincoln', '--json'], cacheDir, {
       execFileImpl,
     });

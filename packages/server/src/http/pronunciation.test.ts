@@ -1,15 +1,15 @@
-import { describe, expect, it, vi } from 'vitest';
 import type { ArchiveBundle, Place, RawPerson } from '@kinloom/core';
+import { describe, expect, it, vi } from 'vitest';
 import { createInMemoryServerPorts } from '../adapters/inMemory.js';
 import type { PronunciationAudioGenerator } from '../ports.js';
 import { computePronunciationPromptHash } from '../services/pronunciationHelper.js';
-import { createKinloomServer } from './router.js';
-import { signSessionToken } from './session.js';
 import {
   createSyntheticHistoricalPerson,
   createSyntheticLivingPerson,
   createSyntheticSiteConfig,
 } from '../testing/adapterContractSuite.js';
+import { createKinloomServer } from './router.js';
+import { signSessionToken } from './session.js';
 
 const ORIGIN = 'https://mercer.example.test';
 const SECRET = 'kinloom-pronunciation-test-secret-2026-abcdef123456';
@@ -348,9 +348,7 @@ describe('Pronunciation audio generation endpoint and auto-regeneration', () => 
       new Request(`${ORIGIN}/api/bundle`, { headers: { cookie: editorCookie } })
     );
     const bundle1 = (await bundleRes1.json()) as ArchiveBundle;
-    expect(bundle1.people.find((p) => p.id === lincoln.id)?.pronunciation?.audio_url).toBe(
-      firstAudioUrl
-    );
+    expect(bundle1.people.find((p) => p.id === lincoln.id)?.pronunciation?.audio_url).toBe(firstAudioUrl);
 
     // 2. Edit unrelated field (alt_names) without changing pronunciation or name -> no TTS call
     const unrelatedRes = await server.fetch(
@@ -533,9 +531,7 @@ describe('Shared pronunciation lexicon endpoints (GET /api/pronunciations, PUT /
     expect(putNewBody.pronunciation?.phonetic).toBe('NOO SAY-lum');
     expect(putNewBody.pronunciation?.note).toBe('Historic Illinois village');
     expect(putNewBody.pronunciation?.audio_url).toMatch(/^\/media\/pronunciation-[a-f0-9]{16}\.wav$/);
-    expect(putNewBody.pronunciations['New Salem']?.audio_url).toBe(
-      putNewBody.pronunciation?.audio_url
-    );
+    expect(putNewBody.pronunciations['New Salem']?.audio_url).toBe(putNewBody.pronunciation?.audio_url);
     expect(putNewBody.pronunciations.Mercer?.phonetic).toBe('MER-ser');
     expect(generateSpy).toHaveBeenCalledTimes(1);
 

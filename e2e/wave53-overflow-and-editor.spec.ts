@@ -1,8 +1,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { expect, test, type Page } from '@playwright/test';
 import { getSessionCookieName, signSessionToken } from '@kinloom/server';
-import { startLiveWikiTestServer, type LiveWikiTestHarness } from './helpers/wikiTestServer.js';
+import { expect, type Page, test } from '@playwright/test';
+import { type LiveWikiTestHarness, startLiveWikiTestServer } from './helpers/wikiTestServer.js';
 
 const STATIC_DEMO_ORIGIN = 'http://127.0.0.1:4173';
 const SESSION_SECRET = 'kinloom-e2e-test-session-secret-0123456789abcdef';
@@ -39,8 +39,9 @@ interface OverflowAuditResult {
 }
 
 async function blockExternalMapTiles(page: Page): Promise<void> {
-  await page.route(/^https?:\/\/(?:[^/]*openstreetmap\.org|[^/]*cartocdn\.com|[^/]*tile\.|fonts\.googleapis\.com|fonts\.gstatic\.com)/i, (route) =>
-    route.abort(),
+  await page.route(
+    /^https?:\/\/(?:[^/]*openstreetmap\.org|[^/]*cartocdn\.com|[^/]*tile\.|fonts\.googleapis\.com|fonts\.gstatic\.com)/i,
+    (route) => route.abort()
   );
 }
 
@@ -105,7 +106,8 @@ async function seedResearchBatch(page: Page, wiki: LiveWikiTestHarness, batchId:
           entity_id: 'pl_springfield_il',
           merge: true,
           data: {
-            summary: 'Capital of Illinois and long-term residence documented in 1850 and 1860 federal censuses.',
+            summary:
+              'Capital of Illinois and long-term residence documented in 1850 and 1860 federal censuses.',
           },
           summary: 'Expand Springfield historical profile from 1860 census',
         },
@@ -119,13 +121,12 @@ async function runPerElementOverflowAndCollisionAudit(page: Page): Promise<Overf
   return page.evaluate(() => {
     const docOverflowX = Math.max(
       0,
-      Math.round((document.documentElement.scrollWidth - window.innerWidth) * 10) / 10,
+      Math.round((document.documentElement.scrollWidth - window.innerWidth) * 10) / 10
     );
 
     const TARGET_SELECTOR =
       'button, a[href], [role="tab"], [role="menuitem"], .pill-btn, .nav-pill, .wiki-btn-primary, .wiki-btn-secondary, .wiki-badge, .wiki-author-pill, .wiki-role-chip, .wiki-action-tag, h1, h2, h3, h4';
-    const EXCLUDED_SELECTOR =
-      '.visually-hidden, .sr-only, .lightbox-backdrop-close, .skip-to-content';
+    const EXCLUDED_SELECTOR = '.visually-hidden, .sr-only, .lightbox-backdrop-close, .skip-to-content';
 
     const isVisibleElement = (el: Element): el is HTMLElement => {
       if (!(el instanceof HTMLElement)) {
@@ -164,15 +165,13 @@ async function runPerElementOverflowAndCollisionAudit(page: Page): Promise<Overf
         continue;
       }
       const style = window.getComputedStyle(raw);
-      const isHorizontalScroller =
-        style.overflowX === 'auto' || style.overflowX === 'scroll';
-      const isTruncatedEllipsis =
-        style.textOverflow === 'ellipsis' && style.overflowX === 'hidden';
+      const isHorizontalScroller = style.overflowX === 'auto' || style.overflowX === 'scroll';
+      const isTruncatedEllipsis = style.textOverflow === 'ellipsis' && style.overflowX === 'hidden';
       const hasOverflowScroll = raw.scrollWidth > raw.clientWidth + 1.5;
 
       if (!isHorizontalScroller && !isTruncatedEllipsis && hasOverflowScroll) {
         elementOverflows.push(
-          `${describeEl(raw)} scrollWidth=${Math.round(raw.scrollWidth)} > clientWidth=${Math.round(raw.clientWidth)}`,
+          `${describeEl(raw)} scrollWidth=${Math.round(raw.scrollWidth)} > clientWidth=${Math.round(raw.clientWidth)}`
         );
       }
 
@@ -194,7 +193,7 @@ async function runPerElementOverflowAndCollisionAudit(page: Page): Promise<Overf
                 const rightEsc = tr.right - box.right;
                 if (leftEsc > 1.5 || rightEsc > 1.5) {
                   textEscapes.push(
-                    `${describeEl(raw)} textEsc(L=${leftEsc.toFixed(1)},R=${rightEsc.toFixed(1)})`,
+                    `${describeEl(raw)} textEsc(L=${leftEsc.toFixed(1)},R=${rightEsc.toFixed(1)})`
                   );
                   break;
                 }
@@ -231,7 +230,7 @@ async function runPerElementOverflowAndCollisionAudit(page: Page): Promise<Overf
           const cRect = child.getBoundingClientRect();
           if (cRect.left < pRect.left - 1.5 || cRect.right > pRect.right + 1.5) {
             parentEscapes.push(
-              `${sel} -> ${describeEl(child)} child[${Math.round(cRect.left)}..${Math.round(cRect.right)}] outside parent[${Math.round(pRect.left)}..${Math.round(pRect.right)}]`,
+              `${sel} -> ${describeEl(child)} child[${Math.round(cRect.left)}..${Math.round(cRect.right)}] outside parent[${Math.round(pRect.left)}..${Math.round(pRect.right)}]`
             );
           }
         }
@@ -253,7 +252,7 @@ async function runPerElementOverflowAndCollisionAudit(page: Page): Promise<Overf
           continue;
         }
         const controls = [...scope.querySelectorAll<HTMLElement>('button, a[href], select')].filter(
-          (el) => isVisibleElement(el) && !el.closest('[role="menu"], [role="listbox"]'),
+          (el) => isVisibleElement(el) && !el.closest('[role="menu"], [role="listbox"]')
         );
         for (let i = 0; i < controls.length; i += 1) {
           for (let j = i + 1; j < controls.length; j += 1) {
@@ -268,7 +267,7 @@ async function runPerElementOverflowAndCollisionAudit(page: Page): Promise<Overf
             const overlapY = Math.min(ra.bottom, rb.bottom) - Math.max(ra.top, rb.top);
             if (overlapX > 1.5 && overlapY > 1.5) {
               siblingCollisions.push(
-                `${sel}: ${describeEl(a)} overlaps ${describeEl(b)} by ${overlapX.toFixed(1)}x${overlapY.toFixed(1)}px`,
+                `${sel}: ${describeEl(a)} overlaps ${describeEl(b)} by ${overlapX.toFixed(1)}x${overlapY.toFixed(1)}px`
               );
             }
           }
@@ -299,7 +298,7 @@ async function navigateAndWaitReady(page: Page, url: string): Promise<void> {
         !text.includes('Loading administration records')
       );
     },
-    { timeout: 10_000 },
+    { timeout: 10_000 }
   );
   await page.waitForTimeout(80);
 }
@@ -323,12 +322,9 @@ test.describe('Wave 53B signed-in editor UX, per-element overflow/collision, and
 
     // 1. Public static demo sweep across 4 viewports on key routes
     for (const vp of VIEWPORTS) {
-      // oxlint-disable-next-line eslint/no-await-in-loop -- sequential viewport matrix
       await page.setViewportSize({ width: vp.width, height: vp.height });
       for (const route of ['/', '/tree?surface=roll', '/person/abraham-lincoln-1809', '/evidence']) {
-        // oxlint-disable-next-line eslint/no-await-in-loop -- sequential route sweep
         await navigateAndWaitReady(page, `${STATIC_DEMO_ORIGIN}${route}`);
-        // oxlint-disable-next-line eslint/no-await-in-loop -- measure layout
         const audit = await runPerElementOverflowAndCollisionAudit(page);
         expect(audit.docOverflowX, `public ${route} @ ${vp.name} docOverflowX`).toBeLessThanOrEqual(1);
         expect(audit.elementOverflows, `public ${route} @ ${vp.name} elementOverflows`).toEqual([]);
@@ -344,15 +340,11 @@ test.describe('Wave 53B signed-in editor UX, per-element overflow/collision, and
       { name: '360x800', width: 360, height: 800 },
       { name: '390x844', width: 390, height: 844 },
     ]) {
-      // oxlint-disable-next-line eslint/no-await-in-loop -- sequential mobile stress check
       await page.setViewportSize({ width: vp.width, height: vp.height });
 
       // IndexPage signed-in with 3-digit counts + multi-word plugin tab
-      // oxlint-disable-next-line eslint/no-await-in-loop -- navigate
       await navigateAndWaitReady(page, `${wiki.baseUrl}/`);
-      // oxlint-disable-next-line eslint/no-await-in-loop -- wait for buttons
       await expect(page.locator('.index-filter-actions .index-add-person-btn')).toBeVisible();
-      // oxlint-disable-next-line eslint/no-await-in-loop -- inject 3-digit counts + multi-word plugin nav tab
       await page.evaluate(() => {
         const mediaBtn = document.querySelector('.index-media-filter-btn');
         if (mediaBtn) {
@@ -363,7 +355,12 @@ test.describe('Wave 53B signed-in editor UX, per-element overflow/collision, and
           exportBtn.textContent = 'Export GEDCOM (128)';
         }
         const nav = document.querySelector('.nav-links');
-        if (nav && ![...nav.querySelectorAll('a.nav-pill')].some((a) => a.textContent?.includes('Read Memoir Chapters'))) {
+        if (
+          nav &&
+          ![...nav.querySelectorAll('a.nav-pill')].some((a) =>
+            a.textContent?.includes('Read Memoir Chapters')
+          )
+        ) {
           const pluginLink = document.createElement('a');
           pluginLink.className = 'nav-pill';
           pluginLink.href = '/memoir';
@@ -372,7 +369,6 @@ test.describe('Wave 53B signed-in editor UX, per-element overflow/collision, and
         }
       });
 
-      // oxlint-disable-next-line eslint/no-await-in-loop -- measure stressed index
       const indexAudit = await runPerElementOverflowAndCollisionAudit(page);
       expect(indexAudit.docOverflowX, `3-digit / @ ${vp.name}`).toBeLessThanOrEqual(1);
       expect(indexAudit.elementOverflows, `3-digit / @ ${vp.name} elementOverflows`).toEqual([]);
@@ -381,7 +377,6 @@ test.describe('Wave 53B signed-in editor UX, per-element overflow/collision, and
       expect(indexAudit.siblingCollisions, `3-digit / @ ${vp.name} siblingCollisions`).toEqual([]);
 
       // Verify no orphan half-width cell on .index-filter-actions
-      // oxlint-disable-next-line eslint/no-await-in-loop -- check balanced action rows
       const rowMetrics = await page.evaluate(() => {
         const container = document.querySelector('.index-filter-actions')!.getBoundingClientRect();
         const media = document.querySelector('.index-media-filter-btn')!.getBoundingClientRect();
@@ -398,43 +393,36 @@ test.describe('Wave 53B signed-in editor UX, per-element overflow/collision, and
       expect(rowMetrics.sameSecondRow).toBe(true);
       expect(rowMetrics.secondRowSpan).toBeGreaterThanOrEqual(rowMetrics.containerWidth - 4);
 
-      // oxlint-disable-next-line eslint/no-await-in-loop -- screenshot proof
       await maybeScreenshot(page, `index-signed-in-3digit-${vp.name}.png`);
 
       // TreePage signed-in Direct Line and Full Tree with 3-digit count (128)
-      // oxlint-disable-next-line eslint/no-await-in-loop -- navigate to tree
       await navigateAndWaitReady(page, `${wiki.baseUrl}/tree?surface=roll`);
-      // oxlint-disable-next-line eslint/no-await-in-loop -- wait for toolbar
       await expect(page.locator('.tree-scope-segmented')).toBeVisible();
-      // oxlint-disable-next-line eslint/no-await-in-loop -- inject 3-digit Full Tree count
       await page.evaluate(() => {
-        const buttons = [...document.querySelectorAll<HTMLButtonElement>('.tree-scope-segmented .tree-seg-btn')];
+        const buttons = [
+          ...document.querySelectorAll<HTMLButtonElement>('.tree-scope-segmented .tree-seg-btn'),
+        ];
         const fullBtn = buttons.find((b) => b.textContent?.includes('Full Tree'));
         if (fullBtn) {
           fullBtn.textContent = 'Full Tree (128)';
         }
       });
-      // oxlint-disable-next-line eslint/no-await-in-loop -- measure stressed tree
       const treeAudit = await runPerElementOverflowAndCollisionAudit(page);
       expect(treeAudit.docOverflowX, `3-digit /tree @ ${vp.name}`).toBeLessThanOrEqual(1);
       expect(treeAudit.elementOverflows, `3-digit /tree @ ${vp.name} elementOverflows`).toEqual([]);
       expect(treeAudit.textEscapes, `3-digit /tree @ ${vp.name} textEscapes`).toEqual([]);
       expect(treeAudit.parentEscapes, `3-digit /tree @ ${vp.name} parentEscapes`).toEqual([]);
       expect(treeAudit.siblingCollisions, `3-digit /tree @ ${vp.name} siblingCollisions`).toEqual([]);
-      // oxlint-disable-next-line eslint/no-await-in-loop -- verify desktop + Add Person is hidden on mobile and mobile + icon button is 44x44
       await expect(page.locator('.tree-toolbar .tree-add-person-btn')).toBeHidden();
-      // oxlint-disable-next-line eslint/no-await-in-loop -- verify mobile + Add Person icon button is 44x44
       const addIconBox = await page.locator('.tree-add-person-mobile-btn').boundingBox();
       expect(addIconBox?.width ?? 0).toBeGreaterThanOrEqual(44);
       expect(addIconBox?.height ?? 0).toBeGreaterThanOrEqual(44);
-      // oxlint-disable-next-line eslint/no-await-in-loop -- verify scope segmented control spans full mobile row width
       const scopeSpan = await page.evaluate(() => {
         const row = document.querySelector('.tree-toolbar-row-secondary')!.getBoundingClientRect();
         const seg = document.querySelector('.tree-scope-segmented')!.getBoundingClientRect();
         return { rowWidth: Math.round(row.width), segWidth: Math.round(seg.width) };
       });
       expect(scopeSpan.segWidth).toBeGreaterThanOrEqual(scopeSpan.rowWidth - 4);
-      // oxlint-disable-next-line eslint/no-await-in-loop -- screenshot proof Direct Line
       await maybeScreenshot(page, `tree-direct-3digit-${vp.name}.png`);
     }
   });
@@ -448,12 +436,9 @@ test.describe('Wave 53B signed-in editor UX, per-element overflow/collision, and
     await seedResearchBatch(page, wiki, 'batch_wave53b_matrix');
 
     for (const vp of VIEWPORTS) {
-      // oxlint-disable-next-line eslint/no-await-in-loop -- sequential viewport matrix
       await page.setViewportSize({ width: vp.width, height: vp.height });
       for (const route of CORE_ROUTES) {
-        // oxlint-disable-next-line eslint/no-await-in-loop -- sequential route sweep
         await navigateAndWaitReady(page, `${wiki.baseUrl}${route}`);
-        // oxlint-disable-next-line eslint/no-await-in-loop -- measure layout
         const audit = await runPerElementOverflowAndCollisionAudit(page);
         expect(audit.docOverflowX, `signed-in ${route} @ ${vp.name} docOverflowX`).toBeLessThanOrEqual(1);
         expect(audit.elementOverflows, `signed-in ${route} @ ${vp.name} elementOverflows`).toEqual([]);
@@ -526,7 +511,7 @@ test.describe('Wave 53B signed-in editor UX, per-element overflow/collision, and
     // Navigate with auth_error query parameters -> SignInModal must auto-open after /api/session resolves
     await page.goto(
       `${wiki.baseUrl}/person/abraham-lincoln-1809?auth_error=INVITE_REQUIRED&auth_provider=google`,
-      { waitUntil: 'networkidle' },
+      { waitUntil: 'networkidle' }
     );
 
     const dialog = page.getByRole('dialog', { name: 'Sign in to family archive' });
@@ -563,27 +548,22 @@ test.describe('Wave 53B signed-in editor UX, per-element overflow/collision, and
       { name: '768x1024', width: 768, height: 1024 },
       { name: '1280x800', width: 1280, height: 800 },
     ]) {
-      // oxlint-disable-next-line eslint/no-await-in-loop -- check each viewport
       await page.setViewportSize({ width: vp.width, height: vp.height });
-      // oxlint-disable-next-line eslint/no-await-in-loop -- navigate
       await page.goto(`${wiki.baseUrl}/person/abraham-lincoln-1809`, { waitUntil: 'networkidle' });
-      // oxlint-disable-next-line eslint/no-await-in-loop -- click pronunciation Edit
       const editPronBtn = page.locator('.pronunciation-edit-link').first();
       await expect(editPronBtn).toBeVisible();
-      // oxlint-disable-next-line eslint/no-await-in-loop -- open drawer at pronunciation section
       await editPronBtn.click();
 
       const drawer = page.getByRole('dialog', { name: /Edit Abraham Lincoln/ });
-      // oxlint-disable-next-line eslint/no-await-in-loop -- wait for drawer
       await expect(drawer).toBeVisible();
-      // oxlint-disable-next-line eslint/no-await-in-loop -- wait for scrollIntoView + revision sync
       await page.waitForTimeout(150);
 
-      // oxlint-disable-next-line eslint/no-await-in-loop -- assert sticky header & footer in viewport
       const stickyCheck = await page.evaluate(() => {
         const top = document.querySelector('.wiki-edit-drawer-panel > .drawer-top')!.getBoundingClientRect();
         const footer = document.querySelector('.wiki-drawer-footer')!.getBoundingClientRect();
-        const saveBtn = document.querySelector('.wiki-drawer-footer button[type="submit"]')!.getBoundingClientRect();
+        const saveBtn = document
+          .querySelector('.wiki-drawer-footer button[type="submit"]')!
+          .getBoundingClientRect();
         const hint = document.querySelector('.wiki-drawer-footer-hint')?.textContent?.trim() ?? '';
         return {
           vh: window.innerHeight,
@@ -601,11 +581,9 @@ test.describe('Wave 53B signed-in editor UX, per-element overflow/collision, and
       }
 
       if (vp.name === '360x800') {
-        // oxlint-disable-next-line eslint/no-await-in-loop -- screenshot proof
         await maybeScreenshot(page, 'edit-drawer-pronunciation-360x800.png');
       }
 
-      // oxlint-disable-next-line eslint/no-await-in-loop -- close drawer
       await drawer.getByRole('button', { name: 'Close', exact: true }).click();
     }
   });
@@ -630,12 +608,12 @@ test.describe('Wave 53B signed-in editor UX, per-element overflow/collision, and
     await firstViewDiff.click();
     await expect(batchSection.getByRole('button', { name: 'Hide Diff' }).first()).toHaveAttribute(
       'aria-expanded',
-      'true',
+      'true'
     );
 
-    const diffWidths = await batchSection.locator('.wiki-diff-table td').evaluateAll((cells) =>
-      cells.map((c) => Math.round(c.getBoundingClientRect().width)),
-    );
+    const diffWidths = await batchSection
+      .locator('.wiki-diff-table td')
+      .evaluateAll((cells) => cells.map((c) => Math.round(c.getBoundingClientRect().width)));
     expect(diffWidths.length).toBeGreaterThanOrEqual(2);
     for (const width of diffWidths) {
       expect(width, 'mobile diff cell stacks full-width >= 260px').toBeGreaterThanOrEqual(260);

@@ -1,15 +1,19 @@
-import { DateStamp, resolveAssetUrl } from './Atoms.js';
-import {
-  buildLibrarianCitation,
-  findSourceUsages,
-  formatSourceTypeLabel,
-} from '@kinloom/core';
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { buildLibrarianCitation, findSourceUsages, formatSourceTypeLabel } from '@kinloom/core';
+import type React from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { KINLOOM_VOCABULARY } from '../lib/vocabulary.js';
 import { useArchiveData } from '../context/ArchiveDataContext.js';
 import { useArchiveUi } from '../context/ArchiveUiContext.js';
+import { cx } from '../lib/cx.js';
 import { useDialogFocusTrap } from '../lib/useDialogFocusTrap.js';
+import { KINLOOM_VOCABULARY } from '../lib/vocabulary.js';
+import cssMod3 from '../pages/IndexPage.module.css';
+import { DateStamp, resolveAssetUrl } from './Atoms.js';
+import cssMod0 from './SourceInspectorDrawer.module.css';
+import cssMod1 from './SourceReaderDrawer.module.css';
+import cssMod2 from './wiki/WikiSurfaces.module.css';
+
+const uiStyles: Readonly<Record<string, string>> = { ...cssMod0, ...cssMod1, ...cssMod2, ...cssMod3 };
 
 export const SourceInspectorDrawer: React.FC = () => {
   const { bundle, sourcesById, eventsById, readableSourceIds, baseUrl } = useArchiveData();
@@ -32,12 +36,12 @@ export const SourceInspectorDrawer: React.FC = () => {
         scan_url: sourceInspector?.scanUrl,
         scan_title: sourceInspector?.scanTitle,
       }),
-    [sourceRecord, activeSourceId, sourceInspector],
+    [sourceRecord, activeSourceId, sourceInspector]
   );
 
   const { usages, linkedMedia } = useMemo(
     () => findSourceUsages(activeSourceId, bundle),
-    [activeSourceId, bundle],
+    [activeSourceId, bundle]
   );
 
   const dialogRef = useDialogFocusTrap({
@@ -60,8 +64,7 @@ export const SourceInspectorDrawer: React.FC = () => {
 
   const isReadable = readableSourceIds.has(activeSourceId);
   const previewScanUrl = sourceInspector.scanUrl || linkedMedia[0]?.file || null;
-  const previewScanCaption =
-    sourceInspector.scanTitle || linkedMedia[0]?.caption || citation.title;
+  const previewScanCaption = sourceInspector.scanTitle || linkedMedia[0]?.caption || citation.title;
 
   const handleCopy = (): void => {
     if (!navigator.clipboard) {
@@ -85,61 +88,62 @@ export const SourceInspectorDrawer: React.FC = () => {
       ref={dialogRef}
       open
       aria-modal="true"
-      className="drawer-backdrop source-inspector-backdrop"
+      className={cx(uiStyles, 'drawer-backdrop source-inspector-backdrop')}
       aria-label={KINLOOM_VOCABULARY.sources.inspectorAria}
     >
       <button
         type="button"
         tabIndex={-1}
-        className="lightbox-backdrop-close"
+        className={cx(uiStyles, 'lightbox-backdrop-close')}
         aria-label="Close source inspector"
         onClick={closeSourceInspector}
       />
-      <div className="drawer-panel source-inspector-panel">
-        <div className="drawer-top">
+      <div className={cx(uiStyles, 'drawer-panel source-inspector-panel')}>
+        <div className={cx(uiStyles, 'drawer-top')}>
           <div>
-            <h2 className="source-inspector-title">{citation.title}</h2>
-            <div className="source-inspector-badges">
-              <span className={`evidence-tier-badge tier-${citation.tier}`}>
+            <h2 className={cx(uiStyles, 'source-inspector-title')}>{citation.title}</h2>
+            <div className={cx(uiStyles, 'source-inspector-badges')}>
+              <span className={cx(uiStyles, `evidence-tier-badge tier-${citation.tier}`)}>
                 {citation.tierLabel}
               </span>
               {sourceInspector.confidence && citation.tier !== 'unverified' && (
-                <span className="evidence-basis-tag">{citation.evidenceBasis}</span>
+                <span className={cx(uiStyles, 'evidence-basis-tag')}>{citation.evidenceBasis}</span>
               )}
             </div>
           </div>
           <button
             ref={closeBtnRef}
             type="button"
-            className="drawer-close"
+            className={cx(uiStyles, 'drawer-close')}
             onClick={closeSourceInspector}
           >
             Close
           </button>
         </div>
 
-        <p className="source-inspector-tier-note">{citation.tierDescription}</p>
+        <p className={cx(uiStyles, 'source-inspector-tier-note')}>{citation.tierDescription}</p>
 
         {activeEvent && (
-          <section className="inspector-block">
-            <h3 className="inspector-section-heading">Cited Claim</h3>
-            <div className="inspector-claim-title">
+          <section className={cx(uiStyles, 'inspector-block')}>
+            <h3 className={cx(uiStyles, 'inspector-section-heading')}>Cited Claim</h3>
+            <div className={cx(uiStyles, 'inspector-claim-title')}>
               <DateStamp displayDate={activeEvent.display_date} edtf={activeEvent.edtf_date} />{' '}
               <span>{activeEvent.title}</span>
             </div>
             {citation.recordDetail ? (
-              <p className="inspector-record-detail">{citation.recordDetail}</p>
+              <p className={cx(uiStyles, 'inspector-record-detail')}>{citation.recordDetail}</p>
             ) : (
-              <p className="inspector-missing-detail">
-                Collection-level citation only. No specific page, sheet, roll, or folio detail is recorded for this event.
+              <p className={cx(uiStyles, 'inspector-missing-detail')}>
+                Collection-level citation only. No specific page, sheet, roll, or folio detail is recorded for
+                this event.
               </p>
             )}
           </section>
         )}
 
-        <section className="inspector-block">
-          <h3 className="inspector-section-heading">Bibliographic Record</h3>
-          <dl className="inspector-bib-list">
+        <section className={cx(uiStyles, 'inspector-block')}>
+          <h3 className={cx(uiStyles, 'inspector-section-heading')}>Bibliographic Record</h3>
+          <dl className={cx(uiStyles, 'inspector-bib-list')}>
             {citation.author && (
               <>
                 <dt>Author / Creator</dt>
@@ -178,7 +182,7 @@ export const SourceInspectorDrawer: React.FC = () => {
                     href={citation.url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inspector-ext-link"
+                    className={cx(uiStyles, 'inspector-ext-link')}
                   >
                     {citation.urlHost || citation.url} ↗
                   </a>
@@ -188,21 +192,21 @@ export const SourceInspectorDrawer: React.FC = () => {
           </dl>
         </section>
 
-        <section className="inspector-block">
-          <div className="inspector-block-header">
-            <h3 className="inspector-section-heading">Formatted Reference</h3>
-            <button type="button" className="source-action-btn" onClick={handleCopy}>
+        <section className={cx(uiStyles, 'inspector-block')}>
+          <div className={cx(uiStyles, 'inspector-block-header')}>
+            <h3 className={cx(uiStyles, 'inspector-section-heading')}>Formatted Reference</h3>
+            <button type="button" className={cx(uiStyles, 'source-action-btn')} onClick={handleCopy}>
               {copied ? 'Copied' : 'Copy Citation'}
             </button>
           </div>
-          <p className="inspector-formatted-citation">{citation.bibliographicString}</p>
+          <p className={cx(uiStyles, 'inspector-formatted-citation')}>{citation.bibliographicString}</p>
         </section>
 
-        <div className="inspector-actions-row">
+        <div className={cx(uiStyles, 'inspector-actions-row')}>
           {isReadable && (
             <button
               type="button"
-              className="pill-btn active"
+              className={cx(uiStyles, 'pill-btn active')}
               onClick={() => {
                 openSourceReader({
                   sourceId: activeSourceId,
@@ -216,7 +220,7 @@ export const SourceInspectorDrawer: React.FC = () => {
           {previewScanUrl && (
             <button
               type="button"
-              className="pill-btn"
+              className={cx(uiStyles, 'pill-btn')}
               onClick={() => {
                 setScanExpanded((v) => !v);
               }}
@@ -231,7 +235,7 @@ export const SourceInspectorDrawer: React.FC = () => {
               href={citation.url}
               target="_blank"
               rel="noopener noreferrer"
-              className="pill-btn"
+              className={cx(uiStyles, 'pill-btn')}
               style={{ textDecoration: 'none' }}
             >
               Open External Archive ↗
@@ -239,7 +243,7 @@ export const SourceInspectorDrawer: React.FC = () => {
           )}
           <Link
             to={`/evidence?tab=citations&source=${encodeURIComponent(activeSourceId)}`}
-            className="pill-btn"
+            className={cx(uiStyles, 'pill-btn')}
             style={{ textDecoration: 'none' }}
             onClick={closeSourceInspector}
           >
@@ -248,53 +252,52 @@ export const SourceInspectorDrawer: React.FC = () => {
         </div>
 
         {scanExpanded && previewScanUrl && (
-          <figure className="inspector-scan-figure">
+          <figure className={cx(uiStyles, 'inspector-scan-figure')}>
             <img
               src={resolveAssetUrl(previewScanUrl, baseUrl)}
               alt={previewScanCaption}
-              className="inspector-scan-img"
+              className={cx(uiStyles, 'inspector-scan-img')}
             />
-            <figcaption className="inspector-scan-caption">{previewScanCaption}</figcaption>
+            <figcaption className={cx(uiStyles, 'inspector-scan-caption')}>{previewScanCaption}</figcaption>
           </figure>
         )}
 
-        <section className="inspector-block">
-          <h3 className="inspector-section-heading">
-            Cited Across This Archive ({usages.length}{' '}
-            {usages.length === 1 ? 'event' : 'events'})
+        <section className={cx(uiStyles, 'inspector-block')}>
+          <h3 className={cx(uiStyles, 'inspector-section-heading')}>
+            Cited Across This Archive ({usages.length} {usages.length === 1 ? 'event' : 'events'})
           </h3>
           {usages.length === 0 ? (
-            <p className="inspector-missing-detail">
+            <p className={cx(uiStyles, 'inspector-missing-detail')}>
               No public events currently cite this source record.
             </p>
           ) : (
-            <ul className="inspector-usage-list">
+            <ul className={cx(uiStyles, 'inspector-usage-list')}>
               {usages.map(({ event, ref, primaryPersonSlug, primaryPersonName }) => {
                 const isCurrent = event.id === sourceInspector.eventId;
                 return (
                   <li
                     key={`${event.id}|${ref.citation_detail ?? ''}`}
-                    className={`inspector-usage-item ${isCurrent ? 'current' : ''}`}
+                    className={cx(uiStyles, `inspector-usage-item ${isCurrent ? 'current' : ''}`)}
                   >
-                    <div className="inspector-usage-top">
+                    <div className={cx(uiStyles, 'inspector-usage-top')}>
                       <DateStamp displayDate={event.display_date} edtf={event.edtf_date} />
                       {primaryPersonSlug ? (
                         <Link
                           to={`/person/${primaryPersonSlug}?event=${event.id}`}
-                          className="inspector-usage-link"
+                          className={cx(uiStyles, 'inspector-usage-link')}
                           onClick={closeSourceInspector}
                         >
                           {event.title}
                         </Link>
                       ) : (
-                        <span className="inspector-usage-title">{event.title}</span>
+                        <span className={cx(uiStyles, 'inspector-usage-title')}>{event.title}</span>
                       )}
                     </div>
                     {primaryPersonName && (
-                      <div className="inspector-usage-person">{primaryPersonName}</div>
+                      <div className={cx(uiStyles, 'inspector-usage-person')}>{primaryPersonName}</div>
                     )}
                     {ref.citation_detail && (
-                      <div className="inspector-usage-detail">{ref.citation_detail}</div>
+                      <div className={cx(uiStyles, 'inspector-usage-detail')}>{ref.citation_detail}</div>
                     )}
                   </li>
                 );

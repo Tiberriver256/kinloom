@@ -1,8 +1,13 @@
 import type { EntityPayload } from '@kinloom/core';
+import type React from 'react';
+import { cx } from '../../lib/cx.js';
 import type { EntityEditorConflict } from '../../machines/entityEditorMachine.js';
-import { ConflictBadge } from './WikiBadges.js';
-import React from 'react';
+import cssMod1 from '../../pages/IndexPage.module.css';
 import { RevisionDiffView } from './RevisionDiffView.js';
+import { ConflictBadge } from './WikiBadges.js';
+import cssMod0 from './WikiSurfaces.module.css';
+
+const uiStyles: Readonly<Record<string, string>> = { ...cssMod0, ...cssMod1 };
 
 export interface ConflictMergeDialogProps {
   conflict: EntityEditorConflict;
@@ -25,22 +30,18 @@ export const ConflictMergeDialog: React.FC<ConflictMergeDialogProps> = ({
   onRebaseToEdit,
   onDiscardDraft,
 }) => (
-  <section
-    className="wiki-conflict-box"
-    role="alert"
-    aria-label="Edit conflict resolution"
-  >
-    <div className="wiki-conflict-header">
+  <section className={cx(uiStyles, 'wiki-conflict-box')} role="alert" aria-label="Edit conflict resolution">
+    <div className={cx(uiStyles, 'wiki-conflict-header')}>
       <ConflictBadge label={`Edit Conflict · Server at r${conflict.latestRevisionId}`} />
-      <span className="wiki-conflict-meta">
+      <span className={cx(uiStyles, 'wiki-conflict-meta')}>
         {conflict.lastAuthorName ? `Updated by ${conflict.lastAuthorName}` : 'Updated by another editor'}
         {conflict.lastUpdatedAt ? ` · ${conflict.lastUpdatedAt}` : ''}
       </span>
     </div>
 
-    <p className="wiki-conflict-copy">
-      Another editor saved a newer revision while your draft was open. Your unsaved edits are still
-      preserved below. Review the field differences and choose how to proceed.
+    <p className={cx(uiStyles, 'wiki-conflict-copy')}>
+      Another editor saved a newer revision while your draft was open. Your unsaved edits are still preserved
+      below. Review the field differences and choose how to proceed.
     </p>
 
     <RevisionDiffView
@@ -51,17 +52,17 @@ export const ConflictMergeDialog: React.FC<ConflictMergeDialogProps> = ({
       compact
     />
 
-    <div className="wiki-conflict-actions">
-      <button type="button" className="pill-btn active" onClick={onRebaseAndRetry}>
+    <div className={cx(uiStyles, 'wiki-conflict-actions')}>
+      <button type="button" className={cx(uiStyles, 'pill-btn active')} onClick={onRebaseAndRetry}>
         Rebase &amp; Save Again
       </button>
-      <button type="button" className="pill-btn" onClick={onRebaseToEdit}>
+      <button type="button" className={cx(uiStyles, 'pill-btn')} onClick={onRebaseToEdit}>
         Rebase &amp; Review in Editor
       </button>
-      <button type="button" className="pill-btn" onClick={onAcceptServer}>
+      <button type="button" className={cx(uiStyles, 'pill-btn')} onClick={onAcceptServer}>
         Accept Server Version
       </button>
-      <button type="button" className="pill-btn" onClick={onDiscardDraft}>
+      <button type="button" className={cx(uiStyles, 'pill-btn')} onClick={onDiscardDraft}>
         Discard Draft
       </button>
     </div>

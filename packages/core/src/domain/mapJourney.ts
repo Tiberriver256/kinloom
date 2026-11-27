@@ -10,11 +10,7 @@ export const MAP_JOURNEY_INITIAL: MapJourneyState = {
   selectedStopId: null,
 };
 
-function select(
-  state: MapJourneyState,
-  stepIndex: number,
-  stopIds: readonly string[]
-): MapJourneyState {
+function select(state: MapJourneyState, stepIndex: number, stopIds: readonly string[]): MapJourneyState {
   return {
     ...state,
     stepIndex,
@@ -38,10 +34,7 @@ export function journeyPrev(state: MapJourneyState, stopIds: readonly string[]):
   return { ...select(state, next, stopIds), playing: false };
 }
 
-export function journeyPlayToggle(
-  state: MapJourneyState,
-  stopIds: readonly string[]
-): MapJourneyState {
+export function journeyPlayToggle(state: MapJourneyState, stopIds: readonly string[]): MapJourneyState {
   if (state.playing) {
     return { ...state, playing: false };
   }

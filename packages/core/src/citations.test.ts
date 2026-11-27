@@ -1,15 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import {
+  type ArchiveEvent,
   extractNarrativeCitations,
   isPreviewableCitationImage,
+  type MediaItem,
   orderNarrativeSources,
   parseInlineCitationToken,
   resolveCitationMedia,
+  type SourceRecord,
   validateArchive,
   validateNarrativeCitations,
-  type ArchiveEvent,
-  type MediaItem,
-  type SourceRecord,
 } from './index.js';
 
 const DEMO_SOURCES: SourceRecord[] = [
@@ -144,7 +144,8 @@ describe('extractNarrativeCitations', () => {
   });
 
   it('keeps numbering contiguous when filtering to known source IDs', () => {
-    const markdown = 'First[^src_missing] then valid[^src_demo_census_1880] and next[^src_demo_marriage_1872].';
+    const markdown =
+      'First[^src_missing] then valid[^src_demo_census_1880] and next[^src_demo_marriage_1872].';
     const known = new Set(['src_demo_census_1880', 'src_demo_marriage_1872']);
 
     const result = extractNarrativeCitations(markdown, { knownSourceIds: known });
@@ -164,7 +165,7 @@ describe('orderNarrativeSources', () => {
     const ordered = orderNarrativeSources(
       markdown,
       ['src_demo_marriage_1872', 'src_demo_census_1880', 'src_demo_diary_1891'],
-      sourcesById,
+      sourcesById
     );
 
     expect(ordered.map((entry) => [entry.source.id, entry.footnoteNumber])).toEqual([
@@ -182,7 +183,7 @@ describe('resolveCitationMedia', () => {
       'med_demo_explicit_override',
       DEMO_MEDIA,
       'per_subject',
-      DEMO_EVENTS,
+      DEMO_EVENTS
     );
     expect(picked?.id).toBe('med_demo_explicit_override');
   });
@@ -193,17 +194,11 @@ describe('resolveCitationMedia', () => {
       null,
       DEMO_MEDIA,
       'per_subject',
-      DEMO_EVENTS,
+      DEMO_EVENTS
     );
     expect(forSubject?.id).toBe('med_demo_scan_subject');
 
-    const withoutSubject = resolveCitationMedia(
-      'src_demo_census_1880',
-      null,
-      DEMO_MEDIA,
-      null,
-      DEMO_EVENTS,
-    );
+    const withoutSubject = resolveCitationMedia('src_demo_census_1880', null, DEMO_MEDIA, null, DEMO_EVENTS);
     expect(withoutSubject?.id).toBe('med_demo_scan_1');
   });
 
@@ -213,7 +208,7 @@ describe('resolveCitationMedia', () => {
       null,
       DEMO_MEDIA,
       'per_subject',
-      DEMO_EVENTS,
+      DEMO_EVENTS
     );
     expect(picked?.id).toBe('med_demo_event_photo');
   });
@@ -233,7 +228,7 @@ describe('resolveCitationMedia', () => {
       null,
       multiEventMedia,
       'per_subject',
-      DEMO_EVENTS,
+      DEMO_EVENTS
     );
     expect(picked?.id).toBe('med_demo_multi_evt');
   });
@@ -242,14 +237,12 @@ describe('resolveCitationMedia', () => {
     expect(isPreviewableCitationImage(DEMO_MEDIA[4])).toBe(false);
     expect(isPreviewableCitationImage(DEMO_MEDIA[5])).toBe(false);
 
+    expect(resolveCitationMedia('src_demo_audio', null, DEMO_MEDIA, 'per_subject', DEMO_EVENTS)).toBeNull();
     expect(
-      resolveCitationMedia('src_demo_audio', null, DEMO_MEDIA, 'per_subject', DEMO_EVENTS),
+      resolveCitationMedia('src_demo_redacted', null, DEMO_MEDIA, 'per_subject', DEMO_EVENTS)
     ).toBeNull();
     expect(
-      resolveCitationMedia('src_demo_redacted', null, DEMO_MEDIA, 'per_subject', DEMO_EVENTS),
-    ).toBeNull();
-    expect(
-      resolveCitationMedia('src_no_media_at_all', null, DEMO_MEDIA, 'per_subject', DEMO_EVENTS),
+      resolveCitationMedia('src_no_media_at_all', null, DEMO_MEDIA, 'per_subject', DEMO_EVENTS)
     ).toBeNull();
   });
 });
@@ -265,7 +258,7 @@ describe('validateNarrativeCitations and validateArchive integration', () => {
         },
       ],
       new Set(['src_demo_census_1880']),
-      new Set(['med_demo_scan_1']),
+      new Set(['med_demo_scan_1'])
     );
 
     expect(errors).toEqual([

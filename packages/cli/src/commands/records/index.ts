@@ -1,46 +1,43 @@
 export {
-  RECORD_COMMAND_ALIASES,
-  RECORD_COMMAND_CATEGORIES,
-  RECORD_COMMAND_SPECS,
-  isRecordCommand,
-  resolveRecordCommand,
-  type AssetScriptCommandSpec,
-  type BaseRecordCommandSpec,
-  type NativeRecordCommandSpec,
-  type RecordCommandCategory,
-  type RecordCommandCategoryInfo,
-  type RecordCommandSpec,
-  type SkillGuideCommandSpec,
-  type SkillScriptCommandSpec,
-} from './registry.js';
-
-export {
-  resolveRecordGuidePath,
-  resolveRecordScriptPath,
-  type ResolveRootsOptions,
-} from './resolve.js';
-
+  type RunRecordCommandOptions,
+  type RunRecordCommandResult,
+  runRecordCommand,
+} from './dispatch.js';
 export {
   classifyRecordCommandIntent,
   formatRecordCommandsHelp,
+  type ParsedSkillDocument,
   parseSkillDocument,
+  type RecordCommandIntent,
   renderRecordCommandHelp,
   rewriteSkillCommandExamples,
-  type ParsedSkillDocument,
-  type RecordCommandIntent,
 } from './help.js';
-
 export {
-  runRecordCommand,
-  type RunRecordCommandOptions,
-  type RunRecordCommandResult,
-} from './dispatch.js';
+  type AssetScriptCommandSpec,
+  type BaseRecordCommandSpec,
+  isRecordCommand,
+  type NativeRecordCommandSpec,
+  RECORD_COMMAND_ALIASES,
+  RECORD_COMMAND_CATEGORIES,
+  RECORD_COMMAND_SPECS,
+  type RecordCommandCategory,
+  type RecordCommandCategoryInfo,
+  type RecordCommandSpec,
+  resolveRecordCommand,
+  type SkillGuideCommandSpec,
+  type SkillScriptCommandSpec,
+} from './registry.js';
+export {
+  type ResolveRootsOptions,
+  resolveRecordGuidePath,
+  resolveRecordScriptPath,
+} from './resolve.js';
 
 export {
   buildTelemetrySubcmd,
   isUvOfflineCacheMiss,
-  resolveScriptInvocation,
   type RecordSpawnFn,
+  resolveScriptInvocation,
   type ScriptInvocation,
 } from './runner.js';
 

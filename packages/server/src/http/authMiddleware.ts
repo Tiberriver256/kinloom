@@ -1,9 +1,9 @@
 import {
-  isInviteActive,
   type AgentTokenScope,
   type ArchiveRepository,
   type CallerPrincipal,
   type Clock,
+  isInviteActive,
   type PluginRouteMinRole,
   type RevisionAuthor,
 } from '@kinloom/core';
@@ -134,11 +134,7 @@ export function enforceCsrfOrigin(request: Request, url: URL, authMethod: AuthMe
   }
 
   if (authMethod === 'none' && origin && origin !== url.origin) {
-    throw new KinloomHttpError(
-      403,
-      'CSRF_ORIGIN_MISMATCH',
-      'Cross-origin state-changing request rejected.'
-    );
+    throw new KinloomHttpError(403, 'CSRF_ORIGIN_MISMATCH', 'Cross-origin state-changing request rejected.');
   }
 }
 

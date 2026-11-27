@@ -3,10 +3,10 @@ import { renderEmbeddedGuide, resolveEmbeddedGuide } from '../../guides/index.js
 import {
   RECORD_COMMAND_CATEGORIES,
   RECORD_COMMAND_SPECS,
-  resolveRecordCommand,
   type RecordCommandSpec,
+  resolveRecordCommand,
 } from './registry.js';
-import { resolveRecordGuidePath, type ResolveRootsOptions } from './resolve.js';
+import { type ResolveRootsOptions, resolveRecordGuidePath } from './resolve.js';
 
 export interface ParsedSkillDocument {
   readonly frontmatter: Readonly<Record<string, string>>;
@@ -46,7 +46,11 @@ function parseSimpleFrontmatter(raw: string): Record<string, string> {
       result[currentKey] =
         blockStyle === '|'
           ? blockLines.join('\n').trim()
-          : blockLines.map((line) => line.trim()).filter(Boolean).join(' ').trim();
+          : blockLines
+              .map((line) => line.trim())
+              .filter(Boolean)
+              .join(' ')
+              .trim();
       currentKey = null;
       blockStyle = null;
       blockLines = [];
@@ -99,10 +103,8 @@ export function rewriteSkillCommandExamples(body: string, spec: RecordCommandSpe
   let rewritten = body;
 
   const skillDir = spec.kind === 'skill-script' || spec.kind === 'native' ? spec.skillDir : undefined;
-  const scriptName =
-    spec.kind === 'skill-script' || spec.kind === 'native' ? spec.scriptName : undefined;
-  const assetScript =
-    spec.kind === 'asset-script' || spec.kind === 'native' ? spec.assetScript : undefined;
+  const scriptName = spec.kind === 'skill-script' || spec.kind === 'native' ? spec.scriptName : undefined;
+  const assetScript = spec.kind === 'asset-script' || spec.kind === 'native' ? spec.assetScript : undefined;
 
   if (skillDir && scriptName) {
     const skillDirEsc = escapeRegExp(skillDir);
@@ -167,8 +169,7 @@ export function renderRecordCommandHelp(
   commandOrSpec: string | RecordCommandSpec,
   options?: ResolveRootsOptions
 ): string {
-  const spec =
-    typeof commandOrSpec === 'string' ? resolveRecordCommand(commandOrSpec) : commandOrSpec;
+  const spec = typeof commandOrSpec === 'string' ? resolveRecordCommand(commandOrSpec) : commandOrSpec;
   if (!spec) {
     throw new Error(`Unknown record command: '${String(commandOrSpec)}'`);
   }
@@ -206,10 +207,7 @@ export function renderRecordCommandHelp(
   return `${rewritten}\n\n---\n${footerLines.join('\n')}`;
 }
 
-function summarizeFromFrontmatterOrRegistry(
-  spec: RecordCommandSpec,
-  options?: ResolveRootsOptions
-): string {
+function summarizeFromFrontmatterOrRegistry(spec: RecordCommandSpec, options?: ResolveRootsOptions): string {
   if (spec.summary.trim().length > 0) {
     return spec.summary.trim();
   }

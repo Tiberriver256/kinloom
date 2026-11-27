@@ -93,22 +93,10 @@ export function detectMimeType(bytes: Uint8Array, filePath: string): string | nu
   ) {
     return 'video/mp4';
   }
-  if (
-    bytes.length >= 4 &&
-    bytes[0] === 0x1a &&
-    bytes[1] === 0x45 &&
-    bytes[2] === 0xdf &&
-    bytes[3] === 0xa3
-  ) {
+  if (bytes.length >= 4 && bytes[0] === 0x1a && bytes[1] === 0x45 && bytes[2] === 0xdf && bytes[3] === 0xa3) {
     return 'video/webm';
   }
-  if (
-    bytes.length >= 4 &&
-    bytes[0] === 0x4f &&
-    bytes[1] === 0x67 &&
-    bytes[2] === 0x67 &&
-    bytes[3] === 0x53
-  ) {
+  if (bytes.length >= 4 && bytes[0] === 0x4f && bytes[1] === 0x67 && bytes[2] === 0x67 && bytes[3] === 0x53) {
     return 'audio/ogg';
   }
   if (
@@ -181,9 +169,7 @@ export async function runUploadMediaCommand(
   const mimeType = options.mimeType?.trim() || detectMimeType(fileBytes, filePath) || '';
 
   const allowAudioVideo =
-    options.allowAudioVideo ||
-    metadata.kind === 'video_story' ||
-    metadata.kind === 'audio_oral_history';
+    options.allowAudioVideo || metadata.kind === 'video_story' || metadata.kind === 'audio_oral_history';
 
   const validation = validateMediaSelection({
     mimeType,

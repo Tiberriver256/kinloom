@@ -13,10 +13,7 @@ import {
   classifyMigrationStage,
   computeStopsBounds,
 } from './geoMap.js';
-import {
-  describeBloodRelation,
-  findKinshipPath,
-} from './kinshipFinder.js';
+import { describeBloodRelation, findKinshipPath } from './kinshipFinder.js';
 import {
   journeyNext,
   journeyPlayToggle,
@@ -25,11 +22,7 @@ import {
   journeyTick,
   MAP_JOURNEY_INITIAL,
 } from './mapJourney.js';
-import {
-  formatPublicCitation,
-  formatPublicProvenance,
-  formatPublicRepository,
-} from './publicDisplay.js';
+import { formatPublicCitation, formatPublicProvenance, formatPublicRepository } from './publicDisplay.js';
 import { computeRadarForEvent } from './radarEngine.js';
 import { polarPointAvoidingTopLabel } from './radarGeometry.js';
 import { buildFullSourceText, buildSourceTextFilename, formatFileSize } from './sourceExport.js';
@@ -294,9 +287,7 @@ describe('decoupled core domain algorithms', () => {
 
   it('classifies citations, formats public provenance, and builds source text exports', () => {
     expect(classifySourceTier(sourcesById.get('src_census_1880'))).toBe('primary');
-    expect(formatPublicCitation('1880 Federal Census, sources/raw/census.pdf')).toBe(
-      '1880 Federal Census'
-    );
+    expect(formatPublicCitation('1880 Federal Census, sources/raw/census.pdf')).toBe('1880 Federal Census');
     expect(formatPublicRepository('Repository archive (sources/)')).toBe('Family Archive');
     expect(formatPublicProvenance('sources/ancestry/a.jpg')).toBe('Ancestry Family Archive');
 
@@ -304,10 +295,7 @@ describe('decoupled core domain algorithms', () => {
     expect(lib.tier).toBe('primary');
     expect(lib.evidenceBasis).toBe('Direct evidence');
 
-    const sum = summarizeEventCitations(
-      [{ source_id: 'src_census_1880', confidence: 'high' }],
-      sourcesById
-    );
+    const sum = summarizeEventCitations([{ source_id: 'src_census_1880', confidence: 'high' }], sourcesById);
     expect(sum.label).toBe('1 Source · 1 Primary');
     expect(sum.primaryCount).toBe(1);
 
@@ -333,9 +321,7 @@ describe('decoupled core domain algorithms', () => {
   });
 
   it('uses siteConfig migrationEras and mapDefaults in geoMap and timeSnapshot', () => {
-    expect(classifyMigrationStage(placesById.get('plc_boston')!, TEST_CONFIG.migrationEras)).toBe(
-      'atlantic'
-    );
+    expect(classifyMigrationStage(placesById.get('plc_boston')!, TEST_CONFIG.migrationEras)).toBe('atlantic');
     expect(classifyMigrationStage(placesById.get('plc_portland')!, TEST_CONFIG.migrationEras)).toBe(
       'pacific'
     );

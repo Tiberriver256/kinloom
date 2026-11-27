@@ -1,11 +1,4 @@
-import { z } from 'zod';
 import {
-  canAutoEnrollViaInvite,
-  canCompleteAdminAuth,
-  canCompleteMemberEditorAuth,
-  evaluateInviteStatus,
-  isInviteActive,
-  resolveCapabilities,
   type ArchiveAuthProviders,
   type ArchiveCapabilities,
   type ArchiveRepository,
@@ -13,11 +6,18 @@ import {
   type AuthProvider,
   type CallerPrincipal,
   type Clock,
+  canAutoEnrollViaInvite,
+  canCompleteAdminAuth,
+  canCompleteMemberEditorAuth,
   type EmailSender,
+  evaluateInviteStatus,
   type InviteRecord,
+  isInviteActive,
   type KinloomSiteConfig,
+  resolveCapabilities,
   type UserRecord,
 } from '@kinloom/core';
+import { z } from 'zod';
 import { pkceChallengeFromVerifier, randomBase64Url, sha256Hex } from '../crypto.js';
 import { KinloomHttpError } from '../errors.js';
 
@@ -165,12 +165,9 @@ export class AuthService {
   async redeemInvite(token: string): Promise<{ invite: InviteRecord }> {
     const trimmed = token.trim();
     if (!trimmed) {
-      throw new KinloomHttpError(
-        404,
-        'INVITE_INVALID_OR_REVOKED',
-        'Invite link is invalid or revoked.',
-        { invite_status: 'missing' }
-      );
+      throw new KinloomHttpError(404, 'INVITE_INVALID_OR_REVOKED', 'Invite link is invalid or revoked.', {
+        invite_status: 'missing',
+      });
     }
     const invite = await this.repository.getInvite(trimmed);
     const nowIso = this.clock.nowIso();
@@ -254,11 +251,7 @@ export class AuthService {
     });
 
     if (!profile.emailVerified) {
-      throw new KinloomHttpError(
-        403,
-        'INVITE_REQUIRED',
-        'A verified email address is required to sign in.'
-      );
+      throw new KinloomHttpError(403, 'INVITE_REQUIRED', 'A verified email address is required to sign in.');
     }
 
     return this.resolveOrEnrollUser({
@@ -290,8 +283,7 @@ export class AuthService {
     const nowIso = this.clock.nowIso();
     const expiresAt = new Date(nowMs + magicLinkTtlMs).toISOString();
     const existingUser = await this.repository.getUser(parsedEmail);
-    const isBootstrap =
-      this.bootstrapAdminEmail !== null && parsedEmail === this.bootstrapAdminEmail;
+    const isBootstrap = this.bootstrapAdminEmail !== null && parsedEmail === this.bootstrapAdminEmail;
 
     let activeInviteToken: string | null = null;
     if (params.inviteToken) {
@@ -353,17 +345,12 @@ export class AuthService {
     return { sent: true };
   }
 
-  async verifyMagicLink(params: {
-    rawToken: string;
-  }): Promise<{ user: UserRecord; autoEnrolled: boolean }> {
+  async verifyMagicLink(params: { rawToken: string }): Promise<{ user: UserRecord; autoEnrolled: boolean }> {
     const trimmed = params.rawToken.trim();
     if (trimmed.length < 8) {
-      throw new KinloomHttpError(
-        400,
-        'TOKEN_INVALID_OR_EXPIRED',
-        'Sign-in link is invalid.',
-        { token_status: 'invalid' }
-      );
+      throw new KinloomHttpError(400, 'TOKEN_INVALID_OR_EXPIRED', 'Sign-in link is invalid.', {
+        token_status: 'invalid',
+      });
     }
 
     const tokenHash = await sha256Hex(trimmed);
@@ -407,10 +394,7 @@ export class AuthService {
     const existing = await this.repository.getUser(normalizedEmail);
 
     if (existing) {
-      if (
-        canCompleteAdminAuth(true, existing.role) ||
-        canCompleteMemberEditorAuth(true, existing.role)
-      ) {
+      if (canCompleteAdminAuth(true, existing.role) || canCompleteMemberEditorAuth(true, existing.role)) {
         await this.repository.touchUserLogin(existing.email, nowIso);
         return {
           user: { ...existing, last_login_at: nowIso },
@@ -449,12 +433,9 @@ export class AuthService {
         return { user: enrolled, autoEnrolled: true };
       }
 
-      throw new KinloomHttpError(
-        403,
-        'INVITE_REQUIRED',
-        'This invite link has expired or been revoked.',
-        { invite_status: inviteStatus }
-      );
+      throw new KinloomHttpError(403, 'INVITE_REQUIRED', 'This invite link has expired or been revoked.', {
+        invite_status: inviteStatus,
+      });
     }
 
     throw new KinloomHttpError(

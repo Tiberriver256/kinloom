@@ -48,7 +48,9 @@ for (const [fgKey, bgKey, minRatio] of pairs) {
   const r = contrast(fg, bg);
   const ok = r >= minRatio;
   if (!ok) failed += 1;
-  console.log(`${ok ? 'PASS' : 'FAIL'} ${fgKey} (${fg}) on ${bgKey} (${bg}): ${r.toFixed(2)}:1 (min ${minRatio}:1)`);
+  console.log(
+    `${ok ? 'PASS' : 'FAIL'} ${fgKey} (${fg}) on ${bgKey} (${bg}): ${r.toFixed(2)}:1 (min ${minRatio}:1)`
+  );
 }
 
 if (failed > 0) {

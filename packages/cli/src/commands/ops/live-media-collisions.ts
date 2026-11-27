@@ -105,7 +105,5 @@ export function collectLiveMediaCollisions(
         (a, b) => a.person_id.localeCompare(b.person_id) || a.media_id.localeCompare(b.media_id)
       ),
     }))
-    .toSorted(
-      (a, b) => a.file.localeCompare(b.file) || a.live_media_id.localeCompare(b.live_media_id)
-    );
+    .toSorted((a, b) => a.file.localeCompare(b.file) || a.live_media_id.localeCompare(b.live_media_id));
 }

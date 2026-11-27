@@ -3,10 +3,17 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import {
+  type KinloomSiteConfig,
+  type MediaItem,
+  type Narrative,
+  type Place,
   parseEventsYaml,
   parseKinloomConfigYaml,
   parseMediaYaml,
   parseNarrativesYaml,
+  type RawEvent,
+  type RawPerson,
+  type SourceRecord,
   serializeEventsYaml,
   serializeKinloomConfigYaml,
   serializeKinshipYaml,
@@ -15,18 +22,11 @@ import {
   serializePeopleYaml,
   serializePlacesYaml,
   serializeSourcesYaml,
-  type KinloomSiteConfig,
-  type MediaItem,
-  type Narrative,
-  type Place,
-  type RawEvent,
-  type RawPerson,
-  type SourceRecord,
 } from '@kinloom/core';
 import { afterEach, describe, expect, it } from 'vitest';
 import { runCli } from '../../cli.js';
 import { EXIT_OK, EXIT_USAGE } from '../../errors.js';
-import { runMediaDedupeCommand, runVerifyCommand, type OpsIo } from './index.js';
+import { type OpsIo, runMediaDedupeCommand, runVerifyCommand } from './index.js';
 
 const tempDirs: string[] = [];
 
@@ -275,9 +275,7 @@ describe('kinloom media dedupe', () => {
     // Note: med_dup_2 has 2 references (narrative citation + event extensions.media_ids) vs 0 for med_dup_1 ->
     // or pass --prefer med_dup_1 to test explicit survivor selection too! First check default dry-run.
     const dryCap = createCaptureIo();
-    expect(await runCli(['media', 'dedupe', '--repo', repoDir, '--json'], { io: dryCap.io })).toBe(
-      EXIT_OK
-    );
+    expect(await runCli(['media', 'dedupe', '--repo', repoDir, '--json'], { io: dryCap.io })).toBe(EXIT_OK);
     const dryBody = JSON.parse(dryCap.stdout.join('\n')) as {
       ok: boolean;
       apply: boolean;
@@ -309,20 +307,18 @@ describe('kinloom media dedupe', () => {
     // Conflicting --prefer flags targeting both IDs in one group exit 2.
     const conflictCap = createCaptureIo();
     expect(
-      await runCli(
-        ['media', 'dedupe', '--repo', repoDir, '--prefer', 'med_dup_1', '--prefer', 'med_dup_2'],
-        { io: conflictCap.io }
-      )
+      await runCli(['media', 'dedupe', '--repo', repoDir, '--prefer', 'med_dup_1', '--prefer', 'med_dup_2'], {
+        io: conflictCap.io,
+      })
     ).toBe(EXIT_USAGE);
     expect(conflictCap.stderr.join('\n')).toContain('Conflicting `--prefer` flags');
 
     // 2. Apply with --prefer med_dup_1 so med_dup_2 is retired and rewritten in narratives.yaml + events.yaml!
     const applyCap = createCaptureIo();
     expect(
-      await runCli(
-        ['media', 'dedupe', '--repo', repoDir, '--prefer', 'med_dup_1', '--apply', '--json'],
-        { io: applyCap.io }
-      )
+      await runCli(['media', 'dedupe', '--repo', repoDir, '--prefer', 'med_dup_1', '--apply', '--json'], {
+        io: applyCap.io,
+      })
     ).toBe(EXIT_OK);
     const applyBody = JSON.parse(applyCap.stdout.join('\n')) as {
       ok: boolean;

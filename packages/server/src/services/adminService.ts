@@ -1,15 +1,15 @@
-import { z } from 'zod';
 import {
-  AgentTokenScopeSchema,
-  UserRoleSchema,
   type AgentTokenRecord,
   type AgentTokenScope,
+  AgentTokenScopeSchema,
   type ArchiveRepository,
   type Clock,
   type InviteRecord,
   type UserRecord,
   type UserRole,
+  UserRoleSchema,
 } from '@kinloom/core';
+import { z } from 'zod';
 import { randomBase64Url, sha256Hex } from '../crypto.js';
 import { KinloomHttpError } from '../errors.js';
 
@@ -81,11 +81,7 @@ export class AdminService {
     });
   }
 
-  async updateUser(params: {
-    email: string;
-    role: UserRole;
-    display_name?: string;
-  }): Promise<UserRecord> {
+  async updateUser(params: { email: string; role: UserRole; display_name?: string }): Promise<UserRecord> {
     const parsed = UpdateUserSchema.parse({
       role: params.role,
       display_name: params.display_name,
@@ -182,11 +178,7 @@ export class AdminService {
     return tokens.map(({ token_hash: _hash, ...publicFields }) => publicFields);
   }
 
-  async createAgentToken(params: {
-    label: string;
-    scope: AgentTokenScope;
-    createdBy: string;
-  }): Promise<{
+  async createAgentToken(params: { label: string; scope: AgentTokenScope; createdBy: string }): Promise<{
     token_id: string;
     label: string;
     scope: AgentTokenScope;

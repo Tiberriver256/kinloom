@@ -1,4 +1,3 @@
-import { describe, expect, it } from 'vitest';
 import type {
   ArchiveBundle,
   KinloomServerPlugin,
@@ -8,15 +7,16 @@ import type {
   TalkComment,
   UserRecord,
 } from '@kinloom/core';
+import { describe, expect, it } from 'vitest';
 import { createInMemoryServerPorts } from '../adapters/inMemory.js';
-import { createKinloomServer } from './router.js';
-import { signSessionToken } from './session.js';
 import {
   createSyntheticEvent,
   createSyntheticHistoricalPerson,
   createSyntheticLivingPerson,
   createSyntheticSiteConfig,
 } from '../testing/adapterContractSuite.js';
+import { createKinloomServer } from './router.js';
+import { signSessionToken } from './session.js';
 
 const ORIGIN = 'https://alder.example.test';
 const SECRET = 'kinloom-e2e-http-server-secret-2026-abcdef123456';
@@ -99,10 +99,9 @@ describe('createKinloomServer end-to-end HTTP transport', () => {
     });
 
     const cbRes = await server.fetch(
-      new Request(
-        `${ORIGIN}/api/auth/google/callback?code=code_founder&state=${encodeURIComponent(state)}`,
-        { headers: { cookie: oauthCookie } }
-      )
+      new Request(`${ORIGIN}/api/auth/google/callback?code=code_founder&state=${encodeURIComponent(state)}`, {
+        headers: { cookie: oauthCookie },
+      })
     );
     expect(cbRes.status).toBe(302);
     expect(cbRes.headers.get('location')).toBe('/admin');
@@ -150,8 +149,7 @@ describe('createKinloomServer end-to-end HTTP transport', () => {
       new Request(`${ORIGIN}/api/auth/google/start`, { headers: { cookie: viewerCookie } })
     );
     const invOAuthCookie = extractCookiePair(invStartRes, '__Host-kinloom_oauth');
-    const invState =
-      new URL(invStartRes.headers.get('location') ?? '').searchParams.get('state') ?? '';
+    const invState = new URL(invStartRes.headers.get('location') ?? '').searchParams.get('state') ?? '';
 
     // Admin lists invites and revokes invite while OAuth is in flight
     const listInvitesRes = await server.fetch(
@@ -562,7 +560,12 @@ describe('createKinloomServer end-to-end HTTP transport', () => {
     );
 
     const form = new FormData();
-    form.append('file', new File([new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])], 'portrait.png', { type: 'image/png' }));
+    form.append(
+      'file',
+      new File([new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])], 'portrait.png', {
+        type: 'image/png',
+      })
+    );
     form.append(
       'metadata',
       JSON.stringify({
@@ -893,12 +896,14 @@ describe('createKinloomServer end-to-end HTTP transport', () => {
     );
     expect(inviteReqBrowserRes.status).toBe(302);
     const inviteReqLocation = inviteReqBrowserRes.headers.get('location') ?? '';
-    expect(inviteReqLocation).toBe(
-      '/person/arthur?tab=life&auth_error=INVITE_REQUIRED&auth_provider=google'
-    );
+    expect(inviteReqLocation).toBe('/person/arthur?tab=life&auth_error=INVITE_REQUIRED&auth_provider=google');
     expect(inviteReqLocation).not.toContain('stranger.person');
     expect(inviteReqLocation).not.toContain('STALE');
-    expect(getSetCookies(inviteReqBrowserRes).some((c) => c.includes('__Host-kinloom_oauth=;') && c.includes('Max-Age=0'))).toBe(true);
+    expect(
+      getSetCookies(inviteReqBrowserRes).some(
+        (c) => c.includes('__Host-kinloom_oauth=;') && c.includes('Max-Age=0')
+      )
+    ).toBe(true);
 
     // Same INVITE_REQUIRED via API caller returns 403 JSON
     const inviteReqApiRes = await server.fetch(
@@ -913,9 +918,7 @@ describe('createKinloomServer end-to-end HTTP transport', () => {
     );
 
     // 4. Google callback error=access_denied (checked BEFORE !code) -> GOOGLE_CANCELLED + clears OAuth cookie + preserves next
-    const cancelStart = await server.fetch(
-      new Request(`${ORIGIN}/api/auth/google/start?next=%2Ftree`)
-    );
+    const cancelStart = await server.fetch(new Request(`${ORIGIN}/api/auth/google/start?next=%2Ftree`));
     const cancelOAuthCookie = extractCookiePair(cancelStart, '__Host-kinloom_oauth');
     const cancelBrowserRes = await server.fetch(
       new Request(`${ORIGIN}/api/auth/google/callback?error=access_denied`, {
@@ -926,7 +929,11 @@ describe('createKinloomServer end-to-end HTTP transport', () => {
     expect(cancelBrowserRes.headers.get('location')).toBe(
       '/tree?auth_error=GOOGLE_CANCELLED&auth_provider=google'
     );
-    expect(getSetCookies(cancelBrowserRes).some((c) => c.includes('__Host-kinloom_oauth=;') && c.includes('Max-Age=0'))).toBe(true);
+    expect(
+      getSetCookies(cancelBrowserRes).some(
+        (c) => c.includes('__Host-kinloom_oauth=;') && c.includes('Max-Age=0')
+      )
+    ).toBe(true);
 
     const cancelApiRes = await server.fetch(
       new Request(`${ORIGIN}/api/auth/google/callback?error=access_denied`, {
@@ -934,9 +941,7 @@ describe('createKinloomServer end-to-end HTTP transport', () => {
       })
     );
     expect(cancelApiRes.status).toBe(400);
-    expect(((await cancelApiRes.json()) as { error: { code: string } }).error.code).toBe(
-      'GOOGLE_CANCELLED'
-    );
+    expect(((await cancelApiRes.json()) as { error: { code: string } }).error.code).toBe('GOOGLE_CANCELLED');
 
     // 5. Google callback other error=server_error -> GOOGLE_AUTH_FAILED
     const otherErrBrowserRes = await server.fetch(
@@ -959,7 +964,11 @@ describe('createKinloomServer end-to-end HTTP transport', () => {
     expect(badStateBrowserRes.headers.get('location')).toBe(
       '/tree?auth_error=INVALID_OAUTH_STATE&auth_provider=google'
     );
-    expect(getSetCookies(badStateBrowserRes).some((c) => c.includes('__Host-kinloom_oauth=;') && c.includes('Max-Age=0'))).toBe(true);
+    expect(
+      getSetCookies(badStateBrowserRes).some(
+        (c) => c.includes('__Host-kinloom_oauth=;') && c.includes('Max-Age=0')
+      )
+    ).toBe(true);
 
     // 7. Invite unhappy paths (expired, revoked, invalid) on both /invite/:token and /api/auth/invite/:token
     const expiredInvRes = await server.fetch(
@@ -1012,12 +1021,14 @@ describe('createKinloomServer end-to-end HTTP transport', () => {
       )
     );
     expect(midFlightCbRes.status).toBe(302);
-    expect(midFlightCbRes.headers.get('location')).toBe(
-      '/?auth_error=INVITE_REVOKED&auth_provider=google'
-    );
+    expect(midFlightCbRes.headers.get('location')).toBe('/?auth_error=INVITE_REVOKED&auth_provider=google');
     const midFlightClearCookies = getSetCookies(midFlightCbRes);
-    expect(midFlightClearCookies.some((c) => c.includes('__Host-kinloom_oauth=;') && c.includes('Max-Age=0'))).toBe(true);
-    expect(midFlightClearCookies.some((c) => c.includes('__Host-kinloom_session=;') && c.includes('Max-Age=0'))).toBe(true);
+    expect(
+      midFlightClearCookies.some((c) => c.includes('__Host-kinloom_oauth=;') && c.includes('Max-Age=0'))
+    ).toBe(true);
+    expect(
+      midFlightClearCookies.some((c) => c.includes('__Host-kinloom_session=;') && c.includes('Max-Age=0'))
+    ).toBe(true);
 
     // Revoked invite on /invite/:token -> browser 302 INVITE_REVOKED, clears stale session cookie
     const revokedInviteBrowserRes = await server.fetch(
@@ -1030,7 +1041,11 @@ describe('createKinloomServer end-to-end HTTP transport', () => {
       '/?auth_error=INVITE_REVOKED&auth_provider=invite'
     );
     expect(revokedInviteBrowserRes.headers.get('location')).not.toContain(revocableInvite.invite.token);
-    expect(getSetCookies(revokedInviteBrowserRes).some((c) => c.includes('__Host-kinloom_session=;') && c.includes('Max-Age=0'))).toBe(true);
+    expect(
+      getSetCookies(revokedInviteBrowserRes).some(
+        (c) => c.includes('__Host-kinloom_session=;') && c.includes('Max-Age=0')
+      )
+    ).toBe(true);
 
     // Unknown invite on /api/auth/invite/:token -> browser 302 INVITE_INVALID, API 404 JSON
     const unknownInviteBrowserRes = await server.fetch(
@@ -1067,7 +1082,8 @@ describe('createKinloomServer end-to-end HTTP transport', () => {
       })
     );
     expect(freshMagicRes.status).toBe(202);
-    const usedLinkUrl = ports.emailSender.sentMessages[ports.emailSender.sentMessages.length - 1]!.magicLinkUrl;
+    const usedLinkUrl =
+      ports.emailSender.sentMessages[ports.emailSender.sentMessages.length - 1]!.magicLinkUrl;
     const firstVerify = await server.fetch(new Request(usedLinkUrl, { headers: browserHtmlHeaders }));
     expect(firstVerify.status).toBe(302);
     expect(firstVerify.headers.get('location')).toBe('/changes');
@@ -1094,7 +1110,8 @@ describe('createKinloomServer end-to-end HTTP transport', () => {
         body: JSON.stringify({ email: 'founder@example.test', next: '/places' }),
       })
     );
-    const expLinkUrl = ports.emailSender.sentMessages[ports.emailSender.sentMessages.length - 1]!.magicLinkUrl;
+    const expLinkUrl =
+      ports.emailSender.sentMessages[ports.emailSender.sentMessages.length - 1]!.magicLinkUrl;
     ports.clock.advanceMs(16 * 60 * 1000);
     const expiredMagicBrowserRes = await server.fetch(
       new Request(expLinkUrl, { headers: browserNavHeaders })
@@ -1129,9 +1146,7 @@ describe('createKinloomServer end-to-end HTTP transport', () => {
       })
     );
     expect(badEmailRes.status).toBe(400);
-    expect(((await badEmailRes.json()) as { error: { code: string } }).error.code).toBe(
-      'VALIDATION_ERROR'
-    );
+    expect(((await badEmailRes.json()) as { error: { code: string } }).error.code).toBe('VALIDATION_ERROR');
 
     const failingMailServer = createKinloomServer({
       siteConfig,
@@ -1176,9 +1191,7 @@ describe('createKinloomServer end-to-end HTTP transport', () => {
       })
     );
     expect(rateLimitedRes.status).toBe(429);
-    expect(((await rateLimitedRes.json()) as { error: { code: string } }).error.code).toBe(
-      'RATE_LIMITED'
-    );
+    expect(((await rateLimitedRes.json()) as { error: { code: string } }).error.code).toBe('RATE_LIMITED');
   });
 
   it('emits edge security headers, rejects non-__Host- cookies on HTTPS, and validates media magic bytes', async () => {
@@ -1294,8 +1307,6 @@ describe('createKinloomServer end-to-end HTTP transport', () => {
     expect(mediaRes.headers.get('content-disposition')).toBe('inline');
     expect(mediaRes.headers.get('x-content-type-options')).toBe('nosniff');
     expect(mediaRes.headers.get('x-frame-options')).toBe('DENY');
-    expect(mediaRes.headers.get('strict-transport-security')).toBe(
-      'max-age=31536000; includeSubDomains'
-    );
+    expect(mediaRes.headers.get('strict-transport-security')).toBe('max-age=31536000; includeSubDomains');
   });
 });

@@ -3,6 +3,7 @@ import path from 'node:path';
 import { CliValidationError } from '../../../errors.js';
 import {
   atomicWriteFileSync,
+  type CommandParseSpec,
   canonicalJsonStringify,
   emitJsonStdout,
   emitStdout,
@@ -11,18 +12,17 @@ import {
   getNumberOption,
   getStringOption,
   httpGetBytes,
+  type OptionSpec,
   parseCacheTtlHours,
   parseCommandArgs,
+  type RecordCommandContext,
+  type RecordCommandOutcome,
+  type RecordHandler,
   RecordRuntimeError,
   resolveCacheDir,
   sha256Hex,
   unzipEntries,
   withAdvisoryLock,
-  type CommandParseSpec,
-  type OptionSpec,
-  type RecordCommandContext,
-  type RecordCommandOutcome,
-  type RecordHandler,
 } from '../runtime/index.js';
 
 export const S3_BASE = 'https://prd-tnm.s3.amazonaws.com/StagedProducts/GeographicNames';
@@ -33,11 +33,62 @@ const DOWNLOAD_TIMEOUT_MS = 120_000;
 const DEFAULT_QUERY_TTL_HOURS = 720;
 
 export const GNIS_STATE_CODES: ReadonlySet<string> = new Set([
-  'AK', 'AL', 'AR', 'AS', 'AZ', 'CA', 'CO', 'CT', 'DC', 'DE', 'FL', 'GA',
-  'GU', 'HI', 'IA', 'ID', 'IL', 'IN', 'KS', 'KY', 'LA', 'MA', 'MD', 'ME',
-  'MI', 'MN', 'MO', 'MP', 'MS', 'MT', 'NC', 'ND', 'NE', 'NH', 'NJ', 'NM',
-  'NV', 'NY', 'OH', 'OK', 'OR', 'PA', 'PR', 'RI', 'SC', 'SD', 'TN', 'TX',
-  'UT', 'VA', 'VI', 'VT', 'WA', 'WI', 'WV', 'WY',
+  'AK',
+  'AL',
+  'AR',
+  'AS',
+  'AZ',
+  'CA',
+  'CO',
+  'CT',
+  'DC',
+  'DE',
+  'FL',
+  'GA',
+  'GU',
+  'HI',
+  'IA',
+  'ID',
+  'IL',
+  'IN',
+  'KS',
+  'KY',
+  'LA',
+  'MA',
+  'MD',
+  'ME',
+  'MI',
+  'MN',
+  'MO',
+  'MP',
+  'MS',
+  'MT',
+  'NC',
+  'ND',
+  'NE',
+  'NH',
+  'NJ',
+  'NM',
+  'NV',
+  'NY',
+  'OH',
+  'OK',
+  'OR',
+  'PA',
+  'PR',
+  'RI',
+  'SC',
+  'SD',
+  'TN',
+  'TX',
+  'UT',
+  'VA',
+  'VI',
+  'VT',
+  'WA',
+  'WI',
+  'WV',
+  'WY',
 ]);
 
 export type GnisRow = Record<string, string>;
@@ -259,10 +310,7 @@ async function ensureStateFile(
   );
 }
 
-async function ensureHistoricalFile(
-  ctx: RecordCommandContext,
-  refresh: boolean
-): Promise<string> {
+async function ensureHistoricalFile(ctx: RecordCommandContext, refresh: boolean): Promise<string> {
   const cdir = getCacheDir(ctx);
   fs.mkdirSync(cdir, { recursive: true });
   const filePath = resolveSafeChild(cdir, 'HistoricalFeatures.txt');
@@ -524,10 +572,7 @@ async function runDownload(
   };
 }
 
-async function runSearch(
-  argv: readonly string[],
-  ctx: RecordCommandContext
-): Promise<RecordCommandOutcome> {
+async function runSearch(argv: readonly string[], ctx: RecordCommandContext): Promise<RecordCommandOutcome> {
   const parsed = parseCommandArgs(argv, SEARCH_SPEC);
   if (parsed.helpRequested) {
     return {
@@ -650,10 +695,7 @@ async function runSearch(
   };
 }
 
-async function runGet(
-  argv: readonly string[],
-  ctx: RecordCommandContext
-): Promise<RecordCommandOutcome> {
+async function runGet(argv: readonly string[], ctx: RecordCommandContext): Promise<RecordCommandOutcome> {
   const parsed = parseCommandArgs(argv, GET_SPEC);
   if (parsed.helpRequested) {
     return {
@@ -740,17 +782,12 @@ function runUrl(argv: readonly string[], ctx: RecordCommandContext): RecordComma
   const name = parsed.positionals[0];
   const lines = [SEARCH_APP];
   if (name) {
-    lines.push(
-      `(Enter '${name}' in the Feature Name field; the app has no stable query-string search URL.)`
-    );
+    lines.push(`(Enter '${name}' in the Feature Name field; the app has no stable query-string search URL.)`);
   }
   return { exitCode: 0, bytesOut: emitStdout(ctx.io, lines.join('\n')) };
 }
 
-export const runGnisCommand: RecordHandler = async (
-  args,
-  ctx
-): Promise<RecordCommandOutcome> => {
+export const runGnisCommand: RecordHandler = async (args, ctx): Promise<RecordCommandOutcome> => {
   try {
     if (args.length === 0 || args[0] === '--help' || args[0] === '-h') {
       return { exitCode: 0, bytesOut: emitStdout(ctx.io, renderRootHelp()) };
@@ -766,9 +803,7 @@ export const runGnisCommand: RecordHandler = async (
       case 'url':
         return runUrl(rest, ctx);
       default:
-        throw new CliValidationError(
-          `No such command '${subcmd}'. Run 'kinloom gnis --script-help'.`
-        );
+        throw new CliValidationError(`No such command '${subcmd}'. Run 'kinloom gnis --script-help'.`);
     }
   } catch (err: unknown) {
     if (err instanceof CliValidationError) {

@@ -5,20 +5,20 @@ import path from 'node:path';
 import { parse as parseYaml } from 'yaml';
 import { CliValidationError } from '../../../errors.js';
 import {
+  type CommandParseSpec,
+  type ExecFileFn,
   emitStdout,
   expandHomePath,
   formatCommandUsage,
   getBooleanOption,
   getNumberOption,
   getStringOption,
-  parseCommandArgs,
-  RecordRuntimeError,
-  type CommandParseSpec,
-  type ExecFileFn,
   type OptionSpec,
+  parseCommandArgs,
   type RecordCommandContext,
   type RecordCommandOutcome,
   type RecordHandler,
+  RecordRuntimeError,
 } from '../runtime/index.js';
 
 export const GEMINI_API_BASE = 'https://generativelanguage.googleapis.com/v1beta/models';
@@ -30,8 +30,7 @@ export const DEFAULT_TEXT_MODEL = 'gemini-4-hydrogen';
 export const CHIRP_MAX_BYTES = 4500;
 export const NOTES_MARKER = "# EDITOR'S NOTES";
 
-const MONTHS =
-  'January|February|March|April|May|June|July|August|September|October|November|December';
+const MONTHS = 'January|February|March|April|May|June|July|August|September|October|November|December';
 
 const ORDINALS = [
   'first',
@@ -79,18 +78,7 @@ const ONES = [
   'nineteen',
 ] as const;
 
-const TENS = [
-  '',
-  '',
-  'twenty',
-  'thirty',
-  'forty',
-  'fifty',
-  'sixty',
-  'seventy',
-  'eighty',
-  'ninety',
-] as const;
+const TENS = ['', '', 'twenty', 'thirty', 'forty', 'fifty', 'sixty', 'seventy', 'eighty', 'ninety'] as const;
 
 const RETRYABLE_STATUSES = new Set([429, 500, 502, 503, 504]);
 
@@ -160,10 +148,7 @@ export function ordinal(n: number): string {
 }
 
 export function speakDates(text: string): string {
-  const dayBeforeMonth = new RegExp(
-    `\\b(\\d{1,2})(?:st|nd|rd|th)? (${MONTHS})(,? (\\d{4}))?\\b`,
-    'g'
-  );
+  const dayBeforeMonth = new RegExp(`\\b(\\d{1,2})(?:st|nd|rd|th)? (${MONTHS})(,? (\\d{4}))?\\b`, 'g');
   const step1 = text.replace(
     dayBeforeMonth,
     (_match, dayStr: string, month: string, _yearClause: string | undefined, year: string | undefined) => {
@@ -219,10 +204,7 @@ export function speakNumbers(text: string): string {
   );
 }
 
-export function applyNames(
-  text: string,
-  names: Readonly<Record<string, string>>
-): string {
+export function applyNames(text: string, names: Readonly<Record<string, string>>): string {
   let out = text;
   const entries = Object.entries(names).sort((a, b) => b[0].length - a[0].length);
   for (const [name, ipa] of entries) {
@@ -380,26 +362,14 @@ export function lintNarrativeScript(
 ): ScriptLintResult {
   const problems: string[] = [];
   const patterns: readonly (readonly [string, RegExp])[] = [
-    [
-      "day-before-month date (write 'May ninth, 1766')",
-      new RegExp(`\\b\\d{1,2} (${MONTHS})\\b`),
-    ],
-    [
-      "numeric month-day date (write 'May ninth')",
-      new RegExp(`\\b(${MONTHS}) \\d{1,2}\\b(?!\\d)`),
-    ],
+    ["day-before-month date (write 'May ninth, 1766')", new RegExp(`\\b\\d{1,2} (${MONTHS})\\b`)],
+    ["numeric month-day date (write 'May ninth')", new RegExp(`\\b(${MONTHS}) \\d{1,2}\\b(?!\\d)`)],
     ["currency symbol (write '470 pounds')", /[£$]/],
     ['s./d. money abbreviation', /\b\d+[sd]\./],
     ['citation remnant', /\b(Lib\.|Vol\.|pp?\.\s*\d|DB \d|FHL|Book \d+)/],
     ["slash (write 'or')", /\S\/\S/],
-    [
-      'comma-grouped number (Chirp pauses on commas; spell out in words)',
-      /\b\d{1,3}(?:,\d{3})+\b/,
-    ],
-    [
-      'abbreviation to spell out',
-      /\b(ca\.|b\.|d\.|decd|Co\.|Jr\.|Sr\.|Capt\.|U\.S\.|No\.)(?=\s|$)/,
-    ],
+    ['comma-grouped number (Chirp pauses on commas; spell out in words)', /\b\d{1,3}(?:,\d{3})+\b/],
+    ['abbreviation to spell out', /\b(ca\.|b\.|d\.|decd|Co\.|Jr\.|Sr\.|Capt\.|U\.S\.|No\.)(?=\s|$)/],
     ['markdown emphasis or link', /[*_`]|\]\(/],
     ['quotation mark', /["\u201c\u201d]/],
   ];
@@ -454,9 +424,7 @@ export function formatYamlSnippet(options: {
     `    duration_seconds: ${Math.round(options.durationSeconds)}`,
   ];
   if (options.editorNotesStartSeconds !== undefined) {
-    lines.push(
-      `    editor_notes_start_seconds: ${Math.round(options.editorNotesStartSeconds)}`
-    );
+    lines.push(`    editor_notes_start_seconds: ${Math.round(options.editorNotesStartSeconds)}`);
   }
   lines.push(`    story_voice: ${options.storyVoice}`);
   lines.push(`    notes_voice: ${options.notesVoice}`);
@@ -532,19 +500,14 @@ function defaultTranscriptPath(audioPath: string): string {
   return path.join(dir, `${base}.transcript.md`);
 }
 
-function resolveGeminiApiKey(
-  keyFile: string | undefined,
-  ctx: RecordCommandContext
-): string {
+function resolveGeminiApiKey(keyFile: string | undefined, ctx: RecordCommandContext): string {
   if (keyFile) {
     const abs = resolvePath(keyFile, ctx);
     return fs.readFileSync(abs, 'utf8').trim();
   }
   const key = (ctx.env.GEMINI_API_KEY ?? ctx.env.GOOGLE_API_KEY ?? '').trim();
   if (!key) {
-    throw new RecordRuntimeError(
-      'Set GEMINI_API_KEY (or GOOGLE_API_KEY), or pass --key-file.'
-    );
+    throw new RecordRuntimeError('Set GEMINI_API_KEY (or GOOGLE_API_KEY), or pass --key-file.');
   }
   return key;
 }
@@ -564,8 +527,7 @@ async function resolveCloudTtsHeaders(
   }
 
   const execFn = ctx.execFileImpl ?? defaultExecFile;
-  const hasGcloud =
-    ctx.execFileImpl !== undefined || findExecutableOnPath('gcloud', ctx.env) !== null;
+  const hasGcloud = ctx.execFileImpl !== undefined || findExecutableOnPath('gcloud', ctx.env) !== null;
 
   let token = (ctx.env.GOOGLE_CLOUD_ACCESS_TOKEN ?? '').trim();
   if (!token) {
@@ -584,14 +546,10 @@ async function resolveCloudTtsHeaders(
           : err instanceof Error
             ? err.message
             : '';
-      throw new RecordRuntimeError(
-        `Failed to get gcloud access token: ${detail || 'run gcloud auth login'}`
-      );
+      throw new RecordRuntimeError(`Failed to get gcloud access token: ${detail || 'run gcloud auth login'}`);
     }
     if (!token) {
-      throw new RecordRuntimeError(
-        'Failed to get gcloud access token: run gcloud auth login'
-      );
+      throw new RecordRuntimeError('Failed to get gcloud access token: run gcloud auth login');
     }
   }
 
@@ -645,9 +603,7 @@ async function postJsonWithRetries(params: {
     }
     const text = await response.text();
     if (response.status !== 200) {
-      throw new RecordRuntimeError(
-        `${params.label}: HTTP ${response.status}: ${text.slice(0, 800)}`
-      );
+      throw new RecordRuntimeError(`${params.label}: HTTP ${response.status}: ${text.slice(0, 800)}`);
     }
     const parsed: unknown = JSON.parse(text);
     if (!isPlainRecord(parsed)) {
@@ -904,9 +860,7 @@ function runList(argv: readonly string[], ctx: RecordCommandContext): RecordComm
   if (rows.length === 0) {
     return { exitCode: 0, bytesOut: 0 };
   }
-  const rendered = rows
-    .map((r) => `${String(r.words).padStart(6)}  ${r.id}  ${r.title}`)
-    .join('\n');
+  const rendered = rows.map((r) => `${String(r.words).padStart(6)}  ${r.id}  ${r.title}`).join('\n');
   return { exitCode: 0, bytesOut: emitStdout(ctx.io, rendered) };
 }
 
@@ -954,9 +908,7 @@ function runCheck(argv: readonly string[], ctx: RecordCommandContext): RecordCom
   const scriptArg = parsed.positionals[0];
   const scriptPath = requireExistingFile(scriptArg, 'script file', ctx);
   const namesArg = getStringOption(parsed, 'names');
-  const namesMap = namesArg
-    ? readNamesJson(requireExistingFile(namesArg, 'names file', ctx))
-    : undefined;
+  const namesMap = namesArg ? readNamesJson(requireExistingFile(namesArg, 'names file', ctx)) : undefined;
 
   const text = fs.readFileSync(scriptPath, 'utf8');
   const result = lintNarrativeScript(scriptArg, text, namesMap);
@@ -972,10 +924,7 @@ function runCheck(argv: readonly string[], ctx: RecordCommandContext): RecordCom
   return { exitCode: 0, bytesOut: emitStdout(ctx.io, lines.join('\n')) };
 }
 
-async function runSynth(
-  argv: readonly string[],
-  ctx: RecordCommandContext
-): Promise<RecordCommandOutcome> {
+async function runSynth(argv: readonly string[], ctx: RecordCommandContext): Promise<RecordCommandOutcome> {
   const parsed = parseCommandArgs(argv, SYNTH_PARSE_SPEC);
   if (parsed.helpRequested) {
     return {
@@ -993,9 +942,7 @@ async function runSynth(
 
   const scriptPath = requireExistingFile(parsed.positionals[0], 'script file', ctx);
   const namesArg = getStringOption(parsed, 'names');
-  const namesMap = namesArg
-    ? readNamesJson(requireExistingFile(namesArg, 'names file', ctx))
-    : {};
+  const namesMap = namesArg ? readNamesJson(requireExistingFile(namesArg, 'names file', ctx)) : {};
 
   const rawBackend = (
     getStringOption(parsed, 'backend') ??
@@ -1005,9 +952,7 @@ async function runSynth(
     .trim()
     .toLowerCase();
   if (rawBackend !== 'chirp3-hd' && rawBackend !== 'gemini') {
-    throw new CliValidationError(
-      `Invalid --backend '${rawBackend}': choose from chirp3-hd, gemini.`
-    );
+    throw new CliValidationError(`Invalid --backend '${rawBackend}': choose from chirp3-hd, gemini.`);
   }
   const backend: 'chirp3-hd' | 'gemini' = rawBackend;
 
@@ -1029,9 +974,7 @@ async function runSynth(
 
   const rawText = fs.readFileSync(scriptPath, 'utf8');
   const withNames =
-    backend === 'gemini' && Object.keys(namesMap).length > 0
-      ? applyNames(rawText, namesMap)
-      : rawText;
+    backend === 'gemini' && Object.keys(namesMap).length > 0 ? applyNames(rawText, namesMap) : rawText;
   const prepared = speakNumbers(speakDates(withNames));
   const { sections, notes } = splitScript(prepared);
 
@@ -1065,9 +1008,7 @@ async function runSynth(
     for (let i = 0; i < chunks.length; i += 1) {
       const chunk = chunks[i];
       const label =
-        backend === 'chirp3-hd'
-          ? resolveChirpVoice(chunk.voice, languageCode)
-          : `${model}:${chunk.voice}`;
+        backend === 'chirp3-hd' ? resolveChirpVoice(chunk.voice, languageCode) : `${model}:${chunk.voice}`;
       const notesSuffix = chunk.isNotes ? ' · notes' : '';
       outLines.push(`===== request ${i + 1} [${backend} · ${label}${notesSuffix}] =====`);
       outLines.push(chunk.text);
@@ -1163,12 +1104,10 @@ async function runSynth(
 
       const candidates = Array.isArray(resp.candidates) ? resp.candidates : [];
       const firstCand = isPlainRecord(candidates[0]) ? candidates[0] : undefined;
-      const content =
-        firstCand && isPlainRecord(firstCand.content) ? firstCand.content : undefined;
+      const content = firstCand && isPlainRecord(firstCand.content) ? firstCand.content : undefined;
       const parts = content && Array.isArray(content.parts) ? content.parts : [];
       const firstPart = isPlainRecord(parts[0]) ? parts[0] : undefined;
-      const inlineData =
-        firstPart && isPlainRecord(firstPart.inlineData) ? firstPart.inlineData : undefined;
+      const inlineData = firstPart && isPlainRecord(firstPart.inlineData) ? firstPart.inlineData : undefined;
       if (!inlineData || typeof inlineData.data !== 'string') {
         throw new RecordRuntimeError(`${model}: response missing inline audio data`);
       }
@@ -1293,8 +1232,7 @@ async function runTranscribe(
   const key = resolveGeminiApiKey(keyFile, ctx);
 
   const ext = path.extname(audioPath).toLowerCase();
-  const mime =
-    ext === '.wav' ? 'audio/wav' : ext === '.ogg' ? 'audio/ogg' : 'audio/mpeg';
+  const mime = ext === '.wav' ? 'audio/wav' : ext === '.ogg' ? 'audio/ogg' : 'audio/mpeg';
 
   const prompt =
     'Transcribe this audio VERBATIM with [mm:ss] timestamps at the start of each ' +
@@ -1311,10 +1249,7 @@ async function runTranscribe(
     body: {
       contents: [
         {
-          parts: [
-            { inlineData: { mimeType: mime, data: audioBase64 } },
-            { text: prompt },
-          ],
+          parts: [{ inlineData: { mimeType: mime, data: audioBase64 } }, { text: prompt }],
         },
       ],
     },
@@ -1326,9 +1261,7 @@ async function runTranscribe(
   const firstCand = isPlainRecord(candidates[0]) ? candidates[0] : undefined;
   const content = firstCand && isPlainRecord(firstCand.content) ? firstCand.content : undefined;
   const parts = content && Array.isArray(content.parts) ? content.parts : [];
-  const text = parts
-    .map((p) => (isPlainRecord(p) && typeof p.text === 'string' ? p.text : ''))
-    .join('');
+  const text = parts.map((p) => (isPlainRecord(p) && typeof p.text === 'string' ? p.text : '')).join('');
 
   const outPath = outArg ? resolvePath(outArg, ctx) : defaultTranscriptPath(audioPath);
   fs.mkdirSync(path.dirname(outPath), { recursive: true });
@@ -1339,10 +1272,7 @@ async function runTranscribe(
   return { exitCode: 0, bytesOut };
 }
 
-export const runNarrativeAudioCommand: RecordHandler = async (
-  args,
-  ctx
-): Promise<RecordCommandOutcome> => {
+export const runNarrativeAudioCommand: RecordHandler = async (args, ctx): Promise<RecordCommandOutcome> => {
   try {
     if (args.length === 0 || args[0] === '--help' || args[0] === '-h') {
       return { exitCode: 0, bytesOut: emitStdout(ctx.io, renderRootHelp()) };
@@ -1360,9 +1290,7 @@ export const runNarrativeAudioCommand: RecordHandler = async (
       case 'transcribe':
         return await runTranscribe(rest, ctx);
       default:
-        throw new CliValidationError(
-          `No such command '${subcmd}'. Run 'kinloom narrative-audio --help'.`
-        );
+        throw new CliValidationError(`No such command '${subcmd}'. Run 'kinloom narrative-audio --help'.`);
     }
   } catch (err: unknown) {
     if (err instanceof CliValidationError) {

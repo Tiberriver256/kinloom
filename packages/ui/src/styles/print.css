@@ -1,0 +1,155 @@
+/* ==========================================================================
+   Print-Friendly Archival Folio
+   ========================================================================== */
+@media print {
+  html,
+  body {
+    background: #ffffff;
+    color: #000000;
+    font-size: 10.5pt;
+  }
+
+  /* Nest under :root so global print overrides outrank lazy-loaded CSS Module chunks without !important. */
+  :root {
+    .topbar,
+    .skip-to-content,
+    .mobile-decade-strip,
+    .timeline-spine,
+    .print-hide,
+    .drawer-backdrop,
+    .lightbox-backdrop,
+    .source-inspector-backdrop,
+    .wiki-edit-drawer-backdrop,
+    .global-search-backdrop,
+    .source-reader-backdrop,
+    .tree-toolbar-shell,
+    .tree-toolbar,
+    .tree-controls,
+    .tree-gen-jump-bar,
+    .tree-focus-drawer,
+    .person-header-actions,
+    .person-section-jump-bar,
+    .wiki-action-bar,
+    .source-toggle,
+    .source-read-btn,
+    .source-action-btn,
+    .also-here,
+    .wireframe-photo:not(.has-real-photo),
+    .filter-bar,
+    .place-scope-bar,
+    .place-decade-bar,
+    .local-survey-nearby-strip,
+    .time-scrubber-wrap,
+    .map-overlay,
+    .kinship-selector-card,
+    .kinship-examples-bar,
+    .narrative-audio-margin-bar,
+    .narrative-audio-dock {
+      display: none;
+    }
+
+    .person-biography-body.is-collapsed {
+      max-height: none;
+      overflow: visible;
+    }
+
+    .person-biography-body.is-collapsed::after {
+      display: none;
+    }
+
+    .is-collapsed-screen {
+      display: block;
+    }
+
+    .person-biography-source-btn {
+      border: none;
+      background: transparent;
+      padding: 0;
+      text-align: left;
+      color: #000000;
+    }
+
+    .kinloom-app:has(.tree-shell-diagram),
+    .tree-shell,
+    .tree-page {
+      height: auto;
+      min-height: auto;
+      overflow: visible;
+    }
+
+    .tree-stage {
+      transform: none;
+      position: static;
+    }
+
+    .tree-roll-unit {
+      break-inside: avoid;
+      page-break-inside: avoid;
+      box-shadow: none;
+      background: #ffffff;
+      border-color: var(--border-control);
+    }
+
+    .explorer-split {
+      display: block;
+      grid-template-columns: 1fr;
+      min-height: auto;
+    }
+
+    .narrative-pane {
+      padding: 0;
+      max-width: 100%;
+    }
+
+    .timeline-layout {
+      display: block;
+    }
+
+    h1,
+    h2,
+    h3,
+    h4,
+    .section-heading {
+      break-after: avoid;
+      page-break-after: avoid;
+      color: #000000;
+    }
+
+    p {
+      orphans: 3;
+      widows: 3;
+    }
+
+    .person-header {
+      background: #ffffff;
+      border-bottom: 1px solid var(--border-control);
+      box-shadow: none;
+      margin-bottom: 10pt;
+    }
+
+    .person-header-top,
+    .person-family-row,
+    .story-card,
+    .person-media-card,
+    .citation-item-card,
+    .place-map-box,
+    .occupancy-row,
+    .time-lane,
+    .evidence-source-row {
+      background: #ffffff;
+      box-shadow: none;
+      break-inside: avoid;
+      page-break-inside: avoid;
+    }
+
+    .story-card {
+      border-bottom: 1px solid var(--border-control);
+      margin-bottom: 10pt;
+    }
+
+    a {
+      color: #000000;
+      text-decoration: none;
+    }
+  }
+}

@@ -3,9 +3,10 @@ import path from 'node:path';
 import { CliValidationError } from '../../../errors.js';
 import {
   atomicWriteFileSync,
+  type CommandParseSpec,
+  CookieJar,
   cachedJsonCall,
   collapseWhitespace,
-  CookieJar,
   emitJsonStdout,
   emitStdout,
   expandHomePath,
@@ -16,14 +17,13 @@ import {
   httpGetBytes,
   httpRequest,
   loadHtml,
+  type OptionSpec,
   parseCacheTtlHours,
   parseCommandArgs,
-  resolveCacheDir,
-  type CommandParseSpec,
-  type OptionSpec,
   type RecordCommandContext,
   type RecordCommandOutcome,
   type RecordHandler,
+  resolveCacheDir,
 } from '../runtime/index.js';
 
 const DEFAULT_CACHE_TTL_HOURS = 168;
@@ -249,10 +249,7 @@ export function parseDeathName(text: string): {
   for (let i = 1; i < parts.length; i += 2) {
     const person = collapseWhitespace(parts[i - 1] ?? '');
     const role = (parts[i] ?? '').toLowerCase();
-    if (
-      person &&
-      (role === 'deceased' || role === 'spouse' || role === 'father' || role === 'mother')
-    ) {
+    if (person && (role === 'deceased' || role === 'spouse' || role === 'father' || role === 'mother')) {
       roles[role] = person;
     }
   }
@@ -284,10 +281,7 @@ export function parseDeathRows(html: string): DeathRecord[] {
 }
 
 export function parsePre1910Rows(html: string, kind: 'birth' | 'death'): Pre1910Record[] {
-  const [, rows] = findResultsTable(
-    html,
-    kind === 'death' ? ['Date Of Death'] : ['Date Of Birth']
-  );
+  const [, rows] = findResultsTable(html, kind === 'death' ? ['Date Of Death'] : ['Date Of Birth']);
   const out: Pre1910Record[] = [];
   for (const row of rows) {
     const cells = row.map((c) => c.text);
@@ -622,11 +616,7 @@ const DOWNLOAD_SPEC: CommandParseSpec = {
 };
 
 function isSearchCachePayload<T>(value: unknown): value is SearchCachePayload<T> {
-  return (
-    isPlainRecord(value) &&
-    typeof value.total === 'number' &&
-    Array.isArray(value.results)
-  );
+  return isPlainRecord(value) && typeof value.total === 'number' && Array.isArray(value.results);
 }
 
 function isDetailRecord(value: unknown): value is DetailRecord {
@@ -640,9 +630,7 @@ function isDetailRecord(value: unknown): value is DetailRecord {
 
 function resolveDirPath(raw: string, ctx: RecordCommandContext): string {
   const expanded = expandHomePath(raw, ctx.env);
-  return path.isAbsolute(expanded)
-    ? path.resolve(expanded)
-    : path.resolve(ctx.cwd, expanded);
+  return path.isAbsolute(expanded) ? path.resolve(expanded) : path.resolve(ctx.cwd, expanded);
 }
 
 function renderRootHelp(): string {
@@ -665,10 +653,7 @@ function renderRootHelp(): string {
   });
 }
 
-export const runMoArchivesCommand: RecordHandler = async (
-  args,
-  ctx
-): Promise<RecordCommandOutcome> => {
+export const runMoArchivesCommand: RecordHandler = async (args, ctx): Promise<RecordCommandOutcome> => {
   try {
     if (args.length === 0 || args[0] === '--help' || args[0] === '-h') {
       return { exitCode: 0, bytesOut: emitStdout(ctx.io, renderRootHelp()) };
@@ -788,9 +773,7 @@ export const runMoArchivesCommand: RecordHandler = async (
           return { exitCode: 0, bytesOut, cacheHit };
         }
         const marker = cacheHit ? ' [cache]' : '';
-        const lines: string[] = [
-          `Total: ${result.total} | showing ${result.results.length}${marker}`,
-        ];
+        const lines: string[] = [`Total: ${result.total} | showing ${result.results.length}${marker}`];
         for (const rec of result.results) {
           const parts: string[] = [rec.name];
           if (rec.age) parts.push(`age ${rec.age}`);
@@ -844,9 +827,7 @@ export const runMoArchivesCommand: RecordHandler = async (
                 BirthSubmit: 'Search',
               };
 
-        const { value: result, cacheHit } = await cachedJsonCall<
-          SearchCachePayload<Pre1910Record>
-        >({
+        const { value: result, cacheHit } = await cachedJsonCall<SearchCachePayload<Pre1910Record>>({
           cacheDir: getCacheDir(ctx),
           kind: 'pre1910',
           payload: { kind, name, county, limit },
@@ -871,9 +852,7 @@ export const runMoArchivesCommand: RecordHandler = async (
           };
         }
         const marker = cacheHit ? ' [cache]' : '';
-        const lines: string[] = [
-          `Total: ${result.total} | showing ${result.results.length}${marker}`,
-        ];
+        const lines: string[] = [`Total: ${result.total} | showing ${result.results.length}${marker}`];
         for (const rec of result.results) {
           if ('date_of_death' in rec) {
             const parts = [
@@ -1005,8 +984,7 @@ export const runMoArchivesCommand: RecordHandler = async (
               ctx.io,
               formatCommandUsage({
                 usage: 'kinloom mo-archives mdh',
-                summary:
-                  'Show the Missouri Digital Heritage browser path (no machine interface).',
+                summary: 'Show the Missouri Digital Heritage browser path (no machine interface).',
               })
             ),
           };
@@ -1026,9 +1004,7 @@ export const runMoArchivesCommand: RecordHandler = async (
       }
 
       default:
-        throw new CliValidationError(
-          `No such command '${subcmd}'. Run 'kinloom mo-archives --script-help'.`
-        );
+        throw new CliValidationError(`No such command '${subcmd}'. Run 'kinloom mo-archives --script-help'.`);
     }
   } catch (err: unknown) {
     if (err instanceof CliValidationError) {

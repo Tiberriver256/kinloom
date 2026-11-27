@@ -9,16 +9,20 @@
   "scripts": {
     "build": "npm run build --workspace=@kinloom/core && npm run build --workspace=@kinloom/server && npm run build --workspace=@kinloom/worker && npm run build --workspace=@kinloom/cli && npm run build --workspace=@kinloom/ui && npm run build --workspace=@kinloom/demo",
     "typecheck": "tsc --noEmit -p packages/core/tsconfig.json && tsc --noEmit -p packages/server/tsconfig.json && tsc --noEmit -p packages/worker/tsconfig.json && tsc --noEmit -p packages/cli/tsconfig.json && tsc --noEmit -p packages/ui/tsconfig.json && tsc --noEmit -p examples/demo/tsconfig.json && tsc --noEmit -p e2e/tsconfig.json",
-    "lint": "oxlint packages/core/src packages/server/src packages/worker/src packages/cli/src packages/ui/src examples/demo/src e2e",
+    "lint": "biome check && npm run check:counts",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "npm run build:data --workspace=@kinloom/demo && npm run build --workspace=@kinloom/demo && playwright test",
     "check:contrast": "node scripts/check-contrast.mjs",
     "check:leaks": "node scripts/check-public-leaks.mjs",
     "audit:impeccable": "node scripts/audit-impeccable.mjs",
-    "check": "npm run lint && npm run build && npm run typecheck && npm test && npm run check:contrast && npm run check:leaks"
+    "check": "npm run lint && npm run build && npm run typecheck && npm test && npm run check:contrast && npm run check:leaks",
+    "format": "biome format --write",
+    "format:check": "biome format",
+    "check:counts": "node scripts/check-archive-counts.mjs"
   },
   "devDependencies": {
+    "@biomejs/biome": "2.6.9",
     "@playwright/test": "^1.65.1",
     "@types/geojson": "^7946.0.16",
     "@types/node": "^26.6.7",
@@ -27,7 +31,6 @@
     "@vitejs/plugin-react": "^6.3.0",
     "fast-check": "^4.11.0",
     "jsdom": "^31.0.1",
-    "oxlint": "^1.95.0",
     "typescript": "^7.0.2",
     "vite": "^8.3.8",
     "vitest": "^5.1.1"

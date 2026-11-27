@@ -45,7 +45,7 @@ export function formatTreeCardName(fullName: string, maxChars = 20): string {
 export function formatTreeCardPlace(
   place: Place | undefined,
   placesById: Map<string, Place>,
-  maxChars = 13,
+  maxChars = 13
 ): string {
   if (!place) {
     return '';

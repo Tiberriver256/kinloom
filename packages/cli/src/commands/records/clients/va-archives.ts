@@ -5,9 +5,10 @@ import {
   atomicWriteFileSync,
   atomicWriteJsonSync,
   CacheHitTracker,
+  type CommandParseSpec,
+  CookieJar,
   canonicalJsonStringify,
   convertTiffToJpeg,
-  CookieJar,
   emitJsonStdout,
   emitStdout,
   formatCommandUsage,
@@ -16,17 +17,16 @@ import {
   getStringOption,
   httpRequest,
   loadHtml,
+  type OptionSpec,
   parseCacheTtlHours,
   parseCommandArgs,
+  type RecordCommandContext,
+  type RecordCommandOutcome,
+  type RecordHandler,
   RecordRuntimeError,
   resolveCacheDir,
   sha256Hex,
   withAdvisoryLock,
-  type CommandParseSpec,
-  type OptionSpec,
-  type RecordCommandContext,
-  type RecordCommandOutcome,
-  type RecordHandler,
 } from '../runtime/index.js';
 
 export const CHANCERY_BASE = 'https://old.lva.virginia.gov/chancery';
@@ -181,9 +181,7 @@ function decodeHtmlEntities(text: string): string {
 }
 
 function cleanPreservingLines(htmlText: string): string {
-  const withBreaks = htmlText
-    .replace(/<br\s*\/?>/gi, '\n')
-    .replace(/<[^>]+>/g, ' ');
+  const withBreaks = htmlText.replace(/<br\s*\/?>/gi, '\n').replace(/<[^>]+>/g, ' ');
   return decodeHtmlEntities(withBreaks.replace(/[ \t]+/g, ' ')).trim();
 }
 
@@ -273,10 +271,7 @@ function isCacheMetaValid(
   };
 }
 
-function buildUrlWithParams(
-  baseUrl: string,
-  params?: Readonly<Record<string, string>>
-): string {
+function buildUrlWithParams(baseUrl: string, params?: Readonly<Record<string, string>>): string {
   if (!params || Object.keys(params).length === 0) {
     return baseUrl;
   }
@@ -488,9 +483,7 @@ export function normalizeLvaImageUrl(raw: string): string {
   }
   const lowerDecoded = decoded.toLowerCase();
   if (!IMAGE_SUFFIXES.some((ext) => lowerDecoded.endsWith(ext))) {
-    throw new Error(
-      `Not an image path (expected ${IMAGE_SUFFIXES.join(', ')}): ${JSON.stringify(raw)}`
-    );
+    throw new Error(`Not an image path (expected ${IMAGE_SUFFIXES.join(', ')}): ${JSON.stringify(raw)}`);
   }
   return `${LVA_IMAGE_BASE}${decoded}`;
 }
@@ -591,9 +584,7 @@ export function parseRosettaViewer(page: string): RosettaViewerInfo {
 
 export function parseSearchPage(page: string): ChancerySearchPage {
   const totalMatch =
-    /Your search returned (\d+) record\(s\)\. You are now viewing records (\d+) through (\d+)/.exec(
-      page
-    );
+    /Your search returned (\d+) record\(s\)\. You are now viewing records (\d+) through (\d+)/.exec(page);
   const total = totalMatch ? Number.parseInt(totalMatch[1], 10) : 0;
   const first = totalMatch ? Number.parseInt(totalMatch[2], 10) : 0;
   const last = totalMatch ? Number.parseInt(totalMatch[3], 10) : 0;
@@ -635,12 +626,9 @@ export function parseCasePage(page: string): ChanceryCaseDetail {
     /<strong>Plaintiff\(s\)<\/strong><\/td><td[^>]*><strong>Defendant\(s\)<\/strong><\/td><\/tr>\s*<tr>\s*<td[^>]*>([\s\S]*?)<\/td>\s*<td[^>]*>([\s\S]*?)<\/td>/i.exec(
       page
     );
-  const surnames =
-    /<strong>Surname\(s\)<\/strong><\/td><\/tr>\s*<tr><td[^>]*>([\s\S]*?)<\/td>/i.exec(page);
+  const surnames = /<strong>Surname\(s\)<\/strong><\/td><\/tr>\s*<tr><td[^>]*>([\s\S]*?)<\/td>/i.exec(page);
   const plat =
-    /<strong>Plat\?<\/strong><\/td><\/tr>\s*<tr><td[^>]*>([^<]*)<\/td>\s*<td[^>]*>([^<]*)<\/td>/i.exec(
-      page
-    );
+    /<strong>Plat\?<\/strong><\/td><\/tr>\s*<tr><td[^>]*>([^<]*)<\/td>\s*<td[^>]*>([^<]*)<\/td>/i.exec(page);
   const willsMatch =
     /<strong>Wills<\/strong><\/td><td[^>]*>[\s\S]*?Plat\?[\s\S]*?<\/tr>\s*<tr><td[^>]*>([\s\S]*?)<\/td>/i.exec(
       page
@@ -779,10 +767,7 @@ function formatChanceryRecordText(rec: ChancerySearchRecord): string {
   return lines.join('\n');
 }
 
-function emitTrackedJson(
-  state: VaSessionState,
-  payload: Record<string, unknown>
-): RecordCommandOutcome {
+function emitTrackedJson(state: VaSessionState, payload: Record<string, unknown>): RecordCommandOutcome {
   const cacheHit = state.tracker.allHits() ?? false;
   return {
     exitCode: 0,
@@ -866,9 +851,7 @@ async function resolveRosetta(
 
   const listing = parseRosettaViewer(viewerRes.bytes.toString('utf8'));
   if (listing.files.length === 0) {
-    throw new RecordRuntimeError(
-      `No delivered files found for ${ie} (restricted or not a viewable IE).`
-    );
+    throw new RecordRuntimeError(`No delivered files found for ${ie} (restricted or not a viewable IE).`);
   }
 
   const result: RosettaFilesCache = {
@@ -930,80 +913,229 @@ const REFRESH_CACHE_OPTIONS: readonly OptionSpec[] = [
 ];
 
 const CHANCERY_SEARCH_OPTIONS: readonly OptionSpec[] = [
-  { key: 'locality', kind: 'string', flags: ['--locality'], default: 'All', help: "County/city, e.g. 'ALBEMARLE CO'. Default All." },
-  { key: 'match', kind: 'string', flags: ['--match'], default: 'Starts', help: 'How the surname match works (Exact/Starts/Includes).' },
-  { key: 'surname2', kind: 'string', flags: ['--surname2'], help: 'Second surname (ANDed by the index form).' },
+  {
+    key: 'locality',
+    kind: 'string',
+    flags: ['--locality'],
+    default: 'All',
+    help: "County/city, e.g. 'ALBEMARLE CO'. Default All.",
+  },
+  {
+    key: 'match',
+    kind: 'string',
+    flags: ['--match'],
+    default: 'Starts',
+    help: 'How the surname match works (Exact/Starts/Includes).',
+  },
+  {
+    key: 'surname2',
+    kind: 'string',
+    flags: ['--surname2'],
+    help: 'Second surname (ANDed by the index form).',
+  },
   { key: 'plaintiffLast', kind: 'string', flags: ['--plaintiff-last'], help: 'Plaintiff last name.' },
   { key: 'plaintiffFirst', kind: 'string', flags: ['--plaintiff-first'], help: 'Plaintiff first name.' },
   { key: 'defendantLast', kind: 'string', flags: ['--defendant-last'], help: 'Defendant last name.' },
   { key: 'defendantFirst', kind: 'string', flags: ['--defendant-first'], help: 'Defendant first name.' },
   { key: 'yearFrom', kind: 'string', flags: ['--year-from'], help: 'First year of case (strDate1).' },
   { key: 'yearTo', kind: 'string', flags: ['--year-to'], help: 'Last year of case (strDate2).' },
-  { key: 'indexNumber', kind: 'string', flags: ['--index-number'], help: 'Index number, e.g. YYYY-NNN (txtIndexNum).' },
-  { key: 'localCaseNumber', kind: 'string', flags: ['--local-case-number'], help: 'Local case file number (txtLclCFN).' },
-  { key: 'enslaved', kind: 'boolean', flags: ['--enslaved'], help: 'Only cases referencing enslaved persons.' },
+  {
+    key: 'indexNumber',
+    kind: 'string',
+    flags: ['--index-number'],
+    help: 'Index number, e.g. YYYY-NNN (txtIndexNum).',
+  },
+  {
+    key: 'localCaseNumber',
+    kind: 'string',
+    flags: ['--local-case-number'],
+    help: 'Local case file number (txtLclCFN).',
+  },
+  {
+    key: 'enslaved',
+    kind: 'boolean',
+    flags: ['--enslaved'],
+    help: 'Only cases referencing enslaved persons.',
+  },
   { key: 'free', kind: 'boolean', flags: ['--free'], help: 'Only cases referencing free persons.' },
   { key: 'plats', kind: 'boolean', flags: ['--plats'], help: 'Only cases with plats available.' },
-  { key: 'pages', kind: 'string', flags: ['--pages'], default: '1', help: "Result pages to fetch: '1', '1-3', '1,3', or 'all'." },
+  {
+    key: 'pages',
+    kind: 'string',
+    flags: ['--pages'],
+    default: '1',
+    help: "Result pages to fetch: '1', '1-3', '1,3', or 'all'.",
+  },
   { key: 'asJson', kind: 'boolean', flags: ['--json'], help: 'Output compact structured JSON.' },
   ...REFRESH_CACHE_OPTIONS,
 ];
 
 const CHANCERY_CASE_OPTIONS: readonly OptionSpec[] = [
-  { key: 'images', kind: 'boolean', flags: ['--images'], help: 'Also list the scanned page PDFs and ZIP URL.' },
+  {
+    key: 'images',
+    kind: 'boolean',
+    flags: ['--images'],
+    help: 'Also list the scanned page PDFs and ZIP URL.',
+  },
   { key: 'asJson', kind: 'boolean', flags: ['--json'], help: 'Output compact structured JSON.' },
   ...REFRESH_CACHE_OPTIONS,
 ];
 
 const CHANCERY_DOWNLOAD_OPTIONS: readonly OptionSpec[] = [
-  { key: 'outDir', kind: 'string', flags: ['--out'], metavar: 'DIR', help: 'Output directory (default: ./va-chancery-<cfn>).' },
-  { key: 'pages', kind: 'string', flags: ['--pages'], default: 'all', help: "1-based page selection, e.g. '1-5' or 'all'." },
-  { key: 'asZip', kind: 'boolean', flags: ['--zip'], help: 'Download the whole-case ZIP instead of page PDFs.' },
+  {
+    key: 'outDir',
+    kind: 'string',
+    flags: ['--out'],
+    metavar: 'DIR',
+    help: 'Output directory (default: ./va-chancery-<cfn>).',
+  },
+  {
+    key: 'pages',
+    kind: 'string',
+    flags: ['--pages'],
+    default: 'all',
+    help: "1-based page selection, e.g. '1-5' or 'all'.",
+  },
+  {
+    key: 'asZip',
+    kind: 'boolean',
+    flags: ['--zip'],
+    help: 'Download the whole-case ZIP instead of page PDFs.',
+  },
   { key: 'overwrite', kind: 'boolean', flags: ['--overwrite'], help: 'Overwrite existing files.' },
   ...REFRESH_CACHE_OPTIONS,
 ];
 
 const CHANCERY_LOCALITIES_OPTIONS: readonly OptionSpec[] = [
-  { key: 'status', kind: 'string', flags: ['--status'], help: 'Filter by viewing status substring, e.g. Scanned.' },
+  {
+    key: 'status',
+    kind: 'string',
+    flags: ['--status'],
+    help: 'Filter by viewing status substring, e.g. Scanned.',
+  },
   { key: 'asJson', kind: 'boolean', flags: ['--json'], help: 'Output a JSON list of locality rows.' },
   ...REFRESH_CACHE_OPTIONS,
 ];
 
 const CATALOG_OPTIONS: readonly OptionSpec[] = [
-  { key: 'field', kind: 'string', flags: ['--field'], choices: CATALOG_FIELDS, default: 'any', help: 'PNXS search field (any, title, creator).' },
-  { key: 'limit', kind: 'integer', flags: ['--limit'], min: 1, default: 10, help: 'Results per page (PNXS limit).' },
-  { key: 'offset', kind: 'integer', flags: ['--offset'], min: 0, default: 0, help: 'Result offset (PNXS offset).' },
+  {
+    key: 'field',
+    kind: 'string',
+    flags: ['--field'],
+    choices: CATALOG_FIELDS,
+    default: 'any',
+    help: 'PNXS search field (any, title, creator).',
+  },
+  {
+    key: 'limit',
+    kind: 'integer',
+    flags: ['--limit'],
+    min: 1,
+    default: 10,
+    help: 'Results per page (PNXS limit).',
+  },
+  {
+    key: 'offset',
+    kind: 'integer',
+    flags: ['--offset'],
+    min: 0,
+    default: 0,
+    help: 'Result offset (PNXS offset).',
+  },
   { key: 'asJson', kind: 'boolean', flags: ['--json'], help: 'Output compact structured JSON.' },
   ...REFRESH_CACHE_OPTIONS,
 ];
 
 const URL_OPTIONS: readonly OptionSpec[] = [
-  { key: 'chanceryCase', kind: 'string', flags: ['--chancery-case'], metavar: 'CFN', help: 'CFN (locality-year-number).' },
-  { key: 'catalogQuery', kind: 'string', flags: ['--catalog'], metavar: 'QUERY', help: 'Catalog search term (Primo search URL).' },
-  { key: 'chronicle', kind: 'boolean', flags: ['--chronicle'], help: 'Virginia Chronicle home page (browser-only).' },
-  { key: 'land', kind: 'boolean', flags: ['--land'], help: 'Land Office patents/grants: libguide + LONN volume index.' },
-  { key: 'arvas', kind: 'boolean', flags: ['--arvas'], help: 'ARVAS finding-aid search home (browser-only).' },
+  {
+    key: 'chanceryCase',
+    kind: 'string',
+    flags: ['--chancery-case'],
+    metavar: 'CFN',
+    help: 'CFN (locality-year-number).',
+  },
+  {
+    key: 'catalogQuery',
+    kind: 'string',
+    flags: ['--catalog'],
+    metavar: 'QUERY',
+    help: 'Catalog search term (Primo search URL).',
+  },
+  {
+    key: 'chronicle',
+    kind: 'boolean',
+    flags: ['--chronicle'],
+    help: 'Virginia Chronicle home page (browser-only).',
+  },
+  {
+    key: 'land',
+    kind: 'boolean',
+    flags: ['--land'],
+    help: 'Land Office patents/grants: libguide + LONN volume index.',
+  },
+  {
+    key: 'arvas',
+    kind: 'boolean',
+    flags: ['--arvas'],
+    help: 'ARVAS finding-aid search home (browser-only).',
+  },
   { key: 'chancery', kind: 'boolean', flags: ['--chancery'], help: 'Chancery Records Index home page.' },
 ];
 
 const GRANT_TIF_OPTIONS: readonly OptionSpec[] = [
-  { key: 'out', kind: 'string', flags: ['--out'], metavar: 'FILE', help: 'Output file (.jpg/.jpeg converts; else raw).' },
+  {
+    key: 'out',
+    kind: 'string',
+    flags: ['--out'],
+    metavar: 'FILE',
+    help: 'Output file (.jpg/.jpeg converts; else raw).',
+  },
   { key: 'asJson', kind: 'boolean', flags: ['--json'], help: 'Output structured JSON.' },
   ...REFRESH_CACHE_OPTIONS,
 ];
 
 const DUNMORE_OPTIONS: readonly OptionSpec[] = [
-  { key: 'pageNo', kind: 'integer', flags: ['--page'], min: 1, help: "Page number to save (default: the card's own page)." },
-  { key: 'out', kind: 'string', flags: ['--out'], metavar: 'FILE', help: 'Save the selected page image (.jpg converts; else raw TIFF).' },
+  {
+    key: 'pageNo',
+    kind: 'integer',
+    flags: ['--page'],
+    min: 1,
+    help: "Page number to save (default: the card's own page).",
+  },
+  {
+    key: 'out',
+    kind: 'string',
+    flags: ['--out'],
+    metavar: 'FILE',
+    help: 'Save the selected page image (.jpg converts; else raw TIFF).',
+  },
   { key: 'asJson', kind: 'boolean', flags: ['--json'], help: 'Output structured JSON.' },
   ...REFRESH_CACHE_OPTIONS,
 ];
 
 const ROSETTA_OPTIONS: readonly OptionSpec[] = [
-  { key: 'fileIndex', kind: 'integer', flags: ['--file'], min: 1, help: "1-based file number from --list (default: viewer's initial file)." },
-  { key: 'flId', kind: 'string', flags: ['--fl'], metavar: 'FL_ID', help: 'Explicit Rosetta file pid (FL<digits>) belonging to this IE.' },
+  {
+    key: 'fileIndex',
+    kind: 'integer',
+    flags: ['--file'],
+    min: 1,
+    help: "1-based file number from --list (default: viewer's initial file).",
+  },
+  {
+    key: 'flId',
+    kind: 'string',
+    flags: ['--fl'],
+    metavar: 'FL_ID',
+    help: 'Explicit Rosetta file pid (FL<digits>) belonging to this IE.',
+  },
   { key: 'listOnly', kind: 'boolean', flags: ['--list'], help: "Only list the IE's delivered files." },
-  { key: 'out', kind: 'string', flags: ['--out'], metavar: 'FILE', help: 'Output file (default ./<IE>_<FL>.<ext>).' },
+  {
+    key: 'out',
+    kind: 'string',
+    flags: ['--out'],
+    metavar: 'FILE',
+    help: 'Output file (default ./<IE>_<FL>.<ext>).',
+  },
   { key: 'asJson', kind: 'boolean', flags: ['--json'], help: 'Output structured JSON.' },
   ...REFRESH_CACHE_OPTIONS,
 ];
@@ -1092,8 +1224,7 @@ function makeState(
 function renderRootHelp(): string {
   return formatCommandUsage({
     usage: 'kinloom va-archives [--refresh] <command> [options]',
-    summary:
-      'Search the Library of Virginia: Chancery Records Index, Primo catalog, image server, Rosetta.',
+    summary: 'Search the Library of Virginia: Chancery Records Index, Primo catalog, image server, Rosetta.',
     subcommands: [
       { name: 'chancery', summary: 'Chancery Records Index (search, case, download, localities).' },
       { name: 'catalog', summary: 'Search the Library of Virginia catalog via Primo PNXS API.' },
@@ -1487,8 +1618,7 @@ async function runChanceryLocalities(
   }
 
   const lines = rows.map(
-    (r) =>
-      `${r.locality.padEnd(20)} ${r.region.padEnd(22)} ${r.time_frame.padEnd(14)} ${r.viewing_status}`
+    (r) => `${r.locality.padEnd(20)} ${r.region.padEnd(22)} ${r.time_frame.padEnd(14)} ${r.viewing_status}`
   );
   lines.push(`${rows.length} localities`);
   return {
@@ -1652,7 +1782,7 @@ async function runGrantTif(
         formatCommandUsage({
           usage: `kinloom va-archives ${commandName} <PATH_OR_URL> [options]`,
           summary:
-            "Fetch (and cache) one Library of Virginia image-server scan (e.g. /LONN/LO-3/372/372_0195.tif). --out x.jpg converts TIFF to JPEG.",
+            'Fetch (and cache) one Library of Virginia image-server scan (e.g. /LONN/LO-3/372/372_0195.tif). --out x.jpg converts TIFF to JPEG.',
           options: GRANT_TIF_OPTIONS,
         })
       ),
@@ -1717,8 +1847,7 @@ async function runDunmore(
         ctx.io,
         formatCommandUsage({
           usage: 'kinloom va-archives dunmore <DRAWER> <CARD> [options]',
-          summary:
-            "Resolve a Dunmore's War (1774) index card to its page TIFFs on image.lva.virginia.gov.",
+          summary: "Resolve a Dunmore's War (1774) index card to its page TIFFs on image.lva.virginia.gov.",
           options: DUNMORE_OPTIONS,
         })
       ),
@@ -1727,9 +1856,7 @@ async function runDunmore(
 
   const [drawer, card] = parsed.positionals;
   if (!/^\d{1,5}\/W\d{1,6}$/.test(drawer)) {
-    throw new CliValidationError(
-      `Invalid drawer (expected e.g. 0001/W0001): ${JSON.stringify(drawer)}`
-    );
+    throw new CliValidationError(`Invalid drawer (expected e.g. 0001/W0001): ${JSON.stringify(drawer)}`);
   }
   if (!/^\d{1,6}$/.test(card)) {
     throw new CliValidationError(`Invalid card number: ${JSON.stringify(card)}`);
@@ -1814,8 +1941,7 @@ async function runDownloadRosetta(
         ctx.io,
         formatCommandUsage({
           usage: 'kinloom va-archives download-rosetta <IE_ID> [options]',
-          summary:
-            'Download a delivered file (PDF/image) for a Library of Virginia Rosetta IE id.',
+          summary: 'Download a delivered file (PDF/image) for a Library of Virginia Rosetta IE id.',
           options: ROSETTA_OPTIONS,
         })
       ),
@@ -1871,8 +1997,7 @@ async function runDownloadRosetta(
   }
 
   const expectedBinPath = path.join(state.cacheRoot, 'rosetta', ie, `${fl}.bin`);
-  const binAlreadyCached =
-    !state.refresh && isCacheMetaValid(expectedBinPath, null, ctx.nowMs) !== undefined;
+  const binAlreadyCached = !state.refresh && isCacheMetaValid(expectedBinPath, null, ctx.nowMs) !== undefined;
   if (!info.session && !binAlreadyCached) {
     const warmUrl = buildUrlWithParams(ROSETTA_DELIVERY, { dps_pid: ie });
     await httpRequest(warmUrl, {
@@ -1908,18 +2033,12 @@ async function runDownloadRosetta(
   }
   return {
     exitCode: 0,
-    bytesOut: emitStdout(
-      ctx.io,
-      `saved ${destPath} (${bytes} bytes, ${meta.content_type}) from ${ie}/${fl}`
-    ),
+    bytesOut: emitStdout(ctx.io, `saved ${destPath} (${bytes} bytes, ${meta.content_type}) from ${ie}/${fl}`),
     cacheHit: state.tracker.allHits(),
   };
 }
 
-export const runVaArchivesCommand: RecordHandler = async (
-  args,
-  ctx
-): Promise<RecordCommandOutcome> => {
+export const runVaArchivesCommand: RecordHandler = async (args, ctx): Promise<RecordCommandOutcome> => {
   try {
     let globalRefresh = false;
     let remaining = [...args];
@@ -1967,9 +2086,7 @@ export const runVaArchivesCommand: RecordHandler = async (
       case 'download-rosetta':
         return await runDownloadRosetta(rest, ctx, globalRefresh);
       default:
-        throw new CliValidationError(
-          `No such command '${subcmd}'. Run 'kinloom va-archives --script-help'.`
-        );
+        throw new CliValidationError(`No such command '${subcmd}'. Run 'kinloom va-archives --script-help'.`);
     }
   } catch (err: unknown) {
     if (err instanceof CliValidationError) {

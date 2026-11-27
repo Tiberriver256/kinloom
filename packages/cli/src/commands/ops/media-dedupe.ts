@@ -2,10 +2,13 @@ import { randomBytes } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import {
-  MediaItemSchema,
-  NarrativeSchema,
   compileArchive,
   getMediaPersonIds,
+  type MediaItem,
+  MediaItemSchema,
+  type Narrative,
+  NarrativeSchema,
+  type Place,
   parseEventsYaml,
   parseKinloomConfigYaml,
   parseKinshipYaml,
@@ -15,6 +18,9 @@ import {
   parsePeopleYaml,
   parsePlacesYaml,
   parseSourcesYaml,
+  type RawEvent,
+  type RawPerson,
+  type SourceRecord,
   serializeEventsYaml,
   serializeMediaYaml,
   serializeNarrativesYaml,
@@ -22,12 +28,6 @@ import {
   serializePlacesYaml,
   serializeSourcesYaml,
   validateNarrativeCitations,
-  type MediaItem,
-  type Narrative,
-  type Place,
-  type RawEvent,
-  type RawPerson,
-  type SourceRecord,
 } from '@kinloom/core';
 import { CliValidationError } from '../../errors.js';
 import { listStagedAuditPersonIds } from './audit-overlaps.js';
@@ -283,10 +283,7 @@ export function mergeDuplicateMediaGroup(
     ...existingAltCaptions,
     ...retired
       .map((item) => item.caption.trim())
-      .filter(
-        (cap) =>
-          cap.length > 0 && !chosenCaption.toLowerCase().includes(cap.toLowerCase())
-      ),
+      .filter((cap) => cap.length > 0 && !chosenCaption.toLowerCase().includes(cap.toLowerCase())),
   ]);
   if (altCaptions.length > 0) {
     mergedExtensions.alternate_captions = altCaptions;
@@ -308,10 +305,7 @@ export function mergeDuplicateMediaGroup(
     ...existingAltProv,
     ...retired
       .map((item) => item.provenance?.trim() ?? '')
-      .filter(
-        (prov) =>
-          prov.length > 0 && prov.toLowerCase() !== chosenProvenance.toLowerCase()
-      ),
+      .filter((prov) => prov.length > 0 && prov.toLowerCase() !== chosenProvenance.toLowerCase()),
   ]);
   if (altProvenance.length > 0) {
     mergedExtensions.alternate_provenance = altProvenance;
@@ -330,10 +324,7 @@ export function mergeDuplicateMediaGroup(
     const prevAdditional = Array.isArray(mergedExtensions.additional_source_ids)
       ? mergedExtensions.additional_source_ids.filter((s): s is string => typeof s === 'string')
       : [];
-    mergedExtensions.additional_source_ids = uniqueNonEmptyStrings([
-      ...prevAdditional,
-      ...additionalSources,
-    ]);
+    mergedExtensions.additional_source_ids = uniqueNonEmptyStrings([...prevAdditional, ...additionalSources]);
     warnings.push(
       `Conflicting source_id on '${normalizedFile}': kept canonical '${canonical.source_id}' on ${canonical.id}; recorded additional [${additionalSources.join(', ')}] in extensions.additional_source_ids.`
     );
@@ -351,10 +342,7 @@ export function mergeDuplicateMediaGroup(
     const prevAdditional = Array.isArray(mergedExtensions.additional_event_ids)
       ? mergedExtensions.additional_event_ids.filter((s): s is string => typeof s === 'string')
       : [];
-    mergedExtensions.additional_event_ids = uniqueNonEmptyStrings([
-      ...prevAdditional,
-      ...additionalEvents,
-    ]);
+    mergedExtensions.additional_event_ids = uniqueNonEmptyStrings([...prevAdditional, ...additionalEvents]);
     warnings.push(
       `Conflicting event_id on '${normalizedFile}': kept canonical '${canonical.event_id}' on ${canonical.id}; recorded additional [${additionalEvents.join(', ')}] in extensions.additional_event_ids.`
     );
@@ -401,10 +389,9 @@ export function mergeDuplicateMediaGroup(
   const prevMergedFrom = Array.isArray(mergedExtensions.merged_from_media_ids)
     ? mergedExtensions.merged_from_media_ids.filter((id): id is string => typeof id === 'string')
     : [];
-  mergedExtensions.merged_from_media_ids = uniqueNonEmptyStrings([
-    ...prevMergedFrom,
-    ...retiredIds,
-  ]).toSorted((a, b) => a.localeCompare(b));
+  mergedExtensions.merged_from_media_ids = uniqueNonEmptyStrings([...prevMergedFrom, ...retiredIds]).toSorted(
+    (a, b) => a.localeCompare(b)
+  );
   canonical.extensions = mergedExtensions;
 
   const validated = MediaItemSchema.parse(canonical);
@@ -510,16 +497,7 @@ function rewriteMediaRefsInExtensionsObject(
         changed = true;
       }
     } else if (typeof val === 'object' && val !== null) {
-      if (
-        rewriteMediaRefsInExtensionsObject(
-          val,
-          retiredToCanonical,
-          file,
-          entityId,
-          fieldPath,
-          rewrites
-        )
-      ) {
+      if (rewriteMediaRefsInExtensionsObject(val, retiredToCanonical, file, entityId, fieldPath, rewrites)) {
         changed = true;
       }
     }
@@ -562,9 +540,7 @@ function scanStagedPackagesForRetiredMedia(
   return warnings;
 }
 
-export function formatMediaDedupeTextReport(
-  report: Omit<MediaDedupeCommandResult, 'rendered'>
-): string {
+export function formatMediaDedupeTextReport(report: Omit<MediaDedupeCommandResult, 'rendered'>): string {
   const lines: string[] = [];
   const modeLabel = report.apply ? 'apply' : 'dry-run';
   if (report.duplicateGroupCount === 0) {
@@ -583,9 +559,7 @@ export function formatMediaDedupeTextReport(
   for (const group of report.groups) {
     lines.push(
       `  File ${group.normalizedFile}: keep ${group.canonicalId}, retire [${group.retiredIds.join(', ')}]` +
-        (group.mergedPersonIds.length > 0
-          ? ` (people: ${group.mergedPersonIds.join(', ')})`
-          : '')
+        (group.mergedPersonIds.length > 0 ? ` (people: ${group.mergedPersonIds.join(', ')})` : '')
     );
   }
   if (report.warnings.length > 0) {
@@ -597,9 +571,7 @@ export function formatMediaDedupeTextReport(
   if (report.stagedPackageWarnings.length > 0) {
     lines.push('  Staged package warnings (read-only, research/ not modified):');
     for (const sw of report.stagedPackageWarnings) {
-      const pairs = sw.retiredMediaIds
-        .map((id) => `${id} -> ${sw.canonicalByRetired[id]}`)
-        .join(', ');
+      const pairs = sw.retiredMediaIds.map((id) => `${id} -> ${sw.canonicalByRetired[id]}`).join(', ');
       lines.push(`    - research/people/${sw.personId}/patch.json references retired media: ${pairs}`);
     }
   }
@@ -608,7 +580,9 @@ export function formatMediaDedupeTextReport(
       `  Dry-run only: 0 files written (${report.wouldWriteYamlFiles.length} file(s) would be updated; pass '--apply' to write).`
     );
   } else {
-    lines.push(`  Written YAML files (${report.writtenYamlFiles.length}): ${report.writtenYamlFiles.join(', ')}`);
+    lines.push(
+      `  Written YAML files (${report.writtenYamlFiles.length}): ${report.writtenYamlFiles.join(', ')}`
+    );
   }
   return lines.join('\n');
 }
@@ -625,9 +599,7 @@ export async function runMediaDedupeCommand(
 ): Promise<MediaDedupeCommandResult> {
   const repoDir = path.resolve(options.repoDir?.trim() || process.cwd());
   const apply = Boolean(options.apply);
-  const preferSet = new Set(
-    (options.preferIds ?? []).map((id) => id.trim()).filter((id) => id.length > 0)
-  );
+  const preferSet = new Set((options.preferIds ?? []).map((id) => id.trim()).filter((id) => id.length > 0));
   const writeFileFn = options.writeFileImpl ?? writeFileAtomicUtf8;
 
   if (!fs.existsSync(repoDir) || !fs.statSync(repoDir).isDirectory()) {
@@ -636,9 +608,7 @@ export async function runMediaDedupeCommand(
   const dataDir = path.join(repoDir, 'data');
   const configPath = path.join(repoDir, 'kinloom.config.yaml');
   if (!fs.existsSync(dataDir) || !fs.existsSync(configPath)) {
-    throw new CliValidationError(
-      `Archive data/ or kinloom.config.yaml not found under ${repoDir}.`
-    );
+    throw new CliValidationError(`Archive data/ or kinloom.config.yaml not found under ${repoDir}.`);
   }
 
   const config = parseKinloomConfigYaml(fs.readFileSync(configPath, 'utf8'));
@@ -664,9 +634,7 @@ export async function runMediaDedupeCommand(
   const mediaById = new Map(media.map((item) => [item.id, item]));
   for (const prefId of preferSet) {
     if (!mediaById.has(prefId)) {
-      throw new CliValidationError(
-        `Preferred media_id '${prefId}' does not exist in data/media.yaml.`
-      );
+      throw new CliValidationError(`Preferred media_id '${prefId}' does not exist in data/media.yaml.`);
     }
   }
 
@@ -704,9 +672,7 @@ export async function runMediaDedupeCommand(
     };
     return {
       ...emptyBase,
-      rendered: options.json
-        ? JSON.stringify(emptyBase, null, 2)
-        : formatMediaDedupeTextReport(emptyBase),
+      rendered: options.json ? JSON.stringify(emptyBase, null, 2) : formatMediaDedupeTextReport(emptyBase),
     };
   }
 
@@ -846,8 +812,7 @@ export async function runMediaDedupeCommand(
   }
 
   const narrativesChanged =
-    citationRewrites.length > 0 ||
-    extensionRewrites.some((rw) => rw.file === 'narratives.yaml');
+    citationRewrites.length > 0 || extensionRewrites.some((rw) => rw.file === 'narratives.yaml');
 
   // Pre-write verification: zero duplicates, valid citations, clean dual-mode compilation & privacy.
   const remainingDuplicates = findDuplicateNormalizedMediaFiles(mergedMedia);
@@ -933,10 +898,7 @@ export async function runMediaDedupeCommand(
   if (apply) {
     const byteSnapshot = new Map<string, Buffer | null>();
     for (const item of pendingWrites) {
-      byteSnapshot.set(
-        item.fullPath,
-        fs.existsSync(item.fullPath) ? fs.readFileSync(item.fullPath) : null
-      );
+      byteSnapshot.set(item.fullPath, fs.existsSync(item.fullPath) ? fs.readFileSync(item.fullPath) : null);
     }
 
     try {
@@ -989,8 +951,6 @@ export async function runMediaDedupeCommand(
 
   return {
     ...baseResult,
-    rendered: options.json
-      ? JSON.stringify(baseResult, null, 2)
-      : formatMediaDedupeTextReport(baseResult),
+    rendered: options.json ? JSON.stringify(baseResult, null, 2) : formatMediaDedupeTextReport(baseResult),
   };
 }

@@ -1,11 +1,18 @@
-import { Link, useLocation } from 'react-router-dom';
 import React, { useEffect, useRef, useState } from 'react';
-import { SignInModal } from './wiki/SignInModal.js';
-import { initialsOf } from './Atoms.js';
-import { KINLOOM_VOCABULARY } from '../lib/vocabulary.js';
+import { Link, useLocation } from 'react-router-dom';
 import { useArchiveData } from '../context/ArchiveDataContext.js';
 import { useArchiveUi } from '../context/ArchiveUiContext.js';
+import { cx } from '../lib/cx.js';
+import { KINLOOM_VOCABULARY } from '../lib/vocabulary.js';
+import cssMod3 from '../pages/NotFoundPage.module.css';
 import { useKinloomPlugins } from '../plugins/PluginContext.js';
+import { initialsOf } from './Atoms.js';
+import cssMod0 from './ExplorerTopBar.module.css';
+import cssMod1 from './SourceReaderDrawer.module.css';
+import { SignInModal } from './wiki/SignInModal.js';
+import cssMod2 from './wiki/WikiSurfaces.module.css';
+
+const uiStyles: Readonly<Record<string, string>> = { ...cssMod0, ...cssMod1, ...cssMod2, ...cssMod3 };
 
 export const ExplorerTopBar: React.FC = () => {
   const { siteConfig, featuredDocumentId, capabilities, session, dataSource, refreshSession } =
@@ -48,10 +55,8 @@ export const ExplorerTopBar: React.FC = () => {
     };
   }, []);
 
-  const isPeopleActive =
-    location.pathname === '/' || location.pathname.startsWith('/person/');
-  const isPlacesActive =
-    location.pathname === '/places' || location.pathname.startsWith('/place/');
+  const isPeopleActive = location.pathname === '/' || location.pathname.startsWith('/person/');
+  const isPlacesActive = location.pathname === '/places' || location.pathname.startsWith('/place/');
   const isTimeActive = location.pathname === '/time';
 
   const isSignedInMember = Boolean(session?.authenticated && session.principal_kind === 'user');
@@ -66,8 +71,9 @@ export const ExplorerTopBar: React.FC = () => {
     if (!accountOpen) {
       return undefined;
     }
-    const firstMenuItem =
-      accountDropdownRef.current?.querySelector<HTMLElement>('[role="menuitem"]:not([disabled])');
+    const firstMenuItem = accountDropdownRef.current?.querySelector<HTMLElement>(
+      '[role="menuitem"]:not([disabled])'
+    );
     firstMenuItem?.focus();
     const onPointerDown = (event: PointerEvent): void => {
       if (accountMenuRef.current && !accountMenuRef.current.contains(event.target as Node)) {
@@ -110,9 +116,10 @@ export const ExplorerTopBar: React.FC = () => {
 
   return (
     <>
+      {/* biome-ignore lint/a11y/useValidAnchor: skip-to-content landmark anchor */}
       <a
         href="#main-content"
-        className="skip-to-content"
+        className={cx(uiStyles, 'skip-to-content')}
         onClick={() => {
           const target = document.getElementById('main-content');
           if (target) {
@@ -125,333 +132,354 @@ export const ExplorerTopBar: React.FC = () => {
       >
         Skip to content
       </a>
-      <header ref={headerRef} className="topbar">
-      <div className="topbar-left">
-        <Link to="/" className="brand-link">
-          {siteConfig.site.title}
-        </Link>
-
-        <nav className="nav-links" aria-label="Primary">
-          <Link
-            to="/"
-            className={`nav-pill nav-axis ${isPeopleActive ? 'active' : ''}`}
-            aria-current={isPeopleActive ? 'page' : undefined}
-          >
-            {KINLOOM_VOCABULARY.nav.people}
-          </Link>
-          <Link
-            to="/places"
-            className={`nav-pill nav-axis ${isPlacesActive ? 'active' : ''}`}
-            aria-current={isPlacesActive ? 'page' : undefined}
-          >
-            {KINLOOM_VOCABULARY.nav.places}
-          </Link>
-          <Link
-            to="/time"
-            className={`nav-pill nav-axis ${isTimeActive ? 'active' : ''}`}
-            aria-current={isTimeActive ? 'page' : undefined}
-          >
-            {KINLOOM_VOCABULARY.nav.time}
+      <header ref={headerRef} className={cx(uiStyles, 'topbar')}>
+        <div className={cx(uiStyles, 'topbar-left')}>
+          <Link to="/" className={cx(uiStyles, 'brand-link')}>
+            {siteConfig.site.title}
           </Link>
 
-          <span className="nav-divider nav-pill-desktop-only" aria-hidden="true" />
-
-          <Link
-            to="/tree"
-            className={`nav-pill ${location.pathname === '/tree' ? 'active' : ''}`}
-            aria-current={location.pathname === '/tree' ? 'page' : undefined}
-          >
-            {KINLOOM_VOCABULARY.nav.tree}
-          </Link>
-          <Link
-            to="/map"
-            className={`nav-pill ${location.pathname === '/map' ? 'active' : ''}`}
-            aria-current={location.pathname === '/map' ? 'page' : undefined}
-          >
-            {KINLOOM_VOCABULARY.nav.map}
-          </Link>
-          <Link
-            to="/kinship"
-            className={`nav-pill nav-pill-desktop-only ${location.pathname === '/kinship' ? 'active' : ''}`}
-            aria-current={location.pathname === '/kinship' ? 'page' : undefined}
-          >
-            {KINLOOM_VOCABULARY.nav.kinship}
-          </Link>
-          <Link
-            to="/evidence"
-            className={`nav-pill nav-pill-desktop-only ${location.pathname === '/evidence' ? 'active' : ''}`}
-            aria-current={location.pathname === '/evidence' ? 'page' : undefined}
-          >
-            {KINLOOM_VOCABULARY.nav.evidence}
-          </Link>
-
-          {navPluginRoutes.map((route) => (
+          <nav className={cx(uiStyles, 'nav-links')} aria-label="Primary">
             <Link
-              key={`${route.pluginId}:${route.path}`}
-              to={route.path}
-              className={`nav-pill ${location.pathname === route.path ? 'active' : ''}`}
-              aria-current={location.pathname === route.path ? 'page' : undefined}
+              to="/"
+              className={cx(uiStyles, `nav-pill nav-axis ${isPeopleActive ? 'active' : ''}`)}
+              aria-current={isPeopleActive ? 'page' : undefined}
             >
-              {route.navLabel}
+              {KINLOOM_VOCABULARY.nav.people}
             </Link>
-          ))}
-        </nav>
-      </div>
+            <Link
+              to="/places"
+              className={cx(uiStyles, `nav-pill nav-axis ${isPlacesActive ? 'active' : ''}`)}
+              aria-current={isPlacesActive ? 'page' : undefined}
+            >
+              {KINLOOM_VOCABULARY.nav.places}
+            </Link>
+            <Link
+              to="/time"
+              className={cx(uiStyles, `nav-pill nav-axis ${isTimeActive ? 'active' : ''}`)}
+              aria-current={isTimeActive ? 'page' : undefined}
+            >
+              {KINLOOM_VOCABULARY.nav.time}
+            </Link>
 
-      <div className="topbar-center">
-        {activeYear !== null && location.pathname.startsWith('/person/') && (
-          <Link
-            to={`/time?year=${activeYear}`}
-            className="year-readout"
-            aria-live="polite"
-            title={`Active timeline year ${activeYear} — click to see where everyone was in ${activeYear}`}
-          >
-            {activeYear}
-          </Link>
-        )}
+            <span className={cx(uiStyles, 'nav-divider nav-pill-desktop-only')} aria-hidden="true" />
 
-        <button
-          type="button"
-          className="nav-pill nav-pill-desktop-only"
-          onClick={handleOpenSources}
-        >
-          {KINLOOM_VOCABULARY.nav.sources}
-        </button>
+            <Link
+              to="/tree"
+              className={cx(uiStyles, `nav-pill ${location.pathname === '/tree' ? 'active' : ''}`)}
+              aria-current={location.pathname === '/tree' ? 'page' : undefined}
+            >
+              {KINLOOM_VOCABULARY.nav.tree}
+            </Link>
+            <Link
+              to="/map"
+              className={cx(uiStyles, `nav-pill ${location.pathname === '/map' ? 'active' : ''}`)}
+              aria-current={location.pathname === '/map' ? 'page' : undefined}
+            >
+              {KINLOOM_VOCABULARY.nav.map}
+            </Link>
+            <Link
+              to="/kinship"
+              className={cx(
+                uiStyles,
+                `nav-pill nav-pill-desktop-only ${location.pathname === '/kinship' ? 'active' : ''}`
+              )}
+              aria-current={location.pathname === '/kinship' ? 'page' : undefined}
+            >
+              {KINLOOM_VOCABULARY.nav.kinship}
+            </Link>
+            <Link
+              to="/evidence"
+              className={cx(
+                uiStyles,
+                `nav-pill nav-pill-desktop-only ${location.pathname === '/evidence' ? 'active' : ''}`
+              )}
+              aria-current={location.pathname === '/evidence' ? 'page' : undefined}
+            >
+              {KINLOOM_VOCABULARY.nav.evidence}
+            </Link>
 
-        <button
-          type="button"
-          className="nav-pill nav-pill-desktop-only"
-          onClick={openSearch}
-          title={KINLOOM_VOCABULARY.nav.searchTooltip}
-        >
-          {KINLOOM_VOCABULARY.nav.searchDesktop}
-        </button>
+            {navPluginRoutes.map((route) => (
+              <Link
+                key={`${route.pluginId}:${route.path}`}
+                to={route.path}
+                className={cx(uiStyles, `nav-pill ${location.pathname === route.path ? 'active' : ''}`)}
+                aria-current={location.pathname === route.path ? 'page' : undefined}
+              >
+                {route.navLabel}
+              </Link>
+            ))}
+          </nav>
+        </div>
 
-        {isInviteViewer && (
+        <div className={cx(uiStyles, 'topbar-center')}>
+          {activeYear !== null && location.pathname.startsWith('/person/') && (
+            <Link
+              to={`/time?year=${activeYear}`}
+              className={cx(uiStyles, 'year-readout')}
+              aria-live="polite"
+              title={`Active timeline year ${activeYear} — click to see where everyone was in ${activeYear}`}
+            >
+              {activeYear}
+            </Link>
+          )}
+
           <button
             type="button"
-            className="nav-pill nav-pill-desktop-only"
-            onClick={() => {
-              setSignInOpen(true);
-            }}
+            className={cx(uiStyles, 'nav-pill nav-pill-desktop-only')}
+            onClick={handleOpenSources}
           >
-            {KINLOOM_VOCABULARY.nav.signInToEdit}
+            {KINLOOM_VOCABULARY.nav.sources}
           </button>
-        )}
 
-        <button
-          type="button"
-          className="topbar-mobile-icon-btn"
-          onClick={openSearch}
-          aria-label={KINLOOM_VOCABULARY.nav.searchAria}
-          title={KINLOOM_VOCABULARY.nav.searchAria}
-        >
-          <svg
-            width="17"
-            height="17"
-            viewBox="0 0 18 18"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.75"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            aria-hidden="true"
+          <button
+            type="button"
+            className={cx(uiStyles, 'nav-pill nav-pill-desktop-only')}
+            onClick={openSearch}
+            title={KINLOOM_VOCABULARY.nav.searchTooltip}
           >
-            <circle cx="8" cy="8" r="5.5" />
-            <path d="M12.2 12.2L16 16" />
-          </svg>
-        </button>
+            {KINLOOM_VOCABULARY.nav.searchDesktop}
+          </button>
 
-        <div className={`topbar-account ${isSignedInMember ? '' : 'topbar-account-mobile-only'}`} ref={accountMenuRef}>
-          {isSignedInMember ? (
+          {isInviteViewer && (
             <button
-              ref={accountTriggerRef}
               type="button"
-              className={`topbar-account-btn ${accountOpen ? 'is-open' : ''}`}
-              aria-expanded={accountOpen}
-              aria-haspopup="menu"
-              aria-label={`Account menu for ${memberLabel}`}
+              className={cx(uiStyles, 'nav-pill nav-pill-desktop-only')}
               onClick={() => {
-                setAccountOpen((open) => !open);
+                setSignInOpen(true);
               }}
             >
-              <span className="topbar-account-avatar" aria-hidden="true">
-                {initialsOf(memberLabel)}
-              </span>
-              <span className="topbar-account-name">{memberLabel}</span>
-              <svg
-                className="topbar-account-caret"
-                width="10"
-                height="10"
-                viewBox="0 0 12 12"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.8"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden="true"
-              >
-                <path d="M3 4.5L6 7.5L9 4.5" />
-              </svg>
-            </button>
-          ) : (
-            <button
-              ref={accountTriggerRef}
-              type="button"
-              className={`topbar-mobile-icon-btn ${accountOpen ? 'is-open' : ''}`}
-              aria-expanded={accountOpen}
-              aria-haspopup="menu"
-              aria-label="Archive menu"
-              title="Archive menu"
-              onClick={() => {
-                setAccountOpen((open) => !open);
-              }}
-            >
-              <svg
-                width="17"
-                height="17"
-                viewBox="0 0 18 18"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.75"
-                strokeLinecap="round"
-                aria-hidden="true"
-              >
-                <path d="M3 5h12M3 9h12M3 13h12" />
-              </svg>
+              {KINLOOM_VOCABULARY.nav.signInToEdit}
             </button>
           )}
 
-          {accountOpen && (
-            <div
-              ref={accountDropdownRef}
-              className="topbar-account-menu"
-              role="menu"
-              aria-label={isSignedInMember ? 'Account options' : 'Archive menu'}
+          <button
+            type="button"
+            className={cx(uiStyles, 'topbar-mobile-icon-btn')}
+            onClick={openSearch}
+            aria-label={KINLOOM_VOCABULARY.nav.searchAria}
+            title={KINLOOM_VOCABULARY.nav.searchAria}
+          >
+            <svg
+              width="17"
+              height="17"
+              viewBox="0 0 18 18"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.75"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
             >
-              {isSignedInMember && (
-                <div className="topbar-account-menu-header">
-                  <strong>{memberLabel}</strong>
-                  <span className="wiki-role-chip">
-                    {session?.role === 'admin' ? 'Admin' : 'Editor'}
-                  </span>
-                </div>
-              )}
+              <circle cx="8" cy="8" r="5.5" />
+              <path d="M12.2 12.2L16 16" />
+            </svg>
+          </button>
 
-              {isInviteViewer && (
-                <>
-                  <div className="topbar-account-menu-header">
-                    <strong>
-                      {session?.inviteLabel ? `Invite: ${session.inviteLabel}` : 'Family Invite'}
-                    </strong>
-                    <span className="wiki-role-chip">Viewer</span>
+          <div
+            className={cx(uiStyles, `topbar-account ${isSignedInMember ? '' : 'topbar-account-mobile-only'}`)}
+            ref={accountMenuRef}
+          >
+            {isSignedInMember ? (
+              <button
+                ref={accountTriggerRef}
+                type="button"
+                className={cx(uiStyles, `topbar-account-btn ${accountOpen ? 'is-open' : ''}`)}
+                aria-expanded={accountOpen}
+                aria-haspopup="menu"
+                aria-label={`Account menu for ${memberLabel}`}
+                onClick={() => {
+                  setAccountOpen((open) => !open);
+                }}
+              >
+                <span className={cx(uiStyles, 'topbar-account-avatar')} aria-hidden="true">
+                  {initialsOf(memberLabel)}
+                </span>
+                <span className={cx(uiStyles, 'topbar-account-name')}>{memberLabel}</span>
+                <svg
+                  className={cx(uiStyles, 'topbar-account-caret')}
+                  width="10"
+                  height="10"
+                  viewBox="0 0 12 12"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M3 4.5L6 7.5L9 4.5" />
+                </svg>
+              </button>
+            ) : (
+              <button
+                ref={accountTriggerRef}
+                type="button"
+                className={cx(uiStyles, `topbar-mobile-icon-btn ${accountOpen ? 'is-open' : ''}`)}
+                aria-expanded={accountOpen}
+                aria-haspopup="menu"
+                aria-label="Archive menu"
+                title="Archive menu"
+                onClick={() => {
+                  setAccountOpen((open) => !open);
+                }}
+              >
+                <svg
+                  width="17"
+                  height="17"
+                  viewBox="0 0 18 18"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.75"
+                  strokeLinecap="round"
+                  aria-hidden="true"
+                >
+                  <path d="M3 5h12M3 9h12M3 13h12" />
+                </svg>
+              </button>
+            )}
+
+            {accountOpen && (
+              <div
+                ref={accountDropdownRef}
+                className={cx(uiStyles, 'topbar-account-menu')}
+                role="menu"
+                aria-label={isSignedInMember ? 'Account options' : 'Archive menu'}
+              >
+                {isSignedInMember && (
+                  <div className={cx(uiStyles, 'topbar-account-menu-header')}>
+                    <strong>{memberLabel}</strong>
+                    <span className={cx(uiStyles, 'wiki-role-chip')}>
+                      {session?.role === 'admin' ? 'Admin' : 'Editor'}
+                    </span>
                   </div>
-                  <button
-                    type="button"
+                )}
+
+                {isInviteViewer && (
+                  <>
+                    <div className={cx(uiStyles, 'topbar-account-menu-header')}>
+                      <strong>
+                        {session?.inviteLabel ? `Invite: ${session.inviteLabel}` : 'Family Invite'}
+                      </strong>
+                      <span className={cx(uiStyles, 'wiki-role-chip')}>Viewer</span>
+                    </div>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      className={cx(uiStyles, 'topbar-account-item')}
+                      onClick={() => {
+                        setAccountOpen(false);
+                        setSignInOpen(true);
+                      }}
+                    >
+                      Sign in to edit
+                    </button>
+                    <div className={cx(uiStyles, 'topbar-account-divider')} role="separator" />
+                  </>
+                )}
+
+                <button
+                  type="button"
+                  role="menuitem"
+                  className={cx(uiStyles, 'topbar-account-item topbar-account-item-mobile-only')}
+                  onClick={handleOpenSources}
+                >
+                  {KINLOOM_VOCABULARY.nav.sources}
+                </button>
+
+                <Link
+                  to="/evidence"
+                  role="menuitem"
+                  className={cx(
+                    uiStyles,
+                    `topbar-account-item topbar-account-item-mobile-only ${location.pathname === '/evidence' ? 'active' : ''}`
+                  )}
+                  onClick={() => {
+                    setAccountOpen(false);
+                  }}
+                >
+                  {KINLOOM_VOCABULARY.nav.evidenceFull}
+                </Link>
+
+                <Link
+                  to="/kinship"
+                  role="menuitem"
+                  className={cx(
+                    uiStyles,
+                    `topbar-account-item topbar-account-item-mobile-only ${location.pathname === '/kinship' ? 'active' : ''}`
+                  )}
+                  onClick={() => {
+                    setAccountOpen(false);
+                  }}
+                >
+                  {KINLOOM_VOCABULARY.nav.kinshipFull}
+                </Link>
+
+                {isSignedInMember && capabilities.hasRevisionHistory && (
+                  <Link
+                    to="/changes"
                     role="menuitem"
-                    className="topbar-account-item"
+                    className={cx(
+                      uiStyles,
+                      `topbar-account-item ${location.pathname === '/changes' ? 'active' : ''}`
+                    )}
                     onClick={() => {
                       setAccountOpen(false);
-                      setSignInOpen(true);
                     }}
                   >
-                    Sign in to edit
-                  </button>
-                  <div className="topbar-account-divider" role="separator" />
-                </>
-              )}
+                    {KINLOOM_VOCABULARY.nav.recentChanges}
+                  </Link>
+                )}
 
-              <button
-                type="button"
-                role="menuitem"
-                className="topbar-account-item topbar-account-item-mobile-only"
-                onClick={handleOpenSources}
-              >
-                {KINLOOM_VOCABULARY.nav.sources}
-              </button>
-
-              <Link
-                to="/evidence"
-                role="menuitem"
-                className={`topbar-account-item topbar-account-item-mobile-only ${location.pathname === '/evidence' ? 'active' : ''}`}
-                onClick={() => {
-                  setAccountOpen(false);
-                }}
-              >
-                {KINLOOM_VOCABULARY.nav.evidenceFull}
-              </Link>
-
-              <Link
-                to="/kinship"
-                role="menuitem"
-                className={`topbar-account-item topbar-account-item-mobile-only ${location.pathname === '/kinship' ? 'active' : ''}`}
-                onClick={() => {
-                  setAccountOpen(false);
-                }}
-              >
-                {KINLOOM_VOCABULARY.nav.kinshipFull}
-              </Link>
-
-              {isSignedInMember && capabilities.hasRevisionHistory && (
-                <Link
-                  to="/changes"
-                  role="menuitem"
-                  className={`topbar-account-item ${location.pathname === '/changes' ? 'active' : ''}`}
-                  onClick={() => {
-                    setAccountOpen(false);
-                  }}
-                >
-                  {KINLOOM_VOCABULARY.nav.recentChanges}
-                </Link>
-              )}
-
-              {isSignedInMember && capabilities.canManageSite && (
-                <Link
-                  to="/admin"
-                  role="menuitem"
-                  className={`topbar-account-item ${location.pathname === '/admin' ? 'active' : ''}`}
-                  onClick={() => {
-                    setAccountOpen(false);
-                  }}
-                >
-                  {KINLOOM_VOCABULARY.nav.siteSettings}
-                </Link>
-              )}
-
-              {isSignedInMember && dataSource.logout && (
-                <>
-                  <div className="topbar-account-divider" role="separator" />
-                  <button
-                    type="button"
+                {isSignedInMember && capabilities.canManageSite && (
+                  <Link
+                    to="/admin"
                     role="menuitem"
-                    className="topbar-account-item is-danger"
-                    disabled={signingOut}
+                    className={cx(
+                      uiStyles,
+                      `topbar-account-item ${location.pathname === '/admin' ? 'active' : ''}`
+                    )}
                     onClick={() => {
-                      void handleLogout();
+                      setAccountOpen(false);
                     }}
                   >
-                    {signingOut ? 'Signing out…' : 'Sign Out'}
-                  </button>
-                </>
-              )}
-            </div>
-          )}
-        </div>
-      </div>
+                    {KINLOOM_VOCABULARY.nav.siteSettings}
+                  </Link>
+                )}
 
-      {pivotTrail.length > 1 && location.pathname.startsWith('/person/') && (
-        <div className="topbar-right">
-          <div className="breadcrumb-strip" aria-label="Recent pivot trail">
-            <span>Trail:</span>
-            {pivotTrail.slice(-3).map((c, idx) => (
-              <React.Fragment key={c.slug}>
-                {idx > 0 && <span>→</span>}
-                <Link to={`/person/${c.slug}`}>{c.name}</Link>
-              </React.Fragment>
-            ))}
+                {isSignedInMember && dataSource.logout && (
+                  <>
+                    <div className={cx(uiStyles, 'topbar-account-divider')} role="separator" />
+                    <button
+                      type="button"
+                      role="menuitem"
+                      className={cx(uiStyles, 'topbar-account-item is-danger')}
+                      disabled={signingOut}
+                      onClick={() => {
+                        void handleLogout();
+                      }}
+                    >
+                      {signingOut ? 'Signing out…' : 'Sign Out'}
+                    </button>
+                  </>
+                )}
+              </div>
+            )}
           </div>
         </div>
-      )}
+
+        {pivotTrail.length > 1 && location.pathname.startsWith('/person/') && (
+          <div className={cx(uiStyles, 'topbar-right')}>
+            <nav className={cx(uiStyles, 'breadcrumb-strip')} aria-label="Recent pivot trail">
+              <span>Trail:</span>
+              {pivotTrail.slice(-3).map((c, idx) => (
+                <React.Fragment key={c.slug}>
+                  {idx > 0 && <span>→</span>}
+                  <Link to={`/person/${c.slug}`}>{c.name}</Link>
+                </React.Fragment>
+              ))}
+            </nav>
+          </div>
+        )}
       </header>
       {isInviteViewer && (
         <SignInModal

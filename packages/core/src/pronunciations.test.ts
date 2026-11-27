@@ -2,13 +2,13 @@ import { describe, expect, it } from 'vitest';
 import { compileArchive } from './compileArchive.js';
 import { parseKinloomConfig } from './schemas/config.js';
 import {
-  PronunciationSchema,
   mergePronunciationLexicons,
-  resolvePersonPronunciation,
-  resolvePlacePronunciation,
   type Place,
   type Pronunciation,
+  PronunciationSchema,
   type RawPerson,
+  resolvePersonPronunciation,
+  resolvePlacePronunciation,
 } from './schemas/entities.js';
 
 function makeBaseConfig(pronunciations?: Record<string, Pronunciation>) {
@@ -273,7 +273,7 @@ describe('resolvePersonPronunciation compositional full-name resolution', () => 
         given_name: 'Mary',
         surname: 'Mercer',
       }),
-      lexicon,
+      lexicon
     );
     expect(twoPart).toEqual({
       phonetic: 'MAIR-ee MER-ser',
@@ -293,7 +293,7 @@ describe('resolvePersonPronunciation compositional full-name resolution', () => 
         given_name: 'Mary Ann',
         surname: 'Mercer',
       }),
-      lexicon,
+      lexicon
     );
     expect(threePart?.phonetic).toBe('MAIR-ee AN MER-ser');
     expect(threePart?.ipa).toBe('/ˈmɛə.ɹi æn ˈmɜːr.sər/');
@@ -321,7 +321,7 @@ describe('resolvePersonPronunciation compositional full-name resolution', () => 
         given_name: 'William E.',
         surname: 'Mercer',
       }),
-      lexicon,
+      lexicon
     );
     expect(resolved?.phonetic).toBe('WIL-yum E. MER-ser Jr.');
     expect(resolved?.ipa).toBe('/ˈwɪl.jəm ˈmɜːr.sər/');
@@ -365,7 +365,7 @@ describe('resolvePersonPronunciation compositional full-name resolution', () => 
         given_name: 'Jan',
         surname: 'van der Berg',
       }),
-      lexicon,
+      lexicon
     );
     expect(multiWord).toEqual({
       phonetic: 'YAHN vahn der BERKH',
@@ -384,7 +384,7 @@ describe('resolvePersonPronunciation compositional full-name resolution', () => 
         given_name: 'Anne-Marie',
         surname: 'van der Berg',
       }),
-      lexicon,
+      lexicon
     );
     expect(hyphenated?.phonetic).toBe('AHN-uh-mah-REE vahn der BERKH');
     expect(hyphenated?.ipa).toBe('/ˈɑn.ə-maːˈri vɑn dər ˈbɛrx/');
@@ -413,7 +413,7 @@ describe('resolvePersonPronunciation compositional full-name resolution', () => 
         given_name: 'Thomas',
         surname: 'van Dijk',
       }),
-      lexicon,
+      lexicon
     );
     expect(mixed?.phonetic).toBe('TOM-us vahn DIKE');
     expect(mixed?.ipa).toBe('/ˈtɒm.əs vɑn ˈdɛik/');
@@ -443,7 +443,7 @@ describe('resolvePersonPronunciation compositional full-name resolution', () => 
         given_name: 'Barnabas',
         surname: 'Mercer',
       }),
-      lexicon,
+      lexicon
     );
     expect(fallback).toEqual({
       phonetic: 'MER-ser',
@@ -463,7 +463,7 @@ describe('resolvePersonPronunciation compositional full-name resolution', () => 
         given_name: 'John',
         surname: 'Holland',
       }),
-      lexicon,
+      lexicon
     );
     expect(personHolland).toBeNull();
   });
@@ -562,8 +562,8 @@ describe('resolvePlacePronunciation homonymous place disambiguation', () => {
     expect(
       resolvePlacePronunciation(
         { ...zeelandNl, pronunciation: { phonetic: 'EXPLICIT-OVERRIDE', language: 'nl' } },
-        lexicon,
-      )?.phonetic,
+        lexicon
+      )?.phonetic
     ).toBe('EXPLICIT-OVERRIDE');
 
     // 2. lexicon[place.id] beats full_name and bare name
@@ -604,7 +604,7 @@ describe('mergePronunciationLexicons', () => {
   it('replaces case-variant keys cleanly without leaving shadowed duplicates', () => {
     const merged = mergePronunciationLexicons(
       { mercer: { phonetic: 'MER-ser-OLD' }, alder: { phonetic: 'AWL-der' } },
-      { Mercer: { phonetic: 'MUR-ser-NEW', note: 'Updated' } },
+      { Mercer: { phonetic: 'MUR-ser-NEW', note: 'Updated' } }
     );
     expect(merged).toEqual({
       alder: { phonetic: 'AWL-der' },

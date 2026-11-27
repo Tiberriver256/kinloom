@@ -132,7 +132,7 @@ async function main() {
   const staticResult = runImpeccableDetect(STATIC_TARGETS, 'static source');
   console.log(
     `[impeccable] static source: ${staticResult.findings.length} primary finding(s)`,
-    staticResult.findings.length > 0 ? JSON.stringify(summarizeByRule(staticResult.findings)) : '',
+    staticResult.findings.length > 0 ? JSON.stringify(summarizeByRule(staticResult.findings)) : ''
   );
 
   const port = await getFreePort();
@@ -143,7 +143,7 @@ async function main() {
     {
       cwd: DEMO_DIR,
       stdio: ['ignore', 'pipe', 'pipe'],
-    },
+    }
   );
 
   let previewStderr = '';
@@ -164,7 +164,7 @@ async function main() {
       allFindings.push(...liveResult.findings);
       console.log(
         `[impeccable] live ${viewport} (${urls.length} routes): ${liveResult.findings.length} primary finding(s)`,
-        liveResult.findings.length > 0 ? JSON.stringify(summarizeByRule(liveResult.findings)) : '',
+        liveResult.findings.length > 0 ? JSON.stringify(summarizeByRule(liveResult.findings)) : ''
       );
     }
   } finally {

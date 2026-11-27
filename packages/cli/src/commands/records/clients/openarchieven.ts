@@ -3,6 +3,7 @@ import path from 'node:path';
 import { CliValidationError } from '../../../errors.js';
 import {
   atomicWriteFileSync,
+  type CommandParseSpec,
   cachedJsonCall,
   DEFAULT_USER_AGENT,
   emitJsonStdout,
@@ -12,23 +13,22 @@ import {
   getBooleanOption,
   getNumberOption,
   getStringOption,
+  type HttpResponseResult,
   httpRequest,
   isPrivateOrReservedIp,
+  type OptionSpec,
   parseCacheTtlHours,
   parseCommandArgs,
-  RecordRuntimeError,
-  resolveCacheDir,
-  resolveSubcommandAlias,
-  sha256Hex,
-  SsrfBlockedError,
-  withAdvisoryLock,
-  type CommandParseSpec,
-  type HttpResponseResult,
-  type OptionSpec,
   type RecordCommandContext,
   type RecordCommandOutcome,
   type RecordHandler,
+  RecordRuntimeError,
+  resolveCacheDir,
+  resolveSubcommandAlias,
+  SsrfBlockedError,
+  sha256Hex,
   type UrlSecurityPolicy,
+  withAdvisoryLock,
 } from '../runtime/index.js';
 
 const DEFAULT_CACHE_TTL_HOURS = 168;
@@ -36,9 +36,7 @@ const CACHE_SCHEMA = 1;
 const API_BASE = 'https://api.openarch.nl/1.0/records';
 const WEB_BASE = 'https://www.openarchieven.nl';
 const ALLOWED_API_HOSTS: ReadonlySet<string> = new Set(['api.openarch.nl']);
-const TRANSIENT_STATUS_CODES: ReadonlySet<number> = new Set([
-  429, 500, 502, 503, 504, 520, 522, 524,
-]);
+const TRANSIENT_STATUS_CODES: ReadonlySet<number> = new Set([429, 500, 502, 503, 504, 520, 522, 524]);
 const MAX_HTTP_ATTEMPTS = 3;
 const RETRY_BASE_MS = 500;
 const MIN_INTERVAL_MS = 250;
@@ -47,11 +45,9 @@ const TIMEOUT_MS = 30_000;
 const ARCHIVE_CODE_RE = /^[A-Za-z0-9_-]{1,32}$/;
 const RECORD_ID_RE = /^[A-Za-z0-9_-]{1,128}$/;
 const OPENARCH_URL_RE = /openarchieven\.nl\/([a-z0-9_-]+):([A-Za-z0-9_-]+)/i;
-const PROXY_THUMB_RE =
-  /^https?:\/\/proxy\.archieven\.nl\/thumb\/([^/?#]+)\/([^/?#]+)(?:[?#].*)?$/i;
+const PROXY_THUMB_RE = /^https?:\/\/proxy\.archieven\.nl\/thumb\/([^/?#]+)\/([^/?#]+)(?:[?#].*)?$/i;
 const IIIF_INFO_RE = /^(https?:\/\/.+)\/info\.json(?:[?#].*)?$/i;
-const IIIF_JP2_RE =
-  /^(https?:\/\/.+\/full\/[^/?#]+\/[^/?#]+\/default)\.jp2(?:[?#].*)?$/i;
+const IIIF_JP2_RE = /^(https?:\/\/.+\/full\/[^/?#]+\/[^/?#]+\/default)\.jp2(?:[?#].*)?$/i;
 
 const VIEWER_HOSTS: ReadonlySet<string> = new Set([
   'www.archieven.nl',
@@ -106,10 +102,7 @@ const CONTENT_TYPE_EXT: Readonly<Record<string, string>> = {
   'application/pdf': 'pdf',
 };
 
-const HTML_CONTENT_TYPES: ReadonlySet<string> = new Set([
-  'text/html',
-  'application/xhtml+xml',
-]);
+const HTML_CONTENT_TYPES: ReadonlySet<string> = new Set(['text/html', 'application/xhtml+xml']);
 
 const FALLBACK_HTTP_STATUSES: ReadonlySet<number> = new Set([403, 404, 410]);
 
@@ -133,9 +126,7 @@ class ScanHttpError extends Error {
   readonly url: string;
 
   constructor(statusCode: number, url: string) {
-    super(
-      `Scan download failed with HTTP ${statusCode} for ${url}. The response was not cached.`
-    );
+    super(`Scan download failed with HTTP ${statusCode} for ${url}. The response was not cached.`);
     this.name = 'ScanHttpError';
     this.statusCode = statusCode;
     this.url = url;
@@ -161,10 +152,7 @@ function getCacheDir(ctx: RecordCommandContext): string {
   });
 }
 
-function resolveTtlHours(
-  cliTtl: number | undefined,
-  ctx: RecordCommandContext
-): number {
+function resolveTtlHours(cliTtl: number | undefined, ctx: RecordCommandContext): number {
   return parseCacheTtlHours(
     cliTtl !== undefined ? cliTtl : ctx.env.KINLOOM_OPENARCHIEVEN_CACHE_TTL_HOURS,
     DEFAULT_CACHE_TTL_HOURS,
@@ -220,19 +208,10 @@ export function validateScanUrl(url: string): string {
   try {
     parsed = new URL(url);
   } catch {
-    throw new SsrfBlockedError(
-      url,
-      `Refusing to download a scan URL that is not http or https: ${url}`
-    );
+    throw new SsrfBlockedError(url, `Refusing to download a scan URL that is not http or https: ${url}`);
   }
-  if (
-    (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') ||
-    !parsed.hostname
-  ) {
-    throw new SsrfBlockedError(
-      url,
-      `Refusing to download a scan URL that is not http or https: ${url}`
-    );
+  if ((parsed.protocol !== 'http:' && parsed.protocol !== 'https:') || !parsed.hostname) {
+    throw new SsrfBlockedError(url, `Refusing to download a scan URL that is not http or https: ${url}`);
   }
   if (parsed.username || parsed.password) {
     throw new SsrfBlockedError(url, 'Refusing scan URL containing embedded credentials.');
@@ -248,10 +227,7 @@ export function validateScanUrl(url: string): string {
     throw new SsrfBlockedError(url, `Refusing local or private scan host '${host}': ${url}`);
   }
   if (isPrivateOrReservedIp(host)) {
-    throw new SsrfBlockedError(
-      url,
-      `Refusing private or reserved IP scan host '${host}': ${url}`
-    );
+    throw new SsrfBlockedError(url, `Refusing private or reserved IP scan host '${host}': ${url}`);
   }
   return url;
 }
@@ -272,12 +248,7 @@ async function requestWithRetry(
   }
 
   const guardedFetch: typeof fetch = (input, init) => {
-    const target =
-      typeof input === 'string'
-        ? input
-        : input instanceof URL
-          ? input.toString()
-          : input.url;
+    const target = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
     options.validator(target);
     return ctx.fetchImpl(input, init);
   };
@@ -353,9 +324,7 @@ async function getJson(
       (typeof data.error_description === 'string' && data.error_description) ||
       (typeof data.error === 'string' && data.error) ||
       'Unknown API error';
-    throw new RecordRuntimeError(
-      `OpenArchieven API error ${String(data.error_code)}: ${desc}`
-    );
+    throw new RecordRuntimeError(`OpenArchieven API error ${String(data.error_code)}: ${desc}`);
   }
   return data;
 }
@@ -472,13 +441,7 @@ class ScanImage {
   readonly uri: string;
   readonly uriPreview: string;
 
-  constructor(
-    index: number,
-    order: number | null,
-    label: string,
-    uri: string,
-    uriPreview: string
-  ) {
+  constructor(index: number, order: number | null, label: string, uri: string, uriPreview: string) {
     this.index = index;
     this.order = order;
     this.label = label;
@@ -501,8 +464,7 @@ class ScanImage {
       return urls.map((u) => [u, false] as const);
     }
 
-    const proxyFull =
-      deriveProxyDownloadUrl(this.uriPreview) ?? deriveProxyDownloadUrl(this.uri);
+    const proxyFull = deriveProxyDownloadUrl(this.uriPreview) ?? deriveProxyDownloadUrl(this.uri);
     const iiifJpg = deriveIiifJpegUrl(this.uri);
     const candidates: (readonly [string, boolean])[] = [];
     const seen = new Set<string>();
@@ -669,9 +631,7 @@ function extractScans(record: Record<string, unknown>): ScanImage[] {
     return a.pos - b.pos;
   });
 
-  return found.map(
-    (item, idx) => new ScanImage(idx + 1, item.order, item.label, item.uri, item.preview)
-  );
+  return found.map((item, idx) => new ScanImage(idx + 1, item.order, item.label, item.uri, item.preview));
 }
 
 function extractScansFromShow(data: unknown): ScanImage[] {
@@ -679,10 +639,7 @@ function extractScansFromShow(data: unknown): ScanImage[] {
   for (const record of asShowRecords(data)) {
     scans.push(...extractScans(record));
   }
-  return scans.map(
-    (scan, idx) =>
-      new ScanImage(idx + 1, scan.order, scan.label, scan.uri, scan.uriPreview)
-  );
+  return scans.map((scan, idx) => new ScanImage(idx + 1, scan.order, scan.label, scan.uri, scan.uriPreview));
 }
 
 function startsWithBytes(buf: Buffer, bytes: readonly number[]): boolean {
@@ -910,12 +867,7 @@ async function downloadScanCandidates(
     const [candidateUrl, fallbackOn5xx] = candidates[idx];
     const hasNext = idx + 1 < candidates.length;
     try {
-      const { body, ext, cacheHit } = await cachedScanBytesChecked(
-        ctx,
-        cacheDir,
-        candidateUrl,
-        options
-      );
+      const { body, ext, cacheHit } = await cachedScanBytesChecked(ctx, cacheDir, candidateUrl, options);
       return { body, ext, resolvedUrl: candidateUrl, cacheHit };
     } catch (err: unknown) {
       if (err instanceof ScanPayloadError) {
@@ -968,7 +920,11 @@ async function loadShow(
 }
 
 function scanFilename(archive: string, identifier: string, index: number, ext: string): string {
-  const short = identifier.replace(/[^A-Za-z0-9]/g, '').slice(0, 8).toLowerCase() || 'record';
+  const short =
+    identifier
+      .replace(/[^A-Za-z0-9]/g, '')
+      .slice(0, 8)
+      .toLowerCase() || 'record';
   const safeArchive = archive.replace(/[^A-Za-z0-9_-]/g, '').toLowerCase() || 'archive';
   const safeExt = ext.replace(/[^A-Za-z0-9]/g, '').toLowerCase() || 'img';
   return `${safeArchive}-${short}-scan-${String(index).padStart(2, '0')}.${safeExt}`;
@@ -1051,10 +1007,7 @@ function validateRecordRef(code: string, ident: string): readonly [string, strin
   return [cleanedCode, cleanedIdent];
 }
 
-function parseRecordRef(
-  archive: string,
-  identifier: string | undefined
-): readonly [string, string] {
+function parseRecordRef(archive: string, identifier: string | undefined): readonly [string, string] {
   if (identifier) {
     return validateRecordRef(archive, identifier);
   }
@@ -1096,15 +1049,8 @@ function isCompleteRecordRef(value: string): boolean {
   return cleaned.includes(':');
 }
 
-function formatA2aRecord(
-  archive: string,
-  identifier: string,
-  record: Record<string, unknown>
-): string {
-  const lines: string[] = [
-    `Record: ${archive}:${identifier}`,
-    `  URL: ${WEB_BASE}/${archive}:${identifier}`,
-  ];
+function formatA2aRecord(archive: string, identifier: string, record: Record<string, unknown>): string {
+  const lines: string[] = [`Record: ${archive}:${identifier}`, `  URL: ${WEB_BASE}/${archive}:${identifier}`];
   const source = isPlainRecord(record.a2a_Source) ? record.a2a_Source : {};
   const sourceType = a2aText(source.a2a_SourceType);
   const sourcePlaceNode = isPlainRecord(source.a2a_SourcePlace) ? source.a2a_SourcePlace : {};
@@ -1522,8 +1468,7 @@ function renderSearchHelp(): string {
 function renderShowHelp(): string {
   return formatCommandUsage({
     usage: 'kinloom openarchieven show <ARCHIVE|ARCHIVE:UUID|URL> [IDENTIFIER] [options]',
-    summary:
-      'Fetch full A2A details for one record by ARCHIVE IDENTIFIER, archive:uuid, or URL.',
+    summary: 'Fetch full A2A details for one record by ARCHIVE IDENTIFIER, archive:uuid, or URL.',
     options: SHOW_OPTIONS,
   });
 }
@@ -1544,10 +1489,7 @@ function renderUrlHelp(): string {
   });
 }
 
-async function runSearch(
-  argv: readonly string[],
-  ctx: RecordCommandContext
-): Promise<RecordCommandOutcome> {
+async function runSearch(argv: readonly string[], ctx: RecordCommandContext): Promise<RecordCommandOutcome> {
   const parsed = parseCommandArgs(argv, SEARCH_PARSE_SPEC);
   if (parsed.helpRequested) {
     return { exitCode: 0, bytesOut: emitStdout(ctx.io, renderSearchHelp()) };
@@ -1579,9 +1521,7 @@ async function runSearch(
     .join(' ');
   let rawName = (nameOpt || nameArg || combinedParts).trim();
   if (!rawName) {
-    throw new CliValidationError(
-      'Provide a name via --name, --first/--last, or a positional argument.'
-    );
+    throw new CliValidationError('Provide a name via --name, --first/--last, or a positional argument.');
   }
   if (year) {
     rawName = `${rawName} ${year.trim()}`;
@@ -1635,9 +1575,7 @@ async function runSearch(
     fetch: async () => {
       const fetched = await getJson(ctx, 'search.json', params);
       if (!isPlainRecord(fetched)) {
-        throw new RecordRuntimeError(
-          `Unexpected non-object search response from ${API_BASE}/search.json`
-        );
+        throw new RecordRuntimeError(`Unexpected non-object search response from ${API_BASE}/search.json`);
       }
       return fetched;
     },
@@ -1666,9 +1604,7 @@ async function runSearch(
     const code = typeof rawDoc.archive_code === 'string' ? rawDoc.archive_code : '';
     const ident = typeof rawDoc.identifier === 'string' ? rawDoc.identifier : '';
     const person =
-      typeof rawDoc.personname === 'string' && rawDoc.personname
-        ? rawDoc.personname
-        : '(unnamed)';
+      typeof rawDoc.personname === 'string' && rawDoc.personname ? rawDoc.personname : '(unnamed)';
     const role = typeof rawDoc.relationtype === 'string' ? rawDoc.relationtype : '';
     const stype =
       (typeof rawDoc.sourcetype === 'string' && rawDoc.sourcetype) ||
@@ -1681,8 +1617,7 @@ async function runSearch(
       : places !== undefined && places !== null
         ? String(places)
         : '';
-    const url =
-      typeof rawDoc.url === 'string' && rawDoc.url ? rawDoc.url : `${WEB_BASE}/${code}:${ident}`;
+    const url = typeof rawDoc.url === 'string' && rawDoc.url ? rawDoc.url : `${WEB_BASE}/${code}:${ident}`;
     lines.push(`- ${code}:${ident} | ${person} (${role}) | ${stype} | ${dateStr} | ${placeStr}`);
     lines.push(`  ${url}`);
   }
@@ -1690,10 +1625,7 @@ async function runSearch(
   return { exitCode: 0, bytesOut, cacheHit };
 }
 
-async function runShow(
-  argv: readonly string[],
-  ctx: RecordCommandContext
-): Promise<RecordCommandOutcome> {
+async function runShow(argv: readonly string[], ctx: RecordCommandContext): Promise<RecordCommandOutcome> {
   const parsed = parseCommandArgs(argv, SHOW_PARSE_SPEC);
   if (parsed.helpRequested) {
     return { exitCode: 0, bytesOut: emitStdout(ctx.io, renderShowHelp()) };
@@ -1817,12 +1749,12 @@ async function runDownload(
     }
     candidates.push([directUrl, false]);
 
-    const { body, ext, resolvedUrl, cacheHit: fileHit } = await downloadScanCandidates(
-      ctx,
-      cacheDir,
-      candidates,
-      { refresh, ttlHours }
-    );
+    const {
+      body,
+      ext,
+      resolvedUrl,
+      cacheHit: fileHit,
+    } = await downloadScanCandidates(ctx, cacheDir, candidates, { refresh, ttlHours });
 
     const outFile = isExistingDir(destPath)
       ? path.join(destPath, `scan-${sha256Hex(resolvedUrl).slice(0, 8)}.${ext}`)
@@ -1899,9 +1831,7 @@ async function runDownload(
     if (downloadAll) {
       throw new CliValidationError('Pass --out-dir DIR (or --out DIR) when using --all.');
     }
-    throw new CliValidationError(
-      'Pass --out FILE for one scan, or --all --out-dir DIR for every scan.'
-    );
+    throw new CliValidationError('Pass --out FILE for one scan, or --all --out-dir DIR for every scan.');
   }
 
   let selected: readonly ScanImage[] = scans;
@@ -1938,15 +1868,14 @@ async function runDownload(
 
   for (const scan of selected) {
     const candidates = scan.candidateUrls(preview);
-    const { body, ext, resolvedUrl, cacheHit: fileHit } = await downloadScanCandidates(
-      ctx,
-      cacheDir,
-      candidates,
-      { refresh, ttlHours }
-    );
+    const {
+      body,
+      ext,
+      resolvedUrl,
+      cacheHit: fileHit,
+    } = await downloadScanCandidates(ctx, cacheDir, candidates, { refresh, ttlHours });
     const filename = scanFilename(code, ident, scan.index, ext);
-    const outFile =
-      downloadAll || isExistingDir(destPath) ? path.join(destPath, filename) : destPath;
+    const outFile = downloadAll || isExistingDir(destPath) ? path.join(destPath, filename) : destPath;
     atomicWriteFileSync(outFile, body);
     fileHits.push(fileHit);
     files.push({
@@ -2009,17 +1938,11 @@ function runUrl(argv: readonly string[], ctx: RecordCommandContext): RecordComma
 
 function isBrokenPipeError(err: unknown): boolean {
   return (
-    typeof err === 'object' &&
-    err !== null &&
-    'code' in err &&
-    (err as { code: unknown }).code === 'EPIPE'
+    typeof err === 'object' && err !== null && 'code' in err && (err as { code: unknown }).code === 'EPIPE'
   );
 }
 
-export const runOpenarchievenCommand: RecordHandler = async (
-  args,
-  ctx
-): Promise<RecordCommandOutcome> => {
+export const runOpenarchievenCommand: RecordHandler = async (args, ctx): Promise<RecordCommandOutcome> => {
   try {
     if (args.length === 0 || args[0] === '--help' || args[0] === '-h') {
       return { exitCode: 0, bytesOut: emitStdout(ctx.io, renderRootHelp()) };
@@ -2036,9 +1959,7 @@ export const runOpenarchievenCommand: RecordHandler = async (
       case 'url':
         return runUrl(rest, ctx);
       default:
-        throw new CliValidationError(
-          `No such command '${rawSubcmd}'. Run 'kinloom openarchieven --help'.`
-        );
+        throw new CliValidationError(`No such command '${rawSubcmd}'. Run 'kinloom openarchieven --help'.`);
     }
   } catch (err: unknown) {
     if (isBrokenPipeError(err)) {

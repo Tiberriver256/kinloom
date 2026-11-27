@@ -1,15 +1,13 @@
-import { execFile, type ExecFileOptions } from 'node:child_process';
+import { type ExecFileOptions, execFile } from 'node:child_process';
 import fs from 'node:fs';
 import { isIP } from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
-import { RecordRuntimeError, type ExecFileFn, type ExecFileResult } from './types.js';
+import { type ExecFileFn, type ExecFileResult, RecordRuntimeError } from './types.js';
 
 export const DEFAULT_USER_AGENT = 'kinloom-records/1.0 (+https://github.com/Tiberriver256/kinloom)';
 
-export const DEFAULT_RETRY_STATUSES: ReadonlySet<number> = new Set([
-  429, 500, 502, 503, 504, 520, 522, 524,
-]);
+export const DEFAULT_RETRY_STATUSES: ReadonlySet<number> = new Set([429, 500, 502, 503, 504, 520, 522, 524]);
 
 export type HostAllowRule = string | RegExp | ((hostname: string) => boolean);
 
@@ -152,8 +150,7 @@ export function isPrivateOrReservedIp(rawHost: string): boolean {
     if (allZero) return true; // ::
     const isLoopback = groups.slice(0, 7).every((g) => g === 0) && groups[7] === 1;
     if (isLoopback) return true; // ::1
-    const isV4Mapped =
-      groups.slice(0, 5).every((g) => g === 0) && (groups[5] === 0xffff || groups[5] === 0);
+    const isV4Mapped = groups.slice(0, 5).every((g) => g === 0) && (groups[5] === 0xffff || groups[5] === 0);
     if (isV4Mapped) {
       const v4 = `${groups[6] >> 8}.${groups[6] & 0xff}.${groups[7] >> 8}.${groups[7] & 0xff}`;
       return isPrivateOrReservedIpv4(v4);
@@ -340,10 +337,7 @@ export interface HttpResponseResult {
 
 const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
 
-export async function httpRequest(
-  rawUrl: string,
-  options: HttpRequestOptions
-): Promise<HttpResponseResult> {
+export async function httpRequest(rawUrl: string, options: HttpRequestOptions): Promise<HttpResponseResult> {
   const maxAttempts = Math.max(1, options.maxAttempts ?? 4);
   const baseBackoffMs = options.baseBackoffMs ?? 500;
   const maxRetryAfterMs = options.maxRetryAfterMs ?? 30_000;
@@ -390,10 +384,7 @@ export async function httpRequest(
             signal: controller.signal,
           };
           if (currentBody !== undefined && currentMethod === 'POST') {
-            fetchInit.body =
-              typeof currentBody === 'string'
-                ? currentBody
-                : Buffer.from(currentBody);
+            fetchInit.body = typeof currentBody === 'string' ? currentBody : Buffer.from(currentBody);
           }
           response = await options.fetchImpl(currentUrl, fetchInit);
         } finally {
@@ -413,7 +404,10 @@ export async function httpRequest(
           const nextUrl = new URL(location, currentUrl).toString();
           assertSafeUrl(nextUrl, options.urlPolicy);
           currentUrl = nextUrl;
-          if (response.status === 303 || ((response.status === 301 || response.status === 302) && currentMethod === 'POST')) {
+          if (
+            response.status === 303 ||
+            ((response.status === 301 || response.status === 302) && currentMethod === 'POST')
+          ) {
             currentMethod = 'GET';
             currentBody = undefined;
           }
@@ -431,11 +425,7 @@ export async function httpRequest(
       const bytes = Buffer.from(arrayBuf);
 
       if (retryStatuses.has(response.status) && attempt < maxAttempts) {
-        const retryAfter = parseRetryAfterMs(
-          response.headers.get('retry-after'),
-          nowMs(),
-          maxRetryAfterMs
-        );
+        const retryAfter = parseRetryAfterMs(response.headers.get('retry-after'), nowMs(), maxRetryAfterMs);
         const backoff = retryAfter ?? Math.min(maxRetryAfterMs, baseBackoffMs * 2 ** (attempt - 1));
         await options.sleepFn(backoff);
         continue;
@@ -460,7 +450,6 @@ export async function httpRequest(
       if (attempt < maxAttempts) {
         const backoff = Math.min(maxRetryAfterMs, baseBackoffMs * 2 ** (attempt - 1));
         await options.sleepFn(backoff);
-        continue;
       }
     }
   }
@@ -504,10 +493,7 @@ export interface BinaryFetchOptions extends HttpRequestOptions {
   readonly verifyContentLength?: boolean;
 }
 
-export async function httpGetBytes(
-  rawUrl: string,
-  options: BinaryFetchOptions
-): Promise<HttpResponseResult> {
+export async function httpGetBytes(rawUrl: string, options: BinaryFetchOptions): Promise<HttpResponseResult> {
   const response = await httpRequest(rawUrl, options);
   if (options.rejectHtml !== false && looksLikeHtmlErrorPage(response.bytes)) {
     throw new RecordRuntimeError(
@@ -530,9 +516,7 @@ export async function httpGetBytes(
 
 export const CURL_META_MARKER = '__KINLOOM_CURL_META__';
 
-export const RETRYABLE_CURL_EXIT_CODES: ReadonlySet<number> = new Set([
-  6, 7, 18, 28, 35, 52, 55, 56, 92,
-]);
+export const RETRYABLE_CURL_EXIT_CODES: ReadonlySet<number> = new Set([6, 7, 18, 28, 35, 52, 55, 56, 92]);
 
 export function defaultExecFile(
   file: string,
@@ -609,10 +593,7 @@ function parseCurlHeaders(rawHeaders: string): Headers {
   return headers;
 }
 
-export async function fetchWithCurl(
-  rawUrl: string,
-  options: CurlFetchOptions
-): Promise<HttpResponseResult> {
+export async function fetchWithCurl(rawUrl: string, options: CurlFetchOptions): Promise<HttpResponseResult> {
   const validatedUrl = assertSafeUrl(rawUrl, options.urlPolicy).toString();
   const execFn = options.execFileImpl ?? defaultExecFile;
   const maxAttempts = Math.max(1, options.maxAttempts ?? 4);
@@ -688,11 +669,7 @@ export async function fetchWithCurl(
       }
 
       if (retryStatuses.has(statusCode) && attempt < maxAttempts) {
-        const retryAfter = parseRetryAfterMs(
-          responseHeaders.get('retry-after'),
-          nowMs(),
-          maxRetryAfterMs
-        );
+        const retryAfter = parseRetryAfterMs(responseHeaders.get('retry-after'), nowMs(), maxRetryAfterMs);
         const backoff = retryAfter ?? Math.min(maxRetryAfterMs, baseBackoffMs * 2 ** (attempt - 1));
         await options.sleepFn(backoff);
         continue;
@@ -727,8 +704,7 @@ export async function fetchWithCurl(
       const stderrText = Buffer.isBuffer(errObj.stderr) ? errObj.stderr.toString('utf8').trim() : '';
       lastError = stderrText || (err instanceof Error ? err.message : String(err));
       const canRetry =
-        attempt < maxAttempts &&
-        (numericCode === undefined || RETRYABLE_CURL_EXIT_CODES.has(numericCode));
+        attempt < maxAttempts && (numericCode === undefined || RETRYABLE_CURL_EXIT_CODES.has(numericCode));
       if (canRetry) {
         const backoff = Math.min(maxRetryAfterMs, baseBackoffMs * 2 ** (attempt - 1));
         await options.sleepFn(backoff);

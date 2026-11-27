@@ -5,11 +5,7 @@ export const EXIT_ERROR = 1;
 export const EXIT_USAGE = 2;
 export const EXIT_CONFLICT = 3;
 
-export type CliExitCode =
-  | typeof EXIT_OK
-  | typeof EXIT_ERROR
-  | typeof EXIT_USAGE
-  | typeof EXIT_CONFLICT;
+export type CliExitCode = typeof EXIT_OK | typeof EXIT_ERROR | typeof EXIT_USAGE | typeof EXIT_CONFLICT;
 
 export type ApiErrorKind =
   | 'unauthorized'
@@ -93,9 +89,7 @@ export function formatConflictDetails(conflict: OptimisticConflictError): string
       } else if (field.kind === 'removed') {
         lines.push(`    - ${field.path}: ${JSON.stringify(field.before)}`);
       } else {
-        lines.push(
-          `    ~ ${field.path}: ${JSON.stringify(field.before)} -> ${JSON.stringify(field.after)}`
-        );
+        lines.push(`    ~ ${field.path}: ${JSON.stringify(field.before)} -> ${JSON.stringify(field.after)}`);
       }
     }
   }

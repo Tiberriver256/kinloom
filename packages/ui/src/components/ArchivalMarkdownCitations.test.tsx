@@ -1,14 +1,15 @@
 /** @vitest-environment jsdom */
 import type { ArchiveBundle, KinloomSiteConfig, MediaItem, SourceRecord } from '@kinloom/core';
 import { compileArchive, parseKinloomConfig } from '@kinloom/core';
-import { MemoryRouter, Route, Routes } from 'react-router-dom';
-import React, { act } from 'react';
+import type React from 'react';
+import { act } from 'react';
 import { createRoot } from 'react-dom/client';
+import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { ArchivalMarkdown } from './ArchivalMarkdown.js';
 import { ArchiveProvider } from '../context/ArchiveProvider.js';
-import { computeCitationPopoverPosition } from './CitationPopover.js';
 import { PersonPage } from '../pages/PersonPage.js';
+import { ArchivalMarkdown } from './ArchivalMarkdown.js';
+import { computeCitationPopoverPosition } from './CitationPopover.js';
 import { SourceInspectorDrawer } from './SourceInspectorDrawer.js';
 
 declare global {
@@ -169,7 +170,7 @@ describe('ArchivalMarkdown inline footnote citations and CitationPopover', () =>
         sourcesById={sourcesById}
         mediaItems={TEST_MEDIA}
         subjectPersonId="p_harriet"
-      />,
+      />
     );
 
     const buttons = [...container.querySelectorAll<HTMLButtonElement>('.archival-footnote-ref')];
@@ -195,7 +196,7 @@ describe('ArchivalMarkdown inline footnote citations and CitationPopover', () =>
         onInspectSource={onInspectSource}
         onOpenMedia={onOpenMedia}
         resolveMediaUrl={(m) => `https://archive.example${m.file}`}
-      />,
+      />
     );
 
     const [firstBtn, overrideBtn] = [
@@ -215,7 +216,7 @@ describe('ArchivalMarkdown inline footnote citations and CitationPopover', () =>
     expect(popover?.textContent).toContain('1880 U.S. Federal Census, Riverdale Township');
     expect(popover?.textContent).toContain('National Archives (NARA)');
     expect(popover?.querySelector<HTMLAnchorElement>('.citation-popover-ext-link')?.href).toBe(
-      'https://catalog.archives.gov/id/100001',
+      'https://catalog.archives.gov/id/100001'
     );
     const thumb = popover?.querySelector<HTMLImageElement>('.citation-popover-media-img');
     expect(thumb?.getAttribute('src')).toBe('https://archive.example/media/demo-census-1880.jpg');
@@ -244,7 +245,7 @@ describe('ArchivalMarkdown inline footnote citations and CitationPopover', () =>
     });
     const overridePopover = document.body.querySelector<HTMLDivElement>('.citation-popover');
     expect(
-      overridePopover?.querySelector<HTMLImageElement>('.citation-popover-media-img')?.getAttribute('src'),
+      overridePopover?.querySelector<HTMLImageElement>('.citation-popover-media-img')?.getAttribute('src')
     ).toBe('https://archive.example/media/demo-diary-1891.jpg');
 
     // Clicking "Inspect full source" fires callback with sourceId
@@ -266,7 +267,7 @@ describe('ArchivalMarkdown inline footnote citations and CitationPopover', () =>
         sourcesById={sourcesById}
         mediaItems={TEST_MEDIA}
         subjectPersonId="p_harriet"
-      />,
+      />
     );
 
     const btn = container.querySelector<HTMLButtonElement>('.archival-footnote-ref');
@@ -320,18 +321,20 @@ describe('PersonPage synced footnote Sources (N), lightbox, and SourceInspectorD
           </Routes>
           <SourceInspectorDrawer />
         </ArchiveProvider>
-      </MemoryRouter>,
+      </MemoryRouter>
     );
 
     const bioSection = container.querySelector('section[aria-label="Biography"]');
     expect(bioSection).not.toBeNull();
 
-    const footnoteBtns = [...(bioSection?.querySelectorAll<HTMLButtonElement>('.archival-footnote-ref') ?? [])];
+    const footnoteBtns = [
+      ...(bioSection?.querySelectorAll<HTMLButtonElement>('.archival-footnote-ref') ?? []),
+    ];
     expect(footnoteBtns.map((b) => b.textContent?.trim())).toEqual(['[1]', '[2]', '[2]']);
 
     // Expand Sources (3) and verify [1] diary, [2] census, then uncited marriage register
     const sourcesToggle = [...(bioSection?.querySelectorAll('button') ?? [])].find((b) =>
-      b.textContent?.includes('Sources (3)'),
+      b.textContent?.includes('Sources (3)')
     );
     act(() => {
       sourcesToggle?.click();

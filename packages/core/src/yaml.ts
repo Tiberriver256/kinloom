@@ -1,24 +1,24 @@
 import { CORE_SCHEMA, load as loadYaml } from 'js-yaml';
 import { stringify as stringifyYamlRaw } from 'yaml';
 import { z } from 'zod';
-import { KinloomSiteConfigSchema, type KinloomSiteConfig } from './schemas/config.js';
+import { type KinloomSiteConfig, KinloomSiteConfigSchema } from './schemas/config.js';
 import {
-  KinshipEdgeSchema,
-  MediaItemSchema,
-  NarrativeEnrichmentSchema,
-  NarrativeSchema,
-  PlaceSchema,
-  RawEventSchema,
-  RawPersonSchema,
-  SourceRecordSchema,
   type KinshipEdge,
+  KinshipEdgeSchema,
   type MediaItem,
+  MediaItemSchema,
   type Narrative,
   type NarrativeEnrichment,
+  NarrativeEnrichmentSchema,
+  NarrativeSchema,
   type Place,
+  PlaceSchema,
   type RawEvent,
+  RawEventSchema,
   type RawPerson,
+  RawPersonSchema,
   type SourceRecord,
+  SourceRecordSchema,
 } from './schemas/entities.js';
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
@@ -38,7 +38,9 @@ function canonicalizeValue(value: unknown, preferredKeyOrder?: readonly string[]
   const keys = Object.keys(value).filter((k) => value[k] !== undefined);
   const rank = new Map<string, number>();
   if (preferredKeyOrder) {
-    preferredKeyOrder.forEach((k, idx) => rank.set(k, idx));
+    preferredKeyOrder.forEach((k, idx) => {
+      rank.set(k, idx);
+    });
   }
   keys.sort((a, b) => {
     const ra = rank.get(a);
@@ -97,10 +99,7 @@ export function stringifyYaml(
   });
 }
 
-function parseListYaml<TSchema extends z.ZodTypeAny>(
-  text: string,
-  itemSchema: TSchema
-): z.infer<TSchema>[] {
+function parseListYaml<TSchema extends z.ZodTypeAny>(text: string, itemSchema: TSchema): z.infer<TSchema>[] {
   if (!text.trim()) {
     return [];
   }
@@ -252,13 +251,8 @@ export function parsePeopleYaml(text: string): RawPerson[] {
   return parseListYaml(text, RawPersonSchema);
 }
 
-export function serializePeopleYaml(
-  people: readonly RawPerson[],
-  options?: { sortById?: boolean }
-): string {
-  const list = options?.sortById
-    ? [...people].toSorted((a, b) => a.id.localeCompare(b.id))
-    : people;
+export function serializePeopleYaml(people: readonly RawPerson[], options?: { sortById?: boolean }): string {
+  const list = options?.sortById ? [...people].toSorted((a, b) => a.id.localeCompare(b.id)) : people;
   return stringifyYaml(list, { preferredKeyOrder: PERSON_KEY_ORDER });
 }
 
@@ -266,13 +260,8 @@ export function parseEventsYaml(text: string): RawEvent[] {
   return parseListYaml(text, RawEventSchema);
 }
 
-export function serializeEventsYaml(
-  events: readonly RawEvent[],
-  options?: { sortById?: boolean }
-): string {
-  const list = options?.sortById
-    ? [...events].toSorted((a, b) => a.id.localeCompare(b.id))
-    : events;
+export function serializeEventsYaml(events: readonly RawEvent[], options?: { sortById?: boolean }): string {
+  const list = options?.sortById ? [...events].toSorted((a, b) => a.id.localeCompare(b.id)) : events;
   return stringifyYaml(list, { preferredKeyOrder: EVENT_KEY_ORDER });
 }
 
@@ -280,13 +269,8 @@ export function parsePlacesYaml(text: string): Place[] {
   return parseListYaml(text, PlaceSchema);
 }
 
-export function serializePlacesYaml(
-  places: readonly Place[],
-  options?: { sortById?: boolean }
-): string {
-  const list = options?.sortById
-    ? [...places].toSorted((a, b) => a.id.localeCompare(b.id))
-    : places;
+export function serializePlacesYaml(places: readonly Place[], options?: { sortById?: boolean }): string {
+  const list = options?.sortById ? [...places].toSorted((a, b) => a.id.localeCompare(b.id)) : places;
   return stringifyYaml(list, { preferredKeyOrder: PLACE_KEY_ORDER });
 }
 
@@ -298,9 +282,7 @@ export function serializeSourcesYaml(
   sources: readonly SourceRecord[],
   options?: { sortById?: boolean }
 ): string {
-  const list = options?.sortById
-    ? [...sources].toSorted((a, b) => a.id.localeCompare(b.id))
-    : sources;
+  const list = options?.sortById ? [...sources].toSorted((a, b) => a.id.localeCompare(b.id)) : sources;
   return stringifyYaml(list, { preferredKeyOrder: SOURCE_KEY_ORDER });
 }
 
@@ -315,9 +297,7 @@ export function serializeKinshipYaml(
   const list = options?.sortDeterministic
     ? [...kinship].toSorted(
         (a, b) =>
-          a.from.localeCompare(b.from) ||
-          a.to.localeCompare(b.to) ||
-          a.relation.localeCompare(b.relation)
+          a.from.localeCompare(b.from) || a.to.localeCompare(b.to) || a.relation.localeCompare(b.relation)
       )
     : kinship;
   return stringifyYaml(list, { preferredKeyOrder: KINSHIP_KEY_ORDER });
@@ -327,13 +307,8 @@ export function parseMediaYaml(text: string): MediaItem[] {
   return parseListYaml(text, MediaItemSchema);
 }
 
-export function serializeMediaYaml(
-  media: readonly MediaItem[],
-  options?: { sortById?: boolean }
-): string {
-  const list = options?.sortById
-    ? [...media].toSorted((a, b) => a.id.localeCompare(b.id))
-    : media;
+export function serializeMediaYaml(media: readonly MediaItem[], options?: { sortById?: boolean }): string {
+  const list = options?.sortById ? [...media].toSorted((a, b) => a.id.localeCompare(b.id)) : media;
   return stringifyYaml(list, { preferredKeyOrder: MEDIA_KEY_ORDER });
 }
 
@@ -345,9 +320,7 @@ export function serializeNarrativesYaml(
   narratives: readonly Narrative[],
   options?: { sortById?: boolean }
 ): string {
-  const list = options?.sortById
-    ? [...narratives].toSorted((a, b) => a.id.localeCompare(b.id))
-    : narratives;
+  const list = options?.sortById ? [...narratives].toSorted((a, b) => a.id.localeCompare(b.id)) : narratives;
   return stringifyYaml(list, { preferredKeyOrder: NARRATIVE_KEY_ORDER });
 }
 

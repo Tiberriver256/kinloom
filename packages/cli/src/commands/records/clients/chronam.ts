@@ -3,6 +3,7 @@ import path from 'node:path';
 import { CliValidationError } from '../../../errors.js';
 import {
   atomicWriteFileSync,
+  type CommandParseSpec,
   cachedJsonCall,
   emitJsonStdout,
   emitStdout,
@@ -10,23 +11,21 @@ import {
   getBooleanOption,
   getNumberOption,
   getStringOption,
+  type OptionSpec,
   parseCacheTtlHours,
   parseCommandArgs,
   parseRetryAfterMs,
+  type RecordCommandContext,
+  type RecordCommandOutcome,
+  type RecordHandler,
   RecordRuntimeError,
   resolveCacheDir,
   sha256Hex,
   withAdvisoryLock,
-  type CommandParseSpec,
-  type OptionSpec,
-  type RecordCommandContext,
-  type RecordCommandOutcome,
-  type RecordHandler,
 } from '../runtime/index.js';
 
 export const COLLECTION_BASE = 'https://www.loc.gov/collections/chronicling-america/';
-export const USER_AGENT =
-  'kinloom/1.0 (genealogy research; +https://github.com/Tiberriver256/kinloom)';
+export const USER_AGENT = 'kinloom/1.0 (genealogy research; +https://github.com/Tiberriver256/kinloom)';
 export const HEADERS: Readonly<Record<string, string>> = Object.freeze({
   'User-Agent': USER_AGENT,
   Accept: 'application/json',
@@ -46,9 +45,7 @@ export const DOWNLOAD_TIMEOUT = 60.0;
 export const CONNECT_TIMEOUT = 15.0;
 export const SEARCH_ATTEMPT_READ_CAP = 65.0;
 export const MAX_ATTEMPTS = 4;
-export const RETRYABLE_STATUS_CODES: ReadonlySet<number> = new Set([
-  429, 500, 502, 503, 504, 520, 522, 524,
-]);
+export const RETRYABLE_STATUS_CODES: ReadonlySet<number> = new Set([429, 500, 502, 503, 504, 520, 522, 524]);
 export const MAX_RETRY_AFTER_S = 30.0;
 export const COLLECTION_START_YEAR = '1736';
 export const COLLECTION_END_YEAR = '1963';
@@ -469,11 +466,7 @@ function isTimeoutError(err: unknown, abortedByTimer: boolean): boolean {
   );
 }
 
-function retryDelaySeconds(
-  attempt: number,
-  resp: Response | null,
-  nowMs: () => number
-): number {
+function retryDelaySeconds(attempt: number, resp: Response | null, nowMs: () => number): number {
   if (resp !== null && (resp.status === 429 || resp.status === 503)) {
     const retryAfterMs = parseRetryAfterMs(
       resp.headers.get('retry-after'),
@@ -488,10 +481,7 @@ function retryDelaySeconds(
   return Math.min(MAX_RETRY_AFTER_S, 0.5 * 2 ** attempt * jitter);
 }
 
-function buildRequestUrl(
-  baseUrl: string,
-  params?: readonly (readonly [string, string])[]
-): string {
+function buildRequestUrl(baseUrl: string, params?: readonly (readonly [string, string])[]): string {
   const validated = validateLocUrl(baseUrl);
   if (!params || params.length === 0) {
     return validated;
@@ -563,16 +553,17 @@ export async function getJson(
     if (remainingSec <= 0.25) {
       break;
     }
-    const readBudgetSec = splitReadTimeout
-      ? Math.min(remainingSec, SEARCH_ATTEMPT_READ_CAP)
-      : remainingSec;
+    const readBudgetSec = splitReadTimeout ? Math.min(remainingSec, SEARCH_ATTEMPT_READ_CAP) : remainingSec;
 
     const controller = new AbortController();
     let abortedByTimer = false;
-    const timer = setTimeout(() => {
-      abortedByTimer = true;
-      controller.abort(new DOMException('The read operation timed out', 'TimeoutError'));
-    }, Math.max(1, Math.round(readBudgetSec * 1000)));
+    const timer = setTimeout(
+      () => {
+        abortedByTimer = true;
+        controller.abort(new DOMException('The read operation timed out', 'TimeoutError'));
+      },
+      Math.max(1, Math.round(readBudgetSec * 1000))
+    );
 
     let resp: Response;
     let finalUrl: string;
@@ -647,8 +638,7 @@ export async function getJson(
         continue;
       }
       throw new RecordRuntimeError(
-        `loc.gov connection error: ${errMessage}. ` +
-          'Retry once or narrow with --state/--dates/--lccn.'
+        `loc.gov connection error: ${errMessage}. ` + 'Retry once or narrow with --state/--dates/--lccn.'
       );
     } finally {
       clearTimeout(timer);
@@ -781,10 +771,13 @@ export async function streamDownloadToPath(
 
     const controller = new AbortController();
     let abortedByTimer = false;
-    const timer = setTimeout(() => {
-      abortedByTimer = true;
-      controller.abort(new DOMException('Download timed out', 'TimeoutError'));
-    }, Math.max(1, Math.round(remainingSec * 1000)));
+    const timer = setTimeout(
+      () => {
+        abortedByTimer = true;
+        controller.abort(new DOMException('Download timed out', 'TimeoutError'));
+      },
+      Math.max(1, Math.round(remainingSec * 1000))
+    );
 
     try {
       const { response: resp } = await fetchFollowingLocRedirects(
@@ -804,9 +797,7 @@ export async function streamDownloadToPath(
           continue;
         }
         const kindErr = resp.status === 429 ? 'rate limited' : 'transient service error';
-        throw new RecordRuntimeError(
-          `Failed downloading ${validatedUrl}: HTTP ${resp.status} (${kindErr}).`
-        );
+        throw new RecordRuntimeError(`Failed downloading ${validatedUrl}: HTTP ${resp.status} (${kindErr}).`);
       }
 
       if (resp.status < 200 || resp.status >= 300) {
@@ -829,9 +820,7 @@ export async function streamDownloadToPath(
       const written = await writeResponseToFile(resp, tmpPath);
 
       if (expectedLen !== undefined && written < expectedLen) {
-        throw new IncompleteDownloadError(
-          `Incomplete download (${written} of ${expectedLen} bytes)`
-        );
+        throw new IncompleteDownloadError(`Incomplete download (${written} of ${expectedLen} bytes)`);
       }
 
       const nbytes = validateDownloadFile(tmpPath, {
@@ -850,9 +839,7 @@ export async function streamDownloadToPath(
       const waitSec = retryDelaySeconds(attempt, null, ctx.nowMs);
       const remAfter = (deadlineMs - ctx.nowMs()) / 1000;
       const retryable =
-        err instanceof IncompleteDownloadError ||
-        isTimeoutError(err, abortedByTimer) ||
-        err instanceof Error;
+        err instanceof IncompleteDownloadError || isTimeoutError(err, abortedByTimer) || err instanceof Error;
       if (retryable && attempt + 1 < MAX_ATTEMPTS && remAfter >= waitSec + 1.0) {
         await ctx.sleepFn(Math.round(waitSec * 1000));
         continue;
@@ -964,12 +951,13 @@ export async function cachedDownloadBytes(
 // --- query & asset helpers ---------------------------------------------------
 
 export function resolveQuery(words: readonly string[], termsOpt: string | undefined): string {
-  const joined = words.filter((w) => w.length > 0).join(' ').trim();
+  const joined = words
+    .filter((w) => w.length > 0)
+    .join(' ')
+    .trim();
   const query = joined || (termsOpt ?? '').trim();
   if (!query) {
-    throw new CliValidationError(
-      'Provide QUERY words as positional arguments or via --terms/--query.'
-    );
+    throw new CliValidationError('Provide QUERY words as positional arguments or via --terms/--query.');
   }
   return query;
 }
@@ -1089,10 +1077,7 @@ export function extractSeqFromUrl(resourceUrl: string, fallback = '1'): string {
   return fallback;
 }
 
-export function iiifJpegFromInfo(
-  infoUrl: string,
-  imageWidth: number | undefined
-): string | null {
+export function iiifJpegFromInfo(infoUrl: string, imageWidth: number | undefined): string | null {
   if (!infoUrl || !infoUrl.endsWith('/info.json')) {
     return null;
   }
@@ -1105,9 +1090,8 @@ export function resolvePageAssets(
   data: Record<string, unknown>,
   options: { readonly imageWidth?: number } = {}
 ): PageAssets {
-  const rawResources = Array.isArray(data.resources) && data.resources.length > 0
-    ? data.resources[0]
-    : undefined;
+  const rawResources =
+    Array.isArray(data.resources) && data.resources.length > 0 ? data.resources[0] : undefined;
   const resources = isPlainRecord(rawResources) ? rawResources : {};
   const pageEntries = Array.isArray(data.page) ? data.page : [];
 
@@ -1152,12 +1136,7 @@ export function resolvePageAssets(
   };
 }
 
-export function buildResourceUrl(
-  lccn: string,
-  date: string,
-  edition: string,
-  seq: string
-): string {
+export function buildResourceUrl(lccn: string, date: string, edition: string, seq: string): string {
   return `https://www.loc.gov/resource/${lccn}/${date}/ed-${edition}/?sp=${seq}`;
 }
 
@@ -1499,10 +1478,7 @@ function renderUrlHelp(): string {
 
 // --- subcommands -------------------------------------------------------------
 
-async function runSearch(
-  argv: readonly string[],
-  ctx: RecordCommandContext
-): Promise<RecordCommandOutcome> {
+async function runSearch(argv: readonly string[], ctx: RecordCommandContext): Promise<RecordCommandOutcome> {
   const parsed = parseCommandArgs(argv, SEARCH_PARSE_SPEC);
   if (parsed.helpRequested) {
     return { exitCode: 0, bytesOut: emitStdout(ctx.io, renderSearchHelp()) };
@@ -1725,11 +1701,12 @@ async function runDownload(
   for (const [kind, assetUrl, filename] of jobs) {
     const safeName = safeOutputFilename(filename);
     const dest = resolveSafeChild(outdir, safeName);
-    const { cachePath, nbytes, contentType, cacheHit: fileHit } = await cachedDownloadFile(
-      ctx,
-      assetUrl,
-      { timeout, refresh, ttlHours, kind }
-    );
+    const {
+      cachePath,
+      nbytes,
+      contentType,
+      cacheHit: fileHit,
+    } = await cachedDownloadFile(ctx, assetUrl, { timeout, refresh, ttlHours, kind });
     atomicCopyFileSync(cachePath, dest);
     totalBytes += nbytes;
     downloadedFiles.push({
@@ -1761,9 +1738,7 @@ async function runDownload(
     )
   );
 
-  const allHit = Boolean(
-    metaHit && downloadedFiles.length > 0 && downloadedFiles.every((f) => f.cache_hit)
-  );
+  const allHit = Boolean(metaHit && downloadedFiles.length > 0 && downloadedFiles.every((f) => f.cache_hit));
 
   if (asJson) {
     const bytesOut = emitJsonStdout(ctx.io, {
@@ -1800,18 +1775,13 @@ function runUrl(argv: readonly string[], ctx: RecordCommandContext): RecordComma
   const lccn = getStringOption(parsed, 'lccn');
 
   const params = buildSearchParams(query, { dates, level, limit: 10, page: 1, state, lccn });
-  const browserParams = params.filter(
-    ([k]) => k !== 'fo' && k !== 'at' && k !== 'c' && k !== 'sp'
-  );
+  const browserParams = params.filter(([k]) => k !== 'fo' && k !== 'at' && k !== 'c' && k !== 'sp');
   const qs = new URLSearchParams(browserParams).toString();
   const bytesOut = emitStdout(ctx.io, `${COLLECTION_BASE}?${qs}`);
   return { exitCode: 0, bytesOut };
 }
 
-export const runChronamCommand: RecordHandler = async (
-  args,
-  ctx
-): Promise<RecordCommandOutcome> => {
+export const runChronamCommand: RecordHandler = async (args, ctx): Promise<RecordCommandOutcome> => {
   try {
     if (args.length === 0 || args[0] === '--help' || args[0] === '-h') {
       return { exitCode: 0, bytesOut: emitStdout(ctx.io, renderRootHelp()) };
@@ -1829,9 +1799,7 @@ export const runChronamCommand: RecordHandler = async (
       case 'url':
         return runUrl(rest, ctx);
       default:
-        throw new CliValidationError(
-          `No such command '${subcmd}'. Run 'kinloom chronam --help'.`
-        );
+        throw new CliValidationError(`No such command '${subcmd}'. Run 'kinloom chronam --help'.`);
     }
   } catch (err: unknown) {
     if (err instanceof CliValidationError) {

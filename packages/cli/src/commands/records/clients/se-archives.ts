@@ -3,6 +3,7 @@ import path from 'node:path';
 import { CliValidationError } from '../../../errors.js';
 import {
   atomicWriteFileSync,
+  type CommandParseSpec,
   cachedJsonCall,
   collapseWhitespace,
   DEFAULT_USER_AGENT,
@@ -14,16 +15,15 @@ import {
   getNumberOption,
   getStringOption,
   httpRequest,
+  type OptionSpec,
   parseCacheTtlHours,
   parseCommandArgs,
-  RecordRuntimeError,
-  resolveCacheDir,
-  SsrfBlockedError,
-  type CommandParseSpec,
-  type OptionSpec,
   type RecordCommandContext,
   type RecordCommandOutcome,
   type RecordHandler,
+  RecordRuntimeError,
+  resolveCacheDir,
+  SsrfBlockedError,
 } from '../runtime/index.js';
 
 const DEFAULT_CACHE_TTL_HOURS = 168;
@@ -68,7 +68,7 @@ const GENDER_ALIASES: Readonly<Record<string, string>> = {
   man: 'Man',
   male: 'Man',
   m: 'Man',
-  'okänt': 'Okänt',
+  okänt: 'Okänt',
   okant: 'Okänt',
   unknown: 'Okänt',
 };
@@ -216,10 +216,7 @@ function resolveTtlHours(cliTtl: number | undefined, ctx: RecordCommandContext):
   );
 }
 
-export function validateSeUrl(
-  rawUrl: string,
-  allowedHosts: readonly string[] = ALLOWED_API_HOSTS
-): string {
+export function validateSeUrl(rawUrl: string, allowedHosts: readonly string[] = ALLOWED_API_HOSTS): string {
   let parsed: URL;
   try {
     parsed = new URL(rawUrl);
@@ -400,9 +397,7 @@ export function normalizeBildid(raw: string): readonly [string, string | null] {
       }
       const parts = parsed.pathname.split('/').filter((p) => p.length > 0);
       if (parts.length < 2 || parts[0].toLowerCase() !== 'bildvisning') {
-        throw new CliValidationError(
-          `Expected a sok.riksarkivet.se/bildvisning/<bildid> URL, got: '${raw}'`
-        );
+        throw new CliValidationError(`Expected a sok.riksarkivet.se/bildvisning/<bildid> URL, got: '${raw}'`);
       }
       token = stripLeadingUnderscores(parts[1]);
     } else {
@@ -473,9 +468,7 @@ export function parseRegisterId(raw: string): string {
     const parsed = new URL(text);
     const parts = parsed.pathname.split('/').filter((p) => p.length > 0);
     if (parts.length < 2 || parts[0] !== 'register') {
-      throw new CliValidationError(
-        `Expected https://data.riksarkivet.se/register/<id>, got: '${raw}'`
-      );
+      throw new CliValidationError(`Expected https://data.riksarkivet.se/register/<id>, got: '${raw}'`);
     }
     text = parts[1];
   }
@@ -533,10 +526,7 @@ function normalizeSearchItem(raw: Record<string, unknown>): NormalizedSearchItem
         iiifManifests.push(img);
       }
     }
-  } else if (
-    typeof rawImages === 'string' &&
-    rawImages.startsWith('https://lbiiif.riksarkivet.se/')
-  ) {
+  } else if (typeof rawImages === 'string' && rawImages.startsWith('https://lbiiif.riksarkivet.se/')) {
     iiifManifests.push(rawImages);
   }
 
@@ -547,7 +537,9 @@ function normalizeSearchItem(raw: Record<string, unknown>): NormalizedSearchItem
       if (!isPlainRecord(snip)) {
         continue;
       }
-      const text = String(snip.text ?? '').replace(EM_TAG_RE, '').trim();
+      const text = String(snip.text ?? '')
+        .replace(EM_TAG_RE, '')
+        .trim();
       const pages: string[] = [];
       if (Array.isArray(snip.pages)) {
         for (const pg of snip.pages) {
@@ -805,12 +797,14 @@ function extractCanvasInfo(index: number, canvas: Record<string, unknown>): Canv
   };
 }
 
-async function fetchIiifManifest(
-  ctx: RecordCommandContext,
-  volumeId: string
-): Promise<IiifManifestResult> {
+async function fetchIiifManifest(ctx: RecordCommandContext, volumeId: string): Promise<IiifManifestResult> {
   const url = `${IIIF_BASE}/arkis!${encodeURIComponent(volumeId)}/manifest`;
-  let res: { readonly status: number; readonly url: string; readonly headers: Headers; readonly bytes: Buffer };
+  let res: {
+    readonly status: number;
+    readonly url: string;
+    readonly headers: Headers;
+    readonly bytes: Buffer;
+  };
   try {
     res = await requestWithRetry(ctx, {
       url,
@@ -939,9 +933,7 @@ export function resolveSafeOutputPath(
   }
   const segments = raw.split(/[\\/]/);
   if (segments.includes('..')) {
-    throw new CliValidationError(
-      `Refusing output path with parent traversal segment ('..'): '${raw}'`
-    );
+    throw new CliValidationError(`Refusing output path with parent traversal segment ('..'): '${raw}'`);
   }
   const expanded = expandHomePath(raw, env);
   const isDirHint =
@@ -1021,10 +1013,7 @@ function formatSearchText(title: string, result: SearchEndpointResult, cacheHit:
     `${title} | total=${result.total} | offset=${result.offset} | showing ${result.results.length}${marker}`,
   ];
   for (const item of result.results) {
-    const parts: string[] = [
-      item.type || item.object_type || 'Record',
-      item.caption || '(untitled)',
-    ];
+    const parts: string[] = [item.type || item.object_type || 'Record', item.caption || '(untitled)'];
     if (item.date) parts.push(item.date);
     if (item.parish) parts.push(item.parish);
     if (item.reference_code) parts.push(item.reference_code);
@@ -1040,8 +1029,7 @@ function formatSearchText(title: string, result: SearchEndpointResult, cacheHit:
     }
     for (const snip of (item.snippets ?? []).slice(0, 2)) {
       const pageStr = snip.pages.length > 0 ? ` [${snip.pages.join(', ')}]` : '';
-      const excerpt =
-        snip.text.length > 160 ? `${snip.text.slice(0, 157)}...` : snip.text;
+      const excerpt = snip.text.length > 160 ? `${snip.text.slice(0, 157)}...` : snip.text;
       lines.push(`    text${pageStr}: ${excerpt}`);
     }
   }
@@ -1067,10 +1055,28 @@ const CACHE_AND_JSON_OPTIONS: readonly OptionSpec[] = [
 ];
 
 const SEARCH_OPTIONS: readonly OptionSpec[] = [
-  { key: 'text', kind: 'string', flags: ['--text'], default: '', help: 'Free-text query across titles, notes, and metadata.' },
+  {
+    key: 'text',
+    kind: 'string',
+    flags: ['--text'],
+    default: '',
+    help: 'Free-text query across titles, notes, and metadata.',
+  },
   { key: 'name', kind: 'string', flags: ['--name'], default: '', help: 'Person or organization name query.' },
-  { key: 'place', kind: 'string', flags: ['--place'], default: '', help: 'Parish, town, or county name query.' },
-  { key: 'transcribed', kind: 'string', flags: ['--transcribed'], default: '', help: 'Search HTR transcripts across digitized volumes.' },
+  {
+    key: 'place',
+    kind: 'string',
+    flags: ['--place'],
+    default: '',
+    help: 'Parish, town, or county name query.',
+  },
+  {
+    key: 'transcribed',
+    kind: 'string',
+    flags: ['--transcribed'],
+    default: '',
+    help: 'Search HTR transcripts across digitized volumes.',
+  },
   {
     key: 'recordType',
     kind: 'string',
@@ -1079,8 +1085,19 @@ const SEARCH_OPTIONS: readonly OptionSpec[] = [
     default: 'all',
     help: 'Filter by record type (default: all).',
   },
-  { key: 'facet', kind: 'string', flags: ['--facet'], default: '', help: 'Raw Riksarkivet facet string override.' },
-  { key: 'digitized', kind: 'boolean', flags: ['--digitized'], help: 'Limit results to digitized materials.' },
+  {
+    key: 'facet',
+    kind: 'string',
+    flags: ['--facet'],
+    default: '',
+    help: 'Raw Riksarkivet facet string override.',
+  },
+  {
+    key: 'digitized',
+    kind: 'boolean',
+    flags: ['--digitized'],
+    help: 'Limit results to digitized materials.',
+  },
   { key: 'yearMin', kind: 'integer', flags: ['--year-min'], metavar: 'YYYY', help: 'Earliest year (YYYY).' },
   { key: 'yearMax', kind: 'integer', flags: ['--year-max'], metavar: 'YYYY', help: 'Latest year (YYYY).' },
   {
@@ -1091,8 +1108,20 @@ const SEARCH_OPTIONS: readonly OptionSpec[] = [
     default: 'relevance',
     help: 'Sort order (default: relevance).',
   },
-  { key: 'limit', kind: 'integer', flags: ['--limit'], default: 20, help: 'Results per page, 1-100 (default: 20).' },
-  { key: 'offset', kind: 'integer', flags: ['--offset'], default: 0, help: '0-based result offset (default: 0).' },
+  {
+    key: 'limit',
+    kind: 'integer',
+    flags: ['--limit'],
+    default: 20,
+    help: 'Results per page, 1-100 (default: 20).',
+  },
+  {
+    key: 'offset',
+    kind: 'integer',
+    flags: ['--offset'],
+    default: 0,
+    help: '0-based result offset (default: 0).',
+  },
   ...CACHE_AND_JSON_OPTIONS,
 ];
 
@@ -1102,12 +1131,49 @@ const BIRTHS_OPTIONS: readonly OptionSpec[] = [
   { key: 'mother', kind: 'string', flags: ['--mother'], default: '', help: "Mother's name." },
   { key: 'place', kind: 'string', flags: ['--place'], default: '', help: 'Parish or birth place.' },
   { key: 'witness', kind: 'string', flags: ['--witness'], default: '', help: 'Baptismal witness name.' },
-  { key: 'gender', kind: 'string', flags: ['--gender'], default: '', help: 'Gender (Kvinna/female, Man/male, Okänt/unknown).' },
-  { key: 'yearMin', kind: 'integer', flags: ['--year-min'], metavar: 'YYYY', help: 'Earliest birth year (YYYY).' },
-  { key: 'yearMax', kind: 'integer', flags: ['--year-max'], metavar: 'YYYY', help: 'Latest birth year (YYYY).' },
-  { key: 'sort', kind: 'string', flags: ['--sort'], choices: ['first_name', 'date'], default: 'date', help: 'Sort order (default: date).' },
-  { key: 'limit', kind: 'integer', flags: ['--limit'], default: 20, help: 'Results per page, 1-100 (default: 20).' },
-  { key: 'offset', kind: 'integer', flags: ['--offset'], default: 0, help: '0-based result offset (default: 0).' },
+  {
+    key: 'gender',
+    kind: 'string',
+    flags: ['--gender'],
+    default: '',
+    help: 'Gender (Kvinna/female, Man/male, Okänt/unknown).',
+  },
+  {
+    key: 'yearMin',
+    kind: 'integer',
+    flags: ['--year-min'],
+    metavar: 'YYYY',
+    help: 'Earliest birth year (YYYY).',
+  },
+  {
+    key: 'yearMax',
+    kind: 'integer',
+    flags: ['--year-max'],
+    metavar: 'YYYY',
+    help: 'Latest birth year (YYYY).',
+  },
+  {
+    key: 'sort',
+    kind: 'string',
+    flags: ['--sort'],
+    choices: ['first_name', 'date'],
+    default: 'date',
+    help: 'Sort order (default: date).',
+  },
+  {
+    key: 'limit',
+    kind: 'integer',
+    flags: ['--limit'],
+    default: 20,
+    help: 'Results per page, 1-100 (default: 20).',
+  },
+  {
+    key: 'offset',
+    kind: 'integer',
+    flags: ['--offset'],
+    default: 0,
+    help: '0-based result offset (default: 0).',
+  },
   ...CACHE_AND_JSON_OPTIONS,
 ];
 
@@ -1118,38 +1184,122 @@ const MARRIAGES_OPTIONS: readonly OptionSpec[] = [
   { key: 'bridePlace', kind: 'string', flags: ['--bride-place'], default: '', help: "Bride's home place." },
   { key: 'parish', kind: 'string', flags: ['--parish'], default: '', help: 'Marriage parish.' },
   { key: 'county', kind: 'string', flags: ['--county'], default: '', help: 'Swedish county (län).' },
-  { key: 'yearMin', kind: 'integer', flags: ['--year-min'], metavar: 'YYYY', help: 'Earliest marriage year (YYYY).' },
-  { key: 'yearMax', kind: 'integer', flags: ['--year-max'], metavar: 'YYYY', help: 'Latest marriage year (YYYY).' },
-  { key: 'sort', kind: 'string', flags: ['--sort'], choices: ['grooms_name', 'brides_name', 'date'], default: 'date', help: 'Sort order (default: date).' },
-  { key: 'limit', kind: 'integer', flags: ['--limit'], default: 20, help: 'Results per page, 1-100 (default: 20).' },
-  { key: 'offset', kind: 'integer', flags: ['--offset'], default: 0, help: '0-based result offset (default: 0).' },
+  {
+    key: 'yearMin',
+    kind: 'integer',
+    flags: ['--year-min'],
+    metavar: 'YYYY',
+    help: 'Earliest marriage year (YYYY).',
+  },
+  {
+    key: 'yearMax',
+    kind: 'integer',
+    flags: ['--year-max'],
+    metavar: 'YYYY',
+    help: 'Latest marriage year (YYYY).',
+  },
+  {
+    key: 'sort',
+    kind: 'string',
+    flags: ['--sort'],
+    choices: ['grooms_name', 'brides_name', 'date'],
+    default: 'date',
+    help: 'Sort order (default: date).',
+  },
+  {
+    key: 'limit',
+    kind: 'integer',
+    flags: ['--limit'],
+    default: 20,
+    help: 'Results per page, 1-100 (default: 20).',
+  },
+  {
+    key: 'offset',
+    kind: 'integer',
+    flags: ['--offset'],
+    default: 0,
+    help: '0-based result offset (default: 0).',
+  },
   ...CACHE_AND_JSON_OPTIONS,
 ];
 
 const DEEDS_OPTIONS: readonly OptionSpec[] = [
   { key: 'parish', kind: 'string', flags: ['--parish'], default: '', help: 'Parish name.' },
   { key: 'propertyName', kind: 'string', flags: ['--property'], default: '', help: 'Farm or property name.' },
-  { key: 'taxUnit', kind: 'string', flags: ['--tax-unit'], default: '', help: 'Tax assessment unit (mantal).' },
+  {
+    key: 'taxUnit',
+    kind: 'string',
+    flags: ['--tax-unit'],
+    default: '',
+    help: 'Tax assessment unit (mantal).',
+  },
   { key: 'court', kind: 'string', flags: ['--court'], default: '', help: 'District court session (ting).' },
   { key: 'adminUnit', kind: 'string', flags: ['--admin-unit'], default: '', help: 'Administrative unit.' },
   { key: 'yearMin', kind: 'integer', flags: ['--year-min'], metavar: 'YYYY', help: 'Earliest year (YYYY).' },
   { key: 'yearMax', kind: 'integer', flags: ['--year-max'], metavar: 'YYYY', help: 'Latest year (YYYY).' },
-  { key: 'sort', kind: 'string', flags: ['--sort'], choices: ['parish', 'year'], default: 'year', help: 'Sort order (default: year).' },
-  { key: 'limit', kind: 'integer', flags: ['--limit'], default: 20, help: 'Results per page, 1-100 (default: 20).' },
-  { key: 'offset', kind: 'integer', flags: ['--offset'], default: 0, help: '0-based result offset (default: 0).' },
+  {
+    key: 'sort',
+    kind: 'string',
+    flags: ['--sort'],
+    choices: ['parish', 'year'],
+    default: 'year',
+    help: 'Sort order (default: year).',
+  },
+  {
+    key: 'limit',
+    kind: 'integer',
+    flags: ['--limit'],
+    default: 20,
+    help: 'Results per page, 1-100 (default: 20).',
+  },
+  {
+    key: 'offset',
+    kind: 'integer',
+    flags: ['--offset'],
+    default: 0,
+    help: '0-based result offset (default: 0).',
+  },
   ...CACHE_AND_JSON_OPTIONS,
 ];
 
 const MANIFEST_OPTIONS: readonly OptionSpec[] = [
-  { key: 'limit', kind: 'integer', flags: ['--limit'], default: 30, help: 'Canvases to show in text output (default: 30).' },
+  {
+    key: 'limit',
+    kind: 'integer',
+    flags: ['--limit'],
+    default: 30,
+    help: 'Canvases to show in text output (default: 30).',
+  },
   ...CACHE_AND_JSON_OPTIONS,
 ];
 
 const DOWNLOAD_OPTIONS: readonly OptionSpec[] = [
-  { key: 'page', kind: 'integer', flags: ['--page'], help: '1-based page number when target is a volume bildid.' },
-  { key: 'width', kind: 'integer', flags: ['--width'], help: 'Scaled pixel width (64-12000; default: full max).' },
-  { key: 'full', kind: 'boolean', flags: ['--full'], help: 'Download full resolution (full/max/0/default.jpg).' },
-  { key: 'out', kind: 'string', flags: ['--out'], required: true, metavar: 'PATH', help: 'Output JPEG file path or directory.' },
+  {
+    key: 'page',
+    kind: 'integer',
+    flags: ['--page'],
+    help: '1-based page number when target is a volume bildid.',
+  },
+  {
+    key: 'width',
+    kind: 'integer',
+    flags: ['--width'],
+    help: 'Scaled pixel width (64-12000; default: full max).',
+  },
+  {
+    key: 'full',
+    kind: 'boolean',
+    flags: ['--full'],
+    help: 'Download full resolution (full/max/0/default.jpg).',
+  },
+  {
+    key: 'out',
+    kind: 'string',
+    flags: ['--out'],
+    required: true,
+    metavar: 'PATH',
+    help: 'Output JPEG file path or directory.',
+  },
   { key: 'overwrite', kind: 'boolean', flags: ['--overwrite'], help: 'Overwrite an existing output file.' },
   { key: 'asJson', kind: 'boolean', flags: ['--json'], help: 'Output structured JSON.' },
 ];
@@ -1159,7 +1309,12 @@ const CENSUS_OPTIONS: readonly OptionSpec[] = [
   { key: 'given', kind: 'string', flags: ['--given'], default: '', help: 'Given name (Fornamn).' },
   { key: 'birthYear', kind: 'integer', flags: ['--birth-year'], help: 'Birth year (1700-1930).' },
   { key: 'parish', kind: 'string', flags: ['--parish'], default: '', help: 'Home parish (Hemförsamling).' },
-  { key: 'year', kind: 'integer', flags: ['--year'], help: 'Census year (1860, 1870, 1880, 1890, 1900, 1910, 1930).' },
+  {
+    key: 'year',
+    kind: 'integer',
+    flags: ['--year'],
+    help: 'Census year (1860, 1870, 1880, 1890, 1900, 1910, 1930).',
+  },
   { key: 'asJson', kind: 'boolean', flags: ['--json'], help: 'Output structured JSON.' },
 ];
 
@@ -1210,7 +1365,10 @@ function renderRootHelp(): string {
       { name: 'collection', summary: 'Browse an archive or series IIIF Collection.' },
       { name: 'manifest', summary: "Inspect a digitized volume's IIIF Presentation v3 Manifest." },
       { name: 'download', summary: 'Download a verified IIIF page scan JPEG from lbiiif.riksarkivet.se.' },
-      { name: 'census', summary: 'Build browser URLs for Swedish National Censuses (Folkräkningar 1860-1930).' },
+      {
+        name: 'census',
+        summary: 'Build browser URLs for Swedish National Censuses (Folkräkningar 1860-1930).',
+      },
     ],
   });
 }
@@ -1231,10 +1389,7 @@ function isIiifManifestResult(value: unknown): value is IiifManifestResult {
   return isPlainRecord(value) && Array.isArray(value.canvases);
 }
 
-async function runSearch(
-  argv: readonly string[],
-  ctx: RecordCommandContext
-): Promise<RecordCommandOutcome> {
+async function runSearch(argv: readonly string[], ctx: RecordCommandContext): Promise<RecordCommandOutcome> {
   const parsed = parseCommandArgs(argv, SEARCH_SPEC);
   if (parsed.helpRequested) {
     return {
@@ -1324,10 +1479,7 @@ async function runSearch(
   };
 }
 
-async function runBirths(
-  argv: readonly string[],
-  ctx: RecordCommandContext
-): Promise<RecordCommandOutcome> {
+async function runBirths(argv: readonly string[], ctx: RecordCommandContext): Promise<RecordCommandOutcome> {
   const parsed = parseCommandArgs(argv, BIRTHS_SPEC);
   if (parsed.helpRequested) {
     return {
@@ -1506,18 +1658,12 @@ async function runMarriages(
   }
   return {
     exitCode: 0,
-    bytesOut: emitStdout(
-      ctx.io,
-      formatSearchText('Riksarkivet Marriage Records', result, cacheHit)
-    ),
+    bytesOut: emitStdout(ctx.io, formatSearchText('Riksarkivet Marriage Records', result, cacheHit)),
     cacheHit,
   };
 }
 
-async function runDeeds(
-  argv: readonly string[],
-  ctx: RecordCommandContext
-): Promise<RecordCommandOutcome> {
+async function runDeeds(argv: readonly string[], ctx: RecordCommandContext): Promise<RecordCommandOutcome> {
   const parsed = parseCommandArgs(argv, DEEDS_SPEC);
   if (parsed.helpRequested) {
     return {
@@ -1596,18 +1742,12 @@ async function runDeeds(
   }
   return {
     exitCode: 0,
-    bytesOut: emitStdout(
-      ctx.io,
-      formatSearchText('Riksarkivet Title Deeds Index', result, cacheHit)
-    ),
+    bytesOut: emitStdout(ctx.io, formatSearchText('Riksarkivet Title Deeds Index', result, cacheHit)),
     cacheHit,
   };
 }
 
-async function runRecord(
-  argv: readonly string[],
-  ctx: RecordCommandContext
-): Promise<RecordCommandOutcome> {
+async function runRecord(argv: readonly string[], ctx: RecordCommandContext): Promise<RecordCommandOutcome> {
   const parsed = parseCommandArgs(argv, RECORD_SPEC);
   if (parsed.helpRequested) {
     return {
@@ -1765,9 +1905,7 @@ async function runManifest(
     lines.push(`  p.${canvas.index} | ${canvas.page_id} | ${dims} | ${canvas.full_image_url}`);
   }
   if (result.canvas_count > limit) {
-    lines.push(
-      `  ... (${result.canvas_count - limit} more pages; pass --limit or --json to view all)`
-    );
+    lines.push(`  ... (${result.canvas_count - limit} more pages; pass --limit or --json to view all)`);
   }
   return { exitCode: 0, bytesOut: emitStdout(ctx.io, lines.join('\n')), cacheHit };
 }
@@ -1958,10 +2096,7 @@ function runCensus(argv: readonly string[], ctx: RecordCommandContext): RecordCo
   return { exitCode: 0, bytesOut: emitStdout(ctx.io, lines.join('\n')) };
 }
 
-export const runSeArchivesCommand: RecordHandler = async (
-  args,
-  ctx
-): Promise<RecordCommandOutcome> => {
+export const runSeArchivesCommand: RecordHandler = async (args, ctx): Promise<RecordCommandOutcome> => {
   try {
     if (args.length === 0 || args[0] === '--help' || args[0] === '-h') {
       return { exitCode: 0, bytesOut: emitStdout(ctx.io, renderRootHelp()) };
@@ -1987,9 +2122,7 @@ export const runSeArchivesCommand: RecordHandler = async (
       case 'census':
         return runCensus(rest, ctx);
       default:
-        throw new CliValidationError(
-          `No such command '${subcmd}'. Run 'kinloom se-archives --script-help'.`
-        );
+        throw new CliValidationError(`No such command '${subcmd}'. Run 'kinloom se-archives --script-help'.`);
     }
   } catch (err: unknown) {
     if (err instanceof CliValidationError) {

@@ -1,11 +1,6 @@
 import type { RawEvent } from '../schemas/entities.js';
 
-export const ALLOWED_MEDIA_MIMES = [
-  'image/jpeg',
-  'image/png',
-  'image/webp',
-  'application/pdf',
-] as const;
+export const ALLOWED_MEDIA_MIMES = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'] as const;
 
 export const ALLOWED_AUDIO_VIDEO_MIMES = [
   'video/mp4',
@@ -49,14 +44,8 @@ const ALLOWED_AUDIO_VIDEO_MIME_SET: ReadonlySet<string> = new Set(ALLOWED_AUDIO_
  * Guard: accepts JPEG, PNG, WebP, and PDF uploads by default, and optional video/audio types when enabled.
  */
 export function isAllowedMediaMime(mimeType: string): mimeType is AllowedMediaMime;
-export function isAllowedMediaMime(
-  mimeType: string,
-  options?: MediaUploadGuardOptions
-): boolean;
-export function isAllowedMediaMime(
-  mimeType: string,
-  options?: MediaUploadGuardOptions
-): boolean {
+export function isAllowedMediaMime(mimeType: string, options?: MediaUploadGuardOptions): boolean;
+export function isAllowedMediaMime(mimeType: string, options?: MediaUploadGuardOptions): boolean {
   const normalized = mimeType.trim().toLowerCase();
   if (ALLOWED_MIME_SET.has(normalized)) {
     return true;
@@ -191,11 +180,7 @@ export function isMatchingUploadGeneration(params: {
   eventUploadGen: number;
   cancelled: boolean;
 }): boolean {
-  return (
-    !params.cancelled &&
-    params.activeUploadGen > 0 &&
-    params.eventUploadGen === params.activeUploadGen
-  );
+  return !params.cancelled && params.activeUploadGen > 0 && params.eventUploadGen === params.activeUploadGen;
 }
 
 /**
@@ -208,9 +193,5 @@ export function canCompleteMediaAttach(params: {
   targetHasLiving: boolean;
   targetBecameLiving: boolean;
 }): boolean {
-  return (
-    isMatchingUploadGeneration(params) &&
-    !params.targetHasLiving &&
-    !params.targetBecameLiving
-  );
+  return isMatchingUploadGeneration(params) && !params.targetHasLiving && !params.targetBecameLiving;
 }

@@ -90,13 +90,10 @@ export async function pkceChallengeFromVerifier(codeVerifier: string): Promise<s
 
 async function importHmacKey(secret: string): Promise<CryptoKey> {
   const secretBytes = TEXT_ENCODER.encode(secret);
-  return crypto.subtle.importKey(
-    'raw',
-    secretBytes,
-    { name: 'HMAC', hash: 'SHA-256' },
-    false,
-    ['sign', 'verify']
-  );
+  return crypto.subtle.importKey('raw', secretBytes, { name: 'HMAC', hash: 'SHA-256' }, false, [
+    'sign',
+    'verify',
+  ]);
 }
 
 export async function hmacSignBase64Url(secret: string, payload: string): Promise<string> {

@@ -4,11 +4,7 @@ import path from 'node:path';
 import { performance } from 'node:perf_hooks';
 import type { KinshipEdge } from '@kinloom/core';
 import { CliValidationError } from '../../errors.js';
-import {
-  inspectImageBuffer,
-  runAuditCommand,
-  type AuditCommandResult,
-} from './audit.js';
+import { type AuditCommandResult, inspectImageBuffer, runAuditCommand } from './audit.js';
 import {
   expandRemoveKinshipTargets,
   type RemoveKinshipEntry,
@@ -16,19 +12,19 @@ import {
 } from './integrate.js';
 import {
   collectLiveMediaCollisions,
+  type LiveMediaFileCollision,
   loadLiveMedia,
   normalizeMediaFilePath,
   readStagedMediaRefs,
-  type LiveMediaFileCollision,
   type StagedMediaRef,
 } from './live-media-collisions.js';
 
 export {
   collectLiveMediaCollisions,
+  type LiveMediaFileCollision,
   loadLiveMedia,
   normalizeMediaFilePath,
   readStagedMediaRefs,
-  type LiveMediaFileCollision,
   type StagedMediaRef,
 };
 
@@ -421,9 +417,7 @@ function hashAndMeasure(diskPath: string): ScanCollisionPackage & { person_id: s
     fs.closeSync(fd);
   }
   const info =
-    headerLen === 0
-      ? { width: null, height: null }
-      : inspectImageBuffer(header.subarray(0, headerLen));
+    headerLen === 0 ? { width: null, height: null } : inspectImageBuffer(header.subarray(0, headerLen));
   return {
     person_id: '',
     bytes: stat.size,
@@ -666,8 +660,7 @@ function collectPersonSlugCollisions(packages: readonly ParsedPackage[]): Person
     }
     const sorted = entries.toSorted(
       (a, b) =>
-        a.package_person_id.localeCompare(b.package_person_id) ||
-        a.person_id.localeCompare(b.person_id)
+        a.package_person_id.localeCompare(b.package_person_id) || a.person_id.localeCompare(b.person_id)
     );
     const personIds = new Set(sorted.map((entry) => entry.person_id));
     collisions.push({
@@ -679,9 +672,7 @@ function collectPersonSlugCollisions(packages: readonly ParsedPackage[]): Person
   return collisions.toSorted((a, b) => a.slug.localeCompare(b.slug));
 }
 
-function collectKinshipAddRemoveConflicts(
-  packages: readonly ParsedPackage[]
-): KinshipAddRemoveConflict[] {
+function collectKinshipAddRemoveConflicts(packages: readonly ParsedPackage[]): KinshipAddRemoveConflict[] {
   const byEdgeKey = new Map<
     string,
     {
@@ -704,9 +695,7 @@ function collectKinshipAddRemoveConflicts(
             rem.from === add.from &&
             rem.to === add.to &&
             rem.relation === add.relation &&
-            (rem.family_xref === undefined ||
-              add.family_xref === null ||
-              add.family_xref === rem.family_xref)
+            (rem.family_xref === undefined || add.family_xref === null || add.family_xref === rem.family_xref)
         );
         if (!conflicts) {
           continue;
@@ -739,9 +728,7 @@ function collectKinshipAddRemoveConflicts(
     }))
     .toSorted(
       (a, b) =>
-        a.from.localeCompare(b.from) ||
-        a.to.localeCompare(b.to) ||
-        a.relation.localeCompare(b.relation)
+        a.from.localeCompare(b.from) || a.to.localeCompare(b.to) || a.relation.localeCompare(b.relation)
     );
 }
 
@@ -762,23 +749,17 @@ export function createEmptyAuditOverlaps(): AuditOverlaps {
 export function countBlockingOverlaps(overlaps: AuditOverlaps): OverlapBlockingCounts {
   return {
     differingScanCollisions: overlaps.scanFileCollisions.filter((row) => !row.bytesIdentical).length,
-    conflictingMediaFileCollisions: overlaps.mediaFileCollisions.filter((row) => row.mediaIdsConflict)
+    conflictingMediaFileCollisions: overlaps.mediaFileCollisions.filter((row) => row.mediaIdsConflict).length,
+    conflictingPersonOverlaps: overlaps.sharedPersonOverlaps.filter((row) => row.fieldDiffs.length > 0)
       .length,
-    conflictingPersonOverlaps: overlaps.sharedPersonOverlaps.filter(
-      (row) => row.fieldDiffs.length > 0
-    ).length,
-    conflictingPersonSlugCollisions: overlaps.personSlugCollisions.filter(
-      (row) => row.personIdsConflict
-    ).length,
+    conflictingPersonSlugCollisions: overlaps.personSlugCollisions.filter((row) => row.personIdsConflict)
+      .length,
     liveMediaFileCollisions: overlaps.liveMediaFileCollisions.length,
     kinshipAddRemoveConflicts: overlaps.kinshipAddRemoveConflicts.length,
   };
 }
 
-export function analyzeStagedOverlaps(
-  repoDir: string,
-  personIds: readonly string[]
-): StagedOverlapAnalysis {
+export function analyzeStagedOverlaps(repoDir: string, personIds: readonly string[]): StagedOverlapAnalysis {
   const resolvedRepo = path.resolve(repoDir);
   if (personIds.length === 0) {
     const overlaps = createEmptyAuditOverlaps();
@@ -820,10 +801,7 @@ function computeAuditOverlaps(input: {
   };
 }
 
-function summarizeBatch(
-  people: readonly AuditBatchPerson[],
-  overlaps: AuditOverlaps
-): AuditBatchSummary {
+function summarizeBatch(people: readonly AuditBatchPerson[], overlaps: AuditOverlaps): AuditBatchSummary {
   return {
     people: people.length,
     passed: people.filter((person) => person.ok).length,
@@ -832,21 +810,17 @@ function summarizeBatch(
     scanFileCollisions: overlaps.scanFileCollisions.length,
     differingScanCollisions: overlaps.scanFileCollisions.filter((row) => !row.bytesIdentical).length,
     mediaFileCollisions: overlaps.mediaFileCollisions.length,
-    conflictingMediaFileCollisions: overlaps.mediaFileCollisions.filter((row) => row.mediaIdsConflict)
-      .length,
+    conflictingMediaFileCollisions: overlaps.mediaFileCollisions.filter((row) => row.mediaIdsConflict).length,
     sharedMediaIds: overlaps.sharedMediaIds.length,
     sharedSourceIds: overlaps.sharedSourceIds.length,
     sharedEventOverlaps: overlaps.sharedEventOverlaps.length,
-    sharedEventFieldDiffs: overlaps.sharedEventOverlaps.filter((row) => row.fieldDiffs.length > 0)
-      .length,
+    sharedEventFieldDiffs: overlaps.sharedEventOverlaps.filter((row) => row.fieldDiffs.length > 0).length,
     sharedPersonOverlaps: overlaps.sharedPersonOverlaps.length,
-    conflictingPersonOverlaps: overlaps.sharedPersonOverlaps.filter(
-      (row) => row.fieldDiffs.length > 0
-    ).length,
+    conflictingPersonOverlaps: overlaps.sharedPersonOverlaps.filter((row) => row.fieldDiffs.length > 0)
+      .length,
     personSlugCollisions: overlaps.personSlugCollisions.length,
-    conflictingPersonSlugCollisions: overlaps.personSlugCollisions.filter(
-      (row) => row.personIdsConflict
-    ).length,
+    conflictingPersonSlugCollisions: overlaps.personSlugCollisions.filter((row) => row.personIdsConflict)
+      .length,
     liveMediaFileCollisions: overlaps.liveMediaFileCollisions.length,
     kinshipAddRemoveConflicts: overlaps.kinshipAddRemoveConflicts.length,
   };
@@ -877,9 +851,7 @@ export function formatAuditBatchTextReport(report: Omit<AuditBatchResult, 'rende
     lines.push(`  Skipped already integrated (${skipped.length}): ${skipped.join(', ')}`);
   }
   if (skippedDrifted.length > 0) {
-    lines.push(
-      `  Skipped drifted legacy (${skippedDrifted.length}): ${skippedDrifted.join(', ')}`
-    );
+    lines.push(`  Skipped drifted legacy (${skippedDrifted.length}): ${skippedDrifted.join(', ')}`);
   }
   if (report.people.length === 0) {
     lines.push('  No pending staged packages remain to audit.');
@@ -904,9 +876,7 @@ export function formatAuditBatchTextReport(report: Omit<AuditBatchResult, 'rende
     );
     for (const staged of collision.packages) {
       const dims =
-        staged.width === null || staged.height === null
-          ? 'unknown size'
-          : `${staged.width}x${staged.height}`;
+        staged.width === null || staged.height === null ? 'unknown size' : `${staged.width}x${staged.height}`;
       lines.push(`    ${staged.person_id} ${staged.bytes} bytes ${dims} sha256=${staged.sha256}`);
     }
   }
@@ -959,9 +929,7 @@ export function formatAuditBatchTextReport(report: Omit<AuditBatchResult, 'rende
   }
   for (const overlap of report.overlaps.sharedPersonOverlaps) {
     const diff =
-      overlap.fieldDiffs.length === 0
-        ? 'same fields'
-        : `differs in ${overlap.fieldDiffs.join(', ')}`;
+      overlap.fieldDiffs.length === 0 ? 'same fields' : `differs in ${overlap.fieldDiffs.join(', ')}`;
     lines.push(`  Person ${overlap.id}: ${diff}`);
     for (const staged of overlap.packages) {
       lines.push(
@@ -978,9 +946,7 @@ export function formatAuditBatchTextReport(report: Omit<AuditBatchResult, 'rende
       `  Person slug ${collision.slug}: ${collision.personIdsConflict ? 'conflicting person ids' : 'same person id'}`
     );
     for (const entry of collision.entries) {
-      lines.push(
-        `    ${entry.package_person_id} person_id=${entry.person_id} slug=${entry.slug}`
-      );
+      lines.push(`    ${entry.package_person_id} person_id=${entry.person_id} slug=${entry.slug}`);
     }
   }
 
@@ -1017,14 +983,13 @@ export async function runAuditBatchCommand(options: {
 }): Promise<AuditBatchResult> {
   const started = performance.now();
   const repoDir = path.resolve(options.repoDir?.trim() || process.cwd());
-  const personIds = options.personIds.map((personId) => personId.trim()).filter((personId) => personId.length > 0);
-  const includeSkipped =
-    Boolean(options.pendingOnly) || options.skippedAlreadyIntegrated !== undefined;
-  const skippedAlreadyIntegrated = includeSkipped
-    ? [...(options.skippedAlreadyIntegrated ?? [])]
-    : undefined;
+  const personIds = options.personIds
+    .map((personId) => personId.trim())
+    .filter((personId) => personId.length > 0);
+  const includeSkipped = Boolean(options.pendingOnly) || options.skippedAlreadyIntegrated !== undefined;
+  const skippedAlreadyIntegrated = includeSkipped ? [...(options.skippedAlreadyIntegrated ?? [])] : undefined;
   const skippedDrifted =
-    Boolean(options.pendingOnly) || options.skippedDrifted !== undefined
+    options.pendingOnly || options.skippedDrifted !== undefined
       ? [...(options.skippedDrifted ?? [])]
       : undefined;
 
@@ -1054,8 +1019,7 @@ export async function runAuditBatchCommand(options: {
   const summary = summarizeBatch(people, overlaps);
   const report: Omit<AuditBatchResult, 'rendered'> = {
     ok: people.every((person) => person.ok),
-    strictOk:
-      people.every((person) => person.strictOk) && !analysis.hasBlockingConflicts,
+    strictOk: people.every((person) => person.strictOk) && !analysis.hasBlockingConflicts,
     repo: repoDir,
     people,
     overlaps,
@@ -1064,8 +1028,6 @@ export async function runAuditBatchCommand(options: {
     ...(skippedDrifted !== undefined ? { skippedDrifted } : {}),
     duration_ms: Math.round(performance.now() - started),
   };
-  const rendered = options.json
-    ? `${JSON.stringify(report, null, 2)}\n`
-    : formatAuditBatchTextReport(report);
+  const rendered = options.json ? `${JSON.stringify(report, null, 2)}\n` : formatAuditBatchTextReport(report);
   return { ...report, rendered };
 }

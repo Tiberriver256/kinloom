@@ -1,4 +1,5 @@
-import React, { useLayoutEffect } from 'react';
+import type React from 'react';
+import { useLayoutEffect } from 'react';
 import { useLocation, useNavigationType } from 'react-router-dom';
 import { scrollTargetForNavigation } from '../lib/scrollMemory.js';
 

@@ -4,6 +4,7 @@ import path from 'node:path';
 import { CliValidationError } from '../../../errors.js';
 import {
   atomicWriteFileSync,
+  type CommandParseSpec,
   canonicalJsonStringify,
   emitJsonStdout,
   emitStdout,
@@ -14,17 +15,16 @@ import {
   getStringOption,
   HttpStatusError,
   launchOptionalChromium,
+  type OptionalBrowserPage,
+  type OptionSpec,
   parseCommandArgs,
+  type RecordCommandContext,
+  type RecordCommandOutcome,
+  type RecordHandler,
   RecordRuntimeError,
   resolveCacheDir,
   resolveSubcommandAlias,
   withAdvisoryLock,
-  type CommandParseSpec,
-  type OptionalBrowserPage,
-  type OptionSpec,
-  type RecordCommandContext,
-  type RecordCommandOutcome,
-  type RecordHandler,
 } from '../runtime/index.js';
 
 export const CATALOG_WEB_BASE = 'https://catalog.archives.gov';
@@ -36,33 +36,19 @@ export const DOWNLOAD_MAX_WORKERS = 4;
 export const DOWNLOAD_ATTEMPTS = 4;
 export const DEFAULT_DOWNLOAD_TIMEOUT = 60.0;
 export const RETRY_AFTER_CAP_S = 30.0;
-export const TRANSIENT_STATUS_CODES: ReadonlySet<number> = new Set([
-  429, 500, 502, 503, 504, 520, 522, 524,
-]);
+export const TRANSIENT_STATUS_CODES: ReadonlySet<number> = new Set([429, 500, 502, 503, 504, 520, 522, 524]);
 const HTML_EXTENSIONS: ReadonlySet<string> = new Set(['.html', '.htm', '.xhtml']);
 export const DEFAULT_QUERY_TTL_HOURS = 168.0;
 export const USER_AGENT =
   'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
-export const VALID_LEVELS = [
-  'recordGroup',
-  'collection',
-  'series',
-  'fileUnit',
-  'item',
-] as const;
+export const VALID_LEVELS = ['recordGroup', 'collection', 'series', 'fileUnit', 'item'] as const;
 
 export const S3_PATH_HOST_RE = /^s3(?:[.-][a-z0-9-]+)?\.amazonaws\.com$/;
 export const NARA_BUCKET_HOST_RE =
   /^(?:naraprodstorage|nara-[a-z0-9-]*|opaexport[a-z0-9-]*)\.s3(?:[.-][a-z0-9-]+)?\.amazonaws\.com$/;
 export const NARA_PATH_PREFIXES = ['/naraprodstorage/', '/opaexport', '/nara-'] as const;
 const CATALOG_RECORD_URL_RE = /^https:\/\/catalog\.archives\.gov\/id\/(\d+)\/?(?:[?#].*)?$/i;
-const HTML_ERROR_PREFIXES = [
-  '<!doctype html',
-  '<html',
-  '<head',
-  '<body',
-  '<title',
-] as const;
+const HTML_ERROR_PREFIXES = ['<!doctype html', '<html', '<head', '<body', '<title'] as const;
 
 export const CENSUS1950_API_BASE = 'https://1950census.archives.gov/api';
 export const CENSUS1950_DEFAULT_LIMIT = 25;
@@ -326,15 +312,10 @@ function getCacheRoot(ctx: RecordCommandContext): string {
   });
 }
 
-export function resolveQueryTtlHours(
-  cliTtl: number | undefined,
-  env: NodeJS.ProcessEnv
-): number {
+export function resolveQueryTtlHours(cliTtl: number | undefined, env: NodeJS.ProcessEnv): number {
   if (cliTtl !== undefined) {
     if (!Number.isFinite(cliTtl) || cliTtl < 0) {
-      throw new CliValidationError(
-        `Invalid --cache-ttl-hours value: ${String(cliTtl)} (must be >= 0).`
-      );
+      throw new CliValidationError(`Invalid --cache-ttl-hours value: ${String(cliTtl)} (must be >= 0).`);
     }
     return cliTtl;
   }
@@ -342,14 +323,10 @@ export function resolveQueryTtlHours(
   if (raw !== undefined && raw.trim().length > 0) {
     const parsed = Number(raw.trim());
     if (!Number.isFinite(parsed)) {
-      throw new CliValidationError(
-        `Invalid KINLOOM_NARA_QUERY_TTL_HOURS value: '${raw}'.`
-      );
+      throw new CliValidationError(`Invalid KINLOOM_NARA_QUERY_TTL_HOURS value: '${raw}'.`);
     }
     if (parsed < 0) {
-      throw new CliValidationError(
-        `Invalid KINLOOM_NARA_QUERY_TTL_HOURS value: '${raw}' (must be >= 0).`
-      );
+      throw new CliValidationError(`Invalid KINLOOM_NARA_QUERY_TTL_HOURS value: '${raw}' (must be >= 0).`);
     }
     return parsed;
   }
@@ -496,8 +473,7 @@ export function validateNaraDownloadUrl(rawUrl: string): string {
     host === 'archives.gov' ||
     host.endsWith('.archives.gov') ||
     NARA_BUCKET_HOST_RE.test(host) ||
-    (S3_PATH_HOST_RE.test(host) &&
-      NARA_PATH_PREFIXES.some((prefix) => pathLower.startsWith(prefix)));
+    (S3_PATH_HOST_RE.test(host) && NARA_PATH_PREFIXES.some((prefix) => pathLower.startsWith(prefix)));
   if (!allowed) {
     throw new RecordRuntimeError(`Refusing download from disallowed host '${host}': ${text}`);
   }
@@ -552,11 +528,7 @@ function resolveUserPath(rawPath: string, cwd: string): string {
   return path.isAbsolute(rawPath) ? rawPath : path.join(cwd, rawPath);
 }
 
-export function detectErrorPayload(
-  head: Buffer,
-  contentType: string,
-  filenameHint = ''
-): string | null {
+export function detectErrorPayload(head: Buffer, contentType: string, filenameHint = ''): string | null {
   const ext = filenameHint ? path.extname(filenameHint).toLowerCase() : '';
   if (HTML_EXTENSIONS.has(ext)) {
     return null;
@@ -566,15 +538,13 @@ export function detectErrorPayload(
     return `HTML response (${contentType})`;
   }
   let sampleBuf = head.subarray(0, 512);
-  if (
-    sampleBuf.length >= 3 &&
-    sampleBuf[0] === 0xef &&
-    sampleBuf[1] === 0xbb &&
-    sampleBuf[2] === 0xbf
-  ) {
+  if (sampleBuf.length >= 3 && sampleBuf[0] === 0xef && sampleBuf[1] === 0xbb && sampleBuf[2] === 0xbf) {
     sampleBuf = sampleBuf.subarray(3);
   }
-  const sample = sampleBuf.toString('latin1').replace(/^[ \t\r\n]+/, '').toLowerCase();
+  const sample = sampleBuf
+    .toString('latin1')
+    .replace(/^[ \t\r\n]+/, '')
+    .toLowerCase();
   if (HTML_ERROR_PREFIXES.some((prefix) => sample.startsWith(prefix))) {
     return 'HTML error page';
   }
@@ -668,11 +638,7 @@ function retryDelayMs(
   return Math.round(delayS * 1000);
 }
 
-function census1950RetryDelayMs(
-  attempt: number,
-  response: Response | null,
-  nowMs: () => number
-): number {
+function census1950RetryDelayMs(attempt: number, response: Response | null, nowMs: () => number): number {
   const retryAfterS = parseRetryAfterSeconds(response?.headers, nowMs, CENSUS1950_RETRY_AFTER_CAP_S);
   if (retryAfterS !== undefined) {
     return Math.round(retryAfterS * 1000);
@@ -706,7 +672,7 @@ export function buildQueryParams(
     readonly title?: string;
     readonly geo?: string;
     readonly control?: string;
-  readonly series?: string;
+    readonly series?: string;
     readonly startDate?: string;
     readonly endDate?: string;
     readonly page?: number;
@@ -751,9 +717,7 @@ export function buildQueryParams(
   }
 
   const combinedQuery =
-    query && extraQuerySeries
-      ? `${query} ${extraQuerySeries}`
-      : query || extraQuerySeries;
+    query && extraQuerySeries ? `${query} ${extraQuerySeries}` : query || extraQuerySeries;
 
   if (combinedQuery) {
     params.push(['q', combinedQuery]);
@@ -822,17 +786,12 @@ export function buildQueryParams(
   return params;
 }
 
-export function encodeCatalogUrl(
-  params: readonly (readonly [string, string])[],
-  forApi = false
-): string {
+export function encodeCatalogUrl(params: readonly (readonly [string, string])[], forApi = false): string {
   const base = forApi ? `${CATALOG_API_BASE}/records/search` : `${CATALOG_WEB_BASE}/search`;
   if (params.length === 0) {
     return base;
   }
-  const qs = params
-    .map(([k, v]) => `${quotePythonStyle(k, true)}=${quotePythonStyle(v, true)}`)
-    .join('&');
+  const qs = params.map(([k, v]) => `${quotePythonStyle(k, true)}=${quotePythonStyle(v, true)}`).join('&');
   return `${base}?${qs}`;
 }
 
@@ -1136,10 +1095,7 @@ export function formatRecordText(rec: NaraRecordSummary): string {
 // Catalog Search & Record Disk Cache
 // ---------------------------------------------------------------------------
 
-function canonicalSearchParams(
-  query: string | null,
-  filter: SearchFilterOptions
-): CanonicalSearchParams {
+function canonicalSearchParams(query: string | null, filter: SearchFilterOptions): CanonicalSearchParams {
   const levels = filter.levels
     .flatMap((item) => item.split(','))
     .map((p) => p.trim())
@@ -1165,10 +1121,7 @@ function canonicalSearchParams(
   };
 }
 
-function queryCachePath(
-  canonical: CanonicalSearchParams,
-  cacheRoot: string
-): readonly [string, string] {
+function queryCachePath(canonical: CanonicalSearchParams, cacheRoot: string): readonly [string, string] {
   const digest = sha256Hex(canonicalJsonStringify(canonical));
   return [digest, resolveSafeChild(path.join(cacheRoot, '_queries'), `${digest}.json`)];
 }
@@ -1455,10 +1408,7 @@ async function apiSearchOne(
     if (retryQuery === null) {
       return [null, webUrl];
     }
-    const retryApiUrl = encodeCatalogUrl(
-      buildQueryParams(retryQuery, { ...filter, forApi: true }),
-      true
-    );
+    const retryApiUrl = encodeCatalogUrl(buildQueryParams(retryQuery, { ...filter, forApi: true }), true);
     try {
       const raw = await apiGetJson(retryApiUrl, apiKey, ctx);
       return [buildSearchPayload(query, webUrl, raw), webUrl];
@@ -1862,13 +1812,7 @@ async function loadOrFetchFullRecordsWithHits(
           const fbRec = fallbackRecs[i];
           if (fbRec) {
             slots[slotIdx] = fbRec;
-            await writeCachedRecord(
-              cleanIds[slotIdx],
-              fbRec,
-              options.cacheRoot,
-              options.includeText,
-              ctx
-            );
+            await writeCachedRecord(cleanIds[slotIdx], fbRec, options.cacheRoot, options.includeText, ctx);
           }
         }
       }
@@ -1946,10 +1890,7 @@ function safeUrlFilename(url: string, contentType = ''): string {
   return safe;
 }
 
-function urlDownloadCachePaths(
-  url: string,
-  cacheRoot: string
-): readonly [string, string, string] {
+function urlDownloadCachePaths(url: string, cacheRoot: string): readonly [string, string, string] {
   const digest = sha256Hex(url);
   const dir = path.join(cacheRoot, 'downloads');
   return [
@@ -2261,7 +2202,7 @@ export function normalizeCensus1950State(raw: string): string {
     throw new CliValidationError(`Invalid --state value: '${raw}'`);
   }
   const upper = text.toUpperCase();
-  if (Object.prototype.hasOwnProperty.call(CENSUS1950_STATES, upper)) {
+  if (Object.hasOwn(CENSUS1950_STATES, upper)) {
     return upper;
   }
   const found = CENSUS1950_STATE_BY_NAME.get(text.toLowerCase());
@@ -2297,19 +2238,14 @@ export function canonicalCensus1950Query(options: {
 }): CanonicalCensus1950Query {
   const page = options.page ?? 1;
   if (!Number.isInteger(options.limit) || options.limit < 1 || options.limit > 100) {
-    throw new CliValidationError(
-      `Invalid --limit value: ${String(options.limit)} (must be 1..100).`
-    );
+    throw new CliValidationError(`Invalid --limit value: ${String(options.limit)} (must be 1..100).`);
   }
   if (!Number.isInteger(page) || page < 1) {
     throw new CliValidationError(`Invalid --page value: ${String(page)} (must be >= 1).`);
   }
-  const stateCode =
-    options.state && options.state.trim() ? normalizeCensus1950State(options.state) : '';
+  const stateCode = options.state && options.state.trim() ? normalizeCensus1950State(options.state) : '';
   const countyText =
-    options.county && options.county.trim()
-      ? census1950PlainToken(options.county, '--county', 80)
-      : '';
+    options.county && options.county.trim() ? census1950PlainToken(options.county, '--county', 80) : '';
   const nameText =
     options.name && options.name.trim() ? census1950PlainToken(options.name, '--name', 120) : '';
   let edText = '';
@@ -2492,12 +2428,7 @@ function emitCensus1950(
 
 export function validateCensus1950ImagePath(raw: string): string {
   const text = raw.trim();
-  if (
-    !text ||
-    text.includes('\0') ||
-    text.includes('\\') ||
-    !CENSUS1950_IMAGE_PATH_RE.test(text)
-  ) {
+  if (!text || text.includes('\0') || text.includes('\\') || !CENSUS1950_IMAGE_PATH_RE.test(text)) {
     throw new CliValidationError(`Invalid 1950 Census image path: '${raw}'`);
   }
   const parts = text.split('/');
@@ -2537,9 +2468,7 @@ export function parseCensus1950ImageSource(raw: string): string {
   try {
     parsed = new URL(text);
   } catch {
-    throw new CliValidationError(
-      '1950 Census image URLs must be https://1950census.archives.gov/iiif/2/...'
-    );
+    throw new CliValidationError('1950 Census image URLs must be https://1950census.archives.gov/iiif/2/...');
   }
   const host = parsed.hostname.toLowerCase();
   if (
@@ -2551,21 +2480,15 @@ export function parseCensus1950ImageSource(raw: string): string {
     parsed.search !== '' ||
     parsed.hash !== ''
   ) {
-    throw new CliValidationError(
-      '1950 Census image URLs must be https://1950census.archives.gov/iiif/2/...'
-    );
+    throw new CliValidationError('1950 Census image URLs must be https://1950census.archives.gov/iiif/2/...');
   }
   const prefix = '/iiif/2/';
   if (!parsed.pathname.startsWith(prefix)) {
-    throw new CliValidationError(
-      '1950 Census image URLs must be https://1950census.archives.gov/iiif/2/...'
-    );
+    throw new CliValidationError('1950 Census image URLs must be https://1950census.archives.gov/iiif/2/...');
   }
   const rest = parsed.pathname.slice(prefix.length).replace(/\/+$/, '');
   if (!rest) {
-    throw new CliValidationError(
-      '1950 Census image URLs must be https://1950census.archives.gov/iiif/2/...'
-    );
+    throw new CliValidationError('1950 Census image URLs must be https://1950census.archives.gov/iiif/2/...');
   }
 
   let encoded: string;
@@ -2627,11 +2550,7 @@ function isExistingDirectory(filePath: string): boolean {
   }
 }
 
-export function resolveCensus1950ImageOutput(
-  rawOutPath: string,
-  imagePath: string,
-  cwd: string
-): string {
+export function resolveCensus1950ImageOutput(rawOutPath: string, imagePath: string, cwd: string): string {
   if (rawOutPath.includes('\0')) {
     throw new CliValidationError(`Invalid output path: ${rawOutPath}`);
   }
@@ -2657,11 +2576,7 @@ export function requireJpegBytes(data: Buffer): Buffer {
   return data;
 }
 
-function readCachedCensus1950Image(
-  filePath: string,
-  ttlHours: number,
-  nowMs: () => number
-): Buffer | null {
+function readCachedCensus1950Image(filePath: string, ttlHours: number, nowMs: () => number): Buffer | null {
   if (ttlHours <= 0) {
     return null;
   }
@@ -2710,10 +2625,7 @@ export async function census1950FetchJpeg(
         ctx.fetchImpl
       );
       if (resp.status < 200 || resp.status >= 300) {
-        if (
-          CENSUS1950_TRANSIENT_STATUS.has(resp.status) &&
-          attempt < CENSUS1950_IMAGE_ATTEMPTS
-        ) {
+        if (CENSUS1950_TRANSIENT_STATUS.has(resp.status) && attempt < CENSUS1950_IMAGE_ATTEMPTS) {
           await ctx.sleepFn(census1950RetryDelayMs(attempt, resp, ctx.nowMs));
           continue;
         }
@@ -2789,11 +2701,7 @@ async function loadCensus1950ImageBytes(
   ctx: RecordCommandContext
 ): Promise<readonly [Buffer, boolean]> {
   const url = census1950ImageJpegUrl(imagePath, options.width);
-  const [dataPath, lockPath] = census1950ImageCachePaths(
-    imagePath,
-    options.width,
-    options.cacheRoot
-  );
+  const [dataPath, lockPath] = census1950ImageCachePaths(imagePath, options.width, options.cacheRoot);
   if (!options.refresh) {
     const cached = readCachedCensus1950Image(dataPath, options.ttlHours, ctx.nowMs);
     if (cached !== null) {
@@ -3342,8 +3250,7 @@ async function runSearch(
     };
   }
 
-  const queries: readonly (string | null)[] =
-    parsed.positionals.length > 0 ? parsed.positionals : [null];
+  const queries: readonly (string | null)[] = parsed.positionals.length > 0 ? parsed.positionals : [null];
   const filters = extractCommonSearchOptions(parsed);
   const apiKey = getStringOption(parsed, 'apiKey') ?? ctx.env.NARA_API_KEY;
   const forceBrowser = getBooleanOption(parsed, 'forceBrowser');
@@ -3439,10 +3346,7 @@ async function runSearch(
 
   if (asJson) {
     const jsonPayloads = payloads.map(({ entry, isHit }) => ({ ...entry, cache_hit: isHit }));
-    const bytesOut = emitJsonStdout(
-      ctx.io,
-      jsonPayloads.length === 1 ? jsonPayloads[0] : jsonPayloads
-    );
+    const bytesOut = emitJsonStdout(ctx.io, jsonPayloads.length === 1 ? jsonPayloads[0] : jsonPayloads);
     return { exitCode: 0, bytesOut, cacheHit: allCacheHit };
   }
 
@@ -3509,19 +3413,14 @@ async function runGet(
   );
 
   const records = fullRecords.map((rec) =>
-    rec.error
-      ? rec
-      : projectRecord(rec, { includeObjects: objects, includeText: text, pageSpec: pages })
+    rec.error ? rec : projectRecord(rec, { includeObjects: objects, includeText: text, pageSpec: pages })
   );
 
   const allCacheHit = hitFlags.length > 0 && hitFlags.every(Boolean);
 
   if (asJson) {
     const jsonRecords = records.map((rec, idx) => ({ ...rec, cache_hit: hitFlags[idx] }));
-    const bytesOut = emitJsonStdout(
-      ctx.io,
-      jsonRecords.length === 1 ? jsonRecords[0] : jsonRecords
-    );
+    const bytesOut = emitJsonStdout(ctx.io, jsonRecords.length === 1 ? jsonRecords[0] : jsonRecords);
     return { exitCode: 0, bytesOut, cacheHit: allCacheHit };
   }
 
@@ -3618,9 +3517,7 @@ async function runDownload(
   if (rawOutDir !== undefined && hasParentTraversal(rawOutDir) && !path.isAbsolute(rawOutDir)) {
     throw new RecordRuntimeError(`Unsafe output directory containing '..': ${rawOutDir}`);
   }
-  const targetDir = rawOutDir
-    ? resolveUserPath(rawOutDir, ctx.cwd)
-    : path.join(ctx.cwd, `nara-${cleanId}`);
+  const targetDir = rawOutDir ? resolveUserPath(rawOutDir, ctx.cwd) : path.join(ctx.cwd, `nara-${cleanId}`);
   fs.mkdirSync(targetDir, { recursive: true });
   const objCacheDir = path.join(cacheRoot, 'objects', cleanId);
 
@@ -3666,10 +3563,7 @@ async function runDownload(
     readonly dest: string;
   }
 
-  const results: (DownloadSlotResult | null)[] = Array.from(
-    { length: prepared.length },
-    () => null
-  );
+  const results: (DownloadSlotResult | null)[] = Array.from({ length: prepared.length }, () => null);
   const uncachedIndices: number[] = [];
 
   for (let idx = 0; idx < prepared.length; idx += 1) {
@@ -3813,8 +3707,7 @@ async function runDownload(
     }
   }
 
-  const allCacheHit =
-    metaCacheHit && jsonFiles.length > 0 && jsonFiles.every((f) => f.cache_hit);
+  const allCacheHit = metaCacheHit && jsonFiles.length > 0 && jsonFiles.every((f) => f.cache_hit);
 
   if (asJson) {
     const primaryCt = jsonFiles[0]?.content_type ?? '';
@@ -3954,8 +3847,7 @@ async function runCensus1950Image(
   const batch = imagePaths.length > 1;
   const resolvedOut = resolveUserPath(outPath, ctx.cwd);
   const looksLikeJpg =
-    CENSUS1950_JPEG_SUFFIXES.has(path.extname(outPath).toLowerCase()) &&
-    !isExistingDirectory(resolvedOut);
+    CENSUS1950_JPEG_SUFFIXES.has(path.extname(outPath).toLowerCase()) && !isExistingDirectory(resolvedOut);
   if (batch && looksLikeJpg) {
     throw new CliValidationError(
       '--out is a .jpg file, but this command received multiple images. Pass a directory, for example --out ./schedules.'
@@ -4016,10 +3908,7 @@ async function runCensus1950Image(
       return { exitCode: 0, bytesOut, cacheHit: rec.cache_hit };
     }
     const verb = rec.cache_hit ? 'Cached' : 'Downloaded';
-    const bytesOut = emitStdout(
-      ctx.io,
-      `${verb}: ${rec.path} (${formatWithCommas(rec.bytes)} bytes)`
-    );
+    const bytesOut = emitStdout(ctx.io, `${verb}: ${rec.path} (${formatWithCommas(rec.bytes)} bytes)`);
     return { exitCode: 0, bytesOut, cacheHit: rec.cache_hit };
   }
 
@@ -4070,9 +3959,7 @@ export function createNaraCommand(overrides: NaraBrowserOverrides = {}): RecordH
         case 'census1950-image':
           return await runCensus1950Image(rest, ctx);
         default:
-          throw new CliValidationError(
-            `No such command '${rawSubcmd}'. Run 'kinloom nara --script-help'.`
-          );
+          throw new CliValidationError(`No such command '${rawSubcmd}'. Run 'kinloom nara --script-help'.`);
       }
     } catch (err: unknown) {
       if (isEpipeError(err)) {

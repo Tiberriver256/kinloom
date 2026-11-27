@@ -1,24 +1,24 @@
-import { z } from 'zod';
 import {
+  AuthorTypeSchema,
   asBatchId,
   asRevisionId,
-  AuthorTypeSchema,
   BatchSubmissionSchema,
   EntityDeleteInputSchema,
   EntityRestoreInputSchema,
+  type EntityType,
   EntityTypeSchema,
   EntityUpdateInputSchema,
   EntityWriteInputSchema,
-  mergePronunciationLexicons,
-  parseEntityPayload,
-  PronunciationVariantSchema,
-  resolveEffectiveLiving,
-  type EntityType,
   type KinloomServerPluginRoute,
   type KinloomSiteConfig,
+  mergePronunciationLexicons,
   type Pronunciation,
+  PronunciationVariantSchema,
+  parseEntityPayload,
   type RevisionQuery,
+  resolveEffectiveLiving,
 } from '@kinloom/core';
+import { z } from 'zod';
 import { KinloomHttpError, toErrorResponseData } from '../errors.js';
 import type { KinloomServerPorts } from '../ports.js';
 import { AdminService } from '../services/adminService.js';
@@ -134,11 +134,7 @@ const UpsertPronunciationLexiconBodySchema = z.object({
 const DEFAULT_SESSION_TTL_SECONDS = 30 * 24 * 60 * 60;
 const DEFAULT_OAUTH_COOKIE_TTL_SECONDS = 10 * 60;
 
-function jsonResponse(
-  data: unknown,
-  status = 200,
-  extraHeaders?: Record<string, string>
-): Response {
+function jsonResponse(data: unknown, status = 200, extraHeaders?: Record<string, string>): Response {
   const headers = new Headers({
     'content-type': 'application/json; charset=utf-8',
     'cache-control': 'no-store',
@@ -172,10 +168,7 @@ function readDetailString(details: unknown, key: string): string | null {
   return typeof value === 'string' ? value : null;
 }
 
-export function mapAuthErrorToBrowserCode(
-  error: unknown,
-  provider: AuthBrowserProvider
-): string {
+export function mapAuthErrorToBrowserCode(error: unknown, provider: AuthBrowserProvider): string {
   if (error instanceof KinloomHttpError) {
     if (error.code === 'INVITE_INVALID_OR_REVOKED') {
       const inviteStatus = readDetailString(error.details, 'invite_status');
@@ -268,11 +261,7 @@ async function readJsonBody(request: Request): Promise<unknown> {
 function parseEntityTypeParam(raw: string): EntityType {
   const parsed = EntityTypeSchema.safeParse(raw);
   if (!parsed.success) {
-    throw new KinloomHttpError(
-      400,
-      'INVALID_ENTITY_TYPE',
-      `Invalid entity type '${raw}'.`
-    );
+    throw new KinloomHttpError(400, 'INVALID_ENTITY_TYPE', `Invalid entity type '${raw}'.`);
   }
   return parsed.data;
 }
@@ -412,9 +401,7 @@ export function createKinloomServer(config: KinloomServerConfig): KinloomServer 
       const selectAccountParam = url.searchParams.get('select_account')?.trim().toLowerCase();
       const promptParam = url.searchParams.get('prompt')?.trim().toLowerCase();
       const selectAccount =
-        selectAccountParam === '1' ||
-        selectAccountParam === 'true' ||
-        promptParam === 'select_account';
+        selectAccountParam === '1' || selectAccountParam === 'true' || promptParam === 'select_account';
       try {
         const redirectUri = `${url.origin}/api/auth/google/callback`;
         const started = await authService.startGoogleAuth({
@@ -463,27 +450,15 @@ export function createKinloomServer(config: KinloomServerConfig): KinloomServer 
           if (oauthError === 'access_denied') {
             throw new KinloomHttpError(400, 'GOOGLE_CANCELLED', 'Google sign-in was canceled.');
           }
-          throw new KinloomHttpError(
-            400,
-            'GOOGLE_AUTH_FAILED',
-            'Google sign-in could not be completed.'
-          );
+          throw new KinloomHttpError(400, 'GOOGLE_AUTH_FAILED', 'Google sign-in could not be completed.');
         }
 
         if (!code || !state || !rawOAuthCookie) {
-          throw new KinloomHttpError(
-            400,
-            'INVALID_OAUTH_STATE',
-            'Missing or expired OAuth state.'
-          );
+          throw new KinloomHttpError(400, 'INVALID_OAUTH_STATE', 'Missing or expired OAuth state.');
         }
 
         if (!oauthState || oauthState.state !== state) {
-          throw new KinloomHttpError(
-            400,
-            'INVALID_OAUTH_STATE',
-            'OAuth state verification failed.'
-          );
+          throw new KinloomHttpError(400, 'INVALID_OAUTH_STATE', 'OAuth state verification failed.');
         }
 
         const { user } = await authService.completeGoogleAuth({
@@ -573,10 +548,7 @@ export function createKinloomServer(config: KinloomServerConfig): KinloomServer 
           if (auth.principal.kind === 'anonymous' && readSessionCookieRaw(request, isSecure)) {
             clearCookies.push(serializeClearCookie(getSessionCookieName(isSecure), isSecure));
           }
-          return redirectResponse(
-            buildAuthErrorRedirectUrl(nextPath, errorCode, 'magic_link'),
-            clearCookies
-          );
+          return redirectResponse(buildAuthErrorRedirectUrl(nextPath, errorCode, 'magic_link'), clearCookies);
         }
         throw error;
       }
@@ -1005,11 +977,7 @@ export function createKinloomServer(config: KinloomServerConfig): KinloomServer 
       try {
         formData = await request.formData();
       } catch {
-        throw new KinloomHttpError(
-          400,
-          'VALIDATION_ERROR',
-          'Expected multipart/form-data upload payload.'
-        );
+        throw new KinloomHttpError(400, 'VALIDATION_ERROR', 'Expected multipart/form-data upload payload.');
       }
 
       const filePart = formData.get('file');
@@ -1038,8 +1006,7 @@ export function createKinloomServer(config: KinloomServerConfig): KinloomServer 
       const summaryPart = formData.get('summary');
       const summary = typeof summaryPart === 'string' ? summaryPart : '';
       const hasPrimaryRaw = formData.get('has_primary_source');
-      const hasPrimarySource =
-        typeof hasPrimaryRaw === 'string' ? hasPrimaryRaw !== 'false' : true;
+      const hasPrimarySource = typeof hasPrimaryRaw === 'string' ? hasPrimaryRaw !== 'false' : true;
 
       const arrayBuffer = await filePart.arrayBuffer();
       const uploaded = await mediaService.uploadMedia({
@@ -1062,11 +1029,7 @@ export function createKinloomServer(config: KinloomServerConfig): KinloomServer 
       );
     }
 
-    if (
-      method === 'GET' &&
-      segments.length >= 2 &&
-      (segments[0] === 'media' || segments[0] === 'sources')
-    ) {
+    if (method === 'GET' && segments.length >= 2 && (segments[0] === 'media' || segments[0] === 'sources')) {
       requireMinRole(auth.principal, 'viewer', { allowAgentScopes: ['write_batch'] });
       const prefix = segments[0];
       const key = segments.slice(1).map(decodeSegment).join('/');
@@ -1345,19 +1308,17 @@ export function createKinloomServer(config: KinloomServerConfig): KinloomServer 
     async fetch(request: Request): Promise<Response> {
       const url = new URL(request.url);
       const isSecure = isSecureRequestUrl(url);
-      const isMediaPath =
-        url.pathname.startsWith('/media/') || url.pathname.startsWith('/sources/');
+      const isMediaPath = url.pathname.startsWith('/media/') || url.pathname.startsWith('/sources/');
       try {
         const response = await handleRequest(request);
-        const isMediaResponse =
-          isMediaPath && (response.status === 200 || response.status === 206);
+        const isMediaResponse = isMediaPath && (response.status === 200 || response.status === 206);
         return applySecurityHeaders(response, { isSecure, isMedia: isMediaResponse });
       } catch (error) {
         const mapped = toErrorResponseData(error);
-        return applySecurityHeaders(
-          jsonResponse(mapped.body, mapped.status, mapped.headers),
-          { isSecure, isMedia: false }
-        );
+        return applySecurityHeaders(jsonResponse(mapped.body, mapped.status, mapped.headers), {
+          isSecure,
+          isMedia: false,
+        });
       }
     },
   };

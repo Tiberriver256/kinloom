@@ -1,5 +1,5 @@
-import type { FilterSpecification, LayerSpecification, StyleSpecification } from 'maplibre-gl';
 import { constrainLayerToDateRange, dateRangeFromDate } from '@openhistoricalmap/maplibre-gl-dates';
+import type { FilterSpecification, LayerSpecification, StyleSpecification } from 'maplibre-gl';
 import { KINLOOM_COLOR_TOKENS } from './tokens.js';
 
 export const OHM_STYLE_URL = 'https://www.openhistoricalmap.org/map-styles/main/main.json';
@@ -19,10 +19,7 @@ const ARCHIVAL_SOURCE_LAYERS = new Set([
   'populated_places',
 ]);
 
-const DROPPED_LAYER_IDS = new Set([
-  'ohm_landcover_hillshade',
-  'water_lines_labels_dam',
-]);
+const DROPPED_LAYER_IDS = new Set(['ohm_landcover_hillshade', 'water_lines_labels_dam']);
 
 const UNUSED_SOURCE_IDS = new Set(['ohm_landcover_hillshade']);
 
@@ -105,7 +102,6 @@ function transformLayer(layer: LayerSpecification): LayerSpecification | null {
       layoutChanged = true;
     }
     if (layoutChanged) {
-      // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- preserving SymbolLayerSpecification after updating text-field/text-font layout properties
       next = { ...next, layout: nextLayout as typeof next.layout };
     }
   }
@@ -125,10 +121,10 @@ function transformLayer(layer: LayerSpecification): LayerSpecification | null {
  */
 export function buildArchivalOhmStyle(
   rawStyle: StyleSpecification,
-  initialYear = OVERVIEW_REFERENCE_YEAR,
+  initialYear = OVERVIEW_REFERENCE_YEAR
 ): StyleSpecification {
   const nextSources = Object.fromEntries(
-    Object.entries(rawStyle.sources).filter(([sourceId]) => !UNUSED_SOURCE_IDS.has(sourceId)),
+    Object.entries(rawStyle.sources).filter(([sourceId]) => !UNUSED_SOURCE_IDS.has(sourceId))
   );
 
   const nextLayers: LayerSpecification[] = [];
@@ -140,9 +136,10 @@ export function buildArchivalOhmStyle(
   }
 
   const dateState = buildInitialDateState(initialYear);
-  const existingState = 'state' in rawStyle && typeof rawStyle.state === 'object' && rawStyle.state !== null
-    ? rawStyle.state
-    : {};
+  const existingState =
+    'state' in rawStyle && typeof rawStyle.state === 'object' && rawStyle.state !== null
+      ? rawStyle.state
+      : {};
 
   return {
     ...rawStyle,
@@ -163,7 +160,7 @@ export function resetCachedOhmStyle(): void {
 
 export async function loadArchivalOhmStyle(
   initialYear = OVERVIEW_REFERENCE_YEAR,
-  fetchFn: typeof fetch = fetch,
+  fetchFn: typeof fetch = fetch
 ): Promise<StyleSpecification> {
   if (!cachedStylePromise) {
     cachedStylePromise = fetchFn(OHM_STYLE_URL)
@@ -171,7 +168,6 @@ export async function loadArchivalOhmStyle(
         if (!res.ok) {
           throw new Error(`HTTP ${res.status} loading ${OHM_STYLE_URL}`);
         }
-        // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- OHM main.json conforms to MapLibre StyleSpecification
         const raw = (await res.json()) as StyleSpecification;
         return buildArchivalOhmStyle(raw, initialYear);
       })

@@ -1,12 +1,20 @@
 import type { ArchiveSearchResult, SearchResultKind } from '@kinloom/core';
 import { searchArchive } from '@kinloom/core';
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { isSearchableQuery, searchNavNext, searchNavPrev, searchNavReset } from '../lib/searchNavigation.js';
-import { KINLOOM_VOCABULARY, SEARCH_KIND_LABELS } from '../lib/vocabulary.js';
+import type React from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useArchiveData } from '../context/ArchiveDataContext.js';
 import { useArchiveUi } from '../context/ArchiveUiContext.js';
+import { cx } from '../lib/cx.js';
+import { isSearchableQuery, searchNavNext, searchNavPrev, searchNavReset } from '../lib/searchNavigation.js';
 import { useDialogFocusTrap } from '../lib/useDialogFocusTrap.js';
-import { useNavigate } from 'react-router-dom';
+import { KINLOOM_VOCABULARY, SEARCH_KIND_LABELS } from '../lib/vocabulary.js';
+import cssMod3 from '../pages/IndexPage.module.css';
+import cssMod0 from './GlobalSearchModal.module.css';
+import cssMod1 from './SourceReaderDrawer.module.css';
+import cssMod2 from './wiki/WikiSurfaces.module.css';
+
+const uiStyles: Readonly<Record<string, string>> = { ...cssMod0, ...cssMod1, ...cssMod2, ...cssMod3 };
 
 export const GlobalSearchModal: React.FC = () => {
   const { bundle, placesById, readings, readingsLoading, siteConfig } = useArchiveData();
@@ -85,7 +93,7 @@ export const GlobalSearchModal: React.FC = () => {
         readings,
         limitPerKind: 6,
       }),
-    [query, bundle, placesById, readings],
+    [query, bundle, placesById, readings]
   );
 
   const activateResult = useCallback(
@@ -102,7 +110,7 @@ export const GlobalSearchModal: React.FC = () => {
         void navigate(item.route);
       }
     },
-    [closeSearch, openSourceReader, navigate],
+    [closeSearch, openSourceReader, navigate]
   );
 
   useEffect(() => {
@@ -116,11 +124,7 @@ export const GlobalSearchModal: React.FC = () => {
       } else if (e.key === 'ArrowUp') {
         e.preventDefault();
         setActiveIdx((i) => searchNavPrev(i));
-      } else if (
-        e.key === 'Enter' &&
-        document.activeElement === inputRef.current &&
-        results[activeIdx]
-      ) {
+      } else if (e.key === 'Enter' && document.activeElement === inputRef.current && results[activeIdx]) {
         e.preventDefault();
         activateResult(results[activeIdx]);
       }
@@ -147,22 +151,22 @@ export const GlobalSearchModal: React.FC = () => {
       ref={dialogRef}
       open
       aria-modal="true"
-      className="lightbox-backdrop global-search-backdrop"
+      className={cx(uiStyles, 'lightbox-backdrop global-search-backdrop')}
       aria-label={KINLOOM_VOCABULARY.search.dialogAria}
     >
       <button
         type="button"
         tabIndex={-1}
-        className="lightbox-backdrop-close"
+        className={cx(uiStyles, 'lightbox-backdrop-close')}
         aria-label="Close search"
         onClick={closeSearch}
       />
-      <div className="global-search-card">
-        <div className="global-search-header">
+      <div className={cx(uiStyles, 'global-search-card')}>
+        <div className={cx(uiStyles, 'global-search-header')}>
           <input
             ref={inputRef}
             type="search"
-            className="global-search-input"
+            className={cx(uiStyles, 'global-search-input')}
             placeholder={KINLOOM_VOCABULARY.search.placeholder}
             value={query}
             onChange={(e) => {
@@ -172,16 +176,16 @@ export const GlobalSearchModal: React.FC = () => {
           />
           <button
             type="button"
-            className="pill-btn global-search-close-btn"
+            className={cx(uiStyles, 'pill-btn global-search-close-btn')}
             aria-label="Close search"
             onClick={closeSearch}
           >
-            <span className="global-search-close-desktop">Esc</span>
-            <span className="global-search-close-mobile">Close</span>
+            <span className={cx(uiStyles, 'global-search-close-desktop')}>Esc</span>
+            <span className={cx(uiStyles, 'global-search-close-mobile')}>Close</span>
           </button>
         </div>
 
-        <div className="global-search-body">
+        <div className={cx(uiStyles, 'global-search-body')}>
           {isSearchableQuery(query) ? (
             <>
               {results.length === 0 && (
@@ -190,10 +194,10 @@ export const GlobalSearchModal: React.FC = () => {
                 </div>
               )}
               {results.length > 0 && (
-                <div className="global-search-groups">
+                <div className={cx(uiStyles, 'global-search-groups')}>
                   {grouped.map((group) => (
-                    <div key={group.kind} className="global-search-group">
-                      <div className="global-search-group-title">
+                    <div key={group.kind} className={cx(uiStyles, 'global-search-group')}>
+                      <div className={cx(uiStyles, 'global-search-group-title')}>
                         {SEARCH_KIND_LABELS[group.kind]} ({group.items.length})
                       </div>
                       {group.items.map((item) => {
@@ -203,7 +207,7 @@ export const GlobalSearchModal: React.FC = () => {
                           <button
                             key={item.id}
                             type="button"
-                            className={`global-search-item ${isActive ? 'active' : ''}`}
+                            className={cx(uiStyles, `global-search-item ${isActive ? 'active' : ''}`)}
                             onMouseEnter={() => {
                               setActiveIdx(flatIdx);
                             }}
@@ -211,10 +215,10 @@ export const GlobalSearchModal: React.FC = () => {
                               activateResult(item);
                             }}
                           >
-                            <div className="global-search-item-title">{item.title}</div>
-                            <div className="global-search-item-sub">{item.subtitle}</div>
+                            <div className={cx(uiStyles, 'global-search-item-title')}>{item.title}</div>
+                            <div className={cx(uiStyles, 'global-search-item-sub')}>{item.subtitle}</div>
                             {item.snippet && (
-                              <div className="global-search-item-snippet">{item.snippet}</div>
+                              <div className={cx(uiStyles, 'global-search-item-snippet')}>{item.snippet}</div>
                             )}
                           </button>
                         );
@@ -226,7 +230,14 @@ export const GlobalSearchModal: React.FC = () => {
             </>
           ) : (
             <div style={{ padding: '14px 16px' }}>
-              <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: 8 }}>
+              <div
+                style={{
+                  fontFamily: 'var(--font-mono)',
+                  fontSize: '0.78rem',
+                  color: 'var(--text-secondary)',
+                  marginBottom: 8,
+                }}
+              >
                 TRY SEARCHING ACROSS PEOPLE, PLACES, EVENTS &amp;{' '}
                 {totalSourcePages > 0 ? `${totalSourcePages} SOURCE PAGES:` : 'SOURCE PAGES:'}
               </div>
@@ -236,7 +247,7 @@ export const GlobalSearchModal: React.FC = () => {
                     <button
                       key={q}
                       type="button"
-                      className="pill-btn"
+                      className={cx(uiStyles, 'pill-btn')}
                       onClick={() => {
                         setQuery(q);
                       }}
@@ -247,7 +258,14 @@ export const GlobalSearchModal: React.FC = () => {
                 </div>
               )}
               {readingsLoading && (
-                <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: 10 }}>
+                <div
+                  style={{
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: '0.75rem',
+                    color: 'var(--text-secondary)',
+                    marginTop: 10,
+                  }}
+                >
                   Loading primary source transcriptions…
                 </div>
               )}
@@ -255,8 +273,8 @@ export const GlobalSearchModal: React.FC = () => {
           )}
         </div>
 
-        <div className="global-search-footer">
-          <span className="global-search-kbd-hint">↑↓ navigate · Enter open · Esc close</span>
+        <div className={cx(uiStyles, 'global-search-footer')}>
+          <span className={cx(uiStyles, 'global-search-kbd-hint')}>↑↓ navigate · Enter open · Esc close</span>
           <span>{readings ? `${totalSourcePages} source pages searchable` : 'Archive ready'}</span>
         </div>
       </div>

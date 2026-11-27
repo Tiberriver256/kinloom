@@ -52,10 +52,7 @@ function normalizeNegatedFlag(flag: string): string | undefined {
  * Rejoins shell-split comma arguments for listed flags, e.g.
  * `['--box', '10,', '20,', '30,', '40']` -> `['--box', '10,20,30,40']`.
  */
-export function normalizeCommaSplitArgs(
-  argv: readonly string[],
-  commaFlags: ReadonlySet<string>
-): string[] {
+export function normalizeCommaSplitArgs(argv: readonly string[], commaFlags: ReadonlySet<string>): string[] {
   if (commaFlags.size === 0) {
     return [...argv];
   }
@@ -121,14 +118,10 @@ function coerceOptionValue(spec: OptionSpec, raw: string, flagUsed: string): str
       throw new CliValidationError(`Option '${flagUsed}' integer out of range: '${raw}'.`);
     }
     if (spec.min !== undefined && parsed < spec.min) {
-      throw new CliValidationError(
-        `Option '${flagUsed}' must be >= ${spec.min}, got ${parsed}.`
-      );
+      throw new CliValidationError(`Option '${flagUsed}' must be >= ${spec.min}, got ${parsed}.`);
     }
     if (spec.max !== undefined && parsed > spec.max) {
-      throw new CliValidationError(
-        `Option '${flagUsed}' must be <= ${spec.max}, got ${parsed}.`
-      );
+      throw new CliValidationError(`Option '${flagUsed}' must be <= ${spec.max}, got ${parsed}.`);
     }
     return parsed;
   }
@@ -143,14 +136,10 @@ function coerceOptionValue(spec: OptionSpec, raw: string, flagUsed: string): str
       throw new CliValidationError(`Option '${flagUsed}' requires a finite number, got '${raw}'.`);
     }
     if (spec.min !== undefined && parsed < spec.min) {
-      throw new CliValidationError(
-        `Option '${flagUsed}' must be >= ${spec.min}, got ${parsed}.`
-      );
+      throw new CliValidationError(`Option '${flagUsed}' must be >= ${spec.min}, got ${parsed}.`);
     }
     if (spec.max !== undefined && parsed > spec.max) {
-      throw new CliValidationError(
-        `Option '${flagUsed}' must be <= ${spec.max}, got ${parsed}.`
-      );
+      throw new CliValidationError(`Option '${flagUsed}' must be <= ${spec.max}, got ${parsed}.`);
     }
     return parsed;
   }
@@ -158,10 +147,7 @@ function coerceOptionValue(spec: OptionSpec, raw: string, flagUsed: string): str
   return raw;
 }
 
-export function parseCommandArgs(
-  rawArgv: readonly string[],
-  spec: CommandParseSpec
-): ParsedCommandArgs {
+export function parseCommandArgs(rawArgv: readonly string[], spec: CommandParseSpec): ParsedCommandArgs {
   const commaSet = new Set(spec.commaSplitFlags ?? []);
   const argv = normalizeCommaSplitArgs(rawArgv, commaSet);
 
@@ -279,9 +265,7 @@ export function parseCommandArgs(
         }
         const coerced = coerceOptionValue(entry.option, inlineValue, flagName);
         if (entry.option.multiple) {
-          const list = Array.isArray(values[entry.option.key])
-            ? (values[entry.option.key] as unknown[])
-            : [];
+          const list = Array.isArray(values[entry.option.key]) ? (values[entry.option.key] as unknown[]) : [];
           list.push(coerced);
           values[entry.option.key] = list;
         } else {
@@ -372,18 +356,12 @@ export function parseCommandArgs(
   };
 }
 
-export function getStringOption(
-  parsed: ParsedCommandArgs,
-  key: string
-): string | undefined {
+export function getStringOption(parsed: ParsedCommandArgs, key: string): string | undefined {
   const val = parsed.values[key];
   return typeof val === 'string' ? val : undefined;
 }
 
-export function getStringListOption(
-  parsed: ParsedCommandArgs,
-  key: string
-): readonly string[] {
+export function getStringListOption(parsed: ParsedCommandArgs, key: string): readonly string[] {
   const val = parsed.values[key];
   if (!Array.isArray(val)) {
     return [];
@@ -395,18 +373,12 @@ export function getBooleanOption(parsed: ParsedCommandArgs, key: string): boolea
   return parsed.values[key] === true;
 }
 
-export function getNumberOption(
-  parsed: ParsedCommandArgs,
-  key: string
-): number | undefined {
+export function getNumberOption(parsed: ParsedCommandArgs, key: string): number | undefined {
   const val = parsed.values[key];
   return typeof val === 'number' ? val : undefined;
 }
 
-export function resolveSubcommandAlias(
-  token: string,
-  aliases: Readonly<Record<string, string>>
-): string {
+export function resolveSubcommandAlias(token: string, aliases: Readonly<Record<string, string>>): string {
   const normalized = token.trim().toLowerCase();
   return aliases[normalized] ?? normalized;
 }
@@ -433,9 +405,7 @@ export function formatCommandUsage(spec: CommandUsageSpec): string {
         }
       }
       const meta =
-        opt.kind === 'boolean'
-          ? ''
-          : ` <${opt.metavar ?? (opt.choices ? opt.choices.join('|') : opt.kind)}>`;
+        opt.kind === 'boolean' ? '' : ` <${opt.metavar ?? (opt.choices ? opt.choices.join('|') : opt.kind)}>`;
       const left = `${flagParts.join(', ')}${meta}`;
       return { left, help: opt.help ?? '' };
     });

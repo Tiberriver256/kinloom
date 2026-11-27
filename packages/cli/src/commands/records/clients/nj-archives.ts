@@ -1,8 +1,9 @@
 import { CliValidationError } from '../../../errors.js';
 import {
+  type CommandParseSpec,
+  CookieJar,
   cachedJsonCall,
   collapseWhitespace,
-  CookieJar,
   emitJsonStdout,
   emitStdout,
   extractFormHiddenInputs,
@@ -13,15 +14,14 @@ import {
   HttpStatusError,
   httpRequest,
   loadHtml,
+  type OptionSpec,
   parseCacheTtlHours,
   parseCommandArgs,
-  RecordRuntimeError,
-  resolveCacheDir,
-  type CommandParseSpec,
-  type OptionSpec,
   type RecordCommandContext,
   type RecordCommandOutcome,
   type RecordHandler,
+  RecordRuntimeError,
+  resolveCacheDir,
 } from '../runtime/index.js';
 
 const DEFAULT_CACHE_TTL_HOURS = 168;
@@ -201,9 +201,7 @@ export const DATABASES: Readonly<Record<string, NjDatabaseSpec>> = {
   },
 };
 
-export const ORDER_ONLY: Readonly<
-  Record<string, readonly [string, string, string, string]>
-> = {
+export const ORDER_ONLY: Readonly<Record<string, readonly [string, string, string, string]>> = {
   'births-1848-1925': [
     'Birth Record Search: May 1, 1848 - December 31, 1925',
     'BirthRecordsRequest.aspx',
@@ -235,18 +233,8 @@ export const ORDER_ONLY: Readonly<
     'GridView4',
     'ctl03',
   ],
-  'revwar-search': [
-    'Revolutionary War Record Search',
-    'RevWarRecordRequest.aspx',
-    'GridView6',
-    'ctl02',
-  ],
-  'wwi-search': [
-    'World War I Record Search',
-    'WorldWarIRecordRequest.aspx',
-    'GridView6',
-    'ctl03',
-  ],
+  'revwar-search': ['Revolutionary War Record Search', 'RevWarRecordRequest.aspx', 'GridView6', 'ctl02'],
+  'wwi-search': ['World War I Record Search', 'WorldWarIRecordRequest.aspx', 'GridView6', 'ctl03'],
 };
 
 const MARRIAGE_DATABASES = new Set<string>(['colonial-marriages', 'marriages-1848-1900']);
@@ -420,18 +408,17 @@ export function getCloseMatches(
 }
 
 export function resolveDatabase(name: string): string {
-  const key = name.trim().toLowerCase().replace(/[\s_]+/g, '-');
+  const key = name
+    .trim()
+    .toLowerCase()
+    .replace(/[\s_]+/g, '-');
   if (key in DATABASES || key in ORDER_ONLY || key === 'monmouth') {
     return key;
   }
   if (key in DATABASE_ALIASES) {
     return DATABASE_ALIASES[key];
   }
-  const known = [
-    ...Object.keys(DATABASES),
-    ...Object.keys(ORDER_ONLY),
-    ...Object.keys(DATABASE_ALIASES),
-  ];
+  const known = [...Object.keys(DATABASES), ...Object.keys(ORDER_ONLY), ...Object.keys(DATABASE_ALIASES)];
   const close = getCloseMatches(key, known, 3, 0.6);
   const mapped = close.map((c) => DATABASE_ALIASES[c] ?? c);
   const hint = mapped.length > 0 ? ` Did you mean: ${mapped.join(', ')}?` : '';
@@ -467,10 +454,7 @@ function selectOptions(pageHtml: string, shortName: string): string[] {
   return out;
 }
 
-export function parseGrid(
-  pageHtml: string,
-  tableHint: string
-): readonly [string[], NjGridRow[]] {
+export function parseGrid(pageHtml: string, tableHint: string): readonly [string[], NjGridRow[]] {
   const $ = loadHtml(pageHtml);
   let targetTable: ReturnType<typeof $> | null = null;
   $('table[id]').each((_idx, el) => {
@@ -511,10 +495,7 @@ export function parseGrid(
     if (texts.length === 1 && /^[\d\s.]+$/.test(texts[0])) {
       return; // single-cell pager row
     }
-    if (
-      rowHtml.includes('Page$') &&
-      texts.filter(Boolean).every((t) => /^(?:\d+|\.{2,3})$/.test(t))
-    ) {
+    if (rowHtml.includes('Page$') && texts.filter(Boolean).every((t) => /^(?:\d+|\.{2,3})$/.test(t))) {
       return; // multi-cell ASP.NET GridView pager row
     }
 
@@ -529,17 +510,14 @@ export function parseGrid(
     let popupMatch: RegExpExecArray | null = popupRe.exec(rowHtml);
     while (popupMatch !== null) {
       const pdfPath = popupMatch[1];
-      const href = pdfPath.startsWith('http')
-        ? pdfPath
-        : `https://oprs.co.monmouth.nj.us${pdfPath}`;
+      const href = pdfPath.startsWith('http') ? pdfPath : `https://oprs.co.monmouth.nj.us${pdfPath}`;
       links.push({ text: 'census page image', href });
       popupMatch = popupRe.exec(rowHtml);
     }
 
     const hasTh = tr.children('th').length > 0;
     const isHeader =
-      hasTh ||
-      (headers.length === 0 && texts.filter(Boolean).every((text) => !/\d/.test(text)));
+      hasTh || (headers.length === 0 && texts.filter(Boolean).every((text) => !/\d/.test(text)));
     if (isHeader) {
       headers = texts;
       return;
@@ -564,11 +542,7 @@ function cappedNotice(pageHtml: string): boolean {
   return collapseWhitespace($.text()).includes('Results are limited to 500 records per search');
 }
 
-export function hasPageLink(
-  pageHtml: string,
-  pageNum: number,
-  gridTarget: string = GRID_TARGET
-): boolean {
+export function hasPageLink(pageHtml: string, pageNum: number, gridTarget: string = GRID_TARGET): boolean {
   const escaped = gridTarget.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const pattern = new RegExp(
     `__doPostBack\\((?:&#39;|')${escaped}(?:&#39;|'),\\s*(?:&#39;|')Page\\$${pageNum}(?:&#39;|')\\)`
@@ -588,7 +562,10 @@ export function matchOptionValue(value: string, options: readonly string[]): str
   }
   const stripped = norm.replace(/\s+county$/, '');
   for (const opt of options) {
-    const optNorm = opt.trim().toLowerCase().replace(/\s+county$/, '');
+    const optNorm = opt
+      .trim()
+      .toLowerCase()
+      .replace(/\s+county$/, '');
     if (optNorm && optNorm === stripped) {
       return opt;
     }
@@ -889,9 +866,7 @@ function emitNjResult(
   const headerLine =
     `${title}: ${rows.length} result(s)` +
     (cacheHit ? ' [cache]' : '') +
-    (result.capped_500 && total >= 500
-      ? ' (search capped at 500 records; narrow the criteria)'
-      : '') +
+    (result.capped_500 && total >= 500 ? ' (search capped at 500 records; narrow the criteria)' : '') +
     (result.pages_read > 1 ? ` (pages read: ${result.pages_read})` : '');
   const lines: string[] = [headerLine];
   const visibleHeaders = result.headers.filter((h) => h !== 'Select');
@@ -1080,21 +1055,20 @@ function isNjSearchResult(value: unknown): value is NjSearchResult {
 function renderRootHelp(): string {
   return formatCommandUsage({
     usage: 'kinloom nj-archives <command> [options]',
-    summary:
-      'Search New Jersey State Archives databases and the Monmouth County OPRS 1875 census.',
+    summary: 'Search New Jersey State Archives databases and the Monmouth County OPRS 1875 census.',
     subcommands: [
       { name: 'databases', summary: 'List the searchable databases on the NJ State Archives portal.' },
-      { name: 'search', summary: 'Search one portal database, e.g. nj-archives search land --surname Lincoln.' },
+      {
+        name: 'search',
+        summary: 'Search one portal database, e.g. nj-archives search land --surname Lincoln.',
+      },
       { name: 'monmouth', summary: 'Search the Monmouth County OPRS 1875 census by person name.' },
       { name: 'url', summary: 'Print the browser URL for the portal, a database, or Monmouth OPRS.' },
     ],
   });
 }
 
-export const runNjArchivesCommand: RecordHandler = async (
-  args,
-  ctx
-): Promise<RecordCommandOutcome> => {
+export const runNjArchivesCommand: RecordHandler = async (args, ctx): Promise<RecordCommandOutcome> => {
   try {
     if (args.length === 0 || args[0] === '--help' || args[0] === '-h') {
       return { exitCode: 0, bytesOut: emitStdout(ctx.io, renderRootHelp()) };
@@ -1183,9 +1157,7 @@ export const runNjArchivesCommand: RecordHandler = async (
 
         if (database === 'natguard-photos') {
           if (!keyword && !surname) {
-            throw new CliValidationError(
-              'natguard-photos requires --keyword (or --surname as keyword).'
-            );
+            throw new CliValidationError('natguard-photos requires --keyword (or --surname as keyword).');
           }
           if (!keyword && surname) {
             keyword = surname;
@@ -1287,8 +1259,7 @@ export const runNjArchivesCommand: RecordHandler = async (
               ctx.io,
               formatCommandUsage({
                 usage: 'kinloom nj-archives url [DATABASE]',
-                summary:
-                  'Print the browser URL for the portal, a database, or Monmouth OPRS.',
+                summary: 'Print the browser URL for the portal, a database, or Monmouth OPRS.',
               })
             ),
           };
@@ -1329,9 +1300,7 @@ export const runNjArchivesCommand: RecordHandler = async (
       }
 
       default:
-        throw new CliValidationError(
-          `No such command '${subcmd}'. Run 'kinloom nj-archives --script-help'.`
-        );
+        throw new CliValidationError(`No such command '${subcmd}'. Run 'kinloom nj-archives --script-help'.`);
     }
   } catch (err: unknown) {
     if (err instanceof CliValidationError) {

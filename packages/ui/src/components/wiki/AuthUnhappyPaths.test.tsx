@@ -1,21 +1,22 @@
 /** @vitest-environment jsdom */
 import type { ArchiveDataSource, KinloomSiteConfig } from '@kinloom/core';
 import { compileArchive, parseKinloomConfig } from '@kinloom/core';
-import React, { act } from 'react';
+import type React from 'react';
+import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, describe, expect, it } from 'vitest';
 import { ApiClientError, HttpWikiDataSource } from '../../adapters/httpWikiDataSource.js';
 import { ArchiveProvider } from '../../context/ArchiveProvider.js';
 import { AuthStatusBanner } from './AuthStatusBanner.js';
-import { PrivateArchiveGate } from './PrivateArchiveGate.js';
-import { SignInModal } from './SignInModal.js';
 import {
+  type AuthErrorCode,
   parseInviteInput,
   resolveAuthFeedback,
   stripAuthErrorParams,
   validateEmailInput,
-  type AuthErrorCode,
 } from './authErrorCopy.js';
+import { PrivateArchiveGate } from './PrivateArchiveGate.js';
+import { SignInModal } from './SignInModal.js';
 
 declare global {
   var IS_REACT_ACT_ENVIRONMENT: boolean | undefined;
@@ -171,13 +172,13 @@ describe('authErrorCopy pure helpers', () => {
       token: 'inv_abc123XYZ',
       path: '/invite/inv_abc123XYZ',
     });
-    expect(
-      parseInviteInput('http://localhost:8787/api/auth/invite/inv_token_99?utm_source=sms#top'),
-    ).toEqual({
-      ok: true,
-      token: 'inv_token_99',
-      path: '/invite/inv_token_99',
-    });
+    expect(parseInviteInput('http://localhost:8787/api/auth/invite/inv_token_99?utm_source=sms#top')).toEqual(
+      {
+        ok: true,
+        token: 'inv_token_99',
+        path: '/invite/inv_token_99',
+      }
+    );
     expect(parseInviteInput('/invite/family_2026_link')).toEqual({
       ok: true,
       token: 'family_2026_link',
@@ -198,7 +199,11 @@ describe('authErrorCopy pure helpers', () => {
 
   it('strips only auth_error and auth_provider while preserving other params and hash', () => {
     expect(
-      stripAuthErrorParams('/person/arthur', '?tab=life&auth_error=INVITE_REQUIRED&auth_provider=google', '#notes'),
+      stripAuthErrorParams(
+        '/person/arthur',
+        '?tab=life&auth_error=INVITE_REQUIRED&auth_provider=google',
+        '#notes'
+      )
     ).toBe('/person/arthur?tab=life#notes');
     expect(stripAuthErrorParams('/', '?auth_error=GOOGLE_CANCELLED&auth_provider=google')).toBe('/');
   });
@@ -213,7 +218,7 @@ describe('authErrorCopy pure helpers', () => {
     const ds = new HttpWikiDataSource({ apiBaseUrl: '' });
     expect(ds.getGoogleSignInUrl('/tree')).toBe('/api/auth/google/start?next=%2Ftree');
     expect(ds.getGoogleSignInUrl('/tree', { selectAccount: true })).toBe(
-      '/api/auth/google/start?next=%2Ftree&select_account=1',
+      '/api/auth/google/start?next=%2Ftree&select_account=1'
     );
   });
 });
@@ -223,7 +228,7 @@ describe('PrivateArchiveGate, SignInModal, and AuthStatusBanner unhappy-path rec
     window.history.replaceState(
       null,
       '',
-      '/person/arthur?tab=bio&auth_error=INVITE_REQUIRED&auth_provider=google#story',
+      '/person/arthur?tab=bio&auth_error=INVITE_REQUIRED&auth_provider=google#story'
     );
     const navigatedPaths: string[] = [];
 
@@ -238,7 +243,7 @@ describe('PrivateArchiveGate, SignInModal, and AuthStatusBanner unhappy-path rec
             navigatedPaths.push(path);
           }}
         />
-      </ArchiveProvider>,
+      </ArchiveProvider>
     );
 
     await act(async () => {
@@ -257,10 +262,10 @@ describe('PrivateArchiveGate, SignInModal, and AuthStatusBanner unhappy-path rec
 
     // Direct 1-tap switch account button passes select_account=1 and clean next
     const switchLink = [...container.querySelectorAll<HTMLAnchorElement>('a')].find((a) =>
-      a.textContent?.includes('Try a different Google account'),
+      a.textContent?.includes('Try a different Google account')
     );
     expect(switchLink?.getAttribute('href')).toBe(
-      '/api/auth/google/start?next=%2Fperson%2Farthur%3Ftab%3Dbio&select_account=1',
+      '/api/auth/google/start?next=%2Fperson%2Farthur%3Ftab%3Dbio&select_account=1'
     );
 
     // Inline invite paste panel is auto-expanded; invalid input shows inline error, valid URL navigates
@@ -298,7 +303,7 @@ describe('PrivateArchiveGate, SignInModal, and AuthStatusBanner unhappy-path rec
         initialBundle={testBundle}
       >
         <PrivateArchiveGate />
-      </ArchiveProvider>,
+      </ArchiveProvider>
     );
     await act(async () => {
       await new Promise((r) => setTimeout(r, 20));
@@ -317,7 +322,7 @@ describe('PrivateArchiveGate, SignInModal, and AuthStatusBanner unhappy-path rec
         initialBundle={testBundle}
       >
         <PrivateArchiveGate />
-      </ArchiveProvider>,
+      </ArchiveProvider>
     );
     await act(async () => {
       await new Promise((r) => setTimeout(r, 20));
@@ -347,7 +352,7 @@ describe('PrivateArchiveGate, SignInModal, and AuthStatusBanner unhappy-path rec
     const { container, unmount } = renderIntoDom(
       <ArchiveProvider siteConfig={siteConfig} dataSource={ds} initialBundle={testBundle}>
         <PrivateArchiveGate />
-      </ArchiveProvider>,
+      </ArchiveProvider>
     );
 
     await act(async () => {
@@ -395,7 +400,7 @@ describe('PrivateArchiveGate, SignInModal, and AuthStatusBanner unhappy-path rec
 
     // Resend button sends another link
     const resendBtn = [...container.querySelectorAll<HTMLButtonElement>('button')].find((b) =>
-      b.textContent?.includes('Send another link'),
+      b.textContent?.includes('Send another link')
     );
     await act(async () => {
       resendBtn?.click();
@@ -406,7 +411,7 @@ describe('PrivateArchiveGate, SignInModal, and AuthStatusBanner unhappy-path rec
 
     // Use a different email returns to editable input
     const diffEmailBtn = [...container.querySelectorAll<HTMLButtonElement>('button')].find((b) =>
-      b.textContent?.includes('Use a different email'),
+      b.textContent?.includes('Use a different email')
     );
     act(() => {
       diffEmailBtn?.click();
@@ -432,13 +437,15 @@ describe('PrivateArchiveGate, SignInModal, and AuthStatusBanner unhappy-path rec
         }}
       >
         <AuthStatusBanner />
-      </ArchiveProvider>,
+      </ArchiveProvider>
     );
     await act(async () => {
       await new Promise((r) => setTimeout(r, 20));
     });
     expect(window.location.search).toBe('');
-    const dialog = inviteViewerRender.container.querySelector('dialog[aria-label="Sign in to family archive"]');
+    const dialog = inviteViewerRender.container.querySelector(
+      'dialog[aria-label="Sign in to family archive"]'
+    );
     expect(dialog).not.toBeNull();
     expect(dialog?.textContent).toContain('That family invite link is no longer active');
     inviteViewerRender.unmount();
@@ -457,7 +464,7 @@ describe('PrivateArchiveGate, SignInModal, and AuthStatusBanner unhappy-path rec
         }}
       >
         <AuthStatusBanner />
-      </ArchiveProvider>,
+      </ArchiveProvider>
     );
     await act(async () => {
       await new Promise((r) => setTimeout(r, 20));
@@ -465,7 +472,7 @@ describe('PrivateArchiveGate, SignInModal, and AuthStatusBanner unhappy-path rec
     expect(window.location.search).toBe('');
     expect(userRender.container.textContent).toContain('That family invite link has expired');
     const dismissBtn = userRender.container.querySelector<HTMLButtonElement>(
-      'button[aria-label="Dismiss sign-in notice"]',
+      'button[aria-label="Dismiss sign-in notice"]'
     );
     act(() => {
       dismissBtn?.click();
@@ -489,7 +496,7 @@ describe('PrivateArchiveGate, SignInModal, and AuthStatusBanner unhappy-path rec
           onClose={() => {}}
           initialUrlError={{ code: 'INVALID_OAUTH_STATE', provider: 'google' }}
         />
-      </ArchiveProvider>,
+      </ArchiveProvider>
     );
     await act(async () => {
       await new Promise((r) => setTimeout(r, 20));

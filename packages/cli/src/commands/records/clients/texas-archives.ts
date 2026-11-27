@@ -1,5 +1,6 @@
 import { CliValidationError } from '../../../errors.js';
 import {
+  type CommandParseSpec,
   cachedJsonCall,
   collapseWhitespace,
   emitJsonStdout,
@@ -12,16 +13,15 @@ import {
   httpGetJson,
   httpGetText,
   loadHtml,
+  type OptionSpec,
   parseCacheTtlHours,
   parseCommandArgs,
   parseXml,
-  RecordRuntimeError,
-  resolveCacheDir,
-  type CommandParseSpec,
-  type OptionSpec,
   type RecordCommandContext,
   type RecordCommandOutcome,
   type RecordHandler,
+  RecordRuntimeError,
+  resolveCacheDir,
 } from '../runtime/index.js';
 
 const DEFAULT_CACHE_TTL_HOURS = 168;
@@ -120,11 +120,7 @@ export function parseIsoDate(raw: string, flagName: string): string {
   const month = Number.parseInt(match[2], 10);
   const day = Number.parseInt(match[3], 10);
   const dt = new Date(Date.UTC(year, month - 1, day));
-  if (
-    dt.getUTCFullYear() !== year ||
-    dt.getUTCMonth() !== month - 1 ||
-    dt.getUTCDate() !== day
-  ) {
+  if (dt.getUTCFullYear() !== year || dt.getUTCMonth() !== month - 1 || dt.getUTCDate() !== day) {
     throw new CliValidationError(`Invalid ${flagName} '${raw}': not a real calendar date.`);
   }
   return trimmed;
@@ -275,10 +271,7 @@ function toArray<T>(value: T | readonly T[] | undefined): T[] {
   return Array.isArray(value) ? [...value] : [value as T];
 }
 
-function findChildByLocalName(
-  parent: Record<string, unknown>,
-  localName: string
-): unknown {
+function findChildByLocalName(parent: Record<string, unknown>, localName: string): unknown {
   if (localName in parent) {
     return parent[localName];
   }
@@ -338,9 +331,7 @@ export function parseOaiRecord(xmlText: string): TexasOaiRecord {
   if (errRaw !== undefined) {
     const firstErr = toArray<unknown>(errRaw)[0];
     const code =
-      isPlainRecord(firstErr) && typeof firstErr['@_code'] === 'string'
-        ? firstErr['@_code']
-        : 'error';
+      isPlainRecord(firstErr) && typeof firstErr['@_code'] === 'string' ? firstErr['@_code'] : 'error';
     const msg = extractXmlNodeText(firstErr);
     throw new RecordRuntimeError(`OAI error ${code}: ${msg}`);
   }
@@ -406,10 +397,7 @@ function isTexasOaiRecord(value: unknown): value is TexasOaiRecord {
   );
 }
 
-async function fetchPortalItem(
-  ctx: RecordCommandContext,
-  arkToken: string
-): Promise<TexasOaiRecord> {
+async function fetchPortalItem(ctx: RecordCommandContext, arkToken: string): Promise<TexasOaiRecord> {
   const ark = normalizeArk(arkToken);
   const params = new URLSearchParams({
     verb: 'GetRecord',
@@ -431,8 +419,7 @@ async function fetchPortalItem(
     ...data,
     ark,
     url: `${PORTAL_BASE}/${ark}/`,
-    browser_note:
-      'Item pages and scans need a browser (ALTCHA challenge on texashistory.unt.edu).',
+    browser_note: 'Item pages and scans need a browser (ALTCHA challenge on texashistory.unt.edu).',
   };
 }
 
@@ -584,17 +571,34 @@ const PORTAL_ITEM_OPTIONS: readonly OptionSpec[] = [
 ];
 
 const TDA_OPTIONS: readonly OptionSpec[] = [
-  { key: 'limit', kind: 'integer', flags: ['--limit'], min: 0, default: 10, help: 'Maximum items to return.' },
+  {
+    key: 'limit',
+    kind: 'integer',
+    flags: ['--limit'],
+    min: 0,
+    default: 10,
+    help: 'Maximum items to return.',
+  },
   { key: 'asJson', kind: 'boolean', flags: ['--json'], help: 'Output compact structured JSON.' },
   ...CACHE_OPTIONS,
 ];
 
 const URL_OPTIONS: readonly OptionSpec[] = [
-  { key: 'portal', kind: 'boolean', flags: ['--portal'], help: 'Portal to Texas History full-text search URL.' },
+  {
+    key: 'portal',
+    kind: 'boolean',
+    flags: ['--portal'],
+    help: 'Portal to Texas History full-text search URL.',
+  },
   { key: 'tda', kind: 'boolean', flags: ['--tda'], help: 'Texas Digital Archive search URL.' },
   { key: 'glo', kind: 'boolean', flags: ['--glo'], help: 'Texas GLO land grant lookup (browser-only).' },
   { key: 'rangers', kind: 'boolean', flags: ['--rangers'], help: 'TSLAC Texas Rangers collection pointer.' },
-  { key: 'tslac', kind: 'boolean', flags: ['--tslac'], help: 'Texas State Library and Archives Commission home.' },
+  {
+    key: 'tslac',
+    kind: 'boolean',
+    flags: ['--tslac'],
+    help: 'Texas State Library and Archives Commission home.',
+  },
 ];
 
 const PORTAL_SEARCH_SPEC: CommandParseSpec = {
@@ -823,10 +827,7 @@ async function runPortalItem(
   return { exitCode: 0, bytesOut: emitStdout(ctx.io, lines.join('\n')), cacheHit };
 }
 
-async function runTda(
-  argv: readonly string[],
-  ctx: RecordCommandContext
-): Promise<RecordCommandOutcome> {
+async function runTda(argv: readonly string[], ctx: RecordCommandContext): Promise<RecordCommandOutcome> {
   const parsed = parseCommandArgs(argv, TDA_SPEC);
   if (parsed.helpRequested) {
     return {
@@ -949,10 +950,7 @@ function runUrl(argv: readonly string[], ctx: RecordCommandContext): RecordComma
   return { exitCode: 0, bytesOut: emitStdout(ctx.io, lines.join('\n')) };
 }
 
-export const runTexasArchivesCommand: RecordHandler = async (
-  args,
-  ctx
-): Promise<RecordCommandOutcome> => {
+export const runTexasArchivesCommand: RecordHandler = async (args, ctx): Promise<RecordCommandOutcome> => {
   try {
     if (args.length === 0 || args[0] === '--help' || args[0] === '-h') {
       return { exitCode: 0, bytesOut: emitStdout(ctx.io, renderRootHelp()) };

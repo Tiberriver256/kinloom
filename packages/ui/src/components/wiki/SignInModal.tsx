@@ -1,8 +1,15 @@
-import React, { useRef } from 'react';
+import type React from 'react';
+import { useRef } from 'react';
 import { useArchiveData } from '../../context/ArchiveDataContext.js';
+import { cx } from '../../lib/cx.js';
 import { useDialogFocusTrap } from '../../lib/useDialogFocusTrap.js';
-import type { AuthUrlError } from './authErrorCopy.js';
+import cssMod2 from '../../pages/IndexPage.module.css';
+import cssMod0 from '../SourceReaderDrawer.module.css';
 import { AuthSignInFlow } from './AuthSignInFlow.js';
+import type { AuthUrlError } from './authErrorCopy.js';
+import cssMod1 from './WikiSurfaces.module.css';
+
+const uiStyles: Readonly<Record<string, string>> = { ...cssMod0, ...cssMod1, ...cssMod2 };
 
 export interface SignInModalProps {
   open: boolean;
@@ -43,20 +50,20 @@ export const SignInModal: React.FC<SignInModalProps> = ({
       ref={dialogRef}
       open
       aria-modal="true"
-      className="lightbox-backdrop"
+      className={cx(uiStyles, 'lightbox-backdrop')}
       aria-label="Sign in to family archive"
     >
       <button
         type="button"
         tabIndex={-1}
-        className="lightbox-backdrop-close"
+        className={cx(uiStyles, 'lightbox-backdrop-close')}
         aria-label="Close sign-in dialog"
         onClick={onClose}
       />
-      <div className="wiki-modal-card wiki-signin-card">
-        <div className="wiki-modal-header">
+      <div className={cx(uiStyles, 'wiki-modal-card wiki-signin-card')}>
+        <div className={cx(uiStyles, 'wiki-modal-header')}>
           <h2>Sign in to {siteConfig.site.title}</h2>
-          <button ref={closeBtnRef} type="button" className="pill-btn" onClick={onClose}>
+          <button ref={closeBtnRef} type="button" className={cx(uiStyles, 'pill-btn')} onClick={onClose}>
             Close
           </button>
         </div>

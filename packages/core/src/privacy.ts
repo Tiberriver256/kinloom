@@ -1,3 +1,4 @@
+import { edtfYear } from './edtf.js';
 import type { PrivacyConfig } from './schemas/config.js';
 import type {
   ArchiveEvent,
@@ -10,7 +11,6 @@ import type {
   ResidenceSpan,
 } from './schemas/entities.js';
 import { getMediaPersonIds } from './schemas/entities.js';
-import { edtfYear } from './edtf.js';
 
 export interface LivingStatusInput {
   explicitLiving?: boolean;
@@ -480,14 +480,7 @@ export function applyPrivacyFilter<TPerson extends RawPerson>(
       const title = redacted.title || '';
       const summary = redacted.summary || '';
       collectReviewFlagsForField(redacted.id, title, title, 'event title', reviewPattern, reviewFlags);
-      collectReviewFlagsForField(
-        redacted.id,
-        title,
-        summary,
-        'summary prose',
-        reviewPattern,
-        reviewFlags
-      );
+      collectReviewFlagsForField(redacted.id, title, summary, 'summary prose', reviewPattern, reviewFlags);
     }
 
     outEvents.push(redacted);

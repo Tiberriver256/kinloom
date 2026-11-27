@@ -1,5 +1,6 @@
 import { CliValidationError } from '../../../errors.js';
 import {
+  type CommandParseSpec,
   cachedJsonCall,
   collapseWhitespace,
   emitJsonStdout,
@@ -10,15 +11,14 @@ import {
   getStringOption,
   httpRequest,
   loadHtml,
+  type OptionSpec,
   parseCacheTtlHours,
   parseCommandArgs,
-  RecordRuntimeError,
-  resolveCacheDir,
-  type CommandParseSpec,
-  type OptionSpec,
   type RecordCommandContext,
   type RecordCommandOutcome,
   type RecordHandler,
+  RecordRuntimeError,
+  resolveCacheDir,
 } from '../runtime/index.js';
 
 const DEFAULT_CACHE_TTL_HOURS = 168;
@@ -31,11 +31,58 @@ const PERSI_ALLOWED_HOSTS = ['www.genealogycenter.info', 'genealogycenter.info']
 const RETRY_WAIT_MS = 5000;
 
 const US_STATES = new Set([
-  'AL', 'AK', 'AZ', 'AR', 'CA', 'CO', 'CT', 'DE', 'DC', 'FL', 'GA', 'HI',
-  'ID', 'IL', 'IN', 'IA', 'KS', 'KY', 'LA', 'ME', 'MD', 'MA', 'MI', 'MN',
-  'MS', 'MO', 'MT', 'NE', 'NV', 'NH', 'NJ', 'NM', 'NY', 'NC', 'ND', 'OH',
-  'OK', 'OR', 'PA', 'RI', 'SC', 'SD', 'TN', 'TX', 'UT', 'VT', 'VA', 'WA',
-  'WV', 'WI', 'WY', 'GEN',
+  'AL',
+  'AK',
+  'AZ',
+  'AR',
+  'CA',
+  'CO',
+  'CT',
+  'DE',
+  'DC',
+  'FL',
+  'GA',
+  'HI',
+  'ID',
+  'IL',
+  'IN',
+  'IA',
+  'KS',
+  'KY',
+  'LA',
+  'ME',
+  'MD',
+  'MA',
+  'MI',
+  'MN',
+  'MS',
+  'MO',
+  'MT',
+  'NE',
+  'NV',
+  'NH',
+  'NJ',
+  'NM',
+  'NY',
+  'NC',
+  'ND',
+  'OH',
+  'OK',
+  'OR',
+  'PA',
+  'RI',
+  'SC',
+  'SD',
+  'TN',
+  'TX',
+  'UT',
+  'VT',
+  'VA',
+  'WA',
+  'WV',
+  'WI',
+  'WY',
+  'GEN',
 ]);
 
 export interface PersiArticle {
@@ -235,17 +282,56 @@ const SURNAME_OPTIONS: readonly OptionSpec[] = [
 ];
 
 const LOCATION_OPTIONS: readonly OptionSpec[] = [
-  { key: 'state', kind: 'string', flags: ['--state'], required: true, metavar: 'ST', help: 'Two-letter state code, e.g. MI. GEN for US general.' },
-  { key: 'county', kind: 'string', flags: ['--county'], default: '', metavar: 'COUNTY', help: 'County name (optional; leave blank for statewide).' },
+  {
+    key: 'state',
+    kind: 'string',
+    flags: ['--state'],
+    required: true,
+    metavar: 'ST',
+    help: 'Two-letter state code, e.g. MI. GEN for US general.',
+  },
+  {
+    key: 'county',
+    kind: 'string',
+    flags: ['--county'],
+    default: '',
+    metavar: 'COUNTY',
+    help: 'County name (optional; leave blank for statewide).',
+  },
   { key: 'asJson', kind: 'boolean', flags: ['--json'], help: 'Emit JSON.' },
   ...CACHE_OPTIONS,
 ];
 
 const SEARCH_OPTIONS: readonly OptionSpec[] = [
-  { key: 'surnameOpt', kind: 'string', flags: ['--surname'], metavar: 'SURNAME', help: 'Search by surname (alias for `persi surname`).' },
-  { key: 'titleOpt', kind: 'string', flags: ['--title'], metavar: 'KEYWORD', help: 'Search by article-title keyword (alias for `persi title`).' },
-  { key: 'state', kind: 'string', flags: ['--state'], metavar: 'ST', help: 'Two-letter state code for location counts (alias for `persi location`).' },
-  { key: 'county', kind: 'string', flags: ['--county'], default: '', metavar: 'COUNTY', help: 'County name (used with --state).' },
+  {
+    key: 'surnameOpt',
+    kind: 'string',
+    flags: ['--surname'],
+    metavar: 'SURNAME',
+    help: 'Search by surname (alias for `persi surname`).',
+  },
+  {
+    key: 'titleOpt',
+    kind: 'string',
+    flags: ['--title'],
+    metavar: 'KEYWORD',
+    help: 'Search by article-title keyword (alias for `persi title`).',
+  },
+  {
+    key: 'state',
+    kind: 'string',
+    flags: ['--state'],
+    metavar: 'ST',
+    help: 'Two-letter state code for location counts (alias for `persi location`).',
+  },
+  {
+    key: 'county',
+    kind: 'string',
+    flags: ['--county'],
+    default: '',
+    metavar: 'COUNTY',
+    help: 'County name (used with --state).',
+  },
   { key: 'limit', kind: 'integer', flags: ['--limit'], min: 0, default: 25, help: 'Max results to show.' },
   { key: 'asJson', kind: 'boolean', flags: ['--json'], help: 'Emit JSON.' },
   ...CACHE_OPTIONS,
@@ -303,11 +389,17 @@ function getCacheDir(ctx: RecordCommandContext): string {
 }
 
 function isArticlesPayload(value: unknown): value is { readonly articles: PersiArticle[] } {
-  return typeof value === 'object' && value !== null && Array.isArray((value as { articles?: unknown }).articles);
+  return (
+    typeof value === 'object' && value !== null && Array.isArray((value as { articles?: unknown }).articles)
+  );
 }
 
 function isCategoriesPayload(value: unknown): value is { readonly categories: PersiCategory[] } {
-  return typeof value === 'object' && value !== null && Array.isArray((value as { categories?: unknown }).categories);
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    Array.isArray((value as { categories?: unknown }).categories)
+  );
 }
 
 async function executeSurname(
@@ -429,10 +521,7 @@ function renderRootHelp(): string {
   });
 }
 
-export const runPersiCommand: RecordHandler = async (
-  args,
-  ctx
-): Promise<RecordCommandOutcome> => {
+export const runPersiCommand: RecordHandler = async (args, ctx): Promise<RecordCommandOutcome> => {
   try {
     if (args.length === 0 || args[0] === '--help' || args[0] === '-h') {
       return { exitCode: 0, bytesOut: emitStdout(ctx.io, renderRootHelp()) };
@@ -579,17 +668,13 @@ export const runPersiCommand: RecordHandler = async (
         };
         const page = pages[mode];
         if (!page) {
-          throw new CliValidationError(
-            `Invalid mode '${mode}'. Choose from: surname, title, location.`
-          );
+          throw new CliValidationError(`Invalid mode '${mode}'. Choose from: surname, title, location.`);
         }
         return { exitCode: 0, bytesOut: emitStdout(ctx.io, page) };
       }
 
       default:
-        throw new CliValidationError(
-          `No such command '${subcmd}'. Run 'kinloom persi --script-help'.`
-        );
+        throw new CliValidationError(`No such command '${subcmd}'. Run 'kinloom persi --script-help'.`);
     }
   } catch (err: unknown) {
     if (err instanceof CliValidationError) {

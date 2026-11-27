@@ -1,7 +1,11 @@
-import React from 'react';
+import type React from 'react';
 import { Link, useInRouterContext } from 'react-router-dom';
-import { KINLOOM_VOCABULARY } from '../lib/vocabulary.js';
 import { useArchiveData } from '../context/ArchiveDataContext.js';
+import { cx } from '../lib/cx.js';
+import { KINLOOM_VOCABULARY } from '../lib/vocabulary.js';
+import cssMod0 from './KinloomFooter.module.css';
+
+const uiStyles = cssMod0;
 
 export const KinloomMark: React.FC<{ size?: number }> = ({ size = 18 }) => (
   <svg
@@ -13,10 +17,25 @@ export const KinloomMark: React.FC<{ size?: number }> = ({ size = 18 }) => (
     role="img"
     aria-label="Kinloom mark"
   >
-    <path d="M8 2.5V13.5M8 18.5V21.5" stroke="var(--surface-header)" strokeWidth="2.5" strokeLinecap="round" />
-    <path d="M16 2.5V5.5M16 10.5V21.5" stroke="var(--surface-header)" strokeWidth="2.5" strokeLinecap="round" />
+    <path
+      d="M8 2.5V13.5M8 18.5V21.5"
+      stroke="var(--surface-header)"
+      strokeWidth="2.5"
+      strokeLinecap="round"
+    />
+    <path
+      d="M16 2.5V5.5M16 10.5V21.5"
+      stroke="var(--surface-header)"
+      strokeWidth="2.5"
+      strokeLinecap="round"
+    />
     <path d="M2.5 8H5.5M10.5 8H21.5" stroke="var(--accent-primary)" strokeWidth="2.5" strokeLinecap="round" />
-    <path d="M2.5 16H13.5M18.5 16H21.5" stroke="var(--surface-header)" strokeWidth="2.5" strokeLinecap="round" />
+    <path
+      d="M2.5 16H13.5M18.5 16H21.5"
+      stroke="var(--surface-header)"
+      strokeWidth="2.5"
+      strokeLinecap="round"
+    />
   </svg>
 );
 
@@ -26,18 +45,18 @@ export const KinloomFooter: React.FC<{ hideNav?: boolean }> = ({ hideNav = false
   const credit = siteConfig.site.footerCredit || 'Built with Kinloom';
 
   return (
-    <footer className="kinloom-footer print-hide" aria-label="Archive colophon">
+    <footer className={cx(uiStyles, 'kinloom-footer print-hide')}>
       {inRouter && !hideNav && (
-        <nav className="kinloom-footer-nav" aria-label="Archive tools">
-          <Link to="/kinship" className="kinloom-footer-link">
+        <nav className={cx(uiStyles, 'kinloom-footer-nav')} aria-label="Archive tools">
+          <Link to="/kinship" className={cx(uiStyles, 'kinloom-footer-link')}>
             {KINLOOM_VOCABULARY.nav.kinshipFull}
           </Link>
-          <Link to="/evidence" className="kinloom-footer-link">
+          <Link to="/evidence" className={cx(uiStyles, 'kinloom-footer-link')}>
             {KINLOOM_VOCABULARY.nav.evidenceFull}
           </Link>
         </nav>
       )}
-      <span className="kinloom-footer-credit">
+      <span className={cx(uiStyles, 'kinloom-footer-credit')}>
         <KinloomMark size={16} />
         <span>{credit}</span>
       </span>

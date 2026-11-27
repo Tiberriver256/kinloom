@@ -1,3 +1,4 @@
+import { UNVERIFIED_TREE_SOURCE_ID } from '../gedcom/citations.js';
 import type {
   ArchiveBundle,
   ArchiveEvent,
@@ -5,7 +6,6 @@ import type {
   MediaItem,
   SourceRecord,
 } from '../schemas/entities.js';
-import { UNVERIFIED_TREE_SOURCE_ID } from '../gedcom/citations.js';
 import { formatPublicCitation, formatPublicRepository } from './publicDisplay.js';
 
 export type EvidenceTier = 'primary' | 'published' | 'family' | 'derivative' | 'unverified';
@@ -31,12 +31,7 @@ const PUBLISHED_TYPES = new Set([
   'church_website',
 ]);
 
-const FAMILY_TYPES = new Set([
-  'family_memoir',
-  'family_papers',
-  'family_chart',
-  'veteran_memoir',
-]);
+const FAMILY_TYPES = new Set(['family_memoir', 'family_papers', 'family_chart', 'veteran_memoir']);
 
 const DERIVATIVE_TYPES = new Set([
   'archival_index',
@@ -114,10 +109,7 @@ export function formatSourceTypeLabel(sourceType?: string): string {
     .join(' ');
 }
 
-export function formatConfidenceLabel(
-  confidence?: 'high' | 'medium' | 'low',
-  tier?: EvidenceTier
-): string {
+export function formatConfidenceLabel(confidence?: 'high' | 'medium' | 'low', tier?: EvidenceTier): string {
   if (tier === 'unverified') {
     return 'Unverified claim';
   }
@@ -150,7 +142,10 @@ export interface LibrarianCitation {
 }
 
 function normalizeForOverlap(value: string): string {
-  return value.toLowerCase().replaceAll(/[^a-z0-9]+/g, ' ').trim();
+  return value
+    .toLowerCase()
+    .replaceAll(/[^a-z0-9]+/g, ' ')
+    .trim();
 }
 
 function isRedundant(candidate: string, existing: string): boolean {
@@ -189,8 +184,7 @@ export function buildLibrarianCitation(
   const publisher = rawPublisher && !isRedundant(rawPublisher, title) ? rawPublisher : null;
 
   const rawRepo = rec ? formatPublicRepository(rec.repository) : '';
-  const repository =
-    rawRepo && tier !== 'unverified' && !isRedundant(rawRepo, title) ? rawRepo : null;
+  const repository = rawRepo && tier !== 'unverified' && !isRedundant(rawRepo, title) ? rawRepo : null;
 
   const recordDetail = ref?.citation_detail?.trim() || null;
   const url = rec?.url?.trim() || null;

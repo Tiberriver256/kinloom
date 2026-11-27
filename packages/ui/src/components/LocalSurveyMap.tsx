@@ -1,7 +1,12 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
 import type { Place } from '@kinloom/core';
 import { projectNearbyPlaces } from '@kinloom/core';
+import type React from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { cx as cls } from '../lib/cx.js';
+import cssMod0 from '../pages/PlacePage.module.css';
+
+const uiStyles = cssMod0;
 
 export interface LocalSurveyMapProps {
   center: Place;
@@ -21,7 +26,7 @@ export const LocalSurveyMap: React.FC<LocalSurveyMapProps> = ({
   const navigate = useNavigate();
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const [isNarrow, setIsNarrow] = useState<boolean>(
-    () => typeof window !== 'undefined' && window.innerWidth <= 480,
+    () => typeof window !== 'undefined' && window.innerWidth <= 480
   );
 
   useEffect(() => {
@@ -71,7 +76,7 @@ export const LocalSurveyMap: React.FC<LocalSurveyMapProps> = ({
         limit: compact ? 6 : 12,
         excludeIds,
       }),
-    [center, allPlaces, width, height, maxRadiusMiles, highlightRadiusMiles, compact, excludeIds],
+    [center, allPlaces, width, height, maxRadiusMiles, highlightRadiusMiles, compact, excludeIds]
   );
 
   const cx = width / 2;
@@ -129,17 +134,12 @@ export const LocalSurveyMap: React.FC<LocalSurveyMapProps> = ({
     ];
 
     for (const c of candidates) {
-      const clearOfRing =
-        compact || !isNarrow || scopeMode !== 'radius15' || c.anchor === 'middle';
+      const clearOfRing = compact || !isNarrow || scopeMode !== 'radius15' || c.anchor === 'middle';
       if (!clearOfRing) {
         continue;
       }
       const blocked = markers.some(
-        (m) =>
-          m.x >= c.box.x1 - 7 &&
-          m.x <= c.box.x2 + 7 &&
-          m.y >= c.box.y1 - 7 &&
-          m.y <= c.box.y2 + 7,
+        (m) => m.x >= c.box.x1 - 7 && m.x <= c.box.x2 + 7 && m.y >= c.box.y1 - 7 && m.y <= c.box.y2 + 7
       );
       if (!blocked) {
         return c;
@@ -204,9 +204,7 @@ export const LocalSurveyMap: React.FC<LocalSurveyMapProps> = ({
         if (x1 < 8 || x2 > width - 28 || y1 < 6 || y2 > height - 4) {
           continue;
         }
-        const overlaps = placed.some(
-          (b) => !(x2 < b.x1 || x1 > b.x2 || y2 < b.y1 || y1 > b.y2),
-        );
+        const overlaps = placed.some((b) => !(x2 < b.x1 || x1 > b.x2 || y2 < b.y1 || y1 > b.y2));
         if (!overlaps) {
           placed.push({ x1, x2, y1, y2 });
           map.set(m.place.id, { lx: c.lx, ly: c.ly, anchor: c.anchor, extraCount: extras });
@@ -225,9 +223,9 @@ export const LocalSurveyMap: React.FC<LocalSurveyMapProps> = ({
   }
 
   return (
-    <div ref={wrapRef} className="local-survey-wrap">
+    <div ref={wrapRef} className={cls(uiStyles, 'local-survey-wrap')}>
       <svg
-        className="local-survey-svg"
+        className={cls(uiStyles, 'local-survey-svg')}
         viewBox={`0 0 ${width} ${height}`}
         width="100%"
         style={{
@@ -298,11 +296,10 @@ export const LocalSurveyMap: React.FC<LocalSurveyMapProps> = ({
         {markers.map((m) => {
           const lbl = labelPlacement.get(m.place.id);
           return (
-            // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role -- no native button exists inside SVG; this <g> already has tabIndex, aria-label, and Enter/Space handling
             <g
               key={m.place.id}
               role="button"
-              className="survey-neighbor-pin"
+              className={cls(uiStyles, 'survey-neighbor-pin')}
               tabIndex={0}
               aria-label={`${m.place.full_name}, ${m.distanceMiles} miles away`}
               style={{ cursor: 'pointer' }}
@@ -364,7 +361,7 @@ export const LocalSurveyMap: React.FC<LocalSurveyMapProps> = ({
           strokeWidth="1.8"
         />
         <text
-          className="local-survey-center-label"
+          className={cls(uiStyles, 'local-survey-center-label')}
           x={centerPlacement.x}
           y={centerPlacement.titleY}
           textAnchor={centerPlacement.anchor}
@@ -380,6 +377,7 @@ export const LocalSurveyMap: React.FC<LocalSurveyMapProps> = ({
           {center.name}
         </text>
 
+        {/* biome-ignore lint/a11y/noAriaHiddenOnFocusable: decorative SVG compass rose */}
         <g transform={`translate(${width - 18}, 16)`} aria-hidden="true">
           <path d="M 0 -7 L 3 2 L 0 0 L -3 2 Z" fill="var(--surface-header)" />
           <text
@@ -396,16 +394,19 @@ export const LocalSurveyMap: React.FC<LocalSurveyMapProps> = ({
         </g>
       </svg>
 
-      <div className="local-survey-caption">{scopeLabel}</div>
+      <div className={cls(uiStyles, 'local-survey-caption')}>{scopeLabel}</div>
 
       {!compact && markers.length > 0 && (
-        <nav className="local-survey-nearby-strip" aria-label={`Nearby places around ${center.name}`}>
-          <span className="local-survey-nearby-label">Nearby:</span>
+        <nav
+          className={cls(uiStyles, 'local-survey-nearby-strip')}
+          aria-label={`Nearby places around ${center.name}`}
+        >
+          <span className={cls(uiStyles, 'local-survey-nearby-label')}>Nearby:</span>
           {markers.slice(0, 6).map((m) => (
             <Link
               key={m.place.id}
               to={`/place/${m.place.slug}`}
-              className="local-survey-nearby-link"
+              className={cls(uiStyles, 'local-survey-nearby-link')}
             >
               {m.place.name} ({m.distanceMiles} mi)
             </Link>

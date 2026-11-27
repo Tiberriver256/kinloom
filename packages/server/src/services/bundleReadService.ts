@@ -1,8 +1,22 @@
 import {
+  type ArchiveRawSnapshot,
+  type ArchiveRepository,
+  type BundleCache,
+  type CachedBundleObject,
+  type Clock,
+  type EntityPayload,
+  type EntityType,
   filterMediaForPrivacy,
+  type KinloomSiteConfig,
   parseEntityPayload,
+  type RawEvent,
+  type RawPerson,
+  type RevisionId,
+  type RevisionQuery,
+  type RevisionRecord,
   redactSinglePerson,
   resolveEffectiveLiving,
+  type StoredEntityRow,
   sanitizeEventForWrite,
   serializeEventsYaml,
   serializeKinshipYaml,
@@ -11,20 +25,6 @@ import {
   serializePeopleYaml,
   serializePlacesYaml,
   serializeSourcesYaml,
-  type ArchiveRawSnapshot,
-  type ArchiveRepository,
-  type BundleCache,
-  type CachedBundleObject,
-  type Clock,
-  type EntityPayload,
-  type EntityType,
-  type KinloomSiteConfig,
-  type RawEvent,
-  type RawPerson,
-  type RevisionId,
-  type RevisionQuery,
-  type RevisionRecord,
-  type StoredEntityRow,
 } from '@kinloom/core';
 import { extractCollectionsFromSnapshot } from '../adapters/inMemory.js';
 import { matchesIfNoneMatch } from '../crypto.js';
@@ -111,10 +111,7 @@ export class BundleReadService {
     return { status: 'hit', object: rebuilt };
   }
 
-  async getEntity(params: {
-    entityType: EntityType;
-    entityId: string;
-  }): Promise<{
+  async getEntity(params: { entityType: EntityType; entityId: string }): Promise<{
     entity: EntityPayload;
     current_revision_id: RevisionId;
     has_primary_source: boolean;
@@ -170,8 +167,7 @@ export class BundleReadService {
 
     const snapshot = await this.repository.loadActiveSnapshot();
     const collections = extractCollectionsFromSnapshot(snapshot);
-    const { redactedPeople, redactedEvents, redactedMedia } =
-      this.applyExportPrivacy(collections);
+    const { redactedPeople, redactedEvents, redactedMedia } = this.applyExportPrivacy(collections);
 
     const files: Record<string, string> = {
       'people.yaml': serializePeopleYaml(redactedPeople, { sortById: true }),
@@ -202,8 +198,7 @@ export class BundleReadService {
 
     const snapshot = await this.repository.loadActiveSnapshot();
     const collections = extractCollectionsFromSnapshot(snapshot);
-    const { redactedPeople, redactedEvents, redactedMedia } =
-      this.applyExportPrivacy(collections);
+    const { redactedPeople, redactedEvents, redactedMedia } = this.applyExportPrivacy(collections);
 
     const peopleMap = new Map(redactedPeople.map((p) => [p.id, p]));
     const eventsMap = new Map(redactedEvents.map((e) => [e.id, e]));
@@ -267,18 +262,12 @@ export class BundleReadService {
     if (entityType === 'event') {
       const parsed = parseEntityPayload('event', rawData);
       const livingIds = await this.repository.getLivingPersonIds();
-      return sanitizeEventForWrite(
-        parsed,
-        livingIds,
-        this.siteConfig.privacy
-      ) as unknown as EntityPayload;
+      return sanitizeEventForWrite(parsed, livingIds, this.siteConfig.privacy) as unknown as EntityPayload;
     }
     return structuredClone(rawData);
   }
 
-  private applyExportPrivacy(
-    collections: ReturnType<typeof extractCollectionsFromSnapshot>
-  ): {
+  private applyExportPrivacy(collections: ReturnType<typeof extractCollectionsFromSnapshot>): {
     redactedPeople: RawPerson[];
     redactedEvents: RawEvent[];
     redactedMedia: typeof collections.media;
@@ -296,9 +285,7 @@ export class BundleReadService {
     );
 
     const peopleById = new Map(redactedPeople.map((p) => [p.id, p]));
-    const eventsById = new Map(
-      redactedEvents.map((e) => [e.id, { id: e.id, participants: e.participants }])
-    );
+    const eventsById = new Map(redactedEvents.map((e) => [e.id, { id: e.id, participants: e.participants }]));
     const redactedMedia = filterMediaForPrivacy(collections.media, peopleById, eventsById, {
       stripLivingPortraits: this.siteConfig.privacy.stripLivingPortraits,
     });

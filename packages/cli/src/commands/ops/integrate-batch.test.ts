@@ -3,6 +3,9 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import {
+  type KinloomSiteConfig,
+  type KinshipEdge,
+  type Place,
   parseEventsYaml,
   parseKinloomConfigYaml,
   parseKinshipYaml,
@@ -11,6 +14,9 @@ import {
   parsePeopleYaml,
   parsePlacesYaml,
   parseSourcesYaml,
+  type RawEvent,
+  type RawPerson,
+  type SourceRecord,
   serializeEventsYaml,
   serializeKinloomConfigYaml,
   serializeKinshipYaml,
@@ -19,22 +25,11 @@ import {
   serializePeopleYaml,
   serializePlacesYaml,
   serializeSourcesYaml,
-  type KinloomSiteConfig,
-  type KinshipEdge,
-  type Place,
-  type RawEvent,
-  type RawPerson,
-  type SourceRecord,
 } from '@kinloom/core';
 import { afterEach, describe, expect, it } from 'vitest';
 import { runCli } from '../../cli.js';
 import { EXIT_ERROR, EXIT_OK, EXIT_USAGE } from '../../errors.js';
-import {
-  classifyStagedPackages,
-  isPackagePending,
-  runIntegrateCommand,
-  type OpsIo,
-} from './index.js';
+import { classifyStagedPackages, isPackagePending, type OpsIo, runIntegrateCommand } from './index.js';
 
 const tempDirs: string[] = [];
 
@@ -231,7 +226,11 @@ async function createSyntheticRepo(): Promise<string> {
     writeFile(path.join(dataDir, 'places.yaml'), serializePlacesYaml(places, { sortById: true }), 'utf8'),
     writeFile(path.join(dataDir, 'sources.yaml'), serializeSourcesYaml(sources, { sortById: true }), 'utf8'),
     writeFile(path.join(dataDir, 'events.yaml'), serializeEventsYaml(events, { sortById: true }), 'utf8'),
-    writeFile(path.join(dataDir, 'kinship.yaml'), serializeKinshipYaml([], { sortDeterministic: true }), 'utf8'),
+    writeFile(
+      path.join(dataDir, 'kinship.yaml'),
+      serializeKinshipYaml([], { sortDeterministic: true }),
+      'utf8'
+    ),
     writeFile(path.join(dataDir, 'media.yaml'), serializeMediaYaml([], { sortById: true }), 'utf8'),
     writeFile(path.join(dataDir, 'narratives.yaml'), serializeNarrativesYaml([], { sortById: true }), 'utf8'),
   ]);
@@ -261,8 +260,7 @@ interface PackageFixtureInput {
 }
 
 async function writeStagedPackage(input: PackageFixtureInput): Promise<string> {
-  const pkgDir =
-    input.packageDirOverride ?? path.join(input.repoDir, 'research', 'people', input.personId);
+  const pkgDir = input.packageDirOverride ?? path.join(input.repoDir, 'research', 'people', input.personId);
   await mkdir(pkgDir, { recursive: true });
 
   const sourceId = input.sourceId ?? `src_${input.personId}_census`;
@@ -475,10 +473,7 @@ describe('kinloom batch integrate and --pending-only', () => {
     expect(payload.preFlightOverlaps.overlaps.sharedSourceIds).toEqual([
       { id: 'src_shared_1900_census', person_ids: ['per_arthur_alder', 'per_helen_maple'] },
     ]);
-    expect(payload.results.map((r) => r.personId)).toEqual([
-      'per_helen_maple',
-      'per_arthur_alder',
-    ]);
+    expect(payload.results.map((r) => r.personId)).toEqual(['per_helen_maple', 'per_arthur_alder']);
     expect(payload.totals.personUpdated).toBe(2);
     expect(payload.totals.events.added).toBe(2);
     expect(payload.totals.sources.added).toBe(1);
@@ -488,18 +483,11 @@ describe('kinloom batch integrate and --pending-only', () => {
     expect(payload.writtenYamlFiles).toContain(path.join(repoDir, 'data', 'narratives.yaml'));
 
     const liveEvents = parseEventsYaml(await readFile(path.join(repoDir, 'data', 'events.yaml'), 'utf8'));
-    expect(liveEvents.map((e) => e.id)).toEqual([
-      'evt_arthur_1900',
-      'evt_arthur_birth',
-      'evt_helen_1900',
-    ]);
+    expect(liveEvents.map((e) => e.id)).toEqual(['evt_arthur_1900', 'evt_arthur_birth', 'evt_helen_1900']);
     const liveNarratives = parseNarrativesYaml(
       await readFile(path.join(repoDir, 'data', 'narratives.yaml'), 'utf8')
     );
-    expect(liveNarratives.map((n) => n.id)).toEqual([
-      'nar_per_arthur_alder_bio',
-      'nar_per_helen_maple_bio',
-    ]);
+    expect(liveNarratives.map((n) => n.id)).toEqual(['nar_per_arthur_alder_bio', 'nar_per_helen_maple_bio']);
     expect(existsSync(path.join(repoDir, 'media', 'shared-1900.png'))).toBe(true);
   });
 
@@ -641,10 +629,9 @@ describe('kinloom batch integrate and --pending-only', () => {
 
     // Apply mode persists both cleanly.
     const apply = createCaptureIo();
-    const applyCode = await runCli(
-      ['integrate', 'per_arthur_alder', 'per_edward_alder', '--repo', repoDir],
-      { io: apply.io }
-    );
+    const applyCode = await runCli(['integrate', 'per_arthur_alder', 'per_edward_alder', '--repo', repoDir], {
+      io: apply.io,
+    });
     expect(applyCode, apply.stderr.join('\n')).toBe(EXIT_OK);
     expect(apply.stdout.join('\n')).toContain('Batch integrate OK: 2 package(s)');
 
@@ -772,10 +759,9 @@ describe('kinloom batch integrate and --pending-only', () => {
 
     const beforePeopleB = await readFile(path.join(repoB, 'data', 'people.yaml'), 'utf8');
     const capB = createCaptureIo();
-    const codeB = await runCli(
-      ['integrate', 'per_arthur_alder', 'per_helen_maple', '--repo', repoB],
-      { io: capB.io }
-    );
+    const codeB = await runCli(['integrate', 'per_arthur_alder', 'per_helen_maple', '--repo', repoB], {
+      io: capB.io,
+    });
     expect(codeB).toBe(EXIT_USAGE);
     expect(capB.stderr.join('\n')).toContain('conflictingPersonOverlaps=1');
     expect(capB.stderr.join('\n')).toContain('conflictingPersonSlugCollisions=1');
@@ -872,10 +858,9 @@ describe('kinloom batch integrate and --pending-only', () => {
     }
 
     const cap = createCaptureIo();
-    const code = await runCli(
-      ['integrate', 'per_arthur_alder', 'per_helen_maple', '--repo', repoDir],
-      { io: cap.io }
-    );
+    const code = await runCli(['integrate', 'per_arthur_alder', 'per_helen_maple', '--repo', repoDir], {
+      io: cap.io,
+    });
     expect(code).toBe(EXIT_ERROR);
     const errText = cap.stderr.join('\n');
     expect(errText).toContain("Batch integrate failed on 'per_helen_maple'");
@@ -885,9 +870,7 @@ describe('kinloom batch integrate and --pending-only', () => {
     // Every YAML file must match its exact pre-batch bytes.
     for (const name of yamlNames) {
       const after = await readFile(path.join(repoDir, 'data', name));
-      expect(after.equals(beforeBytes.get(name)!), `${name} must be rolled back byte-for-byte`).toBe(
-        true
-      );
+      expect(after.equals(beforeBytes.get(name)!), `${name} must be rolled back byte-for-byte`).toBe(true);
     }
 
     // Newly staged scan from package 1 must be unlinked.
@@ -976,10 +959,9 @@ describe('kinloom batch integrate and --pending-only', () => {
     // Audit --all-staged --pending-only now passes on Helen alone and skips Arthur.
     const auditPending = createCaptureIo();
     expect(
-      await runCli(
-        ['audit', '--all-staged', '--pending-only', '--strict', '--repo', repoDir, '--json'],
-        { io: auditPending.io }
-      )
+      await runCli(['audit', '--all-staged', '--pending-only', '--strict', '--repo', repoDir, '--json'], {
+        io: auditPending.io,
+      })
     ).toBe(EXIT_OK);
     const auditPendingJson = JSON.parse(auditPending.stdout.join('\n')) as {
       ok: boolean;
@@ -1026,10 +1008,9 @@ describe('kinloom batch integrate and --pending-only', () => {
 
     const auditZeroJson = createCaptureIo();
     expect(
-      await runCli(
-        ['audit', '--all-staged', '--pending-only', '--strict', '--repo', repoDir, '--json'],
-        { io: auditZeroJson.io }
-      )
+      await runCli(['audit', '--all-staged', '--pending-only', '--strict', '--repo', repoDir, '--json'], {
+        io: auditZeroJson.io,
+      })
     ).toBe(EXIT_OK);
     const auditZeroParsed = JSON.parse(auditZeroJson.stdout.join('\n')) as {
       ok: boolean;
@@ -1040,10 +1021,7 @@ describe('kinloom batch integrate and --pending-only', () => {
     expect(auditZeroParsed.ok).toBe(true);
     expect(auditZeroParsed.strictOk).toBe(true);
     expect(auditZeroParsed.people).toEqual([]);
-    expect(auditZeroParsed.skippedAlreadyIntegrated).toEqual([
-      'per_arthur_alder',
-      'per_helen_maple',
-    ]);
+    expect(auditZeroParsed.skippedAlreadyIntegrated).toEqual(['per_arthur_alder', 'per_helen_maple']);
 
     const integrateZeroText = createCaptureIo();
     expect(
@@ -1054,9 +1032,7 @@ describe('kinloom batch integrate and --pending-only', () => {
     expect(integrateZeroText.stdout.join('\n')).toContain(
       'Batch integrate OK: 0 package(s) (2 already integrated skipped)'
     );
-    expect(integrateZeroText.stdout.join('\n')).toContain(
-      'No pending staged packages remain to integrate.'
-    );
+    expect(integrateZeroText.stdout.join('\n')).toContain('No pending staged packages remain to integrate.');
 
     const integrateZeroJson = createCaptureIo();
     expect(
@@ -1074,10 +1050,7 @@ describe('kinloom batch integrate and --pending-only', () => {
     expect(integrateZeroParsed.mode).toBe('batch');
     expect(integrateZeroParsed.ok).toBe(true);
     expect(integrateZeroParsed.integrated).toEqual([]);
-    expect(integrateZeroParsed.skippedAlreadyIntegrated).toEqual([
-      'per_arthur_alder',
-      'per_helen_maple',
-    ]);
+    expect(integrateZeroParsed.skippedAlreadyIntegrated).toEqual(['per_arthur_alder', 'per_helen_maple']);
     expect(integrateZeroParsed.writtenYamlFiles).toEqual([]);
 
     // Removing the staged scan on disk marks Arthur pending again even though YAML is unchanged.
@@ -1085,13 +1058,9 @@ describe('kinloom batch integrate and --pending-only', () => {
     expect(await isPackagePending(repoDir, 'per_arthur_alder')).toBe(true);
 
     // Verify live YAML still parses cleanly with both people's sources and media.
-    const liveSources = parseSourcesYaml(
-      await readFile(path.join(repoDir, 'data', 'sources.yaml'), 'utf8')
-    );
+    const liveSources = parseSourcesYaml(await readFile(path.join(repoDir, 'data', 'sources.yaml'), 'utf8'));
     expect(liveSources.map((s) => s.id)).toContain('src_per_helen_maple_census');
-    const liveMedia = parseMediaYaml(
-      await readFile(path.join(repoDir, 'data', 'media.yaml'), 'utf8')
-    );
+    const liveMedia = parseMediaYaml(await readFile(path.join(repoDir, 'data', 'media.yaml'), 'utf8'));
     expect(liveMedia.map((m) => m.id)).toContain('med_per_helen_maple_scan');
   });
 
@@ -1104,11 +1073,7 @@ describe('kinloom batch integrate and --pending-only', () => {
       { from: 'per_arthur_alder', to: 'per_clara_birch', relation: 'spouse', family_xref: '@F2@' },
       { from: 'per_clara_birch', to: 'per_arthur_alder', relation: 'spouse', family_xref: '@F2@' },
     ];
-    await writeFile(
-      kinshipPath,
-      serializeKinshipYaml(seededKinship, { sortDeterministic: true }),
-      'utf8'
-    );
+    await writeFile(kinshipPath, serializeKinshipYaml(seededKinship, { sortDeterministic: true }), 'utf8');
 
     const pkgDir = path.join(repoDir, 'research', 'people', 'per_arthur_alder');
     await mkdir(pkgDir, { recursive: true });
@@ -1133,10 +1098,9 @@ describe('kinloom batch integrate and --pending-only', () => {
     expect(beforeClassify.alreadyIntegrated).toEqual([]);
 
     const cap = createCaptureIo();
-    const code = await runCli(
-      ['integrate', '--all-staged', '--pending-only', '--repo', repoDir, '--json'],
-      { io: cap.io }
-    );
+    const code = await runCli(['integrate', '--all-staged', '--pending-only', '--repo', repoDir, '--json'], {
+      io: cap.io,
+    });
     expect(code, `${cap.stderr.join('\n')}\n${cap.stdout.join('\n')}`).toBe(EXIT_OK);
     const body = JSON.parse(cap.stdout.join('\n')) as {
       integrated: string[];
@@ -1188,16 +1152,13 @@ describe('kinloom batch integrate and --pending-only', () => {
       eventTitle: 'Helen Maple 1901 residence',
       scanName: 'helen-kin.png',
       scanBytes: makeMinimalPng(640, 480, 12_000),
-      removeKinship: [
-        { from: 'per_clara_birch', to: 'per_arthur_alder', relation: 'parent' },
-      ],
+      removeKinship: [{ from: 'per_clara_birch', to: 'per_arthur_alder', relation: 'parent' }],
     });
 
     const auditCap = createCaptureIo();
-    const auditCode = await runCli(
-      ['audit', '--all-staged', '--strict', '--repo', repoDir, '--json'],
-      { io: auditCap.io }
-    );
+    const auditCode = await runCli(['audit', '--all-staged', '--strict', '--repo', repoDir, '--json'], {
+      io: auditCap.io,
+    });
     expect(auditCode).toBe(EXIT_ERROR);
     const auditJson = JSON.parse(auditCap.stdout.join('\n')) as {
       ok: boolean;
@@ -1250,11 +1211,7 @@ describe('kinloom batch integrate and --pending-only', () => {
       { from: 'per_arthur_alder', to: 'per_helen_maple', relation: 'child', family_xref: '@F1@' },
       { from: 'per_helen_maple', to: 'per_arthur_alder', relation: 'parent', family_xref: '@F1@' },
     ];
-    await writeFile(
-      kinshipPath,
-      serializeKinshipYaml(seededKinship, { sortDeterministic: true }),
-      'utf8'
-    );
+    await writeFile(kinshipPath, serializeKinshipYaml(seededKinship, { sortDeterministic: true }), 'utf8');
     const beforeKinshipBytes = await readFile(kinshipPath);
 
     await writeStagedPackage({
@@ -1287,10 +1244,9 @@ describe('kinloom batch integrate and --pending-only', () => {
     });
 
     const cap = createCaptureIo();
-    const code = await runCli(
-      ['integrate', 'per_arthur_alder', 'per_helen_maple', '--repo', repoDir],
-      { io: cap.io }
-    );
+    const code = await runCli(['integrate', 'per_arthur_alder', 'per_helen_maple', '--repo', repoDir], {
+      io: cap.io,
+    });
     expect(code).toBe(EXIT_ERROR);
     expect(cap.stderr.join('\n')).toContain('Rollback succeeded:');
 
@@ -1403,11 +1359,7 @@ describe('kinloom batch integrate and --pending-only', () => {
           }
         : nar
     );
-    await writeFile(
-      narrativesPath,
-      serializeNarrativesYaml(updatedNarratives, { sortById: true }),
-      'utf8'
-    );
+    await writeFile(narrativesPath, serializeNarrativesYaml(updatedNarratives, { sortById: true }), 'utf8');
 
     const classifiedAfterLiveEdit = await classifyStagedPackages(repoDir);
     expect(classifiedAfterLiveEdit.alreadyIntegrated).toEqual(['per_arthur_alder']);
@@ -1479,15 +1431,7 @@ describe('kinloom batch integrate and --pending-only', () => {
     const markCap = createCaptureIo();
     expect(
       await runCli(
-        [
-          'integrate',
-          '--all-staged',
-          '--pending-only',
-          '--mark-integrated',
-          '--repo',
-          repoDir,
-          '--json',
-        ],
+        ['integrate', '--all-staged', '--pending-only', '--mark-integrated', '--repo', repoDir, '--json'],
         { io: markCap.io }
       )
     ).toBe(EXIT_OK);
@@ -1521,15 +1465,14 @@ describe('kinloom batch integrate and --pending-only', () => {
     });
 
     const rbCap = createCaptureIo();
-    const rbCode = await runCli(
-      ['integrate', 'per_arthur_alder', 'per_helen_maple', '--repo', repoDir],
-      { io: rbCap.io }
-    );
+    const rbCode = await runCli(['integrate', 'per_arthur_alder', 'per_helen_maple', '--repo', repoDir], {
+      io: rbCap.io,
+    });
     expect(rbCode).toBe(EXIT_ERROR);
     expect(rbCap.stderr.join('\n')).toContain('Rollback succeeded:');
     expect((await readFile(receiptPath)).equals(prevReceiptBytes)).toBe(true);
-    expect(
-      existsSync(path.join(repoDir, 'research', 'people', 'per_helen_maple', '.integrated.json'))
-    ).toBe(false);
+    expect(existsSync(path.join(repoDir, 'research', 'people', 'per_helen_maple', '.integrated.json'))).toBe(
+      false
+    );
   });
 });

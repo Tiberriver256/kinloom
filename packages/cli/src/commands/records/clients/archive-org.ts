@@ -5,6 +5,7 @@ import { CliValidationError } from '../../../errors.js';
 import {
   assertSafeUrl,
   atomicWriteFileSync,
+  type CommandParseSpec,
   canonicalJsonStringify,
   emitJsonStdout,
   emitStdout,
@@ -14,21 +15,20 @@ import {
   getStringListOption,
   getStringOption,
   gunzipBytes,
+  type OptionSpec,
   parseCacheTtlHours,
   parseCommandArgs,
   parseXml,
-  RecordRuntimeError,
-  resolveCacheDir,
-  resolveSubcommandAlias,
-  sha256Hex,
-  SsrfBlockedError,
-  withAdvisoryLock,
-  type CommandParseSpec,
-  type OptionSpec,
   type RecordCommandContext,
   type RecordCommandOutcome,
   type RecordHandler,
+  RecordRuntimeError,
+  resolveCacheDir,
+  resolveSubcommandAlias,
+  SsrfBlockedError,
+  sha256Hex,
   type UrlSecurityPolicy,
+  withAdvisoryLock,
 } from '../runtime/index.js';
 
 export const BASE = 'https://archive.org';
@@ -43,9 +43,7 @@ export const DEFAULT_QUERY_TTL_HOURS = 168;
 export const MAX_WORKERS = 6;
 export const PAGE_BATCH_LIMIT = 25;
 export const PAGE_BATCH_WORKERS = 4;
-export const RETRYABLE_HTTP_CODES: ReadonlySet<number> = new Set([
-  429, 500, 502, 503, 504, 520, 522, 524,
-]);
+export const RETRYABLE_HTTP_CODES: ReadonlySet<number> = new Set([429, 500, 502, 503, 504, 520, 522, 524]);
 export const MAX_HTTP_RETRIES = 2;
 export const MAX_RETRY_AFTER_SECONDS = 5;
 
@@ -179,8 +177,7 @@ function isIncompleteReadError(err: unknown): boolean {
   if (!(err instanceof Error)) {
     return false;
   }
-  const code =
-    'code' in err ? String((err as { code?: unknown }).code ?? '') : '';
+  const code = 'code' in err ? String((err as { code?: unknown }).code ?? '') : '';
   if (code === 'ERR_STREAM_PREMATURE_CLOSE' || code === 'ECONNRESET') {
     return true;
   }
@@ -191,9 +188,7 @@ function isIncompleteReadError(err: unknown): boolean {
   ) {
     return true;
   }
-  return /incomplete\s*read|remote\s*disconnected|premature\s*close|unexpected\s*eof/i.test(
-    err.message
-  );
+  return /incomplete\s*read|remote\s*disconnected|premature\s*close|unexpected\s*eof/i.test(err.message);
 }
 
 async function withFileLock<T>(
@@ -256,10 +251,7 @@ function getCacheRoot(ctx: RecordCommandContext): string {
   });
 }
 
-function resolveQueryTtlHours(
-  cliTtl: number | undefined,
-  env: NodeJS.ProcessEnv
-): number {
+function resolveQueryTtlHours(cliTtl: number | undefined, env: NodeJS.ProcessEnv): number {
   if (cliTtl !== undefined) {
     return parseCacheTtlHours(cliTtl, DEFAULT_QUERY_TTL_HOURS, '--cache-ttl-hours');
   }
@@ -304,15 +296,10 @@ export function parseLeafInt(raw: string): number {
   if (/^[+-]?\d+$/.test(text)) {
     return Number.parseInt(text, 10);
   }
-  throw new CliValidationError(
-    `invalid leaf value: '${raw}' (expected integer like 12 or n12)`
-  );
+  throw new CliValidationError(`invalid leaf value: '${raw}' (expected integer like 12 or n12)`);
 }
 
-export function validateRelativeItemPath(
-  name: string,
-  filesRoot: string
-): readonly [string, string] {
+export function validateRelativeItemPath(name: string, filesRoot: string): readonly [string, string] {
   if (!name || name.includes('\0') || name.includes('\\') || name.startsWith('/')) {
     throw new CliValidationError(`Unsafe file path in item: '${name}'`);
   }
@@ -442,11 +429,7 @@ export async function httpGetBytesIa(
       }
       if (RETRYABLE_HTTP_CODES.has(code)) {
         if (attempt < MAX_HTTP_RETRIES) {
-          const delayMs = parseRetryAfterMsIa(
-            response.headers.get('retry-after'),
-            attempt,
-            ctx.nowMs()
-          );
+          const delayMs = parseRetryAfterMsIa(response.headers.get('retry-after'), attempt, ctx.nowMs());
           await ctx.sleepFn(delayMs);
           continue;
         }
@@ -542,7 +525,11 @@ async function httpGetJsonIa(
     try {
       raw = await httpGetBytesIa(url, ctx, timeout);
     } catch (err: unknown) {
-      if (err instanceof RecordRuntimeError && !(err instanceof ArchiveNotFoundError) && !(err instanceof SsrfBlockedError)) {
+      if (
+        err instanceof RecordRuntimeError &&
+        !(err instanceof ArchiveNotFoundError) &&
+        !(err instanceof SsrfBlockedError)
+      ) {
         const msg = err.message.toLowerCase();
         const isTimeout =
           msg.includes('timed out') || msg.includes('timeout') || msg.includes('reset by peer');
@@ -664,9 +651,7 @@ async function cachedQueryJson(
           data = candidate;
           break;
         }
-        const responseHeader = isPlainRecord(candidate.responseHeader)
-          ? candidate.responseHeader
-          : undefined;
+        const responseHeader = isPlainRecord(candidate.responseHeader) ? candidate.responseHeader : undefined;
         const errMsg = candidate.error ?? responseHeader?.status;
         lastError = new RecordRuntimeError(
           `Internet Archive ${kind} API returned an error response (${String(errMsg)}) from ${url}`
@@ -953,10 +938,7 @@ function maybeGunzip(raw: Uint8Array): Buffer {
   return Buffer.from(raw);
 }
 
-export function synthesizeDjvuFromHocr(
-  searchtextGz: Uint8Array,
-  pageindexGz: Uint8Array
-): string {
+export function synthesizeDjvuFromHocr(searchtextGz: Uint8Array, pageindexGz: Uint8Array): string {
   const text = maybeGunzip(searchtextGz).toString('utf8');
   const offsets: unknown = JSON.parse(maybeGunzip(pageindexGz).toString('utf8'));
   if (!Array.isArray(offsets) || offsets.length === 0) {
@@ -1169,10 +1151,7 @@ export async function ensureItemCache(
           }
         } else if (fetched.hocr_text !== undefined && fetched.hocr_idx !== undefined) {
           try {
-            djvuBytesOut = Buffer.from(
-              synthesizeDjvuFromHocr(fetched.hocr_text, fetched.hocr_idx),
-              'utf8'
-            );
+            djvuBytesOut = Buffer.from(synthesizeDjvuFromHocr(fetched.hocr_text, fetched.hocr_idx), 'utf8');
             djvuSource = 'hocr';
             segmentMode = 'scandata';
           } catch (err: unknown) {
@@ -1484,8 +1463,7 @@ function grepCachedItem(
             match: match[0],
             snippet: extractSnippet(pageText, mStart, mEnd, options.contextChars),
             image_url: leafN !== null ? pageImageUrl(identifier, leafN, { scale: 2 }) : null,
-            details_url:
-              leafN !== null ? pageDetailsUrl(identifier, leafN) : itemUrl(identifier),
+            details_url: leafN !== null ? pageDetailsUrl(identifier, leafN) : itemUrl(identifier),
           });
         }
       }
@@ -1574,11 +1552,7 @@ function leafFromScandataLeaf(pageIndex: PageIndex, scandataLeaf: number): numbe
   );
 }
 
-function segmentForLeaf(
-  pageIndex: PageIndex,
-  leafN: number,
-  scandataLeaf: number | null
-): number | null {
+function segmentForLeaf(pageIndex: PageIndex, leafN: number, scandataLeaf: number | null): number | null {
   const mode = pageIndex.segment_mode || 'scandata';
   if (mode === 'flat') {
     return null;
@@ -1628,9 +1602,7 @@ function parsePrintedRange(pageIndex: PageIndex, spec: string): number[] {
       const startLabel = part.slice(0, dashIdx);
       const endLabel = part.slice(dashIdx + 1);
       if (!startLabel.trim() || !endLabel.trim()) {
-        throw new RecordRuntimeError(
-          `Invalid --pages range '${spec}'; expected <p1>-<p2>.`
-        );
+        throw new RecordRuntimeError(`Invalid --pages range '${spec}'; expected <p1>-<p2>.`);
       }
       const [startLeaf] = resolvePrintedPageToLeaf(pageIndex, startLabel);
       const [endLeaf] = resolvePrintedPageToLeaf(pageIndex, endLabel);
@@ -1668,9 +1640,7 @@ function parseLeafSpec(spec: string): number[] {
       const start = Number.parseInt(rangeMatch[1], 10);
       const end = Number.parseInt(rangeMatch[2], 10);
       if (end < start) {
-        throw new CliValidationError(
-          `Invalid --leaves range '${part}': ${end} precedes ${start}.`
-        );
+        throw new CliValidationError(`Invalid --leaves range '${part}': ${end} precedes ${start}.`);
       }
       if (end - start + 1 > PAGE_BATCH_LIMIT) {
         throw new CliValidationError(
@@ -1679,10 +1649,7 @@ function parseLeafSpec(spec: string): number[] {
       }
       chunk = Array.from({ length: end - start + 1 }, (_, i) => start + i);
     } else if (/^[nN]?\d+$/.test(part)) {
-      const num = Number.parseInt(
-        part[0] === 'n' || part[0] === 'N' ? part.slice(1) : part,
-        10
-      );
+      const num = Number.parseInt(part[0] === 'n' || part[0] === 'N' ? part.slice(1) : part, 10);
       chunk = [num];
     } else {
       throw new CliValidationError(
@@ -1720,9 +1687,7 @@ function parsePrintedPageSpec(spec: string): string[] {
       const start = Number.parseInt(rangeMatch[1], 10);
       const end = Number.parseInt(rangeMatch[2], 10);
       if (end < start) {
-        throw new CliValidationError(
-          `Invalid --printed-pages range '${part}': ${end} precedes ${start}.`
-        );
+        throw new CliValidationError(`Invalid --printed-pages range '${part}': ${end} precedes ${start}.`);
       }
       if (end - start + 1 > PAGE_BATCH_LIMIT) {
         throw new CliValidationError(
@@ -1766,7 +1731,10 @@ function resolveSearchQuery(
   queryFlag: string | undefined,
   options: { readonly mediatype?: string; readonly collections?: readonly string[] } = {}
 ): string {
-  const posText = queryParts.filter((p) => p.length > 0).join(' ').trim();
+  const posText = queryParts
+    .filter((p) => p.length > 0)
+    .join(' ')
+    .trim();
   const flagText = (queryFlag ?? '').trim();
   if (posText && flagText) {
     throw new CliValidationError('Pass either a positional query or --query/-q, not both.');
@@ -2325,8 +2293,14 @@ function renderRootHelp(): string {
       { name: 'get', summary: "Read an item's metadata and file list (aliases: metadata, show)." },
       { name: 'download', summary: 'Download files of an item, or list them with no FILE given.' },
       { name: 'fulltext', summary: 'Search OCR full text across digitized books and periodicals.' },
-      { name: 'grep', summary: 'Search cached full-text OCR inside one or more items with exact page mapping.' },
-      { name: 'page', summary: 'Download one or more rendered page JPEGs by printed page or BookReader leaf.' },
+      {
+        name: 'grep',
+        summary: 'Search cached full-text OCR inside one or more items with exact page mapping.',
+      },
+      {
+        name: 'page',
+        summary: 'Download one or more rendered page JPEGs by printed page or BookReader leaf.',
+      },
       { name: 'text', summary: 'Print cached OCR text for a printed page, leaf, or printed-page range.' },
       { name: 'lookup', summary: 'Resolve printed page <-> BookReader leaf <-> scandata leaf.' },
       { name: 'url', summary: 'Print the website advanced-search URL for a query.' },
@@ -2336,10 +2310,7 @@ function renderRootHelp(): string {
 
 // ---------- Subcommands ----------
 
-async function runSearch(
-  argv: readonly string[],
-  ctx: RecordCommandContext
-): Promise<RecordCommandOutcome> {
+async function runSearch(argv: readonly string[], ctx: RecordCommandContext): Promise<RecordCommandOutcome> {
   const parsed = parseCommandArgs(argv, SEARCH_PARSE_SPEC);
   if (parsed.helpRequested) {
     return {
@@ -2357,9 +2328,7 @@ async function runSearch(
 
   const rows = getNumberOption(parsed, 'rows') ?? 10;
   const page = getNumberOption(parsed, 'page') ?? 1;
-  const timeout = validatePositiveTimeout(
-    getNumberOption(parsed, 'timeout') ?? SEARCH_TIMEOUT_SECONDS
-  );
+  const timeout = validatePositiveTimeout(getNumberOption(parsed, 'timeout') ?? SEARCH_TIMEOUT_SECONDS);
   if (rows < 1) {
     throw new CliValidationError(`--rows/--limit must be >= 1, got ${rows}.`);
   }
@@ -2401,13 +2370,11 @@ async function runSearch(
     sorts,
   };
 
-  const [data, cached] = await cachedQueryJson(
-    'search',
-    canonicalParams,
-    `${ADVANCED_SEARCH}?${qs}`,
-    ctx,
-    { ttlHours, refresh, timeout }
-  );
+  const [data, cached] = await cachedQueryJson('search', canonicalParams, `${ADVANCED_SEARCH}?${qs}`, ctx, {
+    ttlHours,
+    refresh,
+    timeout,
+  });
 
   if (asJson) {
     const bytesOut = emitJsonStdout(ctx.io, jsonWithCacheHit(data, cached));
@@ -2425,18 +2392,13 @@ async function runSearch(
     const creator = String(doc.creator ?? '');
     const date = String(doc.date ?? '');
     const mediatypeOut = String(doc.mediatype ?? '');
-    lines.push(
-      `${identifier} | ${title} | ${creator} | ${date} | ${mediatypeOut} | ${itemUrl(identifier)}`
-    );
+    lines.push(`${identifier} | ${title} | ${creator} | ${date} | ${mediatypeOut} | ${itemUrl(identifier)}`);
   }
   const bytesOut = emitStdout(ctx.io, lines.join('\n'));
   return { exitCode: 0, bytesOut, cacheHit: cached };
 }
 
-async function runGet(
-  argv: readonly string[],
-  ctx: RecordCommandContext
-): Promise<RecordCommandOutcome> {
+async function runGet(argv: readonly string[], ctx: RecordCommandContext): Promise<RecordCommandOutcome> {
   const parsed = parseCommandArgs(argv, GET_PARSE_SPEC);
   if (parsed.helpRequested) {
     return {
@@ -2453,9 +2415,7 @@ async function runGet(
   }
 
   const identifier = validateIdentifier(parsed.positionals[0]);
-  const timeout = validatePositiveTimeout(
-    getNumberOption(parsed, 'timeout') ?? DEFAULT_TIMEOUT_SECONDS
-  );
+  const timeout = validatePositiveTimeout(getNumberOption(parsed, 'timeout') ?? DEFAULT_TIMEOUT_SECONDS);
   const refresh = getBooleanOption(parsed, 'refresh');
   const asJson = getBooleanOption(parsed, 'asJson');
   const showFiles = getBooleanOption(parsed, 'files');
@@ -2535,9 +2495,7 @@ async function runDownload(
   const requestedFiles = parsed.positionals.slice(1);
   const outArg = getStringOption(parsed, 'out') ?? '.';
   const listOnly = getBooleanOption(parsed, 'listOnly');
-  const timeout = validatePositiveTimeout(
-    getNumberOption(parsed, 'timeout') ?? DOWNLOAD_TIMEOUT_SECONDS
-  );
+  const timeout = validatePositiveTimeout(getNumberOption(parsed, 'timeout') ?? DOWNLOAD_TIMEOUT_SECONDS);
   const refresh = getBooleanOption(parsed, 'refresh');
   const cacheRoot = getCacheRoot(ctx);
   const filesRoot = path.join(cacheRoot, identifier, 'files');
@@ -2592,20 +2550,15 @@ async function runDownload(
     if (!fileEntry) {
       throw new RecordRuntimeError(`File not in item ${identifier}: ${name}`);
     }
-    const [content, , cached] = await ensureDownloadedFile(
-      identifier,
-      name,
-      fileList,
-      fileEntry,
-      ctx,
-      { cacheRoot, timeout, refresh }
-    );
+    const [content, , cached] = await ensureDownloadedFile(identifier, name, fileList, fileEntry, ctx, {
+      cacheRoot,
+      timeout,
+      refresh,
+    });
     allCached = allCached && cached;
     const dest = path.join(outDir, path.basename(rel));
     atomicWriteFileSync(dest, content);
-    const displayDest = path.isAbsolute(outArg)
-      ? dest
-      : path.join(outArg, path.basename(rel));
+    const displayDest = path.isAbsolute(outArg) ? dest : path.join(outArg, path.basename(rel));
     const status = cached ? 'cache-hit' : 'fetched';
     lines.push(`${displayDest} (${content.length} bytes, ${status})`);
   }
@@ -2635,9 +2588,7 @@ async function runFulltext(
 
   const rows = getNumberOption(parsed, 'rows') ?? 10;
   const page = getNumberOption(parsed, 'page') ?? 1;
-  const timeout = validatePositiveTimeout(
-    getNumberOption(parsed, 'timeout') ?? SEARCH_TIMEOUT_SECONDS
-  );
+  const timeout = validatePositiveTimeout(getNumberOption(parsed, 'timeout') ?? SEARCH_TIMEOUT_SECONDS);
   if (rows < 1) {
     throw new CliValidationError(`--rows/--limit must be >= 1, got ${rows}.`);
   }
@@ -2663,13 +2614,11 @@ async function runFulltext(
     page,
   };
 
-  const [data, cached] = await cachedQueryJson(
-    'fulltext',
-    canonicalParams,
-    `${FULLTEXT_SEARCH}?${qs}`,
-    ctx,
-    { ttlHours, refresh, timeout }
-  );
+  const [data, cached] = await cachedQueryJson('fulltext', canonicalParams, `${FULLTEXT_SEARCH}?${qs}`, ctx, {
+    ttlHours,
+    refresh,
+    timeout,
+  });
 
   if (asJson) {
     const bytesOut = emitJsonStdout(ctx.io, jsonWithCacheHit(data, cached));
@@ -2682,9 +2631,7 @@ async function runFulltext(
   const total = hitsBlock.total ?? 0;
   const hits = Array.isArray(hitsBlock.hits) ? hitsBlock.hits : [];
   const status = cached ? 'cache-hit' : 'fetched';
-  const lines: string[] = [
-    `${String(total)} full-text matches (showing ${hits.length}, ${status})`,
-  ];
+  const lines: string[] = [`${String(total)} full-text matches (showing ${hits.length}, ${status})`];
 
   for (const rawHit of hits) {
     const hit = isPlainRecord(rawHit) ? rawHit : {};
@@ -2708,10 +2655,7 @@ async function runFulltext(
   return { exitCode: 0, bytesOut, cacheHit: cached };
 }
 
-async function runGrep(
-  argv: readonly string[],
-  ctx: RecordCommandContext
-): Promise<RecordCommandOutcome> {
+async function runGrep(argv: readonly string[], ctx: RecordCommandContext): Promise<RecordCommandOutcome> {
   const t0 = ctx.nowMs();
   const parsed = parseCommandArgs(argv, GREP_PARSE_SPEC);
   if (parsed.helpRequested) {
@@ -2721,8 +2665,7 @@ async function runGrep(
         ctx.io,
         formatCommandUsage({
           usage: 'kinloom ia grep [IDENTIFIERS...] [options]',
-          summary:
-            'Search cached full-text OCR inside one or more items with exact page mapping.',
+          summary: 'Search cached full-text OCR inside one or more items with exact page mapping.',
           options: GREP_OPTIONS,
         })
       ),
@@ -2731,9 +2674,7 @@ async function runGrep(
 
   const contextChars = getNumberOption(parsed, 'context') ?? 240;
   const limit = getNumberOption(parsed, 'limit') ?? 25;
-  const timeout = validatePositiveTimeout(
-    getNumberOption(parsed, 'timeout') ?? DEFAULT_TIMEOUT_SECONDS
-  );
+  const timeout = validatePositiveTimeout(getNumberOption(parsed, 'timeout') ?? DEFAULT_TIMEOUT_SECONDS);
   if (contextChars < 0) {
     throw new CliValidationError(`--context must be >= 0, got ${contextChars}.`);
   }
@@ -2776,10 +2717,7 @@ async function runGrep(
     );
   }
 
-  const pattern =
-    rawPatterns.length === 1
-      ? rawPatterns[0]
-      : rawPatterns.map((p) => `(?:${p})`).join('|');
+  const pattern = rawPatterns.length === 1 ? rawPatterns[0] : rawPatterns.map((p) => `(?:${p})`).join('|');
   const ignoreCase = getBooleanOption(parsed, 'ignoreCase');
   const refresh = getBooleanOption(parsed, 'refresh');
   const asJson = getBooleanOption(parsed, 'asJson');
@@ -2853,14 +2791,10 @@ async function runGrep(
     allCached = allCached && wasCached;
     const pageIndex = readPageIndex(entry.pageIndexPath) ?? emptyPageIndex();
     const djvuText = fs.readFileSync(entry.djvuPath).toString('utf8');
-    const [hits, itemTotal] = grepCachedItem(
-      entry.identifier,
-      djvuText,
-      pageIndex,
-      pattern,
-      ignoreCase,
-      { contextChars, limit: remaining }
-    );
+    const [hits, itemTotal] = grepCachedItem(entry.identifier, djvuText, pageIndex, pattern, ignoreCase, {
+      contextChars,
+      limit: remaining,
+    });
     for (const h of hits) {
       h.cached = wasCached;
     }
@@ -2913,10 +2847,7 @@ async function runGrep(
   return { exitCode: 0, bytesOut, cacheHit: allCached };
 }
 
-async function runPage(
-  argv: readonly string[],
-  ctx: RecordCommandContext
-): Promise<RecordCommandOutcome> {
+async function runPage(argv: readonly string[], ctx: RecordCommandContext): Promise<RecordCommandOutcome> {
   const t0 = ctx.nowMs();
   const parsed = parseCommandArgs(argv, PAGE_PARSE_SPEC);
   if (parsed.helpRequested) {
@@ -2926,8 +2857,7 @@ async function runPage(
         ctx.io,
         formatCommandUsage({
           usage: 'kinloom ia page <IDENTIFIER> [LEAF] [options]',
-          summary:
-            'Download one or more rendered page JPEGs by printed page number or BookReader leaf.',
+          summary: 'Download one or more rendered page JPEGs by printed page number or BookReader leaf.',
           options: PAGE_OPTIONS,
         })
       ),
@@ -2946,9 +2876,7 @@ async function runPage(
   const width = getNumberOption(parsed, 'width');
   const concurrency = getNumberOption(parsed, 'concurrency') ?? PAGE_BATCH_WORKERS;
   const outArg = getStringOption(parsed, 'out') ?? '.';
-  const timeout = validatePositiveTimeout(
-    getNumberOption(parsed, 'timeout') ?? DEFAULT_TIMEOUT_SECONDS
-  );
+  const timeout = validatePositiveTimeout(getNumberOption(parsed, 'timeout') ?? DEFAULT_TIMEOUT_SECONDS);
   const refresh = getBooleanOption(parsed, 'refresh');
   const asJson = getBooleanOption(parsed, 'asJson');
 
@@ -2982,14 +2910,10 @@ async function runPage(
     singleNames.push('--printed-page');
   }
   if (leavesSpec !== undefined && singleNames.length > 0) {
-    throw new CliValidationError(
-      `Pass either --leaves or ${singleNames.join(' or ')}, not both.`
-    );
+    throw new CliValidationError(`Pass either --leaves or ${singleNames.join(' or ')}, not both.`);
   }
   if (printedPagesSpec !== undefined && singleNames.length > 0) {
-    throw new CliValidationError(
-      `Pass either --printed-pages or ${singleNames.join(' or ')}, not both.`
-    );
+    throw new CliValidationError(`Pass either --printed-pages or ${singleNames.join(' or ')}, not both.`);
   }
 
   const cacheRoot = getCacheRoot(ctx);
@@ -3129,8 +3053,7 @@ async function runPage(
   if (written.length === 1) {
     const row = written[0];
     const elapsedMs = Math.round((ctx.nowMs() - t0) * 100) / 100;
-    const pageHit =
-      indexCached === null ? row.page_cached : Boolean(row.page_cached && indexCached);
+    const pageHit = indexCached === null ? row.page_cached : Boolean(row.page_cached && indexCached);
     const payload: Record<string, unknown> = {
       identifier,
       leaf: row.leaf,
@@ -3148,10 +3071,7 @@ async function runPage(
       const bytesOut = emitJsonStdout(ctx.io, jsonWithCacheHit(payload, pageHit));
       return { exitCode: 0, bytesOut, cacheHit: pageHit };
     }
-    const extra =
-      row.printed_page !== null
-        ? ` [p.${row.printed_page} -> n${row.leaf}]`
-        : ` [n${row.leaf}]`;
+    const extra = row.printed_page !== null ? ` [p.${row.printed_page} -> n${row.leaf}]` : ` [n${row.leaf}]`;
     const status = row.page_cached ? 'cache-hit' : 'fetched';
     const bytesOut = emitStdout(ctx.io, `${row.path} (${row.bytes} bytes)${extra} (${status})`);
     return { exitCode: 0, bytesOut, cacheHit: pageHit };
@@ -3177,10 +3097,7 @@ async function runPage(
     return { exitCode: 0, bytesOut, cacheHit };
   }
   const lines = written.map((row) => {
-    const extra =
-      row.printed_page !== null
-        ? ` [p.${row.printed_page} -> n${row.leaf}]`
-        : ` [n${row.leaf}]`;
+    const extra = row.printed_page !== null ? ` [p.${row.printed_page} -> n${row.leaf}]` : ` [n${row.leaf}]`;
     const status = row.page_cached ? 'cache-hit' : 'fetched';
     return `${row.path} (${row.bytes} bytes)${extra} (${status})`;
   });
@@ -3188,10 +3105,7 @@ async function runPage(
   return { exitCode: 0, bytesOut, cacheHit };
 }
 
-async function runText(
-  argv: readonly string[],
-  ctx: RecordCommandContext
-): Promise<RecordCommandOutcome> {
+async function runText(argv: readonly string[], ctx: RecordCommandContext): Promise<RecordCommandOutcome> {
   const parsed = parseCommandArgs(argv, TEXT_PARSE_SPEC);
   if (parsed.helpRequested) {
     return {
@@ -3217,9 +3131,7 @@ async function runText(
     rawId = itemFlag;
   }
   if (!rawId) {
-    throw new CliValidationError(
-      'Pass an Internet Archive item identifier (positional or --item/--id).'
-    );
+    throw new CliValidationError('Pass an Internet Archive item identifier (positional or --item/--id).');
   }
   const identifier = validateIdentifier(rawId);
 
@@ -3228,9 +3140,7 @@ async function runText(
   let leafArg = leafFlagRaw !== undefined ? parseLeafInt(leafFlagRaw) : undefined;
   let pagesArg = getStringOption(parsed, 'pages');
   const leavesArg = getStringOption(parsed, 'leaves');
-  const timeout = validatePositiveTimeout(
-    getNumberOption(parsed, 'timeout') ?? DEFAULT_TIMEOUT_SECONDS
-  );
+  const timeout = validatePositiveTimeout(getNumberOption(parsed, 'timeout') ?? DEFAULT_TIMEOUT_SECONDS);
   const refresh = getBooleanOption(parsed, 'refresh');
   const asJson = getBooleanOption(parsed, 'asJson');
 
@@ -3332,8 +3242,7 @@ async function runText(
       lines.push('');
     }
     const pp = page.printed_page ? `p.${page.printed_page}` : 'p.?';
-    const sc =
-      page.scandata_leaf !== null ? `, scandata leaf ${page.scandata_leaf}` : '';
+    const sc = page.scandata_leaf !== null ? `, scandata leaf ${page.scandata_leaf}` : '';
     lines.push(`== ${identifier} | n${page.leaf} (${pp}${sc})`);
     lines.push(`   image: ${page.image_url}`);
     lines.push(`   details: ${page.details_url}`);
@@ -3343,10 +3252,7 @@ async function runText(
   return { exitCode: 0, bytesOut, cacheHit: cacheEntry.cached };
 }
 
-async function runLookup(
-  argv: readonly string[],
-  ctx: RecordCommandContext
-): Promise<RecordCommandOutcome> {
+async function runLookup(argv: readonly string[], ctx: RecordCommandContext): Promise<RecordCommandOutcome> {
   const parsed = parseCommandArgs(argv, LOOKUP_PARSE_SPEC);
   if (parsed.helpRequested) {
     return {
@@ -3355,8 +3261,7 @@ async function runLookup(
         ctx.io,
         formatCommandUsage({
           usage: 'kinloom ia lookup <IDENTIFIER> [options]',
-          summary:
-            'Resolve printed page <-> BookReader leaf <-> scandata leaf from cached page_index.json.',
+          summary: 'Resolve printed page <-> BookReader leaf <-> scandata leaf from cached page_index.json.',
           options: LOOKUP_OPTIONS,
         })
       ),
@@ -3368,9 +3273,7 @@ async function runLookup(
   const leafFlagRaw = getStringOption(parsed, 'leaf');
   const leafArg = leafFlagRaw !== undefined ? parseLeafInt(leafFlagRaw) : undefined;
   const scandataLeaf = getNumberOption(parsed, 'scandataLeaf');
-  const timeout = validatePositiveTimeout(
-    getNumberOption(parsed, 'timeout') ?? DEFAULT_TIMEOUT_SECONDS
-  );
+  const timeout = validatePositiveTimeout(getNumberOption(parsed, 'timeout') ?? DEFAULT_TIMEOUT_SECONDS);
   const refresh = getBooleanOption(parsed, 'refresh');
   const asJson = getBooleanOption(parsed, 'asJson');
 
@@ -3447,10 +3350,7 @@ function runUrl(argv: readonly string[], ctx: RecordCommandContext): RecordComma
   return { exitCode: 0, bytesOut };
 }
 
-export const runArchiveOrgCommand: RecordHandler = async (
-  args,
-  ctx
-): Promise<RecordCommandOutcome> => {
+export const runArchiveOrgCommand: RecordHandler = async (args, ctx): Promise<RecordCommandOutcome> => {
   try {
     if (args.length === 0 || args[0] === '--help' || args[0] === '-h') {
       return { exitCode: 0, bytesOut: emitStdout(ctx.io, renderRootHelp()) };
@@ -3477,9 +3377,7 @@ export const runArchiveOrgCommand: RecordHandler = async (
       case 'url':
         return runUrl(rest, ctx);
       default:
-        throw new CliValidationError(
-          `No such command '${rawSubcmd}'. Run 'kinloom ia --help'.`
-        );
+        throw new CliValidationError(`No such command '${rawSubcmd}'. Run 'kinloom ia --help'.`);
     }
   } catch (err: unknown) {
     if (isBrokenPipeError(err)) {

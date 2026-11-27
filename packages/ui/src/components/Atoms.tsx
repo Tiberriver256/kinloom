@@ -7,27 +7,37 @@ import type {
   Place,
   SourceRecord,
 } from '@kinloom/core';
-import {
-  buildLibrarianCitation,
-  formatPublicCitation,
-  summarizeEventCitations,
-} from '@kinloom/core';
+import { buildLibrarianCitation, formatPublicCitation, summarizeEventCitations } from '@kinloom/core';
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { KINLOOM_VOCABULARY } from '../lib/vocabulary.js';
 import { useArchiveData } from '../context/ArchiveDataContext.js';
 import { useArchiveUi } from '../context/ArchiveUiContext.js';
+import { cx } from '../lib/cx.js';
 import { useDialogFocusTrap } from '../lib/useDialogFocusTrap.js';
+import { KINLOOM_VOCABULARY } from '../lib/vocabulary.js';
+import cssMod3 from '../pages/IndexPage.module.css';
+import cssMod4 from '../pages/NotFoundPage.module.css';
+import cssMod0 from './Atoms.module.css';
+import cssMod1 from './SourceInspectorDrawer.module.css';
+import cssMod2 from './SourceReaderDrawer.module.css';
+
+const uiStyles: Readonly<Record<string, string>> = {
+  ...cssMod0,
+  ...cssMod1,
+  ...cssMod2,
+  ...cssMod3,
+  ...cssMod4,
+};
 
 export const EmptyStateNotice: React.FC<{
   title: string;
   body?: string;
   action?: React.ReactNode;
 }> = ({ title, body, action }) => (
-  <div className="empty-state-notice" role="status">
-    <p className="empty-state-notice-title">{title}</p>
-    {body && <p className="empty-state-notice-body">{body}</p>}
-    {action && <div className="empty-state-notice-action">{action}</div>}
+  <div className={cx(uiStyles, 'empty-state-notice')} role="status">
+    <p className={cx(uiStyles, 'empty-state-notice-title')}>{title}</p>
+    {body && <p className={cx(uiStyles, 'empty-state-notice-body')}>{body}</p>}
+    {action && <div className={cx(uiStyles, 'empty-state-notice-action')}>{action}</div>}
   </div>
 );
 
@@ -35,11 +45,8 @@ const EMPTY_ALTERNATE_DATES: AlternateDate[] = [];
 const EMPTY_ALTERNATE_PLACES: AlternatePlace[] = [];
 const EMPTY_FACT_CONFLICTS: FactConflict[] = [];
 
-export const DateStamp: React.FC<{ displayDate: string; edtf?: string }> = ({
-  displayDate,
-  edtf,
-}) => (
-  <span className="date-stamp" title={edtf ? `Recorded date: ${edtf}` : undefined}>
+export const DateStamp: React.FC<{ displayDate: string; edtf?: string }> = ({ displayDate, edtf }) => (
+  <span className={cx(uiStyles, 'date-stamp')} title={edtf ? `Recorded date: ${edtf}` : undefined}>
     {displayDate || 'Undated'}
   </span>
 );
@@ -51,7 +58,11 @@ export const CoordinatePill: React.FC<{ place: Place | undefined }> = ({ place }
   const latStr = `${Math.abs(place.lat).toFixed(2)}°${place.lat >= 0 ? 'N' : 'S'}`;
   const lngStr = `${Math.abs(place.lng).toFixed(2)}°${place.lng >= 0 ? 'E' : 'W'}`;
   return (
-    <Link to={`/place/${place.slug}`} className="coordinate-pill" title={`Open ${place.full_name} profile`}>
+    <Link
+      to={`/place/${place.slug}`}
+      className={cx(uiStyles, 'coordinate-pill')}
+      title={`Open ${place.full_name} profile`}
+    >
       <span>
         {latStr}, {lngStr} · {place.name}
       </span>
@@ -65,14 +76,30 @@ export const ScopeGlyph: React.FC<{ category?: string; size?: number }> = ({
 }) => {
   if (category === 'weather') {
     return (
-      <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth={1.5} aria-hidden>
+      <svg
+        width={size}
+        height={size}
+        viewBox="0 0 16 16"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={1.5}
+        aria-hidden
+      >
         <path d="M8 1v14M1 8h14M3 3l10 10M13 3L3 13" />
       </svg>
     );
   }
   if (category === 'newspaper') {
     return (
-      <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth={1.5} aria-hidden>
+      <svg
+        width={size}
+        height={size}
+        viewBox="0 0 16 16"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={1.5}
+        aria-hidden
+      >
         <rect x="2" y="2" width="12" height="12" />
         <path d="M4.5 5.5h7M4.5 8h7M4.5 10.5h4.5" />
       </svg>
@@ -80,7 +107,15 @@ export const ScopeGlyph: React.FC<{ category?: string; size?: number }> = ({
   }
   if (category === 'macro') {
     return (
-      <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth={1.5} aria-hidden>
+      <svg
+        width={size}
+        height={size}
+        viewBox="0 0 16 16"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={1.5}
+        aria-hidden
+      >
         <circle cx="8" cy="8" r="6" />
         <path d="M2 8h12M8 2a9 9 0 0 1 0 12M8 2a9 9 0 0 0 0 12" />
       </svg>
@@ -88,7 +123,15 @@ export const ScopeGlyph: React.FC<{ category?: string; size?: number }> = ({
   }
   if (category === 'homestead') {
     return (
-      <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth={1.5} aria-hidden>
+      <svg
+        width={size}
+        height={size}
+        viewBox="0 0 16 16"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={1.5}
+        aria-hidden
+      >
         <path d="M2 8l6-5 6 5v6H2V8z" />
         <path d="M6.5 14v-4h3v4" />
       </svg>
@@ -96,14 +139,30 @@ export const ScopeGlyph: React.FC<{ category?: string; size?: number }> = ({
   }
   if (category === 'family_milestone') {
     return (
-      <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth={1.5} aria-hidden>
+      <svg
+        width={size}
+        height={size}
+        viewBox="0 0 16 16"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={1.5}
+        aria-hidden
+      >
         <circle cx="6" cy="8" r="3.5" />
         <circle cx="10" cy="8" r="3.5" />
       </svg>
     );
   }
   return (
-    <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth={1.5} aria-hidden>
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 16 16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.5}
+      aria-hidden
+    >
       <circle cx="8" cy="8" r="4" />
       <path d="M8 1v3M8 12v3" />
     </svg>
@@ -180,11 +239,11 @@ export const RelativeAvatarChip: React.FC<{
   return (
     <button
       type="button"
-      className={`avatar-chip ${tierClass}`}
+      className={cx(uiStyles, `avatar-chip ${tierClass}`)}
       onClick={onClick}
       title={`${name} (${relationship}) — ${tier}${distLabel}. Open Person Profile.`}
     >
-      <span className="avatar-circle">{initialsOf(name)}</span>
+      <span className={cx(uiStyles, 'avatar-circle')}>{initialsOf(name)}</span>
       <span>
         <strong>{name}</strong>{' '}
         <span style={{ color: 'var(--text-secondary)', fontSize: '0.78rem' }}>
@@ -227,7 +286,10 @@ export const ArchivalPhotoFrame: React.FC<{ caption: string; photoUrl?: string |
     <>
       <button
         type="button"
-        className={`wireframe-photo photo-placeholder-frame ${resolvedUrl ? 'has-real-photo' : ''}`}
+        className={cx(
+          uiStyles,
+          `wireframe-photo photo-placeholder-frame ${resolvedUrl ? 'has-real-photo' : ''}`
+        )}
         onClick={(e) => {
           e.stopPropagation();
           setOpen(true);
@@ -235,13 +297,20 @@ export const ArchivalPhotoFrame: React.FC<{ caption: string; photoUrl?: string |
       >
         {resolvedUrl ? (
           <>
-            <img src={resolvedUrl} alt={caption} className="milestone-photo-img" loading="lazy" />
-            <span className="wireframe-photo-caption">{caption}</span>
+            <img
+              src={resolvedUrl}
+              alt={caption}
+              className={cx(uiStyles, 'milestone-photo-img')}
+              loading="lazy"
+            />
+            <span className={cx(uiStyles, 'wireframe-photo-caption')}>{caption}</span>
           </>
         ) : (
           <>
-            <span className="wireframe-photo-label">Archival Photograph Needed · Click for Details</span>
-            <span className="wireframe-photo-caption">{caption}</span>
+            <span className={cx(uiStyles, 'wireframe-photo-label')}>
+              Archival Photograph Needed · Click for Details
+            </span>
+            <span className={cx(uiStyles, 'wireframe-photo-caption')}>{caption}</span>
           </>
         )}
       </button>
@@ -250,27 +319,40 @@ export const ArchivalPhotoFrame: React.FC<{ caption: string; photoUrl?: string |
           ref={dialogRef}
           open
           aria-modal="true"
-          className="lightbox-backdrop photo-lightbox-overlay"
+          className={cx(uiStyles, 'lightbox-backdrop photo-lightbox-overlay')}
           aria-label="Archival photograph lightbox"
         >
           <button
             type="button"
             tabIndex={-1}
-            className="lightbox-backdrop-close"
+            className={cx(uiStyles, 'lightbox-backdrop-close')}
             aria-label="Close archival photograph lightbox"
             onClick={() => {
               setOpen(false);
             }}
           />
-          <div className="lightbox-card">
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-              <strong style={{ fontFamily: 'var(--font-mono)', fontSize: '0.82rem', color: 'var(--surface-header)' }}>
+          <div className={cx(uiStyles, 'lightbox-card')}>
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                marginBottom: 12,
+              }}
+            >
+              <strong
+                style={{
+                  fontFamily: 'var(--font-mono)',
+                  fontSize: '0.82rem',
+                  color: 'var(--surface-header)',
+                }}
+              >
                 {resolvedUrl ? 'ARCHIVAL PHOTOGRAPH · ZOOM VIEW' : 'ARCHIVAL PHOTOGRAPH NEEDED'}
               </strong>
               <button
                 ref={closeBtnRef}
                 type="button"
-                className="pill-btn"
+                className={cx(uiStyles, 'pill-btn')}
                 onClick={() => {
                   setOpen(false);
                 }}
@@ -283,17 +365,37 @@ export const ArchivalPhotoFrame: React.FC<{ caption: string; photoUrl?: string |
                 <img
                   src={resolvedUrl}
                   alt={caption}
-                  style={{ width: '100%', maxHeight: '72vh', objectFit: 'contain', borderRadius: 2, border: '1px solid var(--border-decorative)' }}
+                  style={{
+                    width: '100%',
+                    maxHeight: '72vh',
+                    objectFit: 'contain',
+                    borderRadius: 2,
+                    border: '1px solid var(--border-decorative)',
+                  }}
                 />
-                <figcaption style={{ marginTop: 8, fontSize: '0.85rem', color: 'var(--text-secondary)', fontStyle: 'italic' }}>
+                <figcaption
+                  style={{
+                    marginTop: 8,
+                    fontSize: '0.85rem',
+                    color: 'var(--text-secondary)',
+                    fontStyle: 'italic',
+                  }}
+                >
                   {caption}
                 </figcaption>
               </figure>
             ) : (
-              <div className="wireframe-photo" style={{ minHeight: 180, cursor: 'default' }}>
-                <span className="wireframe-photo-label">No Photograph Archived Yet</span>
-                <span className="wireframe-photo-caption">{caption}</span>
-                <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.78rem', color: 'var(--text-secondary)', marginTop: 8 }}>
+              <div className={cx(uiStyles, 'wireframe-photo')} style={{ minHeight: 180, cursor: 'default' }}>
+                <span className={cx(uiStyles, 'wireframe-photo-label')}>No Photograph Archived Yet</span>
+                <span className={cx(uiStyles, 'wireframe-photo-caption')}>{caption}</span>
+                <span
+                  style={{
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: '0.78rem',
+                    color: 'var(--text-secondary)',
+                    marginTop: 8,
+                  }}
+                >
                   A family photograph for this moment has not been added yet.
                 </span>
               </div>
@@ -323,7 +425,9 @@ export const SourceCitationTag: React.FC<{
   const { readableSourceIds, baseUrl } = useArchiveData();
   const [expanded, setExpanded] = useState(false);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
-  const [activeScan, setActiveScan] = useState<{ url: string; title: string; citation?: string } | null>(null);
+  const [activeScan, setActiveScan] = useState<{ url: string; title: string; citation?: string } | null>(
+    null
+  );
   const scanCloseRef = React.useRef<HTMLButtonElement | null>(null);
   const { openSourceReader, openSourceInspector } = useArchiveUi();
   const scanDialogRef = useDialogFocusTrap({
@@ -365,11 +469,11 @@ export const SourceCitationTag: React.FC<{
   };
 
   return (
-    <div className="source-tag">
+    <div className={cx(uiStyles, 'source-tag')}>
       <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8 }}>
         <button
           type="button"
-          className={`source-toggle ${summary.onlyUnverified ? 'is-uncited' : ''}`}
+          className={cx(uiStyles, `source-toggle ${summary.onlyUnverified ? 'is-uncited' : ''}`)}
           aria-expanded={expanded}
           onClick={(e) => {
             e.stopPropagation();
@@ -380,17 +484,17 @@ export const SourceCitationTag: React.FC<{
             {expanded ? '▾' : '▸'} {summary.label}
           </span>
           {alternateDates.length > 0 && (
-            <span className="conflict-pill">
+            <span className={cx(uiStyles, 'conflict-pill')}>
               ! {alternateDates.length} Date Discrepanc{alternateDates.length > 1 ? 'ies' : 'y'}
             </span>
           )}
           {alternatePlaces.length > 0 && (
-            <span className="conflict-pill">
+            <span className={cx(uiStyles, 'conflict-pill')}>
               ! {alternatePlaces.length} Place Discrepanc{alternatePlaces.length > 1 ? 'ies' : 'y'}
             </span>
           )}
           {factConflicts.length > 0 && (
-            <span className="conflict-pill">
+            <span className={cx(uiStyles, 'conflict-pill')}>
               ! {factConflicts.length} Fact Discrepanc{factConflicts.length > 1 ? 'ies' : 'y'}
             </span>
           )}
@@ -399,7 +503,7 @@ export const SourceCitationTag: React.FC<{
         {firstReadable && (
           <button
             type="button"
-            className="source-read-btn"
+            className={cx(uiStyles, 'source-read-btn')}
             onClick={(e) => {
               e.stopPropagation();
               openSourceReader({ sourceId: firstReadable.source_id, eventId });
@@ -412,7 +516,7 @@ export const SourceCitationTag: React.FC<{
         {firstScan?.scan_url && (
           <button
             type="button"
-            className="source-read-btn"
+            className={cx(uiStyles, 'source-read-btn')}
             onClick={(e) => {
               e.stopPropagation();
               const rec = sourcesById.get(firstScan.source_id);
@@ -429,43 +533,43 @@ export const SourceCitationTag: React.FC<{
       </div>
 
       {expanded && (
-        <div className="source-details">
+        <div className={cx(uiStyles, 'source-details')}>
           {sources.length > 0 && (
-            <div className="citation-card-list">
+            <div className={cx(uiStyles, 'citation-card-list')}>
               {sources.map((ref) => {
                 const rec = sourcesById.get(ref.source_id);
                 const cit = buildLibrarianCitation(rec, ref);
                 const isReadable = readableSourceIds.has(ref.source_id);
                 const itemKey = `${ref.source_id}|${ref.claimed_date ?? ''}|${ref.citation_detail ?? ''}|${ref.scan_url ?? ''}`;
                 return (
-                  <div key={itemKey} className="citation-item-card">
-                    <div className="citation-item-top">
-                      <span className={`evidence-tier-badge tier-${cit.tier}`}>
+                  <div key={itemKey} className={cx(uiStyles, 'citation-item-card')}>
+                    <div className={cx(uiStyles, 'citation-item-top')}>
+                      <span className={cx(uiStyles, `evidence-tier-badge tier-${cit.tier}`)}>
                         {cit.tierLabel}
                       </span>
                       {cit.tier !== 'unverified' && (
-                        <span className="evidence-basis-tag">{cit.evidenceBasis}</span>
+                        <span className={cx(uiStyles, 'evidence-basis-tag')}>{cit.evidenceBasis}</span>
                       )}
                     </div>
-                    <div className="citation-item-title">{cit.title}</div>
+                    <div className={cx(uiStyles, 'citation-item-title')}>{cit.title}</div>
                     {(cit.author || cit.repository) && (
-                      <div className="citation-item-meta">
+                      <div className={cx(uiStyles, 'citation-item-meta')}>
                         {[cit.author, cit.repository].filter(Boolean).join(' · ')}
                       </div>
                     )}
                     {cit.recordDetail ? (
-                      <div className="citation-page-detail">{cit.recordDetail}</div>
+                      <div className={cx(uiStyles, 'citation-page-detail')}>{cit.recordDetail}</div>
                     ) : (
                       cit.tier !== 'unverified' && (
-                        <div className="citation-missing-detail">
+                        <div className={cx(uiStyles, 'citation-missing-detail')}>
                           Collection-level reference (no page or roll number recorded)
                         </div>
                       )
                     )}
-                    <div className="citation-item-actions">
+                    <div className={cx(uiStyles, 'citation-item-actions')}>
                       <button
                         type="button"
-                        className="source-action-btn primary"
+                        className={cx(uiStyles, 'source-action-btn primary')}
                         onClick={(e) => {
                           e.stopPropagation();
                           openSourceInspector({
@@ -483,7 +587,7 @@ export const SourceCitationTag: React.FC<{
                       </button>
                       <button
                         type="button"
-                        className="source-action-btn"
+                        className={cx(uiStyles, 'source-action-btn')}
                         onClick={(e) => {
                           e.stopPropagation();
                           handleCopyCitation(itemKey, cit.bibliographicString);
@@ -494,7 +598,7 @@ export const SourceCitationTag: React.FC<{
                       {isReadable && (
                         <button
                           type="button"
-                          className="source-action-btn"
+                          className={cx(uiStyles, 'source-action-btn')}
                           onClick={(e) => {
                             e.stopPropagation();
                             openSourceReader({ sourceId: ref.source_id, eventId });
@@ -506,7 +610,7 @@ export const SourceCitationTag: React.FC<{
                       {ref.scan_url && (
                         <button
                           type="button"
-                          className="source-action-btn"
+                          className={cx(uiStyles, 'source-action-btn')}
                           onClick={(e) => {
                             e.stopPropagation();
                             setActiveScan({
@@ -524,7 +628,7 @@ export const SourceCitationTag: React.FC<{
                           href={cit.url}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="source-action-btn"
+                          className={cx(uiStyles, 'source-action-btn')}
                           onClick={(e) => {
                             e.stopPropagation();
                           }}
@@ -539,7 +643,7 @@ export const SourceCitationTag: React.FC<{
             </div>
           )}
           {alternateDates.length > 0 && (
-            <div className="citation-conflicts-box">
+            <div className={cx(uiStyles, 'citation-conflicts-box')}>
               <strong>Preserved Date Discrepancies</strong>
               <ul>
                 {alternateDates.map((alt) => {
@@ -550,7 +654,7 @@ export const SourceCitationTag: React.FC<{
                       {rec && (
                         <button
                           type="button"
-                          className="source-read-inline"
+                          className={cx(uiStyles, 'source-read-inline')}
                           onClick={(e) => {
                             e.stopPropagation();
                             openSourceInspector({
@@ -571,7 +675,7 @@ export const SourceCitationTag: React.FC<{
             </div>
           )}
           {alternatePlaces.length > 0 && (
-            <div className="citation-conflicts-box">
+            <div className={cx(uiStyles, 'citation-conflicts-box')}>
               <strong>Preserved Place Discrepancies</strong>
               <ul>
                 {alternatePlaces.map((alt) => {
@@ -582,7 +686,7 @@ export const SourceCitationTag: React.FC<{
                       {rec && (
                         <button
                           type="button"
-                          className="source-read-inline"
+                          className={cx(uiStyles, 'source-read-inline')}
                           onClick={(e) => {
                             e.stopPropagation();
                             openSourceInspector({
@@ -602,7 +706,7 @@ export const SourceCitationTag: React.FC<{
             </div>
           )}
           {factConflicts.length > 0 && (
-            <div className="citation-conflicts-box">
+            <div className={cx(uiStyles, 'citation-conflicts-box')}>
               <strong>Preserved Fact Discrepancies</strong>
               <ul>
                 {factConflicts.map((alt) => {
@@ -613,7 +717,7 @@ export const SourceCitationTag: React.FC<{
                       {rec && (
                         <button
                           type="button"
-                          className="source-read-inline"
+                          className={cx(uiStyles, 'source-read-inline')}
                           onClick={(e) => {
                             e.stopPropagation();
                             openSourceInspector({
@@ -640,27 +744,27 @@ export const SourceCitationTag: React.FC<{
           ref={scanDialogRef}
           open
           aria-modal="true"
-          className="lightbox-backdrop photo-lightbox-overlay"
+          className={cx(uiStyles, 'lightbox-backdrop photo-lightbox-overlay')}
           aria-label="Record scan lightbox"
         >
           <button
             type="button"
             tabIndex={-1}
-            className="lightbox-backdrop-close"
+            className={cx(uiStyles, 'lightbox-backdrop-close')}
             aria-label="Close record scan lightbox"
             onClick={() => {
               setActiveScan(null);
             }}
           />
-          <div className="scan-lightbox-card">
-            <div className="scan-lightbox-header">
+          <div className={cx(uiStyles, 'scan-lightbox-card')}>
+            <div className={cx(uiStyles, 'scan-lightbox-header')}>
               <strong style={{ fontFamily: 'var(--font-mono)', fontSize: '0.8rem' }}>
                 RECORD SCAN · {activeScan.title}
               </strong>
               <button
                 ref={scanCloseRef}
                 type="button"
-                className="pill-btn"
+                className={cx(uiStyles, 'pill-btn')}
                 onClick={() => {
                   setActiveScan(null);
                 }}
@@ -668,10 +772,21 @@ export const SourceCitationTag: React.FC<{
                 Close [Esc]
               </button>
             </div>
-            <div className="scan-lightbox-scroll">
-              <img src={activeScan.url} alt={activeScan.title} className="scan-page-img-full" />
+            <div className={cx(uiStyles, 'scan-lightbox-scroll')}>
+              <img
+                src={activeScan.url}
+                alt={activeScan.title}
+                className={cx(uiStyles, 'scan-page-img-full')}
+              />
               {activeScan.citation && (
-                <p style={{ marginTop: 10, fontSize: '0.82rem', color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)' }}>
+                <p
+                  style={{
+                    marginTop: 10,
+                    fontSize: '0.82rem',
+                    color: 'var(--text-secondary)',
+                    fontFamily: 'var(--font-mono)',
+                  }}
+                >
                   {activeScan.citation}
                 </p>
               )}

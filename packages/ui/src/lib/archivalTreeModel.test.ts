@@ -1,4 +1,5 @@
 import type { ArchiveBundle, KinshipEdge, Person, Place } from '@kinloom/core';
+import { describe, expect, it } from 'vitest';
 import {
   ARCHIVAL_NODE_W,
   buildArchivalTreeModel,
@@ -12,11 +13,8 @@ import {
   resolveTreeFocusPlan,
   searchTreePeople,
 } from './archivalTreeModel.js';
-import { describe, expect, it } from 'vitest';
 
-function makePerson(
-  overrides: Partial<Person> & Pick<Person, 'id' | 'slug' | 'full_name'>,
-): Person {
+function makePerson(overrides: Partial<Person> & Pick<Person, 'id' | 'slug' | 'full_name'>): Person {
   const parts = overrides.full_name.split(' ');
   return {
     given_name: parts[0] ?? overrides.full_name,
@@ -214,7 +212,7 @@ function buildSyntheticFamilyFixture(): {
       (cid): KinshipEdge[] => [
         { from: 'p_arthur', to: cid, relation: 'parent' },
         { from: 'p_clara', to: cid, relation: 'parent' },
-      ],
+      ]
     ),
     // Marriage II child
     { from: 'p_arthur', to: 'p_half_1', relation: 'parent' },
@@ -318,7 +316,7 @@ describe('archivalTreeModel', () => {
     expect(arthurBuses[0].busY).not.toBe(arthurBuses[1].busY);
 
     // Same-generation rank nodes never overlap horizontally
-    const byGen = new Map<number, typeof layout.nodes[number][]>();
+    const byGen = new Map<number, (typeof layout.nodes)[number][]>();
     for (const node of layout.nodes) {
       if (node.placement !== 'rank') {
         continue;
@@ -353,17 +351,14 @@ describe('archivalTreeModel', () => {
         model.peopleById.get('p_living_named')!,
         model.parentMap,
         model.childMap,
-        model.spouseMap,
-      ),
+        model.spouseMap
+      )
     ).toBe(false);
 
     const layout = computeArchivalDiagramLayout(model);
     expect(layout.byId.has('p_infant_1')).toBe(false);
     expect(layout.earlyLossStrips).toHaveLength(1);
-    expect(layout.earlyLossStrips[0].chips.map((c) => c.person.id)).toEqual([
-      'p_infant_1',
-      'p_infant_2',
-    ]);
+    expect(layout.earlyLossStrips[0].chips.map((c) => c.person.id)).toEqual(['p_infant_1', 'p_infant_2']);
   });
 
   it('collapses large collateral sibling sets behind progressive disclosure and expands into a 2-column hanging grid', () => {
@@ -377,15 +372,10 @@ describe('archivalTreeModel', () => {
     });
 
     const marriageOne = collapsedModel.unions.find(
-      (u) => u.primaryPartnerId === 'p_arthur' && u.secondaryPartnerId === 'p_clara',
+      (u) => u.primaryPartnerId === 'p_arthur' && u.secondaryPartnerId === 'p_clara'
     )!;
     expect(marriageOne.visibleChildIds).toEqual(['p_henry']);
-    expect(marriageOne.collapsedSiblingIds).toEqual([
-      'p_sib_1',
-      'p_sib_2',
-      'p_sib_3',
-      'p_sib_4',
-    ]);
+    expect(marriageOne.collapsedSiblingIds).toEqual(['p_sib_1', 'p_sib_2', 'p_sib_3', 'p_sib_4']);
 
     const collapsedLayout = computeArchivalDiagramLayout(collapsedModel);
     expect(collapsedLayout.siblingToggles).toHaveLength(1);

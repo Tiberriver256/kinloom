@@ -111,11 +111,7 @@ async function invokeIa(
   };
 }
 
-function makeTextAndLookupFetch(
-  itemId: string,
-  djvuPages: readonly string[],
-  seen: string[]
-): typeof fetch {
+function makeTextAndLookupFetch(itemId: string, djvuPages: readonly string[], seen: string[]): typeof fetch {
   const fakeMeta = {
     metadata: { identifier: itemId, title: 'Synthetic Gazetteer' },
     files: [
@@ -246,10 +242,10 @@ describe('archive-org native client: cached grep and page', () => {
     expect(out2.hits[0].cached).toBe(true);
 
     // --refresh forces fresh fetches and updates cached content.
-    const r3 = await invokeIa(
-      ['grep', itemId, '--pattern', 'Clara Barton', '--refresh', '--json'],
-      { cacheDir: tmpdir, fetchImpl }
-    );
+    const r3 = await invokeIa(['grep', itemId, '--pattern', 'Clara Barton', '--refresh', '--json'], {
+      cacheDir: tmpdir,
+      fetchImpl,
+    });
     expect(r3.exitCode).toBe(0);
     expect(fetchCalls).toHaveLength(3);
     const out3 = JSON.parse(r3.stdout) as typeof out1;
@@ -434,10 +430,10 @@ describe('archive-org native client: cached grep and page', () => {
     expect(fs.readFileSync(outFile2).equals(jpegState.bytes)).toBe(true);
 
     // Text output reports cache-hit on cached leaf fetch.
-    const rTxt = await invokeIa(
-      ['page', itemId, '--leaf', '4', '--scale', '2', '--out', outFile2],
-      { cacheDir: tmpdir, fetchImpl }
-    );
+    const rTxt = await invokeIa(['page', itemId, '--leaf', '4', '--scale', '2', '--out', outFile2], {
+      cacheDir: tmpdir,
+      fetchImpl,
+    });
     expect(rTxt.exitCode).toBe(0);
     expect(rTxt.stdout).toContain('cache-hit');
     expect(seenUrls).toHaveLength(callCountAfterFirst);
@@ -487,9 +483,7 @@ describe('archive-org native client: cached grep and page', () => {
           throw new Error(`Missing leaf in URL: ${url}`);
         }
         const leaf = Number.parseInt(match[1], 10);
-        return bytesResponse(
-          Buffer.concat([Buffer.from([0xff, 0xd8, leaf]), Buffer.alloc(24, 0)])
-        );
+        return bytesResponse(Buffer.concat([Buffer.from([0xff, 0xd8, leaf]), Buffer.alloc(24, 0)]));
       } finally {
         inflight -= 1;
       }
@@ -542,10 +536,10 @@ describe('archive-org native client: cached grep and page', () => {
     expect(ranged.cache_hit).toBe(true);
     expect(seen).toHaveLength(callsAfterMiss);
 
-    const rConflict = await invokeIa(
-      ['page', itemId, '--leaf', '1', '--leaves', '2,3', '--out', outDir],
-      { cacheDir: tmpdir, fetchImpl }
-    );
+    const rConflict = await invokeIa(['page', itemId, '--leaf', '1', '--leaves', '2,3', '--out', outDir], {
+      cacheDir: tmpdir,
+      fetchImpl,
+    });
     expect(rConflict.exitCode).toBe(2);
     expect(rConflict.stderr).toContain('--leaves');
 
@@ -641,9 +635,12 @@ describe('archive-org native client: cached grep and page', () => {
     expect(p2.cache_hit).toBe(true);
     expect(p2.count).toBe(2);
     expect(seen).toHaveLength(callsAfterMiss);
-    expect(fs.readFileSync(p2.pages[0].path).subarray(0, 2).equals(Buffer.from([0xff, 0xd8]))).toBe(
-      true
-    );
+    expect(
+      fs
+        .readFileSync(p2.pages[0].path)
+        .subarray(0, 2)
+        .equals(Buffer.from([0xff, 0xd8]))
+    ).toBe(true);
 
     const rSingle = await invokeIa(
       [
@@ -720,9 +717,7 @@ describe('archive-org native client: cached grep and page', () => {
     );
     expect(rReuse.exitCode).toBe(0);
     expect(fetchCalls).toEqual([]);
-    expect(fs.readFileSync(path.join(out1, `${itemId}_scandata.xml`)).equals(SYNTHETIC_SCANDATA)).toBe(
-      true
-    );
+    expect(fs.readFileSync(path.join(out1, `${itemId}_scandata.xml`)).equals(SYNTHETIC_SCANDATA)).toBe(true);
     expect(fs.readFileSync(path.join(out1, `${itemId}_djvu.txt`)).equals(djvuBytes)).toBe(true);
     expect(rReuse.stdout).toContain('cache-hit');
 
@@ -750,23 +745,17 @@ describe('archive-org native client: cached grep and page', () => {
 
     // --refresh re-fetches metadata and PDF and updates cache.
     pdfBytes.data = Buffer.from('%PDF-1.4 synthetic county record v2', 'utf8');
-    const rRef = await invokeIa(
-      ['download', itemId, `${itemId}.pdf`, '--out', out2, '--refresh'],
-      { cacheDir: tmpdir, fetchImpl }
-    );
+    const rRef = await invokeIa(['download', itemId, `${itemId}.pdf`, '--out', out2, '--refresh'], {
+      cacheDir: tmpdir,
+      fetchImpl,
+    });
     expect(rRef.exitCode).toBe(0);
     expect(fetchCalls).toHaveLength(2);
     expect(fs.readFileSync(path.join(out2, `${itemId}.pdf`)).equals(pdfBytes.data)).toBe(true);
 
     // Path traversal filenames are rejected with exit code 2 and zero HTTP calls.
     fetchCalls.length = 0;
-    for (const badName of [
-      '../evil.txt',
-      '/etc/passwd',
-      'sub/../../escape.txt',
-      'a\\b.txt',
-      'C:drive.txt',
-    ]) {
+    for (const badName of ['../evil.txt', '/etc/passwd', 'sub/../../escape.txt', 'a\\b.txt', 'C:drive.txt']) {
       const rBad = await invokeIa(['download', itemId, badName, '--out', out2], {
         cacheDir: tmpdir,
         fetchImpl,
@@ -884,10 +873,10 @@ describe('archive-org native client: cached grep and page', () => {
     expect(fd2.cache_hit).toBe(true);
     expect(fetchCalls).toHaveLength(1);
 
-    const f3 = await invokeIa(
-      ['fulltext', '"Oakridge Mill"', '--cache-ttl-hours', '0', '--json'],
-      { cacheDir: tmpdir, fetchImpl }
-    );
+    const f3 = await invokeIa(['fulltext', '"Oakridge Mill"', '--cache-ttl-hours', '0', '--json'], {
+      cacheDir: tmpdir,
+      fetchImpl,
+    });
     expect(f3.exitCode).toBe(0);
     const fd3 = JSON.parse(f3.stdout) as typeof fd1;
     expect(fd3.response.body.hits.total).toBe(7);
@@ -1402,20 +1391,7 @@ describe('archive-org native client: hardening', () => {
 
     const tmpdir = await makeTempDir();
     const r1 = await invokeIa(
-      [
-        'grep',
-        goodId,
-        badId,
-        '-e',
-        'Douglass',
-        '-e',
-        'Barton',
-        '-C',
-        '80',
-        '-m',
-        '10',
-        '--json',
-      ],
+      ['grep', goodId, badId, '-e', 'Douglass', '-e', 'Barton', '-C', '80', '-m', '10', '--json'],
       { cacheDir: tmpdir, fetchImpl }
     );
     expect(r1.exitCode).toBe(0);
@@ -1484,10 +1460,10 @@ describe('archive-org native client: hardening', () => {
     const outDir = path.join(tmpdir, 'out');
 
     // Single-page via --leaves with duplicate leaf deduplicates to 1 fetch.
-    const r1 = await invokeIa(
-      ['page', itemId, '--leaves', '4,4', '--out-dir', outDir, '--json'],
-      { cacheDir: tmpdir, fetchImpl }
-    );
+    const r1 = await invokeIa(['page', itemId, '--leaves', '4,4', '--out-dir', outDir, '--json'], {
+      cacheDir: tmpdir,
+      fetchImpl,
+    });
     expect(r1.exitCode).toBe(0);
     const p1 = JSON.parse(r1.stdout) as { cache_hit: boolean; leaf: number };
     expect(p1.cache_hit).toBe(false);
@@ -1683,11 +1659,7 @@ describe('archive-org native client: hardening', () => {
 
     // Invalid --rows and empty query exit 2 with no HTTP requests.
     const before = seenUrls.length;
-    for (const badArgv of [
-      ['search'],
-      ['search', 'Oak', '--limit', '0'],
-      ['search', 'Oak', '--page', '0'],
-    ]) {
+    for (const badArgv of [['search'], ['search', 'Oak', '--limit', '0'], ['search', 'Oak', '--page', '0']]) {
       const rBad = await invokeIa(badArgv, { cacheDir: tmpdir, fetchImpl });
       expect(rBad.exitCode).toBe(2);
     }
@@ -1800,12 +1772,21 @@ describe('archive-org native client: hardening', () => {
     const textCases: readonly (readonly [readonly string[], readonly number[]])[] = [
       [['text', itemId, '--page', '1', '--json'], [3]],
       [['text', itemId, '-p', 'iv', '--json'], [2]],
-      [['text', itemId, '--printed-pages', 'iv,2', '--json'], [2, 4]],
+      [
+        ['text', itemId, '--printed-pages', 'iv,2', '--json'],
+        [2, 4],
+      ],
       [['text', itemId, '--leaf', 'n3', '--json'], [3]],
-      [['text', itemId, '--leaves', 'n2-n3', '--json'], [2, 3]],
+      [
+        ['text', itemId, '--leaves', 'n2-n3', '--json'],
+        [2, 3],
+      ],
       [['text', '--item', itemId, '--page', '2', '--json'], [4]],
       [['text', itemId, 'n4', '--json'], [4]],
-      [['text', itemId, '1-2', '--json'], [3, 4]],
+      [
+        ['text', itemId, '1-2', '--json'],
+        [3, 4],
+      ],
     ];
     for (const [argv, expectedLeaves] of textCases) {
       const res = await invokeIa(argv, { cacheDir: tmpdir, fetchImpl });
@@ -1847,14 +1828,13 @@ describe('archive-org native client: hardening', () => {
     await expect(
       httpGetBytesIa('https://169.254.169.254/latest/meta-data/', ctxBlocked)
     ).rejects.toBeInstanceOf(SsrfBlockedError);
-    await expect(
-      httpGetBytesIa('https://evil.example.com/metadata/demo', ctxBlocked)
-    ).rejects.toBeInstanceOf(SsrfBlockedError);
+    await expect(httpGetBytesIa('https://evil.example.com/metadata/demo', ctxBlocked)).rejects.toBeInstanceOf(
+      SsrfBlockedError
+    );
 
     // Redirect to evil host is blocked; redirect to ia801405.us.archive.org is allowed.
     const ctxBadRedirect = createRecordContext({
-      fetchImpl: async () =>
-        bytesResponse('', 302, { Location: 'https://evil.example.com/stolen' }),
+      fetchImpl: async () => bytesResponse('', 302, { Location: 'https://evil.example.com/stolen' }),
       sleepFn: async () => {},
     });
     await expect(
@@ -1873,10 +1853,7 @@ describe('archive-org native client: hardening', () => {
       },
       sleepFn: async () => {},
     });
-    const redirected = await httpGetBytesIa(
-      'https://archive.org/download/demo/file.txt',
-      ctxGoodRedirect
-    );
+    const redirected = await httpGetBytesIa('https://archive.org/download/demo/file.txt', ctxGoodRedirect);
     expect(redirected.toString('utf8')).toBe('redirected-ok');
   });
 
@@ -1914,11 +1891,27 @@ describe('archive-org native client: hardening', () => {
     };
 
     const run1 = await invokeIa(
-      ['pages', itemId, '--pages', '1-3,5', '--out-dir', outDir, '--scale', '4', '--concurrency', '4', '--json'],
+      [
+        'pages',
+        itemId,
+        '--pages',
+        '1-3,5',
+        '--out-dir',
+        outDir,
+        '--scale',
+        '4',
+        '--concurrency',
+        '4',
+        '--json',
+      ],
       { cacheDir: cacheRoot, fetchImpl }
     );
     expect(run1.exitCode, run1.stderr).toBe(0);
-    const body1 = JSON.parse(run1.stdout) as { count: number; cache_hit: boolean; pages: Array<{ leaf: number; path: string; page_cached: boolean }> };
+    const body1 = JSON.parse(run1.stdout) as {
+      count: number;
+      cache_hit: boolean;
+      pages: Array<{ leaf: number; path: string; page_cached: boolean }>;
+    };
     expect(body1.count).toBe(4);
     expect(body1.cache_hit).toBe(false);
     expect(body1.pages.map((p) => p.leaf)).toEqual([1, 2, 3, 5]);
@@ -1930,7 +1923,19 @@ describe('archive-org native client: hardening', () => {
 
     // Second run resumes cleanly from disk cache with 0 new HTTP fetches
     const run2 = await invokeIa(
-      ['pages', itemId, '--pages', '1-3,5', '--out-dir', outDir, '--scale', '4', '--concurrency', '4', '--json'],
+      [
+        'pages',
+        itemId,
+        '--pages',
+        '1-3,5',
+        '--out-dir',
+        outDir,
+        '--scale',
+        '4',
+        '--concurrency',
+        '4',
+        '--json',
+      ],
       { cacheDir: cacheRoot, fetchImpl }
     );
     expect(run2.exitCode, run2.stderr).toBe(0);

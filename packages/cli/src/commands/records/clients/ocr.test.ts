@@ -239,10 +239,7 @@ describe('ocr native client', () => {
     };
 
     const t0 = Date.now();
-    const res = await invokeOcr(
-      [imgPath, '--cache-dir', cacheDir, '--timeout', '0.3', '--json'],
-      { env }
-    );
+    const res = await invokeOcr([imgPath, '--cache-dir', cacheDir, '--timeout', '0.3', '--json'], { env });
     const elapsedMs = Date.now() - t0;
 
     expect(res.exitCode).toBe(1);
@@ -341,10 +338,9 @@ describe('ocr native client', () => {
       env,
     });
     expect(conflict.exitCode).toBe(2);
-    const cursive = await invokeOcr(
-      [imgPath, '--cache-dir', cacheDir, '--boxes', '--mode', 'cursive'],
-      { env }
-    );
+    const cursive = await invokeOcr([imgPath, '--cache-dir', cacheDir, '--boxes', '--mode', 'cursive'], {
+      env,
+    });
     expect(cursive.exitCode).toBe(2);
   });
 
@@ -457,10 +453,9 @@ describe('ocr native client', () => {
     expect(fs.readFileSync(callLog, 'utf8').trim().split('\n')).toHaveLength(4);
 
     // Missing file fails cleanly with exit 2 before invoking tesseract.
-    const missing = await invokeOcr(
-      [img1, path.join(tmp, 'does-not-exist.png'), '--cache-dir', cacheDir],
-      { env }
-    );
+    const missing = await invokeOcr([img1, path.join(tmp, 'does-not-exist.png'), '--cache-dir', cacheDir], {
+      env,
+    });
     expect(missing.exitCode).toBe(2);
     expect(missing.stderr).toContain('image file not found');
     expect(fs.readFileSync(callLog, 'utf8').trim().split('\n')).toHaveLength(4);

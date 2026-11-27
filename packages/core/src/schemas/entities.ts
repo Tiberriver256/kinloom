@@ -14,30 +14,13 @@ const OptionalCoercedStringSchema = z
   .transform((val) => (val === null ? null : String(val)))
   .optional();
 
-export const EventScopeSchema = z.enum([
-  'personal',
-  'family',
-  'local',
-  'state',
-  'national',
-  'global',
-]);
+export const EventScopeSchema = z.enum(['personal', 'family', 'local', 'state', 'national', 'global']);
 
-export const EventKindSchema = z.enum([
-  'point_event',
-  'residence_anchor',
-  'context_span',
-]);
+export const EventKindSchema = z.enum(['point_event', 'residence_anchor', 'context_span']);
 
 export const ConfidenceTierSchema = z.enum(['Confirmed', 'Inferred', 'Possible']);
 
-export const PlaceTypeSchema = z.enum([
-  'country',
-  'state',
-  'county',
-  'town',
-  'homestead',
-]);
+export const PlaceTypeSchema = z.enum(['country', 'state', 'county', 'town', 'homestead']);
 
 export const KinshipRelationSchema = z.enum(['parent', 'child', 'spouse']);
 
@@ -56,30 +39,37 @@ export const ArchivalMediaKindSchema = z.enum([
 
 export const BuildModeSchema = z.enum(['public', 'private']);
 
-export const NarrativeKindSchema = z.enum([
-  'biography',
-  'family_story',
-  'research_note',
-  'memoir',
-]);
+export const NarrativeKindSchema = z.enum(['biography', 'family_story', 'research_note', 'memoir']);
 
 export const AlternateDateSchema = z.object({
   edtf_date: CoercedEdtfStringSchema,
   source_id: z.string().min(1),
-  note: z.string().nullable().default('').transform((v) => v ?? ''),
+  note: z
+    .string()
+    .nullable()
+    .default('')
+    .transform((v) => v ?? ''),
 });
 
 export const AlternatePlaceSchema = z.object({
   place_name: z.string().min(1),
   place_id: z.string().nullable().optional(),
   source_id: z.string().min(1),
-  note: z.string().nullable().default('').transform((v) => v ?? ''),
+  note: z
+    .string()
+    .nullable()
+    .default('')
+    .transform((v) => v ?? ''),
 });
 
 export const FactConflictSchema = z.object({
   claim: z.string().min(1),
   source_id: z.string().min(1),
-  note: z.string().nullable().default('').transform((v) => v ?? ''),
+  note: z
+    .string()
+    .nullable()
+    .default('')
+    .transform((v) => v ?? ''),
 });
 
 export const EventParticipantSchema = z.object({
@@ -137,7 +127,7 @@ export type Pronunciation = z.infer<typeof PronunciationSchema>;
  */
 export function mergePronunciationLexicons(
   base?: Readonly<Record<string, Pronunciation>> | null,
-  override?: Readonly<Record<string, Pronunciation>> | null,
+  override?: Readonly<Record<string, Pronunciation>> | null
 ): Record<string, Pronunciation> {
   const out: Record<string, Pronunciation> = {};
   const keyByLower = new Map<string, string>();
@@ -162,7 +152,7 @@ export function mergePronunciationLexicons(
 
 function mergePronunciationEntry(
   shared: Pronunciation | undefined,
-  own: Pronunciation | undefined,
+  own: Pronunciation | undefined
 ): Pronunciation | null {
   if (!own && !shared) {
     return null;
@@ -278,7 +268,17 @@ const COUNTRY_TOKEN_PATTERNS: readonly { readonly code: string; readonly tokens:
   },
   {
     code: 'SE',
-    tokens: ['sweden', 'sverige', 'värmland', 'dalarna', 'skåne', 'småland', 'östergötland', 'västergötland', 'bergslagen'],
+    tokens: [
+      'sweden',
+      'sverige',
+      'värmland',
+      'dalarna',
+      'skåne',
+      'småland',
+      'östergötland',
+      'västergötland',
+      'bergslagen',
+    ],
   },
   {
     code: 'FI',
@@ -290,11 +290,38 @@ const COUNTRY_TOKEN_PATTERNS: readonly { readonly code: string; readonly tokens:
   },
   {
     code: 'DE',
-    tokens: ['germany', 'deutschland', 'prussia', 'preußen', 'bavaria', 'bayern', 'saxony', 'sachsen', 'hanover', 'hannover', 'hesse', 'hessen', 'westphalia', 'württemberg', 'baden'],
+    tokens: [
+      'germany',
+      'deutschland',
+      'prussia',
+      'preußen',
+      'bavaria',
+      'bayern',
+      'saxony',
+      'sachsen',
+      'hanover',
+      'hannover',
+      'hesse',
+      'hessen',
+      'westphalia',
+      'württemberg',
+      'baden',
+    ],
   },
   {
     code: 'CA',
-    tokens: ['canada', 'ontario', 'quebec', 'québec', 'nova scotia', 'new brunswick', 'manitoba', 'saskatchewan', 'alberta', 'british columbia'],
+    tokens: [
+      'canada',
+      'ontario',
+      'quebec',
+      'québec',
+      'nova scotia',
+      'new brunswick',
+      'manitoba',
+      'saskatchewan',
+      'alberta',
+      'british columbia',
+    ],
   },
   {
     code: 'IE',
@@ -405,7 +432,7 @@ function languageCompatibleCountries(language: string): ReadonlySet<string> | nu
 
 function isBareLexiconEntryCompatibleWithPlace(
   entry: Pronunciation,
-  place: { readonly name?: string; readonly full_name?: string },
+  place: { readonly name?: string; readonly full_name?: string }
 ): boolean {
   const fullName = place.full_name?.trim() ?? '';
   const fullNameLower = fullName.toLowerCase();
@@ -471,12 +498,7 @@ function hasPronunciationEntryContent(entry?: Pronunciation | null): boolean {
   if (!entry) {
     return false;
   }
-  if (
-    Boolean(entry.phonetic?.trim()) ||
-    Boolean(entry.ipa?.trim()) ||
-    Boolean(entry.audio_url?.trim()) ||
-    Boolean(entry.note?.trim())
-  ) {
+  if (entry.phonetic?.trim() || entry.ipa?.trim() || entry.audio_url?.trim() || entry.note?.trim()) {
     return true;
   }
   return Boolean(
@@ -485,20 +507,20 @@ function hasPronunciationEntryContent(entry?: Pronunciation | null): boolean {
         Boolean(v.phonetic?.trim()) ||
         Boolean(v.ipa?.trim()) ||
         Boolean(v.audio_url?.trim()) ||
-        Boolean(v.note?.trim()),
-    ),
+        Boolean(v.note?.trim())
+    )
   );
 }
 
 function lookupLexiconEntry(
   lexicon: Readonly<Record<string, Pronunciation>>,
-  key: string,
+  key: string
 ): Pronunciation | undefined {
   const trimmed = key.trim();
   if (!trimmed) {
     return undefined;
   }
-  if (Object.prototype.hasOwnProperty.call(lexicon, trimmed)) {
+  if (Object.hasOwn(lexicon, trimmed)) {
     return lexicon[trimmed];
   }
   const lower = trimmed.toLowerCase();
@@ -510,10 +532,7 @@ function lookupLexiconEntry(
   return undefined;
 }
 
-function isLexiconEntryCompatibleWithPerson(
-  entry: Pronunciation,
-  fullNameLower: string,
-): boolean {
+function isLexiconEntryCompatibleWithPerson(entry: Pronunciation, fullNameLower: string): boolean {
   if (entry.match_full_name_contains === undefined) {
     return true;
   }
@@ -530,7 +549,7 @@ function isLexiconEntryCompatibleWithPerson(
 function lookupCompatiblePersonLexiconEntry(
   lexicon: Readonly<Record<string, Pronunciation>>,
   key: string,
-  fullNameLower: string,
+  fullNameLower: string
 ): Pronunciation | undefined {
   const entry = lookupLexiconEntry(lexicon, key);
   if (!entry || !hasPronunciationEntryContent(entry)) {
@@ -551,8 +570,7 @@ function tokenizePersonName(person: {
   readonly surname?: string;
 }): string[] {
   const rawFull = person.full_name?.trim() ?? '';
-  const combined =
-    rawFull || [person.given_name?.trim(), person.surname?.trim()].filter(Boolean).join(' ');
+  const combined = rawFull || [person.given_name?.trim(), person.surname?.trim()].filter(Boolean).join(' ');
   if (!combined) {
     return [];
   }
@@ -601,9 +619,7 @@ interface ComposedTokenPart {
 }
 
 function composeLanguageTag(entries: readonly Pronunciation[]): string | undefined {
-  const rawLangs = entries
-    .map((e) => e.language?.trim())
-    .filter((lang): lang is string => Boolean(lang));
+  const rawLangs = entries.map((e) => e.language?.trim()).filter((lang): lang is string => Boolean(lang));
   if (rawLangs.length === 0) {
     return undefined;
   }
@@ -612,7 +628,7 @@ function composeLanguageTag(entries: readonly Pronunciation[]): string | undefin
     return rawLangs[0];
   }
   const baseLangs = new Set(
-    rawLangs.map((l) => normalizeBaseLanguage(l)).filter((b): b is string => Boolean(b)),
+    rawLangs.map((l) => normalizeBaseLanguage(l)).filter((b): b is string => Boolean(b))
   );
   if (baseLangs.size === 1) {
     // Prefer a region-qualified tag (e.g. en-US over en) if all share one base language.
@@ -660,7 +676,7 @@ function composeProvenance(entries: readonly Pronunciation[]): {
 function resolveCompositionalPersonPronunciation(
   tokens: readonly string[],
   lexicon: Readonly<Record<string, Pronunciation>>,
-  fullNameLower: string,
+  fullNameLower: string
 ): { readonly resolved: ResolvedPersonPronunciation | null; readonly missingParts: readonly string[] } {
   if (tokens.length === 0) {
     return { resolved: null, missingParts: [] };
@@ -700,7 +716,10 @@ function resolveCompositionalPersonPronunciation(
 
     // Hyphenated name tokens (e.g. "Anne-Marie" or "Smith-Jones"): compose sub-parts when each resolves.
     if (token.includes('-')) {
-      const subTokens = token.split('-').map((s) => s.trim()).filter(Boolean);
+      const subTokens = token
+        .split('-')
+        .map((s) => s.trim())
+        .filter(Boolean);
       if (subTokens.length > 1) {
         const subEntries: Pronunciation[] = [];
         let allSubMatched = true;
@@ -752,7 +771,10 @@ function resolveCompositionalPersonPronunciation(
   }
 
   const resolvedEntries = parts
-    .filter((p): p is ComposedTokenPart & { readonly entry: Pronunciation } => p.kind === 'resolved' && Boolean(p.entry))
+    .filter(
+      (p): p is ComposedTokenPart & { readonly entry: Pronunciation } =>
+        p.kind === 'resolved' && Boolean(p.entry)
+    )
     .map((p) => p.entry);
 
   const allHavePhonetic = resolvedEntries.every((e) => Boolean(e.phonetic?.trim()));
@@ -762,8 +784,7 @@ function resolveCompositionalPersonPronunciation(
   if (allHavePhonetic) {
     let out = '';
     for (const part of parts) {
-      const piece =
-        part.kind === 'resolved' ? (part.entry?.phonetic?.trim() ?? '') : part.token;
+      const piece = part.kind === 'resolved' ? (part.entry?.phonetic?.trim() ?? '') : part.token;
       if (!piece) {
         continue;
       }
@@ -838,7 +859,7 @@ export function resolvePersonPronunciation(
     readonly surname?: string;
     readonly pronunciation?: Pronunciation | null;
   },
-  lexicon?: Readonly<Record<string, Pronunciation>> | null,
+  lexicon?: Readonly<Record<string, Pronunciation>> | null
 ): ResolvedPersonPronunciation | null {
   if (person.is_living || person.full_name?.trim() === 'Living') {
     return null;
@@ -848,16 +869,13 @@ export function resolvePersonPronunciation(
   const fullNameLower = fullNameTrimmed.toLowerCase();
   const idKey = person.id?.trim() ?? '';
 
-  const exactIdEntry =
-    lexicon && idKey ? lookupLexiconEntry(lexicon, idKey) : undefined;
+  const exactIdEntry = lexicon && idKey ? lookupLexiconEntry(lexicon, idKey) : undefined;
   const exactFullNameEntry =
     lexicon && fullNameTrimmed
       ? lookupCompatiblePersonLexiconEntry(lexicon, fullNameTrimmed, fullNameLower)
       : undefined;
   const exactShared =
-    exactIdEntry && hasPronunciationEntryContent(exactIdEntry)
-      ? exactIdEntry
-      : exactFullNameEntry;
+    exactIdEntry && hasPronunciationEntryContent(exactIdEntry) ? exactIdEntry : exactFullNameEntry;
 
   // 1. Explicit person.pronunciation always wins with full coverage.
   const own = person.pronunciation ?? undefined;
@@ -897,7 +915,7 @@ export function resolvePersonPronunciation(
   const { resolved: composed, missingParts } = resolveCompositionalPersonPronunciation(
     tokens,
     lexicon,
-    fullNameLower,
+    fullNameLower
   );
   if (composed) {
     return composed;
@@ -937,7 +955,7 @@ export function resolvePlacePronunciation(
     readonly full_name?: string;
     readonly pronunciation?: Pronunciation | null;
   },
-  lexicon?: Readonly<Record<string, Pronunciation>> | null,
+  lexicon?: Readonly<Record<string, Pronunciation>> | null
 ): Pronunciation | null {
   let shared: Pronunciation | undefined;
 
@@ -951,9 +969,7 @@ export function resolvePlacePronunciation(
     if (!shared && fullNameKey) {
       shared =
         lexicon[fullNameKey] ??
-        Object.entries(lexicon).find(
-          ([k]) => k.toLowerCase() === fullNameKey.toLowerCase(),
-        )?.[1];
+        Object.entries(lexicon).find(([k]) => k.toLowerCase() === fullNameKey.toLowerCase())?.[1];
     }
 
     const nameKey = place.name?.trim();
@@ -970,9 +986,7 @@ export function resolvePlacePronunciation(
         }
         const keyQualifiers = keySegments.slice(1).map((s) => s.toLowerCase());
         const allMatch = keyQualifiers.every(
-          (q) =>
-            qualifierSegments.includes(q) ||
-            (q.length >= 3 && qualifierJoined.includes(q)),
+          (q) => qualifierSegments.includes(q) || (q.length >= 3 && qualifierJoined.includes(q))
         );
         if (allMatch && (!bestQualified || key.length > bestQualified.keyLen)) {
           bestQualified = { keyLen: key.length, entry };
@@ -986,9 +1000,7 @@ export function resolvePlacePronunciation(
     if (!shared && nameKey) {
       const bareEntry =
         lexicon[nameKey] ??
-        Object.entries(lexicon).find(
-          ([k]) => k.toLowerCase() === nameKey.toLowerCase(),
-        )?.[1];
+        Object.entries(lexicon).find(([k]) => k.toLowerCase() === nameKey.toLowerCase())?.[1];
       if (bareEntry && isBareLexiconEntryCompatibleWithPlace(bareEntry, place)) {
         shared = bareEntry;
       }
@@ -1064,7 +1076,11 @@ export const RawEventSchema = z.object({
   fact_conflicts: z.array(FactConflictSchema).optional(),
   place_id: z.string().nullable().default(null),
   place_precision: z.string().nullable().optional(),
-  summary: z.string().nullable().default('').transform((v) => v ?? ''),
+  summary: z
+    .string()
+    .nullable()
+    .default('')
+    .transform((v) => v ?? ''),
   severity_rank: z.number().nullable().optional(),
   weather_metrics: z.record(z.string(), z.union([z.string(), z.number()])).optional(),
   source_url: z.string().nullable().optional(),
@@ -1098,10 +1114,7 @@ export const NarrativeEnrichmentOverrideSchema = z.object({
   photo_placeholder_caption: z.string().optional(),
 });
 
-export const NarrativeEnrichmentSchema = z.union([
-  NarrativeEnrichmentOverrideSchema,
-  RawEventSchema,
-]);
+export const NarrativeEnrichmentSchema = z.union([NarrativeEnrichmentOverrideSchema, RawEventSchema]);
 
 export const ResidenceSpanSchema = z.object({
   id: z.string().min(1),

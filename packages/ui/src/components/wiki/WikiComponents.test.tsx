@@ -8,26 +8,26 @@ import type {
   TalkComment,
 } from '@kinloom/core';
 import { asRevisionId, compileArchive, parseKinloomConfig } from '@kinloom/core';
+import { act } from 'react';
+import { createRoot } from 'react-dom/client';
+import { MemoryRouter } from 'react-router-dom';
+import { describe, expect, it } from 'vitest';
+import { StaticDemoDataSource } from '../../adapters/staticDemoDataSource.js';
+import { ArchiveProvider } from '../../context/ArchiveProvider.js';
 import {
   formatLineageGroupLabel,
   formatTreeCardName,
   formatTreeCardPlace,
 } from '../../lib/treeNodeDisplay.js';
-import { AuthorPill, CitationBadge, ConflictBadge } from './WikiBadges.js';
-import { ArchiveProvider } from '../../context/ArchiveProvider.js';
-import { AuthStatusBanner, getInviteStripDismissKey } from './AuthStatusBanner.js';
-import { CreateEntityModal, buildUniquePersonIdentity } from './CreateEntityModal.js';
-import { EntityEditDrawer } from './EntityEditDrawer.js';
-import { MemoryRouter } from 'react-router-dom';
-import { PrivateArchiveGate } from './PrivateArchiveGate.js';
 import { RecentChangesPage } from '../../pages/RecentChangesPage.js';
-import { RevisionDiffView } from './RevisionDiffView.js';
-import { StaticDemoDataSource } from '../../adapters/staticDemoDataSource.js';
-import { TalkPanel } from './TalkPanel.js';
 import { initialsOf } from '../Atoms.js';
-import { act } from 'react';
-import { createRoot } from 'react-dom/client';
-import { describe, expect, it } from 'vitest';
+import { AuthStatusBanner, getInviteStripDismissKey } from './AuthStatusBanner.js';
+import { buildUniquePersonIdentity, CreateEntityModal } from './CreateEntityModal.js';
+import { EntityEditDrawer } from './EntityEditDrawer.js';
+import { PrivateArchiveGate } from './PrivateArchiveGate.js';
+import { RevisionDiffView } from './RevisionDiffView.js';
+import { TalkPanel } from './TalkPanel.js';
+import { AuthorPill, CitationBadge, ConflictBadge } from './WikiBadges.js';
 
 declare global {
   var IS_REACT_ACT_ENVIRONMENT: boolean | undefined;
@@ -104,7 +104,7 @@ describe('Wiki UI components and tree display polish helpers', () => {
         <ConflictBadge />
         <AuthorPill authorType="agent" authorName="Archivist Bot" />
         <AuthorPill authorType="system_seed" authorName="seed" />
-      </div>,
+      </div>
     );
 
     expect(container.textContent).toContain('Cited');
@@ -121,7 +121,7 @@ describe('Wiki UI components and tree display polish helpers', () => {
       <RevisionDiffView
         before={{ full_name: 'Clara Barton', birth_edtf: '1821' }}
         after={{ full_name: 'Clarissa Harlowe Barton', birth_edtf: '1821-12-25', note: 'Verified' }}
-      />,
+      />
     );
 
     expect(container.textContent).toContain('+1 added');
@@ -187,11 +187,7 @@ describe('Wiki UI components and tree display polish helpers', () => {
     };
 
     const { container, unmount } = renderIntoDom(
-      <ArchiveProvider
-        siteConfig={siteConfig}
-        initialBundle={testBundle}
-        dataSource={mockDataSource}
-      >
+      <ArchiveProvider siteConfig={siteConfig} initialBundle={testBundle} dataSource={mockDataSource}>
         <EntityEditDrawer
           open
           entityType="person"
@@ -201,7 +197,7 @@ describe('Wiki UI components and tree display polish helpers', () => {
           title="Clara Barton"
           onClose={() => {}}
         />
-      </ArchiveProvider>,
+      </ArchiveProvider>
     );
 
     const inputs = container.querySelectorAll<HTMLInputElement>('input[type="text"]');
@@ -229,7 +225,7 @@ describe('Wiki UI components and tree display polish helpers', () => {
     expect(container.textContent).toContain('Peer Editor');
 
     const rebaseBtn = [...container.querySelectorAll('button')].find((b) =>
-      b.textContent?.includes('Rebase & Save Again'),
+      b.textContent?.includes('Rebase & Save Again')
     );
     await act(async () => {
       rebaseBtn?.click();
@@ -299,14 +295,14 @@ describe('Wiki UI components and tree display polish helpers', () => {
         >
           <RecentChangesPage initialRevisions={revisions} />
         </ArchiveProvider>
-      </MemoryRouter>,
+      </MemoryRouter>
     );
 
     expect(container.textContent).toContain('Batch wave_census_1880');
     expect(container.textContent).toContain('Add family note');
 
-    const agentTab = [...container.querySelectorAll<HTMLButtonElement>('button[role="tab"]')].find(
-      (b) => b.textContent?.includes('Research Agents'),
+    const agentTab = [...container.querySelectorAll<HTMLButtonElement>('button[role="tab"]')].find((b) =>
+      b.textContent?.includes('Research Agents')
     );
     act(() => {
       agentTab?.click();
@@ -315,7 +311,7 @@ describe('Wiki UI components and tree display polish helpers', () => {
     expect(container.textContent).not.toContain('Add family note');
 
     const revertBatchBtn = [...container.querySelectorAll('button')].find((b) =>
-      b.textContent?.includes('Revert Entire Batch'),
+      b.textContent?.includes('Revert Entire Batch')
     );
     await act(async () => {
       revertBatchBtn?.click();
@@ -323,7 +319,7 @@ describe('Wiki UI components and tree display polish helpers', () => {
     });
     expect(revertedBatches).toEqual([]);
     const confirmBatchBtn = [...container.querySelectorAll('button')].find((b) =>
-      b.textContent?.includes('Confirm Batch Revert'),
+      b.textContent?.includes('Confirm Batch Revert')
     );
     expect(confirmBatchBtn).toBeDefined();
     await act(async () => {
@@ -394,7 +390,7 @@ describe('Wiki UI components and tree display polish helpers', () => {
             initialComments={initialComments}
           />
         </ArchiveProvider>
-      </MemoryRouter>,
+      </MemoryRouter>
     );
 
     expect(container.textContent).toContain('Verify baptismal date in parish roll.');
@@ -405,14 +401,16 @@ describe('Wiki UI components and tree display polish helpers', () => {
       textarea.dispatchEvent(new Event('input', { bubbles: true }));
     });
     await act(async () => {
-      container.querySelector('form')?.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+      container
+        .querySelector('form')
+        ?.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
       await new Promise((r) => setTimeout(r, 20));
     });
     expect(posted).toEqual(['Confirmed in town register p. 4.']);
     expect(container.textContent).toContain('Confirmed in town register p. 4.');
 
     const deleteButtons = [...container.querySelectorAll<HTMLButtonElement>('button')].filter(
-      (b) => b.textContent === 'Delete',
+      (b) => b.textContent === 'Delete'
     );
     expect(deleteButtons.length).toBe(2);
     await act(async () => {
@@ -453,25 +451,27 @@ describe('Wiki UI components and tree display polish helpers', () => {
         >
           <AuthStatusBanner />
         </ArchiveProvider>
-      </MemoryRouter>,
+      </MemoryRouter>
     );
     expect(inviteRender.container.textContent).toContain('Family invite (Holiday Reunion)');
     expect(inviteRender.container.textContent).toContain('Sign in to edit');
     const signInBtn = [...inviteRender.container.querySelectorAll('button')].find((b) =>
-      b.textContent?.includes('Sign in to edit'),
+      b.textContent?.includes('Sign in to edit')
     );
     act(() => {
       signInBtn?.click();
     });
-    expect(inviteRender.container.querySelector('dialog[aria-label="Sign in to family archive"]')).not.toBeNull();
+    expect(
+      inviteRender.container.querySelector('dialog[aria-label="Sign in to family archive"]')
+    ).not.toBeNull();
     const closeSignInBtn = [...inviteRender.container.querySelectorAll('button')].find(
-      (b) => b.textContent?.trim() === 'Close',
+      (b) => b.textContent?.trim() === 'Close'
     );
     act(() => {
       closeSignInBtn?.click();
     });
     const dismissBtn = inviteRender.container.querySelector<HTMLButtonElement>(
-      'button[aria-label="Dismiss family invite notice"]',
+      'button[aria-label="Dismiss family invite notice"]'
     );
     expect(dismissBtn).not.toBeNull();
     act(() => {
@@ -496,7 +496,7 @@ describe('Wiki UI components and tree display polish helpers', () => {
         >
           <AuthStatusBanner />
         </ArchiveProvider>
-      </MemoryRouter>,
+      </MemoryRouter>
     );
     expect(remountSame.container.querySelector('.wiki-auth-banner')).toBeNull();
     remountSame.unmount();
@@ -515,7 +515,7 @@ describe('Wiki UI components and tree display polish helpers', () => {
         >
           <AuthStatusBanner />
         </ArchiveProvider>
-      </MemoryRouter>,
+      </MemoryRouter>
     );
     expect(remountOther.container.textContent).toContain('Family invite (Spring Gathering)');
     remountOther.unmount();
@@ -616,11 +616,7 @@ describe('Wiki UI components and tree display polish helpers', () => {
     };
 
     const { container, unmount } = renderIntoDom(
-      <ArchiveProvider
-        siteConfig={siteConfig}
-        initialBundle={twoPersonBundle}
-        dataSource={mockDataSource}
-      >
+      <ArchiveProvider siteConfig={siteConfig} initialBundle={twoPersonBundle} dataSource={mockDataSource}>
         <CreateEntityModal
           open
           relativeContext={{
@@ -632,7 +628,7 @@ describe('Wiki UI components and tree display polish helpers', () => {
             closedCount += 1;
           }}
         />
-      </ArchiveProvider>,
+      </ArchiveProvider>
     );
 
     expect(container.querySelector('h2')?.textContent).toBe('Add parent of Clara Barton');
@@ -656,7 +652,9 @@ describe('Wiki UI components and tree display polish helpers', () => {
     });
 
     await act(async () => {
-      container.querySelector('form')?.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+      container
+        .querySelector('form')
+        ?.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
       await new Promise((r) => setTimeout(r, 20));
     });
 
@@ -688,11 +686,7 @@ describe('Wiki UI components and tree display polish helpers', () => {
     // Link existing person mode filters candidates, excludes anchor, and creates only the kinship edge
     createdCalls.length = 0;
     const linkRender = renderIntoDom(
-      <ArchiveProvider
-        siteConfig={siteConfig}
-        initialBundle={twoPersonBundle}
-        dataSource={mockDataSource}
-      >
+      <ArchiveProvider siteConfig={siteConfig} initialBundle={twoPersonBundle} dataSource={mockDataSource}>
         <CreateEntityModal
           open
           relativeContext={{
@@ -702,11 +696,11 @@ describe('Wiki UI components and tree display polish helpers', () => {
           }}
           onClose={() => {}}
         />
-      </ArchiveProvider>,
+      </ArchiveProvider>
     );
 
     const linkTab = [...linkRender.container.querySelectorAll<HTMLButtonElement>('button[role="tab"]')].find(
-      (b) => b.textContent?.includes('Link existing person'),
+      (b) => b.textContent?.includes('Link existing person')
     );
     act(() => {
       linkTab?.click();
@@ -748,11 +742,7 @@ describe('Wiki UI components and tree display polish helpers', () => {
     // Child relative mode defaults lineage_group to 'descendant' and links anchor -> newChild as 'parent'
     createdCalls.length = 0;
     const childRender = renderIntoDom(
-      <ArchiveProvider
-        siteConfig={siteConfig}
-        initialBundle={twoPersonBundle}
-        dataSource={mockDataSource}
-      >
+      <ArchiveProvider siteConfig={siteConfig} initialBundle={twoPersonBundle} dataSource={mockDataSource}>
         <CreateEntityModal
           open
           relativeContext={{
@@ -762,7 +752,7 @@ describe('Wiki UI components and tree display polish helpers', () => {
           }}
           onClose={() => {}}
         />
-      </ArchiveProvider>,
+      </ArchiveProvider>
     );
     const childSelects = [...childRender.container.querySelectorAll<HTMLSelectElement>('select')];
     expect(childSelects[1].value).toBe('descendant');
@@ -793,13 +783,9 @@ describe('Wiki UI components and tree display polish helpers', () => {
     // Standalone + Add Person exposes Sex and Lineage group selects
     createdCalls.length = 0;
     const standaloneRender = renderIntoDom(
-      <ArchiveProvider
-        siteConfig={siteConfig}
-        initialBundle={twoPersonBundle}
-        dataSource={mockDataSource}
-      >
+      <ArchiveProvider siteConfig={siteConfig} initialBundle={twoPersonBundle} dataSource={mockDataSource}>
         <CreateEntityModal open defaultKind="person" onClose={() => {}} />
-      </ArchiveProvider>,
+      </ArchiveProvider>
     );
     const standaloneSelects = [...standaloneRender.container.querySelectorAll<HTMLSelectElement>('select')];
     const standaloneTextInputs = [
@@ -830,9 +816,7 @@ describe('Wiki UI components and tree display polish helpers', () => {
   it('formats tree node labels, names, and generic census subdivisions without private strings', () => {
     expect(formatLineageGroupLabel('pivot_ancestor')).toBe('Focus Ancestor');
     expect(formatLineageGroupLabel('descendant')).toBe('Descendant');
-    expect(formatTreeCardName('Jonathan William Prescott Jr.', 22)).toBe(
-      'Jonathan W. Prescott Jr.',
-    );
+    expect(formatTreeCardName('Jonathan William Prescott Jr.', 22)).toBe('Jonathan W. Prescott Jr.');
 
     const county: Place = {
       id: 'pl_county',
@@ -892,7 +876,7 @@ describe('Wiki UI components and tree display polish helpers', () => {
     const withoutGoogle = renderIntoDom(
       <ArchiveProvider siteConfig={siteConfig} dataSource={makeSource(false)} initialBundle={testBundle}>
         <PrivateArchiveGate />
-      </ArchiveProvider>,
+      </ArchiveProvider>
     );
     await act(async () => {
       await new Promise((r) => setTimeout(r, 20));
@@ -904,7 +888,7 @@ describe('Wiki UI components and tree display polish helpers', () => {
     const withGoogle = renderIntoDom(
       <ArchiveProvider siteConfig={siteConfig} dataSource={makeSource(true)} initialBundle={testBundle}>
         <PrivateArchiveGate />
-      </ArchiveProvider>,
+      </ArchiveProvider>
     );
     await act(async () => {
       await new Promise((r) => setTimeout(r, 20));

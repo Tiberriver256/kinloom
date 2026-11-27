@@ -11,8 +11,6 @@ import { EMBEDDED_GUIDES } from '../../guides/index.js';
 import { CORE_CLI_COMMANDS } from '../../plugins.js';
 import type { OpsIo, TelemetryEvent } from '../ops/telemetry.js';
 import {
-  RECORD_COMMAND_ALIASES,
-  RECORD_COMMAND_SPECS,
   buildTelemetrySubcmd,
   classifyRecordCommandIntent,
   createSyntheticPng,
@@ -20,12 +18,14 @@ import {
   isRecordCommand,
   isUvOfflineCacheMiss,
   parseSkillDocument,
+  RECORD_COMMAND_ALIASES,
+  RECORD_COMMAND_SPECS,
+  type RecordSpawnFn,
   renderRecordCommandHelp,
   resolveRecordCommand,
   resolveRecordGuidePath,
   rewriteSkillCommandExamples,
   runRecordCommand,
-  type RecordSpawnFn,
 } from './index.js';
 
 const THIS_DIR = path.dirname(fileURLToPath(import.meta.url));
@@ -190,9 +190,9 @@ Body text here.`;
     );
 
     const audioSpec = resolveRecordCommand('narrative-audio')!;
-    expect(
-      rewriteSkillCommandExamples('CLI=skills/narrative-audio/scripts/narrative-audio', audioSpec)
-    ).toBe('CLI="kinloom narrative-audio"');
+    expect(rewriteSkillCommandExamples('CLI=skills/narrative-audio/scripts/narrative-audio', audioSpec)).toBe(
+      'CLI="kinloom narrative-audio"'
+    );
 
     const prepSpec = resolveRecordCommand('prep-scan')!;
     expect(
@@ -435,12 +435,7 @@ describe('help vs subcommand routing, native dispatch, and telemetry', () => {
       .trim()
       .split('\n')
       .map((line) => JSON.parse(line) as TelemetryEvent);
-    expect(events.map((e) => e.subcmd)).toEqual([
-      'ocr cursive',
-      'ocr printed',
-      'ocr printed',
-      'ocr',
-    ]);
+    expect(events.map((e) => e.subcmd)).toEqual(['ocr cursive', 'ocr printed', 'ocr printed', 'ocr']);
     expect(events.slice(0, 3).map((e) => e.cache_hit)).toEqual([true, true, true]);
 
     // General path-leak guard for every record command.
@@ -490,13 +485,11 @@ describe('bundle-skills.mjs and dual-mode bundled resolution', () => {
     }
 
     expect(
-      fs.existsSync(
-        path.join(tmpOut, 'bundled-skills', 'narrative-audio', 'references', 'script-rules.md')
-      )
+      fs.existsSync(path.join(tmpOut, 'bundled-skills', 'narrative-audio', 'references', 'script-rules.md'))
     ).toBe(true);
-    expect(
-      fs.existsSync(path.join(tmpOut, 'bundled-skills', 'archive-org', 'scripts', '__pycache__'))
-    ).toBe(false);
+    expect(fs.existsSync(path.join(tmpOut, 'bundled-skills', 'archive-org', 'scripts', '__pycache__'))).toBe(
+      false
+    );
   });
 });
 
@@ -873,14 +866,54 @@ describe('native TypeScript OCR, alias routing, and ubiquitous-language parity',
       expectedSubcmd: string;
       expectedHit: boolean;
     }> = [
-      { command: 'wikitree', args: ['get', 'Lincoln-1', '--json'], expectedSubcmd: 'wikitree get', expectedHit: false },
-      { command: 'wikitree', args: ['profile', 'Lincoln-1', '--json'], expectedSubcmd: 'wikitree profile', expectedHit: true },
-      { command: 'hathi', args: ['bib', 'oclc', '424023', '--json'], expectedSubcmd: 'hathi bib', expectedHit: false },
-      { command: 'hathi', args: ['bib', 'oclc', '424023', '--json'], expectedSubcmd: 'hathi bib', expectedHit: true },
-      { command: 'uk-archives', args: ['tna', 'search', 'Alder', '--json'], expectedSubcmd: 'uk-archives tna', expectedHit: false },
-      { command: 'uk-archives', args: ['discovery', 'search', 'Alder', '--json'], expectedSubcmd: 'uk-archives discovery', expectedHit: true },
-      { command: 'se-archives', args: ['search', '--text', 'Alder', '--json'], expectedSubcmd: 'se-archives search', expectedHit: false },
-      { command: 'se-archives', args: ['search', '--text', 'Alder', '--json'], expectedSubcmd: 'se-archives search', expectedHit: true },
+      {
+        command: 'wikitree',
+        args: ['get', 'Lincoln-1', '--json'],
+        expectedSubcmd: 'wikitree get',
+        expectedHit: false,
+      },
+      {
+        command: 'wikitree',
+        args: ['profile', 'Lincoln-1', '--json'],
+        expectedSubcmd: 'wikitree profile',
+        expectedHit: true,
+      },
+      {
+        command: 'hathi',
+        args: ['bib', 'oclc', '424023', '--json'],
+        expectedSubcmd: 'hathi bib',
+        expectedHit: false,
+      },
+      {
+        command: 'hathi',
+        args: ['bib', 'oclc', '424023', '--json'],
+        expectedSubcmd: 'hathi bib',
+        expectedHit: true,
+      },
+      {
+        command: 'uk-archives',
+        args: ['tna', 'search', 'Alder', '--json'],
+        expectedSubcmd: 'uk-archives tna',
+        expectedHit: false,
+      },
+      {
+        command: 'uk-archives',
+        args: ['discovery', 'search', 'Alder', '--json'],
+        expectedSubcmd: 'uk-archives discovery',
+        expectedHit: true,
+      },
+      {
+        command: 'se-archives',
+        args: ['search', '--text', 'Alder', '--json'],
+        expectedSubcmd: 'se-archives search',
+        expectedHit: false,
+      },
+      {
+        command: 'se-archives',
+        args: ['search', '--text', 'Alder', '--json'],
+        expectedSubcmd: 'se-archives search',
+        expectedHit: true,
+      },
     ];
 
     for (const tc of nativeCases) {

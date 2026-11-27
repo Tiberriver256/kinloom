@@ -1,12 +1,12 @@
 import { readFile } from 'node:fs/promises';
 import {
-  compileArchive,
-  computeEntityDiff,
-  parseKinloomConfigYaml,
   type ArchiveBundle,
   type BuildMode,
+  compileArchive,
+  computeEntityDiff,
   type EntityPayload,
   type FieldDiff,
+  parseKinloomConfigYaml,
 } from '@kinloom/core';
 import { KinloomApiClient, resolveAuthToken } from '../client.js';
 import { CliValidationError } from '../errors.js';
@@ -66,16 +66,14 @@ function bundleToComparablePayload(bundle: ArchiveBundle): EntityPayload {
   return normalized as EntityPayload;
 }
 
-export async function runReconcileCommand(
-  options: ReconcileCommandOptions
-): Promise<ReconcileCommandResult> {
+export async function runReconcileCommand(options: ReconcileCommandOptions): Promise<ReconcileCommandResult> {
   const configPath = options.configPath.trim();
   if (!configPath) {
     throw new CliValidationError('`--config` kinloom.config.yaml path is required for `kinloom reconcile`.');
   }
 
   const configText = await readFile(configPath, 'utf8');
-  let siteConfig;
+  let siteConfig: ReturnType<typeof parseKinloomConfigYaml>;
   try {
     siteConfig = parseKinloomConfigYaml(configText);
   } catch (err: unknown) {
@@ -89,10 +87,7 @@ export async function runReconcileCommand(
     fetchImpl: options.fetchImpl,
   });
 
-  const [bundleResult, snapshotResult] = await Promise.all([
-    client.getBundle(),
-    client.exportSnapshot(),
-  ]);
+  const [bundleResult, snapshotResult] = await Promise.all([client.getBundle(), client.exportSnapshot()]);
 
   if (bundleResult.status !== 'ok') {
     throw new Error('Expected 200 OK from GET /api/bundle during reconcile.');

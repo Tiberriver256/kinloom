@@ -5,11 +5,7 @@ import type {
   MediaItem,
   MediaValidationFailure,
 } from '@kinloom/core';
-import {
-  canCompleteMediaAttach,
-  isMatchingUploadGeneration,
-  validateMediaSelection,
-} from '@kinloom/core';
+import { canCompleteMediaAttach, isMatchingUploadGeneration, validateMediaSelection } from '@kinloom/core';
 import { assign, fromPromise, setup } from 'xstate';
 import { ApiClientError } from '../adapters/httpWikiDataSource.js';
 
@@ -136,135 +132,131 @@ export interface AttachMediaActorInput {
 
 export const defaultUploadMediaActor = fromPromise<UploadActorOutcome, UploadMediaActorInput>(
   async ({ input, signal }) => {
-  const form = new FormData();
-  form.append('file', input.file);
-  form.append('sha256', input.sha256);
-  form.append(
-    'metadata',
-    JSON.stringify({
-      kind: input.metadata.kind,
-      caption: input.metadata.caption || input.file.name,
-      person_ids: [...input.targets.personIds],
-      person_id: input.targets.personIds[0] ?? null,
-      event_id: input.targets.eventId ?? null,
-      source_id: input.targets.sourceId ?? null,
-      date_edtf: input.metadata.dateEdtf || undefined,
-      provenance: input.metadata.provenance || undefined,
-      mime_type: input.file.type || undefined,
-    }),
-  );
-  form.append('summary', input.metadata.summary.trim() || `Upload ${input.file.name}`);
+    const form = new FormData();
+    form.append('file', input.file);
+    form.append('sha256', input.sha256);
+    form.append(
+      'metadata',
+      JSON.stringify({
+        kind: input.metadata.kind,
+        caption: input.metadata.caption || input.file.name,
+        person_ids: [...input.targets.personIds],
+        person_id: input.targets.personIds[0] ?? null,
+        event_id: input.targets.eventId ?? null,
+        source_id: input.targets.sourceId ?? null,
+        date_edtf: input.metadata.dateEdtf || undefined,
+        provenance: input.metadata.provenance || undefined,
+        mime_type: input.file.type || undefined,
+      })
+    );
+    form.append('summary', input.metadata.summary.trim() || `Upload ${input.file.name}`);
 
-  if (input.dataSource?.uploadMedia) {
-    try {
-      const uploaded = await input.dataSource.uploadMedia(form, { signal });
-      return {
-        kind: 'uploaded',
-        uploadGen: input.uploadGen,
-        r2Key: uploaded.url,
-        url: uploaded.url,
-        media: uploaded.media,
-      };
-    } catch (error) {
-      const livingCheck = isLivingMediaBlockedError(error);
-      if (livingCheck.blocked) {
+    if (input.dataSource?.uploadMedia) {
+      try {
+        const uploaded = await input.dataSource.uploadMedia(form, { signal });
         return {
-          kind: 'living_blocked',
+          kind: 'uploaded',
           uploadGen: input.uploadGen,
-          message: livingCheck.message,
+          r2Key: uploaded.url,
+          url: uploaded.url,
+          media: uploaded.media,
         };
+      } catch (error) {
+        const livingCheck = isLivingMediaBlockedError(error);
+        if (livingCheck.blocked) {
+          return {
+            kind: 'living_blocked',
+            uploadGen: input.uploadGen,
+            message: livingCheck.message,
+          };
+        }
+        throw error;
       }
-      throw error;
     }
-  }
 
-  const res = await fetch('/api/media/upload', {
-    method: 'POST',
-    credentials: 'same-origin',
-    body: form,
-    signal,
-  });
+    const res = await fetch('/api/media/upload', {
+      method: 'POST',
+      credentials: 'same-origin',
+      body: form,
+      signal,
+    });
 
-  if (res.status === 422) {
-    const body = (await res.json().catch(() => ({}))) as {
-      error?: { message?: string; code?: string };
-      message?: string;
-    };
+    if (res.status === 422) {
+      const body = (await res.json().catch(() => ({}))) as {
+        error?: { message?: string; code?: string };
+        message?: string;
+      };
+      return {
+        kind: 'living_blocked',
+        uploadGen: input.uploadGen,
+        message: body.error?.message ?? body.message ?? 'Media cannot be attached to living relatives.',
+      };
+    }
+
+    if (!res.ok) {
+      throw new Error(`HTTP ${res.status} uploading media`);
+    }
+
+    const data = (await res.json()) as { media?: MediaItem; url?: string; r2Key?: string };
     return {
-      kind: 'living_blocked',
+      kind: 'uploaded',
       uploadGen: input.uploadGen,
-      message:
-        body.error?.message ??
-        body.message ??
-        'Media cannot be attached to living relatives.',
+      r2Key: data.r2Key ?? data.url ?? `media/${input.sha256}`,
+      url: data.url,
+      media: data.media,
     };
   }
-
-  if (!res.ok) {
-    throw new Error(`HTTP ${res.status} uploading media`);
-  }
-
-  const data = (await res.json()) as { media?: MediaItem; url?: string; r2Key?: string };
-  return {
-    kind: 'uploaded',
-    uploadGen: input.uploadGen,
-    r2Key: data.r2Key ?? data.url ?? `media/${input.sha256}`,
-    url: data.url,
-    media: data.media,
-  };
-});
+);
 
 export const defaultAttachMediaActor = fromPromise<AttachActorOutcome, AttachMediaActorInput>(
   async ({ input, signal }) => {
-  // Single-request Worker `/api/media/upload` creates and attaches the media entity atomically.
-  if (input.uploadedMedia) {
+    // Single-request Worker `/api/media/upload` creates and attaches the media entity atomically.
+    if (input.uploadedMedia) {
+      return {
+        kind: 'attached',
+        uploadGen: input.uploadGen,
+        mediaId: input.uploadedMedia.id,
+        targetBecameLiving: false,
+      };
+    }
+
+    const res = await fetch('/api/media/attach', {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: { 'content-type': 'application/json', accept: 'application/json' },
+      body: JSON.stringify({
+        r2Key: input.r2Key,
+        sha256: input.sha256,
+        targets: input.targets,
+      }),
+      signal,
+    });
+
+    if (res.status === 422) {
+      const body = (await res.json().catch(() => ({}))) as {
+        error?: { message?: string };
+        message?: string;
+      };
+      return {
+        kind: 'living_blocked',
+        uploadGen: input.uploadGen,
+        message: body.error?.message ?? body.message ?? 'Media cannot be attached to living relatives.',
+      };
+    }
+
+    if (!res.ok) {
+      throw new Error(`HTTP ${res.status} attaching media`);
+    }
+
+    const ok = (await res.json()) as { media_id: string; target_became_living?: boolean };
     return {
       kind: 'attached',
       uploadGen: input.uploadGen,
-      mediaId: input.uploadedMedia.id,
-      targetBecameLiving: false,
+      mediaId: ok.media_id,
+      targetBecameLiving: Boolean(ok.target_became_living),
     };
   }
-
-  const res = await fetch('/api/media/attach', {
-    method: 'POST',
-    credentials: 'same-origin',
-    headers: { 'content-type': 'application/json', accept: 'application/json' },
-    body: JSON.stringify({
-      r2Key: input.r2Key,
-      sha256: input.sha256,
-      targets: input.targets,
-    }),
-    signal,
-  });
-
-  if (res.status === 422) {
-    const body = (await res.json().catch(() => ({}))) as {
-      error?: { message?: string };
-      message?: string;
-    };
-    return {
-      kind: 'living_blocked',
-      uploadGen: input.uploadGen,
-      message:
-        body.error?.message ??
-        body.message ??
-        'Media cannot be attached to living relatives.',
-    };
-  }
-
-  if (!res.ok) {
-    throw new Error(`HTTP ${res.status} attaching media`);
-  }
-
-  const ok = (await res.json()) as { media_id: string; target_became_living?: boolean };
-  return {
-    kind: 'attached',
-    uploadGen: input.uploadGen,
-    mediaId: ok.media_id,
-    targetBecameLiving: Boolean(ok.target_became_living),
-  };
-});
+);
 
 function readUploadOutput(event: unknown): UploadActorOutcome | null {
   if (typeof event !== 'object' || event === null || !('output' in event)) {
@@ -330,8 +322,7 @@ export const mediaUploadMachine = setup({
       const output = readAttachOutput(event);
       return (
         output !== null &&
-        (output.kind === 'living_blocked' ||
-          (output.kind === 'attached' && output.targetBecameLiving))
+        (output.kind === 'living_blocked' || (output.kind === 'attached' && output.targetBecameLiving))
       );
     },
     canCompleteAttach: ({ context, event }) => {
@@ -449,10 +440,7 @@ export const mediaUploadMachine = setup({
       },
     },
     clientValidating: {
-      always: [
-        { guard: 'isClientInvalid', target: 'rejectedInvalid' },
-        { target: 'hashingSha256' },
-      ],
+      always: [{ guard: 'isClientInvalid', target: 'rejectedInvalid' }, { target: 'hashingSha256' }],
     },
     hashingSha256: {
       tags: ['busy', 'hashing'],
@@ -469,9 +457,7 @@ export const mediaUploadMachine = setup({
           actions: assign(({ event }) => ({
             rejectionReason: 'hash_failed' as const,
             rejectionMessage:
-              event.error instanceof Error
-                ? event.error.message
-                : 'Failed to hash file with SHA-256.',
+              event.error instanceof Error ? event.error.message : 'Failed to hash file with SHA-256.',
           })),
         },
       },
@@ -515,7 +501,7 @@ export const mediaUploadMachine = setup({
                     uploadedMedia: event.output.media ?? null,
                     retryableError: null,
                   }
-                : {},
+                : {}
             ),
           },
           // Stale upload generation response: safely reset to idle.
@@ -527,8 +513,7 @@ export const mediaUploadMachine = setup({
         onError: {
           target: 'failedRetryable',
           actions: assign(({ event }) => ({
-            retryableError:
-              event.error instanceof Error ? event.error.message : String(event.error),
+            retryableError: event.error instanceof Error ? event.error.message : String(event.error),
           })),
         },
       },
@@ -553,9 +538,7 @@ export const mediaUploadMachine = setup({
             guard: 'canCompleteAttach',
             target: 'complete',
             actions: assign(({ event }) =>
-              event.output.kind === 'attached'
-                ? { mediaId: event.output.mediaId, retryableError: null }
-                : {},
+              event.output.kind === 'attached' ? { mediaId: event.output.mediaId, retryableError: null } : {}
             ),
           },
           {
@@ -578,8 +561,7 @@ export const mediaUploadMachine = setup({
         onError: {
           target: 'failedRetryable',
           actions: assign(({ event }) => ({
-            retryableError:
-              event.error instanceof Error ? event.error.message : String(event.error),
+            retryableError: event.error instanceof Error ? event.error.message : String(event.error),
           })),
         },
       },
@@ -600,10 +582,7 @@ export const mediaUploadMachine = setup({
     failedRetryable: {
       tags: ['error', 'retryable'],
       on: {
-        RETRY: [
-          { guard: 'alreadyUploaded', target: 'attaching' },
-          { target: 'uploading' },
-        ],
+        RETRY: [{ guard: 'alreadyUploaded', target: 'attaching' }, { target: 'uploading' }],
         CANCEL: { target: 'idle', actions: [{ type: 'cancelAndReset' }] },
       },
     },

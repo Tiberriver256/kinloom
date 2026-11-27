@@ -1,12 +1,14 @@
 import type { BranchConfig, Person } from '@kinloom/core';
-import type {
-  TreeLineageMode,
-  TreeSearchCandidate,
-  TreeViewSurface,
-} from '../../lib/archivalTreeModel.js';
-import React from 'react';
+import type React from 'react';
+import type { TreeLineageMode, TreeSearchCandidate, TreeViewSurface } from '../../lib/archivalTreeModel.js';
+import { cx } from '../../lib/cx.js';
 import { KINLOOM_VOCABULARY } from '../../lib/vocabulary.js';
+import cssMod0 from '../../pages/IndexPage.module.css';
+import cssMod1 from '../../pages/PersonPage.module.css';
+import cssMod2 from '../../pages/TreeAndMapPage.module.css';
 import { TreePersonSearch } from './TreePersonSearch.js';
+
+const uiStyles: Readonly<Record<string, string>> = { ...cssMod0, ...cssMod1, ...cssMod2 };
 
 export interface TreeToolbarProps {
   readonly populatedBranches: readonly BranchConfig[];
@@ -49,9 +51,13 @@ export const TreeToolbar: React.FC<TreeToolbarProps> = ({
   canEdit,
   onAddPerson,
 }) => (
-  <div className="tree-toolbar-shell">
-    <div className="tree-toolbar" role="toolbar" aria-label={KINLOOM_VOCABULARY.tree.toolbarAria}>
-      <div className="tree-toolbar-row tree-toolbar-row-primary">
+  <div className={cx(uiStyles, 'tree-toolbar-shell')}>
+    <div
+      className={cx(uiStyles, 'tree-toolbar')}
+      role="toolbar"
+      aria-label={KINLOOM_VOCABULARY.tree.toolbarAria}
+    >
+      <div className={cx(uiStyles, 'tree-toolbar-row tree-toolbar-row-primary')}>
         <TreePersonSearch
           query={searchQuery}
           onQueryChange={onSearchQueryChange}
@@ -63,7 +69,7 @@ export const TreeToolbar: React.FC<TreeToolbarProps> = ({
 
         {populatedBranches.length > 1 && (
           <select
-            className="pill-btn tree-branch-select"
+            className={cx(uiStyles, 'pill-btn tree-branch-select')}
             aria-label={KINLOOM_VOCABULARY.tree.branchSelectAria}
             value={branchFilter}
             onChange={(e) => {
@@ -84,7 +90,7 @@ export const TreeToolbar: React.FC<TreeToolbarProps> = ({
         {canEdit && (
           <button
             type="button"
-            className="pill-btn tree-add-person-mobile-btn"
+            className={cx(uiStyles, 'pill-btn tree-add-person-mobile-btn')}
             aria-label="Add person"
             title={KINLOOM_VOCABULARY.tree.addPerson}
             onClick={onAddPerson}
@@ -105,13 +111,13 @@ export const TreeToolbar: React.FC<TreeToolbarProps> = ({
         )}
 
         <div
-          className="tree-segmented tree-layout-segmented"
+          className={cx(uiStyles, 'tree-segmented tree-layout-segmented')}
           role="group"
           aria-label={KINLOOM_VOCABULARY.tree.layoutGroupAria}
         >
           <button
             type="button"
-            className={`pill-btn tree-seg-btn${surface === 'roll' ? ' active' : ''}`}
+            className={cx(uiStyles, `pill-btn tree-seg-btn${surface === 'roll' ? ' active' : ''}`)}
             aria-pressed={surface === 'roll'}
             onClick={() => {
               onSurfaceChange('roll');
@@ -121,7 +127,7 @@ export const TreeToolbar: React.FC<TreeToolbarProps> = ({
           </button>
           <button
             type="button"
-            className={`pill-btn tree-seg-btn${surface === 'diagram' ? ' active' : ''}`}
+            className={cx(uiStyles, `pill-btn tree-seg-btn${surface === 'diagram' ? ' active' : ''}`)}
             aria-pressed={surface === 'diagram'}
             onClick={() => {
               onSurfaceChange('diagram');
@@ -134,17 +140,20 @@ export const TreeToolbar: React.FC<TreeToolbarProps> = ({
 
       {(showDirectToggle || canEdit) && (
         <div
-          className={`tree-toolbar-row tree-toolbar-row-secondary${showDirectToggle ? '' : ' is-desktop-only'}`}
+          className={cx(
+            uiStyles,
+            `tree-toolbar-row tree-toolbar-row-secondary${showDirectToggle ? '' : ' is-desktop-only'}`
+          )}
         >
           {showDirectToggle && (
             <div
-              className="tree-segmented tree-scope-segmented"
+              className={cx(uiStyles, 'tree-segmented tree-scope-segmented')}
               role="group"
               aria-label={KINLOOM_VOCABULARY.tree.scopeGroupAria}
             >
               <button
                 type="button"
-                className={`pill-btn tree-seg-btn${mode === 'spine' ? ' active' : ''}`}
+                className={cx(uiStyles, `pill-btn tree-seg-btn${mode === 'spine' ? ' active' : ''}`)}
                 aria-pressed={mode === 'spine'}
                 onClick={() => {
                   onModeChange('spine');
@@ -154,7 +163,7 @@ export const TreeToolbar: React.FC<TreeToolbarProps> = ({
               </button>
               <button
                 type="button"
-                className={`pill-btn tree-seg-btn${mode === 'full' ? ' active' : ''}`}
+                className={cx(uiStyles, `pill-btn tree-seg-btn${mode === 'full' ? ' active' : ''}`)}
                 aria-pressed={mode === 'full'}
                 onClick={() => {
                   onModeChange('full');
@@ -168,7 +177,7 @@ export const TreeToolbar: React.FC<TreeToolbarProps> = ({
           {canEdit && (
             <button
               type="button"
-              className="pill-btn tree-add-person-btn"
+              className={cx(uiStyles, 'pill-btn tree-add-person-btn')}
               onClick={onAddPerson}
             >
               {KINLOOM_VOCABULARY.tree.addPerson}

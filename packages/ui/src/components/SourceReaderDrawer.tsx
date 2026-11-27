@@ -1,4 +1,3 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
 import type { ReadingDocument } from '@kinloom/core';
 import {
   buildAllSourcesText,
@@ -7,14 +6,23 @@ import {
   formatFileSize,
   formatPublicCitation,
 } from '@kinloom/core';
-import { readerNextPage, readerPrevPage, resolveReaderPageIndex } from '../lib/sourceReaderNav.js';
-import { handleTablistKeyDown } from '../lib/keyboardNav.js';
-import { KINLOOM_VOCABULARY } from '../lib/vocabulary.js';
-import { PluginSlot } from '../plugins/PluginContext.js';
-import { resolveAssetUrl } from './Atoms.js';
+import type React from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useArchiveData } from '../context/ArchiveDataContext.js';
 import { useArchiveUi } from '../context/ArchiveUiContext.js';
+import { cx } from '../lib/cx.js';
+import { handleTablistKeyDown } from '../lib/keyboardNav.js';
+import { readerNextPage, readerPrevPage, resolveReaderPageIndex } from '../lib/sourceReaderNav.js';
 import { useDialogFocusTrap } from '../lib/useDialogFocusTrap.js';
+import { KINLOOM_VOCABULARY } from '../lib/vocabulary.js';
+import cssMod1 from '../pages/IndexPage.module.css';
+import cssMod2 from '../pages/PersonPage.module.css';
+import cssMod3 from '../pages/TreeAndMapPage.module.css';
+import { PluginSlot } from '../plugins/PluginContext.js';
+import { resolveAssetUrl } from './Atoms.js';
+import cssMod0 from './SourceReaderDrawer.module.css';
+
+const uiStyles: Readonly<Record<string, string>> = { ...cssMod0, ...cssMod1, ...cssMod2, ...cssMod3 };
 
 function triggerTextDownload(filename: string, content: string): void {
   const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
@@ -52,7 +60,7 @@ const renderHighlightedText = (text: string, query: string): React.ReactNode => 
     const start = offset;
     offset += part.length;
     return part.toLowerCase() === q.toLowerCase() ? (
-      <mark key={start} className="transcript-mark">
+      <mark key={start} className={cx(uiStyles, 'transcript-mark')}>
         {part}
       </mark>
     ) : (
@@ -62,14 +70,8 @@ const renderHighlightedText = (text: string, query: string): React.ReactNode => 
 };
 
 export const SourceReaderDrawer: React.FC = () => {
-  const {
-    readings,
-    readingsLoading,
-    readingsError,
-    siteConfig,
-    featuredDocumentId,
-    baseUrl,
-  } = useArchiveData();
+  const { readings, readingsLoading, readingsError, siteConfig, featuredDocumentId, baseUrl } =
+    useArchiveData();
   const { sourceReader, closeSourceReader } = useArchiveUi();
 
   const closeBtnRef = useRef<HTMLButtonElement | null>(null);
@@ -117,11 +119,7 @@ export const SourceReaderDrawer: React.FC = () => {
     if (!sourceReader) {
       return;
     }
-    const requestedDocId =
-      sourceReader.sourceId ||
-      featuredDocumentId ||
-      orderedDocs[0]?.source_id ||
-      '';
+    const requestedDocId = sourceReader.sourceId || featuredDocumentId || orderedDocs[0]?.source_id || '';
     setActiveDocId(requestedDocId);
     setSearchTerm(sourceReader.highlightQuery || '');
     setScanZoomOpen(false);
@@ -137,9 +135,7 @@ export const SourceReaderDrawer: React.FC = () => {
 
     const mappedPage =
       sourceReader.page ??
-      (sourceReader.eventId
-        ? readings.event_page_map[sourceReader.eventId]?.[doc.source_id]
-        : undefined);
+      (sourceReader.eventId ? readings.event_page_map[sourceReader.eventId]?.[doc.source_id] : undefined);
 
     setPageIdx(resolveReaderPageIndex(doc.pages, mappedPage));
   }, [sourceReader, readings, featuredDocumentId, orderedDocs]);
@@ -193,9 +189,7 @@ export const SourceReaderDrawer: React.FC = () => {
     return null;
   }
 
-  const safeIdx = currentDoc
-    ? Math.max(0, Math.min(pageIdx, Math.max(0, currentDoc.pages.length - 1)))
-    : 0;
+  const safeIdx = currentDoc ? Math.max(0, Math.min(pageIdx, Math.max(0, currentDoc.pages.length - 1))) : 0;
   const currentPage = currentDoc?.pages[safeIdx] || null;
   const hasScan = Boolean(currentPage?.image_url);
   const effectiveMode: ReaderViewMode = hasScan ? viewMode : 'text';
@@ -238,26 +232,36 @@ export const SourceReaderDrawer: React.FC = () => {
       ref={dialogRef}
       open
       aria-modal="true"
-      className="drawer-backdrop source-reader-backdrop"
+      className={cx(uiStyles, 'drawer-backdrop source-reader-backdrop')}
       aria-label={KINLOOM_VOCABULARY.sources.readerAria}
     >
       <button
         type="button"
         tabIndex={-1}
-        className="lightbox-backdrop-close"
+        className={cx(uiStyles, 'lightbox-backdrop-close')}
         aria-label="Close source reader"
         onClick={closeSourceReader}
       />
       <aside
-        className={`drawer-panel source-reader-panel ${effectiveMode === 'split' ? 'source-reader-wide' : ''}`}
+        className={cx(
+          uiStyles,
+          `drawer-panel source-reader-panel ${effectiveMode === 'split' ? 'source-reader-wide' : ''}`
+        )}
       >
-        <div className="drawer-top">
+        <div className={cx(uiStyles, 'drawer-top')}>
           <div>
-            <h2 className="drawer-title" style={{ marginTop: 0 }}>
+            <h2 className={cx(uiStyles, 'drawer-title')} style={{ marginTop: 0 }}>
               {currentDoc?.title || KINLOOM_VOCABULARY.sources.readerFallbackTitle}
             </h2>
             {currentDoc && (
-              <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.78rem', color: 'var(--text-secondary)', marginTop: 2 }}>
+              <div
+                style={{
+                  fontFamily: 'var(--font-mono)',
+                  fontSize: '0.78rem',
+                  color: 'var(--text-secondary)',
+                  marginTop: 2,
+                }}
+              >
                 Source Reader · {currentDoc.author}
               </div>
             )}
@@ -265,7 +269,7 @@ export const SourceReaderDrawer: React.FC = () => {
           <button
             ref={closeBtnRef}
             type="button"
-            className="pill-btn"
+            className={cx(uiStyles, 'pill-btn')}
             onClick={closeSourceReader}
           >
             Close [Esc]
@@ -274,7 +278,7 @@ export const SourceReaderDrawer: React.FC = () => {
 
         {orderedDocs.length > 0 && (
           <div
-            className="filter-bar source-collection-tabs"
+            className={cx(uiStyles, 'filter-bar source-collection-tabs')}
             style={{ marginBottom: 0 }}
             role="tablist"
             aria-label="Source collections"
@@ -297,7 +301,7 @@ export const SourceReaderDrawer: React.FC = () => {
                   role="tab"
                   tabIndex={isSelected ? 0 : -1}
                   aria-selected={isSelected}
-                  className={`pill-btn ${isSelected ? 'active' : ''}`}
+                  className={cx(uiStyles, `pill-btn ${isSelected ? 'active' : ''}`)}
                   onClick={() => {
                     setActiveDocId(doc.source_id);
                     setPageIdx(0);
@@ -311,20 +315,26 @@ export const SourceReaderDrawer: React.FC = () => {
           </div>
         )}
 
-        {readingsLoading && <p className="empty-ring-note">Loading primary transcriptions…</p>}
-        {readingsError && <p className="empty-ring-note">Error loading transcriptions: {readingsError}</p>}
+        {readingsLoading && (
+          <p className={cx(uiStyles, 'empty-ring-note')}>Loading primary transcriptions…</p>
+        )}
+        {readingsError && (
+          <p className={cx(uiStyles, 'empty-ring-note')}>Error loading transcriptions: {readingsError}</p>
+        )}
         {!readingsLoading && !readingsError && orderedDocs.length === 0 && (
-          <p className="empty-ring-note">No primary source transcriptions have been added to this archive yet.</p>
+          <p className={cx(uiStyles, 'empty-ring-note')}>
+            No primary source transcriptions have been added to this archive yet.
+          </p>
         )}
 
         {currentDoc && currentPage && (
           <>
-            <div className="source-reader-controls">
-              <div className="source-reader-toolbar-row">
-                <div className="source-pager-group">
+            <div className={cx(uiStyles, 'source-reader-controls')}>
+              <div className={cx(uiStyles, 'source-reader-toolbar-row')}>
+                <div className={cx(uiStyles, 'source-pager-group')}>
                   <button
                     type="button"
-                    className="pill-btn"
+                    className={cx(uiStyles, 'pill-btn')}
                     disabled={safeIdx <= 0}
                     onClick={() => {
                       setPageIdx((i) => readerPrevPage(i));
@@ -334,7 +344,7 @@ export const SourceReaderDrawer: React.FC = () => {
                     ← Prev
                   </button>
                   <select
-                    className="pill-btn source-page-indicator"
+                    className={cx(uiStyles, 'pill-btn source-page-indicator')}
                     aria-label="Select transcription page"
                     value={safeIdx}
                     onChange={(e) => {
@@ -349,7 +359,7 @@ export const SourceReaderDrawer: React.FC = () => {
                   </select>
                   <button
                     type="button"
-                    className="pill-btn"
+                    className={cx(uiStyles, 'pill-btn')}
                     disabled={safeIdx >= currentDoc.pages.length - 1}
                     onClick={() => {
                       setPageIdx((i) => readerNextPage(i, currentDoc.pages.length));
@@ -361,11 +371,14 @@ export const SourceReaderDrawer: React.FC = () => {
                 </div>
 
                 {hasScan && (
-                  // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role -- role="group" is the correct grouping pattern for a button toolbar
-                  <div className="source-view-mode-group" role="group" aria-label="Document view mode">
+                  <div
+                    className={cx(uiStyles, 'source-view-mode-group')}
+                    role="group"
+                    aria-label="Document view mode"
+                  >
                     <button
                       type="button"
-                      className={`pill-btn ${effectiveMode === 'text' ? 'active' : ''}`}
+                      className={cx(uiStyles, `pill-btn ${effectiveMode === 'text' ? 'active' : ''}`)}
                       onClick={() => {
                         setViewMode('text');
                       }}
@@ -374,7 +387,7 @@ export const SourceReaderDrawer: React.FC = () => {
                     </button>
                     <button
                       type="button"
-                      className={`pill-btn ${effectiveMode === 'split' ? 'active' : ''}`}
+                      className={cx(uiStyles, `pill-btn ${effectiveMode === 'split' ? 'active' : ''}`)}
                       onClick={() => {
                         setViewMode('split');
                       }}
@@ -383,7 +396,7 @@ export const SourceReaderDrawer: React.FC = () => {
                     </button>
                     <button
                       type="button"
-                      className={`pill-btn ${effectiveMode === 'scan' ? 'active' : ''}`}
+                      className={cx(uiStyles, `pill-btn ${effectiveMode === 'scan' ? 'active' : ''}`)}
                       onClick={() => {
                         setViewMode('scan');
                       }}
@@ -396,7 +409,7 @@ export const SourceReaderDrawer: React.FC = () => {
 
               <input
                 type="search"
-                className="search-input source-search-input"
+                className={cx(uiStyles, 'search-input source-search-input')}
                 style={{ minWidth: 0, width: '100%' }}
                 placeholder="Search within this document…"
                 value={searchTerm}
@@ -405,7 +418,7 @@ export const SourceReaderDrawer: React.FC = () => {
                   setSearchTerm(val);
                   if (val.trim()) {
                     const firstHit = currentDoc.pages.findIndex((p) =>
-                      p.text.toLowerCase().includes(val.trim().toLowerCase()),
+                      p.text.toLowerCase().includes(val.trim().toLowerCase())
                     );
                     if (firstHit !== -1) {
                       setPageIdx(firstHit);
@@ -416,7 +429,17 @@ export const SourceReaderDrawer: React.FC = () => {
               />
 
               {searchTerm.trim() && (
-                <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 6, fontSize: '0.78rem', fontFamily: 'var(--font-mono)', color: 'var(--text-secondary)' }}>
+                <div
+                  style={{
+                    display: 'flex',
+                    flexWrap: 'wrap',
+                    alignItems: 'center',
+                    gap: 6,
+                    fontSize: '0.78rem',
+                    fontFamily: 'var(--font-mono)',
+                    color: 'var(--text-secondary)',
+                  }}
+                >
                   <span>
                     {matchingPageIndices.length} matching page{matchingPageIndices.length === 1 ? '' : 's'}:
                   </span>
@@ -424,7 +447,7 @@ export const SourceReaderDrawer: React.FC = () => {
                     <button
                       key={idx}
                       type="button"
-                      className={`pill-btn ${safeIdx === idx ? 'active' : ''}`}
+                      className={cx(uiStyles, `pill-btn ${safeIdx === idx ? 'active' : ''}`)}
                       style={{ padding: '2px 7px', fontSize: '0.75rem' }}
                       onClick={() => {
                         setPageIdx(idx);
@@ -437,14 +460,14 @@ export const SourceReaderDrawer: React.FC = () => {
               )}
             </div>
 
-            <div className={`source-reader-stage mode-${effectiveMode}`}>
+            <div className={cx(uiStyles, `source-reader-stage mode-${effectiveMode}`)}>
               {(effectiveMode === 'scan' || effectiveMode === 'split') && scanSrc && (
-                <figure className="scan-viewer-sheet">
-                  <div className="transcript-meta">
+                <figure className={cx(uiStyles, 'scan-viewer-sheet')}>
+                  <div className={cx(uiStyles, 'transcript-meta')}>
                     <span>Original Scan · {currentPage.label}</span>
                     <button
                       type="button"
-                      className="source-read-inline"
+                      className={cx(uiStyles, 'source-read-inline')}
                       onClick={() => {
                         setScanZoomOpen(true);
                       }}
@@ -455,36 +478,38 @@ export const SourceReaderDrawer: React.FC = () => {
                   <img
                     src={scanSrc}
                     alt={`Scanned original page for ${currentDoc.title}, ${currentPage.label}`}
-                    className="scan-page-img"
+                    className={cx(uiStyles, 'scan-page-img')}
                     loading="lazy"
                   />
                 </figure>
               )}
 
               {(effectiveMode === 'text' || effectiveMode === 'split') && (
-                <div className="transcript-sheet">
-                  <div className="transcript-meta">
+                <div className={cx(uiStyles, 'transcript-sheet')}>
+                  <div className={cx(uiStyles, 'transcript-meta')}>
                     <span>{currentPage.label}</span>
-                    <span>Page {safeIdx + 1} of {currentDoc.pages.length}</span>
+                    <span>
+                      Page {safeIdx + 1} of {currentDoc.pages.length}
+                    </span>
                   </div>
-                  <pre className="transcript-body">
+                  <pre className={cx(uiStyles, 'transcript-body')}>
                     {renderHighlightedText(currentPage.text, searchTerm)}
                   </pre>
                 </div>
               )}
             </div>
 
-            <div className="source-download-bar source-download-footer">
+            <div className={cx(uiStyles, 'source-download-bar source-download-footer')}>
               <button
                 type="button"
-                className="pill-btn map-bordered-btn active"
+                className={cx(uiStyles, 'pill-btn map-bordered-btn active')}
                 onClick={handleDownloadFullText}
               >
                 Download Text ({currentDoc.pages.length} {currentDoc.pages.length === 1 ? 'p.' : 'pp.'})
               </button>
               <button
                 type="button"
-                className="pill-btn map-bordered-btn"
+                className={cx(uiStyles, 'pill-btn map-bordered-btn')}
                 onClick={() => {
                   void handleCopyFullText();
                 }}
@@ -495,7 +520,7 @@ export const SourceReaderDrawer: React.FC = () => {
                 <a
                   href={pdfSrc}
                   download
-                  className="pill-btn map-bordered-btn"
+                  className={cx(uiStyles, 'pill-btn map-bordered-btn')}
                   style={{ textDecoration: 'none' }}
                 >
                   Download PDF{pdfSizeLabel ? ` (${pdfSizeLabel})` : ''}
@@ -504,7 +529,7 @@ export const SourceReaderDrawer: React.FC = () => {
               {orderedDocs.length > 1 && (
                 <button
                   type="button"
-                  className="pill-btn map-bordered-btn"
+                  className={cx(uiStyles, 'pill-btn map-bordered-btn')}
                   onClick={handleDownloadAllSources}
                 >
                   All Sources (.txt)
@@ -512,7 +537,9 @@ export const SourceReaderDrawer: React.FC = () => {
               )}
             </div>
 
-            <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+            <div
+              style={{ fontFamily: 'var(--font-mono)', fontSize: '0.75rem', color: 'var(--text-secondary)' }}
+            >
               Provenance: {formatPublicCitation(currentDoc.provenance)}
             </div>
             <PluginSlot name="sourceReaderFooter" />
@@ -524,27 +551,40 @@ export const SourceReaderDrawer: React.FC = () => {
             ref={scanZoomDialogRef}
             open
             aria-modal="true"
-            className="lightbox-backdrop"
+            className={cx(uiStyles, 'lightbox-backdrop')}
             aria-label="Full page scan zoom view"
           >
             <button
               type="button"
               tabIndex={-1}
-              className="lightbox-backdrop-close"
+              className={cx(uiStyles, 'lightbox-backdrop-close')}
               aria-label="Close full page scan view"
               onClick={() => {
                 setScanZoomOpen(false);
               }}
             />
-            <div className="lightbox-card scan-lightbox-card">
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-                <strong style={{ fontFamily: 'var(--font-mono)', fontSize: '0.8rem', color: 'var(--surface-header)' }}>
+            <div className={cx(uiStyles, 'lightbox-card scan-lightbox-card')}>
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  marginBottom: 10,
+                }}
+              >
+                <strong
+                  style={{
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: '0.8rem',
+                    color: 'var(--surface-header)',
+                  }}
+                >
                   {currentDoc?.title} · {currentPage.label}
                 </strong>
                 <button
                   ref={scanZoomCloseBtnRef}
                   type="button"
-                  className="pill-btn"
+                  className={cx(uiStyles, 'pill-btn')}
                   onClick={() => {
                     setScanZoomOpen(false);
                   }}
@@ -552,11 +592,11 @@ export const SourceReaderDrawer: React.FC = () => {
                   Close [Esc]
                 </button>
               </div>
-              <div className="scan-lightbox-scroll">
+              <div className={cx(uiStyles, 'scan-lightbox-scroll')}>
                 <img
                   src={scanSrc}
                   alt={`High-resolution scan of ${currentPage.label}`}
-                  className="scan-page-img-full"
+                  className={cx(uiStyles, 'scan-page-img-full')}
                 />
               </div>
             </div>

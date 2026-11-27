@@ -74,9 +74,7 @@ export class R2MediaStore implements MediaStore {
       const total = obj.size;
       const start = Math.max(0, options.range.offset);
       const endExclusive =
-        options.range.length !== undefined
-          ? Math.min(total, start + options.range.length)
-          : total;
+        options.range.length !== undefined ? Math.min(total, start + options.range.length) : total;
       const rangeLength = Math.max(0, endExclusive - start);
 
       const sha256 = resolveSha256(key, obj);

@@ -75,9 +75,7 @@ const GEN_ROW_H = 124;
 
 function isDirectPerson(p: Person): boolean {
   return (
-    p.lineage_group === 'ancestor' ||
-    p.lineage_group === 'pivot_ancestor' ||
-    p.lineage_group === 'descendant'
+    p.lineage_group === 'ancestor' || p.lineage_group === 'pivot_ancestor' || p.lineage_group === 'descendant'
   );
 }
 
@@ -318,9 +316,7 @@ export function computeTreeLayout({
         continue;
       }
       used.add(p.id);
-      const sps = (spouseMap.get(p.id) ?? []).filter(
-        (sid) => !used.has(sid) && (gen.get(sid) ?? 0) === g
-      );
+      const sps = (spouseMap.get(p.id) ?? []).filter((sid) => !used.has(sid) && (gen.get(sid) ?? 0) === g);
       const unitMembers: Person[] = [p];
       if (sps.length > 0) {
         const sp = personMap.get(sps[0]);
@@ -396,8 +392,7 @@ export function computeTreeLayout({
   const rowWidths = new Map<number, number>();
   for (const g of genNums) {
     const units = unitsByGen.get(g) ?? [];
-    const w =
-      units.reduce((acc, u) => acc + u.width, 0) + Math.max(0, units.length - 1) * UNIT_GAP;
+    const w = units.reduce((acc, u) => acc + u.width, 0) + Math.max(0, units.length - 1) * UNIT_GAP;
     rowWidths.set(g, w);
     if (w > maxRowWidth) {
       maxRowWidth = w;

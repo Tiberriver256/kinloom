@@ -4,10 +4,10 @@ import { compileArchive } from './compileArchive.js';
 import { computeLifeOverlap } from './domain/kinshipFinder.js';
 import { isPersonAliveInYear } from './domain/timeSnapshot.js';
 import {
-  PrivacyViolationError,
   applyPrivacyFilter,
   assertMediaAllowedForPrivacy,
   isPersonLivingPublic,
+  PrivacyViolationError,
   redactSinglePerson,
   resolveEffectiveLiving,
   sanitizeEventForWrite,
@@ -24,7 +24,12 @@ const SYNTHETIC_CONFIG = parseKinloomConfig({
   },
   defaultBranchId: 'alder_main',
   branches: [
-    { id: 'alder_main', label: 'Alder Lineage', surnames: ['Alder'], lineageGroups: ['ancestor', 'descendant'] },
+    {
+      id: 'alder_main',
+      label: 'Alder Lineage',
+      surnames: ['Alder'],
+      lineageGroups: ['ancestor', 'descendant'],
+    },
     { id: 'mercer_side', label: 'Mercer Branch', surnames: ['Mercer'] },
   ],
   migrationEras: [
@@ -123,7 +128,9 @@ const SYNTHETIC_EVENTS: RawEvent[] = [
     summary: 'Arthur Alder enumerated in 1880 census (GEDCOM @I1@).',
     severity_rank: 4,
     participants: [{ person_id: 'per_arthur_alder', role: 'resident' }],
-    sources: [{ source_id: 'src_census_1880', confidence: 'high', citation_detail: 'Number: 123-45-6789; Roll 42' }],
+    sources: [
+      { source_id: 'src_census_1880', confidence: 'high', citation_detail: 'Number: 123-45-6789; Roll 42' },
+    ],
   },
   {
     id: 'evt_1890_resi',
@@ -294,10 +301,20 @@ describe('compileArchive and living-person privacy', () => {
     expect(pub.portrait_url).toBeNull();
 
     expect(
-      isPersonLivingPublic({ hasDeathOrBurial: false, birthYear: 1925, earliestEventYear: 1925, referenceYear: 2026 })
+      isPersonLivingPublic({
+        hasDeathOrBurial: false,
+        birthYear: 1925,
+        earliestEventYear: 1925,
+        referenceYear: 2026,
+      })
     ).toBe(false);
     expect(
-      isPersonLivingPublic({ hasDeathOrBurial: false, birthYear: 1926, earliestEventYear: 1926, referenceYear: 2026 })
+      isPersonLivingPublic({
+        hasDeathOrBurial: false,
+        birthYear: 1926,
+        earliestEventYear: 1926,
+        referenceYear: 2026,
+      })
     ).toBe(true);
 
     // Single-entity event write sanitizer
@@ -313,9 +330,7 @@ describe('compileArchive and living-person privacy', () => {
     expect(sanitizedNoYear.edtf_date).toBe('');
 
     // Single-entity media privacy assertion (direct person_ids and via event participants)
-    expect(() => assertMediaAllowedForPrivacy(SYNTHETIC_MEDIA[1], livingIds)).toThrow(
-      PrivacyViolationError
-    );
+    expect(() => assertMediaAllowedForPrivacy(SYNTHETIC_MEDIA[1], livingIds)).toThrow(PrivacyViolationError);
     const eventsById = new Map(SYNTHETIC_EVENTS.map((e) => [e.id, e]));
     expect(() =>
       assertMediaAllowedForPrivacy(
@@ -324,9 +339,7 @@ describe('compileArchive and living-person privacy', () => {
         eventsById
       )
     ).toThrow(PrivacyViolationError);
-    expect(() =>
-      assertMediaAllowedForPrivacy(SYNTHETIC_MEDIA[0], livingIds, eventsById)
-    ).not.toThrow();
+    expect(() => assertMediaAllowedForPrivacy(SYNTHETIC_MEDIA[0], livingIds, eventsById)).not.toThrow();
   });
 
   it('wires siteConfig.privacy cutoff, referenceYear, and config schemaVersion + wiki defaults', () => {

@@ -1,5 +1,5 @@
+import { type ApiErrorEnvelope, PrivacyViolationError } from '@kinloom/core';
 import { ZodError } from 'zod';
-import { PrivacyViolationError, type ApiErrorEnvelope } from '@kinloom/core';
 
 export class KinloomHttpError extends Error {
   readonly status: number;
