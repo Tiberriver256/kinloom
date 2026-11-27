@@ -167,6 +167,26 @@ function makeSampleSiteConfig(): KinloomSiteConfig {
         stripLivingResidenceSpans: true,
         markGedcomLivingConfidential: true,
       },
+      pronunciations: {
+        Alder: { phonetic: 'AWL-der', ipa: '/ˈɔːldər/', source_label: 'Synthetic test fixture' },
+        Maple: { phonetic: 'MAY-pul', ipa: '/ˈmeɪpəl/', source_label: 'Synthetic test fixture' },
+        Birch: { phonetic: 'BURCH', ipa: '/bɜːrtʃ/', source_label: 'Synthetic test fixture' },
+        Rowan: { phonetic: 'ROH-un', ipa: '/ˈroʊən/', source_label: 'Synthetic test fixture' },
+        Thomas: { phonetic: 'TOM-us', ipa: '/ˈtɒməs/', source_label: 'Synthetic test fixture' },
+        Arthur: { phonetic: 'AR-thur', ipa: '/ˈɑːrθər/', source_label: 'Synthetic test fixture' },
+        Helen: { phonetic: 'HEL-un', ipa: '/ˈhɛlən/', source_label: 'Synthetic test fixture' },
+        William: { phonetic: 'WIL-yum', ipa: '/ˈwɪljəm/', source_label: 'Synthetic test fixture' },
+        Mary: { phonetic: 'MAIR-ee', ipa: '/ˈmɛəri/', source_label: 'Synthetic test fixture' },
+        Edward: { phonetic: 'ED-wurd', ipa: '/ˈɛdwərd/', source_label: 'Synthetic test fixture' },
+        Samuel: { phonetic: 'SAM-yoo-ul', ipa: '/ˈsæmjuəl/', source_label: 'Synthetic test fixture' },
+        'Oak County': {
+          phonetic: 'OHK KOWN-tee',
+          ipa: '/oʊk ˈkaʊnti/',
+          source_label: 'Synthetic test fixture',
+        },
+        Ohio: { phonetic: 'oh-HY-oh', ipa: '/oʊˈhaɪoʊ/', source_label: 'Synthetic test fixture' },
+        USA: { phonetic: 'YOO-ES-AY', ipa: '/ˌjuːɛsˈeɪ/', source_label: 'Synthetic test fixture' },
+      },
     })
   );
 }
@@ -5940,7 +5960,7 @@ describe('ops/verify', () => {
       duplicate_vital_event: 3,
       placeholder_event: 1,
     });
-    expect(parsedDefault.warnings).toHaveLength(11);
+    expect(parsedDefault.warnings.filter((w) => !w.startsWith('[pronunciation]'))).toHaveLength(11);
 
     // Confirm adoptive parent link on Esther was NOT flagged.
     expect(parsedDefault.hygiene.warnings.some((w) => w.personIds.includes('per_child_adoptive_ok'))).toBe(
@@ -7346,5 +7366,206 @@ describe('ops/verify', () => {
     expect(payload.kinship.length).toBeGreaterThan(0);
     expect(payload.pronunciation).not.toBeNull();
     expect(payload.pronunciation?.phonetic).toContain('LING');
+  });
+});
+
+describe('ops/pronunciation-checks', () => {
+  it('flags living pronunciation leaks as hard audit errors and missing/unsourced/deleted pronunciations as strict failures', async () => {
+    const repoDir = await createSyntheticRepo();
+
+    // Add a live pronunciation on Arthur Alder so we can test accidental deletion.
+    const peoplePath = path.join(repoDir, 'data', 'people.yaml');
+    const people = parsePeopleYaml(await readFile(peoplePath, 'utf8'));
+    const updatedPeople = people.map((p) =>
+      p.id === 'per_arthur_alder'
+        ? {
+            ...p,
+            pronunciation: {
+              phonetic: 'AR-thur AWL-der',
+              ipa: '/ˈɑːrθər ˈɔːldər/',
+              source_label: 'Synthetic test fixture',
+            },
+          }
+        : p
+    );
+    await writeFile(peoplePath, serializePeopleYaml(updatedPeople, { sortById: true }), 'utf8');
+
+    // Remove the 1955 living visit event so chronology is clean.
+    const eventsPath = path.join(repoDir, 'data', 'events.yaml');
+    const filteredEvents = parseEventsYaml(await readFile(eventsPath, 'utf8')).filter(
+      (e) => e.id !== 'evt_arthur_living_visit'
+    );
+    await writeFile(eventsPath, serializeEventsYaml(filteredEvents, { sortById: true }), 'utf8');
+
+    const pkgDir = path.join(repoDir, 'research', 'people', 'per_arthur_alder');
+    await mkdir(pkgDir, { recursive: true });
+
+    // Case 1: Missing pronunciation on newly staged deceased person + place, plus accidental live deletion.
+    await writeFile(
+      path.join(pkgDir, 'patch.json'),
+      JSON.stringify(
+        {
+          person_id: 'per_arthur_alder',
+          person_updates: { pronunciation: null },
+          people: [
+            {
+              id: 'per_zephyr_quinn',
+              slug: 'zephyr-quinn',
+              full_name: 'Zephyr Quinn',
+              given_name: 'Zephyr',
+              surname: 'Quinn',
+              sex: 'M',
+              is_living: false,
+              lineage_group: 'ancestor',
+              birth_edtf: '1800',
+              death_edtf: '1870',
+              portrait_url: null,
+            },
+          ],
+          places: [
+            {
+              id: 'plc_gloucester_shire',
+              slug: 'gloucester-shire',
+              name: 'Gloucestershire',
+              full_name: 'Gloucestershire, England',
+              place_type: 'county',
+              parent_id: null,
+              lat: 51.86,
+              lng: -2.24,
+              historical_names: [],
+            },
+          ],
+        },
+        null,
+        2
+      ),
+      'utf8'
+    );
+
+    const warnAudit = await runAuditCommand({ repoDir, personId: 'per_arthur_alder' });
+    expect(warnAudit.ok).toBe(true);
+    expect(warnAudit.strictOk).toBe(false);
+    expect(warnAudit.checks.pronunciation.strictOk).toBe(false);
+    expect(
+      warnAudit.checks.pronunciation.warnings.some((w) => w.includes('removes existing live pronunciation'))
+    ).toBe(true);
+    expect(warnAudit.checks.pronunciation.warnings.some((w) => w.includes('Zephyr Quinn'))).toBe(true);
+    expect(warnAudit.checks.pronunciation.warnings.some((w) => w.includes('Gloucestershire'))).toBe(true);
+
+    // Case 2: Living person with explicit pronunciation -> hard error (ok: false).
+    await writeFile(
+      path.join(pkgDir, 'patch.json'),
+      JSON.stringify(
+        {
+          person_id: 'per_arthur_alder',
+          people: [
+            {
+              id: 'per_living_leak',
+              slug: 'living-leak',
+              full_name: 'Jamie Alder',
+              given_name: 'Jamie',
+              surname: 'Alder',
+              sex: 'U',
+              is_living: true,
+              lineage_group: 'descendant',
+              birth_edtf: '1990',
+              death_edtf: '',
+              portrait_url: null,
+              pronunciation: {
+                phonetic: 'JAY-mee AWL-der',
+                source_label: 'Should never be stored',
+              },
+            },
+          ],
+        },
+        null,
+        2
+      ),
+      'utf8'
+    );
+
+    const leakAudit = await runAuditCommand({ repoDir, personId: 'per_arthur_alder' });
+    expect(leakAudit.ok).toBe(false);
+    expect(leakAudit.checks.pronunciation.ok).toBe(false);
+    expect(leakAudit.errors.some((e) => e.includes('Living person record in staged patch'))).toBe(true);
+  });
+
+  it('surfaces pronunciation coverage gaps in verify warnings and fails under --strict-pronunciation or living leaks', async () => {
+    const repoDir = await createSyntheticRepo();
+
+    // Add a deceased person with an uncovered name.
+    const peoplePath = path.join(repoDir, 'data', 'people.yaml');
+    const people = parsePeopleYaml(await readFile(peoplePath, 'utf8'));
+    people.push({
+      id: 'per_zephyr_quinn',
+      slug: 'zephyr-quinn',
+      full_name: 'Zephyr Quinn',
+      given_name: 'Zephyr',
+      surname: 'Quinn',
+      alt_names: [],
+      sex: 'M',
+      is_living: false,
+      lineage_group: 'ancestor',
+      birth_edtf: '1800',
+      death_edtf: '1870',
+      portrait_url: null,
+    });
+    await writeFile(peoplePath, serializePeopleYaml(people, { sortById: true }), 'utf8');
+
+    // Remove the synthetic living visit event + living media so base verify passes.
+    await writeFile(
+      path.join(repoDir, 'data', 'events.yaml'),
+      serializeEventsYaml([], { sortById: true }),
+      'utf8'
+    );
+    await writeFile(
+      path.join(repoDir, 'data', 'media.yaml'),
+      serializeMediaYaml([], { sortById: true }),
+      'utf8'
+    );
+
+    const defaultCap = createCaptureIo();
+    expect(await runCli(['verify', '--repo', repoDir, '--json'], { io: defaultCap.io })).toBe(EXIT_OK);
+    const defaultJson = JSON.parse(defaultCap.stdout.join('\n')) as {
+      ok: boolean;
+      strictPronunciation: boolean;
+      warnings: string[];
+      checks: { pronunciation: { ok: boolean; strictOk: boolean; warnings: string[] } };
+    };
+    expect(defaultJson.ok).toBe(true);
+    expect(defaultJson.strictPronunciation).toBe(false);
+    expect(defaultJson.checks.pronunciation.ok).toBe(true);
+    expect(defaultJson.checks.pronunciation.strictOk).toBe(false);
+    expect(
+      defaultJson.warnings.some((w) => w.includes('[pronunciation]') && w.includes('Zephyr Quinn'))
+    ).toBe(true);
+
+    const strictCap = createCaptureIo();
+    expect(
+      await runCli(['verify', '--repo', repoDir, '--strict-pronunciation', '--json'], { io: strictCap.io })
+    ).toBe(EXIT_ERROR);
+    const strictJson = JSON.parse(strictCap.stdout.join('\n')) as {
+      ok: boolean;
+      strictPronunciation: boolean;
+      errors: string[];
+    };
+    expect(strictJson.ok).toBe(false);
+    expect(strictJson.strictPronunciation).toBe(true);
+    expect(strictJson.errors.some((e) => e.includes('pronunciation:') && e.includes('Zephyr Quinn'))).toBe(
+      true
+    );
+
+    // Living person with explicit pronunciation fails even default verify.
+    const withLeak = people.map((p) =>
+      p.id === 'per_clara_maple_living'
+        ? { ...p, pronunciation: { phonetic: 'KLAIR-uh MAY-pul', source_label: 'Leak test' } }
+        : p
+    );
+    await writeFile(peoplePath, serializePeopleYaml(withLeak, { sortById: true }), 'utf8');
+    const leakCap = createCaptureIo();
+    expect(await runCli(['verify', '--repo', repoDir, '--json'], { io: leakCap.io })).toBe(EXIT_ERROR);
+    const leakJson = JSON.parse(leakCap.stdout.join('\n')) as { ok: boolean; errors: string[] };
+    expect(leakJson.ok).toBe(false);
+    expect(leakJson.errors.some((e) => e.includes('pronunciation:'))).toBe(true);
   });
 });

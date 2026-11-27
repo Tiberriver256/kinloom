@@ -116,6 +116,21 @@ function makeSampleSiteConfig(): KinloomSiteConfig {
         stripLivingResidenceSpans: true,
         markGedcomLivingConfidential: true,
       },
+      pronunciations: {
+        Alder: { phonetic: 'AWL-der', ipa: '/ˈɔːldər/', source_label: 'Synthetic test fixture' },
+        Maple: { phonetic: 'MAY-pul', ipa: '/ˈmeɪpəl/', source_label: 'Synthetic test fixture' },
+        Birch: { phonetic: 'BURCH', ipa: '/bɜːrtʃ/', source_label: 'Synthetic test fixture' },
+        Arthur: { phonetic: 'AR-thur', ipa: '/ˈɑːrθər/', source_label: 'Synthetic test fixture' },
+        Helen: { phonetic: 'HEL-un', ipa: '/ˈhɛlən/', source_label: 'Synthetic test fixture' },
+        Clara: { phonetic: 'KLAIR-uh', ipa: '/ˈklɛərə/', source_label: 'Synthetic test fixture' },
+        'Oak County': {
+          phonetic: 'OHK KOWN-tee',
+          ipa: '/oʊk ˈkaʊnti/',
+          source_label: 'Synthetic test fixture',
+        },
+        Ohio: { phonetic: 'oh-HY-oh', ipa: '/oʊˈhaɪoʊ/', source_label: 'Synthetic test fixture' },
+        USA: { phonetic: 'YOO-ES-AY', ipa: '/ˌjuːɛsˈeɪ/', source_label: 'Synthetic test fixture' },
+      },
     })
   );
 }

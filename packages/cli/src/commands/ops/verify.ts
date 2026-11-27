@@ -526,13 +526,24 @@ export function formatVerifyTextReport(report: Omit<VerifyCommandResult, 'render
     lines.push(`  ... and ${report.errors.length - 30} more error(s).`);
   }
 
-  if (report.warnings.length > 0) {
-    lines.push(`Tree hygiene warnings (${report.warnings.length}):`);
-    for (const warning of report.warnings.slice(0, 30)) {
+  if (report.hygiene.warnings.length > 0) {
+    lines.push(`Tree hygiene warnings (${report.hygiene.warnings.length}):`);
+    for (const warning of report.hygiene.warnings.slice(0, 30)) {
+      lines.push(`  WARN: [${warning.category}] ${warning.message}`);
+    }
+    if (report.hygiene.warnings.length > 30) {
+      lines.push(`  ... and ${report.hygiene.warnings.length - 30} more tree hygiene warning(s).`);
+    }
+  }
+
+  const otherWarnings = report.warnings.slice(report.hygiene.warnings.length);
+  if (otherWarnings.length > 0) {
+    lines.push(`Warnings (${otherWarnings.length}):`);
+    for (const warning of otherWarnings.slice(0, 30)) {
       lines.push(`  WARN: ${warning}`);
     }
-    if (report.warnings.length > 30) {
-      lines.push(`  ... and ${report.warnings.length - 30} more warning(s).`);
+    if (otherWarnings.length > 30) {
+      lines.push(`  ... and ${otherWarnings.length - 30} more warning(s).`);
     }
   }
 

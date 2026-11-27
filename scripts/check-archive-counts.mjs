@@ -8,7 +8,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
 import { parseSync } from 'rolldown/experimental';
-import { noHardcodedArchiveCountsRule } from '../packages/core/dist/oxlint/plugin.js';
+import { noHardcodedArchiveCountsRule } from '../packages/core/src/oxlint/plugin.ts';
 
 const REPO_ROOT = path.resolve(import.meta.dirname, '..');
 const DEFAULT_TARGETS = [

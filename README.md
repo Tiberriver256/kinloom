@@ -73,6 +73,7 @@ Private sites extend Kinloom without forking core packages:
 
 - **`KinloomUiPlugin` (`@kinloom/ui`):** Register custom routes and top-bar links, inject React panels into named page slots (`indexHero`, `personDetail`, `placeDetail`, `sourceReaderFooter`, `evidenceExtra`), or provide custom `mediaRenderers`.
 - **`KinloomServerPlugin` (`@kinloom/server`):** Mount authenticated custom API routes that inherit session, RBAC, and CSRF enforcement, or subscribe to `onRevisionCommitted` hooks.
+- **`KinloomCliPlugin` (`@kinloom/cli`):** Auto-discover site-local CLI extensions from `extensions/<name>/cli.mjs` or `kinloom.config.yaml` to register custom subcommands, `auditChecks` hooks for `kinloom audit`, and `verifyChecks` hooks for `kinloom verify`.
 - **Byte-range video and oral histories:** `MediaService` validates and stores images, PDFs, MP4/WebM videos, and audio oral histories under content-addressed SHA-256 keys, streaming `GET /media/:key` with HTTP `206 Partial Content` and `Content-Range` headers for scrubbable `<video>` and `<audio>` playback.
 
 ## Built-in genealogy research CLI and guides

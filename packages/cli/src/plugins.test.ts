@@ -294,3 +294,201 @@ describe('site-root CLI plugin discovery and dispatch', () => {
     ).toBe(EXIT_ERROR);
   });
 });
+
+describe('site CLI plugin auditChecks and verifyChecks hooks', () => {
+  async function createMinimalArchiveRepo(dir: string, plugins?: string[]): Promise<void> {
+    const dataDir = path.join(dir, 'data');
+    await mkdir(dataDir, { recursive: true });
+    await writeFile(path.join(dir, 'kinloom.config.yaml'), makeSampleSiteConfigYaml(plugins), 'utf8');
+    await writeFile(
+      path.join(dataDir, 'people.yaml'),
+      `- id: per_ada_alder
+  slug: ada-alder
+  full_name: Ada Alder
+  given_name: Ada
+  surname: Alder
+  alt_names: []
+  sex: F
+  is_living: false
+  lineage_group: ancestor
+  birth_edtf: '1850-01-01'
+  death_edtf: '1920-02-02'
+  portrait_url: null
+  pronunciation:
+    phonetic: AY-duh AWL-der
+    ipa: /ˈeɪdə ˈɔːldər/
+    source_label: Synthetic test fixture
+`,
+      'utf8'
+    );
+    await writeFile(path.join(dataDir, 'places.yaml'), '[]\n', 'utf8');
+    await writeFile(path.join(dataDir, 'sources.yaml'), '[]\n', 'utf8');
+    await writeFile(path.join(dataDir, 'events.yaml'), '[]\n', 'utf8');
+    await writeFile(path.join(dataDir, 'kinship.yaml'), '[]\n', 'utf8');
+    await writeFile(path.join(dataDir, 'media.yaml'), '[]\n', 'utf8');
+    await writeFile(path.join(dataDir, 'narratives.yaml'), '[]\n', 'utf8');
+  }
+
+  it('auto-discovers check-only plugins from extensions/*/cli.mjs and runs verifyChecks and auditChecks', async () => {
+    const siteDir = await makeTempDir('kinloom-plugin-checks-');
+    await createMinimalArchiveRepo(siteDir);
+
+    const extDir = path.join(siteDir, 'extensions', 'custom-checks');
+    await mkdir(extDir, { recursive: true });
+    await writeFile(
+      path.join(extDir, 'cli.mjs'),
+      `export default {
+  id: 'custom-checks',
+  name: 'Custom Checks',
+  verifyChecks: [
+    {
+      id: 'require-source-count',
+      name: 'Require Source Count',
+      run(ctx) {
+        if (ctx.sources.length === 0) {
+          return {
+            warnings: ['Archive has no sources yet.'],
+            strictFailures: ['Strict mode requires at least one source.'],
+          };
+        }
+        return {};
+      },
+    },
+  ],
+  auditChecks: [
+    {
+      id: 'require-summary',
+      name: 'Require Narrative Summary',
+      run(ctx) {
+        const narratives = Array.isArray(ctx.patch.narratives) ? ctx.patch.narratives : [];
+        if (narratives.length === 0) {
+          return {
+            errors: ['Patch must include at least one narrative.'],
+          };
+        }
+        return { details: { checkedNarratives: narratives.length } };
+      },
+    },
+  ],
+};
+`,
+      'utf8'
+    );
+
+    // Check-only plugin should be discovered even without commands.
+    const discovered = await discoverSiteCliPlugins(siteDir);
+    expect(discovered.warnings).toEqual([]);
+    expect(discovered.plugins).toHaveLength(1);
+    expect(discovered.plugins[0]?.id).toBe('custom-checks');
+
+    // Default verify surfaces plugin warning without failing.
+    const verifyCap = createCaptureIo();
+    expect(await runCli(['verify', '--repo', siteDir, '--json'], { cwd: siteDir, io: verifyCap.io })).toBe(
+      EXIT_OK
+    );
+    const verifyJson = JSON.parse(verifyCap.stdout.join('\n')) as {
+      ok: boolean;
+      warnings: string[];
+      pluginChecks: Array<{
+        pluginId: string;
+        id: string;
+        ok: boolean;
+        strictOk: boolean;
+        warnings: string[];
+      }>;
+    };
+    expect(verifyJson.ok).toBe(true);
+    expect(verifyJson.pluginChecks).toHaveLength(1);
+    expect(verifyJson.pluginChecks[0]?.id).toBe('require-source-count');
+    expect(verifyJson.pluginChecks[0]?.strictOk).toBe(false);
+    expect(verifyJson.warnings.some((w) => w.includes('[plugin:require-source-count]'))).toBe(true);
+
+    // Verify with --strict promotes plugin strictFailures to errors.
+    const strictVerifyCap = createCaptureIo();
+    expect(
+      await runCli(['verify', '--repo', siteDir, '--strict', '--json'], {
+        cwd: siteDir,
+        io: strictVerifyCap.io,
+      })
+    ).toBe(EXIT_ERROR);
+    const strictVerifyJson = JSON.parse(strictVerifyCap.stdout.join('\n')) as {
+      ok: boolean;
+      errors: string[];
+    };
+    expect(strictVerifyJson.ok).toBe(false);
+    expect(strictVerifyJson.errors.some((e) => e.includes('plugin(require-source-count)'))).toBe(true);
+
+    // Audit runs plugin auditChecks and fails when plugin reports an error.
+    const pkgDir = path.join(siteDir, 'research', 'people', 'per_ada_alder');
+    await mkdir(pkgDir, { recursive: true });
+    await writeFile(
+      path.join(pkgDir, 'patch.json'),
+      JSON.stringify({ person_id: 'per_ada_alder', narratives: [] }, null, 2),
+      'utf8'
+    );
+    const auditCap = createCaptureIo();
+    expect(
+      await runCli(['audit', 'per_ada_alder', '--repo', siteDir, '--json'], { cwd: siteDir, io: auditCap.io })
+    ).toBe(EXIT_ERROR);
+    const auditJson = JSON.parse(auditCap.stdout.join('\n')) as {
+      ok: boolean;
+      errors: string[];
+      pluginChecks: Array<{ pluginId: string; id: string; ok: boolean; errors: string[] }>;
+    };
+    expect(auditJson.ok).toBe(false);
+    expect(auditJson.pluginChecks).toHaveLength(1);
+    expect(auditJson.pluginChecks[0]?.id).toBe('require-summary');
+    expect(auditJson.errors.some((e) => e.includes('plugin(require-summary)'))).toBe(true);
+  });
+
+  it('catches throwing plugin checks cleanly and warns on duplicate check IDs', async () => {
+    const siteDir = await makeTempDir('kinloom-plugin-throws-');
+    await createMinimalArchiveRepo(siteDir);
+
+    const pluginA: KinloomCliPlugin = {
+      id: 'plugin-a',
+      name: 'Plugin A',
+      verifyChecks: [
+        {
+          id: 'dup-check',
+          name: 'Boom Check',
+          run() {
+            throw new Error('simulated plugin failure');
+          },
+        },
+      ],
+    };
+    const pluginB: KinloomCliPlugin = {
+      id: 'plugin-b',
+      name: 'Plugin B',
+      verifyChecks: [
+        {
+          id: 'dup-check',
+          name: 'Shadowed Check',
+          run() {
+            return { errors: [], warnings: [] };
+          },
+        },
+      ],
+    };
+
+    const verifyCap = createCaptureIo();
+    expect(
+      await runCli(['verify', '--repo', siteDir, '--json'], {
+        cwd: siteDir,
+        io: verifyCap.io,
+        plugins: [pluginA, pluginB],
+      })
+    ).toBe(EXIT_ERROR);
+    const verifyJson = JSON.parse(verifyCap.stdout.join('\n')) as {
+      ok: boolean;
+      errors: string[];
+      warnings: string[];
+      pluginChecks: Array<{ pluginId: string; id: string; ok: boolean; errors: string[] }>;
+    };
+    expect(verifyJson.ok).toBe(false);
+    expect(verifyJson.pluginChecks).toHaveLength(1);
+    expect(verifyJson.pluginChecks[0]?.errors[0]).toContain('simulated plugin failure');
+    expect(verifyJson.warnings.some((w) => w.includes("duplicate verify check 'dup-check'"))).toBe(true);
+  });
+});
