@@ -1,1 +1,1 @@
-export const KINLOOM_SERVER_VERSION = '0.50.0';
+export const KINLOOM_SERVER_VERSION = '0.51.0';
