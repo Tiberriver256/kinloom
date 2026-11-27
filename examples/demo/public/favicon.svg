@@ -1,9 +1,19 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32" fill="none" role="img" aria-label="Kinloom icon">
-  <rect x="0.75" y="0.75" width="30.5" height="30.5" rx="6" fill="#F5EFE2" stroke="#D6CEBE" stroke-width="1.5"/>
+  <style>
+    .kl-bg { fill: #F5EFE2; stroke: #D6CEBE; }
+    .kl-warp { stroke: #1B2A41; }
+    .kl-accent { stroke: #7A4612; }
+    @media (prefers-color-scheme: dark) {
+      .kl-bg { fill: #1B2A41; stroke: #334663; }
+      .kl-warp { stroke: #FCF9F2; }
+      .kl-accent { stroke: #7A4612; }
+    }
+  </style>
+  <rect class="kl-bg" x="0.75" y="0.75" width="30.5" height="30.5" rx="6" stroke-width="1.5"/>
   <g transform="translate(4, 4)">
-    <path d="M8 2.5V13.5M8 18.5V21.5" stroke="#1B2A41" stroke-width="2.5" stroke-linecap="round"/>
-    <path d="M16 2.5V5.5M16 10.5V21.5" stroke="#1B2A41" stroke-width="2.5" stroke-linecap="round"/>
-    <path d="M2.5 8H5.5M10.5 8H21.5" stroke="#7A4612" stroke-width="2.5" stroke-linecap="round"/>
-    <path d="M2.5 16H13.5M18.5 16H21.5" stroke="#1B2A41" stroke-width="2.5" stroke-linecap="round"/>
+    <path class="kl-warp" d="M8 2.5V13.5M8 18.5V21.5" stroke-width="2.5" stroke-linecap="round"/>
+    <path class="kl-warp" d="M16 2.5V5.5M16 10.5V21.5" stroke-width="2.5" stroke-linecap="round"/>
+    <path class="kl-accent" d="M2.5 8H5.5M10.5 8H21.5" stroke-width="2.5" stroke-linecap="round"/>
+    <path class="kl-warp" d="M2.5 16H13.5M18.5 16H21.5" stroke-width="2.5" stroke-linecap="round"/>
   </g>
 </svg>

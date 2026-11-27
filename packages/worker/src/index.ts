@@ -14,6 +14,7 @@ import { D1ArchiveRepository } from './adapters/d1Repository.js';
 import { GeminiPronunciationAudioGenerator } from './adapters/geminiPronunciationGenerator.js';
 import { R2IncrementalPatchBundleCache } from './adapters/r2BundleCache.js';
 import { R2MediaStore } from './adapters/r2MediaStore.js';
+import { handleDynamicOgRequest } from './ogCard.js';
 import type { ExportedHandler, KinloomWorkerEnv } from './types.js';
 
 export const KINLOOM_WORKER_VERSION = '0.40.1';
@@ -42,6 +43,7 @@ export {
   type R2IncrementalPatchBundleCacheOptions,
 } from './adapters/r2BundleCache.js';
 export { R2MediaStore } from './adapters/r2MediaStore.js';
+export { type DynamicOgRequestOptions, handleDynamicOgRequest } from './ogCard.js';
 export type {
   D1Database,
   D1ExecResult,
@@ -103,6 +105,11 @@ export function renderPrivacyPolicyHtml(siteConfig: KinloomSiteConfig): string {
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Privacy Policy | ${title}</title>
+  <meta name="theme-color" content="#F5EFE2" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#1B2A41" media="(prefers-color-scheme: dark)">
+  <link rel="icon" href="/favicon.ico" sizes="48x48">
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
   <style>
     :root {
       --paper: #F5EFE2;
@@ -252,6 +259,24 @@ export function createCloudflareWorker(
       const repository = new D1ArchiveRepository(env.DB, {
         privacyConfig: options.siteConfig.privacy,
       });
+
+      if (
+        options.siteConfig.brand?.dynamicOg &&
+        (request.method === 'GET' || request.method === 'HEAD') &&
+        url.pathname.startsWith('/og/')
+      ) {
+        const ogResponse = await handleDynamicOgRequest({
+          pathname: url.pathname,
+          headOnly: request.method === 'HEAD',
+          isSecure: url.protocol === 'https:',
+          siteConfig: options.siteConfig,
+          repository,
+        });
+        if (ogResponse) {
+          return ogResponse;
+        }
+      }
+
       const bundleCache = new R2IncrementalPatchBundleCache({
         bucket: env.MEDIA_BUCKET,
         siteConfig: options.siteConfig,

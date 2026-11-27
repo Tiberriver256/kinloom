@@ -35,6 +35,53 @@ async function runInit(rest: readonly string[], ctx: CliDispatchContext): Promis
   return EXIT_OK;
 }
 
+async function runBrandkit(rest: readonly string[], ctx: CliDispatchContext): Promise<CliExitCode> {
+  const { values } = safeParseArgs({
+    args: rest,
+    allowPositionals: false,
+    options: {
+      config: { type: 'string' },
+      out: { type: 'string' },
+      title: { type: 'string' },
+      subtitle: { type: 'string' },
+      metadata: { type: 'string' },
+      accent: { type: 'string' },
+      surface: { type: 'string' },
+      mark: { type: 'string' },
+      vignette: { type: 'string' },
+      'print-head': { type: 'boolean', default: false },
+      'no-force': { type: 'boolean', default: false },
+    },
+  });
+  const surface = values.surface?.trim();
+  if (surface && surface !== 'parchment' && surface !== 'navy') {
+    throw new CliValidationError("Option `--surface` must be 'parchment' or 'navy'.");
+  }
+  const { runBrandkitCommand } = await import('../commands/brandkit.js');
+  const result = await runBrandkitCommand({
+    configPath: values.config,
+    outDir: values.out?.trim() || 'public',
+    title: values.title,
+    subtitle: values.subtitle,
+    metadataLine: values.metadata,
+    accent: values.accent,
+    surface: surface as 'parchment' | 'navy' | undefined,
+    markSvgPath: values.mark,
+    vignetteImagePath: values.vignette,
+    force: !values['no-force'],
+    cwd: ctx.cwd,
+  });
+  const writtenCount = result.files.filter((f) => !f.skipped).length;
+  const skippedCount = result.files.length - writtenCount;
+  ctx.io.stdout(
+    `Generated brandkit in ${result.outDir}: ${writtenCount} written, ${skippedCount} skipped (og-default.png: ${(result.ogBytes / 1024).toFixed(1)} KB).`
+  );
+  if (values['print-head']) {
+    ctx.io.stdout(result.headTags);
+  }
+  return EXIT_OK;
+}
+
 async function runSliceGedcom(rest: readonly string[], ctx: CliDispatchContext): Promise<CliExitCode> {
   const { values } = safeParseArgs({
     args: rest,
@@ -301,6 +348,8 @@ export async function dispatchCoreCommand(
   switch (command) {
     case 'init':
       return runInit(rest, ctx);
+    case 'brandkit':
+      return runBrandkit(rest, ctx);
     case 'slice-gedcom':
       return runSliceGedcom(rest, ctx);
     case 'seed':

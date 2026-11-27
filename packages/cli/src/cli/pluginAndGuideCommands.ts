@@ -30,6 +30,7 @@ export const ROOT_HELP = `Usage: kinloom <command> [options]
 
 Archive lifecycle:
   init               Scaffold a thin private family archive repository
+  brandkit           Generate all-device favicons, PWA icons, manifest, and Open Graph image
   slice-gedcom       Slice a combined GEDCOM export into deterministic YAML files
   seed               Load local YAML + config and submit an idempotent seed batch
   submit-batch       Validate and submit a typed BatchSubmission JSON/YAML file
@@ -79,6 +80,22 @@ Options:
   --accent <hex>      6-digit hex theme accent color (default: #7A4612)
   --force             Overwrite existing files
   -h, --help          Show this help message`,
+
+  brandkit: `Usage: kinloom brandkit [options]
+
+Options:
+  --config <path>      Path to kinloom.config.yaml (optional; uses Kinloom defaults if omitted)
+  --out <dir>          Output directory for brandkit assets (default: public)
+  --title <text>       Override OG card & manifest title
+  --subtitle <text>    Override OG card subtitle
+  --metadata <text>    Override OG card monospace metadata line
+  --accent <hex>       Override 6-digit hex accent color (e.g. #2F5245)
+  --surface <theme>    Card/icon surface theme: 'parchment' or 'navy' (default: parchment)
+  --mark <svg-path>    Custom SVG mark file to embed instead of default KinloomMark
+  --vignette <imgPath> Optional archival vignette image for split-layout OG card
+  --print-head         Print ready-to-paste HTML <head> meta & icon tags
+  --no-force           Skip files that already exist
+  -h, --help           Show this help message`,
 
   'slice-gedcom': `Usage: kinloom slice-gedcom --input <file.ged> --out <data-dir> --root <xref-or-name> [options]
 

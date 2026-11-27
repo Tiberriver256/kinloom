@@ -18,6 +18,22 @@ export const SiteThemeConfigSchema = z.object({
   accent: HexColorSchema.optional(),
 });
 
+export const SiteBrandConfigSchema = z.object({
+  title: z.string().min(1).optional(),
+  subtitle: z.string().min(1).optional(),
+  metadataLine: z.string().min(1).optional(),
+  accent: HexColorSchema.optional(),
+  surface: z.enum(['parchment', 'navy']).default('parchment'),
+  themeColorLight: HexColorSchema.default('#F5EFE2'),
+  themeColorDark: HexColorSchema.default('#1B2A41'),
+  ogImage: z.string().min(1).optional(),
+  ogImageAlt: z.string().min(1).optional(),
+  markSvg: z.string().min(1).optional(),
+  vignetteImage: z.string().min(1).optional(),
+  showFooterCredit: z.boolean().default(true),
+  dynamicOg: z.boolean().default(false),
+});
+
 export const BranchConfigSchema = z.object({
   id: z.string().min(1),
   label: z.string().min(1),
@@ -90,6 +106,7 @@ export const KinloomSiteConfigSchema = z.object({
   schemaVersion: z.literal(1).default(1),
   site: SiteMetadataSchema,
   theme: SiteThemeConfigSchema.optional(),
+  brand: SiteBrandConfigSchema.optional(),
   defaultBranchId: z.string().min(1).optional(),
   branches: z.array(BranchConfigSchema).default([]),
   lineageSections: z.array(LineageSectionConfigSchema).default([]),
@@ -107,6 +124,7 @@ export const KinloomSiteConfigSchema = z.object({
 
 export type SiteMetadata = z.infer<typeof SiteMetadataSchema>;
 export type SiteThemeConfig = z.infer<typeof SiteThemeConfigSchema>;
+export type SiteBrandConfig = z.infer<typeof SiteBrandConfigSchema>;
 export type BranchConfig = z.infer<typeof BranchConfigSchema>;
 export type LineageSectionConfig = z.infer<typeof LineageSectionConfigSchema>;
 export type FeaturedKinshipPair = z.infer<typeof FeaturedKinshipPairSchema>;

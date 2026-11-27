@@ -15,7 +15,14 @@ export {
   type UploadMediaRequest,
   type UploadMediaResponse,
 } from './client.js';
-
+export {
+  type BrandkitCommandOptions,
+  type BrandkitCommandResult,
+  type BrandkitFileArtifact,
+  encodeIcoFromPngs,
+  type IcoPngFrame,
+  runBrandkitCommand,
+} from './commands/brandkit.js';
 export {
   ARCHIVE_YAML_FILE_NAMES,
   type ArchiveYamlFileName,

@@ -304,7 +304,7 @@ describe('kinloom CLI commands', () => {
       { io: cap.io }
     );
     expect(exitCode).toBe(EXIT_OK);
-    expect(cap.stdout[0]).toContain('13 created, 0 skipped');
+    expect(cap.stdout[0]).toContain('21 created, 0 skipped');
 
     const configYaml = await readFile(path.join(targetDir, 'kinloom.config.yaml'), 'utf8');
     const parsedConfig = parseKinloomConfigYaml(configYaml);
@@ -352,7 +352,7 @@ describe('kinloom CLI commands', () => {
       { io: cap2.io }
     );
     expect(secondCode).toBe(EXIT_OK);
-    expect(cap2.stdout[0]).toContain('0 created, 13 skipped');
+    expect(cap2.stdout[0]).toContain('0 created, 21 skipped');
 
     // Invalid hex accent fails at CLI boundary with exit code 2.
     const cap3 = createCaptureIo();

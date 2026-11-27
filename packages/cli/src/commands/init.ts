@@ -2,6 +2,7 @@ import { access, mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { parseKinloomConfig, serializeKinloomConfigYaml } from '@kinloom/core';
 import { CliValidationError } from '../errors.js';
+import { runBrandkitCommand } from './brandkit.js';
 import { ARCHIVE_YAML_FILE_NAMES } from './dataFiles.js';
 
 export interface InitCommandOptions {
@@ -338,6 +339,22 @@ export async function runInitCommand(options: InitCommandOptions): Promise<InitC
     await mkdir(path.dirname(fullPath), { recursive: true });
     await writeFile(fullPath, content, 'utf8');
     created.push(relativePath);
+  }
+
+  // Scaffold default all-device brandkit assets into public/
+  const brandkit = await runBrandkitCommand({
+    configPath: path.join(resolvedDir, 'kinloom.config.yaml'),
+    outDir: path.join(resolvedDir, 'public'),
+    force: Boolean(options.force),
+    cwd: resolvedDir,
+  });
+  for (const asset of brandkit.files) {
+    const rel = path.join('public', asset.fileName);
+    if (asset.skipped) {
+      skipped.push(rel);
+    } else {
+      created.push(rel);
+    }
   }
 
   return {

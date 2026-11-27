@@ -1,5 +1,7 @@
 // Schemas & Domain Types
 
+// Brandkit SVG, Manifest, Head Tags & Privacy-Safe OG Metadata
+export * from './brandkit.js';
 // Core Domain Algorithms (UI-agnostic)
 export * from './citations.js';
 // Pure TypeScript Archive Compiler & Incremental Bundle Patcher

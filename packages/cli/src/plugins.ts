@@ -128,6 +128,7 @@ export const CORE_CLI_COMMANDS: ReadonlySet<string> = new Set([
   'help',
   'guide',
   'init',
+  'brandkit',
   'slice-gedcom',
   'seed',
   'submit-batch',
