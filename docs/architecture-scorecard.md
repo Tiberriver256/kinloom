@@ -353,12 +353,55 @@ Measured at commit `110eed9` before decomposition (`26,184` LOC across all 24 re
 | **Modularity** | 9.1 / 10 | **9.9 / 10** | **9.6 / 10** | Zero non-test files `>= 650` LOC remain anywhere in `@kinloom/cli` (max `644` LOC across the entire CLI package, max `525` LOC across Iteration 3B) or `@kinloom/worker`. Only 4 core/server files remain above `950` LOC repo-wide. |
 | **Extensibility** | 9.3 / 10 | **9.8 / 10** | **9.6 / 10** | Adding a new regional archive client, record subcommand, ops check, or pronunciation provider now composes directly over `records/runtime/{primitives,parse,urlPolicy,http}.ts` and small single-purpose modules. |
 
-## Remaining Roadmap (Iteration 3C to 10/10 Repo-Wide)
+## Iteration 3C Changes (Final Core, Server & UI Modules Below 750 LOC)
 
-1. **Iteration 3C: Final 4 Core & Server Monoliths (`packages/core/` & `packages/server/`)**
-   - `packages/server/src/testing/adapterContractSuite.ts` (`1,332` LOC)
-   - `packages/core/src/patchArchive.ts` (`1,098` LOC)
-   - `packages/core/src/gedcom/slice.ts` (`1,028` LOC)
-   - `packages/server/src/adapters/inMemory.ts` (`964` LOC)
-2. **Optional Final Polish (Secondary `711-897` LOC Core/UI Modules)**
-   - `packages/core/src/schemas/pronunciation.ts` (`897` LOC), `packages/ui/src/components/ArchivalMarkdown.tsx` (`859` LOC), `packages/ui/src/components/Atoms.tsx` (`799` LOC), `packages/ui/src/components/tree/TreeOrthogonalCanvas.tsx` (`742` LOC), `packages/core/src/compileArchive.ts` (`736` LOC), `packages/ui/src/machines/authSessionMachine.ts` (`720` LOC), `packages/ui/src/lib/tree/treeGraphBuilder.ts` (`711` LOC).
+Measured at commit `9280285` before decomposition (`6,977` LOC across all 7 remaining non-test files above `750` LOC repo-wide) and verified on `2026-11-27` (UTC via Python) with zero `any`, `@ts-ignore`, or `@ts-expect-error` escape hatches, 0 circular imports across `packages/core/src/`, `packages/server/src/`, and `packages/ui/src/`, 0 Biome errors/warnings, and 100% backward-compatible exports across all 7 facades. Every non-test TypeScript/TSX file across the entire monorepo is now strictly `< 750` LOC (repo-wide max: `742` LOC in `packages/ui/src/components/tree/TreeOrthogonalCanvas.tsx`).
+
+### Iteration 3C Before/After LOC Table
+
+| Target Module | Before LOC | After Entrypoint LOC | Extracted Submodules | Max Submodule LOC |
+| --- | ---: | ---: | --- | ---: |
+| `packages/server/src/testing/adapterContractSuite.ts` | 1,332 | 34 | 5 modules under `testing/contract/` | 422 |
+| `packages/core/src/patchArchive.ts` | 1,098 | 92 | 3 modules under `core/src/patch/` | 459 |
+| `packages/core/src/gedcom/slice.ts` | 1,028 | 77 | 4 modules under `core/src/gedcom/slice*.ts` | 445 |
+| `packages/server/src/adapters/inMemory.ts` | 964 | 230 | 4 modules under `adapters/inMemory/` | 360 |
+| `packages/core/src/schemas/pronunciation.ts` | 897 | 24 | 3 modules under `core/src/schemas/pronunciation*.ts` | 553 |
+| `packages/ui/src/components/ArchivalMarkdown.tsx` | 859 | 231 | 3 modules under `components/markdown/` | 284 |
+| `packages/ui/src/components/Atoms.tsx` | 799 | 10 | 4 modules under `components/atoms/` | 421 |
+
+### Domain Module Breakdown
+
+1. **Backend Adapter Contract Suite (`packages/server/src/testing/adapterContractSuite.ts` & `testing/contract/`)**:
+   - `adapterContractSuite.ts` (`1,332` -> `34` LOC): Thin Vitest suite coordinator re-exporting all 9 fixtures, types, and `runBackendAdapterContractTests`.
+   - `contract/{harness,entityAndPrivacyContract,batchAndRevisionContract,mediaContract,authAndTokenContract}.ts` (`106`-`422` LOC): Separates synthetic fixtures/cookies/clock harness from entity CRUD & living-person privacy tests, multi-op rollback & >100-entity zero-N+1 batch tests, SHA-256 & HTTP 206 range media tests, and OAuth/magic-link/rate-limit/agent-token tests.
+2. **Incremental Bundle Patcher (`packages/core/src/patchArchive.ts` & `core/src/patch/`)**:
+   - `patchArchive.ts` (`1,098` -> `92` LOC): Thin pure orchestration facade (`applyPatchMutation` -> 5 incremental reconcilers -> immutable `ArchiveBundle` assembly).
+   - `patch/{patchState,entityMutators,reconcilers}.ts` (`258`-`459` LOC): Isolates lazy-indexed `PatchWorkingState` and dirty-tracking sets, per-entity mutation appliers with shared primary-source resolution, and O(affected) post-mutation reconcilers (newly living redaction, affected media cleanup, place ancestor/proximity spans, event/media counts & portraits, and residence span splicing).
+3. **GEDCOM Lineage Slicer (`packages/core/src/gedcom/slice.ts` & `core/src/gedcom/slice*.ts`)**:
+   - `slice.ts` (`1,028` -> `77` LOC): Clean pipeline facade (`parseGedcomText` -> `selectGedcomLineage` -> `buildPlacesFromRaw` -> `buildSlicePeople` -> `buildSliceKinship` -> `buildSliceEventsAndSources`).
+   - `{sliceTypes,sliceTraversal,sliceNormalization,sliceBuilders}.ts` (`89`-`445` LOC): Separates option/result contracts, ancestor/sibling/descendant graph traversal, maiden-name/living-status/place normalization, and Kinloom entity emission with anomaly tracking.
+4. **In-Memory Server Adapters (`packages/server/src/adapters/inMemory.ts` & `adapters/inMemory/`)**:
+   - `inMemory.ts` (`964` -> `230` LOC): Mirrors `D1ArchiveRepository` by composing `InMemoryArchiveRepository` over two domain stores while re-exporting all adapter classes and `createInMemoryServerPorts`.
+   - `inMemory/{entityAndMutationStore,accessAndTalkStore,bundleAndMediaStores,authAndEmailFakes}.ts` (`73`-`360` LOC): Separates atomic clone-and-swap entity/revision persistence, talk/user/invite/magic-link/agent-token persistence, snapshot extraction + bundle cache + byte-range media + lexicon stores, and OAuth/email test doubles.
+5. **Pronunciation Bounded Context (`packages/core/src/schemas/pronunciation.ts` & `pronunciation*.ts`)**:
+   - `pronunciation.ts` (`897` -> `24` LOC): Pure backward-compatible barrel preserving all 18 exported schemas, types, and functions.
+   - `{pronunciationSchema,pronunciationPhonetics,pronunciationResolve}.ts` (`65`-`553` LOC): Separates Zod contracts/types, IPA validation/lexicon merging/tokenization helpers, and compositional person/place resolution; `pronunciationGeo.ts` imports `Pronunciation` directly from `pronunciationSchema.ts` for strict acyclicity.
+6. **Archival Markdown Renderer (`packages/ui/src/components/ArchivalMarkdown.tsx` & `components/markdown/`)**:
+   - `ArchivalMarkdown.tsx` (`859` -> `231` LOC): Clean block renderer composing pure parser, popover hook, and inline renderer (all 4 files `< 285` LOC).
+   - `markdown/{archivalMarkdownParser,archivalInlineRenderer,useCitationPopover}.ts` (`207`-`284` LOC): Separates React-free block AST/entity-matcher parsing, inline token/citation/mention React rendering, and citation popover hover/focus/pin lifecycle state.
+7. **UI Atom Primitives (`packages/ui/src/components/Atoms.tsx` & `components/atoms/`)**:
+   - `Atoms.tsx` (`799` -> `10` LOC): Pure backward-compatible barrel preserving all 9 exported utilities and components.
+   - `atoms/{formatters,ArchivalPrimitives,ArchivalPhotoFrame,SourceCitationTag}.ts(x)` (`58`-`421` LOC): Separates React-free `initialsOf`/`resolveAssetUrl` formatters, compact display primitives, photo zoom lightbox frame, and expandable source citation/discrepancy card list with scan lightbox (trimming unused CSS module imports per component).
+
+## Pre-Review 6-Axis Readiness Summary (Iteration 4 Fresh-Eyes Gate)
+
+| Axis | Post-It. 3B (Repo-Wide) | Post-It. 3C Readiness (Repo-Wide) | Evidence Across `@kinloom/{core,server,worker,cli,ui}` |
+| --- | :---: | :---: | --- |
+| **Decoupling** | 9.6 / 10 | **9.9 / 10 (pre-review)** | Every core engine, server service/adapter/contract suite, worker D1 store, CLI command/client, and UI page/component depends on narrow typed ports and domain seams with 0 circular imports across all decomposed packages. |
+| **Cohesion** | 9.6 / 10 | **9.9 / 10 (pre-review)** | All 52 original monoliths across Iterations 1, 2A, 2B, 3A, 3B, and 3C now own one clear bounded context per file (schemas vs phonetics vs resolution; parser vs traversal vs builders; pure state vs mutators vs reconcilers; pure markdown AST vs popover state vs React renderers). |
+| **Data flow** | 9.6 / 10 | **9.8 / 10 (pre-review)** | Deterministic unidirectional pipelines across archive compilation/patching, GEDCOM slicing, HTTP routing, atomic D1/InMemory commits, CLI sync/integrate/audit/records, and UI view-model projections. |
+| **Layering** | 9.7 / 10 | **9.9 / 10 (pre-review)** | Strict hexagonal separation preserved end-to-end: `@kinloom/core` stays runtime-agnostic and pure, `@kinloom/server` stays portable Web Fetch, `@kinloom/worker` isolates Cloudflare D1/R2, `@kinloom/cli` isolates external HTTP/disk/subprocess adapters from pure domain rules, and `@kinloom/ui` separates pure view-models/formatters/parsers from React views. |
+| **Modularity** | 9.6 / 10 | **9.9 / 10 (pre-review)** | **0** non-test TS/TSX files `>= 750` LOC remain repo-wide (down from `4,103` LOC max at baseline to `742` LOC max repo-wide); **0** CSS modules `>= 700` LOC remain; every Iteration 3C facade is `10`-`231` LOC and every extracted submodule is `58`-`553` LOC. |
+| **Extensibility** | 9.6 / 10 | **9.9 / 10 (pre-review)** | Adding a backend contract domain, patch reconciler, GEDCOM slice builder, pronunciation policy rule, HTTP route group, entity form kind, CLI archive client, or UI primitive targets one small module with zero modification of god-files. |
+
+Ready for **Iteration 4 independent fresh-eyes `10/10` architectural review**.

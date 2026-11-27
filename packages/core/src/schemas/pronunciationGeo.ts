@@ -1,4 +1,4 @@
-import type { Pronunciation } from './pronunciation.js';
+import type { Pronunciation } from './pronunciationSchema.js';
 
 const US_STATE_NAMES = new Set([
   'alabama',
