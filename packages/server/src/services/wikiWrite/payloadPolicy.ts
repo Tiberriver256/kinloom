@@ -46,7 +46,7 @@ export function rowToPayload(row: StoredEntityRecord): EntityPayload {
   return storedRecordToEntityPayload(row);
 }
 
-export function rowToWorking(row: StoredEntityRecord | null): WorkingEntityRecord {
+export function rowToWorking(row: StoredEntityRecord | null, clonePayload = true): WorkingEntityRecord {
   if (!row) {
     return {
       lifecycle: { kind: 'nonExistent' },
@@ -55,7 +55,7 @@ export function rowToWorking(row: StoredEntityRecord | null): WorkingEntityRecor
       updatedAt: '',
     };
   }
-  const payload = rowToPayload(row);
+  const payload = clonePayload ? rowToPayload(row) : 'edge' in row ? toEntityPayload(row.edge) : row.data;
   if (row.deleted_at !== null) {
     return {
       lifecycle: {
@@ -141,15 +141,28 @@ export function updateWorkingPrivacyContext(
   workingEvents: Map<string, Pick<RawEvent, 'id' | 'participants'>>
 ): void {
   if (entityType === 'person') {
-    const parsed = parseEntityPayload('person', sanitized);
-    if (resolveEffectiveLiving(parsed, siteConfig.privacy, referenceYear)) {
+    const isLiving = resolveEffectiveLiving(
+      {
+        is_living: Boolean(sanitized.is_living),
+        birth_edtf: typeof sanitized.birth_edtf === 'string' ? sanitized.birth_edtf : '',
+        death_edtf: typeof sanitized.death_edtf === 'string' ? sanitized.death_edtf : '',
+      },
+      siteConfig.privacy,
+      referenceYear
+    );
+    if (isLiving) {
       livingIds.add(entityId);
     } else {
       livingIds.delete(entityId);
     }
   } else if (entityType === 'event') {
-    const parsed = parseEntityPayload('event', sanitized);
-    workingEvents.set(entityId, { id: parsed.id, participants: parsed.participants });
+    const participants = Array.isArray(sanitized.participants)
+      ? (sanitized.participants as RawEvent['participants'])
+      : parseEntityPayload('event', sanitized).participants;
+    workingEvents.set(entityId, {
+      id: typeof sanitized.id === 'string' ? sanitized.id : entityId,
+      participants,
+    });
   }
 }
 
@@ -290,8 +303,17 @@ export async function maybeGenerateEntityPronunciationAudio(
   }
 
   if (params.entityType === 'person') {
-    const parsedPerson = parseEntityPayload('person', params.sanitized);
-    if (resolveEffectiveLiving(parsedPerson, deps.siteConfig.privacy, deps.clock.currentYear())) {
+    if (
+      resolveEffectiveLiving(
+        {
+          is_living: Boolean(params.sanitized.is_living),
+          birth_edtf: typeof params.sanitized.birth_edtf === 'string' ? params.sanitized.birth_edtf : '',
+          death_edtf: typeof params.sanitized.death_edtf === 'string' ? params.sanitized.death_edtf : '',
+        },
+        deps.siteConfig.privacy,
+        deps.clock.currentYear()
+      )
+    ) {
       return params.sanitized;
     }
   }

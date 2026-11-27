@@ -1,7 +1,9 @@
 import { edtfYear } from '../edtf.js';
+import { fastLocaleCompare } from '../fastCompare.js';
 import type { PrivacyConfig } from '../schemas/config.js';
 import type { ArchiveEvent, BuildMode, MediaItem, Person, RawEvent, RawPerson } from '../schemas/entities.js';
-import { getMediaPersonIds } from '../schemas/entities.js';
+import { getMediaPersonIds } from '../schemas/pureHelpers.js';
+import { mayMatchPattern, registerPatternPrefilter } from './prefilter.js';
 
 export const DEFAULT_LIVING_CUTOFF_YEARS = 101;
 
@@ -136,7 +138,7 @@ export function collectLivingNames(
       }
     }
   }
-  return [...names].toSorted((a, b) => b.length - a.length || a.localeCompare(b));
+  return [...names].toSorted((a, b) => b.length - a.length || fastLocaleCompare(a, b));
 }
 
 export function escapeLivingNameRegExp(value: string): string {
@@ -148,14 +150,28 @@ export function compileLivingNamePattern(livingNames: readonly string[]): RegExp
     return null;
   }
   const body = livingNames.map((name) => escapeLivingNameRegExp(name)).join('|');
-  return new RegExp(`(?<![\\p{L}\\p{N}_])(?:${body})(?![\\p{L}\\p{N}_])`, 'gu');
+  const pattern = new RegExp(`(?<![\\p{L}\\p{N}_])(?:${body})(?![\\p{L}\\p{N}_])`, 'gu');
+  registerPatternPrefilter(pattern, livingNames, false);
+  return pattern;
 }
 
 export function scrubLivingNames(text: string, pattern: RegExp | null): string {
-  if (!text || !pattern) {
+  if (!text || !pattern || !mayMatchPattern(pattern, text)) {
     return text;
   }
   return text.replaceAll(pattern, 'Living');
+}
+
+function clonePersonFast<T extends RawPerson>(p: T): T {
+  const copy: RawPerson = {
+    ...p,
+    alt_names: [...p.alt_names],
+    ...(p.pronunciation !== undefined
+      ? { pronunciation: p.pronunciation ? structuredClone(p.pronunciation) : null }
+      : {}),
+    ...(p.extensions !== undefined ? { extensions: structuredClone(p.extensions) } : {}),
+  };
+  return copy as T;
 }
 
 function applyRawLivingRedactionFields(
@@ -207,7 +223,7 @@ export function redactSingleRawPerson(
   mode: BuildMode,
   options?: RedactOptions
 ): RawPerson {
-  const copy = options?.clone === false ? person : structuredClone(person);
+  const copy = options?.clone === false ? person : clonePersonFast(person);
   if (!resolveEffectiveLiving(copy, options?.privacy, options?.referenceYear)) {
     return copy;
   }
@@ -216,7 +232,7 @@ export function redactSingleRawPerson(
 }
 
 export function redactCompiledPerson(person: Person, mode: BuildMode, options?: RedactOptions): Person {
-  const copy = options?.clone === false ? person : structuredClone(person);
+  const copy = options?.clone === false ? person : clonePersonFast(person);
   if (!resolveEffectiveLiving(copy, options?.privacy, options?.referenceYear)) {
     return copy;
   }

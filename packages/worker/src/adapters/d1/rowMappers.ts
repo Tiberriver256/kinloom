@@ -1,6 +1,8 @@
 import {
   type AgentTokenRecord,
+  type AgentTokenScope,
   AgentTokenScopeSchema,
+  type AuthorType,
   AuthorTypeSchema,
   asRevisionId,
   asSha256Hex,
@@ -11,16 +13,32 @@ import {
   type KinshipEdge,
   type MagicLinkRecord,
   parseEntityPayload,
+  type RevisionAction,
   RevisionActionSchema,
   type RevisionRecord,
   type StoredEntityRow,
   type StoredKinshipRow,
   type TalkComment,
   type UserRecord,
+  type UserRole,
   UserRoleSchema,
 } from '@kinloom/core';
 
 export type NonKinshipEntityType = Exclude<EntityType, 'kinship_edge'>;
+
+const NON_KINSHIP_ENTITY_TYPES = new Set<NonKinshipEntityType>([
+  'person',
+  'event',
+  'place',
+  'source',
+  'media',
+  'narrative',
+]);
+const ENTITY_TYPES = new Set<EntityType>([...NON_KINSHIP_ENTITY_TYPES, 'kinship_edge']);
+const REVISION_ACTIONS = new Set<RevisionAction>(['create', 'update', 'delete', 'restore', 'revert']);
+const AUTHOR_TYPES = new Set<AuthorType>(['human', 'agent', 'system_seed']);
+const USER_ROLES = new Set<UserRole>(['admin', 'editor']);
+const AGENT_SCOPES = new Set<AgentTokenScope>(['write_batch', 'read_backup']);
 
 export interface RawDbEntityRow {
   entity_type: string;
@@ -117,6 +135,11 @@ export interface RawDbLivingPersonProjectionRow {
   is_living: number | boolean | null;
   birth_edtf: string | number | null;
   death_edtf: string | number | null;
+}
+
+export interface RawDbLivingPersonDeltaRow extends RawDbLivingPersonProjectionRow {
+  active_entity_id: string | null;
+  deleted_at: string | null;
 }
 
 export interface RawDbPronunciationLexiconRow {
@@ -284,6 +307,20 @@ export function parseDbLivingPersonProjectionRow(raw: unknown): RawDbLivingPerso
   };
 }
 
+export function parseDbLivingPersonDeltaRow(raw: unknown): RawDbLivingPersonDeltaRow {
+  if (!isRecord(raw)) {
+    throw new Error('Expected D1 living person delta row object.');
+  }
+  return {
+    entity_id: expectString(raw, 'entity_id'),
+    active_entity_id: expectNullableString(raw, 'active_entity_id'),
+    deleted_at: expectNullableString(raw, 'deleted_at'),
+    is_living: expectNullableBoolOrNumber(raw, 'is_living'),
+    birth_edtf: expectNullableStringOrNumber(raw, 'birth_edtf'),
+    death_edtf: expectNullableStringOrNumber(raw, 'death_edtf'),
+  };
+}
+
 export function parseDbRevisionRow(raw: unknown): RawDbRevisionRow {
   if (!isRecord(raw)) {
     throw new Error('Expected D1 revision row object.');
@@ -408,7 +445,17 @@ function parseJsonObject(raw: string): EntityPayload {
   return parsed as EntityPayload;
 }
 
+function parseEntityTypeFast(raw: string): EntityType {
+  if (ENTITY_TYPES.has(raw as EntityType)) {
+    return raw as EntityType;
+  }
+  return EntityTypeSchema.parse(raw);
+}
+
 function parseNonKinshipEntityType(raw: string): NonKinshipEntityType {
+  if (NON_KINSHIP_ENTITY_TYPES.has(raw as NonKinshipEntityType)) {
+    return raw as NonKinshipEntityType;
+  }
   const parsed = EntityTypeSchema.parse(raw);
   if (parsed === 'kinship_edge') {
     throw new Error('Unexpected kinship_edge row inside entities table.');
@@ -446,17 +493,23 @@ export function mapKinshipRow(row: RawDbKinshipRow): StoredKinshipRow {
 }
 
 export function mapRevisionRow(row: RawDbRevisionRow): RevisionRecord {
+  const action = REVISION_ACTIONS.has(row.action as RevisionAction)
+    ? (row.action as RevisionAction)
+    : RevisionActionSchema.parse(row.action);
+  const authorType = AUTHOR_TYPES.has(row.author_type as AuthorType)
+    ? (row.author_type as AuthorType)
+    : AuthorTypeSchema.parse(row.author_type);
   return {
     revision_id: asRevisionId(row.revision_id),
     batch_id: row.batch_id,
-    entity_type: EntityTypeSchema.parse(row.entity_type),
+    entity_type: parseEntityTypeFast(row.entity_type),
     entity_id: row.entity_id,
     parent_revision_id: row.parent_revision_id,
-    action: RevisionActionSchema.parse(row.action),
+    action,
     reverted_revision_id: row.reverted_revision_id,
     author_id: row.author_id,
     author_name: row.author_name,
-    author_type: AuthorTypeSchema.parse(row.author_type),
+    author_type: authorType,
     summary: row.summary,
     has_primary_source: row.has_primary_source !== 0,
     before_json: row.before_json !== null ? parseJsonObject(row.before_json) : null,
@@ -468,7 +521,7 @@ export function mapRevisionRow(row: RawDbRevisionRow): RevisionRecord {
 export function mapTalkRow(row: RawDbTalkRow): TalkComment {
   return {
     comment_id: row.comment_id,
-    entity_type: EntityTypeSchema.parse(row.entity_type),
+    entity_type: parseEntityTypeFast(row.entity_type),
     entity_id: row.entity_id,
     author_id: row.author_id,
     author_name: row.author_name,
@@ -480,10 +533,11 @@ export function mapTalkRow(row: RawDbTalkRow): TalkComment {
 }
 
 export function mapUserRow(row: RawDbUserRow): UserRecord {
+  const role = USER_ROLES.has(row.role as UserRole) ? (row.role as UserRole) : UserRoleSchema.parse(row.role);
   return {
     email: row.email,
     display_name: row.display_name,
-    role: UserRoleSchema.parse(row.role),
+    role,
     added_by: row.added_by,
     added_at: row.added_at,
     last_login_at: row.last_login_at,
@@ -514,11 +568,14 @@ export function mapMagicLinkRow(row: RawDbMagicLinkRow): MagicLinkRecord {
 }
 
 export function mapAgentTokenRow(row: RawDbAgentTokenRow): AgentTokenRecord {
+  const scope = AGENT_SCOPES.has(row.scope as AgentTokenScope)
+    ? (row.scope as AgentTokenScope)
+    : AgentTokenScopeSchema.parse(row.scope);
   return {
     token_id: row.token_id,
     token_hash: asSha256Hex(row.token_hash),
     label: row.label,
-    scope: AgentTokenScopeSchema.parse(row.scope),
+    scope,
     created_by: row.created_by,
     created_at: row.created_at,
     revoked_at: row.revoked_at,

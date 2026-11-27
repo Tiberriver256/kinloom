@@ -1,7 +1,7 @@
 import { haversineMiles } from '../edtf.js';
 import type { MapDefaultsConfig, MigrationEraConfig } from '../schemas/config.js';
-import { DEFAULT_MIGRATION_ERAS } from '../schemas/config.js';
 import type { ArchiveBundle, ArchiveEvent, Person, Place } from '../schemas/entities.js';
+import { DEFAULT_MIGRATION_ERAS } from '../schemas/pureHelpers.js';
 
 export interface GeoBounds {
   minLat: number;

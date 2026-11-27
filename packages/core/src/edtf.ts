@@ -39,12 +39,97 @@ const GEDCOM_MONTH_MAP: Readonly<Record<string, number>> = {
   DECEMBER: 12,
 };
 
+export interface CompiledEdtfMeta {
+  readonly timeMin: number | null;
+  readonly timeMax: number | null;
+  readonly displayDate: string;
+  readonly year: number | null;
+}
+
+const EMPTY_EDTF_META: CompiledEdtfMeta = {
+  timeMin: null,
+  timeMax: null,
+  displayDate: 'Undated',
+  year: null,
+};
+
+const MAX_EDTF_CACHE_SIZE = 16384;
+const edtfYearCache = new Map<string, number | null>();
+const edtfBoundsCache = new Map<string, readonly [number, number] | null>();
+const edtfDisplayCache = new Map<string, string>();
+const edtfPointCache = new Map<string, ParsedEdtfPoint | null>();
+const compiledEdtfMetaCache = new Map<string, CompiledEdtfMeta>();
+
+function setBounded<V>(cache: Map<string, V>, key: string, value: V): void {
+  if (cache.size >= MAX_EDTF_CACHE_SIZE) {
+    cache.clear();
+  }
+  cache.set(key, value);
+}
+
+function parseFourDigitsAt(str: string, idx: number): number {
+  const c0 = str.charCodeAt(idx) - 48;
+  const c1 = str.charCodeAt(idx + 1) - 48;
+  const c2 = str.charCodeAt(idx + 2) - 48;
+  const c3 = str.charCodeAt(idx + 3) - 48;
+  if ((c0 | c1 | c2 | c3) < 0 || c0 > 9 || c1 > 9 || c2 > 9 || c3 > 9) {
+    return -1;
+  }
+  return c0 * 1000 + c1 * 100 + c2 * 10 + c3;
+}
+
+function parseTwoDigitsAt(str: string, idx: number): number {
+  const c0 = str.charCodeAt(idx) - 48;
+  const c1 = str.charCodeAt(idx + 1) - 48;
+  if ((c0 | c1) < 0 || c0 > 9 || c1 > 9) {
+    return -1;
+  }
+  return c0 * 10 + c1;
+}
+
+const EDTF_YEAR_FALLBACK_RE = /\b(1[4-9]\d{2}|20\d{2})\b/;
+
 export function edtfYear(edtf: string | number | null | undefined): number | null {
   if (edtf === null || edtf === undefined || edtf === '') {
     return null;
   }
-  const m = /\b(1[4-9]\d{2}|20\d{2})\b/.exec(String(edtf));
-  return m ? Number(m[1]) : null;
+  if (typeof edtf === 'number') {
+    if (Number.isInteger(edtf) && edtf >= 1400 && edtf <= 2099) {
+      return edtf;
+    }
+    const m = EDTF_YEAR_FALLBACK_RE.exec(String(edtf));
+    return m ? Number(m[1]) : null;
+  }
+  const cached = edtfYearCache.get(edtf);
+  if (cached !== undefined) {
+    return cached;
+  }
+
+  let result: number | null = null;
+  const len = edtf.length;
+  if (len >= 4) {
+    const y = parseFourDigitsAt(edtf, 0);
+    if (y >= 1400 && y <= 2099) {
+      const nextCode = len > 4 ? edtf.charCodeAt(4) : 0;
+      const isWordBoundary =
+        len === 4 ||
+        !(
+          (nextCode >= 48 && nextCode <= 57) ||
+          (nextCode >= 65 && nextCode <= 90) ||
+          (nextCode >= 97 && nextCode <= 122) ||
+          nextCode === 95
+        );
+      if (isWordBoundary) {
+        result = y;
+      }
+    }
+  }
+  if (result === null) {
+    const m = EDTF_YEAR_FALLBACK_RE.exec(edtf);
+    result = m ? Number(m[1]) : null;
+  }
+  setBounded(edtfYearCache, edtf, result);
+  return result;
 }
 
 export type ParsedEdtfPrecision = 'day' | 'month' | 'year' | 'decade';
@@ -74,79 +159,89 @@ interface ParsedEdtfPoint {
 type ParsedEdtfEndpoint = { kind: 'open' } | { kind: 'point'; point: ParsedEdtfPoint };
 
 function parseClosedEdtfPoint(part: string): ParsedEdtfPoint | null {
+  const cached = edtfPointCache.get(part);
+  if (cached !== undefined) {
+    return cached;
+  }
+
   const clean = part.trim().replaceAll(/[~?%]/g, '');
   if (!clean) {
+    setBounded(edtfPointCache, part, null);
     return null;
   }
 
-  const mDec = /^(\d{3})X$/i.exec(clean);
-  if (mDec) {
-    const y0 = Number(mDec[1]) * 10;
-    return {
-      year: y0,
-      month: null,
-      day: null,
-      precision: 'decade',
-      startDays: daysSinceEpoch(y0, 1, 1),
-      endDays: daysSinceEpoch(y0 + 9, 12, 31),
-      startMs: Date.UTC(y0, 0, 1),
-      endMs: Date.UTC(y0 + 9, 11, 31),
-    };
+  let point: ParsedEdtfPoint | null = null;
+  const len = clean.length;
+
+  if (len === 10 && clean.charCodeAt(4) === 45 && clean.charCodeAt(7) === 45) {
+    const y = parseFourDigitsAt(clean, 0);
+    const mo = parseTwoDigitsAt(clean, 5);
+    const rawD = parseTwoDigitsAt(clean, 8);
+    if (y >= 0 && mo >= 0 && rawD >= 0) {
+      const last = lastDayOfMonth(y, mo);
+      const d = Math.max(1, Math.min(rawD, last));
+      const j = daysSinceEpoch(y, mo, d);
+      const ms = Date.UTC(y, mo - 1, d);
+      point = {
+        year: y,
+        month: mo,
+        day: d,
+        precision: 'day',
+        startDays: j,
+        endDays: j,
+        startMs: ms,
+        endMs: ms,
+      };
+    }
+  } else if (len === 7 && clean.charCodeAt(4) === 45) {
+    const y = parseFourDigitsAt(clean, 0);
+    const mo = parseTwoDigitsAt(clean, 5);
+    if (y >= 0 && mo >= 0) {
+      const last = lastDayOfMonth(y, mo);
+      point = {
+        year: y,
+        month: mo,
+        day: null,
+        precision: 'month',
+        startDays: daysSinceEpoch(y, mo, 1),
+        endDays: daysSinceEpoch(y, mo, last),
+        startMs: Date.UTC(y, mo - 1, 1),
+        endMs: Date.UTC(y, mo - 1, last),
+      };
+    }
+  } else if (len === 4) {
+    const y = parseFourDigitsAt(clean, 0);
+    if (y >= 0) {
+      point = {
+        year: y,
+        month: null,
+        day: null,
+        precision: 'year',
+        startDays: daysSinceEpoch(y, 1, 1),
+        endDays: daysSinceEpoch(y, 12, 31),
+        startMs: Date.UTC(y, 0, 1),
+        endMs: Date.UTC(y, 11, 31),
+      };
+    } else if ((clean.charCodeAt(3) | 32) === 120) {
+      const mDec = /^(\d{3})X$/i.exec(clean);
+      if (mDec) {
+        const y0 = Number(mDec[1]) * 10;
+        point = {
+          year: y0,
+          month: null,
+          day: null,
+          precision: 'decade',
+          startDays: daysSinceEpoch(y0, 1, 1),
+          endDays: daysSinceEpoch(y0 + 9, 12, 31),
+          startMs: Date.UTC(y0, 0, 1),
+          endMs: Date.UTC(y0 + 9, 11, 31),
+        };
+      }
+    }
   }
 
-  const mFull = /^(\d{4})-(\d{2})-(\d{2})$/.exec(clean);
-  if (mFull) {
-    const y = Number(mFull[1]);
-    const mo = Number(mFull[2]);
-    const last = lastDayOfMonth(y, mo);
-    const d = Math.max(1, Math.min(Number(mFull[3]), last));
-    const j = daysSinceEpoch(y, mo, d);
-    const ms = Date.UTC(y, mo - 1, d);
-    return {
-      year: y,
-      month: mo,
-      day: d,
-      precision: 'day',
-      startDays: j,
-      endDays: j,
-      startMs: ms,
-      endMs: ms,
-    };
-  }
-
-  const mMonth = /^(\d{4})-(\d{2})$/.exec(clean);
-  if (mMonth) {
-    const y = Number(mMonth[1]);
-    const mo = Number(mMonth[2]);
-    const last = lastDayOfMonth(y, mo);
-    return {
-      year: y,
-      month: mo,
-      day: null,
-      precision: 'month',
-      startDays: daysSinceEpoch(y, mo, 1),
-      endDays: daysSinceEpoch(y, mo, last),
-      startMs: Date.UTC(y, mo - 1, 1),
-      endMs: Date.UTC(y, mo - 1, last),
-    };
-  }
-
-  const mYear = /^(\d{4})$/.exec(clean);
-  if (mYear) {
-    const y = Number(mYear[1]);
-    return {
-      year: y,
-      month: null,
-      day: null,
-      precision: 'year',
-      startDays: daysSinceEpoch(y, 1, 1),
-      endDays: daysSinceEpoch(y, 12, 31),
-      startMs: Date.UTC(y, 0, 1),
-      endMs: Date.UTC(y, 11, 31),
-    };
-  }
-
-  return null;
+  setBounded(edtfPointCache, part, point);
+  return point;
 }
 
 function parseEdtfEndpoint(part: string): ParsedEdtfEndpoint | null {
@@ -220,13 +315,14 @@ export function parseEdtfInterval(raw: unknown): ParsedEdtfInterval | null {
   };
 }
 
-function edtfPartBounds(part: string): [number, number] | null {
+function edtfPartBounds(part: string): readonly [number, number] | null {
   const s = part.trim();
   if (!s) {
     return null;
   }
-  const approx = s.endsWith('~') || s.endsWith('%');
-  const uncertain = s.endsWith('?');
+  const lastCode = s.charCodeAt(s.length - 1);
+  const approx = lastCode === 126 || lastCode === 37; // '~' or '%'
+  const uncertain = lastCode === 63; // '?'
   const point = parseClosedEdtfPoint(s);
   if (!point) {
     return null;
@@ -256,6 +352,35 @@ function edtfPartBounds(part: string): [number, number] | null {
   return [point.startDays, point.endDays];
 }
 
+function computeEdtfBoundsInternal(rawKey: string): readonly [number, number] | null {
+  const cached = edtfBoundsCache.get(rawKey);
+  if (cached !== undefined) {
+    return cached;
+  }
+  const s = rawKey.trim();
+  let result: readonly [number, number] | null = null;
+  if (s) {
+    const idx = s.indexOf('/');
+    if (idx !== -1) {
+      const left = s.slice(0, idx);
+      const right = s.slice(idx + 1);
+      const lb = left ? edtfPartBounds(left) : null;
+      const rb = right ? edtfPartBounds(right) : null;
+      if (lb && rb) {
+        result = [Math.min(lb[0], rb[0]), Math.max(lb[1], rb[1])];
+      } else if (lb) {
+        result = [lb[0], lb[1] + 5 * 365];
+      } else if (rb) {
+        result = [rb[0] - 5 * 365, rb[1]];
+      }
+    } else {
+      result = edtfPartBounds(s);
+    }
+  }
+  setBounded(edtfBoundsCache, rawKey, result);
+  return result;
+}
+
 /**
  * Convert an EDTF string (including intervals and qualifiers) into [time_min, time_max] epoch days.
  */
@@ -263,35 +388,20 @@ export function edtfToBounds(edtf: string | number | null | undefined): [number,
   if (edtf === null || edtf === undefined || edtf === '') {
     return null;
   }
-  const s = String(edtf).trim();
-  if (!s) {
-    return null;
-  }
-  if (s.includes('/')) {
-    const idx = s.indexOf('/');
-    const left = s.slice(0, idx);
-    const right = s.slice(idx + 1);
-    const lb = left ? edtfPartBounds(left) : null;
-    const rb = right ? edtfPartBounds(right) : null;
-    if (lb && rb) {
-      return [Math.min(lb[0], rb[0]), Math.max(lb[1], rb[1])];
-    }
-    if (lb) {
-      return [lb[0], lb[1] + 5 * 365];
-    }
-    if (rb) {
-      return [rb[0] - 5 * 365, rb[1]];
-    }
-    return null;
-  }
-  return edtfPartBounds(s);
+  const key = typeof edtf === 'string' ? edtf : String(edtf);
+  const res = computeEdtfBoundsInternal(key);
+  return res ? [res[0], res[1]] : null;
 }
 
 /**
  * Convert an EDTF string into [earliestYear, latestYear] using `edtfToBounds()`.
  */
 export function edtfYearBounds(edtf: string | number | null | undefined): [number, number] | null {
-  const bounds = edtfToBounds(edtf);
+  if (edtf === null || edtf === undefined || edtf === '') {
+    return null;
+  }
+  const key = typeof edtf === 'string' ? edtf : String(edtf);
+  const bounds = computeEdtfBoundsInternal(key);
   if (bounds) {
     return [epochDaysToYear(bounds[0]), epochDaysToYear(bounds[1])];
   }
@@ -303,7 +413,11 @@ export function edtfYearBounds(edtf: string | number | null | undefined): [numbe
  * Deterministic numeric sort key for an EDTF string (epoch-day start, or MAX_SAFE_INTEGER when undated).
  */
 export function edtfSortKey(edtf: string | number | null | undefined): number {
-  const bounds = edtfToBounds(edtf);
+  if (edtf === null || edtf === undefined || edtf === '') {
+    return Number.MAX_SAFE_INTEGER;
+  }
+  const key = typeof edtf === 'string' ? edtf : String(edtf);
+  const bounds = computeEdtfBoundsInternal(key);
   return bounds ? bounds[0] : Number.MAX_SAFE_INTEGER;
 }
 
@@ -314,46 +428,87 @@ export function formatEdtfDisplay(edtf: string | number | null | undefined): str
   if (edtf === null || edtf === undefined || edtf === '') {
     return 'Undated';
   }
-  const raw = String(edtf).trim();
+  const key = typeof edtf === 'string' ? edtf : String(edtf);
+  const cached = edtfDisplayCache.get(key);
+  if (cached !== undefined) {
+    return cached;
+  }
+
+  const raw = key.trim();
+  let formatted: string;
   if (!raw) {
-    return 'Undated';
-  }
-  if (raw.includes('/')) {
+    formatted = 'Undated';
+  } else {
     const idx = raw.indexOf('/');
-    const left = raw.slice(0, idx);
-    const right = raw.slice(idx + 1);
-    if (!left) {
-      return `Bef. ${formatEdtfDisplay(right)}`;
+    if (idx !== -1) {
+      const left = raw.slice(0, idx);
+      const right = raw.slice(idx + 1);
+      if (!left) {
+        formatted = `Bef. ${formatEdtfDisplay(right)}`;
+      } else if (!right) {
+        formatted = `Aft. ${formatEdtfDisplay(left)}`;
+      } else {
+        formatted = `${formatEdtfDisplay(left)}–${formatEdtfDisplay(right)}`;
+      }
+    } else {
+      let prefix = '';
+      let s = raw;
+      const lastCode = s.charCodeAt(s.length - 1);
+      if (lastCode === 126) {
+        prefix = 'c. ';
+        s = s.slice(0, -1);
+      } else if (lastCode === 63) {
+        prefix = 'est. ';
+        s = s.slice(0, -1);
+      }
+      if (s.length === 10 && s.charCodeAt(4) === 45 && s.charCodeAt(7) === 45) {
+        const y = parseFourDigitsAt(s, 0);
+        const mo = parseTwoDigitsAt(s, 5);
+        const d = parseTwoDigitsAt(s, 8);
+        if (y >= 0 && mo >= 1 && mo <= 12 && d >= 0) {
+          formatted = `${prefix}${MONTHS[mo - 1]} ${d}, ${s.slice(0, 4)}`;
+        } else {
+          formatted = `${prefix}${s}`;
+        }
+      } else if (s.length === 7 && s.charCodeAt(4) === 45) {
+        const y = parseFourDigitsAt(s, 0);
+        const mo = parseTwoDigitsAt(s, 5);
+        if (y >= 0 && mo >= 1 && mo <= 12) {
+          formatted = `${prefix}${MONTHS[mo - 1]} ${s.slice(0, 4)}`;
+        } else {
+          formatted = `${prefix}${s}`;
+        }
+      } else {
+        formatted = `${prefix}${s}`;
+      }
     }
-    if (!right) {
-      return `Aft. ${formatEdtfDisplay(left)}`;
-    }
-    return `${formatEdtfDisplay(left)}–${formatEdtfDisplay(right)}`;
   }
-  let prefix = '';
-  let s = raw;
-  if (s.endsWith('~')) {
-    prefix = 'c. ';
-    s = s.slice(0, -1);
-  } else if (s.endsWith('?')) {
-    prefix = 'est. ';
-    s = s.slice(0, -1);
+
+  setBounded(edtfDisplayCache, key, formatted);
+  return formatted;
+}
+
+/**
+ * Single-lookup compiled EDTF metadata (`timeMin`, `timeMax`, `displayDate`, `year`) for archive compilation.
+ */
+export function getCompiledEdtfMeta(edtf: string | number | null | undefined): CompiledEdtfMeta {
+  if (edtf === null || edtf === undefined || edtf === '') {
+    return EMPTY_EDTF_META;
   }
-  const mFull = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s);
-  if (mFull) {
-    const mo = Number(mFull[2]);
-    if (mo >= 1 && mo <= 12) {
-      return `${prefix}${MONTHS[mo - 1]} ${Number(mFull[3])}, ${mFull[1]}`;
-    }
+  const key = typeof edtf === 'string' ? edtf : String(edtf);
+  const cached = compiledEdtfMetaCache.get(key);
+  if (cached !== undefined) {
+    return cached;
   }
-  const mMonth = /^(\d{4})-(\d{2})$/.exec(s);
-  if (mMonth) {
-    const mo = Number(mMonth[2]);
-    if (mo >= 1 && mo <= 12) {
-      return `${prefix}${MONTHS[mo - 1]} ${mMonth[1]}`;
-    }
-  }
-  return `${prefix}${s}`;
+  const bounds = computeEdtfBoundsInternal(key);
+  const meta: CompiledEdtfMeta = {
+    timeMin: bounds ? bounds[0] : null,
+    timeMax: bounds ? bounds[1] : null,
+    displayDate: formatEdtfDisplay(key),
+    year: edtfYear(key),
+  };
+  setBounded(compiledEdtfMetaCache, key, meta);
+  return meta;
 }
 
 function parseSingleGedcomDate(text: string): string {
@@ -474,16 +629,20 @@ export function parseGedcomDateToEdtf(raw: string): string {
   return parseSingleGedcomDate(s);
 }
 
-const toRad = (deg: number): number => (deg * Math.PI) / 180;
+const DEG_TO_RAD = Math.PI / 180;
 
 /**
  * Great-circle distance in statute miles between two latitude/longitude coordinates.
  */
 export function haversineMiles(lat1: number, lng1: number, lat2: number, lng2: number): number {
   const earthRadiusMiles = 3958.7613;
-  const dLat = toRad(lat2 - lat1);
-  const dLng = toRad(lng2 - lng1);
-  const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+  const dLat = (lat2 - lat1) * DEG_TO_RAD;
+  const dLng = (lng2 - lng1) * DEG_TO_RAD;
+  const sinHalfLat = Math.sin(dLat * 0.5);
+  const sinHalfLng = Math.sin(dLng * 0.5);
+  const a =
+    sinHalfLat * sinHalfLat +
+    Math.cos(lat1 * DEG_TO_RAD) * Math.cos(lat2 * DEG_TO_RAD) * sinHalfLng * sinHalfLng;
   return 2 * earthRadiusMiles * Math.asin(Math.min(1, Math.sqrt(a)));
 }
 

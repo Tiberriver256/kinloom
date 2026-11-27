@@ -1,13 +1,17 @@
 import type { Person } from '@kinloom/core';
-import { buildFilteredGedcom7, buildGedcomExportFilename, buildPersonThumbMap } from '@kinloom/core';
+import {
+  buildFilteredGedcom7,
+  buildGedcomExportFilename,
+  buildPersonThumbMap,
+  fastLocaleCompare,
+} from '@kinloom/core';
 import type React from 'react';
-import { useMemo, useState } from 'react';
+import { lazy, Suspense, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { EmptyStateNotice, PersonPortrait } from '../components/Atoms.js';
 import atomStyles from '../components/Atoms.module.css';
 import { ExplorerTopBar } from '../components/ExplorerTopBar.js';
 import { KinloomFooter } from '../components/KinloomFooter.js';
-import { CreateEntityModal } from '../components/wiki/CreateEntityModal.js';
 import wikiChromeStyles from '../components/wiki/WikiChrome.module.css';
 import { useArchiveData } from '../context/ArchiveDataContext.js';
 import { cx, joinClasses } from '../lib/cx.js';
@@ -17,9 +21,14 @@ import controlStyles from '../styles/Controls.module.css';
 import layoutStyles from '../styles/Layout.module.css';
 import indexStyles from './IndexPage.module.css';
 
+const LazyCreateEntityModal = lazy(async () => {
+  const module = await import('../components/wiki/CreateEntityModal.js');
+  return { default: module.CreateEntityModal };
+});
+
 function byBirthThenName(a: Person, b: Person): number {
   if (a.birth_year === null && b.birth_year === null) {
-    return a.full_name.localeCompare(b.full_name);
+    return fastLocaleCompare(a.full_name, b.full_name);
   }
   if (a.birth_year === null) {
     return 1;
@@ -27,7 +36,7 @@ function byBirthThenName(a: Person, b: Person): number {
   if (b.birth_year === null) {
     return -1;
   }
-  return a.birth_year - b.birth_year || a.full_name.localeCompare(b.full_name);
+  return a.birth_year - b.birth_year || fastLocaleCompare(a.full_name, b.full_name);
 }
 
 interface ResolvedSection {
@@ -402,12 +411,16 @@ export const IndexPage: React.FC = () => {
           </>
         )}
       </main>
-      <CreateEntityModal
-        open={createOpen}
-        onClose={() => {
-          setCreateOpen(false);
-        }}
-      />
+      {capabilities.canEdit && createOpen && (
+        <Suspense fallback={null}>
+          <LazyCreateEntityModal
+            open={createOpen}
+            onClose={() => {
+              setCreateOpen(false);
+            }}
+          />
+        </Suspense>
+      )}
       <KinloomFooter />
     </div>
   );

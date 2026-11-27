@@ -23,7 +23,11 @@ import type {
   TalkComment,
   UpsertPronunciationTermResult,
 } from '@kinloom/core';
-import { ArchiveBundleSchema, MediaChecklistItemSchema, ReadingsBundleSchema } from '@kinloom/core';
+import {
+  tryValidateArchiveBundle,
+  tryValidateMediaChecklistItems,
+  tryValidateReadingsBundle,
+} from '@kinloom/core';
 import { createHttpAdminDataSource } from './httpWiki/adminClient.js';
 import {
   ApiClientError,
@@ -136,15 +140,18 @@ export class HttpWikiDataSource implements ArchiveDataSource {
     }
 
     const raw: unknown = await res.json();
-    let bundle: ArchiveBundle;
-    try {
-      bundle = ArchiveBundleSchema.parse(raw);
-    } catch (err) {
-      throw new ApiClientError(
-        res.status,
-        'INVALID_API_RESPONSE',
-        `Invalid archive bundle payload: ${err instanceof Error ? err.message : String(err)}`
-      );
+    let bundle = tryValidateArchiveBundle(raw);
+    if (bundle === null) {
+      try {
+        const { ArchiveBundleSchema } = await import('@kinloom/core');
+        bundle = ArchiveBundleSchema.parse(raw);
+      } catch (err) {
+        throw new ApiClientError(
+          res.status,
+          'INVALID_API_RESPONSE',
+          `Invalid archive bundle payload: ${err instanceof Error ? err.message : String(err)}`
+        );
+      }
     }
     const etag = res.headers.get('etag');
     this.cachedBundle = bundle;
@@ -164,6 +171,11 @@ export class HttpWikiDataSource implements ArchiveDataSource {
       throw await parseErrorEnvelope(res);
     }
     const raw: unknown = await res.json();
+    const fast = tryValidateReadingsBundle(raw);
+    if (fast !== null) {
+      return fast;
+    }
+    const { ReadingsBundleSchema } = await import('@kinloom/core');
     return ReadingsBundleSchema.parse(raw);
   }
 
@@ -187,7 +199,12 @@ export class HttpWikiDataSource implements ArchiveDataSource {
         'Invalid media checklist payload: expected object with items array'
       );
     }
+    const fast = tryValidateMediaChecklistItems(raw.items);
+    if (fast !== null) {
+      return fast;
+    }
     try {
+      const { MediaChecklistItemSchema } = await import('@kinloom/core');
       return raw.items.map((item) => MediaChecklistItemSchema.parse(item));
     } catch (err) {
       throw new ApiClientError(

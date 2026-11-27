@@ -1,5 +1,6 @@
 import { edtfYearBounds } from '../edtf.js';
 import { escapeLivingNameRegExp } from './policy.js';
+import { mayMatchPattern, registerPatternPrefilter } from './prefilter.js';
 
 export interface LivingNamePerson {
   full_name?: unknown;
@@ -91,9 +92,12 @@ export function computeSourceMaxYearById(
       if (!sourceId) {
         continue;
       }
-      const years = sourceEventYears.get(sourceId) ?? [];
+      let years = sourceEventYears.get(sourceId);
+      if (!years) {
+        years = [];
+        sourceEventYears.set(sourceId, years);
+      }
       years.push(eventYear);
-      sourceEventYears.set(sourceId, years);
     }
   }
 
@@ -216,10 +220,11 @@ function buildUnicodeAlternationRegex(names: readonly string[]): RegExp | null {
   if (names.length === 0) {
     return null;
   }
-  const escaped = [...new Set(names)]
-    .toSorted((a, b) => b.length - a.length)
-    .map((name) => escapeLivingNameRegExp(name));
-  return new RegExp(`(?<![\\p{L}\\p{N}_])(?:${escaped.join('|')})(?![\\p{L}\\p{N}_])`, 'giu');
+  const uniqueNames = [...new Set(names)].toSorted((a, b) => b.length - a.length);
+  const escaped = uniqueNames.map((name) => escapeLivingNameRegExp(name));
+  const pattern = new RegExp(`(?<![\\p{L}\\p{N}_])(?:${escaped.join('|')})(?![\\p{L}\\p{N}_])`, 'giu');
+  registerPatternPrefilter(pattern, uniqueNames, true);
+  return pattern;
 }
 
 export function compileLivingNameMatcher(
@@ -306,12 +311,14 @@ export function collectLivingNameHits(
     return [];
   }
   const hits: LivingNameHit[] = [];
-  for (const target of targets) {
-    if (!target.text) {
+  for (let i = 0; i < targets.length; i += 1) {
+    const target = targets[i];
+    if (!target.text || !mayMatchPattern(pattern, target.text)) {
       continue;
     }
     pattern.lastIndex = 0;
-    for (const match of target.text.matchAll(pattern)) {
+    let match: RegExpExecArray | null;
+    while ((match = pattern.exec(target.text)) !== null) {
       if (hits.length >= MAX_LIVING_NAME_HITS) {
         return hits;
       }
@@ -334,13 +341,17 @@ export function collectLivingNameHitsWithMatcher(
   const hits: LivingNameHit[] = [];
   const seen = new Set<string>();
   const scanPattern = (pattern: RegExp, target: LivingNameTarget): boolean => {
+    if (!mayMatchPattern(pattern, target.text)) {
+      return false;
+    }
     pattern.lastIndex = 0;
-    for (const match of target.text.matchAll(pattern)) {
+    let match: RegExpExecArray | null;
+    while ((match = pattern.exec(target.text)) !== null) {
       const text = match[0];
       if (!text) {
         continue;
       }
-      const key = `${target.location}\0${match.index ?? -1}\0${text.toLowerCase()}`;
+      const key = `${target.location}\0${match.index}\0${text.toLowerCase()}`;
       if (seen.has(key)) {
         continue;
       }
@@ -353,14 +364,16 @@ export function collectLivingNameHitsWithMatcher(
     return false;
   };
 
-  for (const target of targets) {
+  for (let i = 0; i < targets.length; i += 1) {
+    const target = targets[i];
     if (!target.text) {
       continue;
     }
     if (matcher.exactPattern && scanPattern(matcher.exactPattern, target)) {
       return hits;
     }
-    for (const rule of matcher.derivedRules) {
+    for (let j = 0; j < matcher.derivedRules.length; j += 1) {
+      const rule = matcher.derivedRules[j];
       if (rule.minYear !== null && typeof target.maxYear === 'number' && target.maxYear < rule.minYear) {
         continue;
       }

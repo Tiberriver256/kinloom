@@ -1,6 +1,6 @@
-import { edtfToBounds, edtfYear, formatEdtfDisplay } from '../edtf.js';
+import { edtfYear, getCompiledEdtfMeta } from '../edtf.js';
+import { fastLocaleCompare } from '../fastCompare.js';
 import type { KinloomSiteConfig } from '../schemas/config.js';
-import { resolveDefaultBranchId } from '../schemas/config.js';
 import type {
   ArchiveEvent,
   EventSourceRef,
@@ -14,7 +14,41 @@ import type {
   RawPerson,
   SourceRecord,
 } from '../schemas/entities.js';
+import { resolveDefaultBranchId } from '../schemas/pureHelpers.js';
 import type { AncestryPersonRecord } from './types.js';
+
+interface CompiledBranchRule {
+  readonly id: string;
+  readonly lineageGroupSet: ReadonlySet<string> | null;
+  readonly surnameSet: ReadonlySet<string> | null;
+}
+
+interface CompiledSiteBranchIndex {
+  readonly defaultBranchId: string;
+  readonly rules: readonly CompiledBranchRule[];
+}
+
+const branchIndexCache = new WeakMap<KinloomSiteConfig, CompiledSiteBranchIndex>();
+
+function getSiteBranchIndex(siteConfig: KinloomSiteConfig): CompiledSiteBranchIndex {
+  let cached = branchIndexCache.get(siteConfig);
+  if (!cached) {
+    const rules: CompiledBranchRule[] = siteConfig.branches.map((branch) => ({
+      id: branch.id,
+      lineageGroupSet: branch.lineageGroups.length > 0 ? new Set(branch.lineageGroups) : null,
+      surnameSet:
+        branch.surnames.length > 0
+          ? new Set(branch.surnames.map((s) => s.trim().toLowerCase()).filter(Boolean))
+          : null,
+    }));
+    cached = {
+      defaultBranchId: resolveDefaultBranchId(siteConfig),
+      rules,
+    };
+    branchIndexCache.set(siteConfig, cached);
+  }
+  return cached;
+}
 
 function isEnrichmentOverride(enr: NarrativeEnrichment): enr is NarrativeEnrichmentOverride {
   return 'override_event_id' in enr && typeof enr.override_event_id === 'string';
@@ -72,16 +106,18 @@ export function resolvePersonBranch(
   if (person.branch) {
     return person.branch;
   }
+  const index = getSiteBranchIndex(siteConfig);
   const surnameLower = person.surname.trim().toLowerCase();
-  for (const branch of siteConfig.branches) {
-    if (branch.lineageGroups.length > 0 && branch.lineageGroups.includes(person.lineage_group)) {
-      return branch.id;
+  for (let i = 0; i < index.rules.length; i += 1) {
+    const rule = index.rules[i];
+    if (rule.lineageGroupSet?.has(person.lineage_group)) {
+      return rule.id;
     }
-    if (surnameLower && branch.surnames.some((s) => s.trim().toLowerCase() === surnameLower)) {
-      return branch.id;
+    if (surnameLower && rule.surnameSet?.has(surnameLower)) {
+      return rule.id;
     }
   }
-  return resolveDefaultBranchId(siteConfig);
+  return index.defaultBranchId;
 }
 
 export function compareArchiveEvents(
@@ -102,23 +138,38 @@ export function compareArchiveEvents(
   if (sevDiff !== 0) {
     return sevDiff;
   }
-  return a.id.localeCompare(b.id);
+  return fastLocaleCompare(a.id, b.id);
 }
 
 export function buildTimedEvent(
   ev: RawEvent,
   placeAncestors: Readonly<Record<string, readonly string[]>>
 ): ArchiveEvent {
-  const edtf = ev.edtf_date || '';
-  const bounds = edtfToBounds(edtf);
+  const meta = getCompiledEdtfMeta(ev.edtf_date);
+  const ancestors = ev.place_id ? placeAncestors[ev.place_id] : undefined;
   return {
     ...ev,
-    time_min: bounds ? bounds[0] : null,
-    time_max: bounds ? bounds[1] : null,
-    display_date: formatEdtfDisplay(edtf),
-    year: edtfYear(edtf),
-    place_ancestors: ev.place_id ? [...(placeAncestors[ev.place_id] ?? [])] : [],
+    time_min: meta.timeMin,
+    time_max: meta.timeMax,
+    display_date: meta.displayDate,
+    year: meta.year,
+    place_ancestors: ancestors && ancestors.length > 0 ? ancestors.slice() : [],
   };
+}
+
+export function populateTimedEventInPlace(
+  ev: RawEvent,
+  placeAncestors: Readonly<Record<string, readonly string[]>>
+): ArchiveEvent {
+  const meta = getCompiledEdtfMeta(ev.edtf_date);
+  const ancestors = ev.place_id ? placeAncestors[ev.place_id] : undefined;
+  const target = ev as ArchiveEvent;
+  target.time_min = meta.timeMin;
+  target.time_max = meta.timeMax;
+  target.display_date = meta.displayDate;
+  target.year = meta.year;
+  target.place_ancestors = ancestors && ancestors.length > 0 ? ancestors.slice() : [];
+  return target;
 }
 
 export function collectUncitedEntityKeys(bundle: {
@@ -140,14 +191,16 @@ export function collectUncitedEntityKeys(bundle: {
     ['media', bundle.media ?? []],
     ['narrative', bundle.narratives ?? []],
   ];
-  for (const [prefix, items] of collections) {
-    for (const item of items) {
+  for (let c = 0; c < collections.length; c += 1) {
+    const [prefix, items] = collections[c];
+    for (let i = 0; i < items.length; i += 1) {
+      const item = items[i];
       if (item.has_primary_source === false) {
         uncited.push(`${prefix}:${item.id}`);
       }
     }
   }
-  return uncited.toSorted();
+  return uncited.length > 1 ? uncited.toSorted() : uncited;
 }
 
 export function applyNarrativeEnrichments(
@@ -157,7 +210,10 @@ export function applyNarrativeEnrichments(
   if (!enrichments || enrichments.length === 0) {
     return;
   }
-  const rawEventsById = new Map<string, RawEvent>(rawEvents.map((e) => [e.id, e]));
+  const rawEventsById = new Map<string, RawEvent>();
+  for (let i = 0; i < rawEvents.length; i += 1) {
+    rawEventsById.set(rawEvents[i].id, rawEvents[i]);
+  }
   for (const enr of enrichments) {
     if (isEnrichmentOverride(enr)) {
       const target = rawEventsById.get(enr.override_event_id);
@@ -220,7 +276,10 @@ export function enrichHouseholdDescriptions(
       ancestryByXref.set(`@I${numId}@`, ap);
     }
   }
-  const peopleById = new Map(people.map((p) => [p.id, p]));
+  const peopleById = new Map<string, RawPerson>();
+  for (let i = 0; i < people.length; i += 1) {
+    peopleById.set(people[i].id, people[i]);
+  }
   let enriched = 0;
 
   for (const ev of events) {

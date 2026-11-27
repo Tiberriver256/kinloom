@@ -1,7 +1,7 @@
 import { getCurrentReferenceYear } from '../clock.js';
 import type { AnchorYearConfig } from '../schemas/config.js';
-import { DEFAULT_ANCHOR_YEARS } from '../schemas/config.js';
 import type { ArchiveBundle, ArchiveEvent, ConfidenceTier, Person, Place } from '../schemas/entities.js';
+import { DEFAULT_ANCHOR_YEARS } from '../schemas/pureHelpers.js';
 import {
   buildPersonThumbMap,
   buildPlacesDirectory,

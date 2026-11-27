@@ -1,6 +1,12 @@
 import { z } from 'zod';
 import { PronunciationSchema } from './entities.js';
 
+export {
+  DEFAULT_ANCHOR_YEARS,
+  DEFAULT_MIGRATION_ERAS,
+  resolveDefaultBranchId,
+} from './pureHelpers.js';
+
 const HexColorSchema = z.string().regex(/^#[0-9a-fA-F]{6}$/, 'Expected a 6-digit hex color such as #7A4612');
 
 export const SiteMetadataSchema = z.object({
@@ -137,42 +143,6 @@ export type WikiConfig = z.infer<typeof WikiConfigSchema>;
 export type KinloomSiteConfig = z.infer<typeof KinloomSiteConfigSchema>;
 export type KinloomSiteConfigInput = z.input<typeof KinloomSiteConfigSchema>;
 
-export const DEFAULT_MIGRATION_ERAS: readonly MigrationEraConfig[] = [
-  { id: 'europe', label: 'Europe', minLng: -20 },
-  { id: 'eastern', label: 'Eastern Seaboard', minLng: -82, maxLng: -20 },
-  { id: 'interior', label: 'Interior Frontier', minLng: -108, maxLng: -82, minLat: 36.5 },
-  { id: 'southern', label: 'Southern Plains', minLng: -108, maxLng: -82, maxLat: 36.5 },
-  { id: 'western', label: 'Pacific West', maxLng: -108 },
-];
-
-export const DEFAULT_ANCHOR_YEARS: readonly AnchorYearConfig[] = [
-  { year: 1620, label: '1620' },
-  { year: 1665, label: '1665' },
-  { year: 1715, label: '1715' },
-  { year: 1776, label: '1776' },
-  { year: 1850, label: '1850' },
-  { year: 1880, label: '1880' },
-  { year: 1900, label: '1900' },
-  { year: 1910, label: '1910' },
-  { year: 1920, label: '1920' },
-  { year: 1930, label: '1930' },
-  { year: 1940, label: '1940' },
-  { year: 1955, label: '1955' },
-];
-
 export function parseKinloomConfig(input: unknown): KinloomSiteConfig {
   return KinloomSiteConfigSchema.parse(input);
-}
-
-export function resolveDefaultBranchId(config?: KinloomSiteConfig | null): string {
-  if (!config) {
-    return 'primary';
-  }
-  if (config.defaultBranchId) {
-    return config.defaultBranchId;
-  }
-  if (config.branches.length > 0) {
-    return config.branches[0].id;
-  }
-  return 'primary';
 }

@@ -1,6 +1,5 @@
 import { z } from 'zod';
 import {
-  type KinshipEdge,
   KinshipEdgeSchema,
   MediaItemSchema,
   NarrativeSchema,
@@ -9,6 +8,22 @@ import {
   RawPersonSchema,
   SourceRecordSchema,
 } from './entities.js';
+import {
+  tryFastParseKinshipEdge,
+  tryFastParseMediaItem,
+  tryFastParseNarrative,
+  tryFastParsePlace,
+  tryFastParseRawEvent,
+  tryFastParseRawPerson,
+  tryFastParseSourceRecord,
+} from './fastEntities.js';
+
+export {
+  buildEntityId,
+  deriveKinshipEdgeId,
+  ENTITY_ID_PREFIX,
+  toEntityPayload,
+} from './pureHelpers.js';
 
 export const EntityTypeSchema = z.enum([
   'person',
@@ -106,7 +121,23 @@ export type TypedEntityByType = {
   [K in keyof typeof ENTITY_SCHEMA_BY_TYPE]: z.infer<(typeof ENTITY_SCHEMA_BY_TYPE)[K]>;
 };
 
+const FAST_ENTITY_PARSER_BY_TYPE: {
+  readonly [K in keyof TypedEntityByType]: (raw: unknown) => TypedEntityByType[K] | null;
+} = {
+  person: tryFastParseRawPerson,
+  event: tryFastParseRawEvent,
+  place: tryFastParsePlace,
+  source: tryFastParseSourceRecord,
+  media: tryFastParseMediaItem,
+  narrative: tryFastParseNarrative,
+  kinship_edge: tryFastParseKinshipEdge,
+};
+
 export function parseEntityPayload<T extends EntityType>(entityType: T, raw: unknown): TypedEntityByType[T] {
+  const fast = FAST_ENTITY_PARSER_BY_TYPE[entityType](raw);
+  if (fast !== null) {
+    return fast;
+  }
   const schema = ENTITY_SCHEMA_BY_TYPE[entityType];
   return schema.parse(raw) as TypedEntityByType[T];
 }
@@ -115,29 +146,12 @@ export function safeParseEntityPayload<T extends EntityType>(
   entityType: T,
   raw: unknown
 ): z.ZodSafeParseResult<TypedEntityByType[T]> {
+  const fast = FAST_ENTITY_PARSER_BY_TYPE[entityType](raw);
+  if (fast !== null) {
+    return { success: true, data: fast };
+  }
   const schema = ENTITY_SCHEMA_BY_TYPE[entityType];
   return schema.safeParse(raw) as z.ZodSafeParseResult<TypedEntityByType[T]>;
-}
-
-export const ENTITY_ID_PREFIX: Readonly<Record<Exclude<EntityType, 'kinship_edge'>, string>> = {
-  person: 'per',
-  event: 'evt',
-  place: 'plc',
-  source: 'src',
-  media: 'med',
-  narrative: 'nar',
-};
-
-export function buildEntityId(entityType: Exclude<EntityType, 'kinship_edge'>, suffix: string): string {
-  return `${ENTITY_ID_PREFIX[entityType]}_${suffix}`;
-}
-
-export function toEntityPayload<T extends object>(entity: T): EntityPayload {
-  return Object.fromEntries(Object.entries(entity));
-}
-
-export function deriveKinshipEdgeId(edge: Pick<KinshipEdge, 'from' | 'relation' | 'to'>): string {
-  return `${edge.from}:${edge.relation}:${edge.to}`;
 }
 
 export const RevisionRecordSchema = z.object({

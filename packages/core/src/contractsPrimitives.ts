@@ -1,14 +1,14 @@
 import type { EntityDiffSummary } from './revisions.js';
 import type { KinshipEdge } from './schemas/entities.js';
-import {
-  type AgentTokenScope,
-  type AuthorType,
-  type EntityPayload,
-  type EntityType,
-  type RevisionAction,
-  type RevisionRecord,
-  toEntityPayload,
-  type UserRole,
+import { toEntityPayload } from './schemas/pureHelpers.js';
+import type {
+  AgentTokenScope,
+  AuthorType,
+  EntityPayload,
+  EntityType,
+  RevisionAction,
+  RevisionRecord,
+  UserRole,
 } from './schemas/revisions.js';
 
 /**

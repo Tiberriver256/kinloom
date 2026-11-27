@@ -2,6 +2,7 @@
 
 // Brandkit SVG, Manifest, Head Tags & Privacy-Safe OG Metadata
 export * from './brandkit.js';
+export * from './bundleFastValidate.js';
 // Core Domain Algorithms (UI-agnostic)
 export * from './citations.js';
 export * from './clock.js';
@@ -24,6 +25,7 @@ export * from './domain/timeSnapshot.js';
 export * from './domain/timeYear.js';
 // EDTF & Geo Math
 export * from './edtf.js';
+export * from './fastCompare.js';
 // GEDCOM Citations, Parser, GEDCOM 7 Exporter & Generic Slice Seeder
 export * from './gedcom/citations.js';
 export * from './gedcom/export.js';

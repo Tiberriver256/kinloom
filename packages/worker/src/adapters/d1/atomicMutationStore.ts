@@ -9,12 +9,17 @@ import {
   type OptimisticConflictError,
   parseEntityPayload,
   type RevisionAuthor,
+  type RevisionId,
   type RevisionRecord,
   type StoredEntityRow,
   type StoredKinshipRow,
 } from '@kinloom/core';
 import type { D1Database, D1PreparedStatement } from '../../types.js';
-import { pushCreateRunStatements, type RevisionResultEntry } from './createRunStatements.js';
+import {
+  pushCreateRunStatements,
+  pushUpdateRunStatements,
+  type RevisionResultEntry,
+} from './createRunStatements.js';
 import {
   parseDbAuthorNameRow,
   parseDbReturningRevisionIdRow,
@@ -29,11 +34,25 @@ import {
   rowToEntityPayload,
 } from './sqlHelpers.js';
 
+function isBulkEligibleEntityUpdateOp(op: AtomicMutationOp): boolean {
+  return (
+    op.action === 'update' &&
+    op.entity_type !== 'kinship_edge' &&
+    op.expected_parent_revision_id !== null &&
+    op.after_json !== null &&
+    op.soft_delete !== true
+  );
+}
+
 export class D1AtomicMutationStore implements AtomicMutationStore {
   constructor(
     private readonly db: D1Database,
     private readonly readStore: Pick<EntityReadStore, 'getHeadRevisionId' | 'getEntity'> & {
       getEntitiesBatch: NonNullable<EntityReadStore['getEntitiesBatch']>;
+      notifyCommittedMutations?: (
+        operations: readonly AtomicMutationOp[],
+        headRevisionId: RevisionId
+      ) => void;
     }
   ) {}
 
@@ -76,6 +95,38 @@ export class D1AtomicMutationStore implements AtomicMutationStore {
         });
         i = runEnd - 1;
         continue;
+      }
+
+      if (isBulkEligibleEntityUpdateOp(op) && !mutatedInBatch.has(key)) {
+        const seenInUpdateRun = new Set<string>();
+        let runEnd = i;
+        while (runEnd < ops.length) {
+          const candidate = ops[runEnd];
+          if (!isBulkEligibleEntityUpdateOp(candidate)) {
+            break;
+          }
+          const candidateKey = entityCompositeKey(candidate.entity_type, candidate.entity_id);
+          if (mutatedInBatch.has(candidateKey) || seenInUpdateRun.has(candidateKey)) {
+            break;
+          }
+          seenInUpdateRun.add(candidateKey);
+          runEnd += 1;
+        }
+        if (runEnd - i >= 2) {
+          for (const k of seenInUpdateRun) {
+            mutatedInBatch.add(k);
+          }
+          pushUpdateRunStatements(this.db, {
+            ops: ops.slice(i, runEnd),
+            batchId: params.batch_id,
+            author: params.author,
+            nowIso: params.nowIso,
+            statements,
+            revisionResultEntries,
+          });
+          i = runEnd - 1;
+          continue;
+        }
       }
 
       const alreadyMutatedInBatch = mutatedInBatch.has(key);
@@ -128,6 +179,26 @@ export class D1AtomicMutationStore implements AtomicMutationStore {
               })
             );
           }
+        } else if (entry.kind === 'update') {
+          const revRows = rawRows.map(parseDbReturningRevisionPairRow);
+          if (revRows.length !== entry.ops.length) {
+            throw new Error(
+              `D1 update revision insert returned ${revRows.length} rows for ${entry.ops.length} operations.`
+            );
+          }
+          const sortedRows = revRows.toSorted((a, b) => a.revision_id - b.revision_id);
+          for (let j = 0; j < sortedRows.length; j += 1) {
+            committedRevisions.push(
+              buildCommittedRevisionRecord({
+                revisionId: sortedRows[j].revision_id,
+                parentRevisionId: sortedRows[j].parent_revision_id,
+                op: entry.ops[j],
+                batchId: params.batch_id,
+                author: params.author,
+                nowIso: params.nowIso,
+              })
+            );
+          }
         } else {
           const firstRow = rawRows[0];
           if (!firstRow) {
@@ -152,9 +223,11 @@ export class D1AtomicMutationStore implements AtomicMutationStore {
         );
       }
       const lastRevision = committedRevisions[committedRevisions.length - 1];
+      const headRevisionId = asRevisionId(lastRevision.revision_id);
+      this.readStore.notifyCommittedMutations?.(ops, headRevisionId);
       return {
         kind: 'committed',
-        head_revision_id: asRevisionId(lastRevision.revision_id),
+        head_revision_id: headRevisionId,
         revisions: committedRevisions,
       };
     } catch (error) {

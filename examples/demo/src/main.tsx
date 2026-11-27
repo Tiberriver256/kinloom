@@ -3,16 +3,13 @@ import '@kinloom/ui/styles/archival.css';
 import type { ArchiveDataSource } from '@kinloom/core';
 import type { KinloomUiPlugin } from '@kinloom/ui';
 import {
-  createHttpWikiDataSource,
   createNarrativeAudioPlugin,
-  createRecipesUiPlugin,
   createStaticArchiveDataSource,
   installGlobalErrorHandlers,
   KinloomApp,
 } from '@kinloom/ui';
 import React from 'react';
 import ReactDOM from 'react-dom/client';
-import { demoStoryPlugin } from './demoStoryPlugin.js';
 import { demoSiteConfig } from './generated/siteConfig.js';
 
 function readEnvFlag(name: string): string | undefined {
@@ -44,40 +41,49 @@ function resolveBackendMode(): BackendMode {
   return 'static';
 }
 
-const narrativeAudioPlugin = createNarrativeAudioPlugin();
-
-function resolveDemoPlugins(): readonly KinloomUiPlugin[] {
-  const plugins: KinloomUiPlugin[] = [narrativeAudioPlugin];
+function isDemoPluginEnabled(): boolean {
   const meta = document.querySelector<HTMLMetaElement>('meta[name="kinloom-demo-plugin"]');
-  if (meta?.content === 'true' || readEnvFlag('VITE_KINLOOM_DEMO_PLUGIN') === 'true') {
-    plugins.push(demoStoryPlugin);
-  }
-  const recipesMeta = document.querySelector<HTMLMetaElement>('meta[name="kinloom-recipes-plugin"]');
-  if (recipesMeta?.content === 'true' || readEnvFlag('VITE_KINLOOM_RECIPES_PLUGIN') === 'true') {
-    plugins.push(createRecipesUiPlugin());
-  }
-  return plugins;
+  return meta?.content === 'true' || readEnvFlag('VITE_KINLOOM_DEMO_PLUGIN') === 'true';
 }
 
-const backendMode = resolveBackendMode();
-const dataSource: ArchiveDataSource =
-  backendMode === 'http'
-    ? createHttpWikiDataSource({
-        apiBaseUrl: '',
-        assetBaseUrl: import.meta.env.BASE_URL,
-        fetchImpl: (input, init) => globalThis.fetch(input, init),
-      })
-    : createStaticArchiveDataSource(import.meta.env.BASE_URL, (input, init) => globalThis.fetch(input, init));
+function isRecipesPluginEnabled(): boolean {
+  const meta = document.querySelector<HTMLMetaElement>('meta[name="kinloom-recipes-plugin"]');
+  return meta?.content === 'true' || readEnvFlag('VITE_KINLOOM_RECIPES_PLUGIN') === 'true';
+}
 
-const plugins = resolveDemoPlugins();
+async function bootstrap(container: Element): Promise<void> {
+  const narrativeAudioPlugin = createNarrativeAudioPlugin();
+  const backendMode = resolveBackendMode();
 
-ReactDOM.createRoot(rootElement).render(
-  <React.StrictMode>
-    <KinloomApp
-      siteConfig={demoSiteConfig}
-      dataSource={dataSource}
-      plugins={plugins}
-      baseUrl={import.meta.env.BASE_URL}
-    />
-  </React.StrictMode>
-);
+  const dataSource: ArchiveDataSource =
+    backendMode === 'http'
+      ? (await import('@kinloom/ui/adapters/httpWikiDataSource')).createHttpWikiDataSource({
+          apiBaseUrl: '',
+          assetBaseUrl: import.meta.env.BASE_URL,
+          fetchImpl: (input, init) => globalThis.fetch(input, init),
+        })
+      : createStaticArchiveDataSource(import.meta.env.BASE_URL, (input, init) =>
+          globalThis.fetch(input, init)
+        );
+
+  const plugins: KinloomUiPlugin[] = [narrativeAudioPlugin];
+  if (isDemoPluginEnabled()) {
+    plugins.push((await import('./demoStoryPlugin.js')).demoStoryPlugin);
+  }
+  if (isRecipesPluginEnabled()) {
+    plugins.push((await import('@kinloom/ui/plugins/recipesPlugin')).createRecipesUiPlugin());
+  }
+
+  ReactDOM.createRoot(container).render(
+    <React.StrictMode>
+      <KinloomApp
+        siteConfig={demoSiteConfig}
+        dataSource={dataSource}
+        plugins={plugins}
+        baseUrl={import.meta.env.BASE_URL}
+      />
+    </React.StrictMode>
+  );
+}
+
+void bootstrap(rootElement);

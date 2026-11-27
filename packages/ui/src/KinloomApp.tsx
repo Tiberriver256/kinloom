@@ -6,15 +6,13 @@ import { AppErrorBoundary } from './components/AppErrorBoundary.js';
 import statusShellStyles from './components/ArchiveStatusShell.module.css';
 import { BlankScreenWatchdog } from './components/BlankScreenWatchdog.js';
 import { ExplorerTopBar } from './components/ExplorerTopBar.js';
-import { GlobalSearchModal } from './components/GlobalSearchModal.js';
 import { ScrollMemory } from './components/ScrollMemory.js';
-import { SourceInspectorDrawer } from './components/SourceInspectorDrawer.js';
-import { SourceReaderDrawer } from './components/SourceReaderDrawer.js';
 import { AuthStatusBanner } from './components/wiki/AuthStatusBanner.js';
 import { PrivateArchiveGate } from './components/wiki/PrivateArchiveGate.js';
 import type { ArchiveCapabilities, ArchiveDataLoader, ArchiveSession } from './context/ArchiveDataContext.js';
 import { useArchiveData } from './context/ArchiveDataContext.js';
 import { ArchiveProvider } from './context/ArchiveProvider.js';
+import { useArchiveUi } from './context/ArchiveUiContext.js';
 import { cx } from './lib/cx.js';
 import { IndexPage } from './pages/IndexPage.js';
 import { NotFoundPage } from './pages/NotFoundPage.js';
@@ -62,6 +60,18 @@ const TreePage = lazy(async () => {
   const module = await import('./pages/TreePage.js');
   return { default: module.TreePage };
 });
+const LazyGlobalSearchModal = lazy(async () => {
+  const module = await import('./components/GlobalSearchModal.js');
+  return { default: module.GlobalSearchModal };
+});
+const LazySourceReaderDrawer = lazy(async () => {
+  const module = await import('./components/SourceReaderDrawer.js');
+  return { default: module.SourceReaderDrawer };
+});
+const LazySourceInspectorDrawer = lazy(async () => {
+  const module = await import('./components/SourceInspectorDrawer.js');
+  return { default: module.SourceInspectorDrawer };
+});
 
 export interface KinloomAppProps {
   siteConfig: KinloomSiteConfig;
@@ -91,6 +101,17 @@ const RouteLoading: React.FC = () => (
     </main>
   </div>
 );
+
+const LazyShellOverlays: React.FC = () => {
+  const { searchOpen, sourceReader, sourceInspector } = useArchiveUi();
+  return (
+    <Suspense fallback={null}>
+      {sourceReader !== null && <LazySourceReaderDrawer />}
+      {sourceInspector !== null && <LazySourceInspectorDrawer />}
+      {searchOpen && <LazyGlobalSearchModal />}
+    </Suspense>
+  );
+};
 
 const RoutedAppShell: React.FC<{ siteTitle: string; baseUrl: string }> = ({ siteTitle, baseUrl }) => {
   const location = useLocation();
@@ -140,9 +161,7 @@ const RoutedAppShell: React.FC<{ siteTitle: string; baseUrl: string }> = ({ site
           </Routes>
         </Suspense>
       </AppErrorBoundary>
-      <SourceReaderDrawer />
-      <SourceInspectorDrawer />
-      <GlobalSearchModal />
+      <LazyShellOverlays />
       <PluginSlot name="appShell" className={'kinloom-app-shell-slot'} />
     </>
   );

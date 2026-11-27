@@ -23,6 +23,67 @@ export interface KinshipPathResult {
   }[];
 }
 
+const peopleByIdCache = new WeakMap<readonly Person[], Map<string, Person>>();
+const eventPlacesCache = new WeakMap<readonly ArchiveBundle['events'][number][], Map<string, Set<string>>>();
+const kinshipAdjCache = new WeakMap<readonly KinshipEdge[], Map<string, KinshipEdge[]>>();
+
+function getCachedPeopleById(people: readonly Person[]): Map<string, Person> {
+  let cached = peopleByIdCache.get(people);
+  if (!cached) {
+    cached = new Map();
+    for (let i = 0; i < people.length; i += 1) {
+      cached.set(people[i].id, people[i]);
+    }
+    peopleByIdCache.set(people, cached);
+  }
+  return cached;
+}
+
+function getCachedEventPlacesByPerson(
+  events: readonly ArchiveBundle['events'][number][]
+): Map<string, Set<string>> {
+  let cached = eventPlacesCache.get(events);
+  if (!cached) {
+    cached = new Map();
+    for (let i = 0; i < events.length; i += 1) {
+      const ev = events[i];
+      if (!ev.place_id) {
+        continue;
+      }
+      for (let j = 0; j < ev.participants.length; j += 1) {
+        const pid = ev.participants[j].person_id;
+        let set = cached.get(pid);
+        if (!set) {
+          set = new Set();
+          cached.set(pid, set);
+        }
+        set.add(ev.place_id);
+      }
+    }
+    eventPlacesCache.set(events, cached);
+  }
+  return cached;
+}
+
+function getCachedKinshipAdj(kinship: readonly KinshipEdge[]): Map<string, KinshipEdge[]> {
+  let cached = kinshipAdjCache.get(kinship);
+  if (!cached) {
+    cached = new Map();
+    for (let i = 0; i < kinship.length; i += 1) {
+      const k = kinship[i];
+      let list = cached.get(k.from);
+      if (!list) {
+        list = [k];
+        cached.set(k.from, list);
+      } else {
+        list.push(k);
+      }
+    }
+    kinshipAdjCache.set(kinship, cached);
+  }
+  return cached;
+}
+
 function ordinal(n: number): string {
   const mod100 = n % 100;
   if (mod100 >= 11 && mod100 <= 13) {
@@ -186,33 +247,23 @@ export function findKinshipPath(params: {
   referenceYear?: number;
 }): KinshipPathResult {
   const { fromId, toId, bundle, placesById, referenceYear = getCurrentReferenceYear() } = params;
-  const peopleById = new Map(bundle.people.map((p) => [p.id, p]));
+  const peopleById = getCachedPeopleById(bundle.people);
   const personA = peopleById.get(fromId);
   const personB = peopleById.get(toId);
 
   const overlapYears = personA && personB ? computeLifeOverlap(personA, personB, referenceYear) : null;
 
-  const placesA = new Set<string>();
-  const placesB = new Set<string>();
-  for (const ev of bundle.events) {
-    if (!ev.place_id) {
-      continue;
-    }
-    for (const pt of ev.participants) {
-      if (pt.person_id === fromId) {
-        placesA.add(ev.place_id);
-      }
-      if (pt.person_id === toId) {
-        placesB.add(ev.place_id);
-      }
-    }
-  }
+  const placesByPerson = getCachedEventPlacesByPerson(bundle.events);
+  const placesA = placesByPerson.get(fromId);
+  const placesB = placesByPerson.get(toId);
   const sharedPlaces: { place: Place; distanceMiles: number }[] = [];
-  for (const pid of placesA) {
-    if (placesB.has(pid)) {
-      const pl = placesById.get(pid);
-      if (pl && pl.place_type !== 'country' && pl.place_type !== 'state') {
-        sharedPlaces.push({ place: pl, distanceMiles: 0 });
+  if (placesA && placesB) {
+    for (const pid of placesA) {
+      if (placesB.has(pid)) {
+        const pl = placesById.get(pid);
+        if (pl && pl.place_type !== 'country' && pl.place_type !== 'state') {
+          sharedPlaces.push({ place: pl, distanceMiles: 0 });
+        }
       }
     }
   }
@@ -228,26 +279,25 @@ export function findKinshipPath(params: {
     };
   }
 
-  const adj = new Map<string, KinshipEdge[]>();
-  for (const k of bundle.kinship) {
-    const list = adj.get(k.from) ?? [];
-    list.push(k);
-    adj.set(k.from, list);
-  }
+  const adj = getCachedKinshipAdj(bundle.kinship);
 
   const queue: string[] = [fromId];
   const visited = new Set<string>([fromId]);
   const prev = new Map<string, KinshipStep>();
 
-  while (queue.length > 0) {
-    const cur = queue.shift();
-    if (cur === undefined) {
-      break;
-    }
+  let qHead = 0;
+  while (qHead < queue.length) {
+    const cur = queue[qHead];
+    qHead += 1;
     if (cur === toId) {
       break;
     }
-    for (const edge of adj.get(cur) ?? []) {
+    const edges = adj.get(cur);
+    if (!edges) {
+      continue;
+    }
+    for (let i = 0; i < edges.length; i += 1) {
+      const edge = edges[i];
       if (visited.has(edge.to)) {
         continue;
       }
@@ -276,10 +326,12 @@ export function findKinshipPath(params: {
     if (!step) {
       break;
     }
-    steps.unshift(step);
-    personIds.unshift(step.fromId);
+    steps.push(step);
+    personIds.push(step.fromId);
     cursor = step.fromId;
   }
+  steps.reverse();
+  personIds.reverse();
 
   return {
     connected: true,

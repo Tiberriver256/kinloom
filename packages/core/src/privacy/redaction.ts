@@ -8,7 +8,7 @@ import type {
   RawPerson,
   ResidenceSpan,
 } from '../schemas/entities.js';
-import { getMediaPersonIds } from '../schemas/entities.js';
+import { getMediaPersonIds } from '../schemas/pureHelpers.js';
 import {
   type ApplyPrivacyFilterOptions,
   collectLivingNames,
@@ -21,6 +21,39 @@ import {
   resolveEffectiveLiving,
   scrubLivingNames,
 } from './policy.js';
+import { mayMatchPattern } from './prefilter.js';
+
+function cloneNarrativeFast(n: Narrative): Narrative {
+  const out = { id: n.id, slug: n.slug } as Narrative;
+  if (n.kind !== undefined) {
+    out.kind = n.kind;
+  }
+  if (n.subject_person_id !== undefined) {
+    out.subject_person_id = n.subject_person_id;
+  }
+  out.title = n.title;
+  if (n.summary !== undefined) {
+    out.summary = n.summary;
+  }
+  out.body_md = n.body_md;
+  if (n.date_edtf !== undefined) {
+    out.date_edtf = n.date_edtf;
+  }
+  out.person_ids = n.person_ids.slice();
+  out.place_ids = n.place_ids.slice();
+  out.event_ids = n.event_ids.slice();
+  out.source_ids = n.source_ids.slice();
+  if (n.updated_at !== undefined) {
+    out.updated_at = n.updated_at;
+  }
+  if (n.has_primary_source !== undefined) {
+    out.has_primary_source = n.has_primary_source;
+  }
+  if (n.extensions !== undefined) {
+    out.extensions = structuredClone(n.extensions);
+  }
+  return out;
+}
 
 export function redactSingleEvent(
   event: ArchiveEvent,
@@ -32,9 +65,9 @@ export function redactSingleEvent(
   let hasAnyParticipant = false;
   let hasLivingParticipant = false;
   let allParticipantsLiving = true;
-  for (const pt of event.participants) {
+  for (let i = 0; i < event.participants.length; i += 1) {
     hasAnyParticipant = true;
-    if (livingIds.has(pt.person_id)) {
+    if (livingIds.has(event.participants[i].person_id)) {
       hasLivingParticipant = true;
     } else {
       allParticipantsLiving = false;
@@ -45,51 +78,51 @@ export function redactSingleEvent(
     return null;
   }
 
+  if (!hasLivingParticipant) {
+    return options?.clone === false ? event : structuredClone(event);
+  }
+
   const copy = options?.clone === false ? event : structuredClone(event);
 
   if (mode === 'public') {
-    if (hasLivingParticipant) {
-      if (copy.title) {
-        copy.title = scrubLivingNames(copy.title, livingPattern);
-      }
-      copy.summary = 'Shared family milestone (details redacted for living participants).';
-      copy.place_id = null;
-      copy.photo_url = undefined;
-      if (copy.alternate_dates) {
-        for (const alt of copy.alternate_dates) {
-          if (alt.note) {
-            alt.note = scrubLivingNames(alt.note, livingPattern);
-          }
+    if (copy.title) {
+      copy.title = scrubLivingNames(copy.title, livingPattern);
+    }
+    copy.summary = 'Shared family milestone (details redacted for living participants).';
+    copy.place_id = null;
+    copy.photo_url = undefined;
+    if (copy.alternate_dates) {
+      for (const alt of copy.alternate_dates) {
+        if (alt.note) {
+          alt.note = scrubLivingNames(alt.note, livingPattern);
         }
       }
-      if (copy.alternate_places) {
-        for (const alt of copy.alternate_places) {
-          if (alt.note) {
-            alt.note = scrubLivingNames(alt.note, livingPattern);
-          }
+    }
+    if (copy.alternate_places) {
+      for (const alt of copy.alternate_places) {
+        if (alt.note) {
+          alt.note = scrubLivingNames(alt.note, livingPattern);
         }
       }
-      if (copy.fact_conflicts) {
-        for (const alt of copy.fact_conflicts) {
-          if (alt.note) {
-            alt.note = scrubLivingNames(alt.note, livingPattern);
-          }
+    }
+    if (copy.fact_conflicts) {
+      for (const alt of copy.fact_conflicts) {
+        if (alt.note) {
+          alt.note = scrubLivingNames(alt.note, livingPattern);
         }
       }
     }
     return copy;
   }
 
-  if (hasLivingParticipant) {
-    const showBirthYear = options?.privacy?.privateModeShowsBirthYear ?? true;
-    const stripPortraits = options?.privacy?.stripLivingPortraits ?? true;
-    const yr = showBirthYear ? edtfYear(copy.edtf_date) : null;
-    copy.edtf_date = yr !== null ? String(yr) : '';
-    copy.place_id = null;
-    copy.summary = 'Living relative record (location and exact date omitted).';
-    if (stripPortraits) {
-      copy.photo_url = undefined;
-    }
+  const showBirthYear = options?.privacy?.privateModeShowsBirthYear ?? true;
+  const stripPortraits = options?.privacy?.stripLivingPortraits ?? true;
+  const yr = showBirthYear ? edtfYear(copy.edtf_date) : null;
+  copy.edtf_date = yr !== null ? String(yr) : '';
+  copy.place_id = null;
+  copy.summary = 'Living relative record (location and exact date omitted).';
+  if (stripPortraits) {
+    copy.photo_url = undefined;
   }
   return copy;
 }
@@ -109,7 +142,7 @@ function collectReviewFlagsForField(
   pattern: RegExp,
   reviewFlags: string[]
 ): void {
-  if (!fieldText) {
+  if (!fieldText || !mayMatchPattern(pattern, fieldText)) {
     return;
   }
   const seen = new Set<string>();
@@ -139,7 +172,8 @@ function applyPrivacyFilterCore<TPerson extends RawPerson>(
 
   const livingIds = new Set<string>();
   const effectiveLivingPeople: Pick<RawPerson, 'is_living' | 'full_name' | 'alt_names'>[] = [];
-  for (const p of people) {
+  for (let i = 0; i < people.length; i += 1) {
+    const p = people[i];
     if (resolveEffectiveLiving(p, privacy, referenceYear)) {
       livingIds.add(p.id);
       effectiveLivingPeople.push({
@@ -150,41 +184,61 @@ function applyPrivacyFilterCore<TPerson extends RawPerson>(
     }
   }
 
-  const livingNames = collectLivingNames(effectiveLivingPeople);
-  const livingPattern = compileLivingNamePattern(livingNames);
-  const reviewLivingNames = livingNames.filter((name) => name.length >= 5);
+  // Living-name regexes are only evaluated in public mode; skip compiling them in private mode.
+  const livingNames = mode === 'public' ? collectLivingNames(effectiveLivingPeople) : [];
+  const livingPattern = mode === 'public' ? compileLivingNamePattern(livingNames) : null;
+  const reviewLivingNames = mode === 'public' ? livingNames.filter((name) => name.length >= 5) : [];
   const reviewPattern =
-    reviewLivingNames.length === livingNames.length
-      ? livingPattern
-      : compileLivingNamePattern(reviewLivingNames);
+    mode !== 'public'
+      ? null
+      : reviewLivingNames.length === livingNames.length
+        ? livingPattern
+        : compileLivingNamePattern(reviewLivingNames);
   const reviewFlags: string[] = [];
 
-  const outPeople = people.map((p) => redactPerson(p, mode, redactOpts));
+  const outPeople = new Array<TPerson>(people.length);
+  for (let i = 0; i < people.length; i += 1) {
+    outPeople[i] = redactPerson(people[i], mode, redactOpts);
+  }
+
+  const hasLivingSet = livingIds.size > 0;
   const outEvents: ArchiveEvent[] = [];
 
-  for (const ev of events) {
-    const hasLivingParticipant = ev.participants.some((pt) => livingIds.has(pt.person_id));
+  for (let i = 0; i < events.length; i += 1) {
+    const ev = events[i];
+    let hasLivingParticipant = false;
+    if (hasLivingSet) {
+      for (let j = 0; j < ev.participants.length; j += 1) {
+        if (livingIds.has(ev.participants[j].person_id)) {
+          hasLivingParticipant = true;
+          break;
+        }
+      }
+    }
 
-    const redacted = redactSingleEvent(ev, livingIds, livingPattern, mode, redactOpts);
-    if (!redacted) {
+    if (!hasLivingParticipant) {
+      const copy = cloneInputs ? structuredClone(ev) : ev;
+      if (mode === 'public' && reviewPattern) {
+        const title = copy.title || '';
+        const summary = copy.summary || '';
+        collectReviewFlagsForField(copy.id, title, title, 'event title', reviewPattern, reviewFlags);
+        collectReviewFlagsForField(copy.id, title, summary, 'summary prose', reviewPattern, reviewFlags);
+      }
+      outEvents.push(copy);
       continue;
     }
 
-    if (mode === 'public' && !hasLivingParticipant && reviewPattern) {
-      const title = redacted.title || '';
-      const summary = redacted.summary || '';
-      collectReviewFlagsForField(redacted.id, title, title, 'event title', reviewPattern, reviewFlags);
-      collectReviewFlagsForField(redacted.id, title, summary, 'summary prose', reviewPattern, reviewFlags);
+    const redacted = redactSingleEvent(ev, livingIds, livingPattern, mode, redactOpts);
+    if (redacted) {
+      outEvents.push(redacted);
     }
-
-    outEvents.push(redacted);
   }
 
   const stripLivingSpans = mode === 'public' || (privacy?.stripLivingResidenceSpans ?? true);
   const filteredSpans = stripLivingSpans
     ? residenceSpans.filter((s) => !livingIds.has(s.person_id))
     : [...residenceSpans];
-  const outSpans = cloneInputs ? filteredSpans.map((s) => structuredClone(s)) : filteredSpans;
+  const outSpans = cloneInputs ? filteredSpans.map((s) => ({ ...s })) : filteredSpans;
 
   return {
     people: outPeople,
@@ -234,11 +288,12 @@ export function filterMediaForPrivacy(
   const cloneInputs = options?.cloneInputs ?? true;
   const stripLivingPortraits = options?.stripLivingPortraits ?? true;
   const result: MediaItem[] = [];
-  for (const item of media) {
+  for (let i = 0; i < media.length; i += 1) {
+    const item = media[i];
     const linkedPersonIds = getMediaPersonIds(item);
     let blocked = false;
-    for (const pid of linkedPersonIds) {
-      const person = peopleById.get(pid);
+    for (let j = 0; j < linkedPersonIds.length; j += 1) {
+      const person = peopleById.get(linkedPersonIds[j]);
       if (!person || (stripLivingPortraits && person.is_living)) {
         blocked = true;
         break;
@@ -258,7 +313,13 @@ export function filterMediaForPrivacy(
         continue;
       }
     }
-    const copy = cloneInputs ? structuredClone(item) : item;
+    const copy: MediaItem = cloneInputs
+      ? {
+          ...item,
+          ...(item.person_ids !== undefined ? { person_ids: [...item.person_ids] } : {}),
+          ...(item.extensions !== undefined ? { extensions: structuredClone(item.extensions) } : {}),
+        }
+      : item;
     if (copy.person_id) {
       const target = peopleById.get(copy.person_id);
       if (target) {
@@ -286,7 +347,7 @@ export function redactSingleNarrative(
   mode: BuildMode,
   options?: RedactNarrativeOptions
 ): Narrative {
-  const copy = options?.clone === false ? narrative : structuredClone(narrative);
+  const copy = options?.clone === false ? narrative : cloneNarrativeFast(narrative);
   if (mode !== 'public') {
     return copy;
   }
@@ -318,5 +379,9 @@ export function filterNarrativesForPrivacy(
   options?: { cloneInputs?: boolean }
 ): Narrative[] {
   const clone = options?.cloneInputs ?? true;
-  return narratives.map((n) => redactSingleNarrative(n, livingIds, livingPattern, mode, { clone }));
+  const out = new Array<Narrative>(narratives.length);
+  for (let i = 0; i < narratives.length; i += 1) {
+    out[i] = redactSingleNarrative(narratives[i], livingIds, livingPattern, mode, { clone });
+  }
+  return out;
 }

@@ -12,7 +12,7 @@ import {
   samePlaceOrWithin15Miles,
 } from '../residenceSpans.js';
 import type { ArchiveEvent, Place, ResidenceSpan } from '../schemas/entities.js';
-import { getMediaPersonIds } from '../schemas/entities.js';
+import { getMediaPersonIds } from '../schemas/pureHelpers.js';
 import { arraysEqualStrings, type PatchWorkingState, updateUncitedKey } from './patchState.js';
 
 export function reconcileNewlyLivingEntities(state: PatchWorkingState): void {
@@ -49,7 +49,7 @@ export function reconcileNewlyLivingEntities(state: PatchWorkingState): void {
     }
     if (!redacted) {
       state.events.splice(i, 1);
-      updateUncitedKey(state.uncitedKeys, 'event', ev.id, undefined, true);
+      updateUncitedKey(state.uncitedKeys, 'event', ev.id, undefined, true, state);
       state.invalidateEventsIndex();
     } else {
       state.events[i] = redacted;
@@ -99,7 +99,8 @@ export function reconcileAffectedMedia(state: PatchWorkingState): void {
     }
     if (drop) {
       state.media.splice(i, 1);
-      updateUncitedKey(state.uncitedKeys, 'media', item.id, undefined, true);
+      state.mediaMutated = true;
+      updateUncitedKey(state.uncitedKeys, 'media', item.id, undefined, true, state);
       for (const pid of linkedPids) {
         state.affectedMediaPersonIds.add(pid);
         if (item.kind === 'portrait') {
@@ -118,6 +119,7 @@ export function reconcileAffectedMedia(state: PatchWorkingState): void {
       const pIdx = idxById.get(item.person_id);
       if (pIdx !== undefined) {
         const target = state.people[pIdx];
+        state.mediaMutated = true;
         state.media[i] = {
           ...item,
           ...(target.full_name ? { person_name: target.full_name } : {}),
@@ -198,8 +200,22 @@ function reconcileEventCounts(state: PatchWorkingState): void {
   }
 
   for (const ev of state.events) {
+    const pts = ev.participants;
+    if (pts.length === 1) {
+      const pid = pts[0].person_id;
+      if (state.affectedEventCountPersonIds.has(pid)) {
+        eventCounts.set(pid, (eventCounts.get(pid) ?? 0) + 1);
+        if (ev.place_id) {
+          const pCounts = placeCountsByPerson.get(pid);
+          if (pCounts) {
+            pCounts.set(ev.place_id, (pCounts.get(ev.place_id) ?? 0) + 1);
+          }
+        }
+      }
+      continue;
+    }
     let matchedAny = false;
-    for (const pt of ev.participants) {
+    for (const pt of pts) {
       if (state.affectedEventCountPersonIds.has(pt.person_id)) {
         matchedAny = true;
         break;
@@ -209,7 +225,7 @@ function reconcileEventCounts(state: PatchWorkingState): void {
       continue;
     }
     const seenInEvent = new Set<string>();
-    for (const pt of ev.participants) {
+    for (const pt of pts) {
       if (!state.affectedEventCountPersonIds.has(pt.person_id) || seenInEvent.has(pt.person_id)) {
         continue;
       }

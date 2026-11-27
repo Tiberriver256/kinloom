@@ -1,5 +1,5 @@
 import type { ArchiveEvent, MediaItem, Narrative, SourceRecord } from './schemas/entities.js';
-import { getMediaPersonIds } from './schemas/entities.js';
+import { getMediaPersonIds } from './schemas/pureHelpers.js';
 
 const SINGLE_CITATION_TOKEN_RE = /^\[\^([A-Za-z0-9._:-]+)(?:\|([A-Za-z0-9._:-]+))?\]$/;
 

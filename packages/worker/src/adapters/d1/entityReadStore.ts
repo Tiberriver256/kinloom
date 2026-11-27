@@ -1,5 +1,6 @@
 import {
   type ArchiveRawSnapshot,
+  type AtomicMutationOp,
   asRevisionId,
   type BatchId,
   type Clock,
@@ -7,6 +8,8 @@ import {
   type EntityReadStore,
   type EntityType,
   entityLookupCompositeKey,
+  fastLocaleCompare,
+  type PrefetchedWriteContext,
   type PrivacyConfig,
   type RevisionId,
   type RevisionLogStore,
@@ -25,13 +28,46 @@ import {
   parseDbEntityRow,
   parseDbHeadRevisionRow,
   parseDbKinshipRow,
+  parseDbLivingPersonDeltaRow,
   parseDbLivingPersonProjectionRow,
   parseDbRevisionRow,
 } from './rowMappers.js';
 import { chunkJsonArray, prepareD1Statement } from './sqlHelpers.js';
 
+interface CachedLivingPeopleState {
+  headRevisionId: number;
+  referenceYear: number;
+  privacyKey: string;
+  livingIds: Set<string>;
+}
+
+const MAX_INCREMENTAL_LIVING_REVISIONS = 500;
+const livingPeopleCaches = new WeakMap<D1Database, CachedLivingPeopleState>();
+
+const HEAD_REV_SQL = 'SELECT COALESCE(MAX(revision_id), 0) AS head_revision_id FROM revisions';
+const LIVING_DELTA_SQL = `SELECT r.entity_id AS entity_id,
+        e.entity_id AS active_entity_id,
+        e.deleted_at AS deleted_at,
+        json_extract(e.data_json, '$.is_living') AS is_living,
+        json_extract(e.data_json, '$.birth_edtf') AS birth_edtf,
+        json_extract(e.data_json, '$.death_edtf') AS death_edtf
+   FROM (
+     SELECT DISTINCT entity_id
+       FROM revisions
+      WHERE revision_id > ? AND entity_type = 'person'
+   ) AS r
+   LEFT JOIN entities AS e
+     ON e.entity_type = 'person' AND e.entity_id = r.entity_id`;
+const LIVING_FULL_SQL = `SELECT entity_id,
+        json_extract(data_json, '$.is_living') AS is_living,
+        json_extract(data_json, '$.birth_edtf') AS birth_edtf,
+        json_extract(data_json, '$.death_edtf') AS death_edtf
+   FROM entities
+   WHERE entity_type = 'person' AND deleted_at IS NULL`;
+
 export class D1EntityReadStore implements EntityReadStore, RevisionLogStore {
   private readonly clock: Clock;
+  private readonly privacyKey: string;
 
   constructor(
     private readonly db: D1Database,
@@ -39,13 +75,128 @@ export class D1EntityReadStore implements EntityReadStore, RevisionLogStore {
     clock?: Clock
   ) {
     this.clock = clock ?? new SystemClock();
+    this.privacyKey = JSON.stringify(privacyConfig ?? null);
+  }
+
+  private buildEntityLookupBatchStatements(
+    keys: readonly EntityLookupKey[],
+    result: Map<string, StoredEntityRecord | null>,
+    statements: D1PreparedStatement[],
+    statementKinds: Array<'kinship_edge' | 'entity'>
+  ): void {
+    const entityPairs: Array<[NonKinshipEntityType, string]> = [];
+    const kinshipIds: string[] = [];
+    for (let i = 0; i < keys.length; i += 1) {
+      const key = keys[i];
+      const composite = entityLookupCompositeKey(key.entityType, key.entityId);
+      if (result.has(composite)) {
+        continue;
+      }
+      result.set(composite, null);
+      if (key.entityType === 'kinship_edge') {
+        kinshipIds.push(key.entityId);
+      } else {
+        entityPairs.push([key.entityType, key.entityId]);
+      }
+    }
+
+    for (const pairsJson of chunkJsonArray(entityPairs)) {
+      statements.push(
+        prepareD1Statement(
+          this.db,
+          `SELECT e.entity_type, e.entity_id, e.slug, e.data_json, e.current_revision_id,
+                    e.has_primary_source, e.deleted_at, e.updated_at
+             FROM json_each(?) AS k
+             JOIN entities AS e
+               ON e.entity_type = json_extract(k.value, '$[0]')
+              AND e.entity_id = json_extract(k.value, '$[1]')`
+        ).bind(pairsJson)
+      );
+      statementKinds.push('entity');
+    }
+
+    for (const idsJson of chunkJsonArray(kinshipIds)) {
+      statements.push(
+        prepareD1Statement(
+          this.db,
+          `SELECT edge_id, from_person_id, to_person_id, relation, family_xref,
+                    current_revision_id, deleted_at, updated_at
+             FROM kinship_edges
+             WHERE edge_id IN (SELECT value FROM json_each(?))`
+        ).bind(idsJson)
+      );
+      statementKinds.push('kinship_edge');
+    }
+  }
+
+  private applyLivingDeltaRows(
+    cached: CachedLivingPeopleState,
+    rawRows: readonly unknown[],
+    referenceYear: number
+  ): void {
+    for (let i = 0; i < rawRows.length; i += 1) {
+      const row = parseDbLivingPersonDeltaRow(rawRows[i]);
+      if (row.active_entity_id === null || row.deleted_at !== null) {
+        cached.livingIds.delete(row.entity_id);
+        continue;
+      }
+      const isLiving = resolveEffectiveLiving(
+        {
+          is_living: Boolean(row.is_living),
+          birth_edtf: row.birth_edtf == null ? '' : String(row.birth_edtf),
+          death_edtf: row.death_edtf == null ? '' : String(row.death_edtf),
+        },
+        this.privacyConfig,
+        referenceYear
+      );
+      if (isLiving) {
+        cached.livingIds.add(row.entity_id);
+      } else {
+        cached.livingIds.delete(row.entity_id);
+      }
+    }
+  }
+
+  notifyCommittedMutations(operations: readonly AtomicMutationOp[], headRevisionId: RevisionId): void {
+    const referenceYear = this.clock.currentYear();
+    const cached = livingPeopleCaches.get(this.db);
+    if (
+      !cached ||
+      cached.referenceYear !== referenceYear ||
+      cached.privacyKey !== this.privacyKey ||
+      headRevisionId !== cached.headRevisionId + operations.length
+    ) {
+      return;
+    }
+    for (let i = 0; i < operations.length; i += 1) {
+      const op = operations[i];
+      if (op.entity_type !== 'person') {
+        continue;
+      }
+      if (op.soft_delete === true || op.action === 'delete' || op.after_json === null) {
+        cached.livingIds.delete(op.entity_id);
+        continue;
+      }
+      const isLiving = resolveEffectiveLiving(
+        {
+          is_living: Boolean(op.after_json.is_living),
+          birth_edtf: op.after_json.birth_edtf == null ? '' : String(op.after_json.birth_edtf),
+          death_edtf: op.after_json.death_edtf == null ? '' : String(op.after_json.death_edtf),
+        },
+        this.privacyConfig,
+        referenceYear
+      );
+      if (isLiving) {
+        cached.livingIds.add(op.entity_id);
+      } else {
+        cached.livingIds.delete(op.entity_id);
+      }
+    }
+    cached.headRevisionId = headRevisionId;
   }
 
   async getHeadRevisionId(): Promise<RevisionId> {
-    const rawRow = await prepareD1Statement(
-      this.db,
-      'SELECT COALESCE(MAX(revision_id), 0) AS head_revision_id FROM revisions'
-    ).first<unknown>();
+    const rawRow = await prepareD1Statement(this.db, HEAD_REV_SQL).first<unknown>();
     const row = rawRow !== null ? parseDbHeadRevisionRow(rawRow) : null;
     return asRevisionId(row?.head_revision_id ?? 0);
   }
@@ -82,64 +233,22 @@ export class D1EntityReadStore implements EntityReadStore, RevisionLogStore {
       return result;
     }
 
-    const entityPairs: Array<[NonKinshipEntityType, string]> = [];
-    const kinshipIds: string[] = [];
-    for (const key of keys) {
-      const composite = entityLookupCompositeKey(key.entityType, key.entityId);
-      if (result.has(composite)) {
-        continue;
-      }
-      result.set(composite, null);
-      if (key.entityType === 'kinship_edge') {
-        kinshipIds.push(key.entityId);
-      } else {
-        entityPairs.push([key.entityType, key.entityId]);
-      }
-    }
-
     const statements: D1PreparedStatement[] = [];
     const statementKinds: Array<'kinship_edge' | 'entity'> = [];
-
-    for (const pairsJson of chunkJsonArray(entityPairs)) {
-      statements.push(
-        prepareD1Statement(
-          this.db,
-          `SELECT e.entity_type, e.entity_id, e.slug, e.data_json, e.current_revision_id,
-                    e.has_primary_source, e.deleted_at, e.updated_at
-             FROM json_each(?) AS k
-             JOIN entities AS e
-               ON e.entity_type = json_extract(k.value, '$[0]')
-              AND e.entity_id = json_extract(k.value, '$[1]')`
-        ).bind(pairsJson)
-      );
-      statementKinds.push('entity');
-    }
-
-    for (const idsJson of chunkJsonArray(kinshipIds)) {
-      statements.push(
-        prepareD1Statement(
-          this.db,
-          `SELECT edge_id, from_person_id, to_person_id, relation, family_xref,
-                    current_revision_id, deleted_at, updated_at
-             FROM kinship_edges
-             WHERE edge_id IN (SELECT value FROM json_each(?))`
-        ).bind(idsJson)
-      );
-      statementKinds.push('kinship_edge');
-    }
+    this.buildEntityLookupBatchStatements(keys, result, statements, statementKinds);
 
     const batchResults = await this.db.batch(statements);
     for (let i = 0; i < batchResults.length; i += 1) {
       const kind = statementKinds[i];
       const rawRows = batchResults[i]?.results ?? [];
       if (kind === 'kinship_edge') {
-        for (const rawRow of rawRows) {
-          const mapped = mapKinshipRow(parseDbKinshipRow(rawRow));
+        for (let j = 0; j < rawRows.length; j += 1) {
+          const mapped = mapKinshipRow(parseDbKinshipRow(rawRows[j]));
           result.set(entityLookupCompositeKey('kinship_edge', mapped.edge_id), mapped);
         }
       } else {
-        for (const rawRow of rawRows) {
-          const mapped = mapEntityRow(parseDbEntityRow(rawRow));
+        for (let j = 0; j < rawRows.length; j += 1) {
+          const mapped = mapEntityRow(parseDbEntityRow(rawRows[j]));
           result.set(entityLookupCompositeKey(mapped.entity_type, mapped.entity_id), mapped);
         }
       }
@@ -148,20 +257,127 @@ export class D1EntityReadStore implements EntityReadStore, RevisionLogStore {
     return result;
   }
 
+  async prefetchWriteContext(keys: readonly EntityLookupKey[]): Promise<PrefetchedWriteContext> {
+    const referenceYear = this.clock.currentYear();
+    const cached = livingPeopleCaches.get(this.db);
+    const hasWarmLivingCache =
+      cached !== undefined &&
+      cached.referenceYear === referenceYear &&
+      cached.privacyKey === this.privacyKey &&
+      cached.headRevisionId > 0;
+
+    const entities = new Map<string, StoredEntityRecord | null>();
+    const statements: D1PreparedStatement[] = [prepareD1Statement(this.db, HEAD_REV_SQL)];
+    const statementKinds: Array<'kinship_edge' | 'entity'> = [];
+
+    if (hasWarmLivingCache) {
+      statements.push(prepareD1Statement(this.db, LIVING_DELTA_SQL).bind(cached.headRevisionId));
+    } else {
+      statements.push(prepareD1Statement(this.db, LIVING_FULL_SQL));
+    }
+
+    this.buildEntityLookupBatchStatements(keys, entities, statements, statementKinds);
+
+    const batchResults = await this.db.batch(statements);
+    const headRaw = batchResults[0]?.results[0];
+    const headRevNum = headRaw !== undefined ? parseDbHeadRevisionRow(headRaw).head_revision_id : 0;
+    const headRevisionId = asRevisionId(headRevNum);
+
+    for (let i = 0; i < statementKinds.length; i += 1) {
+      const kind = statementKinds[i];
+      const rawRows = batchResults[i + 2]?.results ?? [];
+      if (kind === 'kinship_edge') {
+        for (let j = 0; j < rawRows.length; j += 1) {
+          const mapped = mapKinshipRow(parseDbKinshipRow(rawRows[j]));
+          entities.set(entityLookupCompositeKey('kinship_edge', mapped.edge_id), mapped);
+        }
+      } else {
+        for (let j = 0; j < rawRows.length; j += 1) {
+          const mapped = mapEntityRow(parseDbEntityRow(rawRows[j]));
+          entities.set(entityLookupCompositeKey(mapped.entity_type, mapped.entity_id), mapped);
+        }
+      }
+    }
+
+    let livingPersonIds: ReadonlySet<string>;
+    if (hasWarmLivingCache && headRevNum >= cached.headRevisionId) {
+      const deltaRows = batchResults[1]?.results ?? [];
+      if (deltaRows.length > 0) {
+        this.applyLivingDeltaRows(cached, deltaRows, referenceYear);
+      }
+      cached.headRevisionId = headRevNum;
+      livingPersonIds = new Set(cached.livingIds);
+    } else if (!hasWarmLivingCache) {
+      const living = new Set<string>();
+      const peopleRows = batchResults[1]?.results ?? [];
+      for (let i = 0; i < peopleRows.length; i += 1) {
+        const row = parseDbLivingPersonProjectionRow(peopleRows[i]);
+        if (
+          resolveEffectiveLiving(
+            {
+              is_living: Boolean(row.is_living),
+              birth_edtf: row.birth_edtf == null ? '' : String(row.birth_edtf),
+              death_edtf: row.death_edtf == null ? '' : String(row.death_edtf),
+            },
+            this.privacyConfig,
+            referenceYear
+          )
+        ) {
+          living.add(row.entity_id);
+        }
+      }
+      if (headRevNum > 0) {
+        livingPeopleCaches.set(this.db, {
+          headRevisionId: headRevNum,
+          referenceYear,
+          privacyKey: this.privacyKey,
+          livingIds: new Set(living),
+        });
+      }
+      livingPersonIds = living;
+    } else {
+      livingPeopleCaches.delete(this.db);
+      livingPersonIds = await this.getLivingPersonIds();
+    }
+
+    return {
+      headRevisionId,
+      livingPersonIds,
+      entities,
+    };
+  }
+
   async getLivingPersonIds(): Promise<ReadonlySet<string>> {
-    const result = await prepareD1Statement(
-      this.db,
-      `SELECT entity_id,
-                json_extract(data_json, '$.is_living') AS is_living,
-                json_extract(data_json, '$.birth_edtf') AS birth_edtf,
-                json_extract(data_json, '$.death_edtf') AS death_edtf
-         FROM entities
-         WHERE entity_type = 'person' AND deleted_at IS NULL`
-    ).all<unknown>();
+    const referenceYear = this.clock.currentYear();
+    const cached = livingPeopleCaches.get(this.db);
+
+    if (cached && cached.referenceYear === referenceYear && cached.privacyKey === this.privacyKey) {
+      const headRev = await this.getHeadRevisionId();
+      if (headRev > 0) {
+        if (headRev === cached.headRevisionId) {
+          return new Set(cached.livingIds);
+        }
+        if (
+          headRev > cached.headRevisionId &&
+          headRev - cached.headRevisionId <= MAX_INCREMENTAL_LIVING_REVISIONS
+        ) {
+          const delta = await prepareD1Statement(this.db, LIVING_DELTA_SQL)
+            .bind(cached.headRevisionId)
+            .all<unknown>();
+          this.applyLivingDeltaRows(cached, delta.results, referenceYear);
+          cached.headRevisionId = headRev;
+          return new Set(cached.livingIds);
+        }
+      }
+    }
+
+    const [peopleRes, headRes] = await this.db.batch([
+      prepareD1Statement(this.db, LIVING_FULL_SQL),
+      prepareD1Statement(this.db, HEAD_REV_SQL),
+    ]);
 
     const living = new Set<string>();
-    const referenceYear = this.clock.currentYear();
-    for (const rawRow of result.results) {
+    for (const rawRow of peopleRes.results) {
       const row = parseDbLivingPersonProjectionRow(rawRow);
       if (
         resolveEffectiveLiving(
@@ -177,6 +393,18 @@ export class D1EntityReadStore implements EntityReadStore, RevisionLogStore {
         living.add(row.entity_id);
       }
     }
+
+    const headRaw = headRes.results[0];
+    const headRev = headRaw !== undefined ? parseDbHeadRevisionRow(headRaw).head_revision_id : 0;
+    if (headRev > 0) {
+      livingPeopleCaches.set(this.db, {
+        headRevisionId: headRev,
+        referenceYear,
+        privacyKey: this.privacyKey,
+        livingIds: new Set(living),
+      });
+    }
+
     return living;
   }
 
@@ -197,13 +425,13 @@ export class D1EntityReadStore implements EntityReadStore, RevisionLogStore {
          FROM kinship_edges
          WHERE deleted_at IS NULL`
       ),
-      prepareD1Statement(this.db, 'SELECT COALESCE(MAX(revision_id), 0) AS head_revision_id FROM revisions'),
+      prepareD1Statement(this.db, HEAD_REV_SQL),
     ]);
 
     const entities = entitiesRes.results.map((rawRow) => mapEntityRow(parseDbEntityRow(rawRow)));
     const kinship = kinshipRes.results
       .map((rawRow) => mapKinshipRow(parseDbKinshipRow(rawRow)))
-      .toSorted((a, b) => a.edge_id.localeCompare(b.edge_id));
+      .toSorted((a, b) => fastLocaleCompare(a.edge_id, b.edge_id));
     const headRaw = headRes.results[0];
     const headRow = headRaw !== undefined ? parseDbHeadRevisionRow(headRaw) : undefined;
 

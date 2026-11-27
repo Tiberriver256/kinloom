@@ -40,8 +40,15 @@ export function indexPrefetchedEvents(prefetchedRows: ReadonlyMap<string, Stored
     const eventId = key.slice('event:'.length);
     prefetchedEventIds.add(eventId);
     if (row && !('edge' in row) && row.deleted_at === null) {
-      const parsedEv = parseEntityPayload('event', row.data);
-      workingEvents.set(parsedEv.id, { id: parsedEv.id, participants: parsedEv.participants });
+      if (typeof row.data.id === 'string' && Array.isArray(row.data.participants)) {
+        workingEvents.set(row.data.id, {
+          id: row.data.id,
+          participants: row.data.participants as RawEvent['participants'],
+        });
+      } else {
+        const parsedEv = parseEntityPayload('event', row.data);
+        workingEvents.set(parsedEv.id, { id: parsedEv.id, participants: parsedEv.participants });
+      }
     }
   }
   return { workingEvents, prefetchedEventIds };
@@ -77,11 +84,22 @@ export async function compileBatchRevertOps(
     }
   }
 
-  const [headRev, initialLivingIds, prefetchedRows] = await Promise.all([
-    deps.repository.getHeadRevisionId(),
-    deps.repository.getLivingPersonIds(),
-    prefetchEntitiesByKey(deps.repository, prefetchKeys),
-  ]);
+  let headRev: RevisionId;
+  let initialLivingIds: ReadonlySet<string>;
+  let prefetchedRows: Map<string, StoredEntityRecord | null>;
+
+  if (deps.repository.prefetchWriteContext) {
+    const ctx = await deps.repository.prefetchWriteContext(prefetchKeys);
+    headRev = ctx.headRevisionId;
+    initialLivingIds = ctx.livingPersonIds;
+    prefetchedRows = ctx.entities;
+  } else {
+    [headRev, initialLivingIds, prefetchedRows] = await Promise.all([
+      deps.repository.getHeadRevisionId(),
+      deps.repository.getLivingPersonIds(),
+      prefetchEntitiesByKey(deps.repository, prefetchKeys),
+    ]);
+  }
 
   const currentStatesByKey = new Map<string, EntityLifecycleState>();
   const initialRevisionByKey = new Map<string, RevisionId>();

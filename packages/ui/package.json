@@ -23,6 +23,14 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     },
+    "./adapters/httpWikiDataSource": {
+      "types": "./dist/adapters/httpWikiDataSource.d.ts",
+      "import": "./dist/adapters/httpWikiDataSource.js"
+    },
+    "./plugins/recipesPlugin": {
+      "types": "./dist/plugins/recipesPlugin.d.ts",
+      "import": "./dist/plugins/recipesPlugin.js"
+    },
     "./styles/archival.css": "./dist/styles/archival.css"
   },
   "files": [

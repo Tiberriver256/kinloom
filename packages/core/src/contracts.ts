@@ -94,10 +94,17 @@ export type {
   PluginSqlValue,
 };
 
+export interface PrefetchedWriteContext {
+  headRevisionId: RevisionId;
+  livingPersonIds: ReadonlySet<string>;
+  entities: Map<string, StoredEntityRecord | null>;
+}
+
 export interface EntityReadStore {
   getHeadRevisionId(): Promise<RevisionId>;
   getEntity(entityType: EntityType, entityId: string): Promise<StoredEntityRecord | null>;
   getEntitiesBatch?(keys: readonly EntityLookupKey[]): Promise<Map<string, StoredEntityRecord | null>>;
+  prefetchWriteContext?(keys: readonly EntityLookupKey[]): Promise<PrefetchedWriteContext>;
   getLivingPersonIds(): Promise<ReadonlySet<string>>;
   loadActiveSnapshot(): Promise<ArchiveRawSnapshot>;
 }
@@ -190,6 +197,7 @@ export interface BundleCache {
     previous: ArchiveBundle,
     mutations: readonly RevisionRecord[]
   ): Promise<CachedBundleObject>;
+  tryApplyMutationsFromMemo?(mutations: readonly RevisionRecord[]): Promise<CachedBundleObject | null>;
 }
 
 export interface MediaByteRange {

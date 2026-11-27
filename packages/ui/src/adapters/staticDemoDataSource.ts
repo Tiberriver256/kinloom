@@ -6,7 +6,11 @@ import type {
   MediaChecklistItem,
   ReadingsBundle,
 } from '@kinloom/core';
-import { ArchiveBundleSchema, MediaChecklistItemSchema, ReadingsBundleSchema } from '@kinloom/core';
+import {
+  tryValidateArchiveBundle,
+  tryValidateMediaChecklistItems,
+  tryValidateReadingsBundle,
+} from '@kinloom/core';
 
 const STATIC_ANONYMOUS_SESSION: ArchiveSessionState = {
   authenticated: false,
@@ -49,6 +53,15 @@ export class StaticDemoDataSource implements ArchiveDataSource {
       throw new Error(`HTTP ${res.status} loading archive.json`);
     }
     const raw: unknown = await res.json();
+    const fast = tryValidateArchiveBundle(raw);
+    if (fast !== null) {
+      return {
+        bundle: fast,
+        etag: res.headers.get('etag'),
+        notModified: false,
+      };
+    }
+    const { ArchiveBundleSchema } = await import('@kinloom/core');
     const bundle = ArchiveBundleSchema.parse(raw);
     return {
       bundle,
@@ -66,6 +79,11 @@ export class StaticDemoDataSource implements ArchiveDataSource {
       throw new Error(`HTTP ${res.status} loading readings.json`);
     }
     const raw: unknown = await res.json();
+    const fast = tryValidateReadingsBundle(raw);
+    if (fast !== null) {
+      return fast;
+    }
+    const { ReadingsBundleSchema } = await import('@kinloom/core');
     return ReadingsBundleSchema.parse(raw);
   }
 
@@ -83,6 +101,11 @@ export class StaticDemoDataSource implements ArchiveDataSource {
     if (typeof raw !== 'object' || raw === null || !('items' in raw) || !Array.isArray(raw.items)) {
       throw new Error('Invalid media-checklist.json payload: expected object with items array');
     }
+    const fast = tryValidateMediaChecklistItems(raw.items);
+    if (fast !== null) {
+      return fast;
+    }
+    const { MediaChecklistItemSchema } = await import('@kinloom/core');
     return raw.items.map((item) => MediaChecklistItemSchema.parse(item));
   }
 

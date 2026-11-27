@@ -6,6 +6,28 @@ const IPA_SLASH_WRAP_RE = /\/[^\s/](?:[^/]*[^\s/])?\//;
 export const SINGLE_LETTER_INITIAL_RE = /^[\p{L}]\.?$/u;
 export const PERSON_NAME_DECORATION_RE = /^(?:jr\.?|sr\.?|ii|iii|iv|v|vi)$/i;
 
+const lexiconLowerIndexCache = new WeakMap<
+  Readonly<Record<string, Pronunciation>>,
+  Map<string, { readonly key: string; readonly entry: Pronunciation }>
+>();
+
+function getLexiconLowerIndex(
+  lexicon: Readonly<Record<string, Pronunciation>>
+): Map<string, { readonly key: string; readonly entry: Pronunciation }> {
+  let cached = lexiconLowerIndexCache.get(lexicon);
+  if (!cached) {
+    cached = new Map();
+    for (const key of Object.keys(lexicon)) {
+      const lower = key.trim().toLowerCase();
+      if (!cached.has(lower)) {
+        cached.set(lower, { key, entry: lexicon[key] });
+      }
+    }
+    lexiconLowerIndexCache.set(lexicon, cached);
+  }
+  return cached;
+}
+
 /**
  * Detect IPA symbols or `/.../` slash-wrapped IPA notation inside a plain-English
  * `phonetic` (Respelling) string. Returns deduplicated offending symbols in order.
@@ -24,7 +46,7 @@ export function findIpaGlyphsInPhonetic(phonetic?: string | null): string[] {
       found.push(glyph);
     }
   }
-  if (IPA_SLASH_WRAP_RE.test(trimmed)) {
+  if (trimmed.includes('/') && IPA_SLASH_WRAP_RE.test(trimmed)) {
     found.push('/.../');
   }
   return found;
@@ -118,13 +140,7 @@ export function lookupLexiconMatch(
   if (Object.hasOwn(lexicon, trimmed)) {
     return { key: trimmed, entry: lexicon[trimmed] };
   }
-  const lower = trimmed.toLowerCase();
-  for (const [candidateKey, entry] of Object.entries(lexicon)) {
-    if (candidateKey.trim().toLowerCase() === lower) {
-      return { key: candidateKey, entry };
-    }
-  }
-  return undefined;
+  return getLexiconLowerIndex(lexicon).get(trimmed.toLowerCase());
 }
 
 export function lookupLexiconEntry(
@@ -171,6 +187,8 @@ export function lookupCompatiblePersonLexiconEntry(
   return lookupCompatiblePersonLexiconMatch(lexicon, key, fullNameLower)?.entry;
 }
 
+const SIMPLE_PERSON_NAME_RE = /^[A-Za-z0-9 .'-]+$/;
+
 export function tokenizePersonName(person: {
   readonly full_name?: string;
   readonly given_name?: string;
@@ -180,6 +198,23 @@ export function tokenizePersonName(person: {
   const combined = rawFull || [person.given_name?.trim(), person.surname?.trim()].filter(Boolean).join(' ');
   if (!combined) {
     return [];
+  }
+  if (SIMPLE_PERSON_NAME_RE.test(combined)) {
+    const parts = combined.split(/\s+/);
+    const out: string[] = [];
+    for (let i = 0; i < parts.length; i += 1) {
+      let tok = parts[i];
+      if (tok.startsWith("'") || tok.startsWith('-') || tok.startsWith('.')) {
+        tok = tok.replace(/^['.-]+/, '');
+      }
+      if (tok.endsWith("'") || tok.endsWith('-')) {
+        tok = tok.replace(/['-]+$/, '');
+      }
+      if (tok) {
+        out.push(tok);
+      }
+    }
+    return out;
   }
   const cleaned = combined
     .replaceAll(/\([^)]*\)/g, ' ')
@@ -234,7 +269,6 @@ export function composeLanguageTag(entries: readonly Pronunciation[]): string | 
     const qualified = rawLangs.find((l) => /[-_]/.test(l));
     return qualified ?? rawLangs[0];
   }
-  // Omit a single language tag for mixed-language names so TTS follows the composed respelling.
   return undefined;
 }
 

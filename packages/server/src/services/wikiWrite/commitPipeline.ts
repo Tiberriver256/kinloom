@@ -13,6 +13,8 @@ import {
   type EntityReadStore,
   type EntityType,
   entityLookupCompositeKey,
+  fastLocaleCompare,
+  isTrustedArchiveBundle,
   type KinloomServerPlugin,
   type OptimisticConflictError,
   parseEntityPayload,
@@ -78,10 +80,10 @@ export function buildInitialSnapshotFromRevisions(
 
   const entities = [...entitiesByKey.values()].toSorted((a, b) =>
     a.entity_type === b.entity_type
-      ? a.entity_id.localeCompare(b.entity_id)
-      : a.entity_type.localeCompare(b.entity_type)
+      ? fastLocaleCompare(a.entity_id, b.entity_id)
+      : fastLocaleCompare(a.entity_type, b.entity_type)
   );
-  const kinship = [...kinshipById.values()].toSorted((a, b) => a.edge_id.localeCompare(b.edge_id));
+  const kinship = [...kinshipById.values()].toSorted((a, b) => fastLocaleCompare(a.edge_id, b.edge_id));
 
   return {
     head_revision_id: headRevisionId,
@@ -165,6 +167,13 @@ export class WikiCommitPipeline {
     committedRevisions: readonly RevisionRecord[],
     headRevisionId: RevisionId
   ): Promise<string> {
+    if (committedRevisions.length > 0 && this.deps.bundleCache.tryApplyMutationsFromMemo) {
+      const fastPatched = await this.deps.bundleCache.tryApplyMutationsFromMemo(committedRevisions);
+      if (fastPatched !== null) {
+        return fastPatched.etag;
+      }
+    }
+
     if (this.deps.bundleCache.applyMutationsAndStore && committedRevisions.length > 0) {
       const cached = await this.deps.bundleCache.getCached(null);
       const firstNewRevId = committedRevisions[0].revision_id;
@@ -172,9 +181,13 @@ export class WikiCommitPipeline {
         if (cached.object.revision_id === firstNewRevId - 1) {
           let previousBundle: ArchiveBundle | null = null;
           if (cached.object.parsedBundle !== undefined) {
-            const parsed = ArchiveBundleSchema.safeParse(cached.object.parsedBundle);
-            if (parsed.success) {
-              previousBundle = parsed.data;
+            if (isTrustedArchiveBundle(cached.object.parsedBundle)) {
+              previousBundle = cached.object.parsedBundle;
+            } else {
+              const parsed = ArchiveBundleSchema.safeParse(cached.object.parsedBundle);
+              if (parsed.success) {
+                previousBundle = parsed.data;
+              }
             }
             if (typeof cached.object.body !== 'string') {
               await cached.object.body.cancel().catch(() => undefined);

@@ -1,5 +1,8 @@
+import { clonePronunciationLexiconFast } from './compileArchive.js';
+import { markTrustedArchiveBundle } from './fastCompare.js';
 import { applyPatchMutation } from './patch/entityMutators.js';
 import {
+  attachBundleIndexMemo,
   type BundlePatchMutation,
   createPatchWorkingState,
   type PatchCompiledBundleOptions,
@@ -28,7 +31,8 @@ export function patchCompiledBundle(
   options?: PatchCompiledBundleOptions
 ): ArchiveBundle {
   let maxRevisionId = previousBundle.meta.max_revision_id;
-  for (const m of mutations) {
+  for (let i = 0; i < mutations.length; i += 1) {
+    const m = mutations[i];
     if (m.revision_id !== undefined) {
       maxRevisionId = maxRevisionId === undefined ? m.revision_id : Math.max(maxRevisionId, m.revision_id);
     }
@@ -42,7 +46,7 @@ export function patchCompiledBundle(
         : undefined;
 
   if (mutations.length === 0) {
-    return {
+    const unchanged: ArchiveBundle = {
       ...previousBundle,
       meta: {
         ...previousBundle.meta,
@@ -50,14 +54,26 @@ export function patchCompiledBundle(
         generated_at: options?.generatedAt ?? previousBundle.meta.generated_at,
         ...(maxRevisionId !== undefined ? { max_revision_id: maxRevisionId } : {}),
       },
-      ...(pronunciationLexicon ? { pronunciations: structuredClone(pronunciationLexicon) } : {}),
+      ...(pronunciationLexicon
+        ? { pronunciations: clonePronunciationLexiconFast(pronunciationLexicon) }
+        : {}),
     };
+    markTrustedArchiveBundle(unchanged);
+    return unchanged;
   }
 
   const state = createPatchWorkingState(previousBundle, siteConfig, mode, options);
 
-  for (const mutation of mutations) {
-    applyPatchMutation(state, mutation);
+  // Pre-scan whether any media mutation exists in the batch so person/event updates know if media changed!
+  for (let i = 0; i < mutations.length; i += 1) {
+    if (mutations[i].entity_type === 'media') {
+      state.mediaMutated = true;
+      break;
+    }
+  }
+
+  for (let i = 0; i < mutations.length; i += 1) {
+    applyPatchMutation(state, mutations[i]);
   }
 
   reconcileNewlyLivingEntities(state);
@@ -67,15 +83,19 @@ export function patchCompiledBundle(
   reconcileResidenceSpans(state);
 
   const livingRedactedCount = state.getLivingRedactedCount();
-  const sortedUncitedKeys = [...state.uncitedKeys].toSorted();
+  const sortedUncitedKeys = state.hasUncitedChanges()
+    ? [...state.uncitedKeys].toSorted()
+    : previousBundle.meta.uncited_entity_keys;
 
-  return {
+  const patched: ArchiveBundle = {
     meta: {
       ...(previousBundle.meta.version ? { version: previousBundle.meta.version } : {}),
       build_mode: mode,
       generated_at: options?.generatedAt ?? previousBundle.meta.generated_at,
       ...(maxRevisionId !== undefined ? { max_revision_id: maxRevisionId } : {}),
-      ...(sortedUncitedKeys.length > 0 ? { uncited_entity_keys: sortedUncitedKeys } : {}),
+      ...(sortedUncitedKeys && sortedUncitedKeys.length > 0
+        ? { uncited_entity_keys: sortedUncitedKeys }
+        : {}),
       counts: {
         people: state.people.length,
         living_redacted: livingRedactedCount,
@@ -96,6 +116,10 @@ export function patchCompiledBundle(
     kinship: state.kinship,
     sources: state.sources,
     ...(state.narratives !== undefined ? { narratives: state.narratives } : {}),
-    ...(pronunciationLexicon ? { pronunciations: structuredClone(pronunciationLexicon) } : {}),
+    ...(pronunciationLexicon ? { pronunciations: clonePronunciationLexiconFast(pronunciationLexicon) } : {}),
   };
+
+  attachBundleIndexMemo(patched, state.buildDerivedMemo());
+  markTrustedArchiveBundle(patched);
+  return patched;
 }

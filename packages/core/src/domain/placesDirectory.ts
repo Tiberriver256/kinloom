@@ -1,6 +1,6 @@
 import type { MigrationEraConfig } from '../schemas/config.js';
 import type { ArchiveBundle, Person, Place } from '../schemas/entities.js';
-import { getMediaPersonIds } from '../schemas/entities.js';
+import { getMediaPersonIds } from '../schemas/pureHelpers.js';
 import { classifyMigrationStage } from './geoMap.js';
 
 export interface PlaceDirectoryEntry {

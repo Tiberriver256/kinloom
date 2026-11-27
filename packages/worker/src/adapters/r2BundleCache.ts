@@ -1,5 +1,6 @@
 import {
   type ArchiveBundle,
+  ArchiveBundleSchema,
   type ArchiveRawSnapshot,
   asRevisionId,
   type BuildMode,
@@ -12,12 +13,19 @@ import {
   patchCompiledBundle,
   type RevisionId,
   type RevisionRecord,
+  RevisionRecordSchema,
+  tryValidateArchiveBundle,
 } from '@kinloom/core';
-import { bytesToStream, matchesIfNoneMatch } from '@kinloom/server';
+import { matchesIfNoneMatch } from '@kinloom/server';
 import type { R2Bucket } from '../types.js';
 
 export const DEFAULT_COMPILED_BUNDLE_KEY = 'compiled/archive.json';
+const DELTA_FORMAT_V1 = 'kinloom-delta-v1';
+const DEFAULT_DELTA_THRESHOLD_BYTES = 65_536;
+const DEFAULT_MAX_DELTA_MUTATIONS = 2_000;
+const DEFAULT_MAX_DELTA_BYTES = 2_097_152;
 const MAX_R2_STORE_ATTEMPTS = 5;
+const UTF8_ENCODER = new TextEncoder();
 
 export interface R2IncrementalPatchBundleCacheOptions {
   bucket: R2Bucket;
@@ -25,22 +33,286 @@ export interface R2IncrementalPatchBundleCacheOptions {
   clock: Clock;
   mode?: BuildMode;
   key?: string;
+  deltaThresholdBytes?: number;
+  maxDeltaMutations?: number;
+  maxDeltaBytes?: number;
+}
+
+interface StoredDeltaState {
+  readonly baseRevision: RevisionId;
+  readonly baseR2Etag: string;
+  readonly mutations: readonly RevisionRecord[];
 }
 
 interface StoredBundleMemo {
   readonly revision: RevisionId;
   readonly etag: string;
+  readonly r2Etag: string;
   readonly generatedAt: string;
-  readonly serialized: string;
-  readonly byteLength: number;
   readonly bundle: ArchiveBundle;
-  readonly bytes: Uint8Array;
+  serialized: string | null;
+  encoded: Uint8Array | null;
+  readonly deltaState: StoredDeltaState | null;
 }
 
-// Last bundle this isolate wrote, per bucket and key. getCached() trusts it only
-// when R2 head() still reports the same revision, etag, and generated_at, so a
-// write from any other isolate falls back to a full R2 read.
+interface DeltaJournalEnvelope {
+  readonly format: typeof DELTA_FORMAT_V1;
+  readonly base_revision: number;
+  readonly base_etag: string;
+  readonly mutations: RevisionRecord[];
+}
+
+interface SerializedWithBytes {
+  readonly json: string;
+  readonly bytes: number;
+}
+
+const RevisionRecordArraySchema = RevisionRecordSchema.array();
+
+// Last bundle this isolate wrote or replayed, per bucket and key.
+// - On reads (`getCached`), trusted only when R2 `head()` confirms the same revision, etag, and generated_at.
+// - On writes (`tryApplyMutationsFromMemo`), verified atomically by R2 conditional `put({ onlyIf: { etagMatches } })`.
 const storedBundleMemos = new WeakMap<R2Bucket, Map<string, StoredBundleMemo>>();
+
+// WeakMap caches for copy-on-write incremental JSON serialization + exact UTF-8 byte lengths.
+const collectionJsonCache = new WeakMap<object, SerializedWithBytes>();
+const itemJsonCache = new WeakMap<object, SerializedWithBytes>();
+
+export function utf8ByteLengthFast(str: string): number {
+  const len = str.length;
+  let bytes = len;
+  for (let i = 0; i < len; i += 1) {
+    const code = str.charCodeAt(i);
+    if (code < 0x80) {
+      continue;
+    }
+    if (code < 0x800) {
+      bytes += 1;
+    } else if (
+      code >= 0xd800 &&
+      code <= 0xdbff &&
+      i + 1 < len &&
+      (str.charCodeAt(i + 1) & 0xfc00) === 0xdc00
+    ) {
+      bytes += 2;
+      i += 1;
+    } else {
+      bytes += 2;
+    }
+  }
+  return bytes;
+}
+
+function createBytesStream(bytes: Uint8Array): ReadableStream<Uint8Array> {
+  return new ReadableStream<Uint8Array>({
+    start(controller) {
+      controller.enqueue(bytes);
+      controller.close();
+    },
+  });
+}
+
+function serializeArrayWithItemCache(arr: readonly unknown[]): SerializedWithBytes {
+  const cached = collectionJsonCache.get(arr);
+  if (cached !== undefined) {
+    return cached;
+  }
+  const len = arr.length;
+  if (len === 0) {
+    const empty: SerializedWithBytes = { json: '[]', bytes: 2 };
+    collectionJsonCache.set(arr, empty);
+    return empty;
+  }
+  const parts = new Array<string>(len);
+  let totalBytes = 2 + (len - 1); // '[' + commas + ']'
+  for (let i = 0; i < len; i += 1) {
+    const item = arr[i];
+    if (item !== null && typeof item === 'object') {
+      let itemEntry = itemJsonCache.get(item);
+      if (itemEntry === undefined) {
+        const json = JSON.stringify(item);
+        itemEntry = { json, bytes: utf8ByteLengthFast(json) };
+        itemJsonCache.set(item, itemEntry);
+      }
+      parts[i] = itemEntry.json;
+      totalBytes += itemEntry.bytes;
+    } else {
+      const json = item === undefined ? 'null' : JSON.stringify(item);
+      parts[i] = json;
+      totalBytes += utf8ByteLengthFast(json);
+    }
+  }
+  const entry: SerializedWithBytes = { json: `[${parts.join(',')}]`, bytes: totalBytes };
+  collectionJsonCache.set(arr, entry);
+  return entry;
+}
+
+export function stringifyArchiveBundleWithBytes(bundle: ArchiveBundle): SerializedWithBytes {
+  const entries = Object.entries(bundle);
+  const topParts: string[] = [];
+  let totalBytes = 2; // '{' + '}'
+
+  for (let i = 0; i < entries.length; i += 1) {
+    const [k, val] = entries[i];
+    if (val === undefined) {
+      continue;
+    }
+    let valEntry: SerializedWithBytes;
+    if (k === 'meta') {
+      const json = JSON.stringify(val);
+      valEntry = { json, bytes: utf8ByteLengthFast(json) };
+    } else if (Array.isArray(val)) {
+      valEntry = serializeArrayWithItemCache(val);
+    } else if (val !== null && typeof val === 'object') {
+      const cachedObj = collectionJsonCache.get(val);
+      if (cachedObj !== undefined) {
+        valEntry = cachedObj;
+      } else {
+        const json = JSON.stringify(val);
+        valEntry = { json, bytes: utf8ByteLengthFast(json) };
+        collectionJsonCache.set(val, valEntry);
+      }
+    } else {
+      const json = JSON.stringify(val);
+      valEntry = { json, bytes: utf8ByteLengthFast(json) };
+    }
+    const keyPrefix = `${JSON.stringify(k)}:`;
+    if (topParts.length > 0) {
+      totalBytes += 1; // ','
+    }
+    totalBytes += utf8ByteLengthFast(keyPrefix) + valEntry.bytes;
+    topParts.push(`${keyPrefix}${valEntry.json}`);
+  }
+
+  return { json: `{${topParts.join(',')}}`, bytes: totalBytes };
+}
+
+export function stringifyArchiveBundleFast(bundle: ArchiveBundle): string {
+  return stringifyArchiveBundleWithBytes(bundle).json;
+}
+
+function ensureMemoEncoded(memo: StoredBundleMemo): Uint8Array {
+  if (memo.encoded === null) {
+    if (memo.serialized === null) {
+      memo.serialized = stringifyArchiveBundleWithBytes(memo.bundle).json;
+    }
+    memo.encoded = UTF8_ENCODER.encode(memo.serialized);
+  }
+  return memo.encoded;
+}
+
+/**
+ * Coalesces sequential delta journal entries by `(entity_type, entity_id)` so repeated updates
+ * to the same entities stay bounded by active mutated entity count while preserving exact replay
+ * semantics (`before_json` from the earliest delta against `.base`, `after_json` and `revision_id`
+ * from the latest mutation).
+ */
+export function coalesceDeltaMutations(
+  existing: readonly RevisionRecord[],
+  incoming: readonly RevisionRecord[]
+): RevisionRecord[] {
+  if (existing.length === 0 && incoming.length <= 1) {
+    return [...incoming];
+  }
+  const byEntityKey = new Map<string, RevisionRecord>();
+  const appendOne = (mut: RevisionRecord): void => {
+    const key = `${mut.entity_type}:${mut.entity_id}`;
+    const prev = byEntityKey.get(key);
+    if (!prev) {
+      byEntityKey.set(key, mut);
+      return;
+    }
+    byEntityKey.delete(key);
+    if (prev.action === 'create' && mut.after_json === null) {
+      return;
+    }
+    const mergedAction: RevisionRecord['action'] =
+      prev.action === 'create' && mut.after_json !== null ? 'create' : mut.action;
+    byEntityKey.set(key, {
+      ...mut,
+      action: mergedAction,
+      parent_revision_id: prev.parent_revision_id,
+      before_json: prev.before_json,
+    });
+  };
+
+  let maxRevisionRecord: RevisionRecord | null = null;
+  for (let i = 0; i < existing.length; i += 1) {
+    const m = existing[i];
+    if (!maxRevisionRecord || m.revision_id >= maxRevisionRecord.revision_id) {
+      maxRevisionRecord = m;
+    }
+    appendOne(m);
+  }
+  for (let i = 0; i < incoming.length; i += 1) {
+    const m = incoming[i];
+    if (!maxRevisionRecord || m.revision_id >= maxRevisionRecord.revision_id) {
+      maxRevisionRecord = m;
+    }
+    appendOne(m);
+  }
+
+  const coalesced = [...byEntityKey.values()];
+  if (
+    maxRevisionRecord &&
+    (coalesced.length === 0 || coalesced[coalesced.length - 1].revision_id < maxRevisionRecord.revision_id)
+  ) {
+    coalesced.push({
+      ...maxRevisionRecord,
+      action: 'delete',
+      before_json: null,
+      after_json: null,
+    });
+  }
+  return coalesced;
+}
+
+function parseDeltaJournal(rawText: string): DeltaJournalEnvelope | null {
+  try {
+    const parsed: unknown = JSON.parse(rawText);
+    if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+      return null;
+    }
+    const rec = parsed as Record<string, unknown>;
+    if (
+      rec.format !== DELTA_FORMAT_V1 ||
+      typeof rec.base_revision !== 'number' ||
+      !Number.isSafeInteger(rec.base_revision) ||
+      rec.base_revision < 0 ||
+      typeof rec.base_etag !== 'string' ||
+      rec.base_etag.length === 0 ||
+      !Array.isArray(rec.mutations)
+    ) {
+      return null;
+    }
+    const validatedMutations = RevisionRecordArraySchema.safeParse(rec.mutations);
+    if (!validatedMutations.success) {
+      return null;
+    }
+    return {
+      format: DELTA_FORMAT_V1,
+      base_revision: rec.base_revision,
+      base_etag: rec.base_etag,
+      mutations: validatedMutations.data,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function parseArchiveBundleText(rawText: string): ArchiveBundle | null {
+  try {
+    const raw: unknown = JSON.parse(rawText);
+    const fast = tryValidateArchiveBundle(raw);
+    if (fast !== null) {
+      return fast;
+    }
+    const parsed = ArchiveBundleSchema.safeParse(raw);
+    return parsed.success ? parsed.data : null;
+  } catch {
+    return null;
+  }
+}
 
 function parseRevisionMetadata(raw: string | undefined): RevisionId | null {
   if (!raw || !/^\d+$/.test(raw)) {
@@ -71,8 +343,9 @@ export function computeSiteConfigHash(siteConfig: KinloomSiteConfig): string {
 }
 
 /**
- * Cloudflare R2 BundleCache that applies O(affected_people) incremental patches on writes
- * and falls back to full compileArchive on cold misses.
+ * Cloudflare R2 BundleCache that applies O(affected_people) incremental patches on writes,
+ * persists compact CAS-guarded coalesced delta journals for large archives (avoiding multi-megabyte R2
+ * snapshot rewrites on every mutation), and falls back to full compileArchive on cold misses.
  */
 export class R2IncrementalPatchBundleCache implements BundleCache {
   readonly adapterKind = 'r2';
@@ -81,7 +354,11 @@ export class R2IncrementalPatchBundleCache implements BundleCache {
   private readonly clock: Clock;
   private readonly mode: BuildMode;
   private readonly key: string;
+  private readonly baseKey: string;
   private readonly configHash: string;
+  private readonly deltaThresholdBytes: number;
+  private readonly maxDeltaMutations: number;
+  private readonly maxDeltaBytes: number;
   public rebuildCount = 0;
   public incrementalPatchCount = 0;
 
@@ -91,11 +368,24 @@ export class R2IncrementalPatchBundleCache implements BundleCache {
     this.clock = options.clock;
     this.mode = options.mode ?? 'private';
     this.key = options.key ?? DEFAULT_COMPILED_BUNDLE_KEY;
+    this.baseKey = `${this.key}.base`;
     this.configHash = computeSiteConfigHash(options.siteConfig);
+    this.deltaThresholdBytes = options.deltaThresholdBytes ?? DEFAULT_DELTA_THRESHOLD_BYTES;
+    this.maxDeltaMutations = options.maxDeltaMutations ?? DEFAULT_MAX_DELTA_MUTATIONS;
+    this.maxDeltaBytes = options.maxDeltaBytes ?? DEFAULT_MAX_DELTA_BYTES;
   }
 
   private get memoKey(): string {
     return `${this.mode}:${this.configHash}:${this.key}`;
+  }
+
+  private saveMemo(memo: StoredBundleMemo): void {
+    let memos = storedBundleMemos.get(this.bucket);
+    if (!memos) {
+      memos = new Map();
+      storedBundleMemos.set(this.bucket, memos);
+    }
+    memos.set(this.memoKey, memo);
   }
 
   async getCached(
@@ -125,13 +415,14 @@ export class R2IncrementalPatchBundleCache implements BundleCache {
         headEtag === memo.etag &&
         headObj.customMetadata?.generated_at === memo.generatedAt
       ) {
+        const encoded = ensureMemoEncoded(memo);
         return {
           status: 'hit',
           object: {
             etag: memo.etag,
             revision_id: memo.revision,
-            body: bytesToStream(memo.bytes),
-            byteLength: memo.byteLength,
+            body: createBytesStream(encoded),
+            byteLength: encoded.byteLength,
             generated_at: memo.generatedAt,
             parsedBundle: memo.bundle,
           },
@@ -157,6 +448,63 @@ export class R2IncrementalPatchBundleCache implements BundleCache {
     }
 
     const generatedAt = obj.customMetadata?.generated_at ?? obj.uploaded.toISOString();
+
+    if (obj.customMetadata?.format === DELTA_FORMAT_V1) {
+      const [deltaText, baseObj] = await Promise.all([obj.text(), this.bucket.get(this.baseKey)]);
+      if (!baseObj || baseObj.customMetadata?.config_hash !== this.configHash) {
+        if (baseObj) {
+          await baseObj.body.cancel().catch(() => undefined);
+        }
+        return { status: 'miss' };
+      }
+      const delta = parseDeltaJournal(deltaText);
+      if (!delta || delta.base_etag !== baseObj.etag) {
+        await baseObj.body.cancel().catch(() => undefined);
+        return { status: 'miss' };
+      }
+      const baseText = await baseObj.text();
+      const baseBundle = parseArchiveBundleText(baseText);
+      if (!baseBundle) {
+        return { status: 'miss' };
+      }
+
+      const replayed =
+        delta.mutations.length > 0
+          ? patchCompiledBundle(baseBundle, delta.mutations, this.siteConfig, this.mode, {
+              generatedAt,
+            })
+          : baseBundle;
+
+      const coldMemo: StoredBundleMemo = {
+        revision: revId,
+        etag,
+        r2Etag: obj.etag,
+        generatedAt,
+        bundle: replayed,
+        serialized: delta.mutations.length === 0 ? baseText : null,
+        encoded: null,
+        deltaState: {
+          baseRevision: asRevisionId(delta.base_revision),
+          baseR2Etag: baseObj.etag,
+          mutations: delta.mutations,
+        },
+      };
+      this.saveMemo(coldMemo);
+      const encoded = ensureMemoEncoded(coldMemo);
+
+      return {
+        status: 'hit',
+        object: {
+          etag,
+          revision_id: revId,
+          body: createBytesStream(encoded),
+          byteLength: encoded.byteLength,
+          generated_at: generatedAt,
+          parsedBundle: replayed,
+        },
+      };
+    }
+
     return {
       status: 'hit',
       object: {
@@ -166,6 +514,137 @@ export class R2IncrementalPatchBundleCache implements BundleCache {
         byteLength: obj.size,
         generated_at: generatedAt,
       },
+    };
+  }
+
+  async tryApplyMutationsFromMemo(mutations: readonly RevisionRecord[]): Promise<CachedBundleObject | null> {
+    if (mutations.length === 0) {
+      return null;
+    }
+    const priorMemo = storedBundleMemos.get(this.bucket)?.get(this.memoKey);
+    if (!priorMemo?.r2Etag || priorMemo.revision !== mutations[0].revision_id - 1) {
+      return null;
+    }
+
+    const generatedAt = this.clock.nowIso();
+    const patched = patchCompiledBundle(priorMemo.bundle, mutations, this.siteConfig, this.mode, {
+      generatedAt,
+    });
+    let maxRev = priorMemo.bundle.meta.max_revision_id ?? 0;
+    for (let i = 0; i < mutations.length; i += 1) {
+      if (mutations[i].revision_id > maxRev) {
+        maxRev = mutations[i].revision_id;
+      }
+    }
+    const headRevisionId = asRevisionId(maxRev);
+    const etag = `"r${headRevisionId}-${this.configHash}"`;
+
+    if (priorMemo.deltaState !== null) {
+      const nextMutations = coalesceDeltaMutations(priorMemo.deltaState.mutations, mutations);
+      if (nextMutations.length <= this.maxDeltaMutations) {
+        const deltaPayload: DeltaJournalEnvelope = {
+          format: DELTA_FORMAT_V1,
+          base_revision: priorMemo.deltaState.baseRevision,
+          base_etag: priorMemo.deltaState.baseR2Etag,
+          mutations: nextMutations,
+        };
+        const deltaBody = JSON.stringify(deltaPayload);
+        if (deltaBody.length <= this.maxDeltaBytes) {
+          const putResult = await this.bucket.put(this.key, deltaBody, {
+            onlyIf: { etagMatches: priorMemo.r2Etag },
+            httpMetadata: {
+              contentType: 'application/json; charset=utf-8',
+            },
+            customMetadata: {
+              revision: String(headRevisionId),
+              config_hash: this.configHash,
+              etag,
+              generated_at: generatedAt,
+              format: DELTA_FORMAT_V1,
+              base_revision: String(priorMemo.deltaState.baseRevision),
+            },
+          });
+
+          if (putResult === null) {
+            storedBundleMemos.get(this.bucket)?.delete(this.memoKey);
+            return null;
+          }
+
+          this.incrementalPatchCount += 1;
+          this.saveMemo({
+            revision: headRevisionId,
+            etag,
+            r2Etag: putResult.etag,
+            generatedAt,
+            bundle: patched,
+            serialized: null,
+            encoded: null,
+            deltaState: {
+              baseRevision: priorMemo.deltaState.baseRevision,
+              baseR2Etag: priorMemo.deltaState.baseR2Etag,
+              mutations: nextMutations,
+            },
+          });
+
+          return {
+            etag,
+            revision_id: headRevisionId,
+            body: '',
+            byteLength: 0,
+            generated_at: generatedAt,
+            parsedBundle: patched,
+          };
+        }
+      }
+
+      // Delta journal reached compaction cap -> compact full snapshot into .base and reset journal.
+      this.incrementalPatchCount += 1;
+      return this.storeBundle(patched, headRevisionId, generatedAt);
+    }
+
+    const computed = stringifyArchiveBundleWithBytes(patched);
+    if (computed.bytes >= this.deltaThresholdBytes) {
+      this.incrementalPatchCount += 1;
+      return this.storeBundle(patched, headRevisionId, generatedAt, computed.json, computed.bytes);
+    }
+
+    const putResult = await this.bucket.put(this.key, computed.json, {
+      onlyIf: { etagMatches: priorMemo.r2Etag },
+      httpMetadata: {
+        contentType: 'application/json; charset=utf-8',
+      },
+      customMetadata: {
+        revision: String(headRevisionId),
+        config_hash: this.configHash,
+        etag,
+        generated_at: generatedAt,
+      },
+    });
+
+    if (putResult === null) {
+      storedBundleMemos.get(this.bucket)?.delete(this.memoKey);
+      return null;
+    }
+
+    this.incrementalPatchCount += 1;
+    this.saveMemo({
+      revision: headRevisionId,
+      etag,
+      r2Etag: putResult.etag,
+      generatedAt,
+      bundle: patched,
+      serialized: computed.json,
+      encoded: null,
+      deltaState: null,
+    });
+
+    return {
+      etag,
+      revision_id: headRevisionId,
+      body: computed.json,
+      byteLength: putResult.size,
+      generated_at: generatedAt,
+      parsedBundle: patched,
     };
   }
 
@@ -204,60 +683,112 @@ export class R2IncrementalPatchBundleCache implements BundleCache {
   private async storeBundle(
     bundle: ArchiveBundle,
     headRevisionId: RevisionId,
-    generatedAt: string
+    generatedAt: string,
+    preSerialized?: string,
+    preByteLength?: number
   ): Promise<CachedBundleObject> {
-    const serialized = JSON.stringify(bundle);
-    const encoded = new TextEncoder().encode(serialized);
+    let serialized: string;
+    let byteLength: number;
+    if (preSerialized !== undefined && preByteLength !== undefined) {
+      serialized = preSerialized;
+      byteLength = preByteLength;
+    } else {
+      const computed = stringifyArchiveBundleWithBytes(bundle);
+      serialized = computed.json;
+      byteLength = computed.bytes;
+    }
+
     const etag = `"r${headRevisionId}-${this.configHash}"`;
+    const priorMemo = storedBundleMemos.get(this.bucket)?.get(this.memoKey);
 
-    for (let attempt = 0; attempt < MAX_R2_STORE_ATTEMPTS; attempt += 1) {
-      const existingHead = await this.bucket.head(this.key);
-      if (existingHead) {
-        const existingRev = parseRevisionMetadata(existingHead.customMetadata?.revision);
-        const sameConfig = existingHead.customMetadata?.config_hash === this.configHash;
-        if (sameConfig && existingRev !== null && existingRev > headRevisionId) {
-          const fresher = await this.getCached(null);
-          if (fresher.status === 'hit') {
-            return fresher.object;
-          }
-          continue;
-        }
-      }
+    let deltaBasePutEtag: string | null = null;
+    let payloadToPut = serialized;
+    let customMetadata: Record<string, string> = {
+      revision: String(headRevisionId),
+      config_hash: this.configHash,
+      etag,
+      generated_at: generatedAt,
+    };
 
-      const putResult = await this.bucket.put(this.key, encoded, {
-        onlyIf: existingHead ? { etagMatches: existingHead.etag } : { etagDoesNotMatch: '*' },
+    if (byteLength >= this.deltaThresholdBytes) {
+      const basePut = await this.bucket.put(this.baseKey, serialized, {
         httpMetadata: {
           contentType: 'application/json; charset=utf-8',
         },
         customMetadata: {
           revision: String(headRevisionId),
           config_hash: this.configHash,
-          etag,
-          generated_at: generatedAt,
         },
+      });
+      if (basePut !== null) {
+        deltaBasePutEtag = basePut.etag;
+        const initDelta: DeltaJournalEnvelope = {
+          format: DELTA_FORMAT_V1,
+          base_revision: headRevisionId,
+          base_etag: basePut.etag,
+          mutations: [],
+        };
+        payloadToPut = JSON.stringify(initDelta);
+        customMetadata = {
+          ...customMetadata,
+          format: DELTA_FORMAT_V1,
+          base_revision: String(headRevisionId),
+        };
+      }
+    }
+
+    for (let attempt = 0; attempt < MAX_R2_STORE_ATTEMPTS; attempt += 1) {
+      let matchR2Etag: string | null = null;
+      if (attempt === 0 && priorMemo && priorMemo.revision < headRevisionId && priorMemo.r2Etag) {
+        matchR2Etag = priorMemo.r2Etag;
+      } else {
+        const existingHead = await this.bucket.head(this.key);
+        if (existingHead) {
+          const existingRev = parseRevisionMetadata(existingHead.customMetadata?.revision);
+          const sameConfig = existingHead.customMetadata?.config_hash === this.configHash;
+          if (sameConfig && existingRev !== null && existingRev > headRevisionId) {
+            const fresher = await this.getCached(null);
+            if (fresher.status === 'hit') {
+              return fresher.object;
+            }
+            continue;
+          }
+          matchR2Etag = existingHead.etag;
+        }
+      }
+
+      const putResult = await this.bucket.put(this.key, payloadToPut, {
+        onlyIf: matchR2Etag !== null ? { etagMatches: matchR2Etag } : { etagDoesNotMatch: '*' },
+        httpMetadata: {
+          contentType: 'application/json; charset=utf-8',
+        },
+        customMetadata,
       });
 
       if (putResult !== null) {
-        let memos = storedBundleMemos.get(this.bucket);
-        if (!memos) {
-          memos = new Map();
-          storedBundleMemos.set(this.bucket, memos);
-        }
-        memos.set(this.memoKey, {
+        this.saveMemo({
           revision: headRevisionId,
           etag,
+          r2Etag: putResult.etag,
           generatedAt,
-          serialized,
-          byteLength: encoded.byteLength,
           bundle,
-          bytes: encoded,
+          serialized,
+          encoded: null,
+          deltaState:
+            deltaBasePutEtag !== null
+              ? {
+                  baseRevision: headRevisionId,
+                  baseR2Etag: deltaBasePutEtag,
+                  mutations: [],
+                }
+              : null,
         });
 
         return {
           etag,
           revision_id: headRevisionId,
           body: serialized,
-          byteLength: encoded.byteLength,
+          byteLength,
           generated_at: generatedAt,
           parsedBundle: bundle,
         };
@@ -273,7 +804,7 @@ export class R2IncrementalPatchBundleCache implements BundleCache {
       etag,
       revision_id: headRevisionId,
       body: serialized,
-      byteLength: encoded.byteLength,
+      byteLength,
       generated_at: generatedAt,
       parsedBundle: bundle,
     };

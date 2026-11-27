@@ -1,5 +1,6 @@
 import {
   type AtomicMutationOp,
+  type AuthorType,
   asBatchId,
   asRevisionId,
   type BatchId,
@@ -7,6 +8,7 @@ import {
   BatchSubmissionSchema,
   type Clock,
   type EntityLookupKey,
+  type EntityPatch,
   type EntityPayload,
   type EntityReadStore,
   type EntityType,
@@ -37,6 +39,146 @@ export interface BatchCompilerDeps {
   readonly clock: Clock;
   readonly siteConfig: KinloomSiteConfig;
   readonly commitPipeline: WikiCommitPipeline;
+}
+
+const VALID_ENTITY_TYPES = new Set<EntityType>([
+  'person',
+  'event',
+  'place',
+  'source',
+  'media',
+  'narrative',
+  'kinship_edge',
+]);
+
+const VALID_AUTHOR_TYPES = new Set<AuthorType>(['human', 'agent', 'system_seed']);
+
+function isPlainPayloadObject(value: unknown): value is EntityPayload {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+function tryFastValidateBatchSubmission(raw: unknown): BatchSubmission | null {
+  if (!isPlainPayloadObject(raw)) {
+    return null;
+  }
+  const batchId = raw.batch_id;
+  const summary = raw.summary;
+  if (typeof batchId !== 'string' || batchId.length === 0) {
+    return null;
+  }
+  if (typeof summary !== 'string' || summary.length < 3) {
+    return null;
+  }
+  const authorTypeRaw = raw.author_type ?? 'agent';
+  if (typeof authorTypeRaw !== 'string' || !VALID_AUTHOR_TYPES.has(authorTypeRaw as AuthorType)) {
+    return null;
+  }
+  const hasPrimaryRaw = raw.has_primary_source ?? true;
+  if (typeof hasPrimaryRaw !== 'boolean') {
+    return null;
+  }
+  const rawPatches = raw.patches;
+  if (!Array.isArray(rawPatches) || rawPatches.length === 0) {
+    return null;
+  }
+
+  const patches: EntityPatch[] = new Array(rawPatches.length);
+  for (let i = 0; i < rawPatches.length; i += 1) {
+    const p = rawPatches[i];
+    if (!isPlainPayloadObject(p)) {
+      return null;
+    }
+    const action = p.action;
+    const entityType = p.entity_type;
+    const entityId = p.entity_id;
+    if (
+      typeof entityType !== 'string' ||
+      !VALID_ENTITY_TYPES.has(entityType as EntityType) ||
+      typeof entityId !== 'string' ||
+      entityId.length === 0
+    ) {
+      return null;
+    }
+    const patchSummary = p.summary;
+    if (patchSummary !== undefined && (typeof patchSummary !== 'string' || patchSummary.length < 3)) {
+      return null;
+    }
+    const parentRev = p.parent_revision_id;
+    if (
+      parentRev !== undefined &&
+      (typeof parentRev !== 'number' || !Number.isInteger(parentRev) || parentRev <= 0)
+    ) {
+      return null;
+    }
+
+    if (action === 'create') {
+      if (!isPlainPayloadObject(p.data)) {
+        return null;
+      }
+      if (p.has_primary_source !== undefined && typeof p.has_primary_source !== 'boolean') {
+        return null;
+      }
+      patches[i] = {
+        action: 'create',
+        entity_type: entityType as EntityType,
+        entity_id: entityId,
+        data: p.data,
+        ...(patchSummary !== undefined ? { summary: patchSummary } : {}),
+        ...(p.has_primary_source !== undefined ? { has_primary_source: p.has_primary_source } : {}),
+      };
+    } else if (action === 'update') {
+      if (!isPlainPayloadObject(p.data)) {
+        return null;
+      }
+      const merge = p.merge ?? true;
+      if (typeof merge !== 'boolean') {
+        return null;
+      }
+      if (p.has_primary_source !== undefined && typeof p.has_primary_source !== 'boolean') {
+        return null;
+      }
+      patches[i] = {
+        action: 'update',
+        entity_type: entityType as EntityType,
+        entity_id: entityId,
+        data: p.data,
+        merge,
+        ...(parentRev !== undefined ? { parent_revision_id: parentRev } : {}),
+        ...(patchSummary !== undefined ? { summary: patchSummary } : {}),
+        ...(p.has_primary_source !== undefined ? { has_primary_source: p.has_primary_source } : {}),
+      };
+    } else if (action === 'delete') {
+      patches[i] = {
+        action: 'delete',
+        entity_type: entityType as EntityType,
+        entity_id: entityId,
+        ...(parentRev !== undefined ? { parent_revision_id: parentRev } : {}),
+        ...(patchSummary !== undefined ? { summary: patchSummary } : {}),
+      };
+    } else if (action === 'restore') {
+      if (p.data !== undefined && !isPlainPayloadObject(p.data)) {
+        return null;
+      }
+      patches[i] = {
+        action: 'restore',
+        entity_type: entityType as EntityType,
+        entity_id: entityId,
+        ...(parentRev !== undefined ? { parent_revision_id: parentRev } : {}),
+        ...(p.data !== undefined ? { data: p.data } : {}),
+        ...(patchSummary !== undefined ? { summary: patchSummary } : {}),
+      };
+    } else {
+      return null;
+    }
+  }
+
+  return {
+    batch_id: batchId,
+    author_type: authorTypeRaw as AuthorType,
+    summary,
+    has_primary_source: hasPrimaryRaw,
+    patches,
+  };
 }
 
 async function resolveBatchExpectedParent(
@@ -83,9 +225,10 @@ export async function compileBatchSubmissionOps(
   batchId: BatchId;
   operations: AtomicMutationOp[];
 }> {
-  const parsed = BatchSubmissionSchema.parse(submission);
+  const parsed = tryFastValidateBatchSubmission(submission) ?? BatchSubmissionSchema.parse(submission);
   const batchId = asBatchId(parsed.batch_id);
   const nowIso = deps.clock.nowIso();
+  const referenceYear = deps.clock.currentYear();
 
   const prefetchKeys: EntityLookupKey[] = [];
   for (const patch of parsed.patches) {
@@ -98,11 +241,22 @@ export async function compileBatchSubmissionOps(
     }
   }
 
-  const [initialLivingIds, headRevisionId, prefetchedRows] = await Promise.all([
-    deps.repository.getLivingPersonIds(),
-    deps.repository.getHeadRevisionId(),
-    prefetchEntitiesByKey(deps.repository, prefetchKeys),
-  ]);
+  let initialLivingIds: ReadonlySet<string>;
+  let headRevisionId: RevisionId;
+  let prefetchedRows: Map<string, StoredEntityRecord | null>;
+
+  if (deps.repository.prefetchWriteContext) {
+    const ctx = await deps.repository.prefetchWriteContext(prefetchKeys);
+    initialLivingIds = ctx.livingPersonIds;
+    headRevisionId = ctx.headRevisionId;
+    prefetchedRows = ctx.entities;
+  } else {
+    [initialLivingIds, headRevisionId, prefetchedRows] = await Promise.all([
+      deps.repository.getLivingPersonIds(),
+      deps.repository.getHeadRevisionId(),
+      prefetchEntitiesByKey(deps.repository, prefetchKeys),
+    ]);
+  }
 
   // Fetch events referenced by existing media rows that a merge/restore patch omits.
   const extraEventKeys: EntityLookupKey[] = [];
@@ -133,8 +287,9 @@ export async function compileBatchSubmissionOps(
   const operations: AtomicMutationOp[] = [];
   let syntheticRev = headRevisionId + 1;
 
+  const ownsPrefetchedRows = Boolean(deps.repository.prefetchWriteContext);
   for (const [key, row] of prefetchedRows.entries()) {
-    workingByKey.set(key, rowToWorking(row));
+    workingByKey.set(key, rowToWorking(row, !ownsPrefetchedRows));
   }
 
   const getWorking = async (entityType: EntityType, entityId: string): Promise<WorkingEntityRecord> => {
@@ -184,7 +339,7 @@ export async function compileBatchSubmissionOps(
         });
         updateWorkingPrivacyContext(
           deps.siteConfig,
-          deps.clock.currentYear(),
+          referenceYear,
           entityType,
           validated.entityId,
           validated.sanitized,
@@ -192,10 +347,11 @@ export async function compileBatchSubmissionOps(
           workingEvents
         );
 
+        const slug = extractSlug(entityType, validated.sanitized);
         operations.push({
           entity_type: entityType,
           entity_id: validated.entityId,
-          slug: extractSlug(entityType, validated.sanitized),
+          slug,
           action: 'create',
           expected_parent_revision_id: null,
           summary,
@@ -208,7 +364,7 @@ export async function compileBatchSubmissionOps(
         workingByKey.set(createdKey, {
           lifecycle: { kind: 'active', currentRevisionId: syntheticRev, data: validated.sanitized },
           hasPrimarySource,
-          slug: extractSlug(entityType, validated.sanitized),
+          slug,
           updatedAt: nowIso,
         });
         lockedInitialByKey.add(createdKey);
@@ -228,9 +384,8 @@ export async function compileBatchSubmissionOps(
           );
         }
 
-        const mergedRaw: EntityPayload = patch.merge
-          ? { ...structuredClone(current.lifecycle.data), ...structuredClone(patch.data) }
-          : structuredClone(patch.data);
+        const previousData = current.lifecycle.data;
+        const mergedRaw: EntityPayload = patch.merge ? { ...previousData, ...patch.data } : patch.data;
         const validated = await validateAndSanitizeEntityPayload(deps, {
           entityType,
           requestedEntityId: entityId,
@@ -255,7 +410,7 @@ export async function compileBatchSubmissionOps(
 
         updateWorkingPrivacyContext(
           deps.siteConfig,
-          deps.clock.currentYear(),
+          referenceYear,
           entityType,
           entityId,
           validated.sanitized,
@@ -263,22 +418,23 @@ export async function compileBatchSubmissionOps(
           workingEvents
         );
 
+        const slug = extractSlug(entityType, validated.sanitized);
         operations.push({
           entity_type: entityType,
           entity_id: entityId,
-          slug: extractSlug(entityType, validated.sanitized),
+          slug,
           action: 'update',
           expected_parent_revision_id: expectedParent,
           summary,
           has_primary_source: hasPrimarySource,
-          before_json: structuredClone(current.lifecycle.data),
+          before_json: previousData,
           after_json: validated.sanitized,
         });
 
         workingByKey.set(key, {
           lifecycle: { kind: 'active', currentRevisionId: syntheticRev, data: validated.sanitized },
           hasPrimarySource,
-          slug: extractSlug(entityType, validated.sanitized),
+          slug,
           updatedAt: nowIso,
         });
         lockedInitialByKey.add(key);
@@ -316,6 +472,7 @@ export async function compileBatchSubmissionOps(
           prefetchedEventIds.add(entityId);
         }
 
+        const previousData = current.lifecycle.data;
         operations.push({
           entity_type: entityType,
           entity_id: entityId,
@@ -324,7 +481,7 @@ export async function compileBatchSubmissionOps(
           expected_parent_revision_id: expectedParent,
           summary,
           has_primary_source: current.hasPrimarySource,
-          before_json: structuredClone(current.lifecycle.data),
+          before_json: previousData,
           after_json: null,
           soft_delete: true,
         });
@@ -333,7 +490,7 @@ export async function compileBatchSubmissionOps(
           lifecycle: {
             kind: 'softDeleted',
             currentRevisionId: syntheticRev,
-            lastData: structuredClone(current.lifecycle.data),
+            lastData: structuredClone(previousData),
             deletedAt: nowIso,
           },
           hasPrimarySource: current.hasPrimarySource,
@@ -357,9 +514,9 @@ export async function compileBatchSubmissionOps(
           );
         }
 
-        const candidateRaw = patch.data
-          ? { ...structuredClone(current.lifecycle.lastData), ...structuredClone(patch.data) }
-          : structuredClone(current.lifecycle.lastData);
+        const candidateRaw: EntityPayload = patch.data
+          ? { ...current.lifecycle.lastData, ...patch.data }
+          : current.lifecycle.lastData;
         const validated = await validateAndSanitizeEntityPayload(deps, {
           entityType,
           requestedEntityId: entityId,
@@ -384,7 +541,7 @@ export async function compileBatchSubmissionOps(
 
         updateWorkingPrivacyContext(
           deps.siteConfig,
-          deps.clock.currentYear(),
+          referenceYear,
           entityType,
           entityId,
           validated.sanitized,
@@ -392,10 +549,11 @@ export async function compileBatchSubmissionOps(
           workingEvents
         );
 
+        const slug = extractSlug(entityType, validated.sanitized);
         operations.push({
           entity_type: entityType,
           entity_id: entityId,
-          slug: extractSlug(entityType, validated.sanitized),
+          slug,
           action: 'restore',
           expected_parent_revision_id: expectedParent,
           summary,
@@ -408,7 +566,7 @@ export async function compileBatchSubmissionOps(
         workingByKey.set(key, {
           lifecycle: { kind: 'active', currentRevisionId: syntheticRev, data: validated.sanitized },
           hasPrimarySource: current.hasPrimarySource,
-          slug: extractSlug(entityType, validated.sanitized),
+          slug,
           updatedAt: nowIso,
         });
         lockedInitialByKey.add(key);

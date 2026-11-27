@@ -21,6 +21,7 @@ export {
   stripIpaDelimiters,
   tokenizePersonName,
 } from './pronunciation.js';
+export { getMediaPersonIds } from './pureHelpers.js';
 
 const CoercedEdtfStringSchema = z
   .union([z.string(), z.number(), z.null(), z.undefined()])
@@ -438,22 +439,4 @@ export interface SourceInspectorRequest {
   scanUrl?: string;
   scanTitle?: string;
   confidence?: SourceConfidence;
-}
-
-/**
- * Returns every person ID linked to a media item across both `person_ids` and legacy `person_id`.
- */
-export function getMediaPersonIds(item: Pick<MediaItem, 'person_id' | 'person_ids'>): string[] {
-  const ids = new Set<string>();
-  if (item.person_id) {
-    ids.add(item.person_id);
-  }
-  if (item.person_ids) {
-    for (const id of item.person_ids) {
-      if (id) {
-        ids.add(id);
-      }
-    }
-  }
-  return [...ids];
 }

@@ -1,4 +1,4 @@
-import type { KinshipEdge, Person } from '@kinloom/core';
+import { fastLocaleCompare, type KinshipEdge, type Person } from '@kinloom/core';
 
 export type TreeLineageMode = 'spine' | 'full';
 export type TreeViewSurface = 'roll' | 'diagram';
@@ -395,5 +395,5 @@ export function sortPeopleChronologically(a: Person, b: Person): number {
   if (ya !== yb) {
     return ya - yb;
   }
-  return a.full_name.localeCompare(b.full_name);
+  return fastLocaleCompare(a.full_name, b.full_name);
 }

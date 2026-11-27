@@ -13,6 +13,27 @@ import {
   type TreeUnion,
 } from './types.js';
 
+const normalizedBundleCache = new WeakMap<ArchiveBundle, ArchiveBundle>();
+
+function getNormalizedKinshipBundle(bundle: ArchiveBundle): ArchiveBundle {
+  let cached = normalizedBundleCache.get(bundle);
+  if (!cached) {
+    const normalizedKinship: KinshipEdge[] = [...bundle.kinship];
+    for (const edge of bundle.kinship) {
+      if (edge.relation === 'parent') {
+        normalizedKinship.push({ from: edge.to, to: edge.from, relation: 'child' });
+      } else if (edge.relation === 'child') {
+        normalizedKinship.push({ from: edge.to, to: edge.from, relation: 'parent' });
+      } else if (edge.relation === 'spouse') {
+        normalizedKinship.push({ from: edge.to, to: edge.from, relation: 'spouse' });
+      }
+    }
+    cached = { ...bundle, kinship: normalizedKinship };
+    normalizedBundleCache.set(bundle, cached);
+  }
+  return cached;
+}
+
 export function computeLineageSpotlight(params: {
   readonly selectedPersonId: string;
   readonly model: ArchivalTreeModel;
@@ -96,20 +117,10 @@ export function computeLineageSpotlight(params: {
   if (bundle && placesById && model.pivotPersonId && model.pivotPersonId !== selectedPersonId) {
     const pivot = model.peopleById.get(model.pivotPersonId);
     if (pivot) {
-      const normalizedKinship: KinshipEdge[] = [...bundle.kinship];
-      for (const edge of bundle.kinship) {
-        if (edge.relation === 'parent') {
-          normalizedKinship.push({ from: edge.to, to: edge.from, relation: 'child' });
-        } else if (edge.relation === 'child') {
-          normalizedKinship.push({ from: edge.to, to: edge.from, relation: 'parent' });
-        } else if (edge.relation === 'spouse') {
-          normalizedKinship.push({ from: edge.to, to: edge.from, relation: 'spouse' });
-        }
-      }
       const path = findKinshipPath({
         fromId: selectedPersonId,
         toId: model.pivotPersonId,
-        bundle: { ...bundle, kinship: normalizedKinship },
+        bundle: getNormalizedKinshipBundle(bundle),
         placesById,
       });
       if (path.connected) {
@@ -135,11 +146,16 @@ export function computeLineageSpotlight(params: {
 }
 
 function normalizeSearchFold(value: string): string {
-  return value
-    .normalize('NFKD')
-    .replaceAll(/[\u0300-\u036F]/g, '')
-    .toLowerCase()
-    .trim();
+  for (let i = 0; i < value.length; i += 1) {
+    if (value.charCodeAt(i) >= 0x80) {
+      return value
+        .normalize('NFKD')
+        .replace(/[\u0300-\u036F]/g, '')
+        .toLowerCase()
+        .trim();
+    }
+  }
+  return value.toLowerCase().trim();
 }
 
 export function isTreeSearchEligible(
@@ -159,28 +175,61 @@ export function isTreeSearchEligible(
   return true;
 }
 
+interface ModelSurfaceIndex {
+  readonly visibleIds: ReadonlySet<string>;
+  readonly collapsedUnionByPersonId: ReadonlyMap<string, TreeUnion>;
+}
+
+const modelSurfaceIndexCache = new WeakMap<ArchivalTreeModel, ModelSurfaceIndex>();
+
+function getModelSurfaceIndex(model: ArchivalTreeModel): ModelSurfaceIndex {
+  let cached = modelSurfaceIndexCache.get(model);
+  if (!cached) {
+    const visibleIds = new Set<string>();
+    const collapsedUnionByPersonId = new Map<string, TreeUnion>();
+    for (const g of model.generations) {
+      for (let i = 0; i < g.personIds.length; i += 1) {
+        const pid = g.personIds[i];
+        if (!model.earlyLossIds.has(pid)) {
+          visibleIds.add(pid);
+        }
+      }
+    }
+    for (const u of model.unions) {
+      for (let i = 0; i < u.hangingChildIds.length; i += 1) {
+        const pid = u.hangingChildIds[i];
+        if (!model.earlyLossIds.has(pid)) {
+          visibleIds.add(pid);
+        }
+      }
+      for (let i = 0; i < u.earlyLossChildIds.length; i += 1) {
+        const pid = u.earlyLossChildIds[i];
+        if (model.earlyLossIds.has(pid)) {
+          visibleIds.add(pid);
+        }
+      }
+      for (let i = 0; i < u.collapsedSiblingIds.length; i += 1) {
+        const pid = u.collapsedSiblingIds[i];
+        if (!collapsedUnionByPersonId.has(pid)) {
+          collapsedUnionByPersonId.set(pid, u);
+        }
+      }
+    }
+    cached = { visibleIds, collapsedUnionByPersonId };
+    modelSurfaceIndexCache.set(model, cached);
+  }
+  return cached;
+}
+
 export function isPersonVisibleOnCurrentSurface(personId: string, model: ArchivalTreeModel): boolean {
   if (!model.peopleById.has(personId)) {
     return false;
   }
-  if (model.earlyLossIds.has(personId)) {
-    return model.unions.some((u) => u.earlyLossChildIds.includes(personId));
-  }
-  for (const g of model.generations) {
-    if (g.personIds.includes(personId)) {
-      return true;
-    }
-  }
-  for (const u of model.unions) {
-    if (u.hangingChildIds.includes(personId)) {
-      return true;
-    }
-  }
-  return false;
+  return getModelSurfaceIndex(model).visibleIds.has(personId);
 }
 
 export function findCollapsedUnionForPerson(personId: string, model: ArchivalTreeModel): TreeUnion | null {
-  return model.unions.find((u) => u.collapsedSiblingIds.includes(personId)) ?? null;
+  return getModelSurfaceIndex(model).collapsedUnionByPersonId.get(personId) ?? null;
 }
 
 export function resolveTreeFocusPlan(params: {
@@ -221,6 +270,58 @@ export function resolveTreeFocusPlan(params: {
   };
 }
 
+interface CachedPersonSearchEntry {
+  readonly eligiblePublic: boolean;
+  readonly eligiblePrivate: boolean;
+  readonly foldedFull: string;
+  readonly foldedGiven: string;
+  readonly foldedSurname: string;
+  readonly foldedAlts: readonly string[];
+  readonly haystack: string;
+  readonly lifespanLabel: string;
+}
+
+const personSearchIndexCache = new WeakMap<Person, CachedPersonSearchEntry>();
+
+function getPersonSearchEntry(person: Person): CachedPersonSearchEntry {
+  let cached = personSearchIndexCache.get(person);
+  if (!cached) {
+    const eligiblePrivate = isTreeSearchEligible(person, 'private');
+    const eligiblePublic = eligiblePrivate && !person.is_living;
+    const foldedFull = normalizeSearchFold(person.full_name);
+    const foldedGiven = normalizeSearchFold(person.given_name);
+    const foldedSurname = normalizeSearchFold(person.surname);
+    const foldedAlts = person.alt_names.length > 0 ? person.alt_names.map(normalizeSearchFold) : [];
+    const parts: string[] = [];
+    if (foldedFull) {
+      parts.push(foldedFull);
+    }
+    for (let i = 0; i < foldedAlts.length; i += 1) {
+      if (foldedAlts[i]) {
+        parts.push(foldedAlts[i]);
+      }
+    }
+    if (person.birth_year !== null) {
+      parts.push(String(person.birth_year));
+    }
+    if (person.death_year !== null) {
+      parts.push(String(person.death_year));
+    }
+    cached = {
+      eligiblePublic,
+      eligiblePrivate,
+      foldedFull,
+      foldedGiven,
+      foldedSurname,
+      foldedAlts,
+      haystack: parts.join(' '),
+      lifespanLabel: formatCardLifespan(person),
+    };
+    personSearchIndexCache.set(person, cached);
+  }
+  return cached;
+}
+
 export function searchTreePeople(params: {
   readonly query: string;
   readonly people: readonly Person[];
@@ -244,42 +345,17 @@ export function searchTreePeople(params: {
 
   const normalizedQuery = normalizeSearchFold(query);
   const queryTokens = normalizedQuery.length > 0 ? normalizedQuery.split(/\s+/).filter(Boolean) : [];
-
-  const collapsedIds = new Set<string>();
-  for (const union of model.unions) {
-    for (const cid of union.collapsedSiblingIds) {
-      collapsedIds.add(cid);
-    }
-  }
+  const surfaceIndex = getModelSurfaceIndex(model);
+  const isPrivateMode = buildMode === 'private';
 
   const scored: { candidate: TreeSearchCandidate; score: number }[] = [];
 
-  for (const person of people) {
-    if (!isTreeSearchEligible(person, buildMode)) {
+  for (let pIdx = 0; pIdx < people.length; pIdx += 1) {
+    const person = people[pIdx];
+    const entry = getPersonSearchEntry(person);
+    if (!(isPrivateMode ? entry.eligiblePrivate : entry.eligiblePublic)) {
       continue;
     }
-
-    const personBranch = person.branch || defaultBranchId;
-    const isOutsideCurrentBranch = branchFilter !== 'all' && personBranch !== branchFilter;
-    const isCollapsed = collapsedIds.has(person.id);
-    const inCurrentModel = model.peopleById.has(person.id);
-    const isOutsideCurrentMode =
-      !isOutsideCurrentBranch &&
-      inCurrentModel &&
-      !isCollapsed &&
-      !isPersonVisibleOnCurrentSurface(person.id, model);
-
-    const foldedFull = normalizeSearchFold(person.full_name);
-    const foldedGiven = normalizeSearchFold(person.given_name);
-    const foldedSurname = normalizeSearchFold(person.surname);
-    const foldedAlts = person.alt_names.map(normalizeSearchFold);
-    const yearStr = [
-      person.birth_year !== null ? String(person.birth_year) : '',
-      person.death_year !== null ? String(person.death_year) : '',
-    ]
-      .filter(Boolean)
-      .join(' ');
-    const haystack = [foldedFull, ...foldedAlts, yearStr].filter(Boolean).join(' ');
 
     let score = 0;
     if (queryTokens.length === 0) {
@@ -294,26 +370,48 @@ export function searchTreePeople(params: {
       }
       score += Math.min(25, person.event_count);
     } else {
-      if (!queryTokens.every((token) => haystack.includes(token))) {
+      let allMatched = true;
+      for (let t = 0; t < queryTokens.length; t += 1) {
+        if (!entry.haystack.includes(queryTokens[t])) {
+          allMatched = false;
+          break;
+        }
+      }
+      if (!allMatched) {
         continue;
       }
-      if (foldedFull === normalizedQuery) {
+      if (entry.foldedFull === normalizedQuery) {
         score += 200;
-      } else if (foldedFull.startsWith(normalizedQuery)) {
+      } else if (entry.foldedFull.startsWith(normalizedQuery)) {
         score += 150;
-      } else if (foldedGiven.startsWith(normalizedQuery) || foldedSurname.startsWith(normalizedQuery)) {
+      } else if (
+        entry.foldedGiven.startsWith(normalizedQuery) ||
+        entry.foldedSurname.startsWith(normalizedQuery)
+      ) {
         score += 125;
-      } else if (foldedFull.includes(normalizedQuery)) {
+      } else if (entry.foldedFull.includes(normalizedQuery)) {
         score += 100;
-      } else if (foldedAlts.some((alt) => alt.includes(normalizedQuery))) {
-        score += 80;
       } else {
-        score += 60;
+        let matchedAlt = false;
+        for (let a = 0; a < entry.foldedAlts.length; a += 1) {
+          if (entry.foldedAlts[a].includes(normalizedQuery)) {
+            matchedAlt = true;
+            break;
+          }
+        }
+        score += matchedAlt ? 80 : 60;
       }
       if (model.directPersonIds.has(person.id)) {
         score += 10;
       }
     }
+
+    const personBranch = person.branch || defaultBranchId;
+    const isOutsideCurrentBranch = branchFilter !== 'all' && personBranch !== branchFilter;
+    const isCollapsed = surfaceIndex.collapsedUnionByPersonId.has(person.id);
+    const inCurrentModel = model.peopleById.has(person.id);
+    const isOutsideCurrentMode =
+      !isOutsideCurrentBranch && inCurrentModel && !isCollapsed && !surfaceIndex.visibleIds.has(person.id);
 
     if (!isOutsideCurrentBranch) {
       score += 12;
@@ -327,7 +425,7 @@ export function searchTreePeople(params: {
       score,
       candidate: {
         person,
-        lifespanLabel: formatCardLifespan(person),
+        lifespanLabel: entry.lifespanLabel,
         branchId: personBranch,
         branchLabel: branchLabelsById.get(personBranch) ?? null,
         genLabel: genIdx !== undefined ? `G${genIdx + 1}` : null,

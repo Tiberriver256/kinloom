@@ -8,7 +8,7 @@ import type {
   RawPerson,
   SourceRecord,
 } from './schemas/entities.js';
-import { getMediaPersonIds } from './schemas/entities.js';
+import { getMediaPersonIds } from './schemas/pureHelpers.js';
 
 export interface ValidateArchiveInput {
   people: readonly Pick<RawPerson, 'id'>[];
