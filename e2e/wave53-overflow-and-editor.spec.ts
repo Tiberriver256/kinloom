@@ -322,12 +322,9 @@ test.describe('Wave 53B signed-in editor UX, per-element overflow/collision, and
 
     // 1. Public static demo sweep across 4 viewports on key routes
     for (const vp of VIEWPORTS) {
-      // oxlint-disable-next-line eslint/no-await-in-loop -- sequential viewport matrix
       await page.setViewportSize({ width: vp.width, height: vp.height });
       for (const route of ['/', '/tree?surface=roll', '/person/abraham-lincoln-1809', '/evidence']) {
-        // oxlint-disable-next-line eslint/no-await-in-loop -- sequential route sweep
         await navigateAndWaitReady(page, `${STATIC_DEMO_ORIGIN}${route}`);
-        // oxlint-disable-next-line eslint/no-await-in-loop -- measure layout
         const audit = await runPerElementOverflowAndCollisionAudit(page);
         expect(audit.docOverflowX, `public ${route} @ ${vp.name} docOverflowX`).toBeLessThanOrEqual(1);
         expect(audit.elementOverflows, `public ${route} @ ${vp.name} elementOverflows`).toEqual([]);
@@ -343,15 +340,11 @@ test.describe('Wave 53B signed-in editor UX, per-element overflow/collision, and
       { name: '360x800', width: 360, height: 800 },
       { name: '390x844', width: 390, height: 844 },
     ]) {
-      // oxlint-disable-next-line eslint/no-await-in-loop -- sequential mobile stress check
       await page.setViewportSize({ width: vp.width, height: vp.height });
 
       // IndexPage signed-in with 3-digit counts + multi-word plugin tab
-      // oxlint-disable-next-line eslint/no-await-in-loop -- navigate
       await navigateAndWaitReady(page, `${wiki.baseUrl}/`);
-      // oxlint-disable-next-line eslint/no-await-in-loop -- wait for buttons
       await expect(page.locator('.index-filter-actions .index-add-person-btn')).toBeVisible();
-      // oxlint-disable-next-line eslint/no-await-in-loop -- inject 3-digit counts + multi-word plugin nav tab
       await page.evaluate(() => {
         const mediaBtn = document.querySelector('.index-media-filter-btn');
         if (mediaBtn) {
@@ -376,7 +369,6 @@ test.describe('Wave 53B signed-in editor UX, per-element overflow/collision, and
         }
       });
 
-      // oxlint-disable-next-line eslint/no-await-in-loop -- measure stressed index
       const indexAudit = await runPerElementOverflowAndCollisionAudit(page);
       expect(indexAudit.docOverflowX, `3-digit / @ ${vp.name}`).toBeLessThanOrEqual(1);
       expect(indexAudit.elementOverflows, `3-digit / @ ${vp.name} elementOverflows`).toEqual([]);
@@ -385,7 +377,6 @@ test.describe('Wave 53B signed-in editor UX, per-element overflow/collision, and
       expect(indexAudit.siblingCollisions, `3-digit / @ ${vp.name} siblingCollisions`).toEqual([]);
 
       // Verify no orphan half-width cell on .index-filter-actions
-      // oxlint-disable-next-line eslint/no-await-in-loop -- check balanced action rows
       const rowMetrics = await page.evaluate(() => {
         const container = document.querySelector('.index-filter-actions')!.getBoundingClientRect();
         const media = document.querySelector('.index-media-filter-btn')!.getBoundingClientRect();
@@ -402,15 +393,11 @@ test.describe('Wave 53B signed-in editor UX, per-element overflow/collision, and
       expect(rowMetrics.sameSecondRow).toBe(true);
       expect(rowMetrics.secondRowSpan).toBeGreaterThanOrEqual(rowMetrics.containerWidth - 4);
 
-      // oxlint-disable-next-line eslint/no-await-in-loop -- screenshot proof
       await maybeScreenshot(page, `index-signed-in-3digit-${vp.name}.png`);
 
       // TreePage signed-in Direct Line and Full Tree with 3-digit count (128)
-      // oxlint-disable-next-line eslint/no-await-in-loop -- navigate to tree
       await navigateAndWaitReady(page, `${wiki.baseUrl}/tree?surface=roll`);
-      // oxlint-disable-next-line eslint/no-await-in-loop -- wait for toolbar
       await expect(page.locator('.tree-scope-segmented')).toBeVisible();
-      // oxlint-disable-next-line eslint/no-await-in-loop -- inject 3-digit Full Tree count
       await page.evaluate(() => {
         const buttons = [
           ...document.querySelectorAll<HTMLButtonElement>('.tree-scope-segmented .tree-seg-btn'),
@@ -420,27 +407,22 @@ test.describe('Wave 53B signed-in editor UX, per-element overflow/collision, and
           fullBtn.textContent = 'Full Tree (128)';
         }
       });
-      // oxlint-disable-next-line eslint/no-await-in-loop -- measure stressed tree
       const treeAudit = await runPerElementOverflowAndCollisionAudit(page);
       expect(treeAudit.docOverflowX, `3-digit /tree @ ${vp.name}`).toBeLessThanOrEqual(1);
       expect(treeAudit.elementOverflows, `3-digit /tree @ ${vp.name} elementOverflows`).toEqual([]);
       expect(treeAudit.textEscapes, `3-digit /tree @ ${vp.name} textEscapes`).toEqual([]);
       expect(treeAudit.parentEscapes, `3-digit /tree @ ${vp.name} parentEscapes`).toEqual([]);
       expect(treeAudit.siblingCollisions, `3-digit /tree @ ${vp.name} siblingCollisions`).toEqual([]);
-      // oxlint-disable-next-line eslint/no-await-in-loop -- verify desktop + Add Person is hidden on mobile and mobile + icon button is 44x44
       await expect(page.locator('.tree-toolbar .tree-add-person-btn')).toBeHidden();
-      // oxlint-disable-next-line eslint/no-await-in-loop -- verify mobile + Add Person icon button is 44x44
       const addIconBox = await page.locator('.tree-add-person-mobile-btn').boundingBox();
       expect(addIconBox?.width ?? 0).toBeGreaterThanOrEqual(44);
       expect(addIconBox?.height ?? 0).toBeGreaterThanOrEqual(44);
-      // oxlint-disable-next-line eslint/no-await-in-loop -- verify scope segmented control spans full mobile row width
       const scopeSpan = await page.evaluate(() => {
         const row = document.querySelector('.tree-toolbar-row-secondary')!.getBoundingClientRect();
         const seg = document.querySelector('.tree-scope-segmented')!.getBoundingClientRect();
         return { rowWidth: Math.round(row.width), segWidth: Math.round(seg.width) };
       });
       expect(scopeSpan.segWidth).toBeGreaterThanOrEqual(scopeSpan.rowWidth - 4);
-      // oxlint-disable-next-line eslint/no-await-in-loop -- screenshot proof Direct Line
       await maybeScreenshot(page, `tree-direct-3digit-${vp.name}.png`);
     }
   });
@@ -454,12 +436,9 @@ test.describe('Wave 53B signed-in editor UX, per-element overflow/collision, and
     await seedResearchBatch(page, wiki, 'batch_wave53b_matrix');
 
     for (const vp of VIEWPORTS) {
-      // oxlint-disable-next-line eslint/no-await-in-loop -- sequential viewport matrix
       await page.setViewportSize({ width: vp.width, height: vp.height });
       for (const route of CORE_ROUTES) {
-        // oxlint-disable-next-line eslint/no-await-in-loop -- sequential route sweep
         await navigateAndWaitReady(page, `${wiki.baseUrl}${route}`);
-        // oxlint-disable-next-line eslint/no-await-in-loop -- measure layout
         const audit = await runPerElementOverflowAndCollisionAudit(page);
         expect(audit.docOverflowX, `signed-in ${route} @ ${vp.name} docOverflowX`).toBeLessThanOrEqual(1);
         expect(audit.elementOverflows, `signed-in ${route} @ ${vp.name} elementOverflows`).toEqual([]);
@@ -569,23 +548,16 @@ test.describe('Wave 53B signed-in editor UX, per-element overflow/collision, and
       { name: '768x1024', width: 768, height: 1024 },
       { name: '1280x800', width: 1280, height: 800 },
     ]) {
-      // oxlint-disable-next-line eslint/no-await-in-loop -- check each viewport
       await page.setViewportSize({ width: vp.width, height: vp.height });
-      // oxlint-disable-next-line eslint/no-await-in-loop -- navigate
       await page.goto(`${wiki.baseUrl}/person/abraham-lincoln-1809`, { waitUntil: 'networkidle' });
-      // oxlint-disable-next-line eslint/no-await-in-loop -- click pronunciation Edit
       const editPronBtn = page.locator('.pronunciation-edit-link').first();
       await expect(editPronBtn).toBeVisible();
-      // oxlint-disable-next-line eslint/no-await-in-loop -- open drawer at pronunciation section
       await editPronBtn.click();
 
       const drawer = page.getByRole('dialog', { name: /Edit Abraham Lincoln/ });
-      // oxlint-disable-next-line eslint/no-await-in-loop -- wait for drawer
       await expect(drawer).toBeVisible();
-      // oxlint-disable-next-line eslint/no-await-in-loop -- wait for scrollIntoView + revision sync
       await page.waitForTimeout(150);
 
-      // oxlint-disable-next-line eslint/no-await-in-loop -- assert sticky header & footer in viewport
       const stickyCheck = await page.evaluate(() => {
         const top = document.querySelector('.wiki-edit-drawer-panel > .drawer-top')!.getBoundingClientRect();
         const footer = document.querySelector('.wiki-drawer-footer')!.getBoundingClientRect();
@@ -609,11 +581,9 @@ test.describe('Wave 53B signed-in editor UX, per-element overflow/collision, and
       }
 
       if (vp.name === '360x800') {
-        // oxlint-disable-next-line eslint/no-await-in-loop -- screenshot proof
         await maybeScreenshot(page, 'edit-drawer-pronunciation-360x800.png');
       }
 
-      // oxlint-disable-next-line eslint/no-await-in-loop -- close drawer
       await drawer.getByRole('button', { name: 'Close', exact: true }).click();
     }
   });

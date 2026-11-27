@@ -1,5 +1,4 @@
 // Side-effect CSS import: the standard Vite pattern for loading library styles.
-// oxlint-disable-next-line import/no-unassigned-import
 import 'maplibre-gl/dist/maplibre-gl.css';
 import type {
   LineageRouteMode,
@@ -923,7 +922,6 @@ export const MapPage: React.FC = () => {
     setSelectedStopId(nextStopId);
     const bounds = computeStopsBounds(stops, siteConfig.mapDefaults) ?? defaultBounds;
     fitCameraBounds(bounds, nextStopId !== null);
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- stops and defaultBounds are read when the filter key changes
   }, [selectedPersonId, selectedEraId]);
 
   useEffect(() => {

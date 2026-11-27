@@ -20,14 +20,10 @@ test('mobile viewports (390px and 360px) render every route without horizontal o
   await page.route('https://vtiles.openhistoricalmap.org/**', (route) => route.abort());
 
   for (const width of [390, 360]) {
-    // oxlint-disable-next-line eslint/no-await-in-loop -- sequential viewport audit
     await page.setViewportSize({ width, height: 844 });
     for (const url of MOBILE_ROUTES) {
-      // oxlint-disable-next-line eslint/no-await-in-loop -- sequential route audit
       await page.goto(url);
-      // oxlint-disable-next-line eslint/no-await-in-loop -- wait for main content before measuring overflow
       await expect(page.locator('main')).toBeVisible();
-      // oxlint-disable-next-line eslint/no-await-in-loop -- measure scrollWidth against innerWidth
       const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
       expect(overflow, `Horizontal overflow on ${url} at ${width}px`).toBeLessThanOrEqual(0);
     }

@@ -182,7 +182,6 @@ export const PlacesIndexPage: React.FC = () => {
         {bundle && (
           <>
             <div className="places-filter-stack">
-              {/* oxlint-disable-next-line jsx-a11y/prefer-tag-over-role -- role="group" is the correct grouping pattern for a button toolbar */}
               <div
                 className="filter-bar ink-filter-bar"
                 role="group"

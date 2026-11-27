@@ -696,7 +696,6 @@ export const EvidencePage: React.FC = () => {
                 />
               </div>
 
-              {/* oxlint-disable-next-line jsx-a11y/prefer-tag-over-role -- role="group" is the correct grouping pattern for a button toolbar */}
               <div
                 className="filter-bar"
                 role="group"

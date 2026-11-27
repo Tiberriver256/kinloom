@@ -121,9 +121,7 @@ test('all 9 archival routes render cleanly with zero console or page errors', as
   ];
 
   for (const item of checks) {
-    // oxlint-disable-next-line eslint/no-await-in-loop -- sequential navigation across all routes
     await page.goto(item.url);
-    // oxlint-disable-next-line eslint/no-await-in-loop -- assertion corresponds to current route
     await item.assertVisible();
   }
 

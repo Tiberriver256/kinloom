@@ -292,7 +292,6 @@ export const LocalSurveyMap: React.FC<LocalSurveyMapProps> = ({
         {markers.map((m) => {
           const lbl = labelPlacement.get(m.place.id);
           return (
-            // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role -- no native button exists inside SVG; this <g> already has tabIndex, aria-label, and Enter/Space handling
             <g
               key={m.place.id}
               role="button"

@@ -352,7 +352,6 @@ export const SourceReaderDrawer: React.FC = () => {
                 </div>
 
                 {hasScan && (
-                  // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role -- role="group" is the correct grouping pattern for a button toolbar
                   <div className="source-view-mode-group" role="group" aria-label="Document view mode">
                     <button
                       type="button"

@@ -201,7 +201,6 @@ export const EntityEditDrawer: React.FC<EntityEditDrawerProps> = ({
     return (): void => {
       cancelled = true;
     };
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- synchronize live entity revision once each time the drawer opens
   }, [open, entityType, entityId, dataSource]);
 
   useEffect(() => {

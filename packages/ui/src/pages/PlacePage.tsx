@@ -328,7 +328,6 @@ export const PlacePage: React.FC = () => {
               })()}
             </div>
 
-            {/* oxlint-disable-next-line jsx-a11y/prefer-tag-over-role -- role="group" is the correct grouping pattern for a button toolbar */}
             <div
               className="filter-bar place-scope-bar print-hide"
               style={{ margin: 0 }}

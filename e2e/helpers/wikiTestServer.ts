@@ -269,9 +269,7 @@ async function seedDemoRepository(
         continue;
       }
       const bytes = new Uint8Array(fs.readFileSync(fullPath));
-      // oxlint-disable-next-line eslint/no-await-in-loop -- deterministic sequential media store hydration
       const digest = await sha256Hex(bytes);
-      // oxlint-disable-next-line eslint/no-await-in-loop -- deterministic sequential media store hydration
       await ports.mediaStore.put({
         key: `media/${filename}`,
         body: bytes.buffer,

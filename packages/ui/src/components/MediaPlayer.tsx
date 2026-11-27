@@ -84,7 +84,6 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({ media, baseUrl, varian
     }
     return (
       <div className={className ?? 'media-player-shell media-player-video'}>
-        {/* oxlint-disable-next-line jsx-a11y/media-has-caption -- track element is conditionally rendered when transcript_url is present */}
         <video
           controls
           playsInline
@@ -115,7 +114,6 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({ media, baseUrl, varian
     }
     return (
       <div className={className ?? 'media-player-shell media-player-audio'}>
-        {/* oxlint-disable-next-line jsx-a11y/media-has-caption -- oral history transcript link provided alongside audio element when available */}
         <audio controls preload="metadata" className="media-player-audio-el" aria-label={media.caption}>
           <source src={src} type={media.mime_type ?? undefined} />
         </audio>

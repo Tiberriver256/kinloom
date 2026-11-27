@@ -90,11 +90,11 @@ const OrthogonalBusItem: React.FC<{
   return (
     // biome-ignore lint/a11y/noAriaHiddenOnFocusable: decorative SVG connector lines
     <g
-      className={`tree-bus-group${bus.isDirect ? ' is-direct' : ''}$stemLit ? ' is-lit' : ''`}
+      className={`tree-bus-group${bus.isDirect ? ' is-direct' : ''}${stemLit ? ' is-lit' : ''}`}
       aria-hidden="true"
     >
       <path
-        className={`tree-edge tree-bus-stem$bus.isDirect ? ' is-direct' : ''$stemLit ? ' is-lit' : ''`}
+        className={`tree-edge tree-bus-stem${bus.isDirect ? ' is-direct' : ''}${stemLit ? ' is-lit' : ''}`}
         d={stemPath}
         fill="none"
         stroke={
@@ -105,7 +105,7 @@ const OrthogonalBusItem: React.FC<{
       />
       {bus.railMaxX > bus.railMinX && (
         <path
-          className={`tree-edge tree-bus-rail$bus.isDirect ? ' is-direct' : ''$stemLit ? ' is-lit' : ''`}
+          className={`tree-edge tree-bus-rail${bus.isDirect ? ' is-direct' : ''}${stemLit ? ' is-lit' : ''}`}
           d={railPath}
           fill="none"
           stroke={
@@ -127,9 +127,9 @@ const OrthogonalBusItem: React.FC<{
         );
         return (
           <path
-            key={`$bus.unionId-$drop.childId`}
-            className={`tree-edge tree-bus-drop$drop.isDirect ? ' is-direct' : ''$dropLit ? ' is-lit' : ''`}
-            d={`M $drop.x$bus.busYV $drop.toY`}
+            key={`${bus.unionId}-${drop.childId}`}
+            className={`tree-edge tree-bus-drop${drop.isDirect ? ' is-direct' : ''}${dropLit ? ' is-lit' : ''}`}
+            d={`M ${drop.x} ${bus.busY} V ${drop.toY}`}
             fill="none"
             stroke={
               dropLit
@@ -154,10 +154,10 @@ const HangingRailItem: React.FC<{
   const anyChildLit = Boolean(highlightedIds && rail.childIds.some((cid) => highlightedIds.has(cid)));
   return (
     // biome-ignore lint/a11y/noAriaHiddenOnFocusable: decorative SVG hanging rail
-    <g className={`tree-hanging-rail$anyChildLit ? ' is-lit' : ''`} aria-hidden="true">
+    <g className={`tree-hanging-rail${anyChildLit ? ' is-lit' : ''}`} aria-hidden="true">
       <path
-        className={`tree-edge$anyChildLit ? ' is-lit' : ''`}
-        d={`M $rail.spineX$rail.topYV $rail.bottomY`}
+        className={`tree-edge${anyChildLit ? ' is-lit' : ''}`}
+        d={`M ${rail.spineX} ${rail.topY} V ${rail.bottomY}`}
         fill="none"
         stroke={anyChildLit ? 'var(--accent-primary)' : 'var(--border-control)'}
         strokeWidth={anyChildLit ? 2 : 1.25}
@@ -166,9 +166,9 @@ const HangingRailItem: React.FC<{
         const tickLit = Boolean(highlightedIds?.has(tick.childId));
         return (
           <path
-            key={`$rail.unionId-tick-$tick.childId`}
-            className={`tree-edge$tickLit ? ' is-lit' : ''`}
-            d={`M $rail.spineX$tick.yH $tick.toX`}
+            key={`${rail.unionId}-tick-${tick.childId}`}
+            className={`tree-edge${tickLit ? ' is-lit' : ''}`}
+            d={`M ${rail.spineX} ${tick.y} H ${tick.toX}`}
             fill="none"
             stroke={tickLit ? 'var(--accent-primary)' : 'var(--border-control)'}
             strokeWidth={tickLit ? 2 : 1.2}
@@ -188,7 +188,7 @@ const UnionHubItem: React.FC<{
   return (
     // biome-ignore lint/a11y/noAriaHiddenOnFocusable: decorative SVG union hub
     <g
-      className={`tree-couple tree-union-hub$isLit ? ' is-lit' : ''`}
+      className={`tree-couple tree-union-hub${isLit ? ' is-lit' : ''}`}
       data-union-id={hub.union.id}
       aria-hidden="true"
     >
@@ -269,16 +269,15 @@ const DiagramNodeCard: React.FC<{
     const primaryTextFill = isSelected ? 'var(--text-inverse)' : 'var(--surface-header)';
     const secondaryTextFill = isSelected ? 'var(--surface-linen)' : 'var(--text-secondary)';
     const safeId = person.id.replace(/[^a-zA-Z0-9_-]/g, '_');
-    const clipId = `tree-avatar-clip-$safeId`;
-    const cardClipId = `tree-card-clip-$safeId`;
+    const clipId = `tree-avatar-clip-${safeId}`;
+    const cardClipId = `tree-card-clip-${safeId}`;
 
     return (
-      // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role -- SVG <g> requires role="button" with keyboard Enter/Space support
       <g
         role="button"
-        className={`tree-node-card$node.isDirect ? ' is-direct' : ' is-collateral'$isSelected ? ' is-selected' : ''$isLit ? ' is-lit' : ''`}
+        className={`tree-node-card${node.isDirect ? ' is-direct' : ' is-collateral'}${isSelected ? ' is-selected' : ''}${isLit ? ' is-lit' : ''}`}
         tabIndex={0}
-        aria-label={`Inspect $person.full_name`}
+        aria-label={`Inspect ${person.full_name}`}
         aria-pressed={isSelected}
         transform={`translate(${node.x}, ${node.y})`}
         onClick={(e) => {
@@ -426,11 +425,11 @@ const EarlyLossStripLayer: React.FC<{
         strip.chips.some((chip) => highlightedIds.has(chip.person.id)))
   );
   return (
-    <g className={`tree-diagram-early-strip$anyLit ? ' is-lit' : ''`} data-union-id={strip.unionId}>
+    <g className={`tree-diagram-early-strip${anyLit ? ' is-lit' : ''}`} data-union-id={strip.unionId}>
       <title>{KINLOOM_VOCABULARY.tree.diedYoungTooltip}</title>
       <path
-        className={`tree-edge$anyLit ? ' is-lit' : ''`}
-        d={`M $strip.stemFromX$strip.stemFromYV $strip.y`}
+        className={`tree-edge${anyLit ? ' is-lit' : ''}`}
+        d={`M ${strip.stemFromX} ${strip.stemFromY} V ${strip.y}`}
         fill="none"
         stroke={anyLit ? 'var(--accent-primary)' : 'var(--border-control)'}
         strokeWidth="1.2"
@@ -460,13 +459,12 @@ const EarlyLossStripLayer: React.FC<{
         const isSelected = selectedPersonId === chip.person.id;
         const isLit = Boolean(highlightedIds?.has(chip.person.id));
         return (
-          // oxlint-disable-next-line jsx-a11y/prefer-tag-over-role -- SVG interactive chip
           <g
             key={chip.person.id}
             role="button"
             tabIndex={0}
-            className={`tree-node-card tree-diagram-early-chip$isSelected ? ' is-selected' : ''$isLit ? ' is-lit' : ''`}
-            aria-label={`Inspect $chip.person.full_name`}
+            className={`tree-node-card tree-diagram-early-chip${isSelected ? ' is-selected' : ''}${isLit ? ' is-lit' : ''}`}
+            aria-label={`Inspect ${chip.person.full_name}`}
             aria-pressed={isSelected}
             transform={`translate(${chip.x}, ${chip.y})`}
             onClick={(e) => {
@@ -537,16 +535,15 @@ const SiblingToggleItem: React.FC<{
   });
 
   return (
-    <g className={`tree-diagram-sibling-toggle$isLit ? ' is-lit' : ''`}>
+    <g className={`tree-diagram-sibling-toggle${isLit ? ' is-lit' : ''}`}>
       <path
-        className={`tree-edge$isLit ? ' is-lit' : ''`}
-        d={`M $toggle.stemFromX$toggle.stemFromYV $toggle.y`}
+        className={`tree-edge${isLit ? ' is-lit' : ''}`}
+        d={`M ${toggle.stemFromX} ${toggle.stemFromY} V ${toggle.y}`}
         fill="none"
         stroke={isLit ? 'var(--accent-primary)' : 'var(--border-control)'}
         strokeWidth="1.2"
         strokeDasharray="3 2"
       />
-      {/* oxlint-disable-next-line jsx-a11y/prefer-tag-over-role -- SVG disclosure trigger
       <g
         role="button"
         tabIndex={0}
@@ -633,12 +630,12 @@ export const TreeOrthogonalCanvas: React.FC<TreeOrthogonalCanvasProps> = ({
 
   return (
     <svg
-      className={`tree-canvas tree-canvas-$semanticZoom$hasSelection ? ' has-selection' : ''`}
+      className={`tree-canvas tree-canvas-${semanticZoom}${hasSelection ? ' has-selection' : ''}`}
       width={layout.bounds.maxX}
       height={layout.bounds.maxY}
-      viewBox={`$layout.bounds.minX$layout.bounds.minY$layout.bounds.maxX - layout.bounds.minX$layout.bounds.maxY - layout.bounds.minY`}
+      viewBox={`${layout.bounds.minX} ${layout.bounds.minY} ${layout.bounds.maxX - layout.bounds.minX} ${layout.bounds.maxY - layout.bounds.minY}`}
       role="group"
-      aria-label={`$activeBranchLabel$KINLOOM_VOCABULARY.tree.chartCanvasSuffix`}
+      aria-label={`${activeBranchLabel} ${KINLOOM_VOCABULARY.tree.chartCanvasSuffix}`}
     >
       <GenBandsLayer genBands={layout.genBands} maxX={layout.bounds.maxX} />
 
@@ -655,14 +652,14 @@ export const TreeOrthogonalCanvas: React.FC<TreeOrthogonalCanvasProps> = ({
 
       <g className="tree-layer-hanging-rails">
         {layout.hangingRails.map((rail) => (
-          <HangingRailItem key={`rail-$rail.unionId`} rail={rail} highlightedIds={highlightedIds} />
+          <HangingRailItem key={`rail-${rail.unionId}`} rail={rail} highlightedIds={highlightedIds} />
         ))}
       </g>
 
       <g className="tree-layer-early-strips">
         {layout.earlyLossStrips.map((strip) => (
           <EarlyLossStripLayer
-            key={`early-$strip.unionId`}
+            key={`early-${strip.unionId}`}
             strip={strip}
             selectedPersonId={selectedPersonId}
             highlightedIds={highlightedIds}
@@ -674,7 +671,7 @@ export const TreeOrthogonalCanvas: React.FC<TreeOrthogonalCanvasProps> = ({
       <g className="tree-layer-sibling-toggles">
         {layout.siblingToggles.map((toggle) => (
           <SiblingToggleItem
-            key={`toggle-$toggle.unionId`}
+            key={`toggle-${toggle.unionId}`}
             toggle={toggle}
             isLit={Boolean(highlightedUnionIds?.has(toggle.unionId))}
             onToggle={onToggleUnionSiblings}
@@ -685,7 +682,7 @@ export const TreeOrthogonalCanvas: React.FC<TreeOrthogonalCanvasProps> = ({
       <g className="tree-layer-hubs">
         {layout.hubs.map((hub) => (
           <UnionHubItem
-            key={`hub-$hub.union.id`}
+            key={`hub-${hub.union.id}`}
             hub={hub}
             isLit={Boolean(
               highlightedUnionIds?.has(hub.union.id) ||

@@ -241,7 +241,6 @@ export const TimePage: React.FC = () => {
                   </button>
                 </div>
                 <div className="time-anchor-caption">Year · people alive</div>
-                {/* oxlint-disable-next-line jsx-a11y/prefer-tag-over-role -- role="group" is the correct grouping pattern for a button toolbar
                 <div className="time-anchor-strip" role="group" aria-label="Jump to notable family years">
                   {suggestedYears.map((m) => (
                     <button

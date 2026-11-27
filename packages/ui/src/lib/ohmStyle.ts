@@ -102,7 +102,6 @@ function transformLayer(layer: LayerSpecification): LayerSpecification | null {
       layoutChanged = true;
     }
     if (layoutChanged) {
-      // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- preserving SymbolLayerSpecification after updating text-field/text-font layout properties
       next = { ...next, layout: nextLayout as typeof next.layout };
     }
   }
@@ -169,7 +168,6 @@ export async function loadArchivalOhmStyle(
         if (!res.ok) {
           throw new Error(`HTTP ${res.status} loading ${OHM_STYLE_URL}`);
         }
-        // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- OHM main.json conforms to MapLibre StyleSpecification
         const raw = (await res.json()) as StyleSpecification;
         return buildArchivalOhmStyle(raw, initialYear);
       })

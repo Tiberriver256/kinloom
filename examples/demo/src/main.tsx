@@ -1,5 +1,4 @@
 // Side-effect CSS import for Kinloom archival styles and design tokens.
-// oxlint-disable-next-line import/no-unassigned-import
 import '@kinloom/ui/styles/archival.css';
 import type { ArchiveDataSource } from '@kinloom/core';
 import type { KinloomUiPlugin } from '@kinloom/ui';

@@ -429,7 +429,6 @@ export const PersonPage: React.FC = () => {
     if (person) {
       pushPivot({ slug: person.slug, name: person.full_name, year: activeEvent?.year ?? null });
     }
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- records the visit once per person
   }, [person?.slug]);
 
   const radar = useMemo(() => {
