@@ -29,9 +29,18 @@ export const UI_RECIPE_COURSE_LABELS: Readonly<Record<UiRecipeCourse, string>> =
   other: 'Family Classic',
 };
 
-export const UI_RECIPE_SORT_MODES = ['stars', 'newest', 'alpha'] as const;
+export const UI_RECIPE_SORT_MODES = ['stars', 'most_starred', 'newest', 'alpha'] as const;
 export const UiRecipeSortModeSchema = z.enum(UI_RECIPE_SORT_MODES);
 export type UiRecipeSortMode = z.infer<typeof UiRecipeSortModeSchema>;
+
+export type UiCatalogSortOption = 'most_starred' | 'newest' | 'alpha';
+
+export function normalizeCatalogSortMode(raw: string | null | undefined): UiCatalogSortOption {
+  if (raw === 'newest' || raw === 'alpha' || raw === 'most_starred') {
+    return raw;
+  }
+  return 'most_starred';
+}
 
 export const UI_RECIPE_CARD_SIDES = ['front', 'back', 'page', 'dish', 'other'] as const;
 export const UiRecipeCardSideSchema = z.enum(UI_RECIPE_CARD_SIDES);
@@ -146,6 +155,7 @@ export const UiRecipeListResponseSchema = z.object({
   permissions: z
     .object({
       can_create: z.boolean(),
+      can_star: z.boolean().optional(),
     })
     .optional(),
 });
@@ -218,8 +228,20 @@ export const UiRecipesByPersonResponseSchema = z.object({
   person_id: z.string().min(1),
   recipes: z.array(UiRecipeSummarySchema),
   total: z.number().int().min(0),
+  permissions: z
+    .object({
+      can_star: z.boolean(),
+    })
+    .optional(),
 });
 export type UiRecipesByPersonResponse = z.infer<typeof UiRecipesByPersonResponseSchema>;
+
+export const UiRecipeStarResponseSchema = z.object({
+  recipe_id: z.string().min(1),
+  star_count: z.number().int().min(0),
+  viewer_has_starred: z.boolean(),
+});
+export type UiRecipeStarResponse = z.infer<typeof UiRecipeStarResponseSchema>;
 
 export function parseUiRecipeListResponse(raw: unknown): UiRecipeListResponse {
   return UiRecipeListResponseSchema.parse(raw);
@@ -239,6 +261,28 @@ export function parseUiRecipePhotosReorderResponse(raw: unknown): UiRecipePhotos
 
 export function parseUiRecipesByPersonResponse(raw: unknown): UiRecipesByPersonResponse {
   return UiRecipesByPersonResponseSchema.parse(raw);
+}
+
+export function parseUiRecipeStarResponse(raw: unknown): UiRecipeStarResponse {
+  return UiRecipeStarResponseSchema.parse(raw);
+}
+
+export interface RecipeStarState {
+  readonly star_count: number;
+  readonly viewer_has_starred: boolean;
+}
+
+export function computeOptimisticStarState(
+  current: RecipeStarState,
+  targetStarred: boolean
+): RecipeStarState {
+  if (current.viewer_has_starred === targetStarred) {
+    return current;
+  }
+  return {
+    viewer_has_starred: targetStarred,
+    star_count: Math.max(0, current.star_count + (targetStarred ? 1 : -1)),
+  };
 }
 
 export function parseUiRecipeMutationResponse(raw: unknown): UiRecipeMutationResponse {
@@ -410,9 +454,13 @@ export function filterStaticRecipes(
 
   const sort = params.sort ?? 'newest';
   const sorted = filtered.toSorted((a, b) => {
-    if (sort === 'stars') {
+    if (sort === 'stars' || sort === 'most_starred') {
       if (b.star_count !== a.star_count) {
         return b.star_count - a.star_count;
+      }
+      const updatedCmp = b.updated_at.localeCompare(a.updated_at);
+      if (updatedCmp !== 0) {
+        return updatedCmp;
       }
       const createdCmp = b.created_at.localeCompare(a.created_at);
       return createdCmp !== 0 ? createdCmp : a.id.localeCompare(b.id);

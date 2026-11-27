@@ -259,8 +259,8 @@ export class SqlRecipesRepository implements RecipesRepository {
 
     const sort = query.sort ?? 'newest';
     const orderBy =
-      sort === 'stars'
-        ? 'r.star_count DESC, r.created_at DESC, r.id ASC'
+      sort === 'stars' || sort === 'most_starred'
+        ? 'r.star_count DESC, r.updated_at DESC, r.created_at DESC, r.id ASC'
         : sort === 'alpha'
           ? 'LOWER(r.title) ASC, r.created_at DESC, r.id ASC'
           : 'r.created_at DESC, r.id ASC';

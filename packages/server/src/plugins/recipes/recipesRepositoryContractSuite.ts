@@ -230,9 +230,32 @@ export function runRecipesRepositoryContractSuite(
         expect(livingLookup.items).toEqual([]);
         expect(livingLookup.total).toBe(0);
 
-        // Sort by stars
+        // Sort by stars and most_starred (tie-broken by updated_at DESC)
         const byStars = await repo.listRecipes({ sort: 'stars' });
         expect(byStars.items.map((i) => i.recipe.id)).toEqual(['rec_a', 'rec_c', 'rec_b']);
+
+        const byMostStarred = await repo.listRecipes({ sort: 'most_starred' });
+        expect(byMostStarred.items.map((i) => i.recipe.id)).toEqual(['rec_a', 'rec_c', 'rec_b']);
+
+        // Update rec_b so its updated_at is newer than rec_c, then tie their star_count at 1
+        await repo.updateRecipe({
+          id: 'rec_b',
+          data: UpdateRecipeInputSchema.parse({
+            title: 'Apple Orchard Pie',
+            summary: 'Crisp pastry crust, refreshed notes.',
+            course: 'dessert',
+            tags: ['autumn', 'pie'],
+            provenance_note: 'From the cedar cookbook.',
+            attributed_person_id: 'per_reclassified_living',
+            expected_version: 1,
+          }),
+          actor,
+          nowIso: '2026-11-27T11:30:00.000Z',
+        });
+        await repo.starRecipe('rec_b', 'usr_beta', '2026-11-27T11:35:00.000Z');
+        const byMostStarredTie = await repo.listRecipes({ sort: 'most_starred' });
+        expect(byMostStarredTie.items.map((i) => i.recipe.id)).toEqual(['rec_a', 'rec_b', 'rec_c']);
+        await repo.unstarRecipe('rec_b', 'usr_beta');
 
         // Sort alphabetically
         const byAlpha = await repo.listRecipes({ sort: 'alpha', limit: 2, offset: 1 });

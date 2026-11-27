@@ -6,6 +6,7 @@ import {
   parseUiRecipeMutationResponse,
   parseUiRecipePhotoMutationResponse,
   parseUiRecipePhotosReorderResponse,
+  parseUiRecipeStarResponse,
   parseUiRecipesByPersonResponse,
   type RecipesListQueryParams,
   type UiCreateRecipePayload,
@@ -17,6 +18,7 @@ import {
   type UiRecipePhoto,
   type UiRecipePhotoMutationResponse,
   type UiRecipePhotosReorderResponse,
+  type UiRecipeStarResponse,
   type UiRecipesByPersonResponse,
   type UiUpdateRecipePayload,
 } from '../lib/recipesModel.js';
@@ -82,6 +84,8 @@ export interface RecipesClient {
     photoId: string,
     options?: { readonly signal?: AbortSignal }
   ): Promise<void>;
+  starRecipe?(slugOrId: string, options?: { readonly signal?: AbortSignal }): Promise<UiRecipeStarResponse>;
+  unstarRecipe?(slugOrId: string, options?: { readonly signal?: AbortSignal }): Promise<UiRecipeStarResponse>;
 }
 
 export interface HttpRecipesClientOptions {
@@ -263,6 +267,34 @@ export function createHttpRecipesClient(options: HttpRecipesClientOptions = {}):
       await api.deleteNoContent(
         `/api/plugins/recipes/${encodeURIComponent(recipeSlugOrId)}/photos/${encodeURIComponent(photoId)}`,
         reqOptions
+      );
+    },
+
+    async starRecipe(
+      slugOrId: string,
+      reqOptions?: { readonly signal?: AbortSignal }
+    ): Promise<UiRecipeStarResponse> {
+      return api.requestJson(
+        `/api/plugins/recipes/${encodeURIComponent(slugOrId)}/star`,
+        parseUiRecipeStarResponse,
+        {
+          method: 'POST',
+          signal: reqOptions?.signal,
+        }
+      );
+    },
+
+    async unstarRecipe(
+      slugOrId: string,
+      reqOptions?: { readonly signal?: AbortSignal }
+    ): Promise<UiRecipeStarResponse> {
+      return api.requestJson(
+        `/api/plugins/recipes/${encodeURIComponent(slugOrId)}/star`,
+        parseUiRecipeStarResponse,
+        {
+          method: 'DELETE',
+          signal: reqOptions?.signal,
+        }
       );
     },
   };

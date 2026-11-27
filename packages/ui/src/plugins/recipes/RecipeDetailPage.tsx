@@ -15,6 +15,7 @@ import { ExplorerTopBar } from '../../components/ExplorerTopBar.js';
 import { KinloomFooter } from '../../components/KinloomFooter.js';
 import { cx } from '../../lib/cx.js';
 import {
+  computeOptimisticStarState,
   formatRecipeCourseLabel,
   formatRecipeDuration,
   formatRecipeIngredientLine,
@@ -27,6 +28,7 @@ import {
   type UiRecipePhoto,
 } from '../../lib/recipesModel.js';
 import { useKinloomPluginContext } from '../PluginContext.js';
+import { RecipeStarButton } from './RecipeStarButton.js';
 import recipeStyles from './Recipes.module.css';
 import { useRecipesPlugin } from './RecipesContext.js';
 
@@ -62,6 +64,8 @@ export const RecipeDetailPage: React.FC = () => {
   const [activePhotoIndex, setActivePhotoIndex] = useState<number | null>(null);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState<boolean>(false);
   const [deletingRecipe, setDeletingRecipe] = useState<boolean>(false);
+  const [starPending, setStarPending] = useState<boolean>(false);
+  const [starError, setStarError] = useState<string | null>(null);
 
   const [uploadCaption, setUploadCaption] = useState<string>('');
   const [uploadCardSide, setUploadCardSide] = useState<UiRecipeCardSide>('front');
@@ -87,6 +91,8 @@ export const RecipeDetailPage: React.FC = () => {
     setActivePhotoIndex(null);
     setPhotoAction({ kind: 'idle' });
     setPhotoFeedback(null);
+    setStarPending(false);
+    setStarError(null);
 
     void client
       .getRecipe(slug, { signal: controller.signal })
@@ -175,6 +181,72 @@ export const RecipeDetailPage: React.FC = () => {
   const canEditRecipe = Boolean(detail?.permissions.can_edit && client.updateRecipe);
   const canDeleteRecipe = Boolean(detail?.permissions.can_delete && client.deleteRecipe);
   const canManagePhotos = Boolean(detail?.permissions.can_upload && client.uploadRecipePhoto);
+  const canStarRecipe = Boolean(detail?.permissions.can_star && client.starRecipe && client.unstarRecipe);
+
+  const handleToggleStar = async (): Promise<void> => {
+    if (!detail || !canStarRecipe || !client.starRecipe || !client.unstarRecipe || starPending) {
+      return;
+    }
+    const prevStarred = detail.viewer_has_starred;
+    const prevCount = detail.recipe.star_count;
+    const targetStarred = !prevStarred;
+    const optimistic = computeOptimisticStarState(
+      { star_count: prevCount, viewer_has_starred: prevStarred },
+      targetStarred
+    );
+
+    setStarPending(true);
+    setStarError(null);
+    setDetail((prev) =>
+      prev
+        ? {
+            ...prev,
+            viewer_has_starred: optimistic.viewer_has_starred,
+            recipe: {
+              ...prev.recipe,
+              star_count: optimistic.star_count,
+              viewer_has_starred: optimistic.viewer_has_starred,
+            },
+          }
+        : prev
+    );
+
+    try {
+      const result = targetStarred
+        ? await client.starRecipe(detail.recipe.slug)
+        : await client.unstarRecipe(detail.recipe.slug);
+      setDetail((prev) =>
+        prev
+          ? {
+              ...prev,
+              viewer_has_starred: result.viewer_has_starred,
+              recipe: {
+                ...prev.recipe,
+                star_count: result.star_count,
+                viewer_has_starred: result.viewer_has_starred,
+              },
+            }
+          : prev
+      );
+    } catch (err: unknown) {
+      setDetail((prev) =>
+        prev
+          ? {
+              ...prev,
+              viewer_has_starred: prevStarred,
+              recipe: {
+                ...prev.recipe,
+                star_count: prevCount,
+                viewer_has_starred: prevStarred,
+              },
+            }
+          : prev
+      );
+      setStarError(err instanceof Error ? err.message : 'Unable to update recipe star right now.');
+    } finally {
+      setStarPending(false);
+    }
+  };
 
   const handleConfirmDeleteRecipe = async (): Promise<void> => {
     if (!detail || !client.deleteRecipe || deletingRecipe) {
@@ -417,6 +489,17 @@ export const RecipeDetailPage: React.FC = () => {
           </Link>
           {detail && (
             <div className={cx(recipeStyles, 'recipe-detail-actions')}>
+              <RecipeStarButton
+                recipeTitle={detail.recipe.title}
+                starCount={detail.recipe.star_count}
+                starred={detail.viewer_has_starred}
+                canStar={canStarRecipe}
+                pending={starPending}
+                variant="detail"
+                onToggle={() => {
+                  void handleToggleStar();
+                }}
+              />
               {canEditRecipe && (
                 <Link
                   to={`${basePath}/${encodeURIComponent(detail.recipe.slug)}/edit`}
@@ -442,6 +525,16 @@ export const RecipeDetailPage: React.FC = () => {
             </div>
           )}
         </div>
+
+        {starError && (
+          <ArchivalToast
+            tone="error"
+            message={starError}
+            onDismiss={() => {
+              setStarError(null);
+            }}
+          />
+        )}
 
         {error && (
           <ArchivalToast

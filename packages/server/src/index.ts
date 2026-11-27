@@ -479,6 +479,7 @@ export {
 } from './plugins/recipes/schemas.js';
 export {
   canCreateOrEditRecipe,
+  canStarRecipe,
   computeRecipePermissions,
   createRecipesServerPlugin,
   DEFAULT_RECIPES_RUNTIME_SETTINGS,

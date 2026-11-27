@@ -1584,3 +1584,324 @@ describe('createRecipesServerPlugin (Issue #49 structured recipe CRUD, optimisti
     ).toBe(404);
   });
 });
+
+describe('createRecipesServerPlugin (Issue #50 starring, favorites, RBAC, and sort parity)', () => {
+  it('supports idempotent POST/DELETE star endpoints, aggregate counts without voter leaks, favorites filtering, and most_starred sort', async () => {
+    const { ports, recipesRepo, server, securityEvents, cookieForUser, cookieForInvite } =
+      await createTestHarness();
+    const adminCookie = await cookieForUser('admin@archive.example.test', 'admin');
+    const editorCookie = await cookieForUser('editor@archive.example.test', 'editor');
+    const inviteCookie = await cookieForInvite();
+
+    const r1 = await recipesRepo.createRecipe({
+      id: 'rec_star_1',
+      data: CreateRecipeInputSchema.parse({
+        title: 'Buckwheat Griddle Cakes',
+        course: 'breakfast',
+        attributed_person_id: 'p_ada',
+      }),
+      actor: { id: 'editor@archive.example.test', name: 'Clara Baker' },
+      nowIso: '2026-11-27T09:00:00.000Z',
+    });
+    const r2 = await recipesRepo.createRecipe({
+      id: 'rec_star_2',
+      data: CreateRecipeInputSchema.parse({
+        title: 'Spiced Pear Preserves',
+        course: 'preserve',
+        attributed_person_id: 'p_ada',
+      }),
+      actor: { id: 'admin@archive.example.test', name: 'Archive Steward' },
+      nowIso: '2026-11-27T10:00:00.000Z',
+    });
+
+    // Update r1 so its updated_at is later than r2 for most_starred tie-break verification
+    await recipesRepo.updateRecipe({
+      id: r1.id,
+      data: {
+        ...CreateRecipeInputSchema.parse({
+          title: 'Buckwheat Griddle Cakes',
+          course: 'breakfast',
+          attributed_person_id: 'p_ada',
+        }),
+        expected_version: 1,
+      },
+      actor: { id: 'editor@archive.example.test', name: 'Clara Baker' },
+      nowIso: '2026-11-27T11:30:00.000Z',
+    });
+
+    // Anonymous POST/DELETE is rejected with 401 and emits #31 auth.write.forbidden telemetry
+    const anonStarRes = await server.fetch(
+      new Request(`http://localhost/api/plugins/recipes/${r1.slug}/star`, {
+        method: 'POST',
+        headers: { origin: 'http://localhost' },
+      })
+    );
+    expect(anonStarRes.status).toBe(401);
+    expect(
+      securityEvents.some(
+        (ev) =>
+          ev.type === 'auth.write.forbidden' &&
+          ev.reason === 'unauthenticated' &&
+          ev.actorKind === 'anonymous'
+      )
+    ).toBe(true);
+
+    // CSRF origin mismatch is rejected with 403 and emits csrf.rejected telemetry
+    const csrfRes = await server.fetch(
+      new Request(`http://localhost/api/plugins/recipes/${r1.slug}/star`, {
+        method: 'POST',
+        headers: { cookie: editorCookie, origin: 'https://evil.example' },
+      })
+    );
+    expect(csrfRes.status).toBe(403);
+    expect(securityEvents.some((ev) => ev.type === 'csrf.rejected')).toBe(true);
+
+    // API agent token is rejected (human-only) with 403 + auth.write.forbidden telemetry
+    const agentBearer = 'kl_agent_star_blocked_test';
+    await ports.repository.createAgentToken({
+      token_id: 'tok_agent_star',
+      token_hash: await sha256Hex(agentBearer),
+      label: 'Star Bot',
+      scope: 'write_batch',
+      created_by: 'admin@archive.example.test',
+      created_at: ports.clock.nowIso(),
+      revoked_at: null,
+    });
+    const agentStarRes = await server.fetch(
+      new Request(`http://localhost/api/plugins/recipes/${r1.slug}/star`, {
+        method: 'POST',
+        headers: { authorization: `Bearer ${agentBearer}` },
+      })
+    );
+    expect(agentStarRes.status).toBe(403);
+    expect(
+      securityEvents.some(
+        (ev) =>
+          ev.type === 'auth.write.forbidden' && ev.reason === 'member_required' && ev.actorKind === 'agent'
+      )
+    ).toBe(true);
+
+    // Invite viewer is blocked under default star_min_role='editor' and sees can_star: false
+    const catalogInviteDefault = (await (
+      await server.fetch(
+        new Request('http://localhost/api/plugins/recipes', { headers: { cookie: inviteCookie } })
+      )
+    ).json()) as { permissions: { can_create: boolean; can_star: boolean } };
+    expect(catalogInviteDefault.permissions).toEqual({ can_create: false, can_star: false });
+
+    const inviteStarBlocked = await server.fetch(
+      new Request(`http://localhost/api/plugins/recipes/${r1.slug}/star`, {
+        method: 'POST',
+        headers: { cookie: inviteCookie, origin: 'http://localhost' },
+      })
+    );
+    expect(inviteStarBlocked.status).toBe(403);
+    expect(
+      securityEvents.some(
+        (ev) =>
+          ev.type === 'auth.write.forbidden' &&
+          ev.reason === 'invite_read_only' &&
+          ev.actorKind === 'invite_viewer'
+      )
+    ).toBe(true);
+
+    // Editor stars r1 twice (strictly idempotent) and verifies zero voter leaks in JSON
+    const starOnce = await server.fetch(
+      new Request(`http://localhost/api/plugins/recipes/${r1.slug}/star`, {
+        method: 'POST',
+        headers: { cookie: editorCookie, origin: 'http://localhost' },
+      })
+    );
+    expect(starOnce.status).toBe(200);
+    const starOnceText = await starOnce.text();
+    expect(starOnceText).not.toContain('editor@archive.example.test');
+    expect(starOnceText).not.toContain('usr_');
+    expect(JSON.parse(starOnceText)).toEqual({
+      recipe_id: r1.id,
+      star_count: 1,
+      viewer_has_starred: true,
+    });
+
+    const starTwice = await server.fetch(
+      new Request(`http://localhost/api/plugins/recipes/${r1.id}/star`, {
+        method: 'POST',
+        headers: { cookie: editorCookie, origin: 'http://localhost' },
+      })
+    );
+    expect(starTwice.status).toBe(200);
+    expect(await starTwice.json()).toEqual({
+      recipe_id: r1.id,
+      star_count: 1,
+      viewer_has_starred: true,
+    });
+
+    // Admin also stars r2 -> both r1 and r2 have 1 star, r1 has newer updated_at so sorts first under most_starred
+    const adminStarR2 = await server.fetch(
+      new Request(`http://localhost/api/plugins/recipes/${r2.slug}/star`, {
+        method: 'POST',
+        headers: { cookie: adminCookie, origin: 'http://localhost' },
+      })
+    );
+    expect(adminStarR2.status).toBe(200);
+    expect(await adminStarR2.json()).toEqual({
+      recipe_id: r2.id,
+      star_count: 1,
+      viewer_has_starred: true,
+    });
+
+    // Catalog sort=most_starred orders by star_count DESC, updated_at DESC and returns caller-scoped viewer_has_starred + permissions.can_star
+    const sortedRes = await server.fetch(
+      new Request('http://localhost/api/plugins/recipes?sort=most_starred', {
+        headers: { cookie: editorCookie },
+      })
+    );
+    expect(sortedRes.status).toBe(200);
+    const sortedText = await sortedRes.text();
+    expect(sortedText).not.toContain('editor@archive.example.test');
+    expect(sortedText).not.toContain('admin@archive.example.test');
+    const sortedJson = JSON.parse(sortedText) as {
+      recipes: Array<{ id: string; star_count: number; viewer_has_starred: boolean }>;
+      permissions: { can_create: boolean; can_star: boolean };
+    };
+    expect(sortedJson.permissions).toEqual({ can_create: true, can_star: true });
+    expect(sortedJson.recipes.map((r) => [r.id, r.star_count, r.viewer_has_starred])).toEqual([
+      [r1.id, 1, true],
+      [r2.id, 1, false],
+    ]);
+
+    // favorites=true returns only the caller's starred recipes
+    const editorFavs = (await (
+      await server.fetch(
+        new Request('http://localhost/api/plugins/recipes?favorites=true', {
+          headers: { cookie: editorCookie },
+        })
+      )
+    ).json()) as { recipes: Array<{ id: string }>; total: number };
+    expect(editorFavs.total).toBe(1);
+    expect(editorFavs.recipes.map((r) => r.id)).toEqual([r1.id]);
+
+    const adminFavs = (await (
+      await server.fetch(
+        new Request('http://localhost/api/plugins/recipes?favorites=1', {
+          headers: { cookie: adminCookie },
+        })
+      )
+    ).json()) as { recipes: Array<{ id: string }>; total: number };
+    expect(adminFavs.total).toBe(1);
+    expect(adminFavs.recipes.map((r) => r.id)).toEqual([r2.id]);
+
+    // Person endpoint includes aggregate star_count, caller-scoped viewer_has_starred, and permissions.can_star
+    const byPersonJson = (await (
+      await server.fetch(
+        new Request('http://localhost/api/plugins/recipes/by-person/p_ada', {
+          headers: { cookie: editorCookie },
+        })
+      )
+    ).json()) as {
+      recipes: Array<{ id: string; star_count: number; viewer_has_starred: boolean }>;
+      permissions: { can_star: boolean };
+    };
+    expect(byPersonJson.permissions).toEqual({ can_star: true });
+    expect(byPersonJson.recipes.find((r) => r.id === r1.id)?.viewer_has_starred).toBe(true);
+    expect(byPersonJson.recipes.find((r) => r.id === r2.id)?.viewer_has_starred).toBe(false);
+
+    // Admin enables star_min_role='viewer' via #44 settings -> invite_viewer can now star & unstar
+    const enableInviteStar = await server.fetch(
+      new Request(`http://localhost/api/admin/plugin-settings/${RECIPES_PLUGIN_ID}`, {
+        method: 'PUT',
+        headers: {
+          cookie: adminCookie,
+          origin: 'http://localhost',
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({
+          values: {
+            create_edit_min_role: 'editor',
+            upload_min_role: 'editor',
+            star_min_role: 'viewer',
+            comment_min_role: 'editor',
+            max_photo_mb: 10,
+            max_photos_per_recipe: 12,
+            show_home_widget: true,
+          },
+        }),
+      })
+    );
+    expect(enableInviteStar.status).toBe(200);
+
+    const inviteStarOk = await server.fetch(
+      new Request(`http://localhost/api/plugins/recipes/${r1.slug}/star`, {
+        method: 'POST',
+        headers: { cookie: inviteCookie, origin: 'http://localhost' },
+      })
+    );
+    expect(inviteStarOk.status).toBe(200);
+    expect(await inviteStarOk.json()).toEqual({
+      recipe_id: r1.id,
+      star_count: 2,
+      viewer_has_starred: true,
+    });
+
+    const inviteUnstarOk = await server.fetch(
+      new Request(`http://localhost/api/plugins/recipes/${r1.slug}/star`, {
+        method: 'DELETE',
+        headers: { cookie: inviteCookie, origin: 'http://localhost' },
+      })
+    );
+    expect(inviteUnstarOk.status).toBe(200);
+    expect(await inviteUnstarOk.json()).toEqual({
+      recipe_id: r1.id,
+      star_count: 1,
+      viewer_has_starred: false,
+    });
+
+    // Idempotent DELETE twice
+    const editorUnstar1 = await server.fetch(
+      new Request(`http://localhost/api/plugins/recipes/${r1.slug}/star`, {
+        method: 'DELETE',
+        headers: { cookie: editorCookie, origin: 'http://localhost' },
+      })
+    );
+    expect(editorUnstar1.status).toBe(200);
+    expect(await editorUnstar1.json()).toEqual({
+      recipe_id: r1.id,
+      star_count: 0,
+      viewer_has_starred: false,
+    });
+
+    const editorUnstar2 = await server.fetch(
+      new Request(`http://localhost/api/plugins/recipes/${r1.slug}/star`, {
+        method: 'DELETE',
+        headers: { cookie: editorCookie, origin: 'http://localhost' },
+      })
+    );
+    expect(editorUnstar2.status).toBe(200);
+    expect(await editorUnstar2.json()).toEqual({
+      recipe_id: r1.id,
+      star_count: 0,
+      viewer_has_starred: false,
+    });
+
+    // Missing recipe returns 404 on POST and DELETE star
+    expect(
+      (
+        await server.fetch(
+          new Request('http://localhost/api/plugins/recipes/nonexistent-recipe/star', {
+            method: 'POST',
+            headers: { cookie: editorCookie, origin: 'http://localhost' },
+          })
+        )
+      ).status
+    ).toBe(404);
+    expect(
+      (
+        await server.fetch(
+          new Request('http://localhost/api/plugins/recipes/nonexistent-recipe/star', {
+            method: 'DELETE',
+            headers: { cookie: editorCookie, origin: 'http://localhost' },
+          })
+        )
+      ).status
+    ).toBe(404);
+  });
+});

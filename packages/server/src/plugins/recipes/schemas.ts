@@ -34,7 +34,7 @@ export const RECIPE_COMMENT_DELETED_BY_ROLES = ['author', 'admin'] as const;
 export const RecipeCommentDeletedByRoleSchema = z.enum(RECIPE_COMMENT_DELETED_BY_ROLES);
 export type RecipeCommentDeletedByRole = z.infer<typeof RecipeCommentDeletedByRoleSchema>;
 
-export const RECIPE_SORT_MODES = ['stars', 'newest', 'alpha'] as const;
+export const RECIPE_SORT_MODES = ['stars', 'most_starred', 'newest', 'alpha'] as const;
 export const RecipeSortModeSchema = z.enum(RECIPE_SORT_MODES);
 export type RecipeSortMode = z.infer<typeof RecipeSortModeSchema>;
 

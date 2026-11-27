@@ -224,9 +224,13 @@ export class InMemoryRecipesRepository implements RecipesRepository {
 
     const sort = query.sort ?? 'newest';
     filtered.sort((a, b) => {
-      if (sort === 'stars') {
+      if (sort === 'stars' || sort === 'most_starred') {
         if (b.star_count !== a.star_count) {
           return b.star_count - a.star_count;
+        }
+        const updatedCmp = b.updated_at.localeCompare(a.updated_at);
+        if (updatedCmp !== 0) {
+          return updatedCmp;
         }
         const createdCmp = b.created_at.localeCompare(a.created_at);
         return createdCmp !== 0 ? createdCmp : a.id.localeCompare(b.id);

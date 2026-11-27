@@ -2161,3 +2161,268 @@ describe('ArchivalLightbox, ArchivalFileDropzone, and RecipeDetailPage photo man
     c3.remove();
   });
 });
+
+describe('Recipe Starring, Optimistic Rollback, and My Favorites UI (#50)', () => {
+  it('toggles stars optimistically on catalog cards and detail page, rolls back with alert on API error, and hides My Favorites when can_star is false', async () => {
+    let failNextStar = false;
+    let canStarFlag = true;
+    let recipesState: UiRecipeDetail[] = SAMPLE_RECIPES.map((r) => ({ ...r }));
+    const starCalls: string[] = [];
+
+    const interactiveClient: RecipesClient = {
+      async listRecipes(params = {}) {
+        const filtered = recipesState.filter((r) => !params.favorites || r.viewer_has_starred);
+        const sorted = [...filtered].sort((a, b) => {
+          if (params.sort === 'alpha') {
+            return a.title.localeCompare(b.title);
+          }
+          if (params.sort === 'newest') {
+            return b.created_at.localeCompare(a.created_at);
+          }
+          if (b.star_count !== a.star_count) {
+            return b.star_count - a.star_count;
+          }
+          return b.updated_at.localeCompare(a.updated_at);
+        });
+        return {
+          recipes: sorted,
+          total: sorted.length,
+          limit: 24,
+          offset: 0,
+          facets: { courses: ['bread', 'dessert'], tags: ['autumn', 'heirloom', 'winter'] },
+          display: { show_home_widget: true },
+          permissions: { can_create: false, can_star: canStarFlag },
+        };
+      },
+      async getRecipe(slugOrId) {
+        const found = recipesState.find((r) => r.slug === slugOrId || r.id === slugOrId);
+        if (!found) {
+          return null;
+        }
+        return {
+          recipe: found,
+          photos: [...(SAMPLE_PHOTOS[found.id] ?? [])],
+          viewer_has_starred: found.viewer_has_starred,
+          permissions: {
+            can_edit: false,
+            can_delete: false,
+            can_upload: false,
+            can_star: canStarFlag,
+            can_comment: false,
+          },
+        };
+      },
+      async listRecipesByPerson(personId) {
+        const matched = recipesState.filter((r) => r.attributed_person_id === personId);
+        return {
+          person_id: personId,
+          recipes: matched,
+          total: matched.length,
+          permissions: { can_star: canStarFlag },
+        };
+      },
+      async starRecipe(slugOrId) {
+        starCalls.push(`POST:${slugOrId}`);
+        if (failNextStar) {
+          failNextStar = false;
+          throw new Error('Star service temporarily unavailable');
+        }
+        const target = recipesState.find((r) => r.slug === slugOrId || r.id === slugOrId);
+        if (!target) {
+          throw new Error('Not found');
+        }
+        const nextCount = target.viewer_has_starred ? target.star_count : target.star_count + 1;
+        recipesState = recipesState.map((r) =>
+          r.id === target.id ? { ...r, star_count: nextCount, viewer_has_starred: true } : r
+        );
+        return { recipe_id: target.id, star_count: nextCount, viewer_has_starred: true };
+      },
+      async unstarRecipe(slugOrId) {
+        starCalls.push(`DELETE:${slugOrId}`);
+        if (failNextStar) {
+          failNextStar = false;
+          throw new Error('Unable to remove star right now');
+        }
+        const target = recipesState.find((r) => r.slug === slugOrId || r.id === slugOrId);
+        if (!target) {
+          throw new Error('Not found');
+        }
+        const nextCount = target.viewer_has_starred ? Math.max(0, target.star_count - 1) : target.star_count;
+        recipesState = recipesState.map((r) =>
+          r.id === target.id ? { ...r, star_count: nextCount, viewer_has_starred: false } : r
+        );
+        return { recipe_id: target.id, star_count: nextCount, viewer_has_starred: false };
+      },
+    };
+
+    const plugin = createRecipesUiPlugin({ client: interactiveClient });
+    const container = document.createElement('div');
+    document.body.append(container);
+    const root = createRoot(container);
+
+    // 1. Authenticated member sees My Favorites tab & interactive star buttons on /recipes
+    await act(async () => {
+      root.render(
+        <KinloomApp
+          key="star-catalog"
+          siteConfig={SITE_CONFIG}
+          initialBundle={TEST_BUNDLE}
+          initialReadings={{ version: 1, documents: {}, event_page_map: {} }}
+          plugins={[plugin]}
+          initialEntries={['/recipes?sort=most_starred']}
+        />
+      );
+    });
+    await flushUi();
+
+    expect(container.querySelectorAll('[role="tab"]')).toHaveLength(2);
+    const pieStarBtn = container.querySelector<HTMLButtonElement>('button[aria-label*="Autumn Cider Pie"]');
+    expect(pieStarBtn?.getAttribute('aria-pressed')).toBe('false');
+
+    // Star Autumn Cider Pie -> updates optimistically and reconciles
+    await act(async () => {
+      pieStarBtn?.click();
+    });
+    await flushUi();
+    expect(starCalls).toContain('POST:autumn-cider-pie');
+    const pieStarBtnAfter = container.querySelector<HTMLButtonElement>(
+      'button[aria-label*="Autumn Cider Pie"]'
+    );
+    expect(pieStarBtnAfter?.getAttribute('aria-pressed')).toBe('true');
+    expect(pieStarBtnAfter?.textContent).toContain('2');
+
+    // Rollback on failure surfaces accessible role="alert" toast and restores previous star state
+    failNextStar = true;
+    await act(async () => {
+      pieStarBtnAfter?.click();
+    });
+    await flushUi();
+    expect(container.querySelector('[role="alert"]')?.textContent).toContain(
+      'Unable to remove star right now'
+    );
+    expect(
+      container
+        .querySelector<HTMLButtonElement>('button[aria-label*="Autumn Cider Pie"]')
+        ?.getAttribute('aria-pressed')
+    ).toBe('true');
+
+    // Switch to My Favorites tab (?favorites=1 bookmark route) and unstar with rollback then success
+    await act(async () => {
+      root.render(
+        <KinloomApp
+          key="star-favorites-url"
+          siteConfig={SITE_CONFIG}
+          initialBundle={TEST_BUNDLE}
+          initialReadings={{ version: 1, documents: {}, event_page_map: {} }}
+          plugins={[plugin]}
+          initialEntries={['/recipes?favorites=1']}
+        />
+      );
+    });
+    await flushUi();
+    const favTab = [...container.querySelectorAll<HTMLButtonElement>('[role="tab"]')].find((t) =>
+      t.textContent?.includes('My Favorites')
+    );
+    expect(favTab?.getAttribute('aria-selected')).toBe('true');
+
+    failNextStar = true;
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('button[aria-label*="Autumn Cider Pie"]')?.click();
+    });
+    await flushUi();
+    // Rollback restored Autumn Cider Pie into My Favorites list
+    expect(container.textContent).toContain('Autumn Cider Pie');
+
+    // Now succeed unstarring Autumn Cider Pie from My Favorites
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('button[aria-label*="Autumn Cider Pie"]')?.click();
+    });
+    await flushUi();
+    expect(container.textContent).not.toContain('Autumn Cider Pie');
+
+    // 2. Detail page star toggle & rollback
+    await act(async () => {
+      root.render(
+        <KinloomApp
+          key="star-detail"
+          siteConfig={SITE_CONFIG}
+          initialBundle={TEST_BUNDLE}
+          initialReadings={{ version: 1, documents: {}, event_page_map: {} }}
+          plugins={[plugin]}
+          initialEntries={['/recipes/autumn-cider-pie']}
+        />
+      );
+    });
+    await flushUi();
+
+    const detailStarBtn = container.querySelector<HTMLButtonElement>(
+      'button[aria-label*="Autumn Cider Pie"]'
+    );
+    expect(detailStarBtn?.getAttribute('aria-pressed')).toBe('false');
+    await act(async () => {
+      detailStarBtn?.click();
+    });
+    await flushUi();
+    expect(
+      container
+        .querySelector<HTMLButtonElement>('button[aria-label*="Autumn Cider Pie"]')
+        ?.getAttribute('aria-pressed')
+    ).toBe('true');
+
+    failNextStar = true;
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('button[aria-label*="Autumn Cider Pie"]')?.click();
+    });
+    await flushUi();
+    expect(container.querySelector('[role="alert"]')?.textContent).toContain(
+      'Unable to remove star right now'
+    );
+    expect(
+      container
+        .querySelector<HTMLButtonElement>('button[aria-label*="Autumn Cider Pie"]')
+        ?.getAttribute('aria-pressed')
+    ).toBe('true');
+
+    // 3. Viewer without can_star sees read-only star count badges (zero star buttons) and no My Favorites tab
+    canStarFlag = false;
+    await act(async () => {
+      root.render(
+        <KinloomApp
+          key="star-readonly-catalog"
+          siteConfig={SITE_CONFIG}
+          initialBundle={TEST_BUNDLE}
+          initialReadings={{ version: 1, documents: {}, event_page_map: {} }}
+          plugins={[plugin]}
+          initialEntries={['/recipes']}
+        />
+      );
+    });
+    await flushUi();
+    expect(container.querySelectorAll('[role="tab"]')).toHaveLength(0);
+    expect(
+      container.querySelector('button[aria-label*="Star recipe"], button[aria-label*="Remove star"]')
+    ).toBeNull();
+    expect(container.textContent).toContain('4 stars');
+
+    await act(async () => {
+      root.render(
+        <KinloomApp
+          key="star-readonly-detail"
+          siteConfig={SITE_CONFIG}
+          initialBundle={TEST_BUNDLE}
+          initialReadings={{ version: 1, documents: {}, event_page_map: {} }}
+          plugins={[plugin]}
+          initialEntries={['/recipes/oatmeal-honey-biscuits']}
+        />
+      );
+    });
+    await flushUi();
+    expect(container.querySelector('button[aria-label*="Oatmeal Honey Biscuits"]')).toBeNull();
+    expect(container.textContent).toContain('4 stars');
+
+    act(() => {
+      root.unmount();
+    });
+    container.remove();
+  });
+});

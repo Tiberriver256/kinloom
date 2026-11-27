@@ -76,8 +76,21 @@ export const PersonRecipesSlot: React.FC<PersonRecipesSlotProps> = ({ person }) 
               to={`${basePath}/${encodeURIComponent(recipe.slug)}`}
               className={cx(recipeStyles, 'recipe-slot-mini-card')}
             >
-              <span className={cx(recipeStyles, 'recipe-course-badge')}>
-                {formatRecipeCourseLabel(recipe.course)}
+              <span className={cx(recipeStyles, 'recipe-slot-mini-top')}>
+                <span className={cx(recipeStyles, 'recipe-course-badge')}>
+                  {formatRecipeCourseLabel(recipe.course)}
+                </span>
+                <span
+                  className={cx(
+                    recipeStyles,
+                    recipe.viewer_has_starred
+                      ? 'recipe-slot-star recipe-slot-star-active'
+                      : 'recipe-slot-star'
+                  )}
+                >
+                  <span aria-hidden="true">{recipe.viewer_has_starred ? '★' : '☆'}</span> {recipe.star_count}{' '}
+                  {recipe.star_count === 1 ? 'star' : 'stars'}
+                </span>
               </span>
               <span className={cx(recipeStyles, 'recipe-slot-mini-title')}>{recipe.title}</span>
               <span className={cx(recipeStyles, 'recipe-slot-mini-meta')}>
@@ -108,7 +121,7 @@ export const IndexRecipesWidget: React.FC = () => {
     const controller = new AbortController();
     let cancelled = false;
     void client
-      .listRecipes({ sort: 'stars', limit: 4 }, { signal: controller.signal })
+      .listRecipes({ sort: 'most_starred', limit: 4 }, { signal: controller.signal })
       .then((res) => {
         if (cancelled) {
           return;
@@ -157,14 +170,25 @@ export const IndexRecipesWidget: React.FC = () => {
             to={`${basePath}/${encodeURIComponent(recipe.slug)}`}
             className={cx(recipeStyles, 'recipe-slot-mini-card')}
           >
-            <span className={cx(recipeStyles, 'recipe-course-badge')}>
-              {formatRecipeCourseLabel(recipe.course)}
+            <span className={cx(recipeStyles, 'recipe-slot-mini-top')}>
+              <span className={cx(recipeStyles, 'recipe-course-badge')}>
+                {formatRecipeCourseLabel(recipe.course)}
+              </span>
+              <span
+                className={cx(
+                  recipeStyles,
+                  recipe.viewer_has_starred ? 'recipe-slot-star recipe-slot-star-active' : 'recipe-slot-star'
+                )}
+              >
+                <span aria-hidden="true">{recipe.viewer_has_starred ? '★' : '☆'}</span> {recipe.star_count}{' '}
+                {recipe.star_count === 1 ? 'star' : 'stars'}
+              </span>
             </span>
             <span className={cx(recipeStyles, 'recipe-slot-mini-title')}>{recipe.title}</span>
             <span className={cx(recipeStyles, 'recipe-slot-mini-meta')}>
               {recipe.attributed_person
                 ? `From ${recipe.attributed_person.full_name}`
-                : recipe.source_era || `${recipe.star_count} ${recipe.star_count === 1 ? 'star' : 'stars'}`}
+                : recipe.source_era || 'Family recipe card'}
             </span>
           </Link>
         ))}

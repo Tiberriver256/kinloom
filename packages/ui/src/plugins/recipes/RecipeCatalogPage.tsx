@@ -14,16 +14,19 @@ import { ExplorerTopBar } from '../../components/ExplorerTopBar.js';
 import { KinloomFooter } from '../../components/KinloomFooter.js';
 import { cx } from '../../lib/cx.js';
 import {
+  computeOptimisticStarState,
   formatRecipeCourseLabel,
   formatTotalRecipeDuration,
+  normalizeCatalogSortMode,
   UI_RECIPE_COURSES,
+  type UiCatalogSortOption,
   type UiRecipeCourse,
   UiRecipeCourseSchema,
   type UiRecipeListResponse,
-  type UiRecipeSortMode,
-  UiRecipeSortModeSchema,
+  type UiRecipeSummary,
 } from '../../lib/recipesModel.js';
 import { useKinloomPluginContext } from '../PluginContext.js';
+import { RecipeStarButton } from './RecipeStarButton.js';
 import recipeStyles from './Recipes.module.css';
 import { useRecipesPlugin } from './RecipesContext.js';
 
@@ -45,7 +48,13 @@ export const RecipeCatalogPage: React.FC<RecipeCatalogPageProps> = ({ initialTab
   const ancestorSelectId = useId();
   const sortSelectId = useId();
 
-  const [activeTab, setActiveTab] = useState<'all' | 'favorites'>(initialTab);
+  const [activeTab, setActiveTab] = useState<'all' | 'favorites'>(() => {
+    const favParam = searchParams.get('favorites');
+    if (initialTab === 'favorites' || favParam === '1' || favParam === 'true') {
+      return 'favorites';
+    }
+    return 'all';
+  });
   const [query, setQuery] = useState<string>(() => searchParams.get('q') ?? '');
   const [course, setCourse] = useState<UiRecipeCourse | ''>(() => {
     const raw = searchParams.get('course');
@@ -54,33 +63,76 @@ export const RecipeCatalogPage: React.FC<RecipeCatalogPageProps> = ({ initialTab
   });
   const [tag, setTag] = useState<string>(() => searchParams.get('tag')?.trim().toLowerCase() ?? '');
   const [ancestorId, setAncestorId] = useState<string>(() => searchParams.get('ancestor') ?? '');
-  const [sort, setSort] = useState<UiRecipeSortMode>(() => {
-    const raw = searchParams.get('sort');
-    const parsed = raw ? UiRecipeSortModeSchema.safeParse(raw) : null;
-    return parsed?.success ? parsed.data : 'stars';
-  });
+  const [sort, setSort] = useState<UiCatalogSortOption>(() =>
+    normalizeCatalogSortMode(searchParams.get('sort'))
+  );
   const [offset, setOffset] = useState<number>(0);
   const [reloadTick, setReloadTick] = useState<number>(0);
 
   const [data, setData] = useState<UiRecipeListResponse | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+  const [starError, setStarError] = useState<string | null>(null);
+  const [pendingStarIds, setPendingStarIds] = useState<ReadonlySet<string>>(() => new Set());
   const [disabledOnServer, setDisabledOnServer] = useState<boolean>(false);
 
   useEffect(() => {
-    setActiveTab(initialTab);
-    setOffset(0);
-  }, [initialTab]);
+    if (initialTab === 'favorites') {
+      setActiveTab('favorites');
+      setOffset(0);
+    } else {
+      const favParam = searchParams.get('favorites');
+      setActiveTab(favParam === '1' || favParam === 'true' ? 'favorites' : 'all');
+      setOffset(0);
+    }
+  }, [initialTab, searchParams]);
 
   const deceasedPeople = useMemo(() => searchDeceasedPeople('', 100), [searchDeceasedPeople]);
 
-  const syncUrlTag = useCallback(
-    (nextTag: string) => {
+  const syncCatalogParams = useCallback(
+    (updates: {
+      readonly q?: string;
+      readonly course?: string;
+      readonly tag?: string;
+      readonly ancestor?: string;
+      readonly sort?: UiCatalogSortOption;
+    }) => {
       const nextParams = new URLSearchParams(searchParams);
-      if (nextTag) {
-        nextParams.set('tag', nextTag);
-      } else {
-        nextParams.delete('tag');
+      if (updates.q !== undefined) {
+        const trimmed = updates.q.trim();
+        if (trimmed) {
+          nextParams.set('q', trimmed);
+        } else {
+          nextParams.delete('q');
+        }
+      }
+      if (updates.course !== undefined) {
+        if (updates.course) {
+          nextParams.set('course', updates.course);
+        } else {
+          nextParams.delete('course');
+        }
+      }
+      if (updates.tag !== undefined) {
+        if (updates.tag) {
+          nextParams.set('tag', updates.tag);
+        } else {
+          nextParams.delete('tag');
+        }
+      }
+      if (updates.ancestor !== undefined) {
+        if (updates.ancestor) {
+          nextParams.set('ancestor', updates.ancestor);
+        } else {
+          nextParams.delete('ancestor');
+        }
+      }
+      if (updates.sort !== undefined) {
+        if (updates.sort !== 'most_starred') {
+          nextParams.set('sort', updates.sort);
+        } else {
+          nextParams.set('sort', 'most_starred');
+        }
       }
       setSearchParams(nextParams, { replace: true });
     },
@@ -143,15 +195,18 @@ export const RecipeCatalogPage: React.FC<RecipeCatalogPageProps> = ({ initialTab
     setTag('');
     setAncestorId('');
     setOffset(0);
-    syncUrlTag('');
+    syncCatalogParams({ q: '', course: '', tag: '', ancestor: '' });
   };
 
   const handleSelectTab = (tabId: string): void => {
     const nextTab = tabId === 'favorites' ? 'favorites' : 'all';
     setActiveTab(nextTab);
     setOffset(0);
+    const nextParams = new URLSearchParams(searchParams);
+    nextParams.delete('favorites');
+    const qs = nextParams.toString();
     const targetPath = nextTab === 'favorites' ? `${basePath}/favorites` : basePath;
-    void navigate(targetPath, { replace: true });
+    void navigate(qs ? `${targetPath}?${qs}` : targetPath, { replace: true });
   };
 
   const courseOptions = useMemo<readonly UiRecipeCourse[]>(() => {
@@ -165,8 +220,126 @@ export const RecipeCatalogPage: React.FC<RecipeCatalogPageProps> = ({ initialTab
   const recipes = data?.recipes ?? [];
   const total = data?.total ?? 0;
   const canCreate = Boolean(data?.permissions?.can_create && client.createRecipe);
+  const canStar = Boolean(data?.permissions?.can_star && client.starRecipe && client.unstarRecipe);
+  const showFavoritesTab =
+    data === null ||
+    data.permissions === undefined ||
+    data.permissions.can_star !== false ||
+    activeTab === 'favorites';
   const hasPrevious = offset > 0;
   const hasNext = offset + recipes.length < total;
+
+  const handleToggleStar = async (recipe: UiRecipeSummary): Promise<void> => {
+    if (!canStar || !client.starRecipe || !client.unstarRecipe || pendingStarIds.has(recipe.id)) {
+      return;
+    }
+
+    const targetStarred = !recipe.viewer_has_starred;
+    const prevStarState = {
+      star_count: recipe.star_count,
+      viewer_has_starred: recipe.viewer_has_starred,
+    };
+    const optimistic = computeOptimisticStarState(prevStarState, targetStarred);
+    const removingFromFavorites = activeTab === 'favorites' && !targetStarred;
+    const originalIndex = recipes.findIndex((item) => item.id === recipe.id);
+
+    setStarError(null);
+    setPendingStarIds((prev) => {
+      const next = new Set(prev);
+      next.add(recipe.id);
+      return next;
+    });
+
+    setData((prev) => {
+      if (!prev) {
+        return prev;
+      }
+      if (removingFromFavorites) {
+        return {
+          ...prev,
+          recipes: prev.recipes.filter((item) => item.id !== recipe.id),
+          total: Math.max(0, prev.total - 1),
+        };
+      }
+      return {
+        ...prev,
+        recipes: prev.recipes.map((item) =>
+          item.id === recipe.id
+            ? {
+                ...item,
+                star_count: optimistic.star_count,
+                viewer_has_starred: optimistic.viewer_has_starred,
+              }
+            : item
+        ),
+      };
+    });
+
+    try {
+      const result = targetStarred
+        ? await client.starRecipe(recipe.slug)
+        : await client.unstarRecipe(recipe.slug);
+      setData((prev) => {
+        if (!prev) {
+          return prev;
+        }
+        return {
+          ...prev,
+          recipes: prev.recipes.map((item) =>
+            item.id === recipe.id
+              ? {
+                  ...item,
+                  star_count: result.star_count,
+                  viewer_has_starred: result.viewer_has_starred,
+                }
+              : item
+          ),
+        };
+      });
+    } catch (err: unknown) {
+      setData((prev) => {
+        if (!prev) {
+          return prev;
+        }
+        if (removingFromFavorites) {
+          if (prev.recipes.some((item) => item.id === recipe.id)) {
+            return prev;
+          }
+          const restored = [...prev.recipes];
+          const insertAt = originalIndex >= 0 ? Math.min(originalIndex, restored.length) : restored.length;
+          restored.splice(insertAt, 0, {
+            ...recipe,
+            star_count: prevStarState.star_count,
+            viewer_has_starred: prevStarState.viewer_has_starred,
+          });
+          return {
+            ...prev,
+            recipes: restored,
+            total: prev.total + 1,
+          };
+        }
+        return {
+          ...prev,
+          recipes: prev.recipes.map((item) =>
+            item.id === recipe.id
+              ? {
+                  ...item,
+                  star_count: prevStarState.star_count,
+                  viewer_has_starred: prevStarState.viewer_has_starred,
+                }
+              : item
+          ),
+        };
+      });
+      setStarError(err instanceof Error ? err.message : 'Unable to update recipe star right now.');
+    } finally {
+      setPendingStarIds((prev) => {
+        const next = new Set(prev);
+        next.delete(recipe.id);
+        return next;
+      });
+    }
+  };
 
   return (
     <div>
@@ -194,15 +367,17 @@ export const RecipeCatalogPage: React.FC<RecipeCatalogPageProps> = ({ initialTab
           </div>
         </ArchivalBanner>
 
-        <ArchivalTabs
-          ariaLabel="Recipe catalog view"
-          tabs={[
-            { id: 'all', label: 'All Recipes' },
-            { id: 'favorites', label: 'My Favorites' },
-          ]}
-          activeTabId={activeTab}
-          onSelectTab={handleSelectTab}
-        />
+        {showFavoritesTab && (
+          <ArchivalTabs
+            ariaLabel="Recipe catalog view"
+            tabs={[
+              { id: 'all', label: 'All Recipes' },
+              { id: 'favorites', label: 'My Favorites' },
+            ]}
+            activeTabId={activeTab}
+            onSelectTab={handleSelectTab}
+          />
+        )}
 
         <ArchivalFilterBar
           actions={
@@ -228,8 +403,10 @@ export const RecipeCatalogPage: React.FC<RecipeCatalogPageProps> = ({ initialTab
               placeholder="Title, provenance, or tag…"
               value={query}
               onChange={(e) => {
-                setQuery(e.target.value);
+                const next = e.target.value;
+                setQuery(next);
                 setOffset(0);
+                syncCatalogParams({ q: next });
               }}
             />
           </div>
@@ -245,8 +422,10 @@ export const RecipeCatalogPage: React.FC<RecipeCatalogPageProps> = ({ initialTab
               onChange={(e) => {
                 const raw = e.target.value;
                 const parsed = raw ? UiRecipeCourseSchema.safeParse(raw) : null;
-                setCourse(parsed?.success ? parsed.data : '');
+                const nextCourse = parsed?.success ? parsed.data : '';
+                setCourse(nextCourse);
                 setOffset(0);
+                syncCatalogParams({ course: nextCourse });
               }}
             >
               <option value="">All courses</option>
@@ -271,7 +450,7 @@ export const RecipeCatalogPage: React.FC<RecipeCatalogPageProps> = ({ initialTab
                   const next = e.target.value;
                   setTag(next);
                   setOffset(0);
-                  syncUrlTag(next);
+                  syncCatalogParams({ tag: next });
                 }}
               >
                 <option value="">All tags</option>
@@ -294,8 +473,10 @@ export const RecipeCatalogPage: React.FC<RecipeCatalogPageProps> = ({ initialTab
                 className={cx(recipeStyles, 'recipe-filter-select')}
                 value={ancestorId}
                 onChange={(e) => {
-                  setAncestorId(e.target.value);
+                  const next = e.target.value;
+                  setAncestorId(next);
                   setOffset(0);
+                  syncCatalogParams({ ancestor: next });
                 }}
               >
                 <option value="">All ancestors</option>
@@ -317,14 +498,13 @@ export const RecipeCatalogPage: React.FC<RecipeCatalogPageProps> = ({ initialTab
               className={cx(recipeStyles, 'recipe-filter-select')}
               value={sort}
               onChange={(e) => {
-                const parsed = UiRecipeSortModeSchema.safeParse(e.target.value);
-                if (parsed.success) {
-                  setSort(parsed.data);
-                  setOffset(0);
-                }
+                const nextSort = normalizeCatalogSortMode(e.target.value);
+                setSort(nextSort);
+                setOffset(0);
+                syncCatalogParams({ sort: nextSort });
               }}
             >
-              <option value="stars">Most Starred</option>
+              <option value="most_starred">Most Starred</option>
               <option value="newest">Newest</option>
               <option value="alpha">Alphabetical</option>
             </select>
@@ -338,10 +518,20 @@ export const RecipeCatalogPage: React.FC<RecipeCatalogPageProps> = ({ initialTab
               onRemove={() => {
                 setTag('');
                 setOffset(0);
-                syncUrlTag('');
+                syncCatalogParams({ tag: '' });
               }}
             />
           </div>
+        )}
+
+        {starError && (
+          <ArchivalToast
+            tone="error"
+            message={starError}
+            onDismiss={() => {
+              setStarError(null);
+            }}
+          />
         )}
 
         {error && (
@@ -484,7 +674,7 @@ export const RecipeCatalogPage: React.FC<RecipeCatalogPageProps> = ({ initialTab
                                 const next = tag === t ? '' : t;
                                 setTag(next);
                                 setOffset(0);
-                                syncUrlTag(next);
+                                syncCatalogParams({ tag: next });
                               }}
                             />
                           ))}
@@ -496,9 +686,17 @@ export const RecipeCatalogPage: React.FC<RecipeCatalogPageProps> = ({ initialTab
                           {[totalTime, recipe.servings].filter(Boolean).join(' · ') || 'Heirloom card'}
                         </span>
                         <span className={cx(recipeStyles, 'recipe-card-stats')}>
-                          <span>
-                            {recipe.star_count} {recipe.star_count === 1 ? 'star' : 'stars'}
-                          </span>
+                          <RecipeStarButton
+                            recipeTitle={recipe.title}
+                            starCount={recipe.star_count}
+                            starred={recipe.viewer_has_starred}
+                            canStar={canStar}
+                            pending={pendingStarIds.has(recipe.id)}
+                            variant="card"
+                            onToggle={() => {
+                              void handleToggleStar(recipe);
+                            }}
+                          />
                           <span>
                             {recipe.comment_count} {recipe.comment_count === 1 ? 'note' : 'notes'}
                           </span>

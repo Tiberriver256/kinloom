@@ -449,6 +449,16 @@ export function canCreateOrEditRecipe(principal: CallerPrincipal, settings: Reci
   return settings.create_edit_min_role === 'admin' ? principal.role === 'admin' : true;
 }
 
+export function canStarRecipe(principal: CallerPrincipal, settings: RecipesRuntimeSettings): boolean {
+  if (principal.kind === 'user') {
+    return true;
+  }
+  if (principal.kind === 'invite_viewer') {
+    return settings.star_min_role === 'viewer';
+  }
+  return false;
+}
+
 export function computeRecipePermissions(
   principal: CallerPrincipal,
   recipe: Pick<RecipeRecord, 'created_by_id'>,
@@ -468,7 +478,7 @@ export function computeRecipePermissions(
       can_edit: false,
       can_delete: false,
       can_upload: false,
-      can_star: settings.star_min_role === 'viewer',
+      can_star: canStarRecipe(principal, settings),
       can_comment: false,
     };
   }
@@ -480,7 +490,7 @@ export function computeRecipePermissions(
     can_edit: settings.create_edit_min_role === 'admin' ? isAdmin : true,
     can_delete: isAdmin || isOwner,
     can_upload: settings.upload_min_role === 'admin' ? isAdmin : true,
-    can_star: true,
+    can_star: canStarRecipe(principal, settings),
     can_comment:
       settings.comment_min_role === 'disabled'
         ? false
@@ -530,6 +540,57 @@ function parseOptionalMultipartBoolean(raw: unknown, fieldName: string): boolean
     return true;
   }
   throw new KinloomHttpError(400, 'VALIDATION_ERROR', `Field '${fieldName}' must be 'true' or 'false'.`);
+}
+
+function requireAuthenticatedMutationPrincipal(ctx: KinloomServerPluginContext): void {
+  if (ctx.principal.kind !== 'anonymous') {
+    return;
+  }
+  const authHeader = ctx.request.headers.get('authorization')?.trim().toLowerCase() ?? '';
+  const bearerAttempted = authHeader === 'bearer' || authHeader.startsWith('bearer ');
+  if (!bearerAttempted && hasSecurityEventEmitter(ctx)) {
+    ctx.emitSecurityEvent({
+      type: 'auth.write.forbidden',
+      status: 401,
+      reason: 'unauthenticated',
+      requiredRole: 'editor',
+      actorKind: 'anonymous',
+    });
+  }
+  throw new KinloomHttpError(401, 'UNAUTHORIZED', 'Authentication is required.');
+}
+
+async function requireRecipeStarActorKey(
+  ctx: KinloomServerPluginContext,
+  settings: RecipesRuntimeSettings
+): Promise<string> {
+  const { principal } = ctx;
+  if (principal.kind === 'invite_viewer' && settings.star_min_role !== 'viewer') {
+    if (hasSecurityEventEmitter(ctx)) {
+      ctx.emitSecurityEvent({
+        type: 'auth.write.forbidden',
+        status: 403,
+        reason: 'invite_read_only',
+        requiredRole: 'editor',
+        actorKind: 'invite_viewer',
+      });
+    }
+    throw new KinloomHttpError(403, 'FORBIDDEN', 'Sign in as a family archive member to star recipes.');
+  }
+  const actorKey = await deriveRecipeActorKey(principal);
+  if (!actorKey) {
+    if (hasSecurityEventEmitter(ctx)) {
+      ctx.emitSecurityEvent({
+        type: 'auth.write.forbidden',
+        status: 403,
+        reason: 'member_required',
+        requiredRole: 'editor',
+        actorKind: principal.kind,
+      });
+    }
+    throw new KinloomHttpError(403, 'FORBIDDEN', 'Only human archive members may star recipes.');
+  }
+  return actorKey;
 }
 
 function requireRecipeWriteActor(
@@ -777,6 +838,11 @@ export function createRecipesServerPlugin(options: RecipesServerPluginOptions = 
         resolveRuntimeSettings(ctx.ports),
       ]);
 
+      const catalogPermissions = {
+        can_create: canCreateOrEditRecipe(ctx.principal, settings),
+        can_star: canStarRecipe(ctx.principal, settings),
+      };
+
       if (favoritesRequested && viewerActorKey === null) {
         const facetOnly = await repo.listRecipes({
           limit: 1,
@@ -790,7 +856,7 @@ export function createRecipesServerPlugin(options: RecipesServerPluginOptions = 
           offset: pagination.offset,
           facets: facetOnly.facets,
           display: { show_home_widget: settings.show_home_widget },
-          permissions: { can_create: canCreateOrEditRecipe(ctx.principal, settings) },
+          permissions: catalogPermissions,
         });
       }
 
@@ -831,7 +897,7 @@ export function createRecipesServerPlugin(options: RecipesServerPluginOptions = 
         offset: pagination.offset,
         facets: result.facets,
         display: { show_home_widget: settings.show_home_widget },
-        permissions: { can_create: canCreateOrEditRecipe(ctx.principal, settings) },
+        permissions: catalogPermissions,
       });
     }
 
@@ -877,16 +943,19 @@ export function createRecipesServerPlugin(options: RecipesServerPluginOptions = 
       const rawOffset = parseOptionalIntParam(sp.get('offset'), 'offset', 0, 100_000);
       const pagination = clampRecipeListPagination(rawLimit ?? 12, rawOffset);
 
-      const [livingIds, viewerActorKey] = await Promise.all([
+      const [livingIds, viewerActorKey, settings] = await Promise.all([
         ctx.ports.repository.getLivingPersonIds(),
         deriveRecipeActorKey(ctx.principal),
+        resolveRuntimeSettings(ctx.ports),
       ]);
+      const personPermissions = { can_star: canStarRecipe(ctx.principal, settings) };
 
       if (livingIds.has(personId)) {
         return jsonResponse({
           person_id: personId,
           recipes: [],
           total: 0,
+          permissions: personPermissions,
         });
       }
 
@@ -897,6 +966,7 @@ export function createRecipesServerPlugin(options: RecipesServerPluginOptions = 
           person_id: personId,
           recipes: [],
           total: 0,
+          permissions: personPermissions,
         });
       }
 
@@ -921,6 +991,7 @@ export function createRecipesServerPlugin(options: RecipesServerPluginOptions = 
         person_id: personId,
         recipes,
         total: result.total,
+        permissions: personPermissions,
       });
     }
 
@@ -1069,8 +1140,31 @@ export function createRecipesServerPlugin(options: RecipesServerPluginOptions = 
   }
 
   async function handlePostRequest(ctx: KinloomServerPluginContext): Promise<Response> {
+    requireAuthenticatedMutationPrincipal(ctx);
     const repo = resolveRepository(ctx);
     const segments = splitRecipesRouteSegments(ctx.url.pathname);
+
+    // POST /api/plugins/recipes/:slugOrId/star (idempotent star)
+    if (segments.length === 2 && segments[1] === 'star') {
+      const settings = await resolveRuntimeSettings(ctx.ports);
+      const actorKey = await requireRecipeStarActorKey(ctx, settings);
+
+      const slugOrId = decodeSegment(segments[0]).trim();
+      const recipe = slugOrId ? await repo.getRecipeBySlugOrId(slugOrId) : null;
+      if (!recipe) {
+        throw new KinloomHttpError(404, 'RECIPE_NOT_FOUND', `Recipe '${slugOrId}' was not found.`);
+      }
+
+      const outcome = await repo.starRecipe(recipe.id, actorKey, ctx.ports.clock.nowIso());
+      if (outcome.kind === 'not_found') {
+        throw new KinloomHttpError(404, 'RECIPE_NOT_FOUND', `Recipe '${slugOrId}' was not found.`);
+      }
+      return jsonResponse({
+        recipe_id: outcome.recipe_id,
+        star_count: outcome.star_count,
+        viewer_has_starred: true,
+      });
+    }
 
     // POST /api/plugins/recipes (create structured recipe)
     if (segments.length === 0) {
@@ -1305,8 +1399,31 @@ export function createRecipesServerPlugin(options: RecipesServerPluginOptions = 
   }
 
   async function handleDeleteRequest(ctx: KinloomServerPluginContext): Promise<Response> {
+    requireAuthenticatedMutationPrincipal(ctx);
     const repo = resolveRepository(ctx);
     const segments = splitRecipesRouteSegments(ctx.url.pathname);
+
+    // DELETE /api/plugins/recipes/:slugOrId/star (idempotent unstar)
+    if (segments.length === 2 && segments[1] === 'star') {
+      const settings = await resolveRuntimeSettings(ctx.ports);
+      const actorKey = await requireRecipeStarActorKey(ctx, settings);
+
+      const slugOrId = decodeSegment(segments[0]).trim();
+      const recipe = slugOrId ? await repo.getRecipeBySlugOrId(slugOrId) : null;
+      if (!recipe) {
+        throw new KinloomHttpError(404, 'RECIPE_NOT_FOUND', `Recipe '${slugOrId}' was not found.`);
+      }
+
+      const outcome = await repo.unstarRecipe(recipe.id, actorKey);
+      if (outcome.kind === 'not_found') {
+        throw new KinloomHttpError(404, 'RECIPE_NOT_FOUND', `Recipe '${slugOrId}' was not found.`);
+      }
+      return jsonResponse({
+        recipe_id: outcome.recipe_id,
+        star_count: outcome.star_count,
+        viewer_has_starred: false,
+      });
+    }
 
     // DELETE /api/plugins/recipes/:slugOrId (soft-delete by owner or admin)
     if (segments.length === 1) {
@@ -1375,7 +1492,7 @@ export function createRecipesServerPlugin(options: RecipesServerPluginOptions = 
       {
         method: 'POST',
         pathPrefix: RECIPES_API_PREFIX,
-        minRole: 'editor',
+        minRole: 'public',
         handle: handlePostRequest,
       },
       {
@@ -1393,7 +1510,7 @@ export function createRecipesServerPlugin(options: RecipesServerPluginOptions = 
       {
         method: 'DELETE',
         pathPrefix: RECIPES_API_PREFIX,
-        minRole: 'editor',
+        minRole: 'public',
         handle: handleDeleteRequest,
       },
     ],

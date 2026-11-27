@@ -428,6 +428,65 @@ describe('Cloudflare Worker 0006_plugin_migrations, D1PluginDatabaseFactory, and
     expect(stalePayload.error.code).toBe('RECIPE_VERSION_CONFLICT');
     expect(stalePayload.error.details.server_version).toBe(2);
 
+    // End-to-end Miniflare Worker star/unstar idempotency, favorites=true, and sort=most_starred over D1
+    const starPost1 = await recipesWorker.fetch(
+      new Request(`${CONTRACT_TEST_ORIGIN}/api/plugins/recipes/${createdRecipe.recipe.slug}/star`, {
+        method: 'POST',
+        headers: { cookie, origin: CONTRACT_TEST_ORIGIN },
+      }),
+      env
+    );
+    expect(starPost1.status).toBe(200);
+    expect(await starPost1.json()).toEqual({
+      recipe_id: createdRecipe.recipe.id,
+      star_count: 1,
+      viewer_has_starred: true,
+    });
+
+    const starPost2 = await recipesWorker.fetch(
+      new Request(`${CONTRACT_TEST_ORIGIN}/api/plugins/recipes/${createdRecipe.recipe.slug}/star`, {
+        method: 'POST',
+        headers: { cookie, origin: CONTRACT_TEST_ORIGIN },
+      }),
+      env
+    );
+    expect(starPost2.status).toBe(200);
+    expect(await starPost2.json()).toEqual({
+      recipe_id: createdRecipe.recipe.id,
+      star_count: 1,
+      viewer_has_starred: true,
+    });
+
+    const favListRes = await recipesWorker.fetch(
+      new Request(`${CONTRACT_TEST_ORIGIN}/api/plugins/recipes?favorites=true&sort=most_starred`, {
+        headers: { cookie },
+      }),
+      env
+    );
+    expect(favListRes.status).toBe(200);
+    const favListJson = (await favListRes.json()) as {
+      recipes: Array<{ id: string; star_count: number; viewer_has_starred: boolean }>;
+      permissions: { can_create: boolean; can_star: boolean };
+    };
+    expect(favListJson.permissions.can_star).toBe(true);
+    expect(favListJson.recipes.map((r) => [r.id, r.star_count, r.viewer_has_starred])).toEqual([
+      [createdRecipe.recipe.id, 1, true],
+    ]);
+
+    const starDel = await recipesWorker.fetch(
+      new Request(`${CONTRACT_TEST_ORIGIN}/api/plugins/recipes/${createdRecipe.recipe.slug}/star`, {
+        method: 'DELETE',
+        headers: { cookie, origin: CONTRACT_TEST_ORIGIN },
+      }),
+      env
+    );
+    expect(starDel.status).toBe(200);
+    expect(await starDel.json()).toEqual({
+      recipe_id: createdRecipe.recipe.id,
+      star_count: 0,
+      viewer_has_starred: false,
+    });
+
     const deleteRecipeRes = await recipesWorker.fetch(
       new Request(`${CONTRACT_TEST_ORIGIN}/api/plugins/recipes/${createdRecipe.recipe.slug}`, {
         method: 'DELETE',

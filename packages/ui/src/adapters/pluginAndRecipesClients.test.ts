@@ -7,7 +7,13 @@ import {
   stepLightboxZoom,
   validateImageUploadCandidates,
 } from '../lib/lightboxModel.js';
-import type { UiRecipeDetail, UiRecipePhoto } from '../lib/recipesModel.js';
+import {
+  computeOptimisticStarState,
+  filterStaticRecipes,
+  normalizeCatalogSortMode,
+  type UiRecipeDetail,
+  type UiRecipePhoto,
+} from '../lib/recipesModel.js';
 import { ApiClientError } from './httpWiki/httpClient.js';
 import { createHttpPluginApiClient } from './pluginApiClient.js';
 import { createHttpRecipesClient, createStaticRecipesClient } from './recipesClient.js';
@@ -373,6 +379,83 @@ describe('createHttpRecipesClient and createStaticRecipesClient', () => {
       'PATCH /api/plugins/recipes/sourdough-boule',
       'DELETE /api/plugins/recipes/sourdough-boule',
     ]);
+  });
+
+  it('supports idempotent starRecipe and unstarRecipe through PluginApiClient and pure star model helpers', async () => {
+    const requests: Array<{ url: string; method: string }> = [];
+    const fetchImpl: typeof fetch = async (input, init) => {
+      const url = typeof input === 'string' ? input : input.toString();
+      const method = init?.method ?? 'GET';
+      requests.push({ url, method });
+      if (method === 'POST' && url === '/api/plugins/recipes/sourdough-boule/star') {
+        return new Response(JSON.stringify({ recipe_id: 'rec_1', star_count: 4, viewer_has_starred: true }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        });
+      }
+      if (method === 'DELETE' && url === '/api/plugins/recipes/sourdough-boule/star') {
+        return new Response(
+          JSON.stringify({ recipe_id: 'rec_1', star_count: 3, viewer_has_starred: false }),
+          { status: 200, headers: { 'content-type': 'application/json' } }
+        );
+      }
+      return new Response(JSON.stringify({ error: { code: 'NOT_FOUND', message: 'Missing' } }), {
+        status: 404,
+        headers: { 'content-type': 'application/json' },
+      });
+    };
+
+    const client = createHttpRecipesClient({ fetchImpl });
+    expect(await client.starRecipe!('sourdough-boule')).toEqual({
+      recipe_id: 'rec_1',
+      star_count: 4,
+      viewer_has_starred: true,
+    });
+    expect(await client.unstarRecipe!('sourdough-boule')).toEqual({
+      recipe_id: 'rec_1',
+      star_count: 3,
+      viewer_has_starred: false,
+    });
+    expect(requests.map((r) => `${r.method} ${r.url}`)).toEqual([
+      'POST /api/plugins/recipes/sourdough-boule/star',
+      'DELETE /api/plugins/recipes/sourdough-boule/star',
+    ]);
+
+    expect(computeOptimisticStarState({ star_count: 2, viewer_has_starred: false }, true)).toEqual({
+      star_count: 3,
+      viewer_has_starred: true,
+    });
+    expect(computeOptimisticStarState({ star_count: 2, viewer_has_starred: true }, true)).toEqual({
+      star_count: 2,
+      viewer_has_starred: true,
+    });
+    expect(computeOptimisticStarState({ star_count: 0, viewer_has_starred: true }, false)).toEqual({
+      star_count: 0,
+      viewer_has_starred: false,
+    });
+
+    expect(normalizeCatalogSortMode('most_starred')).toBe('most_starred');
+    expect(normalizeCatalogSortMode('stars')).toBe('most_starred');
+    expect(normalizeCatalogSortMode('newest')).toBe('newest');
+    expect(normalizeCatalogSortMode('alpha')).toBe('alpha');
+    expect(normalizeCatalogSortMode('unknown')).toBe('most_starred');
+
+    const tiedA: UiRecipeDetail = {
+      ...SAMPLE_RECIPE,
+      id: 'rec_tie_a',
+      slug: 'tie-a',
+      star_count: 2,
+      updated_at: '2026-11-27T09:00:00.000Z',
+    };
+    const tiedB: UiRecipeDetail = {
+      ...SAMPLE_RECIPE,
+      id: 'rec_tie_b',
+      slug: 'tie-b',
+      star_count: 2,
+      updated_at: '2026-11-27T11:00:00.000Z',
+    };
+    const sorted = filterStaticRecipes([tiedA, tiedB], { sort: 'most_starred' });
+    expect(sorted.recipes.map((r) => r.id)).toEqual(['rec_tie_b', 'rec_tie_a']);
   });
 });
 
