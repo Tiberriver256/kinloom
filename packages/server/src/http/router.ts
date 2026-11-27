@@ -104,7 +104,11 @@ export const RESERVED_SERVER_ROUTE_PREFIXES: readonly string[] = [
   '/api/auth',
   '/api/media',
   '/api/talk',
-  '/api/admin',
+  '/api/admin/invites',
+  '/api/admin/agent-tokens',
+  '/api/admin/users',
+  '/api/admin/system',
+  '/api/admin/plugin-settings',
   '/api/pronunciations',
   '/api/pronunciation',
   '/privacy',
@@ -483,6 +487,11 @@ export function createKinloomServer(config: KinloomServerConfig): KinloomServer 
             status: secured.status,
             durationMs,
             errorCode: null,
+            waitUntil: fetchOptions?.waitUntil,
+            reportPluginError: config.onPluginError,
+            ports: config.ports,
+            siteConfig: config.siteConfig,
+            mode,
           },
           config.onPluginError
         );
@@ -526,6 +535,11 @@ export function createKinloomServer(config: KinloomServerConfig): KinloomServer 
             status: mapped.status,
             durationMs,
             errorCode,
+            waitUntil: fetchOptions?.waitUntil,
+            reportPluginError: config.onPluginError,
+            ports: config.ports,
+            siteConfig: config.siteConfig,
+            mode,
           },
           config.onPluginError
         );

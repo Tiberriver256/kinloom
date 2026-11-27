@@ -407,3 +407,75 @@ export default {
 Keep Cloudflare's dashboard **Automatic setup** (edge auto-injection for Pages or proxied zones) disabled when you run Kinloom.
 Automatic injection adds the beacon outside Kinloom's router, which breaks Kinloom's strict default `script-src 'self'` CSP and causes the `/privacy` page to contradict the live HTML.
 Using the `webAnalytics` plugin option keeps beacon injection, scoped CSP directives, and the `/privacy` disclosure synchronized and off by default.
+
+## Privacy-first page visit stats & Admin Settings dashboard (off by default)
+
+Kinloom provides an optional server-instance page visit counter (`createPageVisitStatsPlugin` from `@kinloom/worker` or `@kinloom/server`) paired with an optional UI plugin (`createObservabilityStatsPlugin` from `@kinloom/ui`).
+Both plugins stay completely off by default.
+When you do not register them (or pass `{ enabled: false }`), the server performs zero database writes, exposes zero stats endpoints (`404` on `/api/admin/observability/stats` and `/api/observability/page-visits`), leaves `/privacy` unchanged, and renders zero visit counters or observability dashboard chrome.
+
+### 1. Apply the D1 migration
+
+Apply migration `0005_page_visit_stats.sql` with `kinloom migrate` (or Wrangler D1 migrations) to create the idempotent `page_visit_daily` and `observability_cache_daily` tables:
+
+```sh
+kinloom migrate --remote
+```
+
+If the migration has not been applied yet, `D1PageVisitStatsStore` degrades cleanly to zero counts without breaking requests.
+
+### 2. Enable the server plugin
+
+Register `createPageVisitStatsPlugin()` alongside `createCloudflareWorker`.
+Pair it with `createWorkersObservabilityPlugin()` if you also want bundle cache hit-ratio tracking alongside page visit counts:
+
+```ts
+import {
+	createCloudflareWorker,
+	createPageVisitStatsPlugin,
+	createWorkersObservabilityPlugin,
+} from '@kinloom/worker';
+import { siteConfig } from './siteConfig.js';
+
+export default createCloudflareWorker({
+	siteConfig,
+	plugins: [
+		createWorkersObservabilityPlugin(),
+		createPageVisitStatsPlugin({
+			publicVisitBadges: false, // toggleable later in Admin Settings
+			defaultWindow: '30d',
+		}),
+	],
+});
+```
+
+`createCloudflareWorker` automatically wires `D1PageVisitStatsStore(env.DB)` into the plugin store port and schedules visit writes through `ctx.waitUntil` so storage work never delays page responses or breaks requests if D1 errors occur.
+
+### 3. Enable the Admin Settings UI dashboard and optional badges
+
+Pass `createObservabilityStatsPlugin()` to `<KinloomApp plugins={[...]} />`:
+
+```tsx
+import { createObservabilityStatsPlugin, KinloomApp } from '@kinloom/ui';
+
+<KinloomApp
+	siteConfig={siteConfig}
+	plugins={[
+		createObservabilityStatsPlugin({
+			showPublicVisitBadges: false,
+			defaultWindow: '30d',
+		}),
+	]}
+/>;
+```
+
+Administrators see an **Archive Traffic & Page Visit Stats** dashboard inside **Admin Settings** (`AdminSettingsShell`) with rolling `7d` / `30d` / `all-time` totals, an accessible daily UTC bar chart, bundle revision, cache hit ratio, top visited deceased people/places/narratives, and a switch to show or hide subtle archival visit badges on entity pages.
+
+### Privacy guarantees and endpoints
+
+- **Aggregate counts only:** The store records only normalized static route keys (`/`, `/places`, `/time`, `/tree`, `/map`, `/kinship`, `/evidence`, `/changes`) or verified entity slugs (`/person/:slug`, `/place/:slug`, `/narrative/:slug`) bucketed by UTC day (`YYYY-MM-DD`).
+- **Zero cookies, zero IP storage, zero fingerprinting:** The plugin sets zero cookies, reads zero IP addresses, and stores zero user or session identifiers.
+- **Strict living-person exclusion:** Visits to living people or narratives linked to living people are never written to storage, never returned by `GET /api/admin/observability/stats`, and always return `404` on `GET /api/observability/page-visits` (identical to nonexistent slugs).
+- **Bot and prefetch filtering:** Non-`GET` requests, non-`2xx` or non-HTML responses, `Purpose: prefetch` / `Sec-Purpose: prefetch` requests, and known bot/crawler/CLI user agents are ignored.
+- **Admin RBAC and optional public count endpoint:** `GET /api/admin/observability/stats` enforces `enforceCsrfOrigin` and `requireMinRole(..., 'admin')` (`401` unauthenticated, `403` non-admin, `404` when disabled). `GET /api/observability/page-visits` stays `404` until explicitly enabled via `publicVisitBadges: true` or the Admin Settings switch.
+- **Truthful `/privacy` disclosure:** When enabled, the plugin appends a privacy bullet to `/privacy` disclosing aggregate, cookie-free server-instance page visit counting and living-relative exclusion.

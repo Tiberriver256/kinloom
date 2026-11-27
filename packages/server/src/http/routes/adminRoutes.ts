@@ -27,6 +27,8 @@ const UpdateUserBodySchema = z.object({
   display_name: z.string().optional(),
 });
 
+const BUILTIN_ADMIN_DOMAINS = new Set(['system', 'plugin-settings', 'invites', 'agent-tokens', 'users']);
+
 export function createAdminRouteHandler(
   adminService: AdminService,
   systemDiagnosticsService?: SystemDiagnosticsService,
@@ -36,6 +38,10 @@ export function createAdminRouteHandler(
     const { request, url, method, segments, auth, telemetry } = ctx;
 
     if (segments[0] !== 'api' || segments[1] !== 'admin') {
+      return null;
+    }
+
+    if (!segments[2] || !BUILTIN_ADMIN_DOMAINS.has(segments[2])) {
       return null;
     }
 

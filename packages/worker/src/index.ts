@@ -11,6 +11,7 @@ import {
   createKinloomServer,
   GoogleOAuthProvider,
   type KinloomServerPlugin,
+  type PageVisitStatsStore,
   RecentErrorRingBuffer,
   SystemClock,
   validateAndCompilePluginRoutes,
@@ -18,6 +19,7 @@ import {
 import { createCloudflareAssetHandler } from './adapters/cloudflareAssets.js';
 import { CloudflareEmailSender } from './adapters/cloudflareEmailSender.js';
 import { probeD1SchemaMigrationLevel } from './adapters/d1/schemaProbe.js';
+import { D1PageVisitStatsStore } from './adapters/d1PageVisitStatsStore.js';
 import { D1PluginSettingsStore } from './adapters/d1PluginSettingsStore.js';
 import { D1PronunciationLexiconStore } from './adapters/d1PronunciationLexiconStore.js';
 import { createD1ArchiveRepository } from './adapters/d1Repository.js';
@@ -29,25 +31,46 @@ import type { ExecutionContext, ExportedHandler, KinloomWorkerEnv } from './type
 export const KINLOOM_WORKER_VERSION = '0.45.0';
 
 export {
+  type AdminObservabilityStatsResponse,
+  AdminObservabilityStatsResponseSchema,
   CLOUDFLARE_WEB_ANALYTICS_BEACON_URL,
   CLOUDFLARE_WEB_ANALYTICS_CONNECT_ORIGIN,
   CLOUDFLARE_WEB_ANALYTICS_PRIVACY_DISCLOSURE_ID,
   CLOUDFLARE_WEB_ANALYTICS_PRIVACY_SUMMARY,
   CLOUDFLARE_WEB_ANALYTICS_SCRIPT_ORIGIN,
   type CloudflareWebAnalyticsToken,
+  createPageVisitStatsPlugin,
   createPronunciationPlugin,
   createWorkersObservabilityPlugin,
+  type DailyVisitPoint,
   type DynamicOgRequestOptions,
   handleDynamicOgRequest,
+  InMemoryPageVisitStatsStore,
   isCloudflareWebAnalyticsToken,
   isWebAnalyticsEnabled,
   type KinloomServerPlugin,
+  type ObservabilityCacheOutcome,
+  type ObservabilityCacheSummary,
+  type ObservabilityCacheTotals,
+  type ObservabilityStatsWindow,
+  PAGE_VISIT_STATS_ADMIN_ROUTE,
+  PAGE_VISIT_STATS_PLUGIN_ID,
+  PAGE_VISIT_STATS_PRIVACY_DISCLOSURE_ID,
+  PAGE_VISIT_STATS_PRIVACY_SUMMARY,
+  PAGE_VISIT_STATS_PUBLIC_COUNT_ROUTE,
+  type PageVisitEntityKind,
+  type PageVisitIncrementInput,
+  type PageVisitStatsPluginOptions,
+  type PageVisitStatsStore,
+  type PageVisitTopRow,
   PRONUNCIATION_PLUGIN_ID,
   type PronunciationFallbackBackend,
   type PronunciationPhonemeMode,
   type PronunciationPluginOptions,
   type PronunciationPluginRuntimeConfig,
   type PronunciationTtsBackend,
+  type PublicPageVisitCountResponse,
+  PublicPageVisitCountResponseSchema,
   type RenderPrivacyPolicyOptions,
   renderCloudflareWebAnalyticsBeaconHtml,
   renderPrivacyPolicyHtml,
@@ -62,6 +85,7 @@ export {
   type ServerPrivacyDisclosure,
   type ServerSecurityEvent,
   type ServerSecurityEventType,
+  type TopVisitedPage,
   validateCloudflareWebAnalyticsToken,
   type WebAnalyticsOptions,
   WORKERS_OBSERVABILITY_PLUGIN_ID,
@@ -79,6 +103,7 @@ export {
   type CloudflareEmailSenderOptions,
   DEFAULT_EMAIL_FROM,
 } from './adapters/cloudflareEmailSender.js';
+export { D1PageVisitStatsStore } from './adapters/d1PageVisitStatsStore.js';
 export { D1PluginSettingsStore } from './adapters/d1PluginSettingsStore.js';
 export { D1PronunciationLexiconStore } from './adapters/d1PronunciationLexiconStore.js';
 export {
@@ -134,6 +159,7 @@ export interface CreateCloudflareWorkerOptions {
   pronunciationGenerator?: PronunciationAudioGenerator;
   pronunciationLexiconStore?: PronunciationLexiconStore;
   pluginSettingsStore?: PluginSettingsStore;
+  pageVisitStatsStore?: PageVisitStatsStore;
   onPluginError?: (pluginId: string, error: unknown) => void;
   buildCommitSha?: string;
   buildTimestamp?: string;
@@ -195,6 +221,7 @@ export function createCloudflareWorker(
       const pronunciationLexiconStore =
         options.pronunciationLexiconStore ?? new D1PronunciationLexiconStore(env.DB);
       const pluginSettingsStore = options.pluginSettingsStore ?? new D1PluginSettingsStore(env.DB);
+      const pageVisitStatsStore = options.pageVisitStatsStore ?? new D1PageVisitStatsStore(env.DB);
 
       const server = createKinloomServer({
         siteConfig: options.siteConfig,
@@ -224,6 +251,7 @@ export function createCloudflareWorker(
           pronunciationGenerator,
           pronunciationLexiconStore,
           pluginSettingsStore,
+          pageVisitStatsStore,
           plugins,
         },
       });

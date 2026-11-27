@@ -2,7 +2,9 @@ import type {
   Clock,
   KinloomServerPlugin as CoreKinloomServerPlugin,
   KinloomServerPorts as CoreKinloomServerPorts,
+  KinloomSiteConfig,
 } from '@kinloom/core';
+import type { PageVisitStatsStore } from '../plugins/pageVisitStatsTypes.js';
 import type { ServerDocumentContributions } from './documentContributions.js';
 import type { ServerSecurityEvent, ServerSecurityEventPayload } from './securityEvents.js';
 
@@ -58,6 +60,11 @@ export interface ServerRequestResponseEvent {
   readonly status: number;
   readonly durationMs: number;
   readonly errorCode: string | null;
+  readonly waitUntil?: (promise: Promise<unknown>) => void;
+  readonly reportPluginError?: (pluginId: string, error: unknown) => void;
+  readonly ports?: KinloomServerPorts;
+  readonly siteConfig?: KinloomSiteConfig;
+  readonly mode?: 'private' | 'public';
 }
 
 export interface ServerRequestErrorEvent {
@@ -86,6 +93,7 @@ export interface KinloomServerPlugin extends CoreKinloomServerPlugin {
 
 export interface KinloomServerPorts extends Omit<CoreKinloomServerPorts, 'plugins'> {
   plugins?: readonly KinloomServerPlugin[];
+  pageVisitStatsStore?: PageVisitStatsStore;
 }
 
 export interface CompiledRoutePrefixMatcher {
@@ -128,6 +136,8 @@ const EXACT_STATIC_ROUTES = new Set<string>([
   '/api/admin/users',
   '/api/admin/system',
   '/api/admin/plugin-settings',
+  '/api/admin/observability/stats',
+  '/api/observability/page-visits',
   '/privacy',
   '/og/site.svg',
   '/data/bundle.json',

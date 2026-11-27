@@ -12,6 +12,11 @@ export {
   createHttpWikiDataSource,
   HttpWikiDataSource,
 } from './adapters/httpWikiDataSource.js';
+export type {
+  HttpObservabilityStatsClientOptions,
+  ObservabilityStatsClient,
+} from './adapters/observabilityStatsClient.js';
+export { createHttpObservabilityStatsClient } from './adapters/observabilityStatsClient.js';
 export {
   createStaticArchiveDataSource,
   StaticDemoDataSource,
@@ -179,6 +184,7 @@ export type { KinloomAppProps } from './KinloomApp.js';
 export { KinloomApp } from './KinloomApp.js';
 export * from './lib/adminDiagnostics.js';
 export * from './lib/archivalTreeModel.js';
+export * from './lib/observabilityStatsModel.js';
 export * from './lib/pluginSettingsForm.js';
 export * from './lib/scrollMemory.js';
 export * from './lib/searchNavigation.js';
@@ -220,6 +226,11 @@ export {
   createNarrativeAudioPlugin,
   readNarrativeAudioMeta,
 } from './plugins/narrativeAudioPlugin.js';
+export type { ObservabilityStatsUiPluginOptions } from './plugins/observabilityStatsPlugin.js';
+export {
+  createObservabilityStatsPlugin,
+  OBSERVABILITY_STATS_UI_PLUGIN_ID,
+} from './plugins/observabilityStatsPlugin.js';
 export type {
   KinloomPluginContextValue,
   KinloomPluginProviderProps,

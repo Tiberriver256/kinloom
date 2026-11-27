@@ -139,6 +139,7 @@ describe('kinloom migrate', () => {
       '0002_pronunciations.sql',
       '0003_pronunciation_provenance.sql',
       '0004_plugin_settings.sql',
+      '0005_page_visit_stats.sql',
     ]);
     expect(migrations[0].requirements.isInitialSchema).toBe(true);
     expect(migrations[0].requirements.createdTables).toContain('revisions');
@@ -151,6 +152,10 @@ describe('kinloom migrate', () => {
       'variants_json',
     ]);
     expect(migrations[3].requirements.createdTables).toEqual(['plugin_settings', 'plugin_setting_secrets']);
+    expect(migrations[4].requirements.createdTables).toEqual([
+      'page_visit_daily',
+      'observability_cache_daily',
+    ]);
   });
 
   it('resolves D1 database binding from wrangler.jsonc, wrangler.json, and wrangler.toml', () => {
@@ -219,6 +224,7 @@ database_name = "example-toml-db" # archive database
       '0002_pronunciations.sql',
       '0003_pronunciation_provenance.sql',
       '0004_plugin_settings.sql',
+      '0005_page_visit_stats.sql',
     ]);
     expect(calls.every((c) => !c.args.includes('--file'))).toBe(true);
     expect(calls.every((c) => c.args.includes('--remote'))).toBe(true);
@@ -226,6 +232,7 @@ database_name = "example-toml-db" # archive database
     expect(result.rendered).toContain('0002_pronunciations.sql');
     expect(result.rendered).toContain('0003_pronunciation_provenance.sql');
     expect(result.rendered).toContain('0004_plugin_settings.sql');
+    expect(result.rendered).toContain('0005_page_visit_stats.sql');
   });
 
   it('applies only pending migrations in numeric order, verifies schema, and is idempotent on re-run', async () => {
@@ -259,16 +266,18 @@ database_name = "example-toml-db" # archive database
       '0002_pronunciations.sql',
       '0003_pronunciation_provenance.sql',
       '0004_plugin_settings.sql',
+      '0005_page_visit_stats.sql',
     ]);
     expect(first.applied.map((m) => [m.id, m.satisfiedBy])).toEqual([
       ['0001_initial.sql', 'schema'],
       ['0002_pronunciations.sql', 'applied_now'],
       ['0003_pronunciation_provenance.sql', 'applied_now'],
       ['0004_plugin_settings.sql', 'applied_now'],
+      ['0005_page_visit_stats.sql', 'applied_now'],
     ]);
 
     const fileExecs = calls.filter((c) => c.args.includes('--file'));
-    expect(fileExecs).toHaveLength(3);
+    expect(fileExecs).toHaveLength(4);
     expect(path.basename(fileExecs[0].args[fileExecs[0].args.indexOf('--file') + 1])).toBe(
       '0002_pronunciations.sql'
     );
@@ -277,6 +286,9 @@ database_name = "example-toml-db" # archive database
     );
     expect(path.basename(fileExecs[2].args[fileExecs[2].args.indexOf('--file') + 1])).toBe(
       '0004_plugin_settings.sql'
+    );
+    expect(path.basename(fileExecs[3].args[fileExecs[3].args.indexOf('--file') + 1])).toBe(
+      '0005_page_visit_stats.sql'
     );
 
     // Second run converges with zero write executions
@@ -291,7 +303,7 @@ database_name = "example-toml-db" # archive database
     expect(second.verified).toBe(true);
     expect(second.executed).toEqual([]);
     expect(second.pending).toEqual([]);
-    expect(second.applied).toHaveLength(4);
+    expect(second.applied).toHaveLength(5);
     const secondCalls = calls.slice(callCountBeforeSecond);
     expect(secondCalls.every((c) => !c.args.includes('--file'))).toBe(true);
   });
@@ -305,8 +317,19 @@ database_name = "example-toml-db" # archive database
     );
 
     const state: MockD1State = {
-      tables: new Set(['revisions', 'pronunciation_lexicon', 'plugin_settings', 'plugin_setting_secrets']),
-      indexes: new Set(['idx_plugin_setting_secrets_plugin_id']),
+      tables: new Set([
+        'revisions',
+        'pronunciation_lexicon',
+        'plugin_settings',
+        'plugin_setting_secrets',
+        'page_visit_daily',
+        'observability_cache_daily',
+      ]),
+      indexes: new Set([
+        'idx_plugin_setting_secrets_plugin_id',
+        'idx_page_visit_daily_day_utc',
+        'idx_page_visit_daily_kind_day',
+      ]),
       columnsByTable: new Map([
         ['pronunciation_lexicon', new Set(['term', 'phonetic', 'source_url', 'source_label'])],
       ]),
