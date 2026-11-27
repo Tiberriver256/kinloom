@@ -742,6 +742,9 @@ export class InMemoryIncrementalBundleCache implements BundleCache {
     revisionId: RevisionId,
     generatedAt: string
   ): CachedBundleObject {
+    if (this.cached && this.cached.revision_id > revisionId) {
+      return { ...this.cached };
+    }
     const serialized = JSON.stringify(bundle);
     const byteLength = new TextEncoder().encode(serialized).byteLength;
     const object: CachedBundleObject = {

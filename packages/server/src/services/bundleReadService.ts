@@ -61,6 +61,15 @@ export type ExportSnapshotResult =
       snapshot: ArchiveRawSnapshot;
     };
 
+function parseRevisionFromEtag(etag: string): number | null {
+  const match = /^"?r(\d+)(?:-[a-f0-9]+)?"?$/i.exec(etag.trim());
+  if (!match) {
+    return null;
+  }
+  const num = Number(match[1]);
+  return Number.isSafeInteger(num) && num >= 0 ? num : null;
+}
+
 export class BundleReadService {
   private readonly repository: ArchiveRepository;
   private readonly bundleCache: BundleCache;
@@ -75,12 +84,23 @@ export class BundleReadService {
   }
 
   async getBundle(params: { ifNoneMatch: string | null }): Promise<GetBundleResult> {
-    const cached = await this.bundleCache.getCached(params.ifNoneMatch);
+    const [headRev, cached] = await Promise.all([
+      this.repository.getHeadRevisionId(),
+      this.bundleCache.getCached(params.ifNoneMatch),
+    ]);
+
     if (cached.status === 'not_modified') {
-      return cached;
-    }
-    if (cached.status === 'hit') {
-      return cached;
+      const cachedRev = parseRevisionFromEtag(cached.etag);
+      if (cachedRev !== null && cachedRev >= headRev) {
+        return cached;
+      }
+    } else if (cached.status === 'hit') {
+      if (cached.object.revision_id >= headRev) {
+        return cached;
+      }
+      if (typeof cached.object.body !== 'string') {
+        await cached.object.body.cancel().catch(() => undefined);
+      }
     }
 
     const snapshot = await this.repository.loadActiveSnapshot();
