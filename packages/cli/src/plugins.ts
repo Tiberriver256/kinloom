@@ -1,8 +1,19 @@
 import { readdir, readFile, stat } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import path from 'node:path';
+import { performance } from 'node:perf_hooks';
 import { pathToFileURL } from 'node:url';
-import { type KinloomSiteConfig, parseKinloomConfigYaml } from '@kinloom/core';
+import {
+  type KinloomSiteConfig,
+  type KinshipEdge,
+  type MediaItem,
+  type Narrative,
+  type Place,
+  parseKinloomConfigYaml,
+  type RawEvent,
+  type RawPerson,
+  type SourceRecord,
+} from '@kinloom/core';
 import type { CliIo } from './cli.js';
 import { isRecordCommand } from './commands/records/registry.js';
 import type { CliExitCode } from './errors.js';
@@ -21,10 +32,82 @@ export interface KinloomCliCommand {
   run(args: readonly string[], ctx: KinloomCliPluginContext): Promise<CliExitCode> | CliExitCode;
 }
 
+export interface KinloomCheckResult {
+  readonly errors: readonly string[];
+  readonly warnings: readonly string[];
+  readonly strictWarnings?: readonly string[];
+  readonly strictFailures?: readonly string[];
+  readonly details?: Record<string, unknown>;
+}
+
+export interface KinloomAuditCheckContext {
+  readonly repoDir: string;
+  readonly personId: string;
+  readonly packageDir: string;
+  readonly patch: Readonly<Record<string, unknown>>;
+  readonly dossierText: string;
+  readonly siteConfig: KinloomSiteConfig | null;
+  readonly targetPerson: Readonly<Record<string, unknown>> | null;
+  readonly livePeople: readonly Readonly<Record<string, unknown>>[];
+  readonly mergedPeople: readonly Readonly<Record<string, unknown>>[];
+}
+
+export interface KinloomVerifyCheckContext {
+  readonly repoDir: string;
+  readonly dataDir: string;
+  readonly siteConfig: KinloomSiteConfig;
+  readonly people: readonly RawPerson[];
+  readonly events: readonly RawEvent[];
+  readonly places: readonly Place[];
+  readonly sources: readonly SourceRecord[];
+  readonly kinship: readonly KinshipEdge[];
+  readonly media: readonly MediaItem[];
+  readonly narratives: readonly Narrative[];
+  readonly strictHygiene: boolean;
+  readonly strictPronunciation: boolean;
+}
+
+export interface KinloomAuditCheck {
+  readonly id: string;
+  readonly name: string;
+  run(ctx: KinloomAuditCheckContext): Promise<KinloomCheckResult> | KinloomCheckResult;
+}
+
+export interface KinloomVerifyCheck {
+  readonly id: string;
+  readonly name: string;
+  run(ctx: KinloomVerifyCheckContext): Promise<KinloomCheckResult> | KinloomCheckResult;
+}
+
 export interface KinloomCliPlugin {
   readonly id: string;
   readonly name: string;
-  readonly commands: readonly KinloomCliCommand[];
+  readonly commands?: readonly KinloomCliCommand[];
+  readonly auditChecks?: readonly KinloomAuditCheck[];
+  readonly verifyChecks?: readonly KinloomVerifyCheck[];
+}
+
+export interface RegisteredAuditCheck {
+  readonly pluginId: string;
+  readonly check: KinloomAuditCheck;
+}
+
+export interface RegisteredVerifyCheck {
+  readonly pluginId: string;
+  readonly check: KinloomVerifyCheck;
+}
+
+export interface ExecutedPluginCheckResult {
+  readonly pluginId: string;
+  readonly id: string;
+  readonly name: string;
+  readonly ok: boolean;
+  readonly strictOk: boolean;
+  readonly durationMs: number;
+  readonly errors: string[];
+  readonly warnings: string[];
+  readonly strictFailures: string[];
+  readonly details?: Record<string, unknown>;
 }
 
 export interface DiscoverSiteCliPluginsResult {
@@ -36,6 +119,8 @@ export interface DiscoverSiteCliPluginsResult {
 export interface ResolvedPluginCommands {
   plugins: KinloomCliPlugin[];
   commands: Map<string, KinloomCliCommand>;
+  auditChecks: RegisteredAuditCheck[];
+  verifyChecks: RegisteredVerifyCheck[];
   warnings: string[];
 }
 
@@ -83,7 +168,7 @@ function isKinloomCliCommand(value: unknown): value is KinloomCliCommand {
   );
 }
 
-function isKinloomCliPlugin(value: unknown): value is KinloomCliPlugin {
+function isKinloomCheck(value: unknown): value is { id: string; name: string; run: unknown } {
   if (typeof value !== 'object' || value === null) {
     return false;
   }
@@ -91,9 +176,40 @@ function isKinloomCliPlugin(value: unknown): value is KinloomCliPlugin {
   return (
     isNonEmptyString(candidate.id) &&
     isNonEmptyString(candidate.name) &&
-    Array.isArray(candidate.commands) &&
-    candidate.commands.every((cmd) => isKinloomCliCommand(cmd))
+    typeof candidate.run === 'function'
   );
+}
+
+function isKinloomCliPlugin(value: unknown): value is KinloomCliPlugin {
+  if (typeof value !== 'object' || value === null) {
+    return false;
+  }
+  const candidate = value as Record<string, unknown>;
+  if (!isNonEmptyString(candidate.id) || !isNonEmptyString(candidate.name)) {
+    return false;
+  }
+  const hasCommands = candidate.commands !== undefined;
+  const hasAuditChecks = candidate.auditChecks !== undefined;
+  const hasVerifyChecks = candidate.verifyChecks !== undefined;
+  if (!hasCommands && !hasAuditChecks && !hasVerifyChecks) {
+    return false;
+  }
+  if (hasCommands && (!Array.isArray(candidate.commands) || !candidate.commands.every(isKinloomCliCommand))) {
+    return false;
+  }
+  if (
+    hasAuditChecks &&
+    (!Array.isArray(candidate.auditChecks) || !candidate.auditChecks.every(isKinloomCheck))
+  ) {
+    return false;
+  }
+  if (
+    hasVerifyChecks &&
+    (!Array.isArray(candidate.verifyChecks) || !candidate.verifyChecks.every(isKinloomCheck))
+  ) {
+    return false;
+  }
+  return true;
 }
 
 function extractCliPluginFromModule(mod: unknown): KinloomCliPlugin | null {
@@ -171,7 +287,11 @@ async function resolvePluginImportTarget(cwd: string, specifier: string): Promis
 
 export function resolvePluginCommands(plugins: readonly KinloomCliPlugin[]): ResolvedPluginCommands {
   const seenPluginIds = new Set<string>();
+  const seenAuditCheckIds = new Set<string>();
+  const seenVerifyCheckIds = new Set<string>();
   const commands = new Map<string, KinloomCliCommand>();
+  const auditChecks: RegisteredAuditCheck[] = [];
+  const verifyChecks: RegisteredVerifyCheck[] = [];
   const acceptedPlugins: KinloomCliPlugin[] = [];
   const warnings: string[] = [];
 
@@ -184,7 +304,7 @@ export function resolvePluginCommands(plugins: readonly KinloomCliPlugin[]): Res
     seenPluginIds.add(pluginId);
 
     const acceptedCommands: KinloomCliCommand[] = [];
-    for (const cmd of plugin.commands) {
+    for (const cmd of plugin.commands ?? []) {
       const cmdName = cmd.name.trim();
       if (isBuiltInCliCommand(cmdName)) {
         warnings.push(`Plugin '${pluginId}' attempted to shadow built-in command '${cmdName}'; ignoring.`);
@@ -199,11 +319,47 @@ export function resolvePluginCommands(plugins: readonly KinloomCliPlugin[]): Res
       acceptedCommands.push(normalizedCmd);
     }
 
-    if (acceptedCommands.length > 0) {
+    const acceptedAuditChecks: KinloomAuditCheck[] = [];
+    for (const check of plugin.auditChecks ?? []) {
+      const checkId = check.id.trim();
+      if (seenAuditCheckIds.has(checkId)) {
+        warnings.push(
+          `Plugin '${pluginId}' attempted to register duplicate audit check '${checkId}'; ignoring.`
+        );
+        continue;
+      }
+      seenAuditCheckIds.add(checkId);
+      const normalizedCheck: KinloomAuditCheck = checkId === check.id ? check : { ...check, id: checkId };
+      acceptedAuditChecks.push(normalizedCheck);
+      auditChecks.push({ pluginId, check: normalizedCheck });
+    }
+
+    const acceptedVerifyChecks: KinloomVerifyCheck[] = [];
+    for (const check of plugin.verifyChecks ?? []) {
+      const checkId = check.id.trim();
+      if (seenVerifyCheckIds.has(checkId)) {
+        warnings.push(
+          `Plugin '${pluginId}' attempted to register duplicate verify check '${checkId}'; ignoring.`
+        );
+        continue;
+      }
+      seenVerifyCheckIds.add(checkId);
+      const normalizedCheck: KinloomVerifyCheck = checkId === check.id ? check : { ...check, id: checkId };
+      acceptedVerifyChecks.push(normalizedCheck);
+      verifyChecks.push({ pluginId, check: normalizedCheck });
+    }
+
+    if (
+      acceptedCommands.length > 0 ||
+      acceptedAuditChecks.length > 0 ||
+      acceptedVerifyChecks.length > 0
+    ) {
       acceptedPlugins.push({
         id: pluginId,
         name: plugin.name,
         commands: acceptedCommands,
+        ...(acceptedAuditChecks.length > 0 ? { auditChecks: acceptedAuditChecks } : {}),
+        ...(acceptedVerifyChecks.length > 0 ? { verifyChecks: acceptedVerifyChecks } : {}),
       });
     }
   }
@@ -211,14 +367,57 @@ export function resolvePluginCommands(plugins: readonly KinloomCliPlugin[]): Res
   return {
     plugins: acceptedPlugins,
     commands,
+    auditChecks,
+    verifyChecks,
     warnings,
   };
+}
+
+export async function runRegisteredCheck<TContext>(
+  pluginId: string,
+  check: { readonly id: string; readonly name: string; run(ctx: TContext): Promise<KinloomCheckResult> | KinloomCheckResult },
+  ctx: TContext
+): Promise<ExecutedPluginCheckResult> {
+  const t0 = performance.now();
+  try {
+    const raw = await check.run(ctx);
+    const errors = [...(raw.errors ?? [])];
+    const warnings = [...(raw.warnings ?? [])];
+    const strictFailures = [...(raw.strictFailures ?? []), ...(raw.strictWarnings ?? [])];
+    const durationMs = Math.round(performance.now() - t0);
+    return {
+      pluginId,
+      id: check.id,
+      name: check.name,
+      ok: errors.length === 0,
+      strictOk: errors.length === 0 && strictFailures.length === 0,
+      durationMs,
+      errors,
+      warnings,
+      strictFailures,
+      ...(raw.details !== undefined ? { details: raw.details } : {}),
+    };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    const durationMs = Math.round(performance.now() - t0);
+    return {
+      pluginId,
+      id: check.id,
+      name: check.name,
+      ok: false,
+      strictOk: false,
+      durationMs,
+      errors: [`Check '${check.id}' threw an error: ${message}`],
+      warnings: [],
+      strictFailures: [],
+    };
+  }
 }
 
 export function formatPluginCommandsHelp(plugins: readonly KinloomCliPlugin[]): string {
   const rows: string[] = [];
   for (const plugin of plugins) {
-    for (const cmd of plugin.commands) {
+    for (const cmd of plugin.commands ?? []) {
       const padded = cmd.name.length >= 18 ? `${cmd.name}  ` : `${cmd.name.padEnd(18)} `;
       rows.push(`  ${padded}${cmd.summary}`);
     }
