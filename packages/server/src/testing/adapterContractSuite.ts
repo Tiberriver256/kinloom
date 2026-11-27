@@ -6,6 +6,10 @@ import { type BackendAdapterContractFactory, createContractHarnessRunner } from 
 import { registerMediaContractTests } from './contract/mediaContract.js';
 
 export {
+  type RecipesRepositoryFactory,
+  runRecipesRepositoryContractSuite,
+} from '../plugins/recipes/recipesRepositoryContractSuite.js';
+export {
   type BackendAdapterContractFactory,
   type BackendAdapterContractHarness,
   CONTRACT_SESSION_SECRET,

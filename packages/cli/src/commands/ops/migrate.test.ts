@@ -1,15 +1,18 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { RECIPES_INITIAL_MIGRATION_SQL } from '@kinloom/server';
 import { afterEach, describe, expect, it } from 'vitest';
 import { runCli } from '../../cli.js';
-import { EXIT_OK, EXIT_USAGE } from '../../errors.js';
+import { CliValidationError, EXIT_OK, EXIT_USAGE } from '../../errors.js';
 import { isBuiltInCliCommand } from '../../plugins.js';
 import {
   discoverMigrations,
+  discoverPluginMigrations,
   parseMigrationSchemaRequirements,
   resolveD1DatabaseBinding,
   resolveMigrationsDir,
+  resolvePluginMigrationsDir,
   runMigrateCommand,
 } from './migrate.js';
 import type { WranglerExecutor } from './sync.js';
@@ -31,11 +34,21 @@ afterEach(() => {
   }
 });
 
+interface MockPluginLedgerRow {
+  plugin_id: string;
+  namespace: string;
+  version: number;
+  migration_id: string;
+  checksum_sha256: string;
+  applied_at: string;
+}
+
 interface MockD1State {
   tables: Set<string>;
   indexes: Set<string>;
   columnsByTable: Map<string, Set<string>>;
   trackedMigrations: Set<string>;
+  pluginLedger?: MockPluginLedgerRow[];
 }
 
 function createMockD1Executor(
@@ -103,6 +116,34 @@ function createMockD1Executor(
       };
     }
 
+    if (sql.includes('FROM plugin_migrations')) {
+      const results = (state.pluginLedger ?? []).map((row) => ({ ...row }));
+      return {
+        stdout: JSON.stringify([{ success: true, results }]),
+        stderr: '',
+      };
+    }
+
+    if (sql.includes('INSERT INTO plugin_migrations')) {
+      const match =
+        /VALUES\s*\('([^']*)',\s*'([^']*)',\s*(\d+),\s*'([^']*)',\s*'([^']*)',\s*'([^']*)'\)/i.exec(sql);
+      if (simulateApply && match) {
+        state.pluginLedger ??= [];
+        state.pluginLedger.push({
+          plugin_id: match[1],
+          namespace: match[2],
+          version: Number.parseInt(match[3], 10),
+          migration_id: match[4],
+          checksum_sha256: match[5],
+          applied_at: match[6],
+        });
+      }
+      return {
+        stdout: JSON.stringify([{ success: true, results: [] }]),
+        stderr: '',
+      };
+    }
+
     if (sql.includes('PRAGMA table_info(')) {
       const matches = [...sql.matchAll(/PRAGMA\s+table_info\(([^)]+)\)/gi)];
       const statements = matches.map((m) => {
@@ -140,6 +181,7 @@ describe('kinloom migrate', () => {
       '0003_pronunciation_provenance.sql',
       '0004_plugin_settings.sql',
       '0005_page_visit_stats.sql',
+      '0006_plugin_migrations.sql',
     ]);
     expect(migrations[0].requirements.isInitialSchema).toBe(true);
     expect(migrations[0].requirements.createdTables).toContain('revisions');
@@ -156,6 +198,7 @@ describe('kinloom migrate', () => {
       'page_visit_daily',
       'observability_cache_daily',
     ]);
+    expect(migrations[5].requirements.createdTables).toEqual(['plugin_migrations']);
   });
 
   it('resolves D1 database binding from wrangler.jsonc, wrangler.json, and wrangler.toml', () => {
@@ -225,6 +268,7 @@ database_name = "example-toml-db" # archive database
       '0003_pronunciation_provenance.sql',
       '0004_plugin_settings.sql',
       '0005_page_visit_stats.sql',
+      '0006_plugin_migrations.sql',
     ]);
     expect(calls.every((c) => !c.args.includes('--file'))).toBe(true);
     expect(calls.every((c) => c.args.includes('--remote'))).toBe(true);
@@ -233,6 +277,8 @@ database_name = "example-toml-db" # archive database
     expect(result.rendered).toContain('0003_pronunciation_provenance.sql');
     expect(result.rendered).toContain('0004_plugin_settings.sql');
     expect(result.rendered).toContain('0005_page_visit_stats.sql');
+    expect(result.rendered).toContain('0006_plugin_migrations.sql');
+    expect(result.pluginMigrationsDir).toBeUndefined();
   });
 
   it('applies only pending migrations in numeric order, verifies schema, and is idempotent on re-run', async () => {
@@ -267,6 +313,7 @@ database_name = "example-toml-db" # archive database
       '0003_pronunciation_provenance.sql',
       '0004_plugin_settings.sql',
       '0005_page_visit_stats.sql',
+      '0006_plugin_migrations.sql',
     ]);
     expect(first.applied.map((m) => [m.id, m.satisfiedBy])).toEqual([
       ['0001_initial.sql', 'schema'],
@@ -274,10 +321,11 @@ database_name = "example-toml-db" # archive database
       ['0003_pronunciation_provenance.sql', 'applied_now'],
       ['0004_plugin_settings.sql', 'applied_now'],
       ['0005_page_visit_stats.sql', 'applied_now'],
+      ['0006_plugin_migrations.sql', 'applied_now'],
     ]);
 
     const fileExecs = calls.filter((c) => c.args.includes('--file'));
-    expect(fileExecs).toHaveLength(4);
+    expect(fileExecs).toHaveLength(5);
     expect(path.basename(fileExecs[0].args[fileExecs[0].args.indexOf('--file') + 1])).toBe(
       '0002_pronunciations.sql'
     );
@@ -289,6 +337,9 @@ database_name = "example-toml-db" # archive database
     );
     expect(path.basename(fileExecs[3].args[fileExecs[3].args.indexOf('--file') + 1])).toBe(
       '0005_page_visit_stats.sql'
+    );
+    expect(path.basename(fileExecs[4].args[fileExecs[4].args.indexOf('--file') + 1])).toBe(
+      '0006_plugin_migrations.sql'
     );
 
     // Second run converges with zero write executions
@@ -303,7 +354,7 @@ database_name = "example-toml-db" # archive database
     expect(second.verified).toBe(true);
     expect(second.executed).toEqual([]);
     expect(second.pending).toEqual([]);
-    expect(second.applied).toHaveLength(5);
+    expect(second.applied).toHaveLength(6);
     const secondCalls = calls.slice(callCountBeforeSecond);
     expect(secondCalls.every((c) => !c.args.includes('--file'))).toBe(true);
   });
@@ -324,11 +375,13 @@ database_name = "example-toml-db" # archive database
         'plugin_setting_secrets',
         'page_visit_daily',
         'observability_cache_daily',
+        'plugin_migrations',
       ]),
       indexes: new Set([
         'idx_plugin_setting_secrets_plugin_id',
         'idx_page_visit_daily_day_utc',
         'idx_page_visit_daily_kind_day',
+        'idx_plugin_migrations_namespace',
       ]),
       columnsByTable: new Map([
         ['pronunciation_lexicon', new Set(['term', 'phonetic', 'source_url', 'source_label'])],
@@ -419,5 +472,156 @@ database_name = "example-toml-db" # archive database
     const conflictCode = await runCli(['migrate', '--remote', '--local'], { io });
     expect(conflictCode).toBe(EXIT_USAGE);
     expect(stderr.join('\n')).toContain('either `--remote` or `--local`, not both');
+  });
+
+  it('discovers, validates, applies idempotently, and detects checksum drift for namespaced plugin migrations', async () => {
+    const repoDir = createTempDir('kinloom-migrate-plugins-');
+    fs.writeFileSync(
+      path.join(repoDir, 'wrangler.jsonc'),
+      JSON.stringify({ d1_databases: [{ binding: 'DB', database_name: 'recipes-archive-db' }] }),
+      'utf8'
+    );
+    const recipesMigrationsDir = path.join(repoDir, 'migrations', 'plugins', 'recipes');
+    fs.mkdirSync(recipesMigrationsDir, { recursive: true });
+    const recipeSqlPath = path.join(recipesMigrationsDir, '0001_recipes_initial.sql');
+    fs.writeFileSync(recipeSqlPath, RECIPES_INITIAL_MIGRATION_SQL, 'utf8');
+
+    expect(resolvePluginMigrationsDir(repoDir)).toBe(path.join(repoDir, 'migrations', 'plugins'));
+    const discovered = await discoverPluginMigrations(path.join(repoDir, 'migrations', 'plugins'));
+    expect(discovered).toHaveLength(1);
+    expect(discovered[0]).toMatchObject({
+      pluginId: 'kinloom-recipes',
+      namespace: 'recipes',
+      version: 1,
+      migrationId: '0001_recipes_initial',
+    });
+
+    const state: MockD1State = {
+      tables: new Set([
+        'revisions',
+        'pronunciation_lexicon',
+        'plugin_settings',
+        'plugin_setting_secrets',
+        'page_visit_daily',
+        'observability_cache_daily',
+      ]),
+      indexes: new Set([
+        'idx_plugin_setting_secrets_plugin_id',
+        'idx_page_visit_daily_day_utc',
+        'idx_page_visit_daily_kind_day',
+      ]),
+      columnsByTable: new Map([
+        ['pronunciation_lexicon', new Set(['source_url', 'source_label', 'region', 'variants_json'])],
+      ]),
+      trackedMigrations: new Set(),
+      pluginLedger: [],
+    };
+    const { executor, calls } = createMockD1Executor(state);
+
+    // Dry-run reports pending 0006 + recipes/0001_recipes_initial without executing writes.
+    const dry = await runMigrateCommand({
+      repoDir,
+      target: 'local',
+      dryRun: true,
+      execWrangler: executor,
+    });
+    expect(dry.ok).toBe(true);
+    expect(dry.verified).toBe(false);
+    expect(dry.pending.map((m) => m.id)).toEqual(['0006_plugin_migrations.sql']);
+    expect(dry.pluginPending?.map((p) => p.migrationId)).toEqual(['0001_recipes_initial']);
+    expect(dry.rendered).toContain('Plugin pending:');
+    expect(dry.rendered).toContain('recipes/0001_recipes_initial');
+
+    // Live run executes 0006 first, then recipes plugin SQL + plugin_migrations ledger insert.
+    const live = await runMigrateCommand({
+      repoDir,
+      target: 'local',
+      dryRun: false,
+      execWrangler: executor,
+    });
+    expect(live.ok).toBe(true);
+    expect(live.verified).toBe(true);
+    expect(live.executed).toEqual(['0006_plugin_migrations.sql']);
+    expect(live.pluginExecuted).toEqual(['recipes/0001_recipes_initial']);
+    expect(live.pluginApplied?.[0].satisfiedBy).toBe('applied_now');
+    expect(live.rendered).toContain('Plugin applied:');
+
+    // Second live run is strictly idempotent with zero file executions.
+    const beforeSecond = calls.length;
+    const second = await runMigrateCommand({
+      repoDir,
+      target: 'local',
+      dryRun: false,
+      execWrangler: executor,
+    });
+    expect(second.ok).toBe(true);
+    expect(second.verified).toBe(true);
+    expect(second.executed).toEqual([]);
+    expect(second.pluginExecuted).toEqual([]);
+    expect(second.pluginApplied?.[0].satisfiedBy).toBe('plugin_migrations');
+    expect(calls.slice(beforeSecond).every((c) => !c.args.includes('--file'))).toBe(true);
+
+    // Mutating the applied SQL file triggers checksum drift error before any write.
+    fs.writeFileSync(
+      recipeSqlPath,
+      `${RECIPES_INITIAL_MIGRATION_SQL}\nCREATE TABLE IF NOT EXISTS plugin_recipes_extra (id TEXT PRIMARY KEY);\n`,
+      'utf8'
+    );
+    await expect(
+      runMigrateCommand({
+        repoDir,
+        target: 'local',
+        dryRun: false,
+        execWrangler: executor,
+      })
+    ).rejects.toThrow(/checksum or identity mismatch/);
+
+    // Invalid core-table DDL in an explicit --plugin-migrations directory is rejected before any D1 call.
+    const badPluginDir = path.join(repoDir, 'bad-plugins');
+    fs.mkdirSync(path.join(badPluginDir, 'evil'), { recursive: true });
+    fs.writeFileSync(
+      path.join(badPluginDir, 'evil', '0001_bad.sql'),
+      'ALTER TABLE users ADD COLUMN evil TEXT;\n',
+      'utf8'
+    );
+    await expect(
+      runMigrateCommand({
+        repoDir,
+        target: 'local',
+        pluginMigrationsDir: badPluginDir,
+        execWrangler: executor,
+      })
+    ).rejects.toBeInstanceOf(CliValidationError);
+
+    expect(() => resolvePluginMigrationsDir(repoDir, 'does-not-exist')).toThrow(CliValidationError);
+    await expect(discoverPluginMigrations(path.join(repoDir, 'missing-dir'))).rejects.toBeInstanceOf(
+      CliValidationError
+    );
+
+    // Custom plugin_id header comment, empty namespace folder, invalid namespace name, and invalid filename
+    const customDir = path.join(repoDir, 'custom-plugins');
+    fs.mkdirSync(path.join(customDir, 'empty_ns'), { recursive: true });
+    fs.mkdirSync(path.join(customDir, 'notes'), { recursive: true });
+    fs.writeFileSync(
+      path.join(customDir, 'notes', '0001_notes_init.sql'),
+      '-- plugin_id: custom-notes-plugin\nCREATE TABLE IF NOT EXISTS plugin_notes_entries (id TEXT PRIMARY KEY);\n',
+      'utf8'
+    );
+    const customDiscovered = await discoverPluginMigrations(customDir);
+    expect(customDiscovered).toHaveLength(1);
+    expect(customDiscovered[0].pluginId).toBe('custom-notes-plugin');
+
+    const invalidNameDir = path.join(repoDir, 'invalid-file-plugins');
+    fs.mkdirSync(path.join(invalidNameDir, 'notes'), { recursive: true });
+    fs.writeFileSync(
+      path.join(invalidNameDir, 'notes', 'bad_filename.sql'),
+      'CREATE TABLE IF NOT EXISTS plugin_notes_entries (id TEXT PRIMARY KEY);\n',
+      'utf8'
+    );
+    await expect(discoverPluginMigrations(invalidNameDir)).rejects.toBeInstanceOf(CliValidationError);
+
+    const invalidNsDir = path.join(repoDir, 'invalid-ns-plugins');
+    fs.mkdirSync(path.join(invalidNsDir, 'BAD-NS'), { recursive: true });
+    await expect(discoverPluginMigrations(invalidNsDir)).rejects.toBeInstanceOf(CliValidationError);
   });
 });

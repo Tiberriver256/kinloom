@@ -23,10 +23,33 @@ export function formatMigrateReport(result: Omit<MigrateCommandResult, 'rendered
       const detail = item.missingObjects.length > 0 ? ` missing ${item.missingObjects.join(', ')}` : '';
       lines.push(`  [pending] ${item.id}${detail}`);
     }
-  } else if (result.dryRun) {
+  } else if (result.dryRun && (!result.pluginPending || result.pluginPending.length === 0)) {
     lines.push('All migrations are already satisfied. No writes needed.');
-  } else if (result.verified) {
+  } else if (result.verified && (!result.pluginPending || result.pluginPending.length === 0)) {
     lines.push('Post-migration schema verification passed.');
+  }
+
+  if (result.pluginMigrationsDir) {
+    const pluginApplied = result.pluginApplied ?? [];
+    const pluginPending = result.pluginPending ?? [];
+    const pluginExecuted = result.pluginExecuted ?? [];
+    lines.push(`Plugin migrations: ${result.pluginMigrationsDir}`);
+    lines.push(
+      `Plugin summary: ${pluginApplied.length} applied, ${pluginPending.length} pending, ${pluginExecuted.length} executed`
+    );
+    if (pluginApplied.length > 0) {
+      lines.push('Plugin applied:');
+      for (const item of pluginApplied) {
+        lines.push(`  [ok] ${item.namespace}/${item.migrationId} (${item.satisfiedBy})`);
+      }
+    }
+    if (pluginPending.length > 0) {
+      lines.push('Plugin pending:');
+      for (const item of pluginPending) {
+        const detail = item.missingObjects.length > 0 ? ` missing ${item.missingObjects.join(', ')}` : '';
+        lines.push(`  [pending] ${item.namespace}/${item.migrationId}${detail}`);
+      }
+    }
   }
 
   return lines.join('\n');

@@ -1,6 +1,7 @@
 import type {
   Clock,
   KinloomServerPlugin as CoreKinloomServerPlugin,
+  KinloomServerPluginContext as CoreKinloomServerPluginContext,
   KinloomServerPorts as CoreKinloomServerPorts,
   KinloomSiteConfig,
 } from '@kinloom/core';
@@ -80,6 +81,10 @@ export interface ServerPluginObservabilityFlags {
   readonly serverTiming: boolean;
   readonly securityTelemetry: boolean;
   readonly webAnalytics: boolean;
+}
+
+export interface ServerPluginRouteContext extends CoreKinloomServerPluginContext {
+  readonly emitSecurityEvent?: (payload: ServerSecurityEventPayload) => void;
 }
 
 export interface KinloomServerPlugin extends CoreKinloomServerPlugin {

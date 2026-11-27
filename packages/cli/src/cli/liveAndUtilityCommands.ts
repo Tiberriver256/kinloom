@@ -205,6 +205,7 @@ export async function runMigrate(rest: readonly string[], ctx: CliDispatchContex
     allowPositionals: false,
     options: {
       repo: { type: 'string' },
+      'plugin-migrations': { type: 'string' },
       remote: { type: 'boolean', default: false },
       local: { type: 'boolean', default: false },
       'dry-run': { type: 'boolean', default: false },
@@ -230,6 +231,7 @@ export async function runMigrate(rest: readonly string[], ctx: CliDispatchContex
     () =>
       runMigrateCommand({
         repoDir: values.repo ?? ctx.cwd,
+        pluginMigrationsDir: values['plugin-migrations'],
         target,
         dryRun: values['dry-run'],
         json: values.json,

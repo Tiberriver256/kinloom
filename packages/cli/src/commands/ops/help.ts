@@ -302,12 +302,13 @@ Inspect a Kinloom Cloudflare D1 database and idempotently apply only pending SQL
 Checks sqlite_master and PRAGMA table_info(...) so existing databases created before d1_migrations tracking existed never fail on already-present tables or columns.
 
 Options:
-  --repo <dir>       Archive repository root containing wrangler.jsonc, wrangler.json, or wrangler.toml (default: current directory)
-  --remote           Target the remote Cloudflare D1 database (default)
-  --local            Target the local Wrangler D1 database
-  --dry-run          Inspect schema and report applied vs pending migrations without executing any writes
-  --json             Emit structured JSON status and verification report
-  -h, --help         Show this help message`;
+  --repo <dir>               Archive repository root containing wrangler.jsonc, wrangler.json, or wrangler.toml (default: current directory)
+  --plugin-migrations <dir>  Optional directory containing namespaced plugin migrations (<dir>/<namespace>/<NNNN>_<id>.sql); auto-discovers <repo>/migrations/plugins when present
+  --remote                   Target the remote Cloudflare D1 database (default)
+  --local                    Target the local Wrangler D1 database
+  --dry-run                  Inspect schema and report applied vs pending migrations without executing any writes
+  --json                     Emit structured JSON status and verification report
+  -h, --help                 Show this help message`;
 
 export const SCREENSHOTS_HELP = `Usage: kinloom screenshots --url <baseUrl> [options]
 

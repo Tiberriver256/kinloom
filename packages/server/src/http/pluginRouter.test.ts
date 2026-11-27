@@ -308,4 +308,91 @@ describe('createKinloomServer plugin routing and startup validation', () => {
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ ok: true });
   });
+
+  it('validates plugin migrations at startup and injects scoped pluginDb when pluginDatabaseFactory is configured', async () => {
+    const siteConfig = createSyntheticSiteConfig();
+    const ports = createInMemoryServerPorts(siteConfig);
+
+    // Invalid DDL referencing core table fails fast at server creation
+    expect(() =>
+      createKinloomServer({
+        siteConfig,
+        ports: {
+          ...ports,
+          plugins: [
+            {
+              id: 'evil-db-plugin',
+              name: 'Evil DB Plugin',
+              databaseNamespace: 'evil',
+              migrations: [
+                {
+                  version: 1,
+                  id: '0001_evil',
+                  description: 'Tries to alter users',
+                  sql: 'ALTER TABLE users ADD COLUMN pwned TEXT;',
+                },
+              ],
+            },
+          ],
+        },
+        sessionSecret: SECRET,
+      })
+    ).toThrow(RangeError);
+
+    let capturedNamespace: string | undefined;
+    const server = createKinloomServer({
+      siteConfig,
+      ports: {
+        ...ports,
+        pluginDatabaseFactory: {
+          adapterKind: 'test-db',
+          forPlugin(_pluginId, namespace) {
+            return {
+              adapterKind: 'test-db',
+              namespace,
+              async query() {
+                return [];
+              },
+              async first() {
+                return null;
+              },
+              async run() {
+                return { changes: 0 };
+              },
+              async batch() {
+                return [];
+              },
+            };
+          },
+        },
+        plugins: [
+          {
+            id: 'scoped-db-plugin',
+            name: 'Scoped DB Plugin',
+            databaseNamespace: 'scoped',
+            routes: [
+              {
+                method: 'GET',
+                pathPrefix: '/api/plugins/scoped-check',
+                minRole: 'public',
+                async handle(ctx) {
+                  capturedNamespace = ctx.pluginDb?.namespace;
+                  return new Response(JSON.stringify({ ns: ctx.pluginDb?.namespace ?? null }), {
+                    status: 200,
+                    headers: { 'content-type': 'application/json' },
+                  });
+                },
+              },
+            ],
+          },
+        ],
+      },
+      sessionSecret: SECRET,
+    });
+
+    const res = await server.fetch(new Request(`${ORIGIN}/api/plugins/scoped-check`));
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ns: 'scoped' });
+    expect(capturedNamespace).toBe('scoped');
+  });
 });

@@ -19,7 +19,7 @@ export async function probeD1SchemaMigrationLevel(db: D1Database): Promise<strin
   try {
     const tablesRes = await db
       .prepare(
-        "SELECT name FROM sqlite_master WHERE type = 'table' AND name IN ('entities', 'pronunciation_lexicon', 'plugin_settings', 'plugin_setting_secrets', 'page_visit_daily', 'observability_cache_daily')"
+        "SELECT name FROM sqlite_master WHERE type = 'table' AND name IN ('entities', 'pronunciation_lexicon', 'plugin_settings', 'plugin_setting_secrets', 'page_visit_daily', 'observability_cache_daily', 'plugin_migrations')"
       )
       .all<{ name?: unknown }>();
     const tableNames = new Set(
@@ -27,6 +27,9 @@ export async function probeD1SchemaMigrationLevel(db: D1Database): Promise<strin
         .map((row) => (typeof row.name === 'string' ? row.name : ''))
         .filter((name) => name.length > 0)
     );
+    if (tableNames.has('plugin_migrations')) {
+      return '0006_plugin_migrations.sql';
+    }
     if (tableNames.has('page_visit_daily') && tableNames.has('observability_cache_daily')) {
       return '0005_page_visit_stats.sql';
     }

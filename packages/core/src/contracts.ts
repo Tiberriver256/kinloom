@@ -19,6 +19,15 @@ import type { KinloomSiteConfig } from './schemas/config.js';
 import type { PluginRuntimeStatus, PluginStatusProbeResult } from './schemas/diagnostics.js';
 import type { ArchiveBundle, Pronunciation } from './schemas/entities.js';
 import type {
+  AppliedPluginMigrationRecord,
+  PluginDatabaseFactory,
+  PluginDatabasePort,
+  PluginSqlMigration,
+  PluginSqlRunResult,
+  PluginSqlStatement,
+  PluginSqlValue,
+} from './schemas/pluginDatabase.js';
+import type {
   PluginSettingScalarValue,
   PluginSettingsSchema,
   PluginSettingsSecretWriteOp,
@@ -75,6 +84,15 @@ export {
   type UpsertPronunciationTermResult,
 } from './contractsUi.js';
 export type { AgentTokenScope, ApiErrorEnvelope, UserRole } from './schemas/revisions.js';
+export type {
+  AppliedPluginMigrationRecord,
+  PluginDatabaseFactory,
+  PluginDatabasePort,
+  PluginSqlMigration,
+  PluginSqlRunResult,
+  PluginSqlStatement,
+  PluginSqlValue,
+};
 
 export interface EntityReadStore {
   getHeadRevisionId(): Promise<RevisionId>;
@@ -245,6 +263,8 @@ export interface KinloomServerPluginContext {
   principal: CallerPrincipal;
   siteConfig: KinloomSiteConfig;
   ports: KinloomServerPorts;
+  /** Scoped database port when plugin declares databaseNamespace and host provides pluginDatabaseFactory. */
+  pluginDb?: PluginDatabasePort;
 }
 
 export interface KinloomServerPluginRoute {
@@ -274,6 +294,10 @@ export interface KinloomServerPlugin {
   readonly status?: PluginRuntimeStatus;
   readonly routes?: readonly KinloomServerPluginRoute[];
   readonly settingsSchema?: PluginSettingsSchema;
+  /** Optional SQL namespace segment (for example 'recipes' -> tables must start with 'plugin_recipes_'). */
+  readonly databaseNamespace?: string;
+  /** Ordered, idempotent DDL migrations owned by this plugin. Requires databaseNamespace. */
+  readonly migrations?: readonly PluginSqlMigration[];
   getStatus?(): PluginStatusProbeResult | Promise<PluginStatusProbeResult>;
   getReadonlySettings?(
     ctx: KinloomServerPluginReadonlySettingsContext
@@ -351,6 +375,7 @@ export interface KinloomServerPorts {
   pronunciationGenerator?: PronunciationAudioGenerator;
   pronunciationLexiconStore?: PronunciationLexiconStore;
   pluginSettingsStore?: PluginSettingsStore;
+  pluginDatabaseFactory?: PluginDatabaseFactory;
   plugins?: readonly KinloomServerPlugin[];
 }
 

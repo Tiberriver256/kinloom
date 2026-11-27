@@ -2,6 +2,7 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import type { WranglerExecOptions, WranglerExecutor } from '../shared/wrangler.js';
 import {
+  type AppliedPluginLedgerEntry,
   type D1SchemaSnapshot,
   type D1StatementResult,
   type DiscoveredMigration,
@@ -97,7 +98,8 @@ export async function executeD1File(ctx: MigrateExecContext, filePath: string): 
 
 export async function inspectD1Schema(
   ctx: MigrateExecContext,
-  migrations: readonly DiscoveredMigration[]
+  migrations: readonly DiscoveredMigration[],
+  includePluginLedger = false
 ): Promise<D1SchemaSnapshot> {
   const masterStatements = await executeD1Command(
     ctx,
@@ -125,6 +127,32 @@ export async function inspectD1Schema(
     for (const row of trackedStatements[0]?.results ?? []) {
       if (typeof row.name === 'string' && row.name.trim().length > 0) {
         trackedMigrations.add(row.name.trim());
+      }
+    }
+  }
+
+  let pluginLedger: Map<string, AppliedPluginLedgerEntry> | undefined;
+  if (includePluginLedger && tables.has('plugin_migrations')) {
+    pluginLedger = new Map<string, AppliedPluginLedgerEntry>();
+    const ledgerStatements = await executeD1Command(
+      ctx,
+      'SELECT plugin_id, namespace, version, migration_id, checksum_sha256 FROM plugin_migrations;'
+    );
+    for (const row of ledgerStatements[0]?.results ?? []) {
+      if (
+        typeof row.plugin_id === 'string' &&
+        typeof row.namespace === 'string' &&
+        typeof row.version === 'number' &&
+        typeof row.migration_id === 'string' &&
+        typeof row.checksum_sha256 === 'string'
+      ) {
+        pluginLedger.set(`${row.plugin_id}:${row.version}`, {
+          pluginId: row.plugin_id,
+          namespace: row.namespace,
+          version: row.version,
+          migrationId: row.migration_id,
+          checksumSha256: row.checksum_sha256,
+        });
       }
     }
   }
@@ -159,5 +187,6 @@ export async function inspectD1Schema(
     indexes,
     columnsByTable,
     trackedMigrations,
+    ...(pluginLedger ? { pluginLedger } : {}),
   };
 }

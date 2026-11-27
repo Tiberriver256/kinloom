@@ -3,6 +3,7 @@ import type {
   Clock,
   EmailSender,
   KinloomSiteConfig,
+  PluginDatabaseFactory,
   PluginSettingsStore,
   PronunciationAudioGenerator,
   PronunciationLexiconStore,
@@ -20,6 +21,7 @@ import { createCloudflareAssetHandler } from './adapters/cloudflareAssets.js';
 import { CloudflareEmailSender } from './adapters/cloudflareEmailSender.js';
 import { probeD1SchemaMigrationLevel } from './adapters/d1/schemaProbe.js';
 import { D1PageVisitStatsStore } from './adapters/d1PageVisitStatsStore.js';
+import { D1PluginDatabaseFactory } from './adapters/d1PluginDatabase.js';
 import { D1PluginSettingsStore } from './adapters/d1PluginSettingsStore.js';
 import { D1PronunciationLexiconStore } from './adapters/d1PronunciationLexiconStore.js';
 import { createD1ArchiveRepository } from './adapters/d1Repository.js';
@@ -109,6 +111,11 @@ export {
   type PublicPageVisitCountResponse,
   PublicPageVisitCountResponseSchema,
   parseOpenFinanceConfig,
+  RECIPES_DATABASE_NAMESPACE,
+  RECIPES_INITIAL_MIGRATION_SQL,
+  RECIPES_PLUGIN_ID,
+  RECIPES_PLUGIN_MIGRATIONS,
+  type RecipesRepository,
   type RenderPrivacyPolicyOptions,
   renderCloudflareWebAnalyticsBeaconHtml,
   renderPrivacyPolicyHtml,
@@ -123,6 +130,7 @@ export {
   type ServerPrivacyDisclosure,
   type ServerSecurityEvent,
   type ServerSecurityEventType,
+  SqlRecipesRepository,
   type TopVisitedPage,
   validateCloudflareWebAnalyticsToken,
   validateDonationPlatformUrl,
@@ -144,6 +152,13 @@ export {
   DEFAULT_EMAIL_FROM,
 } from './adapters/cloudflareEmailSender.js';
 export { D1PageVisitStatsStore } from './adapters/d1PageVisitStatsStore.js';
+export {
+  createD1PluginMigrationExecutor,
+  createD1RecipesRepository,
+  D1PluginDatabaseFactory,
+  D1PluginDatabasePort,
+  runD1PluginMigrations,
+} from './adapters/d1PluginDatabase.js';
 export { D1PluginSettingsStore } from './adapters/d1PluginSettingsStore.js';
 export { D1PronunciationLexiconStore } from './adapters/d1PronunciationLexiconStore.js';
 export {
@@ -199,6 +214,7 @@ export interface CreateCloudflareWorkerOptions {
   pronunciationGenerator?: PronunciationAudioGenerator;
   pronunciationLexiconStore?: PronunciationLexiconStore;
   pluginSettingsStore?: PluginSettingsStore;
+  pluginDatabaseFactory?: PluginDatabaseFactory;
   pageVisitStatsStore?: PageVisitStatsStore;
   onPluginError?: (pluginId: string, error: unknown) => void;
   buildCommitSha?: string;
@@ -261,6 +277,7 @@ export function createCloudflareWorker(
       const pronunciationLexiconStore =
         options.pronunciationLexiconStore ?? new D1PronunciationLexiconStore(env.DB);
       const pluginSettingsStore = options.pluginSettingsStore ?? new D1PluginSettingsStore(env.DB);
+      const pluginDatabaseFactory = options.pluginDatabaseFactory ?? new D1PluginDatabaseFactory(env.DB);
       const pageVisitStatsStore = options.pageVisitStatsStore ?? new D1PageVisitStatsStore(env.DB);
 
       const server = createKinloomServer({
@@ -291,6 +308,7 @@ export function createCloudflareWorker(
           pronunciationGenerator,
           pronunciationLexiconStore,
           pluginSettingsStore,
+          pluginDatabaseFactory,
           pageVisitStatsStore,
           plugins,
         },

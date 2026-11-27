@@ -23,9 +23,11 @@ import {
   type KinloomServerPorts,
   normalizeServerRouteTemplate,
   runPluginLifecycleHook,
+  type ServerPluginRouteContext,
   type ServerRequestTelemetryTracker,
   timeSpan,
 } from './pluginLifecycle.js';
+import { assertValidPluginNamespace, validateRegisteredPluginDatabases } from './pluginMigrations.js';
 import { RecentErrorRingBuffer } from './recentErrorBuffer.js';
 import { createAdminRouteHandler } from './routes/adminRoutes.js';
 import { createAuthRouteHandler } from './routes/authRoutes.js';
@@ -70,6 +72,7 @@ const DEFAULT_OAUTH_COOKIE_TTL_SECONDS = 10 * 60;
 
 export interface CompiledPluginRoute {
   readonly pluginId: string;
+  readonly databaseNamespace?: string;
   readonly method: string;
   readonly normalizedPrefix: string;
   readonly route: KinloomServerPluginRoute;
@@ -125,6 +128,8 @@ export function validateAndCompilePluginRoutes(
   const seenPluginIds = new Set<string>();
   const compiledRoutes: CompiledPluginRoute[] = [];
 
+  validateRegisteredPluginDatabases(plugins);
+
   for (const plugin of plugins) {
     const pluginId = plugin.id.trim();
     if (!pluginId) {
@@ -134,6 +139,11 @@ export function validateAndCompilePluginRoutes(
       throw new RangeError(`Duplicate server plugin id '${pluginId}'.`);
     }
     seenPluginIds.add(pluginId);
+
+    const databaseNamespace =
+      plugin.databaseNamespace !== undefined
+        ? assertValidPluginNamespace(plugin.databaseNamespace)
+        : undefined;
 
     for (const route of plugin.routes ?? []) {
       const method = route.method.trim().toUpperCase();
@@ -167,6 +177,7 @@ export function validateAndCompilePluginRoutes(
 
       compiledRoutes.push({
         pluginId,
+        ...(databaseNamespace ? { databaseNamespace } : {}),
         method,
         normalizedPrefix,
         route,
@@ -181,14 +192,14 @@ function matchPluginRoute(
   routes: readonly CompiledPluginRoute[],
   method: string,
   pathname: string
-): KinloomServerPluginRoute | null {
+): CompiledPluginRoute | null {
   const upperMethod = method.toUpperCase();
   for (const compiled of routes) {
     if (compiled.method !== '*' && compiled.method !== upperMethod) {
       continue;
     }
     if (matchesPathPrefix(pathname, compiled.normalizedPrefix)) {
-      return compiled.route;
+      return compiled;
     }
   }
   return null;
@@ -359,25 +370,33 @@ export function createKinloomServer(config: KinloomServerConfig): KinloomServer 
 
     const matchedPluginRoute = matchPluginRoute(pluginRoutes, method, pathname);
     if (matchedPluginRoute) {
+      const { route: pluginRoute, pluginId, databaseNamespace } = matchedPluginRoute;
       enforceCsrfOrigin(request, url, auth.authMethod, telemetry);
-      requireMinRole(auth.principal, matchedPluginRoute.minRole, {
+      requireMinRole(auth.principal, pluginRoute.minRole, {
         allowAgentScopes:
-          matchedPluginRoute.minRole === 'viewer'
+          pluginRoute.minRole === 'viewer'
             ? ['write_batch', 'read_backup']
-            : matchedPluginRoute.minRole === 'editor'
+            : pluginRoute.minRole === 'editor'
               ? ['write_batch']
               : [],
-        adminForbiddenCode: matchedPluginRoute.minRole === 'admin' ? 'ADMIN_REQUIRED' : 'FORBIDDEN',
+        adminForbiddenCode: pluginRoute.minRole === 'admin' ? 'ADMIN_REQUIRED' : 'FORBIDDEN',
         telemetry,
         bearerRejected: auth.bearerRejected,
       });
-      return matchedPluginRoute.handle({
+      const pluginDb =
+        databaseNamespace && config.ports.pluginDatabaseFactory
+          ? config.ports.pluginDatabaseFactory.forPlugin(pluginId, databaseNamespace)
+          : undefined;
+      const pluginCtx: ServerPluginRouteContext = {
         request,
         url,
         principal: auth.principal,
         siteConfig: config.siteConfig,
         ports: config.ports,
-      });
+        ...(pluginDb ? { pluginDb } : {}),
+        ...(telemetry ? { emitSecurityEvent: (payload) => telemetry.queueSecurityEvent(payload) } : {}),
+      };
+      return pluginRoute.handle(pluginCtx);
     }
 
     if (

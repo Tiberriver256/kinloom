@@ -140,11 +140,15 @@ export {
   runMediaDedupeCommand,
 } from './media-dedupe.js';
 export {
+  type AppliedPluginLedgerEntry,
   type D1DatabaseBinding,
   type D1SchemaSnapshot,
   type DiscoveredMigration,
+  type DiscoveredPluginMigration,
   discoverMigrations,
+  discoverPluginMigrations,
   evaluateMigrationStatus,
+  evaluatePluginMigrationStatus,
   formatMigrateReport,
   type MigrateCommandOptions,
   type MigrateCommandResult,
@@ -152,9 +156,11 @@ export {
   type MigrationColumnRequirement,
   type MigrationSchemaRequirements,
   type MigrationStatusEntry,
+  type PluginMigrationStatusEntry,
   parseMigrationSchemaRequirements,
   resolveD1DatabaseBinding,
   resolveMigrationsDir,
+  resolvePluginMigrationsDir,
   runMigrateCommand,
 } from './migrate.js';
 export {

@@ -30,11 +30,42 @@ export interface DiscoveredMigration {
   readonly requirements: MigrationSchemaRequirements;
 }
 
+export interface AppliedPluginLedgerEntry {
+  readonly pluginId: string;
+  readonly namespace: string;
+  readonly version: number;
+  readonly migrationId: string;
+  readonly checksumSha256: string;
+}
+
+export interface DiscoveredPluginMigration {
+  readonly pluginId: string;
+  readonly namespace: string;
+  readonly version: number;
+  readonly migrationId: string;
+  readonly filePath: string;
+  readonly sql: string;
+  readonly checksumSha256: string;
+  readonly requirements: MigrationSchemaRequirements;
+}
+
+export interface PluginMigrationStatusEntry {
+  readonly pluginId: string;
+  readonly namespace: string;
+  readonly version: number;
+  readonly migrationId: string;
+  readonly filePath: string;
+  readonly status: 'applied' | 'pending';
+  readonly satisfiedBy: 'plugin_migrations' | 'applied_now' | 'pending';
+  readonly missingObjects: readonly string[];
+}
+
 export interface D1SchemaSnapshot {
   readonly tables: ReadonlySet<string>;
   readonly indexes: ReadonlySet<string>;
   readonly columnsByTable: ReadonlyMap<string, ReadonlySet<string>>;
   readonly trackedMigrations: ReadonlySet<string>;
+  readonly pluginLedger?: ReadonlyMap<string, AppliedPluginLedgerEntry>;
 }
 
 export interface MigrationStatusEntry {
@@ -52,6 +83,7 @@ export interface MigrateCommandOptions {
   readonly dryRun?: boolean;
   readonly json?: boolean;
   readonly migrationsDir?: string;
+  readonly pluginMigrationsDir?: string;
   readonly wranglerBin?: string;
   readonly execWrangler?: WranglerExecutor;
 }
@@ -69,6 +101,10 @@ export interface MigrateCommandResult {
   readonly executed: readonly string[];
   readonly verified: boolean;
   readonly rendered: string;
+  readonly pluginMigrationsDir?: string;
+  readonly pluginApplied?: readonly PluginMigrationStatusEntry[];
+  readonly pluginPending?: readonly PluginMigrationStatusEntry[];
+  readonly pluginExecuted?: readonly string[];
 }
 
 export interface D1StatementResult {
