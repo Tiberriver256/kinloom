@@ -206,6 +206,7 @@ export const IndexPage: React.FC = () => {
         </section>
 
         <PluginSlot name="indexHero" />
+        <PluginSlot name="indexWidgets" />
 
         {loading && <p>Loading family archive…</p>}
         {error && (

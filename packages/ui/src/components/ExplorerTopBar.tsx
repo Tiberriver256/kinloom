@@ -3,6 +3,7 @@ import { Link, useLocation } from 'react-router-dom';
 import { useArchiveData } from '../context/ArchiveDataContext.js';
 import { useArchiveUi } from '../context/ArchiveUiContext.js';
 import { cx, joinClasses } from '../lib/cx.js';
+import { isPluginNavRouteActive, selectVisiblePluginNavRoutes } from '../lib/pluginNav.js';
 import { KINLOOM_VOCABULARY } from '../lib/vocabulary.js';
 import { AuthSessionActorContext } from '../machines/authSessionMachine.js';
 import { PluginSlot, useKinloomPlugins } from '../plugins/PluginContext.js';
@@ -19,7 +20,7 @@ export const ExplorerTopBar: React.FC = () => {
   const { activeYear, pivotTrail, openSourceReader, openSearch } = useArchiveUi();
   const { routes: pluginRoutes } = useKinloomPlugins();
   const location = useLocation();
-  const navPluginRoutes = pluginRoutes.filter((r) => Boolean(r.navLabel));
+  const navPluginRoutes = selectVisiblePluginNavRoutes(pluginRoutes, session, capabilities);
 
   const [accountOpen, setAccountOpen] = useState(false);
   const [signInOpen, setSignInOpen] = useState(false);
@@ -191,16 +192,24 @@ export const ExplorerTopBar: React.FC = () => {
               {KINLOOM_VOCABULARY.nav.evidence}
             </Link>
 
-            {navPluginRoutes.map((route) => (
-              <Link
-                key={`${route.pluginId}:${route.path}`}
-                to={route.path}
-                className={cx(topBarStyles, `nav-pill ${location.pathname === route.path ? 'active' : ''}`)}
-                aria-current={location.pathname === route.path ? 'page' : undefined}
-              >
-                {route.navLabel}
-              </Link>
-            ))}
+            {navPluginRoutes.map((route) => {
+              const isActive = isPluginNavRouteActive(route, location.pathname);
+              return (
+                <Link
+                  key={`${route.pluginId}:${route.path}`}
+                  to={route.path}
+                  className={cx(topBarStyles, `nav-pill ${isActive ? 'active' : ''}`)}
+                  aria-current={isActive ? 'page' : undefined}
+                >
+                  {route.navIcon && (
+                    <span className={cx(topBarStyles, 'nav-pill-icon')} aria-hidden="true">
+                      {route.navIcon}
+                    </span>
+                  )}
+                  <span>{route.navLabel}</span>
+                </Link>
+              );
+            })}
             <PluginSlot name="topBarNav" className={cx(topBarStyles, 'topbar-nav-plugin-slot')} />
           </nav>
         </div>
@@ -415,6 +424,33 @@ export const ExplorerTopBar: React.FC = () => {
                 >
                   {KINLOOM_VOCABULARY.nav.kinshipFull}
                 </Link>
+
+                {navPluginRoutes.map((route) => {
+                  const isActive = isPluginNavRouteActive(route, location.pathname);
+                  return (
+                    <Link
+                      key={`mobile:${route.pluginId}:${route.path}`}
+                      to={route.path}
+                      role="menuitem"
+                      className={joinClasses(
+                        cx(wikiChromeStyles, 'topbar-account-item'),
+                        cx(topBarStyles, 'topbar-account-item-mobile-only'),
+                        isActive ? 'active' : ''
+                      )}
+                      aria-current={isActive ? 'page' : undefined}
+                      onClick={() => {
+                        setAccountOpen(false);
+                      }}
+                    >
+                      {route.navIcon && (
+                        <span className={cx(topBarStyles, 'nav-pill-icon')} aria-hidden="true">
+                          {route.navIcon}
+                        </span>
+                      )}
+                      <span>{route.navLabel}</span>
+                    </Link>
+                  );
+                })}
 
                 {isSignedInMember && capabilities.hasRevisionHistory && (
                   <Link

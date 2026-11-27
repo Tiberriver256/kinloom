@@ -27,7 +27,9 @@ import {
   createInMemoryServerPorts,
   createKinloomServer,
   createPronunciationPlugin,
+  createRecipesServerPlugin,
   createWorkersObservabilityPlugin,
+  InMemoryRecipesRepository,
   type InMemoryServerPortsBundle,
   type KinloomServer,
   sha256Hex,
@@ -68,21 +70,27 @@ function contentTypeForPath(filePath: string): string {
   return MIME_BY_EXT[ext] ?? 'application/octet-stream';
 }
 
-function injectLiveWikiMeta(html: string): string {
+function injectLiveWikiMeta(html: string, enableRecipesPlugin = false): string {
   const tags = [
     '<meta name="kinloom-backend" content="http" />',
     '<meta name="kinloom-demo-plugin" content="true" />',
+    ...(enableRecipesPlugin ? ['<meta name="kinloom-recipes-plugin" content="true" />'] : []),
   ].join('\n    ');
   return html.replace('</head>', `    ${tags}\n  </head>`);
 }
 
-let sharedAssetHandler: { fetch(request: Request): Promise<Response> } | null = null;
+const sharedAssetHandlers = new Map<string, { fetch(request: Request): Promise<Response> }>();
 
-function createDemoDistAssetHandler(distDir: string): {
+function createDemoDistAssetHandler(
+  distDir: string,
+  enableRecipesPlugin = false
+): {
   fetch(request: Request): Promise<Response>;
 } {
-  if (sharedAssetHandler) {
-    return sharedAssetHandler;
+  const cacheKey = `${path.resolve(distDir)}::recipes=${enableRecipesPlugin ? '1' : '0'}`;
+  const existing = sharedAssetHandlers.get(cacheKey);
+  if (existing) {
+    return existing;
   }
   const resolvedDist = path.resolve(distDir);
   const indexHtmlPath = path.join(resolvedDist, 'index.html');
@@ -91,10 +99,10 @@ function createDemoDistAssetHandler(distDir: string): {
       `Missing built demo SPA at ${indexHtmlPath}. Run "npm run build --workspace=@kinloom/demo" first.`
     );
   }
-  const indexHtml = injectLiveWikiMeta(fs.readFileSync(indexHtmlPath, 'utf8'));
+  const indexHtml = injectLiveWikiMeta(fs.readFileSync(indexHtmlPath, 'utf8'), enableRecipesPlugin);
   const fileCache = new Map<string, { bytes: Uint8Array; contentType: string }>();
 
-  sharedAssetHandler = {
+  const handler = {
     async fetch(request: Request): Promise<Response> {
       const url = new URL(request.url);
       let decodedPath = '/';
@@ -147,7 +155,8 @@ function createDemoDistAssetHandler(distDir: string): {
       });
     },
   };
-  return sharedAssetHandler;
+  sharedAssetHandlers.set(cacheKey, handler);
+  return handler;
 }
 
 interface CachedDemoSeed {
@@ -352,6 +361,10 @@ async function readNodeRequestBody(req: http.IncomingMessage): Promise<Uint8Arra
   return new Uint8Array(Buffer.concat(chunks));
 }
 
+export interface StartLiveWikiServerOptions {
+  readonly enableRecipesPlugin?: boolean;
+}
+
 export interface LiveWikiTestHarness {
   readonly baseUrl: string;
   readonly inviteToken: string;
@@ -359,17 +372,21 @@ export interface LiveWikiTestHarness {
   readonly adminEmail: string;
   readonly siteConfig: KinloomSiteConfig;
   readonly ports: InMemoryServerPortsBundle;
+  readonly recipesRepo: InMemoryRecipesRepository | null;
   readonly server: KinloomServer;
   close(): Promise<void>;
 }
 
-export async function startLiveWikiTestServer(): Promise<LiveWikiTestHarness> {
+export async function startLiveWikiTestServer(
+  options: StartLiveWikiServerOptions = {}
+): Promise<LiveWikiTestHarness> {
   const seed = await getCachedDemoSeed();
   const siteConfig = structuredClone(seed.siteConfig);
   const ports = createInMemoryServerPorts(siteConfig, {
     initialIso: '2026-11-24T12:00:00.000Z',
   });
-  ports.assetHandler = createDemoDistAssetHandler(DEMO_DIST_DIR);
+  const enableRecipes = options.enableRecipesPlugin === true;
+  ports.assetHandler = createDemoDistAssetHandler(DEMO_DIST_DIR, enableRecipes);
 
   await seedDemoRepository(seed, ports);
 
@@ -404,6 +421,7 @@ export async function startLiveWikiTestServer(): Promise<LiveWikiTestHarness> {
     revoked_at: null,
   });
 
+  const recipesRepo = enableRecipes ? new InMemoryRecipesRepository() : null;
   const server = createKinloomServer({
     siteConfig,
     ports: {
@@ -411,6 +429,7 @@ export async function startLiveWikiTestServer(): Promise<LiveWikiTestHarness> {
       plugins: [
         createWorkersObservabilityPlugin({ clock: ports.clock, sink: () => {} }),
         createPronunciationPlugin(),
+        ...(recipesRepo ? [createRecipesServerPlugin({ repository: recipesRepo })] : []),
       ],
     },
     sessionSecret: SESSION_SECRET,
@@ -496,6 +515,7 @@ export async function startLiveWikiTestServer(): Promise<LiveWikiTestHarness> {
     adminEmail,
     siteConfig,
     ports,
+    recipesRepo,
     server,
     close: async () => {
       if (closePromise) {

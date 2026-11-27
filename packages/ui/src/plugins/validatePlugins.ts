@@ -97,7 +97,21 @@ export function validateAndCompileUiPlugins(plugins: readonly KinloomUiPlugin[])
           );
         }
         seenRouteOwners.set(key, { pluginId, path: normalizedPath });
-        routes.push({ ...route, path: normalizedPath, pluginId });
+        let normalizedPrefix: string | undefined;
+        if (route.navMatchPrefix !== undefined) {
+          normalizedPrefix = normalizeUiRoutePath(route.navMatchPrefix, pluginId);
+        }
+        if (route.navOrder !== undefined && !Number.isFinite(route.navOrder)) {
+          throw new RangeError(
+            `UI plugin '${pluginId}' route '${normalizedPath}' navOrder must be a finite number.`
+          );
+        }
+        routes.push({
+          ...route,
+          path: normalizedPath,
+          ...(normalizedPrefix !== undefined ? { navMatchPrefix: normalizedPrefix } : {}),
+          pluginId,
+        });
       }
     }
 

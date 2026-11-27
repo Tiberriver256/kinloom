@@ -1,0 +1,372 @@
+/* ==========================================================================
+   Exported Archival UI Primitives — Parchment / Slate / Brass Tokens
+   ========================================================================== */
+
+.archival-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(270px, 100%), 1fr));
+  gap: 16px;
+}
+
+.archival-filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 12px;
+  padding: 12px 14px;
+  margin-bottom: 18px;
+  background: var(--surface-card);
+  border: 1px solid var(--border-decorative);
+  border-radius: var(--radius-sm);
+}
+
+.archival-filter-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 12px;
+  flex: 1 1 auto;
+  min-inline-size: 0;
+}
+
+.archival-filter-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-inline-start: auto;
+}
+
+/* Accessible single-row scrollable tablist */
+.archival-tablist {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: stretch;
+  gap: 6px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  border-bottom: 1px solid var(--border-decorative);
+  margin-bottom: 16px;
+}
+
+.archival-tablist::-webkit-scrollbar {
+  display: none;
+}
+
+.archival-tab {
+  position: relative;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-block-size: 44px;
+  padding: 8px 14px;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  font-family: var(--font-serif);
+  font-size: 0.96rem;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: color 0.14s ease;
+}
+
+.archival-tab:hover {
+  color: var(--surface-header);
+}
+
+.archival-tab:focus-visible {
+  outline: 2px solid var(--action-focus);
+  outline-offset: -2px;
+  border-radius: var(--radius-sm);
+}
+
+.archival-tab[aria-selected="true"] {
+  color: var(--accent-primary);
+}
+
+.archival-tab[aria-selected="true"]::after {
+  content: "";
+  position: absolute;
+  inset: auto 0 0;
+  border-block-end: 2.5px solid var(--accent-primary);
+}
+
+.archival-tab-badge {
+  font-family: var(--font-mono);
+  font-size: 0.74rem;
+  padding: 1px 6px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-linen);
+  color: var(--text-secondary);
+}
+
+/* Tag pill */
+.archival-tag-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-block-size: 28px;
+  padding: 3px 9px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-decorative);
+  background: var(--surface-linen);
+  color: var(--surface-header);
+  font-family: var(--font-mono);
+  font-size: 0.74rem;
+  font-weight: 500;
+  line-height: 1.2;
+}
+
+button.archival-tag-pill {
+  cursor: pointer;
+  transition:
+    background-color 0.14s ease,
+    border-color 0.14s ease,
+    color 0.14s ease;
+}
+
+button.archival-tag-pill:hover {
+  background: var(--surface-muted);
+  border-color: var(--border-control);
+}
+
+button.archival-tag-pill[aria-pressed="true"] {
+  background: var(--surface-header);
+  border-color: var(--surface-header);
+  color: var(--text-inverse);
+}
+
+button.archival-tag-pill:focus-visible,
+.archival-tag-remove:focus-visible {
+  outline: 2px solid var(--action-focus);
+  outline-offset: 2px;
+}
+
+.archival-tag-remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-inline-size: 20px;
+  min-block-size: 20px;
+  padding: 0 2px;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  cursor: pointer;
+  line-height: 1;
+}
+
+/* Toast / status banner */
+.archival-toast {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+  margin-bottom: 14px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-decorative);
+  background: var(--surface-card);
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  line-height: 1.4;
+}
+
+.archival-toast-info {
+  background: var(--surface-card);
+  border-color: var(--border-control);
+  color: var(--text-primary);
+}
+
+.archival-toast-success {
+  background: var(--diff-add-bg);
+  border-color: var(--diff-add-fg);
+  color: var(--diff-add-fg);
+}
+
+.archival-toast-error {
+  background: var(--diff-del-bg);
+  border-color: var(--diff-del-fg);
+  color: var(--diff-del-fg);
+}
+
+.archival-toast-dismiss {
+  flex: none;
+  min-inline-size: 32px;
+  min-block-size: 32px;
+  padding: 4px 8px;
+  border: 1px solid currentColor;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: inherit;
+  font-family: var(--font-mono);
+  font-size: 0.74rem;
+  cursor: pointer;
+}
+
+.archival-toast-dismiss:focus-visible {
+  outline: 2px solid var(--action-focus);
+  outline-offset: 2px;
+}
+
+/* Empty state */
+.archival-empty-state {
+  padding: 28px 22px;
+  border: 1px solid var(--border-decorative);
+  border-radius: var(--radius-md);
+  background: var(--surface-card);
+  margin: 12px 0 24px;
+}
+
+.archival-empty-title {
+  margin: 0;
+  font-family: var(--font-serif);
+  font-size: 1.12rem;
+  font-weight: 600;
+  color: var(--surface-header);
+}
+
+.archival-empty-body {
+  margin: 8px 0 0;
+  font-size: 0.94rem;
+  line-height: 1.5;
+  color: var(--text-secondary);
+  max-width: 58ch;
+}
+
+.archival-empty-action {
+  margin-top: 14px;
+}
+
+/* Modal & Drawer overlays */
+.archival-overlay-dialog[open] {
+  position: fixed;
+  inset: 0;
+  z-index: 220;
+  margin: 0;
+  padding: 16px;
+  inline-size: 100%;
+  block-size: 100%;
+  max-inline-size: none;
+  max-block-size: none;
+  border: none;
+  background: rgba(27, 42, 65, 0.56);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  overscroll-behavior: contain;
+}
+
+.archival-overlay-drawer[open] {
+  padding: 0;
+  align-items: stretch;
+  justify-content: flex-end;
+}
+
+.archival-overlay-backdrop {
+  position: fixed;
+  inset: 0;
+  border: none;
+  background: transparent;
+  padding: 0;
+  margin: 0;
+  cursor: default;
+}
+
+.archival-modal-panel {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  inline-size: min(640px, calc(100dvw - 32px));
+  max-block-size: calc(100dvh - 32px);
+  background: var(--surface-card);
+  color: var(--text-primary);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-active);
+  overflow: hidden;
+}
+
+.archival-drawer-panel {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  inline-size: min(520px, 100dvw);
+  block-size: 100dvh;
+  background: var(--surface-card);
+  color: var(--text-primary);
+  border-inline-start: 1px solid var(--border-strong);
+  box-shadow: var(--shadow-active);
+  overflow: hidden;
+}
+
+.archival-overlay-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 18px;
+  background: var(--surface-linen);
+  border-bottom: 1px solid var(--border-decorative);
+}
+
+.archival-overlay-title {
+  margin: 0;
+  font-family: var(--font-serif);
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--surface-header);
+}
+
+.archival-overlay-close {
+  flex: none;
+  min-block-size: 36px;
+  padding: 4px 10px;
+  border: 1px solid var(--border-control);
+  border-radius: var(--radius-sm);
+  background: var(--surface-card);
+  color: var(--surface-header);
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.archival-overlay-close:hover {
+  background: var(--surface-canvas);
+  border-color: var(--surface-header);
+}
+
+.archival-overlay-close:focus-visible {
+  outline: 2px solid var(--action-focus);
+  outline-offset: 2px;
+}
+
+.archival-overlay-body {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  padding: 18px;
+  overscroll-behavior: contain;
+}
+
+@media (max-width: 768px) {
+  .archival-filter-bar {
+    padding: 10px 12px;
+  }
+
+  .archival-filter-actions {
+    margin-inline-start: 0;
+  }
+
+  button.archival-tag-pill {
+    min-block-size: 36px;
+  }
+}

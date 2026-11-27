@@ -27,6 +27,17 @@ export type {
   OpenFinanceClient,
 } from './adapters/openFinanceClient.js';
 export { createHttpOpenFinanceClient } from './adapters/openFinanceClient.js';
+export type {
+  HttpPluginApiClientOptions,
+  PluginApiClient,
+} from './adapters/pluginApiClient.js';
+export { createHttpPluginApiClient } from './adapters/pluginApiClient.js';
+export type {
+  HttpRecipesClientOptions,
+  RecipesClient,
+  StaticRecipesClientOptions,
+} from './adapters/recipesClient.js';
+export { createHttpRecipesClient, createStaticRecipesClient } from './adapters/recipesClient.js';
 export {
   createStaticArchiveDataSource,
   StaticDemoDataSource,
@@ -57,6 +68,26 @@ export {
   formatNarrativeDateSpan,
   parseMarkdownBlocks,
 } from './components/ArchivalMarkdown.js';
+export type {
+  ArchivalCardGridProps,
+  ArchivalEmptyStateProps,
+  ArchivalFilterBarProps,
+  ArchivalOverlayProps,
+  ArchivalTabItem,
+  ArchivalTabsProps,
+  ArchivalTagPillProps,
+  ArchivalToastProps,
+} from './components/ArchivalPrimitives.js';
+export {
+  ArchivalCardGrid,
+  ArchivalDrawer,
+  ArchivalEmptyState,
+  ArchivalFilterBar,
+  ArchivalModal,
+  ArchivalTabs,
+  ArchivalTagPill,
+  ArchivalToast,
+} from './components/ArchivalPrimitives.js';
 export {
   ArchivalPhotoFrame,
   CoordinatePill,
@@ -197,7 +228,9 @@ export * from './lib/archivalTreeModel.js';
 export * from './lib/bookPublishingModel.js';
 export * from './lib/observabilityStatsModel.js';
 export * from './lib/openFinanceModel.js';
+export * from './lib/pluginNav.js';
 export * from './lib/pluginSettingsForm.js';
+export * from './lib/recipesModel.js';
 export * from './lib/scrollMemory.js';
 export * from './lib/searchNavigation.js';
 export * from './lib/sourceReaderNav.js';
@@ -256,6 +289,7 @@ export {
 export type {
   KinloomPluginContextValue,
   KinloomPluginProviderProps,
+  KinloomPluginRuntimeContext,
   PluginSlotProps,
 } from './plugins/PluginContext.js';
 // Extension & Plugin Seam
@@ -263,13 +297,17 @@ export {
   KinloomPluginProvider,
   PluginSlot,
   RESERVED_UI_ROUTE_PATHS,
+  useKinloomPluginContext,
   useKinloomPlugins,
   validateAndCompileUiPlugins,
 } from './plugins/PluginContext.js';
+export type { RecipesUiPluginOptions } from './plugins/recipesPlugin.js';
+export { createRecipesUiPlugin, RECIPES_UI_PLUGIN_ID } from './plugins/recipesPlugin.js';
 export type {
   KinloomMediaRenderer,
   KinloomMediaRendererProps,
   KinloomUiPlugin,
+  KinloomUiPluginNavMinRole,
   KinloomUiPluginRoute,
   KinloomUiPluginSlotContext,
   KinloomUiPluginSlotName,

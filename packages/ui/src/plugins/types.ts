@@ -16,9 +16,19 @@ import type {
   EntityEditFormEntry,
 } from '../components/wiki/entityForms/fieldTypes.js';
 
+export type KinloomUiPluginNavMinRole = 'public' | 'viewer' | 'editor' | 'admin';
+
 export interface KinloomUiPluginRoute {
   readonly path: string;
   readonly navLabel?: string;
+  /** Prefix used to keep the top-bar nav pill active across nested sub-routes (for example '/recipes'). */
+  readonly navMatchPrefix?: string;
+  /** Optional short aria-hidden icon rendered next to navLabel. */
+  readonly navIcon?: React.ReactNode;
+  /** Optional numeric sort order among plugin nav items (ascending, ties preserve registration order). */
+  readonly navOrder?: number;
+  /** Optional minimum visibility role for showing this link in navigation chrome. Defaults to 'public'. */
+  readonly navMinRole?: KinloomUiPluginNavMinRole;
   readonly component: React.ComponentType;
 }
 
@@ -37,7 +47,11 @@ export type KinloomUiPluginSlotRenderer = (ctx: KinloomUiPluginSlotContext) => R
 
 export interface KinloomUiPluginSlots {
   readonly indexHero?: KinloomUiPluginSlotRenderer;
+  /** Widget shelf rendered on IndexPage below indexHero and above the people filter bar. */
+  readonly indexWidgets?: KinloomUiPluginSlotRenderer;
   readonly personDetail?: KinloomUiPluginSlotRenderer;
+  /** Related-content panel rendered on PersonPage below PersonMediaSection (strictly deceased people only). */
+  readonly personRelated?: KinloomUiPluginSlotRenderer;
   readonly narrativeHeader?: KinloomUiPluginSlotRenderer;
   readonly placeDetail?: KinloomUiPluginSlotRenderer;
   readonly sourceReaderFooter?: KinloomUiPluginSlotRenderer;

@@ -476,6 +476,22 @@ export {
   type UpdateRecipePhotoInput,
   UpdateRecipePhotoInputSchema,
 } from './plugins/recipes/schemas.js';
+export {
+  computeRecipePermissions,
+  createRecipesServerPlugin,
+  DEFAULT_RECIPES_RUNTIME_SETTINGS,
+  type PublicRecipeAncestorRef,
+  type PublicRecipeDetail,
+  type PublicRecipePermissions,
+  type PublicRecipePhoto,
+  type PublicRecipeSummary,
+  RECIPES_API_PREFIX,
+  type RecipesCommentMinRoleSetting,
+  type RecipesRuntimeSettings,
+  type RecipesServerPluginOptions,
+  type RecipesStarMinRoleSetting,
+  type RecipesWriteMinRoleSetting,
+} from './plugins/recipes/serverPlugin.js';
 export { SqlRecipesRepository } from './plugins/recipes/sqlRecipesRepository.js';
 export {
   buildSecurityTelemetryLogRecord,

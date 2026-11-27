@@ -394,6 +394,10 @@ export const PersonPage: React.FC = () => {
                 }}
               />
 
+              {!person.is_living && person.full_name !== 'Living' && (
+                <PluginSlot name="personRelated" person={person} />
+              )}
+
               <PersonLifeTimelineSection
                 person={person}
                 personEvents={personEvents}

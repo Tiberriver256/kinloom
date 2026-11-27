@@ -5,6 +5,7 @@ import type { KinloomUiPlugin } from '@kinloom/ui';
 import {
   createHttpWikiDataSource,
   createNarrativeAudioPlugin,
+  createRecipesUiPlugin,
   createStaticArchiveDataSource,
   installGlobalErrorHandlers,
   KinloomApp,
@@ -46,11 +47,16 @@ function resolveBackendMode(): BackendMode {
 const narrativeAudioPlugin = createNarrativeAudioPlugin();
 
 function resolveDemoPlugins(): readonly KinloomUiPlugin[] {
+  const plugins: KinloomUiPlugin[] = [narrativeAudioPlugin];
   const meta = document.querySelector<HTMLMetaElement>('meta[name="kinloom-demo-plugin"]');
   if (meta?.content === 'true' || readEnvFlag('VITE_KINLOOM_DEMO_PLUGIN') === 'true') {
-    return [narrativeAudioPlugin, demoStoryPlugin];
+    plugins.push(demoStoryPlugin);
   }
-  return [narrativeAudioPlugin];
+  const recipesMeta = document.querySelector<HTMLMetaElement>('meta[name="kinloom-recipes-plugin"]');
+  if (recipesMeta?.content === 'true' || readEnvFlag('VITE_KINLOOM_RECIPES_PLUGIN') === 'true') {
+    plugins.push(createRecipesUiPlugin());
+  }
+  return plugins;
 }
 
 const backendMode = resolveBackendMode();
