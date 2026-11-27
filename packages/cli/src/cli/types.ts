@@ -1,4 +1,5 @@
 import { type ParseArgsConfig, parseArgs } from 'node:util';
+import type { ScreenshotBrowserFactory } from '../commands/ops/screenshots/types.js';
 import { type CliExitCode, CliValidationError, EXIT_ERROR } from '../errors.js';
 import type { CliIo } from '../io.js';
 import type { KinloomCliPlugin } from '../pluginTypes.js';
@@ -10,6 +11,7 @@ export interface RunCliOptions {
   fetchImpl?: typeof fetch;
   cwd?: string;
   plugins?: readonly KinloomCliPlugin[];
+  screenshotBrowserFactory?: ScreenshotBrowserFactory;
 }
 
 export interface CliDispatchContext {
@@ -18,6 +20,7 @@ export interface CliDispatchContext {
   cwd: string;
   fetchImpl?: typeof fetch;
   plugins?: readonly KinloomCliPlugin[];
+  screenshotBrowserFactory?: ScreenshotBrowserFactory;
 }
 
 export function requireStringFlag(value: string | undefined, flagName: string): string {

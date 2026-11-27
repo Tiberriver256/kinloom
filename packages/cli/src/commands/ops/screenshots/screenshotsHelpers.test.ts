@@ -1,10 +1,13 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   buildHeadlessEnv,
+  createPlaywrightBrowserFactory,
   inspectLiveNavLinks,
   inspectVisiblePluginSlots,
   isExecutableBinary,
+  loadPlaywrightModule,
   navigateAndSettlePage,
+  type PlaywrightLaunchModule,
   resolveScreenshotChromiumPath,
   safeCloseHandle,
   withTimeout,
@@ -502,6 +505,111 @@ describe('screenshots/browser utilities', () => {
     });
     expect(await inspectLiveNavLinks(failingPage)).toEqual([]);
     expect(await inspectVisiblePluginSlots(failingPage, '/')).toEqual([]);
+  });
+
+  it('loads playwright-core or falls back to playwright and throws when neither is installed', async () => {
+    const fakeBrowser = {
+      newContext: vi.fn(),
+      close: vi.fn(async () => undefined),
+    };
+    const coreMod: PlaywrightLaunchModule = {
+      chromium: {
+        launch: vi.fn(async () => fakeBrowser),
+      },
+    };
+    const pwMod: PlaywrightLaunchModule = {
+      chromium: {
+        launch: vi.fn(async () => fakeBrowser),
+      },
+    };
+
+    const loadedCore = await loadPlaywrightModule(async (name) => {
+      if (name === 'playwright-core') {
+        return coreMod;
+      }
+      throw new Error('should not inspect fallback');
+    });
+    expect(loadedCore).toBe(coreMod);
+
+    const loadedFallback = await loadPlaywrightModule(async (name) => {
+      if (name === 'playwright-core') {
+        return { chromium: null };
+      }
+      return pwMod;
+    });
+    expect(loadedFallback).toBe(pwMod);
+
+    await expect(
+      loadPlaywrightModule(async () => {
+        throw new Error('Cannot find package');
+      })
+    ).rejects.toThrow('playwright-core');
+  });
+
+  it('launches bundled vs system chromium with expected args, env, and minimum timeout floor', async () => {
+    const launchCalls: Array<Record<string, unknown>> = [];
+    const fakeBrowser = {
+      newContext: vi.fn(),
+      close: vi.fn(async () => undefined),
+    };
+
+    const bundledFactory = createPlaywrightBrowserFactory({
+      loadModule: async () => ({
+        chromium: {
+          executablePath: () => '/bundled/chromium',
+          launch: async (opts) => {
+            launchCalls.push({ ...(opts ?? {}) });
+            return fakeBrowser;
+          },
+        },
+      }),
+      isExecutable: (filePath) => filePath === '/bundled/chromium',
+    });
+
+    const bundledBrowser = await bundledFactory({
+      timeoutMs: 1_000,
+      env: { PATH: '/usr/bin', WAYLAND_DISPLAY: 'wayland-1' },
+    });
+    expect(bundledBrowser).toBe(fakeBrowser);
+    expect(launchCalls[0]).toEqual({
+      headless: true,
+      timeout: 5_000,
+      args: [
+        '--no-first-run',
+        '--no-default-browser-check',
+        '--disable-extensions',
+        '--disable-dev-shm-usage',
+      ],
+      executablePath: undefined,
+      env: undefined,
+    });
+
+    const systemFactory = createPlaywrightBrowserFactory({
+      loadModule: async () => ({
+        chromium: {
+          executablePath: () => {
+            throw new Error('bundled missing');
+          },
+          launch: async (opts) => {
+            launchCalls.push({ ...(opts ?? {}) });
+            return fakeBrowser;
+          },
+        },
+      }),
+      isExecutable: (filePath) => filePath === '/usr/lib/chromium/chromium',
+    });
+
+    const systemBrowser = await systemFactory({
+      timeoutMs: 12_000,
+      env: { PATH: '/usr/bin', WAYLAND_DISPLAY: 'wayland-1', HOME: '/home/demo' },
+    });
+    expect(systemBrowser).toBe(fakeBrowser);
+    expect(launchCalls[1]?.executablePath).toBe('/usr/lib/chromium/chromium');
+    expect(launchCalls[1]?.timeout).toBe(12_000);
+    expect(launchCalls[1]?.args).toContain('--ozone-platform=headless');
+    const launchEnv = launchCalls[1]?.env as Record<string, string> | undefined;
+    expect(launchEnv?.WAYLAND_DISPLAY).toBeUndefined();
+    expect(launchEnv?.HOME).toBe('/home/demo');
   });
 });
 

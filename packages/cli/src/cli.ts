@@ -30,6 +30,7 @@ export async function runCli(argv: readonly string[], options?: RunCliOptions): 
     cwd: options?.cwd ?? process.cwd(),
     fetchImpl: options?.fetchImpl,
     plugins: options?.plugins,
+    screenshotBrowserFactory: options?.screenshotBrowserFactory,
   };
 
   try {

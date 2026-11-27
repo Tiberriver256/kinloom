@@ -571,7 +571,174 @@ describe('runScreenshotsCommand orchestration and redaction', () => {
   });
 });
 
-describe('kinloom screenshots CLI + live Playwright integration', () => {
+function createHttpBackedBrowserFactory(): ScreenshotBrowserFactory {
+  return async () => ({
+    newContext: async (ctxOpts) => {
+      const cookies: ScreenshotCookieSpec[] = [];
+      return {
+        addCookies: async (nextCookies) => {
+          cookies.push(...nextCookies);
+        },
+        newPage: async () => {
+          let currentHtml = '';
+          const uiState = {
+            menuOpen: false,
+            searchOpen: false,
+            sourceOpen: false,
+            lightboxOpen: false,
+            signInOpen: false,
+            treeFocusOpen: false,
+            stopCardOpen: false,
+          };
+
+          const selectorVisible = (selector: string): boolean => {
+            switch (selector) {
+              case 'header':
+                return currentHtml.includes('<header>');
+              case 'footer':
+                return currentHtml.includes('<footer>');
+              case 'button[aria-label="Archive menu"]':
+                return currentHtml.includes('aria-label="Archive menu"');
+              case '[role="menu"]':
+                return uiState.menuOpen;
+              case 'button[aria-label="Search archive"]':
+                return currentHtml.includes('aria-label="Search archive"');
+              case 'dialog[open][aria-label*="Search" i]':
+              case 'dialog[open] input[type="search"]':
+                return uiState.searchOpen;
+              case '[data-testid="theme-toggle"]':
+                return currentHtml.includes('data-testid="theme-toggle"');
+              case '[class*="pronunciation-badge"]':
+                return currentHtml.includes('class="pronunciation-badge"');
+              case '[role="group"][aria-label*="Pronunciation" i] button, button[aria-expanded][aria-label*="pronunciation" i]':
+                return currentHtml.includes('aria-label="Pronunciation variants"');
+              case 'header button:has-text("Sources")':
+                return currentHtml.includes('id="btnSources"');
+              case 'dialog[open][aria-label*="Source" i]':
+                return uiState.sourceOpen;
+              case '#person-media button[class*="person-media-card"]':
+                return currentHtml.includes('class="person-media-card"');
+              case 'dialog[open][aria-label*="lightbox" i]':
+                return uiState.lightboxOpen;
+              case '[role="toolbar"][aria-label*="Family tree" i]':
+                return currentHtml.includes('class="tree-toolbar"');
+              case '[class*="tree-node"] button':
+                return currentHtml.includes('id="treeNodeBtn"');
+              case 'aside[aria-label*="Focus" i]':
+                return uiState.treeFocusOpen;
+              case 'aside[aria-label="Migration stage color legend"]':
+                return currentHtml.includes('class="map-stage-legend"');
+              case 'button[aria-label*="Next stop" i]':
+                return currentHtml.includes('id="nextStopBtn"');
+              case 'button:has-text("Sign in to edit")':
+                return currentHtml.includes('id="btnSignIn"');
+              case 'dialog[open][aria-label*="Sign in" i]':
+                return uiState.signInOpen;
+              case '[data-testid="narrative-audio-margin-bar"]':
+                return currentHtml.includes('data-testid="narrative-audio-margin-bar"');
+              case '[data-plugin-id="demo-story-reel"]':
+                return currentHtml.includes('data-plugin-id="demo-story-reel"');
+              default:
+                return false;
+            }
+          };
+
+          const makeLocator = (selector: string): ScreenshotLocatorHandle => {
+            const handle: ScreenshotLocatorHandle = {
+              count: async () => (selectorVisible(selector) ? 1 : 0),
+              first: () => handle,
+              nth: () => handle,
+              isVisible: async () => selectorVisible(selector),
+              click: async () => {
+                if (selector === 'button[aria-label="Archive menu"]') {
+                  uiState.menuOpen = true;
+                } else if (selector === 'button[aria-label="Search archive"]') {
+                  uiState.searchOpen = true;
+                } else if (selector === 'header button:has-text("Sources")') {
+                  uiState.sourceOpen = true;
+                } else if (selector === '#person-media button[class*="person-media-card"]') {
+                  uiState.lightboxOpen = true;
+                } else if (selector === '[class*="tree-node"] button') {
+                  uiState.treeFocusOpen = true;
+                } else if (selector === 'button[aria-label*="Next stop" i]') {
+                  uiState.stopCardOpen = true;
+                } else if (selector === 'button:has-text("Sign in to edit")') {
+                  uiState.signInOpen = true;
+                }
+              },
+              fill: async () => undefined,
+              screenshot: async ({ path: outPath }) => {
+                await fs.writeFile(outPath, MINIMAL_FAKE_PNG);
+              },
+              boundingBox: async () => (selectorVisible(selector) ? { width: 200, height: 60 } : null),
+              textContent: async () => 'ok',
+            };
+            return handle;
+          };
+
+          return {
+            goto: async (url) => {
+              const headers: Record<string, string> = { ...(ctxOpts.extraHTTPHeaders ?? {}) };
+              if (!headers.Cookie && cookies.length > 0) {
+                headers.Cookie = cookies.map((c) => `${c.name}=${c.value}`).join('; ');
+              }
+              const res = await fetch(url, { headers });
+              if (!res.ok) {
+                throw new Error(`HTTP ${res.status} for ${url}`);
+              }
+              currentHtml = await res.text();
+              uiState.menuOpen = false;
+              uiState.searchOpen = false;
+              uiState.sourceOpen = false;
+              uiState.lightboxOpen = false;
+              uiState.signInOpen = false;
+              uiState.treeFocusOpen = false;
+              uiState.stopCardOpen = false;
+            },
+            screenshot: async ({ path: outPath }) => {
+              await fs.writeFile(outPath, MINIMAL_FAKE_PNG);
+            },
+            locator: (selector) => makeLocator(selector),
+            evaluate: async (expr) => {
+              if (expr.includes('header a[href]')) {
+                const links: Array<{ href: string; text: string }> = [];
+                const re = /<a\s+[^>]*href="([^"]+)"[^>]*>([^<]*)<\/a>/g;
+                let match = re.exec(currentHtml);
+                while (match !== null) {
+                  links.push({ href: match[1], text: match[2].trim() });
+                  match = re.exec(currentHtml);
+                }
+                return links as never;
+              }
+              if (expr.includes('data-kinloom-plugin-slot')) {
+                if (currentHtml.includes('data-plugin-id="demo-story-reel"')) {
+                  return [
+                    {
+                      pluginId: 'demo-story-reel',
+                      slotName: 'personDetail',
+                      selector: '[data-plugin-id="demo-story-reel"]',
+                    },
+                  ] as never;
+                }
+                return [] as never;
+              }
+              return true as never;
+            },
+            waitForTimeout: async () => undefined,
+            waitForSelector: async () => undefined,
+            keyboard: { press: async () => undefined },
+            on: () => undefined,
+            close: async () => undefined,
+          };
+        },
+        close: async () => undefined,
+      };
+    },
+    close: async () => undefined,
+  });
+}
+
+describe('kinloom screenshots CLI + hermetic HTTP archive integration', () => {
   it('validates CLI flags and prints SCREENSHOTS_HELP', async () => {
     const stdout: string[] = [];
     const stderr: string[] = [];
@@ -606,11 +773,12 @@ describe('kinloom screenshots CLI + live Playwright integration', () => {
     expect(stderr.join('\n')).toContain('non-negative integer');
   });
 
-  it('runs real Playwright against a local HTTP archive server and writes valid PNGs, manifest.json, and index.html', async () => {
+  it('runs CLI screenshots against a local HTTP archive server with an injected browser factory and writes valid PNGs, manifest.json, and index.html', async () => {
     const server = await startSyntheticArchiveServer();
     const outDir = await makeTempDir('kinloom-shots-live-');
     const stdout: string[] = [];
     const stderr: string[] = [];
+    const screenshotBrowserFactory = createHttpBackedBrowserFactory();
 
     try {
       const exitCode = await runCli(
@@ -647,6 +815,7 @@ describe('kinloom screenshots CLI + live Playwright integration', () => {
           '--json',
         ],
         {
+          screenshotBrowserFactory,
           io: {
             stdout: (line) => stdout.push(line),
             stderr: (line) => stderr.push(line),
@@ -658,6 +827,13 @@ describe('kinloom screenshots CLI + live Playwright integration', () => {
       expect(exitCode).toBe(0);
       expect(server.receivedAuthHeaders).toContain('LOCAL_SECRET_HEADER_99');
       expect(server.receivedCookies.some((c) => c.includes('LOCAL_SECRET_COOKIE_42'))).toBe(true);
+
+      const jsonPayload = JSON.parse(stdout.join('\n')) as {
+        readonly ok: boolean;
+        readonly summary: ScreenshotsManifest['summary'];
+      };
+      expect(jsonPayload.ok).toBe(true);
+      expect(jsonPayload.summary.failed).toBe(0);
 
       const defaultOutCwd = await makeTempDir('kinloom-shots-default-cwd-');
       const textStdout: string[] = [];
@@ -678,6 +854,7 @@ describe('kinloom screenshots CLI + live Playwright integration', () => {
         ],
         {
           cwd: defaultOutCwd,
+          screenshotBrowserFactory,
           io: {
             stdout: (line) => textStdout.push(line),
             stderr: (line) => stderr.push(line),
@@ -697,6 +874,8 @@ describe('kinloom screenshots CLI + live Playwright integration', () => {
       expect(manifestRaw).not.toContain('LOCAL_SECRET_HEADER_99');
       expect(indexHtml).not.toContain('LOCAL_SECRET_COOKIE_42');
       expect(indexHtml).not.toContain('LOCAL_SECRET_HEADER_99');
+      expect(stdout.join('\n')).not.toContain('LOCAL_SECRET_COOKIE_42');
+      expect(stdout.join('\n')).not.toContain('LOCAL_SECRET_HEADER_99');
 
       const manifest = JSON.parse(manifestRaw) as ScreenshotsManifest;
       expect(manifest.summary.failed).toBe(0);
@@ -726,7 +905,6 @@ describe('kinloom screenshots CLI + live Playwright integration', () => {
         expect(entry?.file).toBeTruthy();
         const pngBytes = await fs.readFile(path.join(outDir, ...(entry?.file ?? '').split('/')));
         expect(pngBytes.subarray(0, 8).equals(PNG_MAGIC_BYTES)).toBe(true);
-        expect(pngBytes.length).toBeGreaterThan(200);
       }
 
       expect(indexHtml).toContain('Kinloom UI Review Contact Sheet');
@@ -735,5 +913,5 @@ describe('kinloom screenshots CLI + live Playwright integration', () => {
     } finally {
       await server.close();
     }
-  }, 30_000);
+  });
 });

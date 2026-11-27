@@ -105,6 +105,7 @@ export async function runScreenshots(rest: readonly string[], ctx: CliDispatchCo
         concurrency,
         json: values.json,
         fetchImpl: ctx.fetchImpl,
+        browserFactory: ctx.screenshotBrowserFactory,
       })
   );
 

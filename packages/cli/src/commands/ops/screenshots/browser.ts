@@ -10,7 +10,7 @@ import type {
   ScreenshotTheme,
 } from './types.js';
 
-interface PlaywrightLaunchModule {
+export interface PlaywrightLaunchModule {
   readonly chromium: {
     executablePath?(): string;
     launch(options?: {
@@ -21,6 +21,21 @@ interface PlaywrightLaunchModule {
       readonly env?: Record<string, string>;
     }): Promise<ScreenshotBrowserHandle>;
   };
+}
+
+export type PlaywrightModuleImporter = (specifier: 'playwright-core' | 'playwright') => Promise<unknown>;
+
+function isPlaywrightLaunchModule(value: unknown): value is PlaywrightLaunchModule {
+  if (typeof value !== 'object' || value === null || !('chromium' in value)) {
+    return false;
+  }
+  const { chromium } = value;
+  return (
+    typeof chromium === 'object' &&
+    chromium !== null &&
+    'launch' in chromium &&
+    typeof chromium.launch === 'function'
+  );
 }
 
 const DIRECT_CHROMIUM_PATHS = ['/usr/lib/chromium/chromium', '/usr/lib/chromium-browser/chromium-browser'];
@@ -132,12 +147,14 @@ export async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, lab
   });
 }
 
-async function loadPlaywrightModule(): Promise<PlaywrightLaunchModule> {
+export async function loadPlaywrightModule(
+  importer: PlaywrightModuleImporter = (name) => import(name)
+): Promise<PlaywrightLaunchModule> {
   const candidates = ['playwright-core', 'playwright'] as const;
   for (const name of candidates) {
     try {
-      const mod = (await import(name)) as PlaywrightLaunchModule;
-      if (mod?.chromium && typeof mod.chromium.launch === 'function') {
+      const mod = await importer(name);
+      if (isPlaywrightLaunchModule(mod)) {
         return mod;
       }
     } catch {
@@ -149,32 +166,43 @@ async function loadPlaywrightModule(): Promise<PlaywrightLaunchModule> {
   );
 }
 
-export const defaultScreenshotBrowserFactory: ScreenshotBrowserFactory = async ({ timeoutMs, env }) => {
-  const playwrightMod = await loadPlaywrightModule();
-  let bundledPath: string | undefined;
-  try {
-    bundledPath = playwrightMod.chromium.executablePath?.();
-  } catch {
-    bundledPath = undefined;
-  }
-  const resolved = resolveScreenshotChromiumPath({
-    env,
-    playwrightExecutablePath: bundledPath,
-  });
-  const args = resolved.isSystemBinary ? [...BASE_ARGS, ...SYSTEM_EXTRA_ARGS] : [...BASE_ARGS];
-  const launchTimeout = Math.max(5_000, timeoutMs);
-  return withTimeout(
-    playwrightMod.chromium.launch({
-      headless: true,
-      timeout: launchTimeout,
-      args,
-      executablePath: resolved.executablePath,
-      env: resolved.isSystemBinary ? buildHeadlessEnv(env) : undefined,
-    }),
-    launchTimeout + 2_000,
-    'chromium.launch'
-  );
-};
+export function createPlaywrightBrowserFactory(deps?: {
+  readonly loadModule?: () => Promise<PlaywrightLaunchModule>;
+  readonly isExecutable?: (filePath: string) => boolean;
+}): ScreenshotBrowserFactory {
+  const loadModule = deps?.loadModule ?? loadPlaywrightModule;
+  const isExecutable = deps?.isExecutable;
+
+  return async ({ timeoutMs, env }) => {
+    const playwrightMod = await loadModule();
+    let bundledPath: string | undefined;
+    try {
+      bundledPath = playwrightMod.chromium.executablePath?.();
+    } catch {
+      bundledPath = undefined;
+    }
+    const resolved = resolveScreenshotChromiumPath({
+      env,
+      playwrightExecutablePath: bundledPath,
+      isExecutable,
+    });
+    const args = resolved.isSystemBinary ? [...BASE_ARGS, ...SYSTEM_EXTRA_ARGS] : [...BASE_ARGS];
+    const launchTimeout = Math.max(5_000, timeoutMs);
+    return withTimeout(
+      playwrightMod.chromium.launch({
+        headless: true,
+        timeout: launchTimeout,
+        args,
+        executablePath: resolved.executablePath,
+        env: resolved.isSystemBinary ? buildHeadlessEnv(env) : undefined,
+      }),
+      launchTimeout + 2_000,
+      'chromium.launch'
+    );
+  };
+}
+
+export const defaultScreenshotBrowserFactory: ScreenshotBrowserFactory = createPlaywrightBrowserFactory();
 
 export async function safeCloseHandle(
   handle: { close(): Promise<void> } | undefined,
