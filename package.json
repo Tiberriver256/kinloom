@@ -19,7 +19,8 @@
     "check": "npm run lint && npm run build && npm run typecheck && npm test && npm run check:contrast && npm run check:leaks",
     "format": "biome format --write",
     "format:check": "biome format",
-    "check:counts": "node scripts/check-archive-counts.mjs"
+    "check:counts": "node scripts/check-archive-counts.mjs",
+    "test:coverage": "vitest run --coverage"
   },
   "devDependencies": {
     "@biomejs/biome": "2.6.9",
@@ -29,6 +30,7 @@
     "@types/react": "^19.3.1",
     "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^6.3.0",
+    "@vitest/coverage-v8": "^5.1.1",
     "fast-check": "^4.11.0",
     "jsdom": "^31.0.1",
     "typescript": "^7.0.2",

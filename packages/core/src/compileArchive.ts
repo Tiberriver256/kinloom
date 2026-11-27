@@ -460,24 +460,24 @@ export function compileArchive(input: CompileArchiveInput): CompileArchiveResult
   // Apply GEDCOM citation cleanings
   applyCitationCleanings(timedEvents, uniqueSources, legacyContainerSourceIds);
 
-  // Stage 3: Derive residence spans
-  const rawSpans = deriveResidenceSpans(rawPeople, timedEvents, placesById, {
-    includeLiving: includeLivingSpans,
-  });
-
   // Capture pre-redaction living names for public-mode narrative scrubbing
   const narrativeLivingPattern =
     mode === 'public' ? compileLivingNamePattern(collectLivingNames(rawPeople)) : null;
 
-  // Stage 5: Apply living-person privacy filter in place on already-cloned inputs
+  // Stage 3: Apply living-person privacy filter in place on already-cloned inputs before deriving
+  // residence spans so location-redacted living-participant events cannot leak into residence spans.
   const {
     people: redactedRawPeople,
     events: redactedEvents,
-    residenceSpans,
     reviewFlags,
-  } = applyPrivacyFilter(rawPeople, timedEvents, rawSpans, mode, {
+  } = applyPrivacyFilter(rawPeople, timedEvents, [], mode, {
     privacy,
     cloneInputs: false,
+  });
+
+  // Stage 4: Derive residence spans from privacy-filtered people and events
+  const residenceSpans = deriveResidenceSpans(redactedRawPeople, redactedEvents, placesById, {
+    includeLiving: includeLivingSpans,
   });
 
   // Sort events chronologically matching Python's stable sort tuple: (time_min is None, time_min or 99999999, -(severity_rank or 0))
