@@ -214,12 +214,41 @@ dist/
 raw-gedcom/
 `;
 
-const OXLINTRC_JSON = `${JSON.stringify(
+const BIOME_JSON = `${JSON.stringify(
   {
-    $schema: './node_modules/oxlint/configuration_schema.json',
-    jsPlugins: ['@kinloom/core/oxlint-plugin'],
-    rules: {
-      'kinloom/no-hardcoded-archive-counts': 'error',
+    $schema: './node_modules/@biomejs/biome/configuration_schema.json',
+    vcs: {
+      enabled: true,
+      clientKind: 'git',
+      useIgnoreFile: true,
+    },
+    formatter: {
+      enabled: true,
+      indentStyle: 'space',
+      indentWidth: 2,
+      lineWidth: 110,
+    },
+    javascript: {
+      formatter: {
+        quoteStyle: 'single',
+        semicolons: 'always',
+        trailingCommas: 'es5',
+      },
+    },
+    css: {
+      parser: {
+        cssModules: true,
+      },
+    },
+    linter: {
+      enabled: true,
+      rules: {
+        preset: 'recommended',
+        style: {
+          useImportType: 'error',
+          useNodejsImportProtocol: 'error',
+        },
+      },
     },
   },
   null,
@@ -293,7 +322,7 @@ export async function runInitCommand(options: InitCommandOptions): Promise<InitC
     [path.join('.github', 'workflows', 'backup.yml'), BACKUP_WORKFLOW_YAML],
     [path.join('.github', 'workflows', 'reconcile.yml'), RECONCILE_WORKFLOW_YAML],
     [path.join('extensions', 'README.md'), EXTENSIONS_README_MD],
-    ['.oxlintrc.json', OXLINTRC_JSON],
+    ['biome.json', BIOME_JSON],
     ['.gitignore', GITIGNORE_CONTENT],
   ];
 

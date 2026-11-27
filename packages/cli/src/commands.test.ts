@@ -332,12 +332,15 @@ describe('kinloom CLI commands', () => {
     const extReadme = await readFile(path.join(targetDir, 'extensions', 'README.md'), 'utf8');
     expect(extReadme).toContain('KinloomUiPlugin');
 
-    const oxlintrc = JSON.parse(await readFile(path.join(targetDir, '.oxlintrc.json'), 'utf8')) as {
-      jsPlugins: string[];
-      rules: Record<string, string>;
+    const biomeConfig = JSON.parse(await readFile(path.join(targetDir, 'biome.json'), 'utf8')) as {
+      $schema: string;
+      css: { parser: { cssModules: boolean } };
+      linter: { enabled: boolean; rules: { preset: string } };
     };
-    expect(oxlintrc.jsPlugins).toEqual(['@kinloom/core/oxlint-plugin']);
-    expect(oxlintrc.rules['kinloom/no-hardcoded-archive-counts']).toBe('error');
+    expect(biomeConfig.$schema).toContain('@biomejs/biome');
+    expect(biomeConfig.css.parser.cssModules).toBe(true);
+    expect(biomeConfig.linter.enabled).toBe(true);
+    expect(biomeConfig.linter.rules.preset).toBe('recommended');
 
     const gitignore = await readFile(path.join(targetDir, '.gitignore'), 'utf8');
     expect(gitignore).toContain('raw-gedcom/');
