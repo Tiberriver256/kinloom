@@ -86,7 +86,8 @@ describe('brandkit core primitives', () => {
     expect(centered).toContain(
       `viewBox="0 0 ${KINLOOM_OG_DIMENSIONS.width} ${KINLOOM_OG_DIMENSIONS.height}"`
     );
-    expect(centered).toContain('Alder &amp; Oak &lt;Archive&gt;');
+    expect(centered).toContain('Alder &amp; Oak');
+    expect(centered).toContain('&lt;Archive&gt;');
     expect(centered).toContain('OHIO &amp; OREGON');
 
     const split = renderOgCardSvg({

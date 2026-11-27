@@ -150,10 +150,7 @@ export function resolveBrandSpec(
     overrides?.description?.trim() ||
     config?.site.description?.trim() ||
     'Archival family history explorer built with Kinloom.';
-  const metadataLine =
-    overrides?.metadataLine?.trim() ||
-    brand?.metadataLine?.trim() ||
-    'OPEN-SOURCE · CITATION-FIRST · PRIVACY-SAFE';
+  const metadataLine = overrides?.metadataLine?.trim() || brand?.metadataLine?.trim() || '';
   const accent = normalizeHex(
     overrides?.accent ?? brand?.accent ?? config?.theme?.accent,
     KINLOOM_BRAND_PALETTE.ochre
@@ -338,11 +335,14 @@ export function renderOgCardSvg(options: {
   const isNavy = surface === 'navy';
   const bg = isNavy ? KINLOOM_BRAND_PALETTE.navy : KINLOOM_BRAND_PALETTE.parchment;
   const cardBg = isNavy ? '#22344F' : KINLOOM_BRAND_PALETTE.ivory;
+  const panelBg = isNavy ? '#17253A' : KINLOOM_BRAND_PALETTE.parchment;
   const ruleColor = isNavy ? KINLOOM_BRAND_PALETTE.ruleDark : KINLOOM_BRAND_PALETTE.ruleLight;
-  const subtleLine = isNavy ? '#2A3F5F' : '#E5DAC5';
+  const innerRuleColor = isNavy ? '#2B3F5E' : '#E5DAC5';
+  const topBarColor = isNavy ? KINLOOM_BRAND_PALETTE.ivory : KINLOOM_BRAND_PALETTE.navy;
   const titleColor = isNavy ? KINLOOM_BRAND_PALETTE.inkInverse : KINLOOM_BRAND_PALETTE.inkPrimary;
   const subtitleColor = isNavy ? KINLOOM_BRAND_PALETTE.inkInverseMuted : KINLOOM_BRAND_PALETTE.inkSecondary;
   const markPrimary = isNavy ? KINLOOM_BRAND_PALETTE.ivory : KINLOOM_BRAND_PALETTE.navy;
+  const treeInk = isNavy ? KINLOOM_BRAND_PALETTE.ivory : KINLOOM_BRAND_PALETTE.navy;
 
   const markContent = options.customMarkInnerSvg
     ? options.customMarkInnerSvg
@@ -351,119 +351,89 @@ export function renderOgCardSvg(options: {
   const serifFont = `'Newsreader', Georgia, 'Times New Roman', serif`;
   const monoFont = `'IBM Plex Mono', 'DejaVu Sans Mono', ui-monospace, monospace`;
 
-  const ledgerLines = Array.from({ length: 10 }, (_, idx) => {
-    const y = 78 + idx * 52;
-    return `<line x1="980" y1="${y}" x2="1172" y2="${y}" stroke="${subtleLine}" stroke-width="1"/>`;
-  }).join('\n    ');
-
-  const verticalLedger = [1040, 1096, 1144]
-    .map((x) => `<line x1="${x}" y1="28" x2="${x}" y2="602" stroke="${subtleLine}" stroke-width="1"/>`)
-    .join('\n    ');
-
-  if (options.vignetteDataUri) {
-    const titleLines = wrapTextLines(options.title, 18, 2);
-    const titleFontSize = titleLines.some((line) => line.length > 14) ? 62 : 70;
-    const titleStartY = titleLines.length === 1 ? 268 : 238;
-    const titleSvg = titleLines
-      .map(
-        (line, idx) =>
-          `<text x="90" y="${titleStartY + idx * (titleFontSize + 12)}" fill="${titleColor}" font-family="${serifFont}" font-size="${titleFontSize}" font-weight="700">${escapeXml(line)}</text>`
-      )
-      .join('\n    ');
-
-    const ruleY = titleStartY + titleLines.length * (titleFontSize + 12) + 14;
-    const subtitleLines = wrapTextLines(options.subtitle, 28, 2);
-    const subtitleSvg = subtitleLines
-      .map(
-        (line, idx) =>
-          `<text x="90" y="${ruleY + 48 + idx * 42}" fill="${subtitleColor}" font-family="${serifFont}" font-size="34" font-weight="500">${escapeXml(line)}</text>`
-      )
-      .join('\n    ');
-
-    const metaY = ruleY + 48 + subtitleLines.length * 42 + 20;
-    const metaSvg = options.metadataLine
-      ? `<text x="90" y="${Math.min(metaY, 514)}" fill="${titleColor}" font-family="${monoFont}" font-size="22" font-weight="600" letter-spacing="1.6">${escapeXml(options.metadataLine.toUpperCase())}</text>`
-      : '';
-
-    const footerSvg = options.footerCredit
-      ? `<text x="90" y="562" fill="${subtitleColor}" font-family="${monoFont}" font-size="20" font-weight="600" letter-spacing="1.6">${escapeXml(options.footerCredit.toUpperCase())}</text>`
-      : '';
-
-    const kickerSvg = options.kicker
-      ? `<text x="160" y="138" fill="${accent}" font-family="${monoFont}" font-size="20" font-weight="600" letter-spacing="2">${escapeXml(options.kicker.toUpperCase())}</text>`
-      : '';
-
-    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}" width="${width}" height="${height}" fill="none">
-  <defs>
-    <clipPath id="kl-vignette-clip">
-      <rect x="774" y="88" width="330" height="454" rx="2"/>
-    </clipPath>
-  </defs>
-  <rect x="0" y="0" width="${width}" height="${height}" fill="${bg}"/>
-  <rect x="34" y="34" width="${width - 68}" height="${height - 68}" fill="${cardBg}" stroke="${ruleColor}" stroke-width="1.5"/>
-  <g transform="translate(90, 96) scale(2.2)">
-    ${markContent}
-  </g>
-  ${kickerSvg}
-  ${titleSvg}
-  <line x1="90" y1="${ruleY}" x2="660" y2="${ruleY}" stroke="${accent}" stroke-width="4"/>
-  ${subtitleSvg}
-  ${metaSvg}
-  ${footerSvg}
-  <rect x="766" y="80" width="346" height="470" fill="${bg}" stroke="${ruleColor}" stroke-width="1.5"/>
-  <image href="${escapeXml(options.vignetteDataUri)}" x="774" y="88" width="330" height="454" preserveAspectRatio="xMidYMid slice" clip-path="url(#kl-vignette-clip)"/>
-</svg>
-`;
-  }
-
-  // Centered editorial layout tuned for high-contrast phone legibility inside the 1080x600 safe zone
-  const titleLines = wrapTextLines(options.title, 22, 2);
-  const titleFontSize = titleLines.length === 1 ? 86 : 74;
-  const titleStartY = titleLines.length === 1 ? 320 : 280;
+  const kickerText = (options.kicker?.trim() || 'FAMILY ARCHIVE').toUpperCase();
+  const titleLines = wrapTextLines(options.title, 20, 2);
+  const longestTitleLine = Math.max(...titleLines.map((line) => line.length), 0);
+  const titleFontSize =
+    titleLines.length === 1 ? (longestTitleLine > 15 ? 78 : 92) : longestTitleLine > 15 ? 76 : 86;
+  const titleStartY = titleLines.length === 1 ? 298 : 264;
+  const titleLineStep = titleFontSize + 14;
   const titleSvg = titleLines
     .map(
       (line, idx) =>
-        `<text x="600" y="${titleStartY + idx * (titleFontSize + 12)}" text-anchor="middle" fill="${titleColor}" font-family="${serifFont}" font-size="${titleFontSize}" font-weight="700">${escapeXml(line)}</text>`
+        `<text x="80" y="${titleStartY + idx * titleLineStep}" fill="${titleColor}" font-family="${serifFont}" font-size="${titleFontSize}" font-weight="700">${escapeXml(line)}</text>`
     )
     .join('\n  ');
 
-  const subtitleY = titleStartY + (titleLines.length - 1) * (titleFontSize + 12) + 66;
-  const subtitleLines = wrapTextLines(options.subtitle, 42, 2);
+  const ruleY = titleStartY + (titleLines.length - 1) * titleLineStep + 34;
+  const subtitleLines = wrapTextLines(options.subtitle, 30, 2);
+  const subtitleFontSize = subtitleLines.some((line) => line.length > 26) ? 40 : 44;
+  const subtitleY = ruleY + 58;
   const subtitleSvg = subtitleLines
     .map(
       (line, idx) =>
-        `<text x="600" y="${subtitleY + idx * 46}" text-anchor="middle" fill="${subtitleColor}" font-family="${serifFont}" font-size="38" font-weight="500">${escapeXml(line)}</text>`
+        `<text x="80" y="${subtitleY + idx * (subtitleFontSize + 10)}" fill="${subtitleColor}" font-family="${serifFont}" font-size="${subtitleFontSize}" font-weight="500">${escapeXml(line)}</text>`
     )
     .join('\n  ');
 
-  const ruleY = subtitleY + (subtitleLines.length - 1) * 46 + 38;
-  const metaY = Math.min(ruleY + 52, 566);
-  const metaText = options.metadataLine?.trim() || options.footerCredit?.trim() || '';
-  const metaSvg = metaText
-    ? `<text x="600" y="${metaY}" text-anchor="middle" fill="${titleColor}" font-family="${monoFont}" font-size="24" font-weight="600" letter-spacing="1.8">${escapeXml(metaText.toUpperCase())}</text>`
+  const metaY = Math.min(subtitleY + (subtitleLines.length - 1) * (subtitleFontSize + 10) + 46, 548);
+  const metaSvg = options.metadataLine?.trim()
+    ? `<text x="80" y="${metaY}" fill="${titleColor}" font-family="${monoFont}" font-size="22" font-weight="600" letter-spacing="1.6">${escapeXml(options.metadataLine.trim().toUpperCase())}</text>`
     : '';
 
-  const kickerSvg = options.kicker
-    ? `<text x="600" y="84" text-anchor="middle" fill="${accent}" font-family="${monoFont}" font-size="22" font-weight="600" letter-spacing="2.2">${escapeXml(options.kicker.toUpperCase())}</text>`
+  const footerCreditSvg = options.footerCredit?.trim()
+    ? `<text x="1146" y="576" text-anchor="end" fill="${subtitleColor}" opacity="0.58" font-family="${monoFont}" font-size="13" letter-spacing="1.4">${escapeXml(options.footerCredit.trim().toUpperCase())}</text>`
     : '';
 
-  const markY = options.kicker ? 102 : 70;
+  const rightPanelDefs = options.vignetteDataUri
+    ? `  <defs>
+    <clipPath id="kl-vignette-clip">
+      <rect x="816" y="100" width="294" height="430" rx="2"/>
+    </clipPath>
+  </defs>`
+    : '';
+
+  const rightPanelSvg = options.vignetteDataUri
+    ? `  <rect x="808" y="92" width="310" height="446" rx="4" fill="${panelBg}" stroke="${ruleColor}" stroke-width="1.5"/>
+  <image href="${escapeXml(options.vignetteDataUri)}" x="816" y="100" width="294" height="430" preserveAspectRatio="xMidYMid slice" clip-path="url(#kl-vignette-clip)"/>`
+    : `  <g transform="translate(808, 92)">
+    <rect x="0" y="0" width="310" height="446" rx="4" fill="${panelBg}" stroke="${ruleColor}" stroke-width="1.5"/>
+    <path d="M155 376 V300 M85 300 H225 M85 300 V220 M225 300 V220 M45 220 H125 M185 220 H265 M45 220 V140 M125 220 V140 M185 220 V140 M265 220 V140 M45 140 V82 M125 140 V82 M185 140 V82 M265 140 V82" stroke="${treeInk}" stroke-width="3" stroke-linecap="round" opacity="0.28"/>
+    <path d="M155 376 V300 H85 V220 H125 V140" stroke="${accent}" stroke-width="4" stroke-linecap="round" opacity="0.88"/>
+    <circle cx="155" cy="376" r="14" fill="${accent}"/>
+    <circle cx="85" cy="300" r="11" fill="${treeInk}"/>
+    <circle cx="225" cy="300" r="11" fill="${treeInk}" opacity="0.45"/>
+    <circle cx="45" cy="220" r="9" fill="${treeInk}" opacity="0.45"/>
+    <circle cx="125" cy="220" r="10" fill="${accent}"/>
+    <circle cx="185" cy="220" r="9" fill="${treeInk}" opacity="0.45"/>
+    <circle cx="265" cy="220" r="9" fill="${treeInk}" opacity="0.45"/>
+    <circle cx="45" cy="140" r="7" fill="${treeInk}" opacity="0.35"/>
+    <circle cx="125" cy="140" r="8" fill="${treeInk}"/>
+    <circle cx="185" cy="140" r="7" fill="${treeInk}" opacity="0.35"/>
+    <circle cx="265" cy="140" r="7" fill="${treeInk}" opacity="0.35"/>
+    <circle cx="45" cy="82" r="5" fill="${treeInk}" opacity="0.25"/>
+    <circle cx="125" cy="82" r="5" fill="${treeInk}" opacity="0.25"/>
+    <circle cx="185" cy="82" r="5" fill="${treeInk}" opacity="0.25"/>
+    <circle cx="265" cy="82" r="5" fill="${treeInk}" opacity="0.25"/>
+  </g>`;
 
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}" width="${width}" height="${height}" fill="none">
+${rightPanelDefs}
   <rect x="0" y="0" width="${width}" height="${height}" fill="${bg}"/>
-  <g opacity="0.65">
-    ${ledgerLines}
-    ${verticalLedger}
-  </g>
-  <rect x="28" y="28" width="${width - 56}" height="${height - 56}" stroke="${ruleColor}" stroke-width="1.5"/>
-  ${kickerSvg}
-  <g transform="translate(534, ${markY}) scale(5.5)">
+  <rect x="28" y="28" width="${width - 56}" height="${height - 56}" fill="${cardBg}" stroke="${ruleColor}" stroke-width="2"/>
+  <rect x="38" y="38" width="${width - 76}" height="${height - 76}" stroke="${innerRuleColor}" stroke-width="1"/>
+  <rect x="28" y="28" width="${width - 56}" height="8" fill="${topBarColor}"/>
+  <rect x="28" y="28" width="320" height="8" fill="${accent}"/>
+  <g transform="translate(80, 86) scale(3.2)">
     ${markContent}
   </g>
+  <text x="178" y="136" fill="${accent}" font-family="${monoFont}" font-size="24" font-weight="600" letter-spacing="2.4">${escapeXml(kickerText)}</text>
   ${titleSvg}
+  <line x1="80" y1="${ruleY}" x2="740" y2="${ruleY}" stroke="${accent}" stroke-width="5"/>
   ${subtitleSvg}
-  <line x1="510" y1="${ruleY}" x2="690" y2="${ruleY}" stroke="${accent}" stroke-width="4"/>
   ${metaSvg}
+${rightPanelSvg}
+  ${footerCreditSvg}
 </svg>
 `;
 }
