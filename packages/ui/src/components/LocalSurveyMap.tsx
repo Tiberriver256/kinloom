@@ -3,7 +3,7 @@ import { projectNearbyPlaces } from '@kinloom/core';
 import type React from 'react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { cx } from '../lib/cx.js';
+import { cx as cls } from '../lib/cx.js';
 import cssMod0 from '../pages/PlacePage.module.css';
 
 const uiStyles = cssMod0;
@@ -223,9 +223,9 @@ export const LocalSurveyMap: React.FC<LocalSurveyMapProps> = ({
   }
 
   return (
-    <div ref={wrapRef} className={cx(uiStyles, 'local-survey-wrap')}>
+    <div ref={wrapRef} className={cls(uiStyles, 'local-survey-wrap')}>
       <svg
-        className={cx(uiStyles, 'local-survey-svg')}
+        className={cls(uiStyles, 'local-survey-svg')}
         viewBox={`0 0 ${width} ${height}`}
         width="100%"
         style={{
@@ -299,7 +299,7 @@ export const LocalSurveyMap: React.FC<LocalSurveyMapProps> = ({
             <g
               key={m.place.id}
               role="button"
-              className={cx(uiStyles, 'survey-neighbor-pin')}
+              className={cls(uiStyles, 'survey-neighbor-pin')}
               tabIndex={0}
               aria-label={`${m.place.full_name}, ${m.distanceMiles} miles away`}
               style={{ cursor: 'pointer' }}
@@ -361,7 +361,7 @@ export const LocalSurveyMap: React.FC<LocalSurveyMapProps> = ({
           strokeWidth="1.8"
         />
         <text
-          className={cx(uiStyles, 'local-survey-center-label')}
+          className={cls(uiStyles, 'local-survey-center-label')}
           x={centerPlacement.x}
           y={centerPlacement.titleY}
           textAnchor={centerPlacement.anchor}
@@ -394,19 +394,19 @@ export const LocalSurveyMap: React.FC<LocalSurveyMapProps> = ({
         </g>
       </svg>
 
-      <div className={cx(uiStyles, 'local-survey-caption')}>{scopeLabel}</div>
+      <div className={cls(uiStyles, 'local-survey-caption')}>{scopeLabel}</div>
 
       {!compact && markers.length > 0 && (
         <nav
-          className={cx(uiStyles, 'local-survey-nearby-strip')}
+          className={cls(uiStyles, 'local-survey-nearby-strip')}
           aria-label={`Nearby places around ${center.name}`}
         >
-          <span className={cx(uiStyles, 'local-survey-nearby-label')}>Nearby:</span>
+          <span className={cls(uiStyles, 'local-survey-nearby-label')}>Nearby:</span>
           {markers.slice(0, 6).map((m) => (
             <Link
               key={m.place.id}
               to={`/place/${m.place.slug}`}
-              className={cx(uiStyles, 'local-survey-nearby-link')}
+              className={cls(uiStyles, 'local-survey-nearby-link')}
             >
               {m.place.name} ({m.distanceMiles} mi)
             </Link>
