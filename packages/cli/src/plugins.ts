@@ -6,6 +6,7 @@ import { pathToFileURL } from 'node:url';
 import { type KinloomSiteConfig, parseKinloomConfigYaml } from '@kinloom/core';
 import { CORE_CLI_COMMANDS } from './cli/builtinCatalog.js';
 import { isRecordCommand } from './commands/records/registry.js';
+import { EXIT_USAGE } from './errors.js';
 import type {
   DiscoverSiteCliPluginsResult,
   ExecutedPluginCheckResult,
@@ -35,6 +36,18 @@ export type {
   ResolvedPluginCommands,
 } from './pluginTypes.js';
 export { CORE_CLI_COMMANDS };
+
+export const RESERVED_AUDIT_CHECK_IDS: ReadonlySet<string> = new Set(['pronunciation']);
+export const RESERVED_VERIFY_CHECK_IDS: ReadonlySet<string> = new Set(['pronunciation']);
+
+export class CliPluginValidationError extends RangeError {
+  readonly exitCode = EXIT_USAGE;
+
+  constructor(message: string) {
+    super(message);
+    this.name = 'CliPluginValidationError';
+  }
+}
 
 export function isBuiltInCliCommand(name: string): boolean {
   const normalized = name.trim();
@@ -181,26 +194,34 @@ export function resolvePluginCommands(plugins: readonly KinloomCliPlugin[]): Res
   const auditChecks: RegisteredAuditCheck[] = [];
   const verifyChecks: RegisteredVerifyCheck[] = [];
   const acceptedPlugins: KinloomCliPlugin[] = [];
-  const warnings: string[] = [];
 
   for (const plugin of plugins) {
     const pluginId = plugin.id.trim();
+    if (!pluginId) {
+      throw new CliPluginValidationError('CLI plugin id must be a non-empty string.');
+    }
     if (seenPluginIds.has(pluginId)) {
-      warnings.push(`Duplicate CLI plugin '${pluginId}'; ignoring subsequent registration.`);
-      continue;
+      throw new CliPluginValidationError(`Duplicate CLI plugin id '${pluginId}'.`);
     }
     seenPluginIds.add(pluginId);
 
     const acceptedCommands: KinloomCliCommand[] = [];
     for (const cmd of plugin.commands ?? []) {
       const cmdName = cmd.name.trim();
+      if (!cmdName) {
+        throw new CliPluginValidationError(
+          `CLI plugin '${pluginId}' command name must be a non-empty string.`
+        );
+      }
       if (isBuiltInCliCommand(cmdName)) {
-        warnings.push(`Plugin '${pluginId}' attempted to shadow built-in command '${cmdName}'; ignoring.`);
-        continue;
+        throw new CliPluginValidationError(
+          `CLI plugin '${pluginId}' command '${cmdName}' collides with built-in CLI command '${cmdName}'.`
+        );
       }
       if (commands.has(cmdName)) {
-        warnings.push(`Plugin '${pluginId}' attempted to register duplicate command '${cmdName}'; ignoring.`);
-        continue;
+        throw new CliPluginValidationError(
+          `CLI plugin '${pluginId}' attempted to register duplicate command '${cmdName}'.`
+        );
       }
       const normalizedCmd: KinloomCliCommand = cmdName === cmd.name ? cmd : { ...cmd, name: cmdName };
       commands.set(cmdName, normalizedCmd);
@@ -210,11 +231,20 @@ export function resolvePluginCommands(plugins: readonly KinloomCliPlugin[]): Res
     const acceptedAuditChecks: KinloomAuditCheck[] = [];
     for (const check of plugin.auditChecks ?? []) {
       const checkId = check.id.trim();
-      if (seenAuditCheckIds.has(checkId)) {
-        warnings.push(
-          `Plugin '${pluginId}' attempted to register duplicate audit check '${checkId}'; ignoring.`
+      if (!checkId) {
+        throw new CliPluginValidationError(
+          `CLI plugin '${pluginId}' audit check id must be a non-empty string.`
         );
-        continue;
+      }
+      if (RESERVED_AUDIT_CHECK_IDS.has(checkId)) {
+        throw new CliPluginValidationError(
+          `CLI plugin '${pluginId}' audit check '${checkId}' collides with reserved built-in audit check '${checkId}'.`
+        );
+      }
+      if (seenAuditCheckIds.has(checkId)) {
+        throw new CliPluginValidationError(
+          `CLI plugin '${pluginId}' attempted to register duplicate audit check '${checkId}'.`
+        );
       }
       seenAuditCheckIds.add(checkId);
       const normalizedCheck: KinloomAuditCheck = checkId === check.id ? check : { ...check, id: checkId };
@@ -225,11 +255,20 @@ export function resolvePluginCommands(plugins: readonly KinloomCliPlugin[]): Res
     const acceptedVerifyChecks: KinloomVerifyCheck[] = [];
     for (const check of plugin.verifyChecks ?? []) {
       const checkId = check.id.trim();
-      if (seenVerifyCheckIds.has(checkId)) {
-        warnings.push(
-          `Plugin '${pluginId}' attempted to register duplicate verify check '${checkId}'; ignoring.`
+      if (!checkId) {
+        throw new CliPluginValidationError(
+          `CLI plugin '${pluginId}' verify check id must be a non-empty string.`
         );
-        continue;
+      }
+      if (RESERVED_VERIFY_CHECK_IDS.has(checkId)) {
+        throw new CliPluginValidationError(
+          `CLI plugin '${pluginId}' verify check '${checkId}' collides with reserved built-in verify check '${checkId}'.`
+        );
+      }
+      if (seenVerifyCheckIds.has(checkId)) {
+        throw new CliPluginValidationError(
+          `CLI plugin '${pluginId}' attempted to register duplicate verify check '${checkId}'.`
+        );
       }
       seenVerifyCheckIds.add(checkId);
       const normalizedCheck: KinloomVerifyCheck = checkId === check.id ? check : { ...check, id: checkId };
@@ -253,7 +292,7 @@ export function resolvePluginCommands(plugins: readonly KinloomCliPlugin[]): Res
     commands,
     auditChecks,
     verifyChecks,
-    warnings,
+    warnings: [],
   };
 }
 

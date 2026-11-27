@@ -125,11 +125,12 @@ export async function runVerifyCommand(options: VerifyCommandOptions = {}): Prom
     verifyCheckCtx
   );
 
+  let pluginDiscoveryWarnings: string[] = [];
   let resolvedPluginVerifyChecks = resolvePluginCommands(options.plugins ?? []);
   if (options.plugins === undefined) {
     const discovered = await discoverSiteCliPlugins(repoDir);
     resolvedPluginVerifyChecks = resolvePluginCommands(discovered.plugins);
-    resolvedPluginVerifyChecks.warnings.push(...discovered.warnings);
+    pluginDiscoveryWarnings = discovered.warnings;
   }
   const pluginChecks: ExecutedPluginCheckResult[] = [];
   for (const reg of resolvedPluginVerifyChecks.verifyChecks) {
@@ -145,7 +146,7 @@ export async function runVerifyCommand(options: VerifyCommandOptions = {}): Prom
     livingNames,
     hygiene,
     pronunciation: pronunciationCheck,
-    pluginDiscoveryWarnings: resolvedPluginVerifyChecks.warnings,
+    pluginDiscoveryWarnings,
     pluginChecks,
     strictHygiene,
     strictPronunciation,

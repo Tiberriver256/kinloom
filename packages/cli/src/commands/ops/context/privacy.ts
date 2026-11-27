@@ -1,8 +1,10 @@
 import {
   collectLivingNames,
   compileLivingNamePattern,
+  DEFAULT_LIVING_CUTOFF_YEARS,
   edtfYear,
   getCurrentReferenceYear,
+  isPersonLivingPublic,
   type PrivacyConfig,
   resolveEffectiveLiving,
 } from '@kinloom/core';
@@ -70,10 +72,14 @@ export function isEffectiveLivingRecord(
     .filter((yr): yr is number => yr !== null);
   if (years.length > 0) {
     const earliest = Math.min(...years);
-    const cutoffYears = privacy.livingCutoffYears ?? 101;
-    if (earliest > refYear - cutoffYears) {
-      return true;
-    }
+    return isPersonLivingPublic({
+      explicitLiving: false,
+      hasDeathOrBurial: false,
+      birthYear: null,
+      earliestEventYear: earliest,
+      referenceYear: refYear,
+      livingCutoffYears: privacy.livingCutoffYears ?? DEFAULT_LIVING_CUTOFF_YEARS,
+    });
   }
   return false;
 }
@@ -92,25 +98,14 @@ export function isConfirmedDeceasedRelative(
   const birthEdtf = asNonEmptyString(person.birth_edtf);
   const deathEdtf = asNonEmptyString(person.death_edtf);
   const refYear = privacy.referenceYear ?? getCurrentReferenceYear();
-  if (
-    resolveEffectiveLiving(
-      {
-        is_living: false,
-        birth_edtf: birthEdtf,
-        death_edtf: deathEdtf,
-      },
-      privacy,
-      refYear
-    )
-  ) {
-    return false;
-  }
-  if (deathEdtf.length > 0) {
-    return true;
-  }
-  const birthYear = edtfYear(birthEdtf);
-  const cutoffYears = privacy.livingCutoffYears ?? 101;
-  return birthYear !== null && birthYear <= refYear - cutoffYears;
+  return !isPersonLivingPublic({
+    explicitLiving: false,
+    hasDeathOrBurial: deathEdtf.length > 0,
+    birthYear: edtfYear(birthEdtf),
+    earliestEventYear: null,
+    referenceYear: refYear,
+    livingCutoffYears: privacy.livingCutoffYears ?? DEFAULT_LIVING_CUTOFF_YEARS,
+  });
 }
 
 export function selectPeopleBlocksForContext(

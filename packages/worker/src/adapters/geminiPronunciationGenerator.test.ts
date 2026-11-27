@@ -212,4 +212,62 @@ describe('GeminiPronunciationAudioGenerator', () => {
       /did not contain inline audio data/
     );
   });
+
+  it('rejects malformed Gemini JSON responses via Zod schema validation while ignoring extra metadata fields', async () => {
+    for (const malformed of [
+      null,
+      [],
+      { candidates: 'not-an-array' },
+      { candidates: [{ content: { parts: [{ inlineData: { data: 12345 } }] } }] },
+    ]) {
+      const badFetch = vi.fn(
+        async () =>
+          new Response(JSON.stringify(malformed), {
+            status: 200,
+            headers: { 'content-type': 'application/json' },
+          })
+      );
+      const generator = new GeminiPronunciationAudioGenerator({
+        apiKey: 'test-gemini-key',
+        fetchFn: badFetch as unknown as typeof fetch,
+      });
+      await expect(generator.generate({ text: 'New Salem' })).rejects.toThrow(/JSON schema/);
+    }
+
+    const rawPcm = new Uint8Array([0x01, 0x02, 0x03, 0x04]);
+    const extraFieldsFetch = vi.fn(
+      async () =>
+        new Response(
+          JSON.stringify({
+            modelVersion: 'gemini-3.8-flash-tts',
+            usageMetadata: { totalTokenCount: 42 },
+            candidates: [
+              {
+                finishReason: 'STOP',
+                content: {
+                  role: 'model',
+                  parts: [
+                    { text: 'ignored-note' },
+                    {
+                      inlineData: {
+                        mimeType: 'audio/L16;codec=pcm;rate=24000',
+                        data: bytesToBase64(rawPcm),
+                      },
+                    },
+                  ],
+                },
+              },
+            ],
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } }
+        )
+    );
+    const generator = new GeminiPronunciationAudioGenerator({
+      apiKey: 'test-gemini-key',
+      fetchFn: extraFieldsFetch as unknown as typeof fetch,
+    });
+    const audio = await generator.generate({ text: 'New Salem' });
+    expect(audio.contentType).toBe('audio/wav');
+    expect(audio.bytes.slice(44)).toEqual(rawPcm);
+  });
 });

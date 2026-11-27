@@ -108,6 +108,38 @@ describe('authErrorCopy, pronunciationDraft, and timelineScroll behavioral rules
       cleanPronunciation({ ipa: '  ˈɔːldər  ', source_url: 'https://example.test/ref' }, true)?.ipa
     ).toBe('ˈɔːldər');
     expect(cleanPronunciation({ ipa: '  ', phonetic: '' }, true)).toBeNull();
+    expect(
+      readDraftPronunciation({
+        variants: [{ label: 'Dutch', phonetic: 'HOOS' }, { label: '' }, null, 42],
+        match_full_name_contains: ['Alder', 99, ''],
+      })
+    ).toEqual({
+      variants: [{ label: 'Dutch', phonetic: 'HOOS' }],
+      match_full_name_contains: ['Alder'],
+    });
+    expect(
+      cleanPronunciation(
+        {
+          variants: [{ bad: true }, 'nope'],
+          match_full_name_contains: [123, '   '],
+        },
+        true
+      )
+    ).toBeNull();
+    expect(
+      cleanPronunciation(
+        {
+          phonetic: '  HOOS ',
+          variants: [{ label: 'Dutch', ipa: '/ɣus/' }, { label: '' }],
+          match_full_name_contains: '  Zeeland  ',
+        },
+        true
+      )
+    ).toEqual({
+      phonetic: 'HOOS',
+      variants: [{ label: 'Dutch', ipa: '/ɣus/' }],
+      match_full_name_contains: 'Zeeland',
+    });
 
     const fetchSpy = vi.fn();
     const httpDs = createHttpWikiDataSource({ fetchImpl: fetchSpy as unknown as typeof fetch });

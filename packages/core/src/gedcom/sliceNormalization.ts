@@ -309,7 +309,7 @@ export function detectLivingStatus(
   // Fallback heuristics for modern individuals missing a birth date.
   const modernMarriageCutoff = referenceYear - 61;
   const modernSpouseCutoff = referenceYear - 81;
-  const modernParentCutoff = referenceYear - 101;
+  const modernParentCutoff = referenceYear - livingCutoffYears;
 
   for (const fid of ind.fams) {
     const fam = fams.get(fid);

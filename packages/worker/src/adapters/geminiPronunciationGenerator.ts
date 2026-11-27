@@ -1,4 +1,5 @@
 import type { PronunciationAudioGenerator, PronunciationAudioResult } from '@kinloom/core';
+import { z } from 'zod';
 
 export const DEFAULT_GEMINI_TTS_MODEL = 'gemini-3.8-flash-tts';
 export const DEFAULT_GEMINI_TTS_VOICE = 'Charon';
@@ -10,22 +11,32 @@ export interface GeminiPronunciationAudioGeneratorOptions {
   fetchFn?: typeof fetch;
 }
 
-interface GeminiGenerateContentResponse {
-  candidates?: Array<{
-    content?: {
-      parts?: Array<{
-        inlineData?: {
-          mimeType?: string;
-          data?: string;
-        };
-      }>;
-    };
-  }>;
-  error?: {
-    message?: string;
-    code?: number;
-  };
-}
+const GeminiInlineDataSchema = z.object({
+  mimeType: z.string().optional(),
+  data: z.string().optional(),
+});
+
+const GeminiContentPartSchema = z.object({
+  inlineData: GeminiInlineDataSchema.optional(),
+});
+
+const GeminiCandidateSchema = z.object({
+  content: z
+    .object({
+      parts: z.array(GeminiContentPartSchema).optional(),
+    })
+    .optional(),
+});
+
+const GeminiGenerateContentResponseSchema = z.object({
+  candidates: z.array(GeminiCandidateSchema).optional(),
+  error: z
+    .object({
+      message: z.string().optional(),
+      code: z.number().optional(),
+    })
+    .optional(),
+});
 
 function decodeBase64ToBytes(base64: string): Uint8Array {
   const binary = atob(base64);
@@ -242,7 +253,12 @@ export class GeminiPronunciationAudioGenerator implements PronunciationAudioGene
       throw new Error(`Gemini TTS request failed with HTTP ${response.status}: ${errorText.slice(0, 200)}`);
     }
 
-    const payload = (await response.json()) as GeminiGenerateContentResponse;
+    const rawPayload: unknown = await response.json();
+    const parsedPayload = GeminiGenerateContentResponseSchema.safeParse(rawPayload);
+    if (!parsedPayload.success) {
+      throw new Error('Gemini TTS response did not match expected generateContent JSON schema.');
+    }
+    const payload = parsedPayload.data;
     const parts = payload.candidates?.[0]?.content?.parts ?? [];
     const audioPart = parts.find(
       (part) => typeof part.inlineData?.data === 'string' && part.inlineData.data.length > 0

@@ -1,4 +1,5 @@
 import { getCurrentReferenceYear } from '../clock.js';
+import { DEFAULT_LIVING_CUTOFF_YEARS } from '../privacy/policy.js';
 import { parseGedcomText } from './parse.js';
 import {
   buildSliceEventsAndSources,
@@ -23,7 +24,7 @@ export function sliceGedcom(gedcomText: string, options: SliceGedcomOptions): Sl
   const normalizeMaidenNames = options.normalizeMaidenNames ?? true;
   const branchId = options.branchId ?? 'primary';
   const referenceYear = options.referenceYear ?? getCurrentReferenceYear();
-  const livingCutoffYears = options.livingCutoffYears ?? 101;
+  const livingCutoffYears = options.livingCutoffYears ?? DEFAULT_LIVING_CUTOFF_YEARS;
 
   const selection = selectGedcomLineage(indis, fams, options);
   const rawPlaces = collectRawSlicePlaces(indis, fams, selection);

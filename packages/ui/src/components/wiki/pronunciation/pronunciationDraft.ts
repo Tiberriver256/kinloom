@@ -1,10 +1,12 @@
-import type {
-  ArchiveDataSource,
-  EntityType,
-  PersonPronunciationTokenRole,
-  Pronunciation,
+import {
+  type ArchiveDataSource,
+  type EntityType,
+  isArchiveApiError,
+  type PersonPronunciationTokenRole,
+  type Pronunciation,
+  type PronunciationVariant,
+  PronunciationVariantSchema,
 } from '@kinloom/core';
-import { isArchiveApiError } from '@kinloom/core';
 
 export type PronunciationStringFieldKey =
   | 'phonetic'
@@ -49,36 +51,72 @@ export interface SharedTokenDraft {
   region: string;
 }
 
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function parseValidVariants(raw: unknown): PronunciationVariant[] {
+  if (!Array.isArray(raw)) {
+    return [];
+  }
+  const valid: PronunciationVariant[] = [];
+  for (const item of raw) {
+    const parsed = PronunciationVariantSchema.safeParse(item);
+    if (parsed.success) {
+      valid.push(parsed.data);
+    }
+  }
+  return valid;
+}
+
+function parseMatchFullNameContains(
+  raw: unknown,
+  trimValues: boolean
+): Pronunciation['match_full_name_contains'] | undefined {
+  if (typeof raw === 'string') {
+    const normalized = trimValues ? raw.trim() : raw;
+    return normalized.length > 0 ? normalized : undefined;
+  }
+  if (Array.isArray(raw)) {
+    const valid = raw
+      .filter((item): item is string => typeof item === 'string')
+      .map((item) => (trimValues ? item.trim() : item))
+      .filter((item) => item.length > 0);
+    return valid.length > 0 ? valid : undefined;
+  }
+  return undefined;
+}
+
 export function readDraftPronunciation(value: unknown): Pronunciation | null {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+  if (!isPlainRecord(value)) {
     return null;
   }
-  const raw = value as Record<string, unknown>;
   const out: Pronunciation = {};
   for (const key of PRONUNCIATION_STRING_KEYS) {
-    const val = raw[key];
+    const val = value[key];
     if (typeof val === 'string' && val.length > 0) {
       out[key] = val;
     }
   }
-  if (Array.isArray(raw.variants) && raw.variants.length > 0) {
-    out.variants = raw.variants as Pronunciation['variants'];
+  const variants = parseValidVariants(value.variants);
+  if (variants.length > 0) {
+    out.variants = variants;
   }
-  if (typeof raw.match_full_name_contains === 'string' || Array.isArray(raw.match_full_name_contains)) {
-    out.match_full_name_contains = raw.match_full_name_contains as Pronunciation['match_full_name_contains'];
+  const matchContains = parseMatchFullNameContains(value.match_full_name_contains, false);
+  if (matchContains !== undefined) {
+    out.match_full_name_contains = matchContains;
   }
   return Object.keys(out).length > 0 ? out : null;
 }
 
 export function cleanPronunciation(value: unknown, trimValues: boolean): Pronunciation | null {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+  if (!isPlainRecord(value)) {
     return null;
   }
-  const raw = value as Record<string, unknown>;
   const out: Pronunciation = {};
   let hasAnyNonWhitespace = false;
   for (const key of PRONUNCIATION_STRING_KEYS) {
-    const val = raw[key];
+    const val = value[key];
     if (typeof val !== 'string') {
       continue;
     }
@@ -90,12 +128,14 @@ export function cleanPronunciation(value: unknown, trimValues: boolean): Pronunc
       }
     }
   }
-  if (Array.isArray(raw.variants) && raw.variants.length > 0) {
-    out.variants = raw.variants as Pronunciation['variants'];
+  const variants = parseValidVariants(value.variants);
+  if (variants.length > 0) {
+    out.variants = variants;
     hasAnyNonWhitespace = true;
   }
-  if (typeof raw.match_full_name_contains === 'string' || Array.isArray(raw.match_full_name_contains)) {
-    out.match_full_name_contains = raw.match_full_name_contains as Pronunciation['match_full_name_contains'];
+  const matchContains = parseMatchFullNameContains(value.match_full_name_contains, trimValues);
+  if (matchContains !== undefined) {
+    out.match_full_name_contains = matchContains;
   }
   return hasAnyNonWhitespace ? out : null;
 }

@@ -16,7 +16,13 @@ import {
 import { afterEach, describe, expect, it } from 'vitest';
 import { type CliIo, runCli } from './cli.js';
 import { EXIT_ERROR, EXIT_OK, EXIT_USAGE } from './errors.js';
-import { discoverSiteCliPlugins, type KinloomCliPlugin } from './plugins.js';
+import {
+  CliPluginValidationError,
+  discoverSiteCliPlugins,
+  type KinloomCliCommand,
+  type KinloomCliPlugin,
+  resolvePluginCommands,
+} from './plugins.js';
 
 const tempDirs: string[] = [];
 
@@ -180,7 +186,7 @@ describe('site-root CLI plugin discovery and dispatch', () => {
     expect(runCap.stdout).toEqual(['Site: Alder Archive']);
   });
 
-  it('prevents a plugin from shadowing built-in commands like verify while keeping safe commands', async () => {
+  it('fails fast when a plugin attempts to shadow a built-in command like verify', async () => {
     const siteDir = await makeTempDir('kinloom-plugin-shadow-');
     const pluginDir = path.join(siteDir, 'extensions', 'shadow-plugin');
     await mkdir(pluginDir, { recursive: true });
@@ -215,20 +221,15 @@ describe('site-root CLI plugin discovery and dispatch', () => {
       'utf8'
     );
 
-    const discovered = await discoverSiteCliPlugins(siteDir);
-    expect(discovered.warnings.some((w) => w.includes("shadow built-in command 'verify'"))).toBe(true);
-    expect(discovered.plugins).toHaveLength(1);
-    expect(discovered.plugins[0]?.commands?.map((c) => c.name)).toEqual(['safe-cmd']);
+    await expect(discoverSiteCliPlugins(siteDir)).rejects.toThrow(CliPluginValidationError);
+    await expect(discoverSiteCliPlugins(siteDir)).rejects.toThrow(
+      /collides with built-in CLI command 'verify'/
+    );
 
     const verifyHelpCap = createCaptureIo();
-    expect(await runCli(['verify', '--help'], { cwd: siteDir, io: verifyHelpCap.io })).toBe(EXIT_OK);
-    expect(verifyHelpCap.stdout.join('\n')).toContain('Usage: kinloom verify');
-    expect(verifyHelpCap.stdout.join('\n')).not.toContain('FAKE VERIFY HELP');
-    expect(verifyHelpCap.stderr.join('\n')).toContain("shadow built-in command 'verify'");
-
-    const safeCap = createCaptureIo();
-    expect(await runCli(['safe-cmd'], { cwd: siteDir, io: safeCap.io })).toBe(EXIT_OK);
-    expect(safeCap.stdout).toEqual(['SAFE_OK']);
+    expect(await runCli(['verify', '--help'], { cwd: siteDir, io: verifyHelpCap.io })).toBe(EXIT_USAGE);
+    expect(verifyHelpCap.stdout).toEqual([]);
+    expect(verifyHelpCap.stderr.join('\n')).toContain("collides with built-in CLI command 'verify'");
   });
 
   it('runs cleanly in directories without kinloom.config.yaml or extensions/', async () => {
@@ -258,7 +259,7 @@ describe('site-root CLI plugin discovery and dispatch', () => {
     expect(helpCap.stderr.join('\n')).toContain('Could not parse kinloom.config.yaml');
   });
 
-  it('supports explicit options.plugins and deduplicates by id', async () => {
+  it('supports explicit options.plugins and fails fast on duplicate plugin IDs, duplicate commands, reserved checks, or empty identifiers', async () => {
     const emptyDir = await makeTempDir('kinloom-plugin-explicit-');
     const explicitPlugin: KinloomCliPlugin = {
       id: 'explicit-plugin',
@@ -289,11 +290,22 @@ describe('site-root CLI plugin discovery and dispatch', () => {
       await runCli(['ping'], {
         cwd: emptyDir,
         io: pingCap.io,
-        plugins: [explicitPlugin, explicitPlugin],
+        plugins: [explicitPlugin],
       })
     ).toBe(EXIT_OK);
     expect(pingCap.stdout).toEqual(['pong']);
-    expect(pingCap.stderr.join('\n')).toContain("Duplicate CLI plugin 'explicit-plugin'");
+    expect(pingCap.stderr).toEqual([]);
+
+    const dupCap = createCaptureIo();
+    expect(
+      await runCli(['ping'], {
+        cwd: emptyDir,
+        io: dupCap.io,
+        plugins: [explicitPlugin, explicitPlugin],
+      })
+    ).toBe(EXIT_USAGE);
+    expect(dupCap.stdout).toEqual([]);
+    expect(dupCap.stderr.join('\n')).toContain("Duplicate CLI plugin id 'explicit-plugin'");
 
     const failCap = createCaptureIo();
     expect(
@@ -303,6 +315,82 @@ describe('site-root CLI plugin discovery and dispatch', () => {
         plugins: [explicitPlugin],
       })
     ).toBe(EXIT_ERROR);
+
+    const noopCommand: KinloomCliCommand = {
+      name: 'custom-cmd',
+      summary: 'Noop',
+      help: 'Usage: kinloom custom-cmd',
+      run: () => EXIT_OK,
+    };
+
+    expect(() => resolvePluginCommands([{ id: '   ', name: 'Blank', commands: [noopCommand] }])).toThrow(
+      RangeError
+    );
+    expect(() =>
+      resolvePluginCommands([
+        {
+          id: 'blank-cmd',
+          name: 'Blank Cmd',
+          commands: [{ ...noopCommand, name: '   ' }],
+        },
+      ])
+    ).toThrow(CliPluginValidationError);
+    expect(() =>
+      resolvePluginCommands([
+        { id: 'cmd-a', name: 'A', commands: [noopCommand] },
+        { id: 'cmd-b', name: 'B', commands: [noopCommand] },
+      ])
+    ).toThrow(/duplicate command 'custom-cmd'/);
+    expect(() =>
+      resolvePluginCommands([
+        {
+          id: 'blank-audit',
+          name: 'Blank Audit',
+          auditChecks: [{ id: ' ', name: 'Blank', run: () => ({ errors: [], warnings: [] }) }],
+        },
+      ])
+    ).toThrow(CliPluginValidationError);
+    expect(() =>
+      resolvePluginCommands([
+        {
+          id: 'blank-verify',
+          name: 'Blank Verify',
+          verifyChecks: [{ id: '', name: 'Blank', run: () => ({ errors: [], warnings: [] }) }],
+        },
+      ])
+    ).toThrow(CliPluginValidationError);
+    expect(() =>
+      resolvePluginCommands([
+        {
+          id: 'reserved-audit',
+          name: 'Reserved Audit',
+          auditChecks: [{ id: 'pronunciation', name: 'Shadow', run: () => ({ errors: [], warnings: [] }) }],
+        },
+      ])
+    ).toThrow(/reserved built-in audit check 'pronunciation'/);
+    expect(() =>
+      resolvePluginCommands([
+        {
+          id: 'reserved-verify',
+          name: 'Reserved Verify',
+          verifyChecks: [{ id: 'pronunciation', name: 'Shadow', run: () => ({ errors: [], warnings: [] }) }],
+        },
+      ])
+    ).toThrow(/reserved built-in verify check 'pronunciation'/);
+    expect(() =>
+      resolvePluginCommands([
+        {
+          id: 'dup-verify-a',
+          name: 'Dup Verify A',
+          verifyChecks: [{ id: 'same-verify', name: 'A', run: () => ({ errors: [], warnings: [] }) }],
+        },
+        {
+          id: 'dup-verify-b',
+          name: 'Dup Verify B',
+          verifyChecks: [{ id: 'same-verify', name: 'B', run: () => ({ errors: [], warnings: [] }) }],
+        },
+      ])
+    ).toThrow(/duplicate verify check 'same-verify'/);
   });
 });
 
@@ -532,7 +620,7 @@ describe('plugin auditChecks/verifyChecks and built-in pronunciation checks (#22
     expect(verifyStrict.stdout.join('\n')).toContain('Strict config verify notice');
   });
 
-  it('deduplicates duplicate plugin check IDs and isolates throwing plugin checks', async () => {
+  it('fails fast on duplicate plugin check IDs and isolates throwing plugin checks', async () => {
     const siteDir = await createMinimalCheckArchive({
       pronunciations: {
         'Arthur Alder': {
@@ -593,16 +681,9 @@ describe('plugin auditChecks/verifyChecks and built-in pronunciation checks (#22
         io: auditCap.io,
         plugins: [pluginA, pluginB],
       })
-    ).toBe(EXIT_OK);
-    const auditJson = JSON.parse(auditCap.stdout.join('\n')) as {
-      ok: boolean;
-      warnings: string[];
-      pluginChecks: Array<{ pluginId: string; id: string }>;
-    };
-    expect(auditJson.ok).toBe(true);
-    expect(auditJson.pluginChecks).toHaveLength(1);
-    expect(auditJson.pluginChecks[0]?.pluginId).toBe('plugin-a');
-    expect(auditJson.warnings.some((w) => w.includes("duplicate audit check 'dup-check'"))).toBe(true);
+    ).toBe(EXIT_USAGE);
+    expect(auditCap.stdout).toEqual([]);
+    expect(auditCap.stderr.join('\n')).toContain("duplicate audit check 'dup-check'");
 
     const verifyCap = createCaptureIo();
     expect(

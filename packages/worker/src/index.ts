@@ -7,7 +7,12 @@ import type {
   PronunciationAudioGenerator,
   PronunciationLexiconStore,
 } from '@kinloom/core';
-import { createKinloomServer, GoogleOAuthProvider, SystemClock } from '@kinloom/server';
+import {
+  createKinloomServer,
+  GoogleOAuthProvider,
+  SystemClock,
+  validateAndCompilePluginRoutes,
+} from '@kinloom/server';
 import { createCloudflareAssetHandler } from './adapters/cloudflareAssets.js';
 import { CloudflareEmailSender } from './adapters/cloudflareEmailSender.js';
 import { D1PronunciationLexiconStore } from './adapters/d1PronunciationLexiconStore.js';
@@ -95,6 +100,9 @@ export interface CreateCloudflareWorkerOptions {
 export function createCloudflareWorker(
   options: CreateCloudflareWorkerOptions
 ): ExportedHandler<KinloomWorkerEnv> {
+  const plugins = options.plugins ? [...options.plugins] : [];
+  const compiledPluginRoutes = validateAndCompilePluginRoutes(plugins);
+
   return {
     async fetch(request: Request, env: KinloomWorkerEnv): Promise<Response> {
       const clock = options.clock ?? new SystemClock();
@@ -144,6 +152,7 @@ export function createCloudflareWorker(
         sessionSecret: env.SESSION_SECRET,
         bootstrapAdminEmail: env.BOOTSTRAP_ADMIN_EMAIL,
         onPluginError: options.onPluginError,
+        compiledPluginRoutes,
         ports: {
           repository,
           bundleCache,
@@ -154,7 +163,7 @@ export function createCloudflareWorker(
           assetHandler,
           pronunciationGenerator,
           pronunciationLexiconStore,
-          plugins: options.plugins,
+          plugins,
         },
       });
 

@@ -152,6 +152,26 @@ export function buildArchivalOhmStyle(
   };
 }
 
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function isLayerSpecLike(value: unknown): boolean {
+  return isPlainObject(value) && typeof value.id === 'string' && typeof value.type === 'string';
+}
+
+function isMapLibreStyleDocument(value: unknown): value is StyleSpecification {
+  if (!isPlainObject(value)) {
+    return false;
+  }
+  return (
+    value.version === 8 &&
+    isPlainObject(value.sources) &&
+    Array.isArray(value.layers) &&
+    value.layers.every(isLayerSpecLike)
+  );
+}
+
 let cachedStylePromise: Promise<StyleSpecification> | null = null;
 
 export function resetCachedOhmStyle(): void {
@@ -168,7 +188,10 @@ export async function loadArchivalOhmStyle(
         if (!res.ok) {
           throw new Error(`HTTP ${res.status} loading ${OHM_STYLE_URL}`);
         }
-        const raw = (await res.json()) as StyleSpecification;
+        const raw: unknown = await res.json();
+        if (!isMapLibreStyleDocument(raw)) {
+          throw new Error(`Invalid MapLibre style JSON loaded from ${OHM_STYLE_URL}`);
+        }
         return buildArchivalOhmStyle(raw, initialYear);
       })
       .catch((error: unknown) => {

@@ -285,11 +285,12 @@ export async function runAuditCommand(options: AuditCommandOptions): Promise<Aud
     auditCheckCtx
   );
 
+  let pluginDiscoveryWarnings: string[] = [];
   let resolvedPluginAuditChecks = resolvePluginCommands(options.plugins ?? []);
   if (options.plugins === undefined) {
     const discovered = await discoverSiteCliPlugins(repoDir);
     resolvedPluginAuditChecks = resolvePluginCommands(discovered.plugins);
-    resolvedPluginAuditChecks.warnings.push(...discovered.warnings);
+    pluginDiscoveryWarnings = discovered.warnings;
   }
   const pluginChecks: ExecutedPluginCheckResult[] = [];
   for (const reg of resolvedPluginAuditChecks.auditChecks) {
@@ -328,7 +329,7 @@ export async function runAuditCommand(options: AuditCommandOptions): Promise<Aud
     ...scans.warnings.map((w) => `scans: ${w}`),
     ...liveMediaWarnings,
     ...pronunciationCheck.warnings.map((w) => `pronunciation: ${w}`),
-    ...resolvedPluginAuditChecks.warnings.map((w) => `plugin: ${w}`),
+    ...pluginDiscoveryWarnings.map((w) => `plugin: ${w}`),
     ...pluginChecks.flatMap((pc) => pc.warnings.map((w) => `plugin(${pc.id}): ${w}`)),
   ];
 

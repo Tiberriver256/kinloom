@@ -29,7 +29,7 @@ export async function loadSitePlugins(
 ): Promise<LoadedSitePlugins> {
   const discovered = await discoverSiteCliPlugins(cwd);
   const merged = resolvePluginCommands([...discovered.plugins, ...(explicitPlugins ?? [])]);
-  for (const warning of [...discovered.warnings, ...merged.warnings]) {
+  for (const warning of discovered.warnings) {
     io.stderr(`Warning: ${warning}`);
   }
   return { discovered, merged };

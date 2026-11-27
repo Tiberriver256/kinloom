@@ -40,6 +40,7 @@ export interface KinloomServerConfig {
   oauthCookieTtlSeconds?: number;
   magicLinkTtlMinutes?: number;
   onPluginError?: (pluginId: string, error: unknown) => void;
+  compiledPluginRoutes?: readonly CompiledPluginRoute[];
 }
 
 export interface KinloomServer {
@@ -49,7 +50,7 @@ export interface KinloomServer {
 const DEFAULT_SESSION_TTL_SECONDS = 30 * 24 * 60 * 60;
 const DEFAULT_OAUTH_COOKIE_TTL_SECONDS = 10 * 60;
 
-interface CompiledPluginRoute {
+export interface CompiledPluginRoute {
   readonly pluginId: string;
   readonly method: string;
   readonly normalizedPrefix: string;
@@ -76,7 +77,7 @@ function pluginMethodsOverlap(methodA: string, methodB: string): boolean {
   return methodA === '*' || methodB === '*' || methodA === methodB;
 }
 
-const RESERVED_SERVER_ROUTE_PREFIXES: readonly string[] = [
+export const RESERVED_SERVER_ROUTE_PREFIXES: readonly string[] = [
   '/api/bundle',
   '/api/entities',
   '/api/revisions',
@@ -93,9 +94,10 @@ const RESERVED_SERVER_ROUTE_PREFIXES: readonly string[] = [
   '/invite',
   '/media',
   '/sources',
+  '/data',
 ];
 
-function validateAndCompilePluginRoutes(
+export function validateAndCompilePluginRoutes(
   plugins: readonly KinloomServerPlugin[]
 ): readonly CompiledPluginRoute[] {
   const seenPluginIds = new Set<string>();
@@ -183,7 +185,7 @@ export function createKinloomServer(config: KinloomServerConfig): KinloomServer 
   const sessionTtlSeconds = config.sessionTtlSeconds ?? DEFAULT_SESSION_TTL_SECONDS;
   const oauthCookieTtlSeconds = config.oauthCookieTtlSeconds ?? DEFAULT_OAUTH_COOKIE_TTL_SECONDS;
   const plugins = config.ports.plugins ?? [];
-  const pluginRoutes = validateAndCompilePluginRoutes(plugins);
+  const pluginRoutes = config.compiledPluginRoutes ?? validateAndCompilePluginRoutes(plugins);
 
   const authService = new AuthService({
     repository: config.ports.repository,

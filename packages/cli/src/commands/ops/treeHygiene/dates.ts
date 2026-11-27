@@ -1,51 +1,19 @@
+import { edtfYear, type ParsedEdtfInterval, parseEdtfInterval } from '@kinloom/core';
 import type { ParsedDatePart, ParsedEdtfRange } from './types.js';
 
-export function parseDatePart(raw: string): ParsedDatePart | null {
-  const clean = raw.trim().replaceAll(/[~?%]+$/g, '');
-  if (!clean) {
-    return null;
-  }
-  const full = /^(\d{4})-(\d{2})-(\d{2})$/.exec(clean);
-  if (full) {
+function intervalEndpointToDatePart(interval: ParsedEdtfInterval, bound: 'min' | 'max'): ParsedDatePart {
+  if (interval.precision === 'decade') {
     return {
-      year: Number(full[1]),
-      month: Number(full[2]),
-      day: Number(full[3]),
-    };
-  }
-  const monthOnly = /^(\d{4})-(\d{2})$/.exec(clean);
-  if (monthOnly) {
-    return {
-      year: Number(monthOnly[1]),
-      month: Number(monthOnly[2]),
-      day: null,
-    };
-  }
-  const yearOnly = /^(\d{4})$/.exec(clean);
-  if (yearOnly) {
-    return {
-      year: Number(yearOnly[1]),
+      year: bound === 'max' ? interval.year + 9 : interval.year,
       month: null,
       day: null,
     };
   }
-  const decade = /^(\d{3})X$/i.exec(clean);
-  if (decade) {
-    return {
-      year: Number(decade[1]) * 10,
-      month: null,
-      day: null,
-    };
-  }
-  const fallback = /\b(1[4-9]\d{2}|20\d{2})\b/.exec(clean);
-  if (fallback) {
-    return {
-      year: Number(fallback[1]),
-      month: null,
-      day: null,
-    };
-  }
-  return null;
+  return {
+    year: interval.year,
+    month: interval.month,
+    day: interval.day,
+  };
 }
 
 export function parseEdtfRange(edtf: string | null | undefined): ParsedEdtfRange | null {
@@ -56,41 +24,47 @@ export function parseEdtfRange(edtf: string | null | undefined): ParsedEdtfRange
   if (!trimmed) {
     return null;
   }
-  if (trimmed.includes('/')) {
+
+  const parsed = parseEdtfInterval(trimmed);
+  if (parsed) {
     const slash = trimmed.indexOf('/');
-    const leftRaw = trimmed.slice(0, slash).trim();
-    const rightRaw = trimmed.slice(slash + 1).trim();
-    const left = leftRaw ? parseDatePart(leftRaw) : null;
-    const right = rightRaw ? parseDatePart(rightRaw) : null;
-    if (!left && !right) {
-      return null;
+    if (slash === -1) {
+      const minDate = intervalEndpointToDatePart(parsed, 'min');
+      const maxDate = intervalEndpointToDatePart(parsed, 'max');
+      return {
+        minYear: minDate.year,
+        maxYear: maxDate.year,
+        minDate,
+        maxDate,
+      };
     }
+
+    const leftParsed = Number.isFinite(parsed.startMs) ? parseEdtfInterval(trimmed.slice(0, slash)) : null;
+    const rightParsed = Number.isFinite(parsed.endMs) ? parseEdtfInterval(trimmed.slice(slash + 1)) : null;
+    const minDate = leftParsed ? intervalEndpointToDatePart(leftParsed, 'min') : null;
+    const maxDate = rightParsed ? intervalEndpointToDatePart(rightParsed, 'max') : null;
     return {
-      minYear: left?.year ?? null,
-      maxYear: right?.year ?? null,
-      minDate: left,
-      maxDate: right,
+      minYear: minDate?.year ?? null,
+      maxYear: maxDate?.year ?? null,
+      minDate,
+      maxDate,
     };
   }
-  const decade = /^(\d{3})X$/i.exec(trimmed.replaceAll(/[~?%]+$/g, ''));
-  if (decade) {
-    const startYear = Number(decade[1]) * 10;
-    return {
-      minYear: startYear,
-      maxYear: startYear + 9,
-      minDate: { year: startYear, month: null, day: null },
-      maxDate: { year: startYear + 9, month: null, day: null },
-    };
-  }
-  const single = parseDatePart(trimmed);
-  if (!single) {
+
+  if (trimmed.includes('/')) {
     return null;
   }
+
+  const fallbackYear = edtfYear(trimmed);
+  if (fallbackYear === null) {
+    return null;
+  }
+  const fallbackPart: ParsedDatePart = { year: fallbackYear, month: null, day: null };
   return {
-    minYear: single.year,
-    maxYear: single.year,
-    minDate: single,
-    maxDate: single,
+    minYear: fallbackYear,
+    maxYear: fallbackYear,
+    minDate: fallbackPart,
+    maxDate: fallbackPart,
   };
 }
 

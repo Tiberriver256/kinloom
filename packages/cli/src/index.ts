@@ -104,6 +104,7 @@ export {
 export * from './guides/index.js';
 
 export {
+  CliPluginValidationError,
   CORE_CLI_COMMANDS,
   type DiscoverSiteCliPluginsResult,
   discoverSiteCliPlugins,
@@ -118,6 +119,8 @@ export {
   type KinloomCliPluginContext,
   type KinloomVerifyCheck,
   type KinloomVerifyCheckContext,
+  RESERVED_AUDIT_CHECK_IDS,
+  RESERVED_VERIFY_CHECK_IDS,
   type RegisteredAuditCheck,
   type RegisteredVerifyCheck,
   type ResolvedPluginCommands,

@@ -345,4 +345,54 @@ describe('Cloudflare Worker behavioral lifecycle (talk, admin D1 store, and stat
       await mf.dispose();
     }
   }, 20_000);
+
+  it('validates server plugins synchronously at createCloudflareWorker creation time', () => {
+    const siteConfig = createSyntheticSiteConfig();
+    const okHandler = async () => new Response('ok');
+
+    expect(() =>
+      createCloudflareWorker({
+        siteConfig,
+        plugins: [
+          { id: 'dup-worker-plugin', name: 'One' },
+          { id: ' dup-worker-plugin ', name: 'Two' },
+        ],
+      })
+    ).toThrow(RangeError);
+
+    for (const badPrefix of ['/api/bundle', '/data', '/data/readings.json']) {
+      expect(() =>
+        createCloudflareWorker({
+          siteConfig,
+          plugins: [
+            {
+              id: `reserved-${badPrefix.replaceAll('/', '_')}`,
+              name: 'Reserved Prefix',
+              routes: [{ method: 'GET', pathPrefix: badPrefix, minRole: 'public', handle: okHandler }],
+            },
+          ],
+        })
+      ).toThrow(RangeError);
+    }
+
+    expect(() =>
+      createCloudflareWorker({
+        siteConfig,
+        plugins: [
+          {
+            id: 'custom-worker-plugin',
+            name: 'Valid Plugin',
+            routes: [
+              {
+                method: 'GET',
+                pathPrefix: '/api/custom-worker',
+                minRole: 'public',
+                handle: okHandler,
+              },
+            ],
+          },
+        ],
+      })
+    ).not.toThrow();
+  });
 });

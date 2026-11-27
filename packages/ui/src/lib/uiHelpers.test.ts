@@ -17,11 +17,13 @@ import {
   isChunkLoadError,
   isSearchableQuery,
   KINLOOM_VOCABULARY,
+  loadArchivalOhmStyle,
   PAPER_LAND_LAYER_ID,
   pickActiveTimelineEventId,
   readerNextPage,
   readerPrevPage,
   reportClientError,
+  resetCachedOhmStyle,
   resolveReaderPageIndex,
   sanitizeReport,
   sanitizeRoute,
@@ -70,6 +72,47 @@ describe('ohmStyle', () => {
     assert.equal(labelLayer.type, 'symbol');
     assert.deepEqual(labelLayer.layout?.['text-field'], ['coalesce', ['get', 'name_en'], ['get', 'name']]);
     assert.deepEqual(labelLayer.layout?.['text-font'], ['OpenHistorical']);
+  });
+
+  test('loadArchivalOhmStyle rejects malformed style JSON and clears failed cache entries', async () => {
+    resetCachedOhmStyle();
+    const malformedPayloads: unknown[] = [
+      null,
+      [],
+      { version: 7, sources: {}, layers: [] },
+      { version: 8, sources: null, layers: [] },
+      { version: 8, sources: {}, layers: 'not-an-array' },
+      { version: 8, sources: {}, layers: [{ id: 'bg' }] },
+    ];
+
+    for (const payload of malformedPayloads) {
+      const badFetch = async () =>
+        new Response(JSON.stringify(payload), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        });
+      await assert.rejects(
+        () => loadArchivalOhmStyle('1900', badFetch as unknown as typeof fetch),
+        /Invalid MapLibre style JSON/
+      );
+    }
+
+    const validFetch = async () =>
+      new Response(
+        JSON.stringify({
+          version: 8,
+          sources: { ohm: { type: 'vector', url: 'https://example.test/ohm' } },
+          layers: [{ id: 'bg', type: 'background', paint: { 'background-color': '#eee' } }],
+        }),
+        { status: 200, headers: { 'content-type': 'application/json' } }
+      );
+    const loaded = await loadArchivalOhmStyle('1900', validFetch as unknown as typeof fetch);
+    assert.equal(loaded.version, 8);
+    assert.deepEqual(
+      loaded.layers.map((layer) => layer.id),
+      ['bg']
+    );
+    resetCachedOhmStyle();
   });
 });
 

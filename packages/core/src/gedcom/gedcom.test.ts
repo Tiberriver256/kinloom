@@ -189,6 +189,46 @@ describe('GEDCOM citations, parse, export, and sliceGedcom', () => {
     expect(expanded.people.some((p) => p.gedcom_xref === '@I99@')).toBe(true);
   });
 
+  it('respects custom livingCutoffYears for undated children via parent birth-year cutoff in sliceGedcom', () => {
+    const undatedChildGedcom = `0 HEAD
+1 GEDC
+2 VERS 5.5.1
+0 @I1@ INDI
+1 NAME Thomas /Alder/
+1 SEX M
+1 BIRT
+2 DATE 1915
+1 DEAT
+2 DATE 1988
+1 FAMS @F1@
+0 @I2@ INDI
+1 NAME Nora /Alder/
+1 SEX F
+1 FAMC @F1@
+0 @F1@ FAM
+1 HUSB @I1@
+1 CHIL @I2@
+0 TRLR
+`;
+
+    const defaultCutoff = sliceGedcom(undatedChildGedcom, {
+      rootXref: '@I1@',
+      ancestorSurnames: ['Alder'],
+      referenceYear: 2026,
+    });
+    const childDefault = defaultCutoff.people.find((p) => p.gedcom_xref === '@I2@');
+    expect(childDefault?.is_living).toBe(false);
+
+    const widerCutoff = sliceGedcom(undatedChildGedcom, {
+      rootXref: '@I1@',
+      ancestorSurnames: ['Alder'],
+      referenceYear: 2026,
+      livingCutoffYears: 120,
+    });
+    const childWider = widerCutoff.people.find((p) => p.gedcom_xref === '@I2@');
+    expect(childWider?.is_living).toBe(true);
+  });
+
   it('exports parameterized GEDCOM 7 with HEAD.SOUR from siteConfig and 1 RESN CONFIDENTIAL for living people', () => {
     const sliced = sliceGedcom(SYNTHETIC_GEDCOM, {
       rootXref: '@I3@',

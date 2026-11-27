@@ -249,7 +249,15 @@ describe('createKinloomServer plugin routing and startup validation', () => {
     const siteConfig = createSyntheticSiteConfig();
     const ports = createInMemoryServerPorts(siteConfig);
 
-    for (const badPrefix of ['/api/bundle', '/api/entities/custom', '/privacy', '/api', '/']) {
+    for (const badPrefix of [
+      '/api/bundle',
+      '/api/entities/custom',
+      '/privacy',
+      '/data',
+      '/data/readings.json',
+      '/api',
+      '/',
+    ]) {
       expect(() =>
         createKinloomServer({
           siteConfig,

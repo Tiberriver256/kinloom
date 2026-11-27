@@ -65,11 +65,14 @@ export {
 export {
   type AuthBrowserProvider,
   buildAuthErrorRedirectUrl,
+  type CompiledPluginRoute,
   createKinloomServer,
   isBrowserNavigation,
   type KinloomServer,
   type KinloomServerConfig,
   mapAuthErrorToBrowserCode,
+  RESERVED_SERVER_ROUTE_PREFIXES,
+  validateAndCompilePluginRoutes,
 } from './http/router.js';
 export {
   createPrivacyAndOgRouteHandler,
