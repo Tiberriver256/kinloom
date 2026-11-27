@@ -57,9 +57,6 @@ jobs:
           node-version: 24
           cache: npm
 
-      - name: Install tesseract and poppler
-        run: sudo apt-get update && sudo apt-get install -y tesseract-ocr poppler-utils
-
       - name: Skip release commits
         id: gate
         env:
@@ -102,6 +99,10 @@ jobs:
             appendFileSync(out, `tag=${plan.tag ?? ""}\n`);
           '
 
+      - name: Install tesseract and poppler
+        if: steps.plan.outputs.should_release == 'true' && inputs.dry_run != true
+        run: sudo apt-get update && sudo apt-get install -y tesseract-ocr poppler-utils
+
       - name: Bump, verify, tag, and create the GitHub release
         if: steps.plan.outputs.should_release == 'true' && inputs.dry_run != true
         env:
@@ -119,7 +120,12 @@ jobs:
           esac
 
           if git ls-remote --exit-code --tags origin "refs/tags/${TAG}" >/dev/null 2>&1; then
-            echo "Tag ${TAG} is already on origin."
+            git fetch origin "refs/tags/${TAG}:refs/tags/${TAG}" --force
+            if ! git merge-base --is-ancestor HEAD "${TAG}^{commit}"; then
+              echo "Refusing to reuse existing tag ${TAG} because it does not contain HEAD ($(git rev-parse --short HEAD))." >&2
+              exit 1
+            fi
+            echo "Tag ${TAG} is already on origin and contains HEAD."
           else
             node scripts/release-version.mjs bump "$VERSION"
             npm ci
@@ -221,8 +227,8 @@ jobs:
           TAG: ${{ needs.release.outputs.tag }}
         run: |
           set -euo pipefail
-          git fetch origin "refs/tags/${TAG}"
-          git checkout --detach "$TAG"
+          git fetch origin "refs/tags/${TAG}:refs/tags/${TAG}" --force
+          git checkout --detach "refs/tags/${TAG}"
 
       - name: Setup Node.js
         uses: actions/setup-node@v7

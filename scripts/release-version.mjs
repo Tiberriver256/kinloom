@@ -326,16 +326,110 @@ export function applyVersionFiles(root, version) {
   }
 }
 
-function discoverTag(cwd) {
+function listSemverTags(cwd, { mergedOnly = false } = {}) {
   try {
-    return execFileSync('git', ['describe', '--tags', '--abbrev=0', '--match', 'v*'], {
+    const args = mergedOnly ? ['tag', '--merged', 'HEAD', '--list', 'v*'] : ['tag', '--list', 'v*'];
+    const raw = execFileSync('git', args, {
       cwd,
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'ignore'],
-    }).trim();
+    });
+    return raw
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter((tag) => versionFromTag(tag) !== null)
+      .sort((left, right) => compareSemver(versionFromTag(right), versionFromTag(left)));
+  } catch {
+    return [];
+  }
+}
+
+function discoverWorkspaceVersion(cwd) {
+  const packagesDir = path.join(cwd, 'packages');
+  if (!fs.existsSync(packagesDir)) return null;
+  let highest = null;
+  for (const entry of fs.readdirSync(packagesDir, { withFileTypes: true })) {
+    if (!entry.isDirectory()) continue;
+    const pkgPath = path.join(packagesDir, entry.name, 'package.json');
+    if (!fs.existsSync(pkgPath)) continue;
+    const data = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
+    if (typeof data.version !== 'string' || !/^\d+\.\d+\.\d+$/.test(data.version)) continue;
+    if (!highest || compareSemver(data.version, highest) > 0) {
+      highest = data.version;
+    }
+  }
+  return highest;
+}
+
+function findReleaseCommit(cwd, version) {
+  try {
+    const raw = execFileSync('git', ['log', '--format=%H%x1f%s', 'HEAD'], {
+      cwd,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    });
+    const expectedSubject = `chore(release): v${version}`;
+    for (const line of raw.split(/\r?\n/)) {
+      if (!line) continue;
+      const [sha, subject] = line.split('\x1f');
+      if (sha && subject?.trim() === expectedSubject) {
+        return sha;
+      }
+    }
+    return null;
   } catch {
     return null;
   }
+}
+
+export function discoverReleaseBase(cwd, explicitFromTag = null) {
+  if (explicitFromTag) {
+    const version = versionFromTag(explicitFromTag);
+    if (!version) throw new Error(`Tag ${explicitFromTag} is not vX.Y.Z`);
+    return {
+      current: version,
+      previousTag: explicitFromTag,
+      commitBaseRef: explicitFromTag,
+    };
+  }
+
+  const mergedTags = listSemverTags(cwd, { mergedOnly: true });
+  const reachableTag = mergedTags[0] ?? null;
+  const allTags = listSemverTags(cwd);
+  const highestTag = allTags[0] ?? null;
+  const workspaceVersion = discoverWorkspaceVersion(cwd);
+
+  const candidates = [
+    reachableTag ? versionFromTag(reachableTag) : null,
+    highestTag ? versionFromTag(highestTag) : null,
+    workspaceVersion,
+  ].filter(Boolean);
+  if (candidates.length === 0) {
+    throw new Error('No v* tag found. Pass --from-tag.');
+  }
+  candidates.sort((left, right) => compareSemver(right, left));
+  const current = candidates[0];
+  const currentTag = `v${current}`;
+
+  if (mergedTags.includes(currentTag)) {
+    return {
+      current,
+      previousTag: currentTag,
+      commitBaseRef: currentTag,
+    };
+  }
+
+  const releaseCommit = findReleaseCommit(cwd, current);
+  const previousTag = allTags.includes(currentTag) ? currentTag : (reachableTag ?? highestTag);
+  const commitBaseRef = releaseCommit ?? reachableTag ?? highestTag;
+  if (!commitBaseRef) {
+    throw new Error('No v* tag found. Pass --from-tag.');
+  }
+  return {
+    current,
+    previousTag,
+    commitBaseRef,
+  };
 }
 
 function versionFromTag(tag) {
@@ -343,8 +437,8 @@ function versionFromTag(tag) {
   return match ? match[1] : null;
 }
 
-function loadCommits(cwd, fromTag) {
-  const raw = execFileSync('git', ['log', `${fromTag}..HEAD`, '--reverse', `--format=${GIT_FORMAT}`], {
+function loadCommits(cwd, fromRef) {
+  const raw = execFileSync('git', ['log', `${fromRef}..HEAD`, '--reverse', `--format=${GIT_FORMAT}`], {
     cwd,
     encoding: 'utf8',
   });
@@ -352,11 +446,8 @@ function loadCommits(cwd, fromTag) {
 }
 
 function releasePayload(cwd, flags) {
-  const fromTag = flags['from-tag'] || discoverTag(cwd);
-  if (!fromTag) throw new Error('No v* tag found. Pass --from-tag.');
-  const current = versionFromTag(fromTag);
-  if (!current) throw new Error(`Tag ${fromTag} is not vX.Y.Z`);
-  const commits = loadCommits(cwd, fromTag);
+  const { current, previousTag, commitBaseRef } = discoverReleaseBase(cwd, flags['from-tag'] ?? null);
+  const commits = loadCommits(cwd, commitBaseRef);
   const plan = planRelease({
     current,
     commits,
@@ -367,7 +458,7 @@ function releasePayload(cwd, flags) {
     should_release: plan.shouldRelease,
     version: plan.version,
     tag: plan.tag,
-    previous_tag: fromTag,
+    previous_tag: previousTag,
     previous_version: current,
     bump: plan.bump,
     reason: plan.reason,

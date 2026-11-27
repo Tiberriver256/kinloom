@@ -350,4 +350,67 @@ describe('next command', () => {
       rmSync(cwd, { recursive: true, force: true });
     }
   });
+
+  it('anchors on the highest semver tag and release commit when newer tags are detached from HEAD', () => {
+    const cwd = initRepo('feat(cli): initial feature');
+    try {
+      // Simulate pre-rewrite branch that created tags v0.3.0 and v0.3.1 off main's later history.
+      git(cwd, ['checkout', '-b', 'pre-rewrite']);
+      git(cwd, ['commit', '--allow-empty', '-m', 'chore(release): v0.3.0']);
+      git(cwd, ['tag', '-a', 'v0.3.0', '-m', 'v0.3.0']);
+      git(cwd, ['commit', '--allow-empty', '-m', 'fix(ui): patch']);
+      git(cwd, ['commit', '--allow-empty', '-m', 'chore(release): v0.3.1']);
+      git(cwd, ['tag', '-a', 'v0.3.1', '-m', 'v0.3.1']);
+
+      // Rewritten main shares v0.2.0 as ancestor, carries matching chore(release): v0.3.1, and adds a new feat.
+      git(cwd, ['checkout', 'main']);
+      mkdirSync(path.join(cwd, 'packages/core'), { recursive: true });
+      writeFileSync(
+        path.join(cwd, 'packages/core/package.json'),
+        '{\n  "name": "@kinloom/core",\n  "version": "0.3.1"\n}\n'
+      );
+      git(cwd, ['add', 'packages/core/package.json']);
+      git(cwd, ['commit', '-m', 'chore(release): v0.3.1']);
+
+      // With no new commits after chore(release): v0.3.1, no release should be planned.
+      const idle = spawnSync(process.execPath, [scriptPath, 'next', '--json'], {
+        cwd,
+        encoding: 'utf8',
+      });
+      expect(idle.status).toBe(0);
+      expect(JSON.parse(idle.stdout)).toMatchObject({
+        should_release: false,
+        version: null,
+        tag: null,
+        previous_tag: 'v0.3.1',
+        previous_version: '0.3.1',
+      });
+
+      // Adding a feat after chore(release): v0.3.1 must plan v0.4.0 (never regress to v0.3.0).
+      git(cwd, ['commit', '--allow-empty', '-m', 'feat(obs): add telemetry']);
+      const next = spawnSync(process.execPath, [scriptPath, 'next', '--json'], {
+        cwd,
+        encoding: 'utf8',
+      });
+      expect(next.status).toBe(0);
+      const payload = JSON.parse(next.stdout) as {
+        should_release: boolean;
+        version: string;
+        tag: string;
+        previous_tag: string;
+        previous_version: string;
+        commits: Array<{ subject: string }>;
+      };
+      expect(payload).toMatchObject({
+        should_release: true,
+        version: '0.4.0',
+        tag: 'v0.4.0',
+        previous_tag: 'v0.3.1',
+        previous_version: '0.3.1',
+      });
+      expect(payload.commits.map((c) => c.subject)).toEqual(['add telemetry']);
+    } finally {
+      rmSync(cwd, { recursive: true, force: true });
+    }
+  });
 });
