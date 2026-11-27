@@ -4,21 +4,21 @@ import {
   type RawPerson,
   type ResolvedPersonPronunciation,
   resolvePersonPronunciation,
-  stripIpaDelimiters,
 } from '@kinloom/core';
+import {
+  extractAlignedTokenSegment,
+  matchesComposedTokenSequence,
+  normalizeIpaComparable,
+  normalizeWhitespace,
+} from './tokenAlignment.js';
 import type { PronounceDeduplicateKeepReason } from './types.js';
 
-export function normalizeWhitespace(value?: string | null): string {
-  return (value ?? '').trim().replaceAll(/\s+/g, ' ');
-}
-
-export function normalizeIpaComparable(value?: string | null): string {
-  const trimmed = value?.trim() ?? '';
-  if (!trimmed) {
-    return '';
-  }
-  return normalizeWhitespace(stripIpaDelimiters(trimmed));
-}
+export {
+  normalizeIpaComparable,
+  normalizeIpaForConflictCheck,
+  normalizePhoneticComparable,
+  normalizeWhitespace,
+} from './tokenAlignment.js';
 
 function hasExplicitPronunciationContent(entry?: Pronunciation | null): entry is Pronunciation {
   if (!entry) {
@@ -107,9 +107,25 @@ export function evaluatePersonOverrideRedundancy(
   }
 
   if (!force) {
+    const inspectedTokens =
+      withoutOwn.resolvedFrom === 'composed'
+        ? inspectPersonPronunciationTokens(person, lexicon).tokens
+        : null;
+
     const ownPhonetic = normalizeWhitespace(own.phonetic);
     const sharedPhonetic = normalizeWhitespace(withoutOwn.phonetic);
-    if (ownPhonetic && ownPhonetic !== sharedPhonetic) {
+    const phoneticEquivalent =
+      !ownPhonetic ||
+      ownPhonetic === sharedPhonetic ||
+      Boolean(
+        inspectedTokens &&
+          matchesComposedTokenSequence({
+            value: ownPhonetic,
+            tokens: inspectedTokens,
+            mode: 'phonetic',
+          })
+      );
+    if (!phoneticEquivalent) {
       return {
         kind: 'keep',
         reason: 'pronunciation_differs',
@@ -119,7 +135,18 @@ export function evaluatePersonOverrideRedundancy(
 
     const ownIpa = normalizeIpaComparable(own.ipa);
     const sharedIpa = normalizeIpaComparable(withoutOwn.ipa);
-    if (ownIpa && ownIpa !== sharedIpa) {
+    const ipaEquivalent =
+      !ownIpa ||
+      ownIpa === sharedIpa ||
+      Boolean(
+        inspectedTokens &&
+          matchesComposedTokenSequence({
+            value: ownIpa,
+            tokens: inspectedTokens,
+            mode: 'ipa',
+          })
+      );
+    if (!ipaEquivalent) {
       return {
         kind: 'keep',
         reason: 'pronunciation_differs',
@@ -138,41 +165,6 @@ export interface PromotionCandidate {
   readonly term: string;
   readonly entry: Pronunciation;
   readonly personId: string;
-}
-
-function stripDelimitedPrefixAndSuffix(
-  fullValue: string,
-  prefixPieces: readonly string[],
-  suffixPieces: readonly string[]
-): string | null {
-  let remaining = normalizeWhitespace(fullValue);
-  for (const piece of prefixPieces) {
-    const norm = normalizeWhitespace(piece);
-    if (!norm) {
-      return null;
-    }
-    if (remaining.toLowerCase().startsWith(`${norm.toLowerCase()} `)) {
-      remaining = remaining.slice(norm.length + 1).trim();
-    } else if (remaining.toLowerCase().startsWith(`${norm.toLowerCase()}-`)) {
-      remaining = remaining.slice(norm.length + 1).trim();
-    } else {
-      return null;
-    }
-  }
-  for (let i = suffixPieces.length - 1; i >= 0; i -= 1) {
-    const norm = normalizeWhitespace(suffixPieces[i]);
-    if (!norm) {
-      return null;
-    }
-    if (remaining.toLowerCase().endsWith(` ${norm.toLowerCase()}`)) {
-      remaining = remaining.slice(0, remaining.length - norm.length - 1).trim();
-    } else if (remaining.toLowerCase().endsWith(`-${norm.toLowerCase()}`)) {
-      remaining = remaining.slice(0, remaining.length - norm.length - 1).trim();
-    } else {
-      return null;
-    }
-  }
-  return remaining || null;
 }
 
 export function extractPromotableTokenFromPerson(
@@ -201,74 +193,36 @@ export function extractPromotableTokenFromPerson(
   const beforeTokens = inspection.tokens.slice(0, missingIdx);
   const afterTokens = inspection.tokens.slice(missingIdx + 1);
 
-  let extractedPhonetic: string | undefined;
   const ownPhonetic = normalizeWhitespace(own.phonetic);
-  if (ownPhonetic) {
-    const beforePhonetic: string[] = [];
-    const afterPhonetic: string[] = [];
-    let canExtractPhonetic = true;
-    for (const tok of beforeTokens) {
-      const piece = tok.kind === 'token' ? normalizeWhitespace(tok.entry?.phonetic) : tok.text;
-      if (!piece) {
-        canExtractPhonetic = false;
-        break;
-      }
-      beforePhonetic.push(piece);
-    }
-    if (canExtractPhonetic) {
-      for (const tok of afterTokens) {
-        const piece = tok.kind === 'token' ? normalizeWhitespace(tok.entry?.phonetic) : tok.text;
-        if (!piece) {
-          canExtractPhonetic = false;
-          break;
-        }
-        afterPhonetic.push(piece);
-      }
-    }
-    if (canExtractPhonetic) {
-      const remainder = stripDelimitedPrefixAndSuffix(ownPhonetic, beforePhonetic, afterPhonetic);
-      if (remainder) {
-        extractedPhonetic = remainder;
-      }
-    }
+  const extractedPhonetic = ownPhonetic
+    ? (extractAlignedTokenSegment({
+        fullValue: ownPhonetic,
+        beforeTokens,
+        missingToken,
+        afterTokens,
+        mode: 'phonetic',
+      }) ?? undefined)
+    : undefined;
+
+  // Never silently drop a present Respelling into an IPA-only lexicon entry.
+  if (ownPhonetic && !extractedPhonetic) {
+    return null;
   }
 
-  let extractedIpa: string | undefined;
   const ownIpaInner = normalizeIpaComparable(own.ipa);
-  if (ownIpaInner) {
-    const beforeIpa: string[] = [];
-    const afterIpa: string[] = [];
-    let canExtractIpa = true;
-    for (const tok of beforeTokens) {
-      if (tok.kind !== 'token') {
-        continue;
-      }
-      const piece = normalizeIpaComparable(tok.entry?.ipa);
-      if (!piece) {
-        canExtractIpa = false;
-        break;
-      }
-      beforeIpa.push(piece);
-    }
-    if (canExtractIpa) {
-      for (const tok of afterTokens) {
-        if (tok.kind !== 'token') {
-          continue;
-        }
-        const piece = normalizeIpaComparable(tok.entry?.ipa);
-        if (!piece) {
-          canExtractIpa = false;
-          break;
-        }
-        afterIpa.push(piece);
-      }
-    }
-    if (canExtractIpa) {
-      const remainder = stripDelimitedPrefixAndSuffix(ownIpaInner, beforeIpa, afterIpa);
-      if (remainder) {
-        extractedIpa = `/${remainder}/`;
-      }
-    }
+  const extractedIpa = ownIpaInner
+    ? (extractAlignedTokenSegment({
+        fullValue: ownIpaInner,
+        beforeTokens,
+        missingToken,
+        afterTokens,
+        mode: 'ipa',
+      }) ?? undefined)
+    : undefined;
+
+  // Never promote a phonetic-only token when IPA was present but failed alignment.
+  if (ownIpaInner && !extractedIpa) {
+    return null;
   }
 
   if (!extractedPhonetic && !extractedIpa) {

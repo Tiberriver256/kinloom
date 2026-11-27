@@ -17,8 +17,8 @@ import {
   evaluatePersonOverrideRedundancy,
   extractPromotableTokenFromPerson,
   loadArchivePronunciationLexicon,
-  normalizeIpaComparable,
-  normalizeWhitespace,
+  normalizeIpaForConflictCheck,
+  normalizePhoneticComparable,
   type PromotionCandidate,
   type PronounceDeduplicateKeptOverride,
   type PronounceDeduplicateOptions,
@@ -178,10 +178,10 @@ export function runPronounceDeduplicateCommand(
       }
 
       const distinctPhonetics = new Set(
-        candidates.map((c) => normalizeWhitespace(c.entry.phonetic)).filter(Boolean)
+        candidates.map((c) => normalizePhoneticComparable(c.entry.phonetic)).filter(Boolean)
       );
       const distinctIpas = new Set(
-        candidates.map((c) => normalizeIpaComparable(c.entry.ipa)).filter(Boolean)
+        candidates.map((c) => normalizeIpaForConflictCheck(c.entry.ipa)).filter(Boolean)
       );
       if (distinctPhonetics.size > 1 || distinctIpas.size > 1) {
         skippedPromotions.push({
@@ -192,19 +192,41 @@ export function runPronounceDeduplicateCommand(
         continue;
       }
 
-      const bestEntry =
+      const bestCandidate =
+        candidates.find(
+          (c) =>
+            c.entry.phonetic &&
+            c.entry.ipa?.includes('ˈ') &&
+            /[A-Z]/.test(c.entry.phonetic) &&
+            c.entry.source_label
+        ) ??
         candidates.find((c) => c.entry.phonetic && c.entry.ipa && c.entry.source_label) ??
         candidates.find((c) => c.entry.phonetic && c.entry.ipa) ??
+        candidates.find((c) => c.entry.phonetic) ??
         first;
 
-      workingLexicon[bestEntry.term] = bestEntry.entry;
-      promotedLexiconAdditions[bestEntry.term] = bestEntry.entry;
+      const bestPhonetic =
+        bestCandidate.entry.phonetic ??
+        candidates.find((c) => c.entry.phonetic && /[A-Z]/.test(c.entry.phonetic))?.entry.phonetic ??
+        candidates.find((c) => c.entry.phonetic)?.entry.phonetic;
+      const bestIpa =
+        bestCandidate.entry.ipa ??
+        candidates.find((c) => c.entry.ipa?.includes('ˈ'))?.entry.ipa ??
+        candidates.find((c) => c.entry.ipa)?.entry.ipa;
+      const mergedEntry: Pronunciation = {
+        ...bestCandidate.entry,
+        ...(bestPhonetic ? { phonetic: bestPhonetic } : {}),
+        ...(bestIpa ? { ipa: bestIpa } : {}),
+      };
+
+      workingLexicon[bestCandidate.term] = mergedEntry;
+      promotedLexiconAdditions[bestCandidate.term] = mergedEntry;
       promotedTokens.push({
-        term: bestEntry.term,
-        ...(bestEntry.entry.phonetic ? { phonetic: bestEntry.entry.phonetic } : {}),
-        ...(bestEntry.entry.ipa ? { ipa: bestEntry.entry.ipa } : {}),
-        ...(bestEntry.entry.language ? { language: bestEntry.entry.language } : {}),
-        source_person_id: bestEntry.personId,
+        term: bestCandidate.term,
+        ...(mergedEntry.phonetic ? { phonetic: mergedEntry.phonetic } : {}),
+        ...(mergedEntry.ipa ? { ipa: mergedEntry.ipa } : {}),
+        ...(mergedEntry.language ? { language: mergedEntry.language } : {}),
+        source_person_id: bestCandidate.personId,
       });
     }
   }

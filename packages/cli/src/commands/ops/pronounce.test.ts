@@ -4,6 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import {
   parseKinloomConfig,
+  parseKinloomConfigYaml,
   parsePeopleYaml,
   parsePlacesYaml,
   serializeKinloomConfigYaml,
@@ -1402,5 +1403,467 @@ describe('IPA-in-phonetic audit checks and kinloom pronounce deduplicate', () =>
     expect(auditAfter.ok).toBe(true);
     expect(auditAfter.strictOk).toBe(true);
     expect(auditAfter.summary.redundant_person_overrides).toBe(0);
+  });
+
+  it('extracts clean phonetic and IPA tokens across middle initials, leading initials, and hyphenated respellings without leaking initial segments', async () => {
+    const repoDir = await makeTempDir('kinloom-pron-middle-initial-');
+    fs.mkdirSync(path.join(repoDir, 'data'), { recursive: true });
+
+    const config = parseKinloomConfig({
+      site: {
+        title: 'Synthetic Middle Initial Archive',
+        familyName: 'Doe Vance Archive',
+        gedcomSourceName: 'SYNTHETIC_INITIALS',
+      },
+      pronunciations: {
+        Doe: {
+          phonetic: 'DOH',
+          ipa: '/doʊ/',
+          language: 'en-US',
+          source_label: 'Wiktionary',
+        },
+        Clara: {
+          phonetic: 'KLAIR-uh',
+          ipa: '/ˈklɛə.rə/',
+          language: 'en-US',
+          source_label: 'Wiktionary',
+        },
+        Mercer: {
+          phonetic: 'MER-ser',
+          ipa: '/ˈmɜːr.sər/',
+          language: 'en-US',
+          source_label: 'Wiktionary',
+        },
+      },
+    });
+    fs.writeFileSync(path.join(repoDir, 'kinloom.config.yaml'), serializeKinloomConfigYaml(config), 'utf8');
+
+    const people = [
+      {
+        id: 'per_jane_m',
+        slug: 'jane-m-doe',
+        full_name: 'Jane M. Doe',
+        given_name: 'Jane M.',
+        surname: 'Doe',
+        alt_names: [],
+        sex: 'F' as const,
+        is_living: false,
+        lineage_group: 'ancestor' as const,
+        birth_edtf: '1850',
+        death_edtf: '1920',
+        portrait_url: null,
+        pronunciation: {
+          phonetic: 'JAYN em DOH',
+          ipa: '/ˈdʒeɪn ˈɛm doʊ/',
+          language: 'en-US',
+          source_label: 'Wiktionary',
+        },
+      },
+      {
+        id: 'per_jane_plain',
+        slug: 'jane-doe',
+        full_name: 'Jane Doe',
+        given_name: 'Jane',
+        surname: 'Doe',
+        alt_names: [],
+        sex: 'F' as const,
+        is_living: false,
+        lineage_group: 'collateral' as const,
+        birth_edtf: '1852',
+        death_edtf: '1922',
+        portrait_url: null,
+        pronunciation: {
+          phonetic: 'JAYN DOH',
+          ipa: '/ˈdʒeɪn doʊ/',
+          language: 'en-US',
+          source_label: 'Wiktionary',
+        },
+      },
+      {
+        id: 'per_jane_r_nopunct',
+        slug: 'jane-r-doe',
+        full_name: 'Jane R Doe',
+        given_name: 'Jane R',
+        surname: 'Doe',
+        alt_names: [],
+        sex: 'F' as const,
+        is_living: false,
+        lineage_group: 'collateral' as const,
+        birth_edtf: '1854',
+        death_edtf: '1924',
+        portrait_url: null,
+        pronunciation: {
+          phonetic: 'JAYN, R. DOH',
+          ipa: 'dʒeɪn ɑːr doʊ',
+          language: 'en-US',
+          source_label: 'Wiktionary',
+        },
+      },
+      {
+        id: 'per_clara_q_sterling',
+        slug: 'clara-q-sterling',
+        full_name: 'Clara Q. Sterling',
+        given_name: 'Clara Q.',
+        surname: 'Sterling',
+        alt_names: [],
+        sex: 'F' as const,
+        is_living: false,
+        lineage_group: 'ancestor' as const,
+        birth_edtf: '1848',
+        death_edtf: '1918',
+        portrait_url: null,
+        pronunciation: {
+          phonetic: 'KLAIR-uh KYOO STER-ling',
+          ipa: '/ˈklɛə.rə kjuː ˈstɜːr.lɪŋ/',
+          language: 'en-US',
+          source_label: 'Wiktionary',
+        },
+      },
+      {
+        id: 'per_j_arthur_doe',
+        slug: 'j-arthur-doe',
+        full_name: 'J. Arthur Doe',
+        given_name: 'J. Arthur',
+        surname: 'Doe',
+        alt_names: [],
+        sex: 'M' as const,
+        is_living: false,
+        lineage_group: 'ancestor' as const,
+        birth_edtf: '1845',
+        death_edtf: '1915',
+        portrait_url: null,
+        pronunciation: {
+          phonetic: 'JAY AR-ther DOH',
+          ipa: '/ˈdʒeɪ ˈɑːr.θər doʊ/',
+          language: 'en-US',
+          source_label: 'Wiktionary',
+        },
+      },
+      {
+        id: 'per_j_r_vance',
+        slug: 'j-r-vance',
+        full_name: 'J. R. Vance',
+        given_name: 'J. R.',
+        surname: 'Vance',
+        alt_names: [],
+        sex: 'M' as const,
+        is_living: false,
+        lineage_group: 'ancestor' as const,
+        birth_edtf: '1840',
+        death_edtf: '1909',
+        portrait_url: null,
+        pronunciation: {
+          phonetic: 'JAY AR VANS',
+          ipa: '/dʒeɪ ɑːr væns/',
+          language: 'en-US',
+          source_label: 'Wiktionary',
+        },
+      },
+      {
+        id: 'per_owen_w_mercer',
+        slug: 'owen-w-mercer',
+        full_name: 'Owen W. Mercer',
+        given_name: 'Owen W.',
+        surname: 'Mercer',
+        alt_names: [],
+        sex: 'M' as const,
+        is_living: false,
+        lineage_group: 'ancestor' as const,
+        birth_edtf: '1860',
+        death_edtf: '1930',
+        portrait_url: null,
+        pronunciation: {
+          phonetic: 'OH-en DUB-uhl-yoo MER-ser',
+          ipa: '/ˈoʊ.ən ˈdʌb.əl.juː ˈmɜːr.sər/',
+          language: 'en-US',
+          source_label: 'Wiktionary',
+        },
+      },
+      {
+        id: 'per_mary_e_mercer',
+        slug: 'mary-e-mercer',
+        full_name: 'Mary E. Mercer',
+        given_name: 'Mary E.',
+        surname: 'Mercer',
+        alt_names: [],
+        sex: 'F' as const,
+        is_living: false,
+        lineage_group: 'ancestor' as const,
+        birth_edtf: '1862',
+        death_edtf: '1932',
+        portrait_url: null,
+        pronunciation: {
+          phonetic: 'MAIR-ee MER-ser',
+          ipa: '/ˈmɛə.ɹi ˈmɜːr.sər/',
+          language: 'en-US',
+          source_label: 'Wiktionary',
+        },
+      },
+      {
+        id: 'per_thomas_b_mercer',
+        slug: 'thomas-b-mercer',
+        full_name: 'Thomas B Mercer',
+        given_name: 'Thomas B',
+        surname: 'Mercer',
+        alt_names: [],
+        sex: 'M' as const,
+        is_living: false,
+        lineage_group: 'ancestor' as const,
+        birth_edtf: '1864',
+        death_edtf: '1934',
+        portrait_url: null,
+        pronunciation: {
+          phonetic: 'TOM-us BEE MER-ser',
+          ipa: '/ˈtɒm.əs ˈbiː ˈmɜːr.sər/',
+          language: 'en-US',
+          source_label: 'Wiktionary',
+        },
+      },
+    ];
+    fs.writeFileSync(path.join(repoDir, 'data', 'people.yaml'), serializePeopleYaml(people), 'utf8');
+    fs.writeFileSync(path.join(repoDir, 'data', 'places.yaml'), serializePlacesYaml([]), 'utf8');
+
+    const dedupeOut: string[] = [];
+    const dedupeExit = await runCli(
+      ['pronounce', 'deduplicate', '--repo', repoDir, '--promote-tokens', '--apply', '--json'],
+      {
+        io: {
+          stdout: (line) => dedupeOut.push(line),
+          stderr: () => {},
+        },
+      }
+    );
+    expect(dedupeExit).toBe(0);
+
+    const dedupeResult = JSON.parse(dedupeOut.join('\n')) as {
+      applied: boolean;
+      promoted_tokens: Array<{ term: string; phonetic?: string; ipa?: string; language?: string }>;
+      skipped_promotions: Array<{ term: string; reason: string }>;
+      removable_overrides: Array<{ id: string }>;
+      kept_overrides: Array<{ id: string; reason: string }>;
+    };
+
+    expect(dedupeResult.applied).toBe(true);
+    expect(dedupeResult.skipped_promotions).toEqual([]);
+    expect(dedupeResult.promoted_tokens).toEqual([
+      {
+        term: 'Arthur',
+        phonetic: 'AR-ther',
+        ipa: '/ˈɑːr.θər/',
+        language: 'en-US',
+        source_person_id: 'per_j_arthur_doe',
+      },
+      {
+        term: 'Jane',
+        phonetic: 'JAYN',
+        ipa: '/ˈdʒeɪn/',
+        language: 'en-US',
+        source_person_id: 'per_jane_m',
+      },
+      {
+        term: 'Mary',
+        phonetic: 'MAIR-ee',
+        ipa: '/ˈmɛə.ɹi/',
+        language: 'en-US',
+        source_person_id: 'per_mary_e_mercer',
+      },
+      {
+        term: 'Owen',
+        phonetic: 'OH-en',
+        ipa: '/ˈoʊ.ən/',
+        language: 'en-US',
+        source_person_id: 'per_owen_w_mercer',
+      },
+      {
+        term: 'Sterling',
+        phonetic: 'STER-ling',
+        ipa: '/ˈstɜːr.lɪŋ/',
+        language: 'en-US',
+        source_person_id: 'per_clara_q_sterling',
+      },
+      {
+        term: 'Thomas',
+        phonetic: 'TOM-us',
+        ipa: '/ˈtɒm.əs/',
+        language: 'en-US',
+        source_person_id: 'per_thomas_b_mercer',
+      },
+      {
+        term: 'Vance',
+        phonetic: 'VANS',
+        ipa: '/væns/',
+        language: 'en-US',
+        source_person_id: 'per_j_r_vance',
+      },
+    ]);
+    expect(dedupeResult.kept_overrides).toEqual([]);
+    expect(dedupeResult.removable_overrides.map((r) => r.id).toSorted()).toEqual([
+      'per_clara_q_sterling',
+      'per_j_arthur_doe',
+      'per_j_r_vance',
+      'per_jane_m',
+      'per_jane_plain',
+      'per_jane_r_nopunct',
+      'per_mary_e_mercer',
+      'per_owen_w_mercer',
+      'per_thomas_b_mercer',
+    ]);
+
+    const auditOut: string[] = [];
+    const auditExit = await runCli(['pronounce', 'audit', '--repo', repoDir, '--strict', '--json'], {
+      io: {
+        stdout: (line) => auditOut.push(line),
+        stderr: () => {},
+      },
+    });
+    expect(auditExit).toBe(0);
+    const auditParsed = JSON.parse(auditOut.join('\n')) as {
+      ok: boolean;
+      strictOk: boolean;
+      ipa_quality_warnings: unknown[];
+      redundant_person_overrides: unknown[];
+      summary: {
+        deceasedTotal: number;
+        deceasedFullCoverage: number;
+        deceasedPartialOnly: number;
+        deceasedMissing: number;
+      };
+    };
+    expect(auditParsed.ok).toBe(true);
+    expect(auditParsed.strictOk).toBe(true);
+    expect(auditParsed.ipa_quality_warnings).toEqual([]);
+    expect(auditParsed.redundant_person_overrides).toEqual([]);
+    expect(auditParsed.summary.deceasedTotal).toBe(9);
+    expect(auditParsed.summary.deceasedFullCoverage).toBe(9);
+    expect(auditParsed.summary.deceasedPartialOnly).toBe(0);
+    expect(auditParsed.summary.deceasedMissing).toBe(0);
+
+    const persistedConfig = parseKinloomConfigYaml(
+      fs.readFileSync(path.join(repoDir, 'kinloom.config.yaml'), 'utf8')
+    );
+    expect(persistedConfig.pronunciations?.Jane).toEqual({
+      phonetic: 'JAYN',
+      ipa: '/ˈdʒeɪn/',
+      language: 'en-US',
+      source_label: 'Wiktionary',
+    });
+    expect(persistedConfig.pronunciations?.Sterling).toEqual({
+      phonetic: 'STER-ling',
+      ipa: '/ˈstɜːr.lɪŋ/',
+      language: 'en-US',
+      source_label: 'Wiktionary',
+    });
+    expect(persistedConfig.pronunciations?.Thomas).toEqual({
+      phonetic: 'TOM-us',
+      ipa: '/ˈtɒm.əs/',
+      language: 'en-US',
+      source_label: 'Wiktionary',
+    });
+    const persistedPeople = parsePeopleYaml(
+      fs.readFileSync(path.join(repoDir, 'data', 'people.yaml'), 'utf8')
+    );
+    expect(persistedPeople.every((p) => p.pronunciation === undefined)).toBe(true);
+  });
+
+  it('still flags genuine pronunciation conflicts and refuses to merge an expanded middle name into a given-name token', async () => {
+    const repoDir = await makeTempDir('kinloom-pron-genuine-conflict-');
+    fs.mkdirSync(path.join(repoDir, 'data'), { recursive: true });
+
+    const config = parseKinloomConfig({
+      site: {
+        title: 'Synthetic Conflict Archive',
+        familyName: 'Vance Family',
+        gedcomSourceName: 'VANCE_CONFLICT',
+      },
+      pronunciations: {
+        Vance: {
+          phonetic: 'VANS',
+          ipa: '/væns/',
+          language: 'en-US',
+          source_label: 'Wiktionary',
+        },
+      },
+    });
+    fs.writeFileSync(path.join(repoDir, 'kinloom.config.yaml'), serializeKinloomConfigYaml(config), 'utf8');
+
+    const people = [
+      {
+        id: 'per_clara_us',
+        slug: 'clara-vance-us',
+        full_name: 'Clara Vance',
+        given_name: 'Clara',
+        surname: 'Vance',
+        alt_names: [],
+        sex: 'F' as const,
+        is_living: false,
+        lineage_group: 'ancestor' as const,
+        birth_edtf: '1850',
+        death_edtf: '1920',
+        portrait_url: null,
+        pronunciation: {
+          phonetic: 'KLAIR-uh VANS',
+          ipa: '/ˈklɛə.rə væns/',
+          language: 'en-US',
+          source_label: 'Wiktionary',
+        },
+      },
+      {
+        id: 'per_clara_alt',
+        slug: 'clara-b-vance-alt',
+        full_name: 'Clara B. Vance',
+        given_name: 'Clara B.',
+        surname: 'Vance',
+        alt_names: [],
+        sex: 'F' as const,
+        is_living: false,
+        lineage_group: 'collateral' as const,
+        birth_edtf: '1855',
+        death_edtf: '1925',
+        portrait_url: null,
+        pronunciation: {
+          phonetic: 'KLAH-ruh BEE VANS',
+          ipa: '/ˈklɑː.rə biː væns/',
+          language: 'en-US',
+          source_label: 'Family oral tradition',
+        },
+      },
+      {
+        id: 'per_evelyn_expanded_middle',
+        slug: 'evelyn-m-vance',
+        full_name: 'Evelyn M. Vance',
+        given_name: 'Evelyn M.',
+        surname: 'Vance',
+        alt_names: [],
+        sex: 'F' as const,
+        is_living: false,
+        lineage_group: 'collateral' as const,
+        birth_edtf: '1860',
+        death_edtf: '1930',
+        portrait_url: null,
+        pronunciation: {
+          phonetic: 'EV-uh-lin MAH-ree VANS',
+          ipa: '/ˈɛv.ə.lɪn məˈriː væns/',
+          language: 'en-US',
+          source_label: 'Family oral tradition',
+        },
+      },
+    ];
+    fs.writeFileSync(path.join(repoDir, 'data', 'people.yaml'), serializePeopleYaml(people), 'utf8');
+    fs.writeFileSync(path.join(repoDir, 'data', 'places.yaml'), serializePlacesYaml([]), 'utf8');
+
+    const result = runPronounceDeduplicateCommand({ repoDir, promoteTokens: true, json: true });
+    expect(result.promoted_tokens).toEqual([]);
+    expect(result.skipped_promotions).toEqual([
+      {
+        term: 'Clara',
+        reason: 'conflicting_candidates',
+        source_person_ids: ['per_clara_us', 'per_clara_alt'],
+      },
+    ]);
+    expect(result.kept_overrides.map((k) => k.id).toSorted()).toEqual([
+      'per_clara_alt',
+      'per_clara_us',
+      'per_evelyn_expanded_middle',
+    ]);
   });
 });

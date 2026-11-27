@@ -12,6 +12,8 @@ export {
   evaluatePersonOverrideRedundancy,
   extractPromotableTokenFromPerson,
   normalizeIpaComparable,
+  normalizeIpaForConflictCheck,
+  normalizePhoneticComparable,
   normalizeWhitespace,
   type OverrideRedundancyDecision,
   type PromotionCandidate,
