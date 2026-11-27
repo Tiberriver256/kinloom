@@ -112,13 +112,12 @@ describe('Cloudflare Worker behavioral lifecycle (talk, admin D1 store, and stat
         ASSETS: fakeAssets,
         SESSION_SECRET: CONTRACT_SESSION_SECRET,
         BOOTSTRAP_ADMIN_EMAIL: 'admin@example.test',
-        APP_ORIGIN: CONTRACT_TEST_ORIGIN,
       };
 
       const worker = createCloudflareWorker({ siteConfig, clock });
 
       // 1. Seed a person and exercise full D1 talk comment CRUD over HTTP
-      const person: RawPerson = createSyntheticHistoricalPerson('per_d1_talk');
+      const person: RawPerson = createSyntheticHistoricalPerson({ id: 'per_d1_talk' });
       const createPerson = await worker.fetch(
         new Request(`${CONTRACT_TEST_ORIGIN}/api/entities/person`, {
           method: 'POST',

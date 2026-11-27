@@ -23,7 +23,6 @@ async function setupServerWithAdmin() {
   });
   const server = createKinloomServer({
     siteConfig,
-    appOrigin: ORIGIN,
     sessionSecret: CONTRACT_SESSION_SECRET,
     ports,
   });
@@ -50,7 +49,7 @@ describe('Server batch compilation, payload policy, read/export, and media edge-
       'content-type': 'application/json',
     };
 
-    const henry: RawPerson = createSyntheticHistoricalPerson('per_batch_henry');
+    const henry: RawPerson = createSyntheticHistoricalPerson({ id: 'per_batch_henry' });
     const livingDesc: RawPerson = {
       id: 'per_batch_living',
       slug: 'maya-alder-living',
@@ -58,18 +57,22 @@ describe('Server batch compilation, payload policy, read/export, and media edge-
       given_name: 'Maya',
       surname: 'Alder',
       sex: 'F',
-      birth_edtf_date: '1996-03-01',
+      birth_edtf: '1996-03-01',
       is_living: true,
+      alt_names: [],
+      lineage_group: 'primary',
+      death_edtf: '',
+      portrait_url: null,
     };
     const eventWithLiving: RawEvent = {
       id: 'evt_batch_living',
       event_kind: 'residence_anchor',
+      place_id: 'pl_batch_1',
       scope: 'personal',
       summary: 'Modern residence.',
       sources: [],
       title: 'Modern residence',
       edtf_date: '2018-01-01',
-      confidence: 'Confirmed',
       participants: [{ person_id: livingDesc.id, role: 'subject' }],
     };
 

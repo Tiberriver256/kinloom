@@ -500,6 +500,7 @@ describe('GEDCOM slicing behavioral contract', () => {
     expect(() =>
       applyEntityPatch(null, {
         action: 'update',
+        merge: true,
         entity_type: 'person',
         entity_id: 'per_1',
         data: { id: 'per_1' },
@@ -508,6 +509,7 @@ describe('GEDCOM slicing behavioral contract', () => {
     expect(() =>
       applyEntityPatch(active, {
         action: 'update',
+        merge: true,
         entity_type: 'person',
         entity_id: 'per_1',
         parent_revision_id: 1,

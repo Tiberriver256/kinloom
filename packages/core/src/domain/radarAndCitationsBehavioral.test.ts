@@ -232,20 +232,17 @@ describe('radarEngine overflow & spatial matching + domain citations behavioral 
       }),
     ];
 
-    const { bundle } = compileArchive(
-      {
-        siteConfig: SITE_CONFIG,
-        people,
-        events,
-        places,
-        sources,
-        kinship: [{ from: 'per_focus', to: 'per_rel_0', relation: 'spouse' }],
-        narratives: [],
-        stories: [],
-        media,
-      },
-      { mode: 'public', referenceYear: 2026 }
-    );
+    const { bundle } = compileArchive({
+      siteConfig: SITE_CONFIG,
+      people,
+      events,
+      places,
+      sources,
+      kinship: [{ from: 'per_focus', to: 'per_rel_0', relation: 'spouse' }],
+      narratives: [],
+      media,
+      mode: 'public',
+    });
 
     const peopleById = new Map(bundle.people.map((p) => [p.id, p]));
     const placesById = new Map(bundle.places.map((p) => [p.id, p]));
@@ -265,16 +262,17 @@ describe('radarEngine overflow & spatial matching + domain citations behavioral 
 
     // summarizeEventCitations across all tiers + empty + unverified-only
     expect(summarizeEventCitations([], sourcesById).onlyUnverified).toBe(true);
-    expect(summarizeEventCitations([{ source_id: 'src_nonexistent' }], sourcesById).onlyUnverified).toBe(
-      true
-    );
+    expect(
+      summarizeEventCitations([{ source_id: 'src_nonexistent', confidence: 'low' }], sourcesById)
+        .onlyUnverified
+    ).toBe(true);
     const mixedSummary = summarizeEventCitations(
       [
-        { source_id: 'src_primary' },
-        { source_id: 'src_published' },
-        { source_id: 'src_family' },
-        { source_id: 'src_index' },
-        { source_id: 'src_nonexistent' },
+        { source_id: 'src_primary', confidence: 'high' },
+        { source_id: 'src_published', confidence: 'medium' },
+        { source_id: 'src_family', confidence: 'medium' },
+        { source_id: 'src_index', confidence: 'low' },
+        { source_id: 'src_nonexistent', confidence: 'low' },
       ],
       sourcesById
     );

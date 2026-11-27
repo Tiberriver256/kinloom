@@ -81,7 +81,7 @@ describe('HTTP & Crypto behavioral coverage (structure-insensitive)', () => {
     });
 
     // 1. Seed a historical person via HTTP
-    const person: RawPerson = createSyntheticHistoricalPerson('per_alder_export');
+    const person: RawPerson = createSyntheticHistoricalPerson({ id: 'per_alder_export' });
     const createRes = await server.fetch(
       new Request(`${ORIGIN}/api/entities/person`, {
         method: 'POST',
@@ -292,7 +292,7 @@ describe('HTTP & Crypto behavioral coverage (structure-insensitive)', () => {
     expect(getPerson.status).toBe(200);
     const personRow = (await getPerson.json()) as { entity: { current_revision_id: number } };
     const person2: RawPerson = {
-      ...createSyntheticHistoricalPerson('per_alder_spouse'),
+      ...createSyntheticHistoricalPerson({ id: 'per_alder_spouse' }),
       id: 'per_clara_alder',
       slug: 'clara-alder-spouse',
       full_name: 'Clara Alder',

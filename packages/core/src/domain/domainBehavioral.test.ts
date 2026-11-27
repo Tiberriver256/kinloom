@@ -388,15 +388,19 @@ describe('Archive search & excerpt behavior', () => {
   it('ranks exact, prefix, and substring matches across people, places, events, and primary source readings', () => {
     const { bundle, placesById } = buildRichArchiveFixture();
     const readings: ReadingsBundle = {
+      version: 1,
+      event_page_map: {},
       documents: {
         src_history: {
           source_id: 'src_history',
           title: 'History of Cedar County',
           author: 'Valley Historical Society',
+          provenance: 'Family archive',
           pages: [
             {
               page: 1,
               label: 'Page 1',
+              file: 'p1.txt',
               text: 'In the spring of 1880, Henry Alder built a sawmill along the river in Riverdale, Cedar County.',
             },
           ],
@@ -698,7 +702,8 @@ describe('Kinship pathfinding, radar co-presence, and time snapshot behavior', (
       source_id: 'src_history',
       title: 'Cedar County History!',
       author: 'Valley Society',
-      pages: [{ page: 1, label: 'Page 1', text: 'Chapter One text.' }],
+      provenance: 'Family archive',
+      pages: [{ page: 1, label: 'Page 1', file: 'p1.txt', text: 'Chapter One text.' }],
     };
     expect(buildSourceTextFilename(doc)).toBe('cedar-county-history.txt');
     expect(buildFullSourceText(doc)).toContain('Chapter One text.');

@@ -109,7 +109,6 @@ describe('Server GoogleOAuthProvider error handling, entity payload policy, and 
     });
     const server = createKinloomServer({
       siteConfig,
-      appOrigin: ORIGIN,
       sessionSecret: CONTRACT_SESSION_SECRET,
       ports,
     });
@@ -129,7 +128,7 @@ describe('Server GoogleOAuthProvider error handling, entity payload policy, and 
 
     // 1. Create person without explicit entity_id -> auto-generated ID
     const personData: RawPerson = {
-      ...createSyntheticHistoricalPerson('per_auto_placeholder'),
+      ...createSyntheticHistoricalPerson({ id: 'per_auto_placeholder' }),
       id: '',
     };
     const createAuto = await server.fetch(
@@ -256,7 +255,7 @@ describe('Server GoogleOAuthProvider error handling, entity payload policy, and 
 
     // 7. Media upload blocked for living person (422)
     const livingPerson = {
-      ...createSyntheticHistoricalPerson('per_living_upload'),
+      ...createSyntheticHistoricalPerson({ id: 'per_living_upload' }),
       id: 'per_living_upload',
       slug: 'living-upload-alder',
       full_name: 'Jordan Alder',
@@ -412,7 +411,6 @@ describe('HTTP payload policy, media privacy, and byte-range edge behavior', () 
     });
     const server = createKinloomServer({
       siteConfig,
-      appOrigin: ORIGIN,
       sessionSecret: CONTRACT_SESSION_SECRET,
       ports,
     });
@@ -438,7 +436,7 @@ describe('HTTP payload policy, media privacy, and byte-range edge behavior', () 
           has_primary_source: true,
           summary: 'Create living person',
           data: {
-            ...createSyntheticHistoricalPerson('per_living_priv'),
+            ...createSyntheticHistoricalPerson({ id: 'per_living_priv' }),
             full_name: 'Sam Alder',
             living: true,
             birth_edtf: '1995-03-10',

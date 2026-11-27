@@ -183,7 +183,6 @@ describe('GEDCOM parse & slice behavioral suite', () => {
       includeDescendantSpouses: true,
       expandSpouseAncestors: false,
       normalizeMaidenNames: true,
-      referenceYear: 2026,
       knownPlaces: {
         'hudsonville, ottawa county, michigan, usa': { lat: 42.8711, lng: -85.8648, place_type: 'town' },
       },
@@ -214,11 +213,10 @@ describe('GEDCOM parse & slice behavioral suite', () => {
       maxAncestorDepth: 1,
       maxDescendantDepth: 1,
       normalizeMaidenNames: false,
-      referenceYear: 2026,
     });
     expect(pruned.people.some((p) => p.full_name === 'Samuel Alder')).toBe(false);
     expect(pruned.people.some((p) => p.full_name === 'Arthur Vance')).toBe(false);
-    expect(pruned.people.some((p) => p.birth_date === '1995')).toBe(false);
+    expect(pruned.people.some((p) => p.birth_edtf === '1995')).toBe(false);
   });
 
   it('handles escaped @ signs, emigration/residence/naturalization events, missing-root errors, and GEDCOM 7 export round-trips', () => {
@@ -256,26 +254,23 @@ describe('GEDCOM parse & slice behavioral suite', () => {
 
     expect(() => sliceGedcom(extraGedcom, { rootName: 'Nonexistent Person' })).toThrow();
 
-    const sliced = sliceGedcom(extraGedcom, { rootXref: '@I1@', referenceYear: 2026 });
+    const sliced = sliceGedcom(extraGedcom, { rootXref: '@I1@' });
     const siteConfig = parseKinloomConfig({
       site: { title: 'Alder Archive', familyName: 'Alder', gedcomSourceName: 'ALDER_ARCHIVE' },
       defaultBranchId: 'primary',
       branches: [{ id: 'primary', label: 'Primary' }],
     });
-    const { bundle } = compileArchive(
-      {
-        siteConfig,
-        people: sliced.people,
-        events: sliced.events,
-        places: sliced.places,
-        sources: sliced.sources,
-        kinship: sliced.kinship,
-        narratives: [],
-        stories: [],
-        media: [],
-      },
-      { mode: 'public', referenceYear: 2026 }
-    );
+    const { bundle } = compileArchive({
+      siteConfig,
+      people: sliced.people,
+      events: sliced.events,
+      places: sliced.places,
+      sources: sliced.sources,
+      kinship: sliced.kinship,
+      narratives: [],
+      media: [],
+      mode: 'public',
+    });
     const ged = exportGedcom7(bundle, siteConfig);
     expect(ged).toContain('0 HEAD');
     expect(ged).toContain('Van Der Berg');
@@ -283,20 +278,17 @@ describe('GEDCOM parse & slice behavioral suite', () => {
 
     // Full multi-generation fixture exported in private mode with living-person RESN CONFIDENTIAL
     const fullSliced = sliceGedcom(RICH_SYNTHETIC_GEDCOM, { rootName: 'Henry Alder', referenceYear: 2026 });
-    const { bundle: privBundle } = compileArchive(
-      {
-        siteConfig,
-        people: fullSliced.people,
-        events: fullSliced.events,
-        places: fullSliced.places,
-        sources: fullSliced.sources,
-        kinship: fullSliced.kinship,
-        narratives: [],
-        stories: [],
-        media: [],
-      },
-      { mode: 'private', referenceYear: 2026 }
-    );
+    const { bundle: privBundle } = compileArchive({
+      siteConfig,
+      people: fullSliced.people,
+      events: fullSliced.events,
+      places: fullSliced.places,
+      sources: fullSliced.sources,
+      kinship: fullSliced.kinship,
+      narratives: [],
+      media: [],
+      mode: 'private',
+    });
     const privGed = exportGedcom7(privBundle, siteConfig, {
       filterDescription: 'Full Alder Branch',
       exportDate: new Date('2026-11-26T00:00:00.000Z'),

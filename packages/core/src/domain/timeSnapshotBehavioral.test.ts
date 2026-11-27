@@ -1,13 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { compileArchive } from '../compileArchive.js';
 import { KinloomSiteConfigSchema } from '../schemas/config.js';
-import {
-  type ArchiveInput,
-  MediaItemSchema,
-  PlaceSchema,
-  RawEventSchema,
-  RawPersonSchema,
-} from '../schemas/entities.js';
+import { MediaItemSchema, PlaceSchema, RawEventSchema, RawPersonSchema } from '../schemas/entities.js';
 import {
   buildPersonThumbMap,
   buildPlacesDirectory,
@@ -223,7 +217,7 @@ function createRichSnapshotFixture() {
     },
   ];
 
-  const input: ArchiveInput = {
+  const input = {
     siteConfig: SITE_CONFIG,
     people: people.map((p) => RawPersonSchema.parse(p)),
     events: events.map((e) =>
@@ -239,9 +233,8 @@ function createRichSnapshotFixture() {
     ),
     places: places.map((p) => PlaceSchema.parse({ slug: p.id.replaceAll('_', '-'), parent_id: null, ...p })),
     sources: [],
-    kinship: [{ from: 'per_henry', to: 'per_clara', relation: 'spouse' }],
+    kinship: [{ from: 'per_henry', to: 'per_clara', relation: 'spouse' as const }],
     narratives: [],
-    stories: [],
     media: [
       {
         id: 'med_clara_headstone',
@@ -268,7 +261,7 @@ function createRichSnapshotFixture() {
     ].map((m) => MediaItemSchema.parse(m)),
   };
 
-  return compileArchive(input, { mode: 'public', referenceYear: 2026 }).bundle;
+  return compileArchive({ ...input, mode: 'public' }).bundle;
 }
 
 describe('timeSnapshot domain behavioral suite', () => {
@@ -333,20 +326,17 @@ describe('timeSnapshot domain behavioral suite', () => {
     expect(defaultYear).toBeGreaterThanOrEqual(1880);
     expect(defaultYear).toBeLessThanOrEqual(1945);
 
-    const emptyBundle = compileArchive(
-      {
-        siteConfig: SITE_CONFIG,
-        people: [],
-        events: [],
-        places: [],
-        sources: [],
-        kinship: [],
-        narratives: [],
-        stories: [],
-        media: [],
-      },
-      { mode: 'public', referenceYear: 2026 }
-    ).bundle;
+    const emptyBundle = compileArchive({
+      siteConfig: SITE_CONFIG,
+      people: [],
+      events: [],
+      places: [],
+      sources: [],
+      kinship: [],
+      narratives: [],
+      media: [],
+      mode: 'public',
+    }).bundle;
     expect(pickDefaultSnapshotYear(emptyBundle, new Map())).toBe(1900);
 
     const directory = buildPlacesDirectory(bundle, placesById, peopleById);
