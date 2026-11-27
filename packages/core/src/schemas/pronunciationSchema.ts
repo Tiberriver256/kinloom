@@ -43,6 +43,7 @@ export interface ResolvedPersonPronunciation extends Pronunciation {
   readonly matchedPart?: string;
   readonly resolvedFrom?: PronunciationResolutionSource;
   readonly missingParts?: readonly string[];
+  readonly token_audio_urls?: readonly string[];
 }
 
 export type PersonPronunciationTokenRole = 'given' | 'middle' | 'surname' | 'suffix';

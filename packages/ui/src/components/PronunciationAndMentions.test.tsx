@@ -282,7 +282,7 @@ describe('PronunciationBadge playback and fallback', () => {
     unmount();
   });
 
-  it('falls back to window.speechSynthesis using native label for non-English and phonetic guide for English', () => {
+  it('falls back to window.speechSynthesis using natural label instead of ALL-CAPS phonetic respellings', () => {
     const speak = vi.fn();
     const cancel = vi.fn();
     class MockUtterance {
@@ -304,7 +304,10 @@ describe('PronunciationBadge playback and fallback', () => {
       <div>
         <PronunciationBadge pronunciation={{ phonetic: 'KRAH-koof', language: 'pl' }} label="Kraków" />
         <PronunciationBadge pronunciation={{ phonetic: 'HOOS', ipa: '/ɣus/', language: 'nl' }} label="Goes" />
-        <PronunciationBadge pronunciation={{ phonetic: 'MER-ser', language: 'en-US' }} label="Mercer" />
+        <PronunciationBadge
+          pronunciation={{ phonetic: 'MAIR-ee AN MER-ser', language: 'en-US' }}
+          label="Mary Ann Mercer"
+        />
       </div>
     );
 
@@ -314,12 +317,12 @@ describe('PronunciationBadge playback and fallback', () => {
     const goesBtn = container.querySelector<HTMLButtonElement>(
       'button[aria-label="Listen to pronunciation of Goes"]'
     );
-    const mercerBtn = container.querySelector<HTMLButtonElement>(
-      'button[aria-label="Listen to pronunciation of Mercer"]'
+    const maryBtn = container.querySelector<HTMLButtonElement>(
+      'button[aria-label="Listen to pronunciation of Mary Ann Mercer"]'
     );
     expect(krakowBtn).not.toBeNull();
     expect(goesBtn).not.toBeNull();
-    expect(mercerBtn).not.toBeNull();
+    expect(maryBtn).not.toBeNull();
 
     // Polish: speaks native label "Kraków", NOT English respelling "KRAH-koof"
     act(() => {
@@ -345,16 +348,221 @@ describe('PronunciationBadge playback and fallback', () => {
     expect(nlUtterance.text).toBe('Goes');
     expect(nlUtterance.lang).toBe('nl');
 
-    // English: speaks phonetic guide "MER-ser"
+    // English: speaks natural label "Mary Ann Mercer" so browser TTS never spells ALL-CAPS tokens letter by letter
     act(() => {
-      mercerBtn!.click();
+      maryBtn!.click();
     });
     expect(speak).toHaveBeenCalledTimes(3);
     const enUtterance = speak.mock.calls[2][0] as MockUtterance;
-    expect(enUtterance.text).toBe('MER-ser');
+    expect(enUtterance.text).toBe('Mary Ann Mercer');
     expect(enUtterance.lang).toBe('en-US');
 
     unmount();
+  });
+
+  it('plays composed token_audio_urls via Web Audio gapless concatenation for same-origin clips and falls back to sequential Audio for cross-origin or decode failures', async () => {
+    vi.useFakeTimers();
+    try {
+      const createdSources: Array<{
+        buffer: AudioBuffer | null;
+        start: ReturnType<typeof vi.fn>;
+        stop: ReturnType<typeof vi.fn>;
+        connect: ReturnType<typeof vi.fn>;
+        onended: (() => void) | null;
+      }> = [];
+      const closeSpy = vi.fn(async () => {});
+      let decodeShouldFail = false;
+
+      class MockAudioBuffer {
+        readonly numberOfChannels: number;
+        readonly length: number;
+        readonly sampleRate: number;
+        private readonly channels: Float32Array[];
+
+        constructor(numberOfChannels: number, length: number, sampleRate: number) {
+          this.numberOfChannels = numberOfChannels;
+          this.length = length;
+          this.sampleRate = sampleRate;
+          this.channels = Array.from({ length: numberOfChannels }, () => new Float32Array(length));
+        }
+
+        getChannelData(channel: number): Float32Array {
+          return this.channels[channel];
+        }
+      }
+
+      class MockAudioContext {
+        state = 'suspended';
+        sampleRate = 1000;
+        destination = {};
+        resume = vi.fn(async () => {
+          this.state = 'running';
+        });
+        close = closeSpy;
+        createBuffer(channels: number, length: number, sampleRate: number): AudioBuffer {
+          return new MockAudioBuffer(channels, length, sampleRate) as unknown as AudioBuffer;
+        }
+        async decodeAudioData(data: ArrayBuffer): Promise<AudioBuffer> {
+          if (decodeShouldFail) {
+            throw new Error('decode failed');
+          }
+          const view = new Uint8Array(data);
+          const buf = new MockAudioBuffer(1, 10, 1000);
+          buf.getChannelData(0).fill(view[0] ?? 1);
+          return buf as unknown as AudioBuffer;
+        }
+        createBufferSource(): AudioBufferSourceNode {
+          const node = {
+            buffer: null as AudioBuffer | null,
+            start: vi.fn(),
+            stop: vi.fn(),
+            connect: vi.fn(),
+            onended: null as (() => void) | null,
+          };
+          createdSources.push(node);
+          return node as unknown as AudioBufferSourceNode;
+        }
+      }
+
+      const fetchSpy = vi.fn<typeof fetch>(async (input) => {
+        const url = String(input);
+        const marker = url.includes('mary') ? 1 : url.includes('ann') ? 2 : 3;
+        return new Response(new Uint8Array([marker]), { status: 200 });
+      });
+
+      const createdAudios: Array<{
+        src: string;
+        play: ReturnType<typeof vi.fn>;
+        pause: ReturnType<typeof vi.fn>;
+        listeners: Map<string, () => void>;
+      }> = [];
+      class MockAudio {
+        src: string;
+        currentTime = 0;
+        listeners = new Map<string, () => void>();
+        play = vi.fn(() => Promise.resolve());
+        pause = vi.fn();
+        constructor(src: string) {
+          this.src = src;
+          createdAudios.push(this);
+        }
+        addEventListener(event: string, cb: () => void): void {
+          this.listeners.set(event, cb);
+        }
+      }
+
+      vi.stubGlobal('AudioContext', MockAudioContext);
+      vi.stubGlobal('fetch', fetchSpy);
+      vi.stubGlobal('Audio', MockAudio);
+
+      const { container, unmount } = renderIntoDom(
+        <div>
+          <PronunciationBadge
+            pronunciation={{
+              phonetic: 'MAIR-ee AN MER-ser',
+              language: 'en-US',
+              coverage: 'full',
+              resolvedFrom: 'composed',
+              token_audio_urls: [
+                '/media/pronunciation-mary.wav',
+                '/media/pronunciation-ann.wav',
+                '/media/pronunciation-mercer.wav',
+              ],
+            }}
+            label="Mary Ann Mercer"
+            baseUrl="/"
+          />
+          <PronunciationBadge
+            pronunciation={{
+              phonetic: 'HEN-drik MER-ser',
+              language: 'nl',
+              coverage: 'full',
+              resolvedFrom: 'composed',
+              token_audio_urls: [
+                '/media/pronunciation-hendrik.wav',
+                'https://commons.wikimedia.org/wiki/Special:FilePath/Nl-mercer.ogg',
+              ],
+            }}
+            label="Hendrik Mercer"
+            baseUrl="/"
+          />
+        </div>
+      );
+
+      const maryBtn = container.querySelector<HTMLButtonElement>(
+        'button[aria-label="Listen to pronunciation of Mary Ann Mercer"]'
+      );
+      const hendrikBtn = container.querySelector<HTMLButtonElement>(
+        'button[aria-label="Listen to pronunciation of Hendrik Mercer"]'
+      );
+
+      // 1. Same-origin clips concatenate via Web Audio API with 70ms silence gaps (70 samples at 1000 Hz)
+      await act(async () => {
+        maryBtn!.click();
+        await Promise.resolve();
+        await Promise.resolve();
+        await Promise.resolve();
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+
+      expect(fetchSpy).toHaveBeenCalledTimes(3);
+      expect(createdSources).toHaveLength(1);
+      expect(createdSources[0].start).toHaveBeenCalledWith(0);
+      // 3 clips * 10 samples + 2 gaps * 70 samples = 170 samples
+      expect(createdSources[0].buffer?.length).toBe(170);
+      expect(maryBtn!.getAttribute('aria-pressed')).toBe('true');
+
+      act(() => {
+        createdSources[0].onended?.();
+      });
+      expect(maryBtn!.getAttribute('aria-pressed')).toBe('false');
+      expect(closeSpy).toHaveBeenCalled();
+
+      // 2. Cross-origin clip skips fetch/Web Audio and plays sequentially via HTML Audio
+      act(() => {
+        hendrikBtn!.click();
+      });
+      expect(fetchSpy).toHaveBeenCalledTimes(3);
+      expect(createdAudios).toHaveLength(1);
+      expect(createdAudios[0].src).toBe('/media/pronunciation-hendrik.wav');
+      expect(hendrikBtn!.getAttribute('aria-pressed')).toBe('true');
+
+      act(() => {
+        createdAudios[0].listeners.get('ended')?.();
+        vi.advanceTimersByTime(65);
+      });
+      expect(createdAudios).toHaveLength(2);
+      expect(createdAudios[1].src).toBe('https://commons.wikimedia.org/wiki/Special:FilePath/Nl-mercer.ogg');
+      act(() => {
+        createdAudios[1].listeners.get('ended')?.();
+      });
+      expect(hendrikBtn!.getAttribute('aria-pressed')).toBe('false');
+
+      // 3. When Web Audio decode fails on same-origin clips, transparently fall back to sequential HTML Audio
+      decodeShouldFail = true;
+      await act(async () => {
+        maryBtn!.click();
+        await Promise.resolve();
+        await Promise.resolve();
+        await Promise.resolve();
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+      expect(createdAudios).toHaveLength(3);
+      expect(createdAudios[2].src).toBe('/media/pronunciation-mary.wav');
+
+      // Clicking stop while playing cancels cleanly
+      act(() => {
+        maryBtn!.click();
+      });
+      expect(createdAudios[2].pause).toHaveBeenCalledTimes(1);
+      expect(maryBtn!.getAttribute('aria-pressed')).toBe('false');
+
+      unmount();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('displays source attribution and switches/plays variants on non-compact badges without cluttering compact badges', () => {

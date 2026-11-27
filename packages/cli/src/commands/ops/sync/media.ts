@@ -1,12 +1,20 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import type { KinloomSiteConfig, Pronunciation } from '@kinloom/core';
 import { CliValidationError } from '../../../errors.js';
 import {
+  isPlainRecord,
   type MediaUploadTarget,
   runWithConcurrency,
   type SanitizedLocalEntry,
   type SyncExecutionContext,
 } from './types.js';
+
+export interface PronunciationMediaSources {
+  readonly siteConfig?: Pick<KinloomSiteConfig, 'pronunciations'>;
+  readonly people?: readonly SanitizedLocalEntry[];
+  readonly places?: readonly SanitizedLocalEntry[];
+}
 
 const MIME_BY_EXT: Readonly<Record<string, string>> = {
   '.jpg': 'image/jpeg',
@@ -20,16 +28,60 @@ const MIME_BY_EXT: Readonly<Record<string, string>> = {
   '.webm': 'video/webm',
   '.mp3': 'audio/mpeg',
   '.m4a': 'audio/mp4',
+  '.ogg': 'audio/ogg',
   '.wav': 'audio/wav',
   '.txt': 'text/plain; charset=utf-8',
   '.json': 'application/json; charset=utf-8',
 };
 
 const MEDIA_PROBE_CONCURRENCY = 12;
+const PRONUNCIATION_MEDIA_PREFIX = '/media/pronunciation-';
 
 function guessMimeType(filePath: string): string {
   const ext = path.extname(filePath).toLowerCase();
   return MIME_BY_EXT[ext] ?? 'application/octet-stream';
+}
+
+function collectPronunciationEntryAudioUrls(entry: Pronunciation | null | undefined, out: string[]): void {
+  if (!entry) {
+    return;
+  }
+  if (typeof entry.audio_url === 'string' && entry.audio_url.trim()) {
+    out.push(entry.audio_url.trim());
+  }
+  if (Array.isArray(entry.variants)) {
+    for (const variant of entry.variants) {
+      if (typeof variant.audio_url === 'string' && variant.audio_url.trim()) {
+        out.push(variant.audio_url.trim());
+      }
+    }
+  }
+}
+
+function extractEntityPronunciation(data: unknown): Pronunciation | null {
+  if (!isPlainRecord(data) || !isPlainRecord(data.pronunciation)) {
+    return null;
+  }
+  return data.pronunciation as Pronunciation;
+}
+
+function resolvePronunciationLocalPath(
+  repoDir: string,
+  mediaLayout: 'archive-media' | 'media',
+  r2Key: string
+): string | null {
+  // Check <repo>/media/ before <repo>/archive-media/media/ because `pronounce synth` defaults to ./media/.
+  const directPath = path.join(repoDir, r2Key);
+  if (fs.existsSync(directPath)) {
+    return directPath;
+  }
+  if (mediaLayout === 'archive-media') {
+    const archivePath = path.join(repoDir, 'archive-media', r2Key);
+    if (fs.existsSync(archivePath)) {
+      return archivePath;
+    }
+  }
+  return null;
 }
 
 export function detectSyncMediaLayout(repoDir: string): 'archive-media' | 'media' {
@@ -52,7 +104,10 @@ export function resolveMediaUploadTarget(
 
   if (rawInput.startsWith('/media/') || rawInput.startsWith('media/')) {
     const cleanRel = rawInput.replace(/^\/+/, '');
-    localPath = path.join(mediaRoot, cleanRel);
+    const preferredPath = cleanRel.startsWith('media/pronunciation-')
+      ? (resolvePronunciationLocalPath(repoDir, mediaLayout, cleanRel) ?? path.join(mediaRoot, cleanRel))
+      : path.join(mediaRoot, cleanRel);
+    localPath = preferredPath;
     r2Key = cleanRel;
   } else {
     localPath = path.isAbsolute(rawInput) ? path.resolve(rawInput) : path.resolve(repoDir, rawInput);
@@ -83,7 +138,8 @@ export function resolveMediaUploadTarget(
 export async function findMissingRemoteMedia(
   ctx: SyncExecutionContext,
   writeToken: string,
-  mediaEntries: readonly SanitizedLocalEntry[]
+  mediaEntries: readonly SanitizedLocalEntry[],
+  pronunciationSources?: PronunciationMediaSources
 ): Promise<{ checkedCount: number; missing: MediaUploadTarget[] }> {
   const mediaRoot =
     ctx.mediaLayout === 'archive-media' ? path.join(ctx.repoDir, 'archive-media') : ctx.repoDir;
@@ -114,6 +170,46 @@ export async function findMissingRemoteMedia(
       contentType: mime,
       url: `${ctx.bindings.baseUrl}/${r2Key}`,
     });
+  }
+
+  if (pronunciationSources) {
+    const rawAudioUrls: string[] = [];
+    for (const entry of Object.values(pronunciationSources.siteConfig?.pronunciations ?? {})) {
+      collectPronunciationEntryAudioUrls(entry, rawAudioUrls);
+    }
+    for (const personEntry of pronunciationSources.people ?? []) {
+      if (personEntry.isLiving) {
+        continue;
+      }
+      if (isPlainRecord(personEntry.data) && personEntry.data.full_name === 'Living') {
+        continue;
+      }
+      collectPronunciationEntryAudioUrls(extractEntityPronunciation(personEntry.data), rawAudioUrls);
+    }
+    for (const placeEntry of pronunciationSources.places ?? []) {
+      collectPronunciationEntryAudioUrls(extractEntityPronunciation(placeEntry.data), rawAudioUrls);
+    }
+
+    for (const audioUrl of rawAudioUrls) {
+      if (!audioUrl.startsWith(PRONUNCIATION_MEDIA_PREFIX)) {
+        continue;
+      }
+      const r2Key = audioUrl.replace(/^\/+/, '');
+      if (r2Key.includes('..') || seenKeys.has(r2Key)) {
+        continue;
+      }
+      const localPath = resolvePronunciationLocalPath(ctx.repoDir, ctx.mediaLayout, r2Key);
+      if (!localPath) {
+        continue;
+      }
+      seenKeys.add(r2Key);
+      candidates.push({
+        localPath,
+        r2Key,
+        contentType: guessMimeType(localPath),
+        url: `${ctx.bindings.baseUrl}/${r2Key}`,
+      });
+    }
   }
 
   const probeResults = await runWithConcurrency(candidates, MEDIA_PROBE_CONCURRENCY, async (cand) => {

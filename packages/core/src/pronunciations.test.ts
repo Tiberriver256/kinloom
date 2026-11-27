@@ -302,6 +302,84 @@ describe('resolvePersonPronunciation compositional full-name resolution', () => 
     expect(threePart?.ipa).toBe('/ˈmɛə.ɹi æn ˈmɜːr.sər/');
     expect(threePart?.coverage).toBe('full');
     expect(threePart?.resolvedFrom).toBe('composed');
+    expect(threePart?.token_audio_urls).toBeUndefined();
+  });
+
+  it('emits token_audio_urls on composed names when every substantive token has audio_url, skipping unmatched initials and suffixes', () => {
+    const fullAudioLexicon: Record<string, Pronunciation> = {
+      Mary: {
+        phonetic: 'MAIR-ee',
+        ipa: '/ˈmɛə.ɹi/',
+        language: 'en-US',
+        audio_url: '/media/pronunciation-mary.wav',
+      },
+      Ann: {
+        phonetic: 'AN',
+        ipa: '/æn/',
+        language: 'en-US',
+        audio_url: '/media/pronunciation-ann.wav',
+      },
+      William: {
+        phonetic: 'WIL-yum',
+        ipa: '/ˈwɪl.jəm/',
+        language: 'en-US',
+        audio_url: '/media/pronunciation-william.wav',
+      },
+      Mercer: {
+        phonetic: 'MER-ser',
+        ipa: '/ˈmɜːr.sər/',
+        language: 'en-US',
+        audio_url: '/media/pronunciation-mercer.wav',
+      },
+    };
+
+    const composedThree = resolvePersonPronunciation(
+      makeDeceasedPerson({
+        id: 'per_mary_ann_audio',
+        full_name: 'Mary Ann Mercer',
+        given_name: 'Mary Ann',
+        surname: 'Mercer',
+      }),
+      fullAudioLexicon
+    );
+    expect(composedThree?.audio_url).toBeUndefined();
+    expect(composedThree?.token_audio_urls).toEqual([
+      '/media/pronunciation-mary.wav',
+      '/media/pronunciation-ann.wav',
+      '/media/pronunciation-mercer.wav',
+    ]);
+
+    const withInitialAndSuffix = resolvePersonPronunciation(
+      makeDeceasedPerson({
+        id: 'per_william_j',
+        full_name: 'William J. Mercer Jr.',
+        given_name: 'William J.',
+        surname: 'Mercer',
+      }),
+      fullAudioLexicon
+    );
+    expect(withInitialAndSuffix?.audio_url).toBeUndefined();
+    expect(withInitialAndSuffix?.token_audio_urls).toEqual([
+      '/media/pronunciation-william.wav',
+      '/media/pronunciation-mercer.wav',
+    ]);
+
+    // Missing audio on any substantive token omits token_audio_urls
+    const partialAudioLexicon: Record<string, Pronunciation> = {
+      ...fullAudioLexicon,
+      Ann: { phonetic: 'AN', ipa: '/æn/', language: 'en-US' },
+    };
+    const missingMiddleAudio = resolvePersonPronunciation(
+      makeDeceasedPerson({
+        id: 'per_mary_ann_partial',
+        full_name: 'Mary Ann Mercer',
+        given_name: 'Mary Ann',
+        surname: 'Mercer',
+      }),
+      partialAudioLexicon
+    );
+    expect(missingMiddleAudio?.audio_url).toBeUndefined();
+    expect(missingMiddleAudio?.token_audio_urls).toBeUndefined();
   });
 
   it('handles middle initials and generational suffixes cleanly during full-name composition', () => {
@@ -600,6 +678,37 @@ describe('resolvePlacePronunciation homonymous place disambiguation', () => {
 
     expect(resolvePlacePronunciation(ilPlace, lexicon)?.phonetic).toBe('SPRING-feeld (IL)');
     expect(resolvePlacePronunciation(maPlace, lexicon)).toBeNull();
+  });
+
+  it('preserves audio_url from qualified and bare lexicon entries when resolving places', () => {
+    const lexicon: Record<string, Pronunciation> = {
+      'Oakville, Ontario': {
+        phonetic: 'OHK-vil',
+        ipa: '/ˈoʊk.vɪl/',
+        language: 'en-CA',
+        audio_url: '/media/pronunciation-oakville.wav',
+      },
+      Riverdale: {
+        phonetic: 'RIV-er-dayl',
+        language: 'en-US',
+        audio_url: '/media/pronunciation-riverdale.wav',
+      },
+    };
+    const oakville = makePlace({
+      id: 'plc_oakville',
+      name: 'Oakville',
+      full_name: 'Oakville, Halton Region, Ontario, Canada',
+    });
+    const riverdale = makePlace({
+      id: 'plc_riverdale',
+      name: 'Riverdale',
+      full_name: 'Riverdale, Ohio, United States',
+    });
+
+    expect(resolvePlacePronunciation(oakville, lexicon)?.audio_url).toBe('/media/pronunciation-oakville.wav');
+    expect(resolvePlacePronunciation(riverdale, lexicon)?.audio_url).toBe(
+      '/media/pronunciation-riverdale.wav'
+    );
   });
 });
 

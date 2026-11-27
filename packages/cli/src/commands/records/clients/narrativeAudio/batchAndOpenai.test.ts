@@ -619,20 +619,40 @@ describe('narrative-audio markdown prep and archive batch mode', () => {
     expect(impObj.exitCode, impObj.stderr).toBe(0);
     expect(JSON.parse(impObj.stdout).missing).toBe(1);
 
-    // Error handling in openai-speech synthesis (HTTP 500 -> exit 1) & mismatched ref flags (-> exit 2)
+    // Error handling in openai-speech synthesis (HTTP 500 -> exit 1) & mismatched ref flags (-> exit 2 even without ffmpeg)
     const scriptPath = path.join(repoDir, 'mini.txt');
     fs.writeFileSync(scriptPath, 'Jane Doe lived in Oakville.');
-    const refMismatch = await invokeNarrativeAudio([
-      'synth',
-      scriptPath,
-      '--backend',
-      'openai-speech',
-      '--endpoint',
-      'http://127.0.0.1:8000',
-      '--story-ref-audio',
-      scriptPath,
-    ]);
+    const refMismatch = await invokeNarrativeAudio(
+      [
+        'synth',
+        scriptPath,
+        '--backend',
+        'openai-speech',
+        '--endpoint',
+        'http://127.0.0.1:8000',
+        '--story-ref-audio',
+        scriptPath,
+      ],
+      { env: { PATH: '' } }
+    );
     expect(refMismatch.exitCode).toBe(2);
+    expect(refMismatch.stderr).toContain('--story-ref-audio and --story-ref-text');
+
+    const notesRefMismatch = await invokeNarrativeAudio(
+      [
+        'synth',
+        scriptPath,
+        '--backend',
+        'openai-speech',
+        '--endpoint',
+        'http://127.0.0.1:8000',
+        '--notes-ref-text',
+        'Reference sample',
+      ],
+      { env: { PATH: '' } }
+    );
+    expect(notesRefMismatch.exitCode).toBe(2);
+    expect(notesRefMismatch.stderr).toContain('--notes-ref-audio and --notes-ref-text');
 
     const openAiErr = await invokeNarrativeAudio(
       ['synth', scriptPath, '--backend', 'openai-speech', '--endpoint', 'http://127.0.0.1:8000'],

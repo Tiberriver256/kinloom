@@ -1,7 +1,21 @@
 import fs from 'node:fs';
-import { type KinloomSiteConfig, type Pronunciation, serializeKinloomConfigYaml } from '@kinloom/core';
+import {
+  type KinloomSiteConfig,
+  type Place,
+  type Pronunciation,
+  type RawPerson,
+  serializeKinloomConfigYaml,
+  serializePeopleYaml,
+  serializePlacesYaml,
+} from '@kinloom/core';
 import { OPENAI_SPEECH_RETRYABLE_STATUSES, type PhonemeMode } from '../shared/audio/index.js';
-import type { PronounceAudioFormat, PronounceSynthScope, PronounceSynthTarget } from './synthTargets.js';
+import { hasPronunciationValues } from '../shared/pronunciation/index.js';
+import type {
+  DeduplicatedPronounceOverride,
+  PronounceAudioFormat,
+  PronounceSynthScope,
+  PronounceSynthTarget,
+} from './synthTargets.js';
 
 export type PronounceSynthBackend = 'gemini' | 'openai-speech';
 export const DEFAULT_PRONOUNCE_GEMINI_MODEL = 'gemini-3.8-flash-tts';
@@ -32,6 +46,9 @@ export interface PronounceSynthResult {
   readonly manifest_path: string | null;
   readonly config_updated: boolean;
   readonly config_entries_updated: number;
+  readonly updatedConfigEntries: number;
+  readonly updatedPersonEntries: number;
+  readonly updatedPlaceEntries: number;
   readonly summary: {
     readonly total_targets: number;
     readonly deduplicated: number;
@@ -155,48 +172,160 @@ export async function synthesizeTargetWithGemini(params: {
   throw new Error(`gemini-tts failed after retries for '${params.target.text}'`);
 }
 
-export function applyConfigAudioUpdates(params: {
+export interface PronunciationAudioUpdateCounts {
+  readonly updatedConfigEntries: number;
+  readonly updatedPersonEntries: number;
+  readonly updatedPlaceEntries: number;
+}
+
+export function applyPronunciationAudioUpdates(params: {
   readonly configPath: string;
   readonly siteConfig: KinloomSiteConfig;
+  readonly peoplePath: string;
+  readonly people: readonly RawPerson[];
+  readonly livingPersonIds: ReadonlySet<string>;
+  readonly placesPath: string;
+  readonly places: readonly Place[];
+  readonly targets: readonly PronounceSynthTarget[];
+  readonly deduplicatedOverrides: readonly DeduplicatedPronounceOverride[];
   readonly items: readonly PronounceSynthItemResult[];
   readonly force: boolean;
-}): number {
+  readonly dryRun?: boolean;
+}): PronunciationAudioUpdateCounts {
   const existingPronunciations = params.siteConfig.pronunciations ?? {};
   const nextPronunciations: Record<string, Pronunciation> = { ...existingPronunciations };
-  let updatedCount = 0;
+  const targetById = new Map(params.targets.map((target) => [target.id, target]));
+  const eligibleCacheKeys = new Set<string>();
+  const personAudioById = new Map<string, string>();
+  const placeAudioById = new Map<string, string>();
+  let updatedConfigEntries = 0;
 
   for (const item of params.items) {
-    if (item.scope !== 'lexicon') {
+    const isEligible =
+      item.status === 'synthesized' ||
+      item.status === 'imported' ||
+      item.status === 'skipped_existing' ||
+      (params.dryRun === true && item.status === 'planned');
+    if (!isEligible) {
       continue;
     }
-    if (item.status !== 'synthesized' && item.status !== 'imported' && item.status !== 'skipped_existing') {
+
+    const target = targetById.get(item.id);
+    if (target) {
+      eligibleCacheKeys.add(target.cache_key);
+    }
+
+    if (item.scope === 'lexicon') {
+      const entry = nextPronunciations[item.key];
+      if (!entry) {
+        continue;
+      }
+      if (entry.audio_url?.trim() && !params.force) {
+        continue;
+      }
+      if (entry.audio_url === item.audio_url) {
+        continue;
+      }
+      nextPronunciations[item.key] = {
+        ...entry,
+        audio_url: item.audio_url,
+      };
+      updatedConfigEntries += 1;
       continue;
     }
-    const entry = nextPronunciations[item.key];
-    if (!entry) {
-      continue;
+
+    if (item.scope === 'person') {
+      personAudioById.set(item.key, item.audio_url);
+    } else if (item.scope === 'place') {
+      placeAudioById.set(item.key, item.audio_url);
     }
-    if (entry.audio_url?.trim() && !params.force) {
-      continue;
-    }
-    if (entry.audio_url === item.audio_url) {
-      continue;
-    }
-    nextPronunciations[item.key] = {
-      ...entry,
-      audio_url: item.audio_url,
-    };
-    updatedCount += 1;
   }
 
-  if (updatedCount > 0) {
-    const nextConfig: KinloomSiteConfig = {
-      ...params.siteConfig,
-      pronunciations: nextPronunciations,
-    };
-    fs.writeFileSync(params.configPath, serializeKinloomConfigYaml(nextConfig), 'utf8');
+  for (const override of params.deduplicatedOverrides) {
+    if (!eligibleCacheKeys.has(override.cache_key)) {
+      continue;
+    }
+    if (override.scope === 'person' && !personAudioById.has(override.key)) {
+      personAudioById.set(override.key, override.audio_url);
+    } else if (override.scope === 'place' && !placeAudioById.has(override.key)) {
+      placeAudioById.set(override.key, override.audio_url);
+    }
   }
-  return updatedCount;
+
+  let updatedPersonEntries = 0;
+  const nextPeople: RawPerson[] = params.people.map((person) => {
+    if (params.livingPersonIds.has(person.id) || person.is_living || person.full_name.trim() === 'Living') {
+      return person;
+    }
+    if (!person.pronunciation || !hasPronunciationValues(person.pronunciation)) {
+      return person;
+    }
+    const nextAudioUrl = personAudioById.get(person.id);
+    if (!nextAudioUrl) {
+      return person;
+    }
+    if (person.pronunciation.audio_url?.trim() && !params.force) {
+      return person;
+    }
+    if (person.pronunciation.audio_url === nextAudioUrl) {
+      return person;
+    }
+    updatedPersonEntries += 1;
+    return {
+      ...person,
+      pronunciation: {
+        ...person.pronunciation,
+        audio_url: nextAudioUrl,
+      },
+    };
+  });
+
+  let updatedPlaceEntries = 0;
+  const nextPlaces: Place[] = params.places.map((place) => {
+    if (!place.pronunciation || !hasPronunciationValues(place.pronunciation)) {
+      return place;
+    }
+    const nextAudioUrl = placeAudioById.get(place.id);
+    if (!nextAudioUrl) {
+      return place;
+    }
+    if (place.pronunciation.audio_url?.trim() && !params.force) {
+      return place;
+    }
+    if (place.pronunciation.audio_url === nextAudioUrl) {
+      return place;
+    }
+    updatedPlaceEntries += 1;
+    return {
+      ...place,
+      pronunciation: {
+        ...place.pronunciation,
+        audio_url: nextAudioUrl,
+      },
+    };
+  });
+
+  if (!params.dryRun) {
+    if (updatedConfigEntries > 0) {
+      const nextConfig: KinloomSiteConfig = {
+        ...params.siteConfig,
+        pronunciations: nextPronunciations,
+      };
+      fs.writeFileSync(params.configPath, serializeKinloomConfigYaml(nextConfig), 'utf8');
+    }
+    if (updatedPersonEntries > 0) {
+      fs.writeFileSync(params.peoplePath, serializePeopleYaml(nextPeople), 'utf8');
+    }
+    if (updatedPlaceEntries > 0) {
+      fs.writeFileSync(params.placesPath, serializePlacesYaml(nextPlaces), 'utf8');
+    }
+  }
+
+  return {
+    updatedConfigEntries,
+    updatedPersonEntries,
+    updatedPlaceEntries,
+  };
 }
 
 export function formatPronounceSynthText(result: Omit<PronounceSynthResult, 'rendered'>): string {
@@ -213,12 +342,20 @@ export function formatPronounceSynthText(result: Omit<PronounceSynthResult, 'ren
       `  Imported: ${s.imported} | Skipped existing: ${s.skipped_existing} | Missing in import dir: ${s.missing_import}`
     );
   } else if (result.mode === 'dry_run') {
-    lines.push(`  Planned: ${s.planned} | Skipped existing: ${s.skipped_existing}`);
+    const missingPart = s.missing_import > 0 ? ` | Missing in import dir: ${s.missing_import}` : '';
+    lines.push(`  Planned: ${s.planned} | Skipped existing: ${s.skipped_existing}${missingPart}`);
   } else {
     lines.push(`  Synthesized: ${s.synthesized} | Skipped existing: ${s.skipped_existing}`);
   }
-  if (result.config_updated) {
-    lines.push(`  Updated kinloom.config.yaml audio_url entries: ${result.config_entries_updated}`);
+  const verb = result.mode === 'dry_run' ? 'Would update' : 'Updated';
+  if (result.updatedConfigEntries > 0) {
+    lines.push(`  ${verb} kinloom.config.yaml audio_url entries: ${result.updatedConfigEntries}`);
+  }
+  if (result.updatedPersonEntries > 0) {
+    lines.push(`  ${verb} data/people.yaml audio_url entries: ${result.updatedPersonEntries}`);
+  }
+  if (result.updatedPlaceEntries > 0) {
+    lines.push(`  ${verb} data/places.yaml audio_url entries: ${result.updatedPlaceEntries}`);
   }
   return lines.join('\n');
 }

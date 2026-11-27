@@ -2679,6 +2679,107 @@ describe('sync/media.ts', () => {
     expect(uploaded).toEqual(['media/scans/photo.webp']);
     expect(putArgs[0]).toContain('oakville-archive-media/media/scans/photo.webp');
     expect(putArgs[0]).toContain('image/webp');
+
+    // findMissingRemoteMedia also discovers /media/pronunciation-* clips from config, deceased people, and places,
+    // checking <repo>/media/ before <repo>/archive-media/media/ and strictly excluding living people
+    const rootMediaDir = path.join(repoDir, 'media');
+    await mkdir(rootMediaDir, { recursive: true });
+    const lexWav = path.join(rootMediaDir, 'pronunciation-lexicon.wav');
+    const variantWav = path.join(rootMediaDir, 'pronunciation-variant.wav');
+    const personWav = path.join(rootMediaDir, 'pronunciation-person.wav');
+    const placeArchiveDir = path.join(repoDir, 'archive-media', 'media');
+    await mkdir(placeArchiveDir, { recursive: true });
+    const placeWav = path.join(placeArchiveDir, 'pronunciation-place.wav');
+    const livingWav = path.join(rootMediaDir, 'pronunciation-living.wav');
+    await writeFile(lexWav, 'wav-lex');
+    await writeFile(variantWav, 'wav-var');
+    await writeFile(personWav, 'wav-per');
+    await writeFile(placeWav, 'wav-plc');
+    await writeFile(livingWav, 'wav-liv');
+
+    const pronCtx = makeSyncContext(repoDir, {
+      mediaLayout: 'archive-media',
+      fetchImpl: async (input) => {
+        const url = String(input);
+        if (url.endsWith('/media/pronunciation-variant.wav')) {
+          return new Response('x', { status: 206 });
+        }
+        return new Response('x', { status: 404 });
+      },
+    });
+    const pronProbe = await findMissingRemoteMedia(pronCtx, 'tok', [], {
+      siteConfig: {
+        pronunciations: {
+          Oakville: {
+            phonetic: 'OHK-vil',
+            audio_url: '/media/pronunciation-lexicon.wav',
+            variants: [
+              {
+                label: 'Local',
+                phonetic: 'OHK-vuhl',
+                audio_url: '/media/pronunciation-variant.wav',
+              },
+            ],
+          },
+          External: {
+            phonetic: 'EX',
+            audio_url: 'https://commons.wikimedia.org/wiki/Special:FilePath/Ex.ogg',
+          },
+          MissingOnDisk: {
+            phonetic: 'MIS',
+            audio_url: '/media/pronunciation-missing.wav',
+          },
+        },
+      },
+      people: [
+        {
+          entity_type: 'person',
+          entity_id: 'per_deceased',
+          data: makeDeceasedPerson({
+            id: 'per_deceased',
+            pronunciation: { phonetic: 'JAYN', audio_url: '/media/pronunciation-person.wav' },
+          }),
+          has_primary_source: true,
+          isLiving: false,
+        },
+        {
+          entity_type: 'person',
+          entity_id: 'per_living',
+          data: makeDeceasedPerson({
+            id: 'per_living',
+            is_living: true,
+            full_name: 'Living',
+            pronunciation: { phonetic: 'PRIV', audio_url: '/media/pronunciation-living.wav' },
+          }),
+          has_primary_source: true,
+          isLiving: true,
+        },
+      ],
+      places: [
+        {
+          entity_type: 'place',
+          entity_id: 'plc_harbor',
+          data: makePlace({
+            id: 'plc_harbor',
+            pronunciation: { phonetic: 'HAR-ber', audio_url: '/media/pronunciation-place.wav' },
+          }),
+          has_primary_source: true,
+          isLiving: false,
+        },
+      ],
+    });
+    expect(pronProbe.checkedCount).toBe(4);
+    expect(pronProbe.missing).toEqual([
+      { localPath: lexWav, r2Key: 'media/pronunciation-lexicon.wav', contentType: 'audio/wav' },
+      { localPath: personWav, r2Key: 'media/pronunciation-person.wav', contentType: 'audio/wav' },
+      { localPath: placeWav, r2Key: 'media/pronunciation-place.wav', contentType: 'audio/wav' },
+    ]);
+    // Direct resolveMediaUploadTarget also prefers ./media/ for pronunciation clips in archive-media repos
+    expect(resolveMediaUploadTarget(repoDir, 'archive-media', '/media/pronunciation-lexicon.wav')).toEqual({
+      localPath: lexWav,
+      r2Key: 'media/pronunciation-lexicon.wav',
+      contentType: 'audio/wav',
+    });
   });
 });
 

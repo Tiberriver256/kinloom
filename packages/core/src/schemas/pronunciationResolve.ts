@@ -169,6 +169,10 @@ function resolveCompositionalPersonPronunciation(
 
   const language = composeLanguageTag(resolvedEntries);
   const provenance = composeProvenance(resolvedEntries);
+  const tokenAudioUrls = resolvedEntries
+    .map((entry) => entry.audio_url?.trim() ?? '')
+    .filter((url) => url.length > 0);
+  const allHaveAudio = resolvedEntries.length > 0 && tokenAudioUrls.length === resolvedEntries.length;
 
   return {
     resolved: {
@@ -176,6 +180,7 @@ function resolveCompositionalPersonPronunciation(
       ...(ipa ? { ipa } : {}),
       ...(language ? { language } : {}),
       ...provenance,
+      ...(allHaveAudio ? { token_audio_urls: tokenAudioUrls } : {}),
       coverage: 'full',
       resolvedFrom: 'composed',
     },

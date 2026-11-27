@@ -192,6 +192,17 @@ export async function runSynth(
     notesPause,
   });
 
+  const storyRefAudio = getStringOption(parsed, 'storyRefAudio');
+  const storyRefText = getStringOption(parsed, 'storyRefText');
+  const notesRefAudio = getStringOption(parsed, 'notesRefAudio');
+  const notesRefText = getStringOption(parsed, 'notesRefText');
+  if ((storyRefAudio || storyRefText) && (!storyRefAudio || !storyRefText)) {
+    throw new CliValidationError('Pass both --story-ref-audio and --story-ref-text together.');
+  }
+  if ((notesRefAudio || notesRefText) && (!notesRefAudio || !notesRefText)) {
+    throw new CliValidationError('Pass both --notes-ref-audio and --notes-ref-text together.');
+  }
+
   if (dryRun) {
     return {
       exitCode: 0,
@@ -210,27 +221,18 @@ export async function runSynth(
     };
   }
 
-  if (ctx.execFileImpl === undefined && findExecutableOnPath('ffmpeg', ctx.env) === null) {
-    throw new RecordRuntimeError('ffmpeg not found on PATH');
-  }
-
-  const storyRefAudio = getStringOption(parsed, 'storyRefAudio');
-  const storyRefText = getStringOption(parsed, 'storyRefText');
-  const notesRefAudio = getStringOption(parsed, 'notesRefAudio');
-  const notesRefText = getStringOption(parsed, 'notesRefText');
+  const endpointUrl = backend === 'openai-speech' ? normalizeSpeechEndpointUrl(endpointRaw) : '';
   let storyRef: VoiceCloneReference | undefined;
   let notesRef: VoiceCloneReference | undefined;
-  if (storyRefAudio || storyRefText) {
-    if (!storyRefAudio || !storyRefText) {
-      throw new CliValidationError('Pass both --story-ref-audio and --story-ref-text together.');
-    }
+  if (storyRefAudio && storyRefText) {
     storyRef = loadVoiceCloneReference(resolveUserPathFromContext(storyRefAudio, ctx), storyRefText);
   }
-  if (notesRefAudio || notesRefText) {
-    if (!notesRefAudio || !notesRefText) {
-      throw new CliValidationError('Pass both --notes-ref-audio and --notes-ref-text together.');
-    }
+  if (notesRefAudio && notesRefText) {
     notesRef = loadVoiceCloneReference(resolveUserPathFromContext(notesRefAudio, ctx), notesRefText);
+  }
+
+  if (ctx.execFileImpl === undefined && findExecutableOnPath('ffmpeg', ctx.env) === null) {
+    throw new RecordRuntimeError('ffmpeg not found on PATH');
   }
 
   const outPath = outArg ? resolveUserPathFromContext(outArg, ctx) : defaultMp3Path(scriptPath);
@@ -240,7 +242,7 @@ export async function runSynth(
       : backend === 'openai-speech'
         ? await synthesizeWithOpenAiSpeech({
             chunks,
-            endpoint: normalizeSpeechEndpointUrl(endpointRaw),
+            endpoint: endpointUrl,
             model,
             apiKey,
             storyRef,

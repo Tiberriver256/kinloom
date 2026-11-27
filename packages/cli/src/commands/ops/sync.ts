@@ -157,7 +157,12 @@ export async function runSyncCommand(options: SyncCommandOptions = {}): Promise<
       const missingRes = await findMissingRemoteMedia(
         ctx,
         minted.write_batch.rawToken,
-        sanitizedLocal.byType.media
+        sanitizedLocal.byType.media,
+        {
+          siteConfig: local.siteConfig,
+          people: sanitizedLocal.byType.person,
+          places: sanitizedLocal.byType.place,
+        }
       );
       checkedRemoteMediaCount = missingRes.checkedCount;
       for (const item of missingRes.missing) {

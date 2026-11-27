@@ -5,6 +5,8 @@ import path from 'node:path';
 import {
   parseKinloomConfig,
   parseKinloomConfigYaml,
+  parsePeopleYaml,
+  parsePlacesYaml,
   serializeKinloomConfigYaml,
   serializePeopleYaml,
   serializePlacesYaml,
@@ -296,10 +298,96 @@ describe('kinloom pronounce synth', () => {
     });
     expect(forcedImport.summary.imported).toBe(2);
     expect(forcedImport.config_entries_updated).toBe(1);
+    expect(forcedImport.updatedConfigEntries).toBe(1);
+    expect(forcedImport.updatedPersonEntries).toBe(0);
+    expect(forcedImport.updatedPlaceEntries).toBe(0);
     const forcedConfig = parseKinloomConfigYaml(
       fs.readFileSync(path.join(repoDir, 'kinloom.config.yaml'), 'utf8')
     );
     expect(forcedConfig.pronunciations?.Oakville?.audio_url).toBe(oakvilleTarget?.audio_url);
+  });
+
+  it('supports true --dry-run on --import-dir and updates explicit person/place overrides in YAML on --update-config', async () => {
+    const repoDir = await makeTempDir('kinloom-pron-overrides-');
+    createSyntheticArchive(repoDir);
+
+    const collected = collectPronounceSynthTargets({
+      repoDir,
+      scope: 'curated',
+      voice: 'Charon',
+      format: 'wav',
+      phonemeMode: 'ipa',
+    });
+    const importDir = path.join(repoDir, 'colab-all');
+    fs.mkdirSync(importDir, { recursive: true });
+    for (const target of collected.targets) {
+      fs.writeFileSync(path.join(importDir, target.filename), Buffer.from(`RIFF-${target.id}`));
+    }
+
+    const configBefore = fs.readFileSync(path.join(repoDir, 'kinloom.config.yaml'), 'utf8');
+    const peopleBefore = fs.readFileSync(path.join(repoDir, 'data', 'people.yaml'), 'utf8');
+    const placesBefore = fs.readFileSync(path.join(repoDir, 'data', 'places.yaml'), 'utf8');
+
+    // True dry-run with --import-dir + --update-config: copies zero WAVs and writes zero YAML files
+    const dryImport = await runPronounceSynthCommand({
+      repoDir,
+      importDir,
+      updateConfig: true,
+      dryRun: true,
+      json: true,
+    });
+    expect(dryImport.mode).toBe('dry_run');
+    expect(dryImport.config_updated).toBe(false);
+    expect(dryImport.summary.planned).toBe(4);
+    expect(dryImport.summary.imported).toBe(0);
+    expect(dryImport.updatedConfigEntries).toBe(1);
+    expect(dryImport.updatedPersonEntries).toBe(1);
+    expect(dryImport.updatedPlaceEntries).toBe(1);
+    expect(fs.existsSync(path.join(repoDir, 'media'))).toBe(false);
+    expect(fs.readFileSync(path.join(repoDir, 'kinloom.config.yaml'), 'utf8')).toBe(configBefore);
+    expect(fs.readFileSync(path.join(repoDir, 'data', 'people.yaml'), 'utf8')).toBe(peopleBefore);
+    expect(fs.readFileSync(path.join(repoDir, 'data', 'places.yaml'), 'utf8')).toBe(placesBefore);
+
+    // Real import updates kinloom.config.yaml + explicit person.pronunciation + explicit place.pronunciation
+    const realImport = await runPronounceSynthCommand({
+      repoDir,
+      importDir,
+      updateConfig: true,
+    });
+    expect(realImport.mode).toBe('import_dir');
+    expect(realImport.config_updated).toBe(true);
+    expect(realImport.updatedConfigEntries).toBe(1);
+    expect(realImport.updatedPersonEntries).toBe(1);
+    expect(realImport.updatedPlaceEntries).toBe(1);
+    expect(realImport.rendered).toContain('Updated data/people.yaml audio_url entries: 1');
+    expect(realImport.rendered).toContain('Updated data/places.yaml audio_url entries: 1');
+
+    const janeTarget = collected.targets.find((t) => t.id === 'person:per_jane');
+    const harborTarget = collected.targets.find((t) => t.id === 'place:plc_harbor');
+    const peopleAfter = parsePeopleYaml(fs.readFileSync(path.join(repoDir, 'data', 'people.yaml'), 'utf8'));
+    const placesAfter = parsePlacesYaml(fs.readFileSync(path.join(repoDir, 'data', 'places.yaml'), 'utf8'));
+
+    expect(peopleAfter.find((p) => p.id === 'per_jane')?.pronunciation?.audio_url).toBe(
+      janeTarget?.audio_url
+    );
+    // People without explicit overrides and living people must never receive new pronunciation blocks
+    expect(peopleAfter.find((p) => p.id === 'per_hendrik')?.pronunciation).toBeUndefined();
+    expect(peopleAfter.find((p) => p.id === 'per_living_case')?.pronunciation).toBeUndefined();
+
+    expect(placesAfter.find((p) => p.id === 'plc_harbor')?.pronunciation?.audio_url).toBe(
+      harborTarget?.audio_url
+    );
+    expect(placesAfter.find((p) => p.id === 'plc_oakville')?.pronunciation).toBeUndefined();
+
+    // Re-running without --force preserves already-set audio_url on overrides
+    const secondImport = await runPronounceSynthCommand({
+      repoDir,
+      importDir,
+      updateConfig: true,
+    });
+    expect(secondImport.updatedConfigEntries).toBe(0);
+    expect(secondImport.updatedPersonEntries).toBe(0);
+    expect(secondImport.updatedPlaceEntries).toBe(0);
   });
 
   it('synthesizes via openai-speech without seed, supports voice cloning and skip-existing, and works via Gemini backend', async () => {

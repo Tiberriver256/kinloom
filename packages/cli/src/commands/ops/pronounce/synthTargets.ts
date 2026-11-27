@@ -45,12 +45,25 @@ export interface PronounceSynthTarget {
   readonly existing_audio_url?: string;
 }
 
+export interface DeduplicatedPronounceOverride {
+  readonly scope: 'place' | 'person';
+  readonly key: string;
+  readonly cache_key: string;
+  readonly audio_url: string;
+}
+
 export interface CollectedPronounceTargets {
   readonly repoDir: string;
   readonly configPath: string;
   readonly siteConfig: KinloomSiteConfig;
+  readonly peoplePath: string;
+  readonly people: readonly RawPerson[];
+  readonly livingPersonIds: ReadonlySet<string>;
+  readonly placesPath: string;
+  readonly places: readonly Place[];
   readonly livingExcluded: number;
   readonly targets: readonly PronounceSynthTarget[];
+  readonly deduplicatedOverrides: readonly DeduplicatedPronounceOverride[];
   readonly deduplicatedCount: number;
 }
 
@@ -127,8 +140,9 @@ export function collectPronounceSynthTargets(options: {
     );
   }
 
-  const seenCacheKeys = new Set<string>();
+  const seenAudioUrlByCacheKey = new Map<string, string>();
   const targets: PronounceSynthTarget[] = [];
+  const deduplicatedOverrides: DeduplicatedPronounceOverride[] = [];
   let deduplicatedCount = 0;
 
   const pushTarget = (params: {
@@ -137,6 +151,7 @@ export function collectPronounceSynthTargets(options: {
     key: string;
     text: string;
     entry: Pronunciation;
+    explicitOverride?: boolean;
   }): void => {
     if (!isSpeakableEntry(params.entry)) {
       return;
@@ -148,11 +163,19 @@ export function collectPronounceSynthTargets(options: {
       language: params.entry.language,
       voice: options.voice,
     });
-    if (seenCacheKeys.has(cacheKey)) {
+    const existingAudioUrl = seenAudioUrlByCacheKey.get(cacheKey);
+    if (existingAudioUrl !== undefined) {
       deduplicatedCount += 1;
+      if (params.explicitOverride && (params.scope === 'place' || params.scope === 'person')) {
+        deduplicatedOverrides.push({
+          scope: params.scope,
+          key: params.key,
+          cache_key: cacheKey,
+          audio_url: existingAudioUrl,
+        });
+      }
       return;
     }
-    seenCacheKeys.add(cacheKey);
 
     const filename = pronunciationAudioFilename({
       text: params.text,
@@ -162,6 +185,8 @@ export function collectPronounceSynthTargets(options: {
       voice: options.voice,
       ext: options.format,
     });
+    const audioUrl = `/media/${filename}`;
+    seenAudioUrlByCacheKey.set(cacheKey, audioUrl);
     const speechInput = formatPhonemeTerm(
       {
         text: params.text,
@@ -182,7 +207,7 @@ export function collectPronounceSynthTargets(options: {
       voice: options.voice,
       cache_key: cacheKey,
       filename,
-      audio_url: `/media/${filename}`,
+      audio_url: audioUrl,
       speech_input: speechInput,
       ...(params.entry.audio_url ? { existing_audio_url: params.entry.audio_url } : {}),
     });
@@ -210,6 +235,7 @@ export function collectPronounceSynthTargets(options: {
           key: place.id,
           text: place.name,
           entry: place.pronunciation,
+          explicitOverride: true,
         });
       } else if (options.scope === 'all' && isGeocodedPlace(place)) {
         const resolved = resolvePlacePronunciation(place, lexicon);
@@ -236,6 +262,7 @@ export function collectPronounceSynthTargets(options: {
           key: person.id,
           text: person.full_name,
           entry: person.pronunciation,
+          explicitOverride: true,
         });
       } else if (options.scope === 'all') {
         const resolved = resolvePersonPronunciation(person, lexicon);
@@ -256,8 +283,14 @@ export function collectPronounceSynthTargets(options: {
     repoDir,
     configPath,
     siteConfig,
+    peoplePath,
+    people,
+    livingPersonIds: new Set(livingPeople.map((entry) => entry.person.id)),
+    placesPath,
+    places,
     livingExcluded: livingPeople.length,
     targets,
+    deduplicatedOverrides,
     deduplicatedCount,
   };
 }

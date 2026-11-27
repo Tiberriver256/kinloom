@@ -13,7 +13,7 @@ import {
   type VoiceCloneReference,
 } from '../shared/audio/index.js';
 import {
-  applyConfigAudioUpdates,
+  applyPronunciationAudioUpdates,
   buildSynthResult,
   DEFAULT_PRONOUNCE_GEMINI_MODEL,
   type PronounceBatchManifest,
@@ -173,6 +173,9 @@ export async function runPronounceSynthCommand(
         manifest_path: manifestPath,
         config_updated: false,
         config_entries_updated: 0,
+        updatedConfigEntries: 0,
+        updatedPersonEntries: 0,
+        updatedPlaceEntries: 0,
         summary: {
           total_targets: collected.targets.length,
           deduplicated: collected.deduplicatedCount,
@@ -189,12 +192,16 @@ export async function runPronounceSynthCommand(
     );
   }
 
+  const dryRun = Boolean(options.dryRun);
+
   if (options.importDir) {
     const importDir = path.resolve(options.importDir);
     if (!fs.existsSync(importDir) || !fs.statSync(importDir).isDirectory()) {
       throw new CliValidationError(`Import directory does not exist: ${importDir}`);
     }
-    fs.mkdirSync(outDir, { recursive: true });
+    if (!dryRun) {
+      fs.mkdirSync(outDir, { recursive: true });
+    }
     const items: PronounceSynthItemResult[] = [];
     for (const target of collected.targets) {
       const destPath = path.join(outDir, target.filename);
@@ -224,6 +231,19 @@ export async function runPronounceSynthCommand(
         });
         continue;
       }
+      if (dryRun) {
+        items.push({
+          id: target.id,
+          scope: target.scope,
+          key: target.key,
+          text: target.text,
+          filename: target.filename,
+          audio_url: target.audio_url,
+          status: 'planned',
+          size_bytes: fs.statSync(srcPath).size,
+        });
+        continue;
+      }
       fs.copyFileSync(srcPath, destPath);
       items.push({
         id: target.id,
@@ -237,22 +257,33 @@ export async function runPronounceSynthCommand(
       });
     }
 
-    const updatedEntries = options.updateConfig
-      ? applyConfigAudioUpdates({
+    const updates = options.updateConfig
+      ? applyPronunciationAudioUpdates({
           configPath: collected.configPath,
           siteConfig: collected.siteConfig,
+          peoplePath: collected.peoplePath,
+          people: collected.people,
+          livingPersonIds: collected.livingPersonIds,
+          placesPath: collected.placesPath,
+          places: collected.places,
+          targets: collected.targets,
+          deduplicatedOverrides: collected.deduplicatedOverrides,
           items,
           force,
+          dryRun,
         })
-      : 0;
+      : { updatedConfigEntries: 0, updatedPersonEntries: 0, updatedPlaceEntries: 0 };
 
     return buildSynthResult(
       {
         ...baseMeta,
-        mode: 'import_dir',
+        mode: dryRun ? 'dry_run' : 'import_dir',
         manifest_path: null,
-        config_updated: updatedEntries > 0,
-        config_entries_updated: updatedEntries,
+        config_updated: !dryRun && updates.updatedConfigEntries > 0,
+        config_entries_updated: updates.updatedConfigEntries,
+        updatedConfigEntries: updates.updatedConfigEntries,
+        updatedPersonEntries: updates.updatedPersonEntries,
+        updatedPlaceEntries: updates.updatedPlaceEntries,
         summary: {
           total_targets: collected.targets.length,
           deduplicated: collected.deduplicatedCount,
@@ -260,7 +291,7 @@ export async function runPronounceSynthCommand(
           synthesized: 0,
           imported: items.filter((i) => i.status === 'imported').length,
           skipped_existing: items.filter((i) => i.status === 'skipped_existing').length,
-          planned: 0,
+          planned: items.filter((i) => i.status === 'planned').length,
           missing_import: items.filter((i) => i.status === 'missing_import').length,
         },
         items,
@@ -269,7 +300,7 @@ export async function runPronounceSynthCommand(
     );
   }
 
-  if (options.dryRun) {
+  if (dryRun) {
     const items: PronounceSynthItemResult[] = collected.targets.map((target) => {
       const destPath = path.join(outDir, target.filename);
       return {
@@ -282,13 +313,32 @@ export async function runPronounceSynthCommand(
         status: skipExisting && fs.existsSync(destPath) ? 'skipped_existing' : 'planned',
       };
     });
+    const updates = options.updateConfig
+      ? applyPronunciationAudioUpdates({
+          configPath: collected.configPath,
+          siteConfig: collected.siteConfig,
+          peoplePath: collected.peoplePath,
+          people: collected.people,
+          livingPersonIds: collected.livingPersonIds,
+          placesPath: collected.placesPath,
+          places: collected.places,
+          targets: collected.targets,
+          deduplicatedOverrides: collected.deduplicatedOverrides,
+          items,
+          force,
+          dryRun: true,
+        })
+      : { updatedConfigEntries: 0, updatedPersonEntries: 0, updatedPlaceEntries: 0 };
     return buildSynthResult(
       {
         ...baseMeta,
         mode: 'dry_run',
         manifest_path: null,
         config_updated: false,
-        config_entries_updated: 0,
+        config_entries_updated: updates.updatedConfigEntries,
+        updatedConfigEntries: updates.updatedConfigEntries,
+        updatedPersonEntries: updates.updatedPersonEntries,
+        updatedPlaceEntries: updates.updatedPlaceEntries,
         summary: {
           total_targets: collected.targets.length,
           deduplicated: collected.deduplicatedCount,
@@ -387,22 +437,33 @@ export async function runPronounceSynthCommand(
     }
   );
 
-  const updatedEntries = options.updateConfig
-    ? applyConfigAudioUpdates({
+  const updates = options.updateConfig
+    ? applyPronunciationAudioUpdates({
         configPath: collected.configPath,
         siteConfig: collected.siteConfig,
+        peoplePath: collected.peoplePath,
+        people: collected.people,
+        livingPersonIds: collected.livingPersonIds,
+        placesPath: collected.placesPath,
+        places: collected.places,
+        targets: collected.targets,
+        deduplicatedOverrides: collected.deduplicatedOverrides,
         items,
         force,
+        dryRun: false,
       })
-    : 0;
+    : { updatedConfigEntries: 0, updatedPersonEntries: 0, updatedPlaceEntries: 0 };
 
   return buildSynthResult(
     {
       ...baseMeta,
       mode: 'synth',
       manifest_path: null,
-      config_updated: updatedEntries > 0,
-      config_entries_updated: updatedEntries,
+      config_updated: updates.updatedConfigEntries > 0,
+      config_entries_updated: updates.updatedConfigEntries,
+      updatedConfigEntries: updates.updatedConfigEntries,
+      updatedPersonEntries: updates.updatedPersonEntries,
+      updatedPlaceEntries: updates.updatedPlaceEntries,
       summary: {
         total_targets: collected.targets.length,
         deduplicated: collected.deduplicatedCount,

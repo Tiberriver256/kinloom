@@ -1,6 +1,18 @@
-import type { Pronunciation, PronunciationCoverage, PronunciationVariant } from '@kinloom/core';
+import type {
+  Pronunciation,
+  PronunciationCoverage,
+  PronunciationVariant,
+  ResolvedPersonPronunciation,
+} from '@kinloom/core';
 import type React from 'react';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  playSingleAudioUrl,
+  playSpeechSynthesisFallback,
+  playTokenAudioUrls,
+  stopActivePronunciation,
+  stopPronunciationIfOwner,
+} from '../browser/pronunciationPlayback.js';
 import { cx } from '../lib/cx.js';
 import {
   formatPronunciationScopePrefix,
@@ -10,8 +22,10 @@ import {
 import { resolveAssetUrl } from './Atoms.js';
 import pronunciationBadgeStyles from './PronunciationBadge.module.css';
 
+export type PronunciationBadgeData = Pronunciation | ResolvedPersonPronunciation;
+
 export interface PronunciationBadgeProps {
-  pronunciation?: Pronunciation | null;
+  pronunciation?: PronunciationBadgeData | null;
   label: string;
   /** Optional prefix when the guide applies to a specific name part (e.g. "Surname"). */
   prefix?: string;
@@ -27,33 +41,6 @@ export interface PronunciationBadgeProps {
 }
 
 const SAFE_EXTERNAL_URL_RE = /^https?:\/\//i;
-
-let activeAudioElement: HTMLAudioElement | null = null;
-let activeStopCallback: (() => void) | null = null;
-
-function stopActivePronunciation(): void {
-  if (activeAudioElement) {
-    activeAudioElement.pause();
-    try {
-      activeAudioElement.currentTime = 0;
-    } catch {
-      // Ignore if media element is not seekable yet.
-    }
-    activeAudioElement = null;
-  }
-  if (typeof window !== 'undefined' && 'speechSynthesis' in window && window.speechSynthesis) {
-    try {
-      window.speechSynthesis.cancel();
-    } catch {
-      // Ignore speechSynthesis cancellation errors in headless environments.
-    }
-  }
-  if (activeStopCallback) {
-    const cb = activeStopCallback;
-    activeStopCallback = null;
-    cb();
-  }
-}
 
 export function isEnglishPronunciationLanguage(language?: string | null): boolean {
   const trimmed = language?.trim();
@@ -74,11 +61,18 @@ function hasSingleEntryContent(
   );
 }
 
-export function hasPronunciationContent(pronunciation?: Pronunciation | null): boolean {
+function extractTokenAudioUrls(pronunciation?: PronunciationBadgeData | null): readonly string[] {
+  if (!pronunciation || !('token_audio_urls' in pronunciation)) {
+    return [];
+  }
+  return pronunciation.token_audio_urls ?? [];
+}
+
+export function hasPronunciationContent(pronunciation?: PronunciationBadgeData | null): boolean {
   if (!pronunciation) {
     return false;
   }
-  if (hasSingleEntryContent(pronunciation)) {
+  if (hasSingleEntryContent(pronunciation) || extractTokenAudioUrls(pronunciation).length > 0) {
     return true;
   }
   return Boolean(pronunciation.variants?.some((variant) => hasSingleEntryContent(variant)));
@@ -124,9 +118,7 @@ export const PronunciationBadge: React.FC<PronunciationBadgeProps> = ({
 
   useEffect(() => {
     return (): void => {
-      if (stopSelfRef.current && activeStopCallback === stopSelfRef.current) {
-        stopActivePronunciation();
-      }
+      stopPronunciationIfOwner(stopSelfRef.current);
     };
   }, []);
 
@@ -150,79 +142,42 @@ export const PronunciationBadge: React.FC<PronunciationBadgeProps> = ({
       };
 
       const audioUrl = activeEntry?.audio_url?.trim();
-      if (audioUrl && typeof Audio !== 'undefined') {
+      if (audioUrl) {
         const resolved = resolveAssetUrl(audioUrl, baseUrl);
         if (!resolved) {
           return;
         }
-        const audio = new Audio(resolved);
-        activeAudioElement = audio;
-        activeStopCallback = onStopped;
         stopSelfRef.current = onStopped;
         setPlaying(true);
-
-        const cleanup = (): void => {
-          if (activeAudioElement === audio) {
-            activeAudioElement = null;
-          }
-          if (activeStopCallback === onStopped) {
-            activeStopCallback = null;
-          }
-          onStopped();
-        };
-
-        audio.addEventListener('ended', cleanup, { once: true });
-        audio.addEventListener('error', cleanup, { once: true });
-
-        try {
-          const playPromise = audio.play();
-          if (playPromise && typeof playPromise.catch === 'function') {
-            void playPromise.catch(() => {
-              cleanup();
-            });
-          }
-        } catch {
-          cleanup();
+        if (playSingleAudioUrl(resolved, onStopped)) {
+          return;
         }
-        return;
+        onStopped();
       }
 
-      if (
-        typeof window !== 'undefined' &&
-        'speechSynthesis' in window &&
-        window.speechSynthesis &&
-        typeof SpeechSynthesisUtterance !== 'undefined'
-      ) {
-        // Send English respellings only to English voices; non-English voices pronounce
-        // the native orthography (`label`) cleanly in their own language.
-        const spokenText = isEnglishPronunciationLanguage(activeEntry?.language)
-          ? activeEntry?.phonetic?.trim() || label
-          : label;
-        const utterance = new SpeechSynthesisUtterance(spokenText);
-        if (activeEntry?.language?.trim()) {
-          utterance.lang = activeEntry.language.trim();
-        }
-        activeStopCallback = onStopped;
-        stopSelfRef.current = onStopped;
-        setPlaying(true);
-
-        const cleanup = (): void => {
-          if (activeStopCallback === onStopped) {
-            activeStopCallback = null;
+      if (effectiveVariantIdx === null) {
+        const resolvedTokenUrls = extractTokenAudioUrls(pronunciation)
+          .map((raw) => resolveAssetUrl(raw.trim(), baseUrl))
+          .filter((url): url is string => Boolean(url));
+        if (resolvedTokenUrls.length > 0) {
+          stopSelfRef.current = onStopped;
+          setPlaying(true);
+          if (playTokenAudioUrls(resolvedTokenUrls, onStopped)) {
+            return;
           }
           onStopped();
-        };
-
-        utterance.onend = cleanup;
-        utterance.onerror = cleanup;
-        try {
-          window.speechSynthesis.speak(utterance);
-        } catch {
-          cleanup();
         }
+      }
+
+      // Pass natural orthography (`label`) rather than ALL-CAPS hyphenated respellings so
+      // browser TTS speaks words instead of spelling stressed syllables letter by letter.
+      stopSelfRef.current = onStopped;
+      setPlaying(true);
+      if (!playSpeechSynthesisFallback(label, activeEntry?.language, onStopped)) {
+        onStopped();
       }
     },
-    [playing, activeEntry, baseUrl, label]
+    [playing, activeEntry, effectiveVariantIdx, pronunciation, baseUrl, label]
   );
 
   if (!pronunciation || !hasPronunciationContent(pronunciation) || !activeEntry) {
