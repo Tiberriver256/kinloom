@@ -1,6 +1,11 @@
 // Root Application Shell
 
 export type {
+  BookPublishingClient,
+  HttpBookPublishingClientOptions,
+} from './adapters/bookPublishingClient.js';
+export { createHttpBookPublishingClient } from './adapters/bookPublishingClient.js';
+export type {
   CreatedAgentTokenResponse,
   CreatedInviteResponse,
   HttpWikiDataSourceOptions,
@@ -189,6 +194,7 @@ export type { KinloomAppProps } from './KinloomApp.js';
 export { KinloomApp } from './KinloomApp.js';
 export * from './lib/adminDiagnostics.js';
 export * from './lib/archivalTreeModel.js';
+export * from './lib/bookPublishingModel.js';
 export * from './lib/observabilityStatsModel.js';
 export * from './lib/openFinanceModel.js';
 export * from './lib/pluginSettingsForm.js';
@@ -223,6 +229,11 @@ export type { RecentChangesPageProps } from './pages/RecentChangesPage.js';
 export { RecentChangesPage } from './pages/RecentChangesPage.js';
 export { TimePage } from './pages/TimePage.js';
 export { TreePage } from './pages/TreePage.js';
+export type { BookPublishingUiPluginOptions } from './plugins/bookPublishingPlugin.js';
+export {
+  BOOK_PUBLISHING_UI_PLUGIN_ID,
+  createBookPublishingPlugin,
+} from './plugins/bookPublishingPlugin.js';
 export type {
   ActiveNarrativeAudioTrack,
   NarrativeAudioPluginOptions,

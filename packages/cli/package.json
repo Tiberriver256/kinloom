@@ -33,6 +33,7 @@
   },
   "dependencies": {
     "@kinloom/core": "^0.47.0",
+    "@kinloom/server": "^0.47.0",
     "cheerio": "^1.2.0",
     "fast-xml-parser": "^5.12.1",
     "fflate": "^0.8.3",

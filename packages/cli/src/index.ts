@@ -103,6 +103,20 @@ export {
 } from './errors.js';
 export * from './guides/index.js';
 export {
+  BOOK_PUBLISHING_CLI_PLUGIN_ID,
+  BOOK_PUBLISHING_COMMAND_NAME,
+  BOOK_PUBLISHING_HELP,
+  type BookPublishingCliPluginOptions,
+  createBookPublishingCliPlugin,
+} from './plugins/bookPublishing.js';
+export {
+  createPlaywrightPdfRenderer,
+  type PlaywrightPdfBrowserFactory,
+  type PlaywrightPdfBrowserHandle,
+  type PlaywrightPdfPageHandle,
+  type PlaywrightPdfRendererOptions,
+} from './plugins/bookPublishingPdf.js';
+export {
   type BundleColdProbeResult,
   type BundleProbeResult,
   type BundleWarmProbeResult,
