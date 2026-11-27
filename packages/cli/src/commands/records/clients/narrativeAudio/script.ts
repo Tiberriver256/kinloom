@@ -1,6 +1,14 @@
 import path from 'node:path';
 import { parse as parseYaml } from 'yaml';
+import {
+  applyPhonemeTags,
+  DEFAULT_OPENAI_SPEECH_MODEL,
+  type PhonemeMode,
+  type PhonemeTermHint,
+} from '../../../ops/shared/audio/index.js';
 import { isPlainRecord } from '../../runtime/primitives.js';
+
+export { DEFAULT_OPENAI_SPEECH_MODEL, type PhonemeMode, type PhonemeTermHint };
 
 export const GEMINI_API_BASE = 'https://generativelanguage.googleapis.com/v1beta/models';
 export const CLOUD_TTS_API = 'https://texttospeech.googleapis.com/v1/text:synthesize';
@@ -63,7 +71,8 @@ const TENS = ['', '', 'twenty', 'thirty', 'forty', 'fifty', 'sixty', 'seventy', 
 
 export const RETRYABLE_STATUSES: ReadonlySet<number> = new Set([429, 500, 502, 503, 504]);
 
-export type TtsBackend = 'chirp3-hd' | 'gemini';
+export type TtsBackend = 'chirp3-hd' | 'gemini' | 'openai-speech';
+export type NamesHintMap = Readonly<Record<string, string | PhonemeTermHint>>;
 
 export interface ChirpPronunciation {
   readonly phrase: string;
@@ -77,13 +86,6 @@ export interface NarrativeRecord {
   readonly title?: string;
   readonly kind?: string;
   readonly body_md?: string;
-}
-
-export interface ScriptLintResult {
-  readonly sections: readonly string[];
-  readonly notes: readonly string[];
-  readonly wordCount: number;
-  readonly problems: readonly string[];
 }
 
 export interface WavStripResult {
@@ -183,26 +185,32 @@ export function speakNumbers(text: string): string {
   );
 }
 
-export function applyNames(text: string, names: Readonly<Record<string, string>>): string {
+export function applyNames(text: string, names: NamesHintMap): string {
   let out = text;
   const entries = Object.entries(names).sort((a, b) => b[0].length - a[0].length);
-  for (const [name, ipa] of entries) {
+  for (const [name, entry] of entries) {
+    const replacement =
+      typeof entry === 'string' ? entry : entry.ipa?.trim() || entry.phonetic?.trim() || entry.text;
+    if (!replacement) {
+      continue;
+    }
     const rx = new RegExp(`(?<![\\w/])${escapeRegExp(name)}(?![\\w/])`, 'g');
-    out = out.replace(rx, () => ipa);
+    out = out.replace(rx, () => replacement);
   }
   return out;
 }
 
-export function buildChirpPronunciations(
-  text: string,
-  names: Readonly<Record<string, string>>
-): ChirpPronunciation[] {
+export function buildChirpPronunciations(text: string, names: NamesHintMap): ChirpPronunciation[] {
   const entries: ChirpPronunciation[] = [];
   const sorted = Object.entries(names).sort((a, b) => b[0].length - a[0].length);
-  for (const [phrase, ipa] of sorted) {
+  for (const [phrase, entry] of sorted) {
+    const rawIpa = typeof entry === 'string' ? entry : entry.ipa;
+    if (!rawIpa?.trim()) {
+      continue;
+    }
     const rx = new RegExp(`(?<!\\w)${escapeRegExp(phrase)}(?!\\w)`);
     if (rx.test(text)) {
-      const cleanedIpa = ipa.trim().replace(/^\/+|\/+$/g, '');
+      const cleanedIpa = rawIpa.trim().replace(/^\/+|\/+$/g, '');
       entries.push({
         phrase,
         phoneticEncoding: 'PHONETIC_ENCODING_IPA',
@@ -333,60 +341,6 @@ export function parseNarrativesYaml(rawYaml: string): NarrativeRecord[] {
     }));
 }
 
-export function lintNarrativeScript(
-  scriptLabel: string,
-  text: string,
-  names?: Readonly<Record<string, string>>
-): ScriptLintResult {
-  const problems: string[] = [];
-  const patterns: readonly (readonly [string, RegExp])[] = [
-    ["day-before-month date (write 'May ninth, 1766')", new RegExp(`\\b\\d{1,2} (${MONTHS})\\b`)],
-    ["numeric month-day date (write 'May ninth')", new RegExp(`\\b(${MONTHS}) \\d{1,2}\\b(?!\\d)`)],
-    ["currency symbol (write '470 pounds')", /[£$]/],
-    ['s./d. money abbreviation', /\b\d+[sd]\./],
-    ['citation remnant', /\b(Lib\.|Vol\.|pp?\.\s*\d|DB \d|FHL|Book \d+)/],
-    ["slash (write 'or')", /\S\/\S/],
-    ['comma-grouped number (Chirp pauses on commas; spell out in words)', /\b\d{1,3}(?:,\d{3})+\b/],
-    ['abbreviation to spell out', /\b(ca\.|b\.|d\.|decd|Co\.|Jr\.|Sr\.|Capt\.|U\.S\.|No\.)(?=\s|$)/],
-    ['markdown emphasis or link', /[*_`]|\]\(/],
-    ['quotation mark', /["\u201c\u201d]/],
-  ];
-
-  const lines = text.split(/\r?\n/);
-  for (let i = 0; i < lines.length; i += 1) {
-    const line = lines[i];
-    for (const [label, rx] of patterns) {
-      if (rx.test(line)) {
-        problems.push(`${scriptLabel}:${i + 1}: ${label}: ${line.trim().slice(0, 100)}`);
-      }
-    }
-  }
-
-  if (!text.includes(NOTES_MARKER)) {
-    problems.push(`no '${NOTES_MARKER}' section (fine only if there are no notes)`);
-  }
-
-  if (names) {
-    for (const [k, v] of Object.entries(names)) {
-      const rx = new RegExp(`(?<!\\w)${escapeRegExp(k)}(?!\\w)`);
-      if (!rx.test(text)) {
-        problems.push(`names: '${k}' does not appear in the script`);
-      }
-      if (!(v.startsWith('/') && v.endsWith('/'))) {
-        problems.push(`names: '${k}' value is not /IPA/ in slashes: ${v}`);
-      }
-    }
-  }
-
-  const { sections, notes } = splitScript(text);
-  return {
-    sections,
-    notes,
-    wordCount: countWords(text),
-    problems,
-  };
-}
-
 export function formatYamlSnippet(options: {
   readonly fileName: string;
   readonly durationSeconds: number;
@@ -412,16 +366,23 @@ export function formatYamlSnippet(options: {
 export function buildSynthChunks(options: {
   readonly rawText: string;
   readonly backend: TtsBackend;
-  readonly namesMap: Readonly<Record<string, string>>;
+  readonly namesMap: NamesHintMap;
+  readonly phonemeMode?: PhonemeMode;
   readonly voice: string;
   readonly notesVoice: string;
   readonly sectionPause: number;
   readonly notesPause: number;
 }): SynthChunk[] {
-  const withNames =
-    options.backend === 'gemini' && Object.keys(options.namesMap).length > 0
-      ? applyNames(options.rawText, options.namesMap)
-      : options.rawText;
+  const hasNames = Object.keys(options.namesMap).length > 0;
+  const withNames = !hasNames
+    ? options.rawText
+    : options.backend === 'openai-speech'
+      ? applyPhonemeTags(options.rawText, options.namesMap, options.phonemeMode ?? 'ipa')
+      : options.backend === 'gemini'
+        ? options.phonemeMode
+          ? applyPhonemeTags(options.rawText, options.namesMap, options.phonemeMode)
+          : applyNames(options.rawText, options.namesMap)
+        : options.rawText;
   const prepared = speakNumbers(speakDates(withNames));
   const { sections, notes } = splitScript(prepared);
 
@@ -457,7 +418,9 @@ export function formatDryRunPlan(options: {
   readonly backend: TtsBackend;
   readonly languageCode: string;
   readonly model: string;
-  readonly namesMap: Readonly<Record<string, string>>;
+  readonly namesMap: NamesHintMap;
+  readonly endpoint?: string;
+  readonly phonemeMode?: PhonemeMode;
 }): string {
   const outLines: string[] = [];
   for (let i = 0; i < options.chunks.length; i += 1) {
@@ -467,7 +430,9 @@ export function formatDryRunPlan(options: {
         ? resolveChirpVoice(chunk.voice, options.languageCode)
         : `${options.model}:${chunk.voice}`;
     const notesSuffix = chunk.isNotes ? ' · notes' : '';
-    outLines.push(`===== request ${i + 1} [${options.backend} · ${label}${notesSuffix}] =====`);
+    const extraSuffix =
+      options.backend === 'openai-speech' && options.phonemeMode ? ` · phonemes:${options.phonemeMode}` : '';
+    outLines.push(`===== request ${i + 1} [${options.backend} · ${label}${notesSuffix}${extraSuffix}] =====`);
     outLines.push(chunk.text);
     if (options.backend === 'chirp3-hd' && Object.keys(options.namesMap).length > 0) {
       const prons = buildChirpPronunciations(chunk.text, options.namesMap);
@@ -481,30 +446,22 @@ export function formatDryRunPlan(options: {
 }
 
 export function defaultMp3Path(scriptPath: string): string {
-  const dir = path.dirname(scriptPath);
   const ext1 = path.extname(scriptPath);
   let base = ext1 ? path.basename(scriptPath, ext1) : path.basename(scriptPath);
   const ext2 = path.extname(base);
-  if (ext2) {
-    base = path.basename(base, ext2);
-  }
-  return path.join(dir, `${base}.mp3`);
+  if (ext2) base = path.basename(base, ext2);
+  return path.join(path.dirname(scriptPath), `${base}.mp3`);
 }
 
 export function defaultTranscriptPath(audioPath: string): string {
-  const dir = path.dirname(audioPath);
   const ext = path.extname(audioPath);
   const base = ext ? path.basename(audioPath, ext) : path.basename(audioPath);
-  return path.join(dir, `${base}.transcript.md`);
+  return path.join(path.dirname(audioPath), `${base}.transcript.md`);
 }
 
 export function inferAudioMimeType(audioPath: string): string {
   const ext = path.extname(audioPath).toLowerCase();
-  if (ext === '.wav') {
-    return 'audio/wav';
-  }
-  if (ext === '.ogg') {
-    return 'audio/ogg';
-  }
+  if (ext === '.wav') return 'audio/wav';
+  if (ext === '.ogg') return 'audio/ogg';
   return 'audio/mpeg';
 }

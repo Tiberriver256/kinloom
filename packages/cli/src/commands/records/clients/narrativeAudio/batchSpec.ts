@@ -1,0 +1,207 @@
+import { type CommandParseSpec, formatCommandUsage, type OptionSpec } from '../../runtime/args.js';
+import { DEFAULT_OPENAI_SPEECH_MODEL, DEFAULT_TTS_MODEL } from './script.js';
+
+export const BATCH_OPTIONS: readonly OptionSpec[] = [
+  {
+    key: 'repo',
+    kind: 'string',
+    flags: ['--repo'],
+    metavar: 'DIR',
+    help: 'Archive repository root (default: current working directory).',
+  },
+  {
+    key: 'kind',
+    kind: 'string',
+    flags: ['--kind'],
+    default: 'biography',
+    metavar: 'KIND',
+    help: 'Filter narratives by kind (default: biography; empty string includes all non-living).',
+  },
+  {
+    key: 'backend',
+    kind: 'string',
+    flags: ['--backend'],
+    metavar: 'chirp3-hd|gemini|openai-speech',
+    help: 'TTS backend (defaults to openai-speech when --endpoint is set, otherwise chirp3-hd).',
+  },
+  {
+    key: 'endpoint',
+    kind: 'string',
+    flags: ['--endpoint'],
+    metavar: 'URL',
+    help: 'Base URL for --backend openai-speech (or KINLOOM_TTS_ENDPOINT / NARRATIVE_AUDIO_ENDPOINT).',
+  },
+  {
+    key: 'apiKey',
+    kind: 'string',
+    flags: ['--api-key'],
+    metavar: 'SECRET',
+    help: 'Optional Bearer API key for --backend openai-speech (or OPENAI_SPEECH_API_KEY).',
+  },
+  {
+    key: 'model',
+    kind: 'string',
+    flags: ['--model'],
+    default: DEFAULT_TTS_MODEL,
+    metavar: 'MODEL',
+    help: `TTS model (default: ${DEFAULT_OPENAI_SPEECH_MODEL} for openai-speech, ${DEFAULT_TTS_MODEL} for gemini).`,
+  },
+  {
+    key: 'voice',
+    kind: 'string',
+    flags: ['--voice'],
+    default: 'Charon',
+    metavar: 'VOICE',
+    help: 'Story voice (default: Charon).',
+  },
+  {
+    key: 'notesVoice',
+    kind: 'string',
+    flags: ['--notes-voice'],
+    default: 'Kore',
+    metavar: 'VOICE',
+    help: "Editor's notes voice (default: Kore).",
+  },
+  {
+    key: 'phonemeMode',
+    kind: 'string',
+    flags: ['--phoneme-mode'],
+    default: 'ipa',
+    metavar: 'ipa|arpabet|plain',
+    help: 'Phoneme formatting for archive lexicon hints (default: ipa).',
+  },
+  {
+    key: 'storyRefAudio',
+    kind: 'string',
+    flags: ['--story-ref-audio'],
+    metavar: 'PATH',
+    help: 'Reference audio clip for story voice cloning (openai-speech).',
+  },
+  {
+    key: 'storyRefText',
+    kind: 'string',
+    flags: ['--story-ref-text'],
+    metavar: 'TEXT',
+    help: 'Transcript of --story-ref-audio.',
+  },
+  {
+    key: 'notesRefAudio',
+    kind: 'string',
+    flags: ['--notes-ref-audio'],
+    metavar: 'PATH',
+    help: "Reference audio clip for editor's notes voice cloning (openai-speech).",
+  },
+  {
+    key: 'notesRefText',
+    kind: 'string',
+    flags: ['--notes-ref-text'],
+    metavar: 'TEXT',
+    help: 'Transcript of --notes-ref-audio.',
+  },
+  {
+    key: 'sectionPause',
+    kind: 'number',
+    flags: ['--section-pause'],
+    default: 0.8,
+    min: 0,
+    metavar: 'SECONDS',
+    help: 'Silence between story sections in seconds (default: 0.8).',
+  },
+  {
+    key: 'notesPause',
+    kind: 'number',
+    flags: ['--notes-pause'],
+    default: 2.0,
+    min: 0,
+    metavar: 'SECONDS',
+    help: "Silence before Editor's notes in seconds (default: 2.0).",
+  },
+  {
+    key: 'bitrate',
+    kind: 'string',
+    flags: ['--bitrate'],
+    default: '96k',
+    metavar: 'RATE',
+    help: 'MP3 bitrate passed to ffmpeg (default: 96k).',
+  },
+  {
+    key: 'languageCode',
+    kind: 'string',
+    flags: ['--language-code'],
+    metavar: 'BCP47',
+    help: 'BCP-47 language code for chirp3-hd voices (default: en-US).',
+  },
+  {
+    key: 'gcpProject',
+    kind: 'string',
+    flags: ['--gcp-project'],
+    metavar: 'PROJECT',
+    help: 'GCP project ID for chirp3-hd billing quota header.',
+  },
+  {
+    key: 'keyFile',
+    kind: 'string',
+    flags: ['--key-file'],
+    metavar: 'PATH',
+    help: 'File containing the API key.',
+  },
+  {
+    key: 'outDir',
+    kind: 'string',
+    flags: ['--out-dir'],
+    metavar: 'DIR',
+    help: 'Output media directory (default: <repo>/media).',
+  },
+  {
+    key: 'exportManifest',
+    kind: 'string',
+    flags: ['--export-manifest'],
+    metavar: 'PATH',
+    help: 'Export privacy-filtered batch JSON manifest for offline/Colab rendering.',
+  },
+  {
+    key: 'importDir',
+    kind: 'string',
+    flags: ['--import-dir'],
+    metavar: 'DIR',
+    help: 'Import rendered MP3s and metadata JSON into media/ and update data/narratives.yaml.',
+  },
+  {
+    key: 'updateYaml',
+    kind: 'boolean',
+    flags: ['--update-yaml'],
+    help: 'Write extensions.narrative_audio into data/narratives.yaml after live synthesis.',
+  },
+  {
+    key: 'force',
+    kind: 'boolean',
+    flags: ['--force'],
+    help: 'Include narratives that already have audio and overwrite existing MP3 files.',
+  },
+  {
+    key: 'dryRun',
+    kind: 'boolean',
+    flags: ['--dry-run'],
+    help: 'Preview planned narratives without calling TTS APIs or writing audio files.',
+  },
+  {
+    key: 'json',
+    kind: 'boolean',
+    flags: ['--json'],
+    help: 'Emit structured JSON output.',
+  },
+];
+
+export const BATCH_PARSE_SPEC: CommandParseSpec = {
+  options: BATCH_OPTIONS,
+  allowPositionals: false,
+};
+
+export function renderBatchHelp(): string {
+  return formatCommandUsage({
+    usage: 'kinloom narrative-audio batch [options]',
+    summary:
+      'Batch-narrate deceased biographies missing audio, export a Colab manifest, or import rendered MP3s.',
+    options: BATCH_OPTIONS,
+  });
+}

@@ -1,5 +1,5 @@
 import { type CommandParseSpec, formatCommandUsage, type OptionSpec } from '../../runtime/args.js';
-import { DEFAULT_TEXT_MODEL, DEFAULT_TTS_MODEL } from './script.js';
+import { DEFAULT_OPENAI_SPEECH_MODEL, DEFAULT_TEXT_MODEL, DEFAULT_TTS_MODEL } from './script.js';
 
 const LIST_OPTIONS: readonly OptionSpec[] = [
   {
@@ -65,8 +65,57 @@ const SYNTH_OPTIONS: readonly OptionSpec[] = [
     key: 'backend',
     kind: 'string',
     flags: ['--backend'],
-    metavar: 'chirp3-hd|gemini',
-    help: 'TTS engine: chirp3-hd (Google Cloud TTS) or gemini (Gemini TTS).',
+    metavar: 'chirp3-hd|gemini|openai-speech',
+    help: 'TTS engine: chirp3-hd (Google Cloud TTS), gemini (Gemini TTS), or openai-speech (OpenAI-compatible /v1/audio/speech).',
+  },
+  {
+    key: 'endpoint',
+    kind: 'string',
+    flags: ['--endpoint'],
+    metavar: 'URL',
+    help: 'Base URL for --backend openai-speech (or KINLOOM_TTS_ENDPOINT / NARRATIVE_AUDIO_ENDPOINT).',
+  },
+  {
+    key: 'apiKey',
+    kind: 'string',
+    flags: ['--api-key'],
+    metavar: 'SECRET',
+    help: 'Optional Bearer API key for --backend openai-speech (or OPENAI_SPEECH_API_KEY).',
+  },
+  {
+    key: 'phonemeMode',
+    kind: 'string',
+    flags: ['--phoneme-mode'],
+    metavar: 'ipa|arpabet|plain',
+    help: 'Phoneme formatting for names hints: ipa, arpabet, or plain.',
+  },
+  {
+    key: 'storyRefAudio',
+    kind: 'string',
+    flags: ['--story-ref-audio'],
+    metavar: 'PATH',
+    help: 'Reference audio clip for story voice cloning (openai-speech).',
+  },
+  {
+    key: 'storyRefText',
+    kind: 'string',
+    flags: ['--story-ref-text'],
+    metavar: 'TEXT',
+    help: 'Transcript of --story-ref-audio for story voice cloning.',
+  },
+  {
+    key: 'notesRefAudio',
+    kind: 'string',
+    flags: ['--notes-ref-audio'],
+    metavar: 'PATH',
+    help: "Reference audio clip for editor's notes voice cloning (openai-speech).",
+  },
+  {
+    key: 'notesRefText',
+    kind: 'string',
+    flags: ['--notes-ref-text'],
+    metavar: 'TEXT',
+    help: 'Transcript of --notes-ref-audio for notes voice cloning.',
   },
   {
     key: 'languageCode',
@@ -88,7 +137,7 @@ const SYNTH_OPTIONS: readonly OptionSpec[] = [
     flags: ['--model'],
     default: DEFAULT_TTS_MODEL,
     metavar: 'MODEL',
-    help: `Gemini TTS model when --backend gemini (default: ${DEFAULT_TTS_MODEL}).`,
+    help: `TTS model (default: ${DEFAULT_TTS_MODEL} for gemini, ${DEFAULT_OPENAI_SPEECH_MODEL} for openai-speech).`,
   },
   {
     key: 'voice',
@@ -155,6 +204,8 @@ export const SYNTH_PARSE_SPEC: CommandParseSpec = {
   positionalLabel: 'script',
 };
 
+export { BATCH_PARSE_SPEC, renderBatchHelp } from './batchSpec.js';
+
 const TRANSCRIBE_OPTIONS: readonly OptionSpec[] = [
   {
     key: 'model',
@@ -191,12 +242,17 @@ export const TRANSCRIBE_PARSE_SPEC: CommandParseSpec = {
 export function renderRootHelp(): string {
   return formatCommandUsage({
     usage: 'kinloom narrative-audio <command> [options]',
-    summary: 'Narrate Kinloom narrative biographies with Chirp 3: HD or Gemini TTS.',
+    summary:
+      'Narrate Kinloom narrative biographies with Chirp 3: HD, Gemini TTS, or OpenAI-compatible GPU TTS.',
     subcommands: [
       { name: 'list', summary: 'List narratives (word count, id, title), shortest first.' },
       { name: 'extract', summary: 'Print one narrative slug, title, and body_md.' },
       { name: 'check', summary: 'Lint a spoken script (and optional names file).' },
       { name: 'synth', summary: "Synthesize SCRIPT to MP3 (story voice, then editor's notes voice)." },
+      {
+        name: 'batch',
+        summary: 'Batch-narrate missing deceased biographies, export Colab manifest, or import MP3s.',
+      },
       { name: 'transcribe', summary: 'Verbatim, timestamped transcript that flags audio glitches.' },
     ],
   });

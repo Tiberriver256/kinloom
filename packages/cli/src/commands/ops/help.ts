@@ -256,19 +256,45 @@ Subcommands:
       promote unambiguous missing single tokens into kinloom.config.yaml, and
       --apply to write YAML updates.
 
+  synth [--repo <path>] [--backend gemini|openai-speech] [--endpoint <url>] [options]
+      Batch-synthesize privacy-filtered pronunciation clips into media/ with
+      deterministic v2 SHA-256 filenames (pronunciation-<hash>.wav|mp3). Supports
+      live Gemini TTS, OpenAI-compatible /v1/audio/speech GPU servers (such as
+      SGLang-Omni on Google Colab G4), or offline --export-manifest / --import-dir
+      workflows. Strictly excludes living people (0 living leaks).
+
 Options:
-  --lang <code>      Language filter for \`lookup\` (e.g. nl, sv, fi, pl, de, en)
-  --refresh          Bypass disk cache on \`lookup\` and re-fetch from Wikimedia
-  --repo <dir>       Archive repository root for \`audit\` and \`deduplicate\` (default: current directory)
-  --strict           Exit non-zero if any deceased person lacks full-name coverage, any place lacks coverage, any homonymous collision exists, any IPA symbol appears inside phonetic (Respelling), or any living leak exists
-  --apply            Write YAML updates in \`deduplicate\` (dry-run by default)
-  --promote-tokens   Promote unambiguous single missing tokens into the shared lexicon during \`deduplicate\`
-  --force            In \`deduplicate\`, remove per-person overrides whose Respelling/IPA differs when shared tokens still provide full coverage and no unique notes/variants/audio are lost
-  --json             Emit structured JSON output
-  -h, --help         Show this help message
+  --lang <code>            Language filter for \`lookup\` (e.g. nl, sv, fi, pl, de, en)
+  --refresh                Bypass disk cache on \`lookup\` and re-fetch from Wikimedia
+  --repo <dir>             Archive repository root for \`audit\`, \`deduplicate\`, and \`synth\` (default: current directory)
+  --strict                 Exit non-zero if any deceased person lacks full-name coverage, any place lacks coverage, any homonymous collision exists, any IPA symbol appears inside phonetic (Respelling), or any living leak exists
+  --apply                  Write YAML updates in \`deduplicate\` (dry-run by default)
+  --promote-tokens         Promote unambiguous single missing tokens into the shared lexicon during \`deduplicate\`
+  --force                  In \`deduplicate\`, override differing Respelling/IPA; in \`synth\`, regenerate existing files and overwrite config audio_url
+  --backend <id>           TTS backend for \`synth\`: gemini (default) or openai-speech
+  --endpoint <url>         Base URL for OpenAI-compatible /v1/audio/speech server (or KINLOOM_TTS_ENDPOINT)
+  --api-key <secret>       Bearer/API key override (or OPENAI_SPEECH_API_KEY / GEMINI_API_KEY)
+  --model <id>             Model ID (default: fishaudio/drama-3 for openai-speech, gemini-3.8-flash-tts for gemini)
+  --voice <name>           Voice name (default: Charon)
+  --phoneme-mode <mode>    Phoneme formatting for \`synth\`: ipa (default), arpabet, or plain
+  --ref-audio <path>       Reference audio clip for zero-shot voice cloning (openai-speech)
+  --ref-text <text>        Transcript of --ref-audio for voice cloning (openai-speech)
+  --out-dir <dir>          Output directory for synthesized clips (default: <repo>/media)
+  --format <wav|mp3>       Output audio format for \`synth\` (default: wav, 24 kHz mono -16 LUFS)
+  --scope <mode>           Target set for \`synth\`: lexicon, curated (default), or all
+  --skip-existing          Skip targets whose cached audio file already exists (default: true)
+  --update-config          Write /media/pronunciation-<hash>.<ext> into audio_url in kinloom.config.yaml
+  --export-manifest <path> Export privacy-filtered batch JSON manifest for offline/Colab rendering
+  --import-dir <dir>       Import rendered clips matching v2 filenames from a directory into --out-dir
+  --concurrency <N>        Parallel synthesis workers (default: 2 for gemini, 4 for openai-speech)
+  --dry-run                Preview planned targets without calling TTS APIs or writing audio files
+  --json                   Emit structured JSON output
+  -h, --help               Show this help message
 
 Environment variables:
-  KINLOOM_PRONOUNCE_CACHE_DIR  Override disk cache directory (default ~/.cache/kinloom-pronounce)`;
+  KINLOOM_PRONOUNCE_CACHE_DIR  Override disk cache directory (default ~/.cache/kinloom-pronounce)
+  KINLOOM_TTS_ENDPOINT         Default endpoint URL for \`--backend openai-speech\`
+  OPENAI_SPEECH_API_KEY        Optional Bearer token for \`--backend openai-speech\``;
 
 export const MIGRATE_HELP = `Usage: kinloom migrate [options]
 

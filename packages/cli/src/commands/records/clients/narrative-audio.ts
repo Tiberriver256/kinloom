@@ -1,6 +1,13 @@
 import { CliValidationError } from '../../../errors.js';
 import { handleRecordCommandError } from '../runtime/primitives.js';
 import { emitStdout, type RecordCommandOutcome, type RecordHandler } from '../runtime/types.js';
+import {
+  collectArchiveLexiconHints,
+  type NarrativeBatchManifest,
+  type NarrativeBatchManifestItem,
+  narrativeMarkdownToSpokenScript,
+  runBatch,
+} from './narrativeAudio/batch.js';
 import { renderRootHelp } from './narrativeAudio/cliSpecs.js';
 import { runCheck, runExtract, runList, runSynth, runTranscribe } from './narrativeAudio/commands.js';
 
@@ -12,17 +19,16 @@ export {
   CLOUD_TTS_API,
   DEFAULT_BACKEND,
   DEFAULT_LANGUAGE,
+  DEFAULT_OPENAI_SPEECH_MODEL,
   DEFAULT_TEXT_MODEL,
   DEFAULT_TTS_MODEL,
   formatYamlSnippet,
   GEMINI_API_BASE,
   intToWords,
-  lintNarrativeScript,
   type NarrativeRecord,
   NOTES_MARKER,
   ordinal,
   resolveChirpVoice,
-  type ScriptLintResult,
   speakDates,
   speakNumbers,
   splitScript,
@@ -30,12 +36,25 @@ export {
   stripWavHeader,
   type WavStripResult,
 } from './narrativeAudio/script.js';
+export { lintNarrativeScript, type ScriptLintResult } from './narrativeAudio/scriptLint.js';
 export { loadNarratives } from './narrativeAudio/synthesis.js';
+export {
+  collectArchiveLexiconHints,
+  type NarrativeBatchManifest,
+  type NarrativeBatchManifestItem,
+  narrativeMarkdownToSpokenScript,
+};
 
 export const runNarrativeAudioCommand: RecordHandler = async (args, ctx): Promise<RecordCommandOutcome> => {
   try {
     if (args.length === 0 || args[0] === '--help' || args[0] === '-h') {
       return { exitCode: 0, bytesOut: emitStdout(ctx.io, renderRootHelp()) };
+    }
+    if (args.includes('--all-missing')) {
+      const stripped = args.filter(
+        (token, idx) => token !== '--all-missing' && !(idx === 0 && token === 'synth')
+      );
+      return await runBatch(stripped, ctx);
     }
     const [subcmd, ...rest] = args;
     switch (subcmd) {
@@ -47,6 +66,8 @@ export const runNarrativeAudioCommand: RecordHandler = async (args, ctx): Promis
         return runCheck(rest, ctx);
       case 'synth':
         return await runSynth(rest, ctx);
+      case 'batch':
+        return await runBatch(rest, ctx);
       case 'transcribe':
         return await runTranscribe(rest, ctx);
       default:

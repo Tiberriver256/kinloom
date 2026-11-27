@@ -11,6 +11,7 @@ import {
   countWords,
   GEMINI_API_BASE,
   inferAudioMimeType,
+  type NamesHintMap,
   type NarrativeRecord,
   parseNarrativesYaml,
   RETRYABLE_STATUSES,
@@ -208,7 +209,7 @@ export async function postJsonWithRetries(params: {
 
 export async function synthesizeWithChirp(options: {
   readonly chunks: readonly SynthChunk[];
-  readonly namesMap: Readonly<Record<string, string>>;
+  readonly namesMap: NamesHintMap;
   readonly languageCode: string;
   readonly gcpProject: string | undefined;
   readonly keyFile: string | undefined;

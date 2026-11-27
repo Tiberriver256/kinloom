@@ -1,0 +1,28 @@
+export {
+  type AudioExecFileFn,
+  buildOpenAiSpeechPayload,
+  DEFAULT_OPENAI_SPEECH_MODEL,
+  defaultAudioExecFile,
+  loadVoiceCloneReference,
+  normalizePronunciationAudioWithFfmpeg,
+  normalizeSpeechEndpointUrl,
+  OPENAI_SPEECH_RETRYABLE_STATUSES,
+  type OpenAiSpeechPayload,
+  type OpenAiSpeechRequest,
+  type OpenAiSpeechResponse,
+  synthesizeOpenAiSpeech,
+  type VoiceCloneReference,
+} from './openaiSpeech.js';
+export {
+  applyPhonemeTags,
+  computePronunciationCacheKey,
+  formatPhonemeTerm,
+  ipaToArpabet,
+  PHONEME_MODES,
+  type PhonemeMode,
+  type PhonemeTermHint,
+  type PronunciationCacheKeyInput,
+  parsePhonemeMode,
+  pronunciationAudioFilename,
+  stripIpaSlashes,
+} from './phonemes.js';

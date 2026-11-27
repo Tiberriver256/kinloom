@@ -10,6 +10,23 @@ export {
 } from './pronounce/lookup.js';
 export { buildCommonsAudioUrl, extractMediaWikiPronunciations } from './pronounce/mediaWiki.js';
 export {
+  DEFAULT_PRONOUNCE_GEMINI_MODEL,
+  type PronounceBatchManifest,
+  type PronounceSynthBackend,
+  type PronounceSynthItemResult,
+  type PronounceSynthOptions,
+  type PronounceSynthResult,
+  runPronounceSynthCommand,
+  wrapPcmAsWav,
+} from './pronounce/synth.js';
+export {
+  type CollectedPronounceTargets,
+  collectPronounceSynthTargets,
+  type PronounceAudioFormat,
+  type PronounceSynthScope,
+  type PronounceSynthTarget,
+} from './pronounce/synthTargets.js';
+export {
   PRONOUNCE_SUPPORTED_LANGS,
   PRONOUNCE_TIER_RANK,
   type PronounceAudioHit,

@@ -68,6 +68,16 @@ kinloom pronounce deduplicate [--repo <path>] [--promote-tokens] [--apply] [--fo
 - Pass \`--promote-tokens\` to safely promote unambiguous single missing tokens into \`kinloom.config.yaml\` \`pronunciations\` before pruning redundant full-name overrides.
 - Pass \`--apply\` to write cleaned YAML back to \`kinloom.config.yaml\` and \`data/people.yaml\`.
 
+### 4. Batch-synthesize pronunciation clips (Gemini or OpenAI-compatible GPU TTS)
+
+\`\`\`bash
+kinloom pronounce synth [--repo <path>] [--backend gemini|openai-speech] [--endpoint <url>] [--phoneme-mode ipa|arpabet|plain] [--format wav|mp3] [--scope lexicon|curated|all] [--update-config]
+\`\`\`
+
+- Synthesizes deterministic \`v2\` SHA-256 filenames (\`pronunciation-<hash>.wav|mp3\`) matching \`@kinloom/server\` byte-for-byte, normalized via \`ffmpeg\` to 24 kHz mono at \`-16 LUFS\`.
+- Supports live OpenAI-compatible \`/v1/audio/speech\` servers (such as SGLang-Omni + \`fishaudio/drama-3\` on Google Colab G4) and offline \`--export-manifest <file>\` / \`--import-dir <dir>\` workflows.
+- Strictly enforces the **Living Privacy Rule**: fails if any living pronunciation leak exists and excludes all living people from targets and manifests.
+
 ## Pre-sync gate
 
 Run the strict **Pronunciation Audit** right before archive verification and **Archive Sync**:

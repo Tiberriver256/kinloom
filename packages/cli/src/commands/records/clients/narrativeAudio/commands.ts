@@ -1,6 +1,13 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { CliValidationError } from '../../../../errors.js';
+import {
+  DEFAULT_OPENAI_SPEECH_MODEL,
+  loadVoiceCloneReference,
+  normalizeSpeechEndpointUrl,
+  parsePhonemeMode,
+  type VoiceCloneReference,
+} from '../../../ops/shared/audio/index.js';
 import { getBooleanOption, getNumberOption, getStringOption, parseCommandArgs } from '../../runtime/args.js';
 import { resolveUserPathFromContext } from '../../runtime/primitives.js';
 import {
@@ -21,6 +28,7 @@ import {
   SYNTH_PARSE_SPEC,
   TRANSCRIBE_PARSE_SPEC,
 } from './cliSpecs.js';
+import { synthesizeWithOpenAiSpeech } from './openaiSynthesis.js';
 import {
   buildSynthChunks,
   countWords,
@@ -32,9 +40,9 @@ import {
   defaultTranscriptPath,
   formatDryRunPlan,
   formatYamlSnippet,
-  lintNarrativeScript,
   type TtsBackend,
 } from './script.js';
+import { lintNarrativeScript } from './scriptLint.js';
 import {
   encodePcmToMp3,
   findExecutableOnPath,
@@ -131,8 +139,10 @@ export async function runSynth(
   )
     .trim()
     .toLowerCase();
-  if (rawBackend !== 'chirp3-hd' && rawBackend !== 'gemini') {
-    throw new CliValidationError(`Invalid --backend '${rawBackend}': choose from chirp3-hd, gemini.`);
+  if (rawBackend !== 'chirp3-hd' && rawBackend !== 'gemini' && rawBackend !== 'openai-speech') {
+    throw new CliValidationError(
+      `Invalid --backend '${rawBackend}': choose from chirp3-hd, gemini, openai-speech.`
+    );
   }
   const backend: TtsBackend = rawBackend;
 
@@ -142,7 +152,25 @@ export async function runSynth(
     DEFAULT_LANGUAGE
   ).trim();
   const gcpProject = getStringOption(parsed, 'gcpProject');
-  const model = getStringOption(parsed, 'model') ?? DEFAULT_TTS_MODEL;
+  const model = parsed.provided.has('model')
+    ? (getStringOption(parsed, 'model') ?? DEFAULT_TTS_MODEL)
+    : backend === 'openai-speech'
+      ? DEFAULT_OPENAI_SPEECH_MODEL
+      : DEFAULT_TTS_MODEL;
+  const endpointRaw = (
+    getStringOption(parsed, 'endpoint') ??
+    ctx.env.KINLOOM_TTS_ENDPOINT ??
+    ctx.env.NARRATIVE_AUDIO_ENDPOINT ??
+    ''
+  ).trim();
+  const apiKey = getStringOption(parsed, 'apiKey') ?? ctx.env.OPENAI_SPEECH_API_KEY;
+  const rawPhonemeMode = getStringOption(parsed, 'phonemeMode');
+  const phonemeMode =
+    rawPhonemeMode !== undefined
+      ? parsePhonemeMode(rawPhonemeMode)
+      : backend === 'openai-speech'
+        ? 'ipa'
+        : undefined;
   const voice = getStringOption(parsed, 'voice') ?? 'Charon';
   const notesVoice = getStringOption(parsed, 'notesVoice') ?? 'Kore';
   const sectionPause = getNumberOption(parsed, 'sectionPause') ?? 0.8;
@@ -157,6 +185,7 @@ export async function runSynth(
     rawText,
     backend,
     namesMap,
+    phonemeMode,
     voice,
     notesVoice,
     sectionPause,
@@ -166,7 +195,18 @@ export async function runSynth(
   if (dryRun) {
     return {
       exitCode: 0,
-      bytesOut: emitStdout(ctx.io, formatDryRunPlan({ chunks, backend, languageCode, model, namesMap })),
+      bytesOut: emitStdout(
+        ctx.io,
+        formatDryRunPlan({
+          chunks,
+          backend,
+          languageCode,
+          model,
+          namesMap,
+          endpoint: endpointRaw || undefined,
+          phonemeMode,
+        })
+      ),
     };
   }
 
@@ -174,11 +214,40 @@ export async function runSynth(
     throw new RecordRuntimeError('ffmpeg not found on PATH');
   }
 
+  const storyRefAudio = getStringOption(parsed, 'storyRefAudio');
+  const storyRefText = getStringOption(parsed, 'storyRefText');
+  const notesRefAudio = getStringOption(parsed, 'notesRefAudio');
+  const notesRefText = getStringOption(parsed, 'notesRefText');
+  let storyRef: VoiceCloneReference | undefined;
+  let notesRef: VoiceCloneReference | undefined;
+  if (storyRefAudio || storyRefText) {
+    if (!storyRefAudio || !storyRefText) {
+      throw new CliValidationError('Pass both --story-ref-audio and --story-ref-text together.');
+    }
+    storyRef = loadVoiceCloneReference(resolveUserPathFromContext(storyRefAudio, ctx), storyRefText);
+  }
+  if (notesRefAudio || notesRefText) {
+    if (!notesRefAudio || !notesRefText) {
+      throw new CliValidationError('Pass both --notes-ref-audio and --notes-ref-text together.');
+    }
+    notesRef = loadVoiceCloneReference(resolveUserPathFromContext(notesRefAudio, ctx), notesRefText);
+  }
+
   const outPath = outArg ? resolveUserPathFromContext(outArg, ctx) : defaultMp3Path(scriptPath);
   const synthesis =
     backend === 'chirp3-hd'
       ? await synthesizeWithChirp({ chunks, namesMap, languageCode, gcpProject, keyFile, ctx })
-      : await synthesizeWithGemini({ chunks, model, keyFile, ctx });
+      : backend === 'openai-speech'
+        ? await synthesizeWithOpenAiSpeech({
+            chunks,
+            endpoint: normalizeSpeechEndpointUrl(endpointRaw),
+            model,
+            apiKey,
+            storyRef,
+            notesRef,
+            ctx,
+          })
+        : await synthesizeWithGemini({ chunks, model, keyFile, ctx });
 
   await encodePcmToMp3({
     pcm: synthesis.combinedPcm,

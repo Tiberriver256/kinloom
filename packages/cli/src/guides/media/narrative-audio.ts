@@ -5,10 +5,11 @@ export const NARRATIVE_AUDIO_GUIDE: EmbeddedGuide = {
   id: 'narrative-audio',
   command: 'narrative-audio',
   category: 'media-ocr',
-  summary: 'Turn Kinloom narratives into narrated MP3 audio (Chirp 3: HD or Gemini TTS)',
+  summary:
+    'Turn Kinloom narratives into narrated MP3 audio (Chirp 3: HD, Gemini TTS, or OpenAI-compatible GPU TTS)',
   body: `# Narrative audio (\`kinloom narrative-audio\`)
 
-Turn Kinloom narrative biographies (\`data/narratives.yaml\`) into narrated MP3 audio using Google Cloud TTS Chirp 3: HD (default) or Gemini TTS via \`kinloom narrative-audio\`. Requires \`ffmpeg\` on \`PATH\`. Only \`synth\` and the optional \`transcribe\` command call paid TTS or Gemini APIs.
+Turn Kinloom narrative biographies (\`data/narratives.yaml\`) into narrated MP3 audio using Google Cloud TTS Chirp 3: HD (default), Gemini TTS, or an OpenAI-compatible \`/v1/audio/speech\` GPU server (such as SGLang-Omni + \`fishaudio/drama-3\` on Google Colab G4) via \`kinloom narrative-audio\`. Requires \`ffmpeg\` on \`PATH\`. Only \`synth\`, live \`batch\`, and the optional \`transcribe\` command call TTS or Gemini APIs.
 
 ## Workflow
 
@@ -32,9 +33,14 @@ kinloom narrative-audio synth audio/<slug>.script.txt --names audio/<slug>.names
 # 4. Synthesize (paid) — defaults to Google Cloud TTS Chirp 3: HD (\`--backend chirp3-hd\`)
 kinloom narrative-audio synth audio/<slug>.script.txt --names audio/<slug>.names.json -o audio/<slug>.mp3
 
-# Switch backends or voices via flags (or NARRATIVE_AUDIO_BACKEND=chirp3-hd|gemini):
+# Switch backends or voices via flags (or NARRATIVE_AUDIO_BACKEND=chirp3-hd|gemini|openai-speech):
 kinloom narrative-audio synth audio/<slug>.script.txt --names audio/<slug>.names.json --backend chirp3-hd --gcp-project <project> -o audio/<slug>.mp3
 kinloom narrative-audio synth audio/<slug>.script.txt --names audio/<slug>.names.json --backend gemini --model gemini-3.8-flash-tts -o audio/<slug>.mp3
+kinloom narrative-audio synth audio/<slug>.script.txt --names audio/<slug>.names.json --backend openai-speech --endpoint http://127.0.0.1:8000 --model fishaudio/drama-3 --phoneme-mode ipa -o audio/<slug>.mp3
+
+# Batch-narrate all missing deceased biographies (live or via Colab export/import manifest):
+kinloom narrative-audio batch --repo "$ARCHIVE" --backend openai-speech --export-manifest /tmp/narratives-manifest.json
+kinloom narrative-audio batch --repo "$ARCHIVE" --import-dir /tmp/rendered-narratives
 
 # 5. Optional QA transcript (paid; uses Gemini API)
 kinloom narrative-audio transcribe audio/<slug>.mp3
@@ -43,10 +49,11 @@ kinloom narrative-audio transcribe audio/<slug>.mp3
 kinloom sync --upload-media audio/<slug>.mp3 --verify-live
 \`\`\`
 
-\`synth\` supports two configurable TTS backends (\`--backend\` or \`NARRATIVE_AUDIO_BACKEND\`):
+\`synth\` and \`batch\` support three configurable TTS backends (\`--backend\` or \`NARRATIVE_AUDIO_BACKEND\`):
 
 1. **\`chirp3-hd\` (default):** Google Cloud Text-to-Speech API (\`texttospeech.googleapis.com\`) using Chirp 3: HD voices (\`en-US-Chirp3-HD-Charon\` / \`Kore\`, configurable via \`--language-code\`, \`--voice\`, \`--notes-voice\`). Passes \`.names.json\` as structured \`customPronunciations\` (\`PHONETIC_ENCODING_IPA\`) without mutating the prose, automatically splits long sections under the 5,000-byte limit, and authenticates via \`gcloud auth print-access-token\` (with \`--gcp-project\` / \`GOOGLE_CLOUD_PROJECT\`) or \`GOOGLE_CLOUD_TTS_API_KEY\` / \`--key-file\`.
 2. **\`gemini\`:** Gemini TTS (\`gemini-3.8-flash-tts\`) via \`GEMINI_API_KEY\` / \`GOOGLE_API_KEY\` / \`--key-file\`, swapping each name in \`.names.json\` for its inline \`/IPA/\` string (longest names first, whole words only).
+3. **\`openai-speech\`:** Generic OpenAI-compatible \`POST <endpoint>/v1/audio/speech\` client (default model \`fishaudio/drama-3\`, configurable via \`--endpoint\` / \`KINLOOM_TTS_ENDPOINT\` / \`NARRATIVE_AUDIO_ENDPOINT\` and optional \`OPENAI_SPEECH_API_KEY\`). Supports \`--phoneme-mode ipa|arpabet|plain\` (\`<|phoneme_start|>...<|phoneme_end|>\`) and optional zero-shot voice cloning references (\`--story-ref-audio\` / \`--story-ref-text\`, \`--notes-ref-audio\` / \`--notes-ref-text\`). Never sends \`seed\` in request JSON for SGLang-Omni compatibility. See \`docs/colab-gpu-tts.md\`.
 
 In both backends, \`synth\`:
 1. Rewrites any leftover dates like "9 May 1766" as "May ninth, 1766".
