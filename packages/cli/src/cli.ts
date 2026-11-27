@@ -873,6 +873,7 @@ export async function runCli(
             repo: { type: 'string' },
             'ancestry-dir': { type: 'string' },
             'include-family': { type: 'boolean', default: false },
+            full: { type: 'boolean', default: false },
             json: { type: 'boolean', default: false },
           },
         });
@@ -896,7 +897,8 @@ export async function runCli(
               repoDir: values.repo ?? cwd,
               personId,
               ancestryDir: values['ancestry-dir'],
-              includeFamily: values['include-family'],
+              includeFamily: values['include-family'] || values.full,
+              full: values.full,
               json: values.json,
             })
         );
