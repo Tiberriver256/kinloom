@@ -2,7 +2,13 @@ import type { EntityType, TalkComment } from '@kinloom/core';
 import type React from 'react';
 import { useCallback, useEffect, useState } from 'react';
 import { useArchiveData } from '../../context/ArchiveDataContext.js';
+import { cx } from '../../lib/cx.js';
 import { KINLOOM_VOCABULARY } from '../../lib/vocabulary.js';
+import cssMod1 from '../../pages/IndexPage.module.css';
+import cssMod2 from '../../pages/PersonPage.module.css';
+import cssMod0 from './WikiSurfaces.module.css';
+
+const uiStyles: Readonly<Record<string, string>> = { ...cssMod0, ...cssMod1, ...cssMod2 };
 
 export interface TalkPanelProps {
   entityType: EntityType;
@@ -85,41 +91,43 @@ export const TalkPanel: React.FC<TalkPanelProps> = ({
   };
 
   return (
-    <section className="wiki-panel" aria-label={KINLOOM_VOCABULARY.wiki.familyNotes}>
-      <div className="wiki-panel-header">
+    <section className={cx(uiStyles, 'wiki-panel')} aria-label={KINLOOM_VOCABULARY.wiki.familyNotes}>
+      <div className={cx(uiStyles, 'wiki-panel-header')}>
         <h2>Family Notes{entityTitle ? ` · ${entityTitle}` : ''}</h2>
-        <span className="wiki-panel-meta">
+        <span className={cx(uiStyles, 'wiki-panel-meta')}>
           {comments.length} note{comments.length === 1 ? '' : 's'}
         </span>
       </div>
 
       {error && (
-        <div className="wiki-status-banner is-error" role="alert">
+        <div className={cx(uiStyles, 'wiki-status-banner is-error')} role="alert">
           {error}
         </div>
       )}
 
-      {loading && <p className="empty-ring-note">Loading discussion notes…</p>}
+      {loading && <p className={cx(uiStyles, 'empty-ring-note')}>Loading discussion notes…</p>}
       {!loading && comments.length === 0 && (
-        <p className="empty-ring-note">No research notes or family discussion posted on this record yet.</p>
+        <p className={cx(uiStyles, 'empty-ring-note')}>
+          No research notes or family discussion posted on this record yet.
+        </p>
       )}
 
-      <div className="wiki-talk-list">
+      <div className={cx(uiStyles, 'wiki-talk-list')}>
         {comments.map((comment) => {
           const canDeleteComment =
             Boolean(dataSource.deleteTalkComment) &&
             capabilities.canEdit &&
             (session?.role === 'admin' || (Boolean(session?.email) && session?.email === comment.author_id));
           return (
-            <article key={comment.comment_id} className="wiki-talk-item">
-              <div className="wiki-talk-meta">
+            <article key={comment.comment_id} className={cx(uiStyles, 'wiki-talk-item')}>
+              <div className={cx(uiStyles, 'wiki-talk-meta')}>
                 <div>
                   <strong>{comment.author_name}</strong> <span>{comment.created_at}</span>
                 </div>
                 {canDeleteComment && (
                   <button
                     type="button"
-                    className="pill-btn wiki-danger-btn"
+                    className={cx(uiStyles, 'pill-btn wiki-danger-btn')}
                     disabled={deletingId !== null}
                     onClick={() => {
                       void handleDelete(comment.comment_id);
@@ -129,7 +137,7 @@ export const TalkPanel: React.FC<TalkPanelProps> = ({
                   </button>
                 )}
               </div>
-              <div className="wiki-talk-body">{comment.body_md}</div>
+              <div className={cx(uiStyles, 'wiki-talk-body')}>{comment.body_md}</div>
             </article>
           );
         })}
@@ -137,17 +145,17 @@ export const TalkPanel: React.FC<TalkPanelProps> = ({
 
       {capabilities.canEdit && dataSource.postTalkComment ? (
         <form
-          className="wiki-talk-form"
+          className={cx(uiStyles, 'wiki-talk-form')}
           onSubmit={(e) => {
             void handleSubmit(e);
           }}
         >
-          <label htmlFor={`talk-input-${entityId}`} className="wiki-field-label">
+          <label htmlFor={`talk-input-${entityId}`} className={cx(uiStyles, 'wiki-field-label')}>
             Add a family note or question
           </label>
           <textarea
             id={`talk-input-${entityId}`}
-            className="wiki-textarea"
+            className={cx(uiStyles, 'wiki-textarea')}
             rows={3}
             placeholder="Share a memory, ask a question about a date, or add family context…"
             value={bodyMd}
@@ -156,10 +164,10 @@ export const TalkPanel: React.FC<TalkPanelProps> = ({
             }}
             disabled={submitting}
           />
-          <div className="wiki-form-actions">
+          <div className={cx(uiStyles, 'wiki-form-actions')}>
             <button
               type="submit"
-              className="wiki-btn-primary wiki-btn-sm"
+              className={cx(uiStyles, 'wiki-btn-primary wiki-btn-sm')}
               disabled={submitting || bodyMd.trim().length === 0}
             >
               {submitting ? 'Posting…' : 'Post Note'}
@@ -167,7 +175,7 @@ export const TalkPanel: React.FC<TalkPanelProps> = ({
           </div>
         </form>
       ) : (
-        <p className="wiki-hint-text">Sign in as a family editor to add family notes.</p>
+        <p className={cx(uiStyles, 'wiki-hint-text')}>Sign in as a family editor to add family notes.</p>
       )}
     </section>
   );

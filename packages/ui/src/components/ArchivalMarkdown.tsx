@@ -8,10 +8,14 @@ import {
 import type React from 'react';
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useOptionalArchiveData } from '../context/ArchiveDataContext.js';
+import { cx } from '../lib/cx.js';
+import cssMod0 from '../pages/PersonPage.module.css';
 import { resolveAssetUrl } from './Atoms.js';
 import { CitationPopover } from './CitationPopover.js';
 import { InlineEntityMention } from './InlineEntityMention.js';
 import { hasPronunciationContent } from './PronunciationBadge.js';
+
+const uiStyles = cssMod0;
 
 type MarkdownBlock =
   | { kind: 'heading'; level: 3 | 4; text: string }
@@ -302,10 +306,10 @@ function parseInlineNodes(
         const isActive = citationCtx.activeKey === key;
 
         nodes.push(
-          <sup key={key} className="archival-footnote-sup">
+          <sup key={key} className={cx(uiStyles, 'archival-footnote-sup')}>
             <button
               type="button"
-              className={`archival-footnote-ref${isActive ? ' is-active' : ''}`}
+              className={cx(uiStyles, `archival-footnote-ref${isActive ? ' is-active' : ''}`)}
               aria-label={`Source citation ${footnoteNumber}: ${formatPublicCitation(source.citation)}`}
               aria-expanded={isActive}
               aria-controls={isActive ? citationCtx.popoverId : undefined}
@@ -386,7 +390,7 @@ function parseInlineNodes(
           <a
             key={key}
             href={href}
-            className="archival-md-link"
+            className={cx(uiStyles, 'archival-md-link')}
             target={isExternal ? '_blank' : undefined}
             rel={isExternal ? 'noopener noreferrer' : undefined}
           >
@@ -778,29 +782,29 @@ export const ArchivalMarkdown: React.FC<ArchivalMarkdownProps> = ({
   }
 
   return (
-    <div className={className ? `archival-markdown ${className}` : 'archival-markdown'}>
+    <div className={cx(uiStyles, className ? `archival-markdown ${className}` : 'archival-markdown')}>
       {blocks.map((block, idx) => {
         const blockKey = `b-${idx}`;
         switch (block.kind) {
           case 'heading':
             return block.level === 3 ? (
-              <h4 key={blockKey} className="archival-md-heading">
+              <h4 key={blockKey} className={cx(uiStyles, 'archival-md-heading')}>
                 {parseInlineNodes(block.text, blockKey, citationCtx)}
               </h4>
             ) : (
-              <h5 key={blockKey} className="archival-md-subheading">
+              <h5 key={blockKey} className={cx(uiStyles, 'archival-md-subheading')}>
                 {parseInlineNodes(block.text, blockKey, citationCtx)}
               </h5>
             );
           case 'blockquote':
             return (
-              <blockquote key={blockKey} className="archival-md-quote">
+              <blockquote key={blockKey} className={cx(uiStyles, 'archival-md-quote')}>
                 {parseInlineNodes(block.text, blockKey, citationCtx, entityCtx, new Set())}
               </blockquote>
             );
           case 'list':
             return block.ordered ? (
-              <ol key={blockKey} className="archival-md-list">
+              <ol key={blockKey} className={cx(uiStyles, 'archival-md-list')}>
                 {block.items.map((item, itemIdx) => (
                   // biome-ignore lint/suspicious/noArrayIndexKey: markdown list items have no stable ID beyond block+index
                   <li key={`${blockKey}-li-${itemIdx}`}>
@@ -809,7 +813,7 @@ export const ArchivalMarkdown: React.FC<ArchivalMarkdownProps> = ({
                 ))}
               </ol>
             ) : (
-              <ul key={blockKey} className="archival-md-list">
+              <ul key={blockKey} className={cx(uiStyles, 'archival-md-list')}>
                 {block.items.map((item, itemIdx) => (
                   // biome-ignore lint/suspicious/noArrayIndexKey: markdown list items have no stable ID beyond block+index
                   <li key={`${blockKey}-li-${itemIdx}`}>
@@ -820,7 +824,7 @@ export const ArchivalMarkdown: React.FC<ArchivalMarkdownProps> = ({
             );
           case 'paragraph':
             return (
-              <p key={blockKey} className="archival-md-p">
+              <p key={blockKey} className={cx(uiStyles, 'archival-md-p')}>
                 {parseInlineNodes(block.text, blockKey, citationCtx, entityCtx, new Set())}
               </p>
             );

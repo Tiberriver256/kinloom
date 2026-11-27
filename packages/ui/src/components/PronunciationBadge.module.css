@@ -465,12 +465,11 @@
   color: var(--diff-add-fg);
 }
 
-
 /* Responsive overrides */
 
 @media (max-width: 768px) {
   .pronunciation-play-btn {
-width: 44px;
+    width: 44px;
     height: 44px;
     min-width: 44px;
     min-height: 44px;

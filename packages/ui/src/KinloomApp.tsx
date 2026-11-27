@@ -14,10 +14,15 @@ import { PrivateArchiveGate } from './components/wiki/PrivateArchiveGate.js';
 import type { ArchiveCapabilities, ArchiveDataLoader, ArchiveSession } from './context/ArchiveDataContext.js';
 import { useArchiveData } from './context/ArchiveDataContext.js';
 import { ArchiveProvider } from './context/ArchiveProvider.js';
+import { cx } from './lib/cx.js';
 import { IndexPage } from './pages/IndexPage.js';
+import cssMod0 from './pages/IndexPage.module.css';
 import { NotFoundPage } from './pages/NotFoundPage.js';
+import cssMod1 from './pages/TreeAndMapPage.module.css';
 import { PluginSlot, useKinloomPlugins } from './plugins/PluginContext.js';
 import type { KinloomUiPlugin } from './plugins/types.js';
+
+const uiStyles: Readonly<Record<string, string>> = { ...cssMod0, ...cssMod1 };
 
 const AdminPage = lazy(async () => {
   const module = await import('./pages/AdminPage.js');
@@ -80,9 +85,9 @@ export interface KinloomAppProps {
 const RouteLoading: React.FC = () => (
   <div>
     <ExplorerTopBar />
-    <main id="main-content" className="index-page">
-      <output className="archive-loading-shell" aria-live="polite">
-        <span className="archive-loading-spinner" aria-hidden="true" />
+    <main id="main-content" className={cx(uiStyles, 'index-page')}>
+      <output className={cx(uiStyles, 'archive-loading-shell')} aria-live="polite">
+        <span className={cx(uiStyles, 'archive-loading-spinner')} aria-hidden="true" />
         <span>Loading archival view…</span>
       </output>
     </main>
@@ -140,7 +145,7 @@ const RoutedAppShell: React.FC<{ siteTitle: string; baseUrl: string }> = ({ site
       <SourceReaderDrawer />
       <SourceInspectorDrawer />
       <GlobalSearchModal />
-      <PluginSlot name="appShell" className="kinloom-app-shell-slot" />
+      <PluginSlot name="appShell" className={cx(uiStyles, 'kinloom-app-shell-slot')} />
     </>
   );
 };
@@ -176,7 +181,7 @@ export const KinloomApp: React.FC<KinloomAppProps> = ({
   const shell = <RoutedAppShell siteTitle={siteConfig.site.title} baseUrl={resolvedBase} />;
 
   return (
-    <div className="kinloom-app" style={rootStyle}>
+    <div className={cx(uiStyles, 'kinloom-app')} style={rootStyle}>
       <AppErrorBoundary siteTitle={siteConfig.site.title} baseUrl={resolvedBase}>
         <ArchiveProvider
           siteConfig={siteConfig}

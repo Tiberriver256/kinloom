@@ -236,17 +236,16 @@
   background: var(--border-control);
 }
 
-
 /* Responsive overrides */
 
 @media (max-width: 768px) {
   .local-survey-nearby-link {
-min-height: 44px;
+    min-height: 44px;
     padding: 6px 11px;
   }
 
   .occupancy-row {
-grid-template-columns: 1fr;
+    grid-template-columns: 1fr;
     gap: 6px;
     padding: 10px 4px;
   }

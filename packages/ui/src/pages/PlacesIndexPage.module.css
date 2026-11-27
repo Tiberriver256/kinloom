@@ -115,23 +115,22 @@
   text-decoration: none;
 }
 
-
 /* Responsive overrides */
 
 @media (max-width: 768px) {
   .place-ledger-row {
-padding: 11px 2px;
+    padding: 11px 2px;
   }
 
   .place-ledger-name {
-font-size: 1.38rem;
+    font-size: 1.38rem;
   }
 
   .place-ledger-span {
-font-size: 1.15rem;
+    font-size: 1.15rem;
   }
 
   .place-ledger-people {
-margin-top: 8px;
+    margin-top: 8px;
   }
 }

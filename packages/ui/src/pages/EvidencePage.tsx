@@ -9,15 +9,33 @@ import type React from 'react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { DateStamp, EmptyStateNotice } from '../components/Atoms.js';
+import cssMod0 from '../components/Atoms.module.css';
 import { ExplorerTopBar } from '../components/ExplorerTopBar.js';
 import { KinloomFooter } from '../components/KinloomFooter.js';
 import { MediaPlayer } from '../components/MediaPlayer.js';
+import cssMod1 from '../components/SourceInspectorDrawer.module.css';
+import cssMod2 from '../components/SourceReaderDrawer.module.css';
 import { useArchiveData } from '../context/ArchiveDataContext.js';
 import { useArchiveUi } from '../context/ArchiveUiContext.js';
+import { cx } from '../lib/cx.js';
 import { handleTablistKeyDown } from '../lib/keyboardNav.js';
 import { useDialogFocusTrap } from '../lib/useDialogFocusTrap.js';
 import { KINLOOM_VOCABULARY, MEDIA_KIND_LABELS } from '../lib/vocabulary.js';
 import { PluginSlot } from '../plugins/PluginContext.js';
+import cssMod3 from './EvidencePage.module.css';
+import cssMod4 from './IndexPage.module.css';
+import cssMod5 from './PersonPage.module.css';
+import cssMod6 from './PlacePage.module.css';
+
+const uiStyles: Readonly<Record<string, string>> = {
+  ...cssMod0,
+  ...cssMod1,
+  ...cssMod2,
+  ...cssMod3,
+  ...cssMod4,
+  ...cssMod5,
+  ...cssMod6,
+};
 
 type EvidenceTab = 'conflicts' | 'citations' | 'media';
 type MediaKindFilter = 'all' | ArchivalMediaKind;
@@ -216,7 +234,7 @@ export const EvidencePage: React.FC = () => {
     return (
       <div>
         <ExplorerTopBar />
-        <main id="main-content" className="index-page">
+        <main id="main-content" className={cx(uiStyles, 'index-page')}>
           {KINLOOM_VOCABULARY.evidence.loading}
         </main>
       </div>
@@ -228,8 +246,8 @@ export const EvidencePage: React.FC = () => {
   return (
     <div>
       <ExplorerTopBar />
-      <main id="main-content" className="place-page">
-        <section className="wire-banner" style={{ marginBottom: 18 }}>
+      <main id="main-content" className={cx(uiStyles, 'place-page')}>
+        <section className={cx(uiStyles, 'wire-banner')} style={{ marginBottom: 18 }}>
           <div>
             <h1>{KINLOOM_VOCABULARY.evidence.heading}</h1>
             <p>
@@ -238,7 +256,7 @@ export const EvidencePage: React.FC = () => {
               scans.
             </p>
           </div>
-          <div className="folio-metrics">
+          <div className={cx(uiStyles, 'folio-metrics')}>
             <div>
               <strong>{bundle.sources.length}</strong> cataloged sources
             </div>
@@ -257,7 +275,7 @@ export const EvidencePage: React.FC = () => {
         <PluginSlot name="evidenceExtra" />
 
         <div
-          className="filter-bar evidence-tabs"
+          className={cx(uiStyles, 'filter-bar evidence-tabs')}
           role="tablist"
           aria-label={KINLOOM_VOCABULARY.evidence.tablistAria}
           onKeyDown={(event) => {
@@ -271,7 +289,7 @@ export const EvidencePage: React.FC = () => {
             role="tab"
             tabIndex={tab === 'conflicts' ? 0 : -1}
             aria-selected={tab === 'conflicts'}
-            className={`pill-btn ${tab === 'conflicts' ? 'active' : ''}`}
+            className={cx(uiStyles, `pill-btn ${tab === 'conflicts' ? 'active' : ''}`)}
             onClick={() => {
               setTab('conflicts');
             }}
@@ -283,7 +301,7 @@ export const EvidencePage: React.FC = () => {
             role="tab"
             tabIndex={tab === 'citations' ? 0 : -1}
             aria-selected={tab === 'citations'}
-            className={`pill-btn ${tab === 'citations' ? 'active' : ''}`}
+            className={cx(uiStyles, `pill-btn ${tab === 'citations' ? 'active' : ''}`)}
             onClick={() => {
               setTab('citations');
             }}
@@ -295,7 +313,7 @@ export const EvidencePage: React.FC = () => {
             role="tab"
             tabIndex={tab === 'media' ? 0 : -1}
             aria-selected={tab === 'media'}
-            className={`pill-btn ${tab === 'media' ? 'active' : ''}`}
+            className={cx(uiStyles, `pill-btn ${tab === 'media' ? 'active' : ''}`)}
             onClick={() => {
               setTab('media');
             }}
@@ -319,7 +337,7 @@ export const EvidencePage: React.FC = () => {
                   (ev.alternate_places?.length || 0) +
                   (ev.fact_conflicts?.length || 0);
                 return (
-                  <article key={ev.id} className="place-map-box" style={{ marginBottom: 0 }}>
+                  <article key={ev.id} className={cx(uiStyles, 'place-map-box')} style={{ marginBottom: 0 }}>
                     <div
                       style={{
                         display: 'flex',
@@ -331,7 +349,7 @@ export const EvidencePage: React.FC = () => {
                     >
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                         <DateStamp displayDate={ev.display_date} edtf={ev.edtf_date} />
-                        <span className="conflict-pill">
+                        <span className={cx(uiStyles, 'conflict-pill')}>
                           ! {totalDiscrepancies} Preserved Discrepanc{totalDiscrepancies === 1 ? 'y' : 'ies'}
                         </span>
                       </div>
@@ -339,7 +357,7 @@ export const EvidencePage: React.FC = () => {
                         {readableRef && (
                           <button
                             type="button"
-                            className="source-read-btn"
+                            className={cx(uiStyles, 'source-read-btn')}
                             onClick={() => {
                               openSourceReader({ sourceId: readableRef.source_id, eventId: ev.id });
                             }}
@@ -350,7 +368,7 @@ export const EvidencePage: React.FC = () => {
                         {primaryPerson && (
                           <Link
                             to={`/person/${primaryPerson.slug}?event=${ev.id}`}
-                            className="pill-btn"
+                            className={cx(uiStyles, 'pill-btn')}
                             style={{ textDecoration: 'none' }}
                           >
                             {KINLOOM_VOCABULARY.evidence.openProfileCta}
@@ -369,7 +387,7 @@ export const EvidencePage: React.FC = () => {
                       {ev.title}
                     </h2>
                     <p style={{ margin: '0 0 10px', fontSize: '0.92rem' }}>{ev.summary}</p>
-                    <div className="source-details">
+                    <div className={cx(uiStyles, 'source-details')}>
                       <strong>Conflicting Claims Preserved Side-by-Side:</strong>
                       <ul>
                         {[
@@ -403,7 +421,7 @@ export const EvidencePage: React.FC = () => {
                               {readableSourceIds.has(claim.sourceId) && (
                                 <button
                                   type="button"
-                                  className="source-read-inline"
+                                  className={cx(uiStyles, 'source-read-inline')}
                                   onClick={() => {
                                     openSourceReader({ sourceId: claim.sourceId, eventId: ev.id });
                                   }}
@@ -425,7 +443,7 @@ export const EvidencePage: React.FC = () => {
 
         {tab === 'citations' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-            <section className="place-map-box" style={{ marginBottom: 0 }}>
+            <section className={cx(uiStyles, 'place-map-box')} style={{ marginBottom: 0 }}>
               <div
                 style={{
                   display: 'flex',
@@ -441,7 +459,7 @@ export const EvidencePage: React.FC = () => {
                 </h2>
                 <input
                   type="search"
-                  className="search-input"
+                  className={cx(uiStyles, 'search-input')}
                   placeholder="Filter sources or repositories (e.g. Census, NARA, Vital, County)…"
                   value={sourceQuery}
                   onChange={(e) => {
@@ -462,7 +480,7 @@ export const EvidencePage: React.FC = () => {
                       sourceQuery.trim() ? (
                         <button
                           type="button"
-                          className="pill-btn"
+                          className={cx(uiStyles, 'pill-btn')}
                           onClick={() => {
                             setSourceQuery('');
                           }}
@@ -478,7 +496,7 @@ export const EvidencePage: React.FC = () => {
                     const readable = readableSourceIds.has(s.id);
                     const cit = buildLibrarianCitation(s);
                     return (
-                      <div key={s.id} className="evidence-source-row">
+                      <div key={s.id} className={cx(uiStyles, 'evidence-source-row')}>
                         <div>
                           <div
                             style={{
@@ -489,7 +507,9 @@ export const EvidencePage: React.FC = () => {
                               marginBottom: 4,
                             }}
                           >
-                            <span className={`evidence-tier-badge tier-${cit.tier}`}>{cit.tierLabel}</span>
+                            <span className={cx(uiStyles, `evidence-tier-badge tier-${cit.tier}`)}>
+                              {cit.tierLabel}
+                            </span>
                             {cit.author && (
                               <span style={{ fontSize: '0.82rem', color: 'var(--text-secondary)' }}>
                                 {cit.author}
@@ -533,7 +553,7 @@ export const EvidencePage: React.FC = () => {
                           </span>
                           <button
                             type="button"
-                            className="source-action-btn primary"
+                            className={cx(uiStyles, 'source-action-btn primary')}
                             onClick={() => {
                               openSourceInspector({ sourceId: s.id });
                             }}
@@ -543,7 +563,7 @@ export const EvidencePage: React.FC = () => {
                           {readable && (
                             <button
                               type="button"
-                              className="source-read-btn"
+                              className={cx(uiStyles, 'source-read-btn')}
                               onClick={() => {
                                 openSourceReader({ sourceId: s.id });
                               }}
@@ -556,7 +576,7 @@ export const EvidencePage: React.FC = () => {
                               href={s.url}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="source-read-btn"
+                              className={cx(uiStyles, 'source-read-btn')}
                               style={{ textDecoration: 'none' }}
                             >
                               Open Archive ↗
@@ -570,7 +590,7 @@ export const EvidencePage: React.FC = () => {
               </div>
             </section>
 
-            <section className="place-map-box" style={{ marginBottom: 0 }}>
+            <section className={cx(uiStyles, 'place-map-box')} style={{ marginBottom: 0 }}>
               {unverifiedEvents.length === 0 ? (
                 <EmptyStateNotice title="All events have primary citations." />
               ) : (
@@ -624,7 +644,7 @@ export const EvidencePage: React.FC = () => {
                           {p && (
                             <Link
                               to={`/person/${p.slug}?event=${ev.id}`}
-                              className="pill-btn"
+                              className={cx(uiStyles, 'pill-btn')}
                               style={{ textDecoration: 'none', fontSize: '0.8125rem' }}
                             >
                               Verify on {p.full_name} →
@@ -638,7 +658,7 @@ export const EvidencePage: React.FC = () => {
                     <div style={{ marginTop: 12 }}>
                       <button
                         type="button"
-                        className="pill-btn"
+                        className={cx(uiStyles, 'pill-btn')}
                         onClick={() => {
                           setShowAllUnverified((v) => !v);
                         }}
@@ -657,7 +677,7 @@ export const EvidencePage: React.FC = () => {
 
         {tab === 'media' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-            <section className="place-map-box" style={{ marginBottom: 0 }}>
+            <section className={cx(uiStyles, 'place-map-box')} style={{ marginBottom: 0 }}>
               <div
                 style={{
                   display: 'flex',
@@ -685,7 +705,7 @@ export const EvidencePage: React.FC = () => {
                 </div>
                 <input
                   type="search"
-                  className="search-input"
+                  className={cx(uiStyles, 'search-input')}
                   placeholder={KINLOOM_VOCABULARY.evidence.mediaSearchPlaceholder}
                   value={mediaQuery}
                   onChange={(e) => {
@@ -697,14 +717,14 @@ export const EvidencePage: React.FC = () => {
               </div>
 
               <div
-                className="filter-bar"
+                className={cx(uiStyles, 'filter-bar')}
                 role="group"
                 aria-label="Filter photos and documents by category"
                 style={{ marginBottom: 14 }}
               >
                 <button
                   type="button"
-                  className={`pill-btn ${mediaKindFilter === 'all' ? 'active' : ''}`}
+                  className={cx(uiStyles, `pill-btn ${mediaKindFilter === 'all' ? 'active' : ''}`)}
                   onClick={() => {
                     setMediaKindFilter('all');
                     setMediaLimit(36);
@@ -732,7 +752,7 @@ export const EvidencePage: React.FC = () => {
                     <button
                       key={k}
                       type="button"
-                      className={`pill-btn ${mediaKindFilter === k ? 'active' : ''}`}
+                      className={cx(uiStyles, `pill-btn ${mediaKindFilter === k ? 'active' : ''}`)}
                       onClick={() => {
                         setMediaKindFilter(k);
                         setMediaLimit(36);
@@ -755,7 +775,7 @@ export const EvidencePage: React.FC = () => {
                     mediaKindFilter !== 'all' || mediaQuery.trim() ? (
                       <button
                         type="button"
-                        className="pill-btn"
+                        className={cx(uiStyles, 'pill-btn')}
                         onClick={() => {
                           setMediaKindFilter('all');
                           setMediaQuery('');
@@ -768,12 +788,12 @@ export const EvidencePage: React.FC = () => {
                 />
               ) : (
                 <>
-                  <div className="person-media-grid">
+                  <div className={cx(uiStyles, 'person-media-grid')}>
                     {displayedMedia.map((m) => (
                       <button
                         key={m.id}
                         type="button"
-                        className="person-media-card"
+                        className={cx(uiStyles, 'person-media-card')}
                         onClick={() => {
                           if (m.kind === 'document_scan' && m.source_id && m.page) {
                             openSourceReader({ sourceId: m.source_id, page: m.page });
@@ -782,13 +802,13 @@ export const EvidencePage: React.FC = () => {
                           }
                         }}
                       >
-                        <div className="person-media-thumb-wrap">
+                        <div className={cx(uiStyles, 'person-media-thumb-wrap')}>
                           <MediaPlayer media={m} baseUrl={baseUrl} variant="preview" />
-                          <span className={`media-kind-badge kind-${m.kind}`}>
+                          <span className={cx(uiStyles, `media-kind-badge kind-${m.kind}`)}>
                             {MEDIA_KIND_LABELS[m.kind] || m.kind}
                           </span>
                         </div>
-                        <div className="person-media-caption">{m.caption}</div>
+                        <div className={cx(uiStyles, 'person-media-caption')}>{m.caption}</div>
                       </button>
                     ))}
                   </div>
@@ -796,7 +816,7 @@ export const EvidencePage: React.FC = () => {
                     <div style={{ marginTop: 16, textAlign: 'center' }}>
                       <button
                         type="button"
-                        className="pill-btn"
+                        className={cx(uiStyles, 'pill-btn')}
                         onClick={() => {
                           setMediaLimit((n) => n + 36);
                         }}
@@ -811,7 +831,7 @@ export const EvidencePage: React.FC = () => {
             </section>
 
             {mediaChecklist.length > 0 && (
-              <section className="place-map-box" style={{ marginBottom: 0 }}>
+              <section className={cx(uiStyles, 'place-map-box')} style={{ marginBottom: 0 }}>
                 <h2
                   style={{
                     fontFamily: 'var(--font-serif)',
@@ -839,7 +859,10 @@ export const EvidencePage: React.FC = () => {
                 ) : (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                     {missingChecklistItems.map((item) => (
-                      <div key={`${item.person_id}-${item.obje_xref}`} className="evidence-source-row">
+                      <div
+                        key={`${item.person_id}-${item.obje_xref}`}
+                        className={cx(uiStyles, 'evidence-source-row')}
+                      >
                         <div>
                           <strong style={{ fontSize: '0.94rem' }}>{item.title}</strong>
                           <div
@@ -855,7 +878,7 @@ export const EvidencePage: React.FC = () => {
                         </div>
                         <Link
                           to={`/person/${item.person_slug}`}
-                          className="pill-btn"
+                          className={cx(uiStyles, 'pill-btn')}
                           style={{ textDecoration: 'none', fontSize: '0.8125rem' }}
                         >
                           {KINLOOM_VOCABULARY.evidence.openProfileCta}
@@ -877,23 +900,23 @@ export const EvidencePage: React.FC = () => {
                 ref={lightboxDialogRef}
                 open
                 aria-modal="true"
-                className="lightbox-backdrop"
+                className={cx(uiStyles, 'lightbox-backdrop')}
                 aria-label={lightboxItem.caption}
               >
                 <button
                   type="button"
                   tabIndex={-1}
-                  className="lightbox-backdrop-close"
+                  className={cx(uiStyles, 'lightbox-backdrop-close')}
                   aria-label="Close lightbox"
                   onClick={() => {
                     setLightboxItem(null);
                   }}
                 />
-                <div className="scan-lightbox-card">
-                  <div className="scan-lightbox-header">
+                <div className={cx(uiStyles, 'scan-lightbox-card')}>
+                  <div className={cx(uiStyles, 'scan-lightbox-header')}>
                     <div>
                       <span
-                        className={`media-kind-badge kind-${lightboxItem.kind}`}
+                        className={cx(uiStyles, `media-kind-badge kind-${lightboxItem.kind}`)}
                         style={{ position: 'static', marginRight: 8 }}
                       >
                         {MEDIA_KIND_LABELS[lightboxItem.kind] || lightboxItem.kind}
@@ -913,7 +936,7 @@ export const EvidencePage: React.FC = () => {
                         <>
                           <button
                             type="button"
-                            className="pill-btn"
+                            className={cx(uiStyles, 'pill-btn')}
                             onClick={() => {
                               setLightboxItem(navMedia[(curIdx - 1 + navMedia.length) % navMedia.length]);
                             }}
@@ -922,7 +945,7 @@ export const EvidencePage: React.FC = () => {
                           </button>
                           <button
                             type="button"
-                            className="pill-btn"
+                            className={cx(uiStyles, 'pill-btn')}
                             onClick={() => {
                               setLightboxItem(navMedia[(curIdx + 1) % navMedia.length]);
                             }}
@@ -934,7 +957,7 @@ export const EvidencePage: React.FC = () => {
                       {lightboxItem.person_slug && (
                         <Link
                           to={`/person/${lightboxItem.person_slug}`}
-                          className="pill-btn"
+                          className={cx(uiStyles, 'pill-btn')}
                           style={{ textDecoration: 'none' }}
                           onClick={() => {
                             setLightboxItem(null);
@@ -946,7 +969,7 @@ export const EvidencePage: React.FC = () => {
                       <button
                         ref={lightboxCloseRef}
                         type="button"
-                        className="pill-btn"
+                        className={cx(uiStyles, 'pill-btn')}
                         onClick={() => {
                           setLightboxItem(null);
                         }}
@@ -956,7 +979,7 @@ export const EvidencePage: React.FC = () => {
                       </button>
                     </div>
                   </div>
-                  <div className="scan-lightbox-scroll">
+                  <div className={cx(uiStyles, 'scan-lightbox-scroll')}>
                     <MediaPlayer media={lightboxItem} baseUrl={baseUrl} variant="full" />
                   </div>
                   {lightboxItem.provenance && (

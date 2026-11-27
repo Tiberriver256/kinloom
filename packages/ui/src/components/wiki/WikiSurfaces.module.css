@@ -1649,16 +1649,15 @@
   }
 }
 
-
 /* Responsive overrides */
 
 @media (max-width: 1023px) {
   .topbar-account-name {
-display: none;
+    display: none;
   }
 
   .topbar-account-btn {
-height: 44px;
+    height: 44px;
     min-height: 44px;
     min-width: 44px;
     padding: 4px 8px 4px 6px;
@@ -1666,24 +1665,24 @@ height: 44px;
   }
 
   .topbar-account-menu {
-right: 0;
+    right: 0;
     left: auto;
     max-width: calc(100vw - 24px);
   }
 
   .topbar-account-item {
-min-height: 44px;
+    min-height: 44px;
   }
 }
 
 @media (max-width: 768px) {
   .kinship-examples-bar {
-flex-wrap: wrap;
+    flex-wrap: wrap;
     gap: 8px;
   }
 
   .kinship-examples-bar :global(.pill-btn) {
-white-space: normal;
+    white-space: normal;
     text-align: left;
     min-height: 44px;
     border: 1px solid var(--border-control);

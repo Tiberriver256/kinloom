@@ -5,8 +5,13 @@ import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from
 import { createPortal } from 'react-dom';
 import { Link, useInRouterContext } from 'react-router-dom';
 import { useOptionalArchiveData } from '../context/ArchiveDataContext.js';
+import { cx } from '../lib/cx.js';
+import cssMod1 from '../pages/PersonPage.module.css';
 import { computeCitationPopoverPosition, type PopoverCoordinates } from './CitationPopover.js';
 import { hasPronunciationContent, PronunciationBadge } from './PronunciationBadge.js';
+import cssMod0 from './PronunciationBadge.module.css';
+
+const uiStyles: Readonly<Record<string, string>> = { ...cssMod0, ...cssMod1 };
 
 const POPOVER_CLOSE_DELAY_MS = 150;
 const useIsoLayoutEffect = typeof window !== 'undefined' ? useLayoutEffect : useEffect;
@@ -211,7 +216,7 @@ export const InlineEntityMention: React.FC<InlineEntityMentionProps> = (props) =
       id={popoverId}
       role="dialog"
       aria-label={`${entityTitle} preview`}
-      className={`citation-popover entity-popover is-${coords.placement} print-hide`}
+      className={cx(uiStyles, `citation-popover entity-popover is-${coords.placement} print-hide`)}
       style={{
         top: coords.top,
         left: coords.left,
@@ -221,15 +226,15 @@ export const InlineEntityMention: React.FC<InlineEntityMentionProps> = (props) =
       onMouseLeave={handleMouseLeave}
       onBlur={handleBlur}
     >
-      <div className="citation-popover-header">
-        <div className="citation-popover-header-meta">
-          <span className={`entity-popover-kind is-${kind}`}>
+      <div className={cx(uiStyles, 'citation-popover-header')}>
+        <div className={cx(uiStyles, 'citation-popover-header-meta')}>
+          <span className={cx(uiStyles, `entity-popover-kind is-${kind}`)}>
             {kind === 'person' ? 'Person' : formatPlaceTypeLabel(props.place.place_type)}
           </span>
         </div>
         <button
           type="button"
-          className="citation-popover-close"
+          className={cx(uiStyles, 'citation-popover-close')}
           aria-label={`Close ${entityTitle} preview`}
           onClick={closePopover}
         >
@@ -237,9 +242,9 @@ export const InlineEntityMention: React.FC<InlineEntityMentionProps> = (props) =
         </button>
       </div>
 
-      <div className="entity-popover-title">{entityTitle}</div>
+      <div className={cx(uiStyles, 'entity-popover-title')}>{entityTitle}</div>
 
-      <div className="citation-popover-meta">
+      <div className={cx(uiStyles, 'citation-popover-meta')}>
         {kind === 'person' ? (
           <span>{formatPersonDates(props.person)}</span>
         ) : (
@@ -248,7 +253,7 @@ export const InlineEntityMention: React.FC<InlineEntityMentionProps> = (props) =
       </div>
 
       {showPronunciation && (
-        <div className="entity-popover-pronunciation">
+        <div className={cx(uiStyles, 'entity-popover-pronunciation')}>
           <PronunciationBadge
             pronunciation={pronunciation}
             label={pronunciationLabel}
@@ -260,13 +265,13 @@ export const InlineEntityMention: React.FC<InlineEntityMentionProps> = (props) =
         </div>
       )}
 
-      <div className="citation-popover-footer">
+      <div className={cx(uiStyles, 'citation-popover-footer')}>
         {inRouter ? (
-          <Link to={href} className="entity-popover-profile-link" onClick={closePopover}>
+          <Link to={href} className={cx(uiStyles, 'entity-popover-profile-link')} onClick={closePopover}>
             View profile →
           </Link>
         ) : (
-          <a href={href} className="entity-popover-profile-link" onClick={closePopover}>
+          <a href={href} className={cx(uiStyles, 'entity-popover-profile-link')} onClick={closePopover}>
             View profile →
           </a>
         )}
@@ -275,7 +280,7 @@ export const InlineEntityMention: React.FC<InlineEntityMentionProps> = (props) =
   ) : null;
 
   return (
-    <span className={`inline-entity-mention is-${kind}`}>
+    <span className={cx(uiStyles, `inline-entity-mention is-${kind}`)}>
       {inRouter ? (
         <Link to={href} {...linkProps}>
           {displayText}
@@ -292,7 +297,7 @@ export const InlineEntityMention: React.FC<InlineEntityMentionProps> = (props) =
           baseUrl={baseUrl}
           compact
           iconOnly
-          className="inline-entity-pronunciation"
+          className={cx(uiStyles, 'inline-entity-pronunciation')}
         />
       )}
       {popoverCard &&

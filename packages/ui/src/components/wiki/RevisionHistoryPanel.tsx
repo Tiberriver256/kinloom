@@ -3,9 +3,15 @@ import { asRevisionId } from '@kinloom/core';
 import type React from 'react';
 import { useCallback, useEffect, useState } from 'react';
 import { useArchiveData } from '../../context/ArchiveDataContext.js';
+import { cx } from '../../lib/cx.js';
 import { formatArchivalTimestamp } from '../../lib/formatTimestamp.js';
+import cssMod1 from '../../pages/IndexPage.module.css';
+import cssMod2 from '../../pages/PersonPage.module.css';
 import { RevisionDiffView } from './RevisionDiffView.js';
 import { AuthorPill, CitationBadge } from './WikiBadges.js';
+import cssMod0 from './WikiSurfaces.module.css';
+
+const uiStyles: Readonly<Record<string, string>> = { ...cssMod0, ...cssMod1, ...cssMod2 };
 
 export interface RevisionHistoryPanelProps {
   entityType: EntityType;
@@ -87,55 +93,59 @@ export const RevisionHistoryPanel: React.FC<RevisionHistoryPanelProps> = ({
   };
 
   return (
-    <section className="wiki-panel" aria-label="Revision history">
-      <div className="wiki-panel-header">
+    <section className={cx(uiStyles, 'wiki-panel')} aria-label="Revision history">
+      <div className={cx(uiStyles, 'wiki-panel-header')}>
         <h2>Revision History</h2>
-        <span className="wiki-panel-meta">
+        <span className={cx(uiStyles, 'wiki-panel-meta')}>
           {revisions.length} revision{revisions.length === 1 ? '' : 's'}
         </span>
       </div>
 
       {statusMessage && (
-        <output className="wiki-status-banner is-success" aria-live="polite">
+        <output className={cx(uiStyles, 'wiki-status-banner is-success')} aria-live="polite">
           {statusMessage}
         </output>
       )}
       {error && (
-        <div className="wiki-status-banner is-error" role="alert">
+        <div className={cx(uiStyles, 'wiki-status-banner is-error')} role="alert">
           {error}
         </div>
       )}
-      {loading && <p className="empty-ring-note">Loading revision history…</p>}
+      {loading && <p className={cx(uiStyles, 'empty-ring-note')}>Loading revision history…</p>}
       {!loading && revisions.length === 0 && (
-        <p className="empty-ring-note">No revisions have been recorded for this record yet.</p>
+        <p className={cx(uiStyles, 'empty-ring-note')}>
+          No revisions have been recorded for this record yet.
+        </p>
       )}
 
-      <div className="wiki-revision-list">
+      <div className={cx(uiStyles, 'wiki-revision-list')}>
         {revisions.map((rev) => {
           const isExpanded = expandedId === rev.revision_id;
           return (
-            <article key={rev.revision_id} className="wiki-revision-item">
-              <div className="wiki-revision-row">
-                <div className="wiki-revision-main">
-                  <div className="wiki-revision-topline">
-                    <code className="wiki-rev-id">r{rev.revision_id}</code>
-                    <span className={`wiki-action-tag action-${rev.action}`}>{rev.action}</span>
+            <article key={rev.revision_id} className={cx(uiStyles, 'wiki-revision-item')}>
+              <div className={cx(uiStyles, 'wiki-revision-row')}>
+                <div className={cx(uiStyles, 'wiki-revision-main')}>
+                  <div className={cx(uiStyles, 'wiki-revision-topline')}>
+                    <code className={cx(uiStyles, 'wiki-rev-id')}>r{rev.revision_id}</code>
+                    <span className={cx(uiStyles, `wiki-action-tag action-${rev.action}`)}>{rev.action}</span>
                     <AuthorPill authorType={rev.author_type} authorName={rev.author_name} />
                     <CitationBadge hasPrimarySource={rev.has_primary_source} />
-                    {rev.batch_id && <code className="wiki-batch-chip">batch:{rev.batch_id}</code>}
+                    {rev.batch_id && (
+                      <code className={cx(uiStyles, 'wiki-batch-chip')}>batch:{rev.batch_id}</code>
+                    )}
                   </div>
-                  <div className="wiki-revision-summary">{rev.summary}</div>
-                  <div className="wiki-revision-time">
+                  <div className={cx(uiStyles, 'wiki-revision-summary')}>{rev.summary}</div>
+                  <div className={cx(uiStyles, 'wiki-revision-time')}>
                     <time dateTime={rev.created_at} title={rev.created_at}>
                       {formatArchivalTimestamp(rev.created_at)}
                     </time>
                   </div>
                 </div>
 
-                <div className="wiki-revision-actions">
+                <div className={cx(uiStyles, 'wiki-revision-actions')}>
                   <button
                     type="button"
-                    className="pill-btn"
+                    className={cx(uiStyles, 'pill-btn')}
                     aria-expanded={isExpanded}
                     onClick={() => {
                       setExpandedId(isExpanded ? null : rev.revision_id);
@@ -148,7 +158,7 @@ export const RevisionHistoryPanel: React.FC<RevisionHistoryPanelProps> = ({
                     confirmingRevertId !== rev.revision_id && (
                       <button
                         type="button"
-                        className="pill-btn wiki-danger-btn"
+                        className={cx(uiStyles, 'pill-btn wiki-danger-btn')}
                         disabled={revertingId !== null}
                         onClick={() => {
                           setConfirmingRevertId(rev.revision_id);
@@ -161,15 +171,15 @@ export const RevisionHistoryPanel: React.FC<RevisionHistoryPanelProps> = ({
               </div>
 
               {confirmingRevertId === rev.revision_id && (
-                <div className="wiki-confirm-inline" role="alert">
-                  <p className="wiki-confirm-inline-text">
+                <div className={cx(uiStyles, 'wiki-confirm-inline')} role="alert">
+                  <p className={cx(uiStyles, 'wiki-confirm-inline-text')}>
                     Revert revision <code>r{rev.revision_id}</code>? This appends a new revision restoring the
                     prior version.
                   </p>
-                  <div className="wiki-inline-actions">
+                  <div className={cx(uiStyles, 'wiki-inline-actions')}>
                     <button
                       type="button"
-                      className="pill-btn wiki-danger-btn"
+                      className={cx(uiStyles, 'pill-btn wiki-danger-btn')}
                       disabled={revertingId !== null}
                       onClick={() => {
                         void handleRevert(rev);
@@ -179,7 +189,7 @@ export const RevisionHistoryPanel: React.FC<RevisionHistoryPanelProps> = ({
                     </button>
                     <button
                       type="button"
-                      className="pill-btn"
+                      className={cx(uiStyles, 'pill-btn')}
                       disabled={revertingId !== null}
                       onClick={() => {
                         setConfirmingRevertId(null);
@@ -192,7 +202,7 @@ export const RevisionHistoryPanel: React.FC<RevisionHistoryPanelProps> = ({
               )}
 
               {isExpanded && (
-                <div className="wiki-revision-diff-body">
+                <div className={cx(uiStyles, 'wiki-revision-diff-body')}>
                   <RevisionDiffView
                     before={rev.before_json}
                     after={rev.after_json}

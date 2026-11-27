@@ -1707,12 +1707,11 @@ html.tree-viewport-lock body {
   gap: 6px;
 }
 
-
 /* Responsive overrides */
 
 @media (max-width: 768px) {
   .tree-toolbar-shell {
-top: 0;
+    top: 0;
     left: 0;
     right: 0;
     width: 100%;
@@ -1723,7 +1722,7 @@ top: 0;
   }
 
   .tree-page-roll .tree-toolbar-shell {
-position: sticky;
+    position: sticky;
     top: var(--topbar-height);
     left: 0;
     right: 0;
@@ -1733,7 +1732,7 @@ position: sticky;
   }
 
   .tree-toolbar {
-display: flex;
+    display: flex;
     flex-direction: column;
     align-items: stretch;
     gap: 6px;
@@ -1746,7 +1745,7 @@ display: flex;
   }
 
   .tree-toolbar-row {
-display: flex;
+    display: flex;
     align-items: center;
     gap: 6px;
     min-width: 0;
@@ -1754,11 +1753,11 @@ display: flex;
   }
 
   .tree-search-desktop {
-display: none;
+    display: none;
   }
 
   .tree-search-toggle-btn {
-display: inline-flex;
+    display: inline-flex;
     align-items: center;
     justify-content: center;
     min-width: 44px;
@@ -1767,7 +1766,7 @@ display: inline-flex;
   }
 
   .tree-toolbar :global(.tree-add-person-mobile-btn) {
-display: inline-flex;
+    display: inline-flex;
     align-items: center;
     justify-content: center;
     min-width: 44px;
@@ -1777,7 +1776,7 @@ display: inline-flex;
   }
 
   .tree-toolbar select:global(.pill-btn):global(.tree-branch-select) {
-flex: 1 1 80px;
+    flex: 1 1 80px;
     min-width: 0;
     max-width: none;
     min-height: 44px;
@@ -1785,7 +1784,7 @@ flex: 1 1 80px;
   }
 
   .tree-segmented :global(.tree-seg-btn) {
-min-height: 44px;
+    min-height: 44px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -1793,11 +1792,11 @@ min-height: 44px;
   }
 
   .tree-toolbar :global(.tree-add-person-btn) {
-display: none;
+    display: none;
   }
 
   .tree-search-popover:global(.is-mobile-open) {
-position: fixed;
+    position: fixed;
     top: calc(var(--topbar-height) + 60px);
     left: 10px;
     right: 10px;
@@ -1807,12 +1806,12 @@ position: fixed;
   }
 
   .tree-search-option {
-min-height: 44px;
+    min-height: 44px;
     padding: 9px 12px;
   }
 
   .tree-gen-jump-bar {
-padding-right: 26px;
+    padding-right: 26px;
     mask-image: linear-gradient(to right, black 88%, transparent 100%);
     -webkit-mask-image: linear-gradient(to right, black 88%, transparent 100%);
   }
@@ -1826,16 +1825,16 @@ padding-right: 26px;
   .tree-focus-timeline-link,
   .tree-focus-timeline-link:global(.pill-btn):global(.active),
   .tree-focus-clear-btn {
-min-height: 44px;
+    min-height: 44px;
   }
 
   .tree-gen-jump-chip,
   .tree-focus-close-btn {
-min-width: 44px;
+    min-width: 44px;
   }
 
   .tree-focus-breadcrumb {
-flex-wrap: nowrap;
+    flex-wrap: nowrap;
     overflow-x: auto;
     scrollbar-width: none;
     white-space: nowrap;
@@ -1843,11 +1842,11 @@ flex-wrap: nowrap;
   }
 
   .tree-focus-breadcrumb::-webkit-scrollbar {
-display: none;
+    display: none;
   }
 
   .tree-focus-crumb-btn {
-min-height: 44px;
+    min-height: 44px;
     display: inline-flex;
     align-items: center;
     padding: 0 4px;
@@ -1855,34 +1854,34 @@ min-height: 44px;
   }
 
   .tree-focus-crumb-current {
-flex-shrink: 0;
+    flex-shrink: 0;
   }
 
   .tree-roll-viewport {
-padding: 8px 10px 140px;
+    padding: 8px 10px 140px;
   }
 
   .tree-roll-unit {
-padding: 9px;
+    padding: 9px;
   }
 
   .tree-roll-card {
-flex: 1 1 128px;
+    flex: 1 1 128px;
     padding: 8px 9px;
     min-height: 56px;
   }
 
   .tree-roll-card-name {
-font-size: 0.92rem;
+    font-size: 0.92rem;
   }
 
   .tree-hanging-grid {
-gap: 8px 12px;
+    gap: 8px 12px;
   }
 
   .tree-page-roll :global(.tree-focus-drawer),
   .tree-page-diagram :global(.tree-focus-drawer) {
-position: fixed;
+    position: fixed;
     top: auto;
     left: 10px;
     right: 10px;
@@ -1895,12 +1894,12 @@ position: fixed;
   }
 
   .tree-page-diagram .tree-controls {
-right: 10px;
+    right: 10px;
     bottom: 14px;
   }
 
   .map-toolbar {
-top: 8px;
+    top: 8px;
     left: 8px;
     right: 8px;
     max-width: none;
@@ -1911,18 +1910,18 @@ top: 8px;
   }
 
   .map-trace-label {
-flex: 1.15 1 0;
+    flex: 1.15 1 0;
     min-width: 0;
     gap: 0;
   }
 
   .map-trace-label > span {
-display: none;
+    display: none;
   }
 
   .map-trace-label > select:global(.pill-btn),
   .map-era-select-mobile {
-display: inline-flex;
+    display: inline-flex;
     width: 100%;
     min-width: 0;
     min-height: 44px;
@@ -1931,11 +1930,11 @@ display: inline-flex;
   }
 
   .map-era-select-mobile {
-flex: 1 1 0;
+    flex: 1 1 0;
   }
 
   .map-route-mode-mobile {
-display: inline-flex;
+    display: inline-flex;
     align-items: center;
     justify-content: center;
     flex: 0 0 auto;
@@ -1948,26 +1947,26 @@ display: inline-flex;
 
   .map-toolbar-presets,
   .map-route-mode {
-display: none;
+    display: none;
   }
 
   .map-style-note {
-top: 100px;
+    top: 100px;
     left: 8px;
     font-size: 0.72rem;
     padding: 2px 7px;
   }
 
   .map-stage-legend {
-display: none;
+    display: none;
   }
 
   .tree-minimap {
-display: none;
+    display: none;
   }
 
   .tree-popover {
-top: auto;
+    top: auto;
     left: 10px;
     right: 64px;
     bottom: 14px;
@@ -1979,12 +1978,12 @@ top: auto;
   }
 
   .tree-controls {
-right: 10px;
+    right: 10px;
     bottom: 14px;
   }
 
   .tree-controls :global(.pill-btn) {
-min-width: 44px;
+    min-width: 44px;
     min-height: 44px;
     padding: 0;
     display: inline-flex;
@@ -1993,13 +1992,13 @@ min-width: 44px;
   }
 
   .map-page :global(.maplibregl-ctrl-bottom-left) {
-top: 66px;
+    top: 66px;
     left: 8px;
     bottom: auto;
   }
 
   .map-bottom-dock {
-position: absolute;
+    position: absolute;
     left: 0;
     right: 0;
     bottom: 0;
@@ -2015,7 +2014,7 @@ position: absolute;
   }
 
   .map-drawer-handle {
-display: block;
+    display: block;
     width: 34px;
     height: 4px;
     border-radius: 999px;
@@ -2027,7 +2026,7 @@ display: block;
 
   .map-stop-popover,
   .map-stop-popover:global(.is-left) {
-position: static;
+    position: static;
     top: auto;
     left: auto;
     right: auto;
@@ -2046,12 +2045,12 @@ position: static;
   }
 
   .map-stop-title {
-margin: 2px 0 0;
+    margin: 2px 0 0;
     font-size: 1rem;
   }
 
   .map-drawer-toggle {
-display: inline-flex;
+    display: inline-flex;
     align-items: center;
     justify-content: center;
     min-height: 44px;
@@ -2062,23 +2061,23 @@ display: inline-flex;
   }
 
   .map-close-btn {
-min-width: 44px;
+    min-width: 44px;
     min-height: 44px;
   }
 
   .map-stop-popover:not(:global(.is-expanded)) :global(.map-stop-details) {
-display: none;
+    display: none;
   }
 
   .map-stop-links :global(.pill-btn) {
-min-height: 44px;
+    min-height: 44px;
     display: inline-flex;
     align-items: center;
     padding: 0 10px;
   }
 
   .map-playback-bar {
-position: static;
+    position: static;
     left: auto;
     right: auto;
     bottom: auto;
@@ -2091,14 +2090,14 @@ position: static;
   }
 
   .map-playback-buttons {
-width: 100%;
+    width: 100%;
     display: grid;
     grid-template-columns: 1.35fr 0.85fr 0.9fr 1fr;
     gap: 4px;
   }
 
   .map-playback-buttons :global(.pill-btn) {
-min-height: 44px;
+    min-height: 44px;
     min-width: 44px;
     padding: 0 4px;
     font-size: 0.74rem;
@@ -2109,12 +2108,12 @@ min-height: 44px;
   }
 
   .map-playback-slider {
-width: 100%;
+    width: 100%;
     min-width: 0;
     gap: 8px;
   }
 
   .map-range-input {
-min-height: 44px;
+    min-height: 44px;
   }
 }

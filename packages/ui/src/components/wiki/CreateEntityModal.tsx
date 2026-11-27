@@ -3,9 +3,15 @@ import { deriveKinshipEdgeId, isEditSummaryValid } from '@kinloom/core';
 import type React from 'react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useArchiveData } from '../../context/ArchiveDataContext.js';
+import { cx } from '../../lib/cx.js';
 import { handleTablistKeyDown } from '../../lib/keyboardNav.js';
 import { useDialogFocusTrap } from '../../lib/useDialogFocusTrap.js';
+import cssMod2 from '../../pages/IndexPage.module.css';
+import cssMod0 from '../SourceReaderDrawer.module.css';
 import { CitationBadge } from './WikiBadges.js';
+import cssMod1 from './WikiSurfaces.module.css';
+
+const uiStyles: Readonly<Record<string, string>> = { ...cssMod0, ...cssMod1, ...cssMod2 };
 
 export type CreatableKind = 'person' | 'event' | 'place' | 'kinship_edge';
 export type RelativeRelation = 'parent' | 'spouse' | 'child';
@@ -447,33 +453,33 @@ export const CreateEntityModal: React.FC<CreateEntityModalProps> = ({
   };
 
   const renderPersonFields = (): React.ReactNode => (
-    <div className="wiki-field-grid">
-      <label className="wiki-field">
-        <span className="wiki-field-label">Given name</span>
+    <div className={cx(uiStyles, 'wiki-field-grid')}>
+      <label className={cx(uiStyles, 'wiki-field')}>
+        <span className={cx(uiStyles, 'wiki-field-label')}>Given name</span>
         <input
           type="text"
-          className="wiki-input"
+          className={cx(uiStyles, 'wiki-input')}
           value={givenName}
           onChange={(e) => {
             setGivenName(e.target.value);
           }}
         />
       </label>
-      <label className="wiki-field">
-        <span className="wiki-field-label">Surname</span>
+      <label className={cx(uiStyles, 'wiki-field')}>
+        <span className={cx(uiStyles, 'wiki-field-label')}>Surname</span>
         <input
           type="text"
-          className="wiki-input"
+          className={cx(uiStyles, 'wiki-input')}
           value={surname}
           onChange={(e) => {
             setSurname(e.target.value);
           }}
         />
       </label>
-      <label className="wiki-field">
-        <span className="wiki-field-label">Sex</span>
+      <label className={cx(uiStyles, 'wiki-field')}>
+        <span className={cx(uiStyles, 'wiki-field-label')}>Sex</span>
         <select
-          className="wiki-input"
+          className={cx(uiStyles, 'wiki-input')}
           value={sex}
           onChange={(e) => {
             setSex(parsePersonSex(e.target.value));
@@ -486,10 +492,10 @@ export const CreateEntityModal: React.FC<CreateEntityModalProps> = ({
           ))}
         </select>
       </label>
-      <label className="wiki-field">
-        <span className="wiki-field-label">Lineage group</span>
+      <label className={cx(uiStyles, 'wiki-field')}>
+        <span className={cx(uiStyles, 'wiki-field-label')}>Lineage group</span>
         <select
-          className="wiki-input"
+          className={cx(uiStyles, 'wiki-input')}
           value={lineageGroup}
           onChange={(e) => {
             setLineageGroup(parsePersonLineageGroup(e.target.value));
@@ -502,11 +508,11 @@ export const CreateEntityModal: React.FC<CreateEntityModalProps> = ({
           ))}
         </select>
       </label>
-      <label className="wiki-field">
-        <span className="wiki-field-label">Birth date</span>
+      <label className={cx(uiStyles, 'wiki-field')}>
+        <span className={cx(uiStyles, 'wiki-field-label')}>Birth date</span>
         <input
           type="text"
-          className="wiki-input"
+          className={cx(uiStyles, 'wiki-input')}
           placeholder="e.g. 1845-06-14 or 1845"
           value={birthEdtf}
           onChange={(e) => {
@@ -514,11 +520,11 @@ export const CreateEntityModal: React.FC<CreateEntityModalProps> = ({
           }}
         />
       </label>
-      <label className="wiki-field">
-        <span className="wiki-field-label">Death date</span>
+      <label className={cx(uiStyles, 'wiki-field')}>
+        <span className={cx(uiStyles, 'wiki-field-label')}>Death date</span>
         <input
           type="text"
-          className="wiki-input"
+          className={cx(uiStyles, 'wiki-input')}
           placeholder="Leave blank if living"
           value={deathEdtf}
           onChange={(e) => {
@@ -526,7 +532,7 @@ export const CreateEntityModal: React.FC<CreateEntityModalProps> = ({
           }}
         />
       </label>
-      <label className="wiki-checkbox-row wiki-field-full">
+      <label className={cx(uiStyles, 'wiki-checkbox-row wiki-field-full')}>
         <input
           type="checkbox"
           checked={isLiving}
@@ -553,25 +559,31 @@ export const CreateEntityModal: React.FC<CreateEntityModalProps> = ({
       : 'Save to Archive';
 
   return (
-    <dialog ref={dialogRef} open aria-modal="true" className="lightbox-backdrop" aria-label={modalTitle}>
+    <dialog
+      ref={dialogRef}
+      open
+      aria-modal="true"
+      className={cx(uiStyles, 'lightbox-backdrop')}
+      aria-label={modalTitle}
+    >
       <button
         type="button"
         tabIndex={-1}
-        className="lightbox-backdrop-close"
+        className={cx(uiStyles, 'lightbox-backdrop-close')}
         aria-label="Close create record modal"
         onClick={onClose}
       />
-      <div className="wiki-modal-card">
-        <div className="wiki-modal-header">
+      <div className={cx(uiStyles, 'wiki-modal-card')}>
+        <div className={cx(uiStyles, 'wiki-modal-header')}>
           <h2>{modalTitle}</h2>
-          <button ref={closeBtnRef} type="button" className="pill-btn" onClick={onClose}>
+          <button ref={closeBtnRef} type="button" className={cx(uiStyles, 'pill-btn')} onClick={onClose}>
             Close
           </button>
         </div>
 
         {relativeContext ? (
           <div
-            className="filter-bar"
+            className={cx(uiStyles, 'filter-bar')}
             role="tablist"
             aria-label="How to add relative"
             onKeyDown={(event) => {
@@ -593,7 +605,7 @@ export const CreateEntityModal: React.FC<CreateEntityModalProps> = ({
                 role="tab"
                 tabIndex={relativeTab === tabId ? 0 : -1}
                 aria-selected={relativeTab === tabId}
-                className={`pill-btn ${relativeTab === tabId ? 'active' : ''}`}
+                className={cx(uiStyles, `pill-btn ${relativeTab === tabId ? 'active' : ''}`)}
                 onClick={() => {
                   setRelativeTab(tabId);
                   setError(null);
@@ -605,7 +617,7 @@ export const CreateEntityModal: React.FC<CreateEntityModalProps> = ({
           </div>
         ) : (
           <div
-            className="filter-bar"
+            className={cx(uiStyles, 'filter-bar')}
             role="tablist"
             aria-label="Record type to create"
             onKeyDown={(event) => {
@@ -634,7 +646,7 @@ export const CreateEntityModal: React.FC<CreateEntityModalProps> = ({
                 role="tab"
                 tabIndex={kind === id ? 0 : -1}
                 aria-selected={kind === id}
-                className={`pill-btn ${kind === id ? 'active' : ''}`}
+                className={cx(uiStyles, `pill-btn ${kind === id ? 'active' : ''}`)}
                 onClick={() => {
                   setKind(id);
                   setError(null);
@@ -647,13 +659,13 @@ export const CreateEntityModal: React.FC<CreateEntityModalProps> = ({
         )}
 
         {error && (
-          <div className="wiki-status-banner is-error" role="alert">
+          <div className={cx(uiStyles, 'wiki-status-banner is-error')} role="alert">
             {error}
           </div>
         )}
 
         <form
-          className="wiki-edit-form"
+          className={cx(uiStyles, 'wiki-edit-form')}
           onSubmit={(e) => {
             void handleSubmit(e);
           }}
@@ -662,15 +674,15 @@ export const CreateEntityModal: React.FC<CreateEntityModalProps> = ({
             relativeTab === 'create_new' ? (
               renderPersonFields()
             ) : (
-              <div className="wiki-field-grid">
-                <p className="wiki-relative-hint wiki-field-full">
+              <div className={cx(uiStyles, 'wiki-field-grid')}>
+                <p className={cx(uiStyles, 'wiki-relative-hint wiki-field-full')}>
                   {relativeSpec.linkHint(relativeContext.anchorPersonName)}
                 </p>
-                <label className="wiki-field wiki-field-full">
-                  <span className="wiki-field-label">Filter people by name</span>
+                <label className={cx(uiStyles, 'wiki-field wiki-field-full')}>
+                  <span className={cx(uiStyles, 'wiki-field-label')}>Filter people by name</span>
                   <input
                     type="search"
-                    className="wiki-input"
+                    className={cx(uiStyles, 'wiki-input')}
                     placeholder="Type a name to narrow the list…"
                     value={existingQuery}
                     onChange={(e) => {
@@ -678,10 +690,10 @@ export const CreateEntityModal: React.FC<CreateEntityModalProps> = ({
                     }}
                   />
                 </label>
-                <label className="wiki-field wiki-field-full">
-                  <span className="wiki-field-label">Existing person</span>
+                <label className={cx(uiStyles, 'wiki-field wiki-field-full')}>
+                  <span className={cx(uiStyles, 'wiki-field-label')}>Existing person</span>
                   <select
-                    className="wiki-input"
+                    className={cx(uiStyles, 'wiki-input')}
                     value={existingPersonId}
                     onChange={(e) => {
                       setExistingPersonId(e.target.value);
@@ -702,23 +714,23 @@ export const CreateEntityModal: React.FC<CreateEntityModalProps> = ({
               {kind === 'person' && renderPersonFields()}
 
               {kind === 'event' && (
-                <div className="wiki-field-grid">
-                  <label className="wiki-field wiki-field-full">
-                    <span className="wiki-field-label">Event title</span>
+                <div className={cx(uiStyles, 'wiki-field-grid')}>
+                  <label className={cx(uiStyles, 'wiki-field wiki-field-full')}>
+                    <span className={cx(uiStyles, 'wiki-field-label')}>Event title</span>
                     <input
                       type="text"
-                      className="wiki-input"
+                      className={cx(uiStyles, 'wiki-input')}
                       value={eventTitle}
                       onChange={(e) => {
                         setEventTitle(e.target.value);
                       }}
                     />
                   </label>
-                  <label className="wiki-field">
-                    <span className="wiki-field-label">Date</span>
+                  <label className={cx(uiStyles, 'wiki-field')}>
+                    <span className={cx(uiStyles, 'wiki-field-label')}>Date</span>
                     <input
                       type="text"
-                      className="wiki-input"
+                      className={cx(uiStyles, 'wiki-input')}
                       placeholder="1880-06"
                       value={eventDate}
                       onChange={(e) => {
@@ -726,10 +738,10 @@ export const CreateEntityModal: React.FC<CreateEntityModalProps> = ({
                       }}
                     />
                   </label>
-                  <label className="wiki-field">
-                    <span className="wiki-field-label">Primary person</span>
+                  <label className={cx(uiStyles, 'wiki-field')}>
+                    <span className={cx(uiStyles, 'wiki-field-label')}>Primary person</span>
                     <select
-                      className="wiki-input"
+                      className={cx(uiStyles, 'wiki-input')}
                       value={eventPersonId}
                       onChange={(e) => {
                         setEventPersonId(e.target.value);
@@ -743,10 +755,10 @@ export const CreateEntityModal: React.FC<CreateEntityModalProps> = ({
                       ))}
                     </select>
                   </label>
-                  <label className="wiki-field wiki-field-full">
-                    <span className="wiki-field-label">Place</span>
+                  <label className={cx(uiStyles, 'wiki-field wiki-field-full')}>
+                    <span className={cx(uiStyles, 'wiki-field-label')}>Place</span>
                     <select
-                      className="wiki-input"
+                      className={cx(uiStyles, 'wiki-input')}
                       value={eventPlaceId}
                       onChange={(e) => {
                         setEventPlaceId(e.target.value);
@@ -760,10 +772,10 @@ export const CreateEntityModal: React.FC<CreateEntityModalProps> = ({
                       ))}
                     </select>
                   </label>
-                  <label className="wiki-field wiki-field-full">
-                    <span className="wiki-field-label">Summary</span>
+                  <label className={cx(uiStyles, 'wiki-field wiki-field-full')}>
+                    <span className={cx(uiStyles, 'wiki-field-label')}>Summary</span>
                     <textarea
-                      className="wiki-textarea"
+                      className={cx(uiStyles, 'wiki-textarea')}
                       rows={3}
                       value={eventSummary}
                       onChange={(e) => {
@@ -775,23 +787,23 @@ export const CreateEntityModal: React.FC<CreateEntityModalProps> = ({
               )}
 
               {kind === 'place' && (
-                <div className="wiki-field-grid">
-                  <label className="wiki-field">
-                    <span className="wiki-field-label">Short name</span>
+                <div className={cx(uiStyles, 'wiki-field-grid')}>
+                  <label className={cx(uiStyles, 'wiki-field')}>
+                    <span className={cx(uiStyles, 'wiki-field-label')}>Short name</span>
                     <input
                       type="text"
-                      className="wiki-input"
+                      className={cx(uiStyles, 'wiki-input')}
                       value={placeName}
                       onChange={(e) => {
                         setPlaceName(e.target.value);
                       }}
                     />
                   </label>
-                  <label className="wiki-field">
-                    <span className="wiki-field-label">Full hierarchical name</span>
+                  <label className={cx(uiStyles, 'wiki-field')}>
+                    <span className={cx(uiStyles, 'wiki-field-label')}>Full hierarchical name</span>
                     <input
                       type="text"
-                      className="wiki-input"
+                      className={cx(uiStyles, 'wiki-input')}
                       placeholder="Town, County, State, Country"
                       value={placeFullName}
                       onChange={(e) => {
@@ -799,24 +811,24 @@ export const CreateEntityModal: React.FC<CreateEntityModalProps> = ({
                       }}
                     />
                   </label>
-                  <label className="wiki-field">
-                    <span className="wiki-field-label">Latitude</span>
+                  <label className={cx(uiStyles, 'wiki-field')}>
+                    <span className={cx(uiStyles, 'wiki-field-label')}>Latitude</span>
                     <input
                       type="number"
                       step="any"
-                      className="wiki-input"
+                      className={cx(uiStyles, 'wiki-input')}
                       value={placeLat}
                       onChange={(e) => {
                         setPlaceLat(e.target.value);
                       }}
                     />
                   </label>
-                  <label className="wiki-field">
-                    <span className="wiki-field-label">Longitude</span>
+                  <label className={cx(uiStyles, 'wiki-field')}>
+                    <span className={cx(uiStyles, 'wiki-field-label')}>Longitude</span>
                     <input
                       type="number"
                       step="any"
-                      className="wiki-input"
+                      className={cx(uiStyles, 'wiki-input')}
                       value={placeLng}
                       onChange={(e) => {
                         setPlaceLng(e.target.value);
@@ -827,11 +839,11 @@ export const CreateEntityModal: React.FC<CreateEntityModalProps> = ({
               )}
 
               {kind === 'kinship_edge' && (
-                <div className="wiki-field-grid">
-                  <label className="wiki-field">
-                    <span className="wiki-field-label">From person</span>
+                <div className={cx(uiStyles, 'wiki-field-grid')}>
+                  <label className={cx(uiStyles, 'wiki-field')}>
+                    <span className={cx(uiStyles, 'wiki-field-label')}>From person</span>
                     <select
-                      className="wiki-input"
+                      className={cx(uiStyles, 'wiki-input')}
                       value={fromPersonId}
                       onChange={(e) => {
                         setFromPersonId(e.target.value);
@@ -845,10 +857,10 @@ export const CreateEntityModal: React.FC<CreateEntityModalProps> = ({
                       ))}
                     </select>
                   </label>
-                  <label className="wiki-field">
-                    <span className="wiki-field-label">Relationship</span>
+                  <label className={cx(uiStyles, 'wiki-field')}>
+                    <span className={cx(uiStyles, 'wiki-field-label')}>Relationship</span>
                     <select
-                      className="wiki-input"
+                      className={cx(uiStyles, 'wiki-input')}
                       value={relation}
                       onChange={(e) => {
                         setRelation(parseKinshipRelation(e.target.value));
@@ -859,10 +871,10 @@ export const CreateEntityModal: React.FC<CreateEntityModalProps> = ({
                       <option value="child">is child of</option>
                     </select>
                   </label>
-                  <label className="wiki-field wiki-field-full">
-                    <span className="wiki-field-label">To person</span>
+                  <label className={cx(uiStyles, 'wiki-field wiki-field-full')}>
+                    <span className={cx(uiStyles, 'wiki-field-label')}>To person</span>
                     <select
-                      className="wiki-input"
+                      className={cx(uiStyles, 'wiki-input')}
                       value={toPersonId}
                       onChange={(e) => {
                         setToPersonId(e.target.value);
@@ -881,7 +893,7 @@ export const CreateEntityModal: React.FC<CreateEntityModalProps> = ({
             </>
           )}
 
-          <label className="wiki-checkbox-row">
+          <label className={cx(uiStyles, 'wiki-checkbox-row')}>
             <input
               type="checkbox"
               checked={hasPrimarySource}
@@ -897,11 +909,11 @@ export const CreateEntityModal: React.FC<CreateEntityModalProps> = ({
             </span>
           </label>
 
-          <label className="wiki-field">
-            <span className="wiki-field-label">Note about this addition</span>
+          <label className={cx(uiStyles, 'wiki-field')}>
+            <span className={cx(uiStyles, 'wiki-field-label')}>Note about this addition</span>
             <input
               type="text"
-              className="wiki-input"
+              className={cx(uiStyles, 'wiki-input')}
               required
               minLength={3}
               placeholder="e.g. From family photo album or 1880 census"
@@ -912,15 +924,15 @@ export const CreateEntityModal: React.FC<CreateEntityModalProps> = ({
             />
           </label>
 
-          <div className="wiki-form-actions">
+          <div className={cx(uiStyles, 'wiki-form-actions')}>
             <button
               type="submit"
-              className="wiki-btn-primary wiki-btn-sm"
+              className={cx(uiStyles, 'wiki-btn-primary wiki-btn-sm')}
               disabled={submitting || !isEditSummaryValid(summary)}
             >
               {submitLabel}
             </button>
-            <button type="button" className="pill-btn" onClick={onClose}>
+            <button type="button" className={cx(uiStyles, 'pill-btn')} onClick={onClose}>
               Cancel
             </button>
           </div>

@@ -3,6 +3,11 @@ import { buildLibrarianCitation } from '@kinloom/core';
 import type React from 'react';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { cx } from '../lib/cx.js';
+import cssMod1 from '../pages/PersonPage.module.css';
+import cssMod0 from './SourceInspectorDrawer.module.css';
+
+const uiStyles: Readonly<Record<string, string>> = { ...cssMod0, ...cssMod1 };
 
 const SAFE_EXTERNAL_URL_RE = /^https?:\/\//i;
 
@@ -159,7 +164,7 @@ export const CitationPopover: React.FC<CitationPopoverProps> = ({
       id={id}
       role="dialog"
       aria-label={`Source citation ${footnoteNumber}`}
-      className={`citation-popover is-${coords.placement} print-hide`}
+      className={cx(uiStyles, `citation-popover is-${coords.placement} print-hide`)}
       style={{
         top: coords.top,
         left: coords.left,
@@ -169,14 +174,16 @@ export const CitationPopover: React.FC<CitationPopoverProps> = ({
       onMouseLeave={onMouseLeave}
       onBlur={onBlur}
     >
-      <div className="citation-popover-header">
-        <div className="citation-popover-header-meta">
-          <span className="citation-popover-num">[{footnoteNumber}]</span>
-          <span className={`evidence-tier-badge tier-${citation.tier}`}>{citation.tierLabel}</span>
+      <div className={cx(uiStyles, 'citation-popover-header')}>
+        <div className={cx(uiStyles, 'citation-popover-header-meta')}>
+          <span className={cx(uiStyles, 'citation-popover-num')}>[{footnoteNumber}]</span>
+          <span className={cx(uiStyles, `evidence-tier-badge tier-${citation.tier}`)}>
+            {citation.tierLabel}
+          </span>
         </div>
         <button
           type="button"
-          className="citation-popover-close"
+          className={cx(uiStyles, 'citation-popover-close')}
           aria-label="Close citation preview"
           onClick={onClose}
         >
@@ -184,17 +191,17 @@ export const CitationPopover: React.FC<CitationPopoverProps> = ({
         </button>
       </div>
 
-      <p className="citation-popover-body">{citation.title}</p>
+      <p className={cx(uiStyles, 'citation-popover-body')}>{citation.title}</p>
 
       {(citation.repository || safeExternalUrl) && (
-        <div className="citation-popover-meta">
+        <div className={cx(uiStyles, 'citation-popover-meta')}>
           {citation.repository && <span>{citation.repository}</span>}
           {safeExternalUrl && (
             <a
               href={safeExternalUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="citation-popover-ext-link"
+              className={cx(uiStyles, 'citation-popover-ext-link')}
             >
               {citation.urlHost || 'External archive'} ↗
             </a>
@@ -203,22 +210,22 @@ export const CitationPopover: React.FC<CitationPopoverProps> = ({
       )}
 
       {showMediaPreview && media && mediaUrl && (
-        <div className="citation-popover-media-wrap">
+        <div className={cx(uiStyles, 'citation-popover-media-wrap')}>
           {onOpenMedia ? (
             <button
               type="button"
-              className="citation-popover-media-btn"
+              className={cx(uiStyles, 'citation-popover-media-btn')}
               aria-label={`Open full archival scan: ${media.caption}`}
               onClick={() => {
                 onClose();
                 onOpenMedia(media);
               }}
             >
-              <span className="citation-popover-media-frame">
+              <span className={cx(uiStyles, 'citation-popover-media-frame')}>
                 <img
                   src={mediaUrl}
                   alt={media.caption}
-                  className="citation-popover-media-img"
+                  className={cx(uiStyles, 'citation-popover-media-img')}
                   loading="lazy"
                   onLoad={reposition}
                   onError={() => {
@@ -226,15 +233,15 @@ export const CitationPopover: React.FC<CitationPopoverProps> = ({
                   }}
                 />
               </span>
-              <span className="citation-popover-media-caption">{media.caption}</span>
+              <span className={cx(uiStyles, 'citation-popover-media-caption')}>{media.caption}</span>
             </button>
           ) : (
-            <figure className="citation-popover-media-figure">
-              <div className="citation-popover-media-frame">
+            <figure className={cx(uiStyles, 'citation-popover-media-figure')}>
+              <div className={cx(uiStyles, 'citation-popover-media-frame')}>
                 <img
                   src={mediaUrl}
                   alt={media.caption}
-                  className="citation-popover-media-img"
+                  className={cx(uiStyles, 'citation-popover-media-img')}
                   loading="lazy"
                   onLoad={reposition}
                   onError={() => {
@@ -242,17 +249,19 @@ export const CitationPopover: React.FC<CitationPopoverProps> = ({
                   }}
                 />
               </div>
-              <figcaption className="citation-popover-media-caption">{media.caption}</figcaption>
+              <figcaption className={cx(uiStyles, 'citation-popover-media-caption')}>
+                {media.caption}
+              </figcaption>
             </figure>
           )}
         </div>
       )}
 
       {onInspectSource && (
-        <div className="citation-popover-footer">
+        <div className={cx(uiStyles, 'citation-popover-footer')}>
           <button
             type="button"
-            className="citation-popover-inspect-btn"
+            className={cx(uiStyles, 'citation-popover-inspect-btn')}
             onClick={() => {
               onClose();
               onInspectSource(source.id);

@@ -1,12 +1,16 @@
 import type { Pronunciation, PronunciationCoverage, PronunciationVariant } from '@kinloom/core';
 import type React from 'react';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { cx } from '../lib/cx.js';
 import {
   formatPronunciationScopePrefix,
   formatPronunciationScopeTitle,
   KINLOOM_VOCABULARY,
 } from '../lib/vocabulary.js';
 import { resolveAssetUrl } from './Atoms.js';
+import cssMod0 from './PronunciationBadge.module.css';
+
+const uiStyles = cssMod0;
 
 export interface PronunciationBadgeProps {
   pronunciation?: Pronunciation | null;
@@ -253,10 +257,10 @@ export const PronunciationBadge: React.FC<PronunciationBadgeProps> = ({
     .join(' ');
 
   return (
-    <span className={rootClassName} data-coverage={coverage ?? undefined}>
+    <span className={cx(uiStyles, rootClassName)} data-coverage={coverage ?? undefined}>
       <button
         type="button"
-        className={`pronunciation-play-btn print-hide${playing ? ' is-playing' : ''}`}
+        className={cx(uiStyles, `pronunciation-play-btn print-hide${playing ? ' is-playing' : ''}`)}
         aria-label={`Listen to pronunciation of ${label}`}
         aria-pressed={playing}
         title={playing ? `Stop pronunciation of ${label}` : `Listen to pronunciation of ${label}`}
@@ -280,34 +284,37 @@ export const PronunciationBadge: React.FC<PronunciationBadgeProps> = ({
         </svg>
       </button>
       {!iconOnly && effectivePrefix && (
-        <span className="pronunciation-prefix" title={prefixTitle}>
+        <span className={cx(uiStyles, 'pronunciation-prefix')} title={prefixTitle}>
           {effectivePrefix}:
         </span>
       )}
       {!iconOnly && primaryGuide && (
-        <span className="pronunciation-guide" title={secondaryIpa ? `IPA: ${secondaryIpa}` : undefined}>
+        <span
+          className={cx(uiStyles, 'pronunciation-guide')}
+          title={secondaryIpa ? `IPA: ${secondaryIpa}` : undefined}
+        >
           {primaryGuide}
         </span>
       )}
       {!iconOnly && !compact && secondaryIpa && (
-        <span className="pronunciation-ipa" title={`IPA ${secondaryIpa}`}>
+        <span className={cx(uiStyles, 'pronunciation-ipa')} title={`IPA ${secondaryIpa}`}>
           {secondaryIpa}
         </span>
       )}
       {!iconOnly && language && (
-        <span className="pronunciation-lang" title={`Language: ${language}`}>
+        <span className={cx(uiStyles, 'pronunciation-lang')} title={`Language: ${language}`}>
           {language}
         </span>
       )}
-      {!iconOnly && !compact && note && <span className="pronunciation-note">{note}</span>}
+      {!iconOnly && !compact && note && <span className={cx(uiStyles, 'pronunciation-note')}>{note}</span>}
       {!iconOnly && !compact && (sourceLabel || safeSourceUrl) && (
-        <span className="pronunciation-source">
+        <span className={cx(uiStyles, 'pronunciation-source')}>
           {safeSourceUrl ? (
             <a
               href={safeSourceUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="pronunciation-source-link"
+              className={cx(uiStyles, 'pronunciation-source-link')}
             >
               {sourceLabel || KINLOOM_VOCABULARY.pronunciation.defaultSourceLabel}
             </a>
@@ -318,13 +325,16 @@ export const PronunciationBadge: React.FC<PronunciationBadgeProps> = ({
       )}
       {!iconOnly && !compact && variants.length > 0 && (
         <span
-          className="pronunciation-variants print-hide"
+          className={cx(uiStyles, 'pronunciation-variants print-hide')}
           role="group"
           aria-label={KINLOOM_VOCABULARY.pronunciation.variantsAria}
         >
           <button
             type="button"
-            className={`pronunciation-variant-btn${effectiveVariantIdx === null ? ' is-active' : ''}`}
+            className={cx(
+              uiStyles,
+              `pronunciation-variant-btn${effectiveVariantIdx === null ? ' is-active' : ''}`
+            )}
             aria-pressed={effectiveVariantIdx === null}
             onClick={(e) => {
               e.stopPropagation();
@@ -339,7 +349,10 @@ export const PronunciationBadge: React.FC<PronunciationBadgeProps> = ({
               // biome-ignore lint/suspicious/noArrayIndexKey: variant labels may repeat across locales
               key={`${variant.label}-${idx}`}
               type="button"
-              className={`pronunciation-variant-btn${effectiveVariantIdx === idx ? ' is-active' : ''}`}
+              className={cx(
+                uiStyles,
+                `pronunciation-variant-btn${effectiveVariantIdx === idx ? ' is-active' : ''}`
+              )}
               aria-pressed={effectiveVariantIdx === idx}
               onClick={(e) => {
                 e.stopPropagation();

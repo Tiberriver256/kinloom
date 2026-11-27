@@ -4,10 +4,24 @@ import type React from 'react';
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { EmptyStateNotice } from '../components/Atoms.js';
+import cssMod0 from '../components/Atoms.module.css';
 import { ExplorerTopBar } from '../components/ExplorerTopBar.js';
 import { KinloomFooter } from '../components/KinloomFooter.js';
 import { useArchiveData } from '../context/ArchiveDataContext.js';
+import { cx } from '../lib/cx.js';
 import { formatReaderLoadError, KINLOOM_VOCABULARY } from '../lib/vocabulary.js';
+import cssMod1 from './IndexPage.module.css';
+import cssMod2 from './PersonPage.module.css';
+import cssMod3 from './PlacesIndexPage.module.css';
+import cssMod4 from './TimePage.module.css';
+
+const uiStyles: Readonly<Record<string, string>> = {
+  ...cssMod0,
+  ...cssMod1,
+  ...cssMod2,
+  ...cssMod3,
+  ...cssMod4,
+};
 
 const PlaceLedgerEntry: React.FC<{
   entry: PlaceDirectoryEntry;
@@ -21,33 +35,33 @@ const PlaceLedgerEntry: React.FC<{
   const previewPeople = entry.people.slice(0, 8);
   const extraCount = Math.max(0, entry.people.length - previewPeople.length);
   return (
-    <article className="place-ledger-row">
-      <div className="place-ledger-main">
-        <div className="place-ledger-top">
+    <article className={cx(uiStyles, 'place-ledger-row')}>
+      <div className={cx(uiStyles, 'place-ledger-main')}>
+        <div className={cx(uiStyles, 'place-ledger-top')}>
           <div>
-            <h2 className="place-ledger-name">
+            <h2 className={cx(uiStyles, 'place-ledger-name')}>
               <Link to={`/place/${entry.place.slug}`}>{entry.place.name}</Link>
             </h2>
-            <div className="place-ledger-full">
+            <div className={cx(uiStyles, 'place-ledger-full')}>
               {entry.place.full_name} · {stageLabel}
             </div>
           </div>
-          <div className="place-ledger-stats">
-            <span className="place-ledger-span">{yearSpan}</span>
-            <span className="place-ledger-counts">
+          <div className={cx(uiStyles, 'place-ledger-stats')}>
+            <span className={cx(uiStyles, 'place-ledger-span')}>{yearSpan}</span>
+            <span className={cx(uiStyles, 'place-ledger-counts')}>
               {entry.people.length} {entry.people.length === 1 ? 'relative' : 'relatives'} ·{' '}
               {entry.eventCount} {entry.eventCount === 1 ? 'event' : 'events'}
             </span>
-            <Link to={`/place/${entry.place.slug}`} className="ink-link-btn">
+            <Link to={`/place/${entry.place.slug}`} className={cx(uiStyles, 'ink-link-btn')}>
               {KINLOOM_VOCABULARY.place.placeProfileCta}
             </Link>
           </div>
         </div>
 
         {previewPeople.length > 0 && (
-          <div className="place-ledger-people">
-            <span className="place-ledger-people-label">Passed through:</span>
-            <div className="place-ledger-people-list">
+          <div className={cx(uiStyles, 'place-ledger-people')}>
+            <span className={cx(uiStyles, 'place-ledger-people-label')}>Passed through:</span>
+            <div className={cx(uiStyles, 'place-ledger-people-list')}>
               {previewPeople.map((p) => (
                 <Link
                   key={p.person.id}
@@ -56,7 +70,7 @@ const PlaceLedgerEntry: React.FC<{
                       ? `/person/${p.person.slug}?event=${p.firstEventId}`
                       : `/person/${p.person.slug}`
                   }
-                  className="place-resident-link"
+                  className={cx(uiStyles, 'place-resident-link')}
                 >
                   {p.person.full_name}
                   {p.startYear > 0 && (
@@ -65,7 +79,7 @@ const PlaceLedgerEntry: React.FC<{
                 </Link>
               ))}
               {extraCount > 0 && (
-                <Link to={`/place/${entry.place.slug}`} className="place-resident-more">
+                <Link to={`/place/${entry.place.slug}`} className={cx(uiStyles, 'place-resident-more')}>
                   +{extraCount} more →
                 </Link>
               )}
@@ -143,17 +157,19 @@ export const PlacesIndexPage: React.FC = () => {
   return (
     <div>
       <ExplorerTopBar />
-      <main id="main-content" className="places-index-page">
-        <header className="folio-header axis-page-header">
-          <div className="folio-header-row">
+      <main id="main-content" className={cx(uiStyles, 'places-index-page')}>
+        <header className={cx(uiStyles, 'folio-header axis-page-header')}>
+          <div className={cx(uiStyles, 'folio-header-row')}>
             <div>
-              <h1 className="folio-title">Places in the {siteConfig.site.familyName} Archive</h1>
-              <p className="folio-lead">
+              <h1 className={cx(uiStyles, 'folio-title')}>
+                Places in the {siteConfig.site.familyName} Archive
+              </h1>
+              <p className={cx(uiStyles, 'folio-lead')}>
                 Towns, counties, and homesteads along the line: who passed through, when they overlapped, and
                 what local weather or newspaper notices recorded.
               </p>
-              <div className="axis-page-header-actions">
-                <Link to="/map" className="ink-link-btn">
+              <div className={cx(uiStyles, 'axis-page-header-actions')}>
+                <Link to="/map" className={cx(uiStyles, 'ink-link-btn')}>
                   Open Migration Map →
                 </Link>
               </div>
@@ -161,15 +177,15 @@ export const PlacesIndexPage: React.FC = () => {
           </div>
         </header>
 
-        {loading && <p className="empty-ring-note">Loading places directory…</p>}
+        {loading && <p className={cx(uiStyles, 'empty-ring-note')}>Loading places directory…</p>}
         {error && (
           <div style={{ marginBottom: 18 }}>
-            <p className="empty-ring-note">
+            <p className={cx(uiStyles, 'empty-ring-note')}>
               {formatReaderLoadError(error, 'Unable to load archive records right now.')}
             </p>
             <button
               type="button"
-              className="pill-btn"
+              className={cx(uiStyles, 'pill-btn')}
               onClick={() => {
                 reloadArchive();
               }}
@@ -181,9 +197,9 @@ export const PlacesIndexPage: React.FC = () => {
 
         {bundle && (
           <>
-            <div className="places-filter-stack">
+            <div className={cx(uiStyles, 'places-filter-stack')}>
               <div
-                className="filter-bar ink-filter-bar"
+                className={cx(uiStyles, 'filter-bar ink-filter-bar')}
                 role="group"
                 aria-label="Filter places by migration region"
               >
@@ -191,7 +207,7 @@ export const PlacesIndexPage: React.FC = () => {
                   <button
                     key={f.id}
                     type="button"
-                    className={`pill-btn ${stage === f.id ? 'active' : ''}`}
+                    className={cx(uiStyles, `pill-btn ${stage === f.id ? 'active' : ''}`)}
                     onClick={() => {
                       setStage(f.id);
                     }}
@@ -201,10 +217,10 @@ export const PlacesIndexPage: React.FC = () => {
                 ))}
               </div>
 
-              <div className="filter-bar places-search-bar">
+              <div className={cx(uiStyles, 'filter-bar places-search-bar')}>
                 <input
                   type="search"
-                  className="search-input"
+                  className={cx(uiStyles, 'search-input')}
                   placeholder={KINLOOM_VOCABULARY.place.filterPlaceholder}
                   value={query}
                   onChange={(e) => {
@@ -226,7 +242,7 @@ export const PlacesIndexPage: React.FC = () => {
                   stage !== 'all' || query.trim() ? (
                     <button
                       type="button"
-                      className="pill-btn"
+                      className={cx(uiStyles, 'pill-btn')}
                       onClick={() => {
                         setStage('all');
                         setQuery('');
@@ -238,7 +254,7 @@ export const PlacesIndexPage: React.FC = () => {
                 }
               />
             ) : (
-              <section className="places-ledger" aria-label="Archived places and residents">
+              <section className={cx(uiStyles, 'places-ledger')} aria-label="Archived places and residents">
                 {filtered.map((entry) => (
                   <PlaceLedgerEntry
                     key={entry.place.id}

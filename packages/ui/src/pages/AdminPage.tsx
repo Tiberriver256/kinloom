@@ -7,10 +7,24 @@ import type {
   PublicAgentTokenRecord,
 } from '../adapters/httpWikiDataSource.js';
 import { HttpWikiDataSource } from '../adapters/httpWikiDataSource.js';
+import cssMod0 from '../components/Atoms.module.css';
 import { ExplorerTopBar } from '../components/ExplorerTopBar.js';
 import { KinloomFooter } from '../components/KinloomFooter.js';
+import cssMod1 from '../components/wiki/WikiSurfaces.module.css';
 import { useArchiveData } from '../context/ArchiveDataContext.js';
+import { cx } from '../lib/cx.js';
 import { formatArchivalTimestamp } from '../lib/formatTimestamp.js';
+import cssMod2 from './IndexPage.module.css';
+import cssMod3 from './PersonPage.module.css';
+import cssMod4 from './PlacePage.module.css';
+
+const uiStyles: Readonly<Record<string, string>> = {
+  ...cssMod0,
+  ...cssMod1,
+  ...cssMod2,
+  ...cssMod3,
+  ...cssMod4,
+};
 
 type AdminConfirmState =
   | { readonly kind: 'demote'; readonly email: string }
@@ -224,10 +238,10 @@ export const AdminPage: React.FC<AdminPageProps> = ({ adminClient }) => {
     return (
       <div>
         <ExplorerTopBar />
-        <main id="main-content" className="place-page">
-          <section className="place-map-box">
+        <main id="main-content" className={cx(uiStyles, 'place-page')}>
+          <section className={cx(uiStyles, 'place-map-box')}>
             <h1>Site Administration</h1>
-            <p className="empty-ring-note">
+            <p className={cx(uiStyles, 'empty-ring-note')}>
               Administrator permissions are required to manage members, invite links, and agent tokens.
             </p>
           </section>
@@ -240,8 +254,8 @@ export const AdminPage: React.FC<AdminPageProps> = ({ adminClient }) => {
   return (
     <div>
       <ExplorerTopBar />
-      <main id="main-content" className="place-page">
-        <section className="wire-banner" style={{ marginBottom: 18 }}>
+      <main id="main-content" className={cx(uiStyles, 'place-page')}>
+        <section className={cx(uiStyles, 'wire-banner')} style={{ marginBottom: 18 }}>
           <div>
             <h1>Site Administration</h1>
             <p>
@@ -249,7 +263,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ adminClient }) => {
               research helpers or archive backups.
             </p>
           </div>
-          <div className="folio-metrics">
+          <div className={cx(uiStyles, 'folio-metrics')}>
             <div>
               <strong>{users.length}</strong> enrolled members
             </div>
@@ -263,19 +277,19 @@ export const AdminPage: React.FC<AdminPageProps> = ({ adminClient }) => {
         </section>
 
         {error && (
-          <div className="wiki-status-banner is-error" role="alert">
+          <div className={cx(uiStyles, 'wiki-status-banner is-error')} role="alert">
             {error}
           </div>
         )}
-        {loading && <p className="empty-ring-note">Loading administration records…</p>}
+        {loading && <p className={cx(uiStyles, 'empty-ring-note')}>Loading administration records…</p>}
 
         {/* Members */}
-        <section className="place-map-box">
-          <h2 className="wiki-section-title">Enrolled Family Members</h2>
+        <section className={cx(uiStyles, 'place-map-box')}>
+          <h2 className={cx(uiStyles, 'wiki-section-title')}>Enrolled Family Members</h2>
           {users.length === 0 ? (
-            <p className="empty-ring-note">No enrolled members found.</p>
+            <p className={cx(uiStyles, 'empty-ring-note')}>No enrolled members found.</p>
           ) : (
-            <div className="wiki-admin-list">
+            <div className={cx(uiStyles, 'wiki-admin-list')}>
               {users.map((user) => {
                 const isSelf = currentAdminEmail !== null && user.email.toLowerCase() === currentAdminEmail;
                 const demoteBlocked = user.role === 'admin' && (isSelf || adminCount <= 1);
@@ -287,25 +301,29 @@ export const AdminPage: React.FC<AdminPageProps> = ({ adminClient }) => {
                 const isRowBusy = busyKey === `role:${user.email}`;
 
                 return (
-                  <div key={user.email} className="wiki-admin-row">
+                  <div key={user.email} className={cx(uiStyles, 'wiki-admin-row')}>
                     <div>
                       <strong>{user.display_name}</strong>{' '}
-                      <span className="wiki-role-chip">{user.role === 'admin' ? 'Admin' : 'Editor'}</span>
-                      {isSelf && <span className="wiki-role-chip is-self">You</span>}
-                      <div className="wiki-panel-meta">
+                      <span className={cx(uiStyles, 'wiki-role-chip')}>
+                        {user.role === 'admin' ? 'Admin' : 'Editor'}
+                      </span>
+                      {isSelf && <span className={cx(uiStyles, 'wiki-role-chip is-self')}>You</span>}
+                      <div className={cx(uiStyles, 'wiki-panel-meta')}>
                         {user.email} · Added{' '}
                         <time dateTime={user.added_at} title={user.added_at}>
                           {formatArchivalTimestamp(user.added_at, false)}
                         </time>
                       </div>
-                      {demoteBlocked && <div className="wiki-panel-meta">{demoteBlockedReason}</div>}
+                      {demoteBlocked && (
+                        <div className={cx(uiStyles, 'wiki-panel-meta')}>{demoteBlockedReason}</div>
+                      )}
                     </div>
-                    <div className="wiki-inline-actions">
+                    <div className={cx(uiStyles, 'wiki-inline-actions')}>
                       {confirmingDemote ? (
                         <>
                           <button
                             type="button"
-                            className="pill-btn wiki-danger-btn"
+                            className={cx(uiStyles, 'pill-btn wiki-danger-btn')}
                             disabled={busyKey !== null}
                             onClick={() => {
                               void handleToggleRole(user);
@@ -315,7 +333,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ adminClient }) => {
                           </button>
                           <button
                             type="button"
-                            className="pill-btn"
+                            className={cx(uiStyles, 'pill-btn')}
                             disabled={busyKey !== null}
                             onClick={() => {
                               setPendingConfirm(null);
@@ -327,7 +345,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ adminClient }) => {
                       ) : (
                         <button
                           type="button"
-                          className="wiki-btn-secondary wiki-btn-sm"
+                          className={cx(uiStyles, 'wiki-btn-secondary wiki-btn-sm')}
                           disabled={busyKey !== null || demoteBlocked}
                           title={demoteBlocked ? demoteBlockedReason : undefined}
                           onClick={() => {
@@ -354,19 +372,19 @@ export const AdminPage: React.FC<AdminPageProps> = ({ adminClient }) => {
         </section>
 
         {/* Invite links */}
-        <section className="place-map-box">
-          <h2 className="wiki-section-title">Family Invite Links</h2>
+        <section className={cx(uiStyles, 'place-map-box')}>
+          <h2 className={cx(uiStyles, 'wiki-section-title')}>Family Invite Links</h2>
           <form
-            className="wiki-inline-form"
+            className={cx(uiStyles, 'wiki-inline-form')}
             onSubmit={(e) => {
               void handleCreateInvite(e);
             }}
           >
-            <label className="wiki-field wiki-inline-field-grow">
-              <span className="wiki-field-label">Invite label</span>
+            <label className={cx(uiStyles, 'wiki-field wiki-inline-field-grow')}>
+              <span className={cx(uiStyles, 'wiki-field-label')}>Invite label</span>
               <input
                 type="text"
-                className="wiki-input"
+                className={cx(uiStyles, 'wiki-input')}
                 placeholder="e.g. Reunion cousins"
                 value={inviteLabel}
                 onChange={(e) => {
@@ -374,13 +392,13 @@ export const AdminPage: React.FC<AdminPageProps> = ({ adminClient }) => {
                 }}
               />
             </label>
-            <label className="wiki-field wiki-inline-field-days">
-              <span className="wiki-field-label">Expires (days)</span>
+            <label className={cx(uiStyles, 'wiki-field wiki-inline-field-days')}>
+              <span className={cx(uiStyles, 'wiki-field-label')}>Expires (days)</span>
               <input
                 type="number"
                 min="1"
                 max="365"
-                className="wiki-input"
+                className={cx(uiStyles, 'wiki-input')}
                 aria-label="Expires in days"
                 value={inviteDays}
                 onChange={(e) => {
@@ -390,7 +408,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ adminClient }) => {
             </label>
             <button
               type="submit"
-              className="wiki-btn-primary wiki-btn-sm"
+              className={cx(uiStyles, 'wiki-btn-primary wiki-btn-sm')}
               disabled={!inviteLabel.trim() || busyKey !== null}
             >
               {busyKey === 'create_invite' ? 'Creating…' : 'Generate Invite Link'}
@@ -398,14 +416,14 @@ export const AdminPage: React.FC<AdminPageProps> = ({ adminClient }) => {
           </form>
 
           {createdInviteUrl && (
-            <output className="wiki-status-banner is-success" aria-live="polite">
+            <output className={cx(uiStyles, 'wiki-status-banner is-success')} aria-live="polite">
               <p>
                 <strong>New invite link:</strong> <code>{createdInviteUrl}</code>
               </p>
-              <div className="wiki-inline-actions" style={{ marginTop: 4 }}>
+              <div className={cx(uiStyles, 'wiki-inline-actions')} style={{ marginTop: 4 }}>
                 <button
                   type="button"
-                  className="pill-btn active"
+                  className={cx(uiStyles, 'pill-btn active')}
                   onClick={() => {
                     copyText('created_invite', createdInviteUrl);
                   }}
@@ -414,7 +432,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ adminClient }) => {
                 </button>
                 <button
                   type="button"
-                  className="pill-btn"
+                  className={cx(uiStyles, 'pill-btn')}
                   onClick={() => {
                     setCreatedInviteUrl(null);
                   }}
@@ -425,22 +443,22 @@ export const AdminPage: React.FC<AdminPageProps> = ({ adminClient }) => {
             </output>
           )}
 
-          <div className="wiki-admin-list" style={{ marginTop: 12 }}>
+          <div className={cx(uiStyles, 'wiki-admin-list')} style={{ marginTop: 12 }}>
             {invites.map((inv) => {
               const confirmingRevoke =
                 pendingConfirm?.kind === 'revoke_invite' && pendingConfirm.token === inv.token;
               const isRowBusy = busyKey === `revoke_invite:${inv.token}`;
               const copyId = `invite:${inv.token}`;
               return (
-                <div key={inv.token} className="wiki-admin-row">
+                <div key={inv.token} className={cx(uiStyles, 'wiki-admin-row')}>
                   <div>
                     <strong>{inv.label}</strong>{' '}
                     {inv.revoked_at ? (
-                      <span className="wiki-badge wiki-badge-conflict">Revoked</span>
+                      <span className={cx(uiStyles, 'wiki-badge wiki-badge-conflict')}>Revoked</span>
                     ) : (
-                      <span className="wiki-badge wiki-badge-cited">Active</span>
+                      <span className={cx(uiStyles, 'wiki-badge wiki-badge-cited')}>Active</span>
                     )}
-                    <div className="wiki-panel-meta">
+                    <div className={cx(uiStyles, 'wiki-panel-meta')}>
                       Uses: {inv.uses}
                       {inv.expires_at ? (
                         <>
@@ -456,12 +474,12 @@ export const AdminPage: React.FC<AdminPageProps> = ({ adminClient }) => {
                     </div>
                   </div>
                   {!inv.revoked_at && (
-                    <div className="wiki-inline-actions">
+                    <div className={cx(uiStyles, 'wiki-inline-actions')}>
                       {confirmingRevoke ? (
                         <>
                           <button
                             type="button"
-                            className="pill-btn wiki-danger-btn"
+                            className={cx(uiStyles, 'pill-btn wiki-danger-btn')}
                             disabled={busyKey !== null}
                             onClick={() => {
                               void handleRevokeInvite(inv.token);
@@ -471,7 +489,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ adminClient }) => {
                           </button>
                           <button
                             type="button"
-                            className="pill-btn"
+                            className={cx(uiStyles, 'pill-btn')}
                             disabled={busyKey !== null}
                             onClick={() => {
                               setPendingConfirm(null);
@@ -484,7 +502,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ adminClient }) => {
                         <>
                           <button
                             type="button"
-                            className="wiki-btn-secondary wiki-btn-sm"
+                            className={cx(uiStyles, 'wiki-btn-secondary wiki-btn-sm')}
                             onClick={() => {
                               copyText(copyId, buildInviteUrl(inv.token));
                             }}
@@ -493,7 +511,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ adminClient }) => {
                           </button>
                           <button
                             type="button"
-                            className="pill-btn wiki-danger-btn"
+                            className={cx(uiStyles, 'pill-btn wiki-danger-btn')}
                             disabled={busyKey !== null}
                             onClick={() => {
                               setPendingConfirm({ kind: 'revoke_invite', token: inv.token });
@@ -512,19 +530,19 @@ export const AdminPage: React.FC<AdminPageProps> = ({ adminClient }) => {
         </section>
 
         {/* Agent tokens */}
-        <section className="place-map-box">
-          <h2 className="wiki-section-title">Scoped AI Agent &amp; Backup Tokens</h2>
+        <section className={cx(uiStyles, 'place-map-box')}>
+          <h2 className={cx(uiStyles, 'wiki-section-title')}>Scoped AI Agent &amp; Backup Tokens</h2>
           <form
-            className="wiki-inline-form"
+            className={cx(uiStyles, 'wiki-inline-form')}
             onSubmit={(e) => {
               void handleCreateToken(e);
             }}
           >
-            <label className="wiki-field wiki-inline-field-grow">
-              <span className="wiki-field-label">Token label</span>
+            <label className={cx(uiStyles, 'wiki-field wiki-inline-field-grow')}>
+              <span className={cx(uiStyles, 'wiki-field-label')}>Token label</span>
               <input
                 type="text"
-                className="wiki-input"
+                className={cx(uiStyles, 'wiki-input')}
                 placeholder="e.g. Research CLI or Nightly Backup"
                 value={tokenLabel}
                 onChange={(e) => {
@@ -532,10 +550,10 @@ export const AdminPage: React.FC<AdminPageProps> = ({ adminClient }) => {
                 }}
               />
             </label>
-            <label className="wiki-field wiki-inline-field-scope">
-              <span className="wiki-field-label">Permission scope</span>
+            <label className={cx(uiStyles, 'wiki-field wiki-inline-field-scope')}>
+              <span className={cx(uiStyles, 'wiki-field-label')}>Permission scope</span>
               <select
-                className="wiki-input"
+                className={cx(uiStyles, 'wiki-input')}
                 aria-label="Agent token scope"
                 value={tokenScope}
                 onChange={(e) => {
@@ -548,7 +566,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ adminClient }) => {
             </label>
             <button
               type="submit"
-              className="wiki-btn-primary wiki-btn-sm"
+              className={cx(uiStyles, 'wiki-btn-primary wiki-btn-sm')}
               disabled={!tokenLabel.trim() || busyKey !== null}
             >
               {busyKey === 'create_token' ? 'Creating…' : 'Create Token'}
@@ -556,17 +574,17 @@ export const AdminPage: React.FC<AdminPageProps> = ({ adminClient }) => {
           </form>
 
           {revealedSecret && (
-            <div className="wiki-status-banner is-warning" role="alert">
+            <div className={cx(uiStyles, 'wiki-status-banner is-warning')} role="alert">
               <div>
                 <strong>Copy this secret now — it will never be shown again:</strong>
                 <div style={{ marginTop: 6 }}>
-                  <code className="wiki-secret-box">{revealedSecret.plaintext_secret}</code>
+                  <code className={cx(uiStyles, 'wiki-secret-box')}>{revealedSecret.plaintext_secret}</code>
                 </div>
               </div>
-              <div className="wiki-inline-actions" style={{ marginTop: 8 }}>
+              <div className={cx(uiStyles, 'wiki-inline-actions')} style={{ marginTop: 8 }}>
                 <button
                   type="button"
-                  className="pill-btn active"
+                  className={cx(uiStyles, 'pill-btn active')}
                   onClick={() => {
                     void navigator.clipboard
                       ?.writeText(revealedSecret.plaintext_secret)
@@ -582,7 +600,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ adminClient }) => {
                 </button>
                 <button
                   type="button"
-                  className="pill-btn"
+                  className={cx(uiStyles, 'pill-btn')}
                   onClick={() => {
                     setRevealedSecret(null);
                   }}
@@ -593,22 +611,24 @@ export const AdminPage: React.FC<AdminPageProps> = ({ adminClient }) => {
             </div>
           )}
 
-          <div className="wiki-admin-list" style={{ marginTop: 12 }}>
+          <div className={cx(uiStyles, 'wiki-admin-list')} style={{ marginTop: 12 }}>
             {tokens.map((tok) => {
               const confirmingRevoke =
                 pendingConfirm?.kind === 'revoke_token' && pendingConfirm.tokenId === tok.token_id;
               const isRowBusy = busyKey === `revoke_token:${tok.token_id}`;
               return (
-                <div key={tok.token_id} className="wiki-admin-row">
+                <div key={tok.token_id} className={cx(uiStyles, 'wiki-admin-row')}>
                   <div>
                     <strong>{tok.label}</strong>{' '}
-                    <span className="wiki-batch-chip">{formatTokenScopeLabel(tok.scope)}</span>{' '}
+                    <span className={cx(uiStyles, 'wiki-batch-chip')}>
+                      {formatTokenScopeLabel(tok.scope)}
+                    </span>{' '}
                     {tok.revoked_at ? (
-                      <span className="wiki-badge wiki-badge-conflict">Revoked</span>
+                      <span className={cx(uiStyles, 'wiki-badge wiki-badge-conflict')}>Revoked</span>
                     ) : (
-                      <span className="wiki-badge wiki-badge-cited">Active</span>
+                      <span className={cx(uiStyles, 'wiki-badge wiki-badge-cited')}>Active</span>
                     )}
-                    <div className="wiki-panel-meta">
+                    <div className={cx(uiStyles, 'wiki-panel-meta')}>
                       ID: {tok.token_id} · Created{' '}
                       <time dateTime={tok.created_at} title={tok.created_at}>
                         {formatArchivalTimestamp(tok.created_at, false)}
@@ -616,12 +636,12 @@ export const AdminPage: React.FC<AdminPageProps> = ({ adminClient }) => {
                     </div>
                   </div>
                   {!tok.revoked_at && (
-                    <div className="wiki-inline-actions">
+                    <div className={cx(uiStyles, 'wiki-inline-actions')}>
                       {confirmingRevoke ? (
                         <>
                           <button
                             type="button"
-                            className="pill-btn wiki-danger-btn"
+                            className={cx(uiStyles, 'pill-btn wiki-danger-btn')}
                             disabled={busyKey !== null}
                             onClick={() => {
                               void handleRevokeToken(tok.token_id);
@@ -631,7 +651,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ adminClient }) => {
                           </button>
                           <button
                             type="button"
-                            className="pill-btn"
+                            className={cx(uiStyles, 'pill-btn')}
                             disabled={busyKey !== null}
                             onClick={() => {
                               setPendingConfirm(null);
@@ -643,7 +663,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ adminClient }) => {
                       ) : (
                         <button
                           type="button"
-                          className="pill-btn wiki-danger-btn"
+                          className={cx(uiStyles, 'pill-btn wiki-danger-btn')}
                           disabled={busyKey !== null}
                           onClick={() => {
                             setPendingConfirm({ kind: 'revoke_token', tokenId: tok.token_id });

@@ -12,18 +12,32 @@ import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useArchiveData } from '../context/ArchiveDataContext.js';
 import { useArchiveUi } from '../context/ArchiveUiContext.js';
+import { cx } from '../lib/cx.js';
 import { useDialogFocusTrap } from '../lib/useDialogFocusTrap.js';
 import { KINLOOM_VOCABULARY } from '../lib/vocabulary.js';
+import cssMod3 from '../pages/IndexPage.module.css';
+import cssMod4 from '../pages/NotFoundPage.module.css';
+import cssMod0 from './Atoms.module.css';
+import cssMod1 from './SourceInspectorDrawer.module.css';
+import cssMod2 from './SourceReaderDrawer.module.css';
+
+const uiStyles: Readonly<Record<string, string>> = {
+  ...cssMod0,
+  ...cssMod1,
+  ...cssMod2,
+  ...cssMod3,
+  ...cssMod4,
+};
 
 export const EmptyStateNotice: React.FC<{
   title: string;
   body?: string;
   action?: React.ReactNode;
 }> = ({ title, body, action }) => (
-  <div className="empty-state-notice" role="status">
-    <p className="empty-state-notice-title">{title}</p>
-    {body && <p className="empty-state-notice-body">{body}</p>}
-    {action && <div className="empty-state-notice-action">{action}</div>}
+  <div className={cx(uiStyles, 'empty-state-notice')} role="status">
+    <p className={cx(uiStyles, 'empty-state-notice-title')}>{title}</p>
+    {body && <p className={cx(uiStyles, 'empty-state-notice-body')}>{body}</p>}
+    {action && <div className={cx(uiStyles, 'empty-state-notice-action')}>{action}</div>}
   </div>
 );
 
@@ -32,7 +46,7 @@ const EMPTY_ALTERNATE_PLACES: AlternatePlace[] = [];
 const EMPTY_FACT_CONFLICTS: FactConflict[] = [];
 
 export const DateStamp: React.FC<{ displayDate: string; edtf?: string }> = ({ displayDate, edtf }) => (
-  <span className="date-stamp" title={edtf ? `Recorded date: ${edtf}` : undefined}>
+  <span className={cx(uiStyles, 'date-stamp')} title={edtf ? `Recorded date: ${edtf}` : undefined}>
     {displayDate || 'Undated'}
   </span>
 );
@@ -44,7 +58,11 @@ export const CoordinatePill: React.FC<{ place: Place | undefined }> = ({ place }
   const latStr = `${Math.abs(place.lat).toFixed(2)}°${place.lat >= 0 ? 'N' : 'S'}`;
   const lngStr = `${Math.abs(place.lng).toFixed(2)}°${place.lng >= 0 ? 'E' : 'W'}`;
   return (
-    <Link to={`/place/${place.slug}`} className="coordinate-pill" title={`Open ${place.full_name} profile`}>
+    <Link
+      to={`/place/${place.slug}`}
+      className={cx(uiStyles, 'coordinate-pill')}
+      title={`Open ${place.full_name} profile`}
+    >
       <span>
         {latStr}, {lngStr} · {place.name}
       </span>
@@ -221,11 +239,11 @@ export const RelativeAvatarChip: React.FC<{
   return (
     <button
       type="button"
-      className={`avatar-chip ${tierClass}`}
+      className={cx(uiStyles, `avatar-chip ${tierClass}`)}
       onClick={onClick}
       title={`${name} (${relationship}) — ${tier}${distLabel}. Open Person Profile.`}
     >
-      <span className="avatar-circle">{initialsOf(name)}</span>
+      <span className={cx(uiStyles, 'avatar-circle')}>{initialsOf(name)}</span>
       <span>
         <strong>{name}</strong>{' '}
         <span style={{ color: 'var(--text-secondary)', fontSize: '0.78rem' }}>
@@ -268,7 +286,10 @@ export const ArchivalPhotoFrame: React.FC<{ caption: string; photoUrl?: string |
     <>
       <button
         type="button"
-        className={`wireframe-photo photo-placeholder-frame ${resolvedUrl ? 'has-real-photo' : ''}`}
+        className={cx(
+          uiStyles,
+          `wireframe-photo photo-placeholder-frame ${resolvedUrl ? 'has-real-photo' : ''}`
+        )}
         onClick={(e) => {
           e.stopPropagation();
           setOpen(true);
@@ -276,13 +297,20 @@ export const ArchivalPhotoFrame: React.FC<{ caption: string; photoUrl?: string |
       >
         {resolvedUrl ? (
           <>
-            <img src={resolvedUrl} alt={caption} className="milestone-photo-img" loading="lazy" />
-            <span className="wireframe-photo-caption">{caption}</span>
+            <img
+              src={resolvedUrl}
+              alt={caption}
+              className={cx(uiStyles, 'milestone-photo-img')}
+              loading="lazy"
+            />
+            <span className={cx(uiStyles, 'wireframe-photo-caption')}>{caption}</span>
           </>
         ) : (
           <>
-            <span className="wireframe-photo-label">Archival Photograph Needed · Click for Details</span>
-            <span className="wireframe-photo-caption">{caption}</span>
+            <span className={cx(uiStyles, 'wireframe-photo-label')}>
+              Archival Photograph Needed · Click for Details
+            </span>
+            <span className={cx(uiStyles, 'wireframe-photo-caption')}>{caption}</span>
           </>
         )}
       </button>
@@ -291,19 +319,19 @@ export const ArchivalPhotoFrame: React.FC<{ caption: string; photoUrl?: string |
           ref={dialogRef}
           open
           aria-modal="true"
-          className="lightbox-backdrop photo-lightbox-overlay"
+          className={cx(uiStyles, 'lightbox-backdrop photo-lightbox-overlay')}
           aria-label="Archival photograph lightbox"
         >
           <button
             type="button"
             tabIndex={-1}
-            className="lightbox-backdrop-close"
+            className={cx(uiStyles, 'lightbox-backdrop-close')}
             aria-label="Close archival photograph lightbox"
             onClick={() => {
               setOpen(false);
             }}
           />
-          <div className="lightbox-card">
+          <div className={cx(uiStyles, 'lightbox-card')}>
             <div
               style={{
                 display: 'flex',
@@ -324,7 +352,7 @@ export const ArchivalPhotoFrame: React.FC<{ caption: string; photoUrl?: string |
               <button
                 ref={closeBtnRef}
                 type="button"
-                className="pill-btn"
+                className={cx(uiStyles, 'pill-btn')}
                 onClick={() => {
                   setOpen(false);
                 }}
@@ -357,9 +385,9 @@ export const ArchivalPhotoFrame: React.FC<{ caption: string; photoUrl?: string |
                 </figcaption>
               </figure>
             ) : (
-              <div className="wireframe-photo" style={{ minHeight: 180, cursor: 'default' }}>
-                <span className="wireframe-photo-label">No Photograph Archived Yet</span>
-                <span className="wireframe-photo-caption">{caption}</span>
+              <div className={cx(uiStyles, 'wireframe-photo')} style={{ minHeight: 180, cursor: 'default' }}>
+                <span className={cx(uiStyles, 'wireframe-photo-label')}>No Photograph Archived Yet</span>
+                <span className={cx(uiStyles, 'wireframe-photo-caption')}>{caption}</span>
                 <span
                   style={{
                     fontFamily: 'var(--font-mono)',
@@ -441,11 +469,11 @@ export const SourceCitationTag: React.FC<{
   };
 
   return (
-    <div className="source-tag">
+    <div className={cx(uiStyles, 'source-tag')}>
       <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8 }}>
         <button
           type="button"
-          className={`source-toggle ${summary.onlyUnverified ? 'is-uncited' : ''}`}
+          className={cx(uiStyles, `source-toggle ${summary.onlyUnverified ? 'is-uncited' : ''}`)}
           aria-expanded={expanded}
           onClick={(e) => {
             e.stopPropagation();
@@ -456,17 +484,17 @@ export const SourceCitationTag: React.FC<{
             {expanded ? '▾' : '▸'} {summary.label}
           </span>
           {alternateDates.length > 0 && (
-            <span className="conflict-pill">
+            <span className={cx(uiStyles, 'conflict-pill')}>
               ! {alternateDates.length} Date Discrepanc{alternateDates.length > 1 ? 'ies' : 'y'}
             </span>
           )}
           {alternatePlaces.length > 0 && (
-            <span className="conflict-pill">
+            <span className={cx(uiStyles, 'conflict-pill')}>
               ! {alternatePlaces.length} Place Discrepanc{alternatePlaces.length > 1 ? 'ies' : 'y'}
             </span>
           )}
           {factConflicts.length > 0 && (
-            <span className="conflict-pill">
+            <span className={cx(uiStyles, 'conflict-pill')}>
               ! {factConflicts.length} Fact Discrepanc{factConflicts.length > 1 ? 'ies' : 'y'}
             </span>
           )}
@@ -475,7 +503,7 @@ export const SourceCitationTag: React.FC<{
         {firstReadable && (
           <button
             type="button"
-            className="source-read-btn"
+            className={cx(uiStyles, 'source-read-btn')}
             onClick={(e) => {
               e.stopPropagation();
               openSourceReader({ sourceId: firstReadable.source_id, eventId });
@@ -488,7 +516,7 @@ export const SourceCitationTag: React.FC<{
         {firstScan?.scan_url && (
           <button
             type="button"
-            className="source-read-btn"
+            className={cx(uiStyles, 'source-read-btn')}
             onClick={(e) => {
               e.stopPropagation();
               const rec = sourcesById.get(firstScan.source_id);
@@ -505,41 +533,43 @@ export const SourceCitationTag: React.FC<{
       </div>
 
       {expanded && (
-        <div className="source-details">
+        <div className={cx(uiStyles, 'source-details')}>
           {sources.length > 0 && (
-            <div className="citation-card-list">
+            <div className={cx(uiStyles, 'citation-card-list')}>
               {sources.map((ref) => {
                 const rec = sourcesById.get(ref.source_id);
                 const cit = buildLibrarianCitation(rec, ref);
                 const isReadable = readableSourceIds.has(ref.source_id);
                 const itemKey = `${ref.source_id}|${ref.claimed_date ?? ''}|${ref.citation_detail ?? ''}|${ref.scan_url ?? ''}`;
                 return (
-                  <div key={itemKey} className="citation-item-card">
-                    <div className="citation-item-top">
-                      <span className={`evidence-tier-badge tier-${cit.tier}`}>{cit.tierLabel}</span>
+                  <div key={itemKey} className={cx(uiStyles, 'citation-item-card')}>
+                    <div className={cx(uiStyles, 'citation-item-top')}>
+                      <span className={cx(uiStyles, `evidence-tier-badge tier-${cit.tier}`)}>
+                        {cit.tierLabel}
+                      </span>
                       {cit.tier !== 'unverified' && (
-                        <span className="evidence-basis-tag">{cit.evidenceBasis}</span>
+                        <span className={cx(uiStyles, 'evidence-basis-tag')}>{cit.evidenceBasis}</span>
                       )}
                     </div>
-                    <div className="citation-item-title">{cit.title}</div>
+                    <div className={cx(uiStyles, 'citation-item-title')}>{cit.title}</div>
                     {(cit.author || cit.repository) && (
-                      <div className="citation-item-meta">
+                      <div className={cx(uiStyles, 'citation-item-meta')}>
                         {[cit.author, cit.repository].filter(Boolean).join(' · ')}
                       </div>
                     )}
                     {cit.recordDetail ? (
-                      <div className="citation-page-detail">{cit.recordDetail}</div>
+                      <div className={cx(uiStyles, 'citation-page-detail')}>{cit.recordDetail}</div>
                     ) : (
                       cit.tier !== 'unverified' && (
-                        <div className="citation-missing-detail">
+                        <div className={cx(uiStyles, 'citation-missing-detail')}>
                           Collection-level reference (no page or roll number recorded)
                         </div>
                       )
                     )}
-                    <div className="citation-item-actions">
+                    <div className={cx(uiStyles, 'citation-item-actions')}>
                       <button
                         type="button"
-                        className="source-action-btn primary"
+                        className={cx(uiStyles, 'source-action-btn primary')}
                         onClick={(e) => {
                           e.stopPropagation();
                           openSourceInspector({
@@ -557,7 +587,7 @@ export const SourceCitationTag: React.FC<{
                       </button>
                       <button
                         type="button"
-                        className="source-action-btn"
+                        className={cx(uiStyles, 'source-action-btn')}
                         onClick={(e) => {
                           e.stopPropagation();
                           handleCopyCitation(itemKey, cit.bibliographicString);
@@ -568,7 +598,7 @@ export const SourceCitationTag: React.FC<{
                       {isReadable && (
                         <button
                           type="button"
-                          className="source-action-btn"
+                          className={cx(uiStyles, 'source-action-btn')}
                           onClick={(e) => {
                             e.stopPropagation();
                             openSourceReader({ sourceId: ref.source_id, eventId });
@@ -580,7 +610,7 @@ export const SourceCitationTag: React.FC<{
                       {ref.scan_url && (
                         <button
                           type="button"
-                          className="source-action-btn"
+                          className={cx(uiStyles, 'source-action-btn')}
                           onClick={(e) => {
                             e.stopPropagation();
                             setActiveScan({
@@ -598,7 +628,7 @@ export const SourceCitationTag: React.FC<{
                           href={cit.url}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="source-action-btn"
+                          className={cx(uiStyles, 'source-action-btn')}
                           onClick={(e) => {
                             e.stopPropagation();
                           }}
@@ -613,7 +643,7 @@ export const SourceCitationTag: React.FC<{
             </div>
           )}
           {alternateDates.length > 0 && (
-            <div className="citation-conflicts-box">
+            <div className={cx(uiStyles, 'citation-conflicts-box')}>
               <strong>Preserved Date Discrepancies</strong>
               <ul>
                 {alternateDates.map((alt) => {
@@ -624,7 +654,7 @@ export const SourceCitationTag: React.FC<{
                       {rec && (
                         <button
                           type="button"
-                          className="source-read-inline"
+                          className={cx(uiStyles, 'source-read-inline')}
                           onClick={(e) => {
                             e.stopPropagation();
                             openSourceInspector({
@@ -645,7 +675,7 @@ export const SourceCitationTag: React.FC<{
             </div>
           )}
           {alternatePlaces.length > 0 && (
-            <div className="citation-conflicts-box">
+            <div className={cx(uiStyles, 'citation-conflicts-box')}>
               <strong>Preserved Place Discrepancies</strong>
               <ul>
                 {alternatePlaces.map((alt) => {
@@ -656,7 +686,7 @@ export const SourceCitationTag: React.FC<{
                       {rec && (
                         <button
                           type="button"
-                          className="source-read-inline"
+                          className={cx(uiStyles, 'source-read-inline')}
                           onClick={(e) => {
                             e.stopPropagation();
                             openSourceInspector({
@@ -676,7 +706,7 @@ export const SourceCitationTag: React.FC<{
             </div>
           )}
           {factConflicts.length > 0 && (
-            <div className="citation-conflicts-box">
+            <div className={cx(uiStyles, 'citation-conflicts-box')}>
               <strong>Preserved Fact Discrepancies</strong>
               <ul>
                 {factConflicts.map((alt) => {
@@ -687,7 +717,7 @@ export const SourceCitationTag: React.FC<{
                       {rec && (
                         <button
                           type="button"
-                          className="source-read-inline"
+                          className={cx(uiStyles, 'source-read-inline')}
                           onClick={(e) => {
                             e.stopPropagation();
                             openSourceInspector({
@@ -714,27 +744,27 @@ export const SourceCitationTag: React.FC<{
           ref={scanDialogRef}
           open
           aria-modal="true"
-          className="lightbox-backdrop photo-lightbox-overlay"
+          className={cx(uiStyles, 'lightbox-backdrop photo-lightbox-overlay')}
           aria-label="Record scan lightbox"
         >
           <button
             type="button"
             tabIndex={-1}
-            className="lightbox-backdrop-close"
+            className={cx(uiStyles, 'lightbox-backdrop-close')}
             aria-label="Close record scan lightbox"
             onClick={() => {
               setActiveScan(null);
             }}
           />
-          <div className="scan-lightbox-card">
-            <div className="scan-lightbox-header">
+          <div className={cx(uiStyles, 'scan-lightbox-card')}>
+            <div className={cx(uiStyles, 'scan-lightbox-header')}>
               <strong style={{ fontFamily: 'var(--font-mono)', fontSize: '0.8rem' }}>
                 RECORD SCAN · {activeScan.title}
               </strong>
               <button
                 ref={scanCloseRef}
                 type="button"
-                className="pill-btn"
+                className={cx(uiStyles, 'pill-btn')}
                 onClick={() => {
                   setActiveScan(null);
                 }}
@@ -742,8 +772,12 @@ export const SourceCitationTag: React.FC<{
                 Close [Esc]
               </button>
             </div>
-            <div className="scan-lightbox-scroll">
-              <img src={activeScan.url} alt={activeScan.title} className="scan-page-img-full" />
+            <div className={cx(uiStyles, 'scan-lightbox-scroll')}>
+              <img
+                src={activeScan.url}
+                alt={activeScan.title}
+                className={cx(uiStyles, 'scan-page-img-full')}
+              />
               {activeScan.citation && (
                 <p
                   style={{

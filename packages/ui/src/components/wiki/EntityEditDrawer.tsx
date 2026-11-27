@@ -4,11 +4,18 @@ import { useMachine } from '@xstate/react';
 import type React from 'react';
 import { useEffect, useRef, useState } from 'react';
 import { useArchiveData } from '../../context/ArchiveDataContext.js';
+import { cx } from '../../lib/cx.js';
 import { useDialogFocusTrap } from '../../lib/useDialogFocusTrap.js';
 import { entityEditorMachine } from '../../machines/entityEditorMachine.js';
+import cssMod3 from '../../pages/IndexPage.module.css';
 import { hasPronunciationContent, PronunciationBadge } from '../PronunciationBadge.js';
+import cssMod0 from '../PronunciationBadge.module.css';
+import cssMod1 from '../SourceReaderDrawer.module.css';
 import { ConflictMergeDialog } from './ConflictMergeDialog.js';
 import { CitationBadge } from './WikiBadges.js';
+import cssMod2 from './WikiSurfaces.module.css';
+
+const uiStyles: Readonly<Record<string, string>> = { ...cssMod0, ...cssMod1, ...cssMod2, ...cssMod3 };
 
 export type EntityEditDrawerSection = 'pronunciation';
 
@@ -500,33 +507,38 @@ export const EntityEditDrawer: React.FC<EntityEditDrawerProps> = ({
       ref={dialogRef}
       open
       aria-modal="true"
-      className="drawer-backdrop wiki-edit-drawer-backdrop"
+      className={cx(uiStyles, 'drawer-backdrop wiki-edit-drawer-backdrop')}
       aria-label={`Edit ${title ?? `${entityType} ${entityId}`}`}
     >
       <button
         type="button"
         tabIndex={-1}
-        className="lightbox-backdrop-close"
+        className={cx(uiStyles, 'lightbox-backdrop-close')}
         aria-label="Close edit drawer"
         onClick={handleCloseAttempt}
       />
-      <aside className="drawer-panel wiki-edit-drawer-panel">
-        <div className="drawer-top">
+      <aside className={cx(uiStyles, 'drawer-panel wiki-edit-drawer-panel')}>
+        <div className={cx(uiStyles, 'drawer-top')}>
           <div>
-            <h2 className="drawer-title" style={{ marginTop: 0 }}>
+            <h2 className={cx(uiStyles, 'drawer-title')} style={{ marginTop: 0 }}>
               Edit {title ?? `${entityType}/${entityId}`}
             </h2>
-            <div className="wiki-drawer-subtitle">
+            <div className={cx(uiStyles, 'wiki-drawer-subtitle')}>
               Changes are saved to the family history and can always be undone.
             </div>
           </div>
-          <button ref={closeBtnRef} type="button" className="pill-btn" onClick={handleCloseAttempt}>
+          <button
+            ref={closeBtnRef}
+            type="button"
+            className={cx(uiStyles, 'pill-btn')}
+            onClick={handleCloseAttempt}
+          >
             Close
           </button>
         </div>
 
         <form
-          className="wiki-edit-drawer-form"
+          className={cx(uiStyles, 'wiki-edit-drawer-form')}
           onSubmit={(e) => {
             e.preventDefault();
             if (entityType === 'person' || entityType === 'place') {
@@ -547,22 +559,22 @@ export const EntityEditDrawer: React.FC<EntityEditDrawerProps> = ({
             send({ type: 'SUBMIT' });
           }}
         >
-          <div className="wiki-edit-drawer-body">
+          <div className={cx(uiStyles, 'wiki-edit-drawer-body')}>
             {syncingRevision && !isSaving && (
-              <div className="wiki-status-banner is-info" role="status" aria-live="polite">
+              <div className={cx(uiStyles, 'wiki-status-banner is-info')} role="status" aria-live="polite">
                 Loading latest revision…
               </div>
             )}
 
             {isConfirmingLeave && (
-              <div className="wiki-status-banner is-warning" role="alert">
+              <div className={cx(uiStyles, 'wiki-status-banner is-warning')} role="alert">
                 <div>
                   <strong>Unsaved changes.</strong> Leaving will discard your local edits.
                 </div>
-                <div className="wiki-inline-actions">
+                <div className={cx(uiStyles, 'wiki-inline-actions')}>
                   <button
                     type="button"
-                    className="pill-btn active"
+                    className={cx(uiStyles, 'pill-btn active')}
                     onClick={() => {
                       send({ type: 'STAY_EDITING' });
                     }}
@@ -571,7 +583,7 @@ export const EntityEditDrawer: React.FC<EntityEditDrawerProps> = ({
                   </button>
                   <button
                     type="button"
-                    className="pill-btn"
+                    className={cx(uiStyles, 'pill-btn')}
                     onClick={() => {
                       send({ type: 'CONFIRM_LEAVE' });
                       onClose();
@@ -584,14 +596,14 @@ export const EntityEditDrawer: React.FC<EntityEditDrawerProps> = ({
             )}
 
             {isSaved && (
-              <output className="wiki-status-banner is-success" aria-live="polite">
+              <output className={cx(uiStyles, 'wiki-status-banner is-success')} aria-live="polite">
                 <div>
                   Saved revision <code>r{snapshot.context.baseRevisionId}</code>.
                 </div>
-                <div className="wiki-inline-actions">
+                <div className={cx(uiStyles, 'wiki-inline-actions')}>
                   <button
                     type="button"
-                    className="pill-btn"
+                    className={cx(uiStyles, 'pill-btn')}
                     onClick={() => {
                       send({ type: 'START_EDIT' });
                     }}
@@ -600,7 +612,7 @@ export const EntityEditDrawer: React.FC<EntityEditDrawerProps> = ({
                   </button>
                   <button
                     type="button"
-                    className="pill-btn active"
+                    className={cx(uiStyles, 'pill-btn active')}
                     onClick={() => {
                       send({ type: 'DISMISS_SAVED' });
                       onClose();
@@ -635,14 +647,14 @@ export const EntityEditDrawer: React.FC<EntityEditDrawerProps> = ({
             )}
 
             {isNetworkError && networkError && (
-              <div className="wiki-status-banner is-error" role="alert">
+              <div className={cx(uiStyles, 'wiki-status-banner is-error')} role="alert">
                 <div>
                   <strong>Save failed:</strong> {networkError}
                 </div>
-                <div className="wiki-inline-actions">
+                <div className={cx(uiStyles, 'wiki-inline-actions')}>
                   <button
                     type="button"
-                    className="pill-btn active"
+                    className={cx(uiStyles, 'pill-btn active')}
                     onClick={() => {
                       send({ type: 'RETRY_SAVE' });
                     }}
@@ -651,7 +663,7 @@ export const EntityEditDrawer: React.FC<EntityEditDrawerProps> = ({
                   </button>
                   <button
                     type="button"
-                    className="pill-btn"
+                    className={cx(uiStyles, 'pill-btn')}
                     onClick={() => {
                       send({ type: 'RETURN_TO_EDIT' });
                     }}
@@ -663,9 +675,9 @@ export const EntityEditDrawer: React.FC<EntityEditDrawerProps> = ({
             )}
 
             {validationErrors.length > 0 && (
-              <div className="wiki-status-banner is-error" role="alert">
+              <div className={cx(uiStyles, 'wiki-status-banner is-error')} role="alert">
                 <strong>Fix before saving:</strong>
-                <ul className="wiki-error-list">
+                <ul className={cx(uiStyles, 'wiki-error-list')}>
                   {validationErrors.map((err) => (
                     <li key={err}>{err}</li>
                   ))}
@@ -673,15 +685,15 @@ export const EntityEditDrawer: React.FC<EntityEditDrawerProps> = ({
               </div>
             )}
 
-            <div className="wiki-edit-form">
+            <div className={cx(uiStyles, 'wiki-edit-form')}>
               {entityType === 'person' && (
                 <>
-                  <div className="wiki-field-grid">
-                    <label className="wiki-field">
-                      <span className="wiki-field-label">Full name</span>
+                  <div className={cx(uiStyles, 'wiki-field-grid')}>
+                    <label className={cx(uiStyles, 'wiki-field')}>
+                      <span className={cx(uiStyles, 'wiki-field-label')}>Full name</span>
                       <input
                         type="text"
-                        className="wiki-input"
+                        className={cx(uiStyles, 'wiki-input')}
                         value={asString(draft.full_name)}
                         onChange={(e) => {
                           updateField('full_name', e.target.value);
@@ -689,11 +701,11 @@ export const EntityEditDrawer: React.FC<EntityEditDrawerProps> = ({
                         disabled={isBusy}
                       />
                     </label>
-                    <label className="wiki-field">
-                      <span className="wiki-field-label">Given name</span>
+                    <label className={cx(uiStyles, 'wiki-field')}>
+                      <span className={cx(uiStyles, 'wiki-field-label')}>Given name</span>
                       <input
                         type="text"
-                        className="wiki-input"
+                        className={cx(uiStyles, 'wiki-input')}
                         value={asString(draft.given_name)}
                         onChange={(e) => {
                           updateField('given_name', e.target.value);
@@ -701,11 +713,11 @@ export const EntityEditDrawer: React.FC<EntityEditDrawerProps> = ({
                         disabled={isBusy}
                       />
                     </label>
-                    <label className="wiki-field">
-                      <span className="wiki-field-label">Surname</span>
+                    <label className={cx(uiStyles, 'wiki-field')}>
+                      <span className={cx(uiStyles, 'wiki-field-label')}>Surname</span>
                       <input
                         type="text"
-                        className="wiki-input"
+                        className={cx(uiStyles, 'wiki-input')}
                         value={asString(draft.surname)}
                         onChange={(e) => {
                           updateField('surname', e.target.value);
@@ -713,11 +725,11 @@ export const EntityEditDrawer: React.FC<EntityEditDrawerProps> = ({
                         disabled={isBusy}
                       />
                     </label>
-                    <label className="wiki-field">
-                      <span className="wiki-field-label">Birth date</span>
+                    <label className={cx(uiStyles, 'wiki-field')}>
+                      <span className={cx(uiStyles, 'wiki-field-label')}>Birth date</span>
                       <input
                         type="text"
-                        className="wiki-input"
+                        className={cx(uiStyles, 'wiki-input')}
                         placeholder="e.g. 1850-04-12 or 1850"
                         value={asString(draft.birth_edtf)}
                         onChange={(e) => {
@@ -726,11 +738,11 @@ export const EntityEditDrawer: React.FC<EntityEditDrawerProps> = ({
                         disabled={isBusy}
                       />
                     </label>
-                    <label className="wiki-field">
-                      <span className="wiki-field-label">Death date</span>
+                    <label className={cx(uiStyles, 'wiki-field')}>
+                      <span className={cx(uiStyles, 'wiki-field-label')}>Death date</span>
                       <input
                         type="text"
-                        className="wiki-input"
+                        className={cx(uiStyles, 'wiki-input')}
                         placeholder="Leave blank if living or unknown"
                         value={asString(draft.death_edtf)}
                         onChange={(e) => {
@@ -739,11 +751,11 @@ export const EntityEditDrawer: React.FC<EntityEditDrawerProps> = ({
                         disabled={isBusy}
                       />
                     </label>
-                    <label className="wiki-field">
-                      <span className="wiki-field-label">Nicknames or maiden names</span>
+                    <label className={cx(uiStyles, 'wiki-field')}>
+                      <span className={cx(uiStyles, 'wiki-field-label')}>Nicknames or maiden names</span>
                       <input
                         type="text"
-                        className="wiki-input"
+                        className={cx(uiStyles, 'wiki-input')}
                         placeholder="Separate multiple names with commas"
                         value={asStringArray(draft.alt_names).join(', ')}
                         onChange={(e) => {
@@ -757,7 +769,7 @@ export const EntityEditDrawer: React.FC<EntityEditDrawerProps> = ({
                       />
                     </label>
                   </div>
-                  <label className="wiki-checkbox-row">
+                  <label className={cx(uiStyles, 'wiki-checkbox-row')}>
                     <input
                       type="checkbox"
                       checked={Boolean(draft.is_living)}
@@ -774,12 +786,12 @@ export const EntityEditDrawer: React.FC<EntityEditDrawerProps> = ({
               )}
 
               {entityType === 'place' && (
-                <div className="wiki-field-grid">
-                  <label className="wiki-field">
-                    <span className="wiki-field-label">Short name</span>
+                <div className={cx(uiStyles, 'wiki-field-grid')}>
+                  <label className={cx(uiStyles, 'wiki-field')}>
+                    <span className={cx(uiStyles, 'wiki-field-label')}>Short name</span>
                     <input
                       type="text"
-                      className="wiki-input"
+                      className={cx(uiStyles, 'wiki-input')}
                       value={asString(draft.name)}
                       onChange={(e) => {
                         updateField('name', e.target.value);
@@ -787,11 +799,11 @@ export const EntityEditDrawer: React.FC<EntityEditDrawerProps> = ({
                       disabled={isBusy}
                     />
                   </label>
-                  <label className="wiki-field">
-                    <span className="wiki-field-label">Full hierarchical name</span>
+                  <label className={cx(uiStyles, 'wiki-field')}>
+                    <span className={cx(uiStyles, 'wiki-field-label')}>Full hierarchical name</span>
                     <input
                       type="text"
-                      className="wiki-input"
+                      className={cx(uiStyles, 'wiki-input')}
                       value={asString(draft.full_name)}
                       onChange={(e) => {
                         updateField('full_name', e.target.value);
@@ -799,12 +811,12 @@ export const EntityEditDrawer: React.FC<EntityEditDrawerProps> = ({
                       disabled={isBusy}
                     />
                   </label>
-                  <label className="wiki-field">
-                    <span className="wiki-field-label">Latitude</span>
+                  <label className={cx(uiStyles, 'wiki-field')}>
+                    <span className={cx(uiStyles, 'wiki-field-label')}>Latitude</span>
                     <input
                       type="number"
                       step="any"
-                      className="wiki-input"
+                      className={cx(uiStyles, 'wiki-input')}
                       value={typeof draft.lat === 'number' ? draft.lat : 0}
                       onChange={(e) => {
                         updateField('lat', Number(e.target.value));
@@ -812,12 +824,12 @@ export const EntityEditDrawer: React.FC<EntityEditDrawerProps> = ({
                       disabled={isBusy}
                     />
                   </label>
-                  <label className="wiki-field">
-                    <span className="wiki-field-label">Longitude</span>
+                  <label className={cx(uiStyles, 'wiki-field')}>
+                    <span className={cx(uiStyles, 'wiki-field-label')}>Longitude</span>
                     <input
                       type="number"
                       step="any"
-                      className="wiki-input"
+                      className={cx(uiStyles, 'wiki-input')}
                       value={typeof draft.lng === 'number' ? draft.lng : 0}
                       onChange={(e) => {
                         updateField('lng', Number(e.target.value));
@@ -825,10 +837,10 @@ export const EntityEditDrawer: React.FC<EntityEditDrawerProps> = ({
                       disabled={isBusy}
                     />
                   </label>
-                  <label className="wiki-field wiki-field-full">
-                    <span className="wiki-field-label">Historical profile</span>
+                  <label className={cx(uiStyles, 'wiki-field wiki-field-full')}>
+                    <span className={cx(uiStyles, 'wiki-field-label')}>Historical profile</span>
                     <textarea
-                      className="wiki-textarea"
+                      className={cx(uiStyles, 'wiki-textarea')}
                       rows={5}
                       value={asString(draft.summary)}
                       onChange={(e) => {
@@ -843,9 +855,9 @@ export const EntityEditDrawer: React.FC<EntityEditDrawerProps> = ({
               {canEditPronunciation && (
                 <fieldset
                   ref={pronunciationFieldsetRef}
-                  className="wiki-citation-fieldset wiki-pronunciation-fieldset"
+                  className={cx(uiStyles, 'wiki-citation-fieldset wiki-pronunciation-fieldset')}
                 >
-                  <legend className="wiki-field-label">Pronunciation</legend>
+                  <legend className={cx(uiStyles, 'wiki-field-label')}>Pronunciation</legend>
                   {entityType === 'person' &&
                     (() => {
                       const lookupLexicon = (token: string): Pronunciation | undefined => {
@@ -872,14 +884,14 @@ export const EntityEditDrawer: React.FC<EntityEditDrawerProps> = ({
                       const sharedSurname = lookupLexicon(surname);
                       const hasSharedSurname = hasPronunciationContent(sharedSurname);
                       return (
-                        <div className="wiki-pronunciation-breakdown">
-                          <div className="wiki-pronunciation-breakdown-parts">
+                        <div className={cx(uiStyles, 'wiki-pronunciation-breakdown')}>
+                          <div className={cx(uiStyles, 'wiki-pronunciation-breakdown-parts')}>
                             {firstName && (
-                              <span className="wiki-pronunciation-part">
-                                <span className="wiki-pronunciation-part-label">First</span>
+                              <span className={cx(uiStyles, 'wiki-pronunciation-part')}>
+                                <span className={cx(uiStyles, 'wiki-pronunciation-part-label')}>First</span>
                                 <strong>{firstName}</strong>
                                 {(sharedFirst?.phonetic || sharedFirst?.ipa) && (
-                                  <span className="wiki-pronunciation-part-shared">
+                                  <span className={cx(uiStyles, 'wiki-pronunciation-part-shared')}>
                                     → {sharedFirst.phonetic ?? sharedFirst.ipa}
                                     {sharedFirst.phonetic && sharedFirst.ipa ? ` ${sharedFirst.ipa}` : ''}{' '}
                                     (lexicon)
@@ -888,11 +900,11 @@ export const EntityEditDrawer: React.FC<EntityEditDrawerProps> = ({
                               </span>
                             )}
                             {middleNames && (
-                              <span className="wiki-pronunciation-part">
-                                <span className="wiki-pronunciation-part-label">Middle</span>
+                              <span className={cx(uiStyles, 'wiki-pronunciation-part')}>
+                                <span className={cx(uiStyles, 'wiki-pronunciation-part-label')}>Middle</span>
                                 <strong>{middleNames}</strong>
                                 {(sharedMiddle?.phonetic || sharedMiddle?.ipa) && (
-                                  <span className="wiki-pronunciation-part-shared">
+                                  <span className={cx(uiStyles, 'wiki-pronunciation-part-shared')}>
                                     → {sharedMiddle.phonetic ?? sharedMiddle.ipa}
                                     {sharedMiddle.phonetic && sharedMiddle.ipa ? ` ${sharedMiddle.ipa}` : ''}{' '}
                                     (lexicon)
@@ -901,11 +913,11 @@ export const EntityEditDrawer: React.FC<EntityEditDrawerProps> = ({
                               </span>
                             )}
                             {surname && (
-                              <span className="wiki-pronunciation-part">
-                                <span className="wiki-pronunciation-part-label">Surname</span>
+                              <span className={cx(uiStyles, 'wiki-pronunciation-part')}>
+                                <span className={cx(uiStyles, 'wiki-pronunciation-part-label')}>Surname</span>
                                 <strong>{surname}</strong>
                                 {(sharedSurname?.phonetic || sharedSurname?.ipa) && (
-                                  <span className="wiki-pronunciation-part-shared">
+                                  <span className={cx(uiStyles, 'wiki-pronunciation-part-shared')}>
                                     → {sharedSurname.phonetic ?? sharedSurname.ipa}
                                     {sharedSurname.phonetic && sharedSurname.ipa
                                       ? ` ${sharedSurname.ipa}`
@@ -914,14 +926,14 @@ export const EntityEditDrawer: React.FC<EntityEditDrawerProps> = ({
                                   </span>
                                 )}
                                 {(sharedSurname?.source_label || sharedSurname?.source_url) && (
-                                  <span className="pronunciation-source">
+                                  <span className={cx(uiStyles, 'pronunciation-source')}>
                                     {sharedSurname.source_url &&
                                     /^https?:\/\//i.test(sharedSurname.source_url.trim()) ? (
                                       <a
                                         href={sharedSurname.source_url.trim()}
                                         target="_blank"
                                         rel="noopener noreferrer"
-                                        className="pronunciation-source-link"
+                                        className={cx(uiStyles, 'pronunciation-source-link')}
                                       >
                                         {sharedSurname.source_label || 'Source'}
                                       </a>
@@ -932,7 +944,7 @@ export const EntityEditDrawer: React.FC<EntityEditDrawerProps> = ({
                                 )}
                                 <button
                                   type="button"
-                                  className="wiki-pronunciation-shared-toggle"
+                                  className={cx(uiStyles, 'wiki-pronunciation-shared-toggle')}
                                   disabled={isBusy}
                                   aria-expanded={sharedEditorOpen}
                                   onClick={() => {
@@ -961,19 +973,19 @@ export const EntityEditDrawer: React.FC<EntityEditDrawerProps> = ({
                           </div>
 
                           {surname && sharedEditorOpen && (
-                            <div className="wiki-pronunciation-shared-editor">
-                              <div className="wiki-pronunciation-shared-header">
+                            <div className={cx(uiStyles, 'wiki-pronunciation-shared-editor')}>
+                              <div className={cx(uiStyles, 'wiki-pronunciation-shared-header')}>
                                 <strong>Shared pronunciation for &ldquo;{surname}&rdquo;</strong>
-                                <span className="wiki-pronunciation-shared-hint">
+                                <span className={cx(uiStyles, 'wiki-pronunciation-shared-hint')}>
                                   Applies to every record with this surname and automatically generates audio.
                                 </span>
                               </div>
-                              <div className="wiki-field-grid">
-                                <label className="wiki-field">
-                                  <span className="wiki-field-label">Respelling</span>
+                              <div className={cx(uiStyles, 'wiki-field-grid')}>
+                                <label className={cx(uiStyles, 'wiki-field')}>
+                                  <span className={cx(uiStyles, 'wiki-field-label')}>Respelling</span>
                                   <input
                                     type="text"
-                                    className="wiki-input"
+                                    className={cx(uiStyles, 'wiki-input')}
                                     placeholder="e.g. MER-ser"
                                     value={sharedPhonetic}
                                     onChange={(e) => {
@@ -982,11 +994,11 @@ export const EntityEditDrawer: React.FC<EntityEditDrawerProps> = ({
                                     disabled={sharedSaveStatus === 'saving'}
                                   />
                                 </label>
-                                <label className="wiki-field">
-                                  <span className="wiki-field-label">IPA (optional)</span>
+                                <label className={cx(uiStyles, 'wiki-field')}>
+                                  <span className={cx(uiStyles, 'wiki-field-label')}>IPA (optional)</span>
                                   <input
                                     type="text"
-                                    className="wiki-input"
+                                    className={cx(uiStyles, 'wiki-input')}
                                     placeholder="e.g. /ˈmɜːr.sər/"
                                     value={sharedIpa}
                                     onChange={(e) => {
@@ -995,11 +1007,11 @@ export const EntityEditDrawer: React.FC<EntityEditDrawerProps> = ({
                                     disabled={sharedSaveStatus === 'saving'}
                                   />
                                 </label>
-                                <label className="wiki-field">
-                                  <span className="wiki-field-label">Language</span>
+                                <label className={cx(uiStyles, 'wiki-field')}>
+                                  <span className={cx(uiStyles, 'wiki-field-label')}>Language</span>
                                   <input
                                     type="text"
-                                    className="wiki-input"
+                                    className={cx(uiStyles, 'wiki-input')}
                                     placeholder="e.g. en-US, nl, pl"
                                     value={sharedLanguage}
                                     onChange={(e) => {
@@ -1008,11 +1020,11 @@ export const EntityEditDrawer: React.FC<EntityEditDrawerProps> = ({
                                     disabled={sharedSaveStatus === 'saving'}
                                   />
                                 </label>
-                                <label className="wiki-field">
-                                  <span className="wiki-field-label">Note</span>
+                                <label className={cx(uiStyles, 'wiki-field')}>
+                                  <span className={cx(uiStyles, 'wiki-field-label')}>Note</span>
                                   <input
                                     type="text"
-                                    className="wiki-input"
+                                    className={cx(uiStyles, 'wiki-input')}
                                     placeholder="e.g. Stress on first syllable"
                                     value={sharedNote}
                                     onChange={(e) => {
@@ -1021,11 +1033,13 @@ export const EntityEditDrawer: React.FC<EntityEditDrawerProps> = ({
                                     disabled={sharedSaveStatus === 'saving'}
                                   />
                                 </label>
-                                <label className="wiki-field">
-                                  <span className="wiki-field-label">Source label (optional)</span>
+                                <label className={cx(uiStyles, 'wiki-field')}>
+                                  <span className={cx(uiStyles, 'wiki-field-label')}>
+                                    Source label (optional)
+                                  </span>
                                   <input
                                     type="text"
-                                    className="wiki-input"
+                                    className={cx(uiStyles, 'wiki-input')}
                                     placeholder="e.g. Wiktionary (Dutch IPA) or Family oral tradition"
                                     value={sharedSourceLabel}
                                     onChange={(e) => {
@@ -1034,11 +1048,13 @@ export const EntityEditDrawer: React.FC<EntityEditDrawerProps> = ({
                                     disabled={sharedSaveStatus === 'saving'}
                                   />
                                 </label>
-                                <label className="wiki-field">
-                                  <span className="wiki-field-label">Source URL (optional)</span>
+                                <label className={cx(uiStyles, 'wiki-field')}>
+                                  <span className={cx(uiStyles, 'wiki-field-label')}>
+                                    Source URL (optional)
+                                  </span>
                                   <input
                                     type="url"
-                                    className="wiki-input"
+                                    className={cx(uiStyles, 'wiki-input')}
                                     placeholder="e.g. https://en.wiktionary.org/wiki/..."
                                     value={sharedSourceUrl}
                                     onChange={(e) => {
@@ -1048,10 +1064,10 @@ export const EntityEditDrawer: React.FC<EntityEditDrawerProps> = ({
                                   />
                                 </label>
                               </div>
-                              <div className="wiki-pronunciation-shared-actions">
+                              <div className={cx(uiStyles, 'wiki-pronunciation-shared-actions')}>
                                 <button
                                   type="button"
-                                  className="wiki-pronunciation-shared-save-btn"
+                                  className={cx(uiStyles, 'wiki-pronunciation-shared-save-btn')}
                                   disabled={sharedSaveStatus === 'saving'}
                                   onClick={() => {
                                     void handleSaveSharedSurname(surname, sharedSurname);
@@ -1063,7 +1079,7 @@ export const EntityEditDrawer: React.FC<EntityEditDrawerProps> = ({
                                 </button>
                                 <button
                                   type="button"
-                                  className="pill-btn"
+                                  className={cx(uiStyles, 'pill-btn')}
                                   disabled={sharedSaveStatus === 'saving'}
                                   onClick={() => {
                                     setSharedEditorOpen(false);
@@ -1081,7 +1097,10 @@ export const EntityEditDrawer: React.FC<EntityEditDrawerProps> = ({
 
                           {sharedSaveMessage && (
                             <div
-                              className={`wiki-pronunciation-status ${sharedSaveStatus === 'error' ? 'is-error' : 'is-success'}`}
+                              className={cx(
+                                uiStyles,
+                                `wiki-pronunciation-status ${sharedSaveStatus === 'error' ? 'is-error' : 'is-success'}`
+                              )}
                               role={sharedSaveStatus === 'error' ? 'alert' : 'status'}
                             >
                               {sharedSaveMessage}
@@ -1091,17 +1110,17 @@ export const EntityEditDrawer: React.FC<EntityEditDrawerProps> = ({
                       );
                     })()}
                   {entityType === 'person' && (
-                    <div className="wiki-pronunciation-override-heading">
+                    <div className={cx(uiStyles, 'wiki-pronunciation-override-heading')}>
                       Personal override (first / middle / full name)
                     </div>
                   )}
-                  <div className="wiki-field-grid">
-                    <label className="wiki-field">
-                      <span className="wiki-field-label">Respelling</span>
+                  <div className={cx(uiStyles, 'wiki-field-grid')}>
+                    <label className={cx(uiStyles, 'wiki-field')}>
+                      <span className={cx(uiStyles, 'wiki-field-label')}>Respelling</span>
                       <input
                         ref={pronunciationInputRef}
                         type="text"
-                        className="wiki-input"
+                        className={cx(uiStyles, 'wiki-input')}
                         placeholder="e.g. MER-ser or LAY-den"
                         value={draftPronunciation?.phonetic ?? ''}
                         onChange={(e) => {
@@ -1110,11 +1129,11 @@ export const EntityEditDrawer: React.FC<EntityEditDrawerProps> = ({
                         disabled={isBusy}
                       />
                     </label>
-                    <label className="wiki-field">
-                      <span className="wiki-field-label">IPA (optional)</span>
+                    <label className={cx(uiStyles, 'wiki-field')}>
+                      <span className={cx(uiStyles, 'wiki-field-label')}>IPA (optional)</span>
                       <input
                         type="text"
-                        className="wiki-input"
+                        className={cx(uiStyles, 'wiki-input')}
                         placeholder="e.g. /ˈmɜːr.sər/"
                         value={draftPronunciation?.ipa ?? ''}
                         onChange={(e) => {
@@ -1123,11 +1142,11 @@ export const EntityEditDrawer: React.FC<EntityEditDrawerProps> = ({
                         disabled={isBusy}
                       />
                     </label>
-                    <label className="wiki-field">
-                      <span className="wiki-field-label">Language / origin</span>
+                    <label className={cx(uiStyles, 'wiki-field')}>
+                      <span className={cx(uiStyles, 'wiki-field-label')}>Language / origin</span>
                       <input
                         type="text"
-                        className="wiki-input"
+                        className={cx(uiStyles, 'wiki-input')}
                         placeholder="e.g. nl, pl, en-US"
                         value={draftPronunciation?.language ?? ''}
                         onChange={(e) => {
@@ -1136,11 +1155,11 @@ export const EntityEditDrawer: React.FC<EntityEditDrawerProps> = ({
                         disabled={isBusy}
                       />
                     </label>
-                    <label className="wiki-field">
-                      <span className="wiki-field-label">Pronunciation note (optional)</span>
+                    <label className={cx(uiStyles, 'wiki-field')}>
+                      <span className={cx(uiStyles, 'wiki-field-label')}>Pronunciation note (optional)</span>
                       <input
                         type="text"
-                        className="wiki-input"
+                        className={cx(uiStyles, 'wiki-input')}
                         placeholder="e.g. Stress on first syllable"
                         value={draftPronunciation?.note ?? ''}
                         onChange={(e) => {
@@ -1149,11 +1168,11 @@ export const EntityEditDrawer: React.FC<EntityEditDrawerProps> = ({
                         disabled={isBusy}
                       />
                     </label>
-                    <label className="wiki-field">
-                      <span className="wiki-field-label">Source label (optional)</span>
+                    <label className={cx(uiStyles, 'wiki-field')}>
+                      <span className={cx(uiStyles, 'wiki-field-label')}>Source label (optional)</span>
                       <input
                         type="text"
-                        className="wiki-input"
+                        className={cx(uiStyles, 'wiki-input')}
                         placeholder="e.g. Wiktionary (Dutch IPA)"
                         value={draftPronunciation?.source_label ?? ''}
                         onChange={(e) => {
@@ -1162,11 +1181,11 @@ export const EntityEditDrawer: React.FC<EntityEditDrawerProps> = ({
                         disabled={isBusy}
                       />
                     </label>
-                    <label className="wiki-field">
-                      <span className="wiki-field-label">Source URL (optional)</span>
+                    <label className={cx(uiStyles, 'wiki-field')}>
+                      <span className={cx(uiStyles, 'wiki-field-label')}>Source URL (optional)</span>
                       <input
                         type="url"
-                        className="wiki-input"
+                        className={cx(uiStyles, 'wiki-input')}
                         placeholder="e.g. https://en.wiktionary.org/wiki/Leiden"
                         value={draftPronunciation?.source_url ?? ''}
                         onChange={(e) => {
@@ -1177,10 +1196,10 @@ export const EntityEditDrawer: React.FC<EntityEditDrawerProps> = ({
                     </label>
                   </div>
 
-                  <div className="wiki-pronunciation-actions">
+                  <div className={cx(uiStyles, 'wiki-pronunciation-actions')}>
                     <button
                       type="button"
-                      className="wiki-pronunciation-gen-btn"
+                      className={cx(uiStyles, 'wiki-pronunciation-gen-btn')}
                       disabled={isBusy || audioGenStatus === 'loading'}
                       onClick={() => {
                         void handleGeneratePronunciationAudio();
@@ -1208,7 +1227,7 @@ export const EntityEditDrawer: React.FC<EntityEditDrawerProps> = ({
                           : 'Generate Audio'}
                     </button>
                     {hasPronunciationContent(draftPronunciation) && (
-                      <div className="wiki-pronunciation-preview">
+                      <div className={cx(uiStyles, 'wiki-pronunciation-preview')}>
                         <PronunciationBadge
                           pronunciation={draftPronunciation}
                           label={pronunciationPreviewLabel}
@@ -1220,7 +1239,10 @@ export const EntityEditDrawer: React.FC<EntityEditDrawerProps> = ({
 
                   {audioGenMessage && (
                     <div
-                      className={`wiki-pronunciation-status ${audioGenStatus === 'error' ? 'is-error' : 'is-success'}`}
+                      className={cx(
+                        uiStyles,
+                        `wiki-pronunciation-status ${audioGenStatus === 'error' ? 'is-error' : 'is-success'}`
+                      )}
                       role={audioGenStatus === 'error' ? 'alert' : 'status'}
                     >
                       {audioGenMessage}
@@ -1230,12 +1252,12 @@ export const EntityEditDrawer: React.FC<EntityEditDrawerProps> = ({
               )}
 
               {entityType === 'event' && (
-                <div className="wiki-field-grid">
-                  <label className="wiki-field wiki-field-full">
-                    <span className="wiki-field-label">Event title</span>
+                <div className={cx(uiStyles, 'wiki-field-grid')}>
+                  <label className={cx(uiStyles, 'wiki-field wiki-field-full')}>
+                    <span className={cx(uiStyles, 'wiki-field-label')}>Event title</span>
                     <input
                       type="text"
-                      className="wiki-input"
+                      className={cx(uiStyles, 'wiki-input')}
                       value={asString(draft.title)}
                       onChange={(e) => {
                         updateField('title', e.target.value);
@@ -1243,11 +1265,11 @@ export const EntityEditDrawer: React.FC<EntityEditDrawerProps> = ({
                       disabled={isBusy}
                     />
                   </label>
-                  <label className="wiki-field">
-                    <span className="wiki-field-label">Date</span>
+                  <label className={cx(uiStyles, 'wiki-field')}>
+                    <span className={cx(uiStyles, 'wiki-field-label')}>Date</span>
                     <input
                       type="text"
-                      className="wiki-input"
+                      className={cx(uiStyles, 'wiki-input')}
                       value={asString(draft.edtf_date)}
                       onChange={(e) => {
                         updateField('edtf_date', e.target.value);
@@ -1255,10 +1277,10 @@ export const EntityEditDrawer: React.FC<EntityEditDrawerProps> = ({
                       disabled={isBusy}
                     />
                   </label>
-                  <label className="wiki-field wiki-field-full">
-                    <span className="wiki-field-label">Narrative summary</span>
+                  <label className={cx(uiStyles, 'wiki-field wiki-field-full')}>
+                    <span className={cx(uiStyles, 'wiki-field-label')}>Narrative summary</span>
                     <textarea
-                      className="wiki-textarea"
+                      className={cx(uiStyles, 'wiki-textarea')}
                       rows={5}
                       value={asString(draft.summary)}
                       onChange={(e) => {
@@ -1271,12 +1293,12 @@ export const EntityEditDrawer: React.FC<EntityEditDrawerProps> = ({
               )}
 
               {entityType === 'narrative' && (
-                <div className="wiki-field-grid">
-                  <label className="wiki-field wiki-field-full">
-                    <span className="wiki-field-label">Narrative title</span>
+                <div className={cx(uiStyles, 'wiki-field-grid')}>
+                  <label className={cx(uiStyles, 'wiki-field wiki-field-full')}>
+                    <span className={cx(uiStyles, 'wiki-field-label')}>Narrative title</span>
                     <input
                       type="text"
-                      className="wiki-input"
+                      className={cx(uiStyles, 'wiki-input')}
                       value={asString(draft.title)}
                       onChange={(e) => {
                         updateField('title', e.target.value);
@@ -1284,10 +1306,10 @@ export const EntityEditDrawer: React.FC<EntityEditDrawerProps> = ({
                       disabled={isBusy}
                     />
                   </label>
-                  <label className="wiki-field wiki-field-full">
-                    <span className="wiki-field-label">Story text</span>
+                  <label className={cx(uiStyles, 'wiki-field wiki-field-full')}>
+                    <span className={cx(uiStyles, 'wiki-field-label')}>Story text</span>
                     <textarea
-                      className="wiki-textarea"
+                      className={cx(uiStyles, 'wiki-textarea')}
                       rows={8}
                       value={asString(draft.body_md)}
                       onChange={(e) => {
@@ -1303,10 +1325,10 @@ export const EntityEditDrawer: React.FC<EntityEditDrawerProps> = ({
                 entityType !== 'place' &&
                 entityType !== 'event' &&
                 entityType !== 'narrative' && (
-                  <label className="wiki-field wiki-field-full">
-                    <span className="wiki-field-label">Record details</span>
+                  <label className={cx(uiStyles, 'wiki-field wiki-field-full')}>
+                    <span className={cx(uiStyles, 'wiki-field-label')}>Record details</span>
                     <textarea
-                      className="wiki-textarea wiki-mono"
+                      className={cx(uiStyles, 'wiki-textarea wiki-mono')}
                       rows={8}
                       value={JSON.stringify(draft, null, 2)}
                       onChange={(e) => {
@@ -1323,10 +1345,10 @@ export const EntityEditDrawer: React.FC<EntityEditDrawerProps> = ({
                 )}
 
               {/* Citation picker */}
-              <fieldset className="wiki-citation-fieldset">
-                <legend className="wiki-field-label">Source Verification</legend>
-                <div className="wiki-citation-options">
-                  <label className="wiki-radio-card">
+              <fieldset className={cx(uiStyles, 'wiki-citation-fieldset')}>
+                <legend className={cx(uiStyles, 'wiki-field-label')}>Source Verification</legend>
+                <div className={cx(uiStyles, 'wiki-citation-options')}>
+                  <label className={cx(uiStyles, 'wiki-radio-card')}>
                     <input
                       type="radio"
                       name={`citation-mode-${entityId}`}
@@ -1337,10 +1359,12 @@ export const EntityEditDrawer: React.FC<EntityEditDrawerProps> = ({
                       disabled={isBusy}
                     />
                     <CitationBadge hasPrimarySource />
-                    <span className="wiki-radio-desc">Backed by a primary record or archive source</span>
+                    <span className={cx(uiStyles, 'wiki-radio-desc')}>
+                      Backed by a primary record or archive source
+                    </span>
                   </label>
 
-                  <label className="wiki-radio-card">
+                  <label className={cx(uiStyles, 'wiki-radio-card')}>
                     <input
                       type="radio"
                       name={`citation-mode-${entityId}`}
@@ -1351,7 +1375,7 @@ export const EntityEditDrawer: React.FC<EntityEditDrawerProps> = ({
                       disabled={isBusy}
                     />
                     <CitationBadge hasPrimarySource={false} />
-                    <span className="wiki-radio-desc">
+                    <span className={cx(uiStyles, 'wiki-radio-desc')}>
                       Oral recollection or family note (labeled as Family memory until a primary source is
                       cited)
                     </span>
@@ -1359,10 +1383,10 @@ export const EntityEditDrawer: React.FC<EntityEditDrawerProps> = ({
                 </div>
 
                 {citationMode === 'cited' && availableSources.length > 0 && (
-                  <label className="wiki-field" style={{ marginTop: 8 }}>
-                    <span className="wiki-field-label">Link primary source (optional)</span>
+                  <label className={cx(uiStyles, 'wiki-field')} style={{ marginTop: 8 }}>
+                    <span className={cx(uiStyles, 'wiki-field-label')}>Link primary source (optional)</span>
                     <select
-                      className="wiki-input"
+                      className={cx(uiStyles, 'wiki-input')}
                       value={sourceIds[0] ?? ''}
                       onChange={(e) => {
                         const nextId = e.target.value;
@@ -1386,13 +1410,13 @@ export const EntityEditDrawer: React.FC<EntityEditDrawerProps> = ({
               </fieldset>
 
               {/* Required edit summary */}
-              <label className="wiki-field">
-                <span className="wiki-field-label">
+              <label className={cx(uiStyles, 'wiki-field')}>
+                <span className={cx(uiStyles, 'wiki-field-label')}>
                   What did you change? <span aria-hidden="true">*</span>
                 </span>
                 <input
                   type="text"
-                  className="wiki-input"
+                  className={cx(uiStyles, 'wiki-input')}
                   required
                   minLength={3}
                   placeholder="e.g. Corrected birth year from 1880 census or family Bible"
@@ -1403,7 +1427,7 @@ export const EntityEditDrawer: React.FC<EntityEditDrawerProps> = ({
                   disabled={isBusy}
                 />
                 {summary.length > 0 && !summaryValid && (
-                  <span className="wiki-field-hint is-error">
+                  <span className={cx(uiStyles, 'wiki-field-hint is-error')}>
                     Please write a short note (at least 3 characters).
                   </span>
                 )}
@@ -1411,11 +1435,11 @@ export const EntityEditDrawer: React.FC<EntityEditDrawerProps> = ({
             </div>
 
             {dataSource.deleteEntity && (
-              <div className="wiki-danger-zone">
+              <div className={cx(uiStyles, 'wiki-danger-zone')}>
                 {!deleteConfirmOpen ? (
                   <button
                     type="button"
-                    className="pill-btn wiki-danger-btn"
+                    className={cx(uiStyles, 'pill-btn wiki-danger-btn')}
                     onClick={() => {
                       setDeleteConfirmOpen(true);
                     }}
@@ -1423,19 +1447,19 @@ export const EntityEditDrawer: React.FC<EntityEditDrawerProps> = ({
                     Remove from Archive
                   </button>
                 ) : (
-                  <div className="wiki-danger-confirm">
+                  <div className={cx(uiStyles, 'wiki-danger-confirm')}>
                     <p>
                       Removing hides this page from the archive while keeping its full history so it can be
                       restored anytime.
                     </p>
                     {deleteError && (
-                      <div className="wiki-status-banner is-error" role="alert">
+                      <div className={cx(uiStyles, 'wiki-status-banner is-error')} role="alert">
                         <p>{deleteError}</p>
                       </div>
                     )}
                     <input
                       type="text"
-                      className="wiki-input"
+                      className={cx(uiStyles, 'wiki-input')}
                       placeholder="Why are you removing this? (at least 3 characters)"
                       value={deleteSummary}
                       onChange={(e) => {
@@ -1443,10 +1467,10 @@ export const EntityEditDrawer: React.FC<EntityEditDrawerProps> = ({
                       }}
                       disabled={deleteBusy}
                     />
-                    <div className="wiki-inline-actions" style={{ marginTop: 8 }}>
+                    <div className={cx(uiStyles, 'wiki-inline-actions')} style={{ marginTop: 8 }}>
                       <button
                         type="button"
-                        className="pill-btn wiki-danger-btn"
+                        className={cx(uiStyles, 'pill-btn wiki-danger-btn')}
                         disabled={deleteBusy || !isEditSummaryValid(deleteSummary)}
                         onClick={() => {
                           void handleSoftDelete();
@@ -1456,7 +1480,7 @@ export const EntityEditDrawer: React.FC<EntityEditDrawerProps> = ({
                       </button>
                       <button
                         type="button"
-                        className="pill-btn"
+                        className={cx(uiStyles, 'pill-btn')}
                         onClick={() => {
                           setDeleteConfirmOpen(false);
                         }}
@@ -1470,12 +1494,14 @@ export const EntityEditDrawer: React.FC<EntityEditDrawerProps> = ({
             )}
           </div>
 
-          <div className="wiki-drawer-footer">
-            {saveDisabledHint && <span className="wiki-drawer-footer-hint">{saveDisabledHint}</span>}
-            <div className="wiki-form-actions">
+          <div className={cx(uiStyles, 'wiki-drawer-footer')}>
+            {saveDisabledHint && (
+              <span className={cx(uiStyles, 'wiki-drawer-footer-hint')}>{saveDisabledHint}</span>
+            )}
+            <div className={cx(uiStyles, 'wiki-form-actions')}>
               <button
                 type="submit"
-                className="wiki-btn-primary wiki-btn-sm"
+                className={cx(uiStyles, 'wiki-btn-primary wiki-btn-sm')}
                 disabled={isBusy || !snapshot.context.dirty || !summaryValid}
               >
                 {isSaving ? 'Saving…' : 'Save Changes'}
@@ -1483,7 +1509,7 @@ export const EntityEditDrawer: React.FC<EntityEditDrawerProps> = ({
               {isSaving ? (
                 <button
                   type="button"
-                  className="pill-btn"
+                  className={cx(uiStyles, 'pill-btn')}
                   onClick={() => {
                     send({ type: 'CANCEL_SAVE' });
                   }}
@@ -1491,7 +1517,7 @@ export const EntityEditDrawer: React.FC<EntityEditDrawerProps> = ({
                   Cancel Save
                 </button>
               ) : (
-                <button type="button" className="pill-btn" onClick={handleCloseAttempt}>
+                <button type="button" className={cx(uiStyles, 'pill-btn')} onClick={handleCloseAttempt}>
                   Cancel
                 </button>
               )}

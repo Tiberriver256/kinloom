@@ -12,10 +12,15 @@ import {
   formatUnionOtherChildrenLabel,
   toRomanNumeral,
 } from '../../lib/archivalTreeModel.js';
+import { cx } from '../../lib/cx.js';
 import { scrollBehaviorForMotion } from '../../lib/keyboardNav.js';
 import { formatTreeCardName } from '../../lib/treeNodeDisplay.js';
 import { KINLOOM_VOCABULARY } from '../../lib/vocabulary.js';
+import cssMod0 from '../../pages/NotFoundPage.module.css';
+import cssMod1 from '../../pages/TreeAndMapPage.module.css';
 import { initialsOf, resolveAssetUrl } from '../Atoms.js';
+
+const uiStyles: Readonly<Record<string, string>> = { ...cssMod0, ...cssMod1 };
 
 export interface TreePedigreeRollProps {
   readonly model: ArchivalTreeModel;
@@ -68,7 +73,7 @@ const RollPersonCard: React.FC<RollPersonCardProps> = ({
   return (
     <button
       type="button"
-      className={classes}
+      className={cx(uiStyles, classes)}
       data-person-id={person.id}
       aria-label={`Inspect ${person.full_name}`}
       aria-pressed={isSelected}
@@ -76,20 +81,20 @@ const RollPersonCard: React.FC<RollPersonCardProps> = ({
         onSelect(person);
       }}
     >
-      <span className="tree-roll-avatar" aria-hidden="true">
+      <span className={cx(uiStyles, 'tree-roll-avatar')} aria-hidden="true">
         {thumbUrl ? (
-          <img src={thumbUrl} alt="" className="tree-roll-avatar-img" />
+          <img src={thumbUrl} alt="" className={cx(uiStyles, 'tree-roll-avatar-img')} />
         ) : (
-          <span className="tree-roll-avatar-initials">{initialsOf(person.full_name)}</span>
+          <span className={cx(uiStyles, 'tree-roll-avatar-initials')}>{initialsOf(person.full_name)}</span>
         )}
       </span>
-      <span className="tree-roll-card-copy">
-        <span className="tree-roll-card-name">{person.full_name}</span>
-        <span className="tree-roll-card-dates">
+      <span className={cx(uiStyles, 'tree-roll-card-copy')}>
+        <span className={cx(uiStyles, 'tree-roll-card-name')}>{person.full_name}</span>
+        <span className={cx(uiStyles, 'tree-roll-card-dates')}>
           {formatCardLifespan(person)}
           {badgeLabel ? ` · ${badgeLabel}` : ''}
         </span>
-        {spouseLabel && <span className="tree-roll-card-spouse">{spouseLabel}</span>}
+        {spouseLabel && <span className={cx(uiStyles, 'tree-roll-card-spouse')}>{spouseLabel}</span>}
       </span>
     </button>
   );
@@ -138,18 +143,27 @@ const UnionAttachments: React.FC<UnionAttachmentsProps> = ({
       : null;
 
   return (
-    <div className="tree-roll-attachments">
-      {marriageCaption && <div className="tree-roll-union-caption">{marriageCaption}</div>}
+    <div className={cx(uiStyles, 'tree-roll-attachments')}>
+      {marriageCaption && <div className={cx(uiStyles, 'tree-roll-union-caption')}>{marriageCaption}</div>}
 
       {earlyChildren.length > 0 && (
         <div
-          className="tree-early-strip"
+          className={cx(uiStyles, 'tree-early-strip')}
           role="group"
           aria-label={KINLOOM_VOCABULARY.tree.diedYoungTooltip}
           title={KINLOOM_VOCABULARY.tree.diedYoungTooltip}
         >
-          <span className="tree-early-strip-heading" title={KINLOOM_VOCABULARY.tree.diedYoungTooltip}>
-            <svg className="tree-early-sprig" viewBox="0 0 16 16" width="13" height="13" aria-hidden="true">
+          <span
+            className={cx(uiStyles, 'tree-early-strip-heading')}
+            title={KINLOOM_VOCABULARY.tree.diedYoungTooltip}
+          >
+            <svg
+              className={cx(uiStyles, 'tree-early-sprig')}
+              viewBox="0 0 16 16"
+              width="13"
+              height="13"
+              aria-hidden="true"
+            >
               <path
                 d="M8 14V6M8 9C5.5 9 4 7.5 4 5.5C6 5.5 8 7 8 9ZM8 7C10.5 7 12 5.5 12 3.5C10 3.5 8 5 8 7Z"
                 fill="none"
@@ -161,7 +175,7 @@ const UnionAttachments: React.FC<UnionAttachmentsProps> = ({
             </svg>
             {KINLOOM_VOCABULARY.tree.diedYoung} ({earlyChildren.length})
           </span>
-          <div className="tree-early-chip-row">
+          <div className={cx(uiStyles, 'tree-early-chip-row')}>
             {earlyChildren.map((child) => {
               const isSelected = selectedPersonId === child.id;
               const isLit = Boolean(spotlight?.highlightedPersonIds.has(child.id));
@@ -171,15 +185,22 @@ const UnionAttachments: React.FC<UnionAttachmentsProps> = ({
                   key={child.id}
                   type="button"
                   data-person-id={child.id}
-                  className={`tree-node-card tree-early-chip${isSelected ? ' is-selected' : ''}${isLit ? ' is-lit' : ''}${dimmed ? ' is-dimmed' : ''}`}
+                  className={cx(
+                    uiStyles,
+                    `tree-node-card tree-early-chip${isSelected ? ' is-selected' : ''}${isLit ? ' is-lit' : ''}${dimmed ? ' is-dimmed' : ''}`
+                  )}
                   aria-label={`Inspect ${child.full_name}`}
                   aria-pressed={isSelected}
                   onClick={() => {
                     onSelectPerson(child);
                   }}
                 >
-                  <span className="tree-early-chip-name">{child.given_name || child.full_name}</span>
-                  <span className="tree-early-chip-years">{formatEarlyLossAgeLabel(child)}</span>
+                  <span className={cx(uiStyles, 'tree-early-chip-name')}>
+                    {child.given_name || child.full_name}
+                  </span>
+                  <span className={cx(uiStyles, 'tree-early-chip-years')}>
+                    {formatEarlyLossAgeLabel(child)}
+                  </span>
                 </button>
               );
             })}
@@ -197,17 +218,17 @@ const UnionAttachments: React.FC<UnionAttachmentsProps> = ({
             mode: model.effectiveMode,
           });
           return (
-            <div className="tree-roll-siblings-block">
+            <div className={cx(uiStyles, 'tree-roll-siblings-block')}>
               <button
                 type="button"
-                className={`tree-sibling-pill${union.isExpanded ? ' is-expanded' : ''}`}
+                className={cx(uiStyles, `tree-sibling-pill${union.isExpanded ? ' is-expanded' : ''}`)}
                 aria-expanded={union.isExpanded}
                 aria-label={toggleLabels.ariaLabel}
                 onClick={() => {
                   onToggleUnionSiblings(union.id);
                 }}
               >
-                <span className="tree-sibling-pill-chevron" aria-hidden="true">
+                <span className={cx(uiStyles, 'tree-sibling-pill-chevron')} aria-hidden="true">
                   {union.isExpanded ? '▾' : '▸'}
                 </span>
                 <span>{toggleLabels.buttonLabel}</span>
@@ -215,7 +236,7 @@ const UnionAttachments: React.FC<UnionAttachmentsProps> = ({
 
               {union.isExpanded && hangingChildren.length > 0 && (
                 <div
-                  className="tree-hanging-grid"
+                  className={cx(uiStyles, 'tree-hanging-grid')}
                   role="list"
                   aria-label={KINLOOM_VOCABULARY.tree.otherSiblingsAria}
                 >
@@ -230,7 +251,11 @@ const UnionAttachments: React.FC<UnionAttachmentsProps> = ({
                         ? `m. ${formatTreeCardName(siblingSpouses[0], 26)}${siblingSpouses.length > 1 ? ` (+${siblingSpouses.length - 1})` : ''}`
                         : undefined;
                     return (
-                      <div key={sibling.id} className="tree-hanging-grid-item" role="listitem">
+                      <div
+                        key={sibling.id}
+                        className={cx(uiStyles, 'tree-hanging-grid-item')}
+                        role="listitem"
+                      >
                         <RollPersonCard
                           person={sibling}
                           isDirect={false}
@@ -294,10 +319,13 @@ export const TreePedigreeRoll: React.FC<TreePedigreeRollProps> = ({
     return (
       <div
         key={unit.id}
-        className={`tree-roll-unit${unit.isDirect ? ' is-direct' : ' is-collateral'}${isRemarried ? ' is-remarried' : ''}${hasSelection && !isUnitLit ? ' is-dimmed' : ''}`}
+        className={cx(
+          uiStyles,
+          `tree-roll-unit${unit.isDirect ? ' is-direct' : ' is-collateral'}${isRemarried ? ' is-remarried' : ''}${hasSelection && !isUnitLit ? ' is-dimmed' : ''}`
+        )}
       >
-        {branchLabel && <div className="tree-roll-branch-caption">{branchLabel}</div>}
-        <div className={`tree-roll-couple-row${members.length === 1 ? ' is-single' : ''}`}>
+        {branchLabel && <div className={cx(uiStyles, 'tree-roll-branch-caption')}>{branchLabel}</div>}
+        <div className={cx(uiStyles, `tree-roll-couple-row${members.length === 1 ? ' is-single' : ''}`)}>
           {members.map((member, idx) => {
             const prevMember = idx > 0 ? members[idx - 1] : null;
             const connectingUnion = prevMember
@@ -312,7 +340,10 @@ export const TreePedigreeRoll: React.FC<TreePedigreeRollProps> = ({
               <React.Fragment key={member.id}>
                 {connectingUnion && (
                   <span
-                    className={`tree-roll-union-hub${spotlight?.highlightedUnionIds.has(connectingUnion.id) ? ' is-lit' : ''}`}
+                    className={cx(
+                      uiStyles,
+                      `tree-roll-union-hub${spotlight?.highlightedUnionIds.has(connectingUnion.id) ? ' is-lit' : ''}`
+                    )}
                     title={
                       connectingUnion.totalMarriagesForPrimary > 1
                         ? `${KINLOOM_VOCABULARY.tree.marriageLabel} ${toRomanNumeral(connectingUnion.marriageOrder)}`
@@ -357,14 +388,14 @@ export const TreePedigreeRoll: React.FC<TreePedigreeRollProps> = ({
   };
 
   return (
-    <div className="tree-roll-viewport">
+    <div className={cx(uiStyles, 'tree-roll-viewport')}>
       {model.generations.length >= 4 && (
-        <nav className="tree-gen-jump-bar" aria-label="Jump to generation">
+        <nav className={cx(uiStyles, 'tree-gen-jump-bar')} aria-label="Jump to generation">
           {model.generations.map((g) => (
             <button
               key={g.gen}
               type="button"
-              className="tree-gen-jump-chip"
+              className={cx(uiStyles, 'tree-gen-jump-chip')}
               onClick={() => {
                 const target = document.getElementById(`tree-roll-gen-${g.gen}`);
                 target?.scrollIntoView({ behavior: scrollBehaviorForMotion(), block: 'start' });
@@ -377,22 +408,26 @@ export const TreePedigreeRoll: React.FC<TreePedigreeRollProps> = ({
       )}
 
       <div
-        className="tree-roll-scroll"
+        className={cx(uiStyles, 'tree-roll-scroll')}
         role="region"
         aria-label={`${familyLabel} ${KINLOOM_VOCABULARY.tree.listRegionSuffix}`}
       >
-        <ol className="tree-roll-generations">
+        <ol className={cx(uiStyles, 'tree-roll-generations')}>
           {model.generations.map((genGroup, idx) => (
-            <li key={genGroup.gen} id={`tree-roll-gen-${genGroup.gen}`} className="tree-roll-generation">
-              <header className="tree-roll-gen-header">
-                <span className="tree-roll-gen-badge">{genGroup.label}</span>
-                <span className="tree-roll-gen-years">{genGroup.yearRange}</span>
+            <li
+              key={genGroup.gen}
+              id={`tree-roll-gen-${genGroup.gen}`}
+              className={cx(uiStyles, 'tree-roll-generation')}
+            >
+              <header className={cx(uiStyles, 'tree-roll-gen-header')}>
+                <span className={cx(uiStyles, 'tree-roll-gen-badge')}>{genGroup.label}</span>
+                <span className={cx(uiStyles, 'tree-roll-gen-years')}>{genGroup.yearRange}</span>
               </header>
-              <div className="tree-roll-gen-units">
+              <div className={cx(uiStyles, 'tree-roll-gen-units')}>
                 {genGroup.units.map((unit) => renderUnit(unit, idx === 0))}
               </div>
               {idx < model.generations.length - 1 && (
-                <div className="tree-roll-gen-connector" aria-hidden="true" />
+                <div className={cx(uiStyles, 'tree-roll-gen-connector')} aria-hidden="true" />
               )}
             </li>
           ))}

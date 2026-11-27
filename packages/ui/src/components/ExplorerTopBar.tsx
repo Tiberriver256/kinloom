@@ -2,10 +2,17 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useArchiveData } from '../context/ArchiveDataContext.js';
 import { useArchiveUi } from '../context/ArchiveUiContext.js';
+import { cx } from '../lib/cx.js';
 import { KINLOOM_VOCABULARY } from '../lib/vocabulary.js';
+import cssMod3 from '../pages/NotFoundPage.module.css';
 import { useKinloomPlugins } from '../plugins/PluginContext.js';
 import { initialsOf } from './Atoms.js';
+import cssMod0 from './ExplorerTopBar.module.css';
+import cssMod1 from './SourceReaderDrawer.module.css';
 import { SignInModal } from './wiki/SignInModal.js';
+import cssMod2 from './wiki/WikiSurfaces.module.css';
+
+const uiStyles: Readonly<Record<string, string>> = { ...cssMod0, ...cssMod1, ...cssMod2, ...cssMod3 };
 
 export const ExplorerTopBar: React.FC = () => {
   const { siteConfig, featuredDocumentId, capabilities, session, dataSource, refreshSession } =
@@ -112,7 +119,7 @@ export const ExplorerTopBar: React.FC = () => {
       {/* biome-ignore lint/a11y/useValidAnchor: skip-to-content landmark anchor */}
       <a
         href="#main-content"
-        className="skip-to-content"
+        className={cx(uiStyles, 'skip-to-content')}
         onClick={() => {
           const target = document.getElementById('main-content');
           if (target) {
@@ -125,61 +132,67 @@ export const ExplorerTopBar: React.FC = () => {
       >
         Skip to content
       </a>
-      <header ref={headerRef} className="topbar">
-        <div className="topbar-left">
-          <Link to="/" className="brand-link">
+      <header ref={headerRef} className={cx(uiStyles, 'topbar')}>
+        <div className={cx(uiStyles, 'topbar-left')}>
+          <Link to="/" className={cx(uiStyles, 'brand-link')}>
             {siteConfig.site.title}
           </Link>
 
-          <nav className="nav-links" aria-label="Primary">
+          <nav className={cx(uiStyles, 'nav-links')} aria-label="Primary">
             <Link
               to="/"
-              className={`nav-pill nav-axis ${isPeopleActive ? 'active' : ''}`}
+              className={cx(uiStyles, `nav-pill nav-axis ${isPeopleActive ? 'active' : ''}`)}
               aria-current={isPeopleActive ? 'page' : undefined}
             >
               {KINLOOM_VOCABULARY.nav.people}
             </Link>
             <Link
               to="/places"
-              className={`nav-pill nav-axis ${isPlacesActive ? 'active' : ''}`}
+              className={cx(uiStyles, `nav-pill nav-axis ${isPlacesActive ? 'active' : ''}`)}
               aria-current={isPlacesActive ? 'page' : undefined}
             >
               {KINLOOM_VOCABULARY.nav.places}
             </Link>
             <Link
               to="/time"
-              className={`nav-pill nav-axis ${isTimeActive ? 'active' : ''}`}
+              className={cx(uiStyles, `nav-pill nav-axis ${isTimeActive ? 'active' : ''}`)}
               aria-current={isTimeActive ? 'page' : undefined}
             >
               {KINLOOM_VOCABULARY.nav.time}
             </Link>
 
-            <span className="nav-divider nav-pill-desktop-only" aria-hidden="true" />
+            <span className={cx(uiStyles, 'nav-divider nav-pill-desktop-only')} aria-hidden="true" />
 
             <Link
               to="/tree"
-              className={`nav-pill ${location.pathname === '/tree' ? 'active' : ''}`}
+              className={cx(uiStyles, `nav-pill ${location.pathname === '/tree' ? 'active' : ''}`)}
               aria-current={location.pathname === '/tree' ? 'page' : undefined}
             >
               {KINLOOM_VOCABULARY.nav.tree}
             </Link>
             <Link
               to="/map"
-              className={`nav-pill ${location.pathname === '/map' ? 'active' : ''}`}
+              className={cx(uiStyles, `nav-pill ${location.pathname === '/map' ? 'active' : ''}`)}
               aria-current={location.pathname === '/map' ? 'page' : undefined}
             >
               {KINLOOM_VOCABULARY.nav.map}
             </Link>
             <Link
               to="/kinship"
-              className={`nav-pill nav-pill-desktop-only ${location.pathname === '/kinship' ? 'active' : ''}`}
+              className={cx(
+                uiStyles,
+                `nav-pill nav-pill-desktop-only ${location.pathname === '/kinship' ? 'active' : ''}`
+              )}
               aria-current={location.pathname === '/kinship' ? 'page' : undefined}
             >
               {KINLOOM_VOCABULARY.nav.kinship}
             </Link>
             <Link
               to="/evidence"
-              className={`nav-pill nav-pill-desktop-only ${location.pathname === '/evidence' ? 'active' : ''}`}
+              className={cx(
+                uiStyles,
+                `nav-pill nav-pill-desktop-only ${location.pathname === '/evidence' ? 'active' : ''}`
+              )}
               aria-current={location.pathname === '/evidence' ? 'page' : undefined}
             >
               {KINLOOM_VOCABULARY.nav.evidence}
@@ -189,7 +202,7 @@ export const ExplorerTopBar: React.FC = () => {
               <Link
                 key={`${route.pluginId}:${route.path}`}
                 to={route.path}
-                className={`nav-pill ${location.pathname === route.path ? 'active' : ''}`}
+                className={cx(uiStyles, `nav-pill ${location.pathname === route.path ? 'active' : ''}`)}
                 aria-current={location.pathname === route.path ? 'page' : undefined}
               >
                 {route.navLabel}
@@ -198,11 +211,11 @@ export const ExplorerTopBar: React.FC = () => {
           </nav>
         </div>
 
-        <div className="topbar-center">
+        <div className={cx(uiStyles, 'topbar-center')}>
           {activeYear !== null && location.pathname.startsWith('/person/') && (
             <Link
               to={`/time?year=${activeYear}`}
-              className="year-readout"
+              className={cx(uiStyles, 'year-readout')}
               aria-live="polite"
               title={`Active timeline year ${activeYear} — click to see where everyone was in ${activeYear}`}
             >
@@ -210,13 +223,17 @@ export const ExplorerTopBar: React.FC = () => {
             </Link>
           )}
 
-          <button type="button" className="nav-pill nav-pill-desktop-only" onClick={handleOpenSources}>
+          <button
+            type="button"
+            className={cx(uiStyles, 'nav-pill nav-pill-desktop-only')}
+            onClick={handleOpenSources}
+          >
             {KINLOOM_VOCABULARY.nav.sources}
           </button>
 
           <button
             type="button"
-            className="nav-pill nav-pill-desktop-only"
+            className={cx(uiStyles, 'nav-pill nav-pill-desktop-only')}
             onClick={openSearch}
             title={KINLOOM_VOCABULARY.nav.searchTooltip}
           >
@@ -226,7 +243,7 @@ export const ExplorerTopBar: React.FC = () => {
           {isInviteViewer && (
             <button
               type="button"
-              className="nav-pill nav-pill-desktop-only"
+              className={cx(uiStyles, 'nav-pill nav-pill-desktop-only')}
               onClick={() => {
                 setSignInOpen(true);
               }}
@@ -237,7 +254,7 @@ export const ExplorerTopBar: React.FC = () => {
 
           <button
             type="button"
-            className="topbar-mobile-icon-btn"
+            className={cx(uiStyles, 'topbar-mobile-icon-btn')}
             onClick={openSearch}
             aria-label={KINLOOM_VOCABULARY.nav.searchAria}
             title={KINLOOM_VOCABULARY.nav.searchAria}
@@ -259,14 +276,14 @@ export const ExplorerTopBar: React.FC = () => {
           </button>
 
           <div
-            className={`topbar-account ${isSignedInMember ? '' : 'topbar-account-mobile-only'}`}
+            className={cx(uiStyles, `topbar-account ${isSignedInMember ? '' : 'topbar-account-mobile-only'}`)}
             ref={accountMenuRef}
           >
             {isSignedInMember ? (
               <button
                 ref={accountTriggerRef}
                 type="button"
-                className={`topbar-account-btn ${accountOpen ? 'is-open' : ''}`}
+                className={cx(uiStyles, `topbar-account-btn ${accountOpen ? 'is-open' : ''}`)}
                 aria-expanded={accountOpen}
                 aria-haspopup="menu"
                 aria-label={`Account menu for ${memberLabel}`}
@@ -274,12 +291,12 @@ export const ExplorerTopBar: React.FC = () => {
                   setAccountOpen((open) => !open);
                 }}
               >
-                <span className="topbar-account-avatar" aria-hidden="true">
+                <span className={cx(uiStyles, 'topbar-account-avatar')} aria-hidden="true">
                   {initialsOf(memberLabel)}
                 </span>
-                <span className="topbar-account-name">{memberLabel}</span>
+                <span className={cx(uiStyles, 'topbar-account-name')}>{memberLabel}</span>
                 <svg
-                  className="topbar-account-caret"
+                  className={cx(uiStyles, 'topbar-account-caret')}
                   width="10"
                   height="10"
                   viewBox="0 0 12 12"
@@ -297,7 +314,7 @@ export const ExplorerTopBar: React.FC = () => {
               <button
                 ref={accountTriggerRef}
                 type="button"
-                className={`topbar-mobile-icon-btn ${accountOpen ? 'is-open' : ''}`}
+                className={cx(uiStyles, `topbar-mobile-icon-btn ${accountOpen ? 'is-open' : ''}`)}
                 aria-expanded={accountOpen}
                 aria-haspopup="menu"
                 aria-label="Archive menu"
@@ -324,29 +341,31 @@ export const ExplorerTopBar: React.FC = () => {
             {accountOpen && (
               <div
                 ref={accountDropdownRef}
-                className="topbar-account-menu"
+                className={cx(uiStyles, 'topbar-account-menu')}
                 role="menu"
                 aria-label={isSignedInMember ? 'Account options' : 'Archive menu'}
               >
                 {isSignedInMember && (
-                  <div className="topbar-account-menu-header">
+                  <div className={cx(uiStyles, 'topbar-account-menu-header')}>
                     <strong>{memberLabel}</strong>
-                    <span className="wiki-role-chip">{session?.role === 'admin' ? 'Admin' : 'Editor'}</span>
+                    <span className={cx(uiStyles, 'wiki-role-chip')}>
+                      {session?.role === 'admin' ? 'Admin' : 'Editor'}
+                    </span>
                   </div>
                 )}
 
                 {isInviteViewer && (
                   <>
-                    <div className="topbar-account-menu-header">
+                    <div className={cx(uiStyles, 'topbar-account-menu-header')}>
                       <strong>
                         {session?.inviteLabel ? `Invite: ${session.inviteLabel}` : 'Family Invite'}
                       </strong>
-                      <span className="wiki-role-chip">Viewer</span>
+                      <span className={cx(uiStyles, 'wiki-role-chip')}>Viewer</span>
                     </div>
                     <button
                       type="button"
                       role="menuitem"
-                      className="topbar-account-item"
+                      className={cx(uiStyles, 'topbar-account-item')}
                       onClick={() => {
                         setAccountOpen(false);
                         setSignInOpen(true);
@@ -354,14 +373,14 @@ export const ExplorerTopBar: React.FC = () => {
                     >
                       Sign in to edit
                     </button>
-                    <div className="topbar-account-divider" role="separator" />
+                    <div className={cx(uiStyles, 'topbar-account-divider')} role="separator" />
                   </>
                 )}
 
                 <button
                   type="button"
                   role="menuitem"
-                  className="topbar-account-item topbar-account-item-mobile-only"
+                  className={cx(uiStyles, 'topbar-account-item topbar-account-item-mobile-only')}
                   onClick={handleOpenSources}
                 >
                   {KINLOOM_VOCABULARY.nav.sources}
@@ -370,7 +389,10 @@ export const ExplorerTopBar: React.FC = () => {
                 <Link
                   to="/evidence"
                   role="menuitem"
-                  className={`topbar-account-item topbar-account-item-mobile-only ${location.pathname === '/evidence' ? 'active' : ''}`}
+                  className={cx(
+                    uiStyles,
+                    `topbar-account-item topbar-account-item-mobile-only ${location.pathname === '/evidence' ? 'active' : ''}`
+                  )}
                   onClick={() => {
                     setAccountOpen(false);
                   }}
@@ -381,7 +403,10 @@ export const ExplorerTopBar: React.FC = () => {
                 <Link
                   to="/kinship"
                   role="menuitem"
-                  className={`topbar-account-item topbar-account-item-mobile-only ${location.pathname === '/kinship' ? 'active' : ''}`}
+                  className={cx(
+                    uiStyles,
+                    `topbar-account-item topbar-account-item-mobile-only ${location.pathname === '/kinship' ? 'active' : ''}`
+                  )}
                   onClick={() => {
                     setAccountOpen(false);
                   }}
@@ -393,7 +418,10 @@ export const ExplorerTopBar: React.FC = () => {
                   <Link
                     to="/changes"
                     role="menuitem"
-                    className={`topbar-account-item ${location.pathname === '/changes' ? 'active' : ''}`}
+                    className={cx(
+                      uiStyles,
+                      `topbar-account-item ${location.pathname === '/changes' ? 'active' : ''}`
+                    )}
                     onClick={() => {
                       setAccountOpen(false);
                     }}
@@ -406,7 +434,10 @@ export const ExplorerTopBar: React.FC = () => {
                   <Link
                     to="/admin"
                     role="menuitem"
-                    className={`topbar-account-item ${location.pathname === '/admin' ? 'active' : ''}`}
+                    className={cx(
+                      uiStyles,
+                      `topbar-account-item ${location.pathname === '/admin' ? 'active' : ''}`
+                    )}
                     onClick={() => {
                       setAccountOpen(false);
                     }}
@@ -417,11 +448,11 @@ export const ExplorerTopBar: React.FC = () => {
 
                 {isSignedInMember && dataSource.logout && (
                   <>
-                    <div className="topbar-account-divider" role="separator" />
+                    <div className={cx(uiStyles, 'topbar-account-divider')} role="separator" />
                     <button
                       type="button"
                       role="menuitem"
-                      className="topbar-account-item is-danger"
+                      className={cx(uiStyles, 'topbar-account-item is-danger')}
                       disabled={signingOut}
                       onClick={() => {
                         void handleLogout();
@@ -437,8 +468,8 @@ export const ExplorerTopBar: React.FC = () => {
         </div>
 
         {pivotTrail.length > 1 && location.pathname.startsWith('/person/') && (
-          <div className="topbar-right">
-            <nav className="breadcrumb-strip" aria-label="Recent pivot trail">
+          <div className={cx(uiStyles, 'topbar-right')}>
+            <nav className={cx(uiStyles, 'breadcrumb-strip')} aria-label="Recent pivot trail">
               <span>Trail:</span>
               {pivotTrail.slice(-3).map((c, idx) => (
                 <React.Fragment key={c.slug}>

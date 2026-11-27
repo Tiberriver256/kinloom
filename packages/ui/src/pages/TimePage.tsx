@@ -12,11 +12,18 @@ import type React from 'react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { initialsOf, resolveAssetUrl } from '../components/Atoms.js';
+import cssMod0 from '../components/Atoms.module.css';
 import { ExplorerTopBar } from '../components/ExplorerTopBar.js';
 import { KinloomFooter } from '../components/KinloomFooter.js';
 import { useArchiveData } from '../context/ArchiveDataContext.js';
+import { cx } from '../lib/cx.js';
 import { useDialogFocusTrap } from '../lib/useDialogFocusTrap.js';
 import { formatReaderLoadError, KINLOOM_VOCABULARY } from '../lib/vocabulary.js';
+import cssMod1 from './IndexPage.module.css';
+import cssMod2 from './PersonPage.module.css';
+import cssMod3 from './TimePage.module.css';
+
+const uiStyles: Readonly<Record<string, string>> = { ...cssMod0, ...cssMod1, ...cssMod2, ...cssMod3 };
 
 const TimePersonCard: React.FC<{
   entry: TimePersonEntry;
@@ -35,33 +42,33 @@ const TimePersonCard: React.FC<{
   }
   const thumb = personThumbMap.get(entry.person.id) || entry.person.portrait_url;
   return (
-    <Link to={targetUrl} className={`time-person-item ${tierClass}`}>
-      <div className="photo-print time-person-thumb" aria-hidden="true">
+    <Link to={targetUrl} className={cx(uiStyles, `time-person-item ${tierClass}`)}>
+      <div className={cx(uiStyles, 'photo-print time-person-thumb')} aria-hidden="true">
         {thumb ? (
           <img src={resolveAssetUrl(thumb, baseUrl)} alt="" loading="lazy" />
         ) : (
-          <span className="photo-print-monogram">{initialsOf(entry.person.full_name)}</span>
+          <span className={cx(uiStyles, 'photo-print-monogram')}>{initialsOf(entry.person.full_name)}</span>
         )}
       </div>
-      <div className="time-person-info">
-        <div className="time-person-name-row">
-          <span className="time-person-name">{entry.person.full_name}</span>
-          {entry.age !== null && <span className="time-person-age">age {entry.age}</span>}
+      <div className={cx(uiStyles, 'time-person-info')}>
+        <div className={cx(uiStyles, 'time-person-name-row')}>
+          <span className={cx(uiStyles, 'time-person-name')}>{entry.person.full_name}</span>
+          {entry.age !== null && <span className={cx(uiStyles, 'time-person-age')}>age {entry.age}</span>}
         </div>
-        <div className="time-person-status">
+        <div className={cx(uiStyles, 'time-person-status')}>
           {entry.exactYearMatch ? `In ${activeYear}: ` : ''}
           {entry.activityTitle}
         </div>
-        <p className="time-person-note">{entry.activityNote}</p>
-        <div className="time-person-tier">{entry.tier}</div>
+        <p className={cx(uiStyles, 'time-person-note')}>{entry.activityNote}</p>
+        <div className={cx(uiStyles, 'time-person-tier')}>{entry.tier}</div>
       </div>
     </Link>
   );
 };
 
 const TimeLocalNote: React.FC<{ ev: ArchiveEvent }> = ({ ev }) => (
-  <div className="time-local-note">
-    <div className="time-local-title">
+  <div className={cx(uiStyles, 'time-local-note')}>
+    <div className={cx(uiStyles, 'time-local-title')}>
       <span>
         {ev.display_date} — {ev.title}
       </span>
@@ -185,20 +192,20 @@ export const TimePage: React.FC = () => {
   return (
     <div>
       <ExplorerTopBar />
-      <main id="main-content" className="time-page">
-        <header className="folio-header axis-page-header time-folio-header">
-          <div className="time-header-top">
-            <div className="time-header-copy">
-              <h1 className="folio-title">
+      <main id="main-content" className={cx(uiStyles, 'time-page')}>
+        <header className={cx(uiStyles, 'folio-header axis-page-header time-folio-header')}>
+          <div className={cx(uiStyles, 'time-header-top')}>
+            <div className={cx(uiStyles, 'time-header-copy')}>
+              <h1 className={cx(uiStyles, 'folio-title')}>
                 {siteConfig.site.familyName} in{' '}
-                <span className="handwritten-year-hero" aria-live="polite">
+                <span className={cx(uiStyles, 'handwritten-year-hero')} aria-live="polite">
                   {activeYear}
                 </span>
               </h1>
-              <p className="folio-lead">{KINLOOM_VOCABULARY.time.lead}</p>
+              <p className={cx(uiStyles, 'folio-lead')}>{KINLOOM_VOCABULARY.time.lead}</p>
             </div>
             {snapshot && (
-              <div className="time-header-summary" aria-live="polite">
+              <div className={cx(uiStyles, 'time-header-summary')} aria-live="polite">
                 {locatedCount} located · {townCount} {townCount === 1 ? 'town' : 'towns'}
               </div>
             )}
@@ -208,7 +215,7 @@ export const TimePage: React.FC = () => {
             <button
               type="button"
               tabIndex={-1}
-              className="time-dock-scrim"
+              className={cx(uiStyles, 'time-dock-scrim')}
               aria-label="Close milestone year picker"
               onClick={() => {
                 setYearSheetOpen(false);
@@ -216,7 +223,7 @@ export const TimePage: React.FC = () => {
             />
           )}
 
-          <div className={`time-scrubber-wrap print-hide ${yearSheetOpen ? 'sheet-open' : ''}`}>
+          <div className={cx(uiStyles, `time-scrubber-wrap print-hide ${yearSheetOpen ? 'sheet-open' : ''}`)}>
             {suggestedYears.length > 0 && (
               // biome-ignore lint/a11y/useAriaPropsSupportedByRole: responsive mobile sheet becomes modal dialog on small viewports
               <div
@@ -225,14 +232,14 @@ export const TimePage: React.FC = () => {
                 role={yearSheetOpen ? 'dialog' : undefined}
                 aria-modal={yearSheetOpen ? 'true' : undefined}
                 aria-label={yearSheetOpen ? 'Milestone years' : undefined}
-                className={`time-anchor-sheet ${yearSheetOpen ? 'open' : ''}`}
+                className={cx(uiStyles, `time-anchor-sheet ${yearSheetOpen ? 'open' : ''}`)}
               >
-                <div className="time-sheet-header">
-                  <span className="time-sheet-title">Milestone years</span>
+                <div className={cx(uiStyles, 'time-sheet-header')}>
+                  <span className={cx(uiStyles, 'time-sheet-title')}>Milestone years</span>
                   <button
                     ref={sheetCloseBtnRef}
                     type="button"
-                    className="time-sheet-close"
+                    className={cx(uiStyles, 'time-sheet-close')}
                     onClick={() => {
                       setYearSheetOpen(false);
                     }}
@@ -240,13 +247,17 @@ export const TimePage: React.FC = () => {
                     Close
                   </button>
                 </div>
-                <div className="time-anchor-caption">Year · people alive</div>
-                <div className="time-anchor-strip" role="group" aria-label="Jump to notable family years">
+                <div className={cx(uiStyles, 'time-anchor-caption')}>Year · people alive</div>
+                <div
+                  className={cx(uiStyles, 'time-anchor-strip')}
+                  role="group"
+                  aria-label="Jump to notable family years"
+                >
                   {suggestedYears.map((m) => (
                     <button
                       key={m.year}
                       type="button"
-                      className={`time-anchor-btn ${activeYear === m.year ? 'active' : ''}`}
+                      className={cx(uiStyles, `time-anchor-btn ${activeYear === m.year ? 'active' : ''}`)}
                       onClick={() => {
                         setYear(m.year);
                         setYearSheetOpen(false);
@@ -254,8 +265,8 @@ export const TimePage: React.FC = () => {
                       aria-label={`${m.label}: ${m.locatedCount} located of ${m.aliveCount} alive in ${m.year}`}
                       title={`${m.year}: ${m.locatedCount} located of ${m.aliveCount} alive in ${m.year}`}
                     >
-                      <span className="time-anchor-year">{m.label}</span>
-                      <span className="time-anchor-count" aria-hidden="true">
+                      <span className={cx(uiStyles, 'time-anchor-year')}>{m.label}</span>
+                      <span className={cx(uiStyles, 'time-anchor-count')} aria-hidden="true">
                         {m.locatedCount}
                       </span>
                     </button>
@@ -264,11 +275,11 @@ export const TimePage: React.FC = () => {
               </div>
             )}
 
-            <div className="time-mobile-dock-bar">
-              <div className="time-dock-stepper">
+            <div className={cx(uiStyles, 'time-mobile-dock-bar')}>
+              <div className={cx(uiStyles, 'time-dock-stepper')}>
                 <button
                   type="button"
-                  className="time-dock-step-btn"
+                  className={cx(uiStyles, 'time-dock-step-btn')}
                   aria-label={
                     prevAnchorYear === null
                       ? 'No earlier milestone year'
@@ -284,12 +295,12 @@ export const TimePage: React.FC = () => {
                 >
                   <ChevronIcon direction="left" />
                 </button>
-                <span className="time-dock-year-readout" aria-hidden="true">
+                <span className={cx(uiStyles, 'time-dock-year-readout')} aria-hidden="true">
                   {activeYear}
                 </span>
                 <button
                   type="button"
-                  className="time-dock-step-btn"
+                  className={cx(uiStyles, 'time-dock-step-btn')}
                   aria-label={
                     nextAnchorYear === null
                       ? 'No later milestone year'
@@ -309,7 +320,7 @@ export const TimePage: React.FC = () => {
               {suggestedYears.length > 0 && (
                 <button
                   type="button"
-                  className="time-dock-jump-btn"
+                  className={cx(uiStyles, 'time-dock-jump-btn')}
                   aria-expanded={yearSheetOpen}
                   aria-controls="time-anchor-sheet"
                   onClick={() => {
@@ -322,8 +333,8 @@ export const TimePage: React.FC = () => {
               )}
             </div>
 
-            <div className="time-slider-row">
-              <span className="time-slider-bound">{TIME_MIN_YEAR}</span>
+            <div className={cx(uiStyles, 'time-slider-row')}>
+              <span className={cx(uiStyles, 'time-slider-bound')}>{TIME_MIN_YEAR}</span>
               <input
                 type="range"
                 min={TIME_MIN_YEAR}
@@ -333,23 +344,23 @@ export const TimePage: React.FC = () => {
                 onChange={(e) => {
                   setYear(Number(e.target.value));
                 }}
-                className="ink-range-slider"
+                className={cx(uiStyles, 'ink-range-slider')}
                 aria-label={`Select year to inspect ${siteConfig.site.familyName} locations`}
               />
-              <span className="time-slider-bound">{TIME_MAX_YEAR}</span>
+              <span className={cx(uiStyles, 'time-slider-bound')}>{TIME_MAX_YEAR}</span>
             </div>
           </div>
         </header>
 
-        {loading && <p className="empty-ring-note">Loading archival snapshot…</p>}
+        {loading && <p className={cx(uiStyles, 'empty-ring-note')}>Loading archival snapshot…</p>}
         {error && (
           <div style={{ marginBottom: 18 }}>
-            <p className="empty-ring-note">
+            <p className={cx(uiStyles, 'empty-ring-note')}>
               {formatReaderLoadError(error, 'Unable to load archive records right now.')}
             </p>
             <button
               type="button"
-              className="pill-btn"
+              className={cx(uiStyles, 'pill-btn')}
               onClick={() => {
                 reloadArchive();
               }}
@@ -363,38 +374,42 @@ export const TimePage: React.FC = () => {
           <>
             {snapshot.macroEvents.length > 0 && primaryMacroEvent && (
               <section
-                className={`time-macro-ribbon ${worldExpanded ? 'is-expanded' : ''}`}
+                className={cx(uiStyles, `time-macro-ribbon ${worldExpanded ? 'is-expanded' : ''}`)}
                 aria-label={`Wider world events in ${activeYear}`}
               >
-                <div className="time-ribbon-label">
+                <div className={cx(uiStyles, 'time-ribbon-label')}>
                   <span>Wider world</span>
                 </div>
                 <button
                   type="button"
-                  className="time-macro-toggle"
+                  className={cx(uiStyles, 'time-macro-toggle')}
                   aria-expanded={worldExpanded}
                   onClick={() => {
                     setWorldExpanded((open) => !open);
                   }}
                 >
-                  <span className="time-macro-toggle-main">
-                    <span className="time-macro-toggle-tag">World</span>
-                    <strong className="time-macro-toggle-title">{primaryMacroEvent.title}</strong>
+                  <span className={cx(uiStyles, 'time-macro-toggle-main')}>
+                    <span className={cx(uiStyles, 'time-macro-toggle-tag')}>World</span>
+                    <strong className={cx(uiStyles, 'time-macro-toggle-title')}>
+                      {primaryMacroEvent.title}
+                    </strong>
                     {extraMacroCount > 0 && (
-                      <span className="time-macro-toggle-more">+{extraMacroCount}</span>
+                      <span className={cx(uiStyles, 'time-macro-toggle-more')}>+{extraMacroCount}</span>
                     )}
                   </span>
-                  <span className="time-macro-toggle-action">
+                  <span className={cx(uiStyles, 'time-macro-toggle-action')}>
                     <span>{worldExpanded ? 'Hide' : 'Read'}</span>
                     <ChevronIcon direction={worldExpanded ? 'up' : 'down'} />
                   </span>
                 </button>
-                <div className="time-macro-items">
+                <div className={cx(uiStyles, 'time-macro-items')}>
                   {snapshot.macroEvents.map((ev) => (
-                    <div key={ev.id} className="time-macro-item">
-                      <span className="time-macro-year">{ev.display_date}</span>
+                    <div key={ev.id} className={cx(uiStyles, 'time-macro-item')}>
+                      <span className={cx(uiStyles, 'time-macro-year')}>{ev.display_date}</span>
                       <strong>{ev.title}</strong>
-                      {ev.summary && <span className="time-macro-summary"> — {ev.summary}</span>}
+                      {ev.summary && (
+                        <span className={cx(uiStyles, 'time-macro-summary')}> — {ev.summary}</span>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -402,7 +417,7 @@ export const TimePage: React.FC = () => {
             )}
 
             {snapshot.lanes.length === 0 ? (
-              <section className="time-empty-state">
+              <section className={cx(uiStyles, 'time-empty-state')}>
                 <p>
                   {KINLOOM_VOCABULARY.time.emptyStatePrefix} <strong>{activeYear}</strong>.
                   {fallbackAnchorA !== undefined && (
@@ -411,7 +426,7 @@ export const TimePage: React.FC = () => {
                       Try a milestone year (such as{' '}
                       <button
                         type="button"
-                        className="ink-inline-btn"
+                        className={cx(uiStyles, 'ink-inline-btn')}
                         onClick={() => {
                           setYear(fallbackAnchorA);
                         }}
@@ -424,7 +439,7 @@ export const TimePage: React.FC = () => {
                           or{' '}
                           <button
                             type="button"
-                            className="ink-inline-btn"
+                            className={cx(uiStyles, 'ink-inline-btn')}
                             onClick={() => {
                               setYear(fallbackAnchorB);
                             }}
@@ -439,25 +454,28 @@ export const TimePage: React.FC = () => {
                 </p>
               </section>
             ) : (
-              <section className="time-lanes" aria-label={`Town and homestead lanes in ${activeYear}`}>
+              <section
+                className={cx(uiStyles, 'time-lanes')}
+                aria-label={`Town and homestead lanes in ${activeYear}`}
+              >
                 {snapshot.lanes.map((lane) => (
-                  <article key={lane.place.id} className="time-lane">
-                    <div className="time-lane-header">
+                  <article key={lane.place.id} className={cx(uiStyles, 'time-lane')}>
+                    <div className={cx(uiStyles, 'time-lane-header')}>
                       <div>
-                        <h2 className="time-lane-place">
+                        <h2 className={cx(uiStyles, 'time-lane-place')}>
                           <Link to={`/place/${lane.place.slug}`}>{lane.place.name}</Link>
                         </h2>
-                        <div className="time-lane-sub">{lane.place.full_name}</div>
+                        <div className={cx(uiStyles, 'time-lane-sub')}>{lane.place.full_name}</div>
                       </div>
-                      <div className="time-lane-meta">
+                      <div className={cx(uiStyles, 'time-lane-meta')}>
                         <span>
                           {lane.people.length} {lane.people.length === 1 ? 'relative' : 'relatives'}
                         </span>
                       </div>
                     </div>
 
-                    <div className="time-lane-body">
-                      <div className="time-people-row">
+                    <div className={cx(uiStyles, 'time-lane-body')}>
+                      <div className={cx(uiStyles, 'time-people-row')}>
                         {lane.people.map((entry) => (
                           <TimePersonCard
                             key={entry.person.id}
@@ -471,10 +489,10 @@ export const TimePage: React.FC = () => {
 
                       {lane.localEvents.length > 0 && (
                         <aside
-                          className="time-lane-local"
+                          className={cx(uiStyles, 'time-lane-local')}
                           aria-label={`Local dispatches near ${lane.place.name}`}
                         >
-                          <div className="time-local-heading">Local weather and news</div>
+                          <div className={cx(uiStyles, 'time-local-heading')}>Local weather and news</div>
                           {lane.localEvents.map((ev) => (
                             <TimeLocalNote key={ev.id} ev={ev} />
                           ))}
@@ -487,12 +505,15 @@ export const TimePage: React.FC = () => {
             )}
 
             {snapshot.unlocatedPeople.length > 0 && (
-              <section className="time-unlocated-section" aria-label={KINLOOM_VOCABULARY.time.unlocatedAria}>
-                <h2 className="section-heading">
+              <section
+                className={cx(uiStyles, 'time-unlocated-section')}
+                aria-label={KINLOOM_VOCABULARY.time.unlocatedAria}
+              >
+                <h2 className={cx(uiStyles, 'section-heading')}>
                   {KINLOOM_VOCABULARY.time.unlocatedHeadingPrefix} {activeYear} ·{' '}
                   {KINLOOM_VOCABULARY.time.unlocatedHeadingSuffix} ({snapshot.unlocatedPeople.length})
                 </h2>
-                <div className="time-unlocated-list">
+                <div className={cx(uiStyles, 'time-unlocated-list')}>
                   {snapshot.unlocatedPeople.map((entry) => (
                     <Link
                       key={entry.person.id}
@@ -501,14 +522,14 @@ export const TimePage: React.FC = () => {
                           ? `/person/${entry.person.slug}?event=${entry.nearestEventId}`
                           : `/person/${entry.person.slug}`
                       }
-                      className="time-unlocated-row"
+                      className={cx(uiStyles, 'time-unlocated-row')}
                     >
-                      <span className="time-unlocated-name">{entry.person.full_name}</span>
-                      <span className="time-unlocated-years">
+                      <span className={cx(uiStyles, 'time-unlocated-name')}>{entry.person.full_name}</span>
+                      <span className={cx(uiStyles, 'time-unlocated-years')}>
                         {entry.age === null ? '' : `age ${entry.age} · `}
                         {entry.person.birth_year || '?'}–{entry.person.death_year || '?'}
                       </span>
-                      <span className="time-unlocated-note">{entry.activityNote}</span>
+                      <span className={cx(uiStyles, 'time-unlocated-note')}>{entry.activityNote}</span>
                     </Link>
                   ))}
                 </div>

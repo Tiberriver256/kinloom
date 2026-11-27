@@ -4,6 +4,7 @@ import type React from 'react';
 import { useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { DateStamp, resolveAssetUrl, SourceCitationTag } from '../components/Atoms.js';
+import cssMod0 from '../components/Atoms.module.css';
 import { ExplorerTopBar } from '../components/ExplorerTopBar.js';
 import { KinloomFooter } from '../components/KinloomFooter.js';
 import { LocalSurveyMap } from '../components/LocalSurveyMap.js';
@@ -13,9 +14,22 @@ import { EntityEditDrawer, type EntityEditDrawerSection } from '../components/wi
 import { RevisionHistoryPanel } from '../components/wiki/RevisionHistoryPanel.js';
 import { TalkPanel } from '../components/wiki/TalkPanel.js';
 import { WikiActionBar, type WikiEntityTab } from '../components/wiki/WikiActionBar.js';
+import cssMod1 from '../components/wiki/WikiSurfaces.module.css';
 import { useArchiveData } from '../context/ArchiveDataContext.js';
+import { cx } from '../lib/cx.js';
 import { formatReaderLoadError, KINLOOM_VOCABULARY } from '../lib/vocabulary.js';
 import { PluginSlot } from '../plugins/PluginContext.js';
+import cssMod2 from './IndexPage.module.css';
+import cssMod3 from './PersonPage.module.css';
+import cssMod4 from './PlacePage.module.css';
+
+const uiStyles: Readonly<Record<string, string>> = {
+  ...cssMod0,
+  ...cssMod1,
+  ...cssMod2,
+  ...cssMod3,
+  ...cssMod4,
+};
 
 type ScopeMode = 'exact' | 'radius15' | 'county';
 
@@ -216,7 +230,7 @@ export const PlacePage: React.FC = () => {
     return (
       <div>
         <ExplorerTopBar />
-        <main id="main-content" className="place-page">
+        <main id="main-content" className={cx(uiStyles, 'place-page')}>
           Loading archive…
         </main>
       </div>
@@ -226,14 +240,14 @@ export const PlacePage: React.FC = () => {
     return (
       <div>
         <ExplorerTopBar />
-        <main id="main-content" className="place-page">
+        <main id="main-content" className={cx(uiStyles, 'place-page')}>
           <h1>{KINLOOM_VOCABULARY.place.notFoundHeading}</h1>
           <p>{formatReaderLoadError(error, 'We could not find that place in the archive.')}</p>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center' }}>
             {error && (
               <button
                 type="button"
-                className="pill-btn"
+                className={cx(uiStyles, 'pill-btn')}
                 onClick={() => {
                   reloadArchive();
                 }}
@@ -241,7 +255,7 @@ export const PlacePage: React.FC = () => {
                 Try again
               </button>
             )}
-            <Link to="/places" className="pill-btn">
+            <Link to="/places" className={cx(uiStyles, 'pill-btn')}>
               {KINLOOM_VOCABULARY.place.returnToPlaces}
             </Link>
           </div>
@@ -267,29 +281,29 @@ export const PlacePage: React.FC = () => {
   return (
     <div>
       <ExplorerTopBar />
-      <main id="main-content" className="place-page">
+      <main id="main-content" className={cx(uiStyles, 'place-page')}>
         {occupancyRows.rows.length > 0 && (
           <div
-            className="print-hide"
+            className={cx(uiStyles, 'print-hide')}
             style={{ marginBottom: 14, display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'center' }}
           >
-            <Link to={`/time?year=${occupancyRows.minYear}`} className="ink-link-btn">
+            <Link to={`/time?year=${occupancyRows.minYear}`} className={cx(uiStyles, 'ink-link-btn')}>
               See Family in {occupancyRows.minYear} →
             </Link>
           </div>
         )}
 
-        <section className="place-map-box">
+        <section className={cx(uiStyles, 'place-map-box')}>
           <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
             <div>
-              <h1 className="place-dossier-title">{place.full_name}</h1>
+              <h1 className={cx(uiStyles, 'place-dossier-title')}>{place.full_name}</h1>
               {(() => {
                 const effectivePronunciation = resolvePlacePronunciation(place, pronunciations);
                 if (!effectivePronunciation && !capabilities.canEdit) {
                   return null;
                 }
                 return (
-                  <div className="place-pronunciation-row">
+                  <div className={cx(uiStyles, 'place-pronunciation-row')}>
                     {effectivePronunciation ? (
                       <>
                         <PronunciationBadge
@@ -300,7 +314,7 @@ export const PlacePage: React.FC = () => {
                         {capabilities.canEdit && (
                           <button
                             type="button"
-                            className="pronunciation-edit-link print-hide"
+                            className={cx(uiStyles, 'pronunciation-edit-link print-hide')}
                             onClick={() => {
                               setEditInitialSection('pronunciation');
                               setWikiTab('edit');
@@ -314,7 +328,7 @@ export const PlacePage: React.FC = () => {
                     ) : (
                       <button
                         type="button"
-                        className="pronunciation-edit-link print-hide"
+                        className={cx(uiStyles, 'pronunciation-edit-link print-hide')}
                         onClick={() => {
                           setEditInitialSection('pronunciation');
                           setWikiTab('edit');
@@ -329,14 +343,14 @@ export const PlacePage: React.FC = () => {
             </div>
 
             <div
-              className="filter-bar place-scope-bar print-hide"
+              className={cx(uiStyles, 'filter-bar place-scope-bar print-hide')}
               style={{ margin: 0 }}
               role="group"
               aria-label="Map area filter"
             >
               <button
                 type="button"
-                className={`pill-btn ${scopeMode === 'exact' ? 'active' : ''}`}
+                className={cx(uiStyles, `pill-btn ${scopeMode === 'exact' ? 'active' : ''}`)}
                 onClick={() => {
                   setScopeMode('exact');
                 }}
@@ -345,7 +359,7 @@ export const PlacePage: React.FC = () => {
               </button>
               <button
                 type="button"
-                className={`pill-btn ${scopeMode === 'radius15' ? 'active' : ''}`}
+                className={cx(uiStyles, `pill-btn ${scopeMode === 'radius15' ? 'active' : ''}`)}
                 onClick={() => {
                   setScopeMode('radius15');
                 }}
@@ -354,14 +368,14 @@ export const PlacePage: React.FC = () => {
               </button>
               <button
                 type="button"
-                className={`pill-btn ${scopeMode === 'county' ? 'active' : ''}`}
+                className={cx(uiStyles, `pill-btn ${scopeMode === 'county' ? 'active' : ''}`)}
                 onClick={() => {
                   setScopeMode('county');
                 }}
               >
                 Historical County
               </button>
-              <Link to={`/map?place=${place.slug}`} className="ink-link-btn">
+              <Link to={`/map?place=${place.slug}`} className={cx(uiStyles, 'ink-link-btn')}>
                 Migration Map →
               </Link>
             </div>
@@ -402,19 +416,19 @@ export const PlacePage: React.FC = () => {
           (place.summary ||
             placePhotoSrc ||
             (place.historical_names && place.historical_names.length > 0)) && (
-            <section className="place-map-box place-history-section">
+            <section className={cx(uiStyles, 'place-map-box place-history-section')}>
               <h2 style={{ fontFamily: 'var(--font-serif)', margin: '0 0 12px' }}>Historical Profile</h2>
-              <div className={placePhotoSrc ? 'place-history-grid' : undefined}>
-                <div className="place-history-copy">
-                  {place.summary && <p className="place-history-summary">{place.summary}</p>}
+              <div className={cx(uiStyles, placePhotoSrc ? 'place-history-grid' : undefined)}>
+                <div className={cx(uiStyles, 'place-history-copy')}>
+                  {place.summary && <p className={cx(uiStyles, 'place-history-summary')}>{place.summary}</p>}
                   {place.historical_names && place.historical_names.length > 0 && (
                     <div
-                      className="place-historical-names"
+                      className={cx(uiStyles, 'place-historical-names')}
                       role="region"
                       aria-label="Historical jurisdictions"
                     >
-                      <span className="place-historical-names-label">Jurisdictions:</span>
-                      <div className="place-historical-names-list">
+                      <span className={cx(uiStyles, 'place-historical-names-label')}>Jurisdictions:</span>
+                      <div className={cx(uiStyles, 'place-historical-names-list')}>
                         {place.historical_names.map((hn) => {
                           const span =
                             hn.valid_from || hn.valid_to
@@ -423,7 +437,7 @@ export const PlacePage: React.FC = () => {
                           return (
                             <span
                               key={`${hn.name}-${hn.valid_from || ''}-${hn.valid_to || ''}`}
-                              className="place-jurisdiction-chip"
+                              className={cx(uiStyles, 'place-jurisdiction-chip')}
                             >
                               {hn.name}
                               {span}
@@ -438,7 +452,7 @@ export const PlacePage: React.FC = () => {
                   )}
                 </div>
                 {placePhotoSrc && placePhotoMedia && (
-                  <figure className="place-history-figure">
+                  <figure className={cx(uiStyles, 'place-history-figure')}>
                     <MediaPlayer media={placePhotoMedia} baseUrl={baseUrl} variant="full" />
                     {place.photo_caption && <figcaption>{place.photo_caption}</figcaption>}
                   </figure>
@@ -448,7 +462,7 @@ export const PlacePage: React.FC = () => {
           )}
 
         {isReadingProfile && (
-          <section className="place-map-box">
+          <section className={cx(uiStyles, 'place-map-box')}>
             <div
               style={{
                 display: 'flex',
@@ -472,7 +486,9 @@ export const PlacePage: React.FC = () => {
             </div>
 
             {occupancyRows.rows.length === 0 ? (
-              <p className="empty-ring-note">No family residency records found in this area.</p>
+              <p className={cx(uiStyles, 'empty-ring-note')}>
+                No family residency records found in this area.
+              </p>
             ) : (
               <div>
                 {occupancyRows.rows.map((row) => {
@@ -485,16 +501,16 @@ export const PlacePage: React.FC = () => {
                     <Link
                       key={row.person.id}
                       to={`/person/${row.person.slug}?event=${row.firstEventId}`}
-                      className="occupancy-row"
+                      className={cx(uiStyles, 'occupancy-row')}
                       aria-label={`Jump to ${row.person.full_name} (${yearLabel})`}
                     >
-                      <span className="occupancy-row-header">
-                        <span className="occupancy-person-name">{row.person.full_name}</span>
-                        <span className="occupancy-year-label">{yearLabel}</span>
+                      <span className={cx(uiStyles, 'occupancy-row-header')}>
+                        <span className={cx(uiStyles, 'occupancy-person-name')}>{row.person.full_name}</span>
+                        <span className={cx(uiStyles, 'occupancy-year-label')}>{yearLabel}</span>
                       </span>
-                      <span className="occupancy-track" aria-hidden="true">
+                      <span className={cx(uiStyles, 'occupancy-track')} aria-hidden="true">
                         <span
-                          className={`occupancy-bar ${row.tier.toLowerCase()}`}
+                          className={cx(uiStyles, `occupancy-bar ${row.tier.toLowerCase()}`)}
                           style={{ left: `${leftPct}%`, width: `${Math.min(100 - leftPct, widthPct)}%` }}
                         />
                       </span>
@@ -507,7 +523,7 @@ export const PlacePage: React.FC = () => {
         )}
 
         {isReadingProfile && (
-          <section className="place-map-box">
+          <section className={cx(uiStyles, 'place-map-box')}>
             <div
               style={{
                 display: 'flex',
@@ -520,10 +536,10 @@ export const PlacePage: React.FC = () => {
               <h2 style={{ fontFamily: 'var(--font-serif)', margin: 0 }}>
                 {KINLOOM_VOCABULARY.place.localHistoryHeading}
               </h2>
-              <div className="filter-bar place-decade-bar print-hide" style={{ margin: 0 }}>
+              <div className={cx(uiStyles, 'filter-bar place-decade-bar print-hide')} style={{ margin: 0 }}>
                 <button
                   type="button"
-                  className={`pill-btn ${effectiveDecadeFilter === 'all' ? 'active' : ''}`}
+                  className={cx(uiStyles, `pill-btn ${effectiveDecadeFilter === 'all' ? 'active' : ''}`)}
                   aria-pressed={effectiveDecadeFilter === 'all'}
                   onClick={() => {
                     setDecadeFilter('all');
@@ -535,7 +551,10 @@ export const PlacePage: React.FC = () => {
                   <button
                     key={d}
                     type="button"
-                    className={`pill-btn ${effectiveDecadeFilter === String(d) ? 'active' : ''}`}
+                    className={cx(
+                      uiStyles,
+                      `pill-btn ${effectiveDecadeFilter === String(d) ? 'active' : ''}`
+                    )}
                     aria-pressed={effectiveDecadeFilter === String(d)}
                     onClick={() => {
                       setDecadeFilter(String(d));
@@ -548,12 +567,12 @@ export const PlacePage: React.FC = () => {
             </div>
 
             {localRecords.length === 0 ? (
-              <p className="empty-ring-note">{KINLOOM_VOCABULARY.place.localHistoryEmpty}</p>
+              <p className={cx(uiStyles, 'empty-ring-note')}>{KINLOOM_VOCABULARY.place.localHistoryEmpty}</p>
             ) : (
               <div style={{ display: 'grid', gap: 12 }}>
                 {localRecords.map((ev: ArchiveEvent) => (
-                  <article key={ev.id} className="story-card" style={{ padding: 14 }}>
-                    <div className="story-card-top">
+                  <article key={ev.id} className={cx(uiStyles, 'story-card')} style={{ padding: 14 }}>
+                    <div className={cx(uiStyles, 'story-card-top')}>
                       <DateStamp displayDate={ev.display_date} edtf={ev.edtf_date} />
                     </div>
                     <h3 style={{ fontFamily: 'var(--font-serif)', margin: '0 0 6px', fontSize: '1.02rem' }}>
@@ -561,12 +580,12 @@ export const PlacePage: React.FC = () => {
                     </h3>
                     <p style={{ margin: 0, fontSize: '0.9rem' }}>{ev.summary}</p>
                     {ev.source_url && (
-                      <div className="print-hide" style={{ marginTop: 8 }}>
+                      <div className={cx(uiStyles, 'print-hide')} style={{ marginTop: 8 }}>
                         <a
                           href={ev.source_url}
                           target="_blank"
                           rel="noreferrer"
-                          className="pill-btn"
+                          className={cx(uiStyles, 'pill-btn')}
                           style={{ textDecoration: 'none' }}
                         >
                           View External Record ↗

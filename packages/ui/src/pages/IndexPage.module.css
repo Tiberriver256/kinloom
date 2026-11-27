@@ -268,16 +268,15 @@ select.pill-btn option {
   margin: 0 0 12px;
 }
 
-
 /* Responsive overrides */
 
 @media (max-width: 960px) {
   .wire-banner {
-grid-template-columns: 1fr;
+    grid-template-columns: 1fr;
   }
 
   .person-grid {
-grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
@@ -286,32 +285,32 @@ grid-template-columns: repeat(2, minmax(0, 1fr));
   :global(.time-page),
   :global(.places-index-page),
   :global(.place-page) {
-padding: 12px 16px 48px;
+    padding: 12px 16px 48px;
   }
 
   .index-banner {
-padding: 0 0 8px;
+    padding: 0 0 8px;
     margin-bottom: 2px;
   }
 
   .index-banner h1 {
-font-size: 1.38rem;
+    font-size: 1.38rem;
     margin-bottom: 3px;
   }
 
   .index-banner p {
-font-size: 0.86rem;
+    font-size: 0.86rem;
     line-height: 1.38;
   }
 
   .index-filter-bar {
-gap: 6px;
+    gap: 6px;
     margin-bottom: 8px;
   }
 
   .search-input,
   .index-filter-bar .search-input {
-padding: 8px 10px;
+    padding: 8px 10px;
     font-size: 1rem;
     min-height: 44px;
     width: 100%;
@@ -326,24 +325,24 @@ padding: 8px 10px;
   :global(.person-family-chip),
   :global(.person-section-jump-link),
   :global(.pronunciation-variant-btn) {
-min-height: 44px;
+    min-height: 44px;
     display: inline-flex;
     align-items: center;
   }
 
   .index-filter-actions {
-width: 100%;
+    width: 100%;
     flex-wrap: wrap;
     justify-content: flex-start;
     gap: 8px 10px;
   }
 
   .index-export-btn {
-margin-left: 0;
+    margin-left: 0;
   }
 
   .index-filter-actions .pill-btn {
-font-size: 0.8rem;
+    font-size: 0.8rem;
     padding: 6px 11px;
     min-height: 44px;
     display: inline-flex;
@@ -354,47 +353,47 @@ font-size: 0.8rem;
   }
 
   .index-filter-actions :global(.wiki-btn-sm) {
-min-height: 44px;
+    min-height: 44px;
     padding: 6px 12px;
   }
 
   .index-section-heading {
-font-size: 1.02rem;
+    font-size: 1.02rem;
     margin: 20px 0 4px;
     padding-bottom: 4px;
   }
 
   .index-section-heading:global(.is-first) {
-margin-top: 14px;
+    margin-top: 14px;
   }
 
   .search-input {
-min-width: 0;
+    min-width: 0;
     width: 100%;
   }
 
   .person-grid {
-grid-template-columns: 1fr;
+    grid-template-columns: 1fr;
     margin-bottom: 22px;
   }
 
   .person-card {
-padding: 11px 2px;
+    padding: 11px 2px;
     gap: 12px;
   }
 
   .person-card-portrait {
-width: 54px;
+    width: 54px;
     height: 66px;
     padding: 3px;
   }
 
   .person-card-body h3 {
-font-size: 1.06rem;
+    font-size: 1.06rem;
   }
 
   :global(.map-zoom-controls) .pill-btn {
-min-width: 44px;
+    min-width: 44px;
     min-height: 44px;
     padding: 0;
     display: inline-flex;

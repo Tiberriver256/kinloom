@@ -6,6 +6,10 @@ import {
   safeSessionStorage,
   shouldAttemptChunkReload,
 } from '../lib/clientTelemetry.js';
+import { cx } from '../lib/cx.js';
+import cssMod0 from '../pages/TreeAndMapPage.module.css';
+
+const uiStyles = cssMod0;
 
 interface BoundaryState {
   hasError: boolean;
@@ -77,26 +81,34 @@ export class AppErrorBoundary extends React.Component<AppErrorBoundaryProps, Bou
     const kicker = (this.props.siteTitle || 'Family Archive').toUpperCase();
 
     return (
-      <main className="archive-recovery-page" data-testid="archive-recovery-card">
-        <div className="archive-recovery-card" role="alert">
-          <div className="archive-recovery-kicker">{kicker}</div>
-          <h1 className="archive-recovery-title">{heading}</h1>
-          <p className="archive-recovery-lead">
+      <main className={cx(uiStyles, 'archive-recovery-page')} data-testid="archive-recovery-card">
+        <div className={cx(uiStyles, 'archive-recovery-card')} role="alert">
+          <div className={cx(uiStyles, 'archive-recovery-kicker')}>{kicker}</div>
+          <h1 className={cx(uiStyles, 'archive-recovery-title')}>{heading}</h1>
+          <p className={cx(uiStyles, 'archive-recovery-lead')}>
             {chunkStale
               ? 'This page was updated since you opened it. Reload to view the latest version.'
               : 'Something interrupted loading this page. Reload the page or return to the family index.'}
           </p>
-          <div className="archive-recovery-actions">
-            <button type="button" className="archive-recovery-btn primary" onClick={reloadCurrentPage}>
+          <div className={cx(uiStyles, 'archive-recovery-actions')}>
+            <button
+              type="button"
+              className={cx(uiStyles, 'archive-recovery-btn primary')}
+              onClick={reloadCurrentPage}
+            >
               Reload page
             </button>
-            <button type="button" className="archive-recovery-btn" onClick={this.returnToArchiveHome}>
+            <button
+              type="button"
+              className={cx(uiStyles, 'archive-recovery-btn')}
+              onClick={this.returnToArchiveHome}
+            >
               Return to Archive Home
             </button>
           </div>
-          <details className="archive-recovery-details">
+          <details className={cx(uiStyles, 'archive-recovery-details')}>
             <summary>Technical details</summary>
-            <pre className="archive-recovery-tech">
+            <pre className={cx(uiStyles, 'archive-recovery-tech')}>
               {error.message}
               {'\n'}
               build: {getAppBuildId()}

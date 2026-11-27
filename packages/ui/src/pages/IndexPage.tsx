@@ -4,12 +4,19 @@ import type React from 'react';
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { EmptyStateNotice, initialsOf, resolveAssetUrl } from '../components/Atoms.js';
+import cssMod0 from '../components/Atoms.module.css';
 import { ExplorerTopBar } from '../components/ExplorerTopBar.js';
 import { KinloomFooter } from '../components/KinloomFooter.js';
 import { CreateEntityModal } from '../components/wiki/CreateEntityModal.js';
+import cssMod1 from '../components/wiki/WikiSurfaces.module.css';
 import { useArchiveData } from '../context/ArchiveDataContext.js';
+import { cx } from '../lib/cx.js';
 import { formatPhotoDocumentCount, formatReaderLoadError, KINLOOM_VOCABULARY } from '../lib/vocabulary.js';
 import { PluginSlot } from '../plugins/PluginContext.js';
+import cssMod2 from './IndexPage.module.css';
+import cssMod3 from './PersonPage.module.css';
+
+const uiStyles: Readonly<Record<string, string>> = { ...cssMod0, ...cssMod1, ...cssMod2, ...cssMod3 };
 
 function byBirthThenName(a: Person, b: Person): number {
   if (a.birth_year === null && b.birth_year === null) {
@@ -188,8 +195,8 @@ export const IndexPage: React.FC = () => {
   return (
     <div>
       <ExplorerTopBar />
-      <main id="main-content" className="index-page">
-        <section className="wire-banner index-banner">
+      <main id="main-content" className={cx(uiStyles, 'index-page')}>
+        <section className={cx(uiStyles, 'wire-banner index-banner')}>
           <div>
             <h1>{siteConfig.site.familyName}</h1>
             <p>
@@ -207,7 +214,7 @@ export const IndexPage: React.FC = () => {
             <p>{formatReaderLoadError(error, 'Unable to load archive records right now.')}</p>
             <button
               type="button"
-              className="pill-btn"
+              className={cx(uiStyles, 'pill-btn')}
               onClick={() => {
                 reloadArchive();
               }}
@@ -219,10 +226,10 @@ export const IndexPage: React.FC = () => {
 
         {bundle && (
           <>
-            <div className="filter-bar index-filter-bar">
+            <div className={cx(uiStyles, 'filter-bar index-filter-bar')}>
               <input
                 type="search"
-                className="search-input"
+                className={cx(uiStyles, 'search-input')}
                 placeholder="Search name or place…"
                 value={query}
                 onChange={(e) => {
@@ -230,11 +237,19 @@ export const IndexPage: React.FC = () => {
                 }}
                 aria-label={`Search ${siteConfig.site.familyName} relatives by name or place`}
               />
-              <div className={`index-filter-actions${capabilities.canEdit ? ' has-editor-actions' : ''}`}>
-                <div className="index-filter-toggles">
+              <div
+                className={cx(
+                  uiStyles,
+                  `index-filter-actions${capabilities.canEdit ? ' has-editor-actions' : ''}`
+                )}
+              >
+                <div className={cx(uiStyles, 'index-filter-toggles')}>
                   <button
                     type="button"
-                    className={`pill-btn index-media-filter-btn ${onlyWithMedia ? 'active' : ''}`}
+                    className={cx(
+                      uiStyles,
+                      `pill-btn index-media-filter-btn ${onlyWithMedia ? 'active' : ''}`
+                    )}
                     aria-pressed={onlyWithMedia}
                     onClick={() => {
                       setOnlyWithMedia((v) => !v);
@@ -245,7 +260,7 @@ export const IndexPage: React.FC = () => {
                   {(query.trim() || onlyWithMedia) && (
                     <button
                       type="button"
-                      className="pill-btn index-clear-btn"
+                      className={cx(uiStyles, 'pill-btn index-clear-btn')}
                       onClick={() => {
                         setQuery('');
                         setOnlyWithMedia(false);
@@ -258,7 +273,7 @@ export const IndexPage: React.FC = () => {
                 {capabilities.canEdit && (
                   <button
                     type="button"
-                    className="wiki-btn-secondary wiki-btn-sm index-add-person-btn"
+                    className={cx(uiStyles, 'wiki-btn-secondary wiki-btn-sm index-add-person-btn')}
                     onClick={() => {
                       setCreateOpen(true);
                     }}
@@ -268,7 +283,7 @@ export const IndexPage: React.FC = () => {
                 )}
                 <button
                   type="button"
-                  className="pill-btn index-export-btn"
+                  className={cx(uiStyles, 'pill-btn index-export-btn')}
                   disabled={filteredPeople.length === 0}
                   onClick={handleExportFilteredGedcom}
                   title="Download a family tree file of the relatives currently shown"
@@ -303,7 +318,7 @@ export const IndexPage: React.FC = () => {
                   query.trim() || onlyWithMedia ? (
                     <button
                       type="button"
-                      className="pill-btn"
+                      className={cx(uiStyles, 'pill-btn')}
                       onClick={() => {
                         setQuery('');
                         setOnlyWithMedia(false);
@@ -317,11 +332,16 @@ export const IndexPage: React.FC = () => {
             ) : (
               sections.map((section, idx) => (
                 <section key={section.id} aria-label={section.heading}>
-                  <h2 className={`section-heading index-section-heading ${idx === 0 ? 'is-first' : ''}`}>
+                  <h2
+                    className={cx(
+                      uiStyles,
+                      `section-heading index-section-heading ${idx === 0 ? 'is-first' : ''}`
+                    )}
+                  >
                     <span>{section.heading}</span>
-                    <span className="section-heading-count">{section.people.length}</span>
+                    <span className={cx(uiStyles, 'section-heading-count')}>{section.people.length}</span>
                   </h2>
-                  <div className="person-grid">
+                  <div className={cx(uiStyles, 'person-grid')}>
                     {section.people.map((p) => {
                       const primaryPlace = p.primary_place_id
                         ? placesById.get(p.primary_place_id)
@@ -329,22 +349,24 @@ export const IndexPage: React.FC = () => {
                       const mediaCount = p.media_count || 0;
                       const thumbUrl = personThumbMap.get(p.id) || p.portrait_url;
                       return (
-                        <Link key={p.id} to={`/person/${p.slug}`} className="person-card">
-                          <div className="person-card-portrait" aria-hidden="true">
+                        <Link key={p.id} to={`/person/${p.slug}`} className={cx(uiStyles, 'person-card')}>
+                          <div className={cx(uiStyles, 'person-card-portrait')} aria-hidden="true">
                             {thumbUrl ? (
                               <img
                                 src={resolveAssetUrl(thumbUrl, baseUrl)}
                                 alt=""
                                 loading="lazy"
-                                className="person-card-portrait-img"
+                                className={cx(uiStyles, 'person-card-portrait-img')}
                               />
                             ) : (
-                              <span className="photo-print-monogram">{initialsOf(p.full_name)}</span>
+                              <span className={cx(uiStyles, 'photo-print-monogram')}>
+                                {initialsOf(p.full_name)}
+                              </span>
                             )}
                           </div>
-                          <div className="person-card-body">
+                          <div className={cx(uiStyles, 'person-card-body')}>
                             <h3>{p.full_name}</h3>
-                            <div className="person-card-meta">
+                            <div className={cx(uiStyles, 'person-card-meta')}>
                               {p.birth_year || '?'} – {p.death_year || (p.is_living ? 'Living' : '?')}
                             </div>
                             <div
@@ -365,7 +387,7 @@ export const IndexPage: React.FC = () => {
                                 {p.event_count} milestone{p.event_count === 1 ? '' : 's'}
                               </span>
                               {mediaCount > 0 && (
-                                <span className="person-card-media-badge">
+                                <span className={cx(uiStyles, 'person-card-media-badge')}>
                                   {formatPhotoDocumentCount(mediaCount)}
                                 </span>
                               )}

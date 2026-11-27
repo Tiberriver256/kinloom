@@ -4,7 +4,11 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { Link } from 'react-router-dom';
 import { initialsOf, resolveAssetUrl } from '../components/Atoms.js';
 import { formatDurationSeconds } from '../components/MediaPlayer.js';
+import { cx } from '../lib/cx.js';
+import cssMod0 from './narrativeAudioPlugin.module.css';
 import type { KinloomUiPlugin, KinloomUiPluginSlotContext } from './types.js';
+
+const uiStyles = cssMod0;
 
 export interface NarrativeAudioTrackMeta {
   readonly file: string;
@@ -290,7 +294,7 @@ const NarrativeAudioProvider: React.FC<{ children: React.ReactNode }> = ({ child
         ref={audioRef}
         src={activeTrack?.src}
         preload="metadata"
-        className="narrative-audio-hidden-el"
+        className={cx(uiStyles, 'narrative-audio-hidden-el')}
         aria-hidden="true"
         onTimeUpdate={(event) => {
           setCurrentTime(event.currentTarget.currentTime);
@@ -335,14 +339,14 @@ const NarrativeAudioMarginBar: React.FC<NarrativeAudioMarginBarProps> = ({ track
 
   return (
     <div
-      className={`narrative-audio-margin-bar print-hide ${inNotes ? 'is-notes' : 'is-story'}`}
+      className={cx(uiStyles, `narrative-audio-margin-bar print-hide ${inNotes ? 'is-notes' : 'is-story'}`)}
       data-testid="narrative-audio-margin-bar"
       role="region"
       aria-label={`Audio narration for ${track.narrativeTitle}`}
     >
       <button
         type="button"
-        className={`narrative-audio-play-btn ${inNotes ? 'is-notes' : 'is-story'}`}
+        className={cx(uiStyles, `narrative-audio-play-btn ${inNotes ? 'is-notes' : 'is-story'}`)}
         onClick={() => {
           audio.toggleTrack(track);
         }}
@@ -352,37 +356,43 @@ const NarrativeAudioMarginBar: React.FC<NarrativeAudioMarginBarProps> = ({ track
         <span aria-hidden="true">{isPlayingThis ? '❚❚' : '▶'}</span>
       </button>
 
-      <div className="narrative-audio-bar-main">
-        <div className="narrative-audio-bar-top">
-          <span className={`narrative-audio-voice-label ${inNotes ? 'is-notes' : 'is-story'}`}>
+      <div className={cx(uiStyles, 'narrative-audio-bar-main')}>
+        <div className={cx(uiStyles, 'narrative-audio-bar-top')}>
+          <span className={cx(uiStyles, `narrative-audio-voice-label ${inNotes ? 'is-notes' : 'is-story'}`)}>
             {inNotes ? `Editor's Notes · ${track.notesVoice}` : `Listen to Biography · ${track.storyVoice}`}
           </span>
-          <span className="narrative-audio-time">
+          <span className={cx(uiStyles, 'narrative-audio-time')}>
             {totalLabel ? `${currentLabel} / ${totalLabel}` : currentLabel}
           </span>
         </div>
 
-        <div className="narrative-audio-scrub-wrap">
-          <div className="narrative-audio-scrub-track" aria-hidden="true">
-            <div className="narrative-audio-scrub-bg-story" style={{ width: `${splitPct}%` }} />
+        <div className={cx(uiStyles, 'narrative-audio-scrub-wrap')}>
+          <div className={cx(uiStyles, 'narrative-audio-scrub-track')} aria-hidden="true">
+            <div
+              className={cx(uiStyles, 'narrative-audio-scrub-bg-story')}
+              style={{ width: `${splitPct}%` }}
+            />
             {notesStart !== null && splitPct < 100 && (
               <div
-                className="narrative-audio-scrub-bg-notes"
+                className={cx(uiStyles, 'narrative-audio-scrub-bg-notes')}
                 style={{ left: `${splitPct}%`, width: `${100 - splitPct}%` }}
               />
             )}
             <div
-              className="narrative-audio-scrub-fill-story"
+              className={cx(uiStyles, 'narrative-audio-scrub-fill-story')}
               style={{ width: `${Math.min(pct, splitPct)}%` }}
             />
             {notesStart !== null && pct > splitPct && (
               <div
-                className="narrative-audio-scrub-fill-notes"
+                className={cx(uiStyles, 'narrative-audio-scrub-fill-notes')}
                 style={{ left: `${splitPct}%`, width: `${pct - splitPct}%` }}
               />
             )}
             {notesStart !== null && splitPct < 100 && (
-              <div className="narrative-audio-scrub-divider" style={{ left: `${splitPct}%` }} />
+              <div
+                className={cx(uiStyles, 'narrative-audio-scrub-divider')}
+                style={{ left: `${splitPct}%` }}
+              />
             )}
           </div>
           <input
@@ -392,7 +402,7 @@ const NarrativeAudioMarginBar: React.FC<NarrativeAudioMarginBarProps> = ({ track
             step={1}
             value={Math.min(currentSec, totalSec > 0 ? totalSec : 100)}
             disabled={totalSec <= 0}
-            className="narrative-audio-scrub-input"
+            className={cx(uiStyles, 'narrative-audio-scrub-input')}
             aria-label={`Seek position for ${track.narrativeTitle}`}
             onChange={(event) => {
               audio.seekTrack(track, Number(event.target.value));
@@ -401,10 +411,10 @@ const NarrativeAudioMarginBar: React.FC<NarrativeAudioMarginBarProps> = ({ track
         </div>
       </div>
 
-      <div className="narrative-audio-bar-controls">
+      <div className={cx(uiStyles, 'narrative-audio-bar-controls')}>
         <button
           type="button"
-          className="narrative-audio-pill"
+          className={cx(uiStyles, 'narrative-audio-pill')}
           onClick={() => {
             audio.cycleSpeed();
           }}
@@ -416,7 +426,10 @@ const NarrativeAudioMarginBar: React.FC<NarrativeAudioMarginBarProps> = ({ track
         {notesStart !== null && notesStartLabel && (
           <button
             type="button"
-            className={`narrative-audio-pill narrative-audio-jump-btn ${inNotes ? 'is-return' : 'is-notes'}`}
+            className={cx(
+              uiStyles,
+              `narrative-audio-pill narrative-audio-jump-btn ${inNotes ? 'is-return' : 'is-notes'}`
+            )}
             onClick={() => {
               audio.seekTrack(track, inNotes ? 0 : notesStart, true);
             }}
@@ -444,36 +457,41 @@ const NarrativeAudioDock: React.FC = () => {
 
   return (
     <aside
-      className="narrative-audio-dock print-hide"
+      className={cx(uiStyles, 'narrative-audio-dock print-hide')}
       data-testid="narrative-audio-dock"
       aria-label="Persistent narrative audio player"
     >
-      <div className="narrative-audio-dock-progress" aria-hidden="true">
+      <div className={cx(uiStyles, 'narrative-audio-dock-progress')} aria-hidden="true">
         <div
-          className={`narrative-audio-dock-progress-fill ${inNotes ? 'is-notes' : 'is-story'}`}
+          className={cx(uiStyles, `narrative-audio-dock-progress-fill ${inNotes ? 'is-notes' : 'is-story'}`)}
           style={{ width: `${pct}%` }}
         />
       </div>
 
-      <div className="narrative-audio-dock-inner">
-        <div className="narrative-audio-dock-meta">
+      <div className={cx(uiStyles, 'narrative-audio-dock-inner')}>
+        <div className={cx(uiStyles, 'narrative-audio-dock-meta')}>
           <span
-            className={`narrative-audio-dock-badge ${inNotes ? 'is-notes' : 'is-story'}`}
+            className={cx(uiStyles, `narrative-audio-dock-badge ${inNotes ? 'is-notes' : 'is-story'}`)}
             aria-hidden="true"
           >
             {activeTrack.personInitials}
           </span>
-          <div className="narrative-audio-dock-titles">
-            <div className="narrative-audio-dock-title">
+          <div className={cx(uiStyles, 'narrative-audio-dock-titles')}>
+            <div className={cx(uiStyles, 'narrative-audio-dock-title')}>
               {activeTrack.personSlug && activeTrack.personName ? (
-                <Link to={`/person/${activeTrack.personSlug}`} className="narrative-audio-dock-link">
+                <Link
+                  to={`/person/${activeTrack.personSlug}`}
+                  className={cx(uiStyles, 'narrative-audio-dock-link')}
+                >
                   {activeTrack.personName}
                 </Link>
               ) : null}
-              {activeTrack.personName ? <span className="narrative-audio-dock-sep"> · </span> : null}
+              {activeTrack.personName ? (
+                <span className={cx(uiStyles, 'narrative-audio-dock-sep')}> · </span>
+              ) : null}
               <span>{activeTrack.narrativeTitle}</span>
             </div>
-            <div className="narrative-audio-dock-sub">
+            <div className={cx(uiStyles, 'narrative-audio-dock-sub')}>
               {inNotes
                 ? `Editor's Notes (${activeTrack.notesVoice})`
                 : `Biography Narration (${activeTrack.storyVoice})`}
@@ -483,10 +501,10 @@ const NarrativeAudioDock: React.FC = () => {
           </div>
         </div>
 
-        <div className="narrative-audio-dock-controls">
+        <div className={cx(uiStyles, 'narrative-audio-dock-controls')}>
           <button
             type="button"
-            className="narrative-audio-dock-btn"
+            className={cx(uiStyles, 'narrative-audio-dock-btn')}
             onClick={() => {
               audio.skip(-15);
             }}
@@ -496,7 +514,7 @@ const NarrativeAudioDock: React.FC = () => {
           </button>
           <button
             type="button"
-            className="narrative-audio-dock-play"
+            className={cx(uiStyles, 'narrative-audio-dock-play')}
             onClick={() => {
               audio.togglePlayPause();
             }}
@@ -507,7 +525,7 @@ const NarrativeAudioDock: React.FC = () => {
           </button>
           <button
             type="button"
-            className="narrative-audio-dock-btn"
+            className={cx(uiStyles, 'narrative-audio-dock-btn')}
             onClick={() => {
               audio.skip(15);
             }}
@@ -517,7 +535,7 @@ const NarrativeAudioDock: React.FC = () => {
           </button>
           <button
             type="button"
-            className="narrative-audio-dock-btn"
+            className={cx(uiStyles, 'narrative-audio-dock-btn')}
             onClick={() => {
               audio.cycleSpeed();
             }}
@@ -528,7 +546,7 @@ const NarrativeAudioDock: React.FC = () => {
           {notesStart !== null && (
             <button
               type="button"
-              className="narrative-audio-dock-btn"
+              className={cx(uiStyles, 'narrative-audio-dock-btn')}
               onClick={() => {
                 audio.seek(inNotes ? 0 : notesStart);
               }}
@@ -538,7 +556,7 @@ const NarrativeAudioDock: React.FC = () => {
           )}
           <button
             type="button"
-            className="narrative-audio-dock-dismiss"
+            className={cx(uiStyles, 'narrative-audio-dock-dismiss')}
             onClick={() => {
               audio.dismiss();
             }}

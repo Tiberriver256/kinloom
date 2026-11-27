@@ -5,6 +5,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { useSearchParams } from 'react-router-dom';
 import { EmptyStateNotice } from '../components/Atoms.js';
 import { ExplorerTopBar } from '../components/ExplorerTopBar.js';
+import cssMod0 from '../components/ExplorerTopBar.module.css';
 import { TreeFocusDrawer } from '../components/tree/TreeFocusDrawer.js';
 import { TreeOrthogonalCanvas } from '../components/tree/TreeOrthogonalCanvas.js';
 import { TreePedigreeRoll } from '../components/tree/TreePedigreeRoll.js';
@@ -25,6 +26,7 @@ import {
   resolveTreeFocusPlan,
   searchTreePeople,
 } from '../lib/archivalTreeModel.js';
+import { cx } from '../lib/cx.js';
 import type { CanvasTransform, Point2D } from '../lib/treeGestures.js';
 import {
   clampPan,
@@ -38,6 +40,11 @@ import {
   stepInertia,
 } from '../lib/treeGestures.js';
 import { KINLOOM_VOCABULARY } from '../lib/vocabulary.js';
+import cssMod1 from './IndexPage.module.css';
+import cssMod2 from './NotFoundPage.module.css';
+import cssMod3 from './TreeAndMapPage.module.css';
+
+const uiStyles: Readonly<Record<string, string>> = { ...cssMod0, ...cssMod1, ...cssMod2, ...cssMod3 };
 
 const INITIAL_TRANSFORM: CanvasTransform = {
   pan: { x: 40, y: 40 },
@@ -1098,9 +1105,9 @@ export const TreePage: React.FC = () => {
     return (
       <div>
         <ExplorerTopBar />
-        <main id="main-content" className="index-page">
-          <output className="archive-loading-shell" aria-live="polite">
-            <span className="archive-loading-spinner" aria-hidden="true" />
+        <main id="main-content" className={cx(uiStyles, 'index-page')}>
+          <output className={cx(uiStyles, 'archive-loading-shell')} aria-live="polite">
+            <span className={cx(uiStyles, 'archive-loading-spinner')} aria-hidden="true" />
             <span>{KINLOOM_VOCABULARY.tree.loading}</span>
           </output>
         </main>
@@ -1111,13 +1118,13 @@ export const TreePage: React.FC = () => {
   const activeCount = branchCounts[branchFilter] ?? model.totalVisibleCount;
 
   return (
-    <div className={`tree-shell tree-shell-${surface}`}>
+    <div className={cx(uiStyles, `tree-shell tree-shell-${surface}`)}>
       <ExplorerTopBar />
       {/* biome-ignore lint/a11y/useKeyWithClickEvents: interactive pan/zoom container clears selection on background click */}
       <main
         id="main-content"
         ref={containerRef}
-        className={`tree-page tree-page-${surface}`}
+        className={cx(uiStyles, `tree-page tree-page-${surface}`)}
         data-surface={surface}
         data-mode={model.effectiveMode}
         onPointerDown={handlePointerDown}
@@ -1138,7 +1145,7 @@ export const TreePage: React.FC = () => {
           }
         }}
       >
-        <h1 className="visually-hidden">{activeBranchLabel} Family Tree</h1>
+        <h1 className={cx(uiStyles, 'visually-hidden')}>{activeBranchLabel} Family Tree</h1>
 
         <TreeToolbar
           populatedBranches={populatedBranches}
@@ -1176,7 +1183,7 @@ export const TreePage: React.FC = () => {
         />
 
         {model.totalVisibleCount === 0 ? (
-          <div className="tree-empty-wrap">
+          <div className={cx(uiStyles, 'tree-empty-wrap')}>
             <EmptyStateNotice
               title={
                 bundle.people.length === 0
@@ -1192,7 +1199,7 @@ export const TreePage: React.FC = () => {
                 branchFilter !== 'all' || mode !== 'full' ? (
                   <button
                     type="button"
-                    className="pill-btn"
+                    className={cx(uiStyles, 'pill-btn')}
                     onClick={() => {
                       setBranchFilter('all');
                       setMode('full');
@@ -1221,7 +1228,7 @@ export const TreePage: React.FC = () => {
           />
         ) : (
           <>
-            <div ref={stageRef} className="tree-stage" style={stageStyle}>
+            <div ref={stageRef} className={cx(uiStyles, 'tree-stage')} style={stageStyle}>
               <TreeOrthogonalCanvas
                 layout={diagramLayout}
                 spotlight={spotlight}
@@ -1235,10 +1242,14 @@ export const TreePage: React.FC = () => {
               />
             </div>
 
-            <div className="tree-controls" role="group" aria-label={KINLOOM_VOCABULARY.tree.zoomControlsAria}>
+            <div
+              className={cx(uiStyles, 'tree-controls')}
+              role="group"
+              aria-label={KINLOOM_VOCABULARY.tree.zoomControlsAria}
+            >
               <button
                 type="button"
-                className="pill-btn"
+                className={cx(uiStyles, 'pill-btn')}
                 aria-label="Zoom in"
                 title="Zoom in (+)"
                 onClick={() => {
@@ -1249,7 +1260,7 @@ export const TreePage: React.FC = () => {
               </button>
               <button
                 type="button"
-                className="pill-btn"
+                className={cx(uiStyles, 'pill-btn')}
                 aria-label="Zoom out"
                 title="Zoom out (-)"
                 onClick={() => {
@@ -1260,7 +1271,7 @@ export const TreePage: React.FC = () => {
               </button>
               <button
                 type="button"
-                className="pill-btn"
+                className={cx(uiStyles, 'pill-btn')}
                 title="Fit full chart (0)"
                 onClick={animateFitToViewport}
               >
@@ -1268,14 +1279,18 @@ export const TreePage: React.FC = () => {
               </button>
               <button
                 type="button"
-                className="pill-btn"
+                className={cx(uiStyles, 'pill-btn')}
                 aria-label="Reset zoom to 100%"
                 title="Reset zoom to 100% (1)"
                 onClick={handleDiagramResetZoom}
               >
                 1:1
               </button>
-              <output className="tree-zoom-readout" aria-live="polite" aria-label={`Zoom ${zoomPercent}%`}>
+              <output
+                className={cx(uiStyles, 'tree-zoom-readout')}
+                aria-live="polite"
+                aria-label={`Zoom ${zoomPercent}%`}
+              >
                 {zoomPercent}%
               </output>
             </div>
@@ -1295,7 +1310,7 @@ export const TreePage: React.FC = () => {
           />
         )}
 
-        <output className="visually-hidden" aria-live="polite">
+        <output className={cx(uiStyles, 'visually-hidden')} aria-live="polite">
           {liveAnnouncement}
         </output>
       </main>

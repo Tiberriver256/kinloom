@@ -1,4 +1,8 @@
 // Side-effect CSS import: the standard Vite pattern for loading library styles.
+import { cx } from '../lib/cx.js';
+import cssMod0 from './IndexPage.module.css';
+import cssMod1 from './NotFoundPage.module.css';
+import cssMod2 from './TreeAndMapPage.module.css';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import type {
   LineageRouteMode,
@@ -45,6 +49,8 @@ import {
 } from '../lib/ohmStyle.js';
 import { KINLOOM_COLOR_TOKENS } from '../lib/tokens.js';
 import { KINLOOM_VOCABULARY } from '../lib/vocabulary.js';
+
+const uiStyles: Readonly<Record<string, string>> = { ...cssMod0, ...cssMod1, ...cssMod2 };
 
 let maplibreConfigured = false;
 
@@ -1044,15 +1050,15 @@ export const MapPage: React.FC = () => {
 
   if (error) {
     return (
-      <div className="map-shell">
+      <div className={cx(uiStyles, 'map-shell')}>
         <ExplorerTopBar />
-        <main id="main-content" className="index-page">
-          <div className="archive-error-box" role="alert">
+        <main id="main-content" className={cx(uiStyles, 'index-page')}>
+          <div className={cx(uiStyles, 'archive-error-box')} role="alert">
             <h2>Unable to load migration map</h2>
             <p>{error}</p>
             <button
               type="button"
-              className="pill-btn active"
+              className={cx(uiStyles, 'pill-btn active')}
               onClick={() => {
                 window.location.reload();
               }}
@@ -1067,11 +1073,11 @@ export const MapPage: React.FC = () => {
 
   if (loading || !bundle) {
     return (
-      <div className="map-shell">
+      <div className={cx(uiStyles, 'map-shell')}>
         <ExplorerTopBar />
-        <main id="main-content" className="index-page">
-          <output className="archive-loading-shell" aria-live="polite">
-            <span className="archive-loading-spinner" aria-hidden="true" />
+        <main id="main-content" className={cx(uiStyles, 'index-page')}>
+          <output className={cx(uiStyles, 'archive-loading-shell')} aria-live="polite">
+            <span className={cx(uiStyles, 'archive-loading-spinner')} aria-hidden="true" />
             <span>{KINLOOM_VOCABULARY.map.loading}</span>
           </output>
         </main>
@@ -1080,19 +1086,23 @@ export const MapPage: React.FC = () => {
   }
 
   return (
-    <div className="map-shell">
+    <div className={cx(uiStyles, 'map-shell')}>
       <ExplorerTopBar />
-      <main id="main-content" className="tree-page map-page">
-        <div ref={mapHostRef} className="map-canvas" style={{ position: 'absolute', inset: 0 }} />
+      <main id="main-content" className={cx(uiStyles, 'tree-page map-page')}>
+        <div
+          ref={mapHostRef}
+          className={cx(uiStyles, 'map-canvas')}
+          style={{ position: 'absolute', inset: 0 }}
+        />
         {historicalMap.kind === 'failed' && (
-          <output className="map-style-note">Showing offline paper basemap.</output>
+          <output className={cx(uiStyles, 'map-style-note')}>Showing offline paper basemap.</output>
         )}
 
-        <div className="map-overlay map-toolbar">
-          <label className="map-trace-label">
+        <div className={cx(uiStyles, 'map-overlay map-toolbar')}>
+          <label className={cx(uiStyles, 'map-trace-label')}>
             <span>Trace:</span>
             <select
-              className="pill-btn map-trace-select"
+              className={cx(uiStyles, 'pill-btn map-trace-select')}
               aria-label="Filter migration map by person"
               value={selectedPersonId}
               onChange={(event) => {
@@ -1109,7 +1119,7 @@ export const MapPage: React.FC = () => {
           </label>
 
           <select
-            className="pill-btn map-era-select-mobile"
+            className={cx(uiStyles, 'pill-btn map-era-select-mobile')}
             aria-label={KINLOOM_VOCABULARY.map.filterByEraAria}
             value={selectedEraId}
             onChange={(event) => {
@@ -1128,10 +1138,10 @@ export const MapPage: React.FC = () => {
               ))}
           </select>
 
-          <fieldset className="map-toolbar-presets" aria-label="Filter migration map by era">
+          <fieldset className={cx(uiStyles, 'map-toolbar-presets')} aria-label="Filter migration map by era">
             <button
               type="button"
-              className={`pill-btn map-bordered-btn ${selectedEraId === 'all' ? 'active' : ''}`}
+              className={cx(uiStyles, `pill-btn map-bordered-btn ${selectedEraId === 'all' ? 'active' : ''}`)}
               aria-pressed={selectedEraId === 'all'}
               onClick={() => {
                 setSelectedEraId('all');
@@ -1145,7 +1155,10 @@ export const MapPage: React.FC = () => {
                 <button
                   key={era.id}
                   type="button"
-                  className={`pill-btn map-bordered-btn ${selectedEraId === era.id ? 'active' : ''}`}
+                  className={cx(
+                    uiStyles,
+                    `pill-btn map-bordered-btn ${selectedEraId === era.id ? 'active' : ''}`
+                  )}
                   aria-pressed={selectedEraId === era.id}
                   onClick={() => {
                     setSelectedEraId(era.id);
@@ -1160,7 +1173,7 @@ export const MapPage: React.FC = () => {
             <>
               <button
                 type="button"
-                className="pill-btn map-bordered-btn map-route-mode-mobile"
+                className={cx(uiStyles, 'pill-btn map-bordered-btn map-route-mode-mobile')}
                 aria-label={`Route order: ${routeMode === 'per-person' ? KINLOOM_VOCABULARY.map.byPersonMode : KINLOOM_VOCABULARY.map.chronologicalMode}. Click to switch.`}
                 onClick={() => {
                   setRouteMode((prev) => (prev === 'per-person' ? 'chronological' : 'per-person'));
@@ -1170,10 +1183,13 @@ export const MapPage: React.FC = () => {
                   ? KINLOOM_VOCABULARY.map.byPersonMode
                   : KINLOOM_VOCABULARY.map.chronologicalMode}
               </button>
-              <fieldset className="map-route-mode" aria-label="Full lineage route mode">
+              <fieldset className={cx(uiStyles, 'map-route-mode')} aria-label="Full lineage route mode">
                 <button
                   type="button"
-                  className={`pill-btn map-bordered-btn ${routeMode === 'per-person' ? 'active' : ''}`}
+                  className={cx(
+                    uiStyles,
+                    `pill-btn map-bordered-btn ${routeMode === 'per-person' ? 'active' : ''}`
+                  )}
                   aria-pressed={routeMode === 'per-person'}
                   onClick={() => {
                     setRouteMode('per-person');
@@ -1183,7 +1199,10 @@ export const MapPage: React.FC = () => {
                 </button>
                 <button
                   type="button"
-                  className={`pill-btn map-bordered-btn ${routeMode === 'chronological' ? 'active' : ''}`}
+                  className={cx(
+                    uiStyles,
+                    `pill-btn map-bordered-btn ${routeMode === 'chronological' ? 'active' : ''}`
+                  )}
                   aria-pressed={routeMode === 'chronological'}
                   onClick={() => {
                     setRouteMode('chronological');
@@ -1196,11 +1215,14 @@ export const MapPage: React.FC = () => {
           )}
         </div>
 
-        <aside className="map-overlay map-stage-legend" aria-label="Migration stage color legend">
+        <aside
+          className={cx(uiStyles, 'map-overlay map-stage-legend')}
+          aria-label="Migration stage color legend"
+        >
           {migrationEras.map((era) => (
-            <span key={era.id} className="map-legend-item">
+            <span key={era.id} className={cx(uiStyles, 'map-legend-item')}>
               <span
-                className="map-legend-swatch"
+                className={cx(uiStyles, 'map-legend-swatch')}
                 style={{ backgroundColor: stageColorMap.get(era.id) ?? KINLOOM_COLOR_TOKENS.archivalIndigo }}
                 aria-hidden="true"
               />
@@ -1209,38 +1231,41 @@ export const MapPage: React.FC = () => {
           ))}
         </aside>
 
-        <div ref={dockRef} className={`map-bottom-dock${selectedStop ? ' has-stop' : ''}`}>
-          {selectedStop && <div className="map-drawer-handle" aria-hidden="true" />}
+        <div ref={dockRef} className={cx(uiStyles, `map-bottom-dock${selectedStop ? ' has-stop' : ''}`)}>
+          {selectedStop && <div className={cx(uiStyles, 'map-drawer-handle')} aria-hidden="true" />}
 
           {selectedStop && (
             <section
               ref={cardRef}
-              className={`map-overlay tree-popover map-stop-popover${cardSide === 'left' ? ' is-left' : ''}${drawerExpanded ? ' is-expanded' : ''}`}
+              className={cx(
+                uiStyles,
+                `map-overlay tree-popover map-stop-popover${cardSide === 'left' ? ' is-left' : ''}${drawerExpanded ? ' is-expanded' : ''}`
+              )}
               aria-label="Selected stop details"
               aria-live="polite"
             >
-              <div className="map-stop-header">
-                <div className="map-stop-meta">
+              <div className={cx(uiStyles, 'map-stop-header')}>
+                <div className={cx(uiStyles, 'map-stop-meta')}>
                   <span
-                    className="map-stop-eyebrow"
+                    className={cx(uiStyles, 'map-stop-eyebrow')}
                     style={{
                       color:
                         stageColorMap.get(selectedStop.lineageStage) ?? KINLOOM_COLOR_TOKENS.archivalIndigo,
                     }}
                   >
                     <span>{selectedStop.displayDate}</span>
-                    <span className="map-stop-stage">
+                    <span className={cx(uiStyles, 'map-stop-stage')}>
                       {(
                         stageLabelMap.get(selectedStop.lineageStage) ?? selectedStop.lineageStage
                       ).toUpperCase()}
                     </span>
                   </span>
-                  <h2 className="map-stop-title">{selectedStop.place.full_name}</h2>
+                  <h2 className={cx(uiStyles, 'map-stop-title')}>{selectedStop.place.full_name}</h2>
                 </div>
-                <div className="map-stop-header-actions">
+                <div className={cx(uiStyles, 'map-stop-header-actions')}>
                   <button
                     type="button"
-                    className="pill-btn map-bordered-btn map-drawer-toggle"
+                    className={cx(uiStyles, 'pill-btn map-bordered-btn map-drawer-toggle')}
                     aria-expanded={drawerExpanded}
                     onClick={() => {
                       setDrawerExpanded((open) => !open);
@@ -1250,7 +1275,7 @@ export const MapPage: React.FC = () => {
                   </button>
                   <button
                     type="button"
-                    className="pill-btn map-bordered-btn map-close-btn"
+                    className={cx(uiStyles, 'pill-btn map-bordered-btn map-close-btn')}
                     onClick={() => {
                       setPlaying(false);
                       setSelectedStopId(null);
@@ -1263,16 +1288,16 @@ export const MapPage: React.FC = () => {
                 </div>
               </div>
 
-              <div className="map-stop-details">
-                <p className="map-stop-summary">{selectedStop.title}</p>
-                <div className="map-stop-coords">
+              <div className={cx(uiStyles, 'map-stop-details')}>
+                <p className={cx(uiStyles, 'map-stop-summary')}>{selectedStop.title}</p>
+                <div className={cx(uiStyles, 'map-stop-coords')}>
                   {selectedStop.place.lat.toFixed(2)}°{selectedStop.place.lat >= 0 ? 'N' : 'S'},{' '}
                   {Math.abs(selectedStop.place.lng).toFixed(2)}°{selectedStop.place.lng >= 0 ? 'E' : 'W'}
                 </div>
-                <div className="map-stop-links">
+                <div className={cx(uiStyles, 'map-stop-links')}>
                   <Link
                     to={`/place/${selectedStop.place.slug}`}
-                    className="pill-btn active"
+                    className={cx(uiStyles, 'pill-btn active')}
                     style={{ textDecoration: 'none' }}
                   >
                     {KINLOOM_VOCABULARY.map.placeProfileCta}
@@ -1281,7 +1306,7 @@ export const MapPage: React.FC = () => {
                     <Link
                       key={personSlug}
                       to={`/person/${personSlug}?event=${selectedStop.eventId}`}
-                      className="pill-btn map-bordered-btn"
+                      className={cx(uiStyles, 'pill-btn map-bordered-btn')}
                       style={{ textDecoration: 'none' }}
                     >
                       {selectedStop.personNames[index]} →
@@ -1292,14 +1317,14 @@ export const MapPage: React.FC = () => {
             </section>
           )}
 
-          <div className="map-overlay map-playback-bar">
+          <div className={cx(uiStyles, 'map-overlay map-playback-bar')}>
             {stops.length === 0 ? (
-              <div className="map-empty-notice" role="status">
+              <div className={cx(uiStyles, 'map-empty-notice')} role="status">
                 No geocoded stops match the active filter.
                 {(selectedPersonId !== 'all' || selectedEraId !== 'all') && (
                   <button
                     type="button"
-                    className="pill-btn map-bordered-btn"
+                    className={cx(uiStyles, 'pill-btn map-bordered-btn')}
                     onClick={() => {
                       setSelectedPersonId('all');
                       setSelectedEraId('all');
@@ -1310,10 +1335,10 @@ export const MapPage: React.FC = () => {
                 )}
               </div>
             ) : null}
-            <div className="map-playback-buttons">
+            <div className={cx(uiStyles, 'map-playback-buttons')}>
               <button
                 type="button"
-                className={`pill-btn map-bordered-btn ${playing ? 'active' : ''}`}
+                className={cx(uiStyles, `pill-btn map-bordered-btn ${playing ? 'active' : ''}`)}
                 aria-pressed={playing}
                 disabled={stops.length === 0}
                 onClick={() => {
@@ -1324,7 +1349,7 @@ export const MapPage: React.FC = () => {
               </button>
               <button
                 type="button"
-                className="pill-btn map-bordered-btn"
+                className={cx(uiStyles, 'pill-btn map-bordered-btn')}
                 disabled={stops.length === 0 || stepIndex === 0}
                 onClick={() => {
                   applyJourney(journeyPrev(journey, stopIds));
@@ -1334,7 +1359,7 @@ export const MapPage: React.FC = () => {
               </button>
               <button
                 type="button"
-                className="pill-btn map-bordered-btn"
+                className={cx(uiStyles, 'pill-btn map-bordered-btn')}
                 disabled={stops.length === 0 || stepIndex >= stops.length - 1}
                 onClick={() => {
                   applyJourney(journeyNext(journey, stopIds));
@@ -1344,7 +1369,7 @@ export const MapPage: React.FC = () => {
               </button>
               <button
                 type="button"
-                className={`pill-btn map-bordered-btn ${stepIndex < 0 ? 'active' : ''}`}
+                className={cx(uiStyles, `pill-btn map-bordered-btn ${stepIndex < 0 ? 'active' : ''}`)}
                 onClick={() => {
                   setDrawerExpanded(false);
                   applyJourney(journeyReset(journey));
@@ -1354,7 +1379,7 @@ export const MapPage: React.FC = () => {
               </button>
             </div>
 
-            <div className="map-playback-slider">
+            <div className={cx(uiStyles, 'map-playback-slider')}>
               <input
                 type="range"
                 min={0}
@@ -1365,19 +1390,19 @@ export const MapPage: React.FC = () => {
                 }}
                 aria-label="Scrub migration timeline stop"
                 aria-valuetext={sliderValueText}
-                className="map-range-input"
+                className={cx(uiStyles, 'map-range-input')}
               />
-              <span className="map-playback-stat">
+              <span className={cx(uiStyles, 'map-playback-stat')}>
                 {yearSpanLabel} · {metricLabel}
               </span>
             </div>
           </div>
         </div>
 
-        <div className="map-overlay tree-controls map-zoom-controls">
+        <div className={cx(uiStyles, 'map-overlay tree-controls map-zoom-controls')}>
           <button
             type="button"
-            className="pill-btn"
+            className={cx(uiStyles, 'pill-btn')}
             aria-label="Zoom in map"
             onClick={() => {
               mapRef.current?.zoomIn({ duration: 180 });
@@ -1387,7 +1412,7 @@ export const MapPage: React.FC = () => {
           </button>
           <button
             type="button"
-            className="pill-btn"
+            className={cx(uiStyles, 'pill-btn')}
             aria-label="Zoom out map"
             onClick={() => {
               mapRef.current?.zoomOut({ duration: 180 });
@@ -1395,7 +1420,7 @@ export const MapPage: React.FC = () => {
           >
             −
           </button>
-          <button type="button" className="pill-btn" onClick={handleFitClick}>
+          <button type="button" className={cx(uiStyles, 'pill-btn')} onClick={handleFitClick}>
             Fit
           </button>
         </div>

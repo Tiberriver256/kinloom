@@ -134,12 +134,11 @@
   text-underline-offset: 2px;
 }
 
-
 /* Responsive overrides */
 
 @media (max-width: 1023px) {
   .topbar {
-padding: 6px 12px 0;
+    padding: 6px 12px 0;
     gap: 0 8px;
     min-height: 0;
     height: auto;
@@ -149,11 +148,11 @@ padding: 6px 12px 0;
   }
 
   .topbar-left {
-display: contents;
+    display: contents;
   }
 
   .brand-link {
-order: 1;
+    order: 1;
     flex: 1 1 0%;
     min-width: 0;
     overflow: hidden;
@@ -164,7 +163,7 @@ order: 1;
   }
 
   .topbar-center {
-order: 2;
+    order: 2;
     flex: 0 0 auto;
     margin-left: auto;
     width: auto;
@@ -177,7 +176,7 @@ order: 2;
   }
 
   .nav-links {
-order: 3;
+    order: 3;
     flex-basis: 100%;
     flex-wrap: nowrap;
     gap: 6px 10px;
@@ -190,11 +189,11 @@ order: 3;
   }
 
   .nav-links::-webkit-scrollbar {
-display: none;
+    display: none;
   }
 
   .nav-pill {
-flex-shrink: 0;
+    flex-shrink: 0;
     padding: 4px 10px;
     font-size: 0.9rem;
     white-space: nowrap;
@@ -209,13 +208,13 @@ flex-shrink: 0;
   :global(.mobile-sources-btn),
   .topbar-right,
   :global(.nav-pill-desktop-only) {
-display: none;
+    display: none;
   }
 }
 
 @media (max-width: 768px) {
   .person-switcher {
-width: 100%;
+    width: 100%;
     max-width: none;
     font-size: 0.82rem;
     padding: 2px 4px;

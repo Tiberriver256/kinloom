@@ -2,6 +2,10 @@ import type { EntityDiffSummary, EntityPayload, FieldDiff } from '@kinloom/core'
 import { computeEntityDiff } from '@kinloom/core';
 import type React from 'react';
 import { useMemo } from 'react';
+import { cx } from '../../lib/cx.js';
+import cssMod0 from './WikiSurfaces.module.css';
+
+const uiStyles = cssMod0;
 
 export interface RevisionDiffViewProps {
   before?: EntityPayload | null;
@@ -57,23 +61,32 @@ export const RevisionDiffView: React.FC<RevisionDiffViewProps> = ({
 
   if (!summary.hasChanges || summary.fields.length === 0) {
     return (
-      <div className="wiki-diff-empty">
+      <div className={cx(uiStyles, 'wiki-diff-empty')}>
         No field differences between {beforeLabel.toLowerCase()} and {afterLabel.toLowerCase()}.
       </div>
     );
   }
 
   return (
-    <div className={`wiki-diff-wrap${compact ? ' is-compact' : ''}`}>
-      <div className="wiki-diff-summary-bar">
-        <span className="wiki-diff-stat wiki-diff-stat-add">+{summary.addedCount} added</span>
-        <span className="wiki-diff-stat wiki-diff-stat-del">−{summary.removedCount} removed</span>
-        <span className="wiki-diff-stat wiki-diff-stat-chg">~{summary.changedCount} changed</span>
+    <div className={cx(uiStyles, `wiki-diff-wrap${compact ? ' is-compact' : ''}`)}>
+      <div className={cx(uiStyles, 'wiki-diff-summary-bar')}>
+        <span className={cx(uiStyles, 'wiki-diff-stat wiki-diff-stat-add')}>+{summary.addedCount} added</span>
+        <span className={cx(uiStyles, 'wiki-diff-stat wiki-diff-stat-del')}>
+          −{summary.removedCount} removed
+        </span>
+        <span className={cx(uiStyles, 'wiki-diff-stat wiki-diff-stat-chg')}>
+          ~{summary.changedCount} changed
+        </span>
       </div>
 
       {/* biome-ignore lint/a11y/noNoninteractiveTabindex: horizontally scrollable region needs keyboard focus */}
-      <div className="wiki-diff-table-region" role="region" aria-label="Field differences" tabIndex={0}>
-        <table className="wiki-diff-table">
+      <div
+        className={cx(uiStyles, 'wiki-diff-table-region')}
+        role="region"
+        aria-label="Field differences"
+        tabIndex={0}
+      >
+        <table className={cx(uiStyles, 'wiki-diff-table')}>
           <thead>
             <tr>
               <th scope="col">Field</th>
@@ -85,34 +98,40 @@ export const RevisionDiffView: React.FC<RevisionDiffViewProps> = ({
             {summary.fields.map((field) => {
               const sym = symbolForKind(field.kind);
               return (
-                <tr key={field.path} className={`wiki-diff-row kind-${field.kind}`}>
-                  <th scope="row" className="wiki-diff-field-cell">
-                    <span className="wiki-diff-glyph" role="img" aria-label={sym.label}>
+                <tr key={field.path} className={cx(uiStyles, `wiki-diff-row kind-${field.kind}`)}>
+                  <th scope="row" className={cx(uiStyles, 'wiki-diff-field-cell')}>
+                    <span className={cx(uiStyles, 'wiki-diff-glyph')} role="img" aria-label={sym.label}>
                       {sym.glyph}
                     </span>
                     <code>{field.path}</code>
                   </th>
                   <td
                     data-label={beforeLabel}
-                    className={field.kind === 'added' ? 'wiki-diff-cell-empty' : 'wiki-diff-cell-del'}
+                    className={cx(
+                      uiStyles,
+                      field.kind === 'added' ? 'wiki-diff-cell-empty' : 'wiki-diff-cell-del'
+                    )}
                   >
                     {field.kind !== 'added' && (
-                      <span className="wiki-diff-prefix" aria-hidden="true">
+                      <span className={cx(uiStyles, 'wiki-diff-prefix')} aria-hidden="true">
                         −{' '}
                       </span>
                     )}
-                    <span className="wiki-diff-value">{formatDiffValue(field.before)}</span>
+                    <span className={cx(uiStyles, 'wiki-diff-value')}>{formatDiffValue(field.before)}</span>
                   </td>
                   <td
                     data-label={afterLabel}
-                    className={field.kind === 'removed' ? 'wiki-diff-cell-empty' : 'wiki-diff-cell-add'}
+                    className={cx(
+                      uiStyles,
+                      field.kind === 'removed' ? 'wiki-diff-cell-empty' : 'wiki-diff-cell-add'
+                    )}
                   >
                     {field.kind !== 'removed' && (
-                      <span className="wiki-diff-prefix" aria-hidden="true">
+                      <span className={cx(uiStyles, 'wiki-diff-prefix')} aria-hidden="true">
                         +{' '}
                       </span>
                     )}
-                    <span className="wiki-diff-value">{formatDiffValue(field.after)}</span>
+                    <span className={cx(uiStyles, 'wiki-diff-value')}>{formatDiffValue(field.after)}</span>
                   </td>
                 </tr>
               );
