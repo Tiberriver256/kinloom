@@ -12,7 +12,7 @@ export type {
   PronunciationLexiconStore,
 } from './ports.js';
 
-export const KINLOOM_SERVER_VERSION = '0.40.0';
+export const KINLOOM_SERVER_VERSION = '0.40.1';
 
 export {
   GoogleOAuthProvider,
