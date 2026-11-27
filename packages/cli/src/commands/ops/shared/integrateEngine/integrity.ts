@@ -1,11 +1,9 @@
 import {
   extractNarrativeCitations,
-  KinshipEdgeSchema,
+  type KinshipEdge,
   type MediaItem,
   type Narrative,
-  NarrativeSchema,
   type RawEvent,
-  RawEventSchema,
   type RawPerson,
   validateNarrativeCitations,
 } from '@kinloom/core';
@@ -35,7 +33,7 @@ export function validatePatchReferentialIntegrity(input: PatchReferentialIntegri
   } = input;
 
   for (const rawEv of cleanedPatchEvents) {
-    const ev = RawEventSchema.parse(rawEv);
+    const ev = rawEv as RawEvent;
     if (ev.place_id && !placeIds.has(ev.place_id)) {
       throw new Error(`Event '${ev.id}' references missing place_id '${ev.place_id}'.`);
     }
@@ -59,7 +57,7 @@ export function validatePatchReferentialIntegrity(input: PatchReferentialIntegri
   }
 
   for (const rawEdge of patchKinship) {
-    const edge = KinshipEdgeSchema.parse(rawEdge);
+    const edge = rawEdge as KinshipEdge;
     if (!peopleById.has(edge.from)) {
       throw new Error(`Kinship edge references missing 'from' person '${edge.from}'.`);
     }
@@ -69,7 +67,7 @@ export function validatePatchReferentialIntegrity(input: PatchReferentialIntegri
   }
 
   for (const rawNar of normalizedPatchNarratives) {
-    const nar = NarrativeSchema.parse(rawNar);
+    const nar = rawNar as Narrative;
     if (nar.subject_person_id !== undefined) {
       if (!peopleById.has(nar.subject_person_id)) {
         throw new Error(
@@ -133,7 +131,6 @@ export function validateRetirementIntegrity(input: RetirementIntegrityInput): vo
     mediaIds,
   } = input;
 
-  // Ensure top-level event removal never leaves dangling references in surviving media or narratives.
   if (topLevelRemoveEventIds.size > 0) {
     for (const item of finalMedia) {
       if (item.event_id && topLevelRemoveEventIds.has(item.event_id)) {
@@ -151,7 +148,6 @@ export function validateRetirementIntegrity(input: RetirementIntegrityInput): vo
     }
   }
 
-  // Ensure top-level media removal never breaks surviving narrative inline citations.
   if (topLevelRemoveMediaIds.size > 0) {
     for (const nar of finalNarratives) {
       const extracted = extractNarrativeCitations(nar.body_md);
@@ -165,7 +161,6 @@ export function validateRetirementIntegrity(input: RetirementIntegrityInput): vo
     }
   }
 
-  // Ensure top-level source removal never breaks citations or references anywhere in the archive.
   if (topLevelRemoveSourceIds.size > 0) {
     for (const ev of finalEvents) {
       for (const ref of ev.sources) {

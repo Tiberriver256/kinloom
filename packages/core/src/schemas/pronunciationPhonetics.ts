@@ -1,4 +1,4 @@
-import type { Pronunciation } from './pronunciationSchema.js';
+import type { Pronunciation, ResolvedPersonPronunciation } from './pronunciationSchema.js';
 
 const IPA_GLYPHS_IN_PHONETIC_RE = /[əɚɜæɑɔʊʌɪɛʃʒθðŋˈˌː]/g;
 const IPA_SLASH_WRAP_RE = /\/[^\s/](?:[^/]*[^\s/])?\//;
@@ -6,23 +6,61 @@ const IPA_SLASH_WRAP_RE = /\/[^\s/](?:[^/]*[^\s/])?\//;
 export const SINGLE_LETTER_INITIAL_RE = /^[\p{L}]\.?$/u;
 export const PERSON_NAME_DECORATION_RE = /^(?:jr\.?|sr\.?|ii|iii|iv|v|vi)$/i;
 
-const lexiconLowerIndexCache = new WeakMap<
-  Readonly<Record<string, Pronunciation>>,
-  Map<string, { readonly key: string; readonly entry: Pronunciation }>
->();
+export interface LexiconLowerIndexMeta {
+  readonly byLower: Map<string, { readonly key: string; readonly entry: Pronunciation }>;
+  readonly maxWordSpan: number;
+  readonly hasMatchContainsRule: boolean;
+  readonly resolvedPersonCache: Map<string, ResolvedPersonPronunciation | null>;
+}
 
-function getLexiconLowerIndex(
+const lexiconLowerIndexCache = new WeakMap<Readonly<Record<string, Pronunciation>>, LexiconLowerIndexMeta>();
+
+function countWhitespaceSeparatedWords(text: string): number {
+  let words = 0;
+  let inWord = false;
+  for (let i = 0; i < text.length; i += 1) {
+    const isSpace = text.charCodeAt(i) <= 32;
+    if (!isSpace && !inWord) {
+      words += 1;
+      inWord = true;
+    } else if (isSpace) {
+      inWord = false;
+    }
+  }
+  return words;
+}
+
+export function getLexiconLowerIndexMeta(
   lexicon: Readonly<Record<string, Pronunciation>>
-): Map<string, { readonly key: string; readonly entry: Pronunciation }> {
+): LexiconLowerIndexMeta {
   let cached = lexiconLowerIndexCache.get(lexicon);
   if (!cached) {
-    cached = new Map();
+    const byLower = new Map<string, { readonly key: string; readonly entry: Pronunciation }>();
+    let maxWords = 1;
+    let hasMatchContainsRule = false;
     for (const key of Object.keys(lexicon)) {
-      const lower = key.trim().toLowerCase();
-      if (!cached.has(lower)) {
-        cached.set(lower, { key, entry: lexicon[key] });
+      const entry = lexicon[key];
+      const trimmed = key.trim();
+      const lower = trimmed.toLowerCase();
+      if (!byLower.has(lower)) {
+        byLower.set(lower, { key, entry });
+      }
+      if (entry.match_full_name_contains !== undefined) {
+        hasMatchContainsRule = true;
+      }
+      if (maxWords < 4 && trimmed.includes(' ')) {
+        const wc = countWhitespaceSeparatedWords(trimmed);
+        if (wc > maxWords) {
+          maxWords = Math.min(4, wc);
+        }
       }
     }
+    cached = {
+      byLower,
+      maxWordSpan: maxWords,
+      hasMatchContainsRule,
+      resolvedPersonCache: new Map(),
+    };
     lexiconLowerIndexCache.set(lexicon, cached);
   }
   return cached;
@@ -140,7 +178,7 @@ export function lookupLexiconMatch(
   if (Object.hasOwn(lexicon, trimmed)) {
     return { key: trimmed, entry: lexicon[trimmed] };
   }
-  return getLexiconLowerIndex(lexicon).get(trimmed.toLowerCase());
+  return getLexiconLowerIndexMeta(lexicon).byLower.get(trimmed.toLowerCase());
 }
 
 export function lookupLexiconEntry(
@@ -254,14 +292,28 @@ function normalizeBaseLanguage(language?: string | null): string | null {
 }
 
 export function composeLanguageTag(entries: readonly Pronunciation[]): string | undefined {
-  const rawLangs = entries.map((e) => e.language?.trim()).filter((lang): lang is string => Boolean(lang));
-  if (rawLangs.length === 0) {
+  let firstLang: string | undefined;
+  let firstLower: string | undefined;
+  let allSameExact = true;
+  for (let i = 0; i < entries.length; i += 1) {
+    const raw = entries[i].language?.trim();
+    if (!raw) {
+      continue;
+    }
+    if (firstLang === undefined) {
+      firstLang = raw;
+      firstLower = raw.toLowerCase();
+    } else if (allSameExact && raw !== firstLang && raw.toLowerCase() !== firstLower) {
+      allSameExact = false;
+    }
+  }
+  if (firstLang === undefined) {
     return undefined;
   }
-  const uniqueExact = new Set(rawLangs.map((l) => l.toLowerCase()));
-  if (uniqueExact.size === 1) {
-    return rawLangs[0];
+  if (allSameExact) {
+    return firstLang;
   }
+  const rawLangs = entries.map((e) => e.language?.trim()).filter((lang): lang is string => Boolean(lang));
   const baseLangs = new Set(
     rawLangs.map((l) => normalizeBaseLanguage(l)).filter((b): b is string => Boolean(b))
   );
@@ -277,32 +329,70 @@ export function composeProvenance(entries: readonly Pronunciation[]): {
   readonly source_url?: string;
   readonly region?: string;
 } {
-  const labels: string[] = [];
-  const seenLabels = new Set<string>();
-  const urls = new Set<string>();
-  const regions = new Set<string>();
+  let firstLabel: string | undefined;
+  let firstLabelLower: string | undefined;
+  let extraLabels: string[] | null = null;
+  let seenLabels: Set<string> | null = null;
 
-  for (const entry of entries) {
+  let firstUrl: string | undefined;
+  let multiUrl = false;
+
+  let firstRegion: string | undefined;
+  let multiRegion = false;
+
+  for (let i = 0; i < entries.length; i += 1) {
+    const entry = entries[i];
     const label = entry.source_label?.trim();
-    if (label && !seenLabels.has(label.toLowerCase())) {
-      seenLabels.add(label.toLowerCase());
-      labels.push(label);
+    if (label) {
+      const lower = label.toLowerCase();
+      if (firstLabel === undefined) {
+        firstLabel = label;
+        firstLabelLower = lower;
+      } else if (lower !== firstLabelLower) {
+        if (!seenLabels) {
+          seenLabels = new Set([firstLabelLower ?? '', lower]);
+          extraLabels = [firstLabel, label];
+        } else if (!seenLabels.has(lower) && extraLabels) {
+          seenLabels.add(lower);
+          extraLabels.push(label);
+        }
+      }
     }
     const url = entry.source_url?.trim();
     if (url) {
-      urls.add(url);
+      if (firstUrl === undefined) {
+        firstUrl = url;
+      } else if (url !== firstUrl) {
+        multiUrl = true;
+      }
     }
     const region = entry.region?.trim();
     if (region) {
-      regions.add(region);
+      if (firstRegion === undefined) {
+        firstRegion = region;
+      } else if (region !== firstRegion) {
+        multiRegion = true;
+      }
     }
   }
 
-  return {
-    ...(labels.length > 0 ? { source_label: labels.join(' + ') } : {}),
-    ...(urls.size === 1 ? { source_url: [...urls][0] } : {}),
-    ...(regions.size === 1 ? { region: [...regions][0] } : {}),
-  };
+  const out: {
+    source_label?: string;
+    source_url?: string;
+    region?: string;
+  } = {};
+  if (extraLabels) {
+    out.source_label = extraLabels.join(' + ');
+  } else if (firstLabel !== undefined) {
+    out.source_label = firstLabel;
+  }
+  if (firstUrl !== undefined && !multiUrl) {
+    out.source_url = firstUrl;
+  }
+  if (firstRegion !== undefined && !multiRegion) {
+    out.region = firstRegion;
+  }
+  return out;
 }
 
 export function findSurnameTokenSpan(

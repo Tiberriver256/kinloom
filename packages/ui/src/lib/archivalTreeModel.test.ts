@@ -513,3 +513,227 @@ describe('archivalTreeModel', () => {
     expect(vancePlan.nextBranchFilter).toBe('all');
   });
 });
+
+describe('Multi-component generation alignment and orthogonal obstacle detour routing', () => {
+  it('aligns disconnected components, isolated relatives, and empty models deterministically', () => {
+    const emptyModel = buildArchivalTreeModel({
+      people: [],
+      kinship: [],
+      branchFilter: 'all',
+      mode: 'full',
+    });
+    const emptyLayout = computeArchivalDiagramLayout(emptyModel);
+    expect(emptyLayout.nodes).toEqual([]);
+    expect(emptyLayout.buses).toEqual([]);
+
+    const people: Person[] = [
+      // Component 1: 3 generations (1820 -> 1850 -> 1880)
+      makePerson({
+        id: 'p_c1_g0_a',
+        slug: 'arthur-alder-1820',
+        full_name: 'Arthur Alder',
+        birth_year: 1820,
+        death_year: 1890,
+        lineage_group: 'ancestor',
+      }),
+      makePerson({
+        id: 'p_c1_g0_b',
+        slug: 'clara-mercer-1824',
+        full_name: 'Clara Mercer',
+        birth_year: 1824,
+        death_year: 1894,
+        lineage_group: 'ancestor',
+      }),
+      makePerson({
+        id: 'p_c1_g1_a',
+        slug: 'henry-alder-1850',
+        full_name: 'Henry Alder',
+        birth_year: 1850,
+        death_year: 1922,
+        lineage_group: 'pivot_ancestor',
+      }),
+      makePerson({
+        id: 'p_c1_g2_a',
+        slug: 'edith-alder-1880',
+        full_name: 'Edith Alder',
+        birth_year: 1880,
+        death_year: 1955,
+        lineage_group: 'descendant',
+      }),
+      // Component 2: disconnected older couple (1790 -> 1820) forcing negative shift normalization
+      makePerson({
+        id: 'p_c2_g0',
+        slug: 'thomas-bramwell-1790',
+        full_name: 'Thomas Bramwell',
+        birth_year: 1790,
+        death_year: 1860,
+        lineage_group: 'collateral',
+      }),
+      makePerson({
+        id: 'p_c2_g1',
+        slug: 'martha-bramwell-1820',
+        full_name: 'Martha Bramwell',
+        birth_year: 1820,
+        death_year: 1888,
+        lineage_group: 'collateral',
+      }),
+      // Isolated person aligned via birth year (1852)
+      makePerson({
+        id: 'p_iso_dated',
+        slug: 'owen-hale-1852',
+        full_name: 'Owen Hale',
+        birth_year: 1852,
+        death_year: 1920,
+        lineage_group: 'collateral',
+      }),
+      // Isolated person aligned via hidden spouse whose parent is visible
+      makePerson({
+        id: 'p_iso_via_hidden',
+        slug: 'nora-linden',
+        full_name: 'Nora Linden',
+        birth_year: null,
+        death_year: 1930,
+        lineage_group: 'collateral',
+      }),
+      // Hidden living spouse (filtered out of branchPeople because redacted placeholder)
+      makePerson({
+        id: 'p_hidden_spouse',
+        slug: 'living-alder',
+        full_name: 'Living',
+        given_name: 'Living',
+        surname: '',
+        is_living: true,
+        birth_year: null,
+        death_year: null,
+        lineage_group: 'descendant',
+      }),
+    ];
+
+    const kinship: KinshipEdge[] = [
+      { from: 'p_c1_g0_a', to: 'p_c1_g0_b', relation: 'spouse' },
+      { from: 'p_c1_g0_a', to: 'p_c1_g1_a', relation: 'parent' },
+      { from: 'p_c1_g0_b', to: 'p_c1_g1_a', relation: 'parent' },
+      { from: 'p_c1_g1_a', to: 'p_c1_g2_a', relation: 'parent' },
+      { from: 'p_c2_g0', to: 'p_c2_g1', relation: 'parent' },
+      { from: 'p_c1_g1_a', to: 'p_hidden_spouse', relation: 'parent' },
+      { from: 'p_hidden_spouse', to: 'p_iso_via_hidden', relation: 'spouse' },
+    ];
+
+    const model = buildArchivalTreeModel({
+      people,
+      kinship,
+      branchFilter: 'all',
+      mode: 'full',
+    });
+
+    // Older disconnected ancestor shifts before component 1, then min normalizes to 0
+    expect(model.genByPersonId.get('p_c2_g0')).toBe(0);
+    expect(model.genByPersonId.get('p_c1_g0_a')).toBe(1);
+    expect(model.genByPersonId.get('p_c1_g1_a')).toBe(2);
+    expect(model.genByPersonId.get('p_iso_dated')).toBe(2);
+    expect(model.genByPersonId.get('p_iso_via_hidden')).toBe(3);
+
+    const layout = computeArchivalDiagramLayout(model);
+    expect(layout.nodes.length).toBeGreaterThanOrEqual(8);
+    expect(layout.bounds.maxX).toBeGreaterThanOrEqual(640);
+    expect(layout.bounds.maxY).toBeGreaterThanOrEqual(420);
+  });
+
+  it('routes orthogonal stems and child drops around early-loss strips, sibling toggles, and expanded hanging grids', () => {
+    const people: Person[] = [
+      makePerson({
+        id: 'p_dad',
+        slug: 'arthur-alder-1840',
+        full_name: 'Arthur Alder',
+        birth_year: 1840,
+        death_year: 1910,
+        lineage_group: 'ancestor',
+      }),
+      makePerson({
+        id: 'p_mom',
+        slug: 'clara-mercer-1844',
+        full_name: 'Clara Mercer',
+        birth_year: 1844,
+        death_year: 1912,
+        lineage_group: 'ancestor',
+      }),
+      // Early-loss child (died age 2)
+      makePerson({
+        id: 'p_early_1',
+        slug: 'infant-alder-1865',
+        full_name: 'Infant Alder',
+        birth_year: 1865,
+        death_year: 1867,
+        lineage_group: 'collateral',
+      }),
+      // Direct visible child continuing to next generation
+      makePerson({
+        id: 'p_heir',
+        slug: 'william-alder-1868',
+        full_name: 'William Alder',
+        birth_year: 1868,
+        death_year: 1940,
+        lineage_group: 'pivot_ancestor',
+      }),
+      // 4 collateral leaves so union triggers sibling toggle + hanging grid when expanded
+      ...Array.from({ length: 4 }, (_, idx) =>
+        makePerson({
+          id: `p_leaf_${idx}`,
+          slug: `sibling-alder-${1870 + idx}`,
+          full_name: `Sibling ${idx} Alder`,
+          birth_year: 1870 + idx,
+          death_year: 1945 + idx,
+          lineage_group: 'collateral',
+        })
+      ),
+      // Grandchild under p_heir
+      makePerson({
+        id: 'p_grandchild',
+        slug: 'edward-alder-1896',
+        full_name: 'Edward Alder',
+        birth_year: 1896,
+        death_year: 1970,
+        lineage_group: 'descendant',
+      }),
+    ];
+
+    const kinship: KinshipEdge[] = [
+      { from: 'p_dad', to: 'p_mom', relation: 'spouse' },
+      { from: 'p_dad', to: 'p_early_1', relation: 'parent' },
+      { from: 'p_mom', to: 'p_early_1', relation: 'parent' },
+      { from: 'p_dad', to: 'p_heir', relation: 'parent' },
+      { from: 'p_mom', to: 'p_heir', relation: 'parent' },
+      ...Array.from({ length: 4 }, (_, idx) => [
+        { from: 'p_dad', to: `p_leaf_${idx}`, relation: 'parent' as const },
+        { from: 'p_mom', to: `p_leaf_${idx}`, relation: 'parent' as const },
+      ]).flat(),
+      { from: 'p_heir', to: 'p_grandchild', relation: 'parent' },
+    ];
+
+    const collapsedModel = buildArchivalTreeModel({
+      people,
+      kinship,
+      branchFilter: 'all',
+      mode: 'full',
+    });
+    const coupleUnion = collapsedModel.unions.find((u) => u.kind === 'couple');
+    expect(coupleUnion).toBeDefined();
+
+    const expandedModel = buildArchivalTreeModel({
+      people,
+      kinship,
+      branchFilter: 'all',
+      mode: 'full',
+      expandedUnionIds: new Set(coupleUnion ? [coupleUnion.id] : []),
+    });
+    const layout = computeArchivalDiagramLayout(expandedModel);
+
+    expect(layout.earlyLossStrips).toHaveLength(1);
+    expect(layout.siblingToggles).toHaveLength(1);
+    expect(layout.hangingRails).toHaveLength(1);
+    expect(layout.buses.length).toBeGreaterThanOrEqual(2);
+    // Stem from couple union detours cleanly around the early-loss strip / sibling toggle / hanging grid
+    const coupleBus = layout.buses.find((b) => b.unionId === coupleUnion?.id);
+    expect(coupleBus?.stemPoints.length).toBeGreaterThanOrEqual(2);
+  });
+});

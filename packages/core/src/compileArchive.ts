@@ -61,8 +61,8 @@ export {
 
 interface PreparedBaseArchive {
   readonly placeAncestors: Record<string, string[]>;
-  readonly preSortedTimedEvents: readonly ArchiveEvent[];
-  readonly cleanedSources: readonly SourceRecord[];
+  readonly preSortedTimedEvents: ArchiveEvent[];
+  readonly cleanedSources: SourceRecord[];
 }
 
 const preparedBaseCache = new WeakMap<
@@ -81,8 +81,6 @@ function clonePreparedArchiveEvent(e: ArchiveEvent): ArchiveEvent {
     e.photo_placeholder_caption === undefined &&
     e.extensions === undefined
   ) {
-    // Fast monomorphic clone for standard events (participants/sources/place_ancestors on PreparedBaseArchive
-    // were already cloned off caller input and are never mutated in-place during compilation).
     const out = {
       id: e.id,
       title: e.title,
@@ -123,19 +121,11 @@ function clonePreparedArchiveEvent(e: ArchiveEvent): ArchiveEvent {
   return cloned;
 }
 
-function getOrBuildPreparedBaseArchive(
+function buildPreparedBaseArchiveFresh(
   events: readonly RawEvent[],
   places: readonly Place[],
   sources: readonly SourceRecord[]
 ): PreparedBaseArchive {
-  let byPlaces = preparedBaseCache.get(events);
-  if (byPlaces) {
-    const existing = byPlaces.get(places)?.get(sources);
-    if (existing) {
-      return existing;
-    }
-  }
-
   const placesById = new Map<string, Place>();
   for (let i = 0; i < places.length; i += 1) {
     const pl = places[i];
@@ -157,11 +147,27 @@ function getOrBuildPreparedBaseArchive(
   applyCitationCleanings(timedEvents, cleanedSources);
   timedEvents.sort(compareArchiveEvents);
 
-  const prepared: PreparedBaseArchive = {
+  return {
     placeAncestors,
     preSortedTimedEvents: timedEvents,
     cleanedSources,
   };
+}
+
+function getOrBuildPreparedBaseArchive(
+  events: readonly RawEvent[],
+  places: readonly Place[],
+  sources: readonly SourceRecord[]
+): PreparedBaseArchive {
+  let byPlaces = preparedBaseCache.get(events);
+  if (byPlaces) {
+    const existing = byPlaces.get(places)?.get(sources);
+    if (existing) {
+      return existing;
+    }
+  }
+
+  const prepared = buildPreparedBaseArchiveFresh(events, places, sources);
 
   if (!byPlaces) {
     byPlaces = new WeakMap();
@@ -190,11 +196,20 @@ export function clonePronunciationLexiconFast(
   return out;
 }
 
-/**
- * Pure TypeScript archive compiler replacing legacy Python build.py.
- * Clones external inputs once at entry and forwards siteConfig.privacy through privacy redaction and media filtering.
- */
-export function compileArchive(input: CompileArchiveInput): CompileArchiveResult {
+interface DualSharedPreparedContext {
+  readonly prepared: PreparedBaseArchive;
+  readonly consumePreparedInPlace: boolean;
+  readonly preResolvedPeople: readonly RawPerson[];
+  readonly preResolvedBirthYears: readonly (number | null)[];
+  readonly preResolvedDeathYears: readonly (number | null)[];
+  readonly sharedResidenceSpans?: readonly ResidenceSpan[];
+  onComputedPrivateSpans?: (spans: readonly ResidenceSpan[], canShareWithPublic: boolean) => void;
+}
+
+function compileArchiveInternal(
+  input: CompileArchiveInput,
+  dualCtx?: DualSharedPreparedContext
+): CompileArchiveResult {
   const {
     siteConfig,
     mode,
@@ -221,13 +236,19 @@ export function compileArchive(input: CompileArchiveInput): CompileArchiveResult
   // Stage 1: Clone inputs once at entry and assign branches from siteConfig.
   const pronunciationLexicon = siteConfig.pronunciations;
   const rawPeople = new Array<RawPerson>(input.people.length);
-  for (let i = 0; i < input.people.length; i += 1) {
-    const clone = clonePerson(input.people[i]);
-    clone.branch = resolvePersonBranch(clone, siteConfig);
-    if (resolveEffectiveLiving(clone, privacy, effectiveReferenceYear)) {
-      clone.is_living = true;
+  if (dualCtx) {
+    for (let i = 0; i < dualCtx.preResolvedPeople.length; i += 1) {
+      rawPeople[i] = clonePerson(dualCtx.preResolvedPeople[i]);
     }
-    rawPeople[i] = clone;
+  } else {
+    for (let i = 0; i < input.people.length; i += 1) {
+      const clone = clonePerson(input.people[i]);
+      clone.branch = resolvePersonBranch(clone, siteConfig);
+      if (resolveEffectiveLiving(clone, privacy, effectiveReferenceYear)) {
+        clone.is_living = true;
+      }
+      rawPeople[i] = clone;
+    }
   }
 
   const places = new Array<Place>(input.places.length);
@@ -254,7 +275,28 @@ export function compileArchive(input: CompileArchiveInput): CompileArchiveResult
   let placeAncestors: Record<string, string[]>;
   let enrichedHouseholdCount = 0;
 
-  if (canUsePreparedBase) {
+  if (dualCtx && canUsePreparedBase) {
+    const prepared = dualCtx.prepared;
+    if (dualCtx.consumePreparedInPlace) {
+      placeAncestors = prepared.placeAncestors;
+      uniqueSources = prepared.cleanedSources;
+      timedEvents = prepared.preSortedTimedEvents;
+    } else {
+      const clonedAncestors: Record<string, string[]> = {};
+      for (const [pid, chain] of Object.entries(prepared.placeAncestors)) {
+        clonedAncestors[pid] = chain.slice();
+      }
+      placeAncestors = clonedAncestors;
+      uniqueSources = new Array<SourceRecord>(prepared.cleanedSources.length);
+      for (let i = 0; i < prepared.cleanedSources.length; i += 1) {
+        uniqueSources[i] = cloneSource(prepared.cleanedSources[i]);
+      }
+      timedEvents = new Array<ArchiveEvent>(prepared.preSortedTimedEvents.length);
+      for (let i = 0; i < prepared.preSortedTimedEvents.length; i += 1) {
+        timedEvents[i] = clonePreparedArchiveEvent(prepared.preSortedTimedEvents[i]);
+      }
+    }
+  } else if (canUsePreparedBase) {
     const prepared = getOrBuildPreparedBaseArchive(input.events, input.places, input.sources);
     const clonedAncestors: Record<string, string[]> = {};
     for (const [pid, chain] of Object.entries(prepared.placeAncestors)) {
@@ -326,11 +368,7 @@ export function compileArchive(input: CompileArchiveInput): CompileArchiveResult
     }
   }
 
-  // Stage 4: Single integer-indexed pass over people & sortedEvents to compute:
-  // - peopleById + livingIds
-  // - per-person residence anchors -> residenceSpans
-  // - per-person event counts + primary_place_id -> compiledPeople (in place)
-  // - referenced media eventsById
+  // Stage 4: Single integer-indexed pass over people & sortedEvents.
   const numPeople = redactedRawPeople.length;
   const compiledPeople = redactedRawPeople as Person[];
   const peopleById = new Map<string, Person>();
@@ -348,7 +386,7 @@ export function compileArchive(input: CompileArchiveInput): CompileArchiveResult
 
   let referencedMediaEventIds: Set<string> | null = null;
   if (input.compiledMediaOverlay) {
-    referencedMediaEventIds = null; // build full eventsById when overlay is present
+    referencedMediaEventIds = null;
   } else if (stripLivingPortraits && input.media && input.media.length > 0) {
     for (let i = 0; i < input.media.length; i += 1) {
       const eid = input.media[i].event_id;
@@ -361,10 +399,12 @@ export function compileArchive(input: CompileArchiveInput): CompileArchiveResult
     }
   }
 
+  const reuseSharedSpans = Boolean(dualCtx?.sharedResidenceSpans);
   const eventsById = new Map<string, ArchiveEvent>();
   const buildFullEventsById = Boolean(input.compiledMediaOverlay);
   const eventsByPersonIdx = new Array<ArchiveEvent[] | undefined>(numPeople);
-  const anchorsByPersonIdx = new Array<ResidenceAnchor[] | undefined>(numPeople);
+  const anchorsByPersonIdx = reuseSharedSpans ? null : new Array<ResidenceAnchor[] | undefined>(numPeople);
+  let hasMixedDeceasedLivingAnchor = false;
 
   const pushPersonEventAndAnchor = (pIdx: number, ev: ArchiveEvent, isAnchor: boolean): void => {
     const evList = eventsByPersonIdx[pIdx];
@@ -373,7 +413,7 @@ export function compileArchive(input: CompileArchiveInput): CompileArchiveResult
     } else {
       evList.push(ev);
     }
-    if (isAnchor && (!compiledPeople[pIdx].is_living || includeLivingSpans)) {
+    if (anchorsByPersonIdx && isAnchor && (!compiledPeople[pIdx].is_living || includeLivingSpans)) {
       const anchor = ev as ResidenceAnchor;
       const aList = anchorsByPersonIdx[pIdx];
       if (!aList) {
@@ -395,6 +435,7 @@ export function compileArchive(input: CompileArchiveInput): CompileArchiveResult
       continue;
     }
     const isAnchor =
+      !reuseSharedSpans &&
       ev.event_kind === 'residence_anchor' &&
       ev.time_min !== null &&
       ev.time_max !== null &&
@@ -407,6 +448,22 @@ export function compileArchive(input: CompileArchiveInput): CompileArchiveResult
       }
       continue;
     }
+
+    if (isAnchor && !hasMixedDeceasedLivingAnchor && livingIds.size > 0) {
+      let sawDeceased = false;
+      let sawLiving = false;
+      for (let j = 0; j < pLen; j += 1) {
+        if (livingIds.has(pts[j].person_id)) {
+          sawLiving = true;
+        } else {
+          sawDeceased = true;
+        }
+      }
+      if (sawDeceased && sawLiving) {
+        hasMixedDeceasedLivingAnchor = true;
+      }
+    }
+
     if (pLen === 2) {
       const id0 = pts[0].person_id;
       const id1 = pts[1].person_id;
@@ -436,24 +493,38 @@ export function compileArchive(input: CompileArchiveInput): CompileArchiveResult
     }
   }
 
-  const pairCache = getProximityPairCache(placesById, input.places);
-  const residenceSpans: ResidenceSpan[] = [];
-  const placeCounts = new Map<string, number>();
+  let residenceSpans: ResidenceSpan[];
+  if (dualCtx?.sharedResidenceSpans) {
+    residenceSpans = new Array<ResidenceSpan>(dualCtx.sharedResidenceSpans.length);
+    for (let i = 0; i < dualCtx.sharedResidenceSpans.length; i += 1) {
+      residenceSpans[i] = { ...dualCtx.sharedResidenceSpans[i] };
+    }
+  } else {
+    const pairCache = getProximityPairCache(placesById, input.places);
+    residenceSpans = [];
+    if (anchorsByPersonIdx) {
+      for (let i = 0; i < numPeople; i += 1) {
+        const anchors = anchorsByPersonIdx[i];
+        if (anchors && anchors.length >= 2) {
+          appendResidenceSpansForPerson(
+            compiledPeople[i].id,
+            anchors,
+            placesById,
+            pairCache,
+            residenceSpans,
+            residenceSpans.length
+          );
+        }
+      }
+    }
+    if (dualCtx?.onComputedPrivateSpans) {
+      dualCtx.onComputedPrivateSpans(residenceSpans, !includeLivingSpans && !hasMixedDeceasedLivingAnchor);
+    }
+  }
 
+  const placeCounts = new Map<string, number>();
   for (let i = 0; i < numPeople; i += 1) {
     const p = compiledPeople[i];
-    const anchors = anchorsByPersonIdx[i];
-    if (anchors && anchors.length >= 2) {
-      appendResidenceSpansForPerson(
-        p.id,
-        anchors,
-        placesById,
-        pairCache,
-        residenceSpans,
-        residenceSpans.length
-      );
-    }
-
     const pEvts = eventsByPersonIdx[i];
     let primaryPlaceId: string | null = null;
     let eventCount = 0;
@@ -480,8 +551,8 @@ export function compileArchive(input: CompileArchiveInput): CompileArchiveResult
       }
     }
 
-    p.birth_year = edtfYear(p.birth_edtf);
-    p.death_year = edtfYear(p.death_edtf);
+    p.birth_year = dualCtx && !p.is_living ? dualCtx.preResolvedBirthYears[i] : edtfYear(p.birth_edtf);
+    p.death_year = dualCtx && !p.is_living ? dualCtx.preResolvedDeathYears[i] : edtfYear(p.death_edtf);
     p.event_count = eventCount;
     p.media_count = 0;
     p.primary_place_id = primaryPlaceId;
@@ -564,4 +635,100 @@ export function compileArchive(input: CompileArchiveInput): CompileArchiveResult
     reviewFlags,
     enrichedHouseholdCount,
   };
+}
+
+/**
+ * Pure TypeScript archive compiler replacing legacy Python build.py.
+ * Clones external inputs once at entry and forwards siteConfig.privacy through privacy redaction and media filtering.
+ */
+export function compileArchive(input: CompileArchiveInput): CompileArchiveResult {
+  return compileArchiveInternal(input);
+}
+
+/**
+ * Compile both `private` and `public` bundles from the same base archive input in a single pass,
+ * sharing pre-sorted timed events, citation cleanings, person branch/living resolution, and
+ * deceased-only residence spans without mutating caller inputs.
+ */
+export function compileArchiveDual(baseInput: Omit<CompileArchiveInput, 'mode'>): {
+  privateResult: CompileArchiveResult;
+  publicResult: CompileArchiveResult;
+} {
+  const canUsePreparedBase =
+    (!baseInput.enrichments || baseInput.enrichments.length === 0) &&
+    (!baseInput.ancestryPeople || baseInput.ancestryPeople.length === 0) &&
+    (!baseInput.contextEvents || baseInput.contextEvents.length === 0) &&
+    (!baseInput.contextSources || baseInput.contextSources.length === 0) &&
+    (!baseInput.legacyContainerSourceIds || baseInput.legacyContainerSourceIds.size === 0);
+
+  if (!canUsePreparedBase) {
+    return {
+      privateResult: compileArchiveInternal({ ...baseInput, mode: 'private' }),
+      publicResult: compileArchiveInternal({ ...baseInput, mode: 'public' }),
+    };
+  }
+
+  const generatedAt = baseInput.generatedAt ?? new Date().toISOString();
+  const effectiveReferenceYear =
+    baseInput.referenceYear ??
+    baseInput.siteConfig.privacy.referenceYear ??
+    parseIsoReferenceYear(generatedAt) ??
+    getCurrentReferenceYear();
+  const privacy: PrivacyConfig = {
+    ...baseInput.siteConfig.privacy,
+    referenceYear: effectiveReferenceYear,
+  };
+
+  const numPeople = baseInput.people.length;
+  const preResolvedPeople = new Array<RawPerson>(numPeople);
+  const preResolvedBirthYears = new Array<number | null>(numPeople);
+  const preResolvedDeathYears = new Array<number | null>(numPeople);
+  for (let i = 0; i < numPeople; i += 1) {
+    const clone = clonePerson(baseInput.people[i]);
+    clone.branch = resolvePersonBranch(clone, baseInput.siteConfig);
+    if (resolveEffectiveLiving(clone, privacy, effectiveReferenceYear)) {
+      clone.is_living = true;
+    }
+    preResolvedPeople[i] = clone;
+    preResolvedBirthYears[i] = clone.is_living ? null : edtfYear(clone.birth_edtf);
+    preResolvedDeathYears[i] = clone.is_living ? null : edtfYear(clone.death_edtf);
+  }
+
+  const cachedPrepared = preparedBaseCache
+    .get(baseInput.events)
+    ?.get(baseInput.places)
+    ?.get(baseInput.sources);
+  const prepared =
+    cachedPrepared ?? buildPreparedBaseArchiveFresh(baseInput.events, baseInput.places, baseInput.sources);
+
+  let sharedSpansForPublic: readonly ResidenceSpan[] | undefined;
+  const privateResult = compileArchiveInternal(
+    { ...baseInput, generatedAt, mode: 'private' },
+    {
+      prepared,
+      consumePreparedInPlace: false,
+      preResolvedPeople,
+      preResolvedBirthYears,
+      preResolvedDeathYears,
+      onComputedPrivateSpans: (spans, canShare) => {
+        if (canShare) {
+          sharedSpansForPublic = spans;
+        }
+      },
+    }
+  );
+
+  const publicResult = compileArchiveInternal(
+    { ...baseInput, generatedAt, mode: 'public' },
+    {
+      prepared,
+      consumePreparedInPlace: !cachedPrepared,
+      preResolvedPeople,
+      preResolvedBirthYears,
+      preResolvedDeathYears,
+      sharedResidenceSpans: sharedSpansForPublic,
+    }
+  );
+
+  return { privateResult, publicResult };
 }

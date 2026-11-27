@@ -21,8 +21,8 @@ export const GlobalSearchModal: React.FC = () => {
   const [query, setQuery] = useState('');
   const [activeIdx, setActiveIdx] = useState(0);
 
-  const [prevSearchKey, setPrevSearchKey] = useState('');
   const searchKey = `${searchOpen}:${query}`;
+  const [prevSearchKey, setPrevSearchKey] = useState(searchKey);
   if (searchKey !== prevSearchKey) {
     setPrevSearchKey(searchKey);
     setActiveIdx(searchNavReset());

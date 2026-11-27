@@ -1,4 +1,4 @@
-import type { RawEvent, RawPerson } from '@kinloom/core';
+import { fastLocaleCompare, type RawEvent, type RawPerson } from '@kinloom/core';
 
 export const ADOPTIVE_MARKER_RE = /\badopt(?:ed|ion|ive)?\b|\badop\b/i;
 export const ADOPTIVE_XREF_RE = /adopt|adop/i;
@@ -29,6 +29,26 @@ const NON_SPOUSE_ROLE_RE =
   /\b(parent|father|mother|witness|officiant|minister|clergy|bondsman|surety|clerk|mentioned|child|informant|guest)\b/i;
 const SPOUSE_ROLE_RE = /\b(spouse|bride|groom|husband|wife|partner|principal|subject|co\s+principal)\b/i;
 
+const KNOWN_NORMALIZED_ROLES = new Set([
+  'principal',
+  'head',
+  'resident',
+  'attendee',
+  'spouse',
+  'child',
+  'subject',
+  'witness',
+  'parent',
+  'father',
+  'mother',
+  'birth_subject',
+  'death_subject',
+  'deceased',
+  'decedent',
+  'infant',
+  'newborn',
+]);
+
 function hasAdoptiveExtension(extensions: Record<string, unknown> | undefined): boolean {
   if (!extensions) {
     return false;
@@ -39,7 +59,7 @@ function hasAdoptiveExtension(extensions: Record<string, unknown> | undefined): 
         return true;
       }
     }
-    if (typeof value === 'string' && ADOPTIVE_MARKER_RE.test(value)) {
+    if (typeof value === 'string' && ADOPTIVE_XREF_RE.test(value) && ADOPTIVE_MARKER_RE.test(value)) {
       return true;
     }
   }
@@ -50,20 +70,32 @@ export function hasAdoptivePersonTag(person: RawPerson | undefined): boolean {
   if (!person) {
     return false;
   }
-  return ADOPTIVE_MARKER_RE.test(person.lineage_group) || hasAdoptiveExtension(person.extensions);
+  return (
+    (ADOPTIVE_XREF_RE.test(person.lineage_group) && ADOPTIVE_MARKER_RE.test(person.lineage_group)) ||
+    hasAdoptiveExtension(person.extensions)
+  );
 }
 
 export function isAdoptionEvent(event: RawEvent): boolean {
-  if (event.category && ADOPTIVE_MARKER_RE.test(event.category)) {
+  if (event.category && ADOPTIVE_XREF_RE.test(event.category) && ADOPTIVE_MARKER_RE.test(event.category)) {
     return true;
   }
-  if (ADOPTIVE_MARKER_RE.test(event.title)) {
+  if (ADOPTIVE_XREF_RE.test(event.title) && ADOPTIVE_MARKER_RE.test(event.title)) {
     return true;
   }
-  return event.participants.some((p) => ADOPTIVE_MARKER_RE.test(p.role));
+  for (let i = 0; i < event.participants.length; i += 1) {
+    const role = event.participants[i].role;
+    if (ADOPTIVE_XREF_RE.test(role) && ADOPTIVE_MARKER_RE.test(role)) {
+      return true;
+    }
+  }
+  return false;
 }
 
 function normalizeRole(role: string): string {
+  if (KNOWN_NORMALIZED_ROLES.has(role)) {
+    return role;
+  }
   return role
     .trim()
     .toLowerCase()
@@ -71,54 +103,56 @@ function normalizeRole(role: string): string {
 }
 
 function isBirthEvent(event: RawEvent): boolean {
-  if (NON_PRIMARY_BIRTH_TITLE_RE.test(event.title) || NON_PRIMARY_BIRTH_ID_RE.test(event.id)) {
+  const cat = event.category;
+  const isPositive =
+    cat === 'birth' ||
+    BIRTH_ID_RE.test(event.id) ||
+    BIRTH_TITLE_RE.test(event.title) ||
+    (cat !== undefined && cat !== null && cat.trim().toLowerCase() === 'birth');
+  if (!isPositive) {
     return false;
   }
-  if (BIRTH_ID_RE.test(event.id) || BIRTH_TITLE_RE.test(event.title)) {
-    return true;
-  }
-  return event.category?.trim().toLowerCase() === 'birth';
+  return !NON_PRIMARY_BIRTH_TITLE_RE.test(event.title) && !NON_PRIMARY_BIRTH_ID_RE.test(event.id);
 }
 
 export function isBirthEventForParticipant(event: RawEvent, role: string): boolean {
-  const normalizedRole = normalizeRole(role);
-  if (!BIRTH_SUBJECT_ROLES.has(normalizedRole)) {
+  if (!BIRTH_SUBJECT_ROLES.has(normalizeRole(role))) {
     return false;
   }
   return isBirthEvent(event);
 }
 
 function isDeathEvent(event: RawEvent): boolean {
-  if (NON_DEATH_TITLE_RE.test(event.title) || NON_DEATH_ID_RE.test(event.id)) {
+  const cat = event.category;
+  const isPositive =
+    cat === 'death' ||
+    DEATH_ID_RE.test(event.id) ||
+    DEATH_TITLE_RE.test(event.title) ||
+    (cat !== undefined && cat !== null && cat.trim().toLowerCase() === 'death');
+  if (!isPositive) {
     return false;
   }
-  if (DEATH_ID_RE.test(event.id) || DEATH_TITLE_RE.test(event.title)) {
-    return true;
-  }
-  return event.category?.trim().toLowerCase() === 'death';
+  return !NON_DEATH_TITLE_RE.test(event.title) && !NON_DEATH_ID_RE.test(event.id);
 }
 
 export function isDeathEventForParticipant(event: RawEvent, role: string): boolean {
-  const normalizedRole = normalizeRole(role);
-  if (!DEATH_SUBJECT_ROLES.has(normalizedRole)) {
+  if (!DEATH_SUBJECT_ROLES.has(normalizeRole(role))) {
     return false;
   }
   return isDeathEvent(event);
 }
 
 export function isMarriageEvent(event: RawEvent): boolean {
-  if (NON_MARRIAGE_TITLE_RE.test(event.title) || NON_MARRIAGE_ID_RE.test(event.id)) {
+  if (!MARRIAGE_ID_RE.test(event.id) && !MARRIAGE_TITLE_RE.test(event.title)) {
     return false;
   }
-  if (MARRIAGE_ID_RE.test(event.id)) {
-    return true;
-  }
-  return MARRIAGE_TITLE_RE.test(event.title);
+  return !NON_MARRIAGE_TITLE_RE.test(event.title) && !NON_MARRIAGE_ID_RE.test(event.id);
 }
 
 export function getMarriageSpouseIds(event: RawEvent): string[] {
   const spouses = new Set<string>();
-  for (const participant of event.participants) {
+  for (let i = 0; i < event.participants.length; i += 1) {
+    const participant = event.participants[i];
     const roleTokens = participant.role.trim().replaceAll(/[_-]+/g, ' ');
     if (NON_SPOUSE_ROLE_RE.test(roleTokens)) {
       continue;
@@ -127,7 +161,7 @@ export function getMarriageSpouseIds(event: RawEvent): string[] {
       spouses.add(participant.person_id);
     }
   }
-  return [...spouses].toSorted((a, b) => a.localeCompare(b));
+  return [...spouses].toSorted(fastLocaleCompare);
 }
 
 export function personLabel(personId: string, peopleById: ReadonlyMap<string, RawPerson>): string {
@@ -136,9 +170,13 @@ export function personLabel(personId: string, peopleById: ReadonlyMap<string, Ra
 }
 
 export function normalizeSex(person: RawPerson | undefined): 'F' | 'M' | 'U' {
-  const raw = person?.sex?.trim().toUpperCase();
+  const raw = person?.sex;
   if (raw === 'F' || raw === 'M') {
     return raw;
+  }
+  const upper = raw?.trim().toUpperCase();
+  if (upper === 'F' || upper === 'M') {
+    return upper;
   }
   return 'U';
 }

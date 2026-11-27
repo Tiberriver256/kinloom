@@ -58,37 +58,38 @@ function resolveIntegratePaths(
       `Invalid person_id '${personId}'. Only ASCII letters, digits, _, and - are allowed.`
     );
   }
-  if (!fs.existsSync(repoDir) || !fs.statSync(repoDir).isDirectory()) {
-    throw new CliValidationError(`Repository directory does not exist: ${repoDir}`);
-  }
 
   let packageDir = path.resolve(
     options.packageDir?.trim() || path.join(repoDir, 'research', 'people', personId)
   );
-  if (
-    options.packageDir?.trim() &&
-    fs.existsSync(packageDir) &&
-    fs.statSync(packageDir).isFile() &&
-    path.basename(packageDir) === 'patch.json'
-  ) {
-    packageDir = path.dirname(packageDir);
+  if (options.packageDir?.trim()) {
+    const pkgStat = fs.statSync(packageDir, { throwIfNoEntry: false });
+    if (pkgStat?.isFile() && path.basename(packageDir) === 'patch.json') {
+      packageDir = path.dirname(packageDir);
+    }
   }
   const realDataDir = path.join(repoDir, 'data');
   const dataDir = overlay ? overlay.dataDirOverride : realDataDir;
   const configPath = path.join(repoDir, 'kinloom.config.yaml');
   const patchPath = path.join(packageDir, 'patch.json');
 
-  if (!fs.existsSync(path.join(dataDir, 'people.yaml'))) {
-    throw new CliValidationError(
-      `Missing ${path.join(realDataDir, 'people.yaml')} (pass --repo <archive-root> if running outside the archive root).`
-    );
+  if (!options.preloadedRepo || overlay) {
+    const repoStat = fs.statSync(repoDir, { throwIfNoEntry: false });
+    if (!repoStat?.isDirectory()) {
+      throw new CliValidationError(`Repository directory does not exist: ${repoDir}`);
+    }
+    if (!fs.existsSync(path.join(dataDir, 'people.yaml'))) {
+      throw new CliValidationError(
+        `Missing ${path.join(realDataDir, 'people.yaml')} (pass --repo <archive-root> if running outside the archive root).`
+      );
+    }
+    if (!fs.existsSync(configPath)) {
+      throw new CliValidationError(
+        `Missing ${configPath} (pass --repo <archive-root> if running outside the archive root).`
+      );
+    }
   }
-  if (!fs.existsSync(configPath)) {
-    throw new CliValidationError(
-      `Missing ${configPath} (pass --repo <archive-root> if running outside the archive root).`
-    );
-  }
-  if (!fs.existsSync(patchPath)) {
+  if (!options.preparsedPatch && !fs.existsSync(patchPath)) {
     throw new CliValidationError(
       `Missing person patch file: ${patchPath} (pass --package <dir> if the package lives outside research/people/${personId}).`
     );
@@ -110,18 +111,24 @@ export async function executeIntegrateSingle(
     overlay
   );
 
-  const loaded = loadLocalArchiveRepoSync(repoDir, {
-    dataDirOverride: dataDir,
-    requireConfig: true,
-    requirePeopleFile: true,
-    includeEnrichments: true,
-  });
+  const loaded =
+    options.preloadedRepo && !overlay
+      ? options.preloadedRepo
+      : loadLocalArchiveRepoSync(repoDir, {
+          dataDirOverride: dataDir,
+          requireConfig: true,
+          requirePeopleFile: true,
+          includeEnrichments: true,
+        });
   const siteConfig = loaded.siteConfig;
   if (!siteConfig) {
     throw new CliValidationError(`Missing kinloom.config.yaml under ${repoDir}.`);
   }
 
-  const rawPatch: unknown = JSON.parse(fs.readFileSync(patchPath, 'utf8'));
+  const rawPatch: unknown =
+    options.preparsedPatch && !overlay
+      ? options.preparsedPatch
+      : JSON.parse(fs.readFileSync(patchPath, 'utf8'));
   const patch = normalizeAndValidatePatch(rawPatch, personId);
 
   const { mergedPeople, personUpdated, peopleCounts, peopleById, livingIds } = applyPeoplePatch(
@@ -138,10 +145,23 @@ export async function executeIntegrateSingle(
   const mediaMerge = mergeMediaPatch(loaded.media, patch.media, patch.remove_media_ids);
   const kinshipMerge = mergeKinshipPatch(loaded.kinship, patch.kinship, patch.remove_kinship);
 
-  const placeIds = new Set(placesMerge.items.map((p) => p.id));
-  const sourceIds = new Set(sourcesMerge.items.map((s) => s.id));
-  const mediaIds = new Set(mediaMerge.items.map((m) => m.id));
-  const eventsById = new Map(eventsMerge.items.map((e) => [e.id, e]));
+  const placeIds = new Set<string>();
+  for (let i = 0; i < placesMerge.items.length; i += 1) {
+    placeIds.add(placesMerge.items[i].id);
+  }
+  const sourceIds = new Set<string>();
+  for (let i = 0; i < sourcesMerge.items.length; i += 1) {
+    sourceIds.add(sourcesMerge.items[i].id);
+  }
+  const mediaIds = new Set<string>();
+  for (let i = 0; i < mediaMerge.items.length; i += 1) {
+    mediaIds.add(mediaMerge.items[i].id);
+  }
+  const eventsById = new Map<string, (typeof eventsMerge.items)[number]>();
+  for (let i = 0; i < eventsMerge.items.length; i += 1) {
+    const ev = eventsMerge.items[i];
+    eventsById.set(ev.id, ev);
+  }
 
   const narrativesMerge = mergeNarrativesPatch(
     loaded.narratives,
@@ -153,7 +173,7 @@ export async function executeIntegrateSingle(
 
   validatePatchReferentialIntegrity({
     cleanedPatchEvents: eventsMerge.cleanedPatchEvents,
-    patchKinship: patch.kinship,
+    patchKinship: kinshipMerge.parsedPatchKinship,
     normalizedPatchNarratives: narrativesMerge.normalizedPatchNarratives,
     peopleById,
     livingIds,
@@ -189,70 +209,97 @@ export async function executeIntegrateSingle(
     overlay,
   });
 
-  const { privateResult, publicResult, livingLeaks } = compileAndAuditMergedArchive({
-    people: mergedPeople,
-    events: eventsMerge.items,
-    places: placesMerge.items,
-    sources: sourcesMerge.items,
-    kinship: kinshipMerge.items,
-    media: mediaMerge.items,
-    narratives: narrativesMerge.items,
-    ...(loaded.enrichments.length > 0 ? { enrichments: loaded.enrichments } : {}),
-    siteConfig,
-  });
+  const { privateResult, publicResult, livingLeaks } = compileAndAuditMergedArchive(
+    {
+      people: mergedPeople,
+      events: eventsMerge.items,
+      places: placesMerge.items,
+      sources: sourcesMerge.items,
+      kinship: kinshipMerge.items,
+      media: mediaMerge.items,
+      narratives: narrativesMerge.items,
+      ...(loaded.enrichments.length > 0 ? { enrichments: loaded.enrichments } : {}),
+      siteConfig,
+    },
+    { skipBundleRevalidation: true }
+  );
 
   const stagedScansReport = stagePlannedScans(plannedScans, dryRun, overlay);
 
+  const shouldSerializeYaml = !dryRun || Boolean(overlay);
+  const wouldWriteFiles: string[] = [];
   const pendingWrites: Array<{ file: string; content: string }> = [];
+
   if (personUpdated || peopleCounts.added > 0 || peopleCounts.updated > 0) {
-    pendingWrites.push({
-      file: 'people.yaml',
-      content: serializePeopleYaml(mergedPeople, { sortById: true }),
-    });
+    wouldWriteFiles.push('people.yaml');
+    if (shouldSerializeYaml) {
+      pendingWrites.push({
+        file: 'people.yaml',
+        content: serializePeopleYaml(mergedPeople, { sortById: true }),
+      });
+    }
   }
   if (
     eventsMerge.counts.added > 0 ||
     eventsMerge.counts.updated > 0 ||
     eventsMerge.removedEventIds.length > 0
   ) {
-    pendingWrites.push({
-      file: 'events.yaml',
-      content: serializeEventsYaml(eventsMerge.items, { sortById: true }),
-    });
+    wouldWriteFiles.push('events.yaml');
+    if (shouldSerializeYaml) {
+      pendingWrites.push({
+        file: 'events.yaml',
+        content: serializeEventsYaml(eventsMerge.items, { sortById: true }),
+      });
+    }
   }
   if (placesMerge.counts.added > 0 || placesMerge.counts.updated > 0) {
-    pendingWrites.push({
-      file: 'places.yaml',
-      content: serializePlacesYaml(placesMerge.items, { sortById: true }),
-    });
+    wouldWriteFiles.push('places.yaml');
+    if (shouldSerializeYaml) {
+      pendingWrites.push({
+        file: 'places.yaml',
+        content: serializePlacesYaml(placesMerge.items, { sortById: true }),
+      });
+    }
   }
   if (
     sourcesMerge.counts.added > 0 ||
     sourcesMerge.counts.updated > 0 ||
     sourcesMerge.removedSourceIds.length > 0
   ) {
-    pendingWrites.push({
-      file: 'sources.yaml',
-      content: serializeSourcesYaml(sourcesMerge.items, { sortById: true }),
-    });
+    wouldWriteFiles.push('sources.yaml');
+    if (shouldSerializeYaml) {
+      pendingWrites.push({
+        file: 'sources.yaml',
+        content: serializeSourcesYaml(sourcesMerge.items, { sortById: true }),
+      });
+    }
   }
   if (kinshipMerge.counts.added > 0 || kinshipMerge.counts.updated > 0 || kinshipMerge.removed.length > 0) {
-    pendingWrites.push({
-      file: 'kinship.yaml',
-      content: serializeKinshipYaml(kinshipMerge.items, { sortDeterministic: true }),
-    });
+    wouldWriteFiles.push('kinship.yaml');
+    if (shouldSerializeYaml) {
+      pendingWrites.push({
+        file: 'kinship.yaml',
+        content: serializeKinshipYaml(kinshipMerge.items, { sortDeterministic: true }),
+      });
+    }
   }
   if (mediaMerge.counts.added > 0 || mediaMerge.counts.updated > 0 || mediaMerge.removedMediaIds.length > 0) {
-    pendingWrites.push({
-      file: 'media.yaml',
-      content: serializeMediaYaml(mediaMerge.items, { sortById: true }),
-    });
+    wouldWriteFiles.push('media.yaml');
+    if (shouldSerializeYaml) {
+      pendingWrites.push({
+        file: 'media.yaml',
+        content: serializeMediaYaml(mediaMerge.items, { sortById: true }),
+      });
+    }
   }
   if (narrativesMerge.counts.added > 0 || narrativesMerge.counts.updated > 0) {
-    pendingWrites.push({
-      file: 'narratives.yaml',
-      content: serializeNarrativesYaml(narrativesMerge.items, { sortById: true }),
-    });
+    wouldWriteFiles.push('narratives.yaml');
+    if (shouldSerializeYaml) {
+      pendingWrites.push({
+        file: 'narratives.yaml',
+        content: serializeNarrativesYaml(narrativesMerge.items, { sortById: true }),
+      });
+    }
   }
 
   const writtenYamlFiles: string[] = [];
@@ -296,7 +343,7 @@ export async function executeIntegrateSingle(
     removedMedia: mediaMerge.removedMediaIds.length,
     inlineCitationCount: narrativesMerge.inlineCitationCount,
     stagedScans: stagedScansReport,
-    wouldWriteYamlFiles: pendingWrites.map((w) => path.join(realDataDir, w.file)),
+    wouldWriteYamlFiles: wouldWriteFiles.map((file) => path.join(realDataDir, file)),
     writtenYamlFiles,
     validation: {
       privateCounts: privateResult.bundle.meta.counts,

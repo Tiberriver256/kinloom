@@ -2,6 +2,7 @@ import path from 'node:path';
 import { performance } from 'node:perf_hooks';
 import { CliValidationError } from '../../errors.js';
 import type { KinloomCliPlugin } from '../../plugins.js';
+import { type LoadedLocalArchiveRepo, loadLocalArchiveRepo } from '../dataFiles.js';
 import { runAuditCommand } from './audit.js';
 import { formatAuditBatchTextReport } from './auditOverlaps/report.js';
 import type { AuditBatchPerson, AuditBatchResult } from './auditOverlaps/types.js';
@@ -59,6 +60,18 @@ export {
   type StagedMediaRef,
 };
 
+async function tryPreloadBatchArchive(repoDir: string): Promise<LoadedLocalArchiveRepo | undefined> {
+  try {
+    return await loadLocalArchiveRepo(repoDir, {
+      requireConfig: false,
+      requirePeopleFile: true,
+      includeEnrichments: true,
+    });
+  } catch {
+    return undefined;
+  }
+}
+
 export async function runAuditBatchCommand(options: {
   repoDir?: string;
   personIds: readonly string[];
@@ -94,12 +107,14 @@ export async function runAuditBatchCommand(options: {
     seen.add(personId);
   }
 
+  const preloadedRepo = personIds.length > 1 ? await tryPreloadBatchArchive(repoDir) : undefined;
   const people: AuditBatchPerson[] = [];
   for (const personId of personIds) {
     const result = await runAuditCommand({
       repoDir,
       personId,
       json: false,
+      preloadedRepo,
       ...(options.plugins !== undefined ? { plugins: options.plugins } : {}),
     });
     const { rendered: _rendered, ...person } = result;

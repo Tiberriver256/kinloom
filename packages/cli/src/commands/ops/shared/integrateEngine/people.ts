@@ -92,7 +92,7 @@ function mergePersonUpdates(
   privacyConfig: Partial<PrivacyConfig>
 ): { updated: RawPerson; changed: boolean } {
   if (!updates || Object.keys(updates).length === 0) {
-    return { updated: structuredClone(existingPerson), changed: false };
+    return { updated: existingPerson, changed: false };
   }
 
   if (updates.id !== undefined && updates.id !== existingPerson.id) {
@@ -315,7 +315,7 @@ function upsertPatchPeople(
   slugToId: Map<string, string>;
   counts: UpsertCounts;
 } {
-  const items = existingPeople.map((p) => structuredClone(p));
+  const items = [...existingPeople];
   const idxById = new Map<string, number>();
   const slugToId = new Map<string, string>();
   for (let i = 0; i < items.length; i += 1) {
@@ -423,11 +423,9 @@ export function applyPeoplePatch(
   peopleById: Map<string, RawPerson>;
   livingIds: Set<string>;
 } {
-  // Upsert optional patch.people first so upward ancestor patches can also introduce patch.person_id.
   const peopleMerge = upsertPatchPeople(existingPeople, patch.people, privacyConfig);
   const mergedPeople = peopleMerge.items;
 
-  // Invariant 1: Target person must exist (in people.yaml or patch.people) and must not be living.
   const targetIdx = peopleMerge.idxById.get(personId);
   if (targetIdx === undefined) {
     throw new Error(
@@ -470,12 +468,15 @@ export function applyPeoplePatch(
   }
   mergedPeople[targetIdx] = personMerge.updated;
 
-  const peopleById = new Map(mergedPeople.map((p) => [p.id, p]));
-  const livingIds = new Set(
-    mergedPeople
-      .filter((p) => p.is_living || resolveEffectiveLiving(p, privacyConfig, referenceYear))
-      .map((p) => p.id)
-  );
+  const peopleById = new Map<string, RawPerson>();
+  const livingIds = new Set<string>();
+  for (let i = 0; i < mergedPeople.length; i += 1) {
+    const p = mergedPeople[i];
+    peopleById.set(p.id, p);
+    if (p.is_living || resolveEffectiveLiving(p, privacyConfig, referenceYear)) {
+      livingIds.add(p.id);
+    }
+  }
 
   return {
     mergedPeople,

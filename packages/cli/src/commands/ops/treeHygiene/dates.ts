@@ -1,6 +1,9 @@
 import { edtfYear, type ParsedEdtfInterval, parseEdtfInterval } from '@kinloom/core';
 import type { ParsedDatePart, ParsedEdtfRange } from './types.js';
 
+const MAX_RANGE_CACHE = 8192;
+const edtfRangeCache = new Map<string, ParsedEdtfRange | null>();
+
 function intervalEndpointToDatePart(interval: ParsedEdtfInterval, bound: 'min' | 'max'): ParsedDatePart {
   if (interval.precision === 'decade') {
     return {
@@ -16,15 +19,7 @@ function intervalEndpointToDatePart(interval: ParsedEdtfInterval, bound: 'min' |
   };
 }
 
-export function parseEdtfRange(edtf: string | null | undefined): ParsedEdtfRange | null {
-  if (!edtf) {
-    return null;
-  }
-  const trimmed = edtf.trim();
-  if (!trimmed) {
-    return null;
-  }
-
+function computeParsedEdtfRange(trimmed: string): ParsedEdtfRange | null {
   const parsed = parseEdtfInterval(trimmed);
   if (parsed) {
     const slash = trimmed.indexOf('/');
@@ -66,6 +61,25 @@ export function parseEdtfRange(edtf: string | null | undefined): ParsedEdtfRange
     minDate: fallbackPart,
     maxDate: fallbackPart,
   };
+}
+
+export function parseEdtfRange(edtf: string | null | undefined): ParsedEdtfRange | null {
+  if (!edtf) {
+    return null;
+  }
+  const trimmed = edtf.trim();
+  if (!trimmed) {
+    return null;
+  }
+  if (edtfRangeCache.has(trimmed)) {
+    return edtfRangeCache.get(trimmed) ?? null;
+  }
+  const result = computeParsedEdtfRange(trimmed);
+  if (edtfRangeCache.size >= MAX_RANGE_CACHE) {
+    edtfRangeCache.clear();
+  }
+  edtfRangeCache.set(trimmed, result);
+  return result;
 }
 
 export function maxPossibleAgeYears(birth: ParsedEdtfRange, target: ParsedEdtfRange): number | null {

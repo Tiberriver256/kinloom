@@ -16,6 +16,7 @@ import {
   resolvePluginCommands,
   runRegisteredCheck,
 } from '../../plugins.js';
+import { type LoadedLocalArchiveRepo, loadLocalArchiveRepo } from '../dataFiles.js';
 import { computeLifespan, parseAuditEdtf, runChronologyCheck } from './audit/chronology.js';
 import { runUncitedSentenceCheck, splitParagraphIntoSentences } from './audit/citations.js';
 import { runAuditHygieneRegressionCheck } from './audit/hygiene.js';
@@ -34,7 +35,7 @@ import { createPronunciationAuditCheck } from './pronunciation-checks.js';
 import { runIntegrateCommand } from './shared/integrateEngine/execute.js';
 import { collectLiveMediaCollisions, loadLiveMedia, readStagedMediaRefs } from './shared/mediaFiles.js';
 import { parseValidDeathEdtf } from './shared/stagedPackages.js';
-import { parseMatchingYamlBlocks, splitTopLevelYamlList } from './shared/yamlScanner.js';
+import { parseLooseYamlList } from './shared/yamlScanner.js';
 import { formatAuditHygieneWarningMessage } from './tree-hygiene.js';
 
 const SAFE_PERSON_ID_RE = /^[a-zA-Z0-9_-]+$/;
@@ -68,6 +69,17 @@ export {
   splitParagraphIntoSentences,
 };
 
+async function readOptionalUtf8(filePath: string): Promise<string> {
+  try {
+    return await readFile(filePath, 'utf8');
+  } catch (err: unknown) {
+    if (typeof err === 'object' && err !== null && 'code' in err && err.code === 'ENOENT') {
+      return '';
+    }
+    throw err;
+  }
+}
+
 function countZeroCoordPlaces(patch: LooseRecord): string[] {
   const bad: string[] = [];
   for (const rawPl of Array.isArray(patch.places) ? patch.places : []) {
@@ -85,6 +97,8 @@ async function runInProcessIntegrateDryRun(params: {
   repoDir: string;
   personId: string;
   packageDir: string;
+  preloadedRepo?: LoadedLocalArchiveRepo;
+  preparsedPatch?: Record<string, unknown>;
 }): Promise<DryRunCheckResult> {
   const t0 = performance.now();
   try {
@@ -93,6 +107,8 @@ async function runInProcessIntegrateDryRun(params: {
       personId: params.personId,
       packageDir: params.packageDir,
       dryRun: true,
+      preloadedRepo: params.preloadedRepo,
+      preparsedPatch: params.preparsedPatch,
     });
     return {
       ok: res.ok,
@@ -113,6 +129,19 @@ async function runInProcessIntegrateDryRun(params: {
       counts: null,
       error: err instanceof Error ? err.message : String(err),
     };
+  }
+}
+
+async function tryLoadTypedArchiveRepo(repoDir: string): Promise<LoadedLocalArchiveRepo | null> {
+  try {
+    const loaded = await loadLocalArchiveRepo(repoDir, {
+      requireConfig: false,
+      requirePeopleFile: true,
+      includeEnrichments: true,
+    });
+    return loaded;
+  } catch {
+    return null;
   }
 }
 
@@ -138,23 +167,14 @@ export async function runAuditCommand(options: AuditCommandOptions): Promise<Aud
 
   const dataDir = path.join(repoDir, 'data');
   const peoplePath = path.join(dataDir, 'people.yaml');
-  if (!fs.existsSync(peoplePath)) {
+  if (!options.preloadedRepo && !fs.existsSync(peoplePath)) {
     throw new CliValidationError(`Missing data/people.yaml at ${peoplePath}.`);
   }
 
-  const [patchText, dossierText, peopleText, eventsText, kinshipText, configText] = await Promise.all([
+  const [patchText, dossierText, typedRepo] = await Promise.all([
     readFile(patchPath, 'utf8'),
-    fs.existsSync(dossierPath) ? readFile(dossierPath, 'utf8') : Promise.resolve(''),
-    readFile(peoplePath, 'utf8'),
-    fs.existsSync(path.join(dataDir, 'events.yaml'))
-      ? readFile(path.join(dataDir, 'events.yaml'), 'utf8')
-      : Promise.resolve(''),
-    fs.existsSync(path.join(dataDir, 'kinship.yaml'))
-      ? readFile(path.join(dataDir, 'kinship.yaml'), 'utf8')
-      : Promise.resolve(''),
-    fs.existsSync(path.join(repoDir, 'kinloom.config.yaml'))
-      ? readFile(path.join(repoDir, 'kinloom.config.yaml'), 'utf8')
-      : Promise.resolve(''),
+    readOptionalUtf8(dossierPath),
+    options.preloadedRepo ? Promise.resolve(options.preloadedRepo) : tryLoadTypedArchiveRepo(repoDir),
   ]);
 
   const parsedPatch: unknown = JSON.parse(patchText);
@@ -163,11 +183,29 @@ export async function runAuditCommand(options: AuditCommandOptions): Promise<Aud
   }
   const patch = parsedPatch;
 
-  const parsedSiteConfig = configText ? parseKinloomConfigYaml(configText) : null;
-  const privacyConfig: Partial<PrivacyConfig> = parsedSiteConfig ? parsedSiteConfig.privacy : {};
+  let parsedSiteConfig = typedRepo?.siteConfig ?? null;
+  let parsedPeople: LooseRecord[];
+  let allLiveEvents: LooseRecord[];
+  let allLiveKinship: LooseRecord[];
 
-  const peopleBlocks = splitTopLevelYamlList(peopleText);
-  const parsedPeople = parseMatchingYamlBlocks(peopleBlocks);
+  if (typedRepo) {
+    parsedPeople = typedRepo.people as readonly LooseRecord[] as LooseRecord[];
+    allLiveEvents = typedRepo.events as readonly LooseRecord[] as LooseRecord[];
+    allLiveKinship = typedRepo.kinship as readonly LooseRecord[] as LooseRecord[];
+  } else {
+    const [peopleText, eventsText, kinshipText, configText] = await Promise.all([
+      readFile(peoplePath, 'utf8'),
+      readOptionalUtf8(path.join(dataDir, 'events.yaml')),
+      readOptionalUtf8(path.join(dataDir, 'kinship.yaml')),
+      readOptionalUtf8(path.join(repoDir, 'kinloom.config.yaml')),
+    ]);
+    parsedSiteConfig = configText ? parseKinloomConfigYaml(configText) : null;
+    parsedPeople = parseLooseYamlList(peopleText);
+    allLiveEvents = parseLooseYamlList(eventsText);
+    allLiveKinship = parseLooseYamlList(kinshipText);
+  }
+
+  const privacyConfig: Partial<PrivacyConfig> = parsedSiteConfig ? parsedSiteConfig.privacy : {};
 
   const referenceYear = privacyConfig.referenceYear ?? getCurrentReferenceYear();
   const isEffectiveLivingPerson = (person: LooseRecord): boolean => {
@@ -209,46 +247,70 @@ export async function runAuditCommand(options: AuditCommandOptions): Promise<Aud
 
   const mergedAuditPeople: LooseRecord[] = [];
   const seenAuditPersonIds = new Set<string>();
-  for (const person of parsedPeople) {
+  let targetPerson: LooseRecord | null = null;
+  const livingPeople: LooseRecord[] = [];
+  const deceasedPeople: LooseRecord[] = [];
+
+  for (let i = 0; i < parsedPeople.length; i += 1) {
+    const person = parsedPeople[i];
     const id = typeof person.id === 'string' ? person.id : '';
     if (id) {
       seenAuditPersonIds.add(id);
     }
+    const origIsLiving = isEffectiveLivingPerson(person);
+    if (id !== personId && origIsLiving) {
+      livingPeople.push(person);
+    }
+
     const explicitlyLiving = person.is_living === true || person.living === true;
     let effectivePerson: LooseRecord = person;
+    let effectiveIsLiving = origIsLiving;
     if (id === personId && !explicitlyLiving && targetDeathUpdate !== null) {
       const candidate = { ...person, death_edtf: targetDeathUpdate };
       if (!isEffectiveLivingPerson(candidate)) {
         effectivePerson = candidate;
+        effectiveIsLiving = false;
       }
     }
     const staged = id ? stagedPeopleById.get(id) : undefined;
-    if (staged && !isEffectiveLivingPerson(effectivePerson)) {
-      mergedAuditPeople.push({ ...effectivePerson, ...staged });
-    } else {
-      mergedAuditPeople.push(effectivePerson);
+    const finalPerson = staged && !effectiveIsLiving ? { ...effectivePerson, ...staged } : effectivePerson;
+    mergedAuditPeople.push(finalPerson);
+    if (id === personId) {
+      targetPerson = finalPerson;
+    }
+    const finalIsLiving =
+      staged && !effectiveIsLiving ? isEffectiveLivingPerson(finalPerson) : effectiveIsLiving;
+    if (!finalIsLiving) {
+      deceasedPeople.push(finalPerson);
     }
   }
   for (const [id, stagedPerson] of stagedPeopleById) {
     if (!seenAuditPersonIds.has(id)) {
       mergedAuditPeople.push(stagedPerson);
+      if (id === personId) {
+        targetPerson = stagedPerson;
+      }
+      if (!isEffectiveLivingPerson(stagedPerson)) {
+        deceasedPeople.push(stagedPerson);
+      }
     }
   }
 
-  const targetPerson = mergedAuditPeople.find((p) => p.id === personId) ?? null;
-
-  const livingPeople = parsedPeople.filter(
-    (person) => person.id !== personId && isEffectiveLivingPerson(person)
-  );
-  const deceasedPeople = mergedAuditPeople.filter((person) => !isEffectiveLivingPerson(person));
-
-  const allLiveEvents = parseMatchingYamlBlocks(splitTopLevelYamlList(eventsText));
-  const allLiveKinship = kinshipText ? parseMatchingYamlBlocks(splitTopLevelYamlList(kinshipText)) : [];
-  const existingPersonEvents = allLiveEvents.filter(
-    (ev) =>
-      Array.isArray(ev.participants) &&
-      ev.participants.some((pt) => isPlainRecord(pt) && pt.person_id === personId)
-  );
+  const existingPersonEvents: LooseRecord[] = [];
+  for (let i = 0; i < allLiveEvents.length; i += 1) {
+    const ev = allLiveEvents[i];
+    const pts = ev.participants;
+    if (!Array.isArray(pts)) {
+      continue;
+    }
+    for (let p = 0; p < pts.length; p += 1) {
+      const pt = pts[p];
+      if (isPlainRecord(pt) && pt.person_id === personId) {
+        existingPersonEvents.push(ev);
+        break;
+      }
+    }
+  }
 
   const chronology = runChronologyCheck(targetPerson, patch, existingPersonEvents);
   const hygieneWarnings = runAuditHygieneRegressionCheck({
@@ -257,6 +319,15 @@ export async function runAuditCommand(options: AuditCommandOptions): Promise<Aud
     livePeople: parsedPeople,
     liveEvents: allLiveEvents,
     liveKinship: allLiveKinship,
+    ...(typedRepo
+      ? {
+          typedLive: {
+            people: typedRepo.people,
+            events: typedRepo.events,
+            kinship: typedRepo.kinship,
+          },
+        }
+      : {}),
   });
   const privacy = runPrivacyAndStyleScan(dossierText, patch, livingPeople, deceasedPeople, {
     targetPerson,
@@ -266,7 +337,13 @@ export async function runAuditCommand(options: AuditCommandOptions): Promise<Aud
   const citations = runUncitedSentenceCheck(patch);
   const scans = runScanInventoryCheck(repoDir, packageDir, patch);
   const zeroCoordinatePlaces = countZeroCoordPlaces(patch);
-  const dryRun = await runInProcessIntegrateDryRun({ repoDir, personId, packageDir });
+  const dryRun = await runInProcessIntegrateDryRun({
+    repoDir,
+    personId,
+    packageDir,
+    preloadedRepo: typedRepo?.siteConfig ? typedRepo : undefined,
+    preparsedPatch: patch,
+  });
 
   const auditCheckCtx: KinloomAuditCheckContext = {
     repoDir,
@@ -306,10 +383,14 @@ export async function runAuditCommand(options: AuditCommandOptions): Promise<Aud
     ...pronunciationCheck.errors.map((e) => `pronunciation: ${e}`),
     ...pluginChecks.flatMap((pc) => pc.errors.map((e) => `plugin(${pc.id}): ${e}`)),
   ];
-  const liveMediaFileCollisions = collectLiveMediaCollisions(
-    [{ personId, media: readStagedMediaRefs(patch.media) }],
-    loadLiveMedia(repoDir)
-  );
+  const stagedMediaRefs = readStagedMediaRefs(patch.media);
+  const liveMediaFileCollisions =
+    stagedMediaRefs.length === 0
+      ? []
+      : collectLiveMediaCollisions(
+          [{ personId, media: stagedMediaRefs }],
+          typedRepo ? typedRepo.media : loadLiveMedia(repoDir)
+        );
   const liveMediaWarnings = liveMediaFileCollisions.flatMap((collision) =>
     collision.staged.map(
       (staged) =>

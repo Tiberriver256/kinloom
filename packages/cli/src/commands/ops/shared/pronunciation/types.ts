@@ -1,4 +1,4 @@
-import type { PronunciationCoverage } from '@kinloom/core';
+import type { KinloomSiteConfig, Place, PronunciationCoverage, RawPerson } from '@kinloom/core';
 
 export const PRONOUNCE_SUPPORTED_LANGS = ['nl', 'sv', 'fi', 'pl', 'de', 'en'] as const;
 export type PronounceLang = (typeof PRONOUNCE_SUPPORTED_LANGS)[number];
@@ -117,10 +117,17 @@ export interface PronounceAuditResult {
   rendered: string;
 }
 
+export interface PronounceAuditPreloadedData {
+  readonly siteConfig: KinloomSiteConfig;
+  readonly people: readonly RawPerson[];
+  readonly places: readonly Place[];
+}
+
 export interface PronounceAuditOptions {
   repoDir?: string;
   json?: boolean;
   strict?: boolean;
+  preloaded?: PronounceAuditPreloadedData;
 }
 
 export type PronounceDeduplicateKeepReason =

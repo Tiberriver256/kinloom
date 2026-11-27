@@ -27,6 +27,7 @@ import {
 } from './types.js';
 
 interface ObstacleRect {
+  readonly idx: number;
   readonly left: number;
   readonly right: number;
   readonly top: number;
@@ -38,25 +39,128 @@ interface ObstacleRect {
 const OBSTACLE_PAD_X = 4;
 const OBSTACLE_PAD_Y = 1;
 const MIN_SAFE_CORRIDOR_X = 136;
+const Y_STRIPE_SHIFT = 7; // 128px vertical buckets
+
+interface ObstacleSpatialIndex {
+  readonly all: readonly ObstacleRect[];
+  readonly stripes: ObstacleRect[][];
+  readonly seenStamp: Int32Array;
+  stamp: number;
+}
+
+function buildObstacleSpatialIndex(all: readonly ObstacleRect[], maxCoordY: number): ObstacleSpatialIndex {
+  const numStripes = Math.max(1, ((maxCoordY + 256) >> Y_STRIPE_SHIFT) + 2);
+  const stripes: ObstacleRect[][] = new Array(numStripes);
+  for (let i = 0; i < numStripes; i += 1) {
+    stripes[i] = [];
+  }
+  for (let i = 0; i < all.length; i += 1) {
+    const obs = all[i];
+    const s0 = Math.max(0, (obs.top - OBSTACLE_PAD_Y) >> Y_STRIPE_SHIFT);
+    const s1 = Math.min(numStripes - 1, Math.max(0, (obs.bottom + OBSTACLE_PAD_Y) >> Y_STRIPE_SHIFT));
+    for (let s = s0; s <= s1; s += 1) {
+      stripes[s].push(obs);
+    }
+  }
+  return {
+    all,
+    stripes,
+    seenStamp: new Int32Array(all.length),
+    stamp: 0,
+  };
+}
+
+function hasAnyVerticalBlocker(
+  index: ObstacleSpatialIndex,
+  x: number,
+  y1: number,
+  y2: number,
+  skipNodeId1: string | null,
+  skipNodeId2: string | null
+): boolean {
+  const minY = Math.min(y1, y2);
+  const maxY = Math.max(y1, y2);
+  const stripes = index.stripes;
+  const lastStripe = stripes.length - 1;
+  const s0 = Math.max(0, Math.min(lastStripe, minY >> Y_STRIPE_SHIFT));
+  const s1 = Math.max(0, Math.min(lastStripe, maxY >> Y_STRIPE_SHIFT));
+
+  for (let s = s0; s <= s1; s += 1) {
+    const bucket = stripes[s];
+    for (let i = 0; i < bucket.length; i += 1) {
+      const rect = bucket[i];
+      if (
+        x >= rect.left - OBSTACLE_PAD_X &&
+        x <= rect.right + OBSTACLE_PAD_X &&
+        maxY > rect.top + OBSTACLE_PAD_Y &&
+        minY < rect.bottom - OBSTACLE_PAD_Y
+      ) {
+        if (rect.kind === 'node' && (rect.ownerId === skipNodeId1 || rect.ownerId === skipNodeId2)) {
+          continue;
+        }
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+function queryBandObstacles(
+  index: ObstacleSpatialIndex,
+  minY: number,
+  maxY: number,
+  skipNodeId1: string | null,
+  skipNodeId2: string | null
+): ObstacleRect[] {
+  const stripes = index.stripes;
+  const lastStripe = stripes.length - 1;
+  const s0 = Math.max(0, Math.min(lastStripe, (minY - OBSTACLE_PAD_Y - 2) >> Y_STRIPE_SHIFT));
+  const s1 = Math.max(0, Math.min(lastStripe, (maxY + OBSTACLE_PAD_Y + 2) >> Y_STRIPE_SHIFT));
+  index.stamp += 1;
+  const stamp = index.stamp;
+  const seen = index.seenStamp;
+  const out: ObstacleRect[] = [];
+
+  for (let s = s0; s <= s1; s += 1) {
+    const bucket = stripes[s];
+    for (let i = 0; i < bucket.length; i += 1) {
+      const obs = bucket[i];
+      if (seen[obs.idx] === stamp) {
+        continue;
+      }
+      seen[obs.idx] = stamp;
+      if (obs.kind === 'node' && (obs.ownerId === skipNodeId1 || obs.ownerId === skipNodeId2)) {
+        continue;
+      }
+      if (obs.bottom >= minY - OBSTACLE_PAD_Y && obs.top <= maxY + OBSTACLE_PAD_Y) {
+        out.push(obs);
+      }
+    }
+  }
+  return out;
+}
 
 function collapsePoints(raw: readonly DiagramPoint[]): DiagramPoint[] {
   const out: DiagramPoint[] = [];
-  for (const pt of raw) {
-    const rounded = { x: Math.round(pt.x), y: Math.round(pt.y) };
-    const prev = out.at(-1);
-    if (prev && prev.x === rounded.x && prev.y === rounded.y) {
-      continue;
+  for (let i = 0; i < raw.length; i += 1) {
+    const pt = raw[i];
+    const rx = Math.round(pt.x);
+    const ry = Math.round(pt.y);
+    const len = out.length;
+    if (len > 0) {
+      const prev = out[len - 1];
+      if (prev.x === rx && prev.y === ry) {
+        continue;
+      }
+      if (len > 1) {
+        const prev2 = out[len - 2];
+        if ((prev2.x === prev.x && prev.x === rx) || (prev2.y === prev.y && prev.y === ry)) {
+          out[len - 1] = { x: rx, y: ry };
+          continue;
+        }
+      }
     }
-    const prev2 = out.at(-2);
-    if (
-      prev &&
-      prev2 &&
-      ((prev2.x === prev.x && prev.x === rounded.x) || (prev2.y === prev.y && prev.y === rounded.y))
-    ) {
-      out[out.length - 1] = rounded;
-      continue;
-    }
-    out.push(rounded);
+    out.push({ x: rx, y: ry });
   }
   return out;
 }
@@ -89,7 +193,42 @@ function findBlockingObstaclesOnVertical(
   y2: number,
   obstacles: readonly ObstacleRect[]
 ): ObstacleRect[] {
-  return obstacles.filter((obs) => verticalSegmentHitsRect(x, y1, y2, obs));
+  const blockers: ObstacleRect[] = [];
+  for (let i = 0; i < obstacles.length; i += 1) {
+    const obs = obstacles[i];
+    if (verticalSegmentHitsRect(x, y1, y2, obs)) {
+      blockers.push(obs);
+    }
+  }
+  return blockers;
+}
+
+function hasBlockingObstacleOnVertical(
+  x: number,
+  y1: number,
+  y2: number,
+  obstacles: readonly ObstacleRect[]
+): boolean {
+  for (let i = 0; i < obstacles.length; i += 1) {
+    if (verticalSegmentHitsRect(x, y1, y2, obstacles[i])) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function hasHorizontalCollision(
+  x1: number,
+  x2: number,
+  y: number,
+  obstacles: readonly ObstacleRect[]
+): boolean {
+  for (let i = 0; i < obstacles.length; i += 1) {
+    if (horizontalSegmentHitsRect(x1, x2, y, obstacles[i])) {
+      return true;
+    }
+  }
+  return false;
 }
 
 function collectCorridorCandidates(params: {
@@ -103,17 +242,22 @@ function collectCorridorCandidates(params: {
   const { preferredX, y1, y2, obstacles, maxContentX, usedCorridorCounts } = params;
   const minY = Math.min(y1, y2);
   const maxY = Math.max(y1, y2);
-  const relevant = obstacles
-    .filter((obs) => maxY > obs.top + OBSTACLE_PAD_Y && minY < obs.bottom - OBSTACLE_PAD_Y)
-    .toSorted((a, b) => a.left - b.left);
+  const relevant: ObstacleRect[] = [];
+  for (let i = 0; i < obstacles.length; i += 1) {
+    const obs = obstacles[i];
+    if (maxY > obs.top + OBSTACLE_PAD_Y && minY < obs.bottom - OBSTACLE_PAD_Y) {
+      relevant.push(obs);
+    }
+  }
+  relevant.sort((a, b) => a.left - b.left);
 
   const candidates = new Set<number>();
-  for (const obs of relevant) {
+  for (let i = 0; i < relevant.length; i += 1) {
+    const obs = relevant[i];
     candidates.add(Math.round(obs.left - 10));
     candidates.add(Math.round(obs.right + 10));
   }
 
-  // Add midpoints of open gaps between horizontally sorted obstacles.
   for (let i = 0; i < relevant.length - 1; i += 1) {
     const gapLeft = relevant[i].right;
     const gapRight = relevant[i + 1].left;
@@ -122,7 +266,6 @@ function collectCorridorCandidates(params: {
     }
   }
 
-  // Always include safe left/right outer corridors as guaranteed collision-free fallbacks.
   candidates.add(MIN_SAFE_CORRIDOR_X);
   const outerRightBase = Math.round(maxContentX + 16);
   for (let slot = 0; slot < 8; slot += 1) {
@@ -147,7 +290,9 @@ function routeStemAroundObstacles(params: {
   readonly busY: number;
   readonly rowBottomOfParentsY: number;
   readonly preferredSideX: number;
-  readonly obstacles: readonly ObstacleRect[];
+  readonly spatialIndex: ObstacleSpatialIndex;
+  readonly skipParent1: string | null;
+  readonly skipParent2: string | null;
   readonly maxContentX: number;
   readonly usedCorridorCounts: Map<number, number>;
 }): DiagramPoint[] {
@@ -157,10 +302,28 @@ function routeStemAroundObstacles(params: {
     busY,
     rowBottomOfParentsY,
     preferredSideX,
-    obstacles,
+    spatialIndex,
+    skipParent1,
+    skipParent2,
     maxContentX,
     usedCorridorCounts,
   } = params;
+
+  if (!hasAnyVerticalBlocker(spatialIndex, hubX, hubY, busY, skipParent1, skipParent2)) {
+    const rx = Math.round(hubX);
+    const ry1 = Math.round(hubY);
+    const ry2 = Math.round(busY);
+    return ry1 === ry2
+      ? [{ x: rx, y: ry1 }]
+      : [
+          { x: rx, y: ry1 },
+          { x: rx, y: ry2 },
+        ];
+  }
+
+  const minBandY = Math.min(hubY, busY);
+  const maxBandY = Math.max(hubY, busY) + 16;
+  const obstacles = queryBandObstacles(spatialIndex, minBandY, maxBandY, skipParent1, skipParent2);
   const blockers = findBlockingObstaclesOnVertical(hubX, hubY, busY, obstacles);
   if (blockers.length === 0) {
     return collapsePoints([
@@ -169,10 +332,17 @@ function routeStemAroundObstacles(params: {
     ]);
   }
 
-  const blockTop = Math.min(...blockers.map((b) => b.top));
-  const blockBottom = Math.max(...blockers.map((b) => b.bottom));
-  const blockLeft = Math.min(...blockers.map((b) => b.left));
-  const blockRight = Math.max(...blockers.map((b) => b.right));
+  let blockTop = blockers[0].top;
+  let blockBottom = blockers[0].bottom;
+  let blockLeft = blockers[0].left;
+  let blockRight = blockers[0].right;
+  for (let i = 1; i < blockers.length; i += 1) {
+    const b = blockers[i];
+    if (b.top < blockTop) blockTop = b.top;
+    if (b.bottom > blockBottom) blockBottom = b.bottom;
+    if (b.left < blockLeft) blockLeft = b.left;
+    if (b.right > blockRight) blockRight = b.right;
+  }
 
   const detourTopY = Math.round(Math.max(hubY + 4, Math.min(rowBottomOfParentsY + 8, blockTop - 8)));
   const detourBottomY = Math.round(Math.min(busY, blockBottom + 8));
@@ -196,17 +366,16 @@ function routeStemAroundObstacles(params: {
   const allCandidates = [...new Set([...primaryCandidates, ...fallbackCandidates])];
   let chosenX = primaryCandidates[0] ?? Math.round(blockRight + 10);
 
-  for (const candX of allCandidates) {
+  for (let i = 0; i < allCandidates.length; i += 1) {
+    const candX = allCandidates[i];
     if (candX < MIN_SAFE_CORRIDOR_X) {
       continue;
     }
-    const vertClear =
-      findBlockingObstaclesOnVertical(candX, detourTopY, detourBottomY, obstacles).length === 0;
-    const topHorizClear = !obstacles.some((obs) => horizontalSegmentHitsRect(hubX, candX, detourTopY, obs));
-    const botHorizClear = !obstacles.some((obs) =>
-      horizontalSegmentHitsRect(candX, hubX, detourBottomY, obs)
-    );
-    if (vertClear && topHorizClear && botHorizClear) {
+    if (
+      !hasBlockingObstacleOnVertical(candX, detourTopY, detourBottomY, obstacles) &&
+      !hasHorizontalCollision(hubX, candX, detourTopY, obstacles) &&
+      !hasHorizontalCollision(candX, hubX, detourBottomY, obstacles)
+    ) {
       chosenX = candX;
       break;
     }
@@ -228,14 +397,26 @@ function routeChildDropAroundObstacles(params: {
   readonly busY: number;
   readonly toY: number;
   readonly childId: string;
-  readonly allObstacles: readonly ObstacleRect[];
+  readonly spatialIndex: ObstacleSpatialIndex;
   readonly maxContentX: number;
   readonly usedCorridorCounts: Map<number, number>;
 }): DiagramPoint[] {
-  const { dropX, busY, toY, childId, allObstacles, maxContentX, usedCorridorCounts } = params;
-  const obstacles = allObstacles.filter((obs) => !(obs.kind === 'node' && obs.ownerId === childId));
-  const blockers = findBlockingObstaclesOnVertical(dropX, busY, toY, obstacles);
-  if (blockers.length === 0) {
+  const { dropX, busY, toY, childId, spatialIndex, maxContentX, usedCorridorCounts } = params;
+
+  if (!hasAnyVerticalBlocker(spatialIndex, dropX, busY, toY, childId, null)) {
+    const rx = Math.round(dropX);
+    const ry1 = Math.round(busY);
+    const ry2 = Math.round(toY);
+    return ry1 === ry2
+      ? [{ x: rx, y: ry1 }]
+      : [
+          { x: rx, y: ry1 },
+          { x: rx, y: ry2 },
+        ];
+  }
+
+  const obstacles = queryBandObstacles(spatialIndex, Math.min(busY, toY), Math.max(busY, toY), childId, null);
+  if (!hasBlockingObstacleOnVertical(dropX, busY, toY, obstacles)) {
     return collapsePoints([
       { x: dropX, y: busY },
       { x: dropX, y: toY },
@@ -253,14 +434,16 @@ function routeChildDropAroundObstacles(params: {
   });
 
   let chosenX = candidates[0] ?? Math.round(maxContentX + 16);
-  for (const candX of candidates) {
+  for (let i = 0; i < candidates.length; i += 1) {
+    const candX = candidates[i];
     if (candX < MIN_SAFE_CORRIDOR_X) {
       continue;
     }
-    const vertClear = findBlockingObstaclesOnVertical(candX, busY, returnY, obstacles).length === 0;
-    const topClear = !obstacles.some((obs) => horizontalSegmentHitsRect(dropX, candX, busY, obs));
-    const botClear = !obstacles.some((obs) => horizontalSegmentHitsRect(candX, dropX, returnY, obs));
-    if (vertClear && topClear && botClear) {
+    if (
+      !hasBlockingObstacleOnVertical(candX, busY, returnY, obstacles) &&
+      !hasHorizontalCollision(dropX, candX, busY, obstacles) &&
+      !hasHorizontalCollision(candX, dropX, returnY, obstacles)
+    ) {
       chosenX = candX;
       break;
     }
@@ -276,81 +459,202 @@ function routeChildDropAroundObstacles(params: {
   ]);
 }
 
-function minimizeGenerationCrossings(model: ArchivalTreeModel): Map<number, TreeFamilyUnit[]> {
-  const orderedUnitsByGen = new Map<number, TreeFamilyUnit[]>();
-  const personToUnit = new Map<string, TreeFamilyUnit>();
-  for (const g of model.generations) {
-    orderedUnitsByGen.set(g.gen, [...g.units]);
-    for (const u of g.units) {
-      for (const pid of u.orderedMemberIds) {
-        personToUnit.set(pid, u);
+let scratchPosInGen: Int32Array = new Int32Array(1024);
+let scratchBary: Float64Array = new Float64Array(1024);
+let scratchPOffsets: Int32Array = new Int32Array(1025);
+let scratchCOffsets: Int32Array = new Int32Array(1025);
+let scratchPNeighbors: Int32Array = new Int32Array(4096);
+let scratchCNeighbors: Int32Array = new Int32Array(4096);
+
+function ensureUnitScratch(totalUnits: number): void {
+  if (scratchPosInGen.length < totalUnits) {
+    const cap = Math.max(totalUnits, scratchPosInGen.length * 2);
+    scratchPosInGen = new Int32Array(cap);
+    scratchBary = new Float64Array(cap);
+    scratchPOffsets = new Int32Array(cap + 1);
+    scratchCOffsets = new Int32Array(cap + 1);
+  }
+}
+
+function ensureNeighborScratch(pCount: number, cCount: number): void {
+  if (scratchPNeighbors.length < pCount) {
+    const next = new Int32Array(Math.max(pCount, scratchPNeighbors.length * 2));
+    next.set(scratchPNeighbors);
+    scratchPNeighbors = next;
+  }
+  if (scratchCNeighbors.length < cCount) {
+    const next = new Int32Array(Math.max(cCount, scratchCNeighbors.length * 2));
+    next.set(scratchCNeighbors);
+    scratchCNeighbors = next;
+  }
+}
+
+function minimizeGenerationCrossingsSlots(model: ArchivalTreeModel): TreeFamilyUnit[][] {
+  const numGens = model.generations.length;
+  let totalUnits = 0;
+  for (let gSlot = 0; gSlot < numGens; gSlot += 1) {
+    totalUnits += model.generations[gSlot].units.length;
+  }
+  ensureUnitScratch(totalUnits);
+
+  const allUnits = new Array<TreeFamilyUnit>(totalUnits);
+  const rowIndicesByGenSlot: number[][] = new Array(numGens);
+  const personToUnitIdx = new Map<string, number>();
+  const posInGen = scratchPosInGen;
+  const bary = scratchBary;
+
+  let uCursor = 0;
+  for (let gSlot = 0; gSlot < numGens; gSlot += 1) {
+    const units = model.generations[gSlot].units;
+    const rowIndices = new Array<number>(units.length);
+    for (let idx = 0; idx < units.length; idx += 1) {
+      const u = units[idx];
+      const uGlobal = uCursor;
+      uCursor += 1;
+      allUnits[uGlobal] = u;
+      rowIndices[idx] = uGlobal;
+      posInGen[uGlobal] = idx;
+      for (let m = 0; m < u.orderedMemberIds.length; m += 1) {
+        personToUnitIdx.set(u.orderedMemberIds[m], uGlobal);
       }
     }
+    rowIndicesByGenSlot[gSlot] = rowIndices;
   }
 
-  const unitIndex = new Map<string, number>();
-  const refreshIndices = (genNum: number): void => {
-    for (const [idx, u] of (orderedUnitsByGen.get(genNum) ?? []).entries()) {
-      unitIndex.set(u.id, idx);
+  const pOffsets = scratchPOffsets;
+  const cOffsets = scratchCOffsets;
+  pOffsets[0] = 0;
+  cOffsets[0] = 0;
+  let pLen = 0;
+  let cLen = 0;
+
+  for (let uIdx = 0; uIdx < totalUnits; uIdx += 1) {
+    const members = allUnits[uIdx].orderedMemberIds;
+    for (let m = 0; m < members.length; m += 1) {
+      const pid = members[m];
+      const parents = model.parentMap.get(pid);
+      if (parents) {
+        ensureNeighborScratch(pLen + parents.length, cLen);
+        for (let p = 0; p < parents.length; p += 1) {
+          const pu = personToUnitIdx.get(parents[p]);
+          if (pu !== undefined) {
+            scratchPNeighbors[pLen] = pu;
+            pLen += 1;
+          }
+        }
+      }
+      const children = model.childMap.get(pid);
+      if (children) {
+        ensureNeighborScratch(pLen, cLen + children.length);
+        for (let c = 0; c < children.length; c += 1) {
+          const cu = personToUnitIdx.get(children[c]);
+          if (cu !== undefined) {
+            scratchCNeighbors[cLen] = cu;
+            cLen += 1;
+          }
+        }
+      }
     }
-  };
-  for (const g of model.generations) {
-    refreshIndices(g.gen);
+    pOffsets[uIdx + 1] = pLen;
+    cOffsets[uIdx + 1] = cLen;
   }
 
-  const genNums = model.generations.map((g) => g.gen);
+  const pNeighbors = scratchPNeighbors;
+  const cNeighbors = scratchCNeighbors;
+  const byBarycenter = (a: number, b: number): number => bary[a] - bary[b];
+
   for (let sweep = 0; sweep < 4; sweep += 1) {
-    for (let i = 1; i < genNums.length; i += 1) {
-      const g = genNums[i];
-      const units = orderedUnitsByGen.get(g) ?? [];
-      const baryMap = new Map<string, number>();
-      for (const u of units) {
-        const indices: number[] = [];
-        for (const pid of u.orderedMemberIds) {
-          for (const parentId of model.parentMap.get(pid) ?? []) {
-            const pu = personToUnit.get(parentId);
-            if (pu) {
-              indices.push(unitIndex.get(pu.id) ?? 0);
-            }
-          }
-        }
-        baryMap.set(
-          u.id,
-          indices.length > 0
-            ? indices.reduce((acc, v) => acc + v, 0) / indices.length
-            : (unitIndex.get(u.id) ?? 0)
-        );
+    let changed = false;
+
+    for (let gSlot = 1; gSlot < numGens; gSlot += 1) {
+      const row = rowIndicesByGenSlot[gSlot];
+      if (row.length <= 1) {
+        continue;
       }
-      units.sort((a, b) => (baryMap.get(a.id) ?? 0) - (baryMap.get(b.id) ?? 0));
-      refreshIndices(g);
+      let outOfOrder = false;
+      let prevBary = Number.NEGATIVE_INFINITY;
+      for (let r = 0; r < row.length; r += 1) {
+        const uIdx = row[r];
+        const start = pOffsets[uIdx];
+        const end = pOffsets[uIdx + 1];
+        let val: number;
+        if (end > start) {
+          let sum = 0;
+          for (let k = start; k < end; k += 1) {
+            sum += posInGen[pNeighbors[k]];
+          }
+          val = sum / (end - start);
+        } else {
+          val = posInGen[uIdx];
+        }
+        bary[uIdx] = val;
+        if (val < prevBary) {
+          outOfOrder = true;
+        } else {
+          prevBary = val;
+        }
+      }
+      if (outOfOrder) {
+        row.sort(byBarycenter);
+        changed = true;
+        for (let r = 0; r < row.length; r += 1) {
+          posInGen[row[r]] = r;
+        }
+      }
     }
-    for (let i = genNums.length - 2; i >= 0; i -= 1) {
-      const g = genNums[i];
-      const units = orderedUnitsByGen.get(g) ?? [];
-      const baryMap = new Map<string, number>();
-      for (const u of units) {
-        const indices: number[] = [];
-        for (const pid of u.orderedMemberIds) {
-          for (const childId of model.childMap.get(pid) ?? []) {
-            const cu = personToUnit.get(childId);
-            if (cu) {
-              indices.push(unitIndex.get(cu.id) ?? 0);
-            }
-          }
-        }
-        baryMap.set(
-          u.id,
-          indices.length > 0
-            ? indices.reduce((acc, v) => acc + v, 0) / indices.length
-            : (unitIndex.get(u.id) ?? 0)
-        );
+
+    for (let gSlot = numGens - 2; gSlot >= 0; gSlot -= 1) {
+      const row = rowIndicesByGenSlot[gSlot];
+      if (row.length <= 1) {
+        continue;
       }
-      units.sort((a, b) => (baryMap.get(a.id) ?? 0) - (baryMap.get(b.id) ?? 0));
-      refreshIndices(g);
+      let outOfOrder = false;
+      let prevBary = Number.NEGATIVE_INFINITY;
+      for (let r = 0; r < row.length; r += 1) {
+        const uIdx = row[r];
+        const start = cOffsets[uIdx];
+        const end = cOffsets[uIdx + 1];
+        let val: number;
+        if (end > start) {
+          let sum = 0;
+          for (let k = start; k < end; k += 1) {
+            sum += posInGen[cNeighbors[k]];
+          }
+          val = sum / (end - start);
+        } else {
+          val = posInGen[uIdx];
+        }
+        bary[uIdx] = val;
+        if (val < prevBary) {
+          outOfOrder = true;
+        } else {
+          prevBary = val;
+        }
+      }
+      if (outOfOrder) {
+        row.sort(byBarycenter);
+        changed = true;
+        for (let r = 0; r < row.length; r += 1) {
+          posInGen[row[r]] = r;
+        }
+      }
+    }
+
+    if (!changed) {
+      break;
     }
   }
 
-  return orderedUnitsByGen;
+  const orderedSlots: TreeFamilyUnit[][] = new Array(numGens);
+  for (let gSlot = 0; gSlot < numGens; gSlot += 1) {
+    const row = rowIndicesByGenSlot[gSlot];
+    const units = new Array<TreeFamilyUnit>(row.length);
+    for (let r = 0; r < row.length; r += 1) {
+      units[r] = allUnits[row[r]];
+    }
+    orderedSlots[gSlot] = units;
+  }
+  return orderedSlots;
 }
 
 function computeUnitFootprintWidth(model: ArchivalTreeModel, unit: TreeFamilyUnit): number {
@@ -359,8 +663,8 @@ function computeUnitFootprintWidth(model: ArchivalTreeModel, unit: TreeFamilyUni
     Math.max(0, unit.orderedMemberIds.length - 1) * ARCHIVAL_SPOUSE_GAP;
 
   let extraSpan = memberSpan;
-  for (const uid of unit.unionIds) {
-    const union = model.unionsById.get(uid);
+  for (let i = 0; i < unit.unionIds.length; i += 1) {
+    const union = model.unionsById.get(unit.unionIds[i]);
     if (!union) {
       continue;
     }
@@ -374,12 +678,17 @@ function computeUnitFootprintWidth(model: ArchivalTreeModel, unit: TreeFamilyUni
     if (union.hangingChildIds.length > 0) {
       const cols = union.hangingChildIds.length === 1 ? 1 : 2;
       const gridW = cols * ARCHIVAL_NODE_W + (cols === 2 ? ARCHIVAL_HANGING_COL_GAP : 0) + detourPad;
-      extraSpan = Math.max(extraSpan, gridW);
+      if (gridW > extraSpan) {
+        extraSpan = gridW;
+      }
     }
     if (union.earlyLossChildIds.length > 0) {
       const chipsPerRow = Math.min(3, union.earlyLossChildIds.length);
-      const stripW = Math.max(194, chipsPerRow * ARCHIVAL_EARLY_CHIP_W + (chipsPerRow - 1) * 8 + 24);
-      extraSpan = Math.max(extraSpan, stripW + detourPad);
+      const stripW =
+        Math.max(194, chipsPerRow * ARCHIVAL_EARLY_CHIP_W + (chipsPerRow - 1) * 8 + 24) + detourPad;
+      if (stripW > extraSpan) {
+        extraSpan = stripW;
+      }
     }
     const totalCollateral = union.collapsedSiblingIds.length + union.hangingChildIds.length;
     if (totalCollateral > 0) {
@@ -390,8 +699,10 @@ function computeUnitFootprintWidth(model: ArchivalTreeModel, unit: TreeFamilyUni
         isExpanded: union.isExpanded,
         mode: model.effectiveMode,
       });
-      const pillW = Math.max(168, Math.round(toggleLabels.compactLabel.length * 7.2 + 28));
-      extraSpan = Math.max(extraSpan, pillW + detourPad);
+      const pillW = Math.max(168, Math.round(toggleLabels.compactLabel.length * 7.2 + 28)) + detourPad;
+      if (pillW > extraSpan) {
+        extraSpan = pillW;
+      }
     }
   }
   return extraSpan;
@@ -402,15 +713,17 @@ function buildOrthogonalBuses(params: {
   readonly hubByUnionId: ReadonlyMap<string, DiagramUnionHub>;
   readonly byId: ReadonlyMap<string, DiagramPlacedNode>;
   readonly genBands: readonly DiagramGenBand[];
-  readonly allObstacles: readonly ObstacleRect[];
+  readonly genBandIdxByGen: ReadonlyMap<number, number>;
+  readonly spatialIndex: ObstacleSpatialIndex;
   readonly maxContentX: number;
 }): DiagramOrthogonalBus[] {
-  const { model, hubByUnionId, byId, genBands, allObstacles, maxContentX } = params;
+  const { model, hubByUnionId, byId, genBands, genBandIdxByGen, spatialIndex, maxContentX } = params;
   const buses: DiagramOrthogonalBus[] = [];
   const busTrackCounterByGen = new Map<number, number>();
   const usedCorridorCounts = new Map<number, number>();
 
-  for (const union of model.unions) {
+  for (let u = 0; u < model.unions.length; u += 1) {
+    const union = model.unions[u];
     if (union.visibleChildIds.length === 0) {
       continue;
     }
@@ -425,18 +738,30 @@ function buildOrthogonalBuses(params: {
       toY: number;
       isDirect: boolean;
     }[] = [];
+    let minChildTopY = Number.POSITIVE_INFINITY;
+    let sumChildX = 0;
+    let railMinX = hub.x;
+    let railMaxX = hub.x;
+    let anyDirectDrop = false;
 
-    for (const cid of union.visibleChildIds) {
+    for (let i = 0; i < union.visibleChildIds.length; i += 1) {
+      const cid = union.visibleChildIds[i];
       const childNode = byId.get(cid);
       if (!childNode) {
         continue;
       }
+      const dropX = Math.round(childNode.x + childNode.width / 2);
       rawDrops.push({
         childId: cid,
-        x: Math.round(childNode.x + childNode.width / 2),
+        x: dropX,
         toY: childNode.y,
         isDirect: childNode.isDirect,
       });
+      sumChildX += dropX;
+      if (childNode.y < minChildTopY) minChildTopY = childNode.y;
+      if (dropX < railMinX) railMinX = dropX;
+      if (dropX > railMaxX) railMaxX = dropX;
+      if (childNode.isDirect) anyDirectDrop = true;
     }
 
     if (rawDrops.length === 0) {
@@ -446,8 +771,7 @@ function buildOrthogonalBuses(params: {
     const trackIdx = busTrackCounterByGen.get(union.gen) ?? 0;
     busTrackCounterByGen.set(union.gen, trackIdx + 1);
 
-    const minChildTopY = Math.min(...rawDrops.map((d) => d.toY));
-    const genBandIdx = genBands.findIndex((b) => b.gen === union.gen);
+    const genBandIdx = genBandIdxByGen.get(union.gen) ?? -1;
     const genBand = genBandIdx >= 0 ? genBands[genBandIdx] : undefined;
     const nextBand = genBandIdx >= 0 ? genBands[genBandIdx + 1] : undefined;
     const channelStartY = genBand ? genBand.y + genBand.height + 16 : hub.y + 32;
@@ -455,11 +779,7 @@ function buildOrthogonalBuses(params: {
     const channelCapY = nextBand ? Math.min(minChildTopY - 18, nextBand.y - 14) : minChildTopY - 18;
     const busY = Math.round(Math.min(channelCapY, Math.max(hub.y + 20, rawBusY)));
 
-    const parentIdSet = new Set(union.partnerIds);
-    const stemObstacles = allObstacles.filter(
-      (obs) => !(obs.kind === 'node' && parentIdSet.has(obs.ownerId))
-    );
-    const meanChildX = rawDrops.reduce((sum, d) => sum + d.x, 0) / rawDrops.length;
+    const meanChildX = sumChildX / rawDrops.length;
     const rowBottomOfParentsY = genBand ? genBand.y + ARCHIVAL_NODE_H : hub.y + ARCHIVAL_NODE_H / 2;
 
     const stemPoints = routeStemAroundObstacles({
@@ -468,35 +788,45 @@ function buildOrthogonalBuses(params: {
       busY,
       rowBottomOfParentsY,
       preferredSideX: meanChildX,
-      obstacles: stemObstacles,
+      spatialIndex,
+      skipParent1: union.primaryPartnerId,
+      skipParent2: union.secondaryPartnerId,
       maxContentX,
       usedCorridorCounts,
     });
 
-    const childDrops: DiagramOrthogonalDrop[] = rawDrops.map((drop) => ({
-      ...drop,
-      points: routeChildDropAroundObstacles({
-        dropX: drop.x,
-        busY,
-        toY: drop.toY,
+    const childDrops: DiagramOrthogonalDrop[] = new Array(rawDrops.length);
+    const childIds: string[] = new Array(rawDrops.length);
+    for (let i = 0; i < rawDrops.length; i += 1) {
+      const drop = rawDrops[i];
+      childIds[i] = drop.childId;
+      childDrops[i] = {
         childId: drop.childId,
-        allObstacles,
-        maxContentX,
-        usedCorridorCounts,
-      }),
-    }));
+        x: drop.x,
+        toY: drop.toY,
+        isDirect: drop.isDirect,
+        points: routeChildDropAroundObstacles({
+          dropX: drop.x,
+          busY,
+          toY: drop.toY,
+          childId: drop.childId,
+          spatialIndex,
+          maxContentX,
+          usedCorridorCounts,
+        }),
+      };
+    }
 
-    const xs = [hub.x, ...childDrops.map((d) => d.x)];
     buses.push({
       unionId: union.id,
       parentIds: union.partnerIds,
-      childIds: childDrops.map((d) => d.childId),
-      isDirect: union.isDirect && childDrops.some((d) => d.isDirect),
+      childIds,
+      isDirect: union.isDirect && anyDirectDrop,
       hubX: hub.x,
       hubY: hub.y + 8,
       busY,
-      railMinX: Math.min(...xs),
-      railMaxX: Math.max(...xs),
+      railMinX,
+      railMaxX,
       stemPoints,
       childDrops,
     });
@@ -518,26 +848,33 @@ function computeDiagramBounds(params: {
   let maxX = params.leftPad * 2 + params.maxRowWidth;
   let maxY = params.cursorY + 32;
 
-  for (const n of params.nodes) {
-    maxX = Math.max(maxX, n.x + n.width + 64);
-    maxY = Math.max(maxY, n.y + n.height + 64);
-    minX = Math.min(minX, n.x - 40);
+  for (let i = 0; i < params.nodes.length; i += 1) {
+    const n = params.nodes[i];
+    if (n.x + n.width + 64 > maxX) maxX = n.x + n.width + 64;
+    if (n.y + n.height + 64 > maxY) maxY = n.y + n.height + 64;
+    if (n.x - 40 < minX) minX = n.x - 40;
   }
-  for (const s of params.earlyLossStrips) {
-    maxX = Math.max(maxX, s.x + s.width + 48);
-    maxY = Math.max(maxY, s.y + s.height + 48);
+  for (let i = 0; i < params.earlyLossStrips.length; i += 1) {
+    const s = params.earlyLossStrips[i];
+    if (s.x + s.width + 48 > maxX) maxX = s.x + s.width + 48;
+    if (s.y + s.height + 48 > maxY) maxY = s.y + s.height + 48;
   }
-  for (const t of params.siblingToggles) {
-    maxX = Math.max(maxX, t.x + t.width + 48);
-    maxY = Math.max(maxY, t.y + t.height + 48);
+  for (let i = 0; i < params.siblingToggles.length; i += 1) {
+    const t = params.siblingToggles[i];
+    if (t.x + t.width + 48 > maxX) maxX = t.x + t.width + 48;
+    if (t.y + t.height + 48 > maxY) maxY = t.y + t.height + 48;
   }
-  for (const b of params.buses) {
-    for (const pt of b.stemPoints) {
-      maxX = Math.max(maxX, pt.x + 32);
+  for (let i = 0; i < params.buses.length; i += 1) {
+    const b = params.buses[i];
+    for (let p = 0; p < b.stemPoints.length; p += 1) {
+      const px = b.stemPoints[p].x + 32;
+      if (px > maxX) maxX = px;
     }
-    for (const drop of b.childDrops) {
-      for (const pt of drop.points) {
-        maxX = Math.max(maxX, pt.x + 32);
+    for (let d = 0; d < b.childDrops.length; d += 1) {
+      const pts = b.childDrops[d].points;
+      for (let p = 0; p < pts.length; p += 1) {
+        const px = pts[p].x + 32;
+        if (px > maxX) maxX = px;
       }
     }
   }
@@ -551,7 +888,8 @@ function computeDiagramBounds(params: {
 }
 
 export function computeArchivalDiagramLayout(model: ArchivalTreeModel): ArchivalDiagramLayout {
-  if (model.generations.length === 0) {
+  const numGens = model.generations.length;
+  if (numGens === 0) {
     return {
       nodes: [],
       byId: new Map(),
@@ -565,16 +903,23 @@ export function computeArchivalDiagramLayout(model: ArchivalTreeModel): Archival
     };
   }
 
-  const orderedUnitsByGen = minimizeGenerationCrossings(model);
+  const orderedUnitsBySlot = minimizeGenerationCrossingsSlots(model);
+  const unitWidthsBySlot: Float64Array[] = new Array(numGens);
+  const rowWidths = new Float64Array(numGens);
 
-  const rowWidths = new Map<number, number>();
   let maxRowWidth = 0;
-  for (const g of model.generations) {
-    const units = orderedUnitsByGen.get(g.gen) ?? [];
-    const totalW =
-      units.reduce((sum, u) => sum + computeUnitFootprintWidth(model, u), 0) +
-      Math.max(0, units.length - 1) * ARCHIVAL_UNIT_GAP;
-    rowWidths.set(g.gen, totalW);
+  for (let gIdx = 0; gIdx < numGens; gIdx += 1) {
+    const units = orderedUnitsBySlot[gIdx];
+    const widths = new Float64Array(units.length);
+    let unitSum = 0;
+    for (let i = 0; i < units.length; i += 1) {
+      const w = computeUnitFootprintWidth(model, units[i]);
+      widths[i] = w;
+      unitSum += w;
+    }
+    unitWidthsBySlot[gIdx] = widths;
+    const totalW = unitSum + Math.max(0, units.length - 1) * ARCHIVAL_UNIT_GAP;
+    rowWidths[gIdx] = totalW;
     if (totalW > maxRowWidth) {
       maxRowWidth = totalW;
     }
@@ -590,25 +935,30 @@ export function computeArchivalDiagramLayout(model: ArchivalTreeModel): Archival
   const hangingRails: DiagramHangingGridRail[] = [];
   const siblingToggles: DiagramSiblingToggle[] = [];
   const earlyLossStrips: DiagramEarlyLossStrip[] = [];
-  const genBands: DiagramGenBand[] = [];
+  const genBands: DiagramGenBand[] = new Array(numGens);
+  const genBandIdxByGen = new Map<number, number>();
 
   let cursorY = topPad;
 
-  for (const g of model.generations) {
-    const units = orderedUnitsByGen.get(g.gen) ?? [];
-    const rowW = rowWidths.get(g.gen) ?? 0;
+  for (let gIdx = 0; gIdx < numGens; gIdx += 1) {
+    const g = model.generations[gIdx];
+    const units = orderedUnitsBySlot[gIdx];
+    const unitWidths = unitWidthsBySlot[gIdx];
+    const rowW = rowWidths[gIdx];
     let cursorX = leftPad + (maxRowWidth - rowW) / 2;
     const rowTopY = cursorY;
     let rowBottomY = rowTopY + ARCHIVAL_NODE_H;
 
-    for (const unit of units) {
-      const footprintW = computeUnitFootprintWidth(model, unit);
+    for (let uIdx = 0; uIdx < units.length; uIdx += 1) {
+      const unit = units[uIdx];
+      const footprintW = unitWidths[uIdx];
       const memberSpan =
         unit.orderedMemberIds.length * ARCHIVAL_NODE_W +
         Math.max(0, unit.orderedMemberIds.length - 1) * ARCHIVAL_SPOUSE_GAP;
       const memberStartX = cursorX + (footprintW - memberSpan) / 2;
 
-      for (const [idx, pid] of unit.orderedMemberIds.entries()) {
+      for (let idx = 0; idx < unit.orderedMemberIds.length; idx += 1) {
+        const pid = unit.orderedMemberIds[idx];
         const person = model.peopleById.get(pid);
         if (!person) {
           continue;
@@ -633,17 +983,18 @@ export function computeArchivalDiagramLayout(model: ArchivalTreeModel): Archival
         const left = centerX - width / 2;
         const right = centerX + width / 2;
         let y = baseTopY;
-        for (const prior of unitPlacedRects) {
-          if (left < prior.right + 14 && right > prior.left - 14) {
-            y = Math.max(y, prior.bottom + 14);
+        for (let r = 0; r < unitPlacedRects.length; r += 1) {
+          const prior = unitPlacedRects[r];
+          if (left < prior.right + 14 && right > prior.left - 14 && prior.bottom + 14 > y) {
+            y = prior.bottom + 14;
           }
         }
         return y;
       };
 
       let priorHangingBottomY: number | null = null;
-      for (const uid of unit.unionIds) {
-        const union = model.unionsById.get(uid);
+      for (let u = 0; u < unit.unionIds.length; u += 1) {
+        const union = model.unionsById.get(unit.unionIds[u]);
         if (!union) {
           continue;
         }
@@ -707,7 +1058,8 @@ export function computeArchivalDiagramLayout(model: ArchivalTreeModel): Archival
           const stripX = Math.round(hub.x - stripW / 2);
 
           const chips: DiagramEarlyLossChip[] = [];
-          for (const [cIdx, cid] of union.earlyLossChildIds.entries()) {
+          for (let cIdx = 0; cIdx < union.earlyLossChildIds.length; cIdx += 1) {
+            const cid = union.earlyLossChildIds[cIdx];
             const child = model.peopleById.get(cid);
             if (!child) {
               continue;
@@ -738,7 +1090,7 @@ export function computeArchivalDiagramLayout(model: ArchivalTreeModel): Archival
           unitPlacedRects.push({ left: stripX, right: stripX + stripW, bottom: stripY + stripH });
           stemFromY = stripY + stripH;
           attachmentY = stripY + stripH + ARCHIVAL_EARLY_STRIP_GAP;
-          rowBottomY = Math.max(rowBottomY, stripY + stripH);
+          if (stripY + stripH > rowBottomY) rowBottomY = stripY + stripH;
         }
 
         const totalCollateral = union.collapsedSiblingIds.length + union.hangingChildIds.length;
@@ -773,7 +1125,7 @@ export function computeArchivalDiagramLayout(model: ArchivalTreeModel): Archival
           unitPlacedRects.push({ left: pillX, right: pillX + pillW, bottom: pillY + pillH });
           stemFromY = pillY + pillH;
           attachmentY = pillY + pillH + 12;
-          rowBottomY = Math.max(rowBottomY, pillY + pillH);
+          if (pillY + pillH > rowBottomY) rowBottomY = pillY + pillH;
         }
 
         if (union.hangingChildIds.length > 0) {
@@ -788,8 +1140,10 @@ export function computeArchivalDiagramLayout(model: ArchivalTreeModel): Archival
             toX: number;
           }[] = [];
           let maxGridY = gridTopY;
+          let maxTickY = gridTopY;
 
-          for (const [hIdx, cid] of union.hangingChildIds.entries()) {
+          for (let hIdx = 0; hIdx < union.hangingChildIds.length; hIdx += 1) {
+            const cid = union.hangingChildIds[hIdx];
             const child = model.peopleById.get(cid);
             if (!child) {
               continue;
@@ -826,8 +1180,9 @@ export function computeArchivalDiagramLayout(model: ArchivalTreeModel): Archival
                 side: col === 0 ? 'left' : 'right',
                 toX: col === 0 ? x + ARCHIVAL_NODE_W : x,
               });
+              if (tickY > maxTickY) maxTickY = tickY;
             }
-            maxGridY = Math.max(maxGridY, y + ARCHIVAL_NODE_H);
+            if (y + ARCHIVAL_NODE_H > maxGridY) maxGridY = y + ARCHIVAL_NODE_H;
           }
 
           hangingRails.push({
@@ -836,7 +1191,7 @@ export function computeArchivalDiagramLayout(model: ArchivalTreeModel): Archival
             childIds: union.hangingChildIds,
             spineX,
             topY: stemFromY,
-            bottomY: ticks.length > 0 ? Math.max(...ticks.map((t) => t.y)) : gridTopY,
+            bottomY: ticks.length > 0 ? maxTickY : gridTopY,
             ticks,
           });
           unitPlacedRects.push({
@@ -845,67 +1200,101 @@ export function computeArchivalDiagramLayout(model: ArchivalTreeModel): Archival
             bottom: maxGridY,
           });
           priorHangingBottomY = maxGridY;
-          rowBottomY = Math.max(rowBottomY, maxGridY);
+          if (maxGridY > rowBottomY) rowBottomY = maxGridY;
         }
       }
 
       cursorX += footprintW + ARCHIVAL_UNIT_GAP;
     }
 
-    const activeBusCount = g.unions.filter((u) => u.visibleChildIds.length > 0).length;
+    let activeBusCount = 0;
+    for (let i = 0; i < g.unions.length; i += 1) {
+      if (g.unions[i].visibleChildIds.length > 0) {
+        activeBusCount += 1;
+      }
+    }
     const channelHeight = Math.max(ARCHIVAL_GEN_MIN_GAP, 44 + activeBusCount * 12);
 
-    genBands.push({
+    const band: DiagramGenBand = {
       gen: g.gen,
       y: rowTopY,
       height: rowBottomY - rowTopY,
       label: g.label,
       yearRange: g.yearRange,
-    });
+    };
+    genBands[gIdx] = band;
+    genBandIdxByGen.set(g.gen, gIdx);
 
     cursorY = rowBottomY + channelHeight;
   }
 
-  const allObstacles: ObstacleRect[] = [
-    ...nodes.map((n) => ({
-      left: n.x,
-      right: n.x + n.width,
-      top: n.y,
-      bottom: n.y + n.height,
-      ownerId: n.person.id,
-      kind: 'node' as const,
-    })),
-    ...earlyLossStrips.map((s) => ({
-      left: s.x,
-      right: s.x + s.width,
-      top: s.y,
-      bottom: s.y + s.height,
-      ownerId: s.unionId,
-      kind: 'early_strip' as const,
-    })),
-    ...siblingToggles.map((t) => ({
-      left: t.x,
-      right: t.x + t.width,
-      top: t.y,
-      bottom: t.y + t.height,
-      ownerId: t.unionId,
-      kind: 'sibling_toggle' as const,
-    })),
-  ];
-
+  const totalObstacles = nodes.length + earlyLossStrips.length + siblingToggles.length;
+  const allObstacles = new Array<ObstacleRect>(totalObstacles);
   let maxContentX = leftPad + maxRowWidth;
-  for (const obs of allObstacles) {
-    if (obs.right > maxContentX) {
-      maxContentX = obs.right;
-    }
+  let maxObstacleY = cursorY;
+  let oCursor = 0;
+
+  for (let i = 0; i < nodes.length; i += 1) {
+    const n = nodes[i];
+    const right = n.x + n.width;
+    const bottom = n.y + n.height;
+    if (right > maxContentX) maxContentX = right;
+    if (bottom > maxObstacleY) maxObstacleY = bottom;
+    allObstacles[oCursor] = {
+      idx: oCursor,
+      left: n.x,
+      right,
+      top: n.y,
+      bottom,
+      ownerId: n.person.id,
+      kind: 'node',
+    };
+    oCursor += 1;
   }
+  for (let i = 0; i < earlyLossStrips.length; i += 1) {
+    const s = earlyLossStrips[i];
+    const right = s.x + s.width;
+    const bottom = s.y + s.height;
+    if (right > maxContentX) maxContentX = right;
+    if (bottom > maxObstacleY) maxObstacleY = bottom;
+    allObstacles[oCursor] = {
+      idx: oCursor,
+      left: s.x,
+      right,
+      top: s.y,
+      bottom,
+      ownerId: s.unionId,
+      kind: 'early_strip',
+    };
+    oCursor += 1;
+  }
+  for (let i = 0; i < siblingToggles.length; i += 1) {
+    const t = siblingToggles[i];
+    const right = t.x + t.width;
+    const bottom = t.y + t.height;
+    if (right > maxContentX) maxContentX = right;
+    if (bottom > maxObstacleY) maxObstacleY = bottom;
+    allObstacles[oCursor] = {
+      idx: oCursor,
+      left: t.x,
+      right,
+      top: t.y,
+      bottom,
+      ownerId: t.unionId,
+      kind: 'sibling_toggle',
+    };
+    oCursor += 1;
+  }
+
+  const spatialIndex = buildObstacleSpatialIndex(allObstacles, maxObstacleY);
 
   const buses = buildOrthogonalBuses({
     model,
     hubByUnionId,
     byId,
     genBands,
-    allObstacles,
+    genBandIdxByGen,
+    spatialIndex,
     maxContentX,
   });
   const bounds = computeDiagramBounds({

@@ -20,6 +20,7 @@ import {
 import {
   findDuplicateResidenceSpans,
   runDualCompileCheck,
+  runDualCompileCheckWithArtifacts,
   scanPublicLivingNames,
   scanYamlFilesForSsns,
   validatePlaceCoordinates,
@@ -51,6 +52,7 @@ export {
   findDuplicateResidenceSpans,
   formatAuditHygieneWarningMessage,
   formatVerifyTextReport,
+  runDualCompileCheck,
   scanPublicLivingNames,
   scanYamlFilesForSsns,
   TREE_HYGIENE_CATEGORIES,
@@ -68,8 +70,14 @@ export async function runVerifyCommand(options: VerifyCommandOptions = {}): Prom
     archive;
 
   // 1. Validate narrative inline citations against known source and media IDs.
-  const sourceIds = new Set(sources.map((s) => s.id));
-  const mediaIds = new Set(media.map((m) => m.id));
+  const sourceIds = new Set<string>();
+  for (let i = 0; i < sources.length; i += 1) {
+    sourceIds.add(sources[i].id);
+  }
+  const mediaIds = new Set<string>();
+  for (let i = 0; i < media.length; i += 1) {
+    mediaIds.add(media[i].id);
+  }
   const citationErrors = validateNarrativeCitations(narratives, sourceIds, mediaIds);
   const citations: VerifyCitationsResult = {
     ok: citationErrors.length === 0,
@@ -84,12 +92,19 @@ export async function runVerifyCommand(options: VerifyCommandOptions = {}): Prom
   const ssnCheck = scanYamlFilesForSsns(archive.yamlTexts);
 
   // 4. Run dual-mode compilation (private and public) via @kinloom/core.
-  const compileCheck = runDualCompileCheck(archive);
+  //    Input entities were just schema-validated by loadVerifyArchive and placesCheck validates coordinate bounds.
+  const {
+    result: compileCheck,
+    publicNarratives,
+    publicMedia,
+  } = runDualCompileCheckWithArtifacts(archive, {
+    skipBundleRevalidation: placesCheck.ok,
+  });
 
   // 5. Verify every media.yaml file path exists on disk under archive-media/ or media/.
   const mediaCheck = verifyMediaFilesOnDisk(repoDir, media);
 
-  // 6. Living names on text that public export keeps.
+  // 6. Living names on text that public export keeps (reusing already-scrubbed public narratives and media).
   const livingNames = scanPublicLivingNames({
     people,
     events,
@@ -97,6 +112,8 @@ export async function runVerifyCommand(options: VerifyCommandOptions = {}): Prom
     media,
     narratives,
     privacy: siteConfig.privacy,
+    precomputedPublicNarratives: publicNarratives,
+    precomputedPublicMedia: publicMedia ?? [],
   });
 
   // 7. Non-breaking tree-hygiene diagnostics (fail only when --strict-hygiene is enabled).

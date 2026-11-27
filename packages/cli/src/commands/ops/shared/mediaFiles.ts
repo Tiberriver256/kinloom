@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { type MediaItem, parseMediaYaml } from '@kinloom/core';
+import { fastLocaleCompare, type MediaItem, parseMediaYaml } from '@kinloom/core';
 
 export interface LiveMediaFileCollision {
   file: string;
@@ -29,8 +29,20 @@ function isPlainRecord(value: unknown): value is Record<string, unknown> {
 }
 
 export function normalizeMediaFilePath(file: string): string {
-  const parts = file
-    .trim()
+  const trimmed = file.trim();
+  if (!trimmed) {
+    return '';
+  }
+  if (
+    !trimmed.includes('\\') &&
+    !trimmed.includes('//') &&
+    !trimmed.includes('/.') &&
+    !trimmed.startsWith('.') &&
+    !trimmed.endsWith('/')
+  ) {
+    return trimmed.charCodeAt(0) === 47 ? trimmed.slice(1) : trimmed;
+  }
+  const parts = trimmed
     .replaceAll('\\', '/')
     .split('/')
     .filter((part) => part.length > 0 && part !== '.');
@@ -40,25 +52,40 @@ export function normalizeMediaFilePath(file: string): string {
 export function findDuplicateNormalizedMediaFiles(
   mediaItems: readonly Pick<MediaItem, 'id' | 'file'>[]
 ): DuplicateNormalizedMediaFile[] {
-  const grouped = new Map<string, string[]>();
-  for (const item of mediaItems) {
+  const seenSingle = new Map<string, string>();
+  const multi = new Map<string, string[]>();
+
+  for (let i = 0; i < mediaItems.length; i += 1) {
+    const item = mediaItems[i];
     const normalized = normalizeMediaFilePath(item.file);
     if (!normalized) {
       continue;
     }
-    const ids = grouped.get(normalized) ?? [];
-    ids.push(item.id);
-    grouped.set(normalized, ids);
+    const existingList = multi.get(normalized);
+    if (existingList) {
+      existingList.push(item.id);
+      continue;
+    }
+    const firstId = seenSingle.get(normalized);
+    if (firstId === undefined) {
+      seenSingle.set(normalized, item.id);
+    } else if (firstId !== item.id) {
+      multi.set(normalized, [firstId, item.id]);
+    }
+  }
+
+  if (multi.size === 0) {
+    return [];
   }
 
   const duplicates: DuplicateNormalizedMediaFile[] = [];
-  for (const [file, ids] of grouped) {
-    const mediaIds = [...new Set(ids)].toSorted((a, b) => a.localeCompare(b));
+  for (const [file, ids] of multi) {
+    const mediaIds = [...new Set(ids)].toSorted(fastLocaleCompare);
     if (mediaIds.length > 1) {
       duplicates.push({ file, mediaIds });
     }
   }
-  duplicates.sort((a, b) => a.file.localeCompare(b.file));
+  duplicates.sort((a, b) => fastLocaleCompare(a.file, b.file));
   return duplicates;
 }
 
@@ -80,10 +107,13 @@ export function readStagedMediaRefs(rawMedia: unknown): StagedMediaRef[] {
 
 export function loadLiveMedia(repoDir: string): Array<{ id: string; file: string }> {
   const mediaPath = path.join(repoDir, 'data', 'media.yaml');
-  if (!fs.existsSync(mediaPath)) {
+  let rawText: string;
+  try {
+    rawText = fs.readFileSync(mediaPath, 'utf8');
+  } catch {
     return [];
   }
-  return parseMediaYaml(fs.readFileSync(mediaPath, 'utf8')).map((item) => ({
+  return parseMediaYaml(rawText).map((item) => ({
     id: item.id,
     file: item.file,
   }));
@@ -93,47 +123,67 @@ export function collectLiveMediaCollisions(
   packages: readonly StagedMediaPackage[],
   liveMedia: readonly { id: string; file: string }[]
 ): LiveMediaFileCollision[] {
+  const hasAnyStagedMedia = packages.some((pkg) => pkg.media.length > 0);
+  if (!hasAnyStagedMedia || liveMedia.length === 0) {
+    return [];
+  }
+
   const liveByFile = new Map<string, string[]>();
   for (const item of liveMedia) {
     const normalized = normalizeMediaFilePath(item.file);
     if (!normalized) {
       continue;
     }
-    const ids = liveByFile.get(normalized) ?? [];
+    let ids = liveByFile.get(normalized);
+    if (!ids) {
+      ids = [];
+      liveByFile.set(normalized, ids);
+    }
     ids.push(item.id);
-    liveByFile.set(normalized, ids);
   }
 
   const grouped = new Map<string, LiveMediaFileCollision>();
   for (const staged of packages) {
     for (const item of staged.media) {
-      const liveIds = liveByFile.get(item.normalizedFile) ?? [];
+      const liveIds = liveByFile.get(item.normalizedFile);
+      if (!liveIds) {
+        continue;
+      }
       for (const liveId of liveIds) {
         if (liveId === item.id) {
           continue;
         }
         const key = `${item.normalizedFile}\0${liveId}`;
-        const existing = grouped.get(key) ?? {
-          file: item.normalizedFile,
-          live_media_id: liveId,
-          staged: [],
-        };
+        let existing = grouped.get(key);
+        if (!existing) {
+          existing = {
+            file: item.normalizedFile,
+            live_media_id: liveId,
+            staged: [],
+          };
+          grouped.set(key, existing);
+        }
         existing.staged.push({
           person_id: staged.personId,
           media_id: item.id,
           file: item.file,
         });
-        grouped.set(key, existing);
       }
     }
+  }
+
+  if (grouped.size === 0) {
+    return [];
   }
 
   return [...grouped.values()]
     .map((collision) => ({
       ...collision,
       staged: collision.staged.toSorted(
-        (a, b) => a.person_id.localeCompare(b.person_id) || a.media_id.localeCompare(b.media_id)
+        (a, b) => fastLocaleCompare(a.person_id, b.person_id) || fastLocaleCompare(a.media_id, b.media_id)
       ),
     }))
-    .toSorted((a, b) => a.file.localeCompare(b.file) || a.live_media_id.localeCompare(b.live_media_id));
+    .toSorted(
+      (a, b) => fastLocaleCompare(a.file, b.file) || fastLocaleCompare(a.live_media_id, b.live_media_id)
+    );
 }

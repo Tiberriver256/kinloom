@@ -1,11 +1,12 @@
 import fs from 'node:fs';
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import {
   type ArchiveRawSnapshot,
   type BuildMode,
   type CompileArchiveInput,
   type EntityType,
+  fastLocaleCompare,
   type KinloomSiteConfig,
   type KinshipEdge,
   type MediaItem,
@@ -86,22 +87,15 @@ interface RawLocalArchiveTexts {
   enrichmentsText: string | null;
 }
 
-async function readOptionalFile(filePath: string): Promise<string | null> {
+function readOptionalFileSync(filePath: string): string | null {
   try {
-    return await readFile(filePath, 'utf8');
+    return fs.readFileSync(filePath, 'utf8');
   } catch (err: unknown) {
     if (typeof err === 'object' && err !== null && 'code' in err && err.code === 'ENOENT') {
       return null;
     }
     throw err;
   }
-}
-
-function readOptionalFileSync(filePath: string): string | null {
-  if (!fs.existsSync(filePath)) {
-    return null;
-  }
-  return fs.readFileSync(filePath, 'utf8');
 }
 
 function parseLocalArchiveTexts(texts: RawLocalArchiveTexts): LocalArchiveData & {
@@ -126,46 +120,48 @@ function resolveLocalArchiveRepoPaths(
   options: LoadLocalArchiveRepoOptions
 ): { repoDir: string; dataDir: string; configPath: string } {
   const repoDir = path.resolve(rawRepoDir?.trim() || process.cwd());
-  if (!fs.existsSync(repoDir) || !fs.statSync(repoDir).isDirectory()) {
+  const repoStat = fs.statSync(repoDir, { throwIfNoEntry: false });
+  if (!repoStat?.isDirectory()) {
     throw new CliValidationError(`Repository directory does not exist: ${repoDir}`);
   }
   const dataDir = options.dataDirOverride
     ? path.resolve(options.dataDirOverride)
     : path.join(repoDir, 'data');
   const configPath = path.join(repoDir, 'kinloom.config.yaml');
-  if (!fs.existsSync(dataDir) || !fs.statSync(dataDir).isDirectory()) {
+  const dataStat = fs.statSync(dataDir, { throwIfNoEntry: false });
+  if (!dataStat?.isDirectory()) {
     throw new CliValidationError(`Missing data/ directory at ${dataDir}.`);
-  }
-  if (options.requireConfig !== false && !fs.existsSync(configPath)) {
-    throw new CliValidationError(`Missing kinloom.config.yaml at ${configPath}.`);
-  }
-  if (options.requirePeopleFile && !fs.existsSync(path.join(dataDir, 'people.yaml'))) {
-    throw new CliValidationError(`Missing ${path.join(dataDir, 'people.yaml')}.`);
   }
   return { repoDir, dataDir, configPath };
 }
 
+function buildKnownDataTextMap(texts: RawLocalArchiveTexts): Map<string, string> {
+  const known = new Map<string, string>();
+  if (texts.peopleText !== null) known.set('people.yaml', texts.peopleText);
+  if (texts.eventsText !== null) known.set('events.yaml', texts.eventsText);
+  if (texts.placesText !== null) known.set('places.yaml', texts.placesText);
+  if (texts.sourcesText !== null) known.set('sources.yaml', texts.sourcesText);
+  if (texts.kinshipText !== null) known.set('kinship.yaml', texts.kinshipText);
+  if (texts.mediaText !== null) known.set('media.yaml', texts.mediaText);
+  if (texts.narrativesText !== null) known.set('narratives.yaml', texts.narrativesText);
+  if (texts.enrichmentsText !== null) known.set('narrative_enrichments.yaml', texts.enrichmentsText);
+  return known;
+}
+
 export async function loadArchiveDataDir(dataDir: string): Promise<LocalArchiveData> {
-  const [peopleText, eventsText, placesText, sourcesText, kinshipText, mediaText, narrativesText] =
-    await Promise.all([
-      readOptionalFile(path.join(dataDir, 'people.yaml')),
-      readOptionalFile(path.join(dataDir, 'events.yaml')),
-      readOptionalFile(path.join(dataDir, 'places.yaml')),
-      readOptionalFile(path.join(dataDir, 'sources.yaml')),
-      readOptionalFile(path.join(dataDir, 'kinship.yaml')),
-      readOptionalFile(path.join(dataDir, 'media.yaml')),
-      readOptionalFile(path.join(dataDir, 'narratives.yaml')),
-    ]);
+  const files = new Set<string>(fs.readdirSync(dataDir));
+  const readIfPresent = (name: string): string | null =>
+    files.has(name) ? readOptionalFileSync(path.join(dataDir, name)) : null;
 
   const parsed = parseLocalArchiveTexts({
     configText: null,
-    peopleText,
-    eventsText,
-    placesText,
-    sourcesText,
-    kinshipText,
-    mediaText,
-    narrativesText,
+    peopleText: readIfPresent('people.yaml'),
+    eventsText: readIfPresent('events.yaml'),
+    placesText: readIfPresent('places.yaml'),
+    sourcesText: readIfPresent('sources.yaml'),
+    kinshipText: readIfPresent('kinship.yaml'),
+    mediaText: readIfPresent('media.yaml'),
+    narrativesText: readIfPresent('narratives.yaml'),
     enrichmentsText: null,
   });
 
@@ -184,64 +180,7 @@ export async function loadLocalArchiveRepo(
   rawRepoDir?: string,
   options: LoadLocalArchiveRepoOptions = {}
 ): Promise<LoadedLocalArchiveRepo> {
-  const { repoDir, dataDir, configPath } = resolveLocalArchiveRepoPaths(rawRepoDir, options);
-  const [
-    configText,
-    peopleText,
-    eventsText,
-    placesText,
-    sourcesText,
-    kinshipText,
-    mediaText,
-    narrativesText,
-    enrichmentsText,
-  ] = await Promise.all([
-    readOptionalFile(configPath),
-    readOptionalFile(path.join(dataDir, 'people.yaml')),
-    readOptionalFile(path.join(dataDir, 'events.yaml')),
-    readOptionalFile(path.join(dataDir, 'places.yaml')),
-    readOptionalFile(path.join(dataDir, 'sources.yaml')),
-    readOptionalFile(path.join(dataDir, 'kinship.yaml')),
-    readOptionalFile(path.join(dataDir, 'media.yaml')),
-    readOptionalFile(path.join(dataDir, 'narratives.yaml')),
-    options.includeEnrichments
-      ? readOptionalFile(path.join(dataDir, 'narrative_enrichments.yaml'))
-      : Promise.resolve(null),
-  ]);
-
-  let yamlTexts: Array<{ name: string; content: string }> = [];
-  if (options.includeYamlTexts) {
-    const yamlEntries = fs
-      .readdirSync(dataDir, { withFileTypes: true })
-      .filter((entry) => entry.isFile() && (entry.name.endsWith('.yaml') || entry.name.endsWith('.yml')))
-      .toSorted((a, b) => a.name.localeCompare(b.name));
-    yamlTexts = await Promise.all(
-      yamlEntries.map(async (entry) => ({
-        name: `data/${entry.name}`,
-        content: await readFile(path.join(dataDir, entry.name), 'utf8'),
-      }))
-    );
-  }
-
-  const parsed = parseLocalArchiveTexts({
-    configText,
-    peopleText,
-    eventsText,
-    placesText,
-    sourcesText,
-    kinshipText,
-    mediaText,
-    narrativesText,
-    enrichmentsText,
-  });
-
-  return {
-    repoDir,
-    dataDir,
-    configPath,
-    ...parsed,
-    yamlTexts,
-  };
+  return loadLocalArchiveRepoSync(rawRepoDir, options);
 }
 
 export function loadLocalArchiveRepoSync(
@@ -249,29 +188,54 @@ export function loadLocalArchiveRepoSync(
   options: LoadLocalArchiveRepoOptions = {}
 ): LoadedLocalArchiveRepo {
   const { repoDir, dataDir, configPath } = resolveLocalArchiveRepoPaths(rawRepoDir, options);
-  const parsed = parseLocalArchiveTexts({
-    configText: readOptionalFileSync(configPath),
-    peopleText: readOptionalFileSync(path.join(dataDir, 'people.yaml')),
-    eventsText: readOptionalFileSync(path.join(dataDir, 'events.yaml')),
-    placesText: readOptionalFileSync(path.join(dataDir, 'places.yaml')),
-    sourcesText: readOptionalFileSync(path.join(dataDir, 'sources.yaml')),
-    kinshipText: readOptionalFileSync(path.join(dataDir, 'kinship.yaml')),
-    mediaText: readOptionalFileSync(path.join(dataDir, 'media.yaml')),
-    narrativesText: readOptionalFileSync(path.join(dataDir, 'narratives.yaml')),
-    enrichmentsText: options.includeEnrichments
-      ? readOptionalFileSync(path.join(dataDir, 'narrative_enrichments.yaml'))
-      : null,
-  });
+  const configText = readOptionalFileSync(configPath);
+  if (options.requireConfig !== false && configText === null) {
+    throw new CliValidationError(`Missing kinloom.config.yaml at ${configPath}.`);
+  }
+
+  const dataEntries = fs.readdirSync(dataDir, { withFileTypes: true });
+  const dataEntryNames = new Set<string>();
+  const regularFileNames = new Set<string>();
+  for (let i = 0; i < dataEntries.length; i += 1) {
+    dataEntryNames.add(dataEntries[i].name);
+    if (!dataEntries[i].isDirectory()) {
+      regularFileNames.add(dataEntries[i].name);
+    }
+  }
+  if (options.requirePeopleFile && !regularFileNames.has('people.yaml')) {
+    throw new CliValidationError(`Missing ${path.join(dataDir, 'people.yaml')}.`);
+  }
+
+  const readDataFile = (name: string): string | null =>
+    dataEntryNames.has(name) ? readOptionalFileSync(path.join(dataDir, name)) : null;
+
+  const rawTexts: RawLocalArchiveTexts = {
+    configText,
+    peopleText: readDataFile('people.yaml'),
+    eventsText: readDataFile('events.yaml'),
+    placesText: readDataFile('places.yaml'),
+    sourcesText: readDataFile('sources.yaml'),
+    kinshipText: readDataFile('kinship.yaml'),
+    mediaText: readDataFile('media.yaml'),
+    narrativesText: readDataFile('narratives.yaml'),
+    enrichmentsText: options.includeEnrichments ? readDataFile('narrative_enrichments.yaml') : null,
+  };
+  const parsed = parseLocalArchiveTexts(rawTexts);
 
   let yamlTexts: Array<{ name: string; content: string }> = [];
   if (options.includeYamlTexts) {
-    const yamlEntries = fs
-      .readdirSync(dataDir, { withFileTypes: true })
-      .filter((entry) => entry.isFile() && (entry.name.endsWith('.yaml') || entry.name.endsWith('.yml')))
-      .toSorted((a, b) => a.name.localeCompare(b.name));
-    yamlTexts = yamlEntries.map((entry) => ({
-      name: `data/${entry.name}`,
-      content: fs.readFileSync(path.join(dataDir, entry.name), 'utf8'),
+    const knownByFile = buildKnownDataTextMap(rawTexts);
+    const yamlNames: string[] = [];
+    for (let i = 0; i < dataEntries.length; i += 1) {
+      const entry = dataEntries[i];
+      if (entry.isFile() && (entry.name.endsWith('.yaml') || entry.name.endsWith('.yml'))) {
+        yamlNames.push(entry.name);
+      }
+    }
+    yamlNames.sort(fastLocaleCompare);
+    yamlTexts = yamlNames.map((name) => ({
+      name: `data/${name}`,
+      content: knownByFile.get(name) ?? fs.readFileSync(path.join(dataDir, name), 'utf8'),
     }));
   }
 

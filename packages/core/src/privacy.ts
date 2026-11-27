@@ -12,6 +12,7 @@ export {
   type LivingNameHit,
   type LivingNamePerson,
   type LivingNameTarget,
+  mayMatchLivingNameMatcher,
   NARRATIVE_POSTHUMOUS_HORIZON_YEARS,
   type NarrativeMaxYearInput,
   resolveNarrativeMaxYear,

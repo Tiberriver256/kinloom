@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { type LoadedLocalArchiveRepo, loadLocalArchiveRepoSync } from '../../dataFiles.js';
 import { runIntegrateCommand } from '../shared/integrateEngine/execute.js';
 import { detectMediaLayout } from '../shared/integrateEngine/media.js';
 import {
@@ -101,6 +102,7 @@ export async function classifyStagedPackages(
   const alreadyIntegrated: string[] = [];
   const alreadyIntegratedDrifted: string[] = [];
   const statuses: StagedPackageStatus[] = [];
+  let sharedRepo: LoadedLocalArchiveRepo | null | undefined;
 
   for (const personId of allStaged) {
     const packageDir = path.join(resolvedRepo, 'research', 'people', personId);
@@ -114,7 +116,6 @@ export async function classifyStagedPackages(
             statuses.push({ kind: 'already_integrated', personId, reason: 'receipt_match' });
             continue;
           }
-          // Live media scan was deleted after integration; re-queue as pending to restore it.
           pending.push(personId);
           statuses.push({ kind: 'pending', personId, reason: 'changes' });
           continue;
@@ -124,11 +125,24 @@ export async function classifyStagedPackages(
         continue;
       }
 
+      if (sharedRepo === undefined) {
+        try {
+          sharedRepo = loadLocalArchiveRepoSync(resolvedRepo, {
+            requireConfig: true,
+            requirePeopleFile: true,
+            includeEnrichments: true,
+          });
+        } catch {
+          sharedRepo = null;
+        }
+      }
+
       const dryRunResult = await runIntegrateCommand({
         repoDir: resolvedRepo,
         personId,
         dryRun: true,
         json: false,
+        preloadedRepo: sharedRepo ?? undefined,
       });
       if (!hasUnintegratedEffect(dryRunResult)) {
         alreadyIntegrated.push(personId);

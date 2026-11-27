@@ -1,6 +1,6 @@
 import fc from 'fast-check';
 import { describe, expect, it, vi } from 'vitest';
-import { compileArchive } from './compileArchive.js';
+import { compileArchive, compileArchiveDual } from './compileArchive.js';
 import { computeLifeOverlap } from './domain/kinshipFinder.js';
 import { isPersonAliveInYear } from './domain/timeSnapshot.js';
 import {
@@ -14,7 +14,15 @@ import {
   sanitizePersonForWrite,
 } from './privacy.js';
 import { parseKinloomConfig } from './schemas/config.js';
-import type { KinshipEdge, MediaItem, Place, RawEvent, RawPerson, SourceRecord } from './schemas/entities.js';
+import type {
+  KinshipEdge,
+  MediaItem,
+  Narrative,
+  Place,
+  RawEvent,
+  RawPerson,
+  SourceRecord,
+} from './schemas/entities.js';
 
 const SYNTHETIC_CONFIG = parseKinloomConfig({
   site: {
@@ -288,6 +296,71 @@ describe('compileArchive and living-person privacy', () => {
     expect(birthEv?.summary).toBe('Living relative record (location and exact date omitted).');
   });
 
+  it('maintains exact compileArchiveDual parity with separate private and public compileArchive calls across shared and mixed-living residence anchors', () => {
+    const narratives: Narrative[] = [
+      {
+        id: 'nar_arthur_bio',
+        slug: 'arthur-alder-bio',
+        kind: 'biography',
+        title: 'Life of Arthur Alder',
+        body_md: 'Arthur Alder settled in Riverdale; later recalled by Elena Alder.',
+        person_ids: ['per_arthur_alder'],
+        place_ids: ['plc_riverdale'],
+        event_ids: ['evt_1880_resi'],
+        source_ids: ['src_census_1880'],
+      },
+    ];
+    const mixedAnchorEvent: RawEvent = {
+      id: 'evt_1915_mixed_resi',
+      title: 'Shared Riverdale household',
+      scope: 'family',
+      event_kind: 'residence_anchor',
+      category: 'homestead',
+      edtf_date: '1915',
+      place_id: 'plc_ohio',
+      summary: 'Mixed deceased and living household anchor.',
+      severity_rank: 4,
+      participants: [
+        { person_id: 'per_arthur_alder', role: 'head' },
+        { person_id: 'per_elena_alder', role: 'relative' },
+      ],
+      sources: [{ source_id: 'src_census_1880', confidence: 'high' }],
+    };
+
+    const scenarios = [
+      { events: SYNTHETIC_EVENTS, siteConfig: SYNTHETIC_CONFIG },
+      { events: [...SYNTHETIC_EVENTS, mixedAnchorEvent], siteConfig: SYNTHETIC_CONFIG },
+      {
+        events: [...SYNTHETIC_EVENTS, mixedAnchorEvent],
+        siteConfig: parseKinloomConfig({
+          ...SYNTHETIC_CONFIG,
+          privacy: { ...SYNTHETIC_CONFIG.privacy, stripLivingResidenceSpans: false },
+        }),
+      },
+    ];
+
+    for (const scenario of scenarios) {
+      const base = {
+        people: SYNTHETIC_PEOPLE,
+        events: scenario.events,
+        places: SYNTHETIC_PLACES,
+        sources: SYNTHETIC_SOURCES,
+        kinship: SYNTHETIC_KINSHIP,
+        media: SYNTHETIC_MEDIA,
+        narratives,
+        siteConfig: scenario.siteConfig,
+        generatedAt: '2026-11-24T00:00:00.000Z',
+        version: '1.2.0',
+      };
+      const dual = compileArchiveDual(base);
+      const priv = compileArchive({ ...base, mode: 'private' });
+      const pub = compileArchive({ ...base, mode: 'public' });
+
+      expect(dual.privateResult).toEqual(priv);
+      expect(dual.publicResult).toEqual(pub);
+    }
+  });
+
   it('enforces single-entity API boundary redaction and write sanitization', () => {
     const living = SYNTHETIC_PEOPLE[2];
     const sanitized = sanitizePersonForWrite(living);
@@ -523,5 +596,128 @@ describe('compileArchive and living-person privacy', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+
+describe('compileArchive media attachment, overlay merging, thumbnail resolution, and living-event photo guards', () => {
+  it('attaches portrait and milestone media across fast-path and compiledMediaOverlay pipelines while stripping living participant event photos', () => {
+    const mediaList = [
+      ...SYNTHETIC_MEDIA,
+      {
+        id: 'med_joint_stone', // duplicate ID ignored
+        kind: 'headstone' as const,
+        person_ids: ['per_arthur_alder'],
+        file: '/media/dup.jpg',
+        caption: 'Duplicate',
+      },
+      {
+        id: 'med_arthur_portrait',
+        kind: 'portrait' as const,
+        person_id: 'per_arthur_alder',
+        file: '/media/arthur-portrait.jpg',
+        caption: 'Arthur portrait',
+      },
+      {
+        id: 'med_resi_hero',
+        kind: 'milestone' as const,
+        event_id: 'evt_1880_resi',
+        file: '/media/homestead-1880.jpg',
+        caption: 'Alder homestead in 1880',
+      },
+      {
+        id: 'med_shared_living_event',
+        kind: 'milestone' as const,
+        event_id: 'evt_1990_shared',
+        file: '/media/reunion-1990.jpg',
+        caption: 'Reunion with living participant',
+      },
+      {
+        id: 'med_missing_disk',
+        kind: 'family_photo' as const,
+        person_id: 'per_clara_mercer',
+        file: '/media/missing.jpg',
+        caption: 'Missing file',
+      },
+    ];
+
+    const eventsWithExistingPhoto: RawEvent[] = [
+      ...SYNTHETIC_EVENTS,
+      {
+        id: 'evt_1905_preset_photo',
+        title: 'Preset Event Photo',
+        scope: 'family',
+        event_kind: 'point_event',
+        edtf_date: '1905',
+        place_id: 'plc_riverdale',
+        summary: 'Already has photo_url.',
+        photo_url: '/media/existing-event.jpg',
+        participants: [{ person_id: 'per_arthur_alder', role: 'subject' }],
+        sources: [],
+      },
+    ];
+
+    // 1. Fast path (no compiledMediaOverlay / mediaExists / resolveThumbUrl)
+    const fastDual = compileArchiveDual({
+      people: SYNTHETIC_PEOPLE,
+      events: eventsWithExistingPhoto,
+      places: SYNTHETIC_PLACES,
+      sources: SYNTHETIC_SOURCES,
+      kinship: SYNTHETIC_KINSHIP,
+      media: mediaList,
+      siteConfig: SYNTHETIC_CONFIG,
+      generatedAt: '2026-11-24T00:00:00.000Z',
+    });
+    const fastArthur = fastDual.publicResult.bundle.people.find((p) => p.id === 'per_arthur_alder');
+    expect(fastArthur?.portrait_url).toBe('/media/arthur-portrait.jpg');
+    const fastResi = fastDual.publicResult.bundle.events.find((e) => e.id === 'evt_1880_resi');
+    expect(fastResi?.photo_url).toBe('/media/homestead-1880.jpg');
+    expect(fastResi?.photo_placeholder_caption).toBe('Alder homestead in 1880');
+    const fastShared = fastDual.publicResult.bundle.events.find((e) => e.id === 'evt_1990_shared');
+    expect(fastShared?.photo_url).toBeUndefined();
+
+    // 2. Overlay + mediaExists + resolveThumbUrl path
+    const withOverlay = compileArchive({
+      people: SYNTHETIC_PEOPLE,
+      events: eventsWithExistingPhoto,
+      places: SYNTHETIC_PLACES,
+      sources: SYNTHETIC_SOURCES,
+      kinship: SYNTHETIC_KINSHIP,
+      media: mediaList,
+      compiledMediaOverlay: {
+        media: [
+          {
+            id: 'med_overlay_keep',
+            kind: 'document_scan',
+            person_id: 'per_clara_mercer',
+            file: '/media/clara-deed.jpg',
+            caption: 'Clara deed scan',
+          },
+          {
+            id: 'med_overlay_missing',
+            kind: 'document_scan',
+            person_id: 'per_clara_mercer',
+            file: '/media/overlay-missing.jpg',
+            caption: 'Missing overlay',
+          },
+        ],
+        people: [{ id: 'per_clara_mercer', portrait_url: '/media/clara-overlay-portrait.jpg' }],
+        events: [{ id: 'evt_1890_resi', photo_url: '/media/clara-deed.jpg' }],
+      },
+      mediaExists: (filePath) => !filePath.includes('missing'),
+      resolveThumbUrl: (url) => (url?.includes('clara') ? `${url}.thumb.webp` : undefined),
+      siteConfig: SYNTHETIC_CONFIG,
+      mode: 'public',
+      generatedAt: '2026-11-24T00:00:00.000Z',
+    });
+
+    const overlayClara = withOverlay.bundle.people.find((p) => p.id === 'per_clara_mercer');
+    expect(overlayClara?.portrait_url).toBe('/media/clara-overlay-portrait.jpg');
+    expect(overlayClara?.thumb_url).toBe('/media/clara-overlay-portrait.jpg.thumb.webp');
+    const overlayArthur = withOverlay.bundle.people.find((p) => p.id === 'per_arthur_alder');
+    expect(overlayArthur?.portrait_url).toBe('/media/arthur-portrait.jpg');
+    expect(overlayArthur?.thumb_url).toBeUndefined();
+    const overlayDeathEv = withOverlay.bundle.events.find((e) => e.id === 'evt_1890_resi');
+    expect(overlayDeathEv?.photo_url).toBe('/media/clara-deed.jpg');
+    expect(overlayDeathEv?.photo_placeholder_caption).toBe('Clara deed scan');
   });
 });

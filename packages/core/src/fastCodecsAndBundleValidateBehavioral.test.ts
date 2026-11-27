@@ -913,3 +913,60 @@ describe('YAML fast reader, canonical emitter, and fast entity parsers', () => {
     expect(fastLocaleCompare('Édith', 'Edith')).not.toBe(0);
   });
 });
+
+describe('parseYaml extra block-sequence and js-yaml fallback invariants', () => {
+  it('matches js-yaml CORE_SCHEMA on trailing bare dashes, spaced sequence scalars, and malformed indentation fallbacks', () => {
+    const edgeCases = [
+      '-\n',
+      '-   spaced_scalar\n- second_scalar\n',
+      'a: 1\n"__proto__": 2\n',
+      '- item_one\n  - over_indented_sublist\n',
+      '- scalar_parent\n  nested_under_scalar: invalid_fast_path\n',
+    ];
+    for (const sample of edgeCases) {
+      let expectedOk = false;
+      let expectedVal: unknown;
+      try {
+        expectedVal = loadJsYaml(sample, { schema: CORE_SCHEMA }) ?? null;
+        expectedOk = true;
+      } catch {
+        expectedOk = false;
+      }
+      if (expectedOk) {
+        expect(parseYaml(sample)).toEqual(expectedVal);
+      } else {
+        expect(() => parseYaml(sample)).toThrow();
+      }
+    }
+  });
+});
+
+describe('parseYaml quoted escapes, special numbers, and mapping fallback parity', () => {
+  it('matches js-yaml CORE_SCHEMA across double-quoted escape sequences, special numbers, and duplicate/malformed mappings', () => {
+    const samples = [
+      'escaped: "line1\\nline2\\t\\r\\b\\f\\\\\\/\\"\\u0041"\n',
+      'bad_escape: "\\x41"\n',
+      'bad_unicode: "\\uZZZZ"\n',
+      'neg_inf: -.inf\npos_inf: +.inf\nsci: -2.5e-3\nneg_int: -9007199254740991\n',
+      'dup: 1\ndup: 2\n',
+      'parent:\n  child: ok\n   overindented: bad\n',
+      'flow_val: { a: 1, b: [2, 3] }\n',
+      'multi_quoted: "hello \\"world\\""\n',
+    ];
+    for (const sample of samples) {
+      let expectedOk = false;
+      let expectedVal: unknown;
+      try {
+        expectedVal = loadJsYaml(sample, { schema: CORE_SCHEMA }) ?? null;
+        expectedOk = true;
+      } catch {
+        expectedOk = false;
+      }
+      if (expectedOk) {
+        expect(parseYaml(sample)).toEqual(expectedVal);
+      } else {
+        expect(() => parseYaml(sample)).toThrow();
+      }
+    }
+  });
+});

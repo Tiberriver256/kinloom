@@ -9,8 +9,6 @@ import { mergedPrimarySourceFlag, upsertById } from './entityUpsert.js';
 import { isPlainObject, parseOptionalStringList } from './primitives.js';
 import type { UpsertCounts } from './types.js';
 
-// Incoming roles replace a person's existing roles on the event. A person keeps
-// several roles only when the incoming patch lists each one explicitly.
 function dedupeParticipants(
   existing: readonly EventParticipant[] | undefined,
   additions: readonly EventParticipant[] | undefined
@@ -107,11 +105,10 @@ export function mergeEventsPatch(
   counts: UpsertCounts;
   removedEventIds: string[];
   topLevelRemoveEventIds: Set<string>;
-  cleanedPatchEvents: unknown[];
+  cleanedPatchEvents: RawEvent[];
 } {
-  // Extract optional per-event remove_source_ids before schema parsing.
   const eventRemoveSourceIds = new Map<string, Set<string>>();
-  const cleanedPatchEvents = patchEvents.map((rawEv, idx) => {
+  const cleanedRawEvents = patchEvents.map((rawEv, idx) => {
     if (!isPlainObject(rawEv)) {
       return rawEv;
     }
@@ -143,22 +140,27 @@ export function mergeEventsPatch(
 
   const eventsMerge = upsertById(
     existingEvents,
-    cleanedPatchEvents,
+    cleanedRawEvents,
     (ev) => RawEventSchema.parse(ev),
     (prev, incoming) => mergeSharedEvent(prev, incoming, eventRemoveSourceIds.get(incoming.id))
   );
   const topLevelRemoveEventIds = new Set(removeEventIds);
-  if (topLevelRemoveEventIds.size > 0) {
-    const patchedEventIds = new Set(cleanedPatchEvents.map((ev) => RawEventSchema.parse(ev).id));
-    for (const removeId of topLevelRemoveEventIds) {
-      if (patchedEventIds.has(removeId)) {
-        throw new Error(
-          `patch.json cannot both add/update and remove event '${removeId}' in the same patch.`
-        );
-      }
+  const removedEventIds: string[] = [];
+  if (topLevelRemoveEventIds.size === 0) {
+    return {
+      items: eventsMerge.items,
+      counts: eventsMerge.counts,
+      removedEventIds,
+      topLevelRemoveEventIds,
+      cleanedPatchEvents: eventsMerge.parsedIncoming,
+    };
+  }
+  const patchedEventIds = new Set(eventsMerge.parsedIncoming.map((ev) => ev.id));
+  for (const removeId of topLevelRemoveEventIds) {
+    if (patchedEventIds.has(removeId)) {
+      throw new Error(`patch.json cannot both add/update and remove event '${removeId}' in the same patch.`);
     }
   }
-  const removedEventIds: string[] = [];
   const items = eventsMerge.items.filter((ev) => {
     if (topLevelRemoveEventIds.has(ev.id)) {
       removedEventIds.push(ev.id);
@@ -171,6 +173,6 @@ export function mergeEventsPatch(
     counts: eventsMerge.counts,
     removedEventIds,
     topLevelRemoveEventIds,
-    cleanedPatchEvents,
+    cleanedPatchEvents: eventsMerge.parsedIncoming,
   };
 }

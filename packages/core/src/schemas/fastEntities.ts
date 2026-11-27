@@ -45,6 +45,21 @@ function isObj(v: unknown): v is Record<string, unknown> {
   return typeof v === 'object' && v !== null && !Array.isArray(v);
 }
 
+function countOwnEnumerableKeys(obj: Record<string, unknown>): number {
+  let count = 0;
+  for (const _ in obj) {
+    count += 1;
+  }
+  return count;
+}
+
+function hasExactOwnedKeys<T extends object>(
+  obj: Record<string, unknown>,
+  expectedKeys: number
+): obj is Record<string, unknown> & T {
+  return countOwnEnumerableKeys(obj) === expectedKeys;
+}
+
 function coerceEdtf(v: unknown): string | undefined {
   if (v === null || v === undefined) {
     return '';
@@ -107,7 +122,7 @@ function parseSimplePronunciationFast(v: unknown): PronResult {
   return out;
 }
 
-export function tryFastParseRawPerson(raw: unknown): RawPerson | null {
+export function tryFastParseRawPerson(raw: unknown, ownsInput = false): RawPerson | null {
   if (!isObj(raw)) {
     return null;
   }
@@ -131,13 +146,22 @@ export function tryFastParseRawPerson(raw: unknown): RawPerson | null {
     if (!Array.isArray(raw.alt_names)) {
       return null;
     }
-    altNames = new Array<string>(raw.alt_names.length);
-    for (let i = 0; i < raw.alt_names.length; i += 1) {
-      const a = raw.alt_names[i];
-      if (typeof a !== 'string') {
-        return null;
+    if (ownsInput) {
+      for (let i = 0; i < raw.alt_names.length; i += 1) {
+        if (typeof raw.alt_names[i] !== 'string') {
+          return null;
+        }
       }
-      altNames[i] = a;
+      altNames = raw.alt_names as string[];
+    } else {
+      altNames = new Array<string>(raw.alt_names.length);
+      for (let i = 0; i < raw.alt_names.length; i += 1) {
+        const a = raw.alt_names[i];
+        if (typeof a !== 'string') {
+          return null;
+        }
+        altNames[i] = a;
+      }
     }
   }
 
@@ -187,7 +211,28 @@ export function tryFastParseRawPerson(raw: unknown): RawPerson | null {
     return null;
   }
 
-  // Fast monomorphic path when rare optional fields ahead of core fields are absent.
+  if (
+    ownsInput &&
+    raw.alt_names === altNames &&
+    raw.sex === sex &&
+    raw.is_living === isLiving &&
+    raw.lineage_group === lineageGroup &&
+    raw.birth_edtf === birthEdtf &&
+    raw.death_edtf === deathEdtf &&
+    raw.portrait_url === portraitUrl &&
+    raw.pronunciation === undefined
+  ) {
+    let expectedKeys = 12;
+    if (gedcomXref !== undefined) expectedKeys += 1;
+    if (branch !== undefined) expectedKeys += 1;
+    if (thumbUrl !== undefined) expectedKeys += 1;
+    if (hasPrimarySource !== undefined) expectedKeys += 1;
+    if (extensions !== undefined) expectedKeys += 1;
+    if (hasExactOwnedKeys<RawPerson>(raw, expectedKeys)) {
+      return raw;
+    }
+  }
+
   if (gedcomXref === undefined && branch === undefined) {
     const out: RawPerson = {
       id,
@@ -213,12 +258,11 @@ export function tryFastParseRawPerson(raw: unknown): RawPerson | null {
       out.has_primary_source = hasPrimarySource;
     }
     if (extensions !== undefined) {
-      out.extensions = { ...extensions };
+      out.extensions = ownsInput ? extensions : { ...extensions };
     }
     return out;
   }
 
-  // Preserve exact RawPersonSchema property insertion order without conditional object spreads.
   const out = { id, slug } as RawPerson;
   if (gedcomXref !== undefined) {
     out.gedcom_xref = gedcomXref;
@@ -246,18 +290,63 @@ export function tryFastParseRawPerson(raw: unknown): RawPerson | null {
     out.has_primary_source = hasPrimarySource;
   }
   if (extensions !== undefined) {
-    out.extensions = { ...extensions };
+    out.extensions = ownsInput ? extensions : { ...extensions };
   }
   return out;
 }
 
-function tryFastParseEventSourceRefs(raw: unknown): EventSourceRef[] | null {
+function tryFastParseEventSourceRefs(raw: unknown, ownsInput = false): EventSourceRef[] | null {
   if (raw === undefined) {
     return [];
   }
   if (!Array.isArray(raw)) {
     return null;
   }
+  if (ownsInput) {
+    let canReuse = true;
+    for (let i = 0; i < raw.length; i += 1) {
+      const item = raw[i];
+      if (!isObj(item)) {
+        return null;
+      }
+      const { source_id, confidence } = item;
+      if (
+        typeof source_id !== 'string' ||
+        source_id.length === 0 ||
+        typeof confidence !== 'string' ||
+        !SOURCE_CONFIDENCES.has(confidence)
+      ) {
+        return null;
+      }
+      const claimed = coerceOptNullableStrFast(item.claimed_date);
+      if (claimed === OPT_STR_FAIL) {
+        return null;
+      }
+      const citationDetail = item.citation_detail;
+      const scanUrl = item.scan_url;
+      const scanTitle = item.scan_title;
+      if (
+        (citationDetail !== undefined && citationDetail !== null && typeof citationDetail !== 'string') ||
+        (scanUrl !== undefined && scanUrl !== null && typeof scanUrl !== 'string') ||
+        (scanTitle !== undefined && scanTitle !== null && typeof scanTitle !== 'string')
+      ) {
+        return null;
+      }
+      let expectedKeys = 2;
+      if (claimed !== undefined) expectedKeys += 1;
+      if (citationDetail !== undefined) expectedKeys += 1;
+      if (scanUrl !== undefined) expectedKeys += 1;
+      if (scanTitle !== undefined) expectedKeys += 1;
+      if (claimed !== item.claimed_date || countOwnEnumerableKeys(item) !== expectedKeys) {
+        canReuse = false;
+        break;
+      }
+    }
+    if (canReuse) {
+      return raw as EventSourceRef[];
+    }
+  }
+
   const out = new Array<EventSourceRef>(raw.length);
   for (let i = 0; i < raw.length; i += 1) {
     const item = raw[i];
@@ -308,7 +397,7 @@ function tryFastParseEventSourceRefs(raw: unknown): EventSourceRef[] | null {
   return out;
 }
 
-export function tryFastParseRawEvent(raw: unknown): RawEvent | null {
+export function tryFastParseRawEvent(raw: unknown, ownsInput = false): RawEvent | null {
   if (!isObj(raw)) {
     return null;
   }
@@ -410,25 +499,86 @@ export function tryFastParseRawEvent(raw: unknown): RawEvent | null {
     if (!Array.isArray(raw.participants)) {
       return null;
     }
-    participants = new Array<EventParticipant>(raw.participants.length);
-    for (let i = 0; i < raw.participants.length; i += 1) {
-      const pt = raw.participants[i];
-      if (
-        !isObj(pt) ||
-        typeof pt.person_id !== 'string' ||
-        pt.person_id.length === 0 ||
-        typeof pt.role !== 'string' ||
-        pt.role.length === 0
-      ) {
-        return null;
+    if (ownsInput) {
+      let canReusePts = true;
+      for (let i = 0; i < raw.participants.length; i += 1) {
+        const pt = raw.participants[i];
+        if (
+          !isObj(pt) ||
+          typeof pt.person_id !== 'string' ||
+          pt.person_id.length === 0 ||
+          typeof pt.role !== 'string' ||
+          pt.role.length === 0
+        ) {
+          return null;
+        }
+        if (countOwnEnumerableKeys(pt) !== 2) {
+          canReusePts = false;
+          break;
+        }
       }
-      participants[i] = { person_id: pt.person_id, role: pt.role };
+      if (canReusePts) {
+        participants = raw.participants as EventParticipant[];
+      } else {
+        participants = new Array<EventParticipant>(raw.participants.length);
+        for (let i = 0; i < raw.participants.length; i += 1) {
+          const pt = raw.participants[i];
+          if (
+            !isObj(pt) ||
+            typeof pt.person_id !== 'string' ||
+            pt.person_id.length === 0 ||
+            typeof pt.role !== 'string' ||
+            pt.role.length === 0
+          ) {
+            return null;
+          }
+          participants[i] = { person_id: pt.person_id, role: pt.role };
+        }
+      }
+    } else {
+      participants = new Array<EventParticipant>(raw.participants.length);
+      for (let i = 0; i < raw.participants.length; i += 1) {
+        const pt = raw.participants[i];
+        if (
+          !isObj(pt) ||
+          typeof pt.person_id !== 'string' ||
+          pt.person_id.length === 0 ||
+          typeof pt.role !== 'string' ||
+          pt.role.length === 0
+        ) {
+          return null;
+        }
+        participants[i] = { person_id: pt.person_id, role: pt.role };
+      }
     }
   }
 
-  const sources = tryFastParseEventSourceRefs(raw.sources);
+  const sources = tryFastParseEventSourceRefs(raw.sources, ownsInput);
   if (!sources) {
     return null;
+  }
+
+  if (
+    ownsInput &&
+    raw.edtf_date === edtfDate &&
+    raw.place_id === placeId &&
+    raw.summary === rawSummary &&
+    raw.participants === participants &&
+    raw.sources === sources &&
+    raw.alternate_dates === undefined
+  ) {
+    let expectedKeys = 9;
+    if (category !== undefined) expectedKeys += 1;
+    if (placePrecision !== undefined) expectedKeys += 1;
+    if (severityRank !== undefined) expectedKeys += 1;
+    if (sourceUrl !== undefined) expectedKeys += 1;
+    if (photoUrl !== undefined) expectedKeys += 1;
+    if (photoCaption !== undefined) expectedKeys += 1;
+    if (hasPrimarySource !== undefined) expectedKeys += 1;
+    if (extensions !== undefined) expectedKeys += 1;
+    if (hasExactOwnedKeys<RawEvent>(raw, expectedKeys)) {
+      return raw;
+    }
   }
 
   const out = {
@@ -467,12 +617,12 @@ export function tryFastParseRawEvent(raw: unknown): RawEvent | null {
     out.has_primary_source = hasPrimarySource;
   }
   if (extensions !== undefined) {
-    out.extensions = { ...extensions };
+    out.extensions = ownsInput ? extensions : { ...extensions };
   }
   return out;
 }
 
-export function tryFastParsePlace(raw: unknown): Place | null {
+export function tryFastParsePlace(raw: unknown, ownsInput = false): Place | null {
   if (!isObj(raw)) {
     return null;
   }
@@ -535,6 +685,17 @@ export function tryFastParsePlace(raw: unknown): Place | null {
   if (pron === PRON_FAIL) {
     return null;
   }
+  if (ownsInput && raw.pronunciation === undefined) {
+    let expectedKeys = 8;
+    if (summary !== undefined) expectedKeys += 1;
+    if (photoUrl !== undefined) expectedKeys += 1;
+    if (photoCaption !== undefined) expectedKeys += 1;
+    if (hasPrimarySource !== undefined) expectedKeys += 1;
+    if (extensions !== undefined) expectedKeys += 1;
+    if (hasExactOwnedKeys<Place>(raw, expectedKeys)) {
+      return raw;
+    }
+  }
   const out: Place = {
     id,
     slug,
@@ -561,12 +722,12 @@ export function tryFastParsePlace(raw: unknown): Place | null {
     out.has_primary_source = hasPrimarySource;
   }
   if (extensions !== undefined) {
-    out.extensions = { ...extensions };
+    out.extensions = ownsInput ? extensions : { ...extensions };
   }
   return out;
 }
 
-export function tryFastParseSourceRecord(raw: unknown): SourceRecord | null {
+export function tryFastParseSourceRecord(raw: unknown, ownsInput = false): SourceRecord | null {
   if (!isObj(raw)) {
     return null;
   }
@@ -595,6 +756,18 @@ export function tryFastParseSourceRecord(raw: unknown): SourceRecord | null {
   ) {
     return null;
   }
+  if (ownsInput) {
+    let expectedKeys = 3;
+    if (gedcomXref !== undefined) expectedKeys += 1;
+    if (author !== undefined) expectedKeys += 1;
+    if (publisher !== undefined) expectedKeys += 1;
+    if (repository !== undefined) expectedKeys += 1;
+    if (url !== undefined) expectedKeys += 1;
+    if (hasPrimarySource !== undefined) expectedKeys += 1;
+    if (hasExactOwnedKeys<SourceRecord>(raw, expectedKeys)) {
+      return raw;
+    }
+  }
   const out = { id } as SourceRecord;
   if (gedcomXref !== undefined) {
     out.gedcom_xref = gedcomXref;
@@ -619,7 +792,7 @@ export function tryFastParseSourceRecord(raw: unknown): SourceRecord | null {
   return out;
 }
 
-export function tryFastParseKinshipEdge(raw: unknown): KinshipEdge | null {
+export function tryFastParseKinshipEdge(raw: unknown, ownsInput = false): KinshipEdge | null {
   if (!isObj(raw)) {
     return null;
   }
@@ -636,6 +809,9 @@ export function tryFastParseKinshipEdge(raw: unknown): KinshipEdge | null {
   ) {
     return null;
   }
+  if (ownsInput && hasExactOwnedKeys<KinshipEdge>(raw, familyXref !== undefined ? 4 : 3)) {
+    return raw;
+  }
   const out: KinshipEdge = {
     from,
     to,
@@ -647,7 +823,7 @@ export function tryFastParseKinshipEdge(raw: unknown): KinshipEdge | null {
   return out;
 }
 
-export function tryFastParseMediaItem(raw: unknown): MediaItem | null {
+export function tryFastParseMediaItem(raw: unknown, ownsInput = false): MediaItem | null {
   if (!isObj(raw)) {
     return null;
   }
@@ -710,16 +886,33 @@ export function tryFastParseMediaItem(raw: unknown): MediaItem | null {
 
   let personIds: string[] | undefined;
   if (raw.person_ids !== undefined) {
-    if (!Array.isArray(raw.person_ids)) {
+    const validatedIds = tryCopyNonEmptyStringArray(raw.person_ids, ownsInput);
+    if (!validatedIds) {
       return null;
     }
-    personIds = new Array<string>(raw.person_ids.length);
-    for (let i = 0; i < raw.person_ids.length; i += 1) {
-      const pid = raw.person_ids[i];
-      if (typeof pid !== 'string' || pid.length === 0) {
-        return null;
-      }
-      personIds[i] = pid;
+    personIds = validatedIds;
+  }
+
+  if (ownsInput && raw.date_edtf === dateEdtf && (personIds === undefined || raw.person_ids === personIds)) {
+    let expectedKeys = 4;
+    if (sourceId !== undefined) expectedKeys += 1;
+    if (page !== undefined) expectedKeys += 1;
+    if (personId !== undefined) expectedKeys += 1;
+    if (personIds !== undefined) expectedKeys += 1;
+    if (personSlug !== undefined) expectedKeys += 1;
+    if (personName !== undefined) expectedKeys += 1;
+    if (eventId !== undefined) expectedKeys += 1;
+    if (thumbFile !== undefined) expectedKeys += 1;
+    if (dateEdtf !== undefined) expectedKeys += 1;
+    if (provenance !== undefined) expectedKeys += 1;
+    if (mimeType !== undefined) expectedKeys += 1;
+    if (durationSeconds !== undefined) expectedKeys += 1;
+    if (posterUrl !== undefined) expectedKeys += 1;
+    if (transcriptUrl !== undefined) expectedKeys += 1;
+    if (hasPrimarySource !== undefined) expectedKeys += 1;
+    if (extensions !== undefined) expectedKeys += 1;
+    if (hasExactOwnedKeys<MediaItem>(raw, expectedKeys)) {
+      return raw;
     }
   }
 
@@ -772,17 +965,26 @@ export function tryFastParseMediaItem(raw: unknown): MediaItem | null {
     out.has_primary_source = hasPrimarySource;
   }
   if (extensions !== undefined) {
-    out.extensions = { ...extensions };
+    out.extensions = ownsInput ? extensions : { ...extensions };
   }
   return out;
 }
 
-function tryCopyNonEmptyStringArray(raw: unknown): string[] | null {
+function tryCopyNonEmptyStringArray(raw: unknown, ownsInput = false): string[] | null {
   if (raw === undefined) {
     return [];
   }
   if (!Array.isArray(raw)) {
     return null;
+  }
+  if (ownsInput) {
+    for (let i = 0; i < raw.length; i += 1) {
+      const v = raw[i];
+      if (typeof v !== 'string' || v.length === 0) {
+        return null;
+      }
+    }
+    return raw as string[];
   }
   const out = new Array<string>(raw.length);
   for (let i = 0; i < raw.length; i += 1) {
@@ -795,7 +997,7 @@ function tryCopyNonEmptyStringArray(raw: unknown): string[] | null {
   return out;
 }
 
-export function tryFastParseNarrative(raw: unknown): Narrative | null {
+export function tryFastParseNarrative(raw: unknown, ownsInput = false): Narrative | null {
   if (!isObj(raw)) {
     return null;
   }
@@ -842,12 +1044,33 @@ export function tryFastParseNarrative(raw: unknown): Narrative | null {
   if (extensions !== undefined && !isObj(extensions)) {
     return null;
   }
-  const personIds = tryCopyNonEmptyStringArray(raw.person_ids);
-  const placeIds = tryCopyNonEmptyStringArray(raw.place_ids);
-  const eventIds = tryCopyNonEmptyStringArray(raw.event_ids);
-  const sourceIds = tryCopyNonEmptyStringArray(raw.source_ids);
+  const personIds = tryCopyNonEmptyStringArray(raw.person_ids, ownsInput);
+  const placeIds = tryCopyNonEmptyStringArray(raw.place_ids, ownsInput);
+  const eventIds = tryCopyNonEmptyStringArray(raw.event_ids, ownsInput);
+  const sourceIds = tryCopyNonEmptyStringArray(raw.source_ids, ownsInput);
   if (!personIds || !placeIds || !eventIds || !sourceIds) {
     return null;
+  }
+
+  if (
+    ownsInput &&
+    raw.date_edtf === dateEdtf &&
+    raw.person_ids === personIds &&
+    raw.place_ids === placeIds &&
+    raw.event_ids === eventIds &&
+    raw.source_ids === sourceIds
+  ) {
+    let expectedKeys = 8;
+    if (kind !== undefined) expectedKeys += 1;
+    if (subjectPersonId !== undefined) expectedKeys += 1;
+    if (summary !== undefined) expectedKeys += 1;
+    if (dateEdtf !== undefined) expectedKeys += 1;
+    if (updatedAt !== undefined) expectedKeys += 1;
+    if (hasPrimarySource !== undefined) expectedKeys += 1;
+    if (extensions !== undefined) expectedKeys += 1;
+    if (hasExactOwnedKeys<Narrative>(raw, expectedKeys)) {
+      return raw;
+    }
   }
 
   const out = { id, slug } as Narrative;
@@ -876,22 +1099,23 @@ export function tryFastParseNarrative(raw: unknown): Narrative | null {
     out.has_primary_source = hasPrimarySource;
   }
   if (extensions !== undefined) {
-    out.extensions = { ...extensions };
+    out.extensions = ownsInput ? extensions : { ...extensions };
   }
   return out;
 }
 
 export function parseArrayWithFastPath<T>(
   raw: unknown,
-  tryFast: (item: unknown) => T | null,
-  fallbackParseArray: (raw: unknown) => T[]
+  tryFast: (item: unknown, ownsInput: boolean) => T | null,
+  fallbackParseArray: (raw: unknown) => T[],
+  ownsInput = false
 ): T[] {
   if (!Array.isArray(raw)) {
     return fallbackParseArray(raw);
   }
   const out = new Array<T>(raw.length);
   for (let i = 0; i < raw.length; i += 1) {
-    const parsed = tryFast(raw[i]);
+    const parsed = tryFast(raw[i], ownsInput);
     if (parsed === null) {
       return fallbackParseArray(raw);
     }
@@ -908,30 +1132,40 @@ const KinshipEdgeArraySchema = KinshipEdgeSchema.array();
 const MediaItemArraySchema = MediaItemSchema.array();
 const NarrativeArraySchema = NarrativeSchema.array();
 
-export function parsePeopleArrayFast(raw: unknown): RawPerson[] {
-  return parseArrayWithFastPath(raw, tryFastParseRawPerson, (v) => RawPersonArraySchema.parse(v));
+export function parsePeopleArrayFast(raw: unknown, ownsInput = false): RawPerson[] {
+  return parseArrayWithFastPath(raw, tryFastParseRawPerson, (v) => RawPersonArraySchema.parse(v), ownsInput);
 }
 
-export function parseEventsArrayFast(raw: unknown): RawEvent[] {
-  return parseArrayWithFastPath(raw, tryFastParseRawEvent, (v) => RawEventArraySchema.parse(v));
+export function parseEventsArrayFast(raw: unknown, ownsInput = false): RawEvent[] {
+  return parseArrayWithFastPath(raw, tryFastParseRawEvent, (v) => RawEventArraySchema.parse(v), ownsInput);
 }
 
-export function parsePlacesArrayFast(raw: unknown): Place[] {
-  return parseArrayWithFastPath(raw, tryFastParsePlace, (v) => PlaceArraySchema.parse(v));
+export function parsePlacesArrayFast(raw: unknown, ownsInput = false): Place[] {
+  return parseArrayWithFastPath(raw, tryFastParsePlace, (v) => PlaceArraySchema.parse(v), ownsInput);
 }
 
-export function parseSourcesArrayFast(raw: unknown): SourceRecord[] {
-  return parseArrayWithFastPath(raw, tryFastParseSourceRecord, (v) => SourceRecordArraySchema.parse(v));
+export function parseSourcesArrayFast(raw: unknown, ownsInput = false): SourceRecord[] {
+  return parseArrayWithFastPath(
+    raw,
+    tryFastParseSourceRecord,
+    (v) => SourceRecordArraySchema.parse(v),
+    ownsInput
+  );
 }
 
-export function parseKinshipArrayFast(raw: unknown): KinshipEdge[] {
-  return parseArrayWithFastPath(raw, tryFastParseKinshipEdge, (v) => KinshipEdgeArraySchema.parse(v));
+export function parseKinshipArrayFast(raw: unknown, ownsInput = false): KinshipEdge[] {
+  return parseArrayWithFastPath(
+    raw,
+    tryFastParseKinshipEdge,
+    (v) => KinshipEdgeArraySchema.parse(v),
+    ownsInput
+  );
 }
 
-export function parseMediaArrayFast(raw: unknown): MediaItem[] {
-  return parseArrayWithFastPath(raw, tryFastParseMediaItem, (v) => MediaItemArraySchema.parse(v));
+export function parseMediaArrayFast(raw: unknown, ownsInput = false): MediaItem[] {
+  return parseArrayWithFastPath(raw, tryFastParseMediaItem, (v) => MediaItemArraySchema.parse(v), ownsInput);
 }
 
-export function parseNarrativesArrayFast(raw: unknown): Narrative[] {
-  return parseArrayWithFastPath(raw, tryFastParseNarrative, (v) => NarrativeArraySchema.parse(v));
+export function parseNarrativesArrayFast(raw: unknown, ownsInput = false): Narrative[] {
+  return parseArrayWithFastPath(raw, tryFastParseNarrative, (v) => NarrativeArraySchema.parse(v), ownsInput);
 }

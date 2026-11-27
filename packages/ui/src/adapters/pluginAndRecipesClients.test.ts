@@ -598,3 +598,43 @@ describe('lightboxModel pure helpers', () => {
     expect(validated.errors).toHaveLength(4);
   });
 });
+
+describe('apiError pure helpers and error envelope parsing', () => {
+  it('normalizes trailing slashes, asset bases, and structured vs unstructured HTTP error envelopes', async () => {
+    const { normalizeAssetBase, parseErrorEnvelope, stripTrailingSlash } = await import(
+      './httpWiki/apiError.js'
+    );
+    expect(stripTrailingSlash('https://archive.example/')).toBe('https://archive.example');
+    expect(stripTrailingSlash('https://archive.example')).toBe('https://archive.example');
+    expect(normalizeAssetBase()).toBe('/');
+    expect(normalizeAssetBase('')).toBe('/');
+    expect(normalizeAssetBase('/assets')).toBe('/assets/');
+    expect(normalizeAssetBase('/assets/')).toBe('/assets/');
+
+    const structured = await parseErrorEnvelope(
+      new Response(
+        JSON.stringify({ error: { code: 'CONFLICT', message: 'Stale revision', details: { rev: 2 } } }),
+        { status: 409, statusText: 'Conflict' }
+      )
+    );
+    expect(structured).toBeInstanceOf(ApiClientError);
+    expect(structured.status).toBe(409);
+    expect(structured.code).toBe('CONFLICT');
+    expect(structured.details).toEqual({ rev: 2 });
+
+    for (const fallbackBody of [
+      JSON.stringify(null),
+      JSON.stringify({ ok: false }),
+      JSON.stringify({ error: null }),
+      JSON.stringify({ error: { code: '', message: 'No code' } }),
+      JSON.stringify({ error: { code: 'ERR', message: '' } }),
+      'Gateway Timeout Plaintext',
+    ]) {
+      const parsed = await parseErrorEnvelope(
+        new Response(fallbackBody, { status: 502, statusText: 'Bad Gateway' })
+      );
+      expect(parsed.code).toBe('HTTP_502');
+      expect(parsed.message).toBe('HTTP 502 Bad Gateway');
+    }
+  });
+});

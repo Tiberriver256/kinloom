@@ -55,6 +55,7 @@ export interface SourceCitingEventLike {
 }
 
 const MAX_LIVING_NAME_HITS = 50;
+const matcherCombinedPrefilter = new WeakMap<CompiledLivingNameMatcher, RegExp>();
 
 export function extractLatestEdtfYear(raw: unknown): number | null {
   if (typeof raw !== 'string') {
@@ -75,11 +76,16 @@ export function extractEarliestEdtfYear(raw: unknown): number | null {
 export function computeSourceMaxYearById(
   events: readonly SourceCitingEventLike[]
 ): Map<string, number | null> {
-  const sourceEventYears = new Map<string, Array<number | null>>();
-  for (const event of events) {
+  const sourceMaxYearById = new Map<string, number | null>();
+  for (let i = 0; i < events.length; i += 1) {
+    const event = events[i];
+    const rawSources = event.sources;
+    if (!Array.isArray(rawSources) || rawSources.length === 0) {
+      continue;
+    }
     const eventYear = extractLatestEdtfYear(event.edtf_date);
-    const rawSources = Array.isArray(event.sources) ? event.sources : [];
-    for (const ref of rawSources) {
+    for (let s = 0; s < rawSources.length; s += 1) {
+      const ref = rawSources[s];
       let sourceId = '';
       if (typeof ref === 'string') {
         sourceId = ref.trim();
@@ -92,37 +98,40 @@ export function computeSourceMaxYearById(
       if (!sourceId) {
         continue;
       }
-      let years = sourceEventYears.get(sourceId);
-      if (!years) {
-        years = [];
-        sourceEventYears.set(sourceId, years);
+      const prev = sourceMaxYearById.get(sourceId);
+      if (prev === undefined) {
+        sourceMaxYearById.set(sourceId, eventYear);
+      } else if (prev !== null) {
+        sourceMaxYearById.set(sourceId, eventYear === null ? null : Math.max(prev, eventYear));
       }
-      years.push(eventYear);
-    }
-  }
-
-  const sourceMaxYearById = new Map<string, number | null>();
-  for (const [sourceId, years] of sourceEventYears) {
-    if (years.length > 0 && years.every((year): year is number => typeof year === 'number')) {
-      sourceMaxYearById.set(sourceId, Math.max(...years));
-    } else {
-      sourceMaxYearById.set(sourceId, null);
     }
   }
   return sourceMaxYearById;
 }
 
 export function resolveNarrativeMaxYear(input: NarrativeMaxYearInput): number | null {
-  const subjectIds = [...(input.subjectPersonId ? [input.subjectPersonId] : []), ...input.personIds];
-  if (subjectIds.length === 0) {
+  const { subjectPersonId, personIds, eventIds, livingIds, deathYearByPersonId, eventMaxYearById } = input;
+  const hasSubject = Boolean(subjectPersonId);
+  if (!hasSubject && personIds.length === 0) {
     return null;
   }
   let maxDeathYear: number | null = null;
-  for (const personId of subjectIds) {
-    if (input.livingIds.has(personId)) {
+  if (subjectPersonId) {
+    if (livingIds.has(subjectPersonId)) {
       return null;
     }
-    const deathYear = input.deathYearByPersonId.get(personId) ?? null;
+    const subjDeath = deathYearByPersonId.get(subjectPersonId) ?? null;
+    if (subjDeath === null) {
+      return null;
+    }
+    maxDeathYear = subjDeath;
+  }
+  for (let i = 0; i < personIds.length; i += 1) {
+    const personId = personIds[i];
+    if (livingIds.has(personId)) {
+      return null;
+    }
+    const deathYear = deathYearByPersonId.get(personId) ?? null;
     if (deathYear === null) {
       return null;
     }
@@ -132,8 +141,8 @@ export function resolveNarrativeMaxYear(input: NarrativeMaxYearInput): number | 
     return null;
   }
   let narrativeMaxYear = maxDeathYear + NARRATIVE_POSTHUMOUS_HORIZON_YEARS;
-  for (const eventId of input.eventIds) {
-    const eventYear = input.eventMaxYearById.get(eventId);
+  for (let i = 0; i < eventIds.length; i += 1) {
+    const eventYear = eventMaxYearById.get(eventIds[i]);
     if (typeof eventYear === 'number' && eventYear > narrativeMaxYear) {
       narrativeMaxYear = eventYear;
     }
@@ -141,79 +150,133 @@ export function resolveNarrativeMaxYear(input: NarrativeMaxYearInput): number | 
   return narrativeMaxYear;
 }
 
-function trimmedNameTokens(value: unknown): string[] {
-  if (typeof value !== 'string') {
-    return [];
+function extractFirstTokenIfAtLeast(
+  raw: unknown,
+  minTokenCount: 2 | 3,
+  matchingLastLower?: string
+): string | null {
+  if (typeof raw !== 'string') {
+    return null;
   }
-  return value
-    .trim()
-    .split(/\s+/)
-    .filter((token) => token.length > 0);
+  const len = raw.length;
+  let start = 0;
+  while (start < len && raw.charCodeAt(start) <= 32) {
+    start += 1;
+  }
+  let end = len;
+  while (end > start && raw.charCodeAt(end - 1) <= 32) {
+    end -= 1;
+  }
+  if (start >= end) {
+    return null;
+  }
+
+  let firstEnd = start;
+  while (firstEnd < end && raw.charCodeAt(firstEnd) > 32) {
+    firstEnd += 1;
+  }
+  if (firstEnd >= end) {
+    return null;
+  }
+
+  let cur = firstEnd;
+  let tokenCount = 1;
+  let lastTokenStart = start;
+  while (cur < end) {
+    while (cur < end && raw.charCodeAt(cur) <= 32) {
+      cur += 1;
+    }
+    if (cur < end) {
+      lastTokenStart = cur;
+      tokenCount += 1;
+      while (cur < end && raw.charCodeAt(cur) > 32) {
+        cur += 1;
+      }
+    }
+  }
+
+  if (tokenCount < minTokenCount) {
+    return null;
+  }
+  if (matchingLastLower !== undefined && raw.slice(lastTokenStart, end).toLowerCase() !== matchingLastLower) {
+    return null;
+  }
+  return raw.slice(start, firstEnd);
 }
 
-/**
- * First token of given_name (or of full_name when given_name has fewer than two tokens)
- * plus the surname. Used only when at least two tokens sit before the surname and the
- * result is at least 6 characters, so "Clara Elizabeth Maple" also matches "Clara Maple".
- */
 function derivedFirstSurname(person: LivingNamePerson): string | null {
   const surname = typeof person.surname === 'string' ? person.surname.trim() : '';
   if (!surname) {
     return null;
   }
-  let tokensBeforeSurname = trimmedNameTokens(person.given_name);
-  if (tokensBeforeSurname.length < 2) {
-    const fullTokens = trimmedNameTokens(person.full_name);
-    const last = fullTokens[fullTokens.length - 1];
-    if (fullTokens.length >= 3 && last !== undefined && last.toLowerCase() === surname.toLowerCase()) {
-      tokensBeforeSurname = fullTokens.slice(0, -1);
+  let first = extractFirstTokenIfAtLeast(person.given_name, 2);
+  if (!first) {
+    first = extractFirstTokenIfAtLeast(person.full_name, 3, surname.toLowerCase());
+    if (!first) {
+      return null;
     }
   }
-  if (tokensBeforeSurname.length < 2) {
+  if (first.length + 1 + surname.length < 6) {
     return null;
   }
-  const first = tokensBeforeSurname[0];
-  if (!first) {
-    return null;
-  }
-  const derived = `${first} ${surname}`;
-  if (derived.length < 6) {
-    return null;
-  }
-  return derived;
+  return `${first} ${surname}`;
 }
 
-function addExactNameKeys(person: LivingNamePerson, keys: Set<string>): void {
-  const alts = Array.isArray(person.alt_names) ? person.alt_names : [];
-  for (const raw of [person.full_name, ...alts]) {
-    if (typeof raw !== 'string') {
-      continue;
+function addDeceasedExactNameKeysIfRelevant(
+  person: LivingNamePerson,
+  candidateDerivedKeys: { readonly has: (key: string) => boolean },
+  deceasedNameKeys: Set<string>
+): void {
+  if (typeof person.full_name === 'string') {
+    const cleaned = person.full_name.trim();
+    if (cleaned.length >= 6) {
+      const lower = cleaned.toLowerCase();
+      if (candidateDerivedKeys.has(lower)) {
+        deceasedNameKeys.add(lower);
+      }
     }
-    const cleaned = raw.trim();
-    if (cleaned.length > 0) {
-      keys.add(cleaned.toLowerCase());
+  }
+  if (Array.isArray(person.alt_names)) {
+    for (let i = 0; i < person.alt_names.length; i += 1) {
+      const raw = person.alt_names[i];
+      if (typeof raw === 'string') {
+        const cleaned = raw.trim();
+        if (cleaned.length >= 6) {
+          const lower = cleaned.toLowerCase();
+          if (candidateDerivedKeys.has(lower)) {
+            deceasedNameKeys.add(lower);
+          }
+        }
+      }
     }
   }
   const derived = derivedFirstSurname(person);
   if (derived) {
-    keys.add(derived.toLowerCase());
+    const lower = derived.toLowerCase();
+    if (candidateDerivedKeys.has(lower)) {
+      deceasedNameKeys.add(lower);
+    }
   }
 }
 
-function collectStoredMultiwordNames(person: LivingNamePerson): string[] {
-  const alts = Array.isArray(person.alt_names) ? person.alt_names : [];
-  const names: string[] = [];
-  for (const raw of [person.full_name, ...alts]) {
-    if (typeof raw !== 'string') {
-      continue;
-    }
-    const cleaned = raw.trim();
-    // Multi-word names >= 6 chars prevent common single-token false positives.
+function addStoredMultiwordNames(person: LivingNamePerson, out: Set<string>): void {
+  if (typeof person.full_name === 'string') {
+    const cleaned = person.full_name.trim();
     if (cleaned.length >= 6 && cleaned.includes(' ')) {
-      names.push(cleaned);
+      out.add(cleaned);
     }
   }
-  return names;
+  if (Array.isArray(person.alt_names)) {
+    for (let i = 0; i < person.alt_names.length; i += 1) {
+      const raw = person.alt_names[i];
+      if (typeof raw === 'string') {
+        const cleaned = raw.trim();
+        if (cleaned.length >= 6 && cleaned.includes(' ')) {
+          out.add(cleaned);
+        }
+      }
+    }
+  }
 }
 
 function buildUnicodeAlternationRegex(names: readonly string[]): RegExp | null {
@@ -232,28 +295,23 @@ export function compileLivingNameMatcher(
   deceasedPeople: readonly LivingNamePerson[] = [],
   options?: CompileLivingNameMatcherOptions
 ): CompiledLivingNameMatcher {
-  const deceasedNameKeys = new Set<string>();
-  for (const person of deceasedPeople) {
-    addExactNameKeys(person, deceasedNameKeys);
-  }
   const exactNames = new Set<string>();
-  const derivedByKey = new Map<string, { label: string; minYear: number | null }>();
-  for (const person of livingPeople) {
-    for (const stored of collectStoredMultiwordNames(person)) {
-      exactNames.add(stored);
-    }
+  const candidateDerivedByKey = new Map<string, { label: string; minYear: number | null }>();
+
+  for (let i = 0; i < livingPeople.length; i += 1) {
+    const person = livingPeople[i];
+    addStoredMultiwordNames(person, exactNames);
     const derived = derivedFirstSurname(person);
-    // A deceased namesake with the same First Surname must not become a living-name hit.
-    if (derived && !deceasedNameKeys.has(derived.toLowerCase())) {
+    if (derived) {
       const key = derived.toLowerCase();
       const birthYear = extractEarliestEdtfYear(person.birth_edtf);
       let minYear = birthYear !== null ? birthYear - 2 : null;
       if (minYear !== null && options?.referenceYear !== undefined && minYear > options.referenceYear) {
         minYear = options.referenceYear;
       }
-      const existing = derivedByKey.get(key);
+      const existing = candidateDerivedByKey.get(key);
       if (!existing) {
-        derivedByKey.set(key, { label: derived, minYear });
+        candidateDerivedByKey.set(key, { label: derived, minYear });
       } else if (existing.minYear === null || minYear === null) {
         existing.minYear = null;
       } else if (minYear < existing.minYear) {
@@ -262,11 +320,26 @@ export function compileLivingNameMatcher(
     }
   }
 
+  if (candidateDerivedByKey.size > 0 && deceasedPeople.length > 0) {
+    const deceasedCollisions = new Set<string>();
+    for (let i = 0; i < deceasedPeople.length; i += 1) {
+      addDeceasedExactNameKeysIfRelevant(deceasedPeople[i], candidateDerivedByKey, deceasedCollisions);
+    }
+    for (const collided of deceasedCollisions) {
+      candidateDerivedByKey.delete(collided);
+    }
+  }
+
   const byMinYear = new Map<number | null, string[]>();
-  for (const { label, minYear } of derivedByKey.values()) {
-    const bucket = byMinYear.get(minYear) ?? [];
-    bucket.push(label);
-    byMinYear.set(minYear, bucket);
+  const allCombinedLabels: string[] = [...exactNames];
+  for (const { label, minYear } of candidateDerivedByKey.values()) {
+    allCombinedLabels.push(label);
+    const bucket = byMinYear.get(minYear);
+    if (bucket) {
+      bucket.push(label);
+    } else {
+      byMinYear.set(minYear, [label]);
+    }
   }
   const derivedRules: DerivedLivingNameRule[] = [];
   for (const [minYear, labels] of byMinYear.entries()) {
@@ -276,28 +349,66 @@ export function compileLivingNameMatcher(
     }
   }
 
-  return {
+  const matcher: CompiledLivingNameMatcher = {
     exactPattern: buildUnicodeAlternationRegex([...exactNames]),
     derivedRules,
   };
+  if (allCombinedLabels.length > 0 && (matcher.exactPattern ? 1 : 0) + derivedRules.length > 1) {
+    const prefilterKey = /./;
+    registerPatternPrefilter(prefilterKey, allCombinedLabels, true);
+    matcherCombinedPrefilter.set(matcher, prefilterKey);
+  }
+  return matcher;
+}
+
+export function mayMatchLivingNameMatcher(matcher: CompiledLivingNameMatcher, text: string): boolean {
+  if (!text) {
+    return false;
+  }
+  if (!matcher.exactPattern && matcher.derivedRules.length === 0) {
+    return false;
+  }
+  const combined = matcherCombinedPrefilter.get(matcher);
+  if (combined) {
+    return mayMatchPattern(combined, text);
+  }
+  if (matcher.exactPattern && mayMatchPattern(matcher.exactPattern, text)) {
+    return true;
+  }
+  for (let i = 0; i < matcher.derivedRules.length; i += 1) {
+    if (mayMatchPattern(matcher.derivedRules[i].pattern, text)) {
+      return true;
+    }
+  }
+  return false;
 }
 
 export function compileLivingNameRegex(
   livingPeople: readonly LivingNamePerson[],
   deceasedPeople: readonly LivingNamePerson[] = []
 ): RegExp | null {
-  const deceasedNameKeys = new Set<string>();
-  for (const person of deceasedPeople) {
-    addExactNameKeys(person, deceasedNameKeys);
-  }
   const names = new Set<string>();
-  for (const person of livingPeople) {
-    for (const stored of collectStoredMultiwordNames(person)) {
-      names.add(stored);
-    }
+  const candidateDerived = new Map<string, string>();
+  for (let i = 0; i < livingPeople.length; i += 1) {
+    const person = livingPeople[i];
+    addStoredMultiwordNames(person, names);
     const derived = derivedFirstSurname(person);
-    if (derived && !deceasedNameKeys.has(derived.toLowerCase())) {
-      names.add(derived);
+    if (derived) {
+      const lower = derived.toLowerCase();
+      if (!candidateDerived.has(lower)) {
+        candidateDerived.set(lower, derived);
+      }
+    }
+  }
+  if (candidateDerived.size > 0) {
+    const deceasedCollisions = new Set<string>();
+    for (let i = 0; i < deceasedPeople.length; i += 1) {
+      addDeceasedExactNameKeysIfRelevant(deceasedPeople[i], candidateDerived, deceasedCollisions);
+    }
+    for (const [lower, label] of candidateDerived.entries()) {
+      if (!deceasedCollisions.has(lower)) {
+        names.add(label);
+      }
     }
   }
   return buildUnicodeAlternationRegex([...names]);
@@ -338,6 +449,7 @@ export function collectLivingNameHitsWithMatcher(
   if (!matcher.exactPattern && matcher.derivedRules.length === 0) {
     return [];
   }
+  const combined = matcherCombinedPrefilter.get(matcher);
   const hits: LivingNameHit[] = [];
   const seen = new Set<string>();
   const scanPattern = (pattern: RegExp, target: LivingNameTarget): boolean => {
@@ -367,6 +479,9 @@ export function collectLivingNameHitsWithMatcher(
   for (let i = 0; i < targets.length; i += 1) {
     const target = targets[i];
     if (!target.text) {
+      continue;
+    }
+    if (combined && !mayMatchPattern(combined, target.text)) {
       continue;
     }
     if (matcher.exactPattern && scanPattern(matcher.exactPattern, target)) {

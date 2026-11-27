@@ -145,7 +145,7 @@ export function applyKinshipRemovals(
 ): { remaining: KinshipEdge[]; removed: RemovedKinshipEdge[] } {
   if (entries.length === 0) {
     return {
-      remaining: existingList.map((edge) => structuredClone(edge)),
+      remaining: [...existingList],
       removed: [],
     };
   }
@@ -161,13 +161,12 @@ export function applyKinshipRemovals(
   for (const edge of existingList) {
     const matched = targets.some((target) => matchesRemoveKinshipTarget(edge, target));
     if (!matched) {
-      remaining.push(structuredClone(edge));
+      remaining.push(edge);
       continue;
     }
-    // Preserve an edge that patch.kinship would immediately re-insert identically so re-runs stay idempotent.
     const exactKey = `${edge.from}|${edge.to}|${edge.relation}|${normalizedXref(edge.family_xref) ?? ''}`;
     if (incomingByExactKey.has(exactKey)) {
-      remaining.push(structuredClone(edge));
+      remaining.push(edge);
       continue;
     }
     const xref = normalizedXref(edge.family_xref);
@@ -185,9 +184,15 @@ function upsertKinship(
   existingList: readonly KinshipEdge[],
   incomingList: readonly KinshipEdge[]
 ): { items: KinshipEdge[]; counts: UpsertCounts } {
-  const result = existingList.map((item) => structuredClone(item));
+  const result = [...existingList];
+  if (incomingList.length === 0) {
+    return { items: result, counts: { added: 0, updated: 0, unchanged: 0 } };
+  }
   const keyOf = (edge: KinshipEdge): string => `${edge.from}|${edge.to}|${edge.relation}`;
-  const idxByKey = new Map<string, number>(result.map((edge, idx) => [keyOf(edge), idx]));
+  const idxByKey = new Map<string, number>();
+  for (let i = 0; i < result.length; i += 1) {
+    idxByKey.set(keyOf(result[i]), i);
+  }
   let added = 0;
   let updated = 0;
   let unchanged = 0;
@@ -277,7 +282,6 @@ export function mergeKinshipPatch(
   removed: RemovedKinshipEdge[];
   parsedPatchKinship: KinshipEdge[];
 } {
-  // Apply remove_kinship before upserting patch.kinship so parent/spouse/xref replacements work in one patch.
   const parsedPatchKinship = rawPatchKinship.map((rawEdge) => KinshipEdgeSchema.parse(rawEdge));
   const kinshipRemovals = applyKinshipRemovals(existingKinship, removeKinship, parsedPatchKinship);
   const kinshipMerge = upsertKinship(kinshipRemovals.remaining, parsedPatchKinship);

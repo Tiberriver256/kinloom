@@ -26,14 +26,14 @@ function toHygienePerson(record: LooseRecord): RawPerson | null {
     birth_edtf: asString(record.birth_edtf ?? record.birth_date).trim(),
     death_edtf: asString(record.death_edtf ?? record.death_date).trim(),
     portrait_url: typeof record.portrait_url === 'string' ? record.portrait_url : null,
-    ...(isPlainRecord(record.extensions) ? { extensions: structuredClone(record.extensions) } : {}),
+    ...(isPlainRecord(record.extensions) ? { extensions: { ...record.extensions } } : {}),
   };
 }
 
 function applyPersonFieldsForHygiene(existing: RawPerson, patchFields: LooseRecord): RawPerson {
   const next: RawPerson = {
     ...existing,
-    ...(existing.extensions ? { extensions: structuredClone(existing.extensions) } : {}),
+    ...(existing.extensions ? { extensions: { ...existing.extensions } } : {}),
   };
   if (typeof patchFields.full_name === 'string' && patchFields.full_name.trim()) {
     next.full_name = patchFields.full_name.trim();
@@ -53,7 +53,7 @@ function applyPersonFieldsForHygiene(existing: RawPerson, patchFields: LooseReco
   if (isPlainRecord(patchFields.extensions)) {
     next.extensions = {
       ...next.extensions,
-      ...structuredClone(patchFields.extensions),
+      ...patchFields.extensions,
     };
   }
   return next;
@@ -170,35 +170,55 @@ export function runAuditHygieneRegressionCheck(input: {
   livePeople: readonly LooseRecord[];
   liveEvents: readonly LooseRecord[];
   liveKinship: readonly LooseRecord[];
+  typedLive?: {
+    readonly people: readonly RawPerson[];
+    readonly events: readonly RawEvent[];
+    readonly kinship: readonly KinshipEdge[];
+  };
 }): TreeHygieneWarning[] {
-  const prePeople: RawPerson[] = [];
-  for (const raw of input.livePeople) {
-    const person = toHygienePerson(raw);
-    if (person) {
-      prePeople.push(person);
+  let prePeople: readonly RawPerson[];
+  let preEvents: readonly RawEvent[];
+  let preKinship: readonly KinshipEdge[];
+
+  if (input.typedLive) {
+    prePeople = input.typedLive.people;
+    preEvents = input.typedLive.events;
+    preKinship = input.typedLive.kinship;
+  } else {
+    const builtPeople: RawPerson[] = [];
+    for (const raw of input.livePeople) {
+      const person = toHygienePerson(raw);
+      if (person) {
+        builtPeople.push(person);
+      }
     }
-  }
-  const preEvents: RawEvent[] = [];
-  for (const raw of input.liveEvents) {
-    const event = toHygieneEvent(raw);
-    if (event) {
-      preEvents.push(event);
+    const builtEvents: RawEvent[] = [];
+    for (const raw of input.liveEvents) {
+      const event = toHygieneEvent(raw);
+      if (event) {
+        builtEvents.push(event);
+      }
     }
-  }
-  const preKinship: KinshipEdge[] = [];
-  for (const raw of input.liveKinship) {
-    const edge = toHygieneKinship(raw);
-    if (edge) {
-      preKinship.push(edge);
+    const builtKinship: KinshipEdge[] = [];
+    for (const raw of input.liveKinship) {
+      const edge = toHygieneKinship(raw);
+      if (edge) {
+        builtKinship.push(edge);
+      }
     }
+    prePeople = builtPeople;
+    preEvents = builtEvents;
+    preKinship = builtKinship;
   }
 
   const touchedPersonIds = new Set<string>([input.personId]);
   const touchedEventIds = new Set<string>();
 
-  const postPeopleMap = new Map<string, RawPerson>(
-    prePeople.map((person) => [person.id, structuredClone(person)])
-  );
+  const postPeopleMap = new Map<string, RawPerson>();
+  for (let i = 0; i < prePeople.length; i += 1) {
+    const person = prePeople[i];
+    postPeopleMap.set(person.id, person);
+  }
   for (const rawPerson of Array.isArray(input.patch.people) ? input.patch.people : []) {
     if (!isPlainRecord(rawPerson) || typeof rawPerson.id !== 'string' || !rawPerson.id.trim()) {
       continue;
@@ -225,9 +245,11 @@ export function runAuditHygieneRegressionCheck(input: {
     }
   }
 
-  const postEventsMap = new Map<string, RawEvent>(
-    preEvents.map((event) => [event.id, structuredClone(event)])
-  );
+  const postEventsMap = new Map<string, RawEvent>();
+  for (let i = 0; i < preEvents.length; i += 1) {
+    const event = preEvents[i];
+    postEventsMap.set(event.id, event);
+  }
   for (const rawEv of Array.isArray(input.patch.events) ? input.patch.events : []) {
     if (!isPlainRecord(rawEv) || typeof rawEv.id !== 'string' || !rawEv.id.trim()) {
       continue;
@@ -296,22 +318,30 @@ export function runAuditHygieneRegressionCheck(input: {
     stagedKinshipEdges.push(edge);
   }
 
-  const { remaining: kinshipAfterRemovals } = applyKinshipRemovals(
-    preKinship,
-    removeKinshipEntries,
-    stagedKinshipEdges
-  );
-  const postKinshipMap = new Map<string, KinshipEdge>(
-    kinshipAfterRemovals.map((edge) => [`${edge.from}|${edge.to}|${edge.relation}`, structuredClone(edge)])
-  );
-  for (const edge of stagedKinshipEdges) {
-    const key = `${edge.from}|${edge.to}|${edge.relation}`;
-    const existing = postKinshipMap.get(key);
-    postKinshipMap.set(key, {
-      ...(existing ?? edge),
-      ...edge,
-      family_xref: edge.family_xref !== undefined ? edge.family_xref : existing?.family_xref,
-    });
+  let postKinship: readonly KinshipEdge[];
+  if (removeKinshipEntries.length === 0 && stagedKinshipEdges.length === 0) {
+    postKinship = preKinship;
+  } else {
+    const { remaining: kinshipAfterRemovals } = applyKinshipRemovals(
+      preKinship,
+      removeKinshipEntries,
+      stagedKinshipEdges
+    );
+    const postKinshipMap = new Map<string, KinshipEdge>();
+    for (let i = 0; i < kinshipAfterRemovals.length; i += 1) {
+      const edge = kinshipAfterRemovals[i];
+      postKinshipMap.set(`${edge.from}|${edge.to}|${edge.relation}`, edge);
+    }
+    for (const edge of stagedKinshipEdges) {
+      const key = `${edge.from}|${edge.to}|${edge.relation}`;
+      const existing = postKinshipMap.get(key);
+      postKinshipMap.set(key, {
+        ...(existing ?? edge),
+        ...edge,
+        family_xref: edge.family_xref !== undefined ? edge.family_xref : existing?.family_xref,
+      });
+    }
+    postKinship = [...postKinshipMap.values()];
   }
 
   const preHygiene = analyzeTreeHygiene({
@@ -322,7 +352,7 @@ export function runAuditHygieneRegressionCheck(input: {
   const postHygiene = analyzeTreeHygiene({
     people: [...postPeopleMap.values()],
     events: [...postEventsMap.values()],
-    kinship: [...postKinshipMap.values()],
+    kinship: postKinship,
   });
 
   return diffTreeHygieneWarnings({

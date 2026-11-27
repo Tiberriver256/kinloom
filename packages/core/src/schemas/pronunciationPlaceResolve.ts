@@ -6,6 +6,53 @@ import {
 import { mergePronunciationEntry } from './pronunciationPhonetics.js';
 import type { Pronunciation } from './pronunciationSchema.js';
 
+interface QualifiedPlaceLexiconCandidate {
+  readonly keyLen: number;
+  readonly qualifiersLower: readonly string[];
+  readonly entry: Pronunciation;
+}
+
+interface PreindexedPlaceLexicon {
+  readonly byLowerKey: ReadonlyMap<string, Pronunciation>;
+  readonly qualifiedByNameLower: ReadonlyMap<string, readonly QualifiedPlaceLexiconCandidate[]>;
+}
+
+const placeLexiconIndexCache = new WeakMap<Readonly<Record<string, Pronunciation>>, PreindexedPlaceLexicon>();
+
+function getPreindexedPlaceLexicon(lexicon: Readonly<Record<string, Pronunciation>>): PreindexedPlaceLexicon {
+  let cached = placeLexiconIndexCache.get(lexicon);
+  if (cached) {
+    return cached;
+  }
+  const byLowerKey = new Map<string, Pronunciation>();
+  const qualifiedByNameLower = new Map<string, QualifiedPlaceLexiconCandidate[]>();
+
+  for (const key of Object.keys(lexicon)) {
+    const entry = lexicon[key];
+    const lower = key.toLowerCase();
+    if (!byLowerKey.has(lower)) {
+      byLowerKey.set(lower, entry);
+    }
+    if (key.includes(',')) {
+      const keySegments = splitPlaceSegments(key);
+      if (keySegments.length >= 2) {
+        const firstLower = keySegments[0].toLowerCase();
+        const qualifiersLower = keySegments.slice(1).map((s) => s.toLowerCase());
+        let bucket = qualifiedByNameLower.get(firstLower);
+        if (!bucket) {
+          bucket = [];
+          qualifiedByNameLower.set(firstLower, bucket);
+        }
+        bucket.push({ keyLen: key.length, qualifiersLower, entry });
+      }
+    }
+  }
+
+  cached = { byLowerKey, qualifiedByNameLower };
+  placeLexiconIndexCache.set(lexicon, cached);
+  return cached;
+}
+
 /**
  * Resolve a place's effective pronunciation in strict specificity order:
  * 1. Explicit `place.pronunciation` on the place record itself
@@ -28,46 +75,46 @@ export function resolvePlacePronunciation(
 
   if (lexicon) {
     const idKey = place.id?.trim();
-    if (idKey && lexicon[idKey]) {
+    if (idKey && Object.hasOwn(lexicon, idKey)) {
       shared = lexicon[idKey];
     }
 
+    const index = shared ? null : getPreindexedPlaceLexicon(lexicon);
     const fullNameKey = place.full_name?.trim();
-    if (!shared && fullNameKey) {
-      shared =
-        lexicon[fullNameKey] ??
-        Object.entries(lexicon).find(([k]) => k.toLowerCase() === fullNameKey.toLowerCase())?.[1];
+    if (!shared && fullNameKey && index) {
+      shared = Object.hasOwn(lexicon, fullNameKey)
+        ? lexicon[fullNameKey]
+        : index.byLowerKey.get(fullNameKey.toLowerCase());
     }
 
     const nameKey = place.name?.trim();
-    if (!shared && nameKey && fullNameKey) {
+    if (!shared && nameKey && fullNameKey && index) {
       const nameLower = nameKey.toLowerCase();
-      const qualifierSegments = getPlaceQualifierSegments(place).map((s) => s.toLowerCase());
-      const qualifierJoined = qualifierSegments.join(', ');
-      let bestQualified: { readonly keyLen: number; readonly entry: Pronunciation } | null = null;
+      const qualifiedCandidates = index.qualifiedByNameLower.get(nameLower);
+      if (qualifiedCandidates && qualifiedCandidates.length > 0) {
+        const qualifierSegments = getPlaceQualifierSegments(place).map((s) => s.toLowerCase());
+        const qualifierJoined = qualifierSegments.join(', ');
+        let bestQualified: QualifiedPlaceLexiconCandidate | null = null;
 
-      for (const [key, entry] of Object.entries(lexicon)) {
-        const keySegments = splitPlaceSegments(key);
-        if (keySegments.length < 2 || keySegments[0].toLowerCase() !== nameLower) {
-          continue;
+        for (let i = 0; i < qualifiedCandidates.length; i += 1) {
+          const cand = qualifiedCandidates[i];
+          const allMatch = cand.qualifiersLower.every(
+            (q) => qualifierSegments.includes(q) || (q.length >= 3 && qualifierJoined.includes(q))
+          );
+          if (allMatch && (!bestQualified || cand.keyLen > bestQualified.keyLen)) {
+            bestQualified = cand;
+          }
         }
-        const keyQualifiers = keySegments.slice(1).map((s) => s.toLowerCase());
-        const allMatch = keyQualifiers.every(
-          (q) => qualifierSegments.includes(q) || (q.length >= 3 && qualifierJoined.includes(q))
-        );
-        if (allMatch && (!bestQualified || key.length > bestQualified.keyLen)) {
-          bestQualified = { keyLen: key.length, entry };
+        if (bestQualified) {
+          shared = bestQualified.entry;
         }
-      }
-      if (bestQualified) {
-        shared = bestQualified.entry;
       }
     }
 
-    if (!shared && nameKey) {
-      const bareEntry =
-        lexicon[nameKey] ??
-        Object.entries(lexicon).find(([k]) => k.toLowerCase() === nameKey.toLowerCase())?.[1];
+    if (!shared && nameKey && index) {
+      const bareEntry = Object.hasOwn(lexicon, nameKey)
+        ? lexicon[nameKey]
+        : index.byLowerKey.get(nameKey.toLowerCase());
       if (bareEntry && isBareLexiconEntryCompatibleWithPlace(bareEntry, place)) {
         shared = bareEntry;
       }

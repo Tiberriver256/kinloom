@@ -1,5 +1,6 @@
 import type { ParsedEdtfInterval } from '@kinloom/core';
 import type { ExecutedPluginCheckResult, KinloomCliPlugin } from '../../../plugins.js';
+import type { LoadedLocalArchiveRepo } from '../../dataFiles.js';
 import type { IntegrateCommandResult } from '../shared/integrateEngine/types.js';
 import type { TreeHygieneWarning } from '../tree-hygiene.js';
 
@@ -9,6 +10,7 @@ export interface AuditCommandOptions {
   packageDir?: string;
   json?: boolean;
   plugins?: readonly KinloomCliPlugin[];
+  preloadedRepo?: LoadedLocalArchiveRepo;
 }
 
 export type ParsedAuditEdtf = ParsedEdtfInterval;

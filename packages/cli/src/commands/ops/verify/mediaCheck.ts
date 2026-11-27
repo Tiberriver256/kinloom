@@ -8,18 +8,21 @@ export { findDuplicateNormalizedMediaFiles };
 
 export function verifyMediaFilesOnDisk(repoDir: string, mediaItems: readonly MediaItem[]): VerifyMediaResult {
   const archiveMediaRoot = path.join(repoDir, 'archive-media');
-  const hasArchiveMedia = fs.existsSync(archiveMediaRoot) && fs.statSync(archiveMediaRoot).isDirectory();
+  const archiveMediaStat = fs.statSync(archiveMediaRoot, { throwIfNoEntry: false });
+  const hasArchiveMedia = Boolean(archiveMediaStat?.isDirectory());
   const mediaLayout: 'archive-media' | 'media' = hasArchiveMedia ? 'archive-media' : 'media';
   const mediaRoot = hasArchiveMedia ? archiveMediaRoot : repoDir;
   const publicMediaDir = path.resolve(repoDir, 'public', 'media');
+  const publicMediaPrefix = `${publicMediaDir}${path.sep}`;
   const rootPrefix = `${path.resolve(mediaRoot)}${path.sep}`;
 
   const missingFiles: VerifyMissingMediaFile[] = [];
   let checkedCount = 0;
 
-  for (const item of mediaItems) {
+  for (let i = 0; i < mediaItems.length; i += 1) {
+    const item = mediaItems[i];
     const fileUrl = item.file.trim();
-    if (/^https?:\/\//i.test(fileUrl)) {
+    if (fileUrl.startsWith('http://') || fileUrl.startsWith('https://') || /^https?:\/\//i.test(fileUrl)) {
       continue;
     }
     checkedCount += 1;
@@ -46,7 +49,7 @@ export function verifyMediaFilesOnDisk(repoDir: string, mediaItems: readonly Med
     }
 
     const expectedPath = path.resolve(mediaRoot, ...parts);
-    if (expectedPath === publicMediaDir || expectedPath.startsWith(`${publicMediaDir}${path.sep}`)) {
+    if (expectedPath === publicMediaDir || expectedPath.startsWith(publicMediaPrefix)) {
       missingFiles.push({
         id: item.id,
         file: fileUrl,
@@ -64,7 +67,8 @@ export function verifyMediaFilesOnDisk(repoDir: string, mediaItems: readonly Med
       });
       continue;
     }
-    if (!fs.existsSync(expectedPath)) {
+    const stat = fs.statSync(expectedPath, { throwIfNoEntry: false });
+    if (!stat) {
       missingFiles.push({
         id: item.id,
         file: fileUrl,
@@ -73,7 +77,6 @@ export function verifyMediaFilesOnDisk(repoDir: string, mediaItems: readonly Med
       });
       continue;
     }
-    const stat = fs.statSync(expectedPath);
     if (!stat.isFile()) {
       missingFiles.push({
         id: item.id,

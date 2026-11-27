@@ -45,7 +45,7 @@ export function stringifyYaml(
   return emitCanonicalYaml(value, options);
 }
 
-function parseListYamlFast<T>(text: string, parseArray: (raw: unknown) => T[]): T[] {
+function parseListYamlFast<T>(text: string, parseArray: (raw: unknown, ownsInput?: boolean) => T[]): T[] {
   if (!text.trim()) {
     return [];
   }
@@ -53,7 +53,7 @@ function parseListYamlFast<T>(text: string, parseArray: (raw: unknown) => T[]): 
   if (raw === null || raw === undefined) {
     return [];
   }
-  return parseArray(raw);
+  return parseArray(raw, true);
 }
 
 const NarrativeEnrichmentArraySchema = z.array(NarrativeEnrichmentSchema);

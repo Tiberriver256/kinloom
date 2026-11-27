@@ -1,4 +1,4 @@
-import { ApiClientError, parseErrorEnvelope, stripTrailingSlash } from './httpWiki/httpClient.js';
+import { ApiClientError, parseErrorEnvelope, stripTrailingSlash } from './httpWiki/apiError.js';
 
 export interface PluginApiClient {
   requestJson<T>(

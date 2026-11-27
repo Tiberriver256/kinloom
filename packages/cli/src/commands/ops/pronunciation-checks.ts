@@ -321,7 +321,19 @@ export function createPronunciationAuditCheck(): KinloomAuditCheck {
 }
 
 export function runPronunciationVerifyCheck(ctx: KinloomVerifyCheckContext): KinloomCheckResult {
-  const audit = runPronounceAuditCommand({ repoDir: ctx.repoDir });
+  const hasPreloadedEntities = ctx.people.length > 0 || ctx.places.length > 0;
+  const audit = runPronounceAuditCommand({
+    repoDir: ctx.repoDir,
+    ...(hasPreloadedEntities
+      ? {
+          preloaded: {
+            siteConfig: ctx.siteConfig,
+            people: ctx.people,
+            places: ctx.places,
+          },
+        }
+      : {}),
+  });
 
   const errors: string[] = audit.living_leaks.map((leak) => `${leak.location}: ${leak.reason}`);
   const warnings: string[] = [];

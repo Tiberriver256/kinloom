@@ -1,4 +1,6 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useLayoutEffect, useRef } from 'react';
+
+const useIsomorphicLayoutEffect = typeof window !== 'undefined' ? useLayoutEffect : useEffect;
 
 const FOCUSABLE_SELECTOR = [
   'a[href]',
@@ -68,7 +70,7 @@ export function useDialogFocusTrap<T extends HTMLElement = HTMLDialogElement>({
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
 
-  useEffect(() => {
+  useIsomorphicLayoutEffect(() => {
     if (!open || typeof document === 'undefined' || typeof window === 'undefined') {
       return undefined;
     }

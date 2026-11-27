@@ -717,9 +717,11 @@ export function parseYamlFast(text: string): unknown {
           return {};
         }
       }
-      const singleScalar = parseBlockScalarSpan(text, s0, e0);
-      if (singleScalar !== BAIL) {
-        return singleScalar;
+      if (!isSequenceLine(text, s0, e0) && !trySplitKeySpan(text, s0, e0)) {
+        const singleScalar = parseBlockScalarSpan(text, s0, e0);
+        if (singleScalar !== BAIL) {
+          return singleScalar;
+        }
       }
     }
     const cursor = { idx: 0 };

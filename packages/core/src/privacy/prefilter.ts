@@ -1,6 +1,7 @@
 interface WordTokenPrefilter {
   readonly caseInsensitive: boolean;
   readonly minLen: number;
+  readonly firstCharMask: number;
   readonly bloomBits: Uint8Array;
   readonly wordHashes: ReadonlySet<number>;
 }
@@ -9,6 +10,17 @@ const prefilters = new WeakMap<RegExp, WordTokenPrefilter>();
 
 function isAsciiWordCode(c: number): boolean {
   return (c >= 97 && c <= 122) || (c >= 65 && c <= 90) || (c >= 48 && c <= 57) || c === 95;
+}
+
+function asciiWordFirstBit(c: number): number {
+  const lower = c >= 65 && c <= 90 ? c | 32 : c;
+  if (lower >= 97 && lower <= 122) {
+    return 1 << (lower - 97);
+  }
+  if (lower >= 48 && lower <= 57) {
+    return 1 << 26;
+  }
+  return 1 << 27;
 }
 
 function hashAsciiWordSpan(text: string, start: number, end: number, caseInsensitive: boolean): number {
@@ -43,12 +55,14 @@ export function registerPatternPrefilter(
   }
 
   let minLen = Infinity;
+  let firstCharMask = 0;
   const bloomBits = new Uint8Array(512); // 4096 bits
   const wordHashes = new Set<number>();
 
   for (let i = 0; i < names.length; i += 1) {
     const s = names[i];
-    if (s.length < 2 || !isAsciiWordCode(s.charCodeAt(0))) {
+    const c0 = s.charCodeAt(0);
+    if (s.length < 2 || !isAsciiWordCode(c0)) {
       return;
     }
     let wEnd = 1;
@@ -61,6 +75,7 @@ export function registerPatternPrefilter(
     if (s.length < minLen) {
       minLen = s.length;
     }
+    firstCharMask |= asciiWordFirstBit(c0);
     const h = hashAsciiWordSpan(s, 0, wEnd, caseInsensitive);
     wordHashes.add(h);
     const bit1 = h & 4095;
@@ -72,6 +87,7 @@ export function registerPatternPrefilter(
   prefilters.set(pattern, {
     caseInsensitive,
     minLen,
+    firstCharMask,
     bloomBits,
     wordHashes,
   });
@@ -90,8 +106,7 @@ export function mayMatchPattern(pattern: RegExp, text: string): boolean {
     return false;
   }
 
-  const { caseInsensitive, bloomBits, wordHashes } = pf;
-  let hasCandidate = false;
+  const { caseInsensitive, firstCharMask, bloomBits, wordHashes } = pf;
   let i = 0;
 
   while (i < len) {
@@ -100,6 +115,22 @@ export function mayMatchPattern(pattern: RegExp, text: string): boolean {
       return true;
     }
     if (isAsciiWordCode(c)) {
+      if ((firstCharMask & asciiWordFirstBit(c)) === 0) {
+        let j = i + 1;
+        while (j < len) {
+          const nc = text.charCodeAt(j);
+          if (nc >= 128) {
+            return true;
+          }
+          if (!isAsciiWordCode(nc)) {
+            break;
+          }
+          j += 1;
+        }
+        i = j + 1;
+        continue;
+      }
+
       let h = 0x811c9dc5;
       let ch = c;
       if (caseInsensitive && ch >= 65 && ch <= 90) {
@@ -128,13 +159,13 @@ export function mayMatchPattern(pattern: RegExp, text: string): boolean {
         tokLen += 1;
       }
 
-      if (!hasCandidate && tokLen >= 2) {
+      if (tokLen >= 2) {
         const uh = h >>> 0;
         const bit1 = uh & 4095;
         if ((bloomBits[bit1 >>> 3] & (1 << (bit1 & 7))) !== 0) {
           const bit2 = (uh >>> 12) & 4095;
           if ((bloomBits[bit2 >>> 3] & (1 << (bit2 & 7))) !== 0 && wordHashes.has(uh)) {
-            hasCandidate = true;
+            return true;
           }
         }
       }
@@ -144,5 +175,5 @@ export function mayMatchPattern(pattern: RegExp, text: string): boolean {
     }
   }
 
-  return hasCandidate;
+  return false;
 }

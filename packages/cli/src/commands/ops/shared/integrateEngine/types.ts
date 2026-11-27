@@ -1,4 +1,5 @@
 import type { ArchiveBundle, KinshipEdge } from '@kinloom/core';
+import type { LoadedLocalArchiveRepo } from '../../../dataFiles.js';
 
 export const YEAR_ONLY_RE = /^\d{4}$/;
 export const SAFE_PERSON_ID_RE = /^[a-zA-Z0-9_-]+$/;
@@ -22,6 +23,8 @@ export interface IntegrateCommandOptions {
   packageDir?: string;
   dryRun?: boolean;
   json?: boolean;
+  preloadedRepo?: LoadedLocalArchiveRepo;
+  preparsedPatch?: Record<string, unknown>;
 }
 
 export interface UpsertCounts {

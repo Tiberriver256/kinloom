@@ -303,3 +303,237 @@ describe('createBookPublishingCliPlugin (off-by-default CLI book publishing)', (
     ).rejects.toThrow(/playwright-core/);
   });
 });
+
+describe('createBookPublishingCliPlugin validation, error paths, and plain-text outputs', () => {
+  it('validates subcommands, build options, missing config, privacy errors, and playwright flag', async () => {
+    const repoDir = await makeTempArchive();
+    const plugin = createBookPublishingCliPlugin({
+      nowIso: () => '2026-11-27T12:00:00.000Z',
+      playwrightBrowserFactory: async () => ({
+        async newPage() {
+          return {
+            async setContent() {},
+            async pdf() {
+              return new TextEncoder().encode('%PDF-1.4\n1 0 obj\n<< /Type /Page >>\nendobj\n%%EOF\n');
+            },
+            async close() {},
+          };
+        },
+        async close() {},
+      }),
+    });
+
+    // Unknown subcommand
+    const unknownCap = makeCaptureIo();
+    expect(await runCli(['book', 'bogus'], { cwd: repoDir, io: unknownCap.io, plugins: [plugin] })).toBe(
+      EXIT_USAGE
+    );
+    expect(unknownCap.err.join('\n')).toContain("Unknown 'book' subcommand");
+
+    // Invalid build flags
+    for (const badArgs of [
+      ['book', 'build', '--trim', 'invalid-trim'],
+      ['book', 'build', '--binding', 'invalid-binding'],
+      ['book', 'build', '--paper', 'invalid-paper'],
+      ['book', 'build', '--edition', 'invalid-edition'],
+      ['book', 'build', '--renderer', 'invalid-renderer'],
+    ]) {
+      const cap = makeCaptureIo();
+      expect(await runCli(badArgs, { cwd: repoDir, io: cap.io, plugins: [plugin] })).toBe(EXIT_USAGE);
+    }
+
+    // Missing kinloom.config.yaml
+    const emptyDir = await mkdtemp(path.join(os.tmpdir(), 'kinloom-book-noconf-'));
+    tempDirs.push(emptyDir);
+    const noConfCap = makeCaptureIo();
+    expect(
+      await runCli(['book', 'build', '--repo', emptyDir], {
+        cwd: repoDir,
+        io: noConfCap.io,
+        plugins: [plugin],
+      })
+    ).toBe(EXIT_USAGE);
+
+    // Privacy error: include-living on public edition fails closed
+    const privCap = makeCaptureIo();
+    expect(
+      await runCli(['book', 'build', '--edition', 'private'], {
+        cwd: repoDir,
+        io: privCap.io,
+        plugins: [plugin],
+      })
+    ).toBe(EXIT_USAGE);
+
+    // Playwright renderer via CLI flag
+    const pwOutDir = path.join(repoDir, 'dist-pw-flag');
+    const pwCap = makeCaptureIo();
+    expect(
+      await runCli(['book', 'build', '--out', pwOutDir, '--renderer', 'playwright', '--proof-marks'], {
+        cwd: repoDir,
+        io: pwCap.io,
+        plugins: [plugin],
+      })
+    ).toBe(EXIT_OK);
+    expect(pwCap.out.join('\n')).toContain('Built archival landscape book');
+  });
+
+  it('validates quote, submit, and status error paths and renders plain-text summaries', async () => {
+    const repoDir = await makeTempArchive();
+    const outDir = path.join(repoDir, 'dist-text');
+    const addressPath = path.join(repoDir, 'addr.json');
+    await writeFile(
+      addressPath,
+      JSON.stringify({
+        name: 'Rowan Alder',
+        street1: '12 Pine Rd',
+        city: 'Madison',
+        stateCode: 'WI',
+        countryCode: 'US',
+        postalCode: '53703',
+        phoneNumber: '+15555550122',
+      }),
+      'utf8'
+    );
+
+    const noCredPlugin = createBookPublishingCliPlugin({
+      env: {},
+      nowIso: () => '2026-11-27T12:00:00.000Z',
+    });
+
+    // Quote validation errors
+    const missingPagesCap = makeCaptureIo();
+    expect(
+      await runCli(['book', 'quote', '--postal', '53703'], {
+        cwd: repoDir,
+        io: missingPagesCap.io,
+        plugins: [noCredPlugin],
+      })
+    ).toBe(EXIT_USAGE);
+
+    const missingPostalCap = makeCaptureIo();
+    expect(
+      await runCli(['book', 'quote', '--pages', '40'], {
+        cwd: repoDir,
+        io: missingPostalCap.io,
+        plugins: [noCredPlugin],
+      })
+    ).toBe(EXIT_USAGE);
+
+    const badProviderCap = makeCaptureIo();
+    expect(
+      await runCli(['book', 'quote', '--pages', '40', '--postal', '53703', '--provider', 'unknown'], {
+        cwd: repoDir,
+        io: badProviderCap.io,
+        plugins: [noCredPlugin],
+      })
+    ).toBe(EXIT_USAGE);
+
+    const missingLuluEnvCap = makeCaptureIo();
+    expect(
+      await runCli(['book', 'quote', '--pages', '40', '--postal', '53703', '--provider', 'lulu'], {
+        cwd: repoDir,
+        io: missingLuluEnvCap.io,
+        plugins: [noCredPlugin],
+      })
+    ).toBe(EXIT_USAGE);
+    expect(missingLuluEnvCap.err.join('\n')).toContain('KINLOOM_LULU_CLIENT_ID');
+
+    // Quote plain-text output with mock provider
+    const quoteTextCap = makeCaptureIo();
+    expect(
+      await runCli(['book', 'quote', '--pages', '60', '--postal', '53703', '--provider', 'mock'], {
+        cwd: repoDir,
+        io: quoteTextCap.io,
+        plugins: [noCredPlugin],
+      })
+    ).toBe(EXIT_OK);
+    expect(quoteTextCap.out.join('\n')).toContain('Total: $');
+
+    // Build first, then exercise submit & status plain-text + error paths
+    const mockPublisher = createMockBookPublisherAdapter({ nowIso: () => '2026-11-27T12:00:00.000Z' });
+    const plugin = createBookPublishingCliPlugin({
+      publisherProvider: mockPublisher,
+      nowIso: () => '2026-11-27T12:00:00.000Z',
+    });
+
+    expect(
+      await runCli(['book', 'build', '--out', outDir], {
+        cwd: repoDir,
+        io: makeCaptureIo().io,
+        plugins: [plugin],
+      })
+    ).toBe(EXIT_OK);
+
+    // Missing --address-file
+    const missingAddrCap = makeCaptureIo();
+    expect(
+      await runCli(['book', 'submit', '--dir', outDir], {
+        cwd: repoDir,
+        io: missingAddrCap.io,
+        plugins: [plugin],
+      })
+    ).toBe(EXIT_USAGE);
+
+    // Dry-run plain-text
+    const dryTextCap = makeCaptureIo();
+    expect(
+      await runCli(['book', 'submit', '--dir', outDir, '--address-file', addressPath, '--dry-run'], {
+        cwd: repoDir,
+        io: dryTextCap.io,
+        plugins: [plugin],
+      })
+    ).toBe(EXIT_OK);
+    expect(dryTextCap.out.join('\n')).toContain('Dry-run preflight passed');
+
+    // Sandbox submit plain-text + status plain-text
+    const submitTextCap = makeCaptureIo();
+    expect(
+      await runCli(['book', 'submit', '--dir', outDir, '--address-file', addressPath, '--sandbox'], {
+        cwd: repoDir,
+        io: submitTextCap.io,
+        plugins: [plugin],
+      })
+    ).toBe(EXIT_OK);
+    expect(submitTextCap.out.join('\n')).toContain('Submitted print job mock-job-1');
+
+    const missingJobCap = makeCaptureIo();
+    expect(await runCli(['book', 'status'], { cwd: repoDir, io: missingJobCap.io, plugins: [plugin] })).toBe(
+      EXIT_USAGE
+    );
+
+    const statusTextCap = makeCaptureIo();
+    expect(
+      await runCli(['book', 'status', '--job-id', 'mock-job-1'], {
+        cwd: repoDir,
+        io: statusTextCap.io,
+        plugins: [plugin],
+      })
+    ).toBe(EXIT_OK);
+    expect(statusTextCap.out.join('\n')).toContain('Job mock-job-1: status=ready_for_production');
+
+    // Publisher preflight failure returns EXIT_ERROR (non-zero)
+    const failingPlugin = createBookPublishingCliPlugin({
+      publisherProvider: createMockBookPublisherAdapter({
+        failValidationMessage: 'Spine bleed mismatch',
+      }),
+    });
+    const failValCap = makeCaptureIo();
+    const failValExit = await runCli(
+      ['book', 'submit', '--dir', outDir, '--address-file', addressPath, '--sandbox'],
+      { cwd: repoDir, io: failValCap.io, plugins: [failingPlugin] }
+    );
+    expect(failValExit).not.toBe(EXIT_OK);
+    expect(failValCap.err.join('\n')).toContain('Publisher preflight validation failed');
+
+    // Corrupt interior PDF fails integrity check
+    await writeFile(path.join(outDir, 'interior.pdf'), 'not-a-pdf', 'utf8');
+    const corruptCap = makeCaptureIo();
+    expect(
+      await runCli(['book', 'submit', '--dir', outDir, '--address-file', addressPath, '--dry-run'], {
+        cwd: repoDir,
+        io: corruptCap.io,
+        plugins: [plugin],
+      })
+    ).toBe(EXIT_USAGE);
+  });
+});

@@ -296,4 +296,139 @@ describe('R2IncrementalPatchBundleCache delta journal & coalescing behavioral su
     });
     expect((await missingBaseCache.getCached(null)).status).toBe('miss');
   });
+
+  it('handles inline-to-delta threshold crossing, maxDeltaBytes compaction, concurrent ETag conflicts, and fresher-revision wins', async () => {
+    const siteConfig = createSyntheticSiteConfig();
+    const clock = new FixedClock('2026-11-27T12:00:00.000Z');
+    const mem = createMemoryR2Bucket();
+
+    const p1 = createSyntheticHistoricalPerson({
+      id: 'per_alder_inline',
+      slug: 'arthur-alder-inline',
+      full_name: 'Arthur Alder',
+    });
+    const baseSnap: ArchiveRawSnapshot = {
+      head_revision_id: asRevisionId(1),
+      entities: [
+        {
+          entity_type: 'person',
+          entity_id: p1.id,
+          slug: p1.slug,
+          data: toEntityPayload(p1),
+          current_revision_id: asRevisionId(1),
+          has_primary_source: true,
+          deleted_at: null,
+          updated_at: clock.nowIso(),
+        },
+      ],
+      kinship: [],
+    };
+
+    // Start just above initial serialized size so rev 1 stays inline, then rev 2 crosses deltaThresholdBytes
+    const probeCache = new R2IncrementalPatchBundleCache({
+      bucket: mem.bucket,
+      siteConfig,
+      clock,
+      deltaThresholdBytes: 1_000_000,
+    });
+    const initialBuilt = await probeCache.rebuildAndStore(baseSnap);
+    const threshold = initialBuilt.byteLength + 20;
+
+    const mem2 = createMemoryR2Bucket();
+    const crossingCache = new R2IncrementalPatchBundleCache({
+      bucket: mem2.bucket,
+      siteConfig,
+      clock,
+      deltaThresholdBytes: threshold,
+      maxDeltaBytes: 120, // force maxDeltaBytes compaction on next delta write
+    });
+    await crossingCache.rebuildAndStore(baseSnap);
+    expect(mem2.entries.has('compiled/archive.json.base')).toBe(false);
+
+    const p2 = createSyntheticHistoricalPerson({
+      id: 'per_mercer_cross',
+      slug: 'clara-mercer-cross',
+      full_name: 'Clara Mercer of Ottawa County',
+    });
+    const rev2: RevisionRecord = {
+      revision_id: asRevisionId(2),
+      batch_id: null,
+      entity_type: 'person',
+      entity_id: p2.id,
+      parent_revision_id: null,
+      action: 'create',
+      reverted_revision_id: null,
+      author_id: 'editor@example.test',
+      author_name: 'Editor Alder',
+      author_type: 'human',
+      summary: 'Cross delta threshold from inline memo',
+      has_primary_source: true,
+      before_json: null,
+      after_json: toEntityPayload(p2),
+      created_at: clock.nowIso(),
+    };
+
+    const crossed = await crossingCache.tryApplyMutationsFromMemo([rev2]);
+    expect(crossed?.revision_id).toBe(asRevisionId(2));
+    expect(mem2.entries.has('compiled/archive.json.base')).toBe(true);
+
+    // Next mutation exceeds maxDeltaBytes=120 -> compacts into .base
+    const p2b = { ...p2, full_name: 'Clara E. Mercer of Ottawa County' };
+    const rev3: RevisionRecord = {
+      ...rev2,
+      revision_id: asRevisionId(3),
+      parent_revision_id: 2,
+      action: 'update',
+      before_json: toEntityPayload(p2),
+      after_json: toEntityPayload(p2b),
+    };
+    const compactedByBytes = await crossingCache.tryApplyMutationsFromMemo([rev3]);
+    expect(compactedByBytes?.revision_id).toBe(asRevisionId(3));
+
+    // Concurrent ETag conflict during delta write returns null cleanly and evicts stale memo
+    const conflictDeltaCache = new R2IncrementalPatchBundleCache({
+      bucket: mem2.cloneColdView(),
+      siteConfig,
+      clock,
+      deltaThresholdBytes: 128,
+    });
+    await conflictDeltaCache.getCached(null); // warm delta memo at rev 3
+    // Mutate underlying R2 etag behind conflictDeltaCache's back
+    const headEntry = mem2.entries.get('compiled/archive.json')!;
+    mem2.entries.set('compiled/archive.json', { ...headEntry, etag: 'concurrent-writer-etag' });
+    const rev4: RevisionRecord = {
+      ...rev3,
+      revision_id: asRevisionId(4),
+      parent_revision_id: 3,
+      before_json: toEntityPayload(p2b),
+      after_json: toEntityPayload({ ...p2b, full_name: 'Clara Mercer IV' }),
+    };
+    expect(await conflictDeltaCache.tryApplyMutationsFromMemo([rev4])).toBeNull();
+
+    // Concurrent ETag conflict during inline write returns null cleanly
+    const memInline = createMemoryR2Bucket();
+    const inlineCache = new R2IncrementalPatchBundleCache({
+      bucket: memInline.bucket,
+      siteConfig,
+      clock,
+      deltaThresholdBytes: 1_000_000,
+    });
+    const inlineRev1 = await inlineCache.rebuildAndStore(baseSnap);
+    const inlineHead = memInline.entries.get('compiled/archive.json')!;
+    memInline.entries.set('compiled/archive.json', { ...inlineHead, etag: 'concurrent-inline-etag' });
+    expect(await inlineCache.tryApplyMutationsFromMemo([rev2])).toBeNull();
+
+    // Direct applyMutationsAndStore + stale storeBundle yielding to fresher revision in R2
+    const appliedRev2 = await inlineCache.applyMutationsAndStore(inlineRev1.parsedBundle!, [rev2]);
+    expect(appliedRev2.revision_id).toBe(asRevisionId(2));
+
+    const staleCache = new R2IncrementalPatchBundleCache({
+      bucket: memInline.cloneColdView(),
+      siteConfig,
+      clock,
+      deltaThresholdBytes: 1_000_000,
+    });
+    const yieldedToFresher = await staleCache.rebuildAndStore(baseSnap); // rev 1 < rev 2 in R2
+    expect(yieldedToFresher.revision_id).toBe(asRevisionId(2));
+  });
 });

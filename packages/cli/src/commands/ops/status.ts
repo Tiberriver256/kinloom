@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import {
   edtfYear,
+  fastLocaleCompare,
   getCurrentReferenceYear,
   getMediaPersonIds,
   type KinshipEdge,
@@ -9,12 +10,19 @@ import {
   type Narrative,
   type Place,
   type PrivacyConfig,
+  parseEventsYaml,
+  parseKinloomConfigYaml,
+  parseKinshipYaml,
+  parseMediaYaml,
+  parseNarrativesYaml,
+  parsePeopleYaml,
+  parsePlacesYaml,
+  parseSourcesYaml,
   type RawEvent,
   type RawPerson,
   resolveEffectiveLiving,
 } from '@kinloom/core';
 import { CliValidationError } from '../../errors.js';
-import { loadLocalArchiveRepo } from '../dataFiles.js';
 
 export { STATUS_HELP } from './help.js';
 
@@ -124,6 +132,26 @@ function queueStatus(hasBiography: boolean, hasStagedPatch: boolean): BiographyQ
   return 'pending';
 }
 
+const parsedYearsCache = new WeakMap<
+  DeceasedQueueItem,
+  { readonly birthYear: number | null; readonly deathYear: number | null }
+>();
+
+function getItemYears(item: DeceasedQueueItem): {
+  readonly birthYear: number | null;
+  readonly deathYear: number | null;
+} {
+  let cached = parsedYearsCache.get(item);
+  if (!cached) {
+    cached = {
+      birthYear: edtfYear(item.birth_edtf),
+      deathYear: edtfYear(item.death_edtf),
+    };
+    parsedYearsCache.set(item, cached);
+  }
+  return cached;
+}
+
 const STATUS_SORT_COMPARATORS: Record<
   StatusSortMode,
   (a: DeceasedQueueItem, b: DeceasedQueueItem) => number
@@ -132,19 +160,24 @@ const STATUS_SORT_COMPARATORS: Record<
     a.events - b.events ||
     a.sources - b.sources ||
     a.media - b.media ||
-    compareNullableYear(edtfYear(a.birth_edtf), edtfYear(b.birth_edtf)) ||
-    a.id.localeCompare(b.id),
+    compareNullableYear(getItemYears(a).birthYear, getItemYears(b).birthYear) ||
+    fastLocaleCompare(a.id, b.id),
   richest: (a, b) =>
     b.events - a.events ||
     b.sources - a.sources ||
     b.media - a.media ||
-    compareNullableYear(edtfYear(a.birth_edtf), edtfYear(b.birth_edtf)) ||
-    a.id.localeCompare(b.id),
-  chronological: (a, b) =>
-    compareNullableYear(edtfYear(a.birth_edtf), edtfYear(b.birth_edtf)) ||
-    compareNullableYear(edtfYear(a.death_edtf), edtfYear(b.death_edtf)) ||
-    a.events - b.events ||
-    a.id.localeCompare(b.id),
+    compareNullableYear(getItemYears(a).birthYear, getItemYears(b).birthYear) ||
+    fastLocaleCompare(a.id, b.id),
+  chronological: (a, b) => {
+    const ya = getItemYears(a);
+    const yb = getItemYears(b);
+    return (
+      compareNullableYear(ya.birthYear, yb.birthYear) ||
+      compareNullableYear(ya.deathYear, yb.deathYear) ||
+      a.events - b.events ||
+      fastLocaleCompare(a.id, b.id)
+    );
+  },
 };
 
 function compareDeceased(sort: StatusSortMode): (a: DeceasedQueueItem, b: DeceasedQueueItem) => number {
@@ -164,38 +197,35 @@ interface PersonResearchCounts {
   media: number;
 }
 
-function indexResearchCounts(
-  events: readonly RawEvent[],
+interface MutablePersonResearchBucket {
+  eventIds: Set<string>;
+  sourceIds: Set<string>;
+  mediaIds: Set<string>;
+}
+
+function getOrCreateBucket(
+  counts: Map<string, MutablePersonResearchBucket>,
+  personId: string
+): MutablePersonResearchBucket {
+  let row = counts.get(personId);
+  if (!row) {
+    row = { eventIds: new Set(), sourceIds: new Set(), mediaIds: new Set() };
+    counts.set(personId, row);
+  }
+  return row;
+}
+
+function finalizeResearchBuckets(
+  counts: Map<string, MutablePersonResearchBucket>,
   media: readonly MediaItem[]
 ): Map<string, PersonResearchCounts> {
-  const counts = new Map<string, { eventIds: Set<string>; sourceIds: Set<string>; mediaIds: Set<string> }>();
-  const bucket = (personId: string) => {
-    let row = counts.get(personId);
-    if (!row) {
-      row = { eventIds: new Set(), sourceIds: new Set(), mediaIds: new Set() };
-      counts.set(personId, row);
-    }
-    return row;
-  };
-
-  for (const event of events) {
-    const participantIds = new Set(event.participants.map((participant) => participant.person_id));
-    const sourceIds = event.sources.map((source) => source.source_id);
-    for (const personId of participantIds) {
-      const row = bucket(personId);
-      row.eventIds.add(event.id);
-      for (const sourceId of sourceIds) {
-        row.sourceIds.add(sourceId);
-      }
+  for (let i = 0; i < media.length; i += 1) {
+    const item = media[i];
+    const pids = getMediaPersonIds(item);
+    for (let p = 0; p < pids.length; p += 1) {
+      getOrCreateBucket(counts, pids[p]).mediaIds.add(item.id);
     }
   }
-
-  for (const item of media) {
-    for (const personId of getMediaPersonIds(item)) {
-      bucket(personId).mediaIds.add(item.id);
-    }
-  }
-
   const flattened = new Map<string, PersonResearchCounts>();
   for (const [personId, row] of counts) {
     flattened.set(personId, {
@@ -207,12 +237,402 @@ function indexResearchCounts(
   return flattened;
 }
 
+function indexResearchCounts(
+  events: readonly RawEvent[],
+  media: readonly MediaItem[]
+): Map<string, PersonResearchCounts> {
+  const counts = new Map<string, MutablePersonResearchBucket>();
+
+  for (let i = 0; i < events.length; i += 1) {
+    const event = events[i];
+    const pts = event.participants;
+    const srcs = event.sources;
+    const ptLen = pts.length;
+    if (ptLen === 0) {
+      continue;
+    }
+    if (ptLen === 1) {
+      const row = getOrCreateBucket(counts, pts[0].person_id);
+      row.eventIds.add(event.id);
+      for (let s = 0; s < srcs.length; s += 1) {
+        row.sourceIds.add(srcs[s].source_id);
+      }
+      continue;
+    }
+    for (let p = 0; p < ptLen; p += 1) {
+      const personId = pts[p].person_id;
+      let duplicatePt = false;
+      for (let prev = 0; prev < p; prev += 1) {
+        if (pts[prev].person_id === personId) {
+          duplicatePt = true;
+          break;
+        }
+      }
+      if (duplicatePt) {
+        continue;
+      }
+      const row = getOrCreateBucket(counts, personId);
+      row.eventIds.add(event.id);
+      for (let s = 0; s < srcs.length; s += 1) {
+        row.sourceIds.add(srcs[s].source_id);
+      }
+    }
+  }
+
+  return finalizeResearchBuckets(counts, media);
+}
+
+function readSimpleYamlIdScalar(text: string, rawStart: number, end: number): string | null {
+  let start = rawStart;
+  while (start < end && text.charCodeAt(start) === 32) {
+    start += 1;
+  }
+  if (start >= end) {
+    return '';
+  }
+  const c0 = text.charCodeAt(start);
+  if (c0 === 34) {
+    if (end - start < 2 || text.charCodeAt(end - 1) !== 34) {
+      return null;
+    }
+    for (let i = start + 1; i < end - 1; i += 1) {
+      if (text.charCodeAt(i) === 92) {
+        try {
+          const parsed = JSON.parse(text.slice(start, end));
+          return typeof parsed === 'string' ? parsed : null;
+        } catch {
+          return null;
+        }
+      }
+    }
+    return text.slice(start + 1, end - 1);
+  }
+  if (
+    c0 === 39 ||
+    c0 === 124 ||
+    c0 === 62 ||
+    c0 === 91 ||
+    c0 === 123 ||
+    c0 === 38 ||
+    c0 === 42 ||
+    c0 === 33
+  ) {
+    return null;
+  }
+  for (let i = start; i < end; i += 1) {
+    const c = text.charCodeAt(i);
+    if (c === 35 && i > start && text.charCodeAt(i - 1) === 32) {
+      return null;
+    }
+  }
+  const val = text.slice(start, end);
+  if (val === 'null' || val === 'Null' || val === 'NULL' || val === '~') {
+    return '';
+  }
+  return val;
+}
+
+function flushScannedStatusEvent(
+  counts: Map<string, MutablePersonResearchBucket>,
+  eventId: string,
+  participants: readonly string[],
+  sources: readonly string[]
+): void {
+  const ptLen = participants.length;
+  if (ptLen === 0) {
+    return;
+  }
+  if (ptLen === 1) {
+    const row = getOrCreateBucket(counts, participants[0]);
+    row.eventIds.add(eventId);
+    for (let s = 0; s < sources.length; s += 1) {
+      row.sourceIds.add(sources[s]);
+    }
+    return;
+  }
+  for (let p = 0; p < ptLen; p += 1) {
+    const personId = participants[p];
+    let duplicatePt = false;
+    for (let prev = 0; prev < p; prev += 1) {
+      if (participants[prev] === personId) {
+        duplicatePt = true;
+        break;
+      }
+    }
+    if (duplicatePt) {
+      continue;
+    }
+    const row = getOrCreateBucket(counts, personId);
+    row.eventIds.add(eventId);
+    for (let s = 0; s < sources.length; s += 1) {
+      row.sourceIds.add(sources[s]);
+    }
+  }
+}
+
+function tryScanCanonicalEventsForStatus(
+  eventsText: string,
+  media: readonly MediaItem[]
+): { eventsCount: number; research: Map<string, PersonResearchCounts> } | null {
+  const len = eventsText.length;
+  let pos = len > 0 && eventsText.charCodeAt(0) === 0xfeff ? 1 : 0;
+
+  const counts = new Map<string, MutablePersonResearchBucket>();
+  let eventsCount = 0;
+  let curEventId: string | null = null;
+  const curParticipants: string[] = [];
+  const curSources: string[] = [];
+  let section: 0 | 1 | 2 = 0; // 0 = other, 1 = participants, 2 = sources
+
+  while (pos < len) {
+    let lineEnd = eventsText.indexOf('\n', pos);
+    if (lineEnd === -1) {
+      lineEnd = len;
+    }
+    let trimEnd = lineEnd;
+    if (trimEnd > pos && eventsText.charCodeAt(trimEnd - 1) === 13) {
+      trimEnd -= 1;
+    }
+
+    let indent = 0;
+    let cur = pos;
+    while (cur < trimEnd) {
+      const c = eventsText.charCodeAt(cur);
+      if (c === 32) {
+        indent += 1;
+        cur += 1;
+      } else if (c === 9) {
+        return null;
+      } else {
+        break;
+      }
+    }
+    while (trimEnd > cur && eventsText.charCodeAt(trimEnd - 1) === 32) {
+      trimEnd -= 1;
+    }
+
+    pos = lineEnd + 1;
+    if (cur >= trimEnd || eventsText.charCodeAt(cur) === 35) {
+      continue;
+    }
+
+    if (indent === 0) {
+      if (trimEnd - cur === 2 && eventsText.charCodeAt(cur) === 91 && eventsText.charCodeAt(cur + 1) === 93) {
+        return eventsCount === 0
+          ? { eventsCount: 0, research: finalizeResearchBuckets(counts, media) }
+          : null;
+      }
+      if (eventsText.charCodeAt(cur) !== 45 || (cur + 1 < trimEnd && eventsText.charCodeAt(cur + 1) !== 32)) {
+        return null;
+      }
+      if (eventsCount > 0) {
+        if (!curEventId) {
+          return null;
+        }
+        flushScannedStatusEvent(counts, curEventId, curParticipants, curSources);
+      }
+      eventsCount += 1;
+      curEventId = null;
+      curParticipants.length = 0;
+      curSources.length = 0;
+      section = 0;
+
+      if (eventsText.startsWith('- id:', cur)) {
+        const idVal = readSimpleYamlIdScalar(eventsText, cur + 5, trimEnd);
+        if (!idVal) {
+          return null;
+        }
+        curEventId = idVal;
+      }
+      continue;
+    }
+
+    if (eventsCount === 0) {
+      return null;
+    }
+
+    if (indent === 2) {
+      section = 0;
+      const c0 = eventsText.charCodeAt(cur);
+      if (c0 === 105 && eventsText.startsWith('id:', cur)) {
+        const idVal = readSimpleYamlIdScalar(eventsText, cur + 3, trimEnd);
+        if (!idVal) {
+          return null;
+        }
+        curEventId = idVal;
+      } else if (c0 === 112 && eventsText.startsWith('participants:', cur)) {
+        let rest = cur + 13;
+        while (rest < trimEnd && eventsText.charCodeAt(rest) === 32) {
+          rest += 1;
+        }
+        if (rest === trimEnd) {
+          section = 1;
+        } else if (
+          trimEnd - rest === 2 &&
+          eventsText.charCodeAt(rest) === 91 &&
+          eventsText.charCodeAt(rest + 1) === 93
+        ) {
+          section = 0;
+        } else {
+          return null;
+        }
+      } else if (c0 === 115 && eventsText.startsWith('sources:', cur)) {
+        let rest = cur + 8;
+        while (rest < trimEnd && eventsText.charCodeAt(rest) === 32) {
+          rest += 1;
+        }
+        if (rest === trimEnd) {
+          section = 2;
+        } else if (
+          trimEnd - rest === 2 &&
+          eventsText.charCodeAt(rest) === 91 &&
+          eventsText.charCodeAt(rest + 1) === 93
+        ) {
+          section = 0;
+        } else {
+          return null;
+        }
+      } else {
+        const lastChar = eventsText.charCodeAt(trimEnd - 1);
+        if (lastChar === 124 || lastChar === 62) {
+          return null;
+        }
+      }
+      continue;
+    }
+
+    if (indent === 4 && section !== 0) {
+      if (section === 1) {
+        if (eventsText.startsWith('- person_id:', cur)) {
+          const pid = readSimpleYamlIdScalar(eventsText, cur + 12, trimEnd);
+          if (!pid) {
+            return null;
+          }
+          curParticipants.push(pid);
+        } else if (eventsText.charCodeAt(cur) === 45 && cur + 2 < trimEnd) {
+          const afterDash = eventsText.charCodeAt(cur + 2);
+          if (afterDash === 91 || afterDash === 123) {
+            return null;
+          }
+        }
+      } else if (eventsText.startsWith('- source_id:', cur)) {
+        const sid = readSimpleYamlIdScalar(eventsText, cur + 12, trimEnd);
+        if (!sid) {
+          return null;
+        }
+        curSources.push(sid);
+      } else if (eventsText.charCodeAt(cur) === 45 && cur + 2 < trimEnd) {
+        const afterDash = eventsText.charCodeAt(cur + 2);
+        if (afterDash === 91 || afterDash === 123) {
+          return null;
+        }
+      }
+      continue;
+    }
+
+    if (indent === 6 && section !== 0) {
+      if (section === 1 && eventsText.startsWith('person_id:', cur)) {
+        const pid = readSimpleYamlIdScalar(eventsText, cur + 10, trimEnd);
+        if (!pid) {
+          return null;
+        }
+        curParticipants.push(pid);
+      } else if (section === 2 && eventsText.startsWith('source_id:', cur)) {
+        const sid = readSimpleYamlIdScalar(eventsText, cur + 10, trimEnd);
+        if (!sid) {
+          return null;
+        }
+        curSources.push(sid);
+      }
+    }
+  }
+
+  if (eventsCount > 0) {
+    if (!curEventId) {
+      return null;
+    }
+    flushScannedStatusEvent(counts, curEventId, curParticipants, curSources);
+  }
+
+  return {
+    eventsCount,
+    research: finalizeResearchBuckets(counts, media),
+  };
+}
+
+function tryCountCanonicalSources(sourcesText: string): number | null {
+  const len = sourcesText.length;
+  let pos = len > 0 && sourcesText.charCodeAt(0) === 0xfeff ? 1 : 0;
+  let count = 0;
+
+  while (pos < len) {
+    let lineEnd = sourcesText.indexOf('\n', pos);
+    if (lineEnd === -1) {
+      lineEnd = len;
+    }
+    let trimEnd = lineEnd;
+    if (trimEnd > pos && sourcesText.charCodeAt(trimEnd - 1) === 13) {
+      trimEnd -= 1;
+    }
+    let indent = 0;
+    let cur = pos;
+    while (cur < trimEnd) {
+      const c = sourcesText.charCodeAt(cur);
+      if (c === 32) {
+        indent += 1;
+        cur += 1;
+      } else if (c === 9) {
+        return null;
+      } else {
+        break;
+      }
+    }
+    while (trimEnd > cur && sourcesText.charCodeAt(trimEnd - 1) === 32) {
+      trimEnd -= 1;
+    }
+    pos = lineEnd + 1;
+    if (cur >= trimEnd || sourcesText.charCodeAt(cur) === 35) {
+      continue;
+    }
+    if (indent === 0) {
+      if (
+        trimEnd - cur === 2 &&
+        sourcesText.charCodeAt(cur) === 91 &&
+        sourcesText.charCodeAt(cur + 1) === 93
+      ) {
+        return count === 0 ? 0 : null;
+      }
+      if (!sourcesText.startsWith('- id:', cur)) {
+        return null;
+      }
+      const idVal = readSimpleYamlIdScalar(sourcesText, cur + 5, trimEnd);
+      if (!idVal) {
+        return null;
+      }
+      count += 1;
+    }
+  }
+
+  return count;
+}
+
+function readOptionalUtf8Sync(filePath: string): string | null {
+  try {
+    return fs.readFileSync(filePath, 'utf8');
+  } catch (err: unknown) {
+    if (typeof err === 'object' && err !== null && 'code' in err && err.code === 'ENOENT') {
+      return null;
+    }
+    throw err;
+  }
+}
+
 function indexBiographyByPersonId(narratives: readonly Narrative[]): Map<string, string> {
   const byPerson = new Map<string, string>();
   for (const narrative of narratives) {
     if (narrative.kind === 'biography' && narrative.subject_person_id) {
       const existing = byPerson.get(narrative.subject_person_id);
-      if (!existing || narrative.id.localeCompare(existing) < 0) {
+      if (!existing || fastLocaleCompare(narrative.id, existing) < 0) {
         byPerson.set(narrative.subject_person_id, narrative.id);
       }
     }
@@ -221,34 +641,93 @@ function indexBiographyByPersonId(narratives: readonly Narrative[]): Map<string,
 }
 
 export function indexEndOfLinePersonIds(kinship: readonly KinshipEdge[]): Set<string> {
-  const parentsByPerson = new Map<string, Set<string>>();
-  const childrenByPerson = new Map<string, Set<string>>();
-  const addLink = (map: Map<string, Set<string>>, key: string, value: string): void => {
-    let set = map.get(key);
-    if (!set) {
-      set = new Set<string>();
-      map.set(key, set);
-    }
-    set.add(value);
-  };
+  const hasParent = new Set<string>();
+  const hasChild = new Set<string>();
 
-  for (const edge of kinship) {
+  for (let i = 0; i < kinship.length; i += 1) {
+    const edge = kinship[i];
     if (edge.relation === 'parent') {
-      addLink(parentsByPerson, edge.to, edge.from);
-      addLink(childrenByPerson, edge.from, edge.to);
+      hasParent.add(edge.to);
+      hasChild.add(edge.from);
     } else if (edge.relation === 'child') {
-      addLink(parentsByPerson, edge.from, edge.to);
-      addLink(childrenByPerson, edge.to, edge.from);
+      hasParent.add(edge.from);
+      hasChild.add(edge.to);
     }
   }
 
   const endOfLine = new Set<string>();
-  for (const [personId, children] of childrenByPerson) {
-    if (children.size > 0 && (parentsByPerson.get(personId)?.size ?? 0) === 0) {
+  for (const personId of hasChild) {
+    if (!hasParent.has(personId)) {
       endOfLine.add(personId);
     }
   }
   return endOfLine;
+}
+
+function discoverStagedPatchPersonIds(repoDir: string): Set<string> {
+  const staged = new Set<string>();
+  const peopleResearchDir = path.join(repoDir, 'research', 'people');
+  let entries: fs.Dirent[];
+  try {
+    entries = fs.readdirSync(peopleResearchDir, { withFileTypes: true });
+  } catch {
+    return staged;
+  }
+  for (let i = 0; i < entries.length; i += 1) {
+    const entry = entries[i];
+    if (!entry.isDirectory() && !entry.isSymbolicLink()) {
+      continue;
+    }
+    if (fs.existsSync(path.join(peopleResearchDir, entry.name, 'patch.json'))) {
+      staged.add(entry.name);
+    }
+  }
+  return staged;
+}
+
+function buildDeceasedQueueFromResearch(input: {
+  repoDir: string;
+  people: readonly RawPerson[];
+  narratives: readonly Narrative[];
+  research: ReadonlyMap<string, PersonResearchCounts>;
+  endOfLineIds: ReadonlySet<string> | null;
+  privacy?: Partial<PrivacyConfig>;
+  sort: StatusSortMode;
+  endOfLine: boolean;
+}): DeceasedQueueItem[] {
+  const biographiesByPerson = indexBiographyByPersonId(input.narratives);
+  const stagedPatchIds = discoverStagedPatchPersonIds(input.repoDir);
+  const items: DeceasedQueueItem[] = [];
+  const referenceYear = input.privacy?.referenceYear ?? getCurrentReferenceYear();
+  for (let i = 0; i < input.people.length; i += 1) {
+    const person = input.people[i];
+    if (resolveEffectiveLiving(person, input.privacy, referenceYear)) {
+      continue;
+    }
+    if (input.endOfLineIds && !input.endOfLineIds.has(person.id)) {
+      continue;
+    }
+    const counts = input.research.get(person.id);
+    const biographyId = biographiesByPerson.get(person.id) ?? null;
+    const hasBiography = biographyId !== null;
+    const hasStagedPatch = stagedPatchIds.has(person.id);
+    items.push({
+      id: person.id,
+      full_name: person.full_name,
+      birth_edtf: person.birth_edtf,
+      death_edtf: person.death_edtf,
+      events: counts ? counts.events : 0,
+      sources: counts ? counts.sources : 0,
+      media: counts ? counts.media : 0,
+      has_biography: hasBiography,
+      hasBiography,
+      biographyId,
+      has_staged_patch: hasStagedPatch,
+      status: queueStatus(hasBiography, hasStagedPatch),
+    });
+  }
+  items.sort(input.endOfLine ? STATUS_SORT_COMPARATORS[input.sort] : compareDeceased(input.sort));
+  return items;
 }
 
 export function buildDeceasedQueue(input: {
@@ -263,41 +742,17 @@ export function buildDeceasedQueue(input: {
   endOfLine?: boolean;
 }): DeceasedQueueItem[] {
   const sort = parseStatusSort(input.sort);
-  const endOfLineIds = input.endOfLine ? indexEndOfLinePersonIds(input.kinship ?? []) : null;
-  const research = indexResearchCounts(input.events, input.media);
-  const biographiesByPerson = indexBiographyByPersonId(input.narratives);
-  const items: DeceasedQueueItem[] = [];
-  const referenceYear = input.privacy?.referenceYear ?? getCurrentReferenceYear();
-  for (const person of input.people) {
-    if (resolveEffectiveLiving(person, input.privacy, referenceYear)) {
-      continue;
-    }
-    if (endOfLineIds && !endOfLineIds.has(person.id)) {
-      continue;
-    }
-    const counts = research.get(person.id) ?? { events: 0, sources: 0, media: 0 };
-    const biographyId = biographiesByPerson.get(person.id) ?? null;
-    const hasBiography = biographyId !== null;
-    const hasStagedPatch = fs.existsSync(
-      path.join(input.repoDir, 'research', 'people', person.id, 'patch.json')
-    );
-    items.push({
-      id: person.id,
-      full_name: person.full_name,
-      birth_edtf: person.birth_edtf,
-      death_edtf: person.death_edtf,
-      events: counts.events,
-      sources: counts.sources,
-      media: counts.media,
-      has_biography: hasBiography,
-      hasBiography,
-      biographyId,
-      has_staged_patch: hasStagedPatch,
-      status: queueStatus(hasBiography, hasStagedPatch),
-    });
-  }
-  items.sort(input.endOfLine ? STATUS_SORT_COMPARATORS[sort] : compareDeceased(sort));
-  return items;
+  const endOfLine = Boolean(input.endOfLine);
+  return buildDeceasedQueueFromResearch({
+    repoDir: input.repoDir,
+    people: input.people,
+    narratives: input.narratives,
+    research: indexResearchCounts(input.events, input.media),
+    endOfLineIds: endOfLine ? indexEndOfLinePersonIds(input.kinship ?? []) : null,
+    privacy: input.privacy,
+    sort,
+    endOfLine,
+  });
 }
 
 const STATUS_FILTER_TITLE: Record<BiographyQueueStatus, string> = {
@@ -397,17 +852,74 @@ export async function runStatusCommand(options: StatusCommandOptions = {}): Prom
   const sort = parseStatusSort(options.sort);
   const endOfLine = Boolean(options.endOfLine);
   const missingBiography = Boolean(options.missingBiography);
-  const loaded = await loadLocalArchiveRepo(options.repoDir, { requireConfig: false });
-  const { repoDir, people, events, places, sources, media, narratives, kinship } = loaded;
-  const privacy: Partial<PrivacyConfig> = loaded.siteConfig ? loaded.siteConfig.privacy : {};
+
+  const repoDir = path.resolve(options.repoDir?.trim() || process.cwd());
+  const repoStat = fs.statSync(repoDir, { throwIfNoEntry: false });
+  if (!repoStat?.isDirectory()) {
+    throw new CliValidationError(`Repository directory does not exist: ${repoDir}`);
+  }
+  const dataDir = path.join(repoDir, 'data');
+  const dataStat = fs.statSync(dataDir, { throwIfNoEntry: false });
+  if (!dataStat?.isDirectory()) {
+    throw new CliValidationError(`Missing data/ directory at ${dataDir}.`);
+  }
+
+  const dataEntries = fs.readdirSync(dataDir, { withFileTypes: true });
+  const dataFiles = new Set<string>();
+  for (let i = 0; i < dataEntries.length; i += 1) {
+    if (!dataEntries[i].isDirectory()) {
+      dataFiles.add(dataEntries[i].name);
+    }
+  }
+  const readDataFile = (name: string): string | null =>
+    dataFiles.has(name) ? readOptionalUtf8Sync(path.join(dataDir, name)) : null;
+
+  const configText = readOptionalUtf8Sync(path.join(repoDir, 'kinloom.config.yaml'));
+  const siteConfig = configText ? parseKinloomConfigYaml(configText) : null;
+  const privacy: Partial<PrivacyConfig> = siteConfig ? siteConfig.privacy : {};
+
+  const peopleText = readDataFile('people.yaml');
+  const placesText = readDataFile('places.yaml');
+  const kinshipText = readDataFile('kinship.yaml');
+  const mediaText = readDataFile('media.yaml');
+  const narrativesText = readDataFile('narratives.yaml');
+  const sourcesText = readDataFile('sources.yaml');
+  const eventsText = readDataFile('events.yaml');
+
+  const people = peopleText ? parsePeopleYaml(peopleText) : [];
+  const places = placesText ? parsePlacesYaml(placesText) : [];
+  const kinship = kinshipText ? parseKinshipYaml(kinshipText) : [];
+  const media = mediaText ? parseMediaYaml(mediaText) : [];
+  const narratives = narrativesText ? parseNarrativesYaml(narrativesText) : [];
+
+  const sourcesCount =
+    sourcesText === null
+      ? 0
+      : (tryCountCanonicalSources(sourcesText) ?? parseSourcesYaml(sourcesText).length);
+
+  let eventsCount = 0;
+  let research: Map<string, PersonResearchCounts>;
+  if (eventsText === null) {
+    research = finalizeResearchBuckets(new Map(), media);
+  } else {
+    const fastEvents = tryScanCanonicalEventsForStatus(eventsText, media);
+    if (fastEvents) {
+      eventsCount = fastEvents.eventsCount;
+      research = fastEvents.research;
+    } else {
+      const parsedEvents = parseEventsYaml(eventsText);
+      eventsCount = parsedEvents.length;
+      research = indexResearchCounts(parsedEvents, media);
+    }
+  }
+
   const endOfLineIds = indexEndOfLinePersonIds(kinship);
-  const allDeceased = buildDeceasedQueue({
+  const allDeceased = buildDeceasedQueueFromResearch({
     repoDir,
     people,
-    events,
-    media,
     narratives,
-    kinship,
+    research,
+    endOfLineIds: null,
     privacy,
     sort,
     endOfLine: false,
@@ -420,7 +932,29 @@ export async function runStatusCommand(options: StatusCommandOptions = {}): Prom
     ? scopedDeceased.filter((person) => !person.hasBiography)
     : scopedDeceased;
   const livingCount = people.length - allDeceased.length;
-  const biographyCompleteCount = allDeceased.filter((person) => person.hasBiography).length;
+
+  let biographyCompleteCount = 0;
+  for (let i = 0; i < allDeceased.length; i += 1) {
+    if (allDeceased[i].hasBiography) {
+      biographyCompleteCount += 1;
+    }
+  }
+  let doneLiveCount = 0;
+  let stagedCount = 0;
+  let pendingCount = 0;
+  for (let i = 0; i < deceased.length; i += 1) {
+    const st = deceased[i].status;
+    if (st === 'done_live') doneLiveCount += 1;
+    else if (st === 'staged') stagedCount += 1;
+    else pendingCount += 1;
+  }
+
+  let zeroCoordPlaces = 0;
+  for (let i = 0; i < places.length; i += 1) {
+    if (isZeroCoordPlace(places[i])) {
+      zeroCoordPlaces += 1;
+    }
+  }
 
   const report: StatusReport = {
     repo: repoDir,
@@ -433,10 +967,10 @@ export async function runStatusCommand(options: StatusCommandOptions = {}): Prom
       deceased: allDeceased.length,
       living: livingCount,
     },
-    events: events.length,
+    events: eventsCount,
     places: places.length,
-    zeroCoordPlaces: places.filter(isZeroCoordPlace).length,
-    sources: sources.length,
+    zeroCoordPlaces,
+    sources: sourcesCount,
     media: media.length,
     narratives: narratives.length,
     biographies: {
@@ -445,9 +979,9 @@ export async function runStatusCommand(options: StatusCommandOptions = {}): Prom
       totalDeceased: allDeceased.length,
     },
     queue: {
-      done_live: deceased.filter((person) => person.status === 'done_live').length,
-      staged: deceased.filter((person) => person.status === 'staged').length,
-      pending: deceased.filter((person) => person.status === 'pending').length,
+      done_live: doneLiveCount,
+      staged: stagedCount,
+      pending: pendingCount,
     },
     deceased,
   };

@@ -48,11 +48,23 @@ function assertValidPlaceCoordinates(place: unknown, label: string): Record<stri
   return copy;
 }
 
+function assertMergedPlaceCoordinates(place: Place, label: string): void {
+  const { lat, lng } = place;
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+    throw new Error(`${label} (${place.id}) has non-finite coordinates.`);
+  }
+  if (lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+    throw new Error(`${label} (${place.id}) coordinates out of range: (${lat}, ${lng}).`);
+  }
+  if (Math.abs(lat) < 1e-9 && Math.abs(lng) < 1e-9) {
+    throw new Error(`${label} (${place.id}) has forbidden (0, 0) coordinates.`);
+  }
+}
+
 export function mergePlacesPatch(
   existingPlaces: readonly Place[],
   patchPlaces: readonly unknown[]
 ): { items: Place[]; counts: UpsertCounts } {
-  // Invariant 2: Every place in patch.places and merged places must have valid non-(0, 0) coordinates.
   const placeIdsWithExplicitPronunciation = new Set<string>();
   const validatedPatchPlaces = patchPlaces.map((pl, idx) => {
     const normalized = assertValidPlaceCoordinates(pl, `patch.places[${idx}]`);
@@ -89,10 +101,11 @@ export function mergePlacesPatch(
       return merged;
     }
   );
-  for (const pl of placesMerge.items) {
-    assertValidPlaceCoordinates(pl, `merged place '${pl.id}'`);
+  for (let i = 0; i < placesMerge.items.length; i += 1) {
+    const pl = placesMerge.items[i];
+    assertMergedPlaceCoordinates(pl, `merged place '${pl.id}'`);
   }
-  return placesMerge;
+  return { items: placesMerge.items, counts: placesMerge.counts };
 }
 
 export function mergeSourcesPatch(
@@ -134,17 +147,21 @@ export function mergeSourcesPatch(
     }
   );
   const topLevelRemoveSourceIds = new Set(removeSourceIds);
-  if (topLevelRemoveSourceIds.size > 0) {
-    const patchedSourceIds = new Set(patchSources.map((s) => SourceRecordSchema.parse(s).id));
-    for (const removeId of topLevelRemoveSourceIds) {
-      if (patchedSourceIds.has(removeId)) {
-        throw new Error(
-          `patch.json cannot both add/update and remove source '${removeId}' in the same patch.`
-        );
-      }
+  const removedSourceIds: string[] = [];
+  if (topLevelRemoveSourceIds.size === 0) {
+    return {
+      items: sourcesMerge.items,
+      counts: sourcesMerge.counts,
+      removedSourceIds,
+      topLevelRemoveSourceIds,
+    };
+  }
+  const patchedSourceIds = new Set(sourcesMerge.parsedIncoming.map((s) => s.id));
+  for (const removeId of topLevelRemoveSourceIds) {
+    if (patchedSourceIds.has(removeId)) {
+      throw new Error(`patch.json cannot both add/update and remove source '${removeId}' in the same patch.`);
     }
   }
-  const removedSourceIds: string[] = [];
   const items = sourcesMerge.items.filter((src) => {
     if (topLevelRemoveSourceIds.has(src.id)) {
       removedSourceIds.push(src.id);
@@ -198,17 +215,21 @@ export function mergeMediaPatch(
     }
   );
   const topLevelRemoveMediaIds = new Set(removeMediaIds);
-  if (topLevelRemoveMediaIds.size > 0) {
-    const patchedMediaIds = new Set(patchMedia.map((m) => MediaItemSchema.parse(m).id));
-    for (const removeId of topLevelRemoveMediaIds) {
-      if (patchedMediaIds.has(removeId)) {
-        throw new Error(
-          `patch.json cannot both add/update and remove media '${removeId}' in the same patch.`
-        );
-      }
+  const removedMediaIds: string[] = [];
+  if (topLevelRemoveMediaIds.size === 0) {
+    return {
+      items: mediaMerge.items,
+      counts: mediaMerge.counts,
+      removedMediaIds,
+      topLevelRemoveMediaIds,
+    };
+  }
+  const patchedMediaIds = new Set(mediaMerge.parsedIncoming.map((m) => m.id));
+  for (const removeId of topLevelRemoveMediaIds) {
+    if (patchedMediaIds.has(removeId)) {
+      throw new Error(`patch.json cannot both add/update and remove media '${removeId}' in the same patch.`);
     }
   }
-  const removedMediaIds: string[] = [];
   const items = mediaMerge.items.filter((item) => {
     if (topLevelRemoveMediaIds.has(item.id)) {
       removedMediaIds.push(item.id);
@@ -229,10 +250,10 @@ export function mergeNarrativesPatch(
   items: Narrative[];
   counts: UpsertCounts;
   inlineCitationCount: number;
-  normalizedPatchNarratives: unknown[];
+  normalizedPatchNarratives: Narrative[];
 } {
   let inlineCitationCount = 0;
-  const normalizedPatchNarratives = patchNarratives.map((rawNar) => {
+  const normalizedRawNarratives = patchNarratives.map((rawNar) => {
     if (!isPlainObject(rawNar)) {
       return rawNar;
     }
@@ -269,7 +290,7 @@ export function mergeNarrativesPatch(
 
   const narrativesMerge = upsertById(
     existingNarratives,
-    normalizedPatchNarratives,
+    normalizedRawNarratives,
     (n) => NarrativeSchema.parse(n),
     (prev, incoming) => {
       const merged: Record<string, unknown> = { ...incoming };
@@ -295,6 +316,6 @@ export function mergeNarrativesPatch(
     items: narrativesMerge.items,
     counts: narrativesMerge.counts,
     inlineCitationCount,
-    normalizedPatchNarratives,
+    normalizedPatchNarratives: narrativesMerge.parsedIncoming,
   };
 }

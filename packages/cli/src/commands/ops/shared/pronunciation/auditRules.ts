@@ -1,4 +1,5 @@
 import {
+  fastLocaleCompare,
   findIpaGlyphsInPhonetic,
   type Place,
   type Pronunciation,
@@ -40,15 +41,12 @@ const NON_ENGLISH_COUNTRY_HINTS = [
   'italia',
   'austria',
   'switzerland',
-];
+] as const;
 
-const NON_TRIVIAL_PLACE_PATTERNS: readonly RegExp[] = [
-  /(?:dijk|kerk|stad|holm|vik|berg|borg|huizen|woude|zand|sluis|meer|veld|veen|buren|dam|sloot)$/i,
-  /(?:järvi|koski|mäki|lahti|niemi|luoto|pää|kylä)$/i,
-  /(?:sz|cz|rz|dz|ść|ź|ł|ń|ś|ć)/i,
-  /(?:ij|oe|ui|eu|aa|ee|oo|uu)/i,
-  /(?:ough|augh|sch|tz|ckh|gham|cester|wich|borough|burgh)/i,
-];
+const NON_ENGLISH_COUNTRY_QUICK_RE = new RegExp(`(?:${NON_ENGLISH_COUNTRY_HINTS.join('|')})`);
+
+const NON_TRIVIAL_PLACE_COMBINED_RE =
+  /(?:(?:dijk|kerk|stad|holm|vik|berg|borg|huizen|woude|zand|sluis|meer|veld|veen|buren|dam|sloot|järvi|koski|mäki|lahti|niemi|luoto|pää|kylä)$|sz|cz|rz|dz|ść|ź|ł|ń|ś|ć|ij|oe|ui|eu|aa|ee|oo|uu|ough|augh|sch|tz|ckh|gham|cester|wich|borough|burgh)/i;
 
 interface ForeignIpaRule {
   readonly pattern: RegExp;
@@ -103,25 +101,28 @@ function hasNonAsciiChar(value: string): boolean {
 }
 
 export function inspectNonTrivialPlaceReason(place: Place): string | null {
-  const fullLower = place.full_name.toLowerCase();
-  const segments = place.full_name
-    .split(',')
-    .map((s) => s.trim().toLowerCase())
-    .filter(Boolean);
-  const qualifierJoined = segments.length > 1 ? segments.slice(1).join(', ') : fullLower;
+  const fullName = place.full_name;
+  const commaIdx = fullName.indexOf(',');
+  const qualifierSlice = commaIdx >= 0 ? fullName.slice(commaIdx + 1) : fullName;
+  const qualifierLower = qualifierSlice.toLowerCase();
 
-  for (const countryHint of NON_ENGLISH_COUNTRY_HINTS) {
-    if (qualifierJoined.includes(countryHint)) {
-      return `foreign place (${countryHint})`;
+  if (NON_ENGLISH_COUNTRY_QUICK_RE.test(qualifierLower)) {
+    const segments = fullName
+      .split(',')
+      .map((s) => s.trim().toLowerCase())
+      .filter(Boolean);
+    const qualifierJoined = segments.length > 1 ? segments.slice(1).join(', ') : fullName.toLowerCase();
+    for (const countryHint of NON_ENGLISH_COUNTRY_HINTS) {
+      if (qualifierJoined.includes(countryHint)) {
+        return `foreign place (${countryHint})`;
+      }
     }
   }
   if (hasNonAsciiChar(place.name)) {
     return 'non-ASCII orthography';
   }
-  for (const pattern of NON_TRIVIAL_PLACE_PATTERNS) {
-    if (pattern.test(place.name)) {
-      return 'non-trivial orthography';
-    }
+  if (NON_TRIVIAL_PLACE_COMBINED_RE.test(place.name)) {
+    return 'non-trivial orthography';
   }
   return null;
 }
@@ -245,10 +246,11 @@ export function detectLivingPronunciationLeaks(
   deceasedPeople: readonly RawPerson[],
   lexiconLowerKeys: ReadonlyMap<string, string>
 ): PronounceLivingLeak[] {
-  const deceasedFullNamesLower = new Set(
-    deceasedPeople.map((p) => p.full_name.trim().toLowerCase()).filter(Boolean)
-  );
-  const deceasedIdsLower = new Set(deceasedPeople.map((p) => p.id.trim().toLowerCase()));
+  if (livingPeople.length === 0) {
+    return [];
+  }
+  let deceasedFullNamesLower: Set<string> | null = null;
+  let deceasedIdsLower: Set<string> | null = null;
   const livingLeaks: PronounceLivingLeak[] = [];
 
   for (const { index, person } of livingPeople) {
@@ -260,26 +262,33 @@ export function detectLivingPronunciationLeaks(
       });
     }
     const idLower = person.id.trim().toLowerCase();
-    if (idLower && !deceasedIdsLower.has(idLower) && lexiconLowerKeys.has(idLower)) {
-      livingLeaks.push({
-        scope: 'lexicon',
-        location: `kinloom.config.yaml pronunciations (matches data/people.yaml record #${index})`,
-        reason: 'Pronunciation Lexicon contains a key matching a living person ID (redacted for privacy).',
-      });
+    if (idLower && lexiconLowerKeys.has(idLower)) {
+      if (!deceasedIdsLower) {
+        deceasedIdsLower = new Set(deceasedPeople.map((p) => p.id.trim().toLowerCase()));
+      }
+      if (!deceasedIdsLower.has(idLower)) {
+        livingLeaks.push({
+          scope: 'lexicon',
+          location: `kinloom.config.yaml pronunciations (matches data/people.yaml record #${index})`,
+          reason: 'Pronunciation Lexicon contains a key matching a living person ID (redacted for privacy).',
+        });
+      }
     }
     const fullLower = person.full_name.trim().toLowerCase();
-    if (
-      fullLower &&
-      fullLower !== 'living' &&
-      !deceasedFullNamesLower.has(fullLower) &&
-      lexiconLowerKeys.has(fullLower)
-    ) {
-      livingLeaks.push({
-        scope: 'lexicon',
-        location: `kinloom.config.yaml pronunciations (matches data/people.yaml record #${index})`,
-        reason:
-          'Pronunciation Lexicon contains a full-name key matching a living person (redacted for privacy).',
-      });
+    if (fullLower && fullLower !== 'living' && lexiconLowerKeys.has(fullLower)) {
+      if (!deceasedFullNamesLower) {
+        deceasedFullNamesLower = new Set(
+          deceasedPeople.map((p) => p.full_name.trim().toLowerCase()).filter(Boolean)
+        );
+      }
+      if (!deceasedFullNamesLower.has(fullLower)) {
+        livingLeaks.push({
+          scope: 'lexicon',
+          location: `kinloom.config.yaml pronunciations (matches data/people.yaml record #${index})`,
+          reason:
+            'Pronunciation Lexicon contains a full-name key matching a living person (redacted for privacy).',
+        });
+      }
     }
   }
 
@@ -296,13 +305,16 @@ export function detectHomonymousPlaceCollisions(
     if (!lower) {
       continue;
     }
-    const list = placesByBareNameLower.get(lower) ?? [];
+    let list = placesByBareNameLower.get(lower);
+    if (!list) {
+      list = [];
+      placesByBareNameLower.set(lower, list);
+    }
     list.push(place);
-    placesByBareNameLower.set(lower, list);
   }
 
   const homonymousCollisions: PronounceHomonymCollision[] = [];
-  for (const [key] of Object.entries(lexicon).toSorted(([a], [b]) => a.localeCompare(b))) {
+  for (const key of Object.keys(lexicon).toSorted(fastLocaleCompare)) {
     if (key.includes(',') || key.startsWith('plc_')) {
       continue;
     }
@@ -314,7 +326,7 @@ export function detectHomonymousPlaceCollisions(
     if (distinctScopes.size < 2) {
       continue;
     }
-    const sortedMatches = [...matchingPlaces].toSorted((a, b) => a.full_name.localeCompare(b.full_name));
+    const sortedMatches = [...matchingPlaces].toSorted((a, b) => fastLocaleCompare(a.full_name, b.full_name));
     const exampleKeys = sortedMatches
       .slice(0, 2)
       .map((p) => `"${p.name}, ${derivePlaceScopeHint(p)}"`)

@@ -4,17 +4,29 @@ import {
   type BuildMode,
   type CompileArchiveInput,
   type CompileArchiveResult,
-  compileArchive,
+  compileArchiveDual,
+  tryValidateArchiveBundle,
 } from '@kinloom/core';
 
 const YEAR_ONLY_RE = /^\d{4}$/;
 
 export function auditBundlePrivacy(bundle: ArchiveBundle, mode: BuildMode): string[] {
-  const livingPeople = bundle.people.filter((p) => Boolean(p.is_living));
-  const livingIds = new Set(livingPeople.map((p) => p.id));
+  const livingPeople: ArchiveBundle['people'][number][] = [];
+  const livingIds = new Set<string>();
+  for (let i = 0; i < bundle.people.length; i += 1) {
+    const p = bundle.people[i];
+    if (p.is_living) {
+      livingPeople.push(p);
+      livingIds.add(p.id);
+    }
+  }
+  if (livingPeople.length === 0) {
+    return [];
+  }
   const leaks: string[] = [];
 
-  for (const person of livingPeople) {
+  for (let i = 0; i < livingPeople.length; i += 1) {
+    const person = livingPeople[i];
     const birthEdtf = person.birth_edtf.trim();
     if (mode === 'public') {
       if (person.full_name !== 'Living') {
@@ -41,8 +53,15 @@ export function auditBundlePrivacy(bundle: ArchiveBundle, mode: BuildMode): stri
   }
 
   const livingEventIds = new Set<string>();
-  for (const ev of bundle.events) {
-    const hasLiving = ev.participants.some((pt) => livingIds.has(pt.person_id));
+  for (let i = 0; i < bundle.events.length; i += 1) {
+    const ev = bundle.events[i];
+    let hasLiving = false;
+    for (let p = 0; p < ev.participants.length; p += 1) {
+      if (livingIds.has(ev.participants[p].person_id)) {
+        hasLiving = true;
+        break;
+      }
+    }
     if (!hasLiving) {
       continue;
     }
@@ -59,44 +78,67 @@ export function auditBundlePrivacy(bundle: ArchiveBundle, mode: BuildMode): stri
     }
   }
 
-  for (const span of bundle.residence_spans) {
+  for (let i = 0; i < bundle.residence_spans.length; i += 1) {
+    const span = bundle.residence_spans[i];
     if (livingIds.has(span.person_id)) {
       leaks.push(`${mode}:residence_span:${span.id}`);
     }
   }
 
-  for (const item of bundle.media ?? []) {
-    const linkedLiving =
+  const mediaList = bundle.media ?? [];
+  for (let i = 0; i < mediaList.length; i += 1) {
+    const item = mediaList[i];
+    let linkedLiving =
       Boolean(item.person_id && livingIds.has(item.person_id)) ||
-      Boolean(item.person_ids?.some((pid) => livingIds.has(pid))) ||
       Boolean(item.event_id && livingEventIds.has(item.event_id));
+    if (!linkedLiving && item.person_ids) {
+      for (let p = 0; p < item.person_ids.length; p += 1) {
+        if (livingIds.has(item.person_ids[p])) {
+          linkedLiving = true;
+          break;
+        }
+      }
+    }
     if (linkedLiving) {
       leaks.push(`${mode}:media:${item.id}`);
     }
   }
 
-  for (const nar of bundle.narratives ?? []) {
+  const narList = bundle.narratives ?? [];
+  for (let i = 0; i < narList.length; i += 1) {
+    const nar = narList[i];
     if (nar.subject_person_id && livingIds.has(nar.subject_person_id)) {
       leaks.push(`${mode}:narrative:${nar.id}:subject_person_id`);
     }
-    if (nar.person_ids.some((pid) => livingIds.has(pid))) {
-      leaks.push(`${mode}:narrative:${nar.id}`);
+    for (let p = 0; p < nar.person_ids.length; p += 1) {
+      if (livingIds.has(nar.person_ids[p])) {
+        leaks.push(`${mode}:narrative:${nar.id}`);
+        break;
+      }
     }
   }
 
   return leaks;
 }
 
-export function compileAndAuditMergedArchive(compileBase: Omit<CompileArchiveInput, 'mode'>): {
+export function compileAndAuditMergedArchive(
+  compileBase: Omit<CompileArchiveInput, 'mode'>,
+  options?: { skipBundleRevalidation?: boolean }
+): {
   privateResult: CompileArchiveResult;
   publicResult: CompileArchiveResult;
   livingLeaks: number;
 } {
-  const privateResult = compileArchive({ ...compileBase, mode: 'private' });
-  const publicResult = compileArchive({ ...compileBase, mode: 'public' });
+  const { privateResult, publicResult } = compileArchiveDual(compileBase);
 
-  ArchiveBundleSchema.parse(privateResult.bundle);
-  ArchiveBundleSchema.parse(publicResult.bundle);
+  if (!options?.skipBundleRevalidation) {
+    if (!tryValidateArchiveBundle(privateResult.bundle)) {
+      ArchiveBundleSchema.parse(privateResult.bundle);
+    }
+    if (!tryValidateArchiveBundle(publicResult.bundle)) {
+      ArchiveBundleSchema.parse(publicResult.bundle);
+    }
+  }
 
   const privateLeaks = auditBundlePrivacy(privateResult.bundle, 'private');
   const publicLeaks = auditBundlePrivacy(publicResult.bundle, 'public');

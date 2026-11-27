@@ -1,7 +1,6 @@
 import {
   collectLivingNameHitsWithMatcher,
   compileLivingNameMatcher,
-  computeSourceMaxYearById,
   extractLatestEdtfYear,
   type LivingNameTarget,
   NARRATIVE_POSTHUMOUS_HORIZON_YEARS,
@@ -50,13 +49,15 @@ export function runPrivacyAndStyleScan(
   deceasedPeople: readonly LooseRecord[] = [],
   dateContext?: PrivacyScanDateContext
 ): PrivacyAndStyleCheckResult {
-  const livingNameMatcher = compileLivingNameMatcher(livingPeople, deceasedPeople);
+  const livingNameMatcher =
+    livingPeople.length > 0 ? compileLivingNameMatcher(livingPeople, deceasedPeople) : null;
   const ssnHits: Array<{ location: string; match: string }> = [];
   const phoneHits: Array<{ location: string; match: string }> = [];
   const emDashHits: Array<{ location: string; count: number }> = [];
 
   const livingIds = new Set<string>();
-  for (const person of livingPeople) {
+  for (let i = 0; i < livingPeople.length; i += 1) {
+    const person = livingPeople[i];
     if (typeof person.id === 'string' && person.id) {
       livingIds.add(person.id);
     }
@@ -64,9 +65,12 @@ export function runPrivacyAndStyleScan(
 
   const allPeople = dateContext?.allPeople ?? [...livingPeople, ...deceasedPeople];
   const deathYearByPersonId = new Map<string, number | null>();
-  for (const person of allPeople) {
-    if (typeof person.id === 'string' && person.id) {
-      deathYearByPersonId.set(person.id, extractLatestEdtfYear(person.death_edtf));
+  if (livingPeople.length > 0) {
+    for (let i = 0; i < allPeople.length; i += 1) {
+      const person = allPeople[i];
+      if (typeof person.id === 'string' && person.id) {
+        deathYearByPersonId.set(person.id, extractLatestEdtfYear(person.death_edtf));
+      }
     }
   }
 
@@ -90,34 +94,123 @@ export function runPrivacyAndStyleScan(
   const subjectMaxYear =
     !targetIsLiving && targetDeathYear !== null ? targetDeathYear + NARRATIVE_POSTHUMOUS_HORIZON_YEARS : null;
 
-  const mergedEventsById = new Map<string, LooseRecord>();
-  const anonymousPatchEvents: LooseRecord[] = [];
-  for (const liveEvent of dateContext?.liveEvents ?? []) {
-    if (typeof liveEvent.id === 'string' && liveEvent.id) {
-      mergedEventsById.set(liveEvent.id, liveEvent);
-    }
-  }
+  const removedEventIds = new Set<string>();
   for (const rawId of Array.isArray(patch.remove_event_ids) ? patch.remove_event_ids : []) {
     if (typeof rawId === 'string' && rawId.trim()) {
-      mergedEventsById.delete(rawId.trim());
+      removedEventIds.add(rawId.trim());
     }
   }
+  const patchEventsById = new Map<string, LooseRecord>();
+  const anonymousPatchEvents: LooseRecord[] = [];
   for (const rawEvent of Array.isArray(patch.events) ? patch.events : []) {
     if (!isPlainRecord(rawEvent)) {
       continue;
     }
     if (typeof rawEvent.id === 'string' && rawEvent.id) {
-      mergedEventsById.set(rawEvent.id, rawEvent);
+      patchEventsById.set(rawEvent.id, rawEvent);
     } else {
       anonymousPatchEvents.push(rawEvent);
     }
   }
 
-  const eventMaxYearById = new Map<string, number | null>();
-  for (const [eventId, event] of mergedEventsById) {
-    eventMaxYearById.set(eventId, extractLatestEdtfYear(event.edtf_date));
+  const liveEvents = dateContext?.liveEvents ?? [];
+  let liveEventsById: Map<string, LooseRecord> | null = null;
+  const eventMaxYearCache = new Map<string, number | null>();
+
+  const getEventMaxYear = (eventId: string): number | null => {
+    if (eventMaxYearCache.has(eventId)) {
+      return eventMaxYearCache.get(eventId) ?? null;
+    }
+    let resolved: number | null = null;
+    const patchedEv = patchEventsById.get(eventId);
+    if (patchedEv) {
+      resolved = extractLatestEdtfYear(patchedEv.edtf_date);
+    } else if (!removedEventIds.has(eventId)) {
+      if (!liveEventsById) {
+        liveEventsById = new Map<string, LooseRecord>();
+        for (let i = 0; i < liveEvents.length; i += 1) {
+          const ev = liveEvents[i];
+          if (typeof ev.id === 'string' && ev.id) {
+            liveEventsById.set(ev.id, ev);
+          }
+        }
+      }
+      const liveEv = liveEventsById.get(eventId);
+      if (liveEv) {
+        resolved = extractLatestEdtfYear(liveEv.edtf_date);
+      }
+    }
+    eventMaxYearCache.set(eventId, resolved);
+    return resolved;
+  };
+
+  // Compute maxYear only for source_ids actually present in patch.sources instead of all 300 archive sources.
+  const patchedSourceIds = new Set<string>();
+  if (Array.isArray(patch.sources)) {
+    for (let i = 0; i < patch.sources.length; i += 1) {
+      const rawSource = patch.sources[i];
+      if (isPlainRecord(rawSource) && typeof rawSource.id === 'string' && rawSource.id) {
+        patchedSourceIds.add(rawSource.id);
+      }
+    }
   }
-  const sourceMaxYearById = computeSourceMaxYearById([...mergedEventsById.values(), ...anonymousPatchEvents]);
+  const sourceMaxYearById = new Map<string, number | null>();
+  if (patchedSourceIds.size > 0 && livingPeople.length > 0) {
+    const accumulateEventForPatchedSources = (ev: LooseRecord): void => {
+      if (!Array.isArray(ev.sources) || ev.sources.length === 0) {
+        return;
+      }
+      let touchesPatched = false;
+      for (let s = 0; s < ev.sources.length; s += 1) {
+        const ref = ev.sources[s];
+        const sid = isPlainRecord(ref) && typeof ref.source_id === 'string' ? ref.source_id : '';
+        if (sid && patchedSourceIds.has(sid)) {
+          touchesPatched = true;
+          break;
+        }
+      }
+      if (!touchesPatched) {
+        return;
+      }
+      const evYear = extractLatestEdtfYear(ev.edtf_date);
+      for (let s = 0; s < ev.sources.length; s += 1) {
+        const ref = ev.sources[s];
+        if (
+          !isPlainRecord(ref) ||
+          typeof ref.source_id !== 'string' ||
+          !patchedSourceIds.has(ref.source_id)
+        ) {
+          continue;
+        }
+        const claimedYear = extractLatestEdtfYear(ref.claimed_date) ?? evYear;
+        if (claimedYear === null) {
+          if (!sourceMaxYearById.has(ref.source_id)) {
+            sourceMaxYearById.set(ref.source_id, null);
+          }
+        } else {
+          const prev = sourceMaxYearById.get(ref.source_id);
+          if (prev === undefined || (prev !== null && claimedYear > prev)) {
+            sourceMaxYearById.set(ref.source_id, claimedYear);
+          }
+        }
+      }
+    };
+
+    for (let i = 0; i < liveEvents.length; i += 1) {
+      const ev = liveEvents[i];
+      const evId = typeof ev.id === 'string' ? ev.id : '';
+      if (evId && (removedEventIds.has(evId) || patchEventsById.has(evId))) {
+        continue;
+      }
+      accumulateEventForPatchedSources(ev);
+    }
+    for (const ev of patchEventsById.values()) {
+      accumulateEventForPatchedSources(ev);
+    }
+    for (const ev of anonymousPatchEvents) {
+      accumulateEventForPatchedSources(ev);
+    }
+  }
 
   const livingNameTargets: LivingNameTarget[] = [];
 
@@ -125,10 +218,14 @@ export function runPrivacyAndStyleScan(
     if (!text) {
       return;
     }
-    livingNameTargets.push({ location: label, text, maxYear });
-    for (const m of text.matchAll(SSN_RE)) {
-      if (ssnHits.length < 25) {
-        ssnHits.push({ location: label, match: m[0] });
+    if (livingNameMatcher) {
+      livingNameTargets.push({ location: label, text, maxYear });
+    }
+    if (text.includes('-')) {
+      for (const m of text.matchAll(SSN_RE)) {
+        if (ssnHits.length < 25) {
+          ssnHits.push({ location: label, match: m[0] });
+        }
       }
     }
     for (const m of text.matchAll(US_PHONE_RE)) {
@@ -136,7 +233,7 @@ export function runPrivacyAndStyleScan(
         phoneHits.push({ location: label, match: m[0] });
       }
     }
-    if (checkEmDash) {
+    if (checkEmDash && text.includes('\u2014')) {
       const count = (text.match(EM_DASH_RE) ?? []).length;
       if (count > 0) {
         emDashHits.push({ location: label, count });
@@ -192,7 +289,7 @@ export function runPrivacyAndStyleScan(
             typeof rawItem.event_id === 'string' && rawItem.event_id ? rawItem.event_id : null;
           mediaMaxYear =
             extractLatestEdtfYear(rawItem.date_edtf) ??
-            (linkedEventId ? (eventMaxYearById.get(linkedEventId) ?? null) : null);
+            (linkedEventId ? getEventMaxYear(linkedEventId) : null);
         }
         collectStringsWithPath(rawItem, `patch.media[${i}]`, mediaMaxYear, patchStrings);
       }
@@ -210,17 +307,24 @@ export function runPrivacyAndStyleScan(
     if (key === 'narratives' && Array.isArray(value)) {
       for (let i = 0; i < value.length; i += 1) {
         const rawNarrative = value[i];
-        const narrativeMaxYear = isPlainRecord(rawNarrative)
-          ? resolveNarrativeMaxYear({
-              subjectPersonId:
-                typeof rawNarrative.subject_person_id === 'string' ? rawNarrative.subject_person_id : null,
-              personIds: stringListField(rawNarrative.person_ids),
-              eventIds: stringListField(rawNarrative.event_ids),
-              livingIds,
-              deathYearByPersonId,
-              eventMaxYearById,
-            })
-          : null;
+        let narrativeMaxYear: number | null = null;
+        if (isPlainRecord(rawNarrative) && livingPeople.length > 0) {
+          const narEventIds = stringListField(rawNarrative.event_ids);
+          const scopedEventMaxYearById = new Map<string, number | null>();
+          for (let e = 0; e < narEventIds.length; e += 1) {
+            const evId = narEventIds[e];
+            scopedEventMaxYearById.set(evId, getEventMaxYear(evId));
+          }
+          narrativeMaxYear = resolveNarrativeMaxYear({
+            subjectPersonId:
+              typeof rawNarrative.subject_person_id === 'string' ? rawNarrative.subject_person_id : null,
+            personIds: stringListField(rawNarrative.person_ids),
+            eventIds: narEventIds,
+            livingIds,
+            deathYearByPersonId,
+            eventMaxYearById: scopedEventMaxYearById,
+          });
+        }
         collectStringsWithPath(rawNarrative, `patch.narratives[${i}]`, narrativeMaxYear, patchStrings);
       }
       continue;
@@ -234,7 +338,9 @@ export function runPrivacyAndStyleScan(
     scanTarget(item.path, item.text, item.maxYear, isBioProse);
   }
 
-  const livingNameHits = collectLivingNameHitsWithMatcher(livingNameMatcher, livingNameTargets);
+  const livingNameHits = livingNameMatcher
+    ? collectLivingNameHitsWithMatcher(livingNameMatcher, livingNameTargets)
+    : [];
 
   const totalEmDashes = emDashHits.reduce((acc, row) => acc + row.count, 0);
   const errors: string[] = [];
