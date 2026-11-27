@@ -1,0 +1,67 @@
+/* ==========================================================================
+   Evidence, Citation Audit & Silver-Gelatin Scan Gallery (/evidence)
+   ========================================================================== */
+.evidence-source-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 4px;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--border-decorative);
+  border-radius: 0;
+}
+
+.evidence-source-row > div:first-child {
+  max-width: 72ch;
+}
+
+.scan-thumb-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 18px 16px;
+}
+
+.scan-thumb-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  color: var(--text-primary);
+  transition: transform 0.14s ease;
+}
+
+.scan-thumb-card:hover {
+  transform: translateY(-2px);
+}
+
+.scan-thumb-card img {
+  width: 100%;
+  aspect-ratio: 3 / 4;
+  object-fit: cover;
+  padding: 5px;
+  background: var(--surface-card);
+  border: 1px solid rgba(130, 122, 106, 0.42);
+  box-shadow: var(--shadow-print);
+  filter: sepia(0.08) contrast(1.03);
+  border-radius: 1px;
+}
+
+
+/* Responsive overrides */
+
+@media (max-width: 768px) {
+  .scan-thumb-grid,
+  :global(.person-media-grid) {
+grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .evidence-source-row {
+flex-direction: column;
+  }
+}

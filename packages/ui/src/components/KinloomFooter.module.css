@@ -1,0 +1,60 @@
+/* ==========================================================================
+   Kinloom White-Label Colophon Footer
+   ========================================================================== */
+.kinloom-footer {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 18px 26px 32px;
+  border-top: 1px solid var(--border-decorative);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px 18px;
+}
+
+.kinloom-footer-nav {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+}
+
+.kinloom-footer-link {
+  font-family: var(--font-mono);
+  font-size: 0.76rem;
+  color: var(--text-secondary);
+  text-decoration: none;
+  border-bottom: 1px dotted var(--border-control);
+  padding: 2px 0;
+  transition:
+    color 0.14s ease,
+    border-color 0.14s ease;
+}
+
+.kinloom-footer-link:hover {
+  color: var(--radar-copresence);
+  border-bottom-color: var(--radar-copresence);
+}
+
+.kinloom-footer-credit {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-mono);
+  font-size: 0.74rem;
+  color: var(--text-secondary);
+}
+
+@media (max-width: 768px) {
+  .kinloom-footer {
+    padding: 14px 14px 28px;
+  }
+
+  .kinloom-footer-link {
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+  }
+}
+

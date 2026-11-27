@@ -1,0 +1,223 @@
+/* ==========================================================================
+   Global Unboxed Hairline Top Bar (Cotton Paper — Zero Dark Slab)
+   ========================================================================== */
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  min-height: var(--topbar-height);
+  background: rgba(245, 239, 226, 0.95);
+  backdrop-filter: blur(6px);
+  color: var(--text-primary);
+  border-bottom: 1px solid var(--border-decorative);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 18px;
+  padding: 8px 26px;
+}
+
+.topbar-left,
+.topbar-center,
+.topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.brand-link {
+  font-family: var(--font-serif);
+  font-weight: 700;
+  font-size: 1.18rem;
+  text-decoration: none;
+  letter-spacing: -0.01em;
+  color: var(--surface-header);
+  white-space: nowrap;
+}
+
+.nav-links {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.nav-divider {
+  width: 1px;
+  height: 16px;
+  background: var(--border-decorative);
+  display: inline-block;
+}
+
+.nav-pill {
+  padding: 4px 2px;
+  border: none;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  text-decoration: none;
+  font-family: var(--font-serif);
+  font-size: 0.96rem;
+  font-weight: 500;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  white-space: nowrap;
+  transition:
+    color 0.15s ease,
+    border-color 0.15s ease;
+}
+
+.nav-pill:global(.nav-axis) {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.nav-pill:hover {
+  color: var(--surface-header);
+  border-bottom-color: var(--border-control);
+}
+
+.nav-pill:global(.active) {
+  color: var(--radar-copresence);
+  border-bottom-color: var(--radar-copresence);
+  font-weight: 700;
+}
+
+.person-switcher {
+  background: transparent;
+  color: var(--text-primary);
+  border: none;
+  border-bottom: 1px solid var(--border-control);
+  border-radius: 0;
+  padding: 3px 4px;
+  font-family: var(--font-serif);
+  font-size: 0.9rem;
+  max-width: 210px;
+  cursor: pointer;
+}
+
+.person-switcher option {
+  background: var(--surface-card);
+  color: var(--text-primary);
+}
+
+.year-readout {
+  font-family: var(--font-hand);
+  font-variant-numeric: tabular-nums;
+  font-size: 1.38rem;
+  font-weight: 700;
+  line-height: 1;
+  padding: 2px 6px;
+  border-bottom: 1.5px solid var(--radar-copresence);
+  color: var(--radar-copresence);
+  text-decoration: none;
+  letter-spacing: 0.02em;
+}
+
+.year-readout:hover {
+  background: var(--surface-radar);
+}
+
+.breadcrumb-strip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-mono);
+  font-size: 0.74rem;
+  color: var(--text-secondary);
+}
+
+.breadcrumb-strip a {
+  text-decoration: underline;
+  text-decoration-color: var(--border-control);
+  text-underline-offset: 2px;
+}
+
+
+/* Responsive overrides */
+
+@media (max-width: 1023px) {
+  .topbar {
+padding: 6px 12px 0;
+    gap: 0 8px;
+    min-height: 0;
+    height: auto;
+    box-sizing: border-box;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .topbar-left {
+display: contents;
+  }
+
+  .brand-link {
+order: 1;
+    flex: 1 1 0%;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-size: clamp(0.8rem, 3.6vw, 0.98rem);
+    line-height: 44px;
+    white-space: nowrap;
+  }
+
+  .topbar-center {
+order: 2;
+    flex: 0 0 auto;
+    margin-left: auto;
+    width: auto;
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 6px;
+    flex-wrap: nowrap;
+  }
+
+  .nav-links {
+order: 3;
+    flex-basis: 100%;
+    flex-wrap: nowrap;
+    gap: 6px 10px;
+    margin-top: 2px;
+    padding: 0;
+    border-top: 1px solid rgba(130, 122, 106, 0.22);
+    overflow-x: auto;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .nav-links::-webkit-scrollbar {
+display: none;
+  }
+
+  .nav-pill {
+flex-shrink: 0;
+    padding: 4px 10px;
+    font-size: 0.9rem;
+    white-space: nowrap;
+    min-height: 44px;
+    min-width: 44px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .year-readout,
+  :global(.mobile-sources-btn),
+  .topbar-right,
+  :global(.nav-pill-desktop-only) {
+display: none;
+  }
+}
+
+@media (max-width: 768px) {
+  .person-switcher {
+width: 100%;
+    max-width: none;
+    font-size: 0.82rem;
+    padding: 2px 4px;
+  }
+}

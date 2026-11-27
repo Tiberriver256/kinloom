@@ -1,0 +1,410 @@
+/* ==========================================================================
+   Librarian Citations & Slide-Over Source Inspector Drawer
+   ========================================================================== */
+:global(.source-toggle):global(.is-uncited) {
+  color: var(--status-conflict);
+  border-bottom-color: var(--status-conflict);
+}
+
+.citation-card-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.citation-item-card {
+  background: var(--surface-canvas);
+  border: 1px solid var(--border-decorative);
+  border-radius: 2px;
+  padding: 11px 13px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.citation-item-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.evidence-tier-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  border: 1px solid currentColor;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  line-height: 1.3;
+}
+
+.evidence-tier-badge:global(.tier-primary) {
+  color: var(--badge-cited-fg);
+  background: var(--badge-cited-bg);
+  border-color: var(--accent-secondary);
+}
+
+.evidence-tier-badge:global(.tier-published) {
+  color: var(--surface-header);
+  background: var(--surface-linen);
+  border-color: var(--border-control);
+}
+
+.evidence-tier-badge:global(.tier-family) {
+  color: var(--badge-memory-fg);
+  background: var(--badge-memory-bg);
+  border-color: var(--accent-primary);
+}
+
+.evidence-tier-badge:global(.tier-derivative) {
+  color: var(--text-secondary);
+  background: var(--surface-muted);
+  border-color: var(--border-control);
+}
+
+.evidence-tier-badge:global(.tier-unverified) {
+  color: var(--diff-del-fg);
+  background: var(--diff-del-bg);
+  border-color: var(--status-conflict);
+}
+
+.evidence-basis-tag {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  color: var(--text-secondary);
+}
+
+.citation-item-title {
+  font-family: var(--font-serif);
+  font-size: 0.96rem;
+  font-weight: 600;
+  color: var(--surface-header);
+  line-height: 1.38;
+}
+
+.citation-item-meta {
+  font-size: 0.83rem;
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
+
+.citation-page-detail {
+  font-family: var(--font-mono);
+  font-size: 0.77rem;
+  color: var(--text-primary);
+  background: var(--surface-card);
+  border: 1px solid var(--border-decorative);
+  border-radius: 2px;
+  padding: 5px 8px;
+  margin-top: 2px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.citation-missing-detail {
+  font-size: 0.8rem;
+  font-style: italic;
+  color: var(--text-secondary);
+}
+
+.citation-item-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.source-action-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  background: var(--surface-card);
+  border: 1px solid var(--border-control);
+  border-radius: 2px;
+  font-family: var(--font-mono);
+  font-size: 0.73rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  text-decoration: none;
+  cursor: pointer;
+  transition:
+    background-color 0.14s ease,
+    border-color 0.14s ease,
+    color 0.14s ease;
+}
+
+.source-action-btn:hover {
+  background: var(--surface-header);
+  border-color: var(--surface-header);
+  color: var(--text-inverse);
+}
+
+.source-action-btn:global(.primary) {
+  border-color: var(--radar-copresence);
+  color: var(--radar-copresence);
+}
+
+.source-action-btn:global(.primary):hover {
+  background: var(--radar-copresence);
+  border-color: var(--radar-copresence);
+  color: var(--text-inverse);
+}
+
+.citation-conflicts-box {
+  margin-top: 10px;
+  padding: 10px 12px;
+  background: var(--surface-canvas);
+  border: 1px solid var(--border-decorative);
+  border-radius: 2px;
+}
+
+.citation-conflicts-box ul {
+  margin: 6px 0 0;
+  padding-left: 18px;
+}
+
+.citation-conflicts-box :global(.source-read-inline) {
+  margin-left: 0;
+  text-align: left;
+}
+
+.source-inspector-backdrop {
+  z-index: 72;
+}
+
+.source-inspector-panel {
+  width: min(560px, 98vw);
+  gap: 16px;
+}
+
+.source-inspector-title {
+  font-family: var(--font-serif);
+  font-size: 1.24rem;
+  line-height: 1.3;
+  color: var(--surface-header);
+  margin: 0 0 8px;
+}
+
+.source-inspector-badges {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.source-inspector-tier-note {
+  margin: 0;
+  font-size: 0.88rem;
+  color: var(--text-secondary);
+  line-height: 1.48;
+}
+
+.inspector-block {
+  background: var(--surface-canvas);
+  border: 1px solid var(--border-decorative);
+  border-radius: 2px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.inspector-block-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.inspector-section-heading {
+  font-family: var(--font-serif);
+  font-size: 0.96rem;
+  font-weight: 700;
+  color: var(--surface-header);
+  margin: 0;
+}
+
+.inspector-claim-title {
+  font-size: 0.92rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.inspector-record-detail {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  line-height: 1.5;
+  color: var(--text-primary);
+  background: var(--surface-card);
+  border: 1px solid var(--border-decorative);
+  border-radius: 2px;
+  padding: 7px 10px;
+  overflow-wrap: anywhere;
+}
+
+.inspector-missing-detail {
+  margin: 0;
+  font-size: 0.84rem;
+  font-style: italic;
+  color: var(--text-secondary);
+}
+
+.inspector-bib-list {
+  display: grid;
+  grid-template-columns: minmax(112px, 132px) 1fr;
+  gap: 6px 12px;
+  margin: 0;
+  font-size: 0.86rem;
+}
+
+.inspector-bib-list dt {
+  font-family: var(--font-mono);
+  font-size: 0.74rem;
+  color: var(--text-secondary);
+  padding-top: 2px;
+}
+
+.inspector-bib-list dd {
+  margin: 0;
+  color: var(--text-primary);
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.inspector-ext-link {
+  color: var(--radar-copresence);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.inspector-formatted-citation {
+  margin: 0;
+  font-family: var(--font-serif);
+  font-size: 0.9rem;
+  line-height: 1.55;
+  color: var(--text-primary);
+  background: transparent;
+  border: none;
+  border-left: 2px solid var(--border-control);
+  border-radius: 0;
+  padding: 4px 0 4px 12px;
+  overflow-wrap: anywhere;
+}
+
+.inspector-block-header .source-action-btn {
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.inspector-actions-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.inspector-scan-figure {
+  margin: 0;
+  background: var(--surface-canvas);
+  border: 1px solid var(--border-decorative);
+  border-radius: 2px;
+  padding: 10px;
+}
+
+.inspector-scan-img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border: 1px solid var(--border-decorative);
+}
+
+.inspector-scan-caption {
+  margin-top: 8px;
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+  line-height: 1.45;
+}
+
+.inspector-usage-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.inspector-usage-item {
+  padding: 8px 10px;
+  background: var(--surface-card);
+  border: 1px solid var(--border-decorative);
+  border-radius: 2px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.inspector-usage-item:global(.current) {
+  border-color: var(--radar-copresence);
+}
+
+.inspector-usage-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.inspector-usage-link {
+  font-family: var(--font-serif);
+  font-size: 0.92rem;
+  font-weight: 600;
+  color: var(--surface-header);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.inspector-usage-link:hover {
+  color: var(--radar-copresence);
+}
+
+.inspector-usage-title {
+  font-family: var(--font-serif);
+  font-size: 0.92rem;
+  font-weight: 600;
+  color: var(--surface-header);
+}
+
+.inspector-usage-person {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+
+.inspector-usage-detail {
+  font-family: var(--font-mono);
+  font-size: 0.74rem;
+  color: var(--text-secondary);
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 600px) {
+  .inspector-bib-list {
+    grid-template-columns: 1fr;
+    gap: 2px;
+  }
+
+  .inspector-bib-list dd {
+    margin-bottom: 6px;
+  }
+}
+
