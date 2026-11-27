@@ -10,7 +10,7 @@ import {
   resolvePersonPronunciation,
   resolvePlacePronunciation,
 } from '@kinloom/core';
-import yaml from 'js-yaml';
+import { parse as parseYaml } from 'yaml';
 import type {
   KinloomAuditCheck,
   KinloomAuditCheckContext,
@@ -59,7 +59,7 @@ function loadLexiconForAudit(
   const dataLexiconPath = path.join(repoDir, 'data', 'pronunciations.yaml');
   if (fs.existsSync(dataLexiconPath)) {
     try {
-      const parsed = yaml.load(fs.readFileSync(dataLexiconPath, 'utf8'));
+      const parsed = parseYaml(fs.readFileSync(dataLexiconPath, 'utf8'));
       if (isPlainRecord(parsed)) {
         for (const [key, val] of Object.entries(parsed)) {
           const entry = parseLoosePronunciation(val);
