@@ -299,6 +299,81 @@ describe('createHttpRecipesClient and createStaticRecipesClient', () => {
       'DELETE /api/plugins/recipes/sourdough-boule/photos/pho_1',
     ]);
   });
+
+  it('supports recipe create, PATCH update, and soft-delete through PluginApiClient', async () => {
+    const requests: Array<{ url: string; method: string; body?: string }> = [];
+    const fetchImpl: typeof fetch = async (input, init) => {
+      const url = typeof input === 'string' ? input : input.toString();
+      const method = init?.method ?? 'GET';
+      const body = typeof init?.body === 'string' ? init.body : undefined;
+      requests.push({ url, method, body });
+      if (method === 'POST' && url === '/api/plugins/recipes') {
+        return new Response(JSON.stringify({ recipe: SAMPLE_RECIPE }), {
+          status: 201,
+          headers: { 'content-type': 'application/json' },
+        });
+      }
+      if (method === 'PATCH' && url === '/api/plugins/recipes/sourdough-boule') {
+        return new Response(
+          JSON.stringify({ recipe: { ...SAMPLE_RECIPE, title: 'Updated Boule', version: 2 } }),
+          {
+            status: 200,
+            headers: { 'content-type': 'application/json' },
+          }
+        );
+      }
+      if (method === 'DELETE' && url === '/api/plugins/recipes/sourdough-boule') {
+        return new Response(null, { status: 204 });
+      }
+      return new Response(JSON.stringify({ error: { code: 'NOT_FOUND', message: 'Missing' } }), {
+        status: 404,
+        headers: { 'content-type': 'application/json' },
+      });
+    };
+
+    const client = createHttpRecipesClient({ fetchImpl });
+    const created = await client.createRecipe!({
+      title: 'Sourdough Boule',
+      summary: 'Crusty hearth loaf.',
+      story_md: 'Passed down since 1890.',
+      ingredients: SAMPLE_RECIPE.ingredients,
+      steps: SAMPLE_RECIPE.steps,
+      prep_minutes: 30,
+      cook_minutes: 45,
+      servings: '1 loaf',
+      course: 'bread',
+      tags: ['heirloom'],
+      provenance_note: 'Grandfather bakery notebook',
+      source_era: '1890s',
+      attributed_person_id: 'p_ada',
+    });
+    expect(created.recipe.slug).toBe('sourdough-boule');
+
+    const updated = await client.updateRecipe!('sourdough-boule', {
+      title: 'Updated Boule',
+      summary: 'Crusty hearth loaf.',
+      story_md: 'Passed down since 1890.',
+      ingredients: SAMPLE_RECIPE.ingredients,
+      steps: SAMPLE_RECIPE.steps,
+      prep_minutes: 30,
+      cook_minutes: 45,
+      servings: '1 loaf',
+      course: 'bread',
+      tags: ['heirloom'],
+      provenance_note: 'Grandfather bakery notebook',
+      source_era: '1890s',
+      attributed_person_id: 'p_ada',
+      expected_version: 1,
+    });
+    expect(updated.recipe.version).toBe(2);
+
+    await expect(client.deleteRecipe!('sourdough-boule')).resolves.toBeUndefined();
+    expect(requests.map((r) => `${r.method} ${r.url}`)).toEqual([
+      'POST /api/plugins/recipes',
+      'PATCH /api/plugins/recipes/sourdough-boule',
+      'DELETE /api/plugins/recipes/sourdough-boule',
+    ]);
+  });
 });
 
 describe('lightboxModel pure helpers', () => {

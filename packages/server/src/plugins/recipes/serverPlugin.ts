@@ -23,6 +23,8 @@ import { InMemoryRecipesRepository } from './inMemoryRecipesRepository.js';
 import { RECIPES_PLUGIN_MIGRATIONS } from './migrations.js';
 import { clampRecipeListPagination, type RecipesRepository } from './recipesRepository.js';
 import {
+  assertDeceasedRecipeAttribution,
+  CreateRecipeInputSchema,
   deriveRecipeActorKey,
   RECIPES_DATABASE_NAMESPACE,
   RECIPES_PLUGIN_ID,
@@ -35,6 +37,7 @@ import {
   type RecipeSortMode,
   RecipeSortModeSchema,
   redactLivingRecipeAttribution,
+  UpdateRecipeInputSchema,
   UpdateRecipePhotoInputSchema,
 } from './schemas.js';
 import { SqlRecipesRepository } from './sqlRecipesRepository.js';
@@ -439,6 +442,13 @@ async function resolveDeceasedAncestorRefs(
   return resolved;
 }
 
+export function canCreateOrEditRecipe(principal: CallerPrincipal, settings: RecipesRuntimeSettings): boolean {
+  if (principal.kind !== 'user') {
+    return false;
+  }
+  return settings.create_edit_min_role === 'admin' ? principal.role === 'admin' : true;
+}
+
 export function computeRecipePermissions(
   principal: CallerPrincipal,
   recipe: Pick<RecipeRecord, 'created_by_id'>,
@@ -520,6 +530,94 @@ function parseOptionalMultipartBoolean(raw: unknown, fieldName: string): boolean
     return true;
   }
   throw new KinloomHttpError(400, 'VALIDATION_ERROR', `Field '${fieldName}' must be 'true' or 'false'.`);
+}
+
+function requireRecipeWriteActor(
+  ctx: KinloomServerPluginContext,
+  settings: RecipesRuntimeSettings
+): { readonly id: string; readonly name: string } {
+  const { principal } = ctx;
+  if (principal.kind !== 'user') {
+    if (hasSecurityEventEmitter(ctx)) {
+      ctx.emitSecurityEvent({
+        type: 'auth.write.forbidden',
+        status: 403,
+        reason: 'member_required',
+        requiredRole: settings.create_edit_min_role,
+        actorKind: principal.kind,
+      });
+    }
+    throw new KinloomHttpError(
+      403,
+      'FORBIDDEN',
+      'Only signed-in family archive members may create or edit recipes.'
+    );
+  }
+  if (settings.create_edit_min_role === 'admin' && principal.role !== 'admin') {
+    if (hasSecurityEventEmitter(ctx)) {
+      ctx.emitSecurityEvent({
+        type: 'auth.write.forbidden',
+        status: 403,
+        reason: 'insufficient_role',
+        requiredRole: 'admin',
+        actorKind: 'user',
+      });
+    }
+    throw new KinloomHttpError(403, 'FORBIDDEN', 'Administrator role is required to create or edit recipes.');
+  }
+  return {
+    id: principal.email,
+    name: principal.display_name,
+  };
+}
+
+function requireSignedInRecipeMember(
+  ctx: KinloomServerPluginContext,
+  message: string
+): { readonly id: string; readonly name: string; readonly role: 'admin' | 'editor' } {
+  const { principal } = ctx;
+  if (principal.kind !== 'user') {
+    if (hasSecurityEventEmitter(ctx)) {
+      ctx.emitSecurityEvent({
+        type: 'auth.write.forbidden',
+        status: 403,
+        reason: 'member_required',
+        requiredRole: 'editor',
+        actorKind: principal.kind,
+      });
+    }
+    throw new KinloomHttpError(403, 'FORBIDDEN', message);
+  }
+  return {
+    id: principal.email,
+    name: principal.display_name,
+    role: principal.role,
+  };
+}
+
+function assertCanDeleteRecipe(
+  ctx: KinloomServerPluginContext,
+  actor: { readonly id: string; readonly role: 'admin' | 'editor' },
+  recipe: Pick<RecipeRecord, 'created_by_id'>
+): void {
+  const isOwner = actor.id.trim().toLowerCase() === recipe.created_by_id.trim().toLowerCase();
+  if (actor.role === 'admin' || isOwner) {
+    return;
+  }
+  if (hasSecurityEventEmitter(ctx)) {
+    ctx.emitSecurityEvent({
+      type: 'auth.write.forbidden',
+      status: 403,
+      reason: 'not_owner',
+      requiredRole: 'admin',
+      actorKind: 'user',
+    });
+  }
+  throw new KinloomHttpError(
+    403,
+    'FORBIDDEN',
+    'Only the recipe creator or an archive administrator may delete this recipe.'
+  );
 }
 
 function requirePhotoUploadActor(
@@ -692,6 +790,7 @@ export function createRecipesServerPlugin(options: RecipesServerPluginOptions = 
           offset: pagination.offset,
           facets: facetOnly.facets,
           display: { show_home_widget: settings.show_home_widget },
+          permissions: { can_create: canCreateOrEditRecipe(ctx.principal, settings) },
         });
       }
 
@@ -732,6 +831,7 @@ export function createRecipesServerPlugin(options: RecipesServerPluginOptions = 
         offset: pagination.offset,
         facets: result.facets,
         display: { show_home_widget: settings.show_home_widget },
+        permissions: { can_create: canCreateOrEditRecipe(ctx.principal, settings) },
       });
     }
 
@@ -874,9 +974,136 @@ export function createRecipesServerPlugin(options: RecipesServerPluginOptions = 
     throw new KinloomHttpError(404, 'NOT_FOUND', `Route GET ${ctx.url.pathname} was not found.`);
   }
 
+  async function buildPublicRecipeDetail(
+    ctx: KinloomServerPluginContext,
+    repo: RecipesRepository,
+    recipe: RecipeRecord
+  ): Promise<PublicRecipeDetail> {
+    const [livingIds, viewerActorKey] = await Promise.all([
+      ctx.ports.repository.getLivingPersonIds(),
+      deriveRecipeActorKey(ctx.principal),
+    ]);
+    const safeRecipe = redactLivingRecipeAttribution(recipe, livingIds);
+    const ancestorRefs =
+      safeRecipe.attributed_person_id !== null
+        ? await resolveDeceasedAncestorRefs(
+            [safeRecipe.attributed_person_id],
+            ctx.ports.repository,
+            livingIds
+          )
+        : new Map<string, PublicRecipeAncestorRef>();
+    const ancestorRef =
+      safeRecipe.attributed_person_id !== null
+        ? (ancestorRefs.get(safeRecipe.attributed_person_id) ?? null)
+        : null;
+    const viewerHasStarred = viewerActorKey ? await repo.hasActorStarred(recipe.id, viewerActorKey) : false;
+    return toPublicRecipeDetail(safeRecipe, viewerHasStarred, ancestorRef);
+  }
+
+  async function handleUpdateRecipe(
+    ctx: KinloomServerPluginContext,
+    repo: RecipesRepository,
+    slugOrId: string
+  ): Promise<Response> {
+    const settings = await resolveRuntimeSettings(ctx.ports);
+    const actor = requireRecipeWriteActor(ctx, settings);
+
+    const existing = slugOrId ? await repo.getRecipeBySlugOrId(slugOrId) : null;
+    if (!existing) {
+      throw new KinloomHttpError(404, 'RECIPE_NOT_FOUND', `Recipe '${slugOrId}' was not found.`);
+    }
+
+    const parsed = UpdateRecipeInputSchema.parse(await readJsonBody(ctx.request));
+    const verifiedPersonId = await assertDeceasedRecipeAttribution(
+      parsed.attributed_person_id,
+      ctx.ports.repository
+    );
+
+    const outcome = await repo.updateRecipe({
+      id: existing.id,
+      data: {
+        ...parsed,
+        attributed_person_id: verifiedPersonId,
+      },
+      actor,
+      nowIso: ctx.ports.clock.nowIso(),
+    });
+
+    switch (outcome.kind) {
+      case 'not_found':
+        throw new KinloomHttpError(404, 'RECIPE_NOT_FOUND', `Recipe '${slugOrId}' was not found.`);
+      case 'slug_conflict':
+        throw new KinloomHttpError(
+          409,
+          'RECIPE_SLUG_CONFLICT',
+          `Recipe slug '${outcome.slug}' is already in use.`
+        );
+      case 'conflict': {
+        const publicServerRecipe = await buildPublicRecipeDetail(ctx, repo, outcome.server_recipe);
+        throw new KinloomHttpError(
+          409,
+          'RECIPE_VERSION_CONFLICT',
+          'This recipe was updated by another archive member. Reload the latest version before saving.',
+          {
+            expected_version: outcome.expected_version,
+            server_version: outcome.server_version,
+            server_updated_at: outcome.server_recipe.updated_at,
+            server_updated_by_name: outcome.server_recipe.updated_by_name,
+            server_recipe: publicServerRecipe,
+          }
+        );
+      }
+      case 'updated': {
+        const publicRecipe = await buildPublicRecipeDetail(ctx, repo, outcome.recipe);
+        const permissions = computeRecipePermissions(ctx.principal, outcome.recipe, settings);
+        return jsonResponse({
+          recipe: publicRecipe,
+          permissions,
+        });
+      }
+      default: {
+        const _exhaustive: never = outcome;
+        return _exhaustive;
+      }
+    }
+  }
+
   async function handlePostRequest(ctx: KinloomServerPluginContext): Promise<Response> {
     const repo = resolveRepository(ctx);
     const segments = splitRecipesRouteSegments(ctx.url.pathname);
+
+    // POST /api/plugins/recipes (create structured recipe)
+    if (segments.length === 0) {
+      const settings = await resolveRuntimeSettings(ctx.ports);
+      const actor = requireRecipeWriteActor(ctx, settings);
+
+      const parsed = CreateRecipeInputSchema.parse(await readJsonBody(ctx.request));
+      const verifiedPersonId = await assertDeceasedRecipeAttribution(
+        parsed.attributed_person_id,
+        ctx.ports.repository
+      );
+
+      const recipeId = `rec_${toHex(randomBytes(8))}`;
+      const created = await repo.createRecipe({
+        id: recipeId,
+        data: {
+          ...parsed,
+          attributed_person_id: verifiedPersonId,
+        },
+        actor,
+        nowIso: ctx.ports.clock.nowIso(),
+      });
+
+      const publicRecipe = await buildPublicRecipeDetail(ctx, repo, created);
+      const permissions = computeRecipePermissions(ctx.principal, created, settings);
+      return jsonResponse(
+        {
+          recipe: publicRecipe,
+          permissions,
+        },
+        201
+      );
+    }
 
     // POST /api/plugins/recipes/:slugOrId/photos
     if (segments.length === 2 && segments[1] === 'photos') {
@@ -1018,9 +1245,28 @@ export function createRecipesServerPlugin(options: RecipesServerPluginOptions = 
     throw new KinloomHttpError(404, 'NOT_FOUND', `Route POST ${ctx.url.pathname} was not found.`);
   }
 
+  async function handlePutRequest(ctx: KinloomServerPluginContext): Promise<Response> {
+    const repo = resolveRepository(ctx);
+    const segments = splitRecipesRouteSegments(ctx.url.pathname);
+
+    // PUT /api/plugins/recipes/:slugOrId
+    if (segments.length === 1) {
+      const slugOrId = decodeSegment(segments[0]).trim();
+      return handleUpdateRecipe(ctx, repo, slugOrId);
+    }
+
+    throw new KinloomHttpError(404, 'NOT_FOUND', `Route PUT ${ctx.url.pathname} was not found.`);
+  }
+
   async function handlePatchRequest(ctx: KinloomServerPluginContext): Promise<Response> {
     const repo = resolveRepository(ctx);
     const segments = splitRecipesRouteSegments(ctx.url.pathname);
+
+    // PATCH /api/plugins/recipes/:slugOrId
+    if (segments.length === 1) {
+      const slugOrId = decodeSegment(segments[0]).trim();
+      return handleUpdateRecipe(ctx, repo, slugOrId);
+    }
 
     // PATCH /api/plugins/recipes/:slugOrId/photos/:photoId
     if (segments.length === 3 && segments[1] === 'photos') {
@@ -1061,6 +1307,29 @@ export function createRecipesServerPlugin(options: RecipesServerPluginOptions = 
   async function handleDeleteRequest(ctx: KinloomServerPluginContext): Promise<Response> {
     const repo = resolveRepository(ctx);
     const segments = splitRecipesRouteSegments(ctx.url.pathname);
+
+    // DELETE /api/plugins/recipes/:slugOrId (soft-delete by owner or admin)
+    if (segments.length === 1) {
+      const actor = requireSignedInRecipeMember(
+        ctx,
+        'Only signed-in family archive members may delete recipes.'
+      );
+      const slugOrId = decodeSegment(segments[0]).trim();
+      const recipe = slugOrId ? await repo.getRecipeBySlugOrId(slugOrId) : null;
+      if (!recipe) {
+        throw new KinloomHttpError(404, 'RECIPE_NOT_FOUND', `Recipe '${slugOrId}' was not found.`);
+      }
+      assertCanDeleteRecipe(ctx, actor, recipe);
+
+      const deleted = await repo.softDeleteRecipe(recipe.id, ctx.ports.clock.nowIso(), {
+        id: actor.id,
+        name: actor.name,
+      });
+      if (!deleted) {
+        throw new KinloomHttpError(404, 'RECIPE_NOT_FOUND', `Recipe '${slugOrId}' was not found.`);
+      }
+      return new Response(null, { status: 204, headers: { 'cache-control': 'no-store' } });
+    }
 
     // DELETE /api/plugins/recipes/:slugOrId/photos/:photoId
     if (segments.length === 3 && segments[1] === 'photos') {
@@ -1108,6 +1377,12 @@ export function createRecipesServerPlugin(options: RecipesServerPluginOptions = 
         pathPrefix: RECIPES_API_PREFIX,
         minRole: 'editor',
         handle: handlePostRequest,
+      },
+      {
+        method: 'PUT',
+        pathPrefix: RECIPES_API_PREFIX,
+        minRole: 'editor',
+        handle: handlePutRequest,
       },
       {
         method: 'PATCH',

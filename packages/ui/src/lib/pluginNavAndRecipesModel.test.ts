@@ -6,17 +6,28 @@ import {
   selectVisiblePluginNavRoutes,
 } from './pluginNav.js';
 import {
+  addDraftTag,
   buildRecipesListQueryString,
+  createEmptyRecipeDraft,
+  extractRecipeApiFieldErrors,
   filterStaticRecipes,
   formatRecipeCourseLabel,
   formatRecipeDuration,
   formatRecipeIngredientLine,
   formatTotalRecipeDuration,
   groupRecipeIngredients,
+  isRecipeDraftDirty,
+  moveDraftListItem,
+  normalizeDraftTagInput,
   parseUiRecipeDetailResponse,
   parseUiRecipeListResponse,
+  parseUiRecipeMutationResponse,
   parseUiRecipesByPersonResponse,
+  parseUiRecipeVersionConflict,
+  recipeDetailToEditorDraft,
+  removeDraftTag,
   type UiRecipeDetail,
+  validateRecipeDraft,
 } from './recipesModel.js';
 
 const NO_CAPS: ArchiveCapabilities = {
@@ -268,5 +279,94 @@ describe('recipesModel pure helpers and parsers', () => {
         total: 1,
       }).total
     ).toBe(1);
+  });
+
+  it('validates recipe editor drafts, reorders rows, manages tags, and parses mutation and conflict payloads', () => {
+    const empty = createEmptyRecipeDraft();
+    expect(isRecipeDraftDirty(empty, empty)).toBe(false);
+    expect(isRecipeDraftDirty({ ...empty, title: 'Scones' }, empty)).toBe(true);
+
+    const fromDetail = recipeDetailToEditorDraft(SAMPLE_RECIPES[0]);
+    expect(fromDetail.title).toBe('Honey Biscuits');
+    expect(fromDetail.prep_minutes).toBe('15');
+    expect(fromDetail.ingredients).toHaveLength(3);
+    expect(recipeDetailToEditorDraft(SAMPLE_RECIPES[1]).ingredients).toHaveLength(1);
+
+    // Row reordering clamps out-of-bounds moves safely
+    expect(moveDraftListItem(['a', 'b', 'c'], 0, -1)).toEqual(['a', 'b', 'c']);
+    expect(moveDraftListItem(['a', 'b', 'c'], 2, 1)).toEqual(['a', 'b', 'c']);
+    expect(moveDraftListItem(['a', 'b', 'c'], 1, -1)).toEqual(['b', 'a', 'c']);
+    expect(moveDraftListItem(['a', 'b', 'c'], 1, 1)).toEqual(['a', 'c', 'b']);
+
+    // Tag normalization, deduplication, removal, and bounds
+    expect(normalizeDraftTagInput('')).toMatchObject({ ok: false });
+    expect(normalizeDraftTagInput('bad!tag')).toMatchObject({ ok: false });
+    expect(normalizeDraftTagInput('#Winter Bread')).toEqual({ ok: true, tag: 'winter bread' });
+    const added = addDraftTag(['winter'], '#Holiday');
+    expect(added.tags).toEqual(['winter', 'holiday']);
+    expect(addDraftTag(added.tags, 'holiday').tags).toEqual(['winter', 'holiday']);
+    expect(addDraftTag(added.tags, '!!!').error).toBeDefined();
+    const twenty = Array.from({ length: 20 }, (_, i) => `tag-${i}`);
+    expect(addDraftTag(twenty, 'tag-21').error).toContain('20');
+    expect(removeDraftTag(['winter', 'holiday'], 'winter')).toEqual(['holiday']);
+
+    // Draft validation rejects invalid fields and normalizes valid drafts
+    const invalid = validateRecipeDraft({
+      ...empty,
+      title: 'A',
+      slug: 'Bad Slug!',
+      prep_minutes: 'abc',
+      cook_minutes: '99999',
+      ingredients: [{ id: 'i1', quantity: '1', unit: 'cup', item: '', note: '', group: '' }],
+      steps: [{ id: 's1', instruction: '', note: 'Missing instruction' }],
+    });
+    expect(invalid.ok).toBe(false);
+    if (!invalid.ok) {
+      expect(invalid.fieldErrors.title).toBeDefined();
+      expect(invalid.fieldErrors.slug).toBeDefined();
+      expect(invalid.fieldErrors.prep_minutes).toBeDefined();
+      expect(invalid.fieldErrors.cook_minutes).toBeDefined();
+      expect(invalid.fieldErrors['ingredients.0.item']).toBeDefined();
+      expect(invalid.fieldErrors['steps.0.instruction']).toBeDefined();
+    }
+
+    const valid = validateRecipeDraft({
+      ...fromDetail,
+      slug: 'honey-biscuits',
+      prep_minutes: '15',
+      cook_minutes: '',
+      ingredients: [
+        ...fromDetail.ingredients,
+        { id: 'blank', quantity: '', unit: '', item: '', note: '', group: '' },
+      ],
+      steps: [...fromDetail.steps, { id: 'blank_s', instruction: '', note: '' }],
+    });
+    expect(valid.ok).toBe(true);
+    if (valid.ok) {
+      expect(valid.payload.prep_minutes).toBe(15);
+      expect(valid.payload.cook_minutes).toBeNull();
+      expect(valid.payload.ingredients).toHaveLength(3);
+      expect(valid.payload.steps).toHaveLength(1);
+    }
+
+    // Mutation & 409 conflict detail parsers + API field error extraction
+    expect(parseUiRecipeMutationResponse({ recipe: SAMPLE_RECIPES[0] }).recipe.id).toBe('rec_1');
+    expect(parseUiRecipeVersionConflict({ nope: true })).toBeNull();
+    expect(
+      parseUiRecipeVersionConflict({
+        expected_version: 1,
+        server_version: 2,
+        server_updated_at: '2026-11-27T12:00:00.000Z',
+        server_updated_by_name: 'Archive Steward',
+        server_recipe: SAMPLE_RECIPES[0],
+      })?.server_version
+    ).toBe(2);
+    expect(
+      extractRecipeApiFieldErrors([
+        { path: 'title', message: 'Too short' },
+        { path: 'title', message: 'Duplicate ignored' },
+      ])
+    ).toEqual({ title: 'Too short' });
+    expect(extractRecipeApiFieldErrors('not-an-array')).toEqual({});
   });
 });

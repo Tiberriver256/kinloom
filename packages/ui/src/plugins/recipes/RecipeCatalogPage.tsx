@@ -164,6 +164,7 @@ export const RecipeCatalogPage: React.FC<RecipeCatalogPageProps> = ({ initialTab
   const tagOptions = data?.facets.tags ?? [];
   const recipes = data?.recipes ?? [];
   const total = data?.total ?? 0;
+  const canCreate = Boolean(data?.permissions?.can_create && client.createRecipe);
   const hasPrevious = offset > 0;
   const hasNext = offset + recipes.length < total;
 
@@ -176,14 +177,21 @@ export const RecipeCatalogPage: React.FC<RecipeCatalogPageProps> = ({ initialTab
             <h1>{pageTitle}</h1>
             <p>{pageDescription}</p>
           </div>
-          {!loading && data && (
-            <div className={cx(recipeStyles, 'recipe-banner-meta')}>
-              <span>
-                {total} {total === 1 ? 'recipe' : 'recipes'}
-              </span>
-              {activeTab === 'favorites' && <span>Filtered: My Favorites</span>}
-            </div>
-          )}
+          <div className={cx(recipeStyles, 'recipe-banner-actions')}>
+            {!loading && data && (
+              <div className={cx(recipeStyles, 'recipe-banner-meta')}>
+                <span>
+                  {total} {total === 1 ? 'recipe' : 'recipes'}
+                </span>
+                {activeTab === 'favorites' && <span>Filtered: My Favorites</span>}
+              </div>
+            )}
+            {canCreate && (
+              <Link to={`${basePath}/new`} className={cx(recipeStyles, 'recipe-primary-btn')}>
+                + Add Recipe
+              </Link>
+            )}
+          </div>
         </ArchivalBanner>
 
         <ArchivalTabs
@@ -402,6 +410,10 @@ export const RecipeCatalogPage: React.FC<RecipeCatalogPageProps> = ({ initialTab
                 >
                   Clear filters
                 </button>
+              ) : canCreate && activeTab === 'all' ? (
+                <Link to={`${basePath}/new`} className={cx(recipeStyles, 'recipe-primary-btn')}>
+                  + Add First Recipe
+                </Link>
               ) : undefined
             }
           />

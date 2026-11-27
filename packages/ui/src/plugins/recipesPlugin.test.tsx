@@ -1391,4 +1391,773 @@ describe('ArchivalLightbox, ArchivalFileDropzone, and RecipeDetailPage photo man
     });
     container.remove();
   });
+
+  it('supports structured recipe creation, editing with side-by-side reference photos, 409 conflict recovery, unsaved guard, XSS-safe markdown preview, and soft-delete', async () => {
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    const setTextareaValue = (el: HTMLTextAreaElement, value: string): void => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')?.set;
+      setter?.call(el, value);
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+      el.dispatchEvent(new Event('change', { bubbles: true }));
+    };
+
+    const storedRecipes = new Map<string, UiRecipeDetail>(SAMPLE_RECIPES.map((r) => [r.slug, r]));
+    const createCalls: unknown[] = [];
+    const updateCalls: Array<{ slug: string; expectedVersion: number; title: string }> = [];
+    const deleteCalls: string[] = [];
+    let simulateConflictOnce = true;
+
+    const fullClient: RecipesClient = {
+      async listRecipes() {
+        const list = [...storedRecipes.values()];
+        return {
+          recipes: list,
+          total: list.length,
+          limit: 24,
+          offset: 0,
+          facets: { courses: ['bread', 'dessert'], tags: ['heirloom', 'winter'] },
+          display: { show_home_widget: true },
+          permissions: { can_create: true },
+        };
+      },
+      async getRecipe(slugOrId) {
+        const found = storedRecipes.get(slugOrId);
+        if (!found) {
+          return null;
+        }
+        return {
+          recipe: found,
+          photos: [
+            ...(SAMPLE_PHOTOS[found.id] ?? []),
+            ...(found.id === 'rec_1'
+              ? [
+                  {
+                    ...SAMPLE_PHOTOS.rec_1[0],
+                    id: 'pho_2',
+                    url: '/media/biscuits-back.jpg',
+                    caption: 'Handwritten card back',
+                    card_side: 'back' as const,
+                    sort_order: 1,
+                  },
+                ]
+              : []),
+          ],
+          viewer_has_starred: found.viewer_has_starred,
+          permissions: {
+            can_edit: true,
+            can_delete: true,
+            can_upload: true,
+            can_star: true,
+            can_comment: true,
+          },
+        };
+      },
+      async listRecipesByPerson(personId) {
+        const matched = [...storedRecipes.values()].filter((r) => r.attributed_person_id === personId);
+        return { person_id: personId, recipes: matched, total: matched.length };
+      },
+      async createRecipe(input) {
+        createCalls.push(input);
+        const created: UiRecipeDetail = {
+          ...SAMPLE_RECIPES[1],
+          id: 'rec_new_1',
+          slug: input.slug ?? 'spiced-oat-scones',
+          title: input.title,
+          summary: input.summary,
+          story_md: input.story_md,
+          ingredients: [...input.ingredients],
+          steps: [...input.steps],
+          prep_minutes: input.prep_minutes,
+          cook_minutes: input.cook_minutes,
+          servings: input.servings,
+          course: input.course,
+          tags: [...input.tags],
+          provenance_note: input.provenance_note,
+          source_era: input.source_era,
+          attributed_person_id: input.attributed_person_id,
+          attributed_person:
+            input.attributed_person_id === 'p_ada'
+              ? { id: 'p_ada', slug: 'ada-lovelace', full_name: 'Ada Lovelace' }
+              : null,
+          version: 1,
+        };
+        storedRecipes.set(created.slug, created);
+        return { recipe: created };
+      },
+      async updateRecipe(slugOrId, input) {
+        updateCalls.push({ slug: slugOrId, expectedVersion: input.expected_version, title: input.title });
+        const existing = storedRecipes.get(slugOrId) ?? SAMPLE_RECIPES[0];
+        if (simulateConflictOnce) {
+          simulateConflictOnce = false;
+          const serverRecipe: UiRecipeDetail = {
+            ...existing,
+            title: 'Server Updated Biscuits',
+            version: existing.version + 1,
+            updated_by_name: 'Archive Steward',
+            updated_at: '2026-11-27T15:30:00.000Z',
+          };
+          storedRecipes.set(slugOrId, serverRecipe);
+          const conflictErr = Object.assign(new Error('Recipe was updated by another member.'), {
+            status: 409,
+            code: 'RECIPE_VERSION_CONFLICT',
+            details: {
+              expected_version: input.expected_version,
+              server_version: serverRecipe.version,
+              server_updated_at: serverRecipe.updated_at,
+              server_updated_by_name: serverRecipe.updated_by_name,
+              server_recipe: serverRecipe,
+            },
+          });
+          throw conflictErr;
+        }
+        const updated: UiRecipeDetail = {
+          ...existing,
+          ...input,
+          ingredients: [...input.ingredients],
+          steps: [...input.steps],
+          tags: [...input.tags],
+          version: input.expected_version + 1,
+        };
+        storedRecipes.set(updated.slug, updated);
+        return { recipe: updated };
+      },
+      async deleteRecipe(slugOrId) {
+        deleteCalls.push(slugOrId);
+        storedRecipes.delete(slugOrId);
+      },
+    };
+
+    const editorPlugin = createRecipesUiPlugin({ client: fullClient });
+
+    // 1. Catalog shows "+ Add Recipe" for authorized editors
+    await act(async () => {
+      root.render(
+        <KinloomApp
+          siteConfig={SITE_CONFIG}
+          initialBundle={TEST_BUNDLE}
+          initialReadings={{ version: 1, documents: {}, event_page_map: {} }}
+          plugins={[editorPlugin]}
+          initialEntries={['/recipes']}
+          session={{
+            authenticated: true,
+            principal_kind: 'user',
+            email: 'editor@archive.example.test',
+            role: 'editor',
+          }}
+          capabilities={{
+            canEdit: true,
+            canUploadMedia: true,
+            hasRevisionHistory: true,
+            hasTalk: true,
+            canManageSite: false,
+          }}
+        />
+      );
+    });
+    await flushUi();
+    const addRecipeLink = [...container.querySelectorAll('a')].find((a) =>
+      a.textContent?.includes('Add Recipe')
+    );
+    expect(addRecipeLink).toBeDefined();
+
+    // 2. Navigate to /recipes/new, test validation, ancestor picker (living excluded!), ingredient/step reordering, XSS-safe markdown preview, and create
+    await act(async () => {
+      addRecipeLink?.click();
+    });
+    await flushUi();
+    expect(container.textContent).toContain('Add Family Recipe');
+
+    // Ancestor picker shows Ada Lovelace and NEVER shows living relative
+    expect(container.textContent).toContain('Ada Lovelace');
+    expect(container.textContent).not.toContain('living-relative');
+
+    // Submit empty form triggers inline validation error
+    const submitBtn = container.querySelector<HTMLButtonElement>('button[type="submit"]');
+    await act(async () => {
+      submitBtn?.click();
+    });
+    await flushUi();
+    expect(container.textContent).toContain('Enter a recipe title of at least 2 characters.');
+
+    // Fill title, prep/cook, pick deceased ancestor Ada Lovelace, add tag, add & reorder ingredients and steps
+    const titleInput = container.querySelector<HTMLInputElement>('input[name="title"]');
+    const prepInput = container.querySelector<HTMLInputElement>('input[name="prep_minutes"]');
+    const cookInput = container.querySelector<HTMLInputElement>('input[name="cook_minutes"]');
+    const storyInput = container.querySelector<HTMLTextAreaElement>('textarea[name="story_md"]');
+    expect(titleInput).not.toBeNull();
+    act(() => {
+      setNativeValue(titleInput!, 'Spiced Oat Scones');
+      setNativeValue(prepInput!, '15');
+      setNativeValue(cookInput!, '20');
+      setTextareaValue(
+        storyInput!,
+        'Baked for tea. [bad](javascript:alert(1)) <script>window.__xss=1</script> **Warm**'
+      );
+    });
+
+    // Switch story tab to Preview and verify XSS-safe rendering (no <script> tag or javascript: href)
+    const previewTab = [...container.querySelectorAll<HTMLButtonElement>('button[role="tab"]')].find(
+      (b) => b.textContent === 'Preview'
+    );
+    act(() => {
+      previewTab?.click();
+    });
+    expect(container.querySelector('script')).toBeNull();
+    expect(container.querySelector('a[href^="javascript:"]')).toBeNull();
+    expect(container.textContent).toContain('Warm');
+
+    // Pick deceased ancestor Ada Lovelace
+    const adaBtn = [...container.querySelectorAll<HTMLButtonElement>('button')].find((b) =>
+      b.textContent?.includes('Ada Lovelace')
+    );
+    act(() => {
+      adaBtn?.click();
+    });
+    expect(container.textContent).toContain('Clear ancestor');
+
+    // Add a tag
+    const tagInput = container.querySelector<HTMLInputElement>('input[placeholder*="holiday"]');
+    const addTagBtn = [...container.querySelectorAll<HTMLButtonElement>('button')].find(
+      (b) => b.textContent === 'Add Tag'
+    );
+    act(() => {
+      setNativeValue(tagInput!, 'Teatime');
+    });
+    act(() => {
+      addTagBtn?.click();
+    });
+    expect(container.textContent).toContain('#teatime');
+
+    // Fill first ingredient and add second ingredient, then move second up
+    const firstIngItem = container.querySelector<HTMLInputElement>('input[placeholder="rolled oats"]');
+    act(() => {
+      setNativeValue(firstIngItem!, 'oats');
+    });
+    const addIngBtn = [...container.querySelectorAll<HTMLButtonElement>('button')].find((b) =>
+      b.textContent?.includes('Add Ingredient')
+    );
+    act(() => {
+      addIngBtn?.click();
+    });
+    const allIngItems = container.querySelectorAll<HTMLInputElement>('input[placeholder="rolled oats"]');
+    expect(allIngItems).toHaveLength(2);
+    act(() => {
+      setNativeValue(allIngItems[1], 'cinnamon');
+    });
+    const moveIngUpBtn = container.querySelector<HTMLButtonElement>(
+      'button[aria-label="Move ingredient 2 up"]'
+    );
+    act(() => {
+      moveIngUpBtn?.click();
+    });
+    const reorderedIngItems = container.querySelectorAll<HTMLInputElement>(
+      'input[placeholder="rolled oats"]'
+    );
+    expect(reorderedIngItems[0].value).toBe('cinnamon');
+
+    // Fill step
+    const firstStep = container.querySelector<HTMLTextAreaElement>(
+      'textarea[placeholder*="preparation step"]'
+    );
+    act(() => {
+      setTextareaValue(firstStep!, 'Bake until golden.');
+    });
+
+    // Trigger unsaved-changes guard modal on Cancel, then click Keep Editing
+    const cancelBtn = [...container.querySelectorAll<HTMLButtonElement>('button')].find(
+      (b) => b.textContent === 'Cancel'
+    );
+    act(() => {
+      cancelBtn?.click();
+    });
+    expect(container.textContent).toContain('Discard unsaved changes?');
+    const keepEditingBtn = [...container.querySelectorAll<HTMLButtonElement>('button')].find(
+      (b) => b.textContent === 'Keep Editing'
+    );
+    act(() => {
+      keepEditingBtn?.click();
+    });
+
+    // Submit create form -> navigates to newly created recipe detail page
+    await act(async () => {
+      submitBtn?.click();
+    });
+    await flushUi();
+    expect(createCalls).toHaveLength(1);
+    expect(container.textContent).toContain('Spiced Oat Scones');
+
+    // 3. Edit an existing recipe with photos -> side-by-side photo switcher + 409 conflict recovery + save
+    await act(async () => {
+      root.unmount();
+    });
+    container.remove();
+    const container2 = document.createElement('div');
+    document.body.appendChild(container2);
+    const root2 = createRoot(container2);
+    await act(async () => {
+      root2.render(
+        <KinloomApp
+          siteConfig={SITE_CONFIG}
+          initialBundle={TEST_BUNDLE}
+          initialReadings={{ version: 1, documents: {}, event_page_map: {} }}
+          plugins={[editorPlugin]}
+          initialEntries={['/recipes/oatmeal-honey-biscuits/edit']}
+          session={{
+            authenticated: true,
+            principal_kind: 'user',
+            email: 'editor@archive.example.test',
+            role: 'editor',
+          }}
+        />
+      );
+    });
+    await flushUi();
+    expect(container2.textContent).toContain('Reference Card');
+    expect(container2.textContent).toContain('Handwritten card front');
+
+    // Switch reference photo to Card Back and open lightbox preview
+    const cardBackSwitch = [...container2.querySelectorAll<HTMLButtonElement>('button')].find((b) =>
+      b.textContent?.includes('2. Card Back')
+    );
+    act(() => {
+      cardBackSwitch?.click();
+    });
+    expect(container2.textContent).toContain('Handwritten card back');
+    const inspectBtn = [...container2.querySelectorAll<HTMLButtonElement>('button')].find((b) =>
+      b.textContent?.includes('Inspect full size')
+    );
+    act(() => {
+      inspectBtn?.click();
+    });
+    const closeLightboxBtn = [...container2.querySelectorAll<HTMLButtonElement>('button')].find(
+      (b) => b.textContent === 'Close'
+    );
+    act(() => {
+      closeLightboxBtn?.click();
+    });
+
+    // Edit title and submit -> hits simulated 409 conflict without losing edits
+    const editTitleInput = container2.querySelector<HTMLInputElement>('input[name="title"]');
+    act(() => {
+      setNativeValue(editTitleInput!, 'My Edited Honey Biscuits');
+    });
+    const saveChangesBtn = container2.querySelector<HTMLButtonElement>('button[type="submit"]');
+    await act(async () => {
+      saveChangesBtn?.click();
+    });
+    await flushUi();
+    expect(container2.textContent).toContain('Newer version saved by Archive Steward');
+    expect(editTitleInput?.value).toBe('My Edited Honey Biscuits');
+
+    // Choose "Keep My Edits & Save Over v2", then save again -> succeeds with expected_version 2!
+    const keepOverBtn = [...container2.querySelectorAll<HTMLButtonElement>('button')].find((b) =>
+      b.textContent?.includes('Keep My Edits')
+    );
+    act(() => {
+      keepOverBtn?.click();
+    });
+    await act(async () => {
+      saveChangesBtn?.click();
+    });
+    await flushUi();
+    expect(updateCalls.map((c) => c.expectedVersion)).toEqual([1, 2]);
+    expect(container2.textContent).toContain('My Edited Honey Biscuits');
+
+    // 4. Delete recipe from detail page via confirmation modal
+    const deleteRecipeBtn = [...container2.querySelectorAll<HTMLButtonElement>('button')].find(
+      (b) => b.textContent === 'Delete Recipe'
+    );
+    expect(deleteRecipeBtn).toBeDefined();
+    act(() => {
+      deleteRecipeBtn?.click();
+    });
+    expect(container2.textContent).toContain('Delete this recipe?');
+    const confirmDelRecipeBtn = [...container2.querySelectorAll<HTMLButtonElement>('button')].find(
+      (b) => b.textContent === 'Confirm Delete'
+    );
+    await act(async () => {
+      confirmDelRecipeBtn?.click();
+    });
+    await flushUi();
+    expect(deleteCalls).toEqual(['oatmeal-honey-biscuits']);
+
+    act(() => {
+      root2.unmount();
+    });
+    container2.remove();
+  });
+
+  it('hides Add, Edit, and Delete controls for viewers and blocks unauthorized direct navigation to /recipes/new and /recipes/:slug/edit', async () => {
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    const staticPlugin = createRecipesUiPlugin({
+      staticRecipes: SAMPLE_RECIPES,
+      staticPhotosByRecipeId: SAMPLE_PHOTOS,
+    });
+
+    await act(async () => {
+      root.render(
+        <KinloomApp
+          siteConfig={SITE_CONFIG}
+          initialBundle={TEST_BUNDLE}
+          initialReadings={{ version: 1, documents: {}, event_page_map: {} }}
+          plugins={[staticPlugin]}
+          initialEntries={['/recipes/oatmeal-honey-biscuits']}
+        />
+      );
+    });
+    await flushUi();
+    expect(container.textContent).not.toContain('Edit Recipe');
+    expect(container.textContent).not.toContain('Delete Recipe');
+
+    await act(async () => {
+      root.unmount();
+    });
+    container.remove();
+
+    const container2 = document.createElement('div');
+    document.body.appendChild(container2);
+    const root2 = createRoot(container2);
+    await act(async () => {
+      root2.render(
+        <KinloomApp
+          siteConfig={SITE_CONFIG}
+          initialBundle={TEST_BUNDLE}
+          initialReadings={{ version: 1, documents: {}, event_page_map: {} }}
+          plugins={[staticPlugin]}
+          initialEntries={['/recipes/new']}
+        />
+      );
+    });
+    await flushUi();
+    expect(container2.textContent).toContain('Editor sign-in required');
+
+    act(() => {
+      root2.unmount();
+    });
+    container2.remove();
+
+    const container3 = document.createElement('div');
+    document.body.appendChild(container3);
+    const root3 = createRoot(container3);
+    await act(async () => {
+      root3.render(
+        <KinloomApp
+          siteConfig={SITE_CONFIG}
+          initialBundle={TEST_BUNDLE}
+          initialReadings={{ version: 1, documents: {}, event_page_map: {} }}
+          plugins={[staticPlugin]}
+          initialEntries={['/recipes/oatmeal-honey-biscuits/edit']}
+        />
+      );
+    });
+    await flushUi();
+    expect(container3.textContent).toContain('Editing is not permitted for your account');
+
+    act(() => {
+      root3.unmount();
+    });
+    container3.remove();
+  });
+
+  it('exercises Reload Latest Version on 409, slug/400 API errors, step/ingredient row edits, tag removal, discard confirm, and missing edit 404', async () => {
+    const setTextareaValue = (el: HTMLTextAreaElement, value: string): void => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')?.set;
+      setter?.call(el, value);
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+      el.dispatchEvent(new Event('change', { bubbles: true }));
+    };
+
+    let modeToThrow: 'conflict' | 'slug' | 'validation' | 'generic' = 'conflict';
+    const editorClient: RecipesClient = {
+      async listRecipes() {
+        return {
+          recipes: [...SAMPLE_RECIPES],
+          total: SAMPLE_RECIPES.length,
+          limit: 24,
+          offset: 0,
+          facets: { courses: ['bread'], tags: ['winter'] },
+          display: { show_home_widget: true },
+          permissions: { can_create: true },
+        };
+      },
+      async getRecipe(slugOrId) {
+        if (slugOrId === 'missing-slug') {
+          return null;
+        }
+        return {
+          recipe: SAMPLE_RECIPES[0],
+          photos: [...(SAMPLE_PHOTOS.rec_1 ?? [])],
+          viewer_has_starred: true,
+          permissions: {
+            can_edit: true,
+            can_delete: true,
+            can_upload: true,
+            can_star: true,
+            can_comment: true,
+          },
+        };
+      },
+      async listRecipesByPerson() {
+        return { person_id: 'p_ada', recipes: [], total: 0 };
+      },
+      async createRecipe() {
+        if (modeToThrow === 'slug') {
+          throw Object.assign(new Error('Slug already taken.'), {
+            status: 409,
+            code: 'RECIPE_SLUG_CONFLICT',
+          });
+        }
+        if (modeToThrow === 'validation') {
+          throw Object.assign(new Error('Validation failed.'), {
+            status: 400,
+            code: 'VALIDATION_ERROR',
+            details: [{ path: 'title', message: 'Server rejected title.' }],
+          });
+        }
+        throw new Error('Network offline');
+      },
+      async updateRecipe() {
+        throw Object.assign(new Error('Version conflict.'), {
+          status: 409,
+          code: 'RECIPE_VERSION_CONFLICT',
+          details: {
+            expected_version: 1,
+            server_version: 3,
+            server_updated_at: '2026-11-27T16:00:00.000Z',
+            server_updated_by_name: 'Archive Steward',
+            server_recipe: {
+              ...SAMPLE_RECIPES[0],
+              title: 'Reloaded Server Biscuits',
+              version: 3,
+            },
+          },
+        });
+      },
+    };
+
+    const plugin = createRecipesUiPlugin({ client: editorClient });
+
+    // 1. Missing recipe on /recipes/:slug/edit renders Not Found empty state
+    const c1 = document.createElement('div');
+    document.body.appendChild(c1);
+    const r1 = createRoot(c1);
+    await act(async () => {
+      r1.render(
+        <KinloomApp
+          siteConfig={SITE_CONFIG}
+          initialBundle={TEST_BUNDLE}
+          initialReadings={{ version: 1, documents: {}, event_page_map: {} }}
+          plugins={[plugin]}
+          initialEntries={['/recipes/missing-slug/edit']}
+          session={{
+            authenticated: true,
+            principal_kind: 'user',
+            email: 'editor@archive.example.test',
+            role: 'editor',
+          }}
+        />
+      );
+    });
+    await flushUi();
+    expect(c1.textContent).toContain('Recipe not found');
+    act(() => {
+      r1.unmount();
+    });
+    c1.remove();
+
+    // 2. Edit page: field edits, blur validation, tag remove, clear ancestor, add/move/remove step & ingredient, 409 Reload Latest Version, and Discard Changes
+    const c2 = document.createElement('div');
+    document.body.appendChild(c2);
+    const r2 = createRoot(c2);
+    await act(async () => {
+      r2.render(
+        <KinloomApp
+          siteConfig={SITE_CONFIG}
+          initialBundle={TEST_BUNDLE}
+          initialReadings={{ version: 1, documents: {}, event_page_map: {} }}
+          plugins={[plugin]}
+          initialEntries={['/recipes/oatmeal-honey-biscuits/edit']}
+          session={{
+            authenticated: true,
+            principal_kind: 'user',
+            email: 'editor@archive.example.test',
+            role: 'editor',
+          }}
+        />
+      );
+    });
+    await flushUi();
+
+    const courseSelect = c2.querySelector<HTMLSelectElement>('select[name="course"]');
+    const slugInput = c2.querySelector<HTMLInputElement>('input[name="slug"]');
+    const summaryInput = c2.querySelector<HTMLTextAreaElement>('textarea[name="summary"]');
+    const servingsInput = c2.querySelector<HTMLInputElement>('input[name="servings"]');
+    const eraInput = c2.querySelector<HTMLInputElement>('input[name="source_era"]');
+    const provInput = c2.querySelector<HTMLInputElement>('input[name="provenance_note"]');
+    const tagInput = c2.querySelector<HTMLInputElement>('input[placeholder*="holiday"]');
+    const qtyInput = c2.querySelector<HTMLInputElement>('input[placeholder="2"]');
+    const unitInput = c2.querySelector<HTMLInputElement>('input[placeholder="cups"]');
+    const noteInput = c2.querySelector<HTMLInputElement>('input[placeholder="sifted"]');
+    const groupInput = c2.querySelector<HTMLInputElement>('input[placeholder="Dry / Glaze"]');
+    const stepNoteInput = c2.querySelector<HTMLInputElement>('input[placeholder*="middle rack"]');
+
+    act(() => {
+      setNativeValue(courseSelect!, 'dessert');
+      setNativeValue(slugInput!, 'oatmeal-honey-biscuits');
+      slugInput!.dispatchEvent(new FocusEvent('blur', { bubbles: true }));
+      setTextareaValue(summaryInput!, 'Updated summary line.');
+      setNativeValue(servingsInput!, '16 biscuits');
+      setNativeValue(eraInput!, 'c. 1845');
+      setNativeValue(provInput!, 'Updated ledger note');
+      setNativeValue(qtyInput!, '3');
+      setNativeValue(unitInput!, 'tbsp');
+      setNativeValue(noteInput!, 'warm');
+      setNativeValue(groupInput!, 'Topping');
+      setNativeValue(stepNoteInput!, 'Check at 15 min');
+    });
+
+    // Invalid tag error + Enter key tag add + tag remove
+    act(() => {
+      setNativeValue(tagInput!, '!!!');
+      tagInput!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    });
+    expect(c2.textContent).toContain('Tags may contain letters');
+    act(() => {
+      setNativeValue(tagInput!, 'cozy');
+      tagInput!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    });
+    expect(c2.textContent).toContain('#cozy');
+    const removeTagBtn = c2.querySelector<HTMLButtonElement>('button[aria-label="Remove #cozy"]');
+    act(() => {
+      removeTagBtn?.click();
+    });
+
+    // Clear ancestor & search deceased ancestor
+    const clearAncBtn = [...c2.querySelectorAll<HTMLButtonElement>('button')].find(
+      (b) => b.textContent === 'Clear ancestor'
+    );
+    act(() => {
+      clearAncBtn?.click();
+    });
+    const ancSearch = c2.querySelector<HTMLInputElement>('input[placeholder*="Search deceased ancestors"]');
+    act(() => {
+      setNativeValue(ancSearch!, 'Charles');
+    });
+    expect(c2.textContent).toContain('Charles Babbage');
+
+    // Move Down ingredient 1 and Remove ingredient 2; Add Step, Move Down, Move Up, Remove Step
+    act(() => {
+      c2.querySelector<HTMLButtonElement>('button[aria-label="Move ingredient 1 down"]')?.click();
+      c2.querySelector<HTMLButtonElement>('button[aria-label="Remove ingredient 2"]')?.click();
+    });
+    const addStepBtn = [...c2.querySelectorAll<HTMLButtonElement>('button')].find((b) =>
+      b.textContent?.includes('Add Step')
+    );
+    act(() => {
+      addStepBtn?.click();
+    });
+    act(() => {
+      c2.querySelector<HTMLButtonElement>('button[aria-label="Move step 1 down"]')?.click();
+      c2.querySelector<HTMLButtonElement>('button[aria-label="Move step 2 up"]')?.click();
+      c2.querySelector<HTMLButtonElement>('button[aria-label="Remove step 3"]')?.click();
+    });
+
+    // Submit -> hits 409 conflict -> click "Reload Latest Version"
+    const submitEditBtn = c2.querySelector<HTMLButtonElement>('button[type="submit"]');
+    await act(async () => {
+      submitEditBtn?.click();
+    });
+    await flushUi();
+    const reloadBtn = [...c2.querySelectorAll<HTMLButtonElement>('button')].find(
+      (b) => b.textContent === 'Reload Latest Version'
+    );
+    expect(reloadBtn).toBeDefined();
+    act(() => {
+      reloadBtn?.click();
+    });
+    expect(c2.querySelector<HTMLInputElement>('input[name="title"]')?.value).toBe('Reloaded Server Biscuits');
+
+    // Make form dirty again, open Discard modal, and confirm Discard Changes
+    act(() => {
+      setNativeValue(c2.querySelector<HTMLInputElement>('input[name="title"]')!, 'Dirty Title');
+    });
+    const cancelBtn = [...c2.querySelectorAll<HTMLButtonElement>('button')].find(
+      (b) => b.textContent === 'Cancel'
+    );
+    act(() => {
+      cancelBtn?.click();
+    });
+    const discardBtn = [...c2.querySelectorAll<HTMLButtonElement>('button')].find(
+      (b) => b.textContent === 'Discard Changes'
+    );
+    await act(async () => {
+      discardBtn?.click();
+    });
+    await flushUi();
+
+    act(() => {
+      r2.unmount();
+    });
+    c2.remove();
+
+    // 3. Create page error branches: 409 slug conflict, 400 field errors, and generic network error
+    const c3 = document.createElement('div');
+    document.body.appendChild(c3);
+    const r3 = createRoot(c3);
+    await act(async () => {
+      r3.render(
+        <KinloomApp
+          siteConfig={SITE_CONFIG}
+          initialBundle={TEST_BUNDLE}
+          initialReadings={{ version: 1, documents: {}, event_page_map: {} }}
+          plugins={[plugin]}
+          initialEntries={['/recipes/new']}
+          session={{
+            authenticated: true,
+            principal_kind: 'user',
+            email: 'editor@archive.example.test',
+            role: 'editor',
+          }}
+        />
+      );
+    });
+    await flushUi();
+
+    const newTitle = c3.querySelector<HTMLInputElement>('input[name="title"]');
+    act(() => {
+      setNativeValue(newTitle!, 'Test Error Handling Pie');
+    });
+
+    modeToThrow = 'slug';
+    await act(async () => {
+      c3.querySelector<HTMLButtonElement>('button[type="submit"]')?.click();
+    });
+    await flushUi();
+    expect(c3.textContent).toContain('Slug already taken.');
+
+    modeToThrow = 'validation';
+    await act(async () => {
+      c3.querySelector<HTMLButtonElement>('button[type="submit"]')?.click();
+    });
+    await flushUi();
+    expect(c3.textContent).toContain('Server rejected title.');
+
+    modeToThrow = 'generic';
+    await act(async () => {
+      c3.querySelector<HTMLButtonElement>('button[type="submit"]')?.click();
+    });
+    await flushUi();
+    expect(c3.textContent).toContain('Network offline');
+
+    act(() => {
+      r3.unmount();
+    });
+    c3.remove();
+  });
 });

@@ -1152,3 +1152,435 @@ describe('createRecipesServerPlugin (Issue #48 photo upload, EXIF stripping, ser
     ).toBe(404);
   });
 });
+
+describe('createRecipesServerPlugin (Issue #49 structured recipe CRUD, optimistic concurrency, RBAC, and privacy)', () => {
+  it('creates, updates via PATCH and PUT with optimistic locking, rejects stale 409 conflicts, and soft-deletes with zero email leaks', async () => {
+    const { ports, server, securityEvents, cookieForUser, cookieForInvite } = await createTestHarness();
+    const editorCookie = await cookieForUser('editor@archive.example.test', 'editor');
+    const adminCookie = await cookieForUser('admin@archive.example.test', 'admin');
+    const inviteCookie = await cookieForInvite();
+
+    // Add a second editor so we can verify owner-only delete protection
+    await ports.repository.upsertUser({
+      email: 'other-editor@archive.example.test',
+      display_name: 'Jonah Baker',
+      role: 'editor',
+      added_by: 'admin@archive.example.test',
+      added_at: ports.clock.nowIso(),
+      last_login_at: null,
+    });
+    const otherEditorCookie = await cookieForUser('other-editor@archive.example.test', 'editor');
+
+    // Catalog reports can_create accurately by role
+    const catalogEditor = (await (
+      await server.fetch(
+        new Request('http://localhost/api/plugins/recipes', { headers: { cookie: editorCookie } })
+      )
+    ).json()) as { permissions: { can_create: boolean } };
+    expect(catalogEditor.permissions.can_create).toBe(true);
+
+    const catalogInvite = (await (
+      await server.fetch(
+        new Request('http://localhost/api/plugins/recipes', { headers: { cookie: inviteCookie } })
+      )
+    ).json()) as { permissions: { can_create: boolean } };
+    expect(catalogInvite.permissions.can_create).toBe(false);
+
+    // CSRF origin mismatch is rejected before mutation
+    const csrfRes = await server.fetch(
+      new Request('http://localhost/api/plugins/recipes', {
+        method: 'POST',
+        headers: {
+          cookie: editorCookie,
+          origin: 'https://evil.example',
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({ title: 'Blocked Cross Origin Pie' }),
+      })
+    );
+    expect(csrfRes.status).toBe(403);
+
+    // Invite viewers and agent tokens cannot create recipes (human-only RBAC)
+    const inviteCreateRes = await server.fetch(
+      new Request('http://localhost/api/plugins/recipes', {
+        method: 'POST',
+        headers: {
+          cookie: inviteCookie,
+          origin: 'http://localhost',
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({ title: 'Invite Viewer Dish' }),
+      })
+    );
+    expect(inviteCreateRes.status).toBe(403);
+
+    const agentBearer = 'kl_agent_recipe_crud_test';
+    await ports.repository.createAgentToken({
+      token_id: 'tok_agent_recipe_crud',
+      token_hash: await sha256Hex(agentBearer),
+      label: 'Recipe Sync Bot',
+      scope: 'write_batch',
+      created_by: 'admin@archive.example.test',
+      created_at: ports.clock.nowIso(),
+      revoked_at: null,
+    });
+
+    const agentCreateRes = await server.fetch(
+      new Request('http://localhost/api/plugins/recipes', {
+        method: 'POST',
+        headers: {
+          authorization: `Bearer ${agentBearer}`,
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({ title: 'Bot Dish' }),
+      })
+    );
+    expect(agentCreateRes.status).toBe(403);
+    expect(
+      securityEvents.some(
+        (ev) =>
+          ev.type === 'auth.write.forbidden' && ev.reason === 'member_required' && ev.actorKind === 'agent'
+      )
+    ).toBe(true);
+
+    // Living-person attribution is rejected with 422 PRIVACY_VIOLATION
+    const livingCreateRes = await server.fetch(
+      new Request('http://localhost/api/plugins/recipes', {
+        method: 'POST',
+        headers: {
+          cookie: editorCookie,
+          origin: 'http://localhost',
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({
+          title: 'Private Living Recipe',
+          attributed_person_id: 'p_living',
+        }),
+      })
+    );
+    expect(livingCreateRes.status).toBe(422);
+    const livingBody = (await livingCreateRes.json()) as { error: { code: string } };
+    expect(livingBody.error.code).toBe('PRIVACY_VIOLATION');
+
+    // Unknown ancestor ID is rejected with 400 INVALID_ANCESTOR_REFERENCE
+    const missingAncestorRes = await server.fetch(
+      new Request('http://localhost/api/plugins/recipes', {
+        method: 'POST',
+        headers: {
+          cookie: editorCookie,
+          origin: 'http://localhost',
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({
+          title: 'Unknown Ancestor Soup',
+          attributed_person_id: 'p_nonexistent',
+        }),
+      })
+    );
+    expect(missingAncestorRes.status).toBe(400);
+    const missingAncestorBody = (await missingAncestorRes.json()) as { error: { code: string } };
+    expect(missingAncestorBody.error.code).toBe('INVALID_ANCESTOR_REFERENCE');
+
+    // Invalid payload fails Zod validation with 400 VALIDATION_ERROR
+    const invalidRes = await server.fetch(
+      new Request('http://localhost/api/plugins/recipes', {
+        method: 'POST',
+        headers: {
+          cookie: editorCookie,
+          origin: 'http://localhost',
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({ title: 'X' }),
+      })
+    );
+    expect(invalidRes.status).toBe(400);
+
+    // Editor creates structured recipe attributed to deceased ancestor
+    const createPayload = {
+      title: 'Cardamom Farmhouse Rolls',
+      summary: 'Soft winter yeast rolls.',
+      story_md: 'Baked every December.\n\n- Served warm.',
+      ingredients: [
+        { id: 'ing_1', quantity: '2', unit: 'cups', item: 'flour', note: 'sifted', group: 'Dry' },
+        { id: 'ing_2', quantity: '1', unit: 'tsp', item: 'cardamom', note: '', group: 'Spices' },
+      ],
+      steps: [
+        { id: 'stp_1', instruction: 'Bloom yeast in warm milk.', note: '110F' },
+        { id: 'stp_2', instruction: 'Bake 18 minutes at 375F.', note: '' },
+      ],
+      prep_minutes: 30,
+      cook_minutes: 18,
+      servings: '12 rolls',
+      course: 'bread',
+      tags: ['Holiday', 'Baking', 'holiday'],
+      provenance_note: 'Copied from the 1948 kitchen notebook.',
+      source_era: '1940s',
+      attributed_person_id: 'p_ada',
+    };
+    const createRes = await server.fetch(
+      new Request('http://localhost/api/plugins/recipes', {
+        method: 'POST',
+        headers: {
+          cookie: editorCookie,
+          origin: 'http://localhost',
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify(createPayload),
+      })
+    );
+    expect(createRes.status).toBe(201);
+    const createText = await createRes.text();
+    expect(createText).not.toContain('editor@archive.example.test');
+    const created = JSON.parse(createText) as {
+      recipe: {
+        id: string;
+        slug: string;
+        version: number;
+        tags: string[];
+        attributed_person: { id: string; full_name: string } | null;
+      };
+      permissions: { can_edit: boolean; can_delete: boolean };
+    };
+    expect(created.recipe.slug).toBe('cardamom-farmhouse-rolls');
+    expect(created.recipe.version).toBe(1);
+    expect(created.recipe.tags).toEqual(['holiday', 'baking']);
+    expect(created.recipe.attributed_person).toEqual({
+      id: 'p_ada',
+      slug: 'ada-lovelace',
+      full_name: 'Ada Lovelace',
+    });
+    expect(created.permissions.can_edit).toBe(true);
+    expect(created.permissions.can_delete).toBe(true);
+
+    // Duplicate explicit slug fails with 409 RECIPE_SLUG_CONFLICT
+    const dupSlugRes = await server.fetch(
+      new Request('http://localhost/api/plugins/recipes', {
+        method: 'POST',
+        headers: {
+          cookie: editorCookie,
+          origin: 'http://localhost',
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({ title: 'Another Roll', slug: 'cardamom-farmhouse-rolls' }),
+      })
+    );
+    expect(dupSlugRes.status).toBe(409);
+
+    // Create a second recipe to test slug collision on update
+    const secondRes = await server.fetch(
+      new Request('http://localhost/api/plugins/recipes', {
+        method: 'POST',
+        headers: {
+          cookie: adminCookie,
+          origin: 'http://localhost',
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({ title: 'Winter Cider', slug: 'winter-cider', course: 'beverage' }),
+      })
+    );
+    expect(secondRes.status).toBe(201);
+
+    // PATCH update with matching expected_version succeeds and bumps version to 2
+    const patchRes = await server.fetch(
+      new Request(`http://localhost/api/plugins/recipes/${created.recipe.slug}`, {
+        method: 'PATCH',
+        headers: {
+          cookie: adminCookie,
+          origin: 'http://localhost',
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({
+          ...createPayload,
+          title: 'Spiced Cardamom Farmhouse Rolls',
+          expected_version: 1,
+        }),
+      })
+    );
+    expect(patchRes.status).toBe(200);
+    const patchText = await patchRes.text();
+    expect(patchText).not.toContain('admin@archive.example.test');
+    const patched = JSON.parse(patchText) as {
+      recipe: { version: number; title: string; updated_by_name: string };
+    };
+    expect(patched.recipe.version).toBe(2);
+    expect(patched.recipe.title).toBe('Spiced Cardamom Farmhouse Rolls');
+    expect(patched.recipe.updated_by_name).toBe('Archive Steward');
+
+    // Stale PATCH with expected_version: 1 returns 409 RECIPE_VERSION_CONFLICT with current server recipe & zero emails
+    const staleRes = await server.fetch(
+      new Request(`http://localhost/api/plugins/recipes/${created.recipe.slug}`, {
+        method: 'PATCH',
+        headers: {
+          cookie: editorCookie,
+          origin: 'http://localhost',
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({
+          ...createPayload,
+          title: 'Stale Overwrite Attempt',
+          expected_version: 1,
+        }),
+      })
+    );
+    expect(staleRes.status).toBe(409);
+    const staleText = await staleRes.text();
+    expect(staleText).not.toContain('admin@archive.example.test');
+    expect(staleText).not.toContain('editor@archive.example.test');
+    const staleBody = JSON.parse(staleText) as {
+      error: {
+        code: string;
+        details: {
+          expected_version: number;
+          server_version: number;
+          server_updated_at: string;
+          server_updated_by_name: string;
+          server_recipe: { title: string; version: number };
+        };
+      };
+    };
+    expect(staleBody.error.code).toBe('RECIPE_VERSION_CONFLICT');
+    expect(staleBody.error.details.expected_version).toBe(1);
+    expect(staleBody.error.details.server_version).toBe(2);
+    expect(staleBody.error.details.server_updated_by_name).toBe('Archive Steward');
+    expect(staleBody.error.details.server_recipe.title).toBe('Spiced Cardamom Farmhouse Rolls');
+
+    // PUT alias also updates cleanly when given current expected_version: 2
+    const putRes = await server.fetch(
+      new Request(`http://localhost/api/plugins/recipes/${created.recipe.id}`, {
+        method: 'PUT',
+        headers: {
+          cookie: editorCookie,
+          origin: 'http://localhost',
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({
+          ...createPayload,
+          title: 'Spiced Cardamom Rolls (Revised)',
+          expected_version: 2,
+        }),
+      })
+    );
+    expect(putRes.status).toBe(200);
+    const putBody = (await putRes.json()) as { recipe: { version: number; title: string } };
+    expect(putBody.recipe.version).toBe(3);
+    expect(putBody.recipe.title).toBe('Spiced Cardamom Rolls (Revised)');
+
+    // PUT on unknown nested path returns 404
+    const badPutRes = await server.fetch(
+      new Request('http://localhost/api/plugins/recipes/a/b/c', {
+        method: 'PUT',
+        headers: { cookie: adminCookie, origin: 'http://localhost' },
+      })
+    );
+    expect(badPutRes.status).toBe(404);
+
+    // Slug collision on PATCH returns 409 RECIPE_SLUG_CONFLICT
+    const slugCollisionRes = await server.fetch(
+      new Request(`http://localhost/api/plugins/recipes/${created.recipe.id}`, {
+        method: 'PATCH',
+        headers: {
+          cookie: editorCookie,
+          origin: 'http://localhost',
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({
+          ...createPayload,
+          slug: 'winter-cider',
+          expected_version: 3,
+        }),
+      })
+    );
+    expect(slugCollisionRes.status).toBe(409);
+
+    // Admin-only create_edit_min_role setting blocks editor writes with 403 + security event
+    const saveSettingsRes = await server.fetch(
+      new Request(`http://localhost/api/admin/plugin-settings/${RECIPES_PLUGIN_ID}`, {
+        method: 'PUT',
+        headers: {
+          cookie: adminCookie,
+          origin: 'http://localhost',
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({
+          values: {
+            create_edit_min_role: 'admin',
+            upload_min_role: 'editor',
+            star_min_role: 'editor',
+            comment_min_role: 'editor',
+            max_photo_mb: 10,
+            max_photos_per_recipe: 12,
+            show_home_widget: true,
+          },
+        }),
+      })
+    );
+    expect(saveSettingsRes.status).toBe(200);
+
+    const editorBlockedRes = await server.fetch(
+      new Request('http://localhost/api/plugins/recipes', {
+        method: 'POST',
+        headers: {
+          cookie: editorCookie,
+          origin: 'http://localhost',
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({ title: 'Blocked While Admin Only' }),
+      })
+    );
+    expect(editorBlockedRes.status).toBe(403);
+    expect(
+      securityEvents.some((ev) => ev.type === 'auth.write.forbidden' && ev.reason === 'insufficient_role')
+    ).toBe(true);
+
+    // Non-owner editor cannot delete another member's recipe (403 + not_owner event)
+    const nonOwnerDelRes = await server.fetch(
+      new Request(`http://localhost/api/plugins/recipes/${created.recipe.slug}`, {
+        method: 'DELETE',
+        headers: { cookie: otherEditorCookie, origin: 'http://localhost' },
+      })
+    );
+    expect(nonOwnerDelRes.status).toBe(403);
+    expect(securityEvents.some((ev) => ev.type === 'auth.write.forbidden' && ev.reason === 'not_owner')).toBe(
+      true
+    );
+
+    // Agent token cannot delete recipes
+    const agentDelRes = await server.fetch(
+      new Request(`http://localhost/api/plugins/recipes/${created.recipe.slug}`, {
+        method: 'DELETE',
+        headers: { authorization: `Bearer ${agentBearer}` },
+      })
+    );
+    expect(agentDelRes.status).toBe(403);
+
+    // Original creator CAN soft-delete their own recipe
+    const ownerDelRes = await server.fetch(
+      new Request(`http://localhost/api/plugins/recipes/${created.recipe.slug}`, {
+        method: 'DELETE',
+        headers: { cookie: editorCookie, origin: 'http://localhost' },
+      })
+    );
+    expect(ownerDelRes.status).toBe(204);
+
+    // Deleted recipe returns 404 on subsequent GET and DELETE
+    expect(
+      (
+        await server.fetch(
+          new Request(`http://localhost/api/plugins/recipes/${created.recipe.slug}`, {
+            headers: { cookie: adminCookie },
+          })
+        )
+      ).status
+    ).toBe(404);
+    expect(
+      (
+        await server.fetch(
+          new Request(`http://localhost/api/plugins/recipes/${created.recipe.slug}`, {
+            method: 'DELETE',
+            headers: { cookie: adminCookie, origin: 'http://localhost' },
+          })
+        )
+      ).status
+    ).toBe(404);
+  });
+});

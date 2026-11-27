@@ -3,18 +3,22 @@ import {
   filterStaticRecipes,
   parseUiRecipeDetailResponse,
   parseUiRecipeListResponse,
+  parseUiRecipeMutationResponse,
   parseUiRecipePhotoMutationResponse,
   parseUiRecipePhotosReorderResponse,
   parseUiRecipesByPersonResponse,
   type RecipesListQueryParams,
+  type UiCreateRecipePayload,
   type UiRecipeCardSide,
   type UiRecipeDetail,
   type UiRecipeDetailResponse,
   type UiRecipeListResponse,
+  type UiRecipeMutationResponse,
   type UiRecipePhoto,
   type UiRecipePhotoMutationResponse,
   type UiRecipePhotosReorderResponse,
   type UiRecipesByPersonResponse,
+  type UiUpdateRecipePayload,
 } from '../lib/recipesModel.js';
 import { ApiClientError } from './httpWiki/httpClient.js';
 import { createHttpPluginApiClient, type PluginApiClient } from './pluginApiClient.js';
@@ -47,6 +51,16 @@ export interface RecipesClient {
     personId: string,
     options?: { readonly limit?: number; readonly signal?: AbortSignal }
   ): Promise<UiRecipesByPersonResponse | null>;
+  createRecipe?(
+    input: UiCreateRecipePayload,
+    options?: { readonly signal?: AbortSignal }
+  ): Promise<UiRecipeMutationResponse>;
+  updateRecipe?(
+    slugOrId: string,
+    input: UiUpdateRecipePayload,
+    options?: { readonly signal?: AbortSignal }
+  ): Promise<UiRecipeMutationResponse>;
+  deleteRecipe?(slugOrId: string, options?: { readonly signal?: AbortSignal }): Promise<void>;
   uploadRecipePhoto?(
     recipeSlugOrId: string,
     input: UploadRecipePhotoInput,
@@ -144,6 +158,39 @@ export function createHttpRecipesClient(options: HttpRecipesClientOptions = {}):
         }
         throw err;
       }
+    },
+
+    async createRecipe(
+      input: UiCreateRecipePayload,
+      reqOptions?: { readonly signal?: AbortSignal }
+    ): Promise<UiRecipeMutationResponse> {
+      return api.requestJson('/api/plugins/recipes', parseUiRecipeMutationResponse, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(input),
+        signal: reqOptions?.signal,
+      });
+    },
+
+    async updateRecipe(
+      slugOrId: string,
+      input: UiUpdateRecipePayload,
+      reqOptions?: { readonly signal?: AbortSignal }
+    ): Promise<UiRecipeMutationResponse> {
+      return api.requestJson(
+        `/api/plugins/recipes/${encodeURIComponent(slugOrId)}`,
+        parseUiRecipeMutationResponse,
+        {
+          method: 'PATCH',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(input),
+          signal: reqOptions?.signal,
+        }
+      );
+    },
+
+    async deleteRecipe(slugOrId: string, reqOptions?: { readonly signal?: AbortSignal }): Promise<void> {
+      await api.deleteNoContent(`/api/plugins/recipes/${encodeURIComponent(slugOrId)}`, reqOptions);
     },
 
     async uploadRecipePhoto(

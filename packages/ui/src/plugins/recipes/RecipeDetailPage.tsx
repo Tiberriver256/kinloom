@@ -1,11 +1,16 @@
 import type React from 'react';
 import { useEffect, useId, useMemo, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { ArchivalFileDropzone } from '../../components/ArchivalFileDropzone.js';
 import { ArchivalPageShell } from '../../components/ArchivalLayout.js';
 import { ArchivalLightbox, type ArchivalLightboxItem } from '../../components/ArchivalLightbox.js';
 import { ArchivalMarkdown } from '../../components/ArchivalMarkdown.js';
-import { ArchivalEmptyState, ArchivalTagPill, ArchivalToast } from '../../components/ArchivalPrimitives.js';
+import {
+  ArchivalEmptyState,
+  ArchivalModal,
+  ArchivalTagPill,
+  ArchivalToast,
+} from '../../components/ArchivalPrimitives.js';
 import { ExplorerTopBar } from '../../components/ExplorerTopBar.js';
 import { KinloomFooter } from '../../components/KinloomFooter.js';
 import { cx } from '../../lib/cx.js';
@@ -42,6 +47,7 @@ interface PhotoFeedbackBanner {
 
 export const RecipeDetailPage: React.FC = () => {
   const { slug } = useParams<{ slug: string }>();
+  const navigate = useNavigate();
   const { client, basePath } = useRecipesPlugin();
   const { bundle, getDeceasedPersonById } = useKinloomPluginContext();
 
@@ -54,6 +60,8 @@ export const RecipeDetailPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [checkedIds, setCheckedIds] = useState<ReadonlySet<string>>(() => new Set());
   const [activePhotoIndex, setActivePhotoIndex] = useState<number | null>(null);
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState<boolean>(false);
+  const [deletingRecipe, setDeletingRecipe] = useState<boolean>(false);
 
   const [uploadCaption, setUploadCaption] = useState<string>('');
   const [uploadCardSide, setUploadCardSide] = useState<UiRecipeCardSide>('front');
@@ -164,7 +172,27 @@ export const RecipeDetailPage: React.FC = () => {
     return raw;
   }, [detail, bundle, getDeceasedPersonById]);
 
+  const canEditRecipe = Boolean(detail?.permissions.can_edit && client.updateRecipe);
+  const canDeleteRecipe = Boolean(detail?.permissions.can_delete && client.deleteRecipe);
   const canManagePhotos = Boolean(detail?.permissions.can_upload && client.uploadRecipePhoto);
+
+  const handleConfirmDeleteRecipe = async (): Promise<void> => {
+    if (!detail || !client.deleteRecipe || deletingRecipe) {
+      return;
+    }
+    setDeletingRecipe(true);
+    setError(null);
+    try {
+      await client.deleteRecipe(detail.recipe.slug);
+      setConfirmDeleteOpen(false);
+      void navigate(basePath);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Unable to delete this recipe.');
+      setConfirmDeleteOpen(false);
+    } finally {
+      setDeletingRecipe(false);
+    }
+  };
   const maxPhotoMb = detail?.media_limits?.max_photo_mb ?? 10;
   const maxPhotosPerRecipe = detail?.media_limits?.max_photos_per_recipe ?? 12;
   const remainingPhotoSlots = detail ? Math.max(0, maxPhotosPerRecipe - detail.photos.length) : 0;
@@ -388,9 +416,30 @@ export const RecipeDetailPage: React.FC = () => {
             ← Back to Recipe Box
           </Link>
           {detail && (
-            <button type="button" className={cx(recipeStyles, 'recipe-action-btn')} onClick={handlePrint}>
-              Print Recipe Card
-            </button>
+            <div className={cx(recipeStyles, 'recipe-detail-actions')}>
+              {canEditRecipe && (
+                <Link
+                  to={`${basePath}/${encodeURIComponent(detail.recipe.slug)}/edit`}
+                  className={cx(recipeStyles, 'recipe-primary-btn')}
+                >
+                  Edit Recipe
+                </Link>
+              )}
+              {canDeleteRecipe && (
+                <button
+                  type="button"
+                  className={cx(recipeStyles, 'recipe-action-btn recipe-action-btn-danger')}
+                  onClick={() => {
+                    setConfirmDeleteOpen(true);
+                  }}
+                >
+                  Delete Recipe
+                </button>
+              )}
+              <button type="button" className={cx(recipeStyles, 'recipe-action-btn')} onClick={handlePrint}>
+                Print Recipe Card
+              </button>
+            </div>
           )}
         </div>
 
@@ -911,6 +960,43 @@ export const RecipeDetailPage: React.FC = () => {
             setActivePhotoIndex(nextIdx);
           }}
         />
+
+        <ArchivalModal
+          open={confirmDeleteOpen}
+          title="Delete this recipe?"
+          onClose={() => {
+            if (!deletingRecipe) {
+              setConfirmDeleteOpen(false);
+            }
+          }}
+        >
+          <p className={cx(recipeStyles, 'recipe-detail-summary')}>
+            Remove <strong>{detail?.recipe.title ?? 'this recipe'}</strong> from the Family Recipe Box? This
+            hides the recipe from the catalog.
+          </p>
+          <div className={cx(recipeStyles, 'recipe-conflict-actions')}>
+            <button
+              type="button"
+              disabled={deletingRecipe}
+              className={cx(recipeStyles, 'recipe-photo-mini-btn recipe-photo-mini-btn-danger')}
+              onClick={() => {
+                void handleConfirmDeleteRecipe();
+              }}
+            >
+              {deletingRecipe ? 'Deleting…' : 'Confirm Delete'}
+            </button>
+            <button
+              type="button"
+              disabled={deletingRecipe}
+              className={cx(recipeStyles, 'recipe-clear-btn')}
+              onClick={() => {
+                setConfirmDeleteOpen(false);
+              }}
+            >
+              Cancel
+            </button>
+          </div>
+        </ArchivalModal>
       </ArchivalPageShell>
       <div className={cx(recipeStyles, 'recipe-print-hide')}>
         <KinloomFooter />

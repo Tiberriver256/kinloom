@@ -7,6 +7,7 @@ import { DEFAULT_RECIPES_ROUTE_BASE, type UiRecipeDetail, type UiRecipePhoto } f
 import { KINLOOM_UI_VERSION } from '../version.js';
 import { RecipeCatalogPage, RecipeFavoritesPage } from './recipes/RecipeCatalogPage.js';
 import { RecipeDetailPage } from './recipes/RecipeDetailPage.js';
+import { RecipeCreatePage, RecipeEditPage } from './recipes/RecipeEditorPage.js';
 import { IndexRecipesWidget, PersonRecipesSlot } from './recipes/RecipeSlots.js';
 import { bindRecipesProvider } from './recipes/RecipesContext.js';
 import type { KinloomUiPlugin, KinloomUiPluginNavMinRole, KinloomUiPluginSlotContext } from './types.js';
@@ -121,6 +122,14 @@ export function createRecipesUiPlugin(options: RecipesUiPluginOptions = {}): Kin
       {
         path: `${basePath}/favorites`,
         component: RecipeFavoritesPage,
+      },
+      {
+        path: `${basePath}/new`,
+        component: RecipeCreatePage,
+      },
+      {
+        path: `${basePath}/:slug/edit`,
+        component: RecipeEditPage,
       },
       {
         path: `${basePath}/:slug`,

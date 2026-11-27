@@ -352,5 +352,89 @@ describe('Cloudflare Worker 0006_plugin_migrations, D1PluginDatabaseFactory, and
     );
     expect(delRes.status).toBe(204);
     expect((await r2Store.head(`plugins/recipes/rec_mf_photo/${uploaded.photo.id}.png`)).exists).toBe(false);
+
+    // End-to-end Miniflare Worker recipe create, PATCH, stale 409 conflict, PUT, and soft-DELETE over D1
+    const createRecipeRes = await recipesWorker.fetch(
+      new Request(`${CONTRACT_TEST_ORIGIN}/api/plugins/recipes`, {
+        method: 'POST',
+        headers: {
+          cookie,
+          origin: CONTRACT_TEST_ORIGIN,
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({
+          title: 'D1 Honey Oat Bread',
+          summary: 'Baked in cast iron.',
+          story_md: 'Copied from the 1934 ledger.',
+          ingredients: [{ id: 'ing_1', quantity: '3', unit: 'cups', item: 'flour', note: '', group: 'Dry' }],
+          steps: [{ id: 'stp_1', instruction: 'Knead and rise 1 hour.', note: '' }],
+          prep_minutes: 20,
+          cook_minutes: 40,
+          servings: '1 loaf',
+          course: 'bread',
+          tags: ['winter', 'heirloom'],
+          provenance_note: '1934 kitchen ledger',
+          source_era: '1930s',
+        }),
+      }),
+      env
+    );
+    expect(createRecipeRes.status).toBe(201);
+    const createdRecipe = (await createRecipeRes.json()) as {
+      recipe: { id: string; slug: string; version: number };
+    };
+    expect(createdRecipe.recipe.slug).toBe('d1-honey-oat-bread');
+    expect(createdRecipe.recipe.version).toBe(1);
+
+    const patchRecipeRes = await recipesWorker.fetch(
+      new Request(`${CONTRACT_TEST_ORIGIN}/api/plugins/recipes/${createdRecipe.recipe.slug}`, {
+        method: 'PATCH',
+        headers: {
+          cookie,
+          origin: CONTRACT_TEST_ORIGIN,
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({
+          title: 'D1 Spiced Honey Oat Bread',
+          expected_version: 1,
+        }),
+      }),
+      env
+    );
+    expect(patchRecipeRes.status).toBe(200);
+    const patchedRecipe = (await patchRecipeRes.json()) as { recipe: { version: number; title: string } };
+    expect(patchedRecipe.recipe.version).toBe(2);
+    expect(patchedRecipe.recipe.title).toBe('D1 Spiced Honey Oat Bread');
+
+    const stalePatchRes = await recipesWorker.fetch(
+      new Request(`${CONTRACT_TEST_ORIGIN}/api/plugins/recipes/${createdRecipe.recipe.slug}`, {
+        method: 'PATCH',
+        headers: {
+          cookie,
+          origin: CONTRACT_TEST_ORIGIN,
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({
+          title: 'Stale D1 Overwrite',
+          expected_version: 1,
+        }),
+      }),
+      env
+    );
+    expect(stalePatchRes.status).toBe(409);
+    const stalePayload = (await stalePatchRes.json()) as {
+      error: { code: string; details: { server_version: number } };
+    };
+    expect(stalePayload.error.code).toBe('RECIPE_VERSION_CONFLICT');
+    expect(stalePayload.error.details.server_version).toBe(2);
+
+    const deleteRecipeRes = await recipesWorker.fetch(
+      new Request(`${CONTRACT_TEST_ORIGIN}/api/plugins/recipes/${createdRecipe.recipe.slug}`, {
+        method: 'DELETE',
+        headers: { cookie, origin: CONTRACT_TEST_ORIGIN },
+      }),
+      env
+    );
+    expect(deleteRecipeRes.status).toBe(204);
   });
 });

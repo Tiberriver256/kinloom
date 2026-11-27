@@ -143,8 +143,49 @@ export const UiRecipeListResponseSchema = z.object({
       show_home_widget: z.boolean(),
     })
     .optional(),
+  permissions: z
+    .object({
+      can_create: z.boolean(),
+    })
+    .optional(),
 });
 export type UiRecipeListResponse = z.infer<typeof UiRecipeListResponseSchema>;
+
+export const UiRecipeMutationResponseSchema = z.object({
+  recipe: UiRecipeDetailSchema,
+  permissions: UiRecipePermissionsSchema.optional(),
+});
+export type UiRecipeMutationResponse = z.infer<typeof UiRecipeMutationResponseSchema>;
+
+export const UiRecipeVersionConflictDetailsSchema = z.object({
+  expected_version: z.number().int().min(1),
+  server_version: z.number().int().min(1),
+  server_updated_at: z.string().min(1),
+  server_updated_by_name: z.string(),
+  server_recipe: UiRecipeDetailSchema,
+});
+export type UiRecipeVersionConflictDetails = z.infer<typeof UiRecipeVersionConflictDetailsSchema>;
+
+export interface UiCreateRecipePayload {
+  readonly title: string;
+  readonly slug?: string;
+  readonly summary: string;
+  readonly story_md: string;
+  readonly ingredients: readonly UiRecipeIngredient[];
+  readonly steps: readonly UiRecipeStep[];
+  readonly prep_minutes: number | null;
+  readonly cook_minutes: number | null;
+  readonly servings: string;
+  readonly course: UiRecipeCourse;
+  readonly tags: readonly string[];
+  readonly provenance_note: string;
+  readonly source_era: string;
+  readonly attributed_person_id: string | null;
+}
+
+export interface UiUpdateRecipePayload extends UiCreateRecipePayload {
+  readonly expected_version: number;
+}
 
 export const UiRecipeMediaLimitsSchema = z.object({
   max_photo_mb: z.number().int().min(1).max(25),
@@ -198,6 +239,15 @@ export function parseUiRecipePhotosReorderResponse(raw: unknown): UiRecipePhotos
 
 export function parseUiRecipesByPersonResponse(raw: unknown): UiRecipesByPersonResponse {
   return UiRecipesByPersonResponseSchema.parse(raw);
+}
+
+export function parseUiRecipeMutationResponse(raw: unknown): UiRecipeMutationResponse {
+  return UiRecipeMutationResponseSchema.parse(raw);
+}
+
+export function parseUiRecipeVersionConflict(details: unknown): UiRecipeVersionConflictDetails | null {
+  const parsed = UiRecipeVersionConflictDetailsSchema.safeParse(details);
+  return parsed.success ? parsed.data : null;
 }
 
 export const DEFAULT_RECIPES_ROUTE_BASE = '/recipes';
@@ -391,4 +441,372 @@ export function filterStaticRecipes(
     facets,
     display: { show_home_widget: showHomeWidget },
   };
+}
+
+export interface RecipeEditorIngredientDraft {
+  readonly id: string;
+  readonly quantity: string;
+  readonly unit: string;
+  readonly item: string;
+  readonly note: string;
+  readonly group: string;
+}
+
+export interface RecipeEditorStepDraft {
+  readonly id: string;
+  readonly instruction: string;
+  readonly note: string;
+}
+
+export interface RecipeEditorDraft {
+  readonly title: string;
+  readonly slug: string;
+  readonly summary: string;
+  readonly story_md: string;
+  readonly ingredients: readonly RecipeEditorIngredientDraft[];
+  readonly steps: readonly RecipeEditorStepDraft[];
+  readonly prep_minutes: string;
+  readonly cook_minutes: string;
+  readonly servings: string;
+  readonly course: UiRecipeCourse;
+  readonly tags: readonly string[];
+  readonly provenance_note: string;
+  readonly source_era: string;
+  readonly attributed_person_id: string | null;
+}
+
+export type ValidateRecipeDraftResult =
+  | {
+      readonly ok: true;
+      readonly payload: UiCreateRecipePayload;
+    }
+  | {
+      readonly ok: false;
+      readonly fieldErrors: Readonly<Record<string, string>>;
+      readonly summary: string;
+    };
+
+const RECIPE_SLUG_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+const RECIPE_TAG_RE = /^[a-z0-9][a-z0-9 -]*$/i;
+
+export function createEmptyIngredientDraft(id: string): RecipeEditorIngredientDraft {
+  return { id, quantity: '', unit: '', item: '', note: '', group: '' };
+}
+
+export function createEmptyStepDraft(id: string): RecipeEditorStepDraft {
+  return { id, instruction: '', note: '' };
+}
+
+export function createEmptyRecipeDraft(): RecipeEditorDraft {
+  return {
+    title: '',
+    slug: '',
+    summary: '',
+    story_md: '',
+    ingredients: [createEmptyIngredientDraft('ing_1')],
+    steps: [createEmptyStepDraft('stp_1')],
+    prep_minutes: '',
+    cook_minutes: '',
+    servings: '',
+    course: 'other',
+    tags: [],
+    provenance_note: '',
+    source_era: '',
+    attributed_person_id: null,
+  };
+}
+
+export function recipeDetailToEditorDraft(recipe: UiRecipeDetail): RecipeEditorDraft {
+  return {
+    title: recipe.title,
+    slug: recipe.slug,
+    summary: recipe.summary,
+    story_md: recipe.story_md,
+    ingredients:
+      recipe.ingredients.length > 0
+        ? recipe.ingredients.map((ing) => ({
+            id: ing.id,
+            quantity: ing.quantity,
+            unit: ing.unit,
+            item: ing.item,
+            note: ing.note,
+            group: ing.group,
+          }))
+        : [createEmptyIngredientDraft('ing_1')],
+    steps:
+      recipe.steps.length > 0
+        ? recipe.steps.map((step) => ({
+            id: step.id,
+            instruction: step.instruction,
+            note: step.note,
+          }))
+        : [createEmptyStepDraft('stp_1')],
+    prep_minutes: recipe.prep_minutes === null ? '' : String(recipe.prep_minutes),
+    cook_minutes: recipe.cook_minutes === null ? '' : String(recipe.cook_minutes),
+    servings: recipe.servings,
+    course: recipe.course,
+    tags: [...recipe.tags],
+    provenance_note: recipe.provenance_note,
+    source_era: recipe.source_era,
+    attributed_person_id: recipe.attributed_person_id,
+  };
+}
+
+export function isRecipeDraftDirty(current: RecipeEditorDraft, baseline: RecipeEditorDraft): boolean {
+  return JSON.stringify(current) !== JSON.stringify(baseline);
+}
+
+export function moveDraftListItem<T>(items: readonly T[], index: number, delta: -1 | 1): T[] {
+  const nextIndex = index + delta;
+  if (index < 0 || index >= items.length || nextIndex < 0 || nextIndex >= items.length) {
+    return [...items];
+  }
+  const copy = [...items];
+  const [moved] = copy.splice(index, 1);
+  if (moved === undefined) {
+    return copy;
+  }
+  copy.splice(nextIndex, 0, moved);
+  return copy;
+}
+
+export function normalizeDraftTagInput(raw: string): {
+  readonly ok: boolean;
+  readonly tag?: string;
+  readonly error?: string;
+} {
+  const cleaned = raw.trim().replace(/^#+/, '').trim().toLowerCase();
+  if (!cleaned) {
+    return { ok: false, error: 'Enter a tag before adding.' };
+  }
+  if (cleaned.length > 40) {
+    return { ok: false, error: 'Tags must be 40 characters or fewer.' };
+  }
+  if (!RECIPE_TAG_RE.test(cleaned)) {
+    return { ok: false, error: 'Tags may contain letters, numbers, spaces, and hyphens.' };
+  }
+  return { ok: true, tag: cleaned };
+}
+
+export function addDraftTag(
+  tags: readonly string[],
+  raw: string
+): { readonly tags: readonly string[]; readonly error?: string } {
+  const parsed = normalizeDraftTagInput(raw);
+  if (!parsed.ok || !parsed.tag) {
+    return { tags, error: parsed.error };
+  }
+  if (tags.includes(parsed.tag)) {
+    return { tags };
+  }
+  if (tags.length >= 20) {
+    return { tags, error: 'Recipes can have at most 20 tags.' };
+  }
+  return { tags: [...tags, parsed.tag] };
+}
+
+export function removeDraftTag(tags: readonly string[], tagToRemove: string): string[] {
+  return tags.filter((t) => t !== tagToRemove);
+}
+
+function parseOptionalDurationField(
+  raw: string,
+  label: string
+): { readonly ok: true; readonly value: number | null } | { readonly ok: false; readonly error: string } {
+  const trimmed = raw.trim();
+  if (trimmed === '') {
+    return { ok: true, value: null };
+  }
+  if (!/^\d+$/.test(trimmed)) {
+    return { ok: false, error: `${label} must be a whole number of minutes.` };
+  }
+  const parsed = Number(trimmed);
+  if (!Number.isSafeInteger(parsed) || parsed < 0 || parsed > 10080) {
+    return { ok: false, error: `${label} must be between 0 and 10080 minutes.` };
+  }
+  return { ok: true, value: parsed };
+}
+
+export function validateRecipeDraft(draft: RecipeEditorDraft): ValidateRecipeDraftResult {
+  const fieldErrors: Record<string, string> = {};
+
+  const title = draft.title.trim();
+  if (title.length < 2) {
+    fieldErrors.title = 'Enter a recipe title of at least 2 characters.';
+  } else if (title.length > 140) {
+    fieldErrors.title = 'Recipe title must be 140 characters or fewer.';
+  }
+
+  const slug = draft.slug.trim();
+  if (slug.length > 0) {
+    if (slug.length < 2 || slug.length > 96 || !RECIPE_SLUG_RE.test(slug)) {
+      fieldErrors.slug =
+        'Use 2 to 96 lowercase letters, numbers, and single hyphens (for example honey-biscuits).';
+    }
+  }
+
+  const summary = draft.summary.trim();
+  if (summary.length > 400) {
+    fieldErrors.summary = 'Summary must be 400 characters or fewer.';
+  }
+
+  const storyMd = draft.story_md.trim();
+  if (storyMd.length > 16000) {
+    fieldErrors.story_md = 'Family story must be 16,000 characters or fewer.';
+  }
+
+  const prepParsed = parseOptionalDurationField(draft.prep_minutes, 'Prep time');
+  if (!prepParsed.ok) {
+    fieldErrors.prep_minutes = prepParsed.error;
+  }
+
+  const cookParsed = parseOptionalDurationField(draft.cook_minutes, 'Cook time');
+  if (!cookParsed.ok) {
+    fieldErrors.cook_minutes = cookParsed.error;
+  }
+
+  const servings = draft.servings.trim();
+  if (servings.length > 60) {
+    fieldErrors.servings = 'Servings must be 60 characters or fewer.';
+  }
+
+  const provenanceNote = draft.provenance_note.trim();
+  if (provenanceNote.length > 400) {
+    fieldErrors.provenance_note = 'Provenance note must be 400 characters or fewer.';
+  }
+
+  const sourceEra = draft.source_era.trim();
+  if (sourceEra.length > 60) {
+    fieldErrors.source_era = 'Source era must be 60 characters or fewer.';
+  }
+
+  const cleanedIngredients: UiRecipeIngredient[] = [];
+  for (let i = 0; i < draft.ingredients.length; i += 1) {
+    const row = draft.ingredients[i];
+    const quantity = row.quantity.trim();
+    const unit = row.unit.trim();
+    const item = row.item.trim();
+    const note = row.note.trim();
+    const group = row.group.trim();
+    const hasAnyValue = Boolean(quantity || unit || item || note || group);
+    if (!hasAnyValue) {
+      continue;
+    }
+    if (!item) {
+      fieldErrors[`ingredients.${i}.item`] = `Enter an ingredient name for row ${i + 1}.`;
+      continue;
+    }
+    if (item.length > 160) {
+      fieldErrors[`ingredients.${i}.item`] = `Ingredient ${i + 1} must be 160 characters or fewer.`;
+      continue;
+    }
+    cleanedIngredients.push({
+      id: row.id.trim().slice(0, 32) || `ing_${i + 1}`,
+      quantity: quantity.slice(0, 40),
+      unit: unit.slice(0, 40),
+      item,
+      note: note.slice(0, 160),
+      group: group.slice(0, 80),
+    });
+  }
+  if (cleanedIngredients.length > 100) {
+    fieldErrors.ingredients = 'Recipes may include at most 100 ingredients.';
+  }
+
+  const cleanedSteps: UiRecipeStep[] = [];
+  for (let i = 0; i < draft.steps.length; i += 1) {
+    const row = draft.steps[i];
+    const instruction = row.instruction.trim();
+    const note = row.note.trim();
+    if (!instruction && !note) {
+      continue;
+    }
+    if (!instruction) {
+      fieldErrors[`steps.${i}.instruction`] = `Enter directions for step ${i + 1}.`;
+      continue;
+    }
+    if (instruction.length > 1200) {
+      fieldErrors[`steps.${i}.instruction`] = `Step ${i + 1} must be 1,200 characters or fewer.`;
+      continue;
+    }
+    cleanedSteps.push({
+      id: row.id.trim().slice(0, 32) || `stp_${i + 1}`,
+      instruction,
+      note: note.slice(0, 300),
+    });
+  }
+  if (cleanedSteps.length > 60) {
+    fieldErrors.steps = 'Recipes may include at most 60 preparation steps.';
+  }
+
+  const normalizedTags: string[] = [];
+  const seenTags = new Set<string>();
+  for (const rawTag of draft.tags) {
+    const parsedTag = normalizeDraftTagInput(rawTag);
+    if (!parsedTag.ok || !parsedTag.tag) {
+      fieldErrors.tags = parsedTag.error ?? 'Invalid tag format.';
+      break;
+    }
+    if (!seenTags.has(parsedTag.tag)) {
+      seenTags.add(parsedTag.tag);
+      normalizedTags.push(parsedTag.tag);
+    }
+  }
+  if (normalizedTags.length > 20) {
+    fieldErrors.tags = 'Recipes can have at most 20 tags.';
+  }
+
+  const errorKeys = Object.keys(fieldErrors);
+  if (errorKeys.length > 0 || !prepParsed.ok || !cookParsed.ok) {
+    const count = errorKeys.length;
+    return {
+      ok: false,
+      fieldErrors,
+      summary:
+        count === 1
+          ? (fieldErrors[errorKeys[0]] ?? 'Review the highlighted field before saving.')
+          : `Fix ${count} highlighted fields before saving.`,
+    };
+  }
+
+  return {
+    ok: true,
+    payload: {
+      title,
+      ...(slug ? { slug } : {}),
+      summary,
+      story_md: storyMd,
+      ingredients: cleanedIngredients,
+      steps: cleanedSteps,
+      prep_minutes: prepParsed.value,
+      cook_minutes: cookParsed.value,
+      servings,
+      course: draft.course,
+      tags: normalizedTags,
+      provenance_note: provenanceNote,
+      source_era: sourceEra,
+      attributed_person_id: draft.attributed_person_id?.trim() || null,
+    },
+  };
+}
+
+const ApiFieldErrorListSchema = z.array(
+  z.object({
+    path: z.string(),
+    message: z.string(),
+  })
+);
+
+export function extractRecipeApiFieldErrors(details: unknown): Readonly<Record<string, string>> {
+  const parsed = ApiFieldErrorListSchema.safeParse(details);
+  if (!parsed.success) {
+    return {};
+  }
+  const out: Record<string, string> = {};
+  for (const item of parsed.data) {
+    if (item.path && !out[item.path]) {
+      out[item.path] = item.message;
+    }
+  }
+  return out;
 }

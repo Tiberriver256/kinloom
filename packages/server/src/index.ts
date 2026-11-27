@@ -478,6 +478,7 @@ export {
   UpdateRecipePhotoInputSchema,
 } from './plugins/recipes/schemas.js';
 export {
+  canCreateOrEditRecipe,
   computeRecipePermissions,
   createRecipesServerPlugin,
   DEFAULT_RECIPES_RUNTIME_SETTINGS,
