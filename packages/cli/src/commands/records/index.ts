@@ -1,4 +1,5 @@
 export {
+  buildTelemetrySubcmd,
   type RunRecordCommandOptions,
   type RunRecordCommandResult,
   runRecordCommand,
@@ -6,15 +7,12 @@ export {
 export {
   classifyRecordCommandIntent,
   formatRecordCommandsHelp,
-  type ParsedSkillDocument,
-  parseSkillDocument,
   type RecordCommandIntent,
   renderRecordCommandHelp,
-  rewriteSkillCommandExamples,
 } from './help.js';
 export {
-  type AssetScriptCommandSpec,
   type BaseRecordCommandSpec,
+  type GuideOnlyCommandSpec,
   isRecordCommand,
   type NativeRecordCommandSpec,
   RECORD_COMMAND_ALIASES,
@@ -24,21 +22,5 @@ export {
   type RecordCommandCategoryInfo,
   type RecordCommandSpec,
   resolveRecordCommand,
-  type SkillGuideCommandSpec,
-  type SkillScriptCommandSpec,
 } from './registry.js';
-export {
-  type ResolveRootsOptions,
-  resolveRecordGuidePath,
-  resolveRecordScriptPath,
-} from './resolve.js';
-
-export {
-  buildTelemetrySubcmd,
-  isUvOfflineCacheMiss,
-  type RecordSpawnFn,
-  resolveScriptInvocation,
-  type ScriptInvocation,
-} from './runner.js';
-
 export * from './runtime/index.js';

@@ -56,7 +56,7 @@ Kinloom separates the React explorer (`<KinloomApp />`) from storage and hosting
 
 ## Architecture and packages
 
-Kinloom ships six npm workspaces, a public-domain demo app, and 19 standalone research skills:
+Kinloom ships six npm workspaces and a public-domain demo app:
 
 | Package | Role | Key capabilities |
 | --- | --- | --- |
@@ -65,7 +65,7 @@ Kinloom ships six npm workspaces, a public-domain demo app, and 19 standalone re
 | `@kinloom/server` | Portable backend | Zero-Cloudflare Web-Fetch HTTP router, auth/invite/magic-link services, optimistic concurrency (`409 Conflict`), append-only revision ledger, HTTP `206 Partial Content` byte-range media streaming, `KinloomServerPlugin`, and `InMemory` test adapters. |
 | `@kinloom/worker` | Cloudflare runtime | Thin adapter binding `@kinloom/server` to Cloudflare Workers, D1 SQLite migrations, R2 content-addressed media storage, and R2 incremental bundle caching. |
 | `@kinloom/ui` | React 19 explorer & wiki | White-labeled People, Places, Time, Tree, Map, Kinship, and Evidence views; inline editors with `Cited` and `Family memory` badges; `409 Conflict` merge dialog; visual diffs; one-click Revert and Batch Revert; Talk threads; Media Uploader; HTML5 `<video>`/`<audio>` player; and `KinloomUiPlugin`. |
-| `@kinloom/cli` | Operator & agent CLI | `kinloom init`, `kinloom seed`, `kinloom slice-gedcom`, `kinloom submit-batch`, and `kinloom export-yaml` for operators, AI research agents, and scheduled Git backups. |
+| `@kinloom/cli` | Operator & agent CLI | Pure-TypeScript CLI for archive lifecycle (`init`, `slice-gedcom`, `seed`, `submit-batch`, `export-yaml`, `sync`, `migrate`), archive operations (`context`, `integrate`, `audit`, `verify`, `pronounce`), 23 built-in archival, scan-prep, OCR, and narrative-audio commands, and 26 embedded workflow guides (`kinloom guide`). |
 
 ## Typed plugin seam and rich media
 
@@ -75,11 +75,15 @@ Private sites extend Kinloom without forking core packages:
 - **`KinloomServerPlugin` (`@kinloom/server`):** Mount authenticated custom API routes that inherit session, RBAC, and CSRF enforcement, or subscribe to `onRevisionCommitted` hooks.
 - **Byte-range video and oral histories:** `MediaService` validates and stores images, PDFs, MP4/WebM videos, and audio oral histories under content-addressed SHA-256 keys, streaming `GET /media/:key` with HTTP `206 Partial Content` and `Content-Range` headers for scrubbable `<video>` and `<audio>` playback.
 
-## Bundled genealogy research skills
+## Built-in genealogy research CLI and guides
 
-The `skills/` directory bundles 20 standalone `uv`-based archival research CLIs for both human researchers and AI agents:
+`@kinloom/cli` ships 23 pure-TypeScript archival, scan-prep, OCR, and narrative-audio commands plus 26 embedded workflow guides (`kinloom guide`), with no Python or external package manager required:
 
-`acpl-persi`, `archive-org`, `blm-glo`, `california-archives`, `chronicling-america`, `cyndis-list`, `findagrave`, `hathitrust`, `kentucky-archives`, `library-of-michigan`, `missouri-archives`, `nara-catalog-search`, `narrative-audio`, `new-jersey-archives`, `openarchieven`, `texas-archives`, `uk-archives`, `usgs-gnis`, `virginia-archives`, and `wikitree`.
+- **Federal and general archives:** `nara`, `archive-org` (alias `ia`), `chronam`, `hathi`, `findagrave`, `gnis`, `wikitree`, `persi`
+- **State archives:** `ca-archives`, `ky-archives`, `michiganology`, `mn-archives`, `mo-archives`, `nj-archives`, `texas-archives`, `va-archives`
+- **International archives:** `fi-archives`, `openarchieven`, `se-archives`, `uk-archives`
+- **Media, scan prep, and OCR:** `prep-scan`, `ocr`, `narrative-audio`
+- **Embedded research guides:** `kinloom guide` (including `blm-glo`, `cyndis-list`, `pronounce`, and `narrative-audio/script-rules`)
 
 Agents submit structured multi-entity discoveries through `POST /api/batches` with scoped `write_batch` bearer tokens. Every agent wave appears in `/changes` with a `Research agent` badge and supports one-click reverse-order Batch Revert.
 

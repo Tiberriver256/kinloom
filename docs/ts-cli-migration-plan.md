@@ -2,6 +2,7 @@
 
 **Date:** 2026-11-26  
 **Baseline commit:** `f856dc6`  
+**Status:** Complete (Waves 55B, 56A, 56B, and 57 / Issues #12–#15 landed on `main`; 0 `.py` files remain)  
 **Target package:** `@kinloom/cli` (`packages/cli`)  
 **Goal:** Migrate every archival research CLI, scan-prep tool, OCR wrapper, narrative-audio tool, and research guide into native TypeScript inside `@kinloom/cli`, then delete `skills/`, `packages/cli/assets/*.py`, `packages/cli/scripts/bundle-skills.mjs`, the `uv`/`python3` runner bridge, and `astral-sh/setup-uv` from CI.
 

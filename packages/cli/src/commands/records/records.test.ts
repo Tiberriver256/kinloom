@@ -7,8 +7,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it } from 'vitest';
 import { runCli } from '../../cli.js';
-import { EMBEDDED_GUIDES } from '../../guides/index.js';
-import { CORE_CLI_COMMANDS } from '../../plugins.js';
+import { EMBEDDED_GUIDES, resolveEmbeddedGuide } from '../../guides/index.js';
 import type { OpsIo, TelemetryEvent } from '../ops/telemetry.js';
 import {
   buildTelemetrySubcmd,
@@ -16,23 +15,18 @@ import {
   createSyntheticPng,
   formatRecordCommandsHelp,
   isRecordCommand,
-  isUvOfflineCacheMiss,
-  parseSkillDocument,
   RECORD_COMMAND_ALIASES,
   RECORD_COMMAND_SPECS,
-  type RecordSpawnFn,
   renderRecordCommandHelp,
   resolveRecordCommand,
-  resolveRecordGuidePath,
-  rewriteSkillCommandExamples,
   runRecordCommand,
 } from './index.js';
 
 const THIS_DIR = path.dirname(fileURLToPath(import.meta.url));
 const CLI_PKG_ROOT = path.resolve(THIS_DIR, '..', '..', '..');
 const REPO_ROOT = path.resolve(CLI_PKG_ROOT, '..', '..');
-const SKILLS_ROOT = path.join(REPO_ROOT, 'skills');
-const BUNDLE_SCRIPT = path.join(CLI_PKG_ROOT, 'scripts', 'bundle-skills.mjs');
+const COPY_MIGRATIONS_SCRIPT = path.join(CLI_PKG_ROOT, 'scripts', 'copy-migrations.mjs');
+const WORKER_MIGRATIONS_DIR = path.join(REPO_ROOT, 'packages', 'worker', 'migrations');
 
 const tempDirs: string[] = [];
 
@@ -55,10 +49,6 @@ function createCaptureIo(): { io: OpsIo; stdout: string[]; stderr: string[] } {
   };
 }
 
-const forbidSpawn: RecordSpawnFn = () => {
-  throw new Error('Native TypeScript record commands must not spawn legacy uv/python3 subprocesses');
-};
-
 afterEach(async () => {
   delete process.env.KINLOOM_TELEMETRY_FILE;
   delete process.env.KINLOOM_TELEMETRY_PARENT;
@@ -72,34 +62,15 @@ afterEach(async () => {
 });
 
 describe('record command registry and discovery', () => {
-  it('registers all 23 native TypeScript commands plus 2 embedded guide commands with zero legacy scripts', () => {
-    const skillDirsOnDisk = fs
-      .readdirSync(SKILLS_ROOT, { withFileTypes: true })
-      .filter((entry) => entry.isDirectory())
-      .map((entry) => entry.name)
-      .sort();
-
-    const recordSkillDirsOnDisk = skillDirsOnDisk.filter((dir) => !CORE_CLI_COMMANDS.has(dir));
-
-    const registeredSkillDirs = RECORD_COMMAND_SPECS.flatMap((spec) => {
-      if (spec.kind === 'skill-guide' || spec.kind === 'skill-script') {
-        return [spec.skillDir];
-      }
-      if (spec.kind === 'native' && spec.skillDir) {
-        return [spec.skillDir];
-      }
-      return [];
-    }).sort();
-
+  it('registers all 23 native TypeScript commands plus 2 embedded guide-only commands with zero legacy scripts', () => {
     const nativeCommands = RECORD_COMMAND_SPECS.filter((spec) => spec.kind === 'native')
       .map((spec) => spec.command)
       .sort();
 
-    const legacyCommands = RECORD_COMMAND_SPECS.filter(
-      (spec) => spec.kind === 'skill-script' || spec.kind === 'asset-script'
-    );
+    const guideOnlyCommands = RECORD_COMMAND_SPECS.filter((spec) => spec.kind === 'guide-only')
+      .map((spec) => spec.command)
+      .sort();
 
-    expect(legacyCommands).toEqual([]);
     expect(nativeCommands).toEqual([
       'archive-org',
       'ca-archives',
@@ -125,16 +96,14 @@ describe('record command registry and discovery', () => {
       'va-archives',
       'wikitree',
     ]);
-    expect(skillDirsOnDisk).toHaveLength(24);
-    expect(skillDirsOnDisk).toContain('pronounce');
-    expect(recordSkillDirsOnDisk).toHaveLength(23);
-    expect(registeredSkillDirs).toEqual(recordSkillDirsOnDisk);
+    expect(guideOnlyCommands).toEqual(['blm-glo', 'cyndis-list']);
     expect(RECORD_COMMAND_SPECS).toHaveLength(25);
     expect(EMBEDDED_GUIDES).toHaveLength(26);
 
     for (const spec of RECORD_COMMAND_SPECS) {
-      const guidePath = resolveRecordGuidePath(spec);
-      expect(fs.statSync(guidePath).isFile()).toBe(true);
+      const guide = resolveEmbeddedGuide(spec.command);
+      expect(guide, `missing embedded guide for '${spec.command}'`).toBeDefined();
+      expect(guide?.content.length).toBeGreaterThan(0);
     }
   });
 
@@ -154,57 +123,7 @@ describe('record command registry and discovery', () => {
   });
 });
 
-describe('embedded guides, frontmatter parsing, invocation rewriting, and help rendering', () => {
-  it('strips YAML frontmatter and extracts metadata fields', () => {
-    const sample = `---
-name: sample-skill
-description: Search sample records cleanly.
----
-
-# Sample Heading
-
-Body text here.`;
-    const parsed = parseSkillDocument(sample);
-    expect(parsed.frontmatter).toEqual({
-      name: 'sample-skill',
-      description: 'Search sample records cleanly.',
-    });
-    expect(parsed.body).toBe('# Sample Heading\n\nBody text here.');
-  });
-
-  it('rewrites legacy script paths into copy-paste kinloom commands', () => {
-    const ukSpec = resolveRecordCommand('uk-archives')!;
-    const ukSample = [
-      'uv run --script skills/uk-archives/scripts/uk-archives discovery search Lincoln',
-      'skills/uk-archives/scripts/uk-archives url --freereg',
-      './scripts/uk-archives freereg search --surname Lincoln',
-      '## Bundled CLI (`scripts/uk-archives`)',
-    ].join('\n');
-    expect(rewriteSkillCommandExamples(ukSample, ukSpec)).toBe(
-      [
-        'kinloom uk-archives discovery search Lincoln',
-        'kinloom uk-archives url --freereg',
-        'kinloom uk-archives freereg search --surname Lincoln',
-        '## Bundled CLI (`kinloom uk-archives`)',
-      ].join('\n')
-    );
-
-    const audioSpec = resolveRecordCommand('narrative-audio')!;
-    expect(rewriteSkillCommandExamples('CLI=skills/narrative-audio/scripts/narrative-audio', audioSpec)).toBe(
-      'CLI="kinloom narrative-audio"'
-    );
-
-    const prepSpec = resolveRecordCommand('prep-scan')!;
-    expect(
-      rewriteSkillCommandExamples('python3 scripts/prep-scan.py preview a.jpg --out-dir out', prepSpec)
-    ).toBe('kinloom prep-scan preview a.jpg --out-dir out');
-
-    const ocrSpec = resolveRecordCommand('ocr')!;
-    expect(
-      rewriteSkillCommandExamples('python3 scripts/cached-ocr.py scan.jpg --mode cursive', ocrSpec)
-    ).toBe('kinloom ocr scan.jpg --mode cursive');
-  });
-
+describe('embedded guides and help rendering', () => {
   it('renders clean embedded help for every registered command with frontmatter stripped', () => {
     for (const spec of RECORD_COMMAND_SPECS) {
       const rendered = renderRecordCommandHelp(spec);
@@ -302,7 +221,6 @@ describe('help vs subcommand routing, native dispatch, and telemetry', () => {
       const { io, stdout, stderr } = createCaptureIo();
       const result = await runRecordCommand(cmd, [], {
         io,
-        spawnImpl: forbidSpawn,
         telemetryFilePath: telemetryFile,
       });
       expect(result.exitCode).toBe(0);
@@ -347,7 +265,6 @@ describe('help vs subcommand routing, native dispatch, and telemetry', () => {
       const { io, stdout, stderr } = createCaptureIo();
       const result = await runRecordCommand(item.cmd, ['--script-help'], {
         io,
-        spawnImpl: forbidSpawn,
         telemetryFilePath: telemetryFile,
       });
       expect(result.mode, item.cmd).toBe('native');
@@ -388,7 +305,6 @@ describe('help vs subcommand routing, native dispatch, and telemetry', () => {
       [secretPath, '--mode', 'cursive', '--cache-dir', cacheDir, '--json'],
       {
         io: createCaptureIo().io,
-        spawnImpl: forbidSpawn,
         telemetryFilePath: telemetryFile,
       }
     );
@@ -399,7 +315,6 @@ describe('help vs subcommand routing, native dispatch, and telemetry', () => {
       [secretPath, '--mode=printed', '--cache-dir', cacheDir],
       {
         io: createCaptureIo().io,
-        spawnImpl: forbidSpawn,
         telemetryFilePath: telemetryFile,
       }
     );
@@ -407,14 +322,12 @@ describe('help vs subcommand routing, native dispatch, and telemetry', () => {
 
     const defaultModeRes = await runRecordCommand('ocr', [secretPath, '--cache-dir', cacheDir], {
       io: createCaptureIo().io,
-      spawnImpl: forbidSpawn,
       telemetryFilePath: telemetryFile,
     });
     expect(defaultModeRes.exitCode).toBe(0);
 
     await runRecordCommand('ocr', ['--script-help'], {
       io: createCaptureIo().io,
-      spawnImpl: forbidSpawn,
       telemetryFilePath: telemetryFile,
     });
 
@@ -422,7 +335,6 @@ describe('help vs subcommand routing, native dispatch, and telemetry', () => {
     process.env.KINLOOM_TELEMETRY_PARENT = '1';
     await runRecordCommand('ocr', ['--script-help'], {
       io: createCaptureIo().io,
-      spawnImpl: forbidSpawn,
       telemetryFilePath: telemetryFile,
     });
     delete process.env.KINLOOM_TELEMETRY_PARENT;
@@ -440,56 +352,48 @@ describe('help vs subcommand routing, native dispatch, and telemetry', () => {
 
     // General path-leak guard for every record command.
     const prepSpec = resolveRecordCommand('prep-scan')!;
-    expect(buildTelemetrySubcmd(prepSpec, ['/abs/private/scan.jpg'], 'script')).toBe('prep-scan');
-    expect(buildTelemetrySubcmd(prepSpec, ['C:\\private\\scan.jpg'], 'script')).toBe('prep-scan');
-    expect(buildTelemetrySubcmd(prepSpec, ['./local-scan.png'], 'script')).toBe('prep-scan');
-    expect(buildTelemetrySubcmd(prepSpec, ['preview', '/abs/private/scan.jpg'], 'script')).toBe(
+    expect(buildTelemetrySubcmd(prepSpec, ['/abs/private/scan.jpg'], 'native')).toBe('prep-scan');
+    expect(buildTelemetrySubcmd(prepSpec, ['C:\\private\\scan.jpg'], 'native')).toBe('prep-scan');
+    expect(buildTelemetrySubcmd(prepSpec, ['./local-scan.png'], 'native')).toBe('prep-scan');
+    expect(buildTelemetrySubcmd(prepSpec, ['preview', '/abs/private/scan.jpg'], 'native')).toBe(
       'prep-scan preview'
     );
   });
-
-  it('detects real uv offline cache-miss diagnostics and ignores script errors', () => {
-    const uvMiss = [
-      'error: No solution found when resolving script dependencies',
-      'hint: Packages were unavailable because the network was disabled. When the network is disabled, registry packages may only be read from the cache.',
-    ].join('\n');
-    expect(isUvOfflineCacheMiss(uvMiss)).toBe(true);
-    expect(
-      isUvOfflineCacheMiss(
-        "error: Failed to resolve `--with` requirement\n  cause: Network connectivity is disabled, but the requested data wasn't found\n         in the cache: https://example.invalid/a.whl\n"
-      )
-    ).toBe(true);
-    expect(isUvOfflineCacheMiss('httpx.ConnectError: network unreachable\n')).toBe(false);
-    expect(isUvOfflineCacheMiss('')).toBe(false);
-  });
 });
 
-describe('bundle-skills.mjs and dual-mode bundled resolution', () => {
-  it('bundles all 24 skills (including pronounce) and 4 assets into a temp dist dir with executable script bits', async () => {
-    const tmpOut = await makeTempDir('kinloom-bundle-test-');
+describe('copy-migrations.mjs build helper', () => {
+  it('copies worker SQL migrations atomically, prunes stale files and legacy dirs, and keeps cli.js executable', async () => {
+    const tmpOut = await makeTempDir('kinloom-copy-migrations-test-');
     const cliStubPath = path.join(tmpOut, 'cli.js');
+    const staleMigrationPath = path.join(tmpOut, 'migrations', '9999_stale.sql');
+    const legacySkillsDir = path.join(tmpOut, 'bundled-skills', 'nara');
+    const legacyAssetsDir = path.join(tmpOut, 'assets');
+
+    fs.mkdirSync(path.dirname(staleMigrationPath), { recursive: true });
+    fs.mkdirSync(legacySkillsDir, { recursive: true });
+    fs.mkdirSync(legacyAssetsDir, { recursive: true });
     await writeFile(cliStubPath, '#!/usr/bin/env node\n', { encoding: 'utf8', mode: 0o644 });
-    const output = execFileSync(process.execPath, [BUNDLE_SCRIPT, '--out-dir', tmpOut], {
+    await writeFile(staleMigrationPath, '-- stale\n', 'utf8');
+    await writeFile(path.join(legacySkillsDir, 'SKILL.md'), '# legacy\n', 'utf8');
+    await writeFile(path.join(legacyAssetsDir, 'prep-scan.py'), '# legacy\n', 'utf8');
+
+    const expectedSqlFiles = fs
+      .readdirSync(WORKER_MIGRATIONS_DIR)
+      .filter((name) => name.endsWith('.sql'))
+      .sort();
+    expect(expectedSqlFiles.length).toBeGreaterThan(0);
+
+    const output = execFileSync(process.execPath, [COPY_MIGRATIONS_SCRIPT, '--out-dir', tmpOut], {
       encoding: 'utf8',
     });
-    expect(output).toContain('Bundled 24 skills (21 scripts, 1 references) and 4 assets');
-    expect(fs.existsSync(path.join(tmpOut, 'bundled-skills', 'pronounce', 'SKILL.md'))).toBe(true);
+    expect(output).toContain(`Copied ${expectedSqlFiles.length} SQL migrations`);
     expect(fs.statSync(cliStubPath).mode & 0o111).not.toBe(0);
 
-    const fakeDistModuleDir = path.join(tmpOut, 'commands', 'records');
-
-    for (const spec of RECORD_COMMAND_SPECS) {
-      const guidePath = resolveRecordGuidePath(spec, { moduleDir: fakeDistModuleDir });
-      expect(guidePath.startsWith(tmpOut)).toBe(true);
-      expect(fs.statSync(guidePath).isFile()).toBe(true);
-    }
-
-    expect(
-      fs.existsSync(path.join(tmpOut, 'bundled-skills', 'narrative-audio', 'references', 'script-rules.md'))
-    ).toBe(true);
-    expect(fs.existsSync(path.join(tmpOut, 'bundled-skills', 'archive-org', 'scripts', '__pycache__'))).toBe(
-      false
-    );
+    const copiedSqlFiles = fs.readdirSync(path.join(tmpOut, 'migrations')).sort();
+    expect(copiedSqlFiles).toEqual(expectedSqlFiles);
+    expect(fs.existsSync(staleMigrationPath)).toBe(false);
+    expect(fs.existsSync(path.join(tmpOut, 'bundled-skills'))).toBe(false);
+    expect(fs.existsSync(path.join(tmpOut, 'assets'))).toBe(false);
   });
 });
 
@@ -520,7 +424,6 @@ describe('native TypeScript OCR, alias routing, and ubiquitous-language parity',
     const { io, stdout, stderr } = createCaptureIo();
     const result = await runRecordCommand('ocr', [imgPath, '--cache-dir', cacheDir, '--json'], {
       io,
-      spawnImpl: forbidSpawn,
       telemetryFilePath: path.join(tmp, 'telemetry.jsonl'),
     });
 
@@ -557,7 +460,6 @@ describe('native TypeScript OCR, alias routing, and ubiquitous-language parity',
       {
         io: okCapture.io,
         env: envWithHighOmp,
-        spawnImpl: forbidSpawn,
         telemetryFilePath: path.join(tmp, 'telemetry.jsonl'),
       }
     );
@@ -579,7 +481,6 @@ describe('native TypeScript OCR, alias routing, and ubiquitous-language parity',
       {
         io: badTimeoutCapture.io,
         env: envWithHighOmp,
-        spawnImpl: forbidSpawn,
         telemetryFilePath: path.join(tmp, 'telemetry.jsonl'),
       }
     );
@@ -596,7 +497,6 @@ describe('native TypeScript OCR, alias routing, and ubiquitous-language parity',
       {
         io: timeoutCapture.io,
         env: envWithHighOmp,
-        spawnImpl: forbidSpawn,
         telemetryFilePath: path.join(tmp, 'telemetry.jsonl'),
       }
     );
@@ -642,7 +542,6 @@ describe('native TypeScript OCR, alias routing, and ubiquitous-language parity',
       const res = await runRecordCommand('ocr', [imgPath, '--cache-dir', cacheDir, ...args], {
         io: cap.io,
         env,
-        spawnImpl: forbidSpawn,
         telemetryFilePath: path.join(tmp, 'telemetry.jsonl'),
       });
       return { exitCode: res.exitCode, stdout: cap.stdout.join('\n'), stderr: cap.stderr.join('\n') };
@@ -731,7 +630,6 @@ describe('native TypeScript OCR, alias routing, and ubiquitous-language parity',
     const res = await runRecordCommand('ocr', [bigPng, '--cache-dir', cacheDir, '--find', 'probate'], {
       io: cap.io,
       env,
-      spawnImpl: forbidSpawn,
       telemetryFilePath: path.join(tmp, 'telemetry.jsonl'),
     });
 
@@ -759,7 +657,6 @@ describe('native TypeScript OCR, alias routing, and ubiquitous-language parity',
     const tsvRes = await runRecordCommand('ocr', [bigPng, '--cache-dir', cacheDir, '--tsv'], {
       io: tsvCap.io,
       env,
-      spawnImpl: forbidSpawn,
       telemetryFilePath: path.join(tmp, 'telemetry.jsonl'),
     });
     expect(tsvRes.exitCode, tsvCap.stderr.join('\n')).toBe(0);
@@ -808,7 +705,6 @@ describe('native TypeScript OCR, alias routing, and ubiquitous-language parity',
       const res = await runRecordCommand('ocr', [...tc.args, '--cache-dir', cacheDir], {
         io: cap.io,
         env,
-        spawnImpl: forbidSpawn,
         telemetryFilePath: path.join(tmp, 'telemetry.jsonl'),
       });
       expect(res.exitCode, `args=${tc.args.join(' ')} stderr=${cap.stderr.join('\n')}`).toBe(2);
@@ -923,7 +819,6 @@ describe('native TypeScript OCR, alias routing, and ubiquitous-language parity',
         env: nativeEnv,
         fetchImpl: mockFetch,
         sleepFn: async () => {},
-        spawnImpl: forbidSpawn,
         telemetryFilePath: telemetryFile,
       });
       expect(res.mode, tc.expectedSubcmd).toBe('native');

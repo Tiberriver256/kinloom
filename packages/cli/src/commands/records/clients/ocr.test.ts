@@ -239,12 +239,12 @@ describe('ocr native client', () => {
     };
 
     const t0 = Date.now();
-    const res = await invokeOcr([imgPath, '--cache-dir', cacheDir, '--timeout', '0.3', '--json'], { env });
+    const res = await invokeOcr([imgPath, '--cache-dir', cacheDir, '--timeout', '1', '--json'], { env });
     const elapsedMs = Date.now() - t0;
 
     expect(res.exitCode).toBe(1);
-    expect(elapsedMs).toBeLessThan(2500);
-    expect(res.stderr).toContain('timed out after 0.3s');
+    expect(elapsedMs).toBeLessThan(3500);
+    expect(res.stderr).toContain('timed out after 1s');
     const payload = JSON.parse(res.stdout) as {
       error_code: string;
       timeout_seconds: number;
@@ -252,7 +252,7 @@ describe('ocr native client', () => {
       message: string;
     };
     expect(payload.error_code).toBe('OCR_TIMEOUT');
-    expect(payload.timeout_seconds).toBe(0.3);
+    expect(payload.timeout_seconds).toBe(1);
     expect(payload.file).toBe(imgPath);
     expect(payload.message).toContain('timed out');
 

@@ -52,35 +52,14 @@ export interface BaseRecordCommandSpec {
 
 export interface NativeRecordCommandSpec extends BaseRecordCommandSpec {
   readonly kind: 'native';
-  readonly skillDir?: string;
-  readonly scriptName?: string;
-  readonly assetScript?: string;
-  readonly assetGuide?: string;
   readonly handler: RecordHandler;
 }
 
-export interface SkillScriptCommandSpec extends BaseRecordCommandSpec {
-  readonly kind: 'skill-script';
-  readonly skillDir: string;
-  readonly scriptName: string;
+export interface GuideOnlyCommandSpec extends BaseRecordCommandSpec {
+  readonly kind: 'guide-only';
 }
 
-export interface SkillGuideCommandSpec extends BaseRecordCommandSpec {
-  readonly kind: 'skill-guide';
-  readonly skillDir: string;
-}
-
-export interface AssetScriptCommandSpec extends BaseRecordCommandSpec {
-  readonly kind: 'asset-script';
-  readonly assetScript: string;
-  readonly assetGuide: string;
-}
-
-export type RecordCommandSpec =
-  | NativeRecordCommandSpec
-  | SkillScriptCommandSpec
-  | SkillGuideCommandSpec
-  | AssetScriptCommandSpec;
+export type RecordCommandSpec = NativeRecordCommandSpec | GuideOnlyCommandSpec;
 
 export const RECORD_COMMAND_SPECS: readonly RecordCommandSpec[] = [
   // Federal & general record archives (8)
@@ -89,8 +68,6 @@ export const RECORD_COMMAND_SPECS: readonly RecordCommandSpec[] = [
     command: 'nara',
     aliases: [],
     category: 'federal-general',
-    skillDir: 'nara-catalog-search',
-    scriptName: 'nara',
     handler: runNaraCommand,
     summary: 'Search, inspect, and download National Archives Catalog records (NARA)',
   },
@@ -99,8 +76,6 @@ export const RECORD_COMMAND_SPECS: readonly RecordCommandSpec[] = [
     command: 'archive-org',
     aliases: ['ia'],
     category: 'federal-general',
-    skillDir: 'archive-org',
-    scriptName: 'archive-org',
     handler: runArchiveOrgCommand,
     summary: 'Search, grep cached OCR, and fetch pages from Internet Archive',
   },
@@ -109,8 +84,6 @@ export const RECORD_COMMAND_SPECS: readonly RecordCommandSpec[] = [
     command: 'chronam',
     aliases: [],
     category: 'federal-general',
-    skillDir: 'chronicling-america',
-    scriptName: 'chronam',
     handler: runChronamCommand,
     summary: 'Search and download Library of Congress Chronicling America newspapers',
   },
@@ -119,8 +92,6 @@ export const RECORD_COMMAND_SPECS: readonly RecordCommandSpec[] = [
     command: 'hathi',
     aliases: [],
     category: 'federal-general',
-    skillDir: 'hathitrust',
-    scriptName: 'hathi',
     handler: runHathiCommand,
     summary: 'Look up books, volumes, and rights in HathiTrust Digital Library',
   },
@@ -129,8 +100,6 @@ export const RECORD_COMMAND_SPECS: readonly RecordCommandSpec[] = [
     command: 'findagrave',
     aliases: [],
     category: 'federal-general',
-    skillDir: 'findagrave',
-    scriptName: 'findagrave',
     handler: runFindagraveCommand,
     summary: 'Search Find a Grave memorials, cemeteries, places, and gravestone photos',
   },
@@ -139,8 +108,6 @@ export const RECORD_COMMAND_SPECS: readonly RecordCommandSpec[] = [
     command: 'gnis',
     aliases: [],
     category: 'federal-general',
-    skillDir: 'usgs-gnis',
-    scriptName: 'gnis',
     handler: runGnisCommand,
     summary: 'Look up historical and current U.S. place names in USGS GNIS',
   },
@@ -149,8 +116,6 @@ export const RECORD_COMMAND_SPECS: readonly RecordCommandSpec[] = [
     command: 'wikitree',
     aliases: [],
     category: 'federal-general',
-    skillDir: 'wikitree',
-    scriptName: 'wikitree',
     handler: runWikitreeCommand,
     summary: 'Search and read public WikiTree profiles, ancestors, and biographies',
   },
@@ -159,8 +124,6 @@ export const RECORD_COMMAND_SPECS: readonly RecordCommandSpec[] = [
     command: 'persi',
     aliases: [],
     category: 'federal-general',
-    skillDir: 'acpl-persi',
-    scriptName: 'persi',
     handler: runPersiCommand,
     summary: 'Search ACPL Periodical Source Index (PERSI) genealogy articles',
   },
@@ -171,8 +134,6 @@ export const RECORD_COMMAND_SPECS: readonly RecordCommandSpec[] = [
     command: 'ca-archives',
     aliases: [],
     category: 'state-archives',
-    skillDir: 'california-archives',
-    scriptName: 'ca-archives',
     handler: runCaArchivesCommand,
     summary: 'Search California archives (OAC, Calisphere, State Archives, CDNC)',
   },
@@ -181,8 +142,6 @@ export const RECORD_COMMAND_SPECS: readonly RecordCommandSpec[] = [
     command: 'ky-archives',
     aliases: [],
     category: 'state-archives',
-    skillDir: 'kentucky-archives',
-    scriptName: 'ky-archives',
     handler: runKyArchivesCommand,
     summary: 'Search Kentucky Historical Society, KDLA, and Land Office patents',
   },
@@ -191,8 +150,6 @@ export const RECORD_COMMAND_SPECS: readonly RecordCommandSpec[] = [
     command: 'michiganology',
     aliases: [],
     category: 'state-archives',
-    skillDir: 'library-of-michigan',
-    scriptName: 'michiganology',
     handler: runMichiganologyCommand,
     summary: 'Search Library of Michigan and Michiganology digital collections',
   },
@@ -201,8 +158,6 @@ export const RECORD_COMMAND_SPECS: readonly RecordCommandSpec[] = [
     command: 'mn-archives',
     aliases: [],
     category: 'state-archives',
-    skillDir: 'minnesota-archives',
-    scriptName: 'mn_archives.py',
     handler: runMnArchivesCommand,
     summary: 'Search Minnesota Historical Society People Records and Digital Newspaper Hub',
   },
@@ -211,8 +166,6 @@ export const RECORD_COMMAND_SPECS: readonly RecordCommandSpec[] = [
     command: 'mo-archives',
     aliases: [],
     category: 'state-archives',
-    skillDir: 'missouri-archives',
-    scriptName: 'mo-archives',
     handler: runMoArchivesCommand,
     summary: 'Search Missouri State Archives death certificates and vital abstracts',
   },
@@ -221,8 +174,6 @@ export const RECORD_COMMAND_SPECS: readonly RecordCommandSpec[] = [
     command: 'nj-archives',
     aliases: [],
     category: 'state-archives',
-    skillDir: 'new-jersey-archives',
-    scriptName: 'nj-archives',
     handler: runNjArchivesCommand,
     summary: 'Search New Jersey State Archives databases and Monmouth OPRS census',
   },
@@ -231,8 +182,6 @@ export const RECORD_COMMAND_SPECS: readonly RecordCommandSpec[] = [
     command: 'texas-archives',
     aliases: [],
     category: 'state-archives',
-    skillDir: 'texas-archives',
-    scriptName: 'texas-archives',
     handler: runTexasArchivesCommand,
     summary: 'Search Portal to Texas History, TSLAC, and Texas GLO land grants',
   },
@@ -241,8 +190,6 @@ export const RECORD_COMMAND_SPECS: readonly RecordCommandSpec[] = [
     command: 'va-archives',
     aliases: [],
     category: 'state-archives',
-    skillDir: 'virginia-archives',
-    scriptName: 'va-archives',
     handler: runVaArchivesCommand,
     summary: 'Search Library of Virginia Chancery Records Index and Primo catalog',
   },
@@ -253,8 +200,6 @@ export const RECORD_COMMAND_SPECS: readonly RecordCommandSpec[] = [
     command: 'fi-archives',
     aliases: [],
     category: 'international',
-    skillDir: 'finnish-archives',
-    scriptName: 'fi_archives.py',
     handler: runFiArchivesCommand,
     summary: 'Search Finnish HisKi parish registers and National Archives Digihakemisto index',
   },
@@ -263,8 +208,6 @@ export const RECORD_COMMAND_SPECS: readonly RecordCommandSpec[] = [
     command: 'openarchieven',
     aliases: [],
     category: 'international',
-    skillDir: 'openarchieven',
-    scriptName: 'openarchieven',
     handler: runOpenarchievenCommand,
     summary: 'Search Dutch and Belgian civil, parish, and Rotterdam passenger records',
   },
@@ -273,8 +216,6 @@ export const RECORD_COMMAND_SPECS: readonly RecordCommandSpec[] = [
     command: 'se-archives',
     aliases: [],
     category: 'international',
-    skillDir: 'swedish-archives',
-    scriptName: 'se_archives.py',
     handler: runSeArchivesCommand,
     summary: 'Search Swedish National Archives (Riksarkivet) records, church books, and IIIF scans',
   },
@@ -283,27 +224,23 @@ export const RECORD_COMMAND_SPECS: readonly RecordCommandSpec[] = [
     command: 'uk-archives',
     aliases: [],
     category: 'international',
-    skillDir: 'uk-archives',
-    scriptName: 'uk-archives',
     handler: runUkArchivesCommand,
     summary: 'Search UK National Archives Discovery and FreeREG parish registers',
   },
 
   // Research directories & guides (2)
   {
-    kind: 'skill-guide',
+    kind: 'guide-only',
     command: 'blm-glo',
     aliases: [],
     category: 'directories-guides',
-    skillDir: 'blm-glo',
     summary: 'Research guide for BLM General Land Office federal land patents',
   },
   {
-    kind: 'skill-guide',
+    kind: 'guide-only',
     command: 'cyndis-list',
     aliases: [],
     category: 'directories-guides',
-    skillDir: 'cyndis-list',
     summary: "Research guide for Cyndi's List county and topic genealogy directories",
   },
 
@@ -313,8 +250,6 @@ export const RECORD_COMMAND_SPECS: readonly RecordCommandSpec[] = [
     command: 'narrative-audio',
     aliases: [],
     category: 'media-ocr',
-    skillDir: 'narrative-audio',
-    scriptName: 'narrative-audio',
     handler: runNarrativeAudioCommand,
     summary: 'Turn Kinloom narratives into narrated MP3 audio (Chirp 3: HD or Gemini TTS)',
   },
@@ -323,8 +258,6 @@ export const RECORD_COMMAND_SPECS: readonly RecordCommandSpec[] = [
     command: 'prep-scan',
     aliases: [],
     category: 'media-ocr',
-    assetScript: 'prep-scan.py',
-    assetGuide: 'prep-scan.md',
     handler: runPrepScanCommand,
     summary: 'Report scan size, join page images, build previews, crops, strips, and PDF pages',
   },
@@ -333,8 +266,6 @@ export const RECORD_COMMAND_SPECS: readonly RecordCommandSpec[] = [
     command: 'ocr',
     aliases: [],
     category: 'media-ocr',
-    assetScript: 'cached-ocr.py',
-    assetGuide: 'ocr.md',
     handler: runOcrCommand,
     summary: 'Run SHA-256 cached OCR for printed (tesseract) or cursive scans',
   },
