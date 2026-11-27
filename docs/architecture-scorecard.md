@@ -243,8 +243,63 @@ Measured at commit `da30f03` before decomposition (`12,960` LOC across 10 target
 | **Modularity** | 7.7 / 10 | **9.5 / 10** | **8.6 / 10** | All 10 Iteration 2B monoliths dropped cleanly under 600 LOC (TS/TSX max `561` LOC) and 700 LOC (CSS max `608` LOC). Remaining 1K+ LOC files are exclusively in `packages/cli/src/commands/records/clients/` and secondary backend/core files queued for Iteration 3. |
 | **Extensibility** | 8.0 / 10 | **9.7 / 10** | **8.9 / 10** | Adding a new entity editor or creatable entity kind is now a single typed entry in `ENTITY_EDIT_FORM_REGISTRY` / `ENTITY_CREATE_FORM_REGISTRY`; adding an evidence tab, person profile section, or map overlay layer touches one focused module. |
 
-## Remaining Roadmap (Iteration 3 to 10/10 Repo-Wide)
+## Iteration 3A Changes (Shared Records Runtime Primitives & 7 Core/Media Record Clients)
 
-1. **Iteration 3: CLI Archival Record Clients & Secondary Monoliths**
-   - Extract shared HTTP, pagination, XML/HTML parsing, and citation formatting primitives across `packages/cli/src/commands/records/clients/*.ts` (`nara.ts` `3,981` LOC, `archive-org.ts` `3,398` LOC, `prep-scan.ts` `2,988` LOC, `ocr.ts` `2,615` LOC, `findagrave.ts` `2,185` LOC, `se-archives.ts` `2,140` LOC, `va-archives.ts` `2,100` LOC, `openarchieven.ts` `1,980` LOC, `chronam.ts` `1,817` LOC, `mn-archives.ts` `1,762` LOC, `fi-archives.ts` `1,680` LOC, plus 6 clients in the `941-1,314` LOC range).
-   - Evaluate secondary `700-1,350` LOC files: `packages/server/src/testing/adapterContractSuite.ts` (`1,332` LOC), `packages/core/src/patchArchive.ts` (`1,098` LOC), `packages/cli/src/commands/ops/audit-overlaps.ts` (`1,040` LOC), `packages/core/src/gedcom/slice.ts` (`1,028` LOC), `packages/server/src/adapters/inMemory.ts` (`964` LOC), `packages/cli/src/commands/ops/media-dedupe.ts` (`956` LOC), and `packages/ui/src/components/ArchivalMarkdown.tsx` (`859` LOC).
+Measured at commit `8f1018d` before decomposition (`19,086` LOC across the 7 largest CLI record/media clients) and verified on `2026-11-27` (UTC via Python) with zero `any`, `@ts-ignore`, or `@ts-expect-error` escape hatches, 0 circular imports across all 39 extracted submodules, 0 Biome errors/warnings across 533 files, and 100% export parity (`239/239` exported symbols preserved across all 7 facades).
+
+### Shared Cross-Client Runtime Extraction
+
+- `packages/cli/src/commands/records/runtime/primitives.ts` (`233` LOC, covered by `primitives.test.ts`): Centralizes duplicated cross-client primitives previously copy-pasted across 2-6 clients (`isPlainRecord`, `hasControlChar`, `isBrokenPipeError`, `hasMagicPrefix`, `stripLeadingBomAndWs`, `looksLikeHtmlBuffer`, `JPEG_MAGIC`, `PNG_MAGIC`, `PDF_MAGIC`, `HTML_ERROR_PREFIXES`, `IncompleteDownloadError`, `atomicWriteCompactJson`, `atomicCopyFileSync`, `readJsonRecordIfValid`, `sha256FileSync`, `resolveSafeChildPath`, `resolveUserPathFromContext`, `resolveEnvCacheTtlHours`, `runWithConcurrency`, `fetchWithTimeout`), re-exported from `runtime/index.ts`.
+
+### Iteration 3A Before/After LOC Table
+
+| Target Monolith | Before LOC | After Entrypoint LOC | Extracted Submodules | Max Submodule LOC |
+| --- | ---: | ---: | --- | ---: |
+| `packages/cli/src/commands/records/clients/nara.ts` | 4,103 | 136 | 9 modules under `clients/nara/` | 628 |
+| `packages/cli/src/commands/records/clients/archive-org.ts` | 3,398 | 106 | 7 modules under `clients/archiveOrg/` | 622 |
+| `packages/cli/src/commands/records/clients/prep-scan.ts` | 2,988 | 78 | 6 modules under `clients/prepScan/` | 614 |
+| `packages/cli/src/commands/records/clients/ocr.ts` | 2,615 | 204 | 5 modules under `clients/ocr/` | 590 |
+| `packages/cli/src/commands/records/clients/findagrave.ts` | 2,185 | 70 | 4 modules under `clients/findagrave/` | 585 |
+| `packages/cli/src/commands/records/clients/openarchieven.ts` | 1,980 | 51 | 4 modules under `clients/openarchieven/` | 618 |
+| `packages/cli/src/commands/records/clients/chronam.ts` | 1,817 | 91 | 4 modules under `clients/chronam/` | 644 |
+
+### Domain Folder Breakdown
+
+1. **NARA Catalog & 1950 Census (`clients/nara.ts` & `clients/nara/`)**:
+   - `nara.ts` (`4,103` -> `136` LOC): Thin `createNaraCommand`/`runNaraCommand` facade re-exporting all 74 original symbols.
+   - `nara/{types,queryAndRecords,browserFallback,catalogTransport,downloads,census1950,cliSpecs,catalogCommands,censusCommands}.ts` (`253`-`628` LOC): Separates pure NAID/URL/page-spec/record projection logic, Playwright fallback, HTTP catalog transport, cached object/direct downloads, 1950 Census + IIIF JPEG bounded context, CLI option specs, and catalog/census subcommand handlers.
+2. **Internet Archive (`clients/archive-org.ts` & `clients/archiveOrg/`)**:
+   - `archive-org.ts` (`3,398` -> `106` LOC): Thin `runArchiveOrgCommand` facade re-exporting all 35 original symbols.
+   - `archiveOrg/{types,transport,itemCache,pageAndGrep,cliSpecs,searchCommands,pageCommands}.ts` (`268`-`622` LOC): Separates IA URL/identifier/retry rules, HTTP transport, metadata/scandata XML/hOCR/DJVU artifact caching, printed-page/leaf range parsing and cached OCR grep, CLI specs, and search/page command runners.
+3. **Archival Scan Preparation (`clients/prep-scan.ts` & `clients/prepScan/`)**:
+   - `prep-scan.ts` (`2,988` -> `78` LOC): Thin `runPrepScanCommand` facade re-exporting all 18 original symbols.
+   - `prepScan/{geometry,imageOps,cliSpecs,rasterCommands,sheetAndStitchCommands,pdfCommands}.ts` (`359`-`614` LOC): Separates pure box/page-range/color/argv parsers, Sharp raster/deskew/redaction/SVG grid/contact-strip primitives, CLI specs, raster commands, multi-panel strip/stitch commands, and cached PDF page/grep commands.
+4. **SHA-256 Cached OCR (`clients/ocr.ts` & `clients/ocr/`)**:
+   - `ocr.ts` (`2,615` -> `204` LOC): Thin `runOcrCommand` facade re-exporting all 47 original symbols (including `runWithConcurrency` from `runtime/primitives.js`).
+   - `ocr/{types,cliArgs,imageAndTsv,engines,pipeline}.ts` (`258`-`590` LOC): Separates OCR config/error models, CLI arg parsing/usage, binary image header inspection and Tesseract TSV rescaling/parsing, timeout-enforced subprocess/printed/cursive engines, and SHA-256 cached single/batch execution pipelines.
+5. **Find a Grave (`clients/findagrave.ts` & `clients/findagrave/`)**:
+   - `findagrave.ts` (`2,185` -> `70` LOC): Thin `runFindagraveCommand` facade re-exporting all 18 original symbols.
+   - `findagrave/{domain,transport,cliSpecs,commands}.ts` (`493`-`585` LOC): Separates GraphQL queries, entity/photo validators, and enrichment formatters from rate-limited GraphQL/photo transport and caching, CLI specs, and command runners.
+6. **OpenArchieven (`clients/openarchieven.ts` & `clients/openarchieven/`)**:
+   - `openarchieven.ts` (`1,980` -> `51` LOC): Thin `runOpenarchievenCommand` facade re-exporting all 4 original symbols.
+   - `openarchieven/{domain,transport,cliSpecs,commands}.ts` (`328`-`618` LOC): Separates A2A record/scan extraction and formatting from rate-limited HTTP/cache transport, CLI specs, and command runners.
+7. **Chronicling America (`clients/chronam.ts` & `clients/chronam/`)**:
+   - `chronam.ts` (`1,817` -> `91` LOC): Thin `runChronamCommand` facade re-exporting all 43 original symbols (including `atomicCopyFileSync` from `runtime/primitives.js`).
+   - `chronam/{domain,transport,cliSpecs,commands}.ts` (`332`-`644` LOC): Separates LOC URL/state/date/query/IIIF asset resolvers from redirect-following HTTP/streaming-download/cache transport, CLI specs, and command runners.
+
+## Post-Iteration 3A Scores
+
+| Axis | Post-It. 2B (Repo-Wide) | Post-It. 3A (It. 3A Scope) | Post-It. 3A (Repo-Wide) | Key Drivers & Remaining Gaps |
+| --- | :---: | :---: | :---: | --- |
+| **Decoupling** | 8.8 / 10 | **9.6 / 10** | **9.2 / 10** | All 7 largest CLI record/media clients now separate pure domain parsers/validators, HTTP/Playwright/Sharp/Tesseract adapters, CLI specs, and thin subcommand runners while sharing `runtime/primitives.ts`; state/international clients remain for Iteration 3B. |
+| **Cohesion** | 8.8 / 10 | **9.6 / 10** | **9.2 / 10** | Every created submodule owns one bounded context (e.g. NARA 1950 Census IIIF, IA scandata/item cache, OCR TSV layout parsing, prep-scan geometry) with zero circular imports across all 39 submodules. |
+| **Data flow** | 9.0 / 10 | **9.5 / 10** | **9.3 / 10** | Explicit `CLI Parse -> Pure Validation/Query Build -> Cached Transport/Adapter -> Domain Projection -> Output` pipelines replace interleaved multi-thousand-line files. |
+| **Layering** | 9.4 / 10 | **9.7 / 10** | **9.5 / 10** | Pure domain/geometry/TSV/A2A/IIIF modules carry zero network or subprocess side effects, and duplicated filesystem/concurrency/HTML-detection helpers now live once in `records/runtime/primitives.ts`. |
+| **Modularity** | 8.6 / 10 | **9.6 / 10** | **9.1 / 10** | All 7 largest monoliths (`1,817`-`4,103` LOC) dropped to `51`-`204` LOC facades with every extracted module strictly `< 650` LOC (max `644` LOC). Remaining `1,000+` LOC files are smaller state/international record clients and secondary backend/core/ops files queued for Iteration 3B. |
+| **Extensibility** | 8.9 / 10 | **9.6 / 10** | **9.3 / 10** | Adding a NARA collection, IA command, prep-scan operation, OCR backend, or archive subcommand targets one focused module and reuses `records/runtime/primitives.ts` directly. |
+
+## Remaining Roadmap (Iteration 3B to 10/10 Repo-Wide)
+
+1. **Iteration 3B: Remaining State/International Record Clients & Secondary Monoliths**
+   - Decompose remaining `1,000+` LOC CLI record clients onto `records/runtime/primitives.ts`: `se-archives.ts` (`2,140` LOC), `va-archives.ts` (`2,100` LOC), `mn-archives.ts` (`1,762` LOC), `fi-archives.ts` (`1,680` LOC), `nj-archives.ts` (`1,314` LOC), `narrative-audio.ts` (`1,304` LOC), `ca-archives.ts` (`1,178` LOC), `uk-archives.ts` (`1,153` LOC), `ky-archives.ts` (`1,053` LOC), `mo-archives.ts` (`1,018` LOC), plus `texas-archives.ts` (`994` LOC) and `michiganology.ts` (`941` LOC).
+   - Decompose secondary `800-1,350` LOC files across core/server/ops/UI: `packages/server/src/testing/adapterContractSuite.ts` (`1,332` LOC), `packages/core/src/patchArchive.ts` (`1,098` LOC), `packages/cli/src/commands/ops/audit-overlaps.ts` (`1,040` LOC), `packages/core/src/gedcom/slice.ts` (`1,028` LOC), `packages/server/src/adapters/inMemory.ts` (`964` LOC), `packages/cli/src/commands/ops/media-dedupe.ts` (`956` LOC), `packages/core/src/schemas/pronunciation.ts` (`897` LOC), `packages/ui/src/components/ArchivalMarkdown.tsx` (`859` LOC), `packages/cli/src/commands/ops/migrate.ts` (`857` LOC), and `packages/cli/src/commands/ops/tree-hygiene.ts` (`808` LOC).

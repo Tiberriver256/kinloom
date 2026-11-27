@@ -4,4 +4,5 @@ export * from './cache.js';
 export * from './http.js';
 export * from './image.js';
 export * from './parse.js';
+export * from './primitives.js';
 export * from './types.js';
