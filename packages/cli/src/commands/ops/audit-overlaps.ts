@@ -4,6 +4,7 @@ import path from 'node:path';
 import { performance } from 'node:perf_hooks';
 import type { KinshipEdge } from '@kinloom/core';
 import { CliValidationError } from '../../errors.js';
+import type { KinloomCliPlugin } from '../../plugins.js';
 import { type AuditCommandResult, inspectImageBuffer, runAuditCommand } from './audit.js';
 import {
   expandRemoveKinshipTargets,
@@ -980,6 +981,7 @@ export async function runAuditBatchCommand(options: {
   pendingOnly?: boolean;
   skippedAlreadyIntegrated?: readonly string[];
   skippedDrifted?: readonly string[];
+  plugins?: readonly KinloomCliPlugin[];
 }): Promise<AuditBatchResult> {
   const started = performance.now();
   const repoDir = path.resolve(options.repoDir?.trim() || process.cwd());
@@ -1009,7 +1011,12 @@ export async function runAuditBatchCommand(options: {
 
   const people: AuditBatchPerson[] = [];
   for (const personId of personIds) {
-    const result = await runAuditCommand({ repoDir, personId, json: false });
+    const result = await runAuditCommand({
+      repoDir,
+      personId,
+      json: false,
+      ...(options.plugins !== undefined ? { plugins: options.plugins } : {}),
+    });
     const { rendered: _rendered, ...person } = result;
     people.push(person);
   }

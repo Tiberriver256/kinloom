@@ -73,6 +73,35 @@ Private sites extend Kinloom without forking core packages:
 
 - **`KinloomUiPlugin` (`@kinloom/ui`):** Register custom routes and top-bar links, inject React panels into named page slots (`indexHero`, `personDetail`, `placeDetail`, `sourceReaderFooter`, `evidenceExtra`), or provide custom `mediaRenderers`.
 - **`KinloomServerPlugin` (`@kinloom/server`):** Mount authenticated custom API routes that inherit session, RBAC, and CSRF enforcement, or subscribe to `onRevisionCommitted` hooks.
+- **`KinloomCliPlugin` (`@kinloom/cli`):** Auto-discovered from `extensions/<name>/cli.mjs` or `kinloom.config.yaml` (`plugins`). Plugins can register custom subcommands, `auditChecks` for `kinloom audit`, and `verifyChecks` for `kinloom verify` (including check-only plugins without custom commands):
+
+```js
+/** @type {import('@kinloom/cli').KinloomCliPlugin} */
+export default {
+  id: 'site-quality-checks',
+  name: 'Site Quality Checks',
+  auditChecks: [
+    {
+      id: 'require-custom-note',
+      name: 'Custom Note Check',
+      run: ({ patch }) => ({
+        errors: [],
+        warnings: patch.notes ? [] : ['Staged patch is missing a custom research note.'],
+      }),
+    },
+  ],
+  verifyChecks: [
+    {
+      id: 'require-places',
+      name: 'Place Count Check',
+      run: ({ places }) => ({
+        errors: places.length > 0 ? [] : ['Archive must define at least one place.'],
+        warnings: [],
+      }),
+    },
+  ],
+};
+```
 - **Byte-range video and oral histories:** `MediaService` validates and stores images, PDFs, MP4/WebM videos, and audio oral histories under content-addressed SHA-256 keys, streaming `GET /media/:key` with HTTP `206 Partial Content` and `Content-Range` headers for scrubbable `<video>` and `<audio>` playback.
 
 ## Built-in genealogy research CLI and guides

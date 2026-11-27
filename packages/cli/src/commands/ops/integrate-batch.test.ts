@@ -116,6 +116,38 @@ function makeSampleSiteConfig(): KinloomSiteConfig {
         stripLivingResidenceSpans: true,
         markGedcomLivingConfidential: true,
       },
+      pronunciations: {
+        'Arthur Alder': {
+          phonetic: 'AR-thur AWL-der',
+          ipa: '/ˈɑːrθər ˈɔːldər/',
+          source_label: 'Synthetic test fixture',
+        },
+        'Helen Maple': {
+          phonetic: 'HEL-en MAY-pul',
+          ipa: '/ˈhɛlən ˈmeɪpəl/',
+          source_label: 'Synthetic test fixture',
+        },
+        'Clara Birch': {
+          phonetic: 'KLAR-uh BURCH',
+          ipa: '/ˈklærə ˈbɜːrtʃ/',
+          source_label: 'Synthetic test fixture',
+        },
+        'William Alder': {
+          phonetic: 'WIL-yum AWL-der',
+          ipa: '/ˈwɪljəm ˈɔːldər/',
+          source_label: 'Synthetic test fixture',
+        },
+        'Mary Birch': {
+          phonetic: 'MAIR-ee BURCH',
+          ipa: '/ˈmɛri ˈbɜːrtʃ/',
+          source_label: 'Synthetic test fixture',
+        },
+        'Oak County': {
+          phonetic: 'OHK KOWN-tee',
+          ipa: '/oʊk ˈkaʊnti/',
+          source_label: 'Synthetic test fixture',
+        },
+      },
     })
   );
 }

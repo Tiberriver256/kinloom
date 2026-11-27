@@ -1,7 +1,18 @@
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { serializeKinloomConfigYaml } from '@kinloom/core';
+import {
+  type Place,
+  type RawPerson,
+  serializeEventsYaml,
+  serializeKinloomConfigYaml,
+  serializeKinshipYaml,
+  serializeMediaYaml,
+  serializeNarrativesYaml,
+  serializePeopleYaml,
+  serializePlacesYaml,
+  serializeSourcesYaml,
+} from '@kinloom/core';
 import { afterEach, describe, expect, it } from 'vitest';
 import { type CliIo, runCli } from './cli.js';
 import { EXIT_ERROR, EXIT_OK, EXIT_USAGE } from './errors.js';
@@ -207,7 +218,7 @@ describe('site-root CLI plugin discovery and dispatch', () => {
     const discovered = await discoverSiteCliPlugins(siteDir);
     expect(discovered.warnings.some((w) => w.includes("shadow built-in command 'verify'"))).toBe(true);
     expect(discovered.plugins).toHaveLength(1);
-    expect(discovered.plugins[0]?.commands.map((c) => c.name)).toEqual(['safe-cmd']);
+    expect(discovered.plugins[0]?.commands?.map((c) => c.name)).toEqual(['safe-cmd']);
 
     const verifyHelpCap = createCaptureIo();
     expect(await runCli(['verify', '--help'], { cwd: siteDir, io: verifyHelpCap.io })).toBe(EXIT_OK);
@@ -292,5 +303,543 @@ describe('site-root CLI plugin discovery and dispatch', () => {
         plugins: [explicitPlugin],
       })
     ).toBe(EXIT_ERROR);
+  });
+});
+
+async function createMinimalCheckArchive(options?: {
+  plugins?: string[];
+  people?: RawPerson[];
+  places?: Place[];
+  pronunciations?: Record<
+    string,
+    { phonetic?: string; ipa?: string; source_label?: string; source_url?: string }
+  >;
+}): Promise<string> {
+  const siteDir = await makeTempDir('kinloom-plugin-checks-');
+  const dataDir = path.join(siteDir, 'data');
+  await mkdir(dataDir, { recursive: true });
+
+  const configYaml = serializeKinloomConfigYaml({
+    schemaVersion: 1,
+    site: {
+      title: 'Alder Archive',
+      familyName: 'Alder',
+      gedcomSourceName: 'ALDER',
+      footerCredit: 'Built with Kinloom',
+    },
+    theme: { accent: '#7A4612' },
+    defaultBranchId: 'alder',
+    branches: [
+      {
+        id: 'alder',
+        label: 'Alder',
+        surnames: ['Alder'],
+        lineageGroups: ['ancestor', 'descendant'],
+        supportsDirectMode: true,
+      },
+    ],
+    lineageSections: [],
+    featuredKinshipPairs: [],
+    migrationEras: [],
+    mapDefaults: { centerLat: 40.0, centerLng: -83.0, zoom: 5, minSpanDeg: 1.0 },
+    privacy: {
+      livingCutoffYears: 101,
+      referenceYear: 2026,
+      privateModeShowsBirthYear: true,
+      stripLivingPortraits: true,
+      stripLivingResidenceSpans: true,
+      markGedcomLivingConfidential: true,
+    },
+    ...(options?.plugins ? { plugins: options.plugins } : {}),
+    ...(options?.pronunciations ? { pronunciations: options.pronunciations } : {}),
+  });
+
+  const people: RawPerson[] = options?.people ?? [
+    {
+      id: 'per_arthur_alder',
+      slug: 'arthur-alder',
+      full_name: 'Arthur Alder',
+      given_name: 'Arthur',
+      surname: 'Alder',
+      alt_names: [],
+      sex: 'M',
+      is_living: false,
+      lineage_group: 'ancestor',
+      birth_edtf: '1858-04-12',
+      death_edtf: '1932-09-18',
+      portrait_url: null,
+    },
+  ];
+  const places: Place[] = options?.places ?? [
+    {
+      id: 'plc_oak_county',
+      slug: 'oak-county',
+      name: 'Oak County',
+      full_name: 'Oak County, Ohio, USA',
+      place_type: 'county',
+      parent_id: null,
+      lat: 40.25,
+      lng: -82.85,
+      historical_names: [],
+    },
+  ];
+
+  await Promise.all([
+    writeFile(path.join(siteDir, 'kinloom.config.yaml'), configYaml, 'utf8'),
+    writeFile(path.join(dataDir, 'people.yaml'), serializePeopleYaml(people, { sortById: true }), 'utf8'),
+    writeFile(path.join(dataDir, 'places.yaml'), serializePlacesYaml(places, { sortById: true }), 'utf8'),
+    writeFile(path.join(dataDir, 'events.yaml'), serializeEventsYaml([], { sortById: true }), 'utf8'),
+    writeFile(path.join(dataDir, 'sources.yaml'), serializeSourcesYaml([], { sortById: true }), 'utf8'),
+    writeFile(
+      path.join(dataDir, 'kinship.yaml'),
+      serializeKinshipYaml([], { sortDeterministic: true }),
+      'utf8'
+    ),
+    writeFile(path.join(dataDir, 'media.yaml'), serializeMediaYaml([], { sortById: true }), 'utf8'),
+    writeFile(path.join(dataDir, 'narratives.yaml'), serializeNarrativesYaml([], { sortById: true }), 'utf8'),
+  ]);
+
+  return siteDir;
+}
+
+describe('plugin auditChecks/verifyChecks and built-in pronunciation checks (#22)', () => {
+  it('runs check-only site plugins discovered from extensions/ and kinloom.config.yaml in audit and verify', async () => {
+    const siteDir = await createMinimalCheckArchive({
+      plugins: ['./plugins/config-check.mjs'],
+      pronunciations: {
+        'Arthur Alder': {
+          phonetic: 'AR-thur AWL-der',
+          ipa: '/ˈɑːrθər ˈɔːldər/',
+          source_label: 'Synthetic test fixture',
+        },
+        'Oak County': {
+          phonetic: 'OHK KOWN-tee',
+          ipa: '/oʊk ˈkaʊnti/',
+          source_label: 'Synthetic test fixture',
+        },
+      },
+    });
+
+    const extDir = path.join(siteDir, 'extensions', 'ext-checks');
+    const cfgDir = path.join(siteDir, 'plugins');
+    const pkgDir = path.join(siteDir, 'research', 'people', 'per_arthur_alder');
+    await Promise.all([
+      mkdir(extDir, { recursive: true }),
+      mkdir(cfgDir, { recursive: true }),
+      mkdir(pkgDir, { recursive: true }),
+    ]);
+
+    await writeFile(
+      path.join(extDir, 'cli.mjs'),
+      `export default {
+  id: 'ext-checks',
+  name: 'Extension Quality Checks',
+  auditChecks: [
+    {
+      id: 'require-research-note',
+      name: 'Research Note Check',
+      run({ patch }) {
+        const missing = !patch.custom_note;
+        return {
+          errors: [],
+          warnings: missing ? ['Missing custom_note in patch.json'] : [],
+          strictFailures: missing ? ['Missing custom_note in patch.json'] : [],
+          details: { hasNote: !missing },
+        };
+      },
+    },
+  ],
+};
+`,
+      'utf8'
+    );
+
+    await writeFile(
+      path.join(cfgDir, 'config-check.mjs'),
+      `export const plugin = {
+  id: 'config-checks',
+  name: 'Config Verify Checks',
+  verifyChecks: [
+    {
+      id: 'site-title-guard',
+      name: 'Site Title Guard',
+      run({ siteConfig }) {
+        return {
+          errors: siteConfig.site.title.includes('Alder') ? [] : ['Unexpected site title'],
+          warnings: ['Advisory config verify notice'],
+          strictWarnings: ['Strict config verify notice'],
+        };
+      },
+    },
+  ],
+};
+`,
+      'utf8'
+    );
+
+    await writeFile(
+      path.join(pkgDir, 'patch.json'),
+      JSON.stringify({ person_id: 'per_arthur_alder' }, null, 2),
+      'utf8'
+    );
+
+    const auditText = createCaptureIo();
+    expect(await runCli(['audit', 'per_arthur_alder', '--repo', siteDir], { io: auditText.io })).toBe(
+      EXIT_OK
+    );
+    expect(auditText.stdout.join('\n')).toContain('Plugin [ext-checks/require-research-note]');
+
+    const auditStrict = createCaptureIo();
+    expect(
+      await runCli(['audit', 'per_arthur_alder', '--repo', siteDir, '--strict', '--json'], {
+        io: auditStrict.io,
+      })
+    ).toBe(EXIT_ERROR);
+    const auditStrictJson = JSON.parse(auditStrict.stdout.join('\n')) as {
+      ok: boolean;
+      strictOk: boolean;
+      pluginChecks: Array<{ pluginId: string; id: string; ok: boolean; strictOk: boolean }>;
+    };
+    expect(auditStrictJson.ok).toBe(true);
+    expect(auditStrictJson.strictOk).toBe(false);
+    expect(auditStrictJson.pluginChecks).toEqual([
+      expect.objectContaining({
+        pluginId: 'ext-checks',
+        id: 'require-research-note',
+        ok: true,
+        strictOk: false,
+      }),
+    ]);
+
+    const verifyDefault = createCaptureIo();
+    expect(await runCli(['verify', '--repo', siteDir, '--json'], { io: verifyDefault.io })).toBe(EXIT_OK);
+    const verifyDefaultJson = JSON.parse(verifyDefault.stdout.join('\n')) as {
+      ok: boolean;
+      pluginChecks: Array<{ pluginId: string; id: string; warnings: string[] }>;
+    };
+    expect(verifyDefaultJson.ok).toBe(true);
+    expect(verifyDefaultJson.pluginChecks).toEqual([
+      expect.objectContaining({
+        pluginId: 'config-checks',
+        id: 'site-title-guard',
+        warnings: ['Advisory config verify notice'],
+      }),
+    ]);
+
+    const verifyStrict = createCaptureIo();
+    expect(await runCli(['verify', '--repo', siteDir, '--strict'], { io: verifyStrict.io })).toBe(EXIT_ERROR);
+    expect(verifyStrict.stdout.join('\n')).toContain('Plugin [config-checks/site-title-guard]');
+    expect(verifyStrict.stdout.join('\n')).toContain('Strict config verify notice');
+  });
+
+  it('deduplicates duplicate plugin check IDs and isolates throwing plugin checks', async () => {
+    const siteDir = await createMinimalCheckArchive({
+      pronunciations: {
+        'Arthur Alder': {
+          phonetic: 'AR-thur AWL-der',
+          ipa: '/ˈɑːrθər ˈɔːldər/',
+          source_label: 'Synthetic test fixture',
+        },
+        'Oak County': {
+          phonetic: 'OHK KOWN-tee',
+          ipa: '/oʊk ˈkaʊnti/',
+          source_label: 'Synthetic test fixture',
+        },
+      },
+    });
+    const pkgDir = path.join(siteDir, 'research', 'people', 'per_arthur_alder');
+    await mkdir(pkgDir, { recursive: true });
+    await writeFile(
+      path.join(pkgDir, 'patch.json'),
+      JSON.stringify({ person_id: 'per_arthur_alder' }, null, 2),
+      'utf8'
+    );
+
+    const pluginA: KinloomCliPlugin = {
+      id: 'plugin-a',
+      name: 'Plugin A',
+      auditChecks: [
+        {
+          id: 'dup-check',
+          name: 'First Dup Check',
+          run: () => ({ errors: [], warnings: [] }),
+        },
+      ],
+      verifyChecks: [
+        {
+          id: 'boom-verify',
+          name: 'Exploding Verify Check',
+          run: () => {
+            throw new Error('simulated verify crash');
+          },
+        },
+      ],
+    };
+    const pluginB: KinloomCliPlugin = {
+      id: 'plugin-b',
+      name: 'Plugin B',
+      auditChecks: [
+        {
+          id: 'dup-check',
+          name: 'Second Dup Check',
+          run: () => ({ errors: ['should never run'], warnings: [] }),
+        },
+      ],
+    };
+
+    const auditCap = createCaptureIo();
+    expect(
+      await runCli(['audit', 'per_arthur_alder', '--repo', siteDir, '--json'], {
+        io: auditCap.io,
+        plugins: [pluginA, pluginB],
+      })
+    ).toBe(EXIT_OK);
+    const auditJson = JSON.parse(auditCap.stdout.join('\n')) as {
+      ok: boolean;
+      warnings: string[];
+      pluginChecks: Array<{ pluginId: string; id: string }>;
+    };
+    expect(auditJson.ok).toBe(true);
+    expect(auditJson.pluginChecks).toHaveLength(1);
+    expect(auditJson.pluginChecks[0]?.pluginId).toBe('plugin-a');
+    expect(auditJson.warnings.some((w) => w.includes("duplicate audit check 'dup-check'"))).toBe(true);
+
+    const verifyCap = createCaptureIo();
+    expect(
+      await runCli(['verify', '--repo', siteDir, '--json'], {
+        io: verifyCap.io,
+        plugins: [pluginA],
+      })
+    ).toBe(EXIT_ERROR);
+    const verifyJson = JSON.parse(verifyCap.stdout.join('\n')) as {
+      ok: boolean;
+      errors: string[];
+      pluginChecks: Array<{ id: string; ok: boolean; errors: string[] }>;
+    };
+    expect(verifyJson.ok).toBe(false);
+    expect(verifyJson.pluginChecks[0]?.ok).toBe(false);
+    expect(verifyJson.errors.some((e) => e.includes('simulated verify crash'))).toBe(true);
+  });
+
+  it('audits staged pronunciations (living leaks, missing/partial/unsourced, live deletion, and data/pronunciations.yaml)', async () => {
+    const siteDir = await createMinimalCheckArchive({
+      people: [
+        {
+          id: 'per_arthur_alder',
+          slug: 'arthur-alder',
+          full_name: 'Arthur Alder',
+          given_name: 'Arthur',
+          surname: 'Alder',
+          alt_names: [],
+          sex: 'M',
+          is_living: false,
+          lineage_group: 'ancestor',
+          birth_edtf: '1858-04-12',
+          death_edtf: '1932-09-18',
+          portrait_url: null,
+          pronunciation: {
+            phonetic: 'AR-thur AWL-der',
+            ipa: '/ˈɑːrθər ˈɔːldər/',
+            source_label: 'Live archive lexicon',
+          },
+        },
+        {
+          id: 'per_living_kin',
+          slug: 'living-kin',
+          full_name: 'Jordan Alder',
+          given_name: 'Jordan',
+          surname: 'Alder',
+          alt_names: [],
+          sex: 'U',
+          is_living: true,
+          lineage_group: 'descendant',
+          birth_edtf: '1992-05-01',
+          death_edtf: '',
+          portrait_url: null,
+        },
+      ],
+    });
+
+    const pkgDir = path.join(siteDir, 'research', 'people', 'per_arthur_alder');
+    await mkdir(pkgDir, { recursive: true });
+
+    // 1. Living leak in staged patch fails with hard error (even without --strict).
+    await writeFile(
+      path.join(pkgDir, 'patch.json'),
+      JSON.stringify(
+        {
+          person_id: 'per_arthur_alder',
+          people: [
+            {
+              id: 'per_living_kin',
+              slug: 'living-kin',
+              full_name: 'Jordan Alder',
+              given_name: 'Jordan',
+              surname: 'Alder',
+              sex: 'U',
+              is_living: true,
+              lineage_group: 'descendant',
+              birth_edtf: '1992-05-01',
+              death_edtf: '',
+              pronunciation: { phonetic: 'JOR-dun AWL-der' },
+            },
+          ],
+        },
+        null,
+        2
+      ),
+      'utf8'
+    );
+    const leakCap = createCaptureIo();
+    expect(await runCli(['audit', 'per_arthur_alder', '--repo', siteDir, '--json'], { io: leakCap.io })).toBe(
+      EXIT_ERROR
+    );
+    const leakJson = JSON.parse(leakCap.stdout.join('\n')) as {
+      ok: boolean;
+      checks: { pronunciation: { ok: boolean; errors: string[] } };
+    };
+    expect(leakJson.ok).toBe(false);
+    expect(leakJson.checks.pronunciation.ok).toBe(false);
+    expect(leakJson.checks.pronunciation.errors.some((e) => e.includes('Living person'))).toBe(true);
+
+    // 2. Deleting live pronunciation + unsourced staged place pronunciation fails --strict.
+    await writeFile(
+      path.join(pkgDir, 'patch.json'),
+      JSON.stringify(
+        {
+          person_id: 'per_arthur_alder',
+          person_updates: { pronunciation: null },
+          places: [
+            {
+              id: 'plc_cedar_mill',
+              slug: 'cedar-mill',
+              name: 'Cedar Mill',
+              full_name: 'Cedar Mill, Ohio, USA',
+              place_type: 'town',
+              parent_id: null,
+              lat: 40.3,
+              lng: -82.9,
+              pronunciation: { phonetic: 'SEE-der MIL' },
+            },
+          ],
+        },
+        null,
+        2
+      ),
+      'utf8'
+    );
+    const deleteCap = createCaptureIo();
+    expect(
+      await runCli(['audit', 'per_arthur_alder', '--repo', siteDir, '--strict', '--json'], {
+        io: deleteCap.io,
+      })
+    ).toBe(EXIT_ERROR);
+    const deleteJson = JSON.parse(deleteCap.stdout.join('\n')) as {
+      ok: boolean;
+      strictOk: boolean;
+      checks: {
+        pronunciation: {
+          strictOk: boolean;
+          warnings: string[];
+          details?: { deletedLivePronunciation?: boolean; unsourcedEntries?: string[] };
+        };
+      };
+    };
+    expect(deleteJson.ok).toBe(true);
+    expect(deleteJson.strictOk).toBe(false);
+    expect(deleteJson.checks.pronunciation.details?.deletedLivePronunciation).toBe(true);
+    expect(deleteJson.checks.pronunciation.details?.unsourcedEntries).toContain('place:plc_cedar_mill');
+
+    // 3. Preserved live pronunciation + staged place resolved via data/pronunciations.yaml passes --strict.
+    await writeFile(
+      path.join(siteDir, 'data', 'pronunciations.yaml'),
+      `"Cedar Mill":\n  phonetic: "SEE-der MIL"\n  ipa: "/ˈsiːdər mɪl/"\n  source_label: "Synthetic gazetteer"\n`,
+      'utf8'
+    );
+    await writeFile(
+      path.join(pkgDir, 'patch.json'),
+      JSON.stringify(
+        {
+          person_id: 'per_arthur_alder',
+          places: [
+            {
+              id: 'plc_cedar_mill',
+              slug: 'cedar-mill',
+              name: 'Cedar Mill',
+              full_name: 'Cedar Mill, Ohio, USA',
+              place_type: 'town',
+              parent_id: null,
+              lat: 40.3,
+              lng: -82.9,
+            },
+          ],
+        },
+        null,
+        2
+      ),
+      'utf8'
+    );
+    const cleanCap = createCaptureIo();
+    expect(
+      await runCli(['audit', 'per_arthur_alder', '--repo', siteDir, '--strict', '--json'], {
+        io: cleanCap.io,
+      })
+    ).toBe(EXIT_OK);
+    const cleanJson = JSON.parse(cleanCap.stdout.join('\n')) as {
+      ok: boolean;
+      strictOk: boolean;
+      checks: { pronunciation: { ok: boolean; strictOk: boolean } };
+    };
+    expect(cleanJson.ok).toBe(true);
+    expect(cleanJson.strictOk).toBe(true);
+    expect(cleanJson.checks.pronunciation.ok).toBe(true);
+    expect(cleanJson.checks.pronunciation.strictOk).toBe(true);
+  });
+
+  it('reports pronunciation coverage gaps as warnings in verify by default and fails under --strict-pronunciation or living leaks', async () => {
+    const gapDir = await createMinimalCheckArchive();
+    const defaultCap = createCaptureIo();
+    expect(await runCli(['verify', '--repo', gapDir, '--json'], { io: defaultCap.io })).toBe(EXIT_OK);
+    const defaultJson = JSON.parse(defaultCap.stdout.join('\n')) as {
+      ok: boolean;
+      checks: { pronunciation: { ok: boolean; warnings: string[] } };
+    };
+    expect(defaultJson.ok).toBe(true);
+    expect(defaultJson.checks.pronunciation.ok).toBe(true);
+    expect(defaultJson.checks.pronunciation.warnings.length).toBeGreaterThan(0);
+
+    const strictCap = createCaptureIo();
+    expect(
+      await runCli(['verify', '--repo', gapDir, '--strict-pronunciation', '--json'], { io: strictCap.io })
+    ).toBe(EXIT_ERROR);
+
+    const leakDir = await createMinimalCheckArchive({
+      people: [
+        {
+          id: 'per_living_leak',
+          slug: 'living-leak',
+          full_name: 'Morgan Alder',
+          given_name: 'Morgan',
+          surname: 'Alder',
+          alt_names: [],
+          sex: 'U',
+          is_living: true,
+          lineage_group: 'descendant',
+          birth_edtf: '1990-01-01',
+          death_edtf: '',
+          portrait_url: null,
+          pronunciation: { phonetic: 'MOR-gun AWL-der' },
+        },
+      ],
+    });
+    const leakCap = createCaptureIo();
+    expect(await runCli(['verify', '--repo', leakDir, '--json'], { io: leakCap.io })).toBe(EXIT_ERROR);
+    const leakJson = JSON.parse(leakCap.stdout.join('\n')) as {
+      ok: boolean;
+      checks: { pronunciation: { ok: boolean; errors: string[] } };
+    };
+    expect(leakJson.ok).toBe(false);
+    expect(leakJson.checks.pronunciation.ok).toBe(false);
+    expect(leakJson.checks.pronunciation.errors.length).toBeGreaterThan(0);
   });
 });

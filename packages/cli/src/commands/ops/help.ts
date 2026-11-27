@@ -58,12 +58,14 @@ Options:
 
 export const AUDIT_HELP = `Usage: kinloom audit [person_id ...] [options]
 
-Run all 5 deterministic package checks in one pass:
+Run all 6 deterministic package checks (plus site plugin auditChecks) in one pass:
   1. Chronology and lifespan arithmetic (including staged patch.people entries)
   2. Living-person privacy, SSN, phone, and em-dash style scan
   3. Uncited biographical prose sentence audit on body_md
   4. Pure-Node scan inventory and magic-header/dimension verification
   5. In-process integrate dry-run schema, citation, and privacy check
+  6. Pronunciation audit (living leaks fail; missing/partial coverage, missing provenance, or live pronunciation deletion warn and fail --strict)
+  7. Site plugin auditChecks (auto-discovered from extensions/*/cli.{mjs,js} and kinloom.config.yaml plugins)
 
 Accepts person_id defined in data/people.yaml or newly staged in patch.people.
 One person id keeps the original text report and the original JSON scorecard.
@@ -165,9 +167,14 @@ Run full-archive invariants across local data/*.yaml files:
      - Duplicate vital events (multiple births/deaths on one person, or duplicate marriages for one couple)
      - Empty GEDCOM placeholder events (title starting with "Recorded event for ")
 
+  8. Pronunciation audit (living-person pronunciation leaks fail; coverage gaps warn unless --strict-pronunciation or --strict is set)
+  9. Site plugin verifyChecks (auto-discovered from extensions/*/cli.{mjs,js} and kinloom.config.yaml plugins)
+
 Options:
-  --repo <dir>       Archive repository root (default: current working directory)
-  --strict-hygiene   Fail verification (exit 1) when any tree-hygiene warning is found
+  --repo <dir>             Archive repository root (default: current working directory)
+  --strict-hygiene         Fail verification (exit 1) when any tree-hygiene warning is found
+  --strict-pronunciation   Fail verification (exit 1) when any pronunciation coverage or provenance warning is found
+  --strict                 Enable both --strict-hygiene and --strict-pronunciation (and plugin strictFailures)
   --json             Emit structured JSON scorecard (includes hygiene.warnings and hygiene.counts)
   -h, --help         Show this help message`;
 

@@ -7,10 +7,12 @@ import {
   type Place,
   type Pronunciation,
   type PronunciationCoverage,
+  PronunciationSchema,
   type PronunciationVariant,
   parseKinloomConfigYaml,
   parsePeopleYaml,
   parsePlacesYaml,
+  parseYaml,
   type RawPerson,
   resolveEffectiveLiving,
   resolvePersonPronunciation,
@@ -1503,6 +1505,33 @@ function formatAuditText(result: Omit<PronounceAuditResult, 'rendered'>): string
   return lines.join('\n');
 }
 
+export function loadArchivePronunciationLexicon(
+  repoDir: string,
+  sitePronunciations?: Readonly<Record<string, Pronunciation>>
+): Record<string, Pronunciation> {
+  const merged: Record<string, Pronunciation> = { ...(sitePronunciations ?? {}) };
+  const dataLexiconPath = path.join(repoDir, 'data', 'pronunciations.yaml');
+  if (fs.existsSync(dataLexiconPath)) {
+    try {
+      const parsed = parseYaml(fs.readFileSync(dataLexiconPath, 'utf8'));
+      if (typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)) {
+        for (const [key, val] of Object.entries(parsed)) {
+          if (typeof val !== 'object' || val === null || Array.isArray(val)) {
+            continue;
+          }
+          const result = PronunciationSchema.safeParse(val);
+          if (result.success) {
+            merged[key] = result.data;
+          }
+        }
+      }
+    } catch {
+      // Malformed optional data/pronunciations.yaml is surfaced by schema/YAML checks elsewhere.
+    }
+  }
+  return merged;
+}
+
 export function runPronounceAuditCommand(options: PronounceAuditOptions): PronounceAuditResult {
   const repoDir = path.resolve(options.repoDir?.trim() || process.cwd());
   if (!fs.existsSync(repoDir) || !fs.statSync(repoDir).isDirectory()) {
@@ -1527,7 +1556,10 @@ export function runPronounceAuditCommand(options: PronounceAuditOptions): Pronou
     ? parsePlacesYaml(fs.readFileSync(placesPath, 'utf8'))
     : [];
 
-  const lexicon: Record<string, Pronunciation> = siteConfig.pronunciations ?? {};
+  const lexicon: Record<string, Pronunciation> = loadArchivePronunciationLexicon(
+    repoDir,
+    siteConfig.pronunciations
+  );
   const lexiconLowerKeys = new Map<string, string>();
   for (const key of Object.keys(lexicon)) {
     lexiconLowerKeys.set(key.trim().toLowerCase(), key);

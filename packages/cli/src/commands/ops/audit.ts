@@ -11,6 +11,14 @@ import {
   resolveEffectiveLiving,
 } from '@kinloom/core';
 import { CliValidationError } from '../../errors.js';
+import {
+  discoverSiteCliPlugins,
+  type ExecutedPluginCheckResult,
+  type KinloomAuditCheckContext,
+  type KinloomCliPlugin,
+  resolvePluginCommands,
+  runRegisteredCheck,
+} from '../../plugins.js';
 import { parseMatchingYamlBlocks, splitTopLevelYamlList } from './context.js';
 import {
   applyKinshipRemovals,
@@ -29,6 +37,7 @@ import {
   NARRATIVE_POSTHUMOUS_HORIZON_YEARS,
   resolveNarrativeMaxYear,
 } from './living-name-matcher.js';
+import { createPronunciationAuditCheck } from './pronunciation-checks.js';
 import {
   analyzeTreeHygiene,
   diffTreeHygieneWarnings,
@@ -313,6 +322,7 @@ export interface AuditCommandOptions {
   personId: string;
   packageDir?: string;
   json?: boolean;
+  plugins?: readonly KinloomCliPlugin[];
 }
 
 export interface ParsedAuditEdtf {
@@ -425,7 +435,9 @@ export interface AuditCommandResult {
     citations: CitationsCheckResult;
     scans: ScansCheckResult;
     dryRun: DryRunCheckResult;
+    pronunciation: ExecutedPluginCheckResult;
   };
+  pluginChecks: ExecutedPluginCheckResult[];
   errors: string[];
   warnings: string[];
   rendered: string;
@@ -1834,6 +1846,17 @@ export function formatAuditTextReport(report: Omit<AuditCommandResult, 'rendered
     `  5. Dry-Run: ${report.checks.dryRun.ok ? 'PASS' : 'FAIL'} (${report.checks.dryRun.durationMs} ms) | ` +
       `reviewFlags=${report.checks.dryRun.reviewFlags} livingLeaks=${report.checks.dryRun.livingLeaks} zeroCoordPlaces=${report.zeroCoordinatePlaces.length}`
   );
+  const pron = report.checks.pronunciation;
+  const pronStatus = !pron.ok ? 'FAIL' : pron.warnings.length > 0 ? 'WARN' : 'PASS';
+  lines.push(
+    `  6. Pronunciation: ${pronStatus} (${pron.durationMs} ms) | errors=${pron.errors.length} warnings=${pron.warnings.length}`
+  );
+  for (const pc of report.pluginChecks) {
+    const pcStatus = !pc.ok ? 'FAIL' : pc.warnings.length > 0 || !pc.strictOk ? 'WARN' : 'PASS';
+    lines.push(
+      `  Plugin [${pc.pluginId}/${pc.id}] ${pc.name}: ${pcStatus} (${pc.durationMs} ms) | errors=${pc.errors.length} warnings=${pc.warnings.length}`
+    );
+  }
   for (const err of report.errors) {
     lines.push(`  ERROR: ${err}`);
   }
@@ -1925,7 +1948,8 @@ export async function runAuditCommand(options: AuditCommandOptions): Promise<Aud
   }
   const patch = parsedPatch;
 
-  const privacyConfig: Partial<PrivacyConfig> = configText ? parseKinloomConfigYaml(configText).privacy : {};
+  const parsedSiteConfig = configText ? parseKinloomConfigYaml(configText) : null;
+  const privacyConfig: Partial<PrivacyConfig> = parsedSiteConfig ? parsedSiteConfig.privacy : {};
 
   const peopleBlocks = splitTopLevelYamlList(peopleText);
   const parsedPeople = parseMatchingYamlBlocks(peopleBlocks);
@@ -2027,12 +2051,42 @@ export async function runAuditCommand(options: AuditCommandOptions): Promise<Aud
   const zeroCoordinatePlaces = countZeroCoordPlaces(patch);
   const dryRun = await runInProcessIntegrateDryRun({ repoDir, personId, packageDir });
 
+  const auditCheckCtx: KinloomAuditCheckContext = {
+    repoDir,
+    personId,
+    packageDir,
+    patch,
+    dossierText,
+    siteConfig: parsedSiteConfig,
+    targetPerson,
+    livePeople: parsedPeople,
+    mergedPeople: mergedAuditPeople,
+  };
+  const pronunciationCheck = await runRegisteredCheck(
+    'builtin',
+    createPronunciationAuditCheck(),
+    auditCheckCtx
+  );
+
+  let resolvedPluginAuditChecks = resolvePluginCommands(options.plugins ?? []);
+  if (options.plugins === undefined) {
+    const discovered = await discoverSiteCliPlugins(repoDir);
+    resolvedPluginAuditChecks = resolvePluginCommands(discovered.plugins);
+    resolvedPluginAuditChecks.warnings.push(...discovered.warnings);
+  }
+  const pluginChecks: ExecutedPluginCheckResult[] = [];
+  for (const reg of resolvedPluginAuditChecks.auditChecks) {
+    pluginChecks.push(await runRegisteredCheck(reg.pluginId, reg.check, auditCheckCtx));
+  }
+
   const allErrors: string[] = [
     ...chronology.errors.map((e) => `chronology: ${e}`),
     ...privacy.errors.map((e) => `privacy: ${e}`),
     ...scans.errors.map((e) => `scans: ${e}`),
     ...zeroCoordinatePlaces.map((id) => `places: zero or missing coordinates on '${id}'`),
     ...(dryRun.error ? [`dryRun: ${dryRun.error}`] : []),
+    ...pronunciationCheck.errors.map((e) => `pronunciation: ${e}`),
+    ...pluginChecks.flatMap((pc) => pc.errors.map((e) => `plugin(${pc.id}): ${e}`)),
   ];
   const liveMediaFileCollisions = collectLiveMediaCollisions(
     [{ personId, media: readStagedMediaRefs(patch.media) }],
@@ -2056,6 +2110,9 @@ export async function runAuditCommand(options: AuditCommandOptions): Promise<Aud
       : []),
     ...scans.warnings.map((w) => `scans: ${w}`),
     ...liveMediaWarnings,
+    ...pronunciationCheck.warnings.map((w) => `pronunciation: ${w}`),
+    ...resolvedPluginAuditChecks.warnings.map((w) => `plugin: ${w}`),
+    ...pluginChecks.flatMap((pc) => pc.warnings.map((w) => `plugin(${pc.id}): ${w}`)),
   ];
 
   const durationMs = Math.round(performance.now() - t0);
@@ -2066,7 +2123,9 @@ export async function runAuditCommand(options: AuditCommandOptions): Promise<Aud
       citations.uncitedCount === 0 &&
       privacy.emDashCount === 0 &&
       liveMediaFileCollisions.length === 0 &&
-      hygieneWarnings.length === 0,
+      hygieneWarnings.length === 0 &&
+      pronunciationCheck.strictOk &&
+      pluginChecks.every((pc) => pc.strictOk),
     repo: repoDir,
     person_id: personId,
     package_dir: packageDir,
@@ -2079,7 +2138,9 @@ export async function runAuditCommand(options: AuditCommandOptions): Promise<Aud
       citations,
       scans,
       dryRun,
+      pronunciation: pronunciationCheck,
     },
+    pluginChecks,
     errors: allErrors,
     warnings: allWarnings,
   };

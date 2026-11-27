@@ -158,6 +158,36 @@ export const videoStoryPlugin: KinloomUiPlugin = {
 
 Pass \`plugins={[videoStoryPlugin]}\` into \`<KinloomApp />\` in your private site entrypoint.
 
+## Registering CLI \`auditChecks\` and \`verifyChecks\` (\`extensions/<name>/cli.mjs\`)
+
+\`\`\`js
+/** @type {import('@kinloom/cli').KinloomCliPlugin} */
+export default {
+  id: 'site-quality-checks',
+  name: 'Site Quality Checks',
+  auditChecks: [
+    {
+      id: 'require-custom-note',
+      name: 'Custom Note Check',
+      run: ({ patch }) => ({
+        errors: [],
+        warnings: patch.notes ? [] : ['Staged patch is missing a custom research note.'],
+      }),
+    },
+  ],
+  verifyChecks: [
+    {
+      id: 'require-places',
+      name: 'Place Count Check',
+      run: ({ places }) => ({
+        errors: places.length > 0 ? [] : ['Archive must define at least one place.'],
+        warnings: [],
+      }),
+    },
+  ],
+};
+\`\`\`
+
 ## Vite Configuration (Single React Instance)
 
 When building a private site app with Vite, include \`resolve.dedupe\` in \`vite.config.ts\` so \`@kinloom/ui\` and your site share one React and Router instance:

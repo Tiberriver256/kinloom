@@ -71,7 +71,7 @@ Archive lifecycle:
 Research & archive ops:
   context            Dump privacy-fenced YAML context, relatives, and leads for a person
   integrate          Validate and merge one or more person research packages into local YAML
-  audit              Run 5-check package audits for one person or a staged batch
+  audit              Run 6-check package audits (plus plugin checks) for one person or a staged batch
   verify             Run full-archive invariant checks over local data/*.yaml files
   media              Inspect and deduplicate local archive media records (dry-run by default)
   status             Report archive totals and the deceased biography queue
@@ -1198,6 +1198,7 @@ export async function runCli(argv: readonly string[], options?: RunCliOptions): 
                 personId,
                 packageDir,
                 json: values.json,
+                ...(options?.plugins ? { plugins: options.plugins } : {}),
               })
           );
           writeRenderedOutput(io, result.rendered);
@@ -1221,6 +1222,7 @@ export async function runCli(argv: readonly string[], options?: RunCliOptions): 
               pendingOnly: values['pending-only'],
               skippedAlreadyIntegrated,
               skippedDrifted,
+              ...(options?.plugins ? { plugins: options.plugins } : {}),
             })
         );
         writeRenderedOutput(io, result.rendered);
@@ -1278,6 +1280,8 @@ export async function runCli(argv: readonly string[], options?: RunCliOptions): 
           options: {
             repo: { type: 'string' },
             'strict-hygiene': { type: 'boolean', default: false },
+            'strict-pronunciation': { type: 'boolean', default: false },
+            strict: { type: 'boolean', default: false },
             json: { type: 'boolean', default: false },
           },
         });
@@ -1296,8 +1300,10 @@ export async function runCli(argv: readonly string[], options?: RunCliOptions): 
           () =>
             runVerifyCommand({
               repoDir: values.repo ?? cwd,
-              strictHygiene: values['strict-hygiene'],
+              strictHygiene: values['strict-hygiene'] || values.strict,
+              strictPronunciation: values['strict-pronunciation'] || values.strict,
               json: values.json,
+              ...(options?.plugins ? { plugins: options.plugins } : {}),
             })
         );
         writeRenderedOutput(io, result.rendered);

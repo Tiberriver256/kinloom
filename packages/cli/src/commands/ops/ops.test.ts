@@ -167,6 +167,103 @@ function makeSampleSiteConfig(): KinloomSiteConfig {
         stripLivingResidenceSpans: true,
         markGedcomLivingConfidential: true,
       },
+      pronunciations: {
+        'Thomas Alder': {
+          phonetic: 'TOM-us AWL-der',
+          ipa: '/ˈtɒməs ˈɔːldər/',
+          source_label: 'Synthetic test fixture',
+        },
+        'Arthur Alder': {
+          phonetic: 'AR-thur AWL-der',
+          ipa: '/ˈɑːrθər ˈɔːldər/',
+          source_label: 'Synthetic test fixture',
+        },
+        'Helen Maple': {
+          phonetic: 'HEL-en MAY-pul',
+          ipa: '/ˈhɛlən ˈmeɪpəl/',
+          source_label: 'Synthetic test fixture',
+        },
+        'William Alder': {
+          phonetic: 'WIL-yum AWL-der',
+          ipa: '/ˈwɪljəm ˈɔːldər/',
+          source_label: 'Synthetic test fixture',
+        },
+        'Mary Birch': {
+          phonetic: 'MAIR-ee BURCH',
+          ipa: '/ˈmɛri ˈbɜːrtʃ/',
+          source_label: 'Synthetic test fixture',
+        },
+        'Edward Birch': {
+          phonetic: 'ED-wurd BURCH',
+          ipa: '/ˈɛdwərd ˈbɜːrtʃ/',
+          source_label: 'Synthetic test fixture',
+        },
+        'Samuel Rowan': {
+          phonetic: 'SAM-yoo-ul ROH-un',
+          ipa: '/ˈsæmjuəl ˈroʊən/',
+          source_label: 'Synthetic test fixture',
+        },
+        'Samuel Alder': {
+          phonetic: 'SAM-yoo-ul AWL-der',
+          ipa: '/ˈsæmjuəl ˈɔːldər/',
+          source_label: 'Synthetic test fixture',
+        },
+        'Martha Birch': {
+          phonetic: 'MAR-thuh BURCH',
+          ipa: '/ˈmɑːrθə ˈbɜːrtʃ/',
+          source_label: 'Synthetic test fixture',
+        },
+        'Hannah Cedar': {
+          phonetic: 'HAN-uh SEE-der',
+          ipa: '/ˈhænə ˈsiːdər/',
+          source_label: 'Synthetic test fixture',
+        },
+        'Ruth Linden': {
+          phonetic: 'ROOTH LIN-den',
+          ipa: '/ruːθ ˈlɪndən/',
+          source_label: 'Synthetic test fixture',
+        },
+        'Caleb Alder': {
+          phonetic: 'KAY-lub AWL-der',
+          ipa: '/ˈkeɪləb ˈɔːldər/',
+          source_label: 'Synthetic test fixture',
+        },
+        'Owen Alder': {
+          phonetic: 'OH-en AWL-der',
+          ipa: '/ˈoʊən ˈɔːldər/',
+          source_label: 'Synthetic test fixture',
+        },
+        'Nora Alder': {
+          phonetic: 'NOR-uh AWL-der',
+          ipa: '/ˈnɔːrə ˈɔːldər/',
+          source_label: 'Synthetic test fixture',
+        },
+        'Clara Alder': {
+          phonetic: 'KLAR-uh AWL-der',
+          ipa: '/ˈklærə ˈɔːldər/',
+          source_label: 'Synthetic test fixture',
+        },
+        'Esther Alder': {
+          phonetic: 'ES-ter AWL-der',
+          ipa: '/ˈɛstər ˈɔːldər/',
+          source_label: 'Synthetic test fixture',
+        },
+        'Henry Maple': {
+          phonetic: 'HEN-ree MAY-pul',
+          ipa: '/ˈhɛnri ˈmeɪpəl/',
+          source_label: 'Synthetic test fixture',
+        },
+        'Daniel Maple': {
+          phonetic: 'DAN-yul MAY-pul',
+          ipa: '/ˈdænjəl ˈmeɪpəl/',
+          source_label: 'Synthetic test fixture',
+        },
+        'Oak County': {
+          phonetic: 'OHK KOWN-tee',
+          ipa: '/oʊk ˈkaʊnti/',
+          source_label: 'Synthetic test fixture',
+        },
+      },
     })
   );
 }
