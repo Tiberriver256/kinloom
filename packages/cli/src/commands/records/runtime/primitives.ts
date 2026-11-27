@@ -1,8 +1,9 @@
 import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
+import { CliValidationError } from '../../../errors.js';
 import { atomicWriteFileSync, expandHomePath, parseCacheTtlHours } from './cache.js';
-import { type RecordCommandContext, RecordRuntimeError } from './types.js';
+import { type RecordCommandContext, type RecordCommandOutcome, RecordRuntimeError } from './types.js';
 
 export const JPEG_MAGIC: Buffer = Buffer.from([0xff, 0xd8, 0xff]);
 export const PNG_MAGIC: Buffer = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
@@ -230,4 +231,29 @@ export async function fetchWithTimeout(
   } finally {
     clearTimeout(timer);
   }
+}
+
+export function encodeUrlPathPreservingSlashes(value: string): string {
+  return encodeURIComponent(value).replace(/%2F/gi, '/');
+}
+
+export function handleRecordCommandError(
+  err: unknown,
+  ctx: RecordCommandContext,
+  options: { readonly ignoreBrokenPipe?: boolean } = {}
+): RecordCommandOutcome {
+  if (options.ignoreBrokenPipe && isBrokenPipeError(err)) {
+    return { exitCode: 0, bytesOut: 0 };
+  }
+  if (err instanceof CliValidationError) {
+    ctx.io.stderr(`Error: ${err.message}`);
+    return { exitCode: 2, bytesOut: 0 };
+  }
+  if (err instanceof RecordRuntimeError) {
+    ctx.io.stderr(`Error: ${err.message}`);
+    return { exitCode: err.exitCode, bytesOut: 0 };
+  }
+  const message = err instanceof Error ? err.message : String(err);
+  ctx.io.stderr(`Error: ${message}`);
+  return { exitCode: 1, bytesOut: 0 };
 }

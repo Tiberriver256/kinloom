@@ -13,6 +13,19 @@ export function collapseWhitespace(text: string): string {
   return text.replace(/\s+/g, ' ').trim();
 }
 
+export function cleanHtmlText(
+  html: string,
+  options: { readonly stripScriptsAndStyles?: boolean } = {}
+): string {
+  let stripped = html;
+  if (options.stripScriptsAndStyles) {
+    stripped = stripped.replace(/<script[\s\S]*?<\/script>/gi, ' ').replace(/<style[\s\S]*?<\/style>/gi, ' ');
+  }
+  stripped = stripped.replace(/<[^>]+>/g, ' ');
+  const $ = loadHtml(`<body>${stripped.replace(/</g, '&lt;')}</body>`);
+  return collapseWhitespace($('body').text());
+}
+
 export function extractFormHiddenInputs($: CheerioDocument, formSelector = 'form'): Record<string, string> {
   const result: Record<string, string> = {};
   const scope = $(formSelector);

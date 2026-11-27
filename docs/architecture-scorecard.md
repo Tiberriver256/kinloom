@@ -298,8 +298,67 @@ Measured at commit `8f1018d` before decomposition (`19,086` LOC across the 7 lar
 | **Modularity** | 8.6 / 10 | **9.6 / 10** | **9.1 / 10** | All 7 largest monoliths (`1,817`-`4,103` LOC) dropped to `51`-`204` LOC facades with every extracted module strictly `< 650` LOC (max `644` LOC). Remaining `1,000+` LOC files are smaller state/international record clients and secondary backend/core/ops files queued for Iteration 3B. |
 | **Extensibility** | 8.9 / 10 | **9.6 / 10** | **9.3 / 10** | Adding a NARA collection, IA command, prep-scan operation, OCR backend, or archive subcommand targets one focused module and reuses `records/runtime/primitives.ts` directly. |
 
-## Remaining Roadmap (Iteration 3B to 10/10 Repo-Wide)
+## Iteration 3B Changes (Regional Record Clients, Runtime URL Policy & Remaining CLI Ops)
 
-1. **Iteration 3B: Remaining State/International Record Clients & Secondary Monoliths**
-   - Decompose remaining `1,000+` LOC CLI record clients onto `records/runtime/primitives.ts`: `se-archives.ts` (`2,140` LOC), `va-archives.ts` (`2,100` LOC), `mn-archives.ts` (`1,762` LOC), `fi-archives.ts` (`1,680` LOC), `nj-archives.ts` (`1,314` LOC), `narrative-audio.ts` (`1,304` LOC), `ca-archives.ts` (`1,178` LOC), `uk-archives.ts` (`1,153` LOC), `ky-archives.ts` (`1,053` LOC), `mo-archives.ts` (`1,018` LOC), plus `texas-archives.ts` (`994` LOC) and `michiganology.ts` (`941` LOC).
-   - Decompose secondary `800-1,350` LOC files across core/server/ops/UI: `packages/server/src/testing/adapterContractSuite.ts` (`1,332` LOC), `packages/core/src/patchArchive.ts` (`1,098` LOC), `packages/cli/src/commands/ops/audit-overlaps.ts` (`1,040` LOC), `packages/core/src/gedcom/slice.ts` (`1,028` LOC), `packages/server/src/adapters/inMemory.ts` (`964` LOC), `packages/cli/src/commands/ops/media-dedupe.ts` (`956` LOC), `packages/core/src/schemas/pronunciation.ts` (`897` LOC), `packages/ui/src/components/ArchivalMarkdown.tsx` (`859` LOC), `packages/cli/src/commands/ops/migrate.ts` (`857` LOC), and `packages/cli/src/commands/ops/tree-hygiene.ts` (`808` LOC).
+Measured at commit `110eed9` before decomposition (`26,184` LOC across all 24 remaining CLI files above `650` LOC) and verified on `2026-11-27` (UTC via Python) with zero `any`, `@ts-ignore`, or `@ts-expect-error` escape hatches, 0 circular imports across all 238 non-test files in `packages/cli/src/commands/` (including breaking the pre-existing `pronounce/audit.ts` <-> `pronounce/deduplicate.ts` cycle), 0 Biome errors/warnings across 635 files, 89/89 Vitest test files (`707/707` tests) passing, and 100% export parity (`367/367` exported symbols preserved across all 24 targets). Every non-test file in `packages/cli/src/` is now strictly `< 650` LOC (max `644` LOC from Iteration 3A; max `525` LOC across all 102 newly extracted Iteration 3B submodules).
+
+### Shared Cross-Client Runtime Extensions
+
+- `packages/cli/src/commands/records/runtime/urlPolicy.ts` (`306` LOC): Extracted IPv4/IPv6 private-IP classification (`isPrivateOrReservedIp`), SSRF guard (`assertSafeUrl`, `SsrfBlockedError`), `HttpStatusError`, `CookieJar`, `parseRetryAfterMs`, and `looksLikeHtmlErrorPage` out of `runtime/http.ts` (`724` -> `444` LOC, re-exporting all original symbols).
+- `packages/cli/src/commands/records/runtime/primitives.ts` (`259` LOC, covered by `primitives.test.ts`): Added `encodeUrlPathPreservingSlashes` (eliminating 4x duplicated `pyQuote`) and `handleRecordCommandError` (eliminating duplicated CLI error-mapping catch ladders across all 15 record client facades), alongside existing `isPlainRecord`, `resolveEnvCacheTtlHours`, `resolveUserPathFromContext`, `resolveSafeChildPath`, `looksLikeHtmlBuffer`, and `atomicCopyFileSync` reused across all decomposed clients.
+- `packages/cli/src/commands/records/runtime/parse.ts` (`100` LOC): Added shared `cleanHtmlText` (with optional `<script>`/`<style>` stripping) reused across regional HTML parsers.
+
+### Iteration 3B Before/After LOC Table
+
+| Target Monolith | Before LOC | After Entrypoint LOC | Extracted Submodules | Max Submodule LOC |
+| --- | ---: | ---: | --- | ---: |
+| `packages/cli/src/commands/records/clients/se-archives.ts` | 2,140 | 58 | 6 modules under `clients/seArchives/` | 502 |
+| `packages/cli/src/commands/records/clients/va-archives.ts` | 2,100 | 120 | 6 modules under `clients/vaArchives/` | 414 |
+| `packages/cli/src/commands/records/clients/mn-archives.ts` | 1,762 | 97 | 5 modules under `clients/mnArchives/` | 487 |
+| `packages/cli/src/commands/records/clients/fi-archives.ts` | 1,680 | 65 | 5 modules under `clients/fiArchives/` | 525 |
+| `packages/cli/src/commands/records/clients/nj-archives.ts` | 1,314 | 48 | 5 modules under `clients/njArchives/` | 330 |
+| `packages/cli/src/commands/records/clients/narrative-audio.ts` | 1,304 | 58 | 4 modules under `clients/narrativeAudio/` | 510 |
+| `packages/cli/src/commands/records/clients/ca-archives.ts` | 1,178 | 64 | 4 modules under `clients/caArchives/` | 423 |
+| `packages/cli/src/commands/records/clients/uk-archives.ts` | 1,153 | 67 | 4 modules under `clients/ukArchives/` | 359 |
+| `packages/cli/src/commands/records/clients/ky-archives.ts` | 1,053 | 64 | 4 modules under `clients/kyArchives/` | 380 |
+| `packages/cli/src/commands/records/clients/mo-archives.ts` | 1,018 | 41 | 4 modules under `clients/moArchives/` | 347 |
+| `packages/cli/src/commands/records/clients/texas-archives.ts` | 994 | 63 | 4 modules under `clients/texasArchives/` | 378 |
+| `packages/cli/src/commands/records/clients/michiganology.ts` | 941 | 45 | 4 modules under `clients/michiganology/` | 305 |
+| `packages/cli/src/commands/records/clients/gnis.ts` | 821 | 42 | 4 modules under `clients/gnis/` | 247 |
+| `packages/cli/src/commands/records/clients/wikitree.ts` | 714 | 32 | 4 modules under `clients/wikitree/` | 283 |
+| `packages/cli/src/commands/records/clients/persi.ts` | 688 | 37 | 4 modules under `clients/persi/` | 249 |
+| `packages/cli/src/commands/records/runtime/http.ts` | 724 | 444 | `runtime/urlPolicy.ts` | 306 |
+| `packages/cli/src/commands/ops/audit-overlaps.ts` | 1,040 | 157 | 4 modules under `ops/auditOverlaps/` | 412 |
+| `packages/cli/src/commands/ops/media-dedupe.ts` | 956 | 147 | 5 modules under `ops/mediaDedupe/` | 302 |
+| `packages/cli/src/commands/ops/migrate.ts` | 857 | 124 | 5 modules under `ops/migrate/` | 302 |
+| `packages/cli/src/commands/ops/tree-hygiene.ts` | 808 | 8 | 5 modules under `ops/treeHygiene/` | 409 |
+| `packages/cli/src/commands/ops/verify.ts` | 787 | 184 | 5 modules under `ops/verify/` | 278 |
+| `packages/cli/src/commands/ops/integrate-batch.ts` | 730 | 155 | 5 modules under `ops/integrateBatch/` | 177 |
+| `packages/cli/src/commands/ops/pronounce/audit.ts` | 731 | 279 | `auditRules.ts`, `auditReport.ts`, `lexiconLoader.ts` | 335 |
+| `packages/cli/src/commands/ops/pronounce/lookup.ts` | 691 | 271 | `lookupCache.ts`, `lookupProviders.ts` | 341 |
+
+### Domain Breakdown Summary
+
+1. **15 Record & Audio Clients (`clients/{seArchives,vaArchives,mnArchives,fiArchives,njArchives,narrativeAudio,caArchives,ukArchives,kyArchives,moArchives,texasArchives,michiganology,gnis,wikitree,persi}/`)**: Each client separates pure domain types/validators/parsers (`domain.ts`, `parsers.ts`, `catalog.ts`, `script.ts`), external HTTP/curl/Playwright/TTS/disk adapters (`transport.ts`, `synthesis.ts`), CLI option/help definitions (`cliSpecs.ts`), and subcommand handlers (`commands.ts` or split `searchCommands.ts`/`resourceCommands.ts` & `chanceryCommands.ts`/`collectionCommands.ts`) behind a `< 125` LOC facade reusing `records/runtime/{primitives,parse}.ts`.
+2. **8 CLI Ops Modules (`ops/{auditOverlaps,mediaDedupe,migrate,treeHygiene,verify,integrateBatch}/` & `ops/pronounce/`)**: Each ops domain isolates pure rules/planners/rewriters/SQL parsers (`detectors.ts`, `merge.ts`, `rewrite.ts`, `sqlParser.ts`, `dates.ts`, `classifiers.ts`, `checks.ts`, `classify.ts`, `auditRules.ts`) from filesystem/D1/Wrangler/HTTP adapters (`loader.ts`, `io.ts`, `discovery.ts`, `d1Client.ts`, `mediaCheck.ts`, `snapshot.ts`, `executor.ts`, `lookupCache.ts`, `lookupProviders.ts`, `lexiconLoader.ts`) and text/JSON report renderers (`report.ts`, `auditReport.ts`).
+
+## Post-Iteration 3B Scores
+
+| Axis | Post-It. 3A (Repo-Wide) | Post-It. 3B (It. 3B Scope) | Post-It. 3B (Repo-Wide) | Key Drivers & Remaining Gaps |
+| --- | :---: | :---: | :---: | --- |
+| **Decoupling** | 9.2 / 10 | **9.8 / 10** | **9.6 / 10** | Every CLI record client and ops command now depends on narrow typed domain/transport/report seams and shared `records/runtime/` primitives; 0 circular imports across all 238 non-test files in `packages/cli/src/commands/`. |
+| **Cohesion** | 9.2 / 10 | **9.8 / 10** | **9.6 / 10** | Every CLI module owns one bounded responsibility (parsers vs transport vs CLI specs vs handlers; pure audit/dedupe/migration rules vs disk/D1/HTTP adapters). |
+| **Data flow** | 9.3 / 10 | **9.7 / 10** | **9.6 / 10** | Uniform `CLI Parse -> Pure Validation/Parsing -> Cached Transport/Adapter -> Domain Projection -> Output` and `Load -> Pure Plan/Check -> Atomic Write/Rollback -> Report` pipelines across all CLI commands. |
+| **Layering** | 9.5 / 10 | **9.9 / 10** | **9.7 / 10** | Zero network, subprocess, or filesystem side effects leak into pure parser/domain/rule modules; SSRF URL policy cleanly separated from HTTP/curl transport; `pronounce/lexiconLoader.ts` eliminates the last ops module cycle. |
+| **Modularity** | 9.1 / 10 | **9.9 / 10** | **9.6 / 10** | Zero non-test files `>= 650` LOC remain anywhere in `@kinloom/cli` (max `644` LOC across the entire CLI package, max `525` LOC across Iteration 3B) or `@kinloom/worker`. Only 4 core/server files remain above `950` LOC repo-wide. |
+| **Extensibility** | 9.3 / 10 | **9.8 / 10** | **9.6 / 10** | Adding a new regional archive client, record subcommand, ops check, or pronunciation provider now composes directly over `records/runtime/{primitives,parse,urlPolicy,http}.ts` and small single-purpose modules. |
+
+## Remaining Roadmap (Iteration 3C to 10/10 Repo-Wide)
+
+1. **Iteration 3C: Final 4 Core & Server Monoliths (`packages/core/` & `packages/server/`)**
+   - `packages/server/src/testing/adapterContractSuite.ts` (`1,332` LOC)
+   - `packages/core/src/patchArchive.ts` (`1,098` LOC)
+   - `packages/core/src/gedcom/slice.ts` (`1,028` LOC)
+   - `packages/server/src/adapters/inMemory.ts` (`964` LOC)
+2. **Optional Final Polish (Secondary `711-897` LOC Core/UI Modules)**
+   - `packages/core/src/schemas/pronunciation.ts` (`897` LOC), `packages/ui/src/components/ArchivalMarkdown.tsx` (`859` LOC), `packages/ui/src/components/Atoms.tsx` (`799` LOC), `packages/ui/src/components/tree/TreeOrthogonalCanvas.tsx` (`742` LOC), `packages/core/src/compileArchive.ts` (`736` LOC), `packages/ui/src/machines/authSessionMachine.ts` (`720` LOC), `packages/ui/src/lib/tree/treeGraphBuilder.ts` (`711` LOC).

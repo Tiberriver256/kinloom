@@ -2,9 +2,12 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
+import { CliValidationError } from '../../../errors.js';
 import {
   atomicCopyFileSync,
   atomicWriteCompactJson,
+  encodeUrlPathPreservingSlashes,
+  handleRecordCommandError,
   hasControlChar,
   hasMagicPrefix,
   isBrokenPipeError,
@@ -17,6 +20,7 @@ import {
   runWithConcurrency,
   sha256FileSync,
 } from './primitives.js';
+import { createRecordContext, RecordRuntimeError } from './types.js';
 
 const tempDirs: string[] = [];
 
@@ -88,5 +92,27 @@ describe('records runtime primitives', () => {
     });
     expect(maxActive).toBeLessThanOrEqual(2);
     expect(output).toEqual(['0:20', '1:40', '2:60', '3:80', '4:100']);
+  });
+
+  it('encodes URL paths preserving slashes and maps CLI command errors consistently', () => {
+    expect(encodeUrlPathPreservingSlashes('a/b c/d+e')).toBe('a/b%20c/d%2Be');
+    const errs: string[] = [];
+    const ctx = createRecordContext({
+      io: { stdout: () => {}, stderr: (m) => errs.push(m) },
+    });
+    expect(handleRecordCommandError(new CliValidationError('bad flag'), ctx)).toEqual({
+      exitCode: 2,
+      bytesOut: 0,
+    });
+    expect(handleRecordCommandError(new RecordRuntimeError('net fail', 3), ctx)).toEqual({
+      exitCode: 3,
+      bytesOut: 0,
+    });
+    expect(handleRecordCommandError({ code: 'EPIPE' }, ctx, { ignoreBrokenPipe: true })).toEqual({
+      exitCode: 0,
+      bytesOut: 0,
+    });
+    expect(handleRecordCommandError(new Error('boom'), ctx)).toEqual({ exitCode: 1, bytesOut: 0 });
+    expect(errs).toEqual(['Error: bad flag', 'Error: net fail', 'Error: boom']);
   });
 });

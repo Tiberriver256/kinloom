@@ -16,7 +16,7 @@ import {
   stripIpaDelimiters,
 } from '@kinloom/core';
 import { CliValidationError } from '../../../errors.js';
-import { loadArchivePronunciationLexicon } from './audit.js';
+import { loadArchivePronunciationLexicon } from './lexiconLoader.js';
 import type {
   PronounceDeduplicateKeepReason,
   PronounceDeduplicateKeptOverride,
