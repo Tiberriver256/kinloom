@@ -17,11 +17,14 @@ Use \`kinloom pronounce\` when researching **Pronunciation Guides** for deceased
 kinloom pronounce lookup <term> [--lang nl|sv|fi|pl|de|en] [--refresh] [--json]
 \`\`\`
 
-- Queries Wiktionary (\`<lang>.wiktionary.org\` and \`en.wiktionary.org\`) and Wikipedia (\`<lang>.wikipedia.org\` and \`en.wikipedia.org\`) via the MediaWiki API.
+- Queries Wiktionary (\`<lang>.wiktionary.org\` and \`en.wiktionary.org\`), Wikipedia (\`<lang>.wikipedia.org\` and \`en.wikipedia.org\`), and **Forvo** (when \`FORVO_API_KEY\` is configured), and emits structured, anti-bot-compliant lookup URLs for **Forvo**, **YouGlish**, **VOA Pronunciation Guide**, **NameShouts**, **Pronounce Names**, and **HowToPronounce**.
 - Extracts verified **IPA** templates (\`{{IPA|...}}\`, \`{{IPA-nl|...}}\`, \`{{IPA-sv|...}}\`, \`{{IPA-pl|...}}\`, \`{{IPA-fi|...}}\`, \`{{IPA-de|...}}\`, \`{{IPA-en|...}}\`, \`{{pron|...}}\`) and Wikimedia Commons audio files (\`{{audio|...}}\`).
+- Ranks sources by tier, always prioritizing **Tier 1 (\`native_speaker\`)** evidence (Forvo, YouGlish, Wikimedia Commons native audio, Wiktionary) above **Tier 2 (\`broadcast_lexicon\`)** (VOA Pronunciation Guide, Wikipedia IPA) and **Tier 3 (\`community\`)** (NameShouts, Pronounce Names, HowToPronounce). Never rely on automated/generated voices alone for local or historical exceptions.
+- Reports two-source cross-check status in \`--json\` output: \`corroborated\` (\`true\` when matched across at least 2 independent databases), \`sourceCount\`, \`highestTier\`, \`native_speaker_verified\`, and \`verification_note\`.
+- Never bypasses CAPTCHAs, Cloudflare challenges, or paywalls; gated or JS-rendered databases return \`status: "requires_api_key"\` or \`"manual_lookup"\` with the exact pre-formatted query URL.
 - Caches results atomically under \`~/.cache/kinloom-pronounce/\` (overrideable via \`KINLOOM_PRONOUNCE_CACHE_DIR\`) with a top-level \`cache_hit\` boolean in \`--json\` output.
 - Retries HTTP 429, 5xx, and transient network failures up to 4 attempts honoring \`Retry-After\`.
-- Sets \`verified: true\` only when upstream returns an IPA string. Never fabricate IPA when \`verified\` is \`false\`.
+- Sets \`verified: true\` only when upstream returns verified IPA or native-speaker audio. Never fabricate IPA when \`verified\` is \`false\`.
 
 Examples:
 
@@ -88,5 +91,6 @@ pronunciations:
 
 ## Environment variables
 
-- \`KINLOOM_PRONOUNCE_CACHE_DIR\`: Override disk cache directory (default \`~/.cache/kinloom-pronounce\`).`,
+- \`KINLOOM_PRONOUNCE_CACHE_DIR\`: Override disk cache directory (default \`~/.cache/kinloom-pronounce\`).
+- \`FORVO_API_KEY\`: Optional Forvo API key enabling automated Tier 1 native-speaker audio lookup in \`kinloom pronounce lookup\`.`,
 };

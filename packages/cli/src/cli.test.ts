@@ -74,7 +74,7 @@ describe('unified kinloom CLI dispatch', () => {
     expect(output).toContain('ocr');
   });
 
-  it('renders SKILL.md guides with kinloom invocations for help <cmd> and <cmd> --help', async () => {
+  it('renders embedded guides with kinloom invocations for help <cmd> and <cmd> --help', async () => {
     const tmp = await makeTempDir('kinloom-cli-help-');
     process.env.KINLOOM_TELEMETRY_FILE = path.join(tmp, 'calls.jsonl');
 

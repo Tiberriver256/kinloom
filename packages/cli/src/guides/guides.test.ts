@@ -136,6 +136,8 @@ describe('embedded workflow guides', () => {
     expect(pronounce?.content).toContain('100% deceased Full-Name Pronunciation');
     expect(pronounce?.content).toContain('100% Place coverage');
     expect(pronounce?.content).toContain('Zero Living leaks');
+    expect(pronounce?.content).toContain('FORVO_API_KEY');
+    expect(pronounce?.content).toContain('corroborated');
 
     const audio = resolveEmbeddedGuide('narrative-audio');
     expect(audio?.guide.summary).toContain('Chirp 3: HD');
