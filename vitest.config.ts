@@ -21,6 +21,37 @@ export default defineConfig({
         'packages/*/src/**/types.ts',
         'packages/server/src/testing/**',
       ],
+      thresholds: {
+        lines: 90,
+        functions: 90,
+        statements: 90,
+        branches: 80,
+        'packages/core/src/**': {
+          lines: 90,
+          functions: 90,
+          statements: 90,
+        },
+        'packages/server/src/**': {
+          lines: 90,
+          functions: 90,
+          statements: 90,
+        },
+        'packages/worker/src/**': {
+          lines: 90,
+          functions: 90,
+          statements: 90,
+        },
+        'packages/ui/src/**': {
+          lines: 90,
+          functions: 90,
+          statements: 90,
+        },
+        'packages/cli/src/**': {
+          lines: 90,
+          functions: 90,
+          statements: 90,
+        },
+      },
     },
   },
 });

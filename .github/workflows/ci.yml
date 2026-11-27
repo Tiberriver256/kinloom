@@ -32,6 +32,9 @@ jobs:
       - name: Architecture, lint, build, typecheck, unit tests, contrast, and leak checks
         run: npm run check
 
+      - name: Enforce >= 90% V8 code coverage thresholds
+        run: npm run test:coverage
+
       - name: Install Playwright Chromium browser
         run: npx playwright install --with-deps chromium
 
