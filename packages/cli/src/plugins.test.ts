@@ -207,7 +207,7 @@ describe('site-root CLI plugin discovery and dispatch', () => {
     const discovered = await discoverSiteCliPlugins(siteDir);
     expect(discovered.warnings.some((w) => w.includes("shadow built-in command 'verify'"))).toBe(true);
     expect(discovered.plugins).toHaveLength(1);
-    expect(discovered.plugins[0]?.commands.map((c) => c.name)).toEqual(['safe-cmd']);
+    expect(discovered.plugins[0]?.commands?.map((c) => c.name)).toEqual(['safe-cmd']);
 
     const verifyHelpCap = createCaptureIo();
     expect(await runCli(['verify', '--help'], { cwd: siteDir, io: verifyHelpCap.io })).toBe(EXIT_OK);
