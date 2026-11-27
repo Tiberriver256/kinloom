@@ -39,9 +39,8 @@ describe('records runtime parse helpers', () => {
 
   it('parses XML via fast-xml-parser, extracts ZIP entries via fflate, and decompresses gzip', () => {
     const xml = '<book><page leaf="4"><word>Lincoln</word></page></book>';
-    const parsed = parseXml<{ book: { page: { '@_leaf': string; word: string } } }>(xml);
-    expect(parsed.book.page['@_leaf']).toBe('4');
-    expect(parsed.book.page.word).toBe('Lincoln');
+    const parsed = parseXml(xml);
+    expect(parsed).toEqual({ book: { page: { '@_leaf': '4', word: 'Lincoln' } } });
 
     const zipped = zipSync({ 'hello.txt': Buffer.from('world', 'utf8') });
     const entries = unzipEntries(zipped);

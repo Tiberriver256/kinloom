@@ -261,7 +261,7 @@ function collectDcValues(node: unknown, dcKey: string, out: string[]): void {
 export function parseOaiRecord(xmlText: string): TexasOaiRecord {
   let parsed: unknown;
   try {
-    parsed = parseXml<unknown>(xmlText);
+    parsed = parseXml(xmlText);
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
     throw new RecordRuntimeError(`OAI response was not valid XML: ${message}`);
@@ -342,7 +342,7 @@ export function parseTdaRss(feed: string, limit?: number): TexasTdaItem[] {
   const results: TexasTdaItem[] = [];
   const seen = new Set<string>();
   try {
-    const parsed = parseXml<unknown>(feed, {
+    const parsed = parseXml(feed, {
       isArray: (tagName) => tagName === 'item',
     });
     if (isPlainRecord(parsed)) {

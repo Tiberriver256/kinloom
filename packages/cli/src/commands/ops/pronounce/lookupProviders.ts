@@ -1,3 +1,4 @@
+import { z } from 'zod';
 import { fetchJsonWithRetry } from './lookupCache.js';
 import {
   buildCommonsAudioUrl,
@@ -28,21 +29,48 @@ const YOUGLISH_LANG_SLUGS: Readonly<Record<string, string>> = {
   pt: 'portuguese',
 };
 
-interface ForvoApiItem {
-  id?: number;
-  word?: string;
-  pathmp3?: string;
-  pathogg?: string;
-  username?: string;
-  country?: string;
-  langname?: string;
-  code?: string;
-  num_positive_votes?: number;
-}
+const MediaWikiRevisionSchema = z.object({
+  slots: z
+    .object({
+      main: z
+        .object({
+          content: z.string().optional(),
+        })
+        .optional(),
+    })
+    .optional(),
+  content: z.string().optional(),
+});
 
-interface ForvoApiResponse {
-  items?: ForvoApiItem[];
-}
+const MediaWikiPageSchema = z.object({
+  title: z.string().optional(),
+  missing: z.boolean().optional(),
+  revisions: z.array(MediaWikiRevisionSchema).optional(),
+});
+
+export const MediaWikiQueryResponseSchema = z.object({
+  query: z
+    .object({
+      pages: z.array(MediaWikiPageSchema).optional(),
+    })
+    .optional(),
+}) satisfies z.ZodType<MediaWikiQueryResponse>;
+
+const ForvoApiItemSchema = z.object({
+  id: z.number().optional(),
+  word: z.string().optional(),
+  pathmp3: z.string().optional(),
+  pathogg: z.string().optional(),
+  username: z.string().optional(),
+  country: z.string().optional(),
+  langname: z.string().optional(),
+  code: z.string().optional(),
+  num_positive_votes: z.number().optional(),
+});
+
+export const ForvoApiResponseSchema = z.object({
+  items: z.array(ForvoApiItemSchema).optional(),
+});
 
 export function buildForvoLookupUrl(term: string, lang: string | null): string {
   const base = `https://forvo.com/word/${encodeURIComponent(term.toLowerCase())}/`;
@@ -175,19 +203,24 @@ export async function queryMediaWikiPronunciations(params: {
     apiUrl.searchParams.set('formatversion', '2');
     apiUrl.searchParams.set('titles', params.term);
 
-    let payload: MediaWikiQueryResponse | null = null;
+    let rawPayload: unknown = null;
     try {
-      payload = (await fetchJsonWithRetry({
+      rawPayload = await fetchJsonWithRetry({
         url: apiUrl.toString(),
         fetchImpl: params.fetchImpl,
         timeoutMs: params.timeoutMs,
         sleepFn: params.sleepFn,
-      })) as MediaWikiQueryResponse | null;
+      });
     } catch {
       continue;
     }
 
-    for (const page of payload?.query?.pages ?? []) {
+    const parsed = MediaWikiQueryResponseSchema.safeParse(rawPayload);
+    if (!parsed.success) {
+      continue;
+    }
+
+    for (const page of parsed.data.query?.pages ?? []) {
       if (page.missing || !page.title) {
         continue;
       }
@@ -266,13 +299,29 @@ export async function queryForvoPronunciations(params: {
     `https://apifree.forvo.com/key/${encodeURIComponent(params.forvoApiKey)}/format/json/action/word-pronunciations/word/${encodeURIComponent(params.term)}` +
     (params.normalizedLang ? `/language/${encodeURIComponent(params.normalizedLang)}` : '');
   try {
-    const forvoPayload = (await fetchJsonWithRetry({
+    const rawPayload = await fetchJsonWithRetry({
       url: forvoApiUrl,
       fetchImpl: params.fetchImpl,
       timeoutMs: params.timeoutMs,
       sleepFn: params.sleepFn,
-    })) as ForvoApiResponse | null;
-    const items = (forvoPayload?.items ?? [])
+    });
+    const parsed = ForvoApiResponseSchema.safeParse(rawPayload);
+    if (!parsed.success) {
+      params.sources.push({
+        provider: 'forvo',
+        tier: 'native_speaker',
+        status: 'error',
+        site: 'forvo.com',
+        title: params.term,
+        url: forvoPageUrl,
+        label: 'Forvo (Native speaker audio)',
+        ipa: [],
+        audio_files: [],
+        note: 'Forvo API returned an unexpected payload shape; verify via the direct URL.',
+      });
+      return;
+    }
+    const items = (parsed.data.items ?? [])
       .filter((item) => Boolean(item.pathmp3 || item.pathogg))
       .toSorted((a, b) => (b.num_positive_votes ?? 0) - (a.num_positive_votes ?? 0));
 

@@ -1,3 +1,4 @@
+import { z } from 'zod';
 import { CliValidationError } from '../../../errors.js';
 import {
   type CommandParseSpec,
@@ -33,37 +34,39 @@ export type HathiIdType = (typeof VALID_ID_TYPES)[number];
 
 export const VALID_SEARCH_TYPES = ['all', 'title', 'author', 'subject'] as const;
 
-interface HathiRecord {
-  readonly recordURL?: string;
-  readonly titles?: readonly string[];
-  readonly publishDates?: readonly string[];
-  readonly oclcs?: readonly string[];
-  readonly lccns?: readonly string[];
-  readonly isbns?: readonly string[];
-  readonly issns?: readonly string[];
-  readonly 'marc-xml'?: string;
-  readonly [key: string]: unknown;
-}
+export const HathiRecordSchema = z
+  .object({
+    recordURL: z.string().optional(),
+    titles: z.array(z.string()).optional(),
+    publishDates: z.array(z.string()).optional(),
+    oclcs: z.array(z.string()).optional(),
+    lccns: z.array(z.string()).optional(),
+    isbns: z.array(z.string()).optional(),
+    issns: z.array(z.string()).optional(),
+    'marc-xml': z.string().optional(),
+  })
+  .passthrough();
 
-interface HathiItem {
-  readonly htid?: string;
-  readonly orig?: string;
-  readonly itemURL?: string;
-  readonly enumcron?: string;
-  readonly rightsCode?: string;
-  readonly usRightsString?: string;
-  readonly [key: string]: unknown;
-}
+export const HathiItemSchema = z
+  .object({
+    htid: z.string().optional(),
+    orig: z.string().optional(),
+    itemURL: z.string().optional(),
+    enumcron: z.union([z.string(), z.literal(false), z.null()]).optional(),
+    rightsCode: z.string().optional(),
+    usRightsString: z.string().optional(),
+  })
+  .passthrough();
 
-interface HathiBibPayload {
-  readonly records: Record<string, HathiRecord>;
-  readonly items: HathiItem[];
-  readonly error?: unknown;
-}
+export const HathiBibPayloadSchema = z.object({
+  records: z.record(z.string(), HathiRecordSchema),
+  items: z.array(HathiItemSchema),
+  error: z.unknown().optional(),
+});
 
-function isPlainRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
+export type HathiRecord = z.infer<typeof HathiRecordSchema>;
+export type HathiItem = z.infer<typeof HathiItemSchema>;
+export type HathiBibPayload = z.infer<typeof HathiBibPayloadSchema>;
 
 function isValidIdType(value: string): value is HathiIdType {
   return (VALID_ID_TYPES as readonly string[]).includes(value);
@@ -96,11 +99,8 @@ function isBibCacheable(data: HathiBibPayload): boolean {
   return Object.keys(data.records).length > 0 || data.items.length > 0;
 }
 
-function isHathiBibPayload(value: unknown): value is HathiBibPayload {
-  if (!isPlainRecord(value)) {
-    return false;
-  }
-  return isPlainRecord(value.records) && Array.isArray(value.items);
+export function isHathiBibPayload(value: unknown): value is HathiBibPayload {
+  return HathiBibPayloadSchema.safeParse(value).success;
 }
 
 async function fetchBib(
@@ -118,16 +118,11 @@ async function fetchBib(
     maxAttempts: 1,
     urlPolicy: { allowedSchemes: ['https:'], allowedHosts: HATHI_ALLOWED_HOSTS },
   });
-  if (!isPlainRecord(data)) {
+  const parsed = HathiBibPayloadSchema.safeParse(data);
+  if (!parsed.success) {
     throw new RecordRuntimeError(`Bib API returned unexpected JSON shape for ${url}`);
   }
-  const records = isPlainRecord(data.records) ? (data.records as Record<string, HathiRecord>) : {};
-  const items = Array.isArray(data.items) ? (data.items as HathiItem[]) : [];
-  return {
-    records,
-    items,
-    ...(data.error !== undefined ? { error: data.error } : {}),
-  };
+  return parsed.data;
 }
 
 export function compactBib(data: HathiBibPayload, full: boolean, cacheHit = false): string {
@@ -167,7 +162,7 @@ export function compactBib(data: HathiBibPayload, full: boolean, cacheHit = fals
     first = false;
     lines.push(`Item ${item.htid ?? ''} (${item.orig ?? ''}): ${item.usRightsString ?? ''}${suffix}`);
     lines.push(`  item URL: ${item.itemURL ?? ''}`);
-    if (item.enumcron) {
+    if (typeof item.enumcron === 'string' && item.enumcron.length > 0) {
       lines.push(`  enumcron: ${item.enumcron}`);
     }
     if (item.rightsCode) {

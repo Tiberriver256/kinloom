@@ -74,7 +74,7 @@ export function extractHtmlTables($: CheerioDocument, tableSelector = 'table'): 
   return tables;
 }
 
-export function parseXml<T = unknown>(xml: string, options: Partial<X2jOptions> = {}): T {
+export function parseXml(xml: string, options: Partial<X2jOptions> = {}): unknown {
   const parser = new XMLParser({
     ignoreAttributes: false,
     attributeNamePrefix: '@_',
@@ -84,7 +84,7 @@ export function parseXml<T = unknown>(xml: string, options: Partial<X2jOptions> 
     parseAttributeValue: false,
     ...options,
   });
-  return parser.parse(xml) as T;
+  return parser.parse(xml);
 }
 
 export function unzipEntries(zipBytes: Uint8Array): Record<string, Uint8Array> {

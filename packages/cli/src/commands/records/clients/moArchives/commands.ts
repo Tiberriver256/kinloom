@@ -27,8 +27,9 @@ import {
   type DeathRecord,
   type DetailRecord,
   getMoCacheDir,
+  isDeathSearchCachePayload,
   isDetailRecord,
-  isSearchCachePayload,
+  isPre1910SearchCachePayload,
   MATCH_METHODS,
   MDH_HOME,
   MDH_SEARCH,
@@ -112,7 +113,7 @@ export async function runDeath(
     refresh,
     fetch: () => searchDeath(ctx, formData, limit),
     cacheable: (r) => Boolean(r.verified),
-    validateCached: isSearchCachePayload<DeathRecord>,
+    validateCached: isDeathSearchCachePayload,
     nowMs: ctx.nowMs,
     sleepFn: ctx.sleepFn,
   });
@@ -200,7 +201,7 @@ export async function runPre1910(
     refresh,
     fetch: () => searchPre1910(ctx, kind, formData, limit),
     cacheable: (r) => Boolean(r.verified),
-    validateCached: isSearchCachePayload<Pre1910Record>,
+    validateCached: isPre1910SearchCachePayload,
     nowMs: ctx.nowMs,
     sleepFn: ctx.sleepFn,
   });

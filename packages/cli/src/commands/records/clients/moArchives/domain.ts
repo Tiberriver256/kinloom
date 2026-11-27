@@ -1,7 +1,8 @@
 import path from 'node:path';
+import { z } from 'zod';
 import { resolveCacheDir } from '../../runtime/cache.js';
 import { collapseWhitespace, loadHtml } from '../../runtime/parse.js';
-import { isPlainRecord, resolveEnvCacheTtlHours } from '../../runtime/primitives.js';
+import { resolveEnvCacheTtlHours } from '../../runtime/primitives.js';
 import type { RecordCommandContext } from '../../runtime/types.js';
 
 export const DEFAULT_CACHE_TTL_HOURS = 168;
@@ -305,15 +306,74 @@ export function safePdfFilename(rawUrl: string): string {
   }
 }
 
-export function isSearchCachePayload<T>(value: unknown): value is SearchCachePayload<T> {
-  return isPlainRecord(value) && typeof value.total === 'number' && Array.isArray(value.results);
+const DeathRecordSchema = z.object({
+  name: z.string(),
+  deceased: z.string().optional(),
+  spouse: z.string().optional(),
+  father: z.string().optional(),
+  mother: z.string().optional(),
+  age: z.string(),
+  date_of_death: z.string(),
+  county: z.string(),
+  cert: z.string(),
+  ssn4: z.string(),
+  image: z.string(),
+}) satisfies z.ZodType<DeathRecord>;
+
+const Pre1910DeathRecordSchema = z.object({
+  name: z.string(),
+  age: z.string(),
+  sex: z.string(),
+  color: z.string(),
+  date_of_death: z.string(),
+  county: z.string(),
+  detail_id: z.string(),
+  detail_url: z.string(),
+}) satisfies z.ZodType<Pre1910DeathRecord>;
+
+const Pre1910BirthRecordSchema = z.object({
+  name: z.string(),
+  place: z.string(),
+  county: z.string(),
+  date_of_birth: z.string(),
+  father: z.string(),
+  mother: z.string(),
+  attendant: z.string(),
+  detail_id: z.string(),
+  detail_url: z.string(),
+}) satisfies z.ZodType<Pre1910BirthRecord>;
+
+const Pre1910RecordSchema = z.union([
+  Pre1910DeathRecordSchema,
+  Pre1910BirthRecordSchema,
+]) satisfies z.ZodType<Pre1910Record>;
+
+const DeathSearchCachePayloadSchema = z.object({
+  total: z.number(),
+  results: z.array(DeathRecordSchema),
+  verified: z.boolean(),
+}) satisfies z.ZodType<SearchCachePayload<DeathRecord>>;
+
+const Pre1910SearchCachePayloadSchema = z.object({
+  total: z.number(),
+  results: z.array(Pre1910RecordSchema),
+  verified: z.boolean(),
+}) satisfies z.ZodType<SearchCachePayload<Pre1910Record>>;
+
+const DetailRecordSchema = z.object({
+  id: z.string(),
+  url: z.string(),
+  fields: z.record(z.string(), z.string()),
+}) satisfies z.ZodType<DetailRecord>;
+
+export function isDeathSearchCachePayload(value: unknown): value is SearchCachePayload<DeathRecord> {
+  return DeathSearchCachePayloadSchema.safeParse(value).success;
+}
+
+export function isPre1910SearchCachePayload(value: unknown): value is SearchCachePayload<Pre1910Record> {
+  return Pre1910SearchCachePayloadSchema.safeParse(value).success;
 }
 
 export function isDetailRecord(value: unknown): value is DetailRecord {
-  return (
-    isPlainRecord(value) &&
-    typeof value.id === 'string' &&
-    typeof value.url === 'string' &&
-    isPlainRecord(value.fields)
-  );
+  return DetailRecordSchema.safeParse(value).success;
 }

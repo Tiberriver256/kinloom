@@ -3,8 +3,8 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { createRecordContext } from '../runtime/index.js';
-import { runHathiCommand } from './hathi.js';
+import { cacheKeyFor, createRecordContext } from '../runtime/index.js';
+import { isHathiBibPayload, runHathiCommand } from './hathi.js';
 
 const BIB_PAYLOAD_A = {
   records: {
@@ -202,5 +202,65 @@ describe('hathi native client', () => {
     expect(r4.exitCode).toBe(0);
     expect(calls).toBe(4);
     expect(fs.readdirSync(cacheDir).filter((f) => f.endsWith('.json'))).toHaveLength(1);
+  });
+
+  it('rejects malformed records and items elements at both HTTP and disk-cache boundaries', async () => {
+    expect(isHathiBibPayload({ records: { '1': null }, items: [] })).toBe(false);
+    expect(isHathiBibPayload({ records: {}, items: [null, 42] })).toBe(false);
+    expect(isHathiBibPayload({ records: { '1': { titles: [123] } }, items: [] })).toBe(false);
+    expect(isHathiBibPayload({ records: {}, items: [{ htid: 999 }] })).toBe(false);
+    expect(isHathiBibPayload(BIB_PAYLOAD_A)).toBe(true);
+
+    const cacheDir = await makeTempDir();
+    const badPayloads: unknown[] = [
+      { records: { '1': null }, items: [] },
+      { records: {}, items: [null, 42] },
+      { records: { '1': { titles: [123] } }, items: [] },
+      { records: {}, items: [{ htid: 999 }] },
+    ];
+    let httpIdx = 0;
+    const badFetch: typeof fetch = async () => {
+      const payload = badPayloads[httpIdx];
+      httpIdx += 1;
+      return new Response(JSON.stringify(payload), { status: 200 });
+    };
+
+    for (let i = 0; i < badPayloads.length; i += 1) {
+      const res = await invokeHathi(['bib', 'oclc', '424023'], cacheDir, badFetch);
+      expect(res.exitCode).toBe(1);
+      expect(res.stderr).toContain('Bib API returned unexpected JSON shape');
+    }
+    expect(fs.readdirSync(cacheDir).filter((f) => f.endsWith('.json'))).toEqual([]);
+
+    const key = cacheKeyFor('bib', { id_type: 'oclc', value: '424023', full: false });
+    const cacheFile = path.join(cacheDir, `${key}.json`);
+    fs.writeFileSync(
+      cacheFile,
+      JSON.stringify({
+        schema: 1,
+        fetched_at: Math.floor(Date.now() / 1000),
+        kind: 'bib',
+        query: { id_type: 'oclc', value: '424023', full: false },
+        result: { records: { '1': null }, items: [null, 42] },
+      }),
+      'utf8'
+    );
+
+    let recoveryCalls = 0;
+    const recoveryFetch: typeof fetch = async () => {
+      recoveryCalls += 1;
+      return new Response(JSON.stringify(BIB_PAYLOAD_A), { status: 200 });
+    };
+
+    const recovered = await invokeHathi(['bib', 'oclc', '424023', '--json'], cacheDir, recoveryFetch);
+    expect(recovered.exitCode).toBe(0);
+    expect(recoveryCalls).toBe(1);
+    const recoveredJson = JSON.parse(recovered.stdout) as { cache_hit: boolean };
+    expect(recoveredJson.cache_hit).toBe(false);
+
+    const cachedAfter = await invokeHathi(['bib', 'oclc', '424023', '--json'], cacheDir, recoveryFetch);
+    expect(cachedAfter.exitCode).toBe(0);
+    expect(recoveryCalls).toBe(1);
+    expect((JSON.parse(cachedAfter.stdout) as { cache_hit: boolean }).cache_hit).toBe(true);
   });
 });

@@ -90,7 +90,7 @@ export function parseScandataXml(xmlBytes: Uint8Array): PageIndex {
   if (XMLValidator.validate(xmlText) !== true) {
     throw new Error('Invalid scandata.xml XML payload.');
   }
-  const pageDataNode = findPageDataNode(parseXml<unknown>(xmlText));
+  const pageDataNode = findPageDataNode(parseXml(xmlText));
   if (pageDataNode === undefined) {
     throw new Error('scandata.xml is missing <pageData>.');
   }

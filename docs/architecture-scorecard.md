@@ -667,3 +667,30 @@ Evaluated on `2026-11-27` (UTC via Python `datetime.now(timezone.utc)`) on top o
 - Live CLI smoke checks: `kinloom --help` and `kinloom status --help` exit `0`
 
 Ready for **Fresh-Eyes Independent Review #6 (`10/10` across all six axes)**.
+
+## Fresh-Eyes Independent Review #6 (`3f4594f`) & Iteration 9 Remediation (CLI External JSON & Cache Validation)
+
+Evaluated on `2026-11-27` (UTC via Python `datetime.now(timezone.utc)`) on top of commit `3f4594f`. Fresh-Eyes Review #6 independently scored **five of six axes `10/10`** (`Decoupling`, `Cohesion`, `Layering`, `Modularity`, `Extensibility`) and identified 2 remaining CLI external JSON/cache casts on `Data flow` (`9/10`). Iteration 9 remediated both gaps and completed a preventive sweep across non-test `packages/cli/src/` while keeping `packages/*/dist` rebuilt in place and preserving every verified invariant.
+
+### Findings Remediated in Iteration 9
+
+| Review Finding | Root Cause Before Iteration 9 | Measured Fix in Iteration 9 |
+| --- | --- | --- |
+| **Gap 1 (Data flow): Unvalidated MediaWiki and Forvo JSON casts in `pronounce/lookupProviders.ts`** | `queryMediaWikiPronunciations` cast `fetchJsonWithRetry(...)` with `as MediaWikiQueryResponse \| null` and `queryForvoPronunciations` cast with `as ForvoApiResponse \| null`, risking uncaught `TypeError` on non-array `query.pages` / non-string `page.title` and leaking malformed fields into `PronounceAudioHit` or cached files. | Added strict `MediaWikiQueryResponseSchema` (`satisfies z.ZodType<MediaWikiQueryResponse>`) and `ForvoApiResponseSchema` in `packages/cli/src/commands/ops/pronounce/lookupProviders.ts` (`390` LOC), parsed both HTTP payloads via `.safeParse(...)` with zero `as` casts, skipped non-conforming MediaWiki payloads cleanly inside the target loop, recorded an explicit `'error'` Forvo source status on non-conforming payloads, and added malformed-payload unit tests in `packages/cli/src/commands/ops/pronounce.test.ts`. |
+| **Gap 2 (Data flow): Unchecked `records`/`items` casts & shallow cache guard in `clients/hathi.ts`** | `fetchBib` cast `data.records as Record<string, HathiRecord>` and `data.items as HathiItem[]`, and `isHathiBibPayload` checked only top-level `isPlainRecord(value.records) && Array.isArray(value.items)` without validating record or item elements. | Added element-level `HathiRecordSchema`, `HathiItemSchema`, and `HathiBibPayloadSchema` in `packages/cli/src/commands/records/clients/hathi.ts` (`381` LOC), parsed both HTTP (`fetchBib`, throwing `RecordRuntimeError`) and disk-cache (`isHathiBibPayload`, returning `false` for clean cache miss) boundaries via `.safeParse(...)` with zero `as` casts, removed dead local `isPlainRecord`, and added HTTP + disk-cache malformed-element tests in `packages/cli/src/commands/records/clients/hathi.test.ts`. |
+| **Preventive Sweep: Generic `parseXml<T>` cast & shallow `moArchives` cache guards** | `parseXml<T = unknown>` in `packages/cli/src/commands/records/runtime/parse.ts` returned `parser.parse(xml) as T`; `isSearchCachePayload<T>` and `isDetailRecord` in `packages/cli/src/commands/records/clients/moArchives/domain.ts` did not validate cached `results` elements, `verified`, or `fields` string values. | Changed `parseXml` in `packages/cli/src/commands/records/runtime/parse.ts` (`100` LOC) to return `unknown` with zero `as` casts and updated its 4 callers plus `parse.test.ts`; replaced `isSearchCachePayload<T>` and `isDetailRecord` with element-level Zod schemas (`isDeathSearchCachePayload`, `isPre1910SearchCachePayload`, `isDetailRecord`) in `packages/cli/src/commands/records/clients/moArchives/domain.ts` (`379` LOC) and `commands.ts`. |
+
+### Iteration 9 Measured Verification Snapshot
+
+- Non-test files across `packages/*/src` and `examples/demo/src`: **`619` total (`577` TS/TSX max `548` LOC, `42` CSS max `523` LOC, `0` files `> 550` LOC)**
+- Production non-null assertions (`!`) and escape hatches (`any`, `@ts-ignore`, `@ts-expect-error`, `@ts-nocheck`, `as unknown as`, `eslint-disable`): **`0`**
+- `npm run build`: **`6/6` workspaces** built cleanly in place (`packages/*/dist` preserved)
+- `npm run check:arch`: **`PASS` (`0` violations across `577` non-test TS/TSX files: `0` runtime cycles, `0` type cycles, `0` dynamic-import cycles, `0` reverse-layer/adapter/cross-page-CSS/atom-drawer-CSS imports, `0` raw UI `/api/` fetch or sendBeacon calls, `0` pure-UI leaks, `0` escape hatches, `0` eager record-client imports, `0` ambient Date in privacy)**
+- `npm run lint`: Biome **`0` errors, `0` warnings** across `789` files + `check:counts` **`0` violations** across `716` files
+- `npm run typecheck`: **`7/7` tsconfigs** (`0` errors)
+- `npm test`: **`128/128` test files, `850/850` tests passed** (including new malformed-payload tests in `pronounce.test.ts` and `hathi.test.ts`)
+- `npm run check:contrast`: **`15/15` passed**
+- `npm run check:leaks`: **`0` leaks**
+- Live CLI smoke checks: `kinloom --help` and `kinloom pronounce --help` exit `0`
+
+Ready for **Fresh-Eyes Independent Review #7 (`10/10` across all six axes)**.

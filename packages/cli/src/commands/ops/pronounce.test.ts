@@ -435,6 +435,117 @@ describe('kinloom pronounce lookup', () => {
     expect(reparsed).not.toBeNull();
     expect(reparsed?.term).toBe('Goes');
   });
+
+  it('skips malformed MediaWiki payloads (non-array pages, null entries, non-string titles) without throwing', async () => {
+    const cacheDir = await makeTempDir('kinloom-pron-bad-wiki-');
+    const mockFetch = vi.fn<typeof fetch>(async (input) => {
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
+      if (url.startsWith('https://nl.wiktionary.org/')) {
+        return new Response(JSON.stringify({ query: { pages: { '1': { title: 'Goes' } } } }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        });
+      }
+      if (url.startsWith('https://en.wiktionary.org/')) {
+        return new Response(JSON.stringify({ query: { pages: [null] } }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        });
+      }
+      if (url.startsWith('https://nl.wikipedia.org/')) {
+        return new Response(
+          JSON.stringify({
+            query: {
+              pages: [{ title: 123, revisions: [{ slots: { main: { content: '{{IPA|nl|/ɣus/}}' } } }] }],
+            },
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } }
+        );
+      }
+      return new Response(
+        JSON.stringify({
+          query: {
+            pages: [
+              {
+                title: 'Goes',
+                revisions: [{ slots: { main: { content: 'Goes ({{IPA-nl|ɣus}})' } } }],
+              },
+            ],
+          },
+        }),
+        { status: 200, headers: { 'content-type': 'application/json' } }
+      );
+    });
+
+    const result = await runPronounceLookupCommand({
+      term: 'Goes',
+      lang: 'nl',
+      cacheDir,
+      fetchImpl: mockFetch,
+      sleepFn: async () => {},
+      nowIso: () => '2026-11-27T04:30:00.000Z',
+    });
+
+    expect(result.verified).toBe(true);
+    expect(result.primary_ipa).toBe('/ɣus/');
+    expect(result.sources.filter((s) => s.status === 'verified').map((s) => s.site)).toEqual([
+      'en.wikipedia.org',
+    ]);
+  });
+
+  it('reports Forvo status error and leaks no audio hits when Forvo returns malformed item field types', async () => {
+    const cacheDir = await makeTempDir('kinloom-pron-bad-forvo-');
+    const mockFetch = vi.fn<typeof fetch>(async (input) => {
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
+      if (url.startsWith('https://apifree.forvo.com/')) {
+        return new Response(
+          JSON.stringify({
+            items: [
+              {
+                id: 'not-a-number',
+                pathmp3: 12345,
+                username: { nested: true },
+                num_positive_votes: 'five',
+              },
+            ],
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } }
+        );
+      }
+      return new Response(JSON.stringify({ query: { pages: [{ title: 'Zeeland', missing: true }] } }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      });
+    });
+
+    const result = await runPronounceLookupCommand({
+      term: 'Zeeland',
+      lang: 'nl',
+      forvoApiKey: 'test-forvo-key',
+      cacheDir,
+      fetchImpl: mockFetch,
+      sleepFn: async () => {},
+      nowIso: () => '2026-11-27T04:30:00.000Z',
+    });
+
+    const forvoSource = result.sources.find((s) => s.provider === 'forvo');
+    expect(forvoSource?.status).toBe('error');
+    expect(forvoSource?.audio_files).toEqual([]);
+    expect(result.audio_files).toEqual([]);
+    expect(result.verified).toBe(false);
+
+    const cachePath = buildLookupCachePath({
+      cacheDir,
+      term: 'Zeeland',
+      normalizedLang: 'nl',
+      normalizedRegion: null,
+      hasForvoKey: true,
+    });
+    const cached = readLookupCache(cachePath);
+    expect(cached).not.toBeNull();
+    expect(cached?.audio_files).toEqual([]);
+    expect(cached?.sources.find((s) => s.provider === 'forvo')?.status).toBe('error');
+  });
 });
 
 describe('kinloom pronounce audit', () => {

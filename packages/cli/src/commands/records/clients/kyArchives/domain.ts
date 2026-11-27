@@ -226,7 +226,7 @@ export function parsePreservicaRss(
   const seen = new Set<string>();
 
   try {
-    const parsed = parseXml<unknown>(feed, {
+    const parsed = parseXml(feed, {
       isArray: (tagName) => tagName === 'item',
     });
     if (isPlainRecord(parsed)) {
