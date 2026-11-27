@@ -122,6 +122,8 @@
   border: 1px solid var(--border-decorative);
   border-radius: var(--radius-sm);
   padding: 14px 16px;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .transcript-meta {
@@ -135,6 +137,10 @@
   padding-bottom: 8px;
   margin-bottom: 10px;
   border-bottom: 1px dashed var(--border-decorative);
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .transcript-body {

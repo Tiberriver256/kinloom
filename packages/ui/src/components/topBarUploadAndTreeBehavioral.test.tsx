@@ -130,6 +130,20 @@ async function flushUi(): Promise<void> {
   });
 }
 
+async function waitForCondition(
+  predicate: () => boolean,
+  description: string,
+  timeoutMs = 5000
+): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (!predicate()) {
+    if (Date.now() >= deadline) {
+      throw new Error(`Timed out after ${timeoutMs}ms waiting for ${description}`);
+    }
+    await flushUi();
+  }
+}
+
 afterEach(() => {
   while (cleanups.length > 0) {
     cleanups.pop()?.();
@@ -295,29 +309,40 @@ describe('ExplorerTopBar, MediaUploaderModal, MilestoneStoryCard, TreePage canva
         </ArchiveProvider>
       </MemoryRouter>
     );
-    await flushUi();
-    await flushUi();
+    await waitForCondition(
+      () => modal.querySelector('input[type="file"]') !== null,
+      'MediaUploaderModal file input to render'
+    );
 
     const fileInput = modal.querySelector('input[type="file"]') as HTMLInputElement | null;
+    expect(fileInput).not.toBeNull();
     if (fileInput) {
       const png = new File([new Uint8Array([137, 80, 78, 71])], 'homestead.png', { type: 'image/png' });
       Object.defineProperty(fileInput, 'files', { value: [png], configurable: true });
       act(() => {
         fileInput.dispatchEvent(new Event('change', { bubbles: true }));
       });
-      await flushUi();
+      await waitForCondition(
+        () =>
+          Array.from(modal.querySelectorAll('button')).some(
+            (b) => /upload|add photo|submit/i.test(b.textContent || '') && !b.disabled
+          ),
+        'MediaUploaderModal submit button to become enabled'
+      );
       const uploadBtn = Array.from(modal.querySelectorAll('button')).find(
         (b) => /upload|add photo|submit/i.test(b.textContent || '') && !b.disabled
       );
-      if (uploadBtn) {
-        act(() => {
-          uploadBtn.click();
-        });
-        await flushUi();
-        await flushUi();
-      }
+      expect(uploadBtn).not.toBeNull();
+      act(() => {
+        uploadBtn?.click();
+      });
+      await waitForCondition(
+        () => uploaded && Boolean(modal.textContent?.includes('Uploaded and attached media to the archive.')),
+        'MediaUploaderModal upload and attach pipeline to complete'
+      );
     }
-    expect(uploaded || modal.textContent?.includes('homestead.png')).toBe(true);
+    expect(uploaded).toBe(true);
+    expect(modal.textContent).toContain('Uploaded and attached media to the archive.');
 
     // MilestoneStoryCard click + co-presence pivot
     let selected = false;

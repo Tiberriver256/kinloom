@@ -315,6 +315,8 @@
 .source-tag {
   margin-top: 12px;
   padding-top: 8px;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .source-toggle {
@@ -328,8 +330,11 @@
   color: var(--text-secondary);
   cursor: pointer;
   display: inline-flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 6px;
+  max-width: 100%;
+  text-align: left;
 }
 
 .source-toggle:hover {
@@ -349,6 +354,8 @@
   background: var(--diff-del-bg);
   color: var(--diff-del-fg);
   margin-left: 6px;
+  max-width: 100%;
+  overflow-wrap: anywhere;
 }
 
 .source-details {
@@ -357,12 +364,26 @@
   border-left: 2px solid var(--border-decorative);
   font-size: 0.9rem;
   color: var(--text-secondary);
-  max-width: 56ch;
+  min-width: 0;
+  max-width: min(56ch, 100%);
+  box-sizing: border-box;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .source-details ul {
   margin: 4px 0 0;
   padding-left: 18px;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.source-details li,
+.source-details code {
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .person-portrait-img {

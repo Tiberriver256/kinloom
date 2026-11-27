@@ -219,6 +219,13 @@ select.pill-btn option {
   font-size: 0.74rem;
   font-weight: 600;
   cursor: pointer;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+  text-align: left;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .source-read-inline:hover {

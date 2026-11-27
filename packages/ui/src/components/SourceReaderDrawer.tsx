@@ -514,7 +514,13 @@ export const SourceReaderDrawer: React.FC = () => {
             </div>
 
             <div
-              style={{ fontFamily: 'var(--font-mono)', fontSize: '0.75rem', color: 'var(--text-secondary)' }}
+              style={{
+                fontFamily: 'var(--font-mono)',
+                fontSize: '0.75rem',
+                color: 'var(--text-secondary)',
+                overflowWrap: 'anywhere',
+                wordBreak: 'break-word',
+              }}
             >
               Provenance: {formatPublicCitation(currentDoc.provenance)}
             </div>

@@ -34,22 +34,29 @@ export const ExplorerTopBar: React.FC = () => {
     if (!headerEl || typeof window === 'undefined') {
       return undefined;
     }
+    let cancelled = false;
     const syncTopbarHeight = (): void => {
-      const measured = Math.ceil(headerEl.getBoundingClientRect().height);
+      if (cancelled) {
+        return;
+      }
+      const measured = Math.floor(headerEl.getBoundingClientRect().height);
       if (measured > 0) {
         document.documentElement.style.setProperty('--topbar-height', `${measured}px`);
       }
     };
     syncTopbarHeight();
+    void document.fonts?.ready?.then(syncTopbarHeight);
     if (typeof ResizeObserver === 'undefined') {
       window.addEventListener('resize', syncTopbarHeight);
       return (): void => {
+        cancelled = true;
         window.removeEventListener('resize', syncTopbarHeight);
       };
     }
     const observer = new ResizeObserver(syncTopbarHeight);
     observer.observe(headerEl);
     return (): void => {
+      cancelled = true;
       observer.disconnect();
     };
   }, []);

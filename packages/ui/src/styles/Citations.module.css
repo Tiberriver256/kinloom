@@ -10,6 +10,8 @@
   display: flex;
   flex-direction: column;
   gap: 10px;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .citation-item-card {
@@ -20,6 +22,9 @@
   display: flex;
   flex-direction: column;
   gap: 5px;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 .citation-item-top {
@@ -84,12 +89,20 @@
   font-weight: 600;
   color: var(--surface-header);
   line-height: 1.38;
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .citation-item-meta {
   font-size: 0.83rem;
   color: var(--text-secondary);
   line-height: 1.4;
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .citation-page-detail {
@@ -102,13 +115,21 @@
   padding: 5px 8px;
   margin-top: 2px;
   line-height: 1.45;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
   overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .citation-missing-detail {
   font-size: 0.8rem;
   font-style: italic;
   color: var(--text-secondary);
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .citation-item-actions {
@@ -162,14 +183,40 @@
   background: var(--surface-canvas);
   border: 1px solid var(--border-decorative);
   border-radius: 2px;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .citation-conflicts-box ul {
   margin: 6px 0 0;
   padding-left: 18px;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.citation-conflicts-box li {
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.citation-conflicts-box code {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .citation-conflicts-box :global(.source-read-inline) {
   margin-left: 0;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
   text-align: left;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
