@@ -1,6 +1,6 @@
 {
   "name": "@kinloom/core",
-  "version": "0.39.0",
+  "version": "0.40.1",
   "type": "module",
   "sideEffects": false,
   "license": "MIT",
