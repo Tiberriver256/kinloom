@@ -8,6 +8,7 @@ import {
   type MediaItem,
   MediaItemSchema,
   type MediaStore,
+  maxBytesForMediaMime,
   parseEntityPayload,
   type RawEvent,
   type RevisionAuthor,
@@ -176,6 +177,14 @@ export function parseHttpByteRange(
   };
 }
 
+export interface MediaUploadRejectionInfo {
+  readonly reason: 'magic_bytes_mismatch' | 'unsupported_media_type' | 'file_too_large' | 'empty_file';
+  readonly status: number;
+  readonly contentType: string;
+  readonly sizeBytes: number;
+  readonly maxBytes?: number;
+}
+
 export class MediaService {
   private readonly repository: EntityReadStore;
   private readonly mediaStore: MediaStore;
@@ -196,6 +205,7 @@ export class MediaService {
     summary: string;
     hasPrimarySource?: boolean;
     author: RevisionAuthor;
+    onUploadRejected?: (info: MediaUploadRejectionInfo) => void;
   }): Promise<{
     media: MediaItem;
     url: string;
@@ -226,16 +236,43 @@ export class MediaService {
 
     if (!selectionCheck.ok) {
       if (selectionCheck.reason === 'unsupported_mime') {
+        params.onUploadRejected?.({
+          reason: 'unsupported_media_type',
+          status: 415,
+          contentType: normalizedMime,
+          sizeBytes: params.bytes.byteLength,
+        });
         throw new KinloomHttpError(415, 'UNSUPPORTED_MEDIA_TYPE', selectionCheck.message);
       }
       if (selectionCheck.reason === 'file_too_large') {
+        params.onUploadRejected?.({
+          reason: 'file_too_large',
+          status: 413,
+          contentType: normalizedMime,
+          sizeBytes: params.bytes.byteLength,
+          maxBytes: maxBytesForMediaMime(normalizedMime, maxUploadOverride),
+        });
         throw new KinloomHttpError(413, 'PAYLOAD_TOO_LARGE', selectionCheck.message);
+      }
+      if (selectionCheck.reason === 'empty_file') {
+        params.onUploadRejected?.({
+          reason: 'empty_file',
+          status: 400,
+          contentType: normalizedMime,
+          sizeBytes: params.bytes.byteLength,
+        });
       }
       throw new KinloomHttpError(400, 'VALIDATION_ERROR', selectionCheck.message);
     }
 
     const ext = EXTENSION_BY_MIME[normalizedMime];
     if (!ext) {
+      params.onUploadRejected?.({
+        reason: 'unsupported_media_type',
+        status: 415,
+        contentType: normalizedMime,
+        sizeBytes: params.bytes.byteLength,
+      });
       throw new KinloomHttpError(
         415,
         'UNSUPPORTED_MEDIA_TYPE',
@@ -244,6 +281,12 @@ export class MediaService {
     }
 
     if (!matchesMagicBytesForMime(normalizedMime, params.bytes)) {
+      params.onUploadRejected?.({
+        reason: 'magic_bytes_mismatch',
+        status: 415,
+        contentType: normalizedMime,
+        sizeBytes: params.bytes.byteLength,
+      });
       throw new KinloomHttpError(
         415,
         'UNSUPPORTED_MEDIA_TYPE',

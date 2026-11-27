@@ -4,9 +4,24 @@ import type {
   ServerRequestErrorEvent,
   ServerRequestResponseEvent,
   ServerRequestStartEvent,
+  ServerSecurityEvent,
   ServerTelemetryCacheStatus,
   ServerTimingSpanName,
 } from '../http/pluginLifecycle.js';
+import { createSecurityTelemetryHandler, type WorkersSecurityTelemetryOption } from './securityTelemetry.js';
+
+export {
+  buildSecurityTelemetryLogRecord,
+  createSecurityTelemetryHandler,
+  defaultSecurityTelemetrySink,
+  isSecurityTelemetryEnabled,
+  type SecurityTelemetryAlertSink,
+  type SecurityTelemetryLogLevel,
+  type SecurityTelemetryLogRecord,
+  type SecurityTelemetryOptions,
+  type SecurityTelemetrySink,
+  type WorkersSecurityTelemetryOption,
+} from './securityTelemetry.js';
 
 export const WORKERS_OBSERVABILITY_PLUGIN_ID = 'kinloom-workers-observability';
 
@@ -47,6 +62,11 @@ export interface WorkersObservabilityPluginOptions {
   readonly now?: () => number;
   /** Optional request ID generator fallback when no safe incoming request ID or cf-ray exists. */
   readonly generateRequestId?: () => string;
+  /**
+   * Opt-in security and abuse telemetry (structured security_event logs and fault-isolated alert sink).
+   * Strictly OFF by default even when createWorkersObservabilityPlugin() is registered.
+   */
+  readonly securityTelemetry?: WorkersSecurityTelemetryOption;
 }
 
 interface PerRequestObservabilityState {
@@ -246,36 +266,45 @@ export function createWorkersObservabilityPlugin(
   const sink: WorkersObservabilitySink = options.sink ?? defaultWorkersObservabilitySink;
   const generateRequestId = options.generateRequestId ?? defaultGenerateRequestId;
 
-  function ensureState(telemetry: ServerRequestStartEvent['telemetry']): PerRequestObservabilityState {
-    const existing = readState(telemetry.metadata);
+  function ensureState(request: Request, metadata: Map<string, unknown>): PerRequestObservabilityState {
+    const existing = readState(metadata);
     if (existing) {
       return existing;
     }
     const created: PerRequestObservabilityState = {
-      requestId: resolveObservabilityRequestId(telemetry.request, generateRequestId),
+      requestId: resolveObservabilityRequestId(request, generateRequestId),
       startedAtMs: readCustomNowMs(options),
       errorCode: null,
     };
-    telemetry.metadata.set(WORKERS_OBSERVABILITY_PLUGIN_ID, created);
+    metadata.set(WORKERS_OBSERVABILITY_PLUGIN_ID, created);
     return created;
   }
+
+  const securityEventHandler = options.securityTelemetry
+    ? createSecurityTelemetryHandler({
+        option: options.securityTelemetry,
+        resolveRequestId: (event: ServerSecurityEvent) =>
+          ensureState(event.request, event.metadata).requestId,
+        readTimestampIso: () => readTimestampIso(options),
+      })
+    : undefined;
 
   return {
     id: WORKERS_OBSERVABILITY_PLUGIN_ID,
     name: 'Cloudflare Workers Observability',
 
     onRequestStart(event: ServerRequestStartEvent): void {
-      ensureState(event.telemetry);
+      ensureState(event.telemetry.request, event.telemetry.metadata);
     },
 
     onError(event: ServerRequestErrorEvent): void {
-      const state = ensureState(event.telemetry);
+      const state = ensureState(event.telemetry.request, event.telemetry.metadata);
       state.errorCode = sanitizeObservabilityErrorCode(event.errorCode);
     },
 
     async onResponse(event: ServerRequestResponseEvent): Promise<void> {
       const { telemetry } = event;
-      const state = ensureState(telemetry);
+      const state = ensureState(telemetry.request, telemetry.metadata);
 
       const endCustomMs = readCustomNowMs(options);
       const rawDurationMs =
@@ -322,5 +351,7 @@ export function createWorkersObservabilityPlugin(
 
       await sink(record);
     },
+
+    ...(securityEventHandler ? { onSecurityEvent: securityEventHandler } : {}),
   };
 }

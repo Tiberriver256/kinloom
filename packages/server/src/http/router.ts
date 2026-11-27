@@ -12,6 +12,7 @@ import { type HttpRequestContext, type HttpRouteHandler, jsonResponse } from './
 import {
   createRequestTelemetryTracker,
   hasRequestLifecyclePlugins,
+  hasSecurityEventPlugins,
   type KinloomServerPlugin,
   type KinloomServerPorts,
   normalizeServerRouteTemplate,
@@ -48,8 +49,12 @@ export interface KinloomServerConfig {
   compiledPluginRoutes?: readonly CompiledPluginRoute[];
 }
 
+export interface KinloomServerFetchOptions {
+  readonly waitUntil?: (promise: Promise<unknown>) => void;
+}
+
 export interface KinloomServer {
-  fetch(request: Request): Promise<Response>;
+  fetch(request: Request, options?: KinloomServerFetchOptions): Promise<Response>;
 }
 
 const DEFAULT_SESSION_TTL_SECONDS = 30 * 24 * 60 * 60;
@@ -192,6 +197,10 @@ export function createKinloomServer(config: KinloomServerConfig): KinloomServer 
   const plugins = config.ports.plugins ?? [];
   const pluginRoutes = config.compiledPluginRoutes ?? validateAndCompilePluginRoutes(plugins);
   const hasLifecyclePlugins = hasRequestLifecyclePlugins(plugins);
+  const hasSecurityPlugins = hasSecurityEventPlugins(plugins);
+  const securityPlugins = hasSecurityPlugins
+    ? plugins.filter((plugin) => typeof plugin.onSecurityEvent === 'function')
+    : [];
 
   const authService = new AuthService({
     repository: config.ports.repository,
@@ -313,7 +322,7 @@ export function createKinloomServer(config: KinloomServerConfig): KinloomServer 
 
     const matchedPluginRoute = matchPluginRoute(pluginRoutes, method, pathname);
     if (matchedPluginRoute) {
-      enforceCsrfOrigin(request, url, auth.authMethod);
+      enforceCsrfOrigin(request, url, auth.authMethod, telemetry);
       requireMinRole(auth.principal, matchedPluginRoute.minRole, {
         allowAgentScopes:
           matchedPluginRoute.minRole === 'viewer'
@@ -322,6 +331,8 @@ export function createKinloomServer(config: KinloomServerConfig): KinloomServer 
               ? ['write_batch']
               : [],
         adminForbiddenCode: matchedPluginRoute.minRole === 'admin' ? 'ADMIN_REQUIRED' : 'FORBIDDEN',
+        telemetry,
+        bearerRejected: auth.bearerRejected,
       });
       return matchedPluginRoute.handle({
         request,
@@ -342,6 +353,8 @@ export function createKinloomServer(config: KinloomServerConfig): KinloomServer 
       if (pathname.startsWith('/data/')) {
         requireMinRole(auth.principal, 'viewer', {
           allowAgentScopes: ['write_batch', 'read_backup'],
+          telemetry,
+          bearerRejected: auth.bearerRejected,
         });
         const assetHandler = config.ports.assetHandler;
         const dataResponse = await timeSpan(telemetry, 'bundle', () => assetHandler.fetch(request));
@@ -361,12 +374,12 @@ export function createKinloomServer(config: KinloomServerConfig): KinloomServer 
   }
 
   return {
-    async fetch(request: Request): Promise<Response> {
+    async fetch(request: Request, fetchOptions?: KinloomServerFetchOptions): Promise<Response> {
       const url = new URL(request.url);
       const isSecure = isSecureRequestUrl(url);
       const isMediaPath = url.pathname.startsWith('/media/') || url.pathname.startsWith('/sources/');
 
-      if (!hasLifecyclePlugins) {
+      if (!hasLifecyclePlugins && !hasSecurityPlugins) {
         try {
           const response = await handleRequest(request);
           const isMediaResponse = isMediaPath && (response.status === 200 || response.status === 206);
@@ -382,19 +395,33 @@ export function createKinloomServer(config: KinloomServerConfig): KinloomServer 
 
       const method = request.method.toUpperCase();
       const route = normalizeServerRouteTemplate(url.pathname, pluginRoutes, method);
-      const tracker = createRequestTelemetryTracker({ request, method, route });
+      const tracker = createRequestTelemetryTracker({
+        request,
+        method,
+        route,
+        clock: config.ports.clock,
+        securityPlugins: hasSecurityPlugins ? securityPlugins : undefined,
+        waitUntil: fetchOptions?.waitUntil,
+        onPluginError: config.onPluginError,
+      });
 
-      await runPluginLifecycleHook(
-        plugins,
-        (plugin) => plugin.onRequestStart,
-        { telemetry: tracker.snapshot() },
-        config.onPluginError
-      );
+      if (hasLifecyclePlugins) {
+        await runPluginLifecycleHook(
+          plugins,
+          (plugin) => plugin.onRequestStart,
+          { telemetry: tracker.snapshot() },
+          config.onPluginError
+        );
+      }
 
       try {
         const response = await handleRequest(request, tracker);
         const isMediaResponse = isMediaPath && (response.status === 200 || response.status === 206);
         const secured = applySecurityHeaders(response, { isSecure, isMedia: isMediaResponse });
+        await tracker.flushSecurityEvents();
+        if (!hasLifecyclePlugins) {
+          return secured;
+        }
         const durationMs = Math.max(0, tracker.now() - tracker.startedAtMs);
         await runPluginLifecycleHook(
           plugins,
@@ -415,6 +442,10 @@ export function createKinloomServer(config: KinloomServerConfig): KinloomServer 
           isSecure,
           isMedia: false,
         });
+        await tracker.flushSecurityEvents();
+        if (!hasLifecyclePlugins) {
+          return errorResponse;
+        }
         const durationMs = Math.max(0, tracker.now() - tracker.startedAtMs);
         const errorCode = mapped.body.error.code;
         await runPluginLifecycleHook(

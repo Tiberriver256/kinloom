@@ -14,8 +14,10 @@ import {
   createCloudflareWorker,
   createWorkersObservabilityPlugin,
   type D1Database,
+  type ExecutionContext,
   type KinloomWorkerEnv,
   type R2Bucket,
+  type SecurityTelemetryLogRecord,
   type WorkersObservabilityLogRecord,
 } from './index.js';
 
@@ -215,6 +217,139 @@ describe('createCloudflareWorker optional Workers Observability plugin', () => {
         env
       );
       expect(safeRes.status).toBe(200);
+    } finally {
+      await mf.dispose();
+    }
+  });
+
+  it('keeps security telemetry off by default on Worker and forwards ctx.waitUntil alerts when explicitly enabled', async () => {
+    const { mf, env } = await createMiniflareEnv();
+    try {
+      const siteConfig = createSyntheticSiteConfig();
+      const clock = new FixedClock('2026-07-01T09:00:00.000Z');
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+      try {
+        // Observability plugin without securityTelemetry emits zero security_event logs.
+        const obsDefaultWorker = createCloudflareWorker({
+          siteConfig,
+          clock,
+          plugins: [createWorkersObservabilityPlugin({ clock, sink: () => undefined })],
+        });
+        const defaultDeniedRes = await obsDefaultWorker.fetch(
+          new Request(`${CONTRACT_TEST_ORIGIN}/api/bundle`, {
+            headers: { authorization: 'Bearer kin_worker_invalid_token_111111' },
+          }),
+          env
+        );
+        expect(defaultDeniedRes.status).toBe(401);
+        expect(warnSpy.mock.calls).toHaveLength(0);
+      } finally {
+        warnSpy.mockRestore();
+      }
+
+      // Opt-in security telemetry with async alertSink wired through ExecutionContext.waitUntil.
+      const securityRecords: SecurityTelemetryLogRecord[] = [];
+      const alerts: SecurityTelemetryLogRecord[] = [];
+      const reportedErrors: Array<{ pluginId: string; message: string }> = [];
+      const waitUntilTasks: Promise<unknown>[] = [];
+      const fakeCtx: ExecutionContext = {
+        waitUntil(promise: Promise<unknown>) {
+          waitUntilTasks.push(promise);
+        },
+        passThroughOnException() {},
+      };
+
+      const securityWorker = createCloudflareWorker({
+        siteConfig,
+        clock,
+        onPluginError: (pluginId, error) => {
+          reportedErrors.push({
+            pluginId,
+            message: error instanceof Error ? error.message : String(error),
+          });
+        },
+        plugins: [
+          createWorkersObservabilityPlugin({
+            clock,
+            sink: () => undefined,
+            securityTelemetry: {
+              enabled: true,
+              sink: (record) => {
+                securityRecords.push(record);
+              },
+              alertSink: async (record) => {
+                alerts.push(record);
+                if (record.event_type === 'csrf.rejected') {
+                  throw new Error('worker alert webhook unreachable');
+                }
+              },
+            },
+          }),
+        ],
+      });
+
+      const badBearerRes = await securityWorker.fetch(
+        new Request(`${CONTRACT_TEST_ORIGIN}/api/bundle`, {
+          headers: {
+            authorization: 'Bearer kin_worker_secret_token_987654',
+            'cf-ray': 'wrk12345678901ab-ORD',
+          },
+        }),
+        env,
+        fakeCtx
+      );
+      expect(badBearerRes.status).toBe(401);
+
+      const csrfRes = await securityWorker.fetch(
+        new Request(`${CONTRACT_TEST_ORIGIN}/api/auth/logout`, {
+          method: 'POST',
+          headers: {
+            origin: 'https://evil.worker.example.test',
+            'cf-ray': 'wrk22345678901ab-ORD',
+          },
+        }),
+        env,
+        fakeCtx
+      );
+      expect(csrfRes.status).toBe(403);
+      expect(waitUntilTasks).toHaveLength(2);
+      await Promise.all(waitUntilTasks);
+
+      expect(securityRecords).toEqual([
+        {
+          event: 'security_event',
+          event_type: 'auth.agent_token.rejected',
+          timestamp: '2026-07-01T09:00:00.000Z',
+          level: 'warn',
+          request_id: 'wrk12345678901ab-ORD',
+          method: 'GET',
+          route: '/api/bundle',
+          status: 401,
+          reason: 'invalid_or_revoked',
+        },
+        {
+          event: 'security_event',
+          event_type: 'csrf.rejected',
+          timestamp: '2026-07-01T09:00:00.000Z',
+          level: 'warn',
+          request_id: 'wrk22345678901ab-ORD',
+          method: 'POST',
+          route: '/api/auth/logout',
+          status: 403,
+          reason: 'origin_mismatch',
+          auth_method: 'none',
+        },
+      ]);
+      expect(alerts).toHaveLength(2);
+      expect(reportedErrors).toEqual([
+        {
+          pluginId: 'kinloom-workers-observability',
+          message: 'worker alert webhook unreachable',
+        },
+      ]);
+      expect(JSON.stringify(securityRecords)).not.toContain('kin_worker_secret_token_987654');
+      expect(JSON.stringify(securityRecords)).not.toContain('evil.worker.example.test');
     } finally {
       await mf.dispose();
     }

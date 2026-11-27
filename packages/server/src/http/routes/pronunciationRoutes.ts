@@ -50,8 +50,12 @@ export function createPronunciationRouteHandler(deps: PronunciationRouteHandlerD
     const { request, url, pathname, method, segments, auth, telemetry } = ctx;
 
     if (method === 'POST' && pathname === '/api/pronunciation/generate') {
-      enforceCsrfOrigin(request, url, auth.authMethod);
-      requireMinRole(auth.principal, 'editor', { allowAgentScopes: ['write_batch'] });
+      enforceCsrfOrigin(request, url, auth.authMethod, telemetry);
+      requireMinRole(auth.principal, 'editor', {
+        allowAgentScopes: ['write_batch'],
+        telemetry,
+        bearerRejected: auth.bearerRejected,
+      });
 
       const body = GeneratePronunciationBodySchema.parse(await readJsonBody(request));
       const stored = await timeSpan(telemetry, 'r2', () =>
@@ -73,6 +77,8 @@ export function createPronunciationRouteHandler(deps: PronunciationRouteHandlerD
       if (mode !== 'public') {
         requireMinRole(auth.principal, 'viewer', {
           allowAgentScopes: ['write_batch', 'read_backup'],
+          telemetry,
+          bearerRejected: auth.bearerRejected,
         });
       }
       const pronunciations = await timeSpan(telemetry, 'd1', () =>
@@ -89,8 +95,12 @@ export function createPronunciationRouteHandler(deps: PronunciationRouteHandlerD
       segments[0] === 'api' &&
       segments[1] === 'pronunciations'
     ) {
-      enforceCsrfOrigin(request, url, auth.authMethod);
-      requireMinRole(auth.principal, 'editor', { allowAgentScopes: ['write_batch'] });
+      enforceCsrfOrigin(request, url, auth.authMethod, telemetry);
+      requireMinRole(auth.principal, 'editor', {
+        allowAgentScopes: ['write_batch'],
+        telemetry,
+        bearerRejected: auth.bearerRejected,
+      });
 
       const term = decodeSegment(segments[2]);
       const body = UpsertPronunciationLexiconBodySchema.parse(await readJsonBody(request));

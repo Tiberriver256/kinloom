@@ -1,7 +1,25 @@
 import type {
+  Clock,
   KinloomServerPlugin as CoreKinloomServerPlugin,
   KinloomServerPorts as CoreKinloomServerPorts,
 } from '@kinloom/core';
+import type { ServerSecurityEvent, ServerSecurityEventPayload } from './securityEvents.js';
+
+export {
+  type AgentTokenRejectedReason,
+  type CsrfRejectedReason,
+  type InviteInvalidReason,
+  type MagicLinkInvalidReason,
+  type MediaUploadRejectedReason,
+  type OAuthFailureReason,
+  SERVER_SECURITY_EVENT_TYPES,
+  type ServerSecurityEvent,
+  type ServerSecurityEventBase,
+  type ServerSecurityEventPayload,
+  type ServerSecurityEventType,
+  sanitizeMediaContentType,
+  type WriteForbiddenReason,
+} from './securityEvents.js';
 
 export type ServerTimingSpanName = 'd1' | 'r2' | 'bundle' | 'total';
 export type RecordableServerTimingSpanName = Exclude<ServerTimingSpanName, 'total'>;
@@ -44,6 +62,7 @@ export interface KinloomServerPlugin extends CoreKinloomServerPlugin {
   onRequestStart?(event: ServerRequestStartEvent): void | Promise<void>;
   onResponse?(event: ServerRequestResponseEvent): void | Promise<void>;
   onError?(event: ServerRequestErrorEvent): void | Promise<void>;
+  onSecurityEvent?(event: ServerSecurityEvent): void | Promise<void>;
 }
 
 export interface KinloomServerPorts extends Omit<CoreKinloomServerPorts, 'plugins'> {
@@ -57,11 +76,14 @@ export interface CompiledRoutePrefixMatcher {
 
 export interface ServerRequestTelemetryTracker {
   readonly startedAtMs: number;
+  readonly hasSecuritySubscribers: boolean;
   now(): number;
   recordSpan(span: RecordableServerTimingSpanName, durationMs: number): void;
   setRoute(route: string): void;
   setCacheStatus(status: ServerTelemetryCacheStatus): void;
   setBundleRevision(revision: number | null): void;
+  queueSecurityEvent(payload: ServerSecurityEventPayload): void;
+  flushSecurityEvents(): Promise<void>;
   snapshot(): ServerRequestTelemetryContext;
   applyResponseHeaders(response: Response): Response;
 }
@@ -257,17 +279,33 @@ export function createRequestTelemetryTracker(params: {
   request: Request;
   method: string;
   route: string;
+  clock?: Clock;
+  securityPlugins?: readonly KinloomServerPlugin[];
+  waitUntil?: (promise: Promise<unknown>) => void;
+  onPluginError?: (pluginId: string, error: unknown) => void;
 }): ServerRequestTelemetryTracker {
   const startedAtMs = readHighResNow();
   const spans: Partial<Record<ServerTimingSpanName, number>> = {};
   const responseHeaders = new Headers();
   const metadata = new Map<string, unknown>();
+  const securityPlugins = params.securityPlugins ?? [];
+  const hasSecuritySubscribers = securityPlugins.length > 0;
+  const pendingSecurityEvents: Array<{ timestamp: string; payload: ServerSecurityEventPayload }> = [];
   let currentRoute = params.route;
   let cacheStatus: ServerTelemetryCacheStatus | null = null;
   let bundleRevision: number | null = null;
 
+  function reportPluginError(pluginId: string, error: unknown): void {
+    try {
+      params.onPluginError?.(pluginId, error);
+    } catch {
+      // Isolate reporter failures so telemetry never fails user requests.
+    }
+  }
+
   return {
     startedAtMs,
+    hasSecuritySubscribers,
     now: readHighResNow,
     recordSpan(span: RecordableServerTimingSpanName, durationMs: number): void {
       if (!Number.isFinite(durationMs) || durationMs < 0) {
@@ -288,6 +326,42 @@ export function createRequestTelemetryTracker(params: {
       }
       if (Number.isSafeInteger(revision) && revision >= 0) {
         bundleRevision = revision;
+      }
+    },
+    queueSecurityEvent(payload: ServerSecurityEventPayload): void {
+      if (!hasSecuritySubscribers) {
+        return;
+      }
+      const timestamp = params.clock ? params.clock.nowIso() : new Date().toISOString();
+      pendingSecurityEvents.push({ timestamp, payload });
+    },
+    async flushSecurityEvents(): Promise<void> {
+      if (!hasSecuritySubscribers || pendingSecurityEvents.length === 0) {
+        return;
+      }
+      const batch = pendingSecurityEvents.splice(0, pendingSecurityEvents.length);
+      for (const item of batch) {
+        for (const plugin of securityPlugins) {
+          const hook = plugin.onSecurityEvent;
+          if (!hook) {
+            continue;
+          }
+          const event: ServerSecurityEvent = {
+            ...item.payload,
+            timestamp: item.timestamp,
+            method: params.method,
+            route: currentRoute,
+            request: params.request,
+            metadata,
+            waitUntil: params.waitUntil,
+            reportError: (error: unknown) => reportPluginError(plugin.id, error),
+          };
+          try {
+            await hook(event);
+          } catch (error) {
+            reportPluginError(plugin.id, error);
+          }
+        }
       }
     },
     snapshot(): ServerRequestTelemetryContext {
@@ -353,6 +427,10 @@ export function hasRequestLifecyclePlugins(plugins: readonly KinloomServerPlugin
       typeof plugin.onResponse === 'function' ||
       typeof plugin.onError === 'function'
   );
+}
+
+export function hasSecurityEventPlugins(plugins: readonly KinloomServerPlugin[]): boolean {
+  return plugins.some((plugin) => typeof plugin.onSecurityEvent === 'function');
 }
 
 export async function runPluginLifecycleHook<TEvent>(

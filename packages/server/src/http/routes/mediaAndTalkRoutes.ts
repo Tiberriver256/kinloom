@@ -11,7 +11,7 @@ import {
   parsePositiveInt,
   readJsonBody,
 } from '../httpPrimitives.js';
-import { timeSpan } from '../pluginLifecycle.js';
+import { sanitizeMediaContentType, timeSpan } from '../pluginLifecycle.js';
 
 const TalkPostBodySchema = z.object({
   body_md: z.string(),
@@ -29,8 +29,12 @@ export function createMediaAndTalkRouteHandler(deps: MediaAndTalkRouteHandlerDep
     const { request, url, pathname, method, segments, auth, telemetry } = ctx;
 
     if (method === 'POST' && pathname === '/api/media/upload') {
-      enforceCsrfOrigin(request, url, auth.authMethod);
-      requireMinRole(auth.principal, 'editor', { allowAgentScopes: ['write_batch'] });
+      enforceCsrfOrigin(request, url, auth.authMethod, telemetry);
+      requireMinRole(auth.principal, 'editor', {
+        allowAgentScopes: ['write_batch'],
+        telemetry,
+        bearerRejected: auth.bearerRejected,
+      });
 
       let formData: FormData;
       try {
@@ -68,6 +72,25 @@ export function createMediaAndTalkRouteHandler(deps: MediaAndTalkRouteHandlerDep
       const hasPrimarySource = typeof hasPrimaryRaw === 'string' ? hasPrimaryRaw !== 'false' : true;
 
       const arrayBuffer = await filePart.arrayBuffer();
+      const onUploadRejected = telemetry?.hasSecuritySubscribers
+        ? (info: {
+            reason: 'magic_bytes_mismatch' | 'unsupported_media_type' | 'file_too_large' | 'empty_file';
+            status: number;
+            contentType: string;
+            sizeBytes: number;
+            maxBytes?: number;
+          }) => {
+            telemetry.queueSecurityEvent({
+              type: 'media.upload.rejected',
+              status: info.status,
+              reason: info.reason,
+              contentType: sanitizeMediaContentType(info.contentType),
+              sizeBytes: info.sizeBytes,
+              ...(info.maxBytes !== undefined ? { maxBytes: info.maxBytes } : {}),
+            });
+          }
+        : undefined;
+
       const uploaded = await timeSpan(telemetry, 'r2', () =>
         mediaService.uploadMedia({
           bytes: new Uint8Array(arrayBuffer),
@@ -76,6 +99,7 @@ export function createMediaAndTalkRouteHandler(deps: MediaAndTalkRouteHandlerDep
           summary,
           hasPrimarySource,
           author: principalToRevisionAuthor(auth.principal),
+          onUploadRejected,
         })
       );
       telemetry?.setBundleRevision(uploaded.revision.revision_id);
@@ -92,7 +116,11 @@ export function createMediaAndTalkRouteHandler(deps: MediaAndTalkRouteHandlerDep
     }
 
     if (method === 'GET' && segments.length >= 2 && (segments[0] === 'media' || segments[0] === 'sources')) {
-      requireMinRole(auth.principal, 'viewer', { allowAgentScopes: ['write_batch'] });
+      requireMinRole(auth.principal, 'viewer', {
+        allowAgentScopes: ['write_batch'],
+        telemetry,
+        bearerRejected: auth.bearerRejected,
+      });
       const prefix = segments[0];
       const key = segments.slice(1).map(decodeSegment).join('/');
       const result = await timeSpan(telemetry, 'r2', () =>
@@ -129,7 +157,10 @@ export function createMediaAndTalkRouteHandler(deps: MediaAndTalkRouteHandlerDep
         const entityId = decodeSegment(segments[3]);
 
         if (method === 'GET') {
-          requireMinRole(auth.principal, 'viewer');
+          requireMinRole(auth.principal, 'viewer', {
+            telemetry,
+            bearerRejected: auth.bearerRejected,
+          });
           const comments = await timeSpan(telemetry, 'd1', () =>
             talkService.listComments({ entityType, entityId })
           );
@@ -137,41 +168,80 @@ export function createMediaAndTalkRouteHandler(deps: MediaAndTalkRouteHandlerDep
         }
 
         if (method === 'POST') {
-          enforceCsrfOrigin(request, url, auth.authMethod);
-          requireMinRole(auth.principal, 'editor');
+          enforceCsrfOrigin(request, url, auth.authMethod, telemetry);
+          requireMinRole(auth.principal, 'editor', {
+            telemetry,
+            bearerRejected: auth.bearerRejected,
+          });
           if (auth.principal.kind !== 'user') {
+            telemetry?.queueSecurityEvent({
+              type: 'auth.write.forbidden',
+              status: 403,
+              reason: 'member_required',
+              requiredRole: 'editor',
+              actorKind: auth.principal.kind,
+            });
             throw new KinloomHttpError(403, 'FORBIDDEN', 'Only signed-in members can post Talk comments.');
           }
           const userPrincipal = auth.principal;
           const body = TalkPostBodySchema.parse(await readJsonBody(request));
-          const comment = await timeSpan(telemetry, 'd1', () =>
-            talkService.postComment({
-              entityType,
-              entityId,
-              bodyMd: body.body_md,
-              authorId: userPrincipal.email,
-              authorName: userPrincipal.display_name,
-            })
-          );
-          return jsonResponse({ comment }, 201);
+          try {
+            const comment = await timeSpan(telemetry, 'd1', () =>
+              talkService.postComment({
+                entityType,
+                entityId,
+                bodyMd: body.body_md,
+                authorId: userPrincipal.email,
+                authorName: userPrincipal.display_name,
+              })
+            );
+            return jsonResponse({ comment }, 201);
+          } catch (error) {
+            if (error instanceof KinloomHttpError && error.status === 403 && error.code === 'FORBIDDEN') {
+              telemetry?.queueSecurityEvent({
+                type: 'auth.write.forbidden',
+                status: 403,
+                reason: 'talk_disabled',
+                requiredRole: 'editor',
+                actorKind: 'user',
+              });
+            }
+            throw error;
+          }
         }
       }
 
       if (method === 'DELETE' && segments.length === 5) {
-        enforceCsrfOrigin(request, url, auth.authMethod);
-        requireMinRole(auth.principal, 'editor');
+        enforceCsrfOrigin(request, url, auth.authMethod, telemetry);
+        requireMinRole(auth.principal, 'editor', {
+          telemetry,
+          bearerRejected: auth.bearerRejected,
+        });
         const entityType = parseEntityTypeParam(decodeSegment(segments[2]));
         const entityId = decodeSegment(segments[3]);
         const commentId = parsePositiveInt(decodeSegment(segments[4]), 'comment_id');
-        await timeSpan(telemetry, 'd1', () =>
-          talkService.deleteComment({
-            entityType,
-            entityId,
-            commentId,
-            principal: auth.principal,
-          })
-        );
-        return new Response(null, { status: 204, headers: { 'cache-control': 'no-store' } });
+        try {
+          await timeSpan(telemetry, 'd1', () =>
+            talkService.deleteComment({
+              entityType,
+              entityId,
+              commentId,
+              principal: auth.principal,
+            })
+          );
+          return new Response(null, { status: 204, headers: { 'cache-control': 'no-store' } });
+        } catch (error) {
+          if (error instanceof KinloomHttpError && error.status === 403 && error.code === 'FORBIDDEN') {
+            telemetry?.queueSecurityEvent({
+              type: 'auth.write.forbidden',
+              status: 403,
+              reason: error.message.toLowerCase().includes('disabled') ? 'talk_disabled' : 'not_owner',
+              requiredRole: 'admin',
+              actorKind: auth.principal.kind,
+            });
+          }
+          throw error;
+        }
       }
     }
 

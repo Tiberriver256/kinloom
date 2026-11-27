@@ -69,6 +69,7 @@ When `enabled` is `false`, the factory returns an inert plugin with no request l
 | `clock` | `Clock` | System UTC clock | Supplies the ISO-8601 `timestamp` field. |
 | `now` | `() => number` | `performance.now()` | Supplies deterministic millisecond timestamps for tests. |
 | `generateRequestId` | `() => string` | `crypto.randomUUID()` | Generates a request ID when incoming headers are absent or rejected. |
+| `securityTelemetry` | `boolean \| SecurityTelemetryOptions` | `false` | Enables redacted `security_event` logs and optional alert callbacks when explicitly set to `true` or `{ enabled: true, ... }`. |
 
 ## Response headers
 
@@ -127,3 +128,133 @@ The plugin protects living relatives and archive credentials in four ways:
 - **No query strings, bodies, or auth headers:** Query parameters (such as magic-link `token` or OAuth `code` and `state`), `Authorization` headers, `Cookie` headers, session IDs, and request bodies never enter log records.
 - **Canonical error codes only:** Logs record only validated uppercase error codes (such as `UNAUTHORIZED` or `OPTIMISTIC_CONFLICT`) and never raw exception messages or stack traces.
 - **Fault-isolated lifecycle hooks:** If a plugin hook or custom `sink` throws synchronously or rejects asynchronously, `@kinloom/server` catches the error, reports it through `onPluginError` if configured, and returns the original HTTP response to the caller.
+
+## Security and abuse telemetry (off by default)
+
+Security telemetry stays off by default even when you register `createWorkersObservabilityPlugin()`.
+When `securityTelemetry` is omitted, set to `false`, or set to `{ enabled: false }`, the plugin omits the `onSecurityEvent` hook and the router skips security event emission completely.
+
+### Enable security telemetry
+
+Pass `securityTelemetry: true` to log structured `security_event` JSON lines through `console.warn` (and `console.error` on 5xx auth provider failures):
+
+```ts
+import {
+	createCloudflareWorker,
+	createWorkersObservabilityPlugin,
+} from '@kinloom/worker';
+import { siteConfig } from './siteConfig.js';
+
+export default createCloudflareWorker({
+	siteConfig,
+	plugins: [
+		createWorkersObservabilityPlugin({
+			securityTelemetry: true,
+		}),
+	],
+});
+```
+
+To forward alerts to a webhook or custom handler, pass an options object with `enabled: true` and `alertSink`:
+
+```ts
+createWorkersObservabilityPlugin({
+	securityTelemetry: {
+		enabled: true,
+		alertOn: [
+			'auth.magic_link.rate_limited',
+			'auth.agent_token.rejected',
+			'csrf.rejected',
+		],
+		alertSink: async (record) => {
+			await fetch('https://alerts.example.test/kinloom', {
+				method: 'POST',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify(record),
+			});
+		},
+	},
+});
+```
+
+`createCloudflareWorker` passes `ctx.waitUntil` into `server.fetch`, so async `alertSink` callbacks run without delaying HTTP responses.
+If `sink` or `alertSink` throws synchronously or rejects asynchronously, `@kinloom/server` catches the failure, reports it to `onPluginError` if configured, and returns the original HTTP denial response to the caller.
+
+### Security telemetry options reference
+
+| Option | Type | Default | Description |
+| --- | --- | --- | --- |
+| `enabled` | `boolean` | Required (`false` when omitted) | Must be `true` to register the `onSecurityEvent` hook. |
+| `sink` | `(record: SecurityTelemetryLogRecord) => void \| Promise<void>` | `console.warn` / `console.error` JSON lines | Receives one redacted `security_event` record per security denial. |
+| `alertSink` | `(record: SecurityTelemetryLogRecord) => void \| Promise<void>` | `undefined` | Optional fault-isolated alert or webhook callback. |
+| `onAlert` | `(record: SecurityTelemetryLogRecord) => void \| Promise<void>` | `undefined` | Alias for `alertSink`. |
+| `alertOn` | `readonly ServerSecurityEventType[]` | All 8 event types | Restricts `alertSink` delivery to matching `event_type` values. |
+
+### Security event schema and types
+
+Each security denial emits one structured JSON object with bounded-cardinality fields and the same `request_id` as the corresponding `http_request` record:
+
+```json
+{
+	"event": "security_event",
+	"event_type": "media.upload.rejected",
+	"timestamp": "2026-06-15T12:00:00.000Z",
+	"level": "warn",
+	"request_id": "8f1a2b3c4d5e6f7a-ORD",
+	"method": "POST",
+	"route": "/api/media/upload",
+	"status": 415,
+	"reason": "magic_bytes_mismatch",
+	"content_type": "image/png",
+	"size_bytes": 64
+}
+```
+
+The closed `ServerSecurityEventType` union covers eight denial paths:
+
+| `event_type` | Trigger | Safe extra fields |
+| --- | --- | --- |
+| `auth.magic_link.rate_limited` | Magic-link request hits the per-window limit (`429`). | None |
+| `auth.magic_link.invalid_or_expired` | Magic-link verification fails (`invalid`, `used`, `expired`, or `invite_required`). | None |
+| `auth.oauth.failed` | Google OAuth start or callback fails (`cancelled`, `provider_error`, `invalid_state`, `provider_unconfigured`, `email_unverified`, `invite_required`, `exchange_failed`). | `provider` |
+| `auth.invite.invalid` | Invite link redemption or active invite session check fails (`missing`, `not_found`, `expired`, `revoked`). | None |
+| `auth.agent_token.rejected` | Bearer token is empty, invalid, revoked, or lacks the required route scope. | None |
+| `auth.write.forbidden` | Unauthenticated caller, read-only invite viewer, non-admin editor, or non-owner attempts a write or admin operation. | `required_role`, `actor_kind` |
+| `media.upload.rejected` | Upload fails magic-byte verification, MIME allowlist, empty-file check, or size limit. | `content_type`, `size_bytes`, `max_bytes` |
+| `csrf.rejected` | State-changing request fails Origin verification (`missing_origin` or `origin_mismatch`). | `auth_method` |
+
+Security event records never include plaintext emails, bearer tokens, magic-link tokens, invite tokens, session cookies, living-person names, raw IP addresses, or raw `Origin` headers.
+
+## Cloudflare WAF, Security Analytics, and Notifications
+
+Cloudflare WAF rules, Security Analytics filters, and Notifications are opt-in at your Cloudflare zone and account level.
+Configure them only on archives where you want edge rate limiting and automated alerting.
+
+### Opt-in Cloudflare WAF rate-limiting rules
+
+In the Cloudflare dashboard, open **Security > WAF > Rate limiting rules** for your archive zone and add rules targeting Kinloom's sensitive endpoints:
+
+1. **Magic-link requests:** Match `(http.request.method eq "POST" and http.request.uri.path eq "/api/auth/magic-link/request")`. Limit to `5` requests per `10` minutes per IP with action **Block** (HTTP `429`).
+2. **Auth verification and invite probing:** Match `(http.request.uri.path eq "/api/auth/magic-link/verify" or starts_with(http.request.uri.path, "/invite/") or starts_with(http.request.uri.path, "/api/auth/invite/"))`. Limit to `20` requests per `10` minutes per IP with action **Managed Challenge** or **Block**.
+3. **OAuth callback bursts:** Match `(http.request.uri.path eq "/api/auth/google/start" or http.request.uri.path eq "/api/auth/google/callback")`. Limit to `20` requests per `10` minutes per IP.
+4. **Media uploads:** Match `(http.request.method eq "POST" and http.request.uri.path eq "/api/media/upload")`. Limit to `30` requests per `10` minutes per IP to cap abusive multipart payloads before they reach R2.
+
+### Cloudflare Workers Logs and Security Analytics filters
+
+In **Workers & Pages > your Worker > Logs** (or **Security > Analytics** for WAF events), filter on the structured JSON fields emitted by the plugin:
+
+- All security denials: `event = "security_event"`
+- Auth abuse burst: `event = "security_event" AND event_type IN ("auth.magic_link.rate_limited", "auth.magic_link.invalid_or_expired", "auth.oauth.failed", "auth.invite.invalid")`
+- Token or CSRF probing: `event = "security_event" AND event_type IN ("auth.agent_token.rejected", "csrf.rejected", "auth.write.forbidden")`
+- Upload spoofing or oversized uploads: `event = "security_event" AND event_type = "media.upload.rejected"`
+- Server 5xx errors: `event = "http_request" AND status >= 500`
+
+Correlate any `security_event` with its surrounding HTTP telemetry by filtering on `request_id`.
+
+### Cloudflare Notifications ("Get notified") policies
+
+In the Cloudflare dashboard, open **Notifications > Add** to enable alerts for production archives:
+
+1. **Worker 5xx error spikes:** Select **Workers** (or **HTTP Alerts > Origin Error Rate Alert**) and trigger when `5xx` error rates exceed your baseline (for example, `> 5%` over `5` minutes) for your archive Worker or hostname.
+2. **D1 errors and usage limits:** Select **D1** alerts (or Worker error-rate alerts correlated with `event = "http_request" AND level = "error"` in Workers Logs) to catch database query failures or quota thresholds early.
+3. **Auth failure bursts and WAF triggers:** Select **HTTP DDoS Attack Alert** and **WAF / Rate Limiting Alerts** for your zone, and optionally pair them with `securityTelemetry.alertSink` pointing to a private Slack, Discord, PagerDuty, or email webhook for immediate `auth.magic_link.rate_limited` and `auth.agent_token.rejected` alerts.

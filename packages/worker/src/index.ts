@@ -20,7 +20,7 @@ import { createD1ArchiveRepository } from './adapters/d1Repository.js';
 import { GeminiPronunciationAudioGenerator } from './adapters/geminiPronunciationGenerator.js';
 import { R2IncrementalPatchBundleCache } from './adapters/r2BundleCache.js';
 import { R2MediaStore } from './adapters/r2MediaStore.js';
-import type { ExportedHandler, KinloomWorkerEnv } from './types.js';
+import type { ExecutionContext, ExportedHandler, KinloomWorkerEnv } from './types.js';
 
 export const KINLOOM_WORKER_VERSION = '0.40.1';
 
@@ -30,11 +30,20 @@ export {
   handleDynamicOgRequest,
   type KinloomServerPlugin,
   renderPrivacyPolicyHtml,
+  SERVER_SECURITY_EVENT_TYPES,
+  type SecurityTelemetryAlertSink,
+  type SecurityTelemetryLogLevel,
+  type SecurityTelemetryLogRecord,
+  type SecurityTelemetryOptions,
+  type SecurityTelemetrySink,
+  type ServerSecurityEvent,
+  type ServerSecurityEventType,
   WORKERS_OBSERVABILITY_PLUGIN_ID,
   type WorkersObservabilityLogLevel,
   type WorkersObservabilityLogRecord,
   type WorkersObservabilityPluginOptions,
   type WorkersObservabilitySink,
+  type WorkersSecurityTelemetryOption,
 } from '@kinloom/server';
 export { createCloudflareAssetHandler } from './adapters/cloudflareAssets.js';
 export {
@@ -111,7 +120,7 @@ export function createCloudflareWorker(
   const compiledPluginRoutes = validateAndCompilePluginRoutes(plugins);
 
   return {
-    async fetch(request: Request, env: KinloomWorkerEnv): Promise<Response> {
+    async fetch(request: Request, env: KinloomWorkerEnv, ctx?: ExecutionContext): Promise<Response> {
       const clock = options.clock ?? new SystemClock();
       const mode = env.ARCHIVE_MODE === 'public' ? 'public' : 'private';
 
@@ -174,7 +183,7 @@ export function createCloudflareWorker(
         },
       });
 
-      return server.fetch(request);
+      return server.fetch(request, ctx ? { waitUntil: (promise) => ctx.waitUntil(promise) } : undefined);
     },
   };
 }

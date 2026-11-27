@@ -3,6 +3,7 @@ import {
   type AgentTokenScope,
   type CallerPrincipal,
   type Clock,
+  evaluateInviteStatus,
   isInviteActive,
   type PluginRouteMinRole,
   type RevisionAuthor,
@@ -18,7 +19,10 @@ export interface ResolvedAuthContext {
   principal: CallerPrincipal;
   authMethod: AuthMethod;
   inviteToken: string | null;
+  bearerRejected?: boolean;
 }
+
+type SecurityEventQueueTarget = Pick<ServerRequestTelemetryTracker, 'queueSecurityEvent'>;
 
 const MUTATION_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 
@@ -28,11 +32,13 @@ export async function resolveCallerPrincipal(params: {
   sessionSecret: string;
   repository: Pick<AccessControlStore, 'findActiveAgentTokenByHash' | 'getUser' | 'getInvite'>;
   clock: Clock;
-  telemetry?: Pick<ServerRequestTelemetryTracker, 'now' | 'recordSpan'>;
+  telemetry?: Pick<ServerRequestTelemetryTracker, 'now' | 'recordSpan'> & Partial<SecurityEventQueueTarget>;
 }): Promise<ResolvedAuthContext> {
   const authHeader = params.request.headers.get('authorization');
-  if (authHeader?.trim().toLowerCase().startsWith('bearer ')) {
-    const rawBearer = authHeader.trim().slice(7).trim();
+  const trimmedAuth = authHeader?.trim() ?? '';
+  const lowerAuth = trimmedAuth.toLowerCase();
+  if (lowerAuth === 'bearer' || lowerAuth.startsWith('bearer ')) {
+    const rawBearer = trimmedAuth.slice(6).trim();
     if (rawBearer.length > 0) {
       const tokenHash = await sha256Hex(rawBearer);
       const tokenRecord = await timeSpan(params.telemetry, 'd1', () =>
@@ -51,10 +57,16 @@ export async function resolveCallerPrincipal(params: {
         };
       }
     }
+    params.telemetry?.queueSecurityEvent?.({
+      type: 'auth.agent_token.rejected',
+      status: 401,
+      reason: rawBearer.length === 0 ? 'empty_token' : 'invalid_or_revoked',
+    });
     return {
       principal: { kind: 'anonymous' },
       authMethod: 'none',
       inviteToken: null,
+      bearerRejected: true,
     };
   }
 
@@ -102,7 +114,14 @@ export async function resolveCallerPrincipal(params: {
   const liveInvite = await timeSpan(params.telemetry, 'd1', () =>
     params.repository.getInvite(payload.invite_token)
   );
-  if (!liveInvite || !isInviteActive(liveInvite, params.clock.nowIso())) {
+  const nowIso = params.clock.nowIso();
+  if (!liveInvite || !isInviteActive(liveInvite, nowIso)) {
+    const inviteStatus = evaluateInviteStatus(liveInvite, nowIso);
+    params.telemetry?.queueSecurityEvent?.({
+      type: 'auth.invite.invalid',
+      status: 401,
+      reason: inviteStatus === 'active' ? 'not_found' : inviteStatus,
+    });
     return {
       principal: { kind: 'anonymous' },
       authMethod: 'none',
@@ -121,7 +140,12 @@ export async function resolveCallerPrincipal(params: {
   };
 }
 
-export function enforceCsrfOrigin(request: Request, url: URL, authMethod: AuthMethod): void {
+export function enforceCsrfOrigin(
+  request: Request,
+  url: URL,
+  authMethod: AuthMethod,
+  telemetry?: Partial<SecurityEventQueueTarget>
+): void {
   const method = request.method.toUpperCase();
   if (!MUTATION_METHODS.has(method)) {
     return;
@@ -130,6 +154,12 @@ export function enforceCsrfOrigin(request: Request, url: URL, authMethod: AuthMe
   const origin = request.headers.get('origin');
   if (authMethod === 'cookie') {
     if (!origin || origin !== url.origin) {
+      telemetry?.queueSecurityEvent?.({
+        type: 'csrf.rejected',
+        status: 403,
+        reason: origin ? 'origin_mismatch' : 'missing_origin',
+        authMethod: 'cookie',
+      });
       throw new KinloomHttpError(
         403,
         'CSRF_ORIGIN_MISMATCH',
@@ -140,6 +170,12 @@ export function enforceCsrfOrigin(request: Request, url: URL, authMethod: AuthMe
   }
 
   if (authMethod === 'none' && origin && origin !== url.origin) {
+    telemetry?.queueSecurityEvent?.({
+      type: 'csrf.rejected',
+      status: 403,
+      reason: 'origin_mismatch',
+      authMethod: 'none',
+    });
     throw new KinloomHttpError(403, 'CSRF_ORIGIN_MISMATCH', 'Cross-origin state-changing request rejected.');
   }
 }
@@ -150,6 +186,8 @@ export function requireMinRole(
   options?: {
     allowAgentScopes?: readonly AgentTokenScope[];
     adminForbiddenCode?: 'ADMIN_REQUIRED' | 'FORBIDDEN';
+    telemetry?: Partial<SecurityEventQueueTarget>;
+    bearerRejected?: boolean;
   }
 ): void {
   if (minRole === 'public') {
@@ -157,6 +195,15 @@ export function requireMinRole(
   }
 
   if (principal.kind === 'anonymous') {
+    if ((minRole === 'editor' || minRole === 'admin') && !options?.bearerRejected) {
+      options?.telemetry?.queueSecurityEvent?.({
+        type: 'auth.write.forbidden',
+        status: 401,
+        reason: 'unauthenticated',
+        requiredRole: minRole,
+        actorKind: 'anonymous',
+      });
+    }
     throw new KinloomHttpError(401, 'UNAUTHORIZED', 'Authentication is required.');
   }
 
@@ -165,6 +212,11 @@ export function requireMinRole(
     if (allowedScopes.includes(principal.scope)) {
       return;
     }
+    options?.telemetry?.queueSecurityEvent?.({
+      type: 'auth.agent_token.rejected',
+      status: 403,
+      reason: 'insufficient_scope',
+    });
     const code =
       minRole === 'admin' && options?.adminForbiddenCode === 'ADMIN_REQUIRED'
         ? 'ADMIN_REQUIRED'
@@ -181,6 +233,13 @@ export function requireMinRole(
   }
 
   if (principal.kind === 'invite_viewer') {
+    options?.telemetry?.queueSecurityEvent?.({
+      type: 'auth.write.forbidden',
+      status: 403,
+      reason: 'invite_read_only',
+      requiredRole: minRole,
+      actorKind: 'invite_viewer',
+    });
     const code =
       minRole === 'admin' && options?.adminForbiddenCode === 'ADMIN_REQUIRED'
         ? 'ADMIN_REQUIRED'
@@ -198,6 +257,13 @@ export function requireMinRole(
 
   // minRole === 'admin'
   if (principal.role !== 'admin') {
+    options?.telemetry?.queueSecurityEvent?.({
+      type: 'auth.write.forbidden',
+      status: 403,
+      reason: 'insufficient_role',
+      requiredRole: 'admin',
+      actorKind: 'user',
+    });
     throw new KinloomHttpError(
       403,
       options?.adminForbiddenCode ?? 'ADMIN_REQUIRED',

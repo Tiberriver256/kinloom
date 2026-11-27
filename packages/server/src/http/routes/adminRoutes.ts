@@ -33,8 +33,12 @@ export function createAdminRouteHandler(adminService: AdminService): HttpRouteHa
       return null;
     }
 
-    enforceCsrfOrigin(request, url, auth.authMethod);
-    requireMinRole(auth.principal, 'admin', { adminForbiddenCode: 'ADMIN_REQUIRED' });
+    enforceCsrfOrigin(request, url, auth.authMethod, telemetry);
+    requireMinRole(auth.principal, 'admin', {
+      adminForbiddenCode: 'ADMIN_REQUIRED',
+      telemetry,
+      bearerRejected: auth.bearerRejected,
+    });
     const adminEmail = auth.principal.kind === 'user' ? auth.principal.email : 'admin';
 
     if (segments[2] === 'invites') {

@@ -49,6 +49,8 @@ export function createWikiRouteHandler(deps: WikiRouteHandlerDeps): HttpRouteHan
     if (method === 'GET' && pathname === '/api/bundle') {
       requireMinRole(auth.principal, 'viewer', {
         allowAgentScopes: ['write_batch', 'read_backup'],
+        telemetry,
+        bearerRejected: auth.bearerRejected,
       });
       const result = await timeSpan(telemetry, 'bundle', () =>
         bundleReadService.getBundle({
@@ -79,8 +81,8 @@ export function createWikiRouteHandler(deps: WikiRouteHandlerDeps): HttpRouteHan
 
     if (segments[0] === 'api' && segments[1] === 'entities') {
       if (method === 'POST' && segments.length === 3) {
-        enforceCsrfOrigin(request, url, auth.authMethod);
-        requireMinRole(auth.principal, 'editor');
+        enforceCsrfOrigin(request, url, auth.authMethod, telemetry);
+        requireMinRole(auth.principal, 'editor', { telemetry, bearerRejected: auth.bearerRejected });
         const entityType = parseEntityTypeParam(decodeSegment(segments[2]));
         const body = EntityWriteInputSchema.parse(await readJsonBody(request));
         const created = await timeSpan(telemetry, 'd1', () =>
@@ -102,7 +104,11 @@ export function createWikiRouteHandler(deps: WikiRouteHandlerDeps): HttpRouteHan
         const entityId = decodeSegment(segments[3]);
 
         if (method === 'GET') {
-          requireMinRole(auth.principal, 'viewer', { allowAgentScopes: ['write_batch'] });
+          requireMinRole(auth.principal, 'viewer', {
+            allowAgentScopes: ['write_batch'],
+            telemetry,
+            bearerRejected: auth.bearerRejected,
+          });
           const entity = await timeSpan(telemetry, 'd1', () =>
             bundleReadService.getEntity({ entityType, entityId })
           );
@@ -110,8 +116,8 @@ export function createWikiRouteHandler(deps: WikiRouteHandlerDeps): HttpRouteHan
         }
 
         if (method === 'PUT') {
-          enforceCsrfOrigin(request, url, auth.authMethod);
-          requireMinRole(auth.principal, 'editor');
+          enforceCsrfOrigin(request, url, auth.authMethod, telemetry);
+          requireMinRole(auth.principal, 'editor', { telemetry, bearerRejected: auth.bearerRejected });
           const body = EntityUpdateInputSchema.parse(await readJsonBody(request));
           const updated = await timeSpan(telemetry, 'd1', () =>
             wikiWriteService.updateEntity({
@@ -130,8 +136,8 @@ export function createWikiRouteHandler(deps: WikiRouteHandlerDeps): HttpRouteHan
         }
 
         if (method === 'DELETE') {
-          enforceCsrfOrigin(request, url, auth.authMethod);
-          requireMinRole(auth.principal, 'editor');
+          enforceCsrfOrigin(request, url, auth.authMethod, telemetry);
+          requireMinRole(auth.principal, 'editor', { telemetry, bearerRejected: auth.bearerRejected });
           const body = EntityDeleteInputSchema.parse(await readJsonBody(request));
           const deleted = await timeSpan(telemetry, 'd1', () =>
             wikiWriteService.deleteEntity({
@@ -148,8 +154,8 @@ export function createWikiRouteHandler(deps: WikiRouteHandlerDeps): HttpRouteHan
       }
 
       if (method === 'POST' && segments.length === 5 && segments[4] === 'restore') {
-        enforceCsrfOrigin(request, url, auth.authMethod);
-        requireMinRole(auth.principal, 'editor');
+        enforceCsrfOrigin(request, url, auth.authMethod, telemetry);
+        requireMinRole(auth.principal, 'editor', { telemetry, bearerRejected: auth.bearerRejected });
         const entityType = parseEntityTypeParam(decodeSegment(segments[2]));
         const entityId = decodeSegment(segments[3]);
         const body = EntityRestoreInputSchema.parse(await readJsonBody(request));
@@ -169,7 +175,11 @@ export function createWikiRouteHandler(deps: WikiRouteHandlerDeps): HttpRouteHan
     }
 
     if (method === 'GET' && pathname === '/api/revisions') {
-      requireMinRole(auth.principal, 'viewer', { allowAgentScopes: ['write_batch'] });
+      requireMinRole(auth.principal, 'viewer', {
+        allowAgentScopes: ['write_batch'],
+        telemetry,
+        bearerRejected: auth.bearerRejected,
+      });
       const query: RevisionQuery = {};
 
       const entityTypeRaw = url.searchParams.get('entity_type');
@@ -208,8 +218,8 @@ export function createWikiRouteHandler(deps: WikiRouteHandlerDeps): HttpRouteHan
       segments[1] === 'revisions' &&
       segments[3] === 'revert'
     ) {
-      enforceCsrfOrigin(request, url, auth.authMethod);
-      requireMinRole(auth.principal, 'editor');
+      enforceCsrfOrigin(request, url, auth.authMethod, telemetry);
+      requireMinRole(auth.principal, 'editor', { telemetry, bearerRejected: auth.bearerRejected });
       const revisionId = asRevisionId(parsePositiveInt(decodeSegment(segments[2]), 'revision_id'));
       const body = OptionalSummaryBodySchema.parse(await readJsonBody(request));
       const reverted = await timeSpan(telemetry, 'd1', () =>
@@ -224,10 +234,12 @@ export function createWikiRouteHandler(deps: WikiRouteHandlerDeps): HttpRouteHan
     }
 
     if (method === 'POST' && pathname === '/api/batches') {
-      enforceCsrfOrigin(request, url, auth.authMethod);
+      enforceCsrfOrigin(request, url, auth.authMethod, telemetry);
       requireMinRole(auth.principal, 'admin', {
         allowAgentScopes: ['write_batch'],
         adminForbiddenCode: 'FORBIDDEN',
+        telemetry,
+        bearerRejected: auth.bearerRejected,
       });
       const submission = BatchSubmissionSchema.parse(await readJsonBody(request));
       const committed = await timeSpan(telemetry, 'd1', () =>
@@ -247,8 +259,8 @@ export function createWikiRouteHandler(deps: WikiRouteHandlerDeps): HttpRouteHan
       segments[1] === 'batches' &&
       segments[3] === 'revert'
     ) {
-      enforceCsrfOrigin(request, url, auth.authMethod);
-      requireMinRole(auth.principal, 'editor');
+      enforceCsrfOrigin(request, url, auth.authMethod, telemetry);
+      requireMinRole(auth.principal, 'editor', { telemetry, bearerRejected: auth.bearerRejected });
       const batchId = asBatchId(decodeSegment(segments[2]));
       const body = OptionalSummaryBodySchema.parse(await readJsonBody(request));
       const reverted = await timeSpan(telemetry, 'd1', () =>
@@ -266,6 +278,8 @@ export function createWikiRouteHandler(deps: WikiRouteHandlerDeps): HttpRouteHan
       requireMinRole(auth.principal, 'admin', {
         allowAgentScopes: ['read_backup'],
         adminForbiddenCode: 'FORBIDDEN',
+        telemetry,
+        bearerRejected: auth.bearerRejected,
       });
       const exported = await timeSpan(telemetry, 'bundle', () =>
         bundleReadService.exportYaml({
@@ -292,6 +306,8 @@ export function createWikiRouteHandler(deps: WikiRouteHandlerDeps): HttpRouteHan
       requireMinRole(auth.principal, 'admin', {
         allowAgentScopes: ['read_backup'],
         adminForbiddenCode: 'FORBIDDEN',
+        telemetry,
+        bearerRejected: auth.bearerRejected,
       });
       const exported = await timeSpan(telemetry, 'bundle', () =>
         bundleReadService.exportSnapshot({

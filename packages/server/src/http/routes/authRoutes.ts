@@ -13,6 +13,7 @@ import {
   readJsonBody,
   redirectResponse,
 } from '../httpPrimitives.js';
+import type { InviteInvalidReason, MagicLinkInvalidReason, OAuthFailureReason } from '../securityEvents.js';
 import {
   getOAuthCookieName,
   getSessionCookieName,
@@ -30,6 +31,66 @@ const MagicLinkRequestSchema = z.object({
   next: z.string().optional(),
 });
 
+function readErrorDetailField(error: KinloomHttpError, key: string): string | null {
+  if (typeof error.details !== 'object' || error.details === null || !(key in error.details)) {
+    return null;
+  }
+  const value = (error.details as Record<string, unknown>)[key];
+  return typeof value === 'string' ? value : null;
+}
+
+function classifyOAuthFailureReason(error: unknown): OAuthFailureReason {
+  if (error instanceof KinloomHttpError) {
+    switch (error.code) {
+      case 'GOOGLE_CANCELLED':
+        return 'cancelled';
+      case 'GOOGLE_AUTH_FAILED':
+        return 'provider_error';
+      case 'INVALID_OAUTH_STATE':
+        return 'invalid_state';
+      case 'AUTH_PROVIDER_UNCONFIGURED':
+        return 'provider_unconfigured';
+      case 'INVITE_REQUIRED':
+        return error.message.toLowerCase().includes('verified email')
+          ? 'email_unverified'
+          : 'invite_required';
+      default:
+        return 'exchange_failed';
+    }
+  }
+  return 'exchange_failed';
+}
+
+function classifyMagicLinkInvalidReason(error: unknown): MagicLinkInvalidReason {
+  if (error instanceof KinloomHttpError) {
+    if (error.code === 'TOKEN_INVALID_OR_EXPIRED') {
+      const tokenStatus = readErrorDetailField(error, 'token_status');
+      if (tokenStatus === 'used' || tokenStatus === 'invalid' || tokenStatus === 'expired') {
+        return tokenStatus;
+      }
+      return 'expired';
+    }
+    if (error.code === 'INVITE_REQUIRED') {
+      return 'invite_required';
+    }
+  }
+  return 'invalid';
+}
+
+function classifyInviteInvalidReason(error: unknown): InviteInvalidReason {
+  if (error instanceof KinloomHttpError) {
+    const status = readErrorDetailField(error, 'invite_status');
+    if (status === 'missing' || status === 'not_found' || status === 'expired' || status === 'revoked') {
+      return status;
+    }
+  }
+  return 'not_found';
+}
+
+function resolveHttpErrorStatus(error: unknown, fallbackStatus: number): number {
+  return error instanceof KinloomHttpError ? error.status : fallbackStatus;
+}
+
 export interface AuthRouteHandlerDeps {
   readonly authService: AuthService;
   readonly clock: Clock;
@@ -42,7 +103,7 @@ export function createAuthRouteHandler(deps: AuthRouteHandlerDeps): HttpRouteHan
   const { authService, clock, sessionSecret, sessionTtlSeconds, oauthCookieTtlSeconds } = deps;
 
   return async (ctx) => {
-    const { request, url, pathname, method, isSecure, segments, auth } = ctx;
+    const { request, url, pathname, method, isSecure, segments, auth, telemetry } = ctx;
 
     if (method === 'GET' && pathname === '/api/auth/me') {
       return jsonResponse(authService.getSessionInfo(auth.principal), 200);
@@ -79,7 +140,14 @@ export function createAuthRouteHandler(deps: AuthRouteHandlerDeps): HttpRouteHan
         });
         return redirectResponse(started.authorizationUrl, [oauthCookie]);
       } catch (error) {
-        if (isBrowserNavigation(request)) {
+        const browserNav = isBrowserNavigation(request);
+        telemetry?.queueSecurityEvent({
+          type: 'auth.oauth.failed',
+          status: browserNav ? 302 : resolveHttpErrorStatus(error, 500),
+          reason: classifyOAuthFailureReason(error),
+          provider: 'google',
+        });
+        if (browserNav) {
           const errorCode = mapAuthErrorToBrowserCode(error, 'google');
           return redirectResponse(buildAuthErrorRedirectUrl(requestedNext, errorCode, 'google'));
         }
@@ -142,7 +210,14 @@ export function createAuthRouteHandler(deps: AuthRouteHandlerDeps): HttpRouteHan
           }),
         ]);
       } catch (error) {
-        if (isBrowserNavigation(request)) {
+        const browserNav = isBrowserNavigation(request);
+        telemetry?.queueSecurityEvent({
+          type: 'auth.oauth.failed',
+          status: browserNav ? 302 : resolveHttpErrorStatus(error, 400),
+          reason: classifyOAuthFailureReason(error),
+          provider: 'google',
+        });
+        if (browserNav) {
           const errorCode = mapAuthErrorToBrowserCode(error, 'google');
           const clearCookies = [serializeClearCookie(getOAuthCookieName(isSecure), isSecure)];
           if (auth.principal.kind === 'anonymous' && readSessionCookieRaw(request, isSecure)) {
@@ -158,15 +233,26 @@ export function createAuthRouteHandler(deps: AuthRouteHandlerDeps): HttpRouteHan
     }
 
     if (method === 'POST' && pathname === '/api/auth/magic-link/request') {
-      enforceCsrfOrigin(request, url, auth.authMethod);
+      enforceCsrfOrigin(request, url, auth.authMethod, telemetry);
       const body = MagicLinkRequestSchema.parse(await readJsonBody(request));
-      const result = await authService.requestMagicLink({
-        email: body.email,
-        inviteToken: auth.inviteToken,
-        verifyBaseUrl: `${url.origin}/api/auth/magic-link/verify`,
-        nextPath: body.next,
-      });
-      return jsonResponse(result, 202);
+      try {
+        const result = await authService.requestMagicLink({
+          email: body.email,
+          inviteToken: auth.inviteToken,
+          verifyBaseUrl: `${url.origin}/api/auth/magic-link/verify`,
+          nextPath: body.next,
+        });
+        return jsonResponse(result, 202);
+      } catch (error) {
+        if (error instanceof KinloomHttpError && error.code === 'RATE_LIMITED') {
+          telemetry?.queueSecurityEvent({
+            type: 'auth.magic_link.rate_limited',
+            status: 429,
+            reason: 'rate_limit_exceeded',
+          });
+        }
+        throw error;
+      }
     }
 
     if (method === 'GET' && pathname === '/api/auth/magic-link/verify') {
@@ -194,7 +280,26 @@ export function createAuthRouteHandler(deps: AuthRouteHandlerDeps): HttpRouteHan
           }),
         ]);
       } catch (error) {
-        if (isBrowserNavigation(request)) {
+        const browserNav = isBrowserNavigation(request);
+        const status = browserNav ? 302 : resolveHttpErrorStatus(error, 400);
+        if (
+          error instanceof KinloomHttpError &&
+          error.code === 'INVITE_REQUIRED' &&
+          readErrorDetailField(error, 'invite_status') !== null
+        ) {
+          telemetry?.queueSecurityEvent({
+            type: 'auth.invite.invalid',
+            status,
+            reason: classifyInviteInvalidReason(error),
+          });
+        } else {
+          telemetry?.queueSecurityEvent({
+            type: 'auth.magic_link.invalid_or_expired',
+            status,
+            reason: classifyMagicLinkInvalidReason(error),
+          });
+        }
+        if (browserNav) {
           const errorCode = mapAuthErrorToBrowserCode(error, 'magic_link');
           const clearCookies: string[] = [];
           if (auth.principal.kind === 'anonymous' && readSessionCookieRaw(request, isSecure)) {
@@ -236,7 +341,13 @@ export function createAuthRouteHandler(deps: AuthRouteHandlerDeps): HttpRouteHan
           }),
         ]);
       } catch (error) {
-        if (isBrowserNavigation(request)) {
+        const browserNav = isBrowserNavigation(request);
+        telemetry?.queueSecurityEvent({
+          type: 'auth.invite.invalid',
+          status: browserNav ? 302 : resolveHttpErrorStatus(error, 404),
+          reason: classifyInviteInvalidReason(error),
+        });
+        if (browserNav) {
           const errorCode = mapAuthErrorToBrowserCode(error, 'invite');
           const clearCookies: string[] = [];
           if (auth.principal.kind === 'anonymous' && readSessionCookieRaw(request, isSecure)) {
@@ -249,7 +360,7 @@ export function createAuthRouteHandler(deps: AuthRouteHandlerDeps): HttpRouteHan
     }
 
     if (method === 'POST' && pathname === '/api/auth/logout') {
-      enforceCsrfOrigin(request, url, auth.authMethod);
+      enforceCsrfOrigin(request, url, auth.authMethod, telemetry);
       const headers = new Headers({ 'cache-control': 'no-store' });
       headers.append('set-cookie', serializeClearCookie(getSessionCookieName(isSecure), isSecure));
       return new Response(null, { status: 204, headers });
