@@ -84,13 +84,17 @@ function toLooseRawPerson(rec: Readonly<Record<string, unknown>>): RawPerson {
     id: asString(rec.id).trim(),
     slug: asString(rec.slug).trim() || asString(rec.id).trim(),
     full_name: fullName || [givenNames, surname].filter(Boolean).join(' ').trim(),
-    given_names: givenNames,
+    given_name: asString(rec.given_name).trim() || givenNames,
     surname,
+    alt_names: [],
+    sex: asString(rec.sex).trim() || 'U',
     birth_edtf: asString(rec.birth_edtf).trim(),
     death_edtf: asString(rec.death_edtf).trim(),
     is_living: rec.is_living === true || rec.living === true,
+    lineage_group: asString(rec.lineage_group).trim() || 'unknown',
+    portrait_url: null,
     ...(pronunciation ? { pronunciation } : {}),
-  } as RawPerson;
+  } as unknown as RawPerson;
 }
 
 function toLoosePlace(rec: Readonly<Record<string, unknown>>): Place {

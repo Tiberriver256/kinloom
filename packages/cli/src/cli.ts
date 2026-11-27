@@ -1198,7 +1198,7 @@ export async function runCli(argv: readonly string[], options?: RunCliOptions): 
                 personId,
                 packageDir,
                 json: values.json,
-                ...(options.plugins ? { plugins: options.plugins } : {}),
+                ...(options?.plugins ? { plugins: options.plugins } : {}),
               })
           );
           writeRenderedOutput(io, result.rendered);
@@ -1302,7 +1302,7 @@ export async function runCli(argv: readonly string[], options?: RunCliOptions): 
               strictHygiene: values['strict-hygiene'] || values.strict,
               strictPronunciation: values['strict-pronunciation'] || values.strict,
               json: values.json,
-              ...(options.plugins ? { plugins: options.plugins } : {}),
+              ...(options?.plugins ? { plugins: options.plugins } : {}),
             })
         );
         writeRenderedOutput(io, result.rendered);
