@@ -1509,6 +1509,10 @@ describe('createCloudflareWorker full HTTP lifecycle (Miniflare)', () => {
     const res = await worker.fetch(new Request(`${CONTRACT_TEST_ORIGIN}/privacy`), env);
     expect(res.status).toBe(200);
     expect(res.headers.get('content-type')).toBe('text/html; charset=utf-8');
+    expect(res.headers.get('x-content-type-options')).toBe('nosniff');
+    expect(res.headers.get('x-frame-options')).toBe('DENY');
+    expect(res.headers.get('strict-transport-security')).toBe('max-age=31536000; includeSubDomains');
+    expect(res.headers.get('content-security-policy')).toContain("default-src 'self'");
     const html = await res.text();
     expect(html).toContain(`<title>Privacy Policy | ${siteConfig.site.title}</title>`);
     expect(html).toContain(siteConfig.site.familyName);

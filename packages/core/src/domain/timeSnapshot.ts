@@ -1,3 +1,4 @@
+import { getCurrentReferenceYear } from '../privacy.js';
 import type { AnchorYearConfig, MigrationEraConfig } from '../schemas/config.js';
 import { DEFAULT_ANCHOR_YEARS } from '../schemas/config.js';
 import type {
@@ -147,7 +148,7 @@ export function isPersonAliveInYear(
   person: Person,
   year: number,
   personEventYears?: readonly number[],
-  referenceYear = 2026
+  referenceYear = getCurrentReferenceYear()
 ): boolean {
   if (person.is_living && person.full_name === 'Living') {
     return false;
@@ -222,7 +223,7 @@ export function computeTimeSnapshot(
   bundle: ArchiveBundle,
   year: number,
   placesById: ReadonlyMap<string, Place>,
-  referenceYear = 2026
+  referenceYear = getCurrentReferenceYear()
 ): TimeSnapshot {
   const eventsByPerson = new Map<string, ArchiveEvent[]>();
   for (const ev of bundle.events) {

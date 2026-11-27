@@ -38,21 +38,75 @@ const LANG_DISPLAY_NAMES: Readonly<Record<string, string>> = {
   da: 'Danish',
 };
 
+export type PronounceSourceTier =
+  | 'native_speaker'
+  | 'broadcast_lexicon'
+  | 'community'
+  | 'automated';
+
+export type PronounceSourceStatus =
+  | 'verified'
+  | 'no_match'
+  | 'requires_api_key'
+  | 'manual_lookup'
+  | 'error';
+
+export type PronounceProviderId =
+  | 'forvo'
+  | 'youglish'
+  | 'wiktionary'
+  | 'voa'
+  | 'wikipedia'
+  | 'nameshouts'
+  | 'pronouncenames'
+  | 'howtopronounce';
+
+export const PRONOUNCE_TIER_RANK: Readonly<Record<PronounceSourceTier, number>> = {
+  native_speaker: 1,
+  broadcast_lexicon: 2,
+  community: 3,
+  automated: 4,
+};
+
+const YOUGLISH_LANG_SLUGS: Readonly<Record<string, string>> = {
+  en: 'english',
+  nl: 'dutch',
+  sv: 'swedish',
+  fi: 'finnish',
+  pl: 'polish',
+  de: 'german',
+  fr: 'french',
+  no: 'norwegian',
+  da: 'danish',
+  es: 'spanish',
+  it: 'italian',
+  pt: 'portuguese',
+};
+
 export interface PronounceAudioHit {
   filename: string;
   commons_file: string;
   url: string;
   language?: string;
   source_url: string;
+  provider?: PronounceProviderId;
+  tier?: PronounceSourceTier;
+  speaker?: string;
+  country?: string;
 }
 
 export interface PronounceSourceHit {
+  provider: PronounceProviderId;
+  tier: PronounceSourceTier;
+  status: PronounceSourceStatus;
   site: string;
   title: string;
   url: string;
   label: string;
   ipa: string[];
+  phonetic?: string[];
   audio_files: string[];
+  note?: string;
 }
 
 export interface PronounceLookupResult {
@@ -60,6 +114,11 @@ export interface PronounceLookupResult {
   term: string;
   lang: string | null;
   verified: boolean;
+  corroborated: boolean;
+  sourceCount: number;
+  highestTier: PronounceSourceTier | null;
+  native_speaker_verified: boolean;
+  verification_note: string | null;
   cache_hit: boolean;
   ipa: string[];
   primary_ipa: string | null;
@@ -74,10 +133,12 @@ export interface PronounceLookupResult {
 export interface PronounceLookupOptions {
   term: string;
   lang?: string;
+  region?: string;
   json?: boolean;
   refresh?: boolean;
   cacheDir?: string;
   timeoutMs?: number;
+  forvoApiKey?: string;
   fetchImpl?: typeof fetch;
   sleepFn?: (ms: number) => Promise<void>;
   nowIso?: () => string;
@@ -620,15 +681,214 @@ function formatSourceLabel(target: WikiTargetSpec, lang: string | null): string 
   return `${projectLabel} (${langDisplay} IPA)`;
 }
 
+interface ForvoApiItem {
+  id?: number;
+  word?: string;
+  pathmp3?: string;
+  pathogg?: string;
+  username?: string;
+  country?: string;
+  langname?: string;
+  code?: string;
+  num_positive_votes?: number;
+}
+
+interface ForvoApiResponse {
+  items?: ForvoApiItem[];
+}
+
+export function buildForvoLookupUrl(term: string, lang: string | null): string {
+  const base = `https://forvo.com/word/${encodeURIComponent(term.toLowerCase())}/`;
+  return lang ? `${base}#${encodeURIComponent(lang)}` : base;
+}
+
+export function buildYouGlishLookupUrl(
+  term: string,
+  lang: string | null,
+  region?: string | null
+): string {
+  const langSlug = (lang && YOUGLISH_LANG_SLUGS[lang]) || 'english';
+  const regionSlug = region?.trim().toLowerCase();
+  const accentSuffix =
+    langSlug === 'english' && regionSlug && ['us', 'uk', 'aus', 'can', 'ie', 'sco', 'nz'].includes(regionSlug)
+      ? `/${regionSlug}`
+      : '';
+  return `https://youglish.com/pronounce/${encodeURIComponent(term)}/${langSlug}${accentSuffix}`;
+}
+
+export function buildManualLookupSources(
+  term: string,
+  lang: string | null,
+  options?: { region?: string | null; includeForvoManual?: boolean }
+): PronounceSourceHit[] {
+  const encodedTerm = encodeURIComponent(term);
+  const slugTerm = encodeURIComponent(term.toLowerCase().replaceAll(/\s+/g, '-'));
+  const sources: PronounceSourceHit[] = [];
+
+  if (options?.includeForvoManual !== false) {
+    sources.push({
+      provider: 'forvo',
+      tier: 'native_speaker',
+      status: 'requires_api_key',
+      site: 'forvo.com',
+      title: term,
+      url: buildForvoLookupUrl(term, lang),
+      label: 'Forvo (Native speaker audio)',
+      ipa: [],
+      audio_files: [],
+      note: 'Set FORVO_API_KEY to query native-speaker recordings automatically, or open the direct Forvo URL.',
+    });
+  }
+
+  sources.push({
+    provider: 'youglish',
+    tier: 'native_speaker',
+    status: 'manual_lookup',
+    site: 'youglish.com',
+    title: term,
+    url: buildYouGlishLookupUrl(term, lang, options?.region),
+    label: 'YouGlish (Regional accent clips)',
+    ipa: [],
+    audio_files: [],
+    note: 'Open in browser to hear native regional accent clips in real spoken context.',
+  });
+
+  sources.push({
+    provider: 'voa',
+    tier: 'broadcast_lexicon',
+    status: 'manual_lookup',
+    site: 'pronounce.voanews.com',
+    title: term,
+    url: `https://pronounce.voanews.com/search?q=${encodedTerm}`,
+    label: 'VOA Pronunciation Guide (Broadcast lexicon)',
+    ipa: [],
+    audio_files: [],
+    note: 'Broadcast pronunciation guide for international names and places.',
+  });
+
+  sources.push({
+    provider: 'nameshouts',
+    tier: 'community',
+    status: 'manual_lookup',
+    site: 'nameshouts.com',
+    title: term,
+    url: `https://www.nameshouts.com/names/${slugTerm}`,
+    label: 'NameShouts (Name database)',
+    ipa: [],
+    audio_files: [],
+    note: 'Secondary name database cross-check; prefer Tier 1 native-speaker audio when available.',
+  });
+
+  sources.push({
+    provider: 'pronouncenames',
+    tier: 'community',
+    status: 'manual_lookup',
+    site: 'pronouncenames.com',
+    title: term,
+    url: `https://www.pronouncenames.com/pronounce/${encodedTerm}`,
+    label: 'Pronounce Names (Community database)',
+    ipa: [],
+    audio_files: [],
+    note: 'Community-submitted name pronunciations; corroborate with a second independent source.',
+  });
+
+  sources.push({
+    provider: 'howtopronounce',
+    tier: 'community',
+    status: 'manual_lookup',
+    site: 'howtopronounce.com',
+    title: term,
+    url: `https://www.howtopronounce.com/${slugTerm}`,
+    label: 'HowToPronounce (Community database)',
+    ipa: [],
+    audio_files: [],
+    note: 'Community-submitted audio and phonetic hints; never rely on automated voices alone for local exceptions.',
+  });
+
+  return sources;
+}
+
+export function rankPronounceSources(sources: readonly PronounceSourceHit[]): PronounceSourceHit[] {
+  return [...sources].toSorted((a, b) => {
+    const aVerified = a.status === 'verified' ? 0 : 1;
+    const bVerified = b.status === 'verified' ? 0 : 1;
+    if (aVerified !== bVerified) {
+      return aVerified - bVerified;
+    }
+    const tierDiff = PRONOUNCE_TIER_RANK[a.tier] - PRONOUNCE_TIER_RANK[b.tier];
+    if (tierDiff !== 0) {
+      return tierDiff;
+    }
+    const aHasAudio = a.audio_files.length > 0 ? 0 : 1;
+    const bHasAudio = b.audio_files.length > 0 ? 0 : 1;
+    if (aHasAudio !== bHasAudio) {
+      return aHasAudio - bHasAudio;
+    }
+    const aHasIpa = a.ipa.length > 0 ? 0 : 1;
+    const bHasIpa = b.ipa.length > 0 ? 0 : 1;
+    if (aHasIpa !== bHasIpa) {
+      return aHasIpa - bHasIpa;
+    }
+    return 0;
+  });
+}
+
+export function evaluatePronounceCorroboration(sources: readonly PronounceSourceHit[]): {
+  corroborated: boolean;
+  sourceCount: number;
+  highestTier: PronounceSourceTier | null;
+  native_speaker_verified: boolean;
+  verification_note: string | null;
+} {
+  const verifiedSources = sources.filter((s) => s.status === 'verified');
+  const independentProviders = new Set(verifiedSources.map((s) => s.provider));
+  const sourceCount = independentProviders.size;
+  const corroborated = sourceCount >= 2;
+
+  let highestTier: PronounceSourceTier | null = null;
+  for (const src of verifiedSources) {
+    if (highestTier === null || PRONOUNCE_TIER_RANK[src.tier] < PRONOUNCE_TIER_RANK[highestTier]) {
+      highestTier = src.tier;
+    }
+  }
+
+  const nativeSpeakerVerified = verifiedSources.some((s) => s.tier === 'native_speaker');
+
+  let verificationNote: string | null = null;
+  if (verifiedSources.length === 0) {
+    verificationNote =
+      'No automated upstream IPA or native-speaker recording matched; verify across at least two manual lookup sources before recording in the lexicon.';
+  } else if (highestTier === 'automated') {
+    verificationNote =
+      'Only automated/generated previews matched; never rely on automated voices alone for local or historical exceptions—verify with a native speaker source.';
+  } else if (!nativeSpeakerVerified) {
+    verificationNote =
+      'No Tier 1 native-speaker audio/lexicon match yet; cross-check with Forvo, YouGlish, or Wiktionary before finalizing.';
+  } else if (!corroborated) {
+    verificationNote =
+      'Matched in 1 independent database; cross-check a second independent source (e.g. Forvo, YouGlish, VOA, or Wikipedia) to confirm regional usage.';
+  }
+
+  return {
+    corroborated,
+    sourceCount,
+    highestTier,
+    native_speaker_verified: nativeSpeakerVerified,
+    verification_note: verificationNote,
+  };
+}
+
 function formatLookupText(result: Omit<PronounceLookupResult, 'rendered'>): string {
   const lines: string[] = [];
   lines.push(
-    `Pronunciation lookup: ${result.term}${result.lang ? ` [${result.lang}]` : ''} (verified=${result.verified}, cache_hit=${result.cache_hit})`
+    `Pronunciation lookup: ${result.term}${result.lang ? ` [${result.lang}]` : ''} (verified=${result.verified}, corroborated=${result.corroborated}, sources=${result.sourceCount}, highest_tier=${result.highestTier ?? 'none'}, cache_hit=${result.cache_hit})`
   );
   if (result.verified) {
-    lines.push(`  IPA: ${result.ipa.join(', ')}`);
+    if (result.ipa.length > 0) {
+      lines.push(`  IPA: ${result.ipa.join(', ')}`);
+    }
     if (result.source_label || result.source_url) {
-      lines.push(`  Source: ${result.source_label ?? 'Wikimedia'}${result.source_url ? ` (${result.source_url})` : ''}`);
+      lines.push(`  Primary source: ${result.source_label ?? 'Wikimedia'}${result.source_url ? ` (${result.source_url})` : ''}`);
     }
     if (result.audio_files.length > 0) {
       lines.push(`  Native audio (${result.audio_files.length}):`);
@@ -637,12 +897,24 @@ function formatLookupText(result: Omit<PronounceLookupResult, 'rendered'>): stri
       }
     }
   } else {
-    lines.push('  No verified IPA found on Wiktionary or Wikipedia (never fabricating IPA).');
+    lines.push('  No verified IPA found on automated sources (never fabricating IPA).');
     if (result.audio_files.length > 0) {
       lines.push(`  Native audio (${result.audio_files.length}):`);
       for (const audio of result.audio_files) {
         lines.push(`    - ${audio.filename}: ${audio.url}`);
       }
+    }
+  }
+  if (result.verification_note) {
+    lines.push(`  Note: ${result.verification_note}`);
+  }
+  const manualSources = result.sources.filter(
+    (s) => s.status === 'manual_lookup' || s.status === 'requires_api_key'
+  );
+  if (manualSources.length > 0) {
+    lines.push(`  Cross-check links (${manualSources.length}):`);
+    for (const src of manualSources) {
+      lines.push(`    - [${src.tier} / ${src.status}] ${src.label}: ${src.url}`);
     }
   }
   return lines.join('\n');
@@ -669,8 +941,12 @@ export async function runPronounceLookupCommand(
   }
 
   const cacheDir = getPronounceCacheDir(options.cacheDir);
+  const forvoApiKey = (options.forvoApiKey ?? process.env.FORVO_API_KEY)?.trim() || null;
+  const normalizedRegion = options.region?.trim().toLowerCase() || null;
   const cacheKey = createHash('sha256')
-    .update(`v1|term:${term.toLowerCase()}|lang:${normalizedLang ?? ''}`)
+    .update(
+      `v2|term:${term.toLowerCase()}|lang:${normalizedLang ?? ''}|region:${normalizedRegion ?? ''}|forvo:${forvoApiKey ? '1' : '0'}`
+    )
     .digest('hex');
   const cachePath = path.join(cacheDir, `${cacheKey}.json`);
 
@@ -753,7 +1029,17 @@ export async function runPronounceLookupCommand(
       const pageUrl = `https://${target.host}/wiki/${encodeURIComponent(page.title.replaceAll(' ', '_'))}`;
       const label = formatSourceLabel(target, normalizedLang);
 
+      const provider: PronounceProviderId =
+        target.project === 'wiktionary' ? 'wiktionary' : 'wikipedia';
+      const tier: PronounceSourceTier =
+        target.project === 'wiktionary' || extracted.audioFiles.length > 0
+          ? 'native_speaker'
+          : 'broadcast_lexicon';
+
       sources.push({
+        provider,
+        tier,
+        status: 'verified',
         site: target.host,
         title: page.title,
         url: pageUrl,
@@ -784,6 +1070,111 @@ export async function runPronounceLookupCommand(
     }
   }
 
+  // Optional Tier 1 Forvo API lookup when FORVO_API_KEY is configured (never bypassing anti-bot gates)
+  let forvoQueried = false;
+  if (forvoApiKey) {
+    forvoQueried = true;
+    const forvoPageUrl = buildForvoLookupUrl(term, normalizedLang);
+    const forvoApiUrl =
+      `https://apifree.forvo.com/key/${encodeURIComponent(forvoApiKey)}/format/json/action/word-pronunciations/word/${encodeURIComponent(term)}` +
+      (normalizedLang ? `/language/${encodeURIComponent(normalizedLang)}` : '');
+    try {
+      const forvoPayload = (await fetchJsonWithRetry({
+        url: forvoApiUrl,
+        fetchImpl,
+        timeoutMs,
+        sleepFn,
+      })) as ForvoApiResponse | null;
+      const items = (forvoPayload?.items ?? [])
+        .filter((item) => Boolean(item.pathmp3 || item.pathogg))
+        .toSorted((a, b) => (b.num_positive_votes ?? 0) - (a.num_positive_votes ?? 0));
+
+      if (items.length > 0) {
+        const forvoAudioNames: string[] = [];
+        for (let idx = 0; idx < items.length; idx += 1) {
+          const item = items[idx];
+          const audioUrl = item.pathmp3 || item.pathogg || '';
+          const ext = item.pathmp3 ? 'mp3' : 'ogg';
+          const filename = `forvo-${term.toLowerCase().replaceAll(/[^a-z0-9]+/g, '-')}-${item.id ?? idx + 1}.${ext}`;
+          forvoAudioNames.push(filename);
+          if (!audioByFilename.has(filename)) {
+            audioByFilename.set(filename, {
+              filename,
+              commons_file: filename,
+              url: audioUrl,
+              ...(item.code ?? normalizedLang ? { language: item.code ?? normalizedLang ?? undefined } : {}),
+              source_url: forvoPageUrl,
+              provider: 'forvo',
+              tier: 'native_speaker',
+              ...(item.username ? { speaker: item.username } : {}),
+              ...(item.country ? { country: item.country } : {}),
+            });
+          }
+        }
+        sources.push({
+          provider: 'forvo',
+          tier: 'native_speaker',
+          status: 'verified',
+          site: 'forvo.com',
+          title: term,
+          url: forvoPageUrl,
+          label: `Forvo (${items.length} native speaker recording${items.length === 1 ? '' : 's'})`,
+          ipa: [],
+          audio_files: forvoAudioNames,
+        });
+      } else {
+        sources.push({
+          provider: 'forvo',
+          tier: 'native_speaker',
+          status: 'no_match',
+          site: 'forvo.com',
+          title: term,
+          url: forvoPageUrl,
+          label: 'Forvo (Native speaker audio)',
+          ipa: [],
+          audio_files: [],
+        });
+      }
+    } catch {
+      sources.push({
+        provider: 'forvo',
+        tier: 'native_speaker',
+        status: 'error',
+        site: 'forvo.com',
+        title: term,
+        url: forvoPageUrl,
+        label: 'Forvo (Native speaker audio)',
+        ipa: [],
+        audio_files: [],
+        note: 'Forvo API lookup failed; verify via the direct URL.',
+      });
+    }
+  }
+
+  // Append anti-bot-compliant structured manual lookup entries for gated/JS-rendered databases
+  sources.push(
+    ...buildManualLookupSources(term, normalizedLang, {
+      region: normalizedRegion,
+      includeForvoManual: !forvoQueried,
+    })
+  );
+
+  const rankedSources = rankPronounceSources(sources);
+  const corroboration = evaluatePronounceCorroboration(rankedSources);
+
+  // Pick primary source from highest-ranked verified source (preserving IPA priority when available)
+  const topVerifiedWithIpa = rankedSources.find(
+    (s) => s.status === 'verified' && s.ipa.length > 0
+  );
+  const topVerifiedAny = rankedSources.find((s) => s.status === 'verified');
+  if (topVerifiedWithIpa) {
+    primarySourceUrl = topVerifiedWithIpa.url;
+    primarySourceLabel = topVerifiedWithIpa.label;
+  } else if (!primarySourceUrl && topVerifiedAny) {
+    primarySourceUrl = topVerifiedAny.url;
+    primarySourceLabel = topVerifiedAny.label;
+  }
+
   const ipaList = [...allIpa];
   const audioList = [...audioByFilename.values()];
   const fetchedAt = (options.nowIso ?? (() => new Date().toISOString()))();
@@ -792,13 +1183,18 @@ export async function runPronounceLookupCommand(
     ok: true,
     term,
     lang: normalizedLang,
-    verified: ipaList.length > 0,
+    verified: ipaList.length > 0 || corroboration.native_speaker_verified,
+    corroborated: corroboration.corroborated,
+    sourceCount: corroboration.sourceCount,
+    highestTier: corroboration.highestTier,
+    native_speaker_verified: corroboration.native_speaker_verified,
+    verification_note: corroboration.verification_note,
     ipa: ipaList,
     primary_ipa: ipaList[0] ?? null,
     audio_files: audioList,
     source_url: primarySourceUrl,
     source_label: primarySourceLabel,
-    sources,
+    sources: rankedSources,
     fetched_at: fetchedAt,
   };
 

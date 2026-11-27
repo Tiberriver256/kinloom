@@ -1,4 +1,5 @@
 import type { AssetHandler } from '@kinloom/core';
+import { applySecurityHeaders } from '@kinloom/server';
 import type { Fetcher } from '../types.js';
 
 const KINLOOM_FAVICON_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32" fill="none" role="img" aria-label="Kinloom">
@@ -38,9 +39,7 @@ function notFoundPlainResponse(): Response {
  * Never falls back to SPA HTML for /api/*, /media/*, /favicon.ico, /favicon.svg, or missing static assets.
  */
 export function createCloudflareAssetHandler(assets?: Fetcher): AssetHandler {
-  return {
-    async fetch(request: Request): Promise<Response> {
-      const url = new URL(request.url);
+  async function resolveAssetResponse(request: Request, url: URL): Promise<Response> {
       const pathname = url.pathname;
 
       if (
@@ -111,6 +110,13 @@ export function createCloudflareAssetHandler(assets?: Fetcher): AssetHandler {
         status: 200,
         headers,
       });
+  }
+
+  return {
+    async fetch(request: Request): Promise<Response> {
+      const url = new URL(request.url);
+      const response = await resolveAssetResponse(request, url);
+      return applySecurityHeaders(response, { isSecure: url.protocol === 'https:' });
     },
   };
 }

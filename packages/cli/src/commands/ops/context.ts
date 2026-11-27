@@ -8,7 +8,9 @@ import {
   parseKinloomConfigYaml,
   parseYaml,
   resolveEffectiveLiving,
+  resolvePersonPronunciation,
   type PrivacyConfig,
+  type ResolvedPronunciation,
 } from '@kinloom/core';
 import { CliValidationError } from '../../errors.js';
 
@@ -22,7 +24,15 @@ export interface ContextCommandOptions {
   personId: string;
   ancestryDir?: string;
   includeFamily?: boolean;
+  full?: boolean;
   json?: boolean;
+}
+
+export interface ContextKinshipEdge {
+  from: string;
+  to: string;
+  relation: string;
+  family_xref?: string | null;
 }
 
 export interface ContextRelativeEntry {
@@ -114,6 +124,8 @@ export interface PersonContextPayload {
     spouses: ContextRelativeListItem[];
     children: ContextRelativeListItem[];
   };
+  kinship: ContextKinshipEdge[];
+  pronunciation: ResolvedPronunciation | null;
   events: Record<string, unknown>[];
   places: Record<string, unknown>[];
   sources: Record<string, unknown>[];
@@ -256,7 +268,7 @@ function isEffectiveLivingRecord(
     .filter((yr): yr is number => yr !== null);
   if (years.length > 0) {
     const earliest = Math.min(...years);
-    const refYear = privacy.referenceYear ?? 2026;
+    const refYear = privacy.referenceYear ?? new Date().getUTCFullYear();
     const cutoffYears = privacy.livingCutoffYears ?? 101;
     if (earliest > refYear - cutoffYears) {
       return true;
@@ -447,7 +459,7 @@ function isConfirmedDeceasedRelative(
     return true;
   }
   const birthYear = edtfYear(birthEdtf);
-  const refYear = privacy.referenceYear ?? 2026;
+  const refYear = privacy.referenceYear ?? new Date().getUTCFullYear();
   const cutoffYears = privacy.livingCutoffYears ?? 101;
   return birthYear !== null && birthYear <= refYear - cutoffYears;
 }
@@ -1099,9 +1111,9 @@ export async function runContextCommand(
     readOptionalUtf8(path.join(dataDir, 'narratives.yaml')),
   ]);
 
-  const privacy: Partial<PrivacyConfig> = configText
-    ? parseKinloomConfigYaml(configText).privacy
-    : {};
+  const parsedConfig = configText ? parseKinloomConfigYaml(configText) : null;
+  const privacy: Partial<PrivacyConfig> = parsedConfig?.privacy ?? {};
+  const pronunciationLexicon = parsedConfig?.pronunciations;
 
   // Pre-filter top-level YAML blocks so large archives stay sub-second.
   const peopleBlocks = splitTopLevelYamlList(peopleText);
@@ -1116,7 +1128,7 @@ export async function runContextCommand(
     kinshipBlocks.filter((b) => b.includes(personId))
   );
 
-  const includeFamily = options.includeFamily === true;
+  const includeFamily = options.includeFamily === true || options.full === true;
   const parentIds = new Set<string>();
   const spouseIds = new Set<string>();
   const childIds = new Set<string>();
@@ -1465,10 +1477,38 @@ export async function runContextCommand(
     nameIndexHolder,
   });
 
+  const personKinship: ContextKinshipEdge[] = relevantKinship
+    .filter((edge) => edge.from === personId || edge.to === personId)
+    .map((edge) => {
+      const fromId = typeof edge.from === 'string' ? edge.from : '';
+      const toId = typeof edge.to === 'string' ? edge.to : '';
+      return {
+        from: livingIds.has(fromId) ? REDACTED_RELATIVE_LABEL : fromId,
+        to: livingIds.has(toId) ? REDACTED_RELATIVE_LABEL : toId,
+        relation: typeof edge.relation === 'string' ? edge.relation : '',
+        ...(typeof edge.family_xref === 'string' ? { family_xref: edge.family_xref } : {}),
+      };
+    });
+
+  const resolvedPronunciation = resolvePersonPronunciation(
+    {
+      full_name: asNonEmptyString(sanitizedTargetPerson.full_name),
+      given_name: asNonEmptyString(sanitizedTargetPerson.given_name),
+      surname: asNonEmptyString(sanitizedTargetPerson.surname),
+      is_living: false,
+      ...(isPlainRecord(sanitizedTargetPerson.pronunciation)
+        ? { pronunciation: sanitizedTargetPerson.pronunciation as never }
+        : {}),
+    },
+    pronunciationLexicon
+  );
+
   const context: PersonContextPayload = {
     repoDir,
     person: sanitizedTargetPerson,
     relatives,
+    kinship: personKinship,
+    pronunciation: resolvedPronunciation,
     events: personEvents,
     places: referencedPlaces,
     sources: referencedSources,

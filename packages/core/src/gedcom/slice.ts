@@ -9,7 +9,7 @@ import type {
   SourceRecord,
 } from '../schemas/entities.js';
 import { edtfYear, parseGedcomDateToEdtf } from '../edtf.js';
-import { isPersonLivingPublic } from '../privacy.js';
+import { getCurrentReferenceYear, isPersonLivingPublic } from '../privacy.js';
 import {
   cleanSourceCitationTitle,
   inferSourceRepository,
@@ -482,7 +482,7 @@ export function sliceGedcom(gedcomText: string, options: SliceGedcomOptions): Sl
   const expandSpouseAncestors = options.expandSpouseAncestors ?? false;
   const normalizeMaidenNames = options.normalizeMaidenNames ?? true;
   const branchId = options.branchId ?? 'primary';
-  const referenceYear = options.referenceYear ?? 2026;
+  const referenceYear = options.referenceYear ?? getCurrentReferenceYear();
   const livingCutoffYears = options.livingCutoffYears ?? 101;
   const stopDescendants = new Set(options.stopDescendantXrefs ?? []);
   const ancestorSurnamesLower = (options.ancestorSurnames ?? [])

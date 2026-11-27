@@ -378,7 +378,7 @@ export function buildFilteredGedcom7(options: GedcomExportOptions): string {
   const sourceXrefById = new Map<string, string>();
   const orderedSources: SourceRecord[] = [];
   const registerSource = (sourceId: string): string | null => {
-    if (!sourceId || sourceId === UNVERIFIED_TREE_SOURCE_ID || sourceId === 'src_ancestry_gedcom_2026') {
+    if (!sourceId || sourceId === UNVERIFIED_TREE_SOURCE_ID) {
       return null;
     }
     const existing = sourceXrefById.get(sourceId);

@@ -205,6 +205,7 @@ export interface SearchFilterOptions {
   readonly title?: string;
   readonly geo?: string;
   readonly control?: string;
+  readonly series?: string;
   readonly startDate?: string;
   readonly endDate?: string;
   readonly page: number;
@@ -705,6 +706,7 @@ export function buildQueryParams(
     readonly title?: string;
     readonly geo?: string;
     readonly control?: string;
+  readonly series?: string;
     readonly startDate?: string;
     readonly endDate?: string;
     readonly page?: number;
@@ -717,11 +719,47 @@ export function buildQueryParams(
   const forApi = options.forApi ?? false;
   const params: [string, string][] = [];
 
-  if (query) {
-    params.push(['q', query]);
+  const rawSeries = options.series?.trim() || null;
+  let effectiveStartDate = options.startDate ?? null;
+  let effectiveEndDate = options.endDate ?? null;
+  let effectiveControl = options.control ?? null;
+  let effectiveTitle = options.title ?? null;
+  let seriesNaId: string | null = null;
+  let extraQuerySeries: string | null = null;
+
+  if (rawSeries) {
+    if (/^\d{4}$/.test(rawSeries)) {
+      if (!effectiveStartDate) {
+        effectiveStartDate = rawSeries;
+      }
+      if (!effectiveEndDate) {
+        effectiveEndDate = rawSeries;
+      }
+    } else if (/^[A-Za-z]\d{2,5}$/.test(rawSeries)) {
+      if (!effectiveControl) {
+        effectiveControl = rawSeries.toUpperCase();
+      } else {
+        extraQuerySeries = rawSeries;
+      }
+    } else if (/^\d{5,}$/.test(rawSeries)) {
+      seriesNaId = rawSeries;
+    } else if (!effectiveTitle) {
+      effectiveTitle = rawSeries;
+    } else {
+      extraQuerySeries = rawSeries;
+    }
   }
-  if (options.title) {
-    params.push(['title', options.title]);
+
+  const combinedQuery =
+    query && extraQuerySeries
+      ? `${query} ${extraQuerySeries}`
+      : query || extraQuerySeries;
+
+  if (combinedQuery) {
+    params.push(['q', combinedQuery]);
+  }
+  if (effectiveTitle) {
+    params.push(['title', effectiveTitle]);
   }
   if (options.person) {
     params.push(['personOrOrg', options.person]);
@@ -729,8 +767,11 @@ export function buildQueryParams(
   if (options.geo) {
     params.push(['geographicReference', options.geo]);
   }
-  if (options.control) {
-    params.push(['controlNumbers', options.control]);
+  if (effectiveControl) {
+    params.push(['controlNumbers', effectiveControl]);
+  }
+  if (seriesNaId) {
+    params.push(['ancestorNaIds', seriesNaId]);
   }
   if (options.levels && options.levels.length > 0) {
     const flat = options.levels
@@ -766,11 +807,11 @@ export function buildQueryParams(
   if (options.materialType) {
     params.push(['typeOfMaterials', options.materialType]);
   }
-  if (options.startDate) {
-    params.push(['startDate', options.startDate]);
+  if (effectiveStartDate) {
+    params.push(['startDate', effectiveStartDate]);
   }
-  if (options.endDate) {
-    params.push(['endDate', options.endDate]);
+  if (effectiveEndDate) {
+    params.push(['endDate', effectiveEndDate]);
   }
   if (page > 1 || forApi) {
     params.push(['page', String(page)]);
@@ -2865,6 +2906,13 @@ const COMMON_SEARCH_OPTIONS: readonly OptionSpec[] = [
     help: 'Control number or microform identifier.',
   },
   {
+    key: 'series',
+    kind: 'string',
+    flags: ['--series'],
+    metavar: 'SERIES',
+    help: 'Series filter: 4-digit year (e.g. 1940), microform ID (e.g. M593), series NAID, or series title.',
+  },
+  {
     key: 'startDate',
     kind: 'string',
     flags: ['--start-date'],
@@ -3243,6 +3291,7 @@ function extractCommonSearchOptions(parsed: ReturnType<typeof parseCommandArgs>)
     title: getStringOption(parsed, 'title'),
     geo: getStringOption(parsed, 'geo'),
     control: getStringOption(parsed, 'control'),
+    series: getStringOption(parsed, 'series'),
     startDate: getStringOption(parsed, 'startDate'),
     endDate: getStringOption(parsed, 'endDate'),
     page: getNumberOption(parsed, 'page') ?? 1,

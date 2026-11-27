@@ -167,7 +167,7 @@ export function cleanAlternateNote(note: string): string {
 export function applyCitationCleanings(
   events: ArchiveEvent[],
   sources: SourceRecord[],
-  legacyContainerSourceIds: ReadonlySet<string> = new Set(['src_ancestry_gedcom_2026'])
+  legacyContainerSourceIds: ReadonlySet<string> = new Set()
 ): void {
   for (const ev of events) {
     if (ev.summary) {

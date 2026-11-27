@@ -1,3 +1,4 @@
+import { getCurrentReferenceYear } from '../privacy.js';
 import type { ArchiveBundle, KinshipEdge, Person, Place } from '../schemas/entities.js';
 
 export interface KinshipStep {
@@ -166,7 +167,7 @@ export function describeKinshipSteps(steps: readonly KinshipStep[]): string {
 export function computeLifeOverlap(
   a: Person,
   b: Person,
-  referenceYear = 2026
+  referenceYear = getCurrentReferenceYear()
 ): KinshipPathResult['overlapYears'] {
   const aStart = a.birth_year;
   const bStart = b.birth_year;
@@ -190,7 +191,7 @@ export function findKinshipPath(params: {
   placesById: ReadonlyMap<string, Place>;
   referenceYear?: number;
 }): KinshipPathResult {
-  const { fromId, toId, bundle, placesById, referenceYear = 2026 } = params;
+  const { fromId, toId, bundle, placesById, referenceYear = getCurrentReferenceYear() } = params;
   const peopleById = new Map(bundle.people.map((p) => [p.id, p]));
   const personA = peopleById.get(fromId);
   const personB = peopleById.get(toId);

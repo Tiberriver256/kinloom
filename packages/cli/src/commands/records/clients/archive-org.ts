@@ -65,6 +65,7 @@ const IA_URL_POLICY: UrlSecurityPolicy = {
 const SUBCOMMAND_ALIASES: Readonly<Record<string, string>> = {
   metadata: 'get',
   show: 'get',
+  pages: 'page',
 };
 
 export class ArchiveNotFoundError extends RecordRuntimeError {
@@ -2158,6 +2159,14 @@ const PAGE_OPTIONS: readonly OptionSpec[] = [
     help: 'Output file path (.jpg) or directory (default: .).',
   },
   {
+    key: 'concurrency',
+    kind: 'integer',
+    flags: ['--concurrency', '-j'],
+    default: PAGE_BATCH_WORKERS,
+    metavar: 'N',
+    help: `Max concurrent page downloads for batch ranges (1-8, default: ${PAGE_BATCH_WORKERS}).`,
+  },
+  {
     key: 'timeout',
     kind: 'number',
     flags: ['--timeout'],
@@ -2935,6 +2944,7 @@ async function runPage(
   const printedPagesSpec = getStringOption(parsed, 'printedPages');
   const scale = getNumberOption(parsed, 'scale');
   const width = getNumberOption(parsed, 'width');
+  const concurrency = getNumberOption(parsed, 'concurrency') ?? PAGE_BATCH_WORKERS;
   const outArg = getStringOption(parsed, 'out') ?? '.';
   const timeout = validatePositiveTimeout(
     getNumberOption(parsed, 'timeout') ?? DEFAULT_TIMEOUT_SECONDS
@@ -2947,6 +2957,9 @@ async function runPage(
   }
   if (width !== undefined && width < 1) {
     throw new CliValidationError(`--width must be >= 1, got ${width}.`);
+  }
+  if (!Number.isInteger(concurrency) || concurrency < 1 || concurrency > 8) {
+    throw new CliValidationError(`--concurrency must be an integer between 1 and 8, got ${concurrency}.`);
   }
 
   if (printedPage !== undefined && (leafFromPos !== undefined || leafFromFlag !== undefined)) {
@@ -3059,7 +3072,7 @@ async function runPage(
     );
   }
 
-  const fetched = await runWithConcurrency(jobs, PAGE_BATCH_WORKERS, (job) =>
+  const fetched = await runWithConcurrency(jobs, concurrency, (job) =>
     ensurePageImageCache(identifier, job.leaf, job.suffix, job.url, ctx, {
       cacheRoot,
       timeout,

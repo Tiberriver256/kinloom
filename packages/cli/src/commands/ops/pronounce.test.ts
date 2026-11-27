@@ -15,7 +15,9 @@ import { runCli } from '../../cli.js';
 import { runIntegrateCommand } from './integrate.js';
 import {
   buildCommonsAudioUrl,
+  evaluatePronounceCorroboration,
   extractMediaWikiPronunciations,
+  rankPronounceSources,
   runPronounceAuditCommand,
   runPronounceLookupCommand,
 } from './pronounce.js';
@@ -270,9 +272,135 @@ describe('kinloom pronounce lookup', () => {
       sleepFn: async () => {},
     });
     expect(missing.verified).toBe(false);
+    expect(missing.corroborated).toBe(false);
+    expect(missing.sourceCount).toBe(0);
+    expect(missing.highestTier).toBeNull();
     expect(missing.ipa).toEqual([]);
     expect(missing.primary_ipa).toBeNull();
     expect(missing.source_url).toBeNull();
+    // Structured anti-bot-compliant fallback URLs are always emitted for gated providers
+    const providers = missing.sources.map((s) => s.provider);
+    expect(providers).toEqual(
+      expect.arrayContaining(['forvo', 'youglish', 'voa', 'nameshouts', 'pronouncenames', 'howtopronounce'])
+    );
+    expect(missing.sources.find((s) => s.provider === 'forvo')?.status).toBe('requires_api_key');
+    expect(missing.sources.find((s) => s.provider === 'youglish')?.status).toBe('manual_lookup');
+    expect(missing.sources.find((s) => s.provider === 'voa')?.status).toBe('manual_lookup');
+  });
+
+  it('ranks verified native-speaker sources above broadcast/community/automated tiers and flags two-source corroboration', async () => {
+    const cacheDir = await makeTempDir('kinloom-pron-multi-');
+    const mockFetch = vi.fn<typeof fetch>(async (input) => {
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
+      if (url.startsWith('https://apifree.forvo.com/')) {
+        return new Response(
+          JSON.stringify({
+            items: [
+              {
+                id: 42,
+                word: 'Zeeland',
+                pathmp3: 'https://audio.forvo.com/mp3/zeeland-nl.mp3',
+                username: 'native_nl',
+                country: 'Netherlands',
+                code: 'nl',
+                num_positive_votes: 5,
+              },
+            ],
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } }
+        );
+      }
+      if (url.startsWith('https://en.wikipedia.org/')) {
+        return new Response(
+          JSON.stringify({
+            query: {
+              pages: [
+                {
+                  title: 'Zeeland',
+                  revisions: [
+                    {
+                      slots: {
+                        main: { content: 'Zeeland ({{IPA-nl|ˈzeːlɑnt}})' },
+                      },
+                    },
+                  ],
+                },
+              ],
+            },
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } }
+        );
+      }
+      return new Response(
+        JSON.stringify({ query: { pages: [{ title: 'Zeeland', missing: true }] } }),
+        { status: 200, headers: { 'content-type': 'application/json' } }
+      );
+    });
+
+    const result = await runPronounceLookupCommand({
+      term: 'Zeeland',
+      lang: 'nl',
+      region: 'nl',
+      forvoApiKey: 'test-forvo-key',
+      json: true,
+      cacheDir,
+      fetchImpl: mockFetch,
+      sleepFn: async () => {},
+    });
+
+    expect(result.verified).toBe(true);
+    expect(result.corroborated).toBe(true);
+    expect(result.sourceCount).toBe(2);
+    expect(result.highestTier).toBe('native_speaker');
+    expect(result.native_speaker_verified).toBe(true);
+    // Tier 1 Forvo ranks ahead of Tier 2 Wikipedia
+    const verifiedOrder = result.sources.filter((s) => s.status === 'verified').map((s) => s.provider);
+    expect(verifiedOrder).toEqual(['forvo', 'wikipedia']);
+    expect(result.audio_files[0]?.provider).toBe('forvo');
+    expect(result.audio_files[0]?.speaker).toBe('native_nl');
+
+    // Pure ranking and corroboration check across all 4 tiers (automated-only emits explicit warning)
+    const ranked = rankPronounceSources([
+      {
+        provider: 'howtopronounce',
+        tier: 'automated',
+        status: 'verified',
+        site: 'howtopronounce.com',
+        title: 'Test',
+        url: 'https://www.howtopronounce.com/test',
+        label: 'Automated',
+        ipa: [],
+        audio_files: ['a.mp3'],
+      },
+      {
+        provider: 'nameshouts',
+        tier: 'community',
+        status: 'verified',
+        site: 'nameshouts.com',
+        title: 'Test',
+        url: 'https://www.nameshouts.com/names/test',
+        label: 'Community',
+        ipa: [],
+        audio_files: [],
+      },
+      {
+        provider: 'forvo',
+        tier: 'native_speaker',
+        status: 'verified',
+        site: 'forvo.com',
+        title: 'Test',
+        url: 'https://forvo.com/word/test/',
+        label: 'Forvo',
+        ipa: [],
+        audio_files: ['native.mp3'],
+      },
+    ]);
+    expect(ranked.map((s) => s.tier)).toEqual(['native_speaker', 'community', 'automated']);
+
+    const autoOnly = evaluatePronounceCorroboration([ranked[2]]);
+    expect(autoOnly.highestTier).toBe('automated');
+    expect(autoOnly.native_speaker_verified).toBe(false);
+    expect(autoOnly.verification_note).toContain('automated');
   });
 });
 

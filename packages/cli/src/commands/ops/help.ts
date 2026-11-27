@@ -147,7 +147,7 @@ Within each status group (pending, staged, done_live), items sort by --sort:
   richest        events desc, sources desc, media desc, birthYear asc (null last), id asc
   chronological  birthYear asc (null last), deathYear asc (null last), events asc, id asc
 Effective living status uses resolveEffectiveLiving with privacy.referenceYear and privacy.livingCutoffYears from kinloom.config.yaml.
-When that file is absent, the defaults are referenceYear 2026 and livingCutoffYears 101.`;
+When that file is absent, the defaults are the current UTC year for referenceYear and livingCutoffYears 101.`;
 
 export const VERIFY_HELP = `Usage: kinloom verify [options]
 

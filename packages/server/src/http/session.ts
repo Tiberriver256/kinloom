@@ -77,7 +77,7 @@ export function parseCookies(cookieHeader: string | null): Map<string, string> {
 export function readSessionCookieRaw(request: Request, isSecure: boolean): string | null {
   const cookies = parseCookies(request.headers.get('cookie'));
   if (isSecure) {
-    return cookies.get(PROD_SESSION_COOKIE_NAME) ?? cookies.get(DEV_SESSION_COOKIE_NAME) ?? null;
+    return cookies.get(PROD_SESSION_COOKIE_NAME) ?? null;
   }
   return cookies.get(DEV_SESSION_COOKIE_NAME) ?? cookies.get(PROD_SESSION_COOKIE_NAME) ?? null;
 }
@@ -85,7 +85,7 @@ export function readSessionCookieRaw(request: Request, isSecure: boolean): strin
 export function readOAuthCookieRaw(request: Request, isSecure: boolean): string | null {
   const cookies = parseCookies(request.headers.get('cookie'));
   if (isSecure) {
-    return cookies.get(PROD_OAUTH_COOKIE_NAME) ?? cookies.get(DEV_OAUTH_COOKIE_NAME) ?? null;
+    return cookies.get(PROD_OAUTH_COOKIE_NAME) ?? null;
   }
   return cookies.get(DEV_OAUTH_COOKIE_NAME) ?? cookies.get(PROD_OAUTH_COOKIE_NAME) ?? null;
 }

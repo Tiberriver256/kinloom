@@ -562,7 +562,7 @@ describe('createKinloomServer end-to-end HTTP transport', () => {
     );
 
     const form = new FormData();
-    form.append('file', new File([new Uint8Array([0x89, 0x50, 0x4e, 0x47])], 'portrait.png', { type: 'image/png' }));
+    form.append('file', new File([new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])], 'portrait.png', { type: 'image/png' }));
     form.append(
       'metadata',
       JSON.stringify({
@@ -1178,6 +1178,124 @@ describe('createKinloomServer end-to-end HTTP transport', () => {
     expect(rateLimitedRes.status).toBe(429);
     expect(((await rateLimitedRes.json()) as { error: { code: string } }).error.code).toBe(
       'RATE_LIMITED'
+    );
+  });
+
+  it('emits edge security headers, rejects non-__Host- cookies on HTTPS, and validates media magic bytes', async () => {
+    const siteConfig = createSyntheticSiteConfig();
+    const ports = createInMemoryServerPorts(siteConfig);
+    const server = createKinloomServer({
+      siteConfig,
+      ports,
+      sessionSecret: SECRET,
+      bootstrapAdminEmail: 'founder@example.test',
+    });
+
+    await ports.repository.upsertUser({
+      email: 'admin@example.test',
+      display_name: 'Admin',
+      role: 'admin',
+      added_by: 'bootstrap',
+      added_at: ports.clock.nowIso(),
+      last_login_at: ports.clock.nowIso(),
+    });
+    const token = await signSessionToken({
+      secret: SECRET,
+      clock: ports.clock,
+      ttlSeconds: 3600,
+      payload: { kind: 'user', email: 'admin@example.test', display_name: 'Admin', role: 'admin' },
+    });
+
+    // 1. HTTPS request with dev cookie name (kinloom_session) MUST be ignored (no fallback)
+    const httpsDevCookieRes = await server.fetch(
+      new Request(`${ORIGIN}/api/auth/me`, {
+        headers: { cookie: `kinloom_session=${token}` },
+      })
+    );
+    expect(httpsDevCookieRes.status).toBe(200);
+    const httpsDevMe = (await httpsDevCookieRes.json()) as {
+      session: { authenticated: boolean; principal_kind: string };
+    };
+    expect(httpsDevMe.session.authenticated).toBe(false);
+    expect(httpsDevMe.session.principal_kind).toBe('anonymous');
+
+    // Security headers on HTTPS API response
+    expect(httpsDevCookieRes.headers.get('x-content-type-options')).toBe('nosniff');
+    expect(httpsDevCookieRes.headers.get('x-frame-options')).toBe('DENY');
+    expect(httpsDevCookieRes.headers.get('referrer-policy')).toBe('strict-origin-when-cross-origin');
+    expect(httpsDevCookieRes.headers.get('strict-transport-security')).toBe(
+      'max-age=31536000; includeSubDomains'
+    );
+    expect(httpsDevCookieRes.headers.get('content-security-policy')).toContain("default-src 'self'");
+    expect(httpsDevCookieRes.headers.get('content-security-policy')).toContain("frame-ancestors 'none'");
+
+    // HTTP localhost still accepts dev cookie and omits HSTS
+    const httpDevCookieRes = await server.fetch(
+      new Request('http://localhost:8787/api/auth/me', {
+        headers: { cookie: `kinloom_session=${token}` },
+      })
+    );
+    expect(httpDevCookieRes.status).toBe(200);
+    expect(httpDevCookieRes.headers.get('strict-transport-security')).toBeNull();
+    const httpDevMe = (await httpDevCookieRes.json()) as {
+      session: { authenticated: boolean; email?: string };
+    };
+    expect(httpDevMe.session.authenticated).toBe(true);
+    expect(httpDevMe.session.email).toBe('admin@example.test');
+
+    // 2. Spoofed Content-Type uploads (HTML disguised as image/jpeg or PDF) rejected with 415 before writing to MediaStore
+    const adminCookie = `__Host-kinloom_session=${token}`;
+    const spoofedForm = new FormData();
+    spoofedForm.append(
+      'file',
+      new File(['<html><script>alert(1)</script></html>'], 'evil.jpg', { type: 'image/jpeg' })
+    );
+    spoofedForm.append('metadata', JSON.stringify({ kind: 'document_scan', caption: 'Spoofed' }));
+    spoofedForm.append('summary', 'Attempt spoofed JPEG upload');
+
+    const spoofedRes = await server.fetch(
+      new Request(`${ORIGIN}/api/media/upload`, {
+        method: 'POST',
+        headers: { origin: ORIGIN, cookie: adminCookie },
+        body: spoofedForm,
+      })
+    );
+    expect(spoofedRes.status).toBe(415);
+    expect(ports.mediaStore.putCount).toBe(0);
+
+    // Valid JPEG upload succeeds and /media/:key serves sandboxed CSP + Content-Disposition: inline
+    const validJpegForm = new FormData();
+    validJpegForm.append(
+      'file',
+      new File([new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10])], 'scan.jpg', {
+        type: 'image/jpeg',
+      })
+    );
+    validJpegForm.append('metadata', JSON.stringify({ kind: 'document_scan', caption: 'Real scan' }));
+    validJpegForm.append('summary', 'Upload valid JPEG scan');
+
+    const validUploadRes = await server.fetch(
+      new Request(`${ORIGIN}/api/media/upload`, {
+        method: 'POST',
+        headers: { origin: ORIGIN, cookie: adminCookie },
+        body: validJpegForm,
+      })
+    );
+    expect(validUploadRes.status).toBe(201);
+    const { url: mediaUrl } = (await validUploadRes.json()) as { url: string };
+
+    const mediaRes = await server.fetch(
+      new Request(`${ORIGIN}${mediaUrl}`, {
+        headers: { cookie: adminCookie },
+      })
+    );
+    expect(mediaRes.status).toBe(200);
+    expect(mediaRes.headers.get('content-security-policy')).toBe("default-src 'none'; sandbox");
+    expect(mediaRes.headers.get('content-disposition')).toBe('inline');
+    expect(mediaRes.headers.get('x-content-type-options')).toBe('nosniff');
+    expect(mediaRes.headers.get('x-frame-options')).toBe('DENY');
+    expect(mediaRes.headers.get('strict-transport-security')).toBe(
+      'max-age=31536000; includeSubDomains'
     );
   });
 });

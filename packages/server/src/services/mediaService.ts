@@ -22,6 +22,7 @@ const EXTENSION_BY_MIME: Record<string, string> = {
   'image/jpeg': 'jpg',
   'image/png': 'png',
   'image/webp': 'webp',
+  'image/gif': 'gif',
   'application/pdf': 'pdf',
   'video/mp4': 'mp4',
   'video/webm': 'webm',
@@ -30,6 +31,61 @@ const EXTENSION_BY_MIME: Record<string, string> = {
   'audio/ogg': 'ogg',
   'audio/wav': 'wav',
 };
+
+const PNG_MAGIC = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a] as const;
+const PDF_MAGIC = [0x25, 0x50, 0x44, 0x46, 0x2d] as const; // %PDF-
+
+function startsWithBytes(bytes: Uint8Array, prefix: readonly number[]): boolean {
+  if (bytes.byteLength < prefix.length) {
+    return false;
+  }
+  for (let i = 0; i < prefix.length; i += 1) {
+    if (bytes[i] !== prefix[i]) {
+      return false;
+    }
+  }
+  return true;
+}
+
+/**
+ * Verifies actual file magic bytes for allowed image and PDF MIME types
+ * (JPEG, PNG, WebP, GIF, PDF) to prevent Content-Type spoofing.
+ */
+export function matchesMagicBytesForMime(mimeType: string, bytes: Uint8Array): boolean {
+  const normalized = mimeType.split(';')[0]?.trim().toLowerCase() ?? '';
+  switch (normalized) {
+    case 'image/jpeg':
+      return bytes.byteLength >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff;
+    case 'image/png':
+      return startsWithBytes(bytes, PNG_MAGIC);
+    case 'image/webp':
+      return (
+        bytes.byteLength >= 12 &&
+        bytes[0] === 0x52 &&
+        bytes[1] === 0x49 &&
+        bytes[2] === 0x46 &&
+        bytes[3] === 0x46 &&
+        bytes[8] === 0x57 &&
+        bytes[9] === 0x45 &&
+        bytes[10] === 0x42 &&
+        bytes[11] === 0x50
+      );
+    case 'image/gif':
+      return (
+        bytes.byteLength >= 6 &&
+        bytes[0] === 0x47 &&
+        bytes[1] === 0x49 &&
+        bytes[2] === 0x46 &&
+        bytes[3] === 0x38 &&
+        (bytes[4] === 0x37 || bytes[4] === 0x39) &&
+        bytes[5] === 0x61
+      );
+    case 'application/pdf':
+      return startsWithBytes(bytes, PDF_MAGIC);
+    default:
+      return true;
+  }
+}
 
 const SAFE_MEDIA_SEGMENT_PATTERN = /^[a-zA-Z0-9._-]+$/;
 const MAX_MEDIA_PATH_SEGMENTS = 8;
@@ -191,6 +247,14 @@ export class MediaService {
         415,
         'UNSUPPORTED_MEDIA_TYPE',
         `Unsupported media MIME type '${normalizedMime}'.`
+      );
+    }
+
+    if (!matchesMagicBytesForMime(normalizedMime, params.bytes)) {
+      throw new KinloomHttpError(
+        415,
+        'UNSUPPORTED_MEDIA_TYPE',
+        `Uploaded file contents do not match declared media type '${normalizedMime}'.`
       );
     }
 
