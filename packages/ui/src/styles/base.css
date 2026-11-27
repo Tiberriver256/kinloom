@@ -71,9 +71,6 @@ select {
   white-space: nowrap;
 }
 
-
-}
-
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
@@ -84,4 +81,3 @@ select {
     scroll-behavior: auto;
   }
 }
-
