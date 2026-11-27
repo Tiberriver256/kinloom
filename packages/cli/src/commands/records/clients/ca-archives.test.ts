@@ -3,8 +3,13 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { createRecordContext, type OptionalBrowser } from '../runtime/index.js';
-import { browserSearch, runCaArchivesCommand } from './ca-archives.js';
+import { createRecordContext, type OptionalBrowser, type OptionalBrowserProcess } from '../runtime/index.js';
+import {
+  browserSearch,
+  type CaArchivesOverrides,
+  createCaArchivesCommand,
+  runCaArchivesCommand,
+} from './ca-archives.js';
 
 const PORTAL_SEARCH_HTML =
   '<html><body><p>Search Results 1 to 1 of 1</p>' +
@@ -46,7 +51,8 @@ async function invokeCa(
   args: readonly string[],
   cacheDir: string,
   fetchImpl: typeof fetch,
-  extraEnv: NodeJS.ProcessEnv = {}
+  extraEnv: NodeJS.ProcessEnv = {},
+  overrides?: CaArchivesOverrides
 ): Promise<{ exitCode: number; stdout: string; stderr: string; cacheHit?: boolean }> {
   const stdout: string[] = [];
   const stderr: string[] = [];
@@ -59,7 +65,8 @@ async function invokeCa(
     fetchImpl,
     sleepFn: async () => {},
   });
-  const outcome = await runCaArchivesCommand(args, ctx);
+  const handler = overrides ? createCaArchivesCommand(overrides) : runCaArchivesCommand;
+  const outcome = await handler(args, ctx);
   return {
     exitCode: outcome.exitCode,
     stdout: stdout.join('\n'),
@@ -215,6 +222,10 @@ describe('ca-archives native client', () => {
               visited.push(u);
             },
             content: async () => '',
+            waitForFunction: async () => true,
+            waitForTimeout: async (ms) => {
+              await new Promise((resolve) => setTimeout(resolve, Math.min(25, ms) + 10));
+            },
             evaluate: async <T>(fn: string | (() => T)): Promise<T> => {
               const expr = String(fn);
               if (currentUrl.includes('oac.cdlib.org')) {
@@ -277,5 +288,138 @@ describe('ca-archives native client', () => {
         url: 'https://calisphere.org/item/abc123/',
       },
     ]);
+  });
+
+  it('aborts hanging browser launch/evaluate/close promptly and keeps partial results from fast sources', async () => {
+    const cacheDir = await makeTempDir();
+    const signals: (NodeJS.Signals | number | undefined)[] = [];
+    let signalCode: NodeJS.Signals | null = null;
+    const proc: OptionalBrowserProcess = {
+      pid: 99901,
+      get exitCode() {
+        return null;
+      },
+      get signalCode() {
+        return signalCode;
+      },
+      kill(sig) {
+        signals.push(sig);
+        if (sig === 'SIGKILL') {
+          signalCode = 'SIGKILL';
+        }
+        return true;
+      },
+    };
+
+    const hangingEvalBrowser: OptionalBrowser = {
+      newContext: async () => ({
+        newPage: async () => {
+          let currentUrl = '';
+          return {
+            goto: async (u) => {
+              currentUrl = u;
+            },
+            content: async () => '',
+            evaluate: async <T>(fn: string | (() => T)): Promise<T> => {
+              if (currentUrl.includes('calisphere.org')) {
+                return new Promise<T>(() => {});
+              }
+              const expr = String(fn);
+              if (expr.includes('innerText')) {
+                return 'Showing 1-1 of 1 entries' as unknown as T;
+              }
+              return [{ href: '/findaid/ark:/13030/c81111', text: 'Fast OAC Entry' }] as unknown as T;
+            },
+            close: () => new Promise<void>(() => {}),
+          };
+        },
+        close: () => new Promise<void>(() => {}),
+      }),
+      close: () => new Promise<void>(() => {}),
+      process: () => proc,
+    };
+
+    const ctx = createRecordContext({
+      env: { KINLOOM_CA_ARCHIVES_CACHE_DIR: cacheDir },
+      fetchImpl: async () => {
+        throw new Error('unexpected HTTP');
+      },
+      sleepFn: async () => {},
+    });
+
+    const t0 = Date.now();
+    const partial = await browserSearch(
+      ctx,
+      ['oac', 'calisphere'],
+      'Sacramento',
+      5,
+      80,
+      async () => hangingEvalBrowser,
+      { closeTimeoutMs: 25, killGraceMs: 10 }
+    );
+    expect(Date.now() - t0).toBeLessThan(600);
+    expect(partial.oac?.timed_out).toBeUndefined();
+    expect(partial.oac?.results).toEqual([
+      {
+        title: 'Fast OAC Entry',
+        url: 'https://oac.cdlib.org/findaid/ark:/13030/c81111',
+        kind: 'collection',
+      },
+    ]);
+    expect(partial.calisphere?.timed_out).toBe(true);
+    expect(partial.calisphere?.error).toContain('timed out');
+    expect(signals).toEqual(['SIGTERM', 'SIGKILL']);
+
+    const fetchFast: typeof fetch = async (input) => {
+      if (String(input).includes('archives.sos.ca.gov')) {
+        return new Response(PORTAL_SEARCH_HTML, { status: 200 });
+      }
+      return new Response(JSON.stringify(EXHIBITS_SEARCH_JSON), {
+        status: 200,
+        headers: { 'content-type': 'application/ld+json', 'Omeka-S-Total-Results': '1' },
+      });
+    };
+
+    const hangingLauncher = (): Promise<OptionalBrowser> => new Promise<OptionalBrowser>(() => {});
+
+    const t1 = Date.now();
+    const mixed = await invokeCa(
+      ['search', 'Sacramento', '--timeout', '0.04', '--json'],
+      cacheDir,
+      fetchFast,
+      {},
+      { launcher: hangingLauncher, closeTimeoutMs: 20, killGraceMs: 10 }
+    );
+    expect(Date.now() - t1).toBeLessThan(600);
+    expect(mixed.exitCode).toBe(0);
+    expect(mixed.stderr).toContain('Warning: oac timed out:');
+    expect(mixed.stderr).toContain('Warning: calisphere timed out:');
+    const mixedJson = JSON.parse(mixed.stdout) as {
+      timed_out_sources: string[];
+      sources: { source: string; timed_out?: boolean; results: unknown[] }[];
+    };
+    expect(mixedJson.timed_out_sources).toEqual(['oac', 'calisphere']);
+    expect(mixedJson.sources.find((s) => s.source === 'oac')?.timed_out).toBe(true);
+    expect(mixedJson.sources.find((s) => s.source === 'portal')?.results).toHaveLength(1);
+    expect(mixedJson.sources.find((s) => s.source === 'exhibits')?.results).toHaveLength(1);
+
+    const onlyHanging = await invokeCa(
+      ['search', 'Sacramento', '--source', 'oac', '--timeout', '0.03', '--json'],
+      cacheDir,
+      fetchFast,
+      {},
+      { launcher: hangingLauncher, closeTimeoutMs: 20, killGraceMs: 10 }
+    );
+    expect(onlyHanging.exitCode).toBe(1);
+    const onlyJson = JSON.parse(onlyHanging.stdout) as {
+      timed_out_sources: string[];
+      sources: { source: string; timed_out?: boolean; error?: string }[];
+    };
+    expect(onlyJson.timed_out_sources).toEqual(['oac']);
+    expect(onlyJson.sources[0]?.timed_out).toBe(true);
+    expect(onlyJson.sources[0]?.error).toContain('launch');
+
+    const badTimeout = await invokeCa(['search', 'Sacramento', '--timeout', '0'], cacheDir, fetchFast);
+    expect(badTimeout.exitCode).toBe(2);
   });
 });

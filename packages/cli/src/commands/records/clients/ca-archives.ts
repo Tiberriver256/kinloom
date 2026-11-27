@@ -2,10 +2,13 @@ import path from 'node:path';
 import { CliValidationError } from '../../../errors.js';
 import {
   atomicWriteFileSync,
+  BrowserTimeoutError,
+  type ChromiumLauncher,
   type CommandParseSpec,
   cachedJsonCall,
   cacheKeyFor,
   collapseWhitespace,
+  DEFAULT_BROWSER_LAUNCH_TIMEOUT_MS,
   emitJsonStdout,
   emitStdout,
   formatCommandUsage,
@@ -17,8 +20,6 @@ import {
   httpRequest,
   launchOptionalChromium,
   loadHtml,
-  type OptionalBrowser,
-  type OptionalBrowserPage,
   type OptionSpec,
   parseCacheTtlHours,
   parseCommandArgs,
@@ -28,11 +29,15 @@ import {
   RecordRuntimeError,
   readSchemaCacheEntry,
   resolveCacheDir,
+  runWithBrowserSession,
   type SchemaCacheEntry,
   withAdvisoryLock,
 } from '../runtime/index.js';
 
+export type { ChromiumLauncher };
+
 const DEFAULT_CACHE_TTL_HOURS = 168;
+const DEFAULT_SEARCH_TIMEOUT_SEC = 45;
 const CACHE_SCHEMA = 1;
 
 export const OAC_BASE = 'https://oac.cdlib.org';
@@ -68,6 +73,14 @@ export interface CaSourceEntry {
   readonly url: string;
   readonly total: number | null;
   readonly results: readonly CaSearchResultItem[];
+  readonly timed_out?: boolean;
+  readonly error?: string;
+}
+
+export interface CaArchivesOverrides {
+  readonly launcher?: ChromiumLauncher;
+  readonly closeTimeoutMs?: number;
+  readonly killGraceMs?: number;
 }
 
 export interface CaSourceOutput extends CaSourceEntry {
@@ -95,20 +108,23 @@ interface RawBrowserLink {
   readonly text?: string;
 }
 
-interface WaitableBrowserPage extends OptionalBrowserPage {
-  waitForFunction(pageFunction: string, arg?: unknown, options?: { timeout?: number }): Promise<unknown>;
-  waitForTimeout?(timeout: number): Promise<void>;
-}
-
 function isPlainRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-function isWaitablePage(page: OptionalBrowserPage): page is WaitableBrowserPage {
-  return (
-    'waitForFunction' in page &&
-    typeof (page as unknown as Record<string, unknown>).waitForFunction === 'function'
-  );
+function isTimeoutFailure(err: unknown): boolean {
+  if (err instanceof BrowserTimeoutError) {
+    return true;
+  }
+  if (err instanceof Error) {
+    return err.name === 'TimeoutError' || /timed?\s*out/i.test(err.message);
+  }
+  return false;
+}
+
+function isNavigationContextDestroyed(err: unknown): boolean {
+  const message = err instanceof Error ? err.message : String(err);
+  return /execution context was destroyed|most likely because of a navigation/i.test(message);
 }
 
 function pyQuote(value: string): string {
@@ -212,7 +228,8 @@ function extractOmekaTypes(item: Record<string, unknown>): string {
 export async function searchPortal(
   ctx: RecordCommandContext,
   query: string,
-  limit = 10
+  limit = 10,
+  timeoutMs = 30_000
 ): Promise<CaSourceEntry> {
   const url = portalUrl(query);
   const { text } = await httpGetText(url, {
@@ -220,7 +237,7 @@ export async function searchPortal(
     sleepFn: ctx.sleepFn,
     nowMs: ctx.nowMs,
     userAgent: USER_AGENT,
-    timeoutMs: 30_000,
+    timeoutMs: Math.max(1_000, Math.min(30_000, Math.floor(timeoutMs))),
     maxAttempts: 1,
     urlPolicy: { allowedSchemes: ['https:'], allowedHosts: ['archives.sos.ca.gov'] },
   });
@@ -230,7 +247,8 @@ export async function searchPortal(
 export async function searchExhibits(
   ctx: RecordCommandContext,
   query: string,
-  limit = 10
+  limit = 10,
+  timeoutMs = 30_000
 ): Promise<CaSourceEntry> {
   const url = exhibitsUrl(query, limit);
   const response = await httpRequest(url, {
@@ -239,7 +257,7 @@ export async function searchExhibits(
     nowMs: ctx.nowMs,
     userAgent: USER_AGENT,
     headers: { Accept: 'application/ld+json' },
-    timeoutMs: 30_000,
+    timeoutMs: Math.max(1_000, Math.min(30_000, Math.floor(timeoutMs))),
     maxAttempts: 1,
     urlPolicy: { allowedSchemes: ['https:'], allowedHosts: ['exhibits.sos.ca.gov'] },
   });
@@ -332,90 +350,196 @@ export function dedupeCalisphereLinks(
   return results;
 }
 
-export type ChromiumLauncher = (options: {
-  readonly env: NodeJS.ProcessEnv;
-  readonly overrideEnvVar?: string;
-}) => Promise<OptionalBrowser>;
+function makeTimedOutEntry(source: CaSearchableSource, url: string, message: string): CaSourceEntry {
+  return {
+    source,
+    url,
+    total: null,
+    results: [],
+    timed_out: true,
+    error: message,
+  };
+}
 
 export async function browserSearch(
   ctx: RecordCommandContext,
   sources: readonly ('oac' | 'calisphere')[],
   query: string,
   limit = 10,
-  timeoutMs = 60_000,
-  launcher: ChromiumLauncher = launchOptionalChromium
+  timeoutMs = DEFAULT_SEARCH_TIMEOUT_SEC * 1000,
+  launcher: ChromiumLauncher = launchOptionalChromium,
+  sessionOptions?: { readonly closeTimeoutMs?: number; readonly killGraceMs?: number }
 ): Promise<Partial<Record<'oac' | 'calisphere', CaSourceEntry>>> {
-  const browser = await launcher({ env: ctx.env, overrideEnvVar: 'CA_ARCHIVES_BROWSER' });
-  const context = await browser.newContext({ userAgent: USER_AGENT });
-  const page = await context.newPage();
   const out: Partial<Record<'oac' | 'calisphere', CaSourceEntry>> = {};
+  const totalTimeoutMs = Math.max(1, Math.floor(timeoutMs));
+  const launchTimeoutMs = Math.min(DEFAULT_BROWSER_LAUNCH_TIMEOUT_MS, totalTimeoutMs);
 
   try {
-    if (sources.includes('oac')) {
-      const url = oacUrl(query);
-      await page.goto(url, { waitUntil: 'domcontentloaded', timeout: timeoutMs });
-      if (isWaitablePage(page)) {
-        try {
-          await page.waitForFunction(
-            '() => /of \\d+ entries|No results/i.test(document.body.innerText)',
-            undefined,
-            { timeout: 20_000 }
-          );
-        } catch {
-          // Proceed to inspect current DOM if wait timed out.
-        }
-        if (typeof page.waitForTimeout === 'function') {
-          await page.waitForTimeout(500);
-        } else {
-          await ctx.sleepFn(500);
-        }
-      }
-      const text = await page.evaluate<string>('document.body.innerText');
-      const totalMatch = /of (\d+) entries/.exec(typeof text === 'string' ? text : '');
-      const total = totalMatch ? Number.parseInt(totalMatch[1], 10) : null;
-      const links = await page.evaluate<RawBrowserLink[]>(OAC_LINKS_JS);
-      out.oac = {
-        source: 'oac',
-        url,
-        total,
-        results: dedupeOacLinks(Array.isArray(links) ? links : [], OAC_BASE, limit),
-      };
-    }
+    await runWithBrowserSession(
+      {
+        env: ctx.env,
+        overrideEnvVar: 'CA_ARCHIVES_BROWSER',
+        userAgent: USER_AGENT,
+        totalTimeoutMs,
+        launchTimeoutMs,
+        closeTimeoutMs: sessionOptions?.closeTimeoutMs,
+        killGraceMs: sessionOptions?.killGraceMs,
+        nowMs: ctx.nowMs,
+        launcher,
+      },
+      async (session) => {
+        const { page } = session;
 
-    if (sources.includes('calisphere')) {
-      const url = calisphereUrl(query);
-      await page.goto(url, { waitUntil: 'domcontentloaded', timeout: timeoutMs });
-      if (isWaitablePage(page)) {
-        try {
-          await page.waitForFunction(
-            '() => /\\d+ items? found|No results/i.test(document.body.innerText)',
-            undefined,
-            { timeout: 20_000 }
-          );
-        } catch {
-          // Proceed to inspect current DOM if wait timed out.
-        }
-        if (typeof page.waitForTimeout === 'function') {
-          await page.waitForTimeout(500);
-        } else {
-          await ctx.sleepFn(500);
+        for (let idx = 0; idx < sources.length; idx += 1) {
+          const src = sources[idx];
+          const url = src === 'oac' ? oacUrl(query) : calisphereUrl(query);
+          const remainingCount = sources.length - idx;
+          const remainingTotal = session.remainingMs();
+          if (remainingTotal <= 0) {
+            out[src] = makeTimedOutEntry(
+              src,
+              url,
+              `Browser search budget (${totalTimeoutMs}ms) exhausted before ${src}.`
+            );
+            continue;
+          }
+
+          const sourceBudgetMs = Math.max(1, Math.floor(remainingTotal / remainingCount));
+          const sourceDeadline = ctx.nowMs() + sourceBudgetMs;
+          const sourceRemaining = (): number =>
+            Math.min(session.remainingMs(), Math.max(0, sourceDeadline - ctx.nowMs()));
+
+          try {
+            await session.runStep(
+              `${src}:goto`,
+              (stepMs) => page.goto(url, { waitUntil: 'domcontentloaded', timeout: stepMs }),
+              sourceRemaining()
+            );
+
+            if (typeof page.waitForFunction === 'function') {
+              const waitExpr =
+                src === 'oac'
+                  ? '() => /of \\d+ entries|No results/i.test(document.body.innerText)'
+                  : '() => /\\d+ items? found|No results/i.test(document.body.innerText)';
+              for (let navAttempt = 0; navAttempt < 3; navAttempt += 1) {
+                const waitBudget = Math.min(15_000, Math.floor(sourceRemaining() * 0.6));
+                if (waitBudget <= 0) {
+                  break;
+                }
+                try {
+                  await session.runStep(
+                    `${src}:waitForFunction`,
+                    (stepMs) => page.waitForFunction!(waitExpr, undefined, { timeout: stepMs }),
+                    waitBudget
+                  );
+                  break;
+                } catch (waitErr: unknown) {
+                  if (session.remainingMs() <= 0) {
+                    throw waitErr;
+                  }
+                  if (isNavigationContextDestroyed(waitErr) && navAttempt < 2 && sourceRemaining() > 300) {
+                    const retryWaitMs = Math.min(400, Math.floor(sourceRemaining() * 0.2));
+                    await session.runStep(
+                      `${src}:nav-retry`,
+                      () =>
+                        typeof page.waitForTimeout === 'function'
+                          ? page.waitForTimeout(retryWaitMs)
+                          : ctx.sleepFn(retryWaitMs),
+                      sourceRemaining()
+                    );
+                    continue;
+                  }
+                  // Proceed to inspect current DOM if the page text heuristic timed out.
+                  break;
+                }
+              }
+
+              const settleMs = Math.min(500, Math.floor(sourceRemaining() * 0.2));
+              if (settleMs > 0) {
+                await session.runStep(
+                  `${src}:settle`,
+                  () =>
+                    typeof page.waitForTimeout === 'function'
+                      ? page.waitForTimeout(settleMs)
+                      : ctx.sleepFn(settleMs),
+                  sourceRemaining()
+                );
+              }
+            }
+
+            const evaluateWithNavRetry = async <T>(phase: string, expr: string): Promise<T> => {
+              for (let attempt = 0; attempt < 3; attempt += 1) {
+                try {
+                  return await session.runStep(phase, () => page.evaluate<T>(expr), sourceRemaining());
+                } catch (evalErr: unknown) {
+                  if (isNavigationContextDestroyed(evalErr) && attempt < 2 && sourceRemaining() > 300) {
+                    const retryWaitMs = Math.min(400, Math.floor(sourceRemaining() * 0.2));
+                    await session.runStep(
+                      `${phase}:nav-retry`,
+                      () =>
+                        typeof page.waitForTimeout === 'function'
+                          ? page.waitForTimeout(retryWaitMs)
+                          : ctx.sleepFn(retryWaitMs),
+                      sourceRemaining()
+                    );
+                    continue;
+                  }
+                  throw evalErr;
+                }
+              }
+              return session.runStep(phase, () => page.evaluate<T>(expr), sourceRemaining());
+            };
+
+            const text = await evaluateWithNavRetry<string>(
+              `${src}:evaluate-text`,
+              'document.body.innerText'
+            );
+            const links = await evaluateWithNavRetry<RawBrowserLink[]>(
+              `${src}:evaluate-links`,
+              src === 'oac' ? OAC_LINKS_JS : CAL_LINKS_JS
+            );
+
+            if (src === 'oac') {
+              const totalMatch = /of (\d+) entries/.exec(typeof text === 'string' ? text : '');
+              const total = totalMatch ? Number.parseInt(totalMatch[1], 10) : null;
+              out.oac = {
+                source: 'oac',
+                url,
+                total,
+                results: dedupeOacLinks(Array.isArray(links) ? links : [], OAC_BASE, limit),
+              };
+            } else {
+              const totalMatch = /(\d+) items? found/.exec(typeof text === 'string' ? text : '');
+              const total = totalMatch ? Number.parseInt(totalMatch[1], 10) : null;
+              out.calisphere = {
+                source: 'calisphere',
+                url,
+                total,
+                results: dedupeCalisphereLinks(Array.isArray(links) ? links : [], CALISPHERE_BASE, limit),
+              };
+            }
+          } catch (err: unknown) {
+            if (isTimeoutFailure(err)) {
+              const message = err instanceof Error ? err.message : String(err);
+              out[src] = makeTimedOutEntry(src, url, message);
+              continue;
+            }
+            throw err;
+          }
         }
       }
-      const text = await page.evaluate<string>('document.body.innerText');
-      const totalMatch = /(\d+) items? found/.exec(typeof text === 'string' ? text : '');
-      const total = totalMatch ? Number.parseInt(totalMatch[1], 10) : null;
-      const links = await page.evaluate<RawBrowserLink[]>(CAL_LINKS_JS);
-      out.calisphere = {
-        source: 'calisphere',
-        url,
-        total,
-        results: dedupeCalisphereLinks(Array.isArray(links) ? links : [], CALISPHERE_BASE, limit),
-      };
+    );
+  } catch (err: unknown) {
+    if (isTimeoutFailure(err)) {
+      const message = err instanceof Error ? err.message : String(err);
+      for (const src of sources) {
+        if (!out[src]) {
+          out[src] = makeTimedOutEntry(src, buildUrl(src, query, limit), message);
+        }
+      }
+      return out;
     }
-  } finally {
-    await page.close();
-    await context.close();
-    await browser.close();
+    throw err;
   }
 
   return out;
@@ -486,7 +610,7 @@ async function fetchExhibitsItem(ctx: RecordCommandContext, exhibitsId: string):
 }
 
 function isSourceCacheable(entry: CaSourceEntry): boolean {
-  return entry.results.length > 0 || entry.total !== null;
+  return !entry.timed_out && !entry.error && (entry.results.length > 0 || entry.total !== null);
 }
 
 function isCaSourceEntry(value: unknown): value is CaSourceEntry {
@@ -580,6 +704,10 @@ function formatSourceText(entry: CaSourceOutput): string[] {
   }
   lines.push(header);
   lines.push(`  ${entry.url}`);
+  if (entry.error) {
+    lines.push(entry.timed_out ? `  Timed out: ${entry.error}` : `  Error: ${entry.error}`);
+    return lines;
+  }
   if (entry.results.length === 0) {
     lines.push('  No results.');
   }
@@ -631,6 +759,14 @@ const SEARCH_OPTIONS: readonly OptionSpec[] = [
     min: 0,
     default: 10,
     help: 'Results per source.',
+  },
+  {
+    key: 'timeout',
+    kind: 'number',
+    flags: ['--timeout'],
+    default: DEFAULT_SEARCH_TIMEOUT_SEC,
+    metavar: 'SECONDS',
+    help: `Total timeout in seconds for browser-backed sources (default ${DEFAULT_SEARCH_TIMEOUT_SEC}).`,
   },
   {
     key: 'asJson',
@@ -708,7 +844,11 @@ function renderRootHelp(): string {
   });
 }
 
-async function runSearch(argv: readonly string[], ctx: RecordCommandContext): Promise<RecordCommandOutcome> {
+async function runSearch(
+  argv: readonly string[],
+  ctx: RecordCommandContext,
+  overrides: CaArchivesOverrides = {}
+): Promise<RecordCommandOutcome> {
   const parsed = parseCommandArgs(argv, SEARCH_SPEC);
   if (parsed.helpRequested) {
     return {
@@ -729,6 +869,11 @@ async function runSearch(argv: readonly string[], ctx: RecordCommandContext): Pr
   const wanted: readonly CaSearchableSource[] =
     selectedSources.length > 0 ? selectedSources : SEARCHABLE_SOURCES;
   const limit = getNumberOption(parsed, 'limit') ?? 10;
+  const timeoutSec = getNumberOption(parsed, 'timeout') ?? DEFAULT_SEARCH_TIMEOUT_SEC;
+  if (!Number.isFinite(timeoutSec) || timeoutSec <= 0) {
+    throw new CliValidationError(`Invalid --timeout value: ${String(timeoutSec)} (must be > 0).`);
+  }
+  const timeoutMs = Math.max(1, Math.round(timeoutSec * 1000));
   const asJson = getBooleanOption(parsed, 'asJson');
   const refresh = getBooleanOption(parsed, 'refresh');
   const ttlHours = resolveTtl(getNumberOption(parsed, 'cacheTtlHours'), ctx);
@@ -761,7 +906,18 @@ async function runSearch(argv: readonly string[], ctx: RecordCommandContext): Pr
   }
 
   if (uncachedBrowser.length > 0) {
-    const fetched = await browserSearch(ctx, uncachedBrowser, q, limit);
+    const fetched = await browserSearch(
+      ctx,
+      uncachedBrowser,
+      q,
+      limit,
+      timeoutMs,
+      overrides.launcher ?? launchOptionalChromium,
+      {
+        closeTimeoutMs: overrides.closeTimeoutMs,
+        killGraceMs: overrides.killGraceMs,
+      }
+    );
     for (const src of uncachedBrowser) {
       const entry = fetched[src];
       if (!entry) {
@@ -775,37 +931,55 @@ async function runSearch(argv: readonly string[], ctx: RecordCommandContext): Pr
   }
 
   if (wanted.includes('portal')) {
-    const { value, cacheHit } = await cachedJsonCall<CaSourceEntry>({
-      cacheDir,
-      kind: 'search:portal',
-      payload,
-      ttlHours,
-      refresh,
-      schema: CACHE_SCHEMA,
-      fetch: () => searchPortal(ctx, q, limit),
-      cacheable: isSourceCacheable,
-      validateCached: isCaSourceEntry,
-      nowMs: ctx.nowMs,
-      sleepFn: ctx.sleepFn,
-    });
-    out.portal = { ...value, cache_hit: cacheHit };
+    try {
+      const { value, cacheHit } = await cachedJsonCall<CaSourceEntry>({
+        cacheDir,
+        kind: 'search:portal',
+        payload,
+        ttlHours,
+        refresh,
+        schema: CACHE_SCHEMA,
+        fetch: () => searchPortal(ctx, q, limit, timeoutMs),
+        cacheable: isSourceCacheable,
+        validateCached: isCaSourceEntry,
+        nowMs: ctx.nowMs,
+        sleepFn: ctx.sleepFn,
+      });
+      out.portal = { ...value, cache_hit: cacheHit };
+    } catch (err: unknown) {
+      if (isTimeoutFailure(err) && wanted.length > 1) {
+        const message = err instanceof Error ? err.message : String(err);
+        out.portal = { ...makeTimedOutEntry('portal', portalUrl(q), message), cache_hit: false };
+      } else {
+        throw err;
+      }
+    }
   }
 
   if (wanted.includes('exhibits')) {
-    const { value, cacheHit } = await cachedJsonCall<CaSourceEntry>({
-      cacheDir,
-      kind: 'search:exhibits',
-      payload,
-      ttlHours,
-      refresh,
-      schema: CACHE_SCHEMA,
-      fetch: () => searchExhibits(ctx, q, limit),
-      cacheable: isSourceCacheable,
-      validateCached: isCaSourceEntry,
-      nowMs: ctx.nowMs,
-      sleepFn: ctx.sleepFn,
-    });
-    out.exhibits = { ...value, cache_hit: cacheHit };
+    try {
+      const { value, cacheHit } = await cachedJsonCall<CaSourceEntry>({
+        cacheDir,
+        kind: 'search:exhibits',
+        payload,
+        ttlHours,
+        refresh,
+        schema: CACHE_SCHEMA,
+        fetch: () => searchExhibits(ctx, q, limit, timeoutMs),
+        cacheable: isSourceCacheable,
+        validateCached: isCaSourceEntry,
+        nowMs: ctx.nowMs,
+        sleepFn: ctx.sleepFn,
+      });
+      out.exhibits = { ...value, cache_hit: cacheHit };
+    } catch (err: unknown) {
+      if (isTimeoutFailure(err) && wanted.length > 1) {
+        const message = err instanceof Error ? err.message : String(err);
+        out.exhibits = { ...makeTimedOutEntry('exhibits', exhibitsUrl(q, limit), message), cache_hit: false };
+      } else {
+        throw err;
+      }
+    }
   }
 
   const ordered: CaSourceOutput[] = [];
@@ -815,12 +989,24 @@ async function runSearch(argv: readonly string[], ctx: RecordCommandContext): Pr
       ordered.push(entry);
     }
   }
+  const timedOutSources = ordered.filter((entry) => entry.timed_out === true).map((entry) => entry.source);
+  for (const entry of ordered) {
+    if (entry.timed_out && entry.error) {
+      ctx.io.stderr(`Warning: ${entry.source} timed out: ${entry.error}`);
+    }
+  }
+  const allTimedOut = ordered.length > 0 && timedOutSources.length === ordered.length;
   const allCached = ordered.length > 0 && ordered.every((entry) => entry.cache_hit);
+  const exitCode = allTimedOut ? 1 : 0;
 
   if (asJson) {
+    const jsonPayload =
+      timedOutSources.length > 0
+        ? { query: q, cache_hit: allCached, timed_out_sources: timedOutSources, sources: ordered }
+        : { query: q, cache_hit: allCached, sources: ordered };
     return {
-      exitCode: 0,
-      bytesOut: emitJsonStdout(ctx.io, { query: q, cache_hit: allCached, sources: ordered }),
+      exitCode,
+      bytesOut: emitJsonStdout(ctx.io, jsonPayload),
       cacheHit: allCached,
     };
   }
@@ -830,7 +1016,7 @@ async function runSearch(argv: readonly string[], ctx: RecordCommandContext): Pr
     lines.push(...formatSourceText(entry), '');
   }
   return {
-    exitCode: 0,
+    exitCode,
     bytesOut: emitStdout(ctx.io, lines.join('\n')),
     cacheHit: allCached,
   };
@@ -958,29 +1144,35 @@ async function runGet(argv: readonly string[], ctx: RecordCommandContext): Promi
   };
 }
 
-export const runCaArchivesCommand: RecordHandler = async (args, ctx): Promise<RecordCommandOutcome> => {
-  try {
-    if (args.length === 0 || args[0] === '--help' || args[0] === '-h') {
-      return { exitCode: 0, bytesOut: emitStdout(ctx.io, renderRootHelp()) };
+export function createCaArchivesCommand(overrides: CaArchivesOverrides = {}): RecordHandler {
+  return async (args, ctx): Promise<RecordCommandOutcome> => {
+    try {
+      if (args.length === 0 || args[0] === '--help' || args[0] === '-h') {
+        return { exitCode: 0, bytesOut: emitStdout(ctx.io, renderRootHelp()) };
+      }
+      const [subcmd, ...rest] = args;
+      switch (subcmd) {
+        case 'search':
+          return await runSearch(rest, ctx, overrides);
+        case 'url':
+          return runUrl(rest, ctx);
+        case 'get':
+          return await runGet(rest, ctx);
+        default:
+          throw new CliValidationError(
+            `No such command '${subcmd}'. Run 'kinloom ca-archives --script-help'.`
+          );
+      }
+    } catch (err: unknown) {
+      if (err instanceof CliValidationError) {
+        ctx.io.stderr(`Error: ${err.message}`);
+        return { exitCode: 2, bytesOut: 0 };
+      }
+      const message = err instanceof Error ? err.message : String(err);
+      ctx.io.stderr(`Error: ${message}`);
+      return { exitCode: 1, bytesOut: 0 };
     }
-    const [subcmd, ...rest] = args;
-    switch (subcmd) {
-      case 'search':
-        return await runSearch(rest, ctx);
-      case 'url':
-        return runUrl(rest, ctx);
-      case 'get':
-        return await runGet(rest, ctx);
-      default:
-        throw new CliValidationError(`No such command '${subcmd}'. Run 'kinloom ca-archives --script-help'.`);
-    }
-  } catch (err: unknown) {
-    if (err instanceof CliValidationError) {
-      ctx.io.stderr(`Error: ${err.message}`);
-      return { exitCode: 2, bytesOut: 0 };
-    }
-    const message = err instanceof Error ? err.message : String(err);
-    ctx.io.stderr(`Error: ${message}`);
-    return { exitCode: 1, bytesOut: 0 };
-  }
-};
+  };
+}
+
+export const runCaArchivesCommand: RecordHandler = createCaArchivesCommand();

@@ -4,8 +4,10 @@ import path from 'node:path';
 import { CliValidationError } from '../../../errors.js';
 import {
   atomicWriteFileSync,
+  type ChromiumLauncher,
   type CommandParseSpec,
   canonicalJsonStringify,
+  DEFAULT_BROWSER_LAUNCH_TIMEOUT_MS,
   emitJsonStdout,
   emitStdout,
   formatCommandUsage,
@@ -24,6 +26,7 @@ import {
   RecordRuntimeError,
   resolveCacheDir,
   resolveSubcommandAlias,
+  runWithBrowserSession,
   withAdvisoryLock,
 } from '../runtime/index.js';
 
@@ -32,6 +35,8 @@ export const CATALOG_API_BASE = 'https://catalog.archives.gov/api/v2';
 export const API_MAX_WORKERS = 6;
 export const API_ATTEMPTS = 3;
 export const API_READ_TIMEOUT_MS = 30_000;
+export const DEFAULT_BROWSER_TIMEOUT_S = 60.0;
+export const DEFAULT_BROWSER_TIMEOUT_MS = DEFAULT_BROWSER_TIMEOUT_S * 1000;
 export const DOWNLOAD_MAX_WORKERS = 4;
 export const DOWNLOAD_ATTEMPTS = 4;
 export const DEFAULT_DOWNLOAD_TIMEOUT = 60.0;
@@ -241,6 +246,9 @@ export interface Census1950ImageRecord {
 }
 
 export interface NaraBrowserOverrides {
+  readonly launcher?: ChromiumLauncher;
+  readonly closeTimeoutMs?: number;
+  readonly killGraceMs?: number;
   readonly browserSearchMany?: (
     items: readonly (readonly [string | null, string])[],
     ctx: RecordCommandContext,
@@ -1478,20 +1486,35 @@ interface ExtendedBrowserPage extends OptionalBrowserPage {
   waitForTimeout?: (timeout: number) => Promise<void>;
 }
 
-async function defaultBrowserSearchMany(
+export async function defaultBrowserSearchMany(
   items: readonly (readonly [string | null, string])[],
   ctx: RecordCommandContext,
-  timeoutMs = 30_000
+  timeoutMs = DEFAULT_BROWSER_TIMEOUT_MS,
+  sessionOverrides?: {
+    readonly launcher?: ChromiumLauncher;
+    readonly closeTimeoutMs?: number;
+    readonly killGraceMs?: number;
+  }
 ): Promise<NaraSearchPayload[]> {
-  const browser = await launchOptionalChromium({
-    env: ctx.env,
-    overrideEnvVar: 'NARA_BROWSER',
-  });
+  const totalTimeoutMs = Math.max(1, Math.floor(timeoutMs));
+  const launchTimeoutMs = Math.min(DEFAULT_BROWSER_LAUNCH_TIMEOUT_MS, totalTimeoutMs);
   const results: NaraSearchPayload[] = [];
-  try {
-    const context = await browser.newContext({ userAgent: USER_AGENT });
-    const page = (await context.newPage()) as ExtendedBrowserPage;
-    try {
+
+  await runWithBrowserSession(
+    {
+      env: ctx.env,
+      overrideEnvVar: 'NARA_BROWSER',
+      userAgent: USER_AGENT,
+      totalTimeoutMs,
+      launchTimeoutMs,
+      closeTimeoutMs: sessionOverrides?.closeTimeoutMs,
+      killGraceMs: sessionOverrides?.killGraceMs,
+      nowMs: ctx.nowMs,
+      launcher: sessionOverrides?.launcher ?? launchOptionalChromium,
+    },
+    async (session) => {
+      const page = session.page as ExtendedBrowserPage;
+
       for (const [query, searchUrl] of items) {
         const captured: Record<string, unknown>[] = [];
         const pendingReads: Promise<void>[] = [];
@@ -1518,27 +1541,43 @@ async function defaultBrowserSearchMany(
 
         page.on?.('response', onResponse);
         try {
-          await page.goto(searchUrl, { waitUntil: 'domcontentloaded', timeout: timeoutMs });
+          await session.runStep('nara-search:goto', (stepMs) =>
+            page.goto(searchUrl, { waitUntil: 'domcontentloaded', timeout: stepMs })
+          );
           if (page.waitForFunction) {
-            try {
-              await page.waitForFunction(
-                `() => {
-                  const t = document.body.innerText || '';
-                  return /\\d+\\s+results?\\s+for|No results|0 results|did not match/i.test(t);
-                }`,
-                undefined,
-                { timeout: Math.min(timeoutMs, 20_000) }
-              );
-            } catch {
-              // Fall through to captured responses or DOM scrape.
+            const waitBudget = Math.min(20_000, Math.floor(session.remainingMs() * 0.6));
+            if (waitBudget > 0) {
+              try {
+                await session.runStep(
+                  'nara-search:waitForFunction',
+                  (stepMs) =>
+                    page.waitForFunction!(
+                      `() => {
+                        const t = document.body.innerText || '';
+                        return /\\d+\\s+results?\\s+for|No results|0 results|did not match/i.test(t);
+                      }`,
+                      undefined,
+                      { timeout: stepMs }
+                    ),
+                  waitBudget
+                );
+              } catch (waitErr: unknown) {
+                if (session.remainingMs() <= 0) {
+                  throw waitErr;
+                }
+                // Fall through to captured responses or DOM scrape.
+              }
             }
           }
-          if (page.waitForTimeout) {
-            await page.waitForTimeout(500);
-          } else {
-            await ctx.sleepFn(500);
+          const settleMs = Math.min(500, Math.floor(session.remainingMs() * 0.25));
+          if (settleMs > 0) {
+            await session.runStep('nara-search:settle', () =>
+              page.waitForTimeout ? page.waitForTimeout(settleMs) : ctx.sleepFn(settleMs)
+            );
           }
-          await Promise.allSettled(pendingReads);
+          if (pendingReads.length > 0) {
+            await session.runStep('nara-search:read-responses', () => Promise.allSettled(pendingReads));
+          }
         } finally {
           page.removeListener?.('response', onResponse);
         }
@@ -1555,20 +1594,22 @@ async function defaultBrowserSearchMany(
         }
 
         if (entry === null) {
-          const domItems = await page.evaluate<NaraRecordSummary[]>(
-            `(() => {
-              const items = [];
-              const seen = new Set();
-              for (const a of document.querySelectorAll('a[href*="/id/"]')) {
-                const m = (a.getAttribute('href') || '').match(/\\/id\\/(\\d+)/);
-                if (!m || seen.has(m[1])) continue;
-                const title = (a.textContent || '').trim();
-                if (!title) continue;
-                seen.add(m[1]);
-                items.push({ naId: m[1], title, url: 'https://catalog.archives.gov/id/' + m[1] });
-              }
-              return items;
-            })()`
+          const domItems = await session.runStep('nara-search:evaluate', () =>
+            page.evaluate<NaraRecordSummary[]>(
+              `(() => {
+                const items = [];
+                const seen = new Set();
+                for (const a of document.querySelectorAll('a[href*="/id/"]')) {
+                  const m = (a.getAttribute('href') || '').match(/\\/id\\/(\\d+)/);
+                  if (!m || seen.has(m[1])) continue;
+                  const title = (a.textContent || '').trim();
+                  if (!title) continue;
+                  seen.add(m[1]);
+                  items.push({ naId: m[1], title, url: 'https://catalog.archives.gov/id/' + m[1] });
+                }
+                return items;
+              })()`
+            )
           );
           const safeDom = Array.isArray(domItems) ? domItems : [];
           entry =
@@ -1578,17 +1619,12 @@ async function defaultBrowserSearchMany(
         }
         results.push(entry);
       }
-    } finally {
-      await page.close();
-      await context.close();
     }
-  } finally {
-    await browser.close();
-  }
+  );
   return results;
 }
 
-async function defaultBrowserGetRecords(
+export async function defaultBrowserGetRecords(
   naids: readonly string[],
   options: {
     readonly includeObjects: boolean;
@@ -1596,18 +1632,32 @@ async function defaultBrowserGetRecords(
     readonly pageSpec: string | null;
     readonly timeoutMs?: number;
   },
-  ctx: RecordCommandContext
+  ctx: RecordCommandContext,
+  sessionOverrides?: {
+    readonly launcher?: ChromiumLauncher;
+    readonly closeTimeoutMs?: number;
+    readonly killGraceMs?: number;
+  }
 ): Promise<NaraRecordSummary[]> {
-  const timeoutMs = options.timeoutMs ?? 30_000;
-  const browser = await launchOptionalChromium({
-    env: ctx.env,
-    overrideEnvVar: 'NARA_BROWSER',
-  });
+  const totalTimeoutMs = Math.max(1, Math.floor(options.timeoutMs ?? DEFAULT_BROWSER_TIMEOUT_MS));
+  const launchTimeoutMs = Math.min(DEFAULT_BROWSER_LAUNCH_TIMEOUT_MS, totalTimeoutMs);
   const records: NaraRecordSummary[] = [];
-  try {
-    const context = await browser.newContext({ userAgent: USER_AGENT });
-    const page = (await context.newPage()) as ExtendedBrowserPage;
-    try {
+
+  await runWithBrowserSession(
+    {
+      env: ctx.env,
+      overrideEnvVar: 'NARA_BROWSER',
+      userAgent: USER_AGENT,
+      totalTimeoutMs,
+      launchTimeoutMs,
+      closeTimeoutMs: sessionOverrides?.closeTimeoutMs,
+      killGraceMs: sessionOverrides?.killGraceMs,
+      nowMs: ctx.nowMs,
+      launcher: sessionOverrides?.launcher ?? launchOptionalChromium,
+    },
+    async (session) => {
+      const page = session.page as ExtendedBrowserPage;
+
       for (const naid of naids) {
         const cleanId = String(naid).replace(/\D+/g, '');
         let capturedRecord: NaraRecordSummary | null = null;
@@ -1668,30 +1718,49 @@ async function defaultBrowserGetRecords(
         page.on?.('response', onResponse);
         const url = `${CATALOG_WEB_BASE}/id/${cleanId}`;
         try {
-          await page.goto(url, { waitUntil: 'domcontentloaded', timeout: timeoutMs });
+          await session.runStep('nara-get:goto', (stepMs) =>
+            page.goto(url, { waitUntil: 'domcontentloaded', timeout: stepMs })
+          );
           if (page.waitForFunction) {
-            try {
-              await page.waitForFunction(
-                `() => /National Archives Identifier/i.test(document.body.innerText || '')`,
-                undefined,
-                { timeout: Math.min(timeoutMs, 20_000) }
-              );
-            } catch {
-              // Proceed to wait loop.
+            const waitBudget = Math.min(20_000, Math.floor(session.remainingMs() * 0.6));
+            if (waitBudget > 0) {
+              try {
+                await session.runStep(
+                  'nara-get:waitForFunction',
+                  (stepMs) =>
+                    page.waitForFunction!(
+                      `() => /National Archives Identifier/i.test(document.body.innerText || '')`,
+                      undefined,
+                      { timeout: stepMs }
+                    ),
+                  waitBudget
+                );
+              } catch (waitErr: unknown) {
+                if (session.remainingMs() <= 0) {
+                  throw waitErr;
+                }
+                // Proceed to wait loop.
+              }
             }
           }
-          for (let tick = 0; tick < 25; tick += 1) {
-            await Promise.allSettled(pendingReads);
+          for (let tick = 0; tick < 25 && session.remainingMs() > 0; tick += 1) {
+            if (pendingReads.length > 0) {
+              await session.runStep('nara-get:read-responses', () => Promise.allSettled(pendingReads));
+            }
             if (capturedRecord !== null && (!options.includeText || contributions.length > 0)) {
               break;
             }
-            if (page.waitForTimeout) {
-              await page.waitForTimeout(200);
-            } else {
-              await ctx.sleepFn(200);
+            const tickMs = Math.min(200, session.remainingMs());
+            if (tickMs <= 0) {
+              break;
             }
+            await session.runStep('nara-get:poll', () =>
+              page.waitForTimeout ? page.waitForTimeout(tickMs) : ctx.sleepFn(tickMs)
+            );
           }
-          await Promise.allSettled(pendingReads);
+          if (pendingReads.length > 0 && session.remainingMs() > 0) {
+            await session.runStep('nara-get:read-responses', () => Promise.allSettled(pendingReads));
+          }
         } finally {
           page.removeListener?.('response', onResponse);
         }
@@ -1724,13 +1793,8 @@ async function defaultBrowserGetRecords(
           records.push(rec);
         }
       }
-    } finally {
-      await page.close();
-      await context.close();
     }
-  } finally {
-    await browser.close();
-  }
+  );
   return records;
 }
 
@@ -1746,6 +1810,7 @@ async function loadOrFetchFullRecordsWithHits(
     readonly includeText: boolean;
     readonly refresh: boolean;
     readonly cacheRoot: string;
+    readonly browserTimeoutMs?: number;
   },
   ctx: RecordCommandContext,
   overrides: NaraBrowserOverrides
@@ -1768,7 +1833,14 @@ async function loadOrFetchFullRecordsWithHits(
     missIndices.push(idx);
   }
 
-  const browserGet = overrides.browserGetRecords ?? defaultBrowserGetRecords;
+  const browserGet =
+    overrides.browserGetRecords ??
+    ((ids, opts, cmdCtx) =>
+      defaultBrowserGetRecords(ids, opts, cmdCtx, {
+        launcher: overrides.launcher,
+        closeTimeoutMs: overrides.closeTimeoutMs,
+        killGraceMs: overrides.killGraceMs,
+      }));
 
   if (missIndices.length > 0) {
     const missIds = missIndices.map((idx) => cleanIds[idx]);
@@ -1804,7 +1876,12 @@ async function loadOrFetchFullRecordsWithHits(
       if (fallbackNaids.length > 0) {
         const fallbackRecs = await browserGet(
           fallbackNaids,
-          { includeObjects: true, includeText: options.includeText, pageSpec: 'all' },
+          {
+            includeObjects: true,
+            includeText: options.includeText,
+            pageSpec: 'all',
+            timeoutMs: options.browserTimeoutMs,
+          },
           ctx
         );
         for (let i = 0; i < fallbackSlots.length; i += 1) {
@@ -1819,7 +1896,12 @@ async function loadOrFetchFullRecordsWithHits(
     } else {
       const fetchedRecs = await browserGet(
         missIds,
-        { includeObjects: true, includeText: options.includeText, pageSpec: 'all' },
+        {
+          includeObjects: true,
+          includeText: options.includeText,
+          pageSpec: 'all',
+          timeoutMs: options.browserTimeoutMs,
+        },
         ctx
       );
       for (let i = 0; i < missIndices.length; i += 1) {
@@ -2896,6 +2978,14 @@ const SEARCH_OPTIONS: readonly OptionSpec[] = [
     help: 'Override search query cache TTL in hours (default: 168 or $KINLOOM_NARA_QUERY_TTL_HOURS).',
   },
   {
+    key: 'timeout',
+    kind: 'number',
+    flags: ['--timeout'],
+    default: DEFAULT_BROWSER_TIMEOUT_S,
+    metavar: 'SECONDS',
+    help: `Total timeout in seconds for browser-backed searches (default ${DEFAULT_BROWSER_TIMEOUT_S}).`,
+  },
+  {
     key: 'asJson',
     kind: 'boolean',
     flags: ['--json'],
@@ -2947,6 +3037,14 @@ const GET_OPTIONS: readonly OptionSpec[] = [
     kind: 'boolean',
     flags: ['--refresh'],
     help: 'Bypass the local disk cache and fetch fresh record metadata.',
+  },
+  {
+    key: 'timeout',
+    kind: 'number',
+    flags: ['--timeout'],
+    default: DEFAULT_BROWSER_TIMEOUT_S,
+    metavar: 'SECONDS',
+    help: `Total timeout in seconds for browser-backed record lookups (default ${DEFAULT_BROWSER_TIMEOUT_S}).`,
   },
   {
     key: 'asJson',
@@ -3254,6 +3352,11 @@ async function runSearch(
   const forceBrowser = getBooleanOption(parsed, 'forceBrowser');
   const refresh = getBooleanOption(parsed, 'refresh');
   const cliTtl = getNumberOption(parsed, 'cacheTtlHours');
+  const timeoutSec = getNumberOption(parsed, 'timeout') ?? DEFAULT_BROWSER_TIMEOUT_S;
+  if (!Number.isFinite(timeoutSec) || timeoutSec <= 0) {
+    throw new CliValidationError(`Invalid --timeout value: ${String(timeoutSec)} (must be > 0).`);
+  }
+  const browserTimeoutMs = Math.max(1, Math.round(timeoutSec * 1000));
   const asJson = getBooleanOption(parsed, 'asJson');
 
   const useApi = Boolean(apiKey) && !forceBrowser;
@@ -3280,7 +3383,14 @@ async function runSearch(
     missIndices.push(idx);
   }
 
-  const browserSearch = overrides.browserSearchMany ?? defaultBrowserSearchMany;
+  const browserSearch =
+    overrides.browserSearchMany ??
+    ((pairs, cmdCtx, limitMs) =>
+      defaultBrowserSearchMany(pairs, cmdCtx, limitMs, {
+        launcher: overrides.launcher,
+        closeTimeoutMs: overrides.closeTimeoutMs,
+        killGraceMs: overrides.killGraceMs,
+      }));
 
   if (missIndices.length > 0) {
     const missQueries = missIndices.map((idx) => queries[idx]);
@@ -3305,7 +3415,7 @@ async function runSearch(
       }
 
       if (fallbackPairs.length > 0) {
-        const fallbackResults = await browserSearch(fallbackPairs, ctx);
+        const fallbackResults = await browserSearch(fallbackPairs, ctx, browserTimeoutMs);
         for (let i = 0; i < fallbackSlots.length; i += 1) {
           const slotIdx = fallbackSlots[i];
           const fbEntry = fallbackResults[i];
@@ -3320,7 +3430,7 @@ async function runSearch(
         q,
         encodeCatalogUrl(buildQueryParams(q, { ...filters, forApi: false }), false),
       ]);
-      const fetched = await browserSearch(urlPairs, ctx);
+      const fetched = await browserSearch(urlPairs, ctx, browserTimeoutMs);
       for (let i = 0; i < missIndices.length; i += 1) {
         const slotIdx = missIndices[i];
         const entry = fetched[i];
@@ -3400,12 +3510,17 @@ async function runGet(
   const pages = getStringOption(parsed, 'pages') ?? 'all';
   const text = getBooleanOption(parsed, 'text');
   const refresh = getBooleanOption(parsed, 'refresh');
+  const timeoutSec = getNumberOption(parsed, 'timeout') ?? DEFAULT_BROWSER_TIMEOUT_S;
+  if (!Number.isFinite(timeoutSec) || timeoutSec <= 0) {
+    throw new CliValidationError(`Invalid --timeout value: ${String(timeoutSec)} (must be > 0).`);
+  }
+  const browserTimeoutMs = Math.max(1, Math.round(timeoutSec * 1000));
   const asJson = getBooleanOption(parsed, 'asJson');
 
   const cacheRoot = getCacheRoot(ctx);
   const [fullRecords, hitFlags] = await loadOrFetchFullRecordsWithHits(
     naids,
-    { apiKey, forceBrowser, includeText: text, refresh, cacheRoot },
+    { apiKey, forceBrowser, includeText: text, refresh, cacheRoot, browserTimeoutMs },
     ctx,
     overrides
   );
@@ -3486,7 +3601,14 @@ async function runDownload(
 
   const [fullRecords, metaHits] = await loadOrFetchFullRecordsWithHits(
     [cleanId],
-    { apiKey, forceBrowser, includeText: false, refresh, cacheRoot },
+    {
+      apiKey,
+      forceBrowser,
+      includeText: false,
+      refresh,
+      cacheRoot,
+      browserTimeoutMs: Math.max(1, Math.round(timeoutSec * 1000)),
+    },
     ctx,
     overrides
   );

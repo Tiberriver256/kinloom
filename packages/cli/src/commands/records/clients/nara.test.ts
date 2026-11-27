@@ -6,6 +6,8 @@ import { afterEach, describe, expect, it } from 'vitest';
 import {
   createRecordContext,
   HttpStatusError,
+  type OptionalBrowser,
+  type OptionalBrowserProcess,
   type RecordHandler,
   RecordRuntimeError,
 } from '../runtime/index.js';
@@ -2124,5 +2126,74 @@ describe('NARA url subcommand, help, and env defaults', () => {
     });
     expect(titleUrl.exitCode, titleUrl.stderr).toBe(0);
     expect(titleUrl.stdout).toContain('title=Population');
+  });
+
+  it('bounds browser search and get against hanging launch, evaluate, and close with forced cleanup', async () => {
+    const cacheDir = await makeTempDir('nara-browser-timeout-');
+    const signals: (NodeJS.Signals | number | undefined)[] = [];
+    let signalCode: NodeJS.Signals | null = null;
+    const proc: OptionalBrowserProcess = {
+      pid: 77701,
+      get exitCode() {
+        return null;
+      },
+      get signalCode() {
+        return signalCode;
+      },
+      kill(sig) {
+        signals.push(sig);
+        if (sig === 'SIGKILL') {
+          signalCode = 'SIGKILL';
+        }
+        return true;
+      },
+    };
+
+    const hangingEvalBrowser: OptionalBrowser = {
+      newContext: async () => ({
+        newPage: async () => ({
+          goto: async () => {},
+          content: async () => '',
+          evaluate: () => new Promise<never>(() => {}),
+          close: () => new Promise<void>(() => {}),
+        }),
+        close: () => new Promise<void>(() => {}),
+      }),
+      close: () => new Promise<void>(() => {}),
+      process: () => proc,
+    };
+
+    const t0 = Date.now();
+    const searchRes = await invokeNara(['search', 'Harriet Tubman', '--browser', '--timeout', '0.04'], {
+      cacheDir,
+      overrides: {
+        launcher: async () => hangingEvalBrowser,
+        closeTimeoutMs: 20,
+        killGraceMs: 10,
+      },
+    });
+    expect(Date.now() - t0).toBeLessThan(600);
+    expect(searchRes.exitCode).toBe(1);
+    expect(searchRes.stderr).toContain('timed out');
+    expect(signals).toEqual(['SIGTERM', 'SIGKILL']);
+
+    const t1 = Date.now();
+    const getRes = await invokeNara(['get', '595367', '--browser', '--timeout', '0.03'], {
+      cacheDir,
+      overrides: {
+        launcher: () => new Promise<OptionalBrowser>(() => {}),
+        closeTimeoutMs: 20,
+        killGraceMs: 10,
+      },
+    });
+    expect(Date.now() - t1).toBeLessThan(600);
+    expect(getRes.exitCode).toBe(1);
+    expect(getRes.stderr).toContain('launch');
+
+    const badSearchTimeout = await invokeNara(['search', 'Harriet', '--timeout', '0'], { cacheDir });
+    expect(badSearchTimeout.exitCode).toBe(2);
+
+    const badGetTimeout = await invokeNara(['get', '595367', '--timeout', '-1'], { cacheDir });
+    expect(badGetTimeout.exitCode).toBe(2);
   });
 });
