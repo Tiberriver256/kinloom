@@ -8,25 +8,33 @@ import {
 import {
   addDraftTag,
   buildRecipesListQueryString,
+  countActiveRecipeComments,
   createEmptyRecipeDraft,
   extractRecipeApiFieldErrors,
   filterStaticRecipes,
+  formatDeletedCommentTombstone,
   formatRecipeCourseLabel,
   formatRecipeDuration,
   formatRecipeIngredientLine,
   formatTotalRecipeDuration,
+  groupRecipeCommentThreads,
   groupRecipeIngredients,
   isRecipeDraftDirty,
   moveDraftListItem,
   normalizeDraftTagInput,
+  parseUiCreateRecipeCommentResponse,
+  parseUiRecipeCommentsListResponse,
   parseUiRecipeDetailResponse,
   parseUiRecipeListResponse,
   parseUiRecipeMutationResponse,
   parseUiRecipesByPersonResponse,
   parseUiRecipeVersionConflict,
+  parseUiUpdateRecipeCommentResponse,
   recipeDetailToEditorDraft,
   removeDraftTag,
+  type UiRecipeComment,
   type UiRecipeDetail,
+  validateRecipeCommentBody,
   validateRecipeDraft,
 } from './recipesModel.js';
 
@@ -368,5 +376,88 @@ describe('recipesModel pure helpers and parsers', () => {
       ])
     ).toEqual({ title: 'Too short' });
     expect(extractRecipeApiFieldErrors('not-an-array')).toEqual({});
+  });
+
+  it('validates comment bodies, groups 2-level comment threads, formats tombstones, and parses comment payloads', () => {
+    expect(validateRecipeCommentBody('   ')).toEqual({
+      ok: false,
+      error: 'Enter a comment before posting.',
+    });
+    expect(validateRecipeCommentBody('x'.repeat(4001)).ok).toBe(false);
+    expect(validateRecipeCommentBody('  Great crust tip!  ')).toEqual({
+      ok: true,
+      body_md: 'Great crust tip!',
+    });
+
+    const root: UiRecipeComment = {
+      id: 'cmt_1',
+      parent_comment_id: null,
+      depth: 0,
+      deleted: false,
+      deleted_by_role: null,
+      author_name: 'Clara Baker',
+      author_key: 'usr_clara',
+      body_md: 'Original note',
+      created_at: '2026-11-27T10:00:00.000Z',
+      edited_at: null,
+      can_edit: true,
+      can_delete: true,
+    };
+    const reply: UiRecipeComment = {
+      id: 'cmt_2',
+      parent_comment_id: 'cmt_1',
+      depth: 1,
+      deleted: false,
+      deleted_by_role: null,
+      author_name: 'Jonah Baker',
+      author_key: 'usr_jonah',
+      body_md: 'Helpful reply',
+      created_at: '2026-11-27T10:05:00.000Z',
+      edited_at: '2026-11-27T10:06:00.000Z',
+      can_edit: false,
+      can_delete: true,
+    };
+    const tombstone: UiRecipeComment = {
+      ...root,
+      id: 'cmt_tomb',
+      deleted: true,
+      deleted_by_role: 'admin',
+      author_name: null,
+      author_key: null,
+      body_md: '',
+      can_edit: false,
+      can_delete: false,
+    };
+    const orphan: UiRecipeComment = {
+      ...reply,
+      id: 'cmt_orphan',
+      parent_comment_id: 'cmt_missing_parent',
+    };
+
+    // Out-of-order reply before root still attaches to root; true orphan becomes standalone thread
+    const threads = groupRecipeCommentThreads([reply, root, tombstone, orphan]);
+    expect(threads.map((t) => [t.root.id, t.replies.map((r) => r.id)])).toEqual([
+      ['cmt_1', ['cmt_2']],
+      ['cmt_tomb', []],
+      ['cmt_orphan', []],
+    ]);
+
+    expect(countActiveRecipeComments([root, reply, tombstone])).toBe(2);
+    expect(formatDeletedCommentTombstone('author')).toBe('[Comment removed]');
+    expect(formatDeletedCommentTombstone(null)).toBe('[Comment removed]');
+    expect(formatDeletedCommentTombstone('admin')).toBe('[Comment removed by an archive administrator]');
+
+    expect(
+      parseUiRecipeCommentsListResponse({
+        recipe_id: 'rec_1',
+        comments: [root, reply],
+        comment_count: 2,
+        permissions: { can_comment: true },
+      }).comments
+    ).toHaveLength(2);
+    expect(parseUiCreateRecipeCommentResponse({ comment: root, comment_count: 1 }).comment_count).toBe(1);
+    expect(parseUiUpdateRecipeCommentResponse({ comment: reply }).comment.edited_at).toBe(
+      '2026-11-27T10:06:00.000Z'
+    );
   });
 });

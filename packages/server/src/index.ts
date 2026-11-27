@@ -478,6 +478,7 @@ export {
   UpdateRecipePhotoInputSchema,
 } from './plugins/recipes/schemas.js';
 export {
+  canCommentOnRecipe,
   canCreateOrEditRecipe,
   canStarRecipe,
   computeRecipePermissions,

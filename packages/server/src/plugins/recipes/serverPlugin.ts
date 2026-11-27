@@ -24,12 +24,14 @@ import { RECIPES_PLUGIN_MIGRATIONS } from './migrations.js';
 import { clampRecipeListPagination, type RecipesRepository } from './recipesRepository.js';
 import {
   assertDeceasedRecipeAttribution,
+  CreateRecipeCommentSchema,
   CreateRecipeInputSchema,
   deriveRecipeActorKey,
   RECIPES_DATABASE_NAMESPACE,
   RECIPES_PLUGIN_ID,
   type RecipeCardSide,
   RecipeCardSideSchema,
+  type RecipeCommentDeletedByRole,
   type RecipeCourse,
   RecipeCourseSchema,
   type RecipePhotoRecord,
@@ -37,6 +39,8 @@ import {
   type RecipeSortMode,
   RecipeSortModeSchema,
   redactLivingRecipeAttribution,
+  toPublicRecipeComment,
+  UpdateRecipeCommentSchema,
   UpdateRecipeInputSchema,
   UpdateRecipePhotoInputSchema,
 } from './schemas.js';
@@ -459,6 +463,16 @@ export function canStarRecipe(principal: CallerPrincipal, settings: RecipesRunti
   return false;
 }
 
+export function canCommentOnRecipe(principal: CallerPrincipal, settings: RecipesRuntimeSettings): boolean {
+  if (principal.kind !== 'user') {
+    return false;
+  }
+  if (settings.comment_min_role === 'disabled') {
+    return false;
+  }
+  return settings.comment_min_role === 'admin' ? principal.role === 'admin' : true;
+}
+
 export function computeRecipePermissions(
   principal: CallerPrincipal,
   recipe: Pick<RecipeRecord, 'created_by_id'>,
@@ -491,12 +505,7 @@ export function computeRecipePermissions(
     can_delete: isAdmin || isOwner,
     can_upload: settings.upload_min_role === 'admin' ? isAdmin : true,
     can_star: canStarRecipe(principal, settings),
-    can_comment:
-      settings.comment_min_role === 'disabled'
-        ? false
-        : settings.comment_min_role === 'admin'
-          ? isAdmin
-          : true,
+    can_comment: canCommentOnRecipe(principal, settings),
   };
 }
 
@@ -642,7 +651,7 @@ function requireSignedInRecipeMember(
       ctx.emitSecurityEvent({
         type: 'auth.write.forbidden',
         status: 403,
-        reason: 'member_required',
+        reason: principal.kind === 'invite_viewer' ? 'invite_read_only' : 'member_required',
         requiredRole: 'editor',
         actorKind: principal.kind,
       });
@@ -654,6 +663,115 @@ function requireSignedInRecipeMember(
     name: principal.display_name,
     role: principal.role,
   };
+}
+
+async function requireRecipeCommentActor(
+  ctx: KinloomServerPluginContext,
+  settings: RecipesRuntimeSettings
+): Promise<{ readonly id: string; readonly key: string; readonly name: string }> {
+  const { principal } = ctx;
+  if (principal.kind !== 'user') {
+    if (hasSecurityEventEmitter(ctx)) {
+      ctx.emitSecurityEvent({
+        type: 'auth.write.forbidden',
+        status: 403,
+        reason: principal.kind === 'invite_viewer' ? 'invite_read_only' : 'member_required',
+        requiredRole: settings.comment_min_role === 'admin' ? 'admin' : 'editor',
+        actorKind: principal.kind,
+      });
+    }
+    throw new KinloomHttpError(
+      403,
+      'FORBIDDEN',
+      'Only signed-in family archive members may post recipe comments.'
+    );
+  }
+  if (settings.comment_min_role === 'disabled') {
+    if (hasSecurityEventEmitter(ctx)) {
+      ctx.emitSecurityEvent({
+        type: 'auth.write.forbidden',
+        status: 403,
+        reason: 'talk_disabled',
+        requiredRole: 'editor',
+        actorKind: 'user',
+      });
+    }
+    throw new KinloomHttpError(403, 'COMMENTS_DISABLED', 'Recipe comments are disabled on this archive.');
+  }
+  if (settings.comment_min_role === 'admin' && principal.role !== 'admin') {
+    if (hasSecurityEventEmitter(ctx)) {
+      ctx.emitSecurityEvent({
+        type: 'auth.write.forbidden',
+        status: 403,
+        reason: 'insufficient_role',
+        requiredRole: 'admin',
+        actorKind: 'user',
+      });
+    }
+    throw new KinloomHttpError(403, 'FORBIDDEN', 'Administrator role is required to post recipe comments.');
+  }
+  const actorKey = await deriveRecipeActorKey(principal);
+  if (!actorKey) {
+    throw new KinloomHttpError(
+      403,
+      'FORBIDDEN',
+      'Only signed-in family archive members may post recipe comments.'
+    );
+  }
+  return {
+    id: principal.email,
+    key: actorKey,
+    name: principal.display_name,
+  };
+}
+
+function assertCanEditRecipeComment(
+  ctx: KinloomServerPluginContext,
+  actor: { readonly id: string },
+  comment: { readonly author_id: string }
+): void {
+  const isOwner = actor.id.trim().toLowerCase() === comment.author_id.trim().toLowerCase();
+  if (isOwner) {
+    return;
+  }
+  if (hasSecurityEventEmitter(ctx)) {
+    ctx.emitSecurityEvent({
+      type: 'auth.write.forbidden',
+      status: 403,
+      reason: 'not_owner',
+      requiredRole: 'editor',
+      actorKind: 'user',
+    });
+  }
+  throw new KinloomHttpError(403, 'FORBIDDEN', 'Only the comment author may edit this comment.');
+}
+
+function resolveCommentDeleteRole(
+  ctx: KinloomServerPluginContext,
+  actor: { readonly id: string; readonly role: 'admin' | 'editor' },
+  comment: { readonly author_id: string }
+): RecipeCommentDeletedByRole {
+  const isOwner = actor.id.trim().toLowerCase() === comment.author_id.trim().toLowerCase();
+  if (isOwner) {
+    return 'author';
+  }
+  if (actor.role === 'admin') {
+    return 'admin';
+  }
+  if (hasSecurityEventEmitter(ctx)) {
+    ctx.emitSecurityEvent({
+      type: 'auth.write.forbidden',
+      status: 403,
+      reason: 'not_owner',
+      requiredRole: 'admin',
+      actorKind: 'user',
+    });
+  }
+  throw new KinloomHttpError(
+    403,
+    'FORBIDDEN',
+    'Only the comment author or an archive administrator may delete this comment.'
+  );
 }
 
 function assertCanDeleteRecipe(
@@ -995,6 +1113,30 @@ export function createRecipesServerPlugin(options: RecipesServerPluginOptions = 
       });
     }
 
+    // 4b. GET /api/plugins/recipes/:slugOrId/comments
+    if (segments.length === 2 && segments[1] === 'comments') {
+      const slugOrId = decodeSegment(segments[0]).trim();
+      if (!slugOrId) {
+        throw new KinloomHttpError(404, 'RECIPE_NOT_FOUND', 'Recipe not found.');
+      }
+      const recipe = await repo.getRecipeBySlugOrId(slugOrId);
+      if (!recipe) {
+        throw new KinloomHttpError(404, 'RECIPE_NOT_FOUND', `Recipe '${slugOrId}' was not found.`);
+      }
+      const [comments, settings] = await Promise.all([
+        repo.listCommentsForRecipe(recipe.id),
+        resolveRuntimeSettings(ctx.ports),
+      ]);
+      return jsonResponse({
+        recipe_id: recipe.id,
+        comments: comments.map((comment) => toPublicRecipeComment(comment, ctx.principal)),
+        comment_count: recipe.comment_count,
+        permissions: {
+          can_comment: canCommentOnRecipe(ctx.principal, settings),
+        },
+      });
+    }
+
     // 5. GET /api/plugins/recipes/:slugOrId
     if (segments.length === 1) {
       const slugOrId = decodeSegment(segments[0]).trim();
@@ -1143,6 +1285,60 @@ export function createRecipesServerPlugin(options: RecipesServerPluginOptions = 
     requireAuthenticatedMutationPrincipal(ctx);
     const repo = resolveRepository(ctx);
     const segments = splitRecipesRouteSegments(ctx.url.pathname);
+
+    // POST /api/plugins/recipes/:slugOrId/comments (create top-level comment or depth-1 reply)
+    if (segments.length === 2 && segments[1] === 'comments') {
+      const settings = await resolveRuntimeSettings(ctx.ports);
+      const actor = await requireRecipeCommentActor(ctx, settings);
+
+      const slugOrId = decodeSegment(segments[0]).trim();
+      const recipe = slugOrId ? await repo.getRecipeBySlugOrId(slugOrId) : null;
+      if (!recipe) {
+        throw new KinloomHttpError(404, 'RECIPE_NOT_FOUND', `Recipe '${slugOrId}' was not found.`);
+      }
+
+      const parsed = CreateRecipeCommentSchema.parse(await readJsonBody(ctx.request));
+      const commentId = `cmt_${toHex(randomBytes(8))}`;
+      const outcome = await repo.addComment({
+        id: commentId,
+        recipe_id: recipe.id,
+        parent_comment_id: parsed.parent_comment_id,
+        author_id: actor.id,
+        author_key: actor.key,
+        author_name: actor.name,
+        body_md: parsed.body_md,
+        nowIso: ctx.ports.clock.nowIso(),
+      });
+
+      switch (outcome.kind) {
+        case 'recipe_not_found':
+          throw new KinloomHttpError(404, 'RECIPE_NOT_FOUND', `Recipe '${slugOrId}' was not found.`);
+        case 'parent_not_found':
+          throw new KinloomHttpError(
+            400,
+            'INVALID_PARENT_COMMENT',
+            'Parent comment does not exist on this recipe or has been removed.'
+          );
+        case 'max_depth_exceeded':
+          throw new KinloomHttpError(
+            400,
+            'MAX_THREAD_DEPTH_EXCEEDED',
+            'Replies cannot be nested more than one level deep.'
+          );
+        case 'created':
+          return jsonResponse(
+            {
+              comment: toPublicRecipeComment(outcome.comment, ctx.principal),
+              comment_count: outcome.comment_count,
+            },
+            201
+          );
+        default: {
+          const _exhaustive: never = outcome;
+          return _exhaustive;
+        }
+      }
+    }
 
     // POST /api/plugins/recipes/:slugOrId/star (idempotent star)
     if (segments.length === 2 && segments[1] === 'star') {
@@ -1362,6 +1558,42 @@ export function createRecipesServerPlugin(options: RecipesServerPluginOptions = 
       return handleUpdateRecipe(ctx, repo, slugOrId);
     }
 
+    // PATCH /api/plugins/recipes/:slugOrId/comments/:commentId (owner-only edit)
+    if (segments.length === 3 && segments[1] === 'comments') {
+      const actor = requireSignedInRecipeMember(
+        ctx,
+        'Only signed-in family archive members may edit recipe comments.'
+      );
+
+      const slugOrId = decodeSegment(segments[0]).trim();
+      const commentId = decodeSegment(segments[2]).trim();
+      const recipe = slugOrId ? await repo.getRecipeBySlugOrId(slugOrId) : null;
+      if (!recipe) {
+        throw new KinloomHttpError(404, 'RECIPE_NOT_FOUND', `Recipe '${slugOrId}' was not found.`);
+      }
+
+      const existing = commentId ? await repo.getCommentById(recipe.id, commentId) : null;
+      if (!existing) {
+        throw new KinloomHttpError(404, 'COMMENT_NOT_FOUND', `Recipe comment '${commentId}' was not found.`);
+      }
+      assertCanEditRecipeComment(ctx, actor, existing);
+
+      const parsed = UpdateRecipeCommentSchema.parse(await readJsonBody(ctx.request));
+      const outcome = await repo.updateComment({
+        recipe_id: recipe.id,
+        comment_id: existing.id,
+        body_md: parsed.body_md,
+        edited_at: ctx.ports.clock.nowIso(),
+      });
+      if (outcome.kind === 'not_found') {
+        throw new KinloomHttpError(404, 'COMMENT_NOT_FOUND', `Recipe comment '${commentId}' was not found.`);
+      }
+
+      return jsonResponse({
+        comment: toPublicRecipeComment(outcome.comment, ctx.principal),
+      });
+    }
+
     // PATCH /api/plugins/recipes/:slugOrId/photos/:photoId
     if (segments.length === 3 && segments[1] === 'photos') {
       const settings = await resolveRuntimeSettings(ctx.ports);
@@ -1445,6 +1677,39 @@ export function createRecipesServerPlugin(options: RecipesServerPluginOptions = 
       if (!deleted) {
         throw new KinloomHttpError(404, 'RECIPE_NOT_FOUND', `Recipe '${slugOrId}' was not found.`);
       }
+      return new Response(null, { status: 204, headers: { 'cache-control': 'no-store' } });
+    }
+
+    // DELETE /api/plugins/recipes/:slugOrId/comments/:commentId (soft-delete by author or admin)
+    if (segments.length === 3 && segments[1] === 'comments') {
+      const actor = requireSignedInRecipeMember(
+        ctx,
+        'Only signed-in family archive members may delete recipe comments.'
+      );
+
+      const slugOrId = decodeSegment(segments[0]).trim();
+      const commentId = decodeSegment(segments[2]).trim();
+      const recipe = slugOrId ? await repo.getRecipeBySlugOrId(slugOrId) : null;
+      if (!recipe) {
+        throw new KinloomHttpError(404, 'RECIPE_NOT_FOUND', `Recipe '${slugOrId}' was not found.`);
+      }
+
+      const existing = commentId ? await repo.getCommentById(recipe.id, commentId) : null;
+      if (!existing) {
+        throw new KinloomHttpError(404, 'COMMENT_NOT_FOUND', `Recipe comment '${commentId}' was not found.`);
+      }
+      const deletedByRole = resolveCommentDeleteRole(ctx, actor, existing);
+
+      const outcome = await repo.softDeleteComment({
+        recipe_id: recipe.id,
+        comment_id: existing.id,
+        deleted_at: ctx.ports.clock.nowIso(),
+        deleted_by_role: deletedByRole,
+      });
+      if (outcome.kind === 'not_found') {
+        throw new KinloomHttpError(404, 'COMMENT_NOT_FOUND', `Recipe comment '${commentId}' was not found.`);
+      }
+
       return new Response(null, { status: 204, headers: { 'cache-control': 'no-store' } });
     }
 

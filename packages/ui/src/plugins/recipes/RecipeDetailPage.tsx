@@ -1,5 +1,5 @@
 import type React from 'react';
-import { useEffect, useId, useMemo, useState } from 'react';
+import { useCallback, useEffect, useId, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { ArchivalFileDropzone } from '../../components/ArchivalFileDropzone.js';
 import { ArchivalPageShell } from '../../components/ArchivalLayout.js';
@@ -28,6 +28,7 @@ import {
   type UiRecipePhoto,
 } from '../../lib/recipesModel.js';
 import { useKinloomPluginContext } from '../PluginContext.js';
+import { RecipeCommentsSection } from './RecipeCommentsSection.js';
 import { RecipeStarButton } from './RecipeStarButton.js';
 import recipeStyles from './Recipes.module.css';
 import { useRecipesPlugin } from './RecipesContext.js';
@@ -162,6 +163,14 @@ export const RecipeDetailPage: React.FC = () => {
       window.print();
     }
   };
+
+  const handleCommentCountChange = useCallback((nextCount: number): void => {
+    setDetail((prev) =>
+      prev && prev.recipe.comment_count !== nextCount
+        ? { ...prev, recipe: { ...prev.recipe, comment_count: nextCount } }
+        : prev
+    );
+  }, []);
 
   const resolvedAncestor = useMemo(() => {
     const raw = detail?.recipe.attributed_person ?? null;
@@ -634,6 +643,12 @@ export const RecipeDetailPage: React.FC = () => {
                   {detail.recipe.star_count} {detail.recipe.star_count === 1 ? 'star' : 'stars'}
                 </span>
               </div>
+              <div className={cx(recipeStyles, 'recipe-meta-cell')}>
+                <span className={cx(recipeStyles, 'recipe-meta-label')}>Discussion</span>
+                <span className={cx(recipeStyles, 'recipe-meta-value')}>
+                  {detail.recipe.comment_count} {detail.recipe.comment_count === 1 ? 'comment' : 'comments'}
+                </span>
+              </div>
             </div>
 
             {(detail.photos.length > 0 || canManagePhotos) && (
@@ -1041,6 +1056,15 @@ export const RecipeDetailPage: React.FC = () => {
               </span>
             </footer>
           </article>
+        )}
+
+        {!loading && detail && (
+          <RecipeCommentsSection
+            recipeSlug={detail.recipe.slug}
+            initialCommentCount={detail.recipe.comment_count}
+            canComment={detail.permissions.can_comment}
+            onCommentCountChange={handleCommentCountChange}
+          />
         )}
 
         <ArchivalLightbox

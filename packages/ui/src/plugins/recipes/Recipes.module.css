@@ -1311,9 +1311,214 @@
   }
 }
 
+/* Threaded Family Discussion Comments (#51) */
+.recipe-comments-section {
+  margin-top: 24px;
+  padding: 22px 24px;
+  background: var(--surface-card);
+  border: 1px solid var(--border-decorative);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-card);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.recipe-comments-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border-decorative);
+}
+
+.recipe-comments-header .recipe-section-heading {
+  margin: 0;
+  padding-bottom: 0;
+  border-bottom: none;
+}
+
+.recipe-comments-count {
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.recipe-comments-empty {
+  margin: 0;
+  padding: 16px 18px;
+  border: 1px dashed var(--border-control);
+  border-radius: var(--radius-sm);
+  background: var(--surface-canvas);
+  font-family: var(--font-serif);
+  font-size: 0.96rem;
+  color: var(--text-secondary);
+}
+
+.recipe-comment-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.recipe-comment-thread {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.recipe-comment-card {
+  padding: 14px 16px;
+  border: 1px solid var(--border-decorative);
+  border-radius: var(--radius-sm);
+  background: var(--surface-canvas);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.recipe-comment-card-reply {
+  background: var(--surface-linen);
+}
+
+.recipe-comment-tombstone {
+  border-style: dashed;
+  background: var(--surface-linen);
+}
+
+.recipe-comment-tombstone-label {
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  font-style: italic;
+  color: var(--text-secondary);
+}
+
+.recipe-comment-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+}
+
+.recipe-comment-byline {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px 10px;
+}
+
+.recipe-comment-author {
+  font-family: var(--font-serif);
+  font-size: 0.98rem;
+  font-weight: 700;
+  color: var(--surface-header);
+}
+
+.recipe-comment-time {
+  font-family: var(--font-mono);
+  font-size: 0.74rem;
+  color: var(--text-secondary);
+}
+
+.recipe-comment-edited {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  color: var(--text-secondary);
+}
+
+.recipe-comment-actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.recipe-comment-body {
+  font-size: 0.96rem;
+  line-height: 1.55;
+  color: var(--text-primary);
+}
+
+.recipe-comment-replies {
+  margin: 0;
+  padding: 0 0 0 22px;
+  list-style: none;
+  border-inline-start: 2px solid var(--border-control);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.recipe-comment-composer {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border-decorative);
+}
+
+.recipe-comment-composer-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+}
+
+.recipe-comment-inline-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.recipe-comment-reply-form {
+  margin-inline-start: 22px;
+  padding: 12px 14px;
+  border: 1px solid var(--border-decorative);
+  border-inline-start: 2px solid var(--accent-primary);
+  border-radius: var(--radius-sm);
+  background: var(--surface-linen);
+}
+
+.recipe-comment-form-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.recipe-comments-readonly-note {
+  margin: 0;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-decorative);
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+}
+
 @media (max-width: 640px) {
   .recipe-ingredient-item-col {
     grid-column: span 1;
+  }
+
+  .recipe-comments-section {
+    padding: 16px;
+  }
+
+  .recipe-comment-replies {
+    padding-inline-start: 14px;
+  }
+
+  .recipe-comment-reply-form {
+    margin-inline-start: 14px;
   }
 }
 

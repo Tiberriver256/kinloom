@@ -11,6 +11,7 @@ import {
   computeOptimisticStarState,
   filterStaticRecipes,
   normalizeCatalogSortMode,
+  type UiRecipeComment,
   type UiRecipeDetail,
   type UiRecipePhoto,
 } from '../lib/recipesModel.js';
@@ -456,6 +457,114 @@ describe('createHttpRecipesClient and createStaticRecipesClient', () => {
     };
     const sorted = filterStaticRecipes([tiedA, tiedB], { sort: 'most_starred' });
     expect(sorted.recipes.map((r) => r.id)).toEqual(['rec_tie_b', 'rec_tie_a']);
+  });
+
+  it('supports recipe comments list, create, update, delete, and static comments through PluginApiClient', async () => {
+    const sampleComment: UiRecipeComment = {
+      id: 'cmt_1',
+      parent_comment_id: null,
+      depth: 0,
+      deleted: false,
+      deleted_by_role: null,
+      author_name: 'Clara Baker',
+      author_key: 'usr_clara',
+      body_md: 'Bake on the center rack.',
+      created_at: '2026-11-27T10:00:00.000Z',
+      edited_at: null,
+      can_edit: true,
+      can_delete: true,
+    };
+
+    const requests: Array<{ url: string; method: string; body?: string }> = [];
+    const fetchImpl: typeof fetch = async (input, init) => {
+      const url = typeof input === 'string' ? input : input.toString();
+      const method = init?.method ?? 'GET';
+      const body = typeof init?.body === 'string' ? init.body : undefined;
+      requests.push({ url, method, body });
+
+      if (method === 'GET' && url === '/api/plugins/recipes/sourdough-boule/comments') {
+        return new Response(
+          JSON.stringify({
+            recipe_id: 'rec_1',
+            comments: [sampleComment],
+            comment_count: 1,
+            permissions: { can_comment: true },
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } }
+        );
+      }
+      if (method === 'GET' && url === '/api/plugins/recipes/missing/comments') {
+        return new Response(JSON.stringify({ error: { code: 'RECIPE_NOT_FOUND', message: 'Missing' } }), {
+          status: 404,
+          headers: { 'content-type': 'application/json' },
+        });
+      }
+      if (method === 'GET' && url === '/api/plugins/recipes/err/comments') {
+        return new Response(JSON.stringify({ error: { code: 'INTERNAL', message: 'Boom' } }), {
+          status: 500,
+          headers: { 'content-type': 'application/json' },
+        });
+      }
+      if (method === 'POST' && url === '/api/plugins/recipes/sourdough-boule/comments') {
+        return new Response(JSON.stringify({ comment: sampleComment, comment_count: 1 }), {
+          status: 201,
+          headers: { 'content-type': 'application/json' },
+        });
+      }
+      if (method === 'PATCH' && url === '/api/plugins/recipes/sourdough-boule/comments/cmt_1') {
+        return new Response(
+          JSON.stringify({
+            comment: {
+              ...sampleComment,
+              body_md: 'Updated tip.',
+              edited_at: '2026-11-27T10:05:00.000Z',
+            },
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } }
+        );
+      }
+      if (method === 'DELETE' && url === '/api/plugins/recipes/sourdough-boule/comments/cmt_1') {
+        return new Response(null, { status: 204 });
+      }
+      return new Response(JSON.stringify({ error: { code: 'NOT_FOUND', message: 'Missing' } }), {
+        status: 404,
+        headers: { 'content-type': 'application/json' },
+      });
+    };
+
+    const client = createHttpRecipesClient({ fetchImpl });
+    const list = await client.listRecipeComments!('sourdough-boule');
+    expect(list?.comments).toHaveLength(1);
+    expect(await client.listRecipeComments!('missing')).toBeNull();
+    await expect(client.listRecipeComments!('err')).rejects.toThrow(ApiClientError);
+
+    const created = await client.createRecipeComment!('sourdough-boule', {
+      body_md: 'Bake on the center rack.',
+    });
+    expect(created.comment.id).toBe('cmt_1');
+
+    const updated = await client.updateRecipeComment!('sourdough-boule', 'cmt_1', {
+      body_md: 'Updated tip.',
+    });
+    expect(updated.comment.body_md).toBe('Updated tip.');
+    expect(updated.comment.edited_at).toBe('2026-11-27T10:05:00.000Z');
+
+    await expect(client.deleteRecipeComment!('sourdough-boule', 'cmt_1')).resolves.toBeUndefined();
+    expect(requests.map((r) => `${r.method} ${r.url}`)).toEqual([
+      'GET /api/plugins/recipes/sourdough-boule/comments',
+      'GET /api/plugins/recipes/missing/comments',
+      'GET /api/plugins/recipes/err/comments',
+      'POST /api/plugins/recipes/sourdough-boule/comments',
+      'PATCH /api/plugins/recipes/sourdough-boule/comments/cmt_1',
+      'DELETE /api/plugins/recipes/sourdough-boule/comments/cmt_1',
+    ]);
+
+    const staticClient = createStaticRecipesClient({
+      recipes: [SAMPLE_RECIPE],
+      commentsByRecipeId: { rec_1: [sampleComment] },
+    });
+    expect((await staticClient.listRecipeComments!('sourdough-boule'))?.comment_count).toBe(1);
+    expect(await staticClient.listRecipeComments!('nope')).toBeNull();
   });
 });
 

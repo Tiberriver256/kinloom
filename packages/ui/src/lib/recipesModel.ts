@@ -858,3 +858,143 @@ export function extractRecipeApiFieldErrors(details: unknown): Readonly<Record<s
   }
   return out;
 }
+
+export const RECIPE_COMMENT_MAX_LENGTH = 4000;
+
+export const UI_RECIPE_COMMENT_DELETED_BY_ROLES = ['author', 'admin'] as const;
+export const UiRecipeCommentDeletedByRoleSchema = z.enum(UI_RECIPE_COMMENT_DELETED_BY_ROLES);
+export type UiRecipeCommentDeletedByRole = z.infer<typeof UiRecipeCommentDeletedByRoleSchema>;
+
+export const UiRecipeCommentSchema = z.object({
+  id: z.string().min(1),
+  parent_comment_id: z.string().nullable(),
+  depth: z.union([z.literal(0), z.literal(1)]),
+  deleted: z.boolean(),
+  deleted_by_role: UiRecipeCommentDeletedByRoleSchema.nullable(),
+  author_name: z.string().nullable(),
+  author_key: z.string().nullable(),
+  body_md: z.string(),
+  created_at: z.string().min(1),
+  edited_at: z.string().nullable(),
+  can_edit: z.boolean(),
+  can_delete: z.boolean(),
+});
+export type UiRecipeComment = z.infer<typeof UiRecipeCommentSchema>;
+
+export const UiRecipeCommentsListResponseSchema = z.object({
+  recipe_id: z.string().min(1).optional(),
+  comments: z.array(UiRecipeCommentSchema),
+  comment_count: z.number().int().min(0).optional(),
+  permissions: z
+    .object({
+      can_comment: z.boolean(),
+    })
+    .optional(),
+});
+export type UiRecipeCommentsListResponse = z.infer<typeof UiRecipeCommentsListResponseSchema>;
+
+export interface UiCreateRecipeCommentPayload {
+  readonly body_md: string;
+  readonly parent_comment_id?: string | null;
+}
+
+export interface UiUpdateRecipeCommentPayload {
+  readonly body_md: string;
+}
+
+export const UiCreateRecipeCommentResponseSchema = z.object({
+  comment: UiRecipeCommentSchema,
+  comment_count: z.number().int().min(0),
+});
+export type UiCreateRecipeCommentResponse = z.infer<typeof UiCreateRecipeCommentResponseSchema>;
+
+export const UiUpdateRecipeCommentResponseSchema = z.object({
+  comment: UiRecipeCommentSchema,
+});
+export type UiUpdateRecipeCommentResponse = z.infer<typeof UiUpdateRecipeCommentResponseSchema>;
+
+export function parseUiRecipeCommentsListResponse(raw: unknown): UiRecipeCommentsListResponse {
+  return UiRecipeCommentsListResponseSchema.parse(raw);
+}
+
+export function parseUiCreateRecipeCommentResponse(raw: unknown): UiCreateRecipeCommentResponse {
+  return UiCreateRecipeCommentResponseSchema.parse(raw);
+}
+
+export function parseUiUpdateRecipeCommentResponse(raw: unknown): UiUpdateRecipeCommentResponse {
+  return UiUpdateRecipeCommentResponseSchema.parse(raw);
+}
+
+export type ValidateRecipeCommentResult =
+  | { readonly ok: true; readonly body_md: string }
+  | { readonly ok: false; readonly error: string };
+
+export function validateRecipeCommentBody(raw: string): ValidateRecipeCommentResult {
+  const trimmed = raw.trim();
+  if (trimmed.length === 0) {
+    return { ok: false, error: 'Enter a comment before posting.' };
+  }
+  if (trimmed.length > RECIPE_COMMENT_MAX_LENGTH) {
+    return {
+      ok: false,
+      error: `Comments must be ${RECIPE_COMMENT_MAX_LENGTH.toLocaleString('en-US')} characters or fewer.`,
+    };
+  }
+  return { ok: true, body_md: trimmed };
+}
+
+export interface RecipeCommentThread {
+  readonly root: UiRecipeComment;
+  readonly replies: readonly UiRecipeComment[];
+}
+
+/**
+ * Groups chronologically ordered recipe comments into 2-level threads (root depth 0 + replies depth 1).
+ */
+export function groupRecipeCommentThreads(
+  comments: readonly UiRecipeComment[]
+): readonly RecipeCommentThread[] {
+  const threads: Array<{ readonly root: UiRecipeComment; readonly replies: UiRecipeComment[] }> = [];
+  const byRootId = new Map<string, { readonly root: UiRecipeComment; readonly replies: UiRecipeComment[] }>();
+  const orphanReplies: UiRecipeComment[] = [];
+
+  for (const comment of comments) {
+    if (comment.depth === 0 || comment.parent_comment_id === null) {
+      const entry = { root: comment, replies: [] };
+      byRootId.set(comment.id, entry);
+      threads.push(entry);
+    } else {
+      const parentThread = byRootId.get(comment.parent_comment_id);
+      if (parentThread) {
+        parentThread.replies.push(comment);
+      } else {
+        orphanReplies.push(comment);
+      }
+    }
+  }
+
+  for (const orphan of orphanReplies) {
+    const parentThread = orphan.parent_comment_id ? byRootId.get(orphan.parent_comment_id) : undefined;
+    if (parentThread) {
+      parentThread.replies.push(orphan);
+    } else {
+      threads.push({ root: orphan, replies: [] });
+    }
+  }
+
+  return threads;
+}
+
+export function countActiveRecipeComments(comments: readonly UiRecipeComment[]): number {
+  let count = 0;
+  for (const comment of comments) {
+    if (!comment.deleted) {
+      count += 1;
+    }
+  }
+  return count;
+}
+
+export function formatDeletedCommentTombstone(deletedByRole: UiRecipeCommentDeletedByRole | null): string {
+  return deletedByRole === 'admin' ? '[Comment removed by an archive administrator]' : '[Comment removed]';
+}

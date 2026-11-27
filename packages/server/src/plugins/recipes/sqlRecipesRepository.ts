@@ -727,7 +727,7 @@ export class SqlRecipesRepository implements RecipesRepository {
              )
            )
          )
-       ORDER BY c.created_at ASC, c.id ASC`,
+       ORDER BY c.created_at ASC, c.depth ASC, c.id ASC`,
       [recipeId],
       parseRecipeCommentDbRow
     );

@@ -1905,3 +1905,616 @@ describe('createRecipesServerPlugin (Issue #50 starring, favorites, RBAC, and so
     ).toBe(404);
   });
 });
+
+describe('createRecipesServerPlugin (Issue #51 threaded comments, RBAC moderation, and zero email exposure)', () => {
+  it('supports threaded comment CRUD, bounded depth, RBAC settings, ownership/admin moderation, tombstones, and zero email leaks', async () => {
+    const { ports, recipesRepo, server, securityEvents, cookieForUser, cookieForInvite } =
+      await createTestHarness();
+
+    await ports.repository.upsertUser({
+      email: 'other@archive.example.test',
+      display_name: 'Jonah Baker',
+      role: 'editor',
+      added_by: 'admin@archive.example.test',
+      added_at: ports.clock.nowIso(),
+      last_login_at: null,
+    });
+
+    const adminCookie = await cookieForUser('admin@archive.example.test', 'admin');
+    const editorCookie = await cookieForUser('editor@archive.example.test', 'editor');
+    const otherEditorToken = await signSessionToken({
+      secret: SESSION_SECRET,
+      clock: ports.clock,
+      ttlSeconds: 3600,
+      payload: {
+        kind: 'user',
+        email: 'other@archive.example.test',
+        display_name: 'Jonah Baker',
+        role: 'editor',
+      },
+    });
+    const otherEditorCookie = `${getSessionCookieName(false)}=${otherEditorToken}`;
+    const inviteCookie = await cookieForInvite();
+
+    const agentBearer = 'kl_agent_comments_blocked_test';
+    await ports.repository.createAgentToken({
+      token_id: 'tok_agent_cmt',
+      token_hash: await sha256Hex(agentBearer),
+      label: 'Comment Bot',
+      scope: 'write_batch',
+      created_by: 'admin@archive.example.test',
+      created_at: ports.clock.nowIso(),
+      revoked_at: null,
+    });
+
+    const r1 = await recipesRepo.createRecipe({
+      id: 'rec_cmt_1',
+      data: CreateRecipeInputSchema.parse({ title: 'Spiced Gingerbread Loaf', course: 'dessert' }),
+      actor: { id: 'editor@archive.example.test', name: 'Clara Baker' },
+      nowIso: '2026-11-27T09:00:00.000Z',
+    });
+    const r2 = await recipesRepo.createRecipe({
+      id: 'rec_cmt_2',
+      data: CreateRecipeInputSchema.parse({ title: 'Buttermilk Cornbread', course: 'bread' }),
+      actor: { id: 'admin@archive.example.test', name: 'Archive Steward' },
+      nowIso: '2026-11-27T09:05:00.000Z',
+    });
+
+    // GET comments: anonymous -> 401, missing recipe -> 404, invite_viewer -> 200 with can_comment: false
+    expect(
+      (await server.fetch(new Request(`http://localhost/api/plugins/recipes/${r1.slug}/comments`))).status
+    ).toBe(401);
+    expect(
+      (
+        await server.fetch(
+          new Request('http://localhost/api/plugins/recipes/no-such-recipe/comments', {
+            headers: { cookie: editorCookie },
+          })
+        )
+      ).status
+    ).toBe(404);
+
+    const inviteEmpty = await server.fetch(
+      new Request(`http://localhost/api/plugins/recipes/${r1.slug}/comments`, {
+        headers: { cookie: inviteCookie },
+      })
+    );
+    expect(inviteEmpty.status).toBe(200);
+    expect(await inviteEmpty.json()).toEqual({
+      recipe_id: r1.id,
+      comments: [],
+      comment_count: 0,
+      permissions: { can_comment: false },
+    });
+
+    // POST comments RBAC & CSRF guards
+    expect(
+      (
+        await server.fetch(
+          new Request(`http://localhost/api/plugins/recipes/${r1.slug}/comments`, {
+            method: 'POST',
+            headers: { origin: 'http://localhost', 'content-type': 'application/json' },
+            body: JSON.stringify({ body_md: 'Anon attempt' }),
+          })
+        )
+      ).status
+    ).toBe(401);
+
+    const csrfPostRes = await server.fetch(
+      new Request(`http://localhost/api/plugins/recipes/${r1.slug}/comments`, {
+        method: 'POST',
+        headers: {
+          cookie: editorCookie,
+          origin: 'https://evil.example',
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({ body_md: 'CSRF attempt' }),
+      })
+    );
+    expect(csrfPostRes.status).toBe(403);
+    expect(securityEvents.some((ev) => ev.type === 'csrf.rejected')).toBe(true);
+
+    const invitePostRes = await server.fetch(
+      new Request(`http://localhost/api/plugins/recipes/${r1.slug}/comments`, {
+        method: 'POST',
+        headers: {
+          cookie: inviteCookie,
+          origin: 'http://localhost',
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({ body_md: 'Invite attempt' }),
+      })
+    );
+    expect(invitePostRes.status).toBe(403);
+    expect(
+      securityEvents.some((ev) => ev.type === 'auth.write.forbidden' && ev.reason === 'invite_read_only')
+    ).toBe(true);
+
+    const agentPostRes = await server.fetch(
+      new Request(`http://localhost/api/plugins/recipes/${r1.slug}/comments`, {
+        method: 'POST',
+        headers: {
+          authorization: `Bearer ${agentBearer}`,
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({ body_md: 'Bot attempt' }),
+      })
+    );
+    expect(agentPostRes.status).toBe(403);
+    expect(
+      securityEvents.some(
+        (ev) =>
+          ev.type === 'auth.write.forbidden' && ev.reason === 'member_required' && ev.actorKind === 'agent'
+      )
+    ).toBe(true);
+
+    // Validation bounds: empty and > 4000 chars rejected with 400
+    expect(
+      (
+        await server.fetch(
+          new Request(`http://localhost/api/plugins/recipes/${r1.slug}/comments`, {
+            method: 'POST',
+            headers: {
+              cookie: editorCookie,
+              origin: 'http://localhost',
+              'content-type': 'application/json',
+            },
+            body: JSON.stringify({ body_md: '   ' }),
+          })
+        )
+      ).status
+    ).toBe(400);
+    expect(
+      (
+        await server.fetch(
+          new Request(`http://localhost/api/plugins/recipes/${r1.slug}/comments`, {
+            method: 'POST',
+            headers: {
+              cookie: editorCookie,
+              origin: 'http://localhost',
+              'content-type': 'application/json',
+            },
+            body: JSON.stringify({ body_md: 'x'.repeat(4001) }),
+          })
+        )
+      ).status
+    ).toBe(400);
+
+    // Missing recipe on POST -> 404
+    expect(
+      (
+        await server.fetch(
+          new Request('http://localhost/api/plugins/recipes/missing-recipe/comments', {
+            method: 'POST',
+            headers: {
+              cookie: editorCookie,
+              origin: 'http://localhost',
+              'content-type': 'application/json',
+            },
+            body: JSON.stringify({ body_md: 'Hello' }),
+          })
+        )
+      ).status
+    ).toBe(404);
+
+    // Create top-level comment (depth 0) on r1 and verify zero raw email exposure
+    const createRootRes = await server.fetch(
+      new Request(`http://localhost/api/plugins/recipes/${r1.slug}/comments`, {
+        method: 'POST',
+        headers: {
+          cookie: editorCookie,
+          origin: 'http://localhost',
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({ body_md: 'Use **blackstrap molasses** for richer flavor.' }),
+      })
+    );
+    expect(createRootRes.status).toBe(201);
+    const createRootText = await createRootRes.text();
+    expect(createRootText).not.toContain('editor@archive.example.test');
+    const createdRoot = JSON.parse(createRootText) as {
+      comment: {
+        id: string;
+        depth: number;
+        author_name: string;
+        can_edit: boolean;
+        can_delete: boolean;
+        edited_at: string | null;
+      };
+      comment_count: number;
+    };
+    expect(createdRoot.comment_count).toBe(1);
+    expect(createdRoot.comment.depth).toBe(0);
+    expect(createdRoot.comment.author_name).toBe('Clara Baker');
+    expect(createdRoot.comment.can_edit).toBe(true);
+    expect(createdRoot.comment.can_delete).toBe(true);
+    expect(createdRoot.comment.edited_at).toBeNull();
+
+    // Replying to r1's comment under r2 fails with 400 INVALID_PARENT_COMMENT (cross-recipe parent)
+    const crossRecipeReply = await server.fetch(
+      new Request(`http://localhost/api/plugins/recipes/${r2.slug}/comments`, {
+        method: 'POST',
+        headers: {
+          cookie: otherEditorCookie,
+          origin: 'http://localhost',
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({ body_md: 'Wrong recipe', parent_comment_id: createdRoot.comment.id }),
+      })
+    );
+    expect(crossRecipeReply.status).toBe(400);
+    expect(((await crossRecipeReply.json()) as { error: { code: string } }).error.code).toBe(
+      'INVALID_PARENT_COMMENT'
+    );
+
+    // Valid depth-1 reply by another editor
+    const createReplyRes = await server.fetch(
+      new Request(`http://localhost/api/plugins/recipes/${r1.slug}/comments`, {
+        method: 'POST',
+        headers: {
+          cookie: otherEditorCookie,
+          origin: 'http://localhost',
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({
+          body_md: 'Tried it with fresh grated ginger too!',
+          parent_comment_id: createdRoot.comment.id,
+        }),
+      })
+    );
+    expect(createReplyRes.status).toBe(201);
+    const createdReply = (await createReplyRes.json()) as {
+      comment: { id: string; depth: number; parent_comment_id: string };
+      comment_count: number;
+    };
+    expect(createdReply.comment.depth).toBe(1);
+    expect(createdReply.comment.parent_comment_id).toBe(createdRoot.comment.id);
+    expect(createdReply.comment_count).toBe(2);
+
+    // Depth-2 reply (replying to a depth-1 reply) is rejected with 400 MAX_THREAD_DEPTH_EXCEEDED
+    const deepReplyRes = await server.fetch(
+      new Request(`http://localhost/api/plugins/recipes/${r1.slug}/comments`, {
+        method: 'POST',
+        headers: {
+          cookie: editorCookie,
+          origin: 'http://localhost',
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({
+          body_md: 'Too deeply nested',
+          parent_comment_id: createdReply.comment.id,
+        }),
+      })
+    );
+    expect(deepReplyRes.status).toBe(400);
+    expect(((await deepReplyRes.json()) as { error: { code: string } }).error.code).toBe(
+      'MAX_THREAD_DEPTH_EXCEEDED'
+    );
+
+    // PATCH edit: strictly owner-only (even archive admin cannot rewrite another member's comment)
+    const adminEditOtherRes = await server.fetch(
+      new Request(`http://localhost/api/plugins/recipes/${r1.slug}/comments/${createdReply.comment.id}`, {
+        method: 'PATCH',
+        headers: {
+          cookie: adminCookie,
+          origin: 'http://localhost',
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({ body_md: 'Admin rewrite attempt' }),
+      })
+    );
+    expect(adminEditOtherRes.status).toBe(403);
+    expect(securityEvents.some((ev) => ev.type === 'auth.write.forbidden' && ev.reason === 'not_owner')).toBe(
+      true
+    );
+
+    // Agent cannot PATCH comments
+    expect(
+      (
+        await server.fetch(
+          new Request(`http://localhost/api/plugins/recipes/${r1.slug}/comments/${createdReply.comment.id}`, {
+            method: 'PATCH',
+            headers: {
+              authorization: `Bearer ${agentBearer}`,
+              'content-type': 'application/json',
+            },
+            body: JSON.stringify({ body_md: 'Agent edit' }),
+          })
+        )
+      ).status
+    ).toBe(403);
+
+    // Owner PATCH succeeds and sets edited_at
+    ports.clock.advanceMs(120_000);
+    const ownerEditRes = await server.fetch(
+      new Request(`http://localhost/api/plugins/recipes/${r1.slug}/comments/${createdReply.comment.id}`, {
+        method: 'PATCH',
+        headers: {
+          cookie: otherEditorCookie,
+          origin: 'http://localhost',
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({ body_md: 'Tried it with fresh grated ginger and orange zest!' }),
+      })
+    );
+    expect(ownerEditRes.status).toBe(200);
+    const ownerEditText = await ownerEditRes.text();
+    expect(ownerEditText).not.toContain('other@archive.example.test');
+    const ownerEdited = JSON.parse(ownerEditText) as {
+      comment: { body_md: string; edited_at: string | null; can_edit: boolean; can_delete: boolean };
+    };
+    expect(ownerEdited.comment.body_md).toBe('Tried it with fresh grated ginger and orange zest!');
+    expect(ownerEdited.comment.edited_at).not.toBeNull();
+    expect(ownerEdited.comment.can_edit).toBe(true);
+    expect(ownerEdited.comment.can_delete).toBe(true);
+
+    // Missing recipe or comment on PATCH -> 404
+    expect(
+      (
+        await server.fetch(
+          new Request(
+            `http://localhost/api/plugins/recipes/missing-rec/comments/${createdReply.comment.id}`,
+            {
+              method: 'PATCH',
+              headers: {
+                cookie: otherEditorCookie,
+                origin: 'http://localhost',
+                'content-type': 'application/json',
+              },
+              body: JSON.stringify({ body_md: 'Missing recipe' }),
+            }
+          )
+        )
+      ).status
+    ).toBe(404);
+    expect(
+      (
+        await server.fetch(
+          new Request(`http://localhost/api/plugins/recipes/${r1.slug}/comments/cmt_missing`, {
+            method: 'PATCH',
+            headers: {
+              cookie: otherEditorCookie,
+              origin: 'http://localhost',
+              'content-type': 'application/json',
+            },
+            body: JSON.stringify({ body_md: 'Missing comment' }),
+          })
+        )
+      ).status
+    ).toBe(404);
+
+    // DELETE RBAC: non-owner editor cannot delete another member's comment (403)
+    const nonOwnerDelRes = await server.fetch(
+      new Request(`http://localhost/api/plugins/recipes/${r1.slug}/comments/${createdRoot.comment.id}`, {
+        method: 'DELETE',
+        headers: { cookie: otherEditorCookie, origin: 'http://localhost' },
+      })
+    );
+    expect(nonOwnerDelRes.status).toBe(403);
+
+    // Invite viewer and agent cannot delete comments
+    expect(
+      (
+        await server.fetch(
+          new Request(`http://localhost/api/plugins/recipes/${r1.slug}/comments/${createdRoot.comment.id}`, {
+            method: 'DELETE',
+            headers: { cookie: inviteCookie, origin: 'http://localhost' },
+          })
+        )
+      ).status
+    ).toBe(403);
+    expect(
+      (
+        await server.fetch(
+          new Request(`http://localhost/api/plugins/recipes/${r1.slug}/comments/${createdRoot.comment.id}`, {
+            method: 'DELETE',
+            headers: { authorization: `Bearer ${agentBearer}` },
+          })
+        )
+      ).status
+    ).toBe(403);
+
+    // Author deletes root comment while active reply exists -> 204, tombstone preserved, zero emails
+    const authorDelRoot = await server.fetch(
+      new Request(`http://localhost/api/plugins/recipes/${r1.slug}/comments/${createdRoot.comment.id}`, {
+        method: 'DELETE',
+        headers: { cookie: editorCookie, origin: 'http://localhost' },
+      })
+    );
+    expect(authorDelRoot.status).toBe(204);
+
+    // Replying to soft-deleted root comment is rejected with 400 INVALID_PARENT_COMMENT
+    expect(
+      (
+        await server.fetch(
+          new Request(`http://localhost/api/plugins/recipes/${r1.slug}/comments`, {
+            method: 'POST',
+            headers: {
+              cookie: editorCookie,
+              origin: 'http://localhost',
+              'content-type': 'application/json',
+            },
+            body: JSON.stringify({ body_md: 'Late reply', parent_comment_id: createdRoot.comment.id }),
+          })
+        )
+      ).status
+    ).toBe(400);
+
+    const listWithTombstoneRes = await server.fetch(
+      new Request(`http://localhost/api/plugins/recipes/${r1.slug}/comments`, {
+        headers: { cookie: adminCookie },
+      })
+    );
+    expect(listWithTombstoneRes.status).toBe(200);
+    const listWithTombstoneText = await listWithTombstoneRes.text();
+    expect(listWithTombstoneText).not.toContain('editor@archive.example.test');
+    expect(listWithTombstoneText).not.toContain('other@archive.example.test');
+    expect(listWithTombstoneText).not.toContain('admin@archive.example.test');
+    const listWithTombstone = JSON.parse(listWithTombstoneText) as {
+      comment_count: number;
+      comments: Array<{
+        id: string;
+        deleted: boolean;
+        deleted_by_role: string | null;
+        author_name: string | null;
+        body_md: string;
+        can_edit: boolean;
+        can_delete: boolean;
+      }>;
+    };
+    expect(listWithTombstone.comment_count).toBe(1);
+    expect(listWithTombstone.comments).toHaveLength(2);
+    expect(listWithTombstone.comments[0]).toMatchObject({
+      id: createdRoot.comment.id,
+      deleted: true,
+      deleted_by_role: 'author',
+      author_name: null,
+      body_md: '',
+      can_edit: false,
+      can_delete: false,
+    });
+    expect(listWithTombstone.comments[1]).toMatchObject({
+      id: createdReply.comment.id,
+      deleted: false,
+      author_name: 'Jonah Baker',
+      can_edit: false,
+      can_delete: true,
+    });
+
+    // Archive admin moderates (soft-deletes) the remaining reply -> 204, both tombstone and reply disappear
+    const adminModDel = await server.fetch(
+      new Request(`http://localhost/api/plugins/recipes/${r1.slug}/comments/${createdReply.comment.id}`, {
+        method: 'DELETE',
+        headers: { cookie: adminCookie, origin: 'http://localhost' },
+      })
+    );
+    expect(adminModDel.status).toBe(204);
+
+    // Deleting already-deleted comment returns 404
+    expect(
+      (
+        await server.fetch(
+          new Request(`http://localhost/api/plugins/recipes/${r1.slug}/comments/${createdReply.comment.id}`, {
+            method: 'DELETE',
+            headers: { cookie: adminCookie, origin: 'http://localhost' },
+          })
+        )
+      ).status
+    ).toBe(404);
+    expect(
+      (
+        await server.fetch(
+          new Request(
+            `http://localhost/api/plugins/recipes/missing-rec/comments/${createdReply.comment.id}`,
+            {
+              method: 'DELETE',
+              headers: { cookie: adminCookie, origin: 'http://localhost' },
+            }
+          )
+        )
+      ).status
+    ).toBe(404);
+
+    const listAfterCleanup = (await (
+      await server.fetch(
+        new Request(`http://localhost/api/plugins/recipes/${r1.slug}/comments`, {
+          headers: { cookie: editorCookie },
+        })
+      )
+    ).json()) as { comments: unknown[]; comment_count: number };
+    expect(listAfterCleanup.comments).toEqual([]);
+    expect(listAfterCleanup.comment_count).toBe(0);
+
+    // #44 plugin settings: comment_min_role='admin' blocks editor (403) and allows admin (201)
+    await server.fetch(
+      new Request(`http://localhost/api/admin/plugin-settings/${RECIPES_PLUGIN_ID}`, {
+        method: 'PUT',
+        headers: {
+          cookie: adminCookie,
+          origin: 'http://localhost',
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({
+          values: {
+            create_edit_min_role: 'editor',
+            upload_min_role: 'editor',
+            star_min_role: 'editor',
+            comment_min_role: 'admin',
+            max_photo_mb: 10,
+            max_photos_per_recipe: 12,
+            show_home_widget: true,
+          },
+        }),
+      })
+    );
+
+    const editorBlockedAdminOnly = await server.fetch(
+      new Request(`http://localhost/api/plugins/recipes/${r1.slug}/comments`, {
+        method: 'POST',
+        headers: {
+          cookie: editorCookie,
+          origin: 'http://localhost',
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({ body_md: 'Blocked for editors' }),
+      })
+    );
+    expect(editorBlockedAdminOnly.status).toBe(403);
+    expect(
+      securityEvents.some((ev) => ev.type === 'auth.write.forbidden' && ev.reason === 'insufficient_role')
+    ).toBe(true);
+
+    const adminAllowed = await server.fetch(
+      new Request(`http://localhost/api/plugins/recipes/${r1.slug}/comments`, {
+        method: 'POST',
+        headers: {
+          cookie: adminCookie,
+          origin: 'http://localhost',
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({ body_md: 'Admin note preserved.' }),
+      })
+    );
+    expect(adminAllowed.status).toBe(201);
+
+    // #44 plugin settings: comment_min_role='disabled' blocks even admin with 403 COMMENTS_DISABLED
+    await server.fetch(
+      new Request(`http://localhost/api/admin/plugin-settings/${RECIPES_PLUGIN_ID}`, {
+        method: 'PUT',
+        headers: {
+          cookie: adminCookie,
+          origin: 'http://localhost',
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({
+          values: {
+            create_edit_min_role: 'editor',
+            upload_min_role: 'editor',
+            star_min_role: 'editor',
+            comment_min_role: 'disabled',
+            max_photo_mb: 10,
+            max_photos_per_recipe: 12,
+            show_home_widget: true,
+          },
+        }),
+      })
+    );
+
+    const disabledPost = await server.fetch(
+      new Request(`http://localhost/api/plugins/recipes/${r1.slug}/comments`, {
+        method: 'POST',
+        headers: {
+          cookie: adminCookie,
+          origin: 'http://localhost',
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({ body_md: 'Blocked while disabled' }),
+      })
+    );
+    expect(disabledPost.status).toBe(403);
+    expect(((await disabledPost.json()) as { error: { code: string } }).error.code).toBe('COMMENTS_DISABLED');
+    expect(
+      securityEvents.some((ev) => ev.type === 'auth.write.forbidden' && ev.reason === 'talk_disabled')
+    ).toBe(true);
+  });
+});

@@ -20,7 +20,7 @@ import {
 } from '../components/ArchivalPrimitives.js';
 import { ArchiveProvider } from '../context/ArchiveProvider.js';
 import { KinloomApp } from '../KinloomApp.js';
-import type { UiRecipeDetail, UiRecipePhoto } from '../lib/recipesModel.js';
+import type { UiRecipeComment, UiRecipeDetail, UiRecipePhoto } from '../lib/recipesModel.js';
 import { useKinloomPluginContext, validateAndCompileUiPlugins } from './PluginContext.js';
 import { useRecipesPlugin } from './recipes/RecipesContext.js';
 import { createRecipesUiPlugin } from './recipesPlugin.js';
@@ -179,8 +179,13 @@ const SAMPLE_PHOTOS: Readonly<Record<string, readonly UiRecipePhoto[]>> = {
   ],
 };
 
-function setNativeValue(el: HTMLInputElement | HTMLSelectElement, value: string): void {
-  const proto = el instanceof HTMLSelectElement ? HTMLSelectElement.prototype : HTMLInputElement.prototype;
+function setNativeValue(el: HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement, value: string): void {
+  const proto =
+    el instanceof HTMLSelectElement
+      ? HTMLSelectElement.prototype
+      : el instanceof HTMLTextAreaElement
+        ? HTMLTextAreaElement.prototype
+        : HTMLInputElement.prototype;
   const setter = Object.getOwnPropertyDescriptor(proto, 'value')?.set;
   setter?.call(el, value);
   el.dispatchEvent(new Event('input', { bubbles: true }));
@@ -2419,6 +2424,325 @@ describe('Recipe Starring, Optimistic Rollback, and My Favorites UI (#50)', () =
     await flushUi();
     expect(container.querySelector('button[aria-label*="Oatmeal Honey Biscuits"]')).toBeNull();
     expect(container.textContent).toContain('4 stars');
+
+    act(() => {
+      root.unmount();
+    });
+    container.remove();
+  });
+
+  it('renders threaded family discussion with XSS-safe markdown, bounded replies, inline edits, accessible delete modal, tombstones, and read-only states (#51)', async () => {
+    let canCommentFlag = true;
+    let failNextMutation: string | null = null;
+    let nextId = 1;
+    let commentsState: UiRecipeComment[] = [];
+
+    const commentsClient: RecipesClient = {
+      async listRecipes() {
+        return {
+          recipes: [...SAMPLE_RECIPES],
+          total: SAMPLE_RECIPES.length,
+          limit: 40,
+          offset: 0,
+          facets: { courses: ['bread', 'dessert'], tags: ['heirloom'] },
+        };
+      },
+      async getRecipe(slugOrId) {
+        const found = SAMPLE_RECIPES.find((r) => r.slug === slugOrId || r.id === slugOrId);
+        if (!found) {
+          return null;
+        }
+        return {
+          recipe: { ...found, comment_count: commentsState.filter((c) => !c.deleted).length },
+          photos: [...(SAMPLE_PHOTOS[found.id] ?? [])],
+          viewer_has_starred: found.viewer_has_starred,
+          permissions: {
+            can_edit: false,
+            can_delete: false,
+            can_upload: false,
+            can_star: false,
+            can_comment: canCommentFlag,
+          },
+        };
+      },
+      async listRecipesByPerson() {
+        return { person_id: 'p_ada', recipes: [], total: 0 };
+      },
+      async listRecipeComments() {
+        const rootsWithActiveReplies = new Set(
+          commentsState
+            .filter((c) => !c.deleted && c.parent_comment_id !== null)
+            .map((c) => c.parent_comment_id)
+        );
+        const visible = commentsState.filter(
+          (c) => !c.deleted || (c.depth === 0 && rootsWithActiveReplies.has(c.id))
+        );
+        return {
+          recipe_id: 'rec_1',
+          comments: visible,
+          comment_count: visible.filter((c) => !c.deleted).length,
+          permissions: { can_comment: canCommentFlag },
+        };
+      },
+      async createRecipeComment(_slugOrId, input) {
+        if (failNextMutation) {
+          const msg = failNextMutation;
+          failNextMutation = null;
+          throw new Error(msg);
+        }
+        const id = `cmt_ui_${nextId}`;
+        nextId += 1;
+        const created: UiRecipeComment = {
+          id,
+          parent_comment_id: input.parent_comment_id ?? null,
+          depth: input.parent_comment_id ? 1 : 0,
+          deleted: false,
+          deleted_by_role: null,
+          author_name: input.parent_comment_id ? 'Jonah Baker' : 'Clara Baker',
+          author_key: input.parent_comment_id ? 'usr_jonah' : 'usr_clara',
+          body_md: input.body_md,
+          created_at: '2026-11-27T12:00:00.000Z',
+          edited_at: null,
+          can_edit: true,
+          can_delete: true,
+        };
+        commentsState = [...commentsState, created];
+        return {
+          comment: created,
+          comment_count: commentsState.filter((c) => !c.deleted).length,
+        };
+      },
+      async updateRecipeComment(_slugOrId, commentId, input) {
+        if (failNextMutation) {
+          const msg = failNextMutation;
+          failNextMutation = null;
+          throw new Error(msg);
+        }
+        const target = commentsState.find((c) => c.id === commentId);
+        if (!target) {
+          throw new Error('Comment not found');
+        }
+        const updated: UiRecipeComment = {
+          ...target,
+          body_md: input.body_md,
+          edited_at: '2026-11-27T12:10:00.000Z',
+        };
+        commentsState = commentsState.map((c) => (c.id === commentId ? updated : c));
+        return { comment: updated };
+      },
+      async deleteRecipeComment(_slugOrId, commentId) {
+        if (failNextMutation) {
+          const msg = failNextMutation;
+          failNextMutation = null;
+          throw new Error(msg);
+        }
+        commentsState = commentsState.map((c) =>
+          c.id === commentId
+            ? {
+                ...c,
+                deleted: true,
+                deleted_by_role: 'author',
+                author_name: null,
+                author_key: null,
+                body_md: '',
+                edited_at: null,
+                can_edit: false,
+                can_delete: false,
+              }
+            : c
+        );
+      },
+    };
+
+    const plugin = createRecipesUiPlugin({ client: commentsClient });
+    const container = document.createElement('div');
+    document.body.append(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(
+        <KinloomApp
+          key="comments-member"
+          siteConfig={SITE_CONFIG}
+          initialBundle={TEST_BUNDLE}
+          initialReadings={{ version: 1, documents: {}, event_page_map: {} }}
+          plugins={[plugin]}
+          initialEntries={['/recipes/oatmeal-honey-biscuits']}
+        />
+      );
+    });
+    await flushUi();
+
+    // Empty state copy is displayed
+    expect(container.textContent).toContain('Family Discussion');
+    expect(container.textContent).toContain('Share a memory or cooking note about this recipe.');
+
+    // Submitting empty comment flags aria-invalid and displays error alert
+    const postBtn = [...container.querySelectorAll<HTMLButtonElement>('button')].find(
+      (b) => b.textContent === 'Post Comment'
+    );
+    await act(async () => {
+      postBtn?.click();
+    });
+    await flushUi();
+    const composer = container.querySelector<HTMLTextAreaElement>('textarea');
+    expect(composer?.getAttribute('aria-invalid')).toBe('true');
+    expect(container.querySelector('[role="alert"]')?.textContent).toContain(
+      'Enter a comment before posting.'
+    );
+
+    // Post top-level comment containing XSS payloads -> rendered strictly as inert text
+    const xssPayload =
+      '**Great** biscuit tip: <script>alert(1)</script> [click](javascript:alert(1)) <img src=x onerror=alert(1)>';
+    act(() => {
+      if (composer) {
+        setNativeValue(composer, xssPayload);
+      }
+    });
+    await act(async () => {
+      postBtn?.click();
+    });
+    await flushUi();
+
+    expect(container.querySelector('script')).toBeNull();
+    expect(container.querySelector('img[src="x"]')).toBeNull();
+    expect(container.querySelector('a[href^="javascript:"]')).toBeNull();
+    expect(container.textContent).toContain('Clara Baker');
+    expect(container.textContent).toContain('1 comment');
+    expect(container.querySelector('time[title="2026-11-27T12:00:00.000Z"]')).not.toBeNull();
+
+    // Reply to root comment -> creates indented depth-1 reply with NO nested Reply button on the reply
+    const replyTrigger = container.querySelector<HTMLButtonElement>(
+      'button[aria-label="Reply to Clara Baker"]'
+    );
+    act(() => {
+      replyTrigger?.click();
+    });
+    await flushUi();
+    const replyTextarea = container.querySelector<HTMLTextAreaElement>(
+      'textarea[placeholder="Write a reply…"]'
+    );
+    const postReplyBtn = [...container.querySelectorAll<HTMLButtonElement>('button')].find(
+      (b) => b.textContent === 'Post Reply'
+    );
+    // Empty reply shows validation error
+    await act(async () => {
+      postReplyBtn?.click();
+    });
+    expect(replyTextarea?.getAttribute('aria-invalid')).toBe('true');
+
+    act(() => {
+      if (replyTextarea) {
+        setNativeValue(replyTextarea, 'Baked these for Sunday breakfast.');
+      }
+    });
+    await act(async () => {
+      postReplyBtn?.click();
+    });
+    await flushUi();
+    expect(container.textContent).toContain('Jonah Baker');
+    expect(container.textContent).toContain('Baked these for Sunday breakfast.');
+    expect(container.textContent).toContain('2 comments');
+    expect(container.querySelector('button[aria-label="Reply to Jonah Baker"]')).toBeNull();
+
+    // Inline edit on reply -> updates body and displays (edited) badge
+    const editReplyBtn = container.querySelector<HTMLButtonElement>(
+      'button[aria-label="Edit comment by Jonah Baker"]'
+    );
+    act(() => {
+      editReplyBtn?.click();
+    });
+    await flushUi();
+    const editTextarea = container.querySelector<HTMLTextAreaElement>('article textarea');
+    act(() => {
+      if (editTextarea) {
+        setNativeValue(editTextarea, 'Baked these for Sunday brunch with jam.');
+      }
+    });
+    const saveEditBtn = [...container.querySelectorAll<HTMLButtonElement>('button')].find(
+      (b) => b.textContent === 'Save Changes'
+    );
+    await act(async () => {
+      saveEditBtn?.click();
+    });
+    await flushUi();
+    expect(container.textContent).toContain('Baked these for Sunday brunch with jam.');
+    expect(container.textContent).toContain('(edited)');
+
+    // Delete root comment via accessible ArchivalModal -> leaves [Comment removed] tombstone while keeping reply
+    const deleteRootBtn = container.querySelector<HTMLButtonElement>(
+      'button[aria-label="Delete comment by Clara Baker"]'
+    );
+    act(() => {
+      deleteRootBtn?.click();
+    });
+    await flushUi();
+    const modal = container.querySelector('dialog');
+    expect(modal?.textContent).toContain('Delete this comment?');
+    expect(modal?.textContent).toContain('[Comment removed]');
+
+    const confirmDelBtn = [...(modal?.querySelectorAll<HTMLButtonElement>('button') ?? [])].find(
+      (b) => b.textContent === 'Confirm Delete'
+    );
+    await act(async () => {
+      confirmDelBtn?.click();
+    });
+    await flushUi();
+    expect(container.textContent).toContain('[Comment removed]');
+    expect(container.textContent).toContain('Baked these for Sunday brunch with jam.');
+    expect(container.textContent).toContain('1 comment');
+
+    // Mutation error surfaces accessible toast cleanly
+    failNextMutation = 'Delete failed temporarily';
+    act(() => {
+      container
+        .querySelector<HTMLButtonElement>('button[aria-label="Delete comment by Jonah Baker"]')
+        ?.click();
+    });
+    await flushUi();
+    const errModalConfirm = [...container.querySelectorAll<HTMLButtonElement>('dialog button')].find(
+      (b) => b.textContent === 'Confirm Delete'
+    );
+    await act(async () => {
+      errModalConfirm?.click();
+    });
+    await flushUi();
+    expect(container.querySelector('[role="alert"]')?.textContent).toContain('Delete failed temporarily');
+
+    // Now succeed deleting reply -> clears tombstone and returns to empty state
+    act(() => {
+      container
+        .querySelector<HTMLButtonElement>('button[aria-label="Delete comment by Jonah Baker"]')
+        ?.click();
+    });
+    await flushUi();
+    const finalModalConfirm = [...container.querySelectorAll<HTMLButtonElement>('dialog button')].find(
+      (b) => b.textContent === 'Confirm Delete'
+    );
+    await act(async () => {
+      finalModalConfirm?.click();
+    });
+    await flushUi();
+    expect(container.textContent).toContain('Share a memory or cooking note about this recipe.');
+    expect(container.textContent).toContain('0 comments');
+
+    // Read-only / non-permitted viewer sees no composer and no comment mutation buttons
+    canCommentFlag = false;
+    await act(async () => {
+      root.render(
+        <KinloomApp
+          key="comments-readonly"
+          siteConfig={SITE_CONFIG}
+          initialBundle={TEST_BUNDLE}
+          initialReadings={{ version: 1, documents: {}, event_page_map: {} }}
+          plugins={[plugin]}
+          initialEntries={['/recipes/oatmeal-honey-biscuits']}
+        />
+      );
+    });
+    await flushUi();
+    expect(container.querySelector('textarea')).toBeNull();
+    expect(container.textContent).toContain('Sign in as a family archive member to join the discussion.');
 
     act(() => {
       root.unmount();

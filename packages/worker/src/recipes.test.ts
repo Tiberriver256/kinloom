@@ -487,6 +487,126 @@ describe('Cloudflare Worker 0006_plugin_migrations, D1PluginDatabaseFactory, and
       viewer_has_starred: false,
     });
 
+    // End-to-end Miniflare Worker threaded comments CRUD, depth cap, edit, and tombstone cleanup over D1
+    const cmtRootRes = await recipesWorker.fetch(
+      new Request(`${CONTRACT_TEST_ORIGIN}/api/plugins/recipes/${createdRecipe.recipe.slug}/comments`, {
+        method: 'POST',
+        headers: { cookie, origin: CONTRACT_TEST_ORIGIN, 'content-type': 'application/json' },
+        body: JSON.stringify({ body_md: 'D1 root note about proofing.' }),
+      }),
+      env
+    );
+    expect(cmtRootRes.status).toBe(201);
+    const cmtRootText = await cmtRootRes.text();
+    expect(cmtRootText).not.toContain('admin@archive.example.test');
+    const cmtRoot = JSON.parse(cmtRootText) as {
+      comment: { id: string; depth: number };
+      comment_count: number;
+    };
+    expect(cmtRoot.comment.depth).toBe(0);
+    expect(cmtRoot.comment_count).toBe(1);
+
+    const cmtReplyRes = await recipesWorker.fetch(
+      new Request(`${CONTRACT_TEST_ORIGIN}/api/plugins/recipes/${createdRecipe.recipe.slug}/comments`, {
+        method: 'POST',
+        headers: { cookie, origin: CONTRACT_TEST_ORIGIN, 'content-type': 'application/json' },
+        body: JSON.stringify({
+          body_md: 'D1 direct reply.',
+          parent_comment_id: cmtRoot.comment.id,
+        }),
+      }),
+      env
+    );
+    expect(cmtReplyRes.status).toBe(201);
+    const cmtReply = (await cmtReplyRes.json()) as {
+      comment: { id: string; depth: number };
+      comment_count: number;
+    };
+    expect(cmtReply.comment.depth).toBe(1);
+    expect(cmtReply.comment_count).toBe(2);
+
+    // Depth-2 reply is rejected with 400 MAX_THREAD_DEPTH_EXCEEDED
+    const cmtTooDeep = await recipesWorker.fetch(
+      new Request(`${CONTRACT_TEST_ORIGIN}/api/plugins/recipes/${createdRecipe.recipe.slug}/comments`, {
+        method: 'POST',
+        headers: { cookie, origin: CONTRACT_TEST_ORIGIN, 'content-type': 'application/json' },
+        body: JSON.stringify({
+          body_md: 'Too deep.',
+          parent_comment_id: cmtReply.comment.id,
+        }),
+      }),
+      env
+    );
+    expect(cmtTooDeep.status).toBe(400);
+
+    // Edit reply
+    const cmtEditRes = await recipesWorker.fetch(
+      new Request(
+        `${CONTRACT_TEST_ORIGIN}/api/plugins/recipes/${createdRecipe.recipe.slug}/comments/${cmtReply.comment.id}`,
+        {
+          method: 'PATCH',
+          headers: { cookie, origin: CONTRACT_TEST_ORIGIN, 'content-type': 'application/json' },
+          body: JSON.stringify({ body_md: 'D1 direct reply (edited).' }),
+        }
+      ),
+      env
+    );
+    expect(cmtEditRes.status).toBe(200);
+    const cmtEdited = (await cmtEditRes.json()) as {
+      comment: { body_md: string; edited_at: string | null };
+    };
+    expect(cmtEdited.comment.body_md).toBe('D1 direct reply (edited).');
+    expect(cmtEdited.comment.edited_at).not.toBeNull();
+
+    // Soft-delete root keeps tombstone while reply is active, then deleting reply removes both
+    expect(
+      (
+        await recipesWorker.fetch(
+          new Request(
+            `${CONTRACT_TEST_ORIGIN}/api/plugins/recipes/${createdRecipe.recipe.slug}/comments/${cmtRoot.comment.id}`,
+            { method: 'DELETE', headers: { cookie, origin: CONTRACT_TEST_ORIGIN } }
+          ),
+          env
+        )
+      ).status
+    ).toBe(204);
+
+    const cmtListTombstone = (await (
+      await recipesWorker.fetch(
+        new Request(`${CONTRACT_TEST_ORIGIN}/api/plugins/recipes/${createdRecipe.recipe.slug}/comments`, {
+          headers: { cookie },
+        }),
+        env
+      )
+    ).json()) as { comments: Array<{ id: string; deleted: boolean }>; comment_count: number };
+    expect(cmtListTombstone.comment_count).toBe(1);
+    expect(cmtListTombstone.comments.map((c) => [c.id, c.deleted])).toEqual([
+      [cmtRoot.comment.id, true],
+      [cmtReply.comment.id, false],
+    ]);
+
+    expect(
+      (
+        await recipesWorker.fetch(
+          new Request(
+            `${CONTRACT_TEST_ORIGIN}/api/plugins/recipes/${createdRecipe.recipe.slug}/comments/${cmtReply.comment.id}`,
+            { method: 'DELETE', headers: { cookie, origin: CONTRACT_TEST_ORIGIN } }
+          ),
+          env
+        )
+      ).status
+    ).toBe(204);
+    const cmtListFinal = (await (
+      await recipesWorker.fetch(
+        new Request(`${CONTRACT_TEST_ORIGIN}/api/plugins/recipes/${createdRecipe.recipe.slug}/comments`, {
+          headers: { cookie },
+        }),
+        env
+      )
+    ).json()) as { comments: unknown[]; comment_count: number };
+    expect(cmtListFinal.comments).toEqual([]);
+    expect(cmtListFinal.comment_count).toBe(0);
+
     const deleteRecipeRes = await recipesWorker.fetch(
       new Request(`${CONTRACT_TEST_ORIGIN}/api/plugins/recipes/${createdRecipe.recipe.slug}`, {
         method: 'DELETE',

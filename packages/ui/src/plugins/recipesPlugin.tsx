@@ -3,7 +3,12 @@ import {
   createStaticRecipesClient,
   type RecipesClient,
 } from '../adapters/recipesClient.js';
-import { DEFAULT_RECIPES_ROUTE_BASE, type UiRecipeDetail, type UiRecipePhoto } from '../lib/recipesModel.js';
+import {
+  DEFAULT_RECIPES_ROUTE_BASE,
+  type UiRecipeComment,
+  type UiRecipeDetail,
+  type UiRecipePhoto,
+} from '../lib/recipesModel.js';
 import { KINLOOM_UI_VERSION } from '../version.js';
 import { RecipeCatalogPage, RecipeFavoritesPage } from './recipes/RecipeCatalogPage.js';
 import { RecipeDetailPage } from './recipes/RecipeDetailPage.js';
@@ -38,6 +43,8 @@ export interface RecipesUiPluginOptions {
   readonly staticRecipes?: readonly UiRecipeDetail[];
   /** Optional static photos keyed by recipe ID when using `staticRecipes`. */
   readonly staticPhotosByRecipeId?: Readonly<Record<string, readonly UiRecipePhoto[]>>;
+  /** Optional static comments keyed by recipe ID when using `staticRecipes`. */
+  readonly staticCommentsByRecipeId?: Readonly<Record<string, readonly UiRecipeComment[]>>;
   /** Controls whether the IndexPage home widget shelf is mounted. Defaults to true. */
   readonly showIndexWidget?: boolean;
   /** Optional heading override for the catalog page and home shelf. */
@@ -91,6 +98,7 @@ export function createRecipesUiPlugin(options: RecipesUiPluginOptions = {}): Kin
       ? createStaticRecipesClient({
           recipes: options.staticRecipes,
           photosByRecipeId: options.staticPhotosByRecipeId,
+          commentsByRecipeId: options.staticCommentsByRecipeId,
           showHomeWidget: showIndexWidget,
         })
       : createHttpRecipesClient({ apiBaseUrl: options.apiBaseUrl });

@@ -64,6 +64,9 @@ function compareComments(a: RecipeCommentRecord, b: RecipeCommentRecord): number
   if (createdCmp !== 0) {
     return createdCmp;
   }
+  if (a.depth !== b.depth) {
+    return a.depth - b.depth;
+  }
   return a.id.localeCompare(b.id);
 }
 

@@ -1,6 +1,9 @@
 import {
   buildRecipesListQueryString,
+  countActiveRecipeComments,
   filterStaticRecipes,
+  parseUiCreateRecipeCommentResponse,
+  parseUiRecipeCommentsListResponse,
   parseUiRecipeDetailResponse,
   parseUiRecipeListResponse,
   parseUiRecipeMutationResponse,
@@ -8,9 +11,14 @@ import {
   parseUiRecipePhotosReorderResponse,
   parseUiRecipeStarResponse,
   parseUiRecipesByPersonResponse,
+  parseUiUpdateRecipeCommentResponse,
   type RecipesListQueryParams,
+  type UiCreateRecipeCommentPayload,
+  type UiCreateRecipeCommentResponse,
   type UiCreateRecipePayload,
   type UiRecipeCardSide,
+  type UiRecipeComment,
+  type UiRecipeCommentsListResponse,
   type UiRecipeDetail,
   type UiRecipeDetailResponse,
   type UiRecipeListResponse,
@@ -20,6 +28,8 @@ import {
   type UiRecipePhotosReorderResponse,
   type UiRecipeStarResponse,
   type UiRecipesByPersonResponse,
+  type UiUpdateRecipeCommentPayload,
+  type UiUpdateRecipeCommentResponse,
   type UiUpdateRecipePayload,
 } from '../lib/recipesModel.js';
 import { ApiClientError } from './httpWiki/httpClient.js';
@@ -86,6 +96,26 @@ export interface RecipesClient {
   ): Promise<void>;
   starRecipe?(slugOrId: string, options?: { readonly signal?: AbortSignal }): Promise<UiRecipeStarResponse>;
   unstarRecipe?(slugOrId: string, options?: { readonly signal?: AbortSignal }): Promise<UiRecipeStarResponse>;
+  listRecipeComments?(
+    slugOrId: string,
+    options?: { readonly signal?: AbortSignal }
+  ): Promise<UiRecipeCommentsListResponse | null>;
+  createRecipeComment?(
+    slugOrId: string,
+    input: UiCreateRecipeCommentPayload,
+    options?: { readonly signal?: AbortSignal }
+  ): Promise<UiCreateRecipeCommentResponse>;
+  updateRecipeComment?(
+    slugOrId: string,
+    commentId: string,
+    input: UiUpdateRecipeCommentPayload,
+    options?: { readonly signal?: AbortSignal }
+  ): Promise<UiUpdateRecipeCommentResponse>;
+  deleteRecipeComment?(
+    slugOrId: string,
+    commentId: string,
+    options?: { readonly signal?: AbortSignal }
+  ): Promise<void>;
 }
 
 export interface HttpRecipesClientOptions {
@@ -297,12 +327,80 @@ export function createHttpRecipesClient(options: HttpRecipesClientOptions = {}):
         }
       );
     },
+
+    async listRecipeComments(
+      slugOrId: string,
+      reqOptions?: { readonly signal?: AbortSignal }
+    ): Promise<UiRecipeCommentsListResponse | null> {
+      try {
+        return await api.requestJson(
+          `/api/plugins/recipes/${encodeURIComponent(slugOrId)}/comments`,
+          parseUiRecipeCommentsListResponse,
+          { signal: reqOptions?.signal }
+        );
+      } catch (err) {
+        if (err instanceof ApiClientError && err.status === 404) {
+          return null;
+        }
+        throw err;
+      }
+    },
+
+    async createRecipeComment(
+      slugOrId: string,
+      input: UiCreateRecipeCommentPayload,
+      reqOptions?: { readonly signal?: AbortSignal }
+    ): Promise<UiCreateRecipeCommentResponse> {
+      return api.requestJson(
+        `/api/plugins/recipes/${encodeURIComponent(slugOrId)}/comments`,
+        parseUiCreateRecipeCommentResponse,
+        {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            body_md: input.body_md,
+            parent_comment_id: input.parent_comment_id ?? null,
+          }),
+          signal: reqOptions?.signal,
+        }
+      );
+    },
+
+    async updateRecipeComment(
+      slugOrId: string,
+      commentId: string,
+      input: UiUpdateRecipeCommentPayload,
+      reqOptions?: { readonly signal?: AbortSignal }
+    ): Promise<UiUpdateRecipeCommentResponse> {
+      return api.requestJson(
+        `/api/plugins/recipes/${encodeURIComponent(slugOrId)}/comments/${encodeURIComponent(commentId)}`,
+        parseUiUpdateRecipeCommentResponse,
+        {
+          method: 'PATCH',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ body_md: input.body_md }),
+          signal: reqOptions?.signal,
+        }
+      );
+    },
+
+    async deleteRecipeComment(
+      slugOrId: string,
+      commentId: string,
+      reqOptions?: { readonly signal?: AbortSignal }
+    ): Promise<void> {
+      await api.deleteNoContent(
+        `/api/plugins/recipes/${encodeURIComponent(slugOrId)}/comments/${encodeURIComponent(commentId)}`,
+        reqOptions
+      );
+    },
   };
 }
 
 export interface StaticRecipesClientOptions {
   readonly recipes: readonly UiRecipeDetail[];
   readonly photosByRecipeId?: Readonly<Record<string, readonly UiRecipePhoto[]>>;
+  readonly commentsByRecipeId?: Readonly<Record<string, readonly UiRecipeComment[]>>;
   readonly showHomeWidget?: boolean;
 }
 
@@ -312,6 +410,7 @@ export interface StaticRecipesClientOptions {
 export function createStaticRecipesClient(options: StaticRecipesClientOptions): RecipesClient {
   const showHomeWidget = options.showHomeWidget ?? true;
   const photosMap = options.photosByRecipeId ?? {};
+  const commentsMap = options.commentsByRecipeId ?? {};
 
   return {
     async listRecipes(params: RecipesListQueryParams = {}): Promise<UiRecipeListResponse> {
@@ -354,6 +453,20 @@ export function createStaticRecipesClient(options: StaticRecipesClientOptions): 
         person_id: personId,
         recipes: result.recipes,
         total: result.total,
+      };
+    },
+
+    async listRecipeComments(slugOrId: string): Promise<UiRecipeCommentsListResponse | null> {
+      const found = options.recipes.find((r) => r.slug === slugOrId || r.id === slugOrId);
+      if (!found) {
+        return null;
+      }
+      const comments = [...(commentsMap[found.id] ?? [])];
+      return {
+        recipe_id: found.id,
+        comments,
+        comment_count: countActiveRecipeComments(comments),
+        permissions: { can_comment: false },
       };
     },
   };
