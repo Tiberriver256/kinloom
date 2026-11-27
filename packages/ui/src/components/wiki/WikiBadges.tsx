@@ -2,7 +2,7 @@ import type { AuthorType } from '@kinloom/core';
 import { deriveCitationBadge } from '@kinloom/core';
 import type React from 'react';
 import { cx } from '../../lib/cx.js';
-import cssMod0 from './WikiSurfaces.module.css';
+import cssMod0 from './WikiChrome.module.css';
 
 const uiStyles = cssMod0;
 

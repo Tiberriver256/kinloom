@@ -1,0 +1,443 @@
+/* Wiki Badges, Account Menu, Buttons & Contributor Action Bar */
+
+/* Badges (WCAG 1.4.1 icon + label + semantic token) */
+.wiki-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+  font-family: var(--font-mono);
+  font-size: 0.74rem;
+  font-weight: 600;
+  line-height: 1.4;
+  border: 1px solid currentColor;
+}
+
+.wiki-badge-cited {
+  background: var(--badge-cited-bg);
+  color: var(--badge-cited-fg);
+}
+
+.wiki-badge-memory {
+  background: var(--badge-memory-bg);
+  color: var(--badge-memory-fg);
+}
+
+.wiki-badge-conflict {
+  background: var(--diff-del-bg);
+  color: var(--status-conflict);
+}
+
+.wiki-badge-icon {
+  flex-shrink: 0;
+}
+
+:global(.wiki-author-pill) {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+  font-family: var(--font-mono);
+  font-size: 0.74rem;
+  background: var(--surface-linen);
+  color: var(--text-primary);
+  border: 1px solid var(--border-decorative);
+}
+
+:global(.wiki-author-agent) {
+  background: var(--surface-muted);
+  color: var(--surface-header);
+  border-color: var(--border-control);
+}
+
+:global(.wiki-author-system_seed) {
+  color: var(--text-secondary);
+}
+
+.wiki-role-chip {
+  display: inline-block;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  padding: 1px 6px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-linen);
+  border: 1px solid var(--border-control);
+  color: var(--surface-header);
+}
+
+/* Quiet Account Menu inside ExplorerTopBar */
+.topbar-account {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.topbar-account-btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  height: 36px;
+  padding: 3px 10px 3px 4px;
+  background: var(--surface-card);
+  border: 1px solid var(--border-control);
+  border-radius: 999px;
+  color: var(--surface-header);
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  font-weight: 500;
+  line-height: 1;
+  cursor: pointer;
+  white-space: nowrap;
+  box-sizing: border-box;
+  transition:
+    background-color 0.14s ease,
+    border-color 0.14s ease;
+}
+
+.topbar-account-btn:hover,
+.topbar-account-btn:global(.is-open) {
+  background: var(--surface-linen);
+  border-color: var(--surface-header);
+}
+
+.topbar-account-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--surface-header);
+  color: var(--text-inverse);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: 0.02em;
+  flex-shrink: 0;
+}
+
+.topbar-account-name {
+  max-width: 150px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.2;
+}
+
+.topbar-account-caret {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-secondary);
+  flex-shrink: 0;
+}
+
+.topbar-account-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 60;
+  min-width: 220px;
+  padding: 8px;
+  background: var(--surface-card);
+  border: 1px solid var(--border-control);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-active);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.topbar-account-menu-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 8px 10px;
+  margin-bottom: 4px;
+  border-bottom: 1px solid var(--border-decorative);
+  font-size: 0.88rem;
+  color: var(--surface-header);
+}
+
+.topbar-account-item {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  padding: 8px 10px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+  transition:
+    background-color 0.14s ease,
+    color 0.14s ease;
+}
+
+.topbar-account-item:hover,
+.topbar-account-item:global(.active) {
+  background: var(--surface-linen);
+  color: var(--surface-header);
+}
+
+.topbar-account-item:global(.is-danger) {
+  color: var(--diff-del-fg);
+}
+
+.topbar-account-item:global(.is-danger):hover {
+  background: var(--diff-del-bg);
+}
+
+.topbar-account-divider {
+  height: 1px;
+  margin: 4px 0;
+  background: var(--border-decorative);
+}
+
+/* Primary & Secondary Archival Buttons (Clear Affordance for Grandma & Grandpa) */
+.wiki-btn-primary,
+.wiki-btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 46px;
+  padding: 10px 18px;
+  border-radius: var(--radius-md);
+  font-family: var(--font-mono);
+  font-size: 0.86rem;
+  font-weight: 600;
+  letter-spacing: 0.015em;
+  text-decoration: none;
+  cursor: pointer;
+  box-sizing: border-box;
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.wiki-btn-sm {
+  min-height: 38px;
+  padding: 7px 14px;
+  font-size: 0.8rem;
+}
+
+.wiki-btn-full {
+  width: 100%;
+}
+
+.wiki-btn-primary {
+  background: var(--surface-header);
+  color: var(--text-inverse);
+  border: 1px solid var(--surface-header);
+}
+
+.wiki-btn-primary:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--surface-header) 86%, var(--surface-card));
+  border-color: color-mix(in srgb, var(--surface-header) 86%, var(--surface-card));
+}
+
+.wiki-btn-primary:active:not(:disabled) {
+  background: color-mix(in srgb, var(--surface-header) 88%, var(--border-strong));
+}
+
+.wiki-btn-primary:disabled {
+  background: var(--surface-muted);
+  color: var(--text-secondary);
+  border-color: var(--border-control);
+  cursor: not-allowed;
+}
+
+.wiki-btn-secondary {
+  background: var(--surface-card);
+  color: var(--surface-header);
+  border: 1px solid var(--border-control);
+}
+
+.wiki-btn-secondary:hover:not(:disabled) {
+  background: var(--surface-linen);
+  border-color: var(--surface-header);
+}
+
+.wiki-btn-secondary:active:not(:disabled) {
+  background: var(--surface-muted);
+}
+
+.wiki-btn-secondary:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.wiki-btn-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 8px 6px;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font-family: var(--font-mono);
+  font-size: 0.84rem;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.wiki-btn-link:hover:not(:disabled) {
+  opacity: 0.82;
+}
+
+.wiki-btn-link:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* Quiet Contributor Action Bar (Person & Place Pages) */
+.wiki-action-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+  margin: 0 0 20px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border-decorative);
+}
+
+.wiki-action-primary,
+.wiki-action-secondary {
+  display: flex;
+  align-items: center;
+  gap: 8px 14px;
+  flex-wrap: wrap;
+}
+
+@media (max-width: 768px) {
+  .wiki-action-bar {
+    gap: 6px 12px;
+    margin: 0 0 14px;
+    padding: 8px 0;
+  }
+
+  .wiki-action-bar .wiki-btn-sm {
+    min-height: 44px;
+    padding: 6px 12px;
+  }
+
+  .wiki-action-bar :global(.pill-btn) {
+    min-height: 44px;
+    padding: 6px 10px;
+    display: inline-flex;
+    align-items: center;
+  }
+
+  :global(.person-header-actions) {
+    gap: 8px 10px;
+  }
+
+  :global(.person-header-actions) :global(.pill-btn),
+  :global(.person-header-actions) :global(.ink-link-btn) {
+    min-height: 44px;
+    padding: 6px 12px;
+    display: inline-flex;
+    align-items: center;
+  }
+
+  :global(.evidence-tabs) :global(.pill-btn),
+  :global(.source-action-btn),
+  :global(.source-read-btn),
+  :global(.source-toggle),
+  :global(.person-biography-toggle),
+  :global(.person-biography-sources-toggle) {
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+  }
+
+  :global(.source-action-btn),
+  :global(.source-read-btn) {
+    padding: 6px 10px;
+  }
+
+  :global(.person-pronunciation-row) :global(.pronunciation-play-btn),
+  :global(.place-pronunciation-row) :global(.pronunciation-play-btn) {
+    width: 44px;
+    height: 44px;
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  :global(.pronunciation-edit-link) {
+    min-height: 44px;
+    min-width: 44px;
+    justify-content: center;
+    padding: 4px 10px;
+  }
+
+  :global(.wiki-input),
+  select:global(.pill-btn),
+  :global(.drawer-top) :global(.pill-btn),
+  :global(.drawer-close),
+  :global(.person-family-add-btn),
+  .wiki-btn-sm,
+  :global(.wiki-pronunciation-shared-toggle),
+  :global(.wiki-pronunciation-gen-btn),
+  :global(.wiki-pronunciation-shared-save-btn),
+  :global(.wiki-radio-card),
+  :global(.wiki-checkbox-row),
+  :global(.inspector-usage-link),
+  :global(.wiki-revision-actions) :global(.pill-btn),
+  :global(.wiki-admin-row) :global(.pill-btn),
+  :global(.wiki-modal-header) :global(.pill-btn),
+  :global(.wiki-form-actions) :global(.pill-btn),
+  :global(.wiki-danger-zone) :global(.pill-btn),
+  :global(.tree-toolbar) :global(.pill-btn):not(:global(.tree-add-person-btn)),
+  :global(.place-map-box) :global(.pill-btn),
+  :global(.kinship-selector-card) :global(.pill-btn) {
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+  }
+
+  :global(.tree-toolbar) :global(.tree-add-person-btn) {
+    display: none;
+  }
+}
+
+@media (max-width: 1023px) {
+  .topbar-account-name {
+    display: none;
+  }
+
+  .topbar-account-btn {
+    height: 44px;
+    min-height: 44px;
+    min-width: 44px;
+    padding: 4px 8px 4px 6px;
+    gap: 4px;
+  }
+
+  .topbar-account-menu {
+    right: 0;
+    left: auto;
+    max-width: calc(100vw - 24px);
+  }
+
+  .topbar-account-item {
+    min-height: 44px;
+  }
+}

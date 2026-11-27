@@ -8,7 +8,7 @@ import cssMod0 from '../components/Atoms.module.css';
 import { ExplorerTopBar } from '../components/ExplorerTopBar.js';
 import { KinloomFooter } from '../components/KinloomFooter.js';
 import { CreateEntityModal } from '../components/wiki/CreateEntityModal.js';
-import cssMod1 from '../components/wiki/WikiSurfaces.module.css';
+import cssMod1 from '../components/wiki/WikiChrome.module.css';
 import { useArchiveData } from '../context/ArchiveDataContext.js';
 import { cx } from '../lib/cx.js';
 import { formatPhotoDocumentCount, formatReaderLoadError, KINLOOM_VOCABULARY } from '../lib/vocabulary.js';

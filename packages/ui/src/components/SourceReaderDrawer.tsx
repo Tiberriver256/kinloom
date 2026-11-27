@@ -17,9 +17,9 @@ import { useDialogFocusTrap } from '../lib/useDialogFocusTrap.js';
 import { KINLOOM_VOCABULARY } from '../lib/vocabulary.js';
 import cssMod1 from '../pages/IndexPage.module.css';
 import cssMod2 from '../pages/PersonPage.module.css';
-import cssMod3 from '../pages/TreeAndMapPage.module.css';
 import { PluginSlot } from '../plugins/PluginContext.js';
 import { resolveAssetUrl } from './Atoms.js';
+import cssMod3 from './CanvasSurfacePrimitives.module.css';
 import cssMod0 from './SourceReaderDrawer.module.css';
 
 const uiStyles: Readonly<Record<string, string>> = { ...cssMod0, ...cssMod1, ...cssMod2, ...cssMod3 };

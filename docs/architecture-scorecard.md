@@ -180,13 +180,71 @@ Measured at commit `2f508a2` before decomposition (`11,305` LOC across 6 files) 
 | **Modularity** | 6.8 / 10 | **9.1 / 10** | **7.7 / 10** | All 6 Iteration 2A monoliths dropped from 1,522-2,294 LOC to 33-374 LOC entrypoints with every submodule under 700 LOC (max 691 LOC). Remaining 1K+ LOC files are UI pages/drawers/CSS and `records/clients/`. |
 | **Extensibility** | 7.2 / 10 | **9.2 / 10** | **8.0 / 10** | Adding a CLI command group, audit check, integrate entity merger, or pronunciation provider now targets one focused module rather than a 1.5K-2.3K LOC file. |
 
-## Remaining Roadmap (Iterations 2B & 3 to 10/10 Repo-Wide)
+## Iteration 2B Changes (UI Pages, Entity Form Registry & CSS Module Decomposition)
 
-1. **Iteration 2B: UI Page, Drawer & CSS Monoliths (`packages/ui/src/`)**
-   - `PersonPage.tsx` (`1,542` LOC): Extract vital header, family grid, life timeline, story/narrative cards, and media gallery sections into focused view components plus pure view-model hooks.
-   - `EntityEditDrawer.tsx` (`1,533` LOC) and `CreateEntityModal.tsx` (`944` LOC): Split entity-type-specific field editors (`person`, `place`, `event`, `source`, `media`, `narrative`) behind a typed registry seam.
-   - `MapPage.tsx` (`1,432` LOC), `TreePage.tsx` (`1,327` LOC), and `EvidencePage.tsx` (`1,006` LOC): Separate map/tree controller hooks, toolbar/drawer state, and panel renderers.
-   - Split oversized CSS Modules (`TreeAndMapPage.module.css` `2,119` LOC, `WikiSurfaces.module.css` `1,679` LOC, `PersonPage.module.css` `1,068` LOC) by component boundary.
-2. **Iteration 3: CLI Archival Record Clients & Secondary Monoliths**
+Measured at commit `da30f03` before decomposition (`12,960` LOC across 10 target monoliths: 7 TSX files totaling `8,094` LOC and 3 CSS Modules totaling `4,866` LOC) and verified after decomposition with zero `any`, `@ts-ignore`, or `@ts-expect-error` escape hatches, 0 Biome errors/warnings, 0 impeccable audit findings across static/desktop/mobile, 100% Playwright E2E pass rate, and 100% backward-compatible public exports from `packages/ui/src/index.ts`.
+
+### Iteration 2B Before/After LOC Table
+
+| Target Monolith | Before LOC | After Entrypoint LOC | Extracted Submodules | Max Submodule LOC |
+| --- | ---: | ---: | --- | ---: |
+| `packages/ui/src/pages/PersonPage.tsx` | 1,542 | 471 | 6 modules under `pages/person/` | 309 |
+| `packages/ui/src/pages/MapPage.tsx` | 1,432 | 306 | 5 modules under `pages/map/` | 527 |
+| `packages/ui/src/pages/TreePage.tsx` | 1,327 | 523 | 4 modules under `pages/tree/` | 473 |
+| `packages/ui/src/pages/EvidencePage.tsx` | 1,006 | 274 | 4 modules under `pages/evidence/` | 388 |
+| `packages/ui/src/components/wiki/EntityEditDrawer.tsx` | 946 | 561 | Shared `entityForms/{fieldTypes,editRegistry,EntityDrawerChrome}` | 308 |
+| `packages/ui/src/components/wiki/CreateEntityModal.tsx` | 944 | 430 | Shared `entityForms/{fieldTypes,createRegistry}` | 448 |
+| `packages/ui/src/components/wiki/PronunciationEditorSection.tsx` | 897 | 296 | 3 modules under `components/wiki/pronunciation/` | 338 |
+| `packages/ui/src/pages/TreeAndMapPage.module.css` | 2,119 | removed | `TreePage`, `MapPage`, `TreePedigreeRoll`, `TreeFocusDrawer`, `ArchiveStatusShell`, `CanvasSurfacePrimitives` | 608 |
+| `packages/ui/src/components/wiki/WikiSurfaces.module.css` | 1,679 | removed | `WikiChrome`, `WikiAuth`, `WikiPanels`, `WikiForms` (+ domain rules moved to `ArchiveStatusShell`, `MediaGallery`, `KinshipPage`) | 512 |
+| `packages/ui/src/pages/PersonPage.module.css` | 1,068 | 479 | `PersonNarratives.module.css`, `ArchivalMarkdown.module.css`, `MediaGallery.module.css` | 261 |
+
+### 1. Entity Form Registry Seam & Wiki Drawers (`packages/ui/src/components/wiki/`)
+
+- `entityForms/fieldTypes.ts` (`240` LOC): Pure field normalizers (`asString`, `asStringArray`, `slugify`, `buildUniquePersonIdentity`, `parsePersonSex`, `parsePersonLineageGroup`, `parseKinshipRelation`), typed `CreateEntityDraft` factory, relative relation specs, and registry interfaces.
+- `entityForms/editRegistry.tsx` (`308` LOC): Typed `ENTITY_EDIT_FORM_REGISTRY` seam (`person`, `place`, `event`, `narrative`, plus `JsonFallbackEditFields`) owning per-entity field views, pronunciation capability predicates, and `prepareSubmitDraft` hooks so `EntityEditDrawer` contains zero entity-type switches.
+- `entityForms/createRegistry.tsx` (`448` LOC): Typed `ENTITY_CREATE_FORM_REGISTRY` seam (`person`, `event`, `place`, `kinship_edge`) with discriminated-union `validateAndBuild` results, shared `PersonCreateFields`, and `LinkExistingRelativeFields`.
+- `entityForms/EntityDrawerChrome.tsx` (`202` LOC): Focused status banners (`EntityDrawerStatusBanners`) and soft-delete confirmation section (`EntityDangerZone`).
+- `EntityEditDrawer.tsx` (`946` -> `561` LOC) & `CreateEntityModal.tsx` (`944` -> `430` LOC): Clean lifecycle shells preserving 100% of original exports and XState machine contracts.
+- `PronunciationEditorSection.tsx` (`897` -> `296` LOC) & `pronunciation/{pronunciationDraft.ts,SharedTokenPronunciationEditor.tsx,PersonalPronunciationOverrideForm.tsx}` (`189`, `338`, `221` LOC): Separates draft normalization and boundary API requests from shared token chip editing and personal override form rendering.
+
+### 2. Person Profile Bounded Context (`packages/ui/src/pages/PersonPage.tsx` & `pages/person/`)
+
+- `PersonPage.tsx` (`1,542` -> `471` LOC): Page shell composing archive data, timeline sync hook, wiki tabs, and modal/drawer surfaces.
+- `person/personViewModel.ts` (`264` LOC): Pure, unit-tested view-model selectors (`collectPersonMedia`, `collectPersonResidenceSpans`, `buildImmediateFamily`, `buildTimelineScrubberTicks`, `buildPersonSectionJumpItems`, `resolvePortraitLightboxState`, `buildPersonEditInitialData`, `triggerPersonGedcomDownload`).
+- `person/usePersonTimelineSync.ts` (`156` LOC): Encapsulates `?event=` URL query sync, initial card scroll, RAF scroll-spy via `pickActiveTimelineEventId`, active year updates, and pivot breadcrumb push.
+- `person/PersonProfileHeader.tsx` (`309` LOC), `person/PersonNarrativesSection.tsx` (`237` LOC, unifying duplicated Biography and Family Stories rendering), `person/PersonMediaSection.tsx` (`241` LOC, grid + keyboard lightbox), and `person/PersonLifeTimelineSection.tsx` (`130` LOC).
+
+### 3. Migration Map & Family Tree Pages (`pages/map/` & `pages/tree/`)
+
+- `MapPage.tsx` (`1,432` -> `306` LOC), `map/mapOverlayData.ts` (`144` LOC, pure MapLibre-free GeoJSON overlay and bounds builders), `map/mapLibreLayers.ts` (`313` LOC, MapLibre worker setup, paper style, and layer bindings), `map/useMigrationMapController.ts` (`527` LOC, map lifecycle, OHM date filtering, camera easing, playback loop, and keyboard shortcuts), `map/MapToolbar.tsx` (`146` LOC), and `map/MapStopDrawerAndDock.tsx` (`264` LOC).
+- `TreePage.tsx` (`1,327` -> `523` LOC), `tree/treePageHelpers.ts` (`42` LOC), `tree/useTreeViewportTransform.ts` (`473` LOC, transform RAF queue, smooth easing, inertia physics, fit/center, and zoom helpers), `tree/useTreeCanvasInteractions.ts` (`415` LOC, multi-pointer drag/pinch/double-tap, wheel zoom, and keyboard navigation), and `tree/TreeZoomControls.tsx` (`65` LOC).
+
+### 4. Evidence & Provenance Page (`pages/EvidencePage.tsx` & `pages/evidence/`)
+
+- `EvidencePage.tsx` (`1,006` -> `274` LOC): Clean tablist shell and banner metrics.
+- `evidence/evidenceViewModel.ts` (`158` LOC): Pure selectors for conflict events, discrepancy claims, unverified GEDCOM entries, citation metrics, source search/sort, and media category filtering.
+- `evidence/EvidenceDiscrepanciesTab.tsx` (`123` LOC), `evidence/EvidenceSourcesTab.tsx` (`270` LOC), and `evidence/EvidenceMediaTab.tsx` (`388` LOC, gallery + undigitized checklist + lightbox).
+- Pure view-model and registry contracts are covered directly by `packages/ui/src/pages/uiViewModels.test.ts` (`322` LOC).
+
+### 5. Layered CSS Modules Decomposition
+
+- Eliminated all three `1,000+` LOC CSS Module monoliths (`TreeAndMapPage.module.css` `2,119` LOC, `WikiSurfaces.module.css` `1,679` LOC, `PersonPage.module.css` `1,068` LOC) and resolved upward layering inversions where reusable components (`ArchivalMarkdown`, `CitationPopover`, `InlineEntityMention`, `MediaPlayer`, `SourceReaderDrawer`, `AppErrorBoundary`, `KinloomApp`, `PluginContext`) previously depended on page CSS modules.
+- Every CSS Module in `packages/ui/src/` is now strictly `< 700` LOC (max `608` LOC across all Iteration 2B split stylesheets), preserving cascade order, `>= 44px` mobile touch targets, `0px` horizontal overflow, and `@media print` fidelity.
+
+## Post-Iteration 2B Scores
+
+| Axis | Post-It. 2A (Repo-Wide) | Post-It. 2B (It. 2B Scope) | Post-It. 2B (Repo-Wide) | Key Drivers & Remaining Gaps |
+| --- | :---: | :---: | :---: | --- |
+| **Decoupling** | 8.0 / 10 | **9.6 / 10** | **8.8 / 10** | UI pages, wiki drawers, pronunciation editors, and CSS modules now depend on narrow typed seams (`ENTITY_EDIT_FORM_REGISTRY`, `ENTITY_CREATE_FORM_REGISTRY`, pure view-models, component-layer CSS); CLI record clients remain for Iteration 3. |
+| **Cohesion** | 8.0 / 10 | **9.6 / 10** | **8.8 / 10** | Each UI page separates pure view-model derivation, browser/DOM/MapLibre/pointer controllers, and focused presentational panels; Biography and Family Stories share one unified narrative renderer; non-wiki CSS moved out of `WikiSurfaces`. |
+| **Data flow** | 8.5 / 10 | **9.5 / 10** | **9.0 / 10** | Deterministic `Bundle -> Pure View-Model -> Presentational Component` pipelines across Person, Map, Tree, and Evidence pages; single typed `CreateEntityDraft` + discriminated-union payload builder replaces 18 scattered `useState` hooks. |
+| **Layering** | 8.9 / 10 | **9.8 / 10** | **9.4 / 10** | Pure UI view-models (`personViewModel`, `evidenceViewModel`, `mapOverlayData`, `entityForms/fieldTypes`) carry zero React/DOM/MapLibre runtime coupling, and component CSS modules no longer reach upward into `pages/*.module.css`. |
+| **Modularity** | 7.7 / 10 | **9.5 / 10** | **8.6 / 10** | All 10 Iteration 2B monoliths dropped cleanly under 600 LOC (TS/TSX max `561` LOC) and 700 LOC (CSS max `608` LOC). Remaining 1K+ LOC files are exclusively in `packages/cli/src/commands/records/clients/` and secondary backend/core files queued for Iteration 3. |
+| **Extensibility** | 8.0 / 10 | **9.7 / 10** | **8.9 / 10** | Adding a new entity editor or creatable entity kind is now a single typed entry in `ENTITY_EDIT_FORM_REGISTRY` / `ENTITY_CREATE_FORM_REGISTRY`; adding an evidence tab, person profile section, or map overlay layer touches one focused module. |
+
+## Remaining Roadmap (Iteration 3 to 10/10 Repo-Wide)
+
+1. **Iteration 3: CLI Archival Record Clients & Secondary Monoliths**
    - Extract shared HTTP, pagination, XML/HTML parsing, and citation formatting primitives across `packages/cli/src/commands/records/clients/*.ts` (`nara.ts` `3,981` LOC, `archive-org.ts` `3,398` LOC, `prep-scan.ts` `2,988` LOC, `ocr.ts` `2,615` LOC, `findagrave.ts` `2,185` LOC, `se-archives.ts` `2,140` LOC, `va-archives.ts` `2,100` LOC, `openarchieven.ts` `1,980` LOC, `chronam.ts` `1,817` LOC, `mn-archives.ts` `1,762` LOC, `fi-archives.ts` `1,680` LOC, plus 6 clients in the `941-1,314` LOC range).
-   - Evaluate secondary 1K+ LOC files: `packages/server/src/testing/adapterContractSuite.ts` (`1,332` LOC), `packages/core/src/patchArchive.ts` (`1,098` LOC), `packages/cli/src/commands/ops/audit-overlaps.ts` (`1,040` LOC), `packages/core/src/gedcom/slice.ts` (`1,028` LOC), `packages/server/src/adapters/inMemory.ts` (`964` LOC), and `packages/cli/src/commands/ops/media-dedupe.ts` (`956` LOC).
+   - Evaluate secondary `700-1,350` LOC files: `packages/server/src/testing/adapterContractSuite.ts` (`1,332` LOC), `packages/core/src/patchArchive.ts` (`1,098` LOC), `packages/cli/src/commands/ops/audit-overlaps.ts` (`1,040` LOC), `packages/core/src/gedcom/slice.ts` (`1,028` LOC), `packages/server/src/adapters/inMemory.ts` (`964` LOC), `packages/cli/src/commands/ops/media-dedupe.ts` (`956` LOC), and `packages/ui/src/components/ArchivalMarkdown.tsx` (`859` LOC).

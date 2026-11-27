@@ -1,7 +1,7 @@
 import type { Narrative, Person, Place } from '@kinloom/core';
 import type React from 'react';
 import { createContext, useContext, useMemo } from 'react';
-import cssMod0 from '../components/wiki/WikiSurfaces.module.css';
+import cssMod0 from '../components/ArchiveStatusShell.module.css';
 import { useArchiveData } from '../context/ArchiveDataContext.js';
 import { cx } from '../lib/cx.js';
 import type {

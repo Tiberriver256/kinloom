@@ -21,7 +21,7 @@ import {
 import { cx } from '../../lib/cx.js';
 import { formatTreeCardName } from '../../lib/treeNodeDisplay.js';
 import { KINLOOM_VOCABULARY } from '../../lib/vocabulary.js';
-import cssMod0 from '../../pages/TreeAndMapPage.module.css';
+import cssMod0 from '../../pages/TreePage.module.css';
 import { initialsOf, resolveAssetUrl } from '../Atoms.js';
 
 const uiStyles = cssMod0;

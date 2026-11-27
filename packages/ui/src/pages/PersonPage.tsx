@@ -1,28 +1,17 @@
-import type { ArchiveEvent, CoPresenceItem, MediaItem } from '@kinloom/core';
+import type { CoPresenceItem, MediaItem } from '@kinloom/core';
 import {
-  buildFilteredGedcom7,
-  buildGedcomExportFilename,
   computeRadarForEvent,
   findNearestEventForPerson,
-  formatPublicCitation,
-  formatPublicProvenance,
   getEventsForPerson,
-  getMediaPersonIds,
-  orderNarrativeSources,
   partitionPersonNarratives,
-  resolvePersonPronunciation,
 } from '@kinloom/core';
 import type React from 'react';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { ArchivalMarkdown, formatNarrativeDateSpan } from '../components/ArchivalMarkdown.js';
-import { EmptyStateNotice, resolveAssetUrl } from '../components/Atoms.js';
+import { useCallback, useMemo, useState } from 'react';
+import { Link, useNavigate, useParams } from 'react-router-dom';
+import { resolveAssetUrl } from '../components/Atoms.js';
 import cssMod0 from '../components/Atoms.module.css';
 import { ExplorerTopBar } from '../components/ExplorerTopBar.js';
 import { KinloomFooter } from '../components/KinloomFooter.js';
-import { MediaPlayer } from '../components/MediaPlayer.js';
-import { MilestoneStoryCard } from '../components/MilestoneStoryCard.js';
-import { PronunciationBadge } from '../components/PronunciationBadge.js';
 import cssMod1 from '../components/SourceReaderDrawer.module.css';
 import { CreateEntityModal, type RelativeCreateContext } from '../components/wiki/CreateEntityModal.js';
 import { EntityEditDrawer, type EntityEditDrawerSection } from '../components/wiki/EntityEditDrawer.js';
@@ -30,42 +19,42 @@ import { MediaUploaderModal } from '../components/wiki/MediaUploaderModal.js';
 import { RevisionHistoryPanel } from '../components/wiki/RevisionHistoryPanel.js';
 import { TalkPanel } from '../components/wiki/TalkPanel.js';
 import { WikiActionBar, type WikiEntityTab } from '../components/wiki/WikiActionBar.js';
-import { CitationBadge } from '../components/wiki/WikiBadges.js';
-import cssMod2 from '../components/wiki/WikiSurfaces.module.css';
 import { useArchiveData } from '../context/ArchiveDataContext.js';
 import { useArchiveUi } from '../context/ArchiveUiContext.js';
 import { cx } from '../lib/cx.js';
-import { scrollBehaviorForMotion } from '../lib/keyboardNav.js';
-import {
-  buildEventQueryUrl,
-  pickActiveTimelineEventId,
-  shouldRunInitialEventScroll,
-} from '../lib/timelineScroll.js';
-import { useDialogFocusTrap } from '../lib/useDialogFocusTrap.js';
-import { formatReaderLoadError, KINLOOM_VOCABULARY, MEDIA_KIND_LABELS } from '../lib/vocabulary.js';
+import { formatReaderLoadError, KINLOOM_VOCABULARY } from '../lib/vocabulary.js';
 import { PluginSlot } from '../plugins/PluginContext.js';
 import cssMod3 from './IndexPage.module.css';
 import cssMod4 from './NotFoundPage.module.css';
 import cssMod5 from './PersonPage.module.css';
+import { PersonLifeTimelineSection } from './person/PersonLifeTimelineSection.js';
+import { PersonMediaLightbox, PersonMediaSection } from './person/PersonMediaSection.js';
+import { PersonNarrativesSection } from './person/PersonNarrativesSection.js';
+import { PersonProfileHeader } from './person/PersonProfileHeader.js';
+import {
+  buildImmediateFamily,
+  buildPersonEditInitialData,
+  buildPersonSectionJumpItems,
+  buildTimelineScrubberTicks,
+  collectPersonMedia,
+  collectPersonResidenceSpans,
+  countUniqueEventPlaces,
+  type PersonLightboxState,
+  resolvePortraitLightboxState,
+  triggerPersonGedcomDownload,
+} from './person/personViewModel.js';
+import { usePersonTimelineSync } from './person/usePersonTimelineSync.js';
 
 const uiStyles: Readonly<Record<string, string>> = {
   ...cssMod0,
   ...cssMod1,
-  ...cssMod2,
   ...cssMod3,
   ...cssMod4,
   ...cssMod5,
 };
 
-type PersonLightboxState =
-  | { kind: 'closed' }
-  | { kind: 'gallery'; index: number }
-  | { kind: 'single'; media: MediaItem };
-
 export const PersonPage: React.FC = () => {
   const { slug } = useParams<{ slug: string }>();
-  const location = useLocation();
-  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
 
   const {
@@ -82,11 +71,10 @@ export const PersonPage: React.FC = () => {
     pronunciations,
     reloadArchive,
   } = useArchiveData();
-  const { setActiveYear, pushPivot, openSourceInspector } = useArchiveUi();
+  const { openSourceInspector } = useArchiveUi();
 
   const person = slug ? peopleBySlug.get(slug) : undefined;
 
-  const [activeEventId, setActiveEventId] = useState<string | null>(searchParams.get('event'));
   const [lightbox, setLightbox] = useState<PersonLightboxState>({ kind: 'closed' });
   const [showAllMedia, setShowAllMedia] = useState(false);
   const [showAllNarratives, setShowAllNarratives] = useState(false);
@@ -116,57 +104,43 @@ export const PersonPage: React.FC = () => {
     setRelativeModal(null);
   }
 
-  const cardRefs = useRef<Map<string, HTMLElement>>(new Map());
-  const completedInitialScrollNavKeyRef = useRef<string | null>(null);
+  const branchLabelById = useMemo(
+    () => new Map(siteConfig.branches.map((branch) => [branch.id, branch.label])),
+    [siteConfig.branches]
+  );
 
-  const branchLabelById = useMemo(() => {
-    const map = new Map<string, string>();
-    for (const branch of siteConfig.branches) {
-      map.set(branch.id, branch.label);
-    }
-    return map;
-  }, [siteConfig.branches]);
+  const personEvents = useMemo(
+    () => (bundle && person ? getEventsForPerson(bundle, person.id) : []),
+    [bundle, person]
+  );
 
-  const personEvents = useMemo(() => {
-    if (!bundle || !person) {
-      return [];
-    }
-    return getEventsForPerson(bundle, person.id);
-  }, [bundle, person]);
+  const personResidenceSpans = useMemo(
+    () => (bundle && person ? collectPersonResidenceSpans(bundle, person.id) : []),
+    [bundle, person]
+  );
 
-  const personResidenceSpans = useMemo(() => {
-    if (!bundle || !person) {
-      return [];
-    }
-    return bundle.residence_spans
-      .filter((span) => span.person_id === person.id)
-      .toSorted((a, b) => a.time_min - b.time_min);
-  }, [bundle, person]);
+  const personMedia = useMemo(
+    () => (bundle && person ? collectPersonMedia(bundle, person.id) : []),
+    [bundle, person]
+  );
 
-  const personMedia: MediaItem[] = useMemo(() => {
-    if (!bundle || !person) {
-      return [];
-    }
-    const items = (bundle.media || []).filter((m) => getMediaPersonIds(m).includes(person.id));
-    const order: Record<string, number> = {
-      portrait: 0,
-      family_photo: 1,
-      record_scan: 2,
-      headstone: 3,
-      document_scan: 4,
-      milestone: 5,
-      video_story: 6,
-      audio_oral_history: 7,
-    };
-    return [...items].toSorted((a, b) => (order[a.kind] ?? 9) - (order[b.kind] ?? 9));
-  }, [bundle, person]);
+  const { biographies: personBiographies, familyStories } = useMemo(
+    () =>
+      bundle && person
+        ? partitionPersonNarratives(bundle.narratives ?? [], person.id)
+        : { biographies: [], familyStories: [] },
+    [bundle, person]
+  );
 
-  const { biographies: personBiographies, familyStories } = useMemo(() => {
-    if (!bundle || !person) {
-      return { biographies: [], familyStories: [] };
-    }
-    return partitionPersonNarratives(bundle.narratives ?? [], person.id);
-  }, [bundle, person]);
+  const immediateFamily = useMemo(
+    () =>
+      bundle && person
+        ? buildImmediateFamily(bundle, person.id, peopleById)
+        : { parents: [], spouses: [], children: [], livingSpouseCount: 0, livingChildCount: 0 },
+    [bundle, person, peopleById]
+  );
+
+  const { activeEvent, setActiveEventId, cardRefs } = usePersonTimelineSync(slug, person, personEvents);
 
   const toggleNarrativeBody = useCallback((narrativeId: string) => {
     setExpandedNarrativeIds((prev) => {
@@ -192,261 +166,18 @@ export const PersonPage: React.FC = () => {
     });
   }, []);
 
-  const immediateFamily = useMemo(() => {
-    if (!bundle || !person) {
-      return {
-        parents: [] as { id: string; slug: string; name: string; years: string }[],
-        spouses: [] as { id: string; slug: string; name: string; years: string }[],
-        children: [] as { id: string; slug: string; name: string; years: string }[],
-        livingSpouseCount: 0,
-        livingChildCount: 0,
-      };
-    }
-    const parentIds = new Set<string>();
-    const spouseIds = new Set<string>();
-    const childIds = new Set<string>();
-
-    for (const k of bundle.kinship) {
-      if (k.relation === 'parent' && k.to === person.id) {
-        parentIds.add(k.from);
-      } else if (k.relation === 'child' && k.from === person.id) {
-        parentIds.add(k.to);
-      } else if (k.relation === 'parent' && k.from === person.id) {
-        childIds.add(k.to);
-      } else if (k.relation === 'child' && k.to === person.id) {
-        childIds.add(k.from);
-      } else if (k.relation === 'spouse' && k.from === person.id) {
-        spouseIds.add(k.to);
-      } else if (k.relation === 'spouse' && k.to === person.id) {
-        spouseIds.add(k.from);
-      }
-    }
-
-    const toEntries = (
-      ids: Set<string>
-    ): { visible: { id: string; slug: string; name: string; years: string }[]; livingCount: number } => {
-      const visible: { id: string; slug: string; name: string; years: string; sortYear: number }[] = [];
-      let livingCount = 0;
-      for (const id of ids) {
-        const rel = peopleById.get(id);
-        if (!rel) {
-          continue;
-        }
-        if (rel.is_living || rel.full_name === 'Living') {
-          livingCount += 1;
-          continue;
-        }
-        visible.push({
-          id: rel.id,
-          slug: rel.slug,
-          name: rel.full_name,
-          years: `${rel.birth_year || '?'}–${rel.death_year || '?'}`,
-          sortYear: rel.birth_year ?? 9999,
-        });
-      }
-      visible.sort((a, b) => a.sortYear - b.sortYear || a.name.localeCompare(b.name));
-      return {
-        visible: visible.map(({ id, slug: entrySlug, name, years }) => ({
-          id,
-          slug: entrySlug,
-          name,
-          years,
-        })),
-        livingCount,
-      };
-    };
-
-    const parents = toEntries(parentIds);
-    const spouses = toEntries(spouseIds);
-    const children = toEntries(childIds);
-    return {
-      parents: parents.visible,
-      spouses: spouses.visible,
-      children: children.visible,
-      livingSpouseCount: spouses.livingCount,
-      livingChildCount: children.livingCount,
-    };
-  }, [bundle, person, peopleById]);
-
   const handleOpenCitationMedia = useCallback(
     (media: MediaItem) => {
       const idx = personMedia.findIndex((item) => item.id === media.id);
-      if (idx !== -1) {
-        setLightbox({ kind: 'gallery', index: idx });
-      } else {
-        setLightbox({ kind: 'single', media });
-      }
+      setLightbox(idx !== -1 ? { kind: 'gallery', index: idx } : { kind: 'single', media });
     },
     [personMedia]
   );
 
   const resolveCitationMediaUrl = useCallback(
-    (media: MediaItem): string | null => {
-      const resolved = resolveAssetUrl(media.thumb_file || media.file, baseUrl);
-      return resolved || null;
-    },
+    (media: MediaItem): string | null => resolveAssetUrl(media.thumb_file || media.file, baseUrl) || null,
     [baseUrl]
   );
-
-  const lightboxCloseBtnRef = useRef<HTMLButtonElement | null>(null);
-  const lightboxDialogRef = useDialogFocusTrap({
-    open: lightbox.kind !== 'closed',
-    onClose: () => {
-      setLightbox({ kind: 'closed' });
-    },
-    initialFocusRef: lightboxCloseBtnRef,
-  });
-
-  useEffect(() => {
-    if (lightbox.kind === 'closed') {
-      return undefined;
-    }
-    const onKey = (e: KeyboardEvent): void => {
-      if (e.key === 'ArrowRight' && personMedia.length > 0) {
-        setLightbox((prev) =>
-          prev.kind === 'gallery' ? { kind: 'gallery', index: (prev.index + 1) % personMedia.length } : prev
-        );
-      } else if (e.key === 'ArrowLeft' && personMedia.length > 0) {
-        setLightbox((prev) =>
-          prev.kind === 'gallery'
-            ? {
-                kind: 'gallery',
-                index: (prev.index - 1 + personMedia.length) % personMedia.length,
-              }
-            : prev
-        );
-      }
-    };
-    window.addEventListener('keydown', onKey);
-    return (): void => {
-      window.removeEventListener('keydown', onKey);
-    };
-  }, [lightbox.kind, personMedia.length]);
-
-  useEffect(() => {
-    const params = new URLSearchParams(location.search);
-    const qEvt = params.get('event');
-    if (qEvt && personEvents.some((e) => e.id === qEvt)) {
-      setActiveEventId(qEvt);
-    } else if (personEvents.length > 0) {
-      setActiveEventId(personEvents[0].id);
-    } else {
-      setActiveEventId(null);
-    }
-  }, [location.search, personEvents]);
-
-  useEffect(() => {
-    const params = new URLSearchParams(location.search);
-    const qEvt = params.get('event');
-    const navKey = `${slug || ''}:${location.key}`;
-    const eventIds = personEvents.map((e) => e.id);
-
-    if (
-      shouldRunInitialEventScroll({
-        navKey,
-        completedNavKey: completedInitialScrollNavKeyRef.current,
-        targetEventId: qEvt,
-        eventIds,
-      })
-    ) {
-      const el = qEvt ? cardRefs.current.get(qEvt) : undefined;
-      if (el) {
-        completedInitialScrollNavKeyRef.current = navKey;
-        el.scrollIntoView({ behavior: 'auto', block: 'start' });
-      }
-    } else if (personEvents.length > 0 && completedInitialScrollNavKeyRef.current !== navKey) {
-      completedInitialScrollNavKeyRef.current = navKey;
-    }
-  }, [slug, location.key, location.search, personEvents]);
-
-  useEffect(() => {
-    if (personEvents.length === 0) {
-      return undefined;
-    }
-
-    let rafId: number | null = null;
-
-    const syncFromScroll = (): void => {
-      rafId = null;
-      const metrics: { id: string; top: number; bottom: number }[] = [];
-      for (const ev of personEvents) {
-        const el = cardRefs.current.get(ev.id);
-        if (!el) {
-          continue;
-        }
-        const rect = el.getBoundingClientRect();
-        metrics.push({ id: ev.id, top: rect.top, bottom: rect.bottom });
-      }
-      if (metrics.length === 0) {
-        return;
-      }
-
-      const viewportHeight = window.innerHeight || 800;
-      const isMobile = window.innerWidth < 768;
-      const topOffset = isMobile ? 128 : 58;
-      const bottomOffset = isMobile ? 52 : 0;
-      const usableHeight = Math.max(120, viewportHeight - topOffset - bottomOffset);
-      const anchorY = topOffset + usableHeight * 0.28;
-      const maxScrollY = Math.max(0, document.documentElement.scrollHeight - viewportHeight);
-
-      const nextId = pickActiveTimelineEventId(metrics, {
-        anchorY,
-        scrollY: window.scrollY,
-        maxScrollY,
-      });
-
-      if (nextId) {
-        setActiveEventId((prev) => (prev === nextId ? prev : nextId));
-      }
-    };
-
-    const scheduleSync = (): void => {
-      if (rafId !== null) {
-        return;
-      }
-      rafId = window.requestAnimationFrame(syncFromScroll);
-    };
-
-    window.addEventListener('scroll', scheduleSync, { passive: true });
-    window.addEventListener('resize', scheduleSync, { passive: true });
-
-    return (): void => {
-      window.removeEventListener('scroll', scheduleSync);
-      window.removeEventListener('resize', scheduleSync);
-      if (rafId !== null) {
-        window.cancelAnimationFrame(rafId);
-      }
-    };
-  }, [personEvents]);
-
-  const activeEvent: ArchiveEvent | null = useMemo(() => {
-    if (!activeEventId) {
-      return personEvents[0] || null;
-    }
-    return personEvents.find((e) => e.id === activeEventId) || personEvents[0] || null;
-  }, [activeEventId, personEvents]);
-
-  useEffect(() => {
-    if (!activeEvent) {
-      setActiveYear(null);
-      return;
-    }
-    setActiveYear(activeEvent.year);
-    if (!person || !window.location.pathname.endsWith(`/person/${person.slug}`)) {
-      return;
-    }
-    const nextUrl = buildEventQueryUrl(window.location.href, activeEvent.id);
-    if (nextUrl) {
-      window.history.replaceState(window.history.state, '', nextUrl);
-    }
-  }, [activeEvent, person, setActiveYear]);
-
-  // biome-ignore lint/correctness/useExhaustiveDependencies: push pivot breadcrumb only when person slug changes
-  useEffect(() => {
-    if (person) {
-      pushPivot({ slug: person.slug, name: person.full_name, year: activeEvent?.year ?? null });
-    }
-  }, [person?.slug]);
 
   const radar = useMemo(() => {
     if (!bundle || !person) {
@@ -482,51 +213,10 @@ export const PersonPage: React.FC = () => {
     if (!bundle || !person) {
       return;
     }
-    const gedcomText = buildFilteredGedcom7({
-      people: [person],
-      bundle,
-      placesById,
-      sourcesById,
-      siteConfig,
-      filterDescription: `Person Profile: ${person.full_name}`,
-    });
-    const filename = buildGedcomExportFilename({
-      familySlug: person.slug,
-      lineageFilter: 'all',
-      selectedEra: 'all',
-      onlyWithMedia: false,
-      query: '',
-      sortBy: 'featured',
-      count: 1,
-    });
-    const blob = new Blob([gedcomText], { type: 'text/vnd.familysearch.gedcom;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = filename;
-    document.body.append(link);
-    link.click();
-    link.remove();
-    window.setTimeout(() => {
-      URL.revokeObjectURL(url);
-    }, 1000);
+    triggerPersonGedcomDownload({ person, bundle, placesById, sourcesById, siteConfig });
   }, [bundle, person, placesById, sourcesById, siteConfig]);
 
-  const scrubberItems = useMemo(() => {
-    const seen = new Set<number>();
-    const ticks: { decade: number; eventId: string }[] = [];
-    for (const ev of personEvents) {
-      if (ev.year === null) {
-        continue;
-      }
-      const dec = Math.floor(ev.year / 10) * 10;
-      if (!seen.has(dec)) {
-        seen.add(dec);
-        ticks.push({ decade: dec, eventId: ev.id });
-      }
-    }
-    return ticks;
-  }, [personEvents]);
+  const scrubberItems = useMemo(() => buildTimelineScrubberTicks(personEvents), [personEvents]);
 
   if (loading) {
     return (
@@ -538,6 +228,7 @@ export const PersonPage: React.FC = () => {
       </div>
     );
   }
+
   if (error || !bundle || !person) {
     return (
       <div>
@@ -567,32 +258,16 @@ export const PersonPage: React.FC = () => {
     );
   }
 
-  const routePlaceCount = new Set(
-    personEvents.map((ev) => ev.place_id).filter((id): id is string => Boolean(id))
-  ).size;
+  const routePlaceCount = countUniqueEventPlaces(personEvents);
   const alsoHere = [...radar.coPresenceVisible, ...radar.coPresenceOverflow];
   const branchLabel = person.branch ? (branchLabelById.get(person.branch) ?? person.branch) : null;
-
-  const sectionJumpItems = [
-    personBiographies.length > 0
-      ? { id: 'person-biography', label: KINLOOM_VOCABULARY.person.biographyHeading }
-      : null,
-    familyStories.length > 0
-      ? {
-          id: 'person-family-stories',
-          label: `${KINLOOM_VOCABULARY.person.familyStoriesHeading} (${familyStories.length})`,
-        }
-      : null,
-    personMedia.length > 0
-      ? {
-          id: 'person-media',
-          label: `${KINLOOM_VOCABULARY.person.photosAndDocumentsHeading} (${personMedia.length})`,
-        }
-      : null,
-    personEvents.length > 0
-      ? { id: 'person-timeline', label: `Life Timeline (${personEvents.length})` }
-      : null,
-  ].filter((item): item is { id: string; label: string } => item !== null);
+  const isReadingView = wikiTab !== 'history' && wikiTab !== 'talk';
+  const sectionJumpItems = buildPersonSectionJumpItems({
+    biographyCount: personBiographies.length,
+    familyStoryCount: familyStories.length,
+    mediaCount: personMedia.length,
+    eventCount: personEvents.length,
+  });
 
   return (
     <div>
@@ -600,297 +275,30 @@ export const PersonPage: React.FC = () => {
 
       <div className={cx(uiStyles, 'explorer-split')}>
         <main id="main-content" className={cx(uiStyles, 'narrative-pane')}>
-          <header className={cx(uiStyles, 'person-header')}>
-            <div className={cx(uiStyles, 'person-header-top')}>
-              <div
-                className={cx(
-                  uiStyles,
-                  `person-header-identity${person.portrait_url ? ' has-portrait' : ''}`
-                )}
-              >
-                {person.portrait_url && (
-                  <button
-                    type="button"
-                    className={cx(uiStyles, 'person-portrait-btn')}
-                    onClick={() => {
-                      const idx = personMedia.findIndex((m) => m.file === person.portrait_url);
-                      if (idx !== -1) {
-                        setLightbox({ kind: 'gallery', index: idx });
-                      } else if (personMedia.length > 0) {
-                        setLightbox({ kind: 'gallery', index: 0 });
-                      } else if (person.portrait_url) {
-                        setLightbox({
-                          kind: 'single',
-                          media: {
-                            id: `portrait-${person.id}`,
-                            kind: 'portrait',
-                            file: person.portrait_url,
-                            caption: `Archival portrait of ${person.full_name}`,
-                            person_id: person.id,
-                            person_name: person.full_name,
-                            person_slug: person.slug,
-                          },
-                        });
-                      }
-                    }}
-                    title="Click to zoom archival portrait"
-                  >
-                    <img
-                      src={resolveAssetUrl(person.portrait_url, baseUrl)}
-                      alt={`Archival portrait of ${person.full_name}`}
-                      className={cx(uiStyles, 'person-portrait-img')}
-                    />
-                  </button>
-                )}
-                <h1 className={cx(uiStyles, 'person-header-title')}>{person.full_name}</h1>
-                {!person.is_living &&
-                  person.full_name !== 'Living' &&
-                  (() => {
-                    const effectivePronunciation = resolvePersonPronunciation(person, pronunciations);
-                    const isFullCoverage = effectivePronunciation?.coverage === 'full';
-                    const badgeLabel = isFullCoverage
-                      ? person.full_name
-                      : effectivePronunciation?.matchedPart || person.surname || person.full_name;
-                    if (!effectivePronunciation && !capabilities.canEdit) {
-                      return null;
-                    }
-                    return (
-                      <div className={cx(uiStyles, 'person-pronunciation-row')}>
-                        {effectivePronunciation ? (
-                          <>
-                            <PronunciationBadge
-                              pronunciation={effectivePronunciation}
-                              label={badgeLabel}
-                              coverage={effectivePronunciation.coverage}
-                              matchedPart={effectivePronunciation.matchedPart}
-                              baseUrl={baseUrl}
-                            />
-                            {capabilities.canEdit && (
-                              <button
-                                type="button"
-                                className={cx(uiStyles, 'pronunciation-edit-link print-hide')}
-                                onClick={() => {
-                                  setEditInitialSection('pronunciation');
-                                  setWikiTab('edit');
-                                }}
-                                aria-label={`Edit pronunciation for ${person.full_name}`}
-                              >
-                                {KINLOOM_VOCABULARY.person.editPronunciation}
-                              </button>
-                            )}
-                          </>
-                        ) : (
-                          <button
-                            type="button"
-                            className={cx(uiStyles, 'pronunciation-edit-link print-hide')}
-                            onClick={() => {
-                              setEditInitialSection('pronunciation');
-                              setWikiTab('edit');
-                            }}
-                          >
-                            {KINLOOM_VOCABULARY.person.addPronunciation}
-                          </button>
-                        )}
-                      </div>
-                    );
-                  })()}
-                <div className={cx(uiStyles, 'person-header-dates')}>
-                  <span>
-                    {person.birth_edtf || '?'} — {person.death_edtf || (person.is_living ? 'Living' : '?')}
-                  </span>
-                  {branchLabel && <span className={cx(uiStyles, 'person-branch-badge')}>{branchLabel}</span>}
-                  {person.has_primary_source !== undefined && (
-                    <CitationBadge hasPrimarySource={person.has_primary_source} />
-                  )}
-                </div>
-                {person.alt_names.length > 0 && (
-                  <div className={cx(uiStyles, 'person-alt-names')}>
-                    {KINLOOM_VOCABULARY.person.alsoRecordedAs} {person.alt_names.join(', ')}
-                  </div>
-                )}
-              </div>
-              <div className={cx(uiStyles, 'person-header-actions print-hide')}>
-                {routePlaceCount > 1 && (
-                  <Link to={`/map?person=${person.slug}`} className={cx(uiStyles, 'ink-link-btn')}>
-                    Their route
-                  </Link>
-                )}
-                <button
-                  type="button"
-                  className={cx(uiStyles, 'pill-btn print-hide')}
-                  onClick={handleExportPersonGedcom}
-                  title={`Download family tree file for ${person.full_name}`}
-                >
-                  Export GEDCOM
-                </button>
-              </div>
-            </div>
-            {(capabilities.canEdit ||
-              immediateFamily.parents.length > 0 ||
-              immediateFamily.spouses.length > 0 ||
-              immediateFamily.children.length > 0 ||
-              immediateFamily.livingSpouseCount > 0 ||
-              immediateFamily.livingChildCount > 0) && (
-              <div
-                className={cx(uiStyles, 'person-family-strip')}
-                role="region"
-                aria-label="Immediate family connections"
-              >
-                {(immediateFamily.parents.length > 0 || capabilities.canEdit) && (
-                  <div className={cx(uiStyles, 'person-family-row')}>
-                    <span className={cx(uiStyles, 'person-family-label')}>Parents</span>
-                    <div className={cx(uiStyles, 'person-family-chips')}>
-                      {immediateFamily.parents.map((rel) => (
-                        <Link
-                          key={rel.id}
-                          to={`/person/${rel.slug}`}
-                          className={cx(uiStyles, 'person-family-chip')}
-                        >
-                          {rel.name} <span>({rel.years})</span>
-                        </Link>
-                      ))}
-                      {capabilities.canEdit && (
-                        <button
-                          type="button"
-                          className={cx(uiStyles, 'person-family-add-btn print-hide')}
-                          onClick={() => {
-                            setRelativeModal({
-                              anchorPersonId: person.id,
-                              anchorPersonName: person.full_name,
-                              relation: 'parent',
-                            });
-                          }}
-                        >
-                          + Add parent
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                )}
-                {(immediateFamily.spouses.length > 0 ||
-                  immediateFamily.livingSpouseCount > 0 ||
-                  capabilities.canEdit) && (
-                  <div className={cx(uiStyles, 'person-family-row')}>
-                    <span className={cx(uiStyles, 'person-family-label')}>
-                      {immediateFamily.spouses.length + immediateFamily.livingSpouseCount > 1
-                        ? 'Spouses'
-                        : 'Spouse'}
-                    </span>
-                    <div className={cx(uiStyles, 'person-family-chips')}>
-                      {immediateFamily.spouses.map((rel) => (
-                        <Link
-                          key={rel.id}
-                          to={`/person/${rel.slug}`}
-                          className={cx(uiStyles, 'person-family-chip')}
-                        >
-                          {rel.name} <span>({rel.years})</span>
-                        </Link>
-                      ))}
-                      {immediateFamily.livingSpouseCount > 0 && (
-                        <span className={cx(uiStyles, 'person-family-chip is-redacted')}>
-                          {immediateFamily.livingSpouseCount} living spouse (redacted)
-                        </span>
-                      )}
-                      {capabilities.canEdit && (
-                        <button
-                          type="button"
-                          className={cx(uiStyles, 'person-family-add-btn print-hide')}
-                          onClick={() => {
-                            setRelativeModal({
-                              anchorPersonId: person.id,
-                              anchorPersonName: person.full_name,
-                              relation: 'spouse',
-                            });
-                          }}
-                        >
-                          + Add spouse
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                )}
-                {(immediateFamily.children.length > 0 ||
-                  immediateFamily.livingChildCount > 0 ||
-                  capabilities.canEdit) && (
-                  <div className={cx(uiStyles, 'person-family-row')}>
-                    <span className={cx(uiStyles, 'person-family-label')}>Children</span>
-                    <div className={cx(uiStyles, 'person-family-chips')}>
-                      {immediateFamily.children.map((rel) => (
-                        <Link
-                          key={rel.id}
-                          to={`/person/${rel.slug}`}
-                          className={cx(uiStyles, 'person-family-chip')}
-                        >
-                          {rel.name} <span>({rel.years})</span>
-                        </Link>
-                      ))}
-                      {immediateFamily.livingChildCount > 0 && (
-                        <span className={cx(uiStyles, 'person-family-chip is-redacted')}>
-                          +{immediateFamily.livingChildCount} living{' '}
-                          {immediateFamily.livingChildCount === 1 ? 'child' : 'children'} (redacted)
-                        </span>
-                      )}
-                      {capabilities.canEdit && (
-                        <button
-                          type="button"
-                          className={cx(uiStyles, 'person-family-add-btn print-hide')}
-                          onClick={() => {
-                            setRelativeModal({
-                              anchorPersonId: person.id,
-                              anchorPersonName: person.full_name,
-                              relation: 'child',
-                            });
-                          }}
-                        >
-                          + Add child
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {personResidenceSpans.length > 0 && (
-              <div
-                className={cx(uiStyles, 'person-family-strip')}
-                role="region"
-                aria-label="Documented residence spans"
-              >
-                <div className={cx(uiStyles, 'person-family-row')}>
-                  <span className={cx(uiStyles, 'person-family-label')}>Residences</span>
-                  <div className={cx(uiStyles, 'person-family-chips')}>
-                    {personResidenceSpans.map((span) => {
-                      const pl = placesById.get(span.place_id);
-                      if (!pl) {
-                        return null;
-                      }
-                      const range =
-                        span.start_year && span.end_year
-                          ? span.start_year === span.end_year
-                            ? String(span.start_year)
-                            : `${span.start_year}–${span.end_year}`
-                          : 'Undated';
-                      return (
-                        <Link
-                          key={span.id}
-                          to={`/place/${pl.slug}`}
-                          className={cx(uiStyles, 'person-family-chip')}
-                          title={`${pl.full_name} (${range} · ${span.confidence_tier})`}
-                        >
-                          {pl.name}{' '}
-                          <span>
-                            ({range}
-                            {span.confidence_tier === 'Possible' ? ' · approx.' : ''})
-                          </span>
-                        </Link>
-                      );
-                    })}
-                  </div>
-                </div>
-              </div>
-            )}
-          </header>
+          <PersonProfileHeader
+            person={person}
+            baseUrl={baseUrl}
+            branchLabel={branchLabel}
+            routePlaceCount={routePlaceCount}
+            canEdit={capabilities.canEdit}
+            pronunciations={pronunciations}
+            immediateFamily={immediateFamily}
+            residenceSpans={personResidenceSpans}
+            placesById={placesById}
+            uiStyles={uiStyles}
+            onOpenPortraitLightbox={() => {
+              const next = resolvePortraitLightboxState(person, personMedia);
+              if (next) {
+                setLightbox(next);
+              }
+            }}
+            onEditPronunciation={() => {
+              setEditInitialSection('pronunciation');
+              setWikiTab('edit');
+            }}
+            onExportGedcom={handleExportPersonGedcom}
+            onOpenRelativeModal={setRelativeModal}
+          />
 
           <WikiActionBar
             activeTab={wikiTab}
@@ -914,7 +322,7 @@ export const PersonPage: React.FC = () => {
             <TalkPanel entityType="person" entityId={person.id} entityTitle={person.full_name} />
           )}
 
-          {wikiTab !== 'history' && wikiTab !== 'talk' && sectionJumpItems.length >= 2 && (
+          {isReadingView && sectionJumpItems.length >= 2 && (
             <nav
               className={cx(uiStyles, 'person-section-jump-bar print-hide')}
               aria-label="Jump to profile section"
@@ -927,446 +335,95 @@ export const PersonPage: React.FC = () => {
             </nav>
           )}
 
-          {wikiTab !== 'history' && wikiTab !== 'talk' && personBiographies.length > 0 && (
-            <section
-              id="person-biography"
-              className={cx(uiStyles, 'person-biography-section')}
-              aria-label={KINLOOM_VOCABULARY.person.biographyHeading}
-            >
-              <div className={cx(uiStyles, 'person-biography-header')}>
-                <h2>{KINLOOM_VOCABULARY.person.biographyHeading}</h2>
-                {personBiographies.length > 1 && (
-                  <span className={cx(uiStyles, 'person-biography-count')}>
-                    {personBiographies.length} biographies
-                  </span>
-                )}
-              </div>
-
-              <div className={cx(uiStyles, 'person-biography-list')}>
-                {(showAllNarratives ? personBiographies : personBiographies.slice(0, 1)).map((narrative) => {
-                  const isLong = narrative.body_md.trim().length > 560;
-                  const isExpanded = expandedNarrativeIds.has(narrative.id);
-                  const sourcesOpen = expandedSourceNarrativeIds.has(narrative.id);
-                  const dateLabel = formatNarrativeDateSpan(narrative.date_edtf);
-                  const orderedSources = orderNarrativeSources(
-                    narrative.body_md,
-                    narrative.source_ids ?? [],
-                    sourcesById
-                  );
-
-                  return (
-                    <article key={narrative.id} className={cx(uiStyles, 'person-biography-entry')}>
-                      <div className={cx(uiStyles, 'person-biography-entry-head')}>
-                        <h3>{narrative.title}</h3>
-                        {dateLabel && !narrative.title.includes(dateLabel) && (
-                          <span className={cx(uiStyles, 'person-biography-date')}>{dateLabel}</span>
-                        )}
-                      </div>
-
-                      {narrative.summary && (
-                        <p className={cx(uiStyles, 'person-biography-summary')}>{narrative.summary}</p>
-                      )}
-
-                      <PluginSlot name="narrativeHeader" person={person} narrative={narrative} />
-
-                      <div
-                        className={cx(
-                          uiStyles,
-                          `person-biography-body ${isLong && !isExpanded ? 'is-collapsed' : ''}`
-                        )}
-                      >
-                        <ArchivalMarkdown
-                          markdown={narrative.body_md}
-                          sourcesById={sourcesById}
-                          mediaItems={bundle.media}
-                          events={bundle.events}
-                          subjectPersonId={person.id}
-                          peopleById={peopleById}
-                          placesById={placesById}
-                          linkedPersonIds={narrative.person_ids}
-                          linkedPlaceIds={narrative.place_ids}
-                          baseUrl={baseUrl}
-                          onInspectSource={(sourceId) => {
-                            openSourceInspector({ sourceId });
-                          }}
-                          onOpenMedia={handleOpenCitationMedia}
-                          resolveMediaUrl={resolveCitationMediaUrl}
-                        />
-                      </div>
-
-                      {(isLong || orderedSources.length > 0) && (
-                        <div className={cx(uiStyles, 'person-biography-actions print-hide')}>
-                          {isLong && (
-                            <button
-                              type="button"
-                              className={cx(uiStyles, 'ink-inline-btn person-biography-toggle')}
-                              aria-expanded={isExpanded}
-                              onClick={() => {
-                                toggleNarrativeBody(narrative.id);
-                              }}
-                            >
-                              {isExpanded ? 'Show less' : 'Read full biography'}
-                            </button>
-                          )}
-
-                          {orderedSources.length > 0 && (
-                            <button
-                              type="button"
-                              className={cx(uiStyles, 'person-biography-sources-toggle')}
-                              aria-expanded={sourcesOpen}
-                              onClick={() => {
-                                toggleNarrativeSources(narrative.id);
-                              }}
-                            >
-                              <span>Sources ({orderedSources.length})</span>
-                              <span className={cx(uiStyles, 'person-biography-chevron')} aria-hidden="true">
-                                {sourcesOpen ? '▾' : '▸'}
-                              </span>
-                            </button>
-                          )}
-                        </div>
-                      )}
-
-                      {orderedSources.length > 0 && (
-                        <div
-                          className={cx(
-                            uiStyles,
-                            `person-biography-sources${sourcesOpen ? '' : ' is-collapsed-screen'}`
-                          )}
-                        >
-                          <ul className={cx(uiStyles, 'person-biography-source-list')}>
-                            {orderedSources.map(({ source: src, footnoteNumber }) => (
-                              <li key={src.id}>
-                                <button
-                                  type="button"
-                                  className={cx(uiStyles, 'person-biography-source-btn')}
-                                  onClick={() => {
-                                    openSourceInspector({ sourceId: src.id });
-                                  }}
-                                >
-                                  {footnoteNumber !== null && (
-                                    <span className={cx(uiStyles, 'person-biography-source-num')}>
-                                      [{footnoteNumber}]
-                                    </span>
-                                  )}
-                                  <span className={cx(uiStyles, 'person-biography-source-text')}>
-                                    {formatPublicCitation(src.citation)}
-                                  </span>
-                                </button>
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-                      )}
-                    </article>
-                  );
-                })}
-              </div>
-
-              {personBiographies.length > 1 && (
-                <div className={cx(uiStyles, 'person-biography-more-wrap print-hide')}>
-                  <button
-                    type="button"
-                    className={cx(uiStyles, 'pill-btn')}
-                    aria-expanded={showAllNarratives}
-                    onClick={() => {
-                      setShowAllNarratives((v) => !v);
-                    }}
-                  >
-                    {showAllNarratives
-                      ? 'Show fewer biographies'
-                      : `Read ${personBiographies.length - 1} more ${personBiographies.length - 1 === 1 ? 'biography' : 'biographies'}`}
-                  </button>
-                </div>
-              )}
-            </section>
-          )}
-
-          {wikiTab !== 'history' && wikiTab !== 'talk' && familyStories.length > 0 && (
-            <section
-              id="person-family-stories"
-              className={cx(uiStyles, 'person-biography-section person-family-stories-section')}
-              aria-label="Family Stories"
-            >
-              <div className={cx(uiStyles, 'person-biography-header')}>
-                <h2>Family Stories</h2>
-                {familyStories.length > 1 && (
-                  <span className={cx(uiStyles, 'person-biography-count')}>
-                    {familyStories.length} stories
-                  </span>
-                )}
-              </div>
-
-              <div className={cx(uiStyles, 'person-biography-list')}>
-                {(showAllFamilyStories ? familyStories : familyStories.slice(0, 3)).map((story) => {
-                  const isExpanded = expandedNarrativeIds.has(story.id);
-                  const sourcesOpen = expandedSourceNarrativeIds.has(story.id);
-                  const dateLabel = formatNarrativeDateSpan(story.date_edtf);
-                  const orderedSources = orderNarrativeSources(
-                    story.body_md,
-                    story.source_ids ?? [],
-                    sourcesById
-                  );
-
-                  return (
-                    <article
-                      key={story.id}
-                      className={cx(uiStyles, 'person-biography-entry person-family-story-entry')}
-                    >
-                      <div className={cx(uiStyles, 'person-biography-entry-head')}>
-                        <h3>{story.title}</h3>
-                        {dateLabel && !story.title.includes(dateLabel) && (
-                          <span className={cx(uiStyles, 'person-biography-date')}>{dateLabel}</span>
-                        )}
-                      </div>
-
-                      {story.summary && (
-                        <p className={cx(uiStyles, 'person-biography-summary')}>{story.summary}</p>
-                      )}
-
-                      <PluginSlot name="narrativeHeader" person={person} narrative={story} />
-
-                      {isExpanded && (
-                        <div className={cx(uiStyles, 'person-biography-body')}>
-                          <ArchivalMarkdown
-                            markdown={story.body_md}
-                            sourcesById={sourcesById}
-                            mediaItems={bundle.media}
-                            events={bundle.events}
-                            subjectPersonId={person.id}
-                            peopleById={peopleById}
-                            placesById={placesById}
-                            linkedPersonIds={story.person_ids}
-                            linkedPlaceIds={story.place_ids}
-                            baseUrl={baseUrl}
-                            onInspectSource={(sourceId) => {
-                              openSourceInspector({ sourceId });
-                            }}
-                            onOpenMedia={handleOpenCitationMedia}
-                            resolveMediaUrl={resolveCitationMediaUrl}
-                          />
-                        </div>
-                      )}
-
-                      <div className={cx(uiStyles, 'person-biography-actions print-hide')}>
-                        <button
-                          type="button"
-                          className={cx(uiStyles, 'ink-inline-btn person-biography-toggle')}
-                          aria-expanded={isExpanded}
-                          onClick={() => {
-                            toggleNarrativeBody(story.id);
-                          }}
-                        >
-                          {isExpanded ? 'Hide story' : 'Read story'}
-                        </button>
-
-                        {orderedSources.length > 0 && (
-                          <button
-                            type="button"
-                            className={cx(uiStyles, 'person-biography-sources-toggle')}
-                            aria-expanded={sourcesOpen}
-                            onClick={() => {
-                              toggleNarrativeSources(story.id);
-                            }}
-                          >
-                            <span>Sources ({orderedSources.length})</span>
-                            <span className={cx(uiStyles, 'person-biography-chevron')} aria-hidden="true">
-                              {sourcesOpen ? '▾' : '▸'}
-                            </span>
-                          </button>
-                        )}
-                      </div>
-
-                      {orderedSources.length > 0 && (
-                        <div
-                          className={cx(
-                            uiStyles,
-                            `person-biography-sources${sourcesOpen ? '' : ' is-collapsed-screen'}`
-                          )}
-                        >
-                          <ul className={cx(uiStyles, 'person-biography-source-list')}>
-                            {orderedSources.map(({ source: src, footnoteNumber }) => (
-                              <li key={src.id}>
-                                <button
-                                  type="button"
-                                  className={cx(uiStyles, 'person-biography-source-btn')}
-                                  onClick={() => {
-                                    openSourceInspector({ sourceId: src.id });
-                                  }}
-                                >
-                                  {footnoteNumber !== null && (
-                                    <span className={cx(uiStyles, 'person-biography-source-num')}>
-                                      [{footnoteNumber}]
-                                    </span>
-                                  )}
-                                  <span className={cx(uiStyles, 'person-biography-source-text')}>
-                                    {formatPublicCitation(src.citation)}
-                                  </span>
-                                </button>
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-                      )}
-                    </article>
-                  );
-                })}
-              </div>
-
-              {familyStories.length > 3 && (
-                <div className={cx(uiStyles, 'person-biography-more-wrap print-hide')}>
-                  <button
-                    type="button"
-                    className={cx(uiStyles, 'pill-btn')}
-                    aria-expanded={showAllFamilyStories}
-                    onClick={() => {
-                      setShowAllFamilyStories((v) => !v);
-                    }}
-                  >
-                    {showAllFamilyStories
-                      ? 'Show fewer family stories'
-                      : `Show ${familyStories.length - 3} more family ${familyStories.length - 3 === 1 ? 'story' : 'stories'}`}
-                  </button>
-                </div>
-              )}
-            </section>
-          )}
-
-          {wikiTab !== 'history' && wikiTab !== 'talk' && personMedia.length > 0 && (
-            <section
-              id="person-media"
-              className={cx(uiStyles, 'person-media-section')}
-              aria-label={KINLOOM_VOCABULARY.person.photosAndDocumentsAria}
-            >
-              <div className={cx(uiStyles, 'person-media-header')}>
-                <h2>{KINLOOM_VOCABULARY.person.photosAndDocumentsHeading}</h2>
-                {personMedia.length > 8 && (
-                  <button
-                    type="button"
-                    className={cx(uiStyles, 'pill-btn print-hide')}
-                    onClick={() => {
-                      setShowAllMedia((v) => !v);
-                    }}
-                  >
-                    {showAllMedia ? 'Show Fewer' : `Show All ${personMedia.length}`}
-                  </button>
-                )}
-              </div>
-              <div className={cx(uiStyles, 'person-media-grid')}>
-                {(showAllMedia ? personMedia : personMedia.slice(0, 8)).map((item, idx) => (
-                  <button
-                    key={item.id}
-                    type="button"
-                    className={cx(uiStyles, 'person-media-card')}
-                    onClick={() => {
-                      setLightbox({ kind: 'gallery', index: idx });
-                    }}
-                  >
-                    <div className={cx(uiStyles, 'person-media-thumb-wrap')}>
-                      <MediaPlayer media={item} baseUrl={baseUrl} variant="preview" />
-                    </div>
-                    <span className={cx(uiStyles, 'person-media-caption')}>{item.caption}</span>
-                  </button>
-                ))}
-              </div>
-            </section>
-          )}
-
-          {wikiTab !== 'history' &&
-            wikiTab !== 'talk' &&
-            (personEvents.length === 0 ? (
-              <EmptyStateNotice
-                title={`${KINLOOM_VOCABULARY.person.emptyEventsPrefix} ${person.full_name}.`}
-                action={
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                    <Link
-                      to={`/tree?focus=${person.slug}`}
-                      className={cx(uiStyles, 'pill-btn')}
-                      style={{ textDecoration: 'none' }}
-                    >
-                      Open Family Tree →
-                    </Link>
-                    {capabilities.canEdit && (
-                      <button
-                        type="button"
-                        className={cx(uiStyles, 'pill-btn')}
-                        onClick={() => {
-                          setEditInitialSection(undefined);
-                          setWikiTab('edit');
-                        }}
-                      >
-                        Edit Profile
-                      </button>
-                    )}
-                  </div>
-                }
+          {isReadingView && (
+            <>
+              <PersonNarrativesSection
+                variant="biography"
+                sectionId="person-biography"
+                heading={KINLOOM_VOCABULARY.person.biographyHeading}
+                narratives={personBiographies}
+                showAll={showAllNarratives}
+                onToggleShowAll={() => {
+                  setShowAllNarratives((v) => !v);
+                }}
+                expandedNarrativeIds={expandedNarrativeIds}
+                expandedSourceNarrativeIds={expandedSourceNarrativeIds}
+                onToggleNarrativeBody={toggleNarrativeBody}
+                onToggleNarrativeSources={toggleNarrativeSources}
+                person={person}
+                bundle={bundle}
+                peopleById={peopleById}
+                placesById={placesById}
+                sourcesById={sourcesById}
+                baseUrl={baseUrl}
+                uiStyles={uiStyles}
+                onInspectSource={(sourceId) => {
+                  openSourceInspector({ sourceId });
+                }}
+                onOpenMedia={handleOpenCitationMedia}
+                resolveMediaUrl={resolveCitationMediaUrl}
               />
-            ) : (
-              <section
-                id="person-timeline"
-                className={cx(uiStyles, 'person-timeline-section')}
-                aria-label={KINLOOM_VOCABULARY.person.lifeTimelineAria}
-              >
-                <h2 className={cx(uiStyles, 'section-heading person-timeline-heading')}>Life Timeline</h2>
-                <div
-                  className={cx(uiStyles, `timeline-layout${scrubberItems.length === 0 ? ' no-spine' : ''}`)}
-                >
-                  {scrubberItems.length > 0 && (
-                    <nav className={cx(uiStyles, 'timeline-spine')} aria-label="Jump to decade">
-                      <div className={cx(uiStyles, 'scrubber-list')}>
-                        {scrubberItems.map((t) => {
-                          const isAct =
-                            activeEvent?.year !== null &&
-                            activeEvent?.year !== undefined &&
-                            Math.floor(activeEvent.year / 10) * 10 === t.decade;
-                          return (
-                            <button
-                              key={t.decade}
-                              type="button"
-                              className={cx(uiStyles, `scrubber-tick ${isAct ? 'active' : ''}`)}
-                              aria-current={isAct ? 'true' : undefined}
-                              onClick={() => {
-                                setActiveEventId(t.eventId);
-                                cardRefs.current.get(t.eventId)?.scrollIntoView({
-                                  behavior: scrollBehaviorForMotion(),
-                                  block: 'start',
-                                });
-                              }}
-                            >
-                              {t.decade}s
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </nav>
-                  )}
 
-                  <div className={cx(uiStyles, 'story-stream')}>
-                    {personEvents.map((ev) => (
-                      <MilestoneStoryCard
-                        key={ev.id}
-                        event={ev}
-                        place={ev.place_id ? placesById.get(ev.place_id) : undefined}
-                        isActive={activeEvent?.id === ev.id}
-                        sourcesById={sourcesById}
-                        alsoHere={activeEvent?.id === ev.id ? alsoHere : []}
-                        onPivotPerson={handlePivotPerson}
-                        onSelect={() => {
-                          setActiveEventId(ev.id);
-                        }}
-                        cardRef={(el) => {
-                          if (el) {
-                            cardRefs.current.set(ev.id, el);
-                          } else {
-                            cardRefs.current.delete(ev.id);
-                          }
-                        }}
-                      />
-                    ))}
-                  </div>
-                </div>
-              </section>
-            ))}
+              <PersonNarrativesSection
+                variant="familyStories"
+                sectionId="person-family-stories"
+                heading="Family Stories"
+                narratives={familyStories}
+                showAll={showAllFamilyStories}
+                onToggleShowAll={() => {
+                  setShowAllFamilyStories((v) => !v);
+                }}
+                expandedNarrativeIds={expandedNarrativeIds}
+                expandedSourceNarrativeIds={expandedSourceNarrativeIds}
+                onToggleNarrativeBody={toggleNarrativeBody}
+                onToggleNarrativeSources={toggleNarrativeSources}
+                person={person}
+                bundle={bundle}
+                peopleById={peopleById}
+                placesById={placesById}
+                sourcesById={sourcesById}
+                baseUrl={baseUrl}
+                uiStyles={uiStyles}
+                onInspectSource={(sourceId) => {
+                  openSourceInspector({ sourceId });
+                }}
+                onOpenMedia={handleOpenCitationMedia}
+                resolveMediaUrl={resolveCitationMediaUrl}
+              />
+
+              <PersonMediaSection
+                personMedia={personMedia}
+                baseUrl={baseUrl}
+                showAllMedia={showAllMedia}
+                uiStyles={uiStyles}
+                onToggleShowAll={() => {
+                  setShowAllMedia((v) => !v);
+                }}
+                onOpenGalleryIndex={(index) => {
+                  setLightbox({ kind: 'gallery', index });
+                }}
+              />
+
+              <PersonLifeTimelineSection
+                person={person}
+                personEvents={personEvents}
+                activeEvent={activeEvent}
+                scrubberItems={scrubberItems}
+                placesById={placesById}
+                sourcesById={sourcesById}
+                alsoHere={alsoHere}
+                canEdit={capabilities.canEdit}
+                cardRefs={cardRefs}
+                uiStyles={uiStyles}
+                onSelectEventId={setActiveEventId}
+                onPivotPerson={handlePivotPerson}
+                onOpenEdit={() => {
+                  setEditInitialSection(undefined);
+                  setWikiTab('edit');
+                }}
+              />
+            </>
+          )}
         </main>
       </div>
 
@@ -1376,23 +433,7 @@ export const PersonPage: React.FC = () => {
         entityType="person"
         entityId={person.id}
         revisionId={bundle.meta.max_revision_id ?? 1}
-        initialData={{
-          id: person.id,
-          slug: person.slug,
-          full_name: person.full_name,
-          given_name: person.given_name,
-          surname: person.surname,
-          alt_names: person.alt_names,
-          sex: person.sex,
-          is_living: person.is_living,
-          lineage_group: person.lineage_group,
-          branch: person.branch,
-          birth_edtf: person.birth_edtf,
-          death_edtf: person.death_edtf,
-          portrait_url: person.portrait_url,
-          pronunciation: person.pronunciation ?? null,
-          has_primary_source: person.has_primary_source,
-        }}
+        initialData={buildPersonEditInitialData(person)}
         hasPrimarySource={person.has_primary_source ?? true}
         title={person.full_name}
         onClose={() => {
@@ -1417,125 +458,13 @@ export const PersonPage: React.FC = () => {
         }}
       />
 
-      {(() => {
-        const activeLightboxMedia =
-          lightbox.kind === 'gallery'
-            ? (personMedia[lightbox.index] ?? null)
-            : lightbox.kind === 'single'
-              ? lightbox.media
-              : null;
-        if (!activeLightboxMedia) {
-          return null;
-        }
-        return (
-          <dialog
-            ref={lightboxDialogRef}
-            open
-            aria-modal="true"
-            className={cx(uiStyles, 'lightbox-backdrop photo-lightbox-overlay print-hide')}
-            aria-label={KINLOOM_VOCABULARY.person.mediaLightboxAria}
-          >
-            <button
-              type="button"
-              tabIndex={-1}
-              className={cx(uiStyles, 'lightbox-backdrop-close')}
-              aria-label="Close lightbox"
-              onClick={() => {
-                setLightbox({ kind: 'closed' });
-              }}
-            />
-            <div className={cx(uiStyles, 'scan-lightbox-card')}>
-              <div className={cx(uiStyles, 'scan-lightbox-header')}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                  <span
-                    className={cx(uiStyles, `media-kind-badge kind-${activeLightboxMedia.kind}`)}
-                    style={{ position: 'static' }}
-                  >
-                    {MEDIA_KIND_LABELS[activeLightboxMedia.kind] || activeLightboxMedia.kind}
-                  </span>
-                  {lightbox.kind === 'gallery' && (
-                    <strong
-                      style={{
-                        fontFamily: 'var(--font-mono)',
-                        fontSize: '0.78rem',
-                        color: 'var(--text-inverse)',
-                      }}
-                    >
-                      {lightbox.index + 1} / {personMedia.length}
-                    </strong>
-                  )}
-                </div>
-                <div className={cx(uiStyles, 'media-lightbox-nav')}>
-                  {lightbox.kind === 'gallery' && personMedia.length > 1 && (
-                    <>
-                      <button
-                        type="button"
-                        className={cx(uiStyles, 'pill-btn')}
-                        onClick={() => {
-                          setLightbox({
-                            kind: 'gallery',
-                            index: (lightbox.index - 1 + personMedia.length) % personMedia.length,
-                          });
-                        }}
-                      >
-                        ← Prev
-                      </button>
-                      <button
-                        type="button"
-                        className={cx(uiStyles, 'pill-btn')}
-                        onClick={() => {
-                          setLightbox({
-                            kind: 'gallery',
-                            index: (lightbox.index + 1) % personMedia.length,
-                          });
-                        }}
-                      >
-                        Next →
-                      </button>
-                    </>
-                  )}
-                  <button
-                    ref={lightboxCloseBtnRef}
-                    type="button"
-                    className={cx(uiStyles, 'pill-btn')}
-                    onClick={() => {
-                      setLightbox({ kind: 'closed' });
-                    }}
-                  >
-                    Close [Esc]
-                  </button>
-                </div>
-              </div>
-              <div className={cx(uiStyles, 'scan-lightbox-scroll')}>
-                <MediaPlayer media={activeLightboxMedia} baseUrl={baseUrl} variant="full" />
-                <div style={{ marginTop: 12, padding: '8px 4px' }}>
-                  <div
-                    style={{
-                      fontFamily: 'var(--font-serif)',
-                      fontSize: '1.05rem',
-                      color: 'var(--surface-header)',
-                      fontWeight: 600,
-                    }}
-                  >
-                    {activeLightboxMedia.caption}
-                  </div>
-                  <div
-                    style={{
-                      fontFamily: 'var(--font-mono)',
-                      fontSize: '0.74rem',
-                      color: 'var(--text-secondary)',
-                      marginTop: 4,
-                    }}
-                  >
-                    {activeLightboxMedia.date_edtf ? `Date: ${activeLightboxMedia.date_edtf} · ` : ''}
-                    {formatPublicProvenance(activeLightboxMedia.provenance)}
-                  </div>
-                </div>
-              </div>
-            </div>
-          </dialog>
-        );
-      })()}
+      <PersonMediaLightbox
+        lightbox={lightbox}
+        personMedia={personMedia}
+        baseUrl={baseUrl}
+        uiStyles={uiStyles}
+        onSetLightbox={setLightbox}
+      />
       <KinloomFooter />
     </div>
   );

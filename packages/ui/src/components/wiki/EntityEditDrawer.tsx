@@ -10,16 +10,25 @@ import { entityEditorMachine } from '../../machines/entityEditorMachine.js';
 import cssMod3 from '../../pages/IndexPage.module.css';
 import cssMod0 from '../PronunciationBadge.module.css';
 import cssMod1 from '../SourceReaderDrawer.module.css';
-import { ConflictMergeDialog } from './ConflictMergeDialog.js';
-import {
-  cleanPronunciation,
-  PronunciationEditorSection,
-  readDraftPronunciation,
-} from './PronunciationEditorSection.js';
+import { EntityDangerZone, EntityDrawerStatusBanners } from './entityForms/EntityDrawerChrome.js';
+import { getEntityEditFormEntry } from './entityForms/editRegistry.js';
+import { asString } from './entityForms/fieldTypes.js';
+import { PronunciationEditorSection, readDraftPronunciation } from './PronunciationEditorSection.js';
+import cssMod2_1 from './WikiAuth.module.css';
 import { CitationBadge } from './WikiBadges.js';
-import cssMod2 from './WikiSurfaces.module.css';
+import cssMod2_0 from './WikiChrome.module.css';
+import cssMod2_3 from './WikiForms.module.css';
+import cssMod2_2 from './WikiPanels.module.css';
 
-const uiStyles: Readonly<Record<string, string>> = { ...cssMod0, ...cssMod1, ...cssMod2, ...cssMod3 };
+const uiStyles: Readonly<Record<string, string>> = {
+  ...cssMod0,
+  ...cssMod1,
+  ...cssMod2_0,
+  ...cssMod2_1,
+  ...cssMod2_2,
+  ...cssMod2_3,
+  ...cssMod3,
+};
 
 export type EntityEditDrawerSection = 'pronunciation';
 
@@ -35,23 +44,6 @@ export interface EntityEditDrawerProps {
   onClose: () => void;
   onSaved?: (revisionId: number, snapshot: EntityPayload) => void;
   onDeleted?: () => void;
-}
-
-function asString(value: unknown): string {
-  if (typeof value === 'string') {
-    return value;
-  }
-  if (typeof value === 'number') {
-    return String(value);
-  }
-  return '';
-}
-
-function asStringArray(value: unknown): string[] {
-  if (!Array.isArray(value)) {
-    return [];
-  }
-  return value.filter((item): item is string => typeof item === 'string');
 }
 
 export const EntityEditDrawer: React.FC<EntityEditDrawerProps> = ({
@@ -208,6 +200,8 @@ export const EntityEditDrawer: React.FC<EntityEditDrawerProps> = ({
 
   const { draft, summary, citationMode, sourceIds, conflict, validationErrors, networkError } =
     snapshot.context;
+  const formEntry = getEntityEditFormEntry(entityType);
+  const EntityFields = formEntry.Fields;
   const isSaving = snapshot.hasTag('busy');
   const isBusy = isSaving || syncingRevision;
   const isConflict = snapshot.matches('conflict409');
@@ -233,14 +227,15 @@ export const EntityEditDrawer: React.FC<EntityEditDrawerProps> = ({
     });
   };
 
+  const replaceDraft = (nextDraft: EntityPayload): void => {
+    send({ type: 'EDIT_FIELD', draft: nextDraft });
+  };
+
   const draftPronunciation = readDraftPronunciation(draft?.pronunciation);
-  const canEditPronunciation =
-    entityType === 'place' ||
-    (entityType === 'person' && !draft?.is_living && asString(draft?.full_name) !== 'Living');
+  const pronunciationEntityType = formEntry.pronunciationEntityType;
+  const canEditPronunciation = Boolean(pronunciationEntityType && formEntry.supportsPronunciation?.(draft));
   const pronunciationPreviewLabel =
-    entityType === 'person'
-      ? asString(draft.full_name) || title || entityId
-      : asString(draft.name) || asString(draft.full_name) || title || entityId;
+    formEntry.getPronunciationPreviewLabel?.(draft, title, entityId) ?? title ?? entityId;
 
   const handleCloseAttempt = (): void => {
     if (snapshot.hasTag('dirty')) {
@@ -334,320 +329,76 @@ export const EntityEditDrawer: React.FC<EntityEditDrawerProps> = ({
           className={cx(uiStyles, 'wiki-edit-drawer-form')}
           onSubmit={(e) => {
             e.preventDefault();
-            if (entityType === 'person' || entityType === 'place') {
-              const cleanedPronunciation =
-                entityType === 'person' && draft.is_living
-                  ? null
-                  : cleanPronunciation(draft.pronunciation, true);
-              if (JSON.stringify(cleanedPronunciation) !== JSON.stringify(draft.pronunciation ?? null)) {
-                send({
-                  type: 'EDIT_FIELD',
-                  draft: {
-                    ...draft,
-                    pronunciation: cleanedPronunciation,
-                  },
-                });
-              }
+            const preparedDraft = formEntry.prepareSubmitDraft?.(draft);
+            if (preparedDraft) {
+              send({ type: 'EDIT_FIELD', draft: preparedDraft });
             }
             send({ type: 'SUBMIT' });
           }}
         >
           <div className={cx(uiStyles, 'wiki-edit-drawer-body')}>
-            {syncingRevision && !isSaving && (
-              <div className={cx(uiStyles, 'wiki-status-banner is-info')} role="status" aria-live="polite">
-                Loading latest revision…
-              </div>
-            )}
-
-            {isConfirmingLeave && (
-              <div className={cx(uiStyles, 'wiki-status-banner is-warning')} role="alert">
-                <div>
-                  <strong>Unsaved changes.</strong> Leaving will discard your local edits.
-                </div>
-                <div className={cx(uiStyles, 'wiki-inline-actions')}>
-                  <button
-                    type="button"
-                    className={cx(uiStyles, 'pill-btn active')}
-                    onClick={() => {
-                      send({ type: 'STAY_EDITING' });
-                    }}
-                  >
-                    Keep Editing
-                  </button>
-                  <button
-                    type="button"
-                    className={cx(uiStyles, 'pill-btn')}
-                    onClick={() => {
-                      send({ type: 'CONFIRM_LEAVE' });
-                      onClose();
-                    }}
-                  >
-                    Discard &amp; Close
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {isSaved && (
-              <output className={cx(uiStyles, 'wiki-status-banner is-success')} aria-live="polite">
-                <div>
-                  Saved revision <code>r{snapshot.context.baseRevisionId}</code>.
-                </div>
-                <div className={cx(uiStyles, 'wiki-inline-actions')}>
-                  <button
-                    type="button"
-                    className={cx(uiStyles, 'pill-btn')}
-                    onClick={() => {
-                      send({ type: 'START_EDIT' });
-                    }}
-                  >
-                    Edit Again
-                  </button>
-                  <button
-                    type="button"
-                    className={cx(uiStyles, 'pill-btn active')}
-                    onClick={() => {
-                      send({ type: 'DISMISS_SAVED' });
-                      onClose();
-                    }}
-                  >
-                    Done
-                  </button>
-                </div>
-              </output>
-            )}
-
-            {isConflict && conflict && (
-              <ConflictMergeDialog
-                conflict={conflict}
-                localDraft={draft}
-                onAcceptServer={() => {
-                  send({ type: 'ACCEPT_SERVER' });
-                  reloadArchive();
-                  onClose();
-                }}
-                onRebaseAndRetry={() => {
-                  send({ type: 'REBASE_AND_RETRY' });
-                }}
-                onRebaseToEdit={() => {
-                  send({ type: 'REBASE_TO_EDIT' });
-                }}
-                onDiscardDraft={() => {
-                  send({ type: 'DISCARD_DRAFT' });
-                  onClose();
-                }}
-              />
-            )}
-
-            {isNetworkError && networkError && (
-              <div className={cx(uiStyles, 'wiki-status-banner is-error')} role="alert">
-                <div>
-                  <strong>Save failed:</strong> {networkError}
-                </div>
-                <div className={cx(uiStyles, 'wiki-inline-actions')}>
-                  <button
-                    type="button"
-                    className={cx(uiStyles, 'pill-btn active')}
-                    onClick={() => {
-                      send({ type: 'RETRY_SAVE' });
-                    }}
-                  >
-                    Retry Save
-                  </button>
-                  <button
-                    type="button"
-                    className={cx(uiStyles, 'pill-btn')}
-                    onClick={() => {
-                      send({ type: 'RETURN_TO_EDIT' });
-                    }}
-                  >
-                    Back to Editor
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {validationErrors.length > 0 && (
-              <div className={cx(uiStyles, 'wiki-status-banner is-error')} role="alert">
-                <strong>Fix before saving:</strong>
-                <ul className={cx(uiStyles, 'wiki-error-list')}>
-                  {validationErrors.map((err) => (
-                    <li key={err}>{err}</li>
-                  ))}
-                </ul>
-              </div>
-            )}
+            <EntityDrawerStatusBanners
+              syncingRevision={syncingRevision}
+              isSaving={isSaving}
+              isConfirmingLeave={isConfirmingLeave}
+              isSaved={isSaved}
+              baseRevisionId={snapshot.context.baseRevisionId}
+              isConflict={isConflict}
+              conflict={conflict}
+              draft={draft}
+              isNetworkError={isNetworkError}
+              networkError={networkError}
+              validationErrors={validationErrors}
+              uiStyles={uiStyles}
+              onStayEditing={() => {
+                send({ type: 'STAY_EDITING' });
+              }}
+              onConfirmLeave={() => {
+                send({ type: 'CONFIRM_LEAVE' });
+                onClose();
+              }}
+              onEditAgain={() => {
+                send({ type: 'START_EDIT' });
+              }}
+              onDismissSaved={() => {
+                send({ type: 'DISMISS_SAVED' });
+                onClose();
+              }}
+              onAcceptServer={() => {
+                send({ type: 'ACCEPT_SERVER' });
+                reloadArchive();
+                onClose();
+              }}
+              onRebaseAndRetry={() => {
+                send({ type: 'REBASE_AND_RETRY' });
+              }}
+              onRebaseToEdit={() => {
+                send({ type: 'REBASE_TO_EDIT' });
+              }}
+              onDiscardDraft={() => {
+                send({ type: 'DISCARD_DRAFT' });
+                onClose();
+              }}
+              onRetrySave={() => {
+                send({ type: 'RETRY_SAVE' });
+              }}
+              onReturnToEdit={() => {
+                send({ type: 'RETURN_TO_EDIT' });
+              }}
+            />
 
             <div className={cx(uiStyles, 'wiki-edit-form')}>
-              {entityType === 'person' && (
-                <>
-                  <div className={cx(uiStyles, 'wiki-field-grid')}>
-                    <label className={cx(uiStyles, 'wiki-field')}>
-                      <span className={cx(uiStyles, 'wiki-field-label')}>Full name</span>
-                      <input
-                        type="text"
-                        className={cx(uiStyles, 'wiki-input')}
-                        value={asString(draft.full_name)}
-                        onChange={(e) => {
-                          updateField('full_name', e.target.value);
-                        }}
-                        disabled={isBusy}
-                      />
-                    </label>
-                    <label className={cx(uiStyles, 'wiki-field')}>
-                      <span className={cx(uiStyles, 'wiki-field-label')}>Given name</span>
-                      <input
-                        type="text"
-                        className={cx(uiStyles, 'wiki-input')}
-                        value={asString(draft.given_name)}
-                        onChange={(e) => {
-                          updateField('given_name', e.target.value);
-                        }}
-                        disabled={isBusy}
-                      />
-                    </label>
-                    <label className={cx(uiStyles, 'wiki-field')}>
-                      <span className={cx(uiStyles, 'wiki-field-label')}>Surname</span>
-                      <input
-                        type="text"
-                        className={cx(uiStyles, 'wiki-input')}
-                        value={asString(draft.surname)}
-                        onChange={(e) => {
-                          updateField('surname', e.target.value);
-                        }}
-                        disabled={isBusy}
-                      />
-                    </label>
-                    <label className={cx(uiStyles, 'wiki-field')}>
-                      <span className={cx(uiStyles, 'wiki-field-label')}>Birth date</span>
-                      <input
-                        type="text"
-                        className={cx(uiStyles, 'wiki-input')}
-                        placeholder="e.g. 1850-04-12 or 1850"
-                        value={asString(draft.birth_edtf)}
-                        onChange={(e) => {
-                          updateField('birth_edtf', e.target.value);
-                        }}
-                        disabled={isBusy}
-                      />
-                    </label>
-                    <label className={cx(uiStyles, 'wiki-field')}>
-                      <span className={cx(uiStyles, 'wiki-field-label')}>Death date</span>
-                      <input
-                        type="text"
-                        className={cx(uiStyles, 'wiki-input')}
-                        placeholder="Leave blank if living or unknown"
-                        value={asString(draft.death_edtf)}
-                        onChange={(e) => {
-                          updateField('death_edtf', e.target.value);
-                        }}
-                        disabled={isBusy}
-                      />
-                    </label>
-                    <label className={cx(uiStyles, 'wiki-field')}>
-                      <span className={cx(uiStyles, 'wiki-field-label')}>Nicknames or maiden names</span>
-                      <input
-                        type="text"
-                        className={cx(uiStyles, 'wiki-input')}
-                        placeholder="Separate multiple names with commas"
-                        value={asStringArray(draft.alt_names).join(', ')}
-                        onChange={(e) => {
-                          const list = e.target.value
-                            .split(',')
-                            .map((s) => s.trim())
-                            .filter(Boolean);
-                          updateField('alt_names', list);
-                        }}
-                        disabled={isBusy}
-                      />
-                    </label>
-                  </div>
-                  <label className={cx(uiStyles, 'wiki-checkbox-row')}>
-                    <input
-                      type="checkbox"
-                      checked={Boolean(draft.is_living)}
-                      onChange={(e) => {
-                        updateField('is_living', e.target.checked);
-                      }}
-                      disabled={isBusy}
-                    />
-                    <span>
-                      Living person (strictly hides portraits, street addresses, and exact birth dates)
-                    </span>
-                  </label>
-                </>
-              )}
+              <EntityFields
+                draft={draft}
+                isBusy={isBusy}
+                uiStyles={uiStyles}
+                updateField={updateField}
+                replaceDraft={replaceDraft}
+              />
 
-              {entityType === 'place' && (
-                <div className={cx(uiStyles, 'wiki-field-grid')}>
-                  <label className={cx(uiStyles, 'wiki-field')}>
-                    <span className={cx(uiStyles, 'wiki-field-label')}>Short name</span>
-                    <input
-                      type="text"
-                      className={cx(uiStyles, 'wiki-input')}
-                      value={asString(draft.name)}
-                      onChange={(e) => {
-                        updateField('name', e.target.value);
-                      }}
-                      disabled={isBusy}
-                    />
-                  </label>
-                  <label className={cx(uiStyles, 'wiki-field')}>
-                    <span className={cx(uiStyles, 'wiki-field-label')}>Full hierarchical name</span>
-                    <input
-                      type="text"
-                      className={cx(uiStyles, 'wiki-input')}
-                      value={asString(draft.full_name)}
-                      onChange={(e) => {
-                        updateField('full_name', e.target.value);
-                      }}
-                      disabled={isBusy}
-                    />
-                  </label>
-                  <label className={cx(uiStyles, 'wiki-field')}>
-                    <span className={cx(uiStyles, 'wiki-field-label')}>Latitude</span>
-                    <input
-                      type="number"
-                      step="any"
-                      className={cx(uiStyles, 'wiki-input')}
-                      value={typeof draft.lat === 'number' ? draft.lat : 0}
-                      onChange={(e) => {
-                        updateField('lat', Number(e.target.value));
-                      }}
-                      disabled={isBusy}
-                    />
-                  </label>
-                  <label className={cx(uiStyles, 'wiki-field')}>
-                    <span className={cx(uiStyles, 'wiki-field-label')}>Longitude</span>
-                    <input
-                      type="number"
-                      step="any"
-                      className={cx(uiStyles, 'wiki-input')}
-                      value={typeof draft.lng === 'number' ? draft.lng : 0}
-                      onChange={(e) => {
-                        updateField('lng', Number(e.target.value));
-                      }}
-                      disabled={isBusy}
-                    />
-                  </label>
-                  <label className={cx(uiStyles, 'wiki-field wiki-field-full')}>
-                    <span className={cx(uiStyles, 'wiki-field-label')}>Historical profile</span>
-                    <textarea
-                      className={cx(uiStyles, 'wiki-textarea')}
-                      rows={5}
-                      value={asString(draft.summary)}
-                      onChange={(e) => {
-                        updateField('summary', e.target.value);
-                      }}
-                      disabled={isBusy}
-                    />
-                  </label>
-                </div>
-              )}
-
-              {canEditPronunciation && (entityType === 'person' || entityType === 'place') && (
+              {canEditPronunciation && pronunciationEntityType && (
                 <PronunciationEditorSection
-                  entityType={entityType}
+                  entityType={pronunciationEntityType}
                   entityId={entityId}
                   fullName={asString(draft.full_name)}
                   givenName={asString(draft.given_name)}
@@ -667,100 +418,6 @@ export const EntityEditDrawer: React.FC<EntityEditDrawerProps> = ({
                 />
               )}
 
-              {entityType === 'event' && (
-                <div className={cx(uiStyles, 'wiki-field-grid')}>
-                  <label className={cx(uiStyles, 'wiki-field wiki-field-full')}>
-                    <span className={cx(uiStyles, 'wiki-field-label')}>Event title</span>
-                    <input
-                      type="text"
-                      className={cx(uiStyles, 'wiki-input')}
-                      value={asString(draft.title)}
-                      onChange={(e) => {
-                        updateField('title', e.target.value);
-                      }}
-                      disabled={isBusy}
-                    />
-                  </label>
-                  <label className={cx(uiStyles, 'wiki-field')}>
-                    <span className={cx(uiStyles, 'wiki-field-label')}>Date</span>
-                    <input
-                      type="text"
-                      className={cx(uiStyles, 'wiki-input')}
-                      value={asString(draft.edtf_date)}
-                      onChange={(e) => {
-                        updateField('edtf_date', e.target.value);
-                      }}
-                      disabled={isBusy}
-                    />
-                  </label>
-                  <label className={cx(uiStyles, 'wiki-field wiki-field-full')}>
-                    <span className={cx(uiStyles, 'wiki-field-label')}>Narrative summary</span>
-                    <textarea
-                      className={cx(uiStyles, 'wiki-textarea')}
-                      rows={5}
-                      value={asString(draft.summary)}
-                      onChange={(e) => {
-                        updateField('summary', e.target.value);
-                      }}
-                      disabled={isBusy}
-                    />
-                  </label>
-                </div>
-              )}
-
-              {entityType === 'narrative' && (
-                <div className={cx(uiStyles, 'wiki-field-grid')}>
-                  <label className={cx(uiStyles, 'wiki-field wiki-field-full')}>
-                    <span className={cx(uiStyles, 'wiki-field-label')}>Narrative title</span>
-                    <input
-                      type="text"
-                      className={cx(uiStyles, 'wiki-input')}
-                      value={asString(draft.title)}
-                      onChange={(e) => {
-                        updateField('title', e.target.value);
-                      }}
-                      disabled={isBusy}
-                    />
-                  </label>
-                  <label className={cx(uiStyles, 'wiki-field wiki-field-full')}>
-                    <span className={cx(uiStyles, 'wiki-field-label')}>Story text</span>
-                    <textarea
-                      className={cx(uiStyles, 'wiki-textarea')}
-                      rows={8}
-                      value={asString(draft.body_md)}
-                      onChange={(e) => {
-                        updateField('body_md', e.target.value);
-                      }}
-                      disabled={isBusy}
-                    />
-                  </label>
-                </div>
-              )}
-
-              {entityType !== 'person' &&
-                entityType !== 'place' &&
-                entityType !== 'event' &&
-                entityType !== 'narrative' && (
-                  <label className={cx(uiStyles, 'wiki-field wiki-field-full')}>
-                    <span className={cx(uiStyles, 'wiki-field-label')}>Record details</span>
-                    <textarea
-                      className={cx(uiStyles, 'wiki-textarea wiki-mono')}
-                      rows={8}
-                      value={JSON.stringify(draft, null, 2)}
-                      onChange={(e) => {
-                        try {
-                          const parsed = JSON.parse(e.target.value) as EntityPayload;
-                          send({ type: 'EDIT_FIELD', draft: parsed });
-                        } catch {
-                          // Ignore incomplete JSON while typing.
-                        }
-                      }}
-                      disabled={isBusy}
-                    />
-                  </label>
-                )}
-
-              {/* Citation picker */}
               <fieldset className={cx(uiStyles, 'wiki-citation-fieldset')}>
                 <legend className={cx(uiStyles, 'wiki-field-label')}>Source Verification</legend>
                 <div className={cx(uiStyles, 'wiki-citation-options')}>
@@ -825,7 +482,6 @@ export const EntityEditDrawer: React.FC<EntityEditDrawerProps> = ({
                 )}
               </fieldset>
 
-              {/* Required edit summary */}
               <label className={cx(uiStyles, 'wiki-field')}>
                 <span className={cx(uiStyles, 'wiki-field-label')}>
                   What did you change? <span aria-hidden="true">*</span>
@@ -851,62 +507,21 @@ export const EntityEditDrawer: React.FC<EntityEditDrawerProps> = ({
             </div>
 
             {dataSource.deleteEntity && (
-              <div className={cx(uiStyles, 'wiki-danger-zone')}>
-                {!deleteConfirmOpen ? (
-                  <button
-                    type="button"
-                    className={cx(uiStyles, 'pill-btn wiki-danger-btn')}
-                    onClick={() => {
-                      setDeleteConfirmOpen(true);
-                    }}
-                  >
-                    Remove from Archive
-                  </button>
-                ) : (
-                  <div className={cx(uiStyles, 'wiki-danger-confirm')}>
-                    <p>
-                      Removing hides this page from the archive while keeping its full history so it can be
-                      restored anytime.
-                    </p>
-                    {deleteError && (
-                      <div className={cx(uiStyles, 'wiki-status-banner is-error')} role="alert">
-                        <p>{deleteError}</p>
-                      </div>
-                    )}
-                    <input
-                      type="text"
-                      className={cx(uiStyles, 'wiki-input')}
-                      placeholder="Why are you removing this? (at least 3 characters)"
-                      value={deleteSummary}
-                      onChange={(e) => {
-                        setDeleteSummary(e.target.value);
-                      }}
-                      disabled={deleteBusy}
-                    />
-                    <div className={cx(uiStyles, 'wiki-inline-actions')} style={{ marginTop: 8 }}>
-                      <button
-                        type="button"
-                        className={cx(uiStyles, 'pill-btn wiki-danger-btn')}
-                        disabled={deleteBusy || !isEditSummaryValid(deleteSummary)}
-                        onClick={() => {
-                          void handleSoftDelete();
-                        }}
-                      >
-                        {deleteBusy ? 'Removing…' : 'Confirm Removal'}
-                      </button>
-                      <button
-                        type="button"
-                        className={cx(uiStyles, 'pill-btn')}
-                        onClick={() => {
-                          setDeleteConfirmOpen(false);
-                        }}
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
+              <EntityDangerZone
+                confirmOpen={deleteConfirmOpen}
+                summary={deleteSummary}
+                busy={deleteBusy}
+                error={deleteError}
+                uiStyles={uiStyles}
+                onOpenConfirm={() => {
+                  setDeleteConfirmOpen(true);
+                }}
+                onCancelConfirm={() => {
+                  setDeleteConfirmOpen(false);
+                }}
+                onSummaryChange={setDeleteSummary}
+                onConfirmDelete={handleSoftDelete}
+              />
             )}
           </div>
 

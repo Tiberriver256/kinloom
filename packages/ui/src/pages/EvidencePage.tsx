@@ -1,28 +1,35 @@
-import type { ArchivalMediaKind, MediaChecklistItem, MediaItem } from '@kinloom/core';
-import {
-  buildLibrarianCitation,
-  formatPublicCitation,
-  formatSourceTypeLabel,
-  UNVERIFIED_TREE_SOURCE_ID,
-} from '@kinloom/core';
+import type { MediaChecklistItem, MediaItem } from '@kinloom/core';
 import type React from 'react';
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
-import { DateStamp, EmptyStateNotice } from '../components/Atoms.js';
+import { useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import cssMod0 from '../components/Atoms.module.css';
 import { ExplorerTopBar } from '../components/ExplorerTopBar.js';
 import { KinloomFooter } from '../components/KinloomFooter.js';
-import { MediaPlayer } from '../components/MediaPlayer.js';
+import cssMod7 from '../components/MediaGallery.module.css';
 import cssMod1 from '../components/SourceInspectorDrawer.module.css';
 import cssMod2 from '../components/SourceReaderDrawer.module.css';
 import { useArchiveData } from '../context/ArchiveDataContext.js';
 import { useArchiveUi } from '../context/ArchiveUiContext.js';
 import { cx } from '../lib/cx.js';
 import { handleTablistKeyDown } from '../lib/keyboardNav.js';
-import { useDialogFocusTrap } from '../lib/useDialogFocusTrap.js';
-import { KINLOOM_VOCABULARY, MEDIA_KIND_LABELS } from '../lib/vocabulary.js';
+import { KINLOOM_VOCABULARY } from '../lib/vocabulary.js';
 import { PluginSlot } from '../plugins/PluginContext.js';
 import cssMod3 from './EvidencePage.module.css';
+import { EvidenceDiscrepanciesTab } from './evidence/EvidenceDiscrepanciesTab.js';
+import { EvidenceMediaLightbox, EvidenceMediaTab } from './evidence/EvidenceMediaTab.js';
+import { EvidenceSourcesTab } from './evidence/EvidenceSourcesTab.js';
+import {
+  collectConflictEvents,
+  collectUnverifiedEvents,
+  computeEvidenceCitationMetrics,
+  countMediaByKind,
+  EVIDENCE_TABS,
+  type EvidenceTab,
+  filterAndSortSources,
+  filterMediaItems,
+  type MediaKindFilter,
+  parseInitialEvidenceTab,
+} from './evidence/evidenceViewModel.js';
 import cssMod4 from './IndexPage.module.css';
 import cssMod5 from './PersonPage.module.css';
 import cssMod6 from './PlacePage.module.css';
@@ -35,38 +42,23 @@ const uiStyles: Readonly<Record<string, string>> = {
   ...cssMod4,
   ...cssMod5,
   ...cssMod6,
+  ...cssMod7,
 };
-
-type EvidenceTab = 'conflicts' | 'citations' | 'media';
-type MediaKindFilter = 'all' | ArchivalMediaKind;
 
 export const EvidencePage: React.FC = () => {
   const { bundle, baseUrl, peopleById, sourcesById, readableSourceIds, loadMediaChecklist, loading } =
     useArchiveData();
   const { openSourceReader, openSourceInspector } = useArchiveUi();
   const [searchParams] = useSearchParams();
-  const initialTabParam = searchParams.get('tab');
-  const initialSourceParam = searchParams.get('source') || '';
-  const initialTab: EvidenceTab =
-    initialTabParam === 'citations' || initialTabParam === 'media' || initialTabParam === 'conflicts'
-      ? initialTabParam
-      : 'conflicts';
-  const [tab, setTab] = useState<EvidenceTab>(initialTab);
-  const [sourceQuery, setSourceQuery] = useState(initialSourceParam);
+
+  const [tab, setTab] = useState<EvidenceTab>(() => parseInitialEvidenceTab(searchParams.get('tab')));
+  const [sourceQuery, setSourceQuery] = useState(() => searchParams.get('source') || '');
   const [showAllUnverified, setShowAllUnverified] = useState(false);
   const [mediaKindFilter, setMediaKindFilter] = useState<MediaKindFilter>('all');
   const [mediaQuery, setMediaQuery] = useState('');
   const [mediaLimit, setMediaLimit] = useState(36);
   const [lightboxItem, setLightboxItem] = useState<MediaItem | null>(null);
   const [mediaChecklist, setMediaChecklist] = useState<MediaChecklistItem[]>([]);
-  const lightboxCloseRef = useRef<HTMLButtonElement | null>(null);
-  const lightboxDialogRef = useDialogFocusTrap({
-    open: Boolean(lightboxItem),
-    onClose: () => {
-      setLightboxItem(null);
-    },
-    initialFocusRef: lightboxCloseRef,
-  });
 
   useEffect(() => {
     let cancelled = false;
@@ -86,149 +78,29 @@ export const EvidencePage: React.FC = () => {
     };
   }, [loadMediaChecklist]);
 
-  const conflictEvents = useMemo(() => {
-    if (!bundle) {
-      return [];
-    }
-    return bundle.events.filter(
-      (e) =>
-        (e.alternate_dates?.length || 0) +
-          (e.alternate_places?.length || 0) +
-          (e.fact_conflicts?.length || 0) >
-        0
-    );
-  }, [bundle]);
+  const conflictEvents = useMemo(() => collectConflictEvents(bundle), [bundle]);
+  const unverifiedEvents = useMemo(() => collectUnverifiedEvents(bundle), [bundle]);
+  const { detailedCitationCount, linkedRecordScanCount, sourceUsageCounts } = useMemo(
+    () => computeEvidenceCitationMetrics(bundle),
+    [bundle]
+  );
 
-  const unverifiedEvents = useMemo(() => {
-    if (!bundle) {
-      return [];
-    }
-    return bundle.events.filter(
-      (e) =>
-        (e.scope === 'personal' || e.scope === 'family') &&
-        e.sources.length > 0 &&
-        e.sources.every((s) => s.source_id === UNVERIFIED_TREE_SOURCE_ID)
-    );
-  }, [bundle]);
-
-  const detailedCitationCount = useMemo(() => {
-    if (!bundle) {
-      return 0;
-    }
-    let total = 0;
-    for (const ev of bundle.events) {
-      for (const sr of ev.sources) {
-        if (sr.citation_detail) {
-          total += 1;
-        }
-      }
-    }
-    return total;
-  }, [bundle]);
-
-  const linkedRecordScanCount = useMemo(() => {
-    if (!bundle) {
-      return 0;
-    }
-    let total = 0;
-    for (const ev of bundle.events) {
-      for (const sr of ev.sources) {
-        if (sr.scan_url) {
-          total += 1;
-        }
-      }
-    }
-    return total;
-  }, [bundle]);
-
-  const sourceUsageCounts = useMemo(() => {
-    const counts = new Map<string, number>();
-    if (!bundle) {
-      return counts;
-    }
-    for (const ev of bundle.events) {
-      for (const sr of ev.sources) {
-        counts.set(sr.source_id, (counts.get(sr.source_id) || 0) + 1);
-      }
-    }
-    return counts;
-  }, [bundle]);
-
-  const filteredSources = useMemo(() => {
-    if (!bundle) {
-      return [];
-    }
-    const q = sourceQuery.trim().toLowerCase();
-    return bundle.sources
-      .filter((s) => {
-        if (!q) {
-          return true;
-        }
-        return (
-          s.id.toLowerCase().includes(q) ||
-          s.citation.toLowerCase().includes(q) ||
-          (s.author || '').toLowerCase().includes(q) ||
-          (s.repository || '').toLowerCase().includes(q) ||
-          s.source_type.toLowerCase().includes(q)
-        );
-      })
-      .toSorted((a, b) => (sourceUsageCounts.get(b.id) || 0) - (sourceUsageCounts.get(a.id) || 0));
-  }, [bundle, sourceQuery, sourceUsageCounts]);
+  const filteredSources = useMemo(
+    () => filterAndSortSources(bundle, sourceQuery, sourceUsageCounts),
+    [bundle, sourceQuery, sourceUsageCounts]
+  );
 
   const allMedia = useMemo(() => bundle?.media || [], [bundle]);
-
-  const mediaCountsByKind = useMemo(() => {
-    const counts: Record<string, number> = {};
-    for (const m of allMedia) {
-      counts[m.kind] = (counts[m.kind] || 0) + 1;
-    }
-    return counts;
-  }, [allMedia]);
-
-  const filteredMedia = useMemo(() => {
-    const q = mediaQuery.trim().toLowerCase();
-    return allMedia.filter((m) => {
-      if (mediaKindFilter !== 'all' && m.kind !== mediaKindFilter) {
-        return false;
-      }
-      if (q) {
-        const hay = `${m.caption} ${m.person_name || ''} ${m.provenance || ''} ${m.kind}`.toLowerCase();
-        if (!hay.includes(q)) {
-          return false;
-        }
-      }
-      return true;
-    });
-  }, [allMedia, mediaKindFilter, mediaQuery]);
-
-  const displayedMedia = filteredMedia.slice(0, mediaLimit);
-
+  const mediaCountsByKind = useMemo(() => countMediaByKind(allMedia), [allMedia]);
+  const filteredMedia = useMemo(
+    () => filterMediaItems(allMedia, mediaKindFilter, mediaQuery),
+    [allMedia, mediaKindFilter, mediaQuery]
+  );
   const missingChecklistItems = useMemo(
     () => mediaChecklist.filter((i) => i.status !== 'digitized'),
     [mediaChecklist]
   );
-
   const navMedia = useMemo(() => filteredMedia.filter((m) => m.kind !== 'document_scan'), [filteredMedia]);
-
-  useEffect(() => {
-    if (!lightboxItem) {
-      return undefined;
-    }
-    const onKey = (e: KeyboardEvent): void => {
-      if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
-        const idx = navMedia.findIndex((m) => m.id === lightboxItem.id);
-        if (idx === -1 || navMedia.length <= 1) {
-          return;
-        }
-        const delta = e.key === 'ArrowRight' ? 1 : -1;
-        setLightboxItem(navMedia[(idx + delta + navMedia.length) % navMedia.length]);
-      }
-    };
-    window.addEventListener('keydown', onKey);
-    return (): void => {
-      window.removeEventListener('keydown', onKey);
-    };
-  }, [lightboxItem, navMedia]);
 
   if (loading || !bundle) {
     return (
@@ -240,8 +112,6 @@ export const EvidencePage: React.FC = () => {
       </div>
     );
   }
-
-  const visibleUnverified = showAllUnverified ? unverifiedEvents : unverifiedEvents.slice(0, 25);
 
   return (
     <div>
@@ -279,7 +149,7 @@ export const EvidencePage: React.FC = () => {
           role="tablist"
           aria-label={KINLOOM_VOCABULARY.evidence.tablistAria}
           onKeyDown={(event) => {
-            handleTablistKeyDown(event, ['conflicts', 'citations', 'media'] as const, tab, (next) => {
+            handleTablistKeyDown(event, EVIDENCE_TABS, tab, (next) => {
               setTab(next);
             });
           }}
@@ -323,682 +193,80 @@ export const EvidencePage: React.FC = () => {
         </div>
 
         {tab === 'conflicts' && (
-          <section style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-            {conflictEvents.length === 0 ? (
-              <EmptyStateNotice title="No source discrepancies are recorded." />
-            ) : (
-              conflictEvents.map((ev) => {
-                const primaryPerson = ev.participants
-                  .map((pt) => peopleById.get(pt.person_id))
-                  .find((p) => p && p.full_name !== 'Living');
-                const readableRef = ev.sources.find((s) => readableSourceIds.has(s.source_id));
-                const totalDiscrepancies =
-                  (ev.alternate_dates?.length || 0) +
-                  (ev.alternate_places?.length || 0) +
-                  (ev.fact_conflicts?.length || 0);
-                return (
-                  <article key={ev.id} className={cx(uiStyles, 'place-map-box')} style={{ marginBottom: 0 }}>
-                    <div
-                      style={{
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        flexWrap: 'wrap',
-                        gap: 8,
-                        alignItems: 'center',
-                      }}
-                    >
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                        <DateStamp displayDate={ev.display_date} edtf={ev.edtf_date} />
-                        <span className={cx(uiStyles, 'conflict-pill')}>
-                          ! {totalDiscrepancies} Preserved Discrepanc{totalDiscrepancies === 1 ? 'y' : 'ies'}
-                        </span>
-                      </div>
-                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                        {readableRef && (
-                          <button
-                            type="button"
-                            className={cx(uiStyles, 'source-read-btn')}
-                            onClick={() => {
-                              openSourceReader({ sourceId: readableRef.source_id, eventId: ev.id });
-                            }}
-                          >
-                            {KINLOOM_VOCABULARY.sources.readSourceCta}
-                          </button>
-                        )}
-                        {primaryPerson && (
-                          <Link
-                            to={`/person/${primaryPerson.slug}?event=${ev.id}`}
-                            className={cx(uiStyles, 'pill-btn')}
-                            style={{ textDecoration: 'none' }}
-                          >
-                            {KINLOOM_VOCABULARY.evidence.openProfileCta}
-                          </Link>
-                        )}
-                      </div>
-                    </div>
-                    <h2
-                      style={{
-                        fontFamily: 'var(--font-serif)',
-                        fontSize: '1.22rem',
-                        margin: '10px 0 6px',
-                        color: 'var(--surface-header)',
-                      }}
-                    >
-                      {ev.title}
-                    </h2>
-                    <p style={{ margin: '0 0 10px', fontSize: '0.92rem' }}>{ev.summary}</p>
-                    <div className={cx(uiStyles, 'source-details')}>
-                      <strong>Conflicting Claims Preserved Side-by-Side:</strong>
-                      <ul>
-                        {[
-                          ...(ev.alternate_dates || []).map((alt) => ({
-                            key: `date|${alt.edtf_date}|${alt.source_id}|${alt.note}`,
-                            badge: alt.edtf_date,
-                            note: alt.note,
-                            sourceId: alt.source_id,
-                          })),
-                          ...(ev.alternate_places || []).map((alt) => ({
-                            key: `place|${alt.place_name}|${alt.source_id}|${alt.note}`,
-                            badge: `Place: ${alt.place_name}`,
-                            note: alt.note,
-                            sourceId: alt.source_id,
-                          })),
-                          ...(ev.fact_conflicts || []).map((alt) => ({
-                            key: `fact|${alt.claim}|${alt.source_id}|${alt.note}`,
-                            badge: alt.claim,
-                            note: alt.note,
-                            sourceId: alt.source_id,
-                          })),
-                        ].map((claim) => {
-                          const src = sourcesById.get(claim.sourceId);
-                          const publicCitation = src ? formatPublicCitation(src.citation) : '';
-                          return (
-                            <li key={claim.key} style={{ marginBottom: 4 }}>
-                              <code>{claim.badge}</code> — {claim.note}
-                              {publicCitation && (
-                                <span style={{ color: 'var(--text-secondary)' }}> · {publicCitation}</span>
-                              )}
-                              {readableSourceIds.has(claim.sourceId) && (
-                                <button
-                                  type="button"
-                                  className={cx(uiStyles, 'source-read-inline')}
-                                  onClick={() => {
-                                    openSourceReader({ sourceId: claim.sourceId, eventId: ev.id });
-                                  }}
-                                >
-                                  Read Page ↗
-                                </button>
-                              )}
-                            </li>
-                          );
-                        })}
-                      </ul>
-                    </div>
-                  </article>
-                );
-              })
-            )}
-          </section>
+          <EvidenceDiscrepanciesTab
+            conflictEvents={conflictEvents}
+            peopleById={peopleById}
+            sourcesById={sourcesById}
+            readableSourceIds={readableSourceIds}
+            uiStyles={uiStyles}
+            onOpenSourceReader={openSourceReader}
+          />
         )}
 
         {tab === 'citations' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-            <section className={cx(uiStyles, 'place-map-box')} style={{ marginBottom: 0 }}>
-              <div
-                style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  flexWrap: 'wrap',
-                  gap: 10,
-                  marginBottom: 12,
-                }}
-              >
-                <h2 style={{ fontFamily: 'var(--font-serif)', margin: 0, color: 'var(--surface-header)' }}>
-                  {KINLOOM_VOCABULARY.evidence.sourceRegistryHeading} ({filteredSources.length})
-                </h2>
-                <input
-                  type="search"
-                  className={cx(uiStyles, 'search-input')}
-                  placeholder="Filter sources or repositories (e.g. Census, NARA, Vital, County)…"
-                  value={sourceQuery}
-                  onChange={(e) => {
-                    setSourceQuery(e.target.value);
-                  }}
-                  aria-label="Filter archival sources"
-                />
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {filteredSources.length === 0 ? (
-                  <EmptyStateNotice
-                    title={
-                      bundle.sources.length === 0
-                        ? 'No sources have been cataloged yet.'
-                        : 'No sources match that filter.'
-                    }
-                    action={
-                      sourceQuery.trim() ? (
-                        <button
-                          type="button"
-                          className={cx(uiStyles, 'pill-btn')}
-                          onClick={() => {
-                            setSourceQuery('');
-                          }}
-                        >
-                          Clear filter
-                        </button>
-                      ) : undefined
-                    }
-                  />
-                ) : (
-                  filteredSources.map((s) => {
-                    const count = sourceUsageCounts.get(s.id) || 0;
-                    const readable = readableSourceIds.has(s.id);
-                    const cit = buildLibrarianCitation(s);
-                    return (
-                      <div key={s.id} className={cx(uiStyles, 'evidence-source-row')}>
-                        <div>
-                          <div
-                            style={{
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: 8,
-                              flexWrap: 'wrap',
-                              marginBottom: 4,
-                            }}
-                          >
-                            <span className={cx(uiStyles, `evidence-tier-badge tier-${cit.tier}`)}>
-                              {cit.tierLabel}
-                            </span>
-                            {cit.author && (
-                              <span style={{ fontSize: '0.82rem', color: 'var(--text-secondary)' }}>
-                                {cit.author}
-                              </span>
-                            )}
-                          </div>
-                          <div
-                            style={{ fontWeight: 600, fontSize: '0.94rem', color: 'var(--surface-header)' }}
-                          >
-                            {cit.title}
-                          </div>
-                          <div
-                            style={{
-                              fontFamily: 'var(--font-mono)',
-                              fontSize: '0.78rem',
-                              color: 'var(--text-secondary)',
-                              marginTop: 2,
-                            }}
-                          >
-                            Repository: {cit.repository || 'Archival Collection'} ·{' '}
-                            {formatSourceTypeLabel(s.source_type)}
-                          </div>
-                        </div>
-                        <div
-                          style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: 6,
-                            flexShrink: 0,
-                            flexWrap: 'wrap',
-                          }}
-                        >
-                          <span
-                            style={{
-                              fontFamily: 'var(--font-mono)',
-                              fontSize: '0.78rem',
-                              color: 'var(--text-secondary)',
-                            }}
-                          >
-                            {count} citation{count === 1 ? '' : 's'}
-                          </span>
-                          <button
-                            type="button"
-                            className={cx(uiStyles, 'source-action-btn primary')}
-                            onClick={() => {
-                              openSourceInspector({ sourceId: s.id });
-                            }}
-                          >
-                            Inspect Source →
-                          </button>
-                          {readable && (
-                            <button
-                              type="button"
-                              className={cx(uiStyles, 'source-read-btn')}
-                              onClick={() => {
-                                openSourceReader({ sourceId: s.id });
-                              }}
-                            >
-                              {KINLOOM_VOCABULARY.sources.openReaderCta}
-                            </button>
-                          )}
-                          {s.url && (
-                            <a
-                              href={s.url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className={cx(uiStyles, 'source-read-btn')}
-                              style={{ textDecoration: 'none' }}
-                            >
-                              Open Archive ↗
-                            </a>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })
-                )}
-              </div>
-            </section>
-
-            <section className={cx(uiStyles, 'place-map-box')} style={{ marginBottom: 0 }}>
-              {unverifiedEvents.length === 0 ? (
-                <EmptyStateNotice title="All events have primary citations." />
-              ) : (
-                <>
-                  <h2
-                    style={{
-                      fontFamily: 'var(--font-serif)',
-                      margin: '0 0 6px',
-                      color: 'var(--surface-header)',
-                    }}
-                  >
-                    {KINLOOM_VOCABULARY.evidence.unverifiedHeading} ({unverifiedEvents.length})
-                  </h2>
-                  <p style={{ margin: '0 0 12px', fontSize: '0.9375rem', color: 'var(--text-secondary)' }}>
-                    Because a GEDCOM export is a container rather than a primary source, events imported
-                    without an underlying census, vital, or archival citation are tracked here for primary
-                    verification.
-                  </p>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                    {visibleUnverified.map((ev) => {
-                      const p = ev.participants
-                        .map((pt) => peopleById.get(pt.person_id))
-                        .find((x) => x && x.full_name !== 'Living');
-                      return (
-                        <div
-                          key={ev.id}
-                          style={{
-                            display: 'flex',
-                            justifyContent: 'space-between',
-                            alignItems: 'center',
-                            flexWrap: 'wrap',
-                            gap: 8,
-                            padding: '7px 10px',
-                            background: 'var(--surface-canvas)',
-                            border: '1px solid var(--border-decorative)',
-                            borderRadius: 2,
-                          }}
-                        >
-                          <div>
-                            <strong style={{ fontSize: '0.94rem' }}>{ev.title}</strong>{' '}
-                            <span
-                              style={{
-                                fontFamily: 'var(--font-mono)',
-                                fontSize: '0.8125rem',
-                                color: 'var(--text-secondary)',
-                              }}
-                            >
-                              ({ev.display_date || 'Date unrecorded'})
-                            </span>
-                          </div>
-                          {p && (
-                            <Link
-                              to={`/person/${p.slug}?event=${ev.id}`}
-                              className={cx(uiStyles, 'pill-btn')}
-                              style={{ textDecoration: 'none', fontSize: '0.8125rem' }}
-                            >
-                              Verify on {p.full_name} →
-                            </Link>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                  {unverifiedEvents.length > 25 && (
-                    <div style={{ marginTop: 12 }}>
-                      <button
-                        type="button"
-                        className={cx(uiStyles, 'pill-btn')}
-                        onClick={() => {
-                          setShowAllUnverified((v) => !v);
-                        }}
-                      >
-                        {showAllUnverified
-                          ? 'Show Fewer Entries Needing Citation'
-                          : `Show All ${unverifiedEvents.length} Entries Needing Citation`}
-                      </button>
-                    </div>
-                  )}
-                </>
-              )}
-            </section>
-          </div>
+          <EvidenceSourcesTab
+            totalSourceCount={bundle.sources.length}
+            filteredSources={filteredSources}
+            sourceQuery={sourceQuery}
+            sourceUsageCounts={sourceUsageCounts}
+            readableSourceIds={readableSourceIds}
+            unverifiedEvents={unverifiedEvents}
+            showAllUnverified={showAllUnverified}
+            peopleById={peopleById}
+            uiStyles={uiStyles}
+            onSourceQueryChange={setSourceQuery}
+            onToggleShowAllUnverified={() => {
+              setShowAllUnverified((v) => !v);
+            }}
+            onOpenSourceInspector={openSourceInspector}
+            onOpenSourceReader={openSourceReader}
+          />
         )}
 
         {tab === 'media' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-            <section className={cx(uiStyles, 'place-map-box')} style={{ marginBottom: 0 }}>
-              <div
-                style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'flex-start',
-                  flexWrap: 'wrap',
-                  gap: 10,
-                  marginBottom: 10,
-                }}
-              >
-                <div>
-                  <h2
-                    style={{
-                      fontFamily: 'var(--font-serif)',
-                      margin: '0 0 4px',
-                      color: 'var(--surface-header)',
-                    }}
-                  >
-                    {KINLOOM_VOCABULARY.evidence.mediaGalleryHeading} ({filteredMedia.length})
-                  </h2>
-                  <p style={{ margin: 0, fontSize: '0.92rem', color: 'var(--text-secondary)' }}>
-                    Portraits, family photographs, headstones, record scans (strictly excluding living
-                    people), and document scans.
-                  </p>
-                </div>
-                <input
-                  type="search"
-                  className={cx(uiStyles, 'search-input')}
-                  placeholder={KINLOOM_VOCABULARY.evidence.mediaSearchPlaceholder}
-                  value={mediaQuery}
-                  onChange={(e) => {
-                    setMediaQuery(e.target.value);
-                    setMediaLimit(36);
-                  }}
-                  aria-label={KINLOOM_VOCABULARY.evidence.mediaSearchAria}
-                />
-              </div>
-
-              <div
-                className={cx(uiStyles, 'filter-bar')}
-                role="group"
-                aria-label="Filter photos and documents by category"
-                style={{ marginBottom: 14 }}
-              >
-                <button
-                  type="button"
-                  className={cx(uiStyles, `pill-btn ${mediaKindFilter === 'all' ? 'active' : ''}`)}
-                  onClick={() => {
-                    setMediaKindFilter('all');
-                    setMediaLimit(36);
-                  }}
-                >
-                  {KINLOOM_VOCABULARY.evidence.allMediaItems} ({allMedia.length})
-                </button>
-                {(
-                  [
-                    'record_scan',
-                    'portrait',
-                    'family_photo',
-                    'headstone',
-                    'document_scan',
-                    'milestone',
-                    'video_story',
-                    'audio_oral_history',
-                  ] as ArchivalMediaKind[]
-                ).map((k) => {
-                  const cnt = mediaCountsByKind[k] || 0;
-                  if (cnt === 0) {
-                    return null;
-                  }
-                  return (
-                    <button
-                      key={k}
-                      type="button"
-                      className={cx(uiStyles, `pill-btn ${mediaKindFilter === k ? 'active' : ''}`)}
-                      onClick={() => {
-                        setMediaKindFilter(k);
-                        setMediaLimit(36);
-                      }}
-                    >
-                      {MEDIA_KIND_LABELS[k]} ({cnt})
-                    </button>
-                  );
-                })}
-              </div>
-
-              {displayedMedia.length === 0 ? (
-                <EmptyStateNotice
-                  title={
-                    allMedia.length === 0
-                      ? 'No photos or documents have been added yet.'
-                      : KINLOOM_VOCABULARY.evidence.mediaEmpty
-                  }
-                  action={
-                    mediaKindFilter !== 'all' || mediaQuery.trim() ? (
-                      <button
-                        type="button"
-                        className={cx(uiStyles, 'pill-btn')}
-                        onClick={() => {
-                          setMediaKindFilter('all');
-                          setMediaQuery('');
-                        }}
-                      >
-                        Clear filters
-                      </button>
-                    ) : undefined
-                  }
-                />
-              ) : (
-                <>
-                  <div className={cx(uiStyles, 'person-media-grid')}>
-                    {displayedMedia.map((m) => (
-                      <button
-                        key={m.id}
-                        type="button"
-                        className={cx(uiStyles, 'person-media-card')}
-                        onClick={() => {
-                          if (m.kind === 'document_scan' && m.source_id && m.page) {
-                            openSourceReader({ sourceId: m.source_id, page: m.page });
-                          } else {
-                            setLightboxItem(m);
-                          }
-                        }}
-                      >
-                        <div className={cx(uiStyles, 'person-media-thumb-wrap')}>
-                          <MediaPlayer media={m} baseUrl={baseUrl} variant="preview" />
-                          <span className={cx(uiStyles, `media-kind-badge kind-${m.kind}`)}>
-                            {MEDIA_KIND_LABELS[m.kind] || m.kind}
-                          </span>
-                        </div>
-                        <div className={cx(uiStyles, 'person-media-caption')}>{m.caption}</div>
-                      </button>
-                    ))}
-                  </div>
-                  {filteredMedia.length > displayedMedia.length && (
-                    <div style={{ marginTop: 16, textAlign: 'center' }}>
-                      <button
-                        type="button"
-                        className={cx(uiStyles, 'pill-btn')}
-                        onClick={() => {
-                          setMediaLimit((n) => n + 36);
-                        }}
-                      >
-                        {KINLOOM_VOCABULARY.evidence.loadMoreMedia} (
-                        {filteredMedia.length - displayedMedia.length} remaining)
-                      </button>
-                    </div>
-                  )}
-                </>
-              )}
-            </section>
-
-            {mediaChecklist.length > 0 && (
-              <section className={cx(uiStyles, 'place-map-box')} style={{ marginBottom: 0 }}>
-                <h2
-                  style={{
-                    fontFamily: 'var(--font-serif)',
-                    margin: '0 0 6px',
-                    color: 'var(--surface-header)',
-                  }}
-                >
-                  Un-digitized Photos &amp; Documents ({missingChecklistItems.length} missing of{' '}
-                  {mediaChecklist.length} cataloged)
-                </h2>
-                <p style={{ margin: '0 0 12px', fontSize: '0.92rem', color: 'var(--text-secondary)' }}>
-                  Cataloged media attachments for deceased ancestors whose image files have not yet been
-                  digitized.
-                </p>
-                {missingChecklistItems.length === 0 ? (
-                  <p
-                    style={{
-                      fontFamily: 'var(--font-mono)',
-                      fontSize: '0.82rem',
-                      color: 'var(--radar-local)',
-                    }}
-                  >
-                    All cataloged deceased-ancestor archival photos have been digitized.
-                  </p>
-                ) : (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                    {missingChecklistItems.map((item) => (
-                      <div
-                        key={`${item.person_id}-${item.obje_xref}`}
-                        className={cx(uiStyles, 'evidence-source-row')}
-                      >
-                        <div>
-                          <strong style={{ fontSize: '0.94rem' }}>{item.title}</strong>
-                          <div
-                            style={{
-                              fontFamily: 'var(--font-mono)',
-                              fontSize: '0.78rem',
-                              color: 'var(--text-secondary)',
-                            }}
-                          >
-                            {item.person_name} ({item.lifespan}) · {item.media_type} ·{' '}
-                            {item.form.toUpperCase()}
-                          </div>
-                        </div>
-                        <Link
-                          to={`/person/${item.person_slug}`}
-                          className={cx(uiStyles, 'pill-btn')}
-                          style={{ textDecoration: 'none', fontSize: '0.8125rem' }}
-                        >
-                          {KINLOOM_VOCABULARY.evidence.openProfileCta}
-                        </Link>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </section>
-            )}
-          </div>
+          <EvidenceMediaTab
+            allMedia={allMedia}
+            filteredMedia={filteredMedia}
+            mediaLimit={mediaLimit}
+            mediaKindFilter={mediaKindFilter}
+            mediaQuery={mediaQuery}
+            mediaCountsByKind={mediaCountsByKind}
+            mediaChecklist={mediaChecklist}
+            missingChecklistItems={missingChecklistItems}
+            baseUrl={baseUrl}
+            uiStyles={uiStyles}
+            onMediaQueryChange={(value) => {
+              setMediaQuery(value);
+              setMediaLimit(36);
+            }}
+            onMediaKindFilterChange={(kind) => {
+              setMediaKindFilter(kind);
+              setMediaLimit(36);
+            }}
+            onClearMediaFilters={() => {
+              setMediaKindFilter('all');
+              setMediaQuery('');
+            }}
+            onLoadMoreMedia={() => {
+              setMediaLimit((n) => n + 36);
+            }}
+            onOpenMediaItem={(m) => {
+              if (m.kind === 'document_scan' && m.source_id && m.page) {
+                openSourceReader({ sourceId: m.source_id, page: m.page });
+              } else {
+                setLightboxItem(m);
+              }
+            }}
+          />
         )}
 
-        {lightboxItem &&
-          (() => {
-            const curIdx = navMedia.findIndex((m) => m.id === lightboxItem.id);
-            return (
-              <dialog
-                ref={lightboxDialogRef}
-                open
-                aria-modal="true"
-                className={cx(uiStyles, 'lightbox-backdrop')}
-                aria-label={lightboxItem.caption}
-              >
-                <button
-                  type="button"
-                  tabIndex={-1}
-                  className={cx(uiStyles, 'lightbox-backdrop-close')}
-                  aria-label="Close lightbox"
-                  onClick={() => {
-                    setLightboxItem(null);
-                  }}
-                />
-                <div className={cx(uiStyles, 'scan-lightbox-card')}>
-                  <div className={cx(uiStyles, 'scan-lightbox-header')}>
-                    <div>
-                      <span
-                        className={cx(uiStyles, `media-kind-badge kind-${lightboxItem.kind}`)}
-                        style={{ position: 'static', marginRight: 8 }}
-                      >
-                        {MEDIA_KIND_LABELS[lightboxItem.kind] || lightboxItem.kind}
-                      </span>
-                      <strong
-                        style={{
-                          fontFamily: 'var(--font-serif)',
-                          fontSize: '1.05rem',
-                          color: 'var(--text-inverse)',
-                        }}
-                      >
-                        {lightboxItem.caption}
-                      </strong>
-                    </div>
-                    <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-                      {navMedia.length > 1 && curIdx !== -1 && (
-                        <>
-                          <button
-                            type="button"
-                            className={cx(uiStyles, 'pill-btn')}
-                            onClick={() => {
-                              setLightboxItem(navMedia[(curIdx - 1 + navMedia.length) % navMedia.length]);
-                            }}
-                          >
-                            ← Prev
-                          </button>
-                          <button
-                            type="button"
-                            className={cx(uiStyles, 'pill-btn')}
-                            onClick={() => {
-                              setLightboxItem(navMedia[(curIdx + 1) % navMedia.length]);
-                            }}
-                          >
-                            Next →
-                          </button>
-                        </>
-                      )}
-                      {lightboxItem.person_slug && (
-                        <Link
-                          to={`/person/${lightboxItem.person_slug}`}
-                          className={cx(uiStyles, 'pill-btn')}
-                          style={{ textDecoration: 'none' }}
-                          onClick={() => {
-                            setLightboxItem(null);
-                          }}
-                        >
-                          Open {lightboxItem.person_name || 'Person'} →
-                        </Link>
-                      )}
-                      <button
-                        ref={lightboxCloseRef}
-                        type="button"
-                        className={cx(uiStyles, 'pill-btn')}
-                        onClick={() => {
-                          setLightboxItem(null);
-                        }}
-                        aria-label="Close archival image lightbox"
-                      >
-                        Close [Esc]
-                      </button>
-                    </div>
-                  </div>
-                  <div className={cx(uiStyles, 'scan-lightbox-scroll')}>
-                    <MediaPlayer media={lightboxItem} baseUrl={baseUrl} variant="full" />
-                  </div>
-                  {lightboxItem.provenance && (
-                    <div
-                      style={{
-                        padding: '8px 14px',
-                        fontFamily: 'var(--font-mono)',
-                        fontSize: '0.75rem',
-                        color: 'var(--text-secondary)',
-                        borderTop: '1px solid var(--border-decorative)',
-                      }}
-                    >
-                      Source file: {lightboxItem.provenance}
-                    </div>
-                  )}
-                </div>
-              </dialog>
-            );
-          })()}
+        <EvidenceMediaLightbox
+          lightboxItem={lightboxItem}
+          navMedia={navMedia}
+          baseUrl={baseUrl}
+          uiStyles={uiStyles}
+          onSetLightboxItem={setLightboxItem}
+        />
       </main>
       <KinloomFooter />
     </div>

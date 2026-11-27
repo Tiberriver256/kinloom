@@ -6,7 +6,7 @@ import { cx } from '../../lib/cx.js';
 import { searchNavNext, searchNavPrev, searchNavReset } from '../../lib/searchNavigation.js';
 import { KINLOOM_VOCABULARY } from '../../lib/vocabulary.js';
 import cssMod0 from '../../pages/IndexPage.module.css';
-import cssMod1 from '../../pages/TreeAndMapPage.module.css';
+import cssMod1 from '../../pages/TreePage.module.css';
 
 const uiStyles: Readonly<Record<string, string>> = { ...cssMod0, ...cssMod1 };
 

@@ -1,28 +1,49 @@
-import type { EntityPayload, EntityType, KinshipRelation } from '@kinloom/core';
+import type { EntityPayload, EntityType } from '@kinloom/core';
 import { deriveKinshipEdgeId, isEditSummaryValid } from '@kinloom/core';
 import type React from 'react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useArchiveData } from '../../context/ArchiveDataContext.js';
 import { cx } from '../../lib/cx.js';
 import { handleTablistKeyDown } from '../../lib/keyboardNav.js';
 import { useDialogFocusTrap } from '../../lib/useDialogFocusTrap.js';
 import cssMod2 from '../../pages/IndexPage.module.css';
 import cssMod0 from '../SourceReaderDrawer.module.css';
+import {
+  buildPersonCreatePayload,
+  CREATABLE_KIND_ORDER,
+  ENTITY_CREATE_FORM_REGISTRY,
+  LinkExistingRelativeFields,
+  PersonCreateFields,
+} from './entityForms/createRegistry.js';
+import type {
+  CreatableKind,
+  CreateEntityDraft,
+  PersonLineageGroup,
+  PersonSex,
+  RelativeCreateContext,
+  RelativeModalTab,
+  RelativeRelation,
+} from './entityForms/fieldTypes.js';
+import {
+  buildUniquePersonIdentity,
+  createInitialEntityDraft,
+  RELATIVE_RELATION_SPECS,
+} from './entityForms/fieldTypes.js';
 import { CitationBadge } from './WikiBadges.js';
-import cssMod1 from './WikiSurfaces.module.css';
+import cssMod1_0 from './WikiChrome.module.css';
+import cssMod1_2 from './WikiForms.module.css';
+import cssMod1_1 from './WikiPanels.module.css';
 
-const uiStyles: Readonly<Record<string, string>> = { ...cssMod0, ...cssMod1, ...cssMod2 };
+export type { CreatableKind, PersonLineageGroup, PersonSex, RelativeCreateContext, RelativeRelation };
+export { buildUniquePersonIdentity };
 
-export type CreatableKind = 'person' | 'event' | 'place' | 'kinship_edge';
-export type RelativeRelation = 'parent' | 'spouse' | 'child';
-export type PersonSex = 'M' | 'F' | 'U';
-export type PersonLineageGroup = 'ancestor' | 'descendant' | 'descendant_spouse' | 'collateral' | 'extended';
-
-export interface RelativeCreateContext {
-  anchorPersonId: string;
-  anchorPersonName: string;
-  relation: RelativeRelation;
-}
+const uiStyles: Readonly<Record<string, string>> = {
+  ...cssMod0,
+  ...cssMod1_0,
+  ...cssMod1_1,
+  ...cssMod1_2,
+  ...cssMod2,
+};
 
 export interface CreateEntityModalProps {
   open: boolean;
@@ -31,122 +52,6 @@ export interface CreateEntityModalProps {
   relativeContext?: RelativeCreateContext;
   onClose: () => void;
   onCreated?: (entityType: EntityType, entity: EntityPayload) => void;
-}
-
-type RelativeModalTab = 'create_new' | 'link_existing';
-
-interface RelativeRelationSpec {
-  readonly headingPrefix: string;
-  readonly defaultLineageGroup: PersonLineageGroup;
-  readonly buildEdge: (
-    anchorPersonId: string,
-    relatedPersonId: string
-  ) => { from: string; to: string; relation: KinshipRelation };
-  readonly linkHint: (anchorPersonName: string) => string;
-}
-
-const RELATIVE_RELATION_SPECS: Record<RelativeRelation, RelativeRelationSpec> = {
-  parent: {
-    headingPrefix: 'Add parent of',
-    defaultLineageGroup: 'ancestor',
-    buildEdge: (anchorPersonId, relatedPersonId) => ({
-      from: relatedPersonId,
-      to: anchorPersonId,
-      relation: 'parent',
-    }),
-    linkHint: (anchorName) => `Choose an existing person who is a parent of ${anchorName}.`,
-  },
-  spouse: {
-    headingPrefix: 'Add spouse of',
-    defaultLineageGroup: 'descendant_spouse',
-    buildEdge: (anchorPersonId, relatedPersonId) => ({
-      from: anchorPersonId,
-      to: relatedPersonId,
-      relation: 'spouse',
-    }),
-    linkHint: (anchorName) => `Choose an existing person who is a spouse of ${anchorName}.`,
-  },
-  child: {
-    headingPrefix: 'Add child of',
-    defaultLineageGroup: 'descendant',
-    buildEdge: (anchorPersonId, relatedPersonId) => ({
-      from: anchorPersonId,
-      to: relatedPersonId,
-      relation: 'parent',
-    }),
-    linkHint: (anchorName) => `Choose an existing person who is a child of ${anchorName}.`,
-  },
-};
-
-const PERSON_SEX_OPTIONS: readonly { readonly value: PersonSex; readonly label: string }[] = [
-  { value: 'U', label: 'Unspecified (U)' },
-  { value: 'F', label: 'Female (F)' },
-  { value: 'M', label: 'Male (M)' },
-];
-
-const PERSON_LINEAGE_OPTIONS: readonly {
-  readonly value: PersonLineageGroup;
-  readonly label: string;
-}[] = [
-  { value: 'ancestor', label: 'Ancestor' },
-  { value: 'descendant', label: 'Descendant' },
-  { value: 'descendant_spouse', label: 'Spouse' },
-  { value: 'collateral', label: 'Extended Relative' },
-  { value: 'extended', label: 'Extended Relative (Other)' },
-];
-
-function slugify(value: string): string {
-  return (
-    value
-      .toLowerCase()
-      .replaceAll(/[^a-z0-9]+/g, '-')
-      .replaceAll(/^-+|-+$/g, '') || 'record'
-  );
-}
-
-export function buildUniquePersonIdentity(
-  fullName: string,
-  existingPeople: readonly { id: string; slug: string }[]
-): { id: string; slug: string } {
-  const baseSlug = slugify(fullName);
-  const usedIds = new Set(existingPeople.map((p) => p.id));
-  const usedSlugs = new Set(existingPeople.map((p) => p.slug));
-  let candidateSlug = baseSlug;
-  let candidateId = `per_${candidateSlug.replaceAll('-', '_')}`;
-  let suffix = 2;
-  while (usedIds.has(candidateId) || usedSlugs.has(candidateSlug)) {
-    candidateSlug = `${baseSlug}-${suffix}`;
-    candidateId = `per_${candidateSlug.replaceAll('-', '_')}`;
-    suffix += 1;
-  }
-  return { id: candidateId, slug: candidateSlug };
-}
-
-function parsePersonSex(value: string): PersonSex {
-  if (value === 'M' || value === 'F' || value === 'U') {
-    return value;
-  }
-  return 'U';
-}
-
-function parsePersonLineageGroup(value: string): PersonLineageGroup {
-  switch (value) {
-    case 'ancestor':
-    case 'descendant':
-    case 'descendant_spouse':
-    case 'collateral':
-    case 'extended':
-      return value;
-    default:
-      return 'extended';
-  }
-}
-
-function parseKinshipRelation(value: string): KinshipRelation {
-  if (value === 'parent' || value === 'spouse' || value === 'child') {
-    return value;
-  }
-  return 'parent';
 }
 
 export const CreateEntityModal: React.FC<CreateEntityModalProps> = ({
@@ -158,45 +63,18 @@ export const CreateEntityModal: React.FC<CreateEntityModalProps> = ({
   onCreated,
 }) => {
   const { dataSource, bundle, reloadArchive } = useArchiveData();
+  const anchorId = relativeContext?.anchorPersonId ?? null;
+  const anchorRelation = relativeContext?.relation ?? null;
+
   const [kind, setKind] = useState<CreatableKind>(defaultKind);
   const [relativeTab, setRelativeTab] = useState<RelativeModalTab>('create_new');
   const [summary, setSummary] = useState('');
   const [hasPrimarySource, setHasPrimarySource] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  // Person fields
-  const [givenName, setGivenName] = useState('');
-  const [surname, setSurname] = useState('');
-  const [sex, setSex] = useState<PersonSex>('U');
-  const [lineageGroup, setLineageGroup] = useState<PersonLineageGroup>(
-    relativeContext ? RELATIVE_RELATION_SPECS[relativeContext.relation].defaultLineageGroup : 'extended'
+  const [draft, setDraft] = useState<CreateEntityDraft>(() =>
+    createInitialEntityDraft(defaultPersonId, anchorRelation)
   );
-  const [birthEdtf, setBirthEdtf] = useState('');
-  const [deathEdtf, setDeathEdtf] = useState('');
-  const [isLiving, setIsLiving] = useState(false);
-
-  // Link existing relative fields
-  const [existingQuery, setExistingQuery] = useState('');
-  const [existingPersonId, setExistingPersonId] = useState('');
-
-  // Event fields
-  const [eventTitle, setEventTitle] = useState('');
-  const [eventDate, setEventDate] = useState('');
-  const [eventPersonId, setEventPersonId] = useState(defaultPersonId ?? '');
-  const [eventPlaceId, setEventPlaceId] = useState('');
-  const [eventSummary, setEventSummary] = useState('');
-
-  // Place fields
-  const [placeName, setPlaceName] = useState('');
-  const [placeFullName, setPlaceFullName] = useState('');
-  const [placeLat, setPlaceLat] = useState('39.8283');
-  const [placeLng, setPlaceLng] = useState('-98.5795');
-
-  // Kinship fields (standalone tab)
-  const [fromPersonId, setFromPersonId] = useState(defaultPersonId ?? '');
-  const [toPersonId, setToPersonId] = useState('');
-  const [relation, setRelation] = useState<KinshipRelation>('parent');
 
   const closeBtnRef = useRef<HTMLButtonElement | null>(null);
   const dialogRef = useDialogFocusTrap({
@@ -204,9 +82,6 @@ export const CreateEntityModal: React.FC<CreateEntityModalProps> = ({
     onClose,
     initialFocusRef: closeBtnRef,
   });
-
-  const anchorId = relativeContext?.anchorPersonId ?? null;
-  const anchorRelation = relativeContext?.relation ?? null;
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: re-initialize form defaults when anchor entity changes
   useEffect(() => {
@@ -218,30 +93,15 @@ export const CreateEntityModal: React.FC<CreateEntityModalProps> = ({
     setSummary('');
     setHasPrimarySource(true);
     setError(null);
-    setGivenName('');
-    setSurname('');
-    setSex('U');
-    setLineageGroup(
-      anchorRelation ? RELATIVE_RELATION_SPECS[anchorRelation].defaultLineageGroup : 'extended'
-    );
-    setBirthEdtf('');
-    setDeathEdtf('');
-    setIsLiving(false);
-    setExistingQuery('');
-    setExistingPersonId('');
-    setEventTitle('');
-    setEventDate('');
-    setEventPersonId(defaultPersonId ?? '');
-    setEventPlaceId('');
-    setEventSummary('');
-    setPlaceName('');
-    setPlaceFullName('');
-    setPlaceLat('39.8283');
-    setPlaceLng('-98.5795');
-    setFromPersonId(defaultPersonId ?? '');
-    setToPersonId('');
-    setRelation('parent');
+    setDraft(createInitialEntityDraft(defaultPersonId, anchorRelation));
   }, [open, defaultKind, defaultPersonId, anchorId, anchorRelation]);
+
+  const updateDraft = useCallback(
+    <K extends keyof CreateEntityDraft>(key: K, value: CreateEntityDraft[K]): void => {
+      setDraft((prev) => ({ ...prev, [key]: value }));
+    },
+    []
+  );
 
   const people = useMemo(() => bundle?.people ?? [], [bundle]);
   const places = useMemo(() => bundle?.places ?? [], [bundle]);
@@ -250,7 +110,7 @@ export const CreateEntityModal: React.FC<CreateEntityModalProps> = ({
     if (!relativeContext) {
       return [];
     }
-    const q = existingQuery.trim().toLowerCase();
+    const q = draft.existingQuery.trim().toLowerCase();
     return people
       .filter((p) => p.id !== relativeContext.anchorPersonId)
       .filter((p) => {
@@ -262,38 +122,15 @@ export const CreateEntityModal: React.FC<CreateEntityModalProps> = ({
         return matchFull || matchAlt;
       })
       .toSorted((a, b) => a.full_name.localeCompare(b.full_name));
-  }, [people, relativeContext, existingQuery]);
+  }, [people, relativeContext, draft.existingQuery]);
 
   if (!open) {
     return null;
   }
 
   const relativeSpec = relativeContext ? RELATIVE_RELATION_SPECS[relativeContext.relation] : null;
-
-  const buildPersonDraft = (): { entityId: string; payload: EntityPayload } | null => {
-    const fullName = `${givenName.trim()} ${surname.trim()}`.trim();
-    if (!fullName) {
-      setError('Enter at least a given name or surname.');
-      return null;
-    }
-    const { id: entityId, slug } = buildUniquePersonIdentity(fullName, people);
-    const payload: EntityPayload = {
-      id: entityId,
-      slug,
-      full_name: fullName,
-      given_name: givenName.trim() || fullName,
-      surname: surname.trim(),
-      alt_names: [],
-      sex,
-      is_living: isLiving,
-      lineage_group: lineageGroup,
-      birth_edtf: birthEdtf.trim(),
-      death_edtf: deathEdtf.trim(),
-      portrait_url: null,
-      has_primary_source: hasPrimarySource,
-    };
-    return { entityId, payload };
-  };
+  const activeCreateEntry = ENTITY_CREATE_FORM_REGISTRY[kind];
+  const ActiveFields = activeCreateEntry.Fields;
 
   const handleSubmit = async (e: React.FormEvent): Promise<void> => {
     e.preventDefault();
@@ -310,11 +147,11 @@ export const CreateEntityModal: React.FC<CreateEntityModalProps> = ({
 
     if (relativeContext && relativeSpec) {
       if (relativeTab === 'link_existing') {
-        if (!existingPersonId || existingPersonId === relativeContext.anchorPersonId) {
+        if (!draft.existingPersonId || draft.existingPersonId === relativeContext.anchorPersonId) {
           setError('Choose an existing person to link.');
           return;
         }
-        const edge = relativeSpec.buildEdge(relativeContext.anchorPersonId, existingPersonId);
+        const edge = relativeSpec.buildEdge(relativeContext.anchorPersonId, draft.existingPersonId);
         const edgeId = deriveKinshipEdgeId(edge);
         setSubmitting(true);
         setError(null);
@@ -336,11 +173,12 @@ export const CreateEntityModal: React.FC<CreateEntityModalProps> = ({
         return;
       }
 
-      const personDraft = buildPersonDraft();
-      if (!personDraft) {
+      const personResult = buildPersonCreatePayload(draft, people, hasPrimarySource);
+      if (!personResult.ok) {
+        setError(personResult.error);
         return;
       }
-      const edge = relativeSpec.buildEdge(relativeContext.anchorPersonId, personDraft.entityId);
+      const edge = relativeSpec.buildEdge(relativeContext.anchorPersonId, personResult.entityId);
       const edgeId = deriveKinshipEdgeId(edge);
 
       setSubmitting(true);
@@ -348,8 +186,8 @@ export const CreateEntityModal: React.FC<CreateEntityModalProps> = ({
       let createdPerson = false;
       try {
         const personRes = await dataSource.createEntity('person', {
-          entity_id: personDraft.entityId,
-          data: personDraft.payload,
+          entity_id: personResult.entityId,
+          data: personResult.payload,
           summary: trimmedSummary,
           has_primary_source: hasPrimarySource,
         });
@@ -378,68 +216,18 @@ export const CreateEntityModal: React.FC<CreateEntityModalProps> = ({
       return;
     }
 
-    let entityId: string;
-    let payload: EntityPayload;
-
-    if (kind === 'person') {
-      const personDraft = buildPersonDraft();
-      if (!personDraft) {
-        return;
-      }
-      ({ entityId, payload } = personDraft);
-    } else if (kind === 'event') {
-      if (!eventTitle.trim()) {
-        setError('Enter an event title.');
-        return;
-      }
-      const slug = slugify(eventTitle);
-      entityId = `evt_${eventDate.trim().slice(0, 4) || 'undated'}_${slug.replaceAll('-', '_')}`;
-      payload = {
-        id: entityId,
-        title: eventTitle.trim(),
-        scope: 'personal',
-        event_kind: 'point_event',
-        edtf_date: eventDate.trim(),
-        place_id: eventPlaceId || null,
-        summary: eventSummary.trim(),
-        participants: eventPersonId ? [{ person_id: eventPersonId, role: 'principal' }] : [],
-        sources: [],
-        has_primary_source: hasPrimarySource,
-      };
-    } else if (kind === 'place') {
-      if (!placeName.trim()) {
-        setError('Enter a place name.');
-        return;
-      }
-      const slug = slugify(placeFullName.trim() || placeName.trim());
-      entityId = `pl_${slug.replaceAll('-', '_')}`;
-      payload = {
-        id: entityId,
-        slug,
-        name: placeName.trim(),
-        full_name: placeFullName.trim() || placeName.trim(),
-        place_type: 'town',
-        parent_id: null,
-        lat: Number(placeLat) || 0,
-        lng: Number(placeLng) || 0,
-        has_primary_source: hasPrimarySource,
-      };
-    } else {
-      if (!fromPersonId || !toPersonId || fromPersonId === toPersonId) {
-        setError('Choose two distinct people for the kinship link.');
-        return;
-      }
-      const edge = { from: fromPersonId, to: toPersonId, relation };
-      entityId = deriveKinshipEdgeId(edge);
-      payload = edge;
+    const built = activeCreateEntry.validateAndBuild(draft, { people, hasPrimarySource });
+    if (!built.ok) {
+      setError(built.error);
+      return;
     }
 
     setSubmitting(true);
     setError(null);
     try {
       const res = await dataSource.createEntity(kind, {
-        entity_id: entityId,
-        data: payload,
+        entity_id: built.entityId,
+        data: built.payload,
         summary: trimmedSummary,
         has_primary_source: hasPrimarySource,
       });
@@ -452,99 +240,6 @@ export const CreateEntityModal: React.FC<CreateEntityModalProps> = ({
       setSubmitting(false);
     }
   };
-
-  const renderPersonFields = (): React.ReactNode => (
-    <div className={cx(uiStyles, 'wiki-field-grid')}>
-      <label className={cx(uiStyles, 'wiki-field')}>
-        <span className={cx(uiStyles, 'wiki-field-label')}>Given name</span>
-        <input
-          type="text"
-          className={cx(uiStyles, 'wiki-input')}
-          value={givenName}
-          onChange={(e) => {
-            setGivenName(e.target.value);
-          }}
-        />
-      </label>
-      <label className={cx(uiStyles, 'wiki-field')}>
-        <span className={cx(uiStyles, 'wiki-field-label')}>Surname</span>
-        <input
-          type="text"
-          className={cx(uiStyles, 'wiki-input')}
-          value={surname}
-          onChange={(e) => {
-            setSurname(e.target.value);
-          }}
-        />
-      </label>
-      <label className={cx(uiStyles, 'wiki-field')}>
-        <span className={cx(uiStyles, 'wiki-field-label')}>Sex</span>
-        <select
-          className={cx(uiStyles, 'wiki-input')}
-          value={sex}
-          onChange={(e) => {
-            setSex(parsePersonSex(e.target.value));
-          }}
-        >
-          {PERSON_SEX_OPTIONS.map((opt) => (
-            <option key={opt.value} value={opt.value}>
-              {opt.label}
-            </option>
-          ))}
-        </select>
-      </label>
-      <label className={cx(uiStyles, 'wiki-field')}>
-        <span className={cx(uiStyles, 'wiki-field-label')}>Lineage group</span>
-        <select
-          className={cx(uiStyles, 'wiki-input')}
-          value={lineageGroup}
-          onChange={(e) => {
-            setLineageGroup(parsePersonLineageGroup(e.target.value));
-          }}
-        >
-          {PERSON_LINEAGE_OPTIONS.map((opt) => (
-            <option key={opt.value} value={opt.value}>
-              {opt.label}
-            </option>
-          ))}
-        </select>
-      </label>
-      <label className={cx(uiStyles, 'wiki-field')}>
-        <span className={cx(uiStyles, 'wiki-field-label')}>Birth date</span>
-        <input
-          type="text"
-          className={cx(uiStyles, 'wiki-input')}
-          placeholder="e.g. 1845-06-14 or 1845"
-          value={birthEdtf}
-          onChange={(e) => {
-            setBirthEdtf(e.target.value);
-          }}
-        />
-      </label>
-      <label className={cx(uiStyles, 'wiki-field')}>
-        <span className={cx(uiStyles, 'wiki-field-label')}>Death date</span>
-        <input
-          type="text"
-          className={cx(uiStyles, 'wiki-input')}
-          placeholder="Leave blank if living"
-          value={deathEdtf}
-          onChange={(e) => {
-            setDeathEdtf(e.target.value);
-          }}
-        />
-      </label>
-      <label className={cx(uiStyles, 'wiki-checkbox-row wiki-field-full')}>
-        <input
-          type="checkbox"
-          checked={isLiving}
-          onChange={(e) => {
-            setIsLiving(e.target.checked);
-          }}
-        />
-        <span>Living relative (privacy redaction enforced automatically)</span>
-      </label>
-    </div>
-  );
 
   const modalTitle =
     relativeContext && relativeSpec
@@ -622,25 +317,13 @@ export const CreateEntityModal: React.FC<CreateEntityModalProps> = ({
             role="tablist"
             aria-label="Record type to create"
             onKeyDown={(event) => {
-              handleTablistKeyDown(
-                event,
-                ['person', 'event', 'place', 'kinship_edge'] as const,
-                kind,
-                (next) => {
-                  setKind(next);
-                  setError(null);
-                }
-              );
+              handleTablistKeyDown(event, CREATABLE_KIND_ORDER, kind, (next) => {
+                setKind(next);
+                setError(null);
+              });
             }}
           >
-            {(
-              [
-                ['person', 'Person'],
-                ['event', 'Event'],
-                ['place', 'Place'],
-                ['kinship_edge', 'Family Link'],
-              ] as const
-            ).map(([id, label]) => (
+            {CREATABLE_KIND_ORDER.map((id) => (
               <button
                 key={id}
                 type="button"
@@ -653,7 +336,7 @@ export const CreateEntityModal: React.FC<CreateEntityModalProps> = ({
                   setError(null);
                 }}
               >
-                {label}
+                {ENTITY_CREATE_FORM_REGISTRY[id].tabLabel}
               </button>
             ))}
           </div>
@@ -673,225 +356,36 @@ export const CreateEntityModal: React.FC<CreateEntityModalProps> = ({
         >
           {relativeContext && relativeSpec ? (
             relativeTab === 'create_new' ? (
-              renderPersonFields()
+              <PersonCreateFields
+                draft={draft}
+                updateDraft={updateDraft}
+                people={people}
+                places={places}
+                uiStyles={uiStyles}
+              />
             ) : (
-              <div className={cx(uiStyles, 'wiki-field-grid')}>
-                <p className={cx(uiStyles, 'wiki-relative-hint wiki-field-full')}>
-                  {relativeSpec.linkHint(relativeContext.anchorPersonName)}
-                </p>
-                <label className={cx(uiStyles, 'wiki-field wiki-field-full')}>
-                  <span className={cx(uiStyles, 'wiki-field-label')}>Filter people by name</span>
-                  <input
-                    type="search"
-                    className={cx(uiStyles, 'wiki-input')}
-                    placeholder="Type a name to narrow the list…"
-                    value={existingQuery}
-                    onChange={(e) => {
-                      setExistingQuery(e.target.value);
-                    }}
-                  />
-                </label>
-                <label className={cx(uiStyles, 'wiki-field wiki-field-full')}>
-                  <span className={cx(uiStyles, 'wiki-field-label')}>Existing person</span>
-                  <select
-                    className={cx(uiStyles, 'wiki-input')}
-                    value={existingPersonId}
-                    onChange={(e) => {
-                      setExistingPersonId(e.target.value);
-                    }}
-                  >
-                    <option value="">Choose person…</option>
-                    {filteredExistingCandidates.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.full_name} ({p.birth_year || '?'}–{p.death_year || (p.is_living ? 'Living' : '?')})
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              </div>
+              <LinkExistingRelativeFields
+                linkHint={relativeSpec.linkHint(relativeContext.anchorPersonName)}
+                existingQuery={draft.existingQuery}
+                existingPersonId={draft.existingPersonId}
+                candidates={filteredExistingCandidates}
+                uiStyles={uiStyles}
+                onQueryChange={(value) => {
+                  updateDraft('existingQuery', value);
+                }}
+                onPersonIdChange={(value) => {
+                  updateDraft('existingPersonId', value);
+                }}
+              />
             )
           ) : (
-            <>
-              {kind === 'person' && renderPersonFields()}
-
-              {kind === 'event' && (
-                <div className={cx(uiStyles, 'wiki-field-grid')}>
-                  <label className={cx(uiStyles, 'wiki-field wiki-field-full')}>
-                    <span className={cx(uiStyles, 'wiki-field-label')}>Event title</span>
-                    <input
-                      type="text"
-                      className={cx(uiStyles, 'wiki-input')}
-                      value={eventTitle}
-                      onChange={(e) => {
-                        setEventTitle(e.target.value);
-                      }}
-                    />
-                  </label>
-                  <label className={cx(uiStyles, 'wiki-field')}>
-                    <span className={cx(uiStyles, 'wiki-field-label')}>Date</span>
-                    <input
-                      type="text"
-                      className={cx(uiStyles, 'wiki-input')}
-                      placeholder="1880-06"
-                      value={eventDate}
-                      onChange={(e) => {
-                        setEventDate(e.target.value);
-                      }}
-                    />
-                  </label>
-                  <label className={cx(uiStyles, 'wiki-field')}>
-                    <span className={cx(uiStyles, 'wiki-field-label')}>Primary person</span>
-                    <select
-                      className={cx(uiStyles, 'wiki-input')}
-                      value={eventPersonId}
-                      onChange={(e) => {
-                        setEventPersonId(e.target.value);
-                      }}
-                    >
-                      <option value="">None selected</option>
-                      {people.map((p) => (
-                        <option key={p.id} value={p.id}>
-                          {p.full_name}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label className={cx(uiStyles, 'wiki-field wiki-field-full')}>
-                    <span className={cx(uiStyles, 'wiki-field-label')}>Place</span>
-                    <select
-                      className={cx(uiStyles, 'wiki-input')}
-                      value={eventPlaceId}
-                      onChange={(e) => {
-                        setEventPlaceId(e.target.value);
-                      }}
-                    >
-                      <option value="">Unrecorded place</option>
-                      {places.map((pl) => (
-                        <option key={pl.id} value={pl.id}>
-                          {pl.full_name}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label className={cx(uiStyles, 'wiki-field wiki-field-full')}>
-                    <span className={cx(uiStyles, 'wiki-field-label')}>Summary</span>
-                    <textarea
-                      className={cx(uiStyles, 'wiki-textarea')}
-                      rows={3}
-                      value={eventSummary}
-                      onChange={(e) => {
-                        setEventSummary(e.target.value);
-                      }}
-                    />
-                  </label>
-                </div>
-              )}
-
-              {kind === 'place' && (
-                <div className={cx(uiStyles, 'wiki-field-grid')}>
-                  <label className={cx(uiStyles, 'wiki-field')}>
-                    <span className={cx(uiStyles, 'wiki-field-label')}>Short name</span>
-                    <input
-                      type="text"
-                      className={cx(uiStyles, 'wiki-input')}
-                      value={placeName}
-                      onChange={(e) => {
-                        setPlaceName(e.target.value);
-                      }}
-                    />
-                  </label>
-                  <label className={cx(uiStyles, 'wiki-field')}>
-                    <span className={cx(uiStyles, 'wiki-field-label')}>Full hierarchical name</span>
-                    <input
-                      type="text"
-                      className={cx(uiStyles, 'wiki-input')}
-                      placeholder="Town, County, State, Country"
-                      value={placeFullName}
-                      onChange={(e) => {
-                        setPlaceFullName(e.target.value);
-                      }}
-                    />
-                  </label>
-                  <label className={cx(uiStyles, 'wiki-field')}>
-                    <span className={cx(uiStyles, 'wiki-field-label')}>Latitude</span>
-                    <input
-                      type="number"
-                      step="any"
-                      className={cx(uiStyles, 'wiki-input')}
-                      value={placeLat}
-                      onChange={(e) => {
-                        setPlaceLat(e.target.value);
-                      }}
-                    />
-                  </label>
-                  <label className={cx(uiStyles, 'wiki-field')}>
-                    <span className={cx(uiStyles, 'wiki-field-label')}>Longitude</span>
-                    <input
-                      type="number"
-                      step="any"
-                      className={cx(uiStyles, 'wiki-input')}
-                      value={placeLng}
-                      onChange={(e) => {
-                        setPlaceLng(e.target.value);
-                      }}
-                    />
-                  </label>
-                </div>
-              )}
-
-              {kind === 'kinship_edge' && (
-                <div className={cx(uiStyles, 'wiki-field-grid')}>
-                  <label className={cx(uiStyles, 'wiki-field')}>
-                    <span className={cx(uiStyles, 'wiki-field-label')}>From person</span>
-                    <select
-                      className={cx(uiStyles, 'wiki-input')}
-                      value={fromPersonId}
-                      onChange={(e) => {
-                        setFromPersonId(e.target.value);
-                      }}
-                    >
-                      <option value="">Choose person…</option>
-                      {people.map((p) => (
-                        <option key={p.id} value={p.id}>
-                          {p.full_name}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label className={cx(uiStyles, 'wiki-field')}>
-                    <span className={cx(uiStyles, 'wiki-field-label')}>Relationship</span>
-                    <select
-                      className={cx(uiStyles, 'wiki-input')}
-                      value={relation}
-                      onChange={(e) => {
-                        setRelation(parseKinshipRelation(e.target.value));
-                      }}
-                    >
-                      <option value="parent">is parent of</option>
-                      <option value="spouse">is spouse of</option>
-                      <option value="child">is child of</option>
-                    </select>
-                  </label>
-                  <label className={cx(uiStyles, 'wiki-field wiki-field-full')}>
-                    <span className={cx(uiStyles, 'wiki-field-label')}>To person</span>
-                    <select
-                      className={cx(uiStyles, 'wiki-input')}
-                      value={toPersonId}
-                      onChange={(e) => {
-                        setToPersonId(e.target.value);
-                      }}
-                    >
-                      <option value="">Choose person…</option>
-                      {people.map((p) => (
-                        <option key={p.id} value={p.id}>
-                          {p.full_name}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                </div>
-              )}
-            </>
+            <ActiveFields
+              draft={draft}
+              updateDraft={updateDraft}
+              people={people}
+              places={places}
+              uiStyles={uiStyles}
+            />
           )}
 
           <label className={cx(uiStyles, 'wiki-checkbox-row')}>

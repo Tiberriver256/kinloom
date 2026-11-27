@@ -3,17 +3,15 @@ import type React from 'react';
 import { useArchiveData } from '../context/ArchiveDataContext.js';
 import { cx } from '../lib/cx.js';
 import cssMod3 from '../pages/IndexPage.module.css';
-import cssMod4 from '../pages/PersonPage.module.css';
 import { useKinloomPlugins } from '../plugins/PluginContext.js';
 import { resolveAssetUrl } from './Atoms.js';
 import cssMod0 from './Atoms.module.css';
+import cssMod4 from './MediaGallery.module.css';
 import cssMod1 from './SourceReaderDrawer.module.css';
-import cssMod2 from './wiki/WikiSurfaces.module.css';
 
 const uiStyles: Readonly<Record<string, string>> = {
   ...cssMod0,
   ...cssMod1,
-  ...cssMod2,
   ...cssMod3,
   ...cssMod4,
 };

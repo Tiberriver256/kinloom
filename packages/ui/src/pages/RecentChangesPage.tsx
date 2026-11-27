@@ -8,7 +8,8 @@ import { ExplorerTopBar } from '../components/ExplorerTopBar.js';
 import { KinloomFooter } from '../components/KinloomFooter.js';
 import { RevisionDiffView } from '../components/wiki/RevisionDiffView.js';
 import { AuthorPill, CitationBadge } from '../components/wiki/WikiBadges.js';
-import cssMod1 from '../components/wiki/WikiSurfaces.module.css';
+import cssMod1_1 from '../components/wiki/WikiForms.module.css';
+import cssMod1_0 from '../components/wiki/WikiPanels.module.css';
 import { useArchiveData } from '../context/ArchiveDataContext.js';
 import { cx } from '../lib/cx.js';
 import { formatArchivalTimestamp } from '../lib/formatTimestamp.js';
@@ -19,7 +20,8 @@ import cssMod4 from './PlacePage.module.css';
 
 const uiStyles: Readonly<Record<string, string>> = {
   ...cssMod0,
-  ...cssMod1,
+  ...cssMod1_0,
+  ...cssMod1_1,
   ...cssMod2,
   ...cssMod3,
   ...cssMod4,

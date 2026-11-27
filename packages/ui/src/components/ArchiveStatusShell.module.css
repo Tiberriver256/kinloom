@@ -1,0 +1,189 @@
+/* Archive App Shell, Loading, Error & Recovery Surfaces */
+
+.kinloom-app {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+}
+
+.kinloom-app:has(:global(.map-shell)),
+.kinloom-app:has(:global(.tree-shell-diagram)) {
+  height: 100dvh;
+  overflow: hidden;
+}
+
+.archive-loading-shell {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  border: 1px solid var(--border-decorative);
+  border-radius: var(--radius-sm);
+  background: var(--surface-card);
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+}
+
+.archive-loading-spinner {
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  border: 2px solid var(--border-decorative);
+  border-top-color: var(--radar-copresence);
+  animation: archive-spin 0.8s linear infinite;
+}
+
+@keyframes archive-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.archive-error-box {
+  max-width: 520px;
+  padding: 18px 20px;
+  border: 1px solid var(--status-conflict);
+  border-radius: var(--radius-sm);
+  background: var(--surface-card);
+}
+
+.archive-error-box h2 {
+  margin: 0 0 8px;
+  font-family: var(--font-serif);
+  color: var(--surface-header);
+}
+
+.archive-recovery-page {
+  min-height: 100dvh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px 16px;
+}
+
+.archive-recovery-card {
+  width: min(520px, 100%);
+  padding: 24px 26px;
+  border: 1px solid var(--border-control);
+  border-radius: var(--radius-sm);
+  background: var(--surface-card);
+  box-shadow: var(--shadow-active);
+}
+
+.archive-recovery-kicker {
+  margin: 0 0 8px;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  color: var(--radar-copresence);
+}
+
+.archive-recovery-title {
+  margin: 0 0 10px;
+  font-family: var(--font-serif);
+  font-size: 1.4rem;
+  line-height: 1.25;
+  color: var(--surface-header);
+}
+
+.archive-recovery-lead {
+  margin: 0 0 18px;
+  font-family: var(--font-serif);
+  font-size: 0.98rem;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+.archive-recovery-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.archive-recovery-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40px;
+  padding: 9px 16px;
+  border: 1px solid var(--border-control);
+  border-radius: var(--radius-sm);
+  background: var(--surface-canvas);
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  cursor: pointer;
+  transition:
+    background-color 0.14s ease,
+    border-color 0.14s ease,
+    color 0.14s ease;
+}
+
+.archive-recovery-btn:hover {
+  background: var(--surface-radar);
+  border-color: var(--surface-header);
+  color: var(--surface-header);
+}
+
+.archive-recovery-btn:focus-visible {
+  outline: 2px solid var(--radar-copresence);
+  outline-offset: 2px;
+}
+
+.archive-recovery-btn:global(.primary) {
+  background: var(--surface-header);
+  border-color: var(--surface-header);
+  color: var(--text-inverse);
+}
+
+.archive-recovery-btn:global(.primary):hover {
+  background: var(--radar-copresence);
+  border-color: var(--radar-copresence);
+  color: var(--text-inverse);
+}
+
+.archive-recovery-details {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 0.76rem;
+  color: var(--text-secondary);
+}
+
+.archive-recovery-details summary {
+  cursor: pointer;
+  color: var(--text-primary);
+}
+
+.archive-recovery-tech {
+  margin: 10px 0 0;
+  padding: 10px 12px;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  background: var(--surface-canvas);
+  border: 1px solid var(--border-decorative);
+  border-radius: 2px;
+  color: var(--text-secondary);
+}
+
+@media (max-width: 480px) {
+  .archive-recovery-card {
+    padding: 18px 16px;
+  }
+
+  .archive-recovery-actions {
+    flex-direction: column;
+  }
+
+  .archive-recovery-btn {
+    width: 100%;
+  }
+}
+
+.kinloom-plugin-slot {
+  margin-bottom: 16px;
+}

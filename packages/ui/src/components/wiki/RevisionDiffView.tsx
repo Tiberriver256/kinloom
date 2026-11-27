@@ -3,7 +3,7 @@ import { computeEntityDiff } from '@kinloom/core';
 import type React from 'react';
 import { useMemo } from 'react';
 import { cx } from '../../lib/cx.js';
-import cssMod0 from './WikiSurfaces.module.css';
+import cssMod0 from './WikiPanels.module.css';
 
 const uiStyles = cssMod0;
 

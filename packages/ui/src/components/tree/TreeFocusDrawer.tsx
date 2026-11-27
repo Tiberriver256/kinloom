@@ -7,10 +7,11 @@ import { cx } from '../../lib/cx.js';
 import { formatLineageGroupLabel } from '../../lib/treeNodeDisplay.js';
 import { formatPhotoDocumentCount, KINLOOM_VOCABULARY } from '../../lib/vocabulary.js';
 import cssMod0 from '../../pages/IndexPage.module.css';
-import cssMod1 from '../../pages/TreeAndMapPage.module.css';
 import { initialsOf, resolveAssetUrl } from '../Atoms.js';
+import cssMod2 from '../CanvasSurfacePrimitives.module.css';
+import cssMod1 from './TreeFocusDrawer.module.css';
 
-const uiStyles: Readonly<Record<string, string>> = { ...cssMod0, ...cssMod1 };
+const uiStyles: Readonly<Record<string, string>> = { ...cssMod0, ...cssMod2, ...cssMod1 };
 
 export interface TreeFocusDrawerProps {
   readonly person: Person;

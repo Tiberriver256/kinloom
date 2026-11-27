@@ -9,9 +9,10 @@ import cssMod1 from '../../pages/IndexPage.module.css';
 import cssMod2 from '../../pages/PersonPage.module.css';
 import { RevisionDiffView } from './RevisionDiffView.js';
 import { AuthorPill, CitationBadge } from './WikiBadges.js';
-import cssMod0 from './WikiSurfaces.module.css';
+import cssMod0_1 from './WikiForms.module.css';
+import cssMod0_0 from './WikiPanels.module.css';
 
-const uiStyles: Readonly<Record<string, string>> = { ...cssMod0, ...cssMod1, ...cssMod2 };
+const uiStyles: Readonly<Record<string, string>> = { ...cssMod0_0, ...cssMod0_1, ...cssMod1, ...cssMod2 };
 
 export interface RevisionHistoryPanelProps {
   entityType: EntityType;

@@ -1,0 +1,87 @@
+/* Shared Canvas Surface & Overlay Primitives (Tree & Map) */
+
+.tree-page {
+  position: relative;
+  background-color: var(--surface-canvas);
+}
+
+.tree-controls {
+  position: absolute;
+  right: 18px;
+  bottom: 18px;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.tree-controls :global(.pill-btn) {
+  min-width: 40px;
+  min-height: 38px;
+  text-align: center;
+  background: rgba(252, 249, 242, 0.96);
+  border: 1px solid var(--border-control);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-card);
+  touch-action: manipulation;
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.tree-popover {
+  position: absolute;
+  top: 16px;
+  right: 18px;
+  z-index: 25;
+  width: 312px;
+  background: var(--surface-card);
+  border: 1px solid var(--border-control);
+  border-radius: var(--radius-md);
+  padding: 14px 16px;
+  box-shadow: var(--shadow-active);
+}
+
+.map-bordered-btn {
+  border: 1px solid var(--border-decorative);
+  border-radius: var(--radius-sm);
+  padding: 4px 9px;
+  background: rgba(245, 239, 226, 0.55);
+}
+
+.map-bordered-btn:hover {
+  border-color: var(--border-control);
+}
+
+.map-bordered-btn:global(.active) {
+  border-color: var(--radar-copresence);
+  border-bottom: 2px solid var(--radar-copresence);
+}
+
+@media (max-width: 768px) {
+  .tree-popover {
+    top: auto;
+    left: 10px;
+    right: 64px;
+    bottom: 14px;
+    width: auto;
+    max-height: 46vh;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: 12px 14px;
+  }
+
+  .tree-controls {
+    right: 10px;
+    bottom: 14px;
+  }
+
+  .tree-controls :global(.pill-btn) {
+    min-width: 44px;
+    min-height: 44px;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+}

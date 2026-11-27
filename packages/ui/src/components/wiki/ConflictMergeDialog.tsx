@@ -5,7 +5,7 @@ import type { EntityEditorConflict } from '../../machines/entityEditorMachine.js
 import cssMod1 from '../../pages/IndexPage.module.css';
 import { RevisionDiffView } from './RevisionDiffView.js';
 import { ConflictBadge } from './WikiBadges.js';
-import cssMod0 from './WikiSurfaces.module.css';
+import cssMod0 from './WikiPanels.module.css';
 
 const uiStyles: Readonly<Record<string, string>> = { ...cssMod0, ...cssMod1 };
 

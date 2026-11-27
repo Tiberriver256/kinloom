@@ -7,7 +7,7 @@ import cssMod2 from '../../pages/IndexPage.module.css';
 import cssMod0 from '../SourceReaderDrawer.module.css';
 import { AuthSignInFlow } from './AuthSignInFlow.js';
 import type { AuthUrlError } from './authErrorCopy.js';
-import cssMod1 from './WikiSurfaces.module.css';
+import cssMod1 from './WikiForms.module.css';
 
 const uiStyles: Readonly<Record<string, string>> = { ...cssMod0, ...cssMod1, ...cssMod2 };
 

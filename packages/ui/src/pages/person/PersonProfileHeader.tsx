@@ -1,0 +1,309 @@
+import type { Person, Place, Pronunciation, ResidenceSpan } from '@kinloom/core';
+import { resolvePersonPronunciation } from '@kinloom/core';
+import type React from 'react';
+import { Link } from 'react-router-dom';
+import { resolveAssetUrl } from '../../components/Atoms.js';
+import { PronunciationBadge } from '../../components/PronunciationBadge.js';
+import type { RelativeCreateContext } from '../../components/wiki/CreateEntityModal.js';
+import { CitationBadge } from '../../components/wiki/WikiBadges.js';
+import { cx } from '../../lib/cx.js';
+import { KINLOOM_VOCABULARY } from '../../lib/vocabulary.js';
+import type { ImmediateFamilySummary } from './personViewModel.js';
+
+export interface PersonProfileHeaderProps {
+  readonly person: Person;
+  readonly baseUrl?: string;
+  readonly branchLabel: string | null;
+  readonly routePlaceCount: number;
+  readonly canEdit: boolean;
+  readonly pronunciations: Readonly<Record<string, Pronunciation>>;
+  readonly immediateFamily: ImmediateFamilySummary;
+  readonly residenceSpans: readonly ResidenceSpan[];
+  readonly placesById: ReadonlyMap<string, Place>;
+  readonly uiStyles: Readonly<Record<string, string>>;
+  readonly onOpenPortraitLightbox: () => void;
+  readonly onEditPronunciation: () => void;
+  readonly onExportGedcom: () => void;
+  readonly onOpenRelativeModal: (ctx: RelativeCreateContext) => void;
+}
+
+export const PersonProfileHeader: React.FC<PersonProfileHeaderProps> = ({
+  person,
+  baseUrl,
+  branchLabel,
+  routePlaceCount,
+  canEdit,
+  pronunciations,
+  immediateFamily,
+  residenceSpans,
+  placesById,
+  uiStyles,
+  onOpenPortraitLightbox,
+  onEditPronunciation,
+  onExportGedcom,
+  onOpenRelativeModal,
+}) => {
+  const showFamilyStrip =
+    canEdit ||
+    immediateFamily.parents.length > 0 ||
+    immediateFamily.spouses.length > 0 ||
+    immediateFamily.children.length > 0 ||
+    immediateFamily.livingSpouseCount > 0 ||
+    immediateFamily.livingChildCount > 0;
+
+  const effectivePronunciation =
+    !person.is_living && person.full_name !== 'Living'
+      ? resolvePersonPronunciation(person, pronunciations)
+      : null;
+  const showPronunciationRow =
+    !person.is_living && person.full_name !== 'Living' && (Boolean(effectivePronunciation) || canEdit);
+
+  return (
+    <header className={cx(uiStyles, 'person-header')}>
+      <div className={cx(uiStyles, 'person-header-top')}>
+        <div className={cx(uiStyles, `person-header-identity${person.portrait_url ? ' has-portrait' : ''}`)}>
+          {person.portrait_url && (
+            <button
+              type="button"
+              className={cx(uiStyles, 'person-portrait-btn')}
+              onClick={onOpenPortraitLightbox}
+              title="Click to zoom archival portrait"
+            >
+              <img
+                src={resolveAssetUrl(person.portrait_url, baseUrl)}
+                alt={`Archival portrait of ${person.full_name}`}
+                className={cx(uiStyles, 'person-portrait-img')}
+              />
+            </button>
+          )}
+          <h1 className={cx(uiStyles, 'person-header-title')}>{person.full_name}</h1>
+          {showPronunciationRow && (
+            <div className={cx(uiStyles, 'person-pronunciation-row')}>
+              {effectivePronunciation ? (
+                <>
+                  <PronunciationBadge
+                    pronunciation={effectivePronunciation}
+                    label={
+                      effectivePronunciation.coverage === 'full'
+                        ? person.full_name
+                        : effectivePronunciation.matchedPart || person.surname || person.full_name
+                    }
+                    coverage={effectivePronunciation.coverage}
+                    matchedPart={effectivePronunciation.matchedPart}
+                    baseUrl={baseUrl}
+                  />
+                  {canEdit && (
+                    <button
+                      type="button"
+                      className={cx(uiStyles, 'pronunciation-edit-link print-hide')}
+                      onClick={onEditPronunciation}
+                      aria-label={`Edit pronunciation for ${person.full_name}`}
+                    >
+                      {KINLOOM_VOCABULARY.person.editPronunciation}
+                    </button>
+                  )}
+                </>
+              ) : (
+                <button
+                  type="button"
+                  className={cx(uiStyles, 'pronunciation-edit-link print-hide')}
+                  onClick={onEditPronunciation}
+                >
+                  {KINLOOM_VOCABULARY.person.addPronunciation}
+                </button>
+              )}
+            </div>
+          )}
+          <div className={cx(uiStyles, 'person-header-dates')}>
+            <span>
+              {person.birth_edtf || '?'} — {person.death_edtf || (person.is_living ? 'Living' : '?')}
+            </span>
+            {branchLabel && <span className={cx(uiStyles, 'person-branch-badge')}>{branchLabel}</span>}
+            {person.has_primary_source !== undefined && (
+              <CitationBadge hasPrimarySource={person.has_primary_source} />
+            )}
+          </div>
+          {person.alt_names.length > 0 && (
+            <div className={cx(uiStyles, 'person-alt-names')}>
+              {KINLOOM_VOCABULARY.person.alsoRecordedAs} {person.alt_names.join(', ')}
+            </div>
+          )}
+        </div>
+        <div className={cx(uiStyles, 'person-header-actions print-hide')}>
+          {routePlaceCount > 1 && (
+            <Link to={`/map?person=${person.slug}`} className={cx(uiStyles, 'ink-link-btn')}>
+              Their route
+            </Link>
+          )}
+          <button
+            type="button"
+            className={cx(uiStyles, 'pill-btn print-hide')}
+            onClick={onExportGedcom}
+            title={`Download family tree file for ${person.full_name}`}
+          >
+            Export GEDCOM
+          </button>
+        </div>
+      </div>
+
+      {showFamilyStrip && (
+        <div
+          className={cx(uiStyles, 'person-family-strip')}
+          role="region"
+          aria-label="Immediate family connections"
+        >
+          {(immediateFamily.parents.length > 0 || canEdit) && (
+            <div className={cx(uiStyles, 'person-family-row')}>
+              <span className={cx(uiStyles, 'person-family-label')}>Parents</span>
+              <div className={cx(uiStyles, 'person-family-chips')}>
+                {immediateFamily.parents.map((rel) => (
+                  <Link
+                    key={rel.id}
+                    to={`/person/${rel.slug}`}
+                    className={cx(uiStyles, 'person-family-chip')}
+                  >
+                    {rel.name} <span>({rel.years})</span>
+                  </Link>
+                ))}
+                {canEdit && (
+                  <button
+                    type="button"
+                    className={cx(uiStyles, 'person-family-add-btn print-hide')}
+                    onClick={() => {
+                      onOpenRelativeModal({
+                        anchorPersonId: person.id,
+                        anchorPersonName: person.full_name,
+                        relation: 'parent',
+                      });
+                    }}
+                  >
+                    + Add parent
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+
+          {(immediateFamily.spouses.length > 0 || immediateFamily.livingSpouseCount > 0 || canEdit) && (
+            <div className={cx(uiStyles, 'person-family-row')}>
+              <span className={cx(uiStyles, 'person-family-label')}>
+                {immediateFamily.spouses.length + immediateFamily.livingSpouseCount > 1
+                  ? 'Spouses'
+                  : 'Spouse'}
+              </span>
+              <div className={cx(uiStyles, 'person-family-chips')}>
+                {immediateFamily.spouses.map((rel) => (
+                  <Link
+                    key={rel.id}
+                    to={`/person/${rel.slug}`}
+                    className={cx(uiStyles, 'person-family-chip')}
+                  >
+                    {rel.name} <span>({rel.years})</span>
+                  </Link>
+                ))}
+                {immediateFamily.livingSpouseCount > 0 && (
+                  <span className={cx(uiStyles, 'person-family-chip is-redacted')}>
+                    {immediateFamily.livingSpouseCount} living spouse (redacted)
+                  </span>
+                )}
+                {canEdit && (
+                  <button
+                    type="button"
+                    className={cx(uiStyles, 'person-family-add-btn print-hide')}
+                    onClick={() => {
+                      onOpenRelativeModal({
+                        anchorPersonId: person.id,
+                        anchorPersonName: person.full_name,
+                        relation: 'spouse',
+                      });
+                    }}
+                  >
+                    + Add spouse
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+
+          {(immediateFamily.children.length > 0 || immediateFamily.livingChildCount > 0 || canEdit) && (
+            <div className={cx(uiStyles, 'person-family-row')}>
+              <span className={cx(uiStyles, 'person-family-label')}>Children</span>
+              <div className={cx(uiStyles, 'person-family-chips')}>
+                {immediateFamily.children.map((rel) => (
+                  <Link
+                    key={rel.id}
+                    to={`/person/${rel.slug}`}
+                    className={cx(uiStyles, 'person-family-chip')}
+                  >
+                    {rel.name} <span>({rel.years})</span>
+                  </Link>
+                ))}
+                {immediateFamily.livingChildCount > 0 && (
+                  <span className={cx(uiStyles, 'person-family-chip is-redacted')}>
+                    +{immediateFamily.livingChildCount} living{' '}
+                    {immediateFamily.livingChildCount === 1 ? 'child' : 'children'} (redacted)
+                  </span>
+                )}
+                {canEdit && (
+                  <button
+                    type="button"
+                    className={cx(uiStyles, 'person-family-add-btn print-hide')}
+                    onClick={() => {
+                      onOpenRelativeModal({
+                        anchorPersonId: person.id,
+                        anchorPersonName: person.full_name,
+                        relation: 'child',
+                      });
+                    }}
+                  >
+                    + Add child
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {residenceSpans.length > 0 && (
+        <div
+          className={cx(uiStyles, 'person-family-strip')}
+          role="region"
+          aria-label="Documented residence spans"
+        >
+          <div className={cx(uiStyles, 'person-family-row')}>
+            <span className={cx(uiStyles, 'person-family-label')}>Residences</span>
+            <div className={cx(uiStyles, 'person-family-chips')}>
+              {residenceSpans.map((span) => {
+                const pl = placesById.get(span.place_id);
+                if (!pl) {
+                  return null;
+                }
+                const range =
+                  span.start_year && span.end_year
+                    ? span.start_year === span.end_year
+                      ? String(span.start_year)
+                      : `${span.start_year}–${span.end_year}`
+                    : 'Undated';
+                return (
+                  <Link
+                    key={span.id}
+                    to={`/place/${pl.slug}`}
+                    className={cx(uiStyles, 'person-family-chip')}
+                    title={`${pl.full_name} (${range} · ${span.confidence_tier})`}
+                  >
+                    {pl.name}{' '}
+                    <span>
+                      ({range}
+                      {span.confidence_tier === 'Possible' ? ' · approx.' : ''})
+                    </span>
+                  </Link>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+    </header>
+  );
+};

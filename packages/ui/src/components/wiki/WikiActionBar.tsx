@@ -2,7 +2,7 @@ import type React from 'react';
 import { useArchiveData } from '../../context/ArchiveDataContext.js';
 import { cx } from '../../lib/cx.js';
 import cssMod1 from '../../pages/IndexPage.module.css';
-import cssMod0 from './WikiSurfaces.module.css';
+import cssMod0 from './WikiChrome.module.css';
 
 const uiStyles: Readonly<Record<string, string>> = { ...cssMod0, ...cssMod1 };
 

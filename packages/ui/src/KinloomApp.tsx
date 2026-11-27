@@ -3,6 +3,7 @@ import type React from 'react';
 import { lazy, Suspense, useEffect } from 'react';
 import { BrowserRouter, MemoryRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { AppErrorBoundary } from './components/AppErrorBoundary.js';
+import cssMod1 from './components/ArchiveStatusShell.module.css';
 import { BlankScreenWatchdog } from './components/BlankScreenWatchdog.js';
 import { ExplorerTopBar } from './components/ExplorerTopBar.js';
 import { GlobalSearchModal } from './components/GlobalSearchModal.js';
@@ -18,7 +19,6 @@ import { cx } from './lib/cx.js';
 import { IndexPage } from './pages/IndexPage.js';
 import cssMod0 from './pages/IndexPage.module.css';
 import { NotFoundPage } from './pages/NotFoundPage.js';
-import cssMod1 from './pages/TreeAndMapPage.module.css';
 import { PluginSlot, useKinloomPlugins } from './plugins/PluginContext.js';
 import type { KinloomUiPlugin } from './plugins/types.js';
 

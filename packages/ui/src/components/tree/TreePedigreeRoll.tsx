@@ -17,8 +17,8 @@ import { scrollBehaviorForMotion } from '../../lib/keyboardNav.js';
 import { formatTreeCardName } from '../../lib/treeNodeDisplay.js';
 import { KINLOOM_VOCABULARY } from '../../lib/vocabulary.js';
 import cssMod0 from '../../pages/NotFoundPage.module.css';
-import cssMod1 from '../../pages/TreeAndMapPage.module.css';
 import { initialsOf, resolveAssetUrl } from '../Atoms.js';
+import cssMod1 from './TreePedigreeRoll.module.css';
 
 const uiStyles: Readonly<Record<string, string>> = { ...cssMod0, ...cssMod1 };
 

@@ -5,7 +5,7 @@ import { cx } from '../../lib/cx.js';
 import { KinloomFooter, KinloomMark } from '../KinloomFooter.js';
 import { AuthSignInFlow } from './AuthSignInFlow.js';
 import { type AuthUrlError, consumeAuthErrorFromWindow } from './authErrorCopy.js';
-import cssMod0 from './WikiSurfaces.module.css';
+import cssMod0 from './WikiAuth.module.css';
 
 const uiStyles = cssMod0;
 

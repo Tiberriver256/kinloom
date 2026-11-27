@@ -7,7 +7,7 @@ import {
   shouldAttemptChunkReload,
 } from '../lib/clientTelemetry.js';
 import { cx } from '../lib/cx.js';
-import cssMod0 from '../pages/TreeAndMapPage.module.css';
+import cssMod0 from './ArchiveStatusShell.module.css';
 
 const uiStyles = cssMod0;
 

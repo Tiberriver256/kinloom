@@ -5,7 +5,6 @@ import { EmptyStateNotice, initialsOf } from '../components/Atoms.js';
 import cssMod0 from '../components/Atoms.module.css';
 import { ExplorerTopBar } from '../components/ExplorerTopBar.js';
 import { KinloomFooter } from '../components/KinloomFooter.js';
-import cssMod1 from '../components/wiki/WikiSurfaces.module.css';
 import { useArchiveData } from '../context/ArchiveDataContext.js';
 import { cx } from '../lib/cx.js';
 import { formatKinshipPresentation } from '../lib/kinshipPresentation.js';
@@ -17,7 +16,6 @@ import cssMod5 from './PlacePage.module.css';
 
 const uiStyles: Readonly<Record<string, string>> = {
   ...cssMod0,
-  ...cssMod1,
   ...cssMod2,
   ...cssMod3,
   ...cssMod4,

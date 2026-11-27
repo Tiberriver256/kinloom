@@ -11,9 +11,8 @@ import cssMod3 from '../pages/IndexPage.module.css';
 import { DateStamp, resolveAssetUrl } from './Atoms.js';
 import cssMod0 from './SourceInspectorDrawer.module.css';
 import cssMod1 from './SourceReaderDrawer.module.css';
-import cssMod2 from './wiki/WikiSurfaces.module.css';
 
-const uiStyles: Readonly<Record<string, string>> = { ...cssMod0, ...cssMod1, ...cssMod2, ...cssMod3 };
+const uiStyles: Readonly<Record<string, string>> = { ...cssMod0, ...cssMod1, ...cssMod3 };
 
 export const SourceInspectorDrawer: React.FC = () => {
   const { bundle, sourcesById, eventsById, readableSourceIds, baseUrl } = useArchiveData();

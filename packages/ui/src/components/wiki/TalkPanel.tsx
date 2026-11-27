@@ -6,9 +6,19 @@ import { cx } from '../../lib/cx.js';
 import { KINLOOM_VOCABULARY } from '../../lib/vocabulary.js';
 import cssMod1 from '../../pages/IndexPage.module.css';
 import cssMod2 from '../../pages/PersonPage.module.css';
-import cssMod0 from './WikiSurfaces.module.css';
+import cssMod0_1 from './WikiAuth.module.css';
+import cssMod0_0 from './WikiChrome.module.css';
+import cssMod0_3 from './WikiForms.module.css';
+import cssMod0_2 from './WikiPanels.module.css';
 
-const uiStyles: Readonly<Record<string, string>> = { ...cssMod0, ...cssMod1, ...cssMod2 };
+const uiStyles: Readonly<Record<string, string>> = {
+  ...cssMod0_0,
+  ...cssMod0_1,
+  ...cssMod0_2,
+  ...cssMod0_3,
+  ...cssMod1,
+  ...cssMod2,
+};
 
 export interface TalkPanelProps {
   entityType: EntityType;

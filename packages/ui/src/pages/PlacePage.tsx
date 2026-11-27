@@ -14,7 +14,6 @@ import { EntityEditDrawer, type EntityEditDrawerSection } from '../components/wi
 import { RevisionHistoryPanel } from '../components/wiki/RevisionHistoryPanel.js';
 import { TalkPanel } from '../components/wiki/TalkPanel.js';
 import { WikiActionBar, type WikiEntityTab } from '../components/wiki/WikiActionBar.js';
-import cssMod1 from '../components/wiki/WikiSurfaces.module.css';
 import { useArchiveData } from '../context/ArchiveDataContext.js';
 import { cx } from '../lib/cx.js';
 import { formatReaderLoadError, KINLOOM_VOCABULARY } from '../lib/vocabulary.js';
@@ -25,7 +24,6 @@ import cssMod4 from './PlacePage.module.css';
 
 const uiStyles: Readonly<Record<string, string>> = {
   ...cssMod0,
-  ...cssMod1,
   ...cssMod2,
   ...cssMod3,
   ...cssMod4,

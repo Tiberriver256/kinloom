@@ -4,7 +4,7 @@ import type React from 'react';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { cx } from '../lib/cx.js';
-import cssMod1 from '../pages/PersonPage.module.css';
+import cssMod1 from './ArchivalMarkdown.module.css';
 import cssMod0 from './SourceInspectorDrawer.module.css';
 
 const uiStyles: Readonly<Record<string, string>> = { ...cssMod0, ...cssMod1 };

@@ -9,7 +9,7 @@ import type React from 'react';
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useOptionalArchiveData } from '../context/ArchiveDataContext.js';
 import { cx } from '../lib/cx.js';
-import cssMod0 from '../pages/PersonPage.module.css';
+import cssMod0 from './ArchivalMarkdown.module.css';
 import { resolveAssetUrl } from './Atoms.js';
 import { CitationPopover } from './CitationPopover.js';
 import { InlineEntityMention } from './InlineEntityMention.js';

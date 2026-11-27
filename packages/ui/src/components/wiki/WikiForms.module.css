@@ -1,0 +1,264 @@
+/* Wiki Edit Drawer, Modals, Form Fields & Danger Zone */
+
+.wiki-relative-hint {
+  margin: 0;
+  font-size: 0.88rem;
+  color: var(--text-secondary);
+}
+
+.wiki-input[aria-invalid="true"] {
+  border-color: var(--diff-del-fg);
+  background: var(--diff-del-bg);
+}
+
+/* Edit Drawer & Modals */
+.wiki-edit-drawer-panel {
+  width: min(680px, 98vw);
+  padding: 0;
+  overflow: hidden;
+  gap: 0;
+}
+
+.wiki-edit-drawer-panel > :global(.drawer-top) {
+  flex: 0 0 auto;
+  padding: 18px 24px 12px;
+  background: var(--surface-card);
+  z-index: 2;
+}
+
+.wiki-edit-drawer-form {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.wiki-edit-drawer-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 14px 24px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  scroll-padding-bottom: 72px;
+}
+
+.wiki-drawer-footer {
+  flex: 0 0 auto;
+  border-top: 1px solid var(--border-decorative);
+  padding: 12px 24px;
+  background: var(--surface-card);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 14px;
+  z-index: 2;
+}
+
+.wiki-drawer-footer-hint {
+  font-family: var(--font-mono);
+  font-size: 0.76rem;
+  color: var(--text-secondary);
+}
+
+.wiki-drawer-subtitle {
+  font-family: var(--font-mono);
+  font-size: 0.76rem;
+  color: var(--text-secondary);
+}
+
+.wiki-modal-card {
+  position: relative;
+  z-index: 2;
+  width: min(620px, 94vw);
+  max-height: 90vh;
+  overflow-y: auto;
+  background: var(--surface-card);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-active);
+  padding: 20px;
+}
+
+.wiki-signin-card {
+  width: min(460px, 94vw);
+}
+
+.wiki-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.wiki-modal-header h2 {
+  font-family: var(--font-serif);
+  margin: 0;
+  color: var(--surface-header);
+}
+
+.wiki-edit-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.wiki-field-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.wiki-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.wiki-field-full {
+  grid-column: 1 / -1;
+}
+
+.wiki-field-label {
+  font-family: var(--font-mono);
+  font-size: 0.76rem;
+  font-weight: 600;
+  color: var(--surface-header);
+}
+
+.wiki-input,
+.wiki-textarea {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 9px 11px;
+  background: var(--surface-canvas);
+  color: var(--text-primary);
+  border: 1px solid var(--border-control);
+  border-radius: var(--radius-md);
+  font-family: inherit;
+  font-size: 0.94rem;
+}
+
+.wiki-input-lg {
+  min-height: 46px;
+  font-size: 1rem;
+  padding: 10px 12px;
+}
+
+.wiki-mono {
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+}
+
+.wiki-checkbox-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: 0.9rem;
+  line-height: 1.45;
+  flex-wrap: nowrap;
+}
+
+.wiki-checkbox-row input[type="checkbox"] {
+  margin-top: 3px;
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+}
+
+.wiki-citation-fieldset {
+  border: 1px solid var(--border-decorative);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  margin: 0;
+}
+
+.wiki-citation-options {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.wiki-radio-card {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 0.86rem;
+}
+
+.wiki-radio-desc {
+  color: var(--text-secondary);
+}
+
+.wiki-danger-zone {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border-decorative);
+}
+
+.wiki-danger-btn {
+  color: var(--diff-del-fg);
+  border-color: var(--diff-del-fg);
+}
+
+.wiki-inline-form {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: flex-end;
+}
+
+.wiki-inline-field-grow {
+  flex: 1 1 240px;
+}
+
+.wiki-inline-field-days {
+  flex: 0 1 130px;
+}
+
+.wiki-inline-field-scope {
+  flex: 1 1 250px;
+}
+
+.wiki-error-list {
+  margin: 4px 0 0 18px;
+  padding: 0;
+}
+
+@media (max-width: 768px) {
+  .wiki-edit-drawer-panel > :global(.drawer-top),
+  .wiki-edit-drawer-body,
+  .wiki-drawer-footer {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+
+  .wiki-input,
+  .wiki-textarea {
+    font-size: 1rem;
+  }
+
+  .wiki-inline-form {
+    align-items: stretch;
+  }
+
+  .wiki-inline-field-grow,
+  .wiki-inline-field-days,
+  .wiki-inline-field-scope {
+    flex: 1 1 100%;
+  }
+
+  .wiki-inline-form :global(.wiki-btn-primary) {
+    width: 100%;
+  }
+
+  .wiki-field-grid {
+    grid-template-columns: 1fr;
+  }
+}

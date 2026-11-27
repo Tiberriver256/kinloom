@@ -6,7 +6,7 @@ import { createPortal } from 'react-dom';
 import { Link, useInRouterContext } from 'react-router-dom';
 import { useOptionalArchiveData } from '../context/ArchiveDataContext.js';
 import { cx } from '../lib/cx.js';
-import cssMod1 from '../pages/PersonPage.module.css';
+import cssMod1 from './ArchivalMarkdown.module.css';
 import { computeCitationPopoverPosition, type PopoverCoordinates } from './CitationPopover.js';
 import { hasPronunciationContent, PronunciationBadge } from './PronunciationBadge.js';
 import cssMod0 from './PronunciationBadge.module.css';

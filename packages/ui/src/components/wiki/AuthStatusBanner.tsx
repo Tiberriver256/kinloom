@@ -4,7 +4,7 @@ import { useArchiveData } from '../../context/ArchiveDataContext.js';
 import { cx } from '../../lib/cx.js';
 import { type AuthUrlError, consumeAuthErrorFromWindow, resolveAuthFeedback } from './authErrorCopy.js';
 import { SignInModal } from './SignInModal.js';
-import cssMod0 from './WikiSurfaces.module.css';
+import cssMod0 from './WikiAuth.module.css';
 
 const uiStyles = cssMod0;
 

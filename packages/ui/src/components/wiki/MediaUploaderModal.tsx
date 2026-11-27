@@ -9,9 +9,17 @@ import { KINLOOM_VOCABULARY, MEDIA_KIND_LABELS } from '../../lib/vocabulary.js';
 import { mediaUploadMachine } from '../../machines/mediaUploadMachine.js';
 import cssMod2 from '../../pages/IndexPage.module.css';
 import cssMod0 from '../SourceReaderDrawer.module.css';
-import cssMod1 from './WikiSurfaces.module.css';
+import cssMod1_0 from './WikiChrome.module.css';
+import cssMod1_2 from './WikiForms.module.css';
+import cssMod1_1 from './WikiPanels.module.css';
 
-const uiStyles: Readonly<Record<string, string>> = { ...cssMod0, ...cssMod1, ...cssMod2 };
+const uiStyles: Readonly<Record<string, string>> = {
+  ...cssMod0,
+  ...cssMod1_0,
+  ...cssMod1_1,
+  ...cssMod1_2,
+  ...cssMod2,
+};
 
 export interface MediaUploaderModalProps {
   open: boolean;

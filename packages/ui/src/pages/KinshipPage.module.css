@@ -103,3 +103,33 @@
     grid-template-columns: 1fr;
   }
 }
+
+.kinship-examples-bar :global(.pill-btn) {
+  text-align: left;
+  border: 1px solid var(--border-decorative);
+  border-radius: var(--radius-sm);
+  padding: 5px 10px;
+  background: var(--surface-card);
+}
+
+.kinship-examples-bar :global(.pill-btn):hover {
+  border-color: var(--accent-primary);
+  background: var(--surface-linen);
+}
+
+@media (max-width: 768px) {
+  .kinship-examples-bar {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .kinship-examples-bar :global(.pill-btn) {
+    white-space: normal;
+    text-align: left;
+    min-height: 44px;
+    border: 1px solid var(--border-control);
+    border-radius: var(--radius-sm);
+    padding: 6px 10px;
+    background: var(--surface-card);
+  }
+}

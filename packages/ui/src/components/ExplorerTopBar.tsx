@@ -10,9 +10,16 @@ import { initialsOf } from './Atoms.js';
 import cssMod0 from './ExplorerTopBar.module.css';
 import cssMod1 from './SourceReaderDrawer.module.css';
 import { SignInModal } from './wiki/SignInModal.js';
-import cssMod2 from './wiki/WikiSurfaces.module.css';
+import cssMod2_0 from './wiki/WikiChrome.module.css';
+import cssMod2_1 from './wiki/WikiPanels.module.css';
 
-const uiStyles: Readonly<Record<string, string>> = { ...cssMod0, ...cssMod1, ...cssMod2, ...cssMod3 };
+const uiStyles: Readonly<Record<string, string>> = {
+  ...cssMod0,
+  ...cssMod1,
+  ...cssMod2_0,
+  ...cssMod2_1,
+  ...cssMod3,
+};
 
 export const ExplorerTopBar: React.FC = () => {
   const { siteConfig, featuredDocumentId, capabilities, session, dataSource, refreshSession } =

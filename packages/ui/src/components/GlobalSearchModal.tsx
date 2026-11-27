@@ -12,9 +12,8 @@ import { KINLOOM_VOCABULARY, SEARCH_KIND_LABELS } from '../lib/vocabulary.js';
 import cssMod3 from '../pages/IndexPage.module.css';
 import cssMod0 from './GlobalSearchModal.module.css';
 import cssMod1 from './SourceReaderDrawer.module.css';
-import cssMod2 from './wiki/WikiSurfaces.module.css';
 
-const uiStyles: Readonly<Record<string, string>> = { ...cssMod0, ...cssMod1, ...cssMod2, ...cssMod3 };
+const uiStyles: Readonly<Record<string, string>> = { ...cssMod0, ...cssMod1, ...cssMod3 };
 
 export const GlobalSearchModal: React.FC = () => {
   const { bundle, placesById, readings, readingsLoading, siteConfig } = useArchiveData();
