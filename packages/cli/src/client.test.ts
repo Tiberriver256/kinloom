@@ -291,4 +291,33 @@ describe('KinloomApiClient', () => {
       code: 'INVALID_RESPONSE_SCHEMA',
     });
   });
+
+  it('forwards optional cacheControl and custom headers on getBundle', async () => {
+    const client = new KinloomApiClient({ baseUrl, token: 'bundle-tok' });
+    responder = (_req, _body, res) => {
+      res.writeHead(200, { 'content-type': 'application/json', etag: '"r10"' });
+      res.end(
+        JSON.stringify({
+          meta: {
+            build_mode: 'private',
+            generated_at: '2026-01-01T00:00:00.000Z',
+            max_revision_id: 10,
+            counts: { people: 0, living_redacted: 0, events: 0, residence_spans: 0, places: 0, sources: 0 },
+          },
+          people: [],
+          events: [],
+          residence_spans: [],
+          places: [],
+          place_ancestors: {},
+          kinship: [],
+          sources: [],
+        })
+      );
+    };
+
+    const result = await client.getBundle({ cacheControl: 'no-cache', headers: { 'X-Test-Probe': '1' } });
+    expect(result.status).toBe('ok');
+    expect(lastRequest?.headers['cache-control']).toBe('no-cache');
+    expect(lastRequest?.headers['x-test-probe']).toBe('1');
+  });
 });

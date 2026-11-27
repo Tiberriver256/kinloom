@@ -37,8 +37,27 @@ export type {
 } from './pluginTypes.js';
 export { CORE_CLI_COMMANDS };
 
-export const RESERVED_AUDIT_CHECK_IDS: ReadonlySet<string> = new Set(['pronunciation']);
-export const RESERVED_VERIFY_CHECK_IDS: ReadonlySet<string> = new Set(['pronunciation']);
+export const RESERVED_AUDIT_CHECK_IDS: ReadonlySet<string> = new Set([
+  'chronology',
+  'privacy',
+  'citations',
+  'scans',
+  'dryRun',
+  'dry-run',
+  'hygiene',
+  'pronunciation',
+]);
+export const RESERVED_VERIFY_CHECK_IDS: ReadonlySet<string> = new Set([
+  'citations',
+  'places',
+  'ssn',
+  'compile',
+  'media',
+  'livingNames',
+  'living-names',
+  'hygiene',
+  'pronunciation',
+]);
 
 export class CliPluginValidationError extends RangeError {
   readonly exitCode = EXIT_USAGE;

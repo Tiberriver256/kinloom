@@ -347,16 +347,28 @@ export class KinloomApiClient {
     };
   }
 
-  async getBundle(options?: { ifNoneMatch?: string }): Promise<GetBundleResult> {
+  async getBundle(options?: {
+    ifNoneMatch?: string;
+    cacheControl?: string;
+    headers?: Readonly<Record<string, string>>;
+    signal?: AbortSignal;
+  }): Promise<GetBundleResult> {
     const endpoint = '/api/bundle';
     const extraHeaders: Record<string, string> = {};
+    if (options?.headers) {
+      Object.assign(extraHeaders, options.headers);
+    }
     if (options?.ifNoneMatch) {
       extraHeaders['If-None-Match'] = options.ifNoneMatch;
+    }
+    if (options?.cacheControl) {
+      extraHeaders['Cache-Control'] = options.cacheControl;
     }
 
     const response = await this.fetchImpl(`${this.baseUrl}${endpoint}`, {
       method: 'GET',
       headers: this.buildHeaders(extraHeaders),
+      ...(options?.signal ? { signal: options.signal } : {}),
     });
 
     if (response.status === 304) {

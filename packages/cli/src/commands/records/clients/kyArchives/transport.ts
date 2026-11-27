@@ -21,7 +21,7 @@ async function getJsonDict(
   url: string,
   allowedHosts: readonly string[]
 ): Promise<Record<string, unknown>> {
-  const { data } = await httpGetJson<unknown>(url, {
+  const { data } = await httpGetJson(url, {
     fetchImpl: ctx.fetchImpl,
     sleepFn: ctx.sleepFn,
     nowMs: ctx.nowMs,

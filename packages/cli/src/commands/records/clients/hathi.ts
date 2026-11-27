@@ -110,7 +110,7 @@ async function fetchBib(
   full: boolean
 ): Promise<HathiBibPayload> {
   const url = bibUrl(idType, value, full);
-  const { data } = await httpGetJson<unknown>(url, {
+  const { data } = await httpGetJson(url, {
     fetchImpl: ctx.fetchImpl,
     sleepFn: ctx.sleepFn,
     nowMs: ctx.nowMs,

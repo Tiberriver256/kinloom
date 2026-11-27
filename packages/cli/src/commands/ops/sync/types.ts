@@ -184,7 +184,7 @@ export interface LocalArchiveFiles {
 
 export interface RemoteSnapshotResponse {
   head_revision_id?: number;
-  entities: Array<{
+  entities: ReadonlyArray<{
     entity_type: Exclude<EntityType, 'kinship_edge'>;
     entity_id: string;
     data: EntityPayload;
@@ -192,7 +192,7 @@ export interface RemoteSnapshotResponse {
     has_primary_source?: boolean;
     deleted_at?: string | null;
   }>;
-  kinship: Array<{
+  kinship: ReadonlyArray<{
     edge_id: string;
     edge: KinshipEdge;
     current_revision_id: number;

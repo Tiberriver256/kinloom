@@ -638,3 +638,32 @@ Evaluated on `2026-11-27` (UTC via Python `datetime.now(timezone.utc)`) on top o
 - Live CLI smoke check: `node packages/cli/dist/cli.js --help` exits `0`
 
 Ready for **Fresh-Eyes Independent Review #5 (`10/10` across all six axes)**.
+
+## Fresh-Eyes Independent Review #5 (`badc299`) & Iteration 8 Remediation (All 4 CLI Items + Allowlist Cleanup)
+
+Evaluated on `2026-11-27` (UTC via Python `datetime.now(timezone.utc)`) on top of commit `badc299`. Fresh-Eyes Review #5 scored **`9 / 10 / 9 / 10 / 10 / 9`** with zero findings in `@kinloom/core`, `@kinloom/server`, `@kinloom/worker`, `@kinloom/ui`, `@kinloom/tokens`, or `examples/demo`, leaving 4 surgical items in `@kinloom/cli` plus 1 stale allowlist entry in `scripts/check-architecture.mjs`. Iteration 8 remediated all 5 items cleanly in place while keeping `packages/*/dist` intact and preserving every verified invariant.
+
+### Findings Remediated in Iteration 8
+
+| Review Finding | Root Cause Before Iteration 8 | Measured Fix in Iteration 8 |
+| --- | --- | --- |
+| **Gap 1 (Decoupling & Data flow): Duplicate HTTP client & casts in `sync/remoteClient.ts`** | `sync/remoteClient.ts` bypassed `KinloomApiClient` with raw `ctx.fetchImpl`, duplicated `RemoteSnapshotEnvelopeSchema`, parsed `/api/batches` with raw `JSON.parse`, and cast `meta.counts as ArchiveBundle['meta']['counts']`. | Added optional `cacheControl`, `headers`, and `signal` options to `KinloomApiClient.getBundle` (`packages/cli/src/client.ts`); routed `fetchRemoteSnapshot`, `submitPatchChunks`, `purgeCompiledBundleAndRecompile`, and the `/api/bundle` live probe in `packages/cli/src/commands/ops/sync/remoteClient.ts` through `KinloomApiClient` while keeping raw `ctx.fetchImpl` solely for streaming `/{r2Key}` first-byte media probes; deleted `RemoteSnapshotEnvelopeSchema`, raw batch `JSON.parse`, and the `meta.counts` cast; made `RemoteSnapshotResponse` arrays `ReadonlyArray` in `sync/types.ts`; added malformed `/api/batches` and `/api/bundle` rejection tests in `ops.test.ts` and `cacheControl`/header tests in `client.test.ts`. |
+| **Gap 2 (Data flow): Unvalidated disk JSON cast in `pronounce/lookupCache.ts`** | `readLookupCache` cast `JSON.parse(...) as CachedLookupPayload` after checking only `typeof cachedRaw.term === 'string'`, risking a `TypeError` in `formatLookupText` on partial or corrupt cache files. | Defined strict `CachedLookupPayloadSchema` (covering every required and optional field of `CachedLookupPayload`, verified via `satisfies z.ZodType<CachedLookupPayload>`) in `packages/cli/src/commands/ops/pronounce/lookupCache.ts`, parsed disk JSON via `CachedLookupPayloadSchema.safeParse(raw)` returning `null` on mismatch, and added partial/corrupt cache recovery tests in `packages/cli/src/commands/ops/pronounce.test.ts`. |
+| **Gap 3 (Data flow): Unchecked `JSON.parse(...) as T` helpers in CLI record runtime** | `CachedJsonCallOptions.validateCached` and `readSchemaCacheEntry`'s validator were optional with a `return result as T` fallback; unused `readJsonCache` and `httpGetJson<T = unknown>` cast `JSON.parse(...) as T`. | Made `validateCached` required on `CachedJsonCallOptions<T>` and `readSchemaCacheEntry<T>` and deleted the `as T` fallback and unused `readJsonCache` in `packages/cli/src/commands/records/runtime/cache.ts`; changed `httpGetJson` in `packages/cli/src/commands/records/runtime/http.ts` to return `Promise<{ readonly data: unknown; readonly response: HttpResponseResult }>` without a generic cast and updated all 4 client callers (`hathi.ts`, `wikitree/transport.ts`, `kyArchives/transport.ts`, `texasArchives/transport.ts`); updated and expanded runtime tests in `cache.test.ts` and `http.test.ts`. |
+| **Gap 4 (Extensibility): Incomplete reserved built-in check IDs in `plugins.ts`** | `RESERVED_AUDIT_CHECK_IDS` and `RESERVED_VERIFY_CHECK_IDS` only reserved `'pronunciation'`, permitting plugins to collide with other built-in audit and verify check IDs. | Expanded `RESERVED_AUDIT_CHECK_IDS` (`'chronology'`, `'privacy'`, `'citations'`, `'scans'`, `'dryRun'`, `'dry-run'`, `'hygiene'`, `'pronunciation'`) and `RESERVED_VERIFY_CHECK_IDS` (`'citations'`, `'places'`, `'ssn'`, `'compile'`, `'media'`, `'livingNames'`, `'living-names'`, `'hygiene'`, `'pronunciation'`) in `packages/cli/src/plugins.ts` so `resolvePluginCommands` throws `CliPluginValidationError` on every built-in collision, and verified every ID in `packages/cli/src/plugins.test.ts`. |
+| **Minor Hygiene: Stale `'livingnamematcher'` allowlist entry** | `SHARED_OPS_OWNERS` in `scripts/check-architecture.mjs` retained `'livingnamematcher'` after `living-name-matcher.ts` was deleted in Iteration 5A. | Removed `'livingnamematcher'` from `SHARED_OPS_OWNERS` in `scripts/check-architecture.mjs`. |
+
+### Iteration 8 Measured Verification Snapshot
+
+- Non-test files across `packages/*/src` and `examples/demo/src`: **`620` total (`577` TS/TSX max `548` LOC, `43` CSS max `523` LOC, `0` files `> 550` LOC)**
+- Production non-null assertions (`!`) and escape hatches (`any`, `@ts-ignore`, `@ts-expect-error`, `@ts-nocheck`, `as unknown as`, `eslint-disable`): **`0`**
+- `npm run build`: **`6/6` workspaces** built cleanly in place (`packages/*/dist` preserved)
+- `npm run check:arch`: **`PASS` (`0` violations across `577` non-test TS/TSX files: `0` runtime cycles, `0` type cycles, `0` dynamic-import cycles, `0` reverse-layer/adapter/cross-page-CSS/atom-drawer-CSS imports, `0` raw UI `/api/` fetch or sendBeacon calls, `0` pure-UI leaks, `0` escape hatches, `0` eager record-client imports, `0` ambient Date in privacy)**
+- `npm run lint`: Biome **`0` errors, `0` warnings** across `789` files + `check:counts` **`0` violations** across `716` files
+- `npm run typecheck`: **`7/7` tsconfigs** (`0` errors)
+- `npm test`: **`128/128` test files, `847/847` tests passed**
+- `npm run check:contrast`: **`15/15` passed**
+- `npm run check:leaks`: **`0` leaks**
+- Live CLI smoke checks: `kinloom --help` and `kinloom status --help` exit `0`
+
+Ready for **Fresh-Eyes Independent Review #6 (`10/10` across all six axes)**.

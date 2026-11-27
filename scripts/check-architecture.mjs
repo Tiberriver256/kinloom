@@ -315,7 +315,6 @@ const SHARED_OPS_OWNERS = new Set([
   'help',
   'telemetry',
   'shared',
-  'livingnamematcher',
   'pronunciationchecks',
   'treehygiene',
 ]);

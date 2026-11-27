@@ -105,7 +105,7 @@ export interface CachedJsonCallOptions<T> {
   readonly schema?: number;
   readonly fetch: () => Promise<T>;
   readonly cacheable?: (value: T) => boolean;
-  readonly validateCached?: (value: unknown) => value is T;
+  readonly validateCached: (value: unknown) => value is T;
   readonly nowMs?: () => number;
   readonly sleepFn?: (ms: number) => Promise<void>;
 }
@@ -113,9 +113,9 @@ export interface CachedJsonCallOptions<T> {
 export function readSchemaCacheEntry<T>(
   filePath: string,
   ttlHours: number,
-  schema = 1,
-  nowMs: () => number = () => Date.now(),
-  validateCached?: (value: unknown) => value is T
+  schema: number,
+  nowMs: () => number,
+  validateCached: (value: unknown) => value is T
 ): T | undefined {
   if (ttlHours <= 0) {
     return undefined;
@@ -141,10 +141,7 @@ export function readSchemaCacheEntry<T>(
       return undefined;
     }
     const result = entry.result;
-    if (validateCached) {
-      return validateCached(result) ? result : undefined;
-    }
-    return result as T;
+    return validateCached(result) ? result : undefined;
   } catch {
     return undefined;
   }
@@ -230,31 +227,6 @@ export function atomicWriteJsonSync(targetPath: string, payload: unknown): void 
 export type CacheReadResult<T> =
   | { readonly hit: true; readonly value: T; readonly mtimeMs: number }
   | { readonly hit: false };
-
-export function readJsonCache<T = unknown>(
-  filePath: string,
-  ttlMs: number,
-  nowMs: () => number = () => Date.now()
-): CacheReadResult<T> {
-  if (ttlMs <= 0) {
-    return { hit: false };
-  }
-  try {
-    const stat = fs.statSync(filePath);
-    if (!stat.isFile()) {
-      return { hit: false };
-    }
-    const ageMs = nowMs() - stat.mtimeMs;
-    if (ageMs > ttlMs) {
-      return { hit: false };
-    }
-    const raw = fs.readFileSync(filePath, 'utf8');
-    const parsed = JSON.parse(raw) as T;
-    return { hit: true, value: parsed, mtimeMs: stat.mtimeMs };
-  } catch {
-    return { hit: false };
-  }
-}
 
 export function readBinaryCache(
   filePath: string,

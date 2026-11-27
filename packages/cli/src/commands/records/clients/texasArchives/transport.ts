@@ -51,7 +51,7 @@ export async function fetchOpenSearchPage(
 ): Promise<TexasOpenSearchPage> {
   const params = new URLSearchParams({ q: query, format: 'json', pw: String(page) });
   const url = `${PORTAL_OPENSEARCH}?${params.toString()}`;
-  const { data } = await httpGetJson<unknown>(url, {
+  const { data } = await httpGetJson(url, {
     fetchImpl: ctx.fetchImpl,
     sleepFn: ctx.sleepFn,
     nowMs: ctx.nowMs,

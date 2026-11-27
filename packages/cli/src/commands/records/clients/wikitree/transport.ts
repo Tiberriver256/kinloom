@@ -23,7 +23,7 @@ export async function apiCall(
     search.set(k, String(v));
   }
   const url = `${API_BASE}?${search.toString()}`;
-  const { data } = await httpGetJson<unknown>(url, {
+  const { data } = await httpGetJson(url, {
     fetchImpl: ctx.fetchImpl,
     sleepFn: ctx.sleepFn,
     nowMs: ctx.nowMs,

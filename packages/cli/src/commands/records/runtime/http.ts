@@ -178,10 +178,10 @@ export async function httpRequest(rawUrl: string, options: HttpRequestOptions): 
   throw new RecordRuntimeError(`Network error fetching ${rawUrl}: ${message}`);
 }
 
-export async function httpGetJson<T = unknown>(
+export async function httpGetJson(
   rawUrl: string,
   options: HttpRequestOptions
-): Promise<{ readonly data: T; readonly response: HttpResponseResult }> {
+): Promise<{ readonly data: unknown; readonly response: HttpResponseResult }> {
   const response = await httpRequest(rawUrl, options);
   if (looksLikeHtmlErrorPage(response.bytes)) {
     throw new RecordRuntimeError(
@@ -189,7 +189,7 @@ export async function httpGetJson<T = unknown>(
     );
   }
   try {
-    const data = JSON.parse(response.bytes.toString('utf8')) as T;
+    const data: unknown = JSON.parse(response.bytes.toString('utf8'));
     return { data, response };
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);

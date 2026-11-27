@@ -4865,12 +4865,29 @@ describe('ops/sync', () => {
 
     const postedBatches: unknown[] = [];
     const seenAuthHeaders: string[] = [];
+    const makeSyntheticBundle = (maxRevisionId: number) => ({
+      meta: {
+        build_mode: 'private' as const,
+        generated_at: '2026-01-01T00:00:00.000Z',
+        max_revision_id: maxRevisionId,
+        counts: { people: 4, living_redacted: 1, events: 2, residence_spans: 0, places: 1, sources: 2 },
+      },
+      people: [],
+      events: [],
+      residence_spans: [],
+      places: [],
+      place_ancestors: {},
+      kinship: [],
+      sources: [],
+    });
     const fetchImpl: typeof fetch = async (input, init) => {
       const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
       const auth =
-        init?.headers && !Array.isArray(init.headers) && !(init.headers instanceof Headers)
-          ? (init.headers as Record<string, string>).Authorization
-          : undefined;
+        init?.headers instanceof Headers
+          ? (init.headers.get('authorization') ?? undefined)
+          : init?.headers && !Array.isArray(init.headers)
+            ? (init.headers as Record<string, string>).Authorization
+            : undefined;
       if (auth) {
         seenAuthHeaders.push(auth);
       }
@@ -4883,9 +4900,11 @@ describe('ops/sync', () => {
               {
                 entity_type: 'place',
                 entity_id: 'plc_oak_county_ohio',
+                slug: 'oak-county-ohio',
                 current_revision_id: 2,
                 has_primary_source: true,
                 deleted_at: null,
+                updated_at: '2026-01-01T00:00:00.000Z',
                 data: {
                   id: 'plc_oak_county_ohio',
                   slug: 'oak-county-ohio',
@@ -4915,6 +4934,7 @@ describe('ops/sync', () => {
         return new Response(
           JSON.stringify({
             batch_id: body.batch_id,
+            revisions: [],
             head_revision_id: 6,
             etag: '"rev-6"',
           }),
@@ -4923,15 +4943,10 @@ describe('ops/sync', () => {
       }
 
       if (url.endsWith('/api/bundle')) {
-        return new Response(
-          JSON.stringify({
-            meta: {
-              max_revision_id: 6,
-              counts: { people: 4, living_redacted: 1, events: 2, residence_spans: 0, places: 1, sources: 2 },
-            },
-          }),
-          { status: 200, headers: { 'Content-Type': 'application/json', etag: '"rev-6-compiled"' } }
-        );
+        return new Response(JSON.stringify(makeSyntheticBundle(6)), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json', etag: '"rev-6-compiled"' },
+        });
       }
 
       return new Response('not found', { status: 404 });
@@ -4965,6 +4980,7 @@ describe('ops/sync', () => {
       )
     ).toBe(true);
     const serialized = JSON.stringify(result);
+    expect(seenAuthHeaders.length).toBeGreaterThan(0);
     for (const authHeader of seenAuthHeaders) {
       const rawToken = authHeader.replace(/^Bearer\s+/, '');
       expect(serialized).not.toContain(rawToken);
@@ -5128,6 +5144,22 @@ describe('ops/sync', () => {
       return { events, execWrangler };
     };
 
+    const makeSyntheticBundle = (maxRevisionId: number) => ({
+      meta: {
+        build_mode: 'private' as const,
+        generated_at: '2026-01-01T00:00:00.000Z',
+        max_revision_id: maxRevisionId,
+        counts: { people: 4, living_redacted: 1, events: 2, residence_spans: 0, places: 1, sources: 2 },
+      },
+      people: [],
+      events: [],
+      residence_spans: [],
+      places: [],
+      place_ancestors: {},
+      kinship: [],
+      sources: [],
+    });
+
     // 1. Passing --verify-live probes /api/bundle and uploaded R2 key BEFORE temp token cleanup.
     const passMock = makeWranglerMock();
     let mediaProbeCalls = 0;
@@ -5145,21 +5177,16 @@ describe('ops/sync', () => {
       if (url.endsWith('/api/batches')) {
         const body = JSON.parse(String(init?.body ?? '{}')) as { batch_id: string };
         return new Response(
-          JSON.stringify({ batch_id: body.batch_id, head_revision_id: 6, etag: '"rev-6"' }),
+          JSON.stringify({ batch_id: body.batch_id, revisions: [], head_revision_id: 6, etag: '"rev-6"' }),
           { status: 200, headers: { 'Content-Type': 'application/json' } }
         );
       }
       if (url.endsWith('/api/bundle')) {
         passMock.events.push('probe:bundle');
-        return new Response(
-          JSON.stringify({
-            meta: {
-              max_revision_id: 6,
-              counts: { people: 4, living_redacted: 1, events: 2, residence_spans: 0, places: 1, sources: 2 },
-            },
-          }),
-          { status: 200, headers: { 'Content-Type': 'application/json', etag: '"rev-6"' } }
-        );
+        return new Response(JSON.stringify(makeSyntheticBundle(6)), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json', etag: '"rev-6"' },
+        });
       }
       if (url.endsWith('/media/arthur-scan.png')) {
         mediaProbeCalls += 1;
@@ -5211,20 +5238,15 @@ describe('ops/sync', () => {
       if (url.endsWith('/api/batches')) {
         const body = JSON.parse(String(init?.body ?? '{}')) as { batch_id: string };
         return new Response(
-          JSON.stringify({ batch_id: body.batch_id, head_revision_id: 6, etag: '"rev-6"' }),
+          JSON.stringify({ batch_id: body.batch_id, revisions: [], head_revision_id: 6, etag: '"rev-6"' }),
           { status: 200, headers: { 'Content-Type': 'application/json' } }
         );
       }
       if (url.endsWith('/api/bundle')) {
-        return new Response(
-          JSON.stringify({
-            meta: {
-              max_revision_id: 5,
-              counts: { people: 4, living_redacted: 1, events: 2, residence_spans: 0, places: 1, sources: 2 },
-            },
-          }),
-          { status: 200, headers: { 'Content-Type': 'application/json' } }
-        );
+        return new Response(JSON.stringify(makeSyntheticBundle(5)), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
       }
       if (url.endsWith('/media/arthur-scan.png')) {
         failMediaCalls += 1;
@@ -5256,6 +5278,109 @@ describe('ops/sync', () => {
     expect(failRes.cleanup?.remainingTmpCount).toBe(0);
     expect(failRes.cleanup?.backupCount).toBe(1);
     expect(failMock.events).toContain('cleanup');
+  });
+
+  it('rejects malformed /api/batches and /api/bundle responses via KinloomApiClient schema validation', async () => {
+    const repoDir = await createSyntheticRepo();
+    await writeFile(
+      path.join(repoDir, 'wrangler.jsonc'),
+      JSON.stringify({
+        d1_databases: [{ database_name: 'alder-db' }],
+        r2_buckets: [{ bucket_name: 'alder-media' }],
+        routes: [{ pattern: 'alder.example.org/*' }],
+      }),
+      'utf8'
+    );
+
+    const execWrangler: WranglerExecutor = async (_bin, args) => {
+      if (args[0] === 'd1') {
+        const sql = args[args.indexOf('--command') + 1] ?? '';
+        if (sql.includes('DELETE FROM agent_tokens')) {
+          return {
+            stdout: JSON.stringify([
+              { success: true, results: [] },
+              { success: true, results: [] },
+              { success: true, results: [{ count: 1 }] },
+              { success: true, results: [{ count: 0 }] },
+            ]),
+            stderr: '',
+          };
+        }
+        return {
+          stdout: JSON.stringify([
+            { success: true, results: [] },
+            { success: true, results: [] },
+          ]),
+          stderr: '',
+        };
+      }
+      return { stdout: 'ok', stderr: '' };
+    };
+
+    // 1. Malformed /api/batches payload fails with schema validation instead of producing NaN.
+    const badBatchFetch: typeof fetch = async (input) => {
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+      if (url.endsWith('/api/export/snapshot')) {
+        return new Response(JSON.stringify({ head_revision_id: 1, entities: [], kinship: [] }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+      if (url.endsWith('/api/batches')) {
+        return new Response(
+          JSON.stringify({ batch_id: 'b_bad', head_revision_id: 'not-a-number', etag: '"r2"' }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } }
+        );
+      }
+      return new Response('not found', { status: 404 });
+    };
+
+    await expect(
+      runSyncCommand({
+        repoDir,
+        fetchImpl: badBatchFetch,
+        execWrangler,
+      })
+    ).rejects.toMatchObject({
+      name: 'KinloomApiError',
+      code: 'INVALID_RESPONSE_SCHEMA',
+    });
+
+    // 2. Malformed /api/bundle payload fails with schema validation instead of unchecked cast.
+    const badBundleFetch: typeof fetch = async (input, init) => {
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+      if (url.endsWith('/api/export/snapshot')) {
+        return new Response(JSON.stringify({ head_revision_id: 1, entities: [], kinship: [] }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+      if (url.endsWith('/api/batches')) {
+        const body = JSON.parse(String(init?.body ?? '{}')) as { batch_id: string };
+        return new Response(
+          JSON.stringify({ batch_id: body.batch_id, revisions: [], head_revision_id: 2, etag: '"r2"' }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } }
+        );
+      }
+      if (url.endsWith('/api/bundle')) {
+        return new Response(JSON.stringify({ meta: { max_revision_id: 2, counts: { people: 'corrupt' } } }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+      return new Response('not found', { status: 404 });
+    };
+
+    await expect(
+      runSyncCommand({
+        repoDir,
+        fetchImpl: badBundleFetch,
+        execWrangler,
+      })
+    ).rejects.toMatchObject({
+      name: 'KinloomApiError',
+      code: 'INVALID_RESPONSE_SCHEMA',
+    });
   });
 });
 

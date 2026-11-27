@@ -13,6 +13,7 @@ import {
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { runCli } from '../../cli.js';
 import { runIntegrateCommand } from './integrate.js';
+import { buildLookupCachePath, readLookupCache } from './pronounce/lookupCache.js';
 import {
   buildCommonsAudioUrl,
   evaluatePronounceCorroboration,
@@ -394,6 +395,45 @@ describe('kinloom pronounce lookup', () => {
     expect(autoOnly.highestTier).toBe('automated');
     expect(autoOnly.native_speaker_verified).toBe(false);
     expect(autoOnly.verification_note).toContain('automated');
+  });
+
+  it('rejects partial or corrupt disk cache entries via Zod and re-fetches cleanly without crashing text formatting', async () => {
+    const cacheDir = await makeTempDir('kinloom-pron-corrupt-cache-');
+    const cachePath = buildLookupCachePath({
+      cacheDir,
+      term: 'Goes',
+      normalizedLang: 'nl',
+      normalizedRegion: null,
+      hasForvoKey: false,
+    });
+
+    fs.writeFileSync(cachePath, JSON.stringify({ term: 'x' }), 'utf8');
+    expect(readLookupCache(cachePath)).toBeNull();
+
+    const mockFetch = vi.fn<typeof fetch>(async () => {
+      return new Response(JSON.stringify({ query: { pages: [{ title: 'Goes', missing: true }] } }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      });
+    });
+
+    const recovered = await runPronounceLookupCommand({
+      term: 'Goes',
+      lang: 'nl',
+      json: false,
+      cacheDir,
+      fetchImpl: mockFetch,
+      sleepFn: async () => {},
+      nowIso: () => '2026-11-27T04:00:00.000Z',
+    });
+
+    expect(recovered.cache_hit).toBe(false);
+    expect(recovered.rendered).toContain('Pronunciation lookup: Goes [nl]');
+    expect(mockFetch).toHaveBeenCalled();
+
+    const reparsed = readLookupCache(cachePath);
+    expect(reparsed).not.toBeNull();
+    expect(reparsed?.term).toBe('Goes');
   });
 });
 

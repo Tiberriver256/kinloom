@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { z } from 'zod';
 import type { PronounceLookupResult } from './types.js';
 
 const DEFAULT_CACHE_DIR = path.join(os.homedir(), '.cache', 'kinloom-pronounce');
@@ -10,6 +11,72 @@ const MAX_FETCH_ATTEMPTS = 4;
 const DEFAULT_USER_AGENT = 'KinloomCLI/1.0 (https://kinloom.org; archival pronunciation lookup)';
 
 export type CachedLookupPayload = Omit<PronounceLookupResult, 'rendered' | 'cache_hit'>;
+
+const PronounceSourceTierSchema = z.enum(['native_speaker', 'broadcast_lexicon', 'community', 'automated']);
+
+const PronounceSourceStatusSchema = z.enum([
+  'verified',
+  'no_match',
+  'requires_api_key',
+  'manual_lookup',
+  'error',
+]);
+
+const PronounceProviderIdSchema = z.enum([
+  'forvo',
+  'youglish',
+  'wiktionary',
+  'voa',
+  'wikipedia',
+  'nameshouts',
+  'pronouncenames',
+  'howtopronounce',
+]);
+
+const PronounceAudioHitSchema = z.object({
+  filename: z.string(),
+  commons_file: z.string(),
+  url: z.string(),
+  language: z.string().optional(),
+  source_url: z.string(),
+  provider: PronounceProviderIdSchema.optional(),
+  tier: PronounceSourceTierSchema.optional(),
+  speaker: z.string().optional(),
+  country: z.string().optional(),
+});
+
+const PronounceSourceHitSchema = z.object({
+  provider: PronounceProviderIdSchema,
+  tier: PronounceSourceTierSchema,
+  status: PronounceSourceStatusSchema,
+  site: z.string(),
+  title: z.string(),
+  url: z.string(),
+  label: z.string(),
+  ipa: z.array(z.string()),
+  phonetic: z.array(z.string()).optional(),
+  audio_files: z.array(z.string()),
+  note: z.string().optional(),
+});
+
+export const CachedLookupPayloadSchema = z.object({
+  ok: z.literal(true),
+  term: z.string(),
+  lang: z.string().nullable(),
+  verified: z.boolean(),
+  corroborated: z.boolean(),
+  sourceCount: z.number().int().nonnegative(),
+  highestTier: PronounceSourceTierSchema.nullable(),
+  native_speaker_verified: z.boolean(),
+  verification_note: z.string().nullable(),
+  ipa: z.array(z.string()),
+  primary_ipa: z.string().nullable(),
+  audio_files: z.array(PronounceAudioHitSchema),
+  source_url: z.string().nullable(),
+  source_label: z.string().nullable(),
+  sources: z.array(PronounceSourceHitSchema),
+  fetched_at: z.string(),
+}) satisfies z.ZodType<CachedLookupPayload>;
 
 export function defaultSleep(ms: number): Promise<void> {
   return new Promise((resolve) => {
@@ -53,14 +120,12 @@ export function readLookupCache(cachePath: string): CachedLookupPayload | null {
     return null;
   }
   try {
-    const cachedRaw = JSON.parse(fs.readFileSync(cachePath, 'utf8')) as CachedLookupPayload;
-    if (cachedRaw && typeof cachedRaw === 'object' && typeof cachedRaw.term === 'string') {
-      return cachedRaw;
-    }
+    const raw: unknown = JSON.parse(fs.readFileSync(cachePath, 'utf8'));
+    const parsed = CachedLookupPayloadSchema.safeParse(raw);
+    return parsed.success ? parsed.data : null;
   } catch {
-    // Corrupt cache entry: fall through and re-fetch cleanly.
+    return null;
   }
-  return null;
 }
 
 export function writeLookupCache(cachePath: string, payload: CachedLookupPayload): void {
@@ -119,7 +184,8 @@ export async function fetchJsonWithRetry(params: {
       if (!response.ok) {
         return null;
       }
-      return (await response.json()) as unknown;
+      const json: unknown = await response.json();
+      return json;
     } catch (error) {
       clearTimeout(timer);
       lastError = error;

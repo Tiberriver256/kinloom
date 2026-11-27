@@ -1,8 +1,8 @@
 import { randomBytes } from 'node:crypto';
-import { type ArchiveBundle, type EntityPatch, KinshipEdgeSchema, parseEntityPayload } from '@kinloom/core';
-import { z } from 'zod';
+import type { BatchSubmission, EntityPatch } from '@kinloom/core';
+import { type GetBundleResult, KinloomApiClient, type SubmitBatchResponse } from '../../../client.js';
+import { KinloomApiError } from '../../../errors.js';
 import {
-  isPlainRecord,
   type RemoteSnapshotResponse,
   runWithConcurrency,
   type SyncExecutionContext,
@@ -15,82 +15,47 @@ import {
 const LIVE_VERIFY_CONCURRENCY = 6;
 const LIVE_VERIFY_TIMEOUT_MS = 15_000;
 
-const RemoteSnapshotEntityTypeSchema = z.enum(['person', 'event', 'place', 'source', 'media', 'narrative']);
+function createSyncApiClient(ctx: SyncExecutionContext, token: string): KinloomApiClient {
+  return new KinloomApiClient({
+    baseUrl: ctx.bindings.baseUrl,
+    token,
+    fetchImpl: ctx.fetchImpl,
+  });
+}
 
-const RemoteSnapshotEnvelopeSchema = z.object({
-  head_revision_id: z.number().optional(),
-  entities: z.array(
-    z.object({
-      entity_type: RemoteSnapshotEntityTypeSchema,
-      entity_id: z.string(),
-      data: z.record(z.string(), z.unknown()),
-      current_revision_id: z.coerce.number(),
-      has_primary_source: z.boolean().optional(),
-      deleted_at: z.string().nullable().optional(),
-    })
-  ),
-  kinship: z.array(
-    z.object({
-      edge_id: z.string(),
-      edge: KinshipEdgeSchema,
-      current_revision_id: z.coerce.number(),
-      deleted_at: z.string().nullable().optional(),
-    })
-  ),
-});
-
-function parseRemoteSnapshotResponse(raw: unknown): RemoteSnapshotResponse {
-  const parsed = RemoteSnapshotEnvelopeSchema.safeParse(raw);
-  if (!parsed.success) {
-    throw new Error('Unexpected response shape from GET /api/export/snapshot.');
-  }
-  return {
-    ...(parsed.data.head_revision_id !== undefined ? { head_revision_id: parsed.data.head_revision_id } : {}),
-    entities: parsed.data.entities.map((row) => ({
-      entity_type: row.entity_type,
-      entity_id: row.entity_id,
-      data: parseEntityPayload(row.entity_type, row.data),
-      current_revision_id: row.current_revision_id,
-      ...(row.has_primary_source !== undefined ? { has_primary_source: row.has_primary_source } : {}),
-      ...(row.deleted_at !== undefined ? { deleted_at: row.deleted_at } : {}),
-    })),
-    kinship: parsed.data.kinship.map((row) => ({
-      edge_id: row.edge_id,
-      edge: row.edge,
-      current_revision_id: row.current_revision_id,
-      ...(row.deleted_at !== undefined ? { deleted_at: row.deleted_at } : {}),
-    })),
-  };
+function isApiResponseValidationError(err: KinloomApiError): boolean {
+  return err.code === 'INVALID_JSON_RESPONSE' || err.code === 'INVALID_RESPONSE_SCHEMA';
 }
 
 export async function fetchRemoteSnapshot(
   ctx: SyncExecutionContext,
   readToken: string
 ): Promise<{ etag: string | null; headRevisionId: number; snapshot: RemoteSnapshotResponse }> {
-  const response = await ctx.fetchImpl(`${ctx.bindings.baseUrl}/api/export/snapshot`, {
-    method: 'GET',
-    headers: {
-      Accept: 'application/json',
-      Authorization: `Bearer ${readToken}`,
-    },
-  });
-
-  if (!response.ok) {
-    const text = await response.text();
-    throw new Error(`GET /api/export/snapshot failed with HTTP ${response.status}: ${text.slice(0, 300)}`);
+  const client = createSyncApiClient(ctx, readToken);
+  try {
+    const res = await client.exportSnapshot();
+    if (res.status !== 'ok') {
+      throw new Error('GET /api/export/snapshot returned unexpected 304 Not Modified.');
+    }
+    return {
+      etag: res.etag,
+      headRevisionId: Number(res.snapshot.head_revision_id),
+      snapshot: res.snapshot,
+    };
+  } catch (err: unknown) {
+    if (err instanceof KinloomApiError) {
+      if (isApiResponseValidationError(err)) {
+        throw err;
+      }
+      throw new Error(
+        `GET /api/export/snapshot failed with HTTP ${err.status}: ${err.message.slice(0, 300)}`,
+        {
+          cause: err,
+        }
+      );
+    }
+    throw err;
   }
-
-  const body: unknown = await response.json();
-  const snapshotRaw = isPlainRecord(body) && isPlainRecord(body.snapshot) ? body.snapshot : body;
-  const snapshot = parseRemoteSnapshotResponse(snapshotRaw);
-
-  const headRaw = snapshot.head_revision_id ?? (isPlainRecord(body) ? body.head_revision_id : 0) ?? 0;
-
-  return {
-    etag: response.headers.get('etag'),
-    headRevisionId: Number(headRaw),
-    snapshot,
-  };
 }
 
 export async function submitPatchChunks(params: {
@@ -101,6 +66,7 @@ export async function submitPatchChunks(params: {
   patches: readonly EntityPatch[];
   chunkSize: number;
 }): Promise<SyncSubmittedBatch[]> {
+  const client = createSyncApiClient(params.ctx, params.writeToken);
   const totalChunks = Math.ceil(params.patches.length / params.chunkSize);
   const padWidth = String(totalChunks).length;
   const runStamp = new Date()
@@ -122,38 +88,35 @@ export async function submitPatchChunks(params: {
     const chunkSummary =
       totalChunks === 1 ? params.summary : `${params.summary} (part ${i + 1}/${totalChunks})`;
 
-    const payload = {
+    const payload: BatchSubmission = {
       batch_id: batchId,
       author_type: 'agent',
       summary: chunkSummary,
       has_primary_source: true,
-      patches: slice,
+      patches: [...slice],
     };
 
-    const response = await params.ctx.fetchImpl(`${params.ctx.bindings.baseUrl}/api/batches`, {
-      method: 'POST',
-      headers: {
-        Accept: 'application/json',
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${params.writeToken}`,
-      },
-      body: JSON.stringify(payload),
-    });
-
-    const text = await response.text();
-    if (!response.ok) {
-      throw new Error(
-        `POST /api/batches (${batchId}, ${slice.length} patches) failed with HTTP ${response.status}: ${text.slice(0, 500)}`
-      );
+    let submitted: SubmitBatchResponse;
+    try {
+      submitted = await client.submitBatch(payload);
+    } catch (err: unknown) {
+      if (err instanceof KinloomApiError) {
+        if (isApiResponseValidationError(err)) {
+          throw err;
+        }
+        throw new Error(
+          `POST /api/batches (${batchId}, ${slice.length} patches) failed with HTTP ${err.status}: ${err.message.slice(0, 500)}`,
+          { cause: err }
+        );
+      }
+      throw err;
     }
 
-    const parsed: unknown = JSON.parse(text);
-    const parsedRec = isPlainRecord(parsed) ? parsed : {};
     responses.push({
-      batch_id: typeof parsedRec.batch_id === 'string' ? parsedRec.batch_id : batchId,
+      batch_id: submitted.batch_id,
       patchCount: slice.length,
-      head_revision_id: Number(parsedRec.head_revision_id ?? 0),
-      etag: typeof parsedRec.etag === 'string' ? parsedRec.etag : '',
+      head_revision_id: submitted.head_revision_id,
+      etag: submitted.etag,
     });
   }
 
@@ -182,30 +145,34 @@ export async function purgeCompiledBundleAndRecompile(
     }
   );
 
-  const response = await ctx.fetchImpl(`${ctx.bindings.baseUrl}/api/bundle`, {
-    method: 'GET',
-    headers: {
-      Accept: 'application/json',
-      Authorization: `Bearer ${bearerToken}`,
-      'Cache-Control': 'no-cache',
-    },
-  });
-
-  if (!response.ok) {
-    const text = await response.text();
-    throw new Error(`Post-purge GET /api/bundle failed with HTTP ${response.status}: ${text.slice(0, 300)}`);
+  const client = createSyncApiClient(ctx, bearerToken);
+  let res: GetBundleResult;
+  try {
+    res = await client.getBundle({ cacheControl: 'no-cache' });
+  } catch (err: unknown) {
+    if (err instanceof KinloomApiError) {
+      if (isApiResponseValidationError(err)) {
+        throw err;
+      }
+      throw new Error(
+        `Post-purge GET /api/bundle failed with HTTP ${err.status}: ${err.message.slice(0, 300)}`,
+        {
+          cause: err,
+        }
+      );
+    }
+    throw err;
   }
 
-  const bundle: unknown = await response.json();
-  const meta = isPlainRecord(bundle) && isPlainRecord(bundle.meta) ? bundle.meta : null;
-  const maxRevisionId = typeof meta?.max_revision_id === 'number' ? meta.max_revision_id : null;
-  const counts = isPlainRecord(meta?.counts) ? (meta.counts as ArchiveBundle['meta']['counts']) : null;
+  if (res.status !== 'ok') {
+    throw new Error('Post-purge GET /api/bundle returned unexpected 304 Not Modified.');
+  }
 
   return {
-    httpStatus: response.status,
-    etag: response.headers.get('etag'),
-    maxRevisionId,
-    counts,
+    httpStatus: 200,
+    etag: res.etag,
+    maxRevisionId: res.bundle.meta.max_revision_id ?? null,
+    counts: res.bundle.meta.counts,
   };
 }
 
@@ -221,58 +188,65 @@ export async function verifyLiveEndpoints(params: {
   let bundleRevision: number | null = null;
 
   const bundleUrl = `${params.ctx.bindings.baseUrl}/api/bundle`;
+  const client = createSyncApiClient(params.ctx, params.writeToken);
   try {
-    const response = await params.ctx.fetchImpl(bundleUrl, {
-      method: 'GET',
-      headers: {
-        Accept: 'application/json',
-        Authorization: `Bearer ${params.writeToken}`,
-        'Cache-Control': 'no-cache',
-      },
+    const res = await client.getBundle({
+      cacheControl: 'no-cache',
       signal: AbortSignal.timeout(LIVE_VERIFY_TIMEOUT_MS),
     });
-    bundleStatus = response.status;
-    if (response.status !== 200) {
-      const text = await response.text().catch(() => '');
+    if (res.status !== 'ok') {
+      bundleStatus = 304;
       failures.push({
         target: 'bundle',
         url: bundleUrl,
-        status: response.status,
-        reason: `Expected HTTP 200 from /api/bundle, got HTTP ${response.status}${text.trim() ? `: ${text.trim().slice(0, 160)}` : ''}`,
+        status: 304,
+        reason: 'Expected HTTP 200 from /api/bundle, got HTTP 304',
       });
     } else {
-      let body: unknown;
-      try {
-        body = await response.json();
-      } catch (err: unknown) {
+      bundleStatus = 200;
+      bundleRevision = res.bundle.meta.max_revision_id ?? null;
+      if (params.expectedRevision !== null && bundleRevision !== params.expectedRevision) {
         failures.push({
           target: 'bundle',
           url: bundleUrl,
-          status: response.status,
-          reason: `Invalid JSON from /api/bundle: ${err instanceof Error ? err.message : String(err)}`,
+          status: 200,
+          reason: `Bundle revision mismatch: expected r${params.expectedRevision}, got ${bundleRevision !== null ? `r${bundleRevision}` : 'none'}`,
         });
-        body = null;
-      }
-      if (body !== null) {
-        const meta = isPlainRecord(body) && isPlainRecord(body.meta) ? body.meta : null;
-        bundleRevision = typeof meta?.max_revision_id === 'number' ? meta.max_revision_id : null;
-        if (params.expectedRevision !== null && bundleRevision !== params.expectedRevision) {
-          failures.push({
-            target: 'bundle',
-            url: bundleUrl,
-            status: response.status,
-            reason: `Bundle revision mismatch: expected r${params.expectedRevision}, got ${bundleRevision !== null ? `r${bundleRevision}` : 'none'}`,
-          });
-        }
       }
     }
   } catch (err: unknown) {
-    failures.push({
-      target: 'bundle',
-      url: bundleUrl,
-      status: null,
-      reason: err instanceof Error ? err.message : String(err),
-    });
+    if (err instanceof KinloomApiError) {
+      bundleStatus = err.status;
+      if (err.code === 'INVALID_JSON_RESPONSE') {
+        failures.push({
+          target: 'bundle',
+          url: bundleUrl,
+          status: err.status,
+          reason: `Invalid JSON from /api/bundle: ${err.message}`,
+        });
+      } else if (err.code === 'INVALID_RESPONSE_SCHEMA') {
+        failures.push({
+          target: 'bundle',
+          url: bundleUrl,
+          status: err.status,
+          reason: err.message,
+        });
+      } else {
+        failures.push({
+          target: 'bundle',
+          url: bundleUrl,
+          status: err.status,
+          reason: `Expected HTTP 200 from /api/bundle, got HTTP ${err.status}${err.message.trim() ? `: ${err.message.trim().slice(0, 160)}` : ''}`,
+        });
+      }
+    } else {
+      failures.push({
+        target: 'bundle',
+        url: bundleUrl,
+        status: null,
+        reason: err instanceof Error ? err.message : String(err),
+      });
+    }
   }
 
   let mediaFailed = 0;

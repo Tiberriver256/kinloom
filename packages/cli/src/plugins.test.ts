@@ -359,24 +359,69 @@ describe('site-root CLI plugin discovery and dispatch', () => {
         },
       ])
     ).toThrow(CliPluginValidationError);
-    expect(() =>
-      resolvePluginCommands([
-        {
-          id: 'reserved-audit',
-          name: 'Reserved Audit',
-          auditChecks: [{ id: 'pronunciation', name: 'Shadow', run: () => ({ errors: [], warnings: [] }) }],
-        },
-      ])
-    ).toThrow(/reserved built-in audit check 'pronunciation'/);
-    expect(() =>
-      resolvePluginCommands([
-        {
-          id: 'reserved-verify',
-          name: 'Reserved Verify',
-          verifyChecks: [{ id: 'pronunciation', name: 'Shadow', run: () => ({ errors: [], warnings: [] }) }],
-        },
-      ])
-    ).toThrow(/reserved built-in verify check 'pronunciation'/);
+    for (const reservedAuditId of [
+      'chronology',
+      'privacy',
+      'citations',
+      'scans',
+      'dryRun',
+      'dry-run',
+      'hygiene',
+      'pronunciation',
+    ]) {
+      expect(() =>
+        resolvePluginCommands([
+          {
+            id: `reserved-audit-${reservedAuditId}`,
+            name: 'Reserved Audit',
+            auditChecks: [{ id: reservedAuditId, name: 'Shadow', run: () => ({ errors: [], warnings: [] }) }],
+          },
+        ])
+      ).toThrow(CliPluginValidationError);
+      expect(() =>
+        resolvePluginCommands([
+          {
+            id: `reserved-audit-${reservedAuditId}`,
+            name: 'Reserved Audit',
+            auditChecks: [{ id: reservedAuditId, name: 'Shadow', run: () => ({ errors: [], warnings: [] }) }],
+          },
+        ])
+      ).toThrow(new RegExp(`reserved built-in audit check '${reservedAuditId}'`));
+    }
+    for (const reservedVerifyId of [
+      'citations',
+      'places',
+      'ssn',
+      'compile',
+      'media',
+      'livingNames',
+      'living-names',
+      'hygiene',
+      'pronunciation',
+    ]) {
+      expect(() =>
+        resolvePluginCommands([
+          {
+            id: `reserved-verify-${reservedVerifyId}`,
+            name: 'Reserved Verify',
+            verifyChecks: [
+              { id: reservedVerifyId, name: 'Shadow', run: () => ({ errors: [], warnings: [] }) },
+            ],
+          },
+        ])
+      ).toThrow(CliPluginValidationError);
+      expect(() =>
+        resolvePluginCommands([
+          {
+            id: `reserved-verify-${reservedVerifyId}`,
+            name: 'Reserved Verify',
+            verifyChecks: [
+              { id: reservedVerifyId, name: 'Shadow', run: () => ({ errors: [], warnings: [] }) },
+            ],
+          },
+        ])
+      ).toThrow(new RegExp(`reserved built-in verify check '${reservedVerifyId}'`));
+    }
     expect(() =>
       resolvePluginCommands([
         {

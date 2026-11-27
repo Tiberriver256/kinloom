@@ -13,7 +13,7 @@ import {
   canonicalJsonStringify,
   parseCacheTtlHours,
   readBinaryCache,
-  readJsonCache,
+  readSchemaCacheEntry,
   resolveCacheDir,
   sha256Hex,
   ttlHoursToMs,
@@ -89,27 +89,47 @@ describe('records runtime cache', () => {
     expect(() => parseCacheTtlHours('bogus', 24)).toThrow(CliValidationError);
   });
 
-  it('writes JSON and binary files atomically, respects TTL, and falls back on corrupt JSON', async () => {
+  it('writes JSON and binary files atomically, respects TTL, and validates schema cache entries', async () => {
     const tmp = await makeTempDir('kinloom-runtime-cache-');
     const jsonPath = path.join(tmp, 'nested', 'item.json');
     const binPath = path.join(tmp, 'nested', 'scan.bin');
 
-    atomicWriteJsonSync(jsonPath, { ok: true, id: 42 });
+    const isItemPayload = (value: unknown): value is { ok: boolean; id: number } =>
+      typeof value === 'object' &&
+      value !== null &&
+      !Array.isArray(value) &&
+      typeof (value as Record<string, unknown>).ok === 'boolean' &&
+      typeof (value as Record<string, unknown>).id === 'number';
+
     const now = Date.now();
-    const hit = readJsonCache<{ ok: boolean; id: number }>(jsonPath, ttlHoursToMs(1), () => now);
-    expect(hit.hit).toBe(true);
-    if (hit.hit) {
-      expect(hit.value).toEqual({ ok: true, id: 42 });
-    }
+    atomicWriteJsonSync(jsonPath, {
+      schema: 1,
+      fetched_at: now / 1000,
+      kind: 'item',
+      query: { id: 42 },
+      result: { ok: true, id: 42 },
+    });
+    const hit = readSchemaCacheEntry(jsonPath, 1, 1, () => now, isItemPayload);
+    expect(hit).toEqual({ ok: true, id: 42 });
 
     // TTL 0 disables reads.
-    expect(readJsonCache(jsonPath, 0, () => now).hit).toBe(false);
+    expect(readSchemaCacheEntry(jsonPath, 0, 1, () => now, isItemPayload)).toBeUndefined();
     // Expired entry misses.
-    expect(readJsonCache(jsonPath, 1_000, () => now + 60_000).hit).toBe(false);
+    expect(readSchemaCacheEntry(jsonPath, 1, 1, () => now + 7_200_000, isItemPayload)).toBeUndefined();
+
+    // Wrong payload shape fails validation cleanly as a cache miss.
+    atomicWriteJsonSync(jsonPath, {
+      schema: 1,
+      fetched_at: now / 1000,
+      kind: 'item',
+      query: { id: 42 },
+      result: { ok: 'not-a-boolean' },
+    });
+    expect(readSchemaCacheEntry(jsonPath, 24, 1, () => now, isItemPayload)).toBeUndefined();
 
     // Corrupt JSON fails open as miss.
     atomicWriteFileSync(jsonPath, '{corrupt');
-    expect(readJsonCache(jsonPath, ttlHoursToMs(24), () => now).hit).toBe(false);
+    expect(readSchemaCacheEntry(jsonPath, 24, 1, () => now, isItemPayload)).toBeUndefined();
 
     // Binary cache round-trip.
     atomicWriteFileSync(binPath, Buffer.from([1, 2, 3, 4]));
@@ -160,6 +180,11 @@ describe('records runtime cache', () => {
       calls += 1;
       return { count: calls };
     };
+    const isCountPayload = (value: unknown): value is { count: number } =>
+      typeof value === 'object' &&
+      value !== null &&
+      !Array.isArray(value) &&
+      typeof (value as Record<string, unknown>).count === 'number';
 
     const r1 = await cachedJsonCall({
       cacheDir: tmp,
@@ -168,6 +193,7 @@ describe('records runtime cache', () => {
       ttlHours: 24,
       refresh: false,
       fetch,
+      validateCached: isCountPayload,
     });
     const r2 = await cachedJsonCall({
       cacheDir: tmp,
@@ -176,6 +202,7 @@ describe('records runtime cache', () => {
       ttlHours: 24,
       refresh: false,
       fetch,
+      validateCached: isCountPayload,
     });
     const r3 = await cachedJsonCall({
       cacheDir: tmp,
@@ -184,9 +211,30 @@ describe('records runtime cache', () => {
       ttlHours: 24,
       refresh: true,
       fetch,
+      validateCached: isCountPayload,
     });
     expect(r1).toEqual({ value: { count: 1 }, cacheHit: false });
     expect(r2).toEqual({ value: { count: 1 }, cacheHit: true });
     expect(r3).toEqual({ value: { count: 2 }, cacheHit: false });
+
+    // Corrupted cached payload shape triggers refetch instead of returning unvalidated data.
+    const key = cacheKeyFor('bib', { a: 1, b: 2 });
+    atomicWriteJsonSync(path.join(tmp, `${key}.json`), {
+      schema: 1,
+      fetched_at: Date.now() / 1000,
+      kind: 'bib',
+      query: { a: 1, b: 2 },
+      result: { count: 'corrupt' },
+    });
+    const r4 = await cachedJsonCall({
+      cacheDir: tmp,
+      kind: 'bib',
+      payload: { a: 1, b: 2 },
+      ttlHours: 24,
+      refresh: false,
+      fetch,
+      validateCached: isCountPayload,
+    });
+    expect(r4).toEqual({ value: { count: 3 }, cacheHit: false });
   });
 });

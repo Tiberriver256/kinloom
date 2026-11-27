@@ -59,7 +59,7 @@ describe('records runtime http client', () => {
       });
     };
 
-    const { data } = await httpGetJson<{ ok: boolean }>('https://api.example.org/search', {
+    const { data } = await httpGetJson('https://api.example.org/search', {
       fetchImpl,
       sleepFn: async (ms) => {
         sleeps.push(ms);
