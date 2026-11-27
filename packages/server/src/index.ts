@@ -9,7 +9,7 @@ export type {
 } from '@kinloom/core';
 export { extractCollectionsFromSnapshot } from '@kinloom/core';
 
-export const KINLOOM_SERVER_VERSION = '0.42.0';
+export const KINLOOM_SERVER_VERSION = '0.43.0';
 
 export {
   GoogleOAuthProvider,
