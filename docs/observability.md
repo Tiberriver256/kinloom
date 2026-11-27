@@ -258,3 +258,100 @@ In the Cloudflare dashboard, open **Notifications > Add** to enable alerts for p
 1. **Worker 5xx error spikes:** Select **Workers** (or **HTTP Alerts > Origin Error Rate Alert**) and trigger when `5xx` error rates exceed your baseline (for example, `> 5%` over `5` minutes) for your archive Worker or hostname.
 2. **D1 errors and usage limits:** Select **D1** alerts (or Worker error-rate alerts correlated with `event = "http_request" AND level = "error"` in Workers Logs) to catch database query failures or quota thresholds early.
 3. **Auth failure bursts and WAF triggers:** Select **HTTP DDoS Attack Alert** and **WAF / Rate Limiting Alerts** for your zone, and optionally pair them with `securityTelemetry.alertSink` pointing to a private Slack, Discord, PagerDuty, or email webhook for immediate `auth.magic_link.rate_limited` and `auth.agent_token.rejected` alerts.
+
+## Synthetic performance probes and Core Web Vitals budgets (off by default)
+
+Kinloom provides an optional CLI synthetic probe plugin (`createSyntheticProbePlugin` from `@kinloom/cli`) and an opt-in Playwright Core Web Vitals budget suite (`npm run test:cwv`).
+Both stay disabled by default so standard `kinloom` CLI usage, `kinloom verify`, and `npm run test:e2e` do not perform extra network probes or timing assertions unless you opt in.
+
+### Enable the `kinloom probe` CLI plugin
+
+Create an extension entry in `extensions/synthetic-probe/cli.mjs` inside your archive repository (or list the module path under `plugins:` in `kinloom.config.yaml`):
+
+```js
+import { createSyntheticProbePlugin } from '@kinloom/cli';
+
+export default createSyntheticProbePlugin({
+	targetUrl: 'https://archive.example.test',
+	budgets: {
+		maxHtmlTtfbMs: 800,
+		maxBundleColdMs: 1500,
+		maxBundleWarmMs: 400,
+		maxMediaRangeMs: 1000,
+	},
+});
+```
+
+Run a synthetic check against a deployed or preview archive:
+
+```sh
+kinloom probe --url https://archive.example.test
+kinloom probe --url https://archive.example.test --json
+```
+
+The command checks four areas in order and exits with code `0` on pass or `1` on a budget breach:
+
+1. **HTML root (`/`):** Measures TTFB, total duration, response bytes, and baseline security headers (`content-security-policy`, `x-content-type-options`, `x-frame-options`, `referrer-policy`, and `strict-transport-security` on HTTPS URLs).
+2. **Cold `/api/bundle`:** Measures uncached latency, payload size, `ETag`, `Cache-Control`, and parses W3C `Server-Timing` spans (`d1`, `r2`, `bundle`, `total`) when `createWorkersObservabilityPlugin` is active.
+3. **Warm conditional `/api/bundle`:** Re-requests `/api/bundle` with `If-None-Match` and verifies HTTP `304 Not Modified` within the warm latency budget.
+4. **R2 media byte-range (`Range: bytes=0-1023`):** Probes `--media-path` (or the first same-origin media path discovered in `/api/bundle`) and verifies HTTP `206 Partial Content`, `Content-Range`, and `Accept-Ranges: bytes`. If no media item exists, the media check reports `skipped`.
+
+Pass `enabled: false` to keep the file registered as an inert no-op plugin.
+Pass `attachVerifyCheck: true` (together with `targetUrl` or `KINLOOM_PROBE_URL`) only if you want `kinloom verify` to run the live HTTP probe as an additional `synthetic-probe` check.
+
+### Synthetic probe options and CLI flags
+
+| Option / CLI flag | Default | Description |
+| --- | --- | --- |
+| `enabled` | `true` | Returns an inert plugin with zero commands and zero verify checks when `false`. |
+| `attachVerifyCheck` | `false` | Adds the `synthetic-probe` check to `kinloom verify` only when `true`. |
+| `targetUrl` / `--url` | `KINLOOM_PROBE_URL` | Base URL of the archive to probe. |
+| `mediaPath` / `--media-path` | First media item in `/api/bundle` | Explicit same-origin media path for the `206` byte-range probe. |
+| `mediaRangeBytes` / `--media-range-bytes` | `1024` | Number of leading bytes requested in the `Range` header. |
+| `token` / `--token` | `undefined` | Optional bearer token for private archive probes (never written to reports). |
+| `budgets.maxHtmlTtfbMs` / `--max-html-ttfb-ms` | `800` | Maximum allowed root HTML TTFB in milliseconds. |
+| `budgets.maxBundleColdMs` / `--max-bundle-cold-ms` | `1500` | Maximum allowed cold `/api/bundle` latency in milliseconds. |
+| `budgets.maxBundleWarmMs` / `--max-bundle-warm-ms` | `400` | Maximum allowed conditional `304` `/api/bundle` latency in milliseconds. |
+| `budgets.maxMediaRangeMs` / `--max-media-range-ms` | `1000` | Maximum allowed media `206` byte-range latency in milliseconds. |
+| `budgets.require304` / `--no-require-304` | `true` | Fails when `/api/bundle` omits `ETag` or does not return `304`. |
+| `budgets.require206` / `--no-require-206` | `true` | Fails when the media probe does not return `206` with `Content-Range` and `Accept-Ranges: bytes`. |
+| `budgets.requireSecurityHeaders` / `--no-require-security-headers` | `true` | Fails when required security headers are missing on `/`. |
+
+### Run the opt-in Core Web Vitals budget suite
+
+Run the Playwright Core Web Vitals budget checks against the built demo archive:
+
+```sh
+npm run test:cwv
+```
+
+`npm run test:e2e` skips `e2e/cwv-budget.spec.ts` unless `KINLOOM_CWV_BUDGET=1` is set.
+The CWV suite captures `first-contentful-paint` (FCP), `largest-contentful-paint` (LCP), `layout-shift` (CLS), and interaction latency across `/`, `/tree`, `/map`, and `/person/abraham-lincoln-1809`.
+Override default budgets with environment variables when running in slower CI environments:
+
+| Environment variable | Default | Metric |
+| --- | --- | --- |
+| `KINLOOM_CWV_MAX_LCP_MS` | `2500` | Largest Contentful Paint (ms) |
+| `KINLOOM_CWV_MAX_FCP_MS` | `1800` | First Contentful Paint (ms) |
+| `KINLOOM_CWV_MAX_CLS` | `0.1` | Cumulative Layout Shift |
+| `KINLOOM_CWV_MAX_INTERACTION_MS` | `200` | Interaction latency (ms) |
+
+### Cloudflare Observatory setup guide
+
+Cloudflare Observatory runs scheduled synthetic Lighthouse and Core Web Vitals tests from Cloudflare's edge locations.
+Configure it in **Speed > Observatory** for your archive zone when you want continuous production tracking.
+
+1. **Add test URLs:** Register four representative routes for your archive hostname:
+	- `https://archive.example.test/` (archive landing page and primary index)
+	- `https://archive.example.test/tree` (interactive family tree view)
+	- `https://archive.example.test/map` (migration map canvas and filter controls)
+	- `https://archive.example.test/person/<slug>` (person profile with biography, residence spans, and media gallery)
+2. **Pick a test schedule:** Schedule **Daily** tests from the region closest to your primary family audience (and optionally a second distant region to track cold edge cache behavior). Trigger a manual run after deploys that change UI bundles, fonts, or media encoding.
+3. **Set alert thresholds:** Align Observatory budgets and CI `kinloom probe` checks with Google's Good Core Web Vitals targets:
+	- **TTFB:** `<= 800 ms` on HTML and `<= 400 ms` on warm `304` `/api/bundle` revalidation
+	- **FCP:** `<= 1800 ms`
+	- **LCP:** `<= 2500 ms`
+	- **CLS:** `<= 0.1`
+	- **INP:** `<= 200 ms`
+	- **Bundle cold latency:** `<= 1500 ms` and **R2 media `206` range latency:** `<= 1000 ms`
+4. **Correlate regressions:** When Observatory flags a TTFB or LCP regression, run `kinloom probe --url https://archive.example.test --json` to inspect `Server-Timing` (`d1`, `r2`, `bundle`, `total`) alongside Workers Logs (`event = "http_request"`).

@@ -102,7 +102,37 @@ export {
   type KinloomApiErrorOptions,
 } from './errors.js';
 export * from './guides/index.js';
-
+export {
+  type BundleColdProbeResult,
+  type BundleProbeResult,
+  type BundleWarmProbeResult,
+  createSyntheticProbePlugin,
+  DEFAULT_MEDIA_RANGE_BYTES,
+  DEFAULT_PROBE_TIMEOUT_MS,
+  DEFAULT_SYNTHETIC_PROBE_BUDGETS,
+  discoverFirstMediaPathFromBundle,
+  evaluateSecurityHeaders,
+  formatSyntheticProbeReport,
+  type HtmlProbeResult,
+  type MediaRangeProbeResult,
+  type MediaRangeSource,
+  normalizeProbeBaseUrl,
+  type ParsedServerTiming,
+  parseServerTimingHeader,
+  type RunSyntheticProbeInput,
+  resolveProbeBudgets,
+  runSyntheticProbe,
+  type SecurityHeaderCheckResult,
+  type ServerTimingSpanName,
+  SYNTHETIC_PROBE_COMMAND_NAME,
+  SYNTHETIC_PROBE_HELP,
+  SYNTHETIC_PROBE_PLUGIN_ID,
+  SYNTHETIC_PROBE_VERIFY_CHECK_ID,
+  type SyntheticProbeBudgets,
+  type SyntheticProbeClock,
+  type SyntheticProbePluginOptions,
+  type SyntheticProbeReport,
+} from './plugins/syntheticProbe.js';
 export {
   CliPluginValidationError,
   CORE_CLI_COMMANDS,
