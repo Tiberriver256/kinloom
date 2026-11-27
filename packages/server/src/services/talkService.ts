@@ -1,10 +1,10 @@
 import type {
-  ArchiveRepository,
   CallerPrincipal,
   Clock,
   EntityType,
   KinloomSiteConfig,
   TalkComment,
+  TalkCommentStore,
 } from '@kinloom/core';
 import { z } from 'zod';
 import { KinloomHttpError } from '../errors.js';
@@ -16,13 +16,13 @@ const TalkBodySchema = z
   .max(8000, 'Comment cannot exceed 8000 characters.');
 
 export interface TalkServiceDeps {
-  repository: ArchiveRepository;
+  repository: TalkCommentStore;
   clock: Clock;
   siteConfig: KinloomSiteConfig;
 }
 
 export class TalkService {
-  private readonly repository: ArchiveRepository;
+  private readonly repository: TalkCommentStore;
   private readonly clock: Clock;
   private readonly siteConfig: KinloomSiteConfig;
 

@@ -1,4 +1,4 @@
-import { getCurrentReferenceYear } from '../privacy.js';
+import { getCurrentReferenceYear } from '../clock.js';
 import type { ArchiveBundle, KinshipEdge, Person, Place } from '../schemas/entities.js';
 
 export interface KinshipStep {

@@ -1,7 +1,6 @@
-import type { ArchiveBundle, Place, RawPerson } from '@kinloom/core';
+import type { ArchiveBundle, Place, PronunciationAudioGenerator, RawPerson } from '@kinloom/core';
 import { describe, expect, it, vi } from 'vitest';
 import { createInMemoryServerPorts } from '../adapters/inMemory.js';
-import type { PronunciationAudioGenerator } from '../ports.js';
 import { computePronunciationPromptHash } from '../services/pronunciationHelper.js';
 import {
   createSyntheticHistoricalPerson,

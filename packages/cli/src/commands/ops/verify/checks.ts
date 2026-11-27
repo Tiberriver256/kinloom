@@ -6,6 +6,7 @@ import {
   compileLivingNamePattern,
   filterMediaForPrivacy,
   filterNarrativesForPrivacy,
+  getCurrentReferenceYear,
   type MediaItem,
   type Narrative,
   type Place,
@@ -195,8 +196,9 @@ export function scanPublicLivingNames(input: {
   const livingIds = new Set<string>();
   const livingPeople: RawPerson[] = [];
   const deceasedPeople: RawPerson[] = [];
+  const referenceYear = input.privacy?.referenceYear ?? getCurrentReferenceYear();
   for (const person of input.people) {
-    if (resolveEffectiveLiving(person, input.privacy)) {
+    if (resolveEffectiveLiving(person, input.privacy, referenceYear)) {
       livingIds.add(person.id);
       livingPeople.push(person);
     } else {

@@ -6,109 +6,19 @@ import {
   type CachedBundleObject,
   type Clock,
   compileArchive,
+  extractCollectionsFromSnapshot,
   type KinloomSiteConfig,
-  type KinshipEdge,
   type MediaByteRange,
-  type MediaItem,
   type MediaStore,
-  type Narrative,
-  type Place,
   type Pronunciation,
-  parseEntityPayload,
+  type PronunciationLexiconStore,
   patchCompiledBundle,
-  type RawEvent,
-  type RawPerson,
   type RevisionId,
   type RevisionRecord,
   type Sha256Hex,
-  type SourceRecord,
   type StoredMediaObject,
 } from '@kinloom/core';
 import { bytesToStream, matchesIfNoneMatch, readStreamToBytes } from '../../crypto.js';
-import type { PronunciationLexiconStore } from '../../ports.js';
-
-export function extractCollectionsFromSnapshot(snapshot: ArchiveRawSnapshot): {
-  people: RawPerson[];
-  events: RawEvent[];
-  places: Place[];
-  sources: SourceRecord[];
-  media: MediaItem[];
-  narratives: Narrative[];
-  kinship: KinshipEdge[];
-} {
-  const people: RawPerson[] = [];
-  const events: RawEvent[] = [];
-  const places: Place[] = [];
-  const sources: SourceRecord[] = [];
-  const media: MediaItem[] = [];
-  const narratives: Narrative[] = [];
-
-  for (const row of snapshot.entities) {
-    if (row.deleted_at !== null) {
-      continue;
-    }
-    switch (row.entity_type) {
-      case 'person': {
-        const parsed = parseEntityPayload('person', row.data);
-        if (!row.has_primary_source && parsed.has_primary_source === undefined) {
-          parsed.has_primary_source = false;
-        }
-        people.push(parsed);
-        break;
-      }
-      case 'event': {
-        const parsed = parseEntityPayload('event', row.data);
-        if (!row.has_primary_source && parsed.has_primary_source === undefined) {
-          parsed.has_primary_source = false;
-        }
-        events.push(parsed);
-        break;
-      }
-      case 'place': {
-        const parsed = parseEntityPayload('place', row.data);
-        if (!row.has_primary_source && parsed.has_primary_source === undefined) {
-          parsed.has_primary_source = false;
-        }
-        places.push(parsed);
-        break;
-      }
-      case 'source': {
-        const parsed = parseEntityPayload('source', row.data);
-        if (!row.has_primary_source && parsed.has_primary_source === undefined) {
-          parsed.has_primary_source = false;
-        }
-        sources.push(parsed);
-        break;
-      }
-      case 'media': {
-        const parsed = parseEntityPayload('media', row.data);
-        if (!row.has_primary_source && parsed.has_primary_source === undefined) {
-          parsed.has_primary_source = false;
-        }
-        media.push(parsed);
-        break;
-      }
-      case 'narrative': {
-        const parsed = parseEntityPayload('narrative', row.data);
-        if (!row.has_primary_source && parsed.has_primary_source === undefined) {
-          parsed.has_primary_source = false;
-        }
-        narratives.push(parsed);
-        break;
-      }
-      default: {
-        const _exhaustive: never = row.entity_type;
-        throw new Error(`Unhandled entity type: ${String(_exhaustive)}`);
-      }
-    }
-  }
-
-  const kinship = snapshot.kinship
-    .filter((row) => row.deleted_at === null)
-    .map((row) => structuredClone(row.edge));
-
-  return { people, events, places, sources, media, narratives, kinship };
-}
 
 /**
  * In-memory incremental BundleCache using @kinloom/core patchCompiledBundle + compileArchive.

@@ -1,6 +1,7 @@
 import {
-  type ArchiveRepository,
   assertMediaAllowedForPrivacy,
+  buildEntityId,
+  type EntityReadStore,
   isEditSummaryValid,
   type KinloomSiteConfig,
   type MediaByteRange,
@@ -12,9 +13,10 @@ import {
   type RevisionAuthor,
   type RevisionRecord,
   type StoredMediaObject,
+  toEntityPayload,
   validateMediaSelection,
 } from '@kinloom/core';
-import { generateEntityId, sha256Hex } from '../crypto.js';
+import { randomBytes, sha256Hex, toHex } from '../crypto.js';
 import { KinloomHttpError } from '../errors.js';
 import type { WikiWriteService } from './wikiWriteService.js';
 
@@ -107,7 +109,7 @@ function isSafeRelativeMediaKey(key: string): boolean {
 }
 
 export interface MediaServiceDeps {
-  repository: ArchiveRepository;
+  repository: EntityReadStore;
   mediaStore: MediaStore;
   wikiWriteService: WikiWriteService;
   siteConfig: KinloomSiteConfig;
@@ -175,7 +177,7 @@ export function parseHttpByteRange(
 }
 
 export class MediaService {
-  private readonly repository: ArchiveRepository;
+  private readonly repository: EntityReadStore;
   private readonly mediaStore: MediaStore;
   private readonly wikiWriteService: WikiWriteService;
   private readonly siteConfig: KinloomSiteConfig;
@@ -257,7 +259,7 @@ export class MediaService {
     const mediaId =
       typeof params.metadata.id === 'string' && params.metadata.id.trim().length > 0
         ? params.metadata.id.trim()
-        : generateEntityId('med');
+        : buildEntityId('media', toHex(randomBytes(8)));
 
     const parsedMedia = MediaItemSchema.parse({
       ...params.metadata,
@@ -288,14 +290,14 @@ export class MediaService {
     const created = await this.wikiWriteService.createEntity({
       entityType: 'media',
       entityId: parsedMedia.id,
-      data: parsedMedia as unknown as Record<string, unknown>,
+      data: toEntityPayload(parsedMedia),
       summary: params.summary.trim(),
       hasPrimarySource: params.hasPrimarySource ?? true,
       author: params.author,
     });
 
     return {
-      media: created.entity as unknown as MediaItem,
+      media: parseEntityPayload('media', created.entity),
       url: publicUrl,
       revision: created.revision,
       etag: created.etag,

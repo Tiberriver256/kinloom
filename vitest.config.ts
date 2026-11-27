@@ -19,8 +19,6 @@ export default defineConfig({
         'packages/*/src/**/*.test.tsx',
         'packages/*/src/**/index.ts',
         'packages/*/src/**/types.ts',
-        'packages/core/src/oxlint/plugin.ts',
-        'packages/server/src/ports.ts',
         'packages/server/src/testing/**',
       ],
     },

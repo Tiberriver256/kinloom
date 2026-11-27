@@ -1,10 +1,12 @@
 import type {
+  AccessControlStore,
   AgentTokenRecord,
   EntityType,
   InviteRecord,
   MagicLinkRecord,
   Sha256Hex,
   TalkComment,
+  TalkCommentStore,
   UserRecord,
   UserRole,
 } from '@kinloom/core';
@@ -23,7 +25,7 @@ import {
 } from './rowMappers.js';
 import { prepareD1Statement } from './sqlHelpers.js';
 
-export class D1AccessAndTalkStore {
+export class D1AccessAndTalkStore implements AccessControlStore, TalkCommentStore {
   constructor(private readonly db: D1Database) {}
 
   async listTalkComments(entityType: EntityType, entityId: string): Promise<readonly TalkComment[]> {

@@ -1,37 +1,31 @@
 import {
-  type ArchiveRepository,
   assertMediaAllowedForPrivacy,
+  buildEntityId,
+  type Clock,
   deriveKinshipEdgeId,
   type EntityLifecycleState,
   type EntityLookupKey,
   type EntityPayload,
+  type EntityReadStore,
   type EntityType,
   entityLookupCompositeKey,
   isEditSummaryValid,
   type KinloomSiteConfig,
   type MediaStore,
   type Pronunciation,
+  type PronunciationAudioGenerator,
   parseEntityPayload,
   type RawEvent,
-  type RawPerson,
   resolveEffectiveLiving,
   type StoredEntityRecord,
-  sanitizeEventForWrite,
   sanitizePersonForWrite,
+  sanitizeRawEventForWrite,
+  storedRecordToEntityPayload,
+  toEntityPayload,
 } from '@kinloom/core';
-import { generateEntityId } from '../../crypto.js';
+import { randomBytes, toHex } from '../../crypto.js';
 import { KinloomHttpError } from '../../errors.js';
-import type { PronunciationAudioGenerator } from '../../ports.js';
 import { generateAndStorePronunciationAudio } from '../pronunciationHelper.js';
-
-const ENTITY_ID_PREFIX: Record<Exclude<EntityType, 'kinship_edge'>, string> = {
-  person: 'per',
-  event: 'evt',
-  place: 'plc',
-  source: 'src',
-  media: 'med',
-  narrative: 'nar',
-};
 
 export interface WorkingEntityRecord {
   lifecycle: EntityLifecycleState;
@@ -41,17 +35,15 @@ export interface WorkingEntityRecord {
 }
 
 export interface PayloadPolicyDeps {
-  readonly repository: ArchiveRepository;
+  readonly repository: EntityReadStore;
+  readonly clock: Clock;
   readonly siteConfig: KinloomSiteConfig;
   readonly mediaStore?: MediaStore;
   readonly pronunciationGenerator?: PronunciationAudioGenerator;
 }
 
 export function rowToPayload(row: StoredEntityRecord): EntityPayload {
-  if ('edge' in row) {
-    return structuredClone(row.edge) as unknown as EntityPayload;
-  }
-  return structuredClone(row.data);
+  return storedRecordToEntityPayload(row);
 }
 
 export function rowToWorking(row: StoredEntityRecord | null): WorkingEntityRecord {
@@ -111,7 +103,7 @@ export function assertEditSummaryValid(summary: string): void {
 }
 
 export async function prefetchEntitiesByKey(
-  repository: ArchiveRepository,
+  repository: EntityReadStore,
   keys: readonly EntityLookupKey[]
 ): Promise<Map<string, StoredEntityRecord | null>> {
   if (keys.length === 0) {
@@ -141,6 +133,7 @@ export async function prefetchEntitiesByKey(
 
 export function updateWorkingPrivacyContext(
   siteConfig: KinloomSiteConfig,
+  referenceYear: number,
   entityType: EntityType,
   entityId: string,
   sanitized: EntityPayload,
@@ -148,20 +141,75 @@ export function updateWorkingPrivacyContext(
   workingEvents: Map<string, Pick<RawEvent, 'id' | 'participants'>>
 ): void {
   if (entityType === 'person') {
-    const parsed = sanitized as unknown as RawPerson;
-    if (resolveEffectiveLiving(parsed, siteConfig.privacy)) {
+    const parsed = parseEntityPayload('person', sanitized);
+    if (resolveEffectiveLiving(parsed, siteConfig.privacy, referenceYear)) {
       livingIds.add(entityId);
     } else {
       livingIds.delete(entityId);
     }
   } else if (entityType === 'event') {
-    const parsed = sanitized as unknown as RawEvent;
+    const parsed = parseEntityPayload('event', sanitized);
     workingEvents.set(entityId, { id: parsed.id, participants: parsed.participants });
   }
 }
 
+interface NonKinshipSanitizerContext {
+  readonly deps: Pick<PayloadPolicyDeps, 'repository' | 'clock' | 'siteConfig'>;
+  readonly candidate: Record<string, unknown>;
+  readonly livingPersonIdsOverride?: ReadonlySet<string>;
+  readonly extraEventsById?: ReadonlyMap<string, Pick<RawEvent, 'id' | 'participants'>>;
+  readonly prefetchedEventIds?: ReadonlySet<string>;
+}
+
+type NonKinshipEntityType = Exclude<EntityType, 'kinship_edge'>;
+
+const NON_KINSHIP_SANITIZERS: {
+  [K in NonKinshipEntityType]: (ctx: NonKinshipSanitizerContext) => Promise<EntityPayload>;
+} = {
+  async person({ deps, candidate }) {
+    const parsed = parseEntityPayload('person', candidate);
+    const sanitized = sanitizePersonForWrite(parsed, deps.siteConfig.privacy, deps.clock.currentYear());
+    return toEntityPayload(sanitized);
+  },
+  async event({ deps, candidate, livingPersonIdsOverride }) {
+    const parsed = parseEntityPayload('event', candidate);
+    const livingIds = livingPersonIdsOverride ?? (await deps.repository.getLivingPersonIds());
+    const sanitized = sanitizeRawEventForWrite(parsed, livingIds, deps.siteConfig.privacy);
+    return toEntityPayload(sanitized);
+  },
+  async media({ deps, candidate, livingPersonIdsOverride, extraEventsById, prefetchedEventIds }) {
+    const parsed = parseEntityPayload('media', candidate);
+    const livingIds = livingPersonIdsOverride ?? (await deps.repository.getLivingPersonIds());
+    let eventsMap: ReadonlyMap<string, Pick<RawEvent, 'id' | 'participants'>> | undefined = extraEventsById;
+    if (
+      parsed.event_id &&
+      !extraEventsById?.has(parsed.event_id) &&
+      !prefetchedEventIds?.has(parsed.event_id)
+    ) {
+      const evRow = await deps.repository.getEntity('event', parsed.event_id);
+      if (evRow && !('edge' in evRow) && evRow.deleted_at === null) {
+        const parsedEv = parseEntityPayload('event', evRow.data);
+        const nextEvents = new Map(extraEventsById ?? []);
+        nextEvents.set(parsedEv.id, parsedEv);
+        eventsMap = nextEvents;
+      }
+    }
+    assertMediaAllowedForPrivacy(parsed, livingIds, eventsMap);
+    return toEntityPayload(parsed);
+  },
+  async place({ candidate }) {
+    return toEntityPayload(parseEntityPayload('place', candidate));
+  },
+  async source({ candidate }) {
+    return toEntityPayload(parseEntityPayload('source', candidate));
+  },
+  async narrative({ candidate }) {
+    return toEntityPayload(parseEntityPayload('narrative', candidate));
+  },
+};
+
 export async function validateAndSanitizeEntityPayload(
-  deps: Pick<PayloadPolicyDeps, 'repository' | 'siteConfig'>,
+  deps: Pick<PayloadPolicyDeps, 'repository' | 'clock' | 'siteConfig'>,
   params: {
     entityType: EntityType;
     requestedEntityId?: string;
@@ -190,11 +238,10 @@ export async function validateAndSanitizeEntityPayload(
     }
     return {
       entityId: params.requestedEntityId ?? derivedId,
-      sanitized: parsedEdge as unknown as EntityPayload,
+      sanitized: toEntityPayload(parsedEdge),
     };
   }
 
-  const prefix = ENTITY_ID_PREFIX[params.entityType];
   const bodyId =
     typeof candidate.id === 'string' && candidate.id.trim().length > 0 ? candidate.id.trim() : undefined;
 
@@ -206,64 +253,24 @@ export async function validateAndSanitizeEntityPayload(
     );
   }
 
-  const entityId = params.requestedEntityId ?? bodyId ?? generateEntityId(prefix);
+  const entityId =
+    params.requestedEntityId ?? bodyId ?? buildEntityId(params.entityType, toHex(randomBytes(8)));
   candidate.id = entityId;
   candidate.has_primary_source = params.hasPrimarySource;
 
-  switch (params.entityType) {
-    case 'person': {
-      const parsed = parseEntityPayload('person', candidate);
-      const sanitized = sanitizePersonForWrite(parsed, deps.siteConfig.privacy);
-      return { entityId, sanitized: sanitized as unknown as EntityPayload };
-    }
-    case 'event': {
-      const parsed = parseEntityPayload('event', candidate);
-      const livingIds = params.livingPersonIdsOverride ?? (await deps.repository.getLivingPersonIds());
-      const sanitized = sanitizeEventForWrite(parsed, livingIds, deps.siteConfig.privacy);
-      return { entityId, sanitized: sanitized as unknown as EntityPayload };
-    }
-    case 'media': {
-      const parsed = parseEntityPayload('media', candidate);
-      const livingIds = params.livingPersonIdsOverride ?? (await deps.repository.getLivingPersonIds());
-      let eventsMap: ReadonlyMap<string, Pick<RawEvent, 'id' | 'participants'>> | undefined =
-        params.extraEventsById;
-      if (
-        parsed.event_id &&
-        !params.extraEventsById?.has(parsed.event_id) &&
-        !params.prefetchedEventIds?.has(parsed.event_id)
-      ) {
-        const evRow = await deps.repository.getEntity('event', parsed.event_id);
-        if (evRow && !('edge' in evRow) && evRow.deleted_at === null) {
-          const parsedEv = parseEntityPayload('event', evRow.data);
-          const nextEvents = new Map(params.extraEventsById ?? []);
-          nextEvents.set(parsedEv.id, parsedEv);
-          eventsMap = nextEvents;
-        }
-      }
-      assertMediaAllowedForPrivacy(parsed, livingIds, eventsMap);
-      return { entityId, sanitized: parsed as unknown as EntityPayload };
-    }
-    case 'place': {
-      const parsed = parseEntityPayload('place', candidate);
-      return { entityId, sanitized: parsed as unknown as EntityPayload };
-    }
-    case 'source': {
-      const parsed = parseEntityPayload('source', candidate);
-      return { entityId, sanitized: parsed as unknown as EntityPayload };
-    }
-    case 'narrative': {
-      const parsed = parseEntityPayload('narrative', candidate);
-      return { entityId, sanitized: parsed as unknown as EntityPayload };
-    }
-    default: {
-      const _exhaustive: never = params.entityType;
-      throw new Error(`Unhandled entity type: ${String(_exhaustive)}`);
-    }
-  }
+  const sanitized = await NON_KINSHIP_SANITIZERS[params.entityType]({
+    deps,
+    candidate,
+    livingPersonIdsOverride: params.livingPersonIdsOverride,
+    extraEventsById: params.extraEventsById,
+    prefetchedEventIds: params.prefetchedEventIds,
+  });
+
+  return { entityId, sanitized };
 }
 
 export async function maybeGenerateEntityPronunciationAudio(
-  deps: Pick<PayloadPolicyDeps, 'siteConfig' | 'mediaStore' | 'pronunciationGenerator'>,
+  deps: Pick<PayloadPolicyDeps, 'clock' | 'siteConfig' | 'mediaStore' | 'pronunciationGenerator'>,
   params: {
     entityType: EntityType;
     sanitized: EntityPayload;
@@ -282,11 +289,11 @@ export async function maybeGenerateEntityPronunciationAudio(
     return params.sanitized;
   }
 
-  if (
-    params.entityType === 'person' &&
-    resolveEffectiveLiving(params.sanitized as unknown as RawPerson, deps.siteConfig.privacy)
-  ) {
-    return params.sanitized;
+  if (params.entityType === 'person') {
+    const parsedPerson = parseEntityPayload('person', params.sanitized);
+    if (resolveEffectiveLiving(parsedPerson, deps.siteConfig.privacy, deps.clock.currentYear())) {
+      return params.sanitized;
+    }
   }
 
   const prevPron =

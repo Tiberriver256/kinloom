@@ -1,6 +1,5 @@
-import type { MediaStore } from '@kinloom/core';
+import type { MediaStore, PronunciationAudioGenerator } from '@kinloom/core';
 import { sha256Hex } from '../crypto.js';
-import type { PronunciationAudioGenerator } from '../ports.js';
 
 export interface StoredPronunciationAudio {
   audio_url: string;

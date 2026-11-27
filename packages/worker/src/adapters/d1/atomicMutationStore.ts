@@ -1,9 +1,11 @@
 import {
   type AtomicMutationOp,
+  type AtomicMutationStore,
   asRevisionId,
   type BatchId,
   type CommitMutationsResult,
   computeEntityDiff,
+  type EntityReadStore,
   type OptimisticConflictError,
   parseEntityPayload,
   type RevisionAuthor,
@@ -12,7 +14,7 @@ import {
   type StoredKinshipRow,
 } from '@kinloom/core';
 import type { D1Database, D1PreparedStatement } from '../../types.js';
-import type { D1EntityReadStore } from './entityReadStore.js';
+import { parseDbReturningRevisionIdRow, parseDbReturningRevisionPairRow } from './rowMappers.js';
 import {
   buildCommittedRevisionRecord,
   chunkJsonArray,
@@ -30,10 +32,12 @@ interface RevisionResultEntry {
   readonly ops: readonly AtomicMutationOp[];
 }
 
-export class D1AtomicMutationStore {
+export class D1AtomicMutationStore implements AtomicMutationStore {
   constructor(
     private readonly db: D1Database,
-    private readonly readStore: D1EntityReadStore
+    private readonly readStore: Pick<EntityReadStore, 'getHeadRevisionId' | 'getEntity'> & {
+      getEntitiesBatch: NonNullable<EntityReadStore['getEntitiesBatch']>;
+    }
   ) {}
 
   async commitAtomicMutations(params: {
@@ -105,10 +109,9 @@ export class D1AtomicMutationStore {
       const results = await this.db.batch(statements);
       const committedRevisions: RevisionRecord[] = [];
       for (const entry of revisionResultEntries) {
+        const rawRows = results[entry.stmtIndex]?.results ?? [];
         if (entry.kind === 'create') {
-          const revRows = (results[entry.stmtIndex]?.results ?? []) as unknown as Array<{
-            revision_id: number;
-          }>;
+          const revRows = rawRows.map(parseDbReturningRevisionIdRow);
           if (revRows.length !== entry.ops.length) {
             throw new Error(
               `D1 create revision insert returned ${revRows.length} rows for ${entry.ops.length} operations.`
@@ -129,14 +132,11 @@ export class D1AtomicMutationStore {
             );
           }
         } else {
-          const revRows = (results[entry.stmtIndex]?.results ?? []) as unknown as Array<{
-            revision_id: number;
-            parent_revision_id: number | null;
-          }>;
-          const revRow = revRows[0];
-          if (!revRow) {
+          const firstRow = rawRows[0];
+          if (!firstRow) {
             throw new Error('D1 revision insert did not return the inserted revision row.');
           }
+          const revRow = parseDbReturningRevisionPairRow(firstRow);
           committedRevisions.push(
             buildCommittedRevisionRecord({
               revisionId: revRow.revision_id,

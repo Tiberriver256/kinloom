@@ -4,6 +4,7 @@
 export * from './brandkit.js';
 // Core Domain Algorithms (UI-agnostic)
 export * from './citations.js';
+export * from './clock.js';
 // Pure TypeScript Archive Compiler & Incremental Bundle Patcher
 export * from './compileArchive.js';
 // Shared Phase 3 Contracts & Port Interfaces

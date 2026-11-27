@@ -1,4 +1,4 @@
-import type { PronunciationAudioGenerator, PronunciationAudioResult } from '@kinloom/server';
+import type { PronunciationAudioGenerator, PronunciationAudioResult } from '@kinloom/core';
 
 export const DEFAULT_GEMINI_TTS_MODEL = 'gemini-3.8-flash-tts';
 export const DEFAULT_GEMINI_TTS_VOICE = 'Charon';

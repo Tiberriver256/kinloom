@@ -533,6 +533,7 @@ export function resolveRouteOgMetadata(options: {
   siteConfig: KinloomSiteConfig;
   person?: RawPerson | null;
   privacyConfig?: PrivacyConfig;
+  referenceYear?: number;
 }): RouteOgMetadata {
   const spec = resolveBrandSpec(options.siteConfig);
   const fallback: RouteOgMetadata = {
@@ -549,12 +550,14 @@ export function resolveRouteOgMetadata(options: {
   }
 
   const privacy = options.privacyConfig ?? options.siteConfig.privacy;
+  const referenceYear = options.referenceYear ?? privacy.referenceYear;
   const isLiving = isPersonLivingPublic({
     explicitLiving: options.person.is_living,
     hasDeathOrBurial: Boolean(options.person.death_edtf),
     birthYear: edtfYear(options.person.birth_edtf),
     earliestEventYear: null,
-    referenceYear: privacy.referenceYear,
+    // Fail-closed (0) when no referenceYear is supplied and death date is absent so OG cards never leak living people.
+    referenceYear: referenceYear ?? 0,
     livingCutoffYears: privacy.livingCutoffYears,
   });
 

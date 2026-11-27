@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import {
   edtfYear,
+  getCurrentReferenceYear,
   getMediaPersonIds,
   type KinshipEdge,
   type MediaItem,
@@ -285,8 +286,9 @@ export function buildDeceasedQueue(input: {
   const research = indexResearchCounts(input.events, input.media);
   const biographiesByPerson = indexBiographyByPersonId(input.narratives);
   const items: DeceasedQueueItem[] = [];
+  const referenceYear = input.privacy?.referenceYear ?? getCurrentReferenceYear();
   for (const person of input.people) {
-    if (resolveEffectiveLiving(person, input.privacy)) {
+    if (resolveEffectiveLiving(person, input.privacy, referenceYear)) {
       continue;
     }
     if (endOfLineIds && !endOfLineIds.has(person.id)) {

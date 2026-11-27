@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import {
+  getCurrentReferenceYear,
   type KinloomSiteConfig,
   type Place,
   type Pronunciation,
@@ -69,12 +70,13 @@ export function runPronounceAuditCommand(options: PronounceAuditOptions): Pronou
 
   const deceasedPeople: RawPerson[] = [];
   const livingPeople: Array<{ index: number; person: RawPerson }> = [];
+  const referenceYear = siteConfig.privacy.referenceYear ?? getCurrentReferenceYear();
   for (let i = 0; i < people.length; i += 1) {
     const person = people[i];
     if (
       person.is_living ||
       person.full_name.trim() === 'Living' ||
-      resolveEffectiveLiving(person, siteConfig.privacy)
+      resolveEffectiveLiving(person, siteConfig.privacy, referenceYear)
     ) {
       livingPeople.push({ index: i + 1, person });
       continue;

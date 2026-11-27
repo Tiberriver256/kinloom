@@ -1,6 +1,6 @@
 import {
+  type AccessControlStore,
   type AgentTokenScope,
-  type ArchiveRepository,
   type CallerPrincipal,
   type Clock,
   isInviteActive,
@@ -25,7 +25,7 @@ export async function resolveCallerPrincipal(params: {
   request: Request;
   url: URL;
   sessionSecret: string;
-  repository: ArchiveRepository;
+  repository: Pick<AccessControlStore, 'findActiveAgentTokenByHash' | 'getUser' | 'getInvite'>;
   clock: Clock;
 }): Promise<ResolvedAuthContext> {
   const authHeader = params.request.headers.get('authorization');

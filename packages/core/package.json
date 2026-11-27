@@ -24,10 +24,6 @@
     "./machines": {
       "types": "./dist/machines/index.d.ts",
       "import": "./dist/machines/index.js"
-    },
-    "./oxlint-plugin": {
-      "types": "./dist/oxlint/plugin.d.ts",
-      "import": "./dist/oxlint/plugin.js"
     }
   },
   "files": [

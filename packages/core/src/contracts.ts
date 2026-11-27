@@ -5,18 +5,20 @@ import type {
   KinshipEdge,
   MediaChecklistItem,
   MediaItem,
+  Pronunciation,
   ReadingsBundle,
 } from './schemas/entities.js';
-import type {
-  AgentTokenScope,
-  ApiErrorEnvelope,
-  AuthorType,
-  EntityPayload,
-  EntityType,
-  RevisionAction,
-  RevisionRecord,
-  TalkComment,
-  UserRole,
+import {
+  type AgentTokenScope,
+  type ApiErrorEnvelope,
+  type AuthorType,
+  type EntityPayload,
+  type EntityType,
+  type RevisionAction,
+  type RevisionRecord,
+  type TalkComment,
+  toEntityPayload,
+  type UserRole,
 } from './schemas/revisions.js';
 
 export type { AgentTokenScope, ApiErrorEnvelope, UserRole } from './schemas/revisions.js';
@@ -77,6 +79,13 @@ export interface StoredKinshipRow {
 }
 
 export type StoredEntityRecord = StoredEntityRow | StoredKinshipRow;
+
+export function storedRecordToEntityPayload(row: StoredEntityRecord): EntityPayload {
+  if ('edge' in row) {
+    return toEntityPayload(structuredClone(row.edge));
+  }
+  return structuredClone(row.data);
+}
 
 export interface EntityLookupKey {
   readonly entityType: EntityType;
@@ -182,30 +191,33 @@ export interface RevisionQuery {
   limit?: number;
 }
 
-/**
- * Persistence port implemented by D1ArchiveRepository (production) and InMemoryArchiveRepository (unit tests).
- */
-export interface ArchiveRepository {
+export interface EntityReadStore {
   getHeadRevisionId(): Promise<RevisionId>;
   getEntity(entityType: EntityType, entityId: string): Promise<StoredEntityRecord | null>;
   getEntitiesBatch?(keys: readonly EntityLookupKey[]): Promise<Map<string, StoredEntityRecord | null>>;
   getLivingPersonIds(): Promise<ReadonlySet<string>>;
   loadActiveSnapshot(): Promise<ArchiveRawSnapshot>;
+}
 
+export interface AtomicMutationStore {
   commitAtomicMutations(params: {
     batch_id: BatchId | null;
     author: RevisionAuthor;
     nowIso: string;
     operations: readonly AtomicMutationOp[];
   }): Promise<CommitMutationsResult>;
+}
 
+export interface RevisionLogStore {
   listRevisions(query: RevisionQuery): Promise<{
     items: readonly RevisionRecord[];
     next_cursor: RevisionId | null;
   }>;
   getRevisionById(revisionId: RevisionId): Promise<RevisionRecord | null>;
   getRevisionsByBatch(batchId: BatchId): Promise<readonly RevisionRecord[]>;
+}
 
+export interface TalkCommentStore {
   listTalkComments(entityType: EntityType, entityId: string): Promise<readonly TalkComment[]>;
   insertTalkComment(input: {
     entity_type: EntityType;
@@ -216,7 +228,9 @@ export interface ArchiveRepository {
     created_at: string;
   }): Promise<TalkComment>;
   softDeleteTalkComment(commentId: number, deletedAt: string): Promise<boolean>;
+}
 
+export interface AccessControlStore {
   getUser(email: string): Promise<UserRecord | null>;
   listUsers(): Promise<readonly UserRecord[]>;
   upsertUser(user: UserRecord): Promise<UserRecord>;
@@ -240,6 +254,17 @@ export interface ArchiveRepository {
   createAgentToken(record: AgentTokenRecord): Promise<AgentTokenRecord>;
   revokeAgentToken(tokenId: string, atIso: string): Promise<boolean>;
 }
+
+/**
+ * Full persistence port composed from five cohesive storage sub-ports.
+ * Layer 2 services should depend only on the narrow sub-ports they actually require.
+ */
+export interface ArchiveRepository
+  extends EntityReadStore,
+    AtomicMutationStore,
+    RevisionLogStore,
+    TalkCommentStore,
+    AccessControlStore {}
 
 /**
  * Compiled bundle cache port supporting both incremental patching and full cold rebuilds.
@@ -373,6 +398,28 @@ export interface KinloomServerPlugin {
   }): Promise<void>;
 }
 
+export interface PronunciationAudioResult {
+  bytes: Uint8Array;
+  contentType: string;
+  ext: 'wav' | 'mp3';
+}
+
+export interface PronunciationAudioGenerator {
+  generate(params: {
+    text: string;
+    phonetic?: string;
+    ipa?: string;
+    language?: string;
+    voice?: string;
+  }): Promise<PronunciationAudioResult>;
+}
+
+export interface PronunciationLexiconStore {
+  list(): Promise<Record<string, Pronunciation>>;
+  upsert(term: string, entry: Pronunciation, updatedBy: string, updatedAt: string): Promise<Pronunciation>;
+  delete(term: string): Promise<void>;
+}
+
 export interface KinloomServerPorts {
   repository: ArchiveRepository;
   bundleCache: BundleCache;
@@ -381,6 +428,8 @@ export interface KinloomServerPorts {
   authProvider?: AuthProvider;
   clock: Clock;
   assetHandler?: AssetHandler;
+  pronunciationGenerator?: PronunciationAudioGenerator;
+  pronunciationLexiconStore?: PronunciationLexiconStore;
   plugins?: readonly KinloomServerPlugin[];
 }
 
@@ -415,10 +464,41 @@ export interface EntityWriteInput {
   has_primary_source: boolean;
 }
 
+export type PublicAgentTokenRecord = Omit<AgentTokenRecord, 'token_hash'>;
+
+export interface CreatedInviteResponse {
+  invite: InviteRecord;
+  invite_url: string;
+}
+
+export interface CreatedAgentTokenResponse {
+  token_id: string;
+  label: string;
+  scope: AgentTokenScope;
+  plaintext_secret: string;
+}
+
+/**
+ * UI-side administrative port implemented by live wiki data sources that support site administration.
+ */
+export interface AdminDataSource {
+  listUsers(): Promise<readonly UserRecord[]>;
+  createUser?(input: { email: string; display_name: string; role: UserRole }): Promise<UserRecord>;
+  updateUserRole(email: string, input: { role: UserRole; display_name?: string }): Promise<UserRecord>;
+  deleteUser?(email: string): Promise<void>;
+  listInvites(): Promise<readonly InviteRecord[]>;
+  createInvite(input: { label: string; expires_in_days?: number }): Promise<CreatedInviteResponse>;
+  revokeInvite(token: string): Promise<void>;
+  listAgentTokens(): Promise<readonly PublicAgentTokenRecord[]>;
+  createAgentToken(input: { label: string; scope: AgentTokenScope }): Promise<CreatedAgentTokenResponse>;
+  revokeAgentToken(tokenId: string): Promise<void>;
+}
+
 /**
  * UI-side data transport port implemented by StaticDemoDataSource and HttpWikiDataSource.
  */
 export interface ArchiveDataSource {
+  readonly admin?: AdminDataSource;
   loadArchive(options?: { ifNoneMatch?: string }): Promise<{
     bundle: ArchiveBundle;
     etag: string | null;

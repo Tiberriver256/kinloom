@@ -1,3 +1,4 @@
+import { getCurrentReferenceYear, parseIsoReferenceYear } from '../clock.js';
 import { compareArchiveEvents } from '../compileArchive.js';
 import { collectLivingNames, compileLivingNamePattern } from '../privacy.js';
 import type { KinloomSiteConfig, PrivacyConfig } from '../schemas/config.js';
@@ -27,6 +28,7 @@ export interface BundlePatchMutation {
 
 export interface PatchCompiledBundleOptions {
   generatedAt?: string;
+  referenceYear?: number;
   legacyContainerSourceIds?: ReadonlySet<string>;
 }
 
@@ -80,7 +82,15 @@ export function createPatchWorkingState(
   mode: BuildMode,
   options?: PatchCompiledBundleOptions
 ): PatchWorkingState {
-  const privacy = siteConfig.privacy;
+  const effectiveReferenceYear =
+    options?.referenceYear ??
+    siteConfig.privacy.referenceYear ??
+    parseIsoReferenceYear(options?.generatedAt ?? previousBundle.meta.generated_at) ??
+    getCurrentReferenceYear();
+  const privacy: PrivacyConfig = {
+    ...siteConfig.privacy,
+    referenceYear: effectiveReferenceYear,
+  };
   const people = [...previousBundle.people];
   const events = [...previousBundle.events];
   const places = [...previousBundle.places];

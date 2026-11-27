@@ -1,5 +1,4 @@
 import {
-  type ArchiveRepository,
   type AtomicMutationOp,
   asBatchId,
   asRevisionId,
@@ -10,12 +9,14 @@ import {
   type EntityLifecycleState,
   type EntityLookupKey,
   type EntityPayload,
+  type EntityReadStore,
   type EntityType,
   entityLookupCompositeKey,
   type KinloomSiteConfig,
   parseEntityPayload,
   type RawEvent,
   type RevisionId,
+  type RevisionLogStore,
   type RevisionRecord,
   type StoredEntityRecord,
   transitionBatchRevertLifecycle,
@@ -34,7 +35,7 @@ import {
 } from './payloadPolicy.js';
 
 export interface BatchCompilerDeps {
-  readonly repository: ArchiveRepository;
+  readonly repository: EntityReadStore & RevisionLogStore;
   readonly clock: Clock;
   readonly siteConfig: KinloomSiteConfig;
   readonly commitPipeline: WikiCommitPipeline;
@@ -205,6 +206,7 @@ export async function compileBatchSubmissionOps(
         });
         updateWorkingPrivacyContext(
           deps.siteConfig,
+          deps.clock.currentYear(),
           entityType,
           validated.entityId,
           validated.sanitized,
@@ -275,6 +277,7 @@ export async function compileBatchSubmissionOps(
 
         updateWorkingPrivacyContext(
           deps.siteConfig,
+          deps.clock.currentYear(),
           entityType,
           entityId,
           validated.sanitized,
@@ -403,6 +406,7 @@ export async function compileBatchSubmissionOps(
 
         updateWorkingPrivacyContext(
           deps.siteConfig,
+          deps.clock.currentYear(),
           entityType,
           entityId,
           validated.sanitized,
@@ -527,6 +531,7 @@ export async function compileBatchRevertOps(
       sanitizedAfter = validated.sanitized;
       updateWorkingPrivacyContext(
         deps.siteConfig,
+        deps.clock.currentYear(),
         step.entityType,
         step.entityId,
         sanitizedAfter,

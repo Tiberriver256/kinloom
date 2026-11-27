@@ -466,27 +466,37 @@ describe('compileArchive and living-person privacy', () => {
     );
   });
 
-  it('advances default referenceYear dynamically from the runtime UTC clock when omitted', () => {
+  it('evaluates birth-year living cutoffs deterministically from explicit referenceYear and Clock boundaries', () => {
+    const person1926 = {
+      is_living: false,
+      birth_edtf: '1926-03-14',
+      death_edtf: '',
+    };
+
+    expect(
+      isPersonLivingPublic({
+        hasDeathOrBurial: false,
+        birthYear: 1926,
+        earliestEventYear: 1926,
+        referenceYear: 2026,
+      })
+    ).toBe(true);
+    expect(resolveEffectiveLiving(person1926, undefined, 2026)).toBe(true);
+
+    expect(
+      isPersonLivingPublic({
+        hasDeathOrBurial: false,
+        birthYear: 1926,
+        earliestEventYear: 1926,
+        referenceYear: 2027,
+      })
+    ).toBe(false);
+    expect(resolveEffectiveLiving(person1926, undefined, 2027)).toBe(false);
+
+    expect(() => resolveEffectiveLiving(person1926)).toThrow(RangeError);
+
     vi.useFakeTimers();
     try {
-      const person1926 = {
-        is_living: false,
-        birth_edtf: '1926-03-14',
-        death_edtf: '',
-      };
-
-      vi.setSystemTime(new Date('2026-06-15T12:00:00.000Z'));
-      expect(
-        isPersonLivingPublic({ hasDeathOrBurial: false, birthYear: 1926, earliestEventYear: 1926 })
-      ).toBe(true);
-      expect(resolveEffectiveLiving(person1926)).toBe(true);
-
-      vi.setSystemTime(new Date('2027-01-01T00:00:00.000Z'));
-      expect(
-        isPersonLivingPublic({ hasDeathOrBurial: false, birthYear: 1926, earliestEventYear: 1926 })
-      ).toBe(false);
-      expect(resolveEffectiveLiving(person1926)).toBe(false);
-
       vi.setSystemTime(new Date('2030-05-01T00:00:00.000Z'));
       const livingPerson = {
         id: 'p_living_clock',

@@ -1,7 +1,7 @@
 import {
+  type AccessControlStore,
   type ArchiveAuthProviders,
   type ArchiveCapabilities,
-  type ArchiveRepository,
   type ArchiveSessionState,
   type AuthProvider,
   type CallerPrincipal,
@@ -24,7 +24,7 @@ import { KinloomHttpError } from '../errors.js';
 const EmailSchema = z.string().trim().email('Please provide a valid email address.');
 
 export interface AuthServiceDeps {
-  repository: ArchiveRepository;
+  repository: AccessControlStore;
   emailSender: EmailSender;
   authProvider?: AuthProvider;
   clock: Clock;
@@ -82,7 +82,7 @@ function defaultDisplayNameForEmail(email: string): string {
 }
 
 export class AuthService {
-  private readonly repository: ArchiveRepository;
+  private readonly repository: AccessControlStore;
   private readonly emailSender: EmailSender;
   private readonly authProvider?: AuthProvider;
   private readonly clock: Clock;

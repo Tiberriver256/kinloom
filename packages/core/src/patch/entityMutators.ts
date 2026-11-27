@@ -401,32 +401,21 @@ function applyMediaMutation(state: PatchWorkingState, mutation: BundlePatchMutat
   updateUncitedKey(state.uncitedKeys, 'media', entity_id, effectiveHasPrimary, false);
 }
 
+const ENTITY_MUTATORS: {
+  [K in BundlePatchMutation['entity_type']]: (
+    state: PatchWorkingState,
+    mutation: BundlePatchMutation
+  ) => void;
+} = {
+  source: applySourceMutation,
+  narrative: applyNarrativeMutation,
+  kinship_edge: applyKinshipMutation,
+  place: applyPlaceMutation,
+  person: applyPersonMutation,
+  event: applyEventMutation,
+  media: applyMediaMutation,
+};
+
 export function applyPatchMutation(state: PatchWorkingState, mutation: BundlePatchMutation): void {
-  switch (mutation.entity_type) {
-    case 'source':
-      applySourceMutation(state, mutation);
-      return;
-    case 'narrative':
-      applyNarrativeMutation(state, mutation);
-      return;
-    case 'kinship_edge':
-      applyKinshipMutation(state, mutation);
-      return;
-    case 'place':
-      applyPlaceMutation(state, mutation);
-      return;
-    case 'person':
-      applyPersonMutation(state, mutation);
-      return;
-    case 'event':
-      applyEventMutation(state, mutation);
-      return;
-    case 'media':
-      applyMediaMutation(state, mutation);
-      return;
-    default: {
-      const _exhaustive: never = mutation.entity_type;
-      throw new Error(`Unhandled entity type: ${String(_exhaustive)}`);
-    }
-  }
+  ENTITY_MUTATORS[mutation.entity_type](state, mutation);
 }

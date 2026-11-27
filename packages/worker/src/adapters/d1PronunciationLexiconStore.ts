@@ -1,5 +1,8 @@
-import { type Pronunciation, PronunciationVariantSchema } from '@kinloom/core';
-import type { PronunciationLexiconStore } from '@kinloom/server';
+import {
+  type Pronunciation,
+  type PronunciationLexiconStore,
+  PronunciationVariantSchema,
+} from '@kinloom/core';
 import type { D1Database } from '../types.js';
 
 interface PronunciationLexiconRow {

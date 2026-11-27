@@ -3,14 +3,13 @@ export type {
   KinloomServerPlugin,
   KinloomServerPluginContext,
   KinloomServerPluginRoute,
-  PluginRouteMinRole,
-} from '@kinloom/core';
-export type {
   KinloomServerPorts,
+  PluginRouteMinRole,
   PronunciationAudioGenerator,
   PronunciationAudioResult,
   PronunciationLexiconStore,
-} from './ports.js';
+} from '@kinloom/core';
+export { extractCollectionsFromSnapshot } from '@kinloom/core';
 
 export const KINLOOM_SERVER_VERSION = '0.40.1';
 
@@ -20,7 +19,6 @@ export {
 } from './adapters/googleOAuthProvider.js';
 export {
   createInMemoryServerPorts,
-  extractCollectionsFromSnapshot,
   FakeAuthProvider,
   type FakeOAuthProfile,
   InMemoryArchiveRepository,
@@ -72,6 +70,13 @@ export {
   mapAuthErrorToBrowserCode,
 } from './http/router.js';
 export {
+  createPrivacyAndOgRouteHandler,
+  type DynamicOgRequestOptions,
+  handleDynamicOgRequest,
+  type PrivacyAndOgRouteHandlerDeps,
+  renderPrivacyPolicyHtml,
+} from './http/routes/privacyAndOgRoutes.js';
+export {
   type ApplySecurityHeadersOptions,
   applySecurityHeaders,
   DEFAULT_CONTENT_SECURITY_POLICY,
@@ -120,5 +125,11 @@ export {
   matchesMagicBytesForMime,
   parseHttpByteRange,
 } from './services/mediaService.js';
+export {
+  type GenerateEntityPronunciationInput,
+  PronunciationService,
+  type PronunciationServiceDeps,
+  type UpsertLexiconTermInput,
+} from './services/pronunciationService.js';
 export { TalkService, type TalkServiceDeps } from './services/talkService.js';
 export { WikiWriteService, type WikiWriteServiceDeps } from './services/wikiWriteService.js';

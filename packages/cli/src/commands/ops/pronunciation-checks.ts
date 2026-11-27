@@ -1,5 +1,6 @@
 import {
   findIpaGlyphsInPhonetic,
+  getCurrentReferenceYear,
   type Place,
   type PrivacyConfig,
   type Pronunciation,
@@ -133,7 +134,8 @@ function isEffectiveLivingRecord(
       birth_edtf: asString(rec.birth_edtf).trim(),
       death_edtf: asString(rec.death_edtf).trim(),
     },
-    privacy
+    privacy,
+    privacy.referenceYear ?? getCurrentReferenceYear()
   );
 }
 

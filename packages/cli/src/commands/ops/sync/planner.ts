@@ -7,6 +7,7 @@ import {
   type EntityPayload,
   type EntityType,
   filterMediaForPrivacy,
+  getCurrentReferenceYear,
   parseEntityPayload,
   parseEventsYaml,
   parseKinloomConfigYaml,
@@ -164,14 +165,15 @@ export function buildSanitizedLocalEntries(local: LocalArchiveFiles): {
   filteredOutMediaCount: number;
 } {
   const privacy = local.siteConfig.privacy;
+  const referenceYear = privacy.referenceYear ?? getCurrentReferenceYear();
   const livingIds = new Set<string>();
 
   const sanitizedPeople: SanitizedLocalEntry[] = local.people.map((person) => {
-    const isLiving = resolveEffectiveLiving(person, privacy);
+    const isLiving = resolveEffectiveLiving(person, privacy, referenceYear);
     if (isLiving) {
       livingIds.add(person.id);
     }
-    const sanitized = sanitizePersonForWrite(person, privacy);
+    const sanitized = sanitizePersonForWrite(person, privacy, referenceYear);
     return {
       entity_type: 'person',
       entity_id: sanitized.id,

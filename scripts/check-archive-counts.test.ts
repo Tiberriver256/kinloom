@@ -4,11 +4,11 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { promisify } from 'node:util';
 import { afterEach, describe, expect, it } from 'vitest';
-import { kinloomOxlintPlugin } from './plugin.js';
+import { kinloomOxlintPlugin } from './archive-count-rule.js';
 
 const execFileAsync = promisify(execFile);
 
-const REPO_ROOT = path.resolve(import.meta.dirname, '../../../..');
+const REPO_ROOT = path.resolve(import.meta.dirname, '..');
 const CHECKER_SCRIPT = path.join(REPO_ROOT, 'scripts', 'check-archive-counts.mjs');
 
 interface CountDiagnostic {
@@ -115,7 +115,6 @@ expect.soft(bundle.people).toHaveLength(54);
     );
 
     expect(result.exitCode).toBe(1);
-    // 18 single assertions + 2 offending properties in the .toEqual({ people: 35, events: 235, living_redacted: 0 }) call = 20
     expect(ruleDiagnostics).toHaveLength(20);
     expect(ruleDiagnostics.every((d) => d.message?.includes('change-detector'))).toBe(true);
     expect(ruleDiagnostics.some((d) => d.message?.includes('media === 126'))).toBe(true);

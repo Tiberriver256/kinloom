@@ -1,5 +1,5 @@
 import type {
-  AgentTokenRecord,
+  AdminDataSource,
   AgentTokenScope,
   ArchiveAuthProviders,
   ArchiveBundle,
@@ -7,6 +7,8 @@ import type {
   ArchiveDataSource,
   ArchiveSessionState,
   BatchId,
+  CreatedAgentTokenResponse,
+  CreatedInviteResponse,
   EntityPayload,
   EntityType,
   EntityWriteInput,
@@ -14,6 +16,7 @@ import type {
   MediaChecklistItem,
   MediaItem,
   OptimisticConflictError,
+  PublicAgentTokenRecord,
   ReadingsBundle,
   RevisionId,
   RevisionQuery,
@@ -44,19 +47,11 @@ export class ApiClientError extends Error {
   }
 }
 
-export type PublicAgentTokenRecord = Omit<AgentTokenRecord, 'token_hash'>;
-
-export interface CreatedAgentTokenResponse {
-  token_id: string;
-  label: string;
-  scope: AgentTokenScope;
-  plaintext_secret: string;
-}
-
-export interface CreatedInviteResponse {
-  invite: InviteRecord;
-  invite_url: string;
-}
+export type {
+  CreatedAgentTokenResponse,
+  CreatedInviteResponse,
+  PublicAgentTokenRecord,
+} from '@kinloom/core';
 
 export interface HttpWikiDataSourceOptions {
   /** Base origin or path prefix, defaults to '' (same-origin). */
@@ -106,7 +101,8 @@ function normalizeConflict(details: unknown): OptimisticConflictError {
 /**
  * Live HTTP Wiki adapter implementing ArchiveDataSource plus Admin helper endpoints.
  */
-export class HttpWikiDataSource implements ArchiveDataSource {
+export class HttpWikiDataSource implements ArchiveDataSource, AdminDataSource {
+  readonly admin: AdminDataSource = this;
   private readonly apiBase: string;
   private readonly assetBase: string;
   private readonly fetchImpl: typeof fetch;

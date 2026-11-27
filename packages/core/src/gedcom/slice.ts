@@ -1,4 +1,4 @@
-import { getCurrentReferenceYear } from '../privacy.js';
+import { getCurrentReferenceYear } from '../clock.js';
 import { parseGedcomText } from './parse.js';
 import {
   buildSliceEventsAndSources,

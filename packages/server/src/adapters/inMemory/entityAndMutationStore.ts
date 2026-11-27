@@ -3,6 +3,7 @@ import {
   type AtomicMutationOp,
   asRevisionId,
   type BatchId,
+  type Clock,
   type CommitMutationsResult,
   computeEntityDiff,
   type EntityLookupKey,
@@ -21,17 +22,16 @@ import {
   type StoredEntityRecord,
   type StoredEntityRow,
   type StoredKinshipRow,
+  storedRecordToEntityPayload,
 } from '@kinloom/core';
+import { SystemClock } from '../systemClock.js';
 
 function entityCompositeKey(entityType: EntityType, entityId: string): string {
   return `${entityType}:${entityId}`;
 }
 
 function getRowPayload(row: StoredEntityRow | StoredKinshipRow): EntityPayload {
-  if ('edge' in row) {
-    return structuredClone(row.edge) as unknown as EntityPayload;
-  }
-  return structuredClone(row.data);
+  return storedRecordToEntityPayload(row);
 }
 
 /**
@@ -42,9 +42,11 @@ export class InMemoryEntityAndMutationStore {
   private readonly kinship = new Map<string, StoredKinshipRow>();
   private readonly revisions: RevisionRecord[] = [];
   private readonly privacyConfig?: Partial<PrivacyConfig>;
+  private readonly clock: Clock;
 
-  constructor(options?: { privacyConfig?: Partial<PrivacyConfig> }) {
+  constructor(options?: { privacyConfig?: Partial<PrivacyConfig>; clock?: Clock }) {
     this.privacyConfig = options?.privacyConfig;
+    this.clock = options?.clock ?? new SystemClock();
   }
 
   async getHeadRevisionId(): Promise<RevisionId> {
@@ -86,7 +88,7 @@ export class InMemoryEntityAndMutationStore {
         continue;
       }
       const parsed = parseEntityPayload('person', row.data);
-      if (resolveEffectiveLiving(parsed, this.privacyConfig)) {
+      if (resolveEffectiveLiving(parsed, this.privacyConfig, this.clock.currentYear())) {
         living.add(row.entity_id);
       }
     }

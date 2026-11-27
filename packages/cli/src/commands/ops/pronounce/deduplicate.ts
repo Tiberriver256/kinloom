@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import {
   findIpaGlyphsInPhonetic,
+  getCurrentReferenceYear,
   inspectPersonPronunciationTokens,
   type KinloomSiteConfig,
   type Pronunciation,
@@ -394,11 +395,12 @@ export function runPronounceDeduplicateCommand(
   const deceasedPeople: RawPerson[] = [];
   let livingCount = 0;
 
+  const referenceYear = siteConfig.privacy.referenceYear ?? getCurrentReferenceYear();
   for (const person of people) {
     if (
       person.is_living ||
       person.full_name.trim() === 'Living' ||
-      resolveEffectiveLiving(person, siteConfig.privacy)
+      resolveEffectiveLiving(person, siteConfig.privacy, referenceYear)
     ) {
       livingCount += 1;
       livingIdsLower.add(person.id.trim().toLowerCase());

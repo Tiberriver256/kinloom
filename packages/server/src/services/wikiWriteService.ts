@@ -1,23 +1,25 @@
 import {
-  type ArchiveRepository,
   type AtomicMutationOp,
+  type AtomicMutationStore,
   asRevisionId,
   type BatchId,
   type BatchSubmission,
   type BundleCache,
   type Clock,
   type EntityPayload,
+  type EntityReadStore,
   type EntityType,
   type KinloomServerPlugin,
   type KinloomSiteConfig,
   type MediaStore,
+  type PronunciationAudioGenerator,
   type RevisionAuthor,
   type RevisionId,
+  type RevisionLogStore,
   type RevisionRecord,
   transitionEntityLifecycle,
 } from '@kinloom/core';
 import { KinloomHttpError } from '../errors.js';
-import type { PronunciationAudioGenerator } from '../ports.js';
 import { compileBatchRevertOps, compileBatchSubmissionOps } from './wikiWrite/batchCompiler.js';
 import { WikiCommitPipeline } from './wikiWrite/commitPipeline.js';
 import {
@@ -30,7 +32,7 @@ import {
 } from './wikiWrite/payloadPolicy.js';
 
 export interface WikiWriteServiceDeps {
-  repository: ArchiveRepository;
+  repository: EntityReadStore & AtomicMutationStore & RevisionLogStore;
   bundleCache: BundleCache;
   clock: Clock;
   siteConfig: KinloomSiteConfig;
@@ -41,7 +43,7 @@ export interface WikiWriteServiceDeps {
 }
 
 export class WikiWriteService {
-  private readonly repository: ArchiveRepository;
+  private readonly repository: EntityReadStore & AtomicMutationStore & RevisionLogStore;
   private readonly clock: Clock;
   private readonly siteConfig: KinloomSiteConfig;
   private readonly mediaStore?: MediaStore;
@@ -74,7 +76,7 @@ export class WikiWriteService {
     assertEditSummaryValid(params.summary);
 
     const { entityId, sanitized: initialSanitized } = await validateAndSanitizeEntityPayload(
-      { repository: this.repository, siteConfig: this.siteConfig },
+      { repository: this.repository, clock: this.clock, siteConfig: this.siteConfig },
       {
         entityType: params.entityType,
         requestedEntityId: params.entityId,
@@ -96,6 +98,7 @@ export class WikiWriteService {
 
     const sanitized = await maybeGenerateEntityPronunciationAudio(
       {
+        clock: this.clock,
         siteConfig: this.siteConfig,
         mediaStore: this.mediaStore,
         pronunciationGenerator: this.pronunciationGenerator,
@@ -159,7 +162,7 @@ export class WikiWriteService {
       : structuredClone(params.data);
 
     const { sanitized: initialSanitized } = await validateAndSanitizeEntityPayload(
-      { repository: this.repository, siteConfig: this.siteConfig },
+      { repository: this.repository, clock: this.clock, siteConfig: this.siteConfig },
       {
         entityType: params.entityType,
         requestedEntityId: params.entityId,
@@ -181,6 +184,7 @@ export class WikiWriteService {
 
     const sanitized = await maybeGenerateEntityPronunciationAudio(
       {
+        clock: this.clock,
         siteConfig: this.siteConfig,
         mediaStore: this.mediaStore,
         pronunciationGenerator: this.pronunciationGenerator,
@@ -297,7 +301,7 @@ export class WikiWriteService {
 
     const hasPrimary = 'edge' in existing ? true : existing.has_primary_source;
     const { sanitized } = await validateAndSanitizeEntityPayload(
-      { repository: this.repository, siteConfig: this.siteConfig },
+      { repository: this.repository, clock: this.clock, siteConfig: this.siteConfig },
       {
         entityType: params.entityType,
         requestedEntityId: params.entityId,
@@ -381,7 +385,7 @@ export class WikiWriteService {
     let sanitizedAfter: EntityPayload | null = null;
     if (outcome.revisionInsert.afterJson !== null) {
       const validated = await validateAndSanitizeEntityPayload(
-        { repository: this.repository, siteConfig: this.siteConfig },
+        { repository: this.repository, clock: this.clock, siteConfig: this.siteConfig },
         {
           entityType: targetRev.entity_type,
           requestedEntityId: targetRev.entity_id,

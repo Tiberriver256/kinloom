@@ -5,6 +5,7 @@ import {
   type EntityLookupKey,
   entityLookupCompositeKey,
   type RevisionRecord,
+  toEntityPayload,
 } from '@kinloom/core';
 import { expect, it } from 'vitest';
 import {
@@ -90,8 +91,8 @@ export function registerBatchAndRevisionContractTests(withHarness: WithContractH
             expected_parent_revision_id: asRevisionId(1),
             summary: 'Update p1 in doomed batch',
             has_primary_source: true,
-            before_json: p1 as unknown as Record<string, unknown>,
-            after_json: { ...p1, full_name: 'Should Rollback' } as unknown as Record<string, unknown>,
+            before_json: toEntityPayload(p1),
+            after_json: toEntityPayload({ ...p1, full_name: 'Should Rollback' }),
           },
           {
             entity_type: 'person',
@@ -100,8 +101,8 @@ export function registerBatchAndRevisionContractTests(withHarness: WithContractH
             expected_parent_revision_id: asRevisionId(2),
             summary: 'Stale p2 update triggers rollback',
             has_primary_source: true,
-            before_json: p2 as unknown as Record<string, unknown>,
-            after_json: { ...p2, full_name: 'Stale Write' } as unknown as Record<string, unknown>,
+            before_json: toEntityPayload(p2),
+            after_json: toEntityPayload({ ...p2, full_name: 'Stale Write' }),
           },
         ],
       });

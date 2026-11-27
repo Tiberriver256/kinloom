@@ -119,6 +119,23 @@ export function safeParseEntityPayload<T extends EntityType>(
   return schema.safeParse(raw) as z.ZodSafeParseResult<TypedEntityByType[T]>;
 }
 
+export const ENTITY_ID_PREFIX: Readonly<Record<Exclude<EntityType, 'kinship_edge'>, string>> = {
+  person: 'per',
+  event: 'evt',
+  place: 'plc',
+  source: 'src',
+  media: 'med',
+  narrative: 'nar',
+};
+
+export function buildEntityId(entityType: Exclude<EntityType, 'kinship_edge'>, suffix: string): string {
+  return `${ENTITY_ID_PREFIX[entityType]}_${suffix}`;
+}
+
+export function toEntityPayload<T extends object>(entity: T): EntityPayload {
+  return Object.fromEntries(Object.entries(entity));
+}
+
 export function deriveKinshipEdgeId(edge: Pick<KinshipEdge, 'from' | 'relation' | 'to'>): string {
   return `${edge.from}:${edge.relation}:${edge.to}`;
 }

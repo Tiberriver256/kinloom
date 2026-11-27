@@ -2,33 +2,45 @@ import {
   type ArchiveRawSnapshot,
   asRevisionId,
   type BatchId,
+  type Clock,
   type EntityLookupKey,
+  type EntityReadStore,
   type EntityType,
   entityLookupCompositeKey,
   type PrivacyConfig,
   type RevisionId,
+  type RevisionLogStore,
   type RevisionQuery,
   type RevisionRecord,
   resolveEffectiveLiving,
   type StoredEntityRecord,
 } from '@kinloom/core';
+import { SystemClock } from '@kinloom/server';
 import type { D1Database, D1PreparedStatement } from '../../types.js';
 import {
   mapEntityRow,
   mapKinshipRow,
   mapRevisionRow,
   type NonKinshipEntityType,
+  parseDbEntityRow,
+  parseDbHeadRevisionRow,
+  parseDbKinshipRow,
   type RawDbEntityRow,
   type RawDbKinshipRow,
   type RawDbRevisionRow,
 } from './rowMappers.js';
 import { chunkJsonArray, prepareD1Statement } from './sqlHelpers.js';
 
-export class D1EntityReadStore {
+export class D1EntityReadStore implements EntityReadStore, RevisionLogStore {
+  private readonly clock: Clock;
+
   constructor(
     private readonly db: D1Database,
-    private readonly privacyConfig?: Partial<PrivacyConfig>
-  ) {}
+    private readonly privacyConfig?: Partial<PrivacyConfig>,
+    clock?: Clock
+  ) {
+    this.clock = clock ?? new SystemClock();
+  }
 
   async getHeadRevisionId(): Promise<RevisionId> {
     const row = await prepareD1Statement(
@@ -119,16 +131,15 @@ export class D1EntityReadStore {
     const batchResults = await this.db.batch(statements);
     for (let i = 0; i < batchResults.length; i += 1) {
       const kind = statementKinds[i];
+      const rawRows = batchResults[i]?.results ?? [];
       if (kind === 'kinship_edge') {
-        const rows = (batchResults[i]?.results ?? []) as unknown as RawDbKinshipRow[];
-        for (const row of rows) {
-          const mapped = mapKinshipRow(row);
+        for (const rawRow of rawRows) {
+          const mapped = mapKinshipRow(parseDbKinshipRow(rawRow));
           result.set(entityLookupCompositeKey('kinship_edge', mapped.edge_id), mapped);
         }
       } else {
-        const rows = (batchResults[i]?.results ?? []) as unknown as RawDbEntityRow[];
-        for (const row of rows) {
-          const mapped = mapEntityRow(row);
+        for (const rawRow of rawRows) {
+          const mapped = mapEntityRow(parseDbEntityRow(rawRow));
           result.set(entityLookupCompositeKey(mapped.entity_type, mapped.entity_id), mapped);
         }
       }
@@ -154,6 +165,7 @@ export class D1EntityReadStore {
     }>();
 
     const living = new Set<string>();
+    const referenceYear = this.clock.currentYear();
     for (const row of result.results) {
       if (
         resolveEffectiveLiving(
@@ -162,7 +174,8 @@ export class D1EntityReadStore {
             birth_edtf: row.birth_edtf == null ? '' : String(row.birth_edtf),
             death_edtf: row.death_edtf == null ? '' : String(row.death_edtf),
           },
-          this.privacyConfig
+          this.privacyConfig,
+          referenceYear
         )
       ) {
         living.add(row.entity_id);
@@ -191,11 +204,12 @@ export class D1EntityReadStore {
       prepareD1Statement(this.db, 'SELECT COALESCE(MAX(revision_id), 0) AS head_revision_id FROM revisions'),
     ]);
 
-    const entities = (entitiesRes.results as unknown as RawDbEntityRow[]).map(mapEntityRow);
-    const kinship = (kinshipRes.results as unknown as RawDbKinshipRow[])
-      .map(mapKinshipRow)
+    const entities = entitiesRes.results.map((rawRow) => mapEntityRow(parseDbEntityRow(rawRow)));
+    const kinship = kinshipRes.results
+      .map((rawRow) => mapKinshipRow(parseDbKinshipRow(rawRow)))
       .toSorted((a, b) => a.edge_id.localeCompare(b.edge_id));
-    const headRow = (headRes.results as unknown as Array<{ head_revision_id: number }>)[0];
+    const headRaw = headRes.results[0];
+    const headRow = headRaw !== undefined ? parseDbHeadRevisionRow(headRaw) : undefined;
 
     return {
       head_revision_id: asRevisionId(headRow?.head_revision_id ?? 0),

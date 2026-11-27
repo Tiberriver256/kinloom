@@ -1,10 +1,10 @@
 import {
-  type AgentTokenRecord,
+  type AccessControlStore,
   type AgentTokenScope,
   AgentTokenScopeSchema,
-  type ArchiveRepository,
   type Clock,
   type InviteRecord,
+  type PublicAgentTokenRecord,
   type UserRecord,
   type UserRole,
   UserRoleSchema,
@@ -34,15 +34,15 @@ const CreateAgentTokenSchema = z.object({
   scope: AgentTokenScopeSchema,
 });
 
-export type PublicAgentTokenRecord = Omit<AgentTokenRecord, 'token_hash'>;
+export type { PublicAgentTokenRecord } from '@kinloom/core';
 
 export interface AdminServiceDeps {
-  repository: ArchiveRepository;
+  repository: AccessControlStore;
   clock: Clock;
 }
 
 export class AdminService {
-  private readonly repository: ArchiveRepository;
+  private readonly repository: AccessControlStore;
   private readonly clock: Clock;
 
   constructor(deps: AdminServiceDeps) {

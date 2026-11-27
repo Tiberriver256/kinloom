@@ -1,23 +1,26 @@
 import {
   type ArchiveRawSnapshot,
-  type ArchiveRepository,
   type BundleCache,
   type CachedBundleObject,
   type Clock,
   type EntityPayload,
+  type EntityReadStore,
   type EntityType,
+  type ExtractedSnapshotCollections,
+  extractCollectionsFromSnapshot,
   filterMediaForPrivacy,
   type KinloomSiteConfig,
   parseEntityPayload,
   type RawEvent,
   type RawPerson,
   type RevisionId,
+  type RevisionLogStore,
   type RevisionQuery,
   type RevisionRecord,
-  redactSinglePerson,
+  redactSingleRawPerson,
   resolveEffectiveLiving,
   type StoredEntityRow,
-  sanitizeEventForWrite,
+  sanitizeRawEventForWrite,
   serializeEventsYaml,
   serializeKinshipYaml,
   serializeMediaYaml,
@@ -25,13 +28,14 @@ import {
   serializePeopleYaml,
   serializePlacesYaml,
   serializeSourcesYaml,
+  storedRecordToEntityPayload,
+  toEntityPayload,
 } from '@kinloom/core';
-import { extractCollectionsFromSnapshot } from '../adapters/inMemory.js';
 import { matchesIfNoneMatch } from '../crypto.js';
 import { KinloomHttpError } from '../errors.js';
 
 export interface BundleReadServiceDeps {
-  repository: ArchiveRepository;
+  repository: EntityReadStore & RevisionLogStore;
   bundleCache: BundleCache;
   clock: Clock;
   siteConfig: KinloomSiteConfig;
@@ -71,7 +75,7 @@ function parseRevisionFromEtag(etag: string): number | null {
 }
 
 export class BundleReadService {
-  private readonly repository: ArchiveRepository;
+  private readonly repository: EntityReadStore & RevisionLogStore;
   private readonly bundleCache: BundleCache;
   private readonly clock: Clock;
   private readonly siteConfig: KinloomSiteConfig;
@@ -129,7 +133,7 @@ export class BundleReadService {
 
     if ('edge' in row) {
       return {
-        entity: structuredClone(row.edge) as unknown as EntityPayload,
+        entity: storedRecordToEntityPayload(row),
         current_revision_id: row.current_revision_id,
         has_primary_source: true,
         deleted_at: row.deleted_at,
@@ -211,7 +215,7 @@ export class BundleReadService {
         if (redacted) {
           redactedEntities.push({
             ...row,
-            data: redacted as unknown as EntityPayload,
+            data: toEntityPayload(redacted),
           });
         }
       } else if (row.entity_type === 'event') {
@@ -219,7 +223,7 @@ export class BundleReadService {
         if (redacted) {
           redactedEntities.push({
             ...row,
-            data: redacted as unknown as EntityPayload,
+            data: toEntityPayload(redacted),
           });
         }
       } else if (row.entity_type === 'media') {
@@ -227,7 +231,7 @@ export class BundleReadService {
         if (allowed) {
           redactedEntities.push({
             ...row,
-            data: allowed as unknown as EntityPayload,
+            data: toEntityPayload(allowed),
           });
         }
       } else {
@@ -255,33 +259,40 @@ export class BundleReadService {
   ): Promise<EntityPayload> {
     if (entityType === 'person') {
       const parsed = parseEntityPayload('person', rawData);
-      return redactSinglePerson(parsed, 'private', {
+      const redacted = redactSingleRawPerson(parsed, 'private', {
         privacy: this.siteConfig.privacy,
-      }) as unknown as EntityPayload;
+        referenceYear: this.clock.currentYear(),
+      });
+      return toEntityPayload(redacted);
     }
     if (entityType === 'event') {
       const parsed = parseEntityPayload('event', rawData);
       const livingIds = await this.repository.getLivingPersonIds();
-      return sanitizeEventForWrite(parsed, livingIds, this.siteConfig.privacy) as unknown as EntityPayload;
+      const sanitized = sanitizeRawEventForWrite(parsed, livingIds, this.siteConfig.privacy);
+      return toEntityPayload(sanitized);
     }
     return structuredClone(rawData);
   }
 
-  private applyExportPrivacy(collections: ReturnType<typeof extractCollectionsFromSnapshot>): {
+  private applyExportPrivacy(collections: ExtractedSnapshotCollections): {
     redactedPeople: RawPerson[];
     redactedEvents: RawEvent[];
-    redactedMedia: typeof collections.media;
+    redactedMedia: ExtractedSnapshotCollections['media'];
   } {
+    const referenceYear = this.clock.currentYear();
     const livingIds = new Set<string>();
     const redactedPeople = collections.people.map((person) => {
-      if (resolveEffectiveLiving(person, this.siteConfig.privacy)) {
+      if (resolveEffectiveLiving(person, this.siteConfig.privacy, referenceYear)) {
         livingIds.add(person.id);
       }
-      return redactSinglePerson(person, 'private', { privacy: this.siteConfig.privacy });
+      return redactSingleRawPerson(person, 'private', {
+        privacy: this.siteConfig.privacy,
+        referenceYear,
+      });
     });
 
     const redactedEvents = collections.events.map((event) =>
-      sanitizeEventForWrite(event, livingIds, this.siteConfig.privacy)
+      sanitizeRawEventForWrite(event, livingIds, this.siteConfig.privacy)
     );
 
     const peopleById = new Map(redactedPeople.map((p) => [p.id, p]));

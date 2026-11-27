@@ -1,14 +1,15 @@
 import {
   type ArchiveBundle,
   type ArchiveRawSnapshot,
-  type ArchiveRepository,
   type AtomicMutationOp,
+  type AtomicMutationStore,
   asRevisionId,
   type BatchId,
   type BundleCache,
   type Clock,
   computeEntityDiff,
   type EntityPayload,
+  type EntityReadStore,
   type EntityType,
   entityLookupCompositeKey,
   type KinloomServerPlugin,
@@ -16,6 +17,7 @@ import {
   parseEntityPayload,
   type RevisionAuthor,
   type RevisionId,
+  type RevisionLogStore,
   type RevisionRecord,
   type StoredEntityRecord,
   type StoredEntityRow,
@@ -26,7 +28,7 @@ import { KinloomHttpError } from '../../errors.js';
 import { extractSlug, rowToPayload } from './payloadPolicy.js';
 
 export interface WikiCommitPipelineDeps {
-  readonly repository: ArchiveRepository;
+  readonly repository: EntityReadStore & AtomicMutationStore & RevisionLogStore;
   readonly bundleCache: BundleCache;
   readonly clock: Clock;
   readonly plugins: readonly KinloomServerPlugin[];

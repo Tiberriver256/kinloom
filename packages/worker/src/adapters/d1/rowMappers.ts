@@ -112,6 +112,107 @@ export interface RawDbAgentTokenRow {
   revoked_at: string | null;
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+function expectString(record: Record<string, unknown>, field: string): string {
+  const val = record[field];
+  if (typeof val !== 'string') {
+    throw new Error(`D1 row field '${field}' must be a string.`);
+  }
+  return val;
+}
+
+function expectNullableString(record: Record<string, unknown>, field: string): string | null {
+  const val = record[field];
+  if (val === null || val === undefined) {
+    return null;
+  }
+  if (typeof val !== 'string') {
+    throw new Error(`D1 row field '${field}' must be a string or null.`);
+  }
+  return val;
+}
+
+function expectNumber(record: Record<string, unknown>, field: string): number {
+  const val = record[field];
+  if (typeof val !== 'number' || !Number.isFinite(val)) {
+    throw new Error(`D1 row field '${field}' must be a finite number.`);
+  }
+  return val;
+}
+
+function expectNullableNumber(record: Record<string, unknown>, field: string): number | null {
+  const val = record[field];
+  if (val === null || val === undefined) {
+    return null;
+  }
+  if (typeof val !== 'number' || !Number.isFinite(val)) {
+    throw new Error(`D1 row field '${field}' must be a finite number or null.`);
+  }
+  return val;
+}
+
+export function parseDbEntityRow(raw: unknown): RawDbEntityRow {
+  if (!isRecord(raw)) {
+    throw new Error('Expected D1 entity row object.');
+  }
+  return {
+    entity_type: expectString(raw, 'entity_type'),
+    entity_id: expectString(raw, 'entity_id'),
+    slug: expectNullableString(raw, 'slug'),
+    data_json: expectString(raw, 'data_json'),
+    current_revision_id: expectNumber(raw, 'current_revision_id'),
+    has_primary_source: expectNumber(raw, 'has_primary_source'),
+    deleted_at: expectNullableString(raw, 'deleted_at'),
+    updated_at: expectString(raw, 'updated_at'),
+  };
+}
+
+export function parseDbKinshipRow(raw: unknown): RawDbKinshipRow {
+  if (!isRecord(raw)) {
+    throw new Error('Expected D1 kinship row object.');
+  }
+  return {
+    edge_id: expectString(raw, 'edge_id'),
+    from_person_id: expectString(raw, 'from_person_id'),
+    to_person_id: expectString(raw, 'to_person_id'),
+    relation: expectString(raw, 'relation'),
+    family_xref: expectNullableString(raw, 'family_xref'),
+    current_revision_id: expectNumber(raw, 'current_revision_id'),
+    deleted_at: expectNullableString(raw, 'deleted_at'),
+    updated_at: expectString(raw, 'updated_at'),
+  };
+}
+
+export function parseDbHeadRevisionRow(raw: unknown): { head_revision_id: number } {
+  if (!isRecord(raw)) {
+    throw new Error('Expected D1 head revision row object.');
+  }
+  return { head_revision_id: expectNumber(raw, 'head_revision_id') };
+}
+
+export function parseDbReturningRevisionIdRow(raw: unknown): { revision_id: number } {
+  if (!isRecord(raw)) {
+    throw new Error('Expected D1 returning revision_id row object.');
+  }
+  return { revision_id: expectNumber(raw, 'revision_id') };
+}
+
+export function parseDbReturningRevisionPairRow(raw: unknown): {
+  revision_id: number;
+  parent_revision_id: number | null;
+} {
+  if (!isRecord(raw)) {
+    throw new Error('Expected D1 returning revision row object.');
+  }
+  return {
+    revision_id: expectNumber(raw, 'revision_id'),
+    parent_revision_id: expectNullableNumber(raw, 'parent_revision_id'),
+  };
+}
+
 function parseJsonObject(raw: string): EntityPayload {
   const parsed: unknown = JSON.parse(raw);
   if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {

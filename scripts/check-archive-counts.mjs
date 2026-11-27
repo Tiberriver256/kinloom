@@ -2,13 +2,13 @@
 /**
  * Enforces `kinloom/no-hardcoded-archive-counts` across all TypeScript/TSX/JS
  * files using Rolldown's native ESTree parser (`parseSync`) and the canonical
- * rule exported by `@kinloom/core/oxlint-plugin`.
+ * rule in `scripts/archive-count-rule.ts`.
  */
 import fs from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
 import { parseSync } from 'rolldown/experimental';
-import { noHardcodedArchiveCountsRule } from '../packages/core/src/oxlint/plugin.ts';
+import { noHardcodedArchiveCountsRule } from './archive-count-rule.ts';
 
 const REPO_ROOT = path.resolve(import.meta.dirname, '..');
 const DEFAULT_TARGETS = [

@@ -1,6 +1,7 @@
 import path from 'node:path';
 import {
   edtfToBounds,
+  getCurrentReferenceYear,
   type PrivacyConfig,
   type RawPerson,
   RawPersonSchema,
@@ -223,7 +224,9 @@ function mergePersonUpdates(
   }
 
   const parsed = RawPersonSchema.parse(next);
-  if (resolveEffectiveLiving(parsed, privacyConfig)) {
+  if (
+    resolveEffectiveLiving(parsed, privacyConfig, privacyConfig.referenceYear ?? getCurrentReferenceYear())
+  ) {
     throw new Error(`Refusing update: merged person '${parsed.id}' resolves as living under privacy rules.`);
   }
 
@@ -244,7 +247,10 @@ function assertPersonAllowedForPatch(
       `${label} ('${person.id}') has invalid slug '${person.slug}'. Use lowercase ASCII letters, digits, hyphens, or underscores.`
     );
   }
-  if (person.is_living || resolveEffectiveLiving(person, privacyConfig)) {
+  if (
+    person.is_living ||
+    resolveEffectiveLiving(person, privacyConfig, privacyConfig.referenceYear ?? getCurrentReferenceYear())
+  ) {
     throw new CliValidationError(
       `PRIVACY REFUSAL: ${label} ('${person.id}') resolves as living under archive privacy rules (birth_edtf='${person.birth_edtf}', death_edtf='${person.death_edtf}').`
     );
@@ -380,7 +386,14 @@ function upsertPatchPeople(
     }
 
     const existing = items[existingIdx];
-    if (existing.is_living || resolveEffectiveLiving(existing, privacyConfig)) {
+    if (
+      existing.is_living ||
+      resolveEffectiveLiving(
+        existing,
+        privacyConfig,
+        privacyConfig.referenceYear ?? getCurrentReferenceYear()
+      )
+    ) {
       throw new CliValidationError(
         `PRIVACY REFUSAL: ${label} cannot modify existing living person '${existing.id}'.`
       );
@@ -438,9 +451,10 @@ export function applyPeoplePatch(
     );
   }
   const updatedDeathEdtf = resolveValidDeathEdtfUpdate(patch.person_updates);
+  const referenceYear = privacyConfig.referenceYear ?? getCurrentReferenceYear();
   const candidateTargetPerson =
     updatedDeathEdtf !== null ? { ...targetPerson, death_edtf: updatedDeathEdtf } : targetPerson;
-  if (resolveEffectiveLiving(candidateTargetPerson, privacyConfig)) {
+  if (resolveEffectiveLiving(candidateTargetPerson, privacyConfig, referenceYear)) {
     throw new Error(
       `PRIVACY REFUSAL: Target person '${personId}' resolves as living. Living people cannot be researched or patched.`
     );
@@ -468,7 +482,9 @@ export function applyPeoplePatch(
 
   const peopleById = new Map(mergedPeople.map((p) => [p.id, p]));
   const livingIds = new Set(
-    mergedPeople.filter((p) => p.is_living || resolveEffectiveLiving(p, privacyConfig)).map((p) => p.id)
+    mergedPeople
+      .filter((p) => p.is_living || resolveEffectiveLiving(p, privacyConfig, referenceYear))
+      .map((p) => p.id)
   );
 
   return {

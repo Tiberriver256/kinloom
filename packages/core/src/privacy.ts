@@ -12,22 +12,26 @@ import type {
 } from './schemas/entities.js';
 import { getMediaPersonIds } from './schemas/entities.js';
 
+export const DEFAULT_LIVING_CUTOFF_YEARS = 101;
+
 export interface LivingStatusInput {
   explicitLiving?: boolean;
   hasDeathOrBurial: boolean;
   birthYear: number | null;
   earliestEventYear: number | null;
-  referenceYear?: number;
+  referenceYear: number;
   livingCutoffYears?: number;
 }
 
 export interface RedactOptions {
   privacy?: Partial<PrivacyConfig>;
+  referenceYear?: number;
   clone?: boolean;
 }
 
 export interface ApplyPrivacyFilterOptions {
   privacy?: Partial<PrivacyConfig>;
+  referenceYear?: number;
   cloneInputs?: boolean;
 }
 
@@ -38,7 +42,6 @@ export interface FilterMediaPrivacyOptions {
 
 export class PrivacyViolationError extends Error {
   readonly code: 'LIVING_MEDIA_FORBIDDEN' | 'PRIVACY_VIOLATION';
-  readonly status = 422;
   readonly blockedPersonIds: readonly string[];
 
   constructor(
@@ -60,14 +63,8 @@ export type MediaPrivacyCheckResult =
   | { ok: false; code: 'LIVING_MEDIA_FORBIDDEN'; message: string; blockedPersonIds: string[] };
 
 /**
- * Returns the current UTC calendar year from the runtime clock for default living-cutoff calculations.
- */
-export function getCurrentReferenceYear(): number {
-  return new Date().getUTCFullYear();
-}
-
-/**
  * 100-year living-person privacy heuristic (default cutoff = 101 years so <= referenceYear - 101 is deceased).
+ * Pure and deterministic: callers must supply `referenceYear` explicitly.
  */
 export function isPersonLivingPublic(params: LivingStatusInput): boolean {
   const {
@@ -75,8 +72,8 @@ export function isPersonLivingPublic(params: LivingStatusInput): boolean {
     hasDeathOrBurial,
     birthYear,
     earliestEventYear,
-    referenceYear = getCurrentReferenceYear(),
-    livingCutoffYears = 101,
+    referenceYear,
+    livingCutoffYears = DEFAULT_LIVING_CUTOFF_YEARS,
   } = params;
   if (explicitLiving) {
     return true;
@@ -96,10 +93,12 @@ export function isPersonLivingPublic(params: LivingStatusInput): boolean {
 
 /**
  * Resolve effective living status honoring both explicit `is_living` and configured birth-year cutoff.
+ * Pure and deterministic: requires `referenceYear` or `privacy.referenceYear` whenever evaluating a birth-year cutoff.
  */
 export function resolveEffectiveLiving(
   person: Pick<RawPerson, 'is_living' | 'birth_edtf' | 'death_edtf'>,
-  privacy?: Partial<PrivacyConfig>
+  privacy?: Partial<PrivacyConfig>,
+  referenceYear?: number
 ): boolean {
   if (person.is_living) {
     return true;
@@ -109,13 +108,19 @@ export function resolveEffectiveLiving(
   }
   const birthYear = edtfYear(person.birth_edtf);
   if (birthYear !== null) {
+    const resolvedReferenceYear = referenceYear ?? privacy?.referenceYear;
+    if (resolvedReferenceYear === undefined) {
+      throw new RangeError(
+        'resolveEffectiveLiving requires an explicit referenceYear or privacy.referenceYear when evaluating birth-year cutoffs.'
+      );
+    }
     return isPersonLivingPublic({
       explicitLiving: false,
       hasDeathOrBurial: false,
       birthYear,
       earliestEventYear: null,
-      referenceYear: privacy?.referenceYear ?? getCurrentReferenceYear(),
-      livingCutoffYears: privacy?.livingCutoffYears ?? 101,
+      referenceYear: resolvedReferenceYear,
+      livingCutoffYears: privacy?.livingCutoffYears ?? DEFAULT_LIVING_CUTOFF_YEARS,
     });
   }
   return false;
@@ -162,89 +167,151 @@ export function scrubLivingNames(text: string, pattern: RegExp | null): string {
   return text.replaceAll(pattern, 'Living');
 }
 
-/**
- * Enforce living-person redaction on a single Person entity (API read/write boundary).
- */
-export function redactSinglePerson<T extends RawPerson>(
-  person: T,
+function applyRawLivingRedactionFields(
+  target: RawPerson,
   mode: BuildMode,
   options?: RedactOptions
-): T {
-  const copy = options?.clone === false ? person : structuredClone(person);
-  if (!resolveEffectiveLiving(copy, options?.privacy)) {
-    return copy;
-  }
-  copy.is_living = true;
+): { birthYear: number | null; stripPortraits: boolean } {
+  target.is_living = true;
 
   if (mode === 'public') {
-    copy.full_name = 'Living';
-    copy.given_name = 'Living';
-    copy.surname = '';
-    copy.alt_names = [];
-    copy.birth_edtf = '';
-    copy.death_edtf = '';
-    copy.portrait_url = null;
-    if ('pronunciation' in copy) {
-      delete copy.pronunciation;
+    target.full_name = 'Living';
+    target.given_name = 'Living';
+    target.surname = '';
+    target.alt_names = [];
+    target.birth_edtf = '';
+    target.death_edtf = '';
+    target.portrait_url = null;
+    if ('pronunciation' in target) {
+      delete target.pronunciation;
     }
-    if ('thumb_url' in copy) {
-      copy.thumb_url = null;
+    if ('thumb_url' in target) {
+      target.thumb_url = null;
     }
-    if ('birth_year' in copy) {
-      (copy as unknown as Person).birth_year = null;
-    }
-    if ('death_year' in copy) {
-      (copy as unknown as Person).death_year = null;
-    }
-    if ('media_count' in copy) {
-      (copy as unknown as Person).media_count = 0;
-    }
-    return copy;
+    return { birthYear: null, stripPortraits: true };
   }
 
-  // Private mode: retain name and optional birth year; strip exact birthdate and portrait.
   const showBirthYear = options?.privacy?.privateModeShowsBirthYear ?? true;
   const stripPortraits = options?.privacy?.stripLivingPortraits ?? true;
-  const birthYear = showBirthYear ? edtfYear(copy.birth_edtf) : null;
-  copy.birth_edtf = birthYear !== null ? String(birthYear) : '';
-  if ('birth_year' in copy) {
-    (copy as unknown as Person).birth_year = birthYear;
-  }
+  const birthYear = showBirthYear ? edtfYear(target.birth_edtf) : null;
+  target.birth_edtf = birthYear !== null ? String(birthYear) : '';
   if (stripPortraits) {
-    copy.portrait_url = null;
-    if ('pronunciation' in copy) {
-      delete copy.pronunciation;
+    target.portrait_url = null;
+    if ('pronunciation' in target) {
+      delete target.pronunciation;
     }
-    if ('thumb_url' in copy) {
-      copy.thumb_url = null;
+    if ('thumb_url' in target) {
+      target.thumb_url = null;
     }
-    if ('media_count' in copy) {
-      (copy as unknown as Person).media_count = 0;
-    }
+  }
+  return { birthYear, stripPortraits };
+}
+
+function isCompiledPerson(person: RawPerson | Person): person is Person {
+  return 'birth_year' in person && 'death_year' in person && 'media_count' in person;
+}
+
+/**
+ * Enforce living-person redaction on a single raw Person entity (storage / API write boundary).
+ */
+export function redactSingleRawPerson(
+  person: RawPerson,
+  mode: BuildMode,
+  options?: RedactOptions
+): RawPerson {
+  const copy = options?.clone === false ? person : structuredClone(person);
+  if (!resolveEffectiveLiving(copy, options?.privacy, options?.referenceYear)) {
+    return copy;
+  }
+  applyRawLivingRedactionFields(copy, mode, options);
+  return copy;
+}
+
+/**
+ * Enforce living-person redaction on a compiled Person entity (bundle read model).
+ */
+export function redactCompiledPerson(person: Person, mode: BuildMode, options?: RedactOptions): Person {
+  const copy = options?.clone === false ? person : structuredClone(person);
+  if (!resolveEffectiveLiving(copy, options?.privacy, options?.referenceYear)) {
+    return copy;
+  }
+  const { birthYear, stripPortraits } = applyRawLivingRedactionFields(copy, mode, options);
+  if (mode === 'public') {
+    copy.birth_year = null;
+    copy.death_year = null;
+    copy.media_count = 0;
+    return copy;
+  }
+  copy.birth_year = birthYear;
+  if (stripPortraits) {
+    copy.media_count = 0;
   }
   return copy;
+}
+
+/**
+ * Enforce living-person redaction on either a raw or compiled Person entity.
+ */
+export function redactSinglePerson(person: Person, mode: BuildMode, options?: RedactOptions): Person;
+export function redactSinglePerson(person: RawPerson, mode: BuildMode, options?: RedactOptions): RawPerson;
+export function redactSinglePerson(
+  person: RawPerson | Person,
+  mode: BuildMode,
+  options?: RedactOptions
+): RawPerson | Person {
+  if (isCompiledPerson(person)) {
+    return redactCompiledPerson(person, mode, options);
+  }
+  return redactSingleRawPerson(person, mode, options);
 }
 
 /**
  * Enforce living-person write sanitization before storing a Person record in D1/YAML.
  * Living people keep name and birth year only; exact birthdates and portraits are stripped.
  */
-export function sanitizePersonForWrite<T extends RawPerson>(
-  person: T,
-  privacyConfig?: Partial<PrivacyConfig>
-): T {
-  return redactSinglePerson(person, 'private', { privacy: privacyConfig });
+export function sanitizePersonForWrite(
+  person: Person,
+  privacyConfig?: Partial<PrivacyConfig>,
+  referenceYear?: number
+): Person;
+export function sanitizePersonForWrite(
+  person: RawPerson,
+  privacyConfig?: Partial<PrivacyConfig>,
+  referenceYear?: number
+): RawPerson;
+export function sanitizePersonForWrite(
+  person: RawPerson | Person,
+  privacyConfig?: Partial<PrivacyConfig>,
+  referenceYear?: number
+): RawPerson | Person {
+  const opts: RedactOptions = { privacy: privacyConfig, referenceYear };
+  if (isCompiledPerson(person)) {
+    return redactCompiledPerson(person, 'private', opts);
+  }
+  return redactSingleRawPerson(person, 'private', opts);
 }
 
-/**
- * Enforce living-person write sanitization before storing an Event record in D1/YAML.
- * Events with living participants keep year-only date (when permitted) and omit exact location and summary prose.
- */
-export function sanitizeEventForWrite<T extends RawEvent>(
-  event: T,
+function isCompiledEvent(event: RawEvent | ArchiveEvent): event is ArchiveEvent {
+  return 'place_ancestors' in event;
+}
+
+function applyLivingEventWriteRedaction(target: RawEvent, privacyConfig?: Partial<PrivacyConfig>): void {
+  const showBirthYear = privacyConfig?.privateModeShowsBirthYear ?? true;
+  const stripPortraits = privacyConfig?.stripLivingPortraits ?? true;
+  const yr = showBirthYear ? edtfYear(target.edtf_date) : null;
+  target.edtf_date = yr !== null ? String(yr) : '';
+  target.place_id = null;
+  target.summary = 'Living relative record (location and exact date omitted).';
+  if (stripPortraits) {
+    target.photo_url = undefined;
+  }
+}
+
+export function sanitizeRawEventForWrite(
+  event: RawEvent,
   livingPersonIds: ReadonlySet<string>,
   privacyConfig?: Partial<PrivacyConfig>
-): T {
+): RawEvent {
   const hasLivingParticipant = event.participants.some((pt) => livingPersonIds.has(pt.person_id));
   if (!hasLivingParticipant) {
     return {
@@ -254,19 +321,52 @@ export function sanitizeEventForWrite<T extends RawEvent>(
     };
   }
   const copy = structuredClone(event);
-  const showBirthYear = privacyConfig?.privateModeShowsBirthYear ?? true;
-  const stripPortraits = privacyConfig?.stripLivingPortraits ?? true;
-  const yr = showBirthYear ? edtfYear(copy.edtf_date) : null;
-  copy.edtf_date = yr !== null ? String(yr) : '';
-  copy.place_id = null;
-  copy.summary = 'Living relative record (location and exact date omitted).';
-  if (stripPortraits) {
-    copy.photo_url = undefined;
-  }
-  if ('place_ancestors' in copy) {
-    (copy as unknown as ArchiveEvent).place_ancestors = [];
-  }
+  applyLivingEventWriteRedaction(copy, privacyConfig);
   return copy;
+}
+
+export function sanitizeCompiledEventForWrite(
+  event: ArchiveEvent,
+  livingPersonIds: ReadonlySet<string>,
+  privacyConfig?: Partial<PrivacyConfig>
+): ArchiveEvent {
+  const hasLivingParticipant = event.participants.some((pt) => livingPersonIds.has(pt.person_id));
+  if (!hasLivingParticipant) {
+    return {
+      ...event,
+      participants: event.participants.map((pt) => ({ ...pt })),
+      sources: event.sources.map((s) => ({ ...s })),
+    };
+  }
+  const copy = structuredClone(event);
+  applyLivingEventWriteRedaction(copy, privacyConfig);
+  copy.place_ancestors = [];
+  return copy;
+}
+
+/**
+ * Enforce living-person write sanitization before storing an Event record in D1/YAML.
+ * Events with living participants keep year-only date (when permitted) and omit exact location and summary prose.
+ */
+export function sanitizeEventForWrite(
+  event: ArchiveEvent,
+  livingPersonIds: ReadonlySet<string>,
+  privacyConfig?: Partial<PrivacyConfig>
+): ArchiveEvent;
+export function sanitizeEventForWrite(
+  event: RawEvent,
+  livingPersonIds: ReadonlySet<string>,
+  privacyConfig?: Partial<PrivacyConfig>
+): RawEvent;
+export function sanitizeEventForWrite(
+  event: RawEvent | ArchiveEvent,
+  livingPersonIds: ReadonlySet<string>,
+  privacyConfig?: Partial<PrivacyConfig>
+): RawEvent | ArchiveEvent {
+  if (isCompiledEvent(event)) {
+    return sanitizeCompiledEventForWrite(event, livingPersonIds, privacyConfig);
+  }
+  return sanitizeRawEventForWrite(event, livingPersonIds, privacyConfig);
 }
 
 /**
@@ -306,7 +406,7 @@ export function validateMediaForPrivacy(
 }
 
 /**
- * Throw PrivacyViolationError (HTTP 422) when a media upload references any living person directly or via an event.
+ * Throw PrivacyViolationError when a media item references any living person directly or via an event.
  */
 export function assertMediaAllowedForPrivacy(
   media: Pick<MediaItem, 'id' | 'person_id' | 'person_ids' | 'event_id'>,
@@ -429,24 +529,23 @@ function collectReviewFlagsForField(
   }
 }
 
-/**
- * Full-archive living-person privacy filter matching public and private build policies.
- */
-export function applyPrivacyFilter<TPerson extends RawPerson>(
+function applyPrivacyFilterCore<TPerson extends RawPerson>(
   people: readonly TPerson[],
   events: readonly ArchiveEvent[],
   residenceSpans: readonly ResidenceSpan[],
   mode: BuildMode,
+  redactPerson: (person: TPerson, mode: BuildMode, options: RedactOptions) => TPerson,
   options?: ApplyPrivacyFilterOptions
 ): PrivacyFilterResult<TPerson> {
   const cloneInputs = options?.cloneInputs ?? true;
   const privacy = options?.privacy;
-  const redactOpts: RedactOptions = { privacy, clone: cloneInputs };
+  const referenceYear = options?.referenceYear;
+  const redactOpts: RedactOptions = { privacy, referenceYear, clone: cloneInputs };
 
   const livingIds = new Set<string>();
   const effectiveLivingPeople: Pick<RawPerson, 'is_living' | 'full_name' | 'alt_names'>[] = [];
   for (const p of people) {
-    if (resolveEffectiveLiving(p, privacy)) {
+    if (resolveEffectiveLiving(p, privacy, referenceYear)) {
       livingIds.add(p.id);
       effectiveLivingPeople.push({
         is_living: true,
@@ -465,7 +564,7 @@ export function applyPrivacyFilter<TPerson extends RawPerson>(
       : compileLivingNamePattern(reviewLivingNames);
   const reviewFlags: string[] = [];
 
-  const outPeople = people.map((p) => redactSinglePerson(p, mode, redactOpts));
+  const outPeople = people.map((p) => redactPerson(p, mode, redactOpts));
   const outEvents: ArchiveEvent[] = [];
 
   for (const ev of events) {
@@ -498,6 +597,40 @@ export function applyPrivacyFilter<TPerson extends RawPerson>(
     residenceSpans: outSpans,
     reviewFlags,
   };
+}
+
+/**
+ * Full-archive living-person privacy filter matching public and private build policies.
+ */
+export function applyPrivacyFilter(
+  people: readonly Person[],
+  events: readonly ArchiveEvent[],
+  residenceSpans: readonly ResidenceSpan[],
+  mode: BuildMode,
+  options?: ApplyPrivacyFilterOptions
+): PrivacyFilterResult<Person>;
+export function applyPrivacyFilter(
+  people: readonly RawPerson[],
+  events: readonly ArchiveEvent[],
+  residenceSpans: readonly ResidenceSpan[],
+  mode: BuildMode,
+  options?: ApplyPrivacyFilterOptions
+): PrivacyFilterResult<RawPerson>;
+export function applyPrivacyFilter(
+  people: readonly (RawPerson | Person)[],
+  events: readonly ArchiveEvent[],
+  residenceSpans: readonly ResidenceSpan[],
+  mode: BuildMode,
+  options?: ApplyPrivacyFilterOptions
+): PrivacyFilterResult<RawPerson> | PrivacyFilterResult<Person> {
+  return applyPrivacyFilterCore(
+    people,
+    events,
+    residenceSpans,
+    mode,
+    (p, m, o) => (isCompiledPerson(p) ? redactCompiledPerson(p, m, o) : redactSingleRawPerson(p, m, o)),
+    options
+  );
 }
 
 /**

@@ -7,12 +7,13 @@ import {
   type CachedBundleObject,
   type Clock,
   compileArchive,
+  extractCollectionsFromSnapshot,
   type KinloomSiteConfig,
   patchCompiledBundle,
   type RevisionId,
   type RevisionRecord,
 } from '@kinloom/core';
-import { bytesToStream, extractCollectionsFromSnapshot, matchesIfNoneMatch } from '@kinloom/server';
+import { bytesToStream, matchesIfNoneMatch } from '@kinloom/server';
 import type { R2Bucket } from '../types.js';
 
 export const DEFAULT_COMPILED_BUNDLE_KEY = 'compiled/archive.json';

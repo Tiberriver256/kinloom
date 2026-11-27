@@ -1,4 +1,4 @@
-import { getCurrentReferenceYear } from '../privacy.js';
+import { getCurrentReferenceYear } from '../clock.js';
 import type { AnchorYearConfig, MigrationEraConfig } from '../schemas/config.js';
 import { DEFAULT_ANCHOR_YEARS } from '../schemas/config.js';
 import type { ArchiveBundle, ArchiveEvent, ConfidenceTier, Person, Place } from '../schemas/entities.js';

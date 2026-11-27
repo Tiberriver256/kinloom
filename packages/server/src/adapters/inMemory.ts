@@ -4,10 +4,12 @@ import type {
   ArchiveRepository,
   AtomicMutationOp,
   BatchId,
+  Clock,
   CommitMutationsResult,
   EntityLookupKey,
   EntityType,
   InviteRecord,
+  KinloomServerPorts,
   KinloomSiteConfig,
   MagicLinkRecord,
   PrivacyConfig,
@@ -21,7 +23,6 @@ import type {
   UserRecord,
   UserRole,
 } from '@kinloom/core';
-import type { KinloomServerPorts } from '../ports.js';
 import { InMemoryAccessAndTalkStore } from './inMemory/accessAndTalkStore.js';
 import { FakeAuthProvider, InMemoryEmailSender } from './inMemory/authAndEmailFakes.js';
 import {
@@ -32,6 +33,7 @@ import {
 import { InMemoryEntityAndMutationStore } from './inMemory/entityAndMutationStore.js';
 import { FixedClock } from './systemClock.js';
 
+export { extractCollectionsFromSnapshot } from '@kinloom/core';
 export {
   FakeAuthProvider,
   type FakeOAuthProfile,
@@ -39,7 +41,6 @@ export {
   type SentMagicLinkEmail,
 } from './inMemory/authAndEmailFakes.js';
 export {
-  extractCollectionsFromSnapshot,
   InMemoryIncrementalBundleCache,
   InMemoryMediaStore,
   InMemoryPronunciationLexiconStore,
@@ -52,7 +53,7 @@ export class InMemoryArchiveRepository implements ArchiveRepository {
   private readonly entityStore: InMemoryEntityAndMutationStore;
   private readonly accessStore = new InMemoryAccessAndTalkStore();
 
-  constructor(options?: { privacyConfig?: Partial<PrivacyConfig> }) {
+  constructor(options?: { privacyConfig?: Partial<PrivacyConfig>; clock?: Clock }) {
     this.entityStore = new InMemoryEntityAndMutationStore(options);
   }
 
@@ -211,7 +212,7 @@ export function createInMemoryServerPorts(
   options?: { initialIso?: string }
 ): InMemoryServerPortsBundle {
   const clock = new FixedClock(options?.initialIso ?? '2026-06-01T12:00:00.000Z');
-  const repository = new InMemoryArchiveRepository({ privacyConfig: siteConfig.privacy });
+  const repository = new InMemoryArchiveRepository({ privacyConfig: siteConfig.privacy, clock });
   const bundleCache = new InMemoryIncrementalBundleCache(siteConfig, clock);
   const mediaStore = new InMemoryMediaStore();
   const emailSender = new InMemoryEmailSender();

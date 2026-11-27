@@ -8,6 +8,7 @@ import {
   type RevisionRecord,
   type StoredEntityRow,
   type StoredKinshipRow,
+  storedRecordToEntityPayload,
 } from '@kinloom/core';
 import type { D1Database, D1PreparedStatement } from '../../types.js';
 
@@ -122,10 +123,7 @@ export function entityCompositeKey(entityType: EntityType, entityId: string): st
 }
 
 export function rowToEntityPayload(row: StoredEntityRow | StoredKinshipRow): EntityPayload {
-  if ('edge' in row) {
-    return structuredClone(row.edge) as unknown as EntityPayload;
-  }
-  return structuredClone(row.data);
+  return storedRecordToEntityPayload(row);
 }
 
 export function isSqliteConstraintError(error: unknown): boolean {

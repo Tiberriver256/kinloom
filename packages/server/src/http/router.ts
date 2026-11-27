@@ -1,10 +1,10 @@
-import type { KinloomServerPluginRoute, KinloomSiteConfig } from '@kinloom/core';
+import type { KinloomServerPluginRoute, KinloomServerPorts, KinloomSiteConfig } from '@kinloom/core';
 import { KinloomHttpError, toErrorResponseData } from '../errors.js';
-import type { KinloomServerPorts } from '../ports.js';
 import { AdminService } from '../services/adminService.js';
 import { AuthService } from '../services/authService.js';
 import { BundleReadService } from '../services/bundleReadService.js';
 import { MediaService } from '../services/mediaService.js';
+import { PronunciationService } from '../services/pronunciationService.js';
 import { TalkService } from '../services/talkService.js';
 import { WikiWriteService } from '../services/wikiWriteService.js';
 import { enforceCsrfOrigin, requireMinRole, resolveCallerPrincipal } from './authMiddleware.js';
@@ -12,6 +12,7 @@ import { type HttpRequestContext, type HttpRouteHandler, jsonResponse } from './
 import { createAdminRouteHandler } from './routes/adminRoutes.js';
 import { createAuthRouteHandler } from './routes/authRoutes.js';
 import { createMediaAndTalkRouteHandler } from './routes/mediaAndTalkRoutes.js';
+import { createPrivacyAndOgRouteHandler } from './routes/privacyAndOgRoutes.js';
 import { createPronunciationRouteHandler } from './routes/pronunciationRoutes.js';
 import { createWikiRouteHandler } from './routes/wikiRoutes.js';
 import { applySecurityHeaders } from './securityHeaders.js';
@@ -124,6 +125,21 @@ export function createKinloomServer(config: KinloomServerConfig): KinloomServer 
     clock: config.ports.clock,
   });
 
+  const pronunciationService = new PronunciationService({
+    repository: config.ports.repository,
+    mediaStore: config.ports.mediaStore,
+    clock: config.ports.clock,
+    siteConfig: config.siteConfig,
+    pronunciationGenerator: config.ports.pronunciationGenerator,
+    pronunciationLexiconStore: config.ports.pronunciationLexiconStore,
+  });
+
+  const handlePublicPrivacyOrOg = createPrivacyAndOgRouteHandler({
+    siteConfig: config.siteConfig,
+    entityStore: config.ports.repository,
+    clock: config.ports.clock,
+  });
+
   const routeHandlers: readonly HttpRouteHandler[] = [
     createAuthRouteHandler({
       authService,
@@ -133,11 +149,7 @@ export function createKinloomServer(config: KinloomServerConfig): KinloomServer 
       oauthCookieTtlSeconds,
     }),
     createWikiRouteHandler({ bundleReadService, wikiWriteService }),
-    createPronunciationRouteHandler({
-      siteConfig: config.siteConfig,
-      ports: config.ports,
-      mode,
-    }),
+    createPronunciationRouteHandler({ pronunciationService, mode }),
     createMediaAndTalkRouteHandler({ mediaService, talkService }),
     createAdminRouteHandler(adminService),
   ];
@@ -147,6 +159,12 @@ export function createKinloomServer(config: KinloomServerConfig): KinloomServer 
     const pathname = url.pathname;
     const method = request.method.toUpperCase();
     const isSecure = isSecureRequestUrl(url);
+
+    const publicDocResponse = await handlePublicPrivacyOrOg({ pathname, method, isSecure });
+    if (publicDocResponse !== null) {
+      return publicDocResponse;
+    }
+
     const segments = pathname.split('/').filter(Boolean);
 
     const auth = await resolveCallerPrincipal({

@@ -44,7 +44,7 @@ export function toErrorResponseData(error: unknown): {
 
   if (error instanceof PrivacyViolationError) {
     return {
-      status: error.status,
+      status: 422,
       body: {
         error: {
           code: error.code,

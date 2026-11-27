@@ -2,7 +2,12 @@ import fs from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { performance } from 'node:perf_hooks';
-import { type PrivacyConfig, parseKinloomConfigYaml, resolveEffectiveLiving } from '@kinloom/core';
+import {
+  getCurrentReferenceYear,
+  type PrivacyConfig,
+  parseKinloomConfigYaml,
+  resolveEffectiveLiving,
+} from '@kinloom/core';
 import { CliValidationError } from '../../errors.js';
 import {
   discoverSiteCliPlugins,
@@ -163,6 +168,7 @@ export async function runAuditCommand(options: AuditCommandOptions): Promise<Aud
   const peopleBlocks = splitTopLevelYamlList(peopleText);
   const parsedPeople = parseMatchingYamlBlocks(peopleBlocks);
 
+  const referenceYear = privacyConfig.referenceYear ?? getCurrentReferenceYear();
   const isEffectiveLivingPerson = (person: LooseRecord): boolean => {
     if (person.is_living === true || person.living === true) {
       return true;
@@ -173,7 +179,8 @@ export async function runAuditCommand(options: AuditCommandOptions): Promise<Aud
         birth_edtf: asString(person.birth_edtf).trim(),
         death_edtf: asString(person.death_edtf).trim(),
       },
-      privacyConfig
+      privacyConfig,
+      referenceYear
     );
   };
 
