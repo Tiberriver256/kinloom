@@ -2,7 +2,13 @@ import { z } from 'zod';
 import { PronunciationSchema } from './pronunciation.js';
 
 export {
+  findIpaGlyphsInPhonetic,
+  hasIpaGlyphsInPhonetic,
+  type InspectedPersonPronunciationToken,
+  inspectPersonPronunciationTokens,
   mergePronunciationLexicons,
+  type PersonPronunciationInspection,
+  type PersonPronunciationTokenRole,
   type Pronunciation,
   type PronunciationCoverage,
   type PronunciationResolutionSource,
@@ -12,6 +18,8 @@ export {
   type ResolvedPersonPronunciation,
   resolvePersonPronunciation,
   resolvePlacePronunciation,
+  stripIpaDelimiters,
+  tokenizePersonName,
 } from './pronunciation.js';
 
 const CoercedEdtfStringSchema = z

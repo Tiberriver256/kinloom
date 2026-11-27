@@ -245,13 +245,25 @@ Subcommands:
       every place in data/places.yaml. Verifies 0 living people have any
       pronunciation entry (fails loudly on any living leak), and reports
       surname-only fallbacks, missing places, homonymous bare place collisions,
-      unsourced entries, and IPA quality warnings.
+      unsourced entries, IPA symbols inside phonetic (Respelling), redundant
+      per-person overrides, and IPA quality warnings.
+
+  deduplicate [--repo <path>] [--apply] [--promote-tokens] [--force] [--json]
+      Dry-run by default. Finds deceased people whose explicit person.pronunciation
+      override is 100% losslessly redundant because shared lexicon tokens already
+      resolve full-name coverage with matching Respelling and IPA (without dropping
+      unique notes, variants, or custom audio). Pass --promote-tokens to safely
+      promote unambiguous missing single tokens into kinloom.config.yaml, and
+      --apply to write YAML updates.
 
 Options:
   --lang <code>      Language filter for \`lookup\` (e.g. nl, sv, fi, pl, de, en)
   --refresh          Bypass disk cache on \`lookup\` and re-fetch from Wikimedia
-  --repo <dir>       Archive repository root for \`audit\` (default: current directory)
-  --strict           Exit non-zero if any deceased person lacks full-name coverage, any place lacks coverage, any homonymous collision exists, or any living leak exists
+  --repo <dir>       Archive repository root for \`audit\` and \`deduplicate\` (default: current directory)
+  --strict           Exit non-zero if any deceased person lacks full-name coverage, any place lacks coverage, any homonymous collision exists, any IPA symbol appears inside phonetic (Respelling), or any living leak exists
+  --apply            Write YAML updates in \`deduplicate\` (dry-run by default)
+  --promote-tokens   Promote unambiguous single missing tokens into the shared lexicon during \`deduplicate\`
+  --force            In \`deduplicate\`, remove per-person overrides whose Respelling/IPA differs when shared tokens still provide full coverage and no unique notes/variants/audio are lost
   --json             Emit structured JSON output
   -h, --help         Show this help message
 

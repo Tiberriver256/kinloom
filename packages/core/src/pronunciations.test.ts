@@ -2,6 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { compileArchive } from './compileArchive.js';
 import { parseKinloomConfig } from './schemas/config.js';
 import {
+  findIpaGlyphsInPhonetic,
+  hasIpaGlyphsInPhonetic,
+  inspectPersonPronunciationTokens,
   mergePronunciationLexicons,
   type Place,
   type Pronunciation,
@@ -611,5 +614,98 @@ describe('mergePronunciationLexicons', () => {
       Mercer: { phonetic: 'MUR-ser-NEW', note: 'Updated' },
     });
     expect(merged.mercer).toBeUndefined();
+  });
+});
+
+describe('findIpaGlyphsInPhonetic', () => {
+  it('detects IPA glyphs and /.../ slash notation while accepting clean plain-English respellings', () => {
+    expect(findIpaGlyphsInPhonetic('DAN-yuhl AN-der-sun AWL-der')).toEqual([]);
+    expect(hasIpaGlyphsInPhonetic('AY-bruh-ham LING-kun')).toBe(false);
+    expect(findIpaGlyphsInPhonetic('MER-ser / MUR-ser')).toEqual([]);
+    expect(findIpaGlyphsInPhonetic('')).toEqual([]);
+
+    expect(findIpaGlyphsInPhonetic('DAN-yəl')).toEqual(['ə']);
+    expect(hasIpaGlyphsInPhonetic('DAN-yəl')).toBe(true);
+    expect(findIpaGlyphsInPhonetic('/ˈmɜːr.sər/')).toEqual(['ˈ', 'ɜ', 'ː', 'ə', '/.../']);
+    expect(findIpaGlyphsInPhonetic('/alder/')).toEqual(['/.../']);
+    expect(findIpaGlyphsInPhonetic('THAWM-ɪs ʃɔːrt')).toEqual(['ɪ', 'ʃ', 'ɔ', 'ː']);
+  });
+});
+
+describe('inspectPersonPronunciationTokens', () => {
+  it('segments given, middle, and surname tokens with lexicon matches and composed preview', () => {
+    const lexicon: Record<string, Pronunciation> = {
+      daniel: { phonetic: 'DAN-yuhl', ipa: '/ˈdæn.jəl/', language: 'en-US', source_label: 'Wiktionary' },
+      Alder: { phonetic: 'AWL-der', ipa: '/ˈɔːl.dər/', language: 'en-US', source_label: 'Wiktionary' },
+    };
+
+    const partial = inspectPersonPronunciationTokens(
+      {
+        full_name: 'Daniel Anderson Alder',
+        given_name: 'Daniel Anderson',
+        surname: 'Alder',
+      },
+      lexicon
+    );
+
+    expect(partial.tokens.map((t) => ({ role: t.role, text: t.text, key: t.lexiconKey }))).toEqual([
+      { role: 'given', text: 'Daniel', key: 'daniel' },
+      { role: 'middle', text: 'Anderson', key: null },
+      { role: 'surname', text: 'Alder', key: 'Alder' },
+    ]);
+    expect(partial.allTokensResolved).toBe(false);
+    expect(partial.hasAnySharedToken).toBe(true);
+    expect(partial.composed).toBeNull();
+    expect(partial.missingParts).toEqual(['Anderson']);
+
+    const full = inspectPersonPronunciationTokens(
+      {
+        full_name: 'Daniel Anderson Alder',
+        given_name: 'Daniel Anderson',
+        surname: 'Alder',
+      },
+      {
+        ...lexicon,
+        Anderson: { phonetic: 'AN-der-sun', ipa: '/ˈæn.dər.sən/', language: 'en-US' },
+      }
+    );
+    expect(full.allTokensResolved).toBe(true);
+    expect(full.composed?.phonetic).toBe('DAN-yuhl AN-der-sun AWL-der');
+    expect(full.composed?.ipa).toBe('/ˈdæn.jəl ˈæn.dər.sən ˈɔːl.dər/');
+  });
+
+  it('keeps unmatched multi-word surnames grouped as one editable token and handles initials/suffixes', () => {
+    const multi = inspectPersonPronunciationTokens(
+      {
+        full_name: 'Jan H. van der Berg Jr.',
+        given_name: 'Jan H.',
+        surname: 'van der Berg',
+      },
+      {
+        Jan: { phonetic: 'YAHN', ipa: '/jɑn/', language: 'nl' },
+      }
+    );
+
+    expect(multi.tokens.map((t) => ({ kind: t.kind, role: t.role, text: t.text }))).toEqual([
+      { kind: 'token', role: 'given', text: 'Jan' },
+      { kind: 'initial', role: 'middle', text: 'H.' },
+      { kind: 'token', role: 'surname', text: 'van der Berg' },
+      { kind: 'decoration', role: 'suffix', text: 'Jr.' },
+    ]);
+    expect(multi.allTokensResolved).toBe(false);
+  });
+
+  it('returns empty tokens for living people', () => {
+    const living = inspectPersonPronunciationTokens(
+      {
+        full_name: 'Pat Mercer',
+        given_name: 'Pat',
+        surname: 'Mercer',
+        is_living: true,
+      },
+      { Mercer: { phonetic: 'MER-ser' } }
+    );
+    expect(living.tokens).toEqual([]);
+    expect(living.allTokensResolved).toBe(false);
   });
 });

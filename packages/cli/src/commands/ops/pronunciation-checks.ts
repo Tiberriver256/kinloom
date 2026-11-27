@@ -1,4 +1,5 @@
 import {
+  findIpaGlyphsInPhonetic,
   type Place,
   type PrivacyConfig,
   type Pronunciation,
@@ -52,6 +53,32 @@ function parseLoosePronunciation(raw: unknown): Pronunciation | null {
   }
   const parsed = PronunciationSchema.safeParse(raw);
   return parsed.success ? parsed.data : null;
+}
+
+function collectIpaInPhoneticMessages(scopeLabel: string, pron: Pronunciation): string[] {
+  const messages: string[] = [];
+  const mainPhonetic = pron.phonetic?.trim() ?? '';
+  if (mainPhonetic) {
+    const glyphs = findIpaGlyphsInPhonetic(mainPhonetic);
+    if (glyphs.length > 0) {
+      messages.push(
+        `Staged pronunciation on ${scopeLabel} Respelling '${mainPhonetic}' contains IPA symbol(s) (${glyphs.join(', ')}). Use plain English syllables in phonetic and put IPA in ipa.`
+      );
+    }
+  }
+  for (const variant of pron.variants ?? []) {
+    const variantPhonetic = variant.phonetic?.trim() ?? '';
+    if (!variantPhonetic) {
+      continue;
+    }
+    const glyphs = findIpaGlyphsInPhonetic(variantPhonetic);
+    if (glyphs.length > 0) {
+      messages.push(
+        `Staged pronunciation variant '${variant.label}' on ${scopeLabel} Respelling '${variantPhonetic}' contains IPA symbol(s) (${glyphs.join(', ')}). Use plain English syllables in phonetic and put IPA in ipa.`
+      );
+    }
+  }
+  return messages;
 }
 
 function toLooseRawPerson(rec: Readonly<Record<string, unknown>>): RawPerson {
@@ -162,6 +189,7 @@ export function runPronunciationAuditCheck(ctx: KinloomAuditCheckContext): Kinlo
   const missingPeople: string[] = [];
   const partialPeople: string[] = [];
   const unsourcedEntries: string[] = [];
+  const ipaInPhoneticEntries: string[] = [];
 
   for (const [id, rec] of evaluatedPeople.entries()) {
     const explicitPron = parseLoosePronunciation(rec.pronunciation);
@@ -182,6 +210,12 @@ export function runPronunciationAuditCheck(ctx: KinloomAuditCheckContext): Kinlo
       if (!hasProvenance) {
         unsourcedEntries.push(`person:${id}`);
         const msg = `Staged pronunciation on person '${id}' is missing provenance (source_url or source_label).`;
+        warnings.push(msg);
+        strictFailures.push(msg);
+      }
+      const ipaMessages = collectIpaInPhoneticMessages(`person '${id}'`, explicitPron);
+      for (const msg of ipaMessages) {
+        ipaInPhoneticEntries.push(`person:${id}`);
         warnings.push(msg);
         strictFailures.push(msg);
       }
@@ -224,6 +258,15 @@ export function runPronunciationAuditCheck(ctx: KinloomAuditCheckContext): Kinlo
         warnings.push(msg);
         strictFailures.push(msg);
       }
+      const ipaMessages = collectIpaInPhoneticMessages(
+        `place '${place.full_name || place.id}'`,
+        place.pronunciation
+      );
+      for (const msg of ipaMessages) {
+        ipaInPhoneticEntries.push(`place:${place.id || place.name}`);
+        warnings.push(msg);
+        strictFailures.push(msg);
+      }
     }
     const resolved = resolvePlacePronunciation(place, lexicon);
     if (!resolved || !hasPronunciationValues(resolved)) {
@@ -244,6 +287,7 @@ export function runPronunciationAuditCheck(ctx: KinloomAuditCheckContext): Kinlo
       partialPeople,
       missingPlaces,
       unsourcedEntries,
+      ipaInPhoneticEntries,
       deletedLivePronunciation,
     },
   };

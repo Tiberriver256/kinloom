@@ -320,18 +320,18 @@ async function runDates(rest: readonly string[], ctx: CliDispatchContext): Promi
 
 async function runPronounce(rest: readonly string[], ctx: CliDispatchContext): Promise<CliExitCode> {
   const sub = rest[0];
-  if (sub !== 'lookup' && sub !== 'audit') {
+  if (sub !== 'lookup' && sub !== 'audit' && sub !== 'deduplicate') {
     throw new CliValidationError(
       sub
-        ? `Unknown pronounce subcommand '${sub}'. Expected \`lookup\` or \`audit\`.`
-        : 'Missing pronounce subcommand. Expected `lookup` or `audit`.'
+        ? `Unknown pronounce subcommand '${sub}'. Expected \`lookup\`, \`audit\`, or \`deduplicate\`.`
+        : 'Missing pronounce subcommand. Expected `lookup`, `audit`, or `deduplicate`.'
     );
   }
   const subArgs = rest.slice(1);
-  const [{ runPronounceAuditCommand, runPronounceLookupCommand }, { measureCommand }] = await Promise.all([
-    import('../commands/ops/pronounce.js'),
-    import('../commands/ops/telemetry.js'),
-  ]);
+  const [
+    { runPronounceAuditCommand, runPronounceDeduplicateCommand, runPronounceLookupCommand },
+    { measureCommand },
+  ] = await Promise.all([import('../commands/ops/pronounce.js'), import('../commands/ops/telemetry.js')]);
   if (sub === 'lookup') {
     const { values, positionals } = safeParseArgs({
       args: subArgs,
@@ -364,6 +364,38 @@ async function runPronounce(rest: readonly string[], ctx: CliDispatchContext): P
           refresh: values.refresh,
           json: values.json,
           fetchImpl: ctx.fetchImpl,
+        })
+    );
+    writeRenderedOutput(ctx.io, result.rendered);
+    return EXIT_OK;
+  }
+  if (sub === 'deduplicate') {
+    const { values } = safeParseArgs({
+      args: subArgs,
+      allowPositionals: false,
+      options: {
+        repo: { type: 'string' },
+        apply: { type: 'boolean', default: false },
+        'promote-tokens': { type: 'boolean', default: false },
+        force: { type: 'boolean', default: false },
+        json: { type: 'boolean', default: false },
+      },
+    });
+    const result = await measureCommand(
+      {
+        subcmd: 'pronounce deduplicate',
+        extractResultMeta: (res) => ({
+          exitCode: EXIT_OK,
+          bytesOut: Buffer.byteLength(res.rendered, 'utf8'),
+        }),
+      },
+      async () =>
+        runPronounceDeduplicateCommand({
+          repoDir: values.repo ?? ctx.cwd,
+          apply: values.apply,
+          promoteTokens: values['promote-tokens'],
+          force: values.force,
+          json: values.json,
         })
     );
     writeRenderedOutput(ctx.io, result.rendered);

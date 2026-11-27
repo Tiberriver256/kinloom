@@ -588,6 +588,86 @@ test.describe('Wave 53B signed-in editor UX, per-element overflow/collision, and
     }
   });
 
+  test('Issue #28: Mobile 390x844 Edit Pronunciation shows segmented shared token chips above the fold with >= 44px tap targets and inline token editing', async ({
+    page,
+  }) => {
+    await blockExternalMapTiles(page);
+    await signInAsAdmin(page, wiki);
+
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto(`${wiki.baseUrl}/person/mary-ann-todd`, { waitUntil: 'networkidle' });
+    await expect(page.getByRole('heading', { name: 'Mary Ann Todd', exact: true })).toBeVisible();
+
+    const editPronBtn = page.locator('.pronunciation-edit-link').first();
+    await expect(editPronBtn).toBeVisible();
+    await editPronBtn.click();
+
+    const drawer = page.getByRole('dialog', { name: /Edit Mary Ann Todd/ });
+    await expect(drawer).toBeVisible();
+    await page.waitForTimeout(150);
+
+    const tokenChips = drawer.locator('[data-pronunciation-token]');
+    await expect(tokenChips).toHaveCount(3);
+    await expect(drawer.locator('[data-pronunciation-token="Mary"]')).toBeVisible();
+    await expect(drawer.locator('[data-pronunciation-token="Ann"]')).toBeVisible();
+    await expect(drawer.locator('[data-pronunciation-token="Todd"]')).toBeVisible();
+
+    // Composed preview renders and Personal override stays collapsed when all shared tokens resolve
+    await expect(drawer.getByTestId('pronunciation-composed-preview')).toContainText('MAIR-ee AN TAHD');
+    await expect(drawer.getByRole('button', { name: 'Customize for this person only' })).toBeVisible();
+
+    const mobileMetrics = await page.evaluate(() => {
+      const body = document.querySelector('.wiki-edit-drawer-body')!;
+      const bodyRect = body.getBoundingClientRect();
+      const fieldset = document.querySelector('.wiki-pronunciation-fieldset')!;
+      const legend = fieldset.querySelector('legend')!;
+      const legendRect = legend.getBoundingClientRect();
+      const chips = [...document.querySelectorAll<HTMLButtonElement>('[data-pronunciation-token]')].map(
+        (btn) => {
+          const r = btn.getBoundingClientRect();
+          return {
+            token: btn.dataset.pronunciationToken ?? '',
+            top: Math.round(r.top),
+            bottom: Math.round(r.bottom),
+            height: Math.round(r.height),
+            inBodyViewport: r.top >= bodyRect.top - 2 && r.bottom <= bodyRect.bottom + 2,
+          };
+        }
+      );
+      return {
+        pageOverflowPx: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+        bodyOverflowPx: body.scrollWidth - body.clientWidth,
+        legendInBodyViewport: legendRect.top >= bodyRect.top - 2 && legendRect.bottom <= bodyRect.bottom + 2,
+        chips,
+      };
+    });
+
+    expect(mobileMetrics.pageOverflowPx).toBeLessThanOrEqual(0);
+    expect(mobileMetrics.bodyOverflowPx).toBeLessThanOrEqual(0);
+    expect(mobileMetrics.legendInBodyViewport).toBe(true);
+    for (const chip of mobileMetrics.chips) {
+      expect(chip.height, `token chip ${chip.token} height >= 44px`).toBeGreaterThanOrEqual(44);
+      expect(chip.inBodyViewport, `token chip ${chip.token} visible above the fold`).toBe(true);
+    }
+
+    // Tap the given-name token chip ("Mary"), verify IPA-in-Respelling inline hint, and save cleanly
+    await drawer.locator('[data-pronunciation-token="Mary"]').click();
+    const sharedEditor = drawer.locator('.wiki-pronunciation-shared-editor');
+    await expect(sharedEditor).toBeVisible();
+    await expect(sharedEditor).toContainText('Shared pronunciation for “Mary”');
+
+    const sharedRespellingInput = sharedEditor.getByLabel('Respelling');
+    await sharedRespellingInput.fill('MAIR-ə');
+    await expect(sharedEditor).toContainText('Found IPA symbol (ə)');
+
+    await sharedRespellingInput.fill('MAIR-ee');
+    await expect(sharedEditor).not.toContainText('Found IPA symbol');
+    await sharedEditor.getByRole('button', { name: 'Save for all Mary records' }).click();
+    await expect(drawer).toContainText('Saved shared pronunciation for "Mary"');
+
+    await drawer.getByRole('button', { name: 'Close', exact: true }).click();
+  });
+
   test('W53-U5/U7: Mobile 360px RevisionDiffView stacks full-width, destructive actions confirm, and Admin blocks self-demotion with Copy Link', async ({
     page,
   }) => {

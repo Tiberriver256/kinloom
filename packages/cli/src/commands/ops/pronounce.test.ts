@@ -19,8 +19,10 @@ import {
   extractMediaWikiPronunciations,
   rankPronounceSources,
   runPronounceAuditCommand,
+  runPronounceDeduplicateCommand,
   runPronounceLookupCommand,
 } from './pronounce.js';
+import { runPronunciationAuditCheck, runPronunciationVerifyCheck } from './pronunciation-checks.js';
 
 const tempDirs: string[] = [];
 
@@ -905,5 +907,349 @@ describe('kinloom integrate pronunciation support', () => {
       source_label: 'Wiktionary (Dutch IPA)',
       source_url: 'https://en.wiktionary.org/wiki/Goes',
     });
+  });
+});
+
+describe('IPA-in-phonetic audit checks and kinloom pronounce deduplicate', () => {
+  it('flags IPA glyphs and /.../ notation inside phonetic across pronounce audit --strict, audit --strict, and verify', async () => {
+    const repoDir = await makeTempDir('kinloom-pron-ipa-phonetic-');
+    fs.mkdirSync(path.join(repoDir, 'data'), { recursive: true });
+
+    const config = parseKinloomConfig({
+      site: {
+        title: 'Synthetic IPA Phonetic Audit',
+        familyName: 'Alder Family',
+        gedcomSourceName: 'ALDER_IPA_TEST',
+      },
+      pronunciations: {
+        Daniel: {
+          phonetic: 'DAN-yəl',
+          ipa: '/ˈdæn.jəl/',
+          language: 'en-US',
+          source_label: 'Wiktionary',
+        },
+        Alder: {
+          phonetic: '/ˈɔːl.dər/',
+          ipa: '/ˈɔːl.dər/',
+          language: 'en-US',
+          source_label: 'Wiktionary',
+        },
+      },
+    });
+    fs.writeFileSync(path.join(repoDir, 'kinloom.config.yaml'), serializeKinloomConfigYaml(config), 'utf8');
+    fs.writeFileSync(
+      path.join(repoDir, 'data', 'people.yaml'),
+      serializePeopleYaml([
+        {
+          id: 'per_daniel',
+          slug: 'daniel-alder',
+          full_name: 'Daniel Alder',
+          given_name: 'Daniel',
+          surname: 'Alder',
+          alt_names: [],
+          sex: 'M',
+          is_living: false,
+          lineage_group: 'pivot_ancestor',
+          birth_edtf: '1835',
+          death_edtf: '1908',
+          portrait_url: null,
+        },
+      ]),
+      'utf8'
+    );
+    fs.writeFileSync(path.join(repoDir, 'data', 'places.yaml'), serializePlacesYaml([]), 'utf8');
+
+    // 1. pronounce audit --strict fails when phonetic contains IPA glyphs or /.../
+    const strictAudit = runPronounceAuditCommand({ repoDir, strict: true, json: true });
+    expect(strictAudit.ok).toBe(false);
+    expect(strictAudit.strictOk).toBe(false);
+    const ipaPhoneticWarnings = strictAudit.ipa_quality_warnings.filter((w) => w.code === 'ipa_in_phonetic');
+    expect(ipaPhoneticWarnings.map((w) => w.key)).toEqual(['Alder', 'Daniel']);
+    expect(ipaPhoneticWarnings[0]?.ipa_glyphs).toEqual(['ˈ', 'ɔ', 'ː', 'ə', '/.../']);
+    expect(ipaPhoneticWarnings[1]?.ipa_glyphs).toEqual(['ə']);
+
+    // 2. verify pronunciation check reports them as warnings & strictFailures
+    const verifyRes = runPronunciationVerifyCheck({
+      repoDir,
+      dataDir: path.join(repoDir, 'data'),
+      siteConfig: config,
+      people: [],
+      places: [],
+      events: [],
+      sources: [],
+      kinship: [],
+      media: [],
+      narratives: [],
+      strictHygiene: false,
+      strictPronunciation: true,
+    });
+    expect(verifyRes.warnings.some((w) => w.includes('DAN-yəl'))).toBe(true);
+    expect(verifyRes.strictFailures?.some((w) => w.includes('/ˈɔːl.dər/'))).toBe(true);
+
+    // 3. audit --strict (runPronunciationAuditCheck) rejects newly staged phonetic fields containing IPA glyphs
+    const stagedAudit = runPronunciationAuditCheck({
+      repoDir,
+      personId: 'per_daniel',
+      packageDir: repoDir,
+      dossierText: '',
+      siteConfig: config,
+      targetPerson: {
+        id: 'per_daniel',
+        full_name: 'Daniel Alder',
+        given_name: 'Daniel',
+        surname: 'Alder',
+        is_living: false,
+      },
+      livePeople: [],
+      mergedPeople: [],
+      patch: {
+        person_updates: {
+          pronunciation: {
+            phonetic: 'DAN-yəl AWL-der',
+            ipa: '/ˈdæn.jəl ˈɔːl.dər/',
+            source_label: 'Wiktionary',
+          },
+        },
+        places: [
+          {
+            id: 'plc_leiden',
+            name: 'Leiden',
+            full_name: 'Leiden, Netherlands',
+            pronunciation: {
+              phonetic: 'ˈlɛi.dən',
+              ipa: '/ˈlɛi.dən/',
+              source_label: 'Wiktionary',
+            },
+          },
+        ],
+      },
+    });
+    expect(stagedAudit.warnings.some((w) => w.includes('DAN-yəl AWL-der'))).toBe(true);
+    expect(stagedAudit.strictFailures?.some((w) => w.includes('DAN-yəl AWL-der'))).toBe(true);
+    expect(stagedAudit.strictFailures?.some((w) => w.includes('ˈlɛi.dən'))).toBe(true);
+
+    // 4. Fixing phonetic to plain English syllables makes pronounce audit --strict pass
+    const cleanConfig = parseKinloomConfig({
+      ...config,
+      pronunciations: {
+        Daniel: {
+          phonetic: 'DAN-yuhl',
+          ipa: '/ˈdæn.jəl/',
+          language: 'en-US',
+          source_label: 'Wiktionary',
+        },
+        Alder: {
+          phonetic: 'AWL-der',
+          ipa: '/ˈɔːl.dər/',
+          language: 'en-US',
+          source_label: 'Wiktionary',
+        },
+      },
+    });
+    fs.writeFileSync(
+      path.join(repoDir, 'kinloom.config.yaml'),
+      serializeKinloomConfigYaml(cleanConfig),
+      'utf8'
+    );
+    const cleanStrict = runPronounceAuditCommand({ repoDir, strict: true, json: true });
+    expect(cleanStrict.ok).toBe(true);
+    expect(cleanStrict.strictOk).toBe(true);
+    expect(cleanStrict.ipa_quality_warnings).toEqual([]);
+  });
+
+  it('conservatively deduplicates redundant per-person overrides in dry-run and --apply without losing unique data or exposing living people', async () => {
+    const repoDir = await makeTempDir('kinloom-pron-dedupe-');
+    fs.mkdirSync(path.join(repoDir, 'data'), { recursive: true });
+
+    const config = parseKinloomConfig({
+      site: {
+        title: 'Synthetic Dedupe Archive',
+        familyName: 'Alder Family',
+        gedcomSourceName: 'ALDER_DEDUPE',
+      },
+      pronunciations: {
+        Daniel: {
+          phonetic: 'DAN-yuhl',
+          ipa: '/ˈdæn.jəl/',
+          language: 'en-US',
+          source_label: 'Wiktionary',
+        },
+        Alder: {
+          phonetic: 'AWL-der',
+          ipa: '/ˈɔːl.dər/',
+          language: 'en-US',
+          source_label: 'Wiktionary',
+        },
+      },
+    });
+    fs.writeFileSync(path.join(repoDir, 'kinloom.config.yaml'), serializeKinloomConfigYaml(config), 'utf8');
+
+    const initialPeople = [
+      {
+        id: 'per_redundant',
+        slug: 'daniel-alder',
+        full_name: 'Daniel Alder',
+        given_name: 'Daniel',
+        surname: 'Alder',
+        alt_names: [],
+        sex: 'M' as const,
+        is_living: false,
+        lineage_group: 'pivot_ancestor' as const,
+        birth_edtf: '1835',
+        death_edtf: '1908',
+        portrait_url: null,
+        pronunciation: {
+          phonetic: 'DAN-yuhl AWL-der',
+          ipa: '/ˈdæn.jəl ˈɔːl.dər/',
+          language: 'en-US',
+          source_label: 'Wiktionary',
+        },
+      },
+      {
+        id: 'per_unique_note',
+        slug: 'daniel-alder-note',
+        full_name: 'Daniel Alder',
+        given_name: 'Daniel',
+        surname: 'Alder',
+        alt_names: [],
+        sex: 'M' as const,
+        is_living: false,
+        lineage_group: 'ancestor' as const,
+        birth_edtf: '1810',
+        death_edtf: '1880',
+        portrait_url: null,
+        pronunciation: {
+          phonetic: 'DAN-yuhl AWL-der',
+          ipa: '/ˈdæn.jəl ˈɔːl.dər/',
+          note: 'Family pronounced softly in Pennsylvania branch',
+          source_label: 'Family oral tradition',
+        },
+      },
+      {
+        id: 'per_different_guide',
+        slug: 'daniel-alder-alt',
+        full_name: 'Daniel Alder',
+        given_name: 'Daniel',
+        surname: 'Alder',
+        alt_names: [],
+        sex: 'M' as const,
+        is_living: false,
+        lineage_group: 'collateral' as const,
+        birth_edtf: '1840',
+        death_edtf: '1905',
+        portrait_url: null,
+        pronunciation: {
+          phonetic: 'DAN-yuhl AHL-der',
+          language: 'en-US',
+          source_label: 'Family oral tradition',
+        },
+      },
+      {
+        id: 'per_missing_middle',
+        slug: 'daniel-anderson-alder',
+        full_name: 'Daniel Anderson Alder',
+        given_name: 'Daniel Anderson',
+        surname: 'Alder',
+        alt_names: [],
+        sex: 'M' as const,
+        is_living: false,
+        lineage_group: 'ancestor' as const,
+        birth_edtf: '1855',
+        death_edtf: '1922',
+        portrait_url: null,
+        pronunciation: {
+          phonetic: 'DAN-yuhl AN-der-sun AWL-der',
+          ipa: '/ˈdæn.jəl ˈæn.dər.sən ˈɔːl.dər/',
+          language: 'en-US',
+          source_label: 'Wiktionary',
+        },
+      },
+      {
+        id: 'per_living_private',
+        slug: 'living-private',
+        full_name: 'Casey SecretLivingAlder',
+        given_name: 'Casey',
+        surname: 'SecretLivingAlder',
+        alt_names: [],
+        sex: 'U' as const,
+        is_living: true,
+        lineage_group: 'descendant' as const,
+        birth_edtf: '1999',
+        death_edtf: '',
+        portrait_url: null,
+      },
+    ];
+    fs.writeFileSync(path.join(repoDir, 'data', 'people.yaml'), serializePeopleYaml(initialPeople), 'utf8');
+    fs.writeFileSync(path.join(repoDir, 'data', 'places.yaml'), serializePlacesYaml([]), 'utf8');
+
+    // Dry-run by default: identifies per_redundant, keeps note/different/missing-middle, writes 0 files
+    const dryRun = runPronounceDeduplicateCommand({ repoDir, json: true });
+    expect(dryRun.applied).toBe(false);
+    expect(dryRun.files_written).toEqual([]);
+    expect(dryRun.summary.living_people_excluded).toBe(1);
+    expect(dryRun.removable_overrides.map((r) => r.id)).toEqual(['per_redundant']);
+    expect(dryRun.kept_overrides.map((k) => ({ id: k.id, reason: k.reason }))).toEqual([
+      { id: 'per_different_guide', reason: 'pronunciation_differs' },
+      { id: 'per_unique_note', reason: 'has_unique_note' },
+      { id: 'per_missing_middle', reason: 'would_drop_coverage' },
+    ]);
+    expect(dryRun.rendered).not.toContain('SecretLivingAlder');
+    expect(dryRun.rendered).not.toContain('per_living_private');
+
+    // Audit also surfaces the redundant person override without breaking --strict
+    const auditBefore = runPronounceAuditCommand({ repoDir, json: true });
+    expect(auditBefore.summary.redundant_person_overrides).toBe(1);
+    expect(auditBefore.redundant_person_overrides[0]?.id).toBe('per_redundant');
+
+    // --promote-tokens --apply promotes Anderson cleanly and removes both per_redundant and per_missing_middle
+    const out: string[] = [];
+    const exitCode = await runCli(
+      ['pronounce', 'deduplicate', '--repo', repoDir, '--promote-tokens', '--apply', '--json'],
+      {
+        io: {
+          stdout: (line) => out.push(line),
+          stderr: () => {},
+        },
+      }
+    );
+    expect(exitCode).toBe(0);
+    const cliResult = JSON.parse(out.join('\n')) as {
+      applied: boolean;
+      files_written: string[];
+      promoted_tokens: Array<{ term: string; phonetic?: string; ipa?: string }>;
+      removable_overrides: Array<{ id: string }>;
+      kept_overrides: Array<{ id: string; reason: string }>;
+    };
+    expect(cliResult.applied).toBe(true);
+    expect(cliResult.files_written).toEqual(['kinloom.config.yaml', 'data/people.yaml']);
+    expect(cliResult.promoted_tokens).toEqual([
+      {
+        term: 'Anderson',
+        phonetic: 'AN-der-sun',
+        ipa: '/ˈæn.dər.sən/',
+        language: 'en-US',
+        source_person_id: 'per_missing_middle',
+      },
+    ]);
+    expect(cliResult.removable_overrides.map((r) => r.id)).toEqual(['per_redundant', 'per_missing_middle']);
+    expect(cliResult.kept_overrides.map((k) => k.id)).toEqual(['per_different_guide', 'per_unique_note']);
+
+    // Verify persisted YAML on disk
+    const reloadedPeople = parsePeopleYaml(
+      fs.readFileSync(path.join(repoDir, 'data', 'people.yaml'), 'utf8')
+    );
+    const byId = new Map(reloadedPeople.map((p) => [p.id, p]));
+    expect(byId.get('per_redundant')?.pronunciation).toBeUndefined();
+    expect(byId.get('per_missing_middle')?.pronunciation).toBeUndefined();
+    expect(byId.get('per_unique_note')?.pronunciation?.note).toBe(
+      'Family pronounced softly in Pennsylvania branch'
+    );
+    expect(byId.get('per_different_guide')?.pronunciation?.phonetic).toBe('DAN-yuhl AHL-der');
+
+    // Archive still has 100% strict full-name coverage after deduplication!
+    const auditAfter = runPronounceAuditCommand({ repoDir, strict: true, json: true });
+    expect(auditAfter.ok).toBe(true);
+    expect(auditAfter.strictOk).toBe(true);
+    expect(auditAfter.summary.redundant_person_overrides).toBe(0);
   });
 });

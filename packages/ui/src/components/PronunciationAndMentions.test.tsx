@@ -923,13 +923,13 @@ describe('EntityEditDrawer pronunciation editing and audio generation', () => {
       </ArchiveProvider>
     );
 
-    expect(container.textContent).toContain('Personal override (first / middle / full name)');
+    expect(container.textContent).toContain('Personal override (optional)');
     expect(container.querySelector('[data-testid="lexicon-probe"]')?.textContent).toBe('MER-ser|');
 
-    const editSharedBtn = Array.from(container.querySelectorAll('button')).find(
-      (b) => b.textContent?.trim() === 'Edit shared "Mercer"'
+    const editSharedBtn = container.querySelector<HTMLButtonElement>(
+      'button[data-pronunciation-token="Mercer"]'
     );
-    expect(editSharedBtn).toBeDefined();
+    expect(editSharedBtn).not.toBeNull();
 
     act(() => {
       editSharedBtn!.click();
@@ -939,7 +939,7 @@ describe('EntityEditDrawer pronunciation editing and audio generation', () => {
     expect(sharedEditor).not.toBeNull();
 
     const sharedPhoneticInput = sharedEditor!.querySelector<HTMLInputElement>(
-      'input[placeholder="e.g. MER-ser"]'
+      'input[placeholder="e.g. DAN-yuhl or MER-ser"]'
     );
     expect(sharedPhoneticInput).not.toBeNull();
     expect(sharedPhoneticInput!.value).toBe('MER-ser');
@@ -1213,17 +1213,19 @@ describe('Live-lexicon partial-update merge regression (PersonPage + EntityEditD
       editBtn!.click();
     });
 
-    const editSharedBtn = Array.from(container.querySelectorAll('button')).find(
-      (b) => b.textContent?.trim() === 'Edit shared "Mercer"'
+    const editSharedBtn = container.querySelector<HTMLButtonElement>(
+      'button[data-pronunciation-token="Mercer"]'
     );
-    expect(editSharedBtn).toBeDefined();
+    expect(editSharedBtn).not.toBeNull();
     act(() => {
       editSharedBtn!.click();
     });
 
     const sharedEditor = container.querySelector('.wiki-pronunciation-shared-editor')!;
-    const phoneticInput = sharedEditor.querySelector<HTMLInputElement>('input[placeholder="e.g. MER-ser"]')!;
-    const ipaInput = sharedEditor.querySelector<HTMLInputElement>('input[placeholder="e.g. /ˈmɜːr.sər/"]')!;
+    const phoneticInput = sharedEditor.querySelector<HTMLInputElement>(
+      'input[placeholder="e.g. DAN-yuhl or MER-ser"]'
+    )!;
+    const ipaInput = sharedEditor.querySelector<HTMLInputElement>('input[placeholder="e.g. /ˈdæn.jəl/"]')!;
     const langInput = sharedEditor.querySelector<HTMLInputElement>(
       'input[placeholder="e.g. en-US, nl, pl"]'
     )!;

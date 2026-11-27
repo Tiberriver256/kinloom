@@ -52,9 +52,21 @@ Audits the **Pronunciation Lexicon** (\`kinloom.config.yaml\` \`pronunciations\`
 3. **Zero Living leaks (Living Privacy Rule):** Verifies \`0\` **Living** people have any pronunciation entry in \`data/people.yaml\` or \`kinloom.config.yaml\`; any living leak fails loudly.
 4. **Unsourced entries:** Entries missing both \`source_url\` and \`source_label\` (and whether \`note\` is absent).
 5. **Homonymous bare place collisions:** Bare place keys (for example \`"Zeeland"\` or \`"Holland"\`) when \`data/places.yaml\` contains multiple places with that name across different countries or regions. Prefer qualified keys such as \`"Zeeland, Netherlands"\` and \`"Zeeland, Michigan"\`, or set \`region\` / \`match_full_name_contains\`.
-6. **Linguistic and IPA quality warnings:** Empty entries, unslashed or malformed IPA strings, and suspicious American/English IPA symbols (\`/ɝ/\`, \`/ɚ/\`, \`/ɹ/\`, \`/aɪ/\`, \`/oʊ/\`, \`/eɪ/\`, \`/θ/\`, \`/ð/\`) inside non-English entries (\`nl\`, \`sv\`, \`pl\`, \`fi\`, \`de\`).
+6. **Plain-English Respelling and IPA quality warnings:** Empty entries, IPA symbols (\`ə\`, \`ɚ\`, \`ɜ\`, \`æ\`, \`ɑ\`, \`ɔ\`, \`ʊ\`, \`ʌ\`, \`ɪ\`, \`ɛ\`, \`ʃ\`, \`ʒ\`, \`θ\`, \`ð\`, \`ŋ\`, \`ˈ\`, \`ˌ\`, \`ː\`, or \`/.../\`) placed inside \`phonetic\` (**Respelling**), unslashed or malformed IPA strings, and suspicious American/English IPA symbols (\`/ɝ/\`, \`/ɚ/\`, \`/ɹ/\`, \`/aɪ/\`, \`/oʊ/\`, \`/eɪ/\`, \`/θ/\`, \`/ð/\`) inside non-English entries (\`nl\`, \`sv\`, \`pl\`, \`fi\`, \`de\`).
+7. **Redundant per-person overrides:** Deceased people whose explicit \`person.pronunciation\` already matches full compositional resolution from the shared lexicon.
 
-Pass \`--strict\` to exit non-zero whenever any deceased person lacks **Full-Name Pronunciation** coverage, any place lacks coverage, any homonymous bare place collision exists, or any **Living** leak exists.
+Pass \`--strict\` to exit non-zero whenever any deceased person lacks **Full-Name Pronunciation** coverage, any place lacks coverage, any homonymous bare place collision exists, any \`phonetic\` (**Respelling**) field contains IPA symbols, or any **Living** leak exists.
+
+### 3. Deduplicate redundant per-person overrides
+
+\`\`\`bash
+kinloom pronounce deduplicate [--repo <path>] [--promote-tokens] [--apply] [--force] [--json]
+\`\`\`
+
+- Dry-run by default: scans \`data/people.yaml\` and \`kinloom.config.yaml\` (plus optional \`data/pronunciations.yaml\`) and prints which deceased people have explicit \`person.pronunciation\` overrides that are 100% losslessly redundant because shared lexicon tokens already resolve \`coverage: 'full'\` with matching **Respelling** and **IPA**.
+- Strictly conservative and lossless: never removes an explicit override if removing it would drop coverage below \`full\`, alter the pronunciation (unless \`--force\` is passed), or lose a unique \`note\`, \`variants\`, or custom \`audio_url\`. Never reads or emits living-person records.
+- Pass \`--promote-tokens\` to safely promote unambiguous single missing tokens into \`kinloom.config.yaml\` \`pronunciations\` before pruning redundant full-name overrides.
+- Pass \`--apply\` to write cleaned YAML back to \`kinloom.config.yaml\` and \`data/people.yaml\`.
 
 ## Pre-sync gate
 

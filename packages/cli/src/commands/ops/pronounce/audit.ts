@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import {
+  findIpaGlyphsInPhonetic,
   type KinloomSiteConfig,
   type Place,
   type Pronunciation,
@@ -16,6 +17,7 @@ import {
   resolvePlacePronunciation,
 } from '@kinloom/core';
 import { CliValidationError } from '../../../errors.js';
+import { evaluatePersonOverrideRedundancy } from './deduplicate.js';
 import {
   normalizeLangCode,
   type PronounceAuditOptions,
@@ -27,6 +29,7 @@ import {
   type PronounceMissingPersonGap,
   type PronouncePartialPersonGap,
   type PronounceQualityWarning,
+  type PronounceRedundantPersonOverride,
   type PronounceUnsourcedEntry,
 } from './types.js';
 
@@ -177,6 +180,21 @@ function inspectPronunciationQuality(
     return;
   }
 
+  if (phonetic) {
+    const ipaGlyphs = findIpaGlyphsInPhonetic(phonetic);
+    if (ipaGlyphs.length > 0) {
+      warnings.push({
+        scope,
+        key,
+        code: 'ipa_in_phonetic',
+        ...(language ? { language } : {}),
+        phonetic,
+        ipa_glyphs: ipaGlyphs,
+        message: `Entry '${key}' Respelling '${phonetic}' contains IPA symbol(s) (${ipaGlyphs.join(', ')}). Use plain English syllables in phonetic (Respelling) and put IPA in ipa.`,
+      });
+    }
+  }
+
   if (ipa) {
     const validSlashed = ipa.startsWith('/') && ipa.endsWith('/') && ipa.length > 2;
     const validBracketed = ipa.startsWith('[') && ipa.endsWith(']') && ipa.length > 2;
@@ -252,7 +270,7 @@ function formatAuditText(result: Omit<PronounceAuditResult, 'rendered'>): string
     `  Places coverage: ${s.placesCovered}/${s.placesTotal} (missing: ${s.placesMissing})`,
     `  Living pronunciation leaks: ${s.livingLeaks}`,
     `  Homonymous bare place collisions: ${s.homonymous_place_collisions}`,
-    `  Unsourced entries: ${s.unsourced_entries} | IPA / quality warnings: ${s.ipa_quality_warnings}`,
+    `  Unsourced entries: ${s.unsourced_entries} | IPA / quality warnings: ${s.ipa_quality_warnings} | Redundant person overrides: ${s.redundant_person_overrides}`,
   ];
 
   if (result.living_leaks.length > 0) {
@@ -309,6 +327,19 @@ function formatAuditText(result: Omit<PronounceAuditResult, 'rendered'>): string
     lines.push('', 'IPA / quality warnings:');
     for (const w of result.ipa_quality_warnings) {
       lines.push(`  - [${w.scope}:${w.key}] (${w.code}) ${w.message}`);
+    }
+  }
+
+  if (result.redundant_person_overrides.length > 0) {
+    lines.push(
+      '',
+      `Redundant per-person overrides (${result.redundant_person_overrides.length} — run \`kinloom pronounce deduplicate\`):`
+    );
+    for (const r of result.redundant_person_overrides.slice(0, 25)) {
+      lines.push(`  - ${r.id}: ${r.full_name} (matches shared "${r.composed_phonetic ?? ''}")`);
+    }
+    if (result.redundant_person_overrides.length > 25) {
+      lines.push(`  ... and ${result.redundant_person_overrides.length - 25} more.`);
     }
   }
 
@@ -631,14 +662,31 @@ export function runPronounceAuditCommand(options: PronounceAuditOptions): Pronou
     }
   }
 
+  const redundantPersonOverrides: PronounceRedundantPersonOverride[] = [];
+  for (const person of deceasedPeople) {
+    const decision = evaluatePersonOverrideRedundancy(person, lexicon, false);
+    if (decision?.kind === 'removable') {
+      redundantPersonOverrides.push({
+        id: person.id,
+        full_name: person.full_name,
+        ...(person.pronunciation?.phonetic ? { explicit_phonetic: person.pronunciation.phonetic } : {}),
+        ...(decision.resolved.phonetic ? { composed_phonetic: decision.resolved.phonetic } : {}),
+        ...(decision.resolved.resolvedFrom ? { resolved_from: decision.resolved.resolvedFrom } : {}),
+      });
+    }
+  }
+  redundantPersonOverrides.sort((a, b) => a.full_name.localeCompare(b.full_name) || a.id.localeCompare(b.id));
+
   const homonymousCollisions = detectHomonymousPlaceCollisions(places, lexicon);
+  const ipaInPhoneticWarnings = qualityWarnings.filter((w) => w.code === 'ipa_in_phonetic');
 
   const strictOk =
     livingLeaks.length === 0 &&
     peoplePartial.length === 0 &&
     peopleMissing.length === 0 &&
     missingPlaces.length === 0 &&
-    homonymousCollisions.length === 0;
+    homonymousCollisions.length === 0 &&
+    ipaInPhoneticWarnings.length === 0;
   const ok = livingLeaks.length === 0 && (!options.strict || strictOk);
 
   const resultBody: Omit<PronounceAuditResult, 'rendered'> = {
@@ -663,6 +711,7 @@ export function runPronounceAuditCommand(options: PronounceAuditOptions): Pronou
       unsourced_entries: unsourcedEntries.length,
       homonymous_place_collisions: homonymousCollisions.length,
       ipa_quality_warnings: qualityWarnings.length,
+      redundant_person_overrides: redundantPersonOverrides.length,
     },
     living_leaks: livingLeaks,
     coverage_gaps: {
@@ -674,6 +723,7 @@ export function runPronounceAuditCommand(options: PronounceAuditOptions): Pronou
     unsourced_entries: unsourcedEntries,
     homonymous_place_collisions: homonymousCollisions,
     ipa_quality_warnings: qualityWarnings,
+    redundant_person_overrides: redundantPersonOverrides,
   };
 
   const rendered = options.json ? JSON.stringify(resultBody, null, 2) : formatAuditText(resultBody);

@@ -1,4 +1,4 @@
-import type { EditorCitationMode, EntityPayload, EntityType, Pronunciation } from '@kinloom/core';
+import type { EditorCitationMode, EntityPayload, EntityType } from '@kinloom/core';
 import { asRevisionId, isEditSummaryValid } from '@kinloom/core';
 import { useMachine } from '@xstate/react';
 import type React from 'react';
@@ -8,10 +8,14 @@ import { cx } from '../../lib/cx.js';
 import { useDialogFocusTrap } from '../../lib/useDialogFocusTrap.js';
 import { entityEditorMachine } from '../../machines/entityEditorMachine.js';
 import cssMod3 from '../../pages/IndexPage.module.css';
-import { hasPronunciationContent, PronunciationBadge } from '../PronunciationBadge.js';
 import cssMod0 from '../PronunciationBadge.module.css';
 import cssMod1 from '../SourceReaderDrawer.module.css';
 import { ConflictMergeDialog } from './ConflictMergeDialog.js';
+import {
+  cleanPronunciation,
+  PronunciationEditorSection,
+  readDraftPronunciation,
+} from './PronunciationEditorSection.js';
 import { CitationBadge } from './WikiBadges.js';
 import cssMod2 from './WikiSurfaces.module.css';
 
@@ -50,77 +54,6 @@ function asStringArray(value: unknown): string[] {
   return value.filter((item): item is string => typeof item === 'string');
 }
 
-type PronunciationStringFieldKey =
-  | 'phonetic'
-  | 'ipa'
-  | 'language'
-  | 'audio_url'
-  | 'note'
-  | 'source_label'
-  | 'source_url'
-  | 'region';
-const PRONUNCIATION_STRING_KEYS: readonly PronunciationStringFieldKey[] = [
-  'phonetic',
-  'ipa',
-  'language',
-  'audio_url',
-  'note',
-  'source_label',
-  'source_url',
-  'region',
-];
-
-function readDraftPronunciation(value: unknown): Pronunciation | null {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) {
-    return null;
-  }
-  const raw = value as Record<string, unknown>;
-  const out: Pronunciation = {};
-  for (const key of PRONUNCIATION_STRING_KEYS) {
-    const val = raw[key];
-    if (typeof val === 'string' && val.length > 0) {
-      out[key] = val;
-    }
-  }
-  if (Array.isArray(raw.variants) && raw.variants.length > 0) {
-    out.variants = raw.variants as Pronunciation['variants'];
-  }
-  if (typeof raw.match_full_name_contains === 'string' || Array.isArray(raw.match_full_name_contains)) {
-    out.match_full_name_contains = raw.match_full_name_contains as Pronunciation['match_full_name_contains'];
-  }
-  return Object.keys(out).length > 0 ? out : null;
-}
-
-function cleanPronunciation(value: unknown, trimValues: boolean): Pronunciation | null {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) {
-    return null;
-  }
-  const raw = value as Record<string, unknown>;
-  const out: Pronunciation = {};
-  let hasAnyNonWhitespace = false;
-  for (const key of PRONUNCIATION_STRING_KEYS) {
-    const val = raw[key];
-    if (typeof val !== 'string') {
-      continue;
-    }
-    const normalized = trimValues ? val.trim() : val;
-    if (normalized.length > 0) {
-      out[key] = normalized;
-      if (normalized.trim().length > 0) {
-        hasAnyNonWhitespace = true;
-      }
-    }
-  }
-  if (Array.isArray(raw.variants) && raw.variants.length > 0) {
-    out.variants = raw.variants as Pronunciation['variants'];
-    hasAnyNonWhitespace = true;
-  }
-  if (typeof raw.match_full_name_contains === 'string' || Array.isArray(raw.match_full_name_contains)) {
-    out.match_full_name_contains = raw.match_full_name_contains as Pronunciation['match_full_name_contains'];
-  }
-  return hasAnyNonWhitespace ? out : null;
-}
-
 export const EntityEditDrawer: React.FC<EntityEditDrawerProps> = ({
   open,
   initialSection,
@@ -136,25 +69,13 @@ export const EntityEditDrawer: React.FC<EntityEditDrawerProps> = ({
 }) => {
   const { dataSource, bundle, baseUrl, reloadArchive, pronunciations, setPronunciations } = useArchiveData();
   const pronunciationFieldsetRef = useRef<HTMLFieldSetElement | null>(null);
-  const pronunciationInputRef = useRef<HTMLInputElement | null>(null);
+  const pronunciationPrimaryFocusRef = useRef<HTMLElement | null>(null);
   const hasScrolledInitialSectionRef = useRef(false);
   const [syncingRevision, setSyncingRevision] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [deleteSummary, setDeleteSummary] = useState('');
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
-  const [audioGenStatus, setAudioGenStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
-  const [audioGenMessage, setAudioGenMessage] = useState<string | null>(null);
-  const [sharedEditorOpen, setSharedEditorOpen] = useState(false);
-  const [sharedPhonetic, setSharedPhonetic] = useState('');
-  const [sharedIpa, setSharedIpa] = useState('');
-  const [sharedLanguage, setSharedLanguage] = useState('');
-  const [sharedNote, setSharedNote] = useState('');
-  const [sharedSourceLabel, setSharedSourceLabel] = useState('');
-  const [sharedSourceUrl, setSharedSourceUrl] = useState('');
-  const [sharedRegion, setSharedRegion] = useState('');
-  const [sharedSaveStatus, setSharedSaveStatus] = useState<'idle' | 'saving' | 'success' | 'error'>('idle');
-  const [sharedSaveMessage, setSharedSaveMessage] = useState<string | null>(null);
 
   const [snapshot, send] = useMachine(entityEditorMachine, {
     input: {
@@ -240,12 +161,9 @@ export const EntityEditDrawer: React.FC<EntityEditDrawerProps> = ({
     }
   }, [snapshot, reloadArchive, onSaved]);
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: reset tab state when target entityId changes
+  // biome-ignore lint/correctness/useExhaustiveDependencies: reset scroll flag when target entityId changes
   useEffect(() => {
     if (!open) {
-      setSharedEditorOpen(false);
-      setSharedSaveStatus('idle');
-      setSharedSaveMessage(null);
       hasScrolledInitialSectionRef.current = false;
     }
   }, [open, entityId]);
@@ -260,12 +178,12 @@ export const EntityEditDrawer: React.FC<EntityEditDrawerProps> = ({
       if (fieldset && !hasScrolledInitialSectionRef.current) {
         hasScrolledInitialSectionRef.current = true;
         if (typeof fieldset.scrollIntoView === 'function') {
-          fieldset.scrollIntoView({ block: 'center', behavior: 'auto' });
+          fieldset.scrollIntoView({ block: 'start', behavior: 'auto' });
         }
       }
-      const input = pronunciationInputRef.current;
-      if (input && !input.disabled) {
-        input.focus({ preventScroll: true });
+      const focusTarget = pronunciationPrimaryFocusRef.current;
+      if (focusTarget && !focusTarget.hasAttribute('disabled')) {
+        focusTarget.focus({ preventScroll: true });
       }
     };
     const timer = window.setTimeout(scrollAndFocus, 20);
@@ -323,134 +241,6 @@ export const EntityEditDrawer: React.FC<EntityEditDrawerProps> = ({
     entityType === 'person'
       ? asString(draft.full_name) || title || entityId
       : asString(draft.name) || asString(draft.full_name) || title || entityId;
-
-  const updatePronunciationField = (key: PronunciationStringFieldKey, value: string): void => {
-    const current = readDraftPronunciation(draft.pronunciation) ?? {};
-    const next: Record<string, unknown> = { ...current, [key]: value };
-    if (value === '') {
-      delete next[key];
-    }
-    const cleaned = cleanPronunciation(next, false);
-    updateField('pronunciation', cleaned);
-  };
-
-  const handleGeneratePronunciationAudio = async (): Promise<void> => {
-    if (!canEditPronunciation || audioGenStatus === 'loading') {
-      return;
-    }
-    const text =
-      entityType === 'person'
-        ? asString(draft.full_name).trim()
-        : asString(draft.name).trim() || asString(draft.full_name).trim();
-    if (!text) {
-      setAudioGenStatus('error');
-      setAudioGenMessage('Enter a name before generating pronunciation audio.');
-      return;
-    }
-    setAudioGenStatus('loading');
-    setAudioGenMessage(null);
-    try {
-      const response = await fetch('/api/pronunciation/generate', {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          entity_type: entityType,
-          entity_id: entityId,
-          text,
-          phonetic: draftPronunciation?.phonetic?.trim() || undefined,
-          ipa: draftPronunciation?.ipa?.trim() || undefined,
-          language: draftPronunciation?.language?.trim() || undefined,
-        }),
-      });
-      if (!response.ok) {
-        let errorMessage = `Audio generation failed (HTTP ${response.status}).`;
-        try {
-          const errBody = (await response.json()) as {
-            error?: { message?: string };
-            message?: string;
-          };
-          errorMessage = errBody.error?.message || errBody.message || errorMessage;
-        } catch {
-          // Non-JSON error response; keep HTTP status fallback.
-        }
-        setAudioGenStatus('error');
-        setAudioGenMessage(errorMessage);
-        return;
-      }
-      const data = (await response.json()) as { audio_url?: string };
-      if (!data.audio_url || typeof data.audio_url !== 'string') {
-        setAudioGenStatus('error');
-        setAudioGenMessage('Server response did not include an audio_url.');
-        return;
-      }
-      updatePronunciationField('audio_url', data.audio_url);
-      setAudioGenStatus('success');
-      setAudioGenMessage('Pronunciation audio generated. Save changes to publish.');
-    } catch (err) {
-      setAudioGenStatus('error');
-      setAudioGenMessage(err instanceof Error ? err.message : String(err));
-    }
-  };
-
-  const handleSaveSharedSurname = async (term: string, existingShared?: Pronunciation): Promise<void> => {
-    const trimmedTerm = term.trim();
-    if (!trimmedTerm || sharedSaveStatus === 'saving') {
-      return;
-    }
-    setSharedSaveStatus('saving');
-    setSharedSaveMessage(null);
-    try {
-      const response = await fetch(`/api/pronunciations/${encodeURIComponent(trimmedTerm)}`, {
-        method: 'PUT',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          phonetic: sharedPhonetic.trim() || undefined,
-          ipa: sharedIpa.trim() || undefined,
-          language: sharedLanguage.trim() || undefined,
-          note: sharedNote.trim() || undefined,
-          source_label: sharedSourceLabel.trim() || undefined,
-          source_url: sharedSourceUrl.trim() || undefined,
-          region: sharedRegion.trim() || undefined,
-          ...(existingShared?.variants && existingShared.variants.length > 0
-            ? { variants: existingShared.variants }
-            : {}),
-        }),
-      });
-      if (!response.ok) {
-        let errorMessage = `Failed to save shared pronunciation (HTTP ${response.status}).`;
-        try {
-          const errBody = (await response.json()) as {
-            error?: { message?: string };
-            message?: string;
-          };
-          errorMessage = errBody.error?.message || errBody.message || errorMessage;
-        } catch {
-          // Non-JSON error response; keep HTTP status fallback.
-        }
-        setSharedSaveStatus('error');
-        setSharedSaveMessage(errorMessage);
-        return;
-      }
-      const data = (await response.json()) as {
-        term?: string;
-        pronunciation?: Pronunciation | null;
-        pronunciations?: Record<string, Pronunciation>;
-      };
-      if (data.pronunciations && typeof data.pronunciations === 'object') {
-        setPronunciations(data.pronunciations);
-      }
-      setSharedSaveStatus('success');
-      setSharedSaveMessage(
-        `Saved shared pronunciation for "${trimmedTerm}". Applies to all ${trimmedTerm} records and auto-generates audio.`
-      );
-      setSharedEditorOpen(false);
-    } catch (err) {
-      setSharedSaveStatus('error');
-      setSharedSaveMessage(err instanceof Error ? err.message : String(err));
-    }
-  };
 
   const handleCloseAttempt = (): void => {
     if (snapshot.hasTag('dirty')) {
@@ -855,403 +645,26 @@ export const EntityEditDrawer: React.FC<EntityEditDrawerProps> = ({
                 </div>
               )}
 
-              {canEditPronunciation && (
-                <fieldset
-                  ref={pronunciationFieldsetRef}
-                  className={cx(uiStyles, 'wiki-citation-fieldset wiki-pronunciation-fieldset')}
-                >
-                  <legend className={cx(uiStyles, 'wiki-field-label')}>Pronunciation</legend>
-                  {entityType === 'person' &&
-                    (() => {
-                      const lookupLexicon = (token: string): Pronunciation | undefined => {
-                        const trimmed = token.trim();
-                        if (!trimmed) {
-                          return undefined;
-                        }
-                        return (
-                          pronunciations[trimmed] ??
-                          Object.entries(pronunciations).find(
-                            ([k]) => k.toLowerCase() === trimmed.toLowerCase()
-                          )?.[1]
-                        );
-                      };
-                      const givenTokens = asString(draft.given_name).trim().split(/\s+/).filter(Boolean);
-                      const firstName = givenTokens[0] ?? '';
-                      const middleTokens = givenTokens.slice(1);
-                      const middleNames = middleTokens.join(' ');
-                      const surname = asString(draft.surname).trim();
-                      const sharedFirst = lookupLexicon(firstName);
-                      const sharedMiddle = middleNames
-                        ? (lookupLexicon(middleNames) ?? lookupLexicon(middleTokens[0] ?? ''))
-                        : undefined;
-                      const sharedSurname = lookupLexicon(surname);
-                      const hasSharedSurname = hasPronunciationContent(sharedSurname);
-                      return (
-                        <div className={cx(uiStyles, 'wiki-pronunciation-breakdown')}>
-                          <div className={cx(uiStyles, 'wiki-pronunciation-breakdown-parts')}>
-                            {firstName && (
-                              <span className={cx(uiStyles, 'wiki-pronunciation-part')}>
-                                <span className={cx(uiStyles, 'wiki-pronunciation-part-label')}>First</span>
-                                <strong>{firstName}</strong>
-                                {(sharedFirst?.phonetic || sharedFirst?.ipa) && (
-                                  <span className={cx(uiStyles, 'wiki-pronunciation-part-shared')}>
-                                    → {sharedFirst.phonetic ?? sharedFirst.ipa}
-                                    {sharedFirst.phonetic && sharedFirst.ipa ? ` ${sharedFirst.ipa}` : ''}{' '}
-                                    (lexicon)
-                                  </span>
-                                )}
-                              </span>
-                            )}
-                            {middleNames && (
-                              <span className={cx(uiStyles, 'wiki-pronunciation-part')}>
-                                <span className={cx(uiStyles, 'wiki-pronunciation-part-label')}>Middle</span>
-                                <strong>{middleNames}</strong>
-                                {(sharedMiddle?.phonetic || sharedMiddle?.ipa) && (
-                                  <span className={cx(uiStyles, 'wiki-pronunciation-part-shared')}>
-                                    → {sharedMiddle.phonetic ?? sharedMiddle.ipa}
-                                    {sharedMiddle.phonetic && sharedMiddle.ipa ? ` ${sharedMiddle.ipa}` : ''}{' '}
-                                    (lexicon)
-                                  </span>
-                                )}
-                              </span>
-                            )}
-                            {surname && (
-                              <span className={cx(uiStyles, 'wiki-pronunciation-part')}>
-                                <span className={cx(uiStyles, 'wiki-pronunciation-part-label')}>Surname</span>
-                                <strong>{surname}</strong>
-                                {(sharedSurname?.phonetic || sharedSurname?.ipa) && (
-                                  <span className={cx(uiStyles, 'wiki-pronunciation-part-shared')}>
-                                    → {sharedSurname.phonetic ?? sharedSurname.ipa}
-                                    {sharedSurname.phonetic && sharedSurname.ipa
-                                      ? ` ${sharedSurname.ipa}`
-                                      : ''}{' '}
-                                    (shared)
-                                  </span>
-                                )}
-                                {(sharedSurname?.source_label || sharedSurname?.source_url) && (
-                                  <span className={cx(uiStyles, 'pronunciation-source')}>
-                                    {sharedSurname.source_url &&
-                                    /^https?:\/\//i.test(sharedSurname.source_url.trim()) ? (
-                                      <a
-                                        href={sharedSurname.source_url.trim()}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className={cx(uiStyles, 'pronunciation-source-link')}
-                                      >
-                                        {sharedSurname.source_label || 'Source'}
-                                      </a>
-                                    ) : (
-                                      sharedSurname.source_label
-                                    )}
-                                  </span>
-                                )}
-                                <button
-                                  type="button"
-                                  className={cx(uiStyles, 'wiki-pronunciation-shared-toggle')}
-                                  disabled={isBusy}
-                                  aria-expanded={sharedEditorOpen}
-                                  onClick={() => {
-                                    if (sharedEditorOpen) {
-                                      setSharedEditorOpen(false);
-                                    } else {
-                                      setSharedPhonetic(sharedSurname?.phonetic ?? '');
-                                      setSharedIpa(sharedSurname?.ipa ?? '');
-                                      setSharedLanguage(sharedSurname?.language ?? '');
-                                      setSharedNote(sharedSurname?.note ?? '');
-                                      setSharedSourceLabel(sharedSurname?.source_label ?? '');
-                                      setSharedSourceUrl(sharedSurname?.source_url ?? '');
-                                      setSharedRegion(sharedSurname?.region ?? '');
-                                      setSharedSaveStatus('idle');
-                                      setSharedSaveMessage(null);
-                                      setSharedEditorOpen(true);
-                                    }
-                                  }}
-                                >
-                                  {hasSharedSurname
-                                    ? `Edit shared "${surname}"`
-                                    : `+ Set shared "${surname}"`}
-                                </button>
-                              </span>
-                            )}
-                          </div>
-
-                          {surname && sharedEditorOpen && (
-                            <div className={cx(uiStyles, 'wiki-pronunciation-shared-editor')}>
-                              <div className={cx(uiStyles, 'wiki-pronunciation-shared-header')}>
-                                <strong>Shared pronunciation for &ldquo;{surname}&rdquo;</strong>
-                                <span className={cx(uiStyles, 'wiki-pronunciation-shared-hint')}>
-                                  Applies to every record with this surname and automatically generates audio.
-                                </span>
-                              </div>
-                              <div className={cx(uiStyles, 'wiki-field-grid')}>
-                                <label className={cx(uiStyles, 'wiki-field')}>
-                                  <span className={cx(uiStyles, 'wiki-field-label')}>Respelling</span>
-                                  <input
-                                    type="text"
-                                    className={cx(uiStyles, 'wiki-input')}
-                                    placeholder="e.g. MER-ser"
-                                    value={sharedPhonetic}
-                                    onChange={(e) => {
-                                      setSharedPhonetic(e.target.value);
-                                    }}
-                                    disabled={sharedSaveStatus === 'saving'}
-                                  />
-                                </label>
-                                <label className={cx(uiStyles, 'wiki-field')}>
-                                  <span className={cx(uiStyles, 'wiki-field-label')}>IPA (optional)</span>
-                                  <input
-                                    type="text"
-                                    className={cx(uiStyles, 'wiki-input')}
-                                    placeholder="e.g. /ˈmɜːr.sər/"
-                                    value={sharedIpa}
-                                    onChange={(e) => {
-                                      setSharedIpa(e.target.value);
-                                    }}
-                                    disabled={sharedSaveStatus === 'saving'}
-                                  />
-                                </label>
-                                <label className={cx(uiStyles, 'wiki-field')}>
-                                  <span className={cx(uiStyles, 'wiki-field-label')}>Language</span>
-                                  <input
-                                    type="text"
-                                    className={cx(uiStyles, 'wiki-input')}
-                                    placeholder="e.g. en-US, nl, pl"
-                                    value={sharedLanguage}
-                                    onChange={(e) => {
-                                      setSharedLanguage(e.target.value);
-                                    }}
-                                    disabled={sharedSaveStatus === 'saving'}
-                                  />
-                                </label>
-                                <label className={cx(uiStyles, 'wiki-field')}>
-                                  <span className={cx(uiStyles, 'wiki-field-label')}>Note</span>
-                                  <input
-                                    type="text"
-                                    className={cx(uiStyles, 'wiki-input')}
-                                    placeholder="e.g. Stress on first syllable"
-                                    value={sharedNote}
-                                    onChange={(e) => {
-                                      setSharedNote(e.target.value);
-                                    }}
-                                    disabled={sharedSaveStatus === 'saving'}
-                                  />
-                                </label>
-                                <label className={cx(uiStyles, 'wiki-field')}>
-                                  <span className={cx(uiStyles, 'wiki-field-label')}>
-                                    Source label (optional)
-                                  </span>
-                                  <input
-                                    type="text"
-                                    className={cx(uiStyles, 'wiki-input')}
-                                    placeholder="e.g. Wiktionary (Dutch IPA) or Family oral tradition"
-                                    value={sharedSourceLabel}
-                                    onChange={(e) => {
-                                      setSharedSourceLabel(e.target.value);
-                                    }}
-                                    disabled={sharedSaveStatus === 'saving'}
-                                  />
-                                </label>
-                                <label className={cx(uiStyles, 'wiki-field')}>
-                                  <span className={cx(uiStyles, 'wiki-field-label')}>
-                                    Source URL (optional)
-                                  </span>
-                                  <input
-                                    type="url"
-                                    className={cx(uiStyles, 'wiki-input')}
-                                    placeholder="e.g. https://en.wiktionary.org/wiki/..."
-                                    value={sharedSourceUrl}
-                                    onChange={(e) => {
-                                      setSharedSourceUrl(e.target.value);
-                                    }}
-                                    disabled={sharedSaveStatus === 'saving'}
-                                  />
-                                </label>
-                              </div>
-                              <div className={cx(uiStyles, 'wiki-pronunciation-shared-actions')}>
-                                <button
-                                  type="button"
-                                  className={cx(uiStyles, 'wiki-pronunciation-shared-save-btn')}
-                                  disabled={sharedSaveStatus === 'saving'}
-                                  onClick={() => {
-                                    void handleSaveSharedSurname(surname, sharedSurname);
-                                  }}
-                                >
-                                  {sharedSaveStatus === 'saving'
-                                    ? 'Saving…'
-                                    : `Save for all ${surname} records`}
-                                </button>
-                                <button
-                                  type="button"
-                                  className={cx(uiStyles, 'pill-btn')}
-                                  disabled={sharedSaveStatus === 'saving'}
-                                  onClick={() => {
-                                    setSharedEditorOpen(false);
-                                    if (sharedSaveStatus === 'error') {
-                                      setSharedSaveStatus('idle');
-                                      setSharedSaveMessage(null);
-                                    }
-                                  }}
-                                >
-                                  Cancel
-                                </button>
-                              </div>
-                            </div>
-                          )}
-
-                          {sharedSaveMessage && (
-                            <div
-                              className={cx(
-                                uiStyles,
-                                `wiki-pronunciation-status ${sharedSaveStatus === 'error' ? 'is-error' : 'is-success'}`
-                              )}
-                              role={sharedSaveStatus === 'error' ? 'alert' : 'status'}
-                            >
-                              {sharedSaveMessage}
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })()}
-                  {entityType === 'person' && (
-                    <div className={cx(uiStyles, 'wiki-pronunciation-override-heading')}>
-                      Personal override (first / middle / full name)
-                    </div>
-                  )}
-                  <div className={cx(uiStyles, 'wiki-field-grid')}>
-                    <label className={cx(uiStyles, 'wiki-field')}>
-                      <span className={cx(uiStyles, 'wiki-field-label')}>Respelling</span>
-                      <input
-                        ref={pronunciationInputRef}
-                        type="text"
-                        className={cx(uiStyles, 'wiki-input')}
-                        placeholder="e.g. MER-ser or LAY-den"
-                        value={draftPronunciation?.phonetic ?? ''}
-                        onChange={(e) => {
-                          updatePronunciationField('phonetic', e.target.value);
-                        }}
-                        disabled={isBusy}
-                      />
-                    </label>
-                    <label className={cx(uiStyles, 'wiki-field')}>
-                      <span className={cx(uiStyles, 'wiki-field-label')}>IPA (optional)</span>
-                      <input
-                        type="text"
-                        className={cx(uiStyles, 'wiki-input')}
-                        placeholder="e.g. /ˈmɜːr.sər/"
-                        value={draftPronunciation?.ipa ?? ''}
-                        onChange={(e) => {
-                          updatePronunciationField('ipa', e.target.value);
-                        }}
-                        disabled={isBusy}
-                      />
-                    </label>
-                    <label className={cx(uiStyles, 'wiki-field')}>
-                      <span className={cx(uiStyles, 'wiki-field-label')}>Language / origin</span>
-                      <input
-                        type="text"
-                        className={cx(uiStyles, 'wiki-input')}
-                        placeholder="e.g. nl, pl, en-US"
-                        value={draftPronunciation?.language ?? ''}
-                        onChange={(e) => {
-                          updatePronunciationField('language', e.target.value);
-                        }}
-                        disabled={isBusy}
-                      />
-                    </label>
-                    <label className={cx(uiStyles, 'wiki-field')}>
-                      <span className={cx(uiStyles, 'wiki-field-label')}>Pronunciation note (optional)</span>
-                      <input
-                        type="text"
-                        className={cx(uiStyles, 'wiki-input')}
-                        placeholder="e.g. Stress on first syllable"
-                        value={draftPronunciation?.note ?? ''}
-                        onChange={(e) => {
-                          updatePronunciationField('note', e.target.value);
-                        }}
-                        disabled={isBusy}
-                      />
-                    </label>
-                    <label className={cx(uiStyles, 'wiki-field')}>
-                      <span className={cx(uiStyles, 'wiki-field-label')}>Source label (optional)</span>
-                      <input
-                        type="text"
-                        className={cx(uiStyles, 'wiki-input')}
-                        placeholder="e.g. Wiktionary (Dutch IPA)"
-                        value={draftPronunciation?.source_label ?? ''}
-                        onChange={(e) => {
-                          updatePronunciationField('source_label', e.target.value);
-                        }}
-                        disabled={isBusy}
-                      />
-                    </label>
-                    <label className={cx(uiStyles, 'wiki-field')}>
-                      <span className={cx(uiStyles, 'wiki-field-label')}>Source URL (optional)</span>
-                      <input
-                        type="url"
-                        className={cx(uiStyles, 'wiki-input')}
-                        placeholder="e.g. https://en.wiktionary.org/wiki/Leiden"
-                        value={draftPronunciation?.source_url ?? ''}
-                        onChange={(e) => {
-                          updatePronunciationField('source_url', e.target.value);
-                        }}
-                        disabled={isBusy}
-                      />
-                    </label>
-                  </div>
-
-                  <div className={cx(uiStyles, 'wiki-pronunciation-actions')}>
-                    <button
-                      type="button"
-                      className={cx(uiStyles, 'wiki-pronunciation-gen-btn')}
-                      disabled={isBusy || audioGenStatus === 'loading'}
-                      onClick={() => {
-                        void handleGeneratePronunciationAudio();
-                      }}
-                    >
-                      <svg
-                        width="14"
-                        height="14"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        aria-hidden="true"
-                      >
-                        <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
-                        <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
-                        <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
-                      </svg>
-                      {audioGenStatus === 'loading'
-                        ? 'Generating…'
-                        : draftPronunciation?.audio_url
-                          ? 'Regenerate Audio'
-                          : 'Generate Audio'}
-                    </button>
-                    {hasPronunciationContent(draftPronunciation) && (
-                      <div className={cx(uiStyles, 'wiki-pronunciation-preview')}>
-                        <PronunciationBadge
-                          pronunciation={draftPronunciation}
-                          label={pronunciationPreviewLabel}
-                          baseUrl={baseUrl}
-                        />
-                      </div>
-                    )}
-                  </div>
-
-                  {audioGenMessage && (
-                    <div
-                      className={cx(
-                        uiStyles,
-                        `wiki-pronunciation-status ${audioGenStatus === 'error' ? 'is-error' : 'is-success'}`
-                      )}
-                      role={audioGenStatus === 'error' ? 'alert' : 'status'}
-                    >
-                      {audioGenMessage}
-                    </div>
-                  )}
-                </fieldset>
+              {canEditPronunciation && (entityType === 'person' || entityType === 'place') && (
+                <PronunciationEditorSection
+                  entityType={entityType}
+                  entityId={entityId}
+                  fullName={asString(draft.full_name)}
+                  givenName={asString(draft.given_name)}
+                  surname={asString(draft.surname)}
+                  placeName={asString(draft.name)}
+                  previewLabel={pronunciationPreviewLabel}
+                  draftPronunciation={draftPronunciation}
+                  pronunciations={pronunciations}
+                  baseUrl={baseUrl}
+                  isBusy={isBusy}
+                  fieldsetRef={pronunciationFieldsetRef}
+                  primaryFocusRef={pronunciationPrimaryFocusRef}
+                  onUpdatePronunciation={(next) => {
+                    updateField('pronunciation', next);
+                  }}
+                  onSetPronunciations={setPronunciations}
+                />
               )}
 
               {entityType === 'event' && (

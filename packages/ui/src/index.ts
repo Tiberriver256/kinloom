@@ -113,6 +113,8 @@ export type { MediaUploaderModalProps } from './components/wiki/MediaUploaderMod
 export { MediaUploaderModal } from './components/wiki/MediaUploaderModal.js';
 export type { PrivateArchiveGateProps } from './components/wiki/PrivateArchiveGate.js';
 export { PrivateArchiveGate } from './components/wiki/PrivateArchiveGate.js';
+export type { PronunciationEditorSectionProps } from './components/wiki/PronunciationEditorSection.js';
+export { PronunciationEditorSection } from './components/wiki/PronunciationEditorSection.js';
 export type { RevisionDiffViewProps } from './components/wiki/RevisionDiffView.js';
 export { RevisionDiffView } from './components/wiki/RevisionDiffView.js';
 export type { RevisionHistoryPanelProps } from './components/wiki/RevisionHistoryPanel.js';

@@ -1,5 +1,10 @@
 export { loadArchivePronunciationLexicon, runPronounceAuditCommand } from './pronounce/audit.js';
 export {
+  evaluatePersonOverrideRedundancy,
+  type OverrideRedundancyDecision,
+  runPronounceDeduplicateCommand,
+} from './pronounce/deduplicate.js';
+export {
   buildForvoLookupUrl,
   buildManualLookupSources,
   buildYouGlishLookupUrl,
@@ -17,6 +22,13 @@ export {
   type PronounceAuditResult,
   type PronounceCoverageGapPerson,
   type PronounceCoverageGapPlace,
+  type PronounceDeduplicateKeepReason,
+  type PronounceDeduplicateKeptOverride,
+  type PronounceDeduplicateOptions,
+  type PronounceDeduplicatePromotedToken,
+  type PronounceDeduplicateRemovedOverride,
+  type PronounceDeduplicateResult,
+  type PronounceDeduplicateSkippedPromotion,
   type PronounceHomonymCollision,
   type PronounceLang,
   type PronounceLivingLeak,
@@ -26,6 +38,7 @@ export {
   type PronouncePartialPersonGap,
   type PronounceProviderId,
   type PronounceQualityWarning,
+  type PronounceRedundantPersonOverride,
   type PronounceSourceHit,
   type PronounceSourceStatus,
   type PronounceSourceTier,
