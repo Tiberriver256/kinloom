@@ -112,6 +112,7 @@ describe('brandkit core primitives', () => {
 
   it('renders complete head tags with summary_large_image, raster apple-touch-icon, and manifest', () => {
     const tags = renderBrandkitHeadTags(makeSampleConfig());
+    expect(tags).toContain('property="og:site_name" content="Alder Family Archive"');
     expect(tags).toContain('name="twitter:card" content="summary_large_image"');
     expect(tags).toContain('property="og:image:width" content="1200"');
     expect(tags).toContain('property="og:image:height" content="630"');

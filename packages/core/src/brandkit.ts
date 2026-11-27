@@ -41,6 +41,7 @@ export const KINLOOM_ICON_SIZES = {
 } as const;
 
 export interface ResolvedBrandSpec {
+  readonly siteName: string;
   readonly title: string;
   readonly shortName: string;
   readonly subtitle: string;
@@ -57,6 +58,7 @@ export interface ResolvedBrandSpec {
 }
 
 export interface BrandOverrides {
+  readonly siteName?: string;
   readonly title?: string;
   readonly subtitle?: string;
   readonly description?: string;
@@ -139,6 +141,7 @@ export function resolveBrandSpec(
 ): ResolvedBrandSpec {
   const brand = config?.brand;
   const title = overrides?.title?.trim() || brand?.title?.trim() || config?.site.title?.trim() || 'Kinloom';
+  const siteName = overrides?.siteName?.trim() || brand?.siteName?.trim() || title;
   const defaultSubtitle = config?.site.familyName
     ? `${config.site.familyName} · Archival Explorer`
     : 'Archival Family History Explorer';
@@ -170,6 +173,7 @@ export function resolveBrandSpec(
   const ogImageAlt = overrides?.ogImageAlt?.trim() || brand?.ogImageAlt?.trim() || `${title} — ${subtitle}`;
 
   return {
+    siteName,
     title,
     shortName: deriveShortName(title),
     subtitle,
@@ -504,6 +508,7 @@ export function renderBrandkitHeadTags(
   overrides?: BrandOverrides
 ): string {
   const spec = resolveBrandSpec(config, overrides);
+  const siteName = escapeXml(spec.siteName);
   const title = escapeXml(spec.title);
   const description = escapeXml(spec.description);
   const ogImage = escapeXml(spec.ogImagePath);
@@ -513,6 +518,7 @@ export function renderBrandkitHeadTags(
     `<meta name="description" content="${description}" />`,
     `<meta name="theme-color" content="${spec.themeColorLight}" media="(prefers-color-scheme: light)" />`,
     `<meta name="theme-color" content="${spec.themeColorDark}" media="(prefers-color-scheme: dark)" />`,
+    `<meta property="og:site_name" content="${siteName}" />`,
     `<meta property="og:title" content="${title}" />`,
     `<meta property="og:description" content="${description}" />`,
     `<meta property="og:type" content="website" />`,

@@ -19,6 +19,7 @@ export const SiteThemeConfigSchema = z.object({
 });
 
 export const SiteBrandConfigSchema = z.object({
+  siteName: z.string().min(1).optional(),
   title: z.string().min(1).optional(),
   subtitle: z.string().min(1).optional(),
   metadataLine: z.string().min(1).optional(),
