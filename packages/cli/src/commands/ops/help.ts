@@ -308,3 +308,30 @@ Options:
   --dry-run          Inspect schema and report applied vs pending migrations without executing any writes
   --json             Emit structured JSON status and verification report
   -h, --help         Show this help message`;
+
+export const SCREENSHOTS_HELP = `Usage: kinloom screenshots --url <baseUrl> [options]
+
+Export full-page UI review screenshots, interactive component states, and plugin screens
+from any live Kinloom server URL, along with a machine-readable manifest.json and
+zero-dependency browsable index.html contact sheet.
+
+Options:
+  --url <baseUrl>             Target Kinloom server URL (http:// or https://, required)
+  --out-dir <dir>             Output directory (default: ./kinloom-screenshots)
+  --viewports <list>          Comma-separated presets or name:WxH specs
+                              (default: mobile:390x844,tablet:768x1024,desktop:1440x900)
+  --themes <light,dark>       Color schemes to capture (default: light,dark)
+  --include <scopes>          Capture categories: pages,components,plugins (default: all)
+  --routes <csv>              Optional extra page routes (repeatable or comma-separated)
+  --plugin-routes <csv>       Optional explicit plugin routes to capture under plugins/
+  --sample-people <N>         Representative person dossiers discovered from bundle (default: 1)
+  --sample-places <N>         Representative place dossiers discovered from bundle (default: 1)
+  --auth-cookie <cookie>      Optional Cookie header for authenticated previews (never saved)
+  --auth-header <name: value> Optional HTTP header for authenticated previews (repeatable, never saved)
+  --full-page                 Capture full scrollable page height (default: true)
+  --no-full-page              Capture viewport-only height for page screenshots
+  --wait-ms <ms>              Settle delay after load and font readiness (default: 350)
+  --timeout-ms <ms>           Per-capture timeout in milliseconds (default: 20000)
+  --concurrency <N>           Parallel viewport/theme contexts (default: 2, max: 8)
+  --json                      Emit structured JSON summary and manifest
+  -h, --help                  Show this help message`;

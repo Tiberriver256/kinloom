@@ -6,6 +6,7 @@ import {
   MEDIA_HELP,
   MIGRATE_HELP,
   PRONOUNCE_HELP,
+  SCREENSHOTS_HELP,
   STATUS_HELP,
   SYNC_HELP,
   TELEMETRY_HELP,
@@ -214,6 +215,12 @@ Options:
     category: 'ops',
     summary: 'Report local CLI latency, cache hit rate, and failure summary',
     help: TELEMETRY_HELP,
+  },
+  {
+    name: 'screenshots',
+    category: 'ops',
+    summary: 'Export UI review screenshots, component states, and HTML contact sheet',
+    help: SCREENSHOTS_HELP,
   },
   {
     name: 'guide',
