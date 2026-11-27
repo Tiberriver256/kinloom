@@ -82,6 +82,7 @@ export {
 
 export * from './commands/ops/index.js';
 export * from './commands/records/index.js';
+export * from './guides/index.js';
 
 export {
   ROOT_HELP,

@@ -1,0 +1,145 @@
+import type { EmbeddedGuide } from '../types.js';
+
+export const MICHIGANOLOGY_GUIDE: EmbeddedGuide = {
+  id: 'michiganology',
+  command: 'michiganology',
+  category: 'state-archives',
+  summary: 'Search Library of Michigan and Michiganology digital collections',
+  body: `# Library of Michigan
+
+Research Michigan branches at the Library of Michigan (Lansing) and its Michiganology digital portal via \`kinloom michiganology\`. Fetches use system \`curl\` so Preservica's front door succeeds cleanly; \`curl\` must be installed. No API key or login is required.
+
+Two institutions share one building and one research mission in Lansing, and this guide covers both:
+
+- **Library of Michigan**, 702 W. Kalamazoo St., Lansing, MI 48915. Reference desk 517-335-1477, librarian@michigan.gov. Open Mon-Fri 10 am to 5 pm, Sat 10 am to 4 pm; free admission. Its Abrams Foundation Historical Collection (2nd floor) is one of the largest genealogy collections in the US: census records, cemetery transcriptions, city directories, county and family histories, newspapers from all 83 Michigan counties, land records, vital records, and military indexes.
+- **Archives of Michigan**, same building. Open Mon-Fri 1 to 5 pm, Sat 10 am to 4 pm, phone 517-335-2576. Holds state government records, including the collections digitized on Michiganology.
+
+## CLI usage (\`kinloom michiganology\`)
+
+### Search all digital collections
+
+\`\`\`bash
+# Search a surname across every Michiganology collection
+kinloom michiganology search Lincoln
+
+# JSON output, 20 hits
+kinloom michiganology search Lincoln --limit 20 --json
+\`\`\`
+
+Note on multi-word queries: Preservica simple search treats unquoted multi-word queries (such as \`"Abraham Lincoln"\`) as broad OR matches across collections, so a broad search can return county tax rolls or unrelated files. Inspect individual hits with \`get\` or narrow with Advanced Search on the website.
+
+### Inspect an item (\`get\`) and download the scan (\`download\`)
+
+Search output prints only the item title (often just a surname or certificate number) and URL. Use \`get\` to read the full Preservica \`Item Data\` fields (given name, death date, county, city, parents) and \`download\` to pull the full-resolution JPEG or PDF directly via \`curl\`:
+
+\`\`\`bash
+# Read parsed Item Data metadata and direct download link
+kinloom michiganology get IO_<uuid>
+kinloom michiganology get "https://michigan.access.preservica.com/uncategorized/IO_<uuid>/" --json
+
+# Download the full-resolution file (filename inferred from Content-Disposition)
+kinloom michiganology download IO_<uuid> --out ./downloads/michiganology
+
+# Or write a specific file when --filename is omitted and --out ends in an image or PDF extension
+kinloom michiganology download IO_<uuid> --out ./downloads/certificate.jpg --json
+\`\`\`
+
+\`download\` accepts the same \`--refresh\` and \`--cache-ttl-hours\` flags as \`search\`. \`--json\` prints \`item_id\`, \`path\`, \`bytes\`, \`filename\`, \`content_type\`, and \`cache_hit\`. \`filename\` is the Content-Disposition name. \`path\` is the file written this time, which follows \`--filename\` when you pass it. A repeat call copies the cached bytes and does not run curl.
+
+### List the digital collections
+
+\`\`\`bash
+kinloom michiganology collections
+\`\`\`
+
+### Shareable search URL
+
+\`\`\`bash
+kinloom michiganology url Lincoln
+# https://michigan.access.preservica.com/?s=Lincoln
+\`\`\`
+
+## Michiganology: what is searchable online (verified live 2026-11-24)
+
+Michiganology (\`https://michiganology.org/\`) is the Michigan History Center portal; its searchable collections live on Preservica Universal Access at \`https://michigan.access.preservica.com/\`. Simple search is a stable GET, \`/?s=<query>\`, and results are server-rendered, so plain HTTP works with no browser, no key, and no sign-in. The CLI shows the first page only; use the website (with its sort and filter sidebar) to page through large result sets.
+
+Collections and their live URLs:
+
+| Collection | URL |
+|---|---|
+| Death Certificates, 1897-1952 | \`https://michigan.access.preservica.com/death-certificates-1897-1952/\` |
+| Michigan State Census, 1827-1894 | \`https://michigan.access.preservica.com/michigan-state-census/\` |
+| Naturalization Records | \`https://michigan.access.preservica.com/naturalization-records/\` |
+| World War I, Service Cards | \`https://michigan.access.preservica.com/world-war-i-service-cards/\` |
+| Surveyor Field Notebooks, 1815-1918 | \`https://michigan.access.preservica.com/surveyor-field-notebooks/\` |
+| Surveyor Maps, 1816-1860 | \`https://michigan.access.preservica.com/surveyor-maps/\` |
+| General Photograph Collection, ca. 1860-1990 | \`https://michigan.access.preservica.com/general-photograph-collection/\` |
+| Archives of Michigan Map Collection, ca. 1810-1970 | \`https://michigan.access.preservica.com/archives-of-michigan-map-collection/\` |
+| Corporation Annual Reports, 1997-2006 | \`https://michigan.access.preservica.com/corporation-annual-reports/\` |
+
+Collection notes:
+
+- Death certificates: the index covers 1897-1952. Per library guides (reported, not verified live), digitized certificate images are viewable for records older than 75 years; newer entries are index-only. Michigan death records 1867-1897 predate this collection; use FamilySearch for those.
+- Michigan state census schedules (1827-1894) fill gaps between federal censuses and are a strong online source for pre-1900 Michigan households.
+- Naturalization indexes cover 29 counties (per library guides); the actual records may need an in-person or copy request.
+- The website also has an Advanced Search page with fielded filters (Family Name, Given Name, County, Birth/Death Date, Place, and more), but it is JavaScript-driven with no stable GET pattern verified, so the CLI covers simple search only. Use the website for fielded searches.
+
+## What is in-person only
+
+Not everything is digitized. Expect to visit Lansing (or order copies) for:
+
+- County-level tax rolls and plat maps in physical form; some plat maps and atlases are digitized through the Michigan County Histories and Atlases project (University of Michigan), not Michiganology.
+- State census schedules beyond what Michiganology has digitized, and manuscript census material.
+- Most newspapers: the library holds microfilm newspapers from all 83 counties, but only a subset is online (see the Digital Michigan Newspaper Portal at Central Michigan University's Clarke Historical Library).
+- Vital records on microfilm, probate and court records, and manuscript collections in the Archives.
+- The library catalog (ANSWER) is searchable online before a visit; use it to pull call numbers in advance so reading-room time is spent reading, not searching.
+
+## Subscription databases (Michigan residents, library card required)
+
+Michigan residents can use the Library of Michigan's subscription databases remotely with a Library of Michigan library card and PIN, via \`michigan.gov/libraryofmichigan\` online resources. This includes Ancestry Library Edition style resources and MyHeritage Library Edition. These need a personal library card; the CLI does not touch them and no credentials belong in this repo.
+
+## Research workflow
+
+1. \`kinloom michiganology search <Surname>\` for the broad sweep; note the total count and the strongest first-page hits.
+2. Narrow on the website with Advanced Search: Family Name plus County (for example Wayne, Ingham, or Washtenaw), and filter to the Death Certificates collection for 1897-1952 deaths.
+3. Combine surname and locality (for example \`kinloom michiganology search "Lincoln Detroit"\`) when the surname alone is too noisy; simple search matches either word anywhere, so quote exact names to narrow.
+4. For pre-1897 Michigan deaths and marriages, cross-check FamilySearch Michigan collections; Michiganology's death run starts in 1897.
+5. For land and neighborhood context, pair surveyor maps and the map collection with county plat maps and atlases held in Lansing or digitized at the University of Michigan.
+6. Stage every hit in a **Research Package** (\`research/people/<person_id>/patch.json\`) with its Michiganology item URL; item URLs are stable (\`michigan.access.preservica.com/uncategorized/SO_<uuid>\` or \`IO_<uuid>\`).
+
+## Disk cache and environment variables
+
+\`search\` and \`get\` cache successful responses on disk under \`~/.cache/kinloom-michiganology/\` (default TTL \`168\` hours, advisory locking per cache key, atomic temp-file writes). HTTP/curl errors and unparsed or blocked pages are never cached.
+
+\`download\` caches the file bytes at \`files/<IO_ item id>/body\` in that same directory. A sidecar \`meta.json\` stores the Content-Disposition filename, the content type, and the byte count. The lock is per item id. Empty bodies, non-zero curl exits, HTTP errors, and HTML error pages are not written to the cache, and the command exits 1. \`--out\` is a directory unless it ends in \`.jpg\`, \`.jpeg\`, \`.png\`, \`.tif\`, \`.tiff\`, or \`.pdf\` and you omit \`--filename\`. In that case \`--out\` is the output file.
+
+- \`--refresh\`: bypass cached reads and write the fresh response to disk.
+- \`--cache-ttl-hours <hours>\`: override TTL for one call (\`0\` disables cached reads).
+- \`KINLOOM_MICHIGANOLOGY_CACHE_DIR\`: override the cache directory path.
+- \`KINLOOM_MICHIGANOLOGY_CACHE_TTL_HOURS\`: override the default TTL in hours.
+
+No key or account is needed for Michiganology search.
+
+## Verified-live note
+
+The Michiganology homepage, the Preservica search (\`/?s=<query>\`), the collections list, and the Library of Michigan address, hours, and phone were verified live on 2026-11-24. Items marked "per library guides" or "reported" were not re-verified live and are labeled as such.
+
+## Kinloom Research Package workflow
+
+Never edit \`data/*.yaml\` directly from a research session. Follow Kinloom's staged **Research Package** workflow and **Living Privacy Rule** (never include living people's portraits, exact birth dates, street addresses, or pronunciations in public archives):
+
+1. Discover research targets with \`kinloom status --missing-biography\` or \`kinloom status --end-of-line\`.
+2. Gather privacy-fenced context with \`kinloom context <person_id> --include-family\`.
+3. Prepare downloaded scans with \`kinloom prep-scan\` (for example \`kinloom prep-scan crop --redact-orig\`) and run \`kinloom ocr\` as needed, then stage scans under \`research/people/<person_id>/scans/\`.
+4. Write cited findings into \`research/people/<person_id>/patch.json\`.
+5. Audit, integrate, verify, and sync:
+
+\`\`\`bash
+kinloom audit --all-staged --pending-only --strict
+kinloom integrate --all-staged --pending-only
+kinloom pronounce audit --strict
+kinloom verify
+kinloom migrate
+kinloom sync --sync-missing-media --verify-live
+\`\`\``,
+};

@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import { renderEmbeddedGuide, resolveEmbeddedGuide } from '../../guides/index.js';
 import {
   RECORD_COMMAND_CATEGORIES,
   RECORD_COMMAND_SPECS,
@@ -97,9 +98,15 @@ export function rewriteSkillCommandExamples(body: string, spec: RecordCommandSpe
   const replacement = `kinloom ${spec.command}`;
   let rewritten = body;
 
-  if (spec.kind === 'skill-script' || spec.kind === 'native') {
-    const skillDirEsc = escapeRegExp(spec.skillDir);
-    const scriptEsc = escapeRegExp(spec.scriptName);
+  const skillDir = spec.kind === 'skill-script' || spec.kind === 'native' ? spec.skillDir : undefined;
+  const scriptName =
+    spec.kind === 'skill-script' || spec.kind === 'native' ? spec.scriptName : undefined;
+  const assetScript =
+    spec.kind === 'asset-script' || spec.kind === 'native' ? spec.assetScript : undefined;
+
+  if (skillDir && scriptName) {
+    const skillDirEsc = escapeRegExp(skillDir);
+    const scriptEsc = escapeRegExp(scriptName);
 
     // Handle shell variable assignments like CLI=skills/narrative-audio/scripts/narrative-audio
     const assignPattern = new RegExp(
@@ -120,8 +127,8 @@ export function rewriteSkillCommandExamples(body: string, spec: RecordCommandSpe
       'g'
     );
     rewritten = rewritten.replace(shortPathPattern, replacement);
-  } else if (spec.kind === 'asset-script') {
-    const assetEsc = escapeRegExp(spec.assetScript);
+  } else if (assetScript) {
+    const assetEsc = escapeRegExp(assetScript);
     const assetPattern = new RegExp(
       `(?:(?:uv\\s+run(?:\\s+--script)?|python3(?:\\s+-S)?)\\s+)?(?:\\./)?(?:packages/cli/assets/|scripts/)${assetEsc}\\b`,
       'g'
@@ -145,7 +152,7 @@ export function classifyRecordCommandIntent(
   }
 
   const first = args[0];
-  if (first === '--help' || first === '-h') {
+  if (first === '--help' || first === '-h' || first === '--guide') {
     return { mode: 'render-guide' };
   }
 
@@ -164,6 +171,16 @@ export function renderRecordCommandHelp(
     typeof commandOrSpec === 'string' ? resolveRecordCommand(commandOrSpec) : commandOrSpec;
   if (!spec) {
     throw new Error(`Unknown record command: '${String(commandOrSpec)}'`);
+  }
+
+  const hasExplicitFsOverride = Boolean(
+    options?.bundledSkillsDir || options?.monorepoSkillsDir || options?.assetsDir
+  );
+  if (!hasExplicitFsOverride && resolveEmbeddedGuide(spec.command)) {
+    return renderEmbeddedGuide(spec.command, {
+      includeFooter: true,
+      isGuideOnly: spec.kind === 'skill-guide',
+    });
   }
 
   const guidePath = resolveRecordGuidePath(spec, options);

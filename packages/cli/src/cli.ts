@@ -19,6 +19,11 @@ import {
 import { formatRecordCommandsHelp, renderRecordCommandHelp } from './commands/records/help.js';
 import { resolveRecordCommand } from './commands/records/registry.js';
 import {
+  formatGuidesCatalog,
+  renderEmbeddedGuide,
+  resolveEmbeddedGuide,
+} from './guides/index.js';
+import {
   CliValidationError,
   EXIT_ERROR,
   EXIT_OK,
@@ -79,12 +84,14 @@ Research & archive ops:
   dates              Compute exact Gregorian weekdays, date diffs, and ages
   pronounce          Look up verified Wikimedia IPA/audio and audit pronunciation lexicons
   telemetry          Report local CLI latency, cache hit rate, and failure summary
+  guide              Browse embedded research, archive, OCR, and workflow guides
 
 ${formatRecordCommandsHelp()}
 
 Global options:
   -h, --help         Show help for kinloom or a specific command
   help <command>     Show full help or research guide for any command
+  <command> --guide  Show the embedded workflow guide for any supported command
 
 Environment variables:
   KINLOOM_TOKEN               Bearer token used when --token is omitted
@@ -188,6 +195,19 @@ Options:
   dates: DATES_HELP,
   pronounce: PRONOUNCE_HELP,
   telemetry: TELEMETRY_HELP,
+  guide: `Usage: kinloom guide [topic]
+
+Browse all embedded Kinloom archival, scan-prep, OCR, audio, and workflow guides.
+
+Examples:
+  kinloom guide                              List all 26 embedded guides by category
+  kinloom guide nara                         Show the National Archives (NARA) workflow guide
+  kinloom guide ocr                          Show the safe batch OCR workflow guide
+  kinloom guide pronounce                    Show the pronunciation lookup & audit guide
+  kinloom guide narrative-audio/script-rules Show the narrative audio script rules subguide
+
+Options:
+  -h, --help  Show this help message`,
 };
 
 function requireStringFlag(value: string | undefined, flagName: string): string {
@@ -559,6 +579,23 @@ export async function runCli(
     }
   }
 
+  if (rest.includes('--guide')) {
+    const resolvedGuide = resolveEmbeddedGuide(command);
+    if (resolvedGuide) {
+      io.stdout(renderEmbeddedGuide(command));
+      return EXIT_OK;
+    }
+    const help = COMMAND_HELP[command] ?? mergedPlugins.commands.get(command)?.help;
+    if (help) {
+      io.stdout(help);
+      return EXIT_OK;
+    }
+    io.stderr(
+      `No embedded guide found for '${command}'. Run \`kinloom guide\` to list available topics.`
+    );
+    return EXIT_USAGE;
+  }
+
   if (rest.includes('-h') || rest.includes('--help')) {
     const help = COMMAND_HELP[command] ?? mergedPlugins.commands.get(command)?.help;
     if (!help) {
@@ -571,6 +608,25 @@ export async function runCli(
 
   try {
     switch (command) {
+      case 'guide': {
+        if (rest.length === 0) {
+          io.stdout(formatGuidesCatalog());
+          return EXIT_OK;
+        }
+        if (rest.length > 1 || rest[0].startsWith('-')) {
+          throw new CliValidationError('Usage: kinloom guide [topic]');
+        }
+        const topic = rest[0];
+        if (!resolveEmbeddedGuide(topic)) {
+          io.stderr(
+            `Unknown guide topic '${topic}'. Run \`kinloom guide\` to list all available guides.`
+          );
+          return EXIT_USAGE;
+        }
+        io.stdout(renderEmbeddedGuide(topic));
+        return EXIT_OK;
+      }
+
       case 'init': {
         const { values, positionals } = safeParseArgs({
           args: rest,

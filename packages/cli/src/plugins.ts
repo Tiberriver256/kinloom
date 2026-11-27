@@ -41,6 +41,7 @@ export interface ResolvedPluginCommands {
 
 export const CORE_CLI_COMMANDS: ReadonlySet<string> = new Set([
   'help',
+  'guide',
   'init',
   'slice-gedcom',
   'seed',
