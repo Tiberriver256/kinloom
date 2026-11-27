@@ -78,6 +78,7 @@ export {
   compilePluginDocumentContributions,
   finalizeServerResponse,
   hasRequestLifecyclePlugins,
+  hasSecurityEventEmitter,
   hasSecurityEventPlugins,
   type InviteInvalidReason,
   injectHtmlSnippets,
@@ -542,11 +543,29 @@ export {
   type GetBundleResult,
 } from './services/bundleReadService.js';
 export {
+  computeCrc32,
+  STRIPPABLE_IMAGE_MIMES,
+  type StrippableImageMime,
+  type StrippedImageResult,
+  stripImageMetadata,
+} from './services/imageMetadataStripper.js';
+export {
   MediaService,
   type MediaServiceDeps,
+  type MediaUploadRejectionInfo,
   matchesMagicBytesForMime,
   parseHttpByteRange,
 } from './services/mediaService.js';
+export {
+  DEFAULT_PLUGIN_IMAGE_MIMES,
+  DEFAULT_PLUGIN_MEDIA_MAX_BYTES,
+  extensionForImageMime,
+  PluginMediaService,
+  type PluginMediaServiceOptions,
+  type ServePluginImageParams,
+  type StoredPluginImageResult,
+  type StorePluginImageParams,
+} from './services/pluginMediaService.js';
 export {
   PluginSettingsService,
   type PluginSettingsServiceDeps,

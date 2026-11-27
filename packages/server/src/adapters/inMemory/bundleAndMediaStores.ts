@@ -197,6 +197,10 @@ export class InMemoryMediaStore implements MediaStore {
       body: bytesToStream(entry.bytes),
     };
   }
+
+  async delete(key: string): Promise<void> {
+    this.blobs.delete(key);
+  }
 }
 
 export class InMemoryPronunciationLexiconStore implements PronunciationLexiconStore {

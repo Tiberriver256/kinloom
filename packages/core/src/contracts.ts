@@ -217,6 +217,7 @@ export interface MediaStore {
     sha256: Sha256Hex;
   }): Promise<void>;
   get(key: string, options?: { range?: MediaByteRange }): Promise<StoredMediaObject | null>;
+  delete?(key: string): Promise<void>;
 }
 
 export interface AssetHandler {

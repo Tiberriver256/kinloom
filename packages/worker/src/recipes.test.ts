@@ -1,13 +1,19 @@
 import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { asSha256Hex } from '@kinloom/core';
 import {
+  CreateRecipeInputSchema,
+  computeCrc32,
+  createRecipesServerPlugin,
   FixedClock,
+  getSessionCookieName,
   KinloomHttpError,
   type KinloomServerPlugin,
   RECIPES_DATABASE_NAMESPACE,
   RECIPES_PLUGIN_ID,
   RECIPES_PLUGIN_MIGRATIONS,
+  signSessionToken,
 } from '@kinloom/server';
 import {
   CONTRACT_SESSION_SECRET,
@@ -26,6 +32,7 @@ import {
   D1PluginDatabaseFactory,
   type KinloomWorkerEnv,
   type R2Bucket,
+  R2MediaStore,
   runD1PluginMigrations,
 } from './index.js';
 
@@ -230,5 +237,120 @@ describe('Cloudflare Worker 0006_plugin_migrations, D1PluginDatabaseFactory, and
       namespace: 'recipes',
       total: 0,
     });
+
+    // Verify R2MediaStore.delete removes objects cleanly in Miniflare R2
+    const r2Store = new R2MediaStore(bucket);
+    const sampleKey = 'plugins/recipes/rec_r2_del/pho_r2_del.png';
+    await r2Store.put({
+      key: sampleKey,
+      body: new Uint8Array([1, 2, 3, 4]).buffer,
+      contentType: 'image/png',
+      sha256: asSha256Hex('a'.repeat(64)),
+    });
+    expect((await r2Store.head(sampleKey)).exists).toBe(true);
+    await r2Store.delete(sampleKey);
+    expect((await r2Store.head(sampleKey)).exists).toBe(false);
+
+    // End-to-end Miniflare Worker photo upload, EXIF stripping, GET, and DELETE over D1 + R2
+    const d1Repo = createD1RecipesRepository(db);
+    await d1Repo.createRecipe({
+      id: 'rec_mf_photo',
+      data: CreateRecipeInputSchema.parse({ title: 'Miniflare Apple Crisp', course: 'dessert' }),
+      actor: { id: 'admin@archive.example.test', name: 'Worker Steward' },
+      nowIso: clock.nowIso(),
+    });
+    await db
+      .prepare(
+        'INSERT INTO users (email, display_name, role, added_by, added_at, last_login_at) VALUES (?, ?, ?, ?, ?, NULL)'
+      )
+      .bind('admin@archive.example.test', 'Worker Steward', 'admin', 'bootstrap', clock.nowIso())
+      .run();
+
+    const recipesWorker = createCloudflareWorker({
+      siteConfig: createSyntheticSiteConfig(),
+      clock,
+      plugins: [createRecipesServerPlugin()],
+    });
+    const sessionToken = await signSessionToken({
+      secret: CONTRACT_SESSION_SECRET,
+      clock,
+      ttlSeconds: 3600,
+      payload: {
+        kind: 'user',
+        email: 'admin@archive.example.test',
+        display_name: 'Worker Steward',
+        role: 'admin',
+      },
+    });
+    const cookie = `${getSessionCookieName(true)}=${sessionToken}`;
+
+    const enc = new TextEncoder();
+    const makePngChunk = (type: string, data: Uint8Array): Uint8Array => {
+      const body = new Uint8Array(4 + data.byteLength);
+      body.set(enc.encode(type), 0);
+      body.set(data, 4);
+      const out = new Uint8Array(12 + data.byteLength);
+      const dv = new DataView(out.buffer);
+      dv.setUint32(0, data.byteLength, false);
+      out.set(body, 4);
+      dv.setUint32(8 + data.byteLength, computeCrc32(body), false);
+      return out;
+    };
+    const ihdr = new Uint8Array(13);
+    new DataView(ihdr.buffer).setUint32(0, 128, false);
+    new DataView(ihdr.buffer).setUint32(4, 96, false);
+    ihdr[8] = 8;
+    ihdr[9] = 2;
+    const pngParts = [
+      new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+      makePngChunk('IHDR', ihdr),
+      makePngChunk('eXIf', enc.encode('WORKER_GPS_SECRET')),
+      makePngChunk('IDAT', new Uint8Array([0x78, 0x9c, 0x63, 0x00, 0x00, 0x00, 0x02, 0x00, 0x01])),
+      makePngChunk('IEND', new Uint8Array(0)),
+    ];
+    const pngTotal = pngParts.reduce((s, p) => s + p.byteLength, 0);
+    const pngBytes = new Uint8Array(pngTotal);
+    let pos = 0;
+    for (const part of pngParts) {
+      pngBytes.set(part, pos);
+      pos += part.byteLength;
+    }
+
+    const uploadForm = new FormData();
+    uploadForm.set('file', new File([pngBytes], 'crisp.png', { type: 'image/png' }));
+    uploadForm.set('caption', 'Handwritten crisp card');
+
+    const uploadRes = await recipesWorker.fetch(
+      new Request(`${CONTRACT_TEST_ORIGIN}/api/plugins/recipes/miniflare-apple-crisp/photos`, {
+        method: 'POST',
+        headers: { cookie, origin: CONTRACT_TEST_ORIGIN },
+        body: uploadForm,
+      }),
+      env
+    );
+    expect(uploadRes.status).toBe(201);
+    const uploaded = (await uploadRes.json()) as { photo: { id: string; url: string; width: number } };
+    expect(uploaded.photo.width).toBe(128);
+
+    const getRes = await recipesWorker.fetch(
+      new Request(`${CONTRACT_TEST_ORIGIN}${uploaded.photo.url}`, { headers: { cookie } }),
+      env
+    );
+    expect(getRes.status).toBe(200);
+    const servedText = new TextDecoder('latin1').decode(new Uint8Array(await getRes.arrayBuffer()));
+    expect(servedText).not.toContain('WORKER_GPS_SECRET');
+
+    const delRes = await recipesWorker.fetch(
+      new Request(
+        `${CONTRACT_TEST_ORIGIN}/api/plugins/recipes/miniflare-apple-crisp/photos/${uploaded.photo.id}`,
+        {
+          method: 'DELETE',
+          headers: { cookie, origin: CONTRACT_TEST_ORIGIN },
+        }
+      ),
+      env
+    );
+    expect(delRes.status).toBe(204);
+    expect((await r2Store.head(`plugins/recipes/rec_mf_photo/${uploaded.photo.id}.png`)).exists).toBe(false);
   });
 });

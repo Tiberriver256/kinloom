@@ -6,6 +6,8 @@ import { act, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { describe, expect, it, vi } from 'vitest';
 import type { RecipesClient } from '../adapters/recipesClient.js';
+import { ArchivalFileDropzone } from '../components/ArchivalFileDropzone.js';
+import { ArchivalLightbox } from '../components/ArchivalLightbox.js';
 import {
   ArchivalCardGrid,
   ArchivalDrawer,
@@ -999,6 +1001,390 @@ describe('KinloomUiPlugin seams, ArchivalPrimitives, and Family Recipes UI (#47)
       });
     }).toThrow('useRecipesPlugin must be used inside');
     consoleErr.mockRestore();
+
+    act(() => {
+      root.unmount();
+    });
+    container.remove();
+  });
+});
+
+const LIGHTBOX_TEST_ITEMS = [
+  {
+    id: 'p1',
+    url: '/api/plugins/recipes/photos/p1',
+    alt: 'Front of card',
+    caption: 'Front of card',
+    meta: 'Card Front · 800×600',
+  },
+  {
+    id: 'p2',
+    url: '/api/plugins/recipes/photos/p2',
+    alt: 'Back of card',
+    caption: 'Back of card',
+    meta: 'Card Back · 800×600',
+  },
+] as const;
+
+const LightboxTestHarness: React.FC = () => {
+  const [idx, setIdx] = useState<number | null>(0);
+  return (
+    <div>
+      <button
+        type="button"
+        onClick={() => {
+          setIdx(0);
+        }}
+      >
+        Reopen Lightbox
+      </button>
+      <ArchivalLightbox
+        items={LIGHTBOX_TEST_ITEMS}
+        activeIndex={idx}
+        onClose={() => {
+          setIdx(null);
+        }}
+        onChangeIndex={setIdx}
+      />
+    </div>
+  );
+};
+
+describe('ArchivalLightbox, ArchivalFileDropzone, and RecipeDetailPage photo management (Issue #48)', () => {
+  it('operates ArchivalLightbox zoom, pan, multi-photo keyboard navigation, thumbnail jump, and Esc/backdrop dismissal', async () => {
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(<LightboxTestHarness />);
+    });
+
+    const dialog = container.querySelector<HTMLDialogElement>('dialog');
+    expect(dialog).not.toBeNull();
+    expect(dialog?.hasAttribute('open')).toBe(true);
+    expect(dialog?.getAttribute('closedby')).toBe('any');
+    expect(container.textContent).toContain('Front of card');
+    expect(container.textContent).toContain('1 / 2');
+    expect(container.textContent).toContain('100%');
+
+    // Zoom in via button and keyboard '+' / '-' / '0'
+    act(() => {
+      container.querySelector<HTMLButtonElement>('button[aria-label="Zoom in"]')?.click();
+    });
+    expect(container.textContent).toContain('150%');
+
+    act(() => {
+      dialog?.dispatchEvent(new KeyboardEvent('keydown', { key: '+', bubbles: true }));
+    });
+    expect(container.textContent).toContain('200%');
+
+    // Keyboard arrow panning when zoomed
+    act(() => {
+      dialog?.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true }));
+      dialog?.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+      dialog?.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true }));
+      dialog?.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
+    });
+
+    // Pointer pan drag on stage
+    const stage = container.querySelector<HTMLDivElement>('img')?.parentElement;
+    expect(stage).not.toBeNull();
+    act(() => {
+      stage?.dispatchEvent(new MouseEvent('pointerdown', { clientX: 100, clientY: 100, bubbles: true }));
+      stage?.dispatchEvent(new MouseEvent('pointermove', { clientX: 140, clientY: 120, bubbles: true }));
+      stage?.dispatchEvent(new MouseEvent('pointerup', { clientX: 140, clientY: 120, bubbles: true }));
+      stage?.dispatchEvent(new WheelEvent('wheel', { deltaY: -100, bubbles: true }));
+    });
+    expect(container.textContent).toContain('250%');
+
+    // Zoom out and Reset
+    act(() => {
+      dialog?.dispatchEvent(new KeyboardEvent('keydown', { key: '-', bubbles: true }));
+    });
+    expect(container.textContent).toContain('200%');
+    act(() => {
+      dialog?.dispatchEvent(new KeyboardEvent('keydown', { key: '0', bubbles: true }));
+    });
+    expect(container.textContent).toContain('100%');
+
+    // Navigate next/prev via keyboard and buttons
+    act(() => {
+      dialog?.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+    });
+    expect(container.textContent).toContain('Back of card');
+    expect(container.textContent).toContain('2 / 2');
+
+    act(() => {
+      container.querySelector<HTMLButtonElement>('button[aria-label="Previous photo"]')?.click();
+    });
+    expect(container.textContent).toContain('Front of card');
+
+    // Jump via thumbnail button
+    act(() => {
+      container.querySelector<HTMLButtonElement>('button[aria-label="View photo 2: Back of card"]')?.click();
+    });
+    expect(container.textContent).toContain('Back of card');
+
+    // Close via Escape (jsdom fallback)
+    act(() => {
+      dialog?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    });
+    expect(container.querySelector('dialog')).toBeNull();
+
+    // Reopen and close via Close button
+    act(() => {
+      const reopen = [...container.querySelectorAll('button')].find((b) =>
+        b.textContent?.includes('Reopen Lightbox')
+      );
+      reopen?.click();
+    });
+    expect(container.querySelector('dialog')?.hasAttribute('open')).toBe(true);
+    act(() => {
+      const closeBtn = [...container.querySelectorAll('button')].find((b) => b.textContent === 'Close');
+      closeBtn?.click();
+    });
+    expect(container.querySelector('dialog')).toBeNull();
+
+    act(() => {
+      root.unmount();
+    });
+    container.remove();
+  });
+
+  it('validates dropped and picked files in ArchivalFileDropzone', async () => {
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    const acceptedNames: string[] = [];
+    const rejectedMsgs: string[] = [];
+
+    await act(async () => {
+      root.render(
+        <ArchivalFileDropzone
+          maxBytes={1024}
+          progressLabel="Uploading card 1 of 1…"
+          onFilesAccepted={(files) => {
+            acceptedNames.push(...files.map((f) => f.name));
+          }}
+          onFilesRejected={(errs) => {
+            rejectedMsgs.push(...errs);
+          }}
+        />
+      );
+    });
+
+    expect(container.textContent).toContain('Uploading card 1 of 1…');
+    const dropzoneEl = container.firstElementChild as HTMLDivElement;
+    const goodFile = new File([new Uint8Array(64)], 'front.jpg', { type: 'image/jpeg' });
+    const badFile = new File([new Uint8Array(64)], 'bad.svg', { type: 'image/svg+xml' });
+
+    act(() => {
+      dropzoneEl.dispatchEvent(new Event('dragover', { bubbles: true, cancelable: true }));
+      dropzoneEl.dispatchEvent(new Event('dragleave', { bubbles: true, cancelable: true }));
+      const dropEvent = new Event('drop', { bubbles: true, cancelable: true });
+      Object.defineProperty(dropEvent, 'dataTransfer', {
+        value: { files: [goodFile, badFile] },
+      });
+      dropzoneEl.dispatchEvent(dropEvent);
+    });
+
+    expect(acceptedNames).toEqual(['front.jpg']);
+    expect(rejectedMsgs).toHaveLength(1);
+    expect(rejectedMsgs[0]).toContain('unsupported image type');
+
+    act(() => {
+      root.unmount();
+    });
+    container.remove();
+  });
+
+  it('supports editor upload, caption edit, set cover, reorder, and delete on RecipeDetailPage while hiding controls for viewers', async () => {
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+
+    const photo1: UiRecipePhoto = {
+      id: 'pho_1',
+      recipe_id: 'rec_1',
+      url: '/api/plugins/recipes/photos/pho_1',
+      mime_type: 'image/jpeg',
+      size_bytes: 1200,
+      width: 800,
+      height: 600,
+      orientation: 1,
+      caption: 'Front of card',
+      card_side: 'front',
+      sort_order: 0,
+      uploaded_by_name: 'Clara Baker',
+      created_at: '2026-11-27T10:00:00.000Z',
+    };
+    let photosState: UiRecipePhoto[] = [photo1];
+    let coverId: string | null = 'pho_1';
+
+    const editorClient: RecipesClient = {
+      async listRecipes() {
+        return {
+          recipes: [SAMPLE_RECIPES[0]],
+          total: 1,
+          limit: 40,
+          offset: 0,
+          facets: { courses: ['bread'], tags: ['heirloom'] },
+        };
+      },
+      async getRecipe() {
+        return {
+          recipe: { ...SAMPLE_RECIPES[0], cover_photo_id: coverId },
+          photos: [...photosState],
+          viewer_has_starred: false,
+          permissions: {
+            can_edit: true,
+            can_delete: true,
+            can_upload: true,
+            can_star: true,
+            can_comment: true,
+          },
+          media_limits: { max_photo_mb: 10, max_photos_per_recipe: 12 },
+        };
+      },
+      async listRecipesByPerson() {
+        return { person_id: 'p_ada', recipes: [], total: 0 };
+      },
+      async uploadRecipePhoto(_slug, input) {
+        const next: UiRecipePhoto = {
+          id: 'pho_2',
+          recipe_id: 'rec_1',
+          url: '/api/plugins/recipes/photos/pho_2',
+          mime_type: 'image/png',
+          size_bytes: input.file.size,
+          width: 640,
+          height: 480,
+          orientation: 1,
+          caption: input.caption ?? '',
+          card_side: input.card_side ?? 'front',
+          sort_order: photosState.length,
+          uploaded_by_name: 'Clara Baker',
+          created_at: '2026-11-27T11:00:00.000Z',
+        };
+        photosState = [...photosState, next];
+        if (input.set_cover) {
+          coverId = next.id;
+        }
+        return { photo: next, cover_photo_id: coverId, cover_photo_url: next.url };
+      },
+      async updateRecipePhoto(_slug, photoId, patch) {
+        photosState = photosState.map((p) =>
+          p.id === photoId
+            ? {
+                ...p,
+                caption: patch.caption ?? p.caption,
+                card_side: patch.card_side ?? p.card_side,
+              }
+            : p
+        );
+        if (patch.set_cover) {
+          coverId = photoId;
+        }
+        const updated = photosState.find((p) => p.id === photoId)!;
+        return { photo: updated, cover_photo_id: coverId, cover_photo_url: updated.url };
+      },
+      async reorderRecipePhotos(_slug, photoIds) {
+        photosState = photoIds
+          .map((id, idx) => {
+            const found = photosState.find((p) => p.id === id);
+            return found ? { ...found, sort_order: idx } : null;
+          })
+          .filter((p): p is UiRecipePhoto => p !== null);
+        return { photos: [...photosState] };
+      },
+      async deleteRecipePhoto(_slug, photoId) {
+        photosState = photosState.filter((p) => p.id !== photoId);
+        if (coverId === photoId) {
+          coverId = photosState[0]?.id ?? null;
+        }
+      },
+    };
+
+    const editorPlugin = createRecipesUiPlugin({ client: editorClient });
+    await act(async () => {
+      root.render(
+        <KinloomApp
+          siteConfig={SITE_CONFIG}
+          initialBundle={TEST_BUNDLE}
+          initialReadings={{ version: 1, documents: {}, event_page_map: {} }}
+          plugins={[editorPlugin]}
+          initialEntries={['/recipes/oatmeal-honey-biscuits']}
+        />
+      );
+    });
+    await flushUi();
+
+    expect(container.textContent).toContain('Add recipe card photos');
+    expect(container.textContent).toContain('Front of card');
+
+    // Fill caption + card side and upload second photo via file input
+    const captionInput = container.querySelector<HTMLInputElement>('input[placeholder*="handwritten"]');
+    expect(captionInput).not.toBeNull();
+    const fileInput = container.querySelector<HTMLInputElement>('input[type="file"]');
+    expect(fileInput).not.toBeNull();
+    const backFile = new File([new Uint8Array(128)], 'card-back.png', { type: 'image/png' });
+    await act(async () => {
+      Object.defineProperty(fileInput!, 'files', { value: [backFile], configurable: true });
+      fileInput!.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    await flushUi();
+    expect(container.textContent).toContain('Recipe card photo uploaded.');
+    expect(photosState).toHaveLength(2);
+
+    // Click Set Cover on second photo
+    const setCoverBtn = [...container.querySelectorAll('button')].find((b) => b.textContent === 'Set Cover');
+    expect(setCoverBtn).toBeDefined();
+    await act(async () => {
+      setCoverBtn?.click();
+    });
+    await flushUi();
+    expect(coverId).toBe('pho_2');
+    expect(container.textContent).toContain('Primary cover photo updated.');
+
+    // Reorder second photo earlier
+    const moveEarlierBtn = container.querySelector<HTMLButtonElement>(
+      'button[aria-label="Move photo 2 earlier"]'
+    );
+    expect(moveEarlierBtn).not.toBeNull();
+    await act(async () => {
+      moveEarlierBtn?.click();
+    });
+    await flushUi();
+    expect(photosState.map((p) => p.id)).toEqual(['pho_2', 'pho_1']);
+
+    // Edit photo caption inline
+    const editBtn = [...container.querySelectorAll('button')].find((b) => b.textContent === 'Edit');
+    act(() => {
+      editBtn?.click();
+    });
+    const saveBtn = [...container.querySelectorAll('button')].find((b) => b.textContent === 'Save');
+    await act(async () => {
+      saveBtn?.click();
+    });
+    await flushUi();
+    expect(container.textContent).toContain('Photo details saved.');
+
+    // Delete photo via two-step confirm
+    const deleteBtn = [...container.querySelectorAll('button')].find((b) => b.textContent === 'Delete');
+    act(() => {
+      deleteBtn?.click();
+    });
+    const confirmDeleteBtn = [...container.querySelectorAll('button')].find(
+      (b) => b.textContent === 'Confirm Delete'
+    );
+    expect(confirmDeleteBtn).toBeDefined();
+    await act(async () => {
+      confirmDeleteBtn?.click();
+    });
+    await flushUi();
+    expect(photosState).toHaveLength(1);
+    expect(container.textContent).toContain('Recipe card photo deleted.');
 
     act(() => {
       root.unmount();

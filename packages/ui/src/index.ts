@@ -36,6 +36,8 @@ export type {
   HttpRecipesClientOptions,
   RecipesClient,
   StaticRecipesClientOptions,
+  UpdateRecipePhotoPatch,
+  UploadRecipePhotoInput,
 } from './adapters/recipesClient.js';
 export { createHttpRecipesClient, createStaticRecipesClient } from './adapters/recipesClient.js';
 export {
@@ -46,6 +48,8 @@ export * from './browser/clientTelemetry.js';
 export * from './browser/ohmStyle.js';
 export type { AppErrorBoundaryProps } from './components/AppErrorBoundary.js';
 export { AppErrorBoundary } from './components/AppErrorBoundary.js';
+export type { ArchivalFileDropzoneProps } from './components/ArchivalFileDropzone.js';
+export { ArchivalFileDropzone } from './components/ArchivalFileDropzone.js';
 export type {
   ArchivalBannerProps,
   ArchivalMediaGridProps,
@@ -62,6 +66,11 @@ export {
   ArchivalSection,
   ArchivalStoryCard,
 } from './components/ArchivalLayout.js';
+export type {
+  ArchivalLightboxItem,
+  ArchivalLightboxProps,
+} from './components/ArchivalLightbox.js';
+export { ArchivalLightbox } from './components/ArchivalLightbox.js';
 export type { ArchivalMarkdownProps } from './components/ArchivalMarkdown.js';
 export {
   ArchivalMarkdown,
@@ -226,6 +235,7 @@ export { KinloomApp } from './KinloomApp.js';
 export * from './lib/adminDiagnostics.js';
 export * from './lib/archivalTreeModel.js';
 export * from './lib/bookPublishingModel.js';
+export * from './lib/lightboxModel.js';
 export * from './lib/observabilityStatsModel.js';
 export * from './lib/openFinanceModel.js';
 export * from './lib/pluginNav.js';

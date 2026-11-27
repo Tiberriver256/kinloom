@@ -2,8 +2,10 @@ import { parseKinloomConfig, type RevisionAuthor } from '@kinloom/core';
 import { describe, expect, it } from 'vitest';
 import { createInMemoryServerPorts } from '../../adapters/inMemory.js';
 import { sha256Hex } from '../../crypto.js';
+import type { KinloomServerPlugin, ServerSecurityEvent } from '../../http/pluginLifecycle.js';
 import { createKinloomServer } from '../../http/router.js';
 import { getSessionCookieName, signSessionToken } from '../../http/session.js';
+import { computeCrc32 } from '../../services/imageMetadataStripper.js';
 import { InMemoryRecipesRepository } from './inMemoryRecipesRepository.js';
 import { CreateRecipeInputSchema, deriveRecipeActorKey, RECIPES_PLUGIN_ID } from './schemas.js';
 import {
@@ -120,10 +122,22 @@ async function createTestHarness(options?: {
     last_used_at: null,
   });
 
+  const securityEvents: ServerSecurityEvent[] = [];
+  const securityCapturePlugin: KinloomServerPlugin = {
+    id: 'test-security-capture',
+    name: 'Test Security Capture',
+    onSecurityEvent(event) {
+      securityEvents.push(event);
+    },
+  };
+
   const plugins =
     options?.registerPlugin === false
-      ? []
-      : [createRecipesServerPlugin({ enabled: options?.enabled, repository: recipesRepo })];
+      ? [securityCapturePlugin]
+      : [
+          securityCapturePlugin,
+          createRecipesServerPlugin({ enabled: options?.enabled, repository: recipesRepo }),
+        ];
 
   const server = createKinloomServer({
     siteConfig: SITE_CONFIG,
@@ -161,7 +175,7 @@ async function createTestHarness(options?: {
     return `${getSessionCookieName(false)}=${token}`;
   };
 
-  return { ports, recipesRepo, server, cookieForUser, cookieForInvite };
+  return { ports, recipesRepo, server, securityEvents, cookieForUser, cookieForInvite };
 }
 
 describe('createRecipesServerPlugin (Issue #47 read API & #44 settings)', () => {
@@ -613,5 +627,528 @@ describe('createRecipesServerPlugin (Issue #47 read API & #44 settings)', () => 
       can_star: true,
       can_comment: true,
     });
+  });
+});
+
+function buildTestPngWithExif(width: number, height: number, secretExif: string): Uint8Array<ArrayBuffer> {
+  const enc = new TextEncoder();
+  const makeChunk = (type: string, data: Uint8Array): Uint8Array => {
+    const body = new Uint8Array(4 + data.byteLength);
+    body.set(enc.encode(type), 0);
+    body.set(data, 4);
+    const crc = computeCrc32(body);
+    const out = new Uint8Array(12 + data.byteLength);
+    const dv = new DataView(out.buffer);
+    dv.setUint32(0, data.byteLength, false);
+    out.set(body, 4);
+    dv.setUint32(8 + data.byteLength, crc, false);
+    return out;
+  };
+  const sig = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+  const ihdrData = new Uint8Array(13);
+  const ihdrView = new DataView(ihdrData.buffer);
+  ihdrView.setUint32(0, width, false);
+  ihdrView.setUint32(4, height, false);
+  ihdrData[8] = 8;
+  ihdrData[9] = 2;
+  const parts = [
+    sig,
+    makeChunk('IHDR', ihdrData),
+    makeChunk('eXIf', enc.encode(secretExif)),
+    makeChunk('IDAT', new Uint8Array([0x78, 0x9c, 0x63, 0x00, 0x00, 0x00, 0x02, 0x00, 0x01])),
+    makeChunk('IEND', new Uint8Array(0)),
+  ];
+  const total = parts.reduce((sum, p) => sum + p.byteLength, 0);
+  const out = new Uint8Array(total);
+  let offset = 0;
+  for (const part of parts) {
+    out.set(part, offset);
+    offset += part.byteLength;
+  }
+  return out;
+}
+
+describe('createRecipesServerPlugin (Issue #48 photo upload, EXIF stripping, serving, RBAC, and telemetry)', () => {
+  it('uploads, strips EXIF, serves via both canonical and slug routes with safe headers, edits, reorders, and deletes photos cleanly', async () => {
+    const { ports, recipesRepo, server, cookieForUser, cookieForInvite } = await createTestHarness();
+    const editorCookie = await cookieForUser('editor@archive.example.test', 'editor');
+    const inviteCookie = await cookieForInvite();
+
+    const recipe = await recipesRepo.createRecipe({
+      id: 'rec_photo_1',
+      data: CreateRecipeInputSchema.parse({
+        title: 'Grandmother Rye Bread',
+        summary: 'Caraway rye loaf baked in cast iron.',
+        course: 'bread',
+      }),
+      actor: { id: 'editor@archive.example.test', name: 'Clara Baker' },
+      nowIso: '2026-11-27T12:00:00.000Z',
+    });
+
+    const otherRecipe = await recipesRepo.createRecipe({
+      id: 'rec_photo_other',
+      data: CreateRecipeInputSchema.parse({ title: 'Mint Tea', course: 'beverage' }),
+      actor: { id: 'admin@archive.example.test', name: 'Archive Steward' },
+      nowIso: '2026-11-27T12:01:00.000Z',
+    });
+
+    const pngWithGps = buildTestPngWithExif(640, 480, 'SECRET_GPS_LAT_39_78_LON_89_65');
+    const form1 = new FormData();
+    form1.set('file', new File([pngWithGps], 'card-front.png', { type: 'image/png' }));
+    form1.set('caption', 'Front of handwritten card');
+    form1.set('card_side', 'front');
+
+    const uploadRes1 = await server.fetch(
+      new Request(`http://localhost/api/plugins/recipes/${recipe.slug}/photos`, {
+        method: 'POST',
+        headers: { cookie: editorCookie, origin: 'http://localhost' },
+        body: form1,
+      })
+    );
+    expect(uploadRes1.status).toBe(201);
+    const uploadText1 = await uploadRes1.text();
+    expect(uploadText1).not.toContain('r2_key');
+    expect(uploadText1).not.toContain('editor@archive.example.test');
+    const uploadJson1 = JSON.parse(uploadText1) as {
+      photo: { id: string; url: string; width: number; height: number; card_side: string; caption: string };
+      cover_photo_id: string;
+    };
+    expect(uploadJson1.cover_photo_id).toBe(uploadJson1.photo.id);
+    expect(uploadJson1.photo.width).toBe(640);
+    expect(uploadJson1.photo.height).toBe(480);
+    expect(uploadJson1.photo.card_side).toBe('front');
+    expect(uploadJson1.photo.caption).toBe('Front of handwritten card');
+
+    // Verify stored R2 object exists and has EXIF/GPS stripped
+    const r2Key1 = `plugins/recipes/${recipe.id}/${uploadJson1.photo.id}.png`;
+    expect((await ports.mediaStore.head(r2Key1)).exists).toBe(true);
+
+    // Serve photo via canonical URL (/api/plugins/recipes/photos/:photoId)
+    const getCanonical = await server.fetch(
+      new Request(`http://localhost${uploadJson1.photo.url}`, { headers: { cookie: inviteCookie } })
+    );
+    expect(getCanonical.status).toBe(200);
+    expect(getCanonical.headers.get('content-type')).toBe('image/png');
+    expect(getCanonical.headers.get('content-disposition')).toBe(
+      `inline; filename="recipe-card-${uploadJson1.photo.id}.png"`
+    );
+    expect(getCanonical.headers.get('x-content-type-options')).toBe('nosniff');
+    expect(getCanonical.headers.get('content-security-policy')).toBe("default-src 'none'; sandbox");
+    expect(getCanonical.headers.get('cache-control')).toBe('private, max-age=31536000, immutable');
+    const servedBytes = new Uint8Array(await getCanonical.arrayBuffer());
+    expect(new TextDecoder('latin1').decode(servedBytes)).not.toContain('SECRET_GPS_LAT_39_78');
+
+    // ETag 304 support
+    const etag = getCanonical.headers.get('etag');
+    expect(etag).toBeTruthy();
+    const get304 = await server.fetch(
+      new Request(`http://localhost${uploadJson1.photo.url}`, {
+        headers: { cookie: inviteCookie, 'if-none-match': etag ?? '' },
+      })
+    );
+    expect(get304.status).toBe(304);
+
+    // Serve photo via recipe-scoped slug URL (/api/plugins/recipes/:slug/photos/:photoId)
+    const getScoped = await server.fetch(
+      new Request(`http://localhost/api/plugins/recipes/${recipe.slug}/photos/${uploadJson1.photo.id}`, {
+        headers: { cookie: inviteCookie },
+      })
+    );
+    expect(getScoped.status).toBe(200);
+    expect(getScoped.headers.get('content-type')).toBe('image/png');
+
+    // Cross-recipe photo lookup returns 404
+    const getWrongRecipe = await server.fetch(
+      new Request(`http://localhost/api/plugins/recipes/${otherRecipe.slug}/photos/${uploadJson1.photo.id}`, {
+        headers: { cookie: inviteCookie },
+      })
+    );
+    expect(getWrongRecipe.status).toBe(404);
+
+    // Upload second photo with set_cover='true' and explicit sort_order
+    const form2 = new FormData();
+    form2.set(
+      'file',
+      new File([buildTestPngWithExif(320, 240, 'GPS_2')], 'card-back.png', { type: 'image/png' })
+    );
+    form2.set('caption', 'Back of card');
+    form2.set('card_side', 'back');
+    form2.set('set_cover', 'true');
+    form2.set('sort_order', '2');
+
+    const uploadRes2 = await server.fetch(
+      new Request(`http://localhost/api/plugins/recipes/${recipe.slug}/photos`, {
+        method: 'POST',
+        headers: { cookie: editorCookie, origin: 'http://localhost' },
+        body: form2,
+      })
+    );
+    expect(uploadRes2.status).toBe(201);
+    const uploadJson2 = (await uploadRes2.json()) as {
+      photo: { id: string; sort_order: number };
+      cover_photo_id: string;
+    };
+    expect(uploadJson2.cover_photo_id).toBe(uploadJson2.photo.id);
+    expect(uploadJson2.photo.sort_order).toBe(2);
+
+    // PATCH photo caption, card_side, and set_cover
+    const patchRes = await server.fetch(
+      new Request(`http://localhost/api/plugins/recipes/${recipe.slug}/photos/${uploadJson1.photo.id}`, {
+        method: 'PATCH',
+        headers: {
+          cookie: editorCookie,
+          origin: 'http://localhost',
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({ caption: 'Card front (transcribed)', card_side: 'page', set_cover: true }),
+      })
+    );
+    expect(patchRes.status).toBe(200);
+    const patchJson = (await patchRes.json()) as {
+      photo: { caption: string; card_side: string };
+      cover_photo_id: string;
+    };
+    expect(patchJson.photo.caption).toBe('Card front (transcribed)');
+    expect(patchJson.photo.card_side).toBe('page');
+    expect(patchJson.cover_photo_id).toBe(uploadJson1.photo.id);
+
+    // Reorder photos
+    const reorderRes = await server.fetch(
+      new Request(`http://localhost/api/plugins/recipes/${recipe.slug}/photos/reorder`, {
+        method: 'POST',
+        headers: {
+          cookie: editorCookie,
+          origin: 'http://localhost',
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({ photo_ids: [uploadJson2.photo.id, uploadJson1.photo.id] }),
+      })
+    );
+    expect(reorderRes.status).toBe(200);
+    const reorderJson = (await reorderRes.json()) as { photos: Array<{ id: string }> };
+    expect(reorderJson.photos.map((p) => p.id)).toEqual([uploadJson2.photo.id, uploadJson1.photo.id]);
+
+    // Delete first photo: removes DB row & deletes R2 object
+    const deleteRes = await server.fetch(
+      new Request(`http://localhost/api/plugins/recipes/${recipe.slug}/photos/${uploadJson1.photo.id}`, {
+        method: 'DELETE',
+        headers: { cookie: editorCookie, origin: 'http://localhost' },
+      })
+    );
+    expect(deleteRes.status).toBe(204);
+    expect((await ports.mediaStore.head(r2Key1)).exists).toBe(false);
+
+    // Subsequent GET returns 404
+    expect(
+      (
+        await server.fetch(
+          new Request(`http://localhost${uploadJson1.photo.url}`, { headers: { cookie: inviteCookie } })
+        )
+      ).status
+    ).toBe(404);
+  });
+
+  it('enforces CSRF, RBAC, #44 settings limits, magic-byte validation, and emits #31 media.upload.rejected telemetry', async () => {
+    const { ports, recipesRepo, server, securityEvents, cookieForUser, cookieForInvite } =
+      await createTestHarness();
+    const adminCookie = await cookieForUser('admin@archive.example.test', 'admin');
+    const editorCookie = await cookieForUser('editor@archive.example.test', 'editor');
+    const inviteCookie = await cookieForInvite();
+
+    const recipe = await recipesRepo.createRecipe({
+      id: 'rec_sec_1',
+      data: CreateRecipeInputSchema.parse({ title: 'Saffron Buns', course: 'bread' }),
+      actor: { id: 'admin@archive.example.test', name: 'Archive Steward' },
+      nowIso: '2026-11-27T12:00:00.000Z',
+    });
+
+    // Cross-origin CSRF blocked -> 403
+    const csrfForm = new FormData();
+    csrfForm.set('file', new File([buildTestPngWithExif(16, 16, 'x')], 'x.png', { type: 'image/png' }));
+    const csrfRes = await server.fetch(
+      new Request(`http://localhost/api/plugins/recipes/${recipe.slug}/photos`, {
+        method: 'POST',
+        headers: { cookie: editorCookie, origin: 'https://evil.example' },
+        body: csrfForm,
+      })
+    );
+    expect(csrfRes.status).toBe(403);
+
+    // Invite viewer cannot upload -> 403
+    const inviteRes = await server.fetch(
+      new Request(`http://localhost/api/plugins/recipes/${recipe.slug}/photos`, {
+        method: 'POST',
+        headers: { cookie: inviteCookie, origin: 'http://localhost' },
+        body: csrfForm,
+      })
+    );
+    expect(inviteRes.status).toBe(403);
+
+    // Agent bearer token cannot upload (human-only) -> 403 + auth.write.forbidden
+    const rawAgentToken = 'kl_agent_photo_write_test';
+    await ports.repository.createAgentToken({
+      token_id: 'tok_agent_photo',
+      token_hash: await sha256Hex(rawAgentToken),
+      label: 'Agent Photo Test',
+      scope: 'write_batch',
+      created_by: 'admin@archive.example.test',
+      created_at: ports.clock.nowIso(),
+      revoked_at: null,
+    });
+    const agentRes = await server.fetch(
+      new Request(`http://localhost/api/plugins/recipes/${recipe.slug}/photos`, {
+        method: 'POST',
+        headers: { authorization: `Bearer ${rawAgentToken}` },
+        body: csrfForm,
+      })
+    );
+    expect(agentRes.status).toBe(403);
+
+    // Spoofed HTML labeled as image/jpeg -> 415 + media.upload.rejected
+    const spoofForm = new FormData();
+    spoofForm.set(
+      'file',
+      new File(['<html><script>alert(1)</script></html>'], 'spoof.jpg', { type: 'image/jpeg' })
+    );
+    const spoofRes = await server.fetch(
+      new Request(`http://localhost/api/plugins/recipes/${recipe.slug}/photos`, {
+        method: 'POST',
+        headers: { cookie: editorCookie, origin: 'http://localhost' },
+        body: spoofForm,
+      })
+    );
+    expect(spoofRes.status).toBe(415);
+
+    // SVG upload -> 415 + media.upload.rejected
+    const svgForm = new FormData();
+    svgForm.set(
+      'file',
+      new File(['<svg><script>alert(1)</script></svg>'], 'card.svg', { type: 'image/svg+xml' })
+    );
+    const svgRes = await server.fetch(
+      new Request(`http://localhost/api/plugins/recipes/${recipe.slug}/photos`, {
+        method: 'POST',
+        headers: { cookie: editorCookie, origin: 'http://localhost' },
+        body: svgForm,
+      })
+    );
+    expect(svgRes.status).toBe(415);
+
+    // Tighten #44 settings: upload_min_role='admin', max_photo_mb=1, max_photos_per_recipe=1
+    const updateSettings = await server.fetch(
+      new Request(`http://localhost/api/admin/plugin-settings/${RECIPES_PLUGIN_ID}`, {
+        method: 'PUT',
+        headers: {
+          cookie: adminCookie,
+          origin: 'http://localhost',
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({
+          values: {
+            upload_min_role: 'admin',
+            max_photo_mb: 1,
+            max_photos_per_recipe: 1,
+          },
+        }),
+      })
+    );
+    expect(updateSettings.status).toBe(200);
+
+    // Editor now blocked when upload_min_role='admin'
+    const editorBlocked = await server.fetch(
+      new Request(`http://localhost/api/plugins/recipes/${recipe.slug}/photos`, {
+        method: 'POST',
+        headers: { cookie: editorCookie, origin: 'http://localhost' },
+        body: csrfForm,
+      })
+    );
+    expect(editorBlocked.status).toBe(403);
+
+    // Oversized upload (> 1 MB) -> 413 + media.upload.rejected
+    const bigForm = new FormData();
+    bigForm.set(
+      'file',
+      new File([new Uint8Array(1024 * 1024 + 64).fill(0xff)], 'huge.jpg', { type: 'image/jpeg' })
+    );
+    const bigRes = await server.fetch(
+      new Request(`http://localhost/api/plugins/recipes/${recipe.slug}/photos`, {
+        method: 'POST',
+        headers: { cookie: adminCookie, origin: 'http://localhost' },
+        body: bigForm,
+      })
+    );
+    expect(bigRes.status).toBe(413);
+
+    // Verify #31 media.upload.rejected events captured
+    const uploadRejectedEvents = securityEvents.filter((e) => e.type === 'media.upload.rejected');
+    expect(uploadRejectedEvents.map((e) => e.reason)).toEqual([
+      'magic_bytes_mismatch',
+      'unsupported_media_type',
+      'file_too_large',
+    ]);
+
+    // Validation edge cases on multipart fields
+    const badSideForm = new FormData();
+    badSideForm.set('file', new File([buildTestPngWithExif(16, 16, 'x')], 'x.png', { type: 'image/png' }));
+    badSideForm.set('card_side', 'invalid_side');
+    expect(
+      (
+        await server.fetch(
+          new Request(`http://localhost/api/plugins/recipes/${recipe.slug}/photos`, {
+            method: 'POST',
+            headers: { cookie: adminCookie, origin: 'http://localhost' },
+            body: badSideForm,
+          })
+        )
+      ).status
+    ).toBe(400);
+
+    const badCoverForm = new FormData();
+    badCoverForm.set('file', new File([buildTestPngWithExif(16, 16, 'x')], 'x.png', { type: 'image/png' }));
+    badCoverForm.set('set_cover', 'maybe');
+    expect(
+      (
+        await server.fetch(
+          new Request(`http://localhost/api/plugins/recipes/${recipe.slug}/photos`, {
+            method: 'POST',
+            headers: { cookie: adminCookie, origin: 'http://localhost' },
+            body: badCoverForm,
+          })
+        )
+      ).status
+    ).toBe(400);
+
+    const badSortForm = new FormData();
+    badSortForm.set('file', new File([buildTestPngWithExif(16, 16, 'x')], 'x.png', { type: 'image/png' }));
+    badSortForm.set('sort_order', '9999');
+    expect(
+      (
+        await server.fetch(
+          new Request(`http://localhost/api/plugins/recipes/${recipe.slug}/photos`, {
+            method: 'POST',
+            headers: { cookie: adminCookie, origin: 'http://localhost' },
+            body: badSortForm,
+          })
+        )
+      ).status
+    ).toBe(400);
+
+    const longCaptionForm = new FormData();
+    longCaptionForm.set(
+      'file',
+      new File([buildTestPngWithExif(16, 16, 'x')], 'x.png', { type: 'image/png' })
+    );
+    longCaptionForm.set('caption', 'a'.repeat(245));
+    expect(
+      (
+        await server.fetch(
+          new Request(`http://localhost/api/plugins/recipes/${recipe.slug}/photos`, {
+            method: 'POST',
+            headers: { cookie: adminCookie, origin: 'http://localhost' },
+            body: longCaptionForm,
+          })
+        )
+      ).status
+    ).toBe(400);
+
+    // Upload 1 valid photo then hit max_photos_per_recipe=1 on 2nd upload
+    const okForm = new FormData();
+    okForm.set('file', new File([buildTestPngWithExif(16, 16, 'x')], 'ok.png', { type: 'image/png' }));
+    expect(
+      (
+        await server.fetch(
+          new Request(`http://localhost/api/plugins/recipes/${recipe.slug}/photos`, {
+            method: 'POST',
+            headers: { cookie: adminCookie, origin: 'http://localhost' },
+            body: okForm,
+          })
+        )
+      ).status
+    ).toBe(201);
+
+    const secondMaxRes = await server.fetch(
+      new Request(`http://localhost/api/plugins/recipes/${recipe.slug}/photos`, {
+        method: 'POST',
+        headers: { cookie: adminCookie, origin: 'http://localhost' },
+        body: okForm,
+      })
+    );
+    expect(secondMaxRes.status).toBe(400);
+
+    // 404 edge cases for missing recipe/photo on GET/POST/PATCH/DELETE
+    expect(
+      (
+        await server.fetch(
+          new Request('http://localhost/api/plugins/recipes/photos/missing', {
+            headers: { cookie: adminCookie },
+          })
+        )
+      ).status
+    ).toBe(404);
+    expect(
+      (
+        await server.fetch(
+          new Request('http://localhost/api/plugins/recipes/missing-recipe/photos/pho_x', {
+            method: 'DELETE',
+            headers: { cookie: adminCookie, origin: 'http://localhost' },
+          })
+        )
+      ).status
+    ).toBe(404);
+    expect(
+      (
+        await server.fetch(
+          new Request(`http://localhost/api/plugins/recipes/${recipe.slug}/photos/missing-photo`, {
+            method: 'PATCH',
+            headers: {
+              cookie: adminCookie,
+              origin: 'http://localhost',
+              'content-type': 'application/json',
+            },
+            body: JSON.stringify({ caption: 'nope' }),
+          })
+        )
+      ).status
+    ).toBe(404);
+    expect(
+      (
+        await server.fetch(
+          new Request(`http://localhost/api/plugins/recipes/${recipe.slug}/photos/missing-photo`, {
+            method: 'DELETE',
+            headers: { cookie: adminCookie, origin: 'http://localhost' },
+          })
+        )
+      ).status
+    ).toBe(404);
+    expect(
+      (
+        await server.fetch(
+          new Request('http://localhost/api/plugins/recipes/unknown-action', {
+            method: 'POST',
+            headers: { cookie: adminCookie, origin: 'http://localhost' },
+          })
+        )
+      ).status
+    ).toBe(404);
+    expect(
+      (
+        await server.fetch(
+          new Request('http://localhost/api/plugins/recipes/unknown-action', {
+            method: 'PATCH',
+            headers: { cookie: adminCookie, origin: 'http://localhost' },
+          })
+        )
+      ).status
+    ).toBe(404);
+    expect(
+      (
+        await server.fetch(
+          new Request('http://localhost/api/plugins/recipes/unknown-action', {
+            method: 'DELETE',
+            headers: { cookie: adminCookie, origin: 'http://localhost' },
+          })
+        )
+      ).status
+    ).toBe(404);
   });
 });

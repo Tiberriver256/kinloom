@@ -109,4 +109,8 @@ export class R2MediaStore implements MediaStore {
       body: obj.body,
     };
   }
+
+  async delete(key: string): Promise<void> {
+    await this.bucket.delete(key);
+  }
 }

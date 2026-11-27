@@ -87,6 +87,16 @@ export interface ServerPluginRouteContext extends CoreKinloomServerPluginContext
   readonly emitSecurityEvent?: (payload: ServerSecurityEventPayload) => void;
 }
 
+export function hasSecurityEventEmitter(
+  ctx: CoreKinloomServerPluginContext
+): ctx is ServerPluginRouteContext & {
+  readonly emitSecurityEvent: (payload: ServerSecurityEventPayload) => void;
+} {
+  return (
+    'emitSecurityEvent' in ctx && typeof (ctx as ServerPluginRouteContext).emitSecurityEvent === 'function'
+  );
+}
+
 export interface KinloomServerPlugin extends CoreKinloomServerPlugin {
   readonly documentContributions?: ServerDocumentContributions;
   readonly observabilityFlags?: ServerPluginObservabilityFlags;

@@ -146,13 +146,32 @@ export const UiRecipeListResponseSchema = z.object({
 });
 export type UiRecipeListResponse = z.infer<typeof UiRecipeListResponseSchema>;
 
+export const UiRecipeMediaLimitsSchema = z.object({
+  max_photo_mb: z.number().int().min(1).max(25),
+  max_photos_per_recipe: z.number().int().min(1).max(30),
+});
+export type UiRecipeMediaLimits = z.infer<typeof UiRecipeMediaLimitsSchema>;
+
 export const UiRecipeDetailResponseSchema = z.object({
   recipe: UiRecipeDetailSchema,
   photos: z.array(UiRecipePhotoSchema),
   viewer_has_starred: z.boolean(),
   permissions: UiRecipePermissionsSchema,
+  media_limits: UiRecipeMediaLimitsSchema.optional(),
 });
 export type UiRecipeDetailResponse = z.infer<typeof UiRecipeDetailResponseSchema>;
+
+export const UiRecipePhotoMutationResponseSchema = z.object({
+  photo: UiRecipePhotoSchema,
+  cover_photo_id: z.string().nullable(),
+  cover_photo_url: z.string().nullable().optional(),
+});
+export type UiRecipePhotoMutationResponse = z.infer<typeof UiRecipePhotoMutationResponseSchema>;
+
+export const UiRecipePhotosReorderResponseSchema = z.object({
+  photos: z.array(UiRecipePhotoSchema),
+});
+export type UiRecipePhotosReorderResponse = z.infer<typeof UiRecipePhotosReorderResponseSchema>;
 
 export const UiRecipesByPersonResponseSchema = z.object({
   person_id: z.string().min(1),
@@ -167,6 +186,14 @@ export function parseUiRecipeListResponse(raw: unknown): UiRecipeListResponse {
 
 export function parseUiRecipeDetailResponse(raw: unknown): UiRecipeDetailResponse {
   return UiRecipeDetailResponseSchema.parse(raw);
+}
+
+export function parseUiRecipePhotoMutationResponse(raw: unknown): UiRecipePhotoMutationResponse {
+  return UiRecipePhotoMutationResponseSchema.parse(raw);
+}
+
+export function parseUiRecipePhotosReorderResponse(raw: unknown): UiRecipePhotosReorderResponse {
+  return UiRecipePhotosReorderResponseSchema.parse(raw);
 }
 
 export function parseUiRecipesByPersonResponse(raw: unknown): UiRecipesByPersonResponse {

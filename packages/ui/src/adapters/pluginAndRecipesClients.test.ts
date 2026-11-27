@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import type { UiRecipeDetail } from '../lib/recipesModel.js';
+import {
+  clampLightboxPan,
+  clampLightboxZoom,
+  formatLightboxZoomPercent,
+  stepLightboxIndex,
+  stepLightboxZoom,
+  validateImageUploadCandidates,
+} from '../lib/lightboxModel.js';
+import type { UiRecipeDetail, UiRecipePhoto } from '../lib/recipesModel.js';
 import { ApiClientError } from './httpWiki/httpClient.js';
 import { createHttpPluginApiClient } from './pluginApiClient.js';
 import { createHttpRecipesClient, createStaticRecipesClient } from './recipesClient.js';
@@ -201,5 +209,125 @@ describe('createHttpRecipesClient and createStaticRecipesClient', () => {
     expect((await staticClient.getRecipe('rec_1'))?.recipe.slug).toBe('sourdough-boule');
     expect(await staticClient.getRecipe('nope')).toBeNull();
     expect((await staticClient.listRecipesByPerson('p_ada'))?.total).toBe(1);
+  });
+
+  it('supports photo upload, update, reorder, and delete through PluginApiClient', async () => {
+    const SAMPLE_PHOTO: UiRecipePhoto = {
+      id: 'pho_1',
+      recipe_id: 'rec_1',
+      url: '/api/plugins/recipes/photos/pho_1',
+      mime_type: 'image/png',
+      size_bytes: 512,
+      width: 400,
+      height: 300,
+      orientation: 1,
+      caption: 'Front of card',
+      card_side: 'front',
+      sort_order: 0,
+      uploaded_by_name: 'Clara',
+      created_at: '2026-11-27T08:00:00.000Z',
+    };
+
+    const requests: Array<{ url: string; method: string }> = [];
+    const fetchImpl: typeof fetch = async (input, init) => {
+      const url = typeof input === 'string' ? input : input.toString();
+      const method = init?.method ?? 'GET';
+      requests.push({ url, method });
+      if (method === 'POST' && url.endsWith('/photos')) {
+        return new Response(
+          JSON.stringify({
+            photo: SAMPLE_PHOTO,
+            cover_photo_id: 'pho_1',
+            cover_photo_url: SAMPLE_PHOTO.url,
+          }),
+          { status: 201, headers: { 'content-type': 'application/json' } }
+        );
+      }
+      if (method === 'PATCH' && url.endsWith('/photos/pho_1')) {
+        return new Response(
+          JSON.stringify({
+            photo: { ...SAMPLE_PHOTO, caption: 'Updated caption', card_side: 'back' },
+            cover_photo_id: 'pho_1',
+            cover_photo_url: SAMPLE_PHOTO.url,
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } }
+        );
+      }
+      if (method === 'POST' && url.endsWith('/photos/reorder')) {
+        return new Response(JSON.stringify({ photos: [SAMPLE_PHOTO] }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        });
+      }
+      if (method === 'DELETE' && url.endsWith('/photos/pho_1')) {
+        return new Response(null, { status: 204 });
+      }
+      return new Response(JSON.stringify({ error: { code: 'NOT_FOUND', message: 'Missing' } }), {
+        status: 404,
+        headers: { 'content-type': 'application/json' },
+      });
+    };
+
+    const client = createHttpRecipesClient({ fetchImpl });
+    const file = new File([new Uint8Array([1, 2, 3])], 'card.png', { type: 'image/png' });
+
+    const uploaded = await client.uploadRecipePhoto!('sourdough-boule', {
+      file,
+      caption: 'Front of card',
+      card_side: 'front',
+      set_cover: true,
+      sort_order: 0,
+    });
+    expect(uploaded.photo.id).toBe('pho_1');
+    expect(uploaded.cover_photo_id).toBe('pho_1');
+
+    const updated = await client.updateRecipePhoto!('sourdough-boule', 'pho_1', {
+      caption: 'Updated caption',
+      card_side: 'back',
+      set_cover: true,
+    });
+    expect(updated.photo.caption).toBe('Updated caption');
+
+    const reordered = await client.reorderRecipePhotos!('sourdough-boule', ['pho_1']);
+    expect(reordered.photos).toHaveLength(1);
+
+    await expect(client.deleteRecipePhoto!('sourdough-boule', 'pho_1')).resolves.toBeUndefined();
+    expect(requests.map((r) => `${r.method} ${r.url}`)).toEqual([
+      'POST /api/plugins/recipes/sourdough-boule/photos',
+      'PATCH /api/plugins/recipes/sourdough-boule/photos/pho_1',
+      'POST /api/plugins/recipes/sourdough-boule/photos/reorder',
+      'DELETE /api/plugins/recipes/sourdough-boule/photos/pho_1',
+    ]);
+  });
+});
+
+describe('lightboxModel pure helpers', () => {
+  it('clamps zoom, pan, circular indices, and validates image upload candidates', () => {
+    expect(clampLightboxZoom(Number.NaN)).toBe(1);
+    expect(clampLightboxZoom(0.2)).toBe(1);
+    expect(clampLightboxZoom(9)).toBe(4);
+    expect(stepLightboxZoom(1, 'in')).toBe(1.5);
+    expect(stepLightboxZoom(1, 'out')).toBe(1);
+    expect(formatLightboxZoomPercent(2.5)).toBe('250%');
+
+    expect(clampLightboxPan({ x: 50, y: -50 }, 1)).toEqual({ x: 0, y: 0 });
+    expect(clampLightboxPan({ x: 999, y: -999 }, 2, 400)).toEqual({ x: 200, y: -200 });
+
+    expect(stepLightboxIndex(0, 0, 'next')).toBe(0);
+    expect(stepLightboxIndex(0, 3, 'prev')).toBe(2);
+    expect(stepLightboxIndex(2, 3, 'next')).toBe(0);
+
+    const validated = validateImageUploadCandidates(
+      [
+        { name: 'good.jpg', type: 'image/jpeg', size: 1024 },
+        { name: 'empty.png', type: 'image/png', size: 0 },
+        { name: 'huge.webp', type: 'image/webp', size: 5 * 1024 * 1024 },
+        { name: 'vector.svg', type: 'image/svg+xml', size: 200 },
+        { name: '', type: '', size: 100 },
+      ],
+      { maxBytes: 2 * 1024 * 1024 }
+    );
+    expect(validated.accepted.map((f) => f.name)).toEqual(['good.jpg']);
+    expect(validated.errors).toHaveLength(4);
   });
 });

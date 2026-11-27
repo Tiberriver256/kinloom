@@ -1,8 +1,42 @@
-import { CreateRecipeInputSchema } from '@kinloom/server';
+import {
+  CreateRecipeInputSchema,
+  computeCrc32,
+  getSessionCookieName,
+  signSessionToken,
+} from '@kinloom/server';
 import { expect, test } from '@playwright/test';
 import { startLiveWikiTestServer } from './helpers/wikiTestServer.js';
 
 const STATIC_DEMO_ORIGIN = 'http://127.0.0.1:4173';
+const E2E_SESSION_SECRET = 'kinloom-e2e-test-session-secret-0123456789abcdef';
+
+function buildE2ePngWithExif(secretExif: string): Buffer {
+  const enc = new TextEncoder();
+  const makeChunk = (type: string, data: Uint8Array): Uint8Array => {
+    const body = new Uint8Array(4 + data.byteLength);
+    body.set(enc.encode(type), 0);
+    body.set(data, 4);
+    const out = new Uint8Array(12 + data.byteLength);
+    const dv = new DataView(out.buffer);
+    dv.setUint32(0, data.byteLength, false);
+    out.set(body, 4);
+    dv.setUint32(8 + data.byteLength, computeCrc32(body), false);
+    return out;
+  };
+  // Valid 1x1 RGB PNG with injected eXIf GPS chunk
+  const ihdr = new Uint8Array([0, 0, 0, 1, 0, 0, 0, 1, 8, 2, 0, 0, 0]);
+  const idat = new Uint8Array([
+    0x78, 0x9c, 0x63, 0xf8, 0xcf, 0xc0, 0x00, 0x00, 0x03, 0x01, 0x01, 0x00, 0x18, 0xdd, 0x8d, 0xb0,
+  ]);
+  const parts = [
+    new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    makeChunk('IHDR', ihdr),
+    makeChunk('eXIf', enc.encode(secretExif)),
+    makeChunk('IDAT', idat),
+    makeChunk('IEND', new Uint8Array(0)),
+  ];
+  return Buffer.concat(parts.map((p) => Buffer.from(p)));
+}
 
 test('default unconfigured archives render zero Recipes nav links, slots, or API routes', async ({
   page,
@@ -116,6 +150,90 @@ test('opt-in Family Recipe Box browse, filter, detail, PersonPage slot, IndexPag
 
     await page.getByRole('button', { name: 'Archive menu' }).click();
     await expect(page.getByRole('menuitem', { name: 'Recipes' })).toBeVisible();
+  } finally {
+    await wiki.close();
+  }
+});
+
+test('recipe card photo upload strips EXIF, renders archival zoom lightbox, and supports photo delete', async ({
+  page,
+}) => {
+  const wiki = await startLiveWikiTestServer({ enableRecipesPlugin: true });
+  try {
+    const repo = wiki.recipesRepo!;
+    await repo.createRecipe({
+      id: 'rec_e2e_photos',
+      data: CreateRecipeInputSchema.parse({
+        title: 'Heirloom Rye Loaf',
+        summary: 'Caraway rye bread from the 1880s.',
+        course: 'bread',
+      }),
+      actor: { id: wiki.adminEmail, name: 'Archive Steward' },
+      nowIso: '2026-11-24T12:00:00.000Z',
+    });
+
+    const token = await signSessionToken({
+      secret: E2E_SESSION_SECRET,
+      clock: wiki.ports.clock,
+      ttlSeconds: 3600,
+      payload: {
+        kind: 'user',
+        email: wiki.adminEmail,
+        display_name: 'Archive Steward',
+        role: 'admin',
+      },
+    });
+    const url = new URL(wiki.baseUrl);
+    await page.context().addCookies([
+      {
+        name: getSessionCookieName(false),
+        value: token,
+        domain: url.hostname,
+        path: '/',
+        httpOnly: true,
+        sameSite: 'Lax',
+      },
+    ]);
+
+    await page.goto(`${wiki.baseUrl}/recipes/heirloom-rye-loaf`);
+    await expect(page.getByRole('heading', { name: 'Heirloom Rye Loaf', level: 1 })).toBeVisible();
+
+    await page.getByLabel('Photo Caption (Optional)').fill('Front of handwritten rye card');
+    await page.locator('input[type="file"]').setInputFiles({
+      name: 'rye-card-front.png',
+      mimeType: 'image/png',
+      buffer: buildE2ePngWithExif('E2E_EXIF_GPS_SECRET_39_78'),
+    });
+
+    await expect(page.getByText('Recipe card photo uploaded.')).toBeVisible();
+    const cardButton = page.getByRole('button', { name: /Front of handwritten rye card/ });
+    await expect(cardButton).toBeVisible();
+
+    // Verify served image bytes stripped EXIF GPS secret
+    const imgSrc = await cardButton.locator('img').getAttribute('src');
+    expect(imgSrc).toMatch(/^\/api\/plugins\/recipes\/photos\/pho_/);
+    const imgRes = await page.request.get(`${wiki.baseUrl}${imgSrc}`);
+    expect(imgRes.status()).toBe(200);
+    expect(imgRes.headers()['x-content-type-options']).toBe('nosniff');
+    expect(imgRes.headers()['content-disposition']).toContain('inline');
+    const servedText = (await imgRes.body()).toString('latin1');
+    expect(servedText).not.toContain('E2E_EXIF_GPS_SECRET_39_78');
+
+    // Open archival lightbox, zoom in to 150%, then dismiss with Escape
+    await cardButton.click();
+    const lightbox = page.locator('dialog[open]');
+    await expect(lightbox).toBeVisible();
+    await expect(lightbox.getByText('100%')).toBeVisible();
+    await lightbox.getByRole('button', { name: 'Zoom in' }).click();
+    await expect(lightbox.getByText('150%')).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(lightbox).toBeHidden();
+
+    // Delete photo via two-step confirm
+    await page.getByRole('button', { name: 'Delete', exact: true }).click();
+    await page.getByRole('button', { name: 'Confirm Delete', exact: true }).click();
+    await expect(page.getByText('Recipe card photo deleted.')).toBeVisible();
+    await expect(cardButton).toHaveCount(0);
   } finally {
     await wiki.close();
   }

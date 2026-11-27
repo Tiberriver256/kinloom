@@ -8,9 +8,16 @@ import type {
   PluginSettingsSchema,
 } from '@kinloom/core';
 import { z } from 'zod';
+import { randomBytes, toHex } from '../../crypto.js';
 import { KinloomHttpError } from '../../errors.js';
-import { decodeSegment, jsonResponse } from '../../http/httpPrimitives.js';
-import type { KinloomServerPlugin } from '../../http/pluginLifecycle.js';
+import { decodeSegment, jsonResponse, readJsonBody } from '../../http/httpPrimitives.js';
+import {
+  hasSecurityEventEmitter,
+  type KinloomServerPlugin,
+  sanitizeMediaContentType,
+} from '../../http/pluginLifecycle.js';
+import type { MediaUploadRejectionInfo } from '../../services/mediaService.js';
+import { extensionForImageMime, PluginMediaService } from '../../services/pluginMediaService.js';
 import { KINLOOM_SERVER_VERSION } from '../../version.js';
 import { InMemoryRecipesRepository } from './inMemoryRecipesRepository.js';
 import { RECIPES_PLUGIN_MIGRATIONS } from './migrations.js';
@@ -19,6 +26,8 @@ import {
   deriveRecipeActorKey,
   RECIPES_DATABASE_NAMESPACE,
   RECIPES_PLUGIN_ID,
+  type RecipeCardSide,
+  RecipeCardSideSchema,
   type RecipeCourse,
   RecipeCourseSchema,
   type RecipePhotoRecord,
@@ -26,6 +35,7 @@ import {
   type RecipeSortMode,
   RecipeSortModeSchema,
   redactLivingRecipeAttribution,
+  UpdateRecipePhotoInputSchema,
 } from './schemas.js';
 import { SqlRecipesRepository } from './sqlRecipesRepository.js';
 
@@ -470,9 +480,107 @@ export function computeRecipePermissions(
   };
 }
 
+const ReorderPhotosBodySchema = z.object({
+  photo_ids: z.array(z.string().trim().min(1).max(64)).min(1).max(60),
+});
+
+function parseOptionalMultipartSortOrder(raw: unknown): number | undefined {
+  if (raw === null || raw === undefined) {
+    return undefined;
+  }
+  if (typeof raw !== 'string') {
+    throw new KinloomHttpError(400, 'VALIDATION_ERROR', "Field 'sort_order' must be an integer string.");
+  }
+  const trimmed = raw.trim();
+  if (trimmed === '') {
+    return undefined;
+  }
+  if (!/^\d+$/.test(trimmed)) {
+    throw new KinloomHttpError(400, 'VALIDATION_ERROR', "Field 'sort_order' must be an integer.");
+  }
+  const value = Number(trimmed);
+  if (!Number.isSafeInteger(value) || value < 0 || value > 1000) {
+    throw new KinloomHttpError(400, 'VALIDATION_ERROR', "Field 'sort_order' must be between 0 and 1000.");
+  }
+  return value;
+}
+
+function parseOptionalMultipartBoolean(raw: unknown, fieldName: string): boolean {
+  if (raw === null || raw === undefined) {
+    return false;
+  }
+  if (typeof raw !== 'string') {
+    throw new KinloomHttpError(400, 'VALIDATION_ERROR', `Field '${fieldName}' must be 'true' or 'false'.`);
+  }
+  const normalized = raw.trim().toLowerCase();
+  if (normalized === '' || normalized === 'false' || normalized === '0') {
+    return false;
+  }
+  if (normalized === 'true' || normalized === '1') {
+    return true;
+  }
+  throw new KinloomHttpError(400, 'VALIDATION_ERROR', `Field '${fieldName}' must be 'true' or 'false'.`);
+}
+
+function requirePhotoUploadActor(
+  ctx: KinloomServerPluginContext,
+  settings: RecipesRuntimeSettings
+): { readonly id: string; readonly name: string } {
+  const { principal } = ctx;
+  if (principal.kind !== 'user') {
+    if (hasSecurityEventEmitter(ctx)) {
+      ctx.emitSecurityEvent({
+        type: 'auth.write.forbidden',
+        status: 403,
+        reason: 'member_required',
+        requiredRole: settings.upload_min_role,
+        actorKind: principal.kind,
+      });
+    }
+    throw new KinloomHttpError(
+      403,
+      'FORBIDDEN',
+      'Only signed-in family archive members may manage recipe card photos.'
+    );
+  }
+  if (settings.upload_min_role === 'admin' && principal.role !== 'admin') {
+    if (hasSecurityEventEmitter(ctx)) {
+      ctx.emitSecurityEvent({
+        type: 'auth.write.forbidden',
+        status: 403,
+        reason: 'insufficient_role',
+        requiredRole: 'admin',
+        actorKind: 'user',
+      });
+    }
+    throw new KinloomHttpError(
+      403,
+      'FORBIDDEN',
+      'Administrator role is required to upload or modify recipe card photos.'
+    );
+  }
+  return {
+    id: principal.email,
+    name: principal.display_name,
+  };
+}
+
+function createRecipesMediaService(ctx: KinloomServerPluginContext): PluginMediaService {
+  return new PluginMediaService({
+    mediaStore: ctx.ports.mediaStore,
+    namespace: RECIPES_DATABASE_NAMESPACE,
+  });
+}
+
+function splitRecipesRouteSegments(pathname: string): readonly string[] {
+  const clean = pathname.replace(/\/+$/, '') || '/';
+  const rest = clean === RECIPES_API_PREFIX ? '' : clean.slice(RECIPES_API_PREFIX.length + 1);
+  return rest ? rest.split('/').filter(Boolean) : [];
+}
+
 /**
  * Opt-in Kinloom server plugin for Family Recipe Sharing (strictly off by default).
- * Registers `/api/plugins/recipes*` read endpoints, `#44` declarative admin settings,
+ * Registers `/api/plugins/recipes*` read and photo endpoints, `#44` declarative admin settings,
  * and versioned `plugin_recipes_*` SQL migrations.
  */
 export function createRecipesServerPlugin(options: RecipesServerPluginOptions = {}): KinloomServerPlugin {
@@ -514,11 +622,24 @@ export function createRecipesServerPlugin(options: RecipesServerPluginOptions = 
     return mergeRecipesSettings(cachedSettings, stored.values);
   }
 
+  async function servePhotoByRecord(
+    ctx: KinloomServerPluginContext,
+    photo: RecipePhotoRecord
+  ): Promise<Response> {
+    const mediaService = createRecipesMediaService(ctx);
+    const ext = extensionForImageMime(photo.mime_type);
+    return mediaService.serveImageResponse({
+      key: photo.r2_key,
+      expectedMimeType: photo.mime_type,
+      sha256: photo.sha256,
+      downloadFilename: `recipe-card-${photo.id}.${ext}`,
+      ifNoneMatch: ctx.request.headers.get('if-none-match'),
+    });
+  }
+
   async function handleGetRequest(ctx: KinloomServerPluginContext): Promise<Response> {
     const repo = resolveRepository(ctx);
-    const pathname = ctx.url.pathname.replace(/\/+$/, '') || '/';
-    const rest = pathname === RECIPES_API_PREFIX ? '' : pathname.slice(RECIPES_API_PREFIX.length + 1);
-    const segments = rest ? rest.split('/').filter(Boolean) : [];
+    const segments = splitRecipesRouteSegments(ctx.url.pathname);
 
     // 1. GET /api/plugins/recipes (catalog browse/search/filter/pagination)
     if (segments.length === 0) {
@@ -614,7 +735,38 @@ export function createRecipesServerPlugin(options: RecipesServerPluginOptions = 
       });
     }
 
-    // 2. GET /api/plugins/recipes/by-person/:personId
+    // 2. GET /api/plugins/recipes/photos/:photoId
+    if (segments.length === 2 && segments[0] === 'photos') {
+      const photoId = decodeSegment(segments[1]).trim();
+      if (!photoId) {
+        throw new KinloomHttpError(404, 'PHOTO_NOT_FOUND', 'Recipe photo not found.');
+      }
+      const photo = await repo.getPhotoById(photoId);
+      if (!photo) {
+        throw new KinloomHttpError(404, 'PHOTO_NOT_FOUND', `Recipe photo '${photoId}' was not found.`);
+      }
+      return servePhotoByRecord(ctx, photo);
+    }
+
+    // 3. GET /api/plugins/recipes/:slugOrId/photos/:photoId
+    if (segments.length === 3 && segments[1] === 'photos') {
+      const slugOrId = decodeSegment(segments[0]).trim();
+      const photoId = decodeSegment(segments[2]).trim();
+      if (!slugOrId || !photoId) {
+        throw new KinloomHttpError(404, 'PHOTO_NOT_FOUND', 'Recipe photo not found.');
+      }
+      const recipe = await repo.getRecipeBySlugOrId(slugOrId);
+      if (!recipe) {
+        throw new KinloomHttpError(404, 'RECIPE_NOT_FOUND', `Recipe '${slugOrId}' was not found.`);
+      }
+      const photo = await repo.getPhotoById(photoId);
+      if (!photo || photo.recipe_id !== recipe.id) {
+        throw new KinloomHttpError(404, 'PHOTO_NOT_FOUND', `Recipe photo '${photoId}' was not found.`);
+      }
+      return servePhotoByRecord(ctx, photo);
+    }
+
+    // 4. GET /api/plugins/recipes/by-person/:personId
     if (segments.length === 2 && segments[0] === 'by-person') {
       const personId = decodeSegment(segments[1]).trim();
       if (!personId) {
@@ -672,7 +824,7 @@ export function createRecipesServerPlugin(options: RecipesServerPluginOptions = 
       });
     }
 
-    // 3. GET /api/plugins/recipes/:slugOrId
+    // 5. GET /api/plugins/recipes/:slugOrId
     if (segments.length === 1) {
       const slugOrId = decodeSegment(segments[0]).trim();
       if (!slugOrId) {
@@ -712,10 +864,228 @@ export function createRecipesServerPlugin(options: RecipesServerPluginOptions = 
         photos: photos.map(toPublicRecipePhoto),
         viewer_has_starred: viewerHasStarred,
         permissions,
+        media_limits: {
+          max_photo_mb: settings.max_photo_mb,
+          max_photos_per_recipe: settings.max_photos_per_recipe,
+        },
       });
     }
 
     throw new KinloomHttpError(404, 'NOT_FOUND', `Route GET ${ctx.url.pathname} was not found.`);
+  }
+
+  async function handlePostRequest(ctx: KinloomServerPluginContext): Promise<Response> {
+    const repo = resolveRepository(ctx);
+    const segments = splitRecipesRouteSegments(ctx.url.pathname);
+
+    // POST /api/plugins/recipes/:slugOrId/photos
+    if (segments.length === 2 && segments[1] === 'photos') {
+      const settings = await resolveRuntimeSettings(ctx.ports);
+      const actor = requirePhotoUploadActor(ctx, settings);
+
+      const slugOrId = decodeSegment(segments[0]).trim();
+      const recipe = slugOrId ? await repo.getRecipeBySlugOrId(slugOrId) : null;
+      if (!recipe) {
+        throw new KinloomHttpError(404, 'RECIPE_NOT_FOUND', `Recipe '${slugOrId}' was not found.`);
+      }
+
+      const existingPhotos = await repo.listPhotosForRecipe(recipe.id);
+      if (existingPhotos.length >= settings.max_photos_per_recipe) {
+        throw new KinloomHttpError(
+          400,
+          'MAX_PHOTOS_EXCEEDED',
+          `This recipe already has the maximum of ${settings.max_photos_per_recipe} photos.`
+        );
+      }
+
+      let formData: FormData;
+      try {
+        formData = await ctx.request.formData();
+      } catch {
+        throw new KinloomHttpError(400, 'VALIDATION_ERROR', 'Expected multipart/form-data upload payload.');
+      }
+
+      const filePart = formData.get('file');
+      if (!filePart || typeof filePart === 'string') {
+        throw new KinloomHttpError(400, 'VALIDATION_ERROR', 'Missing file field in multipart upload.');
+      }
+
+      const rawCaption = formData.get('caption');
+      if (rawCaption !== null && typeof rawCaption !== 'string') {
+        throw new KinloomHttpError(400, 'VALIDATION_ERROR', "Field 'caption' must be text.");
+      }
+      const caption = (rawCaption ?? '').trim();
+      if (caption.length > 240) {
+        throw new KinloomHttpError(400, 'VALIDATION_ERROR', 'Photo caption must be 240 characters or fewer.');
+      }
+
+      const rawCardSide = formData.get('card_side');
+      if (rawCardSide !== null && typeof rawCardSide !== 'string') {
+        throw new KinloomHttpError(400, 'VALIDATION_ERROR', "Field 'card_side' must be text.");
+      }
+      let cardSide: RecipeCardSide = 'front';
+      if (rawCardSide !== null && rawCardSide.trim().length > 0) {
+        const parsedSide = RecipeCardSideSchema.safeParse(rawCardSide.trim());
+        if (!parsedSide.success) {
+          throw new KinloomHttpError(400, 'VALIDATION_ERROR', `Invalid card_side '${rawCardSide}'.`);
+        }
+        cardSide = parsedSide.data;
+      }
+
+      const setCover = parseOptionalMultipartBoolean(formData.get('set_cover'), 'set_cover');
+      const sortOrder = parseOptionalMultipartSortOrder(formData.get('sort_order'));
+
+      const rawBytes = new Uint8Array(await filePart.arrayBuffer());
+      const photoId = `pho_${toHex(randomBytes(8))}`;
+      const mediaService = createRecipesMediaService(ctx);
+      const onUploadRejected = hasSecurityEventEmitter(ctx)
+        ? (info: MediaUploadRejectionInfo) => {
+            ctx.emitSecurityEvent({
+              type: 'media.upload.rejected',
+              status: info.status,
+              reason: info.reason,
+              contentType: sanitizeMediaContentType(info.contentType),
+              sizeBytes: info.sizeBytes,
+              ...(info.maxBytes !== undefined ? { maxBytes: info.maxBytes } : {}),
+            });
+          }
+        : undefined;
+
+      const stored = await mediaService.storeImage({
+        bytes: rawBytes,
+        contentType: filePart.type,
+        resourceId: recipe.id,
+        assetId: photoId,
+        maxBytesOverride: settings.max_photo_mb * 1024 * 1024,
+        onUploadRejected,
+      });
+
+      const added = await repo.addPhoto({
+        id: photoId,
+        recipe_id: recipe.id,
+        r2_key: stored.key,
+        mime_type: stored.mimeType,
+        size_bytes: stored.sizeBytes,
+        sha256: stored.sha256,
+        width: stored.width,
+        height: stored.height,
+        orientation: stored.orientation,
+        caption,
+        card_side: cardSide,
+        sort_order: sortOrder,
+        set_cover: setCover,
+        uploaded_by: actor,
+        nowIso: ctx.ports.clock.nowIso(),
+      });
+
+      if (!added) {
+        await mediaService.deleteObject(stored.key);
+        throw new KinloomHttpError(404, 'RECIPE_NOT_FOUND', `Recipe '${slugOrId}' was not found.`);
+      }
+
+      return jsonResponse(
+        {
+          photo: toPublicRecipePhoto(added.photo),
+          cover_photo_id: added.cover_photo_id,
+          cover_photo_url: added.cover_photo_id ? buildPhotoUrl(added.cover_photo_id) : null,
+        },
+        201
+      );
+    }
+
+    // POST /api/plugins/recipes/:slugOrId/photos/reorder
+    if (segments.length === 3 && segments[1] === 'photos' && segments[2] === 'reorder') {
+      const settings = await resolveRuntimeSettings(ctx.ports);
+      requirePhotoUploadActor(ctx, settings);
+
+      const slugOrId = decodeSegment(segments[0]).trim();
+      const recipe = slugOrId ? await repo.getRecipeBySlugOrId(slugOrId) : null;
+      if (!recipe) {
+        throw new KinloomHttpError(404, 'RECIPE_NOT_FOUND', `Recipe '${slugOrId}' was not found.`);
+      }
+
+      const parsed = ReorderPhotosBodySchema.parse(await readJsonBody(ctx.request));
+      const reordered = await repo.reorderPhotos(recipe.id, parsed.photo_ids, ctx.ports.clock.nowIso());
+      if (!reordered) {
+        throw new KinloomHttpError(404, 'RECIPE_NOT_FOUND', `Recipe '${slugOrId}' was not found.`);
+      }
+
+      return jsonResponse({
+        photos: reordered.map(toPublicRecipePhoto),
+      });
+    }
+
+    throw new KinloomHttpError(404, 'NOT_FOUND', `Route POST ${ctx.url.pathname} was not found.`);
+  }
+
+  async function handlePatchRequest(ctx: KinloomServerPluginContext): Promise<Response> {
+    const repo = resolveRepository(ctx);
+    const segments = splitRecipesRouteSegments(ctx.url.pathname);
+
+    // PATCH /api/plugins/recipes/:slugOrId/photos/:photoId
+    if (segments.length === 3 && segments[1] === 'photos') {
+      const settings = await resolveRuntimeSettings(ctx.ports);
+      requirePhotoUploadActor(ctx, settings);
+
+      const slugOrId = decodeSegment(segments[0]).trim();
+      const photoId = decodeSegment(segments[2]).trim();
+      const recipe = slugOrId ? await repo.getRecipeBySlugOrId(slugOrId) : null;
+      if (!recipe) {
+        throw new KinloomHttpError(404, 'RECIPE_NOT_FOUND', `Recipe '${slugOrId}' was not found.`);
+      }
+
+      const patch = UpdateRecipePhotoInputSchema.parse(await readJsonBody(ctx.request));
+      const updated = await repo.updatePhoto({
+        recipe_id: recipe.id,
+        photo_id: photoId,
+        caption: patch.caption,
+        card_side: patch.card_side,
+        sort_order: patch.sort_order,
+        set_cover: patch.set_cover,
+        nowIso: ctx.ports.clock.nowIso(),
+      });
+      if (!updated) {
+        throw new KinloomHttpError(404, 'PHOTO_NOT_FOUND', `Recipe photo '${photoId}' was not found.`);
+      }
+
+      return jsonResponse({
+        photo: toPublicRecipePhoto(updated.photo),
+        cover_photo_id: updated.cover_photo_id,
+        cover_photo_url: updated.cover_photo_id ? buildPhotoUrl(updated.cover_photo_id) : null,
+      });
+    }
+
+    throw new KinloomHttpError(404, 'NOT_FOUND', `Route PATCH ${ctx.url.pathname} was not found.`);
+  }
+
+  async function handleDeleteRequest(ctx: KinloomServerPluginContext): Promise<Response> {
+    const repo = resolveRepository(ctx);
+    const segments = splitRecipesRouteSegments(ctx.url.pathname);
+
+    // DELETE /api/plugins/recipes/:slugOrId/photos/:photoId
+    if (segments.length === 3 && segments[1] === 'photos') {
+      const settings = await resolveRuntimeSettings(ctx.ports);
+      requirePhotoUploadActor(ctx, settings);
+
+      const slugOrId = decodeSegment(segments[0]).trim();
+      const photoId = decodeSegment(segments[2]).trim();
+      const recipe = slugOrId ? await repo.getRecipeBySlugOrId(slugOrId) : null;
+      if (!recipe) {
+        throw new KinloomHttpError(404, 'RECIPE_NOT_FOUND', `Recipe '${slugOrId}' was not found.`);
+      }
+
+      const deleted = await repo.softDeletePhoto(recipe.id, photoId, ctx.ports.clock.nowIso());
+      if (!deleted) {
+        throw new KinloomHttpError(404, 'PHOTO_NOT_FOUND', `Recipe photo '${photoId}' was not found.`);
+      }
+
+      const mediaService = createRecipesMediaService(ctx);
+      await mediaService.deleteObject(deleted.r2_key);
+
+      return new Response(null, { status: 204, headers: { 'cache-control': 'no-store' } });
+    }
+
+    throw new KinloomHttpError(404, 'NOT_FOUND', `Route DELETE ${ctx.url.pathname} was not found.`);
   }
 
   return {
@@ -732,6 +1102,24 @@ export function createRecipesServerPlugin(options: RecipesServerPluginOptions = 
         pathPrefix: RECIPES_API_PREFIX,
         minRole: readMinRole,
         handle: handleGetRequest,
+      },
+      {
+        method: 'POST',
+        pathPrefix: RECIPES_API_PREFIX,
+        minRole: 'editor',
+        handle: handlePostRequest,
+      },
+      {
+        method: 'PATCH',
+        pathPrefix: RECIPES_API_PREFIX,
+        minRole: 'editor',
+        handle: handlePatchRequest,
+      },
+      {
+        method: 'DELETE',
+        pathPrefix: RECIPES_API_PREFIX,
+        minRole: 'editor',
+        handle: handleDeleteRequest,
       },
     ],
     async getReadonlySettings(
