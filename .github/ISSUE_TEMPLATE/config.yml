@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Questions and help (GitHub Discussions Q&A)
+    url: https://github.com/Tiberriver256/kinloom/discussions/categories/q-a
+    about: Ask setup, Cloudflare Worker deployment, GEDCOM, or CLI workflow questions.
+  - name: Show and tell (GitHub Discussions)
+    url: https://github.com/Tiberriver256/kinloom/discussions/categories/show-and-tell
+    about: Share custom plugins, archive setups, or research workflows built with Kinloom.
+  - name: Security and privacy vulnerabilities (Private Advisory)
+    url: https://github.com/Tiberriver256/kinloom/security/advisories/new
+    about: Report security flaws or living-person privacy bypasses privately. Do not open a public issue.

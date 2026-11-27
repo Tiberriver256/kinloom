@@ -1,0 +1,56 @@
+name: Feature request
+description: Propose a new capability or workflow improvement for Kinloom.
+title: "feat(...): "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Open-ended brainstorming fits best in [GitHub Discussions (Ideas)](https://github.com/Tiberriver256/kinloom/discussions/categories/ideas). Use this form for concrete feature proposals.
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Target package or surface
+      options:
+        - "@kinloom/core (schemas, EDTF, GEDCOM, privacy)"
+        - "@kinloom/server (HTTP API, auth, revisions, media)"
+        - "@kinloom/worker (Cloudflare D1 / R2 runtime)"
+        - "@kinloom/ui (React explorer, tree, map, editors)"
+        - "@kinloom/cli (archive commands, research tools, guides)"
+        - "@kinloom/tokens (Paper & Ink design system)"
+        - "Multiple packages"
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem statement
+      description: Describe the archival, research, or operator problem this solves.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: Describe the expected user or CLI behavior and any data model changes.
+    validations:
+      required: true
+
+  - type: textarea
+    id: privacy
+    attributes:
+      label: Living-person privacy impact
+      description: Explain how this feature preserves Kinloom's living-person redaction boundary, or state "No impact".
+    validations:
+      required: false
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Mention any plugin-based approach or workaround you considered.
+    validations:
+      required: false

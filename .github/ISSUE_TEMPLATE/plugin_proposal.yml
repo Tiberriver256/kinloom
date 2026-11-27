@@ -1,0 +1,45 @@
+name: Plugin proposal
+description: Propose a new Kinloom plugin, extension slot, server hook, or CLI audit/verify check.
+title: "plugin(...): "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Kinloom exposes three typed plugin seams (`KinloomUiPlugin`, `KinloomServerPlugin`, and `KinloomCliPlugin`) so private archives can extend Kinloom without forking core packages.
+
+  - type: dropdown
+    id: seam
+    attributes:
+      label: Plugin seam
+      options:
+        - "KinloomUiPlugin (@kinloom/ui)"
+        - "KinloomServerPlugin (@kinloom/server)"
+        - "KinloomCliPlugin (@kinloom/cli)"
+        - "Multiple seams"
+    validations:
+      required: true
+
+  - type: textarea
+    id: use-case
+    attributes:
+      label: Use case
+      description: What capability does this plugin add for archive readers, editors, or researchers?
+    validations:
+      required: true
+
+  - type: textarea
+    id: contract
+    attributes:
+      label: Proposed slots, hooks, routes, or checks
+      description: Describe the exact UI slots, server routes/hooks, or CLI subcommands and audit/verify checks needed.
+    validations:
+      required: true
+
+  - type: textarea
+    id: boundaries
+    attributes:
+      label: Security and privacy boundaries
+      description: Note required RBAC roles, CSRF behavior, or living-person redaction guarantees.
+    validations:
+      required: false
