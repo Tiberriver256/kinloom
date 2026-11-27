@@ -1,7 +1,0 @@
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "jsPlugins": ["./packages/core/src/oxlint/plugin.ts"],
-  "rules": {
-    "kinloom/no-hardcoded-archive-counts": "error"
-  }
-}
