@@ -8,9 +8,16 @@ import {
   resolveBrandSpec,
   resolveRouteOgMetadata,
 } from '@kinloom/core';
+import type { ServerPrivacyDisclosure } from '../documentContributions.js';
 import { applySecurityHeaders } from '../securityHeaders.js';
 
 const HEX_COLOR_PATTERN = /^#[0-9a-f]{6}$/i;
+const DEFAULT_ZERO_TRACKER_BULLET =
+  'This archive embeds zero tracking pixels or behavioral analytics trackers.';
+
+export interface RenderPrivacyPolicyOptions {
+  readonly disclosures?: readonly ServerPrivacyDisclosure[];
+}
 
 function escapeHtml(value: string): string {
   return value
@@ -21,13 +28,32 @@ function escapeHtml(value: string): string {
     .replace(/'/g, '&#39;');
 }
 
-export function renderPrivacyPolicyHtml(siteConfig: KinloomSiteConfig): string {
+function renderAnalyticsPrivacyBullets(disclosures?: readonly ServerPrivacyDisclosure[]): string {
+  if (!disclosures || disclosures.length === 0) {
+    return `      <li>${DEFAULT_ZERO_TRACKER_BULLET}</li>`;
+  }
+  const replacesZeroClaim = disclosures.some((item) => item.replacesZeroAnalyticsClaim === true);
+  const items: string[] = [];
+  if (!replacesZeroClaim) {
+    items.push(`      <li>${DEFAULT_ZERO_TRACKER_BULLET}</li>`);
+  }
+  for (const disclosure of disclosures) {
+    items.push(`      <li>${escapeHtml(disclosure.summary)}</li>`);
+  }
+  return items.join('\n');
+}
+
+export function renderPrivacyPolicyHtml(
+  siteConfig: KinloomSiteConfig,
+  options?: RenderPrivacyPolicyOptions
+): string {
   const title = escapeHtml(siteConfig.site.title);
   const familyName = escapeHtml(siteConfig.site.familyName);
   const accent =
     siteConfig.theme?.accent && HEX_COLOR_PATTERN.test(siteConfig.theme.accent)
       ? siteConfig.theme.accent
       : '#1B2A41';
+  const analyticsBullets = renderAnalyticsPrivacyBullets(options?.disclosures);
 
   return `<!doctype html>
 <html lang="en">
@@ -127,7 +153,7 @@ export function renderPrivacyPolicyHtml(siteConfig: KinloomSiteConfig): string {
     <h2>No Advertising or Third-Party Sharing</h2>
     <ul>
       <li>This archive serves zero advertisements.</li>
-      <li>This archive embeds zero tracking pixels or behavioral analytics trackers.</li>
+${analyticsBullets}
       <li>Your email address, display name, and family records are never sold, rented, or shared with third-party data brokers.</li>
     </ul>
 
@@ -240,12 +266,13 @@ export interface PrivacyAndOgRouteHandlerDeps {
   readonly siteConfig: KinloomSiteConfig;
   readonly entityStore: Pick<EntityReadStore, 'getEntity'>;
   readonly clock: Clock;
+  readonly privacyDisclosures?: readonly ServerPrivacyDisclosure[];
 }
 
 export function createPrivacyAndOgRouteHandler(
   deps: PrivacyAndOgRouteHandlerDeps
 ): (params: { pathname: string; method: string; isSecure: boolean }) => Promise<Response | null> {
-  const { siteConfig, entityStore, clock } = deps;
+  const { siteConfig, entityStore, clock, privacyDisclosures } = deps;
 
   return async ({ pathname, method, isSecure }) => {
     if (method !== 'GET' && method !== 'HEAD') {
@@ -253,7 +280,10 @@ export function createPrivacyAndOgRouteHandler(
     }
 
     if (pathname === '/privacy' || pathname === '/privacy/') {
-      const html = renderPrivacyPolicyHtml(siteConfig);
+      const html = renderPrivacyPolicyHtml(
+        siteConfig,
+        privacyDisclosures && privacyDisclosures.length > 0 ? { disclosures: privacyDisclosures } : undefined
+      );
       return new Response(method === 'HEAD' ? null : html, {
         status: 200,
         headers: {

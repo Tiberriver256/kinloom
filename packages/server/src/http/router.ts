@@ -8,6 +8,7 @@ import { PronunciationService } from '../services/pronunciationService.js';
 import { TalkService } from '../services/talkService.js';
 import { WikiWriteService } from '../services/wikiWriteService.js';
 import { enforceCsrfOrigin, requireMinRole, resolveCallerPrincipal } from './authMiddleware.js';
+import { compilePluginDocumentContributions, finalizeServerResponse } from './documentContributions.js';
 import { type HttpRequestContext, type HttpRouteHandler, jsonResponse } from './httpPrimitives.js';
 import {
   createRequestTelemetryTracker,
@@ -196,6 +197,7 @@ export function createKinloomServer(config: KinloomServerConfig): KinloomServer 
   const oauthCookieTtlSeconds = config.oauthCookieTtlSeconds ?? DEFAULT_OAUTH_COOKIE_TTL_SECONDS;
   const plugins = config.ports.plugins ?? [];
   const pluginRoutes = config.compiledPluginRoutes ?? validateAndCompilePluginRoutes(plugins);
+  const documentContributions = compilePluginDocumentContributions(plugins);
   const hasLifecyclePlugins = hasRequestLifecyclePlugins(plugins);
   const hasSecurityPlugins = hasSecurityEventPlugins(plugins);
   const securityPlugins = hasSecurityPlugins
@@ -261,6 +263,7 @@ export function createKinloomServer(config: KinloomServerConfig): KinloomServer 
     siteConfig: config.siteConfig,
     entityStore: config.ports.repository,
     clock: config.ports.clock,
+    privacyDisclosures: documentContributions?.privacyDisclosures,
   });
 
   const routeHandlers: readonly HttpRouteHandler[] = [
@@ -382,8 +385,14 @@ export function createKinloomServer(config: KinloomServerConfig): KinloomServer 
       if (!hasLifecyclePlugins && !hasSecurityPlugins) {
         try {
           const response = await handleRequest(request);
-          const isMediaResponse = isMediaPath && (response.status === 200 || response.status === 206);
-          return applySecurityHeaders(response, { isSecure, isMedia: isMediaResponse });
+          return finalizeServerResponse({
+            request,
+            pathname: url.pathname,
+            response,
+            isSecure,
+            isMediaPath,
+            documentContributions,
+          });
         } catch (error) {
           const mapped = toErrorResponseData(error);
           return applySecurityHeaders(jsonResponse(mapped.body, mapped.status, mapped.headers), {
@@ -416,8 +425,14 @@ export function createKinloomServer(config: KinloomServerConfig): KinloomServer 
 
       try {
         const response = await handleRequest(request, tracker);
-        const isMediaResponse = isMediaPath && (response.status === 200 || response.status === 206);
-        const secured = applySecurityHeaders(response, { isSecure, isMedia: isMediaResponse });
+        const secured = await finalizeServerResponse({
+          request,
+          pathname: url.pathname,
+          response,
+          isSecure,
+          isMediaPath,
+          documentContributions,
+        });
         await tracker.flushSecurityEvents();
         if (!hasLifecyclePlugins) {
           return secured;

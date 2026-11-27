@@ -3,8 +3,18 @@ import type {
   KinloomServerPlugin as CoreKinloomServerPlugin,
   KinloomServerPorts as CoreKinloomServerPorts,
 } from '@kinloom/core';
+import type { ServerDocumentContributions } from './documentContributions.js';
 import type { ServerSecurityEvent, ServerSecurityEventPayload } from './securityEvents.js';
 
+export {
+  type CompiledDocumentContributions,
+  compilePluginDocumentContributions,
+  finalizeServerResponse,
+  injectHtmlSnippets,
+  isHtmlDocumentResponse,
+  type ServerDocumentContributions,
+  type ServerPrivacyDisclosure,
+} from './documentContributions.js';
 export {
   type AgentTokenRejectedReason,
   type CsrfRejectedReason,
@@ -59,6 +69,7 @@ export interface ServerRequestErrorEvent {
 }
 
 export interface KinloomServerPlugin extends CoreKinloomServerPlugin {
+  readonly documentContributions?: ServerDocumentContributions;
   onRequestStart?(event: ServerRequestStartEvent): void | Promise<void>;
   onResponse?(event: ServerRequestResponseEvent): void | Promise<void>;
   onError?(event: ServerRequestErrorEvent): void | Promise<void>;

@@ -70,6 +70,7 @@ When `enabled` is `false`, the factory returns an inert plugin with no request l
 | `now` | `() => number` | `performance.now()` | Supplies deterministic millisecond timestamps for tests. |
 | `generateRequestId` | `() => string` | `crypto.randomUUID()` | Generates a request ID when incoming headers are absent or rejected. |
 | `securityTelemetry` | `boolean \| SecurityTelemetryOptions` | `false` | Enables redacted `security_event` logs and optional alert callbacks when explicitly set to `true` or `{ enabled: true, ... }`. |
+| `webAnalytics` | `WebAnalyticsOptions` | `undefined` (off) | Enables cookie-free Cloudflare Web Analytics beacon injection, scoped CSP origins, and truthful `/privacy` disclosure when `{ enabled: true, token }` is set. |
 
 ## Response headers
 
@@ -355,3 +356,54 @@ Configure it in **Speed > Observatory** for your archive zone when you want cont
 	- **INP:** `<= 200 ms`
 	- **Bundle cold latency:** `<= 1500 ms` and **R2 media `206` range latency:** `<= 1000 ms`
 4. **Correlate regressions:** When Observatory flags a TTFB or LCP regression, run `kinloom probe --url https://archive.example.test --json` to inspect `Server-Timing` (`d1`, `r2`, `bundle`, `total`) alongside Workers Logs (`event = "http_request"`).
+
+## Cloudflare Web Analytics (RUM) and Core Web Vitals (off by default)
+
+Cloudflare Web Analytics collects aggregate page-load metrics and Core Web Vitals without cookies or cross-site tracking.
+The module stays off by default in `createKinloomServer`, `createCloudflareWorker`, and `createWorkersObservabilityPlugin()`.
+When `webAnalytics` is omitted or `{ enabled: false }`, the server sends zero beacon scripts, keeps `DEFAULT_CONTENT_SECURITY_POLICY` unchanged, and keeps the default zero-tracker `/privacy` page unchanged.
+
+### Enable Cloudflare Web Analytics
+
+1. In the Cloudflare dashboard, open **Analytics & Logs > Web Analytics**, add your archive site, and copy the 32-character hexadecimal site token.
+2. Store the token in your Worker environment as `CF_WEB_ANALYTICS_TOKEN` (for example in `wrangler.jsonc` `vars` or Wrangler secrets).
+3. Pass `webAnalytics: { enabled: true, token: env.CF_WEB_ANALYTICS_TOKEN }` to `createWorkersObservabilityPlugin`:
+
+```ts
+import {
+	createCloudflareWorker,
+	createWorkersObservabilityPlugin,
+	type ExecutionContext,
+	type KinloomWorkerEnv,
+} from '@kinloom/worker';
+import { siteConfig } from './siteConfig.js';
+
+export default {
+	fetch(request: Request, env: KinloomWorkerEnv, ctx: ExecutionContext): Promise<Response> {
+		const worker = createCloudflareWorker({
+			siteConfig,
+			plugins: [
+				createWorkersObservabilityPlugin({
+					webAnalytics: env.CF_WEB_ANALYTICS_TOKEN
+						? { enabled: true, token: env.CF_WEB_ANALYTICS_TOKEN }
+						: { enabled: false },
+				}),
+			],
+		});
+		return worker.fetch(request, env, ctx);
+	},
+};
+```
+
+### Token validation, CSP scoping, and truthful `/privacy` disclosure
+
+- **Strict token validation:** `validateCloudflareWebAnalyticsToken` requires an exact 32-character lowercase hexadecimal string (`/^[0-9a-f]{32}$/`). If `enabled` is `true` and `token` is empty, uppercase, non-hex, contains whitespace, or contains HTML characters, `createWorkersObservabilityPlugin` throws a `RangeError` at plugin creation.
+- **HTML-only beacon injection:** The router injects `<script defer src="https://static.cloudflareinsights.com/beacon.min.js" data-cf-beacon='{"token":"<validated-token>"}'></script>` before `</body>` (or `</head>` if `</body>` is absent) on `2xx` `text/html` document responses, strips stale `Content-Length` and `Content-Encoding` headers, and preserves `Content-Type: text/html`. API JSON (`/api/*`), OG SVG (`/og/*`), media (`/media/*`), `robots.txt`, JavaScript, and CSS responses never receive a `<script>` tag.
+- **Scoped CSP additions:** On HTML responses only, the server appends `https://static.cloudflareinsights.com` to `script-src` and `https://cloudflareinsights.com` to `connect-src`. Every other CSP directive (`default-src`, `style-src`, `img-src`, `frame-ancestors`, `object-src`, and `/media/*` sandbox CSP) stays unchanged, and neither `'unsafe-inline'` nor `'unsafe-eval'` is ever added to `script-src`.
+- **Truthful `/privacy` disclosure:** When Web Analytics is enabled, `/privacy` replaces the default zero-analytics bullet with a disclosure stating that the archive uses optional, cookie-free Cloudflare Web Analytics for aggregate page-load and Core Web Vitals performance telemetry with zero cookies, zero cross-site tracking, and zero advertising trackers.
+
+### Manual plugin injection vs Cloudflare automatic beacon
+
+Keep Cloudflare's dashboard **Automatic setup** (edge auto-injection for Pages or proxied zones) disabled when you run Kinloom.
+Automatic injection adds the beacon outside Kinloom's router, which breaks Kinloom's strict default `script-src 'self'` CSP and causes the `/privacy` page to contradict the live HTML.
+Using the `webAnalytics` plugin option keeps beacon injection, scoped CSP directives, and the `/privacy` disclosure synchronized and off by default.

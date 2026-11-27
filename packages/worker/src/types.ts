@@ -153,4 +153,5 @@ export interface KinloomWorkerEnv {
   ARCHIVE_MODE?: 'public' | 'private';
   GEMINI_API_KEY?: string;
   GEMINI_TTS_MODEL?: string;
+  CF_WEB_ANALYTICS_TOKEN?: string;
 }

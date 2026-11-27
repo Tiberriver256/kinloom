@@ -9,6 +9,7 @@ import type {
   ServerTimingSpanName,
 } from '../http/pluginLifecycle.js';
 import { createSecurityTelemetryHandler, type WorkersSecurityTelemetryOption } from './securityTelemetry.js';
+import { createWebAnalyticsDocumentContributions, type WebAnalyticsOptions } from './webAnalytics.js';
 
 export {
   buildSecurityTelemetryLogRecord,
@@ -22,6 +23,20 @@ export {
   type SecurityTelemetrySink,
   type WorkersSecurityTelemetryOption,
 } from './securityTelemetry.js';
+export {
+  CLOUDFLARE_WEB_ANALYTICS_BEACON_URL,
+  CLOUDFLARE_WEB_ANALYTICS_CONNECT_ORIGIN,
+  CLOUDFLARE_WEB_ANALYTICS_PRIVACY_DISCLOSURE_ID,
+  CLOUDFLARE_WEB_ANALYTICS_PRIVACY_SUMMARY,
+  CLOUDFLARE_WEB_ANALYTICS_SCRIPT_ORIGIN,
+  type CloudflareWebAnalyticsToken,
+  createWebAnalyticsDocumentContributions,
+  isCloudflareWebAnalyticsToken,
+  isWebAnalyticsEnabled,
+  renderCloudflareWebAnalyticsBeaconHtml,
+  validateCloudflareWebAnalyticsToken,
+  type WebAnalyticsOptions,
+} from './webAnalytics.js';
 
 export const WORKERS_OBSERVABILITY_PLUGIN_ID = 'kinloom-workers-observability';
 
@@ -67,6 +82,11 @@ export interface WorkersObservabilityPluginOptions {
    * Strictly OFF by default even when createWorkersObservabilityPlugin() is registered.
    */
   readonly securityTelemetry?: WorkersSecurityTelemetryOption;
+  /**
+   * Opt-in privacy-first Cloudflare Web Analytics (RUM and Core Web Vitals).
+   * Strictly OFF by default even when createWorkersObservabilityPlugin() is registered.
+   */
+  readonly webAnalytics?: WebAnalyticsOptions;
 }
 
 interface PerRequestObservabilityState {
@@ -289,9 +309,12 @@ export function createWorkersObservabilityPlugin(
       })
     : undefined;
 
+  const documentContributions = createWebAnalyticsDocumentContributions(options.webAnalytics);
+
   return {
     id: WORKERS_OBSERVABILITY_PLUGIN_ID,
     name: 'Cloudflare Workers Observability',
+    ...(documentContributions ? { documentContributions } : {}),
 
     onRequestStart(event: ServerRequestStartEvent): void {
       ensureState(event.telemetry.request, event.telemetry.metadata);

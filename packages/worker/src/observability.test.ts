@@ -1,7 +1,13 @@
 import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { FixedClock, getSessionCookieName, signSessionToken } from '@kinloom/server';
+import { parseKinloomConfig } from '@kinloom/core';
+import {
+  DEFAULT_CONTENT_SECURITY_POLICY,
+  FixedClock,
+  getSessionCookieName,
+  signSessionToken,
+} from '@kinloom/server';
 import {
   CONTRACT_SESSION_SECRET,
   CONTRACT_TEST_ORIGIN,
@@ -11,12 +17,17 @@ import {
 import { Miniflare } from 'miniflare';
 import { describe, expect, it, vi } from 'vitest';
 import {
+  CLOUDFLARE_WEB_ANALYTICS_CONNECT_ORIGIN,
+  CLOUDFLARE_WEB_ANALYTICS_PRIVACY_SUMMARY,
+  CLOUDFLARE_WEB_ANALYTICS_SCRIPT_ORIGIN,
   createCloudflareWorker,
   createWorkersObservabilityPlugin,
   type D1Database,
   type ExecutionContext,
+  type Fetcher,
   type KinloomWorkerEnv,
   type R2Bucket,
+  renderPrivacyPolicyHtml,
   type SecurityTelemetryLogRecord,
   type WorkersObservabilityLogRecord,
 } from './index.js';
@@ -350,6 +361,190 @@ describe('createCloudflareWorker optional Workers Observability plugin', () => {
       ]);
       expect(JSON.stringify(securityRecords)).not.toContain('kin_worker_secret_token_987654');
       expect(JSON.stringify(securityRecords)).not.toContain('evil.worker.example.test');
+    } finally {
+      await mf.dispose();
+    }
+  });
+
+  it('keeps Cloudflare Web Analytics off by default on Worker ASSETS and injects beacon, scoped CSP, and truthful /privacy when enabled', async () => {
+    const { mf, env } = await createMiniflareEnv();
+    const validToken = '0123456789abcdef0123456789abcdef';
+    const expectedBeacon = `<script defer src="https://static.cloudflareinsights.com/beacon.min.js" data-cf-beacon='{"token":"${validToken}"}'></script>`;
+    const expectedScopedCsp = [
+      "default-src 'self'",
+      `script-src 'self' ${CLOUDFLARE_WEB_ANALYTICS_SCRIPT_ORIGIN}`,
+      "style-src 'self' 'unsafe-inline'",
+      "img-src 'self' data: blob: https:",
+      "font-src 'self' data: https://www.openhistoricalmap.org https://*.openhistoricalmap.org",
+      `connect-src 'self' https://www.openhistoricalmap.org https://*.openhistoricalmap.org ${CLOUDFLARE_WEB_ANALYTICS_CONNECT_ORIGIN}`,
+      "media-src 'self' blob:",
+      "worker-src 'self' blob:",
+      "object-src 'none'",
+      "base-uri 'self'",
+      "frame-ancestors 'none'",
+      "form-action 'self' https://accounts.google.com",
+    ].join('; ');
+    const spaIndexHtml =
+      '<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Alder Archive</title></head><body><main id="app"></main></body></html>';
+
+    const fakeAssets: Fetcher = {
+      async fetch(input: Request | string | URL, init?: RequestInit): Promise<Response> {
+        const req = input instanceof Request ? input : new Request(String(input), init);
+        const pathname = new URL(req.url).pathname;
+        const headOnly = req.method.toUpperCase() === 'HEAD';
+        if (pathname === '/' || pathname === '/index.html') {
+          return new Response(headOnly ? null : spaIndexHtml, {
+            status: 200,
+            headers: {
+              'content-type': 'text/html; charset=utf-8',
+              'content-length': String(spaIndexHtml.length),
+            },
+          });
+        }
+        if (pathname === '/assets/main.js') {
+          return new Response(headOnly ? null : 'export const ready = true;', {
+            status: 200,
+            headers: { 'content-type': 'text/javascript; charset=utf-8' },
+          });
+        }
+        if (pathname === '/robots.txt') {
+          return new Response(headOnly ? null : 'User-agent: *\nDisallow: /\n', {
+            status: 200,
+            headers: { 'content-type': 'text/plain; charset=utf-8' },
+          });
+        }
+        return new Response('Not Found', { status: 404 });
+      },
+    };
+    const envWithAssets: KinloomWorkerEnv = {
+      ...env,
+      ASSETS: fakeAssets,
+      CF_WEB_ANALYTICS_TOKEN: validToken,
+    };
+
+    try {
+      const baseSiteConfig = createSyntheticSiteConfig();
+      const siteConfig = parseKinloomConfig({
+        ...baseSiteConfig,
+        brand: { ...baseSiteConfig.brand, dynamicOg: true },
+      });
+      const clock = new FixedClock('2026-07-01T09:00:00.000Z');
+
+      // Default OFF (no plugins) and observability plugin without webAnalytics emit zero beacon and default CSP.
+      for (const worker of [
+        createCloudflareWorker({ siteConfig, clock }),
+        createCloudflareWorker({
+          siteConfig,
+          clock,
+          plugins: [createWorkersObservabilityPlugin({ clock, sink: () => undefined })],
+        }),
+        createCloudflareWorker({
+          siteConfig,
+          clock,
+          plugins: [
+            createWorkersObservabilityPlugin({
+              clock,
+              sink: () => undefined,
+              webAnalytics: { enabled: false, token: validToken },
+            }),
+          ],
+        }),
+      ]) {
+        const defaultHome = await worker.fetch(new Request(`${CONTRACT_TEST_ORIGIN}/`), envWithAssets);
+        expect(defaultHome.status).toBe(200);
+        expect(defaultHome.headers.get('content-security-policy')).toBe(DEFAULT_CONTENT_SECURITY_POLICY);
+        expect(await defaultHome.text()).toBe(spaIndexHtml);
+
+        const defaultPrivacy = await worker.fetch(
+          new Request(`${CONTRACT_TEST_ORIGIN}/privacy`),
+          envWithAssets
+        );
+        expect(defaultPrivacy.status).toBe(200);
+        expect(defaultPrivacy.headers.get('content-security-policy')).toBe(DEFAULT_CONTENT_SECURITY_POLICY);
+        expect(await defaultPrivacy.text()).toBe(renderPrivacyPolicyHtml(siteConfig));
+      }
+
+      // Invalid token fails fast synchronously before any Worker request runs.
+      expect(() =>
+        createWorkersObservabilityPlugin({
+          webAnalytics: { enabled: true, token: '"><script>alert(1)</script>' },
+        })
+      ).toThrow(RangeError);
+
+      // Opt-in ON state via env.CF_WEB_ANALYTICS_TOKEN.
+      const rumWorker = createCloudflareWorker({
+        siteConfig,
+        clock,
+        plugins: [
+          createWorkersObservabilityPlugin({
+            clock,
+            sink: () => undefined,
+            webAnalytics: {
+              enabled: true,
+              token: envWithAssets.CF_WEB_ANALYTICS_TOKEN ?? '',
+            },
+          }),
+        ],
+      });
+
+      const homeRes = await rumWorker.fetch(new Request(`${CONTRACT_TEST_ORIGIN}/`), envWithAssets);
+      expect(homeRes.status).toBe(200);
+      expect(homeRes.headers.get('content-type')).toBe('text/html; charset=utf-8');
+      expect(homeRes.headers.get('content-length')).toBeNull();
+      expect(homeRes.headers.get('content-security-policy')).toBe(expectedScopedCsp);
+      expect(await homeRes.text()).toContain(`${expectedBeacon}\n</body>`);
+
+      // SPA fallback route served via Cloudflare ASSETS /index.html also injects beacon and scoped CSP.
+      const spaFallbackRes = await rumWorker.fetch(
+        new Request(`${CONTRACT_TEST_ORIGIN}/people/arthur-alder`),
+        envWithAssets
+      );
+      expect(spaFallbackRes.status).toBe(200);
+      expect(spaFallbackRes.headers.get('content-type')).toBe('text/html; charset=utf-8');
+      expect(spaFallbackRes.headers.get('content-length')).toBeNull();
+      expect(spaFallbackRes.headers.get('content-security-policy')).toBe(expectedScopedCsp);
+      expect(await spaFallbackRes.text()).toContain(`${expectedBeacon}\n</body>`);
+
+      // /privacy renders truthful Cloudflare Web Analytics disclosure.
+      const privacyRes = await rumWorker.fetch(new Request(`${CONTRACT_TEST_ORIGIN}/privacy`), envWithAssets);
+      expect(privacyRes.status).toBe(200);
+      expect(privacyRes.headers.get('content-security-policy')).toBe(expectedScopedCsp);
+      const privacyHtml = await privacyRes.text();
+      expect(privacyHtml).toContain(CLOUDFLARE_WEB_ANALYTICS_PRIVACY_SUMMARY);
+      expect(privacyHtml).not.toContain(
+        'This archive embeds zero tracking pixels or behavioral analytics trackers.'
+      );
+      expect(privacyHtml).toContain(`${expectedBeacon}\n</body>`);
+
+      // Non-HTML endpoints (/api/health, /og/site.svg, /assets/main.js, /robots.txt) remain unmodified.
+      const apiHealthRes = await rumWorker.fetch(
+        new Request(`${CONTRACT_TEST_ORIGIN}/api/health`),
+        envWithAssets
+      );
+      expect(apiHealthRes.status).toBe(404);
+      expect(apiHealthRes.headers.get('content-security-policy')).toBe(DEFAULT_CONTENT_SECURITY_POLICY);
+      expect(await apiHealthRes.text()).not.toContain('<script');
+
+      const ogRes = await rumWorker.fetch(new Request(`${CONTRACT_TEST_ORIGIN}/og/site.svg`), envWithAssets);
+      expect(ogRes.status).toBe(200);
+      expect(ogRes.headers.get('content-security-policy')).toBe(DEFAULT_CONTENT_SECURITY_POLICY);
+      expect(await ogRes.text()).not.toContain('<script');
+
+      const jsRes = await rumWorker.fetch(
+        new Request(`${CONTRACT_TEST_ORIGIN}/assets/main.js`),
+        envWithAssets
+      );
+      expect(jsRes.status).toBe(200);
+      expect(jsRes.headers.get('content-security-policy')).toBe(DEFAULT_CONTENT_SECURITY_POLICY);
+      expect(await jsRes.text()).toBe('export const ready = true;');
+
+      const robotsRes = await rumWorker.fetch(
+        new Request(`${CONTRACT_TEST_ORIGIN}/robots.txt`),
+        envWithAssets
+      );
+      expect(robotsRes.status).toBe(200);
+      expect(robotsRes.headers.get('content-security-policy')).toBe(DEFAULT_CONTENT_SECURITY_POLICY);
+      expect(await robotsRes.text()).toBe('User-agent: *\nDisallow: /\n');
     } finally {
       await mf.dispose();
     }
