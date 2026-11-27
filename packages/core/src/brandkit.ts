@@ -361,36 +361,36 @@ export function renderOgCardSvg(options: {
     .join('\n    ');
 
   if (options.vignetteDataUri) {
-    const titleLines = wrapTextLines(options.title, 20, 2);
-    const titleFontSize = titleLines.some((line) => line.length > 16) ? 54 : 62;
-    const titleStartY = titleLines.length === 1 ? 268 : 246;
+    const titleLines = wrapTextLines(options.title, 18, 2);
+    const titleFontSize = titleLines.some((line) => line.length > 14) ? 62 : 70;
+    const titleStartY = titleLines.length === 1 ? 268 : 238;
     const titleSvg = titleLines
       .map(
         (line, idx) =>
-          `<text x="96" y="${titleStartY + idx * (titleFontSize + 10)}" fill="${titleColor}" font-family="${serifFont}" font-size="${titleFontSize}" font-weight="600">${escapeXml(line)}</text>`
+          `<text x="90" y="${titleStartY + idx * (titleFontSize + 12)}" fill="${titleColor}" font-family="${serifFont}" font-size="${titleFontSize}" font-weight="700">${escapeXml(line)}</text>`
       )
       .join('\n    ');
 
-    const ruleY = titleStartY + titleLines.length * (titleFontSize + 10) + 12;
-    const subtitleLines = wrapTextLines(options.subtitle, 34, 2);
+    const ruleY = titleStartY + titleLines.length * (titleFontSize + 12) + 14;
+    const subtitleLines = wrapTextLines(options.subtitle, 28, 2);
     const subtitleSvg = subtitleLines
       .map(
         (line, idx) =>
-          `<text x="96" y="${ruleY + 42 + idx * 32}" fill="${subtitleColor}" font-family="${serifFont}" font-size="26">${escapeXml(line)}</text>`
+          `<text x="90" y="${ruleY + 48 + idx * 42}" fill="${subtitleColor}" font-family="${serifFont}" font-size="34" font-weight="500">${escapeXml(line)}</text>`
       )
       .join('\n    ');
 
-    const metaY = ruleY + 42 + subtitleLines.length * 32 + 16;
+    const metaY = ruleY + 48 + subtitleLines.length * 42 + 20;
     const metaSvg = options.metadataLine
-      ? `<text x="96" y="${Math.min(metaY, 512)}" fill="${subtitleColor}" font-family="${monoFont}" font-size="16" letter-spacing="2.2">${escapeXml(options.metadataLine.toUpperCase())}</text>`
+      ? `<text x="90" y="${Math.min(metaY, 514)}" fill="${titleColor}" font-family="${monoFont}" font-size="22" font-weight="600" letter-spacing="1.6">${escapeXml(options.metadataLine.toUpperCase())}</text>`
       : '';
 
     const footerSvg = options.footerCredit
-      ? `<text x="96" y="558" fill="${subtitleColor}" font-family="${monoFont}" font-size="14" letter-spacing="2">${escapeXml(options.footerCredit.toUpperCase())}</text>`
+      ? `<text x="90" y="562" fill="${subtitleColor}" font-family="${monoFont}" font-size="20" font-weight="600" letter-spacing="1.6">${escapeXml(options.footerCredit.toUpperCase())}</text>`
       : '';
 
     const kickerSvg = options.kicker
-      ? `<text x="160" y="138" fill="${accent}" font-family="${monoFont}" font-size="15" font-weight="600" letter-spacing="2.4">${escapeXml(options.kicker.toUpperCase())}</text>`
+      ? `<text x="160" y="138" fill="${accent}" font-family="${monoFont}" font-size="20" font-weight="600" letter-spacing="2">${escapeXml(options.kicker.toUpperCase())}</text>`
       : '';
 
     return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}" width="${width}" height="${height}" fill="none">
@@ -401,12 +401,12 @@ export function renderOgCardSvg(options: {
   </defs>
   <rect x="0" y="0" width="${width}" height="${height}" fill="${bg}"/>
   <rect x="34" y="34" width="${width - 68}" height="${height - 68}" fill="${cardBg}" stroke="${ruleColor}" stroke-width="1.5"/>
-  <g transform="translate(96, 102) scale(2)">
+  <g transform="translate(90, 96) scale(2.2)">
     ${markContent}
   </g>
   ${kickerSvg}
   ${titleSvg}
-  <line x1="96" y1="${ruleY}" x2="660" y2="${ruleY}" stroke="${accent}" stroke-width="3"/>
+  <line x1="90" y1="${ruleY}" x2="660" y2="${ruleY}" stroke="${accent}" stroke-width="4"/>
   ${subtitleSvg}
   ${metaSvg}
   ${footerSvg}
@@ -416,37 +416,38 @@ export function renderOgCardSvg(options: {
 `;
   }
 
-  const titleLines = wrapTextLines(options.title, 26, 2);
-  const titleFontSize = titleLines.some((line) => line.length > 20) ? 58 : 72;
-  const titleStartY = titleLines.length === 1 ? 336 : 312;
+  // Centered editorial layout tuned for high-contrast phone legibility inside the 1080x600 safe zone
+  const titleLines = wrapTextLines(options.title, 22, 2);
+  const titleFontSize = titleLines.length === 1 ? 86 : 74;
+  const titleStartY = titleLines.length === 1 ? 320 : 280;
   const titleSvg = titleLines
     .map(
       (line, idx) =>
-        `<text x="600" y="${titleStartY + idx * (titleFontSize + 10)}" text-anchor="middle" fill="${titleColor}" font-family="${serifFont}" font-size="${titleFontSize}" font-weight="600">${escapeXml(line)}</text>`
+        `<text x="600" y="${titleStartY + idx * (titleFontSize + 12)}" text-anchor="middle" fill="${titleColor}" font-family="${serifFont}" font-size="${titleFontSize}" font-weight="700">${escapeXml(line)}</text>`
     )
     .join('\n  ');
 
-  const subtitleY = titleStartY + titleLines.length * (titleFontSize + 10) + 12;
-  const subtitleLines = wrapTextLines(options.subtitle, 54, 2);
+  const subtitleY = titleStartY + (titleLines.length - 1) * (titleFontSize + 12) + 66;
+  const subtitleLines = wrapTextLines(options.subtitle, 42, 2);
   const subtitleSvg = subtitleLines
     .map(
       (line, idx) =>
-        `<text x="600" y="${subtitleY + idx * 34}" text-anchor="middle" fill="${subtitleColor}" font-family="${serifFont}" font-size="28">${escapeXml(line)}</text>`
+        `<text x="600" y="${subtitleY + idx * 46}" text-anchor="middle" fill="${subtitleColor}" font-family="${serifFont}" font-size="38" font-weight="500">${escapeXml(line)}</text>`
     )
     .join('\n  ');
 
-  const ruleY = subtitleY + subtitleLines.length * 34 + 14;
-  const metaY = Math.min(ruleY + 42, 548);
+  const ruleY = subtitleY + (subtitleLines.length - 1) * 46 + 38;
+  const metaY = Math.min(ruleY + 52, 566);
   const metaText = options.metadataLine?.trim() || options.footerCredit?.trim() || '';
   const metaSvg = metaText
-    ? `<text x="600" y="${metaY}" text-anchor="middle" fill="${titleColor}" font-family="${monoFont}" font-size="16" font-weight="500" letter-spacing="2.4">${escapeXml(metaText.toUpperCase())}</text>`
+    ? `<text x="600" y="${metaY}" text-anchor="middle" fill="${titleColor}" font-family="${monoFont}" font-size="24" font-weight="600" letter-spacing="1.8">${escapeXml(metaText.toUpperCase())}</text>`
     : '';
 
   const kickerSvg = options.kicker
-    ? `<text x="600" y="92" text-anchor="middle" fill="${accent}" font-family="${monoFont}" font-size="15" font-weight="600" letter-spacing="2.6">${escapeXml(options.kicker.toUpperCase())}</text>`
+    ? `<text x="600" y="84" text-anchor="middle" fill="${accent}" font-family="${monoFont}" font-size="22" font-weight="600" letter-spacing="2.2">${escapeXml(options.kicker.toUpperCase())}</text>`
     : '';
 
-  const markY = options.kicker ? 116 : 104;
+  const markY = options.kicker ? 102 : 70;
 
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}" width="${width}" height="${height}" fill="none">
   <rect x="0" y="0" width="${width}" height="${height}" fill="${bg}"/>
@@ -461,7 +462,7 @@ export function renderOgCardSvg(options: {
   </g>
   ${titleSvg}
   ${subtitleSvg}
-  <line x1="528" y1="${ruleY}" x2="672" y2="${ruleY}" stroke="${accent}" stroke-width="3"/>
+  <line x1="510" y1="${ruleY}" x2="690" y2="${ruleY}" stroke="${accent}" stroke-width="4"/>
   ${metaSvg}
 </svg>
 `;
