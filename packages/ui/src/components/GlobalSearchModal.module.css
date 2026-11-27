@@ -42,7 +42,7 @@
 .global-search-input {
   flex: 1 1 auto;
   min-width: 0;
-  min-height: 36px;
+  min-height: 44px;
   border: none;
   background: transparent;
   font-family: var(--font-serif);
@@ -112,22 +112,24 @@
   color: var(--text-secondary);
 }
 
-@media (max-width: 768px) {
-  .global-search-input,
+@media (max-width: 760px) {
   .global-search-close-btn {
     min-height: 44px;
     display: inline-flex;
     align-items: center;
   }
 
-  .global-search-close-desktop {
+  .global-search-close-desktop,
+  .global-search-kbd-hint {
     display: none;
   }
 
   .global-search-close-mobile {
     display: inline;
   }
+}
 
+@media (pointer: coarse), (max-width: 768px) {
   .global-search-kbd-hint {
     display: none;
   }
