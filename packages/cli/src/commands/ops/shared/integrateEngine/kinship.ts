@@ -1,5 +1,5 @@
 import { type KinshipEdge, KinshipEdgeSchema } from '@kinloom/core';
-import { CliValidationError } from '../../../errors.js';
+import { CliValidationError } from '../../../../errors.js';
 import { canonicalJsonStringify, isPlainObject } from './primitives.js';
 import {
   type RemovedKinshipEdge,

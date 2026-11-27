@@ -1,6 +1,6 @@
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import type { WranglerExecOptions, WranglerExecutor } from '../sync.js';
+import type { WranglerExecOptions, WranglerExecutor } from '../shared/wrangler.js';
 import {
   type D1SchemaSnapshot,
   type D1StatementResult,

@@ -1,13 +1,13 @@
 import path from 'node:path';
 import {
-  edtfToBounds,
   getCurrentReferenceYear,
   type PrivacyConfig,
   type RawPerson,
   RawPersonSchema,
   resolveEffectiveLiving,
 } from '@kinloom/core';
-import { CliValidationError } from '../../../errors.js';
+import { CliValidationError } from '../../../../errors.js';
+import { parseValidDeathEdtf } from '../stagedPackages.js';
 import { canonicalJsonStringify, dedupeStrings, isPlainObject } from './primitives.js';
 import { type NormalizedPatch, SAFE_PERSON_ID_RE, SAFE_SLUG_RE, type UpsertCounts } from './types.js';
 
@@ -69,17 +69,7 @@ function dedupeExtensionSources(
   return out;
 }
 
-export function parseValidDeathEdtf(raw: unknown): string | null {
-  if (raw === undefined || raw === null) {
-    return null;
-  }
-  const trimmed = String(raw).trim();
-  const slashIdx = trimmed.indexOf('/');
-  if (!trimmed || (slashIdx !== -1 && trimmed.indexOf('/', slashIdx + 1) !== -1)) {
-    return null;
-  }
-  return edtfToBounds(trimmed) !== null ? trimmed : null;
-}
+export { parseValidDeathEdtf };
 
 function resolveValidDeathEdtfUpdate(updates: Record<string, unknown> | null): string | null {
   if (!updates) {

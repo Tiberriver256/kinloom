@@ -1,10 +1,18 @@
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
-import { parseYaml } from '@kinloom/core';
+import {
+  extractYamlBlockId,
+  isPlainYamlRecord,
+  parseBlocksById,
+  parseMatchingYamlBlocks,
+  splitTopLevelYamlList,
+} from '../shared/yamlScanner.js';
 import type { ArchiveYamlBlocks, LooseYamlRecord } from './types.js';
 
+export { extractYamlBlockId, parseBlocksById, parseMatchingYamlBlocks, splitTopLevelYamlList };
+
 export function isPlainRecord(value: unknown): value is LooseYamlRecord {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
+  return isPlainYamlRecord(value);
 }
 
 export function asNonEmptyString(value: unknown): string {
@@ -37,49 +45,6 @@ export async function readOptionalUtf8(filePath: string): Promise<string | null>
     }
     throw err;
   }
-}
-
-export function splitTopLevelYamlList(text: string | null): string[] {
-  if (!text) {
-    return [];
-  }
-  const normalized = text.replaceAll('\r\n', '\n');
-  const startIdx = normalized.startsWith('- ') ? 0 : normalized.indexOf('\n- ');
-  if (startIdx === -1) {
-    return [];
-  }
-  const body = startIdx === 0 ? normalized : normalized.slice(startIdx + 1);
-  return body.split(/\n(?=- )/);
-}
-
-export function extractYamlBlockId(block: string): string | null {
-  const match = /^- id:\s*["']?([^"'\n\r]+?)["']?\s*(?:\n|$)/.exec(block);
-  return match ? match[1].trim() : null;
-}
-
-export function parseMatchingYamlBlocks(blocks: readonly string[]): LooseYamlRecord[] {
-  if (blocks.length === 0) {
-    return [];
-  }
-  const parsed = parseYaml(blocks.join('\n'));
-  if (!Array.isArray(parsed)) {
-    return [];
-  }
-  return parsed.filter(isPlainRecord);
-}
-
-export function parseBlocksById(
-  blocks: readonly string[],
-  wantedIds: ReadonlySet<string>
-): LooseYamlRecord[] {
-  if (wantedIds.size === 0) {
-    return [];
-  }
-  const matched = blocks.filter((block) => {
-    const id = extractYamlBlockId(block);
-    return id !== null && wantedIds.has(id);
-  });
-  return parseMatchingYamlBlocks(matched);
 }
 
 export async function loadArchiveYamlBlocks(repoDir: string, dataDir: string): Promise<ArchiveYamlBlocks> {

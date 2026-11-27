@@ -70,6 +70,19 @@ export function daysSinceEpoch(year: number, month: number, day: number): number
   return toJulianDayNumber(year, month, day) - EPOCH_JDN;
 }
 
+/**
+ * Convert epoch days (days since 1970-01-01) back to a proleptic Gregorian calendar year without `Date`.
+ */
+export function epochDaysToYear(epochDays: number): number {
+  const j = Math.floor(epochDays) + EPOCH_JDN;
+  const f = j + 1401 + Math.floor((Math.floor((4 * j + 274277) / 146097) * 3) / 4) - 38;
+  const e = 4 * f + 3;
+  const g = Math.floor((e % 1461) / 4);
+  const h = 5 * g + 2;
+  const month = ((Math.floor(h / 153) + 2) % 12) + 1;
+  return Math.floor(e / 1461) - 4716 + Math.floor((12 + 2 - month) / 12);
+}
+
 export function lastDayOfMonth(year: number, month: number): number {
   if (month < 1 || month > 12) {
     return 31;
@@ -173,6 +186,18 @@ export function edtfToBounds(edtf: string | number | null | undefined): [number,
     return null;
   }
   return edtfPartBounds(s);
+}
+
+/**
+ * Convert an EDTF string into [earliestYear, latestYear] using `edtfToBounds()`.
+ */
+export function edtfYearBounds(edtf: string | number | null | undefined): [number, number] | null {
+  const bounds = edtfToBounds(edtf);
+  if (bounds) {
+    return [epochDaysToYear(bounds[0]), epochDaysToYear(bounds[1])];
+  }
+  const fallback = edtfYear(edtf);
+  return fallback !== null ? [fallback, fallback] : null;
 }
 
 /**

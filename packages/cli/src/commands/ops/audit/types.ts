@@ -1,5 +1,5 @@
 import type { ExecutedPluginCheckResult, KinloomCliPlugin } from '../../../plugins.js';
-import type { IntegrateCommandResult } from '../integrate.js';
+import type { IntegrateCommandResult } from '../shared/integrateEngine/types.js';
 import type { TreeHygieneWarning } from '../tree-hygiene.js';
 
 export interface AuditCommandOptions {

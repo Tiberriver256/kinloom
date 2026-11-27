@@ -29,7 +29,7 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Lint, build, typecheck, unit tests, contrast, and leak checks
+      - name: Architecture, lint, build, typecheck, unit tests, contrast, and leak checks
         run: npm run check
 
       - name: Install Playwright Chromium browser

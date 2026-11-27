@@ -1,4 +1,4 @@
-import type { WranglerExecutor } from '../sync.js';
+import type { WranglerExecutor } from '../shared/wrangler.js';
 
 export type MigrateTarget = 'remote' | 'local';
 

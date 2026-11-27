@@ -1,19 +1,15 @@
 #!/usr/bin/env node
 import { realpathSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { dispatchCoreCommand } from './cli/coreCommands.js';
-import { dispatchLiveAndUtilityCommand } from './cli/liveAndUtilityCommands.js';
+import { dispatchBuiltInCliCommand, ROOT_HELP } from './cli/builtinCommands.js';
 import {
   dispatchPluginOrUnknownCommand,
   loadSitePlugins,
-  ROOT_HELP,
-  runGuideCliCommand,
   tryDispatchRecordCommand,
   tryHandleCommandHelpOrGuideFlag,
   tryHandleHelpInvocation,
 } from './cli/pluginAndGuideCommands.js';
-import { dispatchResearchOpsCommand } from './cli/researchOpsCommands.js';
-import { type CliDispatchContext, type CliIo, DEFAULT_IO, type RunCliOptions } from './cli/types.js';
+import type { CliDispatchContext, RunCliOptions } from './cli/types.js';
 import {
   type CliExitCode,
   CliValidationError,
@@ -21,8 +17,9 @@ import {
   formatConflictDetails,
   KinloomApiError,
 } from './errors.js';
+import { type CliIo, DEFAULT_IO } from './io.js';
 
-export { type CliIo, ROOT_HELP, type RunCliOptions };
+export { type CliIo, DEFAULT_IO, ROOT_HELP, type RunCliOptions };
 
 export async function runCli(argv: readonly string[], options?: RunCliOptions): Promise<CliExitCode> {
   const io = options?.io ?? DEFAULT_IO;
@@ -56,23 +53,9 @@ export async function runCli(argv: readonly string[], options?: RunCliOptions): 
   }
 
   try {
-    if (command === 'guide') {
-      return runGuideCliCommand(rest, io);
-    }
-
-    const coreExit = await dispatchCoreCommand(command, rest, ctx);
-    if (coreExit !== undefined) {
-      return coreExit;
-    }
-
-    const researchOpsExit = await dispatchResearchOpsCommand(command, rest, ctx);
-    if (researchOpsExit !== undefined) {
-      return researchOpsExit;
-    }
-
-    const liveOrUtilityExit = await dispatchLiveAndUtilityCommand(command, rest, ctx);
-    if (liveOrUtilityExit !== undefined) {
-      return liveOrUtilityExit;
+    const builtInExit = await dispatchBuiltInCliCommand(command, rest, ctx);
+    if (builtInExit !== undefined) {
+      return builtInExit;
     }
 
     return await dispatchPluginOrUnknownCommand(command, rest, ctx, loadedPlugins);

@@ -1,5 +1,16 @@
 export {
+  BUILTIN_CLI_COMMANDS,
+  type BuiltInCliCommandDescriptor,
+  type BuiltInCliCommandMeta,
+  type BuiltInCliCommandName,
+  type BuiltInCommandHandler,
+  COMMAND_HELP,
+  dispatchBuiltInCliCommand,
+  resolveBuiltInCliCommand,
+} from './cli/builtinCommands.js';
+export {
   type CliIo,
+  DEFAULT_IO,
   ROOT_HELP,
   type RunCliOptions,
   runCli,
@@ -26,8 +37,12 @@ export {
 export {
   ARCHIVE_YAML_FILE_NAMES,
   type ArchiveYamlFileName,
+  type LoadedLocalArchiveRepo,
+  type LoadLocalArchiveRepoOptions,
   type LocalArchiveData,
   loadArchiveDataDir,
+  loadLocalArchiveRepo,
+  loadLocalArchiveRepoSync,
   serializeArchiveDataToYamlFiles,
   serializeSnapshotToYamlFiles,
   snapshotToArchiveData,

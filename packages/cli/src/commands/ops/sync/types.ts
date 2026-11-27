@@ -23,6 +23,10 @@ export const SYNC_DEPENDENCY_ORDER: readonly EntityType[] = [
   'narrative',
 ];
 
+import type { WranglerExecOptions, WranglerExecutor } from '../shared/wrangler.js';
+
+export type { WranglerExecOptions, WranglerExecutor };
+
 export interface SyncDeleteTarget {
   entity_type: EntityType;
   entity_id: string;
@@ -35,18 +39,6 @@ export interface WranglerBindings {
   domain: string;
   baseUrl: string;
 }
-
-export interface WranglerExecOptions {
-  cwd: string;
-  timeoutMs: number;
-  maxBufferBytes: number;
-}
-
-export type WranglerExecutor = (
-  wranglerBin: string,
-  args: readonly string[],
-  options: WranglerExecOptions
-) => Promise<{ stdout: string; stderr: string }>;
 
 export interface SyncCommandOptions {
   repoDir?: string;

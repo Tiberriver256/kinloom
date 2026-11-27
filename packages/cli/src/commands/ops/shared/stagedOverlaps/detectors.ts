@@ -1,7 +1,6 @@
 import type { KinshipEdge } from '@kinloom/core';
-import { collectLiveMediaCollisions } from '../live-media-collisions.js';
+import { collectLiveMediaCollisions } from '../mediaFiles.js';
 import {
-  type AuditBatchPerson,
   type AuditBatchSummary,
   type AuditOverlaps,
   EVENT_DIFF_FIELDS,
@@ -384,7 +383,7 @@ export function computeAuditOverlaps(input: {
 }
 
 export function summarizeBatch(
-  people: readonly AuditBatchPerson[],
+  people: readonly { ok: boolean; strictOk: boolean }[],
   overlaps: AuditOverlaps
 ): AuditBatchSummary {
   return {

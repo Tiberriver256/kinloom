@@ -1,5 +1,6 @@
 import { randomBytes } from 'node:crypto';
-import type { ArchiveBundle, EntityPatch } from '@kinloom/core';
+import { type ArchiveBundle, type EntityPatch, KinshipEdgeSchema, parseEntityPayload } from '@kinloom/core';
+import { z } from 'zod';
 import {
   isPlainRecord,
   type RemoteSnapshotResponse,
@@ -13,6 +14,54 @@ import {
 
 const LIVE_VERIFY_CONCURRENCY = 6;
 const LIVE_VERIFY_TIMEOUT_MS = 15_000;
+
+const RemoteSnapshotEntityTypeSchema = z.enum(['person', 'event', 'place', 'source', 'media', 'narrative']);
+
+const RemoteSnapshotEnvelopeSchema = z.object({
+  head_revision_id: z.number().optional(),
+  entities: z.array(
+    z.object({
+      entity_type: RemoteSnapshotEntityTypeSchema,
+      entity_id: z.string(),
+      data: z.record(z.string(), z.unknown()),
+      current_revision_id: z.coerce.number(),
+      has_primary_source: z.boolean().optional(),
+      deleted_at: z.string().nullable().optional(),
+    })
+  ),
+  kinship: z.array(
+    z.object({
+      edge_id: z.string(),
+      edge: KinshipEdgeSchema,
+      current_revision_id: z.coerce.number(),
+      deleted_at: z.string().nullable().optional(),
+    })
+  ),
+});
+
+function parseRemoteSnapshotResponse(raw: unknown): RemoteSnapshotResponse {
+  const parsed = RemoteSnapshotEnvelopeSchema.safeParse(raw);
+  if (!parsed.success) {
+    throw new Error('Unexpected response shape from GET /api/export/snapshot.');
+  }
+  return {
+    ...(parsed.data.head_revision_id !== undefined ? { head_revision_id: parsed.data.head_revision_id } : {}),
+    entities: parsed.data.entities.map((row) => ({
+      entity_type: row.entity_type,
+      entity_id: row.entity_id,
+      data: parseEntityPayload(row.entity_type, row.data),
+      current_revision_id: row.current_revision_id,
+      ...(row.has_primary_source !== undefined ? { has_primary_source: row.has_primary_source } : {}),
+      ...(row.deleted_at !== undefined ? { deleted_at: row.deleted_at } : {}),
+    })),
+    kinship: parsed.data.kinship.map((row) => ({
+      edge_id: row.edge_id,
+      edge: row.edge,
+      current_revision_id: row.current_revision_id,
+      ...(row.deleted_at !== undefined ? { deleted_at: row.deleted_at } : {}),
+    })),
+  };
+}
 
 export async function fetchRemoteSnapshot(
   ctx: SyncExecutionContext,
@@ -33,20 +82,14 @@ export async function fetchRemoteSnapshot(
 
   const body: unknown = await response.json();
   const snapshotRaw = isPlainRecord(body) && isPlainRecord(body.snapshot) ? body.snapshot : body;
-  if (
-    !isPlainRecord(snapshotRaw) ||
-    !Array.isArray(snapshotRaw.entities) ||
-    !Array.isArray(snapshotRaw.kinship)
-  ) {
-    throw new Error('Unexpected response shape from GET /api/export/snapshot.');
-  }
+  const snapshot = parseRemoteSnapshotResponse(snapshotRaw);
 
-  const headRaw = snapshotRaw.head_revision_id ?? (isPlainRecord(body) ? body.head_revision_id : 0) ?? 0;
+  const headRaw = snapshot.head_revision_id ?? (isPlainRecord(body) ? body.head_revision_id : 0) ?? 0;
 
   return {
     etag: response.headers.get('etag'),
     headRevisionId: Number(headRaw),
-    snapshot: snapshotRaw as unknown as RemoteSnapshotResponse,
+    snapshot,
   };
 }
 

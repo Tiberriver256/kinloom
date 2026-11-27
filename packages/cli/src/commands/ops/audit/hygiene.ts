@@ -1,5 +1,6 @@
 import type { KinshipEdge, RawEvent, RawPerson } from '@kinloom/core';
-import { applyKinshipRemovals, type RemoveKinshipEntry } from '../integrate.js';
+import { applyKinshipRemovals } from '../shared/integrateEngine/kinship.js';
+import type { RemoveKinshipEntry } from '../shared/integrateEngine/types.js';
 import { analyzeTreeHygiene, diffTreeHygieneWarnings, type TreeHygieneWarning } from '../tree-hygiene.js';
 import { asString, isPlainRecord, type LooseRecord, stringListField } from './types.js';
 

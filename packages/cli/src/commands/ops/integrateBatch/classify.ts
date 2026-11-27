@@ -1,15 +1,14 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { listStagedAuditPersonIds } from '../audit-overlaps.js';
+import { runIntegrateCommand } from '../shared/integrateEngine/execute.js';
+import { detectMediaLayout } from '../shared/integrateEngine/media.js';
 import {
   computePackageFingerprints,
-  detectMediaLayout,
   doesReceiptMatchPackage,
-  type IntegrateCommandResult,
-  type IntegrationReceipt,
   readIntegrationReceipt,
-  runIntegrateCommand,
-} from '../integrate.js';
+} from '../shared/integrateEngine/receipts.js';
+import type { IntegrateCommandResult, IntegrationReceipt } from '../shared/integrateEngine/types.js';
+import { listStagedAuditPersonIds } from '../shared/stagedPackages.js';
 import type { ClassifiedStagedPackages, StagedPackageStatus } from './types.js';
 
 export function hasUnintegratedEffect(result: IntegrateCommandResult): boolean {

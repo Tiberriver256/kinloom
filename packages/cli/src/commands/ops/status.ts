@@ -1,5 +1,4 @@
 import fs from 'node:fs';
-import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import {
   edtfYear,
@@ -10,19 +9,12 @@ import {
   type Narrative,
   type Place,
   type PrivacyConfig,
-  parseEventsYaml,
-  parseKinloomConfigYaml,
-  parseKinshipYaml,
-  parseMediaYaml,
-  parseNarrativesYaml,
-  parsePeopleYaml,
-  parsePlacesYaml,
-  parseSourcesYaml,
   type RawEvent,
   type RawPerson,
   resolveEffectiveLiving,
 } from '@kinloom/core';
 import { CliValidationError } from '../../errors.js';
+import { loadLocalArchiveRepo } from '../dataFiles.js';
 
 export { STATUS_HELP } from './help.js';
 
@@ -103,17 +95,6 @@ export function parseStatusSort(value: string | undefined): StatusSortMode {
     return trimmed;
   }
   throw new CliValidationError('Option `--sort` must be `sparsest`, `richest`, or `chronological`.');
-}
-
-async function readOptionalUtf8(filePath: string): Promise<string | null> {
-  try {
-    return await readFile(filePath, 'utf8');
-  } catch (err: unknown) {
-    if (typeof err === 'object' && err !== null && 'code' in err && err.code === 'ENOENT') {
-      return null;
-    }
-    throw err;
-  }
 }
 
 function isZeroCoordPlace(place: Place): boolean {
@@ -416,43 +397,9 @@ export async function runStatusCommand(options: StatusCommandOptions = {}): Prom
   const sort = parseStatusSort(options.sort);
   const endOfLine = Boolean(options.endOfLine);
   const missingBiography = Boolean(options.missingBiography);
-  const repoDir = path.resolve(options.repoDir?.trim() || process.cwd());
-  if (!fs.existsSync(repoDir) || !fs.statSync(repoDir).isDirectory()) {
-    throw new CliValidationError(`Repository directory does not exist: ${repoDir}`);
-  }
-  const dataDir = path.join(repoDir, 'data');
-  if (!fs.existsSync(dataDir) || !fs.statSync(dataDir).isDirectory()) {
-    throw new CliValidationError(`Missing data/ directory at ${dataDir}.`);
-  }
-
-  const [
-    configText,
-    peopleText,
-    eventsText,
-    placesText,
-    sourcesText,
-    mediaText,
-    narrativesText,
-    kinshipText,
-  ] = await Promise.all([
-    readOptionalUtf8(path.join(repoDir, 'kinloom.config.yaml')),
-    readOptionalUtf8(path.join(dataDir, 'people.yaml')),
-    readOptionalUtf8(path.join(dataDir, 'events.yaml')),
-    readOptionalUtf8(path.join(dataDir, 'places.yaml')),
-    readOptionalUtf8(path.join(dataDir, 'sources.yaml')),
-    readOptionalUtf8(path.join(dataDir, 'media.yaml')),
-    readOptionalUtf8(path.join(dataDir, 'narratives.yaml')),
-    readOptionalUtf8(path.join(dataDir, 'kinship.yaml')),
-  ]);
-
-  const privacy: Partial<PrivacyConfig> = configText ? parseKinloomConfigYaml(configText).privacy : {};
-  const people = peopleText ? parsePeopleYaml(peopleText) : [];
-  const events = eventsText ? parseEventsYaml(eventsText) : [];
-  const places = placesText ? parsePlacesYaml(placesText) : [];
-  const sources = sourcesText ? parseSourcesYaml(sourcesText) : [];
-  const media = mediaText ? parseMediaYaml(mediaText) : [];
-  const narratives = narrativesText ? parseNarrativesYaml(narrativesText) : [];
-  const kinship = kinshipText ? parseKinshipYaml(kinshipText) : [];
+  const loaded = await loadLocalArchiveRepo(options.repoDir, { requireConfig: false });
+  const { repoDir, people, events, places, sources, media, narratives, kinship } = loaded;
+  const privacy: Partial<PrivacyConfig> = loaded.siteConfig ? loaded.siteConfig.privacy : {};
   const endOfLineIds = indexEndOfLinePersonIds(kinship);
   const allDeceased = buildDeceasedQueue({
     repoDir,

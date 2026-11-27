@@ -3,25 +3,8 @@ import { performance } from 'node:perf_hooks';
 import { CliValidationError } from '../../errors.js';
 import type { KinloomCliPlugin } from '../../plugins.js';
 import { runAuditCommand } from './audit.js';
-import {
-  computeAuditOverlaps,
-  countBlockingOverlaps,
-  createEmptyAuditOverlaps,
-  hasAnyBlockingOverlaps,
-  summarizeBatch,
-} from './auditOverlaps/detectors.js';
-import {
-  listStagedAuditPersonIds,
-  loadStagedPackage,
-  loadStagedScanEntries,
-} from './auditOverlaps/loader.js';
 import { formatAuditBatchTextReport } from './auditOverlaps/report.js';
-import {
-  type AuditBatchPerson,
-  type AuditBatchResult,
-  SAFE_PERSON_ID_RE,
-  type StagedOverlapAnalysis,
-} from './auditOverlaps/types.js';
+import type { AuditBatchPerson, AuditBatchResult } from './auditOverlaps/types.js';
 import {
   collectLiveMediaCollisions,
   type LiveMediaFileCollision,
@@ -29,7 +12,15 @@ import {
   normalizeMediaFilePath,
   readStagedMediaRefs,
   type StagedMediaRef,
-} from './live-media-collisions.js';
+} from './shared/mediaFiles.js';
+import {
+  analyzeStagedOverlaps,
+  countBlockingOverlaps,
+  createEmptyAuditOverlaps,
+  listStagedAuditPersonIds,
+  SAFE_PERSON_ID_RE,
+  summarizeBatch,
+} from './shared/stagedOverlaps/index.js';
 
 export type {
   AuditBatchPerson,
@@ -55,6 +46,7 @@ export type {
   StagedOverlapAnalysis,
 } from './auditOverlaps/types.js';
 export {
+  analyzeStagedOverlaps,
   collectLiveMediaCollisions,
   countBlockingOverlaps,
   createEmptyAuditOverlaps,
@@ -66,30 +58,6 @@ export {
   readStagedMediaRefs,
   type StagedMediaRef,
 };
-
-export function analyzeStagedOverlaps(repoDir: string, personIds: readonly string[]): StagedOverlapAnalysis {
-  const resolvedRepo = path.resolve(repoDir);
-  if (personIds.length === 0) {
-    const overlaps = createEmptyAuditOverlaps();
-    const blocking = countBlockingOverlaps(overlaps);
-    return { overlaps, blocking, hasBlockingConflicts: false };
-  }
-  const packages = personIds.map((personId) =>
-    loadStagedPackage(personId, path.join(resolvedRepo, 'research', 'people', personId))
-  );
-  const scanEntries = loadStagedScanEntries(packages);
-  const overlaps = computeAuditOverlaps({
-    packages,
-    scanEntries,
-    liveMedia: loadLiveMedia(resolvedRepo),
-  });
-  const blocking = countBlockingOverlaps(overlaps);
-  return {
-    overlaps,
-    blocking,
-    hasBlockingConflicts: hasAnyBlockingOverlaps(blocking),
-  };
-}
 
 export async function runAuditBatchCommand(options: {
   repoDir?: string;

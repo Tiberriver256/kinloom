@@ -87,6 +87,8 @@ function toLooseRawPerson(rec: Readonly<Record<string, unknown>>): RawPerson {
   const givenNames = asString(rec.given_names).trim();
   const surname = asString(rec.surname).trim();
   const pronunciation = parseLoosePronunciation(rec.pronunciation);
+  const rawSex = asString(rec.sex).trim();
+  const sex: RawPerson['sex'] = rawSex === 'M' || rawSex === 'F' || rawSex === 'U' ? rawSex : 'U';
   return {
     id: asString(rec.id).trim(),
     slug: asString(rec.slug).trim() || asString(rec.id).trim(),
@@ -94,14 +96,27 @@ function toLooseRawPerson(rec: Readonly<Record<string, unknown>>): RawPerson {
     given_name: asString(rec.given_name).trim() || givenNames,
     surname,
     alt_names: [],
-    sex: asString(rec.sex).trim() || 'U',
+    sex,
     birth_edtf: asString(rec.birth_edtf).trim(),
     death_edtf: asString(rec.death_edtf).trim(),
     is_living: rec.is_living === true || rec.living === true,
     lineage_group: asString(rec.lineage_group).trim() || 'unknown',
     portrait_url: null,
     ...(pronunciation ? { pronunciation } : {}),
-  } as unknown as RawPerson;
+  };
+}
+
+function parseLoosePlaceType(value: unknown): Place['place_type'] {
+  if (
+    value === 'country' ||
+    value === 'state' ||
+    value === 'county' ||
+    value === 'town' ||
+    value === 'homestead'
+  ) {
+    return value;
+  }
+  return 'town';
 }
 
 function toLoosePlace(rec: Readonly<Record<string, unknown>>): Place {
@@ -113,8 +128,10 @@ function toLoosePlace(rec: Readonly<Record<string, unknown>>): Place {
     full_name: asString(rec.full_name).trim() || asString(rec.name).trim(),
     lat: Number(rec.lat ?? 0),
     lng: Number(rec.lng ?? rec.lon ?? 0),
+    place_type: parseLoosePlaceType(rec.place_type),
+    parent_id: null,
     ...(pronunciation ? { pronunciation } : {}),
-  } as Place;
+  };
 }
 
 function isEffectiveLivingRecord(

@@ -6,15 +6,6 @@ import {
   type MediaItem,
   type Narrative,
   type Place,
-  parseEventsYaml,
-  parseKinloomConfigYaml,
-  parseKinshipYaml,
-  parseMediaYaml,
-  parseNarrativeEnrichmentsYaml,
-  parseNarrativesYaml,
-  parsePeopleYaml,
-  parsePlacesYaml,
-  parseSourcesYaml,
   type RawEvent,
   type RawPerson,
   type SourceRecord,
@@ -26,9 +17,10 @@ import {
   validateNarrativeCitations,
 } from '@kinloom/core';
 import { CliValidationError } from '../../../errors.js';
-import { listStagedAuditPersonIds } from '../audit-overlaps.js';
-import { auditBundlePrivacy } from '../integrate.js';
-import { findDuplicateNormalizedMediaFiles } from '../verify.js';
+import { loadLocalArchiveRepoSync } from '../../dataFiles.js';
+import { auditBundlePrivacy } from '../shared/bundlePrivacy.js';
+import { findDuplicateNormalizedMediaFiles } from '../shared/mediaFiles.js';
+import { listStagedAuditPersonIds } from '../shared/stagedPackages.js';
 import type {
   LoadedDedupeArchive,
   LoadedDedupeArchivePaths,
@@ -57,46 +49,37 @@ function writeFileAtomicBuffer(filePath: string, content: Buffer): void {
   fs.renameSync(tmpPath, filePath);
 }
 
-function readOptionalYaml<T>(filePath: string, parser: (raw: string) => T[]): T[] {
-  if (!fs.existsSync(filePath)) {
-    return [];
-  }
-  return parser(fs.readFileSync(filePath, 'utf8'));
-}
-
 export function loadArchiveForMediaDedupe(repoDir: string): LoadedDedupeArchive {
-  if (!fs.existsSync(repoDir) || !fs.statSync(repoDir).isDirectory()) {
-    throw new CliValidationError(`Repository directory does not exist: ${repoDir}`);
-  }
-  const dataDir = path.join(repoDir, 'data');
-  const configPath = path.join(repoDir, 'kinloom.config.yaml');
-  if (!fs.existsSync(dataDir) || !fs.existsSync(configPath)) {
+  const loaded = loadLocalArchiveRepoSync(repoDir, {
+    requireConfig: true,
+    includeEnrichments: true,
+  });
+  if (!loaded.siteConfig) {
     throw new CliValidationError(`Archive data/ or kinloom.config.yaml not found under ${repoDir}.`);
   }
 
-  const config = parseKinloomConfigYaml(fs.readFileSync(configPath, 'utf8'));
   const paths: LoadedDedupeArchivePaths = {
-    peoplePath: path.join(dataDir, 'people.yaml'),
-    placesPath: path.join(dataDir, 'places.yaml'),
-    eventsPath: path.join(dataDir, 'events.yaml'),
-    sourcesPath: path.join(dataDir, 'sources.yaml'),
-    kinshipPath: path.join(dataDir, 'kinship.yaml'),
-    mediaPath: path.join(dataDir, 'media.yaml'),
-    narrativesPath: path.join(dataDir, 'narratives.yaml'),
-    enrichmentsPath: path.join(dataDir, 'narrative_enrichments.yaml'),
+    peoplePath: path.join(loaded.dataDir, 'people.yaml'),
+    placesPath: path.join(loaded.dataDir, 'places.yaml'),
+    eventsPath: path.join(loaded.dataDir, 'events.yaml'),
+    sourcesPath: path.join(loaded.dataDir, 'sources.yaml'),
+    kinshipPath: path.join(loaded.dataDir, 'kinship.yaml'),
+    mediaPath: path.join(loaded.dataDir, 'media.yaml'),
+    narrativesPath: path.join(loaded.dataDir, 'narratives.yaml'),
+    enrichmentsPath: path.join(loaded.dataDir, 'narrative_enrichments.yaml'),
   };
 
   return {
-    config,
+    config: loaded.siteConfig,
     paths,
-    people: readOptionalYaml(paths.peoplePath, parsePeopleYaml),
-    places: readOptionalYaml(paths.placesPath, parsePlacesYaml),
-    events: readOptionalYaml(paths.eventsPath, parseEventsYaml),
-    sources: readOptionalYaml(paths.sourcesPath, parseSourcesYaml),
-    kinship: readOptionalYaml(paths.kinshipPath, parseKinshipYaml),
-    media: readOptionalYaml(paths.mediaPath, parseMediaYaml),
-    narratives: readOptionalYaml(paths.narrativesPath, parseNarrativesYaml),
-    enrichments: readOptionalYaml(paths.enrichmentsPath, parseNarrativeEnrichmentsYaml),
+    people: loaded.people,
+    places: loaded.places,
+    events: loaded.events,
+    sources: loaded.sources,
+    kinship: loaded.kinship,
+    media: loaded.media,
+    narratives: loaded.narratives,
+    enrichments: loaded.enrichments,
   };
 }
 

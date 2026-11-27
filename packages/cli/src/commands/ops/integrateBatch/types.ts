@@ -1,5 +1,5 @@
-import type { StagedOverlapAnalysis } from '../audit-overlaps.js';
-import type { IntegrateCommandResult, UpsertCounts } from '../integrate.js';
+import type { IntegrateCommandResult, UpsertCounts } from '../shared/integrateEngine/types.js';
+import type { StagedOverlapAnalysis } from '../shared/stagedOverlaps/types.js';
 
 export type StagedPackageStatus =
   | {

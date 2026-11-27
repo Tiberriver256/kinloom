@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { CliValidationError } from '../../../errors.js';
-import { stripJsoncCommentsAndTrailingCommas } from '../sync.js';
+import { stripJsoncCommentsAndTrailingCommas } from '../shared/wrangler.js';
 import { parseMigrationSchemaRequirements } from './sqlParser.js';
 import { type D1DatabaseBinding, type DiscoveredMigration, isPlainRecord } from './types.js';
 

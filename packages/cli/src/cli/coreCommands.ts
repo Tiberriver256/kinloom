@@ -6,7 +6,7 @@ import {
   safeParseArgs,
 } from './types.js';
 
-async function runInit(rest: readonly string[], ctx: CliDispatchContext): Promise<CliExitCode> {
+export async function runInit(rest: readonly string[], ctx: CliDispatchContext): Promise<CliExitCode> {
   const { values, positionals } = safeParseArgs({
     args: rest,
     allowPositionals: true,
@@ -35,7 +35,7 @@ async function runInit(rest: readonly string[], ctx: CliDispatchContext): Promis
   return EXIT_OK;
 }
 
-async function runBrandkit(rest: readonly string[], ctx: CliDispatchContext): Promise<CliExitCode> {
+export async function runBrandkit(rest: readonly string[], ctx: CliDispatchContext): Promise<CliExitCode> {
   const { values } = safeParseArgs({
     args: rest,
     allowPositionals: false,
@@ -82,7 +82,7 @@ async function runBrandkit(rest: readonly string[], ctx: CliDispatchContext): Pr
   return EXIT_OK;
 }
 
-async function runSliceGedcom(rest: readonly string[], ctx: CliDispatchContext): Promise<CliExitCode> {
+export async function runSliceGedcom(rest: readonly string[], ctx: CliDispatchContext): Promise<CliExitCode> {
   const { values } = safeParseArgs({
     args: rest,
     allowPositionals: false,
@@ -121,7 +121,7 @@ async function runSliceGedcom(rest: readonly string[], ctx: CliDispatchContext):
   return EXIT_OK;
 }
 
-async function runSeed(rest: readonly string[], ctx: CliDispatchContext): Promise<CliExitCode> {
+export async function runSeed(rest: readonly string[], ctx: CliDispatchContext): Promise<CliExitCode> {
   const { values } = safeParseArgs({
     args: rest,
     allowPositionals: false,
@@ -168,7 +168,7 @@ async function runSeed(rest: readonly string[], ctx: CliDispatchContext): Promis
   return EXIT_OK;
 }
 
-async function runSubmitBatch(rest: readonly string[], ctx: CliDispatchContext): Promise<CliExitCode> {
+export async function runSubmitBatch(rest: readonly string[], ctx: CliDispatchContext): Promise<CliExitCode> {
   const { values, positionals } = safeParseArgs({
     args: rest,
     allowPositionals: true,
@@ -212,7 +212,7 @@ async function runSubmitBatch(rest: readonly string[], ctx: CliDispatchContext):
   return EXIT_OK;
 }
 
-async function runExportYaml(rest: readonly string[], ctx: CliDispatchContext): Promise<CliExitCode> {
+export async function runExportYaml(rest: readonly string[], ctx: CliDispatchContext): Promise<CliExitCode> {
   const { values } = safeParseArgs({
     args: rest,
     allowPositionals: false,
@@ -245,7 +245,7 @@ async function runExportYaml(rest: readonly string[], ctx: CliDispatchContext): 
   return EXIT_OK;
 }
 
-async function runUploadMedia(rest: readonly string[], ctx: CliDispatchContext): Promise<CliExitCode> {
+export async function runUploadMedia(rest: readonly string[], ctx: CliDispatchContext): Promise<CliExitCode> {
   const { values } = safeParseArgs({
     args: rest,
     allowPositionals: false,
@@ -293,7 +293,7 @@ async function runUploadMedia(rest: readonly string[], ctx: CliDispatchContext):
   return EXIT_OK;
 }
 
-async function runReconcile(rest: readonly string[], ctx: CliDispatchContext): Promise<CliExitCode> {
+export async function runReconcile(rest: readonly string[], ctx: CliDispatchContext): Promise<CliExitCode> {
   const { values } = safeParseArgs({
     args: rest,
     allowPositionals: false,
@@ -338,31 +338,4 @@ async function runReconcile(rest: readonly string[], ctx: CliDispatchContext): P
     );
   }
   return EXIT_ERROR;
-}
-
-export async function dispatchCoreCommand(
-  command: string,
-  rest: readonly string[],
-  ctx: CliDispatchContext
-): Promise<CliExitCode | undefined> {
-  switch (command) {
-    case 'init':
-      return runInit(rest, ctx);
-    case 'brandkit':
-      return runBrandkit(rest, ctx);
-    case 'slice-gedcom':
-      return runSliceGedcom(rest, ctx);
-    case 'seed':
-      return runSeed(rest, ctx);
-    case 'submit-batch':
-      return runSubmitBatch(rest, ctx);
-    case 'export-yaml':
-      return runExportYaml(rest, ctx);
-    case 'upload-media':
-      return runUploadMedia(rest, ctx);
-    case 'reconcile':
-      return runReconcile(rest, ctx);
-    default:
-      return undefined;
-  }
 }

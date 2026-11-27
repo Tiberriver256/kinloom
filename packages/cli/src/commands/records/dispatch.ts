@@ -129,7 +129,8 @@ export async function runRecordCommand(
     sleepFn: options?.sleepFn,
     nowMs: options?.nowMs,
   });
-  const outcome = await spec.handler(intent.scriptArgs, ctx);
+  const handler = await spec.loadHandler();
+  const outcome = await handler(intent.scriptArgs, ctx);
   if (shouldRecordTelemetry) {
     recordTelemetryEvent(
       {

@@ -2,15 +2,16 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import type { KinshipEdge } from '@kinloom/core';
-import { CliValidationError } from '../../../errors.js';
-import { inspectImageBuffer } from '../audit.js';
-import { expandRemoveKinshipTargets, type RemoveKinshipEntry } from '../integrate.js';
-import { readStagedMediaRefs } from '../live-media-collisions.js';
+import { CliValidationError } from '../../../../errors.js';
+import { inspectImageBuffer } from '../imageHeader.js';
+import { expandRemoveKinshipTargets } from '../integrateEngine/kinship.js';
+import type { RemoveKinshipEntry } from '../integrateEngine/types.js';
+import { readStagedMediaRefs } from '../mediaFiles.js';
+import { listStagedAuditPersonIds } from '../stagedPackages.js';
 import {
   isPlainRecord,
   nullableText,
   type ParsedPackage,
-  SAFE_PERSON_ID_RE,
   type ScanCollisionPackage,
   type StagedEventRow,
   type StagedKinshipAdd,
@@ -19,18 +20,7 @@ import {
   type StagedSourceRef,
 } from './types.js';
 
-export function listStagedAuditPersonIds(repoDir: string): string[] {
-  const root = path.join(repoDir, 'research', 'people');
-  if (!fs.existsSync(root)) {
-    return [];
-  }
-  return fs
-    .readdirSync(root, { withFileTypes: true })
-    .filter((entry) => entry.isDirectory() && SAFE_PERSON_ID_RE.test(entry.name))
-    .map((entry) => entry.name)
-    .filter((personId) => fs.existsSync(path.join(root, personId, 'patch.json')))
-    .sort((a, b) => a.localeCompare(b));
-}
+export { listStagedAuditPersonIds };
 
 function readPatchObject(patchPath: string): Record<string, unknown> {
   if (!fs.existsSync(patchPath)) {

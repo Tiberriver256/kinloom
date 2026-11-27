@@ -1,33 +1,10 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import type { MediaItem } from '@kinloom/core';
-import { normalizeMediaFilePath } from '../live-media-collisions.js';
-import type { VerifyDuplicateMediaFile, VerifyMediaResult, VerifyMissingMediaFile } from './types.js';
+import { findDuplicateNormalizedMediaFiles } from '../shared/mediaFiles.js';
+import type { VerifyMediaResult, VerifyMissingMediaFile } from './types.js';
 
-export function findDuplicateNormalizedMediaFiles(
-  mediaItems: readonly Pick<MediaItem, 'id' | 'file'>[]
-): VerifyDuplicateMediaFile[] {
-  const grouped = new Map<string, string[]>();
-  for (const item of mediaItems) {
-    const normalized = normalizeMediaFilePath(item.file);
-    if (!normalized) {
-      continue;
-    }
-    const ids = grouped.get(normalized) ?? [];
-    ids.push(item.id);
-    grouped.set(normalized, ids);
-  }
-
-  const duplicates: VerifyDuplicateMediaFile[] = [];
-  for (const [file, ids] of grouped) {
-    const mediaIds = [...new Set(ids)].toSorted((a, b) => a.localeCompare(b));
-    if (mediaIds.length > 1) {
-      duplicates.push({ file, mediaIds });
-    }
-  }
-  duplicates.sort((a, b) => a.file.localeCompare(b.file));
-  return duplicates;
-}
+export { findDuplicateNormalizedMediaFiles };
 
 export function verifyMediaFilesOnDisk(repoDir: string, mediaItems: readonly MediaItem[]): VerifyMediaResult {
   const archiveMediaRoot = path.join(repoDir, 'archive-media');

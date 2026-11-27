@@ -1,11 +1,9 @@
 import { type ParseArgsConfig, parseArgs } from 'node:util';
 import { type CliExitCode, CliValidationError, EXIT_ERROR } from '../errors.js';
-import type { KinloomCliPlugin } from '../plugins.js';
+import type { CliIo } from '../io.js';
+import type { KinloomCliPlugin } from '../pluginTypes.js';
 
-export interface CliIo {
-  stdout(line: string): void;
-  stderr(line: string): void;
-}
+export { type CliIo, DEFAULT_IO } from '../io.js';
 
 export interface RunCliOptions {
   io?: CliIo;
@@ -21,15 +19,6 @@ export interface CliDispatchContext {
   fetchImpl?: typeof fetch;
   plugins?: readonly KinloomCliPlugin[];
 }
-
-export const DEFAULT_IO: CliIo = {
-  stdout: (line) => {
-    process.stdout.write(`${line}\n`);
-  },
-  stderr: (line) => {
-    process.stderr.write(`${line}\n`);
-  },
-};
 
 export function requireStringFlag(value: string | undefined, flagName: string): string {
   if (!value?.trim()) {

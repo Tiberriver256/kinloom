@@ -160,7 +160,7 @@ function parseSyncArgs(argv: readonly string[]): ParsedSyncArgs {
   return parsed;
 }
 
-async function runSync(rest: readonly string[], ctx: CliDispatchContext): Promise<CliExitCode> {
+export async function runSync(rest: readonly string[], ctx: CliDispatchContext): Promise<CliExitCode> {
   const parsed = parseSyncArgs(rest);
   const [{ parseDeleteTargets, parseEntityTypeList, runSyncCommand }, { measureCommand }] = await Promise.all(
     [import('../commands/ops/sync.js'), import('../commands/ops/telemetry.js')]
@@ -199,7 +199,7 @@ async function runSync(rest: readonly string[], ctx: CliDispatchContext): Promis
   return result.liveVerification && !result.liveVerification.ok ? EXIT_ERROR : EXIT_OK;
 }
 
-async function runMigrate(rest: readonly string[], ctx: CliDispatchContext): Promise<CliExitCode> {
+export async function runMigrate(rest: readonly string[], ctx: CliDispatchContext): Promise<CliExitCode> {
   const { values } = safeParseArgs({
     args: rest,
     allowPositionals: false,
@@ -239,7 +239,7 @@ async function runMigrate(rest: readonly string[], ctx: CliDispatchContext): Pro
   return result.ok ? EXIT_OK : EXIT_ERROR;
 }
 
-async function runDates(rest: readonly string[], ctx: CliDispatchContext): Promise<CliExitCode> {
+export async function runDates(rest: readonly string[], ctx: CliDispatchContext): Promise<CliExitCode> {
   const sub = rest[0];
   if (sub !== 'weekday' && sub !== 'diff' && sub !== 'age') {
     throw new CliValidationError(
@@ -318,7 +318,7 @@ async function runDates(rest: readonly string[], ctx: CliDispatchContext): Promi
   return EXIT_OK;
 }
 
-async function runPronounce(rest: readonly string[], ctx: CliDispatchContext): Promise<CliExitCode> {
+export async function runPronounce(rest: readonly string[], ctx: CliDispatchContext): Promise<CliExitCode> {
   const sub = rest[0];
   if (sub !== 'lookup' && sub !== 'audit' && sub !== 'deduplicate') {
     throw new CliValidationError(
@@ -429,7 +429,7 @@ async function runPronounce(rest: readonly string[], ctx: CliDispatchContext): P
   return result.ok ? EXIT_OK : EXIT_ERROR;
 }
 
-async function runTelemetry(rest: readonly string[], ctx: CliDispatchContext): Promise<CliExitCode> {
+export async function runTelemetry(rest: readonly string[], ctx: CliDispatchContext): Promise<CliExitCode> {
   const sub = rest[0];
   const subArgs = sub === 'report' ? rest.slice(1) : rest;
   if (sub && sub !== 'report' && !sub.startsWith('-')) {
@@ -463,25 +463,4 @@ async function runTelemetry(rest: readonly string[], ctx: CliDispatchContext): P
   );
   writeRenderedOutput(ctx.io, result.rendered);
   return EXIT_OK;
-}
-
-export async function dispatchLiveAndUtilityCommand(
-  command: string,
-  rest: readonly string[],
-  ctx: CliDispatchContext
-): Promise<CliExitCode | undefined> {
-  switch (command) {
-    case 'sync':
-      return runSync(rest, ctx);
-    case 'migrate':
-      return runMigrate(rest, ctx);
-    case 'dates':
-      return runDates(rest, ctx);
-    case 'pronounce':
-      return runPronounce(rest, ctx);
-    case 'telemetry':
-      return runTelemetry(rest, ctx);
-    default:
-      return undefined;
-  }
 }

@@ -1,6 +1,6 @@
 import { getMediaPersonIds, type MediaItem, MediaItemSchema } from '@kinloom/core';
 import { CliValidationError } from '../../../errors.js';
-import { normalizeMediaFilePath } from '../live-media-collisions.js';
+import { normalizeMediaFilePath } from '../shared/mediaFiles.js';
 import { type MediaDedupeGroupPlan, uniqueNonEmptyStrings } from './types.js';
 
 const FILLABLE_SCALAR_KEYS = [

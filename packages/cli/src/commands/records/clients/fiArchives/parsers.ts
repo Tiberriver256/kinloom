@@ -57,7 +57,7 @@ function hiskiRowToRecord(
   texts: readonly string[]
 ): HiskiRecord {
   const col = (idx: number): string => texts[idx] ?? '';
-  const base: Record<string, unknown> = {
+  const base: HiskiRecord = {
     parish: parishName,
     parish_code: parishCode,
     book: BOOK_LABELS[book] ?? book,
@@ -66,7 +66,8 @@ function hiskiRowToRecord(
     event_url: new URL(href, HISKI_BASE).toString(),
   };
   if (book === 'kastetut') {
-    Object.assign(base, {
+    return {
+      ...base,
       born: col(0),
       christened: col(1),
       village: col(2),
@@ -74,9 +75,11 @@ function hiskiRowToRecord(
       father: col(4),
       mother: col(5),
       child: col(6),
-    });
-  } else if (book === 'vihityt') {
-    Object.assign(base, {
+    };
+  }
+  if (book === 'vihityt') {
+    return {
+      ...base,
       announced: col(0),
       married: col(1),
       groom_village: col(2),
@@ -85,9 +88,11 @@ function hiskiRowToRecord(
       bride: col(5),
       bride_village: col(6),
       bride_farm: col(7),
-    });
-  } else if (book === 'haudatut') {
-    Object.assign(base, {
+    };
+  }
+  if (book === 'haudatut') {
+    return {
+      ...base,
       died: col(0),
       buried: col(1),
       village: col(2),
@@ -98,20 +103,23 @@ function hiskiRowToRecord(
       age_months: col(7),
       age_weeks: col(8),
       age_days: col(9),
-    });
-  } else if (book === 'smuutt' || book === 'umuutt') {
-    Object.assign(base, {
+    };
+  }
+  if (book === 'smuutt' || book === 'umuutt') {
+    return {
+      ...base,
       departure: col(0),
       arrival: col(1),
       village: col(2),
       farm: col(3),
       person: col(4),
       other_place: col(5),
-    });
-  } else {
-    base.columns = [...texts];
+    };
   }
-  return base as unknown as HiskiRecord;
+  return {
+    ...base,
+    columns: [...texts],
+  };
 }
 
 export function parseHiskiResults(page: string): HiskiSearchResult {

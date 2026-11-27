@@ -1,18 +1,23 @@
+import fs from 'node:fs';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import {
   type ArchiveRawSnapshot,
   type BuildMode,
   type CompileArchiveInput,
+  type EntityType,
   type KinloomSiteConfig,
   type KinshipEdge,
   type MediaItem,
   type Narrative,
+  type NarrativeEnrichment,
   type Place,
   parseEntityPayload,
   parseEventsYaml,
+  parseKinloomConfigYaml,
   parseKinshipYaml,
   parseMediaYaml,
+  parseNarrativeEnrichmentsYaml,
   parseNarrativesYaml,
   parsePeopleYaml,
   parsePlacesYaml,
@@ -28,6 +33,7 @@ import {
   serializePlacesYaml,
   serializeSourcesYaml,
 } from '@kinloom/core';
+import { CliValidationError } from '../errors.js';
 
 export const ARCHIVE_YAML_FILE_NAMES = [
   'people.yaml',
@@ -51,6 +57,35 @@ export interface LocalArchiveData {
   narratives: Narrative[];
 }
 
+export interface LoadLocalArchiveRepoOptions {
+  dataDirOverride?: string;
+  requireConfig?: boolean;
+  requirePeopleFile?: boolean;
+  includeEnrichments?: boolean;
+  includeYamlTexts?: boolean;
+}
+
+export interface LoadedLocalArchiveRepo extends LocalArchiveData {
+  repoDir: string;
+  dataDir: string;
+  configPath: string;
+  siteConfig: KinloomSiteConfig | null;
+  enrichments: NarrativeEnrichment[];
+  yamlTexts: Array<{ name: string; content: string }>;
+}
+
+interface RawLocalArchiveTexts {
+  configText: string | null;
+  peopleText: string | null;
+  eventsText: string | null;
+  placesText: string | null;
+  sourcesText: string | null;
+  kinshipText: string | null;
+  mediaText: string | null;
+  narrativesText: string | null;
+  enrichmentsText: string | null;
+}
+
 async function readOptionalFile(filePath: string): Promise<string | null> {
   try {
     return await readFile(filePath, 'utf8');
@@ -60,6 +95,54 @@ async function readOptionalFile(filePath: string): Promise<string | null> {
     }
     throw err;
   }
+}
+
+function readOptionalFileSync(filePath: string): string | null {
+  if (!fs.existsSync(filePath)) {
+    return null;
+  }
+  return fs.readFileSync(filePath, 'utf8');
+}
+
+function parseLocalArchiveTexts(texts: RawLocalArchiveTexts): LocalArchiveData & {
+  siteConfig: KinloomSiteConfig | null;
+  enrichments: NarrativeEnrichment[];
+} {
+  return {
+    siteConfig: texts.configText ? parseKinloomConfigYaml(texts.configText) : null,
+    people: texts.peopleText ? parsePeopleYaml(texts.peopleText) : [],
+    events: texts.eventsText ? parseEventsYaml(texts.eventsText) : [],
+    places: texts.placesText ? parsePlacesYaml(texts.placesText) : [],
+    sources: texts.sourcesText ? parseSourcesYaml(texts.sourcesText) : [],
+    kinship: texts.kinshipText ? parseKinshipYaml(texts.kinshipText) : [],
+    media: texts.mediaText ? parseMediaYaml(texts.mediaText) : [],
+    narratives: texts.narrativesText ? parseNarrativesYaml(texts.narrativesText) : [],
+    enrichments: texts.enrichmentsText ? parseNarrativeEnrichmentsYaml(texts.enrichmentsText) : [],
+  };
+}
+
+function resolveLocalArchiveRepoPaths(
+  rawRepoDir: string | undefined,
+  options: LoadLocalArchiveRepoOptions
+): { repoDir: string; dataDir: string; configPath: string } {
+  const repoDir = path.resolve(rawRepoDir?.trim() || process.cwd());
+  if (!fs.existsSync(repoDir) || !fs.statSync(repoDir).isDirectory()) {
+    throw new CliValidationError(`Repository directory does not exist: ${repoDir}`);
+  }
+  const dataDir = options.dataDirOverride
+    ? path.resolve(options.dataDirOverride)
+    : path.join(repoDir, 'data');
+  const configPath = path.join(repoDir, 'kinloom.config.yaml');
+  if (!fs.existsSync(dataDir) || !fs.statSync(dataDir).isDirectory()) {
+    throw new CliValidationError(`Missing data/ directory at ${dataDir}.`);
+  }
+  if (options.requireConfig !== false && !fs.existsSync(configPath)) {
+    throw new CliValidationError(`Missing kinloom.config.yaml at ${configPath}.`);
+  }
+  if (options.requirePeopleFile && !fs.existsSync(path.join(dataDir, 'people.yaml'))) {
+    throw new CliValidationError(`Missing ${path.join(dataDir, 'people.yaml')}.`);
+  }
+  return { repoDir, dataDir, configPath };
 }
 
 export async function loadArchiveDataDir(dataDir: string): Promise<LocalArchiveData> {
@@ -74,14 +157,130 @@ export async function loadArchiveDataDir(dataDir: string): Promise<LocalArchiveD
       readOptionalFile(path.join(dataDir, 'narratives.yaml')),
     ]);
 
+  const parsed = parseLocalArchiveTexts({
+    configText: null,
+    peopleText,
+    eventsText,
+    placesText,
+    sourcesText,
+    kinshipText,
+    mediaText,
+    narrativesText,
+    enrichmentsText: null,
+  });
+
   return {
-    people: peopleText ? parsePeopleYaml(peopleText) : [],
-    events: eventsText ? parseEventsYaml(eventsText) : [],
-    places: placesText ? parsePlacesYaml(placesText) : [],
-    sources: sourcesText ? parseSourcesYaml(sourcesText) : [],
-    kinship: kinshipText ? parseKinshipYaml(kinshipText) : [],
-    media: mediaText ? parseMediaYaml(mediaText) : [],
-    narratives: narrativesText ? parseNarrativesYaml(narrativesText) : [],
+    people: parsed.people,
+    events: parsed.events,
+    places: parsed.places,
+    sources: parsed.sources,
+    kinship: parsed.kinship,
+    media: parsed.media,
+    narratives: parsed.narratives,
+  };
+}
+
+export async function loadLocalArchiveRepo(
+  rawRepoDir?: string,
+  options: LoadLocalArchiveRepoOptions = {}
+): Promise<LoadedLocalArchiveRepo> {
+  const { repoDir, dataDir, configPath } = resolveLocalArchiveRepoPaths(rawRepoDir, options);
+  const [
+    configText,
+    peopleText,
+    eventsText,
+    placesText,
+    sourcesText,
+    kinshipText,
+    mediaText,
+    narrativesText,
+    enrichmentsText,
+  ] = await Promise.all([
+    readOptionalFile(configPath),
+    readOptionalFile(path.join(dataDir, 'people.yaml')),
+    readOptionalFile(path.join(dataDir, 'events.yaml')),
+    readOptionalFile(path.join(dataDir, 'places.yaml')),
+    readOptionalFile(path.join(dataDir, 'sources.yaml')),
+    readOptionalFile(path.join(dataDir, 'kinship.yaml')),
+    readOptionalFile(path.join(dataDir, 'media.yaml')),
+    readOptionalFile(path.join(dataDir, 'narratives.yaml')),
+    options.includeEnrichments
+      ? readOptionalFile(path.join(dataDir, 'narrative_enrichments.yaml'))
+      : Promise.resolve(null),
+  ]);
+
+  let yamlTexts: Array<{ name: string; content: string }> = [];
+  if (options.includeYamlTexts) {
+    const yamlEntries = fs
+      .readdirSync(dataDir, { withFileTypes: true })
+      .filter((entry) => entry.isFile() && (entry.name.endsWith('.yaml') || entry.name.endsWith('.yml')))
+      .toSorted((a, b) => a.name.localeCompare(b.name));
+    yamlTexts = await Promise.all(
+      yamlEntries.map(async (entry) => ({
+        name: `data/${entry.name}`,
+        content: await readFile(path.join(dataDir, entry.name), 'utf8'),
+      }))
+    );
+  }
+
+  const parsed = parseLocalArchiveTexts({
+    configText,
+    peopleText,
+    eventsText,
+    placesText,
+    sourcesText,
+    kinshipText,
+    mediaText,
+    narrativesText,
+    enrichmentsText,
+  });
+
+  return {
+    repoDir,
+    dataDir,
+    configPath,
+    ...parsed,
+    yamlTexts,
+  };
+}
+
+export function loadLocalArchiveRepoSync(
+  rawRepoDir?: string,
+  options: LoadLocalArchiveRepoOptions = {}
+): LoadedLocalArchiveRepo {
+  const { repoDir, dataDir, configPath } = resolveLocalArchiveRepoPaths(rawRepoDir, options);
+  const parsed = parseLocalArchiveTexts({
+    configText: readOptionalFileSync(configPath),
+    peopleText: readOptionalFileSync(path.join(dataDir, 'people.yaml')),
+    eventsText: readOptionalFileSync(path.join(dataDir, 'events.yaml')),
+    placesText: readOptionalFileSync(path.join(dataDir, 'places.yaml')),
+    sourcesText: readOptionalFileSync(path.join(dataDir, 'sources.yaml')),
+    kinshipText: readOptionalFileSync(path.join(dataDir, 'kinship.yaml')),
+    mediaText: readOptionalFileSync(path.join(dataDir, 'media.yaml')),
+    narrativesText: readOptionalFileSync(path.join(dataDir, 'narratives.yaml')),
+    enrichmentsText: options.includeEnrichments
+      ? readOptionalFileSync(path.join(dataDir, 'narrative_enrichments.yaml'))
+      : null,
+  });
+
+  let yamlTexts: Array<{ name: string; content: string }> = [];
+  if (options.includeYamlTexts) {
+    const yamlEntries = fs
+      .readdirSync(dataDir, { withFileTypes: true })
+      .filter((entry) => entry.isFile() && (entry.name.endsWith('.yaml') || entry.name.endsWith('.yml')))
+      .toSorted((a, b) => a.name.localeCompare(b.name));
+    yamlTexts = yamlEntries.map((entry) => ({
+      name: `data/${entry.name}`,
+      content: fs.readFileSync(path.join(dataDir, entry.name), 'utf8'),
+    }));
+  }
+
+  return {
+    repoDir,
+    dataDir,
+    configPath,
+    ...parsed,
+    yamlTexts,
   };
 }
 
@@ -109,6 +308,8 @@ export async function writeArchiveDataDir(outDir: string, data: LocalArchiveData
   return written;
 }
 
+type SnapshotEntityType = Exclude<EntityType, 'kinship_edge'>;
+
 export function snapshotToArchiveData(snapshot: ArchiveRawSnapshot): LocalArchiveData {
   const people: RawPerson[] = [];
   const events: RawEvent[] = [];
@@ -116,6 +317,27 @@ export function snapshotToArchiveData(snapshot: ArchiveRawSnapshot): LocalArchiv
   const sources: SourceRecord[] = [];
   const media: MediaItem[] = [];
   const narratives: Narrative[] = [];
+
+  const appendEntityByType: Readonly<Record<SnapshotEntityType, (raw: Record<string, unknown>) => void>> = {
+    person: (raw) => {
+      people.push(parseEntityPayload('person', raw));
+    },
+    event: (raw) => {
+      events.push(parseEntityPayload('event', raw));
+    },
+    place: (raw) => {
+      places.push(parseEntityPayload('place', raw));
+    },
+    source: (raw) => {
+      sources.push(parseEntityPayload('source', raw));
+    },
+    media: (raw) => {
+      media.push(parseEntityPayload('media', raw));
+    },
+    narrative: (raw) => {
+      narratives.push(parseEntityPayload('narrative', raw));
+    },
+  };
 
   for (const row of snapshot.entities) {
     if (row.deleted_at !== null) {
@@ -125,31 +347,7 @@ export function snapshotToArchiveData(snapshot: ArchiveRawSnapshot): LocalArchiv
       row.data.has_primary_source === undefined && row.has_primary_source === false
         ? { ...row.data, has_primary_source: false }
         : row.data;
-
-    switch (row.entity_type) {
-      case 'person':
-        people.push(parseEntityPayload('person', rawWithCitation));
-        break;
-      case 'event':
-        events.push(parseEntityPayload('event', rawWithCitation));
-        break;
-      case 'place':
-        places.push(parseEntityPayload('place', rawWithCitation));
-        break;
-      case 'source':
-        sources.push(parseEntityPayload('source', rawWithCitation));
-        break;
-      case 'media':
-        media.push(parseEntityPayload('media', rawWithCitation));
-        break;
-      case 'narrative':
-        narratives.push(parseEntityPayload('narrative', rawWithCitation));
-        break;
-      default: {
-        const _exhaustive: never = row.entity_type;
-        throw new Error(`Unexpected entity_type: ${String(_exhaustive)}`);
-      }
-    }
+    appendEntityByType[row.entity_type](rawWithCitation);
   }
 
   const kinship: KinshipEdge[] = [];

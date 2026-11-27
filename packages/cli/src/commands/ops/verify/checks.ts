@@ -16,7 +16,6 @@ import {
   resolveEffectiveLiving,
   type SourceRecord,
 } from '@kinloom/core';
-import { auditBundlePrivacy } from '../integrate.js';
 import {
   collectLivingNameHitsWithMatcher,
   compileLivingNameMatcher,
@@ -25,6 +24,7 @@ import {
   type LivingNameTarget,
   resolveNarrativeMaxYear,
 } from '../living-name-matcher.js';
+import { auditBundlePrivacy } from '../shared/bundlePrivacy.js';
 import type {
   LoadedVerifyArchive,
   VerifyCompileResult,

@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import { CliValidationError } from '../../../errors.js';
-import { executeIntegrateSingle, type IntegrateExecutionOverlay } from '../integrate.js';
+import { executeIntegrateSingle } from '../shared/integrateEngine/execute.js';
+import type { IntegrateExecutionOverlay } from '../shared/integrateEngine/types.js';
 import { captureBatchSnapshot, createDryRunDataDirCopy, restoreBatchSnapshot } from './snapshot.js';
 import type { IntegrateBatchItemResult } from './types.js';
 

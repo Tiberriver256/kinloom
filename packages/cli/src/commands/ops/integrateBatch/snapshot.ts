@@ -2,7 +2,8 @@ import { randomBytes } from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { detectMediaLayout, INTEGRATE_YAML_FILES, INTEGRATION_RECEIPT_FILENAME } from '../integrate.js';
+import { detectMediaLayout } from '../shared/integrateEngine/media.js';
+import { INTEGRATE_YAML_FILES, INTEGRATION_RECEIPT_FILENAME } from '../shared/integrateEngine/types.js';
 import type { BatchSnapshot, RollbackStats } from './types.js';
 
 function writeFileAtomicBuffer(filePath: string, content: Buffer): void {

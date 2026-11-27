@@ -1,8 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { CliValidationError } from '../../errors.js';
-import { analyzeStagedOverlaps, listStagedAuditPersonIds } from './audit-overlaps.js';
-import { buildIntegrationReceiptForPackage, writeIntegrationReceipt } from './integrate.js';
 import {
   classifyStagedPackages,
   hasUnintegratedEffect,
@@ -22,6 +20,11 @@ import type {
   IntegrateBatchTotals,
   StagedPackageStatus,
 } from './integrateBatch/types.js';
+import {
+  buildIntegrationReceiptForPackage,
+  writeIntegrationReceipt,
+} from './shared/integrateEngine/receipts.js';
+import { analyzeStagedOverlaps, listStagedAuditPersonIds } from './shared/stagedOverlaps/index.js';
 
 export type {
   ClassifiedStagedPackages,

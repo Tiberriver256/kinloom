@@ -3,149 +3,38 @@ import { createRequire } from 'node:module';
 import path from 'node:path';
 import { performance } from 'node:perf_hooks';
 import { pathToFileURL } from 'node:url';
-import {
-  type KinloomSiteConfig,
-  type KinshipEdge,
-  type MediaItem,
-  type Narrative,
-  type Place,
-  parseKinloomConfigYaml,
-  type RawEvent,
-  type RawPerson,
-  type SourceRecord,
-} from '@kinloom/core';
-import type { CliIo } from './cli.js';
+import { type KinloomSiteConfig, parseKinloomConfigYaml } from '@kinloom/core';
+import { CORE_CLI_COMMANDS } from './cli/builtinCatalog.js';
 import { isRecordCommand } from './commands/records/registry.js';
-import type { CliExitCode } from './errors.js';
+import type {
+  DiscoverSiteCliPluginsResult,
+  ExecutedPluginCheckResult,
+  KinloomAuditCheck,
+  KinloomCheckResult,
+  KinloomCliCommand,
+  KinloomCliPlugin,
+  KinloomVerifyCheck,
+  RegisteredAuditCheck,
+  RegisteredVerifyCheck,
+  ResolvedPluginCommands,
+} from './pluginTypes.js';
 
-export interface KinloomCliPluginContext {
-  readonly cwd: string;
-  readonly io: CliIo;
-  readonly fetchImpl?: typeof fetch;
-  readonly siteConfig?: KinloomSiteConfig | null;
-}
-
-export interface KinloomCliCommand {
-  readonly name: string;
-  readonly summary: string;
-  readonly help: string;
-  run(args: readonly string[], ctx: KinloomCliPluginContext): Promise<CliExitCode> | CliExitCode;
-}
-
-export interface KinloomCheckResult {
-  readonly errors: readonly string[];
-  readonly warnings: readonly string[];
-  readonly strictWarnings?: readonly string[];
-  readonly strictFailures?: readonly string[];
-  readonly details?: Record<string, unknown>;
-}
-
-export interface KinloomAuditCheckContext {
-  readonly repoDir: string;
-  readonly personId: string;
-  readonly packageDir: string;
-  readonly patch: Readonly<Record<string, unknown>>;
-  readonly dossierText: string;
-  readonly siteConfig: KinloomSiteConfig | null;
-  readonly targetPerson: Readonly<Record<string, unknown>> | null;
-  readonly livePeople: readonly Readonly<Record<string, unknown>>[];
-  readonly mergedPeople: readonly Readonly<Record<string, unknown>>[];
-}
-
-export interface KinloomVerifyCheckContext {
-  readonly repoDir: string;
-  readonly dataDir: string;
-  readonly siteConfig: KinloomSiteConfig;
-  readonly people: readonly RawPerson[];
-  readonly events: readonly RawEvent[];
-  readonly places: readonly Place[];
-  readonly sources: readonly SourceRecord[];
-  readonly kinship: readonly KinshipEdge[];
-  readonly media: readonly MediaItem[];
-  readonly narratives: readonly Narrative[];
-  readonly strictHygiene: boolean;
-  readonly strictPronunciation: boolean;
-}
-
-export interface KinloomAuditCheck {
-  readonly id: string;
-  readonly name: string;
-  run(ctx: KinloomAuditCheckContext): Promise<KinloomCheckResult> | KinloomCheckResult;
-}
-
-export interface KinloomVerifyCheck {
-  readonly id: string;
-  readonly name: string;
-  run(ctx: KinloomVerifyCheckContext): Promise<KinloomCheckResult> | KinloomCheckResult;
-}
-
-export interface KinloomCliPlugin {
-  readonly id: string;
-  readonly name: string;
-  readonly commands?: readonly KinloomCliCommand[];
-  readonly auditChecks?: readonly KinloomAuditCheck[];
-  readonly verifyChecks?: readonly KinloomVerifyCheck[];
-}
-
-export interface RegisteredAuditCheck {
-  readonly pluginId: string;
-  readonly check: KinloomAuditCheck;
-}
-
-export interface RegisteredVerifyCheck {
-  readonly pluginId: string;
-  readonly check: KinloomVerifyCheck;
-}
-
-export interface ExecutedPluginCheckResult {
-  readonly pluginId: string;
-  readonly id: string;
-  readonly name: string;
-  readonly ok: boolean;
-  readonly strictOk: boolean;
-  readonly durationMs: number;
-  readonly errors: string[];
-  readonly warnings: string[];
-  readonly strictFailures: string[];
-  readonly details?: Record<string, unknown>;
-}
-
-export interface DiscoverSiteCliPluginsResult {
-  plugins: KinloomCliPlugin[];
-  siteConfig: KinloomSiteConfig | null;
-  warnings: string[];
-}
-
-export interface ResolvedPluginCommands {
-  plugins: KinloomCliPlugin[];
-  commands: Map<string, KinloomCliCommand>;
-  auditChecks: RegisteredAuditCheck[];
-  verifyChecks: RegisteredVerifyCheck[];
-  warnings: string[];
-}
-
-export const CORE_CLI_COMMANDS: ReadonlySet<string> = new Set([
-  'help',
-  'guide',
-  'init',
-  'brandkit',
-  'slice-gedcom',
-  'seed',
-  'submit-batch',
-  'export-yaml',
-  'upload-media',
-  'reconcile',
-  'context',
-  'integrate',
-  'audit',
-  'verify',
-  'status',
-  'sync',
-  'migrate',
-  'dates',
-  'pronounce',
-  'telemetry',
-]);
+export type {
+  DiscoverSiteCliPluginsResult,
+  ExecutedPluginCheckResult,
+  KinloomAuditCheck,
+  KinloomAuditCheckContext,
+  KinloomCheckResult,
+  KinloomCliCommand,
+  KinloomCliPlugin,
+  KinloomCliPluginContext,
+  KinloomVerifyCheck,
+  KinloomVerifyCheckContext,
+  RegisteredAuditCheck,
+  RegisteredVerifyCheck,
+  ResolvedPluginCommands,
+} from './pluginTypes.js';
+export { CORE_CLI_COMMANDS };
 
 export function isBuiltInCliCommand(name: string): boolean {
   const normalized = name.trim();

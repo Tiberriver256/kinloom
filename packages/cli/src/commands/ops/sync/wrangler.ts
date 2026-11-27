@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { promisify } from 'node:util';
 import { CliValidationError } from '../../../errors.js';
+import { stripJsoncCommentsAndTrailingCommas } from '../shared/wrangler.js';
 import {
   isPlainRecord,
   type MintedTempToken,
@@ -19,54 +20,7 @@ export const DEFAULT_BACKUP_TOKEN_LABEL = 'github-actions-nightly-backup';
 const TEMP_TOKEN_LABEL = 'tmp-kinloom-sync';
 const TEMP_TOKEN_ID_PREFIX = 'tmp_sync_';
 
-export function stripJsoncCommentsAndTrailingCommas(text: string): string {
-  let out = '';
-  let inString = false;
-  let escapeNext = false;
-
-  for (let i = 0; i < text.length; i += 1) {
-    const ch = text[i];
-    const next = text[i + 1];
-
-    if (inString) {
-      out += ch;
-      if (escapeNext) {
-        escapeNext = false;
-      } else if (ch === '\\') {
-        escapeNext = true;
-      } else if (ch === '"') {
-        inString = false;
-      }
-      continue;
-    }
-
-    if (ch === '"') {
-      inString = true;
-      out += ch;
-      continue;
-    }
-    if (ch === '/' && next === '/') {
-      while (i < text.length && text[i] !== '\n') {
-        i += 1;
-      }
-      if (i < text.length) {
-        out += '\n';
-      }
-      continue;
-    }
-    if (ch === '/' && next === '*') {
-      i += 2;
-      while (i < text.length && !(text[i] === '*' && text[i + 1] === '/')) {
-        i += 1;
-      }
-      i += 1;
-      continue;
-    }
-    out += ch;
-  }
-
-  return out.replaceAll(/,\s*([}\]])/g, '$1');
-}
+export { stripJsoncCommentsAndTrailingCommas };
 
 function normalizeSiteUrl(rawUrl: string): { baseUrl: string; domain: string } {
   const trimmed = rawUrl.trim();

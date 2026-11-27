@@ -32,30 +32,21 @@ export interface SubmitBatchCommandResult {
   response?: SubmitBatchResponse;
 }
 
+const PARTIAL_ENTITY_SCHEMAS: Readonly<Record<EntityType, z.ZodType>> = {
+  person: RawPersonSchema.partial(),
+  event: RawEventSchema.partial(),
+  place: PlaceSchema.partial(),
+  source: SourceRecordSchema.partial(),
+  media: MediaItemSchema.partial(),
+  narrative: NarrativeSchema.partial(),
+  kinship_edge: KinshipEdgeSchema.partial(),
+};
+
 function validatePartialEntityData(
   entityType: EntityType,
   raw: Record<string, unknown>
 ): z.ZodSafeParseResult<unknown> {
-  switch (entityType) {
-    case 'person':
-      return RawPersonSchema.partial().safeParse(raw);
-    case 'event':
-      return RawEventSchema.partial().safeParse(raw);
-    case 'place':
-      return PlaceSchema.partial().safeParse(raw);
-    case 'source':
-      return SourceRecordSchema.partial().safeParse(raw);
-    case 'media':
-      return MediaItemSchema.partial().safeParse(raw);
-    case 'narrative':
-      return NarrativeSchema.partial().safeParse(raw);
-    case 'kinship_edge':
-      return KinshipEdgeSchema.partial().safeParse(raw);
-    default: {
-      const _exhaustive: never = entityType;
-      throw new Error(`Unexpected entity_type: ${String(_exhaustive)}`);
-    }
-  }
+  return PARTIAL_ENTITY_SCHEMAS[entityType].safeParse(raw);
 }
 
 function formatZodIssues(prefix: string, error: z.ZodError): string[] {

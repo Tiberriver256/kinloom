@@ -30,10 +30,11 @@ import {
   isPlainRecord,
   type LooseRecord,
 } from './audit/types.js';
-import { parseMatchingYamlBlocks, splitTopLevelYamlList } from './context.js';
-import { parseValidDeathEdtf, runIntegrateCommand } from './integrate.js';
-import { collectLiveMediaCollisions, loadLiveMedia, readStagedMediaRefs } from './live-media-collisions.js';
 import { createPronunciationAuditCheck } from './pronunciation-checks.js';
+import { runIntegrateCommand } from './shared/integrateEngine/execute.js';
+import { collectLiveMediaCollisions, loadLiveMedia, readStagedMediaRefs } from './shared/mediaFiles.js';
+import { parseValidDeathEdtf } from './shared/stagedPackages.js';
+import { parseMatchingYamlBlocks, splitTopLevelYamlList } from './shared/yamlScanner.js';
 import { formatAuditHygieneWarningMessage } from './tree-hygiene.js';
 
 const SAFE_PERSON_ID_RE = /^[a-zA-Z0-9_-]+$/;

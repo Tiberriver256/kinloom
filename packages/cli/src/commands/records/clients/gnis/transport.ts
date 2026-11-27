@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { z } from 'zod';
 import {
   atomicWriteFileSync,
   canonicalJsonStringify,
@@ -38,6 +39,25 @@ export function queryCachePath(
   return { digest, filePath };
 }
 
+const GnisCompactFeatureSchema = z.object({
+  feature_id: z.string().nullable(),
+  feature_name: z.string().nullable(),
+  feature_class: z.string().nullable(),
+  state: z.string().nullable(),
+  county: z.string().nullable(),
+  map_name: z.string().nullable(),
+  latitude: z.string().nullable(),
+  longitude: z.string().nullable(),
+  date_created: z.string().nullable(),
+  date_edited: z.string().nullable(),
+});
+
+const GnisSearchPayloadSchema = z.object({
+  source: z.string(),
+  matches: z.number(),
+  results: z.array(GnisCompactFeatureSchema),
+});
+
 export function readCachedSearch(
   canonicalParams: GnisQueryParams,
   cacheDir: string,
@@ -58,13 +78,11 @@ export function readCachedSearch(
   if (typeof cachedAt !== 'number' || !Number.isFinite(cachedAt) || !isPlainRecord(data)) {
     return undefined;
   }
-  if (!Array.isArray(data.results)) {
+  if (nowMs() / 1000 - cachedAt > ttlSeconds) {
     return undefined;
   }
-  if (nowMs() / 1000 - cachedAt <= ttlSeconds) {
-    return data as unknown as GnisSearchPayload;
-  }
-  return undefined;
+  const validated = GnisSearchPayloadSchema.safeParse(data);
+  return validated.success ? validated.data : undefined;
 }
 
 async function downloadZip(ctx: RecordCommandContext, url: string): Promise<Buffer> {

@@ -1,5 +1,5 @@
-import type { StagedOverlapAnalysis } from '../audit-overlaps.js';
-import type { UpsertCounts } from '../integrate.js';
+import type { UpsertCounts } from '../shared/integrateEngine/types.js';
+import type { StagedOverlapAnalysis } from '../shared/stagedOverlaps/types.js';
 import type { IntegrateBatchCommandResult, IntegrateBatchItemResult, IntegrateBatchTotals } from './types.js';
 
 function emptyUpsertCounts(): UpsertCounts {

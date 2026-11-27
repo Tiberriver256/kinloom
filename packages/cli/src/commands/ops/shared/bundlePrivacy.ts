@@ -6,7 +6,8 @@ import {
   type CompileArchiveResult,
   compileArchive,
 } from '@kinloom/core';
-import { YEAR_ONLY_RE } from './types.js';
+
+const YEAR_ONLY_RE = /^\d{4}$/;
 
 export function auditBundlePrivacy(bundle: ArchiveBundle, mode: BuildMode): string[] {
   const livingPeople = bundle.people.filter((p) => Boolean(p.is_living));

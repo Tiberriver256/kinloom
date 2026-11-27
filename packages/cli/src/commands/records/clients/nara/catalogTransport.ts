@@ -1,22 +1,14 @@
-import path from 'node:path';
-import { canonicalJsonStringify, resolveCacheDir, sha256Hex, withAdvisoryLock } from '../../runtime/cache.js';
 import { HttpStatusError } from '../../runtime/http.js';
-import {
-  atomicWriteCompactJson,
-  fetchWithTimeout,
-  isPlainRecord,
-  readJsonRecordIfValid,
-  runWithConcurrency,
-} from '../../runtime/primitives.js';
+import { fetchWithTimeout, isPlainRecord, runWithConcurrency } from '../../runtime/primitives.js';
 import { type RecordCommandContext, RecordRuntimeError } from '../../runtime/types.js';
 import { defaultBrowserGetRecords } from './browserFallback.js';
+import { readCachedRecord, writeCachedRecord } from './catalogCache.js';
 import {
   buildQueryParams,
   buildSearchPayload,
   encodeCatalogUrl,
   extractRecord,
   normalizeQueryForWafRetry,
-  resolveSafeChild,
   validateNaid,
 } from './queryAndRecords.js';
 import {
@@ -25,7 +17,6 @@ import {
   API_READ_TIMEOUT_MS,
   CATALOG_API_BASE,
   CATALOG_WEB_BASE,
-  type CanonicalSearchParams,
   MAX_REDIRECTS,
   type NaraBrowserOverrides,
   type NaraRecordSummary,
@@ -38,13 +29,12 @@ import {
   USER_AGENT,
 } from './types.js';
 
-export function getCacheRoot(ctx: RecordCommandContext): string {
-  return resolveCacheDir({
-    env: ctx.env,
-    envVars: ['KINLOOM_NARA_CACHE_DIR'],
-    defaultSubdir: 'kinloom-nara',
-  });
-}
+export {
+  canonicalSearchParams,
+  getCacheRoot,
+  readCachedSearch,
+  writeCachedSearch,
+} from './catalogCache.js';
 
 export function parseRetryAfterSeconds(
   headers: Headers | null | undefined,
@@ -122,142 +112,6 @@ export async function fetchFollowingRedirects(
     return resp;
   }
   throw new RecordRuntimeError(`Too many redirects (${MAX_REDIRECTS}) for ${startUrl}`);
-}
-
-export function canonicalSearchParams(
-  query: string | null,
-  filter: SearchFilterOptions
-): CanonicalSearchParams {
-  const levels = filter.levels
-    .flatMap((item) => item.split(','))
-    .map((p) => p.trim())
-    .filter((p) => p.length > 0);
-  const recordGroups = filter.recordGroups
-    .flatMap((item) => item.split(','))
-    .map((p) => p.trim())
-    .filter((p) => p.length > 0);
-  return {
-    query: query ?? null,
-    levels,
-    record_groups: recordGroups,
-    online: Boolean(filter.online),
-    material_type: filter.materialType ?? null,
-    person: filter.person ?? null,
-    title: filter.title ?? null,
-    geo: filter.geo ?? null,
-    control: filter.control ?? null,
-    start_date: filter.startDate ?? null,
-    end_date: filter.endDate ?? null,
-    page: filter.page,
-    limit: filter.limit,
-  };
-}
-
-function queryCachePath(canonical: CanonicalSearchParams, cacheRoot: string): readonly [string, string] {
-  const digest = sha256Hex(canonicalJsonStringify(canonical));
-  return [digest, resolveSafeChild(path.join(cacheRoot, '_queries'), `${digest}.json`)];
-}
-
-export function readCachedSearch(
-  canonical: CanonicalSearchParams,
-  cacheRoot: string,
-  ttlHours: number,
-  nowMs: () => number
-): NaraSearchPayload | null {
-  const ttlSeconds = ttlHours * 3600;
-  if (ttlSeconds <= 0) {
-    return null;
-  }
-  const [, filePath] = queryCachePath(canonical, cacheRoot);
-  const envelope = readJsonRecordIfValid(filePath);
-  if (!envelope) {
-    return null;
-  }
-  const cachedAt = envelope.cached_at;
-  const data = envelope.data;
-  if (typeof cachedAt !== 'number' || !Number.isFinite(cachedAt) || !isPlainRecord(data)) {
-    return null;
-  }
-  if (!Array.isArray(data.results)) {
-    return null;
-  }
-  if (nowMs() / 1000 - cachedAt <= ttlSeconds) {
-    return data as unknown as NaraSearchPayload;
-  }
-  return null;
-}
-
-export async function writeCachedSearch(
-  canonical: CanonicalSearchParams,
-  payload: NaraSearchPayload,
-  cacheRoot: string,
-  ctx: RecordCommandContext
-): Promise<void> {
-  if (!Array.isArray(payload.results)) {
-    return;
-  }
-  const [digest, filePath] = queryCachePath(canonical, cacheRoot);
-  const lockPath = resolveSafeChild(path.join(cacheRoot, '_locks'), `query_${digest}.lock`);
-  await withAdvisoryLock(
-    lockPath,
-    async () => {
-      atomicWriteCompactJson(filePath, {
-        cached_at: ctx.nowMs() / 1000,
-        params: canonical,
-        data: payload,
-      });
-    },
-    { nowMs: ctx.nowMs, sleepFn: ctx.sleepFn }
-  );
-}
-
-function recordCachePath(cleanId: string, cacheRoot: string): string {
-  return resolveSafeChild(path.join(cacheRoot, 'records'), `${cleanId}.json`);
-}
-
-function readCachedRecord(
-  cleanId: string,
-  cacheRoot: string,
-  requireText: boolean
-): NaraRecordSummary | null {
-  const envelope = readJsonRecordIfValid(recordCachePath(cleanId, cacheRoot));
-  if (!envelope) {
-    return null;
-  }
-  const record = envelope.record;
-  if (!isPlainRecord(record) || record.error) {
-    return null;
-  }
-  if (requireText && !envelope.has_text) {
-    return null;
-  }
-  return record as unknown as NaraRecordSummary;
-}
-
-async function writeCachedRecord(
-  cleanId: string,
-  fullRecord: NaraRecordSummary,
-  cacheRoot: string,
-  hasText: boolean,
-  ctx: RecordCommandContext
-): Promise<void> {
-  if (fullRecord.error) {
-    return;
-  }
-  const filePath = recordCachePath(cleanId, cacheRoot);
-  const lockPath = resolveSafeChild(path.join(cacheRoot, '_locks'), `record_${cleanId}.lock`);
-  await withAdvisoryLock(
-    lockPath,
-    async () => {
-      atomicWriteCompactJson(filePath, {
-        cached_at: ctx.nowMs() / 1000,
-        naId: cleanId,
-        has_text: Boolean(hasText),
-        record: fullRecord,
-      });
-    },
-    { nowMs: ctx.nowMs, sleepFn: ctx.sleepFn }
-  );
 }
 
 export async function apiGetJson(

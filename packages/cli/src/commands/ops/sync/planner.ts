@@ -1,5 +1,3 @@
-import { readFile } from 'node:fs/promises';
-import path from 'node:path';
 import {
   computeEntityDiff,
   deriveKinshipEdgeId,
@@ -9,14 +7,6 @@ import {
   filterMediaForPrivacy,
   getCurrentReferenceYear,
   parseEntityPayload,
-  parseEventsYaml,
-  parseKinloomConfigYaml,
-  parseKinshipYaml,
-  parseMediaYaml,
-  parseNarrativesYaml,
-  parsePeopleYaml,
-  parsePlacesYaml,
-  parseSourcesYaml,
   type RawEvent,
   type RawPerson,
   resolveEffectiveLiving,
@@ -24,6 +14,7 @@ import {
   sanitizePersonForWrite,
 } from '@kinloom/core';
 import { CliValidationError } from '../../../errors.js';
+import { loadLocalArchiveRepo } from '../../dataFiles.js';
 import {
   type LocalArchiveFiles,
   type RemoteEntityEntry,
@@ -97,55 +88,20 @@ export function parseDeleteTargets(csv: string): SyncDeleteTarget[] {
   return targets;
 }
 
-async function readOptionalUtf8(filePath: string): Promise<string | null> {
-  try {
-    return await readFile(filePath, 'utf8');
-  } catch (err: unknown) {
-    if (typeof err === 'object' && err !== null && 'code' in err && err.code === 'ENOENT') {
-      return null;
-    }
-    throw err;
-  }
-}
-
 export async function loadLocalArchive(repoDir: string): Promise<LocalArchiveFiles> {
-  const dataDir = path.join(repoDir, 'data');
-  const configPath = path.join(repoDir, 'kinloom.config.yaml');
-
-  const [
-    configText,
-    placesText,
-    sourcesText,
-    peopleText,
-    eventsText,
-    kinshipText,
-    mediaText,
-    narrativesText,
-  ] = await Promise.all([
-    readOptionalUtf8(configPath),
-    readOptionalUtf8(path.join(dataDir, 'places.yaml')),
-    readOptionalUtf8(path.join(dataDir, 'sources.yaml')),
-    readOptionalUtf8(path.join(dataDir, 'people.yaml')),
-    readOptionalUtf8(path.join(dataDir, 'events.yaml')),
-    readOptionalUtf8(path.join(dataDir, 'kinship.yaml')),
-    readOptionalUtf8(path.join(dataDir, 'media.yaml')),
-    readOptionalUtf8(path.join(dataDir, 'narratives.yaml')),
-  ]);
-
-  if (!configText) {
-    throw new CliValidationError(`Missing kinloom.config.yaml at ${configPath}.`);
+  const loaded = await loadLocalArchiveRepo(repoDir, { requireConfig: true });
+  if (!loaded.siteConfig) {
+    throw new CliValidationError(`Missing kinloom.config.yaml at ${loaded.configPath}.`);
   }
-
-  const siteConfig = parseKinloomConfigYaml(configText);
   return {
-    siteConfig,
-    places: placesText ? parsePlacesYaml(placesText) : [],
-    sources: sourcesText ? parseSourcesYaml(sourcesText) : [],
-    people: peopleText ? parsePeopleYaml(peopleText) : [],
-    events: eventsText ? parseEventsYaml(eventsText) : [],
-    kinship: kinshipText ? parseKinshipYaml(kinshipText) : [],
-    media: mediaText ? parseMediaYaml(mediaText) : [],
-    narratives: narrativesText ? parseNarrativesYaml(narrativesText) : [],
+    siteConfig: loaded.siteConfig,
+    places: loaded.places,
+    sources: loaded.sources,
+    people: loaded.people,
+    events: loaded.events,
+    kinship: loaded.kinship,
+    media: loaded.media,
+    narratives: loaded.narratives,
   };
 }
 

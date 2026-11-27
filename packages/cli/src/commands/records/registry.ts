@@ -1,26 +1,3 @@
-import { runArchiveOrgCommand } from './clients/archive-org.js';
-import { runCaArchivesCommand } from './clients/ca-archives.js';
-import { runChronamCommand } from './clients/chronam.js';
-import { runFiArchivesCommand } from './clients/fi-archives.js';
-import { runFindagraveCommand } from './clients/findagrave.js';
-import { runGnisCommand } from './clients/gnis.js';
-import { runHathiCommand } from './clients/hathi.js';
-import { runKyArchivesCommand } from './clients/ky-archives.js';
-import { runMichiganologyCommand } from './clients/michiganology.js';
-import { runMnArchivesCommand } from './clients/mn-archives.js';
-import { runMoArchivesCommand } from './clients/mo-archives.js';
-import { runNaraCommand } from './clients/nara.js';
-import { runNarrativeAudioCommand } from './clients/narrative-audio.js';
-import { runNjArchivesCommand } from './clients/nj-archives.js';
-import { runOcrCommand } from './clients/ocr.js';
-import { runOpenarchievenCommand } from './clients/openarchieven.js';
-import { runPersiCommand } from './clients/persi.js';
-import { runPrepScanCommand } from './clients/prep-scan.js';
-import { runSeArchivesCommand } from './clients/se-archives.js';
-import { runTexasArchivesCommand } from './clients/texas-archives.js';
-import { runUkArchivesCommand } from './clients/uk-archives.js';
-import { runVaArchivesCommand } from './clients/va-archives.js';
-import { runWikitreeCommand } from './clients/wikitree.js';
 import type { RecordHandler } from './runtime/types.js';
 
 export type RecordCommandCategory =
@@ -52,7 +29,7 @@ export interface BaseRecordCommandSpec {
 
 export interface NativeRecordCommandSpec extends BaseRecordCommandSpec {
   readonly kind: 'native';
-  readonly handler: RecordHandler;
+  readonly loadHandler: () => Promise<RecordHandler>;
 }
 
 export interface GuideOnlyCommandSpec extends BaseRecordCommandSpec {
@@ -68,7 +45,7 @@ export const RECORD_COMMAND_SPECS: readonly RecordCommandSpec[] = [
     command: 'nara',
     aliases: [],
     category: 'federal-general',
-    handler: runNaraCommand,
+    loadHandler: () => import('./clients/nara.js').then((mod) => mod.runNaraCommand),
     summary: 'Search, inspect, and download National Archives Catalog records (NARA)',
   },
   {
@@ -76,7 +53,7 @@ export const RECORD_COMMAND_SPECS: readonly RecordCommandSpec[] = [
     command: 'archive-org',
     aliases: ['ia'],
     category: 'federal-general',
-    handler: runArchiveOrgCommand,
+    loadHandler: () => import('./clients/archive-org.js').then((mod) => mod.runArchiveOrgCommand),
     summary: 'Search, grep cached OCR, and fetch pages from Internet Archive',
   },
   {
@@ -84,7 +61,7 @@ export const RECORD_COMMAND_SPECS: readonly RecordCommandSpec[] = [
     command: 'chronam',
     aliases: [],
     category: 'federal-general',
-    handler: runChronamCommand,
+    loadHandler: () => import('./clients/chronam.js').then((mod) => mod.runChronamCommand),
     summary: 'Search and download Library of Congress Chronicling America newspapers',
   },
   {
@@ -92,7 +69,7 @@ export const RECORD_COMMAND_SPECS: readonly RecordCommandSpec[] = [
     command: 'hathi',
     aliases: [],
     category: 'federal-general',
-    handler: runHathiCommand,
+    loadHandler: () => import('./clients/hathi.js').then((mod) => mod.runHathiCommand),
     summary: 'Look up books, volumes, and rights in HathiTrust Digital Library',
   },
   {
@@ -100,7 +77,7 @@ export const RECORD_COMMAND_SPECS: readonly RecordCommandSpec[] = [
     command: 'findagrave',
     aliases: [],
     category: 'federal-general',
-    handler: runFindagraveCommand,
+    loadHandler: () => import('./clients/findagrave.js').then((mod) => mod.runFindagraveCommand),
     summary: 'Search Find a Grave memorials, cemeteries, places, and gravestone photos',
   },
   {
@@ -108,7 +85,7 @@ export const RECORD_COMMAND_SPECS: readonly RecordCommandSpec[] = [
     command: 'gnis',
     aliases: [],
     category: 'federal-general',
-    handler: runGnisCommand,
+    loadHandler: () => import('./clients/gnis.js').then((mod) => mod.runGnisCommand),
     summary: 'Look up historical and current U.S. place names in USGS GNIS',
   },
   {
@@ -116,7 +93,7 @@ export const RECORD_COMMAND_SPECS: readonly RecordCommandSpec[] = [
     command: 'wikitree',
     aliases: [],
     category: 'federal-general',
-    handler: runWikitreeCommand,
+    loadHandler: () => import('./clients/wikitree.js').then((mod) => mod.runWikitreeCommand),
     summary: 'Search and read public WikiTree profiles, ancestors, and biographies',
   },
   {
@@ -124,7 +101,7 @@ export const RECORD_COMMAND_SPECS: readonly RecordCommandSpec[] = [
     command: 'persi',
     aliases: [],
     category: 'federal-general',
-    handler: runPersiCommand,
+    loadHandler: () => import('./clients/persi.js').then((mod) => mod.runPersiCommand),
     summary: 'Search ACPL Periodical Source Index (PERSI) genealogy articles',
   },
 
@@ -134,7 +111,7 @@ export const RECORD_COMMAND_SPECS: readonly RecordCommandSpec[] = [
     command: 'ca-archives',
     aliases: [],
     category: 'state-archives',
-    handler: runCaArchivesCommand,
+    loadHandler: () => import('./clients/ca-archives.js').then((mod) => mod.runCaArchivesCommand),
     summary: 'Search California archives (OAC, Calisphere, State Archives, CDNC)',
   },
   {
@@ -142,7 +119,7 @@ export const RECORD_COMMAND_SPECS: readonly RecordCommandSpec[] = [
     command: 'ky-archives',
     aliases: [],
     category: 'state-archives',
-    handler: runKyArchivesCommand,
+    loadHandler: () => import('./clients/ky-archives.js').then((mod) => mod.runKyArchivesCommand),
     summary: 'Search Kentucky Historical Society, KDLA, and Land Office patents',
   },
   {
@@ -150,7 +127,7 @@ export const RECORD_COMMAND_SPECS: readonly RecordCommandSpec[] = [
     command: 'michiganology',
     aliases: [],
     category: 'state-archives',
-    handler: runMichiganologyCommand,
+    loadHandler: () => import('./clients/michiganology.js').then((mod) => mod.runMichiganologyCommand),
     summary: 'Search Library of Michigan and Michiganology digital collections',
   },
   {
@@ -158,7 +135,7 @@ export const RECORD_COMMAND_SPECS: readonly RecordCommandSpec[] = [
     command: 'mn-archives',
     aliases: [],
     category: 'state-archives',
-    handler: runMnArchivesCommand,
+    loadHandler: () => import('./clients/mn-archives.js').then((mod) => mod.runMnArchivesCommand),
     summary: 'Search Minnesota Historical Society People Records and Digital Newspaper Hub',
   },
   {
@@ -166,7 +143,7 @@ export const RECORD_COMMAND_SPECS: readonly RecordCommandSpec[] = [
     command: 'mo-archives',
     aliases: [],
     category: 'state-archives',
-    handler: runMoArchivesCommand,
+    loadHandler: () => import('./clients/mo-archives.js').then((mod) => mod.runMoArchivesCommand),
     summary: 'Search Missouri State Archives death certificates and vital abstracts',
   },
   {
@@ -174,7 +151,7 @@ export const RECORD_COMMAND_SPECS: readonly RecordCommandSpec[] = [
     command: 'nj-archives',
     aliases: [],
     category: 'state-archives',
-    handler: runNjArchivesCommand,
+    loadHandler: () => import('./clients/nj-archives.js').then((mod) => mod.runNjArchivesCommand),
     summary: 'Search New Jersey State Archives databases and Monmouth OPRS census',
   },
   {
@@ -182,7 +159,7 @@ export const RECORD_COMMAND_SPECS: readonly RecordCommandSpec[] = [
     command: 'texas-archives',
     aliases: [],
     category: 'state-archives',
-    handler: runTexasArchivesCommand,
+    loadHandler: () => import('./clients/texas-archives.js').then((mod) => mod.runTexasArchivesCommand),
     summary: 'Search Portal to Texas History, TSLAC, and Texas GLO land grants',
   },
   {
@@ -190,7 +167,7 @@ export const RECORD_COMMAND_SPECS: readonly RecordCommandSpec[] = [
     command: 'va-archives',
     aliases: [],
     category: 'state-archives',
-    handler: runVaArchivesCommand,
+    loadHandler: () => import('./clients/va-archives.js').then((mod) => mod.runVaArchivesCommand),
     summary: 'Search Library of Virginia Chancery Records Index and Primo catalog',
   },
 
@@ -200,7 +177,7 @@ export const RECORD_COMMAND_SPECS: readonly RecordCommandSpec[] = [
     command: 'fi-archives',
     aliases: [],
     category: 'international',
-    handler: runFiArchivesCommand,
+    loadHandler: () => import('./clients/fi-archives.js').then((mod) => mod.runFiArchivesCommand),
     summary: 'Search Finnish HisKi parish registers and National Archives Digihakemisto index',
   },
   {
@@ -208,7 +185,7 @@ export const RECORD_COMMAND_SPECS: readonly RecordCommandSpec[] = [
     command: 'openarchieven',
     aliases: [],
     category: 'international',
-    handler: runOpenarchievenCommand,
+    loadHandler: () => import('./clients/openarchieven.js').then((mod) => mod.runOpenarchievenCommand),
     summary: 'Search Dutch and Belgian civil, parish, and Rotterdam passenger records',
   },
   {
@@ -216,7 +193,7 @@ export const RECORD_COMMAND_SPECS: readonly RecordCommandSpec[] = [
     command: 'se-archives',
     aliases: [],
     category: 'international',
-    handler: runSeArchivesCommand,
+    loadHandler: () => import('./clients/se-archives.js').then((mod) => mod.runSeArchivesCommand),
     summary: 'Search Swedish National Archives (Riksarkivet) records, church books, and IIIF scans',
   },
   {
@@ -224,7 +201,7 @@ export const RECORD_COMMAND_SPECS: readonly RecordCommandSpec[] = [
     command: 'uk-archives',
     aliases: [],
     category: 'international',
-    handler: runUkArchivesCommand,
+    loadHandler: () => import('./clients/uk-archives.js').then((mod) => mod.runUkArchivesCommand),
     summary: 'Search UK National Archives Discovery and FreeREG parish registers',
   },
 
@@ -250,7 +227,7 @@ export const RECORD_COMMAND_SPECS: readonly RecordCommandSpec[] = [
     command: 'narrative-audio',
     aliases: [],
     category: 'media-ocr',
-    handler: runNarrativeAudioCommand,
+    loadHandler: () => import('./clients/narrative-audio.js').then((mod) => mod.runNarrativeAudioCommand),
     summary: 'Turn Kinloom narratives into narrated MP3 audio (Chirp 3: HD or Gemini TTS)',
   },
   {
@@ -258,7 +235,7 @@ export const RECORD_COMMAND_SPECS: readonly RecordCommandSpec[] = [
     command: 'prep-scan',
     aliases: [],
     category: 'media-ocr',
-    handler: runPrepScanCommand,
+    loadHandler: () => import('./clients/prep-scan.js').then((mod) => mod.runPrepScanCommand),
     summary: 'Report scan size, join page images, build previews, crops, strips, and PDF pages',
   },
   {
@@ -266,7 +243,7 @@ export const RECORD_COMMAND_SPECS: readonly RecordCommandSpec[] = [
     command: 'ocr',
     aliases: [],
     category: 'media-ocr',
-    handler: runOcrCommand,
+    loadHandler: () => import('./clients/ocr.js').then((mod) => mod.runOcrCommand),
     summary: 'Run SHA-256 cached OCR for printed (tesseract) or cursive scans',
   },
 ];
