@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
+  CURL_META_MARKER,
   CookieJar,
   HttpStatusError,
   SsrfBlockedError,
   assertSafeUrl,
+  fetchWithCurl,
   httpGetBytes,
   httpGetJson,
   httpRequest,
@@ -152,5 +154,38 @@ describe('records runtime http client', () => {
         sleepFn: instantSleep,
       })
     ).rejects.toThrow(HttpStatusError);
+  });
+
+  it('fetches via isolated curl transport with allowlist enforcement and transient retries', async () => {
+    let calls = 0;
+    const res = await fetchWithCurl('https://michigan.access.preservica.com/?s=smith', {
+      urlPolicy: { allowedSchemes: ['https:'], allowedHosts: ['michigan.access.preservica.com'] },
+      sleepFn: instantSleep,
+      maxAttempts: 3,
+      execFileImpl: async (_file, args) => {
+        calls += 1;
+        if (calls === 1) {
+          const err = new Error('timeout') as Error & { code?: number };
+          err.code = 28;
+          throw err;
+        }
+        const target = args.at(-1) ?? '';
+        return {
+          stdout: Buffer.from(`<html>ok</html>\n${CURL_META_MARKER}\n200\n${target}`),
+          stderr: Buffer.alloc(0),
+        };
+      },
+    });
+    expect(calls).toBe(2);
+    expect(res.status).toBe(200);
+    expect(res.bytes.toString('utf8')).toBe('<html>ok</html>');
+
+    await expect(
+      fetchWithCurl('https://evil.example/page', {
+        urlPolicy: { allowedSchemes: ['https:'], allowedHosts: ['michigan.access.preservica.com'] },
+        sleepFn: instantSleep,
+        execFileImpl: async () => ({ stdout: Buffer.alloc(0), stderr: Buffer.alloc(0) }),
+      })
+    ).rejects.toThrow(SsrfBlockedError);
   });
 });

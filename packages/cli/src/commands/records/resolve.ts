@@ -70,15 +70,17 @@ export function resolveRecordGuidePath(
   spec: RecordCommandSpec,
   options?: ResolveRootsOptions
 ): string {
-  if (spec.kind === 'asset-script') {
-    const candidates = candidateAssetDirs(options).map((dir) => path.join(dir, spec.assetGuide));
-    return findExistingFile(candidates, `guide '${spec.assetGuide}' for '${spec.command}'`);
+  if (spec.kind === 'asset-script' || (spec.kind === 'native' && spec.assetGuide)) {
+    const assetGuide = spec.assetGuide ?? `${spec.command}.md`;
+    const candidates = candidateAssetDirs(options).map((dir) => path.join(dir, assetGuide));
+    return findExistingFile(candidates, `guide '${assetGuide}' for '${spec.command}'`);
   }
 
+  const skillDir = spec.skillDir ?? spec.command;
   const candidates = candidateSkillDirs(options).map((dir) =>
-    path.join(dir, spec.skillDir, 'SKILL.md')
+    path.join(dir, skillDir, 'SKILL.md')
   );
-  return findExistingFile(candidates, `SKILL.md for '${spec.command}' (${spec.skillDir})`);
+  return findExistingFile(candidates, `SKILL.md for '${spec.command}' (${skillDir})`);
 }
 
 export function resolveRecordScriptPath(

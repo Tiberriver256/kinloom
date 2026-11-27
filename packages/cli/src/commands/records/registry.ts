@@ -1,10 +1,25 @@
 import { runArchiveOrgCommand } from './clients/archive-org.js';
+import { runCaArchivesCommand } from './clients/ca-archives.js';
 import { runChronamCommand } from './clients/chronam.js';
+import { runFiArchivesCommand } from './clients/fi-archives.js';
 import { runFindagraveCommand } from './clients/findagrave.js';
+import { runGnisCommand } from './clients/gnis.js';
 import { runHathiCommand } from './clients/hathi.js';
+import { runKyArchivesCommand } from './clients/ky-archives.js';
+import { runMichiganologyCommand } from './clients/michiganology.js';
+import { runMnArchivesCommand } from './clients/mn-archives.js';
+import { runMoArchivesCommand } from './clients/mo-archives.js';
 import { runNaraCommand } from './clients/nara.js';
+import { runNarrativeAudioCommand } from './clients/narrative-audio.js';
+import { runNjArchivesCommand } from './clients/nj-archives.js';
+import { runOcrCommand } from './clients/ocr.js';
 import { runOpenarchievenCommand } from './clients/openarchieven.js';
 import { runPersiCommand } from './clients/persi.js';
+import { runPrepScanCommand } from './clients/prep-scan.js';
+import { runSeArchivesCommand } from './clients/se-archives.js';
+import { runTexasArchivesCommand } from './clients/texas-archives.js';
+import { runUkArchivesCommand } from './clients/uk-archives.js';
+import { runVaArchivesCommand } from './clients/va-archives.js';
 import { runWikitreeCommand } from './clients/wikitree.js';
 import type { RecordHandler } from './runtime/types.js';
 
@@ -37,8 +52,10 @@ export interface BaseRecordCommandSpec {
 
 export interface NativeRecordCommandSpec extends BaseRecordCommandSpec {
   readonly kind: 'native';
-  readonly skillDir: string;
-  readonly scriptName: string;
+  readonly skillDir?: string;
+  readonly scriptName?: string;
+  readonly assetScript?: string;
+  readonly assetGuide?: string;
   readonly handler: RecordHandler;
 }
 
@@ -118,12 +135,13 @@ export const RECORD_COMMAND_SPECS: readonly RecordCommandSpec[] = [
     summary: 'Search Find a Grave memorials, cemeteries, places, and gravestone photos',
   },
   {
-    kind: 'skill-script',
+    kind: 'native',
     command: 'gnis',
     aliases: [],
     category: 'federal-general',
     skillDir: 'usgs-gnis',
     scriptName: 'gnis',
+    handler: runGnisCommand,
     summary: 'Look up historical and current U.S. place names in USGS GNIS',
   },
   {
@@ -149,86 +167,95 @@ export const RECORD_COMMAND_SPECS: readonly RecordCommandSpec[] = [
 
   // State archives (8)
   {
-    kind: 'skill-script',
+    kind: 'native',
     command: 'ca-archives',
     aliases: [],
     category: 'state-archives',
     skillDir: 'california-archives',
     scriptName: 'ca-archives',
+    handler: runCaArchivesCommand,
     summary: 'Search California archives (OAC, Calisphere, State Archives, CDNC)',
   },
   {
-    kind: 'skill-script',
+    kind: 'native',
     command: 'ky-archives',
     aliases: [],
     category: 'state-archives',
     skillDir: 'kentucky-archives',
     scriptName: 'ky-archives',
+    handler: runKyArchivesCommand,
     summary: 'Search Kentucky Historical Society, KDLA, and Land Office patents',
   },
   {
-    kind: 'skill-script',
+    kind: 'native',
     command: 'michiganology',
     aliases: [],
     category: 'state-archives',
     skillDir: 'library-of-michigan',
     scriptName: 'michiganology',
+    handler: runMichiganologyCommand,
     summary: 'Search Library of Michigan and Michiganology digital collections',
   },
   {
-    kind: 'skill-script',
+    kind: 'native',
     command: 'mn-archives',
     aliases: [],
     category: 'state-archives',
     skillDir: 'minnesota-archives',
     scriptName: 'mn_archives.py',
+    handler: runMnArchivesCommand,
     summary: 'Search Minnesota Historical Society People Records and Digital Newspaper Hub',
   },
   {
-    kind: 'skill-script',
+    kind: 'native',
     command: 'mo-archives',
     aliases: [],
     category: 'state-archives',
     skillDir: 'missouri-archives',
     scriptName: 'mo-archives',
+    handler: runMoArchivesCommand,
     summary: 'Search Missouri State Archives death certificates and vital abstracts',
   },
   {
-    kind: 'skill-script',
+    kind: 'native',
     command: 'nj-archives',
     aliases: [],
     category: 'state-archives',
     skillDir: 'new-jersey-archives',
     scriptName: 'nj-archives',
+    handler: runNjArchivesCommand,
     summary: 'Search New Jersey State Archives databases and Monmouth OPRS census',
   },
   {
-    kind: 'skill-script',
+    kind: 'native',
     command: 'texas-archives',
     aliases: [],
     category: 'state-archives',
     skillDir: 'texas-archives',
     scriptName: 'texas-archives',
+    handler: runTexasArchivesCommand,
     summary: 'Search Portal to Texas History, TSLAC, and Texas GLO land grants',
   },
   {
-    kind: 'skill-script',
+    kind: 'native',
     command: 'va-archives',
     aliases: [],
     category: 'state-archives',
     skillDir: 'virginia-archives',
     scriptName: 'va-archives',
+    handler: runVaArchivesCommand,
     summary: 'Search Library of Virginia Chancery Records Index and Primo catalog',
   },
 
   // International archives (4)
   {
-    kind: 'skill-script',
+    kind: 'native',
     command: 'fi-archives',
     aliases: [],
     category: 'international',
     skillDir: 'finnish-archives',
     scriptName: 'fi_archives.py',
+    handler: runFiArchivesCommand,
     summary: 'Search Finnish HisKi parish registers and National Archives Digihakemisto index',
   },
   {
@@ -242,21 +269,23 @@ export const RECORD_COMMAND_SPECS: readonly RecordCommandSpec[] = [
     summary: 'Search Dutch and Belgian civil, parish, and Rotterdam passenger records',
   },
   {
-    kind: 'skill-script',
+    kind: 'native',
     command: 'se-archives',
     aliases: [],
     category: 'international',
     skillDir: 'swedish-archives',
     scriptName: 'se_archives.py',
+    handler: runSeArchivesCommand,
     summary: 'Search Swedish National Archives (Riksarkivet) records, church books, and IIIF scans',
   },
   {
-    kind: 'skill-script',
+    kind: 'native',
     command: 'uk-archives',
     aliases: [],
     category: 'international',
     skillDir: 'uk-archives',
     scriptName: 'uk-archives',
+    handler: runUkArchivesCommand,
     summary: 'Search UK National Archives Discovery and FreeREG parish registers',
   },
 
@@ -280,30 +309,33 @@ export const RECORD_COMMAND_SPECS: readonly RecordCommandSpec[] = [
 
   // Media, scan prep & OCR (3)
   {
-    kind: 'skill-script',
+    kind: 'native',
     command: 'narrative-audio',
     aliases: [],
     category: 'media-ocr',
     skillDir: 'narrative-audio',
     scriptName: 'narrative-audio',
+    handler: runNarrativeAudioCommand,
     summary: 'Turn Kinloom narratives into narrated MP3 audio (Chirp 3: HD or Gemini TTS)',
   },
   {
-    kind: 'asset-script',
+    kind: 'native',
     command: 'prep-scan',
     aliases: [],
     category: 'media-ocr',
     assetScript: 'prep-scan.py',
     assetGuide: 'prep-scan.md',
+    handler: runPrepScanCommand,
     summary: 'Report scan size, join page images, build previews, crops, strips, and PDF pages',
   },
   {
-    kind: 'asset-script',
+    kind: 'native',
     command: 'ocr',
     aliases: [],
     category: 'media-ocr',
     assetScript: 'cached-ocr.py',
     assetGuide: 'ocr.md',
+    handler: runOcrCommand,
     summary: 'Run SHA-256 cached OCR for printed (tesseract) or cursive scans',
   },
 ];
