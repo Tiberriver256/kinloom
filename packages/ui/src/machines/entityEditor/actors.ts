@@ -1,4 +1,4 @@
-import type { EditorCitationMode, EntityPayload, OptimisticConflictError } from '@kinloom/core';
+import type { EditorCitationMode, OptimisticConflictError } from '@kinloom/core';
 import { asRevisionId } from '@kinloom/core';
 import { fromPromise } from 'xstate';
 import type {
@@ -66,84 +66,36 @@ export const defaultDeleteEntityActor = fromPromise<void, DeleteEntityInput>(asy
 
 export const defaultSaveEntityActor = fromPromise<SaveEntityResult, SaveEntityInput>(
   async ({ input, signal }) => {
-    if (input.dataSource?.updateEntity) {
-      const res = await input.dataSource.updateEntity(
-        input.entityType,
-        input.entityId,
-        {
-          data: input.draft,
-          expected_parent_revision_id: asRevisionId(input.expectedParentRevisionId),
-          summary: input.summary.trim(),
-          has_primary_source: input.hasPrimarySource,
-        },
-        { signal }
-      );
-
-      if (!res.ok) {
-        return {
-          kind: 'conflict409',
-          entityId: input.entityId,
-          conflict: mapConflictPayload(res.conflict),
-          reqGen: input.reqGen,
-        };
-      }
-      return {
-        kind: 'ok',
-        entityId: input.entityId,
-        revisionId: res.revision.revision_id,
-        snapshot: res.entity,
-        etag: res.etag,
-        reqGen: input.reqGen,
-      };
+    if (!input.dataSource?.updateEntity) {
+      throw new Error('Editing records is not supported by this archive.');
     }
 
-    const response = await fetch(
-      `/api/entities/${encodeURIComponent(input.entityType)}/${encodeURIComponent(input.entityId)}`,
+    const res = await input.dataSource.updateEntity(
+      input.entityType,
+      input.entityId,
       {
-        method: 'PUT',
-        credentials: 'same-origin',
-        headers: { 'content-type': 'application/json', accept: 'application/json' },
-        body: JSON.stringify({
-          expected_parent_revision_id: input.expectedParentRevisionId,
-          data: input.draft,
-          summary: input.summary.trim(),
-          has_primary_source: input.hasPrimarySource,
-        }),
-        signal,
-      }
+        data: input.draft,
+        expected_parent_revision_id: asRevisionId(input.expectedParentRevisionId),
+        summary: input.summary.trim(),
+        has_primary_source: input.hasPrimarySource,
+      },
+      { signal }
     );
 
-    if (response.status === 409) {
-      const envelope = (await response.json()) as {
-        error?: { details?: OptimisticConflictError };
-      };
-      const details = envelope.error?.details;
-      if (!details) {
-        throw new Error('HTTP 409 response missing conflict details');
-      }
+    if (!res.ok) {
       return {
         kind: 'conflict409',
         entityId: input.entityId,
-        conflict: mapConflictPayload(details),
+        conflict: mapConflictPayload(res.conflict),
         reqGen: input.reqGen,
       };
     }
-
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status} saving ${input.entityType}/${input.entityId}`);
-    }
-
-    const ok = (await response.json()) as {
-      entity: EntityPayload;
-      revision: { revision_id: number };
-      etag: string;
-    };
     return {
       kind: 'ok',
       entityId: input.entityId,
-      revisionId: ok.revision.revision_id,
-      snapshot: ok.entity,
-      etag: ok.etag,
+      revisionId: res.revision.revision_id,
+      snapshot: res.entity,
+      etag: res.etag,
       reqGen: input.reqGen,
     };
   }

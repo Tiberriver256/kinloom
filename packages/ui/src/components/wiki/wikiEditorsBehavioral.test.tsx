@@ -460,6 +460,60 @@ describe('EntityEditDrawer, CreateEntityModal, WikiActionBar, and BlankScreenWat
     expect(createdCount).toBeGreaterThanOrEqual(0);
   });
 
+  it('never submits a person payload under an unsupported defaultKind like source or narrative', async () => {
+    const submissions: Array<{ entityType: string; entityId?: string; data: Record<string, unknown> }> = [];
+    const ds = makeEditorDataSource({
+      createEntity: async (entityType, body) => {
+        submissions.push({ entityType, entityId: body.entity_id, data: body.data });
+        return {
+          entity: body.data,
+          revision: { revision_id: asRevisionId(10) } as unknown as RevisionRecord,
+          etag: '"r10"',
+        };
+      },
+    });
+
+    for (const unsupportedKind of ['source', 'narrative'] as const) {
+      const container = mountEl(
+        <MemoryRouter>
+          <ArchiveProvider siteConfig={SITE_CONFIG} initialBundle={SAMPLE_BUNDLE} dataSource={ds}>
+            <CreateEntityModal open={true} defaultKind={unsupportedKind} onClose={() => {}} />
+          </ArchiveProvider>
+        </MemoryRouter>
+      );
+      await flushUi();
+
+      const textInputs = Array.from(container.querySelectorAll('input[type="text"]')) as HTMLInputElement[];
+      if (textInputs[0]) {
+        setInputValue(textInputs[0], 'Evelyn');
+      }
+      if (textInputs[1]) {
+        setInputValue(textInputs[1], 'Alder');
+      }
+      const summaryInput = textInputs.at(-1);
+      if (summaryInput) {
+        setInputValue(summaryInput, `Created from fallback ${unsupportedKind}`);
+      }
+      await flushUi();
+
+      const submitBtn = Array.from(
+        container.querySelectorAll<HTMLButtonElement>('button[type="submit"]')
+      ).find((b) => !b.disabled);
+      expect(submitBtn).toBeDefined();
+      act(() => {
+        submitBtn?.click();
+      });
+      await flushUi();
+    }
+
+    expect(submissions).toHaveLength(2);
+    for (const sub of submissions) {
+      expect(sub.entityType).toBe('person');
+      expect(sub.entityId).toMatch(/^per_/);
+      expect(sub.data.full_name).toBe('Evelyn Alder');
+    }
+  });
+
   it('toggles WikiActionBar tabs and triggers BlankScreenWatchdog on empty #root', async () => {
     let uploadClicked = 0;
     const ds = makeEditorDataSource();

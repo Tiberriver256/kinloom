@@ -1,5 +1,16 @@
 import type { KinloomUiPlugin } from '@kinloom/ui';
-import { ExplorerTopBar, KinloomFooter, MediaPlayer, useArchiveData } from '@kinloom/ui';
+import {
+  ArchivalBanner,
+  ArchivalMediaGrid,
+  ArchivalMetrics,
+  ArchivalPageShell,
+  ArchivalSection,
+  ArchivalStoryCard,
+  ExplorerTopBar,
+  KinloomFooter,
+  MediaPlayer,
+  useArchiveData,
+} from '@kinloom/ui';
 import type React from 'react';
 import { Link } from 'react-router-dom';
 
@@ -10,8 +21,8 @@ const DemoReelStoryPage: React.FC = () => {
   return (
     <div>
       <ExplorerTopBar />
-      <main className="place-page" data-testid="demo-reel-page">
-        <section className="wire-banner" style={{ marginBottom: 18 }}>
+      <ArchivalPageShell data-testid="demo-reel-page">
+        <ArchivalBanner style={{ marginBottom: 18 }}>
           <div>
             <h1>Archival Story Reel</h1>
             <p>
@@ -19,38 +30,38 @@ const DemoReelStoryPage: React.FC = () => {
               family stories and archival vignettes.
             </p>
           </div>
-          <div className="folio-metrics">
+          <ArchivalMetrics>
             <div>
               <strong>{bundle?.people.length ?? 0}</strong> documented individuals
             </div>
             <div>
               <strong>{videoStories.length}</strong> video stories
             </div>
-          </div>
-        </section>
+          </ArchivalMetrics>
+        </ArchivalBanner>
 
         {videoStories.length === 0 ? (
-          <section className="place-map-box">
+          <ArchivalSection>
             <h2>Featured Historical Vignette</h2>
             <p>
               Ten generations from Hingham, Norfolk (1622) to Springfield, Illinois and Manchester, Vermont
               (1985), grounded in primary census, patent, and vital records.
             </p>
-          </section>
+          </ArchivalSection>
         ) : (
-          <section className="place-map-box">
+          <ArchivalSection>
             <h2>Uploaded Video Stories</h2>
-            <div className="person-media-grid">
+            <ArchivalMediaGrid>
               {videoStories.map((item) => (
-                <article key={item.id} className="story-card">
+                <ArchivalStoryCard key={item.id}>
                   <MediaPlayer media={item} baseUrl={baseUrl} variant="full" />
                   <p style={{ marginTop: 8 }}>{item.caption}</p>
-                </article>
+                </ArchivalStoryCard>
               ))}
-            </div>
-          </section>
+            </ArchivalMediaGrid>
+          </ArchivalSection>
         )}
-      </main>
+      </ArchivalPageShell>
       <KinloomFooter />
     </div>
   );
@@ -72,15 +83,14 @@ export const demoStoryPlugin: KinloomUiPlugin = {
         return null;
       }
       return (
-        <section
-          className="place-map-box"
+        <ArchivalSection
           data-testid="demo-plugin-person-slot"
           aria-label="Archival story highlight"
           style={{ marginBottom: 16 }}
         >
           <strong>Archival Story Spotlight:</strong> {person.full_name} is featured in the{' '}
           <Link to="/stories/demo-reel">Archival Story Reel</Link>.
-        </section>
+        </ArchivalSection>
       );
     },
   },

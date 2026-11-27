@@ -1,31 +1,29 @@
 import type {
   AdminDataSource,
-  AgentTokenScope,
   ArchiveAuthProviders,
   ArchiveBundle,
   ArchiveCapabilities,
   ArchiveDataSource,
   ArchiveSessionState,
   BatchId,
-  CreatedAgentTokenResponse,
-  CreatedInviteResponse,
   EntityPayload,
   EntityType,
   EntityWriteInput,
-  InviteRecord,
+  GeneratedPronunciationAudioResult,
+  GeneratePronunciationAudioInput,
   MediaChecklistItem,
   MediaItem,
   OptimisticConflictError,
-  PublicAgentTokenRecord,
+  Pronunciation,
+  PronunciationLexicon,
   ReadingsBundle,
   RevisionId,
   RevisionQuery,
   RevisionRecord,
   TalkComment,
-  UserRecord,
-  UserRole,
+  UpsertPronunciationTermResult,
 } from '@kinloom/core';
-import { ArchiveBundleMetaSchema, asRevisionId, ReadingsBundleSchema } from '@kinloom/core';
+import { ArchiveBundleMetaSchema, ReadingsBundleSchema } from '@kinloom/core';
 import { createHttpAdminDataSource } from './httpWiki/adminClient.js';
 import {
   ApiClientError,
@@ -35,6 +33,21 @@ import {
   parseErrorEnvelope,
   stripTrailingSlash,
 } from './httpWiki/httpClient.js';
+import {
+  parseBatchRevertResponse,
+  parseEntityGetResponse,
+  parseEntityWriteResponse,
+  parseGeneratedPronunciationAudioResponse,
+  parseMagicLinkResponse,
+  parseMediaUploadResponse,
+  parsePronunciationLexiconResponse,
+  parseRevisionListResponse,
+  parseRevisionOnlyResponse,
+  parseSessionResponse,
+  parseTalkCommentListResponse,
+  parseTalkCommentResponse,
+  parseUpsertPronunciationTermResponse,
+} from './httpWiki/responseParsers.js';
 
 export type {
   CreatedAgentTokenResponse,
@@ -45,9 +58,9 @@ export type { HttpWikiDataSourceOptions };
 export { ApiClientError };
 
 /**
- * Live HTTP Wiki adapter implementing ArchiveDataSource plus Admin helper endpoints.
+ * Live HTTP Wiki adapter implementing ArchiveDataSource with segregated `admin` sub-port.
  */
-export class HttpWikiDataSource implements ArchiveDataSource, AdminDataSource {
+export class HttpWikiDataSource implements ArchiveDataSource {
   readonly admin: AdminDataSource;
   private readonly apiBase: string;
   private readonly assetBase: string;
@@ -62,7 +75,7 @@ export class HttpWikiDataSource implements ArchiveDataSource, AdminDataSource {
     this.admin = createHttpAdminDataSource({
       apiUrl: (path) => this.apiUrl(path),
       fetchImpl: this.fetchImpl,
-      requestJson: (path, init) => this.requestJson(path, init),
+      requestJson: (path, parse, init) => this.requestJson(path, parse, init),
     });
   }
 
@@ -70,7 +83,7 @@ export class HttpWikiDataSource implements ArchiveDataSource, AdminDataSource {
     return `${this.apiBase}${path}`;
   }
 
-  private async requestJson<T>(path: string, init: RequestInit = {}): Promise<T> {
+  private async requestJson<T>(path: string, parse: (raw: unknown) => T, init: RequestInit = {}): Promise<T> {
     const res = await this.fetchImpl(this.apiUrl(path), {
       credentials: 'same-origin',
       ...init,
@@ -82,7 +95,16 @@ export class HttpWikiDataSource implements ArchiveDataSource, AdminDataSource {
     if (!res.ok) {
       throw await parseErrorEnvelope(res);
     }
-    return (await res.json()) as T;
+    const raw: unknown = await res.json();
+    try {
+      return parse(raw);
+    } catch (err) {
+      throw new ApiClientError(
+        res.status,
+        'INVALID_API_RESPONSE',
+        `Invalid response payload from ${path}: ${err instanceof Error ? err.message : String(err)}`
+      );
+    }
   }
 
   async loadArchive(options?: { ifNoneMatch?: string }): Promise<{
@@ -113,13 +135,17 @@ export class HttpWikiDataSource implements ArchiveDataSource, AdminDataSource {
       throw await parseErrorEnvelope(res);
     }
 
-    const raw = (await res.json()) as ArchiveBundle;
-    ArchiveBundleMetaSchema.parse(raw.meta);
+    const raw: unknown = await res.json();
+    if (typeof raw !== 'object' || raw === null || !('meta' in raw)) {
+      throw new ApiClientError(res.status, 'INVALID_API_RESPONSE', 'Archive bundle payload missing meta');
+    }
+    ArchiveBundleMetaSchema.parse((raw as { meta: unknown }).meta);
+    const bundle = raw as ArchiveBundle;
     const etag = res.headers.get('etag');
-    this.cachedBundle = raw;
+    this.cachedBundle = bundle;
     this.cachedEtag = etag;
 
-    return { bundle: raw, etag, notModified: false };
+    return { bundle, etag, notModified: false };
   }
 
   async loadReadings(): Promise<ReadingsBundle | null> {
@@ -144,8 +170,11 @@ export class HttpWikiDataSource implements ArchiveDataSource, AdminDataSource {
       if (!res.ok) {
         return [];
       }
-      const raw = (await res.json()) as { items?: MediaChecklistItem[] };
-      return Array.isArray(raw.items) ? raw.items : [];
+      const raw: unknown = await res.json();
+      if (typeof raw === 'object' && raw !== null && 'items' in raw && Array.isArray(raw.items)) {
+        return raw.items as MediaChecklistItem[];
+      }
+      return [];
     } catch {
       return [];
     }
@@ -156,7 +185,7 @@ export class HttpWikiDataSource implements ArchiveDataSource, AdminDataSource {
     capabilities: ArchiveCapabilities;
     authProviders?: ArchiveAuthProviders;
   }> {
-    return this.requestJson('/api/auth/me', { signal: options?.signal });
+    return this.requestJson('/api/auth/me', parseSessionResponse, { signal: options?.signal });
   }
 
   async getEntity(
@@ -170,23 +199,18 @@ export class HttpWikiDataSource implements ArchiveDataSource, AdminDataSource {
     deleted_at: string | null;
     updated_at: string;
   }> {
-    const data = await this.requestJson<{
-      entity: EntityPayload;
-      current_revision_id: number;
-      has_primary_source: boolean;
-      deleted_at: string | null;
-      updated_at: string;
-    }>(`/api/entities/${encodeURIComponent(entityType)}/${encodeURIComponent(entityId)}`, {
-      signal: options?.signal,
-    });
-    return { ...data, current_revision_id: asRevisionId(data.current_revision_id) };
+    return this.requestJson(
+      `/api/entities/${encodeURIComponent(entityType)}/${encodeURIComponent(entityId)}`,
+      parseEntityGetResponse,
+      { signal: options?.signal }
+    );
   }
 
   async createEntity(
     entityType: EntityType,
     input: EntityWriteInput
   ): Promise<{ entity: EntityPayload; revision: RevisionRecord; etag: string }> {
-    return this.requestJson(`/api/entities/${encodeURIComponent(entityType)}`, {
+    return this.requestJson(`/api/entities/${encodeURIComponent(entityType)}`, parseEntityWriteResponse, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify(input),
@@ -221,12 +245,9 @@ export class HttpWikiDataSource implements ArchiveDataSource, AdminDataSource {
       throw await parseErrorEnvelope(res);
     }
 
-    const body = (await res.json()) as {
-      entity: EntityPayload;
-      revision: RevisionRecord;
-      etag: string;
-    };
-    return { ok: true, ...body };
+    const raw: unknown = await res.json();
+    const parsed = parseEntityWriteResponse(raw);
+    return { ok: true, ...parsed };
   }
 
   async deleteEntity(
@@ -236,6 +257,7 @@ export class HttpWikiDataSource implements ArchiveDataSource, AdminDataSource {
   ): Promise<{ revision: RevisionRecord; etag: string }> {
     return this.requestJson(
       `/api/entities/${encodeURIComponent(entityType)}/${encodeURIComponent(entityId)}`,
+      parseRevisionOnlyResponse,
       {
         method: 'DELETE',
         headers: { 'content-type': 'application/json' },
@@ -251,6 +273,7 @@ export class HttpWikiDataSource implements ArchiveDataSource, AdminDataSource {
   ): Promise<{ entity: EntityPayload; revision: RevisionRecord; etag: string }> {
     return this.requestJson(
       `/api/entities/${encodeURIComponent(entityType)}/${encodeURIComponent(entityId)}/restore`,
+      parseEntityWriteResponse,
       {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
@@ -283,21 +306,14 @@ export class HttpWikiDataSource implements ArchiveDataSource, AdminDataSource {
       params.set('limit', String(query.limit));
     }
     const qs = params.toString();
-    const res = await this.requestJson<{
-      items: RevisionRecord[];
-      next_cursor: number | null;
-    }>(`/api/revisions${qs ? `?${qs}` : ''}`);
-    return {
-      items: res.items,
-      next_cursor: res.next_cursor === null ? null : asRevisionId(res.next_cursor),
-    };
+    return this.requestJson(`/api/revisions${qs ? `?${qs}` : ''}`, parseRevisionListResponse);
   }
 
   async revertRevision(
     revisionId: RevisionId,
     summary?: string
   ): Promise<{ revision: RevisionRecord; etag: string }> {
-    return this.requestJson(`/api/revisions/${revisionId}/revert`, {
+    return this.requestJson(`/api/revisions/${revisionId}/revert`, parseRevisionOnlyResponse, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify(summary ? { summary } : {}),
@@ -308,7 +324,7 @@ export class HttpWikiDataSource implements ArchiveDataSource, AdminDataSource {
     batchId: BatchId,
     summary?: string
   ): Promise<{ revisions: readonly RevisionRecord[]; etag: string }> {
-    return this.requestJson(`/api/batches/${encodeURIComponent(batchId)}/revert`, {
+    return this.requestJson(`/api/batches/${encodeURIComponent(batchId)}/revert`, parseBatchRevertResponse, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify(summary ? { summary } : {}),
@@ -328,31 +344,27 @@ export class HttpWikiDataSource implements ArchiveDataSource, AdminDataSource {
     if (!res.ok) {
       throw await parseErrorEnvelope(res);
     }
-    return (await res.json()) as {
-      media: MediaItem;
-      url: string;
-      revision: RevisionRecord;
-      etag: string;
-    };
+    const raw: unknown = await res.json();
+    return parseMediaUploadResponse(raw);
   }
 
   async listTalkComments(entityType: EntityType, entityId: string): Promise<readonly TalkComment[]> {
-    const data = await this.requestJson<{ comments: TalkComment[] }>(
-      `/api/talk/${encodeURIComponent(entityType)}/${encodeURIComponent(entityId)}`
+    return this.requestJson(
+      `/api/talk/${encodeURIComponent(entityType)}/${encodeURIComponent(entityId)}`,
+      parseTalkCommentListResponse
     );
-    return data.comments;
   }
 
   async postTalkComment(entityType: EntityType, entityId: string, bodyMd: string): Promise<TalkComment> {
-    const data = await this.requestJson<{ comment: TalkComment }>(
+    return this.requestJson(
       `/api/talk/${encodeURIComponent(entityType)}/${encodeURIComponent(entityId)}`,
+      parseTalkCommentResponse,
       {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ body_md: bodyMd }),
       }
     );
-    return data.comment;
   }
 
   async deleteTalkComment(entityType: EntityType, entityId: string, commentId: number): Promise<void> {
@@ -369,7 +381,7 @@ export class HttpWikiDataSource implements ArchiveDataSource, AdminDataSource {
     email: string,
     options?: { next?: string; signal?: AbortSignal }
   ): Promise<{ sent: boolean }> {
-    return this.requestJson<{ sent: boolean }>('/api/auth/magic-link/request', {
+    return this.requestJson('/api/auth/magic-link/request', parseMagicLinkResponse, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify(options?.next ? { email, next: options.next } : { email }),
@@ -387,6 +399,52 @@ export class HttpWikiDataSource implements ArchiveDataSource, AdminDataSource {
     }
   }
 
+  async loadPronunciations(options?: { signal?: AbortSignal }): Promise<PronunciationLexicon | undefined> {
+    const res = await this.fetchImpl(this.apiUrl('/api/pronunciations'), {
+      credentials: 'same-origin',
+      headers: { accept: 'application/json' },
+      signal: options?.signal,
+    });
+    if (res.status === 404) {
+      return undefined;
+    }
+    if (!res.ok) {
+      throw await parseErrorEnvelope(res);
+    }
+    const raw: unknown = await res.json();
+    return parsePronunciationLexiconResponse(raw);
+  }
+
+  async upsertPronunciationTerm(
+    term: string,
+    entry: Pronunciation,
+    options?: { signal?: AbortSignal }
+  ): Promise<UpsertPronunciationTermResult> {
+    const trimmedTerm = term.trim();
+    return this.requestJson(
+      `/api/pronunciations/${encodeURIComponent(trimmedTerm)}`,
+      parseUpsertPronunciationTermResponse,
+      {
+        method: 'PUT',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(entry),
+        signal: options?.signal,
+      }
+    );
+  }
+
+  async generatePronunciationAudio(
+    input: GeneratePronunciationAudioInput,
+    options?: { signal?: AbortSignal }
+  ): Promise<GeneratedPronunciationAudioResult> {
+    return this.requestJson('/api/pronunciation/generate', parseGeneratedPronunciationAudioResponse, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(input),
+      signal: options?.signal,
+    });
+  }
+
   getGoogleSignInUrl(nextPath?: string, options?: { selectAccount?: boolean }): string {
     const params = new URLSearchParams();
     if (nextPath) {
@@ -397,46 +455,6 @@ export class HttpWikiDataSource implements ArchiveDataSource, AdminDataSource {
     }
     const qs = params.toString();
     return this.apiUrl(`/api/auth/google/start${qs ? `?${qs}` : ''}`);
-  }
-
-  listUsers(): Promise<readonly UserRecord[]> {
-    return this.admin.listUsers();
-  }
-
-  createUser(input: { email: string; display_name: string; role: UserRole }): Promise<UserRecord> {
-    return this.admin.createUser!(input);
-  }
-
-  updateUserRole(email: string, input: { role: UserRole; display_name?: string }): Promise<UserRecord> {
-    return this.admin.updateUserRole(email, input);
-  }
-
-  deleteUser(email: string): Promise<void> {
-    return this.admin.deleteUser!(email);
-  }
-
-  listInvites(): Promise<readonly InviteRecord[]> {
-    return this.admin.listInvites();
-  }
-
-  createInvite(input: { label: string; expires_in_days?: number }): Promise<CreatedInviteResponse> {
-    return this.admin.createInvite(input);
-  }
-
-  revokeInvite(token: string): Promise<void> {
-    return this.admin.revokeInvite(token);
-  }
-
-  listAgentTokens(): Promise<readonly PublicAgentTokenRecord[]> {
-    return this.admin.listAgentTokens();
-  }
-
-  createAgentToken(input: { label: string; scope: AgentTokenScope }): Promise<CreatedAgentTokenResponse> {
-    return this.admin.createAgentToken(input);
-  }
-
-  revokeAgentToken(tokenId: string): Promise<void> {
-    return this.admin.revokeAgentToken(tokenId);
   }
 }
 

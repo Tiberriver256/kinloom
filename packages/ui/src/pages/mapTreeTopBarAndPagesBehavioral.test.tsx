@@ -585,6 +585,9 @@ describe('Map, Tree, TopBar, Context, Telemetry, NarrativeAudio, and Pages behav
       loadArchive: async () => ({ bundle: FULL_BUNDLE, etag: '"r1"', notModified: false }),
       loadReadings: async () => READINGS,
       loadMediaChecklist: async () => [],
+      loadPronunciations: async () => ({
+        alder: { phonetic: 'AWL-der', ipa: '/ˈɔːldər/' },
+      }),
       logout: logoutSpy,
       getSession: async () =>
         sessionAnonymous

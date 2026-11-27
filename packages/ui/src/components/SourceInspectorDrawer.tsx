@@ -7,6 +7,7 @@ import { useArchiveUi } from '../context/ArchiveUiContext.js';
 import { useDialogFocusTrap } from '../hooks/useDialogFocusTrap.js';
 import { cx, joinClasses } from '../lib/cx.js';
 import { KINLOOM_VOCABULARY } from '../lib/vocabulary.js';
+import citationStyles from '../styles/Citations.module.css';
 import controlStyles from '../styles/Controls.module.css';
 import overlayStyles from '../styles/Overlays.module.css';
 import { DateStamp, resolveAssetUrl } from './Atoms.js';
@@ -108,11 +109,11 @@ export const SourceInspectorDrawer: React.FC = () => {
           <div>
             <h2 className={cx(inspectorStyles, 'source-inspector-title')}>{citation.title}</h2>
             <div className={cx(inspectorStyles, 'source-inspector-badges')}>
-              <span className={cx(inspectorStyles, `evidence-tier-badge tier-${citation.tier}`)}>
+              <span className={cx(citationStyles, `evidence-tier-badge tier-${citation.tier}`)}>
                 {citation.tierLabel}
               </span>
               {sourceInspector.confidence && citation.tier !== 'unverified' && (
-                <span className={cx(inspectorStyles, 'evidence-basis-tag')}>{citation.evidenceBasis}</span>
+                <span className={cx(citationStyles, 'evidence-basis-tag')}>{citation.evidenceBasis}</span>
               )}
             </div>
           </div>
@@ -195,7 +196,7 @@ export const SourceInspectorDrawer: React.FC = () => {
         <section className={cx(inspectorStyles, 'inspector-block')}>
           <div className={cx(inspectorStyles, 'inspector-block-header')}>
             <h3 className={cx(inspectorStyles, 'inspector-section-heading')}>Formatted Reference</h3>
-            <button type="button" className={cx(inspectorStyles, 'source-action-btn')} onClick={handleCopy}>
+            <button type="button" className={cx(citationStyles, 'source-action-btn')} onClick={handleCopy}>
               {copied ? 'Copied' : 'Copy Citation'}
             </button>
           </div>

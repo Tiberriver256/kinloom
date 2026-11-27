@@ -166,7 +166,84 @@ describe('HttpWikiDataSource', () => {
     expect(uploadRes.url).toBe('/media/abc.jpg');
     expect(calls.find((c) => c.url === '/api/media/upload')?.hasSignal).toBe(true);
 
-    const tokenRes = await ds.createAgentToken({ label: 'Research CLI', scope: 'write_batch' });
+    const tokenRes = await ds.admin.createAgentToken({ label: 'Research CLI', scope: 'write_batch' });
     expect(tokenRes.plaintext_secret).toBe('klm_secret_once');
+  });
+
+  it('supports loadPronunciations, upsertPronunciationTerm, generatePronunciationAudio, and rejects malformed JSON envelopes', async () => {
+    const requests: Array<{ url: string; method: string; credentials?: RequestCredentials }> = [];
+    let notFoundPronunciations = false;
+    let corruptSession = false;
+
+    const ds = new HttpWikiDataSource({
+      apiBaseUrl: 'https://archive.example.test',
+      fetchImpl: async (input, init) => {
+        const url = String(input);
+        const method = init?.method ?? 'GET';
+        requests.push({ url, method, credentials: init?.credentials });
+
+        if (url.endsWith('/api/pronunciations') && method === 'GET') {
+          if (notFoundPronunciations) {
+            return new Response('Not found', { status: 404 });
+          }
+          return jsonResponse({
+            pronunciations: {
+              Alder: { phonetic: 'AWL-der', ipa: '/ˈɔːl.dər/', language: 'en-US' },
+            },
+          });
+        }
+        if (url.endsWith('/api/pronunciations/Alder') && method === 'PUT') {
+          return jsonResponse({
+            term: 'Alder',
+            pronunciation: { phonetic: 'AHL-der', ipa: '/ˈɑːl.dər/' },
+            pronunciations: {
+              Alder: { phonetic: 'AHL-der', ipa: '/ˈɑːl.dər/' },
+            },
+          });
+        }
+        if (url.endsWith('/api/pronunciation/generate') && method === 'POST') {
+          return jsonResponse({
+            audio_url: '/media/audio/alder.mp3',
+            content_type: 'audio/mpeg',
+            size_bytes: 1234,
+          });
+        }
+        if (url.endsWith('/api/auth/me') && corruptSession) {
+          return jsonResponse({ session: 'not-an-object' });
+        }
+        return new Response('Not found', { status: 404 });
+      },
+    });
+
+    const loaded = await ds.loadPronunciations();
+    expect(loaded?.Alder?.phonetic).toBe('AWL-der');
+    expect(requests[0]).toEqual({
+      url: 'https://archive.example.test/api/pronunciations',
+      method: 'GET',
+      credentials: 'same-origin',
+    });
+
+    notFoundPronunciations = true;
+    expect(await ds.loadPronunciations()).toBeUndefined();
+
+    const upserted = await ds.upsertPronunciationTerm('Alder', {
+      phonetic: 'AHL-der',
+      ipa: '/ˈɑːl.dər/',
+    });
+    expect(upserted.pronunciations.Alder?.phonetic).toBe('AHL-der');
+
+    const generated = await ds.generatePronunciationAudio({
+      entity_type: 'person',
+      entity_id: 'per_1',
+      text: 'Alder',
+      phonetic: 'AHL-der',
+    });
+    expect(generated.audio_url).toBe('/media/audio/alder.mp3');
+
+    corruptSession = true;
+    await expect(ds.getSession()).rejects.toMatchObject({
+      name: 'ApiClientError',
+      code: 'INVALID_API_RESPONSE',
+    });
   });
 });

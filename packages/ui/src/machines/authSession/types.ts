@@ -1,4 +1,4 @@
-import type { ArchiveDataSource, AuthMemberRole } from '@kinloom/core';
+import type { ArchiveDataSource, ArchiveSessionState, AuthMemberRole } from '@kinloom/core';
 
 export interface AuthSessionContext {
   pendingInviteToken: string | null;
@@ -7,7 +7,10 @@ export interface AuthSessionContext {
   displayName: string | null;
   role: AuthMemberRole | null;
   autoEnrolledViaInvite: boolean;
+  magicLinkResendCount: number;
   authError: string | null;
+  authErrorDetail: unknown;
+  initialSession?: ArchiveSessionState | null;
   dataSource?: ArchiveDataSource;
 }
 
@@ -18,6 +21,8 @@ export type AuthSessionEvent =
   | { type: 'OPEN_MAGIC_LINK'; token: string }
   | { type: 'RESEND_MAGIC_LINK'; email: string }
   | { type: 'CANCEL_MAGIC_LINK' }
+  | { type: 'CLEAR_AUTH_ERROR' }
+  | { type: 'SYNC_DATA_SOURCE'; dataSource?: ArchiveDataSource }
   | { type: 'INVITE_REVOKED_SERVER' }
   | { type: 'LEAVE_INVITE' }
   | { type: 'DISMISS_INVITE' }
@@ -44,5 +49,6 @@ export type VerifyOutcome =
 
 export interface AuthSessionInput {
   initialInviteToken?: string | null;
+  initialSession?: ArchiveSessionState | null;
   dataSource?: ArchiveDataSource;
 }

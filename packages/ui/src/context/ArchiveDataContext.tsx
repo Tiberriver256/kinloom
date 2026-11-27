@@ -24,7 +24,6 @@ import {
   type ArchiveDataLoader,
   type ArchiveSession,
   createStaticArchiveLoader,
-  isPronunciationsResponse,
   normalizeBaseUrl,
   normalizeCapabilities,
   normalizeSessionProp,
@@ -261,27 +260,20 @@ export const ArchiveDataProvider: React.FC<ArchiveDataProviderProps> = ({
     }
   }, [loading, bundle, ensureReadings]);
 
-  // Fetch live D1 pronunciation overrides when editing is enabled or archive loads over HTTP.
+  // Fetch live pronunciation overrides through the ArchiveDataSource port when available.
   // Fails silently in static/offline mode.
   // biome-ignore lint/correctness/useExhaustiveDependencies: re-fetch live pronunciations when reloadTick increments
   useEffect(() => {
-    if (!liveCapabilities.canEdit && !archiveLoadedOverHttp) {
+    if ((!liveCapabilities.canEdit && !archiveLoadedOverHttp) || !resolvedDataSource.loadPronunciations) {
       return;
     }
-    if (typeof fetch !== 'function') {
-      return;
-    }
+    const controller = new AbortController();
     let cancelled = false;
-    void fetch('/api/pronunciations', { credentials: 'include' })
-      .then(async (res): Promise<unknown> => {
-        if (!res.ok) {
-          return null;
-        }
-        return res.json();
-      })
-      .then((raw) => {
-        if (!cancelled && isPronunciationsResponse(raw)) {
-          setLivePronunciations(raw.pronunciations);
+    void resolvedDataSource
+      .loadPronunciations({ signal: controller.signal })
+      .then((next) => {
+        if (!cancelled && next) {
+          setLivePronunciations(next);
         }
       })
       .catch(() => {
@@ -289,8 +281,9 @@ export const ArchiveDataProvider: React.FC<ArchiveDataProviderProps> = ({
       });
     return (): void => {
       cancelled = true;
+      controller.abort();
     };
-  }, [liveCapabilities.canEdit, archiveLoadedOverHttp, reloadTick]);
+  }, [resolvedDataSource, liveCapabilities.canEdit, archiveLoadedOverHttp, reloadTick]);
 
   const pronunciations = useMemo<Readonly<Record<string, Pronunciation>>>(
     () =>

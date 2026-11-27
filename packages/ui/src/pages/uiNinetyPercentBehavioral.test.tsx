@@ -13,7 +13,8 @@ import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { createActor } from 'xstate';
+import { createActor, fromPromise } from 'xstate';
+import { createHttpWikiDataSource } from '../adapters/httpWikiDataSource.js';
 import { SourceCitationTag } from '../components/atoms/SourceCitationTag.js';
 import { ExplorerTopBar } from '../components/ExplorerTopBar.js';
 import { LocalSurveyMap } from '../components/LocalSurveyMap.js';
@@ -24,7 +25,11 @@ import { CreateEntityModal } from '../components/wiki/CreateEntityModal.js';
 import { EntityEditDrawer } from '../components/wiki/EntityEditDrawer.js';
 import { MediaUploaderModal } from '../components/wiki/MediaUploaderModal.js';
 import { ArchiveProvider } from '../context/ArchiveProvider.js';
-import { authSessionMachine, deriveSessionFromAuthSnapshot } from '../machines/authSessionMachine.js';
+import {
+  authSessionMachine,
+  deriveSessionFromAuthSnapshot,
+  type VerifyOutcome,
+} from '../machines/authSessionMachine.js';
 import { createNarrativeAudioPlugin } from '../plugins/narrativeAudioPlugin.js';
 import { PluginSlot } from '../plugins/PluginContext.js';
 import { type AdminApiClient, AdminPage } from './AdminPage.js';
@@ -746,13 +751,14 @@ describe('UI >=90% behavioral completion suite across pages, drawers, and machin
   });
 
   it('exercises PersonPage gallery/portrait lightboxes, co-presence pivot, pronunciation shared-token & audio APIs, and TreePage RAF viewport motion', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const httpAdapter = createHttpWikiDataSource({
+      fetchImpl: vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
         const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
         if (url.includes('/api/pronunciations/') && init?.method === 'PUT') {
           return new Response(
             JSON.stringify({
+              term: 'Henry',
+              pronunciation: { phonetic: 'HEN-ree', ipa: '/ˈhɛn.ɹi/' },
               pronunciations: {
                 Henry: { phonetic: 'HEN-ree', ipa: '/ˈhɛn.ɹi/' },
                 Alder: { phonetic: 'AHL-dur', ipa: '/ˈɔːl.dɚ/' },
@@ -768,14 +774,17 @@ describe('UI >=90% behavioral completion suite across pages, drawers, and machin
           });
         }
         return new Response('{}', { status: 404 });
-      })
-    );
+      }),
+    });
 
     const ds: ArchiveDataSource = {
       loadArchive: async () => ({ bundle: ARCHIVE_BUNDLE, etag: '"r1"', notModified: false }),
       loadReadings: async () => null,
       listRevisions: async () => ({ items: [], next_cursor: null }),
       listTalkComments: async () => [],
+      loadPronunciations: (opts) => httpAdapter.loadPronunciations(opts),
+      upsertPronunciationTerm: (term, entry, opts) => httpAdapter.upsertPronunciationTerm(term, entry, opts),
+      generatePronunciationAudio: (input, opts) => httpAdapter.generatePronunciationAudio(input, opts),
     };
 
     const personContainer = mountEl(
@@ -942,52 +951,54 @@ describe('UI >=90% behavioral completion suite across pages, drawers, and machin
   });
 
   it('exercises authSessionMachine invite auto-enrollment, revoked invite, Google/magic-link errors, and session expiry', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(async (input: RequestInfo | URL) => {
-        const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
-        if (url.includes('/api/auth/me')) {
-          return new Response(
-            JSON.stringify({
-              session: {
-                authenticated: false,
-                principal_kind: 'invite_viewer',
-                role: 'viewer',
-                inviteLabel: 'Reunion 2026',
-              },
-            }),
-            { status: 200, headers: { 'content-type': 'application/json' } }
-          );
-        }
-        if (url.includes('/api/auth/google/verify')) {
-          return new Response('{}', { status: 403 });
-        }
-        if (url.includes('/api/auth/magic-link/request')) {
-          return new Response('{}', { status: 200 });
-        }
-        if (url.includes('token=auto-enroll')) {
-          return new Response(
-            JSON.stringify({
-              kind: 'verified',
-              isMember: false,
-              role: 'editor',
-              email: 'cousin@example.test',
-              displayName: 'Cousin Alder',
-            }),
-            { status: 200, headers: { 'content-type': 'application/json' } }
-          );
-        }
-        if (url.includes('token=revoked-tok')) {
-          return new Response(JSON.stringify({ kind: 'invite_revoked' }), {
-            status: 200,
-            headers: { 'content-type': 'application/json' },
-          });
-        }
-        return new Response('{}', { status: 500 });
-      })
-    );
+    const authDs = {
+      getSession: async () => ({
+        session: {
+          authenticated: false,
+          principal_kind: 'invite_viewer' as const,
+          role: 'viewer' as const,
+          inviteLabel: 'Reunion 2026',
+        },
+        capabilities: {
+          canEdit: false,
+          canUploadMedia: false,
+          hasRevisionHistory: false,
+          hasTalk: false,
+          canManageSite: false,
+        },
+      }),
+      requestMagicLink: async () => ({ sent: true }),
+    } as unknown as ArchiveDataSource;
 
-    const actor = createActor(authSessionMachine, { input: { initialInviteToken: 'inv_1' } });
+    const testAuthMachine = authSessionMachine.provide({
+      actors: {
+        signInWithGoogle: fromPromise<VerifyOutcome, { inviteToken: string | null }>(async () => ({
+          kind: 'invalid',
+          message: 'This email is not enrolled in this family archive.',
+        })),
+        verifyMagicLink: fromPromise<VerifyOutcome, { token: string; inviteToken: string | null }>(
+          async ({ input }) => {
+            if (input.token === 'auto-enroll') {
+              return {
+                kind: 'verified',
+                isMember: false,
+                role: 'editor',
+                email: 'cousin@example.test',
+                displayName: 'Cousin Alder',
+              };
+            }
+            if (input.token === 'revoked-tok') {
+              return { kind: 'invite_revoked' };
+            }
+            return { kind: 'invalid', message: 'Magic link is invalid or expired.' };
+          }
+        ),
+      },
+    });
+
+    const actor = createActor(testAuthMachine, {
+      input: { initialInviteToken: 'inv_1', dataSource: authDs },
+    });
     actor.start();
     await flushUi();
 
@@ -1579,190 +1590,193 @@ describe('UI >=90% behavioral completion suite across pages, drawers, and machin
     }
   });
 
-  it('completes >=90% behavioral coverage across authSessionMachine fetch flows, NarrativeAudioDock, IndexPage, PlacePage, and PersonPage callbacks', async () => {
-    // 1. authSessionMachine HTTP fetch actors across editor/invite/error/auto-enroll/revoked/expired paths
-    const origFetch = globalThis.fetch;
+  it('completes >=90% behavioral coverage across authSessionMachine port flows, NarrativeAudioDock, IndexPage, PlacePage, and PersonPage callbacks', async () => {
+    // 1. authSessionMachine port-backed & injected actors across editor/invite/error/auto-enroll/revoked/expired paths
     let meMode: 'editor' | 'invite' | 'empty' | '500' = 'editor';
     let magicReqOk = false;
     let verifyMode: '403' | '500' | 'editor' | 'autoEnroll' | 'revoked' = '403';
     let googleMode: '403' | '500' | 'admin' = '403';
 
-    globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
-      const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
-      if (url.includes('/api/auth/me')) {
+    const defaultCaps = {
+      canEdit: false,
+      canUploadMedia: false,
+      hasRevisionHistory: false,
+      hasTalk: false,
+      canManageSite: false,
+    };
+
+    const authDs = {
+      getSession: async () => {
         if (meMode === '500') {
-          return new Response('err', { status: 500 });
+          throw new Error('HTTP 500');
         }
         if (meMode === 'empty') {
-          return new Response(JSON.stringify({}), { status: 200 });
+          return {
+            session: { authenticated: false, principal_kind: 'anonymous' as const },
+            capabilities: defaultCaps,
+          };
         }
         if (meMode === 'invite') {
-          return new Response(
-            JSON.stringify({
-              session: {
-                authenticated: false,
-                principal_kind: 'invite_viewer',
-                inviteLabel: 'Alder Reunion',
-              },
-            }),
-            { status: 200 }
-          );
-        }
-        return new Response(
-          JSON.stringify({
+          return {
             session: {
-              authenticated: true,
-              principal_kind: 'user',
-              email: 'editor@example.test',
-              displayName: 'Clara Mercer',
-              role: 'editor',
+              authenticated: false,
+              principal_kind: 'invite_viewer' as const,
+              inviteLabel: 'Alder Reunion',
             },
-          }),
-          { status: 200 }
-        );
-      }
-      if (url.includes('/api/auth/magic-link/request')) {
-        return magicReqOk ? new Response('{}', { status: 200 }) : new Response('err', { status: 500 });
-      }
-      if (url.includes('/api/auth/magic-link/verify')) {
-        if (verifyMode === '403') {
-          return new Response('forbidden', { status: 403 });
+            capabilities: defaultCaps,
+          };
         }
-        if (verifyMode === '500') {
-          return new Response('expired', { status: 400 });
-        }
-        if (verifyMode === 'revoked') {
-          return new Response(JSON.stringify({ kind: 'invite_revoked' }), { status: 200 });
-        }
-        if (verifyMode === 'autoEnroll') {
-          return new Response(
-            JSON.stringify({
-              kind: 'verified',
-              isMember: false,
-              role: 'editor',
-              email: 'cousin@example.test',
-              displayName: 'Cousin Hale',
-            }),
-            { status: 200 }
-          );
-        }
-        return new Response(
-          JSON.stringify({
-            kind: 'verified',
-            isMember: true,
-            role: 'editor',
+        return {
+          session: {
+            authenticated: true,
+            principal_kind: 'user' as const,
             email: 'editor@example.test',
             displayName: 'Clara Mercer',
-          }),
-          { status: 200 }
-        );
-      }
-      if (url.includes('/api/auth/google/verify')) {
-        if (googleMode === '403') {
-          return new Response('forbidden', { status: 403 });
+            role: 'editor' as const,
+          },
+          capabilities: { ...defaultCaps, canEdit: true },
+        };
+      },
+      requestMagicLink: async () => {
+        if (!magicReqOk) {
+          throw new Error('HTTP 500');
         }
-        if (googleMode === '500') {
-          return new Response('err', { status: 500 });
-        }
-        return new Response(
-          JSON.stringify({
+        return { sent: true };
+      },
+    } as unknown as ArchiveDataSource;
+
+    const testAuthMachine = authSessionMachine.provide({
+      actors: {
+        signInWithGoogle: fromPromise<VerifyOutcome, { inviteToken: string | null }>(async () => {
+          if (googleMode === '403') {
+            return { kind: 'invalid', message: 'This email is not enrolled in this family archive.' };
+          }
+          if (googleMode === '500') {
+            throw new Error('HTTP 500 verifying Google sign-in');
+          }
+          return {
             kind: 'verified',
             isMember: true,
             role: 'admin',
             email: 'admin@example.test',
             displayName: 'Henry Alder',
-          }),
-          { status: 200 }
-        );
-      }
-      return new Response('{}', { status: 200 });
-    }) as typeof fetch;
+          };
+        }),
+        verifyMagicLink: fromPromise<VerifyOutcome, { token: string; inviteToken: string | null }>(
+          async () => {
+            if (verifyMode === '403') {
+              return { kind: 'invalid', message: 'This email is not enrolled in this family archive.' };
+            }
+            if (verifyMode === '500') {
+              return { kind: 'invalid', message: 'Magic link is invalid or expired.' };
+            }
+            if (verifyMode === 'revoked') {
+              return { kind: 'invite_revoked' };
+            }
+            if (verifyMode === 'autoEnroll') {
+              return {
+                kind: 'verified',
+                isMember: false,
+                role: 'editor',
+                email: 'cousin@example.test',
+                displayName: 'Cousin Hale',
+              };
+            }
+            return {
+              kind: 'verified',
+              isMember: true,
+              role: 'editor',
+              email: 'editor@example.test',
+              displayName: 'Clara Mercer',
+            };
+          }
+        ),
+      },
+    });
 
-    try {
-      // Editor hydration -> deriveSession -> REFRESH_SESSION (invite) -> deriveSession -> LEAVE_INVITE -> SIGN_IN_GOOGLE (403 -> 500 -> admin) -> SESSION_EXPIRED -> REQUEST_MAGIC_LINK (error -> ok -> RESEND -> CANCEL)
-      const actor1 = createActor(authSessionMachine, { input: {} });
-      actor1.start();
-      await flushUi();
-      expect(deriveSessionFromAuthSnapshot(actor1.getSnapshot()).session.role).toBe('editor');
+    // Editor hydration -> deriveSession -> REFRESH_SESSION (invite) -> deriveSession -> LEAVE_INVITE -> SIGN_IN_GOOGLE (403 -> 500 -> admin) -> SESSION_EXPIRED -> REQUEST_MAGIC_LINK (error -> ok -> RESEND -> CANCEL)
+    const actor1 = createActor(testAuthMachine, { input: { dataSource: authDs } });
+    actor1.start();
+    await flushUi();
+    expect(deriveSessionFromAuthSnapshot(actor1.getSnapshot()).session.role).toBe('editor');
 
-      meMode = 'invite';
-      actor1.send({ type: 'REFRESH_SESSION' });
-      await flushUi();
-      expect(deriveSessionFromAuthSnapshot(actor1.getSnapshot()).session.principal_kind).toBe(
-        'invite_viewer'
-      );
+    meMode = 'invite';
+    actor1.send({ type: 'REFRESH_SESSION' });
+    await flushUi();
+    expect(deriveSessionFromAuthSnapshot(actor1.getSnapshot()).session.principal_kind).toBe('invite_viewer');
 
-      actor1.send({ type: 'LEAVE_INVITE' });
-      expect(deriveSessionFromAuthSnapshot(actor1.getSnapshot()).session.principal_kind).toBe('anonymous');
+    actor1.send({ type: 'LEAVE_INVITE' });
+    expect(deriveSessionFromAuthSnapshot(actor1.getSnapshot()).session.principal_kind).toBe('anonymous');
 
-      actor1.send({ type: 'SIGN_IN_GOOGLE' });
-      await flushUi();
-      googleMode = '500';
-      actor1.send({ type: 'SIGN_IN_GOOGLE' });
-      await flushUi();
-      googleMode = 'admin';
-      actor1.send({ type: 'SIGN_IN_GOOGLE' });
-      await flushUi();
-      expect(deriveSessionFromAuthSnapshot(actor1.getSnapshot()).session.role).toBe('admin');
+    actor1.send({ type: 'SIGN_IN_GOOGLE' });
+    await flushUi();
+    googleMode = '500';
+    actor1.send({ type: 'SIGN_IN_GOOGLE' });
+    await flushUi();
+    googleMode = 'admin';
+    actor1.send({ type: 'SIGN_IN_GOOGLE' });
+    await flushUi();
+    expect(deriveSessionFromAuthSnapshot(actor1.getSnapshot()).session.role).toBe('admin');
 
-      actor1.send({ type: 'SESSION_EXPIRED' });
-      actor1.send({ type: 'REQUEST_MAGIC_LINK', email: 'editor@example.test' });
-      await flushUi();
-      magicReqOk = true;
-      actor1.send({ type: 'REQUEST_MAGIC_LINK', email: 'editor@example.test' });
-      await flushUi();
-      actor1.send({ type: 'RESEND_MAGIC_LINK', email: 'editor@example.test' });
-      await flushUi();
-      actor1.send({ type: 'CANCEL_MAGIC_LINK' });
+    actor1.send({ type: 'SESSION_EXPIRED' });
+    actor1.send({ type: 'REQUEST_MAGIC_LINK', email: 'editor@example.test' });
+    await flushUi();
+    magicReqOk = true;
+    actor1.send({ type: 'REQUEST_MAGIC_LINK', email: 'editor@example.test' });
+    await flushUi();
+    actor1.send({ type: 'RESEND_MAGIC_LINK', email: 'editor@example.test' });
+    await flushUi();
+    actor1.send({ type: 'CANCEL_MAGIC_LINK' });
 
-      // Magic link verify paths via awaitingMagicLink: 403, 400, editor, invite revoked, invite auto-enroll
-      actor1.send({ type: 'REQUEST_MAGIC_LINK', email: 'editor@example.test' });
-      await flushUi();
-      actor1.send({ type: 'OPEN_MAGIC_LINK', token: 'tok_bad' });
-      await flushUi();
+    // Magic link verify paths via awaitingMagicLink: 403, 400, editor, invite revoked, invite auto-enroll
+    actor1.send({ type: 'REQUEST_MAGIC_LINK', email: 'editor@example.test' });
+    await flushUi();
+    actor1.send({ type: 'OPEN_MAGIC_LINK', token: 'tok_bad' });
+    await flushUi();
 
-      actor1.send({ type: 'REQUEST_MAGIC_LINK', email: 'editor@example.test' });
-      await flushUi();
-      verifyMode = '500';
-      actor1.send({ type: 'OPEN_MAGIC_LINK', token: 'tok_exp' });
-      await flushUi();
+    actor1.send({ type: 'REQUEST_MAGIC_LINK', email: 'editor@example.test' });
+    await flushUi();
+    verifyMode = '500';
+    actor1.send({ type: 'OPEN_MAGIC_LINK', token: 'tok_exp' });
+    await flushUi();
 
-      actor1.send({ type: 'REQUEST_MAGIC_LINK', email: 'editor@example.test' });
-      await flushUi();
-      verifyMode = 'editor';
-      actor1.send({ type: 'OPEN_MAGIC_LINK', token: 'tok_ok' });
-      await flushUi();
-      actor1.send({ type: 'SIGN_OUT' });
-      actor1.stop();
+    actor1.send({ type: 'REQUEST_MAGIC_LINK', email: 'editor@example.test' });
+    await flushUi();
+    verifyMode = 'editor';
+    actor1.send({ type: 'OPEN_MAGIC_LINK', token: 'tok_ok' });
+    await flushUi();
+    actor1.send({ type: 'SIGN_OUT' });
+    actor1.stop();
 
-      meMode = '500';
-      const actor2 = createActor(authSessionMachine, { input: { initialInviteToken: 'inv_1' } });
-      actor2.start();
-      await flushUi();
-      actor2.send({ type: 'OPEN_INVITE', token: 'inv_1', label: 'Reunion', revoked: false });
-      actor2.send({ type: 'REQUEST_MAGIC_LINK', email: 'cousin@example.test' });
-      await flushUi();
-      verifyMode = 'revoked';
-      actor2.send({ type: 'OPEN_MAGIC_LINK', token: 'tok_rev' });
-      await flushUi();
-      actor2.send({ type: 'DISMISS_INVITE' });
-      actor2.stop();
+    meMode = '500';
+    const actor2 = createActor(testAuthMachine, {
+      input: { initialInviteToken: 'inv_1', dataSource: authDs },
+    });
+    actor2.start();
+    await flushUi();
+    actor2.send({ type: 'OPEN_INVITE', token: 'inv_1', label: 'Reunion', revoked: false });
+    actor2.send({ type: 'REQUEST_MAGIC_LINK', email: 'cousin@example.test' });
+    await flushUi();
+    verifyMode = 'revoked';
+    actor2.send({ type: 'OPEN_MAGIC_LINK', token: 'tok_rev' });
+    await flushUi();
+    actor2.send({ type: 'DISMISS_INVITE' });
+    actor2.stop();
 
-      meMode = 'empty';
-      const actor3 = createActor(authSessionMachine, { input: { initialInviteToken: 'inv_2' } });
-      actor3.start();
-      await flushUi();
-      actor3.send({ type: 'OPEN_INVITE', token: 'inv_2', label: 'Cousins', revoked: false });
-      actor3.send({ type: 'REQUEST_MAGIC_LINK', email: 'cousin@example.test' });
-      await flushUi();
-      verifyMode = 'autoEnroll';
-      actor3.send({ type: 'OPEN_MAGIC_LINK', token: 'tok_auto' });
-      await flushUi();
-      expect(actor3.getSnapshot().context.autoEnrolledViaInvite).toBe(true);
-      actor3.stop();
-    } finally {
-      globalThis.fetch = origFetch;
-    }
+    meMode = 'empty';
+    const actor3 = createActor(testAuthMachine, {
+      input: { initialInviteToken: 'inv_2', dataSource: authDs },
+    });
+    actor3.start();
+    await flushUi();
+    actor3.send({ type: 'OPEN_INVITE', token: 'inv_2', label: 'Cousins', revoked: false });
+    actor3.send({ type: 'REQUEST_MAGIC_LINK', email: 'cousin@example.test' });
+    await flushUi();
+    verifyMode = 'autoEnroll';
+    actor3.send({ type: 'OPEN_MAGIC_LINK', token: 'tok_auto' });
+    await flushUi();
+    expect(actor3.getSnapshot().context.autoEnrolledViaInvite).toBe(true);
+    actor3.stop();
 
     // 2. Enriched bundle for NarrativeAudioDock, PersonPage, PlacePage, and IndexPage callbacks
     const { bundle: audioBundle }: { bundle: ArchiveBundle } = compileArchive({

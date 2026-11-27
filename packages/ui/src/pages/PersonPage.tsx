@@ -24,7 +24,7 @@ import { cx } from '../lib/cx.js';
 import { formatReaderLoadError, KINLOOM_VOCABULARY } from '../lib/vocabulary.js';
 import { PluginSlot } from '../plugins/PluginContext.js';
 import controlStyles from '../styles/Controls.module.css';
-import indexStyles from './IndexPage.module.css';
+import layoutStyles from '../styles/Layout.module.css';
 import personStyles from './PersonPage.module.css';
 import { PersonLifeTimelineSection } from './person/PersonLifeTimelineSection.js';
 import { PersonMediaLightbox, PersonMediaSection } from './person/PersonMediaSection.js';
@@ -212,7 +212,7 @@ export const PersonPage: React.FC = () => {
     return (
       <div>
         <ExplorerTopBar />
-        <main id="main-content" className={cx(indexStyles, 'index-page')}>
+        <main id="main-content" className={cx(layoutStyles, 'index-page')}>
           Loading archive…
         </main>
       </div>
@@ -223,7 +223,7 @@ export const PersonPage: React.FC = () => {
     return (
       <div>
         <ExplorerTopBar />
-        <main id="main-content" className={cx(indexStyles, 'index-page')}>
+        <main id="main-content" className={cx(layoutStyles, 'index-page')}>
           <h1>{KINLOOM_VOCABULARY.person.notFoundHeading}</h1>
           <p>{formatReaderLoadError(error, 'We could not find that person in the archive.')}</p>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center' }}>

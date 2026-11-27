@@ -4,10 +4,10 @@ import type {
   ArchiveSessionState,
   ArchiveCapabilities as CoreArchiveCapabilities,
   MediaChecklistItem,
-  Pronunciation,
   ReadingsBundle,
 } from '@kinloom/core';
-import { ArchiveBundleSchema, ReadingsBundleSchema, resolveCapabilities } from '@kinloom/core';
+import { resolveCapabilities } from '@kinloom/core';
+import { createStaticArchiveDataSource } from '../adapters/staticDemoDataSource.js';
 
 export interface ArchiveDataLoader {
   loadArchive: () => Promise<ArchiveBundle>;
@@ -49,28 +49,6 @@ export function normalizeBaseUrl(raw?: string): string {
   return fallback.endsWith('/') ? fallback : `${fallback}/`;
 }
 
-export function isMediaChecklistResponse(data: unknown): data is { items: MediaChecklistItem[] } {
-  return (
-    typeof data === 'object' &&
-    data !== null &&
-    'items' in data &&
-    Array.isArray((data as { items: unknown }).items)
-  );
-}
-
-export function isPronunciationsResponse(
-  data: unknown
-): data is { pronunciations: Record<string, Pronunciation> } {
-  return (
-    typeof data === 'object' &&
-    data !== null &&
-    'pronunciations' in data &&
-    typeof (data as { pronunciations: unknown }).pronunciations === 'object' &&
-    (data as { pronunciations: unknown }).pronunciations !== null &&
-    !Array.isArray((data as { pronunciations: unknown }).pronunciations)
-  );
-}
-
 export function normalizeSessionProp(session: ArchiveSession | null | undefined): ArchiveSessionState | null {
   if (!session) {
     return null;
@@ -105,49 +83,25 @@ export function normalizeCapabilities(
 }
 
 export function wrapLegacyLoader(loader: ArchiveDataLoader): ArchiveDataSource {
+  const loadChecklist = loader.loadMediaChecklist;
   return {
     async loadArchive() {
       const bundle = await loader.loadArchive();
       return { bundle, etag: null, notModified: false };
     },
     loadReadings: () => loader.loadReadings(),
-    loadMediaChecklist: loader.loadMediaChecklist ? () => loader.loadMediaChecklist!() : undefined,
+    loadMediaChecklist: loadChecklist ? () => loadChecklist() : undefined,
   };
 }
 
 export function createStaticArchiveLoader(baseUrl?: string): ArchiveDataLoader {
-  const base = normalizeBaseUrl(baseUrl);
+  const source = createStaticArchiveDataSource(normalizeBaseUrl(baseUrl));
   return {
     async loadArchive(): Promise<ArchiveBundle> {
-      const res = await fetch(`${base}data/archive.json`);
-      if (!res.ok) {
-        throw new Error(`HTTP ${res.status} loading archive.json`);
-      }
-      const raw: unknown = await res.json();
-      return ArchiveBundleSchema.parse(raw);
+      const result = await source.loadArchive();
+      return result.bundle;
     },
-    async loadReadings(): Promise<ReadingsBundle | null> {
-      const res = await fetch(`${base}data/readings.json`);
-      if (res.status === 404) {
-        return null;
-      }
-      if (!res.ok) {
-        throw new Error(`HTTP ${res.status} loading readings.json`);
-      }
-      const raw: unknown = await res.json();
-      return ReadingsBundleSchema.parse(raw);
-    },
-    async loadMediaChecklist(): Promise<MediaChecklistItem[]> {
-      try {
-        const res = await fetch(`${base}data/media-checklist.json`);
-        if (!res.ok) {
-          return [];
-        }
-        const raw: unknown = await res.json();
-        return isMediaChecklistResponse(raw) ? raw.items : [];
-      } catch {
-        return [];
-      }
-    },
+    loadReadings: () => source.loadReadings(),
+    loadMediaChecklist: () => (source.loadMediaChecklist ? source.loadMediaChecklist() : Promise.resolve([])),
   };
 }

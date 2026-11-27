@@ -363,6 +363,94 @@ for (const file of packageFiles) {
       }
     }
   }
+
+  // 2e. packages/server/src/** -> worker / ui / cli
+  if (file.startsWith('packages/server/src/')) {
+    for (const imp of imports) {
+      if (
+        /^@kinloom\/(?:worker|ui|cli)(?:\/|$)/.test(imp.spec) ||
+        /(?:^|\/)packages\/(?:worker|ui|cli)(?:\/|$)/.test(imp.spec)
+      ) {
+        addViolation(
+          'no-reverse-layer-server-pkg',
+          file,
+          imp.line,
+          `@kinloom/server must not depend on '${imp.spec}'.`
+        );
+      }
+    }
+  }
+
+  // 2f. packages/ui/src/(machines|components|pages)/** -> adapters/**
+  if (/^packages\/ui\/src\/(?:machines|components|pages)\//.test(file)) {
+    for (const imp of imports) {
+      if (/(?:^|\/)adapters(?:\/|$)/.test(imp.spec)) {
+        addViolation(
+          'no-ui-adapter-leak',
+          file,
+          imp.line,
+          `UI layer '${file}' must depend on @kinloom/core ports rather than importing adapter '${imp.spec}'.`
+        );
+      }
+    }
+  }
+
+  // 2g. Zero cross-page *.module.css imports (pages/* or KinloomApp.tsx -> BarPage.module.css)
+  if (file === 'packages/ui/src/KinloomApp.tsx' || file.startsWith('packages/ui/src/pages/')) {
+    const pageOwnerStem = (() => {
+      if (file === 'packages/ui/src/KinloomApp.tsx') {
+        return null;
+      }
+      const rel = file.slice('packages/ui/src/pages/'.length);
+      if (!rel.includes('/')) {
+        return rel.replace(/\.(ts|tsx)$/, '').toLowerCase();
+      }
+      return `${rel.split('/')[0].toLowerCase()}page`;
+    })();
+    for (const imp of imports) {
+      if (!imp.spec.endsWith('.module.css')) {
+        continue;
+      }
+      const cssAbs = path.resolve(path.dirname(path.join(ROOT_DIR, file)), imp.spec);
+      const cssRel = path.relative(ROOT_DIR, cssAbs).replaceAll(path.sep, '/');
+      if (!cssRel.startsWith('packages/ui/src/pages/')) {
+        continue;
+      }
+      const cssSubRel = cssRel.slice('packages/ui/src/pages/'.length);
+      const cssBaseStem = path.basename(cssSubRel, '.module.css').toLowerCase();
+      if (file === 'packages/ui/src/KinloomApp.tsx') {
+        addViolation(
+          'no-cross-page-css-import',
+          file,
+          imp.line,
+          `KinloomApp must not import page CSS module '${imp.spec}'; use styles/Layout.module.css.`
+        );
+        continue;
+      }
+      if (!cssSubRel.includes('/') && cssBaseStem.endsWith('page') && cssBaseStem !== pageOwnerStem) {
+        addViolation(
+          'no-cross-page-css-import',
+          file,
+          imp.line,
+          `Page module '${file}' must not import another page CSS module '${imp.spec}'; extract shared styles to styles/.`
+        );
+      }
+    }
+  }
+
+  // 2h. packages/ui/src/components/atoms/** -> *Drawer.module.css
+  if (file.startsWith('packages/ui/src/components/atoms/')) {
+    for (const imp of imports) {
+      if (/Drawer\.module\.css$/.test(imp.spec)) {
+        addViolation(
+          'no-atom-drawer-css-import',
+          file,
+          imp.line,
+          `UI atom '${file}' must not import drawer CSS module '${imp.spec}'; extract shared styles to styles/.`
+        );
+      }
+    }
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -435,6 +523,20 @@ for (const file of packageFiles) {
       'Do not merge multiple CSS modules with `{ ...aStyles, ...bStyles }`; reference owning CSS module classes directly.'
     );
   }
+
+  // 4c. Zero raw fetch('/api/...') outside packages/ui/src/adapters/**
+  if (!file.startsWith('packages/ui/src/adapters/')) {
+    const codeWithStrings = maskSource(sourceCache.get(file), { blankStrings: false });
+    const rawApiFetchRe = /\bfetch\s*\(\s*(['"`])\/api\//g;
+    while ((m = rawApiFetchRe.exec(codeWithStrings)) !== null) {
+      addViolation(
+        'no-raw-ui-api-fetch',
+        file,
+        lineNumberAt(codeWithStrings, m.index),
+        'UI modules outside adapters/ must not call raw `fetch("/api/...")`; route HTTP I/O through ArchiveDataSource.'
+      );
+    }
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -455,6 +557,7 @@ const CODE_ESCAPE_RULES = [
 const COMMENT_ESCAPE_RULES = [
   ['no-ts-ignore', /@ts-ignore\b/g, 'Disallowed `@ts-ignore` directive.'],
   ['no-ts-expect-error', /@ts-expect-error\b/g, 'Disallowed `@ts-expect-error` directive.'],
+  ['no-ts-nocheck', /@ts-nocheck\b/g, 'Disallowed `@ts-nocheck` directive.'],
   ['no-eslint-disable', /eslint-disable/g, 'Disallowed `eslint-disable` directive.'],
 ];
 
@@ -524,6 +627,6 @@ if (violations.length > 0) {
 
 console.log(
   `Architecture check PASSED (0 violations across ${allCheckedFiles.length} non-test TS/TSX files: ` +
-    `0 runtime cycles, 0 type cycles, 0 reverse-layer imports, 0 pure-UI leaks, ` +
-    `0 escape hatches, 0 eager record-client imports, 0 ambient Date in privacy).`
+    `0 runtime cycles, 0 type cycles, 0 reverse-layer/adapter/cross-page-CSS/atom-drawer-CSS imports, ` +
+    `0 raw UI /api/ fetches, 0 pure-UI leaks, 0 escape hatches, 0 eager record-client imports, 0 ambient Date in privacy).`
 );

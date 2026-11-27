@@ -386,6 +386,15 @@
   filter: sepia(0.12) contrast(1.03);
 }
 
+.person-card-media-badge {
+  display: inline-block;
+  padding: 0;
+  color: var(--radar-copresence);
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+
 .photo-placeholder:global(.has-real-photo),
 .wireframe-photo:global(.has-real-photo) {
   border: none;

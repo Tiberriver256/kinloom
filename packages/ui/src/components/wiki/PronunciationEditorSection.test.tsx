@@ -4,6 +4,7 @@ import type React from 'react';
 import { act, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { createHttpWikiDataSource } from '../../adapters/httpWikiDataSource.js';
 import { PronunciationEditorSection } from './PronunciationEditorSection.js';
 
 declare global {
@@ -76,7 +77,7 @@ describe('PronunciationEditorSection', () => {
       }
       return new Response('{}', { status: 404 });
     });
-    vi.stubGlobal('fetch', fetchMock);
+    const httpDataSource = createHttpWikiDataSource({ fetchImpl: fetchMock });
 
     // biome-ignore lint/correctness/noComponentHookFactories: isolated test harness
     const Harness: React.FC = () => {
@@ -108,6 +109,7 @@ describe('PronunciationEditorSection', () => {
           previewLabel="Daniel Anderson Alder"
           draftPronunciation={draftPron}
           pronunciations={pronunciations}
+          dataSource={httpDataSource}
           isBusy={false}
           onUpdatePronunciation={setDraftPron}
           onSetPronunciations={setPronunciations}
@@ -176,7 +178,7 @@ describe('PronunciationEditorSection', () => {
 
     expect(fetchMock).toHaveBeenCalledWith(
       '/api/pronunciations/Anderson',
-      expect.objectContaining({ method: 'PUT', credentials: 'include' })
+      expect.objectContaining({ method: 'PUT', credentials: 'same-origin' })
     );
 
     // Live composed preview appears and Personal override collapses neatly behind toggle

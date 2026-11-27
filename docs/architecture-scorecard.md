@@ -539,3 +539,35 @@ Evaluated on `2026-11-27` (UTC via Python `datetime.now(timezone.utc)`) on top o
 - Live CLI smoke check: `kinloom --help` exits `0`
 
 Ready for **Iteration 5B (UI port adoption & CI architecture gate expansion)**.
+
+## Iteration 5B Remediation (UI Port Isolation, CSS Ownership, Layout Primitives & Hardened CI Gate)
+
+Evaluated on `2026-11-27` (UTC via Python `datetime.now(timezone.utc)`) on top of rebased Iteration 5A (`384c222`, cleanly rebased onto `b0288a3` preserving 100% of `#18` behavioral suites). Iteration 5B resolved every remaining Fresh-Eyes Review #2 finding across `@kinloom/ui`, `examples/demo`, Biome rules, and `scripts/check-architecture.mjs` (`D-1`, `D-2`, `D-3`, `C-1`, `C-2`, `DF-3 UI`, `DF-4`, `L-1`, `L-2`, `M-1 UI`, `M-2 UI`, `E-1`, `E-2`).
+
+### Findings Remediated in Iteration 5B
+
+| Review Finding | Root Cause Before Iteration 5B | Measured Fix in Iteration 5B |
+| --- | --- | --- |
+| **D-1 (P0) Raw `/api/pronunciations*` fetches outside adapters** | `ArchiveDataContext.tsx` and `pronunciationDraft.ts` called raw `fetch('/api/pronunciations...')` and `fetch('/api/pronunciation/generate')` with inconsistent `credentials: 'include'`, bypassing `apiBaseUrl` and `fetchImpl`. | Implemented `loadPronunciations`, `upsertPronunciationTerm`, and `generatePronunciationAudio` on `HttpWikiDataSource` using `credentials: 'same-origin'`, `apiBase`, and `fetchImpl`; routed `ArchiveDataContext.tsx`, `PronunciationEditorSection.tsx`, and `pronunciationDraft.ts` strictly through `ArchiveDataSource`. Raw `/api/` fetches outside `packages/ui/src/adapters/**` = `0`. |
+| **D-2 (P0) Adapter imports & duck-typing in UI layers** | `mediaUpload/actors.ts` and `authErrorCopy.ts` imported `ApiClientError` from `adapters/httpWikiDataSource.js`; `AuthSignInFlow.tsx` duck-typed `getGoogleSignInUrl`. | Replaced `instanceof ApiClientError` with `isArchiveApiError(error)` from `@kinloom/core`, removed all `adapters/` imports from `machines/`, `components/`, and `pages/`, and called `dataSource.getGoogleSignInUrl?.(...)` directly in `AuthSignInFlow.tsx`. |
+| **D-3 (P0) Drifted raw `/api/` fallbacks in XState actors** | `authSession/actors.ts`, `entityEditor/actors.ts`, and `mediaUpload/actors.ts` contained raw `fetch('/api/...')` fallback branches targeting non-existent or drifted endpoints (`/api/auth/google/verify`, `/api/media/attach`, wrong-contract `/api/auth/magic-link/verify`). | Deleted all raw `/api/` fetch fallbacks across all three XState actor modules so every actor executes I/O strictly through injected `ArchiveDataSource` port methods (or explicit actor overrides in tests). |
+| **E-2 (P1) `CreateEntityModal` entity-kind mismatch & `!` assertion** | `CreateEntityModal.tsx` fell back via `createRegistry.entries.person!` while submitting under `kind`, silently posting a person payload under `'source'` or `'narrative'`. | Added `resolveSupportedKind` using `ENTITY_CREATE_FORM_REGISTRY.person` (zero `!`), submitted strictly under `activeCreateEntry.kind`, and added a regression test in `wikiEditorsBehavioral.test.tsx` proving `defaultKind="source"` and `"narrative"` never submit mismatched payloads. |
+| **C-1, E-1, L-1 (P1) Cross-page CSS, atom-to-drawer CSS & plugin layout primitives** | `KinloomApp` and 6 pages imported `IndexPage.module.css`; `IndexPage` imported `PersonPage.module.css`; `SourceCitationTag` (atom), `MediaPlayer`, `CitationPopover`, and tabs imported `*Drawer.module.css`; `demoStoryPlugin.tsx` depended on unexported raw class names; `PersonPage` mobile portrait rules leaked into `narrativeAudioPlugin.module.css`. | Extracted shared layout rules into `styles/Layout.module.css`, citation card/tier rules into `styles/Citations.module.css`, scan lightbox rules into `styles/Overlays.module.css`, `.person-card-media-badge` into `components/Atoms.module.css`, and moved `PersonPage` mobile portrait grid rules into `PersonPage.module.css`; exported `ArchivalPageShell`, `ArchivalBanner`, `ArchivalMetrics`, `ArchivalSection`, `ArchivalMediaGrid`, and `ArchivalStoryCard` from `@kinloom/ui` (`components/ArchivalLayout.tsx`) and migrated `examples/demo/src/demoStoryPlugin.tsx` to them. |
+| **DF-3 UI, DF-4, C-2, M-1 UI, M-2 UI (P1/P2)** | `HttpWikiDataSource.requestJson` cast responses with `as T`; 7 production `!` assertions remained repo-wide; `authSessionMachine.ts` had 0 production callers while `AuthSignInFlow.tsx` duplicated auth state in `useState`/`useEffect`; `HttpWikiDataSource` carried 10 redundant admin pass-through methods; `createStaticArchiveLoader` duplicated `StaticDemoDataSource`. | Added runtime boundary parsers (`adapters/httpWiki/responseParsers.ts`) to `HttpWikiDataSource` and `adminClient.ts` (raising `INVALID_API_RESPONSE` on schema drift); removed all 10 redundant admin pass-throughs on `HttpWikiDataSource` (keeping `readonly admin: AdminDataSource`); delegated `createStaticArchiveLoader` to `createStaticArchiveDataSource`; wired `authSessionMachine` (with extracted `machines/authSession/reducers.ts`) directly into `AuthSignInFlow.tsx` as single source of truth; eliminated all 7 production `!` assertions and enabled Biome `noNonNullAssertion: "error"` for non-test files. |
+| **L-2 (P2) Hardened CI architecture gate** | `scripts/check-architecture.mjs` did not yet enforce `@kinloom/server` reverse-package imports, UI adapter leaks, raw UI `/api/` fetches, cross-page CSS imports, atom-to-drawer CSS imports, or `@ts-nocheck`. | Extended `scripts/check-architecture.mjs` to enforce all 5 new invariants plus `@ts-nocheck`, and enabled Biome `style/noNonNullAssertion: "error"` across all non-test files. |
+
+### Iteration 5B Measured Verification Snapshot
+
+- Non-test files across `packages/*/src` and `examples/demo/src`: **`618` total (`576` TS/TSX max `548` LOC, `42` CSS max `523` LOC, `0` files `> 550` LOC)**
+- Production non-null assertions (`!`) across all non-test files: **`0`** (enforced by Biome `style/noNonNullAssertion: "error"`)
+- `npm run check:arch`: **`PASS` (`0` violations across `576` non-test TS/TSX files)**
+- `npm run lint`: Biome **`0` errors, `0` warnings** across `786` files + `check:counts` **`0` violations** across `713` files
+- `npm run build`: **`6/6` workspaces** built cleanly in place (`packages/*/dist` preserved)
+- `npm run typecheck`: **`7/7` tsconfigs** (`0` errors)
+- `npm test`: **`126/126` test files, `831/831` tests passed** (preserving 100% of `#18` behavioral suites plus new Iteration 5B regression tests)
+- `npm run check:contrast`: **`15/15` passed**
+- `npm run check:leaks`: **`0` leaks**
+- `npm run audit:impeccable`: **`PASS` (`0` primary findings across static source, 16 desktop routes, and 16 mobile routes)**
+- `npm run test:e2e`: **`40/40` Playwright E2E tests passed**
+
+Ready for **Iteration 6 independent zero-context fresh-eyes `10/10` architectural review**.

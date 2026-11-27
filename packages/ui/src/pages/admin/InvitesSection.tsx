@@ -6,6 +6,7 @@ import wikiPanelStyles from '../../components/wiki/WikiPanels.module.css';
 import { cx, joinClasses } from '../../lib/cx.js';
 import { formatArchivalTimestamp } from '../../lib/formatTimestamp.js';
 import controlStyles from '../../styles/Controls.module.css';
+import layoutStyles from '../../styles/Layout.module.css';
 import { type AdminConfirmState, buildInviteUrl } from './adminHelpers.js';
 
 export interface InvitesSectionProps {
@@ -41,7 +42,7 @@ export const InvitesSection: React.FC<InvitesSectionProps> = ({
   onSetPendingConfirm,
   onRevokeInvite,
 }) => (
-  <section className={cx(controlStyles, 'place-map-box')}>
+  <section className={cx(layoutStyles, 'place-map-box')}>
     <h2 className={cx(wikiPanelStyles, 'wiki-section-title')}>Family Invite Links</h2>
     <form
       className={cx(wikiFormStyles, 'wiki-inline-form')}

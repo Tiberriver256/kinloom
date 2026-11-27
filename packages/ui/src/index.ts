@@ -20,6 +20,22 @@ export * from './browser/clientTelemetry.js';
 export * from './browser/ohmStyle.js';
 export type { AppErrorBoundaryProps } from './components/AppErrorBoundary.js';
 export { AppErrorBoundary } from './components/AppErrorBoundary.js';
+export type {
+  ArchivalBannerProps,
+  ArchivalMediaGridProps,
+  ArchivalMetricsProps,
+  ArchivalPageShellProps,
+  ArchivalSectionProps,
+  ArchivalStoryCardProps,
+} from './components/ArchivalLayout.js';
+export {
+  ArchivalBanner,
+  ArchivalMediaGrid,
+  ArchivalMetrics,
+  ArchivalPageShell,
+  ArchivalSection,
+  ArchivalStoryCard,
+} from './components/ArchivalLayout.js';
 export type { ArchivalMarkdownProps } from './components/ArchivalMarkdown.js';
 export {
   ArchivalMarkdown,

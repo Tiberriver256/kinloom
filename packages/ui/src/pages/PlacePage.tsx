@@ -17,6 +17,7 @@ import { cx } from '../lib/cx.js';
 import { formatReaderLoadError, KINLOOM_VOCABULARY } from '../lib/vocabulary.js';
 import { PluginSlot } from '../plugins/PluginContext.js';
 import controlStyles from '../styles/Controls.module.css';
+import layoutStyles from '../styles/Layout.module.css';
 import placeStyles from './PlacePage.module.css';
 import {
   PlaceHistoricalProfileSection,
@@ -97,7 +98,7 @@ export const PlacePage: React.FC = () => {
     return (
       <div>
         <ExplorerTopBar />
-        <main id="main-content" className={cx(controlStyles, 'place-page')}>
+        <main id="main-content" className={cx(layoutStyles, 'place-page')}>
           Loading archive…
         </main>
       </div>
@@ -107,7 +108,7 @@ export const PlacePage: React.FC = () => {
     return (
       <div>
         <ExplorerTopBar />
-        <main id="main-content" className={cx(controlStyles, 'place-page')}>
+        <main id="main-content" className={cx(layoutStyles, 'place-page')}>
           <h1>{KINLOOM_VOCABULARY.place.notFoundHeading}</h1>
           <p>{formatReaderLoadError(error, 'We could not find that place in the archive.')}</p>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center' }}>
@@ -140,7 +141,7 @@ export const PlacePage: React.FC = () => {
   return (
     <div>
       <ExplorerTopBar />
-      <main id="main-content" className={cx(controlStyles, 'place-page')}>
+      <main id="main-content" className={cx(layoutStyles, 'place-page')}>
         {occupancyRows.rows.length > 0 && (
           <div
             className={'print-hide'}
@@ -152,7 +153,7 @@ export const PlacePage: React.FC = () => {
           </div>
         )}
 
-        <section className={cx(controlStyles, 'place-map-box')}>
+        <section className={cx(layoutStyles, 'place-map-box')}>
           <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
             <div>
               <h1 className={cx(placeStyles, 'place-dossier-title')}>{place.full_name}</h1>

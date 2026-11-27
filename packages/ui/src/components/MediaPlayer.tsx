@@ -4,10 +4,10 @@ import { useArchiveData } from '../context/ArchiveDataContext.js';
 import { cx } from '../lib/cx.js';
 import { useKinloomPlugins } from '../plugins/PluginContext.js';
 import controlStyles from '../styles/Controls.module.css';
+import overlayStyles from '../styles/Overlays.module.css';
 import { resolveAssetUrl } from './Atoms.js';
 import atomStyles from './Atoms.module.css';
 import mediaGalleryStyles from './MediaGallery.module.css';
-import readerStyles from './SourceReaderDrawer.module.css';
 
 export interface MediaPlayerProps {
   media: MediaItem;
@@ -203,7 +203,7 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({ media, baseUrl, varian
         className ??
         (variant === 'preview'
           ? cx(mediaGalleryStyles, 'person-media-thumb')
-          : cx(readerStyles, 'scan-page-img-full'))
+          : cx(overlayStyles, 'scan-page-img-full'))
       }
     />
   );

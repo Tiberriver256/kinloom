@@ -6,6 +6,7 @@ import wikiPanelStyles from '../../components/wiki/WikiPanels.module.css';
 import { cx, joinClasses } from '../../lib/cx.js';
 import { formatArchivalTimestamp } from '../../lib/formatTimestamp.js';
 import controlStyles from '../../styles/Controls.module.css';
+import layoutStyles from '../../styles/Layout.module.css';
 import { type AdminConfirmState, formatTokenScopeLabel } from './adminHelpers.js';
 
 export interface AgentTokensSectionProps {
@@ -41,7 +42,7 @@ export const AgentTokensSection: React.FC<AgentTokensSectionProps> = ({
   onSetPendingConfirm,
   onRevokeToken,
 }) => (
-  <section className={cx(controlStyles, 'place-map-box')}>
+  <section className={cx(layoutStyles, 'place-map-box')}>
     <h2 className={cx(wikiPanelStyles, 'wiki-section-title')}>Scoped AI Agent &amp; Backup Tokens</h2>
     <form
       className={cx(wikiFormStyles, 'wiki-inline-form')}

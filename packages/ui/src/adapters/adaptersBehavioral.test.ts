@@ -381,31 +381,33 @@ describe('HttpWikiDataSource behavioral HTTP contract', () => {
     expect((await ds.postTalkComment('person', 'per_1', 'Note')).comment_id).toBe(9);
     await ds.deleteTalkComment('person', 'per_1', 9);
 
-    expect(await ds.listUsers()).toEqual([]);
-    expect((await ds.createUser({ email: 'u@example.test', display_name: 'U', role: 'editor' })).role).toBe(
-      'editor'
+    expect(await ds.admin.listUsers()).toEqual([]);
+    expect(
+      (await ds.admin.createUser?.({ email: 'u@example.test', display_name: 'U', role: 'editor' }))?.role
+    ).toBe('editor');
+    expect((await ds.admin.updateUserRole('u@example.test', { role: 'admin' })).role).toBe('admin');
+    await ds.admin.deleteUser?.('u@example.test');
+
+    expect(await ds.admin.listInvites()).toEqual([]);
+    expect((await ds.admin.createInvite({ label: 'Family', expires_in_days: 30 })).invite.token).toBe(
+      'inv_1'
     );
-    expect((await ds.updateUserRole('u@example.test', { role: 'admin' })).role).toBe('admin');
-    await ds.deleteUser('u@example.test');
+    await ds.admin.revokeInvite('inv_1');
 
-    expect(await ds.listInvites()).toEqual([]);
-    expect((await ds.createInvite({ label: 'Family', expires_in_days: 30 })).invite.token).toBe('inv_1');
-    await ds.revokeInvite('inv_1');
-
-    expect(await ds.listAgentTokens()).toEqual([]);
-    expect((await ds.createAgentToken({ label: 'Sync', scope: 'write_batch' })).plaintext_secret).toBe(
+    expect(await ds.admin.listAgentTokens()).toEqual([]);
+    expect((await ds.admin.createAgentToken({ label: 'Sync', scope: 'write_batch' })).plaintext_secret).toBe(
       'secret_abc'
     );
-    await ds.revokeAgentToken('tok_1');
+    await ds.admin.revokeAgentToken('tok_1');
 
     // Error paths on DELETE/POST endpoints
     failDelete = true;
     await expect(ds.logout()).rejects.toBeInstanceOf(ApiClientError);
     await expect(ds.uploadMedia(fd)).rejects.toBeInstanceOf(ApiClientError);
     await expect(ds.deleteTalkComment('person', 'per_1', 9)).rejects.toBeInstanceOf(ApiClientError);
-    await expect(ds.deleteUser('u@example.test')).rejects.toBeInstanceOf(ApiClientError);
-    await expect(ds.revokeInvite('inv_1')).rejects.toBeInstanceOf(ApiClientError);
-    await expect(ds.revokeAgentToken('tok_1')).rejects.toBeInstanceOf(ApiClientError);
+    await expect(ds.admin.deleteUser?.('u@example.test')).rejects.toBeInstanceOf(ApiClientError);
+    await expect(ds.admin.revokeInvite('inv_1')).rejects.toBeInstanceOf(ApiClientError);
+    await expect(ds.admin.revokeAgentToken('tok_1')).rejects.toBeInstanceOf(ApiClientError);
   });
 });
 

@@ -3,10 +3,11 @@ import { buildLibrarianCitation, formatSourceTypeLabel } from '@kinloom/core';
 import type React from 'react';
 import { Link } from 'react-router-dom';
 import { EmptyStateNotice } from '../../components/Atoms.js';
-import inspectorStyles from '../../components/SourceInspectorDrawer.module.css';
 import { cx } from '../../lib/cx.js';
 import { KINLOOM_VOCABULARY } from '../../lib/vocabulary.js';
+import citationStyles from '../../styles/Citations.module.css';
 import controlStyles from '../../styles/Controls.module.css';
+import layoutStyles from '../../styles/Layout.module.css';
 import evidenceStyles from '../EvidencePage.module.css';
 
 export interface EvidenceSourcesTabProps {
@@ -42,7 +43,7 @@ export const EvidenceSourcesTab: React.FC<EvidenceSourcesTabProps> = ({
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-      <section className={cx(controlStyles, 'place-map-box')} style={{ marginBottom: 0 }}>
+      <section className={cx(layoutStyles, 'place-map-box')} style={{ marginBottom: 0 }}>
         <div
           style={{
             display: 'flex',
@@ -106,7 +107,7 @@ export const EvidenceSourcesTab: React.FC<EvidenceSourcesTabProps> = ({
                         marginBottom: 4,
                       }}
                     >
-                      <span className={cx(inspectorStyles, `evidence-tier-badge tier-${cit.tier}`)}>
+                      <span className={cx(citationStyles, `evidence-tier-badge tier-${cit.tier}`)}>
                         {cit.tierLabel}
                       </span>
                       {cit.author && (
@@ -150,7 +151,7 @@ export const EvidenceSourcesTab: React.FC<EvidenceSourcesTabProps> = ({
                     </span>
                     <button
                       type="button"
-                      className={cx(inspectorStyles, 'source-action-btn primary')}
+                      className={cx(citationStyles, 'source-action-btn primary')}
                       onClick={() => {
                         onOpenSourceInspector({ sourceId: s.id });
                       }}
@@ -187,7 +188,7 @@ export const EvidenceSourcesTab: React.FC<EvidenceSourcesTabProps> = ({
         </div>
       </section>
 
-      <section className={cx(controlStyles, 'place-map-box')} style={{ marginBottom: 0 }}>
+      <section className={cx(layoutStyles, 'place-map-box')} style={{ marginBottom: 0 }}>
         {unverifiedEvents.length === 0 ? (
           <EmptyStateNotice title="All events have primary citations." />
         ) : (

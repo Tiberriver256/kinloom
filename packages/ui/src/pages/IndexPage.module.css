@@ -1,12 +1,6 @@
 /* ==========================================================================
    Page 1: Paper & Ink Family Folio Index (/)
    ========================================================================== */
-.index-page {
-  max-width: 1180px;
-  margin: 0 auto;
-  padding: 20px 26px 56px;
-}
-
 .index-banner {
   border-bottom: none;
   padding: 0 0 10px;

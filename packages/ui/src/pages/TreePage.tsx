@@ -26,7 +26,7 @@ import {
 import { cx } from '../lib/cx.js';
 import { KINLOOM_VOCABULARY } from '../lib/vocabulary.js';
 import controlStyles from '../styles/Controls.module.css';
-import indexStyles from './IndexPage.module.css';
+import layoutStyles from '../styles/Layout.module.css';
 import treePageStyles from './TreePage.module.css';
 import { TreeZoomControls } from './tree/TreeZoomControls.js';
 import { computeTreeBranchCounts, readInitialTreePreferences } from './tree/treePageHelpers.js';
@@ -332,7 +332,7 @@ export const TreePage: React.FC = () => {
     return (
       <div>
         <ExplorerTopBar />
-        <main id="main-content" className={cx(indexStyles, 'index-page')}>
+        <main id="main-content" className={cx(layoutStyles, 'index-page')}>
           <output className={cx(statusShellStyles, 'archive-loading-shell')} aria-live="polite">
             <span className={cx(statusShellStyles, 'archive-loading-spinner')} aria-hidden="true" />
             <span>{KINLOOM_VOCABULARY.tree.loading}</span>

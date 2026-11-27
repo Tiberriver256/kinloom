@@ -4,7 +4,6 @@ import type React from 'react';
 import { useEffect, useRef } from 'react';
 import mediaGalleryStyles from '../../components/MediaGallery.module.css';
 import { MediaPlayer } from '../../components/MediaPlayer.js';
-import readerStyles from '../../components/SourceReaderDrawer.module.css';
 import { useDialogFocusTrap } from '../../hooks/useDialogFocusTrap.js';
 import { cx } from '../../lib/cx.js';
 import { KINLOOM_VOCABULARY, MEDIA_KIND_LABELS } from '../../lib/vocabulary.js';
@@ -146,8 +145,8 @@ export const PersonMediaLightbox: React.FC<PersonMediaLightboxProps> = ({
           onSetLightbox({ kind: 'closed' });
         }}
       />
-      <div className={cx(readerStyles, 'scan-lightbox-card')}>
-        <div className={cx(readerStyles, 'scan-lightbox-header')}>
+      <div className={cx(overlayStyles, 'scan-lightbox-card')}>
+        <div className={cx(overlayStyles, 'scan-lightbox-header')}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
             <span
               className={cx(mediaGalleryStyles, `media-kind-badge kind-${activeLightboxMedia.kind}`)}
@@ -208,7 +207,7 @@ export const PersonMediaLightbox: React.FC<PersonMediaLightboxProps> = ({
             </button>
           </div>
         </div>
-        <div className={cx(readerStyles, 'scan-lightbox-scroll')}>
+        <div className={cx(overlayStyles, 'scan-lightbox-scroll')}>
           <MediaPlayer media={activeLightboxMedia} baseUrl={baseUrl} variant="full" />
           <div style={{ marginTop: 12, padding: '8px 4px' }}>
             <div

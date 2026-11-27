@@ -345,6 +345,7 @@ export const EntityEditDrawer: React.FC<EntityEditDrawerProps> = ({
                   previewLabel={pronunciationPreviewLabel}
                   draftPronunciation={draftPronunciation}
                   pronunciations={pronunciations}
+                  dataSource={dataSource}
                   baseUrl={baseUrl}
                   isBusy={isBusy}
                   fieldsetRef={pronunciationFieldsetRef}

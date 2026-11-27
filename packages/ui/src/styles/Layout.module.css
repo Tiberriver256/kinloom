@@ -1,0 +1,72 @@
+/* ==========================================================================
+   Shared Archival Page Shell, Banner & Section Layout Primitives
+   ========================================================================== */
+.index-page {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 20px 26px 56px;
+}
+
+.place-page {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 26px 26px 64px;
+}
+
+.place-page p {
+  max-width: 56ch;
+}
+
+.wire-banner {
+  border: none;
+  border-bottom: 1px solid var(--border-decorative);
+  background: transparent;
+  padding: 0 0 22px;
+  margin-bottom: 22px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 18px 28px;
+}
+
+.wire-banner h1 {
+  font-family: var(--font-serif);
+  margin: 0 0 8px;
+  font-size: clamp(1.9rem, 3vw, 2.45rem);
+  font-weight: 600;
+  line-height: 1.15;
+  color: var(--surface-header);
+  letter-spacing: -0.015em;
+}
+
+.wire-banner p {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 1.02rem;
+  max-width: 56ch;
+}
+
+.place-map-box {
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--border-decorative);
+  border-radius: 0;
+  box-shadow: none;
+  padding: 0 0 26px;
+  margin-bottom: 26px;
+}
+
+@media (max-width: 960px) {
+  .wire-banner {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 768px) {
+  .index-page,
+  :global(.time-page),
+  :global(.places-index-page),
+  .place-page {
+    padding: 12px 16px 48px;
+  }
+}

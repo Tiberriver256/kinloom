@@ -17,7 +17,7 @@ import { useArchiveData } from '../context/ArchiveDataContext.js';
 import { cx, joinClasses } from '../lib/cx.js';
 import { KINLOOM_VOCABULARY } from '../lib/vocabulary.js';
 import controlStyles from '../styles/Controls.module.css';
-import indexStyles from './IndexPage.module.css';
+import layoutStyles from '../styles/Layout.module.css';
 import mapStyles from './MapPage.module.css';
 import { MapStageLegend, MapStopDrawerAndDock, MapZoomControls } from './map/MapStopDrawerAndDock.js';
 import { MapToolbar } from './map/MapToolbar.js';
@@ -188,7 +188,7 @@ export const MapPage: React.FC = () => {
     return (
       <div className={cx(mapStyles, 'map-shell')}>
         <ExplorerTopBar />
-        <main id="main-content" className={cx(indexStyles, 'index-page')}>
+        <main id="main-content" className={cx(layoutStyles, 'index-page')}>
           <div className={cx(statusShellStyles, 'archive-error-box')} role="alert">
             <h2>Unable to load migration map</h2>
             <p>{error}</p>
@@ -211,7 +211,7 @@ export const MapPage: React.FC = () => {
     return (
       <div className={cx(mapStyles, 'map-shell')}>
         <ExplorerTopBar />
-        <main id="main-content" className={cx(indexStyles, 'index-page')}>
+        <main id="main-content" className={cx(layoutStyles, 'index-page')}>
           <output className={cx(statusShellStyles, 'archive-loading-shell')} aria-live="polite">
             <span className={cx(statusShellStyles, 'archive-loading-spinner')} aria-hidden="true" />
             <span>{KINLOOM_VOCABULARY.map.loading}</span>

@@ -1,0 +1,175 @@
+/* ==========================================================================
+   Shared Librarian Citation Cards, Evidence Tier Badges & Action Buttons
+   ========================================================================== */
+:global(.source-toggle):global(.is-uncited) {
+  color: var(--status-conflict);
+  border-bottom-color: var(--status-conflict);
+}
+
+.citation-card-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.citation-item-card {
+  background: var(--surface-canvas);
+  border: 1px solid var(--border-decorative);
+  border-radius: 2px;
+  padding: 11px 13px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.citation-item-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.evidence-tier-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  border: 1px solid currentColor;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  line-height: 1.3;
+}
+
+.evidence-tier-badge:global(.tier-primary) {
+  color: var(--badge-cited-fg);
+  background: var(--badge-cited-bg);
+  border-color: var(--accent-secondary);
+}
+
+.evidence-tier-badge:global(.tier-published) {
+  color: var(--surface-header);
+  background: var(--surface-linen);
+  border-color: var(--border-control);
+}
+
+.evidence-tier-badge:global(.tier-family) {
+  color: var(--badge-memory-fg);
+  background: var(--badge-memory-bg);
+  border-color: var(--accent-primary);
+}
+
+.evidence-tier-badge:global(.tier-derivative) {
+  color: var(--text-secondary);
+  background: var(--surface-muted);
+  border-color: var(--border-control);
+}
+
+.evidence-tier-badge:global(.tier-unverified) {
+  color: var(--diff-del-fg);
+  background: var(--diff-del-bg);
+  border-color: var(--status-conflict);
+}
+
+.evidence-basis-tag {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  color: var(--text-secondary);
+}
+
+.citation-item-title {
+  font-family: var(--font-serif);
+  font-size: 0.96rem;
+  font-weight: 600;
+  color: var(--surface-header);
+  line-height: 1.38;
+}
+
+.citation-item-meta {
+  font-size: 0.83rem;
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
+
+.citation-page-detail {
+  font-family: var(--font-mono);
+  font-size: 0.77rem;
+  color: var(--text-primary);
+  background: var(--surface-card);
+  border: 1px solid var(--border-decorative);
+  border-radius: 2px;
+  padding: 5px 8px;
+  margin-top: 2px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.citation-missing-detail {
+  font-size: 0.8rem;
+  font-style: italic;
+  color: var(--text-secondary);
+}
+
+.citation-item-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.source-action-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  background: var(--surface-card);
+  border: 1px solid var(--border-control);
+  border-radius: 2px;
+  font-family: var(--font-mono);
+  font-size: 0.73rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  text-decoration: none;
+  cursor: pointer;
+  transition:
+    background-color 0.14s ease,
+    border-color 0.14s ease,
+    color 0.14s ease;
+}
+
+.source-action-btn:hover {
+  background: var(--surface-header);
+  border-color: var(--surface-header);
+  color: var(--text-inverse);
+}
+
+.source-action-btn:global(.primary) {
+  border-color: var(--radar-copresence);
+  color: var(--radar-copresence);
+}
+
+.source-action-btn:global(.primary):hover {
+  background: var(--radar-copresence);
+  border-color: var(--radar-copresence);
+  color: var(--text-inverse);
+}
+
+.citation-conflicts-box {
+  margin-top: 10px;
+  padding: 10px 12px;
+  background: var(--surface-canvas);
+  border: 1px solid var(--border-decorative);
+  border-radius: 2px;
+}
+
+.citation-conflicts-box ul {
+  margin: 6px 0 0;
+  padding-left: 18px;
+}
+
+.citation-conflicts-box :global(.source-read-inline) {
+  margin-left: 0;
+  text-align: left;
+}

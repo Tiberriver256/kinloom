@@ -246,7 +246,10 @@ function verifyKinshipSymmetryForRemovedPairs(
     if (Boolean(forwardEdge) === Boolean(reciprocalEdge)) {
       continue;
     }
-    const surviving = forwardEdge ?? reciprocalEdge!;
+    const surviving = forwardEdge ?? reciprocalEdge;
+    if (!surviving) {
+      continue;
+    }
     const missingKey = forwardEdge ? reciprocalKey : forwardKey;
     const xrefLabel =
       typeof surviving.family_xref === 'string' && surviving.family_xref.length > 0

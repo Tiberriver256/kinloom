@@ -4,8 +4,8 @@ import type React from 'react';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { cx } from '../lib/cx.js';
+import citationStyles from '../styles/Citations.module.css';
 import markdownStyles from './ArchivalMarkdown.module.css';
-import inspectorStyles from './SourceInspectorDrawer.module.css';
 
 const SAFE_EXTERNAL_URL_RE = /^https?:\/\//i;
 
@@ -175,7 +175,7 @@ export const CitationPopover: React.FC<CitationPopoverProps> = ({
       <div className={cx(markdownStyles, 'citation-popover-header')}>
         <div className={cx(markdownStyles, 'citation-popover-header-meta')}>
           <span className={cx(markdownStyles, 'citation-popover-num')}>[{footnoteNumber}]</span>
-          <span className={cx(inspectorStyles, `evidence-tier-badge tier-${citation.tier}`)}>
+          <span className={cx(citationStyles, `evidence-tier-badge tier-${citation.tier}`)}>
             {citation.tierLabel}
           </span>
         </div>

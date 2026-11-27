@@ -5,11 +5,11 @@ import { Link } from 'react-router-dom';
 import { EmptyStateNotice } from '../../components/Atoms.js';
 import mediaGalleryStyles from '../../components/MediaGallery.module.css';
 import { MediaPlayer } from '../../components/MediaPlayer.js';
-import readerStyles from '../../components/SourceReaderDrawer.module.css';
 import { useDialogFocusTrap } from '../../hooks/useDialogFocusTrap.js';
 import { cx } from '../../lib/cx.js';
 import { KINLOOM_VOCABULARY, MEDIA_KIND_LABELS } from '../../lib/vocabulary.js';
 import controlStyles from '../../styles/Controls.module.css';
+import layoutStyles from '../../styles/Layout.module.css';
 import overlayStyles from '../../styles/Overlays.module.css';
 import evidenceStyles from '../EvidencePage.module.css';
 import type { MediaKindFilter } from './evidenceViewModel.js';
@@ -52,7 +52,7 @@ export const EvidenceMediaTab: React.FC<EvidenceMediaTabProps> = ({
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-      <section className={cx(controlStyles, 'place-map-box')} style={{ marginBottom: 0 }}>
+      <section className={cx(layoutStyles, 'place-map-box')} style={{ marginBottom: 0 }}>
         <div
           style={{
             display: 'flex',
@@ -175,7 +175,7 @@ export const EvidenceMediaTab: React.FC<EvidenceMediaTabProps> = ({
       </section>
 
       {mediaChecklist.length > 0 && (
-        <section className={cx(controlStyles, 'place-map-box')} style={{ marginBottom: 0 }}>
+        <section className={cx(layoutStyles, 'place-map-box')} style={{ marginBottom: 0 }}>
           <h2
             style={{
               fontFamily: 'var(--font-serif)',
@@ -300,8 +300,8 @@ export const EvidenceMediaLightbox: React.FC<EvidenceMediaLightboxProps> = ({
           onSetLightboxItem(null);
         }}
       />
-      <div className={cx(readerStyles, 'scan-lightbox-card')}>
-        <div className={cx(readerStyles, 'scan-lightbox-header')}>
+      <div className={cx(overlayStyles, 'scan-lightbox-card')}>
+        <div className={cx(overlayStyles, 'scan-lightbox-header')}>
           <div>
             <span
               className={cx(mediaGalleryStyles, `media-kind-badge kind-${lightboxItem.kind}`)}
@@ -367,7 +367,7 @@ export const EvidenceMediaLightbox: React.FC<EvidenceMediaLightboxProps> = ({
             </button>
           </div>
         </div>
-        <div className={cx(readerStyles, 'scan-lightbox-scroll')}>
+        <div className={cx(overlayStyles, 'scan-lightbox-scroll')}>
           <MediaPlayer media={lightboxItem} baseUrl={baseUrl} variant="full" />
         </div>
         {lightboxItem.provenance && (

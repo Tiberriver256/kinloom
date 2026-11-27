@@ -7,6 +7,7 @@ import atomStyles from '../../components/Atoms.module.css';
 import { cx } from '../../lib/cx.js';
 import { KINLOOM_VOCABULARY } from '../../lib/vocabulary.js';
 import controlStyles from '../../styles/Controls.module.css';
+import layoutStyles from '../../styles/Layout.module.css';
 import { collectEventDiscrepancyClaims } from './evidenceViewModel.js';
 
 export interface EvidenceDiscrepanciesTabProps {
@@ -37,7 +38,7 @@ export const EvidenceDiscrepanciesTab: React.FC<EvidenceDiscrepanciesTabProps> =
         const totalDiscrepancies = claims.length;
 
         return (
-          <article key={ev.id} className={cx(controlStyles, 'place-map-box')} style={{ marginBottom: 0 }}>
+          <article key={ev.id} className={cx(layoutStyles, 'place-map-box')} style={{ marginBottom: 0 }}>
             <div
               style={{
                 display: 'flex',

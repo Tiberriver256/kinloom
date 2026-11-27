@@ -1,7 +1,13 @@
-import type { EntityType, InspectedPersonPronunciationToken, Pronunciation } from '@kinloom/core';
+import type {
+  ArchiveDataSource,
+  EntityType,
+  InspectedPersonPronunciationToken,
+  Pronunciation,
+} from '@kinloom/core';
 import { inspectPersonPronunciationTokens } from '@kinloom/core';
 import type React from 'react';
 import { useEffect, useId, useState } from 'react';
+import { useOptionalArchiveData } from '../../context/ArchiveDataContext.js';
 import { cx, joinClasses } from '../../lib/cx.js';
 import { hasPronunciationContent } from '../PronunciationBadge.js';
 import pronunciationBadgeStyles from '../PronunciationBadge.module.css';
@@ -31,6 +37,7 @@ export interface PronunciationEditorSectionProps {
   previewLabel: string;
   draftPronunciation: Pronunciation | null;
   pronunciations: Readonly<Record<string, Pronunciation>>;
+  dataSource?: ArchiveDataSource;
   baseUrl?: string;
   isBusy: boolean;
   fieldsetRef?: React.RefObject<HTMLFieldSetElement | null>;
@@ -49,6 +56,7 @@ export const PronunciationEditorSection: React.FC<PronunciationEditorSectionProp
   previewLabel,
   draftPronunciation,
   pronunciations,
+  dataSource: dataSourceProp,
   baseUrl,
   isBusy,
   fieldsetRef,
@@ -56,6 +64,8 @@ export const PronunciationEditorSection: React.FC<PronunciationEditorSectionProp
   onUpdatePronunciation,
   onSetPronunciations,
 }) => {
+  const optionalArchive = useOptionalArchiveData();
+  const resolvedDataSource = dataSourceProp ?? optionalArchive?.dataSource;
   const idPrefix = useId();
   const [activeTokenDraft, setActiveTokenDraft] = useState<SharedTokenDraft | null>(null);
   const [sharedSaveStatus, setSharedSaveStatus] = useState<'idle' | 'saving' | 'success' | 'error'>('idle');
@@ -139,7 +149,7 @@ export const PronunciationEditorSection: React.FC<PronunciationEditorSectionProp
     setSharedSaveStatus('saving');
     setSharedSaveMessage(null);
     try {
-      const result = await saveSharedTokenPronunciation(activeTokenDraft);
+      const result = await saveSharedTokenPronunciation(activeTokenDraft, resolvedDataSource);
       if (!result.ok) {
         setSharedSaveStatus('error');
         setSharedSaveMessage(result.message);
@@ -181,6 +191,7 @@ export const PronunciationEditorSection: React.FC<PronunciationEditorSectionProp
         entityId,
         text,
         draftPronunciation,
+        dataSource: resolvedDataSource,
       });
       if (!result.ok) {
         setAudioGenStatus('error');

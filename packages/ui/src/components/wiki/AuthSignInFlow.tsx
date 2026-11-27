@@ -1,9 +1,11 @@
 import type { ArchiveDataSource } from '@kinloom/core';
+import { useMachine } from '@xstate/react';
 import type React from 'react';
 import { useEffect, useId, useRef, useState } from 'react';
 import { useArchiveData } from '../../context/ArchiveDataContext.js';
 import { scrollBehaviorForMotion } from '../../hooks/keyboardNav.js';
 import { cx, joinClasses } from '../../lib/cx.js';
+import { authSessionMachine } from '../../machines/authSessionMachine.js';
 import {
   type AuthFeedback,
   type AuthUrlError,
@@ -27,22 +29,10 @@ export interface AuthSignInFlowProps {
   feedbackRef?: React.RefObject<HTMLDivElement | null>;
 }
 
-interface GoogleSignInUrlCapable {
-  getGoogleSignInUrl(nextPath?: string, options?: { selectAccount?: boolean }): string;
-}
-
-function hasGoogleSignInUrl(
-  dataSource: ArchiveDataSource
-): dataSource is ArchiveDataSource & GoogleSignInUrlCapable {
-  return (
-    'getGoogleSignInUrl' in dataSource &&
-    typeof (dataSource as { getGoogleSignInUrl?: unknown }).getGoogleSignInUrl === 'function'
-  );
-}
-
 function buildGoogleUrl(dataSource: ArchiveDataSource, nextPath: string, selectAccount: boolean): string {
-  if (hasGoogleSignInUrl(dataSource)) {
-    return dataSource.getGoogleSignInUrl(nextPath, { selectAccount });
+  const portUrl = dataSource.getGoogleSignInUrl?.(nextPath, { selectAccount });
+  if (portUrl) {
+    return portUrl;
   }
   const params = new URLSearchParams();
   if (nextPath) {
@@ -69,7 +59,7 @@ export const AuthSignInFlow: React.FC<AuthSignInFlowProps> = ({
   emailInputRef: externalEmailInputRef,
   feedbackRef: externalFeedbackRef,
 }) => {
-  const { dataSource, authProviders } = useArchiveData();
+  const { dataSource, authProviders, session } = useArchiveData();
   const baseId = useId();
   const internalEmailInputRef = useRef<HTMLInputElement | null>(null);
   const internalFeedbackRef = useRef<HTMLDivElement | null>(null);
@@ -80,27 +70,56 @@ export const AuthSignInFlow: React.FC<AuthSignInFlowProps> = ({
   const sentTitleRef = useRef<HTMLParagraphElement | null>(null);
   const inviteOpenedByUserRef = useRef(false);
 
+  const [authSnapshot, sendAuth] = useMachine(authSessionMachine, {
+    input: {
+      dataSource,
+      initialSession:
+        session && session.principal_kind !== 'user'
+          ? session
+          : { authenticated: false, principal_kind: 'anonymous' },
+    },
+  });
+
   const [email, setEmail] = useState('');
   const [emailTouched, setEmailTouched] = useState(false);
   const [emailError, setEmailError] = useState<string | null>(null);
-  const [sending, setSending] = useState(false);
-  const [sentTo, setSentTo] = useState<string | null>(null);
-  const [resendCount, setResendCount] = useState(0);
 
   const [urlError, setUrlError] = useState<AuthUrlError | null>(initialUrlError);
-  const [submitFeedback, setSubmitFeedback] = useState<AuthFeedback | null>(null);
 
   const [inviteOpen, setInviteOpen] = useState(false);
   const [inviteValue, setInviteValue] = useState('');
   const [inviteError, setInviteError] = useState<string | null>(null);
 
   useEffect(() => {
+    sendAuth({ type: 'SYNC_DATA_SOURCE', dataSource });
+  }, [dataSource, sendAuth]);
+
+  useEffect(() => {
     setUrlError(initialUrlError);
     if (initialUrlError) {
-      setSubmitFeedback(null);
-      setSentTo(null);
+      sendAuth({ type: 'CANCEL_MAGIC_LINK' });
+      sendAuth({ type: 'CLEAR_AUTH_ERROR' });
     }
-  }, [initialUrlError]);
+  }, [initialUrlError, sendAuth]);
+
+  const sending = authSnapshot.matches('requestingMagicLink');
+  const resendCount = authSnapshot.context.magicLinkResendCount;
+  const sentTo =
+    authSnapshot.matches('awaitingMagicLinkClick') ||
+    (authSnapshot.matches('requestingMagicLink') && resendCount > 0)
+      ? authSnapshot.context.email
+      : null;
+
+  const submitFeedback: AuthFeedback | null =
+    authSnapshot.context.authErrorDetail !== null && authSnapshot.context.authErrorDetail !== undefined
+      ? resolveClientAuthError(authSnapshot.context.authErrorDetail, 'magic_link', authProviders.google)
+      : authSnapshot.context.authError
+        ? resolveClientAuthError(
+            new Error(authSnapshot.context.authError),
+            'magic_link',
+            authProviders.google
+          )
+        : null;
 
   const activeFeedback: AuthFeedback | null =
     submitFeedback ??
@@ -158,39 +177,11 @@ export const AuthSignInFlow: React.FC<AuthSignInFlowProps> = ({
   const inviteErrorId = `${baseId}-invite-error`;
 
   const clearFeedback = (): void => {
-    setSubmitFeedback(null);
+    sendAuth({ type: 'CLEAR_AUTH_ERROR' });
     setUrlError(null);
   };
 
-  const sendMagicLink = async (targetEmail: string, isResend: boolean): Promise<void> => {
-    if (!dataSource.requestMagicLink) {
-      setSubmitFeedback(
-        resolveAuthFeedback({
-          code: 'EMAIL_SENDER_UNCONFIGURED',
-          provider: 'magic_link',
-          hasGoogleProvider: authProviders.google,
-        })
-      );
-      return;
-    }
-
-    setSending(true);
-    clearFeedback();
-    try {
-      await dataSource.requestMagicLink(targetEmail);
-      setSentTo(targetEmail);
-      setResendCount((count) => (isResend ? count + 1 : 0));
-    } catch (err) {
-      setSubmitFeedback(resolveClientAuthError(err, 'magic_link', authProviders.google));
-      if (isResend) {
-        setSentTo(null);
-      }
-    } finally {
-      setSending(false);
-    }
-  };
-
-  const handleMagicLinkSubmit = async (e: React.FormEvent): Promise<void> => {
+  const handleMagicLinkSubmit = (e: React.FormEvent): void => {
     e.preventDefault();
     const trimmed = email.trim();
     const validationError = validateEmailInput(trimmed);
@@ -201,7 +192,8 @@ export const AuthSignInFlow: React.FC<AuthSignInFlowProps> = ({
       return;
     }
     setEmailError(null);
-    await sendMagicLink(trimmed, false);
+    setUrlError(null);
+    sendAuth({ type: 'REQUEST_MAGIC_LINK', email: trimmed });
   };
 
   const handleInviteSubmit = (e: React.FormEvent): void => {
@@ -217,8 +209,7 @@ export const AuthSignInFlow: React.FC<AuthSignInFlowProps> = ({
   };
 
   const handleUseDifferentEmail = (): void => {
-    setSentTo(null);
-    setResendCount(0);
+    sendAuth({ type: 'CANCEL_MAGIC_LINK' });
     clearFeedback();
     setEmailError(null);
     window.setTimeout(() => {
@@ -301,7 +292,8 @@ export const AuthSignInFlow: React.FC<AuthSignInFlowProps> = ({
                 className={cx(wikiChromeStyles, 'wiki-btn-secondary')}
                 disabled={sending}
                 onClick={() => {
-                  void sendMagicLink(sentTo, true);
+                  setUrlError(null);
+                  sendAuth({ type: 'RESEND_MAGIC_LINK', email: sentTo });
                 }}
               >
                 {sending ? 'Sending link…' : 'Send another link'}
@@ -317,13 +309,7 @@ export const AuthSignInFlow: React.FC<AuthSignInFlowProps> = ({
             </div>
           </output>
         ) : (
-          <form
-            className={cx(wikiFormStyles, 'wiki-edit-form')}
-            noValidate
-            onSubmit={(e) => {
-              void handleMagicLinkSubmit(e);
-            }}
-          >
+          <form className={cx(wikiFormStyles, 'wiki-edit-form')} noValidate onSubmit={handleMagicLinkSubmit}>
             <div className={cx(wikiFormStyles, 'wiki-field')}>
               <label htmlFor={emailInputId} className={cx(wikiFormStyles, 'wiki-field-label')}>
                 Email address

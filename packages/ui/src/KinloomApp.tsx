@@ -17,10 +17,10 @@ import { useArchiveData } from './context/ArchiveDataContext.js';
 import { ArchiveProvider } from './context/ArchiveProvider.js';
 import { cx } from './lib/cx.js';
 import { IndexPage } from './pages/IndexPage.js';
-import indexStyles from './pages/IndexPage.module.css';
 import { NotFoundPage } from './pages/NotFoundPage.js';
 import { PluginSlot, useKinloomPlugins } from './plugins/PluginContext.js';
 import type { KinloomUiPlugin } from './plugins/types.js';
+import layoutStyles from './styles/Layout.module.css';
 
 const AdminPage = lazy(async () => {
   const module = await import('./pages/AdminPage.js');
@@ -83,7 +83,7 @@ export interface KinloomAppProps {
 const RouteLoading: React.FC = () => (
   <div>
     <ExplorerTopBar />
-    <main id="main-content" className={cx(indexStyles, 'index-page')}>
+    <main id="main-content" className={cx(layoutStyles, 'index-page')}>
       <output className={cx(statusShellStyles, 'archive-loading-shell')} aria-live="polite">
         <span className={cx(statusShellStyles, 'archive-loading-spinner')} aria-hidden="true" />
         <span>Loading archival view…</span>

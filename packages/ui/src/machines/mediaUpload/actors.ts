@@ -1,6 +1,5 @@
-import type { MediaItem } from '@kinloom/core';
+import { isArchiveApiError } from '@kinloom/core';
 import { fromPromise } from 'xstate';
-import { ApiClientError } from '../../adapters/httpWikiDataSource.js';
 import type {
   AttachActorOutcome,
   AttachMediaActorInput,
@@ -9,15 +8,17 @@ import type {
 } from './types.js';
 
 function isLivingMediaBlockedError(error: unknown): { blocked: true; message: string } | { blocked: false } {
-  if (error instanceof ApiClientError) {
-    if (
-      error.status === 422 &&
-      (error.code === 'LIVING_MEDIA_FORBIDDEN' ||
-        error.code === 'LIVING_PRIVACY_BLOCKED' ||
-        error.code === 'PRIVACY_VIOLATION')
-    ) {
-      return { blocked: true, message: error.message };
-    }
+  if (
+    isArchiveApiError(error) &&
+    error.status === 422 &&
+    (error.code === 'LIVING_MEDIA_FORBIDDEN' ||
+      error.code === 'LIVING_PRIVACY_BLOCKED' ||
+      error.code === 'PRIVACY_VIOLATION')
+  ) {
+    return {
+      blocked: true,
+      message: error.message ?? 'Media cannot be attached to living relatives.',
+    };
   }
   return { blocked: false };
 }
@@ -33,6 +34,10 @@ export const defaultHashFileSha256 = fromPromise<string, { file: File }>(async (
 
 export const defaultUploadMediaActor = fromPromise<UploadActorOutcome, UploadMediaActorInput>(
   async ({ input, signal }) => {
+    if (!input.dataSource?.uploadMedia) {
+      throw new Error('Uploading media is not supported by this archive.');
+    }
+
     const form = new FormData();
     form.append('file', input.file);
     form.append('sha256', input.sha256);
@@ -52,65 +57,31 @@ export const defaultUploadMediaActor = fromPromise<UploadActorOutcome, UploadMed
     );
     form.append('summary', input.metadata.summary.trim() || `Upload ${input.file.name}`);
 
-    if (input.dataSource?.uploadMedia) {
-      try {
-        const uploaded = await input.dataSource.uploadMedia(form, { signal });
-        return {
-          kind: 'uploaded',
-          uploadGen: input.uploadGen,
-          r2Key: uploaded.url,
-          url: uploaded.url,
-          media: uploaded.media,
-        };
-      } catch (error) {
-        const livingCheck = isLivingMediaBlockedError(error);
-        if (livingCheck.blocked) {
-          return {
-            kind: 'living_blocked',
-            uploadGen: input.uploadGen,
-            message: livingCheck.message,
-          };
-        }
-        throw error;
-      }
-    }
-
-    const res = await fetch('/api/media/upload', {
-      method: 'POST',
-      credentials: 'same-origin',
-      body: form,
-      signal,
-    });
-
-    if (res.status === 422) {
-      const body = (await res.json().catch(() => ({}))) as {
-        error?: { message?: string; code?: string };
-        message?: string;
-      };
+    try {
+      const uploaded = await input.dataSource.uploadMedia(form, { signal });
       return {
-        kind: 'living_blocked',
+        kind: 'uploaded',
         uploadGen: input.uploadGen,
-        message: body.error?.message ?? body.message ?? 'Media cannot be attached to living relatives.',
+        r2Key: uploaded.url,
+        url: uploaded.url,
+        media: uploaded.media,
       };
+    } catch (error) {
+      const livingCheck = isLivingMediaBlockedError(error);
+      if (livingCheck.blocked) {
+        return {
+          kind: 'living_blocked',
+          uploadGen: input.uploadGen,
+          message: livingCheck.message,
+        };
+      }
+      throw error;
     }
-
-    if (!res.ok) {
-      throw new Error(`HTTP ${res.status} uploading media`);
-    }
-
-    const data = (await res.json()) as { media?: MediaItem; url?: string; r2Key?: string };
-    return {
-      kind: 'uploaded',
-      uploadGen: input.uploadGen,
-      r2Key: data.r2Key ?? data.url ?? `media/${input.sha256}`,
-      url: data.url,
-      media: data.media,
-    };
   }
 );
 
 export const defaultAttachMediaActor = fromPromise<AttachActorOutcome, AttachMediaActorInput>(
-  async ({ input, signal }) => {
+  async ({ input }) => {
     if (input.uploadedMedia) {
       return {
         kind: 'attached',
@@ -119,42 +90,7 @@ export const defaultAttachMediaActor = fromPromise<AttachActorOutcome, AttachMed
         targetBecameLiving: false,
       };
     }
-
-    const res = await fetch('/api/media/attach', {
-      method: 'POST',
-      credentials: 'same-origin',
-      headers: { 'content-type': 'application/json', accept: 'application/json' },
-      body: JSON.stringify({
-        r2Key: input.r2Key,
-        sha256: input.sha256,
-        targets: input.targets,
-      }),
-      signal,
-    });
-
-    if (res.status === 422) {
-      const body = (await res.json().catch(() => ({}))) as {
-        error?: { message?: string };
-        message?: string;
-      };
-      return {
-        kind: 'living_blocked',
-        uploadGen: input.uploadGen,
-        message: body.error?.message ?? body.message ?? 'Media cannot be attached to living relatives.',
-      };
-    }
-
-    if (!res.ok) {
-      throw new Error(`HTTP ${res.status} attaching media`);
-    }
-
-    const ok = (await res.json()) as { media_id: string; target_became_living?: boolean };
-    return {
-      kind: 'attached',
-      uploadGen: input.uploadGen,
-      mediaId: ok.media_id,
-      targetBecameLiving: Boolean(ok.target_became_living),
-    };
+    throw new Error('Media upload did not return an attached media record.');
   }
 );
 

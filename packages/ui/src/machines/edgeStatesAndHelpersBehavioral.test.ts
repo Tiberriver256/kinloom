@@ -1,6 +1,8 @@
 /** @vitest-environment jsdom */
+import type { ArchiveDataSource } from '@kinloom/core';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { createActor, waitFor } from 'xstate';
+import { createActor, fromPromise, waitFor } from 'xstate';
+import { createHttpWikiDataSource } from '../adapters/httpWikiDataSource.js';
 import {
   consumeAuthErrorFromWindow,
   getCleanNextPath,
@@ -24,9 +26,15 @@ import {
   pickActiveTimelineEventId,
   shouldRunInitialEventScroll,
 } from '../lib/timelineScroll.js';
-import { authSessionMachine } from './authSessionMachine.js';
+import { authSessionMachine, type VerifyOutcome } from './authSessionMachine.js';
 import { entityEditorMachine } from './entityEditorMachine.js';
-import { mediaUploadMachine } from './mediaUploadMachine.js';
+import {
+  type AttachActorOutcome,
+  type AttachMediaActorInput,
+  mediaUploadMachine,
+  type UploadActorOutcome,
+  type UploadMediaActorInput,
+} from './mediaUploadMachine.js';
 
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -101,33 +109,46 @@ describe('authErrorCopy, pronunciationDraft, and timelineScroll behavioral rules
     ).toBe('ˈɔːldər');
     expect(cleanPronunciation({ ipa: '  ', phonetic: '' }, true)).toBeNull();
 
-    const fetchSpy = vi.spyOn(globalThis, 'fetch');
-    fetchSpy.mockResolvedValueOnce(jsonResponse({ pronunciations: { 'surname:alder': { ipa: 'ˈɔːldər' } } }));
-    const okSave = await saveSharedTokenPronunciation({
-      term: 'alder',
-      displayText: 'Alder',
-      phonetic: 'AWL-der',
-      ipa: 'ˈɔːldər',
-      language: 'en',
-      note: '',
-      source_label: '',
-      source_url: '',
-      region: '',
-    });
+    const fetchSpy = vi.fn();
+    const httpDs = createHttpWikiDataSource({ fetchImpl: fetchSpy as unknown as typeof fetch });
+    fetchSpy.mockResolvedValueOnce(
+      jsonResponse({
+        term: 'alder',
+        pronunciation: { ipa: 'ˈɔːldər' },
+        pronunciations: { 'surname:alder': { ipa: 'ˈɔːldər' } },
+      })
+    );
+    const okSave = await saveSharedTokenPronunciation(
+      {
+        term: 'alder',
+        displayText: 'Alder',
+        phonetic: 'AWL-der',
+        ipa: 'ˈɔːldər',
+        language: 'en',
+        note: '',
+        source_label: '',
+        source_url: '',
+        region: '',
+      },
+      httpDs
+    );
     expect(okSave.ok).toBe(true);
 
-    fetchSpy.mockResolvedValueOnce(jsonResponse({ error: { message: 'Forbidden' } }, 403));
-    const failSave = await saveSharedTokenPronunciation({
-      term: 'alder',
-      displayText: 'Alder',
-      phonetic: 'AWL-der',
-      ipa: 'ˈɔːldər',
-      language: 'en',
-      note: '',
-      source_label: '',
-      source_url: '',
-      region: '',
-    });
+    fetchSpy.mockResolvedValueOnce(jsonResponse({ error: { code: 'FORBIDDEN', message: 'Forbidden' } }, 403));
+    const failSave = await saveSharedTokenPronunciation(
+      {
+        term: 'alder',
+        displayText: 'Alder',
+        phonetic: 'AWL-der',
+        ipa: 'ˈɔːldər',
+        language: 'en',
+        note: '',
+        source_label: '',
+        source_url: '',
+        region: '',
+      },
+      httpDs
+    );
     expect(failSave.ok).toBe(false);
 
     fetchSpy.mockResolvedValueOnce(jsonResponse({ audio_url: '/audio/alder.mp3' }));
@@ -136,15 +157,19 @@ describe('authErrorCopy, pronunciationDraft, and timelineScroll behavioral rules
       entityId: 'per_henry',
       text: 'Henry Alder',
       draftPronunciation: { ipa: 'ˈhɛnri ˈɔːldər' },
+      dataSource: httpDs,
     });
     expect(okAudio.ok).toBe(true);
 
-    fetchSpy.mockResolvedValueOnce(jsonResponse({ error: { message: 'TTS unavailable' } }, 503));
+    fetchSpy.mockResolvedValueOnce(
+      jsonResponse({ error: { code: 'TTS_UNAVAILABLE', message: 'TTS unavailable' } }, 503)
+    );
     const failAudio = await generatePronunciationAudio({
       entityType: 'person',
       entityId: 'per_henry',
       text: 'Henry Alder',
       draftPronunciation: null,
+      dataSource: httpDs,
     });
     expect(failAudio.ok).toBe(false);
   });
@@ -198,14 +223,32 @@ describe('authErrorCopy, pronunciationDraft, and timelineScroll behavioral rules
 describe('Remaining XState machine behavioral edge transitions', () => {
   it('handles CANCEL while uploading, stale upload generations, and attach 422 in mediaUploadMachine', async () => {
     const pngFile = new File([new Uint8Array([1, 2, 3])], 'scan.png', { type: 'image/png' });
-    const fetchSpy = vi.spyOn(globalThis, 'fetch');
+    let attachAttempt = 0;
 
-    // Attach returns 422 living blocked
-    fetchSpy
-      .mockResolvedValueOnce(jsonResponse({ r2Key: 'media/scan.png', url: '/media/scan.png' }))
-      .mockResolvedValueOnce(jsonResponse({ error: { message: 'Target became living' } }, 422));
+    const testMediaMachine = mediaUploadMachine.provide({
+      actors: {
+        uploadMedia: fromPromise<UploadActorOutcome, UploadMediaActorInput>(async ({ input }) => ({
+          kind: 'uploaded',
+          uploadGen: input.uploadGen,
+          r2Key: 'media/scan.png',
+          url: '/media/scan.png',
+        })),
+        attachMedia: fromPromise<AttachActorOutcome, AttachMediaActorInput>(async ({ input }) => {
+          attachAttempt += 1;
+          if (attachAttempt === 1) {
+            return {
+              kind: 'living_blocked',
+              uploadGen: input.uploadGen,
+              message: 'Target became living',
+            };
+          }
+          throw new Error('HTTP 500 attaching media');
+        }),
+      },
+    });
 
-    const actor = createActor(mediaUploadMachine, { input: {} }).start();
+    // Attach returns living blocked
+    const actor = createActor(testMediaMachine, { input: {} }).start();
     actor.send({
       type: 'SELECT_FILE',
       file: pngFile,
@@ -216,9 +259,6 @@ describe('Remaining XState machine behavioral edge transitions', () => {
     expect(blocked.context.rejectionReason).toBe('living_person_blocked');
 
     // Attach 500 error -> failedRetryable -> CANCEL -> idle
-    fetchSpy
-      .mockResolvedValueOnce(jsonResponse({ r2Key: 'media/scan.png', url: '/media/scan.png' }))
-      .mockResolvedValueOnce(jsonResponse({}, 500));
     actor.send({
       type: 'SELECT_FILE',
       file: pngFile,
@@ -243,11 +283,20 @@ describe('Remaining XState machine behavioral edge transitions', () => {
       lineage_group: 'ancestor',
     };
 
-    const fetchSpy = vi.spyOn(globalThis, 'fetch');
-    fetchSpy.mockResolvedValueOnce(jsonResponse({}, 500));
+    const failingUpdateDs = {
+      updateEntity: async () => {
+        throw new Error('HTTP 500 saving person/per_henry');
+      },
+    } as unknown as ArchiveDataSource;
 
     const ed = createActor(entityEditorMachine, {
-      input: { entityType: 'person', entityId: 'per_henry', revisionId: 1, snapshot: base },
+      input: {
+        entityType: 'person',
+        entityId: 'per_henry',
+        revisionId: 1,
+        snapshot: base,
+        dataSource: failingUpdateDs,
+      },
     }).start();
     ed.send({ type: 'START_EDIT' });
     ed.send({ type: 'EDIT_FIELD', draft: { ...base, full_name: 'Henry M. Alder' } });
@@ -260,14 +309,33 @@ describe('Remaining XState machine behavioral edge transitions', () => {
     expect(ed.getSnapshot().matches('viewing')).toBe(true);
     ed.stop();
 
-    // authSessionMachine REFRESH_SESSION + magic link 403
-    fetchSpy
-      .mockResolvedValueOnce(jsonResponse({ session: { authenticated: false, principal_kind: 'anonymous' } }))
-      .mockResolvedValueOnce(jsonResponse({ session: { authenticated: false, principal_kind: 'anonymous' } }))
-      .mockResolvedValueOnce(jsonResponse({ ok: true }))
-      .mockResolvedValueOnce(jsonResponse({}, 403));
+    // authSessionMachine REFRESH_SESSION + magic link invalid
+    const authDs = {
+      getSession: async () => ({
+        session: { authenticated: false, principal_kind: 'anonymous' as const },
+        capabilities: {
+          canEdit: false,
+          canUploadMedia: false,
+          hasRevisionHistory: false,
+          hasTalk: false,
+          canManageSite: false,
+        },
+      }),
+      requestMagicLink: async () => ({ sent: true }),
+    } as unknown as ArchiveDataSource;
 
-    const auth = createActor(authSessionMachine, { input: {} }).start();
+    const testAuthMachine = authSessionMachine.provide({
+      actors: {
+        verifyMagicLink: fromPromise<VerifyOutcome, { token: string; inviteToken: string | null }>(
+          async () => ({
+            kind: 'invalid',
+            message: 'This email is not enrolled in this family archive.',
+          })
+        ),
+      },
+    });
+
+    const auth = createActor(testAuthMachine, { input: { dataSource: authDs } }).start();
     await waitFor(auth, (s) => s.matches('anonymous'));
     auth.send({ type: 'REFRESH_SESSION' });
     await waitFor(auth, (s) => s.matches('anonymous'));

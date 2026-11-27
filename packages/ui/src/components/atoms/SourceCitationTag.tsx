@@ -12,11 +12,10 @@ import { useArchiveUi } from '../../context/ArchiveUiContext.js';
 import { useDialogFocusTrap } from '../../hooks/useDialogFocusTrap.js';
 import { cx } from '../../lib/cx.js';
 import { KINLOOM_VOCABULARY } from '../../lib/vocabulary.js';
+import citationStyles from '../../styles/Citations.module.css';
 import controlStyles from '../../styles/Controls.module.css';
 import overlayStyles from '../../styles/Overlays.module.css';
 import atomStyles from '../Atoms.module.css';
-import inspectorStyles from '../SourceInspectorDrawer.module.css';
-import readerStyles from '../SourceReaderDrawer.module.css';
 import { resolveAssetUrl } from './formatters.js';
 
 const EMPTY_ALTERNATE_DATES: AlternateDate[] = [];
@@ -151,41 +150,41 @@ export const SourceCitationTag: React.FC<{
       {expanded && (
         <div className={cx(atomStyles, 'source-details')}>
           {sources.length > 0 && (
-            <div className={cx(inspectorStyles, 'citation-card-list')}>
+            <div className={cx(citationStyles, 'citation-card-list')}>
               {sources.map((ref) => {
                 const rec = sourcesById.get(ref.source_id);
                 const cit = buildLibrarianCitation(rec, ref);
                 const isReadable = readableSourceIds.has(ref.source_id);
                 const itemKey = `${ref.source_id}|${ref.claimed_date ?? ''}|${ref.citation_detail ?? ''}|${ref.scan_url ?? ''}`;
                 return (
-                  <div key={itemKey} className={cx(inspectorStyles, 'citation-item-card')}>
-                    <div className={cx(inspectorStyles, 'citation-item-top')}>
-                      <span className={cx(inspectorStyles, `evidence-tier-badge tier-${cit.tier}`)}>
+                  <div key={itemKey} className={cx(citationStyles, 'citation-item-card')}>
+                    <div className={cx(citationStyles, 'citation-item-top')}>
+                      <span className={cx(citationStyles, `evidence-tier-badge tier-${cit.tier}`)}>
                         {cit.tierLabel}
                       </span>
                       {cit.tier !== 'unverified' && (
-                        <span className={cx(inspectorStyles, 'evidence-basis-tag')}>{cit.evidenceBasis}</span>
+                        <span className={cx(citationStyles, 'evidence-basis-tag')}>{cit.evidenceBasis}</span>
                       )}
                     </div>
-                    <div className={cx(inspectorStyles, 'citation-item-title')}>{cit.title}</div>
+                    <div className={cx(citationStyles, 'citation-item-title')}>{cit.title}</div>
                     {(cit.author || cit.repository) && (
-                      <div className={cx(inspectorStyles, 'citation-item-meta')}>
+                      <div className={cx(citationStyles, 'citation-item-meta')}>
                         {[cit.author, cit.repository].filter(Boolean).join(' · ')}
                       </div>
                     )}
                     {cit.recordDetail ? (
-                      <div className={cx(inspectorStyles, 'citation-page-detail')}>{cit.recordDetail}</div>
+                      <div className={cx(citationStyles, 'citation-page-detail')}>{cit.recordDetail}</div>
                     ) : (
                       cit.tier !== 'unverified' && (
-                        <div className={cx(inspectorStyles, 'citation-missing-detail')}>
+                        <div className={cx(citationStyles, 'citation-missing-detail')}>
                           Collection-level reference (no page or roll number recorded)
                         </div>
                       )
                     )}
-                    <div className={cx(inspectorStyles, 'citation-item-actions')}>
+                    <div className={cx(citationStyles, 'citation-item-actions')}>
                       <button
                         type="button"
-                        className={cx(inspectorStyles, 'source-action-btn primary')}
+                        className={cx(citationStyles, 'source-action-btn primary')}
                         onClick={(e) => {
                           e.stopPropagation();
                           openSourceInspector({
@@ -203,7 +202,7 @@ export const SourceCitationTag: React.FC<{
                       </button>
                       <button
                         type="button"
-                        className={cx(inspectorStyles, 'source-action-btn')}
+                        className={cx(citationStyles, 'source-action-btn')}
                         onClick={(e) => {
                           e.stopPropagation();
                           handleCopyCitation(itemKey, cit.bibliographicString);
@@ -214,7 +213,7 @@ export const SourceCitationTag: React.FC<{
                       {isReadable && (
                         <button
                           type="button"
-                          className={cx(inspectorStyles, 'source-action-btn')}
+                          className={cx(citationStyles, 'source-action-btn')}
                           onClick={(e) => {
                             e.stopPropagation();
                             openSourceReader({ sourceId: ref.source_id, eventId });
@@ -226,7 +225,7 @@ export const SourceCitationTag: React.FC<{
                       {ref.scan_url && (
                         <button
                           type="button"
-                          className={cx(inspectorStyles, 'source-action-btn')}
+                          className={cx(citationStyles, 'source-action-btn')}
                           onClick={(e) => {
                             e.stopPropagation();
                             setActiveScan({
@@ -244,7 +243,7 @@ export const SourceCitationTag: React.FC<{
                           href={cit.url}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className={cx(inspectorStyles, 'source-action-btn')}
+                          className={cx(citationStyles, 'source-action-btn')}
                           onClick={(e) => {
                             e.stopPropagation();
                           }}
@@ -259,7 +258,7 @@ export const SourceCitationTag: React.FC<{
             </div>
           )}
           {alternateDates.length > 0 && (
-            <div className={cx(inspectorStyles, 'citation-conflicts-box')}>
+            <div className={cx(citationStyles, 'citation-conflicts-box')}>
               <strong>Preserved Date Discrepancies</strong>
               <ul>
                 {alternateDates.map((alt) => {
@@ -291,7 +290,7 @@ export const SourceCitationTag: React.FC<{
             </div>
           )}
           {alternatePlaces.length > 0 && (
-            <div className={cx(inspectorStyles, 'citation-conflicts-box')}>
+            <div className={cx(citationStyles, 'citation-conflicts-box')}>
               <strong>Preserved Place Discrepancies</strong>
               <ul>
                 {alternatePlaces.map((alt) => {
@@ -322,7 +321,7 @@ export const SourceCitationTag: React.FC<{
             </div>
           )}
           {factConflicts.length > 0 && (
-            <div className={cx(inspectorStyles, 'citation-conflicts-box')}>
+            <div className={cx(citationStyles, 'citation-conflicts-box')}>
               <strong>Preserved Fact Discrepancies</strong>
               <ul>
                 {factConflicts.map((alt) => {
@@ -372,8 +371,8 @@ export const SourceCitationTag: React.FC<{
               setActiveScan(null);
             }}
           />
-          <div className={cx(readerStyles, 'scan-lightbox-card')}>
-            <div className={cx(readerStyles, 'scan-lightbox-header')}>
+          <div className={cx(overlayStyles, 'scan-lightbox-card')}>
+            <div className={cx(overlayStyles, 'scan-lightbox-header')}>
               <strong style={{ fontFamily: 'var(--font-mono)', fontSize: '0.8rem' }}>
                 RECORD SCAN · {activeScan.title}
               </strong>
@@ -388,11 +387,11 @@ export const SourceCitationTag: React.FC<{
                 Close [Esc]
               </button>
             </div>
-            <div className={cx(readerStyles, 'scan-lightbox-scroll')}>
+            <div className={cx(overlayStyles, 'scan-lightbox-scroll')}>
               <img
                 src={activeScan.url}
                 alt={activeScan.title}
-                className={cx(readerStyles, 'scan-page-img-full')}
+                className={cx(overlayStyles, 'scan-page-img-full')}
               />
               {activeScan.citation && (
                 <p

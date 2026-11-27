@@ -11,6 +11,7 @@ import controlStyles from '../../styles/Controls.module.css';
 import overlayStyles from '../../styles/Overlays.module.css';
 import {
   buildPersonCreatePayload,
+  ENTITY_CREATE_FORM_REGISTRY,
   LinkExistingRelativeFields,
   PersonCreateFields,
   resolveCreateFormRegistry,
@@ -60,7 +61,17 @@ export const CreateEntityModal: React.FC<CreateEntityModalProps> = ({
   const anchorId = relativeContext?.anchorPersonId ?? null;
   const anchorRelation = relativeContext?.relation ?? null;
 
-  const [kind, setKind] = useState<EntityType>(defaultKind);
+  const resolveSupportedKind = useCallback(
+    (requested: EntityType): EntityType => {
+      if (createRegistry.entries[requested]) {
+        return requested;
+      }
+      return createRegistry.order[0] ?? 'person';
+    },
+    [createRegistry]
+  );
+
+  const [kind, setKind] = useState<EntityType>(() => resolveSupportedKind(defaultKind));
   const [relativeTab, setRelativeTab] = useState<RelativeModalTab>('create_new');
   const [summary, setSummary] = useState('');
   const [hasPrimarySource, setHasPrimarySource] = useState(true);
@@ -82,13 +93,13 @@ export const CreateEntityModal: React.FC<CreateEntityModalProps> = ({
     if (!open) {
       return;
     }
-    setKind(defaultKind);
+    setKind(resolveSupportedKind(defaultKind));
     setRelativeTab('create_new');
     setSummary('');
     setHasPrimarySource(true);
     setError(null);
     setDraft(createInitialEntityDraft(defaultPersonId, anchorRelation));
-  }, [open, defaultKind, defaultPersonId, anchorId, anchorRelation]);
+  }, [open, defaultKind, defaultPersonId, anchorId, anchorRelation, resolveSupportedKind]);
 
   const updateDraft = useCallback(
     <K extends keyof CreateEntityDraft>(key: K, value: CreateEntityDraft[K]): void => {
@@ -123,7 +134,8 @@ export const CreateEntityModal: React.FC<CreateEntityModalProps> = ({
   }
 
   const relativeSpec = relativeContext ? RELATIVE_RELATION_SPECS[relativeContext.relation] : null;
-  const activeCreateEntry = createRegistry.entries[kind] ?? createRegistry.entries.person!;
+  const resolvedKind = resolveSupportedKind(kind);
+  const activeCreateEntry = createRegistry.entries[resolvedKind] ?? ENTITY_CREATE_FORM_REGISTRY.person;
   const ActiveFields = activeCreateEntry.Fields;
 
   const handleSubmit = async (e: React.FormEvent): Promise<void> => {
@@ -218,15 +230,16 @@ export const CreateEntityModal: React.FC<CreateEntityModalProps> = ({
 
     setSubmitting(true);
     setError(null);
+    const targetKind = activeCreateEntry.kind;
     try {
-      const res = await dataSource.createEntity(kind, {
+      const res = await dataSource.createEntity(targetKind, {
         entity_id: built.entityId,
         data: built.payload,
         summary: trimmedSummary,
         has_primary_source: hasPrimarySource,
       });
       reloadArchive();
-      onCreated?.(kind, res.entity);
+      onCreated?.(targetKind, res.entity);
       onClose();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -311,7 +324,7 @@ export const CreateEntityModal: React.FC<CreateEntityModalProps> = ({
             role="tablist"
             aria-label="Record type to create"
             onKeyDown={(event) => {
-              handleTablistKeyDown(event, createRegistry.order, kind, (next) => {
+              handleTablistKeyDown(event, createRegistry.order, resolvedKind, (next) => {
                 setKind(next);
                 setError(null);
               });
@@ -327,9 +340,9 @@ export const CreateEntityModal: React.FC<CreateEntityModalProps> = ({
                   key={id}
                   type="button"
                   role="tab"
-                  tabIndex={kind === id ? 0 : -1}
-                  aria-selected={kind === id}
-                  className={cx(controlStyles, `pill-btn ${kind === id ? 'active' : ''}`)}
+                  tabIndex={resolvedKind === id ? 0 : -1}
+                  aria-selected={resolvedKind === id}
+                  className={cx(controlStyles, `pill-btn ${resolvedKind === id ? 'active' : ''}`)}
                   onClick={() => {
                     setKind(id);
                     setError(null);

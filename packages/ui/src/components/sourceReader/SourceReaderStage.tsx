@@ -1,6 +1,6 @@
 import type { ReadingDocument, ReadingPage } from '@kinloom/core';
 import type React from 'react';
-import { cx, joinClasses } from '../../lib/cx.js';
+import { cx } from '../../lib/cx.js';
 import controlStyles from '../../styles/Controls.module.css';
 import overlayStyles from '../../styles/Overlays.module.css';
 import readerStyles from '../SourceReaderDrawer.module.css';
@@ -102,7 +102,7 @@ export const SourceReaderScanZoomDialog: React.FC<{
       aria-label="Close full page scan view"
       onClick={onClose}
     />
-    <div className={joinClasses(cx(overlayStyles, 'lightbox-card'), cx(readerStyles, 'scan-lightbox-card'))}>
+    <div className={cx(overlayStyles, 'lightbox-card scan-lightbox-card')}>
       <div
         style={{
           display: 'flex',
@@ -124,11 +124,11 @@ export const SourceReaderScanZoomDialog: React.FC<{
           Close [Esc]
         </button>
       </div>
-      <div className={cx(readerStyles, 'scan-lightbox-scroll')}>
+      <div className={cx(overlayStyles, 'scan-lightbox-scroll')}>
         <img
           src={scanSrc}
           alt={`High-resolution scan of ${pageLabel}`}
-          className={cx(readerStyles, 'scan-page-img-full')}
+          className={cx(overlayStyles, 'scan-page-img-full')}
         />
       </div>
     </div>

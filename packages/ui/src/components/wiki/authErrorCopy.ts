@@ -1,4 +1,4 @@
-import { ApiClientError } from '../../adapters/httpWikiDataSource.js';
+import { isArchiveApiError } from '@kinloom/core';
 import {
   type AuthErrorCode,
   type AuthErrorTone,
@@ -22,7 +22,7 @@ export function resolveClientAuthError(
   provider: AuthProviderKind,
   hasGoogleProvider: boolean
 ): AuthFeedback {
-  if (error instanceof ApiClientError) {
+  if (isArchiveApiError(error)) {
     return resolveAuthFeedback({
       code: error.code,
       provider,

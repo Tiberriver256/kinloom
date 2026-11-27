@@ -12,6 +12,7 @@ import { cx } from '../lib/cx.js';
 import { KINLOOM_VOCABULARY } from '../lib/vocabulary.js';
 import { PluginSlot } from '../plugins/PluginContext.js';
 import controlStyles from '../styles/Controls.module.css';
+import layoutStyles from '../styles/Layout.module.css';
 import { EvidenceDiscrepanciesTab } from './evidence/EvidenceDiscrepanciesTab.js';
 import { EvidenceMediaLightbox, EvidenceMediaTab } from './evidence/EvidenceMediaTab.js';
 import { EvidenceSourcesTab } from './evidence/EvidenceSourcesTab.js';
@@ -27,7 +28,6 @@ import {
   type MediaKindFilter,
   parseInitialEvidenceTab,
 } from './evidence/evidenceViewModel.js';
-import indexStyles from './IndexPage.module.css';
 
 export const EvidencePage: React.FC = () => {
   const { bundle, baseUrl, peopleById, sourcesById, readableSourceIds, loadMediaChecklist, loading } =
@@ -90,7 +90,7 @@ export const EvidencePage: React.FC = () => {
     return (
       <div>
         <ExplorerTopBar />
-        <main id="main-content" className={cx(indexStyles, 'index-page')}>
+        <main id="main-content" className={cx(layoutStyles, 'index-page')}>
           {KINLOOM_VOCABULARY.evidence.loading}
         </main>
       </div>
@@ -100,8 +100,8 @@ export const EvidencePage: React.FC = () => {
   return (
     <div>
       <ExplorerTopBar />
-      <main id="main-content" className={cx(controlStyles, 'place-page')}>
-        <section className={cx(controlStyles, 'wire-banner')} style={{ marginBottom: 18 }}>
+      <main id="main-content" className={cx(layoutStyles, 'place-page')}>
+        <section className={cx(layoutStyles, 'wire-banner')} style={{ marginBottom: 18 }}>
           <div>
             <h1>{KINLOOM_VOCABULARY.evidence.heading}</h1>
             <p>

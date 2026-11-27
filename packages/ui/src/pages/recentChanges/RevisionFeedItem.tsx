@@ -8,6 +8,7 @@ import wikiPanelStyles from '../../components/wiki/WikiPanels.module.css';
 import { cx, joinClasses } from '../../lib/cx.js';
 import { formatArchivalTimestamp } from '../../lib/formatTimestamp.js';
 import controlStyles from '../../styles/Controls.module.css';
+import layoutStyles from '../../styles/Layout.module.css';
 import type { PendingRevertConfirm, ResolvedEntityLink } from './recentChangesViewModel.js';
 
 export const RevisionEntityRef: React.FC<{
@@ -64,7 +65,7 @@ export const RevisionFeedItem: React.FC<{
   return (
     <article
       className={joinClasses(
-        standalone && cx(controlStyles, 'place-map-box'),
+        standalone && cx(layoutStyles, 'place-map-box'),
         cx(wikiPanelStyles, 'wiki-revision-item')
       )}
     >

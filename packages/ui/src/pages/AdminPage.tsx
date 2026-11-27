@@ -16,6 +16,7 @@ import wikiPanelStyles from '../components/wiki/WikiPanels.module.css';
 import { useArchiveData } from '../context/ArchiveDataContext.js';
 import { cx } from '../lib/cx.js';
 import controlStyles from '../styles/Controls.module.css';
+import layoutStyles from '../styles/Layout.module.css';
 import { AgentTokensSection } from './admin/AgentTokensSection.js';
 import type { AdminConfirmState } from './admin/adminHelpers.js';
 import { InvitesSection } from './admin/InvitesSection.js';
@@ -207,8 +208,8 @@ export const AdminPage: React.FC<AdminPageProps> = ({ adminClient }) => {
     return (
       <div>
         <ExplorerTopBar />
-        <main id="main-content" className={cx(controlStyles, 'place-page')}>
-          <section className={cx(controlStyles, 'place-map-box')}>
+        <main id="main-content" className={cx(layoutStyles, 'place-page')}>
+          <section className={cx(layoutStyles, 'place-map-box')}>
             <h1>Site Administration</h1>
             <p className={cx(controlStyles, 'empty-ring-note')}>
               Administrator permissions are required to manage members, invite links, and agent tokens.
@@ -223,8 +224,8 @@ export const AdminPage: React.FC<AdminPageProps> = ({ adminClient }) => {
   return (
     <div>
       <ExplorerTopBar />
-      <main id="main-content" className={cx(controlStyles, 'place-page')}>
-        <section className={cx(controlStyles, 'wire-banner')} style={{ marginBottom: 18 }}>
+      <main id="main-content" className={cx(layoutStyles, 'place-page')}>
+        <section className={cx(layoutStyles, 'wire-banner')} style={{ marginBottom: 18 }}>
           <div>
             <h1>Site Administration</h1>
             <p>

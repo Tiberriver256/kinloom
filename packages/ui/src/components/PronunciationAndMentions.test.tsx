@@ -13,6 +13,7 @@ import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { createHttpWikiDataSource } from '../adapters/httpWikiDataSource.js';
 import { useArchiveData } from '../context/ArchiveDataContext.js';
 import { ArchiveProvider } from '../context/ArchiveProvider.js';
 import { PersonPage } from '../pages/PersonPage.js';
@@ -611,9 +612,19 @@ describe('EntityEditDrawer pronunciation editing and audio generation', () => {
     const bundle = buildTestBundle();
     const savedSnapshots: EntityPayload[] = [];
 
+    const fetchMock = vi.fn(
+      async () =>
+        new Response(JSON.stringify({ audio_url: '/audio/generated-leiden.mp3' }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        })
+    );
+    const httpAdapter = createHttpWikiDataSource({ fetchImpl: fetchMock });
+
     const dataSource: ArchiveDataSource = {
       loadArchive: async () => ({ bundle, etag: null, notModified: false }),
       loadReadings: async () => null,
+      generatePronunciationAudio: (input, options) => httpAdapter.generatePronunciationAudio(input, options),
       updateEntity: async (_type, _id, input) => {
         savedSnapshots.push(input.data);
         return {
@@ -640,15 +651,6 @@ describe('EntityEditDrawer pronunciation editing and audio generation', () => {
         };
       },
     };
-
-    const fetchMock = vi.fn(
-      async () =>
-        new Response(JSON.stringify({ audio_url: '/audio/generated-leiden.mp3' }), {
-          status: 200,
-          headers: { 'Content-Type': 'application/json' },
-        })
-    );
-    vi.stubGlobal('fetch', fetchMock);
 
     const { container, unmount } = renderIntoDom(
       <ArchiveProvider siteConfig={TEST_SITE_CONFIG} initialBundle={bundle} dataSource={dataSource}>
@@ -882,7 +884,13 @@ describe('EntityEditDrawer pronunciation editing and audio generation', () => {
         headers: { 'Content-Type': 'application/json' },
       });
     });
-    vi.stubGlobal('fetch', fetchMock);
+    const httpAdapter = createHttpWikiDataSource({ fetchImpl: fetchMock });
+    const dataSource: ArchiveDataSource = {
+      loadArchive: async () => ({ bundle, etag: null, notModified: false }),
+      loadReadings: async () => null,
+      loadPronunciations: (opts) => httpAdapter.loadPronunciations(opts),
+      upsertPronunciationTerm: (term, entry, opts) => httpAdapter.upsertPronunciationTerm(term, entry, opts),
+    };
 
     // biome-ignore lint/correctness/noComponentHookFactories: isolated test probe component
     const LexiconProbe: React.FC = () => {
@@ -895,7 +903,7 @@ describe('EntityEditDrawer pronunciation editing and audio generation', () => {
     };
 
     const { container, unmount } = renderIntoDom(
-      <ArchiveProvider siteConfig={sharedSiteConfig} initialBundle={bundle}>
+      <ArchiveProvider siteConfig={sharedSiteConfig} initialBundle={bundle} dataSource={dataSource}>
         <LexiconProbe />
         <EntityEditDrawer
           open
@@ -963,7 +971,7 @@ describe('EntityEditDrawer pronunciation editing and audio generation', () => {
       ([url, init]) => url === '/api/pronunciations/Mercer' && init?.method === 'PUT'
     );
     expect(putCall).toBeDefined();
-    expect(putCall![1]?.credentials).toBe('include');
+    expect(putCall![1]?.credentials).toBe('same-origin');
     expect(JSON.parse(String(putCall![1]?.body))).toEqual({
       phonetic: 'MUR-ser',
       ipa: '/ˈmɜːr.sər/',
@@ -1186,13 +1194,20 @@ describe('Live-lexicon partial-update merge regression (PersonPage + EntityEditD
       }
       return new Response('{}', { status: 404 });
     });
-    vi.stubGlobal('fetch', fetchMock);
+    const httpAdapter = createHttpWikiDataSource({ fetchImpl: fetchMock });
+    const dataSource: ArchiveDataSource = {
+      loadArchive: async () => ({ bundle, etag: null, notModified: false }),
+      loadReadings: async () => null,
+      loadPronunciations: (opts) => httpAdapter.loadPronunciations(opts),
+      upsertPronunciationTerm: (term, entry, opts) => httpAdapter.upsertPronunciationTerm(term, entry, opts),
+    };
 
     const { container, unmount } = renderIntoDom(
       <MemoryRouter initialEntries={['/person/thomas-mercer']}>
         <ArchiveProvider
           siteConfig={configWithSharedSurname}
           initialBundle={bundle}
+          dataSource={dataSource}
           capabilities={{ canEdit: true }}
         >
           <Routes>

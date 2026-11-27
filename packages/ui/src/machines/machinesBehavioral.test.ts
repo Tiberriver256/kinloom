@@ -7,18 +7,15 @@ import type {
 } from '@kinloom/core';
 import { asRevisionId } from '@kinloom/core';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { createActor, waitFor } from 'xstate';
+import { createActor, fromPromise, waitFor } from 'xstate';
 import { ApiClientError } from '../adapters/httpWikiDataSource.js';
-import { authSessionMachine, deriveSessionFromAuthSnapshot } from './authSessionMachine.js';
+import {
+  authSessionMachine,
+  deriveSessionFromAuthSnapshot,
+  type VerifyOutcome,
+} from './authSessionMachine.js';
 import { entityEditorMachine } from './entityEditorMachine.js';
 import { mediaUploadMachine } from './mediaUploadMachine.js';
-
-function jsonResponse(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { 'content-type': 'application/json' },
-  });
-}
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -92,44 +89,94 @@ describe('authSessionMachine behavioral transitions', () => {
       actor.stop();
     }
 
-    // Fetch-based hydration (no dataSource): non-OK and network failure fall back to anonymous
-    vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(jsonResponse({}, 500));
+    // Missing or failing dataSource hydration falls back cleanly to anonymous
+    const failingDs = {
+      getSession: async () => {
+        throw new Error('offline');
+      },
+    } as unknown as ArchiveDataSource;
+
     const a1 = createActor(authSessionMachine, { input: {} }).start();
     const s1 = await waitFor(a1, (s) => s.matches('anonymous'));
     expect(s1.matches('anonymous')).toBe(true);
     a1.stop();
 
-    vi.spyOn(globalThis, 'fetch').mockRejectedValueOnce(new Error('offline'));
-    const a2 = createActor(authSessionMachine, { input: {} }).start();
+    const a2 = createActor(authSessionMachine, { input: { dataSource: failingDs } }).start();
     const s2 = await waitFor(a2, (s) => s.matches('anonymous'));
     expect(s2.matches('anonymous')).toBe(true);
     a2.stop();
 
-    vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
-      jsonResponse({
-        session: {
+    // Synchronous initialSession hydration skips async invoke
+    const a3 = createActor(authSessionMachine, {
+      input: {
+        initialSession: {
           authenticated: true,
           principal_kind: 'user',
-          email: 'fetch@example.test',
-          displayName: 'Fetch Admin',
+          email: 'initial@example.test',
+          displayName: 'Initial Admin',
           role: 'admin',
         },
-      })
-    );
-    const a3 = createActor(authSessionMachine, { input: {} }).start();
-    const s3 = await waitFor(a3, (s) => s.matches({ authenticated: 'admin' }));
-    expect(s3.context.email).toBe('fetch@example.test');
+      },
+    }).start();
+    expect(a3.getSnapshot().matches({ authenticated: 'admin' })).toBe(true);
+    expect(a3.getSnapshot().context.email).toBe('initial@example.test');
     a3.stop();
   });
 
   it('handles Google sign-in, magic link request/verify/cancel/resend, invite auto-enroll, revocation, and session expiry', async () => {
-    const fetchSpy = vi.spyOn(globalThis, 'fetch');
-    // 1. Initial hydrate -> anonymous
-    fetchSpy.mockResolvedValueOnce(
-      jsonResponse({ session: { authenticated: false, principal_kind: 'anonymous' } })
-    );
+    const googleQueue: Array<() => Promise<VerifyOutcome>> = [
+      async () => ({ kind: 'invalid', message: 'This email is not enrolled in this family archive.' }),
+      async () => {
+        throw new Error('HTTP 500 verifying Google sign-in');
+      },
+      async () => ({
+        kind: 'verified',
+        isMember: false,
+        role: 'editor',
+        email: 'cousin@example.test',
+        displayName: 'Cousin Mercer',
+      }),
+    ];
+    let magicLinkFailsOnce = true;
+    const ds = {
+      getSession: async () => ({
+        session: { authenticated: false, principal_kind: 'anonymous' as const },
+        capabilities: {
+          canEdit: false,
+          canUploadMedia: false,
+          hasRevisionHistory: false,
+          hasTalk: false,
+          canManageSite: false,
+        },
+      }),
+      requestMagicLink: async () => {
+        if (magicLinkFailsOnce) {
+          magicLinkFailsOnce = false;
+          throw new Error('HTTP 503 requesting magic link');
+        }
+        return { sent: true };
+      },
+    } as unknown as ArchiveDataSource;
 
-    const actor = createActor(authSessionMachine, { input: {} }).start();
+    const testMachine = authSessionMachine.provide({
+      actors: {
+        signInWithGoogle: fromPromise<VerifyOutcome, { inviteToken: string | null }>(async () => {
+          const next = googleQueue.shift();
+          return next ? next() : { kind: 'invalid', message: 'Unexpected call' };
+        }),
+        verifyMagicLink: fromPromise<VerifyOutcome, { token: string; inviteToken: string | null }>(
+          async () => ({
+            kind: 'verified',
+            isMember: true,
+            role: 'admin',
+            email: 'admin@example.test',
+            displayName: 'Admin Alder',
+          })
+        ),
+      },
+    });
+
+    const actor = createActor(testMachine, { input: { dataSource: ds } }).start();
     await waitFor(actor, (s) => s.matches('anonymous'));
 
     // Open revoked invite -> inviteRevoked -> dismiss -> anonymous
@@ -142,28 +189,17 @@ describe('authSessionMachine behavioral transitions', () => {
     actor.send({ type: 'OPEN_INVITE', token: 'tok-ok', label: 'Cousin Link', revoked: false });
     expect(actor.getSnapshot().matches('readOnlyInvite')).toBe(true);
 
-    // Google sign-in 403 -> returns to readOnlyInvite with error
-    fetchSpy.mockResolvedValueOnce(jsonResponse({}, 403));
+    // Google sign-in invalid -> returns to readOnlyInvite with error
     actor.send({ type: 'SIGN_IN_GOOGLE' });
     let snap = await waitFor(actor, (s) => s.matches('readOnlyInvite'));
     expect(snap.context.authError).toContain('not enrolled');
 
     // Google sign-in 500 error -> returns to readOnlyInvite with error
-    fetchSpy.mockResolvedValueOnce(jsonResponse({}, 500));
     actor.send({ type: 'SIGN_IN_GOOGLE' });
     snap = await waitFor(actor, (s) => s.matches('readOnlyInvite'));
     expect(snap.context.authError).toContain('500');
 
     // Google sign-in auto-enrolls via invite -> authenticated.editor
-    fetchSpy.mockResolvedValueOnce(
-      jsonResponse({
-        kind: 'verified',
-        isMember: false,
-        role: 'editor',
-        email: 'cousin@example.test',
-        displayName: 'Cousin Mercer',
-      })
-    );
     actor.send({ type: 'SIGN_IN_GOOGLE' });
     snap = await waitFor(actor, (s) => s.matches({ authenticated: 'editor' }));
     expect(snap.context.autoEnrolledViaInvite).toBe(true);
@@ -175,17 +211,14 @@ describe('authSessionMachine behavioral transitions', () => {
     expect(actor.getSnapshot().matches('anonymous')).toBe(true);
 
     // Magic link request failure -> anonymous with error
-    fetchSpy.mockResolvedValueOnce(jsonResponse({}, 503));
     actor.send({ type: 'REQUEST_MAGIC_LINK', email: 'henry@example.test' });
     snap = await waitFor(actor, (s) => s.matches('anonymous'));
     expect(snap.context.authError).toContain('503');
 
-    // Magic link request success -> awaitingMagicLinkClick -> resend -> verify invalid -> verify admin
-    fetchSpy.mockResolvedValueOnce(jsonResponse({ ok: true }));
+    // Magic link request success -> awaitingMagicLinkClick -> resend -> cancel -> verify admin
     actor.send({ type: 'REQUEST_MAGIC_LINK', email: 'henry@example.test' });
     await waitFor(actor, (s) => s.matches('awaitingMagicLinkClick'));
 
-    fetchSpy.mockResolvedValueOnce(jsonResponse({ ok: true }));
     actor.send({ type: 'RESEND_MAGIC_LINK', email: 'henry@example.test' });
     await waitFor(actor, (s) => s.matches('awaitingMagicLinkClick'));
 
@@ -194,19 +227,9 @@ describe('authSessionMachine behavioral transitions', () => {
     expect(actor.getSnapshot().matches('anonymous')).toBe(true);
 
     // Request again and verify as admin
-    fetchSpy.mockResolvedValueOnce(jsonResponse({ ok: true }));
     actor.send({ type: 'REQUEST_MAGIC_LINK', email: 'admin@example.test' });
     await waitFor(actor, (s) => s.matches('awaitingMagicLinkClick'));
 
-    fetchSpy.mockResolvedValueOnce(
-      jsonResponse({
-        kind: 'verified',
-        isMember: true,
-        role: 'admin',
-        email: 'admin@example.test',
-        displayName: 'Admin Alder',
-      })
-    );
     actor.send({ type: 'OPEN_MAGIC_LINK', token: 'ml-admin' });
     snap = await waitFor(actor, (s) => s.matches({ authenticated: 'admin' }));
     expect(snap.context.role).toBe('admin');
@@ -218,12 +241,40 @@ describe('authSessionMachine behavioral transitions', () => {
   });
 
   it('handles magic link invalid/revoked responses and invite leave/revocation', async () => {
-    const fetchSpy = vi.spyOn(globalThis, 'fetch');
-    fetchSpy.mockResolvedValueOnce(
-      jsonResponse({ session: { authenticated: false, principal_kind: 'anonymous' } })
-    );
+    const ds = {
+      getSession: async () => ({
+        session: { authenticated: false, principal_kind: 'anonymous' as const },
+        capabilities: {
+          canEdit: false,
+          canUploadMedia: false,
+          hasRevisionHistory: false,
+          hasTalk: false,
+          canManageSite: false,
+        },
+      }),
+      requestMagicLink: async () => ({ sent: true }),
+    } as unknown as ArchiveDataSource;
 
-    const actor = createActor(authSessionMachine, { input: {} }).start();
+    const testMachine = authSessionMachine.provide({
+      actors: {
+        verifyMagicLink: fromPromise<VerifyOutcome, { token: string; inviteToken: string | null }>(
+          async ({ input }) => {
+            if (input.token === 'expired') {
+              return { kind: 'invalid', message: 'Magic link is invalid or expired.' };
+            }
+            return {
+              kind: 'verified',
+              isMember: true,
+              role: 'editor',
+              email: 'ed@example.test',
+              displayName: 'Ed Alder',
+            };
+          }
+        ),
+      },
+    });
+
+    const actor = createActor(testMachine, { input: { dataSource: ds } }).start();
     await waitFor(actor, (s) => s.matches('anonymous'));
 
     // Open invite then leave
@@ -237,29 +288,17 @@ describe('authSessionMachine behavioral transitions', () => {
     expect(actor.getSnapshot().matches('inviteRevoked')).toBe(true);
     actor.send({ type: 'DISMISS_INVITE' });
 
-    // Magic link verify returns 401 -> invalid -> anonymous
-    fetchSpy.mockResolvedValueOnce(jsonResponse({ ok: true }));
+    // Magic link verify returns invalid -> anonymous
     actor.send({ type: 'REQUEST_MAGIC_LINK', email: 'ed@example.test' });
     await waitFor(actor, (s) => s.matches('awaitingMagicLinkClick'));
 
-    fetchSpy.mockResolvedValueOnce(jsonResponse({}, 401));
     actor.send({ type: 'OPEN_MAGIC_LINK', token: 'expired' });
     const snap = await waitFor(actor, (s) => s.matches('anonymous'));
     expect(snap.context.authError).toContain('expired');
 
     // Magic link verify returns member editor
-    fetchSpy.mockResolvedValueOnce(jsonResponse({ ok: true }));
     actor.send({ type: 'REQUEST_MAGIC_LINK', email: 'ed@example.test' });
     await waitFor(actor, (s) => s.matches('awaitingMagicLinkClick'));
-    fetchSpy.mockResolvedValueOnce(
-      jsonResponse({
-        kind: 'verified',
-        isMember: true,
-        role: 'editor',
-        email: 'ed@example.test',
-        displayName: 'Ed Alder',
-      })
-    );
     actor.send({ type: 'OPEN_MAGIC_LINK', token: 'valid-ed' });
     const edSnap = await waitFor(actor, (s) => s.matches({ authenticated: 'editor' }));
     expect(edSnap.context.email).toBe('ed@example.test');
@@ -387,7 +426,7 @@ describe('entityEditorMachine behavioral transitions', () => {
     actor.stop();
   });
 
-  it('exercises fetch-based save path for 200 OK and 409 conflict + ACCEPT_SERVER', async () => {
+  it('exercises ArchiveDataSource save path for 409 conflict + ACCEPT_SERVER and 200 OK', async () => {
     const basePerson = {
       id: 'per_clara',
       slug: 'clara-alder',
@@ -399,27 +438,35 @@ describe('entityEditorMachine behavioral transitions', () => {
       lineage_group: 'ancestor',
     };
 
-    const fetchSpy = vi.spyOn(globalThis, 'fetch');
-    fetchSpy.mockResolvedValueOnce(
-      jsonResponse(
-        {
-          error: {
-            details: {
-              entity_type: 'person',
+    let saveAttempt = 0;
+    const ds = {
+      updateEntity: async () => {
+        saveAttempt += 1;
+        if (saveAttempt === 1) {
+          return {
+            ok: false as const,
+            conflict: {
+              kind: 'conflict' as const,
+              entity_type: 'person' as const,
               entity_id: 'per_clara',
-              expected_parent_revision_id: 1,
-              server_revision_id: 4,
+              expected_parent_revision_id: asRevisionId(1),
+              server_revision_id: asRevisionId(4),
               server_entity: { ...basePerson, full_name: 'Clara M. Alder' },
               server_deleted_at: null,
               last_author_name: 'Founder',
               last_updated_at: '2026-06-02T00:00:00Z',
-              diff: [],
+              diff: { fields: [], addedCount: 0, removedCount: 0, changedCount: 1, hasChanges: true },
             },
-          },
-        },
-        409
-      )
-    );
+          };
+        }
+        return {
+          ok: true as const,
+          entity: { ...basePerson, full_name: 'Clara M. Alder', death_edtf: '1940' },
+          revision: { revision_id: asRevisionId(5) } as unknown as RevisionRecord,
+          etag: '"r5"',
+        };
+      },
+    } as unknown as ArchiveDataSource;
 
     const actor = createActor(entityEditorMachine, {
       input: {
@@ -427,6 +474,7 @@ describe('entityEditorMachine behavioral transitions', () => {
         entityId: 'per_clara',
         revisionId: 1,
         snapshot: basePerson,
+        dataSource: ds,
       },
     }).start();
 
@@ -442,14 +490,6 @@ describe('entityEditorMachine behavioral transitions', () => {
     expect(actor.getSnapshot().context.baseRevisionId).toBe(4);
     expect(actor.getSnapshot().context.baseSnapshot.full_name).toBe('Clara M. Alder');
 
-    // Now test fetch 200 OK save
-    fetchSpy.mockResolvedValueOnce(
-      jsonResponse({
-        entity: { ...basePerson, full_name: 'Clara M. Alder', death_edtf: '1940' },
-        revision: { revision_id: 5 },
-        etag: '"r5"',
-      })
-    );
     actor.send({ type: 'START_EDIT' });
     actor.send({ type: 'EDIT_FIELD', draft: { ...basePerson, death_edtf: '1940' } });
     actor.send({ type: 'SET_SUMMARY', summary: 'Added death year' });
@@ -532,14 +572,34 @@ describe('mediaUploadMachine behavioral transitions', () => {
     actor.stop();
   });
 
-  it('exercises fetch-based upload + attach actors (200 OK and 422 living blocked)', async () => {
+  it('exercises structural ArchiveApiErrorShape 422 living-block and missing-dataSource rejection in mediaUploadMachine', async () => {
     const pngFile = new File([new Uint8Array([1, 2, 3, 4])], 'mill.png', { type: 'image/png' });
-    const fetchSpy = vi.spyOn(globalThis, 'fetch');
-    fetchSpy
-      .mockResolvedValueOnce(jsonResponse({ r2Key: 'media/mill.png', url: '/media/mill.png' }))
-      .mockResolvedValueOnce(jsonResponse({ media_id: 'med_fetch_1', target_became_living: false }));
+    let call = 0;
+    const ds = {
+      uploadMedia: async () => {
+        call += 1;
+        if (call === 1) {
+          return {
+            media: {
+              id: 'med_port_1',
+              kind: 'family_photo',
+              file: '/media/mill.png',
+              caption: 'Mill',
+            } as unknown as MediaItem,
+            url: '/media/mill.png',
+            revision: { revision_id: asRevisionId(3) } as unknown as RevisionRecord,
+            etag: '"r3"',
+          };
+        }
+        throw {
+          status: 422,
+          code: 'PRIVACY_VIOLATION',
+          message: 'Living person blocked',
+        };
+      },
+    } as unknown as ArchiveDataSource;
 
-    const actor = createActor(mediaUploadMachine, { input: {} }).start();
+    const actor = createActor(mediaUploadMachine, { input: { dataSource: ds } }).start();
     actor.send({
       type: 'SELECT_FILE',
       file: pngFile,
@@ -547,10 +607,8 @@ describe('mediaUploadMachine behavioral transitions', () => {
       targetHasLiving: false,
     });
     const snap = await waitFor(actor, (s) => s.matches('complete'));
-    expect(snap.context.mediaId).toBe('med_fetch_1');
+    expect(snap.context.mediaId).toBe('med_port_1');
 
-    // Fetch 422 on upload
-    fetchSpy.mockResolvedValueOnce(jsonResponse({ error: { message: 'Living person blocked' } }, 422));
     actor.send({
       type: 'SELECT_FILE',
       file: pngFile,

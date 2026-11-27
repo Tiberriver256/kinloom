@@ -59,76 +59,33 @@ export function readVerifyOutput(event: unknown): VerifyOutcome | null {
 
 export const authSessionActors = {
   hydrateSession: fromPromise<HydrateOutcome, { inviteToken: string | null; dataSource?: ArchiveDataSource }>(
-    async ({ input, signal }) => {
-      if (input.dataSource?.getSession) {
-        const res = await input.dataSource.getSession();
-        return hydrateOutcomeFromSession(res.session);
-      }
-      const res = await fetch('/api/auth/me', {
-        credentials: 'same-origin',
-        headers: { accept: 'application/json' },
-        signal,
-      });
-      if (!res.ok) {
+    async ({ input }) => {
+      if (!input.dataSource?.getSession) {
         return { kind: 'anonymous' };
       }
-      const data = (await res.json()) as { session?: ArchiveSessionState };
-      if (!data.session) {
-        return { kind: 'anonymous' };
-      }
-      return hydrateOutcomeFromSession(data.session);
+      const res = await input.dataSource.getSession();
+      return hydrateOutcomeFromSession(res.session);
     }
   ),
-  signInWithGoogle: fromPromise<VerifyOutcome, { inviteToken: string | null }>(async ({ input, signal }) => {
-    const res = await fetch('/api/auth/google/verify', {
-      method: 'POST',
-      credentials: 'same-origin',
-      headers: { 'content-type': 'application/json', accept: 'application/json' },
-      body: JSON.stringify({ invite_token: input.inviteToken }),
-      signal,
-    });
-    if (res.status === 403) {
-      return { kind: 'invalid', message: 'This email is not enrolled in this family archive.' };
-    }
-    if (!res.ok) {
-      throw new Error(`HTTP ${res.status} verifying Google sign-in`);
-    }
-    return (await res.json()) as VerifyOutcome;
-  }),
+  signInWithGoogle: fromPromise<VerifyOutcome, { inviteToken: string | null }>(async () => ({
+    kind: 'invalid',
+    message: 'Google sign-in requires browser redirect or an injected auth actor.',
+  })),
   requestMagicLink: fromPromise<
     void,
     { email: string; inviteToken: string | null; dataSource?: ArchiveDataSource }
-  >(async ({ input, signal }) => {
-    if (input.dataSource?.requestMagicLink) {
-      await input.dataSource.requestMagicLink(input.email);
-      return;
+  >(async ({ input }) => {
+    if (!input.dataSource?.requestMagicLink) {
+      throw {
+        status: 503,
+        code: 'EMAIL_SENDER_UNCONFIGURED',
+        message: 'Email sign-in is not configured for this archive.',
+      };
     }
-    const res = await fetch('/api/auth/magic-link/request', {
-      method: 'POST',
-      credentials: 'same-origin',
-      headers: { 'content-type': 'application/json', accept: 'application/json' },
-      body: JSON.stringify({ email: input.email, invite_token: input.inviteToken }),
-      signal,
-    });
-    if (!res.ok) {
-      throw new Error(`HTTP ${res.status} requesting magic link`);
-    }
+    await input.dataSource.requestMagicLink(input.email);
   }),
-  verifyMagicLink: fromPromise<VerifyOutcome, { token: string; inviteToken: string | null }>(
-    async ({ input, signal }) => {
-      const res = await fetch(`/api/auth/magic-link/verify?token=${encodeURIComponent(input.token)}`, {
-        method: 'GET',
-        credentials: 'same-origin',
-        headers: { accept: 'application/json' },
-        signal,
-      });
-      if (res.status === 403) {
-        return { kind: 'invalid', message: 'This email is not enrolled in this family archive.' };
-      }
-      if (!res.ok) {
-        return { kind: 'invalid', message: 'Magic link is invalid or expired.' };
-      }
-      return (await res.json()) as VerifyOutcome;
-    }
-  ),
+  verifyMagicLink: fromPromise<VerifyOutcome, { token: string; inviteToken: string | null }>(async () => ({
+    kind: 'invalid',
+    message: 'Magic link verification requires browser navigation or an injected auth actor.',
+  })),
 };

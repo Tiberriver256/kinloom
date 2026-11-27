@@ -7,6 +7,7 @@ import milestoneStyles from '../../components/MilestoneStoryCard.module.css';
 import { cx } from '../../lib/cx.js';
 import { KINLOOM_VOCABULARY } from '../../lib/vocabulary.js';
 import controlStyles from '../../styles/Controls.module.css';
+import layoutStyles from '../../styles/Layout.module.css';
 import placeStyles from '../PlacePage.module.css';
 import type { PlaceOccupancySummary } from './placeViewModel.js';
 
@@ -22,7 +23,7 @@ export const PlaceHistoricalProfileSection: React.FC<{
   }
 
   return (
-    <section className={cx(controlStyles, 'place-map-box place-history-section')}>
+    <section className={cx(layoutStyles, 'place-map-box place-history-section')}>
       <h2 style={{ fontFamily: 'var(--font-serif)', margin: '0 0 12px' }}>Historical Profile</h2>
       <div className={cx(placeStyles, placePhotoSrc ? 'place-history-grid' : undefined)}>
         <div className={'place-history-copy'}>
@@ -73,7 +74,7 @@ export const PlaceOccupancySection: React.FC<{
 }> = ({ occupancyRows }) => {
   const spanYears = Math.max(1, occupancyRows.maxYear - occupancyRows.minYear);
   return (
-    <section className={cx(controlStyles, 'place-map-box')}>
+    <section className={cx(layoutStyles, 'place-map-box')}>
       <div
         style={{
           display: 'flex',
@@ -141,7 +142,7 @@ export const PlaceLocalHistorySection: React.FC<{
   readonly sourcesById: Map<string, SourceRecord>;
   readonly onSelectDecade: (decade: string) => void;
 }> = ({ localRecords, recordDecades, effectiveDecadeFilter, sourcesById, onSelectDecade }) => (
-  <section className={cx(controlStyles, 'place-map-box')}>
+  <section className={cx(layoutStyles, 'place-map-box')}>
     <div
       style={{
         display: 'flex',

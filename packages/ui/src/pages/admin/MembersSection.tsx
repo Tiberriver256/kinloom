@@ -6,6 +6,7 @@ import wikiPanelStyles from '../../components/wiki/WikiPanels.module.css';
 import { cx, joinClasses } from '../../lib/cx.js';
 import { formatArchivalTimestamp } from '../../lib/formatTimestamp.js';
 import controlStyles from '../../styles/Controls.module.css';
+import layoutStyles from '../../styles/Layout.module.css';
 import type { AdminConfirmState } from './adminHelpers.js';
 
 export interface MembersSectionProps {
@@ -27,7 +28,7 @@ export const MembersSection: React.FC<MembersSectionProps> = ({
   onSetPendingConfirm,
   onToggleRole,
 }) => (
-  <section className={cx(controlStyles, 'place-map-box')}>
+  <section className={cx(layoutStyles, 'place-map-box')}>
     <h2 className={cx(wikiPanelStyles, 'wiki-section-title')}>Enrolled Family Members</h2>
     {users.length === 0 ? (
       <p className={cx(controlStyles, 'empty-ring-note')}>No enrolled members found.</p>

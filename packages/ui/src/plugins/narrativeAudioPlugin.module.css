@@ -416,22 +416,6 @@
   .narrative-audio-dock-badge {
     display: none;
   }
-
-  :global(.person-header-identity):global(.has-portrait) :global(.person-portrait-btn) {
-    grid-row: 1 / span 2;
-    align-self: start;
-  }
-
-  :global(.person-header-identity):global(.has-portrait) :global(.person-header-dates) {
-    grid-column: 2;
-    grid-row: 2;
-  }
-
-  :global(.person-header-identity):global(.has-portrait) :global(.person-pronunciation-row) {
-    grid-column: 1 / -1;
-    grid-row: 3;
-    width: 100%;
-  }
 }
 
 @media (pointer: coarse), (max-width: 768px) {

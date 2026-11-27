@@ -13,6 +13,7 @@ import { handleTablistKeyDown } from '../hooks/keyboardNav.js';
 import { cx, joinClasses } from '../lib/cx.js';
 import { formatArchivalTimestamp } from '../lib/formatTimestamp.js';
 import controlStyles from '../styles/Controls.module.css';
+import layoutStyles from '../styles/Layout.module.css';
 import { RevisionFeedItem } from './recentChanges/RevisionFeedItem.js';
 import {
   type AuthorFilter,
@@ -131,8 +132,8 @@ export const RecentChangesPage: React.FC<RecentChangesPageProps> = ({ initialRev
   return (
     <div>
       <ExplorerTopBar />
-      <main id="main-content" className={cx(controlStyles, 'place-page')}>
-        <section className={cx(controlStyles, 'wire-banner')} style={{ marginBottom: 18 }}>
+      <main id="main-content" className={cx(layoutStyles, 'place-page')}>
+        <section className={cx(layoutStyles, 'wire-banner')} style={{ marginBottom: 18 }}>
           <div>
             <h1>Revision History</h1>
             <p>
@@ -211,18 +212,17 @@ export const RecentChangesPage: React.FC<RecentChangesPageProps> = ({ initialRev
 
           <div className={cx(wikiPanelStyles, 'wiki-changes-feed')}>
             {groupedFeed.map((group) => {
-              if (group.batchId) {
+              const groupBatchId = group.batchId;
+              if (groupBatchId) {
                 const first = group.revisions[0];
                 const confirmingBatch =
-                  pendingConfirm?.kind === 'batch' && pendingConfirm.batchId === group.batchId;
+                  pendingConfirm?.kind === 'batch' && pendingConfirm.batchId === groupBatchId;
                 return (
-                  <section key={group.key} className={cx(controlStyles, 'place-map-box wiki-batch-group')}>
+                  <section key={group.key} className={cx(layoutStyles, 'place-map-box wiki-batch-group')}>
                     <div className={cx(wikiPanelStyles, 'wiki-batch-header')}>
                       <div>
                         <div className={cx(wikiPanelStyles, 'wiki-revision-topline')}>
-                          <code className={cx(wikiPanelStyles, 'wiki-batch-chip')}>
-                            Batch {group.batchId}
-                          </code>
+                          <code className={cx(wikiPanelStyles, 'wiki-batch-chip')}>Batch {groupBatchId}</code>
                           <AuthorPill authorType={first.author_type} authorName={first.author_name} />
                           <span className={cx(wikiPanelStyles, 'wiki-panel-meta')}>
                             {group.revisions.length} change{group.revisions.length === 1 ? '' : 's'}
@@ -245,7 +245,7 @@ export const RecentChangesPage: React.FC<RecentChangesPageProps> = ({ initialRev
                           onClick={() => {
                             setPendingConfirm({
                               kind: 'batch',
-                              batchId: group.batchId!,
+                              batchId: groupBatchId,
                               count: group.revisions.length,
                             });
                           }}
@@ -259,8 +259,8 @@ export const RecentChangesPage: React.FC<RecentChangesPageProps> = ({ initialRev
                       <div className={cx(wikiPanelStyles, 'wiki-confirm-inline')} role="alert">
                         <p className={cx(wikiPanelStyles, 'wiki-confirm-inline-text')}>
                           Revert all <strong>{group.revisions.length}</strong> change
-                          {group.revisions.length === 1 ? '' : 's'} in batch <code>{group.batchId}</code>?
-                          This appends new revert revisions without deleting history.
+                          {group.revisions.length === 1 ? '' : 's'} in batch <code>{groupBatchId}</code>? This
+                          appends new revert revisions without deleting history.
                         </p>
                         <div className={cx(wikiPanelStyles, 'wiki-inline-actions')}>
                           <button
@@ -271,7 +271,7 @@ export const RecentChangesPage: React.FC<RecentChangesPageProps> = ({ initialRev
                             )}
                             disabled={busyKey !== null}
                             onClick={() => {
-                              void handleRevertBatch(group.batchId!);
+                              void handleRevertBatch(groupBatchId);
                             }}
                           >
                             Confirm Batch Revert

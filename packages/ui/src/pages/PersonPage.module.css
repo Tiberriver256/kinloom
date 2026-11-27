@@ -157,15 +157,6 @@
   margin-bottom: 2px;
 }
 
-.person-card-media-badge {
-  display: inline-block;
-  padding: 0;
-  color: var(--radar-copresence);
-  font-family: var(--font-mono);
-  font-size: 0.72rem;
-  font-weight: 600;
-}
-
 .person-header-top {
   display: flex;
   justify-content: space-between;
@@ -374,5 +365,23 @@
     padding: 4px 6px;
     min-height: 44px;
     text-align: center;
+  }
+}
+
+@media (max-width: 480px) {
+  .person-header-identity:global(.has-portrait) .person-portrait-btn {
+    grid-row: 1 / span 2;
+    align-self: start;
+  }
+
+  .person-header-identity:global(.has-portrait) .person-header-dates {
+    grid-column: 2;
+    grid-row: 2;
+  }
+
+  .person-header-identity:global(.has-portrait) :global(.person-pronunciation-row) {
+    grid-column: 1 / -1;
+    grid-row: 3;
+    width: 100%;
   }
 }

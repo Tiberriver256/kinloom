@@ -10,7 +10,7 @@ import { cx, joinClasses } from '../lib/cx.js';
 import { formatKinshipPresentation } from '../lib/kinshipPresentation.js';
 import { KINLOOM_VOCABULARY } from '../lib/vocabulary.js';
 import controlStyles from '../styles/Controls.module.css';
-import indexStyles from './IndexPage.module.css';
+import layoutStyles from '../styles/Layout.module.css';
 import kinshipStyles from './KinshipPage.module.css';
 
 function formatKinshipPersonOption(person: {
@@ -102,7 +102,7 @@ export const KinshipPage: React.FC = () => {
     return (
       <div>
         <ExplorerTopBar />
-        <main id="main-content" className={cx(indexStyles, 'index-page')}>
+        <main id="main-content" className={cx(layoutStyles, 'index-page')}>
           Loading kinship archive…
         </main>
       </div>
@@ -123,8 +123,8 @@ export const KinshipPage: React.FC = () => {
   return (
     <div>
       <ExplorerTopBar />
-      <main id="main-content" className={cx(controlStyles, 'place-page')}>
-        <section className={cx(controlStyles, 'wire-banner')} style={{ marginBottom: 18 }}>
+      <main id="main-content" className={cx(layoutStyles, 'place-page')}>
+        <section className={cx(layoutStyles, 'wire-banner')} style={{ marginBottom: 18 }}>
           <div>
             <h1>{KINLOOM_VOCABULARY.kinship.heading}</h1>
             <p>{KINLOOM_VOCABULARY.kinship.lead}</p>
@@ -231,7 +231,7 @@ export const KinshipPage: React.FC = () => {
             )}
 
             {result && personA && personB && presentation && (
-              <section className={cx(controlStyles, 'place-map-box')} style={{ marginTop: 18 }}>
+              <section className={cx(layoutStyles, 'place-map-box')} style={{ marginTop: 18 }}>
                 <h2 className={cx(kinshipStyles, 'kinship-result-heading')}>
                   {presentation.headingPrefix}
                   <span style={{ color: 'var(--radar-copresence)' }}>{presentation.highlight}</span>

@@ -1,4 +1,10 @@
-import type { EntityType, PersonPronunciationTokenRole, Pronunciation } from '@kinloom/core';
+import type {
+  ArchiveDataSource,
+  EntityType,
+  PersonPronunciationTokenRole,
+  Pronunciation,
+} from '@kinloom/core';
+import { isArchiveApiError } from '@kinloom/core';
 
 export type PronunciationStringFieldKey =
   | 'phonetic'
@@ -94,57 +100,64 @@ export function cleanPronunciation(value: unknown, trimValues: boolean): Pronunc
   return hasAnyNonWhitespace ? out : null;
 }
 
-async function readErrorMessage(response: Response, fallback: string): Promise<string> {
-  try {
-    const errBody = (await response.json()) as {
-      error?: { message?: string };
-      message?: string;
-    };
-    return errBody.error?.message || errBody.message || fallback;
-  } catch {
-    return fallback;
+function formatPortError(err: unknown, fallback: string): string {
+  if (isArchiveApiError(err)) {
+    return err.message || fallback;
   }
+  if (err instanceof Error && err.message) {
+    return err.message;
+  }
+  return fallback;
 }
 
 export type SaveSharedTokenResult =
   | { readonly ok: true; readonly pronunciations?: Record<string, Pronunciation>; readonly message: string }
   | { readonly ok: false; readonly message: string };
 
-export async function saveSharedTokenPronunciation(draft: SharedTokenDraft): Promise<SaveSharedTokenResult> {
-  const trimmedTerm = draft.term.trim();
-  const response = await fetch(`/api/pronunciations/${encodeURIComponent(trimmedTerm)}`, {
-    method: 'PUT',
-    credentials: 'include',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      phonetic: draft.phonetic.trim() || undefined,
-      ipa: draft.ipa.trim() || undefined,
-      language: draft.language.trim() || undefined,
-      note: draft.note.trim() || undefined,
-      source_label: draft.source_label.trim() || undefined,
-      source_url: draft.source_url.trim() || undefined,
-      region: draft.region.trim() || undefined,
-      ...(draft.existingShared?.variants && draft.existingShared.variants.length > 0
-        ? { variants: draft.existingShared.variants }
-        : {}),
-    }),
-  });
-  if (!response.ok) {
-    const errorMessage = await readErrorMessage(
-      response,
-      `Failed to save shared pronunciation (HTTP ${response.status}).`
-    );
-    return { ok: false, message: errorMessage };
+export async function saveSharedTokenPronunciation(
+  draft: SharedTokenDraft,
+  dataSource?: ArchiveDataSource
+): Promise<SaveSharedTokenResult> {
+  if (!dataSource?.upsertPronunciationTerm) {
+    return {
+      ok: false,
+      message: 'Saving shared pronunciations is not supported by this archive.',
+    };
   }
-  const data = (await response.json()) as {
-    pronunciations?: Record<string, Pronunciation>;
-  };
-  return {
-    ok: true,
-    pronunciations:
-      data.pronunciations && typeof data.pronunciations === 'object' ? data.pronunciations : undefined,
-    message: `Saved shared pronunciation for "${trimmedTerm}". Updates every record sharing this name and generates audio.`,
-  };
+  const trimmedTerm = draft.term.trim();
+  const entry: Pronunciation = {};
+  const phonetic = draft.phonetic.trim();
+  const ipa = draft.ipa.trim();
+  const language = draft.language.trim();
+  const note = draft.note.trim();
+  const sourceLabel = draft.source_label.trim();
+  const sourceUrl = draft.source_url.trim();
+  const region = draft.region.trim();
+  if (phonetic) entry.phonetic = phonetic;
+  if (ipa) entry.ipa = ipa;
+  if (language) entry.language = language;
+  if (note) entry.note = note;
+  if (sourceLabel) entry.source_label = sourceLabel;
+  if (sourceUrl) entry.source_url = sourceUrl;
+  if (region) entry.region = region;
+  if (draft.existingShared?.variants && draft.existingShared.variants.length > 0) {
+    entry.variants = draft.existingShared.variants;
+  }
+
+  try {
+    const data = await dataSource.upsertPronunciationTerm(trimmedTerm, entry);
+    return {
+      ok: true,
+      pronunciations:
+        data.pronunciations && typeof data.pronunciations === 'object' ? data.pronunciations : undefined,
+      message: `Saved shared pronunciation for "${trimmedTerm}". Updates every record sharing this name and generates audio.`,
+    };
+  } catch (err) {
+    return {
+      ok: false,
+      message: formatPortError(err, 'Failed to save shared pronunciation.'),
+    };
+  }
 }
 
 export type GenerateAudioResult =
@@ -156,34 +169,35 @@ export async function generatePronunciationAudio(params: {
   readonly entityId: string;
   readonly text: string;
   readonly draftPronunciation: Pronunciation | null;
+  readonly dataSource?: ArchiveDataSource;
 }): Promise<GenerateAudioResult> {
-  const response = await fetch('/api/pronunciation/generate', {
-    method: 'POST',
-    credentials: 'include',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
+  if (!params.dataSource?.generatePronunciationAudio) {
+    return {
+      ok: false,
+      message: 'Audio generation is not supported by this archive.',
+    };
+  }
+  try {
+    const data = await params.dataSource.generatePronunciationAudio({
       entity_type: params.entityType,
       entity_id: params.entityId,
       text: params.text,
       phonetic: params.draftPronunciation?.phonetic?.trim() || undefined,
       ipa: params.draftPronunciation?.ipa?.trim() || undefined,
       language: params.draftPronunciation?.language?.trim() || undefined,
-    }),
-  });
-  if (!response.ok) {
-    const errorMessage = await readErrorMessage(
-      response,
-      `Audio generation failed (HTTP ${response.status}).`
-    );
-    return { ok: false, message: errorMessage };
+    });
+    if (!data.audio_url || typeof data.audio_url !== 'string') {
+      return { ok: false, message: 'Server response did not include an audio_url.' };
+    }
+    return {
+      ok: true,
+      audioUrl: data.audio_url,
+      message: 'Pronunciation audio generated. Save changes to publish.',
+    };
+  } catch (err) {
+    return {
+      ok: false,
+      message: formatPortError(err, 'Audio generation failed.'),
+    };
   }
-  const data = (await response.json()) as { audio_url?: string };
-  if (!data.audio_url || typeof data.audio_url !== 'string') {
-    return { ok: false, message: 'Server response did not include an audio_url.' };
-  }
-  return {
-    ok: true,
-    audioUrl: data.audio_url,
-    message: 'Pronunciation audio generated. Save changes to publish.',
-  };
 }

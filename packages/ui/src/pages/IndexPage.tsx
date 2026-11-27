@@ -14,8 +14,8 @@ import { cx, joinClasses } from '../lib/cx.js';
 import { formatPhotoDocumentCount, formatReaderLoadError, KINLOOM_VOCABULARY } from '../lib/vocabulary.js';
 import { PluginSlot } from '../plugins/PluginContext.js';
 import controlStyles from '../styles/Controls.module.css';
+import layoutStyles from '../styles/Layout.module.css';
 import indexStyles from './IndexPage.module.css';
-import personStyles from './PersonPage.module.css';
 
 function byBirthThenName(a: Person, b: Person): number {
   if (a.birth_year === null && b.birth_year === null) {
@@ -194,8 +194,8 @@ export const IndexPage: React.FC = () => {
   return (
     <div>
       <ExplorerTopBar />
-      <main id="main-content" className={cx(indexStyles, 'index-page')}>
-        <section className={joinClasses(cx(controlStyles, 'wire-banner'), cx(indexStyles, 'index-banner'))}>
+      <main id="main-content" className={cx(layoutStyles, 'index-page')}>
+        <section className={joinClasses(cx(layoutStyles, 'wire-banner'), cx(indexStyles, 'index-banner'))}>
           <div>
             <h1>{siteConfig.site.familyName}</h1>
             <p>
@@ -389,7 +389,7 @@ export const IndexPage: React.FC = () => {
                                 {p.event_count} milestone{p.event_count === 1 ? '' : 's'}
                               </span>
                               {mediaCount > 0 && (
-                                <span className={cx(personStyles, 'person-card-media-badge')}>
+                                <span className={cx(atomStyles, 'person-card-media-badge')}>
                                   {formatPhotoDocumentCount(mediaCount)}
                                 </span>
                               )}
