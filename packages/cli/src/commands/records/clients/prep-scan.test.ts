@@ -5,11 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import sharp from 'sharp';
 import { afterEach, describe, expect, it } from 'vitest';
-import {
-  createRecordContext,
-  type ExecFileFn,
-  type RecordCommandContext,
-} from '../runtime/index.js';
+import { createRecordContext, type ExecFileFn, type RecordCommandContext } from '../runtime/index.js';
 import {
   alignOffset,
   clampBox,
@@ -200,17 +196,9 @@ describe('prep-scan pure helpers', () => {
       /starts outside 100x80 image\. hint/
     );
 
-    expect(normalizePrepScanArgv(['--box', '10,', '20,', '30,', '40'])).toEqual([
-      '--box',
-      '10,20,30,40',
-    ]);
-    expect(normalizePrepScanArgv(['--pages', '4,', '1-3,', '2'])).toEqual([
-      '--pages',
-      '4,1-3,2',
-    ]);
-    expect(normalizePrepScanArgv(['--box=10,', '20,', '30,', '40'])).toEqual([
-      '--box=10,20,30,40',
-    ]);
+    expect(normalizePrepScanArgv(['--box', '10,', '20,', '30,', '40'])).toEqual(['--box', '10,20,30,40']);
+    expect(normalizePrepScanArgv(['--pages', '4,', '1-3,', '2'])).toEqual(['--pages', '4,1-3,2']);
+    expect(normalizePrepScanArgv(['--box=10,', '20,', '30,', '40'])).toEqual(['--box=10,20,30,40']);
   });
 
   it('parses page specs, coalesces ranges, and parses colors/directions/alignments', () => {
@@ -339,14 +327,7 @@ describe('prep-scan native client', () => {
 
     // Poka-yoke: --out/-o works the same as positional output, and comma-split boxes are rejoined.
     const gridAliasOut = path.join(tmp, 'grid-alias.jpg');
-    const gridAliasRes = await invokePrepScan([
-      'grid',
-      srcImg,
-      '--out',
-      gridAliasOut,
-      '--step',
-      '400',
-    ]);
+    const gridAliasRes = await invokePrepScan(['grid', srcImg, '--out', gridAliasOut, '--step', '400']);
     expect(gridAliasRes.exitCode, gridAliasRes.stderr).toBe(0);
     expect((JSON.parse(gridAliasRes.stdout) as { out: string }).out).toBe(gridAliasOut);
     expect(fs.existsSync(gridAliasOut)).toBe(true);
@@ -402,9 +383,7 @@ describe('prep-scan native client', () => {
     expect(cropHelp.exitCode).toBe(0);
     expect(cropHelp.stdout).toContain('--redact-orig');
     expect(cropHelp.stdout).toContain('[--box BOX]');
-    expect(cropHelp.stdout.replace(/\s+/g, ' ')).toContain(
-      'Omit --box to keep the full rotated frame.'
-    );
+    expect(cropHelp.stdout.replace(/\s+/g, ' ')).toContain('Omit --box to keep the full rotated frame.');
 
     const tmp = await makeTempDir('kinloom-prep-crop-redact-');
     const srcImg = path.join(tmp, 'sheet.png');
@@ -817,20 +796,10 @@ describe('prep-scan native client', () => {
     };
 
     const env = { KINLOOM_OCR_CACHE_DIR: cacheRoot };
-    const run = (args: readonly string[]) =>
-      invokePrepScan(args, { env, execFileImpl: mockExec });
+    const run = (args: readonly string[]) => invokePrepScan(args, { env, execFileImpl: mockExec });
 
     // 1. Cold case-insensitive search
-    const hit = await run([
-      'pdf-grep',
-      pdfPath,
-      '--pattern',
-      'lincoln',
-      '-i',
-      '--context',
-      '10',
-      '--json',
-    ]);
+    const hit = await run(['pdf-grep', pdfPath, '--pattern', 'lincoln', '-i', '--context', '10', '--json']);
     expect(hit.exitCode, hit.stderr).toBe(0);
     expect(hit.cacheHit).toBe(false);
     const parsed = JSON.parse(hit.stdout) as {
@@ -851,14 +820,7 @@ describe('prep-scan native client', () => {
     expect(fs.existsSync(cacheFile)).toBe(true);
 
     // 2. Warm cached search skips pdftotext
-    const caseSensitive = await run([
-      'pdf-grep',
-      pdfPath,
-      '--pattern',
-      'Lincoln',
-      '--limit',
-      '1',
-    ]);
+    const caseSensitive = await run(['pdf-grep', pdfPath, '--pattern', 'Lincoln', '--limit', '1']);
     expect(caseSensitive.exitCode, caseSensitive.stderr).toBe(0);
     expect(caseSensitive.cacheHit).toBe(true);
     expect(caseSensitive.stdout).toContain('p.1 L1:');
@@ -867,14 +829,7 @@ describe('prep-scan native client', () => {
     expect(pdftotextCalls).toBe(1);
 
     // 3. --refresh re-invokes pdftotext
-    const refreshed = await run([
-      'pdf-grep',
-      pdfPath,
-      '--pattern',
-      'Hardin',
-      '--refresh',
-      '--json',
-    ]);
+    const refreshed = await run(['pdf-grep', pdfPath, '--pattern', 'Hardin', '--refresh', '--json']);
     expect(refreshed.exitCode).toBe(0);
     expect((JSON.parse(refreshed.stdout) as { cache_hit: boolean }).cache_hit).toBe(false);
     expect(pdftotextCalls).toBe(2);
@@ -958,8 +913,7 @@ describe('prep-scan native client', () => {
     };
 
     const env = { KINLOOM_OCR_CACHE_DIR: cacheRoot };
-    const run = (args: readonly string[]) =>
-      invokePrepScan(args, { env, execFileImpl: mockExec });
+    const run = (args: readonly string[]) => invokePrepScan(args, { env, execFileImpl: mockExec });
 
     // 1. Cold parallel multi-page render with range + dedup in requested order (4, 1-3, 2 -> [4, 1, 2, 3])
     const outDir1 = path.join(tmp, 'out1');
@@ -1014,9 +968,7 @@ describe('prep-scan native client', () => {
     expect(pdftoppmCalls).toBe(4);
     expect(maxConcurrency).toBeGreaterThanOrEqual(2);
     expect(maxConcurrency).toBeLessThanOrEqual(4);
-    expect(fs.existsSync(path.join(cacheRoot, 'pdf-pages', `${pdfDigest}_p1_dpi72.jpg`))).toBe(
-      true
-    );
+    expect(fs.existsSync(path.join(cacheRoot, 'pdf-pages', `${pdfDigest}_p1_dpi72.jpg`))).toBe(true);
 
     // 2. Warm cache hit into brand-new output directory invokes pdftoppm 0 times
     const outDir2 = path.join(tmp, 'out2');
@@ -1119,16 +1071,7 @@ describe('prep-scan native client', () => {
     expect(pdftoppmCalls).toBe(7);
 
     // 6. Text mode works on cache hit
-    const textRun = await run([
-      'pdf-pages',
-      pdfPath,
-      '-p',
-      '1',
-      '--dpi',
-      '72',
-      '--out-dir',
-      outDir2,
-    ]);
+    const textRun = await run(['pdf-pages', pdfPath, '-p', '1', '--dpi', '72', '--out-dir', outDir2]);
     expect(textRun.exitCode).toBe(0);
     expect(textRun.cacheHit).toBe(true);
     expect(textRun.stdout).toContain('p.001');
@@ -1144,14 +1087,7 @@ describe('prep-scan native client', () => {
       { pages: '99', expectText: 'out of range' },
     ];
     for (const spec of badSpecs) {
-      const badRun = await run([
-        'pdf-pages',
-        pdfPath,
-        '--pages',
-        spec.pages,
-        '--out-dir',
-        outDir2,
-      ]);
+      const badRun = await run(['pdf-pages', pdfPath, '--pages', spec.pages, '--out-dir', outDir2]);
       expect(badRun.exitCode, `spec=${spec.pages} stderr=${badRun.stderr}`).toBe(2);
       expect(badRun.stderr).toContain(spec.expectText);
     }
@@ -1241,12 +1177,7 @@ describe('prep-scan native client', () => {
     expect(fs.existsSync(items[0].path)).toBe(true);
     expect(fs.existsSync(items[1].path)).toBe(true);
 
-    const missing = await invokePrepScan([
-      'preview',
-      path.join(tmp, 'nope.png'),
-      '--out-dir',
-      outDir,
-    ]);
+    const missing = await invokePrepScan(['preview', path.join(tmp, 'nope.png'), '--out-dir', outDir]);
     expect(missing.exitCode).toBe(1);
     expect(missing.stderr).toContain('input file not found');
   });
@@ -1328,12 +1259,7 @@ describe('prep-scan native client', () => {
 
     // All sources failing returns exit 1
     const allBad = await invokePrepScan(
-      [
-        'sheet-strip',
-        'https://archives.example.org/scans/missing.png',
-        '--out',
-        path.join(tmp, 'fail.jpg'),
-      ],
+      ['sheet-strip', 'https://archives.example.org/scans/missing.png', '--out', path.join(tmp, 'fail.jpg')],
       { fetchImpl }
     );
     expect(allBad.exitCode).toBe(1);
@@ -1423,18 +1349,11 @@ describe('prep-scan native client', () => {
     expect(fs.existsSync(rot90Preview)).toBe(true);
 
     const rot45Out = path.join(tmp, 'rot45.jpg');
-    const res45 = await invokePrepScan([
-      'rotate',
-      srcImg,
-      '--out',
-      rot45Out,
-      '--angle',
-      '45',
-    ]);
+    const res45 = await invokePrepScan(['rotate', srcImg, '--out', rot45Out, '--angle', '45']);
     expect(res45.exitCode, res45.stderr).toBe(0);
     expect(res45.stdout).toContain('rotated 45 deg');
     const meta45 = await sharp(rot45Out).metadata();
-    expect((meta45.width ?? 0)).toBeGreaterThan(100);
-    expect((meta45.height ?? 0)).toBeGreaterThan(100);
+    expect(meta45.width ?? 0).toBeGreaterThan(100);
+    expect(meta45.height ?? 0).toBeGreaterThan(100);
   });
 });

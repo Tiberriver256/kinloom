@@ -1,5 +1,5 @@
 import { execFileSync, spawnSync } from 'node:child_process';
-import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -88,14 +88,14 @@ describe('conventional commit planning', () => {
   it('treats a breaking feat on 0.2.0 as major 1.0.0', () => {
     expect(parseCommitMessage('feat(cli)!: drop export', '').level).toBe('major');
     expect(parseCommitMessage('fix(worker): surface', 'BREAKING CHANGE: callers must handle it').level).toBe(
-      'major',
+      'major'
     );
     expect(
       planRelease({
         current: '0.2.0',
         commits: [sample('feat!: drop export')],
         bump: 'auto',
-      }),
+      })
     ).toMatchObject({ version: '1.0.0', bump: 'major', reason: 'conventional major' });
   });
 
@@ -120,7 +120,7 @@ describe('conventional commit planning', () => {
         current: '0.2.0',
         commits: [sample('docs: update readme')],
         bump: 'patch',
-      }),
+      })
     ).toMatchObject({ shouldRelease: true, version: '0.2.1', bump: 'patch', reason: 'explicit patch' });
 
     expect(
@@ -128,7 +128,7 @@ describe('conventional commit planning', () => {
         current: '0.2.0',
         commits: [sample('feat(cli): add dates')],
         forceVersion: '0.2.1',
-      }),
+      })
     ).toMatchObject({ shouldRelease: true, version: '0.2.1', bump: null, reason: 'force-version' });
   });
 
@@ -138,7 +138,7 @@ describe('conventional commit planning', () => {
         sample('feat(cli,skills): add dates'),
         sample('fix: correct date'),
         sample('docs: update readme'),
-      ]),
+      ])
     ).toBe(
       [
         '## Features',
@@ -152,7 +152,7 @@ describe('conventional commit planning', () => {
         '## Other',
         '',
         '* update readme (aaaaaaa) by Release Tester',
-      ].join('\n'),
+      ].join('\n')
     );
   });
 
@@ -163,7 +163,7 @@ describe('conventional commit planning', () => {
         logins: ['octocat', 'not a login', 'hubot'],
         compareUrl: 'https://github.com/example/kinloom/compare/v0.2.0...v0.3.0',
         generatedBody: '## New Contributors\n\n* @octocat made their first contribution',
-      }),
+      })
     ).toBe(
       [
         '## Features',
@@ -181,7 +181,7 @@ describe('conventional commit planning', () => {
         '',
         '* @octocat made their first contribution',
         '',
-      ].join('\n'),
+      ].join('\n')
     );
   });
 });
@@ -208,9 +208,12 @@ describe('version files', () => {
   }
 }
 `);
-    expect(rewritePackageJson('{\n  "name": "@kinloom/demo",\n  "version": "0.2.0",\n  "dependencies": {\n    "@kinloom/core": "0.2.0"\n  }\n}\n', '0.2.1')).toContain(
-      '"@kinloom/core": "0.2.1"',
-    );
+    expect(
+      rewritePackageJson(
+        '{\n  "name": "@kinloom/demo",\n  "version": "0.2.0",\n  "dependencies": {\n    "@kinloom/core": "0.2.0"\n  }\n}\n',
+        '0.2.1'
+      )
+    ).toContain('"@kinloom/core": "0.2.1"');
   });
 
   it('keeps a source file byte-stable when the version does not change', () => {
@@ -253,7 +256,9 @@ describe('version files', () => {
       expect(verifyRelease(root, '0.2.0')).toEqual([]);
       applyVersionFiles(root, '0.2.1');
       expect(verifyRelease(root, '0.2.1')).toEqual([]);
-      expect(readFileSync(path.join(root, 'packages/cli/src/client.ts'), 'utf8')).toContain('kinloom-cli/0.2.1');
+      expect(readFileSync(path.join(root, 'packages/cli/src/client.ts'), 'utf8')).toContain(
+        'kinloom-cli/0.2.1'
+      );
       const failed = spawnSync(process.execPath, [scriptPath, 'verify', '0.2.0'], {
         cwd: root,
         encoding: 'utf8',
@@ -301,7 +306,7 @@ describe('next command', () => {
         policy: 'standard-semver',
       });
       expect(payload.notes_markdown).toMatch(
-        /^## Features\n\n\* \*\*cli:\*\* add dates \([0-9a-f]+\) by Release Tester$/,
+        /^## Features\n\n\* \*\*cli:\*\* add dates \([0-9a-f]+\) by Release Tester$/
       );
     } finally {
       rmSync(cwd, { recursive: true, force: true });
@@ -330,11 +335,10 @@ describe('next command', () => {
   it('accepts an explicit patch version from the force-version flag', () => {
     const cwd = initRepo('docs: update readme');
     try {
-      const result = spawnSync(
-        process.execPath,
-        [scriptPath, 'next', '--json', '--force-version', '0.2.1'],
-        { cwd, encoding: 'utf8' },
-      );
+      const result = spawnSync(process.execPath, [scriptPath, 'next', '--json', '--force-version', '0.2.1'], {
+        cwd,
+        encoding: 'utf8',
+      });
       expect(result.status).toBe(0);
       expect(JSON.parse(result.stdout)).toMatchObject({
         should_release: true,

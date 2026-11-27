@@ -8,7 +8,13 @@
   "files": {
     "ignoreUnknown": true,
     "includes": [
+      "package.json",
+      "biome.json",
+      "packages/*/package.json",
+      "packages/*/tsconfig*.json",
       "packages/*/src/**",
+      "examples/*/package.json",
+      "examples/*/tsconfig*.json",
       "examples/*/src/**",
       "e2e/**",
       "scripts/**",
@@ -50,7 +56,12 @@
     "rules": {
       "preset": "recommended",
       "a11y": {
-        "preset": "recommended"
+        "preset": "recommended",
+        "useSemanticElements": "off",
+        "useMediaCaption": "off"
+      },
+      "correctness": {
+        "useExhaustiveDependencies": "warn"
       },
       "style": {
         "noNonNullAssertion": "off",
@@ -58,7 +69,8 @@
         "useNodejsImportProtocol": "error"
       },
       "suspicious": {
-        "noExplicitAny": "off"
+        "noExplicitAny": "off",
+        "noAssignInExpressions": "off"
       }
     }
   }

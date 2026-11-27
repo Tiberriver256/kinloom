@@ -2,7 +2,7 @@
 import fs, { realpathSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { parseArgs, type ParseArgsConfig } from 'node:util';
+import { type ParseArgsConfig, parseArgs } from 'node:util';
 import {
   AUDIT_HELP,
   CONTEXT_HELP,
@@ -19,25 +19,21 @@ import {
 import { formatRecordCommandsHelp, renderRecordCommandHelp } from './commands/records/help.js';
 import { resolveRecordCommand } from './commands/records/registry.js';
 import {
-  formatGuidesCatalog,
-  renderEmbeddedGuide,
-  resolveEmbeddedGuide,
-} from './guides/index.js';
-import {
+  type CliExitCode,
   CliValidationError,
   EXIT_ERROR,
   EXIT_OK,
   EXIT_USAGE,
-  KinloomApiError,
   formatConflictDetails,
-  type CliExitCode,
+  KinloomApiError,
 } from './errors.js';
+import { formatGuidesCatalog, renderEmbeddedGuide, resolveEmbeddedGuide } from './guides/index.js';
 import {
   discoverSiteCliPlugins,
   formatPluginCommandsHelp,
-  resolvePluginCommands,
   type KinloomCliPlugin,
   type KinloomCliPluginContext,
+  resolvePluginCommands,
 } from './plugins.js';
 
 export interface CliIo {
@@ -238,16 +234,12 @@ function parseStatusLimit(value: string | undefined): number {
   }
   const trimmed = value.trim();
   if (!/^\d+$/.test(trimmed)) {
-    throw new CliValidationError(
-      'Option `--limit` must be an integer greater than or equal to 0.'
-    );
+    throw new CliValidationError('Option `--limit` must be an integer greater than or equal to 0.');
   }
   return Number.parseInt(trimmed, 10);
 }
 
-function parseStatusFilter(
-  value: string | undefined
-): 'pending' | 'staged' | 'done_live' | undefined {
+function parseStatusFilter(value: string | undefined): 'pending' | 'staged' | 'done_live' | undefined {
   if (value === undefined) {
     return undefined;
   }
@@ -255,9 +247,7 @@ function parseStatusFilter(
   if (trimmed === 'pending' || trimmed === 'staged' || trimmed === 'done_live') {
     return trimmed;
   }
-  throw new CliValidationError(
-    'Option `--filter` must be `pending`, `staged`, or `done_live`.'
-  );
+  throw new CliValidationError('Option `--filter` must be `pending`, `staged`, or `done_live`.');
 }
 
 function parseOptionalPositiveInt(value: string | undefined, flagName: string): number | undefined {
@@ -271,10 +261,7 @@ function parseOptionalPositiveInt(value: string | undefined, flagName: string): 
   return parsed;
 }
 
-function parseOptionalPositiveNumber(
-  value: string | undefined,
-  flagName: string
-): number | undefined {
+function parseOptionalPositiveNumber(value: string | undefined, flagName: string): number | undefined {
   if (value === undefined) {
     return undefined;
   }
@@ -285,9 +272,7 @@ function parseOptionalPositiveNumber(
   return parsed;
 }
 
-function safeParseArgs<const T extends ParseArgsConfig>(
-  config: T
-): ReturnType<typeof parseArgs<T>> {
+function safeParseArgs<const T extends ParseArgsConfig>(config: T): ReturnType<typeof parseArgs<T>> {
   try {
     return parseArgs(config);
   } catch (err: unknown) {
@@ -492,7 +477,10 @@ function parseSyncArgs(argv: readonly string[]): ParsedSyncArgs {
         let consumed = 0;
         while (i + 1 < argv.length && !argv[i + 1].startsWith('-')) {
           i += 1;
-          for (const item of argv[i].split(',').map((part) => part.trim()).filter(Boolean)) {
+          for (const item of argv[i]
+            .split(',')
+            .map((part) => part.trim())
+            .filter(Boolean)) {
             parsed.uploadMediaPaths.push(item);
             consumed += 1;
           }
@@ -516,19 +504,13 @@ function normalizeExitCode(code: number): CliExitCode {
   return EXIT_ERROR;
 }
 
-export async function runCli(
-  argv: readonly string[],
-  options?: RunCliOptions
-): Promise<CliExitCode> {
+export async function runCli(argv: readonly string[], options?: RunCliOptions): Promise<CliExitCode> {
   const io = options?.io ?? DEFAULT_IO;
   const fetchImpl = options?.fetchImpl;
   const cwd = options?.cwd ?? process.cwd();
 
   const discovered = await discoverSiteCliPlugins(cwd);
-  const mergedPlugins = resolvePluginCommands([
-    ...discovered.plugins,
-    ...(options?.plugins ?? []),
-  ]);
+  const mergedPlugins = resolvePluginCommands([...discovered.plugins, ...(options?.plugins ?? [])]);
   for (const warning of [...discovered.warnings, ...mergedPlugins.warnings]) {
     io.stderr(`Warning: ${warning}`);
   }
@@ -590,9 +572,7 @@ export async function runCli(
       io.stdout(help);
       return EXIT_OK;
     }
-    io.stderr(
-      `No embedded guide found for '${command}'. Run \`kinloom guide\` to list available topics.`
-    );
+    io.stderr(`No embedded guide found for '${command}'. Run \`kinloom guide\` to list available topics.`);
     return EXIT_USAGE;
   }
 
@@ -618,9 +598,7 @@ export async function runCli(
         }
         const topic = rest[0];
         if (!resolveEmbeddedGuide(topic)) {
-          io.stderr(
-            `Unknown guide topic '${topic}'. Run \`kinloom guide\` to list all available guides.`
-          );
+          io.stderr(`Unknown guide topic '${topic}'. Run \`kinloom guide\` to list all available guides.`);
           return EXIT_USAGE;
         }
         io.stdout(renderEmbeddedGuide(topic));
@@ -733,9 +711,7 @@ export async function runCli(
             `Dry-run OK for batch ${result.batchId}: ${result.createdCount} entities ready (precompiled ${result.precompiledCounts.people} people, ${result.precompiledCounts.events} events, ${result.precompiledCounts.places} places).`
           );
         } else if (!result.response) {
-          io.stdout(
-            `Seed up to date (${result.unchangedCount} unchanged, 0 created, 0 updated).`
-          );
+          io.stdout(`Seed up to date (${result.unchangedCount} unchanged, 0 created, 0 updated).`);
         } else {
           io.stdout(
             `Seeded batch ${result.batchId}: ${result.createdCount} created, ${result.updatedCount} updated, ${result.unchangedCount} unchanged (head r${result.response.head_revision_id}, etag ${result.response.etag}).`
@@ -981,9 +957,7 @@ export async function runCli(
             json: { type: 'boolean', default: false },
           },
         });
-        const positionalIds = positionals
-          .map((id) => id.trim())
-          .filter((id) => id.length > 0);
+        const positionalIds = positionals.map((id) => id.trim()).filter((id) => id.length > 0);
         const packageFlags = [
           values.package !== undefined ? '--package' : undefined,
           values['package-dir'] !== undefined ? '--package-dir' : undefined,
@@ -1038,10 +1012,7 @@ export async function runCli(
         if (!useBatch) {
           let resolvedPersonId: string | undefined = personFlag ?? positionalIds[0];
           if (!personFlag && !packageDir && positionalIds.length === 1) {
-            const fromPositionalPath = resolvePositionalIntegratePackage(
-              positionalIds[0],
-              effectiveRepoDir
-            );
+            const fromPositionalPath = resolvePositionalIntegratePackage(positionalIds[0], effectiveRepoDir);
             if (fromPositionalPath) {
               packageDir = fromPositionalPath.packageDir;
               resolvedPersonId = fromPositionalPath.personId;
@@ -1129,7 +1100,9 @@ export async function runCli(
             'pending-only': { type: 'boolean', default: false },
           },
         });
-        const positionalIds = positionals.map((personId) => personId.trim()).filter((personId) => personId.length > 0);
+        const positionalIds = positionals
+          .map((personId) => personId.trim())
+          .filter((personId) => personId.length > 0);
         const packageFlags = [
           values.package !== undefined ? '--package' : undefined,
           values['package-dir'] !== undefined ? '--package-dir' : undefined,
@@ -1176,9 +1149,7 @@ export async function runCli(
         const { runAuditCommand } = auditMod;
         const { runAuditBatchCommand, listStagedAuditPersonIds } = batchMod;
         const { classifyStagedPackages } = integrateBatchMod;
-        let batchIds = values['all-staged']
-          ? listStagedAuditPersonIds(resolvedRepoDir)
-          : positionalIds;
+        let batchIds = values['all-staged'] ? listStagedAuditPersonIds(resolvedRepoDir) : positionalIds;
         let skippedAlreadyIntegrated: string[] | undefined;
         let skippedDrifted: string[] | undefined;
         if (values['all-staged'] && !values['pending-only'] && batchIds.length === 0) {
@@ -1194,15 +1165,14 @@ export async function runCli(
         }
         const useBatch = values['all-staged'] || batchIds.length > 1;
         if (useBatch && packageDir) {
-          throw new CliValidationError('`--package` / `--package-dir` applies to a single person audit only.');
+          throw new CliValidationError(
+            '`--package` / `--package-dir` applies to a single person audit only.'
+          );
         }
         if (!useBatch) {
           let resolvedPersonId: string | undefined = personFlag ?? positionalIds[0];
           if (!personFlag && !packageDir && positionalIds.length === 1) {
-            const fromPositionalPath = resolvePositionalIntegratePackage(
-              positionalIds[0],
-              resolvedRepoDir
-            );
+            const fromPositionalPath = resolvePositionalIntegratePackage(positionalIds[0], resolvedRepoDir);
             if (fromPositionalPath) {
               packageDir = fromPositionalPath.packageDir;
               resolvedPersonId = fromPositionalPath.personId;
@@ -1381,21 +1351,15 @@ export async function runCli(
       case 'sync': {
         const parsed = parseSyncArgs(rest);
         const [{ parseDeleteTargets, parseEntityTypeList, runSyncCommand }, { measureCommand }] =
-          await Promise.all([
-            import('./commands/ops/sync.js'),
-            import('./commands/ops/telemetry.js'),
-          ]);
+          await Promise.all([import('./commands/ops/sync.js'), import('./commands/ops/telemetry.js')]);
         const types = parsed.typesRaw ? parseEntityTypeList(parsed.typesRaw) : undefined;
         const explicitDeletes =
-          parsed.deleteTokens.length > 0
-            ? parseDeleteTargets(parsed.deleteTokens.join(','))
-            : undefined;
+          parsed.deleteTokens.length > 0 ? parseDeleteTargets(parsed.deleteTokens.join(',')) : undefined;
         const result = await measureCommand(
           {
             subcmd: parsed.dryRun ? 'sync --dry-run' : 'sync',
             extractResultMeta: (res) => ({
-              exitCode:
-                res.liveVerification && !res.liveVerification.ok ? EXIT_ERROR : EXIT_OK,
+              exitCode: res.liveVerification && !res.liveVerification.ok ? EXIT_ERROR : EXIT_OK,
               bytesOut: Buffer.byteLength(res.rendered, 'utf8'),
             }),
           },
@@ -1498,9 +1462,7 @@ export async function runCli(
                 throw new CliValidationError('Option `--at` is only valid with `kinloom dates age`.');
               }
               if (positionals.length !== 1) {
-                throw new CliValidationError(
-                  'Usage: kinloom dates weekday <YYYY-MM-DD> [--json]'
-                );
+                throw new CliValidationError('Usage: kinloom dates weekday <YYYY-MM-DD> [--json]');
               }
               return runDatesCommand({
                 subcommand: 'weekday',
@@ -1554,10 +1516,7 @@ export async function runCli(
         }
         const subArgs = rest.slice(1);
         const [{ runPronounceAuditCommand, runPronounceLookupCommand }, { measureCommand }] =
-          await Promise.all([
-            import('./commands/ops/pronounce.js'),
-            import('./commands/ops/telemetry.js'),
-          ]);
+          await Promise.all([import('./commands/ops/pronounce.js'), import('./commands/ops/telemetry.js')]);
         if (sub === 'lookup') {
           const { values, positionals } = safeParseArgs({
             args: subArgs,
@@ -1640,9 +1599,7 @@ export async function runCli(
             json: { type: 'boolean', default: false },
           },
         });
-        const { measureCommand, runTelemetryReportCommand } = await import(
-          './commands/ops/telemetry.js'
-        );
+        const { measureCommand, runTelemetryReportCommand } = await import('./commands/ops/telemetry.js');
         const result = await measureCommand(
           {
             subcmd: 'telemetry report',

@@ -1,14 +1,15 @@
 import type { AuthorType, RevisionRecord } from '@kinloom/core';
 import { asBatchId, asRevisionId } from '@kinloom/core';
-import { AuthorPill, CitationBadge } from '../components/wiki/WikiBadges.js';
-import React, { useCallback, useEffect, useId, useMemo, useState } from 'react';
+import type React from 'react';
+import { useCallback, useEffect, useId, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { formatArchivalTimestamp } from '../lib/formatTimestamp.js';
-import { handleTablistKeyDown } from '../lib/keyboardNav.js';
 import { ExplorerTopBar } from '../components/ExplorerTopBar.js';
 import { KinloomFooter } from '../components/KinloomFooter.js';
 import { RevisionDiffView } from '../components/wiki/RevisionDiffView.js';
+import { AuthorPill, CitationBadge } from '../components/wiki/WikiBadges.js';
 import { useArchiveData } from '../context/ArchiveDataContext.js';
+import { formatArchivalTimestamp } from '../lib/formatTimestamp.js';
+import { handleTablistKeyDown } from '../lib/keyboardNav.js';
 
 type AuthorFilter = 'all' | AuthorType;
 
@@ -153,7 +154,7 @@ export const RecentChangesPage: React.FC<RecentChangesPageProps> = ({ initialRev
     try {
       const res = await dataSource.revertRevision(
         asRevisionId(rev.revision_id),
-        `Revert r${rev.revision_id}`,
+        `Revert r${rev.revision_id}`
       );
       setStatusMessage(`Reverted r${rev.revision_id} in r${res.revision.revision_id}.`);
       reloadArchive();
@@ -178,7 +179,7 @@ export const RecentChangesPage: React.FC<RecentChangesPageProps> = ({ initialRev
     try {
       const res = await dataSource.revertBatch(asBatchId(batchId), `Batch revert ${batchId}`);
       setStatusMessage(
-        `Reverted batch ${batchId} across ${res.revisions.length} revision${res.revisions.length === 1 ? '' : 's'}.`,
+        `Reverted batch ${batchId} across ${res.revisions.length} revision${res.revisions.length === 1 ? '' : 's'}.`
       );
       reloadArchive();
       if (initialRevisions === undefined) {
@@ -202,9 +203,8 @@ export const RecentChangesPage: React.FC<RecentChangesPageProps> = ({ initialRev
           <div>
             <h1>Revision History</h1>
             <p>
-              Complete append-only revision history of family edits, research batches, and initial
-              archive imports. Every revision or research batch can be reverted cleanly without
-              losing history.
+              Complete append-only revision history of family edits, research batches, and initial archive
+              imports. Every revision or research batch can be reverted cleanly without losing history.
             </p>
           </div>
           <div className="folio-metrics">
@@ -212,8 +212,7 @@ export const RecentChangesPage: React.FC<RecentChangesPageProps> = ({ initialRev
               <strong>{filteredRevisions.length}</strong> revisions shown
             </div>
             <div>
-              <strong>{groupedFeed.filter((g) => g.batchId !== null).length}</strong> grouped
-              research batches
+              <strong>{groupedFeed.filter((g) => g.batchId !== null).length}</strong> grouped research batches
             </div>
           </div>
         </section>
@@ -229,7 +228,7 @@ export const RecentChangesPage: React.FC<RecentChangesPageProps> = ({ initialRev
               authorFilter,
               (next) => {
                 setAuthorFilter(next);
-              },
+              }
             );
           }}
         >
@@ -320,9 +319,8 @@ export const RecentChangesPage: React.FC<RecentChangesPageProps> = ({ initialRev
                       <div className="wiki-confirm-inline" role="alert">
                         <p className="wiki-confirm-inline-text">
                           Revert all <strong>{group.revisions.length}</strong> change
-                          {group.revisions.length === 1 ? '' : 's'} in batch{' '}
-                          <code>{group.batchId}</code>? This appends new revert revisions without
-                          deleting history.
+                          {group.revisions.length === 1 ? '' : 's'} in batch <code>{group.batchId}</code>?
+                          This appends new revert revisions without deleting history.
                         </p>
                         <div className="wiki-inline-actions">
                           <button
@@ -361,9 +359,7 @@ export const RecentChangesPage: React.FC<RecentChangesPageProps> = ({ initialRev
                               <div className="wiki-revision-main">
                                 <div className="wiki-revision-topline">
                                   <code className="wiki-rev-id">r{rev.revision_id}</code>
-                                  <span className={`wiki-action-tag action-${rev.action}`}>
-                                    {rev.action}
-                                  </span>
+                                  <span className={`wiki-action-tag action-${rev.action}`}>{rev.action}</span>
                                   {renderEntityRef(rev)}
                                   <CitationBadge hasPrimarySource={rev.has_primary_source} />
                                 </div>
@@ -448,8 +444,7 @@ export const RecentChangesPage: React.FC<RecentChangesPageProps> = ({ initialRev
               const [rev] = group.revisions;
               const isExpanded = expandedId === rev.revision_id;
               const confirmingRev =
-                pendingConfirm?.kind === 'revision' &&
-                pendingConfirm.rev.revision_id === rev.revision_id;
+                pendingConfirm?.kind === 'revision' && pendingConfirm.rev.revision_id === rev.revision_id;
               return (
                 <article key={group.key} className="place-map-box wiki-revision-item">
                   <div className="wiki-revision-row">

@@ -9,20 +9,20 @@ import {
   type StagedOverlapAnalysis,
 } from './audit-overlaps.js';
 import {
-  INTEGRATION_RECEIPT_FILENAME,
-  INTEGRATE_YAML_FILES,
   buildIntegrationReceiptForPackage,
   computePackageFingerprints,
   detectMediaLayout,
   doesReceiptMatchPackage,
   executeIntegrateSingle,
-  readIntegrationReceipt,
-  runIntegrateCommand,
-  writeIntegrationReceipt,
+  INTEGRATE_YAML_FILES,
+  INTEGRATION_RECEIPT_FILENAME,
   type IntegrateCommandResult,
   type IntegrateExecutionOverlay,
   type IntegrationReceipt,
+  readIntegrationReceipt,
+  runIntegrateCommand,
   type UpsertCounts,
+  writeIntegrationReceipt,
 } from './integrate.js';
 
 const SAFE_PERSON_ID_RE = /^[a-zA-Z0-9_-]+$/;
@@ -241,10 +241,7 @@ export async function classifyStagedPackages(
   personIds?: readonly string[]
 ): Promise<ClassifiedStagedPackages> {
   const resolvedRepo = path.resolve(repoDir);
-  const allStaged =
-    personIds !== undefined
-      ? [...personIds]
-      : listStagedAuditPersonIds(resolvedRepo);
+  const allStaged = personIds !== undefined ? [...personIds] : listStagedAuditPersonIds(resolvedRepo);
 
   const pending: string[] = [];
   const alreadyIntegrated: string[] = [];
@@ -311,17 +308,12 @@ export function formatBlockingOverlapError(analysis: StagedOverlapAnalysis): str
     const items = overlaps.scanFileCollisions
       .filter((row) => !row.bytesIdentical)
       .map((row) => `${row.basename} (${row.packages.map((pkg) => pkg.person_id).join(', ')})`);
-    details.push(
-      `differingScanCollisions=${blocking.differingScanCollisions}: ${items.join('; ')}`
-    );
+    details.push(`differingScanCollisions=${blocking.differingScanCollisions}: ${items.join('; ')}`);
   }
   if (blocking.conflictingMediaFileCollisions > 0) {
     const items = overlaps.mediaFileCollisions
       .filter((row) => row.mediaIdsConflict)
-      .map(
-        (row) =>
-          `${row.file} (${row.entries.map((e) => `${e.person_id}:${e.media_id}`).join(', ')})`
-      );
+      .map((row) => `${row.file} (${row.entries.map((e) => `${e.person_id}:${e.media_id}`).join(', ')})`);
     details.push(
       `conflictingMediaFileCollisions=${blocking.conflictingMediaFileCollisions}: ${items.join('; ')}`
     );
@@ -333,16 +325,13 @@ export function formatBlockingOverlapError(analysis: StagedOverlapAnalysis): str
         (row) =>
           `${row.id} differs in [${row.fieldDiffs.join(', ')}] across ${row.packages.map((p) => p.person_id).join(', ')}`
       );
-    details.push(
-      `conflictingPersonOverlaps=${blocking.conflictingPersonOverlaps}: ${items.join('; ')}`
-    );
+    details.push(`conflictingPersonOverlaps=${blocking.conflictingPersonOverlaps}: ${items.join('; ')}`);
   }
   if (blocking.conflictingPersonSlugCollisions > 0) {
     const items = overlaps.personSlugCollisions
       .filter((row) => row.personIdsConflict)
       .map(
-        (row) =>
-          `${row.slug} (${row.entries.map((e) => `${e.package_person_id}:${e.person_id}`).join(', ')})`
+        (row) => `${row.slug} (${row.entries.map((e) => `${e.package_person_id}:${e.person_id}`).join(', ')})`
       );
     details.push(
       `conflictingPersonSlugCollisions=${blocking.conflictingPersonSlugCollisions}: ${items.join('; ')}`
@@ -353,18 +342,14 @@ export function formatBlockingOverlapError(analysis: StagedOverlapAnalysis): str
       (row) =>
         `${row.file} (live=${row.live_media_id}, staged=${row.staged.map((s) => `${s.person_id}:${s.media_id}`).join(', ')})`
     );
-    details.push(
-      `liveMediaFileCollisions=${blocking.liveMediaFileCollisions}: ${items.join('; ')}`
-    );
+    details.push(`liveMediaFileCollisions=${blocking.liveMediaFileCollisions}: ${items.join('; ')}`);
   }
   if (blocking.kinshipAddRemoveConflicts > 0) {
     const items = overlaps.kinshipAddRemoveConflicts.map(
       (row) =>
         `${row.from}->${row.to}:${row.relation} (added=${row.addedBy.join(',')}, removed=${row.removedBy.join(',')})`
     );
-    details.push(
-      `kinshipAddRemoveConflicts=${blocking.kinshipAddRemoveConflicts}: ${items.join('; ')}`
-    );
+    details.push(`kinshipAddRemoveConflicts=${blocking.kinshipAddRemoveConflicts}: ${items.join('; ')}`);
   }
 
   return (
@@ -395,13 +380,7 @@ function captureBatchSnapshot(repoDir: string, personIds: readonly string[]): Ba
   const mediaFiles = new Map<string, Buffer | null>();
   const receiptFiles = new Map<string, Buffer | null>();
   for (const personId of personIds) {
-    const receiptPath = path.join(
-      repoDir,
-      'research',
-      'people',
-      personId,
-      INTEGRATION_RECEIPT_FILENAME
-    );
+    const receiptPath = path.join(repoDir, 'research', 'people', personId, INTEGRATION_RECEIPT_FILENAME);
     receiptFiles.set(receiptPath, fs.existsSync(receiptPath) ? fs.readFileSync(receiptPath) : null);
 
     const scansDir = path.join(repoDir, 'research', 'people', personId, 'scans');
@@ -510,9 +489,7 @@ export function formatIntegrateBatchTextReport(
     skippedParts.push(`${report.skippedDrifted.length} drifted legacy skipped`);
   }
   const skippedSuffix = skippedParts.length > 0 ? ` (${skippedParts.join(', ')})` : '';
-  lines.push(
-    `Batch integrate ${dryLabel}OK: ${report.integrated.length} package(s)${skippedSuffix}`
-  );
+  lines.push(`Batch integrate ${dryLabel}OK: ${report.integrated.length} package(s)${skippedSuffix}`);
   lines.push(`  Repo: ${report.repo}`);
   if (report.skippedAlreadyIntegrated.length > 0) {
     lines.push(
@@ -579,9 +556,7 @@ export async function runIntegrateBatchCommand(
       'Option `--mark-integrated` requires both `--all-staged` and `--pending-only`.'
     );
   }
-  const explicitIds = (options.personIds ?? [])
-    .map((id) => id.trim())
-    .filter((id) => id.length > 0);
+  const explicitIds = (options.personIds ?? []).map((id) => id.trim()).filter((id) => id.length > 0);
   if (allStaged && explicitIds.length > 0) {
     throw new CliValidationError(
       '`--all-staged` discovers person ids from research/people and does not take person ids.'
@@ -595,15 +570,11 @@ export async function runIntegrateBatchCommand(
   if (allStaged) {
     requested = listStagedAuditPersonIds(repoDir);
     if (!pendingOnly && requested.length === 0) {
-      throw new CliValidationError(
-        'No staged packages with patch.json were found under research/people/.'
-      );
+      throw new CliValidationError('No staged packages with patch.json were found under research/people/.');
     }
   } else {
     if (explicitIds.length === 0) {
-      throw new CliValidationError(
-        'Integrate requires at least one person_id or `--all-staged`.'
-      );
+      throw new CliValidationError('Integrate requires at least one person_id or `--all-staged`.');
     }
     const seen = new Set<string>();
     for (const personId of explicitIds) {
@@ -641,10 +612,7 @@ export async function runIntegrateBatchCommand(
       if (!dryRun) {
         for (const personId of legacyToMark) {
           const packageDir = path.join(repoDir, 'research', 'people', personId);
-          writeIntegrationReceipt(
-            packageDir,
-            buildIntegrationReceiptForPackage(packageDir, personId)
-          );
+          writeIntegrationReceipt(packageDir, buildIntegrationReceiptForPackage(packageDir, personId));
         }
       }
     }
@@ -721,8 +689,7 @@ export async function runIntegrateBatchCommand(
                 : `${stats.removedMediaFiles} newly staged media file(s) removed`;
             rollbackNote = `Rollback succeeded: ${stats.restoredYamlFiles} YAML file(s) restored, ${mediaNote}.`;
           } catch (rollbackErr: unknown) {
-            const rollbackDetail =
-              rollbackErr instanceof Error ? rollbackErr.message : String(rollbackErr);
+            const rollbackDetail = rollbackErr instanceof Error ? rollbackErr.message : String(rollbackErr);
             rollbackNote = `Rollback FAILED: ${rollbackDetail}.`;
           }
           const message = `Batch integrate failed on '${personId}' (package ${i + 1}/${targetIds.length}): ${detail}. ${rollbackNote}`;

@@ -1,8 +1,9 @@
-import React, { useEffect, useState } from 'react';
+import type React from 'react';
+import { useEffect, useState } from 'react';
 import { useArchiveData } from '../../context/ArchiveDataContext.js';
 import { KinloomFooter, KinloomMark } from '../KinloomFooter.js';
-import { consumeAuthErrorFromWindow, type AuthUrlError } from './authErrorCopy.js';
 import { AuthSignInFlow } from './AuthSignInFlow.js';
+import { type AuthUrlError, consumeAuthErrorFromWindow } from './authErrorCopy.js';
 
 export interface PrivateArchiveGateProps {
   onNavigateToInvite?: (invitePath: string) => void;
@@ -33,10 +34,7 @@ export const PrivateArchiveGate: React.FC<PrivateArchiveGateProps> = ({ onNaviga
   return (
     <div className="private-archive-gate">
       <main className="private-archive-gate-main">
-        <section
-          className="private-archive-gate-card"
-          aria-label={`Sign in to ${siteConfig.site.title}`}
-        >
+        <section className="private-archive-gate-card" aria-label={`Sign in to ${siteConfig.site.title}`}>
           <div className="private-archive-gate-brand">
             <KinloomMark size={26} />
             <span className="private-archive-gate-kicker">Private Family Archive</span>

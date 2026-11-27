@@ -3,17 +3,10 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { createRecordContext } from '../runtime/index.js';
-import {
-  hasPageLink,
-  parseGrid,
-  runNjArchivesCommand,
-  searchPortal,
-} from './nj-archives.js';
+import { hasPageLink, parseGrid, runNjArchivesCommand, searchPortal } from './nj-archives.js';
 
 const INDEX_HTML =
-  '<form action="./index.aspx">' +
-  '<input type="hidden" name="__VIEWSTATE" value="vs_idx" />' +
-  '</form>';
+  '<form action="./index.aspx">' + '<input type="hidden" name="__VIEWSTATE" value="vs_idx" />' + '</form>';
 
 const SEARCH_FORM_HTML =
   '<form action="./DeathIndex1848.aspx">' +
@@ -49,9 +42,7 @@ const LAND_RESULT_HTML =
   '</form>';
 
 const MONMOUTH_FORM_HTML =
-  '<form action="./ASearch.aspx">' +
-  '<input type="hidden" name="__VIEWSTATE" value="vs_mon" />' +
-  '</form>';
+  '<form action="./ASearch.aspx">' + '<input type="hidden" name="__VIEWSTATE" value="vs_mon" />' + '</form>';
 
 const MONMOUTH_RESULT_HTML =
   '<table id="ctl00_ContentPlaceHolder1_dgdArcSearch">' +

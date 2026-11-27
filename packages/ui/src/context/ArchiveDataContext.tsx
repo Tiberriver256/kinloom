@@ -1,11 +1,11 @@
 import type {
   ArchiveAuthProviders,
   ArchiveBundle,
-  ArchiveCapabilities as CoreArchiveCapabilities,
   ArchiveDataSource,
   ArchiveEvent,
   ArchiveSessionState,
   ArchiveStatus,
+  ArchiveCapabilities as CoreArchiveCapabilities,
   KinloomSiteConfig,
   MediaChecklistItem,
   Person,
@@ -16,12 +16,13 @@ import type {
 } from '@kinloom/core';
 import {
   ArchiveBundleSchema,
-  ReadingsBundleSchema,
   deriveArchiveStatus,
   mergePronunciationLexicons,
+  ReadingsBundleSchema,
   resolveCapabilities,
 } from '@kinloom/core';
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import type React from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { createStaticArchiveDataSource } from '../adapters/staticDemoDataSource.js';
 
 export interface ArchiveDataLoader {
@@ -116,9 +117,7 @@ function isMediaChecklistResponse(data: unknown): data is { items: MediaChecklis
   );
 }
 
-function isPronunciationsResponse(
-  data: unknown,
-): data is { pronunciations: Record<string, Pronunciation> } {
+function isPronunciationsResponse(data: unknown): data is { pronunciations: Record<string, Pronunciation> } {
   return (
     typeof data === 'object' &&
     data !== null &&
@@ -148,7 +147,7 @@ function normalizeSessionProp(session: ArchiveSession | null | undefined): Archi
 
 function normalizeCapabilities(
   caps: Partial<ArchiveCapabilities> | undefined,
-  session: ArchiveSessionState | null,
+  session: ArchiveSessionState | null
 ): CoreArchiveCapabilities {
   if (!caps) {
     return session ? resolveCapabilities(session) : DEFAULT_CAPABILITIES;
@@ -169,9 +168,7 @@ function wrapLegacyLoader(loader: ArchiveDataLoader): ArchiveDataSource {
       return { bundle, etag: null, notModified: false };
     },
     loadReadings: () => loader.loadReadings(),
-    loadMediaChecklist: loader.loadMediaChecklist
-      ? () => loader.loadMediaChecklist!()
-      : undefined,
+    loadMediaChecklist: loader.loadMediaChecklist ? () => loader.loadMediaChecklist!() : undefined,
   };
 }
 
@@ -236,13 +233,10 @@ export const ArchiveDataProvider: React.FC<ArchiveDataProviderProps> = ({
     return createStaticArchiveDataSource(resolvedBaseUrl);
   }, [dataSource, loader, resolvedBaseUrl]);
 
-  const initialNormalizedSession = useMemo(
-    () => normalizeSessionProp(sessionProp),
-    [sessionProp],
-  );
+  const initialNormalizedSession = useMemo(() => normalizeSessionProp(sessionProp), [sessionProp]);
   const initialNormalizedCaps = useMemo(
     () => normalizeCapabilities(capabilitiesProp, initialNormalizedSession),
-    [capabilitiesProp, initialNormalizedSession],
+    [capabilitiesProp, initialNormalizedSession]
   );
 
   const [bundle, setBundle] = useState<ArchiveBundle | null>(initialBundle);
@@ -251,12 +245,8 @@ export const ArchiveDataProvider: React.FC<ArchiveDataProviderProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [reloadTick, setReloadTick] = useState(0);
 
-  const [liveSession, setLiveSession] = useState<ArchiveSessionState | null>(
-    initialNormalizedSession,
-  );
-  const [liveCapabilities, setLiveCapabilities] = useState<CoreArchiveCapabilities>(
-    initialNormalizedCaps,
-  );
+  const [liveSession, setLiveSession] = useState<ArchiveSessionState | null>(initialNormalizedSession);
+  const [liveCapabilities, setLiveCapabilities] = useState<CoreArchiveCapabilities>(initialNormalizedCaps);
   const [liveAuthProviders, setLiveAuthProviders] = useState<ArchiveAuthProviders>({
     google: false,
     magicLink: Boolean(resolvedDataSource.requestMagicLink),
@@ -436,9 +426,9 @@ export const ArchiveDataProvider: React.FC<ArchiveDataProviderProps> = ({
     () =>
       mergePronunciationLexicons(
         mergePronunciationLexicons(siteConfig.pronunciations, bundle?.pronunciations),
-        livePronunciations,
+        livePronunciations
       ),
-    [siteConfig.pronunciations, bundle?.pronunciations, livePronunciations],
+    [siteConfig.pronunciations, bundle?.pronunciations, livePronunciations]
   );
 
   const status = deriveArchiveStatus({ loading, error, bundle });
@@ -555,7 +545,7 @@ export const ArchiveDataProvider: React.FC<ArchiveDataProviderProps> = ({
       liveAuthProviders,
       pronunciations,
       setPronunciations,
-    ],
+    ]
   );
 
   return <ArchiveDataContext.Provider value={value}>{children}</ArchiveDataContext.Provider>;

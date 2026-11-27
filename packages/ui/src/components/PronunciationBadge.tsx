@@ -1,9 +1,10 @@
 import type { Pronunciation, PronunciationCoverage, PronunciationVariant } from '@kinloom/core';
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import type React from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  KINLOOM_VOCABULARY,
   formatPronunciationScopePrefix,
   formatPronunciationScopeTitle,
+  KINLOOM_VOCABULARY,
 } from '../lib/vocabulary.js';
 import { resolveAssetUrl } from './Atoms.js';
 
@@ -61,16 +62,13 @@ export function isEnglishPronunciationLanguage(language?: string | null): boolea
 }
 
 function hasSingleEntryContent(
-  entry?: Pick<Pronunciation, 'phonetic' | 'ipa' | 'audio_url' | 'note'> | null,
+  entry?: Pick<Pronunciation, 'phonetic' | 'ipa' | 'audio_url' | 'note'> | null
 ): boolean {
   if (!entry) {
     return false;
   }
   return Boolean(
-    entry.phonetic?.trim() ||
-      entry.ipa?.trim() ||
-      entry.audio_url?.trim() ||
-      entry.note?.trim(),
+    entry.phonetic?.trim() || entry.ipa?.trim() || entry.audio_url?.trim() || entry.note?.trim()
   );
 }
 
@@ -221,7 +219,7 @@ export const PronunciationBadge: React.FC<PronunciationBadgeProps> = ({
         }
       }
     },
-    [playing, activeEntry, baseUrl, label],
+    [playing, activeEntry, baseUrl, label]
   );
 
   if (!pronunciation || !hasPronunciationContent(pronunciation) || !activeEntry) {
@@ -287,10 +285,7 @@ export const PronunciationBadge: React.FC<PronunciationBadgeProps> = ({
         </span>
       )}
       {!iconOnly && primaryGuide && (
-        <span
-          className="pronunciation-guide"
-          title={secondaryIpa ? `IPA: ${secondaryIpa}` : undefined}
-        >
+        <span className="pronunciation-guide" title={secondaryIpa ? `IPA: ${secondaryIpa}` : undefined}>
           {primaryGuide}
         </span>
       )}

@@ -1,6 +1,7 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
 import type { Place } from '@kinloom/core';
 import { projectNearbyPlaces } from '@kinloom/core';
+import type React from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 
 export interface LocalSurveyMapProps {
@@ -21,7 +22,7 @@ export const LocalSurveyMap: React.FC<LocalSurveyMapProps> = ({
   const navigate = useNavigate();
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const [isNarrow, setIsNarrow] = useState<boolean>(
-    () => typeof window !== 'undefined' && window.innerWidth <= 480,
+    () => typeof window !== 'undefined' && window.innerWidth <= 480
   );
 
   useEffect(() => {
@@ -71,7 +72,7 @@ export const LocalSurveyMap: React.FC<LocalSurveyMapProps> = ({
         limit: compact ? 6 : 12,
         excludeIds,
       }),
-    [center, allPlaces, width, height, maxRadiusMiles, highlightRadiusMiles, compact, excludeIds],
+    [center, allPlaces, width, height, maxRadiusMiles, highlightRadiusMiles, compact, excludeIds]
   );
 
   const cx = width / 2;
@@ -129,17 +130,12 @@ export const LocalSurveyMap: React.FC<LocalSurveyMapProps> = ({
     ];
 
     for (const c of candidates) {
-      const clearOfRing =
-        compact || !isNarrow || scopeMode !== 'radius15' || c.anchor === 'middle';
+      const clearOfRing = compact || !isNarrow || scopeMode !== 'radius15' || c.anchor === 'middle';
       if (!clearOfRing) {
         continue;
       }
       const blocked = markers.some(
-        (m) =>
-          m.x >= c.box.x1 - 7 &&
-          m.x <= c.box.x2 + 7 &&
-          m.y >= c.box.y1 - 7 &&
-          m.y <= c.box.y2 + 7,
+        (m) => m.x >= c.box.x1 - 7 && m.x <= c.box.x2 + 7 && m.y >= c.box.y1 - 7 && m.y <= c.box.y2 + 7
       );
       if (!blocked) {
         return c;
@@ -204,9 +200,7 @@ export const LocalSurveyMap: React.FC<LocalSurveyMapProps> = ({
         if (x1 < 8 || x2 > width - 28 || y1 < 6 || y2 > height - 4) {
           continue;
         }
-        const overlaps = placed.some(
-          (b) => !(x2 < b.x1 || x1 > b.x2 || y2 < b.y1 || y1 > b.y2),
-        );
+        const overlaps = placed.some((b) => !(x2 < b.x1 || x1 > b.x2 || y2 < b.y1 || y1 > b.y2));
         if (!overlaps) {
           placed.push({ x1, x2, y1, y2 });
           map.set(m.place.id, { lx: c.lx, ly: c.ly, anchor: c.anchor, extraCount: extras });
@@ -402,11 +396,7 @@ export const LocalSurveyMap: React.FC<LocalSurveyMapProps> = ({
         <nav className="local-survey-nearby-strip" aria-label={`Nearby places around ${center.name}`}>
           <span className="local-survey-nearby-label">Nearby:</span>
           {markers.slice(0, 6).map((m) => (
-            <Link
-              key={m.place.id}
-              to={`/place/${m.place.slug}`}
-              className="local-survey-nearby-link"
-            >
+            <Link key={m.place.id} to={`/place/${m.place.slug}`} className="local-survey-nearby-link">
               {m.place.name} ({m.distanceMiles} mi)
             </Link>
           ))}

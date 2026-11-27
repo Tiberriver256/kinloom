@@ -1,8 +1,8 @@
-import { expect, test } from '@playwright/test';
-import type { Page } from '@playwright/test';
 import fs from 'node:fs';
 import path from 'node:path';
-import { startLiveWikiTestServer, type LiveWikiTestHarness } from './helpers/wikiTestServer.js';
+import type { Page } from '@playwright/test';
+import { expect, test } from '@playwright/test';
+import { type LiveWikiTestHarness, startLiveWikiTestServer } from './helpers/wikiTestServer.js';
 
 const VIEWPORTS = [
   { name: '360x800', width: 360, height: 800 },
@@ -80,28 +80,29 @@ test.describe('Wave 50B UX regression suite', () => {
             innerWidth: window.innerWidth,
             headerBottom: headerRect ? Math.round(headerRect.bottom) : 0,
             toolbarTop: toolbarRect ? Math.round(toolbarRect.top) : 0,
-            toolbarScrollOverflow: toolbar
-              ? Math.round(toolbar.scrollWidth - toolbar.clientWidth)
-              : 0,
+            toolbarScrollOverflow: toolbar ? Math.round(toolbar.scrollWidth - toolbar.clientWidth) : 0,
             controlBoxes,
           };
         });
 
-        expect(metrics.overflow, `Overflow on /tree?surface=${surfaceParam} at ${vp.name}`).toBeLessThanOrEqual(0);
+        expect(
+          metrics.overflow,
+          `Overflow on /tree?surface=${surfaceParam} at ${vp.name}`
+        ).toBeLessThanOrEqual(0);
         expect(
           metrics.toolbarTop,
-          `Toolbar overlaps topbar on /tree?surface=${surfaceParam} at ${vp.name}`,
+          `Toolbar overlaps topbar on /tree?surface=${surfaceParam} at ${vp.name}`
         ).toBeGreaterThanOrEqual(metrics.headerBottom - 1);
         expect(
           metrics.toolbarScrollOverflow,
-          `Toolbar inner scroll overflow on /tree?surface=${surfaceParam} at ${vp.name}`,
+          `Toolbar inner scroll overflow on /tree?surface=${surfaceParam} at ${vp.name}`
         ).toBeLessThanOrEqual(2);
         expect(metrics.controlBoxes.length).toBeGreaterThanOrEqual(6);
 
         for (const box of metrics.controlBoxes) {
           expect(box.left, `${box.text} clipped left at ${vp.name}`).toBeGreaterThanOrEqual(0);
           expect(box.right, `${box.text} clipped right at ${vp.name}`).toBeLessThanOrEqual(
-            metrics.innerWidth + 1,
+            metrics.innerWidth + 1
           );
           if (vp.width <= 768) {
             expect(box.height, `${box.text} height < 44px at ${vp.name}`).toBeGreaterThanOrEqual(44);
@@ -159,7 +160,7 @@ test.describe('Wave 50B UX regression suite', () => {
           ? Math.round(centerLabel.getBoundingClientRect().height * 10) / 10
           : 0;
         const nearbyLinks = [...document.querySelectorAll('.local-survey-nearby-link')].map((el) =>
-          Math.round(el.getBoundingClientRect().height),
+          Math.round(el.getBoundingClientRect().height)
         );
 
         return {
@@ -179,7 +180,7 @@ test.describe('Wave 50B UX regression suite', () => {
         expect(report.minRowHeight, `Occupancy row height < 44px at ${vp.name}`).toBeGreaterThanOrEqual(44);
         expect(
           report.centerLabelHeight,
-          `LocalSurveyMap center label height < 10px at ${vp.name}`,
+          `LocalSurveyMap center label height < 10px at ${vp.name}`
         ).toBeGreaterThanOrEqual(10);
         if (report.nearbyLinks.length > 0) {
           expect(Math.min(...report.nearbyLinks)).toBeGreaterThanOrEqual(44);
@@ -222,7 +223,7 @@ test.describe('Wave 50B UX regression suite', () => {
           [...document.querySelectorAll('.time-lane')].flatMap((lane) => {
             const cards = lane.querySelectorAll('.time-person-item');
             return cards.length === 1 ? [Math.round(cards[0].getBoundingClientRect().width)] : [];
-          }),
+          })
         );
         if (cardWidths.length > 0) {
           expect(Math.min(...cardWidths)).toBeGreaterThanOrEqual(340);
@@ -341,7 +342,7 @@ test.describe('Wave 50B UX regression suite', () => {
     await expect(page.locator('.places-search-bar input')).toBeVisible();
     const placesMetrics = await page.evaluate(() => {
       const zeroButtons = [...document.querySelectorAll('.ink-filter-bar button')].filter((b) =>
-        b.textContent?.includes('(0)'),
+        b.textContent?.includes('(0)')
       );
       const searchBox = document.querySelector('.places-search-bar input')?.getBoundingClientRect();
       return {
@@ -451,7 +452,10 @@ test.describe('Wave 50B UX regression suite', () => {
 
       // Enroll as editor via invite + magic link
       await page.goto(`${wiki.baseUrl}/api/auth/invite/${wiki.inviteToken}`);
-      await page.getByRole('region', { name: 'Invite access notice' }).getByRole('button', { name: 'Sign in to edit' }).click();
+      await page
+        .getByRole('region', { name: 'Invite access notice' })
+        .getByRole('button', { name: 'Sign in to edit' })
+        .click();
       const signInDialog = page.getByRole('dialog', { name: 'Sign in to family archive' });
       await signInDialog.getByLabel('Email address').fill('wave50b.editor@archive.example');
       await signInDialog.getByRole('button', { name: 'Email Magic Link' }).click();
@@ -520,7 +524,7 @@ test.describe('Wave 50B UX regression suite', () => {
           saveRect && saveRect.top >= 0 && saveRect.bottom <= window.innerHeight
             ? document.elementFromPoint(
                 saveRect.left + saveRect.width / 2,
-                saveRect.top + saveRect.height / 2,
+                saveRect.top + saveRect.height / 2
               )
             : null;
 
@@ -528,11 +532,11 @@ test.describe('Wave 50B UX regression suite', () => {
           backdropZ: backdrop ? Number(window.getComputedStyle(backdrop).zIndex) : 0,
           dockZ: dock ? Number(window.getComputedStyle(dock).zIndex) : 0,
           fieldsetInView: Boolean(
-            fieldsetRect && fieldsetRect.top < window.innerHeight && fieldsetRect.bottom > 0,
+            fieldsetRect && fieldsetRect.top < window.innerHeight && fieldsetRect.bottom > 0
           ),
           activeTag: document.activeElement?.tagName ?? '',
           activeInsidePronunciation: Boolean(
-            fieldset && document.activeElement && fieldset.contains(document.activeElement),
+            fieldset && document.activeElement && fieldset.contains(document.activeElement)
           ),
           hitIsDock: Boolean(hitAtSave?.closest('[data-testid="narrative-audio-dock"]')),
         };
@@ -589,16 +593,14 @@ test.describe('Wave 50B UX regression suite', () => {
       expect(treeMetrics.directUnits.length).toBeGreaterThan(0);
       for (const unit of treeMetrics.directUnits) {
         expect(unit.borderLeftWidth, `Direct unit left/right border mismatch at ${vp.name}`).toBe(
-          unit.borderRightWidth,
+          unit.borderRightWidth
         );
         expect(unit.borderRadius, `Direct unit borderRadius at ${vp.name}`).toBe('4px');
       }
       expect(treeMetrics.earlyStrips.length).toBeGreaterThan(0);
       for (const strip of treeMetrics.earlyStrips) {
         expect(strip.borderTopWidth, `Early strip borderTopWidth at ${vp.name}`).toBe('0px');
-        expect(strip.backgroundColor, `Early strip backgroundColor at ${vp.name}`).toBe(
-          'rgba(0, 0, 0, 0)',
-        );
+        expect(strip.backgroundColor, `Early strip backgroundColor at ${vp.name}`).toBe('rgba(0, 0, 0, 0)');
       }
 
       // oxlint-disable-next-line eslint/no-await-in-loop -- capture Wave 51B proof
@@ -631,7 +633,7 @@ test.describe('Wave 50B UX regression suite', () => {
       for (const item of proseMetrics) {
         expect(item.maxWidth, `Prose maxWidth on ${check.route} (${check.selector})`).not.toBe('none');
         expect(item.width, `Prose rendered width on ${check.route} (${check.selector})`).toBeLessThanOrEqual(
-          620,
+          620
         );
       }
     }
@@ -668,10 +670,9 @@ test.describe('Wave 50B UX regression suite', () => {
       expect(surveyMetrics.captionFontPx, `Caption fontSize on ${placeRoute}`).toBeGreaterThanOrEqual(12);
       expect(surveyMetrics.textSizes.length).toBeGreaterThan(0);
       for (const t of surveyMetrics.textSizes) {
-        expect(
-          t.effectivePx,
-          `SVG text "${t.text}" effective size on ${placeRoute}`,
-        ).toBeGreaterThanOrEqual(12);
+        expect(t.effectivePx, `SVG text "${t.text}" effective size on ${placeRoute}`).toBeGreaterThanOrEqual(
+          12
+        );
       }
       if (placeRoute.includes('springfield')) {
         // oxlint-disable-next-line eslint/no-await-in-loop -- capture survey map proof
@@ -698,7 +699,7 @@ test.describe('Wave 50B UX regression suite', () => {
             top: Number.parseFloat(s.paddingTop || '0'),
             bottom: Number.parseFloat(s.paddingBottom || '0'),
           };
-        }),
+        })
       );
       expect(pillPaddings.length).toBeGreaterThan(0);
       for (const pad of pillPaddings) {
@@ -774,9 +775,7 @@ test.describe('Wave 50B UX regression suite', () => {
 
     await page.keyboard.press('Escape');
     await expect(searchDialog).toHaveCount(0);
-    const searchRestored = await page.evaluate(() =>
-      document.activeElement?.textContent?.includes('Search'),
-    );
+    const searchRestored = await page.evaluate(() => document.activeElement?.textContent?.includes('Search'));
     expect(searchRestored).toBe(true);
 
     // SourceReaderDrawer: aria-modal, Tab trap, tablist ArrowRight without turning pages, Escape restore
@@ -813,7 +812,7 @@ test.describe('Wave 50B UX regression suite', () => {
     await page.keyboard.press('Escape');
     await expect(readerDialog).toHaveCount(0);
     const sourcesRestored = await page.evaluate(() =>
-      document.activeElement?.textContent?.includes('Sources'),
+      document.activeElement?.textContent?.includes('Sources')
     );
     expect(sourcesRestored).toBe(true);
 
@@ -896,9 +895,7 @@ test.describe('Wave 50B UX regression suite', () => {
     await page.goto('/place/springfield-illinois');
     const placePrint = await page.evaluate(() => {
       const checkHidden = (sel: string): boolean =>
-        [...document.querySelectorAll(sel)].every(
-          (el) => window.getComputedStyle(el).display === 'none',
-        );
+        [...document.querySelectorAll(sel)].every((el) => window.getComputedStyle(el).display === 'none');
       return {
         scopeHidden: checkHidden('.place-scope-bar'),
         decadeHidden: checkHidden('.place-decade-bar'),
@@ -922,7 +919,7 @@ test.describe('Wave 50B UX regression suite', () => {
     const chartAudit = await page.evaluate(() => {
       const sideTabs = document.querySelectorAll('.tree-node-card rect[width="4"]').length;
       const nodeTexts = [...document.querySelectorAll('.tree-node-card text')].map(
-        (el) => el.textContent?.trim() ?? '',
+        (el) => el.textContent?.trim() ?? ''
       );
       const hasAbrahamLincoln = nodeTexts.some((t) => t.includes('Abraham Lincoln'));
       const zoomText = document.querySelector('.tree-zoom-readout')?.textContent?.trim() ?? '';
@@ -952,7 +949,7 @@ test.describe('Wave 50B UX regression suite', () => {
       [...document.querySelectorAll('.time-person-item')].map((card) => ({
         status: card.querySelector('.time-person-status')?.textContent?.trim() ?? '',
         note: card.querySelector('.time-person-note')?.textContent?.trim() ?? '',
-      })),
+      }))
     );
     expect(timeAudit.length).toBeGreaterThan(0);
     for (const item of timeAudit) {
@@ -1005,7 +1002,7 @@ test.describe('Wave 50B UX regression suite', () => {
         [...document.querySelectorAll('.search-input, .index-filter-actions .pill-btn')].map((el) => ({
           cls: el.className,
           height: Math.round(el.getBoundingClientRect().height),
-        })),
+        }))
       );
       expect(indexHeights.length, `no index controls found at ${vp.name}`).toBeGreaterThan(0);
       for (const item of indexHeights) {
@@ -1019,14 +1016,14 @@ test.describe('Wave 50B UX regression suite', () => {
       // oxlint-disable-next-line eslint/no-await-in-loop -- verify pronunciation & family chips + typography
       const personCheck = await page.evaluate(() => {
         const targets = [
-          ...document.querySelectorAll('.person-header .pronunciation-play-btn, .person-header .pill-btn, .person-header .ink-link-btn'),
+          ...document.querySelectorAll(
+            '.person-header .pronunciation-play-btn, .person-header .pill-btn, .person-header .ink-link-btn'
+          ),
         ].map((el) => ({
           cls: el.className,
           height: Math.round(el.getBoundingClientRect().height),
         }));
-        const smallFonts = [
-          ...document.querySelectorAll('.media-kind-badge, .pronunciation-lang'),
-        ]
+        const smallFonts = [...document.querySelectorAll('.media-kind-badge, .pronunciation-lang')]
           .filter((el) => window.getComputedStyle(el).display !== 'none')
           .map((el) => ({
             cls: el.className,
@@ -1051,8 +1048,8 @@ test.describe('Wave 50B UX regression suite', () => {
       // oxlint-disable-next-line eslint/no-await-in-loop -- verify jump chips
       const treeChipHeights = await page.evaluate(() =>
         [...document.querySelectorAll('.tree-gen-jump-chip')].map((el) =>
-          Math.round(el.getBoundingClientRect().height),
-        ),
+          Math.round(el.getBoundingClientRect().height)
+        )
       );
       expect(treeChipHeights.length, `no tree jump chips found at ${vp.name}`).toBeGreaterThan(0);
       for (const h of treeChipHeights) {
@@ -1069,7 +1066,7 @@ test.describe('Wave 50B UX regression suite', () => {
       const timeFonts = await page.evaluate(() =>
         [...document.querySelectorAll('.time-anchor-count, .time-person-tier')]
           .filter((el) => window.getComputedStyle(el).display !== 'none')
-          .map((el) => Number.parseFloat(window.getComputedStyle(el).fontSize)),
+          .map((el) => Number.parseFloat(window.getComputedStyle(el).fontSize))
       );
       expect(timeFonts.length, `no time micro fonts found at ${vp.name}`).toBeGreaterThan(0);
       for (const fs of timeFonts) {

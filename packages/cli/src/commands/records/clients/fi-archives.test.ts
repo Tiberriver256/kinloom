@@ -276,11 +276,7 @@ describe('fi-archives native client', () => {
     };
 
     const r1 = await invokeFi(['archives', 'Turun seurakun*', '--json'], cacheDir, fetchImpl);
-    const r2 = await invokeFi(
-      ['archives', 'Turun seurakun*', '--digitized', '--json'],
-      cacheDir,
-      fetchImpl
-    );
+    const r2 = await invokeFi(['archives', 'Turun seurakun*', '--digitized', '--json'], cacheDir, fetchImpl);
     const r3 = await invokeFi(['archive', '1299923671', '--digitized', '--json'], cacheDir, fetchImpl);
     const r4 = await invokeFi(
       ['archive', 'https://digihakemisto.net/aineisto/1299923671', '--json'],
@@ -339,11 +335,7 @@ describe('fi-archives native client', () => {
 
     const r1 = await invokeFi(['event', '0001/kastetut/418', '--json'], cacheDir, fetchImpl);
     mode = 'challenge';
-    const r2 = await invokeFi(
-      ['event', '0001/kastetut/418', '--refresh', '--json'],
-      cacheDir,
-      fetchImpl
-    );
+    const r2 = await invokeFi(['event', '0001/kastetut/418', '--refresh', '--json'], cacheDir, fetchImpl);
 
     expect(r1.exitCode).toBe(0);
     expect(calls).toBe(3);

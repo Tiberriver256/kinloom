@@ -138,9 +138,9 @@ describe('GEDCOM citations, parse, export, and sliceGedcom', () => {
       cleanEventSummaryProse('John was born on 27 oct 1850 according to the Ancestry GEDCOM (@I1@).')
     ).toBe('John was born on 27 Oct 1850.');
     expect(cleanAlternateNote('GEDCOM alternate date: 1851 (GEDCOM @I1@)')).toBe('Alternate date: 1851');
-    expect(recordScanMatchesSourceCitation('1880 US Federal Census', '1880 United States Federal Census')).toBe(
-      true
-    );
+    expect(
+      recordScanMatchesSourceCitation('1880 US Federal Census', '1880 United States Federal Census')
+    ).toBe(true);
   });
 
   it('slices a combined GEDCOM with maiden names primary, complete siblings, and no upstream spouse-parent subtrees by default', () => {
@@ -177,9 +177,7 @@ describe('GEDCOM citations, parse, export, and sliceGedcom', () => {
     expect(owen?.is_living).toBe(true);
 
     // SSN redacted on parsed PAGE citation
-    const williamBirth = sliced.events.find(
-      (e) => e.title === 'Birth of William Alder'
-    );
+    const williamBirth = sliced.events.find((e) => e.title === 'Birth of William Alder');
     expect(williamBirth?.sources[0]?.citation_detail).toBe('District 4, p. 12');
 
     // When expandSpouseAncestors is explicitly true, @I99@ IS included
@@ -274,9 +272,9 @@ describe('GEDCOM citations, parse, export, and sliceGedcom', () => {
           const ged = formatEdtfToGedcomDate(edtf);
           expect(ged).toMatch(/^\d{1,2} [A-Z]{3} \d{4}$/);
           expect(escapeGedcomValue('@leading')).toBe('@@leading');
-          expect(formatGedcomName({ full_name: 'Ada Lovelace', given_name: 'Ada', surname: 'Lovelace' })).toBe(
-            'Ada /Lovelace/'
-          );
+          expect(
+            formatGedcomName({ full_name: 'Ada Lovelace', given_name: 'Ada', surname: 'Lovelace' })
+          ).toBe('Ada /Lovelace/');
         }
       ),
       { numRuns: 50 }

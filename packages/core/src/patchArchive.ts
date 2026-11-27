@@ -1,3 +1,27 @@
+import {
+  ALLOWED_MANUAL_MEDIA_KINDS,
+  buildTimedEvent,
+  compareArchiveEvents,
+  EVENT_HERO_MEDIA_KINDS,
+  resolvePersonBranch,
+} from './compileArchive.js';
+import { edtfYear } from './edtf.js';
+import { applyCitationCleanings, cleanSourceCitationTitle } from './gedcom/citations.js';
+import {
+  collectLivingNames,
+  compileLivingNamePattern,
+  filterMediaForPrivacy,
+  redactSingleEvent,
+  redactSingleNarrative,
+  redactSinglePerson,
+  resolveEffectiveLiving,
+} from './privacy.js';
+import {
+  buildPlaceAncestors,
+  deriveResidenceSpansForPerson,
+  type ResidenceAnchor,
+  samePlaceOrWithin15Miles,
+} from './residenceSpans.js';
 import type { KinloomSiteConfig } from './schemas/config.js';
 import type {
   ArchiveBundle,
@@ -15,30 +39,6 @@ import type {
 import { getMediaPersonIds } from './schemas/entities.js';
 import type { EntityPayload, EntityType, RevisionAction } from './schemas/revisions.js';
 import { deriveKinshipEdgeId, parseEntityPayload } from './schemas/revisions.js';
-import {
-  ALLOWED_MANUAL_MEDIA_KINDS,
-  EVENT_HERO_MEDIA_KINDS,
-  buildTimedEvent,
-  compareArchiveEvents,
-  resolvePersonBranch,
-} from './compileArchive.js';
-import { edtfYear } from './edtf.js';
-import { applyCitationCleanings, cleanSourceCitationTitle } from './gedcom/citations.js';
-import {
-  collectLivingNames,
-  compileLivingNamePattern,
-  filterMediaForPrivacy,
-  redactSingleEvent,
-  redactSingleNarrative,
-  redactSinglePerson,
-  resolveEffectiveLiving,
-} from './privacy.js';
-import {
-  buildPlaceAncestors,
-  deriveResidenceSpansForPerson,
-  samePlaceOrWithin15Miles,
-  type ResidenceAnchor,
-} from './residenceSpans.js';
 
 export interface BundlePatchMutation {
   revision_id?: number;
@@ -694,7 +694,11 @@ export function patchCompiledBundle(
   }
 
   // Reconcile media when people were deleted, newly marked living, or renamed
-  if (deletedPersonIds.size > 0 || (newlyLivingPersonIds.size > 0 && stripLivingPortraits) || renamedPersonIds.size > 0) {
+  if (
+    deletedPersonIds.size > 0 ||
+    (newlyLivingPersonIds.size > 0 && stripLivingPortraits) ||
+    renamedPersonIds.size > 0
+  ) {
     const { idxById, living } = ensurePeopleIndex();
     const evIdxMap = ensureEventsIndex();
     for (let i = media.length - 1; i >= 0; i -= 1) {
@@ -895,7 +899,12 @@ export function patchCompiledBundle(
       const nextMediaCount = mediaCounts.get(pid) ?? 0;
       let nextPortrait = prev.portrait_url;
       const deletedUrls = deletedPortraitUrlByPerson.get(pid);
-      if (deletedUrls && nextPortrait && deletedUrls.has(nextPortrait) && !explicitPortraitPersonIds.has(pid)) {
+      if (
+        deletedUrls &&
+        nextPortrait &&
+        deletedUrls.has(nextPortrait) &&
+        !explicitPortraitPersonIds.has(pid)
+      ) {
         nextPortrait = portraitFromMedia.get(pid) ?? null;
       } else if (!nextPortrait) {
         nextPortrait = portraitFromMedia.get(pid) ?? null;
@@ -1021,9 +1030,7 @@ export function patchCompiledBundle(
       const anchors = anchorsByPerson.get(pid);
       recomputedSpansByPerson.set(
         pid,
-        anchors && anchors.length >= 2
-          ? deriveResidenceSpansForPerson(pid, anchors, pMap, 0)
-          : []
+        anchors && anchors.length >= 2 ? deriveResidenceSpansForPerson(pid, anchors, pMap, 0) : []
       );
     }
 

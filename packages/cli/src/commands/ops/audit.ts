@@ -3,35 +3,31 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { performance } from 'node:perf_hooks';
 import {
-  parseKinloomConfigYaml,
-  resolveEffectiveLiving,
   type KinshipEdge,
   type PrivacyConfig,
+  parseKinloomConfigYaml,
   type RawEvent,
   type RawPerson,
+  resolveEffectiveLiving,
 } from '@kinloom/core';
 import { CliValidationError } from '../../errors.js';
 import { parseMatchingYamlBlocks, splitTopLevelYamlList } from './context.js';
 import {
   applyKinshipRemovals,
-  parseValidDeathEdtf,
-  runIntegrateCommand,
   type IntegrateCommandResult,
+  parseValidDeathEdtf,
   type RemoveKinshipEntry,
+  runIntegrateCommand,
 } from './integrate.js';
+import { collectLiveMediaCollisions, loadLiveMedia, readStagedMediaRefs } from './live-media-collisions.js';
 import {
-  collectLiveMediaCollisions,
-  loadLiveMedia,
-  readStagedMediaRefs,
-} from './live-media-collisions.js';
-import {
-  NARRATIVE_POSTHUMOUS_HORIZON_YEARS,
   collectLivingNameHitsWithMatcher,
   compileLivingNameMatcher,
   computeSourceMaxYearById,
   extractLatestEdtfYear,
-  resolveNarrativeMaxYear,
   type LivingNameTarget,
+  NARRATIVE_POSTHUMOUS_HORIZON_YEARS,
+  resolveNarrativeMaxYear,
 } from './living-name-matcher.js';
 import {
   analyzeTreeHygiene,
@@ -67,29 +63,237 @@ const MIN_SCAN_WARN_BYTES = 10 * 1024;
 const MAX_SCAN_WARN_BYTES = 10 * 1024 * 1024;
 
 const ABBREVIATIONS = [
-  'Mr.', 'Mrs.', 'Ms.', 'Dr.', 'Prof.', 'Rev.', 'Hon.', 'Gov.', 'Pres.', 'Sen.', 'Rep.',
-  'Esq.', 'Fr.', 'Br.', 'Mme.', 'Mlle.', 'Messrs.', 'Supt.', 'Jr.', 'Sr.',
-  'Gen.', 'Col.', 'Maj.', 'Capt.', 'Lt.', 'Lieut.', 'Sgt.', 'Sergt.', 'Cpl.', 'Corpl.',
-  'Pfc.', 'PFC.', 'Pvt.', 'Adm.', 'Brig.', 'Cmdr.', 'Ens.', 'Spc.', 'Spec.',
-  'Nr.', 'Nrs.', 'nr.', 'nrs.', 'No.', 'Nos.', 'Vol.', 'Vols.', 'vol.', 'vols.',
-  'Lib.', 'Fol.', 'Fols.', 'fol.', 'fols.', 'Reg.', 'reg.', 'Inv.', 'inv.',
-  'Afd.', 'afd.', 'Blz.', 'blz.', 'Hfdst.', 'Vgl.', 'vgl.',
-  'Geb.', 'geb.', 'Ged.', 'ged.', 'Overl.', 'overl.', 'Begr.', 'begr.',
-  'Ch.', 'ch.', 'Sec.', 'sec.', 'Par.', 'par.', 'Pars.', 'pars.',
-  'Fig.', 'Figs.', 'fig.', 'figs.', 'Art.', 'art.', 'Bk.', 'bk.', 'Pt.', 'pt.', 'Ser.', 'ser.',
-  'Ed.', 'Eds.', 'ed.', 'eds.', 'p.', 'pp.', 'c.', 'ca.', 'cf.', 'fl.',
-  'abt.', 'bef.', 'aft.', 'est.', 'approx.', 'e.g.', 'i.e.', 'et al.', 'etc.', 'vs.', 'v.', 'viz.',
-  'Twp.', 'twp.', 'Co.', 'St.', 'Ste.', 'Ave.', 'Blvd.', 'Rd.', 'Ln.', 'Ct.', 'Pl.', 'Sq.',
-  'Dist.', 'Pct.', 'Mt.', 'Ft.', 'Isl.', 'R.F.D.', 'R.R.', 'P.O.', 'Bldg.', 'Dept.', 'Assn.',
-  'Bros.', 'Inc.', 'Ltd.', 'Corp.', 'Mfg.',
-  'Jan.', 'Feb.', 'Mar.', 'Apr.', 'Jun.', 'Jul.', 'Aug.', 'Sep.', 'Sept.', 'Oct.', 'Nov.', 'Dec.',
-  'JAN.', 'FEB.', 'MAR.', 'APR.', 'JUN.', 'JUL.', 'AUG.', 'SEP.', 'SEPT.', 'OCT.', 'NOV.', 'DEC.',
-  'U.S.', 'U.S.A.', 'D.C.', 'Ala.', 'Ariz.', 'Ark.', 'Calif.', 'Colo.', 'Conn.', 'Del.', 'Fla.',
-  'Ga.', 'Ill.', 'Ind.', 'Kan.', 'Kans.', 'Ky.', 'La.', 'Mass.', 'Md.', 'Mich.', 'Minn.', 'Miss.',
-  'Mo.', 'Mont.', 'N.C.', 'N.D.', 'N.H.', 'N.J.', 'N.M.', 'N.Y.', 'Neb.', 'Nebr.', 'Nev.', 'Okla.',
-  'Ore.', 'Oreg.', 'Pa.', 'R.I.', 'S.C.', 'S.D.', 'Tenn.', 'Tex.', 'Va.', 'Vt.', 'W.Va.', 'Wash.',
-  'Wis.', 'Wisc.', 'Wyo.', 'Ont.', 'Que.', 'N.S.', 'N.B.',
-  'B.C.', 'A.D.', 'a.m.', 'p.m.', 'b.', 'd.', 'm.', 'bur.', 'bap.', 'chr.',
+  'Mr.',
+  'Mrs.',
+  'Ms.',
+  'Dr.',
+  'Prof.',
+  'Rev.',
+  'Hon.',
+  'Gov.',
+  'Pres.',
+  'Sen.',
+  'Rep.',
+  'Esq.',
+  'Fr.',
+  'Br.',
+  'Mme.',
+  'Mlle.',
+  'Messrs.',
+  'Supt.',
+  'Jr.',
+  'Sr.',
+  'Gen.',
+  'Col.',
+  'Maj.',
+  'Capt.',
+  'Lt.',
+  'Lieut.',
+  'Sgt.',
+  'Sergt.',
+  'Cpl.',
+  'Corpl.',
+  'Pfc.',
+  'PFC.',
+  'Pvt.',
+  'Adm.',
+  'Brig.',
+  'Cmdr.',
+  'Ens.',
+  'Spc.',
+  'Spec.',
+  'Nr.',
+  'Nrs.',
+  'nr.',
+  'nrs.',
+  'No.',
+  'Nos.',
+  'Vol.',
+  'Vols.',
+  'vol.',
+  'vols.',
+  'Lib.',
+  'Fol.',
+  'Fols.',
+  'fol.',
+  'fols.',
+  'Reg.',
+  'reg.',
+  'Inv.',
+  'inv.',
+  'Afd.',
+  'afd.',
+  'Blz.',
+  'blz.',
+  'Hfdst.',
+  'Vgl.',
+  'vgl.',
+  'Geb.',
+  'geb.',
+  'Ged.',
+  'ged.',
+  'Overl.',
+  'overl.',
+  'Begr.',
+  'begr.',
+  'Ch.',
+  'ch.',
+  'Sec.',
+  'sec.',
+  'Par.',
+  'par.',
+  'Pars.',
+  'pars.',
+  'Fig.',
+  'Figs.',
+  'fig.',
+  'figs.',
+  'Art.',
+  'art.',
+  'Bk.',
+  'bk.',
+  'Pt.',
+  'pt.',
+  'Ser.',
+  'ser.',
+  'Ed.',
+  'Eds.',
+  'ed.',
+  'eds.',
+  'p.',
+  'pp.',
+  'c.',
+  'ca.',
+  'cf.',
+  'fl.',
+  'abt.',
+  'bef.',
+  'aft.',
+  'est.',
+  'approx.',
+  'e.g.',
+  'i.e.',
+  'et al.',
+  'etc.',
+  'vs.',
+  'v.',
+  'viz.',
+  'Twp.',
+  'twp.',
+  'Co.',
+  'St.',
+  'Ste.',
+  'Ave.',
+  'Blvd.',
+  'Rd.',
+  'Ln.',
+  'Ct.',
+  'Pl.',
+  'Sq.',
+  'Dist.',
+  'Pct.',
+  'Mt.',
+  'Ft.',
+  'Isl.',
+  'R.F.D.',
+  'R.R.',
+  'P.O.',
+  'Bldg.',
+  'Dept.',
+  'Assn.',
+  'Bros.',
+  'Inc.',
+  'Ltd.',
+  'Corp.',
+  'Mfg.',
+  'Jan.',
+  'Feb.',
+  'Mar.',
+  'Apr.',
+  'Jun.',
+  'Jul.',
+  'Aug.',
+  'Sep.',
+  'Sept.',
+  'Oct.',
+  'Nov.',
+  'Dec.',
+  'JAN.',
+  'FEB.',
+  'MAR.',
+  'APR.',
+  'JUN.',
+  'JUL.',
+  'AUG.',
+  'SEP.',
+  'SEPT.',
+  'OCT.',
+  'NOV.',
+  'DEC.',
+  'U.S.',
+  'U.S.A.',
+  'D.C.',
+  'Ala.',
+  'Ariz.',
+  'Ark.',
+  'Calif.',
+  'Colo.',
+  'Conn.',
+  'Del.',
+  'Fla.',
+  'Ga.',
+  'Ill.',
+  'Ind.',
+  'Kan.',
+  'Kans.',
+  'Ky.',
+  'La.',
+  'Mass.',
+  'Md.',
+  'Mich.',
+  'Minn.',
+  'Miss.',
+  'Mo.',
+  'Mont.',
+  'N.C.',
+  'N.D.',
+  'N.H.',
+  'N.J.',
+  'N.M.',
+  'N.Y.',
+  'Neb.',
+  'Nebr.',
+  'Nev.',
+  'Okla.',
+  'Ore.',
+  'Oreg.',
+  'Pa.',
+  'R.I.',
+  'S.C.',
+  'S.D.',
+  'Tenn.',
+  'Tex.',
+  'Va.',
+  'Vt.',
+  'W.Va.',
+  'Wash.',
+  'Wis.',
+  'Wisc.',
+  'Wyo.',
+  'Ont.',
+  'Que.',
+  'N.S.',
+  'N.B.',
+  'B.C.',
+  'A.D.',
+  'a.m.',
+  'p.m.',
+  'b.',
+  'd.',
+  'm.',
+  'bur.',
+  'bap.',
+  'chr.',
 ] as const;
 
 const ABBREVIATION_RE = new RegExp(
@@ -383,8 +587,7 @@ export function computeLifespan(
     if (!Number.isFinite(birth.startMs) || !Number.isFinite(death.endMs)) {
       return { exact: false, years: null, days: null, totalDays: null, label: null };
     }
-    const years =
-      new Date(death.endMs).getUTCFullYear() - new Date(birth.startMs).getUTCFullYear();
+    const years = new Date(death.endMs).getUTCFullYear() - new Date(birth.startMs).getUTCFullYear();
     return {
       exact: false,
       years,
@@ -393,12 +596,7 @@ export function computeLifespan(
       label: `~${years} years`,
     };
   }
-  if (
-    birth.precision === 'day' &&
-    death.precision === 'day' &&
-    birth.month !== null &&
-    birth.day !== null
-  ) {
+  if (birth.precision === 'day' && death.precision === 'day' && birth.month !== null && birth.day !== null) {
     const totalDays = Math.round((death.startMs - birth.startMs) / 86_400_000);
     let years = death.year - birth.year;
     let anniversary = Date.UTC(birth.year + years, birth.month - 1, birth.day);
@@ -440,7 +638,10 @@ function checkEventChronologyForPerson(params: {
   const evId = asString(ev.id);
   const textBlob = `${evId} ${asString(ev.event_kind)} ${asString(ev.title)} ${asString(ev.summary)}`;
   const isPostMortemAllowed = POST_MORTEM_RE.test(textBlob);
-  const normalizedRole = role.trim().toLowerCase().replaceAll(/[\s-]+/g, '_');
+  const normalizedRole = role
+    .trim()
+    .toLowerCase()
+    .replaceAll(/[\s-]+/g, '_');
   const isPassivePostMortemRole = POST_MORTEM_PASSIVE_ROLES.has(normalizedRole);
   const isPreBirthContext = PRE_BIRTH_CONTEXT_RE.test(textBlob);
   const isCensus = CENSUS_RE.test(`${evId} ${asString(ev.title)}`);
@@ -452,12 +653,18 @@ function checkEventChronologyForPerson(params: {
   if (birth && birthMinMs !== null && dt.endMs < birthMinMs) {
     if (isCensus) {
       if (!isPreBirthContext) {
-        errors.push(`${labelPrefix}Event ${evId} (${dt.raw}): census predates birth (${birth.raw}) without context label.`);
+        errors.push(
+          `${labelPrefix}Event ${evId} (${dt.raw}): census predates birth (${birth.raw}) without context label.`
+        );
       } else {
-        warnings.push(`${labelPrefix}Event ${evId} (${dt.raw}): labeled pre-birth census context before birth (${birth.raw}).`);
+        warnings.push(
+          `${labelPrefix}Event ${evId} (${dt.raw}): labeled pre-birth census context before birth (${birth.raw}).`
+        );
       }
     } else if (isPreBirthContext) {
-      warnings.push(`${labelPrefix}Event ${evId} (${dt.raw}): pre-birth family context before birth (${birth.raw}).`);
+      warnings.push(
+        `${labelPrefix}Event ${evId} (${dt.raw}): pre-birth family context before birth (${birth.raw}).`
+      );
     } else {
       errors.push(`${labelPrefix}Event ${evId} (${dt.raw}): predates birth (${birth.raw}).`);
     }
@@ -466,12 +673,18 @@ function checkEventChronologyForPerson(params: {
   if (death && deathMaxMs !== null && dt.startMs > deathMaxMs && !isPassivePostMortemRole) {
     if (isCensus) {
       if (!isPostMortemAllowed) {
-        errors.push(`${labelPrefix}Event ${evId} (${dt.raw}): census postdates death (${death.raw}) without explicit posthumous/widow label.`);
+        errors.push(
+          `${labelPrefix}Event ${evId} (${dt.raw}): census postdates death (${death.raw}) without explicit posthumous/widow label.`
+        );
       } else {
-        warnings.push(`${labelPrefix}Event ${evId} (${dt.raw}): labeled post-mortem census entry after death (${death.raw}).`);
+        warnings.push(
+          `${labelPrefix}Event ${evId} (${dt.raw}): labeled post-mortem census entry after death (${death.raw}).`
+        );
       }
     } else if (!isPostMortemAllowed) {
-      errors.push(`${labelPrefix}Event ${evId} (${dt.raw}): postdates death (${death.raw}) and is not a burial/probate/obituary/memorial event.`);
+      errors.push(
+        `${labelPrefix}Event ${evId} (${dt.raw}): postdates death (${death.raw}) and is not a burial/probate/obituary/memorial event.`
+      );
     }
   }
 
@@ -496,7 +709,9 @@ function checkEventChronologyForPerson(params: {
         ageAtEvent = dt.year - birth.year - (beforeBirthday ? 1 : 0);
       }
       if (ageAtEvent !== null && ageAtEvent < 12) {
-        errors.push(`${labelPrefix}Event ${evId} (${dt.raw}): marriage at implausible age ${ageAtEvent} (birth ${birth.raw}).`);
+        errors.push(
+          `${labelPrefix}Event ${evId} (${dt.raw}): marriage at implausible age ${ageAtEvent} (birth ${birth.raw}).`
+        );
       }
     }
   }
@@ -543,10 +758,7 @@ export function runChronologyCheck(
     if (stagedBirth && stagedDeath && stagedBirth.startMs > stagedDeath.endMs) {
       errors.push(`[${stagedId}] Birth (${stagedBirth.raw}) is after death (${stagedDeath.raw}).`);
     }
-    if (
-      stagedLifespan.years !== null &&
-      (stagedLifespan.years < 0 || stagedLifespan.years > 118)
-    ) {
+    if (stagedLifespan.years !== null && (stagedLifespan.years < 0 || stagedLifespan.years > 118)) {
       errors.push(
         `[${stagedId}] Implausible lifespan: ${stagedLifespan.label} (${stagedBirth?.raw} to ${stagedDeath?.raw}).`
       );
@@ -700,9 +912,8 @@ export function runPrivacyAndStyleScan(
   const patchPersonId = typeof patch.person_id === 'string' ? patch.person_id : '';
   const targetPerson =
     dateContext?.targetPerson ??
-    (patchPersonId ? allPeople.find((person) => person.id === patchPersonId) ?? null : null);
-  const targetId =
-    typeof targetPerson?.id === 'string' && targetPerson.id ? targetPerson.id : patchPersonId;
+    (patchPersonId ? (allPeople.find((person) => person.id === patchPersonId) ?? null) : null);
+  const targetId = typeof targetPerson?.id === 'string' && targetPerson.id ? targetPerson.id : patchPersonId;
   const targetDeathYear = extractLatestEdtfYear(
     updates.death_edtf ?? updates.death_date ?? targetPerson?.death_edtf
   );
@@ -715,9 +926,7 @@ export function runPrivacyAndStyleScan(
     targetPerson?.is_living === true ||
     targetPerson?.living === true;
   const subjectMaxYear =
-    !targetIsLiving && targetDeathYear !== null
-      ? targetDeathYear + NARRATIVE_POSTHUMOUS_HORIZON_YEARS
-      : null;
+    !targetIsLiving && targetDeathYear !== null ? targetDeathYear + NARRATIVE_POSTHUMOUS_HORIZON_YEARS : null;
 
   const mergedEventsById = new Map<string, LooseRecord>();
   const anonymousPatchEvents: LooseRecord[] = [];
@@ -746,19 +955,11 @@ export function runPrivacyAndStyleScan(
   for (const [eventId, event] of mergedEventsById) {
     eventMaxYearById.set(eventId, extractLatestEdtfYear(event.edtf_date));
   }
-  const sourceMaxYearById = computeSourceMaxYearById([
-    ...mergedEventsById.values(),
-    ...anonymousPatchEvents,
-  ]);
+  const sourceMaxYearById = computeSourceMaxYearById([...mergedEventsById.values(), ...anonymousPatchEvents]);
 
   const livingNameTargets: LivingNameTarget[] = [];
 
-  const scanTarget = (
-    label: string,
-    text: string,
-    maxYear: number | null,
-    checkEmDash: boolean
-  ): void => {
+  const scanTarget = (label: string, text: string, maxYear: number | null, checkEmDash: boolean): void => {
     if (!text) {
       return;
     }
@@ -803,7 +1004,7 @@ export function runPrivacyAndStyleScan(
             rawPerson.living === true;
           const stagedDeathYear =
             extractLatestEdtfYear(rawPerson.death_edtf) ??
-            (stagedId ? deathYearByPersonId.get(stagedId) ?? null : null);
+            (stagedId ? (deathYearByPersonId.get(stagedId) ?? null) : null);
           if (!stagedIsLiving && stagedDeathYear !== null) {
             personMaxYear = stagedDeathYear + NARRATIVE_POSTHUMOUS_HORIZON_YEARS;
           }
@@ -829,7 +1030,7 @@ export function runPrivacyAndStyleScan(
             typeof rawItem.event_id === 'string' && rawItem.event_id ? rawItem.event_id : null;
           mediaMaxYear =
             extractLatestEdtfYear(rawItem.date_edtf) ??
-            (linkedEventId ? eventMaxYearById.get(linkedEventId) ?? null : null);
+            (linkedEventId ? (eventMaxYearById.get(linkedEventId) ?? null) : null);
         }
         collectStringsWithPath(rawItem, `patch.media[${i}]`, mediaMaxYear, patchStrings);
       }
@@ -838,9 +1039,8 @@ export function runPrivacyAndStyleScan(
     if (key === 'sources' && Array.isArray(value)) {
       for (let i = 0; i < value.length; i += 1) {
         const rawSource = value[i];
-        const sourceId =
-          isPlainRecord(rawSource) && typeof rawSource.id === 'string' ? rawSource.id : '';
-        const sourceMaxYear = sourceId ? sourceMaxYearById.get(sourceId) ?? null : null;
+        const sourceId = isPlainRecord(rawSource) && typeof rawSource.id === 'string' ? rawSource.id : '';
+        const sourceMaxYear = sourceId ? (sourceMaxYearById.get(sourceId) ?? null) : null;
         collectStringsWithPath(rawSource, `patch.sources[${i}]`, sourceMaxYear, patchStrings);
       }
       continue;
@@ -851,9 +1051,7 @@ export function runPrivacyAndStyleScan(
         const narrativeMaxYear = isPlainRecord(rawNarrative)
           ? resolveNarrativeMaxYear({
               subjectPersonId:
-                typeof rawNarrative.subject_person_id === 'string'
-                  ? rawNarrative.subject_person_id
-                  : null,
+                typeof rawNarrative.subject_person_id === 'string' ? rawNarrative.subject_person_id : null,
               personIds: stringListField(rawNarrative.person_ids),
               eventIds: stringListField(rawNarrative.event_ids),
               livingIds,
@@ -870,9 +1068,7 @@ export function runPrivacyAndStyleScan(
 
   for (const item of patchStrings) {
     const isBioProse =
-      item.path.endsWith('.body_md') ||
-      item.path.endsWith('.biography') ||
-      item.path.endsWith('.bio');
+      item.path.endsWith('.body_md') || item.path.endsWith('.biography') || item.path.endsWith('.bio');
     scanTarget(item.path, item.text, item.maxYear, isBioProse);
   }
 
@@ -928,20 +1124,13 @@ export function splitParagraphIntoSentences(paragraph: string): string[] {
   };
   protectedText = protectedText.replaceAll(ABBREVIATION_RE, maskAbbreviation);
   protectedText = protectedText.replaceAll(LOWERCASE_NUMBER_ABBR_RE, maskAbbreviation);
-  protectedText = protectedText.replaceAll(
-    /(?<![A-Za-z])([A-Z])\.(?=\s+[A-Za-z&(])/g,
-    '$1\u0001'
-  );
+  protectedText = protectedText.replaceAll(/(?<![A-Za-z])([A-Z])\.(?=\s+[A-Za-z&(])/g, '$1\u0001');
 
   // Keep inline citation tokens attached to the preceding sentence punctuation.
-  const rawParts = protectedText.split(
-    /(?<=[.!?]["”’')]*?(?:\[\^[^\]]+\])*)\s+(?=[A-Z0-9"“‘'([]|[^a-z\s])/
-  );
+  const rawParts = protectedText.split(/(?<=[.!?]["”’')]*?(?:\[\^[^\]]+\])*)\s+(?=[A-Z0-9"“‘'([]|[^a-z\s])/);
 
   return rawParts
-    .map((s) =>
-      s.replaceAll('\u0001', '.').replaceAll('\u0002', '!').replaceAll('\u0003', '?').trim()
-    )
+    .map((s) => s.replaceAll('\u0001', '.').replaceAll('\u0002', '!').replaceAll('\u0003', '?').trim())
     .filter((s) => s.length > 0);
 }
 
@@ -993,11 +1182,7 @@ export function runUncitedSentenceCheck(patch: LooseRecord): CitationsCheckResul
       if (/^(?:[-*+]|\d+[.)])\s/.test(line)) {
         flush();
         const stripped = line.replace(/^(?:[-*+]|\d+[.)])\s+/, '').trim();
-        if (
-          stripped.endsWith(':') ||
-          !/[.!?](?:\[\^[^\]]+\])*$/.test(stripped) ||
-          stripped.length < 40
-        ) {
+        if (stripped.endsWith(':') || !/[.!?](?:\[\^[^\]]+\])*$/.test(stripped) || stripped.length < 40) {
           continue;
         }
         proseParagraphs.push(stripped);
@@ -1112,10 +1297,7 @@ export function inspectImageBuffer(buf: Buffer): InspectedImageHeader {
   }
 
   // WebP: RIFF....WEBP
-  if (
-    buf.subarray(0, 4).toString('ascii') === 'RIFF' &&
-    buf.subarray(8, 12).toString('ascii') === 'WEBP'
-  ) {
+  if (buf.subarray(0, 4).toString('ascii') === 'RIFF' && buf.subarray(8, 12).toString('ascii') === 'WEBP') {
     const chunk = buf.subarray(12, 16).toString('ascii');
     if (chunk === 'VP8X' && buf.length >= 30) {
       const width = 1 + (buf[24] | (buf[25] << 8) | (buf[26] << 16));
@@ -1164,8 +1346,7 @@ export function runScanInventoryCheck(
 ): ScansCheckResult {
   const scansDir = path.join(packageDir, 'scans');
   const archiveMediaRoot = path.join(repoDir, 'archive-media');
-  const hasArchiveMedia =
-    fs.existsSync(archiveMediaRoot) && fs.statSync(archiveMediaRoot).isDirectory();
+  const hasArchiveMedia = fs.existsSync(archiveMediaRoot) && fs.statSync(archiveMediaRoot).isDirectory();
   const mediaRoot = hasArchiveMedia ? archiveMediaRoot : repoDir;
 
   const errors: string[] = [];
@@ -1518,10 +1699,7 @@ export function runAuditHygieneRegressionCheck(input: {
     }
     const existing = postEventsMap.get(evId);
     if (existing) {
-      const mergedParticipants = mergeHygieneParticipants(
-        existing.participants,
-        incomingParticipants
-      );
+      const mergedParticipants = mergeHygieneParticipants(existing.participants, incomingParticipants);
       for (const participant of mergedParticipants) {
         touchedPersonIds.add(participant.person_id);
       }
@@ -1541,9 +1719,7 @@ export function runAuditHygieneRegressionCheck(input: {
       }
     }
   }
-  for (const rawId of Array.isArray(input.patch.remove_event_ids)
-    ? input.patch.remove_event_ids
-    : []) {
+  for (const rawId of Array.isArray(input.patch.remove_event_ids) ? input.patch.remove_event_ids : []) {
     if (typeof rawId === 'string' && rawId.trim()) {
       const trimmed = rawId.trim();
       touchedEventIds.add(trimmed);
@@ -1552,9 +1728,7 @@ export function runAuditHygieneRegressionCheck(input: {
   }
 
   const removeKinshipEntries: RemoveKinshipEntry[] = [];
-  for (const rawEntry of Array.isArray(input.patch.remove_kinship)
-    ? input.patch.remove_kinship
-    : []) {
+  for (const rawEntry of Array.isArray(input.patch.remove_kinship) ? input.patch.remove_kinship : []) {
     if (!isPlainRecord(rawEntry)) {
       continue;
     }
@@ -1587,10 +1761,7 @@ export function runAuditHygieneRegressionCheck(input: {
     stagedKinshipEdges
   );
   const postKinshipMap = new Map<string, KinshipEdge>(
-    kinshipAfterRemovals.map((edge) => [
-      `${edge.from}|${edge.to}|${edge.relation}`,
-      structuredClone(edge),
-    ])
+    kinshipAfterRemovals.map((edge) => [`${edge.from}|${edge.to}|${edge.relation}`, structuredClone(edge)])
   );
   for (const edge of stagedKinshipEdges) {
     const key = `${edge.from}|${edge.to}|${edge.relation}`;
@@ -1627,11 +1798,7 @@ function countZeroCoordPlaces(patch: LooseRecord): string[] {
     const pl = isPlainRecord(rawPl) ? rawPl : {};
     const lat = Number(pl.lat);
     const lng = Number(pl.lng ?? pl.lon);
-    if (
-      !Number.isFinite(lat) ||
-      !Number.isFinite(lng) ||
-      (Math.abs(lat) < 1e-9 && Math.abs(lng) < 1e-9)
-    ) {
+    if (!Number.isFinite(lat) || !Number.isFinite(lng) || (Math.abs(lat) < 1e-9 && Math.abs(lng) < 1e-9)) {
       bad.push(typeof pl.id === 'string' ? pl.id : 'unknown');
     }
   }
@@ -1758,9 +1925,7 @@ export async function runAuditCommand(options: AuditCommandOptions): Promise<Aud
   }
   const patch = parsedPatch;
 
-  const privacyConfig: Partial<PrivacyConfig> = configText
-    ? parseKinloomConfigYaml(configText).privacy
-    : {};
+  const privacyConfig: Partial<PrivacyConfig> = configText ? parseKinloomConfigYaml(configText).privacy : {};
 
   const peopleBlocks = splitTopLevelYamlList(peopleText);
   const parsedPeople = parseMatchingYamlBlocks(peopleBlocks);
@@ -1796,9 +1961,7 @@ export async function runAuditCommand(options: AuditCommandOptions): Promise<Aud
       String(personUpdates.death_edtf) !== String(personUpdates.death_date);
     if (!hasConflict) {
       const rawDeath =
-        personUpdates.death_edtf !== undefined
-          ? personUpdates.death_edtf
-          : personUpdates.death_date;
+        personUpdates.death_edtf !== undefined ? personUpdates.death_edtf : personUpdates.death_date;
       targetDeathUpdate = parseValidDeathEdtf(rawDeath);
     }
   }
@@ -1839,9 +2002,7 @@ export async function runAuditCommand(options: AuditCommandOptions): Promise<Aud
   const deceasedPeople = mergedAuditPeople.filter((person) => !isEffectiveLivingPerson(person));
 
   const allLiveEvents = parseMatchingYamlBlocks(splitTopLevelYamlList(eventsText));
-  const allLiveKinship = kinshipText
-    ? parseMatchingYamlBlocks(splitTopLevelYamlList(kinshipText))
-    : [];
+  const allLiveKinship = kinshipText ? parseMatchingYamlBlocks(splitTopLevelYamlList(kinshipText)) : [];
   const existingPersonEvents = allLiveEvents.filter(
     (ev) =>
       Array.isArray(ev.participants) &&

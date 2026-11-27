@@ -187,9 +187,7 @@ describe('GeminiPronunciationAudioGenerator', () => {
     expect(sentBody.contents[0].parts[0].text).toBe(
       'Pronounce "Springfield" in American English (en-US) as /ˈsprɪŋfiːld/.'
     );
-    expect(sentBody.generationConfig.speechConfig.voiceConfig.prebuiltVoiceConfig.voiceName).toBe(
-      'Kore'
-    );
+    expect(sentBody.generationConfig.speechConfig.voiceConfig.prebuiltVoiceConfig.voiceName).toBe('Kore');
     expect(result.bytes).toEqual(existingWav);
     expect(result.contentType).toBe('audio/wav');
     expect(result.ext).toBe('wav');
@@ -203,8 +201,8 @@ describe('GeminiPronunciationAudioGenerator', () => {
     });
     await expect(genFail.generate({ text: 'New Salem' })).rejects.toThrow(/HTTP 429/);
 
-    const emptyFetch = vi.fn(async () =>
-      new Response(JSON.stringify({ candidates: [{ content: { parts: [] } }] }), { status: 200 })
+    const emptyFetch = vi.fn(
+      async () => new Response(JSON.stringify({ candidates: [{ content: { parts: [] } }] }), { status: 200 })
     );
     const genEmpty = new GeminiPronunciationAudioGenerator({
       apiKey: 'test-gemini-key',

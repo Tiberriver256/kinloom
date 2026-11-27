@@ -1,6 +1,6 @@
 import { gunzipSync } from 'node:zlib';
 import * as cheerio from 'cheerio';
-import { XMLParser, type X2jOptions } from 'fast-xml-parser';
+import { type X2jOptions, XMLParser } from 'fast-xml-parser';
 import { unzipSync } from 'fflate';
 
 export type CheerioDocument = cheerio.CheerioAPI;
@@ -13,10 +13,7 @@ export function collapseWhitespace(text: string): string {
   return text.replace(/\s+/g, ' ').trim();
 }
 
-export function extractFormHiddenInputs(
-  $: CheerioDocument,
-  formSelector = 'form'
-): Record<string, string> {
+export function extractFormHiddenInputs($: CheerioDocument, formSelector = 'form'): Record<string, string> {
   const result: Record<string, string> = {};
   const scope = $(formSelector);
   const inputs = scope.length > 0 ? scope.find('input[type="hidden"]') : $('input[type="hidden"]');
@@ -34,10 +31,7 @@ export interface ParsedHtmlTable {
   readonly rows: readonly (readonly string[])[];
 }
 
-export function extractHtmlTables(
-  $: CheerioDocument,
-  tableSelector = 'table'
-): ParsedHtmlTable[] {
+export function extractHtmlTables($: CheerioDocument, tableSelector = 'table'): ParsedHtmlTable[] {
   const tables: ParsedHtmlTable[] = [];
   $(tableSelector).each((_tIdx, tableEl) => {
     const headers: string[] = [];

@@ -1,7 +1,8 @@
 import type { EntityType, TalkComment } from '@kinloom/core';
-import React, { useCallback, useEffect, useState } from 'react';
-import { KINLOOM_VOCABULARY } from '../../lib/vocabulary.js';
+import type React from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useArchiveData } from '../../context/ArchiveDataContext.js';
+import { KINLOOM_VOCABULARY } from '../../lib/vocabulary.js';
 
 export interface TalkPanelProps {
   entityType: EntityType;
@@ -100,9 +101,7 @@ export const TalkPanel: React.FC<TalkPanelProps> = ({
 
       {loading && <p className="empty-ring-note">Loading discussion notes…</p>}
       {!loading && comments.length === 0 && (
-        <p className="empty-ring-note">
-          No research notes or family discussion posted on this record yet.
-        </p>
+        <p className="empty-ring-note">No research notes or family discussion posted on this record yet.</p>
       )}
 
       <div className="wiki-talk-list">
@@ -110,14 +109,12 @@ export const TalkPanel: React.FC<TalkPanelProps> = ({
           const canDeleteComment =
             Boolean(dataSource.deleteTalkComment) &&
             capabilities.canEdit &&
-            (session?.role === 'admin' ||
-              (Boolean(session?.email) && session?.email === comment.author_id));
+            (session?.role === 'admin' || (Boolean(session?.email) && session?.email === comment.author_id));
           return (
             <article key={comment.comment_id} className="wiki-talk-item">
               <div className="wiki-talk-meta">
                 <div>
-                  <strong>{comment.author_name}</strong>{' '}
-                  <span>{comment.created_at}</span>
+                  <strong>{comment.author_name}</strong> <span>{comment.created_at}</span>
                 </div>
                 {canDeleteComment && (
                   <button

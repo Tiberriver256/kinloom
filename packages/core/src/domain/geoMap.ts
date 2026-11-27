@@ -1,7 +1,7 @@
+import { haversineMiles } from '../edtf.js';
 import type { MapDefaultsConfig, MigrationEraConfig } from '../schemas/config.js';
 import { DEFAULT_MIGRATION_ERAS } from '../schemas/config.js';
 import type { ArchiveBundle, ArchiveEvent, Person, Place } from '../schemas/entities.js';
-import { haversineMiles } from '../edtf.js';
 
 export interface GeoBounds {
   minLat: number;
@@ -97,8 +97,7 @@ export function classifyMigrationStage(
   migrationEras?: readonly MigrationEraConfig[],
   year?: number | null
 ): string {
-  const eras =
-    migrationEras && migrationEras.length > 0 ? migrationEras : DEFAULT_MIGRATION_ERAS;
+  const eras = migrationEras && migrationEras.length > 0 ? migrationEras : DEFAULT_MIGRATION_ERAS;
   for (const era of eras) {
     if (eraMatchesPlace(era, place, year)) {
       return era.id;
@@ -133,10 +132,8 @@ export function buildMigrationStops(
   peopleById: ReadonlyMap<string, Person>,
   options?: string | null | BuildMigrationStopsOptions
 ): MigrationStop[] {
-  const personIdFilter =
-    typeof options === 'string' || options === null ? options : options?.personIdFilter;
-  const migrationEras =
-    typeof options === 'object' && options !== null ? options.migrationEras : undefined;
+  const personIdFilter = typeof options === 'string' || options === null ? options : options?.personIdFilter;
+  const migrationEras = typeof options === 'object' && options !== null ? options.migrationEras : undefined;
 
   const relevantEvents: ArchiveEvent[] = bundle.events
     .filter((ev) => {
@@ -158,9 +155,7 @@ export function buildMigrationStops(
         return p !== undefined && p.full_name !== 'Living';
       });
     })
-    .toSorted(
-      (a, b) => (a.time_min ?? (a.year ?? 0) * 10_000) - (b.time_min ?? (b.year ?? 0) * 10_000)
-    );
+    .toSorted((a, b) => (a.time_min ?? (a.year ?? 0) * 10_000) - (b.time_min ?? (b.year ?? 0) * 10_000));
 
   const stops: MigrationStop[] = [];
   for (const ev of relevantEvents) {
@@ -201,10 +196,7 @@ export function buildMigrationStops(
   return stops;
 }
 
-export function buildMigrationSegments(
-  stops: readonly MigrationStop[],
-  minMiles = 15
-): MigrationSegment[] {
+export function buildMigrationSegments(stops: readonly MigrationStop[], minMiles = 15): MigrationSegment[] {
   const segments: MigrationSegment[] = [];
   for (let i = 1; i < stops.length; i += 1) {
     const from = stops[i - 1];
@@ -393,68 +385,187 @@ export const ARCHIVAL_LANDMASSES: { id: string; label: string; coords: [number, 
     id: 'usa-contiguous',
     label: 'United States',
     coords: [
-      [48.9, -124.7], [46.2, -124], [42, -124.3], [38, -123], [34.5, -120.5],
-      [32.5, -117.1], [31.3, -111], [31.8, -106.5], [29, -103.1], [29.8, -101.4],
-      [25.9, -97.2], [27.8, -97.1], [29.3, -94.8], [29.6, -90], [30.2, -88],
-      [29.9, -84], [25.2, -81], [25.8, -80.1], [30.7, -81.5], [32.8, -79.9],
-      [35.2, -75.5], [37, -76], [39.5, -74.3], [40.6, -73.9], [41.3, -71.5],
-      [42, -70], [43.6, -70.2], [44.8, -67], [47.3, -68.3], [45, -71.5],
-      [45, -75], [43.6, -79], [42.3, -83], [45.8, -84.7], [46.8, -84.9],
-      [48, -89.5], [49, -95.2], [49, -110], [49, -122.8], [48.9, -124.7],
+      [48.9, -124.7],
+      [46.2, -124],
+      [42, -124.3],
+      [38, -123],
+      [34.5, -120.5],
+      [32.5, -117.1],
+      [31.3, -111],
+      [31.8, -106.5],
+      [29, -103.1],
+      [29.8, -101.4],
+      [25.9, -97.2],
+      [27.8, -97.1],
+      [29.3, -94.8],
+      [29.6, -90],
+      [30.2, -88],
+      [29.9, -84],
+      [25.2, -81],
+      [25.8, -80.1],
+      [30.7, -81.5],
+      [32.8, -79.9],
+      [35.2, -75.5],
+      [37, -76],
+      [39.5, -74.3],
+      [40.6, -73.9],
+      [41.3, -71.5],
+      [42, -70],
+      [43.6, -70.2],
+      [44.8, -67],
+      [47.3, -68.3],
+      [45, -71.5],
+      [45, -75],
+      [43.6, -79],
+      [42.3, -83],
+      [45.8, -84.7],
+      [46.8, -84.9],
+      [48, -89.5],
+      [49, -95.2],
+      [49, -110],
+      [49, -122.8],
+      [48.9, -124.7],
     ],
   },
   {
     id: 'canada-south',
     label: 'Canada',
     coords: [
-      [49, -123], [54, -130], [58, -125], [58, -95], [56, -79],
-      [52, -65], [47, -60], [44.5, -63.5], [44.8, -67], [47.3, -68.3],
-      [45, -71.5], [45, -75], [43.6, -79], [45.8, -84.7], [48, -89.5],
-      [49, -95.2], [49, -123],
+      [49, -123],
+      [54, -130],
+      [58, -125],
+      [58, -95],
+      [56, -79],
+      [52, -65],
+      [47, -60],
+      [44.5, -63.5],
+      [44.8, -67],
+      [47.3, -68.3],
+      [45, -71.5],
+      [45, -75],
+      [43.6, -79],
+      [45.8, -84.7],
+      [48, -89.5],
+      [49, -95.2],
+      [49, -123],
     ],
   },
   {
     id: 'mexico-north',
     label: 'Mexico',
     coords: [
-      [32.5, -117.1], [27, -114], [23, -109.9], [24, -107], [22, -105.5],
-      [22, -97.7], [25.9, -97.2], [29.8, -101.4], [29, -103.1], [31.8, -106.5],
-      [31.3, -111], [32.5, -117.1],
+      [32.5, -117.1],
+      [27, -114],
+      [23, -109.9],
+      [24, -107],
+      [22, -105.5],
+      [22, -97.7],
+      [25.9, -97.2],
+      [29.8, -101.4],
+      [29, -103.1],
+      [31.8, -106.5],
+      [31.3, -111],
+      [32.5, -117.1],
     ],
   },
   {
     id: 'great-britain',
     label: 'Great Britain',
     coords: [
-      [50.1, -5.6], [51.3, -3.5], [53.4, -3.1], [55, -4.9], [57.6, -5.8],
-      [58.6, -3.1], [57.6, -1.8], [55.8, -2.1], [54.5, -0.6], [52.9, 1.7],
-      [51.4, 1.4], [50.7, -1.5], [50.1, -5.6],
+      [50.1, -5.6],
+      [51.3, -3.5],
+      [53.4, -3.1],
+      [55, -4.9],
+      [57.6, -5.8],
+      [58.6, -3.1],
+      [57.6, -1.8],
+      [55.8, -2.1],
+      [54.5, -0.6],
+      [52.9, 1.7],
+      [51.4, 1.4],
+      [50.7, -1.5],
+      [50.1, -5.6],
     ],
   },
   {
     id: 'ireland',
     label: 'Ireland',
     coords: [
-      [51.5, -9.8], [53.2, -9.8], [55.2, -7.5], [54.5, -5.6], [52.2, -6.4], [51.5, -9.8],
+      [51.5, -9.8],
+      [53.2, -9.8],
+      [55.2, -7.5],
+      [54.5, -5.6],
+      [52.2, -6.4],
+      [51.5, -9.8],
     ],
   },
   {
     id: 'western-europe',
     label: 'Western Europe',
     coords: [
-      [43.4, -1.8], [46, -1.2], [48.4, -4.7], [49.7, -1.8], [51, 2],
-      [52.4, 4.6], [53.4, 6.8], [54.2, 8.8], [57.5, 9.8], [55, 12.5],
-      [54, 14.5], [50, 14.5], [46, 13], [43.5, 7], [43.4, -1.8],
+      [43.4, -1.8],
+      [46, -1.2],
+      [48.4, -4.7],
+      [49.7, -1.8],
+      [51, 2],
+      [52.4, 4.6],
+      [53.4, 6.8],
+      [54.2, 8.8],
+      [57.5, 9.8],
+      [55, 12.5],
+      [54, 14.5],
+      [50, 14.5],
+      [46, 13],
+      [43.5, 7],
+      [43.4, -1.8],
     ],
   },
 ];
 
 export const US_REGION_LINES: [number, number][][] = [
-  [[42, -120], [39, -120], [35, -114.6], [32.7, -114.6]],
-  [[36.5, -103], [32, -103], [32, -106.5]],
-  [[36.5, -103], [36.5, -100], [34.5, -100], [33.8, -94.5]],
-  [[33.8, -94], [31, -93.6], [29.7, -93.8]],
-  [[40.6, -95.7], [40.6, -91.6], [36.5, -89.5], [36.5, -94.6], [40.6, -95.7]],
-  [[45, -93], [41.5, -90.5], [38.6, -90.2], [35.1, -90.1], [32.3, -90.9], [29.6, -89.9]],
-  [[42, -80.5], [42, -75], [39.7, -75.5], [39.7, -80.5], [37, -82], [36.5, -76]],
+  [
+    [42, -120],
+    [39, -120],
+    [35, -114.6],
+    [32.7, -114.6],
+  ],
+  [
+    [36.5, -103],
+    [32, -103],
+    [32, -106.5],
+  ],
+  [
+    [36.5, -103],
+    [36.5, -100],
+    [34.5, -100],
+    [33.8, -94.5],
+  ],
+  [
+    [33.8, -94],
+    [31, -93.6],
+    [29.7, -93.8],
+  ],
+  [
+    [40.6, -95.7],
+    [40.6, -91.6],
+    [36.5, -89.5],
+    [36.5, -94.6],
+    [40.6, -95.7],
+  ],
+  [
+    [45, -93],
+    [41.5, -90.5],
+    [38.6, -90.2],
+    [35.1, -90.1],
+    [32.3, -90.9],
+    [29.6, -89.9],
+  ],
+  [
+    [42, -80.5],
+    [42, -75],
+    [39.7, -75.5],
+    [39.7, -80.5],
+    [37, -82],
+    [36.5, -76],
+  ],
 ];

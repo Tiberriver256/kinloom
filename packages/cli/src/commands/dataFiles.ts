@@ -1,21 +1,6 @@
-import { readFile, mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import {
-  parseEventsYaml,
-  parseKinshipYaml,
-  parseMediaYaml,
-  parseNarrativesYaml,
-  parsePeopleYaml,
-  parsePlacesYaml,
-  parseSourcesYaml,
-  parseEntityPayload,
-  serializeEventsYaml,
-  serializeKinshipYaml,
-  serializeMediaYaml,
-  serializeNarrativesYaml,
-  serializePeopleYaml,
-  serializePlacesYaml,
-  serializeSourcesYaml,
   type ArchiveRawSnapshot,
   type BuildMode,
   type CompileArchiveInput,
@@ -24,9 +9,24 @@ import {
   type MediaItem,
   type Narrative,
   type Place,
+  parseEntityPayload,
+  parseEventsYaml,
+  parseKinshipYaml,
+  parseMediaYaml,
+  parseNarrativesYaml,
+  parsePeopleYaml,
+  parsePlacesYaml,
+  parseSourcesYaml,
   type RawEvent,
   type RawPerson,
   type SourceRecord,
+  serializeEventsYaml,
+  serializeKinshipYaml,
+  serializeMediaYaml,
+  serializeNarrativesYaml,
+  serializePeopleYaml,
+  serializePlacesYaml,
+  serializeSourcesYaml,
 } from '@kinloom/core';
 
 export const ARCHIVE_YAML_FILE_NAMES = [
@@ -63,23 +63,16 @@ async function readOptionalFile(filePath: string): Promise<string | null> {
 }
 
 export async function loadArchiveDataDir(dataDir: string): Promise<LocalArchiveData> {
-  const [
-    peopleText,
-    eventsText,
-    placesText,
-    sourcesText,
-    kinshipText,
-    mediaText,
-    narrativesText,
-  ] = await Promise.all([
-    readOptionalFile(path.join(dataDir, 'people.yaml')),
-    readOptionalFile(path.join(dataDir, 'events.yaml')),
-    readOptionalFile(path.join(dataDir, 'places.yaml')),
-    readOptionalFile(path.join(dataDir, 'sources.yaml')),
-    readOptionalFile(path.join(dataDir, 'kinship.yaml')),
-    readOptionalFile(path.join(dataDir, 'media.yaml')),
-    readOptionalFile(path.join(dataDir, 'narratives.yaml')),
-  ]);
+  const [peopleText, eventsText, placesText, sourcesText, kinshipText, mediaText, narrativesText] =
+    await Promise.all([
+      readOptionalFile(path.join(dataDir, 'people.yaml')),
+      readOptionalFile(path.join(dataDir, 'events.yaml')),
+      readOptionalFile(path.join(dataDir, 'places.yaml')),
+      readOptionalFile(path.join(dataDir, 'sources.yaml')),
+      readOptionalFile(path.join(dataDir, 'kinship.yaml')),
+      readOptionalFile(path.join(dataDir, 'media.yaml')),
+      readOptionalFile(path.join(dataDir, 'narratives.yaml')),
+    ]);
 
   return {
     people: peopleText ? parsePeopleYaml(peopleText) : [],
@@ -92,9 +85,7 @@ export async function loadArchiveDataDir(dataDir: string): Promise<LocalArchiveD
   };
 }
 
-export function serializeArchiveDataToYamlFiles(
-  data: LocalArchiveData
-): Record<ArchiveYamlFileName, string> {
+export function serializeArchiveDataToYamlFiles(data: LocalArchiveData): Record<ArchiveYamlFileName, string> {
   return {
     'people.yaml': serializePeopleYaml(data.people, { sortById: true }),
     'events.yaml': serializeEventsYaml(data.events, { sortById: true }),
@@ -106,10 +97,7 @@ export function serializeArchiveDataToYamlFiles(
   };
 }
 
-export async function writeArchiveDataDir(
-  outDir: string,
-  data: LocalArchiveData
-): Promise<string[]> {
+export async function writeArchiveDataDir(outDir: string, data: LocalArchiveData): Promise<string[]> {
   await mkdir(outDir, { recursive: true });
   const files = serializeArchiveDataToYamlFiles(data);
   const written: string[] = [];
@@ -197,9 +185,7 @@ export function snapshotToCompileInput(params: {
     sources: data.sources,
     kinship: data.kinship,
     media: data.media,
-    ...(data.narratives.length > 0 || params.includeEmptyNarratives
-      ? { narratives: data.narratives }
-      : {}),
+    ...(data.narratives.length > 0 || params.includeEmptyNarratives ? { narratives: data.narratives } : {}),
     siteConfig: params.siteConfig,
     mode: params.mode,
     generatedAt: params.generatedAt,

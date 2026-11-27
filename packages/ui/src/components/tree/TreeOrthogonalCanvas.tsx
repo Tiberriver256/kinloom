@@ -1,4 +1,5 @@
 import type { Person } from '@kinloom/core';
+import React, { useMemo } from 'react';
 import type {
   ArchivalDiagramLayout,
   DiagramEarlyLossStrip,
@@ -11,7 +12,6 @@ import type {
   LineageSpotlight,
   SemanticZoomLevel,
 } from '../../lib/archivalTreeModel.js';
-import React, { useMemo } from 'react';
 import {
   formatCardLifespan,
   formatEarlyLossAgeLabel,
@@ -96,11 +96,7 @@ const OrthogonalBusItem: React.FC<{
         d={stemPath}
         fill="none"
         stroke={
-          stemLit
-            ? 'var(--accent-primary)'
-            : bus.isDirect
-              ? 'var(--surface-header)'
-              : 'var(--border-control)'
+          stemLit ? 'var(--accent-primary)' : bus.isDirect ? 'var(--surface-header)' : 'var(--border-control)'
         }
         strokeWidth={stemLit ? 2.6 : bus.isDirect ? 2.2 : 1.3}
         strokeLinecap="square"
@@ -125,7 +121,7 @@ const OrthogonalBusItem: React.FC<{
         const dropLit = Boolean(
           hasSelection &&
             highlightedIds.has(drop.childId) &&
-            bus.parentIds.some((pid) => highlightedIds.has(pid)),
+            bus.parentIds.some((pid) => highlightedIds.has(pid))
         );
         return (
           <path
@@ -153,14 +149,9 @@ const HangingRailItem: React.FC<{
   readonly rail: DiagramHangingGridRail;
   readonly highlightedIds: ReadonlySet<string> | null;
 }> = React.memo(({ rail, highlightedIds }) => {
-  const anyChildLit = Boolean(
-    highlightedIds && rail.childIds.some((cid) => highlightedIds.has(cid)),
-  );
+  const anyChildLit = Boolean(highlightedIds && rail.childIds.some((cid) => highlightedIds.has(cid)));
   return (
-    <g
-      className={`tree-hanging-rail${anyChildLit ? ' is-lit' : ''}`}
-      aria-hidden="true"
-    >
+    <g className={`tree-hanging-rail${anyChildLit ? ' is-lit' : ''}`} aria-hidden="true">
       <path
         className={`tree-edge${anyChildLit ? ' is-lit' : ''}`}
         d={`M ${rail.spineX} ${rail.topY} V ${rail.bottomY}`}
@@ -362,13 +353,7 @@ const DiagramNodeCard: React.FC<{
             >
               {displayName}
             </text>
-            <text
-              x={12}
-              y={39}
-              fontSize="10.5"
-              fontFamily="var(--font-mono)"
-              fill={secondaryTextFill}
-            >
+            <text x={12} y={39} fontSize="10.5" fontFamily="var(--font-mono)" fill={secondaryTextFill}>
               {lifespan}
             </text>
           </g>
@@ -415,20 +400,14 @@ const DiagramNodeCard: React.FC<{
             >
               {displayName}
             </text>
-            <text
-              x={44}
-              y={38}
-              fontSize="10.5"
-              fontFamily="var(--font-mono)"
-              fill={secondaryTextFill}
-            >
+            <text x={44} y={38} fontSize="10.5" fontFamily="var(--font-mono)" fill={secondaryTextFill}>
               {lifespan}
             </text>
           </g>
         )}
       </g>
     );
-  },
+  }
 );
 
 const EarlyLossStripLayer: React.FC<{
@@ -440,42 +419,39 @@ const EarlyLossStripLayer: React.FC<{
   const anyLit = Boolean(
     highlightedIds &&
       (strip.parentIds.some((pid) => highlightedIds.has(pid)) ||
-        strip.chips.some((chip) => highlightedIds.has(chip.person.id))),
+        strip.chips.some((chip) => highlightedIds.has(chip.person.id)))
   );
   return (
-      <g
-        className={`tree-diagram-early-strip${anyLit ? ' is-lit' : ''}`}
-        data-union-id={strip.unionId}
+    <g className={`tree-diagram-early-strip${anyLit ? ' is-lit' : ''}`} data-union-id={strip.unionId}>
+      <title>{KINLOOM_VOCABULARY.tree.diedYoungTooltip}</title>
+      <path
+        className={`tree-edge${anyLit ? ' is-lit' : ''}`}
+        d={`M ${strip.stemFromX} ${strip.stemFromY} V ${strip.y}`}
+        fill="none"
+        stroke={anyLit ? 'var(--accent-primary)' : 'var(--border-control)'}
+        strokeWidth="1.2"
+        strokeDasharray="2 2"
+      />
+      <rect
+        x={strip.x}
+        y={strip.y}
+        width={strip.width}
+        height={strip.height}
+        rx={4}
+        fill="var(--surface-linen)"
+        stroke="var(--border-decorative)"
+        strokeWidth="1"
+      />
+      <text
+        x={strip.x + 12}
+        y={strip.y + 13}
+        fontSize="10"
+        fontWeight="600"
+        fontFamily="var(--font-mono)"
+        fill="var(--text-secondary)"
       >
-        <title>{KINLOOM_VOCABULARY.tree.diedYoungTooltip}</title>
-        <path
-          className={`tree-edge${anyLit ? ' is-lit' : ''}`}
-          d={`M ${strip.stemFromX} ${strip.stemFromY} V ${strip.y}`}
-          fill="none"
-          stroke={anyLit ? 'var(--accent-primary)' : 'var(--border-control)'}
-          strokeWidth="1.2"
-          strokeDasharray="2 2"
-        />
-        <rect
-          x={strip.x}
-          y={strip.y}
-          width={strip.width}
-          height={strip.height}
-          rx={4}
-          fill="var(--surface-linen)"
-          stroke="var(--border-decorative)"
-          strokeWidth="1"
-        />
-        <text
-          x={strip.x + 12}
-          y={strip.y + 13}
-          fontSize="10"
-          fontWeight="600"
-          fontFamily="var(--font-mono)"
-          fill="var(--text-secondary)"
-        >
-          {KINLOOM_VOCABULARY.tree.diedYoung} ({strip.chips.length})
-        </text>
+        {KINLOOM_VOCABULARY.tree.diedYoung} ({strip.chips.length})
+      </text>
       {strip.chips.map((chip) => {
         const isSelected = selectedPersonId === chip.person.id;
         const isLit = Boolean(highlightedIds?.has(chip.person.id));
@@ -648,7 +624,7 @@ export const TreeOrthogonalCanvas: React.FC<TreeOrthogonalCanvasProps> = ({
           initials: initialsOf(p.full_name),
         };
       }),
-    [layout.nodes, personThumbMap, baseUrl],
+    [layout.nodes, personThumbMap, baseUrl]
   );
 
   return (
@@ -675,11 +651,7 @@ export const TreeOrthogonalCanvas: React.FC<TreeOrthogonalCanvasProps> = ({
 
       <g className="tree-layer-hanging-rails">
         {layout.hangingRails.map((rail) => (
-          <HangingRailItem
-            key={`rail-${rail.unionId}`}
-            rail={rail}
-            highlightedIds={highlightedIds}
-          />
+          <HangingRailItem key={`rail-${rail.unionId}`} rail={rail} highlightedIds={highlightedIds} />
         ))}
       </g>
 
@@ -713,7 +685,7 @@ export const TreeOrthogonalCanvas: React.FC<TreeOrthogonalCanvasProps> = ({
             hub={hub}
             isLit={Boolean(
               highlightedUnionIds?.has(hub.union.id) ||
-                (highlightedIds && hub.union.partnerIds.some((pid) => highlightedIds.has(pid))),
+                (highlightedIds && hub.union.partnerIds.some((pid) => highlightedIds.has(pid)))
             )}
           />
         ))}

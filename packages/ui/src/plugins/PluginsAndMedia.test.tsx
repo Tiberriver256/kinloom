@@ -1,13 +1,13 @@
 /** @vitest-environment jsdom */
 import type { ArchiveBundle, KinloomSiteConfig, MediaItem } from '@kinloom/core';
 import { compileArchive, parseKinloomConfig } from '@kinloom/core';
-import type { KinloomUiPlugin } from './types.js';
-import { KinloomApp } from '../KinloomApp.js';
-import { MediaPlayer } from '../components/MediaPlayer.js';
-import { ArchiveProvider } from '../context/ArchiveProvider.js';
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { describe, expect, it } from 'vitest';
+import { MediaPlayer } from '../components/MediaPlayer.js';
+import { ArchiveProvider } from '../context/ArchiveProvider.js';
+import { KinloomApp } from '../KinloomApp.js';
+import type { KinloomUiPlugin } from './types.js';
 
 declare global {
   var IS_REACT_ACT_ENVIRONMENT: boolean | undefined;
@@ -82,13 +82,13 @@ describe('KinloomUiPlugin seam and MediaPlayer', () => {
           initialReadings={{ version: 1, documents: {}, event_page_map: {} }}
           plugins={[storyPlugin]}
           initialEntries={['/']}
-        />,
+        />
       );
       await new Promise((r) => setTimeout(r, 20));
     });
 
     expect(container.querySelector('[data-testid="hero-slot"]')?.textContent).toBe(
-      'Featured Story for Test Family',
+      'Featured Story for Test Family'
     );
     const navLinks = [...container.querySelectorAll('.nav-links a')].map((a) => a.textContent);
     expect(navLinks).toContain('Stories');
@@ -103,13 +103,13 @@ describe('KinloomUiPlugin seam and MediaPlayer', () => {
           initialReadings={{ version: 1, documents: {}, event_page_map: {} }}
           plugins={[storyPlugin]}
           initialEntries={['/stories/essay']}
-        />,
+        />
       );
       await new Promise((r) => setTimeout(r, 20));
     });
 
     expect(container.querySelector('[data-testid="custom-story"]')?.textContent).toBe(
-      'Interactive Video Essay',
+      'Interactive Video Essay'
     );
 
     act(() => {
@@ -146,16 +146,14 @@ describe('KinloomUiPlugin seam and MediaPlayer', () => {
         <ArchiveProvider siteConfig={siteConfig} initialBundle={testBundle}>
           <MediaPlayer media={videoMedia} variant="full" />
           <MediaPlayer media={audioMedia} variant="full" />
-        </ArchiveProvider>,
+        </ArchiveProvider>
       );
     });
 
     const videoEl = container.querySelector('video');
     expect(videoEl).not.toBeNull();
     expect(videoEl?.getAttribute('poster')).toBe('/media/story-poster.jpg');
-    expect(videoEl?.querySelector('track[kind="captions"]')?.getAttribute('src')).toBe(
-      '/media/story.vtt',
-    );
+    expect(videoEl?.querySelector('track[kind="captions"]')?.getAttribute('src')).toBe('/media/story.vtt');
     expect(container.querySelector('audio')).not.toBeNull();
 
     // Custom plugin mediaRenderer takes precedence over native video player
@@ -176,18 +174,14 @@ describe('KinloomUiPlugin seam and MediaPlayer', () => {
 
     await act(async () => {
       root.render(
-        <ArchiveProvider
-          siteConfig={siteConfig}
-          initialBundle={testBundle}
-          plugins={[customPlayerPlugin]}
-        >
+        <ArchiveProvider siteConfig={siteConfig} initialBundle={testBundle} plugins={[customPlayerPlugin]}>
           <MediaPlayer media={videoMedia} variant="full" />
-        </ArchiveProvider>,
+        </ArchiveProvider>
       );
     });
 
     expect(container.querySelector('[data-testid="custom-video-player"]')?.textContent).toBe(
-      'Custom Player: Homestead Oral Story (/media/story.mp4)',
+      'Custom Player: Homestead Oral Story (/media/story.mp4)'
     );
     expect(container.querySelector('video')).toBeNull();
 

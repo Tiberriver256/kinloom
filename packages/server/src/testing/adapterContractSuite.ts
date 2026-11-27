@@ -1,22 +1,22 @@
-import { describe, expect, it } from 'vitest';
 import {
+  type ArchiveBundle,
   asBatchId,
   asRevisionId,
   deriveKinshipEdgeId,
-  entityLookupCompositeKey,
-  KinloomSiteConfigSchema,
-  type ArchiveBundle,
   type EntityLookupKey,
+  entityLookupCompositeKey,
   type KinloomServerPorts,
   type KinloomSiteConfig,
+  KinloomSiteConfigSchema,
   type RawEvent,
   type RawPerson,
   type RevisionRecord,
 } from '@kinloom/core';
+import { describe, expect, it } from 'vitest';
 import {
   FakeAuthProvider,
-  InMemoryEmailSender,
   type FakeOAuthProfile,
+  InMemoryEmailSender,
   type SentMagicLinkEmail,
 } from '../adapters/inMemory.js';
 import { FixedClock } from '../adapters/systemClock.js';
@@ -480,9 +480,7 @@ export function runBackendAdapterContractTests(
         expect(await ports.repository.getHeadRevisionId()).toBe(3);
         const storedP1 = await ports.repository.getEntity('person', p1.id);
         expect(storedP1?.current_revision_id).toBe(1);
-        expect(storedP1 && !('edge' in storedP1) ? storedP1.data.full_name : null).toBe(
-          'Arthur Alder'
-        );
+        expect(storedP1 && !('edge' in storedP1) ? storedP1.data.full_name : null).toBe('Arthur Alder');
       });
     });
 
@@ -670,9 +668,7 @@ export function runBackendAdapterContractTests(
         expect(lastEvent && !('edge' in lastEvent) ? lastEvent.data.summary : null).toBe(
           'Historical Event 19'
         );
-        const firstEdge = fetched.get(
-          entityLookupCompositeKey('kinship_edge', lookupKeys[115].entityId)
-        );
+        const firstEdge = fetched.get(entityLookupCompositeKey('kinship_edge', lookupKeys[115].entityId));
         expect(firstEdge && 'edge' in firstEdge ? firstEdge.edge.relation : null).toBe('parent');
 
         for (const missing of missingKeys) {
@@ -863,7 +859,10 @@ export function runBackendAdapterContractTests(
 
         // Uploading a portrait linked to living Clara must return 422 LIVING_MEDIA_FORBIDDEN
         const form = new FormData();
-        form.append('file', new File([new Uint8Array([0xff, 0xd8, 0xff, 0xe0])], 'clara.jpg', { type: 'image/jpeg' }));
+        form.append(
+          'file',
+          new File([new Uint8Array([0xff, 0xd8, 0xff, 0xe0])], 'clara.jpg', { type: 'image/jpeg' })
+        );
         form.append(
           'metadata',
           JSON.stringify({
@@ -1059,8 +1058,7 @@ export function runBackendAdapterContractTests(
         const samCookie =
           extractSetCookies(cbRes)
             .map(cookiePairFromSetCookie)
-            .find((c) => c.startsWith('__Host-kinloom_session=') && c !== '__Host-kinloom_session=') ??
-          '';
+            .find((c) => c.startsWith('__Host-kinloom_session=') && c !== '__Host-kinloom_session=') ?? '';
 
         // Verify Sam enrolled strictly as editor (never admin!)
         const meRes = await server.fetch(
@@ -1255,9 +1253,7 @@ export function runBackendAdapterContractTests(
               batch_id: 'batch_agent_01',
               summary: 'Agent cited insertion',
               has_primary_source: true,
-              patches: [
-                { action: 'create', entity_type: 'person', entity_id: person.id, data: person },
-              ],
+              patches: [{ action: 'create', entity_type: 'person', entity_id: person.id, data: person }],
             }),
           })
         );
@@ -1309,9 +1305,7 @@ export function runBackendAdapterContractTests(
               batch_id: 'batch_forbidden',
               summary: 'Backup token must not write',
               has_primary_source: true,
-              patches: [
-                { action: 'create', entity_type: 'person', entity_id: 'per_nope', data: person },
-              ],
+              patches: [{ action: 'create', entity_type: 'person', entity_id: 'per_nope', data: person }],
             }),
           })
         );

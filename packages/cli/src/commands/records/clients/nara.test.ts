@@ -6,8 +6,8 @@ import { afterEach, describe, expect, it } from 'vitest';
 import {
   createRecordContext,
   HttpStatusError,
-  RecordRuntimeError,
   type RecordHandler,
+  RecordRuntimeError,
 } from '../runtime/index.js';
 import {
   apiGetJson,
@@ -15,6 +15,8 @@ import {
   census1950FetchJpeg,
   census1950FetchJson,
   createNaraCommand,
+  type NaraBrowserOverrides,
+  type NaraSearchPayload,
   NaraWafOrNonJsonError,
   normalizeQueryForWafRetry,
   parseCensus1950ImageSource,
@@ -22,8 +24,6 @@ import {
   runNaraCommand,
   safeObjectFilename,
   USER_AGENT,
-  type NaraBrowserOverrides,
-  type NaraSearchPayload,
 } from './nara.js';
 
 const LINCOLN_ED_IMAGE =
@@ -34,7 +34,10 @@ const LINCOLN_ED_INFO =
   '43290879-Illinois-087558-0002.jpg/info.json';
 const JPEG_FULL = Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xd9]), Buffer.from('full-schedule')]);
 const JPEG_PREVIEW = Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xd9]), Buffer.from('width-preview')]);
-const JPEG_REFRESHED = Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xd9]), Buffer.from('refreshed-schedule')]);
+const JPEG_REFRESHED = Buffer.concat([
+  Buffer.from([0xff, 0xd8, 0xff, 0xd9]),
+  Buffer.from('refreshed-schedule'),
+]);
 
 function censusSheet(index: number): string {
   return `1950census/43290879-Illinois/43290879-Illinois-087558/43290879-Illinois-087558-${String(index).padStart(4, '0')}.jpg`;
@@ -470,19 +473,19 @@ describe('NARA disk caching and path safety', () => {
     expect(p2.title).toBe('1940 Census Merced ED 24-7 v1');
 
     // Requesting --text upgrades cache once, then second --text makes ZERO HTTP requests.
-    const res3 = await invokeNara(
-      ['get', '595367', '--text', '--pages', '1-2', '--api-key', 'k', '--json'],
-      { cacheDir, fetchImpl }
-    );
+    const res3 = await invokeNara(['get', '595367', '--text', '--pages', '1-2', '--api-key', 'k', '--json'], {
+      cacheDir,
+      fetchImpl,
+    });
     expect(res3.exitCode).toBe(0);
     expect(apiCalls).toHaveLength(2);
     const p3 = JSON.parse(res3.stdout) as { extractedText: { page: number }[] };
     expect(p3.extractedText).toHaveLength(2);
 
-    const res4 = await invokeNara(
-      ['get', '595367', '--text', '--pages', '2', '--api-key', 'k', '--json'],
-      { cacheDir, fetchImpl }
-    );
+    const res4 = await invokeNara(['get', '595367', '--text', '--pages', '2', '--api-key', 'k', '--json'], {
+      cacheDir,
+      fetchImpl,
+    });
     expect(res4.exitCode).toBe(0);
     expect(apiCalls).toHaveLength(2);
     const p4 = JSON.parse(res4.stdout) as { extractedText: { page: number }[] };
@@ -496,9 +499,7 @@ describe('NARA disk caching and path safety', () => {
     });
     expect(res5.exitCode).toBe(0);
     expect(apiCalls).toHaveLength(3);
-    expect((JSON.parse(res5.stdout) as { title: string }).title).toBe(
-      '1940 Census Merced ED 24-7 v2'
-    );
+    expect((JSON.parse(res5.stdout) as { title: string }).title).toBe('1940 Census Merced ED 24-7 v2');
   });
 
   it('download overlapping page ranges reuses cached objects with zero HTTP and honors --refresh', async () => {
@@ -528,45 +529,40 @@ describe('NARA disk caching and path safety', () => {
     const out4 = path.join(workDir, 'out4');
 
     // Cold download pages 1-3 -> 1 metadata + 3 object fetches.
-    const r1 = await invokeNara(
-      ['download', '595367', '--pages', '1-3', '--out', out1, '--api-key', 'k'],
-      { cacheDir, cwd: workDir, fetchImpl }
-    );
+    const r1 = await invokeNara(['download', '595367', '--pages', '1-3', '--out', out1, '--api-key', 'k'], {
+      cacheDir,
+      cwd: workDir,
+      fetchImpl,
+    });
     expect(r1.exitCode).toBe(0);
     expect(metaCalls).toHaveLength(1);
     expect(objCalls).toHaveLength(3);
-    expect(fs.readFileSync(path.join(out1, '002_sheet_002.jpg'), 'utf8')).toBe(
-      'BYTES-sheet_002.jpg-v1'
-    );
+    expect(fs.readFileSync(path.join(out1, '002_sheet_002.jpg'), 'utf8')).toBe('BYTES-sheet_002.jpg-v1');
     expect(fs.existsSync(path.join(cacheDir, 'objects', '595367', '002_sheet_002.jpg'))).toBe(true);
 
     // Overlapping download pages 2-4 -> 0 metadata calls, ONLY page 4 fetched over HTTP!
-    const r2 = await invokeNara(
-      ['download', '595367', '--pages', '2-4', '--out', out2, '--api-key', 'k'],
-      { cacheDir, cwd: workDir, fetchImpl }
-    );
+    const r2 = await invokeNara(['download', '595367', '--pages', '2-4', '--out', out2, '--api-key', 'k'], {
+      cacheDir,
+      cwd: workDir,
+      fetchImpl,
+    });
     expect(r2.exitCode).toBe(0);
     expect(metaCalls).toHaveLength(1);
     expect(objCalls).toHaveLength(4);
     expect(objCalls[3].endsWith('sheet_004.jpg')).toBe(true);
-    expect(fs.readFileSync(path.join(out2, '002_sheet_002.jpg'), 'utf8')).toBe(
-      'BYTES-sheet_002.jpg-v1'
-    );
-    expect(fs.readFileSync(path.join(out2, '004_sheet_004.jpg'), 'utf8')).toBe(
-      'BYTES-sheet_004.jpg-v1'
-    );
+    expect(fs.readFileSync(path.join(out2, '002_sheet_002.jpg'), 'utf8')).toBe('BYTES-sheet_002.jpg-v1');
+    expect(fs.readFileSync(path.join(out2, '004_sheet_004.jpg'), 'utf8')).toBe('BYTES-sheet_004.jpg-v1');
 
     // Full cache hit into a brand-new directory -> ZERO HTTP requests!
-    const r3 = await invokeNara(
-      ['download', '595367', '--pages', '1-4', '--out', out3, '--api-key', 'k'],
-      { cacheDir, cwd: workDir, fetchImpl }
-    );
+    const r3 = await invokeNara(['download', '595367', '--pages', '1-4', '--out', out3, '--api-key', 'k'], {
+      cacheDir,
+      cwd: workDir,
+      fetchImpl,
+    });
     expect(r3.exitCode).toBe(0);
     expect(metaCalls).toHaveLength(1);
     expect(objCalls).toHaveLength(4);
-    expect(fs.readFileSync(path.join(out3, '001_sheet_001.jpg'), 'utf8')).toBe(
-      'BYTES-sheet_001.jpg-v1'
-    );
+    expect(fs.readFileSync(path.join(out3, '001_sheet_001.jpg'), 'utf8')).toBe('BYTES-sheet_001.jpg-v1');
 
     // --refresh bypasses both metadata and object caches.
     byteVersion = 2;
@@ -577,9 +573,7 @@ describe('NARA disk caching and path safety', () => {
     expect(r4.exitCode).toBe(0);
     expect(metaCalls).toHaveLength(2);
     expect(objCalls).toHaveLength(5);
-    expect(fs.readFileSync(path.join(out4, '002_sheet_002.jpg'), 'utf8')).toBe(
-      'BYTES-sheet_002.jpg-v2'
-    );
+    expect(fs.readFileSync(path.join(out4, '002_sheet_002.jpg'), 'utf8')).toBe('BYTES-sheet_002.jpg-v2');
   });
 
   it('search caches by canonical SHA-256 and honors --refresh and --cache-ttl-hours 0', async () => {
@@ -636,17 +630,7 @@ describe('NARA disk caching and path safety', () => {
 
     // --refresh bypasses query cache.
     const r3 = await invokeNara(
-      [
-        'search',
-        'Harriet Tubman',
-        '--rg',
-        '15',
-        '--online',
-        '--refresh',
-        '--api-key',
-        'k',
-        '--json',
-      ],
+      ['search', 'Harriet Tubman', '--rg', '15', '--online', '--refresh', '--api-key', 'k', '--json'],
       { cacheDir, fetchImpl }
     );
     expect(r3.exitCode).toBe(0);
@@ -791,10 +775,10 @@ describe('1950 Census search cache', () => {
       fetchImpl,
     });
     expect(badState.exitCode).toBe(2);
-    const traversal = await invokeNara(
-      ['census1950', '--state', 'IL', '--county', '../secret', '--json'],
-      { cacheDir, fetchImpl }
-    );
+    const traversal = await invokeNara(['census1950', '--state', 'IL', '--county', '../secret', '--json'], {
+      cacheDir,
+      fetchImpl,
+    });
     expect(traversal.exitCode).toBe(2);
     expect(urls).toEqual([]);
     expect(listFilesRecursive(cacheDir).filter((p) => p.endsWith('.json'))).toEqual([]);
@@ -816,9 +800,9 @@ describe('1950 Census search cache', () => {
     expect(explicit.exitCode).toBe(0);
     expect((JSON.parse(explicit.stdout) as { cache_hit: boolean }).cache_hit).toBe(true);
     expect(urls).toHaveLength(1);
-    expect(listFiles(path.join(cacheDir, 'census1950'), '.json').map((p) => path.basename(p))).toEqual(
-      [pageOneName]
-    );
+    expect(listFiles(path.join(cacheDir, 'census1950'), '.json').map((p) => path.basename(p))).toEqual([
+      pageOneName,
+    ]);
 
     payload.page = 2;
     payload.results[0].scheduleId = '2002';
@@ -833,9 +817,7 @@ describe('1950 Census search cache', () => {
     expect(urls).toHaveLength(2);
     expect(urls[1]).toContain('page=2');
     expect(urls[1]).not.toContain('page=1');
-    const cachedNames = listFiles(path.join(cacheDir, 'census1950'), '.json').map((p) =>
-      path.basename(p)
-    );
+    const cachedNames = listFiles(path.join(cacheDir, 'census1950'), '.json').map((p) => path.basename(p));
     expect(cachedNames).toHaveLength(2);
     expect(cachedNames).toContain(pageOneName);
 
@@ -953,16 +935,16 @@ describe('1950 Census IIIF images', () => {
     fs.mkdirSync(outDir, { recursive: true });
     const { urls, fetchImpl } = makeImageFixture();
 
-    const byPath = await invokeNara(
-      ['census1950-image', LINCOLN_ED_IMAGE, '--out', outDir, '--json'],
-      { cacheDir, fetchImpl }
-    );
+    const byPath = await invokeNara(['census1950-image', LINCOLN_ED_IMAGE, '--out', outDir, '--json'], {
+      cacheDir,
+      fetchImpl,
+    });
     expect(byPath.exitCode).toBe(0);
 
-    const byUrl = await invokeNara(
-      ['census1950-image', LINCOLN_ED_INFO, '--out', outDir, '--json'],
-      { cacheDir, fetchImpl }
-    );
+    const byUrl = await invokeNara(['census1950-image', LINCOLN_ED_INFO, '--out', outDir, '--json'], {
+      cacheDir,
+      fetchImpl,
+    });
     expect(byUrl.exitCode).toBe(0);
     const body = JSON.parse(byUrl.stdout) as { cache_hit: boolean; image: string; url: string };
     expect(body.cache_hit).toBe(true);
@@ -978,10 +960,10 @@ describe('1950 Census IIIF images', () => {
     fs.mkdirSync(outDir, { recursive: true });
     const { urls, fetchImpl } = makeImageFixture();
 
-    const full = await invokeNara(
-      ['census1950-image', LINCOLN_ED_IMAGE, '--out', outDir, '--json'],
-      { cacheDir, fetchImpl }
-    );
+    const full = await invokeNara(['census1950-image', LINCOLN_ED_IMAGE, '--out', outDir, '--json'], {
+      cacheDir,
+      fetchImpl,
+    });
     expect(full.exitCode).toBe(0);
 
     const previewPath = path.join(outDir, 'preview.jpg');
@@ -1071,10 +1053,10 @@ describe('1950 Census IIIF images', () => {
     expect(urls).toEqual([]);
     expect(cachedJpegs(cacheDir)).toEqual([]);
 
-    const width = await invokeNara(
-      ['census1950-image', LINCOLN_ED_IMAGE, '--width', '0', '--json'],
-      { cacheDir, fetchImpl }
-    );
+    const width = await invokeNara(['census1950-image', LINCOLN_ED_IMAGE, '--width', '0', '--json'], {
+      cacheDir,
+      fetchImpl,
+    });
     expect(width.exitCode).toBe(2);
     expect(urls).toEqual([]);
   });
@@ -1085,10 +1067,10 @@ describe('1950 Census IIIF images', () => {
     fs.mkdirSync(outDir, { recursive: true });
     const { fetchImpl } = makeImageFixture();
 
-    const ok = await invokeNara(
-      ['census1950-image', LINCOLN_ED_IMAGE, '--out', outDir, '--json'],
-      { cacheDir, fetchImpl }
-    );
+    const ok = await invokeNara(['census1950-image', LINCOLN_ED_IMAGE, '--out', outDir, '--json'], {
+      cacheDir,
+      fetchImpl,
+    });
     expect(ok.exitCode).toBe(0);
 
     const badFetch: typeof fetch = async (input) => {
@@ -1184,7 +1166,13 @@ describe('1950 Census IIIF images', () => {
 
     const data = await census1950FetchJpeg(
       'https://1950census.archives.gov/iiif/2/x/full/full/0/default.jpg',
-      { fetchImpl, sleepFn: async (ms) => { slept.push(ms); }, nowMs: () => Date.now() }
+      {
+        fetchImpl,
+        sleepFn: async (ms) => {
+          slept.push(ms);
+        },
+        nowMs: () => Date.now(),
+      }
     );
     expect(data.equals(JPEG_FULL)).toBe(true);
     expect(calls).toBe(2);
@@ -1204,7 +1192,13 @@ describe('1950 Census IIIF images', () => {
 
     const data = await census1950FetchJpeg(
       'https://1950census.archives.gov/iiif/2/x/full/2400,/0/default.jpg',
-      { fetchImpl, sleepFn: async (ms) => { slept.push(ms); }, nowMs: () => Date.now() }
+      {
+        fetchImpl,
+        sleepFn: async (ms) => {
+          slept.push(ms);
+        },
+        nowMs: () => Date.now(),
+      }
     );
     expect(data.equals(JPEG_PREVIEW)).toBe(true);
     expect(calls).toBe(2);
@@ -1222,7 +1216,9 @@ describe('1950 Census IIIF images', () => {
       await expect(
         census1950FetchJpeg('https://1950census.archives.gov/iiif/2/x/full/full/0/default.jpg', {
           fetchImpl,
-          sleepFn: async (ms) => { slept.push(ms); },
+          sleepFn: async (ms) => {
+            slept.push(ms);
+          },
           nowMs: () => Date.now(),
         })
       ).rejects.toBeInstanceOf(HttpStatusError);
@@ -1238,10 +1234,13 @@ describe('1950 Census IIIF images', () => {
     };
     let caught: unknown;
     try {
-      await census1950FetchJpeg(
-        'https://1950census.archives.gov/iiif/2/x/full/full/0/default.jpg',
-        { fetchImpl: always503, sleepFn: async (ms) => { slept.push(ms); }, nowMs: () => Date.now() }
-      );
+      await census1950FetchJpeg('https://1950census.archives.gov/iiif/2/x/full/full/0/default.jpg', {
+        fetchImpl: always503,
+        sleepFn: async (ms) => {
+          slept.push(ms);
+        },
+        nowMs: () => Date.now(),
+      });
     } catch (err) {
       caught = err;
     }
@@ -1257,10 +1256,10 @@ describe('1950 Census IIIF images', () => {
     fs.mkdirSync(outDir, { recursive: true });
     const fetchImpl: typeof fetch = async () => new Response('missing', { status: 404 });
 
-    const result = await invokeNara(
-      ['census1950-image', LINCOLN_ED_IMAGE, '--out', outDir, '--json'],
-      { cacheDir, fetchImpl }
-    );
+    const result = await invokeNara(['census1950-image', LINCOLN_ED_IMAGE, '--out', outDir, '--json'], {
+      cacheDir,
+      fetchImpl,
+    });
     expect(result.exitCode).toBe(1);
     expect(cachedJpegs(cacheDir)).toEqual([]);
     expect(fs.existsSync(path.join(outDir, '43290879-Illinois-087558-0002.jpg'))).toBe(false);
@@ -1291,12 +1290,7 @@ describe('1950 Census IIIF images', () => {
     expect(urls).toEqual([]);
 
     const tooMany = await invokeNara(
-      [
-        'census1950-image',
-        ...Array.from({ length: 26 }, (_v, idx) => censusSheet(idx + 1)),
-        '--out',
-        outDir,
-      ],
+      ['census1950-image', ...Array.from({ length: 26 }, (_v, idx) => censusSheet(idx + 1)), '--out', outDir],
       { cacheDir, fetchImpl }
     );
     expect(tooMany.exitCode).toBe(2);
@@ -1397,10 +1391,10 @@ describe('1950 Census IIIF images', () => {
     expect(first.exitCode).toBe(0);
     expect((JSON.parse(first.stdout) as { cache_hit: boolean }).cache_hit).toBe(false);
 
-    const mixed = await invokeNara(
-      ['census1950-image', freshSheet, cachedSheet, '--out', outDir, '--json'],
-      { cacheDir, fetchImpl }
-    );
+    const mixed = await invokeNara(['census1950-image', freshSheet, cachedSheet, '--out', outDir, '--json'], {
+      cacheDir,
+      fetchImpl,
+    });
     expect(mixed.exitCode).toBe(0);
     const body = JSON.parse(mixed.stdout) as {
       count: number;
@@ -1546,10 +1540,10 @@ describe('NARA download hardening and telemetry', () => {
         return jsonResponse(sampleRecordResponse('595367', 'Census Roll', { pageCount: 2 }));
       }
       objCalls.push(url);
-      return new Response(
-        Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.from('valid-jpeg')]),
-        { status: 200, headers: { 'content-type': 'image/jpeg' } }
-      );
+      return new Response(Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.from('valid-jpeg')]), {
+        status: 200,
+        headers: { 'content-type': 'image/jpeg' },
+      });
     };
 
     const out1 = path.join(workDir, 'naid1');
@@ -1709,17 +1703,13 @@ describe('NARA download hardening and telemetry', () => {
       return jsonResponse({ body: { hits: { total: 1, hits: [] } } });
     };
 
-    const data = await apiGetJson(
-      'https://catalog.archives.gov/api/v2/records/search?q=Lincoln',
-      'k',
-      {
-        fetchImpl,
-        sleepFn: async (ms) => {
-          sleeps.push(ms);
-        },
-        nowMs: () => Date.now(),
-      }
-    );
+    const data = await apiGetJson('https://catalog.archives.gov/api/v2/records/search?q=Lincoln', 'k', {
+      fetchImpl,
+      sleepFn: async (ms) => {
+        sleeps.push(ms);
+      },
+      nowMs: () => Date.now(),
+    });
     expect(attempts).toBe(3);
     expect(sleeps[0]).toBe(2000);
     const body = data.body as { hits: { total: number } };
@@ -1778,23 +1768,11 @@ describe('NARA download hardening and telemetry', () => {
     const outJpg = path.join(workDir, 'bad.jpg');
 
     const rPdf = await invokeNara(
-      [
-        'download',
-        'https://s3.amazonaws.com/NARAprodstorage/mock/doc.pdf',
-        '--out',
-        outPdf,
-        '--json',
-      ],
+      ['download', 'https://s3.amazonaws.com/NARAprodstorage/mock/doc.pdf', '--out', outPdf, '--json'],
       { cacheDir, cwd: workDir, fetchImpl: htmlFetch }
     );
     const rJpg = await invokeNara(
-      [
-        'download',
-        'https://s3.amazonaws.com/NARAprodstorage/mock/scan.jpg',
-        '--out',
-        outJpg,
-        '--json',
-      ],
+      ['download', 'https://s3.amazonaws.com/NARAprodstorage/mock/scan.jpg', '--out', outJpg, '--json'],
       { cacheDir, cwd: workDir, fetchImpl: htmlFetch }
     );
 
@@ -1824,8 +1802,7 @@ describe('1950 Census Wave 38 reliability and aliases', () => {
     fs.mkdirSync(outDir, { recursive: true });
 
     const encoded =
-      '1950census%2F43290879-Illinois%2F43290879-Illinois-087558%2F' +
-      '43290879-Illinois-087558-0002.jpg';
+      '1950census%2F43290879-Illinois%2F43290879-Illinois-087558%2F' + '43290879-Illinois-087558-0002.jpg';
     const variants = [
       `/${LINCOLN_ED_IMAGE}`,
       encoded,
@@ -1881,15 +1858,17 @@ describe('1950 Census Wave 38 reliability and aliases', () => {
     expect(calls).toHaveLength(1);
 
     // Relative traversal in --out and non-positive --timeout fail before HTTP.
-    const badOut = await invokeNara(
-      ['census1950-image', LINCOLN_ED_IMAGE, '--out', '../escape.jpg'],
-      { cacheDir, cwd: outDir, fetchImpl }
-    );
+    const badOut = await invokeNara(['census1950-image', LINCOLN_ED_IMAGE, '--out', '../escape.jpg'], {
+      cacheDir,
+      cwd: outDir,
+      fetchImpl,
+    });
     expect(badOut.exitCode).toBe(1);
-    const badTimeout = await invokeNara(
-      ['census1950-image', LINCOLN_ED_IMAGE, '--timeout', '0'],
-      { cacheDir, cwd: outDir, fetchImpl }
-    );
+    const badTimeout = await invokeNara(['census1950-image', LINCOLN_ED_IMAGE, '--timeout', '0'], {
+      cacheDir,
+      cwd: outDir,
+      fetchImpl,
+    });
     expect(badTimeout.exitCode).toBe(2);
     expect(calls).toHaveLength(1);
   });
@@ -2025,18 +2004,7 @@ describe('1950 Census Wave 38 reliability and aliases', () => {
       { cacheDir, fetchImpl: censusFetch }
     );
     const c2 = await invokeNara(
-      [
-        'census1950',
-        '--surname',
-        'Lincoln',
-        '--state',
-        'IL',
-        '--ed',
-        '84-1',
-        '--limit',
-        '10',
-        '--json',
-      ],
+      ['census1950', '--surname', 'Lincoln', '--state', 'IL', '--ed', '84-1', '--limit', '10', '--json'],
       { cacheDir, fetchImpl: censusFetch }
     );
     expect(c1.exitCode).toBe(0);
@@ -2059,13 +2027,7 @@ describe('1950 Census Wave 38 reliability and aliases', () => {
       return new Response(JPEG_FULL, { status: 200, headers: { 'content-type': 'image/jpeg' } });
     };
     const rec = await invokeNara(
-      [
-        'census1950-image',
-        LINCOLN_ED_IMAGE.replace('.jpg', '.JPG'),
-        '--out',
-        outDir,
-        '--json',
-      ],
+      ['census1950-image', LINCOLN_ED_IMAGE.replace('.jpg', '.JPG'), '--out', outDir, '--json'],
       {
         cacheDir,
         fetchImpl: htmlThenJpeg,
@@ -2157,7 +2119,9 @@ describe('NARA url subcommand, help, and env defaults', () => {
     expect(naidUrl.exitCode, naidUrl.stderr).toBe(0);
     expect(naidUrl.stdout).toContain('ancestorNaIds=589578');
 
-    const titleUrl = await invokeNara(['url', 'Mercer', '--series', 'Population Schedules', '--api'], { cacheDir });
+    const titleUrl = await invokeNara(['url', 'Mercer', '--series', 'Population Schedules', '--api'], {
+      cacheDir,
+    });
     expect(titleUrl.exitCode, titleUrl.stderr).toBe(0);
     expect(titleUrl.stdout).toContain('title=Population');
   });

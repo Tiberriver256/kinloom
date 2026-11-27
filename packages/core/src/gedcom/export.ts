@@ -1,11 +1,5 @@
 import type { KinloomSiteConfig } from '../schemas/config.js';
-import type {
-  ArchiveBundle,
-  ArchiveEvent,
-  Person,
-  Place,
-  SourceRecord,
-} from '../schemas/entities.js';
+import type { ArchiveBundle, ArchiveEvent, Person, Place, SourceRecord } from '../schemas/entities.js';
 import { UNVERIFIED_TREE_SOURCE_ID } from './citations.js';
 
 const GEDCOM_MONTHS = [
@@ -126,8 +120,14 @@ export function formatEdtfToGedcomDate(edtf?: string | number | null): string {
 
   if (raw.includes('/')) {
     const idx = raw.indexOf('/');
-    const left = raw.slice(0, idx).replace(/[~?%]+$/, '').trim();
-    const right = raw.slice(idx + 1).replace(/[~?%]+$/, '').trim();
+    const left = raw
+      .slice(0, idx)
+      .replace(/[~?%]+$/, '')
+      .trim();
+    const right = raw
+      .slice(idx + 1)
+      .replace(/[~?%]+$/, '')
+      .trim();
     const a = left ? formatIntervalSideDate(left, true) : '';
     const b = right ? formatIntervalSideDate(right, false) : '';
     if (a && b) {
@@ -142,8 +142,7 @@ export function formatEdtfToGedcomDate(edtf?: string | number | null): string {
     return '';
   }
 
-  const approx =
-    raw.endsWith('~') || raw.endsWith('?') || raw.endsWith('%') || /^abt\.?\s/i.test(raw);
+  const approx = raw.endsWith('~') || raw.endsWith('?') || raw.endsWith('%') || /^abt\.?\s/i.test(raw);
   const cleaned = raw
     .replaceAll(/[~?%]+$/g, '')
     .replace(/^abt\.?\s+/i, '')
@@ -159,9 +158,7 @@ export function formatEdtfToGedcomDate(edtf?: string | number | null): string {
   return `${approx ? 'ABT ' : ''}${single}`;
 }
 
-export function formatGedcomName(
-  person: Pick<Person, 'full_name' | 'given_name' | 'surname'>
-): string {
+export function formatGedcomName(person: Pick<Person, 'full_name' | 'given_name' | 'surname'>): string {
   const given = (person.given_name || '').trim();
   const surname = (person.surname || '').trim();
   if (given && surname) {
@@ -597,8 +594,7 @@ export function exportGedcom7(
     siteConfig,
     filterDescription: options?.filterDescription,
     exportDate: options?.exportDate,
-    includeRedactedLiving:
-      options?.includeRedactedLiving ?? bundle.meta.build_mode === 'private',
+    includeRedactedLiving: options?.includeRedactedLiving ?? bundle.meta.build_mode === 'private',
   });
 }
 

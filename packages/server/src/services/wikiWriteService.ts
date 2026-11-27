@@ -1,43 +1,43 @@
 import {
-  asBatchId,
-  asRevisionId,
-  assertMediaAllowedForPrivacy,
-  BatchSubmissionSchema,
-  computeEntityDiff,
-  deriveKinshipEdgeId,
-  entityLookupCompositeKey,
-  isEditSummaryValid,
-  parseEntityPayload,
-  resolveEffectiveLiving,
-  sanitizeEventForWrite,
-  sanitizePersonForWrite,
-  transitionBatchRevertLifecycle,
-  transitionEntityLifecycle,
   type ArchiveBundle,
   type ArchiveRawSnapshot,
   type ArchiveRepository,
   type AtomicMutationOp,
+  asBatchId,
+  asRevisionId,
+  assertMediaAllowedForPrivacy,
   type BatchId,
   type BatchSubmission,
+  BatchSubmissionSchema,
   type BundleCache,
   type Clock,
+  computeEntityDiff,
+  deriveKinshipEdgeId,
   type EntityLifecycleState,
   type EntityLookupKey,
   type EntityPayload,
   type EntityType,
+  entityLookupCompositeKey,
+  isEditSummaryValid,
   type KinloomServerPlugin,
   type KinloomSiteConfig,
   type MediaStore,
   type OptimisticConflictError,
   type Pronunciation,
+  parseEntityPayload,
   type RawEvent,
   type RawPerson,
   type RevisionAuthor,
   type RevisionId,
   type RevisionRecord,
+  resolveEffectiveLiving,
   type StoredEntityRecord,
   type StoredEntityRow,
   type StoredKinshipRow,
+  sanitizeEventForWrite,
+  sanitizePersonForWrite,
+  transitionBatchRevertLifecycle,
+  transitionEntityLifecycle,
 } from '@kinloom/core';
 import { generateEntityId, readBodyToString } from '../crypto.js';
 import { KinloomHttpError } from '../errors.js';
@@ -117,9 +117,7 @@ function extractSlug(entityType: EntityType, payload: EntityPayload | null): str
   if (!payload || entityType === 'kinship_edge') {
     return null;
   }
-  return typeof payload.slug === 'string' && payload.slug.trim().length > 0
-    ? payload.slug.trim()
-    : null;
+  return typeof payload.slug === 'string' && payload.slug.trim().length > 0 ? payload.slug.trim() : null;
 }
 
 function extractMediaEventId(payload: unknown): string | null {
@@ -481,11 +479,7 @@ export class WikiWriteService {
   }): Promise<{ revision: RevisionRecord; etag: string }> {
     const targetRev = await this.repository.getRevisionById(params.revisionId);
     if (!targetRev) {
-      throw new KinloomHttpError(
-        404,
-        'REVISION_NOT_FOUND',
-        `Revision r${params.revisionId} was not found.`
-      );
+      throw new KinloomHttpError(404, 'REVISION_NOT_FOUND', `Revision r${params.revisionId} was not found.`);
     }
 
     const [existing, headRev] = await Promise.all([
@@ -553,10 +547,7 @@ export class WikiWriteService {
     };
   }
 
-  async submitBatch(params: {
-    submission: BatchSubmission;
-    author: RevisionAuthor;
-  }): Promise<{
+  async submitBatch(params: { submission: BatchSubmission; author: RevisionAuthor }): Promise<{
     batch_id: BatchId;
     revisions: readonly RevisionRecord[];
     head_revision_id: RevisionId;
@@ -648,9 +639,9 @@ export class WikiWriteService {
       this.assertSummaryValid(summary);
 
       const hasPrimarySource =
-        ('has_primary_source' in patch && patch.has_primary_source !== undefined
+        'has_primary_source' in patch && patch.has_primary_source !== undefined
           ? patch.has_primary_source
-          : parsed.has_primary_source);
+          : parsed.has_primary_source;
 
       switch (patch.action) {
         case 'create': {
@@ -670,7 +661,13 @@ export class WikiWriteService {
             extraEventsById: workingEvents,
             prefetchedEventIds,
           });
-          this.updateWorkingPrivacyContext(entityType, validated.entityId, validated.sanitized, livingIds, workingEvents);
+          this.updateWorkingPrivacyContext(
+            entityType,
+            validated.entityId,
+            validated.sanitized,
+            livingIds,
+            workingEvents
+          );
 
           operations.push({
             entity_type: entityType,
@@ -730,7 +727,8 @@ export class WikiWriteService {
             patch.parent_revision_id !== undefined &&
             patch.parent_revision_id !== current.lifecycle.currentRevisionId
           ) {
-            const existingRow = prefetchedRows.get(key) ?? (await this.repository.getEntity(entityType, entityId));
+            const existingRow =
+              prefetchedRows.get(key) ?? (await this.repository.getEntity(entityType, entityId));
             if (existingRow) {
               throw await this.buildConflictHttpError({
                 entityType,
@@ -742,7 +740,13 @@ export class WikiWriteService {
             }
           }
 
-          this.updateWorkingPrivacyContext(entityType, entityId, validated.sanitized, livingIds, workingEvents);
+          this.updateWorkingPrivacyContext(
+            entityType,
+            entityId,
+            validated.sanitized,
+            livingIds,
+            workingEvents
+          );
 
           operations.push({
             entity_type: entityType,
@@ -788,7 +792,8 @@ export class WikiWriteService {
             patch.parent_revision_id !== undefined &&
             patch.parent_revision_id !== current.lifecycle.currentRevisionId
           ) {
-            const existingRow = prefetchedRows.get(key) ?? (await this.repository.getEntity(entityType, entityId));
+            const existingRow =
+              prefetchedRows.get(key) ?? (await this.repository.getEntity(entityType, entityId));
             if (existingRow) {
               throw await this.buildConflictHttpError({
                 entityType,
@@ -871,7 +876,8 @@ export class WikiWriteService {
             patch.parent_revision_id !== undefined &&
             patch.parent_revision_id !== current.lifecycle.currentRevisionId
           ) {
-            const existingRow = prefetchedRows.get(key) ?? (await this.repository.getEntity(entityType, entityId));
+            const existingRow =
+              prefetchedRows.get(key) ?? (await this.repository.getEntity(entityType, entityId));
             if (existingRow) {
               throw await this.buildConflictHttpError({
                 entityType,
@@ -883,7 +889,13 @@ export class WikiWriteService {
             }
           }
 
-          this.updateWorkingPrivacyContext(entityType, entityId, validated.sanitized, livingIds, workingEvents);
+          this.updateWorkingPrivacyContext(
+            entityType,
+            entityId,
+            validated.sanitized,
+            livingIds,
+            workingEvents
+          );
 
           operations.push({
             entity_type: entityType,
@@ -932,11 +944,7 @@ export class WikiWriteService {
     };
   }
 
-  async revertBatch(params: {
-    batchId: BatchId;
-    summary?: string;
-    author: RevisionAuthor;
-  }): Promise<{
+  async revertBatch(params: { batchId: BatchId; summary?: string; author: RevisionAuthor }): Promise<{
     reverted_batch_id: BatchId;
     revisions: readonly RevisionRecord[];
     head_revision_id: RevisionId;
@@ -944,11 +952,7 @@ export class WikiWriteService {
   }> {
     const batchRevisions = await this.repository.getRevisionsByBatch(params.batchId);
     if (batchRevisions.length === 0) {
-      throw new KinloomHttpError(
-        404,
-        'BATCH_NOT_FOUND',
-        `Batch ${params.batchId} was not found.`
-      );
+      throw new KinloomHttpError(404, 'BATCH_NOT_FOUND', `Batch ${params.batchId} was not found.`);
     }
 
     const prefetchKeys: EntityLookupKey[] = [];
@@ -1002,15 +1006,10 @@ export class WikiWriteService {
       }
     }
 
-    const outcome = transitionBatchRevertLifecycle(
-      currentStatesByKey,
-      batchRevisions,
-      headRev + 1,
-      {
-        nowIso: this.clock.nowIso(),
-        summaryPrefix: params.summary?.trim() || `Revert batch ${params.batchId}`,
-      }
-    );
+    const outcome = transitionBatchRevertLifecycle(currentStatesByKey, batchRevisions, headRev + 1, {
+      nowIso: this.clock.nowIso(),
+      summaryPrefix: params.summary?.trim() || `Revert batch ${params.batchId}`,
+    });
 
     if (!outcome.ok) {
       throw new KinloomHttpError(
@@ -1040,7 +1039,13 @@ export class WikiWriteService {
           prefetchedEventIds,
         });
         sanitizedAfter = validated.sanitized;
-        this.updateWorkingPrivacyContext(step.entityType, step.entityId, sanitizedAfter, livingIds, workingEvents);
+        this.updateWorkingPrivacyContext(
+          step.entityType,
+          step.entityId,
+          sanitizedAfter,
+          livingIds,
+          workingEvents
+        );
       } else if (step.entityType === 'person') {
         livingIds.delete(step.entityId);
       } else if (step.entityType === 'event') {
@@ -1049,9 +1054,7 @@ export class WikiWriteService {
       }
 
       const alreadyLocked = lockedInitialByKey.has(step.entityKey);
-      const expectedParent = alreadyLocked
-        ? null
-        : (initialRevisionByKey.get(step.entityKey) ?? null);
+      const expectedParent = alreadyLocked ? null : (initialRevisionByKey.get(step.entityKey) ?? null);
       lockedInitialByKey.add(step.entityKey);
 
       operations.push({
@@ -1209,11 +1212,7 @@ export class WikiWriteService {
 
   private assertSummaryValid(summary: string): void {
     if (!isEditSummaryValid(summary)) {
-      throw new KinloomHttpError(
-        400,
-        'VALIDATION_ERROR',
-        'Edit summary must be at least 3 characters.'
-      );
+      throw new KinloomHttpError(400, 'VALIDATION_ERROR', 'Edit summary must be at least 3 characters.');
     }
   }
 
@@ -1271,9 +1270,8 @@ export class WikiWriteService {
     }
 
     const prefix = ENTITY_ID_PREFIX[params.entityType];
-    const bodyId = typeof candidate.id === 'string' && candidate.id.trim().length > 0
-      ? candidate.id.trim()
-      : undefined;
+    const bodyId =
+      typeof candidate.id === 'string' && candidate.id.trim().length > 0 ? candidate.id.trim() : undefined;
 
     if (params.requireIdMatch && params.requestedEntityId && bodyId && bodyId !== params.requestedEntityId) {
       throw new KinloomHttpError(
@@ -1410,10 +1408,7 @@ export class WikiWriteService {
           const previousBundle =
             cached.object.parsedBundle ??
             (JSON.parse(await readBodyToString(cached.object.body)) as ArchiveBundle);
-          const patched = await this.bundleCache.applyMutationsAndStore(
-            previousBundle,
-            committedRevisions
-          );
+          const patched = await this.bundleCache.applyMutationsAndStore(previousBundle, committedRevisions);
           return patched.etag;
         }
         if (typeof cached.object.body !== 'string') {

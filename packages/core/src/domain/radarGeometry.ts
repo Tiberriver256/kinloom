@@ -29,9 +29,7 @@ export function polarPointAvoidingTopLabel(
   const singleOffsets = [0.22, 0.48, 0.78] as const;
   const step = usableArc / count;
   const angle =
-    count === 1
-      ? startAngle + usableArc * singleOffsets[ringIndex]
-      : startAngle + step * (idx + 0.5);
+    count === 1 ? startAngle + usableArc * singleOffsets[ringIndex] : startAngle + step * (idx + 0.5);
 
   return {
     x: cx + r * Math.cos(angle),

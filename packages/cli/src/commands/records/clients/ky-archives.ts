@@ -1,8 +1,9 @@
 import { CliValidationError } from '../../../errors.js';
 import {
+  type CommandParseSpec,
+  CookieJar,
   cachedJsonCall,
   collapseWhitespace,
-  CookieJar,
   emitJsonStdout,
   emitStdout,
   formatCommandUsage,
@@ -13,16 +14,15 @@ import {
   httpGetText,
   httpRequest,
   loadHtml,
+  type OptionSpec,
   parseCacheTtlHours,
   parseCommandArgs,
   parseXml,
-  RecordRuntimeError,
-  resolveCacheDir,
-  type CommandParseSpec,
-  type OptionSpec,
   type RecordCommandContext,
   type RecordCommandOutcome,
   type RecordHandler,
+  RecordRuntimeError,
+  resolveCacheDir,
 } from '../runtime/index.js';
 
 const DEFAULT_CACHE_TTL_HOURS = 168;
@@ -557,14 +557,33 @@ const LAND_OPTIONS: readonly OptionSpec[] = [
 ];
 
 const LAND_PATENT_OPTIONS: readonly OptionSpec[] = [
-  { key: 'book', kind: 'string', flags: ['--book'], metavar: 'BOOK', help: 'Grant book number (quick search).' },
-  { key: 'page', kind: 'string', flags: ['--page'], metavar: 'PAGE', help: 'Grant book page (quick search).' },
+  {
+    key: 'book',
+    kind: 'string',
+    flags: ['--book'],
+    metavar: 'BOOK',
+    help: 'Grant book number (quick search).',
+  },
+  {
+    key: 'page',
+    kind: 'string',
+    flags: ['--page'],
+    metavar: 'PAGE',
+    help: 'Grant book page (quick search).',
+  },
   { key: 'asJson', kind: 'boolean', flags: ['--json'], help: 'Print JSON.' },
   ...CACHE_OPTIONS,
 ];
 
 const PRESERVICA_OPTIONS: readonly OptionSpec[] = [
-  { key: 'limit', kind: 'integer', flags: ['--limit'], min: 0, default: 10, help: 'Maximum items to return.' },
+  {
+    key: 'limit',
+    kind: 'integer',
+    flags: ['--limit'],
+    min: 0,
+    default: 10,
+    help: 'Maximum items to return.',
+  },
   { key: 'asJson', kind: 'boolean', flags: ['--json'], help: 'Print JSON.' },
   ...CACHE_OPTIONS,
 ];
@@ -639,10 +658,7 @@ function renderRootHelp(): string {
   });
 }
 
-export const runKyArchivesCommand: RecordHandler = async (
-  args,
-  ctx
-): Promise<RecordCommandOutcome> => {
+export const runKyArchivesCommand: RecordHandler = async (args, ctx): Promise<RecordCommandOutcome> => {
   try {
     if (args.length === 0 || args[0] === '--help' || args[0] === '-h') {
       return { exitCode: 0, bytesOut: emitStdout(ctx.io, renderRootHelp()) };
@@ -744,9 +760,7 @@ export const runKyArchivesCommand: RecordHandler = async (
           schema: CACHE_SCHEMA,
           fetch: () => fetchCdmItem(ctx, alias, itemId),
           cacheable: (r) =>
-            (Array.isArray(r.fields) && r.fields.length > 0) ||
-            Boolean(r.title) ||
-            Boolean(r.contentType),
+            (Array.isArray(r.fields) && r.fields.length > 0) || Boolean(r.title) || Boolean(r.contentType),
           validateCached: isPlainRecord,
           nowMs: ctx.nowMs,
           sleepFn: ctx.sleepFn,
@@ -761,9 +775,7 @@ export const runKyArchivesCommand: RecordHandler = async (
         }
 
         const marker = cacheHit ? ' [cache]' : '';
-        const lines: string[] = [
-          `${CDM_BASE}/digital/singleitem/collection/${alias}/id/${itemId}${marker}`,
-        ];
+        const lines: string[] = [`${CDM_BASE}/digital/singleitem/collection/${alias}/id/${itemId}${marker}`];
         if (Array.isArray(data.fields)) {
           for (const rawField of data.fields) {
             if (!isPlainRecord(rawField)) {
@@ -1027,9 +1039,7 @@ export const runKyArchivesCommand: RecordHandler = async (
       }
 
       default:
-        throw new CliValidationError(
-          `No such command '${subcmd}'. Run 'kinloom ky-archives --script-help'.`
-        );
+        throw new CliValidationError(`No such command '${subcmd}'. Run 'kinloom ky-archives --script-help'.`);
     }
   } catch (err: unknown) {
     if (err instanceof CliValidationError) {

@@ -8,17 +8,18 @@ import type {
   Place,
 } from '@kinloom/core';
 import { compileArchive, parseKinloomConfig } from '@kinloom/core';
-import { MemoryRouter, Route, Routes } from 'react-router-dom';
-import React, { act } from 'react';
+import type React from 'react';
+import { act } from 'react';
 import { createRoot } from 'react-dom/client';
+import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { ArchivalMarkdown } from './ArchivalMarkdown.js';
-import { ArchiveProvider } from '../context/ArchiveProvider.js';
 import { useArchiveData } from '../context/ArchiveDataContext.js';
-import { EntityEditDrawer } from './wiki/EntityEditDrawer.js';
+import { ArchiveProvider } from '../context/ArchiveProvider.js';
 import { PersonPage } from '../pages/PersonPage.js';
 import { PlacePage } from '../pages/PlacePage.js';
+import { ArchivalMarkdown } from './ArchivalMarkdown.js';
 import { PronunciationBadge } from './PronunciationBadge.js';
+import { EntityEditDrawer } from './wiki/EntityEditDrawer.js';
 
 declare global {
   var IS_REACT_ACT_ENVIRONMENT: boolean | undefined;
@@ -236,14 +237,14 @@ describe('PronunciationBadge playback and fallback', () => {
           baseUrl="/archive/"
           compact
         />
-      </div>,
+      </div>
     );
 
     const leidenBtn = container.querySelector<HTMLButtonElement>(
-      'button[aria-label="Listen to pronunciation of Leiden"]',
+      'button[aria-label="Listen to pronunciation of Leiden"]'
     );
     const thomasBtn = container.querySelector<HTMLButtonElement>(
-      'button[aria-label="Listen to pronunciation of Thomas Mercer"]',
+      'button[aria-label="Listen to pronunciation of Thomas Mercer"]'
     );
     expect(leidenBtn).not.toBeNull();
     expect(thomasBtn).not.toBeNull();
@@ -300,29 +301,20 @@ describe('PronunciationBadge playback and fallback', () => {
 
     const { container, unmount } = renderIntoDom(
       <div>
-        <PronunciationBadge
-          pronunciation={{ phonetic: 'KRAH-koof', language: 'pl' }}
-          label="Kraków"
-        />
-        <PronunciationBadge
-          pronunciation={{ phonetic: 'HOOS', ipa: '/ɣus/', language: 'nl' }}
-          label="Goes"
-        />
-        <PronunciationBadge
-          pronunciation={{ phonetic: 'MER-ser', language: 'en-US' }}
-          label="Mercer"
-        />
-      </div>,
+        <PronunciationBadge pronunciation={{ phonetic: 'KRAH-koof', language: 'pl' }} label="Kraków" />
+        <PronunciationBadge pronunciation={{ phonetic: 'HOOS', ipa: '/ɣus/', language: 'nl' }} label="Goes" />
+        <PronunciationBadge pronunciation={{ phonetic: 'MER-ser', language: 'en-US' }} label="Mercer" />
+      </div>
     );
 
     const krakowBtn = container.querySelector<HTMLButtonElement>(
-      'button[aria-label="Listen to pronunciation of Kraków"]',
+      'button[aria-label="Listen to pronunciation of Kraków"]'
     );
     const goesBtn = container.querySelector<HTMLButtonElement>(
-      'button[aria-label="Listen to pronunciation of Goes"]',
+      'button[aria-label="Listen to pronunciation of Goes"]'
     );
     const mercerBtn = container.querySelector<HTMLButtonElement>(
-      'button[aria-label="Listen to pronunciation of Mercer"]',
+      'button[aria-label="Listen to pronunciation of Mercer"]'
     );
     expect(krakowBtn).not.toBeNull();
     expect(goesBtn).not.toBeNull();
@@ -365,7 +357,8 @@ describe('PronunciationBadge playback and fallback', () => {
   });
 
   it('displays source attribution and switches/plays variants on non-compact badges without cluttering compact badges', () => {
-    const createdAudios: { src: string; play: ReturnType<typeof vi.fn>; pause: ReturnType<typeof vi.fn> }[] = [];
+    const createdAudios: { src: string; play: ReturnType<typeof vi.fn>; pause: ReturnType<typeof vi.fn> }[] =
+      [];
     class MockAudio {
       src: string;
       currentTime = 0;
@@ -407,7 +400,7 @@ describe('PronunciationBadge playback and fallback', () => {
         <div data-testid="compact-badge">
           <PronunciationBadge pronunciation={multiVariant} label="Zeeland" baseUrl="/" compact />
         </div>
-      </div>,
+      </div>
     );
 
     const fullBadge = container.querySelector('[data-testid="full-badge"]')!;
@@ -415,10 +408,10 @@ describe('PronunciationBadge playback and fallback', () => {
 
     expect(fullBadge.textContent).toContain('ZAY-lahnt');
     expect(fullBadge.querySelector('a.pronunciation-source-link')?.getAttribute('href')).toBe(
-      'https://en.wiktionary.org/wiki/Zeeland',
+      'https://en.wiktionary.org/wiki/Zeeland'
     );
     expect(fullBadge.querySelector('a.pronunciation-source-link')?.textContent).toBe(
-      'Wiktionary (Dutch IPA)',
+      'Wiktionary (Dutch IPA)'
     );
 
     // Compact badge omits source links and variant buttons
@@ -427,7 +420,7 @@ describe('PronunciationBadge playback and fallback', () => {
 
     // Switch to the West Michigan variant and play its clip
     const miVariantBtn = Array.from(
-      fullBadge.querySelectorAll<HTMLButtonElement>('button.pronunciation-variant-btn'),
+      fullBadge.querySelectorAll<HTMLButtonElement>('button.pronunciation-variant-btn')
     ).find((b) => b.textContent?.trim() === 'West Michigan');
     expect(miVariantBtn).toBeDefined();
 
@@ -469,20 +462,18 @@ describe('PersonPage and PlacePage pronunciation mounting & living-person redact
             <Route path="/place/:slug" element={<PlacePage />} />
           </Routes>
         </ArchiveProvider>
-      </MemoryRouter>,
+      </MemoryRouter>
     );
 
     expect(
-      deceasedRender.container.querySelector(
-        'button[aria-label="Listen to pronunciation of Thomas Mercer"]',
-      ),
+      deceasedRender.container.querySelector('button[aria-label="Listen to pronunciation of Thomas Mercer"]')
     ).not.toBeNull();
     // Biography should also render inline entity mentions from PersonPage props
     expect(
-      deceasedRender.container.querySelector('a.inline-entity-link[href="/place/leiden"]'),
+      deceasedRender.container.querySelector('a.inline-entity-link[href="/place/leiden"]')
     ).not.toBeNull();
     expect(
-      deceasedRender.container.querySelector('a.inline-entity-link[href="/person/hannah-mercer"]'),
+      deceasedRender.container.querySelector('a.inline-entity-link[href="/person/hannah-mercer"]')
     ).not.toBeNull();
     deceasedRender.unmount();
 
@@ -493,7 +484,7 @@ describe('PersonPage and PlacePage pronunciation mounting & living-person redact
             <Route path="/person/:slug" element={<PersonPage />} />
           </Routes>
         </ArchiveProvider>
-      </MemoryRouter>,
+      </MemoryRouter>
     );
 
     expect(livingRender.container.textContent).not.toContain('SHOULD-NOT-SHOW');
@@ -507,13 +498,11 @@ describe('PersonPage and PlacePage pronunciation mounting & living-person redact
             <Route path="/place/:slug" element={<PlacePage />} />
           </Routes>
         </ArchiveProvider>
-      </MemoryRouter>,
+      </MemoryRouter>
     );
 
     expect(
-      placeRender.container.querySelector(
-        'button[aria-label="Listen to pronunciation of Leiden"]',
-      ),
+      placeRender.container.querySelector('button[aria-label="Listen to pronunciation of Leiden"]')
     ).not.toBeNull();
     expect(placeRender.container.textContent).toContain('LAY-den');
     placeRender.unmount();
@@ -588,7 +577,7 @@ describe('PersonPage and PlacePage pronunciation mounting & living-person redact
             <Route path="/person/:slug" element={<PersonPage />} />
           </Routes>
         </ArchiveProvider>
-      </MemoryRouter>,
+      </MemoryRouter>
     );
     const fullBadge = fullRender.container.querySelector('.person-pronunciation-row .pronunciation-badge');
     expect(fullBadge?.getAttribute('data-coverage')).toBe('full');
@@ -605,10 +594,10 @@ describe('PersonPage and PlacePage pronunciation mounting & living-person redact
             <Route path="/person/:slug" element={<PersonPage />} />
           </Routes>
         </ArchiveProvider>
-      </MemoryRouter>,
+      </MemoryRouter>
     );
     const surnameBadge = surnameRender.container.querySelector(
-      '.person-pronunciation-row .pronunciation-badge',
+      '.person-pronunciation-row .pronunciation-badge'
     );
     expect(surnameBadge?.getAttribute('data-coverage')).toBe('surname');
     expect(surnameBadge?.querySelector('.pronunciation-prefix')?.textContent).toBe('Surname:');
@@ -652,20 +641,17 @@ describe('EntityEditDrawer pronunciation editing and audio generation', () => {
       },
     };
 
-    const fetchMock = vi.fn(async () =>
-      new Response(JSON.stringify({ audio_url: '/audio/generated-leiden.mp3' }), {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-      }),
+    const fetchMock = vi.fn(
+      async () =>
+        new Response(JSON.stringify({ audio_url: '/audio/generated-leiden.mp3' }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        })
     );
     vi.stubGlobal('fetch', fetchMock);
 
     const { container, unmount } = renderIntoDom(
-      <ArchiveProvider
-        siteConfig={TEST_SITE_CONFIG}
-        initialBundle={bundle}
-        dataSource={dataSource}
-      >
+      <ArchiveProvider siteConfig={TEST_SITE_CONFIG} initialBundle={bundle} dataSource={dataSource}>
         <EntityEditDrawer
           open
           entityType="place"
@@ -685,18 +671,14 @@ describe('EntityEditDrawer pronunciation editing and audio generation', () => {
           title="Leiden, South Holland"
           onClose={() => {}}
         />
-      </ArchiveProvider>,
+      </ArchiveProvider>
     );
 
     const phoneticInput = container.querySelector<HTMLInputElement>(
-      'input[placeholder="e.g. MER-ser or LAY-den"]',
+      'input[placeholder="e.g. MER-ser or LAY-den"]'
     );
-    const ipaInput = container.querySelector<HTMLInputElement>(
-      'input[placeholder="e.g. /ˈmɜːr.sər/"]',
-    );
-    const langInput = container.querySelector<HTMLInputElement>(
-      'input[placeholder="e.g. nl, pl, en-US"]',
-    );
+    const ipaInput = container.querySelector<HTMLInputElement>('input[placeholder="e.g. /ˈmɜːr.sər/"]');
+    const langInput = container.querySelector<HTMLInputElement>('input[placeholder="e.g. nl, pl, en-US"]');
     expect(phoneticInput).not.toBeNull();
     expect(ipaInput).not.toBeNull();
     expect(langInput).not.toBeNull();
@@ -715,7 +697,7 @@ describe('EntityEditDrawer pronunciation editing and audio generation', () => {
     expect(container.querySelector('.wiki-pronunciation-preview .pronunciation-badge')).not.toBeNull();
 
     const genBtn = Array.from(container.querySelectorAll('button')).find((b) =>
-      b.textContent?.includes('Generate Audio'),
+      b.textContent?.includes('Generate Audio')
     );
     expect(genBtn).toBeDefined();
 
@@ -743,7 +725,7 @@ describe('EntityEditDrawer pronunciation editing and audio generation', () => {
 
     // Now clear all pronunciation fields and submit to verify empty pronunciation cleans to null
     const summaryInput = container.querySelector<HTMLInputElement>(
-      'input[placeholder="e.g. Corrected birth year from 1880 census or family Bible"]',
+      'input[placeholder="e.g. Corrected birth year from 1880 census or family Bible"]'
     );
     act(() => {
       setNativeInputValue(phoneticInput!, '');
@@ -806,11 +788,7 @@ describe('EntityEditDrawer pronunciation editing and audio generation', () => {
     };
 
     const secondRender = renderIntoDom(
-      <ArchiveProvider
-        siteConfig={TEST_SITE_CONFIG}
-        initialBundle={bundle}
-        dataSource={emptyDataSource}
-      >
+      <ArchiveProvider siteConfig={TEST_SITE_CONFIG} initialBundle={bundle} dataSource={emptyDataSource}>
         <EntityEditDrawer
           open
           entityType="place"
@@ -830,14 +808,14 @@ describe('EntityEditDrawer pronunciation editing and audio generation', () => {
           title="Oxford, Massachusetts"
           onClose={() => {}}
         />
-      </ArchiveProvider>,
+      </ArchiveProvider>
     );
 
     const oxfordPhonetic = secondRender.container.querySelector<HTMLInputElement>(
-      'input[placeholder="e.g. MER-ser or LAY-den"]',
+      'input[placeholder="e.g. MER-ser or LAY-den"]'
     );
     const oxfordSummary = secondRender.container.querySelector<HTMLInputElement>(
-      'input[placeholder="e.g. Corrected birth year from 1880 census or family Bible"]',
+      'input[placeholder="e.g. Corrected birth year from 1880 census or family Bible"]'
     );
     act(() => {
       setNativeInputValue(oxfordPhonetic!, '   ');
@@ -896,7 +874,7 @@ describe('EntityEditDrawer pronunciation editing and audio generation', () => {
           {
             status: 200,
             headers: { 'Content-Type': 'application/json' },
-          },
+          }
         );
       }
       return new Response(JSON.stringify({ pronunciations: {} }), {
@@ -941,14 +919,14 @@ describe('EntityEditDrawer pronunciation editing and audio generation', () => {
           title="Thomas Mercer"
           onClose={() => {}}
         />
-      </ArchiveProvider>,
+      </ArchiveProvider>
     );
 
     expect(container.textContent).toContain('Personal override (first / middle / full name)');
     expect(container.querySelector('[data-testid="lexicon-probe"]')?.textContent).toBe('MER-ser|');
 
     const editSharedBtn = Array.from(container.querySelectorAll('button')).find(
-      (b) => b.textContent?.trim() === 'Edit shared "Mercer"',
+      (b) => b.textContent?.trim() === 'Edit shared "Mercer"'
     );
     expect(editSharedBtn).toBeDefined();
 
@@ -960,7 +938,7 @@ describe('EntityEditDrawer pronunciation editing and audio generation', () => {
     expect(sharedEditor).not.toBeNull();
 
     const sharedPhoneticInput = sharedEditor!.querySelector<HTMLInputElement>(
-      'input[placeholder="e.g. MER-ser"]',
+      'input[placeholder="e.g. MER-ser"]'
     );
     expect(sharedPhoneticInput).not.toBeNull();
     expect(sharedPhoneticInput!.value).toBe('MER-ser');
@@ -970,7 +948,7 @@ describe('EntityEditDrawer pronunciation editing and audio generation', () => {
     });
 
     const saveSharedBtn = Array.from(sharedEditor!.querySelectorAll('button')).find(
-      (b) => b.textContent?.trim() === 'Save for all Mercer records',
+      (b) => b.textContent?.trim() === 'Save for all Mercer records'
     );
     expect(saveSharedBtn).toBeDefined();
 
@@ -981,7 +959,7 @@ describe('EntityEditDrawer pronunciation editing and audio generation', () => {
     });
 
     const putCall = fetchMock.mock.calls.find(
-      ([url, init]) => url === '/api/pronunciations/Mercer' && init?.method === 'PUT',
+      ([url, init]) => url === '/api/pronunciations/Mercer' && init?.method === 'PUT'
     );
     expect(putCall).toBeDefined();
     expect(putCall![1]?.credentials).toBe('include');
@@ -993,11 +971,9 @@ describe('EntityEditDrawer pronunciation editing and audio generation', () => {
 
     // Context and breakdown card both update live without reload
     expect(container.querySelector('[data-testid="lexicon-probe"]')?.textContent).toBe(
-      'MUR-ser|/audio/shared-mercer.mp3',
+      'MUR-ser|/audio/shared-mercer.mp3'
     );
-    expect(container.querySelector('.wiki-pronunciation-part-shared')?.textContent).toContain(
-      'MUR-ser',
-    );
+    expect(container.querySelector('.wiki-pronunciation-part-shared')?.textContent).toContain('MUR-ser');
     expect(container.textContent).toContain('Saved shared pronunciation for "Mercer"');
 
     unmount();
@@ -1040,7 +1016,7 @@ describe('ArchivalMarkdown inline entity mentions and hover popovers', () => {
           linkedPlaceIds={['plc_oxford_twp', 'plc_oxford']}
           baseUrl="/"
         />
-      </MemoryRouter>,
+      </MemoryRouter>
     );
 
     // Subject person (Thomas Mercer) is NOT auto-highlighted
@@ -1070,7 +1046,7 @@ describe('ArchivalMarkdown inline entity mentions and hover popovers', () => {
 
     // Inline speaker button beside Leiden plays audio in one click
     const inlinePlayBtn = container.querySelector<HTMLButtonElement>(
-      '.inline-entity-pronunciation button[aria-label="Listen to pronunciation of Leiden"]',
+      '.inline-entity-pronunciation button[aria-label="Listen to pronunciation of Leiden"]'
     );
     expect(inlinePlayBtn).not.toBeNull();
     act(() => {
@@ -1196,7 +1172,7 @@ describe('Live-lexicon partial-update merge regression (PersonPage + EntityEditD
               },
             },
           }),
-          { status: 200, headers: { 'Content-Type': 'application/json' } },
+          { status: 200, headers: { 'Content-Type': 'application/json' } }
         );
       }
       if (url === '/api/pronunciations') {
@@ -1204,7 +1180,7 @@ describe('Live-lexicon partial-update merge regression (PersonPage + EntityEditD
           JSON.stringify({
             pronunciations: configWithSharedSurname.pronunciations,
           }),
-          { status: 200, headers: { 'Content-Type': 'application/json' } },
+          { status: 200, headers: { 'Content-Type': 'application/json' } }
         );
       }
       return new Response('{}', { status: 404 });
@@ -1222,7 +1198,7 @@ describe('Live-lexicon partial-update merge regression (PersonPage + EntityEditD
             <Route path="/person/:slug" element={<PersonPage />} />
           </Routes>
         </ArchiveProvider>
-      </MemoryRouter>,
+      </MemoryRouter>
     );
 
     const headingRow = container.querySelector('.person-pronunciation-row')!;
@@ -1237,7 +1213,7 @@ describe('Live-lexicon partial-update merge regression (PersonPage + EntityEditD
     });
 
     const editSharedBtn = Array.from(container.querySelectorAll('button')).find(
-      (b) => b.textContent?.trim() === 'Edit shared "Mercer"',
+      (b) => b.textContent?.trim() === 'Edit shared "Mercer"'
     );
     expect(editSharedBtn).toBeDefined();
     act(() => {
@@ -1247,8 +1223,12 @@ describe('Live-lexicon partial-update merge regression (PersonPage + EntityEditD
     const sharedEditor = container.querySelector('.wiki-pronunciation-shared-editor')!;
     const phoneticInput = sharedEditor.querySelector<HTMLInputElement>('input[placeholder="e.g. MER-ser"]')!;
     const ipaInput = sharedEditor.querySelector<HTMLInputElement>('input[placeholder="e.g. /ˈmɜːr.sər/"]')!;
-    const langInput = sharedEditor.querySelector<HTMLInputElement>('input[placeholder="e.g. en-US, nl, pl"]')!;
-    const noteInput = sharedEditor.querySelector<HTMLInputElement>('input[placeholder="e.g. Stress on first syllable"]')!;
+    const langInput = sharedEditor.querySelector<HTMLInputElement>(
+      'input[placeholder="e.g. en-US, nl, pl"]'
+    )!;
+    const noteInput = sharedEditor.querySelector<HTMLInputElement>(
+      'input[placeholder="e.g. Stress on first syllable"]'
+    )!;
 
     act(() => {
       setNativeInputValue(phoneticInput, 'MUR-ser-NEW');
@@ -1258,7 +1238,7 @@ describe('Live-lexicon partial-update merge regression (PersonPage + EntityEditD
     });
 
     const saveSharedBtn = Array.from(sharedEditor.querySelectorAll('button')).find(
-      (b) => b.textContent?.trim() === 'Save for all Mercer records',
+      (b) => b.textContent?.trim() === 'Save for all Mercer records'
     )!;
 
     await act(async () => {
@@ -1279,7 +1259,7 @@ describe('Live-lexicon partial-update merge regression (PersonPage + EntityEditD
 
     // Hover Hannah Mercer's inline mention and verify its popover ALSO shows the NEW live pronunciation
     const hannahLink = container.querySelector<HTMLAnchorElement>(
-      'a.inline-entity-link[href="/person/hannah-mercer"]',
+      'a.inline-entity-link[href="/person/hannah-mercer"]'
     );
     expect(hannahLink).not.toBeNull();
     act(() => {

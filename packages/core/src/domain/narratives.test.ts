@@ -1,16 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import {
+  compileArchive,
+  type Narrative,
   NarrativeKindSchema,
   NarrativeSchema,
-  compileArchive,
   parseKinloomConfig,
   parseNarrativesYaml,
   partitionPersonNarratives,
   patchCompiledBundle,
+  type RawPerson,
   serializeNarrativesYaml,
   validateArchive,
-  type Narrative,
-  type RawPerson,
 } from '../index.js';
 
 const TEST_CONFIG = parseKinloomConfig({
@@ -68,12 +68,7 @@ const TEST_PEOPLE: RawPerson[] = [
 
 describe('Narrative schema, validation, privacy redaction, and person partitioning', () => {
   it('parses kind and subject_person_id and round-trips through YAML deterministically', () => {
-    expect(NarrativeKindSchema.options).toEqual([
-      'biography',
-      'family_story',
-      'research_note',
-      'memoir',
-    ]);
+    expect(NarrativeKindSchema.options).toEqual(['biography', 'family_story', 'research_note', 'memoir']);
 
     const parsed = NarrativeSchema.parse({
       id: 'nar_alice_life',

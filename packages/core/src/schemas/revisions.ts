@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import {
+  type KinshipEdge,
   KinshipEdgeSchema,
   MediaItemSchema,
   NarrativeSchema,
@@ -7,7 +8,6 @@ import {
   RawEventSchema,
   RawPersonSchema,
   SourceRecordSchema,
-  type KinshipEdge,
 } from './entities.js';
 
 export const EntityTypeSchema = z.enum([
@@ -20,13 +20,7 @@ export const EntityTypeSchema = z.enum([
   'kinship_edge',
 ]);
 
-export const RevisionActionSchema = z.enum([
-  'create',
-  'update',
-  'delete',
-  'restore',
-  'revert',
-]);
+export const RevisionActionSchema = z.enum(['create', 'update', 'delete', 'restore', 'revert']);
 
 export const AuthorTypeSchema = z.enum(['human', 'agent', 'system_seed']);
 
@@ -112,10 +106,7 @@ export type TypedEntityByType = {
   [K in keyof typeof ENTITY_SCHEMA_BY_TYPE]: z.infer<(typeof ENTITY_SCHEMA_BY_TYPE)[K]>;
 };
 
-export function parseEntityPayload<T extends EntityType>(
-  entityType: T,
-  raw: unknown
-): TypedEntityByType[T] {
+export function parseEntityPayload<T extends EntityType>(entityType: T, raw: unknown): TypedEntityByType[T] {
   const schema = ENTITY_SCHEMA_BY_TYPE[entityType];
   return schema.parse(raw) as TypedEntityByType[T];
 }
@@ -144,9 +135,7 @@ export const RevisionRecordSchema = z.object({
   author_name: z.string().min(1),
   author_type: AuthorTypeSchema,
   summary: z.string().min(3, 'Edit summary must be at least 3 characters'),
-  has_primary_source: z
-    .union([z.boolean(), z.literal(0), z.literal(1)])
-    .transform((v) => Boolean(v)),
+  has_primary_source: z.union([z.boolean(), z.literal(0), z.literal(1)]).transform((v) => Boolean(v)),
   before_json: EntityPayloadSchema.nullable(),
   after_json: EntityPayloadSchema.nullable(),
   created_at: z.string().min(1),

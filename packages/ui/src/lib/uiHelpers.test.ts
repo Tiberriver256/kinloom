@@ -1,9 +1,10 @@
+import assert from 'node:assert/strict';
 import type { StyleSpecification } from 'maplibre-gl';
+import { describe, test } from 'vitest';
 import {
-  CHUNK_RELOAD_STORAGE_KEY,
-  PAPER_LAND_LAYER_ID,
   buildArchivalOhmStyle,
   buildEventQueryUrl,
+  CHUNK_RELOAD_STORAGE_KEY,
   clampPan,
   clampZoom,
   computeDoubleTapZoom,
@@ -13,9 +14,10 @@ import {
   formatPhotoDocumentCount,
   formatPronunciationScopePrefix,
   formatPronunciationScopeTitle,
-  KINLOOM_VOCABULARY,
   isChunkLoadError,
   isSearchableQuery,
+  KINLOOM_VOCABULARY,
+  PAPER_LAND_LAYER_ID,
   pickActiveTimelineEventId,
   readerNextPage,
   readerPrevPage,
@@ -30,8 +32,6 @@ import {
   shouldRunInitialEventScroll,
   stepInertia,
 } from '../index.js';
-import assert from 'node:assert/strict';
-import { describe, test } from 'vitest';
 
 describe('ohmStyle', () => {
   test('prunes non-archival layers, rewrites land layer to kinloom-paper-land, and preserves date state', () => {
@@ -120,7 +120,7 @@ describe('timelineScroll', () => {
         targetEventId: 'e2',
         eventIds: ['e1', 'e2'],
       }),
-      true,
+      true
     );
     assert.equal(
       shouldRunInitialEventScroll({
@@ -129,16 +129,13 @@ describe('timelineScroll', () => {
         targetEventId: 'e2',
         eventIds: ['e1', 'e2'],
       }),
-      false,
+      false
     );
     assert.equal(
       buildEventQueryUrl('https://archive.test/person/lincoln?from=home', 'e2'),
-      '/person/lincoln?from=home&event=e2',
+      '/person/lincoln?from=home&event=e2'
     );
-    assert.equal(
-      buildEventQueryUrl('https://archive.test/person/lincoln?event=e2', 'e2'),
-      null,
-    );
+    assert.equal(buildEventQueryUrl('https://archive.test/person/lincoln?event=e2', 'e2'), null);
   });
 });
 
@@ -175,7 +172,7 @@ describe('treeGestures', () => {
       { x: 99_999, y: -99_999 },
       1,
       { minX: 0, maxX: 500, minY: 0, maxY: 400 },
-      { width: 800, height: 600 },
+      { width: 800, height: 600 }
     );
     assert.ok(clamped.x < 99_999);
     assert.ok(clamped.y > -99_999);
@@ -206,7 +203,7 @@ describe('clientTelemetry', () => {
 
     assert.equal(
       sanitizeRoute('/invite/secret-token-123?event=e1&token=leak'),
-      '/invite/[redacted]?event=e1',
+      '/invite/[redacted]?event=e1'
     );
     const report = sanitizeReport({
       kind: 'react_boundary',

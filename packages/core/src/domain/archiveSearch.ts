@@ -21,11 +21,17 @@ export function buildExcerpt(text: string, query: string, radius = 64): string {
   const lower = text.toLowerCase();
   const q = query.trim().toLowerCase();
   if (!q) {
-    return text.slice(0, radius * 2).replaceAll(/\s+/g, ' ').trim();
+    return text
+      .slice(0, radius * 2)
+      .replaceAll(/\s+/g, ' ')
+      .trim();
   }
   const idx = lower.indexOf(q);
   if (idx === -1) {
-    return text.slice(0, radius * 2).replaceAll(/\s+/g, ' ').trim();
+    return text
+      .slice(0, radius * 2)
+      .replaceAll(/\s+/g, ' ')
+      .trim();
   }
   const start = Math.max(0, idx - radius);
   const end = Math.min(text.length, idx + q.length + radius);
@@ -110,12 +116,7 @@ export function searchArchive(params: {
   const peopleById = new Map(bundle.people.map((p) => [p.id, p]));
   const eventResults: ArchiveSearchResult[] = [];
   for (const ev of bundle.events) {
-    if (
-      ev.scope !== 'personal' &&
-      ev.scope !== 'family' &&
-      ev.scope !== 'local' &&
-      ev.scope !== 'state'
-    ) {
+    if (ev.scope !== 'personal' && ev.scope !== 'family' && ev.scope !== 'local' && ev.scope !== 'state') {
       continue;
     }
     const pl = ev.place_id ? placesById.get(ev.place_id) : undefined;

@@ -1,20 +1,20 @@
 import type { ArchiveDataSource, EntityPayload } from '@kinloom/core';
+import { describe, expect, it } from 'vitest';
+import { createActor, fromPromise, waitFor } from 'xstate';
 import {
   type AttachActorOutcome,
   type AttachMediaActorInput,
+  authSessionMachine,
+  deriveSessionFromAuthSnapshot,
+  entityEditorMachine,
   type HydrateOutcome,
+  mediaUploadMachine,
   type SaveEntityInput,
   type SaveEntityResult,
   type UploadActorOutcome,
   type UploadMediaActorInput,
   type VerifyOutcome,
-  authSessionMachine,
-  deriveSessionFromAuthSnapshot,
-  entityEditorMachine,
-  mediaUploadMachine,
 } from './index.js';
-import { createActor, fromPromise, waitFor } from 'xstate';
-import { describe, expect, it } from 'vitest';
 
 const BASE_PERSON: EntityPayload = {
   id: 'p_clara',
@@ -199,9 +199,7 @@ describe('entityEditorMachine', () => {
     actor.send({ type: 'SET_SUMMARY', summary: 'Confirm exact death date' });
     actor.send({ type: 'SUBMIT' });
 
-    const conflicted = await waitFor(actor, (s) =>
-      s.matches({ conflict409: 'resolvingConflict' }),
-    );
+    const conflicted = await waitFor(actor, (s) => s.matches({ conflict409: 'resolvingConflict' }));
     expect(conflicted.context.dirty).toBe(true);
     expect(conflicted.context.conflict?.latestRevisionId).toBe(12);
 
@@ -279,7 +277,7 @@ describe('authSessionMachine', () => {
           { email: string; inviteToken: string | null; dataSource?: ArchiveDataSource }
         >(async () => {}),
         verifyMagicLink: fromPromise<VerifyOutcome, { token: string; inviteToken: string | null }>(
-          async () => ({ kind: 'invite_revoked' }),
+          async () => ({ kind: 'invite_revoked' })
         ),
       },
     });

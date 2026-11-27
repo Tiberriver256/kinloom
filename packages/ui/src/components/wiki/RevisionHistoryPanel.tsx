@@ -1,10 +1,11 @@
 import type { EntityType, RevisionRecord } from '@kinloom/core';
 import { asRevisionId } from '@kinloom/core';
-import { AuthorPill, CitationBadge } from './WikiBadges.js';
-import React, { useCallback, useEffect, useState } from 'react';
+import type React from 'react';
+import { useCallback, useEffect, useState } from 'react';
+import { useArchiveData } from '../../context/ArchiveDataContext.js';
 import { formatArchivalTimestamp } from '../../lib/formatTimestamp.js';
 import { RevisionDiffView } from './RevisionDiffView.js';
-import { useArchiveData } from '../../context/ArchiveDataContext.js';
+import { AuthorPill, CitationBadge } from './WikiBadges.js';
 
 export interface RevisionHistoryPanelProps {
   entityType: EntityType;
@@ -24,7 +25,7 @@ export const RevisionHistoryPanel: React.FC<RevisionHistoryPanelProps> = ({
   const [loading, setLoading] = useState<boolean>(initialRevisions === undefined);
   const [error, setError] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<number | null>(
-    initialRevisions && initialRevisions.length > 0 ? initialRevisions[0].revision_id : null,
+    initialRevisions && initialRevisions.length > 0 ? initialRevisions[0].revision_id : null
   );
   const [revertingId, setRevertingId] = useState<number | null>(null);
   const [confirmingRevertId, setConfirmingRevertId] = useState<number | null>(null);
@@ -72,7 +73,7 @@ export const RevisionHistoryPanel: React.FC<RevisionHistoryPanelProps> = ({
     try {
       const res = await dataSource.revertRevision(
         asRevisionId(rev.revision_id),
-        `Undo r${rev.revision_id}: ${rev.summary}`,
+        `Undo r${rev.revision_id}: ${rev.summary}`
       );
       setStatusMessage(`Reverted r${rev.revision_id} in new revision r${res.revision.revision_id}.`);
       reloadArchive();
@@ -162,8 +163,8 @@ export const RevisionHistoryPanel: React.FC<RevisionHistoryPanelProps> = ({
               {confirmingRevertId === rev.revision_id && (
                 <div className="wiki-confirm-inline" role="alert">
                   <p className="wiki-confirm-inline-text">
-                    Revert revision <code>r{rev.revision_id}</code>? This appends a new revision
-                    restoring the prior version.
+                    Revert revision <code>r{rev.revision_id}</code>? This appends a new revision restoring the
+                    prior version.
                   </p>
                   <div className="wiki-inline-actions">
                     <button

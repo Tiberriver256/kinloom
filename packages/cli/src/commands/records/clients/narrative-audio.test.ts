@@ -3,11 +3,7 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import {
-  createRecordContext,
-  type ExecFileFn,
-  type RecordCommandContext,
-} from '../runtime/index.js';
+import { createRecordContext, type ExecFileFn, type RecordCommandContext } from '../runtime/index.js';
 import {
   applyNames,
   buildChirpPronunciations,
@@ -299,10 +295,7 @@ describe('narrative-audio CLI subcommands', () => {
         'He lived near U.S. Route No. 2 and used *emphasis* with "quotes" and a/b.',
       ].join('\n')
     );
-    await writeFile(
-      badNames,
-      JSON.stringify({ MissingName: 'not-slashed' })
-    );
+    await writeFile(badNames, JSON.stringify({ MissingName: 'not-slashed' }));
 
     const failRes = await invokeNarrativeAudio(['check', dirtyScript, '--names', badNames]);
     expect(failRes.exitCode).toBe(1);
@@ -336,20 +329,20 @@ describe('narrative-audio CLI subcommands', () => {
     );
     await writeFile(namesPath, JSON.stringify({ 'Alden Mercer': '/ˈɔːldən ˈmɜːrsər/' }));
 
-    const chirpDry = await invokeNarrativeAudio(
-      ['synth', scriptPath, '--names', namesPath, '--dry-run'],
-      { env: { NARRATIVE_AUDIO_LANGUAGE: 'en-GB' } }
-    );
+    const chirpDry = await invokeNarrativeAudio(['synth', scriptPath, '--names', namesPath, '--dry-run'], {
+      env: { NARRATIVE_AUDIO_LANGUAGE: 'en-GB' },
+    });
     expect(chirpDry.exitCode, chirpDry.stderr).toBe(0);
     expect(chirpDry.stdout).toContain('===== request 1 [chirp3-hd · en-GB-Chirp3-HD-Charon] =====');
-    expect(chirpDry.stdout).toContain('Alden Mercer arrived May ninth, 1766 with one thousand two hundred acres.');
+    expect(chirpDry.stdout).toContain(
+      'Alden Mercer arrived May ninth, 1766 with one thousand two hundred acres.'
+    );
     expect(chirpDry.stdout).toContain('customPronunciations:');
     expect(chirpDry.stdout).toContain('===== request 2 [chirp3-hd · en-GB-Chirp3-HD-Kore · notes] =====');
 
-    const geminiDry = await invokeNarrativeAudio(
-      ['synth', scriptPath, '--names', namesPath, '--dry-run'],
-      { env: { NARRATIVE_AUDIO_BACKEND: 'gemini' } }
-    );
+    const geminiDry = await invokeNarrativeAudio(['synth', scriptPath, '--names', namesPath, '--dry-run'], {
+      env: { NARRATIVE_AUDIO_BACKEND: 'gemini' },
+    });
     expect(geminiDry.exitCode, geminiDry.stderr).toBe(0);
     expect(geminiDry.stdout).toContain('===== request 1 [gemini · gemini-3.8-flash-tts:Charon] =====');
     expect(geminiDry.stdout).toContain('/ˈɔːldən ˈmɜːrsər/ arrived May ninth, 1766');
@@ -392,10 +385,7 @@ describe('narrative-audio CLI subcommands', () => {
         headers: headersObj,
         body: JSON.parse(String(init?.body ?? '{}')),
       });
-      return new Response(
-        JSON.stringify({ audioContent: wavChunk.toString('base64') }),
-        { status: 200 }
-      );
+      return new Response(JSON.stringify({ audioContent: wavChunk.toString('base64') }), { status: 200 });
     };
 
     const execCalls: Array<{ file: string; args: readonly string[]; pcmBytes?: number }> = [];
@@ -512,14 +502,11 @@ describe('narrative-audio CLI subcommands', () => {
       return { stdout: Buffer.alloc(0), stderr: Buffer.alloc(0) };
     };
 
-    const synthRes = await invokeNarrativeAudio(
-      ['synth', scriptPath, '--backend', 'gemini', '-o', outMp3],
-      {
-        env: { GEMINI_API_KEY: 'gemini-secret-key' },
-        fetchImpl: mockFetch,
-        execFileImpl: mockExec,
-      }
-    );
+    const synthRes = await invokeNarrativeAudio(['synth', scriptPath, '--backend', 'gemini', '-o', outMp3], {
+      env: { GEMINI_API_KEY: 'gemini-secret-key' },
+      fetchImpl: mockFetch,
+      execFileImpl: mockExec,
+    });
     expect(synthRes.exitCode, synthRes.stderr).toBe(0);
     expect(synthRes.stdout).toContain('gemini, 312 tokens');
     expect(synthRes.stdout).toContain('    file: media/brief.mp3');
@@ -533,9 +520,7 @@ describe('narrative-audio CLI subcommands', () => {
     expect(transcribeRes.stdout).toBe('[00:00] Clarissa Vance taught school in Illinois.');
     const transcriptFile = path.join(tmp, 'brief.transcript.md');
     expect(fs.existsSync(transcriptFile)).toBe(true);
-    expect(fs.readFileSync(transcriptFile, 'utf8')).toBe(
-      '[00:00] Clarissa Vance taught school in Illinois.'
-    );
+    expect(fs.readFileSync(transcriptFile, 'utf8')).toBe('[00:00] Clarissa Vance taught school in Illinois.');
     expect(transcribeRes.stderr).toContain(`wrote ${transcriptFile}`);
   });
 });

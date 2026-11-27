@@ -4,11 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { createRecordContext, SsrfBlockedError } from '../runtime/index.js';
-import {
-  runOpenarchievenCommand,
-  validateApiUrl,
-  validateScanUrl,
-} from './openarchieven.js';
+import { runOpenarchievenCommand, validateApiUrl, validateScanUrl } from './openarchieven.js';
 
 const SEARCH_PAYLOAD = {
   response: {
@@ -165,21 +161,9 @@ describe('openarchieven cache', () => {
       return jsonResponse(SEARCH_PAYLOAD);
     };
 
-    const r1 = await invokeOpenarchieven(
-      ['search', '--name', 'Jan Jansen', '--json'],
-      cacheDir,
-      fetchImpl
-    );
-    const r2 = await invokeOpenarchieven(
-      ['search', '--name', 'Jan Jansen', '--json'],
-      cacheDir,
-      fetchImpl
-    );
-    const r3 = await invokeOpenarchieven(
-      ['search', '--name', 'Jan Jansen'],
-      cacheDir,
-      fetchImpl
-    );
+    const r1 = await invokeOpenarchieven(['search', '--name', 'Jan Jansen', '--json'], cacheDir, fetchImpl);
+    const r2 = await invokeOpenarchieven(['search', '--name', 'Jan Jansen', '--json'], cacheDir, fetchImpl);
+    const r3 = await invokeOpenarchieven(['search', '--name', 'Jan Jansen'], cacheDir, fetchImpl);
 
     expect(r1.exitCode).toBe(0);
     expect(r2.exitCode).toBe(0);
@@ -226,11 +210,7 @@ describe('openarchieven cache', () => {
       return jsonResponse(SHOW_PAYLOAD);
     };
 
-    const r1 = await invokeOpenarchieven(
-      ['show', `bhi:${RECORD_REF}`, '--json'],
-      cacheDir,
-      fetchImpl
-    );
+    const r1 = await invokeOpenarchieven(['show', `bhi:${RECORD_REF}`, '--json'], cacheDir, fetchImpl);
     const r2 = await invokeOpenarchieven(['show', `bhi:${RECORD_REF}`], cacheDir, fetchImpl);
 
     expect(r1.exitCode).toBe(0);
@@ -261,11 +241,7 @@ describe('openarchieven cache', () => {
     const r2 = await invokeOpenarchieven(['search', '--name', 'Jan Jansen'], cacheDir, fetchImpl);
     expect(fs.readdirSync(cacheDir).filter((f) => f.endsWith('.json'))).toEqual([]);
     step = 'ok';
-    const r3 = await invokeOpenarchieven(
-      ['search', '--name', 'Jan Jansen', '--json'],
-      cacheDir,
-      fetchImpl
-    );
+    const r3 = await invokeOpenarchieven(['search', '--name', 'Jan Jansen', '--json'], cacheDir, fetchImpl);
 
     expect(r1.exitCode).toBe(1);
     expect(r1.stderr).not.toContain('Traceback');
@@ -340,9 +316,10 @@ describe('openarchieven cache', () => {
 
     const queries: Array<Record<string, unknown>> = [];
     for (const file of fs.readdirSync(cacheDir).filter((f) => f.endsWith('.json'))) {
-      const entry = JSON.parse(
-        fs.readFileSync(path.join(cacheDir, file), 'utf8')
-      ) as { query: Record<string, unknown>; result: Record<string, unknown> };
+      const entry = JSON.parse(fs.readFileSync(path.join(cacheDir, file), 'utf8')) as {
+        query: Record<string, unknown>;
+        result: Record<string, unknown>;
+      };
       queries.push(entry.query);
       expect('cache_hit' in entry.result).toBe(false);
     }
@@ -456,11 +433,7 @@ describe('openarchieven download', () => {
     const baseArgs = ['download', `bhi:${RECORD_REF}`, '--scan-index', '1', '--output', out, '--json'];
     await invokeOpenarchieven(baseArgs, cacheDir, fetchImpl);
     const refreshed = await invokeOpenarchieven([...baseArgs, '--refresh'], cacheDir, fetchImpl);
-    const expired = await invokeOpenarchieven(
-      [...baseArgs, '--cache-ttl-hours', '0'],
-      cacheDir,
-      fetchImpl
-    );
+    const expired = await invokeOpenarchieven([...baseArgs, '--cache-ttl-hours', '0'], cacheDir, fetchImpl);
 
     expect(refreshed.exitCode).toBe(0);
     expect(expired.exitCode).toBe(0);
@@ -627,11 +600,7 @@ describe('openarchieven hardening & Wave 45 fallbacks', () => {
       cacheDir,
       fetchImpl
     );
-    const rShow = await invokeOpenarchieven(
-      ['show', `bhi:${RECORD_REF}`, '--json'],
-      cacheDir,
-      fetchImpl
-    );
+    const rShow = await invokeOpenarchieven(['show', `bhi:${RECORD_REF}`, '--json'], cacheDir, fetchImpl);
     const rShowCached = await invokeOpenarchieven(
       ['show', `bhi:${RECORD_REF}`, '--json'],
       cacheDir,
@@ -683,22 +652,14 @@ describe('openarchieven hardening & Wave 45 fallbacks', () => {
   it('14. host allowlist, SSRF guard, path traversal guard, and broken pipe handling', async () => {
     const cacheDir = await makeTempDir();
 
-    expect(() => validateApiUrl('https://evil.example/1.0/records/search.json')).toThrow(
-      SsrfBlockedError
-    );
-    expect(() => validateApiUrl('http://api.openarch.nl/1.0/records/search.json')).toThrow(
-      SsrfBlockedError
-    );
+    expect(() => validateApiUrl('https://evil.example/1.0/records/search.json')).toThrow(SsrfBlockedError);
+    expect(() => validateApiUrl('http://api.openarch.nl/1.0/records/search.json')).toThrow(SsrfBlockedError);
     expect(() => validateApiUrl('https://user:pass@api.openarch.nl/1.0/records/search.json')).toThrow(
       SsrfBlockedError
     );
     expect(() => validateScanUrl('http://127.0.0.1/secret.jpg')).toThrow(SsrfBlockedError);
-    expect(() => validateScanUrl('http://169.254.169.254/latest/meta-data/')).toThrow(
-      SsrfBlockedError
-    );
-    expect(() => validateScanUrl('https://user:pass@scans.invalid/scan.jpg')).toThrow(
-      SsrfBlockedError
-    );
+    expect(() => validateScanUrl('http://169.254.169.254/latest/meta-data/')).toThrow(SsrfBlockedError);
+    expect(() => validateScanUrl('https://user:pass@scans.invalid/scan.jpg')).toThrow(SsrfBlockedError);
 
     const redirectApi: typeof fetch = async (input) => {
       const parsed = new URL(String(input));
@@ -711,11 +672,7 @@ describe('openarchieven hardening & Wave 45 fallbacks', () => {
       return jsonResponse(SEARCH_PAYLOAD);
     };
 
-    const blocked = await invokeOpenarchieven(
-      ['search', '--name', 'Jan Bakker'],
-      cacheDir,
-      redirectApi
-    );
+    const blocked = await invokeOpenarchieven(['search', '--name', 'Jan Bakker'], cacheDir, redirectApi);
     expect(blocked.exitCode).toBe(1);
     expect(blocked.stderr).toContain('Refusing API host');
 
@@ -825,11 +782,7 @@ describe('openarchieven hardening & Wave 45 fallbacks', () => {
 
     // 1. `openarchieven get` aliases `show` and shares the disk cache.
     const g1 = await invokeOpenarchieven(['get', `bhi:${RECORD_REF}`, '--json'], cacheDir, fetchImpl);
-    const g2 = await invokeOpenarchieven(
-      ['show', `bhi:${RECORD_REF}`, '--json'],
-      cacheDir,
-      fetchImpl
-    );
+    const g2 = await invokeOpenarchieven(['show', `bhi:${RECORD_REF}`, '--json'], cacheDir, fetchImpl);
     expect(g1.exitCode).toBe(0);
     expect(g2.exitCode).toBe(0);
     expect((JSON.parse(g1.stdout) as { cache_hit: boolean }).cache_hit).toBe(false);
@@ -857,9 +810,7 @@ describe('openarchieven hardening & Wave 45 fallbacks', () => {
       files: Array<{ url: string }>;
     };
     expect(d1Body.cache_hit).toBe(false);
-    expect(d1Body.files[0].url).toBe(
-      'http://files.archieven.nl/php/show_file.php?adt_id=239&file=demo.jpg'
-    );
+    expect(d1Body.files[0].url).toBe('http://files.archieven.nl/php/show_file.php?adt_id=239&file=demo.jpg');
     expect(fs.readFileSync(outFiles)).toEqual(JPEG_ONE);
     expect(protoAttempts).toBe(2);
 
@@ -927,11 +878,7 @@ describe('openarchieven hardening & Wave 45 fallbacks', () => {
       throw new Error('url command should be offline');
     };
 
-    const recUrl = await invokeOpenarchieven(
-      ['url', '--record', `bhi:${RECORD_REF}`],
-      cacheDir,
-      failFetch
-    );
+    const recUrl = await invokeOpenarchieven(['url', '--record', `bhi:${RECORD_REF}`], cacheDir, failFetch);
     const searchUrl = await invokeOpenarchieven(
       ['url', '--name', 'Jan Jansen', '--year', '1853', '--place', 'Zundert'],
       cacheDir,

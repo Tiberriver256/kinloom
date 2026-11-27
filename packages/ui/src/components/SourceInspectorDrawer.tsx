@@ -1,15 +1,12 @@
-import { DateStamp, resolveAssetUrl } from './Atoms.js';
-import {
-  buildLibrarianCitation,
-  findSourceUsages,
-  formatSourceTypeLabel,
-} from '@kinloom/core';
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { buildLibrarianCitation, findSourceUsages, formatSourceTypeLabel } from '@kinloom/core';
+import type React from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { KINLOOM_VOCABULARY } from '../lib/vocabulary.js';
 import { useArchiveData } from '../context/ArchiveDataContext.js';
 import { useArchiveUi } from '../context/ArchiveUiContext.js';
 import { useDialogFocusTrap } from '../lib/useDialogFocusTrap.js';
+import { KINLOOM_VOCABULARY } from '../lib/vocabulary.js';
+import { DateStamp, resolveAssetUrl } from './Atoms.js';
 
 export const SourceInspectorDrawer: React.FC = () => {
   const { bundle, sourcesById, eventsById, readableSourceIds, baseUrl } = useArchiveData();
@@ -32,12 +29,12 @@ export const SourceInspectorDrawer: React.FC = () => {
         scan_url: sourceInspector?.scanUrl,
         scan_title: sourceInspector?.scanTitle,
       }),
-    [sourceRecord, activeSourceId, sourceInspector],
+    [sourceRecord, activeSourceId, sourceInspector]
   );
 
   const { usages, linkedMedia } = useMemo(
     () => findSourceUsages(activeSourceId, bundle),
-    [activeSourceId, bundle],
+    [activeSourceId, bundle]
   );
 
   const dialogRef = useDialogFocusTrap({
@@ -60,8 +57,7 @@ export const SourceInspectorDrawer: React.FC = () => {
 
   const isReadable = readableSourceIds.has(activeSourceId);
   const previewScanUrl = sourceInspector.scanUrl || linkedMedia[0]?.file || null;
-  const previewScanCaption =
-    sourceInspector.scanTitle || linkedMedia[0]?.caption || citation.title;
+  const previewScanCaption = sourceInspector.scanTitle || linkedMedia[0]?.caption || citation.title;
 
   const handleCopy = (): void => {
     if (!navigator.clipboard) {
@@ -100,20 +96,13 @@ export const SourceInspectorDrawer: React.FC = () => {
           <div>
             <h2 className="source-inspector-title">{citation.title}</h2>
             <div className="source-inspector-badges">
-              <span className={`evidence-tier-badge tier-${citation.tier}`}>
-                {citation.tierLabel}
-              </span>
+              <span className={`evidence-tier-badge tier-${citation.tier}`}>{citation.tierLabel}</span>
               {sourceInspector.confidence && citation.tier !== 'unverified' && (
                 <span className="evidence-basis-tag">{citation.evidenceBasis}</span>
               )}
             </div>
           </div>
-          <button
-            ref={closeBtnRef}
-            type="button"
-            className="drawer-close"
-            onClick={closeSourceInspector}
-          >
+          <button ref={closeBtnRef} type="button" className="drawer-close" onClick={closeSourceInspector}>
             Close
           </button>
         </div>
@@ -131,7 +120,8 @@ export const SourceInspectorDrawer: React.FC = () => {
               <p className="inspector-record-detail">{citation.recordDetail}</p>
             ) : (
               <p className="inspector-missing-detail">
-                Collection-level citation only. No specific page, sheet, roll, or folio detail is recorded for this event.
+                Collection-level citation only. No specific page, sheet, roll, or folio detail is recorded for
+                this event.
               </p>
             )}
           </section>
@@ -260,13 +250,10 @@ export const SourceInspectorDrawer: React.FC = () => {
 
         <section className="inspector-block">
           <h3 className="inspector-section-heading">
-            Cited Across This Archive ({usages.length}{' '}
-            {usages.length === 1 ? 'event' : 'events'})
+            Cited Across This Archive ({usages.length} {usages.length === 1 ? 'event' : 'events'})
           </h3>
           {usages.length === 0 ? (
-            <p className="inspector-missing-detail">
-              No public events currently cite this source record.
-            </p>
+            <p className="inspector-missing-detail">No public events currently cite this source record.</p>
           ) : (
             <ul className="inspector-usage-list">
               {usages.map(({ event, ref, primaryPersonSlug, primaryPersonName }) => {
@@ -290,9 +277,7 @@ export const SourceInspectorDrawer: React.FC = () => {
                         <span className="inspector-usage-title">{event.title}</span>
                       )}
                     </div>
-                    {primaryPersonName && (
-                      <div className="inspector-usage-person">{primaryPersonName}</div>
-                    )}
+                    {primaryPersonName && <div className="inspector-usage-person">{primaryPersonName}</div>}
                     {ref.citation_detail && (
                       <div className="inspector-usage-detail">{ref.citation_detail}</div>
                     )}

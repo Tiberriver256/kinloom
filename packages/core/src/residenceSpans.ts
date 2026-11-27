@@ -1,11 +1,5 @@
-import type {
-  ArchiveEvent,
-  ConfidenceTier,
-  Place,
-  RawPerson,
-  ResidenceSpan,
-} from './schemas/entities.js';
 import { edtfYear, haversineMiles } from './edtf.js';
+import type { ArchiveEvent, ConfidenceTier, Place, RawPerson, ResidenceSpan } from './schemas/entities.js';
 
 export interface ResidenceAnchor {
   id: string;
@@ -165,9 +159,7 @@ export function deriveResidenceSpansForPerson(
       prev.start_year === next.start_year &&
       prev.end_year === next.end_year;
     const overlappingSameTier =
-      prev !== undefined &&
-      prev.confidence_tier === next.confidence_tier &&
-      next.time_min <= prev.time_max;
+      prev !== undefined && prev.confidence_tier === next.confidence_tier && next.time_min <= prev.time_max;
 
     if (prev && prev.place_id === next.place_id && (sameYearWindow || overlappingSameTier)) {
       rawSpans[rawSpans.length - 1] = {

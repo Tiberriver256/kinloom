@@ -1,21 +1,22 @@
 import type { ArchiveEvent, TimePersonEntry } from '@kinloom/core';
 import {
-  TIME_MAX_YEAR,
-  TIME_MIN_YEAR,
   buildPersonThumbMap,
   computeTimeSnapshot,
   getSuggestedSnapshotYears,
   parseTimeYearParam,
   pickDefaultSnapshotYear,
+  TIME_MAX_YEAR,
+  TIME_MIN_YEAR,
 } from '@kinloom/core';
+import type React from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { initialsOf, resolveAssetUrl } from '../components/Atoms.js';
 import { ExplorerTopBar } from '../components/ExplorerTopBar.js';
-import { KINLOOM_VOCABULARY, formatReaderLoadError } from '../lib/vocabulary.js';
 import { KinloomFooter } from '../components/KinloomFooter.js';
 import { useArchiveData } from '../context/ArchiveDataContext.js';
 import { useDialogFocusTrap } from '../lib/useDialogFocusTrap.js';
+import { formatReaderLoadError, KINLOOM_VOCABULARY } from '../lib/vocabulary.js';
 
 const TimePersonCard: React.FC<{
   entry: TimePersonEntry;
@@ -113,7 +114,7 @@ export const TimePage: React.FC = () => {
   if (bundle && year === null) {
     setYear(
       parseTimeYearParam(searchParams.get('year')) ??
-        pickDefaultSnapshotYear(bundle, placesById, siteConfig.anchorYears),
+        pickDefaultSnapshotYear(bundle, placesById, siteConfig.anchorYears)
     );
   }
 
@@ -194,9 +195,7 @@ export const TimePage: React.FC = () => {
                   {activeYear}
                 </span>
               </h1>
-              <p className="folio-lead">
-                {KINLOOM_VOCABULARY.time.lead}
-              </p>
+              <p className="folio-lead">{KINLOOM_VOCABULARY.time.lead}</p>
             </div>
             {snapshot && (
               <div className="time-header-summary" aria-live="polite">
@@ -256,7 +255,9 @@ export const TimePage: React.FC = () => {
                       title={`${m.year}: ${m.locatedCount} located of ${m.aliveCount} alive in ${m.year}`}
                     >
                       <span className="time-anchor-year">{m.label}</span>
-                      <span className="time-anchor-count" aria-hidden="true">{m.locatedCount}</span>
+                      <span className="time-anchor-count" aria-hidden="true">
+                        {m.locatedCount}
+                      </span>
                     </button>
                   ))}
                 </div>
@@ -469,7 +470,10 @@ export const TimePage: React.FC = () => {
                       </div>
 
                       {lane.localEvents.length > 0 && (
-                        <aside className="time-lane-local" aria-label={`Local dispatches near ${lane.place.name}`}>
+                        <aside
+                          className="time-lane-local"
+                          aria-label={`Local dispatches near ${lane.place.name}`}
+                        >
                           <div className="time-local-heading">Local weather and news</div>
                           {lane.localEvents.map((ev) => (
                             <TimeLocalNote key={ev.id} ev={ev} />
@@ -483,14 +487,10 @@ export const TimePage: React.FC = () => {
             )}
 
             {snapshot.unlocatedPeople.length > 0 && (
-              <section
-                className="time-unlocated-section"
-                aria-label={KINLOOM_VOCABULARY.time.unlocatedAria}
-              >
+              <section className="time-unlocated-section" aria-label={KINLOOM_VOCABULARY.time.unlocatedAria}>
                 <h2 className="section-heading">
                   {KINLOOM_VOCABULARY.time.unlocatedHeadingPrefix} {activeYear} ·{' '}
-                  {KINLOOM_VOCABULARY.time.unlocatedHeadingSuffix} (
-                  {snapshot.unlocatedPeople.length})
+                  {KINLOOM_VOCABULARY.time.unlocatedHeadingSuffix} ({snapshot.unlocatedPeople.length})
                 </h2>
                 <div className="time-unlocated-list">
                   {snapshot.unlocatedPeople.map((entry) => (

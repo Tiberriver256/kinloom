@@ -1,18 +1,15 @@
 import type { Person } from '@kinloom/core';
-import {
-  buildFilteredGedcom7,
-  buildGedcomExportFilename,
-  buildPersonThumbMap,
-} from '@kinloom/core';
-import React, { useMemo, useState } from 'react';
+import { buildFilteredGedcom7, buildGedcomExportFilename, buildPersonThumbMap } from '@kinloom/core';
+import type React from 'react';
+import { useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { EmptyStateNotice, initialsOf, resolveAssetUrl } from '../components/Atoms.js';
-import { CreateEntityModal } from '../components/wiki/CreateEntityModal.js';
 import { ExplorerTopBar } from '../components/ExplorerTopBar.js';
 import { KinloomFooter } from '../components/KinloomFooter.js';
-import { Link } from 'react-router-dom';
-import { KINLOOM_VOCABULARY, formatPhotoDocumentCount, formatReaderLoadError } from '../lib/vocabulary.js';
-import { PluginSlot } from '../plugins/PluginContext.js';
+import { CreateEntityModal } from '../components/wiki/CreateEntityModal.js';
 import { useArchiveData } from '../context/ArchiveDataContext.js';
+import { formatPhotoDocumentCount, formatReaderLoadError, KINLOOM_VOCABULARY } from '../lib/vocabulary.js';
+import { PluginSlot } from '../plugins/PluginContext.js';
 
 function byBirthThenName(a: Person, b: Person): number {
   if (a.birth_year === null && b.birth_year === null) {
@@ -35,8 +32,17 @@ interface ResolvedSection {
 }
 
 export const IndexPage: React.FC = () => {
-  const { siteConfig, baseUrl, bundle, placesById, sourcesById, capabilities, loading, error, reloadArchive } =
-    useArchiveData();
+  const {
+    siteConfig,
+    baseUrl,
+    bundle,
+    placesById,
+    sourcesById,
+    capabilities,
+    loading,
+    error,
+    reloadArchive,
+  } = useArchiveData();
   const [onlyWithMedia, setOnlyWithMedia] = useState<boolean>(false);
   const [query, setQuery] = useState<string>('');
   const [exportStatus, setExportStatus] = useState<string>('');
@@ -58,7 +64,7 @@ export const IndexPage: React.FC = () => {
 
   const withMediaCount = useMemo(
     () => publicPeople.filter((p) => (p.media_count || 0) > 0 || Boolean(p.portrait_url)).length,
-    [publicPeople],
+    [publicPeople]
   );
 
   const filteredPeople = useMemo(() => {
@@ -103,8 +109,7 @@ export const IndexPage: React.FC = () => {
           if (assignedIds.has(p.id)) {
             return false;
           }
-          const groupMatch =
-            sec.lineageGroups.length === 0 || sec.lineageGroups.includes(p.lineage_group);
+          const groupMatch = sec.lineageGroups.length === 0 || sec.lineageGroups.includes(p.lineage_group);
           const branchMatch = !sec.branchId || p.branch === sec.branchId;
           return groupMatch && branchMatch;
         })
@@ -172,7 +177,9 @@ export const IndexPage: React.FC = () => {
       URL.revokeObjectURL(url);
     }, 1000);
 
-    setExportStatus(`Exported ${filteredPeople.length} relative${filteredPeople.length === 1 ? '' : 's'} to ${filename}`);
+    setExportStatus(
+      `Exported ${filteredPeople.length} relative${filteredPeople.length === 1 ? '' : 's'} to ${filename}`
+    );
     window.setTimeout(() => {
       setExportStatus('');
     }, 4000);
@@ -316,7 +323,9 @@ export const IndexPage: React.FC = () => {
                   </h2>
                   <div className="person-grid">
                     {section.people.map((p) => {
-                      const primaryPlace = p.primary_place_id ? placesById.get(p.primary_place_id) : undefined;
+                      const primaryPlace = p.primary_place_id
+                        ? placesById.get(p.primary_place_id)
+                        : undefined;
                       const mediaCount = p.media_count || 0;
                       const thumbUrl = personThumbMap.get(p.id) || p.portrait_url;
                       return (
@@ -338,10 +347,20 @@ export const IndexPage: React.FC = () => {
                             <div className="person-card-meta">
                               {p.birth_year || '?'} – {p.death_year || (p.is_living ? 'Living' : '?')}
                             </div>
-                            <div style={{ fontSize: '0.88rem', color: 'var(--text-secondary)', marginTop: 3 }}>
+                            <div
+                              style={{ fontSize: '0.88rem', color: 'var(--text-secondary)', marginTop: 3 }}
+                            >
                               {primaryPlace ? primaryPlace.full_name : 'Location unrecorded'}
                             </div>
-                            <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8, marginTop: 5 }}>
+                            <div
+                              style={{
+                                display: 'flex',
+                                flexWrap: 'wrap',
+                                alignItems: 'center',
+                                gap: 8,
+                                marginTop: 5,
+                              }}
+                            >
                               <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.76rem' }}>
                                 {p.event_count} milestone{p.event_count === 1 ? '' : 's'}
                               </span>

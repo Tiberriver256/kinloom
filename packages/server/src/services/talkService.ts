@@ -1,4 +1,3 @@
-import { z } from 'zod';
 import type {
   ArchiveRepository,
   CallerPrincipal,
@@ -7,6 +6,7 @@ import type {
   KinloomSiteConfig,
   TalkComment,
 } from '@kinloom/core';
+import { z } from 'zod';
 import { KinloomHttpError } from '../errors.js';
 
 const TalkBodySchema = z
@@ -38,10 +38,7 @@ export class TalkService {
     }
   }
 
-  async listComments(params: {
-    entityType: EntityType;
-    entityId: string;
-  }): Promise<readonly TalkComment[]> {
+  async listComments(params: { entityType: EntityType; entityId: string }): Promise<readonly TalkComment[]> {
     this.assertTalkEnabled();
     return this.repository.listTalkComments(params.entityType, params.entityId);
   }
@@ -73,7 +70,11 @@ export class TalkService {
   }): Promise<void> {
     this.assertTalkEnabled();
     if (params.principal.kind !== 'user') {
-      throw new KinloomHttpError(403, 'FORBIDDEN', 'Only the comment author or an admin can delete comments.');
+      throw new KinloomHttpError(
+        403,
+        'FORBIDDEN',
+        'Only the comment author or an admin can delete comments.'
+      );
     }
 
     const comments = await this.repository.listTalkComments(params.entityType, params.entityId);
@@ -92,10 +93,7 @@ export class TalkService {
       );
     }
 
-    const deleted = await this.repository.softDeleteTalkComment(
-      params.commentId,
-      this.clock.nowIso()
-    );
+    const deleted = await this.repository.softDeleteTalkComment(params.commentId, this.clock.nowIso());
     if (!deleted) {
       throw new KinloomHttpError(404, 'NOT_FOUND', `Comment ${params.commentId} was not found.`);
     }

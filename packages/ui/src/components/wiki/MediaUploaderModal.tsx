@@ -1,10 +1,11 @@
 import type { ArchivalMediaKind } from '@kinloom/core';
-import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { KINLOOM_VOCABULARY, MEDIA_KIND_LABELS } from '../../lib/vocabulary.js';
-import { useDialogFocusTrap } from '../../lib/useDialogFocusTrap.js';
-import { mediaUploadMachine } from '../../machines/mediaUploadMachine.js';
-import { useArchiveData } from '../../context/ArchiveDataContext.js';
 import { useMachine } from '@xstate/react';
+import type React from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { useArchiveData } from '../../context/ArchiveDataContext.js';
+import { useDialogFocusTrap } from '../../lib/useDialogFocusTrap.js';
+import { KINLOOM_VOCABULARY, MEDIA_KIND_LABELS } from '../../lib/vocabulary.js';
+import { mediaUploadMachine } from '../../machines/mediaUploadMachine.js';
 
 export interface MediaUploaderModalProps {
   open: boolean;
@@ -117,12 +118,7 @@ export const MediaUploaderModal: React.FC<MediaUploaderModalProps> = ({
       <div className="wiki-modal-card">
         <div className="wiki-modal-header">
           <h2>{KINLOOM_VOCABULARY.wiki.uploadDialogTitle}</h2>
-          <button
-            ref={closeBtnRef}
-            type="button"
-            className="pill-btn"
-            onClick={handleClose}
-          >
+          <button ref={closeBtnRef} type="button" className="pill-btn" onClick={handleClose}>
             Close
           </button>
         </div>
@@ -130,9 +126,8 @@ export const MediaUploaderModal: React.FC<MediaUploaderModalProps> = ({
         {targetIsLiving && (
           <div className="wiki-status-banner is-warning" role="alert">
             <p>
-              <strong>{KINLOOM_VOCABULARY.wiki.livingPrivacyRuleTitle}</strong> Portraits and
-              photographs cannot be attached to living people. Choose a deceased ancestor or
-              historical record instead.
+              <strong>{KINLOOM_VOCABULARY.wiki.livingPrivacyRuleTitle}</strong> Portraits and photographs
+              cannot be attached to living people. Choose a deceased ancestor or historical record instead.
             </p>
           </div>
         )}
@@ -206,9 +201,7 @@ export const MediaUploaderModal: React.FC<MediaUploaderModalProps> = ({
 
         {isComplete && (
           <output className="wiki-status-banner is-success" aria-live="polite">
-            <div>
-              Uploaded and attached media to the archive.
-            </div>
+            <div>Uploaded and attached media to the archive.</div>
             <div className="wiki-inline-actions">
               <button
                 type="button"
@@ -340,11 +333,7 @@ export const MediaUploaderModal: React.FC<MediaUploaderModalProps> = ({
           </div>
 
           <div className="wiki-form-actions">
-            <button
-              type="submit"
-              className="wiki-btn-primary wiki-btn-sm"
-              disabled={!selectedFile || isBusy}
-            >
+            <button type="submit" className="wiki-btn-primary wiki-btn-sm" disabled={!selectedFile || isBusy}>
               {isBusy ? 'Uploading…' : 'Upload Photo'}
             </button>
             <button type="button" className="pill-btn" onClick={onClose}>

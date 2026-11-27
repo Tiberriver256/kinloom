@@ -25,10 +25,7 @@ export interface ApplySecurityHeadersOptions {
 /**
  * Applies standard edge HTTP security headers to API, HTML, static asset, and /media responses.
  */
-export function applySecurityHeaders(
-  response: Response,
-  options: ApplySecurityHeadersOptions
-): Response {
+export function applySecurityHeaders(response: Response, options: ApplySecurityHeadersOptions): Response {
   const headers = new Headers(response.headers);
   headers.set('x-content-type-options', 'nosniff');
   headers.set('x-frame-options', 'DENY');

@@ -259,9 +259,7 @@ export async function runInitCommand(options: InitCommandOptions): Promise<InitC
   const resolvedDir = path.resolve(targetDir);
   const filesToWrite: Array<[string, string]> = [
     ['kinloom.config.yaml', serializeKinloomConfigYaml(config)],
-    ...ARCHIVE_YAML_FILE_NAMES.map(
-      (name): [string, string] => [path.join('data', name), '[]\n']
-    ),
+    ...ARCHIVE_YAML_FILE_NAMES.map((name): [string, string] => [path.join('data', name), '[]\n']),
     [path.join('.github', 'workflows', 'backup.yml'), BACKUP_WORKFLOW_YAML],
     [path.join('.github', 'workflows', 'reconcile.yml'), RECONCILE_WORKFLOW_YAML],
     [path.join('extensions', 'README.md'), EXTENSIONS_README_MD],

@@ -14,8 +14,25 @@ export type {
 
 export const KINLOOM_SERVER_VERSION = '0.39.0';
 
-// Errors & Web-Standard Crypto Helpers
-export { KinloomHttpError, toErrorResponseData } from './errors.js';
+export {
+  GoogleOAuthProvider,
+  type GoogleOAuthProviderConfig,
+} from './adapters/googleOAuthProvider.js';
+export {
+  createInMemoryServerPorts,
+  extractCollectionsFromSnapshot,
+  FakeAuthProvider,
+  type FakeOAuthProfile,
+  InMemoryArchiveRepository,
+  InMemoryEmailSender,
+  InMemoryIncrementalBundleCache,
+  InMemoryMediaStore,
+  InMemoryPronunciationLexiconStore,
+  type InMemoryServerPortsBundle,
+  type SentMagicLinkEmail,
+} from './adapters/inMemory.js';
+// Layer 4: Portable Built-in Adapters
+export { FixedClock, SystemClock } from './adapters/systemClock.js';
 export {
   base64UrlDecodeBytes,
   base64UrlDecodeString,
@@ -35,10 +52,61 @@ export {
   sha256Hex,
   toHex,
 } from './crypto.js';
+// Errors & Web-Standard Crypto Helpers
+export { KinloomHttpError, toErrorResponseData } from './errors.js';
+export {
+  type AuthMethod,
+  enforceCsrfOrigin,
+  principalToRevisionAuthor,
+  type ResolvedAuthContext,
+  requireMinRole,
+  resolveCallerPrincipal,
+} from './http/authMiddleware.js';
+export {
+  type AuthBrowserProvider,
+  buildAuthErrorRedirectUrl,
+  createKinloomServer,
+  isBrowserNavigation,
+  type KinloomServer,
+  type KinloomServerConfig,
+  mapAuthErrorToBrowserCode,
+} from './http/router.js';
+export {
+  type ApplySecurityHeadersOptions,
+  applySecurityHeaders,
+  DEFAULT_CONTENT_SECURITY_POLICY,
+  MEDIA_CONTENT_SECURITY_POLICY,
+  STRICT_TRANSPORT_SECURITY_VALUE,
+} from './http/securityHeaders.js';
 
+// Layer 1: Portable Web-Fetch HTTP Transport
+export {
+  DEV_OAUTH_COOKIE_NAME,
+  DEV_SESSION_COOKIE_NAME,
+  getOAuthCookieName,
+  getSessionCookieName,
+  isSecureRequestUrl,
+  type OAuthStateCookiePayload,
+  PROD_OAUTH_COOKIE_NAME,
+  PROD_SESSION_COOKIE_NAME,
+  parseCookies,
+  readOAuthCookieRaw,
+  readSessionCookieRaw,
+  type SessionCookiePayload,
+  serializeClearCookie,
+  serializeSetCookie,
+  signOAuthStateToken,
+  signSessionToken,
+  verifyOAuthStateToken,
+  verifySessionToken,
+} from './http/session.js';
+export {
+  AdminService,
+  type AdminServiceDeps,
+  type PublicAgentTokenRecord,
+} from './services/adminService.js';
 // Layer 2: Pure Use-Case Services
-export { AuthService, sanitizeNextPath, type AuthServiceDeps } from './services/authService.js';
-export { WikiWriteService, type WikiWriteServiceDeps } from './services/wikiWriteService.js';
+export { AuthService, type AuthServiceDeps, sanitizeNextPath } from './services/authService.js';
 export {
   BundleReadService,
   type BundleReadServiceDeps,
@@ -47,80 +115,10 @@ export {
   type GetBundleResult,
 } from './services/bundleReadService.js';
 export {
-  matchesMagicBytesForMime,
   MediaService,
-  parseHttpByteRange,
   type MediaServiceDeps,
+  matchesMagicBytesForMime,
+  parseHttpByteRange,
 } from './services/mediaService.js';
 export { TalkService, type TalkServiceDeps } from './services/talkService.js';
-export {
-  AdminService,
-  type AdminServiceDeps,
-  type PublicAgentTokenRecord,
-} from './services/adminService.js';
-
-// Layer 1: Portable Web-Fetch HTTP Transport
-export {
-  DEV_OAUTH_COOKIE_NAME,
-  DEV_SESSION_COOKIE_NAME,
-  PROD_OAUTH_COOKIE_NAME,
-  PROD_SESSION_COOKIE_NAME,
-  getOAuthCookieName,
-  getSessionCookieName,
-  isSecureRequestUrl,
-  parseCookies,
-  readOAuthCookieRaw,
-  readSessionCookieRaw,
-  serializeClearCookie,
-  serializeSetCookie,
-  signOAuthStateToken,
-  signSessionToken,
-  verifyOAuthStateToken,
-  verifySessionToken,
-  type OAuthStateCookiePayload,
-  type SessionCookiePayload,
-} from './http/session.js';
-export {
-  enforceCsrfOrigin,
-  principalToRevisionAuthor,
-  requireMinRole,
-  resolveCallerPrincipal,
-  type AuthMethod,
-  type ResolvedAuthContext,
-} from './http/authMiddleware.js';
-export {
-  applySecurityHeaders,
-  DEFAULT_CONTENT_SECURITY_POLICY,
-  MEDIA_CONTENT_SECURITY_POLICY,
-  STRICT_TRANSPORT_SECURITY_VALUE,
-  type ApplySecurityHeadersOptions,
-} from './http/securityHeaders.js';
-export {
-  buildAuthErrorRedirectUrl,
-  createKinloomServer,
-  isBrowserNavigation,
-  mapAuthErrorToBrowserCode,
-  type AuthBrowserProvider,
-  type KinloomServer,
-  type KinloomServerConfig,
-} from './http/router.js';
-
-// Layer 4: Portable Built-in Adapters
-export { FixedClock, SystemClock } from './adapters/systemClock.js';
-export {
-  GoogleOAuthProvider,
-  type GoogleOAuthProviderConfig,
-} from './adapters/googleOAuthProvider.js';
-export {
-  FakeAuthProvider,
-  InMemoryArchiveRepository,
-  InMemoryEmailSender,
-  InMemoryIncrementalBundleCache,
-  InMemoryMediaStore,
-  InMemoryPronunciationLexiconStore,
-  createInMemoryServerPorts,
-  extractCollectionsFromSnapshot,
-  type FakeOAuthProfile,
-  type InMemoryServerPortsBundle,
-  type SentMagicLinkEmail,
-} from './adapters/inMemory.js';
+export { WikiWriteService, type WikiWriteServiceDeps } from './services/wikiWriteService.js';

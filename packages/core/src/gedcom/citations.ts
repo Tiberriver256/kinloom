@@ -20,11 +20,7 @@ export function cleanSourceCitationTitle(rawTitle: string): string {
     .trim();
 }
 
-export function inferSourceRepository(
-  title: string,
-  repoName?: string,
-  publisher?: string
-): string {
+export function inferSourceRepository(title: string, repoName?: string, publisher?: string): string {
   if (repoName && repoName.trim() && !/^ancestry\.com$/i.test(repoName.trim())) {
     return repoName.trim();
   }
@@ -60,11 +56,7 @@ export function inferSourceRepository(
   if (t.includes('virginia, marriage') || t.includes('virginia, divorce')) {
     return 'Virginia Department of Health';
   }
-  if (
-    t.includes('church of england') ||
-    t.includes('parish records') ||
-    t.includes('england, select')
-  ) {
+  if (t.includes('church of england') || t.includes('parish records') || t.includes('england, select')) {
     return 'Church of England Parish Registers';
   }
   if (publisher && publisher.trim()) {
@@ -138,8 +130,7 @@ export function cleanEventSummaryProse(summary: string): string {
   return out
     .replaceAll(
       RE_DAY_MONTH_YEAR,
-      (_, d: string, m: string, y: string) =>
-        `${d} ${m[0].toUpperCase()}${m.slice(1).toLowerCase()} ${y}`
+      (_, d: string, m: string, y: string) => `${d} ${m[0].toUpperCase()}${m.slice(1).toLowerCase()} ${y}`
     )
     .replaceAll(RE_SPACE_DOT, '.')
     .replaceAll(RE_DOUBLE_DOT, '.')

@@ -1,31 +1,23 @@
-import type {
-  ArchiveBundle,
-  ArchiveDataSource,
-  KinloomSiteConfig,
-  ReadingsBundle,
-} from '@kinloom/core';
-import type {
-  ArchiveCapabilities,
-  ArchiveDataLoader,
-  ArchiveSession,
-} from './context/ArchiveDataContext.js';
-import type { KinloomUiPlugin } from './plugins/types.js';
+import type { ArchiveBundle, ArchiveDataSource, KinloomSiteConfig, ReadingsBundle } from '@kinloom/core';
+import type React from 'react';
+import { lazy, Suspense, useEffect } from 'react';
 import { BrowserRouter, MemoryRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom';
-import React, { Suspense, lazy, useEffect } from 'react';
 import { AppErrorBoundary } from './components/AppErrorBoundary.js';
-import { ArchiveProvider } from './context/ArchiveProvider.js';
-import { AuthStatusBanner } from './components/wiki/AuthStatusBanner.js';
 import { BlankScreenWatchdog } from './components/BlankScreenWatchdog.js';
 import { ExplorerTopBar } from './components/ExplorerTopBar.js';
 import { GlobalSearchModal } from './components/GlobalSearchModal.js';
-import { IndexPage } from './pages/IndexPage.js';
-import { NotFoundPage } from './pages/NotFoundPage.js';
-import { PrivateArchiveGate } from './components/wiki/PrivateArchiveGate.js';
 import { ScrollMemory } from './components/ScrollMemory.js';
 import { SourceInspectorDrawer } from './components/SourceInspectorDrawer.js';
 import { SourceReaderDrawer } from './components/SourceReaderDrawer.js';
+import { AuthStatusBanner } from './components/wiki/AuthStatusBanner.js';
+import { PrivateArchiveGate } from './components/wiki/PrivateArchiveGate.js';
+import type { ArchiveCapabilities, ArchiveDataLoader, ArchiveSession } from './context/ArchiveDataContext.js';
 import { useArchiveData } from './context/ArchiveDataContext.js';
+import { ArchiveProvider } from './context/ArchiveProvider.js';
+import { IndexPage } from './pages/IndexPage.js';
+import { NotFoundPage } from './pages/NotFoundPage.js';
 import { PluginSlot, useKinloomPlugins } from './plugins/PluginContext.js';
+import type { KinloomUiPlugin } from './plugins/types.js';
 
 const AdminPage = lazy(async () => {
   const module = await import('./pages/AdminPage.js');
@@ -97,10 +89,7 @@ const RouteLoading: React.FC = () => (
   </div>
 );
 
-const RoutedAppShell: React.FC<{ siteTitle: string; baseUrl: string }> = ({
-  siteTitle,
-  baseUrl,
-}) => {
+const RoutedAppShell: React.FC<{ siteTitle: string; baseUrl: string }> = ({ siteTitle, baseUrl }) => {
   const location = useLocation();
   const { routes: pluginRoutes } = useKinloomPlugins();
   const { bundle, loading, session } = useArchiveData();
@@ -168,9 +157,7 @@ export const KinloomApp: React.FC<KinloomAppProps> = ({
   capabilities,
   initialEntries,
 }) => {
-  const resolvedBase =
-    baseUrl ??
-    ((typeof import.meta !== 'undefined' && import.meta.env?.BASE_URL) || '/');
+  const resolvedBase = baseUrl ?? ((typeof import.meta !== 'undefined' && import.meta.env?.BASE_URL) || '/');
   const routerBasename = resolvedBase.replace(/\/$/, '') || '/';
 
   useEffect(() => {

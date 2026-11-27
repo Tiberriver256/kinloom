@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { CliValidationError } from '../../../errors.js';
 import {
+  type CommandParseSpec,
   formatCommandUsage,
   getBooleanOption,
   getNumberOption,
@@ -9,7 +10,6 @@ import {
   normalizeCommaSplitArgs,
   parseCommandArgs,
   resolveSubcommandAlias,
-  type CommandParseSpec,
 } from './args.js';
 
 describe('records runtime args parser', () => {
@@ -17,7 +17,13 @@ describe('records runtime args parser', () => {
     options: [
       { key: 'limit', kind: 'integer', flags: ['--limit', '--rows', '-n'], min: 1, max: 100, default: 20 },
       { key: 'score', kind: 'number', flags: ['--score'], min: 0 },
-      { key: 'format', kind: 'string', flags: ['--format', '-f'], choices: ['json', 'text'], default: 'text' },
+      {
+        key: 'format',
+        kind: 'string',
+        flags: ['--format', '-f'],
+        choices: ['json', 'text'],
+        default: 'text',
+      },
       { key: 'tag', kind: 'string', flags: ['--tag', '-t'], multiple: true },
       { key: 'json', kind: 'boolean', flags: ['--json', '-j'] },
       { key: 'exact', kind: 'boolean', flags: ['--exact'], negatable: true, default: false },

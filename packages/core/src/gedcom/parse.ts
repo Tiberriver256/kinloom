@@ -80,7 +80,10 @@ export function parseGedcomNameValue(rawVal: string): GedcomNameEntry {
   const cleanName = unescaped.replaceAll('/', '').replaceAll(/\s+/g, ' ').trim();
   const surMatch = /\/([^/]+)\//.exec(unescaped);
   const surname = surMatch ? surMatch[1].trim() : '';
-  const givenName = unescaped.replace(/\/[^/]*\//, '').replaceAll(/\s+/g, ' ').trim();
+  const givenName = unescaped
+    .replace(/\/[^/]*\//, '')
+    .replaceAll(/\s+/g, ' ')
+    .trim();
   return {
     raw: unescaped,
     fullName: cleanName,
@@ -96,21 +99,13 @@ export function applyIndiName(ind: GedcomIndi, val: string): GedcomNameEntry {
     ind.fullName = entry.fullName;
     ind.givenName = entry.givenName;
     ind.surname = entry.surname;
-  } else if (
-    entry.fullName &&
-    entry.fullName !== ind.fullName &&
-    !ind.altNames.includes(entry.fullName)
-  ) {
+  } else if (entry.fullName && entry.fullName !== ind.fullName && !ind.altNames.includes(entry.fullName)) {
     ind.altNames.push(entry.fullName);
   }
   return entry;
 }
 
-export function attachPageToLastSource(
-  curEvent: GedcomEvent,
-  curSourRef: string,
-  cleanPage: string
-): void {
+export function attachPageToLastSource(curEvent: GedcomEvent, curSourRef: string, cleanPage: string): void {
   if (curEvent.sources.length === 0) {
     return;
   }
@@ -172,10 +167,7 @@ const normalizeCitationTokens = (s: string): string =>
     .replaceAll(/\s+/g, ' ')
     .trim();
 
-export function recordScanMatchesSourceCitation(
-  scanTitle: string,
-  sourceCitation: string
-): boolean {
+export function recordScanMatchesSourceCitation(scanTitle: string, sourceCitation: string): boolean {
   const a = normalizeCitationTokens(scanTitle);
   const b = normalizeCitationTokens(sourceCitation);
   if (!a || !b) {

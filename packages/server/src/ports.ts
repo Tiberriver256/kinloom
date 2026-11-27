@@ -18,12 +18,7 @@ export interface PronunciationAudioGenerator {
 
 export interface PronunciationLexiconStore {
   list(): Promise<Record<string, Pronunciation>>;
-  upsert(
-    term: string,
-    entry: Pronunciation,
-    updatedBy: string,
-    updatedAt: string
-  ): Promise<Pronunciation>;
+  upsert(term: string, entry: Pronunciation, updatedBy: string, updatedAt: string): Promise<Pronunciation>;
   delete(term: string): Promise<void>;
 }
 

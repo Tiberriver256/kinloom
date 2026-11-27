@@ -130,8 +130,7 @@ function gqlJsonResponse(data: Record<string, unknown>): Response {
 describe('findagrave native client', () => {
   it('1. get and memorial alias emit cemetery coordinates', async () => {
     const { cacheRoot } = await makeTempEnv();
-    const fetchImpl: typeof fetch = async () =>
-      gqlJsonResponse({ memorialsById: [sampleMemorial('627')] });
+    const fetchImpl: typeof fetch = async () => gqlJsonResponse({ memorialsById: [sampleMemorial('627')] });
 
     for (const subcmd of ['get', 'memorial']) {
       const res = await invokeFindagrave([subcmd, '627', '--json'], { cacheRoot, fetchImpl });
@@ -308,10 +307,7 @@ describe('findagrave native client', () => {
         return gqlJsonResponse({ memorialsById: [sampleMemorial('627', 'Abraham', 'Lincoln', photoMeta)] });
       }
       httpCalls.push(url);
-      const body = Buffer.concat([
-        Buffer.from([0xff, 0xd8, 0xff]),
-        Buffer.from(`JPEG-BYTES-v${imgRev}`),
-      ]);
+      const body = Buffer.concat([Buffer.from([0xff, 0xd8, 0xff]), Buffer.from(`JPEG-BYTES-v${imgRev}`)]);
       return new Response(body, { status: 200, headers: { 'content-type': 'image/jpeg' } });
     };
 
@@ -332,10 +328,11 @@ describe('findagrave native client', () => {
     );
 
     // Different --out and --prefix reuses BOTH memorial and photo caches -> ZERO HTTP requests.
-    const r2 = await invokeFindagrave(
-      ['photo', '627', '--out', out2, '--prefix', 'lincoln-mary'],
-      { cacheRoot, cwd: workDir, fetchImpl }
-    );
+    const r2 = await invokeFindagrave(['photo', '627', '--out', out2, '--prefix', 'lincoln-mary'], {
+      cacheRoot,
+      cwd: workDir,
+      fetchImpl,
+    });
     expect(r2.exitCode, r2.stderr).toBe(0);
     expect(gqlCalls).toHaveLength(1);
     expect(httpCalls).toHaveLength(1);
@@ -395,10 +392,11 @@ describe('findagrave native client', () => {
 
     const out = path.join(workDir, 'photos-json');
 
-    const first = await invokeFindagrave(
-      ['photo', '700', '--out', out, '--type', 'Grave', '--json'],
-      { cacheRoot, cwd: workDir, fetchImpl }
-    );
+    const first = await invokeFindagrave(['photo', '700', '--out', out, '--type', 'Grave', '--json'], {
+      cacheRoot,
+      cwd: workDir,
+      fetchImpl,
+    });
     expect(first.exitCode, first.stderr).toBe(0);
     const firstBody = JSON.parse(first.stdout) as {
       memorial_id: string;
@@ -422,10 +420,11 @@ describe('findagrave native client', () => {
     ]);
     expect(fs.readFileSync(path.join(out, '9901.jpg'))).toEqual(okJpeg);
 
-    const second = await invokeFindagrave(
-      ['photo', '700', '--out', out, '--type', 'Grave', '--json'],
-      { cacheRoot, cwd: workDir, fetchImpl }
-    );
+    const second = await invokeFindagrave(['photo', '700', '--out', out, '--type', 'Grave', '--json'], {
+      cacheRoot,
+      cwd: workDir,
+      fetchImpl,
+    });
     expect(second.exitCode, second.stderr).toBe(0);
     const secondBody = JSON.parse(second.stdout) as {
       cache_hit: boolean;
@@ -484,18 +483,20 @@ describe('findagrave native client', () => {
     expect(fs.existsSync(path.join(cacheRoot, 'photos', '700', '9902.jpg'))).toBe(false);
 
     mode = { body: Buffer.from('portrait-bytes'), type: 'image/jpeg' };
-    const typed = await invokeFindagrave(
-      ['photo', '700', '--out', htmlOut, '--type', 'Portrait', '--json'],
-      { cacheRoot, cwd: workDir, fetchImpl }
-    );
+    const typed = await invokeFindagrave(['photo', '700', '--out', htmlOut, '--type', 'Portrait', '--json'], {
+      cacheRoot,
+      cwd: workDir,
+      fetchImpl,
+    });
     expect(typed.exitCode, typed.stderr).toBe(0);
     expect((JSON.parse(typed.stdout) as { cache_hit: boolean }).cache_hit).toBe(false);
     expect(fs.statSync(path.join(cacheRoot, 'photos', '700', '9902.jpg.type')).isFile()).toBe(true);
 
-    const again = await invokeFindagrave(
-      ['photo', '700', '--out', htmlOut, '--all', '--json'],
-      { cacheRoot, cwd: workDir, fetchImpl }
-    );
+    const again = await invokeFindagrave(['photo', '700', '--out', htmlOut, '--all', '--json'], {
+      cacheRoot,
+      cwd: workDir,
+      fetchImpl,
+    });
     expect(again.exitCode, again.stderr).toBe(0);
     const againBody = JSON.parse(again.stdout) as {
       cache_hit: boolean;
@@ -514,15 +515,22 @@ describe('findagrave native client', () => {
     };
 
     for (const badId of ['../627', '627/../../etc', '627\\bad', '..']) {
-      expect((await invokeFindagrave(['get', badId], { cacheRoot, fetchImpl: neverFetch })).exitCode).not.toBe(0);
-      expect((await invokeFindagrave(['cemetery', badId], { cacheRoot, fetchImpl: neverFetch })).exitCode).not.toBe(0);
-      expect((await invokeFindagrave(['photo', badId], { cacheRoot, fetchImpl: neverFetch })).exitCode).not.toBe(0);
+      expect(
+        (await invokeFindagrave(['get', badId], { cacheRoot, fetchImpl: neverFetch })).exitCode
+      ).not.toBe(0);
+      expect(
+        (await invokeFindagrave(['cemetery', badId], { cacheRoot, fetchImpl: neverFetch })).exitCode
+      ).not.toBe(0);
+      expect(
+        (await invokeFindagrave(['photo', badId], { cacheRoot, fetchImpl: neverFetch })).exitCode
+      ).not.toBe(0);
     }
 
-    const badPrefix = await invokeFindagrave(
-      ['photo', '627', '--prefix', '../escape', '--out', workDir],
-      { cacheRoot, cwd: workDir, fetchImpl: neverFetch }
-    );
+    const badPrefix = await invokeFindagrave(['photo', '627', '--prefix', '../escape', '--out', workDir], {
+      cacheRoot,
+      cwd: workDir,
+      fetchImpl: neverFetch,
+    });
     expect(badPrefix.exitCode).not.toBe(0);
 
     const safeName = safePhotoFilename('../../evil', 'https://example.com/pic.png?v=1');
@@ -569,9 +577,7 @@ describe('findagrave native client', () => {
       return gqlJsonResponse({
         locationsByTypeahead: {
           total: 1,
-          locations: [
-            { __typename: 'Location', id: 'city_1', names: [{ name: 'Springfield' }] },
-          ],
+          locations: [{ __typename: 'Location', id: 'city_1', names: [{ name: 'Springfield' }] }],
         },
       });
     };
@@ -674,10 +680,10 @@ describe('findagrave native client', () => {
 
     // Invalid year filter exits 2 before making a GraphQL call.
     const before = seenVars.length;
-    const bad = await invokeFindagrave(
-      ['search', '--last', 'Lincoln', '--birth-year-filter', 'bogus'],
-      { cacheRoot, fetchImpl }
-    );
+    const bad = await invokeFindagrave(['search', '--last', 'Lincoln', '--birth-year-filter', 'bogus'], {
+      cacheRoot,
+      fetchImpl,
+    });
     expect(bad.exitCode).toBe(2);
     expect(seenVars).toHaveLength(before);
 
@@ -796,13 +802,7 @@ describe('findagrave native client', () => {
 
     const out = path.join(workDir, 'photos-alias');
     const res = await invokeFindagrave(
-      [
-        'photos',
-        'https://www.findagrave.com/memorial/808/abraham-lincoln',
-        '--out-dir',
-        out,
-        '--json',
-      ],
+      ['photos', 'https://www.findagrave.com/memorial/808/abraham-lincoln', '--out-dir', out, '--json'],
       {
         cacheRoot,
         cwd: workDir,

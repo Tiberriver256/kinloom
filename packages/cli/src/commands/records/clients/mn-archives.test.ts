@@ -109,8 +109,8 @@ const SAMPLE_NEWS_METADATA_HTML = `
 `;
 
 const MINIMAL_JPEG_BYTES = Buffer.from([
-  0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00, 0x01, 0x01, 0x00, 0x00, 0x01,
-  0x00, 0x01, 0x00, 0x00, 0xff, 0xd9,
+  0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00, 0x01, 0x01, 0x00, 0x00, 0x01, 0x00, 0x01,
+  0x00, 0x00, 0xff, 0xd9,
 ]);
 
 const tempDirs: string[] = [];
@@ -273,10 +273,9 @@ describe('mn-archives native client', () => {
           { field: 'burialLocation', term: 'Hennepin.*', op: '*' },
           { field: 'burialLocation', term: 'Fort Snelling.*', op: '*' },
         ]);
-        return new Response(
-          JSON.stringify({ success: true, data: { totalHitCount: 0, hits: [] } }),
-          { status: 200 }
-        );
+        return new Response(JSON.stringify({ success: true, data: { totalHitCount: 0, hits: [] } }), {
+          status: 200,
+        });
       }
       if (url.pathname.endsWith('getDeathRecordById')) {
         return new Response(JSON.stringify(SAMPLE_RECORD_DETAIL), { status: 200 });
@@ -284,10 +283,10 @@ describe('mn-archives native client', () => {
       return new Response('not found', { status: 404 });
     };
 
-    const rb = await invokeMn(
-      ['birth', '--last', 'Maple', '--mother-maiden', 'Alder', '--json'],
-      { env, fetchImpl }
-    );
+    const rb = await invokeMn(['birth', '--last', 'Maple', '--mother-maiden', 'Alder', '--json'], {
+      env,
+      fetchImpl,
+    });
     const rc = await invokeMn(['census', '--last', 'Maple', '--begin-year', '1895', '--json'], {
       env,
       fetchImpl,
@@ -303,12 +302,9 @@ describe('mn-archives native client', () => {
 
     expect([rb.exitCode, rc.exitCode, rv.exitCode, rr.exitCode]).toEqual([0, 0, 0, 0]);
     expect(
-      (JSON.parse(rb.stdout) as { results: { mothers_maiden_name: string }[] }).results[0]
-        .mothers_maiden_name
+      (JSON.parse(rb.stdout) as { results: { mothers_maiden_name: string }[] }).results[0].mothers_maiden_name
     ).toBe('Alder');
-    expect(
-      (JSON.parse(rc.stdout) as { results: { locality: string }[] }).results[0].locality
-    ).toBe('Prior');
+    expect((JSON.parse(rc.stdout) as { results: { locality: string }[] }).results[0].locality).toBe('Prior');
     expect((JSON.parse(rv.stdout) as { total: number }).total).toBe(0);
     const rec = JSON.parse(rr.stdout) as {
       summary: { certificate_id: string };
@@ -352,9 +348,7 @@ describe('mn-archives native client', () => {
       env,
       fetchImpl: async () => new Response('internal error', { status: 500 }),
     });
-    const afterFiles = fs
-      .readdirSync(path.join(cacheRoot, 'mn-archives'))
-      .filter((f) => f.endsWith('.json'));
+    const afterFiles = fs.readdirSync(path.join(cacheRoot, 'mn-archives')).filter((f) => f.endsWith('.json'));
 
     expect(failed.exitCode).toBe(1);
     expect(failed.stderr).toContain('HTTP 500');

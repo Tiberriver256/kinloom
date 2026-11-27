@@ -23,7 +23,10 @@ export async function computePronunciationPromptHash(params: {
 }): Promise<string> {
   const text = params.text.trim().toLowerCase();
   const phonetic = (params.phonetic ?? '').trim().toLowerCase();
-  const ipa = (params.ipa ?? '').trim().replace(/^\/+|\/+$/g, '').trim();
+  const ipa = (params.ipa ?? '')
+    .trim()
+    .replace(/^\/+|\/+$/g, '')
+    .trim();
   const lang = (params.language ?? '').trim().toLowerCase();
   const voice = (params.voice ?? 'Charon').trim().toLowerCase();
   const raw = new TextEncoder().encode(

@@ -1,7 +1,7 @@
 import type { KinloomUiPlugin } from '@kinloom/ui';
 import { ExplorerTopBar, KinloomFooter, MediaPlayer, useArchiveData } from '@kinloom/ui';
+import type React from 'react';
 import { Link } from 'react-router-dom';
-import React from 'react';
 
 const DemoReelStoryPage: React.FC = () => {
   const { bundle, siteConfig, baseUrl } = useArchiveData();
@@ -15,8 +15,8 @@ const DemoReelStoryPage: React.FC = () => {
           <div>
             <h1>Archival Story Reel</h1>
             <p>
-              Curated historical story reel for the {siteConfig.site.familyName}, bringing together
-              recorded family stories and archival vignettes.
+              Curated historical story reel for the {siteConfig.site.familyName}, bringing together recorded
+              family stories and archival vignettes.
             </p>
           </div>
           <div className="folio-metrics">
@@ -33,8 +33,8 @@ const DemoReelStoryPage: React.FC = () => {
           <section className="place-map-box">
             <h2>Featured Historical Vignette</h2>
             <p>
-              Ten generations from Hingham, Norfolk (1622) to Springfield, Illinois and Manchester,
-              Vermont (1985), grounded in primary census, patent, and vital records.
+              Ten generations from Hingham, Norfolk (1622) to Springfield, Illinois and Manchester, Vermont
+              (1985), grounded in primary census, patent, and vital records.
             </p>
           </section>
         ) : (

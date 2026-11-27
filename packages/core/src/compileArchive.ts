@@ -1,3 +1,14 @@
+import { edtfToBounds, edtfYear, formatEdtfDisplay } from './edtf.js';
+import { applyCitationCleanings } from './gedcom/citations.js';
+import {
+  applyPrivacyFilter,
+  collectLivingNames,
+  compileLivingNamePattern,
+  filterMediaForPrivacy,
+  filterNarrativesForPrivacy,
+  resolveEffectiveLiving,
+} from './privacy.js';
+import { buildPlaceAncestors, deriveResidenceSpans } from './residenceSpans.js';
 import type { KinloomSiteConfig } from './schemas/config.js';
 import { resolveDefaultBranchId } from './schemas/config.js';
 import type {
@@ -17,17 +28,6 @@ import type {
   SourceRecord,
 } from './schemas/entities.js';
 import { getMediaPersonIds } from './schemas/entities.js';
-import { edtfToBounds, edtfYear, formatEdtfDisplay } from './edtf.js';
-import { applyCitationCleanings } from './gedcom/citations.js';
-import {
-  applyPrivacyFilter,
-  collectLivingNames,
-  compileLivingNamePattern,
-  filterMediaForPrivacy,
-  filterNarrativesForPrivacy,
-  resolveEffectiveLiving,
-} from './privacy.js';
-import { buildPlaceAncestors, deriveResidenceSpans } from './residenceSpans.js';
 
 export interface AncestryHouseholdEvent {
   type?: string;
@@ -75,9 +75,7 @@ export interface CompileArchiveResult {
   enrichedHouseholdCount: number;
 }
 
-function isEnrichmentOverride(
-  enr: NarrativeEnrichment
-): enr is NarrativeEnrichmentOverride {
+function isEnrichmentOverride(enr: NarrativeEnrichment): enr is NarrativeEnrichmentOverride {
   return 'override_event_id' in enr && typeof enr.override_event_id === 'string';
 }
 
@@ -138,10 +136,7 @@ export function resolvePersonBranch(
     if (branch.lineageGroups.length > 0 && branch.lineageGroups.includes(person.lineage_group)) {
       return branch.id;
     }
-    if (
-      surnameLower &&
-      branch.surnames.some((s) => s.trim().toLowerCase() === surnameLower)
-    ) {
+    if (surnameLower && branch.surnames.some((s) => s.trim().toLowerCase() === surnameLower)) {
       return branch.id;
     }
   }
@@ -312,15 +307,11 @@ function cloneEvent(e: RawEvent): RawEvent {
     ...e,
     participants: e.participants.map((pt) => ({ ...pt })),
     sources: e.sources.map((src) => ({ ...src })),
-    ...(e.alternate_dates !== undefined
-      ? { alternate_dates: e.alternate_dates.map((a) => ({ ...a })) }
-      : {}),
+    ...(e.alternate_dates !== undefined ? { alternate_dates: e.alternate_dates.map((a) => ({ ...a })) } : {}),
     ...(e.alternate_places !== undefined
       ? { alternate_places: e.alternate_places.map((a) => ({ ...a })) }
       : {}),
-    ...(e.fact_conflicts !== undefined
-      ? { fact_conflicts: e.fact_conflicts.map((a) => ({ ...a })) }
-      : {}),
+    ...(e.fact_conflicts !== undefined ? { fact_conflicts: e.fact_conflicts.map((a) => ({ ...a })) } : {}),
     ...(e.weather_metrics !== undefined ? { weather_metrics: { ...e.weather_metrics } } : {}),
     ...(e.extensions !== undefined ? { extensions: structuredClone(e.extensions) } : {}),
   };
@@ -432,7 +423,10 @@ export function compileArchive(input: CompileArchiveInput): CompileArchiveResult
         target.alternate_dates = [...(target.alternate_dates ?? []), ...structuredClone(enr.alternate_dates)];
       }
       if (enr.alternate_places !== undefined) {
-        target.alternate_places = [...(target.alternate_places ?? []), ...structuredClone(enr.alternate_places)];
+        target.alternate_places = [
+          ...(target.alternate_places ?? []),
+          ...structuredClone(enr.alternate_places),
+        ];
       }
       if (enr.fact_conflicts !== undefined) {
         target.fact_conflicts = [...(target.fact_conflicts ?? []), ...structuredClone(enr.fact_conflicts)];
@@ -444,11 +438,7 @@ export function compileArchive(input: CompileArchiveInput): CompileArchiveResult
     }
   }
 
-  const enrichedHouseholdCount = enrichHouseholdDescriptions(
-    rawEvents,
-    rawPeople,
-    input.ancestryPeople
-  );
+  const enrichedHouseholdCount = enrichHouseholdDescriptions(rawEvents, rawPeople, input.ancestryPeople);
 
   // Merge external context events
   for (const ctxEv of input.contextEvents ?? []) {
@@ -599,9 +589,7 @@ export function compileArchive(input: CompileArchiveInput): CompileArchiveResult
   const mediaCounts = new Map<string, number>();
   const portraitFromMedia = new Map<string, string>();
   const eventPhotoFromMedia = new Map<string, { file: string; caption: string }>();
-  const overlayMediaIds = new Set(
-    (input.compiledMediaOverlay?.media ?? []).map((m) => m.id).filter(Boolean)
-  );
+  const overlayMediaIds = new Set((input.compiledMediaOverlay?.media ?? []).map((m) => m.id).filter(Boolean));
 
   for (const item of finalMedia) {
     if (resolveThumbUrl) {

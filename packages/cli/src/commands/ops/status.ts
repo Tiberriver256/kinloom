@@ -4,6 +4,11 @@ import path from 'node:path';
 import {
   edtfYear,
   getMediaPersonIds,
+  type KinshipEdge,
+  type MediaItem,
+  type Narrative,
+  type Place,
+  type PrivacyConfig,
   parseEventsYaml,
   parseKinloomConfigYaml,
   parseKinshipYaml,
@@ -12,14 +17,9 @@ import {
   parsePeopleYaml,
   parsePlacesYaml,
   parseSourcesYaml,
-  resolveEffectiveLiving,
-  type KinshipEdge,
-  type MediaItem,
-  type Narrative,
-  type Place,
-  type PrivacyConfig,
   type RawEvent,
   type RawPerson,
+  resolveEffectiveLiving,
 } from '@kinloom/core';
 import { CliValidationError } from '../../errors.js';
 
@@ -101,9 +101,7 @@ export function parseStatusSort(value: string | undefined): StatusSortMode {
   if (trimmed === 'sparsest' || trimmed === 'richest' || trimmed === 'chronological') {
     return trimmed;
   }
-  throw new CliValidationError(
-    'Option `--sort` must be `sparsest`, `richest`, or `chronological`.'
-  );
+  throw new CliValidationError('Option `--sort` must be `sparsest`, `richest`, or `chronological`.');
 }
 
 async function readOptionalUtf8(filePath: string): Promise<string | null> {
@@ -354,10 +352,7 @@ function formatQueueHeading(
   return `${STATUS_FILTER_TITLE[activeFilter]} (${STATUS_SORT_LABEL[sort]}):`;
 }
 
-export function formatStatusTextReport(
-  report: StatusReport,
-  display: StatusTextDisplay = {}
-): string {
+export function formatStatusTextReport(report: StatusReport, display: StatusTextDisplay = {}): string {
   const limit = display.limit ?? DEFAULT_STATUS_TEXT_LIMIT;
   const endOfLine = display.endOfLine ?? report.endOfLine;
   const missingBiography = display.missingBiography ?? report.missingBiography;
@@ -379,9 +374,7 @@ export function formatStatusTextReport(
   const baseRows = missingBiography
     ? report.deceased.filter((person) => !person.hasBiography)
     : report.deceased;
-  const matching = filter
-    ? baseRows.filter((person) => person.status === filter)
-    : baseRows;
+  const matching = filter ? baseRows.filter((person) => person.status === filter) : baseRows;
   lines.push(formatQueueHeading(filter, sort, endOfLine, missingBiography));
   if (matching.length === 0) {
     lines.push('  (none)');
@@ -417,9 +410,7 @@ export function formatStatusTextReport(
   return `${lines.join('\n')}\n`;
 }
 
-export async function runStatusCommand(
-  options: StatusCommandOptions = {}
-): Promise<StatusCommandResult> {
+export async function runStatusCommand(options: StatusCommandOptions = {}): Promise<StatusCommandResult> {
   const sort = parseStatusSort(options.sort);
   const endOfLine = Boolean(options.endOfLine);
   const missingBiography = Boolean(options.missingBiography);

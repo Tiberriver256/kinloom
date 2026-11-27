@@ -12,36 +12,34 @@ import {
   partitionPersonNarratives,
   resolvePersonPronunciation,
 } from '@kinloom/core';
+import type React from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import {
-  buildEventQueryUrl,
-  pickActiveTimelineEventId,
-  shouldRunInitialEventScroll,
-} from '../lib/timelineScroll.js';
 import { ArchivalMarkdown, formatNarrativeDateSpan } from '../components/ArchivalMarkdown.js';
+import { EmptyStateNotice, resolveAssetUrl } from '../components/Atoms.js';
 import { ExplorerTopBar } from '../components/ExplorerTopBar.js';
 import { KinloomFooter } from '../components/KinloomFooter.js';
 import { MediaPlayer } from '../components/MediaPlayer.js';
 import { MilestoneStoryCard } from '../components/MilestoneStoryCard.js';
-import { PluginSlot } from '../plugins/PluginContext.js';
 import { PronunciationBadge } from '../components/PronunciationBadge.js';
-import { EmptyStateNotice, resolveAssetUrl } from '../components/Atoms.js';
-import { useArchiveData } from '../context/ArchiveDataContext.js';
-import { useArchiveUi } from '../context/ArchiveUiContext.js';
-import { scrollBehaviorForMotion } from '../lib/keyboardNav.js';
-import { useDialogFocusTrap } from '../lib/useDialogFocusTrap.js';
-import { CitationBadge } from '../components/wiki/WikiBadges.js';
-import {
-  CreateEntityModal,
-  type RelativeCreateContext,
-} from '../components/wiki/CreateEntityModal.js';
+import { CreateEntityModal, type RelativeCreateContext } from '../components/wiki/CreateEntityModal.js';
 import { EntityEditDrawer, type EntityEditDrawerSection } from '../components/wiki/EntityEditDrawer.js';
 import { MediaUploaderModal } from '../components/wiki/MediaUploaderModal.js';
 import { RevisionHistoryPanel } from '../components/wiki/RevisionHistoryPanel.js';
 import { TalkPanel } from '../components/wiki/TalkPanel.js';
 import { WikiActionBar, type WikiEntityTab } from '../components/wiki/WikiActionBar.js';
-import { KINLOOM_VOCABULARY, MEDIA_KIND_LABELS, formatReaderLoadError } from '../lib/vocabulary.js';
+import { CitationBadge } from '../components/wiki/WikiBadges.js';
+import { useArchiveData } from '../context/ArchiveDataContext.js';
+import { useArchiveUi } from '../context/ArchiveUiContext.js';
+import { scrollBehaviorForMotion } from '../lib/keyboardNav.js';
+import {
+  buildEventQueryUrl,
+  pickActiveTimelineEventId,
+  shouldRunInitialEventScroll,
+} from '../lib/timelineScroll.js';
+import { useDialogFocusTrap } from '../lib/useDialogFocusTrap.js';
+import { formatReaderLoadError, KINLOOM_VOCABULARY, MEDIA_KIND_LABELS } from '../lib/vocabulary.js';
+import { PluginSlot } from '../plugins/PluginContext.js';
 
 type PersonLightboxState =
   | { kind: 'closed' }
@@ -77,15 +75,13 @@ export const PersonPage: React.FC = () => {
   const [showAllMedia, setShowAllMedia] = useState(false);
   const [showAllNarratives, setShowAllNarratives] = useState(false);
   const [showAllFamilyStories, setShowAllFamilyStories] = useState(false);
-  const [expandedNarrativeIds, setExpandedNarrativeIds] = useState<ReadonlySet<string>>(
-    () => new Set(),
-  );
+  const [expandedNarrativeIds, setExpandedNarrativeIds] = useState<ReadonlySet<string>>(() => new Set());
   const [expandedSourceNarrativeIds, setExpandedSourceNarrativeIds] = useState<ReadonlySet<string>>(
-    () => new Set(),
+    () => new Set()
   );
   const [wikiTab, setWikiTab] = useState<WikiEntityTab>('read');
   const [editInitialSection, setEditInitialSection] = useState<EntityEditDrawerSection | undefined>(
-    undefined,
+    undefined
   );
   const [uploadModalOpen, setUploadModalOpen] = useState(false);
   const [relativeModal, setRelativeModal] = useState<RelativeCreateContext | null>(null);
@@ -211,7 +207,7 @@ export const PersonPage: React.FC = () => {
     }
 
     const toEntries = (
-      ids: Set<string>,
+      ids: Set<string>
     ): { visible: { id: string; slug: string; name: string; years: string }[]; livingCount: number } => {
       const visible: { id: string; slug: string; name: string; years: string; sortYear: number }[] = [];
       let livingCount = 0;
@@ -234,7 +230,12 @@ export const PersonPage: React.FC = () => {
       }
       visible.sort((a, b) => a.sortYear - b.sortYear || a.name.localeCompare(b.name));
       return {
-        visible: visible.map(({ id, slug: entrySlug, name, years }) => ({ id, slug: entrySlug, name, years })),
+        visible: visible.map(({ id, slug: entrySlug, name, years }) => ({
+          id,
+          slug: entrySlug,
+          name,
+          years,
+        })),
         livingCount,
       };
     };
@@ -260,7 +261,7 @@ export const PersonPage: React.FC = () => {
         setLightbox({ kind: 'single', media });
       }
     },
-    [personMedia],
+    [personMedia]
   );
 
   const resolveCitationMediaUrl = useCallback(
@@ -268,7 +269,7 @@ export const PersonPage: React.FC = () => {
       const resolved = resolveAssetUrl(media.thumb_file || media.file, baseUrl);
       return resolved || null;
     },
-    [baseUrl],
+    [baseUrl]
   );
 
   const lightboxCloseBtnRef = useRef<HTMLButtonElement | null>(null);
@@ -287,9 +288,7 @@ export const PersonPage: React.FC = () => {
     const onKey = (e: KeyboardEvent): void => {
       if (e.key === 'ArrowRight' && personMedia.length > 0) {
         setLightbox((prev) =>
-          prev.kind === 'gallery'
-            ? { kind: 'gallery', index: (prev.index + 1) % personMedia.length }
-            : prev,
+          prev.kind === 'gallery' ? { kind: 'gallery', index: (prev.index + 1) % personMedia.length } : prev
         );
       } else if (e.key === 'ArrowLeft' && personMedia.length > 0) {
         setLightbox((prev) =>
@@ -298,7 +297,7 @@ export const PersonPage: React.FC = () => {
                 kind: 'gallery',
                 index: (prev.index - 1 + personMedia.length) % personMedia.length,
               }
-            : prev,
+            : prev
         );
       }
     };
@@ -452,11 +451,7 @@ export const PersonPage: React.FC = () => {
       if (!bundle || !person) {
         return;
       }
-      const nearest = findNearestEventForPerson(
-        bundle,
-        item.person.id,
-        activeEvent?.time_min ?? null,
-      );
+      const nearest = findNearestEventForPerson(bundle, item.person.id, activeEvent?.time_min ?? null);
       const qs = new URLSearchParams();
       if (nearest) {
         qs.set('event', nearest.id);
@@ -464,7 +459,7 @@ export const PersonPage: React.FC = () => {
       qs.set('from', person.slug);
       void navigate(`/person/${item.person.slug}?${qs.toString()}`);
     },
-    [bundle, person, activeEvent, navigate],
+    [bundle, person, activeEvent, navigate]
   );
 
   const handleExportPersonGedcom = useCallback(() => {
@@ -521,7 +516,9 @@ export const PersonPage: React.FC = () => {
     return (
       <div>
         <ExplorerTopBar />
-        <main id="main-content" className="index-page">Loading archive…</main>
+        <main id="main-content" className="index-page">
+          Loading archive…
+        </main>
       </div>
     );
   }
@@ -555,7 +552,7 @@ export const PersonPage: React.FC = () => {
   }
 
   const routePlaceCount = new Set(
-    personEvents.map((ev) => ev.place_id).filter((id): id is string => Boolean(id)),
+    personEvents.map((ev) => ev.place_id).filter((id): id is string => Boolean(id))
   ).size;
   const alsoHere = [...radar.coPresenceVisible, ...radar.coPresenceOverflow];
   const branchLabel = person.branch ? (branchLabelById.get(person.branch) ?? person.branch) : null;
@@ -628,10 +625,7 @@ export const PersonPage: React.FC = () => {
                 {!person.is_living &&
                   person.full_name !== 'Living' &&
                   (() => {
-                    const effectivePronunciation = resolvePersonPronunciation(
-                      person,
-                      pronunciations,
-                    );
+                    const effectivePronunciation = resolvePersonPronunciation(person, pronunciations);
                     const isFullCoverage = effectivePronunciation?.coverage === 'full';
                     const badgeLabel = isFullCoverage
                       ? person.full_name
@@ -749,7 +743,9 @@ export const PersonPage: React.FC = () => {
                   capabilities.canEdit) && (
                   <div className="person-family-row">
                     <span className="person-family-label">
-                      {immediateFamily.spouses.length + immediateFamily.livingSpouseCount > 1 ? 'Spouses' : 'Spouse'}
+                      {immediateFamily.spouses.length + immediateFamily.livingSpouseCount > 1
+                        ? 'Spouses'
+                        : 'Spouse'}
                     </span>
                     <div className="person-family-chips">
                       {immediateFamily.spouses.map((rel) => (
@@ -793,7 +789,8 @@ export const PersonPage: React.FC = () => {
                       ))}
                       {immediateFamily.livingChildCount > 0 && (
                         <span className="person-family-chip is-redacted">
-                          +{immediateFamily.livingChildCount} living {immediateFamily.livingChildCount === 1 ? 'child' : 'children'} (redacted)
+                          +{immediateFamily.livingChildCount} living{' '}
+                          {immediateFamily.livingChildCount === 1 ? 'child' : 'children'} (redacted)
                         </span>
                       )}
                       {capabilities.canEdit && (
@@ -870,9 +867,7 @@ export const PersonPage: React.FC = () => {
 
           <PluginSlot name="personDetail" person={person} />
 
-          {wikiTab === 'history' && (
-            <RevisionHistoryPanel entityType="person" entityId={person.id} />
-          )}
+          {wikiTab === 'history' && <RevisionHistoryPanel entityType="person" entityId={person.id} />}
 
           {wikiTab === 'talk' && (
             <TalkPanel entityType="person" entityId={person.id} entityTitle={person.full_name} />
@@ -897,127 +892,117 @@ export const PersonPage: React.FC = () => {
               <div className="person-biography-header">
                 <h2>{KINLOOM_VOCABULARY.person.biographyHeading}</h2>
                 {personBiographies.length > 1 && (
-                  <span className="person-biography-count">
-                    {personBiographies.length} biographies
-                  </span>
+                  <span className="person-biography-count">{personBiographies.length} biographies</span>
                 )}
               </div>
 
               <div className="person-biography-list">
-                {(showAllNarratives ? personBiographies : personBiographies.slice(0, 1)).map(
-                  (narrative) => {
-                    const isLong = narrative.body_md.trim().length > 560;
-                    const isExpanded = expandedNarrativeIds.has(narrative.id);
-                    const sourcesOpen = expandedSourceNarrativeIds.has(narrative.id);
-                    const dateLabel = formatNarrativeDateSpan(narrative.date_edtf);
-                    const orderedSources = orderNarrativeSources(
-                      narrative.body_md,
-                      narrative.source_ids ?? [],
-                      sourcesById,
-                    );
+                {(showAllNarratives ? personBiographies : personBiographies.slice(0, 1)).map((narrative) => {
+                  const isLong = narrative.body_md.trim().length > 560;
+                  const isExpanded = expandedNarrativeIds.has(narrative.id);
+                  const sourcesOpen = expandedSourceNarrativeIds.has(narrative.id);
+                  const dateLabel = formatNarrativeDateSpan(narrative.date_edtf);
+                  const orderedSources = orderNarrativeSources(
+                    narrative.body_md,
+                    narrative.source_ids ?? [],
+                    sourcesById
+                  );
 
-                    return (
-                      <article key={narrative.id} className="person-biography-entry">
-                        <div className="person-biography-entry-head">
-                          <h3>{narrative.title}</h3>
-                          {dateLabel && !narrative.title.includes(dateLabel) && (
-                            <span className="person-biography-date">{dateLabel}</span>
+                  return (
+                    <article key={narrative.id} className="person-biography-entry">
+                      <div className="person-biography-entry-head">
+                        <h3>{narrative.title}</h3>
+                        {dateLabel && !narrative.title.includes(dateLabel) && (
+                          <span className="person-biography-date">{dateLabel}</span>
+                        )}
+                      </div>
+
+                      {narrative.summary && <p className="person-biography-summary">{narrative.summary}</p>}
+
+                      <PluginSlot name="narrativeHeader" person={person} narrative={narrative} />
+
+                      <div className={`person-biography-body ${isLong && !isExpanded ? 'is-collapsed' : ''}`}>
+                        <ArchivalMarkdown
+                          markdown={narrative.body_md}
+                          sourcesById={sourcesById}
+                          mediaItems={bundle.media}
+                          events={bundle.events}
+                          subjectPersonId={person.id}
+                          peopleById={peopleById}
+                          placesById={placesById}
+                          linkedPersonIds={narrative.person_ids}
+                          linkedPlaceIds={narrative.place_ids}
+                          baseUrl={baseUrl}
+                          onInspectSource={(sourceId) => {
+                            openSourceInspector({ sourceId });
+                          }}
+                          onOpenMedia={handleOpenCitationMedia}
+                          resolveMediaUrl={resolveCitationMediaUrl}
+                        />
+                      </div>
+
+                      {(isLong || orderedSources.length > 0) && (
+                        <div className="person-biography-actions print-hide">
+                          {isLong && (
+                            <button
+                              type="button"
+                              className="ink-inline-btn person-biography-toggle"
+                              aria-expanded={isExpanded}
+                              onClick={() => {
+                                toggleNarrativeBody(narrative.id);
+                              }}
+                            >
+                              {isExpanded ? 'Show less' : 'Read full biography'}
+                            </button>
+                          )}
+
+                          {orderedSources.length > 0 && (
+                            <button
+                              type="button"
+                              className="person-biography-sources-toggle"
+                              aria-expanded={sourcesOpen}
+                              onClick={() => {
+                                toggleNarrativeSources(narrative.id);
+                              }}
+                            >
+                              <span>Sources ({orderedSources.length})</span>
+                              <span className="person-biography-chevron" aria-hidden="true">
+                                {sourcesOpen ? '▾' : '▸'}
+                              </span>
+                            </button>
                           )}
                         </div>
+                      )}
 
-                        {narrative.summary && (
-                          <p className="person-biography-summary">{narrative.summary}</p>
-                        )}
-
-                        <PluginSlot name="narrativeHeader" person={person} narrative={narrative} />
-
+                      {orderedSources.length > 0 && (
                         <div
-                          className={`person-biography-body ${isLong && !isExpanded ? 'is-collapsed' : ''}`}
+                          className={`person-biography-sources${sourcesOpen ? '' : ' is-collapsed-screen'}`}
                         >
-                          <ArchivalMarkdown
-                            markdown={narrative.body_md}
-                            sourcesById={sourcesById}
-                            mediaItems={bundle.media}
-                            events={bundle.events}
-                            subjectPersonId={person.id}
-                            peopleById={peopleById}
-                            placesById={placesById}
-                            linkedPersonIds={narrative.person_ids}
-                            linkedPlaceIds={narrative.place_ids}
-                            baseUrl={baseUrl}
-                            onInspectSource={(sourceId) => {
-                              openSourceInspector({ sourceId });
-                            }}
-                            onOpenMedia={handleOpenCitationMedia}
-                            resolveMediaUrl={resolveCitationMediaUrl}
-                          />
+                          <ul className="person-biography-source-list">
+                            {orderedSources.map(({ source: src, footnoteNumber }) => (
+                              <li key={src.id}>
+                                <button
+                                  type="button"
+                                  className="person-biography-source-btn"
+                                  onClick={() => {
+                                    openSourceInspector({ sourceId: src.id });
+                                  }}
+                                >
+                                  {footnoteNumber !== null && (
+                                    <span className="person-biography-source-num">[{footnoteNumber}]</span>
+                                  )}
+                                  <span className="person-biography-source-text">
+                                    {formatPublicCitation(src.citation)}
+                                  </span>
+                                </button>
+                              </li>
+                            ))}
+                          </ul>
                         </div>
-
-                        {(isLong || orderedSources.length > 0) && (
-                          <div className="person-biography-actions print-hide">
-                            {isLong && (
-                              <button
-                                type="button"
-                                className="ink-inline-btn person-biography-toggle"
-                                aria-expanded={isExpanded}
-                                onClick={() => {
-                                  toggleNarrativeBody(narrative.id);
-                                }}
-                              >
-                                {isExpanded ? 'Show less' : 'Read full biography'}
-                              </button>
-                            )}
-
-                            {orderedSources.length > 0 && (
-                              <button
-                                type="button"
-                                className="person-biography-sources-toggle"
-                                aria-expanded={sourcesOpen}
-                                onClick={() => {
-                                  toggleNarrativeSources(narrative.id);
-                                }}
-                              >
-                                <span>Sources ({orderedSources.length})</span>
-                                <span className="person-biography-chevron" aria-hidden="true">
-                                  {sourcesOpen ? '▾' : '▸'}
-                                </span>
-                              </button>
-                            )}
-                          </div>
-                        )}
-
-                        {orderedSources.length > 0 && (
-                          <div
-                            className={`person-biography-sources${sourcesOpen ? '' : ' is-collapsed-screen'}`}
-                          >
-                            <ul className="person-biography-source-list">
-                              {orderedSources.map(({ source: src, footnoteNumber }) => (
-                                <li key={src.id}>
-                                  <button
-                                    type="button"
-                                    className="person-biography-source-btn"
-                                    onClick={() => {
-                                      openSourceInspector({ sourceId: src.id });
-                                    }}
-                                  >
-                                    {footnoteNumber !== null && (
-                                      <span className="person-biography-source-num">
-                                        [{footnoteNumber}]
-                                      </span>
-                                    )}
-                                    <span className="person-biography-source-text">
-                                      {formatPublicCitation(src.citation)}
-                                    </span>
-                                  </button>
-                                </li>
-                              ))}
-                            </ul>
-                          </div>
-                        )}
-                      </article>
-                    );
-                  },
-                )}
+                      )}
+                    </article>
+                  );
+                })}
               </div>
 
               {personBiographies.length > 1 && (
@@ -1048,9 +1033,7 @@ export const PersonPage: React.FC = () => {
               <div className="person-biography-header">
                 <h2>Family Stories</h2>
                 {familyStories.length > 1 && (
-                  <span className="person-biography-count">
-                    {familyStories.length} stories
-                  </span>
+                  <span className="person-biography-count">{familyStories.length} stories</span>
                 )}
               </div>
 
@@ -1062,7 +1045,7 @@ export const PersonPage: React.FC = () => {
                   const orderedSources = orderNarrativeSources(
                     story.body_md,
                     story.source_ids ?? [],
-                    sourcesById,
+                    sourcesById
                   );
 
                   return (
@@ -1074,9 +1057,7 @@ export const PersonPage: React.FC = () => {
                         )}
                       </div>
 
-                      {story.summary && (
-                        <p className="person-biography-summary">{story.summary}</p>
-                      )}
+                      {story.summary && <p className="person-biography-summary">{story.summary}</p>}
 
                       <PluginSlot name="narrativeHeader" person={person} narrative={story} />
 
@@ -1146,9 +1127,7 @@ export const PersonPage: React.FC = () => {
                                   }}
                                 >
                                   {footnoteNumber !== null && (
-                                    <span className="person-biography-source-num">
-                                      [{footnoteNumber}]
-                                    </span>
+                                    <span className="person-biography-source-num">[{footnoteNumber}]</span>
                                   )}
                                   <span className="person-biography-source-text">
                                     {formatPublicCitation(src.citation)}
@@ -1223,93 +1202,99 @@ export const PersonPage: React.FC = () => {
             </section>
           )}
 
-          {wikiTab !== 'history' && wikiTab !== 'talk' && (personEvents.length === 0 ? (
-            <EmptyStateNotice
-              title={`${KINLOOM_VOCABULARY.person.emptyEventsPrefix} ${person.full_name}.`}
-              action={
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                  <Link to={`/tree?focus=${person.slug}`} className="pill-btn" style={{ textDecoration: 'none' }}>
-                    Open Family Tree →
-                  </Link>
-                  {capabilities.canEdit && (
-                    <button
-                      type="button"
+          {wikiTab !== 'history' &&
+            wikiTab !== 'talk' &&
+            (personEvents.length === 0 ? (
+              <EmptyStateNotice
+                title={`${KINLOOM_VOCABULARY.person.emptyEventsPrefix} ${person.full_name}.`}
+                action={
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                    <Link
+                      to={`/tree?focus=${person.slug}`}
                       className="pill-btn"
-                      onClick={() => {
-                        setEditInitialSection(undefined);
-                        setWikiTab('edit');
-                      }}
+                      style={{ textDecoration: 'none' }}
                     >
-                      Edit Profile
-                    </button>
+                      Open Family Tree →
+                    </Link>
+                    {capabilities.canEdit && (
+                      <button
+                        type="button"
+                        className="pill-btn"
+                        onClick={() => {
+                          setEditInitialSection(undefined);
+                          setWikiTab('edit');
+                        }}
+                      >
+                        Edit Profile
+                      </button>
+                    )}
+                  </div>
+                }
+              />
+            ) : (
+              <section
+                id="person-timeline"
+                className="person-timeline-section"
+                aria-label={KINLOOM_VOCABULARY.person.lifeTimelineAria}
+              >
+                <h2 className="section-heading person-timeline-heading">Life Timeline</h2>
+                <div className={`timeline-layout${scrubberItems.length === 0 ? ' no-spine' : ''}`}>
+                  {scrubberItems.length > 0 && (
+                    <nav className="timeline-spine" aria-label="Jump to decade">
+                      <div className="scrubber-list">
+                        {scrubberItems.map((t) => {
+                          const isAct =
+                            activeEvent?.year !== null &&
+                            activeEvent?.year !== undefined &&
+                            Math.floor(activeEvent.year / 10) * 10 === t.decade;
+                          return (
+                            <button
+                              key={t.decade}
+                              type="button"
+                              className={`scrubber-tick ${isAct ? 'active' : ''}`}
+                              aria-current={isAct ? 'true' : undefined}
+                              onClick={() => {
+                                setActiveEventId(t.eventId);
+                                cardRefs.current.get(t.eventId)?.scrollIntoView({
+                                  behavior: scrollBehaviorForMotion(),
+                                  block: 'start',
+                                });
+                              }}
+                            >
+                              {t.decade}s
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </nav>
                   )}
-                </div>
-              }
-            />
-          ) : (
-            <section
-              id="person-timeline"
-              className="person-timeline-section"
-              aria-label={KINLOOM_VOCABULARY.person.lifeTimelineAria}
-            >
-              <h2 className="section-heading person-timeline-heading">Life Timeline</h2>
-              <div className={`timeline-layout${scrubberItems.length === 0 ? ' no-spine' : ''}`}>
-                {scrubberItems.length > 0 && (
-                  <nav className="timeline-spine" aria-label="Jump to decade">
-                    <div className="scrubber-list">
-                      {scrubberItems.map((t) => {
-                        const isAct =
-                          activeEvent?.year !== null &&
-                          activeEvent?.year !== undefined &&
-                          Math.floor(activeEvent.year / 10) * 10 === t.decade;
-                        return (
-                          <button
-                            key={t.decade}
-                            type="button"
-                            className={`scrubber-tick ${isAct ? 'active' : ''}`}
-                            aria-current={isAct ? 'true' : undefined}
-                            onClick={() => {
-                              setActiveEventId(t.eventId);
-                              cardRefs.current.get(t.eventId)?.scrollIntoView({
-                                behavior: scrollBehaviorForMotion(),
-                                block: 'start',
-                              });
-                            }}
-                          >
-                            {t.decade}s
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </nav>
-                )}
 
-                <div className="story-stream">
-                  {personEvents.map((ev) => (
-                    <MilestoneStoryCard
-                      key={ev.id}
-                      event={ev}
-                      place={ev.place_id ? placesById.get(ev.place_id) : undefined}
-                      isActive={activeEvent?.id === ev.id}
-                      sourcesById={sourcesById}
-                      alsoHere={activeEvent?.id === ev.id ? alsoHere : []}
-                      onPivotPerson={handlePivotPerson}
-                      onSelect={() => {
-                        setActiveEventId(ev.id);
-                      }}
-                      cardRef={(el) => {
-                        if (el) {
-                          cardRefs.current.set(ev.id, el);
-                        } else {
-                          cardRefs.current.delete(ev.id);
-                        }
-                      }}
-                    />
-                  ))}
+                  <div className="story-stream">
+                    {personEvents.map((ev) => (
+                      <MilestoneStoryCard
+                        key={ev.id}
+                        event={ev}
+                        place={ev.place_id ? placesById.get(ev.place_id) : undefined}
+                        isActive={activeEvent?.id === ev.id}
+                        sourcesById={sourcesById}
+                        alsoHere={activeEvent?.id === ev.id ? alsoHere : []}
+                        onPivotPerson={handlePivotPerson}
+                        onSelect={() => {
+                          setActiveEventId(ev.id);
+                        }}
+                        cardRef={(el) => {
+                          if (el) {
+                            cardRefs.current.set(ev.id, el);
+                          } else {
+                            cardRefs.current.delete(ev.id);
+                          }
+                        }}
+                      />
+                    ))}
+                  </div>
                 </div>
-              </div>
-            </section>
-          ))}
+              </section>
+            ))}
         </main>
       </div>
 
@@ -1397,7 +1382,13 @@ export const PersonPage: React.FC = () => {
                     {MEDIA_KIND_LABELS[activeLightboxMedia.kind] || activeLightboxMedia.kind}
                   </span>
                   {lightbox.kind === 'gallery' && (
-                    <strong style={{ fontFamily: 'var(--font-mono)', fontSize: '0.78rem', color: 'var(--text-inverse)' }}>
+                    <strong
+                      style={{
+                        fontFamily: 'var(--font-mono)',
+                        fontSize: '0.78rem',
+                        color: 'var(--text-inverse)',
+                      }}
+                    >
                       {lightbox.index + 1} / {personMedia.length}
                     </strong>
                   )}
@@ -1446,10 +1437,24 @@ export const PersonPage: React.FC = () => {
               <div className="scan-lightbox-scroll">
                 <MediaPlayer media={activeLightboxMedia} baseUrl={baseUrl} variant="full" />
                 <div style={{ marginTop: 12, padding: '8px 4px' }}>
-                  <div style={{ fontFamily: 'var(--font-serif)', fontSize: '1.05rem', color: 'var(--surface-header)', fontWeight: 600 }}>
+                  <div
+                    style={{
+                      fontFamily: 'var(--font-serif)',
+                      fontSize: '1.05rem',
+                      color: 'var(--surface-header)',
+                      fontWeight: 600,
+                    }}
+                  >
                     {activeLightboxMedia.caption}
                   </div>
-                  <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.74rem', color: 'var(--text-secondary)', marginTop: 4 }}>
+                  <div
+                    style={{
+                      fontFamily: 'var(--font-mono)',
+                      fontSize: '0.74rem',
+                      color: 'var(--text-secondary)',
+                      marginTop: 4,
+                    }}
+                  >
                     {activeLightboxMedia.date_edtf ? `Date: ${activeLightboxMedia.date_edtf} · ` : ''}
                     {formatPublicProvenance(activeLightboxMedia.provenance)}
                   </div>

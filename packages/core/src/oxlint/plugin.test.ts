@@ -47,11 +47,9 @@ async function runArchiveCountCheck(testFileSource: string): Promise<CountCheckR
   await writeFile(targetPath, testFileSource, 'utf8');
 
   try {
-    const { stdout, stderr } = await execFileAsync(
-      process.execPath,
-      [CHECKER_SCRIPT, '--json', targetPath],
-      { cwd: REPO_ROOT }
-    );
+    const { stdout, stderr } = await execFileAsync(process.execPath, [CHECKER_SCRIPT, '--json', targetPath], {
+      cwd: REPO_ROOT,
+    });
     const parsed = JSON.parse(stdout) as { diagnostics?: CountDiagnostic[] };
     return {
       exitCode: 0,
@@ -123,12 +121,8 @@ expect.soft(bundle.people).toHaveLength(54);
     expect(ruleDiagnostics.some((d) => d.message?.includes('media === 126'))).toBe(true);
     expect(ruleDiagnostics.some((d) => d.message?.includes('narratives === 20'))).toBe(true);
     expect(ruleDiagnostics.some((d) => d.message?.includes('people.length === 35'))).toBe(true);
-    expect(
-      ruleDiagnostics.some((d) => d.message?.includes('meta.counts.living_redacted === 4'))
-    ).toBe(true);
-    expect(
-      ruleDiagnostics.some((d) => d.message?.includes('meta.counts.living_redacted === 0'))
-    ).toBe(false);
+    expect(ruleDiagnostics.some((d) => d.message?.includes('meta.counts.living_redacted === 4'))).toBe(true);
+    expect(ruleDiagnostics.some((d) => d.message?.includes('meta.counts.living_redacted === 0'))).toBe(false);
   });
 
   it('allows zero invariants, data-derived expressions, non-empty checks, and non-archive arrays', async () => {

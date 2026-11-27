@@ -1,4 +1,3 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
 import type { ReadingDocument } from '@kinloom/core';
 import {
   buildAllSourcesText,
@@ -7,14 +6,16 @@ import {
   formatFileSize,
   formatPublicCitation,
 } from '@kinloom/core';
-import { readerNextPage, readerPrevPage, resolveReaderPageIndex } from '../lib/sourceReaderNav.js';
+import type React from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useArchiveData } from '../context/ArchiveDataContext.js';
+import { useArchiveUi } from '../context/ArchiveUiContext.js';
 import { handleTablistKeyDown } from '../lib/keyboardNav.js';
+import { readerNextPage, readerPrevPage, resolveReaderPageIndex } from '../lib/sourceReaderNav.js';
+import { useDialogFocusTrap } from '../lib/useDialogFocusTrap.js';
 import { KINLOOM_VOCABULARY } from '../lib/vocabulary.js';
 import { PluginSlot } from '../plugins/PluginContext.js';
 import { resolveAssetUrl } from './Atoms.js';
-import { useArchiveData } from '../context/ArchiveDataContext.js';
-import { useArchiveUi } from '../context/ArchiveUiContext.js';
-import { useDialogFocusTrap } from '../lib/useDialogFocusTrap.js';
 
 function triggerTextDownload(filename: string, content: string): void {
   const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
@@ -62,14 +63,8 @@ const renderHighlightedText = (text: string, query: string): React.ReactNode => 
 };
 
 export const SourceReaderDrawer: React.FC = () => {
-  const {
-    readings,
-    readingsLoading,
-    readingsError,
-    siteConfig,
-    featuredDocumentId,
-    baseUrl,
-  } = useArchiveData();
+  const { readings, readingsLoading, readingsError, siteConfig, featuredDocumentId, baseUrl } =
+    useArchiveData();
   const { sourceReader, closeSourceReader } = useArchiveUi();
 
   const closeBtnRef = useRef<HTMLButtonElement | null>(null);
@@ -117,11 +112,7 @@ export const SourceReaderDrawer: React.FC = () => {
     if (!sourceReader) {
       return;
     }
-    const requestedDocId =
-      sourceReader.sourceId ||
-      featuredDocumentId ||
-      orderedDocs[0]?.source_id ||
-      '';
+    const requestedDocId = sourceReader.sourceId || featuredDocumentId || orderedDocs[0]?.source_id || '';
     setActiveDocId(requestedDocId);
     setSearchTerm(sourceReader.highlightQuery || '');
     setScanZoomOpen(false);
@@ -137,9 +128,7 @@ export const SourceReaderDrawer: React.FC = () => {
 
     const mappedPage =
       sourceReader.page ??
-      (sourceReader.eventId
-        ? readings.event_page_map[sourceReader.eventId]?.[doc.source_id]
-        : undefined);
+      (sourceReader.eventId ? readings.event_page_map[sourceReader.eventId]?.[doc.source_id] : undefined);
 
     setPageIdx(resolveReaderPageIndex(doc.pages, mappedPage));
   }, [sourceReader, readings, featuredDocumentId, orderedDocs]);
@@ -193,9 +182,7 @@ export const SourceReaderDrawer: React.FC = () => {
     return null;
   }
 
-  const safeIdx = currentDoc
-    ? Math.max(0, Math.min(pageIdx, Math.max(0, currentDoc.pages.length - 1)))
-    : 0;
+  const safeIdx = currentDoc ? Math.max(0, Math.min(pageIdx, Math.max(0, currentDoc.pages.length - 1))) : 0;
   const currentPage = currentDoc?.pages[safeIdx] || null;
   const hasScan = Boolean(currentPage?.image_url);
   const effectiveMode: ReaderViewMode = hasScan ? viewMode : 'text';
@@ -257,17 +244,19 @@ export const SourceReaderDrawer: React.FC = () => {
               {currentDoc?.title || KINLOOM_VOCABULARY.sources.readerFallbackTitle}
             </h2>
             {currentDoc && (
-              <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.78rem', color: 'var(--text-secondary)', marginTop: 2 }}>
+              <div
+                style={{
+                  fontFamily: 'var(--font-mono)',
+                  fontSize: '0.78rem',
+                  color: 'var(--text-secondary)',
+                  marginTop: 2,
+                }}
+              >
                 Source Reader · {currentDoc.author}
               </div>
             )}
           </div>
-          <button
-            ref={closeBtnRef}
-            type="button"
-            className="pill-btn"
-            onClick={closeSourceReader}
-          >
+          <button ref={closeBtnRef} type="button" className="pill-btn" onClick={closeSourceReader}>
             Close [Esc]
           </button>
         </div>
@@ -314,7 +303,9 @@ export const SourceReaderDrawer: React.FC = () => {
         {readingsLoading && <p className="empty-ring-note">Loading primary transcriptions…</p>}
         {readingsError && <p className="empty-ring-note">Error loading transcriptions: {readingsError}</p>}
         {!readingsLoading && !readingsError && orderedDocs.length === 0 && (
-          <p className="empty-ring-note">No primary source transcriptions have been added to this archive yet.</p>
+          <p className="empty-ring-note">
+            No primary source transcriptions have been added to this archive yet.
+          </p>
         )}
 
         {currentDoc && currentPage && (
@@ -405,7 +396,7 @@ export const SourceReaderDrawer: React.FC = () => {
                   setSearchTerm(val);
                   if (val.trim()) {
                     const firstHit = currentDoc.pages.findIndex((p) =>
-                      p.text.toLowerCase().includes(val.trim().toLowerCase()),
+                      p.text.toLowerCase().includes(val.trim().toLowerCase())
                     );
                     if (firstHit !== -1) {
                       setPageIdx(firstHit);
@@ -416,7 +407,17 @@ export const SourceReaderDrawer: React.FC = () => {
               />
 
               {searchTerm.trim() && (
-                <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 6, fontSize: '0.78rem', fontFamily: 'var(--font-mono)', color: 'var(--text-secondary)' }}>
+                <div
+                  style={{
+                    display: 'flex',
+                    flexWrap: 'wrap',
+                    alignItems: 'center',
+                    gap: 6,
+                    fontSize: '0.78rem',
+                    fontFamily: 'var(--font-mono)',
+                    color: 'var(--text-secondary)',
+                  }}
+                >
                   <span>
                     {matchingPageIndices.length} matching page{matchingPageIndices.length === 1 ? '' : 's'}:
                   </span>
@@ -465,11 +466,11 @@ export const SourceReaderDrawer: React.FC = () => {
                 <div className="transcript-sheet">
                   <div className="transcript-meta">
                     <span>{currentPage.label}</span>
-                    <span>Page {safeIdx + 1} of {currentDoc.pages.length}</span>
+                    <span>
+                      Page {safeIdx + 1} of {currentDoc.pages.length}
+                    </span>
                   </div>
-                  <pre className="transcript-body">
-                    {renderHighlightedText(currentPage.text, searchTerm)}
-                  </pre>
+                  <pre className="transcript-body">{renderHighlightedText(currentPage.text, searchTerm)}</pre>
                 </div>
               )}
             </div>
@@ -512,7 +513,9 @@ export const SourceReaderDrawer: React.FC = () => {
               )}
             </div>
 
-            <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+            <div
+              style={{ fontFamily: 'var(--font-mono)', fontSize: '0.75rem', color: 'var(--text-secondary)' }}
+            >
               Provenance: {formatPublicCitation(currentDoc.provenance)}
             </div>
             <PluginSlot name="sourceReaderFooter" />
@@ -537,8 +540,21 @@ export const SourceReaderDrawer: React.FC = () => {
               }}
             />
             <div className="lightbox-card scan-lightbox-card">
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-                <strong style={{ fontFamily: 'var(--font-mono)', fontSize: '0.8rem', color: 'var(--surface-header)' }}>
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  marginBottom: 10,
+                }}
+              >
+                <strong
+                  style={{
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: '0.8rem',
+                    color: 'var(--surface-header)',
+                  }}
+                >
                   {currentDoc?.title} · {currentPage.label}
                 </strong>
                 <button

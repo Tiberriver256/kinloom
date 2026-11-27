@@ -20,7 +20,7 @@ export function handleTablistKeyDown<T extends string>(
   event: React.KeyboardEvent<HTMLElement>,
   items: readonly T[],
   active: T,
-  onSelect: (next: T) => void,
+  onSelect: (next: T) => void
 ): void {
   if (items.length === 0) {
     return;

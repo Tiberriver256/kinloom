@@ -1,10 +1,10 @@
 import type { Person, Place } from '@kinloom/core';
-import type { ArchivalTreeModel, LineageSpotlight } from '../../lib/archivalTreeModel.js';
-import { Link } from 'react-router-dom';
 import React from 'react';
+import { Link } from 'react-router-dom';
+import type { ArchivalTreeModel, LineageSpotlight } from '../../lib/archivalTreeModel.js';
 import { formatCardLifespan } from '../../lib/archivalTreeModel.js';
 import { formatLineageGroupLabel } from '../../lib/treeNodeDisplay.js';
-import { KINLOOM_VOCABULARY, formatPhotoDocumentCount } from '../../lib/vocabulary.js';
+import { formatPhotoDocumentCount, KINLOOM_VOCABULARY } from '../../lib/vocabulary.js';
 import { initialsOf, resolveAssetUrl } from '../Atoms.js';
 
 export interface TreeFocusDrawerProps {
@@ -44,9 +44,7 @@ export const TreeFocusDrawer: React.FC<TreeFocusDrawerProps> = ({
   }
   if (spouseCount > 0) {
     kinSummaryParts.push(
-      spouseCount > 1
-        ? `${spouseCount} marriages`
-        : formatCountLabel(spouseCount, 'spouse', 'spouses'),
+      spouseCount > 1 ? `${spouseCount} marriages` : formatCountLabel(spouseCount, 'spouse', 'spouses')
     );
   }
   if (childCount > 0) {
@@ -58,16 +56,13 @@ export const TreeFocusDrawer: React.FC<TreeFocusDrawerProps> = ({
     : `${person.birth_edtf || '?'} — ${person.death_edtf || '?'}`;
 
   const primaryPlaceName = person.primary_place_id
-    ? placesById.get(person.primary_place_id)?.full_name ?? 'Unrecorded'
+    ? (placesById.get(person.primary_place_id)?.full_name ?? 'Unrecorded')
     : 'Unrecorded';
 
   const resolvedThumb = thumbUrl ? resolveAssetUrl(thumbUrl, baseUrl) : null;
 
   return (
-    <aside
-      className="tree-popover tree-focus-drawer"
-      aria-label={`Lineage focus for ${person.full_name}`}
-    >
+    <aside className="tree-popover tree-focus-drawer" aria-label={`Lineage focus for ${person.full_name}`}>
       <div className="tree-focus-header">
         <div className="tree-focus-eyebrow-row">
           {gen !== undefined && <span className="tree-focus-gen-tag">G{gen + 1}</span>}
@@ -103,7 +98,9 @@ export const TreeFocusDrawer: React.FC<TreeFocusDrawerProps> = ({
                   </span>
                 )}
                 {isCurrent ? (
-                  <span className="tree-focus-crumb-current">{ancestor.given_name || ancestor.full_name}</span>
+                  <span className="tree-focus-crumb-current">
+                    {ancestor.given_name || ancestor.full_name}
+                  </span>
                 ) : (
                   <button
                     type="button"
@@ -123,11 +120,7 @@ export const TreeFocusDrawer: React.FC<TreeFocusDrawerProps> = ({
 
       <div className="tree-focus-identity">
         {resolvedThumb ? (
-          <img
-            src={resolvedThumb}
-            alt={person.full_name}
-            className="tree-focus-portrait"
-          />
+          <img src={resolvedThumb} alt={person.full_name} className="tree-focus-portrait" />
         ) : (
           <div className="tree-focus-monogram" aria-hidden="true">
             {initialsOf(person.full_name)}
@@ -160,17 +153,10 @@ export const TreeFocusDrawer: React.FC<TreeFocusDrawerProps> = ({
       </div>
 
       <div className="tree-focus-actions">
-        <Link
-          to={`/person/${person.slug}`}
-          className="pill-btn active tree-focus-timeline-link"
-        >
+        <Link to={`/person/${person.slug}`} className="pill-btn active tree-focus-timeline-link">
           {KINLOOM_VOCABULARY.tree.openProfileCta}
         </Link>
-        <button
-          type="button"
-          className="pill-btn tree-focus-clear-btn"
-          onClick={onClearFocus}
-        >
+        <button type="button" className="pill-btn tree-focus-clear-btn" onClick={onClearFocus}>
           {KINLOOM_VOCABULARY.tree.clearFocus}
         </button>
       </div>

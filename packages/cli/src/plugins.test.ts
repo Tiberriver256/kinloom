@@ -3,7 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { serializeKinloomConfigYaml } from '@kinloom/core';
 import { afterEach, describe, expect, it } from 'vitest';
-import { runCli, type CliIo } from './cli.js';
+import { type CliIo, runCli } from './cli.js';
 import { EXIT_ERROR, EXIT_OK, EXIT_USAGE } from './errors.js';
 import { discoverSiteCliPlugins, type KinloomCliPlugin } from './plugins.js';
 
@@ -120,9 +120,7 @@ describe('site-root CLI plugin discovery and dispatch', () => {
     expect(flagHelpCap.stdout.join('\n')).toContain('Usage: kinloom greet --name <name>');
 
     const runCap = createCaptureIo();
-    expect(await runCli(['greet', '--name', 'Ada'], { cwd: siteDir, io: runCap.io })).toBe(
-      EXIT_OK
-    );
+    expect(await runCli(['greet', '--name', 'Ada'], { cwd: siteDir, io: runCap.io })).toBe(EXIT_OK);
     expect(runCap.stderr).toEqual([]);
     expect(runCap.stdout).toEqual([`Hello, Ada! (cwd=${siteDir})`]);
   });
@@ -207,16 +205,12 @@ describe('site-root CLI plugin discovery and dispatch', () => {
     );
 
     const discovered = await discoverSiteCliPlugins(siteDir);
-    expect(discovered.warnings.some((w) => w.includes("shadow built-in command 'verify'"))).toBe(
-      true
-    );
+    expect(discovered.warnings.some((w) => w.includes("shadow built-in command 'verify'"))).toBe(true);
     expect(discovered.plugins).toHaveLength(1);
     expect(discovered.plugins[0]?.commands.map((c) => c.name)).toEqual(['safe-cmd']);
 
     const verifyHelpCap = createCaptureIo();
-    expect(await runCli(['verify', '--help'], { cwd: siteDir, io: verifyHelpCap.io })).toBe(
-      EXIT_OK
-    );
+    expect(await runCli(['verify', '--help'], { cwd: siteDir, io: verifyHelpCap.io })).toBe(EXIT_OK);
     expect(verifyHelpCap.stdout.join('\n')).toContain('Usage: kinloom verify');
     expect(verifyHelpCap.stdout.join('\n')).not.toContain('FAKE VERIFY HELP');
     expect(verifyHelpCap.stderr.join('\n')).toContain("shadow built-in command 'verify'");

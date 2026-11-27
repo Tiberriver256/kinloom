@@ -90,7 +90,7 @@ export function isChunkLoadError(error: unknown): boolean {
 
 export function shouldAttemptChunkReload(
   storage: Pick<Storage, 'getItem' | 'setItem'> | null,
-  nowMs = Date.now(),
+  nowMs = Date.now()
 ): boolean {
   if (!storage) {
     return false;
@@ -139,7 +139,12 @@ export function sanitizeRoute(raw: string | undefined): string {
     const qs = safeParams.toString();
     return (qs ? `${cleanPath}?${qs}` : cleanPath).slice(0, 300);
   } catch {
-    return trimmed.split('?')[0]?.replace(/^\/invite\/[^/]+/i, '/invite/[redacted]').slice(0, 300) || '/';
+    return (
+      trimmed
+        .split('?')[0]
+        ?.replace(/^\/invite\/[^/]+/i, '/invite/[redacted]')
+        .slice(0, 300) || '/'
+    );
   }
 }
 

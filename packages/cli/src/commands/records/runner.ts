@@ -1,24 +1,16 @@
-import { spawn, type ChildProcess, type SpawnOptions } from 'node:child_process';
+import { type ChildProcess, type SpawnOptions, spawn } from 'node:child_process';
 import fs from 'node:fs';
 import { performance } from 'node:perf_hooks';
-import { recordTelemetryEvent, type OpsIo } from '../ops/telemetry.js';
-import type {
-  AssetScriptCommandSpec,
-  RecordCommandSpec,
-  SkillScriptCommandSpec,
-} from './registry.js';
-import { resolveRecordScriptPath, type ResolveRootsOptions } from './resolve.js';
+import { type OpsIo, recordTelemetryEvent } from '../ops/telemetry.js';
+import type { AssetScriptCommandSpec, RecordCommandSpec, SkillScriptCommandSpec } from './registry.js';
+import { type ResolveRootsOptions, resolveRecordScriptPath } from './resolve.js';
 
 export interface ScriptInvocation {
   readonly command: string;
   readonly args: readonly string[];
 }
 
-export type RecordSpawnFn = (
-  command: string,
-  args: readonly string[],
-  options: SpawnOptions
-) => ChildProcess;
+export type RecordSpawnFn = (command: string, args: readonly string[], options: SpawnOptions) => ChildProcess;
 
 export interface LegacyRunnerOptions extends ResolveRootsOptions {
   io?: OpsIo;
@@ -49,10 +41,7 @@ function readFirstLine(filePath: string): string {
   }
 }
 
-export function resolveScriptInvocation(
-  scriptPath: string,
-  scriptArgs: readonly string[]
-): ScriptInvocation {
+export function resolveScriptInvocation(scriptPath: string, scriptArgs: readonly string[]): ScriptInvocation {
   const firstLine = readFirstLine(scriptPath);
   if (firstLine.startsWith('#!')) {
     const shebang = firstLine.slice(2).trim();
@@ -147,7 +136,7 @@ function startsLikeJson(text: string): boolean {
 }
 
 function booleanCacheHitField(record: Record<string, unknown>): boolean | undefined {
-  if (!Object.prototype.hasOwnProperty.call(record, 'cache_hit')) {
+  if (!Object.hasOwn(record, 'cache_hit')) {
     return undefined;
   }
   const hit = record.cache_hit;
@@ -359,10 +348,7 @@ function executeSpawnAttempt(params: {
     const child = spawnFn(invocation.command, [...invocation.args], {
       cwd,
       env,
-      stdio:
-        captureOutput || inspectStderr
-          ? ['inherit', 'pipe', 'pipe']
-          : ['inherit', 'pipe', 'inherit'],
+      stdio: captureOutput || inspectStderr ? ['inherit', 'pipe', 'pipe'] : ['inherit', 'pipe', 'inherit'],
     });
 
     const forwardSigInt = () => {
@@ -558,7 +544,7 @@ export async function executeLegacyScriptCommand(
 }
 
 export {
-  runRecordCommand,
   type RunRecordCommandOptions,
   type RunRecordCommandResult,
+  runRecordCommand,
 } from './dispatch.js';

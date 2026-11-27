@@ -1,8 +1,8 @@
 import type { EntityPayload } from '@kinloom/core';
+import type React from 'react';
 import type { EntityEditorConflict } from '../../machines/entityEditorMachine.js';
-import { ConflictBadge } from './WikiBadges.js';
-import React from 'react';
 import { RevisionDiffView } from './RevisionDiffView.js';
+import { ConflictBadge } from './WikiBadges.js';
 
 export interface ConflictMergeDialogProps {
   conflict: EntityEditorConflict;
@@ -25,11 +25,7 @@ export const ConflictMergeDialog: React.FC<ConflictMergeDialogProps> = ({
   onRebaseToEdit,
   onDiscardDraft,
 }) => (
-  <section
-    className="wiki-conflict-box"
-    role="alert"
-    aria-label="Edit conflict resolution"
-  >
+  <section className="wiki-conflict-box" role="alert" aria-label="Edit conflict resolution">
     <div className="wiki-conflict-header">
       <ConflictBadge label={`Edit Conflict · Server at r${conflict.latestRevisionId}`} />
       <span className="wiki-conflict-meta">
@@ -39,8 +35,8 @@ export const ConflictMergeDialog: React.FC<ConflictMergeDialogProps> = ({
     </div>
 
     <p className="wiki-conflict-copy">
-      Another editor saved a newer revision while your draft was open. Your unsaved edits are still
-      preserved below. Review the field differences and choose how to proceed.
+      Another editor saved a newer revision while your draft was open. Your unsaved edits are still preserved
+      below. Review the field differences and choose how to proceed.
     </p>
 
     <RevisionDiffView

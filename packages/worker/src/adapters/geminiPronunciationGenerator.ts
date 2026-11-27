@@ -239,14 +239,14 @@ export class GeminiPronunciationAudioGenerator implements PronunciationAudioGene
 
     if (!response.ok) {
       const errorText = await response.text().catch(() => '');
-      throw new Error(
-        `Gemini TTS request failed with HTTP ${response.status}: ${errorText.slice(0, 200)}`
-      );
+      throw new Error(`Gemini TTS request failed with HTTP ${response.status}: ${errorText.slice(0, 200)}`);
     }
 
     const payload = (await response.json()) as GeminiGenerateContentResponse;
     const parts = payload.candidates?.[0]?.content?.parts ?? [];
-    const audioPart = parts.find((part) => typeof part.inlineData?.data === 'string' && part.inlineData.data.length > 0);
+    const audioPart = parts.find(
+      (part) => typeof part.inlineData?.data === 'string' && part.inlineData.data.length > 0
+    );
     if (!audioPart?.inlineData?.data) {
       throw new Error('Gemini TTS response did not contain inline audio data.');
     }

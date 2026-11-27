@@ -1,12 +1,13 @@
 import type { AgentTokenScope, InviteRecord, UserRecord, UserRole } from '@kinloom/core';
+import type React from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import type {
   CreatedAgentTokenResponse,
   CreatedInviteResponse,
   PublicAgentTokenRecord,
 } from '../adapters/httpWikiDataSource.js';
-import React, { useCallback, useEffect, useState } from 'react';
-import { ExplorerTopBar } from '../components/ExplorerTopBar.js';
 import { HttpWikiDataSource } from '../adapters/httpWikiDataSource.js';
+import { ExplorerTopBar } from '../components/ExplorerTopBar.js';
 import { KinloomFooter } from '../components/KinloomFooter.js';
 import { useArchiveData } from '../context/ArchiveDataContext.js';
 import { formatArchivalTimestamp } from '../lib/formatTimestamp.js';
@@ -32,10 +33,7 @@ export interface AdminApiClient {
   createInvite(input: { label: string; expires_in_days?: number }): Promise<CreatedInviteResponse>;
   revokeInvite(token: string): Promise<void>;
   listAgentTokens(): Promise<readonly PublicAgentTokenRecord[]>;
-  createAgentToken(input: {
-    label: string;
-    scope: AgentTokenScope;
-  }): Promise<CreatedAgentTokenResponse>;
+  createAgentToken(input: { label: string; scope: AgentTokenScope }): Promise<CreatedAgentTokenResponse>;
   revokeAgentToken(tokenId: string): Promise<void>;
 }
 
@@ -168,9 +166,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ adminClient }) => {
     try {
       await client.revokeInvite(token);
       setInvites((prev) =>
-        prev.map((inv) =>
-          inv.token === token ? { ...inv, revoked_at: new Date().toISOString() } : inv,
-        ),
+        prev.map((inv) => (inv.token === token ? { ...inv, revoked_at: new Date().toISOString() } : inv))
       );
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -212,9 +208,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ adminClient }) => {
     try {
       await client.revokeAgentToken(tokenId);
       setTokens((prev) =>
-        prev.map((t) =>
-          t.token_id === tokenId ? { ...t, revoked_at: new Date().toISOString() } : t,
-        ),
+        prev.map((t) => (t.token_id === tokenId ? { ...t, revoked_at: new Date().toISOString() } : t))
       );
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -234,8 +228,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ adminClient }) => {
           <section className="place-map-box">
             <h1>Site Administration</h1>
             <p className="empty-ring-note">
-              Administrator permissions are required to manage members, invite links, and agent
-              tokens.
+              Administrator permissions are required to manage members, invite links, and agent tokens.
             </p>
           </section>
         </main>
@@ -252,8 +245,8 @@ export const AdminPage: React.FC<AdminPageProps> = ({ adminClient }) => {
           <div>
             <h1>Site Administration</h1>
             <p>
-              Manage enrolled family editors, create read-only invite links, and manage access keys
-              for research helpers or archive backups.
+              Manage enrolled family editors, create read-only invite links, and manage access keys for
+              research helpers or archive backups.
             </p>
           </div>
           <div className="folio-metrics">
@@ -284,8 +277,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ adminClient }) => {
           ) : (
             <div className="wiki-admin-list">
               {users.map((user) => {
-                const isSelf =
-                  currentAdminEmail !== null && user.email.toLowerCase() === currentAdminEmail;
+                const isSelf = currentAdminEmail !== null && user.email.toLowerCase() === currentAdminEmail;
                 const demoteBlocked = user.role === 'admin' && (isSelf || adminCount <= 1);
                 const demoteBlockedReason = isSelf
                   ? 'You cannot demote your own admin account.'
@@ -298,9 +290,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ adminClient }) => {
                   <div key={user.email} className="wiki-admin-row">
                     <div>
                       <strong>{user.display_name}</strong>{' '}
-                      <span className="wiki-role-chip">
-                        {user.role === 'admin' ? 'Admin' : 'Editor'}
-                      </span>
+                      <span className="wiki-role-chip">{user.role === 'admin' ? 'Admin' : 'Editor'}</span>
                       {isSelf && <span className="wiki-role-chip is-self">You</span>}
                       <div className="wiki-panel-meta">
                         {user.email} · Added{' '}
@@ -308,9 +298,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ adminClient }) => {
                           {formatArchivalTimestamp(user.added_at, false)}
                         </time>
                       </div>
-                      {demoteBlocked && (
-                        <div className="wiki-panel-meta">{demoteBlockedReason}</div>
-                      )}
+                      {demoteBlocked && <div className="wiki-panel-meta">{demoteBlockedReason}</div>}
                     </div>
                     <div className="wiki-inline-actions">
                       {confirmingDemote ? (
@@ -608,8 +596,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ adminClient }) => {
           <div className="wiki-admin-list" style={{ marginTop: 12 }}>
             {tokens.map((tok) => {
               const confirmingRevoke =
-                pendingConfirm?.kind === 'revoke_token' &&
-                pendingConfirm.tokenId === tok.token_id;
+                pendingConfirm?.kind === 'revoke_token' && pendingConfirm.tokenId === tok.token_id;
               const isRowBusy = busyKey === `revoke_token:${tok.token_id}`;
               return (
                 <div key={tok.token_id} className="wiki-admin-row">

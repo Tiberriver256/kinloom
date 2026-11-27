@@ -1,15 +1,16 @@
-import React, { useEffect, useId, useRef, useState } from 'react';
+import type React from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { HttpWikiDataSource } from '../../adapters/httpWikiDataSource.js';
 import { useArchiveData } from '../../context/ArchiveDataContext.js';
 import { scrollBehaviorForMotion } from '../../lib/keyboardNav.js';
 import {
+  type AuthFeedback,
+  type AuthUrlError,
   getCleanNextPath,
   parseInviteInput,
   resolveAuthFeedback,
   resolveClientAuthError,
   validateEmailInput,
-  type AuthFeedback,
-  type AuthUrlError,
 } from './authErrorCopy.js';
 
 export interface AuthSignInFlowProps {
@@ -21,11 +22,7 @@ export interface AuthSignInFlowProps {
   feedbackRef?: React.RefObject<HTMLDivElement | null>;
 }
 
-function buildGoogleUrl(
-  dataSource: unknown,
-  nextPath: string,
-  selectAccount: boolean,
-): string {
+function buildGoogleUrl(dataSource: unknown, nextPath: string, selectAccount: boolean): string {
   if (dataSource instanceof HttpWikiDataSource) {
     return dataSource.getGoogleSignInUrl(nextPath, { selectAccount });
   }
@@ -153,7 +150,7 @@ export const AuthSignInFlow: React.FC<AuthSignInFlowProps> = ({
           code: 'EMAIL_SENDER_UNCONFIGURED',
           provider: 'magic_link',
           hasGoogleProvider: authProviders.google,
-        }),
+        })
       );
       return;
     }
@@ -210,8 +207,7 @@ export const AuthSignInFlow: React.FC<AuthSignInFlowProps> = ({
     }, 0);
   };
 
-  const canShowInviteHelper =
-    showInviteHelper && (!inviteLabel || Boolean(activeFeedback?.showInvitePaste));
+  const canShowInviteHelper = showInviteHelper && (!inviteLabel || Boolean(activeFeedback?.showInvitePaste));
 
   return (
     <div className="wiki-auth-flow">
@@ -262,12 +258,12 @@ export const AuthSignInFlow: React.FC<AuthSignInFlowProps> = ({
               </strong>
             </p>
             <p>
-              If <strong>{sentTo}</strong> is enrolled in this archive, a one-time sign-in link is on
-              its way (valid for 15 minutes).
+              If <strong>{sentTo}</strong> is enrolled in this archive, a one-time sign-in link is on its way
+              (valid for 15 minutes).
             </p>
             <p className="wiki-auth-feedback-hint">
-              Do not see it yet? Check your spam folder, try another family email, or open a family
-              invite link first.
+              Do not see it yet? Check your spam folder, try another family email, or open a family invite
+              link first.
             </p>
             <div className="wiki-auth-sent-actions">
               <button
@@ -344,11 +340,7 @@ export const AuthSignInFlow: React.FC<AuthSignInFlowProps> = ({
               )}
             </div>
             <div className="wiki-form-actions">
-              <button
-                type="submit"
-                className="wiki-btn-primary wiki-btn-full"
-                disabled={sending}
-              >
+              <button type="submit" className="wiki-btn-primary wiki-btn-full" disabled={sending}>
                 {sending ? 'Sending link…' : 'Email Magic Link'}
               </button>
             </div>

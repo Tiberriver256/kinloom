@@ -97,10 +97,7 @@ export function isTelemetrySuppressedByParent(): boolean {
   return process.env.KINLOOM_TELEMETRY_PARENT === '1';
 }
 
-export function recordTelemetryEvent(
-  record: TelemetryEventInput,
-  options?: RecordTelemetryOptions
-): void {
+export function recordTelemetryEvent(record: TelemetryEventInput, options?: RecordTelemetryOptions): void {
   if (!options?.force && isTelemetrySuppressedByParent()) {
     return;
   }
@@ -187,12 +184,9 @@ function parseTelemetryLine(line: string): TelemetryEvent | null {
         ? Math.max(0, obj.duration_ms)
         : 0;
     const cacheHit = typeof obj.cache_hit === 'boolean' ? obj.cache_hit : null;
-    const exitCode =
-      typeof obj.exit_code === 'number' && Number.isInteger(obj.exit_code) ? obj.exit_code : 0;
+    const exitCode = typeof obj.exit_code === 'number' && Number.isInteger(obj.exit_code) ? obj.exit_code : 0;
     const bytesOut =
-      typeof obj.bytes_out === 'number' && Number.isFinite(obj.bytes_out)
-        ? Math.max(0, obj.bytes_out)
-        : 0;
+      typeof obj.bytes_out === 'number' && Number.isFinite(obj.bytes_out) ? Math.max(0, obj.bytes_out) : 0;
     return {
       ts,
       cmd,
@@ -223,9 +217,7 @@ function roundOneDecimal(value: number): number {
   return Math.round(value * 10) / 10;
 }
 
-export function summarizeTelemetryEvents(
-  events: readonly TelemetryEvent[]
-): TelemetrySummaryRow[] {
+export function summarizeTelemetryEvents(events: readonly TelemetryEvent[]): TelemetrySummaryRow[] {
   const bySubcmd = new Map<string, TelemetryEvent[]>();
   for (const event of events) {
     const key = event.subcmd.trim() || event.cmd.trim() || 'unknown';
@@ -252,9 +244,7 @@ export function summarizeTelemetryEvents(
       p95_ms: computePercentile(durations, 95),
       total_ms: totalMs,
       cache_hit_pct:
-        cacheObservations.length > 0
-          ? roundOneDecimal((cacheHits / cacheObservations.length) * 100)
-          : null,
+        cacheObservations.length > 0 ? roundOneDecimal((cacheHits / cacheObservations.length) * 100) : null,
       fail_pct: roundOneDecimal((failures / group.length) * 100),
     });
   }
@@ -293,9 +283,7 @@ export function formatTelemetryTable(
   );
 
   const formatRow = (cells: readonly string[]): string =>
-    cells
-      .map((cell, idx) => (idx === 0 ? cell.padEnd(widths[idx]) : cell.padStart(widths[idx])))
-      .join('  ');
+    cells.map((cell, idx) => (idx === 0 ? cell.padEnd(widths[idx]) : cell.padStart(widths[idx]))).join('  ');
 
   const lines: string[] = [
     headerNote,
@@ -313,9 +301,7 @@ export async function runTelemetryReportCommand(
 ): Promise<TelemetryReportResult> {
   const filePath = getTelemetryFilePath(options.filePath);
   const sinceHours =
-    options.sinceHours !== undefined && Number.isFinite(options.sinceHours)
-      ? options.sinceHours
-      : null;
+    options.sinceHours !== undefined && Number.isFinite(options.sinceHours) ? options.sinceHours : null;
   const nowMs = options.nowMs ?? Date.now();
   const cutoffMs = sinceHours !== null ? nowMs - sinceHours * 3_600_000 : null;
 

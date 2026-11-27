@@ -1,10 +1,6 @@
 import type { BranchConfig, Person } from '@kinloom/core';
-import type {
-  TreeLineageMode,
-  TreeSearchCandidate,
-  TreeViewSurface,
-} from '../../lib/archivalTreeModel.js';
-import React from 'react';
+import type React from 'react';
+import type { TreeLineageMode, TreeSearchCandidate, TreeViewSurface } from '../../lib/archivalTreeModel.js';
 import { KINLOOM_VOCABULARY } from '../../lib/vocabulary.js';
 import { TreePersonSearch } from './TreePersonSearch.js';
 
@@ -166,11 +162,7 @@ export const TreeToolbar: React.FC<TreeToolbarProps> = ({
           )}
 
           {canEdit && (
-            <button
-              type="button"
-              className="pill-btn tree-add-person-btn"
-              onClick={onAddPerson}
-            >
+            <button type="button" className="pill-btn tree-add-person-btn" onClick={onAddPerson}>
               {KINLOOM_VOCABULARY.tree.addPerson}
             </button>
           )}

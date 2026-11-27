@@ -17,10 +17,7 @@ const SAMPLE_SEARCH_RESPONSE = {
       type: 'Volume',
       metadata: {
         referenceCode: 'SE/ULA/10392/A I a/9',
-        hierarchy: [
-          { caption: 'Uppsala domkyrkoförsamlings kyrkoarkiv' },
-          { caption: 'Husförhörslängder' },
-        ],
+        hierarchy: [{ caption: 'Uppsala domkyrkoförsamlings kyrkoarkiv' }, { caption: 'Husförhörslängder' }],
         archivalInstitution: [{ caption: 'Riksarkivet i Uppsala' }],
         date: '1887 - 1896',
         onlyDigitisedMaterials: true,
@@ -187,8 +184,8 @@ const SAMPLE_MANIFEST_RESPONSE = {
 };
 
 const MINIMAL_JPEG_BYTES = Uint8Array.from([
-  0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00, 0x01, 0x01, 0x00, 0x00, 0x01,
-  0x00, 0x01, 0x00, 0x00, 0xff, 0xd9,
+  0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00, 0x01, 0x01, 0x00, 0x00, 0x01, 0x00, 0x01,
+  0x00, 0x00, 0xff, 0xd9,
 ]);
 
 const tempDirs: string[] = [];
@@ -290,9 +287,7 @@ describe('se-archives native client', () => {
     expect(p1.results[0].self_url).toBe('https://data.riksarkivet.se/archive/Tij9jjX9rH6cxG02H087k3');
     expect(p1.results[1].snippets?.[0].pages).toEqual(['A0030423_00003']);
     expect(p1.results[1].snippets?.[0].text).toBe('Anders Andersson i Garphyttan');
-    expect(p1.results[1].iiif_manifests).toEqual([
-      'https://lbiiif.riksarkivet.se/arkis!A0030423/manifest',
-    ]);
+    expect(p1.results[1].iiif_manifests).toEqual(['https://lbiiif.riksarkivet.se/arkis!A0030423/manifest']);
     expect(r3.stdout).toContain('[cache]');
     expect(
       fs.readdirSync(path.join(cacheRoot, 'se-archives')).filter((f) => f.endsWith('.json'))
@@ -349,12 +344,12 @@ describe('se-archives native client', () => {
     expect(birthsJson.results[0].iiif_manifests).toEqual([
       'https://lbiiif.riksarkivet.se/arkis!00124895/manifest',
     ]);
-    expect(
-      (JSON.parse(rmRes.stdout) as { results: { groom: string }[] }).results[0].groom
-    ).toBe('Johansson, Erik');
-    expect(
-      (JSON.parse(rd.stdout) as { results: { property_name: string }[] }).results[0].property_name
-    ).toBe('Bäcks');
+    expect((JSON.parse(rmRes.stdout) as { results: { groom: string }[] }).results[0].groom).toBe(
+      'Johansson, Erik'
+    );
+    expect((JSON.parse(rd.stdout) as { results: { property_name: string }[] }).results[0].property_name).toBe(
+      'Bäcks'
+    );
     expect((JSON.parse(rr.stdout) as { record: { volume: string } }).record.volume).toBe('C I:17');
     expect(seenPaths).toHaveLength(4);
   });
@@ -468,9 +463,7 @@ describe('se-archives native client', () => {
       jpegFetch
     );
     expect([r1.exitCode, r2.exitCode]).toEqual([0, 0]);
-    expect(seenUrls).toEqual([
-      'https://lbiiif.riksarkivet.se/arkis!00124895_00002/full/1000,/0/default.jpg',
-    ]);
+    expect(seenUrls).toEqual(['https://lbiiif.riksarkivet.se/arkis!00124895_00002/full/1000,/0/default.jpg']);
     const p1 = JSON.parse(r1.stdout) as { format: string; skipped: boolean; cache_hit: boolean };
     const p2 = JSON.parse(r2.stdout) as { skipped: boolean; cache_hit: boolean };
     expect(p1.format).toBe('jpeg');
@@ -521,12 +514,7 @@ describe('se-archives native client', () => {
 
     // 4. Disallowed host URL, path traversal, and conflicting --width/--full exit 2.
     const rHost = await invokeSe(
-      [
-        'download',
-        'https://example.invalid/arkis!00124895_00001/full/max/0/default.jpg',
-        '--out',
-        badJpg,
-      ],
+      ['download', 'https://example.invalid/arkis!00124895_00001/full/max/0/default.jpg', '--out', badJpg],
       cacheRoot,
       jpegFetch
     );
@@ -555,7 +543,18 @@ describe('se-archives native client', () => {
     const cacheRoot = path.join(tmp, 'cache');
 
     const res = await invokeSe(
-      ['census', '--surname', 'Andersson', '--given', 'Anders', '--year', '1890', '--parish', 'Uppsala', '--json'],
+      [
+        'census',
+        '--surname',
+        'Andersson',
+        '--given',
+        'Anders',
+        '--year',
+        '1890',
+        '--parish',
+        'Uppsala',
+        '--json',
+      ],
       cacheRoot
     );
     expect(res.exitCode).toBe(0);

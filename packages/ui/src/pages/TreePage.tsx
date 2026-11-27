@@ -1,10 +1,17 @@
 import type { Person } from '@kinloom/core';
 import { buildPersonThumbMap, resolveDefaultBranchId } from '@kinloom/core';
-import type {
-  SemanticZoomLevel,
-  TreeLineageMode,
-  TreeViewSurface,
-} from '../lib/archivalTreeModel.js';
+import type React from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import { EmptyStateNotice } from '../components/Atoms.js';
+import { ExplorerTopBar } from '../components/ExplorerTopBar.js';
+import { TreeFocusDrawer } from '../components/tree/TreeFocusDrawer.js';
+import { TreeOrthogonalCanvas } from '../components/tree/TreeOrthogonalCanvas.js';
+import { TreePedigreeRoll } from '../components/tree/TreePedigreeRoll.js';
+import { TreeToolbar } from '../components/tree/TreeToolbar.js';
+import { CreateEntityModal } from '../components/wiki/CreateEntityModal.js';
+import { useArchiveData } from '../context/ArchiveDataContext.js';
+import type { SemanticZoomLevel, TreeLineageMode, TreeViewSurface } from '../lib/archivalTreeModel.js';
 import {
   ARCHIVAL_NODE_H,
   ARCHIVAL_NODE_W,
@@ -30,17 +37,7 @@ import {
   midpointBetween,
   stepInertia,
 } from '../lib/treeGestures.js';
-import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
-import { EmptyStateNotice } from '../components/Atoms.js';
-import { ExplorerTopBar } from '../components/ExplorerTopBar.js';
-import { TreeFocusDrawer } from '../components/tree/TreeFocusDrawer.js';
-import { TreeOrthogonalCanvas } from '../components/tree/TreeOrthogonalCanvas.js';
-import { TreePedigreeRoll } from '../components/tree/TreePedigreeRoll.js';
-import { TreeToolbar } from '../components/tree/TreeToolbar.js';
-import { CreateEntityModal } from '../components/wiki/CreateEntityModal.js';
 import { KINLOOM_VOCABULARY } from '../lib/vocabulary.js';
-import { useArchiveData } from '../context/ArchiveDataContext.js';
 
 const INITIAL_TRANSFORM: CanvasTransform = {
   pan: { x: 40, y: 40 },
@@ -57,8 +54,7 @@ function readInitialPreferences(searchParams: URLSearchParams): {
   const modeParam = searchParams.get('mode');
   const surface: TreeViewSurface =
     surfaceParam === 'diagram' || surfaceParam === 'roll' ? surfaceParam : fallback.surface;
-  const mode: TreeLineageMode =
-    modeParam === 'spine' || modeParam === 'full' ? modeParam : fallback.mode;
+  const mode: TreeLineageMode = modeParam === 'spine' || modeParam === 'full' ? modeParam : fallback.mode;
   return { surface, mode };
 }
 
@@ -68,7 +64,7 @@ export const TreePage: React.FC = () => {
 
   const personThumbMap = useMemo(
     () => (bundle ? buildPersonThumbMap(bundle) : new Map<string, string>()),
-    [bundle],
+    [bundle]
   );
 
   const initialPrefs = useMemo(() => readInitialPreferences(searchParams), [searchParams]);
@@ -78,11 +74,9 @@ export const TreePage: React.FC = () => {
   const [mode, setMode] = useState<TreeLineageMode>(initialPrefs.mode);
   const [branchFilter, setBranchFilter] = useState<string>('all');
   const [selectedPersonId, setSelectedPersonId] = useState<string | null>(null);
-  const [expandedUnionIds, setExpandedUnionIds] = useState<ReadonlySet<string>>(
-    () => new Set<string>(),
-  );
+  const [expandedUnionIds, setExpandedUnionIds] = useState<ReadonlySet<string>>(() => new Set<string>());
   const [semanticZoom, setSemanticZoom] = useState<SemanticZoomLevel>(
-    resolveSemanticZoomLevel(INITIAL_TRANSFORM.zoom),
+    resolveSemanticZoomLevel(INITIAL_TRANSFORM.zoom)
   );
   const [zoomPercent, setZoomPercent] = useState<number>(Math.round(INITIAL_TRANSFORM.zoom * 100));
   const [liveAnnouncement, setLiveAnnouncement] = useState<string>('');
@@ -158,31 +152,28 @@ export const TreePage: React.FC = () => {
 
   const populatedBranches = useMemo(
     () => siteConfig.branches.filter((b) => (branchCounts[b.id] || 0) > 0),
-    [siteConfig.branches, branchCounts],
+    [siteConfig.branches, branchCounts]
   );
 
   const branchLabelsById = useMemo(
     () => new Map(siteConfig.branches.map((b) => [b.id, b.label])),
-    [siteConfig.branches],
+    [siteConfig.branches]
   );
 
   const directModeBranchIds = useMemo(
     () => siteConfig.branches.filter((b) => b.supportsDirectMode).map((b) => b.id),
-    [siteConfig.branches],
+    [siteConfig.branches]
   );
 
   const activeBranchConfig = useMemo(
     () => siteConfig.branches.find((b) => b.id === branchFilter),
-    [siteConfig.branches, branchFilter],
+    [siteConfig.branches, branchFilter]
   );
 
   const activeBranchLabel =
-    branchFilter === 'all'
-      ? siteConfig.site.familyName
-      : (activeBranchConfig?.label ?? branchFilter);
+    branchFilter === 'all' ? siteConfig.site.familyName : (activeBranchConfig?.label ?? branchFilter);
 
-  const showDirectToggle =
-    branchFilter === 'all' || (activeBranchConfig?.supportsDirectMode ?? true);
+  const showDirectToggle = branchFilter === 'all' || (activeBranchConfig?.supportsDirectMode ?? true);
 
   const model = useMemo(() => {
     if (!bundle) {
@@ -204,14 +195,11 @@ export const TreePage: React.FC = () => {
     });
   }, [bundle, branchFilter, defaultBranchId, directModeBranchIds, mode, expandedUnionIds]);
 
-  const diagramLayout = useMemo(
-    () => computeArchivalDiagramLayout(model),
-    [model],
-  );
+  const diagramLayout = useMemo(() => computeArchivalDiagramLayout(model), [model]);
 
   const selectedPerson = useMemo(
     () => (selectedPersonId ? (model.peopleById.get(selectedPersonId) ?? null) : null),
-    [selectedPersonId, model.peopleById],
+    [selectedPersonId, model.peopleById]
   );
 
   const spotlight = useMemo(
@@ -224,7 +212,7 @@ export const TreePage: React.FC = () => {
             placesById,
           })
         : null,
-    [selectedPerson, model, bundle, placesById],
+    [selectedPerson, model, bundle, placesById]
   );
 
   const searchCandidates = useMemo(() => {
@@ -290,7 +278,7 @@ export const TreePage: React.FC = () => {
         setZoomPercent(nextPercent);
       }
     },
-    [syncSemanticZoom],
+    [syncSemanticZoom]
   );
 
   const applyTransformNow = useCallback(
@@ -304,7 +292,7 @@ export const TreePage: React.FC = () => {
       transformRef.current = next;
       writeTransformToDom(next);
     },
-    [cancelMotion, writeTransformToDom],
+    [cancelMotion, writeTransformToDom]
   );
 
   const scheduleTransform = useCallback(
@@ -323,7 +311,7 @@ export const TreePage: React.FC = () => {
         }
       });
     },
-    [writeTransformToDom],
+    [writeTransformToDom]
   );
 
   useEffect(
@@ -341,7 +329,7 @@ export const TreePage: React.FC = () => {
         zoomSettleTimerRef.current = null;
       }
     },
-    [],
+    []
   );
 
   // Only lock viewport scrolling when in 2D Diagram surface so Portrait Roll uses native vertical scroll
@@ -411,7 +399,7 @@ export const TreePage: React.FC = () => {
         pan: clampPan(next.pan, next.zoom, diagramLayout.bounds, viewport),
       };
     },
-    [diagramLayout.bounds],
+    [diagramLayout.bounds]
   );
 
   const animateToTransform = useCallback(
@@ -467,7 +455,7 @@ export const TreePage: React.FC = () => {
       };
       motionRafRef.current = window.requestAnimationFrame(tick);
     },
-    [applyTransformNow, cancelMotion, clampTransform, markZooming, writeTransformToDom],
+    [applyTransformNow, cancelMotion, clampTransform, markZooming, writeTransformToDom]
   );
 
   const startInertia = useCallback(
@@ -502,7 +490,7 @@ export const TreePage: React.FC = () => {
       };
       motionRafRef.current = window.requestAnimationFrame(tick);
     },
-    [cancelMotion, clampTransform, writeTransformToDom],
+    [cancelMotion, clampTransform, writeTransformToDom]
   );
 
   const computeFitTransform = useCallback((): CanvasTransform => {
@@ -535,22 +523,19 @@ export const TreePage: React.FC = () => {
     animateToTransform(computeFitTransform(), 210);
   }, [animateToTransform, computeFitTransform]);
 
-  const handleToggleUnionSiblings = useCallback(
-    (unionId: string): void => {
-      setExpandedUnionIds((prev) => {
-        const next = new Set(prev);
-        if (next.has(unionId)) {
-          next.delete(unionId);
-          setLiveAnnouncement('Collapsed sibling group.');
-        } else {
-          next.add(unionId);
-          setLiveAnnouncement('Expanded sibling group.');
-        }
-        return next;
-      });
-    },
-    [],
-  );
+  const handleToggleUnionSiblings = useCallback((unionId: string): void => {
+    setExpandedUnionIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(unionId)) {
+        next.delete(unionId);
+        setLiveAnnouncement('Collapsed sibling group.');
+      } else {
+        next.add(unionId);
+        setLiveAnnouncement('Expanded sibling group.');
+      }
+      return next;
+    });
+  }, []);
 
   const handleSelectPerson = useCallback(
     (person: Person, fromKeyboard = false): void => {
@@ -563,7 +548,7 @@ export const TreePage: React.FC = () => {
       setSelectedPersonId(person.id);
       setLiveAnnouncement(`Focused ${person.full_name} and traced direct lineage.`);
     },
-    [surface],
+    [surface]
   );
 
   const handleClearFocus = useCallback((): void => {
@@ -616,7 +601,7 @@ export const TreePage: React.FC = () => {
       }
       return true;
     },
-    [animateToTransform, applyTransformNow, clampTransform, diagramLayout.byId, diagramLayout.earlyLossStrips],
+    [animateToTransform, applyTransformNow, clampTransform, diagramLayout.byId, diagramLayout.earlyLossStrips]
   );
 
   const scrollRollToPerson = useCallback((personId: string): boolean => {
@@ -671,7 +656,7 @@ export const TreePage: React.FC = () => {
       setFocusRequestSeq((seq) => seq + 1);
       setLiveAnnouncement(`Focused ${person.full_name} and centered them in the tree.`);
     },
-    [branchFilter, defaultBranchId, mode, model],
+    [branchFilter, defaultBranchId, mode, model]
   );
 
   // Handle ?focus=<slug> deep link, search-to-focus centering, and fit-to-viewport when layout/surface changes
@@ -681,9 +666,7 @@ export const TreePage: React.FC = () => {
     }
     const focusSlug = searchParams.get('focus');
     if (focusSlug && appliedFocusSlugRef.current !== focusSlug) {
-      const targetPerson = bundle.people.find(
-        (p) => p.slug === focusSlug && !isRedactedLivingPlaceholder(p),
-      );
+      const targetPerson = bundle.people.find((p) => p.slug === focusSlug && !isRedactedLivingPlaceholder(p));
       if (targetPerson) {
         appliedFocusSlugRef.current = focusSlug;
         handleFocusAndCenterPerson(targetPerson);
@@ -751,7 +734,7 @@ export const TreePage: React.FC = () => {
           currentZoom: current.zoom,
           targetZoom,
           focalPoint,
-        }),
+        })
       );
       markZooming();
       scheduleTransform(next);
@@ -760,15 +743,7 @@ export const TreePage: React.FC = () => {
     return (): void => {
       el.removeEventListener('wheel', onWheel);
     };
-  }, [
-    isReady,
-    surface,
-    cancelMotion,
-    clampTransform,
-    markZooming,
-    readContainerOffset,
-    scheduleTransform,
-  ]);
+  }, [isReady, surface, cancelMotion, clampTransform, markZooming, readContainerOffset, scheduleTransform]);
 
   const setDraggingClass = useCallback((active: boolean): void => {
     containerRef.current?.classList.toggle('is-dragging', active);
@@ -782,7 +757,7 @@ export const TreePage: React.FC = () => {
       if (
         e.target instanceof Element &&
         e.target.closest(
-          'button, a, select, input, .tree-toolbar, .tree-toolbar-shell, .tree-search-popover, .tree-popover, .tree-controls, .tree-diagram-sibling-btn',
+          'button, a, select, input, .tree-toolbar, .tree-toolbar-shell, .tree-search-popover, .tree-popover, .tree-controls, .tree-diagram-sibling-btn'
         )
       ) {
         return;
@@ -826,7 +801,7 @@ export const TreePage: React.FC = () => {
         markZooming();
       }
     },
-    [surface, cancelMotion, markZooming, readContainerOffset, setDraggingClass],
+    [surface, cancelMotion, markZooming, readContainerOffset, setDraggingClass]
   );
 
   const handlePointerMoveNative = useCallback(
@@ -852,7 +827,7 @@ export const TreePage: React.FC = () => {
             startPan: pinchStartRef.current.startPan,
             startMidpoint: pinchStartRef.current.startMidpoint,
             currentMidpoint: midpointBetween(p1, p2),
-          }),
+          })
         );
         markZooming();
         scheduleTransform(next);
@@ -893,7 +868,7 @@ export const TreePage: React.FC = () => {
         scheduleTransform(next);
       }
     },
-    [surface, clampTransform, markZooming, scheduleTransform],
+    [surface, clampTransform, markZooming, scheduleTransform]
   );
 
   const handlePointerUpNative = useCallback(
@@ -967,7 +942,7 @@ export const TreePage: React.FC = () => {
                   targetZoom,
                   focalPoint: releasePt,
                 }),
-                210,
+                210
               );
             }
           } else if (isOnNode) {
@@ -982,7 +957,7 @@ export const TreePage: React.FC = () => {
         }, 0);
       }
     },
-    [animateToTransform, computeFitTransform, setDraggingClass, startInertia],
+    [animateToTransform, computeFitTransform, setDraggingClass, startInertia]
   );
 
   useEffect(() => {
@@ -1018,7 +993,7 @@ export const TreePage: React.FC = () => {
       diagramLayout.bounds.minX,
       diagramLayout.bounds.maxY,
       diagramLayout.bounds.minY,
-    ],
+    ]
   );
 
   const handleDiagramZoomBy = useCallback(
@@ -1036,10 +1011,10 @@ export const TreePage: React.FC = () => {
           targetZoom: base.zoom * factor,
           focalPoint: focal,
         }),
-        180,
+        180
       );
     },
-    [animateToTransform],
+    [animateToTransform]
   );
 
   const handleDiagramResetZoom = useCallback((): void => {
@@ -1056,7 +1031,7 @@ export const TreePage: React.FC = () => {
         targetZoom: 1,
         focalPoint: focal,
       }),
-      180,
+      180
     );
   }, [animateToTransform]);
 
@@ -1089,10 +1064,7 @@ export const TreePage: React.FC = () => {
         e.preventDefault();
         handleDiagramResetZoom();
       } else if (
-        (e.key === 'ArrowLeft' ||
-          e.key === 'ArrowRight' ||
-          e.key === 'ArrowUp' ||
-          e.key === 'ArrowDown') &&
+        (e.key === 'ArrowLeft' || e.key === 'ArrowRight' || e.key === 'ArrowUp' || e.key === 'ArrowDown') &&
         !targetEl?.closest('.tree-toolbar, .tree-toolbar-shell, .tree-popover, .topbar')
       ) {
         e.preventDefault();
@@ -1105,7 +1077,7 @@ export const TreePage: React.FC = () => {
             zoom: base.zoom,
             pan: { x: base.pan.x + dx, y: base.pan.y + dy },
           },
-          120,
+          120
         );
       }
     };
@@ -1156,7 +1128,7 @@ export const TreePage: React.FC = () => {
           if (
             e.target instanceof Element &&
             e.target.closest(
-              'button, a, select, input, .tree-toolbar, .tree-toolbar-shell, .tree-search-popover, .tree-popover, .tree-controls, .tree-node-card, .tree-diagram-sibling-btn',
+              'button, a, select, input, .tree-toolbar, .tree-toolbar-shell, .tree-search-popover, .tree-popover, .tree-controls, .tree-node-card, .tree-diagram-sibling-btn'
             )
           ) {
             return;
@@ -1263,11 +1235,7 @@ export const TreePage: React.FC = () => {
               />
             </div>
 
-            <div
-              className="tree-controls"
-              role="group"
-              aria-label={KINLOOM_VOCABULARY.tree.zoomControlsAria}
-            >
+            <div className="tree-controls" role="group" aria-label={KINLOOM_VOCABULARY.tree.zoomControlsAria}>
               <button
                 type="button"
                 className="pill-btn"
@@ -1307,11 +1275,7 @@ export const TreePage: React.FC = () => {
               >
                 1:1
               </button>
-              <span
-                className="tree-zoom-readout"
-                aria-live="polite"
-                aria-label={`Zoom ${zoomPercent}%`}
-              >
+              <span className="tree-zoom-readout" aria-live="polite" aria-label={`Zoom ${zoomPercent}%`}>
                 {zoomPercent}%
               </span>
             </div>

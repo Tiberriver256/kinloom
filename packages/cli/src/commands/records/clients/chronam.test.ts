@@ -5,8 +5,8 @@ import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { createRecordContext, RecordRuntimeError } from '../runtime/index.js';
 import {
-  cachedDownloadFile,
   COLLECTION_BASE,
+  cachedDownloadFile,
   DEFAULT_TIMEOUT,
   getJson,
   MAX_ATTEMPTS,
@@ -212,9 +212,9 @@ describe('chronam CLI & HTTP retry behavior', () => {
       sleepFn: async () => {},
     });
 
-    await expect(
-      getJson(ctx, COLLECTION_BASE, { params: [['q', 'Lincoln']], timeout: 8.0 })
-    ).rejects.toThrow(/HTTP 503/);
+    await expect(getJson(ctx, COLLECTION_BASE, { params: [['q', 'Lincoln']], timeout: 8.0 })).rejects.toThrow(
+      /HTTP 503/
+    );
     expect(attempts).toBe(MAX_ATTEMPTS);
   });
 
@@ -252,10 +252,9 @@ describe('chronam CLI & HTTP retry behavior', () => {
         if (attempts === 2) {
           return new Response('busy', { status: 503, headers: { 'Retry-After': '3' } });
         }
-        return new Response(
-          JSON.stringify({ search: { hits: 7 }, results: [{ date: '1902' }] }),
-          { status: 200 }
-        );
+        return new Response(JSON.stringify({ search: { hits: 7 }, results: [{ date: '1902' }] }), {
+          status: 200,
+        });
       },
       sleepFn: async (ms) => {
         sleepsMs.push(ms);
@@ -303,10 +302,9 @@ describe('chronam CLI & HTTP retry behavior', () => {
         if (attempts === 1) {
           return new Response('slow down', { status: 429, headers: { 'Retry-After': '3' } });
         }
-        return new Response(
-          JSON.stringify({ search: { hits: 1 }, results: [{ date: '1880' }] }),
-          { status: 200 }
-        );
+        return new Response(JSON.stringify({ search: { hits: 1 }, results: [{ date: '1880' }] }), {
+          status: 200,
+        });
       },
       sleepFn: async (ms) => {
         sleepsMs.push(ms);
@@ -530,9 +528,7 @@ describe('chronam get, page, and download cache', () => {
     expect(second.exitCode, second.stderr).toBe(0);
     expect(second.stdout).toContain('Evening Star');
     expect(second.stdout).toContain('[cache]');
-    expect(getCalls).toEqual([
-      'https://www.loc.gov/resource/sn83045462/1865-04-15/ed-1/?sp=1&fo=json',
-    ]);
+    expect(getCalls).toEqual(['https://www.loc.gov/resource/sn83045462/1865-04-15/ed-1/?sp=1&fo=json']);
     expect(downloadCalls).toEqual([]);
 
     const refreshed = await invokeChronam([...args, '--refresh'], { cacheDir, fetchImpl });
@@ -631,17 +627,7 @@ describe('chronam get, page, and download cache', () => {
     };
 
     const res = await invokeChronam(
-      [
-        'download',
-        '--lccn',
-        'sn83045462',
-        '--date',
-        '1865-04-15',
-        '--seq',
-        '1',
-        '--out',
-        outDir,
-      ],
+      ['download', '--lccn', 'sn83045462', '--date', '1865-04-15', '--seq', '1', '--out', outDir],
       { cacheDir, fetchImpl }
     );
 
@@ -680,9 +666,7 @@ describe('chronam get, page, and download cache', () => {
     expect(second.exitCode, second.stderr).toBe(0);
     expect((JSON.parse(first.stdout) as { cache_hit: boolean }).cache_hit).toBe(false);
     expect((JSON.parse(second.stdout) as { cache_hit: boolean }).cache_hit).toBe(true);
-    expect(getCalls).toEqual([
-      'https://www.loc.gov/resource/sn83045462/1865-04-15/ed-1/?sp=4&fo=json',
-    ]);
+    expect(getCalls).toEqual(['https://www.loc.gov/resource/sn83045462/1865-04-15/ed-1/?sp=4&fo=json']);
   });
 
   it('21. download --json emits cache_hit and resolves page-specific IIIF and sp', async () => {
@@ -724,17 +708,7 @@ describe('chronam get, page, and download cache', () => {
     };
 
     const url = 'https://www.loc.gov/resource/sn83045462/1865-04-15/ed-1/?sp=4&q=railroad';
-    const args = [
-      'download',
-      url,
-      '--out',
-      outDir,
-      '--no-pdf',
-      '--image',
-      '--image-width',
-      '2000',
-      '--json',
-    ];
+    const args = ['download', url, '--out', outDir, '--no-pdf', '--image', '--image-width', '2000', '--json'];
 
     const r1 = await invokeChronam(args, { cacheDir, fetchImpl });
     expect(r1.exitCode, r1.stderr).toBe(0);
@@ -862,16 +836,12 @@ describe('chronam download hardening', () => {
     ).rejects.toThrow(/HTML/);
 
     await expect(
-      cachedDownloadFile(
-        htmlCtx,
-        'https://tile.loc.gov/image-services/iiif/x/full/pct:50/0/default.jpg',
-        {
-          timeout: 10.0,
-          refresh: false,
-          ttlHours: 24.0,
-          kind: 'image',
-        }
-      )
+      cachedDownloadFile(htmlCtx, 'https://tile.loc.gov/image-services/iiif/x/full/pct:50/0/default.jpg', {
+        timeout: 10.0,
+        refresh: false,
+        ttlHours: 24.0,
+        kind: 'image',
+      })
     ).rejects.toThrow(/HTML/);
 
     const filesDir = path.join(cacheDir, 'files');
@@ -888,15 +858,7 @@ describe('chronam download hardening', () => {
     };
 
     const res = await invokeChronam(
-      [
-        'download',
-        '--lccn',
-        'sn83045462',
-        '--date',
-        '1865-04-15',
-        '--out',
-        '../escape-dir',
-      ],
+      ['download', '--lccn', 'sn83045462', '--date', '1865-04-15', '--out', '../escape-dir'],
       { cacheDir, fetchImpl }
     );
 

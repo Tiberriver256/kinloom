@@ -1,16 +1,16 @@
 import fs from 'node:fs';
-import { readFile, readdir } from 'node:fs/promises';
+import { readdir, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import {
   collectLivingNames,
   compileLivingNamePattern,
   edtfYear,
+  type PrivacyConfig,
   parseKinloomConfigYaml,
   parseYaml,
+  type ResolvedPersonPronunciation,
   resolveEffectiveLiving,
   resolvePersonPronunciation,
-  type PrivacyConfig,
-  type ResolvedPersonPronunciation,
 } from '@kinloom/core';
 import { CliValidationError } from '../../errors.js';
 
@@ -264,7 +264,9 @@ function isEffectiveLivingRecord(
     return false;
   }
   const years = personEvents
-    .map((ev) => edtfYear(typeof ev.edtf_date === 'string' || typeof ev.edtf_date === 'number' ? ev.edtf_date : null))
+    .map((ev) =>
+      edtfYear(typeof ev.edtf_date === 'string' || typeof ev.edtf_date === 'number' ? ev.edtf_date : null)
+    )
     .filter((yr): yr is number => yr !== null);
   if (years.length > 0) {
     const earliest = Math.min(...years);
@@ -392,9 +394,7 @@ function collectRecordImagesForPerson(
       continue;
     }
     const imageId =
-      entry.RecordImageId !== undefined && entry.RecordImageId !== null
-        ? String(entry.RecordImageId)
-        : null;
+      entry.RecordImageId !== undefined && entry.RecordImageId !== null ? String(entry.RecordImageId) : null;
     const bytes =
       typeof entry.bytes === 'number' && Number.isFinite(entry.bytes)
         ? entry.bytes
@@ -717,11 +717,12 @@ async function collectDeceasedRelativeRecordImages(params: {
       if (!isPlainRecord(src)) {
         continue;
       }
-      if (src.RecordImageId && typeof src.Title === 'string' && !sourceTitleByImageId.has(String(src.RecordImageId))) {
-        sourceTitleByImageId.set(
-          String(src.RecordImageId),
-          scrubText(src.Title, params.livingNamePattern)
-        );
+      if (
+        src.RecordImageId &&
+        typeof src.Title === 'string' &&
+        !sourceTitleByImageId.has(String(src.RecordImageId))
+      ) {
+        sourceTitleByImageId.set(String(src.RecordImageId), scrubText(src.Title, params.livingNamePattern));
       }
     }
 
@@ -785,8 +786,7 @@ function buildAncestrySummary(
       continue;
     }
     const target = isPlainRecord(factEntry.FactTargetPerson) ? factEntry.FactTargetPerson : null;
-    const targetPid =
-      target?.Id !== undefined && target?.Id !== null ? String(target.Id) : null;
+    const targetPid = target?.Id !== undefined && target?.Id !== null ? String(target.Id) : null;
     if (target?.IsLiving === true || (targetPid && livingAncestryPids.has(targetPid))) {
       redactedLivingFactsCount += 1;
       continue;
@@ -816,9 +816,7 @@ function buildAncestrySummary(
     if (typeof target?.FullName === 'string' && target.FullName) {
       compact.targetPerson = {
         name: scrubText(target.FullName, livingNamePattern),
-        lifeRange: target.LifeRange
-          ? String(target.LifeRange).replaceAll('&ndash;', '-')
-          : null,
+        lifeRange: target.LifeRange ? String(target.LifeRange).replaceAll('&ndash;', '-') : null,
         pid: targetPid,
       };
     }
@@ -881,15 +879,9 @@ function buildAncestrySummary(
     fullName: rawFullName ? scrubText(rawFullName, livingNamePattern) : null,
     lifeRange: card.LifeRange ? String(card.LifeRange).replaceAll('&ndash;', '-') : null,
     birthDate: typeof card.BirthDate === 'string' ? card.BirthDate : null,
-    birthPlace:
-      typeof card.BirthPlace === 'string'
-        ? scrubText(card.BirthPlace, livingNamePattern)
-        : null,
+    birthPlace: typeof card.BirthPlace === 'string' ? scrubText(card.BirthPlace, livingNamePattern) : null,
     deathDate: typeof card.DeathDate === 'string' ? card.DeathDate : null,
-    deathPlace:
-      typeof card.DeathPlace === 'string'
-        ? scrubText(card.DeathPlace, livingNamePattern)
-        : null,
+    deathPlace: typeof card.DeathPlace === 'string' ? scrubText(card.DeathPlace, livingNamePattern) : null,
     factsUrl: typeof raw.factsUrl === 'string' ? raw.factsUrl : null,
     redactedLivingFactsCount,
     facts,
@@ -1049,9 +1041,7 @@ export function formatPersonContextMarkdown(ctx: PersonContextPayload): string {
   }
 
   const relImgs = ctx.relativeRecordImages;
-  lines.push(
-    `- Confirmed-deceased relative record images on disk, deduplicated (${relImgs.length}):`
-  );
+  lines.push(`- Confirmed-deceased relative record images on disk, deduplicated (${relImgs.length}):`);
   if (relImgs.length === 0) {
     lines.push('  - None');
   } else {
@@ -1067,9 +1057,7 @@ export function formatPersonContextMarkdown(ctx: PersonContextPayload): string {
   return `${lines.join('\n')}\n`;
 }
 
-export async function runContextCommand(
-  options: ContextCommandOptions
-): Promise<ContextCommandResult> {
+export async function runContextCommand(options: ContextCommandOptions): Promise<ContextCommandResult> {
   const repoDir = path.resolve(options.repoDir?.trim() || process.cwd());
   const personId = options.personId.trim();
   if (!personId) {
@@ -1087,8 +1075,7 @@ export async function runContextCommand(
     throw new CliValidationError(`Archive data/people.yaml not found under ${repoDir}.`);
   }
 
-  const rawAncestryDir =
-    options.ancestryDir?.trim() || process.env.KINLOOM_ANCESTRY_FACTS_DIR?.trim() || '';
+  const rawAncestryDir = options.ancestryDir?.trim() || process.env.KINLOOM_ANCESTRY_FACTS_DIR?.trim() || '';
   const ancestryDir = rawAncestryDir ? path.resolve(rawAncestryDir) : null;
 
   const [
@@ -1101,7 +1088,9 @@ export async function runContextCommand(
     mediaText,
     narrativesText,
   ] = await Promise.all([
-    readOptionalUtf8(path.join(repoDir, 'kinloom.config.yaml')).then((t) => t || readOptionalUtf8(path.join(dataDir, 'kinloom.config.yaml'))),
+    readOptionalUtf8(path.join(repoDir, 'kinloom.config.yaml')).then(
+      (t) => t || readOptionalUtf8(path.join(dataDir, 'kinloom.config.yaml'))
+    ),
     readOptionalUtf8(peopleYamlPath),
     readOptionalUtf8(path.join(dataDir, 'kinship.yaml')),
     readOptionalUtf8(path.join(dataDir, 'events.yaml')),
@@ -1124,9 +1113,7 @@ export async function runContextCommand(
   const mediaBlocks = splitTopLevelYamlList(mediaText);
   const narrativeBlocks = splitTopLevelYamlList(narrativesText);
 
-  const relevantKinship = parseMatchingYamlBlocks(
-    kinshipBlocks.filter((b) => b.includes(personId))
-  );
+  const relevantKinship = parseMatchingYamlBlocks(kinshipBlocks.filter((b) => b.includes(personId)));
 
   const includeFamily = options.includeFamily === true || options.full === true;
   const parentIds = new Set<string>();
@@ -1164,12 +1151,7 @@ export async function runContextCommand(
       )
     : new Set<string>();
 
-  const relativeIdSet = new Set<string>([
-    ...parentIds,
-    ...spouseIds,
-    ...childIds,
-    ...siblingIds,
-  ]);
+  const relativeIdSet = new Set<string>([...parentIds, ...spouseIds, ...childIds, ...siblingIds]);
 
   const peopleBlocksToParse = peopleBlocks.filter((block) => {
     const id = extractYamlBlockId(block);
@@ -1239,8 +1221,7 @@ export async function runContextCommand(
 
   const livingIds = new Set<string>();
   const livingAncestryPids = new Set<string>();
-  const livingPeopleForNames: Array<{ is_living: boolean; full_name: string; alt_names: string[] }> =
-    [];
+  const livingPeopleForNames: Array<{ is_living: boolean; full_name: string; alt_names: string[] }> = [];
 
   for (const p of parsedPeople) {
     if (typeof p.id !== 'string') {
@@ -1321,9 +1302,7 @@ export async function runContextCommand(
         return pt;
       });
       const yr = edtfYear(
-        typeof clone.edtf_date === 'string' || typeof clone.edtf_date === 'number'
-          ? clone.edtf_date
-          : null
+        typeof clone.edtf_date === 'string' || typeof clone.edtf_date === 'number' ? clone.edtf_date : null
       );
       clone.edtf_date = yr !== null ? String(yr) : '';
       clone.place_id = null;
@@ -1383,8 +1362,7 @@ export async function runContextCommand(
         }
       }
       return (
-        linkedPeople.has(personId) ||
-        (typeof item.event_id === 'string' && personEventIds.has(item.event_id))
+        linkedPeople.has(personId) || (typeof item.event_id === 'string' && personEventIds.has(item.event_id))
       );
     })
     .map((item) => {
@@ -1394,9 +1372,7 @@ export async function runContextCommand(
       return scrubDeep(structuredClone(item), livingNamePattern);
     });
 
-  const personNarratives = parseMatchingYamlBlocks(
-    narrativeBlocks.filter((b) => b.includes(personId))
-  )
+  const personNarratives = parseMatchingYamlBlocks(narrativeBlocks.filter((b) => b.includes(personId)))
     .filter(
       (nar) =>
         nar.subject_person_id === personId ||
@@ -1528,9 +1504,7 @@ export async function runContextCommand(
       mediaBlocks,
       eventBlocks,
       ownMediaIds: new Set(
-        personMedia
-          .map((item) => (typeof item.id === 'string' ? item.id : ''))
-          .filter((id) => id.length > 0)
+        personMedia.map((item) => (typeof item.id === 'string' ? item.id : '')).filter((id) => id.length > 0)
       ),
       livingNamePattern,
     }),

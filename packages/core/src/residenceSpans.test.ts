@@ -1,12 +1,8 @@
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
-import type { ArchiveEvent, Place, RawPerson } from './schemas/entities.js';
 import { edtfToBounds } from './edtf.js';
-import {
-  buildPlaceAncestors,
-  deriveResidenceSpans,
-  samePlaceOrWithin15Miles,
-} from './residenceSpans.js';
+import { buildPlaceAncestors, deriveResidenceSpans, samePlaceOrWithin15Miles } from './residenceSpans.js';
+import type { ArchiveEvent, Place, RawPerson } from './schemas/entities.js';
 
 function makePlace(overrides: Partial<Place> & { id: string }): Place {
   return {

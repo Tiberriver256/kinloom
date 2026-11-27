@@ -1,5 +1,5 @@
-import { expect, test } from '@playwright/test';
 import type { Route } from '@playwright/test';
+import { expect, test } from '@playwright/test';
 
 const MOBILE_ROUTES = [
   '/',
@@ -13,7 +13,9 @@ const MOBILE_ROUTES = [
   '/evidence',
 ];
 
-test('mobile viewports (390px and 360px) render every route without horizontal overflow', async ({ page }) => {
+test('mobile viewports (390px and 360px) render every route without horizontal overflow', async ({
+  page,
+}) => {
   await page.route('https://www.openhistoricalmap.org/**', (route) => route.abort());
   await page.route('https://vtiles.openhistoricalmap.org/**', (route) => route.abort());
 
@@ -26,9 +28,7 @@ test('mobile viewports (390px and 360px) render every route without horizontal o
       // oxlint-disable-next-line eslint/no-await-in-loop -- wait for main content before measuring overflow
       await expect(page.locator('main')).toBeVisible();
       // oxlint-disable-next-line eslint/no-await-in-loop -- measure scrollWidth against innerWidth
-      const overflow = await page.evaluate(
-        () => document.documentElement.scrollWidth - window.innerWidth,
-      );
+      const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
       expect(overflow, `Horizontal overflow on ${url} at ${width}px`).toBeLessThanOrEqual(0);
     }
   }
@@ -45,7 +45,7 @@ test('error boundary catches a broken lazy route chunk and posts client telemetr
   });
 
   const telemetryPosted = page.waitForRequest(
-    (req) => req.url().includes('/api/client-error') && req.method() === 'POST',
+    (req) => req.url().includes('/api/client-error') && req.method() === 'POST'
   );
 
   await page.route('**/api/client-error', async (route) => {

@@ -1,7 +1,7 @@
-import { ArchivalPhotoFrame, DateStamp, SourceCitationTag } from './Atoms.js';
 import type { ArchiveEvent, CoPresenceItem, Place, SourceRecord } from '@kinloom/core';
+import type React from 'react';
 import { Link } from 'react-router-dom';
-import React from 'react';
+import { ArchivalPhotoFrame, DateStamp, SourceCitationTag } from './Atoms.js';
 
 const EMPTY_ALSO_HERE: CoPresenceItem[] = [];
 

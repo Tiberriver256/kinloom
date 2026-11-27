@@ -1,7 +1,9 @@
 import fs from 'node:fs/promises';
 import { expect, test } from '@playwright/test';
 
-test('person profile displays vital facts, compositional pronunciation, residence spans, shared headstone, and exports GEDCOM 7', async ({ page }) => {
+test('person profile displays vital facts, compositional pronunciation, residence spans, shared headstone, and exports GEDCOM 7', async ({
+  page,
+}) => {
   await page.goto('/person/abraham-lincoln-1809');
   await expect(page.getByRole('heading', { name: 'Abraham Lincoln', exact: true })).toBeVisible();
   await expect(page.getByText('1809-02-12 — 1865-04-15')).toBeVisible();
@@ -48,9 +50,9 @@ test('person profile displays vital facts, compositional pronunciation, residenc
   const maryPron = page.locator('.person-pronunciation-row .pronunciation-badge');
   await expect(maryPron).toHaveAttribute('data-coverage', 'full');
   await expect(maryPron).toContainText('MAIR-ee AN TAHD');
-  await expect(
-    page.locator('section[aria-label="Photos and documents"]'),
-  ).toContainText(/Oak Ridge Cemetery monument/);
+  await expect(page.locator('section[aria-label="Photos and documents"]')).toContainText(
+    /Oak Ridge Cemetery monument/
+  );
 
   // Navigate to Thomas Lincoln (surname-only lexicon match) and confirm canonical "Surname:" scope label
   await page.goto('/person/thomas-lincoln');

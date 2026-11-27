@@ -1,10 +1,7 @@
-import React, { useEffect, useState } from 'react';
+import type React from 'react';
+import { useEffect, useState } from 'react';
 import { useArchiveData } from '../../context/ArchiveDataContext.js';
-import {
-  consumeAuthErrorFromWindow,
-  resolveAuthFeedback,
-  type AuthUrlError,
-} from './authErrorCopy.js';
+import { type AuthUrlError, consumeAuthErrorFromWindow, resolveAuthFeedback } from './authErrorCopy.js';
 import { SignInModal } from './SignInModal.js';
 
 export function getInviteStripDismissKey(inviteLabel?: string): string {

@@ -1,8 +1,9 @@
-import React, { useRef } from 'react';
+import type React from 'react';
+import { useRef } from 'react';
 import { useArchiveData } from '../../context/ArchiveDataContext.js';
 import { useDialogFocusTrap } from '../../lib/useDialogFocusTrap.js';
-import type { AuthUrlError } from './authErrorCopy.js';
 import { AuthSignInFlow } from './AuthSignInFlow.js';
+import type { AuthUrlError } from './authErrorCopy.js';
 
 export interface SignInModalProps {
   open: boolean;

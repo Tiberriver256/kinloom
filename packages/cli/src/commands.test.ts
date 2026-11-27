@@ -2,8 +2,14 @@ import { mkdtemp, readFile, rm, stat, utimes, writeFile } from 'node:fs/promises
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import {
+  type ArchiveRawSnapshot,
   asRevisionId,
+  type BatchSubmission,
   compileArchive,
+  type EntityPayload,
+  type EntityType,
+  type KinloomSiteConfig,
+  type Place,
   parseEventsYaml,
   parseKinloomConfigYaml,
   parseKinshipYaml,
@@ -12,21 +18,15 @@ import {
   parsePeopleYaml,
   parsePlacesYaml,
   parseSourcesYaml,
-  serializeKinloomConfigYaml,
-  serializePeopleYaml,
-  type ArchiveRawSnapshot,
-  type BatchSubmission,
-  type EntityPayload,
-  type EntityType,
-  type KinloomSiteConfig,
-  type Place,
   type RawEvent,
   type RawPerson,
   type RevisionRecord,
   type SourceRecord,
+  serializeKinloomConfigYaml,
+  serializePeopleYaml,
 } from '@kinloom/core';
 import { afterEach, describe, expect, it } from 'vitest';
-import { runCli, type CliIo } from './cli.js';
+import { type CliIo, runCli } from './cli.js';
 import { ARCHIVE_YAML_FILE_NAMES, serializeSnapshotToYamlFiles } from './commands/dataFiles.js';
 import { EXIT_CONFLICT, EXIT_ERROR, EXIT_OK, EXIT_USAGE } from './errors.js';
 
@@ -319,10 +319,7 @@ describe('kinloom CLI commands', () => {
       expect(content).toBe('[]\n');
     }
 
-    const backupWorkflow = await readFile(
-      path.join(targetDir, '.github', 'workflows', 'backup.yml'),
-      'utf8'
-    );
+    const backupWorkflow = await readFile(path.join(targetDir, '.github', 'workflows', 'backup.yml'), 'utf8');
     expect(backupWorkflow).toContain('workflow_dispatch:');
     expect(backupWorkflow).toContain('export-yaml');
 
@@ -395,10 +392,18 @@ describe('kinloom CLI commands', () => {
     expect(eleanor?.alt_names).toContain('Eleanor Alder');
 
     // All 7 YAML files exist and parse cleanly through @kinloom/core.
-    expect(parseEventsYaml(await readFile(path.join(outDir, 'events.yaml'), 'utf8')).length).toBeGreaterThan(0);
-    expect(parsePlacesYaml(await readFile(path.join(outDir, 'places.yaml'), 'utf8')).length).toBeGreaterThan(0);
-    expect(parseSourcesYaml(await readFile(path.join(outDir, 'sources.yaml'), 'utf8')).length).toBeGreaterThan(0);
-    expect(parseKinshipYaml(await readFile(path.join(outDir, 'kinship.yaml'), 'utf8')).length).toBeGreaterThan(0);
+    expect(parseEventsYaml(await readFile(path.join(outDir, 'events.yaml'), 'utf8')).length).toBeGreaterThan(
+      0
+    );
+    expect(parsePlacesYaml(await readFile(path.join(outDir, 'places.yaml'), 'utf8')).length).toBeGreaterThan(
+      0
+    );
+    expect(
+      parseSourcesYaml(await readFile(path.join(outDir, 'sources.yaml'), 'utf8')).length
+    ).toBeGreaterThan(0);
+    expect(
+      parseKinshipYaml(await readFile(path.join(outDir, 'kinship.yaml'), 'utf8')).length
+    ).toBeGreaterThan(0);
     expect(parseMediaYaml(await readFile(path.join(outDir, 'media.yaml'), 'utf8'))).toEqual([]);
     expect(parseNarrativesYaml(await readFile(path.join(outDir, 'narratives.yaml'), 'utf8'))).toEqual([]);
 
@@ -442,22 +447,22 @@ describe('kinloom CLI commands', () => {
 
     let fetchCalls = 0;
     const dryCap = createCaptureIo();
-    const dryCode = await runCli(
-      ['seed', '--data', dataDir, '--config', configPath, '--dry-run'],
-      {
-        io: dryCap.io,
-        fetchImpl: async () => {
-          fetchCalls += 1;
-          return new Response('{}', { status: 200 });
-        },
-      }
-    );
+    const dryCode = await runCli(['seed', '--data', dataDir, '--config', configPath, '--dry-run'], {
+      io: dryCap.io,
+      fetchImpl: async () => {
+        fetchCalls += 1;
+        return new Response('{}', { status: 200 });
+      },
+    });
     expect(dryCode).toBe(EXIT_OK);
     expect(fetchCalls).toBe(0);
     expect(dryCap.stdout[0]).toContain('4 entities ready');
 
     // Stateful mock server supporting GET /api/export/snapshot and POST /api/batches
-    const store = new Map<string, { type: Exclude<EntityType, 'kinship_edge'>; id: string; data: EntityPayload; rev: number }>();
+    const store = new Map<
+      string,
+      { type: Exclude<EntityType, 'kinship_edge'>; id: string; data: EntityPayload; rev: number }
+    >();
     let headRev = 0;
     const submittedBatches: BatchSubmission[] = [];
 
@@ -534,7 +539,17 @@ describe('kinloom CLI commands', () => {
     // First live seed creates all 4 entities.
     const seed1Cap = createCaptureIo();
     const seed1Code = await runCli(
-      ['seed', '--data', dataDir, '--config', configPath, '--site', 'https://alder.example.test', '--token', 'tok'],
+      [
+        'seed',
+        '--data',
+        dataDir,
+        '--config',
+        configPath,
+        '--site',
+        'https://alder.example.test',
+        '--token',
+        'tok',
+      ],
       { io: seed1Cap.io, fetchImpl: mockFetch }
     );
     expect(seed1Code).toBe(EXIT_OK);
@@ -545,7 +560,17 @@ describe('kinloom CLI commands', () => {
     // Second live seed with unchanged YAML submits zero batches.
     const seed2Cap = createCaptureIo();
     const seed2Code = await runCli(
-      ['seed', '--data', dataDir, '--config', configPath, '--site', 'https://alder.example.test', '--token', 'tok'],
+      [
+        'seed',
+        '--data',
+        dataDir,
+        '--config',
+        configPath,
+        '--site',
+        'https://alder.example.test',
+        '--token',
+        'tok',
+      ],
       { io: seed2Cap.io, fetchImpl: mockFetch }
     );
     expect(seed2Code).toBe(EXIT_OK);
@@ -562,7 +587,17 @@ describe('kinloom CLI commands', () => {
     );
     const seed3Cap = createCaptureIo();
     const seed3Code = await runCli(
-      ['seed', '--data', dataDir, '--config', configPath, '--site', 'https://alder.example.test', '--token', 'tok'],
+      [
+        'seed',
+        '--data',
+        dataDir,
+        '--config',
+        configPath,
+        '--site',
+        'https://alder.example.test',
+        '--token',
+        'tok',
+      ],
       { io: seed3Cap.io, fetchImpl: mockFetch }
     );
     expect(seed3Code).toBe(EXIT_OK);
@@ -818,9 +853,7 @@ describe('kinloom CLI commands', () => {
     );
     expect(fallbackCode).toBe(EXIT_OK);
     expect(fallbackCap.stdout[0]).toContain('via snapshot_fallback');
-    expect(await readFile(path.join(fallbackOut, 'events.yaml'), 'utf8')).toBe(
-      expectedFiles['events.yaml']
-    );
+    expect(await readFile(path.join(fallbackOut, 'events.yaml'), 'utf8')).toBe(expectedFiles['events.yaml']);
   });
 
   it('upload-media validates MIME/size locally and sends multipart FormData', async () => {
@@ -1033,7 +1066,17 @@ describe('kinloom CLI commands', () => {
     let postedCount = 0;
     const cap = createCaptureIo();
     const code = await runCli(
-      ['seed', '--data', dataDir, '--config', configPath, '--site', 'https://alder.example.test', '--token', 'write_tok'],
+      [
+        'seed',
+        '--data',
+        dataDir,
+        '--config',
+        configPath,
+        '--site',
+        'https://alder.example.test',
+        '--token',
+        'write_tok',
+      ],
       {
         io: cap.io,
         fetchImpl: async (input, init) => {

@@ -1,8 +1,9 @@
 import type { Person } from '@kinloom/core';
+import type React from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import type { TreeSearchCandidate } from '../../lib/archivalTreeModel.js';
-import React, { useId, useMemo, useRef, useState, useEffect } from 'react';
-import { KINLOOM_VOCABULARY } from '../../lib/vocabulary.js';
 import { searchNavNext, searchNavPrev, searchNavReset } from '../../lib/searchNavigation.js';
+import { KINLOOM_VOCABULARY } from '../../lib/vocabulary.js';
 
 export interface TreePersonSearchProps {
   readonly query: string;
@@ -99,9 +100,7 @@ export const TreePersonSearch: React.FC<TreePersonSearchProps> = ({
       className="tree-search-listbox"
     >
       {candidates.length === 0 ? (
-        <div className="tree-search-empty">
-          No matching people for “{query.trim()}”.
-        </div>
+        <div className="tree-search-empty">No matching people for “{query.trim()}”.</div>
       ) : (
         candidates.map((candidate, idx) => {
           const isActive = idx === clampedActiveIdx;

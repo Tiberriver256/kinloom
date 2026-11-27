@@ -5,6 +5,7 @@ import sharp, { type OverlayOptions } from 'sharp';
 import { CliValidationError } from '../../../errors.js';
 import {
   atomicWriteFileSync,
+  type CommandParseSpec,
   defaultExecFile,
   emitJsonStdout,
   emitStdout,
@@ -16,17 +17,16 @@ import {
   getNumberOption,
   getStringListOption,
   getStringOption,
+  type OptionSpec,
   orientedDimensions,
   parseCommandArgs,
-  RecordRuntimeError,
-  resolveCacheDir,
-  withAdvisoryLock,
-  type CommandParseSpec,
-  type OptionSpec,
   type RecordCommandContext,
   type RecordCommandOutcome,
   type RecordHandler,
+  RecordRuntimeError,
+  resolveCacheDir,
   type SavedImageInfo,
+  withAdvisoryLock,
 } from '../runtime/index.js';
 
 const DEFAULT_MAX_WORKERS = 8;
@@ -114,9 +114,7 @@ export function parseBox(raw: string): Box {
   }
   const [x0, y0, x1, y1] = nums;
   if (x0 < 0 || y0 < 0 || x1 <= x0 || y1 <= y0) {
-    throw new CliValidationError(
-      `Invalid box '${raw}': require 0 <= x0 < x1 and 0 <= y0 < y1.`
-    );
+    throw new CliValidationError(`Invalid box '${raw}': require 0 <= x0 < x1 and 0 <= y0 < y1.`);
   }
   return { x0, y0, x1, y1 };
 }
@@ -143,16 +141,14 @@ export function parsePageSpec(raw: string, maxPages = PDF_PAGE_BATCH_LIMIT): num
       const bounds = token.split('-');
       if (bounds.length !== 2 || !bounds[0].trim() || !bounds[1].trim()) {
         throw new CliValidationError(
-          `Invalid page range '${token}' in --pages '${raw}'. ` +
-            'Use positive 1-based bounds like 10-12.'
+          `Invalid page range '${token}' in --pages '${raw}'. ` + 'Use positive 1-based bounds like 10-12.'
         );
       }
       const startStr = bounds[0].trim();
       const endStr = bounds[1].trim();
       if (!/^[+-]?\d+$/.test(startStr) || !/^[+-]?\d+$/.test(endStr)) {
         throw new CliValidationError(
-          `Invalid page range '${token}' in --pages '${raw}'. ` +
-            'Use integer bounds like 10-12.'
+          `Invalid page range '${token}' in --pages '${raw}'. ` + 'Use integer bounds like 10-12.'
         );
       }
       const start = Number.parseInt(startStr, 10);
@@ -195,9 +191,7 @@ export function parsePageSpec(raw: string, maxPages = PDF_PAGE_BATCH_LIMIT): num
       }
       const num = Number.parseInt(token, 10);
       if (num < 1) {
-        throw new CliValidationError(
-          `Page number must be >= 1, got ${num} in --pages '${raw}'.`
-        );
+        throw new CliValidationError(`Page number must be >= 1, got ${num} in --pages '${raw}'.`);
       }
       if (!seen.has(num)) {
         seen.add(num);
@@ -244,13 +238,7 @@ export function formatPageSpec(pages: readonly number[]): string {
     .join(',');
 }
 
-export function clampBox(
-  box: Box,
-  width: number,
-  height: number,
-  label: string,
-  outsideHint = ''
-): Box {
+export function clampBox(box: Box, width: number, height: number, label: string, outsideHint = ''): Box {
   if (box.x0 >= width || box.y0 >= height) {
     const extra = outsideHint ? ` ${outsideHint}` : '';
     throw new CliValidationError(
@@ -260,9 +248,7 @@ export function clampBox(
   const x1 = Math.min(box.x1, width);
   const y1 = Math.min(box.y1, height);
   if (x1 <= box.x0 || y1 <= box.y0) {
-    throw new CliValidationError(
-      `${label} collapses to empty area inside ${width}x${height} image.`
-    );
+    throw new CliValidationError(`${label} collapses to empty area inside ${width}x${height} image.`);
   }
   return { x0: box.x0, y0: box.y0, x1, y1 };
 }
@@ -275,9 +261,7 @@ export function parseJoinDirection(raw: string): JoinDirection {
   if (key === 'h' || key === 'horizontal') {
     return 'horizontal';
   }
-  throw new CliValidationError(
-    `Invalid --direction '${raw}': expected vertical, horizontal, v, or h.`
-  );
+  throw new CliValidationError(`Invalid --direction '${raw}': expected vertical, horizontal, v, or h.`);
 }
 
 export function parseJoinAlign(raw: string): JoinAlign {
@@ -285,9 +269,7 @@ export function parseJoinAlign(raw: string): JoinAlign {
   if (key === 'start' || key === 'center' || key === 'end') {
     return key;
   }
-  throw new CliValidationError(
-    `Invalid --align '${raw}': expected start, center, or end.`
-  );
+  throw new CliValidationError(`Invalid --align '${raw}': expected start, center, or end.`);
 }
 
 export function alignOffset(outer: number, inner: number, align: JoinAlign): number {
@@ -319,9 +301,7 @@ export function parseRgbColor(raw: string): RgbColor {
         b: Number.parseInt(hex.slice(4, 6), 16),
       };
     }
-    throw new CliValidationError(
-      `Invalid --divider-color '${raw}': expected hex or named RGB color.`
-    );
+    throw new CliValidationError(`Invalid --divider-color '${raw}': expected hex or named RGB color.`);
   }
 
   const rgbMatch = /^rgb\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)$/.exec(trimmed);
@@ -332,18 +312,14 @@ export function parseRgbColor(raw: string): RgbColor {
     if (r <= 255 && g <= 255 && b <= 255) {
       return { r, g, b };
     }
-    throw new CliValidationError(
-      `Invalid --divider-color '${raw}': expected hex or named RGB color.`
-    );
+    throw new CliValidationError(`Invalid --divider-color '${raw}': expected hex or named RGB color.`);
   }
 
   const named = NAMED_RGB_COLORS[trimmed];
   if (named) {
     return named;
   }
-  throw new CliValidationError(
-    `Invalid --divider-color '${raw}': expected hex or named RGB color.`
-  );
+  throw new CliValidationError(`Invalid --divider-color '${raw}': expected hex or named RGB color.`);
 }
 
 export function normalizePdfFormat(raw: string): PdfImageFormat {
@@ -1438,13 +1414,28 @@ function renderRootHelp(): string {
       'redacted archival crops, census sheet-strip contact sheets, and selective PDF page renders.',
     subcommands: [
       { name: 'preview', summary: 'Generate compact JPEG inspection previews in parallel.' },
-      { name: 'crop', summary: 'Rotate, optionally crop, draw black redaction boxes, and write a verification preview.' },
-      { name: 'sheet-strip', summary: 'Download or read sheet bands in parallel and stitch one labeled contact sheet.' },
-      { name: 'pdf-pages', summary: 'Render requested PDF pages in parallel via pdftoppm with disk caching.' },
+      {
+        name: 'crop',
+        summary: 'Rotate, optionally crop, draw black redaction boxes, and write a verification preview.',
+      },
+      {
+        name: 'sheet-strip',
+        summary: 'Download or read sheet bands in parallel and stitch one labeled contact sheet.',
+      },
+      {
+        name: 'pdf-pages',
+        summary: 'Render requested PDF pages in parallel via pdftoppm with disk caching.',
+      },
       { name: 'pdf-grep', summary: 'Search PDF text page by page and report 1-based page numbers.' },
-      { name: 'grid', summary: 'Draw an original-pixel coordinate grid overlay onto a compact JPEG preview.' },
+      {
+        name: 'grid',
+        summary: 'Draw an original-pixel coordinate grid overlay onto a compact JPEG preview.',
+      },
       { name: 'stitch', summary: 'Crop 2+ boxes from one scan, apply optional redactions, and stack bands.' },
-      { name: 'info', summary: 'Print pixel size, format, mode, and file size for one or more local images.' },
+      {
+        name: 'info',
+        summary: 'Print pixel size, format, mode, and file size for one or more local images.',
+      },
       { name: 'join', summary: 'Join 2 or more images into one archival JPEG or PNG, in input order.' },
       { name: 'rotate', summary: 'Rotate a scan clockwise by any angle and save an archival image.' },
     ],
@@ -1474,19 +1465,22 @@ function renderSubcommandHelp(subcmd: string): string {
     case 'sheet-strip':
       return formatCommandUsage({
         usage: 'kinloom prep-scan sheet-strip <sources...> --out <file> [options]',
-        summary: 'Download or read census sheet header/street bands in parallel and stitch one labeled contact sheet.',
+        summary:
+          'Download or read census sheet header/street bands in parallel and stitch one labeled contact sheet.',
         options: SHEET_STRIP_OPTIONS,
       });
     case 'pdf-pages':
       return formatCommandUsage({
         usage: 'kinloom prep-scan pdf-pages <pdf_path> --pages <spec> --out-dir <dir> [options]',
-        summary: 'Render requested PDF pages in parallel via pdftoppm with disk caching, compact previews, and optional contact strip.',
+        summary:
+          'Render requested PDF pages in parallel via pdftoppm with disk caching, compact previews, and optional contact strip.',
         options: PDF_PAGES_OPTIONS,
       });
     case 'pdf-grep':
       return formatCommandUsage({
         usage: 'kinloom prep-scan pdf-grep <pdf_path> --pattern <regex> [options]',
-        summary: 'Search PDF text page by page (pdftotext) and print 1-based page numbers + snippets to feed `pdf-pages --pages`.',
+        summary:
+          'Search PDF text page by page (pdftotext) and print 1-based page numbers + snippets to feed `pdf-pages --pages`.',
         options: PDF_GREP_OPTIONS,
       });
     case 'grid':
@@ -1497,7 +1491,8 @@ function renderSubcommandHelp(subcmd: string): string {
       });
     case 'stitch':
       return formatCommandUsage({
-        usage: 'kinloom prep-scan stitch <image> [<out> | --out <out>] --box <x0,y0,x1,y1> --box <x0,y0,x1,y1> [options]',
+        usage:
+          'kinloom prep-scan stitch <image> [<out> | --out <out>] --box <x0,y0,x1,y1> --box <x0,y0,x1,y1> [options]',
         summary: 'Crop 2+ boxes from one scan, apply optional redactions, and stack bands.',
         options: STITCH_OPTIONS,
       });
@@ -1528,10 +1523,7 @@ function renderSubcommandHelp(subcmd: string): string {
 // Subcommand: preview
 // ---------------------------------------------------------------------------
 
-async function cmdPreview(
-  argv: readonly string[],
-  ctx: RecordCommandContext
-): Promise<RecordCommandOutcome> {
+async function cmdPreview(argv: readonly string[], ctx: RecordCommandContext): Promise<RecordCommandOutcome> {
   const parsed = parseCommandArgs(normalizePrepScanArgv(argv), PREVIEW_PARSE_SPEC);
   if (parsed.helpRequested) {
     return { exitCode: 0, bytesOut: emitStdout(ctx.io, renderSubcommandHelp('preview')) };
@@ -1594,9 +1586,7 @@ async function cmdPreview(
   if (asJson) {
     return { exitCode: 0, bytesOut: emitJsonStdout(ctx.io, results) };
   }
-  const lines = results.map(
-    (item) => `${item.path}  ${item.width}x${item.height}  ${item.kb.toFixed(1)} KB`
-  );
+  const lines = results.map((item) => `${item.path}  ${item.width}x${item.height}  ${item.kb.toFixed(1)} KB`);
   return { exitCode: 0, bytesOut: lines.length > 0 ? emitStdout(ctx.io, lines.join('\n')) : 0 };
 }
 
@@ -1604,26 +1594,15 @@ async function cmdPreview(
 // Subcommand: crop
 // ---------------------------------------------------------------------------
 
-async function cmdCrop(
-  argv: readonly string[],
-  ctx: RecordCommandContext
-): Promise<RecordCommandOutcome> {
-  const expanded = expandMultiBoxArgs(
-    normalizePrepScanArgv(argv),
-    new Set(['--redact', '--redact-orig'])
-  );
+async function cmdCrop(argv: readonly string[], ctx: RecordCommandContext): Promise<RecordCommandOutcome> {
+  const expanded = expandMultiBoxArgs(normalizePrepScanArgv(argv), new Set(['--redact', '--redact-orig']));
   const parsed = parseCommandArgs(expanded, CROP_PARSE_SPEC);
   if (parsed.helpRequested) {
     return { exitCode: 0, bytesOut: emitStdout(ctx.io, renderCropHelp()) };
   }
 
   const src = resolveUserPath(parsed.positionals[0], ctx);
-  const outPath = resolveOutputAlias(
-    'crop',
-    parsed.positionals[1],
-    getStringOption(parsed, 'outOpt'),
-    ctx
-  );
+  const outPath = resolveOutputAlias('crop', parsed.positionals[1], getStringOption(parsed, 'outOpt'), ctx);
   const quality = getNumberOption(parsed, 'quality') ?? 92;
   const maxWidth = getNumberOption(parsed, 'maxWidth') ?? 1400;
   const maxKb = getNumberOption(parsed, 'maxKb') ?? 280;
@@ -1701,22 +1680,14 @@ async function cmdCrop(
 // Subcommand: rotate (bonus clean support)
 // ---------------------------------------------------------------------------
 
-async function cmdRotate(
-  argv: readonly string[],
-  ctx: RecordCommandContext
-): Promise<RecordCommandOutcome> {
+async function cmdRotate(argv: readonly string[], ctx: RecordCommandContext): Promise<RecordCommandOutcome> {
   const parsed = parseCommandArgs(normalizePrepScanArgv(argv), ROTATE_PARSE_SPEC);
   if (parsed.helpRequested) {
     return { exitCode: 0, bytesOut: emitStdout(ctx.io, renderSubcommandHelp('rotate')) };
   }
 
   const src = resolveUserPath(parsed.positionals[0], ctx);
-  const outPath = resolveOutputAlias(
-    'rotate',
-    parsed.positionals[1],
-    getStringOption(parsed, 'outOpt'),
-    ctx
-  );
+  const outPath = resolveOutputAlias('rotate', parsed.positionals[1], getStringOption(parsed, 'outOpt'), ctx);
   const angle = normalizeRotationAngle(getNumberOption(parsed, 'angle'));
   const quality = getNumberOption(parsed, 'quality') ?? 92;
   const maxWidth = getNumberOption(parsed, 'maxWidth') ?? 1400;
@@ -1944,10 +1915,7 @@ async function cmdSheetStrip(
   const gapH = 6;
   const totalH = Math.max(
     1,
-    fetched.reduce(
-      (sum, row) => sum + headerH + (row.image ? row.image.height : errorH) + gapH,
-      0
-    )
+    fetched.reduce((sum, row) => sum + headerH + (row.image ? row.image.height : errorH) + gapH, 0)
   );
 
   const overlays: OverlayOptions[] = [];
@@ -1984,9 +1952,7 @@ async function cmdSheetStrip(
     .toBuffer();
 
   const saved = await encodeCompactJpeg(canvas, outPath, { maxWidth: targetWidth, maxKb });
-  const errors = fetched
-    .filter((r) => r.error !== null)
-    .map((r) => ({ source: r.source, error: r.error }));
+  const errors = fetched.filter((r) => r.error !== null).map((r) => ({ source: r.source, error: r.error }));
 
   const payload = {
     band,
@@ -2129,17 +2095,7 @@ async function renderOrLoadPdfPage(
         try {
           await execFn(
             'pdftoppm',
-            [
-              fmtFlag,
-              '-r',
-              String(dpi),
-              '-f',
-              String(pageNum),
-              '-l',
-              String(pageNum),
-              pdfPath,
-              prefix,
-            ],
+            [fmtFlag, '-r', String(dpi), '-f', String(pageNum), '-l', String(pageNum), pdfPath, prefix],
             { timeout: DEFAULT_PDF_TIMEOUT_S * 1000, env: ctx.env }
           );
         } catch (err: unknown) {
@@ -2278,12 +2234,7 @@ async function cmdPdfPages(
         image: im,
       });
     }
-    stripInfo = await buildContactStripFromItems(
-      stripItems,
-      resolveUserPath(stripOpt, ctx),
-      maxWidth,
-      maxKb
-    );
+    stripInfo = await buildContactStripFromItems(stripItems, resolveUserPath(stripOpt, ctx), maxWidth, maxKb);
   }
 
   const allCacheHit = pageRecords.length > 0 && pageRecords.every((r) => r.cache_hit);
@@ -2337,10 +2288,7 @@ function readCachedPdfPages(cachePath: string): string[] | null {
   }
 }
 
-async function extractPdfPagesText(
-  pdfPath: string,
-  ctx: RecordCommandContext
-): Promise<string[]> {
+async function extractPdfPagesText(pdfPath: string, ctx: RecordCommandContext): Promise<string[]> {
   const execFn = ctx.execFileImpl ?? defaultExecFile;
   try {
     const { stdout } = await execFn('pdftotext', ['-enc', 'UTF-8', pdfPath, '-'], {
@@ -2360,9 +2308,7 @@ async function extractPdfPagesText(
           '(for example `apt install poppler-utils` or `brew install poppler`).'
       );
     }
-    throw new RecordRuntimeError(
-      `pdftotext failed (exit ${String(info.code ?? 1)}): ${info.detail}`
-    );
+    throw new RecordRuntimeError(`pdftotext failed (exit ${String(info.code ?? 1)}): ${info.detail}`);
   }
 }
 
@@ -2400,10 +2346,7 @@ async function loadPdfPageTexts(
   );
 }
 
-async function cmdPdfGrep(
-  argv: readonly string[],
-  ctx: RecordCommandContext
-): Promise<RecordCommandOutcome> {
+async function cmdPdfGrep(argv: readonly string[], ctx: RecordCommandContext): Promise<RecordCommandOutcome> {
   const parsed = parseCommandArgs(normalizePrepScanArgv(argv), PDF_GREP_PARSE_SPEC);
   if (parsed.helpRequested) {
     return { exitCode: 0, bytesOut: emitStdout(ctx.io, renderSubcommandHelp('pdf-grep')) };
@@ -2525,13 +2468,7 @@ async function cmdPdfGrep(
 // Subcommand: grid
 // ---------------------------------------------------------------------------
 
-function buildGridSvg(
-  baseW: number,
-  baseH: number,
-  origW: number,
-  origH: number,
-  step: number
-): Buffer {
+function buildGridSvg(baseW: number, baseH: number, origW: number, origH: number, step: number): Buffer {
   const scaleX = baseW / Math.max(1, origW);
   const scaleY = baseH / Math.max(1, origH);
   const majorStep = step * 5;
@@ -2589,22 +2526,14 @@ function buildGridSvg(
   );
 }
 
-async function cmdGrid(
-  argv: readonly string[],
-  ctx: RecordCommandContext
-): Promise<RecordCommandOutcome> {
+async function cmdGrid(argv: readonly string[], ctx: RecordCommandContext): Promise<RecordCommandOutcome> {
   const parsed = parseCommandArgs(normalizePrepScanArgv(argv), GRID_PARSE_SPEC);
   if (parsed.helpRequested) {
     return { exitCode: 0, bytesOut: emitStdout(ctx.io, renderSubcommandHelp('grid')) };
   }
 
   const src = resolveUserPath(parsed.positionals[0], ctx);
-  const outPath = resolveOutputAlias(
-    'grid',
-    parsed.positionals[1],
-    getStringOption(parsed, 'outOpt'),
-    ctx
-  );
+  const outPath = resolveOutputAlias('grid', parsed.positionals[1], getStringOption(parsed, 'outOpt'), ctx);
   const step = getNumberOption(parsed, 'step') ?? 200;
   const maxWidth = getNumberOption(parsed, 'maxWidth') ?? 1600;
   const maxKb = getNumberOption(parsed, 'maxKb') ?? 280;
@@ -2645,26 +2574,15 @@ async function cmdGrid(
 // Subcommand: stitch
 // ---------------------------------------------------------------------------
 
-async function cmdStitch(
-  argv: readonly string[],
-  ctx: RecordCommandContext
-): Promise<RecordCommandOutcome> {
-  const expanded = expandMultiBoxArgs(
-    normalizePrepScanArgv(argv),
-    new Set(['--box', '--redact'])
-  );
+async function cmdStitch(argv: readonly string[], ctx: RecordCommandContext): Promise<RecordCommandOutcome> {
+  const expanded = expandMultiBoxArgs(normalizePrepScanArgv(argv), new Set(['--box', '--redact']));
   const parsed = parseCommandArgs(expanded, STITCH_PARSE_SPEC);
   if (parsed.helpRequested) {
     return { exitCode: 0, bytesOut: emitStdout(ctx.io, renderSubcommandHelp('stitch')) };
   }
 
   const src = resolveUserPath(parsed.positionals[0], ctx);
-  const outPath = resolveOutputAlias(
-    'stitch',
-    parsed.positionals[1],
-    getStringOption(parsed, 'outOpt'),
-    ctx
-  );
+  const outPath = resolveOutputAlias('stitch', parsed.positionals[1], getStringOption(parsed, 'outOpt'), ctx);
   const boxRaws = getStringListOption(parsed, 'box');
   const redactRaws = getStringListOption(parsed, 'redact');
   const rotateDeg = getNumberOption(parsed, 'rotate');
@@ -2712,15 +2630,12 @@ async function cmdStitch(
   let canvasW: number;
   let canvasH: number;
   if (direction === 'horizontal') {
-    canvasW =
-      croppedBands.reduce((sum, b) => sum + b.image.width, 0) +
-      gap * (croppedBands.length - 1);
+    canvasW = croppedBands.reduce((sum, b) => sum + b.image.width, 0) + gap * (croppedBands.length - 1);
     canvasH = Math.max(...croppedBands.map((b) => b.image.height + headerH));
   } else {
     canvasW = Math.max(...croppedBands.map((b) => b.image.width));
     canvasH =
-      croppedBands.reduce((sum, b) => sum + b.image.height + headerH, 0) +
-      gap * (croppedBands.length - 1);
+      croppedBands.reduce((sum, b) => sum + b.image.height + headerH, 0) + gap * (croppedBands.length - 1);
   }
 
   const overlays: OverlayOptions[] = [];
@@ -2856,10 +2771,7 @@ async function cmdStitch(
 // Subcommand: info
 // ---------------------------------------------------------------------------
 
-async function cmdInfo(
-  argv: readonly string[],
-  ctx: RecordCommandContext
-): Promise<RecordCommandOutcome> {
+async function cmdInfo(argv: readonly string[], ctx: RecordCommandContext): Promise<RecordCommandOutcome> {
   const parsed = parseCommandArgs(normalizePrepScanArgv(argv), INFO_PARSE_SPEC);
   if (parsed.helpRequested) {
     return { exitCode: 0, bytesOut: emitStdout(ctx.io, renderSubcommandHelp('info')) };
@@ -2926,19 +2838,14 @@ async function cmdInfo(
 // Subcommand: join
 // ---------------------------------------------------------------------------
 
-async function cmdJoin(
-  argv: readonly string[],
-  ctx: RecordCommandContext
-): Promise<RecordCommandOutcome> {
+async function cmdJoin(argv: readonly string[], ctx: RecordCommandContext): Promise<RecordCommandOutcome> {
   const parsed = parseCommandArgs(normalizePrepScanArgv(argv), JOIN_PARSE_SPEC);
   if (parsed.helpRequested) {
     return { exitCode: 0, bytesOut: emitStdout(ctx.io, renderSubcommandHelp('join')) };
   }
 
   if (parsed.positionals.length < 2) {
-    throw new CliValidationError(
-      'join requires at least 2 images. Pass two or more paths and --out <file>.'
-    );
+    throw new CliValidationError('join requires at least 2 images. Pass two or more paths and --out <file>.');
   }
 
   const outPath = resolveUserPath(getStringOption(parsed, 'out') ?? '', ctx);
@@ -3033,10 +2940,7 @@ async function cmdJoin(
 // Entrypoint
 // ---------------------------------------------------------------------------
 
-export const runPrepScanCommand: RecordHandler = async (
-  args,
-  ctx
-): Promise<RecordCommandOutcome> => {
+export const runPrepScanCommand: RecordHandler = async (args, ctx): Promise<RecordCommandOutcome> => {
   try {
     if (args.length === 0 || args[0] === '--help' || args[0] === '-h') {
       return { exitCode: 0, bytesOut: emitStdout(ctx.io, renderRootHelp()) };

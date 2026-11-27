@@ -79,15 +79,11 @@ export function describeBloodRelation(up: number, down: number): string {
   }
   if (up === 1 && down > 2) {
     const greats = down - 2;
-    return greats === 1
-      ? 'Great-Aunt / Great-Uncle of'
-      : `${ordinal(greats)} Great-Aunt / Uncle of`;
+    return greats === 1 ? 'Great-Aunt / Great-Uncle of' : `${ordinal(greats)} Great-Aunt / Uncle of`;
   }
   if (down === 1 && up > 2) {
     const greats = up - 2;
-    return greats === 1
-      ? 'Great-Niece / Great-Nephew of'
-      : `${ordinal(greats)} Great-Niece / Nephew of`;
+    return greats === 1 ? 'Great-Niece / Great-Nephew of' : `${ordinal(greats)} Great-Niece / Nephew of`;
   }
   const degree = Math.min(up, down) - 1;
   const removed = Math.abs(up - down);
@@ -111,9 +107,7 @@ export function describeKinshipSteps(steps: readonly KinshipStep[]): string {
     return 'Spouse of';
   }
 
-  const spouseIndices = steps
-    .map((s, idx) => (s.relation === 'spouse' ? idx : -1))
-    .filter((i) => i >= 0);
+  const spouseIndices = steps.map((s, idx) => (s.relation === 'spouse' ? idx : -1)).filter((i) => i >= 0);
 
   if (spouseIndices.length === 0) {
     let up = 0;
@@ -196,8 +190,7 @@ export function findKinshipPath(params: {
   const personA = peopleById.get(fromId);
   const personB = peopleById.get(toId);
 
-  const overlapYears =
-    personA && personB ? computeLifeOverlap(personA, personB, referenceYear) : null;
+  const overlapYears = personA && personB ? computeLifeOverlap(personA, personB, referenceYear) : null;
 
   const placesA = new Set<string>();
   const placesB = new Set<string>();

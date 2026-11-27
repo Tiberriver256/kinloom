@@ -221,10 +221,7 @@ export function formatPhotoDocumentCount(count: number): string {
   return `${count} ${count === 1 ? 'photo or document' : 'photos & documents'}`;
 }
 
-export function formatReaderLoadError(
-  rawError: string | null | undefined,
-  fallback: string,
-): string {
+export function formatReaderLoadError(rawError: string | null | undefined, fallback: string): string {
   const trimmed = rawError?.trim();
   if (!trimmed) {
     return fallback;
@@ -244,9 +241,7 @@ export function formatReaderLoadError(
   return trimmed;
 }
 
-export function formatPronunciationScopePrefix(
-  coverage?: PronunciationCoverage,
-): string | undefined {
+export function formatPronunciationScopePrefix(coverage?: PronunciationCoverage): string | undefined {
   if (!coverage || coverage === 'full') {
     return undefined;
   }
@@ -262,20 +257,16 @@ export function formatPronunciationScopePrefix(
 
 export function formatPronunciationScopeTitle(
   coverage?: PronunciationCoverage,
-  matchedPart?: string,
+  matchedPart?: string
 ): string | undefined {
   if (!coverage || coverage === 'full') {
     return undefined;
   }
   if (coverage === 'surname') {
-    return matchedPart
-      ? `Surname pronunciation only (${matchedPart})`
-      : 'Surname pronunciation only';
+    return matchedPart ? `Surname pronunciation only (${matchedPart})` : 'Surname pronunciation only';
   }
   if (coverage === 'partial') {
-    return matchedPart
-      ? `Partial pronunciation (${matchedPart})`
-      : 'Partial name pronunciation';
+    return matchedPart ? `Partial pronunciation (${matchedPart})` : 'Partial name pronunciation';
   }
   const _exhaustive: never = coverage;
   return _exhaustive;

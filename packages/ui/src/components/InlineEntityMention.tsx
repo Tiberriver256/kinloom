@@ -1,14 +1,12 @@
 import type { Person, Place, Pronunciation } from '@kinloom/core';
 import { resolvePersonPronunciation, resolvePlacePronunciation } from '@kinloom/core';
-import React, { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
-import { Link, useInRouterContext } from 'react-router-dom';
+import type React from 'react';
+import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import {
-  type PopoverCoordinates,
-  computeCitationPopoverPosition,
-} from './CitationPopover.js';
-import { PronunciationBadge, hasPronunciationContent } from './PronunciationBadge.js';
+import { Link, useInRouterContext } from 'react-router-dom';
 import { useOptionalArchiveData } from '../context/ArchiveDataContext.js';
+import { computeCitationPopoverPosition, type PopoverCoordinates } from './CitationPopover.js';
+import { hasPronunciationContent, PronunciationBadge } from './PronunciationBadge.js';
 
 const POPOVER_CLOSE_DELAY_MS = 150;
 const useIsoLayoutEffect = typeof window !== 'undefined' ? useLayoutEffect : useEffect;
@@ -34,9 +32,7 @@ function formatPlaceTypeLabel(placeType?: string | null): string {
   if (!placeType) {
     return 'Place';
   }
-  return placeType
-    .replaceAll('_', ' ')
-    .replace(/\b\w/g, (ch) => ch.toUpperCase());
+  return placeType.replaceAll('_', ' ').replace(/\b\w/g, (ch) => ch.toUpperCase());
 }
 
 function formatPersonDates(person: Person): string {
@@ -65,18 +61,13 @@ export const InlineEntityMention: React.FC<InlineEntityMentionProps> = (props) =
   });
 
   const isOpen = openMode !== 'closed';
-  const isLivingPerson =
-    kind === 'person' && (props.person.is_living || props.person.full_name === 'Living');
+  const isLivingPerson = kind === 'person' && (props.person.is_living || props.person.full_name === 'Living');
 
-  const href =
-    kind === 'person' ? `/person/${props.person.slug}` : `/place/${props.place.slug}`;
+  const href = kind === 'person' ? `/person/${props.person.slug}` : `/place/${props.place.slug}`;
   const entityTitle = kind === 'person' ? props.person.full_name : props.place.full_name;
   const personPronunciation =
-    !isLivingPerson && kind === 'person'
-      ? resolvePersonPronunciation(props.person, lexicon)
-      : null;
-  const placePronunciation =
-    kind === 'place' ? resolvePlacePronunciation(props.place, lexicon) : null;
+    !isLivingPerson && kind === 'person' ? resolvePersonPronunciation(props.person, lexicon) : null;
+  const placePronunciation = kind === 'place' ? resolvePlacePronunciation(props.place, lexicon) : null;
   const pronunciation = kind === 'person' ? personPronunciation : placePronunciation;
   const pronunciationCoverage = personPronunciation?.coverage;
   const pronunciationMatchedPart = personPronunciation?.matchedPart;
@@ -125,7 +116,7 @@ export const InlineEntityMention: React.FC<InlineEntityMentionProps> = (props) =
           width: window.innerWidth || 1024,
           height: window.innerHeight || 768,
         },
-      }),
+      })
     );
   }, []);
 
@@ -144,9 +135,7 @@ export const InlineEntityMention: React.FC<InlineEntityMentionProps> = (props) =
     const onKeyDown = (event: KeyboardEvent): void => {
       if (event.key === 'Escape') {
         const focusWasInside = Boolean(
-          popoverRef.current &&
-            document.activeElement &&
-            popoverRef.current.contains(document.activeElement),
+          popoverRef.current && document.activeElement && popoverRef.current.contains(document.activeElement)
         );
         closePopover();
         if (focusWasInside) {

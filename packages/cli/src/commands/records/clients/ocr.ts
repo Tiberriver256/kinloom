@@ -8,15 +8,15 @@ import {
   atomicWriteJsonSync,
   downscaleForCursiveOcr,
   downscaleForOcr,
+  type ExecFileFn,
   emitJsonStdout,
   emitStdout,
-  resolveCacheDir,
-  sha256Hex,
-  withAdvisoryLock,
-  type ExecFileFn,
   type RecordCommandContext,
   type RecordCommandOutcome,
   type RecordHandler,
+  resolveCacheDir,
+  sha256Hex,
+  withAdvisoryLock,
 } from '../runtime/index.js';
 
 export const DEFAULT_CURSIVE_EFFORT = 'low';
@@ -53,13 +53,7 @@ export const IMAGE_EXTENSIONS: ReadonlySet<string> = new Set([
 
 const GEMINI_API_BASE = 'https://generativelanguage.googleapis.com/v1beta/models';
 
-const HTML_SNIFF_PREFIXES: readonly string[] = [
-  '<!doctype',
-  '<html',
-  '<head',
-  '<body',
-  '<title',
-];
+const HTML_SNIFF_PREFIXES: readonly string[] = ['<!doctype', '<html', '<head', '<body', '<title'];
 
 const TESSERACT_INVALID_IMAGE_MARKERS: readonly string[] = [
   'error in pixread',
@@ -262,10 +256,7 @@ export function resolveVisionCli(env: NodeJS.ProcessEnv = process.env): string {
   return configured || DEFAULT_VISION_CLI;
 }
 
-export function resolveOcrCacheDir(
-  flagValue: string | undefined,
-  env: NodeJS.ProcessEnv
-): string {
+export function resolveOcrCacheDir(flagValue: string | undefined, env: NodeJS.ProcessEnv): string {
   return resolveCacheDir({
     flagValue,
     env,
@@ -357,9 +348,7 @@ function parsePositiveTimeout(raw: string): number {
   const trimmed = raw.trim();
   const parsed = Number(trimmed);
   if (trimmed.length === 0 || !Number.isFinite(parsed) || parsed <= 0) {
-    throw new CliValidationError(
-      `Invalid --timeout '${raw}': must be a finite positive number in seconds.`
-    );
+    throw new CliValidationError(`Invalid --timeout '${raw}': must be a finite positive number in seconds.`);
   }
   return parsed;
 }
@@ -391,15 +380,11 @@ function parsePsm(raw: string): number {
 function parseMaxDim(raw: string): number {
   const trimmed = raw.trim();
   if (!/^[+-]?\d+$/.test(trimmed)) {
-    throw new CliValidationError(
-      `Invalid --max-dim '${raw}': must be a non-negative integer in pixels.`
-    );
+    throw new CliValidationError(`Invalid --max-dim '${raw}': must be a non-negative integer in pixels.`);
   }
   const parsed = Number.parseInt(trimmed, 10);
   if (!Number.isSafeInteger(parsed) || parsed < 0) {
-    throw new CliValidationError(
-      `Invalid --max-dim '${raw}': must be a non-negative integer in pixels.`
-    );
+    throw new CliValidationError(`Invalid --max-dim '${raw}': must be a non-negative integer in pixels.`);
   }
   return parsed;
 }
@@ -415,18 +400,14 @@ function parseEffortValue(raw: string): CursiveEffort {
   if (raw === 'low' || raw === 'medium' || raw === 'high' || raw === 'xhigh') {
     return raw;
   }
-  throw new CliValidationError(
-    `Invalid --effort '${raw}': choose from ${VALID_EFFORTS.join(', ')}.`
-  );
+  throw new CliValidationError(`Invalid --effort '${raw}': choose from ${VALID_EFFORTS.join(', ')}.`);
 }
 
 function parseProviderValue(raw: string): CursiveProvider {
   if (raw === 'auto' || raw === 'cli' || raw === 'gemini') {
     return raw;
   }
-  throw new CliValidationError(
-    `Invalid --provider '${raw}': choose from ${VALID_PROVIDERS.join(', ')}.`
-  );
+  throw new CliValidationError(`Invalid --provider '${raw}': choose from ${VALID_PROVIDERS.join(', ')}.`);
 }
 
 export function parseOcrArgs(argv: readonly string[]): ParsedOcrOptions {
@@ -790,9 +771,7 @@ function readJpegDimensions(data: Buffer): readonly [number, number] | null {
   if (n < 4 || data[0] !== 0xff || data[1] !== 0xd8) {
     return null;
   }
-  const sofMarkers = new Set([
-    0xc0, 0xc1, 0xc2, 0xc3, 0xc5, 0xc6, 0xc7, 0xc9, 0xca, 0xcb, 0xcd, 0xce, 0xcf,
-  ]);
+  const sofMarkers = new Set([0xc0, 0xc1, 0xc2, 0xc3, 0xc5, 0xc6, 0xc7, 0xc9, 0xca, 0xcb, 0xcd, 0xce, 0xcf]);
   let pos = 2;
   while (pos < n) {
     while (pos < n && data[pos] !== 0xff) {
@@ -841,10 +820,8 @@ function readTiffDimensions(data: Buffer): readonly [number, number] | null {
   } else {
     return null;
   }
-  const readU16 = (off: number): number =>
-    littleEndian ? data.readUInt16LE(off) : data.readUInt16BE(off);
-  const readU32 = (off: number): number =>
-    littleEndian ? data.readUInt32LE(off) : data.readUInt32BE(off);
+  const readU16 = (off: number): number => (littleEndian ? data.readUInt16LE(off) : data.readUInt16BE(off));
+  const readU32 = (off: number): number => (littleEndian ? data.readUInt32LE(off) : data.readUInt32BE(off));
 
   const ifdOffset = readU32(4);
   if (ifdOffset + 2 > data.length) {
@@ -898,13 +875,7 @@ function readWebpDimensions(data: Buffer): readonly [number, number] | null {
     const height = 1 + (data[27] | (data[28] << 8) | (data[29] << 16));
     return [width, height];
   }
-  if (
-    chunk === 'VP8 ' &&
-    data.length >= 30 &&
-    data[23] === 0x9d &&
-    data[24] === 0x01 &&
-    data[25] === 0x2a
-  ) {
+  if (chunk === 'VP8 ' && data.length >= 30 && data[23] === 0x9d && data[24] === 0x01 && data[25] === 0x2a) {
     const width = data.readUInt16LE(26) & 0x3fff;
     const height = data.readUInt16LE(28) & 0x3fff;
     return width > 0 && height > 0 ? [width, height] : null;
@@ -1035,13 +1006,7 @@ export function rescaleTesseractTsv(
   const idxTop = header.indexOf('top');
   const idxWidth = header.indexOf('width');
   const idxHeight = header.indexOf('height');
-  if (
-    idxLevel === -1 ||
-    idxLeft === -1 ||
-    idxTop === -1 ||
-    idxWidth === -1 ||
-    idxHeight === -1
-  ) {
+  if (idxLevel === -1 || idxLeft === -1 || idxTop === -1 || idxWidth === -1 || idxHeight === -1) {
     return tsv;
   }
   const minCols = Math.max(idxLevel, idxLeft, idxTop, idxWidth, idxHeight) + 1;
@@ -1206,10 +1171,7 @@ export function parseTesseractTsv(tsv: string): ParsedTsvLayout {
   };
 }
 
-export function resolveExecutable(
-  name: string,
-  env: NodeJS.ProcessEnv
-): string | null {
+export function resolveExecutable(name: string, env: NodeJS.ProcessEnv): string | null {
   if (name.includes(path.sep) || (process.platform === 'win32' && name.includes('/'))) {
     try {
       fs.accessSync(name, fs.constants.X_OK);
@@ -1452,10 +1414,7 @@ async function preparePrintedImage(
   }
 
   workSeq += 1;
-  const jobDir = path.join(
-    workDir,
-    `printed_${process.pid}_${workSeq}_${process.hrtime.bigint()}`
-  );
+  const jobDir = path.join(workDir, `printed_${process.pid}_${workSeq}_${process.hrtime.bigint()}`);
   try {
     const downscaled = await downscaleForOcr(imgPath, maxDim);
     if (!downscaled.downscaled || downscaled.width <= 0 || downscaled.height <= 0) {
@@ -1492,9 +1451,7 @@ async function runPrintedOcr(params: {
 }): Promise<{ readonly output: string; readonly meta: Record<string, unknown> }> {
   const { imgPath, rawBytes, psm, timeoutSeconds, tsv, workDir, maxDim, ctx } = params;
 
-  const tesseractBin = ctx.execFileImpl
-    ? 'tesseract'
-    : resolveExecutable('tesseract', ctx.env);
+  const tesseractBin = ctx.execFileImpl ? 'tesseract' : resolveExecutable('tesseract', ctx.env);
   if (!tesseractBin) {
     throw new Error(
       'tesseract executable not found on PATH. Install tesseract-ocr ' +
@@ -1510,13 +1467,7 @@ async function runPrintedOcr(params: {
       OMP_THREAD_LIMIT: '1',
       OMP_NUM_THREADS: '1',
     };
-    const tessArgs = [
-      prepared.sendPath,
-      'stdout',
-      '--psm',
-      String(psm),
-      ...(tsv ? ['tsv'] : []),
-    ];
+    const tessArgs = [prepared.sendPath, 'stdout', '--psm', String(psm), ...(tsv ? ['tsv'] : [])];
     const proc = await runSubprocessWithTimeout({
       bin: tesseractBin,
       args: tessArgs,
@@ -1554,10 +1505,7 @@ async function runPrintedOcr(params: {
     };
     if (prepared.scaleInfo !== null) {
       meta.downscaled = true;
-      meta.original_size = [
-        prepared.scaleInfo.original_width,
-        prepared.scaleInfo.original_height,
-      ];
+      meta.original_size = [prepared.scaleInfo.original_width, prepared.scaleInfo.original_height];
       meta.scaled_size = [prepared.scaleInfo.scaled_width, prepared.scaleInfo.scaled_height];
     }
     return { output: out, meta };
@@ -1737,17 +1685,7 @@ async function runCursiveCliOcr(params: {
   readonly cliBin: string;
   readonly ctx: RecordCommandContext;
 }): Promise<{ readonly text: string; readonly meta: Record<string, unknown>; readonly engine: string }> {
-  const {
-    imgPath,
-    rawBytes,
-    effort,
-    timeoutSeconds,
-    cacheDir,
-    customPrompt,
-    cliName,
-    cliBin,
-    ctx,
-  } = params;
+  const { imgPath, rawBytes, effort, timeoutSeconds, cacheDir, customPrompt, cliName, cliBin, ctx } = params;
 
   const model = (ctx.env.KINLOOM_OCR_MODEL ?? '').trim() || `gemini-4-hydrogen-${effort}`;
   const prepared = await prepareCursiveBuffer(imgPath, rawBytes);
@@ -1756,11 +1694,7 @@ async function runCursiveCliOcr(params: {
   let cleanupDir: string | null = null;
   if (prepared.downscaled) {
     workSeq += 1;
-    cleanupDir = path.join(
-      cacheDir,
-      '.work',
-      `cursive_${process.pid}_${workSeq}_${process.hrtime.bigint()}`
-    );
+    cleanupDir = path.join(cacheDir, '.work', `cursive_${process.pid}_${workSeq}_${process.hrtime.bigint()}`);
     fs.mkdirSync(cleanupDir, { recursive: true });
     sendPath = path.join(cleanupDir, 'preview.jpg');
     fs.writeFileSync(sendPath, prepared.buffer);
@@ -1846,8 +1780,7 @@ async function runCursiveOcr(params: {
   readonly customPrompt?: string;
   readonly ctx: RecordCommandContext;
 }): Promise<{ readonly text: string; readonly meta: Record<string, unknown>; readonly engine: string }> {
-  const { imgPath, rawBytes, effort, provider, timeoutSeconds, cacheDir, customPrompt, ctx } =
-    params;
+  const { imgPath, rawBytes, effort, provider, timeoutSeconds, cacheDir, customPrompt, ctx } = params;
 
   const geminiKey = (ctx.env.GEMINI_API_KEY ?? ctx.env.GOOGLE_API_KEY ?? '').trim();
   const cliName = resolveVisionCli(ctx.env);
@@ -1855,9 +1788,7 @@ async function runCursiveOcr(params: {
 
   if (provider === 'gemini') {
     if (!geminiKey) {
-      throw new Error(
-        'GEMINI_API_KEY or GOOGLE_API_KEY must be set when using --provider gemini.'
-      );
+      throw new Error('GEMINI_API_KEY or GOOGLE_API_KEY must be set when using --provider gemini.');
     }
     return runCursiveGeminiOcr({
       imgPath,
@@ -2356,8 +2287,7 @@ async function runOcrBatchCommand(
   }
 
   const cacheDir = resolveOcrCacheDir(opts.cacheDir, ctx.env);
-  const grepRegex =
-    opts.grep !== undefined ? new RegExp(opts.grep, opts.ignoreCase ? 'i' : '') : undefined;
+  const grepRegex = opts.grep !== undefined ? new RegExp(opts.grep, opts.ignoreCase ? 'i' : '') : undefined;
 
   const fileResults = await runWithConcurrency(
     expanded,
@@ -2454,7 +2384,8 @@ async function runOcrBatchCommand(
   const timedOut = fileResults.filter((f) => f.status === 'timeout').length;
   const failed = fileResults.filter((f) => f.status === 'failed').length;
   const cacheHits = fileResults.filter((f) => f.status === 'ok' && f.cached).length;
-  const allCached = fileResults.length > 0 && succeeded === fileResults.length && cacheHits === fileResults.length;
+  const allCached =
+    fileResults.length > 0 && succeeded === fileResults.length && cacheHits === fileResults.length;
 
   const allMatches: BatchGrepMatch[] = [];
   for (const res of fileResults) {
@@ -2511,31 +2442,23 @@ async function runOcrBatchCommand(
 export function createDefaultExecFile(): ExecFileFn {
   return (file, args, options) =>
     new Promise((resolve, reject) => {
-      execFile(
-        file,
-        [...args],
-        { ...options, encoding: 'buffer' },
-        (error, stdout, stderr) => {
-          if (error) {
-            const errObj = error as Error & { stdout?: Buffer; stderr?: Buffer };
-            errObj.stdout = Buffer.isBuffer(stdout) ? stdout : Buffer.from(stdout ?? '');
-            errObj.stderr = Buffer.isBuffer(stderr) ? stderr : Buffer.from(stderr ?? '');
-            reject(errObj);
-            return;
-          }
-          resolve({
-            stdout: Buffer.isBuffer(stdout) ? stdout : Buffer.from(stdout),
-            stderr: Buffer.isBuffer(stderr) ? stderr : Buffer.from(stderr),
-          });
+      execFile(file, [...args], { ...options, encoding: 'buffer' }, (error, stdout, stderr) => {
+        if (error) {
+          const errObj = error as Error & { stdout?: Buffer; stderr?: Buffer };
+          errObj.stdout = Buffer.isBuffer(stdout) ? stdout : Buffer.from(stdout ?? '');
+          errObj.stderr = Buffer.isBuffer(stderr) ? stderr : Buffer.from(stderr ?? '');
+          reject(errObj);
+          return;
         }
-      );
+        resolve({
+          stdout: Buffer.isBuffer(stdout) ? stdout : Buffer.from(stdout),
+          stderr: Buffer.isBuffer(stderr) ? stderr : Buffer.from(stderr),
+        });
+      });
     });
 }
 
-export const runOcrCommand: RecordHandler = async (
-  args,
-  ctx
-): Promise<RecordCommandOutcome> => {
+export const runOcrCommand: RecordHandler = async (args, ctx): Promise<RecordCommandOutcome> => {
   let emitJsonError = false;
   try {
     if (args.length === 0 || args[0] === '-h' || args[0] === '--help') {
@@ -2603,9 +2526,7 @@ export const runOcrCommand: RecordHandler = async (
       }
 
       if (opts.tsv) {
-        const sections = completed.map(
-          (c) => `=== ${c.rawArg} ===\n${String(c.data).trimEnd()}`
-        );
+        const sections = completed.map((c) => `=== ${c.rawArg} ===\n${String(c.data).trimEnd()}`);
         const bytesOut = emitStdout(ctx.io, sections.join('\n\n'));
         return { exitCode: 0, bytesOut, cacheHit: allCached };
       }

@@ -1,12 +1,12 @@
-import { Link, useSearchParams } from 'react-router-dom';
-import React, { useMemo, useState } from 'react';
 import { findKinshipPath } from '@kinloom/core';
+import React, { useMemo, useState } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
+import { EmptyStateNotice, initialsOf } from '../components/Atoms.js';
 import { ExplorerTopBar } from '../components/ExplorerTopBar.js';
+import { KinloomFooter } from '../components/KinloomFooter.js';
+import { useArchiveData } from '../context/ArchiveDataContext.js';
 import { formatKinshipPresentation } from '../lib/kinshipPresentation.js';
 import { KINLOOM_VOCABULARY } from '../lib/vocabulary.js';
-import { KinloomFooter } from '../components/KinloomFooter.js';
-import { EmptyStateNotice, initialsOf } from '../components/Atoms.js';
-import { useArchiveData } from '../context/ArchiveDataContext.js';
 
 function formatKinshipPersonOption(person: {
   full_name: string;
@@ -31,7 +31,9 @@ export const KinshipPage: React.FC = () => {
     }
     return bundle.people
       .filter((p) => !p.is_living || p.full_name !== 'Living')
-      .toSorted((a, b) => (a.birth_year ?? 9999) - (b.birth_year ?? 9999) || a.full_name.localeCompare(b.full_name));
+      .toSorted(
+        (a, b) => (a.birth_year ?? 9999) - (b.birth_year ?? 9999) || a.full_name.localeCompare(b.full_name)
+      );
   }, [bundle]);
 
   const resolvedPresets = useMemo(() => {
@@ -63,7 +65,9 @@ export const KinshipPage: React.FC = () => {
     (toParamPerson && (!toParamPerson.is_living || toParamPerson.full_name !== 'Living')
       ? toParamPerson.id
       : undefined) ||
-    (resolvedPresets[0]?.toId && resolvedPresets[0].toId !== defaultFrom ? resolvedPresets[0].toId : undefined) ||
+    (resolvedPresets[0]?.toId && resolvedPresets[0].toId !== defaultFrom
+      ? resolvedPresets[0].toId
+      : undefined) ||
     selectablePeople.find((p) => p.id !== defaultFrom)?.id ||
     selectablePeople[0]?.id ||
     '';
@@ -93,7 +97,9 @@ export const KinshipPage: React.FC = () => {
     return (
       <div>
         <ExplorerTopBar />
-        <main id="main-content" className="index-page">Loading kinship archive…</main>
+        <main id="main-content" className="index-page">
+          Loading kinship archive…
+        </main>
       </div>
     );
   }
@@ -194,10 +200,11 @@ export const KinshipPage: React.FC = () => {
             </section>
 
             {resolvedPresets.length > 0 && (
-              <div className="filter-bar kinship-examples-bar print-hide" style={{ marginTop: 12, marginBottom: 14 }}>
-                <span className="kinship-examples-label">
-                  Examples:
-                </span>
+              <div
+                className="filter-bar kinship-examples-bar print-hide"
+                style={{ marginTop: 12, marginBottom: 14 }}
+              >
+                <span className="kinship-examples-label">Examples:</span>
                 {resolvedPresets.map((preset) => (
                   <button
                     key={preset.label}
@@ -222,7 +229,14 @@ export const KinshipPage: React.FC = () => {
                   <span style={{ color: 'var(--radar-copresence)' }}>{presentation.highlight}</span>
                   {presentation.headingSuffix}
                 </h2>
-                <p style={{ margin: '0 0 12px', fontFamily: 'var(--font-mono)', fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
+                <p
+                  style={{
+                    margin: '0 0 12px',
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: '0.78rem',
+                    color: 'var(--text-secondary)',
+                  }}
+                >
                   {presentation.subtitle}
                 </p>
 
@@ -251,7 +265,14 @@ export const KinshipPage: React.FC = () => {
 
                 {result.connected && result.steps.length > 0 && result.personIds.length > 0 && (
                   <div style={{ marginTop: 18 }}>
-                    <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: 10 }}>
+                    <div
+                      style={{
+                        fontFamily: 'var(--font-mono)',
+                        fontSize: '0.78rem',
+                        color: 'var(--text-secondary)',
+                        marginBottom: 10,
+                      }}
+                    >
                       {KINLOOM_VOCABULARY.kinship.shortestPathHint}
                     </div>
                     <div className="kinship-chain">
@@ -273,12 +294,22 @@ export const KinshipPage: React.FC = () => {
                           <React.Fragment key={pid}>
                             {step && <span className="kinship-edge-badge">{edgeLabel}</span>}
                             <Link to={`/person/${p.slug}`} className="kinship-node-pill">
-                              <span className="avatar-circle" style={{ width: 28, height: 28, fontSize: '0.75rem' }}>
+                              <span
+                                className="avatar-circle"
+                                style={{ width: 28, height: 28, fontSize: '0.75rem' }}
+                              >
                                 {initialsOf(p.full_name)}
                               </span>
                               <span>
                                 <strong>{p.full_name}</strong>
-                                <span style={{ display: 'block', fontFamily: 'var(--font-mono)', fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+                                <span
+                                  style={{
+                                    display: 'block',
+                                    fontFamily: 'var(--font-mono)',
+                                    fontSize: '0.75rem',
+                                    color: 'var(--text-secondary)',
+                                  }}
+                                >
                                   {p.birth_year || '?'}–{p.death_year || '?'}
                                 </span>
                               </span>
@@ -291,8 +322,17 @@ export const KinshipPage: React.FC = () => {
                 )}
 
                 {result.sharedPlaces.length > 0 && (
-                  <div style={{ marginTop: 18, paddingTop: 14, borderTop: '1px solid var(--border-decorative)' }}>
-                    <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: 8 }}>
+                  <div
+                    style={{ marginTop: 18, paddingTop: 14, borderTop: '1px solid var(--border-decorative)' }}
+                  >
+                    <div
+                      style={{
+                        fontFamily: 'var(--font-mono)',
+                        fontSize: '0.78rem',
+                        color: 'var(--text-secondary)',
+                        marginBottom: 8,
+                      }}
+                    >
                       {KINLOOM_VOCABULARY.kinship.sharedPlacesHeading}
                     </div>
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>

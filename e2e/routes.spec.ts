@@ -1,5 +1,5 @@
-import { expect, test } from '@playwright/test';
 import type { Page } from '@playwright/test';
+import { expect, test } from '@playwright/test';
 
 function attachErrorCollector(page: Page): string[] {
   const errors: string[] = [];
@@ -17,7 +17,9 @@ function attachErrorCollector(page: Page): string[] {
   return errors;
 }
 
-test('index route renders white-labeled header, footer credit, demo lineage, and redacts living test entry', async ({ page }) => {
+test('index route renders white-labeled header, footer credit, demo lineage, and redacts living test entry', async ({
+  page,
+}) => {
   const errors = attachErrorCollector(page);
   await page.goto('/');
 
@@ -48,10 +50,10 @@ test('all 9 archival routes render cleanly with zero console or page errors', as
         sources: {},
         layers: [{ id: 'background', type: 'background', paint: { 'background-color': '#ece4d2' } }],
       }),
-    }),
+    })
   );
   await page.route('https://vtiles.openhistoricalmap.org/**', (route) =>
-    route.fulfill({ status: 204, body: '' }),
+    route.fulfill({ status: 204, body: '' })
   );
 
   const checks: { url: string; assertVisible: () => Promise<void> }[] = [
@@ -70,14 +72,18 @@ test('all 9 archival routes render cleanly with zero console or page errors', as
     {
       url: '/places',
       assertVisible: async () => {
-        await expect(page.getByRole('heading', { name: 'Places in the Lincoln & Todd Family Archive' })).toBeVisible();
+        await expect(
+          page.getByRole('heading', { name: 'Places in the Lincoln & Todd Family Archive' })
+        ).toBeVisible();
         await expect(page.getByRole('link', { name: 'Springfield', exact: true }).first()).toBeVisible();
       },
     },
     {
       url: '/place/springfield-illinois',
       assertVisible: async () => {
-        await expect(page.getByRole('heading', { name: 'Springfield, Sangamon County, Illinois, USA' })).toBeVisible();
+        await expect(
+          page.getByRole('heading', { name: 'Springfield, Sangamon County, Illinois, USA' })
+        ).toBeVisible();
         await expect(page.getByRole('heading', { name: 'Who Passed Through' })).toBeVisible();
       },
     },

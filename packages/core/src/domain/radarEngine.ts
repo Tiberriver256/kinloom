@@ -1,13 +1,13 @@
+import { haversineMiles, intervalsOverlap } from '../edtf.js';
 import type {
   ArchiveBundle,
   ArchiveEvent,
-  CoPresenceItem,
   ConfidenceTier,
+  CoPresenceItem,
   Person,
   Place,
   RadarSnapshot,
 } from '../schemas/entities.js';
-import { haversineMiles, intervalsOverlap } from '../edtf.js';
 
 const RING_CAP = 8;
 
@@ -35,9 +35,7 @@ export function getKinshipInfo(
     }
   }
   const myParents = new Set(
-    bundle.kinship
-      .filter((k) => k.from === fromPersonId && k.relation === 'child')
-      .map((k) => k.to)
+    bundle.kinship.filter((k) => k.from === fromPersonId && k.relation === 'child').map((k) => k.to)
   );
   if (myParents.size > 0) {
     const sharesParent = bundle.kinship.some(
@@ -138,9 +136,7 @@ export function computeRadarForEvent(
     if (
       !prev ||
       TIER_PRIORITY[cand.tier] > TIER_PRIORITY[prev.tier] ||
-      (TIER_PRIORITY[cand.tier] === TIER_PRIORITY[prev.tier] &&
-        cand.sameHousehold &&
-        !prev.sameHousehold)
+      (TIER_PRIORITY[cand.tier] === TIER_PRIORITY[prev.tier] && cand.sameHousehold && !prev.sameHousehold)
     ) {
       bestByPerson.set(personId, cand);
     }
@@ -157,9 +153,7 @@ export function computeRadarForEvent(
     if (ev.scope !== 'personal' && ev.scope !== 'family') {
       continue;
     }
-    if (
-      !intervalsOverlap(activeEvent.time_min, activeEvent.time_max, ev.time_min, ev.time_max, 180)
-    ) {
+    if (!intervalsOverlap(activeEvent.time_min, activeEvent.time_max, ev.time_min, ev.time_max, 180)) {
       continue;
     }
     const evPlace = ev.place_id ? placesById.get(ev.place_id) : undefined;
@@ -183,16 +177,13 @@ export function computeRadarForEvent(
     );
     const tier: ConfidenceTier = exactTime ? 'Confirmed' : 'Inferred';
     for (const pt of ev.participants) {
-      const sameHouse =
-        spatial.distanceMiles === 0 && (pt.role === 'household' || pt.role === 'spouse');
+      const sameHouse = spatial.distanceMiles === 0 && (pt.role === 'household' || pt.role === 'spouse');
       registerCandidate(pt.person_id, tier, spatial.distanceMiles, sameHouse, ev.place_id, ev.id);
     }
   }
 
   for (const span of bundle.residence_spans) {
-    if (
-      !intervalsOverlap(activeEvent.time_min, activeEvent.time_max, span.time_min, span.time_max, 0)
-    ) {
+    if (!intervalsOverlap(activeEvent.time_min, activeEvent.time_max, span.time_min, span.time_max, 0)) {
       continue;
     }
     const spPlace = placesById.get(span.place_id);
@@ -226,17 +217,14 @@ export function computeRadarForEvent(
     return TIER_PRIORITY[b.tier] - TIER_PRIORITY[a.tier];
   });
 
-  const isCountryPlace = (placeId: string): boolean =>
-    placesById.get(placeId)?.place_type === 'country';
+  const isCountryPlace = (placeId: string): boolean => placesById.get(placeId)?.place_type === 'country';
 
   const localAll = bundle.events
     .filter((ev) => {
       if (ev.scope !== 'local' && ev.scope !== 'state') {
         return false;
       }
-      if (
-        !intervalsOverlap(activeEvent.time_min, activeEvent.time_max, ev.time_min, ev.time_max, 365)
-      ) {
+      if (!intervalsOverlap(activeEvent.time_min, activeEvent.time_max, ev.time_min, ev.time_max, 365)) {
         return false;
       }
       if (!activePlace || !ev.place_id) {
@@ -255,13 +243,7 @@ export function computeRadarForEvent(
       if (ev.scope !== 'national' && ev.scope !== 'global') {
         return false;
       }
-      return intervalsOverlap(
-        activeEvent.time_min,
-        activeEvent.time_max,
-        ev.time_min,
-        ev.time_max,
-        180
-      );
+      return intervalsOverlap(activeEvent.time_min, activeEvent.time_max, ev.time_min, ev.time_max, 180);
     })
     .toSorted((a, b) => (b.severity_rank ?? 0) - (a.severity_rank ?? 0));
 

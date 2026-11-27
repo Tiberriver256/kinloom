@@ -7,17 +7,13 @@ import type {
   Place,
   SourceRecord,
 } from '@kinloom/core';
-import {
-  buildLibrarianCitation,
-  formatPublicCitation,
-  summarizeEventCitations,
-} from '@kinloom/core';
+import { buildLibrarianCitation, formatPublicCitation, summarizeEventCitations } from '@kinloom/core';
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { KINLOOM_VOCABULARY } from '../lib/vocabulary.js';
 import { useArchiveData } from '../context/ArchiveDataContext.js';
 import { useArchiveUi } from '../context/ArchiveUiContext.js';
 import { useDialogFocusTrap } from '../lib/useDialogFocusTrap.js';
+import { KINLOOM_VOCABULARY } from '../lib/vocabulary.js';
 
 export const EmptyStateNotice: React.FC<{
   title: string;
@@ -35,10 +31,7 @@ const EMPTY_ALTERNATE_DATES: AlternateDate[] = [];
 const EMPTY_ALTERNATE_PLACES: AlternatePlace[] = [];
 const EMPTY_FACT_CONFLICTS: FactConflict[] = [];
 
-export const DateStamp: React.FC<{ displayDate: string; edtf?: string }> = ({
-  displayDate,
-  edtf,
-}) => (
+export const DateStamp: React.FC<{ displayDate: string; edtf?: string }> = ({ displayDate, edtf }) => (
   <span className="date-stamp" title={edtf ? `Recorded date: ${edtf}` : undefined}>
     {displayDate || 'Undated'}
   </span>
@@ -65,14 +58,30 @@ export const ScopeGlyph: React.FC<{ category?: string; size?: number }> = ({
 }) => {
   if (category === 'weather') {
     return (
-      <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth={1.5} aria-hidden>
+      <svg
+        width={size}
+        height={size}
+        viewBox="0 0 16 16"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={1.5}
+        aria-hidden
+      >
         <path d="M8 1v14M1 8h14M3 3l10 10M13 3L3 13" />
       </svg>
     );
   }
   if (category === 'newspaper') {
     return (
-      <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth={1.5} aria-hidden>
+      <svg
+        width={size}
+        height={size}
+        viewBox="0 0 16 16"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={1.5}
+        aria-hidden
+      >
         <rect x="2" y="2" width="12" height="12" />
         <path d="M4.5 5.5h7M4.5 8h7M4.5 10.5h4.5" />
       </svg>
@@ -80,7 +89,15 @@ export const ScopeGlyph: React.FC<{ category?: string; size?: number }> = ({
   }
   if (category === 'macro') {
     return (
-      <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth={1.5} aria-hidden>
+      <svg
+        width={size}
+        height={size}
+        viewBox="0 0 16 16"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={1.5}
+        aria-hidden
+      >
         <circle cx="8" cy="8" r="6" />
         <path d="M2 8h12M8 2a9 9 0 0 1 0 12M8 2a9 9 0 0 0 0 12" />
       </svg>
@@ -88,7 +105,15 @@ export const ScopeGlyph: React.FC<{ category?: string; size?: number }> = ({
   }
   if (category === 'homestead') {
     return (
-      <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth={1.5} aria-hidden>
+      <svg
+        width={size}
+        height={size}
+        viewBox="0 0 16 16"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={1.5}
+        aria-hidden
+      >
         <path d="M2 8l6-5 6 5v6H2V8z" />
         <path d="M6.5 14v-4h3v4" />
       </svg>
@@ -96,14 +121,30 @@ export const ScopeGlyph: React.FC<{ category?: string; size?: number }> = ({
   }
   if (category === 'family_milestone') {
     return (
-      <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth={1.5} aria-hidden>
+      <svg
+        width={size}
+        height={size}
+        viewBox="0 0 16 16"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={1.5}
+        aria-hidden
+      >
         <circle cx="6" cy="8" r="3.5" />
         <circle cx="10" cy="8" r="3.5" />
       </svg>
     );
   }
   return (
-    <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth={1.5} aria-hidden>
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 16 16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.5}
+      aria-hidden
+    >
       <circle cx="8" cy="8" r="4" />
       <path d="M8 1v3M8 12v3" />
     </svg>
@@ -263,8 +304,21 @@ export const ArchivalPhotoFrame: React.FC<{ caption: string; photoUrl?: string |
             }}
           />
           <div className="lightbox-card">
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-              <strong style={{ fontFamily: 'var(--font-mono)', fontSize: '0.82rem', color: 'var(--surface-header)' }}>
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                marginBottom: 12,
+              }}
+            >
+              <strong
+                style={{
+                  fontFamily: 'var(--font-mono)',
+                  fontSize: '0.82rem',
+                  color: 'var(--surface-header)',
+                }}
+              >
                 {resolvedUrl ? 'ARCHIVAL PHOTOGRAPH · ZOOM VIEW' : 'ARCHIVAL PHOTOGRAPH NEEDED'}
               </strong>
               <button
@@ -283,9 +337,22 @@ export const ArchivalPhotoFrame: React.FC<{ caption: string; photoUrl?: string |
                 <img
                   src={resolvedUrl}
                   alt={caption}
-                  style={{ width: '100%', maxHeight: '72vh', objectFit: 'contain', borderRadius: 2, border: '1px solid var(--border-decorative)' }}
+                  style={{
+                    width: '100%',
+                    maxHeight: '72vh',
+                    objectFit: 'contain',
+                    borderRadius: 2,
+                    border: '1px solid var(--border-decorative)',
+                  }}
                 />
-                <figcaption style={{ marginTop: 8, fontSize: '0.85rem', color: 'var(--text-secondary)', fontStyle: 'italic' }}>
+                <figcaption
+                  style={{
+                    marginTop: 8,
+                    fontSize: '0.85rem',
+                    color: 'var(--text-secondary)',
+                    fontStyle: 'italic',
+                  }}
+                >
                   {caption}
                 </figcaption>
               </figure>
@@ -293,7 +360,14 @@ export const ArchivalPhotoFrame: React.FC<{ caption: string; photoUrl?: string |
               <div className="wireframe-photo" style={{ minHeight: 180, cursor: 'default' }}>
                 <span className="wireframe-photo-label">No Photograph Archived Yet</span>
                 <span className="wireframe-photo-caption">{caption}</span>
-                <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.78rem', color: 'var(--text-secondary)', marginTop: 8 }}>
+                <span
+                  style={{
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: '0.78rem',
+                    color: 'var(--text-secondary)',
+                    marginTop: 8,
+                  }}
+                >
                   A family photograph for this moment has not been added yet.
                 </span>
               </div>
@@ -323,7 +397,9 @@ export const SourceCitationTag: React.FC<{
   const { readableSourceIds, baseUrl } = useArchiveData();
   const [expanded, setExpanded] = useState(false);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
-  const [activeScan, setActiveScan] = useState<{ url: string; title: string; citation?: string } | null>(null);
+  const [activeScan, setActiveScan] = useState<{ url: string; title: string; citation?: string } | null>(
+    null
+  );
   const scanCloseRef = React.useRef<HTMLButtonElement | null>(null);
   const { openSourceReader, openSourceInspector } = useArchiveUi();
   const scanDialogRef = useDialogFocusTrap({
@@ -440,9 +516,7 @@ export const SourceCitationTag: React.FC<{
                 return (
                   <div key={itemKey} className="citation-item-card">
                     <div className="citation-item-top">
-                      <span className={`evidence-tier-badge tier-${cit.tier}`}>
-                        {cit.tierLabel}
-                      </span>
+                      <span className={`evidence-tier-badge tier-${cit.tier}`}>{cit.tierLabel}</span>
                       {cit.tier !== 'unverified' && (
                         <span className="evidence-basis-tag">{cit.evidenceBasis}</span>
                       )}
@@ -671,7 +745,14 @@ export const SourceCitationTag: React.FC<{
             <div className="scan-lightbox-scroll">
               <img src={activeScan.url} alt={activeScan.title} className="scan-page-img-full" />
               {activeScan.citation && (
-                <p style={{ marginTop: 10, fontSize: '0.82rem', color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)' }}>
+                <p
+                  style={{
+                    marginTop: 10,
+                    fontSize: '0.82rem',
+                    color: 'var(--text-secondary)',
+                    fontFamily: 'var(--font-mono)',
+                  }}
+                >
                   {activeScan.citation}
                 </p>
               )}

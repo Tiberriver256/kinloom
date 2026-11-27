@@ -1,13 +1,7 @@
 import { getCurrentReferenceYear } from '../privacy.js';
 import type { AnchorYearConfig, MigrationEraConfig } from '../schemas/config.js';
 import { DEFAULT_ANCHOR_YEARS } from '../schemas/config.js';
-import type {
-  ArchiveBundle,
-  ArchiveEvent,
-  ConfidenceTier,
-  Person,
-  Place,
-} from '../schemas/entities.js';
+import type { ArchiveBundle, ArchiveEvent, ConfidenceTier, Person, Place } from '../schemas/entities.js';
 import { getMediaPersonIds } from '../schemas/entities.js';
 import { classifyMigrationStage } from './geoMap.js';
 
@@ -137,10 +131,7 @@ export function buildPersonThumbMap(bundle: ArchiveBundle): Map<string, string> 
   return map;
 }
 
-export function classifyPlaceStage(
-  place: Place,
-  migrationEras?: readonly MigrationEraConfig[]
-): string {
+export function classifyPlaceStage(place: Place, migrationEras?: readonly MigrationEraConfig[]): string {
   return classifyMigrationStage(place, migrationEras);
 }
 
@@ -204,8 +195,7 @@ function summarizeActivity(
     };
   }
   const firstSentence = raw.split(/(?<=[.!?])\s+/)[0] || raw;
-  const clipped =
-    firstSentence.length > 130 ? `${firstSentence.slice(0, 127).trimEnd()}…` : firstSentence;
+  const clipped = firstSentence.length > 130 ? `${firstSentence.slice(0, 127).trimEnd()}…` : firstSentence;
   return { title, note: clipped };
 }
 
@@ -262,9 +252,7 @@ export function computeTimeSnapshot(
     const age = person.birth_year === null ? null : Math.max(0, year - person.birth_year);
 
     const sameYearEvents = pEvents.filter((e) => e.year === year);
-    const sameYearWithPlace = sameYearEvents.find(
-      (e) => e.place_id && placesById.has(e.place_id)
-    );
+    const sameYearWithPlace = sameYearEvents.find((e) => e.place_id && placesById.has(e.place_id));
     if (sameYearWithPlace && sameYearWithPlace.place_id) {
       const place = resolveCanonicalPlace(placesById.get(sameYearWithPlace.place_id), placesById);
       if (!place) {
@@ -425,8 +413,7 @@ export function computeTimeSnapshot(
       Math.abs(ev.year - year) <= 1
   );
 
-  const isCountryPlace = (placeId: string): boolean =>
-    placesById.get(placeId)?.place_type === 'country';
+  const isCountryPlace = (placeId: string): boolean => placesById.get(placeId)?.place_type === 'country';
 
   const lanes: TimePlaceLane[] = [];
   for (const [placeId, people] of locatedByPlace.entries()) {

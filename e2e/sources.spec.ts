@@ -7,7 +7,10 @@ test('source inspector and multi-document source reader work end to end', async 
   await page.goto('/person/abraham-lincoln-1809');
 
   // Expand citation on the 1850 Census event and open Source Inspector
-  const censusCard = page.locator('article').filter({ hasText: '1850 U.S. Federal Census records the Lincoln household' }).first();
+  const censusCard = page
+    .locator('article')
+    .filter({ hasText: '1850 U.S. Federal Census records the Lincoln household' })
+    .first();
   await expect(censusCard).toBeVisible();
   await censusCard.locator('button.source-toggle').click();
   await censusCard.getByRole('button', { name: 'Inspect Source →' }).first().click();

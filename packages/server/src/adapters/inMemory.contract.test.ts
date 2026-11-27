@@ -1,14 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { GoogleOAuthProvider } from './googleOAuthProvider.js';
-import { createInMemoryServerPorts } from './inMemory.js';
-import { FixedClock, SystemClock } from './systemClock.js';
+import { BundleReadService } from '../services/bundleReadService.js';
+import { WikiWriteService } from '../services/wikiWriteService.js';
 import {
   createSyntheticHistoricalPerson,
   createSyntheticSiteConfig,
   runBackendAdapterContractTests,
 } from '../testing/adapterContractSuite.js';
-import { BundleReadService } from '../services/bundleReadService.js';
-import { WikiWriteService } from '../services/wikiWriteService.js';
+import { GoogleOAuthProvider } from './googleOAuthProvider.js';
+import { createInMemoryServerPorts } from './inMemory.js';
+import { FixedClock, SystemClock } from './systemClock.js';
 
 runBackendAdapterContractTests('InMemory Reference Adapters', (siteConfig) => {
   const ports = createInMemoryServerPorts(siteConfig);
@@ -225,7 +225,7 @@ describe('Portable built-in adapters', () => {
       author,
     });
     const snapshotRev1 = await ports.repository.loadActiveSnapshot();
-    const rev1Etag = (await ports.bundleCache.getCached(null));
+    const rev1Etag = await ports.bundleCache.getCached(null);
     expect(rev1Etag.status).toBe('hit');
     const staleEtag = rev1Etag.status === 'hit' ? rev1Etag.object.etag : '';
 

@@ -1,4 +1,7 @@
 import type { Narrative, Person, Place } from '@kinloom/core';
+import type React from 'react';
+import { createContext, useContext, useMemo } from 'react';
+import { useArchiveData } from '../context/ArchiveDataContext.js';
 import type {
   KinloomMediaRenderer,
   KinloomUiPlugin,
@@ -6,8 +9,6 @@ import type {
   KinloomUiPluginSlotContext,
   KinloomUiPluginSlotName,
 } from './types.js';
-import React, { createContext, useContext, useMemo } from 'react';
-import { useArchiveData } from '../context/ArchiveDataContext.js';
 
 export interface KinloomPluginContextValue {
   readonly plugins: readonly KinloomUiPlugin[];
@@ -56,9 +57,7 @@ export const KinloomPluginProvider: React.FC<KinloomPluginProviderProps> = ({
     return <Provider>{acc}</Provider>;
   }, children);
 
-  return (
-    <KinloomPluginContext.Provider value={value}>{wrappedChildren}</KinloomPluginContext.Provider>
-  );
+  return <KinloomPluginContext.Provider value={value}>{wrappedChildren}</KinloomPluginContext.Provider>;
 };
 
 export function useKinloomPlugins(): KinloomPluginContextValue {
@@ -77,13 +76,7 @@ export interface PluginSlotProps {
  * Renders every plugin contribution registered for `name`.
  * Returns `null` when no plugins contribute output so empty slots add zero DOM clutter.
  */
-export const PluginSlot: React.FC<PluginSlotProps> = ({
-  name,
-  person,
-  place,
-  narrative,
-  className,
-}) => {
+export const PluginSlot: React.FC<PluginSlotProps> = ({ name, person, place, narrative, className }) => {
   const { plugins } = useKinloomPlugins();
   const { bundle, siteConfig, baseUrl, session, capabilities } = useArchiveData();
 
@@ -113,7 +106,7 @@ export const PluginSlot: React.FC<PluginSlotProps> = ({
       rendered.push(
         <div key={`${plugin.id}:${name}`} className="kinloom-plugin-slot-item" data-plugin-id={plugin.id}>
           {output}
-        </div>,
+        </div>
       );
     }
   }

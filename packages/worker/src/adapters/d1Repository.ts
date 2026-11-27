@@ -1,33 +1,32 @@
 import {
-  AgentTokenScopeSchema,
-  asRevisionId,
-  asSha256Hex,
-  AuthorTypeSchema,
-  computeEntityDiff,
-  entityLookupCompositeKey,
-  EntityTypeSchema,
-  parseEntityPayload,
-  resolveEffectiveLiving,
-  RevisionActionSchema,
-  UserRoleSchema,
   type AgentTokenRecord,
+  AgentTokenScopeSchema,
   type ArchiveRawSnapshot,
   type ArchiveRepository,
   type AtomicMutationOp,
+  AuthorTypeSchema,
+  asRevisionId,
+  asSha256Hex,
   type BatchId,
   type CommitMutationsResult,
+  computeEntityDiff,
   type EntityLookupKey,
   type EntityPayload,
   type EntityType,
+  EntityTypeSchema,
+  entityLookupCompositeKey,
   type InviteRecord,
   type KinshipEdge,
   type MagicLinkRecord,
   type OptimisticConflictError,
   type PrivacyConfig,
+  parseEntityPayload,
+  RevisionActionSchema,
   type RevisionAuthor,
   type RevisionId,
   type RevisionQuery,
   type RevisionRecord,
+  resolveEffectiveLiving,
   type Sha256Hex,
   type StoredEntityRecord,
   type StoredEntityRow,
@@ -35,6 +34,7 @@ import {
   type TalkComment,
   type UserRecord,
   type UserRole,
+  UserRoleSchema,
 } from '@kinloom/core';
 import type { D1Database, D1PreparedStatement } from '../types.js';
 
@@ -417,41 +417,37 @@ export class D1ArchiveRepository implements ArchiveRepository {
   }
 
   async getHeadRevisionId(): Promise<RevisionId> {
-    const row = await this.prepare('SELECT COALESCE(MAX(revision_id), 0) AS head_revision_id FROM revisions')
-      .first<{ head_revision_id: number }>();
+    const row = await this.prepare(
+      'SELECT COALESCE(MAX(revision_id), 0) AS head_revision_id FROM revisions'
+    ).first<{ head_revision_id: number }>();
     return asRevisionId(row?.head_revision_id ?? 0);
   }
 
-  async getEntity(
-    entityType: EntityType,
-    entityId: string
-  ): Promise<StoredEntityRecord | null> {
+  async getEntity(entityType: EntityType, entityId: string): Promise<StoredEntityRecord | null> {
     if (entityType === 'kinship_edge') {
       const row = await this.prepare(
-          `SELECT edge_id, from_person_id, to_person_id, relation, family_xref,
+        `SELECT edge_id, from_person_id, to_person_id, relation, family_xref,
                   current_revision_id, deleted_at, updated_at
            FROM kinship_edges
            WHERE edge_id = ?`
-        )
+      )
         .bind(entityId)
         .first<RawDbKinshipRow>();
       return row ? mapKinshipRow(row) : null;
     }
 
     const row = await this.prepare(
-        `SELECT entity_type, entity_id, slug, data_json, current_revision_id,
+      `SELECT entity_type, entity_id, slug, data_json, current_revision_id,
                 has_primary_source, deleted_at, updated_at
          FROM entities
          WHERE entity_type = ? AND entity_id = ?`
-      )
+    )
       .bind(entityType, entityId)
       .first<RawDbEntityRow>();
     return row ? mapEntityRow(row) : null;
   }
 
-  async getEntitiesBatch(
-    keys: readonly EntityLookupKey[]
-  ): Promise<Map<string, StoredEntityRecord | null>> {
+  async getEntitiesBatch(keys: readonly EntityLookupKey[]): Promise<Map<string, StoredEntityRecord | null>> {
     const result = new Map<string, StoredEntityRecord | null>();
     if (keys.length === 0) {
       return result;
@@ -478,14 +474,13 @@ export class D1ArchiveRepository implements ArchiveRepository {
     for (const pairsJson of chunkJsonArray(entityPairs)) {
       statements.push(
         this.prepare(
-            `SELECT e.entity_type, e.entity_id, e.slug, e.data_json, e.current_revision_id,
+          `SELECT e.entity_type, e.entity_id, e.slug, e.data_json, e.current_revision_id,
                     e.has_primary_source, e.deleted_at, e.updated_at
              FROM json_each(?) AS k
              JOIN entities AS e
                ON e.entity_type = json_extract(k.value, '$[0]')
               AND e.entity_id = json_extract(k.value, '$[1]')`
-          )
-          .bind(pairsJson)
+        ).bind(pairsJson)
       );
       statementKinds.push('entity');
     }
@@ -493,12 +488,11 @@ export class D1ArchiveRepository implements ArchiveRepository {
     for (const idsJson of chunkJsonArray(kinshipIds)) {
       statements.push(
         this.prepare(
-            `SELECT edge_id, from_person_id, to_person_id, relation, family_xref,
+          `SELECT edge_id, from_person_id, to_person_id, relation, family_xref,
                     current_revision_id, deleted_at, updated_at
              FROM kinship_edges
              WHERE edge_id IN (SELECT value FROM json_each(?))`
-          )
-          .bind(idsJson)
+        ).bind(idsJson)
       );
       statementKinds.push('kinship_edge');
     }
@@ -526,19 +520,18 @@ export class D1ArchiveRepository implements ArchiveRepository {
 
   async getLivingPersonIds(): Promise<ReadonlySet<string>> {
     const result = await this.prepare(
-        `SELECT entity_id,
+      `SELECT entity_id,
                 json_extract(data_json, '$.is_living') AS is_living,
                 json_extract(data_json, '$.birth_edtf') AS birth_edtf,
                 json_extract(data_json, '$.death_edtf') AS death_edtf
          FROM entities
          WHERE entity_type = 'person' AND deleted_at IS NULL`
-      )
-      .all<{
-        entity_id: string;
-        is_living: number | boolean | null;
-        birth_edtf: string | number | null;
-        death_edtf: string | number | null;
-      }>();
+    ).all<{
+      entity_id: string;
+      is_living: number | boolean | null;
+      birth_edtf: string | number | null;
+      death_edtf: string | number | null;
+    }>();
 
     const living = new Set<string>();
     for (const row of result.results) {
@@ -846,7 +839,7 @@ export class D1ArchiveRepository implements ArchiveRepository {
     for (const rowsJson of chunkJsonArray(entityRows)) {
       statements.push(
         this.prepare(
-            `INSERT INTO entities (
+          `INSERT INTO entities (
                entity_type, entity_id, slug, data_json, current_revision_id,
                has_primary_source, deleted_at, updated_at
              )
@@ -863,15 +856,14 @@ export class D1ArchiveRepository implements ArchiveRepository {
                SELECT MAX(r2.revision_id) FROM revisions r2
                WHERE r2.entity_type = j.entity_type AND r2.entity_id = j.entity_id
              )`
-          )
-          .bind(nowIso, rowsJson)
+        ).bind(nowIso, rowsJson)
       );
     }
 
     for (const rowsJson of chunkJsonArray(kinshipRows)) {
       statements.push(
         this.prepare(
-            `INSERT INTO kinship_edges (
+          `INSERT INTO kinship_edges (
                edge_id, from_person_id, to_person_id, relation, family_xref,
                current_revision_id, deleted_at, updated_at
              )
@@ -888,8 +880,7 @@ export class D1ArchiveRepository implements ArchiveRepository {
                       json_extract(value, '$[5]') AS deleted_at
                FROM json_each(?)
              ) AS j`
-          )
-          .bind(nowIso, rowsJson)
+        ).bind(nowIso, rowsJson)
       );
     }
   }
@@ -912,7 +903,7 @@ export class D1ArchiveRepository implements ArchiveRepository {
     if (op.action === 'restore') {
       // Guard restore atomically through the action CHECK constraint so stale or active rows roll back DB.batch().
       return this.prepare(
-          `INSERT INTO revisions (
+        `INSERT INTO revisions (
              batch_id, entity_type, entity_id, parent_revision_id, action,
              reverted_revision_id, author_id, author_name, author_type,
              summary, has_primary_source, before_json, after_json, created_at
@@ -926,44 +917,12 @@ export class D1ArchiveRepository implements ArchiveRepository {
              ?, ?, ?, ?, ?, ?, ?, ?, ?
            )
            RETURNING revision_id, parent_revision_id`
-        )
-        .bind(
-          batchId,
-          op.entity_type,
-          op.entity_id,
-          ...lockWhere.bindings,
-          ...lockWhere.bindings,
-          revertedRevId,
-          author.author_id,
-          author.author_name,
-          author.author_type,
-          op.summary,
-          hasPrimary,
-          beforeJson,
-          afterJson,
-          nowIso
-        );
-    }
-
-    // update, delete, and revert rely on CHECK (action IN ('create', 'restore') OR parent_revision_id IS NOT NULL).
-    return this.prepare(
-        `INSERT INTO revisions (
-           batch_id, entity_type, entity_id, parent_revision_id, action,
-           reverted_revision_id, author_id, author_name, author_type,
-           summary, has_primary_source, before_json, after_json, created_at
-         ) VALUES (
-           ?, ?, ?,
-           (SELECT current_revision_id FROM ${lockWhere.table} WHERE ${lockWhere.sql}),
-           ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
-         )
-         RETURNING revision_id, parent_revision_id`
-      )
-      .bind(
+      ).bind(
         batchId,
         op.entity_type,
         op.entity_id,
         ...lockWhere.bindings,
-        op.action,
+        ...lockWhere.bindings,
         revertedRevId,
         author.author_id,
         author.author_name,
@@ -974,6 +933,36 @@ export class D1ArchiveRepository implements ArchiveRepository {
         afterJson,
         nowIso
       );
+    }
+
+    // update, delete, and revert rely on CHECK (action IN ('create', 'restore') OR parent_revision_id IS NOT NULL).
+    return this.prepare(
+      `INSERT INTO revisions (
+           batch_id, entity_type, entity_id, parent_revision_id, action,
+           reverted_revision_id, author_id, author_name, author_type,
+           summary, has_primary_source, before_json, after_json, created_at
+         ) VALUES (
+           ?, ?, ?,
+           (SELECT current_revision_id FROM ${lockWhere.table} WHERE ${lockWhere.sql}),
+           ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+         )
+         RETURNING revision_id, parent_revision_id`
+    ).bind(
+      batchId,
+      op.entity_type,
+      op.entity_id,
+      ...lockWhere.bindings,
+      op.action,
+      revertedRevId,
+      author.author_id,
+      author.author_name,
+      author.author_type,
+      op.summary,
+      hasPrimary,
+      beforeJson,
+      afterJson,
+      nowIso
+    );
   }
 
   private buildLockWhereClause(
@@ -1011,40 +1000,26 @@ export class D1ArchiveRepository implements ArchiveRepository {
     };
   }
 
-  private buildEntityMutationStatement(
-    op: AtomicMutationOp,
-    nowIso: string
-  ): D1PreparedStatement {
-    const isSoftDelete =
-      op.soft_delete === true || op.action === 'delete' || op.after_json === null;
+  private buildEntityMutationStatement(op: AtomicMutationOp, nowIso: string): D1PreparedStatement {
+    const isSoftDelete = op.soft_delete === true || op.action === 'delete' || op.after_json === null;
     const deletedAt = isSoftDelete ? nowIso : null;
 
     if (op.entity_type === 'kinship_edge') {
       if (op.after_json !== null) {
         const edge = parseEntityPayload('kinship_edge', op.after_json);
         return this.prepare(
-            `UPDATE kinship_edges
+          `UPDATE kinship_edges
              SET from_person_id = ?, to_person_id = ?, relation = ?, family_xref = ?,
                  current_revision_id = last_insert_rowid(), deleted_at = ?, updated_at = ?
              WHERE edge_id = ?`
-          )
-          .bind(
-            edge.from,
-            edge.to,
-            edge.relation,
-            edge.family_xref ?? null,
-            deletedAt,
-            nowIso,
-            op.entity_id
-          );
+        ).bind(edge.from, edge.to, edge.relation, edge.family_xref ?? null, deletedAt, nowIso, op.entity_id);
       }
 
       return this.prepare(
-          `UPDATE kinship_edges
+        `UPDATE kinship_edges
            SET current_revision_id = last_insert_rowid(), deleted_at = ?, updated_at = ?
            WHERE edge_id = ?`
-        )
-        .bind(deletedAt, nowIso, op.entity_id);
+      ).bind(deletedAt, nowIso, op.entity_id);
     }
 
     const hasPrimary = op.has_primary_source ? 1 : 0;
@@ -1053,29 +1028,12 @@ export class D1ArchiveRepository implements ArchiveRepository {
       const slugInfo = resolveSlugForOp(op);
       if (slugInfo.updateSlug) {
         return this.prepare(
-            `UPDATE entities
+          `UPDATE entities
              SET slug = ?, data_json = ?, current_revision_id = last_insert_rowid(),
                  has_primary_source = ?, deleted_at = ?, updated_at = ?
              WHERE entity_type = ? AND entity_id = ?`
-          )
-          .bind(
-            slugInfo.value,
-            JSON.stringify(op.after_json),
-            hasPrimary,
-            deletedAt,
-            nowIso,
-            op.entity_type,
-            op.entity_id
-          );
-      }
-
-      return this.prepare(
-          `UPDATE entities
-           SET data_json = ?, current_revision_id = last_insert_rowid(),
-               has_primary_source = ?, deleted_at = ?, updated_at = ?
-           WHERE entity_type = ? AND entity_id = ?`
-        )
-        .bind(
+        ).bind(
+          slugInfo.value,
           JSON.stringify(op.after_json),
           hasPrimary,
           deletedAt,
@@ -1083,15 +1041,22 @@ export class D1ArchiveRepository implements ArchiveRepository {
           op.entity_type,
           op.entity_id
         );
+      }
+
+      return this.prepare(
+        `UPDATE entities
+           SET data_json = ?, current_revision_id = last_insert_rowid(),
+               has_primary_source = ?, deleted_at = ?, updated_at = ?
+           WHERE entity_type = ? AND entity_id = ?`
+      ).bind(JSON.stringify(op.after_json), hasPrimary, deletedAt, nowIso, op.entity_type, op.entity_id);
     }
 
     return this.prepare(
-        `UPDATE entities
+      `UPDATE entities
          SET current_revision_id = last_insert_rowid(),
              has_primary_source = ?, deleted_at = ?, updated_at = ?
          WHERE entity_type = ? AND entity_id = ?`
-      )
-      .bind(hasPrimary, deletedAt, nowIso, op.entity_type, op.entity_id);
+    ).bind(hasPrimary, deletedAt, nowIso, op.entity_type, op.entity_id);
   }
 
   private async resolveConstraintConflict(
@@ -1152,10 +1117,7 @@ export class D1ArchiveRepository implements ArchiveRepository {
     throw originalError;
   }
 
-  private async buildConflictForOp(
-    op: AtomicMutationOp,
-    nowIso: string
-  ): Promise<OptimisticConflictError> {
+  private async buildConflictForOp(op: AtomicMutationOp, nowIso: string): Promise<OptimisticConflictError> {
     const existing = await this.getEntity(op.entity_type, op.entity_id);
     return this.buildConflictFromExisting(op, existing, nowIso);
   }
@@ -1181,12 +1143,12 @@ export class D1ArchiveRepository implements ArchiveRepository {
     }
 
     const lastRev = await this.prepare(
-        `SELECT author_name
+      `SELECT author_name
          FROM revisions
          WHERE entity_type = ? AND entity_id = ?
          ORDER BY revision_id DESC
          LIMIT 1`
-      )
+    )
       .bind(op.entity_type, op.entity_id)
       .first<{ author_name: string }>();
 
@@ -1236,14 +1198,14 @@ export class D1ArchiveRepository implements ArchiveRepository {
 
     const whereSql = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
     const res = await this.prepare(
-        `SELECT revision_id, batch_id, entity_type, entity_id, parent_revision_id, action,
+      `SELECT revision_id, batch_id, entity_type, entity_id, parent_revision_id, action,
                 reverted_revision_id, author_id, author_name, author_type,
                 summary, has_primary_source, before_json, after_json, created_at
          FROM revisions
          ${whereSql}
          ORDER BY revision_id DESC
          LIMIT ?`
-      )
+    )
       .bind(...bindings, limit + 1)
       .all<RawDbRevisionRow>();
 
@@ -1260,12 +1222,12 @@ export class D1ArchiveRepository implements ArchiveRepository {
 
   async getRevisionById(revisionId: RevisionId): Promise<RevisionRecord | null> {
     const row = await this.prepare(
-        `SELECT revision_id, batch_id, entity_type, entity_id, parent_revision_id, action,
+      `SELECT revision_id, batch_id, entity_type, entity_id, parent_revision_id, action,
                 reverted_revision_id, author_id, author_name, author_type,
                 summary, has_primary_source, before_json, after_json, created_at
          FROM revisions
          WHERE revision_id = ?`
-      )
+    )
       .bind(revisionId)
       .first<RawDbRevisionRow>();
     return row ? mapRevisionRow(row) : null;
@@ -1273,13 +1235,13 @@ export class D1ArchiveRepository implements ArchiveRepository {
 
   async getRevisionsByBatch(batchId: BatchId): Promise<readonly RevisionRecord[]> {
     const res = await this.prepare(
-        `SELECT revision_id, batch_id, entity_type, entity_id, parent_revision_id, action,
+      `SELECT revision_id, batch_id, entity_type, entity_id, parent_revision_id, action,
                 reverted_revision_id, author_id, author_name, author_type,
                 summary, has_primary_source, before_json, after_json, created_at
          FROM revisions
          WHERE batch_id = ? AND batch_id IS NOT NULL
          ORDER BY revision_id ASC`
-      )
+    )
       .bind(batchId)
       .all<RawDbRevisionRow>();
     return res.results.map(mapRevisionRow);
@@ -1287,12 +1249,12 @@ export class D1ArchiveRepository implements ArchiveRepository {
 
   async listTalkComments(entityType: EntityType, entityId: string): Promise<readonly TalkComment[]> {
     const res = await this.prepare(
-        `SELECT comment_id, entity_type, entity_id, author_id, author_name,
+      `SELECT comment_id, entity_type, entity_id, author_id, author_name,
                 body_md, created_at, edited_at, deleted_at
          FROM talk_comments
          WHERE entity_type = ? AND entity_id = ? AND deleted_at IS NULL
          ORDER BY comment_id ASC`
-      )
+    )
       .bind(entityType, entityId)
       .all<RawDbTalkRow>();
     return res.results.map(mapTalkRow);
@@ -1307,12 +1269,12 @@ export class D1ArchiveRepository implements ArchiveRepository {
     created_at: string;
   }): Promise<TalkComment> {
     const row = await this.prepare(
-        `INSERT INTO talk_comments (
+      `INSERT INTO talk_comments (
            entity_type, entity_id, author_id, author_name, body_md, created_at
          ) VALUES (?, ?, ?, ?, ?, ?)
          RETURNING comment_id, entity_type, entity_id, author_id, author_name,
                    body_md, created_at, edited_at, deleted_at`
-      )
+    )
       .bind(
         input.entity_type,
         input.entity_id,
@@ -1331,10 +1293,10 @@ export class D1ArchiveRepository implements ArchiveRepository {
 
   async softDeleteTalkComment(commentId: number, deletedAt: string): Promise<boolean> {
     const res = await this.prepare(
-        `UPDATE talk_comments
+      `UPDATE talk_comments
          SET deleted_at = ?
          WHERE comment_id = ? AND deleted_at IS NULL`
-      )
+    )
       .bind(deletedAt, commentId)
       .run();
     return (res.meta.changes ?? 0) > 0;
@@ -1343,10 +1305,10 @@ export class D1ArchiveRepository implements ArchiveRepository {
   async getUser(email: string): Promise<UserRecord | null> {
     const normalized = email.trim().toLowerCase();
     const row = await this.prepare(
-        `SELECT email, display_name, role, added_by, added_at, last_login_at
+      `SELECT email, display_name, role, added_by, added_at, last_login_at
          FROM users
          WHERE email = ?`
-      )
+    )
       .bind(normalized)
       .first<RawDbUserRow>();
     return row ? mapUserRow(row) : null;
@@ -1354,18 +1316,17 @@ export class D1ArchiveRepository implements ArchiveRepository {
 
   async listUsers(): Promise<readonly UserRecord[]> {
     const res = await this.prepare(
-        `SELECT email, display_name, role, added_by, added_at, last_login_at
+      `SELECT email, display_name, role, added_by, added_at, last_login_at
          FROM users
          ORDER BY email ASC`
-      )
-      .all<RawDbUserRow>();
+    ).all<RawDbUserRow>();
     return res.results.map(mapUserRow);
   }
 
   async upsertUser(user: UserRecord): Promise<UserRecord> {
     const normalizedEmail = user.email.trim().toLowerCase();
     const row = await this.prepare(
-        `INSERT INTO users (email, display_name, role, added_by, added_at, last_login_at)
+      `INSERT INTO users (email, display_name, role, added_by, added_at, last_login_at)
          VALUES (?, ?, ?, ?, ?, ?)
          ON CONFLICT(email) DO UPDATE SET
            display_name = excluded.display_name,
@@ -1374,15 +1335,8 @@ export class D1ArchiveRepository implements ArchiveRepository {
            added_at = excluded.added_at,
            last_login_at = excluded.last_login_at
          RETURNING email, display_name, role, added_by, added_at, last_login_at`
-      )
-      .bind(
-        normalizedEmail,
-        user.display_name,
-        user.role,
-        user.added_by,
-        user.added_at,
-        user.last_login_at
-      )
+    )
+      .bind(normalizedEmail, user.display_name, user.role, user.added_by, user.added_at, user.last_login_at)
       .first<RawDbUserRow>();
 
     if (!row) {
@@ -1394,11 +1348,11 @@ export class D1ArchiveRepository implements ArchiveRepository {
   async updateUserRole(email: string, role: UserRole): Promise<UserRecord | null> {
     const normalized = email.trim().toLowerCase();
     const row = await this.prepare(
-        `UPDATE users
+      `UPDATE users
          SET role = ?
          WHERE email = ?
          RETURNING email, display_name, role, added_by, added_at, last_login_at`
-      )
+    )
       .bind(role, normalized)
       .first<RawDbUserRow>();
     return row ? mapUserRow(row) : null;
@@ -1412,17 +1366,15 @@ export class D1ArchiveRepository implements ArchiveRepository {
 
   async touchUserLogin(email: string, atIso: string): Promise<void> {
     const normalized = email.trim().toLowerCase();
-    await this.prepare('UPDATE users SET last_login_at = ? WHERE email = ?')
-      .bind(atIso, normalized)
-      .run();
+    await this.prepare('UPDATE users SET last_login_at = ? WHERE email = ?').bind(atIso, normalized).run();
   }
 
   async getInvite(token: string): Promise<InviteRecord | null> {
     const row = await this.prepare(
-        `SELECT token, label, created_by, created_at, expires_at, revoked_at, uses, last_used_at
+      `SELECT token, label, created_by, created_at, expires_at, revoked_at, uses, last_used_at
          FROM invites
          WHERE token = ?`
-      )
+    )
       .bind(token)
       .first<RawDbInviteRow>();
     return row ? mapInviteRow(row) : null;
@@ -1430,21 +1382,20 @@ export class D1ArchiveRepository implements ArchiveRepository {
 
   async listInvites(): Promise<readonly InviteRecord[]> {
     const res = await this.prepare(
-        `SELECT token, label, created_by, created_at, expires_at, revoked_at, uses, last_used_at
+      `SELECT token, label, created_by, created_at, expires_at, revoked_at, uses, last_used_at
          FROM invites
          ORDER BY created_at DESC`
-      )
-      .all<RawDbInviteRow>();
+    ).all<RawDbInviteRow>();
     return res.results.map(mapInviteRow);
   }
 
   async createInvite(invite: InviteRecord): Promise<InviteRecord> {
     const row = await this.prepare(
-        `INSERT INTO invites (
+      `INSERT INTO invites (
            token, label, created_by, created_at, expires_at, revoked_at, uses, last_used_at
          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
          RETURNING token, label, created_by, created_at, expires_at, revoked_at, uses, last_used_at`
-      )
+    )
       .bind(
         invite.token,
         invite.label,
@@ -1479,25 +1430,19 @@ export class D1ArchiveRepository implements ArchiveRepository {
   async insertMagicLink(record: MagicLinkRecord): Promise<void> {
     const normalizedEmail = record.email.trim().toLowerCase();
     await this.prepare(
-        `INSERT INTO magic_links (token_hash, email, invite_token, expires_at, used_at)
+      `INSERT INTO magic_links (token_hash, email, invite_token, expires_at, used_at)
          VALUES (?, ?, ?, ?, ?)`
-      )
-      .bind(
-        record.token_hash,
-        normalizedEmail,
-        record.invite_token,
-        record.expires_at,
-        record.used_at
-      )
+    )
+      .bind(record.token_hash, normalizedEmail, record.invite_token, record.expires_at, record.used_at)
       .run();
   }
 
   async getMagicLink(tokenHash: Sha256Hex): Promise<MagicLinkRecord | null> {
     const row = await this.prepare(
-        `SELECT token_hash, email, invite_token, expires_at, used_at
+      `SELECT token_hash, email, invite_token, expires_at, used_at
          FROM magic_links
          WHERE token_hash = ?`
-      )
+    )
       .bind(tokenHash)
       .first<RawDbMagicLinkRow>();
     return row ? mapMagicLinkRow(row) : null;
@@ -1506,10 +1451,10 @@ export class D1ArchiveRepository implements ArchiveRepository {
   async countRecentMagicLinks(email: string, sinceIso: string): Promise<number> {
     const normalized = email.trim().toLowerCase();
     const row = await this.prepare(
-        `SELECT COUNT(*) AS count
+      `SELECT COUNT(*) AS count
          FROM magic_links
          WHERE email = ? AND expires_at > ?`
-      )
+    )
       .bind(normalized, sinceIso)
       .first<{ count: number }>();
     return row?.count ?? 0;
@@ -1518,13 +1463,13 @@ export class D1ArchiveRepository implements ArchiveRepository {
   async consumeMagicLink(tokenHash: Sha256Hex, nowIso: string): Promise<MagicLinkRecord | null> {
     // Single atomic UPDATE prevents replay races across concurrent verification requests.
     const row = await this.prepare(
-        `UPDATE magic_links
+      `UPDATE magic_links
          SET used_at = ?
          WHERE token_hash = ?
            AND used_at IS NULL
            AND expires_at > ?
          RETURNING token_hash, email, invite_token, expires_at, used_at`
-      )
+    )
       .bind(nowIso, tokenHash, nowIso)
       .first<RawDbMagicLinkRow>();
     return row ? mapMagicLinkRow(row) : null;
@@ -1532,10 +1477,10 @@ export class D1ArchiveRepository implements ArchiveRepository {
 
   async findActiveAgentTokenByHash(tokenHash: Sha256Hex): Promise<AgentTokenRecord | null> {
     const row = await this.prepare(
-        `SELECT token_id, token_hash, label, scope, created_by, created_at, revoked_at
+      `SELECT token_id, token_hash, label, scope, created_by, created_at, revoked_at
          FROM agent_tokens
          WHERE token_hash = ? AND revoked_at IS NULL`
-      )
+    )
       .bind(tokenHash)
       .first<RawDbAgentTokenRow>();
     return row ? mapAgentTokenRow(row) : null;
@@ -1543,21 +1488,20 @@ export class D1ArchiveRepository implements ArchiveRepository {
 
   async listAgentTokens(): Promise<readonly AgentTokenRecord[]> {
     const res = await this.prepare(
-        `SELECT token_id, token_hash, label, scope, created_by, created_at, revoked_at
+      `SELECT token_id, token_hash, label, scope, created_by, created_at, revoked_at
          FROM agent_tokens
          ORDER BY created_at DESC`
-      )
-      .all<RawDbAgentTokenRow>();
+    ).all<RawDbAgentTokenRow>();
     return res.results.map(mapAgentTokenRow);
   }
 
   async createAgentToken(record: AgentTokenRecord): Promise<AgentTokenRecord> {
     const row = await this.prepare(
-        `INSERT INTO agent_tokens (
+      `INSERT INTO agent_tokens (
            token_id, token_hash, label, scope, created_by, created_at, revoked_at
          ) VALUES (?, ?, ?, ?, ?, ?, ?)
          RETURNING token_id, token_hash, label, scope, created_by, created_at, revoked_at`
-      )
+    )
       .bind(
         record.token_id,
         record.token_hash,
@@ -1576,7 +1520,9 @@ export class D1ArchiveRepository implements ArchiveRepository {
   }
 
   async revokeAgentToken(tokenId: string, atIso: string): Promise<boolean> {
-    const res = await this.prepare('UPDATE agent_tokens SET revoked_at = ? WHERE token_id = ? AND revoked_at IS NULL')
+    const res = await this.prepare(
+      'UPDATE agent_tokens SET revoked_at = ? WHERE token_id = ? AND revoked_at IS NULL'
+    )
       .bind(atIso, tokenId)
       .run();
     return (res.meta.changes ?? 0) > 0;

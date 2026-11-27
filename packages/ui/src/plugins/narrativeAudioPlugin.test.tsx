@@ -1,14 +1,11 @@
 /** @vitest-environment jsdom */
 import type { ArchiveBundle, KinloomSiteConfig, Narrative } from '@kinloom/core';
 import { compileArchive, parseKinloomConfig } from '@kinloom/core';
-import { KinloomApp } from '../KinloomApp.js';
-import {
-  createNarrativeAudioPlugin,
-  readNarrativeAudioMeta,
-} from './narrativeAudioPlugin.js';
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { describe, expect, it } from 'vitest';
+import { KinloomApp } from '../KinloomApp.js';
+import { createNarrativeAudioPlugin, readNarrativeAudioMeta } from './narrativeAudioPlugin.js';
 
 declare global {
   var IS_REACT_ACT_ENVIRONMENT: boolean | undefined;
@@ -102,10 +99,7 @@ const { bundle: testBundle }: { bundle: ArchiveBundle } = compileArchive({
   narratives: [narratedBio, plainBio],
 });
 
-async function waitForCondition(
-  predicate: () => boolean,
-  timeoutMs = 3000,
-): Promise<void> {
+async function waitForCondition(predicate: () => boolean, timeoutMs = 3000): Promise<void> {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     if (predicate()) {
@@ -143,12 +137,12 @@ describe('createNarrativeAudioPlugin (Idea 1 + Idea 4)', () => {
           initialReadings={{ version: 1, documents: {}, event_page_map: {} }}
           plugins={[plugin]}
           initialEntries={['/person/thomas-mercer']}
-        />,
+        />
       );
     });
 
     await waitForCondition(
-      () => container.querySelector('[data-testid="narrative-audio-margin-bar"]') !== null,
+      () => container.querySelector('[data-testid="narrative-audio-margin-bar"]') !== null
     );
 
     // Inline Archival Margin Bar renders inside the biography entry
@@ -192,7 +186,7 @@ describe('createNarrativeAudioPlugin (Idea 1 + Idea 4)', () => {
 
     // Navigate away to /places — dock survives route change!
     const placesLink = [...container.querySelectorAll<HTMLAnchorElement>('.nav-links a')].find(
-      (a) => a.getAttribute('href') === '/places',
+      (a) => a.getAttribute('href') === '/places'
     );
     expect(placesLink).not.toBeNull();
     await act(async () => {
@@ -201,7 +195,7 @@ describe('createNarrativeAudioPlugin (Idea 1 + Idea 4)', () => {
     await waitForCondition(
       () =>
         container.querySelector('[data-testid="narrative-audio-margin-bar"]') === null &&
-        container.querySelector('.archive-loading-shell') === null,
+        container.querySelector('.archive-loading-shell') === null
     );
     expect(container.querySelector('[data-testid="narrative-audio-margin-bar"]')).toBeNull();
     expect(container.querySelector('[data-testid="narrative-audio-dock"]')).not.toBeNull();
@@ -233,14 +227,14 @@ describe('createNarrativeAudioPlugin (Idea 1 + Idea 4)', () => {
           initialReadings={{ version: 1, documents: {}, event_page_map: {} }}
           plugins={[plugin]}
           initialEntries={['/person/hannah-mercer']}
-        />,
+        />
       );
     });
 
     await waitForCondition(
       () =>
         container.querySelector('.archive-loading-shell') === null &&
-        (container.textContent?.includes('Hannah Caldwell Mercer') ?? false),
+        (container.textContent?.includes('Hannah Caldwell Mercer') ?? false)
     );
 
     expect(container.textContent).toContain('Hannah Caldwell Mercer');

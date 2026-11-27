@@ -245,11 +245,7 @@ export function parseMigrationSchemaRequirements(
       );
     if (createTableMatch) {
       const name = unquoteSqlIdent(
-        createTableMatch[1] ??
-          createTableMatch[2] ??
-          createTableMatch[3] ??
-          createTableMatch[4] ??
-          ''
+        createTableMatch[1] ?? createTableMatch[2] ?? createTableMatch[3] ?? createTableMatch[4] ?? ''
       );
       if (name && !createdTables.includes(name)) {
         createdTables.push(name);
@@ -264,11 +260,7 @@ export function parseMigrationSchemaRequirements(
       );
     if (createIndexMatch) {
       const name = unquoteSqlIdent(
-        createIndexMatch[1] ??
-          createIndexMatch[2] ??
-          createIndexMatch[3] ??
-          createIndexMatch[4] ??
-          ''
+        createIndexMatch[1] ?? createIndexMatch[2] ?? createIndexMatch[3] ?? createIndexMatch[4] ?? ''
       );
       if (name && !createdIndexes.includes(name)) {
         createdIndexes.push(name);
@@ -283,18 +275,10 @@ export function parseMigrationSchemaRequirements(
       );
     if (alterAddColMatch) {
       const table = unquoteSqlIdent(
-        alterAddColMatch[1] ??
-          alterAddColMatch[2] ??
-          alterAddColMatch[3] ??
-          alterAddColMatch[4] ??
-          ''
+        alterAddColMatch[1] ?? alterAddColMatch[2] ?? alterAddColMatch[3] ?? alterAddColMatch[4] ?? ''
       );
       const column = unquoteSqlIdent(
-        alterAddColMatch[5] ??
-          alterAddColMatch[6] ??
-          alterAddColMatch[7] ??
-          alterAddColMatch[8] ??
-          ''
+        alterAddColMatch[5] ?? alterAddColMatch[6] ?? alterAddColMatch[7] ?? alterAddColMatch[8] ?? ''
       );
       if (table && column) {
         addedColumns.push({ table, column, statement: stmt });
@@ -373,9 +357,7 @@ export function resolveD1DatabaseBinding(repoDir: string): D1DatabaseBinding {
   if (configPath.endsWith('.toml')) {
     const parsed = parseWranglerTomlD1Binding(raw);
     if (!parsed.dbName) {
-      throw new CliValidationError(
-        `Could not read [[d1_databases]] database_name from ${configPath}.`
-      );
+      throw new CliValidationError(`Could not read [[d1_databases]] database_name from ${configPath}.`);
     }
     return {
       configPath,
@@ -434,9 +416,7 @@ export function resolveMigrationsDir(
   if (explicitMigrationsDir && explicitMigrationsDir.trim().length > 0) {
     const resolved = path.resolve(repoDir, explicitMigrationsDir.trim());
     if (!hasNumberedMigrations(resolved)) {
-      throw new CliValidationError(
-        `No numbered SQL migrations (NNNN_*.sql) found under ${resolved}.`
-      );
+      throw new CliValidationError(`No numbered SQL migrations (NNNN_*.sql) found under ${resolved}.`);
     }
     return resolved;
   }
@@ -497,9 +477,7 @@ export function discoverMigrations(migrationsDir: string): DiscoveredMigration[]
   });
 
   if (entries.length === 0) {
-    throw new CliValidationError(
-      `No numbered SQL migrations (NNNN_*.sql) found under ${migrationsDir}.`
-    );
+    throw new CliValidationError(`No numbered SQL migrations (NNNN_*.sql) found under ${migrationsDir}.`);
   }
 
   return entries;
@@ -565,10 +543,7 @@ function parseD1JsonOutput(stdout: string, dbName: string): D1StatementResult[] 
   return statements;
 }
 
-async function executeD1Command(
-  ctx: MigrateExecContext,
-  sql: string
-): Promise<D1StatementResult[]> {
+async function executeD1Command(ctx: MigrateExecContext, sql: string): Promise<D1StatementResult[]> {
   const targetFlag = ctx.target === 'remote' ? '--remote' : '--local';
   const { stdout } = await ctx.execWrangler(
     ctx.wranglerBin,
@@ -592,10 +567,7 @@ async function executeD1Command(
   return parseD1JsonOutput(stdout, ctx.binding.dbName);
 }
 
-async function executeD1File(
-  ctx: MigrateExecContext,
-  filePath: string
-): Promise<D1StatementResult[]> {
+async function executeD1File(ctx: MigrateExecContext, filePath: string): Promise<D1StatementResult[]> {
   const targetFlag = ctx.target === 'remote' ? '--remote' : '--local';
   const { stdout } = await ctx.execWrangler(
     ctx.wranglerBin,
@@ -665,9 +637,7 @@ async function inspectD1Schema(
   const columnsByTable = new Map<string, Set<string>>();
   const orderedColumnTables = [...tablesNeedingColumns].sort((a, b) => a.localeCompare(b));
   if (orderedColumnTables.length > 0) {
-    const pragmaSql = orderedColumnTables
-      .map((table) => `PRAGMA table_info(${table});`)
-      .join(' ');
+    const pragmaSql = orderedColumnTables.map((table) => `PRAGMA table_info(${table});`).join(' ');
     const pragmaStatements = await executeD1Command(ctx, pragmaSql);
     for (const [idx, table] of orderedColumnTables.entries()) {
       const colSet = new Set<string>();
@@ -775,14 +745,10 @@ function buildMissingAlterStatements(
     .map((colReq) => colReq.statement);
 }
 
-export function formatMigrateReport(
-  result: Omit<MigrateCommandResult, 'rendered'>
-): string {
+export function formatMigrateReport(result: Omit<MigrateCommandResult, 'rendered'>): string {
   const lines: string[] = [];
   const modeLabel = result.dryRun ? 'dry-run' : 'live';
-  lines.push(
-    `Kinloom D1 migrate (${modeLabel}, --${result.target}): ${result.dbName}`
-  );
+  lines.push(`Kinloom D1 migrate (${modeLabel}, --${result.target}): ${result.dbName}`);
   lines.push(`Config: ${result.configPath}`);
   lines.push(`Migrations: ${result.migrationsDir}`);
   lines.push(
@@ -799,8 +765,7 @@ export function formatMigrateReport(
   if (result.pending.length > 0) {
     lines.push('Pending:');
     for (const item of result.pending) {
-      const detail =
-        item.missingObjects.length > 0 ? ` missing ${item.missingObjects.join(', ')}` : '';
+      const detail = item.missingObjects.length > 0 ? ` missing ${item.missingObjects.join(', ')}` : '';
       lines.push(`  [pending] ${item.id}${detail}`);
     }
   } else if (result.dryRun) {
@@ -812,18 +777,12 @@ export function formatMigrateReport(
   return lines.join('\n');
 }
 
-export async function runMigrateCommand(
-  options: MigrateCommandOptions = {}
-): Promise<MigrateCommandResult> {
+export async function runMigrateCommand(options: MigrateCommandOptions = {}): Promise<MigrateCommandResult> {
   const repoDir = path.resolve(options.repoDir ?? process.cwd());
   const target: MigrateTarget = options.target ?? 'remote';
   const dryRun = Boolean(options.dryRun);
   const binding = resolveD1DatabaseBinding(repoDir);
-  const migrationsDir = resolveMigrationsDir(
-    repoDir,
-    options.migrationsDir,
-    binding.migrationsDirHint
-  );
+  const migrationsDir = resolveMigrationsDir(repoDir, options.migrationsDir, binding.migrationsDirHint);
   const migrations = discoverMigrations(migrationsDir);
 
   const ctx: MigrateExecContext = {
@@ -875,9 +834,7 @@ export async function runMigrateCommand(
 
   const afterSnapshot = await inspectD1Schema(ctx, migrations);
   const executedSet = new Set(executed);
-  const afterEntries = migrations.map((m) =>
-    evaluateMigrationStatus(m, afterSnapshot, executedSet)
-  );
+  const afterEntries = migrations.map((m) => evaluateMigrationStatus(m, afterSnapshot, executedSet));
   const applied = afterEntries.filter((e) => e.status === 'applied');
   const pending = afterEntries.filter((e) => e.status === 'pending');
   const verified = pending.length === 0;

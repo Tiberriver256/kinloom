@@ -197,10 +197,7 @@ class MockLva {
         }
       }
       if (url.pathname === '/view/action/ieViewer.do') {
-        if (
-          url.searchParams.get('dps_dvs') !== '111~222' ||
-          url.searchParams.get('dps_pid') !== 'IE900001'
-        ) {
+        if (url.searchParams.get('dps_dvs') !== '111~222' || url.searchParams.get('dps_pid') !== 'IE900001') {
           return new Response('bad viewer params', { status: 400 });
         }
         return new Response(VIEWER_HTML, {
@@ -466,10 +463,11 @@ describe('va-archives grant-tif / lva-tif', () => {
     expect((JSON.parse(rHit.stdout) as { cache_hit: boolean }).cache_hit).toBe(true);
     expect(mock.calls).toHaveLength(1);
 
-    const r3 = await invokeVa(
-      ['grant-tif', '/LONN/LO-3/372/372_0195.tif', '--out', out2, '--refresh'],
-      { cacheDir, cwd: root, mock }
-    );
+    const r3 = await invokeVa(['grant-tif', '/LONN/LO-3/372/372_0195.tif', '--out', out2, '--refresh'], {
+      cacheDir,
+      cwd: root,
+      mock,
+    });
     expect(r3.exitCode).toBe(0);
     expect(mock.calls).toHaveLength(2);
     expect(fs.readFileSync(out2)).toEqual(Buffer.concat([FAKE_TIFF, Buffer.from('-v2', 'utf8')]));
@@ -499,9 +497,7 @@ describe('va-archives grant-tif / lva-tif', () => {
     });
     expect(redir.exitCode).not.toBe(0);
     expect(fs.existsSync(out)).toBe(false);
-    expect(listFilesRecursive(path.join(cacheDir, 'files')).filter((f) => f.endsWith('.tif'))).toEqual(
-      []
-    );
+    expect(listFilesRecursive(path.join(cacheDir, 'files')).filter((f) => f.endsWith('.tif'))).toEqual([]);
   });
 
   it('converts CCITT G4 TIFF to JPEG when --out ends in .jpg', async () => {
@@ -629,9 +625,7 @@ describe('va-archives rosetta', () => {
       mock,
     });
     expect(r3.exitCode).toBe(0);
-    expect(fs.readFileSync(out2)).toEqual(
-      Buffer.concat([FAKE_PDF, Buffer.from('FL900003', 'utf8')])
-    );
+    expect(fs.readFileSync(out2)).toEqual(Buffer.concat([FAKE_PDF, Buffer.from('FL900003', 'utf8')]));
     expect(mock.calls.slice(3).map((c) => c.url.searchParams.get('dps_pid'))).toEqual([
       'IE900001',
       'FL900003',
@@ -713,19 +707,21 @@ describe('va-archives chancery search, case, download, and url', () => {
     expect(caseData.images.total_pages).toBe(2);
 
     const dlDir = path.join(root, 'case-pdfs');
-    const dlPdf = await invokeVa(
-      ['chancery', 'download', '003-1842-001', '--pages', '1', '--out', dlDir],
-      { cacheDir, cwd: root, mock }
-    );
+    const dlPdf = await invokeVa(['chancery', 'download', '003-1842-001', '--pages', '1', '--out', dlDir], {
+      cacheDir,
+      cwd: root,
+      mock,
+    });
     expect(dlPdf.exitCode).toBe(0);
     expect(fs.existsSync(path.join(dlDir, '003-1842-001_0001.pdf'))).toBe(true);
     expect(fs.existsSync(path.join(dlDir, 'metadata.json'))).toBe(true);
 
     const zipDir = path.join(root, 'case-zip');
-    const dlZip = await invokeVa(
-      ['chancery', 'download', '003-1842-001', '--zip', '--out', zipDir],
-      { cacheDir, cwd: root, mock }
-    );
+    const dlZip = await invokeVa(['chancery', 'download', '003-1842-001', '--zip', '--out', zipDir], {
+      cacheDir,
+      cwd: root,
+      mock,
+    });
     expect(dlZip.exitCode).toBe(0);
     expect(fs.readFileSync(path.join(zipDir, '003-1842-001.zip'))).toEqual(FAKE_ZIP);
 

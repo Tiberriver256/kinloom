@@ -1,3 +1,4 @@
+import React from 'react';
 import {
   getAppBuildId,
   isChunkLoadError,
@@ -5,7 +6,6 @@ import {
   safeSessionStorage,
   shouldAttemptChunkReload,
 } from '../lib/clientTelemetry.js';
-import React from 'react';
 
 interface BoundaryState {
   hasError: boolean;
@@ -73,9 +73,7 @@ export class AppErrorBoundary extends React.Component<AppErrorBoundaryProps, Bou
     }
 
     const { error, chunkStale } = this.state;
-    const heading = chunkStale
-      ? 'A newer archive version is available'
-      : 'This page could not be displayed';
+    const heading = chunkStale ? 'A newer archive version is available' : 'This page could not be displayed';
     const kicker = (this.props.siteTitle || 'Family Archive').toUpperCase();
 
     return (

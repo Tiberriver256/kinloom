@@ -195,9 +195,7 @@ export class CloudflareEmailSender implements EmailSender {
       }
       const detail = formatDeliveryErrorDetail(error, params.magicLinkUrl);
       const code = readErrorCode(error);
-      console.error(
-        `[kinloom/worker] SEND_EMAIL binding delivery failed (${code ?? 'no code'}): ${detail}`
-      );
+      console.error(`[kinloom/worker] SEND_EMAIL binding delivery failed (${code ?? 'no code'}): ${detail}`);
       if (code && RECIPIENT_REJECTION_CODES.has(code)) {
         throw new KinloomHttpError(
           502,

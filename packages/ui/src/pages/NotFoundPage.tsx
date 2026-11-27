@@ -1,4 +1,4 @@
-import React from 'react';
+import type React from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { ExplorerTopBar } from '../components/ExplorerTopBar.js';
 import { KinloomFooter } from '../components/KinloomFooter.js';
@@ -15,9 +15,8 @@ export const NotFoundPage: React.FC = () => {
       <main id="main-content" className="not-found-page">
         <h1 className="not-found-title">Page Not Found</h1>
         <p className="not-found-copy">
-          We could not find an archive page at{' '}
-          <code className="not-found-path">{location.pathname}</code>. The record may have moved, or
-          the address may be misspelled.
+          We could not find an archive page at <code className="not-found-path">{location.pathname}</code>.
+          The record may have moved, or the address may be misspelled.
         </p>
         <nav className="not-found-actions" aria-label="Archive recovery links">
           <Link to="/" className="not-found-link is-primary">

@@ -2,6 +2,7 @@ import path from 'node:path';
 import { CliValidationError } from '../../../errors.js';
 import {
   atomicWriteFileSync,
+  type CommandParseSpec,
   cachedJsonCall,
   cacheKeyFor,
   collapseWhitespace,
@@ -16,20 +17,19 @@ import {
   httpRequest,
   launchOptionalChromium,
   loadHtml,
-  parseCacheTtlHours,
-  parseCommandArgs,
-  readSchemaCacheEntry,
-  RecordRuntimeError,
-  resolveCacheDir,
-  withAdvisoryLock,
-  type CommandParseSpec,
   type OptionalBrowser,
   type OptionalBrowserPage,
   type OptionSpec,
+  parseCacheTtlHours,
+  parseCommandArgs,
   type RecordCommandContext,
   type RecordCommandOutcome,
   type RecordHandler,
+  RecordRuntimeError,
+  readSchemaCacheEntry,
+  resolveCacheDir,
   type SchemaCacheEntry,
+  withAdvisoryLock,
 } from '../runtime/index.js';
 
 const DEFAULT_CACHE_TTL_HOURS = 168;
@@ -96,11 +96,7 @@ interface RawBrowserLink {
 }
 
 interface WaitableBrowserPage extends OptionalBrowserPage {
-  waitForFunction(
-    pageFunction: string,
-    arg?: unknown,
-    options?: { timeout?: number }
-  ): Promise<unknown>;
+  waitForFunction(pageFunction: string, arg?: unknown, options?: { timeout?: number }): Promise<unknown>;
   waitForTimeout?(timeout: number): Promise<void>;
 }
 
@@ -156,11 +152,7 @@ export function buildUrl(source: CaSource, query: string, limit = 10): string {
   }
 }
 
-export function parsePortalSearchHtml(
-  html: string,
-  url: string,
-  limit = 10
-): CaSourceEntry {
+export function parsePortalSearchHtml(html: string, url: string, limit = 10): CaSourceEntry {
   const totalMatch = /Search Results \d+ to \d+ of (\d+)/.exec(html);
   const total = totalMatch ? Number.parseInt(totalMatch[1], 10) : null;
 
@@ -214,9 +206,7 @@ function extractOmekaTypes(item: Record<string, unknown>): string {
   if (!Array.isArray(raw)) {
     return '';
   }
-  return raw
-    .filter((entry): entry is string => typeof entry === 'string' && entry !== 'o:Item')
-    .join(', ');
+  return raw.filter((entry): entry is string => typeof entry === 'string' && entry !== 'o:Item').join(', ');
 }
 
 export async function searchPortal(
@@ -453,10 +443,7 @@ async function fetchPortalItem(ctx: RecordCommandContext, portalId: string): Pro
   };
 }
 
-async function fetchExhibitsItem(
-  ctx: RecordCommandContext,
-  exhibitsId: string
-): Promise<CaExhibitsItem> {
+async function fetchExhibitsItem(ctx: RecordCommandContext, exhibitsId: string): Promise<CaExhibitsItem> {
   const url = `${EXHIBITS_BASE}/api/items/${exhibitsId}`;
   const response = await httpRequest(url, {
     fetchImpl: ctx.fetchImpl,
@@ -721,10 +708,7 @@ function renderRootHelp(): string {
   });
 }
 
-async function runSearch(
-  argv: readonly string[],
-  ctx: RecordCommandContext
-): Promise<RecordCommandOutcome> {
+async function runSearch(argv: readonly string[], ctx: RecordCommandContext): Promise<RecordCommandOutcome> {
   const parsed = parseCommandArgs(argv, SEARCH_SPEC);
   if (parsed.helpRequested) {
     return {
@@ -885,10 +869,7 @@ function runUrl(argv: readonly string[], ctx: RecordCommandContext): RecordComma
   };
 }
 
-async function runGet(
-  argv: readonly string[],
-  ctx: RecordCommandContext
-): Promise<RecordCommandOutcome> {
+async function runGet(argv: readonly string[], ctx: RecordCommandContext): Promise<RecordCommandOutcome> {
   const parsed = parseCommandArgs(argv, GET_SPEC);
   if (parsed.helpRequested) {
     return {
@@ -977,10 +958,7 @@ async function runGet(
   };
 }
 
-export const runCaArchivesCommand: RecordHandler = async (
-  args,
-  ctx
-): Promise<RecordCommandOutcome> => {
+export const runCaArchivesCommand: RecordHandler = async (args, ctx): Promise<RecordCommandOutcome> => {
   try {
     if (args.length === 0 || args[0] === '--help' || args[0] === '-h') {
       return { exitCode: 0, bytesOut: emitStdout(ctx.io, renderRootHelp()) };
@@ -994,9 +972,7 @@ export const runCaArchivesCommand: RecordHandler = async (
       case 'get':
         return await runGet(rest, ctx);
       default:
-        throw new CliValidationError(
-          `No such command '${subcmd}'. Run 'kinloom ca-archives --script-help'.`
-        );
+        throw new CliValidationError(`No such command '${subcmd}'. Run 'kinloom ca-archives --script-help'.`);
     }
   } catch (err: unknown) {
     if (err instanceof CliValidationError) {

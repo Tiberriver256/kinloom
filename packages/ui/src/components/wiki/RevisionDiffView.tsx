@@ -1,6 +1,7 @@
 import type { EntityDiffSummary, EntityPayload, FieldDiff } from '@kinloom/core';
 import { computeEntityDiff } from '@kinloom/core';
-import React, { useMemo } from 'react';
+import type React from 'react';
+import { useMemo } from 'react';
 
 export interface RevisionDiffViewProps {
   before?: EntityPayload | null;
@@ -51,7 +52,7 @@ export const RevisionDiffView: React.FC<RevisionDiffViewProps> = ({
 }) => {
   const summary = useMemo(
     () => providedDiff ?? computeEntityDiff(before, after),
-    [providedDiff, before, after],
+    [providedDiff, before, after]
   );
 
   if (!summary.hasChanges || summary.fields.length === 0) {

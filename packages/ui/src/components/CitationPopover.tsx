@@ -1,6 +1,7 @@
 import type { MediaItem, SourceRecord } from '@kinloom/core';
 import { buildLibrarianCitation } from '@kinloom/core';
-import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import type React from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 
 const SAFE_EXTERNAL_URL_RE = /^https?:\/\//i;
@@ -32,7 +33,7 @@ export function computeCitationPopoverPosition(params: {
   const maxWidth = Math.min(340, Math.max(220, params.viewport.width - margin * 2));
   const effectiveWidth = Math.min(
     params.popoverSize.width > 0 ? params.popoverSize.width : maxWidth,
-    maxWidth,
+    maxWidth
   );
   const effectiveHeight = params.popoverSize.height > 0 ? params.popoverSize.height : 200;
 
@@ -105,7 +106,7 @@ export const CitationPopover: React.FC<CitationPopoverProps> = ({
         width: typeof window !== 'undefined' ? window.innerWidth : 1024,
         height: typeof window !== 'undefined' ? window.innerHeight : 768,
       },
-    }),
+    })
   );
   const [imageFailed, setImageFailed] = useState(false);
   const prevMediaUrlRef = useRef<string | null>(mediaUrl);
@@ -131,7 +132,7 @@ export const CitationPopover: React.FC<CitationPopoverProps> = ({
           width: window.innerWidth || 1024,
           height: window.innerHeight || 768,
         },
-      }),
+      })
     );
   }, [anchorEl, popoverRef]);
 
@@ -149,8 +150,7 @@ export const CitationPopover: React.FC<CitationPopoverProps> = ({
   }, [reposition]);
 
   const citation = buildLibrarianCitation(source);
-  const safeExternalUrl =
-    citation.url && SAFE_EXTERNAL_URL_RE.test(citation.url) ? citation.url : null;
+  const safeExternalUrl = citation.url && SAFE_EXTERNAL_URL_RE.test(citation.url) ? citation.url : null;
   const showMediaPreview = Boolean(media && mediaUrl && !imageFailed);
 
   const card = (

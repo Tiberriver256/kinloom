@@ -1,4 +1,4 @@
-import React from 'react';
+import type React from 'react';
 import { useArchiveData } from '../../context/ArchiveDataContext.js';
 
 export type WikiEntityTab = 'read' | 'edit' | 'history' | 'talk';
@@ -41,11 +41,7 @@ export const WikiActionBar: React.FC<WikiActionBarProps> = ({
   const viewingSubPanel = activeTab === 'history' || activeTab === 'talk';
 
   return (
-    <div
-      className="wiki-action-bar print-hide"
-      role="region"
-      aria-label={`Contribute to ${entityLabel}`}
-    >
+    <div className="wiki-action-bar print-hide" role="region" aria-label={`Contribute to ${entityLabel}`}>
       <div className="wiki-action-primary">
         {viewingSubPanel ? (
           <button
@@ -83,11 +79,7 @@ export const WikiActionBar: React.FC<WikiActionBarProps> = ({
             )}
 
             {capabilities.canUploadMedia && onUploadMedia && (
-              <button
-                type="button"
-                className="wiki-btn-secondary wiki-btn-sm"
-                onClick={onUploadMedia}
-              >
+              <button type="button" className="wiki-btn-secondary wiki-btn-sm" onClick={onUploadMedia}>
                 <svg
                   width="14"
                   height="14"

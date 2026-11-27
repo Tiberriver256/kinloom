@@ -32,17 +32,9 @@ interface PlaywrightCoreModule {
   };
 }
 
-const DEFAULT_BROWSER_NAMES = [
-  'chromium',
-  'chromium-browser',
-  'google-chrome',
-  'google-chrome-stable',
-];
+const DEFAULT_BROWSER_NAMES = ['chromium', 'chromium-browser', 'google-chrome', 'google-chrome-stable'];
 
-export function findSystemChromium(
-  env: NodeJS.ProcessEnv,
-  overrideEnvVar?: string
-): string | undefined {
+export function findSystemChromium(env: NodeJS.ProcessEnv, overrideEnvVar?: string): string | undefined {
   if (overrideEnvVar) {
     const override = env[overrideEnvVar]?.trim();
     if (override) {

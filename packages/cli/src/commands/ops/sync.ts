@@ -5,9 +5,18 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { promisify } from 'node:util';
 import {
+  type ArchiveBundle,
   computeEntityDiff,
   deriveKinshipEdgeId,
+  type EntityPatch,
+  type EntityPayload,
+  type EntityType,
   filterMediaForPrivacy,
+  type KinloomSiteConfig,
+  type KinshipEdge,
+  type MediaItem,
+  type Narrative,
+  type Place,
   parseEntityPayload,
   parseEventsYaml,
   parseKinloomConfigYaml,
@@ -17,21 +26,12 @@ import {
   parsePeopleYaml,
   parsePlacesYaml,
   parseSourcesYaml,
-  resolveEffectiveLiving,
-  sanitizeEventForWrite,
-  sanitizePersonForWrite,
-  type ArchiveBundle,
-  type EntityPatch,
-  type EntityPayload,
-  type EntityType,
-  type KinloomSiteConfig,
-  type KinshipEdge,
-  type MediaItem,
-  type Narrative,
-  type Place,
   type RawEvent,
   type RawPerson,
+  resolveEffectiveLiving,
   type SourceRecord,
+  sanitizeEventForWrite,
+  sanitizePersonForWrite,
 } from '@kinloom/core';
 import { CliValidationError } from '../../errors.js';
 
@@ -324,7 +324,10 @@ export function parseEntityTypeList(csv: string): EntityType[] {
 
 export function parseDeleteTargets(csv: string): SyncDeleteTarget[] {
   const targets: SyncDeleteTarget[] = [];
-  for (const token of csv.split(',').map((s) => s.trim()).filter(Boolean)) {
+  for (const token of csv
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean)) {
     const sep = token.indexOf(':');
     if (sep <= 0 || sep === token.length - 1) {
       throw new CliValidationError(
@@ -394,9 +397,7 @@ function normalizeSiteUrl(rawUrl: string): { baseUrl: string; domain: string } {
   try {
     parsed = new URL(withScheme);
   } catch {
-    throw new CliValidationError(
-      `Invalid site URL '${rawUrl}'. Expected an http:// or https:// URL.`
-    );
+    throw new CliValidationError(`Invalid site URL '${rawUrl}'. Expected an http:// or https:// URL.`);
   }
   if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
     throw new CliValidationError(
@@ -460,9 +461,7 @@ export function loadWranglerBindings(repoDir: string, siteUrlOverride?: string):
   const configPath = candidates.find((candidate) => fs.existsSync(candidate));
 
   if (!configPath) {
-    throw new CliValidationError(
-      `Missing wrangler.jsonc, wrangler.json, or wrangler.toml under ${repoDir}.`
-    );
+    throw new CliValidationError(`Missing wrangler.jsonc, wrangler.json, or wrangler.toml under ${repoDir}.`);
   }
 
   const raw = fs.readFileSync(configPath, 'utf8');
@@ -619,9 +618,7 @@ export function buildTempTokenCleanupSql(
     )} AND revoked_at IS NULL;`
   );
   statements.push(
-    `SELECT COUNT(*) AS count FROM agent_tokens WHERE token_id IN (${tokenIds
-      .map(sqlLiteral)
-      .join(', ')});`
+    `SELECT COUNT(*) AS count FROM agent_tokens WHERE token_id IN (${tokenIds.map(sqlLiteral).join(', ')});`
   );
   return statements.join(' ');
 }
@@ -667,9 +664,7 @@ async function executeD1(ctx: SyncExecutionContext, sql: string): Promise<D1Stat
     }
     results.push({
       success: true,
-      results: Array.isArray(stmt.results)
-        ? stmt.results.filter(isPlainRecord)
-        : [],
+      results: Array.isArray(stmt.results) ? stmt.results.filter(isPlainRecord) : [],
     });
   }
   return results;
@@ -882,14 +877,11 @@ async function fetchRemoteSnapshot(
 
   if (!response.ok) {
     const text = await response.text();
-    throw new Error(
-      `GET /api/export/snapshot failed with HTTP ${response.status}: ${text.slice(0, 300)}`
-    );
+    throw new Error(`GET /api/export/snapshot failed with HTTP ${response.status}: ${text.slice(0, 300)}`);
   }
 
   const body: unknown = await response.json();
-  const snapshotRaw =
-    isPlainRecord(body) && isPlainRecord(body.snapshot) ? body.snapshot : body;
+  const snapshotRaw = isPlainRecord(body) && isPlainRecord(body.snapshot) ? body.snapshot : body;
   if (
     !isPlainRecord(snapshotRaw) ||
     !Array.isArray(snapshotRaw.entities) ||
@@ -898,8 +890,7 @@ async function fetchRemoteSnapshot(
     throw new Error('Unexpected response shape from GET /api/export/snapshot.');
   }
 
-  const headRaw =
-    snapshotRaw.head_revision_id ?? (isPlainRecord(body) ? body.head_revision_id : 0) ?? 0;
+  const headRaw = snapshotRaw.head_revision_id ?? (isPlainRecord(body) ? body.head_revision_id : 0) ?? 0;
 
   return {
     etag: response.headers.get('etag'),
@@ -1224,26 +1215,22 @@ async function findMissingRemoteMedia(
     });
   }
 
-  const probeResults = await runWithConcurrency(
-    candidates,
-    MEDIA_PROBE_CONCURRENCY,
-    async (cand) => {
-      const resp = await ctx.fetchImpl(cand.url, {
-        method: 'GET',
-        headers: {
-          Authorization: `Bearer ${writeToken}`,
-          Range: 'bytes=0-0',
-        },
-      });
-      await resp.body?.cancel().catch(() => undefined);
-      return {
-        localPath: cand.localPath,
-        r2Key: cand.r2Key,
-        contentType: cand.contentType,
-        existsRemote: resp.status === 200 || resp.status === 206,
-      };
-    }
-  );
+  const probeResults = await runWithConcurrency(candidates, MEDIA_PROBE_CONCURRENCY, async (cand) => {
+    const resp = await ctx.fetchImpl(cand.url, {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${writeToken}`,
+        Range: 'bytes=0-0',
+      },
+    });
+    await resp.body?.cancel().catch(() => undefined);
+    return {
+      localPath: cand.localPath,
+      r2Key: cand.r2Key,
+      contentType: cand.contentType,
+      existsRemote: resp.status === 200 || resp.status === 206,
+    };
+  });
 
   return {
     checkedCount: candidates.length,
@@ -1297,17 +1284,22 @@ async function submitPatchChunks(params: {
 }): Promise<SyncSubmittedBatch[]> {
   const totalChunks = Math.ceil(params.patches.length / params.chunkSize);
   const padWidth = String(totalChunks).length;
-  const runStamp = new Date().toISOString().replaceAll(/[^0-9]/g, '').slice(0, 14);
-  const safeLabel = params.batchLabel.toLowerCase().replaceAll(/[^a-z0-9-]+/g, '-').replaceAll(/^-|-$/g, '') || 'archive';
+  const runStamp = new Date()
+    .toISOString()
+    .replaceAll(/[^0-9]/g, '')
+    .slice(0, 14);
+  const safeLabel =
+    params.batchLabel
+      .toLowerCase()
+      .replaceAll(/[^a-z0-9-]+/g, '-')
+      .replaceAll(/^-|-$/g, '') || 'archive';
   const baseBatchId = `sync-${safeLabel}-${runStamp}-${randomBytes(3).toString('hex')}`;
 
   const responses: SyncSubmittedBatch[] = [];
   for (let i = 0; i < totalChunks; i += 1) {
     const slice = params.patches.slice(i * params.chunkSize, (i + 1) * params.chunkSize);
     const batchId =
-      totalChunks === 1
-        ? baseBatchId
-        : `${baseBatchId}-p${String(i + 1).padStart(padWidth, '0')}`;
+      totalChunks === 1 ? baseBatchId : `${baseBatchId}-p${String(i + 1).padStart(padWidth, '0')}`;
     const chunkSummary =
       totalChunks === 1 ? params.summary : `${params.summary} (part ${i + 1}/${totalChunks})`;
 
@@ -1382,18 +1374,13 @@ async function purgeCompiledBundleAndRecompile(
 
   if (!response.ok) {
     const text = await response.text();
-    throw new Error(
-      `Post-purge GET /api/bundle failed with HTTP ${response.status}: ${text.slice(0, 300)}`
-    );
+    throw new Error(`Post-purge GET /api/bundle failed with HTTP ${response.status}: ${text.slice(0, 300)}`);
   }
 
   const bundle: unknown = await response.json();
   const meta = isPlainRecord(bundle) && isPlainRecord(bundle.meta) ? bundle.meta : null;
-  const maxRevisionId =
-    typeof meta?.max_revision_id === 'number' ? meta.max_revision_id : null;
-  const counts = isPlainRecord(meta?.counts)
-    ? (meta.counts as ArchiveBundle['meta']['counts'])
-    : null;
+  const maxRevisionId = typeof meta?.max_revision_id === 'number' ? meta.max_revision_id : null;
+  const counts = isPlainRecord(meta?.counts) ? (meta.counts as ArchiveBundle['meta']['counts']) : null;
 
   return {
     httpStatus: response.status,
@@ -1450,10 +1437,7 @@ async function verifyLiveEndpoints(params: {
       if (body !== null) {
         const meta = isPlainRecord(body) && isPlainRecord(body.meta) ? body.meta : null;
         bundleRevision = typeof meta?.max_revision_id === 'number' ? meta.max_revision_id : null;
-        if (
-          params.expectedRevision !== null &&
-          bundleRevision !== params.expectedRevision
-        ) {
+        if (params.expectedRevision !== null && bundleRevision !== params.expectedRevision) {
           failures.push({
             target: 'bundle',
             url: bundleUrl,
@@ -1602,9 +1586,7 @@ export function formatSyncReport(report: Omit<SyncCommandResult, 'rendered'>): s
   if (report.changedSamples.length > 0) {
     lines.push('Sample planned changes:');
     for (const sample of report.changedSamples) {
-      const fields = sample.changedFields?.length
-        ? ` [${sample.changedFields.join(', ')}]`
-        : '';
+      const fields = sample.changedFields?.length ? ` [${sample.changedFields.join(', ')}]` : '';
       lines.push(`  - ${sample.action} ${sample.entity_type}:${sample.entity_id}${fields}`);
     }
   }
@@ -1633,9 +1615,7 @@ export function formatSyncReport(report: Omit<SyncCommandResult, 'rendered'>): s
       `Live verification [${lv.ok ? 'PASS' : 'FAIL'}]: bundle=HTTP ${lv.bundleStatus ?? 'error'} (rev=${lv.bundleRevision ?? 'none'}, expected=${lv.expectedRevision ?? 'none'}), media=${lv.mediaChecked - lv.mediaFailed}/${lv.mediaChecked} ok`
     );
     for (const failure of lv.failures) {
-      lines.push(
-        `  VERIFY FAIL [${failure.target}] ${failure.url}: ${failure.reason}`
-      );
+      lines.push(`  VERIFY FAIL [${failure.target}] ${failure.url}: ${failure.reason}`);
     }
   }
 
@@ -1815,9 +1795,7 @@ export async function runSyncCommand(options: SyncCommandOptions = {}): Promise<
 
   baseReport.cleanup = cleanupResult;
 
-  const rendered = options.json
-    ? `${JSON.stringify(baseReport, null, 2)}\n`
-    : formatSyncReport(baseReport);
+  const rendered = options.json ? `${JSON.stringify(baseReport, null, 2)}\n` : formatSyncReport(baseReport);
 
   return {
     ...baseReport,

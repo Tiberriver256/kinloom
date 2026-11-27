@@ -3,18 +3,18 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import {
-  parseKinloomConfigYaml,
-  parsePeopleYaml,
-  parsePlacesYaml,
-  resolveEffectiveLiving,
-  resolvePersonPronunciation,
-  resolvePlacePronunciation,
   type KinloomSiteConfig,
   type Place,
   type Pronunciation,
   type PronunciationCoverage,
   type PronunciationVariant,
+  parseKinloomConfigYaml,
+  parsePeopleYaml,
+  parsePlacesYaml,
   type RawPerson,
+  resolveEffectiveLiving,
+  resolvePersonPronunciation,
+  resolvePlacePronunciation,
 } from '@kinloom/core';
 import { CliValidationError } from '../../errors.js';
 
@@ -38,18 +38,9 @@ const LANG_DISPLAY_NAMES: Readonly<Record<string, string>> = {
   da: 'Danish',
 };
 
-export type PronounceSourceTier =
-  | 'native_speaker'
-  | 'broadcast_lexicon'
-  | 'community'
-  | 'automated';
+export type PronounceSourceTier = 'native_speaker' | 'broadcast_lexicon' | 'community' | 'automated';
 
-export type PronounceSourceStatus =
-  | 'verified'
-  | 'no_match'
-  | 'requires_api_key'
-  | 'manual_lookup'
-  | 'error';
+export type PronounceSourceStatus = 'verified' | 'no_match' | 'requires_api_key' | 'manual_lookup' | 'error';
 
 export type PronounceProviderId =
   | 'forvo'
@@ -321,7 +312,6 @@ async function fetchJsonWithRetry(params: {
       if (attempt < MAX_FETCH_ATTEMPTS) {
         const waitMs = parseRetryAfterMs(null, attempt);
         await params.sleepFn(waitMs);
-        continue;
       }
     }
   }
@@ -448,21 +438,14 @@ function normalizeAudioFilename(raw: string): string | null {
 }
 
 export function buildCommonsAudioUrl(filename: string): string {
-  const normalized = filename.replace(/^File:/i, '').trim().replaceAll(' ', '_');
+  const normalized = filename
+    .replace(/^File:/i, '')
+    .trim()
+    .replaceAll(' ', '_');
   return `https://commons.wikimedia.org/wiki/Special:FilePath/${encodeURIComponent(normalized)}`;
 }
 
-const IPA_NON_VALUE_TOKENS = new Set([
-  'pron',
-  'lang',
-  'local',
-  'also',
-  'ipa',
-  '-',
-  'or',
-  'and',
-  'locally',
-]);
+const IPA_NON_VALUE_TOKENS = new Set(['pron', 'lang', 'local', 'also', 'ipa', '-', 'or', 'and', 'locally']);
 
 function normalizeLangCode(lang?: string | null): string | null {
   if (!lang) {
@@ -702,11 +685,7 @@ export function buildForvoLookupUrl(term: string, lang: string | null): string {
   return lang ? `${base}#${encodeURIComponent(lang)}` : base;
 }
 
-export function buildYouGlishLookupUrl(
-  term: string,
-  lang: string | null,
-  region?: string | null
-): string {
+export function buildYouGlishLookupUrl(term: string, lang: string | null, region?: string | null): string {
   const langSlug = (lang && YOUGLISH_LANG_SLUGS[lang]) || 'english';
   const regionSlug = region?.trim().toLowerCase();
   const accentSuffix =
@@ -888,7 +867,9 @@ function formatLookupText(result: Omit<PronounceLookupResult, 'rendered'>): stri
       lines.push(`  IPA: ${result.ipa.join(', ')}`);
     }
     if (result.source_label || result.source_url) {
-      lines.push(`  Primary source: ${result.source_label ?? 'Wikimedia'}${result.source_url ? ` (${result.source_url})` : ''}`);
+      lines.push(
+        `  Primary source: ${result.source_label ?? 'Wikimedia'}${result.source_url ? ` (${result.source_url})` : ''}`
+      );
     }
     if (result.audio_files.length > 0) {
       lines.push(`  Native audio (${result.audio_files.length}):`);
@@ -962,9 +943,7 @@ export async function runPronounceLookupCommand(
           ok: true,
           cache_hit: true,
         };
-        const rendered = options.json
-          ? JSON.stringify(resultBody, null, 2)
-          : formatLookupText(resultBody);
+        const rendered = options.json ? JSON.stringify(resultBody, null, 2) : formatLookupText(resultBody);
         return { ...resultBody, rendered };
       }
     } catch {
@@ -1029,8 +1008,7 @@ export async function runPronounceLookupCommand(
       const pageUrl = `https://${target.host}/wiki/${encodeURIComponent(page.title.replaceAll(' ', '_'))}`;
       const label = formatSourceLabel(target, normalizedLang);
 
-      const provider: PronounceProviderId =
-        target.project === 'wiktionary' ? 'wiktionary' : 'wikipedia';
+      const provider: PronounceProviderId = target.project === 'wiktionary' ? 'wiktionary' : 'wikipedia';
       const tier: PronounceSourceTier =
         target.project === 'wiktionary' || extracted.audioFiles.length > 0
           ? 'native_speaker'
@@ -1102,7 +1080,9 @@ export async function runPronounceLookupCommand(
               filename,
               commons_file: filename,
               url: audioUrl,
-              ...(item.code ?? normalizedLang ? { language: item.code ?? normalizedLang ?? undefined } : {}),
+              ...((item.code ?? normalizedLang)
+                ? { language: item.code ?? normalizedLang ?? undefined }
+                : {}),
               source_url: forvoPageUrl,
               provider: 'forvo',
               tier: 'native_speaker',
@@ -1163,9 +1143,7 @@ export async function runPronounceLookupCommand(
   const corroboration = evaluatePronounceCorroboration(rankedSources);
 
   // Pick primary source from highest-ranked verified source (preserving IPA priority when available)
-  const topVerifiedWithIpa = rankedSources.find(
-    (s) => s.status === 'verified' && s.ipa.length > 0
-  );
+  const topVerifiedWithIpa = rankedSources.find((s) => s.status === 'verified' && s.ipa.length > 0);
   const topVerifiedAny = rankedSources.find((s) => s.status === 'verified');
   if (topVerifiedWithIpa) {
     primarySourceUrl = topVerifiedWithIpa.url;
@@ -1204,9 +1182,7 @@ export async function runPronounceLookupCommand(
     ...payloadToCache,
     cache_hit: false,
   };
-  const rendered = options.json
-    ? JSON.stringify(resultBody, null, 2)
-    : formatLookupText(resultBody);
+  const rendered = options.json ? JSON.stringify(resultBody, null, 2) : formatLookupText(resultBody);
   return { ...resultBody, rendered };
 }
 
@@ -1419,12 +1395,7 @@ function hasPronunciationValues(entry?: Pronunciation | null): boolean {
   if (!entry) {
     return false;
   }
-  if (
-    Boolean(entry.phonetic?.trim()) ||
-    Boolean(entry.ipa?.trim()) ||
-    Boolean(entry.audio_url?.trim()) ||
-    Boolean(entry.note?.trim())
-  ) {
+  if (entry.phonetic?.trim() || entry.ipa?.trim() || entry.audio_url?.trim() || entry.note?.trim()) {
     return true;
   }
   return Boolean(
@@ -1433,8 +1404,8 @@ function hasPronunciationValues(entry?: Pronunciation | null): boolean {
         Boolean(v.phonetic?.trim()) ||
         Boolean(v.ipa?.trim()) ||
         Boolean(v.audio_url?.trim()) ||
-        Boolean(v.note?.trim()),
-    ),
+        Boolean(v.note?.trim())
+    )
   );
 }
 
@@ -1458,10 +1429,7 @@ function formatAuditText(result: Omit<PronounceAuditResult, 'rendered'>): string
   }
 
   if (result.coverage_gaps.people_missing.length > 0) {
-    lines.push(
-      '',
-      `Deceased people missing pronunciation (${result.coverage_gaps.people_missing.length}):`,
-    );
+    lines.push('', `Deceased people missing pronunciation (${result.coverage_gaps.people_missing.length}):`);
     for (const p of result.coverage_gaps.people_missing.slice(0, 25)) {
       lines.push(`  - ${p.id}: ${p.full_name}`);
     }
@@ -1473,11 +1441,10 @@ function formatAuditText(result: Omit<PronounceAuditResult, 'rendered'>): string
   if (result.coverage_gaps.people_partial.length > 0) {
     lines.push(
       '',
-      `Deceased people with Surname Pronunciation or Partial Pronunciation (${result.coverage_gaps.people_partial.length}):`,
+      `Deceased people with Surname Pronunciation or Partial Pronunciation (${result.coverage_gaps.people_partial.length}):`
     );
     for (const p of result.coverage_gaps.people_partial.slice(0, 25)) {
-      const missingStr =
-        p.missing_parts.length > 0 ? ` (missing: ${p.missing_parts.join(', ')})` : '';
+      const missingStr = p.missing_parts.length > 0 ? ` (missing: ${p.missing_parts.join(', ')})` : '';
       lines.push(`  - ${p.id}: ${p.full_name} [${p.coverage}]${missingStr}`);
     }
     if (result.coverage_gaps.people_partial.length > 25) {
@@ -1515,7 +1482,7 @@ function formatAuditText(result: Omit<PronounceAuditResult, 'rendered'>): string
     lines.push('', `Unsourced entries (${result.unsourced_entries.length}):`);
     for (const u of result.unsourced_entries.slice(0, 25)) {
       lines.push(
-        `  - [${u.scope}] ${u.label}${u.missing_note ? ' (missing source and note)' : ' (missing source_url/source_label)'}`,
+        `  - [${u.scope}] ${u.label}${u.missing_note ? ' (missing source and note)' : ' (missing source_url/source_label)'}`
       );
     }
     if (result.unsourced_entries.length > 25) {
@@ -1536,9 +1503,7 @@ function formatAuditText(result: Omit<PronounceAuditResult, 'rendered'>): string
   return lines.join('\n');
 }
 
-export function runPronounceAuditCommand(
-  options: PronounceAuditOptions,
-): PronounceAuditResult {
+export function runPronounceAuditCommand(options: PronounceAuditOptions): PronounceAuditResult {
   const repoDir = path.resolve(options.repoDir?.trim() || process.cwd());
   if (!fs.existsSync(repoDir) || !fs.statSync(repoDir).isDirectory()) {
     throw new CliValidationError(`Repository directory does not exist: ${repoDir}`);
@@ -1550,7 +1515,7 @@ export function runPronounceAuditCommand(
 
   if (!fs.existsSync(configPath)) {
     throw new CliValidationError(
-      `Missing ${configPath} (pass --repo <archive-root> if running outside the archive root).`,
+      `Missing ${configPath} (pass --repo <archive-root> if running outside the archive root).`
     );
   }
 
@@ -1587,7 +1552,7 @@ export function runPronounceAuditCommand(
 
   // Verify 0 living people carry an explicit pronunciation or living-only lexicon entry.
   const deceasedFullNamesLower = new Set(
-    deceasedPeople.map((p) => p.full_name.trim().toLowerCase()).filter(Boolean),
+    deceasedPeople.map((p) => p.full_name.trim().toLowerCase()).filter(Boolean)
   );
   const deceasedIdsLower = new Set(deceasedPeople.map((p) => p.id.trim().toLowerCase()));
   const livingLeaks: PronounceLivingLeak[] = [];
@@ -1618,7 +1583,8 @@ export function runPronounceAuditCommand(
       livingLeaks.push({
         scope: 'lexicon',
         location: `kinloom.config.yaml pronunciations (matches data/people.yaml record #${index})`,
-        reason: 'Pronunciation Lexicon contains a full-name key matching a living person (redacted for privacy).',
+        reason:
+          'Pronunciation Lexicon contains a full-name key matching a living person (redacted for privacy).',
       });
     }
   }
@@ -1689,9 +1655,7 @@ export function runPronounceAuditCommand(
       });
     }
   }
-  missingSurnames.sort(
-    (a, b) => b.deceased_count - a.deceased_count || a.surname.localeCompare(b.surname),
-  );
+  missingSurnames.sort((a, b) => b.deceased_count - a.deceased_count || a.surname.localeCompare(b.surname));
 
   // 100% coverage audit for every place in data/places.yaml.
   let placesCovered = 0;
@@ -1724,7 +1688,7 @@ export function runPronounceAuditCommand(
     scope: 'lexicon' | 'person' | 'place',
     key: string,
     label: string,
-    entry: Pronunciation,
+    entry: Pronunciation
   ): void => {
     const hasSource = Boolean(entry.source_url?.trim() || entry.source_label?.trim());
     if (!hasSource) {
@@ -1780,9 +1744,7 @@ export function runPronounceAuditCommand(
     if (distinctScopes.size < 2) {
       continue;
     }
-    const sortedMatches = [...matchingPlaces].toSorted((a, b) =>
-      a.full_name.localeCompare(b.full_name),
-    );
+    const sortedMatches = [...matchingPlaces].toSorted((a, b) => a.full_name.localeCompare(b.full_name));
     const exampleKeys = sortedMatches
       .slice(0, 2)
       .map((p) => `"${p.name}, ${derivePlaceScopeHint(p)}"`)
@@ -1842,8 +1804,6 @@ export function runPronounceAuditCommand(
     ipa_quality_warnings: qualityWarnings,
   };
 
-  const rendered = options.json
-    ? JSON.stringify(resultBody, null, 2)
-    : formatAuditText(resultBody);
+  const rendered = options.json ? JSON.stringify(resultBody, null, 2) : formatAuditText(resultBody);
   return { ...resultBody, rendered };
 }

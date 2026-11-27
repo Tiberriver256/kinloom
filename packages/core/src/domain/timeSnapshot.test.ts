@@ -112,9 +112,7 @@ describe('computeTimeSnapshot fallback headline hygiene', () => {
     expect(johnEntry).toBeDefined();
     expect(johnEntry?.activityTitle).toBe('Likely in Macon County');
     expect(johnEntry?.activityTitle).not.toContain('Death');
-    expect(johnEntry?.activityNote).toBe(
-      'Recorded in 1889: Death of John Mercer in Macon County, Illinois.'
-    );
+    expect(johnEntry?.activityNote).toBe('Recorded in 1889: Death of John Mercer in Macon County, Illinois.');
     expect(johnEntry?.activityNote).not.toBe(johnEntry?.activityTitle);
 
     const claraEntry = snapshot.unlocatedPeople.find((p) => p.person.id === unlocatedPerson.id);

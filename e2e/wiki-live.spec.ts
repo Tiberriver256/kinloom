@@ -1,17 +1,17 @@
-import { expect, test } from '@playwright/test';
-import type { Page } from '@playwright/test';
 import { getSessionCookieName, signSessionToken } from '@kinloom/server';
-import { startLiveWikiTestServer, type LiveWikiTestHarness } from './helpers/wikiTestServer.js';
+import type { Page } from '@playwright/test';
+import { expect, test } from '@playwright/test';
+import { type LiveWikiTestHarness, startLiveWikiTestServer } from './helpers/wikiTestServer.js';
 
 const TINY_PNG_BYTES = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
-  'base64',
+  'base64'
 );
 
 // Valid 1-frame 16x16 VP8 WebM video fixture (548 bytes) for HTTP 206 byte-range verification.
 const TINY_WEBM_BYTES = Buffer.from(
   'GkXfo59ChoEBQveBAULygQRC84EIQoKEd2VibUKHgQJChYECGFOAZwEAAAAAAAH0EU2bdLpNu4tTq4QVSalmU6yBoU27i1OrhBZUrmtTrIHWTbuMU6uEElTDZ1OsggEyTbuMU6uEHFO7a1OsggHe7AEAAAAAAABZAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAVSalmsCrXsYMPQkBNgIxMYXZmNjMuMS4xMDJXQYxMYXZmNjMuMS4xMDJEiYhAWQAAAAAAABZUrmvXrgEAAAAAAABO14EBc8WIie6t9UdySrCcgQAitZyDdW5kiIEAhoVWX1ZQOIOBASPjg4QF9eEA4JCwgRC6gRCagQJVsIRVuYEBVe6BAOwBAAAAAAAAAgAAElTDZ/pzc59jwIBnyJlFo4dFTkNPREVSRIeMTGF2ZjYzLjEuMTAyc3PVY8CLY8WIie6t9UdySrBnyKBFo4dFTkNPREVSRIeTTGF2YzYzLjEuMTAyIGxpYnZweGfIoUWjiERVUkFUSU9ORIeTMDA6MDA6MDAuMTAwMDAwMDAwAB9DtnWo54EAo6OBAACAEAIAnQEqEAAQAABHCIWFiIWEiAICAAwNYAD+/6tQgBxTu2uRu4+zgQC3iveBAfGCAbHwgQM=',
-  'base64',
+  'base64'
 );
 
 const STATIC_DEMO_ORIGIN = 'http://127.0.0.1:4173';
@@ -27,10 +27,7 @@ test.afterEach(async () => {
   await wiki.close();
 });
 
-async function enrollEditorViaInviteAndMagicLink(
-  page: Page,
-  email: string,
-): Promise<void> {
+async function enrollEditorViaInviteAndMagicLink(page: Page, email: string): Promise<void> {
   await page.goto(`${wiki.baseUrl}/api/auth/invite/${wiki.inviteToken}`);
   const inviteNotice = page.getByRole('region', { name: 'Invite access notice' });
   await expect(inviteNotice).toBeVisible();
@@ -40,7 +37,7 @@ async function enrollEditorViaInviteAndMagicLink(
   await dialog.getByLabel('Email address').fill(email);
   await dialog.getByRole('button', { name: 'Email Magic Link' }).click();
   await expect(dialog).toContainText(
-    `If ${email} is enrolled in this archive, a one-time sign-in link is on its way`,
+    `If ${email} is enrolled in this archive, a one-time sign-in link is on its way`
   );
 
   const sent = wiki.ports.emailSender.sentMessages.at(-1);
@@ -105,7 +102,7 @@ test('1. read-only invite shows viewer banner and magic-link sign-in auto-enroll
   await dialog.getByLabel('Email address').fill('cousin.clara@archive.example');
   await dialog.getByRole('button', { name: 'Email Magic Link' }).click();
   await expect(dialog).toContainText(
-    'If cousin.clara@archive.example is enrolled in this archive, a one-time sign-in link is on its way',
+    'If cousin.clara@archive.example is enrolled in this archive, a one-time sign-in link is on its way'
   );
 
   const magicEmail = wiki.ports.emailSender.sentMessages.at(-1);
@@ -156,9 +153,7 @@ test('2. inline edit without primary source renders Family memory badge and pers
   await altNamesInput.fill('Abe Lincoln, Rail-Splitter, Honest Abe');
 
   await drawer.locator('label.wiki-radio-card', { hasText: 'Family memory' }).click();
-  await drawer
-    .getByLabel(/What did you change/)
-    .fill('Record oral family nickname without primary citation');
+  await drawer.getByLabel(/What did you change/).fill('Record oral family nickname without primary citation');
 
   await drawer.getByRole('button', { name: 'Save Changes' }).click();
   await expect(drawer).toContainText('Saved revision');
@@ -211,7 +206,7 @@ test('3. optimistic concurrency 409 Conflict shows field diff and Rebase & Save 
   const liveEntityRes = await wiki.server.fetch(
     new Request(`${wiki.baseUrl}/api/entities/person/p_mary_todd_lincoln`, {
       headers: { cookie: `${sessionCookieName}=${peerToken}` },
-    }),
+    })
   );
   const liveEntity = (await liveEntityRes.json()) as {
     entity: Record<string, unknown>;
@@ -231,7 +226,7 @@ test('3. optimistic concurrency 409 Conflict shows field diff and Rebase & Save 
         summary: 'Clarify maiden given name formatting',
         has_primary_source: true,
       }),
-    }),
+    })
   );
   expect(concurrentRes.status).toBe(200);
 
@@ -251,9 +246,7 @@ test('3. optimistic concurrency 409 Conflict shows field diff and Rebase & Save 
   await page.reload();
   await expect(page.locator('.person-header')).toContainText('Molly Todd');
 
-  const finalEntityRes = await page.request.get(
-    `${wiki.baseUrl}/api/entities/person/p_mary_todd_lincoln`,
-  );
+  const finalEntityRes = await page.request.get(`${wiki.baseUrl}/api/entities/person/p_mary_todd_lincoln`);
   const finalEntity = (await finalEntityRes.json()) as {
     entity: { given_name: string; alt_names: string[] };
   };
@@ -295,9 +288,7 @@ test('4. History tab renders visual side-by-side diff and one-click Undo / Rever
   await expect(page.locator('.person-header')).not.toContainText('Bob Lincoln');
 });
 
-test('5. soft-delete hides record from active views and restore brings it back cleanly', async ({
-  page,
-}) => {
+test('5. soft-delete hides record from active views and restore brings it back cleanly', async ({ page }) => {
   await enrollEditorViaInviteAndMagicLink(page, 'curator@archive.example');
   await page.goto(`${wiki.baseUrl}/person/samuel-lincoln-jr`);
   await expect(page.getByRole('heading', { name: 'Samuel Lincoln Jr.', exact: true })).toBeVisible();
@@ -386,7 +377,9 @@ test('6. media upload supports PNG and HTTP 206 WebM video streaming while block
   // 4. Verify living-person portrait upload is blocked in UI and returns HTTP 422 on server without leaking
   await page.getByRole('button', { name: 'Add Photo' }).click();
   const livingModal = page.getByRole('dialog', { name: 'Upload photo or document' });
-  await livingModal.getByLabel('Who is in this photo? (deceased only)').selectOption('p_jordan_mercer_living');
+  await livingModal
+    .getByLabel('Who is in this photo? (deceased only)')
+    .selectOption('p_jordan_mercer_living');
   await expect(livingModal).toContainText('Living Privacy Rule');
   await livingModal.locator('input[type="file"]').setInputFiles({
     name: 'living-portrait.png',
@@ -424,9 +417,7 @@ test('6. media upload supports PNG and HTTP 206 WebM video streaming while block
     media?: { person_ids?: string[]; person_id?: string | null; caption: string }[];
   };
   const leaked = (bundleData.media ?? []).filter(
-    (m) =>
-      m.person_id === 'p_jordan_mercer_living' ||
-      (m.person_ids ?? []).includes('p_jordan_mercer_living'),
+    (m) => m.person_id === 'p_jordan_mercer_living' || (m.person_ids ?? []).includes('p_jordan_mercer_living')
   );
   expect(leaked).toEqual([]);
 });
@@ -485,16 +476,14 @@ test('7. AI agent batch submit shows Research agent badge in /changes and one-cl
   await batchSection.getByRole('button', { name: 'Revert Entire Batch' }).click();
   await batchSection.getByRole('button', { name: 'Confirm Batch Revert' }).click();
   await expect(page.locator('.wiki-status-banner.is-success')).toContainText(
-    `Reverted batch ${batchId} across 2 revisions`,
+    `Reverted batch ${batchId} across 2 revisions`
   );
 
   // Confirm both entities unwound cleanly in reverse order
   await page.goto(`${wiki.baseUrl}/person/thomas-lincoln`);
   await expect(page.locator('.person-header')).not.toContainText('Tom Lincoln of Kentucky');
 
-  const sourceRes = await page.request.get(
-    `${wiki.baseUrl}/api/entities/source/src_e2e_agent_census`,
-  );
+  const sourceRes = await page.request.get(`${wiki.baseUrl}/api/entities/source/src_e2e_agent_census`);
   const sourceBody = (await sourceRes.json()) as { deleted_at: string | null };
   expect(sourceBody.deleted_at).not.toBeNull();
 });
@@ -521,14 +510,12 @@ test('8. Family Notes panel supports posting a discussion note and soft-deleting
   await expect(reloadedTalk).toContainText('Cross-check 1850 Springfield census dwelling number 442.');
 
   await reloadedTalk.getByRole('button', { name: 'Delete' }).click();
-  await expect(reloadedTalk).not.toContainText(
-    'Cross-check 1850 Springfield census dwelling number 442.',
-  );
+  await expect(reloadedTalk).not.toContainText('Cross-check 1850 Springfield census dwelling number 442.');
 
   await page.reload();
   await page.getByRole('button', { name: /Family Notes/ }).click();
   await expect(page.getByRole('region', { name: 'Family Notes' })).not.toContainText(
-    'Cross-check 1850 Springfield census dwelling number 442.',
+    'Cross-check 1850 Springfield census dwelling number 442.'
   );
 });
 

@@ -1,9 +1,4 @@
-import type {
-  EntityPatch,
-  EntityPayload,
-  EntityType,
-  RevisionRecord,
-} from './schemas/revisions.js';
+import type { EntityPatch, EntityPayload, EntityType, RevisionRecord } from './schemas/revisions.js';
 
 export type FieldDiffKind = 'added' | 'removed' | 'changed';
 
@@ -51,7 +46,7 @@ function deepEqual(a: unknown, b: unknown): boolean {
       return false;
     }
     for (const k of keysA) {
-      if (!Object.prototype.hasOwnProperty.call(b, k)) {
+      if (!Object.hasOwn(b, k)) {
         return false;
       }
       if (!deepEqual(a[k], b[k])) {
@@ -78,8 +73,8 @@ function diffRecords(
 
   for (const key of keys) {
     const path = prefix ? `${prefix}.${key}` : key;
-    const hasBefore = Object.prototype.hasOwnProperty.call(before, key) && before[key] !== undefined;
-    const hasAfter = Object.prototype.hasOwnProperty.call(after, key) && after[key] !== undefined;
+    const hasBefore = Object.hasOwn(before, key) && before[key] !== undefined;
+    const hasAfter = Object.hasOwn(after, key) && after[key] !== undefined;
     const bVal = before[key];
     const aVal = after[key];
 
@@ -165,9 +160,7 @@ export function applyEntityPatch(
             `Cannot create ${patch.entity_type}/${patch.entity_id}: entity is soft-deleted; use restore or revert with expected_parent_revision_id`
           );
         }
-        throw new Error(
-          `Cannot create ${patch.entity_type}/${patch.entity_id}: entity already exists`
-        );
+        throw new Error(`Cannot create ${patch.entity_type}/${patch.entity_id}: entity already exists`);
       }
       const next = structuredClone(patch.data);
       return {
@@ -193,9 +186,7 @@ export function applyEntityPatch(
         );
       }
       const before = structuredClone(current.data);
-      const next = patch.merge
-        ? { ...before, ...structuredClone(patch.data) }
-        : structuredClone(patch.data);
+      const next = patch.merge ? { ...before, ...structuredClone(patch.data) } : structuredClone(patch.data);
       return {
         action: 'update',
         before,
@@ -228,9 +219,7 @@ export function applyEntityPatch(
     }
     case 'restore': {
       if (current === null || current.deletedAt === null) {
-        throw new Error(
-          `Cannot restore ${patch.entity_type}/${patch.entity_id}: entity is not soft-deleted`
-        );
+        throw new Error(`Cannot restore ${patch.entity_type}/${patch.entity_id}: entity is not soft-deleted`);
       }
       if (
         current.revisionId !== undefined &&
@@ -285,8 +274,7 @@ export function buildRevertPayload(
   const diff = computeEntityDiff(before, after);
 
   const summary =
-    options?.summary?.trim() ||
-    `Revert revision r${targetRevision.revision_id} (${targetRevision.summary})`;
+    options?.summary?.trim() || `Revert revision r${targetRevision.revision_id} (${targetRevision.summary})`;
 
   return {
     entity_type: targetRevision.entity_type,

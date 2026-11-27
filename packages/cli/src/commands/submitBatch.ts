@@ -1,19 +1,19 @@
 import { readFile } from 'node:fs/promises';
 import {
+  type BatchSubmission,
   BatchSubmissionSchema,
+  type EntityType,
   KinshipEdgeSchema,
   MediaItemSchema,
   NarrativeSchema,
   PlaceSchema,
+  parseYaml,
   RawEventSchema,
   RawPersonSchema,
   SourceRecordSchema,
-  parseYaml,
   safeParseEntityPayload,
-  type BatchSubmission,
-  type EntityType,
 } from '@kinloom/core';
-import { z } from 'zod';
+import type { z } from 'zod';
 import { KinloomApiClient, resolveAuthToken, type SubmitBatchResponse } from '../client.js';
 import { CliValidationError } from '../errors.js';
 

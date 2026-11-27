@@ -176,17 +176,9 @@ describe('ca-archives native client', () => {
     };
 
     const r1 = await invokeCa(['search', 'Lincoln', '--source', 'portal'], cacheDir, fetchImpl);
-    const r2 = await invokeCa(
-      ['search', 'Lincoln', '--source', 'portal', '--json'],
-      cacheDir,
-      fetchImpl
-    );
+    const r2 = await invokeCa(['search', 'Lincoln', '--source', 'portal', '--json'], cacheDir, fetchImpl);
     expect(fs.readdirSync(cacheDir).filter((f) => f.endsWith('.json'))).toEqual([]);
-    const r3 = await invokeCa(
-      ['search', 'Lincoln', '--source', 'portal', '--json'],
-      cacheDir,
-      fetchImpl
-    );
+    const r3 = await invokeCa(['search', 'Lincoln', '--source', 'portal', '--json'], cacheDir, fetchImpl);
 
     expect(r1.exitCode).toBe(1);
     expect(r1.stderr).not.toContain('Traceback');
@@ -223,7 +215,7 @@ describe('ca-archives native client', () => {
               visited.push(u);
             },
             content: async () => '',
-            evaluate: async <T,>(fn: string | (() => T)): Promise<T> => {
+            evaluate: async <T>(fn: string | (() => T)): Promise<T> => {
               const expr = String(fn);
               if (currentUrl.includes('oac.cdlib.org')) {
                 if (expr.includes('innerText')) {

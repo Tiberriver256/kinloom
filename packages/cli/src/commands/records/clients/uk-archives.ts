@@ -1,8 +1,9 @@
 import { CliValidationError } from '../../../errors.js';
 import {
+  type CommandParseSpec,
+  CookieJar,
   cachedJsonCall,
   collapseWhitespace,
-  CookieJar,
   emitJsonStdout,
   emitStdout,
   formatCommandUsage,
@@ -11,17 +12,16 @@ import {
   getStringOption,
   httpRequest,
   loadHtml,
+  type OptionSpec,
   parseCacheTtlHours,
   parseCommandArgs,
+  type RecordCommandContext,
+  type RecordCommandOutcome,
+  type RecordHandler,
   RecordRuntimeError,
   resolveCacheDir,
   resolveSubcommandAlias,
   SsrfBlockedError,
-  type CommandParseSpec,
-  type OptionSpec,
-  type RecordCommandContext,
-  type RecordCommandOutcome,
-  type RecordHandler,
 } from '../runtime/index.js';
 
 const DEFAULT_CACHE_TTL_HOURS = 168;
@@ -131,10 +131,7 @@ function resolveTtlHours(cliTtl: number | undefined, ctx: RecordCommandContext):
   );
 }
 
-export function validateUkArchivesUrl(
-  rawUrl: string,
-  allowedHosts: readonly string[]
-): string {
+export function validateUkArchivesUrl(rawUrl: string, allowedHosts: readonly string[]): string {
   let parsed: URL;
   try {
     parsed = new URL(rawUrl);
@@ -259,9 +256,7 @@ function normalizeDateFrom(value: string | undefined): string | null {
   }
   const cleaned = value.trim();
   if (!DATE_VALUE_RE.test(cleaned)) {
-    throw new CliValidationError(
-      `Invalid start date '${value}'; expected YYYY or YYYY-MM-DD.`
-    );
+    throw new CliValidationError(`Invalid start date '${value}'; expected YYYY or YYYY-MM-DD.`);
   }
   if (/^\d{4}$/.test(cleaned)) {
     return `${cleaned}-01-01`;
@@ -275,9 +270,7 @@ function normalizeDateTo(value: string | undefined): string | null {
   }
   const cleaned = value.trim();
   if (!DATE_VALUE_RE.test(cleaned)) {
-    throw new CliValidationError(
-      `Invalid end date '${value}'; expected YYYY or YYYY-MM-DD.`
-    );
+    throw new CliValidationError(`Invalid end date '${value}'; expected YYYY or YYYY-MM-DD.`);
   }
   if (/^\d{4}$/.test(cleaned)) {
     return `${cleaned}-12-31`;
@@ -406,9 +399,7 @@ function extractFreeregToken(html: string): string {
   if (val) {
     return val;
   }
-  throw new RecordRuntimeError(
-    'FreeREG authenticity_token not found (page layout may have changed).'
-  );
+  throw new RecordRuntimeError('FreeREG authenticity_token not found (page layout may have changed).');
 }
 
 export function parseFreeregResults(page: string): FreeregRecord[] {
@@ -777,8 +768,7 @@ async function runTnaSearch(
     ttlHours,
     refresh,
     fetch: () => getJson(ctx, DISCOVERY_SEARCH, params, ALLOWED_TNA_HOSTS, 'Discovery search'),
-    cacheable: (r) =>
-      Array.isArray(r.records) && (r.records.length > 0 || Number(r.count ?? 0) > 0),
+    cacheable: (r) => Array.isArray(r.records) && (r.records.length > 0 || Number(r.count ?? 0) > 0),
     validateCached: isPlainRecord,
     nowMs: ctx.nowMs,
     sleepFn: ctx.sleepFn,
@@ -888,9 +878,7 @@ async function runTnaGet(
   if (detail.held_by.length > 0) {
     lines.push(`  Held by: ${detail.held_by.join('; ')}`);
   }
-  lines.push(
-    `  Digitised: ${String(detail.digitised)}  Legal status: ${detail.legal_status ?? 'n/a'}`
-  );
+  lines.push(`  Digitised: ${String(detail.digitised)}  Legal status: ${detail.legal_status ?? 'n/a'}`);
   lines.push(`  ${detail.record_url}`);
   return { exitCode: 0, bytesOut: emitStdout(ctx.io, lines.join('\n')), cacheHit };
 }
@@ -1104,10 +1092,7 @@ const TNA_SUBCOMMAND_ALIASES: Readonly<Record<string, string>> = {
   inspect: 'get',
 };
 
-export const runUkArchivesCommand: RecordHandler = async (
-  args,
-  ctx
-): Promise<RecordCommandOutcome> => {
+export const runUkArchivesCommand: RecordHandler = async (args, ctx): Promise<RecordCommandOutcome> => {
   try {
     if (args.length === 0 || args[0] === '--help' || args[0] === '-h') {
       return { exitCode: 0, bytesOut: emitStdout(ctx.io, renderRootHelp()) };
@@ -1150,9 +1135,7 @@ export const runUkArchivesCommand: RecordHandler = async (
         return runUrl(rest, ctx);
 
       default:
-        throw new CliValidationError(
-          `No such command '${group}'. Run 'kinloom uk-archives --script-help'.`
-        );
+        throw new CliValidationError(`No such command '${group}'. Run 'kinloom uk-archives --script-help'.`);
     }
   } catch (err: unknown) {
     if (err instanceof CliValidationError) {

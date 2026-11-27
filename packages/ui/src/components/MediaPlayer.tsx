@@ -1,8 +1,8 @@
 import type { MediaItem } from '@kinloom/core';
-import React from 'react';
-import { resolveAssetUrl } from './Atoms.js';
+import type React from 'react';
 import { useArchiveData } from '../context/ArchiveDataContext.js';
 import { useKinloomPlugins } from '../plugins/PluginContext.js';
+import { resolveAssetUrl } from './Atoms.js';
 
 export interface MediaPlayerProps {
   media: MediaItem;
@@ -52,12 +52,7 @@ export function formatDurationSeconds(seconds: number | null | undefined): strin
   return `${mins}:${String(secs).padStart(2, '0')}`;
 }
 
-export const MediaPlayer: React.FC<MediaPlayerProps> = ({
-  media,
-  baseUrl,
-  variant = 'full',
-  className,
-}) => {
+export const MediaPlayer: React.FC<MediaPlayerProps> = ({ media, baseUrl, variant = 'full', className }) => {
   const { mediaRenderers } = useKinloomPlugins();
   const { baseUrl: contextBaseUrl } = useArchiveData();
   const effectiveBase = baseUrl ?? contextBaseUrl;
@@ -99,13 +94,9 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
           aria-label={media.caption}
         >
           <source src={src} type={media.mime_type ?? undefined} />
-          {transcriptSrc && (
-            <track kind="captions" src={transcriptSrc} label="Transcript captions" default />
-          )}
+          {transcriptSrc && <track kind="captions" src={transcriptSrc} label="Transcript captions" default />}
         </video>
-        {durationLabel && (
-          <div className="media-player-meta">Duration: {durationLabel}</div>
-        )}
+        {durationLabel && <div className="media-player-meta">Duration: {durationLabel}</div>}
       </div>
     );
   }
@@ -118,9 +109,7 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
           <span className="media-audio-glyph" aria-hidden="true">
             ♫
           </span>
-          <span className="media-audio-label">
-            Oral History{durationLabel ? ` · ${durationLabel}` : ''}
-          </span>
+          <span className="media-audio-label">Oral History{durationLabel ? ` · ${durationLabel}` : ''}</span>
         </div>
       );
     }
@@ -158,7 +147,13 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
       <div className={className ?? 'media-player-shell media-player-pdf'}>
         <iframe title={media.caption} src={src} className="media-player-pdf-frame" />
         <div className="media-player-meta">
-          <a href={src} target="_blank" rel="noreferrer" className="pill-btn" style={{ textDecoration: 'none' }}>
+          <a
+            href={src}
+            target="_blank"
+            rel="noreferrer"
+            className="pill-btn"
+            style={{ textDecoration: 'none' }}
+          >
             Open PDF in new tab ↗
           </a>
         </div>
@@ -167,9 +162,8 @@ export const MediaPlayer: React.FC<MediaPlayerProps> = ({
   }
 
   // 5. Standard archival image.
-  const imgSrc = variant === 'preview' && media.thumb_file
-    ? resolveAssetUrl(media.thumb_file, effectiveBase)
-    : src;
+  const imgSrc =
+    variant === 'preview' && media.thumb_file ? resolveAssetUrl(media.thumb_file, effectiveBase) : src;
   return (
     <img
       src={imgSrc}

@@ -1,8 +1,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { expect, test, type Page } from '@playwright/test';
 import { getSessionCookieName, signSessionToken } from '@kinloom/server';
-import { startLiveWikiTestServer, type LiveWikiTestHarness } from './helpers/wikiTestServer.js';
+import { expect, type Page, test } from '@playwright/test';
+import { type LiveWikiTestHarness, startLiveWikiTestServer } from './helpers/wikiTestServer.js';
 
 const STATIC_DEMO_ORIGIN = 'http://127.0.0.1:4173';
 const SESSION_SECRET = 'kinloom-e2e-test-session-secret-0123456789abcdef';
@@ -39,8 +39,9 @@ interface OverflowAuditResult {
 }
 
 async function blockExternalMapTiles(page: Page): Promise<void> {
-  await page.route(/^https?:\/\/(?:[^/]*openstreetmap\.org|[^/]*cartocdn\.com|[^/]*tile\.|fonts\.googleapis\.com|fonts\.gstatic\.com)/i, (route) =>
-    route.abort(),
+  await page.route(
+    /^https?:\/\/(?:[^/]*openstreetmap\.org|[^/]*cartocdn\.com|[^/]*tile\.|fonts\.googleapis\.com|fonts\.gstatic\.com)/i,
+    (route) => route.abort()
   );
 }
 
@@ -105,7 +106,8 @@ async function seedResearchBatch(page: Page, wiki: LiveWikiTestHarness, batchId:
           entity_id: 'pl_springfield_il',
           merge: true,
           data: {
-            summary: 'Capital of Illinois and long-term residence documented in 1850 and 1860 federal censuses.',
+            summary:
+              'Capital of Illinois and long-term residence documented in 1850 and 1860 federal censuses.',
           },
           summary: 'Expand Springfield historical profile from 1860 census',
         },
@@ -119,13 +121,12 @@ async function runPerElementOverflowAndCollisionAudit(page: Page): Promise<Overf
   return page.evaluate(() => {
     const docOverflowX = Math.max(
       0,
-      Math.round((document.documentElement.scrollWidth - window.innerWidth) * 10) / 10,
+      Math.round((document.documentElement.scrollWidth - window.innerWidth) * 10) / 10
     );
 
     const TARGET_SELECTOR =
       'button, a[href], [role="tab"], [role="menuitem"], .pill-btn, .nav-pill, .wiki-btn-primary, .wiki-btn-secondary, .wiki-badge, .wiki-author-pill, .wiki-role-chip, .wiki-action-tag, h1, h2, h3, h4';
-    const EXCLUDED_SELECTOR =
-      '.visually-hidden, .sr-only, .lightbox-backdrop-close, .skip-to-content';
+    const EXCLUDED_SELECTOR = '.visually-hidden, .sr-only, .lightbox-backdrop-close, .skip-to-content';
 
     const isVisibleElement = (el: Element): el is HTMLElement => {
       if (!(el instanceof HTMLElement)) {
@@ -164,15 +165,13 @@ async function runPerElementOverflowAndCollisionAudit(page: Page): Promise<Overf
         continue;
       }
       const style = window.getComputedStyle(raw);
-      const isHorizontalScroller =
-        style.overflowX === 'auto' || style.overflowX === 'scroll';
-      const isTruncatedEllipsis =
-        style.textOverflow === 'ellipsis' && style.overflowX === 'hidden';
+      const isHorizontalScroller = style.overflowX === 'auto' || style.overflowX === 'scroll';
+      const isTruncatedEllipsis = style.textOverflow === 'ellipsis' && style.overflowX === 'hidden';
       const hasOverflowScroll = raw.scrollWidth > raw.clientWidth + 1.5;
 
       if (!isHorizontalScroller && !isTruncatedEllipsis && hasOverflowScroll) {
         elementOverflows.push(
-          `${describeEl(raw)} scrollWidth=${Math.round(raw.scrollWidth)} > clientWidth=${Math.round(raw.clientWidth)}`,
+          `${describeEl(raw)} scrollWidth=${Math.round(raw.scrollWidth)} > clientWidth=${Math.round(raw.clientWidth)}`
         );
       }
 
@@ -194,7 +193,7 @@ async function runPerElementOverflowAndCollisionAudit(page: Page): Promise<Overf
                 const rightEsc = tr.right - box.right;
                 if (leftEsc > 1.5 || rightEsc > 1.5) {
                   textEscapes.push(
-                    `${describeEl(raw)} textEsc(L=${leftEsc.toFixed(1)},R=${rightEsc.toFixed(1)})`,
+                    `${describeEl(raw)} textEsc(L=${leftEsc.toFixed(1)},R=${rightEsc.toFixed(1)})`
                   );
                   break;
                 }
@@ -231,7 +230,7 @@ async function runPerElementOverflowAndCollisionAudit(page: Page): Promise<Overf
           const cRect = child.getBoundingClientRect();
           if (cRect.left < pRect.left - 1.5 || cRect.right > pRect.right + 1.5) {
             parentEscapes.push(
-              `${sel} -> ${describeEl(child)} child[${Math.round(cRect.left)}..${Math.round(cRect.right)}] outside parent[${Math.round(pRect.left)}..${Math.round(pRect.right)}]`,
+              `${sel} -> ${describeEl(child)} child[${Math.round(cRect.left)}..${Math.round(cRect.right)}] outside parent[${Math.round(pRect.left)}..${Math.round(pRect.right)}]`
             );
           }
         }
@@ -253,7 +252,7 @@ async function runPerElementOverflowAndCollisionAudit(page: Page): Promise<Overf
           continue;
         }
         const controls = [...scope.querySelectorAll<HTMLElement>('button, a[href], select')].filter(
-          (el) => isVisibleElement(el) && !el.closest('[role="menu"], [role="listbox"]'),
+          (el) => isVisibleElement(el) && !el.closest('[role="menu"], [role="listbox"]')
         );
         for (let i = 0; i < controls.length; i += 1) {
           for (let j = i + 1; j < controls.length; j += 1) {
@@ -268,7 +267,7 @@ async function runPerElementOverflowAndCollisionAudit(page: Page): Promise<Overf
             const overlapY = Math.min(ra.bottom, rb.bottom) - Math.max(ra.top, rb.top);
             if (overlapX > 1.5 && overlapY > 1.5) {
               siblingCollisions.push(
-                `${sel}: ${describeEl(a)} overlaps ${describeEl(b)} by ${overlapX.toFixed(1)}x${overlapY.toFixed(1)}px`,
+                `${sel}: ${describeEl(a)} overlaps ${describeEl(b)} by ${overlapX.toFixed(1)}x${overlapY.toFixed(1)}px`
               );
             }
           }
@@ -299,7 +298,7 @@ async function navigateAndWaitReady(page: Page, url: string): Promise<void> {
         !text.includes('Loading administration records')
       );
     },
-    { timeout: 10_000 },
+    { timeout: 10_000 }
   );
   await page.waitForTimeout(80);
 }
@@ -363,7 +362,12 @@ test.describe('Wave 53B signed-in editor UX, per-element overflow/collision, and
           exportBtn.textContent = 'Export GEDCOM (128)';
         }
         const nav = document.querySelector('.nav-links');
-        if (nav && ![...nav.querySelectorAll('a.nav-pill')].some((a) => a.textContent?.includes('Read Memoir Chapters'))) {
+        if (
+          nav &&
+          ![...nav.querySelectorAll('a.nav-pill')].some((a) =>
+            a.textContent?.includes('Read Memoir Chapters')
+          )
+        ) {
           const pluginLink = document.createElement('a');
           pluginLink.className = 'nav-pill';
           pluginLink.href = '/memoir';
@@ -408,7 +412,9 @@ test.describe('Wave 53B signed-in editor UX, per-element overflow/collision, and
       await expect(page.locator('.tree-scope-segmented')).toBeVisible();
       // oxlint-disable-next-line eslint/no-await-in-loop -- inject 3-digit Full Tree count
       await page.evaluate(() => {
-        const buttons = [...document.querySelectorAll<HTMLButtonElement>('.tree-scope-segmented .tree-seg-btn')];
+        const buttons = [
+          ...document.querySelectorAll<HTMLButtonElement>('.tree-scope-segmented .tree-seg-btn'),
+        ];
         const fullBtn = buttons.find((b) => b.textContent?.includes('Full Tree'));
         if (fullBtn) {
           fullBtn.textContent = 'Full Tree (128)';
@@ -526,7 +532,7 @@ test.describe('Wave 53B signed-in editor UX, per-element overflow/collision, and
     // Navigate with auth_error query parameters -> SignInModal must auto-open after /api/session resolves
     await page.goto(
       `${wiki.baseUrl}/person/abraham-lincoln-1809?auth_error=INVITE_REQUIRED&auth_provider=google`,
-      { waitUntil: 'networkidle' },
+      { waitUntil: 'networkidle' }
     );
 
     const dialog = page.getByRole('dialog', { name: 'Sign in to family archive' });
@@ -583,7 +589,9 @@ test.describe('Wave 53B signed-in editor UX, per-element overflow/collision, and
       const stickyCheck = await page.evaluate(() => {
         const top = document.querySelector('.wiki-edit-drawer-panel > .drawer-top')!.getBoundingClientRect();
         const footer = document.querySelector('.wiki-drawer-footer')!.getBoundingClientRect();
-        const saveBtn = document.querySelector('.wiki-drawer-footer button[type="submit"]')!.getBoundingClientRect();
+        const saveBtn = document
+          .querySelector('.wiki-drawer-footer button[type="submit"]')!
+          .getBoundingClientRect();
         const hint = document.querySelector('.wiki-drawer-footer-hint')?.textContent?.trim() ?? '';
         return {
           vh: window.innerHeight,
@@ -630,12 +638,12 @@ test.describe('Wave 53B signed-in editor UX, per-element overflow/collision, and
     await firstViewDiff.click();
     await expect(batchSection.getByRole('button', { name: 'Hide Diff' }).first()).toHaveAttribute(
       'aria-expanded',
-      'true',
+      'true'
     );
 
-    const diffWidths = await batchSection.locator('.wiki-diff-table td').evaluateAll((cells) =>
-      cells.map((c) => Math.round(c.getBoundingClientRect().width)),
-    );
+    const diffWidths = await batchSection
+      .locator('.wiki-diff-table td')
+      .evaluateAll((cells) => cells.map((c) => Math.round(c.getBoundingClientRect().width)));
     expect(diffWidths.length).toBeGreaterThanOrEqual(2);
     for (const width of diffWidths) {
       expect(width, 'mobile diff cell stacks full-width >= 260px').toBeGreaterThanOrEqual(260);

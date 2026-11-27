@@ -1,5 +1,5 @@
-import { z } from 'zod';
 import type { AuthProvider } from '@kinloom/core';
+import { z } from 'zod';
 import { KinloomHttpError } from '../errors.js';
 
 const GoogleTokenResponseSchema = z.object({
@@ -42,8 +42,7 @@ export class GoogleOAuthProvider implements AuthProvider {
     this.authorizationEndpoint =
       config.authorizationEndpoint ?? 'https://accounts.google.com/o/oauth2/v2/auth';
     this.tokenEndpoint = config.tokenEndpoint ?? 'https://oauth2.googleapis.com/token';
-    this.userInfoEndpoint =
-      config.userInfoEndpoint ?? 'https://openidconnect.googleapis.com/v1/userinfo';
+    this.userInfoEndpoint = config.userInfoEndpoint ?? 'https://openidconnect.googleapis.com/v1/userinfo';
     this.fetchFn = config.fetchFn ?? ((input, init) => fetch(input, init));
   }
 
@@ -90,11 +89,7 @@ export class GoogleOAuthProvider implements AuthProvider {
         body: body.toString(),
       });
     } catch {
-      throw new KinloomHttpError(
-        502,
-        'GOOGLE_AUTH_FAILED',
-        'Could not reach Google to complete sign-in.'
-      );
+      throw new KinloomHttpError(502, 'GOOGLE_AUTH_FAILED', 'Could not reach Google to complete sign-in.');
     }
 
     if (!tokenRes.ok) {
@@ -125,11 +120,7 @@ export class GoogleOAuthProvider implements AuthProvider {
         },
       });
     } catch {
-      throw new KinloomHttpError(
-        502,
-        'GOOGLE_AUTH_FAILED',
-        'Could not load your Google account profile.'
-      );
+      throw new KinloomHttpError(502, 'GOOGLE_AUTH_FAILED', 'Could not load your Google account profile.');
     }
 
     if (!userRes.ok) {
@@ -152,10 +143,7 @@ export class GoogleOAuthProvider implements AuthProvider {
 
     const email = userParsed.data.email.trim().toLowerCase();
     const displayName =
-      userParsed.data.name?.trim() ||
-      userParsed.data.given_name?.trim() ||
-      email.split('@')[0] ||
-      'Member';
+      userParsed.data.name?.trim() || userParsed.data.given_name?.trim() || email.split('@')[0] || 'Member';
 
     return {
       email,

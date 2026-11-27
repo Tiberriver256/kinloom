@@ -1,20 +1,16 @@
 import type { EntityPayload, EntityType, KinshipRelation } from '@kinloom/core';
 import { deriveKinshipEdgeId, isEditSummaryValid } from '@kinloom/core';
-import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { CitationBadge } from './WikiBadges.js';
-import { handleTablistKeyDown } from '../../lib/keyboardNav.js';
+import type React from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useArchiveData } from '../../context/ArchiveDataContext.js';
+import { handleTablistKeyDown } from '../../lib/keyboardNav.js';
 import { useDialogFocusTrap } from '../../lib/useDialogFocusTrap.js';
+import { CitationBadge } from './WikiBadges.js';
 
 export type CreatableKind = 'person' | 'event' | 'place' | 'kinship_edge';
 export type RelativeRelation = 'parent' | 'spouse' | 'child';
 export type PersonSex = 'M' | 'F' | 'U';
-export type PersonLineageGroup =
-  | 'ancestor'
-  | 'descendant'
-  | 'descendant_spouse'
-  | 'collateral'
-  | 'extended';
+export type PersonLineageGroup = 'ancestor' | 'descendant' | 'descendant_spouse' | 'collateral' | 'extended';
 
 export interface RelativeCreateContext {
   anchorPersonId: string;
@@ -38,7 +34,7 @@ interface RelativeRelationSpec {
   readonly defaultLineageGroup: PersonLineageGroup;
   readonly buildEdge: (
     anchorPersonId: string,
-    relatedPersonId: string,
+    relatedPersonId: string
   ) => { from: string; to: string; relation: KinshipRelation };
   readonly linkHint: (anchorPersonName: string) => string;
 }
@@ -104,7 +100,7 @@ function slugify(value: string): string {
 
 export function buildUniquePersonIdentity(
   fullName: string,
-  existingPeople: readonly { id: string; slug: string }[],
+  existingPeople: readonly { id: string; slug: string }[]
 ): { id: string; slug: string } {
   const baseSlug = slugify(fullName);
   const usedIds = new Set(existingPeople.map((p) => p.id));
@@ -168,9 +164,7 @@ export const CreateEntityModal: React.FC<CreateEntityModalProps> = ({
   const [surname, setSurname] = useState('');
   const [sex, setSex] = useState<PersonSex>('U');
   const [lineageGroup, setLineageGroup] = useState<PersonLineageGroup>(
-    relativeContext
-      ? RELATIVE_RELATION_SPECS[relativeContext.relation].defaultLineageGroup
-      : 'extended',
+    relativeContext ? RELATIVE_RELATION_SPECS[relativeContext.relation].defaultLineageGroup : 'extended'
   );
   const [birthEdtf, setBirthEdtf] = useState('');
   const [deathEdtf, setDeathEdtf] = useState('');
@@ -221,7 +215,7 @@ export const CreateEntityModal: React.FC<CreateEntityModalProps> = ({
     setSurname('');
     setSex('U');
     setLineageGroup(
-      anchorRelation ? RELATIVE_RELATION_SPECS[anchorRelation].defaultLineageGroup : 'extended',
+      anchorRelation ? RELATIVE_RELATION_SPECS[anchorRelation].defaultLineageGroup : 'extended'
     );
     setBirthEdtf('');
     setDeathEdtf('');
@@ -366,7 +360,7 @@ export const CreateEntityModal: React.FC<CreateEntityModalProps> = ({
         if (createdPerson) {
           reloadArchive();
           setError(
-            `Person record saved, but linking failed: ${err instanceof Error ? err.message : String(err)}`,
+            `Person record saved, but linking failed: ${err instanceof Error ? err.message : String(err)}`
           );
         } else {
           setError(err instanceof Error ? err.message : String(err));
@@ -559,13 +553,7 @@ export const CreateEntityModal: React.FC<CreateEntityModalProps> = ({
       : 'Save to Archive';
 
   return (
-    <dialog
-      ref={dialogRef}
-      open
-      aria-modal="true"
-      className="lightbox-backdrop"
-      aria-label={modalTitle}
-    >
+    <dialog ref={dialogRef} open aria-modal="true" className="lightbox-backdrop" aria-label={modalTitle}>
       <button
         type="button"
         tabIndex={-1}
@@ -587,15 +575,10 @@ export const CreateEntityModal: React.FC<CreateEntityModalProps> = ({
             role="tablist"
             aria-label="How to add relative"
             onKeyDown={(event) => {
-              handleTablistKeyDown(
-                event,
-                ['create_new', 'link_existing'] as const,
-                relativeTab,
-                (next) => {
-                  setRelativeTab(next);
-                  setError(null);
-                },
-              );
+              handleTablistKeyDown(event, ['create_new', 'link_existing'] as const, relativeTab, (next) => {
+                setRelativeTab(next);
+                setError(null);
+              });
             }}
           >
             {(
@@ -633,7 +616,7 @@ export const CreateEntityModal: React.FC<CreateEntityModalProps> = ({
                 (next) => {
                   setKind(next);
                   setError(null);
-                },
+                }
               );
             }}
           >

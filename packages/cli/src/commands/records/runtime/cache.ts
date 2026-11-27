@@ -335,8 +335,7 @@ export async function withAdvisoryLock<T>(
   const staleAfterMs = options.staleAfterMs ?? 120_000;
   const nowMs = options.nowMs ?? (() => Date.now());
   const sleepFn =
-    options.sleepFn ??
-    ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)));
+    options.sleepFn ?? ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)));
 
   fs.mkdirSync(path.dirname(lockPath), { recursive: true });
 

@@ -1,6 +1,6 @@
-import { getAppBuildId, reportClientError } from '../lib/clientTelemetry.js';
 import React from 'react';
 import { useLocation } from 'react-router-dom';
+import { getAppBuildId, reportClientError } from '../lib/clientTelemetry.js';
 
 const BLANK_WATCH_DELAY_MS = 1800;
 const MIN_ROOT_HEIGHT_PX = 40;
@@ -14,7 +14,7 @@ function rootLooksBlank(): { blank: boolean; detail: string } {
   const { height } = root.getBoundingClientRect();
   const rootText = (root.textContent ?? '').trim();
   const hasLoadingOrError = Boolean(
-    root.querySelector('.archive-loading-shell, .archive-recovery-card, .archive-error-box'),
+    root.querySelector('.archive-loading-shell, .archive-recovery-card, .archive-error-box')
   );
   const hasVisibleContent =
     childCount > 0 && height > MIN_ROOT_HEIGHT_PX && (rootText.length > 0 || hasLoadingOrError);

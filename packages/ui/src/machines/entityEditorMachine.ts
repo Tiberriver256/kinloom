@@ -155,7 +155,7 @@ export const defaultSaveEntityActor = fromPromise<SaveEntityResult, SaveEntityIn
           summary: input.summary.trim(),
           has_primary_source: input.hasPrimarySource,
         },
-        { signal },
+        { signal }
       );
 
       if (!res.ok) {
@@ -189,7 +189,7 @@ export const defaultSaveEntityActor = fromPromise<SaveEntityResult, SaveEntityIn
           has_primary_source: input.hasPrimarySource,
         }),
         signal,
-      },
+      }
     );
 
     if (response.status === 409) {
@@ -225,7 +225,7 @@ export const defaultSaveEntityActor = fromPromise<SaveEntityResult, SaveEntityIn
       etag: ok.etag,
       reqGen: input.reqGen,
     };
-  },
+  }
 );
 
 export const entityEditorMachine = setup({
@@ -370,11 +370,7 @@ export const entityEditorMachine = setup({
       return {
         baseRevisionId: context.conflict.latestRevisionId,
         baseSnapshot: structuredClone(context.conflict.latestSnapshot),
-        draft: rebaseEntityDraft(
-          context.baseSnapshot,
-          context.conflict.latestSnapshot,
-          context.draft,
-        ),
+        draft: rebaseEntityDraft(context.baseSnapshot, context.conflict.latestSnapshot, context.draft),
         conflict: null,
         dirty: true,
       };
@@ -573,7 +569,7 @@ export const entityEditorMachine = setup({
                     lastEtag: event.output.etag,
                     networkError: null,
                   }
-                : {},
+                : {}
             ),
           },
           {
@@ -586,7 +582,7 @@ export const entityEditorMachine = setup({
                     dirty: true,
                     networkError: null,
                   }
-                : {},
+                : {}
             ),
           },
           // Stale or mismatched saveGen response is safely ignored while returning editor to dirty draft.
@@ -597,8 +593,7 @@ export const entityEditorMachine = setup({
         onError: {
           target: 'networkErrorRetryable',
           actions: assign(({ event }) => ({
-            networkError:
-              event.error instanceof Error ? event.error.message : String(event.error),
+            networkError: event.error instanceof Error ? event.error.message : String(event.error),
           })),
         },
       },
@@ -644,7 +639,7 @@ export const entityEditorMachine = setup({
                       validationErrors: [],
                       networkError: null,
                     }
-                  : {},
+                  : {}
               ),
             },
             REBASE_AND_RETRY: {

@@ -40,76 +40,76 @@ function notFoundPlainResponse(): Response {
  */
 export function createCloudflareAssetHandler(assets?: Fetcher): AssetHandler {
   async function resolveAssetResponse(request: Request, url: URL): Promise<Response> {
-      const pathname = url.pathname;
+    const pathname = url.pathname;
 
-      if (
-        pathname === '/api' ||
-        pathname.startsWith('/api/') ||
-        pathname === '/media' ||
-        pathname.startsWith('/media/') ||
-        pathname === '/sources' ||
-        pathname.startsWith('/sources/')
-      ) {
-        return notFoundPlainResponse();
-      }
+    if (
+      pathname === '/api' ||
+      pathname.startsWith('/api/') ||
+      pathname === '/media' ||
+      pathname.startsWith('/media/') ||
+      pathname === '/sources' ||
+      pathname.startsWith('/sources/')
+    ) {
+      return notFoundPlainResponse();
+    }
 
-      if (pathname === '/favicon.svg') {
-        if (assets) {
-          const assetRes = await assets.fetch(request);
-          if (isValidStaticAssetResponse(assetRes)) {
-            return assetRes;
-          }
+    if (pathname === '/favicon.svg') {
+      if (assets) {
+        const assetRes = await assets.fetch(request);
+        if (isValidStaticAssetResponse(assetRes)) {
+          return assetRes;
         }
-        return new Response(KINLOOM_FAVICON_SVG, {
-          status: 200,
-          headers: {
-            'content-type': 'image/svg+xml; charset=utf-8',
-            'cache-control': 'public, max-age=86400',
-          },
-        });
       }
+      return new Response(KINLOOM_FAVICON_SVG, {
+        status: 200,
+        headers: {
+          'content-type': 'image/svg+xml; charset=utf-8',
+          'cache-control': 'public, max-age=86400',
+        },
+      });
+    }
 
-      if (pathname === '/favicon.ico') {
-        if (assets) {
-          const assetRes = await assets.fetch(request);
-          if (isValidStaticAssetResponse(assetRes)) {
-            return assetRes;
-          }
+    if (pathname === '/favicon.ico') {
+      if (assets) {
+        const assetRes = await assets.fetch(request);
+        if (isValidStaticAssetResponse(assetRes)) {
+          return assetRes;
         }
-        return notFoundPlainResponse();
       }
+      return notFoundPlainResponse();
+    }
 
-      if (!assets) {
-        return notFoundPlainResponse();
-      }
+    if (!assets) {
+      return notFoundPlainResponse();
+    }
 
-      const directRes = await assets.fetch(request);
+    const directRes = await assets.fetch(request);
 
-      if (STATIC_ASSET_EXTENSION_PATTERN.test(pathname)) {
-        if (isValidStaticAssetResponse(directRes)) {
-          return directRes;
-        }
-        return notFoundPlainResponse();
-      }
-
-      if (directRes.status !== 404) {
+    if (STATIC_ASSET_EXTENSION_PATTERN.test(pathname)) {
+      if (isValidStaticAssetResponse(directRes)) {
         return directRes;
       }
+      return notFoundPlainResponse();
+    }
 
-      const indexUrl = new URL('/index.html', url.origin);
-      const indexRes = await assets.fetch(new Request(indexUrl.toString(), { method: request.method }));
-      if (!indexRes.ok) {
-        return notFoundPlainResponse();
-      }
+    if (directRes.status !== 404) {
+      return directRes;
+    }
 
-      const headers = new Headers(indexRes.headers);
-      if (!headers.has('content-type')) {
-        headers.set('content-type', 'text/html; charset=utf-8');
-      }
-      return new Response(indexRes.body, {
-        status: 200,
-        headers,
-      });
+    const indexUrl = new URL('/index.html', url.origin);
+    const indexRes = await assets.fetch(new Request(indexUrl.toString(), { method: request.method }));
+    if (!indexRes.ok) {
+      return notFoundPlainResponse();
+    }
+
+    const headers = new Headers(indexRes.headers);
+    if (!headers.has('content-type')) {
+      headers.set('content-type', 'text/html; charset=utf-8');
+    }
+    return new Response(indexRes.body, {
+      status: 200,
+      headers,
+    });
   }
 
   return {

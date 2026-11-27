@@ -5,12 +5,13 @@ import {
   resolveCitationMedia,
   resolvePlacePronunciation,
 } from '@kinloom/core';
-import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
+import type React from 'react';
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
+import { useOptionalArchiveData } from '../context/ArchiveDataContext.js';
+import { resolveAssetUrl } from './Atoms.js';
 import { CitationPopover } from './CitationPopover.js';
 import { InlineEntityMention } from './InlineEntityMention.js';
 import { hasPronunciationContent } from './PronunciationBadge.js';
-import { resolveAssetUrl } from './Atoms.js';
-import { useOptionalArchiveData } from '../context/ArchiveDataContext.js';
 
 type MarkdownBlock =
   | { kind: 'heading'; level: 3 | 4; text: string }
@@ -156,7 +157,7 @@ function buildEntityRenderContext(params: {
     candidates.length > 0
       ? new RegExp(
           `(?<![\\p{L}\\p{N}_])(${candidates.map((c) => escapeRegExp(c.text)).join('|')})(?![\\p{L}\\p{N}_])`,
-          'gu',
+          'gu'
         )
       : null;
 
@@ -174,7 +175,7 @@ function renderPlainProseWithEntities(
   slice: string,
   keyPrefix: string,
   entityCtx?: InlineEntityRenderContext,
-  seenAutoEntities?: Set<string>,
+  seenAutoEntities?: Set<string>
 ): React.ReactNode[] {
   if (!slice || !entityCtx?.autoRegex) {
     return slice ? [slice] : [];
@@ -205,7 +206,7 @@ function renderPlainProseWithEntities(
             displayText={matchedText}
             baseUrl={entityCtx.baseUrl}
             pronunciations={entityCtx.pronunciations}
-          />,
+          />
         );
       } else {
         out.push(
@@ -216,7 +217,7 @@ function renderPlainProseWithEntities(
             displayText={matchedText}
             baseUrl={entityCtx.baseUrl}
             pronunciations={entityCtx.pronunciations}
-          />,
+          />
         );
       }
     } else {
@@ -244,7 +245,7 @@ function parseInlineNodes(
   keyPrefix: string,
   citationCtx?: InlineCitationRenderContext,
   entityCtx?: InlineEntityRenderContext,
-  seenAutoEntities?: Set<string>,
+  seenAutoEntities?: Set<string>
 ): React.ReactNode[] {
   const nodes: React.ReactNode[] = [];
   const tokenRe =
@@ -261,8 +262,8 @@ function parseInlineNodes(
           text.slice(lastIndex, match.index),
           `${keyPrefix}-p-${tokenIdx}`,
           entityCtx,
-          seenAutoEntities,
-        ),
+          seenAutoEntities
+        )
       );
     }
 
@@ -272,9 +273,7 @@ function parseInlineNodes(
     if (match[2] !== undefined || match[3] !== undefined) {
       const content = match[2] ?? match[3] ?? '';
       nodes.push(
-        <strong key={key}>
-          {parseInlineNodes(content, key, citationCtx, entityCtx, seenAutoEntities)}
-        </strong>,
+        <strong key={key}>{parseInlineNodes(content, key, citationCtx, entityCtx, seenAutoEntities)}</strong>
       );
     } else if (match[4] !== undefined) {
       nodes.push(<code key={key}>{match[4]}</code>);
@@ -290,7 +289,7 @@ function parseInlineNodes(
           explicitMediaId,
           citationCtx.mediaItems,
           citationCtx.subjectPersonId,
-          citationCtx.events,
+          citationCtx.events
         );
         const mediaUrl = media ? citationCtx.resolveMediaUrl(media) : null;
         const payload: InlineCitationPayload = {
@@ -330,7 +329,7 @@ function parseInlineNodes(
             >
               [{footnoteNumber}]
             </button>
-          </sup>,
+          </sup>
         );
       }
       // Unresolved citation tokens are omitted so raw syntax never appears to readers.
@@ -354,7 +353,7 @@ function parseInlineNodes(
                 displayText={explicitLabel ?? person.full_name}
                 baseUrl={entityCtx?.baseUrl}
                 pronunciations={entityCtx?.pronunciations}
-              />,
+              />
             );
           }
         } else {
@@ -372,7 +371,7 @@ function parseInlineNodes(
               displayText={explicitLabel ?? place.name}
               baseUrl={entityCtx?.baseUrl}
               pronunciations={entityCtx?.pronunciations}
-            />,
+            />
           );
         } else {
           nodes.push(explicitLabel ?? entityId);
@@ -392,7 +391,7 @@ function parseInlineNodes(
             rel={isExternal ? 'noopener noreferrer' : undefined}
           >
             {label}
-          </a>,
+          </a>
         );
       } else {
         nodes.push(label);
@@ -400,9 +399,7 @@ function parseInlineNodes(
     } else if (match[12] !== undefined || match[13] !== undefined) {
       const content = match[12] ?? match[13] ?? '';
       nodes.push(
-        <em key={key}>
-          {parseInlineNodes(content, key, citationCtx, entityCtx, seenAutoEntities)}
-        </em>,
+        <em key={key}>{parseInlineNodes(content, key, citationCtx, entityCtx, seenAutoEntities)}</em>
       );
     } else {
       nodes.push(match[0]);
@@ -414,12 +411,7 @@ function parseInlineNodes(
 
   if (lastIndex < text.length) {
     nodes.push(
-      ...renderPlainProseWithEntities(
-        text.slice(lastIndex),
-        `${keyPrefix}-tail`,
-        entityCtx,
-        seenAutoEntities,
-      ),
+      ...renderPlainProseWithEntities(text.slice(lastIndex), `${keyPrefix}-tail`, entityCtx, seenAutoEntities)
     );
   }
 
@@ -561,11 +553,8 @@ export const ArchivalMarkdown: React.FC<ArchivalMarkdownProps> = ({
   const effectivePronunciations = pronunciationsProp ?? archiveData?.pronunciations;
   const blocks = useMemo(() => parseMarkdownBlocks(markdown), [markdown]);
   const extractedCitations = useMemo(
-    () =>
-      sourcesById
-        ? extractNarrativeCitations(markdown, { knownSourceIds: sourcesById })
-        : null,
-    [markdown, sourcesById],
+    () => (sourcesById ? extractNarrativeCitations(markdown, { knownSourceIds: sourcesById }) : null),
+    [markdown, sourcesById]
   );
 
   const popoverId = useId();
@@ -601,7 +590,7 @@ export const ArchivalMarkdown: React.FC<ArchivalMarkdownProps> = ({
         });
       }, POPOVER_CLOSE_DELAY_MS);
     },
-    [clearCloseTimer],
+    [clearCloseTimer]
   );
 
   useEffect(() => clearCloseTimer, [clearCloseTimer]);
@@ -613,9 +602,7 @@ export const ArchivalMarkdown: React.FC<ArchivalMarkdownProps> = ({
     const onKeyDown = (event: KeyboardEvent): void => {
       if (event.key === 'Escape') {
         const focusWasInside = Boolean(
-          popoverRef.current &&
-            document.activeElement &&
-            popoverRef.current.contains(document.activeElement),
+          popoverRef.current && document.activeElement && popoverRef.current.contains(document.activeElement)
         );
         const anchor = activePopover.anchorEl;
         closePopover();
@@ -658,14 +645,14 @@ export const ArchivalMarkdown: React.FC<ArchivalMarkdownProps> = ({
             : 'hover',
       }));
     },
-    [clearCloseTimer],
+    [clearCloseTimer]
   );
 
   const handleTriggerLeave = useCallback(
     (occurrenceKey: string) => {
       scheduleClose(occurrenceKey);
     },
-    [scheduleClose],
+    [scheduleClose]
   );
 
   const handleTriggerFocus = useCallback(
@@ -680,7 +667,7 @@ export const ArchivalMarkdown: React.FC<ArchivalMarkdownProps> = ({
             : 'focus',
       }));
     },
-    [clearCloseTimer],
+    [clearCloseTimer]
   );
 
   const handleFocusLeavingSurface = useCallback(
@@ -695,21 +682,21 @@ export const ArchivalMarkdown: React.FC<ArchivalMarkdownProps> = ({
       }
       setActivePopover((prev) => (prev && prev.triggerMode === 'focus' ? null : prev));
     },
-    [activePopover],
+    [activePopover]
   );
 
   const handleTriggerBlur = useCallback(
     (event: React.FocusEvent<HTMLButtonElement>) => {
       handleFocusLeavingSurface(event.relatedTarget);
     },
-    [handleFocusLeavingSurface],
+    [handleFocusLeavingSurface]
   );
 
   const handlePopoverBlur = useCallback(
     (event: React.FocusEvent<HTMLDivElement>) => {
       handleFocusLeavingSurface(event.relatedTarget);
     },
-    [handleFocusLeavingSurface],
+    [handleFocusLeavingSurface]
   );
 
   const handleTriggerClick = useCallback(
@@ -726,7 +713,7 @@ export const ArchivalMarkdown: React.FC<ArchivalMarkdownProps> = ({
         };
       });
     },
-    [clearCloseTimer],
+    [clearCloseTimer]
   );
 
   const citationCtx: InlineCitationRenderContext | undefined = useMemo(() => {
@@ -783,7 +770,7 @@ export const ArchivalMarkdown: React.FC<ArchivalMarkdownProps> = ({
       linkedPlaceIds,
       subjectPersonId,
       baseUrl,
-    ],
+    ]
   );
 
   if (blocks.length === 0) {
@@ -816,13 +803,7 @@ export const ArchivalMarkdown: React.FC<ArchivalMarkdownProps> = ({
               <ol key={blockKey} className="archival-md-list">
                 {block.items.map((item, itemIdx) => (
                   <li key={`${blockKey}-li-${itemIdx}`}>
-                    {parseInlineNodes(
-                      item,
-                      `${blockKey}-li-${itemIdx}`,
-                      citationCtx,
-                      entityCtx,
-                      new Set(),
-                    )}
+                    {parseInlineNodes(item, `${blockKey}-li-${itemIdx}`, citationCtx, entityCtx, new Set())}
                   </li>
                 ))}
               </ol>
@@ -830,13 +811,7 @@ export const ArchivalMarkdown: React.FC<ArchivalMarkdownProps> = ({
               <ul key={blockKey} className="archival-md-list">
                 {block.items.map((item, itemIdx) => (
                   <li key={`${blockKey}-li-${itemIdx}`}>
-                    {parseInlineNodes(
-                      item,
-                      `${blockKey}-li-${itemIdx}`,
-                      citationCtx,
-                      entityCtx,
-                      new Set(),
-                    )}
+                    {parseInlineNodes(item, `${blockKey}-li-${itemIdx}`, citationCtx, entityCtx, new Set())}
                   </li>
                 ))}
               </ul>

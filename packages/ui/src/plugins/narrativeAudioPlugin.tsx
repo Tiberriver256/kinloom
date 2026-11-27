@@ -1,9 +1,10 @@
 import type { Narrative, Person } from '@kinloom/core';
-import type { KinloomUiPlugin, KinloomUiPluginSlotContext } from './types.js';
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import type React from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { initialsOf, resolveAssetUrl } from '../components/Atoms.js';
 import { formatDurationSeconds } from '../components/MediaPlayer.js';
+import type { KinloomUiPlugin, KinloomUiPluginSlotContext } from './types.js';
 
 export interface NarrativeAudioTrackMeta {
   readonly file: string;
@@ -180,7 +181,7 @@ const NarrativeAudioProvider: React.FC<{ children: React.ReactNode }> = ({ child
       pendingSeekRef.current = 0;
       setIsPlaying(true);
     },
-    [activeTrack],
+    [activeTrack]
   );
 
   const togglePlayPause = useCallback(() => {
@@ -199,7 +200,7 @@ const NarrativeAudioProvider: React.FC<{ children: React.ReactNode }> = ({ child
         audioRef.current.currentTime = clamped;
       }
     },
-    [duration],
+    [duration]
   );
 
   const seekTrack = useCallback(
@@ -221,14 +222,14 @@ const NarrativeAudioProvider: React.FC<{ children: React.ReactNode }> = ({ child
         setIsPlaying(true);
       }
     },
-    [activeTrack, seek],
+    [activeTrack, seek]
   );
 
   const skip = useCallback(
     (deltaSeconds: number) => {
       seek(currentTime + deltaSeconds);
     },
-    [currentTime, seek],
+    [currentTime, seek]
   );
 
   const cycleSpeed = useCallback(() => {
@@ -277,7 +278,7 @@ const NarrativeAudioProvider: React.FC<{ children: React.ReactNode }> = ({ child
       skip,
       cycleSpeed,
       dismiss,
-    ],
+    ]
   );
 
   return (
@@ -326,8 +327,7 @@ const NarrativeAudioMarginBar: React.FC<NarrativeAudioMarginBarProps> = ({ track
   const inNotes = notesStart !== null && currentSec >= notesStart;
 
   const pct = totalSec > 0 ? Math.min(100, (currentSec / totalSec) * 100) : 0;
-  const splitPct =
-    notesStart !== null && totalSec > 0 ? Math.min(100, (notesStart / totalSec) * 100) : 100;
+  const splitPct = notesStart !== null && totalSec > 0 ? Math.min(100, (notesStart / totalSec) * 100) : 100;
 
   const currentLabel = formatDurationSeconds(currentSec) ?? '0:00';
   const totalLabel = totalSec > 0 ? formatDurationSeconds(totalSec) : null;
@@ -355,9 +355,7 @@ const NarrativeAudioMarginBar: React.FC<NarrativeAudioMarginBarProps> = ({ track
       <div className="narrative-audio-bar-main">
         <div className="narrative-audio-bar-top">
           <span className={`narrative-audio-voice-label ${inNotes ? 'is-notes' : 'is-story'}`}>
-            {inNotes
-              ? `Editor's Notes · ${track.notesVoice}`
-              : `Listen to Biography · ${track.storyVoice}`}
+            {inNotes ? `Editor's Notes · ${track.notesVoice}` : `Listen to Biography · ${track.storyVoice}`}
           </span>
           <span className="narrative-audio-time">
             {totalLabel ? `${currentLabel} / ${totalLabel}` : currentLabel}
@@ -459,7 +457,10 @@ const NarrativeAudioDock: React.FC = () => {
 
       <div className="narrative-audio-dock-inner">
         <div className="narrative-audio-dock-meta">
-          <span className={`narrative-audio-dock-badge ${inNotes ? 'is-notes' : 'is-story'}`} aria-hidden="true">
+          <span
+            className={`narrative-audio-dock-badge ${inNotes ? 'is-notes' : 'is-story'}`}
+            aria-hidden="true"
+          >
             {activeTrack.personInitials}
           </span>
           <div className="narrative-audio-dock-titles">
@@ -561,9 +562,7 @@ const NarrativeAudioDock: React.FC = () => {
  * 2. A persistent cross-page listening dock in `slots.appShell` so narration continues
  *    uninterrupted while browsing Map, Tree, Places, or Source scans.
  */
-export function createNarrativeAudioPlugin(
-  options: NarrativeAudioPluginOptions = {},
-): KinloomUiPlugin {
+export function createNarrativeAudioPlugin(options: NarrativeAudioPluginOptions = {}): KinloomUiPlugin {
   const id = options.id ?? 'kinloom-narrative-audio';
   const defaultStoryVoice = options.defaultStoryVoice ?? 'Charon';
   const defaultNotesVoice = options.defaultNotesVoice ?? 'Kore';

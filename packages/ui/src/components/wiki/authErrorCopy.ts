@@ -127,8 +127,7 @@ export function resolveAuthFeedback(params: {
         provider,
         tone: 'warning',
         title: "That email isn't on the family list yet",
-        detail:
-          'Try another family email address, or open a family invite link first before signing in.',
+        detail: 'Try another family email address, or open a family invite link first before signing in.',
         hint: 'If you do not have a family invite link yet, ask the family archivist to share one with you.',
         showSwitchGoogleAccount: false,
         showInvitePaste: true,
@@ -192,8 +191,7 @@ export function resolveAuthFeedback(params: {
         provider: provider ?? 'magic_link',
         tone: 'warning',
         title: 'That sign-in link has expired',
-        detail:
-          'Sign-in links work once and last 15 minutes. Enter your email below to get a fresh link.',
+        detail: 'Sign-in links work once and last 15 minutes. Enter your email below to get a fresh link.',
         showSwitchGoogleAccount: false,
         showInvitePaste: false,
         focusEmailInput: true,
@@ -205,8 +203,7 @@ export function resolveAuthFeedback(params: {
         provider: provider ?? 'magic_link',
         tone: 'warning',
         title: 'That sign-in link was already used',
-        detail:
-          'Sign-in links work once and last 15 minutes. Enter your email below to get a fresh link.',
+        detail: 'Sign-in links work once and last 15 minutes. Enter your email below to get a fresh link.',
         hint: hasGoogle
           ? 'Some email apps preview links automatically. If this keeps happening, try Continue with Google.'
           : 'Some email apps preview links automatically. Try opening the fresh link directly in your browser.',
@@ -222,8 +219,7 @@ export function resolveAuthFeedback(params: {
         provider: provider ?? 'magic_link',
         tone: 'warning',
         title: 'That sign-in link has expired or was already used',
-        detail:
-          'Sign-in links work once and last 15 minutes. Enter your email below to get a fresh one.',
+        detail: 'Sign-in links work once and last 15 minutes. Enter your email below to get a fresh one.',
         showSwitchGoogleAccount: false,
         showInvitePaste: false,
         focusEmailInput: true,
@@ -382,7 +378,7 @@ export function resolveAuthFeedback(params: {
 export function resolveClientAuthError(
   error: unknown,
   provider: AuthProviderKind,
-  hasGoogleProvider: boolean,
+  hasGoogleProvider: boolean
 ): AuthFeedback {
   if (error instanceof ApiClientError) {
     return resolveAuthFeedback({
@@ -557,7 +553,7 @@ export function consumeAuthErrorFromWindow(): AuthUrlError | null {
   const cleaned = stripAuthErrorParams(
     window.location.pathname,
     window.location.search,
-    window.location.hash,
+    window.location.hash
   );
   try {
     window.history.replaceState(window.history.state, '', cleaned);

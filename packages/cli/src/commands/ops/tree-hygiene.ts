@@ -53,14 +53,7 @@ const NON_PRIMARY_BIRTH_TITLE_RE =
   /\b(baptis\w*|christen\w*|affidavit\w*|delayed|petition\w*|correction\w*|amend\w*|census|enumerat\w*)\b|\bcourt\b(?!\s+house\b|\s+st(?:reet|\.)?\b)/i;
 const NON_PRIMARY_BIRTH_ID_RE =
   /(?:^|[_-])(?:baptis\w*|bapt|christen\w*|chr|affidavit\w*|delayed|petition\w*|court|correction\w*|amend\w*|census)(?:[_-]|$)/i;
-const BIRTH_SUBJECT_ROLES = new Set([
-  'birth_subject',
-  'subject',
-  'principal',
-  'child',
-  'infant',
-  'newborn',
-]);
+const BIRTH_SUBJECT_ROLES = new Set(['birth_subject', 'subject', 'principal', 'child', 'infant', 'newborn']);
 
 const DEATH_ID_RE = /(?:^|[_-])(?:deat|death)(?:[_-]|$)/i;
 const DEATH_TITLE_RE = /\b(death|died|passing|passed\s+away)\b/i;
@@ -68,13 +61,7 @@ const NON_DEATH_TITLE_RE =
   /\b(burial|buried|interment|interred|funeral|probate\w*|estate|obituary|headstone|gravestone|cemetery|tombstone|cremation|inquest|widow\w*|traged\w*|newspaper\w*|article|clipping|census|enumerat\w*)\b|\bmemorial\b(?!\s+(?:hospital|medical|clinic|center)\b)|\blast\s+will\b|\bwill\s+(?:and\s+testament|probated?|proved?|filed|recorded|executed|contested)\b|\b(?:his|her|their)\s+will\b|\bnews\s+(?:report|article|clipping|item|story|account|notice|brief)\b/i;
 const NON_DEATH_ID_RE =
   /(?:^|[_-])(?:burial|buri|interment|funeral|probate\w*|estate|last_will|will_probate|obituary|obit|memorial|headstone|gravestone|cemetery|tombstone|cremation|inquest|widow\w*|traged\w*|newspaper\w*|news_report|news_article|news_clipping|census)(?:[_-]|$)/i;
-const DEATH_SUBJECT_ROLES = new Set([
-  'death_subject',
-  'deceased',
-  'decedent',
-  'subject',
-  'principal',
-]);
+const DEATH_SUBJECT_ROLES = new Set(['death_subject', 'deceased', 'decedent', 'subject', 'principal']);
 
 const MARRIAGE_ID_RE = /(?:^|[_-])(?:marr|marriage|wedding)(?:[_-]|$)/i;
 const MARRIAGE_TITLE_RE = /\b(marr(?:iage|ied)?|wedding|nuptial)\b/i;
@@ -288,7 +275,10 @@ function isAdoptionEvent(event: RawEvent): boolean {
 }
 
 function normalizeRole(role: string): string {
-  return role.trim().toLowerCase().replaceAll(/[\s-]+/g, '_');
+  return role
+    .trim()
+    .toLowerCase()
+    .replaceAll(/[\s-]+/g, '_');
 }
 
 function isBirthEvent(event: RawEvent): boolean {
@@ -471,12 +461,14 @@ export function analyzeTreeHygiene(input: {
   const birthRangeByPerson = new Map<string, { raw: string; range: ParsedEdtfRange }>();
   const deathRangeByPerson = new Map<string, { raw: string; range: ParsedEdtfRange }>();
   for (const person of input.people) {
-    const birthRaw = person.birth_edtf.trim() || birthEventsByPerson.get(person.id)?.[0]?.edtf_date.trim() || '';
+    const birthRaw =
+      person.birth_edtf.trim() || birthEventsByPerson.get(person.id)?.[0]?.edtf_date.trim() || '';
     const birthRange = parseEdtfRange(birthRaw);
     if (birthRange) {
       birthRangeByPerson.set(person.id, { raw: birthRaw, range: birthRange });
     }
-    const deathRaw = person.death_edtf.trim() || deathEventsByPerson.get(person.id)?.[0]?.edtf_date.trim() || '';
+    const deathRaw =
+      person.death_edtf.trim() || deathEventsByPerson.get(person.id)?.[0]?.edtf_date.trim() || '';
     const deathRange = parseEdtfRange(deathRaw);
     if (deathRange) {
       deathRangeByPerson.set(person.id, { raw: deathRaw, range: deathRange });
@@ -495,9 +487,7 @@ export function analyzeTreeHygiene(input: {
         const sortedXrefs = [...xrefs].toSorted((a, b) => a.localeCompare(b));
         const hasAdoptiveXref = sortedXrefs.some((xref) => ADOPTIVE_XREF_RE.test(xref));
         const hasAdoptiveLink =
-          hasAdoptiveXref ||
-          hasAdoptivePersonTag(parent) ||
-          adoptionEventPairs.has(`${childId}|${parentId}`);
+          hasAdoptiveXref || hasAdoptivePersonTag(parent) || adoptionEventPairs.has(`${childId}|${parentId}`);
         return {
           parentId,
           parent,
@@ -619,7 +609,9 @@ export function analyzeTreeHygiene(input: {
   for (const [personId, birthEvents] of birthEventsByPerson) {
     if (birthEvents.length > 1) {
       const sorted = [...birthEvents].toSorted((a, b) => a.id.localeCompare(b.id));
-      const detail = sorted.map((e) => `${e.id}${e.edtf_date.trim() ? ` (${e.edtf_date.trim()})` : ''}`).join(', ');
+      const detail = sorted
+        .map((e) => `${e.id}${e.edtf_date.trim() ? ` (${e.edtf_date.trim()})` : ''}`)
+        .join(', ');
       warnings.push({
         category: 'duplicate_vital_event',
         personIds: [personId],
@@ -632,7 +624,9 @@ export function analyzeTreeHygiene(input: {
   for (const [personId, deathEvents] of deathEventsByPerson) {
     if (deathEvents.length > 1) {
       const sorted = [...deathEvents].toSorted((a, b) => a.id.localeCompare(b.id));
-      const detail = sorted.map((e) => `${e.id}${e.edtf_date.trim() ? ` (${e.edtf_date.trim()})` : ''}`).join(', ');
+      const detail = sorted
+        .map((e) => `${e.id}${e.edtf_date.trim() ? ` (${e.edtf_date.trim()})` : ''}`)
+        .join(', ');
       warnings.push({
         category: 'duplicate_vital_event',
         personIds: [personId],
@@ -646,7 +640,9 @@ export function analyzeTreeHygiene(input: {
     if (coupleMarriages.length > 1) {
       const sorted = [...coupleMarriages].toSorted((a, b) => a.id.localeCompare(b.id));
       const coupleLabel = spouses.map((id) => personLabel(id, peopleById)).join(' and ');
-      const detail = sorted.map((e) => `${e.id}${e.edtf_date.trim() ? ` (${e.edtf_date.trim()})` : ''}`).join(', ');
+      const detail = sorted
+        .map((e) => `${e.id}${e.edtf_date.trim() ? ` (${e.edtf_date.trim()})` : ''}`)
+        .join(', ');
       warnings.push({
         category: 'duplicate_vital_event',
         personIds: spouses,
@@ -768,9 +764,7 @@ function isPreExistingHygieneWarning(
     case 'placeholder_event': {
       const postEventsKey = (postWarning.eventIds ?? []).join(',');
       return preWarnings.some(
-        (pre) =>
-          pre.category === 'placeholder_event' &&
-          (pre.eventIds ?? []).join(',') === postEventsKey
+        (pre) => pre.category === 'placeholder_event' && (pre.eventIds ?? []).join(',') === postEventsKey
       );
     }
     default: {

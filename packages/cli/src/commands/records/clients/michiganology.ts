@@ -3,6 +3,7 @@ import path from 'node:path';
 import { CliValidationError } from '../../../errors.js';
 import {
   atomicWriteFileSync,
+  type CommandParseSpec,
   cachedJsonCall,
   collapseWhitespace,
   emitJsonStdout,
@@ -14,18 +15,17 @@ import {
   getNumberOption,
   getStringOption,
   loadHtml,
+  type OptionSpec,
   parseCacheTtlHours,
   parseCommandArgs,
+  type RecordCommandContext,
+  type RecordCommandOutcome,
+  type RecordHandler,
   RecordRuntimeError,
   resolveCacheDir,
   resolveSubcommandAlias,
   SsrfBlockedError,
   withAdvisoryLock,
-  type CommandParseSpec,
-  type OptionSpec,
-  type RecordCommandContext,
-  type RecordCommandOutcome,
-  type RecordHandler,
 } from '../runtime/index.js';
 
 const DEFAULT_CACHE_TTL_HOURS = 168;
@@ -45,9 +45,7 @@ const CONNECT_TIMEOUT_SEC = 15;
 const MAX_ATTEMPTS = 4;
 const BASE_BACKOFF_MS = 250;
 const MAX_RETRY_AFTER_MS = 30_000;
-const RETRYABLE_STATUS_CODES: ReadonlySet<number> = new Set([
-  429, 500, 502, 503, 504, 520, 522, 524,
-]);
+const RETRYABLE_STATUS_CODES: ReadonlySet<number> = new Set([429, 500, 502, 503, 504, 520, 522, 524]);
 
 const SAFE_ITEM_ID_RE = /^(?:IO|SO)_[A-Za-z0-9-]+$/;
 const DOWNLOAD_FILE_EXTS = new Set<string>(['.jpg', '.jpeg', '.png', '.tif', '.tiff', '.pdf']);
@@ -67,10 +65,7 @@ export const COLLECTIONS: readonly (readonly [string, string])[] = [
   ['Surveyor Field Notebooks, 1815-1918', `${BASE}/surveyor-field-notebooks/`],
   ['Surveyor Maps, 1816-1860', `${BASE}/surveyor-maps/`],
   ['General Photograph Collection, ca. 1860-1990', `${BASE}/general-photograph-collection/`],
-  [
-    'Archives of Michigan Map Collection, ca. 1810-1970',
-    `${BASE}/archives-of-michigan-map-collection/`,
-  ],
+  ['Archives of Michigan Map Collection, ca. 1810-1970', `${BASE}/archives-of-michigan-map-collection/`],
   ['Corporation Annual Reports, 1997-2006', `${BASE}/corporation-annual-reports/`],
 ];
 
@@ -272,9 +267,7 @@ function resolveItemRef(urlOrId: string): readonly [string, string] {
   if (SAFE_ITEM_ID_RE.test(raw)) {
     return [raw, `${BASE}/uncategorized/${raw}/`];
   }
-  throw new CliValidationError(
-    'Pass a Michiganology item URL or a Preservica ID starting with IO_ or SO_.'
-  );
+  throw new CliValidationError('Pass a Michiganology item URL or a Preservica ID starting with IO_ or SO_.');
 }
 
 function encodeQueryPlus(query: string): string {
@@ -373,10 +366,7 @@ export function parseItemHtml(page: string, itemId: string, itemUrl: string): Mi
   };
 }
 
-function fileCachePaths(
-  ctx: RecordCommandContext,
-  itemId: string
-): readonly [string, string, string] {
+function fileCachePaths(ctx: RecordCommandContext, itemId: string): readonly [string, string, string] {
   if (!SAFE_ITEM_ID_RE.test(itemId)) {
     throw new RecordRuntimeError(`Invalid Michiganology item identifier: '${itemId}'`);
   }
@@ -443,10 +433,7 @@ async function fetchDownloadBytes(
   const downloadUrl = validateMichiganologyUrl(`${BASE}/download/file/${itemId}`);
   const res = await curlFetchValidated(ctx, downloadUrl, timeoutSec);
   const contentType = res.headers.get('content-type') || 'application/octet-stream';
-  const filename = filenameFromContentDisposition(
-    res.headers.get('content-disposition'),
-    `${itemId}.bin`
-  );
+  const filename = filenameFromContentDisposition(res.headers.get('content-disposition'), `${itemId}.bin`);
   if (res.bytes.length === 0) {
     throw new RecordRuntimeError(
       `Michiganology download returned an empty file for ${itemId}. The response was not cached.`
@@ -511,9 +498,7 @@ function resolveDownloadDest(
     throw new CliValidationError(`Invalid --out path: '${out}'`);
   }
   const expanded = expandHomePath(out, ctx.env);
-  const resolvedOut = path.isAbsolute(expanded)
-    ? path.resolve(expanded)
-    : path.resolve(ctx.cwd, expanded);
+  const resolvedOut = path.isAbsolute(expanded) ? path.resolve(expanded) : path.resolve(ctx.cwd, expanded);
 
   if (filename !== undefined) {
     const safeName = validateUserFilename(filename);
@@ -669,10 +654,7 @@ function renderRootHelp(): string {
   });
 }
 
-export const runMichiganologyCommand: RecordHandler = async (
-  args,
-  ctx
-): Promise<RecordCommandOutcome> => {
+export const runMichiganologyCommand: RecordHandler = async (args, ctx): Promise<RecordCommandOutcome> => {
   try {
     if (args.length === 0 || args[0] === '--help' || args[0] === '-h') {
       return { exitCode: 0, bytesOut: emitStdout(ctx.io, renderRootHelp()) };
@@ -690,8 +672,7 @@ export const runMichiganologyCommand: RecordHandler = async (
               ctx.io,
               formatCommandUsage({
                 usage: 'kinloom michiganology search [QUERY]... [options]',
-                summary:
-                  'Search all Michiganology collections, e.g. kinloom michiganology search Lincoln.',
+                summary: 'Search all Michiganology collections, e.g. kinloom michiganology search Lincoln.',
                 options: SEARCH_OPTIONS,
               })
             ),
@@ -704,14 +685,10 @@ export const runMichiganologyCommand: RecordHandler = async (
         }
         const query = parts.join(' ').trim();
         if (!query) {
-          throw new CliValidationError(
-            'Missing search query. Example: michiganology search Lincoln'
-          );
+          throw new CliValidationError('Missing search query. Example: michiganology search Lincoln');
         }
         const limit = getNumberOption(parsed, 'limit') ?? 10;
-        const budget = validateTimeout(
-          getNumberOption(parsed, 'timeout') ?? DEFAULT_TEXT_TIMEOUT_SEC
-        );
+        const budget = validateTimeout(getNumberOption(parsed, 'timeout') ?? DEFAULT_TEXT_TIMEOUT_SEC);
         const ttlHours = resolveTtl(getNumberOption(parsed, 'cacheTtlHours'), ctx);
         const refresh = getBooleanOption(parsed, 'refresh');
         const asJson = getBooleanOption(parsed, 'asJson');
@@ -770,17 +747,14 @@ export const runMichiganologyCommand: RecordHandler = async (
               ctx.io,
               formatCommandUsage({
                 usage: 'kinloom michiganology get <URL_OR_ID> [options]',
-                summary:
-                  'Inspect a Michiganology item page (Item Data fields and file download URL).',
+                summary: 'Inspect a Michiganology item page (Item Data fields and file download URL).',
                 options: GET_OPTIONS,
               })
             ),
           };
         }
         const [itemId, itemUrl] = resolveItemRef(parsed.positionals[0] ?? '');
-        const budget = validateTimeout(
-          getNumberOption(parsed, 'timeout') ?? DEFAULT_TEXT_TIMEOUT_SEC
-        );
+        const budget = validateTimeout(getNumberOption(parsed, 'timeout') ?? DEFAULT_TEXT_TIMEOUT_SEC);
         const ttlHours = resolveTtl(getNumberOption(parsed, 'cacheTtlHours'), ctx);
         const refresh = getBooleanOption(parsed, 'refresh');
         const asJson = getBooleanOption(parsed, 'asJson');
@@ -871,20 +845,12 @@ export const runMichiganologyCommand: RecordHandler = async (
           throw new CliValidationError(`Unsafe --out path containing '..': '${out}'`);
         }
 
-        const budget = validateTimeout(
-          getNumberOption(parsed, 'timeout') ?? DEFAULT_DOWNLOAD_TIMEOUT_SEC
-        );
+        const budget = validateTimeout(getNumberOption(parsed, 'timeout') ?? DEFAULT_DOWNLOAD_TIMEOUT_SEC);
         const ttlHours = resolveTtl(getNumberOption(parsed, 'cacheTtlHours'), ctx);
         const refresh = getBooleanOption(parsed, 'refresh');
         const asJson = getBooleanOption(parsed, 'asJson');
 
-        const { data: fetched, cacheHit } = await cachedDownload(
-          ctx,
-          itemId,
-          refresh,
-          ttlHours,
-          budget
-        );
+        const { data: fetched, cacheHit } = await cachedDownload(ctx, itemId, refresh, ttlHours, budget);
         const dest = resolveDownloadDest(out, filename, fetched.filename, ctx);
         atomicWriteFileSync(dest, fetched.body);
 

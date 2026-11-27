@@ -1,12 +1,13 @@
 import type { PlaceDirectoryEntry } from '@kinloom/core';
-import { DEFAULT_MIGRATION_ERAS, buildPlacesDirectory } from '@kinloom/core';
-import React, { useMemo, useState } from 'react';
+import { buildPlacesDirectory, DEFAULT_MIGRATION_ERAS } from '@kinloom/core';
+import type React from 'react';
+import { useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { EmptyStateNotice } from '../components/Atoms.js';
 import { ExplorerTopBar } from '../components/ExplorerTopBar.js';
 import { KinloomFooter } from '../components/KinloomFooter.js';
-import { KINLOOM_VOCABULARY, formatReaderLoadError } from '../lib/vocabulary.js';
-import { Link } from 'react-router-dom';
 import { useArchiveData } from '../context/ArchiveDataContext.js';
+import { formatReaderLoadError, KINLOOM_VOCABULARY } from '../lib/vocabulary.js';
 
 const PlaceLedgerEntry: React.FC<{
   entry: PlaceDirectoryEntry;
@@ -15,9 +16,7 @@ const PlaceLedgerEntry: React.FC<{
   let yearSpan = 'Undated';
   if (entry.minYear && entry.maxYear) {
     yearSpan =
-      entry.minYear === entry.maxYear
-        ? String(entry.minYear)
-        : `${entry.minYear} – ${entry.maxYear}`;
+      entry.minYear === entry.maxYear ? String(entry.minYear) : `${entry.minYear} – ${entry.maxYear}`;
   }
   const previewPeople = entry.people.slice(0, 8);
   const extraCount = Math.max(0, entry.people.length - previewPeople.length);
@@ -61,10 +60,7 @@ const PlaceLedgerEntry: React.FC<{
                 >
                   {p.person.full_name}
                   {p.startYear > 0 && (
-                    <span>
-                      {' '}
-                      ({p.startYear === p.endYear ? p.startYear : `${p.startYear}–${p.endYear}`})
-                    </span>
+                    <span> ({p.startYear === p.endYear ? p.startYear : `${p.startYear}–${p.endYear}`})</span>
                   )}
                 </Link>
               ))}
@@ -88,7 +84,7 @@ export const PlacesIndexPage: React.FC = () => {
 
   const migrationEras = useMemo(
     () => (siteConfig.migrationEras.length > 0 ? siteConfig.migrationEras : DEFAULT_MIGRATION_ERAS),
-    [siteConfig.migrationEras],
+    [siteConfig.migrationEras]
   );
 
   const stageLabelById = useMemo(() => {
@@ -124,7 +120,7 @@ export const PlacesIndexPage: React.FC = () => {
         .filter((era) => (stageCounts[era.id] ?? 0) > 0)
         .map((era) => ({ id: era.id, label: era.label })),
     ],
-    [migrationEras, stageCounts],
+    [migrationEras, stageCounts]
   );
 
   const filtered = useMemo(() => {
@@ -153,8 +149,8 @@ export const PlacesIndexPage: React.FC = () => {
             <div>
               <h1 className="folio-title">Places in the {siteConfig.site.familyName} Archive</h1>
               <p className="folio-lead">
-                Towns, counties, and homesteads along the line: who passed through, when they overlapped,
-                and what local weather or newspaper notices recorded.
+                Towns, counties, and homesteads along the line: who passed through, when they overlapped, and
+                what local weather or newspaper notices recorded.
               </p>
               <div className="axis-page-header-actions">
                 <Link to="/map" className="ink-link-btn">
@@ -187,7 +183,11 @@ export const PlacesIndexPage: React.FC = () => {
           <>
             <div className="places-filter-stack">
               {/* oxlint-disable-next-line jsx-a11y/prefer-tag-over-role -- role="group" is the correct grouping pattern for a button toolbar */}
-              <div className="filter-bar ink-filter-bar" role="group" aria-label="Filter places by migration region">
+              <div
+                className="filter-bar ink-filter-bar"
+                role="group"
+                aria-label="Filter places by migration region"
+              >
                 {stageFilters.map((f) => (
                   <button
                     key={f.id}

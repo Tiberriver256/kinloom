@@ -23,18 +23,12 @@ export function buildSourceTextFilename(doc: ReadingDocument): string {
 }
 
 export function buildFullSourceText(doc: ReadingDocument): string {
-  const header = [
-    doc.title,
-    `Author: ${doc.author}`,
-    `Pages: ${doc.pages.length}`,
-    '',
-  ];
+  const header = [doc.title, `Author: ${doc.author}`, `Pages: ${doc.pages.length}`, ''];
   const sections = doc.pages.map((page) => `=== ${page.label} ===\n\n${page.text.trim()}`);
   return `${header.join('\n')}\n${sections.join('\n\n')}\n`;
 }
 
 export function buildAllSourcesText(docs: readonly ReadingDocument[]): string {
-  const divider =
-    '\n\n========================================================================\n\n';
+  const divider = '\n\n========================================================================\n\n';
   return `${docs.map((doc) => buildFullSourceText(doc).trim()).join(divider)}\n`;
 }

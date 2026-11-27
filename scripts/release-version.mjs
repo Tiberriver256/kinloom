@@ -83,7 +83,7 @@ export function nextVersion(current, level) {
 
 export function parseCommitMessage(subject, body = '') {
   const match = /^(?<type>[A-Za-z]+)(?:\((?<scope>[^)]*)\))?(?<bang>!)?: (?<description>.+)$/.exec(
-    subject.trim(),
+    subject.trim()
   );
   const breakingFooter = /^BREAKING[ -]CHANGE:/im.test(body);
   if (!match) {
@@ -241,7 +241,9 @@ export function rewritePackageJson(text, version) {
       if (!name.startsWith('@kinloom/')) continue;
       const updated = rewriteKinloomRange(range, version);
       if (updated === range) continue;
-      const pattern = new RegExp(`(${escapeRegExp(JSON.stringify(name))}\\s*:\\s*")${escapeRegExp(range)}(")`);
+      const pattern = new RegExp(
+        `(${escapeRegExp(JSON.stringify(name))}\\s*:\\s*")${escapeRegExp(range)}(")`
+      );
       if (!pattern.test(next)) throw new Error(`missing dependency ${name}`);
       next = next.replace(pattern, `$1${updated}$2`);
     }
@@ -410,9 +412,7 @@ function parseArgs(argv) {
 function commandNotes(flags) {
   if (!flags.plan || !flags.out) throw new Error('notes requires --plan and --out');
   const plan = JSON.parse(fs.readFileSync(flags.plan, 'utf8'));
-  const logins = flags['logins-file']
-    ? fs.readFileSync(flags['logins-file'], 'utf8').split(/\r?\n/)
-    : [];
+  const logins = flags['logins-file'] ? fs.readFileSync(flags['logins-file'], 'utf8').split(/\r?\n/) : [];
   const generatedBody =
     flags['generated-file'] && fs.existsSync(flags['generated-file'])
       ? fs.readFileSync(flags['generated-file'], 'utf8')
@@ -469,8 +469,7 @@ function main() {
   throw new Error(`Unknown command ${command}`);
 }
 
-const invokedDirectly =
-  process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+const invokedDirectly = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 if (invokedDirectly) {
   try {
     main();

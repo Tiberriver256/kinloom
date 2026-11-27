@@ -1,5 +1,6 @@
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import type { SourceInspectorRequest, SourceReaderRequest } from '@kinloom/core';
+import type React from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { useArchiveData } from './ArchiveDataContext.js';
 
 export interface PivotCrumb {
@@ -40,7 +41,7 @@ export const ArchiveUiProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       setSourceInspector(null);
       setSourceReader(req);
     },
-    [ensureReadings],
+    [ensureReadings]
   );
 
   const closeSourceReader = useCallback(() => {
@@ -130,7 +131,7 @@ export const ArchiveUiProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       searchOpen,
       openSearch,
       closeSearch,
-    ],
+    ]
   );
 
   return <ArchiveUiContext.Provider value={value}>{children}</ArchiveUiContext.Provider>;

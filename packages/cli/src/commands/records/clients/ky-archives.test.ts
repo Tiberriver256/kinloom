@@ -223,9 +223,7 @@ describe('ky-archives native client', () => {
 
     const cdmUrl = await invokeKy(['cdm-url', 'Boone County'], cacheDir, fetchImpl);
     expect(cdmUrl.exitCode).toBe(0);
-    expect(cdmUrl.stdout).toBe(
-      'https://www.kyhistory.com/cdm/search/searchterm/Boone%20County/mode/exact'
-    );
+    expect(cdmUrl.stdout).toBe('https://www.kyhistory.com/cdm/search/searchterm/Boone%20County/mode/exact');
 
     const urls = await invokeKy(['urls', 'Lincoln'], cacheDir, fetchImpl);
     expect(urls.exitCode).toBe(0);

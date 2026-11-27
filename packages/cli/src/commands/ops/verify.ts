@@ -3,12 +3,17 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { performance } from 'node:perf_hooks';
 import {
+  type ArchiveBundle,
   ArchiveBundleSchema,
   collectLivingNames,
   compileArchive,
   compileLivingNamePattern,
   filterMediaForPrivacy,
   filterNarrativesForPrivacy,
+  type MediaItem,
+  type Narrative,
+  type Place,
+  type PrivacyConfig,
   parseEventsYaml,
   parseKinloomConfigYaml,
   parseKinshipYaml,
@@ -18,16 +23,11 @@ import {
   parsePeopleYaml,
   parsePlacesYaml,
   parseSourcesYaml,
-  resolveEffectiveLiving,
-  validateNarrativeCitations,
-  type ArchiveBundle,
-  type MediaItem,
-  type Narrative,
-  type Place,
-  type PrivacyConfig,
   type RawEvent,
   type RawPerson,
+  resolveEffectiveLiving,
   type SourceRecord,
+  validateNarrativeCitations,
 } from '@kinloom/core';
 import { CliValidationError } from '../../errors.js';
 import { auditBundlePrivacy } from './integrate.js';
@@ -37,15 +37,15 @@ import {
   compileLivingNameMatcher,
   computeSourceMaxYearById,
   extractLatestEdtfYear,
-  resolveNarrativeMaxYear,
   type LivingNameHit,
   type LivingNameTarget,
+  resolveNarrativeMaxYear,
 } from './living-name-matcher.js';
 import {
-  TREE_HYGIENE_CATEGORIES,
   analyzeTreeHygiene,
   diffTreeHygieneWarnings,
   formatAuditHygieneWarningMessage,
+  TREE_HYGIENE_CATEGORIES,
   type TreeHygieneCategory,
   type TreeHygieneSummary,
   type TreeHygieneWarning,
@@ -53,10 +53,10 @@ import {
 
 export { VERIFY_HELP } from './help.js';
 export {
-  TREE_HYGIENE_CATEGORIES,
   analyzeTreeHygiene,
   diffTreeHygieneWarnings,
   formatAuditHygieneWarningMessage,
+  TREE_HYGIENE_CATEGORIES,
   type TreeHygieneCategory,
   type TreeHygieneSummary,
   type TreeHygieneWarning,
@@ -223,10 +223,7 @@ export function scanYamlFilesForSsns(
   };
 }
 
-export function findDuplicateResidenceSpans(
-  bundle: ArchiveBundle,
-  mode: 'private' | 'public'
-): string[] {
+export function findDuplicateResidenceSpans(bundle: ArchiveBundle, mode: 'private' | 'public'): string[] {
   const duplicates: string[] = [];
   const seenIds = new Set<string>();
   const seenTuples = new Set<string>();
@@ -274,13 +271,9 @@ export function findDuplicateNormalizedMediaFiles(
   return duplicates;
 }
 
-export function verifyMediaFilesOnDisk(
-  repoDir: string,
-  mediaItems: readonly MediaItem[]
-): VerifyMediaResult {
+export function verifyMediaFilesOnDisk(repoDir: string, mediaItems: readonly MediaItem[]): VerifyMediaResult {
   const archiveMediaRoot = path.join(repoDir, 'archive-media');
-  const hasArchiveMedia =
-    fs.existsSync(archiveMediaRoot) && fs.statSync(archiveMediaRoot).isDirectory();
+  const hasArchiveMedia = fs.existsSync(archiveMediaRoot) && fs.statSync(archiveMediaRoot).isDirectory();
   const mediaLayout: 'archive-media' | 'media' = hasArchiveMedia ? 'archive-media' : 'media';
   const mediaRoot = hasArchiveMedia ? archiveMediaRoot : repoDir;
   const publicMediaDir = path.resolve(repoDir, 'public', 'media');
@@ -415,17 +408,9 @@ export function scanPublicLivingNames(input: {
       }))
     )
   );
-  const publicNarratives = filterNarrativesForPrivacy(
-    input.narratives,
-    livingIds,
-    scrubPattern,
-    'public'
-  );
+  const publicNarratives = filterNarrativesForPrivacy(input.narratives, livingIds, scrubPattern, 'public');
   const peopleById = new Map(
-    input.people.map((person) => [
-      person.id,
-      { ...person, is_living: livingIds.has(person.id) },
-    ])
+    input.people.map((person) => [person.id, { ...person, is_living: livingIds.has(person.id) }])
   );
   const eventsById = new Map(
     input.events.map((event) => [event.id, { id: event.id, participants: event.participants }])
@@ -460,7 +445,7 @@ export function scanPublicLivingNames(input: {
   for (const item of [...publicMedia].toSorted((a, b) => a.id.localeCompare(b.id))) {
     const mediaMaxYear =
       extractLatestEdtfYear(item.date_edtf) ??
-      (item.event_id ? eventMaxYearById.get(item.event_id) ?? null : null);
+      (item.event_id ? (eventMaxYearById.get(item.event_id) ?? null) : null);
     pushTextTarget(targets, `media:${item.id}:caption`, item.caption, mediaMaxYear);
     pushTextTarget(targets, `media:${item.id}:provenance`, item.provenance, mediaMaxYear);
   }
@@ -490,11 +475,8 @@ export function scanPublicLivingNames(input: {
 export function formatVerifyTextReport(report: Omit<VerifyCommandResult, 'rendered'>): string {
   const status = report.ok ? 'PASS' : 'FAIL';
   const hygieneWarningCount = report.hygiene.warnings.length;
-  const hygieneStatus =
-    hygieneWarningCount === 0 ? 'PASS' : report.strictHygiene ? 'FAIL' : 'WARN';
-  const hygieneCountDetail = TREE_HYGIENE_CATEGORIES.filter(
-    (category) => report.hygiene.counts[category] > 0
-  )
+  const hygieneStatus = hygieneWarningCount === 0 ? 'PASS' : report.strictHygiene ? 'FAIL' : 'WARN';
+  const hygieneCountDetail = TREE_HYGIENE_CATEGORIES.filter((category) => report.hygiene.counts[category] > 0)
     .map((category) => `${category}=${report.hygiene.counts[category]}`)
     .join(', ');
   const hygieneSuffix = hygieneCountDetail ? ` (${hygieneCountDetail})` : '';
@@ -530,9 +512,7 @@ export function formatVerifyTextReport(report: Omit<VerifyCommandResult, 'render
   return `${lines.join('\n')}\n`;
 }
 
-export async function runVerifyCommand(
-  options: VerifyCommandOptions = {}
-): Promise<VerifyCommandResult> {
+export async function runVerifyCommand(options: VerifyCommandOptions = {}): Promise<VerifyCommandResult> {
   const t0 = performance.now();
   const repoDir = path.resolve(options.repoDir?.trim() || process.cwd());
   if (!fs.existsSync(repoDir) || !fs.statSync(repoDir).isDirectory()) {
@@ -676,9 +656,7 @@ export async function runVerifyCommand(
     ...compileCheck.privateLivingLeaks.map((l) => `compile(private): living leak: ${l}`),
     ...compileCheck.publicLivingLeaks.map((l) => `compile(public): living leak: ${l}`),
     ...compileCheck.duplicateResidenceSpans.map((d) => `compile: duplicate residence_span: ${d}`),
-    ...mediaCheck.missingFiles.map(
-      (m) => `media: '${m.id}' (${m.file}) ${m.reason} at ${m.expectedPath}`
-    ),
+    ...mediaCheck.missingFiles.map((m) => `media: '${m.id}' (${m.file}) ${m.reason} at ${m.expectedPath}`),
     ...mediaCheck.duplicateFiles.map(
       (dup) =>
         `media: duplicate file '${dup.file}' on ${dup.mediaIds.join(', ')}. Run 'kinloom media dedupe' to preview a safe merge plan (pass '--apply' to write).`

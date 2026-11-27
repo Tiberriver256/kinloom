@@ -1,11 +1,11 @@
 import type { Person } from '@kinloom/core';
+import React from 'react';
 import type {
   ArchivalTreeModel,
   LineageSpotlight,
   TreeFamilyUnit,
   TreeUnion,
 } from '../../lib/archivalTreeModel.js';
-import React from 'react';
 import {
   formatCardLifespan,
   formatEarlyLossAgeLabel,
@@ -148,17 +148,8 @@ const UnionAttachments: React.FC<UnionAttachmentsProps> = ({
           aria-label={KINLOOM_VOCABULARY.tree.diedYoungTooltip}
           title={KINLOOM_VOCABULARY.tree.diedYoungTooltip}
         >
-          <span
-            className="tree-early-strip-heading"
-            title={KINLOOM_VOCABULARY.tree.diedYoungTooltip}
-          >
-            <svg
-              className="tree-early-sprig"
-              viewBox="0 0 16 16"
-              width="13"
-              height="13"
-              aria-hidden="true"
-            >
+          <span className="tree-early-strip-heading" title={KINLOOM_VOCABULARY.tree.diedYoungTooltip}>
+            <svg className="tree-early-sprig" viewBox="0 0 16 16" width="13" height="13" aria-hidden="true">
               <path
                 d="M8 14V6M8 9C5.5 9 4 7.5 4 5.5C6 5.5 8 7 8 9ZM8 7C10.5 7 12 5.5 12 3.5C10 3.5 8 5 8 7Z"
                 fill="none"
@@ -196,67 +187,68 @@ const UnionAttachments: React.FC<UnionAttachmentsProps> = ({
         </div>
       )}
 
-      {totalCollateral > 0 && (() => {
-        const toggleLabels = formatUnionOtherChildrenLabel({
-          hiddenCount: union.collapsedSiblingIds.length,
-          totalCollateralCount: totalCollateral,
-          visibleChildCount: union.visibleChildIds.length,
-          isExpanded: union.isExpanded,
-          mode: model.effectiveMode,
-        });
-        return (
-          <div className="tree-roll-siblings-block">
-            <button
-              type="button"
-              className={`tree-sibling-pill${union.isExpanded ? ' is-expanded' : ''}`}
-              aria-expanded={union.isExpanded}
-              aria-label={toggleLabels.ariaLabel}
-              onClick={() => {
-                onToggleUnionSiblings(union.id);
-              }}
-            >
-              <span className="tree-sibling-pill-chevron" aria-hidden="true">
-                {union.isExpanded ? '▾' : '▸'}
-              </span>
-              <span>{toggleLabels.buttonLabel}</span>
-            </button>
-
-            {union.isExpanded && hangingChildren.length > 0 && (
-              <div
-                className="tree-hanging-grid"
-                role="list"
-                aria-label={KINLOOM_VOCABULARY.tree.otherSiblingsAria}
+      {totalCollateral > 0 &&
+        (() => {
+          const toggleLabels = formatUnionOtherChildrenLabel({
+            hiddenCount: union.collapsedSiblingIds.length,
+            totalCollateralCount: totalCollateral,
+            visibleChildCount: union.visibleChildIds.length,
+            isExpanded: union.isExpanded,
+            mode: model.effectiveMode,
+          });
+          return (
+            <div className="tree-roll-siblings-block">
+              <button
+                type="button"
+                className={`tree-sibling-pill${union.isExpanded ? ' is-expanded' : ''}`}
+                aria-expanded={union.isExpanded}
+                aria-label={toggleLabels.ariaLabel}
+                onClick={() => {
+                  onToggleUnionSiblings(union.id);
+                }}
               >
-                {hangingChildren.map((sibling) => {
-                  const rawThumb = personThumbMap.get(sibling.id) || sibling.portrait_url;
-                  const thumbUrl = rawThumb ? resolveAssetUrl(rawThumb, baseUrl) : null;
-                  const siblingSpouses = (model.spouseMap.get(sibling.id) ?? [])
-                    .map((sid) => model.peopleById.get(sid)?.full_name?.trim())
-                    .filter((name): name is string => Boolean(name));
-                  const spouseLabel =
-                    siblingSpouses.length > 0
-                      ? `m. ${formatTreeCardName(siblingSpouses[0], 26)}${siblingSpouses.length > 1 ? ` (+${siblingSpouses.length - 1})` : ''}`
-                      : undefined;
-                  return (
-                    <div key={sibling.id} className="tree-hanging-grid-item" role="listitem">
-                      <RollPersonCard
-                        person={sibling}
-                        isDirect={false}
-                        isSelected={selectedPersonId === sibling.id}
-                        isLit={Boolean(spotlight?.highlightedPersonIds.has(sibling.id))}
-                        hasSelection={hasSelection}
-                        thumbUrl={thumbUrl}
-                        spouseLabel={spouseLabel}
-                        onSelect={onSelectPerson}
-                      />
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        );
-      })()}
+                <span className="tree-sibling-pill-chevron" aria-hidden="true">
+                  {union.isExpanded ? '▾' : '▸'}
+                </span>
+                <span>{toggleLabels.buttonLabel}</span>
+              </button>
+
+              {union.isExpanded && hangingChildren.length > 0 && (
+                <div
+                  className="tree-hanging-grid"
+                  role="list"
+                  aria-label={KINLOOM_VOCABULARY.tree.otherSiblingsAria}
+                >
+                  {hangingChildren.map((sibling) => {
+                    const rawThumb = personThumbMap.get(sibling.id) || sibling.portrait_url;
+                    const thumbUrl = rawThumb ? resolveAssetUrl(rawThumb, baseUrl) : null;
+                    const siblingSpouses = (model.spouseMap.get(sibling.id) ?? [])
+                      .map((sid) => model.peopleById.get(sid)?.full_name?.trim())
+                      .filter((name): name is string => Boolean(name));
+                    const spouseLabel =
+                      siblingSpouses.length > 0
+                        ? `m. ${formatTreeCardName(siblingSpouses[0], 26)}${siblingSpouses.length > 1 ? ` (+${siblingSpouses.length - 1})` : ''}`
+                        : undefined;
+                    return (
+                      <div key={sibling.id} className="tree-hanging-grid-item" role="listitem">
+                        <RollPersonCard
+                          person={sibling}
+                          isDirect={false}
+                          isSelected={selectedPersonId === sibling.id}
+                          isLit={Boolean(spotlight?.highlightedPersonIds.has(sibling.id))}
+                          hasSelection={hasSelection}
+                          thumbUrl={thumbUrl}
+                          spouseLabel={spouseLabel}
+                          onSelect={onSelectPerson}
+                        />
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          );
+        })()}
     </div>
   );
 };
@@ -312,7 +304,7 @@ export const TreePedigreeRoll: React.FC<TreePedigreeRollProps> = ({
               ? coupleUnions.find(
                   (u) =>
                     (u.primaryPartnerId === prevMember.id && u.secondaryPartnerId === member.id) ||
-                    (u.primaryPartnerId === member.id && u.secondaryPartnerId === prevMember.id),
+                    (u.primaryPartnerId === member.id && u.secondaryPartnerId === prevMember.id)
                 )
               : undefined;
 
@@ -391,11 +383,7 @@ export const TreePedigreeRoll: React.FC<TreePedigreeRollProps> = ({
       >
         <ol className="tree-roll-generations">
           {model.generations.map((genGroup, idx) => (
-            <li
-              key={genGroup.gen}
-              id={`tree-roll-gen-${genGroup.gen}`}
-              className="tree-roll-generation"
-            >
+            <li key={genGroup.gen} id={`tree-roll-gen-${genGroup.gen}`} className="tree-roll-generation">
               <header className="tree-roll-gen-header">
                 <span className="tree-roll-gen-badge">{genGroup.label}</span>
                 <span className="tree-roll-gen-years">{genGroup.yearRange}</span>

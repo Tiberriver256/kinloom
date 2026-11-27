@@ -1,20 +1,21 @@
 import type { ArchiveEvent, Person } from '@kinloom/core';
 import { haversineMiles, resolvePlacePronunciation } from '@kinloom/core';
-import { DateStamp, SourceCitationTag, resolveAssetUrl } from '../components/Atoms.js';
+import type React from 'react';
+import { useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import React, { useMemo, useState } from 'react';
+import { DateStamp, resolveAssetUrl, SourceCitationTag } from '../components/Atoms.js';
 import { ExplorerTopBar } from '../components/ExplorerTopBar.js';
 import { KinloomFooter } from '../components/KinloomFooter.js';
 import { LocalSurveyMap } from '../components/LocalSurveyMap.js';
 import { MediaPlayer } from '../components/MediaPlayer.js';
-import { PluginSlot } from '../plugins/PluginContext.js';
 import { PronunciationBadge } from '../components/PronunciationBadge.js';
-import { useArchiveData } from '../context/ArchiveDataContext.js';
 import { EntityEditDrawer, type EntityEditDrawerSection } from '../components/wiki/EntityEditDrawer.js';
 import { RevisionHistoryPanel } from '../components/wiki/RevisionHistoryPanel.js';
 import { TalkPanel } from '../components/wiki/TalkPanel.js';
 import { WikiActionBar, type WikiEntityTab } from '../components/wiki/WikiActionBar.js';
-import { KINLOOM_VOCABULARY, formatReaderLoadError } from '../lib/vocabulary.js';
+import { useArchiveData } from '../context/ArchiveDataContext.js';
+import { formatReaderLoadError, KINLOOM_VOCABULARY } from '../lib/vocabulary.js';
+import { PluginSlot } from '../plugins/PluginContext.js';
 
 type ScopeMode = 'exact' | 'radius15' | 'county';
 
@@ -38,7 +39,7 @@ export const PlacePage: React.FC = () => {
   const [decadeFilter, setDecadeFilter] = useState<string>('all');
   const [wikiTab, setWikiTab] = useState<WikiEntityTab>('read');
   const [editInitialSection, setEditInitialSection] = useState<EntityEditDrawerSection | undefined>(
-    undefined,
+    undefined
   );
 
   const place = slug ? placesBySlug.get(slug) : undefined;
@@ -197,9 +198,7 @@ export const PlacePage: React.FC = () => {
   }, [scopeLocalRecords]);
 
   const effectiveDecadeFilter =
-    decadeFilter !== 'all' && recordDecades.some((d) => String(d) === decadeFilter)
-      ? decadeFilter
-      : 'all';
+    decadeFilter !== 'all' && recordDecades.some((d) => String(d) === decadeFilter) ? decadeFilter : 'all';
 
   const localRecords = useMemo(() => {
     if (effectiveDecadeFilter === 'all') {
@@ -217,7 +216,9 @@ export const PlacePage: React.FC = () => {
     return (
       <div>
         <ExplorerTopBar />
-        <main id="main-content" className="place-page">Loading archive…</main>
+        <main id="main-content" className="place-page">
+          Loading archive…
+        </main>
       </div>
     );
   }
@@ -268,7 +269,10 @@ export const PlacePage: React.FC = () => {
       <ExplorerTopBar />
       <main id="main-content" className="place-page">
         {occupancyRows.rows.length > 0 && (
-          <div className="print-hide" style={{ marginBottom: 14, display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'center' }}>
+          <div
+            className="print-hide"
+            style={{ marginBottom: 14, display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'center' }}
+          >
             <Link to={`/time?year=${occupancyRows.minYear}`} className="ink-link-btn">
               See Family in {occupancyRows.minYear} →
             </Link>
@@ -280,10 +284,7 @@ export const PlacePage: React.FC = () => {
             <div>
               <h1 className="place-dossier-title">{place.full_name}</h1>
               {(() => {
-                const effectivePronunciation = resolvePlacePronunciation(
-                  place,
-                  pronunciations,
-                );
+                const effectivePronunciation = resolvePlacePronunciation(place, pronunciations);
                 if (!effectivePronunciation && !capabilities.canEdit) {
                   return null;
                 }
@@ -328,7 +329,12 @@ export const PlacePage: React.FC = () => {
             </div>
 
             {/* oxlint-disable-next-line jsx-a11y/prefer-tag-over-role -- role="group" is the correct grouping pattern for a button toolbar */}
-            <div className="filter-bar place-scope-bar print-hide" style={{ margin: 0 }} role="group" aria-label="Map area filter">
+            <div
+              className="filter-bar place-scope-bar print-hide"
+              style={{ margin: 0 }}
+              role="group"
+              aria-label="Map area filter"
+            >
               <button
                 type="button"
                 className={`pill-btn ${scopeMode === 'exact' ? 'active' : ''}`}
@@ -375,9 +381,7 @@ export const PlacePage: React.FC = () => {
 
           <PluginSlot name="placeDetail" place={place} />
 
-          {wikiTab === 'history' && (
-            <RevisionHistoryPanel entityType="place" entityId={place.id} />
-          )}
+          {wikiTab === 'history' && <RevisionHistoryPanel entityType="place" entityId={place.id} />}
 
           {wikiTab === 'talk' && (
             <TalkPanel entityType="place" entityId={place.id} entityTitle={place.full_name} />
@@ -396,54 +400,70 @@ export const PlacePage: React.FC = () => {
         </section>
 
         {isReadingProfile &&
-          (place.summary || placePhotoSrc || (place.historical_names && place.historical_names.length > 0)) && (
-          <section className="place-map-box place-history-section">
-            <h2 style={{ fontFamily: 'var(--font-serif)', margin: '0 0 12px' }}>
-              Historical Profile
-            </h2>
-            <div className={placePhotoSrc ? 'place-history-grid' : undefined}>
-              <div className="place-history-copy">
-                {place.summary && <p className="place-history-summary">{place.summary}</p>}
-                {place.historical_names && place.historical_names.length > 0 && (
-                  <div className="place-historical-names" aria-label="Historical jurisdictions">
-                    <span className="place-historical-names-label">Jurisdictions:</span>
-                    <div className="place-historical-names-list">
-                      {place.historical_names.map((hn) => {
-                        const span =
-                          hn.valid_from || hn.valid_to
-                            ? ` (${hn.valid_from || '?'}–${hn.valid_to || 'present'})`
-                            : '';
-                        return (
-                          <span key={`${hn.name}-${hn.valid_from || ''}-${hn.valid_to || ''}`} className="place-jurisdiction-chip">
-                            {hn.name}
-                            {span}
-                          </span>
-                        );
-                      })}
+          (place.summary ||
+            placePhotoSrc ||
+            (place.historical_names && place.historical_names.length > 0)) && (
+            <section className="place-map-box place-history-section">
+              <h2 style={{ fontFamily: 'var(--font-serif)', margin: '0 0 12px' }}>Historical Profile</h2>
+              <div className={placePhotoSrc ? 'place-history-grid' : undefined}>
+                <div className="place-history-copy">
+                  {place.summary && <p className="place-history-summary">{place.summary}</p>}
+                  {place.historical_names && place.historical_names.length > 0 && (
+                    <div className="place-historical-names" aria-label="Historical jurisdictions">
+                      <span className="place-historical-names-label">Jurisdictions:</span>
+                      <div className="place-historical-names-list">
+                        {place.historical_names.map((hn) => {
+                          const span =
+                            hn.valid_from || hn.valid_to
+                              ? ` (${hn.valid_from || '?'}–${hn.valid_to || 'present'})`
+                              : '';
+                          return (
+                            <span
+                              key={`${hn.name}-${hn.valid_from || ''}-${hn.valid_to || ''}`}
+                              className="place-jurisdiction-chip"
+                            >
+                              {hn.name}
+                              {span}
+                            </span>
+                          );
+                        })}
+                      </div>
                     </div>
-                  </div>
-                )}
-                {place.sources && place.sources.length > 0 && (
-                  <SourceCitationTag sources={place.sources} sourcesById={sourcesById} />
+                  )}
+                  {place.sources && place.sources.length > 0 && (
+                    <SourceCitationTag sources={place.sources} sourcesById={sourcesById} />
+                  )}
+                </div>
+                {placePhotoSrc && placePhotoMedia && (
+                  <figure className="place-history-figure">
+                    <MediaPlayer media={placePhotoMedia} baseUrl={baseUrl} variant="full" />
+                    {place.photo_caption && <figcaption>{place.photo_caption}</figcaption>}
+                  </figure>
                 )}
               </div>
-              {placePhotoSrc && placePhotoMedia && (
-                <figure className="place-history-figure">
-                  <MediaPlayer media={placePhotoMedia} baseUrl={baseUrl} variant="full" />
-                  {place.photo_caption && <figcaption>{place.photo_caption}</figcaption>}
-                </figure>
-              )}
-            </div>
-          </section>
-        )}
+            </section>
+          )}
 
         {isReadingProfile && (
           <section className="place-map-box">
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
-              <h2 style={{ fontFamily: 'var(--font-serif)', margin: 0 }}>
-                Who Passed Through
-              </h2>
-              <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'baseline',
+                flexWrap: 'wrap',
+                gap: 8,
+                marginBottom: 12,
+              }}
+            >
+              <h2 style={{ fontFamily: 'var(--font-serif)', margin: 0 }}>Who Passed Through</h2>
+              <span
+                style={{
+                  fontFamily: 'var(--font-mono)',
+                  fontSize: '0.78rem',
+                  color: 'var(--text-secondary)',
+                }}
+              >
                 {occupancyRows.minYear} — {occupancyRows.maxYear}
               </span>
             </div>
@@ -485,7 +505,15 @@ export const PlacePage: React.FC = () => {
 
         {isReadingProfile && (
           <section className="place-map-box">
-            <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10, marginBottom: 12 }}>
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                flexWrap: 'wrap',
+                gap: 10,
+                marginBottom: 12,
+              }}
+            >
               <h2 style={{ fontFamily: 'var(--font-serif)', margin: 0 }}>
                 {KINLOOM_VOCABULARY.place.localHistoryHeading}
               </h2>
@@ -517,9 +545,7 @@ export const PlacePage: React.FC = () => {
             </div>
 
             {localRecords.length === 0 ? (
-              <p className="empty-ring-note">
-                {KINLOOM_VOCABULARY.place.localHistoryEmpty}
-              </p>
+              <p className="empty-ring-note">{KINLOOM_VOCABULARY.place.localHistoryEmpty}</p>
             ) : (
               <div style={{ display: 'grid', gap: 12 }}>
                 {localRecords.map((ev: ArchiveEvent) => (
@@ -533,7 +559,13 @@ export const PlacePage: React.FC = () => {
                     <p style={{ margin: 0, fontSize: '0.9rem' }}>{ev.summary}</p>
                     {ev.source_url && (
                       <div className="print-hide" style={{ marginTop: 8 }}>
-                        <a href={ev.source_url} target="_blank" rel="noreferrer" className="pill-btn" style={{ textDecoration: 'none' }}>
+                        <a
+                          href={ev.source_url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="pill-btn"
+                          style={{ textDecoration: 'none' }}
+                        >
                           View External Record ↗
                         </a>
                       </div>

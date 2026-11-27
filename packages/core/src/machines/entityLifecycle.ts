@@ -64,10 +64,7 @@ export function transitionEntityLifecycle(
     return {
       ok: false,
       status: 409,
-      code:
-        state.kind === 'softDeleted'
-          ? 'ENTITY_SOFT_DELETED_USE_RESTORE'
-          : 'ENTITY_ALREADY_EXISTS',
+      code: state.kind === 'softDeleted' ? 'ENTITY_SOFT_DELETED_USE_RESTORE' : 'ENTITY_ALREADY_EXISTS',
       currentRevisionId: state.currentRevisionId,
     };
   }

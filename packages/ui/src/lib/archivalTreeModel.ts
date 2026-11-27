@@ -167,9 +167,7 @@ export function formatUnionOtherChildrenLabel(params: {
   const childWord = count === 1 ? 'child' : 'children';
   if (visibleChildCount > 0) {
     const belowDetail =
-      mode === 'spine'
-        ? `${visibleChildCount} in direct line below`
-        : `${visibleChildCount} shown below`;
+      mode === 'spine' ? `${visibleChildCount} in direct line below` : `${visibleChildCount} shown below`;
     if (isExpanded) {
       return {
         buttonLabel: `Hide ${totalCollateralCount} other ${childWord} (${belowDetail})`,
@@ -354,7 +352,7 @@ export function isEarlyChildhoodLoss(
   person: Person,
   parentMap: ReadonlyMap<string, readonly string[]>,
   childMap: ReadonlyMap<string, readonly string[]>,
-  spouseMap: ReadonlyMap<string, readonly string[]>,
+  spouseMap: ReadonlyMap<string, readonly string[]>
 ): boolean {
   if (person.is_living || person.full_name.trim() === 'Living') {
     return false;
@@ -413,7 +411,7 @@ function inferGenerations(
   kinship: readonly KinshipEdge[],
   parentMap: ReadonlyMap<string, readonly string[]>,
   childMap: ReadonlyMap<string, readonly string[]>,
-  spouseMap: ReadonlyMap<string, readonly string[]>,
+  spouseMap: ReadonlyMap<string, readonly string[]>
 ): Map<string, number> {
   const gen = new Map<string, number>();
   const visIds = new Set(people.map((p) => p.id));
@@ -744,7 +742,10 @@ export function buildArchivalTreeModel({
   }
 
   // Sort marriage order per primary anchor chronologically by earliest child or spouse birth year
-  const coupleDraftsByPrimary = new Map<string, (typeof unionDrafts extends Map<string, infer V> ? V : never)[]>();
+  const coupleDraftsByPrimary = new Map<
+    string,
+    (typeof unionDrafts extends Map<string, infer V> ? V : never)[]
+  >();
   for (const draft of unionDrafts.values()) {
     if (draft.kind === 'couple') {
       const list = coupleDraftsByPrimary.get(draft.aId) ?? [];
@@ -931,12 +932,9 @@ export function buildArchivalTreeModel({
     rankByGen.set(g, list);
   }
 
-  const allGenNums = [
-    ...new Set([
-      ...rankByGen.keys(),
-      ...unions.map((u) => u.gen),
-    ]),
-  ].toSorted((a, b) => a - b);
+  const allGenNums = [...new Set([...rankByGen.keys(), ...unions.map((u) => u.gen)])].toSorted(
+    (a, b) => a - b
+  );
 
   const unitsById = new Map<string, TreeFamilyUnit>();
   const generations: TreeGenerationGroup[] = [];
@@ -968,7 +966,7 @@ export function buildArchivalTreeModel({
           (u) =>
             u.kind === 'couple' &&
             u.gen === g &&
-            (u.primaryPartnerId === anchor.id || u.secondaryPartnerId === anchor.id),
+            (u.primaryPartnerId === anchor.id || u.secondaryPartnerId === anchor.id)
         )
         .toSorted((u1, u2) => u1.marriageOrder - u2.marriageOrder);
 
@@ -1109,7 +1107,7 @@ export function computeArchivalDiagramLayout(model: ArchivalTreeModel): Archival
           u.id,
           indices.length > 0
             ? indices.reduce((acc, v) => acc + v, 0) / indices.length
-            : (unitIndex.get(u.id) ?? 0),
+            : (unitIndex.get(u.id) ?? 0)
         );
       }
       units.sort((a, b) => (baryMap.get(a.id) ?? 0) - (baryMap.get(b.id) ?? 0));
@@ -1133,7 +1131,7 @@ export function computeArchivalDiagramLayout(model: ArchivalTreeModel): Archival
           u.id,
           indices.length > 0
             ? indices.reduce((acc, v) => acc + v, 0) / indices.length
-            : (unitIndex.get(u.id) ?? 0),
+            : (unitIndex.get(u.id) ?? 0)
         );
       }
       units.sort((a, b) => (baryMap.get(a.id) ?? 0) - (baryMap.get(b.id) ?? 0));
@@ -1155,8 +1153,7 @@ export function computeArchivalDiagramLayout(model: ArchivalTreeModel): Archival
       }
       if (union.hangingChildIds.length > 0) {
         const cols = union.hangingChildIds.length === 1 ? 1 : 2;
-        const gridW =
-          cols * ARCHIVAL_NODE_W + (cols === 2 ? ARCHIVAL_HANGING_COL_GAP : 0);
+        const gridW = cols * ARCHIVAL_NODE_W + (cols === 2 ? ARCHIVAL_HANGING_COL_GAP : 0);
         extraSpan = Math.max(extraSpan, gridW);
       }
       if (union.earlyLossChildIds.length > 0) {
@@ -1238,9 +1235,7 @@ export function computeArchivalDiagramLayout(model: ArchivalTreeModel): Archival
           continue;
         }
         const primaryNode = byId.get(union.primaryPartnerId);
-        const secondaryNode = union.secondaryPartnerId
-          ? byId.get(union.secondaryPartnerId)
-          : undefined;
+        const secondaryNode = union.secondaryPartnerId ? byId.get(union.secondaryPartnerId) : undefined;
         if (!primaryNode) {
           continue;
         }
@@ -1425,10 +1420,7 @@ export function computeArchivalDiagramLayout(model: ArchivalTreeModel): Archival
             childIds: union.hangingChildIds,
             spineX,
             topY: gridTopY - 12,
-            bottomY:
-              ticks.length > 0
-                ? Math.max(...ticks.map((t) => t.y))
-                : gridTopY,
+            bottomY: ticks.length > 0 ? Math.max(...ticks.map((t) => t.y)) : gridTopY,
             ticks,
           });
           priorHangingBottomY = maxGridY;
@@ -1625,19 +1617,13 @@ export function computeLineageSpotlight(params: {
     if (parentIds.length === 0) {
       break;
     }
-    const preferredParentId =
-      parentIds.find((pid) => model.directPersonIds.has(pid)) ?? parentIds[0];
+    const preferredParentId = parentIds.find((pid) => model.directPersonIds.has(pid)) ?? parentIds[0];
     cursor = model.peopleById.get(preferredParentId);
   }
 
   let relationshipToPivot: string | null = null;
   let pivotName: string | null = null;
-  if (
-    bundle &&
-    placesById &&
-    model.pivotPersonId &&
-    model.pivotPersonId !== selectedPersonId
-  ) {
+  if (bundle && placesById && model.pivotPersonId && model.pivotPersonId !== selectedPersonId) {
     const pivot = model.peopleById.get(model.pivotPersonId);
     if (pivot) {
       const normalizedKinship: KinshipEdge[] = [...bundle.kinship];
@@ -1688,7 +1674,7 @@ function normalizeSearchFold(value: string): string {
 
 export function isTreeSearchEligible(
   person: Pick<Person, 'is_living' | 'full_name'>,
-  buildMode: 'public' | 'private' = 'public',
+  buildMode: 'public' | 'private' = 'public'
 ): boolean {
   const foldedName = person.full_name.trim().toLowerCase();
   if (!foldedName || foldedName === 'living') {
@@ -1703,10 +1689,7 @@ export function isTreeSearchEligible(
   return true;
 }
 
-export function isPersonVisibleOnCurrentSurface(
-  personId: string,
-  model: ArchivalTreeModel,
-): boolean {
+export function isPersonVisibleOnCurrentSurface(personId: string, model: ArchivalTreeModel): boolean {
   if (!model.peopleById.has(personId)) {
     return false;
   }
@@ -1726,10 +1709,7 @@ export function isPersonVisibleOnCurrentSurface(
   return false;
 }
 
-export function findCollapsedUnionForPerson(
-  personId: string,
-  model: ArchivalTreeModel,
-): TreeUnion | null {
+export function findCollapsedUnionForPerson(personId: string, model: ArchivalTreeModel): TreeUnion | null {
   return model.unions.find((u) => u.collapsedSiblingIds.includes(personId)) ?? null;
 }
 
@@ -1742,8 +1722,7 @@ export function resolveTreeFocusPlan(params: {
 }): TreeFocusPlan {
   const { person, model, currentBranchFilter, defaultBranchId, currentMode } = params;
   const personBranch = person.branch || defaultBranchId;
-  const needsBranchReset =
-    currentBranchFilter !== 'all' && personBranch !== currentBranchFilter;
+  const needsBranchReset = currentBranchFilter !== 'all' && personBranch !== currentBranchFilter;
   const nextBranchFilter = needsBranchReset ? 'all' : currentBranchFilter;
 
   const collapsedUnion = findCollapsedUnionForPerson(person.id, model);
@@ -1811,8 +1790,7 @@ export function searchTreePeople(params: {
     }
 
     const personBranch = person.branch || defaultBranchId;
-    const isOutsideCurrentBranch =
-      branchFilter !== 'all' && personBranch !== branchFilter;
+    const isOutsideCurrentBranch = branchFilter !== 'all' && personBranch !== branchFilter;
     const isCollapsed = collapsedIds.has(person.id);
     const inCurrentModel = model.peopleById.has(person.id);
     const isOutsideCurrentMode =
@@ -1853,10 +1831,7 @@ export function searchTreePeople(params: {
         score += 200;
       } else if (foldedFull.startsWith(normalizedQuery)) {
         score += 150;
-      } else if (
-        foldedGiven.startsWith(normalizedQuery) ||
-        foldedSurname.startsWith(normalizedQuery)
-      ) {
+      } else if (foldedGiven.startsWith(normalizedQuery) || foldedSurname.startsWith(normalizedQuery)) {
         score += 125;
       } else if (foldedFull.includes(normalizedQuery)) {
         score += 100;

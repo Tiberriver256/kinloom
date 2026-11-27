@@ -1,6 +1,6 @@
 import type { AuthorType } from '@kinloom/core';
 import { deriveCitationBadge } from '@kinloom/core';
-import React from 'react';
+import type React from 'react';
 
 export interface CitationBadgeProps {
   hasPrimarySource?: boolean;
@@ -11,11 +11,7 @@ export interface CitationBadgeProps {
 /**
  * WCAG 1.4.1 compliant archival citation badge: icon + text + semantic token.
  */
-export const CitationBadge: React.FC<CitationBadgeProps> = ({
-  hasPrimarySource,
-  sourceIds,
-  className,
-}) => {
+export const CitationBadge: React.FC<CitationBadgeProps> = ({ hasPrimarySource, sourceIds, className }) => {
   const kind = deriveCitationBadge({ hasPrimarySource, sourceIds });
   const isCited = kind === 'Cited';
 
@@ -72,10 +68,7 @@ export interface ConflictBadgeProps {
 /**
  * Split-fork conflict badge used for preserved source discrepancies and 409 edit conflicts.
  */
-export const ConflictBadge: React.FC<ConflictBadgeProps> = ({
-  label = 'Conflict',
-  className,
-}) => (
+export const ConflictBadge: React.FC<ConflictBadgeProps> = ({ label = 'Conflict', className }) => (
   <span className={`wiki-badge wiki-badge-conflict${className ? ` ${className}` : ''}`}>
     <svg
       width="13"
@@ -108,11 +101,7 @@ export interface AuthorPillProps {
 /**
  * Authorship pill distinguishing human editors, AI research agents, and initial archive seeds.
  */
-export const AuthorPill: React.FC<AuthorPillProps> = ({
-  authorType,
-  authorName,
-  className,
-}) => {
+export const AuthorPill: React.FC<AuthorPillProps> = ({ authorType, authorName, className }) => {
   let label = authorName;
   let typePrefix = 'Editor';
   if (authorType === 'agent') {

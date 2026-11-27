@@ -1,36 +1,30 @@
 import type { ArchivalMediaKind, MediaChecklistItem, MediaItem } from '@kinloom/core';
 import {
-  UNVERIFIED_TREE_SOURCE_ID,
   buildLibrarianCitation,
   formatPublicCitation,
   formatSourceTypeLabel,
+  UNVERIFIED_TREE_SOURCE_ID,
 } from '@kinloom/core';
-import { DateStamp, EmptyStateNotice } from '../components/Atoms.js';
+import type React from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { DateStamp, EmptyStateNotice } from '../components/Atoms.js';
 import { ExplorerTopBar } from '../components/ExplorerTopBar.js';
 import { KinloomFooter } from '../components/KinloomFooter.js';
 import { MediaPlayer } from '../components/MediaPlayer.js';
-import { PluginSlot } from '../plugins/PluginContext.js';
 import { useArchiveData } from '../context/ArchiveDataContext.js';
 import { useArchiveUi } from '../context/ArchiveUiContext.js';
 import { handleTablistKeyDown } from '../lib/keyboardNav.js';
 import { useDialogFocusTrap } from '../lib/useDialogFocusTrap.js';
 import { KINLOOM_VOCABULARY, MEDIA_KIND_LABELS } from '../lib/vocabulary.js';
+import { PluginSlot } from '../plugins/PluginContext.js';
 
 type EvidenceTab = 'conflicts' | 'citations' | 'media';
 type MediaKindFilter = 'all' | ArchivalMediaKind;
 
 export const EvidencePage: React.FC = () => {
-  const {
-    bundle,
-    baseUrl,
-    peopleById,
-    sourcesById,
-    readableSourceIds,
-    loadMediaChecklist,
-    loading,
-  } = useArchiveData();
+  const { bundle, baseUrl, peopleById, sourcesById, readableSourceIds, loadMediaChecklist, loading } =
+    useArchiveData();
   const { openSourceReader, openSourceInspector } = useArchiveUi();
   const [searchParams] = useSearchParams();
   const initialTabParam = searchParams.get('tab');
@@ -83,7 +77,7 @@ export const EvidencePage: React.FC = () => {
         (e.alternate_dates?.length || 0) +
           (e.alternate_places?.length || 0) +
           (e.fact_conflicts?.length || 0) >
-        0,
+        0
     );
   }, [bundle]);
 
@@ -95,7 +89,7 @@ export const EvidencePage: React.FC = () => {
       (e) =>
         (e.scope === 'personal' || e.scope === 'family') &&
         e.sources.length > 0 &&
-        e.sources.every((s) => s.source_id === UNVERIFIED_TREE_SOURCE_ID),
+        e.sources.every((s) => s.source_id === UNVERIFIED_TREE_SOURCE_ID)
     );
   }, [bundle]);
 
@@ -193,13 +187,10 @@ export const EvidencePage: React.FC = () => {
 
   const missingChecklistItems = useMemo(
     () => mediaChecklist.filter((i) => i.status !== 'digitized'),
-    [mediaChecklist],
+    [mediaChecklist]
   );
 
-  const navMedia = useMemo(
-    () => filteredMedia.filter((m) => m.kind !== 'document_scan'),
-    [filteredMedia],
-  );
+  const navMedia = useMemo(() => filteredMedia.filter((m) => m.kind !== 'document_scan'), [filteredMedia]);
 
   useEffect(() => {
     if (!lightboxItem) {
@@ -225,7 +216,9 @@ export const EvidencePage: React.FC = () => {
     return (
       <div>
         <ExplorerTopBar />
-        <main id="main-content" className="index-page">{KINLOOM_VOCABULARY.evidence.loading}</main>
+        <main id="main-content" className="index-page">
+          {KINLOOM_VOCABULARY.evidence.loading}
+        </main>
       </div>
     );
   }
@@ -240,9 +233,9 @@ export const EvidencePage: React.FC = () => {
           <div>
             <h1>{KINLOOM_VOCABULARY.evidence.heading}</h1>
             <p>
-              Provenance audit separating primary sources from uncited tree entries, preserving
-              source discrepancies, and cataloging portraits, family photos, headstones, record
-              scans, and document scans.
+              Provenance audit separating primary sources from uncited tree entries, preserving source
+              discrepancies, and cataloging portraits, family photos, headstones, record scans, and document
+              scans.
             </p>
           </div>
           <div className="folio-metrics">
@@ -255,8 +248,8 @@ export const EvidencePage: React.FC = () => {
             </div>
             <div style={{ color: 'var(--radar-copresence)' }}>
               <strong>{allMedia.length}</strong> photos &amp; documents ·{' '}
-              <strong>{unverifiedEvents.length}</strong>{' '}
-              {unverifiedEvents.length === 1 ? 'entry' : 'entries'} needing citation
+              <strong>{unverifiedEvents.length}</strong> {unverifiedEvents.length === 1 ? 'entry' : 'entries'}{' '}
+              needing citation
             </div>
           </div>
         </section>
@@ -268,14 +261,9 @@ export const EvidencePage: React.FC = () => {
           role="tablist"
           aria-label={KINLOOM_VOCABULARY.evidence.tablistAria}
           onKeyDown={(event) => {
-            handleTablistKeyDown(
-              event,
-              ['conflicts', 'citations', 'media'] as const,
-              tab,
-              (next) => {
-                setTab(next);
-              },
-            );
+            handleTablistKeyDown(event, ['conflicts', 'citations', 'media'] as const, tab, (next) => {
+              setTab(next);
+            });
           }}
         >
           <button
@@ -332,7 +320,15 @@ export const EvidencePage: React.FC = () => {
                   (ev.fact_conflicts?.length || 0);
                 return (
                   <article key={ev.id} className="place-map-box" style={{ marginBottom: 0 }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
+                    <div
+                      style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        flexWrap: 'wrap',
+                        gap: 8,
+                        alignItems: 'center',
+                      }}
+                    >
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                         <DateStamp displayDate={ev.display_date} edtf={ev.edtf_date} />
                         <span className="conflict-pill">
@@ -362,7 +358,14 @@ export const EvidencePage: React.FC = () => {
                         )}
                       </div>
                     </div>
-                    <h2 style={{ fontFamily: 'var(--font-serif)', fontSize: '1.22rem', margin: '10px 0 6px', color: 'var(--surface-header)' }}>
+                    <h2
+                      style={{
+                        fontFamily: 'var(--font-serif)',
+                        fontSize: '1.22rem',
+                        margin: '10px 0 6px',
+                        color: 'var(--surface-header)',
+                      }}
+                    >
                       {ev.title}
                     </h2>
                     <p style={{ margin: '0 0 10px', fontSize: '0.92rem' }}>{ev.summary}</p>
@@ -395,9 +398,7 @@ export const EvidencePage: React.FC = () => {
                             <li key={claim.key} style={{ marginBottom: 4 }}>
                               <code>{claim.badge}</code> — {claim.note}
                               {publicCitation && (
-                                <span style={{ color: 'var(--text-secondary)' }}>
-                                  {' '}· {publicCitation}
-                                </span>
+                                <span style={{ color: 'var(--text-secondary)' }}> · {publicCitation}</span>
                               )}
                               {readableSourceIds.has(claim.sourceId) && (
                                 <button
@@ -425,7 +426,16 @@ export const EvidencePage: React.FC = () => {
         {tab === 'citations' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
             <section className="place-map-box" style={{ marginBottom: 0 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10, marginBottom: 12 }}>
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  flexWrap: 'wrap',
+                  gap: 10,
+                  marginBottom: 12,
+                }}
+              >
                 <h2 style={{ fontFamily: 'var(--font-serif)', margin: 0, color: 'var(--surface-header)' }}>
                   {KINLOOM_VOCABULARY.evidence.sourceRegistryHeading} ({filteredSources.length})
                 </h2>
@@ -463,69 +473,100 @@ export const EvidencePage: React.FC = () => {
                     }
                   />
                 ) : (
-                filteredSources.map((s) => {
-                  const count = sourceUsageCounts.get(s.id) || 0;
-                  const readable = readableSourceIds.has(s.id);
-                  const cit = buildLibrarianCitation(s);
-                  return (
-                    <div key={s.id} className="evidence-source-row">
-                      <div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 4 }}>
-                          <span className={`evidence-tier-badge tier-${cit.tier}`}>
-                            {cit.tierLabel}
-                          </span>
-                          {cit.author && (
-                            <span style={{ fontSize: '0.82rem', color: 'var(--text-secondary)' }}>
-                              {cit.author}
-                            </span>
-                          )}
-                        </div>
-                        <div style={{ fontWeight: 600, fontSize: '0.94rem', color: 'var(--surface-header)' }}>
-                          {cit.title}
-                        </div>
-                        <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.78rem', color: 'var(--text-secondary)', marginTop: 2 }}>
-                          Repository: {cit.repository || 'Archival Collection'} · {formatSourceTypeLabel(s.source_type)}
-                        </div>
-                      </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0, flexWrap: 'wrap' }}>
-                        <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
-                          {count} citation{count === 1 ? '' : 's'}
-                        </span>
-                        <button
-                          type="button"
-                          className="source-action-btn primary"
-                          onClick={() => {
-                            openSourceInspector({ sourceId: s.id });
-                          }}
-                        >
-                          Inspect Source →
-                        </button>
-                        {readable && (
-                          <button
-                            type="button"
-                            className="source-read-btn"
-                            onClick={() => {
-                              openSourceReader({ sourceId: s.id });
+                  filteredSources.map((s) => {
+                    const count = sourceUsageCounts.get(s.id) || 0;
+                    const readable = readableSourceIds.has(s.id);
+                    const cit = buildLibrarianCitation(s);
+                    return (
+                      <div key={s.id} className="evidence-source-row">
+                        <div>
+                          <div
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 8,
+                              flexWrap: 'wrap',
+                              marginBottom: 4,
                             }}
                           >
-                            {KINLOOM_VOCABULARY.sources.openReaderCta}
-                          </button>
-                        )}
-                        {s.url && (
-                          <a
-                            href={s.url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="source-read-btn"
-                            style={{ textDecoration: 'none' }}
+                            <span className={`evidence-tier-badge tier-${cit.tier}`}>{cit.tierLabel}</span>
+                            {cit.author && (
+                              <span style={{ fontSize: '0.82rem', color: 'var(--text-secondary)' }}>
+                                {cit.author}
+                              </span>
+                            )}
+                          </div>
+                          <div
+                            style={{ fontWeight: 600, fontSize: '0.94rem', color: 'var(--surface-header)' }}
                           >
-                            Open Archive ↗
-                          </a>
-                        )}
+                            {cit.title}
+                          </div>
+                          <div
+                            style={{
+                              fontFamily: 'var(--font-mono)',
+                              fontSize: '0.78rem',
+                              color: 'var(--text-secondary)',
+                              marginTop: 2,
+                            }}
+                          >
+                            Repository: {cit.repository || 'Archival Collection'} ·{' '}
+                            {formatSourceTypeLabel(s.source_type)}
+                          </div>
+                        </div>
+                        <div
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 6,
+                            flexShrink: 0,
+                            flexWrap: 'wrap',
+                          }}
+                        >
+                          <span
+                            style={{
+                              fontFamily: 'var(--font-mono)',
+                              fontSize: '0.78rem',
+                              color: 'var(--text-secondary)',
+                            }}
+                          >
+                            {count} citation{count === 1 ? '' : 's'}
+                          </span>
+                          <button
+                            type="button"
+                            className="source-action-btn primary"
+                            onClick={() => {
+                              openSourceInspector({ sourceId: s.id });
+                            }}
+                          >
+                            Inspect Source →
+                          </button>
+                          {readable && (
+                            <button
+                              type="button"
+                              className="source-read-btn"
+                              onClick={() => {
+                                openSourceReader({ sourceId: s.id });
+                              }}
+                            >
+                              {KINLOOM_VOCABULARY.sources.openReaderCta}
+                            </button>
+                          )}
+                          {s.url && (
+                            <a
+                              href={s.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="source-read-btn"
+                              style={{ textDecoration: 'none' }}
+                            >
+                              Open Archive ↗
+                            </a>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  );
-                }))}
+                    );
+                  })
+                )}
               </div>
             </section>
 
@@ -534,12 +575,19 @@ export const EvidencePage: React.FC = () => {
                 <EmptyStateNotice title="All events have primary citations." />
               ) : (
                 <>
-                  <h2 style={{ fontFamily: 'var(--font-serif)', margin: '0 0 6px', color: 'var(--surface-header)' }}>
+                  <h2
+                    style={{
+                      fontFamily: 'var(--font-serif)',
+                      margin: '0 0 6px',
+                      color: 'var(--surface-header)',
+                    }}
+                  >
                     {KINLOOM_VOCABULARY.evidence.unverifiedHeading} ({unverifiedEvents.length})
                   </h2>
                   <p style={{ margin: '0 0 12px', fontSize: '0.9375rem', color: 'var(--text-secondary)' }}>
                     Because a GEDCOM export is a container rather than a primary source, events imported
-                    without an underlying census, vital, or archival citation are tracked here for primary verification.
+                    without an underlying census, vital, or archival citation are tracked here for primary
+                    verification.
                   </p>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                     {visibleUnverified.map((ev) => {
@@ -563,7 +611,13 @@ export const EvidencePage: React.FC = () => {
                         >
                           <div>
                             <strong style={{ fontSize: '0.94rem' }}>{ev.title}</strong>{' '}
-                            <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.8125rem', color: 'var(--text-secondary)' }}>
+                            <span
+                              style={{
+                                fontFamily: 'var(--font-mono)',
+                                fontSize: '0.8125rem',
+                                color: 'var(--text-secondary)',
+                              }}
+                            >
                               ({ev.display_date || 'Date unrecorded'})
                             </span>
                           </div>
@@ -604,14 +658,29 @@ export const EvidencePage: React.FC = () => {
         {tab === 'media' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
             <section className="place-map-box" style={{ marginBottom: 0 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 10, marginBottom: 10 }}>
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'flex-start',
+                  flexWrap: 'wrap',
+                  gap: 10,
+                  marginBottom: 10,
+                }}
+              >
                 <div>
-                  <h2 style={{ fontFamily: 'var(--font-serif)', margin: '0 0 4px', color: 'var(--surface-header)' }}>
+                  <h2
+                    style={{
+                      fontFamily: 'var(--font-serif)',
+                      margin: '0 0 4px',
+                      color: 'var(--surface-header)',
+                    }}
+                  >
                     {KINLOOM_VOCABULARY.evidence.mediaGalleryHeading} ({filteredMedia.length})
                   </h2>
                   <p style={{ margin: 0, fontSize: '0.92rem', color: 'var(--text-secondary)' }}>
-                    Portraits, family photographs, headstones, record scans (strictly excluding
-                    living people), and document scans.
+                    Portraits, family photographs, headstones, record scans (strictly excluding living
+                    people), and document scans.
                   </p>
                 </div>
                 <input
@@ -628,7 +697,12 @@ export const EvidencePage: React.FC = () => {
               </div>
 
               {/* oxlint-disable-next-line jsx-a11y/prefer-tag-over-role -- role="group" is the correct grouping pattern for a button toolbar */}
-              <div className="filter-bar" role="group" aria-label="Filter photos and documents by category" style={{ marginBottom: 14 }}>
+              <div
+                className="filter-bar"
+                role="group"
+                aria-label="Filter photos and documents by category"
+                style={{ marginBottom: 14 }}
+              >
                 <button
                   type="button"
                   className={`pill-btn ${mediaKindFilter === 'all' ? 'active' : ''}`}
@@ -728,7 +802,8 @@ export const EvidencePage: React.FC = () => {
                           setMediaLimit((n) => n + 36);
                         }}
                       >
-                        {KINLOOM_VOCABULARY.evidence.loadMoreMedia} ({filteredMedia.length - displayedMedia.length} remaining)
+                        {KINLOOM_VOCABULARY.evidence.loadMoreMedia} (
+                        {filteredMedia.length - displayedMedia.length} remaining)
                       </button>
                     </div>
                   )}
@@ -738,14 +813,28 @@ export const EvidencePage: React.FC = () => {
 
             {mediaChecklist.length > 0 && (
               <section className="place-map-box" style={{ marginBottom: 0 }}>
-                <h2 style={{ fontFamily: 'var(--font-serif)', margin: '0 0 6px', color: 'var(--surface-header)' }}>
-                  Un-digitized Photos &amp; Documents ({missingChecklistItems.length} missing of {mediaChecklist.length} cataloged)
+                <h2
+                  style={{
+                    fontFamily: 'var(--font-serif)',
+                    margin: '0 0 6px',
+                    color: 'var(--surface-header)',
+                  }}
+                >
+                  Un-digitized Photos &amp; Documents ({missingChecklistItems.length} missing of{' '}
+                  {mediaChecklist.length} cataloged)
                 </h2>
                 <p style={{ margin: '0 0 12px', fontSize: '0.92rem', color: 'var(--text-secondary)' }}>
-                  Cataloged media attachments for deceased ancestors whose image files have not yet been digitized.
+                  Cataloged media attachments for deceased ancestors whose image files have not yet been
+                  digitized.
                 </p>
                 {missingChecklistItems.length === 0 ? (
-                  <p style={{ fontFamily: 'var(--font-mono)', fontSize: '0.82rem', color: 'var(--radar-local)' }}>
+                  <p
+                    style={{
+                      fontFamily: 'var(--font-mono)',
+                      fontSize: '0.82rem',
+                      color: 'var(--radar-local)',
+                    }}
+                  >
                     All cataloged deceased-ancestor archival photos have been digitized.
                   </p>
                 ) : (
@@ -754,8 +843,15 @@ export const EvidencePage: React.FC = () => {
                       <div key={`${item.person_id}-${item.obje_xref}`} className="evidence-source-row">
                         <div>
                           <strong style={{ fontSize: '0.94rem' }}>{item.title}</strong>
-                          <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
-                            {item.person_name} ({item.lifespan}) · {item.media_type} · {item.form.toUpperCase()}
+                          <div
+                            style={{
+                              fontFamily: 'var(--font-mono)',
+                              fontSize: '0.78rem',
+                              color: 'var(--text-secondary)',
+                            }}
+                          >
+                            {item.person_name} ({item.lifespan}) · {item.media_type} ·{' '}
+                            {item.form.toUpperCase()}
                           </div>
                         </div>
                         <Link
@@ -797,10 +893,19 @@ export const EvidencePage: React.FC = () => {
                 <div className="scan-lightbox-card">
                   <div className="scan-lightbox-header">
                     <div>
-                      <span className={`media-kind-badge kind-${lightboxItem.kind}`} style={{ position: 'static', marginRight: 8 }}>
+                      <span
+                        className={`media-kind-badge kind-${lightboxItem.kind}`}
+                        style={{ position: 'static', marginRight: 8 }}
+                      >
                         {MEDIA_KIND_LABELS[lightboxItem.kind] || lightboxItem.kind}
                       </span>
-                      <strong style={{ fontFamily: 'var(--font-serif)', fontSize: '1.05rem', color: 'var(--text-inverse)' }}>
+                      <strong
+                        style={{
+                          fontFamily: 'var(--font-serif)',
+                          fontSize: '1.05rem',
+                          color: 'var(--text-inverse)',
+                        }}
+                      >
                         {lightboxItem.caption}
                       </strong>
                     </div>
@@ -856,7 +961,15 @@ export const EvidencePage: React.FC = () => {
                     <MediaPlayer media={lightboxItem} baseUrl={baseUrl} variant="full" />
                   </div>
                   {lightboxItem.provenance && (
-                    <div style={{ padding: '8px 14px', fontFamily: 'var(--font-mono)', fontSize: '0.75rem', color: 'var(--text-secondary)', borderTop: '1px solid var(--border-decorative)' }}>
+                    <div
+                      style={{
+                        padding: '8px 14px',
+                        fontFamily: 'var(--font-mono)',
+                        fontSize: '0.75rem',
+                        color: 'var(--text-secondary)',
+                        borderTop: '1px solid var(--border-decorative)',
+                      }}
+                    >
                       Source file: {lightboxItem.provenance}
                     </div>
                   )}

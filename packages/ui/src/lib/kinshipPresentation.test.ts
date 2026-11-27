@@ -95,7 +95,7 @@ describe('formatKinshipPresentation', () => {
       }),
     });
     expect(`${cousin.headingPrefix}${cousin.highlight}${cousin.headingSuffix}`).toBe(
-      'Clara Mercer is the 1st Cousin of Henry Mercer',
+      'Clara Mercer is the 1st Cousin of Henry Mercer'
     );
     expect(cousin.hopsValue).toBe('4 steps');
 
@@ -117,7 +117,7 @@ describe('formatKinshipPresentation', () => {
     });
     expect(byMarriage.kind).toBe('connected_phrase');
     expect(`${byMarriage.headingPrefix}${byMarriage.highlight}${byMarriage.headingSuffix}`).toBe(
-      'Clara Mercer and Owen Vance: Related by marriage (3 steps)',
+      'Clara Mercer and Owen Vance: Related by marriage (3 steps)'
     );
   });
 });

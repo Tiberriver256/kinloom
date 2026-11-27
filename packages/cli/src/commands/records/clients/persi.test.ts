@@ -125,11 +125,7 @@ describe('persi native client', () => {
       cacheDir,
       fetchImpl
     );
-    const rl2 = await invokePersi(
-      ['location', '--state', 'IL', '--county', 'Sangamon'],
-      cacheDir,
-      fetchImpl
-    );
+    const rl2 = await invokePersi(['location', '--state', 'IL', '--county', 'Sangamon'], cacheDir, fetchImpl);
 
     expect(rt1.exitCode).toBe(0);
     expect(rt2.exitCode).toBe(0);

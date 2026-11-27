@@ -1,20 +1,20 @@
 import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import {
-  compileArchive,
-  computeEntityDiff,
-  deriveKinshipEdgeId,
-  parseKinloomConfigYaml,
   type ArchiveBundle,
   type ArchiveRawSnapshot,
   type BatchSubmission,
+  compileArchive,
+  computeEntityDiff,
+  deriveKinshipEdgeId,
   type EntityPatch,
   type EntityPayload,
   type EntityType,
+  parseKinloomConfigYaml,
 } from '@kinloom/core';
 import { KinloomApiClient, resolveAuthToken, type SubmitBatchResponse } from '../client.js';
 import { CliValidationError, KinloomApiError } from '../errors.js';
-import { loadArchiveDataDir, type LocalArchiveData } from './dataFiles.js';
+import { type LocalArchiveData, loadArchiveDataDir } from './dataFiles.js';
 import { validateBatchSubmission } from './submitBatch.js';
 
 export interface SeedCommandOptions {
@@ -184,8 +184,7 @@ export async function runSeedCommand(options: SeedCommandOptions): Promise<SeedC
 
   const entries = collectSeedEntries(data);
   const batchId = options.batchId?.trim() || deriveDeterministicBatchId(entries);
-  const summary =
-    options.summary?.trim() || `Seed ${siteConfig.site.familyName} archive from YAML`;
+  const summary = options.summary?.trim() || `Seed ${siteConfig.site.familyName} archive from YAML`;
 
   if (options.dryRun) {
     const createPatches: EntityPatch[] = entries.map((entry) => ({

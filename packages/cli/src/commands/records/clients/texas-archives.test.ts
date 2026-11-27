@@ -3,11 +3,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import {
-  createRecordContext,
-  CURL_META_MARKER,
-  type ExecFileFn,
-} from '../runtime/index.js';
+import { CURL_META_MARKER, createRecordContext, type ExecFileFn } from '../runtime/index.js';
 import { runTexasArchivesCommand } from './texas-archives.js';
 
 const OPENSEARCH_PAYLOAD = {
@@ -199,11 +195,9 @@ describe('texas-archives native client', () => {
     const r2 = await invokeTexas(['portal', 'item', 'ark:/67531/metapth100001'], cacheDir, {
       fetchImpl,
     });
-    const rRef = await invokeTexas(
-      ['portal', 'item', 'metapth100001', '--refresh', '--json'],
-      cacheDir,
-      { fetchImpl }
-    );
+    const rRef = await invokeTexas(['portal', 'item', 'metapth100001', '--refresh', '--json'], cacheDir, {
+      fetchImpl,
+    });
     const rTtl = await invokeTexas(
       ['portal', 'item', 'metapth100001', '--cache-ttl-hours', '0', '--json'],
       cacheDir,
@@ -277,10 +271,10 @@ describe('texas-archives native client', () => {
         return new Response(OAI_ERROR_XML, { status: 200 });
       }
       if (calls === 3) {
-        return new Response(
-          JSON.stringify({ feed: { 'opensearch:totalResults': '0', entry: [] } }),
-          { status: 200, headers: { 'content-type': 'application/json' } }
-        );
+        return new Response(JSON.stringify({ feed: { 'opensearch:totalResults': '0', entry: [] } }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        });
       }
       return new Response(JSON.stringify(OPENSEARCH_PAYLOAD), {
         status: 200,
@@ -292,17 +286,13 @@ describe('texas-archives native client', () => {
       fetchImpl,
     });
     const r2 = await invokeTexas(['portal', 'item', 'metapth999999'], cacheDir, { fetchImpl });
-    const r3 = await invokeTexas(
-      ['portal', 'search', 'Smith', '--pages', '1', '--json'],
-      cacheDir,
-      { fetchImpl }
-    );
+    const r3 = await invokeTexas(['portal', 'search', 'Smith', '--pages', '1', '--json'], cacheDir, {
+      fetchImpl,
+    });
     expect(fs.readdirSync(cacheDir).filter((f) => f.endsWith('.json'))).toEqual([]);
-    const r4 = await invokeTexas(
-      ['portal', 'search', 'Smith', '--pages', '1', '--json'],
-      cacheDir,
-      { fetchImpl }
-    );
+    const r4 = await invokeTexas(['portal', 'search', 'Smith', '--pages', '1', '--json'], cacheDir, {
+      fetchImpl,
+    });
 
     expect(r1.exitCode).toBe(1);
     expect(r1.stderr).not.toContain('Traceback');
@@ -323,10 +313,7 @@ describe('texas-archives native client', () => {
     expect(res.stdout).toContain('https://tsl.access.preservica.com/?s=Austin');
     expect(res.stdout).toContain('https://s3.glo.texas.gov/lookup/index.php');
 
-    const badDate = await invokeTexas(
-      ['portal', 'search', 'Houston', '--date-from', '2026-02-30'],
-      cacheDir
-    );
+    const badDate = await invokeTexas(['portal', 'search', 'Houston', '--date-from', '2026-02-30'], cacheDir);
     expect(badDate.exitCode).toBe(2);
   });
 });

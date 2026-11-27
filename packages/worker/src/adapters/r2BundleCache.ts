@@ -1,22 +1,18 @@
 import {
-  asRevisionId,
-  compileArchive,
-  patchCompiledBundle,
   type ArchiveBundle,
   type ArchiveRawSnapshot,
+  asRevisionId,
   type BuildMode,
   type BundleCache,
   type CachedBundleObject,
   type Clock,
+  compileArchive,
   type KinloomSiteConfig,
+  patchCompiledBundle,
   type RevisionId,
   type RevisionRecord,
 } from '@kinloom/core';
-import {
-  bytesToStream,
-  extractCollectionsFromSnapshot,
-  matchesIfNoneMatch,
-} from '@kinloom/server';
+import { bytesToStream, extractCollectionsFromSnapshot, matchesIfNoneMatch } from '@kinloom/server';
 import type { R2Bucket } from '../types.js';
 
 export const DEFAULT_COMPILED_BUNDLE_KEY = 'compiled/archive.json';
@@ -100,7 +96,9 @@ export class R2IncrementalPatchBundleCache implements BundleCache {
     return `${this.mode}:${this.configHash}:${this.key}`;
   }
 
-  async getCached(ifNoneMatch: string | null): Promise<
+  async getCached(
+    ifNoneMatch: string | null
+  ): Promise<
     | { status: 'not_modified'; etag: string }
     | { status: 'hit'; object: CachedBundleObject }
     | { status: 'miss' }
@@ -225,9 +223,7 @@ export class R2IncrementalPatchBundleCache implements BundleCache {
       }
 
       const putResult = await this.bucket.put(this.key, encoded, {
-        onlyIf: existingHead
-          ? { etagMatches: existingHead.etag }
-          : { etagDoesNotMatch: '*' },
+        onlyIf: existingHead ? { etagMatches: existingHead.etag } : { etagDoesNotMatch: '*' },
         httpMetadata: {
           contentType: 'application/json; charset=utf-8',
         },

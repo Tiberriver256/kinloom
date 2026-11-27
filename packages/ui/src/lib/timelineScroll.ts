@@ -13,7 +13,7 @@ export interface PickActiveOptions {
 
 export function pickActiveTimelineEventId(
   cards: readonly TimelineCardMetric[],
-  options: PickActiveOptions,
+  options: PickActiveOptions
 ): string | null {
   if (cards.length === 0) {
     return null;

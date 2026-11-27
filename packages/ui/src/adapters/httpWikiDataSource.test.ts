@@ -91,7 +91,7 @@ describe('HttpWikiDataSource', () => {
               },
             },
           },
-          409,
+          409
         ),
     });
 
@@ -147,7 +147,7 @@ describe('HttpWikiDataSource', () => {
               scope: 'write_batch',
               plaintext_secret: 'klm_secret_once',
             },
-            201,
+            201
           );
         }
         return jsonResponse({ ok: true });

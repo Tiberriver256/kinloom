@@ -12,7 +12,7 @@ import {
   serializeSourcesYaml,
 } from '@kinloom/core';
 import { afterEach, describe, expect, it } from 'vitest';
-import { runCli, type CliIo } from './cli.js';
+import { type CliIo, runCli } from './cli.js';
 import { EXIT_ERROR, EXIT_OK, EXIT_USAGE } from './errors.js';
 
 const tempDirs: string[] = [];
@@ -323,9 +323,9 @@ describe('unified kinloom CLI dispatch', () => {
     expect(wkCap.stdout).toEqual(['Monday, 7 February 1898']);
 
     const diffCap = createCaptureIo();
-    expect(
-      await runCli(['dates', 'diff', '1898-02-07', '1980-11-05', '--json'], { io: diffCap.io })
-    ).toBe(EXIT_OK);
+    expect(await runCli(['dates', 'diff', '1898-02-07', '1980-11-05', '--json'], { io: diffCap.io })).toBe(
+      EXIT_OK
+    );
     const diffJson = JSON.parse(diffCap.stdout.join('\n')) as {
       totalDays: number;
       years: number;
@@ -343,9 +343,9 @@ describe('unified kinloom CLI dispatch', () => {
 
     // Positional event date when --at is omitted.
     const agePosCap = createCaptureIo();
-    expect(
-      await runCli(['dates', 'age', '1898-02-07', '1980-11-05', '--json'], { io: agePosCap.io })
-    ).toBe(EXIT_OK);
+    expect(await runCli(['dates', 'age', '1898-02-07', '1980-11-05', '--json'], { io: agePosCap.io })).toBe(
+      EXIT_OK
+    );
     const agePosJson = JSON.parse(agePosCap.stdout.join('\n')) as {
       ages: Array<{ at: string; years: number; remainingDays: number; totalDays: number }>;
     };
@@ -360,10 +360,9 @@ describe('unified kinloom CLI dispatch', () => {
     // Repeatable --at flags.
     const ageMultiCap = createCaptureIo();
     expect(
-      await runCli(
-        ['dates', 'age', '1898-02-07', '--at', '1920-01-01', '--at', '1940-04-01'],
-        { io: ageMultiCap.io }
-      )
+      await runCli(['dates', 'age', '1898-02-07', '--at', '1920-01-01', '--at', '1940-04-01'], {
+        io: ageMultiCap.io,
+      })
     ).toBe(EXIT_OK);
     expect(ageMultiCap.stdout.join('\n')).toContain('1920-01-01 (Thursday): 21 years, 328 days');
     expect(ageMultiCap.stdout.join('\n')).toContain('1940-04-01 (Monday): 42 years, 54 days');
@@ -477,11 +476,17 @@ describe('unified kinloom CLI dispatch', () => {
 
     // Programmatic cwd honored by status, verify, context, and audit (without --repo)
     const statusCap = createCaptureIo();
-    expect(await runCli(['status', '--json'], { io: statusCap.io, cwd: tmp }), statusCap.stderr.join('\n')).toBe(EXIT_OK);
+    expect(
+      await runCli(['status', '--json'], { io: statusCap.io, cwd: tmp }),
+      statusCap.stderr.join('\n')
+    ).toBe(EXIT_OK);
     expect(JSON.parse(statusCap.stdout.join('\n')).repo).toBe(path.resolve(tmp));
 
     const verifyCap = createCaptureIo();
-    expect(await runCli(['verify', '--json'], { io: verifyCap.io, cwd: tmp }), verifyCap.stderr.join('\n')).toBe(EXIT_OK);
+    expect(
+      await runCli(['verify', '--json'], { io: verifyCap.io, cwd: tmp }),
+      verifyCap.stderr.join('\n')
+    ).toBe(EXIT_OK);
 
     const contextCap = createCaptureIo();
     expect(

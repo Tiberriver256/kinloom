@@ -1,12 +1,13 @@
 import type { ArchiveSearchResult, SearchResultKind } from '@kinloom/core';
 import { searchArchive } from '@kinloom/core';
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { isSearchableQuery, searchNavNext, searchNavPrev, searchNavReset } from '../lib/searchNavigation.js';
-import { KINLOOM_VOCABULARY, SEARCH_KIND_LABELS } from '../lib/vocabulary.js';
+import type React from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useArchiveData } from '../context/ArchiveDataContext.js';
 import { useArchiveUi } from '../context/ArchiveUiContext.js';
+import { isSearchableQuery, searchNavNext, searchNavPrev, searchNavReset } from '../lib/searchNavigation.js';
 import { useDialogFocusTrap } from '../lib/useDialogFocusTrap.js';
-import { useNavigate } from 'react-router-dom';
+import { KINLOOM_VOCABULARY, SEARCH_KIND_LABELS } from '../lib/vocabulary.js';
 
 export const GlobalSearchModal: React.FC = () => {
   const { bundle, placesById, readings, readingsLoading, siteConfig } = useArchiveData();
@@ -85,7 +86,7 @@ export const GlobalSearchModal: React.FC = () => {
         readings,
         limitPerKind: 6,
       }),
-    [query, bundle, placesById, readings],
+    [query, bundle, placesById, readings]
   );
 
   const activateResult = useCallback(
@@ -102,7 +103,7 @@ export const GlobalSearchModal: React.FC = () => {
         void navigate(item.route);
       }
     },
-    [closeSearch, openSourceReader, navigate],
+    [closeSearch, openSourceReader, navigate]
   );
 
   useEffect(() => {
@@ -116,11 +117,7 @@ export const GlobalSearchModal: React.FC = () => {
       } else if (e.key === 'ArrowUp') {
         e.preventDefault();
         setActiveIdx((i) => searchNavPrev(i));
-      } else if (
-        e.key === 'Enter' &&
-        document.activeElement === inputRef.current &&
-        results[activeIdx]
-      ) {
+      } else if (e.key === 'Enter' && document.activeElement === inputRef.current && results[activeIdx]) {
         e.preventDefault();
         activateResult(results[activeIdx]);
       }
@@ -213,9 +210,7 @@ export const GlobalSearchModal: React.FC = () => {
                           >
                             <div className="global-search-item-title">{item.title}</div>
                             <div className="global-search-item-sub">{item.subtitle}</div>
-                            {item.snippet && (
-                              <div className="global-search-item-snippet">{item.snippet}</div>
-                            )}
+                            {item.snippet && <div className="global-search-item-snippet">{item.snippet}</div>}
                           </button>
                         );
                       })}
@@ -226,7 +221,14 @@ export const GlobalSearchModal: React.FC = () => {
             </>
           ) : (
             <div style={{ padding: '14px 16px' }}>
-              <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: 8 }}>
+              <div
+                style={{
+                  fontFamily: 'var(--font-mono)',
+                  fontSize: '0.78rem',
+                  color: 'var(--text-secondary)',
+                  marginBottom: 8,
+                }}
+              >
                 TRY SEARCHING ACROSS PEOPLE, PLACES, EVENTS &amp;{' '}
                 {totalSourcePages > 0 ? `${totalSourcePages} SOURCE PAGES:` : 'SOURCE PAGES:'}
               </div>
@@ -247,7 +249,14 @@ export const GlobalSearchModal: React.FC = () => {
                 </div>
               )}
               {readingsLoading && (
-                <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: 10 }}>
+                <div
+                  style={{
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: '0.75rem',
+                    color: 'var(--text-secondary)',
+                    marginTop: 10,
+                  }}
+                >
                   Loading primary source transcriptions…
                 </div>
               )}
