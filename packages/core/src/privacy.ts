@@ -60,6 +60,13 @@ export type MediaPrivacyCheckResult =
   | { ok: false; code: 'LIVING_MEDIA_FORBIDDEN'; message: string; blockedPersonIds: string[] };
 
 /**
+ * Returns the current UTC calendar year from the runtime clock for default living-cutoff calculations.
+ */
+export function getCurrentReferenceYear(): number {
+  return new Date().getUTCFullYear();
+}
+
+/**
  * 100-year living-person privacy heuristic (default cutoff = 101 years so <= referenceYear - 101 is deceased).
  */
 export function isPersonLivingPublic(params: LivingStatusInput): boolean {
@@ -68,7 +75,7 @@ export function isPersonLivingPublic(params: LivingStatusInput): boolean {
     hasDeathOrBurial,
     birthYear,
     earliestEventYear,
-    referenceYear = 2026,
+    referenceYear = getCurrentReferenceYear(),
     livingCutoffYears = 101,
   } = params;
   if (explicitLiving) {
@@ -107,7 +114,7 @@ export function resolveEffectiveLiving(
       hasDeathOrBurial: false,
       birthYear,
       earliestEventYear: null,
-      referenceYear: privacy?.referenceYear ?? 2026,
+      referenceYear: privacy?.referenceYear ?? getCurrentReferenceYear(),
       livingCutoffYears: privacy?.livingCutoffYears ?? 101,
     });
   }
