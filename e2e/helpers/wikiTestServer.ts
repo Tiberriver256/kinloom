@@ -2,7 +2,13 @@ import fs from 'node:fs';
 import http from 'node:http';
 import type { AddressInfo, Socket } from 'node:net';
 import path from 'node:path';
-import type { AtomicMutationOp, EntityPayload, KinloomSiteConfig, RevisionAuthor } from '@kinloom/core';
+import type {
+  AtomicMutationOp,
+  EntityPayload,
+  KinloomSiteConfig,
+  RevisionAuthor,
+  Sha256Hex,
+} from '@kinloom/core';
 import {
   deriveKinshipEdgeId,
   parseEventsYaml,
@@ -107,7 +113,7 @@ function createDemoDistAssetHandler(distDir: string): {
         }
         const cached = fileCache.get(candidate);
         if (cached) {
-          return new Response(cached.bytes, {
+          return new Response(Buffer.from(cached.bytes), {
             status: 200,
             headers: {
               'content-type': cached.contentType,
@@ -123,7 +129,7 @@ function createDemoDistAssetHandler(distDir: string): {
           const bytes = new Uint8Array(fs.readFileSync(candidate));
           const contentType = contentTypeForPath(candidate);
           fileCache.set(candidate, { bytes, contentType });
-          return new Response(bytes, {
+          return new Response(Buffer.from(bytes), {
             status: 200,
             headers: {
               'content-type': contentType,
@@ -149,9 +155,9 @@ interface CachedDemoSeed {
     readonly key: string;
     readonly bytes: Uint8Array;
     readonly contentType: string;
-    readonly sha256: string;
+    readonly sha256: Sha256Hex;
   }>;
-  readonly agentHash: string;
+  readonly agentHash: Sha256Hex;
 }
 
 let cachedDemoSeedPromise: Promise<CachedDemoSeed> | null = null;
@@ -278,7 +284,7 @@ async function getCachedDemoSeed(): Promise<CachedDemoSeed> {
         key: string;
         bytes: Uint8Array;
         contentType: string;
-        sha256: string;
+        sha256: Sha256Hex;
       }> = [];
       if (fs.existsSync(DEMO_PUBLIC_MEDIA_DIR)) {
         const files = fs.readdirSync(DEMO_PUBLIC_MEDIA_DIR);

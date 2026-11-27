@@ -18,6 +18,7 @@
       "examples/*/src/**",
       "e2e/**",
       "scripts/**",
+      "benchmarks/**",
       "!!**/dist",
       "!!**/node_modules",
       "!!**/coverage",

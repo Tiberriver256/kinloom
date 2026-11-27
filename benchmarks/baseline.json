@@ -1,0 +1,142 @@
+{
+  "generatedAt": "2026-11-27T14:16:43.351Z",
+  "seed": 20260019,
+  "nodeVersion": "v26.13.1",
+  "cpus": 2,
+  "datasetCounts": {
+    "people": 600,
+    "events": 2400,
+    "places": 240,
+    "sources": 300,
+    "kinship": 1230,
+    "media": 300,
+    "narratives": 150
+  },
+  "benchmarks": [
+    {
+      "id": "core.yaml_load_validate",
+      "category": "@kinloom/core",
+      "runs": 7,
+      "medianMs": 84.04,
+      "p95Ms": 114.5,
+      "meanMs": 86.24,
+      "minMs": 75.47,
+      "maxMs": 114.5
+    },
+    {
+      "id": "core.yaml_serialize",
+      "category": "@kinloom/core",
+      "runs": 7,
+      "medianMs": 298.79,
+      "p95Ms": 329.24,
+      "meanMs": 304.23,
+      "minMs": 297.95,
+      "maxMs": 329.24
+    },
+    {
+      "id": "core.compile_archive_dual",
+      "category": "@kinloom/core",
+      "runs": 7,
+      "medianMs": 33.33,
+      "p95Ms": 37.28,
+      "meanMs": 33.17,
+      "minMs": 30.25,
+      "maxMs": 37.28
+    },
+    {
+      "id": "core.patch_compiled_bundle",
+      "category": "@kinloom/core",
+      "runs": 15,
+      "medianMs": 2.57,
+      "p95Ms": 4.25,
+      "meanMs": 2.67,
+      "minMs": 2.05,
+      "maxMs": 4.25
+    },
+    {
+      "id": "server_worker.d1_r2_batch_sync",
+      "category": "@kinloom/server+@kinloom/worker",
+      "runs": 7,
+      "medianMs": 388.03,
+      "p95Ms": 409.62,
+      "meanMs": 382.76,
+      "minMs": 353.57,
+      "maxMs": 409.62
+    },
+    {
+      "id": "cli.audit",
+      "category": "@kinloom/cli",
+      "runs": 5,
+      "medianMs": 516.72,
+      "p95Ms": 587.51,
+      "meanMs": 533.23,
+      "minMs": 502.76,
+      "maxMs": 587.51
+    },
+    {
+      "id": "cli.verify",
+      "category": "@kinloom/cli",
+      "runs": 5,
+      "medianMs": 252.73,
+      "p95Ms": 313.92,
+      "meanMs": 267.09,
+      "minMs": 249.85,
+      "maxMs": 313.92
+    },
+    {
+      "id": "cli.status",
+      "category": "@kinloom/cli",
+      "runs": 7,
+      "medianMs": 174.82,
+      "p95Ms": 227.14,
+      "meanMs": 182.25,
+      "minMs": 168.46,
+      "maxMs": 227.14
+    },
+    {
+      "id": "cli.pronounce_audit",
+      "category": "@kinloom/cli",
+      "runs": 7,
+      "medianMs": 37.92,
+      "p95Ms": 40.35,
+      "meanMs": 38.18,
+      "minMs": 36.64,
+      "maxMs": 40.35
+    },
+    {
+      "id": "ui.tree_model_and_layout",
+      "category": "@kinloom/ui",
+      "runs": 9,
+      "medianMs": 10.24,
+      "p95Ms": 13.95,
+      "meanMs": 10.81,
+      "minMs": 7.99,
+      "maxMs": 13.95
+    },
+    {
+      "id": "ui.tree_search_inp_20_queries",
+      "category": "@kinloom/ui",
+      "runs": 9,
+      "medianMs": 23.04,
+      "p95Ms": 24.93,
+      "meanMs": 23.13,
+      "minMs": 21.86,
+      "maxMs": 24.93
+    }
+  ],
+  "bundleMetrics": {
+    "initialEntryChunks": [
+      "index-BLWBwzyS.js",
+      "ExplorerTopBar-BPLfBhID.js",
+      "WikiBadges-Dg8GG4sT.js",
+      "keyboardNav-BIlYjf43.js",
+      "edtf-i3eXB7Ex.js"
+    ],
+    "initialJsBytes": 625553,
+    "initialJsKiB": 610.89,
+    "totalJsBytes": 2597584,
+    "totalJsKiB": 2536.7,
+    "largestChunkName": "MapPage-yA23-ORH.js",
+    "largestChunkKiB": 1061.65
+  }
+}

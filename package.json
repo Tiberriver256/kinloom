@@ -22,7 +22,8 @@
     "format": "biome format --write",
     "format:check": "biome format",
     "check:counts": "node scripts/check-archive-counts.mjs",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage",
+    "bench": "node benchmarks/run-benchmarks.mjs"
   },
   "devDependencies": {
     "@biomejs/biome": "2.6.9",
