@@ -508,3 +508,34 @@ Evaluated on `2026-11-27` (UTC via Python `datetime.now(timezone.utc)`) on top o
 - Live CLI smoke checks: `kinloom --help`, `kinloom status --help`, `kinloom media --help` all exit `0`
 
 Ready for **Iteration 5 zero-context fresh-eyes `10/10` architectural review**.
+
+## Fresh-Eyes Independent Review #2 (`4a7c1d4`) & Iteration 5A Remediation (Core, Server, Worker & CLI)
+
+Evaluated on `2026-11-27` (UTC via Python `datetime.now(timezone.utc)`) on top of commit `4a7c1d4`. Iteration 5A resolved every Core, Server, Worker, and CLI finding from Fresh-Eyes Review #2 (`DF-1`, `E-3`, `DF-2`, `DF-3 Worker/CLI`, `D-2 Core Contracts`, `M-1`, `M-2 Core`) while keeping all `packages/*/dist` outputs rebuilt in place and leaving UI refactoring and CI gate expansion cleanly scoped to Iteration 5B.
+
+### Findings Remediated in Iteration 5A
+
+| Review Finding | Root Cause Before Iteration 5A | Measured Fix in Iteration 5A |
+| --- | --- | --- |
+| **DF-1 (P0) Dropped `pronunciations` in `patchCompiledBundle`** | `packages/core/src/patchArchive.ts` omitted `pronunciations` on non-empty incremental patches, diverging from `compileArchive.ts`. | Preserved `pronunciations` using `siteConfig.pronunciations` with `previousBundle.pronunciations` fallback and `structuredClone` in both empty and non-empty branches; added full-recompile parity and immutability regression tests in `packages/core/src/patchArchive.test.ts`. |
+| **E-3 (P1) Prefix-stem interception & unvalidated server plugins** | `matchPluginRoute` in `packages/server/src/http/router.ts` used raw `pathname.startsWith(route.pathPrefix)` so `/api/foo` matched `/api/foobar`, and `createKinloomServer` did not reject duplicate plugin IDs or conflicting route prefixes. | Normalized plugin `pathPrefix` (trimming trailing `/` unless root `/`), enforced segment-boundary matching (`pathname === prefix \|\| pathname.startsWith(\`${prefix}/\`)`), and added startup validation rejecting empty/duplicate plugin IDs and overlapping/shadowed route prefixes for overlapping HTTP methods (`*` or equal method); verified in `packages/server/src/http/pluginRouter.test.ts`. |
+| **DF-2 (P1) Duplicated EDTF parser in CLI chronology audit** | `packages/cli/src/commands/ops/audit/chronology.ts` maintained parallel `parseClosedEdtfPoint`/`parseAuditEndpoint`/`parseAuditEdtf` logic that also missed `192X` decade syntax. | Consolidated structured EDTF interval parsing (`ParsedEdtfPrecision`, `ParsedEdtfInterval`, `parseEdtfInterval`) into `packages/core/src/edtf.ts` (extracting pure calendar primitives to `packages/core/src/edtf/calendar.ts` so `edtf.ts` stays at `501` LOC), refactored `chronology.ts` (`423` -> `318` LOC) and `audit/types.ts` to consume `@kinloom/core`, and added open-interval, approximate, and `192X` decade tests in `packages/core/src/edtf.test.ts` and `packages/cli/src/commands/ops/ops.test.ts`. |
+| **D-1 / D-2 Core Port Contracts (5B prep)** | UI layers lacked a port-level API error type guard and optional pronunciation/OAuth methods on `ArchiveDataSource`. | Added `ArchiveApiErrorShape`, `isArchiveApiError(err: unknown)`, `PronunciationLexicon`, `UpsertPronunciationTermResult`, `GeneratePronunciationAudioInput`, `GeneratedPronunciationAudioResult`, and optional `loadPronunciations?`, `upsertPronunciationTerm?`, `generatePronunciationAudio?`, and `getGoogleSignInUrl?` to `packages/core/src/contractsUi.ts` (exported from `@kinloom/core`), aligned `ApiClientError` via `implements ArchiveApiErrorShape`, and added unit tests in `packages/core/src/contractsUi.test.ts`. |
+| **DF-3 (P1) Untyped D1 `.first<T>`/`.all<T>` reads & CLI `!` assertions** | `entityReadStore.ts`, `accessAndTalkStore.ts`, `atomicMutationStore.ts`, and `d1PronunciationLexiconStore.ts` trusted generic SQLite row casts without runtime parsing; `nara/browserFallback.ts` used two `page.waitForFunction!` non-null assertions. | Added runtime `parseDb*Row` boundary parsers for revisions, talk comments, users, invites, magic links, agent tokens, counts, author names, living projections, and pronunciation lexicon rows in `packages/worker/src/adapters/d1/rowMappers.ts` (`526` LOC), updated every `.first()`/`.all()` call across all four D1 stores to read `unknown` and parse (`0` unvalidated typed D1 calls remain), added `packages/worker/src/adapters/d1/rowMappers.test.ts`, and replaced both `waitForFunction!` assertions in `packages/cli/src/commands/records/clients/nara/browserFallback.ts` with explicit local bindings (`0` remaining). |
+| **M-1 & M-2 (P2) Delegation boilerplate, unused layout engine, & trivial shims** | `InMemoryArchiveRepository` held 30 one-line delegation methods (`231` LOC); `packages/core/src/domain/treeLayout.ts` (`526` LOC) had 0 production callers; `packages/worker/src/ogCard.ts` (`1` LOC) and `packages/cli/src/commands/ops/living-name-matcher.ts` (`19` LOC) were trivial re-export shims. | Composed `InMemoryArchiveRepository` via `bindPrototypeMethods` + `createInMemoryArchiveRepository` (`231` -> `107` LOC) matching `createD1ArchiveRepository`; deleted unused `treeLayout.ts` and its orphaned tests; deleted `ogCard.ts` and `living-name-matcher.ts` and pointed callers directly to `@kinloom/server` and `@kinloom/core`. |
+
+### Iteration 5A Measured Verification Snapshot
+
+- Non-test TS/TSX files across `packages/*` and `examples/demo/src`: **`573` files, max `548` LOC (`0` files `> 550` LOC)**
+- Unvalidated typed D1 `.first<T>`/`.all<T>` calls in `packages/worker/src/`: **`0` matches**
+- Non-null `waitForFunction!` assertions in `packages/cli/src/commands/records/clients/nara/browserFallback.ts`: **`0` matches**
+- `npm run build`: **`6/6` workspaces** built cleanly in place (`packages/*/dist` preserved)
+- `npm run check:arch`: **`PASS` (`0` violations across `573` non-test TS/TSX files)**
+- `npm run lint`: Biome **`0` errors, `0` warnings** across `776` files + `check:counts` **`0` violations** across `705` files
+- `npm run typecheck`: **`7/7` tsconfigs** (`0` errors)
+- `npm test`: **`121/121` test files, `810/810` tests passed**
+- `npm run check:contrast`: **`15/15` passed**
+- `npm run check:leaks`: **`0` leaks**
+- Live CLI smoke check: `kinloom --help` exits `0`
+
+Ready for **Iteration 5B (UI port adoption & CI architecture gate expansion)**.

@@ -9,6 +9,7 @@ import {
   haversineMiles,
   intervalsOverlap,
   lastDayOfMonth,
+  parseEdtfInterval,
   parseGedcomDateToEdtf,
   toJulianDayNumber,
 } from './edtf.js';
@@ -47,6 +48,91 @@ describe('edtf utilities', () => {
     expect(edtfToBounds('')).toBeNull();
     expect(edtfSortKey('')).toBe(Number.MAX_SAFE_INTEGER);
     expect(edtfSortKey('1850') < edtfSortKey('1851')).toBe(true);
+  });
+
+  it('parses structured EDTF intervals including open endpoints, approximate flags, and 192X decades', () => {
+    expect(parseEdtfInterval('1885-04-23')).toEqual({
+      raw: '1885-04-23',
+      year: 1885,
+      month: 4,
+      day: 23,
+      precision: 'day',
+      approximate: false,
+      startMs: Date.UTC(1885, 3, 23),
+      endMs: Date.UTC(1885, 3, 23),
+    });
+
+    expect(parseEdtfInterval('192X')).toEqual({
+      raw: '192X',
+      year: 1920,
+      month: null,
+      day: null,
+      precision: 'decade',
+      approximate: false,
+      startMs: Date.UTC(1920, 0, 1),
+      endMs: Date.UTC(1929, 11, 31),
+    });
+
+    expect(parseEdtfInterval('192X~')).toEqual({
+      raw: '192X~',
+      year: 1920,
+      month: null,
+      day: null,
+      precision: 'decade',
+      approximate: true,
+      startMs: Date.UTC(1920, 0, 1),
+      endMs: Date.UTC(1929, 11, 31),
+    });
+
+    expect(parseEdtfInterval('192X/193X')).toEqual({
+      raw: '192X/193X',
+      year: 1920,
+      month: null,
+      day: null,
+      precision: 'decade',
+      approximate: false,
+      startMs: Date.UTC(1920, 0, 1),
+      endMs: Date.UTC(1939, 11, 31),
+    });
+
+    expect(parseEdtfInterval('1879-03-03/..')).toEqual({
+      raw: '1879-03-03/..',
+      year: 1879,
+      month: 3,
+      day: 3,
+      precision: 'day',
+      approximate: false,
+      startMs: Date.UTC(1879, 2, 3),
+      endMs: Number.POSITIVE_INFINITY,
+    });
+
+    expect(parseEdtfInterval('../1890-12-31')).toEqual({
+      raw: '../1890-12-31',
+      year: 1890,
+      month: 12,
+      day: 31,
+      precision: 'day',
+      approximate: false,
+      startMs: Number.NEGATIVE_INFINITY,
+      endMs: Date.UTC(1890, 11, 31),
+    });
+
+    expect(parseEdtfInterval('1885~/1910~')).toEqual({
+      raw: '1885~/1910~',
+      year: 1885,
+      month: null,
+      day: null,
+      precision: 'year',
+      approximate: true,
+      startMs: Date.UTC(1885, 0, 1),
+      endMs: Date.UTC(1910, 11, 31),
+    });
+
+    expect(parseEdtfInterval('1910-01-18/1885-04-23')).toBeNull();
+    expect(parseEdtfInterval('../..')).toBeNull();
+    expect(parseEdtfInterval('/')).toBeNull();
+    expect(parseEdtfInterval('1880/1890/1900')).toBeNull();
+    expect(parseEdtfInterval(null)).toBeNull();
   });
 
   it('formats EDTF strings for compact display badges', () => {

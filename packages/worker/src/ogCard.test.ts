@@ -1,6 +1,6 @@
 import { parseKinloomConfig, type RawPerson } from '@kinloom/core';
+import { handleDynamicOgRequest } from '@kinloom/server';
 import { describe, expect, it } from 'vitest';
-import { handleDynamicOgRequest } from './ogCard.js';
 
 function makeSiteConfig() {
   return parseKinloomConfig({

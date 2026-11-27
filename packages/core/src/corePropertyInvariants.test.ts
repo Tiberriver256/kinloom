@@ -1,7 +1,6 @@
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
 import { compileArchive } from './compileArchive.js';
-import { computeTreeLayout, TREE_NODE_W } from './domain/treeLayout.js';
 import {
   daysSinceEpoch,
   edtfSortKey,
@@ -22,7 +21,6 @@ import {
   type MediaItem,
   mergePronunciationLexicons,
   type Narrative,
-  type Person,
   type Place,
   type Pronunciation,
   type RawEvent,
@@ -808,119 +806,6 @@ describe('Pronunciation composition & disambiguation invariants', () => {
         expect(hasIpaGlyphsInPhonetic(`${asciiRespelling} ə`)).toBe(true);
       }),
       { seed: FIXED_SEED + 43, numRuns: 80 }
-    );
-  });
-});
-
-describe('Tree layout invariants across arbitrary DAG family graphs', () => {
-  const dagGraphArb = fc.integer({ min: 1, max: 16 }).chain((count) =>
-    fc.record({
-      count: fc.constant(count),
-      // Edges only from smaller index (earlier generation) to larger index to guarantee acyclicity
-      parentEdges: fc.array(
-        fc
-          .tuple(
-            fc.integer({ min: 0, max: Math.max(0, count - 2) }),
-            fc.integer({ min: 1, max: Math.max(1, count - 1) })
-          )
-          .filter(([a, b]) => a < b),
-        { minLength: 0, maxLength: count * 2 }
-      ),
-      spousePairs: fc.array(
-        fc
-          .tuple(
-            fc.integer({ min: 0, max: Math.max(0, count - 2) }),
-            fc.integer({ min: 1, max: Math.max(1, count - 1) })
-          )
-          .filter(([a, b]) => a < b),
-        { minLength: 0, maxLength: Math.floor(count / 2) }
-      ),
-    })
-  );
-
-  it('places every node with finite coordinates, positive bounds, and zero horizontal overlaps per row', () => {
-    fc.assert(
-      fc.property(dagGraphArb, ({ count, parentEdges, spousePairs }) => {
-        const people: Person[] = Array.from({ length: count }, (_, idx) => ({
-          id: `per_${idx}`,
-          slug: `person-${idx}`,
-          full_name: `Person ${idx} Alder`,
-          given_name: `Person${idx}`,
-          surname: 'Alder',
-          alt_names: [],
-          sex: idx % 2 === 0 ? 'M' : 'F',
-          is_living: false,
-          lineage_group: 'ancestor',
-          branch: 'alder_main',
-          birth_edtf: `${1820 + idx * 5}`,
-          death_edtf: `${1885 + idx * 5}`,
-          birth_year: 1820 + idx * 5,
-          death_year: 1885 + idx * 5,
-          portrait_url: null,
-          thumb_url: null,
-          event_count: 0,
-          media_count: 0,
-          primary_place_id: null,
-        }));
-
-        const kinship: KinshipEdge[] = [];
-        const seen = new Set<string>();
-        const parentCountByChild = new Map<number, number>();
-        for (const [parentIdx, childIdx] of parentEdges) {
-          if ((parentCountByChild.get(childIdx) ?? 0) >= 2) continue;
-          const key = `p:${parentIdx}:${childIdx}`;
-          if (seen.has(key)) continue;
-          seen.add(key);
-          parentCountByChild.set(childIdx, (parentCountByChild.get(childIdx) ?? 0) + 1);
-          kinship.push({ from: `per_${parentIdx}`, to: `per_${childIdx}`, relation: 'parent' });
-        }
-
-        const married = new Set<number>();
-        for (const [a, b] of spousePairs) {
-          if (married.has(a) || married.has(b)) continue;
-          if (seen.has(`p:${a}:${b}`)) continue;
-          married.add(a);
-          married.add(b);
-          kinship.push({ from: `per_${a}`, to: `per_${b}`, relation: 'spouse' });
-        }
-
-        const layout = computeTreeLayout({
-          people,
-          kinship,
-          branchFilter: 'all',
-          defaultBranchId: 'alder_main',
-          mode: 'full',
-        });
-
-        expect(layout.nodes.length).toBe(count);
-        expect(layout.byId.size).toBe(count);
-        expect(Number.isFinite(layout.bounds.minX)).toBe(true);
-        expect(Number.isFinite(layout.bounds.maxX)).toBe(true);
-        expect(Number.isFinite(layout.bounds.minY)).toBe(true);
-        expect(Number.isFinite(layout.bounds.maxY)).toBe(true);
-        expect(layout.bounds.maxX).toBeGreaterThan(layout.bounds.minX);
-        expect(layout.bounds.maxY).toBeGreaterThan(layout.bounds.minY);
-
-        const rows = new Map<number, number[]>();
-        for (const node of layout.nodes) {
-          expect(Number.isFinite(node.x)).toBe(true);
-          expect(Number.isFinite(node.y)).toBe(true);
-          expect(layout.byId.get(node.person.id)).toBeDefined();
-          const rowKey = Math.round(node.y);
-          const xs = rows.get(rowKey) ?? [];
-          xs.push(node.x);
-          rows.set(rowKey, xs);
-        }
-
-        // Verify zero horizontal node overlaps within any row
-        for (const xs of rows.values()) {
-          xs.sort((a, b) => a - b);
-          for (let i = 1; i < xs.length; i += 1) {
-            expect(xs[i] - xs[i - 1]).toBeGreaterThanOrEqual(TREE_NODE_W - 0.5);
-          }
-        }
-      }),
-      { seed: FIXED_SEED + 50, numRuns: 80 }
     );
   });
 });

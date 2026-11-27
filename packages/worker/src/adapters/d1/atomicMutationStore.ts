@@ -15,7 +15,11 @@ import {
 } from '@kinloom/core';
 import type { D1Database, D1PreparedStatement } from '../../types.js';
 import { pushCreateRunStatements, type RevisionResultEntry } from './createRunStatements.js';
-import { parseDbReturningRevisionIdRow, parseDbReturningRevisionPairRow } from './rowMappers.js';
+import {
+  parseDbAuthorNameRow,
+  parseDbReturningRevisionIdRow,
+  parseDbReturningRevisionPairRow,
+} from './rowMappers.js';
 import {
   buildCommittedRevisionRecord,
   entityCompositeKey,
@@ -423,7 +427,7 @@ export class D1AtomicMutationStore implements AtomicMutationStore {
       };
     }
 
-    const lastRev = await prepareD1Statement(
+    const lastRevRaw = await prepareD1Statement(
       this.db,
       `SELECT author_name
          FROM revisions
@@ -432,7 +436,8 @@ export class D1AtomicMutationStore implements AtomicMutationStore {
          LIMIT 1`
     )
       .bind(op.entity_type, op.entity_id)
-      .first<{ author_name: string }>();
+      .first<unknown>();
+    const lastRev = lastRevRaw !== null ? parseDbAuthorNameRow(lastRevRaw) : null;
 
     const serverEntity = existing.deleted_at === null ? rowToEntityPayload(existing) : null;
     return {

@@ -2,6 +2,7 @@ import type {
   ArchiveBundle,
   KinloomSiteConfig,
   KinshipEdge,
+  LivingNameHit,
   MediaItem,
   Narrative,
   Place,
@@ -11,7 +12,6 @@ import type {
   SourceRecord,
 } from '@kinloom/core';
 import type { ExecutedPluginCheckResult, KinloomCliPlugin } from '../../../plugins.js';
-import type { LivingNameHit } from '../living-name-matcher.js';
 import type { TreeHygieneSummary } from '../tree-hygiene.js';
 
 export interface VerifyCommandOptions {

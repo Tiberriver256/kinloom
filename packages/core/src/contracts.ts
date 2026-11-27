@@ -51,16 +51,22 @@ export {
   storedRecordToEntityPayload,
   type UserRecord,
 } from './contractsPrimitives.js';
-export type {
-  AdminDataSource,
-  ArchiveAuthProviders,
-  ArchiveCapabilities,
-  ArchiveDataSource,
-  ArchiveSessionState,
-  CreatedAgentTokenResponse,
-  CreatedInviteResponse,
-  EntityWriteInput,
-  PublicAgentTokenRecord,
+export {
+  type AdminDataSource,
+  type ArchiveApiErrorShape,
+  type ArchiveAuthProviders,
+  type ArchiveCapabilities,
+  type ArchiveDataSource,
+  type ArchiveSessionState,
+  type CreatedAgentTokenResponse,
+  type CreatedInviteResponse,
+  type EntityWriteInput,
+  type GeneratedPronunciationAudioResult,
+  type GeneratePronunciationAudioInput,
+  isArchiveApiError,
+  type PronunciationLexicon,
+  type PublicAgentTokenRecord,
+  type UpsertPronunciationTermResult,
 } from './contractsUi.js';
 export type { AgentTokenScope, ApiErrorEnvelope, UserRole } from './schemas/revisions.js';
 

@@ -4,19 +4,7 @@ import {
   PronunciationVariantSchema,
 } from '@kinloom/core';
 import type { D1Database } from '../types.js';
-
-interface PronunciationLexiconRow {
-  term: string;
-  phonetic: string | null;
-  ipa: string | null;
-  language: string | null;
-  audio_url: string | null;
-  note: string | null;
-  source_url?: string | null;
-  source_label?: string | null;
-  region?: string | null;
-  variants_json?: string | null;
-}
+import { parseDbPronunciationLexiconRow, type RawDbPronunciationLexiconRow } from './d1/rowMappers.js';
 
 function parseVariantsJson(raw: string | null | undefined): Pronunciation['variants'] {
   if (!raw?.trim()) {
@@ -37,7 +25,7 @@ function parseVariantsJson(raw: string | null | undefined): Pronunciation['varia
   }
 }
 
-function rowToPronunciation(row: PronunciationLexiconRow): Pronunciation {
+function rowToPronunciation(row: RawDbPronunciationLexiconRow): Pronunciation {
   const entry: Pronunciation = {};
   if (row.phonetic) entry.phonetic = row.phonetic;
   if (row.ipa) entry.ipa = row.ipa;
@@ -93,10 +81,11 @@ export class D1PronunciationLexiconStore implements PronunciationLexiconStore {
         .prepare(
           'SELECT term, phonetic, ipa, language, audio_url, note, source_url, source_label, region, variants_json FROM pronunciation_lexicon ORDER BY term ASC'
         )
-        .all<PronunciationLexiconRow>();
+        .all<unknown>();
 
       const entries: Record<string, Pronunciation> = {};
-      for (const row of result.results) {
+      for (const rawRow of result.results) {
+        const row = parseDbPronunciationLexiconRow(rawRow);
         entries[row.term] = rowToPronunciation(row);
       }
       return entries;
@@ -106,9 +95,10 @@ export class D1PronunciationLexiconStore implements PronunciationLexiconStore {
           .prepare(
             'SELECT term, phonetic, ipa, language, audio_url, note FROM pronunciation_lexicon ORDER BY term ASC'
           )
-          .all<PronunciationLexiconRow>();
+          .all<unknown>();
         const entries: Record<string, Pronunciation> = {};
-        for (const row of legacyResult.results) {
+        for (const rawRow of legacyResult.results) {
+          const row = parseDbPronunciationLexiconRow(rawRow);
           entries[row.term] = rowToPronunciation(row);
         }
         return entries;

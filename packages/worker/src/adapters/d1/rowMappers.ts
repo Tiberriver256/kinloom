@@ -112,6 +112,26 @@ export interface RawDbAgentTokenRow {
   revoked_at: string | null;
 }
 
+export interface RawDbLivingPersonProjectionRow {
+  entity_id: string;
+  is_living: number | boolean | null;
+  birth_edtf: string | number | null;
+  death_edtf: string | number | null;
+}
+
+export interface RawDbPronunciationLexiconRow {
+  term: string;
+  phonetic: string | null;
+  ipa: string | null;
+  language: string | null;
+  audio_url: string | null;
+  note: string | null;
+  source_url: string | null;
+  source_label: string | null;
+  region: string | null;
+  variants_json: string | null;
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
 }
@@ -210,6 +230,173 @@ export function parseDbReturningRevisionPairRow(raw: unknown): {
   return {
     revision_id: expectNumber(raw, 'revision_id'),
     parent_revision_id: expectNullableNumber(raw, 'parent_revision_id'),
+  };
+}
+
+export function parseDbCountRow(raw: unknown): { count: number } {
+  if (!isRecord(raw)) {
+    throw new Error('Expected D1 count row object.');
+  }
+  return { count: expectNumber(raw, 'count') };
+}
+
+export function parseDbAuthorNameRow(raw: unknown): { author_name: string } {
+  if (!isRecord(raw)) {
+    throw new Error('Expected D1 author_name row object.');
+  }
+  return { author_name: expectString(raw, 'author_name') };
+}
+
+function expectNullableBoolOrNumber(record: Record<string, unknown>, field: string): number | boolean | null {
+  const val = record[field];
+  if (val === null || val === undefined) {
+    return null;
+  }
+  if (typeof val === 'boolean' || (typeof val === 'number' && Number.isFinite(val))) {
+    return val;
+  }
+  throw new Error(`D1 row field '${field}' must be a boolean, finite number, or null.`);
+}
+
+function expectNullableStringOrNumber(
+  record: Record<string, unknown>,
+  field: string
+): string | number | null {
+  const val = record[field];
+  if (val === null || val === undefined) {
+    return null;
+  }
+  if (typeof val === 'string' || (typeof val === 'number' && Number.isFinite(val))) {
+    return val;
+  }
+  throw new Error(`D1 row field '${field}' must be a string, finite number, or null.`);
+}
+
+export function parseDbLivingPersonProjectionRow(raw: unknown): RawDbLivingPersonProjectionRow {
+  if (!isRecord(raw)) {
+    throw new Error('Expected D1 living person projection row object.');
+  }
+  return {
+    entity_id: expectString(raw, 'entity_id'),
+    is_living: expectNullableBoolOrNumber(raw, 'is_living'),
+    birth_edtf: expectNullableStringOrNumber(raw, 'birth_edtf'),
+    death_edtf: expectNullableStringOrNumber(raw, 'death_edtf'),
+  };
+}
+
+export function parseDbRevisionRow(raw: unknown): RawDbRevisionRow {
+  if (!isRecord(raw)) {
+    throw new Error('Expected D1 revision row object.');
+  }
+  return {
+    revision_id: expectNumber(raw, 'revision_id'),
+    batch_id: expectNullableString(raw, 'batch_id'),
+    entity_type: expectString(raw, 'entity_type'),
+    entity_id: expectString(raw, 'entity_id'),
+    parent_revision_id: expectNullableNumber(raw, 'parent_revision_id'),
+    action: expectString(raw, 'action'),
+    reverted_revision_id: expectNullableNumber(raw, 'reverted_revision_id'),
+    author_id: expectString(raw, 'author_id'),
+    author_name: expectString(raw, 'author_name'),
+    author_type: expectString(raw, 'author_type'),
+    summary: expectString(raw, 'summary'),
+    has_primary_source: expectNumber(raw, 'has_primary_source'),
+    before_json: expectNullableString(raw, 'before_json'),
+    after_json: expectNullableString(raw, 'after_json'),
+    created_at: expectString(raw, 'created_at'),
+  };
+}
+
+export function parseDbTalkRow(raw: unknown): RawDbTalkRow {
+  if (!isRecord(raw)) {
+    throw new Error('Expected D1 talk comment row object.');
+  }
+  return {
+    comment_id: expectNumber(raw, 'comment_id'),
+    entity_type: expectString(raw, 'entity_type'),
+    entity_id: expectString(raw, 'entity_id'),
+    author_id: expectString(raw, 'author_id'),
+    author_name: expectString(raw, 'author_name'),
+    body_md: expectString(raw, 'body_md'),
+    created_at: expectString(raw, 'created_at'),
+    edited_at: expectNullableString(raw, 'edited_at'),
+    deleted_at: expectNullableString(raw, 'deleted_at'),
+  };
+}
+
+export function parseDbUserRow(raw: unknown): RawDbUserRow {
+  if (!isRecord(raw)) {
+    throw new Error('Expected D1 user row object.');
+  }
+  return {
+    email: expectString(raw, 'email'),
+    display_name: expectString(raw, 'display_name'),
+    role: expectString(raw, 'role'),
+    added_by: expectString(raw, 'added_by'),
+    added_at: expectString(raw, 'added_at'),
+    last_login_at: expectNullableString(raw, 'last_login_at'),
+  };
+}
+
+export function parseDbInviteRow(raw: unknown): RawDbInviteRow {
+  if (!isRecord(raw)) {
+    throw new Error('Expected D1 invite row object.');
+  }
+  return {
+    token: expectString(raw, 'token'),
+    label: expectString(raw, 'label'),
+    created_by: expectString(raw, 'created_by'),
+    created_at: expectString(raw, 'created_at'),
+    expires_at: expectNullableString(raw, 'expires_at'),
+    revoked_at: expectNullableString(raw, 'revoked_at'),
+    uses: expectNumber(raw, 'uses'),
+    last_used_at: expectNullableString(raw, 'last_used_at'),
+  };
+}
+
+export function parseDbMagicLinkRow(raw: unknown): RawDbMagicLinkRow {
+  if (!isRecord(raw)) {
+    throw new Error('Expected D1 magic link row object.');
+  }
+  return {
+    token_hash: expectString(raw, 'token_hash'),
+    email: expectString(raw, 'email'),
+    invite_token: expectNullableString(raw, 'invite_token'),
+    expires_at: expectString(raw, 'expires_at'),
+    used_at: expectNullableString(raw, 'used_at'),
+  };
+}
+
+export function parseDbAgentTokenRow(raw: unknown): RawDbAgentTokenRow {
+  if (!isRecord(raw)) {
+    throw new Error('Expected D1 agent token row object.');
+  }
+  return {
+    token_id: expectString(raw, 'token_id'),
+    token_hash: expectString(raw, 'token_hash'),
+    label: expectString(raw, 'label'),
+    scope: expectString(raw, 'scope'),
+    created_by: expectString(raw, 'created_by'),
+    created_at: expectString(raw, 'created_at'),
+    revoked_at: expectNullableString(raw, 'revoked_at'),
+  };
+}
+
+export function parseDbPronunciationLexiconRow(raw: unknown): RawDbPronunciationLexiconRow {
+  if (!isRecord(raw)) {
+    throw new Error('Expected D1 pronunciation lexicon row object.');
+  }
+  return {
+    term: expectString(raw, 'term'),
+    phonetic: expectNullableString(raw, 'phonetic'),
+    ipa: expectNullableString(raw, 'ipa'),
+    language: expectNullableString(raw, 'language'),
+    audio_url: expectNullableString(raw, 'audio_url'),
+    note: expectNullableString(raw, 'note'),
+    source_url: expectNullableString(raw, 'source_url'),
+    source_label: expectNullableString(raw, 'source_label'),
+    region: expectNullableString(raw, 'region'),
+    variants_json: expectNullableString(raw, 'variants_json'),
   };
 }
 

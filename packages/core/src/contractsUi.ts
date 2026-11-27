@@ -7,7 +7,13 @@ import type {
   RevisionQuery,
   UserRecord,
 } from './contractsPrimitives.js';
-import type { ArchiveBundle, MediaChecklistItem, MediaItem, ReadingsBundle } from './schemas/entities.js';
+import type {
+  ArchiveBundle,
+  MediaChecklistItem,
+  MediaItem,
+  Pronunciation,
+  ReadingsBundle,
+} from './schemas/entities.js';
 import type {
   AgentTokenScope,
   EntityPayload,
@@ -16,6 +22,56 @@ import type {
   TalkComment,
   UserRole,
 } from './schemas/revisions.js';
+
+export type PronunciationLexicon = Record<string, Pronunciation>;
+
+export interface ArchiveApiErrorShape {
+  readonly status: number;
+  readonly code: string;
+  readonly message?: string;
+  readonly details?: unknown;
+}
+
+export function isArchiveApiError(err: unknown): err is ArchiveApiErrorShape {
+  if (typeof err !== 'object' || err === null) {
+    return false;
+  }
+  const candidate = err as {
+    status?: unknown;
+    code?: unknown;
+    message?: unknown;
+  };
+  return (
+    typeof candidate.status === 'number' &&
+    Number.isFinite(candidate.status) &&
+    typeof candidate.code === 'string' &&
+    candidate.code.length > 0 &&
+    (candidate.message === undefined || typeof candidate.message === 'string')
+  );
+}
+
+export interface UpsertPronunciationTermResult {
+  readonly term: string;
+  readonly pronunciation: Pronunciation | null;
+  readonly pronunciations: PronunciationLexicon;
+}
+
+export interface GeneratePronunciationAudioInput {
+  readonly entity_type: 'person' | 'place';
+  readonly entity_id: string;
+  readonly text?: string;
+  readonly phonetic?: string;
+  readonly ipa?: string;
+  readonly language?: string;
+  readonly voice?: string;
+}
+
+export interface GeneratedPronunciationAudioResult {
+  readonly audio_url: string;
+  readonly content_type: string;
+  readonly size_bytes: number;
+  readonly deduplicated?: boolean;
+}
 
 export interface ArchiveAuthProviders {
   google: boolean;
@@ -163,4 +219,16 @@ export interface ArchiveDataSource {
 
   requestMagicLink?(email: string): Promise<{ sent: boolean }>;
   logout?(): Promise<void>;
+
+  loadPronunciations?(options?: { signal?: AbortSignal }): Promise<PronunciationLexicon | undefined>;
+  upsertPronunciationTerm?(
+    term: string,
+    entry: Pronunciation,
+    options?: { signal?: AbortSignal }
+  ): Promise<UpsertPronunciationTermResult>;
+  generatePronunciationAudio?(
+    input: GeneratePronunciationAudioInput,
+    options?: { signal?: AbortSignal }
+  ): Promise<GeneratedPronunciationAudioResult>;
+  getGoogleSignInUrl?(returnTo?: string, options?: { selectAccount?: boolean }): string;
 }

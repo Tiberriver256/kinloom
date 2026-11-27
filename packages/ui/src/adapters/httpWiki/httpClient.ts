@@ -1,7 +1,7 @@
-import type { OptimisticConflictError } from '@kinloom/core';
+import type { ArchiveApiErrorShape, OptimisticConflictError } from '@kinloom/core';
 import { ApiErrorEnvelopeSchema, asRevisionId, OptimisticConflictErrorSchema } from '@kinloom/core';
 
-export class ApiClientError extends Error {
+export class ApiClientError extends Error implements ArchiveApiErrorShape {
   readonly status: number;
   readonly code: string;
   readonly details?: unknown;

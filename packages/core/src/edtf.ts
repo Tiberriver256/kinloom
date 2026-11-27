@@ -1,21 +1,15 @@
-export const EPOCH_JDN = 2440588;
-export const EPOCH_MS = Date.UTC(1970, 0, 1);
-export const DAY_MS = 86_400 * 1000;
+import { daysSinceEpoch, epochDaysToYear, lastDayOfMonth, MONTHS } from './edtf/calendar.js';
 
-export const MONTHS: readonly string[] = [
-  'Jan',
-  'Feb',
-  'Mar',
-  'Apr',
-  'May',
-  'Jun',
-  'Jul',
-  'Aug',
-  'Sep',
-  'Oct',
-  'Nov',
-  'Dec',
-];
+export {
+  DAY_MS,
+  daysSinceEpoch,
+  EPOCH_JDN,
+  EPOCH_MS,
+  epochDaysToYear,
+  lastDayOfMonth,
+  MONTHS,
+  toJulianDayNumber,
+} from './edtf/calendar.js';
 
 const GEDCOM_MONTH_MAP: Readonly<Record<string, number>> = {
   JAN: 1,
@@ -45,52 +39,6 @@ const GEDCOM_MONTH_MAP: Readonly<Record<string, number>> = {
   DECEMBER: 12,
 };
 
-/**
- * Convert proleptic Gregorian (year, month, day) to Julian Day Number.
- */
-export function toJulianDayNumber(year: number, month: number, day: number): number {
-  const a = Math.floor((14 - month) / 12);
-  const y = year + 4800 - a;
-  const m = month + 12 * a - 3;
-  return (
-    day +
-    Math.floor((153 * m + 2) / 5) +
-    365 * y +
-    Math.floor(y / 4) -
-    Math.floor(y / 100) +
-    Math.floor(y / 400) -
-    32045
-  );
-}
-
-/**
- * Convert proleptic Gregorian (year, month, day) to epoch days (days since 1970-01-01).
- */
-export function daysSinceEpoch(year: number, month: number, day: number): number {
-  return toJulianDayNumber(year, month, day) - EPOCH_JDN;
-}
-
-/**
- * Convert epoch days (days since 1970-01-01) back to a proleptic Gregorian calendar year without `Date`.
- */
-export function epochDaysToYear(epochDays: number): number {
-  const j = Math.floor(epochDays) + EPOCH_JDN;
-  const f = j + 1401 + Math.floor((Math.floor((4 * j + 274277) / 146097) * 3) / 4) - 38;
-  const e = 4 * f + 3;
-  const g = Math.floor((e % 1461) / 4);
-  const h = 5 * g + 2;
-  const month = ((Math.floor(h / 153) + 2) % 12) + 1;
-  return Math.floor(e / 1461) - 4716 + Math.floor((12 + 2 - month) / 12);
-}
-
-export function lastDayOfMonth(year: number, month: number): number {
-  if (month < 1 || month > 12) {
-    return 31;
-  }
-  const safeYear = Math.max(year, 1);
-  return new Date(Date.UTC(safeYear, month, 0)).getUTCDate();
-}
-
 export function edtfYear(edtf: string | number | null | undefined): number | null {
   if (edtf === null || edtf === undefined || edtf === '') {
     return null;
@@ -99,19 +47,51 @@ export function edtfYear(edtf: string | number | null | undefined): number | nul
   return m ? Number(m[1]) : null;
 }
 
-function edtfPartBounds(part: string): [number, number] | null {
-  const s = part.trim();
-  if (!s) {
+export type ParsedEdtfPrecision = 'day' | 'month' | 'year' | 'decade';
+
+export interface ParsedEdtfInterval {
+  raw: string;
+  year: number;
+  month: number | null;
+  day: number | null;
+  precision: ParsedEdtfPrecision;
+  approximate: boolean;
+  startMs: number;
+  endMs: number;
+}
+
+interface ParsedEdtfPoint {
+  year: number;
+  month: number | null;
+  day: number | null;
+  precision: ParsedEdtfPrecision;
+  startDays: number;
+  endDays: number;
+  startMs: number;
+  endMs: number;
+}
+
+type ParsedEdtfEndpoint = { kind: 'open' } | { kind: 'point'; point: ParsedEdtfPoint };
+
+function parseClosedEdtfPoint(part: string): ParsedEdtfPoint | null {
+  const clean = part.trim().replaceAll(/[~?%]/g, '');
+  if (!clean) {
     return null;
   }
-  const approx = s.endsWith('~') || s.endsWith('%');
-  const uncertain = s.endsWith('?');
-  const clean = s.replace(/[~?%]+$/, '');
 
-  const mDec = /^(\d{3})X$/.exec(clean);
+  const mDec = /^(\d{3})X$/i.exec(clean);
   if (mDec) {
     const y0 = Number(mDec[1]) * 10;
-    return [daysSinceEpoch(y0, 1, 1), daysSinceEpoch(y0 + 9, 12, 31)];
+    return {
+      year: y0,
+      month: null,
+      day: null,
+      precision: 'decade',
+      startDays: daysSinceEpoch(y0, 1, 1),
+      endDays: daysSinceEpoch(y0 + 9, 12, 31),
+      startMs: Date.UTC(y0, 0, 1),
+      endMs: Date.UTC(y0 + 9, 11, 31),
+    };
   }
 
   const mFull = /^(\d{4})-(\d{2})-(\d{2})$/.exec(clean);
@@ -121,13 +101,17 @@ function edtfPartBounds(part: string): [number, number] | null {
     const last = lastDayOfMonth(y, mo);
     const d = Math.max(1, Math.min(Number(mFull[3]), last));
     const j = daysSinceEpoch(y, mo, d);
-    if (approx) {
-      return [j - 365, j + 365];
-    }
-    if (uncertain) {
-      return [j - 30, j + 30];
-    }
-    return [j, j];
+    const ms = Date.UTC(y, mo - 1, d);
+    return {
+      year: y,
+      month: mo,
+      day: d,
+      precision: 'day',
+      startDays: j,
+      endDays: j,
+      startMs: ms,
+      endMs: ms,
+    };
   }
 
   const mMonth = /^(\d{4})-(\d{2})$/.exec(clean);
@@ -135,26 +119,141 @@ function edtfPartBounds(part: string): [number, number] | null {
     const y = Number(mMonth[1]);
     const mo = Number(mMonth[2]);
     const last = lastDayOfMonth(y, mo);
-    const j0 = daysSinceEpoch(y, mo, 1);
-    const j1 = daysSinceEpoch(y, mo, last);
-    if (approx) {
-      return [j0 - 365, j1 + 365];
-    }
-    return [j0, j1];
+    return {
+      year: y,
+      month: mo,
+      day: null,
+      precision: 'month',
+      startDays: daysSinceEpoch(y, mo, 1),
+      endDays: daysSinceEpoch(y, mo, last),
+      startMs: Date.UTC(y, mo - 1, 1),
+      endMs: Date.UTC(y, mo - 1, last),
+    };
   }
 
   const mYear = /^(\d{4})$/.exec(clean);
   if (mYear) {
     const y = Number(mYear[1]);
-    const j0 = daysSinceEpoch(y, 1, 1);
-    const j1 = daysSinceEpoch(y, 12, 31);
-    if (approx) {
-      return [daysSinceEpoch(y - 1, 1, 1), daysSinceEpoch(y + 1, 12, 31)];
-    }
-    return [j0, j1];
+    return {
+      year: y,
+      month: null,
+      day: null,
+      precision: 'year',
+      startDays: daysSinceEpoch(y, 1, 1),
+      endDays: daysSinceEpoch(y, 12, 31),
+      startMs: Date.UTC(y, 0, 1),
+      endMs: Date.UTC(y, 11, 31),
+    };
   }
 
   return null;
+}
+
+function parseEdtfEndpoint(part: string): ParsedEdtfEndpoint | null {
+  const trimmed = part.trim();
+  if (trimmed === '' || trimmed === '..') {
+    return { kind: 'open' };
+  }
+  const point = parseClosedEdtfPoint(trimmed);
+  return point ? { kind: 'point', point } : null;
+}
+
+/**
+ * Parse an EDTF date or interval into structured UTC millisecond bounds, precision, and approximate metadata.
+ * Supports day, month, year, decade (`192X`), open endpoints (`''` / `'..'`), and `[~?%]` qualifiers.
+ */
+export function parseEdtfInterval(raw: unknown): ParsedEdtfInterval | null {
+  if (typeof raw !== 'string') {
+    return null;
+  }
+  const trimmed = raw.trim();
+  if (!trimmed) {
+    return null;
+  }
+  const approximate = /[~?%]/.test(trimmed);
+  const slash = trimmed.indexOf('/');
+  if (slash === -1) {
+    const point = parseClosedEdtfPoint(trimmed);
+    if (!point) {
+      return null;
+    }
+    return {
+      raw: trimmed,
+      year: point.year,
+      month: point.month,
+      day: point.day,
+      precision: point.precision,
+      approximate,
+      startMs: point.startMs,
+      endMs: point.endMs,
+    };
+  }
+  if (trimmed.indexOf('/', slash + 1) !== -1) {
+    return null;
+  }
+
+  const left = parseEdtfEndpoint(trimmed.slice(0, slash));
+  const right = parseEdtfEndpoint(trimmed.slice(slash + 1));
+  if (!left || !right || (left.kind === 'open' && right.kind === 'open')) {
+    return null;
+  }
+
+  const anchor = left.kind === 'point' ? left.point : right.kind === 'point' ? right.point : null;
+  if (!anchor) {
+    return null;
+  }
+  const startMs = left.kind === 'point' ? left.point.startMs : Number.NEGATIVE_INFINITY;
+  const endMs = right.kind === 'point' ? right.point.endMs : Number.POSITIVE_INFINITY;
+  if (Number.isFinite(startMs) && Number.isFinite(endMs) && startMs > endMs) {
+    return null;
+  }
+
+  return {
+    raw: trimmed,
+    year: anchor.year,
+    month: anchor.month,
+    day: anchor.day,
+    precision: anchor.precision,
+    approximate,
+    startMs,
+    endMs,
+  };
+}
+
+function edtfPartBounds(part: string): [number, number] | null {
+  const s = part.trim();
+  if (!s) {
+    return null;
+  }
+  const approx = s.endsWith('~') || s.endsWith('%');
+  const uncertain = s.endsWith('?');
+  const point = parseClosedEdtfPoint(s);
+  if (!point) {
+    return null;
+  }
+
+  if (point.precision === 'decade') {
+    return [point.startDays, point.endDays];
+  }
+  if (point.precision === 'day') {
+    if (approx) {
+      return [point.startDays - 365, point.endDays + 365];
+    }
+    if (uncertain) {
+      return [point.startDays - 30, point.endDays + 30];
+    }
+    return [point.startDays, point.endDays];
+  }
+  if (point.precision === 'month') {
+    if (approx) {
+      return [point.startDays - 365, point.endDays + 365];
+    }
+    return [point.startDays, point.endDays];
+  }
+  if (approx) {
+    return [daysSinceEpoch(point.year - 1, 1, 1), daysSinceEpoch(point.year + 1, 12, 31)];
+  }
+  return [point.startDays, point.endDays];
 }
 
 /**

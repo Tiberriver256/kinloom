@@ -1,3 +1,4 @@
+import { parseEdtfInterval } from '@kinloom/core';
 import {
   asString,
   type ChronologyCheckResult,
@@ -23,114 +24,8 @@ const CENSUS_RE = /\b(census|enumerat\w*)\b/i;
 const MARRIAGE_RE = /\b(marr(?:iage|ied)?|wedding|nuptial)\b/i;
 const SPOUSE_ROLE_RE = /\b(spouse|bride|groom|husband|wife|principal|subject|partner)\b/i;
 
-interface AuditEdtfPoint {
-  year: number;
-  month: number | null;
-  day: number | null;
-  precision: 'day' | 'month' | 'year';
-  startMs: number;
-  endMs: number;
-}
-
-type ParsedEndpoint = { kind: 'open' } | { kind: 'point'; point: AuditEdtfPoint };
-
-function parseClosedEdtfPoint(part: string): AuditEdtfPoint | null {
-  const clean = part.trim().replaceAll(/[~?%]/g, '');
-  const full = /^(\d{4})-(\d{2})-(\d{2})$/.exec(clean);
-  if (full) {
-    const year = Number(full[1]);
-    const month = Number(full[2]);
-    const day = Number(full[3]);
-    const ms = Date.UTC(year, month - 1, day);
-    return { year, month, day, precision: 'day', startMs: ms, endMs: ms };
-  }
-
-  const ym = /^(\d{4})-(\d{2})$/.exec(clean);
-  if (ym) {
-    const year = Number(ym[1]);
-    const month = Number(ym[2]);
-    return {
-      year,
-      month,
-      day: null,
-      precision: 'month',
-      startMs: Date.UTC(year, month - 1, 1),
-      endMs: Date.UTC(year, month, 0),
-    };
-  }
-
-  const y = /^(\d{4})/.exec(clean);
-  if (y) {
-    const year = Number(y[1]);
-    return {
-      year,
-      month: null,
-      day: null,
-      precision: 'year',
-      startMs: Date.UTC(year, 0, 1),
-      endMs: Date.UTC(year, 11, 31),
-    };
-  }
-
-  return null;
-}
-
-function parseAuditEndpoint(part: string): ParsedEndpoint | null {
-  const trimmed = part.trim();
-  if (trimmed === '' || trimmed === '..') {
-    return { kind: 'open' };
-  }
-  const point = parseClosedEdtfPoint(trimmed);
-  return point ? { kind: 'point', point } : null;
-}
-
 export function parseAuditEdtf(raw: unknown): ParsedAuditEdtf | null {
-  if (typeof raw !== 'string') {
-    return null;
-  }
-  const trimmed = raw.trim();
-  if (!trimmed) {
-    return null;
-  }
-  const approximate = /[~?%]/.test(trimmed);
-  const slash = trimmed.indexOf('/');
-  if (slash === -1) {
-    const point = parseClosedEdtfPoint(trimmed);
-    if (!point) {
-      return null;
-    }
-    return { raw: trimmed, approximate, ...point };
-  }
-  if (trimmed.indexOf('/', slash + 1) !== -1) {
-    return null;
-  }
-
-  const left = parseAuditEndpoint(trimmed.slice(0, slash));
-  const right = parseAuditEndpoint(trimmed.slice(slash + 1));
-  if (!left || !right || (left.kind === 'open' && right.kind === 'open')) {
-    return null;
-  }
-
-  const anchor = left.kind === 'point' ? left.point : right.kind === 'point' ? right.point : null;
-  if (!anchor) {
-    return null;
-  }
-  const startMs = left.kind === 'point' ? left.point.startMs : Number.NEGATIVE_INFINITY;
-  const endMs = right.kind === 'point' ? right.point.endMs : Number.POSITIVE_INFINITY;
-  if (Number.isFinite(startMs) && Number.isFinite(endMs) && startMs > endMs) {
-    return null;
-  }
-
-  return {
-    raw: trimmed,
-    year: anchor.year,
-    month: anchor.month,
-    day: anchor.day,
-    precision: anchor.precision,
-    approximate,
-    startMs,
-    endMs,
-  };
+  return parseEdtfInterval(raw);
 }
 
 function auditLowerMs(bound: ParsedAuditEdtf): number {

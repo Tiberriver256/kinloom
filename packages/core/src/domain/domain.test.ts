@@ -34,7 +34,6 @@ import {
   resolveCanonicalPlace,
 } from './timeSnapshot.js';
 import { resolveTimeYear } from './timeYear.js';
-import { computeTreeLayout, TREE_NODE_W } from './treeLayout.js';
 
 const TEST_CONFIG = parseKinloomConfig({
   site: {
@@ -348,36 +347,6 @@ describe('decoupled core domain algorithms', () => {
 
     const dir = buildPlacesDirectory(bundle, placesById, peopleById, TEST_CONFIG.migrationEras);
     expect(dir.some((d) => d.place.id === 'plc_cedar' && d.stage === 'midwest')).toBe(true);
-  });
-
-  it('lays out family tree without overlapping nodes and respects generic branchFilter', () => {
-    const layout = computeTreeLayout({
-      people: bundle.people,
-      kinship: bundle.kinship,
-      branchFilter: 'whitman_core',
-      defaultBranchId: 'whitman_core',
-      mode: 'full',
-    });
-
-    expect(layout.nodes).toHaveLength(4);
-    expect(layout.couples).toHaveLength(1);
-    expect(layout.edges).toHaveLength(2);
-    expect(layout.byId.get('per_gparent')!.gen).toBe(0);
-    expect(layout.byId.get('per_child_a')!.gen).toBe(1);
-
-    // Same-generation nodes never overlap horizontally
-    const byGen = new Map<number, typeof layout.nodes>();
-    for (const n of layout.nodes) {
-      const list = byGen.get(n.gen) ?? [];
-      list.push(n);
-      byGen.set(n.gen, list);
-    }
-    for (const row of byGen.values()) {
-      const sorted = row.toSorted((a, b) => a.x - b.x);
-      for (let i = 1; i < sorted.length; i += 1) {
-        expect(sorted[i].x - sorted[i - 1].x).toBeGreaterThanOrEqual(TREE_NODE_W);
-      }
-    }
   });
 
   it('computes radar co-presence, geometry, journey state machine, archiveStatus, and timeYear', () => {

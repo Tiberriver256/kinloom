@@ -17,11 +17,12 @@ import {
   mapMagicLinkRow,
   mapTalkRow,
   mapUserRow,
-  type RawDbAgentTokenRow,
-  type RawDbInviteRow,
-  type RawDbMagicLinkRow,
-  type RawDbTalkRow,
-  type RawDbUserRow,
+  parseDbAgentTokenRow,
+  parseDbCountRow,
+  parseDbInviteRow,
+  parseDbMagicLinkRow,
+  parseDbTalkRow,
+  parseDbUserRow,
 } from './rowMappers.js';
 import { prepareD1Statement } from './sqlHelpers.js';
 
@@ -38,8 +39,8 @@ export class D1AccessAndTalkStore implements AccessControlStore, TalkCommentStor
          ORDER BY comment_id ASC`
     )
       .bind(entityType, entityId)
-      .all<RawDbTalkRow>();
-    return res.results.map(mapTalkRow);
+      .all<unknown>();
+    return res.results.map((rawRow) => mapTalkRow(parseDbTalkRow(rawRow)));
   }
 
   async insertTalkComment(input: {
@@ -50,7 +51,7 @@ export class D1AccessAndTalkStore implements AccessControlStore, TalkCommentStor
     body_md: string;
     created_at: string;
   }): Promise<TalkComment> {
-    const row = await prepareD1Statement(
+    const rawRow = await prepareD1Statement(
       this.db,
       `INSERT INTO talk_comments (
            entity_type, entity_id, author_id, author_name, body_md, created_at
@@ -66,12 +67,12 @@ export class D1AccessAndTalkStore implements AccessControlStore, TalkCommentStor
         input.body_md,
         input.created_at
       )
-      .first<RawDbTalkRow>();
+      .first<unknown>();
 
-    if (!row) {
+    if (rawRow === null) {
       throw new Error('Failed to insert talk comment.');
     }
-    return mapTalkRow(row);
+    return mapTalkRow(parseDbTalkRow(rawRow));
   }
 
   async softDeleteTalkComment(commentId: number, deletedAt: string): Promise<boolean> {
@@ -88,15 +89,15 @@ export class D1AccessAndTalkStore implements AccessControlStore, TalkCommentStor
 
   async getUser(email: string): Promise<UserRecord | null> {
     const normalized = email.trim().toLowerCase();
-    const row = await prepareD1Statement(
+    const rawRow = await prepareD1Statement(
       this.db,
       `SELECT email, display_name, role, added_by, added_at, last_login_at
          FROM users
          WHERE email = ?`
     )
       .bind(normalized)
-      .first<RawDbUserRow>();
-    return row ? mapUserRow(row) : null;
+      .first<unknown>();
+    return rawRow !== null ? mapUserRow(parseDbUserRow(rawRow)) : null;
   }
 
   async listUsers(): Promise<readonly UserRecord[]> {
@@ -105,13 +106,13 @@ export class D1AccessAndTalkStore implements AccessControlStore, TalkCommentStor
       `SELECT email, display_name, role, added_by, added_at, last_login_at
          FROM users
          ORDER BY email ASC`
-    ).all<RawDbUserRow>();
-    return res.results.map(mapUserRow);
+    ).all<unknown>();
+    return res.results.map((rawRow) => mapUserRow(parseDbUserRow(rawRow)));
   }
 
   async upsertUser(user: UserRecord): Promise<UserRecord> {
     const normalizedEmail = user.email.trim().toLowerCase();
-    const row = await prepareD1Statement(
+    const rawRow = await prepareD1Statement(
       this.db,
       `INSERT INTO users (email, display_name, role, added_by, added_at, last_login_at)
          VALUES (?, ?, ?, ?, ?, ?)
@@ -124,17 +125,17 @@ export class D1AccessAndTalkStore implements AccessControlStore, TalkCommentStor
          RETURNING email, display_name, role, added_by, added_at, last_login_at`
     )
       .bind(normalizedEmail, user.display_name, user.role, user.added_by, user.added_at, user.last_login_at)
-      .first<RawDbUserRow>();
+      .first<unknown>();
 
-    if (!row) {
+    if (rawRow === null) {
       throw new Error(`Failed to upsert user '${normalizedEmail}'.`);
     }
-    return mapUserRow(row);
+    return mapUserRow(parseDbUserRow(rawRow));
   }
 
   async updateUserRole(email: string, role: UserRole): Promise<UserRecord | null> {
     const normalized = email.trim().toLowerCase();
-    const row = await prepareD1Statement(
+    const rawRow = await prepareD1Statement(
       this.db,
       `UPDATE users
          SET role = ?
@@ -142,8 +143,8 @@ export class D1AccessAndTalkStore implements AccessControlStore, TalkCommentStor
          RETURNING email, display_name, role, added_by, added_at, last_login_at`
     )
       .bind(role, normalized)
-      .first<RawDbUserRow>();
-    return row ? mapUserRow(row) : null;
+      .first<unknown>();
+    return rawRow !== null ? mapUserRow(parseDbUserRow(rawRow)) : null;
   }
 
   async deleteUser(email: string): Promise<boolean> {
@@ -160,15 +161,15 @@ export class D1AccessAndTalkStore implements AccessControlStore, TalkCommentStor
   }
 
   async getInvite(token: string): Promise<InviteRecord | null> {
-    const row = await prepareD1Statement(
+    const rawRow = await prepareD1Statement(
       this.db,
       `SELECT token, label, created_by, created_at, expires_at, revoked_at, uses, last_used_at
          FROM invites
          WHERE token = ?`
     )
       .bind(token)
-      .first<RawDbInviteRow>();
-    return row ? mapInviteRow(row) : null;
+      .first<unknown>();
+    return rawRow !== null ? mapInviteRow(parseDbInviteRow(rawRow)) : null;
   }
 
   async listInvites(): Promise<readonly InviteRecord[]> {
@@ -177,12 +178,12 @@ export class D1AccessAndTalkStore implements AccessControlStore, TalkCommentStor
       `SELECT token, label, created_by, created_at, expires_at, revoked_at, uses, last_used_at
          FROM invites
          ORDER BY created_at DESC`
-    ).all<RawDbInviteRow>();
-    return res.results.map(mapInviteRow);
+    ).all<unknown>();
+    return res.results.map((rawRow) => mapInviteRow(parseDbInviteRow(rawRow)));
   }
 
   async createInvite(invite: InviteRecord): Promise<InviteRecord> {
-    const row = await prepareD1Statement(
+    const rawRow = await prepareD1Statement(
       this.db,
       `INSERT INTO invites (
            token, label, created_by, created_at, expires_at, revoked_at, uses, last_used_at
@@ -199,12 +200,12 @@ export class D1AccessAndTalkStore implements AccessControlStore, TalkCommentStor
         invite.uses,
         invite.last_used_at
       )
-      .first<RawDbInviteRow>();
+      .first<unknown>();
 
-    if (!row) {
+    if (rawRow === null) {
       throw new Error(`Failed to create invite '${invite.token}'.`);
     }
-    return mapInviteRow(row);
+    return mapInviteRow(parseDbInviteRow(rawRow));
   }
 
   async recordInviteUse(token: string, atIso: string): Promise<void> {
@@ -235,33 +236,34 @@ export class D1AccessAndTalkStore implements AccessControlStore, TalkCommentStor
   }
 
   async getMagicLink(tokenHash: Sha256Hex): Promise<MagicLinkRecord | null> {
-    const row = await prepareD1Statement(
+    const rawRow = await prepareD1Statement(
       this.db,
       `SELECT token_hash, email, invite_token, expires_at, used_at
          FROM magic_links
          WHERE token_hash = ?`
     )
       .bind(tokenHash)
-      .first<RawDbMagicLinkRow>();
-    return row ? mapMagicLinkRow(row) : null;
+      .first<unknown>();
+    return rawRow !== null ? mapMagicLinkRow(parseDbMagicLinkRow(rawRow)) : null;
   }
 
   async countRecentMagicLinks(email: string, sinceIso: string): Promise<number> {
     const normalized = email.trim().toLowerCase();
-    const row = await prepareD1Statement(
+    const rawRow = await prepareD1Statement(
       this.db,
       `SELECT COUNT(*) AS count
          FROM magic_links
          WHERE email = ? AND expires_at > ?`
     )
       .bind(normalized, sinceIso)
-      .first<{ count: number }>();
+      .first<unknown>();
+    const row = rawRow !== null ? parseDbCountRow(rawRow) : null;
     return row?.count ?? 0;
   }
 
   async consumeMagicLink(tokenHash: Sha256Hex, nowIso: string): Promise<MagicLinkRecord | null> {
     // Single atomic UPDATE prevents replay races across concurrent verification requests.
-    const row = await prepareD1Statement(
+    const rawRow = await prepareD1Statement(
       this.db,
       `UPDATE magic_links
          SET used_at = ?
@@ -271,20 +273,20 @@ export class D1AccessAndTalkStore implements AccessControlStore, TalkCommentStor
          RETURNING token_hash, email, invite_token, expires_at, used_at`
     )
       .bind(nowIso, tokenHash, nowIso)
-      .first<RawDbMagicLinkRow>();
-    return row ? mapMagicLinkRow(row) : null;
+      .first<unknown>();
+    return rawRow !== null ? mapMagicLinkRow(parseDbMagicLinkRow(rawRow)) : null;
   }
 
   async findActiveAgentTokenByHash(tokenHash: Sha256Hex): Promise<AgentTokenRecord | null> {
-    const row = await prepareD1Statement(
+    const rawRow = await prepareD1Statement(
       this.db,
       `SELECT token_id, token_hash, label, scope, created_by, created_at, revoked_at
          FROM agent_tokens
          WHERE token_hash = ? AND revoked_at IS NULL`
     )
       .bind(tokenHash)
-      .first<RawDbAgentTokenRow>();
-    return row ? mapAgentTokenRow(row) : null;
+      .first<unknown>();
+    return rawRow !== null ? mapAgentTokenRow(parseDbAgentTokenRow(rawRow)) : null;
   }
 
   async listAgentTokens(): Promise<readonly AgentTokenRecord[]> {
@@ -293,12 +295,12 @@ export class D1AccessAndTalkStore implements AccessControlStore, TalkCommentStor
       `SELECT token_id, token_hash, label, scope, created_by, created_at, revoked_at
          FROM agent_tokens
          ORDER BY created_at DESC`
-    ).all<RawDbAgentTokenRow>();
-    return res.results.map(mapAgentTokenRow);
+    ).all<unknown>();
+    return res.results.map((rawRow) => mapAgentTokenRow(parseDbAgentTokenRow(rawRow)));
   }
 
   async createAgentToken(record: AgentTokenRecord): Promise<AgentTokenRecord> {
-    const row = await prepareD1Statement(
+    const rawRow = await prepareD1Statement(
       this.db,
       `INSERT INTO agent_tokens (
            token_id, token_hash, label, scope, created_by, created_at, revoked_at
@@ -314,12 +316,12 @@ export class D1AccessAndTalkStore implements AccessControlStore, TalkCommentStor
         record.created_at,
         record.revoked_at
       )
-      .first<RawDbAgentTokenRow>();
+      .first<unknown>();
 
-    if (!row) {
+    if (rawRow === null) {
       throw new Error(`Failed to create agent token '${record.token_id}'.`);
     }
-    return mapAgentTokenRow(row);
+    return mapAgentTokenRow(parseDbAgentTokenRow(rawRow));
   }
 
   async revokeAgentToken(tokenId: string, atIso: string): Promise<boolean> {

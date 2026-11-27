@@ -1,12 +1,17 @@
 import {
   type ArchiveBundle,
   ArchiveBundleSchema,
+  collectLivingNameHitsWithMatcher,
   collectLivingNames,
   compileArchive,
+  compileLivingNameMatcher,
   compileLivingNamePattern,
+  computeSourceMaxYearById,
+  extractLatestEdtfYear,
   filterMediaForPrivacy,
   filterNarrativesForPrivacy,
   getCurrentReferenceYear,
+  type LivingNameTarget,
   type MediaItem,
   type Narrative,
   type Place,
@@ -14,16 +19,9 @@ import {
   type RawEvent,
   type RawPerson,
   resolveEffectiveLiving,
+  resolveNarrativeMaxYear,
   type SourceRecord,
 } from '@kinloom/core';
-import {
-  collectLivingNameHitsWithMatcher,
-  compileLivingNameMatcher,
-  computeSourceMaxYearById,
-  extractLatestEdtfYear,
-  type LivingNameTarget,
-  resolveNarrativeMaxYear,
-} from '../living-name-matcher.js';
 import { auditBundlePrivacy } from '../shared/bundlePrivacy.js';
 import type {
   LoadedVerifyArchive,

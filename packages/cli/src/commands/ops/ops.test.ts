@@ -4149,6 +4149,29 @@ describe('ops/audit', () => {
     expect(parseAuditEdtf('1885-04-23/1910-01-18')?.endMs).toBe(Date.UTC(1910, 0, 18));
   });
 
+  it('parses 192X decade syntax accurately via @kinloom/core in chronology checks', () => {
+    expect(parseAuditEdtf('192X')).toEqual({
+      raw: '192X',
+      year: 1920,
+      month: null,
+      day: null,
+      precision: 'decade',
+      approximate: false,
+      startMs: Date.UTC(1920, 0, 1),
+      endMs: Date.UTC(1929, 11, 31),
+    });
+
+    const decadeCovered = chronologyFor('1880-01-01', '1925-06-15', '192X');
+    expect(decadeCovered.checkedEvents).toBe(1);
+    expect(decadeCovered.errors).toEqual([]);
+
+    const decadeAfterDeath = chronologyFor('1880-01-01', '1918-06-15', '192X');
+    expect(decadeAfterDeath.checkedEvents).toBe(1);
+    expect(decadeAfterDeath.errors).toEqual([
+      'Event evt_span (192X): postdates death (1918-06-15) and is not a burial/probate/obituary/memorial event.',
+    ]);
+  });
+
   it('does not call a long marriage interval an underage marriage', () => {
     const lateEnough = chronologyFor(
       '1896-12-17',

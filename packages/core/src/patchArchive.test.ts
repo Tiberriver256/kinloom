@@ -813,4 +813,71 @@ describe('patchCompiledBundle differential equivalence', () => {
     expect(patched2.meta.max_revision_id).toBe(22);
     expect(patched2.meta.uncited_entity_keys).toBeUndefined();
   });
+
+  it('preserves siteConfig.pronunciations identically to compileArchive across non-empty patches and falls back to previousBundle.pronunciations', () => {
+    const configWithPronunciations = parseKinloomConfig({
+      ...TEST_CONFIG,
+      pronunciations: {
+        Alder: { phonetic: 'AWL-der', ipa: 'ˈɔːldər', language: 'en-US' },
+        Mercer: { phonetic: 'MER-ser', ipa: 'ˈmɜːrsər', language: 'en-US' },
+      },
+    });
+    const base = buildBaseState();
+    const initial = compileArchive({
+      people: base.people,
+      events: base.events,
+      places: base.places,
+      sources: base.sources,
+      kinship: base.kinship,
+      media: base.media,
+      narratives: base.narratives,
+      siteConfig: configWithPronunciations,
+      mode: 'private',
+      generatedAt: FIXED_GENERATED_AT,
+      maxRevisionId: 30,
+    }).bundle;
+
+    const updatedPerson: RawPerson = {
+      ...base.people[0],
+      full_name: 'Arthur J. Alder',
+      has_primary_source: true,
+    };
+    const mutation: BundlePatchMutation = {
+      revision_id: 31,
+      entity_type: 'person',
+      entity_id: updatedPerson.id,
+      action: 'update',
+      after_json: updatedPerson as unknown as EntityPayload,
+      has_primary_source: true,
+    };
+
+    const patched = patchCompiledBundle(initial, [mutation], configWithPronunciations, 'private', {
+      generatedAt: FIXED_GENERATED_AT,
+    });
+    const recompiled = compileArchive({
+      people: applyMutationToRawState(base, mutation).people,
+      events: base.events,
+      places: base.places,
+      sources: base.sources,
+      kinship: base.kinship,
+      media: base.media,
+      narratives: base.narratives,
+      siteConfig: configWithPronunciations,
+      mode: 'private',
+      generatedAt: FIXED_GENERATED_AT,
+      maxRevisionId: 31,
+    }).bundle;
+
+    expect(patched).toEqual(recompiled);
+    expect(patched.pronunciations).toEqual(configWithPronunciations.pronunciations);
+    expect(patched.pronunciations).not.toBe(configWithPronunciations.pronunciations);
+    expect(patched.pronunciations).not.toBe(initial.pronunciations);
+
+    // Fallback: when siteConfig.pronunciations is absent, retain previousBundle.pronunciations cleanly
+    const patchedFallback = patchCompiledBundle(initial, [mutation], TEST_CONFIG, 'private', {
+      generatedAt: FIXED_GENERATED_AT,
+    });
+    expect(patchedFallback.pronunciations).toEqual(initial.pronunciations);
+    expect(patchedFallback.pronunciations).not.toBe(initial.pronunciations);
+  });
 });

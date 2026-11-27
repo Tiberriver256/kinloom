@@ -22,7 +22,6 @@ export * from './domain/radarGeometry.js';
 export * from './domain/sourceExport.js';
 export * from './domain/timeSnapshot.js';
 export * from './domain/timeYear.js';
-export * from './domain/treeLayout.js';
 // EDTF & Geo Math
 export * from './edtf.js';
 // GEDCOM Citations, Parser, GEDCOM 7 Exporter & Generic Slice Seeder

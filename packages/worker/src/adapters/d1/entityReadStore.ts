@@ -25,9 +25,8 @@ import {
   parseDbEntityRow,
   parseDbHeadRevisionRow,
   parseDbKinshipRow,
-  type RawDbEntityRow,
-  type RawDbKinshipRow,
-  type RawDbRevisionRow,
+  parseDbLivingPersonProjectionRow,
+  parseDbRevisionRow,
 } from './rowMappers.js';
 import { chunkJsonArray, prepareD1Statement } from './sqlHelpers.js';
 
@@ -43,16 +42,17 @@ export class D1EntityReadStore implements EntityReadStore, RevisionLogStore {
   }
 
   async getHeadRevisionId(): Promise<RevisionId> {
-    const row = await prepareD1Statement(
+    const rawRow = await prepareD1Statement(
       this.db,
       'SELECT COALESCE(MAX(revision_id), 0) AS head_revision_id FROM revisions'
-    ).first<{ head_revision_id: number }>();
+    ).first<unknown>();
+    const row = rawRow !== null ? parseDbHeadRevisionRow(rawRow) : null;
     return asRevisionId(row?.head_revision_id ?? 0);
   }
 
   async getEntity(entityType: EntityType, entityId: string): Promise<StoredEntityRecord | null> {
     if (entityType === 'kinship_edge') {
-      const row = await prepareD1Statement(
+      const rawRow = await prepareD1Statement(
         this.db,
         `SELECT edge_id, from_person_id, to_person_id, relation, family_xref,
                   current_revision_id, deleted_at, updated_at
@@ -60,11 +60,11 @@ export class D1EntityReadStore implements EntityReadStore, RevisionLogStore {
            WHERE edge_id = ?`
       )
         .bind(entityId)
-        .first<RawDbKinshipRow>();
-      return row ? mapKinshipRow(row) : null;
+        .first<unknown>();
+      return rawRow !== null ? mapKinshipRow(parseDbKinshipRow(rawRow)) : null;
     }
 
-    const row = await prepareD1Statement(
+    const rawRow = await prepareD1Statement(
       this.db,
       `SELECT entity_type, entity_id, slug, data_json, current_revision_id,
                 has_primary_source, deleted_at, updated_at
@@ -72,8 +72,8 @@ export class D1EntityReadStore implements EntityReadStore, RevisionLogStore {
          WHERE entity_type = ? AND entity_id = ?`
     )
       .bind(entityType, entityId)
-      .first<RawDbEntityRow>();
-    return row ? mapEntityRow(row) : null;
+      .first<unknown>();
+    return rawRow !== null ? mapEntityRow(parseDbEntityRow(rawRow)) : null;
   }
 
   async getEntitiesBatch(keys: readonly EntityLookupKey[]): Promise<Map<string, StoredEntityRecord | null>> {
@@ -157,16 +157,12 @@ export class D1EntityReadStore implements EntityReadStore, RevisionLogStore {
                 json_extract(data_json, '$.death_edtf') AS death_edtf
          FROM entities
          WHERE entity_type = 'person' AND deleted_at IS NULL`
-    ).all<{
-      entity_id: string;
-      is_living: number | boolean | null;
-      birth_edtf: string | number | null;
-      death_edtf: string | number | null;
-    }>();
+    ).all<unknown>();
 
     const living = new Set<string>();
     const referenceYear = this.clock.currentYear();
-    for (const row of result.results) {
+    for (const rawRow of result.results) {
+      const row = parseDbLivingPersonProjectionRow(rawRow);
       if (
         resolveEffectiveLiving(
           {
@@ -259,11 +255,11 @@ export class D1EntityReadStore implements EntityReadStore, RevisionLogStore {
          LIMIT ?`
     )
       .bind(...bindings, limit + 1)
-      .all<RawDbRevisionRow>();
+      .all<unknown>();
 
     const hasMore = res.results.length > limit;
     const sliced = hasMore ? res.results.slice(0, limit) : res.results;
-    const items = sliced.map(mapRevisionRow);
+    const items = sliced.map((rawRow) => mapRevisionRow(parseDbRevisionRow(rawRow)));
     const lastItem = items[items.length - 1];
 
     return {
@@ -273,7 +269,7 @@ export class D1EntityReadStore implements EntityReadStore, RevisionLogStore {
   }
 
   async getRevisionById(revisionId: RevisionId): Promise<RevisionRecord | null> {
-    const row = await prepareD1Statement(
+    const rawRow = await prepareD1Statement(
       this.db,
       `SELECT revision_id, batch_id, entity_type, entity_id, parent_revision_id, action,
                 reverted_revision_id, author_id, author_name, author_type,
@@ -282,8 +278,8 @@ export class D1EntityReadStore implements EntityReadStore, RevisionLogStore {
          WHERE revision_id = ?`
     )
       .bind(revisionId)
-      .first<RawDbRevisionRow>();
-    return row ? mapRevisionRow(row) : null;
+      .first<unknown>();
+    return rawRow !== null ? mapRevisionRow(parseDbRevisionRow(rawRow)) : null;
   }
 
   async getRevisionsByBatch(batchId: BatchId): Promise<readonly RevisionRecord[]> {
@@ -297,7 +293,7 @@ export class D1EntityReadStore implements EntityReadStore, RevisionLogStore {
          ORDER BY revision_id ASC`
     )
       .bind(batchId)
-      .all<RawDbRevisionRow>();
-    return res.results.map(mapRevisionRow);
+      .all<unknown>();
+    return res.results.map((rawRow) => mapRevisionRow(parseDbRevisionRow(rawRow)));
   }
 }

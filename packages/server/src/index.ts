@@ -18,10 +18,12 @@ export {
   type GoogleOAuthProviderConfig,
 } from './adapters/googleOAuthProvider.js';
 export {
+  createInMemoryArchiveRepository,
   createInMemoryServerPorts,
   FakeAuthProvider,
   type FakeOAuthProfile,
   InMemoryArchiveRepository,
+  type InMemoryArchiveRepositoryOptions,
   InMemoryEmailSender,
   InMemoryIncrementalBundleCache,
   InMemoryMediaStore,

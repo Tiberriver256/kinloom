@@ -1,3 +1,4 @@
+import type { ParsedEdtfInterval } from '@kinloom/core';
 import type { ExecutedPluginCheckResult, KinloomCliPlugin } from '../../../plugins.js';
 import type { IntegrateCommandResult } from '../shared/integrateEngine/types.js';
 import type { TreeHygieneWarning } from '../tree-hygiene.js';
@@ -10,16 +11,7 @@ export interface AuditCommandOptions {
   plugins?: readonly KinloomCliPlugin[];
 }
 
-export interface ParsedAuditEdtf {
-  raw: string;
-  year: number;
-  month: number | null;
-  day: number | null;
-  precision: 'day' | 'month' | 'year';
-  approximate: boolean;
-  startMs: number;
-  endMs: number;
-}
+export type ParsedAuditEdtf = ParsedEdtfInterval;
 
 export interface LifespanSummary {
   exact: boolean;

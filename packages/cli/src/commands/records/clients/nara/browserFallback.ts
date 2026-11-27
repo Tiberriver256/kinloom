@@ -90,14 +90,16 @@ export async function defaultBrowserSearchMany(
           await session.runStep('nara-search:goto', (stepMs) =>
             page.goto(searchUrl, { waitUntil: 'domcontentloaded', timeout: stepMs })
           );
-          if (page.waitForFunction) {
+          const waitForFunction = page.waitForFunction;
+          if (waitForFunction) {
             const waitBudget = Math.min(20_000, Math.floor(session.remainingMs() * 0.6));
             if (waitBudget > 0) {
               try {
                 await session.runStep(
                   'nara-search:waitForFunction',
                   (stepMs) =>
-                    page.waitForFunction!(
+                    waitForFunction.call(
+                      page,
                       `() => {
                         const t = document.body.innerText || '';
                         return /\\d+\\s+results?\\s+for|No results|0 results|did not match/i.test(t);
@@ -263,14 +265,16 @@ export async function defaultBrowserGetRecords(
           await session.runStep('nara-get:goto', (stepMs) =>
             page.goto(url, { waitUntil: 'domcontentloaded', timeout: stepMs })
           );
-          if (page.waitForFunction) {
+          const waitForFunction = page.waitForFunction;
+          if (waitForFunction) {
             const waitBudget = Math.min(20_000, Math.floor(session.remainingMs() * 0.6));
             if (waitBudget > 0) {
               try {
                 await session.runStep(
                   'nara-get:waitForFunction',
                   (stepMs) =>
-                    page.waitForFunction!(
+                    waitForFunction.call(
+                      page,
                       `() => /National Archives Identifier/i.test(document.body.innerText || '')`,
                       undefined,
                       { timeout: stepMs }

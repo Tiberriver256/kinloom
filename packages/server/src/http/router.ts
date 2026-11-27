@@ -1,4 +1,9 @@
-import type { KinloomServerPluginRoute, KinloomServerPorts, KinloomSiteConfig } from '@kinloom/core';
+import type {
+  KinloomServerPlugin,
+  KinloomServerPluginRoute,
+  KinloomServerPorts,
+  KinloomSiteConfig,
+} from '@kinloom/core';
 import { KinloomHttpError, toErrorResponseData } from '../errors.js';
 import { AdminService } from '../services/adminService.js';
 import { AuthService } from '../services/authService.js';
@@ -44,19 +49,92 @@ export interface KinloomServer {
 const DEFAULT_SESSION_TTL_SECONDS = 30 * 24 * 60 * 60;
 const DEFAULT_OAUTH_COOKIE_TTL_SECONDS = 10 * 60;
 
+interface CompiledPluginRoute {
+  readonly pluginId: string;
+  readonly method: string;
+  readonly normalizedPrefix: string;
+  readonly route: KinloomServerPluginRoute;
+}
+
+function normalizePluginPathPrefix(raw: string, pluginId: string): string {
+  const trimmed = raw.trim();
+  if (!trimmed.startsWith('/')) {
+    throw new RangeError(`Server plugin '${pluginId}' route pathPrefix '${raw}' must start with '/'.`);
+  }
+  const withoutTrailingSlash = trimmed.replace(/\/+$/, '');
+  return withoutTrailingSlash.length > 0 ? withoutTrailingSlash : '/';
+}
+
+function matchesPathPrefix(pathname: string, normalizedPrefix: string): boolean {
+  if (normalizedPrefix === '/') {
+    return pathname.startsWith('/');
+  }
+  return pathname === normalizedPrefix || pathname.startsWith(`${normalizedPrefix}/`);
+}
+
+function pluginMethodsOverlap(methodA: string, methodB: string): boolean {
+  return methodA === '*' || methodB === '*' || methodA === methodB;
+}
+
+function validateAndCompilePluginRoutes(
+  plugins: readonly KinloomServerPlugin[]
+): readonly CompiledPluginRoute[] {
+  const seenPluginIds = new Set<string>();
+  const compiledRoutes: CompiledPluginRoute[] = [];
+
+  for (const plugin of plugins) {
+    const pluginId = plugin.id.trim();
+    if (!pluginId) {
+      throw new RangeError('Server plugin id must be a non-empty string.');
+    }
+    if (seenPluginIds.has(pluginId)) {
+      throw new RangeError(`Duplicate server plugin id '${pluginId}'.`);
+    }
+    seenPluginIds.add(pluginId);
+
+    for (const route of plugin.routes ?? []) {
+      const method = route.method.trim().toUpperCase();
+      if (!method) {
+        throw new RangeError(`Server plugin '${pluginId}' route method must be non-empty.`);
+      }
+      const normalizedPrefix = normalizePluginPathPrefix(route.pathPrefix, pluginId);
+
+      for (const existing of compiledRoutes) {
+        if (
+          pluginMethodsOverlap(existing.method, method) &&
+          (matchesPathPrefix(normalizedPrefix, existing.normalizedPrefix) ||
+            matchesPathPrefix(existing.normalizedPrefix, normalizedPrefix))
+        ) {
+          throw new RangeError(
+            `Conflicting server plugin route '${method} ${normalizedPrefix}' in plugin '${pluginId}' overlaps with '${existing.method} ${existing.normalizedPrefix}' in plugin '${existing.pluginId}'.`
+          );
+        }
+      }
+
+      compiledRoutes.push({
+        pluginId,
+        method,
+        normalizedPrefix,
+        route,
+      });
+    }
+  }
+
+  return compiledRoutes;
+}
+
 function matchPluginRoute(
-  routes: readonly KinloomServerPluginRoute[],
+  routes: readonly CompiledPluginRoute[],
   method: string,
   pathname: string
 ): KinloomServerPluginRoute | null {
   const upperMethod = method.toUpperCase();
-  for (const route of routes) {
-    const routeMethod = route.method.toUpperCase();
-    if (routeMethod !== '*' && routeMethod !== upperMethod) {
+  for (const compiled of routes) {
+    if (compiled.method !== '*' && compiled.method !== upperMethod) {
       continue;
     }
-    if (pathname === route.pathPrefix || pathname.startsWith(route.pathPrefix)) {
-      return route;
+    if (matchesPathPrefix(pathname, compiled.normalizedPrefix)) {
+      return compiled.route;
     }
   }
   return null;
@@ -75,9 +153,7 @@ export function createKinloomServer(config: KinloomServerConfig): KinloomServer 
   const sessionTtlSeconds = config.sessionTtlSeconds ?? DEFAULT_SESSION_TTL_SECONDS;
   const oauthCookieTtlSeconds = config.oauthCookieTtlSeconds ?? DEFAULT_OAUTH_COOKIE_TTL_SECONDS;
   const plugins = config.ports.plugins ?? [];
-  const pluginRoutes: KinloomServerPluginRoute[] = plugins.flatMap((plugin) =>
-    plugin.routes ? [...plugin.routes] : []
-  );
+  const pluginRoutes = validateAndCompilePluginRoutes(plugins);
 
   const authService = new AuthService({
     repository: config.ports.repository,

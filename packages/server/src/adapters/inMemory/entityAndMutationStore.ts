@@ -1,6 +1,7 @@
 import {
   type ArchiveRawSnapshot,
   type AtomicMutationOp,
+  type AtomicMutationStore,
   asRevisionId,
   type BatchId,
   type Clock,
@@ -8,6 +9,7 @@ import {
   computeEntityDiff,
   type EntityLookupKey,
   type EntityPayload,
+  type EntityReadStore,
   type EntityType,
   entityLookupCompositeKey,
   type KinshipEdge,
@@ -16,6 +18,7 @@ import {
   parseEntityPayload,
   type RevisionAuthor,
   type RevisionId,
+  type RevisionLogStore,
   type RevisionQuery,
   type RevisionRecord,
   resolveEffectiveLiving,
@@ -37,7 +40,9 @@ function getRowPayload(row: StoredEntityRow | StoredKinshipRow): EntityPayload {
 /**
  * In-memory entity, kinship, and append-only revision store with atomic clone-and-swap rollback.
  */
-export class InMemoryEntityAndMutationStore {
+export class InMemoryEntityAndMutationStore
+  implements EntityReadStore, AtomicMutationStore, RevisionLogStore
+{
   private readonly entities = new Map<string, StoredEntityRow>();
   private readonly kinship = new Map<string, StoredKinshipRow>();
   private readonly revisions: RevisionRecord[] = [];

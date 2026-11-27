@@ -6,7 +6,7 @@ import {
   type LivingNameTarget,
   NARRATIVE_POSTHUMOUS_HORIZON_YEARS,
   resolveNarrativeMaxYear,
-} from '../living-name-matcher.js';
+} from '@kinloom/core';
 import {
   isPlainRecord,
   type LooseRecord,

@@ -34,6 +34,13 @@ export function patchCompiledBundle(
     }
   }
 
+  const pronunciationLexicon =
+    siteConfig.pronunciations && Object.keys(siteConfig.pronunciations).length > 0
+      ? siteConfig.pronunciations
+      : previousBundle.pronunciations && Object.keys(previousBundle.pronunciations).length > 0
+        ? previousBundle.pronunciations
+        : undefined;
+
   if (mutations.length === 0) {
     return {
       ...previousBundle,
@@ -43,6 +50,7 @@ export function patchCompiledBundle(
         generated_at: options?.generatedAt ?? previousBundle.meta.generated_at,
         ...(maxRevisionId !== undefined ? { max_revision_id: maxRevisionId } : {}),
       },
+      ...(pronunciationLexicon ? { pronunciations: structuredClone(pronunciationLexicon) } : {}),
     };
   }
 
@@ -88,5 +96,6 @@ export function patchCompiledBundle(
     kinship: state.kinship,
     sources: state.sources,
     ...(state.narratives !== undefined ? { narratives: state.narratives } : {}),
+    ...(pronunciationLexicon ? { pronunciations: structuredClone(pronunciationLexicon) } : {}),
   };
 }

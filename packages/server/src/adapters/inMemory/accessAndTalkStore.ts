@@ -1,10 +1,12 @@
 import type {
+  AccessControlStore,
   AgentTokenRecord,
   EntityType,
   InviteRecord,
   MagicLinkRecord,
   Sha256Hex,
   TalkComment,
+  TalkCommentStore,
   UserRecord,
   UserRole,
 } from '@kinloom/core';
@@ -12,7 +14,7 @@ import type {
 /**
  * In-memory persistence for talk comments, users, invites, magic links, and scoped agent tokens.
  */
-export class InMemoryAccessAndTalkStore {
+export class InMemoryAccessAndTalkStore implements AccessControlStore, TalkCommentStore {
   private readonly talkComments: TalkComment[] = [];
   private readonly users = new Map<string, UserRecord>();
   private readonly invites = new Map<string, InviteRecord>();
