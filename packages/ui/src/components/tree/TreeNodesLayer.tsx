@@ -7,12 +7,13 @@ import type {
   SemanticZoomLevel,
 } from '../../lib/archivalTreeModel.js';
 import { formatEarlyLossAgeLabel, formatUnionOtherChildrenLabel } from '../../lib/archivalTreeModel.js';
-import { formatTreeCardName } from '../../lib/treeNodeDisplay.js';
+import { fitTreeCardNameToWidth } from '../../lib/treeNodeDisplay.js';
 import { KINLOOM_VOCABULARY } from '../../lib/vocabulary.js';
 
 export const DiagramNodeCard: React.FC<{
   readonly node: DiagramPlacedNode;
   readonly displayName: string;
+  readonly compactName?: string;
   readonly surnameOrGiven: string;
   readonly lifespan: string;
   readonly thumbUrl: string | null;
@@ -25,6 +26,7 @@ export const DiagramNodeCard: React.FC<{
   ({
     node,
     displayName,
+    compactName,
     surnameOrGiven,
     lifespan,
     thumbUrl,
@@ -137,7 +139,7 @@ export const DiagramNodeCard: React.FC<{
               fontFamily="var(--font-serif)"
               fill={primaryTextFill}
             >
-              {displayName}
+              {compactName ?? displayName}
             </text>
             <text x={12} y={39} fontSize="10.5" fontFamily="var(--font-mono)" fill={secondaryTextFill}>
               {lifespan}
@@ -286,7 +288,7 @@ export const EarlyLossStripLayer: React.FC<{
               fontFamily="var(--font-serif)"
               fill={isSelected ? 'var(--text-inverse)' : 'var(--text-primary)'}
             >
-              {formatTreeCardName(chip.person.given_name || chip.person.full_name, 13)}
+              {fitTreeCardNameToWidth(chip.person.given_name || chip.person.full_name, chip.width - 16, 10.5)}
             </text>
             <text
               x={8}

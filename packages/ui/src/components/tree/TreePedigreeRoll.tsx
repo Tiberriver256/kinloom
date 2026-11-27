@@ -103,6 +103,9 @@ const RollPersonCard: React.FC<RollPersonCardProps> = ({
 
 interface UnionAttachmentsProps {
   readonly union: TreeUnion;
+  readonly isRemarriedUnit: boolean;
+  readonly anchorId: string;
+  readonly fallbackOrder: number;
   readonly model: ArchivalTreeModel;
   readonly spotlight: LineageSpotlight | null;
   readonly selectedPersonId: string | null;
@@ -114,6 +117,9 @@ interface UnionAttachmentsProps {
 
 const UnionAttachments: React.FC<UnionAttachmentsProps> = ({
   union,
+  isRemarriedUnit,
+  anchorId,
+  fallbackOrder,
   model,
   spotlight,
   selectedPersonId,
@@ -135,13 +141,16 @@ const UnionAttachments: React.FC<UnionAttachmentsProps> = ({
     return null;
   }
 
-  const secondaryPartner = union.secondaryPartnerId
-    ? model.peopleById.get(union.secondaryPartnerId)
-    : undefined;
-  const marriageCaption =
-    union.totalMarriagesForPrimary > 1 && secondaryPartner
-      ? `Marriage ${toRomanNumeral(union.marriageOrder)} · ${secondaryPartner.full_name}`
-      : null;
+  const otherPartnerId =
+    union.primaryPartnerId === anchorId ? union.secondaryPartnerId : union.primaryPartnerId;
+  const otherPartner = otherPartnerId ? model.peopleById.get(otherPartnerId) : undefined;
+  const showMarriageCaption = isRemarriedUnit || union.totalMarriagesForPrimary > 1;
+  const effectiveOrder = union.totalMarriagesForPrimary > 1 ? union.marriageOrder : fallbackOrder;
+  const marriageCaption = showMarriageCaption
+    ? otherPartner
+      ? `Marriage ${toRomanNumeral(effectiveOrder)} · ${otherPartner.full_name}`
+      : `Marriage ${toRomanNumeral(effectiveOrder)}`
+    : null;
 
   return (
     <div className={cx(pedigreeRollStyles, 'tree-roll-attachments')}>
@@ -340,53 +349,79 @@ export const TreePedigreeRoll: React.FC<TreePedigreeRollProps> = ({
           )}
         >
           {members.map((member, idx) => {
-            const prevMember = idx > 0 ? members[idx - 1] : null;
-            const connectingUnion = prevMember
+            const isAnchor = member.id === unit.anchorId;
+            const spouseUnion = !isAnchor
               ? coupleUnions.find(
                   (u) =>
-                    (u.primaryPartnerId === prevMember.id && u.secondaryPartnerId === member.id) ||
-                    (u.primaryPartnerId === member.id && u.secondaryPartnerId === prevMember.id)
+                    (u.primaryPartnerId === unit.anchorId && u.secondaryPartnerId === member.id) ||
+                    (u.primaryPartnerId === member.id && u.secondaryPartnerId === unit.anchorId)
                 )
               : undefined;
+            const anchorIdx = members.findIndex((m) => m.id === unit.anchorId);
+            const hubBeforeMember = spouseUnion !== undefined && idx > anchorIdx;
+            const hubAfterMember = spouseUnion !== undefined && idx < anchorIdx;
 
-            return (
-              <React.Fragment key={member.id}>
-                {connectingUnion && (
-                  <span
-                    className={cx(
-                      pedigreeRollStyles,
-                      `tree-roll-union-hub${spotlight?.highlightedUnionIds.has(connectingUnion.id) ? ' is-lit' : ''}`
-                    )}
-                    title={
-                      connectingUnion.totalMarriagesForPrimary > 1
-                        ? `${KINLOOM_VOCABULARY.tree.marriageLabel} ${toRomanNumeral(connectingUnion.marriageOrder)}`
-                        : KINLOOM_VOCABULARY.tree.marriageLabel
-                    }
-                    aria-hidden="true"
-                  >
-                    {connectingUnion.totalMarriagesForPrimary > 1
-                      ? toRomanNumeral(connectingUnion.marriageOrder)
-                      : '•'}
-                  </span>
-                )}
-                <RollPersonCard
-                  person={member}
-                  isDirect={model.directPersonIds.has(member.id)}
-                  isSelected={selectedPersonId === member.id}
-                  isLit={Boolean(spotlight?.highlightedPersonIds.has(member.id))}
-                  hasSelection={hasSelection}
-                  thumbUrl={resolveThumb(member)}
-                  onSelect={onSelectPerson}
-                />
-              </React.Fragment>
+            const renderHub = (connectingUnion: TreeUnion): React.ReactNode => {
+              const showNumeral = isRemarried || connectingUnion.totalMarriagesForPrimary > 1;
+              const orderNum =
+                connectingUnion.totalMarriagesForPrimary > 1
+                  ? connectingUnion.marriageOrder
+                  : Math.max(1, coupleUnions.indexOf(connectingUnion) + 1);
+              return (
+                <span
+                  className={cx(
+                    pedigreeRollStyles,
+                    `tree-roll-union-hub${spotlight?.highlightedUnionIds.has(connectingUnion.id) ? ' is-lit' : ''}`
+                  )}
+                  title={
+                    showNumeral
+                      ? `${KINLOOM_VOCABULARY.tree.marriageLabel} ${toRomanNumeral(orderNum)}`
+                      : KINLOOM_VOCABULARY.tree.marriageLabel
+                  }
+                  aria-hidden="true"
+                >
+                  {showNumeral ? toRomanNumeral(orderNum) : '•'}
+                </span>
+              );
+            };
+
+            const card = (
+              <RollPersonCard
+                person={member}
+                isDirect={model.directPersonIds.has(member.id)}
+                isSelected={selectedPersonId === member.id}
+                isLit={Boolean(spotlight?.highlightedPersonIds.has(member.id))}
+                hasSelection={hasSelection}
+                thumbUrl={resolveThumb(member)}
+                onSelect={onSelectPerson}
+              />
             );
+
+            if (spouseUnion && (hubBeforeMember || hubAfterMember)) {
+              return (
+                <div
+                  key={member.id}
+                  className={cx(pedigreeRollStyles, 'tree-roll-partner-pair')}
+                  data-union-id={spouseUnion.id}
+                >
+                  {hubBeforeMember && renderHub(spouseUnion)}
+                  {card}
+                  {hubAfterMember && renderHub(spouseUnion)}
+                </div>
+              );
+            }
+
+            return <React.Fragment key={member.id}>{card}</React.Fragment>;
           })}
         </div>
 
-        {unitUnions.map((union) => (
+        {unitUnions.map((union, uIdx) => (
           <UnionAttachments
             key={union.id}
             union={union}
+            isRemarriedUnit={isRemarried}
+            anchorId={unit.anchorId}
+            fallbackOrder={uIdx + 1}
             model={model}
             spotlight={spotlight}
             selectedPersonId={selectedPersonId}

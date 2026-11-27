@@ -5,16 +5,18 @@ export type TreeViewSurface = 'roll' | 'diagram';
 export type SemanticZoomLevel = 'overview' | 'compact' | 'detail';
 export type TreeUnionKind = 'couple' | 'single_parent';
 
-export const ARCHIVAL_NODE_W = 172;
+export const ARCHIVAL_NODE_W = 196;
 export const ARCHIVAL_NODE_H = 52;
 export const ARCHIVAL_SPOUSE_GAP = 34;
 export const ARCHIVAL_UNIT_GAP = 34;
 export const ARCHIVAL_GEN_MIN_GAP = 72;
 export const ARCHIVAL_HANGING_COL_GAP = 28;
 export const ARCHIVAL_HANGING_ROW_GAP = 14;
+export const ARCHIVAL_EARLY_CHIP_W = 112;
 export const ARCHIVAL_EARLY_CHIP_H = 30;
 export const ARCHIVAL_EARLY_STRIP_GAP = 10;
 export const COLLATERAL_COLLAPSE_THRESHOLD = 4;
+export const DIRECT_SPINE_DESCENDANT_FANOUT_LIMIT = 12;
 export const EARLY_LOSS_MAX_AGE = 5;
 export const MOBILE_TREE_BREAKPOINT_PX = 768;
 
@@ -98,6 +100,19 @@ export interface DiagramUnionHub {
   readonly rightX: number;
 }
 
+export interface DiagramPoint {
+  readonly x: number;
+  readonly y: number;
+}
+
+export interface DiagramOrthogonalDrop {
+  readonly childId: string;
+  readonly x: number;
+  readonly toY: number;
+  readonly isDirect: boolean;
+  readonly points: readonly DiagramPoint[];
+}
+
 export interface DiagramOrthogonalBus {
   readonly unionId: string;
   readonly parentIds: readonly string[];
@@ -108,12 +123,8 @@ export interface DiagramOrthogonalBus {
   readonly busY: number;
   readonly railMinX: number;
   readonly railMaxX: number;
-  readonly childDrops: readonly {
-    readonly childId: string;
-    readonly x: number;
-    readonly toY: number;
-    readonly isDirect: boolean;
-  }[];
+  readonly stemPoints: readonly DiagramPoint[];
+  readonly childDrops: readonly DiagramOrthogonalDrop[];
 }
 
 export interface DiagramHangingGridRail {
@@ -296,12 +307,12 @@ export function isRedactedLivingPlaceholder(person: Pick<Person, 'is_living' | '
   return person.is_living && person.full_name.trim() === 'Living';
 }
 
+export function isDirectAncestorOrPivot(person: Pick<Person, 'lineage_group'>): boolean {
+  return person.lineage_group === 'ancestor' || person.lineage_group === 'pivot_ancestor';
+}
+
 export function isDirectSpinePerson(person: Pick<Person, 'lineage_group'>): boolean {
-  return (
-    person.lineage_group === 'ancestor' ||
-    person.lineage_group === 'pivot_ancestor' ||
-    person.lineage_group === 'descendant'
-  );
+  return isDirectAncestorOrPivot(person) || person.lineage_group === 'descendant';
 }
 
 export function resolveSemanticZoomLevel(zoom: number): SemanticZoomLevel {

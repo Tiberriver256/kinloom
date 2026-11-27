@@ -3,9 +3,29 @@ import type {
   DiagramGenBand,
   DiagramHangingGridRail,
   DiagramOrthogonalBus,
+  DiagramPoint,
   DiagramUnionHub,
 } from '../../lib/archivalTreeModel.js';
 import { toRomanNumeral } from '../../lib/archivalTreeModel.js';
+
+function pointsToOrthogonalPath(points: readonly DiagramPoint[]): string {
+  if (points.length === 0) {
+    return '';
+  }
+  let d = `M ${points[0].x} ${points[0].y}`;
+  for (let i = 1; i < points.length; i += 1) {
+    const prev = points[i - 1];
+    const cur = points[i];
+    if (cur.x === prev.x) {
+      d += ` V ${cur.y}`;
+    } else if (cur.y === prev.y) {
+      d += ` H ${cur.x}`;
+    } else {
+      d += ` L ${cur.x} ${cur.y}`;
+    }
+  }
+  return d;
+}
 
 export const GenBandsLayer: React.FC<{
   readonly genBands: readonly DiagramGenBand[];
@@ -27,14 +47,14 @@ export const GenBandsLayer: React.FC<{
         <rect
           x={14}
           y={band.y + 11}
-          width={114}
+          width={118}
           height={28}
           rx={3}
           fill="var(--surface-card)"
           stroke="var(--border-control)"
         />
         <text
-          x={71}
+          x={73}
           y={band.y + 29}
           textAnchor="middle"
           fontSize="10.5"
@@ -58,7 +78,10 @@ export const OrthogonalBusItem: React.FC<{
   const stemLit = isUnionLit;
 
   const railPath = `M ${bus.railMinX} ${bus.busY} H ${bus.railMaxX}`;
-  const stemPath = `M ${bus.hubX} ${bus.hubY} V ${bus.busY}`;
+  const stemPath =
+    bus.stemPoints.length >= 2
+      ? pointsToOrthogonalPath(bus.stemPoints)
+      : `M ${bus.hubX} ${bus.hubY} V ${bus.busY}`;
 
   return (
     // biome-ignore lint/a11y/noAriaHiddenOnFocusable: decorative SVG connector lines
@@ -98,11 +121,15 @@ export const OrthogonalBusItem: React.FC<{
             highlightedIds.has(drop.childId) &&
             bus.parentIds.some((pid) => highlightedIds.has(pid))
         );
+        const dropPath =
+          drop.points.length >= 2
+            ? pointsToOrthogonalPath(drop.points)
+            : `M ${drop.x} ${bus.busY} V ${drop.toY}`;
         return (
           <path
             key={`${bus.unionId}-${drop.childId}`}
             className={`tree-edge tree-bus-drop${drop.isDirect ? ' is-direct' : ''}${dropLit ? ' is-lit' : ''}`}
-            d={`M ${drop.x} ${bus.busY} V ${drop.toY}`}
+            d={dropPath}
             fill="none"
             stroke={
               dropLit

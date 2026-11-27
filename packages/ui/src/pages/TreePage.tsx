@@ -28,6 +28,7 @@ import { KINLOOM_VOCABULARY } from '../lib/vocabulary.js';
 import controlStyles from '../styles/Controls.module.css';
 import layoutStyles from '../styles/Layout.module.css';
 import treePageStyles from './TreePage.module.css';
+import { TreeMinimap } from './tree/TreeMinimap.js';
 import { TreeZoomControls } from './tree/TreeZoomControls.js';
 import { computeTreeBranchCounts, readInitialTreePreferences } from './tree/treePageHelpers.js';
 import { useTreeCanvasInteractions } from './tree/useTreeCanvasInteractions.js';
@@ -58,6 +59,8 @@ export const TreePage: React.FC = () => {
 
   const containerRef = useRef<HTMLElement | null>(null);
   const stageRef = useRef<HTMLDivElement | null>(null);
+  const toolbarRef = useRef<HTMLDivElement | null>(null);
+  const controlsRef = useRef<HTMLDivElement | null>(null);
   const appliedFocusSlugRef = useRef<string | null>(null);
   const pendingFocusPersonIdRef = useRef<string | null>(null);
   const lastFitKeyRef = useRef<string | null>(null);
@@ -120,6 +123,8 @@ export const TreePage: React.FC = () => {
     diagramLayout,
     containerRef,
     stageRef,
+    toolbarRef,
+    controlsRef,
   });
   const interactions = useTreeCanvasInteractions({
     isReady,
@@ -296,7 +301,11 @@ export const TreePage: React.FC = () => {
 
     if (surface === 'diagram' && diagramLayout.nodes.length > 0 && lastFitKeyRef.current !== fitKey) {
       lastFitKeyRef.current = fitKey;
-      canvas.fitToViewport();
+      canvas.applyInitialViewport({
+        pivotPersonId: model.pivotPersonId,
+        totalVisibleCount: model.totalVisibleCount,
+        generationCount: model.generations.length,
+      });
     } else if (surface === 'roll') {
       lastFitKeyRef.current = fitKey;
     }
@@ -312,7 +321,7 @@ export const TreePage: React.FC = () => {
     canvas.centerDiagramOnPerson,
     canvas.scrollRollToPerson,
     handleFocusAndCenterPerson,
-    canvas.fitToViewport,
+    canvas.applyInitialViewport,
   ]);
 
   const stageStyle = useMemo(
@@ -362,7 +371,7 @@ export const TreePage: React.FC = () => {
           if (
             e.target instanceof Element &&
             e.target.closest(
-              'button, a, select, input, .tree-toolbar, .tree-toolbar-shell, .tree-search-popover, .tree-popover, .tree-controls, .tree-node-card, .tree-diagram-sibling-btn'
+              'button, a, select, input, .tree-toolbar, .tree-toolbar-shell, .tree-search-popover, .tree-popover, .tree-controls, .tree-minimap, .tree-node-card, .tree-diagram-sibling-btn'
             )
           ) {
             return;
@@ -375,6 +384,7 @@ export const TreePage: React.FC = () => {
         <h1 className={'visually-hidden'}>{activeBranchLabel} Family Tree</h1>
 
         <TreeToolbar
+          shellRef={toolbarRef}
           populatedBranches={populatedBranches}
           branchCounts={branchCounts}
           branchFilter={branchFilter}
@@ -469,7 +479,29 @@ export const TreePage: React.FC = () => {
               />
             </div>
 
+            {diagramLayout.nodes.length > 0 && (
+              <TreeMinimap
+                layout={diagramLayout}
+                spotlight={spotlight}
+                selectedPersonId={selectedPerson?.id ?? null}
+                getViewportSnapshot={canvas.getViewportSnapshot}
+                subscribeTransform={canvas.subscribeTransform}
+                onNavigateToPoint={(gx, gy) => {
+                  canvas.centerDiagramOnPoint(gx, gy, false);
+                }}
+                onPanBy={(dx, dy) => {
+                  const base = canvas.animationTargetRef.current ?? canvas.transformRef.current;
+                  canvas.animateToTransform(
+                    { zoom: base.zoom, pan: { x: base.pan.x + dx, y: base.pan.y + dy } },
+                    120
+                  );
+                }}
+                onFit={canvas.animateFitToViewport}
+              />
+            )}
+
             <TreeZoomControls
+              controlsRef={controlsRef}
               zoomPercent={canvas.zoomPercent}
               onZoomIn={() => {
                 canvas.handleDiagramZoomBy(1.28);

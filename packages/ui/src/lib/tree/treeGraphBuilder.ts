@@ -4,6 +4,8 @@ import {
   type ArchivalTreeModel,
   type BuildArchivalTreeInput,
   COLLATERAL_COLLAPSE_THRESHOLD,
+  DIRECT_SPINE_DESCENDANT_FANOUT_LIMIT,
+  isDirectAncestorOrPivot,
   isDirectSpinePerson,
   isEarlyChildhoodLoss,
   isRedactedLivingPlaceholder,
@@ -19,6 +21,125 @@ import {
 } from './unionAssembly.js';
 
 export { inferGenerations };
+
+function computeFocalDirectSpineIds(params: {
+  readonly branchPeople: readonly Person[];
+  readonly peopleById: ReadonlyMap<string, Person>;
+  readonly parentMap: ReadonlyMap<string, readonly string[]>;
+  readonly childMap: ReadonlyMap<string, readonly string[]>;
+  readonly spouseMap: ReadonlyMap<string, readonly string[]>;
+  readonly earlyLossIds: ReadonlySet<string>;
+  readonly directPersonIds: ReadonlySet<string>;
+}): Set<string> {
+  const { branchPeople, peopleById, parentMap, childMap, spouseMap, earlyLossIds, directPersonIds } = params;
+  const descendantCount = branchPeople.filter((p) => p.lineage_group === 'descendant').length;
+  const hasWideDescendantFanout = descendantCount > DIRECT_SPINE_DESCENDANT_FANOUT_LIMIT;
+
+  // Small/narrow archives keep all direct-spine records intact; wide multi-branch descendant
+  // trees narrow Direct Line mode to the focal ancestor/pivot trunk and primary continuation.
+  if (!hasWideDescendantFanout) {
+    return new Set(directPersonIds);
+  }
+
+  const focal = new Set<string>();
+  const seedAncestors: string[] = [];
+  for (const p of branchPeople) {
+    if (isDirectAncestorOrPivot(p)) {
+      focal.add(p.id);
+      seedAncestors.push(p.id);
+    }
+  }
+
+  // Ensure every ancestor above any pivot/ancestor record stays on the focal spine.
+  const upQueue = [...seedAncestors];
+  while (upQueue.length > 0) {
+    const cur = upQueue.shift();
+    if (!cur) {
+      continue;
+    }
+    for (const pid of parentMap.get(cur) ?? []) {
+      if (!focal.has(pid) && directPersonIds.has(pid)) {
+        focal.add(pid);
+        upQueue.push(pid);
+      }
+    }
+  }
+
+  // Memoize surviving-descendant depth to pick the primary continuation line deterministically.
+  const depthMemo = new Map<string, number>();
+  const visiting = new Set<string>();
+  const subtreeDepth = (id: string): number => {
+    const cached = depthMemo.get(id);
+    if (cached !== undefined) {
+      return cached;
+    }
+    if (visiting.has(id)) {
+      return 0;
+    }
+    visiting.add(id);
+    let best = 0;
+    for (const cid of childMap.get(id) ?? []) {
+      if (!earlyLossIds.has(cid) && directPersonIds.has(cid)) {
+        const d = 1 + subtreeDepth(cid);
+        if (d > best) {
+          best = d;
+        }
+      }
+    }
+    visiting.delete(id);
+    depthMemo.set(id, best);
+    return best;
+  };
+
+  const rankContinuationChild = (aId: string, bId: string): number => {
+    const depthDiff = subtreeDepth(bId) - subtreeDepth(aId);
+    if (depthDiff !== 0) {
+      return depthDiff;
+    }
+    const spDiff = (spouseMap.get(bId)?.length ?? 0) - (spouseMap.get(aId)?.length ?? 0);
+    if (spDiff !== 0) {
+      return spDiff;
+    }
+    const pa = peopleById.get(aId);
+    const pb = peopleById.get(bId);
+    const evDiff = (pb?.event_count ?? 0) - (pa?.event_count ?? 0);
+    if (evDiff !== 0) {
+      return evDiff;
+    }
+    const ya = pa?.birth_year ?? 9999;
+    const yb = pb?.birth_year ?? 9999;
+    if (ya !== yb) {
+      return ya - yb;
+    }
+    return aId.localeCompare(bId);
+  };
+
+  // Walk downward from focal ancestors/pivot into surviving descendant children, keeping at most
+  // one primary continuation per branching union so wide modern descendant fans collapse cleanly.
+  const downQueue = [...focal].toSorted((a, b) => a.localeCompare(b));
+  const processedDown = new Set<string>();
+  while (downQueue.length > 0) {
+    const cur = downQueue.shift();
+    if (!cur || processedDown.has(cur)) {
+      continue;
+    }
+    processedDown.add(cur);
+    const directChildren = (childMap.get(cur) ?? []).filter(
+      (cid) => !earlyLossIds.has(cid) && directPersonIds.has(cid) && !focal.has(cid)
+    );
+    if (directChildren.length === 0) {
+      continue;
+    }
+    const sorted = [...directChildren].toSorted(rankContinuationChild);
+    const primaryChild = sorted[0];
+    if (primaryChild) {
+      focal.add(primaryChild);
+      downQueue.push(primaryChild);
+    }
+  }
+
+  return focal;
+}
 
 export function buildArchivalTreeModel({
   people,
@@ -64,6 +185,13 @@ export function buildArchivalTreeModel({
 
   const genByPersonId = inferGenerations(branchPeople, kinship, parentMap, childMap, spouseMap);
 
+  const earlyLossIds = new Set<string>();
+  for (const p of branchPeople) {
+    if (isEarlyChildhoodLoss(p, parentMap, childMap, spouseMap)) {
+      earlyLossIds.add(p.id);
+    }
+  }
+
   const directPersonIds = new Set<string>();
   for (const p of branchPeople) {
     if (isDirectSpinePerson(p)) {
@@ -71,15 +199,29 @@ export function buildArchivalTreeModel({
     }
   }
 
-  const spinePartnerIds = new Set<string>(directPersonIds);
-  for (const pid of directPersonIds) {
+  const focalSpineIds = computeFocalDirectSpineIds({
+    branchPeople,
+    peopleById,
+    parentMap,
+    childMap,
+    spouseMap,
+    earlyLossIds,
+    directPersonIds,
+  });
+
+  const spinePartnerIds = new Set<string>(focalSpineIds);
+  for (const pid of focalSpineIds) {
     for (const spId of spouseMap.get(pid) ?? []) {
       spinePartnerIds.add(spId);
     }
   }
-  for (const p of branchPeople) {
-    if (p.lineage_group === 'descendant_spouse') {
-      spinePartnerIds.add(p.id);
+  // Include co-parents of focal spine children when no explicit spouse edge was recorded.
+  for (const cid of focalSpineIds) {
+    const parents = parentMap.get(cid) ?? [];
+    if (parents.some((pid) => focalSpineIds.has(pid))) {
+      for (const pid of parents) {
+        spinePartnerIds.add(pid);
+      }
     }
   }
 
@@ -90,14 +232,7 @@ export function buildArchivalTreeModel({
     directModeBranchIds.includes(branchFilter);
 
   const effectiveMode: TreeLineageMode =
-    mode === 'spine' && supportsDirectForBranch && directPersonIds.size > 0 ? 'spine' : 'full';
-
-  const earlyLossIds = new Set<string>();
-  for (const p of branchPeople) {
-    if (isEarlyChildhoodLoss(p, parentMap, childMap, spouseMap)) {
-      earlyLossIds.add(p.id);
-    }
-  }
+    mode === 'spine' && supportsDirectForBranch && focalSpineIds.size > 0 ? 'spine' : 'full';
 
   const pivotPersonId =
     branchPeople.find((p) => p.lineage_group === 'pivot_ancestor')?.id ??
@@ -110,7 +245,7 @@ export function buildArchivalTreeModel({
     genByPersonId,
     parentMap,
     spouseMap,
-    directPersonIds,
+    directPersonIds: effectiveMode === 'spine' ? focalSpineIds : directPersonIds,
   });
   const marriageOrderByUnionId = computeMarriageOrderByUnionId(unionDrafts, peopleById);
 
@@ -118,11 +253,15 @@ export function buildArchivalTreeModel({
     if (effectiveMode === 'full') {
       return true;
     }
-    return (
-      spinePartnerIds.has(draft.aId) ||
-      (draft.bId !== null && spinePartnerIds.has(draft.bId)) ||
-      draft.childIds.some((cid) => spinePartnerIds.has(cid))
-    );
+    const aFocal = focalSpineIds.has(draft.aId);
+    const bFocal = draft.bId !== null && focalSpineIds.has(draft.bId);
+    if (!aFocal && !bFocal) {
+      return false;
+    }
+    if (draft.bId !== null) {
+      return spinePartnerIds.has(draft.aId) && spinePartnerIds.has(draft.bId);
+    }
+    return spinePartnerIds.has(draft.aId);
   };
 
   const unions: TreeUnion[] = [];
@@ -221,9 +360,9 @@ export function buildArchivalTreeModel({
     const orderMeta = marriageOrderByUnionId.get(draft.id) ?? { order: 1, total: 1 };
     const partnerIds = draft.bId ? [draft.aId, draft.bId] : [draft.aId];
     const isDirectUnion =
-      directPersonIds.has(draft.aId) ||
-      (draft.bId !== null && directPersonIds.has(draft.bId)) ||
-      visibleChildIds.some((cid) => directPersonIds.has(cid));
+      focalSpineIds.has(draft.aId) ||
+      (draft.bId !== null && focalSpineIds.has(draft.bId)) ||
+      visibleChildIds.some((cid) => focalSpineIds.has(cid));
 
     const union: TreeUnion = {
       id: draft.id,
@@ -259,12 +398,16 @@ export function buildArchivalTreeModel({
     return true;
   });
 
+  const rankPersonIdSet = new Set(rankPeople.map((p) => p.id));
+  const activeUnions = unions.filter((u) => u.partnerIds.every((pid) => rankPersonIdSet.has(pid)));
+  const activeUnionsById = new Map(activeUnions.map((u) => [u.id, u]));
+
   const { generations, unitsById } = buildGenerationGroups({
     rankPeople,
-    unions,
+    unions: activeUnions,
     genByPersonId,
     spouseMap,
-    directPersonIds,
+    directPersonIds: effectiveMode === 'spine' ? focalSpineIds : directPersonIds,
   });
 
   return {
@@ -275,15 +418,15 @@ export function buildArchivalTreeModel({
     totalVisibleCount: branchPeople.length,
     directSpineCount: spinePartnerIds.size,
     generations,
-    unions,
-    unionsById,
+    unions: activeUnions,
+    unionsById: activeUnionsById,
     unitsById,
     genByPersonId,
     parentMap,
     childMap,
     spouseMap,
     earlyLossIds,
-    directPersonIds,
+    directPersonIds: effectiveMode === 'spine' ? focalSpineIds : directPersonIds,
     pivotPersonId,
   };
 }

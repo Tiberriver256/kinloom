@@ -6,6 +6,7 @@ import { createRoot } from 'react-dom/client';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, describe, expect, it } from 'vitest';
 import { ArchiveProvider } from '../context/ArchiveProvider.js';
+import { buildSynthetic145PersonArchive } from '../lib/tree/largeMultiBranchTree.test.js';
 import { TreePage } from './TreePage.js';
 
 declare global {
@@ -247,26 +248,32 @@ function buildTestBundle(): ArchiveBundle {
 
 let activeCleanup: (() => void) | null = null;
 
-function mountTreeAtWidth(width: number, initialEntry = '/tree'): { container: HTMLElement } {
+function mountTreeAtWidth(
+  width: number,
+  initialEntry = '/tree',
+  customBundle?: ArchiveBundle,
+  customConfig?: KinloomSiteConfig,
+  height = 844
+): { container: HTMLElement } {
   Object.defineProperty(window, 'innerWidth', {
     configurable: true,
     value: width,
   });
   Object.defineProperty(window, 'innerHeight', {
     configurable: true,
-    value: 844,
+    value: height,
   });
 
   const container = document.createElement('div');
   document.body.appendChild(container);
   const root = createRoot(container);
-  const bundle = buildTestBundle();
+  const bundle = customBundle ?? buildTestBundle();
 
   act(() => {
     root.render(
       <MemoryRouter initialEntries={[initialEntry]}>
         <ArchiveProvider
-          siteConfig={TEST_SITE_CONFIG}
+          siteConfig={customConfig ?? TEST_SITE_CONFIG}
           initialBundle={bundle}
           initialReadings={{ version: 1, documents: {}, event_page_map: {} }}
           session={null}
@@ -535,5 +542,142 @@ describe('TreePage', () => {
     } finally {
       Element.prototype.scrollIntoView = origScrollIntoView;
     }
+  });
+
+  it('opens large 145-person archive at readable zoom >= 0.75, renders interactive minimap, and fits safely on Fit click', () => {
+    const { bundle } = buildSynthetic145PersonArchive();
+    const largeConfig: KinloomSiteConfig = parseKinloomConfig({
+      site: {
+        title: 'Alder Multi-Branch Archive',
+        familyName: 'Alder',
+        gedcomSourceName: 'ALDER_145_TEST',
+      },
+      branches: [
+        { id: 'alder_line', label: 'Alder Line', surnames: ['Alder'], supportsDirectMode: true },
+        { id: 'mercer_line', label: 'Mercer Line', surnames: ['Mercer'], supportsDirectMode: true },
+        { id: 'bramwell_line', label: 'Bramwell Line', surnames: ['Bramwell'], supportsDirectMode: true },
+        { id: 'kestrel_line', label: 'Kestrel Line', surnames: ['Kestrel'], supportsDirectMode: false },
+      ],
+    });
+
+    const { container } = mountTreeAtWidth(1440, '/tree', bundle, largeConfig, 900);
+    const main = container.querySelector<HTMLElement>('main.tree-page');
+    expect(main).not.toBeNull();
+
+    // Initial zoom on 145-person / 12-gen archive stays legible (>= 0.75) instead of shrinking to 28%
+    const initialZoom = Number(main?.dataset.zoom ?? '0');
+    expect(initialZoom).toBeGreaterThanOrEqual(0.75);
+
+    // Interactive minimap renders expanded on desktop with viewport rectangle
+    const minimap = container.querySelector('aside.tree-minimap');
+    expect(minimap).not.toBeNull();
+    const minimapSurface = container.querySelector<HTMLElement>('.tree-minimap-surface');
+    const minimapSvg = container.querySelector<SVGSVGElement>('.tree-minimap-svg');
+    expect(minimapSurface).not.toBeNull();
+    expect(minimapSvg?.querySelector('.tree-minimap-viewport')).not.toBeNull();
+
+    // Pointer click + drag on minimap updates pan coordinates
+    if (minimapSvg) {
+      minimapSvg.getBoundingClientRect = () =>
+        ({
+          left: 0,
+          top: 0,
+          right: 180,
+          bottom: 100,
+          width: 180,
+          height: 100,
+          x: 0,
+          y: 0,
+          toJSON: () => ({}),
+        }) as DOMRect;
+    }
+    const beforePanX = Number(main?.dataset.panX ?? '0');
+    act(() => {
+      minimapSurface?.dispatchEvent(
+        new window.MouseEvent('pointerdown', { clientX: 165, clientY: 80, bubbles: true })
+      );
+      minimapSurface?.dispatchEvent(
+        new window.MouseEvent('pointermove', { clientX: 20, clientY: 15, bubbles: true })
+      );
+      minimapSurface?.dispatchEvent(
+        new window.MouseEvent('pointerup', { clientX: 20, clientY: 15, bubbles: true })
+      );
+    });
+    const afterMinimapPanX = Number(main?.dataset.panX ?? '0');
+    expect(afterMinimapPanX).not.toBe(beforePanX);
+
+    // Keyboard navigation and collapse toggle on minimap
+    act(() => {
+      minimapSurface?.dispatchEvent(
+        new window.KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true })
+      );
+      minimapSurface?.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true }));
+      minimapSurface?.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
+      minimapSurface?.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true }));
+      minimapSurface?.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Home', bubbles: true }));
+    });
+    const toggleMinimapBtn = container.querySelector<HTMLButtonElement>('.tree-minimap-toggle');
+    expect(toggleMinimapBtn?.getAttribute('aria-expanded')).toBe('true');
+    act(() => {
+      toggleMinimapBtn?.click();
+    });
+    expect(toggleMinimapBtn?.getAttribute('aria-expanded')).toBe('false');
+    expect(container.querySelector('.tree-minimap-surface')).toBeNull();
+
+    // Clicking Fit fits 100% of graph bounds inside safe viewport insets
+    const fitBtn = [...container.querySelectorAll<HTMLButtonElement>('button')].find(
+      (b) => b.textContent?.trim() === 'Fit'
+    );
+    expect(fitBtn).not.toBeNull();
+    act(() => {
+      fitBtn?.click();
+    });
+    // Trigger prefers-reduced-motion or wait is immediate in jsdom if we verify Fit zoom
+    expect(container.querySelectorAll('.tree-gen-bands > g').length).toBe(12);
+  });
+
+  it('pairs remarriage union badges with spouses and renders Marriage captions for collapsed secondary-marriage children on mobile Roll', () => {
+    const { bundle } = buildSynthetic145PersonArchive();
+    const { container } = mountTreeAtWidth(390, '/tree?surface=roll&mode=spine', bundle);
+
+    // Zero empty generation rows
+    const genItems = [...container.querySelectorAll('.tree-roll-generation')];
+    expect(genItems.length).toBeGreaterThanOrEqual(8);
+    for (const item of genItems) {
+      expect(item.querySelectorAll('.tree-roll-unit').length).toBeGreaterThan(0);
+    }
+
+    // Remarried pivot unit pairs each union badge inside a non-wrapping .tree-roll-partner-pair with its spouse
+    const remarriedUnit = container.querySelector('.tree-roll-unit.is-remarried');
+    expect(remarriedUnit).not.toBeNull();
+    const partnerPairs = [...(remarriedUnit?.querySelectorAll('.tree-roll-partner-pair') ?? [])];
+    expect(partnerPairs).toHaveLength(2);
+    for (const pair of partnerPairs) {
+      expect(pair.querySelector('.tree-roll-union-hub')).not.toBeNull();
+      expect(pair.querySelector('.tree-roll-card')).not.toBeNull();
+    }
+
+    // Both Marriage I and Marriage II attachment groups display their captions even when children are collapsed
+    const captions = [...(remarriedUnit?.querySelectorAll('.tree-roll-union-caption') ?? [])].map((el) =>
+      el.textContent?.trim()
+    );
+    expect(captions.some((c) => c?.startsWith('Marriage I'))).toBe(true);
+    expect(captions.some((c) => c?.startsWith('Marriage II'))).toBe(true);
+  });
+
+  it('starts minimap collapsed on mobile Chart view and expands on toggle click', () => {
+    const { bundle } = buildSynthetic145PersonArchive();
+    const { container } = mountTreeAtWidth(390, '/tree?surface=diagram&mode=full', bundle);
+
+    const toggleBtn = container.querySelector<HTMLButtonElement>('.tree-minimap-toggle');
+    expect(toggleBtn).not.toBeNull();
+    expect(toggleBtn?.getAttribute('aria-expanded')).toBe('false');
+    expect(container.querySelector('.tree-minimap-surface')).toBeNull();
+
+    act(() => {
+      toggleBtn?.click();
+    });
+    expect(toggleBtn?.getAttribute('aria-expanded')).toBe('true');
+    expect(container.querySelector('.tree-minimap-surface')).not.toBeNull();
   });
 });

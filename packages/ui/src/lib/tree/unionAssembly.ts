@@ -131,16 +131,31 @@ export function computeMarriageOrderByUnionId(
   unionDrafts: ReadonlyMap<string, UnionDraft>,
   peopleById: ReadonlyMap<string, Person>
 ): Map<string, { order: number; total: number }> {
-  const coupleDraftsByPrimary = new Map<string, UnionDraft[]>();
+  const coupleCountByPerson = new Map<string, number>();
   for (const draft of unionDrafts.values()) {
-    if (draft.kind === 'couple') {
-      const list = coupleDraftsByPrimary.get(draft.aId) ?? [];
-      list.push(draft);
-      coupleDraftsByPrimary.set(draft.aId, list);
+    if (draft.kind !== 'couple') {
+      continue;
+    }
+    coupleCountByPerson.set(draft.aId, (coupleCountByPerson.get(draft.aId) ?? 0) + 1);
+    if (draft.bId) {
+      coupleCountByPerson.set(draft.bId, (coupleCountByPerson.get(draft.bId) ?? 0) + 1);
     }
   }
+
+  const coupleDraftsByAnchor = new Map<string, UnionDraft[]>();
+  for (const draft of unionDrafts.values()) {
+    if (draft.kind !== 'couple') {
+      continue;
+    }
+    const countA = coupleCountByPerson.get(draft.aId) ?? 0;
+    const countB = draft.bId ? (coupleCountByPerson.get(draft.bId) ?? 0) : 0;
+    const anchorId = draft.bId && countB > countA ? draft.bId : draft.aId;
+    const list = coupleDraftsByAnchor.get(anchorId) ?? [];
+    list.push(draft);
+    coupleDraftsByAnchor.set(anchorId, list);
+  }
   const marriageOrderByUnionId = new Map<string, { order: number; total: number }>();
-  for (const list of coupleDraftsByPrimary.values()) {
+  for (const [anchorId, list] of coupleDraftsByAnchor.entries()) {
     list.sort((u1, u2) => {
       const minChildYear = (cids: readonly string[]): number => {
         const yrs = cids
@@ -153,8 +168,10 @@ export function computeMarriageOrderByUnionId(
       if (y1 !== y2) {
         return y1 - y2;
       }
-      const sp1 = u1.bId ? (peopleById.get(u1.bId)?.birth_year ?? 9999) : 9999;
-      const sp2 = u2.bId ? (peopleById.get(u2.bId)?.birth_year ?? 9999) : 9999;
+      const other1 = u1.aId === anchorId ? u1.bId : u1.aId;
+      const other2 = u2.aId === anchorId ? u2.bId : u2.aId;
+      const sp1 = other1 ? (peopleById.get(other1)?.birth_year ?? 9999) : 9999;
+      const sp2 = other2 ? (peopleById.get(other2)?.birth_year ?? 9999) : 9999;
       return sp1 - sp2;
     });
     for (const [idx, draft] of list.entries()) {
@@ -183,9 +200,8 @@ export function buildGenerationGroups(params: {
     rankByGen.set(g, list);
   }
 
-  const allGenNums = [...new Set([...rankByGen.keys(), ...unions.map((u) => u.gen)])].toSorted(
-    (a, b) => a - b
-  );
+  // Only emit generation bands that contain at least one visible rank person.
+  const allGenNums = [...rankByGen.keys()].toSorted((a, b) => a - b);
 
   const unitsById = new Map<string, TreeFamilyUnit>();
   const generations: TreeGenerationGroup[] = [];
@@ -203,6 +219,9 @@ export function buildGenerationGroups(params: {
       }
       return sortPeopleChronologically(a, b);
     });
+    if (genMembers.length === 0) {
+      continue;
+    }
 
     const placedInUnit = new Set<string>();
     const genUnits: TreeFamilyUnit[] = [];
@@ -258,7 +277,12 @@ export function buildGenerationGroups(params: {
       unitsById.set(unit.id, unit);
     }
 
-    const genUnions = unions.filter((u) => u.gen === g);
+    if (genUnits.length === 0) {
+      continue;
+    }
+
+    const genMemberIds = new Set(genMembers.map((m) => m.id));
+    const genUnions = unions.filter((u) => u.gen === g && u.partnerIds.every((pid) => genMemberIds.has(pid)));
     const yearPool: number[] = [];
     for (const m of genMembers) {
       if (m.birth_year !== null) {

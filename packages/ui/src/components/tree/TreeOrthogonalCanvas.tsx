@@ -8,7 +8,7 @@ import type {
 } from '../../lib/archivalTreeModel.js';
 import { formatCardLifespan } from '../../lib/archivalTreeModel.js';
 import { cx } from '../../lib/cx.js';
-import { formatTreeCardName } from '../../lib/treeNodeDisplay.js';
+import { fitTreeCardNameToWidth } from '../../lib/treeNodeDisplay.js';
 import { KINLOOM_VOCABULARY } from '../../lib/vocabulary.js';
 import { initialsOf, resolveAssetUrl } from '../Atoms.js';
 import treeCanvasStyles from './TreeCanvas.module.css';
@@ -47,11 +47,14 @@ export const TreeOrthogonalCanvas: React.FC<TreeOrthogonalCanvasProps> = ({
       layout.nodes.map((node) => {
         const p = node.person;
         const rawThumb = personThumbMap.get(p.id) || p.portrait_url;
-        const fullLabel = formatTreeCardName(p.full_name, 20);
+        const detailMaxWidthPx = Math.max(80, node.width - 44 - 10);
+        const compactMaxWidthPx = Math.max(96, node.width - 24);
+        const overviewMaxWidthPx = Math.max(96, node.width - 20);
         return {
           node,
-          displayName: formatTreeCardName(p.full_name, 19),
-          surnameOrGiven: fullLabel,
+          displayName: fitTreeCardNameToWidth(p.full_name, detailMaxWidthPx, 11.5),
+          compactName: fitTreeCardNameToWidth(p.full_name, compactMaxWidthPx, 11.5),
+          surnameOrGiven: fitTreeCardNameToWidth(p.full_name, overviewMaxWidthPx, 12),
           lifespan: formatCardLifespan(p),
           thumbUrl: rawThumb ? resolveAssetUrl(rawThumb, baseUrl) : null,
           initials: initialsOf(p.full_name),
@@ -135,6 +138,7 @@ export const TreeOrthogonalCanvas: React.FC<TreeOrthogonalCanvasProps> = ({
               key={pid}
               node={prepared.node}
               displayName={prepared.displayName}
+              compactName={prepared.compactName}
               surnameOrGiven={prepared.surnameOrGiven}
               lifespan={prepared.lifespan}
               thumbUrl={prepared.thumbUrl}

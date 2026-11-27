@@ -92,13 +92,79 @@ html.tree-viewport-lock body {
   left: 18px;
   bottom: 18px;
   z-index: 20;
-  width: 196px;
-  background: rgba(252, 249, 242, 0.95);
+  width: 204px;
+  background: rgba(252, 249, 242, 0.96);
   border: 1px solid var(--border-control);
   border-radius: var(--radius-sm);
   padding: 7px;
-  cursor: pointer;
   box-shadow: var(--shadow-print);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.tree-minimap:global(.is-collapsed) {
+  width: auto;
+  padding: 4px 6px;
+}
+
+.tree-minimap-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.tree-minimap-title {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  letter-spacing: 0.02em;
+}
+
+.tree-minimap:global(.is-collapsed) .tree-minimap-title {
+  display: none;
+}
+
+.tree-minimap :global(.tree-minimap-toggle) {
+  min-width: 44px;
+  min-height: 24px;
+  padding: 2px 8px;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  font-weight: 600;
+  border: 1px solid var(--border-control);
+  border-radius: var(--radius-sm);
+  background: var(--surface-card);
+  color: var(--surface-header);
+  cursor: pointer;
+}
+
+.tree-minimap-surface {
+  display: block;
+  width: 100%;
+  padding: 0;
+  position: relative;
+  border-radius: 3px;
+  border: 1px solid var(--border-decorative);
+  background: var(--surface-canvas);
+  cursor: crosshair;
+  touch-action: none;
+  overflow: hidden;
+}
+
+.tree-minimap-surface:focus-visible {
+  outline: 2px solid var(--action-focus);
+  outline-offset: 2px;
+}
+
+.tree-minimap-svg {
+  display: block;
+}
+
+.tree-minimap-viewport {
+  vector-effect: non-scaling-stroke;
 }
 
 .tree-page-roll :global(.tree-focus-drawer) {
@@ -130,6 +196,15 @@ html.tree-viewport-lock body {
   }
 
   .tree-minimap {
-    display: none;
+    left: 10px;
+    bottom: 14px;
+    width: 164px;
+    padding: 6px;
+  }
+
+  .tree-minimap :global(.tree-minimap-toggle) {
+    min-height: 36px;
+    min-width: 44px;
+    padding: 4px 10px;
   }
 }

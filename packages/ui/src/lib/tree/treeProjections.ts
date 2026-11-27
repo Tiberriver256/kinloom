@@ -213,7 +213,7 @@ export function resolveTreeFocusPlan(params: {
     };
   }
 
-  const needsFullMode = currentMode === 'spine' && !isDirectSpinePerson(person);
+  const needsFullMode = currentMode === 'spine' && (!isDirectSpinePerson(person) || !alreadyVisible);
   return {
     nextBranchFilter,
     nextMode: needsFullMode ? 'full' : currentMode,

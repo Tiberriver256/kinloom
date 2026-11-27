@@ -124,7 +124,7 @@ export function useTreeCanvasInteractions({
       if (
         e.target instanceof Element &&
         e.target.closest(
-          'button, a, select, input, .tree-toolbar, .tree-toolbar-shell, .tree-search-popover, .tree-popover, .tree-controls, .tree-diagram-sibling-btn'
+          'button, a, select, input, .tree-toolbar, .tree-toolbar-shell, .tree-search-popover, .tree-popover, .tree-controls, .tree-minimap, .tree-diagram-sibling-btn'
         )
       ) {
         return;

@@ -6,6 +6,7 @@ import controlStyles from '../../styles/Controls.module.css';
 import treePageStyles from '../TreePage.module.css';
 
 export interface TreeZoomControlsProps {
+  readonly controlsRef?: React.RefObject<HTMLDivElement | null>;
   readonly zoomPercent: number;
   readonly onZoomIn: () => void;
   readonly onZoomOut: () => void;
@@ -14,6 +15,7 @@ export interface TreeZoomControlsProps {
 }
 
 export const TreeZoomControls: React.FC<TreeZoomControlsProps> = ({
+  controlsRef,
   zoomPercent,
   onZoomIn,
   onZoomOut,
@@ -21,6 +23,7 @@ export const TreeZoomControls: React.FC<TreeZoomControlsProps> = ({
   onResetZoom,
 }) => (
   <div
+    ref={controlsRef}
     className={cx(canvasSurfaceStyles, 'tree-controls')}
     role="group"
     aria-label={KINLOOM_VOCABULARY.tree.zoomControlsAria}

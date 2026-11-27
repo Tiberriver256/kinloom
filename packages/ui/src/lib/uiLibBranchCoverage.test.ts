@@ -354,9 +354,9 @@ describe('unionAssembly branch coverage', () => {
       directPersonIds: new Set(['per_anchor']),
     });
 
-    expect(generations).toHaveLength(2);
+    expect(generations).toHaveLength(1);
     expect(generations[0].yearRange).toBe('Gen 1');
-    expect(generations[1].units).toHaveLength(0);
+    expect(generations.every((g) => g.units.length > 0 && g.personIds.length > 0)).toBe(true);
     const anchorUnit = unitsById.get('per_sp1+per_anchor+per_sp2');
     expect(anchorUnit?.orderedMemberIds).toEqual(['per_sp1', 'per_anchor', 'per_sp2']);
   });

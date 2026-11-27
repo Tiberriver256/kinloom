@@ -8,6 +8,7 @@ import { TreePersonSearch } from './TreePersonSearch.js';
 import treeToolbarStyles from './TreeToolbar.module.css';
 
 export interface TreeToolbarProps {
+  readonly shellRef?: React.RefObject<HTMLDivElement | null>;
   readonly populatedBranches: readonly BranchConfig[];
   readonly branchCounts: Readonly<Record<string, number>>;
   readonly branchFilter: string;
@@ -29,6 +30,7 @@ export interface TreeToolbarProps {
 }
 
 export const TreeToolbar: React.FC<TreeToolbarProps> = ({
+  shellRef,
   populatedBranches,
   branchCounts,
   branchFilter,
@@ -48,7 +50,7 @@ export const TreeToolbar: React.FC<TreeToolbarProps> = ({
   canEdit,
   onAddPerson,
 }) => (
-  <div className={cx(treeToolbarStyles, 'tree-toolbar-shell')}>
+  <div ref={shellRef} className={cx(treeToolbarStyles, 'tree-toolbar-shell')}>
     <div
       className={cx(treeToolbarStyles, 'tree-toolbar')}
       role="toolbar"

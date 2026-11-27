@@ -1,10 +1,20 @@
 import type React from 'react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ArchivalDiagramLayout, SemanticZoomLevel } from '../../lib/archivalTreeModel.js';
-import { ARCHIVAL_NODE_H, ARCHIVAL_NODE_W, resolveSemanticZoomLevel } from '../../lib/archivalTreeModel.js';
+import {
+  ARCHIVAL_NODE_H,
+  ARCHIVAL_NODE_W,
+  MOBILE_TREE_BREAKPOINT_PX,
+  resolveSemanticZoomLevel,
+} from '../../lib/archivalTreeModel.js';
 import type { CanvasTransform } from '../../lib/treeGestures.js';
 import { clampPan, computeZoomAroundPoint, stepInertia } from '../../lib/treeGestures.js';
 import { INITIAL_TREE_TRANSFORM } from './treePageHelpers.js';
+
+export const LARGE_TREE_PEOPLE_THRESHOLD = 40;
+export const LARGE_TREE_GENERATION_THRESHOLD = 8;
+export const MIN_READABLE_INITIAL_ZOOM = 0.75;
+const MIN_FIT_ZOOM = 0.05;
 
 export interface ContainerOffsetRect {
   readonly left: number;
@@ -12,6 +22,28 @@ export interface ContainerOffsetRect {
   readonly width: number;
   readonly height: number;
   readonly ts: number;
+}
+
+export interface SafeViewportInsets {
+  readonly top: number;
+  readonly right: number;
+  readonly bottom: number;
+  readonly left: number;
+  readonly viewportWidth: number;
+  readonly viewportHeight: number;
+}
+
+export interface ViewportSnapshot {
+  readonly pan: { readonly x: number; readonly y: number };
+  readonly zoom: number;
+  readonly viewportWidth: number;
+  readonly viewportHeight: number;
+}
+
+export interface InitialViewportRequest {
+  readonly pivotPersonId: string | null;
+  readonly totalVisibleCount: number;
+  readonly generationCount: number;
 }
 
 export interface TreeViewportTransformEngine {
@@ -25,24 +57,32 @@ export interface TreeViewportTransformEngine {
   readonly cancelMotion: () => void;
   readonly scheduleTransform: (next: CanvasTransform) => void;
   readonly readContainerOffset: (forceRefresh: boolean) => ContainerOffsetRect;
+  readonly measureSafeInsets: () => SafeViewportInsets;
   readonly clampTransform: (next: CanvasTransform) => CanvasTransform;
   readonly animateToTransform: (target: CanvasTransform, durationMs?: number) => void;
   readonly startInertia: (initialVx: number, initialVy: number) => void;
   readonly computeFitTransform: () => CanvasTransform;
+  readonly computeInitialTransform: (req: InitialViewportRequest) => CanvasTransform;
+  readonly applyInitialViewport: (req: InitialViewportRequest) => void;
   readonly fitToViewport: () => void;
   readonly animateFitToViewport: () => void;
+  readonly centerDiagramOnPoint: (graphX: number, graphY: number, animate?: boolean) => void;
   readonly centerDiagramOnPerson: (personId: string, animate: boolean) => boolean;
   readonly scrollRollToPerson: (personId: string) => boolean;
   readonly handleDiagramZoomBy: (factor: number) => void;
   readonly handleDiagramResetZoom: () => void;
+  readonly getViewportSnapshot: () => ViewportSnapshot;
+  readonly subscribeTransform: (listener: (snapshot: ViewportSnapshot) => void) => () => void;
 }
 
 export function useTreeViewportTransform(params: {
   readonly diagramLayout: ArchivalDiagramLayout;
   readonly containerRef: React.RefObject<HTMLElement | null>;
   readonly stageRef: React.RefObject<HTMLDivElement | null>;
+  readonly toolbarRef?: React.RefObject<HTMLDivElement | null>;
+  readonly controlsRef?: React.RefObject<HTMLDivElement | null>;
 }): TreeViewportTransformEngine {
-  const { diagramLayout, containerRef, stageRef } = params;
+  const { diagramLayout, containerRef, stageRef, toolbarRef, controlsRef } = params;
   const [semanticZoom, setSemanticZoom] = useState<SemanticZoomLevel>(
     resolveSemanticZoomLevel(INITIAL_TREE_TRANSFORM.zoom)
   );
@@ -57,6 +97,7 @@ export function useTreeViewportTransform(params: {
   const motionRafRef = useRef<number | null>(null);
   const inertiaSpeedRef = useRef(0);
   const zoomSettleTimerRef = useRef<number | null>(null);
+  const listenersRef = useRef<Set<(snapshot: ViewportSnapshot) => void>>(new Set());
   const containerRectRef = useRef<ContainerOffsetRect>({
     left: 0,
     top: 0,
@@ -64,6 +105,60 @@ export function useTreeViewportTransform(params: {
     height: 760,
     ts: 0,
   });
+
+  const getViewportSize = useCallback((): { width: number; height: number } => {
+    const el = containerRef.current;
+    const width =
+      el && el.clientWidth > 0
+        ? el.clientWidth
+        : typeof window !== 'undefined' && window.innerWidth > 0
+          ? window.innerWidth
+          : 1200;
+    const height =
+      el && el.clientHeight > 0
+        ? el.clientHeight
+        : typeof window !== 'undefined' && window.innerHeight > 0
+          ? window.innerHeight
+          : 760;
+    return { width, height };
+  }, [containerRef]);
+
+  const getViewportSnapshot = useCallback((): ViewportSnapshot => {
+    const { width, height } = getViewportSize();
+    const { current } = transformRef;
+    return {
+      pan: { x: current.pan.x, y: current.pan.y },
+      zoom: current.zoom,
+      viewportWidth: width,
+      viewportHeight: height,
+    };
+  }, [getViewportSize]);
+
+  const notifySubscribers = useCallback(
+    (next: CanvasTransform): void => {
+      if (listenersRef.current.size === 0) {
+        return;
+      }
+      const { width, height } = getViewportSize();
+      const snapshot: ViewportSnapshot = {
+        pan: { x: next.pan.x, y: next.pan.y },
+        zoom: next.zoom,
+        viewportWidth: width,
+        viewportHeight: height,
+      };
+      for (const listener of listenersRef.current) {
+        listener(snapshot);
+      }
+    },
+    [getViewportSize]
+  );
+
+  const subscribeTransform = useCallback((listener: (snapshot: ViewportSnapshot) => void): (() => void) => {
+    listenersRef.current.add(listener);
+    return (): void => {
+      listenersRef.current.delete(listener);
+    };
+  }, []);
 
   const syncSemanticZoom = useCallback((zoom: number): void => {
     const nextLevel = resolveSemanticZoomLevel(zoom);
@@ -111,8 +206,9 @@ export function useTreeViewportTransform(params: {
         zoomPercentRef.current = nextPercent;
         setZoomPercent(nextPercent);
       }
+      notifySubscribers(next);
     },
-    [containerRef, stageRef, syncSemanticZoom]
+    [containerRef, notifySubscribers, stageRef, syncSemanticZoom]
   );
 
   const applyTransformNow = useCallback(
@@ -186,19 +282,94 @@ export function useTreeViewportTransform(params: {
     [containerRef]
   );
 
+  const measureSafeInsets = useCallback((): SafeViewportInsets => {
+    const container = containerRef.current;
+    const { width: vw, height: vh } = getViewportSize();
+    const isNarrow = vw < MOBILE_TREE_BREAKPOINT_PX;
+
+    let top = isNarrow ? 116 : 68;
+    const toolbarEl =
+      toolbarRef?.current ?? container?.querySelector<HTMLElement>('.tree-toolbar-shell') ?? null;
+    if (toolbarEl && container) {
+      const tbRect = toolbarEl.getBoundingClientRect();
+      const cRect = container.getBoundingClientRect();
+      const bottomInContainer =
+        tbRect.height > 0 ? tbRect.bottom - cRect.top : toolbarEl.offsetTop + toolbarEl.offsetHeight;
+      if (bottomInContainer > 0) {
+        top = Math.ceil(bottomInContainer + 12);
+      }
+    }
+
+    let right = isNarrow ? 64 : 84;
+    const ctrlEl = controlsRef?.current ?? container?.querySelector<HTMLElement>('.tree-controls') ?? null;
+    if (ctrlEl) {
+      const ctrlRect = ctrlEl.getBoundingClientRect();
+      const measuredCtrlW = ctrlRect.width > 0 ? ctrlRect.width : ctrlEl.offsetWidth;
+      if (measuredCtrlW > 0) {
+        right = Math.ceil(measuredCtrlW + (isNarrow ? 20 : 28));
+      }
+    }
+
+    const left = isNarrow ? 12 : 20;
+    const bottom = isNarrow ? 18 : 24;
+    return { top, right, bottom, left, viewportWidth: vw, viewportHeight: vh };
+  }, [containerRef, controlsRef, getViewportSize, toolbarRef]);
+
+  // Keep G1 clear of the toolbar when responsive toolbar wrapping changes its measured height.
+  useEffect(() => {
+    if (typeof ResizeObserver === 'undefined') {
+      return undefined;
+    }
+    const container = containerRef.current;
+    const toolbarEl =
+      toolbarRef?.current ?? container?.querySelector<HTMLElement>('.tree-toolbar-shell') ?? null;
+    if (!toolbarEl) {
+      return undefined;
+    }
+    const observer = new ResizeObserver(() => {
+      const insets = measureSafeInsets();
+      const current = transformRef.current;
+      const firstBandY = diagramLayout.genBands[0]?.y;
+      if (firstBandY !== undefined) {
+        const renderedFirstBandTop = firstBandY * current.zoom + current.pan.y;
+        if (renderedFirstBandTop < insets.top && current.pan.y >= 0 && current.pan.y < insets.top) {
+          const shiftedY = Math.ceil(insets.top - firstBandY * current.zoom);
+          if (shiftedY > current.pan.y) {
+            applyTransformNow({
+              zoom: current.zoom,
+              pan: { x: current.pan.x, y: shiftedY },
+            });
+            return;
+          }
+        }
+      }
+      notifySubscribers(current);
+    });
+    observer.observe(toolbarEl);
+    if (container) {
+      observer.observe(container);
+    }
+    return (): void => {
+      observer.disconnect();
+    };
+  }, [
+    applyTransformNow,
+    containerRef,
+    diagramLayout.genBands,
+    measureSafeInsets,
+    notifySubscribers,
+    toolbarRef,
+  ]);
+
   const clampTransform = useCallback(
     (next: CanvasTransform): CanvasTransform => {
-      const el = containerRef.current;
-      const viewport = {
-        width: el ? el.clientWidth : containerRectRef.current.width,
-        height: el ? el.clientHeight : containerRectRef.current.height,
-      };
+      const viewport = getViewportSize();
       return {
         zoom: next.zoom,
         pan: clampPan(next.pan, next.zoom, diagramLayout.bounds, viewport),
       };
     },
-    [containerRef, diagramLayout.bounds]
+    [diagramLayout.bounds, getViewportSize]
   );
 
   const animateToTransform = useCallback(
@@ -293,27 +464,90 @@ export function useTreeViewportTransform(params: {
   );
 
   const computeFitTransform = useCallback((): CanvasTransform => {
-    const el = containerRef.current;
-    const vw = el ? el.clientWidth : 1200;
-    const vh = el ? el.clientHeight : 760;
-    const gw = Math.max(400, diagramLayout.bounds.maxX - diagramLayout.bounds.minX);
-    const gh = Math.max(400, diagramLayout.bounds.maxY - diagramLayout.bounds.minY);
-    const padX = vw < 640 ? 24 : 56;
-    const padY = vw < 640 ? 92 : 108;
-    const nextZoom = Math.max(0.28, Math.min(1, Math.min((vw - padX) / gw, (vh - padY) / gh)));
-    const nextX = (vw - gw * nextZoom) / 2 - diagramLayout.bounds.minX * nextZoom;
-    const nextY = Math.max(vw < 640 ? 60 : 66, (vh - gh * nextZoom) / 2);
+    const insets = measureSafeInsets();
+    const safeW = Math.max(120, insets.viewportWidth - insets.left - insets.right);
+    const safeH = Math.max(120, insets.viewportHeight - insets.top - insets.bottom);
+    const gw = Math.max(1, diagramLayout.bounds.maxX - diagramLayout.bounds.minX);
+    const gh = Math.max(1, diagramLayout.bounds.maxY - diagramLayout.bounds.minY);
+    const rawZoom = Math.min(safeW / gw, safeH / gh);
+    const nextZoom = Math.max(MIN_FIT_ZOOM, Math.min(1, Math.floor(rawZoom * 1000) / 1000));
+    const nextX = insets.left + (safeW - gw * nextZoom) / 2 - diagramLayout.bounds.minX * nextZoom;
+    const nextY = insets.top + (safeH - gh * nextZoom) / 2 - diagramLayout.bounds.minY * nextZoom;
     return {
-      zoom: Number(nextZoom.toFixed(2)),
+      zoom: Number(nextZoom.toFixed(3)),
       pan: { x: Math.round(nextX), y: Math.round(nextY) },
     };
   }, [
-    containerRef,
     diagramLayout.bounds.maxX,
     diagramLayout.bounds.minX,
     diagramLayout.bounds.maxY,
     diagramLayout.bounds.minY,
+    measureSafeInsets,
   ]);
+
+  const computeInitialTransform = useCallback(
+    (req: InitialViewportRequest): CanvasTransform => {
+      const fit = computeFitTransform();
+      const needsReadableFocus =
+        req.totalVisibleCount > LARGE_TREE_PEOPLE_THRESHOLD ||
+        req.generationCount > LARGE_TREE_GENERATION_THRESHOLD ||
+        fit.zoom < MIN_READABLE_INITIAL_ZOOM;
+
+      if (!needsReadableFocus) {
+        return fit;
+      }
+
+      const focalNode =
+        (req.pivotPersonId ? diagramLayout.byId.get(req.pivotPersonId) : undefined) ??
+        diagramLayout.nodes.find((n) => n.isDirect) ??
+        diagramLayout.nodes[0];
+      if (!focalNode) {
+        return fit;
+      }
+
+      const insets = measureSafeInsets();
+      const isNarrow = insets.viewportWidth < MOBILE_TREE_BREAKPOINT_PX;
+      const targetZoom = isNarrow ? 0.82 : 0.88;
+      const safeW = Math.max(120, insets.viewportWidth - insets.left - insets.right);
+      const safeH = Math.max(120, insets.viewportHeight - insets.top - insets.bottom);
+      const focalX = insets.left + safeW / 2;
+      const focalY = insets.top + safeH * 0.42;
+
+      const cx = focalNode.x + focalNode.width / 2;
+      const cy = focalNode.y + focalNode.height / 2;
+      let panY = Math.round(focalY - cy * targetZoom);
+      const firstBandY = diagramLayout.genBands[0]?.y;
+      if (firstBandY !== undefined && focalNode.gen === diagramLayout.genBands[0]?.gen) {
+        const minPanYForG1 = Math.ceil(insets.top - firstBandY * targetZoom);
+        if (panY < minPanYForG1) {
+          panY = minPanYForG1;
+        }
+      }
+
+      return clampTransform({
+        zoom: targetZoom,
+        pan: {
+          x: Math.round(focalX - cx * targetZoom),
+          y: panY,
+        },
+      });
+    },
+    [
+      clampTransform,
+      computeFitTransform,
+      diagramLayout.byId,
+      diagramLayout.genBands,
+      diagramLayout.nodes,
+      measureSafeInsets,
+    ]
+  );
+
+  const applyInitialViewport = useCallback(
+    (req: InitialViewportRequest) => {
+      applyTransformNow(computeInitialTransform(req));
+    },
+    [applyTransformNow, computeInitialTransform]
+  );
 
   const fitToViewport = useCallback(() => {
     applyTransformNow(computeFitTransform());
@@ -322,6 +556,28 @@ export function useTreeViewportTransform(params: {
   const animateFitToViewport = useCallback(() => {
     animateToTransform(computeFitTransform(), 210);
   }, [animateToTransform, computeFitTransform]);
+
+  const centerDiagramOnPoint = useCallback(
+    (graphX: number, graphY: number, animate = false): void => {
+      const insets = measureSafeInsets();
+      const safeW = Math.max(120, insets.viewportWidth - insets.left - insets.right);
+      const safeH = Math.max(120, insets.viewportHeight - insets.top - insets.bottom);
+      const currentZoom = transformRef.current.zoom;
+      const target: CanvasTransform = {
+        zoom: currentZoom,
+        pan: {
+          x: Math.round(insets.left + safeW / 2 - graphX * currentZoom),
+          y: Math.round(insets.top + safeH / 2 - graphY * currentZoom),
+        },
+      };
+      if (animate) {
+        animateToTransform(target, 180);
+      } else {
+        applyTransformNow(clampTransform(target));
+      }
+    },
+    [animateToTransform, applyTransformNow, clampTransform, measureSafeInsets]
+  );
 
   const centerDiagramOnPerson = useCallback(
     (personId: string, animate: boolean): boolean => {
@@ -344,15 +600,16 @@ export function useTreeViewportTransform(params: {
       if (cx === null || cy === null) {
         return false;
       }
-      const el = containerRef.current;
-      const vw = el?.clientWidth || (typeof window !== 'undefined' ? window.innerWidth : 1200);
-      const vh = el?.clientHeight || (typeof window !== 'undefined' ? window.innerHeight : 760);
-      const isCompact = vw < 768;
+      const insets = measureSafeInsets();
+      const vw = insets.viewportWidth;
+      const vh = insets.viewportHeight;
+      const isCompact = vw < MOBILE_TREE_BREAKPOINT_PX;
       const targetZoom = isCompact
         ? 0.88
         : Number(Math.max(0.92, Math.min(1.05, transformRef.current.zoom)).toFixed(2));
       const focalX = isCompact ? vw / 2 : Math.max(vw * 0.36, (vw - 320) / 2);
-      const focalY = isCompact ? vh * 0.36 : vh * 0.46;
+      const safeH = Math.max(120, vh - insets.top - insets.bottom);
+      const focalY = insets.top + safeH * (isCompact ? 0.36 : 0.44);
       const targetTransform: CanvasTransform = {
         zoom: targetZoom,
         pan: {
@@ -371,9 +628,9 @@ export function useTreeViewportTransform(params: {
       animateToTransform,
       applyTransformNow,
       clampTransform,
-      containerRef,
       diagramLayout.byId,
       diagramLayout.earlyLossStrips,
+      measureSafeInsets,
     ]
   );
 
@@ -411,31 +668,27 @@ export function useTreeViewportTransform(params: {
 
   const handleDiagramZoomBy = useCallback(
     (factor: number): void => {
-      const el = containerRef.current;
-      const focal = {
-        x: (el?.clientWidth ?? 800) / 2,
-        y: (el?.clientHeight ?? 600) / 2,
-      };
+      const { width, height } = getViewportSize();
+      const focal = { x: width / 2, y: height / 2 };
       const base = animationTargetRef.current ?? transformRef.current;
+      const minZoom = Math.min(0.22, computeFitTransform().zoom);
       animateToTransform(
         computeZoomAroundPoint({
           currentPan: base.pan,
           currentZoom: base.zoom,
           targetZoom: base.zoom * factor,
           focalPoint: focal,
+          minZoom,
         }),
         180
       );
     },
-    [animateToTransform, containerRef]
+    [animateToTransform, computeFitTransform, getViewportSize]
   );
 
   const handleDiagramResetZoom = useCallback((): void => {
-    const el = containerRef.current;
-    const focal = {
-      x: (el?.clientWidth ?? 800) / 2,
-      y: (el?.clientHeight ?? 600) / 2,
-    };
+    const { width, height } = getViewportSize();
+    const focal = { x: width / 2, y: height / 2 };
     const base = animationTargetRef.current ?? transformRef.current;
     animateToTransform(
       computeZoomAroundPoint({
@@ -446,7 +699,7 @@ export function useTreeViewportTransform(params: {
       }),
       180
     );
-  }, [animateToTransform, containerRef]);
+  }, [animateToTransform, getViewportSize]);
 
   return {
     semanticZoom,
@@ -459,15 +712,21 @@ export function useTreeViewportTransform(params: {
     cancelMotion,
     scheduleTransform,
     readContainerOffset,
+    measureSafeInsets,
     clampTransform,
     animateToTransform,
     startInertia,
     computeFitTransform,
+    computeInitialTransform,
+    applyInitialViewport,
     fitToViewport,
     animateFitToViewport,
+    centerDiagramOnPoint,
     centerDiagramOnPerson,
     scrollRollToPerson,
     handleDiagramZoomBy,
     handleDiagramResetZoom,
+    getViewportSnapshot,
+    subscribeTransform,
   };
 }
