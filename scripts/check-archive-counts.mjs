@@ -1,13 +1,13 @@
 #!/usr/bin/env node
 /**
- * Enforces `kinloom/no-hardcoded-archive-counts` across all TypeScript/TSX test
- * and source files using TypeScript's AST parser and the canonical rule exported
- * by `@kinloom/core/oxlint-plugin`.
+ * Enforces `kinloom/no-hardcoded-archive-counts` across all TypeScript/TSX/JS
+ * files using Rolldown's native ESTree parser (`parseSync`) and the canonical
+ * rule exported by `@kinloom/core/oxlint-plugin`.
  */
 import fs from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
-import ts from 'typescript';
+import { parseSync } from 'rolldown/experimental';
 import { noHardcodedArchiveCountsRule } from '../packages/core/dist/oxlint/plugin.js';
 
 const REPO_ROOT = path.resolve(import.meta.dirname, '..');
@@ -21,143 +21,6 @@ const DEFAULT_TARGETS = [
   'e2e',
 ];
 
-function toEstree(node, sourceFile) {
-  if (!node) return null;
-
-  if (ts.isParenthesizedExpression(node)) {
-    return { type: 'ParenthesizedExpression', expression: toEstree(node.expression, sourceFile) };
-  }
-  if (ts.isAsExpression(node)) {
-    return { type: 'TSAsExpression', expression: toEstree(node.expression, sourceFile) };
-  }
-  if (ts.isTypeAssertionExpression(node)) {
-    return { type: 'TSTypeAssertion', expression: toEstree(node.expression, sourceFile) };
-  }
-  if (ts.isNonNullExpression(node)) {
-    return { type: 'TSNonNullExpression', expression: toEstree(node.expression, sourceFile) };
-  }
-  if (ts.isSatisfiesExpression(node)) {
-    return { type: 'TSSatisfiesExpression', expression: toEstree(node.expression, sourceFile) };
-  }
-  if (ts.isIdentifier(node)) {
-    return { type: 'Identifier', name: node.text, _tsNode: node };
-  }
-  if (ts.isNumericLiteral(node)) {
-    return { type: 'Literal', value: Number(node.text), _tsNode: node };
-  }
-  if (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) {
-    return { type: 'Literal', value: node.text, _tsNode: node };
-  }
-  if (node.kind === ts.SyntaxKind.TrueKeyword) {
-    return { type: 'Literal', value: true, _tsNode: node };
-  }
-  if (node.kind === ts.SyntaxKind.FalseKeyword) {
-    return { type: 'Literal', value: false, _tsNode: node };
-  }
-  if (node.kind === ts.SyntaxKind.NullKeyword) {
-    return { type: 'Literal', value: null, _tsNode: node };
-  }
-  if (ts.isPrefixUnaryExpression(node)) {
-    const opMap = {
-      [ts.SyntaxKind.PlusToken]: '+',
-      [ts.SyntaxKind.MinusToken]: '-',
-      [ts.SyntaxKind.ExclamationToken]: '!',
-      [ts.SyntaxKind.TildeToken]: '~',
-    };
-    return {
-      type: 'UnaryExpression',
-      operator: opMap[node.operator] ?? '',
-      argument: toEstree(node.operand, sourceFile),
-      _tsNode: node,
-    };
-  }
-  if (ts.isBinaryExpression(node)) {
-    const opMap = {
-      [ts.SyntaxKind.QuestionQuestionToken]: '??',
-      [ts.SyntaxKind.BarBarToken]: '||',
-      [ts.SyntaxKind.AmpersandAmpersandToken]: '&&',
-    };
-    const operator = opMap[node.operatorToken.kind];
-    if (operator) {
-      return {
-        type: 'LogicalExpression',
-        operator,
-        left: toEstree(node.left, sourceFile),
-        right: toEstree(node.right, sourceFile),
-        _tsNode: node,
-      };
-    }
-    return { type: 'BinaryExpression', _tsNode: node };
-  }
-  if (ts.isArrayLiteralExpression(node)) {
-    return {
-      type: 'ArrayExpression',
-      elements: node.elements.map((el) => toEstree(el, sourceFile)),
-      _tsNode: node,
-    };
-  }
-  if (ts.isPropertyAccessExpression(node)) {
-    return {
-      type: 'MemberExpression',
-      object: toEstree(node.expression, sourceFile),
-      property: toEstree(node.name, sourceFile),
-      computed: false,
-      optional: Boolean(node.questionDotToken),
-      _tsNode: node,
-    };
-  }
-  if (ts.isElementAccessExpression(node)) {
-    return {
-      type: 'MemberExpression',
-      object: toEstree(node.expression, sourceFile),
-      property: toEstree(node.argumentExpression, sourceFile),
-      computed: true,
-      optional: Boolean(node.questionDotToken),
-      _tsNode: node,
-    };
-  }
-  if (ts.isCallExpression(node)) {
-    return {
-      type: 'CallExpression',
-      callee: toEstree(node.expression, sourceFile),
-      arguments: node.arguments.map((arg) => toEstree(arg, sourceFile)),
-      _tsNode: node,
-    };
-  }
-  if (ts.isObjectLiteralExpression(node)) {
-    return {
-      type: 'ObjectExpression',
-      properties: node.properties.map((prop) => {
-        if (ts.isPropertyAssignment(prop)) {
-          const computed = ts.isComputedPropertyName(prop.name);
-          const key = computed ? toEstree(prop.name.expression, sourceFile) : toEstree(prop.name, sourceFile);
-          return {
-            type: 'Property',
-            key,
-            value: toEstree(prop.initializer, sourceFile),
-            computed,
-            _tsNode: prop,
-          };
-        }
-        if (ts.isShorthandPropertyAssignment(prop)) {
-          const id = toEstree(prop.name, sourceFile);
-          return {
-            type: 'Property',
-            key: id,
-            value: id,
-            computed: false,
-            _tsNode: prop,
-          };
-        }
-        return { type: 'SpreadElement', _tsNode: prop };
-      }),
-      _tsNode: node,
-    };
-  }
-
-  return { type: ts.SyntaxKind[node.kind] ?? 'Unknown', _tsNode: node };
-}
-
 function formatMessage(messageId, data) {
   let template = noHardcodedArchiveCountsRule.meta.messages[messageId] ?? messageId;
   for (const [k, v] of Object.entries(data ?? {})) {
@@ -166,21 +29,44 @@ function formatMessage(messageId, data) {
   return template;
 }
 
+function offsetToLineCol(sourceText, offset) {
+  let line = 1;
+  let lastNewline = -1;
+  for (let i = 0; i < offset && i < sourceText.length; i += 1) {
+    if (sourceText.charCodeAt(i) === 10) {
+      line += 1;
+      lastNewline = i;
+    }
+  }
+  return { line, column: offset - lastNewline };
+}
+
+function walkEstree(node, onCallExpression) {
+  if (!node || typeof node !== 'object') return;
+  if (Array.isArray(node)) {
+    for (const item of node) {
+      walkEstree(item, onCallExpression);
+    }
+    return;
+  }
+  if (node.type === 'CallExpression') {
+    onCallExpression(node);
+  }
+  for (const value of Object.values(node)) {
+    if (value && typeof value === 'object') {
+      walkEstree(value, onCallExpression);
+    }
+  }
+}
+
 export function checkSourceForHardcodedCounts(sourceText, filePath = 'sample.ts') {
-  const scriptKind = filePath.endsWith('.tsx') || filePath.endsWith('.jsx') ? ts.ScriptKind.TSX : ts.ScriptKind.TS;
-  const sourceFile = ts.createSourceFile(filePath, sourceText, ts.ScriptTarget.Latest, true, scriptKind);
+  const parsed = parseSync(filePath, sourceText);
   const diagnostics = [];
 
   const listener = noHardcodedArchiveCountsRule.create({
     report(descriptor) {
-      const tsNode = descriptor.node?._tsNode;
-      let line = 1;
-      let column = 1;
-      if (tsNode) {
-        const pos = sourceFile.getLineAndCharacterOfPosition(tsNode.getStart(sourceFile));
-        line = pos.line + 1;
-        column = pos.character + 1;
-      }
+      const start = typeof descriptor.node?.start === 'number' ? descriptor.node.start : 0;
+      const { line, column } = offsetToLineCol(sourceText, start);
       diagnostics.push({
         file: filePath,
         line,
@@ -192,14 +78,10 @@ export function checkSourceForHardcodedCounts(sourceText, filePath = 'sample.ts'
     },
   });
 
-  function visit(node) {
-    if (ts.isCallExpression(node)) {
-      listener.CallExpression(toEstree(node, sourceFile));
-    }
-    ts.forEachChild(node, visit);
-  }
+  walkEstree(parsed.program, (callNode) => {
+    listener.CallExpression(callNode);
+  });
 
-  visit(sourceFile);
   return diagnostics;
 }
 
@@ -237,10 +119,8 @@ if (isMain) {
   const allDiagnostics = [];
   for (const file of files) {
     const content = fs.readFileSync(file, 'utf8');
-    // Fast pre-filter: rule only inspects expect(...) calls.
     if (!content.includes('expect')) continue;
-    const diags = checkSourceForHardcodedCounts(content, file);
-    allDiagnostics.push(...diags);
+    allDiagnostics.push(...checkSourceForHardcodedCounts(content, file));
   }
 
   if (jsonMode) {
