@@ -1198,6 +1198,7 @@ export async function runCli(argv: readonly string[], options?: RunCliOptions): 
                 personId,
                 packageDir,
                 json: values.json,
+                ...(options.plugins ? { plugins: options.plugins } : {}),
               })
           );
           writeRenderedOutput(io, result.rendered);
@@ -1278,6 +1279,8 @@ export async function runCli(argv: readonly string[], options?: RunCliOptions): 
           options: {
             repo: { type: 'string' },
             'strict-hygiene': { type: 'boolean', default: false },
+            'strict-pronunciation': { type: 'boolean', default: false },
+            strict: { type: 'boolean', default: false },
             json: { type: 'boolean', default: false },
           },
         });
@@ -1296,8 +1299,10 @@ export async function runCli(argv: readonly string[], options?: RunCliOptions): 
           () =>
             runVerifyCommand({
               repoDir: values.repo ?? cwd,
-              strictHygiene: values['strict-hygiene'],
+              strictHygiene: values['strict-hygiene'] || values.strict,
+              strictPronunciation: values['strict-pronunciation'] || values.strict,
               json: values.json,
+              ...(options.plugins ? { plugins: options.plugins } : {}),
             })
         );
         writeRenderedOutput(io, result.rendered);

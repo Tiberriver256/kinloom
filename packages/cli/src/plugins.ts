@@ -174,9 +174,7 @@ function isKinloomCheck(value: unknown): value is { id: string; name: string; ru
   }
   const candidate = value as Record<string, unknown>;
   return (
-    isNonEmptyString(candidate.id) &&
-    isNonEmptyString(candidate.name) &&
-    typeof candidate.run === 'function'
+    isNonEmptyString(candidate.id) && isNonEmptyString(candidate.name) && typeof candidate.run === 'function'
   );
 }
 
@@ -349,11 +347,7 @@ export function resolvePluginCommands(plugins: readonly KinloomCliPlugin[]): Res
       verifyChecks.push({ pluginId, check: normalizedCheck });
     }
 
-    if (
-      acceptedCommands.length > 0 ||
-      acceptedAuditChecks.length > 0 ||
-      acceptedVerifyChecks.length > 0
-    ) {
+    if (acceptedCommands.length > 0 || acceptedAuditChecks.length > 0 || acceptedVerifyChecks.length > 0) {
       acceptedPlugins.push({
         id: pluginId,
         name: plugin.name,
@@ -375,7 +369,11 @@ export function resolvePluginCommands(plugins: readonly KinloomCliPlugin[]): Res
 
 export async function runRegisteredCheck<TContext>(
   pluginId: string,
-  check: { readonly id: string; readonly name: string; run(ctx: TContext): Promise<KinloomCheckResult> | KinloomCheckResult },
+  check: {
+    readonly id: string;
+    readonly name: string;
+    run(ctx: TContext): Promise<KinloomCheckResult> | KinloomCheckResult;
+  },
   ctx: TContext
 ): Promise<ExecutedPluginCheckResult> {
   const t0 = performance.now();

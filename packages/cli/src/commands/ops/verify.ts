@@ -30,6 +30,14 @@ import {
   validateNarrativeCitations,
 } from '@kinloom/core';
 import { CliValidationError } from '../../errors.js';
+import {
+  discoverSiteCliPlugins,
+  type ExecutedPluginCheckResult,
+  type KinloomCliPlugin,
+  type KinloomVerifyCheckContext,
+  resolvePluginCommands,
+  runRegisteredCheck,
+} from '../../plugins.js';
 import { auditBundlePrivacy } from './integrate.js';
 import { normalizeMediaFilePath } from './live-media-collisions.js';
 import {
@@ -41,6 +49,7 @@ import {
   type LivingNameTarget,
   resolveNarrativeMaxYear,
 } from './living-name-matcher.js';
+import { createPronunciationVerifyCheck } from './pronunciation-checks.js';
 import {
   analyzeTreeHygiene,
   diffTreeHygieneWarnings,
@@ -71,6 +80,8 @@ export interface VerifyCommandOptions {
   repoDir?: string;
   json?: boolean;
   strictHygiene?: boolean;
+  strictPronunciation?: boolean;
+  plugins?: readonly KinloomCliPlugin[];
 }
 
 export interface VerifyCitationsResult {
@@ -143,6 +154,7 @@ export interface VerifyCommandResult {
   repo: string;
   duration_ms: number;
   strictHygiene: boolean;
+  strictPronunciation: boolean;
   checks: {
     citations: VerifyCitationsResult;
     places: VerifyPlacesResult;
@@ -150,7 +162,9 @@ export interface VerifyCommandResult {
     compile: VerifyCompileResult;
     media: VerifyMediaResult;
     livingNames: VerifyLivingNamesResult;
+    pronunciation: ExecutedPluginCheckResult;
   };
+  pluginChecks: ExecutedPluginCheckResult[];
   hygiene: TreeHygieneSummary;
   warnings: string[];
   errors: string[];
@@ -490,6 +504,19 @@ export function formatVerifyTextReport(report: Omit<VerifyCommandResult, 'render
     `  5. Media disk: ${report.checks.media.ok ? 'PASS' : 'FAIL'} | layout=${report.checks.media.mediaLayout} checked=${report.checks.media.checkedCount} missing=${report.checks.media.missingFiles.length} duplicates=${report.checks.media.duplicateFiles.length}`,
     `  6. Living names: ${report.checks.livingNames.ok ? 'PASS' : 'FAIL'} | hits=${report.checks.livingNames.hits.length}`,
     `  7. Tree hygiene: ${hygieneStatus} | warnings=${hygieneWarningCount}${hygieneSuffix}`,
+    `  8. Pronunciation: ${
+      !report.checks.pronunciation.ok
+        ? 'FAIL'
+        : report.checks.pronunciation.warnings.length > 0
+          ? report.strictPronunciation
+            ? 'FAIL'
+            : 'WARN'
+          : 'PASS'
+    } | errors=${report.checks.pronunciation.errors.length} warnings=${report.checks.pronunciation.warnings.length}`,
+    ...report.pluginChecks.map((pc) => {
+      const pcStatus = !pc.ok ? 'FAIL' : pc.warnings.length > 0 || !pc.strictOk ? 'WARN' : 'PASS';
+      return `  Plugin [${pc.pluginId}/${pc.id}] ${pc.name}: ${pcStatus} (${pc.durationMs} ms) | errors=${pc.errors.length} warnings=${pc.warnings.length}`;
+    }),
   ];
 
   for (const err of report.errors.slice(0, 30)) {
@@ -644,8 +671,47 @@ export async function runVerifyCommand(options: VerifyCommandOptions = {}): Prom
 
   // 7. Non-breaking tree-hygiene diagnostics (fail only when --strict-hygiene is enabled).
   const strictHygiene = Boolean(options.strictHygiene);
+  const strictPronunciation = Boolean(options.strictPronunciation);
   const hygiene = analyzeTreeHygiene({ people, events, kinship });
-  const warnings = hygiene.warnings.map((warning) => `[${warning.category}] ${warning.message}`);
+
+  // 8. Built-in pronunciation check + site plugin verifyChecks.
+  const verifyCheckCtx: KinloomVerifyCheckContext = {
+    repoDir,
+    dataDir,
+    siteConfig,
+    people,
+    events,
+    places,
+    sources,
+    kinship,
+    media,
+    narratives,
+    strictHygiene,
+    strictPronunciation,
+  };
+  const pronunciationCheck = await runRegisteredCheck(
+    'builtin',
+    createPronunciationVerifyCheck(),
+    verifyCheckCtx
+  );
+
+  let resolvedPluginVerifyChecks = resolvePluginCommands(options.plugins ?? []);
+  if (options.plugins === undefined) {
+    const discovered = await discoverSiteCliPlugins(repoDir);
+    resolvedPluginVerifyChecks = resolvePluginCommands(discovered.plugins);
+    resolvedPluginVerifyChecks.warnings.push(...discovered.warnings);
+  }
+  const pluginChecks: ExecutedPluginCheckResult[] = [];
+  for (const reg of resolvedPluginVerifyChecks.verifyChecks) {
+    pluginChecks.push(await runRegisteredCheck(reg.pluginId, reg.check, verifyCheckCtx));
+  }
+
+  const warnings = [
+    ...hygiene.warnings.map((warning) => `[${warning.category}] ${warning.message}`),
+    ...pronunciationCheck.warnings.map((w) => `[pronunciation] ${w}`),
+    ...resolvedPluginVerifyChecks.warnings.map((w) => `[plugin] ${w}`),
+    ...pluginChecks.flatMap((pc) => pc.warnings.map((w) => `[plugin:${pc.id}] ${w}`)),
+  ];
 
   const errors: string[] = [
     ...citations.errors.map((e) => `citations: ${e}`),
@@ -662,8 +728,14 @@ export async function runVerifyCommand(options: VerifyCommandOptions = {}): Prom
         `media: duplicate file '${dup.file}' on ${dup.mediaIds.join(', ')}. Run 'kinloom media dedupe' to preview a safe merge plan (pass '--apply' to write).`
     ),
     ...livingNames.hits.map((hit) => `living-name: ${hit.location} matched '${hit.match}'`),
+    ...pronunciationCheck.errors.map((e) => `pronunciation: ${e}`),
+    ...pluginChecks.flatMap((pc) => pc.errors.map((e) => `plugin(${pc.id}): ${e}`)),
     ...(strictHygiene
       ? hygiene.warnings.map((warning) => `hygiene(${warning.category}): ${warning.message}`)
+      : []),
+    ...(strictPronunciation ? pronunciationCheck.strictFailures.map((f) => `pronunciation: ${f}`) : []),
+    ...(strictHygiene || strictPronunciation
+      ? pluginChecks.flatMap((pc) => pc.strictFailures.map((f) => `plugin(${pc.id}): ${f}`))
       : []),
   ];
 
@@ -673,6 +745,7 @@ export async function runVerifyCommand(options: VerifyCommandOptions = {}): Prom
     repo: repoDir,
     duration_ms: durationMs,
     strictHygiene,
+    strictPronunciation,
     checks: {
       citations,
       places: placesCheck,
@@ -680,7 +753,9 @@ export async function runVerifyCommand(options: VerifyCommandOptions = {}): Prom
       compile: compileCheck,
       media: mediaCheck,
       livingNames,
+      pronunciation: pronunciationCheck,
     },
+    pluginChecks,
     hygiene,
     warnings,
     errors,

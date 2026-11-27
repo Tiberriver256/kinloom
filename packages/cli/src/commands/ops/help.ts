@@ -165,9 +165,14 @@ Run full-archive invariants across local data/*.yaml files:
      - Duplicate vital events (multiple births/deaths on one person, or duplicate marriages for one couple)
      - Empty GEDCOM placeholder events (title starting with "Recorded event for ")
 
+  8. Pronunciation audit (living-person pronunciation leaks fail; coverage gaps warn unless --strict-pronunciation or --strict is set)
+  9. Site plugin verifyChecks (auto-discovered from extensions/*/cli.{mjs,js} and kinloom.config.yaml plugins)
+
 Options:
-  --repo <dir>       Archive repository root (default: current working directory)
-  --strict-hygiene   Fail verification (exit 1) when any tree-hygiene warning is found
+  --repo <dir>             Archive repository root (default: current working directory)
+  --strict-hygiene         Fail verification (exit 1) when any tree-hygiene warning is found
+  --strict-pronunciation   Fail verification (exit 1) when any pronunciation coverage or provenance warning is found
+  --strict                 Enable both --strict-hygiene and --strict-pronunciation (and plugin strictFailures)
   --json             Emit structured JSON scorecard (includes hygiene.warnings and hygiene.counts)
   -h, --help         Show this help message`;
 
