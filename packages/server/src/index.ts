@@ -1,9 +1,7 @@
 export type {
   AssetHandler,
-  KinloomServerPlugin,
   KinloomServerPluginContext,
   KinloomServerPluginRoute,
-  KinloomServerPorts,
   PluginRouteMinRole,
   PronunciationAudioGenerator,
   PronunciationAudioResult,
@@ -63,6 +61,21 @@ export {
   resolveCallerPrincipal,
 } from './http/authMiddleware.js';
 export {
+  type CompiledRoutePrefixMatcher,
+  hasRequestLifecyclePlugins,
+  isApiOrBundleRoute,
+  type KinloomServerPlugin,
+  type KinloomServerPorts,
+  normalizeServerRouteTemplate,
+  type RecordableServerTimingSpanName,
+  type ServerRequestErrorEvent,
+  type ServerRequestResponseEvent,
+  type ServerRequestStartEvent,
+  type ServerRequestTelemetryContext,
+  type ServerTelemetryCacheStatus,
+  type ServerTimingSpanName,
+} from './http/pluginLifecycle.js';
+export {
   type AuthBrowserProvider,
   buildAuthErrorRedirectUrl,
   type CompiledPluginRoute,
@@ -88,7 +101,6 @@ export {
   MEDIA_CONTENT_SECURITY_POLICY,
   STRICT_TRANSPORT_SECURITY_VALUE,
 } from './http/securityHeaders.js';
-
 // Layer 1: Portable Web-Fetch HTTP Transport
 export {
   DEV_OAUTH_COOKIE_NAME,
@@ -110,6 +122,18 @@ export {
   verifyOAuthStateToken,
   verifySessionToken,
 } from './http/session.js';
+export {
+  createWorkersObservabilityPlugin,
+  formatServerTimingHeader,
+  redactObservabilityText,
+  resolveObservabilityRequestId,
+  sanitizeObservabilityErrorCode,
+  WORKERS_OBSERVABILITY_PLUGIN_ID,
+  type WorkersObservabilityLogLevel,
+  type WorkersObservabilityLogRecord,
+  type WorkersObservabilityPluginOptions,
+  type WorkersObservabilitySink,
+} from './plugins/workersObservability.js';
 export {
   AdminService,
   type AdminServiceDeps,

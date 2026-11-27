@@ -72,7 +72,7 @@ Kinloom ships six npm workspaces and a public-domain demo app:
 Private sites extend Kinloom without forking core packages:
 
 - **`KinloomUiPlugin` (`@kinloom/ui`):** Register custom routes and top-bar links, inject React panels into named page slots (`indexHero`, `personDetail`, `placeDetail`, `sourceReaderFooter`, `evidenceExtra`), or provide custom `mediaRenderers`.
-- **`KinloomServerPlugin` (`@kinloom/server`):** Mount authenticated custom API routes that inherit session, RBAC, and CSRF enforcement, or subscribe to `onRevisionCommitted` hooks.
+- **`KinloomServerPlugin` (`@kinloom/server`):** Mount authenticated custom API routes that inherit session, RBAC, and CSRF enforcement, subscribe to `onRevisionCommitted` hooks, or opt into request lifecycle telemetry with `createWorkersObservabilityPlugin()` (off by default; see [docs/observability.md](docs/observability.md)).
 - **`KinloomCliPlugin` (`@kinloom/cli`):** Auto-discovered from `extensions/<name>/cli.mjs` or `kinloom.config.yaml` (`plugins`). Plugins can register custom subcommands, `auditChecks` for `kinloom audit`, and `verifyChecks` for `kinloom verify` (including check-only plugins without custom commands):
 
 ```js

@@ -21,6 +21,7 @@ import {
   parsePositiveInt,
   readJsonBody,
 } from '../httpPrimitives.js';
+import { timeSpan } from '../pluginLifecycle.js';
 
 const OptionalSummaryBodySchema = z.object({
   summary: z.string().trim().min(3).optional(),
@@ -43,15 +44,18 @@ export function createWikiRouteHandler(deps: WikiRouteHandlerDeps): HttpRouteHan
   const { bundleReadService, wikiWriteService } = deps;
 
   return async (ctx) => {
-    const { request, url, pathname, method, segments, auth } = ctx;
+    const { request, url, pathname, method, segments, auth, telemetry } = ctx;
 
     if (method === 'GET' && pathname === '/api/bundle') {
       requireMinRole(auth.principal, 'viewer', {
         allowAgentScopes: ['write_batch', 'read_backup'],
       });
-      const result = await bundleReadService.getBundle({
-        ifNoneMatch: request.headers.get('if-none-match'),
-      });
+      const result = await timeSpan(telemetry, 'bundle', () =>
+        bundleReadService.getBundle({
+          ifNoneMatch: request.headers.get('if-none-match'),
+          telemetry,
+        })
+      );
       if (result.status === 'not_modified') {
         return new Response(null, {
           status: 304,
@@ -79,14 +83,17 @@ export function createWikiRouteHandler(deps: WikiRouteHandlerDeps): HttpRouteHan
         requireMinRole(auth.principal, 'editor');
         const entityType = parseEntityTypeParam(decodeSegment(segments[2]));
         const body = EntityWriteInputSchema.parse(await readJsonBody(request));
-        const created = await wikiWriteService.createEntity({
-          entityType,
-          entityId: body.entity_id,
-          data: body.data,
-          summary: body.summary,
-          hasPrimarySource: body.has_primary_source,
-          author: principalToRevisionAuthor(auth.principal),
-        });
+        const created = await timeSpan(telemetry, 'd1', () =>
+          wikiWriteService.createEntity({
+            entityType,
+            entityId: body.entity_id,
+            data: body.data,
+            summary: body.summary,
+            hasPrimarySource: body.has_primary_source,
+            author: principalToRevisionAuthor(auth.principal),
+          })
+        );
+        telemetry?.setBundleRevision(created.revision.revision_id);
         return jsonResponse(created, 201);
       }
 
@@ -96,7 +103,9 @@ export function createWikiRouteHandler(deps: WikiRouteHandlerDeps): HttpRouteHan
 
         if (method === 'GET') {
           requireMinRole(auth.principal, 'viewer', { allowAgentScopes: ['write_batch'] });
-          const entity = await bundleReadService.getEntity({ entityType, entityId });
+          const entity = await timeSpan(telemetry, 'd1', () =>
+            bundleReadService.getEntity({ entityType, entityId })
+          );
           return jsonResponse(entity, 200, { 'cache-control': 'private, no-store' });
         }
 
@@ -104,16 +113,19 @@ export function createWikiRouteHandler(deps: WikiRouteHandlerDeps): HttpRouteHan
           enforceCsrfOrigin(request, url, auth.authMethod);
           requireMinRole(auth.principal, 'editor');
           const body = EntityUpdateInputSchema.parse(await readJsonBody(request));
-          const updated = await wikiWriteService.updateEntity({
-            entityType,
-            entityId,
-            expectedParentRevisionId: asRevisionId(body.expected_parent_revision_id),
-            data: body.data,
-            merge: body.merge,
-            summary: body.summary,
-            hasPrimarySource: body.has_primary_source,
-            author: principalToRevisionAuthor(auth.principal),
-          });
+          const updated = await timeSpan(telemetry, 'd1', () =>
+            wikiWriteService.updateEntity({
+              entityType,
+              entityId,
+              expectedParentRevisionId: asRevisionId(body.expected_parent_revision_id),
+              data: body.data,
+              merge: body.merge,
+              summary: body.summary,
+              hasPrimarySource: body.has_primary_source,
+              author: principalToRevisionAuthor(auth.principal),
+            })
+          );
+          telemetry?.setBundleRevision(updated.revision.revision_id);
           return jsonResponse(updated, 200);
         }
 
@@ -121,13 +133,16 @@ export function createWikiRouteHandler(deps: WikiRouteHandlerDeps): HttpRouteHan
           enforceCsrfOrigin(request, url, auth.authMethod);
           requireMinRole(auth.principal, 'editor');
           const body = EntityDeleteInputSchema.parse(await readJsonBody(request));
-          const deleted = await wikiWriteService.deleteEntity({
-            entityType,
-            entityId,
-            expectedParentRevisionId: asRevisionId(body.expected_parent_revision_id),
-            summary: body.summary,
-            author: principalToRevisionAuthor(auth.principal),
-          });
+          const deleted = await timeSpan(telemetry, 'd1', () =>
+            wikiWriteService.deleteEntity({
+              entityType,
+              entityId,
+              expectedParentRevisionId: asRevisionId(body.expected_parent_revision_id),
+              summary: body.summary,
+              author: principalToRevisionAuthor(auth.principal),
+            })
+          );
+          telemetry?.setBundleRevision(deleted.revision.revision_id);
           return jsonResponse(deleted, 200);
         }
       }
@@ -138,14 +153,17 @@ export function createWikiRouteHandler(deps: WikiRouteHandlerDeps): HttpRouteHan
         const entityType = parseEntityTypeParam(decodeSegment(segments[2]));
         const entityId = decodeSegment(segments[3]);
         const body = EntityRestoreInputSchema.parse(await readJsonBody(request));
-        const restored = await wikiWriteService.restoreEntity({
-          entityType,
-          entityId,
-          expectedParentRevisionId: asRevisionId(body.expected_parent_revision_id),
-          data: body.data,
-          summary: body.summary,
-          author: principalToRevisionAuthor(auth.principal),
-        });
+        const restored = await timeSpan(telemetry, 'd1', () =>
+          wikiWriteService.restoreEntity({
+            entityType,
+            entityId,
+            expectedParentRevisionId: asRevisionId(body.expected_parent_revision_id),
+            data: body.data,
+            summary: body.summary,
+            author: principalToRevisionAuthor(auth.principal),
+          })
+        );
+        telemetry?.setBundleRevision(restored.revision.revision_id);
         return jsonResponse(restored, 200);
       }
     }
@@ -179,7 +197,7 @@ export function createWikiRouteHandler(deps: WikiRouteHandlerDeps): HttpRouteHan
         query.limit = parsePositiveInt(limitRaw, 'limit');
       }
 
-      const listed = await bundleReadService.listRevisions(query);
+      const listed = await timeSpan(telemetry, 'd1', () => bundleReadService.listRevisions(query));
       return jsonResponse(listed, 200, { 'cache-control': 'private, no-store' });
     }
 
@@ -194,11 +212,14 @@ export function createWikiRouteHandler(deps: WikiRouteHandlerDeps): HttpRouteHan
       requireMinRole(auth.principal, 'editor');
       const revisionId = asRevisionId(parsePositiveInt(decodeSegment(segments[2]), 'revision_id'));
       const body = OptionalSummaryBodySchema.parse(await readJsonBody(request));
-      const reverted = await wikiWriteService.revertRevision({
-        revisionId,
-        summary: body.summary,
-        author: principalToRevisionAuthor(auth.principal),
-      });
+      const reverted = await timeSpan(telemetry, 'd1', () =>
+        wikiWriteService.revertRevision({
+          revisionId,
+          summary: body.summary,
+          author: principalToRevisionAuthor(auth.principal),
+        })
+      );
+      telemetry?.setBundleRevision(reverted.revision.revision_id);
       return jsonResponse(reverted, 201);
     }
 
@@ -209,10 +230,13 @@ export function createWikiRouteHandler(deps: WikiRouteHandlerDeps): HttpRouteHan
         adminForbiddenCode: 'FORBIDDEN',
       });
       const submission = BatchSubmissionSchema.parse(await readJsonBody(request));
-      const committed = await wikiWriteService.submitBatch({
-        submission,
-        author: principalToRevisionAuthor(auth.principal, submission.author_type),
-      });
+      const committed = await timeSpan(telemetry, 'd1', () =>
+        wikiWriteService.submitBatch({
+          submission,
+          author: principalToRevisionAuthor(auth.principal, submission.author_type),
+        })
+      );
+      telemetry?.setBundleRevision(committed.head_revision_id);
       return jsonResponse(committed, 201);
     }
 
@@ -227,11 +251,14 @@ export function createWikiRouteHandler(deps: WikiRouteHandlerDeps): HttpRouteHan
       requireMinRole(auth.principal, 'editor');
       const batchId = asBatchId(decodeSegment(segments[2]));
       const body = OptionalSummaryBodySchema.parse(await readJsonBody(request));
-      const reverted = await wikiWriteService.revertBatch({
-        batchId,
-        summary: body.summary,
-        author: principalToRevisionAuthor(auth.principal),
-      });
+      const reverted = await timeSpan(telemetry, 'd1', () =>
+        wikiWriteService.revertBatch({
+          batchId,
+          summary: body.summary,
+          author: principalToRevisionAuthor(auth.principal),
+        })
+      );
+      telemetry?.setBundleRevision(reverted.head_revision_id);
       return jsonResponse(reverted, 201);
     }
 
@@ -240,9 +267,12 @@ export function createWikiRouteHandler(deps: WikiRouteHandlerDeps): HttpRouteHan
         allowAgentScopes: ['read_backup'],
         adminForbiddenCode: 'FORBIDDEN',
       });
-      const exported = await bundleReadService.exportYaml({
-        ifNoneMatch: request.headers.get('if-none-match'),
-      });
+      const exported = await timeSpan(telemetry, 'bundle', () =>
+        bundleReadService.exportYaml({
+          ifNoneMatch: request.headers.get('if-none-match'),
+          telemetry,
+        })
+      );
       const headers = buildExportHeaders(exported.etag, exported.head_revision_id);
       if (exported.status === 'not_modified') {
         return new Response(null, { status: 304, headers });
@@ -263,9 +293,12 @@ export function createWikiRouteHandler(deps: WikiRouteHandlerDeps): HttpRouteHan
         allowAgentScopes: ['read_backup'],
         adminForbiddenCode: 'FORBIDDEN',
       });
-      const exported = await bundleReadService.exportSnapshot({
-        ifNoneMatch: request.headers.get('if-none-match'),
-      });
+      const exported = await timeSpan(telemetry, 'bundle', () =>
+        bundleReadService.exportSnapshot({
+          ifNoneMatch: request.headers.get('if-none-match'),
+          telemetry,
+        })
+      );
       const headers = buildExportHeaders(exported.etag, exported.head_revision_id);
       if (exported.status === 'not_modified') {
         return new Response(null, { status: 304, headers });

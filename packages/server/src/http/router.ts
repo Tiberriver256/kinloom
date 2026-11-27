@@ -1,9 +1,4 @@
-import type {
-  KinloomServerPlugin,
-  KinloomServerPluginRoute,
-  KinloomServerPorts,
-  KinloomSiteConfig,
-} from '@kinloom/core';
+import type { KinloomServerPluginRoute, KinloomSiteConfig } from '@kinloom/core';
 import { KinloomHttpError, toErrorResponseData } from '../errors.js';
 import { AdminService } from '../services/adminService.js';
 import { AuthService } from '../services/authService.js';
@@ -14,6 +9,16 @@ import { TalkService } from '../services/talkService.js';
 import { WikiWriteService } from '../services/wikiWriteService.js';
 import { enforceCsrfOrigin, requireMinRole, resolveCallerPrincipal } from './authMiddleware.js';
 import { type HttpRequestContext, type HttpRouteHandler, jsonResponse } from './httpPrimitives.js';
+import {
+  createRequestTelemetryTracker,
+  hasRequestLifecyclePlugins,
+  type KinloomServerPlugin,
+  type KinloomServerPorts,
+  normalizeServerRouteTemplate,
+  runPluginLifecycleHook,
+  type ServerRequestTelemetryTracker,
+  timeSpan,
+} from './pluginLifecycle.js';
 import { createAdminRouteHandler } from './routes/adminRoutes.js';
 import { createAuthRouteHandler } from './routes/authRoutes.js';
 import { createMediaAndTalkRouteHandler } from './routes/mediaAndTalkRoutes.js';
@@ -186,6 +191,7 @@ export function createKinloomServer(config: KinloomServerConfig): KinloomServer 
   const oauthCookieTtlSeconds = config.oauthCookieTtlSeconds ?? DEFAULT_OAUTH_COOKIE_TTL_SECONDS;
   const plugins = config.ports.plugins ?? [];
   const pluginRoutes = config.compiledPluginRoutes ?? validateAndCompilePluginRoutes(plugins);
+  const hasLifecyclePlugins = hasRequestLifecyclePlugins(plugins);
 
   const authService = new AuthService({
     repository: config.ports.repository,
@@ -262,7 +268,10 @@ export function createKinloomServer(config: KinloomServerConfig): KinloomServer 
     createAdminRouteHandler(adminService),
   ];
 
-  async function handleRequest(request: Request): Promise<Response> {
+  async function handleRequest(
+    request: Request,
+    telemetry?: ServerRequestTelemetryTracker
+  ): Promise<Response> {
     const url = new URL(request.url);
     const pathname = url.pathname;
     const method = request.method.toUpperCase();
@@ -281,6 +290,7 @@ export function createKinloomServer(config: KinloomServerConfig): KinloomServer 
       sessionSecret: config.sessionSecret,
       repository: config.ports.repository,
       clock: config.ports.clock,
+      telemetry,
     });
 
     const ctx: HttpRequestContext = {
@@ -291,6 +301,7 @@ export function createKinloomServer(config: KinloomServerConfig): KinloomServer 
       isSecure,
       segments,
       auth,
+      telemetry,
     };
 
     for (const handle of routeHandlers) {
@@ -332,6 +343,16 @@ export function createKinloomServer(config: KinloomServerConfig): KinloomServer 
         requireMinRole(auth.principal, 'viewer', {
           allowAgentScopes: ['write_batch', 'read_backup'],
         });
+        const assetHandler = config.ports.assetHandler;
+        const dataResponse = await timeSpan(telemetry, 'bundle', () => assetHandler.fetch(request));
+        if (telemetry) {
+          if (dataResponse.status === 304) {
+            telemetry.setCacheStatus('not_modified');
+          } else if (dataResponse.status === 200) {
+            telemetry.setCacheStatus('hit');
+          }
+        }
+        return dataResponse;
       }
       return config.ports.assetHandler.fetch(request);
     }
@@ -344,16 +365,83 @@ export function createKinloomServer(config: KinloomServerConfig): KinloomServer 
       const url = new URL(request.url);
       const isSecure = isSecureRequestUrl(url);
       const isMediaPath = url.pathname.startsWith('/media/') || url.pathname.startsWith('/sources/');
+
+      if (!hasLifecyclePlugins) {
+        try {
+          const response = await handleRequest(request);
+          const isMediaResponse = isMediaPath && (response.status === 200 || response.status === 206);
+          return applySecurityHeaders(response, { isSecure, isMedia: isMediaResponse });
+        } catch (error) {
+          const mapped = toErrorResponseData(error);
+          return applySecurityHeaders(jsonResponse(mapped.body, mapped.status, mapped.headers), {
+            isSecure,
+            isMedia: false,
+          });
+        }
+      }
+
+      const method = request.method.toUpperCase();
+      const route = normalizeServerRouteTemplate(url.pathname, pluginRoutes, method);
+      const tracker = createRequestTelemetryTracker({ request, method, route });
+
+      await runPluginLifecycleHook(
+        plugins,
+        (plugin) => plugin.onRequestStart,
+        { telemetry: tracker.snapshot() },
+        config.onPluginError
+      );
+
       try {
-        const response = await handleRequest(request);
+        const response = await handleRequest(request, tracker);
         const isMediaResponse = isMediaPath && (response.status === 200 || response.status === 206);
-        return applySecurityHeaders(response, { isSecure, isMedia: isMediaResponse });
+        const secured = applySecurityHeaders(response, { isSecure, isMedia: isMediaResponse });
+        const durationMs = Math.max(0, tracker.now() - tracker.startedAtMs);
+        await runPluginLifecycleHook(
+          plugins,
+          (plugin) => plugin.onResponse,
+          {
+            telemetry: tracker.snapshot(),
+            response: secured,
+            status: secured.status,
+            durationMs,
+            errorCode: null,
+          },
+          config.onPluginError
+        );
+        return tracker.applyResponseHeaders(secured);
       } catch (error) {
         const mapped = toErrorResponseData(error);
-        return applySecurityHeaders(jsonResponse(mapped.body, mapped.status, mapped.headers), {
+        const errorResponse = applySecurityHeaders(jsonResponse(mapped.body, mapped.status, mapped.headers), {
           isSecure,
           isMedia: false,
         });
+        const durationMs = Math.max(0, tracker.now() - tracker.startedAtMs);
+        const errorCode = mapped.body.error.code;
+        await runPluginLifecycleHook(
+          plugins,
+          (plugin) => plugin.onError,
+          {
+            telemetry: tracker.snapshot(),
+            error,
+            status: mapped.status,
+            errorCode,
+            durationMs,
+          },
+          config.onPluginError
+        );
+        await runPluginLifecycleHook(
+          plugins,
+          (plugin) => plugin.onResponse,
+          {
+            telemetry: tracker.snapshot(),
+            response: errorResponse,
+            status: mapped.status,
+            durationMs,
+            errorCode,
+          },
+          config.onPluginError
+        );
+        return tracker.applyResponseHeaders(errorResponse);
       }
     },
   };

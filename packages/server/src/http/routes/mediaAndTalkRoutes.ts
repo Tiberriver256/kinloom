@@ -11,6 +11,7 @@ import {
   parsePositiveInt,
   readJsonBody,
 } from '../httpPrimitives.js';
+import { timeSpan } from '../pluginLifecycle.js';
 
 const TalkPostBodySchema = z.object({
   body_md: z.string(),
@@ -25,7 +26,7 @@ export function createMediaAndTalkRouteHandler(deps: MediaAndTalkRouteHandlerDep
   const { mediaService, talkService } = deps;
 
   return async (ctx) => {
-    const { request, url, pathname, method, segments, auth } = ctx;
+    const { request, url, pathname, method, segments, auth, telemetry } = ctx;
 
     if (method === 'POST' && pathname === '/api/media/upload') {
       enforceCsrfOrigin(request, url, auth.authMethod);
@@ -67,14 +68,17 @@ export function createMediaAndTalkRouteHandler(deps: MediaAndTalkRouteHandlerDep
       const hasPrimarySource = typeof hasPrimaryRaw === 'string' ? hasPrimaryRaw !== 'false' : true;
 
       const arrayBuffer = await filePart.arrayBuffer();
-      const uploaded = await mediaService.uploadMedia({
-        bytes: new Uint8Array(arrayBuffer),
-        contentType: filePart.type,
-        metadata: metadataJson as Record<string, unknown>,
-        summary,
-        hasPrimarySource,
-        author: principalToRevisionAuthor(auth.principal),
-      });
+      const uploaded = await timeSpan(telemetry, 'r2', () =>
+        mediaService.uploadMedia({
+          bytes: new Uint8Array(arrayBuffer),
+          contentType: filePart.type,
+          metadata: metadataJson as Record<string, unknown>,
+          summary,
+          hasPrimarySource,
+          author: principalToRevisionAuthor(auth.principal),
+        })
+      );
+      telemetry?.setBundleRevision(uploaded.revision.revision_id);
 
       return jsonResponse(
         {
@@ -91,11 +95,13 @@ export function createMediaAndTalkRouteHandler(deps: MediaAndTalkRouteHandlerDep
       requireMinRole(auth.principal, 'viewer', { allowAgentScopes: ['write_batch'] });
       const prefix = segments[0];
       const key = segments.slice(1).map(decodeSegment).join('/');
-      const result = await mediaService.getMedia({
-        prefix,
-        key,
-        rangeHeader: request.headers.get('range'),
-      });
+      const result = await timeSpan(telemetry, 'r2', () =>
+        mediaService.getMedia({
+          prefix,
+          key,
+          rangeHeader: request.headers.get('range'),
+        })
+      );
 
       const headers = new Headers({
         'content-type': result.object.contentType,
@@ -124,7 +130,9 @@ export function createMediaAndTalkRouteHandler(deps: MediaAndTalkRouteHandlerDep
 
         if (method === 'GET') {
           requireMinRole(auth.principal, 'viewer');
-          const comments = await talkService.listComments({ entityType, entityId });
+          const comments = await timeSpan(telemetry, 'd1', () =>
+            talkService.listComments({ entityType, entityId })
+          );
           return jsonResponse({ comments }, 200, { 'cache-control': 'private, no-store' });
         }
 
@@ -134,14 +142,17 @@ export function createMediaAndTalkRouteHandler(deps: MediaAndTalkRouteHandlerDep
           if (auth.principal.kind !== 'user') {
             throw new KinloomHttpError(403, 'FORBIDDEN', 'Only signed-in members can post Talk comments.');
           }
+          const userPrincipal = auth.principal;
           const body = TalkPostBodySchema.parse(await readJsonBody(request));
-          const comment = await talkService.postComment({
-            entityType,
-            entityId,
-            bodyMd: body.body_md,
-            authorId: auth.principal.email,
-            authorName: auth.principal.display_name,
-          });
+          const comment = await timeSpan(telemetry, 'd1', () =>
+            talkService.postComment({
+              entityType,
+              entityId,
+              bodyMd: body.body_md,
+              authorId: userPrincipal.email,
+              authorName: userPrincipal.display_name,
+            })
+          );
           return jsonResponse({ comment }, 201);
         }
       }
@@ -152,12 +163,14 @@ export function createMediaAndTalkRouteHandler(deps: MediaAndTalkRouteHandlerDep
         const entityType = parseEntityTypeParam(decodeSegment(segments[2]));
         const entityId = decodeSegment(segments[3]);
         const commentId = parsePositiveInt(decodeSegment(segments[4]), 'comment_id');
-        await talkService.deleteComment({
-          entityType,
-          entityId,
-          commentId,
-          principal: auth.principal,
-        });
+        await timeSpan(telemetry, 'd1', () =>
+          talkService.deleteComment({
+            entityType,
+            entityId,
+            commentId,
+            principal: auth.principal,
+          })
+        );
         return new Response(null, { status: 204, headers: { 'cache-control': 'no-store' } });
       }
     }

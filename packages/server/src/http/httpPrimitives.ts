@@ -2,6 +2,7 @@ import { type EntityType, EntityTypeSchema } from '@kinloom/core';
 import { KinloomHttpError } from '../errors.js';
 import { sanitizeNextPath } from '../services/authService.js';
 import type { ResolvedAuthContext } from './authMiddleware.js';
+import type { ServerRequestTelemetryTracker } from './pluginLifecycle.js';
 
 export interface HttpRequestContext {
   readonly request: Request;
@@ -11,6 +12,7 @@ export interface HttpRequestContext {
   readonly isSecure: boolean;
   readonly segments: readonly string[];
   readonly auth: ResolvedAuthContext;
+  readonly telemetry?: ServerRequestTelemetryTracker;
 }
 
 export type HttpRouteHandler = (ctx: HttpRequestContext) => Promise<Response | null>;

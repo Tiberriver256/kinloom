@@ -189,6 +189,27 @@ export default {
 };
 \`\`\`
 
+## Optional Cloudflare Workers Observability (Off by Default)
+
+Kinloom disables structured request logging, \`X-Request-Id\`, and \`Server-Timing\` by default.
+To opt in for your Cloudflare Worker deployment:
+
+1. Uncomment the \`observability\` block in \`wrangler.jsonc\`.
+2. Register \`createWorkersObservabilityPlugin()\` in your Worker entrypoint (for example \`src/worker.ts\`):
+
+\`\`\`ts
+import { createCloudflareWorker } from '@kinloom/worker';
+// Uncomment to enable privacy-safe JSON request logs, X-Request-Id, and Server-Timing headers:
+// import { createWorkersObservabilityPlugin } from '@kinloom/worker';
+
+export default createCloudflareWorker({
+  siteConfig,
+  plugins: [
+    // createWorkersObservabilityPlugin(),
+  ],
+});
+\`\`\`
+
 ## Vite Configuration (Single React Instance)
 
 When building a private site app with Vite, include \`resolve.dedupe\` in \`vite.config.ts\` so \`@kinloom/ui\` and your site share one React and Router instance:
@@ -214,6 +235,44 @@ dist/
 *.local
 raw-gedcom/
 `;
+
+function renderWranglerJsonc(branchId: string): string {
+  return `{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "${branchId}-archive",
+  "main": "src/worker.ts",
+  "compatibility_date": "2026-01-01",
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS",
+    "run_worker_first": true
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "${branchId}-archive-db",
+      "database_id": "REPLACE_WITH_D1_DATABASE_ID",
+      "migrations_dir": "node_modules/@kinloom/worker/migrations"
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "MEDIA_BUCKET",
+      "bucket_name": "${branchId}-archive-media"
+    }
+  ],
+  "vars": {
+    "ARCHIVE_MODE": "private"
+  },
+  // Optional Cloudflare Workers Observability (off by default).
+  // Uncomment to collect structured JSON logs from createWorkersObservabilityPlugin().
+  // "observability": {
+  //   "enabled": true,
+  //   "head_sampling_rate": 1
+  // }
+}
+`;
+}
 
 const BIOME_JSON = `${JSON.stringify(
   {
@@ -319,6 +378,7 @@ export async function runInitCommand(options: InitCommandOptions): Promise<InitC
   const resolvedDir = path.resolve(targetDir);
   const filesToWrite: Array<[string, string]> = [
     ['kinloom.config.yaml', serializeKinloomConfigYaml(config)],
+    ['wrangler.jsonc', renderWranglerJsonc(branchId)],
     ...ARCHIVE_YAML_FILE_NAMES.map((name): [string, string] => [path.join('data', name), '[]\n']),
     [path.join('.github', 'workflows', 'backup.yml'), BACKUP_WORKFLOW_YAML],
     [path.join('.github', 'workflows', 'reconcile.yml'), RECONCILE_WORKFLOW_YAML],

@@ -2,6 +2,7 @@ import { z } from 'zod';
 import type { AdminService } from '../../services/adminService.js';
 import { enforceCsrfOrigin, requireMinRole } from '../authMiddleware.js';
 import { decodeSegment, type HttpRouteHandler, jsonResponse, readJsonBody } from '../httpPrimitives.js';
+import { timeSpan } from '../pluginLifecycle.js';
 
 const CreateInviteBodySchema = z.object({
   label: z.string(),
@@ -26,7 +27,7 @@ const UpdateUserBodySchema = z.object({
 
 export function createAdminRouteHandler(adminService: AdminService): HttpRouteHandler {
   return async (ctx) => {
-    const { request, url, method, segments, auth } = ctx;
+    const { request, url, method, segments, auth, telemetry } = ctx;
 
     if (segments[0] !== 'api' || segments[1] !== 'admin') {
       return null;
@@ -38,71 +39,83 @@ export function createAdminRouteHandler(adminService: AdminService): HttpRouteHa
 
     if (segments[2] === 'invites') {
       if (method === 'GET' && segments.length === 3) {
-        const invites = await adminService.listInvites();
+        const invites = await timeSpan(telemetry, 'd1', () => adminService.listInvites());
         return jsonResponse({ invites }, 200);
       }
       if (method === 'POST' && segments.length === 3) {
         const body = CreateInviteBodySchema.parse(await readJsonBody(request));
-        const created = await adminService.createInvite({
-          label: body.label,
-          expires_in_days: body.expires_in_days,
-          createdBy: adminEmail,
-          origin: url.origin,
-        });
+        const created = await timeSpan(telemetry, 'd1', () =>
+          adminService.createInvite({
+            label: body.label,
+            expires_in_days: body.expires_in_days,
+            createdBy: adminEmail,
+            origin: url.origin,
+          })
+        );
         return jsonResponse(created, 201);
       }
       if (method === 'DELETE' && segments.length === 4) {
-        await adminService.revokeInvite({ token: decodeSegment(segments[3]) });
+        await timeSpan(telemetry, 'd1', () =>
+          adminService.revokeInvite({ token: decodeSegment(segments[3]) })
+        );
         return new Response(null, { status: 204, headers: { 'cache-control': 'no-store' } });
       }
     }
 
     if (segments[2] === 'agent-tokens') {
       if (method === 'GET' && segments.length === 3) {
-        const tokens = await adminService.listAgentTokens();
+        const tokens = await timeSpan(telemetry, 'd1', () => adminService.listAgentTokens());
         return jsonResponse({ tokens }, 200);
       }
       if (method === 'POST' && segments.length === 3) {
         const body = CreateAgentTokenBodySchema.parse(await readJsonBody(request));
-        const created = await adminService.createAgentToken({
-          label: body.label,
-          scope: body.scope,
-          createdBy: adminEmail,
-        });
+        const created = await timeSpan(telemetry, 'd1', () =>
+          adminService.createAgentToken({
+            label: body.label,
+            scope: body.scope,
+            createdBy: adminEmail,
+          })
+        );
         return jsonResponse(created, 201);
       }
       if (method === 'DELETE' && segments.length === 4) {
-        await adminService.revokeAgentToken({ tokenId: decodeSegment(segments[3]) });
+        await timeSpan(telemetry, 'd1', () =>
+          adminService.revokeAgentToken({ tokenId: decodeSegment(segments[3]) })
+        );
         return new Response(null, { status: 204, headers: { 'cache-control': 'no-store' } });
       }
     }
 
     if (segments[2] === 'users') {
       if (method === 'GET' && segments.length === 3) {
-        const users = await adminService.listUsers();
+        const users = await timeSpan(telemetry, 'd1', () => adminService.listUsers());
         return jsonResponse({ users }, 200);
       }
       if (method === 'POST' && segments.length === 3) {
         const body = CreateUserBodySchema.parse(await readJsonBody(request));
-        const user = await adminService.createUser({
-          email: body.email,
-          display_name: body.display_name,
-          role: body.role,
-          addedBy: adminEmail,
-        });
+        const user = await timeSpan(telemetry, 'd1', () =>
+          adminService.createUser({
+            email: body.email,
+            display_name: body.display_name,
+            role: body.role,
+            addedBy: adminEmail,
+          })
+        );
         return jsonResponse({ user }, 201);
       }
       if (method === 'PATCH' && segments.length === 4) {
         const body = UpdateUserBodySchema.parse(await readJsonBody(request));
-        const user = await adminService.updateUser({
-          email: decodeSegment(segments[3]),
-          role: body.role,
-          display_name: body.display_name,
-        });
+        const user = await timeSpan(telemetry, 'd1', () =>
+          adminService.updateUser({
+            email: decodeSegment(segments[3]),
+            role: body.role,
+            display_name: body.display_name,
+          })
+        );
         return jsonResponse({ user }, 200);
       }
       if (method === 'DELETE' && segments.length === 4) {
-        await adminService.deleteUser({ email: decodeSegment(segments[3]) });
+        await timeSpan(telemetry, 'd1', () => adminService.deleteUser({ email: decodeSegment(segments[3]) }));
         return new Response(null, { status: 204, headers: { 'cache-control': 'no-store' } });
       }
     }

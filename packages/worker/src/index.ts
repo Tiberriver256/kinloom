@@ -2,7 +2,6 @@ import type {
   AuthProvider,
   Clock,
   EmailSender,
-  KinloomServerPlugin,
   KinloomSiteConfig,
   PronunciationAudioGenerator,
   PronunciationLexiconStore,
@@ -10,6 +9,7 @@ import type {
 import {
   createKinloomServer,
   GoogleOAuthProvider,
+  type KinloomServerPlugin,
   SystemClock,
   validateAndCompilePluginRoutes,
 } from '@kinloom/server';
@@ -25,9 +25,16 @@ import type { ExportedHandler, KinloomWorkerEnv } from './types.js';
 export const KINLOOM_WORKER_VERSION = '0.40.1';
 
 export {
+  createWorkersObservabilityPlugin,
   type DynamicOgRequestOptions,
   handleDynamicOgRequest,
+  type KinloomServerPlugin,
   renderPrivacyPolicyHtml,
+  WORKERS_OBSERVABILITY_PLUGIN_ID,
+  type WorkersObservabilityLogLevel,
+  type WorkersObservabilityLogRecord,
+  type WorkersObservabilityPluginOptions,
+  type WorkersObservabilitySink,
 } from '@kinloom/server';
 export { createCloudflareAssetHandler } from './adapters/cloudflareAssets.js';
 export {

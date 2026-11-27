@@ -28,6 +28,7 @@ import {
 import { afterEach, describe, expect, it } from 'vitest';
 import { type CliIo, runCli } from './cli.js';
 import { ARCHIVE_YAML_FILE_NAMES, serializeSnapshotToYamlFiles } from './commands/dataFiles.js';
+import { stripJsoncCommentsAndTrailingCommas } from './commands/ops/shared/wrangler.js';
 import { EXIT_CONFLICT, EXIT_ERROR, EXIT_OK, EXIT_USAGE } from './errors.js';
 
 const tempDirs: string[] = [];
@@ -304,7 +305,7 @@ describe('kinloom CLI commands', () => {
       { io: cap.io }
     );
     expect(exitCode).toBe(EXIT_OK);
-    expect(cap.stdout[0]).toContain('21 created, 0 skipped');
+    expect(cap.stdout[0]).toContain('22 created, 0 skipped');
 
     const configYaml = await readFile(path.join(targetDir, 'kinloom.config.yaml'), 'utf8');
     const parsedConfig = parseKinloomConfigYaml(configYaml);
@@ -313,6 +314,25 @@ describe('kinloom CLI commands', () => {
     expect(parsedConfig.site.gedcomSourceName).toBe('ALDER_ARCHIVE');
     expect(parsedConfig.theme?.accent).toBe('#2F5245');
     expect(parsedConfig.defaultBranchId).toBe('alder');
+
+    const wranglerJsonc = await readFile(path.join(targetDir, 'wrangler.jsonc'), 'utf8');
+    expect(wranglerJsonc).toContain('// "observability": {');
+    const parsedWrangler = JSON.parse(stripJsoncCommentsAndTrailingCommas(wranglerJsonc)) as {
+      name: string;
+      observability?: unknown;
+      d1_databases: Array<{ binding: string; database_name: string }>;
+      r2_buckets: Array<{ binding: string; bucket_name: string }>;
+    };
+    expect(parsedWrangler.name).toBe('alder-archive');
+    expect(parsedWrangler.observability).toBeUndefined();
+    expect(parsedWrangler.d1_databases[0]).toMatchObject({
+      binding: 'DB',
+      database_name: 'alder-archive-db',
+    });
+    expect(parsedWrangler.r2_buckets[0]).toMatchObject({
+      binding: 'MEDIA_BUCKET',
+      bucket_name: 'alder-archive-media',
+    });
 
     for (const fileName of ARCHIVE_YAML_FILE_NAMES) {
       const content = await readFile(path.join(targetDir, 'data', fileName), 'utf8');
@@ -331,6 +351,7 @@ describe('kinloom CLI commands', () => {
 
     const extReadme = await readFile(path.join(targetDir, 'extensions', 'README.md'), 'utf8');
     expect(extReadme).toContain('KinloomUiPlugin');
+    expect(extReadme).toContain('// createWorkersObservabilityPlugin(),');
 
     const biomeConfig = JSON.parse(await readFile(path.join(targetDir, 'biome.json'), 'utf8')) as {
       $schema: string;
@@ -352,7 +373,7 @@ describe('kinloom CLI commands', () => {
       { io: cap2.io }
     );
     expect(secondCode).toBe(EXIT_OK);
-    expect(cap2.stdout[0]).toContain('0 created, 21 skipped');
+    expect(cap2.stdout[0]).toContain('0 created, 22 skipped');
 
     // Invalid hex accent fails at CLI boundary with exit code 2.
     const cap3 = createCaptureIo();

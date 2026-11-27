@@ -74,6 +74,30 @@ function parseRevisionFromEtag(etag: string): number | null {
   return Number.isSafeInteger(num) && num >= 0 ? num : null;
 }
 
+export interface BundleReadTelemetry {
+  now(): number;
+  recordSpan(span: 'd1' | 'r2' | 'bundle', durationMs: number): void;
+  setCacheStatus(status: 'hit' | 'miss' | 'not_modified' | 'bypass'): void;
+  setBundleRevision(revision: number | null): void;
+}
+
+async function timeServiceSpan<T>(
+  telemetry: BundleReadTelemetry | undefined,
+  span: 'd1' | 'r2' | 'bundle',
+  fn: () => Promise<T>
+): Promise<T> {
+  if (!telemetry) {
+    return fn();
+  }
+  const start = telemetry.now();
+  try {
+    return await fn();
+  } finally {
+    const elapsed = telemetry.now() - start;
+    telemetry.recordSpan(span, Math.max(0, elapsed));
+  }
+}
+
 export class BundleReadService {
   private readonly repository: EntityReadStore & RevisionLogStore;
   private readonly bundleCache: BundleCache;
@@ -87,19 +111,27 @@ export class BundleReadService {
     this.siteConfig = deps.siteConfig;
   }
 
-  async getBundle(params: { ifNoneMatch: string | null }): Promise<GetBundleResult> {
+  async getBundle(params: {
+    ifNoneMatch: string | null;
+    telemetry?: BundleReadTelemetry;
+  }): Promise<GetBundleResult> {
+    const { telemetry } = params;
     const [headRev, cached] = await Promise.all([
-      this.repository.getHeadRevisionId(),
-      this.bundleCache.getCached(params.ifNoneMatch),
+      timeServiceSpan(telemetry, 'd1', () => this.repository.getHeadRevisionId()),
+      timeServiceSpan(telemetry, 'r2', () => this.bundleCache.getCached(params.ifNoneMatch)),
     ]);
 
     if (cached.status === 'not_modified') {
       const cachedRev = parseRevisionFromEtag(cached.etag);
       if (cachedRev !== null && cachedRev >= headRev) {
+        telemetry?.setCacheStatus('not_modified');
+        telemetry?.setBundleRevision(cachedRev);
         return cached;
       }
     } else if (cached.status === 'hit') {
       if (cached.object.revision_id >= headRev) {
+        telemetry?.setCacheStatus('hit');
+        telemetry?.setBundleRevision(cached.object.revision_id);
         return cached;
       }
       if (typeof cached.object.body !== 'string') {
@@ -107,9 +139,12 @@ export class BundleReadService {
       }
     }
 
-    const snapshot = await this.repository.loadActiveSnapshot();
-    const rebuilt = await this.bundleCache.rebuildAndStore(snapshot);
+    telemetry?.setCacheStatus('miss');
+    const snapshot = await timeServiceSpan(telemetry, 'd1', () => this.repository.loadActiveSnapshot());
+    const rebuilt = await timeServiceSpan(telemetry, 'r2', () => this.bundleCache.rebuildAndStore(snapshot));
+    telemetry?.setBundleRevision(rebuilt.revision_id);
     if (matchesIfNoneMatch(params.ifNoneMatch, rebuilt.etag)) {
+      telemetry?.setCacheStatus('not_modified');
       return { status: 'not_modified', etag: rebuilt.etag };
     }
     return { status: 'hit', object: rebuilt };
@@ -162,14 +197,22 @@ export class BundleReadService {
     });
   }
 
-  async exportYaml(params: { ifNoneMatch: string | null }): Promise<ExportYamlResult> {
-    const headRev = await this.repository.getHeadRevisionId();
+  async exportYaml(params: {
+    ifNoneMatch: string | null;
+    telemetry?: BundleReadTelemetry;
+  }): Promise<ExportYamlResult> {
+    const { telemetry } = params;
+    const headRev = await timeServiceSpan(telemetry, 'd1', () => this.repository.getHeadRevisionId());
     const etag = `"r${headRev}"`;
     if (matchesIfNoneMatch(params.ifNoneMatch, etag)) {
+      telemetry?.setCacheStatus('not_modified');
+      telemetry?.setBundleRevision(headRev);
       return { status: 'not_modified', etag, head_revision_id: headRev };
     }
 
-    const snapshot = await this.repository.loadActiveSnapshot();
+    const snapshot = await timeServiceSpan(telemetry, 'd1', () => this.repository.loadActiveSnapshot());
+    telemetry?.setCacheStatus('bypass');
+    telemetry?.setBundleRevision(snapshot.head_revision_id);
     const collections = extractCollectionsFromSnapshot(snapshot);
     const { redactedPeople, redactedEvents, redactedMedia } = this.applyExportPrivacy(collections);
 
@@ -193,14 +236,22 @@ export class BundleReadService {
     };
   }
 
-  async exportSnapshot(params: { ifNoneMatch: string | null }): Promise<ExportSnapshotResult> {
-    const headRev = await this.repository.getHeadRevisionId();
+  async exportSnapshot(params: {
+    ifNoneMatch: string | null;
+    telemetry?: BundleReadTelemetry;
+  }): Promise<ExportSnapshotResult> {
+    const { telemetry } = params;
+    const headRev = await timeServiceSpan(telemetry, 'd1', () => this.repository.getHeadRevisionId());
     const etag = `"r${headRev}"`;
     if (matchesIfNoneMatch(params.ifNoneMatch, etag)) {
+      telemetry?.setCacheStatus('not_modified');
+      telemetry?.setBundleRevision(headRev);
       return { status: 'not_modified', etag, head_revision_id: headRev };
     }
 
-    const snapshot = await this.repository.loadActiveSnapshot();
+    const snapshot = await timeServiceSpan(telemetry, 'd1', () => this.repository.loadActiveSnapshot());
+    telemetry?.setCacheStatus('bypass');
+    telemetry?.setBundleRevision(snapshot.head_revision_id);
     const collections = extractCollectionsFromSnapshot(snapshot);
     const { redactedPeople, redactedEvents, redactedMedia } = this.applyExportPrivacy(collections);
 

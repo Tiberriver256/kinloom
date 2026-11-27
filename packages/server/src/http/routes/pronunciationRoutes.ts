@@ -3,6 +3,7 @@ import { z } from 'zod';
 import type { PronunciationService } from '../../services/pronunciationService.js';
 import { enforceCsrfOrigin, principalToRevisionAuthor, requireMinRole } from '../authMiddleware.js';
 import { decodeSegment, type HttpRouteHandler, jsonResponse, readJsonBody } from '../httpPrimitives.js';
+import { timeSpan } from '../pluginLifecycle.js';
 
 const GeneratePronunciationBodySchema = z.object({
   entity_type: z.enum(['person', 'place']),
@@ -46,22 +47,24 @@ export function createPronunciationRouteHandler(deps: PronunciationRouteHandlerD
   const { pronunciationService, mode } = deps;
 
   return async (ctx) => {
-    const { request, url, pathname, method, segments, auth } = ctx;
+    const { request, url, pathname, method, segments, auth, telemetry } = ctx;
 
     if (method === 'POST' && pathname === '/api/pronunciation/generate') {
       enforceCsrfOrigin(request, url, auth.authMethod);
       requireMinRole(auth.principal, 'editor', { allowAgentScopes: ['write_batch'] });
 
       const body = GeneratePronunciationBodySchema.parse(await readJsonBody(request));
-      const stored = await pronunciationService.generateEntityPronunciation({
-        entityType: body.entity_type,
-        entityId: body.entity_id,
-        text: body.text,
-        phonetic: body.phonetic,
-        ipa: body.ipa,
-        language: body.language,
-        voice: body.voice,
-      });
+      const stored = await timeSpan(telemetry, 'r2', () =>
+        pronunciationService.generateEntityPronunciation({
+          entityType: body.entity_type,
+          entityId: body.entity_id,
+          text: body.text,
+          phonetic: body.phonetic,
+          ipa: body.ipa,
+          language: body.language,
+          voice: body.voice,
+        })
+      );
 
       return jsonResponse(stored, 200);
     }
@@ -72,7 +75,9 @@ export function createPronunciationRouteHandler(deps: PronunciationRouteHandlerD
           allowAgentScopes: ['write_batch', 'read_backup'],
         });
       }
-      const pronunciations = await pronunciationService.loadMergedPronunciations();
+      const pronunciations = await timeSpan(telemetry, 'd1', () =>
+        pronunciationService.loadMergedPronunciations()
+      );
       return jsonResponse({ pronunciations }, 200, {
         'cache-control': mode === 'public' ? 'no-store' : 'private, no-store',
       });
@@ -101,11 +106,13 @@ export function createPronunciationRouteHandler(deps: PronunciationRouteHandlerD
       if (body.variants && body.variants.length > 0) entry.variants = body.variants;
 
       const author = principalToRevisionAuthor(auth.principal);
-      const result = await pronunciationService.upsertLexiconTerm({
-        term,
-        entry,
-        updatedBy: author.author_id,
-      });
+      const result = await timeSpan(telemetry, 'd1', () =>
+        pronunciationService.upsertLexiconTerm({
+          term,
+          entry,
+          updatedBy: author.author_id,
+        })
+      );
       return jsonResponse(result, 200);
     }
 

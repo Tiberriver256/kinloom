@@ -9,6 +9,7 @@ import {
 } from '@kinloom/core';
 import { sha256Hex } from '../crypto.js';
 import { KinloomHttpError } from '../errors.js';
+import { type ServerRequestTelemetryTracker, timeSpan } from './pluginLifecycle.js';
 import { isSecureRequestUrl, readSessionCookieRaw, verifySessionToken } from './session.js';
 
 export type AuthMethod = 'none' | 'cookie' | 'bearer';
@@ -27,13 +28,16 @@ export async function resolveCallerPrincipal(params: {
   sessionSecret: string;
   repository: Pick<AccessControlStore, 'findActiveAgentTokenByHash' | 'getUser' | 'getInvite'>;
   clock: Clock;
+  telemetry?: Pick<ServerRequestTelemetryTracker, 'now' | 'recordSpan'>;
 }): Promise<ResolvedAuthContext> {
   const authHeader = params.request.headers.get('authorization');
   if (authHeader?.trim().toLowerCase().startsWith('bearer ')) {
     const rawBearer = authHeader.trim().slice(7).trim();
     if (rawBearer.length > 0) {
       const tokenHash = await sha256Hex(rawBearer);
-      const tokenRecord = await params.repository.findActiveAgentTokenByHash(tokenHash);
+      const tokenRecord = await timeSpan(params.telemetry, 'd1', () =>
+        params.repository.findActiveAgentTokenByHash(tokenHash)
+      );
       if (tokenRecord && tokenRecord.revoked_at === null) {
         return {
           principal: {
@@ -74,7 +78,7 @@ export async function resolveCallerPrincipal(params: {
   }
 
   if (payload.kind === 'user') {
-    const liveUser = await params.repository.getUser(payload.email);
+    const liveUser = await timeSpan(params.telemetry, 'd1', () => params.repository.getUser(payload.email));
     if (!liveUser) {
       return {
         principal: { kind: 'anonymous' },
@@ -95,7 +99,9 @@ export async function resolveCallerPrincipal(params: {
   }
 
   // Re-check invite status on every request so revoked/expired invites immediately lose read access.
-  const liveInvite = await params.repository.getInvite(payload.invite_token);
+  const liveInvite = await timeSpan(params.telemetry, 'd1', () =>
+    params.repository.getInvite(payload.invite_token)
+  );
   if (!liveInvite || !isInviteActive(liveInvite, params.clock.nowIso())) {
     return {
       principal: { kind: 'anonymous' },
