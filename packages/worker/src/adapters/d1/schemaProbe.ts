@@ -19,7 +19,7 @@ export async function probeD1SchemaMigrationLevel(db: D1Database): Promise<strin
   try {
     const tablesRes = await db
       .prepare(
-        "SELECT name FROM sqlite_master WHERE type = 'table' AND name IN ('entities', 'pronunciation_lexicon')"
+        "SELECT name FROM sqlite_master WHERE type = 'table' AND name IN ('entities', 'pronunciation_lexicon', 'plugin_settings', 'plugin_setting_secrets')"
       )
       .all<{ name?: unknown }>();
     const tableNames = new Set(
@@ -27,6 +27,9 @@ export async function probeD1SchemaMigrationLevel(db: D1Database): Promise<strin
         .map((row) => (typeof row.name === 'string' ? row.name : ''))
         .filter((name) => name.length > 0)
     );
+    if (tableNames.has('plugin_settings') && tableNames.has('plugin_setting_secrets')) {
+      return '0004_plugin_settings.sql';
+    }
     if (tableNames.has('pronunciation_lexicon')) {
       const colsRes = await db.prepare('PRAGMA table_info(pronunciation_lexicon)').all<{ name?: unknown }>();
       const hasProvenance = colsRes.results.some((col) => col.name === 'source_url');

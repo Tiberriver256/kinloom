@@ -12,6 +12,7 @@ import type {
   GeneratedPronunciationAudioResult,
   InviteRecord,
   MediaItem,
+  PluginSettingsSnapshot,
   Pronunciation,
   PronunciationLexicon,
   PublicAgentTokenRecord,
@@ -25,6 +26,8 @@ import type {
 } from '@kinloom/core';
 import {
   AdminDiagnosticsReportSchema,
+  AdminPluginSettingsListResponseSchema,
+  AdminPluginSettingsUpdateResponseSchema,
   AgentTokenScopeSchema,
   AuthorTypeSchema,
   asRevisionId,
@@ -435,4 +438,12 @@ export function parseCreatedAgentTokenResponse(raw: unknown): CreatedAgentTokenR
 
 export function parseAdminDiagnosticsReport(raw: unknown): AdminDiagnosticsReport {
   return AdminDiagnosticsReportSchema.parse(raw);
+}
+
+export function parseAdminPluginSettingsListResponse(raw: unknown): readonly PluginSettingsSnapshot[] {
+  return AdminPluginSettingsListResponseSchema.parse(raw).plugins;
+}
+
+export function parseAdminPluginSettingsUpdateResponse(raw: unknown): PluginSettingsSnapshot {
+  return AdminPluginSettingsUpdateResponseSchema.parse(raw).plugin;
 }

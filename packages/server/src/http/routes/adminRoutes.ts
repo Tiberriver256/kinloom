@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import type { AdminService } from '../../services/adminService.js';
+import type { PluginSettingsService } from '../../services/pluginSettingsService.js';
 import type { SystemDiagnosticsService } from '../../services/systemDiagnosticsService.js';
 import { enforceCsrfOrigin, requireMinRole } from '../authMiddleware.js';
 import { decodeSegment, type HttpRouteHandler, jsonResponse, readJsonBody } from '../httpPrimitives.js';
@@ -28,7 +29,8 @@ const UpdateUserBodySchema = z.object({
 
 export function createAdminRouteHandler(
   adminService: AdminService,
-  systemDiagnosticsService?: SystemDiagnosticsService
+  systemDiagnosticsService?: SystemDiagnosticsService,
+  pluginSettingsService?: PluginSettingsService
 ): HttpRouteHandler {
   return async (ctx) => {
     const { request, url, method, segments, auth, telemetry } = ctx;
@@ -48,6 +50,25 @@ export function createAdminRouteHandler(
     if (segments[2] === 'system' && method === 'GET' && segments.length === 3 && systemDiagnosticsService) {
       const report = await systemDiagnosticsService.getReport();
       return jsonResponse(report, 200);
+    }
+
+    if (segments[2] === 'plugin-settings' && pluginSettingsService) {
+      if (method === 'GET' && segments.length === 3) {
+        const plugins = await timeSpan(telemetry, 'd1', () => pluginSettingsService.listPluginSettings());
+        return jsonResponse({ plugins }, 200);
+      }
+      if (method === 'PUT' && segments.length === 4) {
+        const pluginId = decodeSegment(segments[3]);
+        const rawPayload = await readJsonBody(request);
+        const plugin = await timeSpan(telemetry, 'd1', () =>
+          pluginSettingsService.updatePluginSettings({
+            pluginId,
+            rawPayload,
+            updatedBy: adminEmail,
+          })
+        );
+        return jsonResponse({ plugin }, 200);
+      }
     }
 
     if (segments[2] === 'invites') {

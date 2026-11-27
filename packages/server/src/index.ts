@@ -1,11 +1,16 @@
 export type {
   AssetHandler,
   KinloomServerPluginContext,
+  KinloomServerPluginReadonlySettingsContext,
   KinloomServerPluginRoute,
+  KinloomServerPluginSettingsUpdatedEvent,
   PluginRouteMinRole,
+  PluginSettingsStore,
   PronunciationAudioGenerator,
   PronunciationAudioResult,
   PronunciationLexiconStore,
+  StoredPluginSecretMetadata,
+  StoredPluginSettingsRecord,
 } from '@kinloom/core';
 export { extractCollectionsFromSnapshot } from '@kinloom/core';
 export {
@@ -22,6 +27,7 @@ export {
   InMemoryEmailSender,
   InMemoryIncrementalBundleCache,
   InMemoryMediaStore,
+  InMemoryPluginSettingsStore,
   InMemoryPronunciationLexiconStore,
   type InMemoryServerPortsBundle,
   type SentMagicLinkEmail,
@@ -151,6 +157,15 @@ export {
   verifySessionToken,
 } from './http/session.js';
 export {
+  createPronunciationPlugin,
+  PRONUNCIATION_PLUGIN_ID,
+  type PronunciationFallbackBackend,
+  type PronunciationPhonemeMode,
+  type PronunciationPluginOptions,
+  type PronunciationPluginRuntimeConfig,
+  type PronunciationTtsBackend,
+} from './plugins/pronunciationPlugin.js';
+export {
   buildSecurityTelemetryLogRecord,
   CLOUDFLARE_WEB_ANALYTICS_BEACON_URL,
   CLOUDFLARE_WEB_ANALYTICS_CONNECT_ORIGIN,
@@ -204,6 +219,10 @@ export {
   matchesMagicBytesForMime,
   parseHttpByteRange,
 } from './services/mediaService.js';
+export {
+  PluginSettingsService,
+  type PluginSettingsServiceDeps,
+} from './services/pluginSettingsService.js';
 export {
   type GenerateEntityPronunciationInput,
   PronunciationService,

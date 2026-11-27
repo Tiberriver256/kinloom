@@ -15,6 +15,7 @@ import type {
   Pronunciation,
   ReadingsBundle,
 } from './schemas/entities.js';
+import type { PluginSettingsSnapshot, PluginSettingsUpdateRequest } from './schemas/pluginSettings.js';
 import type {
   AgentTokenScope,
   EntityPayload,
@@ -131,6 +132,11 @@ export interface AdminDataSource {
   createAgentToken(input: { label: string; scope: AgentTokenScope }): Promise<CreatedAgentTokenResponse>;
   revokeAgentToken(tokenId: string): Promise<void>;
   getSystemDiagnostics?(): Promise<AdminDiagnosticsReport>;
+  getPluginSettings?(): Promise<readonly PluginSettingsSnapshot[]>;
+  updatePluginSettings?(
+    pluginId: string,
+    input: PluginSettingsUpdateRequest
+  ): Promise<PluginSettingsSnapshot>;
 }
 
 export interface ArchiveDataSource {

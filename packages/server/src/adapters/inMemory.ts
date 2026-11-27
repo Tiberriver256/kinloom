@@ -10,6 +10,7 @@ import { FakeAuthProvider, InMemoryEmailSender } from './inMemory/authAndEmailFa
 import {
   InMemoryIncrementalBundleCache,
   InMemoryMediaStore,
+  InMemoryPluginSettingsStore,
   InMemoryPronunciationLexiconStore,
 } from './inMemory/bundleAndMediaStores.js';
 import { InMemoryEntityAndMutationStore } from './inMemory/entityAndMutationStore.js';
@@ -25,6 +26,7 @@ export {
 export {
   InMemoryIncrementalBundleCache,
   InMemoryMediaStore,
+  InMemoryPluginSettingsStore,
   InMemoryPronunciationLexiconStore,
 } from './inMemory/bundleAndMediaStores.js';
 
@@ -85,6 +87,7 @@ export interface InMemoryServerPortsBundle extends KinloomServerPorts {
   authProvider: FakeAuthProvider;
   clock: FixedClock;
   pronunciationLexiconStore: InMemoryPronunciationLexiconStore;
+  pluginSettingsStore: InMemoryPluginSettingsStore;
 }
 
 export function createInMemoryServerPorts(
@@ -98,6 +101,7 @@ export function createInMemoryServerPorts(
   const emailSender = new InMemoryEmailSender();
   const authProvider = new FakeAuthProvider();
   const pronunciationLexiconStore = new InMemoryPronunciationLexiconStore();
+  const pluginSettingsStore = new InMemoryPluginSettingsStore();
 
   return {
     repository,
@@ -107,5 +111,6 @@ export function createInMemoryServerPorts(
     authProvider,
     clock,
     pronunciationLexiconStore,
+    pluginSettingsStore,
   };
 }

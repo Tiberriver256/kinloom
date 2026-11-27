@@ -10,6 +10,9 @@ import {
   type KinloomSiteConfig,
   type MediaByteRange,
   type MediaStore,
+  type PluginSettingScalarValue,
+  type PluginSettingsSecretWriteOp,
+  type PluginSettingsStore,
   type Pronunciation,
   type PronunciationLexiconStore,
   patchCompiledBundle,
@@ -17,6 +20,8 @@ import {
   type RevisionRecord,
   type Sha256Hex,
   type StoredMediaObject,
+  type StoredPluginSecretMetadata,
+  type StoredPluginSettingsRecord,
 } from '@kinloom/core';
 import { bytesToStream, matchesIfNoneMatch, readStreamToBytes } from '../../crypto.js';
 
@@ -219,5 +224,101 @@ export class InMemoryPronunciationLexiconStore implements PronunciationLexiconSt
 
   async delete(term: string): Promise<void> {
     this.entries.delete(term);
+  }
+}
+
+interface InMemoryStoredSecret {
+  readonly value: string;
+  readonly updatedAt: string;
+  readonly updatedBy: string;
+}
+
+/**
+ * In-memory PluginSettingsStore keeping non-secret settings and write-only secrets
+ * in separate maps so metadata queries never touch secret plaintext.
+ */
+export class InMemoryPluginSettingsStore implements PluginSettingsStore {
+  readonly adapterKind = 'in-memory';
+  private readonly settingsByPlugin = new Map<string, StoredPluginSettingsRecord>();
+  private readonly secretsByPlugin = new Map<string, Map<string, InMemoryStoredSecret>>();
+
+  async getSettings(pluginId: string): Promise<StoredPluginSettingsRecord | null> {
+    const existing = this.settingsByPlugin.get(pluginId);
+    if (!existing) {
+      return null;
+    }
+    return {
+      plugin_id: existing.plugin_id,
+      values: { ...existing.values },
+      updated_at: existing.updated_at,
+      updated_by: existing.updated_by,
+    };
+  }
+
+  async getSecretMetadata(pluginId: string): Promise<Readonly<Record<string, StoredPluginSecretMetadata>>> {
+    const secrets = this.secretsByPlugin.get(pluginId);
+    if (!secrets) {
+      return {};
+    }
+    const out: Record<string, StoredPluginSecretMetadata> = {};
+    for (const [key, entry] of secrets.entries()) {
+      out[key] = {
+        configured: true,
+        updated_at: entry.updatedAt,
+      };
+    }
+    return out;
+  }
+
+  async getSecretValue(pluginId: string, fieldKey: string): Promise<string | null> {
+    return this.secretsByPlugin.get(pluginId)?.get(fieldKey)?.value ?? null;
+  }
+
+  async savePluginSettings(params: {
+    readonly pluginId: string;
+    readonly values: Readonly<Record<string, PluginSettingScalarValue>>;
+    readonly secretMutations: readonly PluginSettingsSecretWriteOp[];
+    readonly updatedBy: string;
+    readonly updatedAt: string;
+  }): Promise<{
+    readonly settings: StoredPluginSettingsRecord;
+    readonly secretMetadata: Readonly<Record<string, StoredPluginSecretMetadata>>;
+  }> {
+    const record: StoredPluginSettingsRecord = {
+      plugin_id: params.pluginId,
+      values: { ...params.values },
+      updated_at: params.updatedAt,
+      updated_by: params.updatedBy,
+    };
+    this.settingsByPlugin.set(params.pluginId, record);
+
+    if (params.secretMutations.length > 0) {
+      let secretMap = this.secretsByPlugin.get(params.pluginId);
+      if (!secretMap) {
+        secretMap = new Map<string, InMemoryStoredSecret>();
+        this.secretsByPlugin.set(params.pluginId, secretMap);
+      }
+      for (const mutation of params.secretMutations) {
+        if (mutation.action === 'clear') {
+          secretMap.delete(mutation.key);
+        } else if (mutation.action === 'set' && mutation.value !== undefined) {
+          secretMap.set(mutation.key, {
+            value: mutation.value,
+            updatedAt: params.updatedAt,
+            updatedBy: params.updatedBy,
+          });
+        }
+      }
+    }
+
+    return {
+      settings: {
+        plugin_id: record.plugin_id,
+        values: { ...record.values },
+        updated_at: record.updated_at,
+        updated_by: record.updated_by,
+      },
+      secretMetadata: await this.getSecretMetadata(params.pluginId),
+    };
   }
 }

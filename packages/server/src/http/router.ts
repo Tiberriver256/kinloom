@@ -4,6 +4,7 @@ import { AdminService } from '../services/adminService.js';
 import { AuthService } from '../services/authService.js';
 import { BundleReadService } from '../services/bundleReadService.js';
 import { MediaService } from '../services/mediaService.js';
+import { PluginSettingsService } from '../services/pluginSettingsService.js';
 import { PronunciationService } from '../services/pronunciationService.js';
 import {
   type KinloomServerDiagnosticsConfig,
@@ -270,6 +271,15 @@ export function createKinloomServer(config: KinloomServerConfig): KinloomServer 
     onPluginError: config.onPluginError,
   });
 
+  const pluginSettingsService = new PluginSettingsService({
+    siteConfig: config.siteConfig,
+    mode,
+    ports: config.ports,
+    plugins,
+    store: config.ports.pluginSettingsStore,
+    onPluginError: config.onPluginError,
+  });
+
   const pronunciationService = new PronunciationService({
     repository: config.ports.repository,
     mediaStore: config.ports.mediaStore,
@@ -297,7 +307,7 @@ export function createKinloomServer(config: KinloomServerConfig): KinloomServer 
     createWikiRouteHandler({ bundleReadService, wikiWriteService }),
     createPronunciationRouteHandler({ pronunciationService, mode }),
     createMediaAndTalkRouteHandler({ mediaService, talkService }),
-    createAdminRouteHandler(adminService, systemDiagnosticsService),
+    createAdminRouteHandler(adminService, systemDiagnosticsService, pluginSettingsService),
   ];
 
   async function handleRequest(

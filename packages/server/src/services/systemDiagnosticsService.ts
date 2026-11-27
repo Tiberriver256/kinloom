@@ -116,6 +116,9 @@ function collectPluginHooks(plugin: KinloomServerPlugin): string[] {
   if (plugin.documentContributions !== undefined) {
     hooks.push('documentContributions');
   }
+  if (plugin.settingsSchema !== undefined) {
+    hooks.push('settingsSchema');
+  }
   return hooks;
 }
 

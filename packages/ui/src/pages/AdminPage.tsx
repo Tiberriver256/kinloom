@@ -4,6 +4,8 @@ import type {
   AgentTokenScope,
   CreatedAgentTokenResponse,
   InviteRecord,
+  PluginSettingsSnapshot,
+  PluginSettingsUpdateRequest,
   PublicAgentTokenRecord,
   UserRecord,
   UserRole,
@@ -41,6 +43,9 @@ export const AdminPage: React.FC<AdminPageProps> = ({ adminClient, extraSettings
   const [diagnostics, setDiagnostics] = useState<AdminDiagnosticsReport | null>(null);
   const [diagnosticsLoading, setDiagnosticsLoading] = useState<boolean>(false);
   const [diagnosticsError, setDiagnosticsError] = useState<string | null>(null);
+  const [pluginSettings, setPluginSettings] = useState<readonly PluginSettingsSnapshot[]>([]);
+  const [pluginSettingsLoading, setPluginSettingsLoading] = useState<boolean>(false);
+  const [pluginSettingsError, setPluginSettingsError] = useState<string | null>(null);
   const [loading, setLoading] = useState<boolean>(Boolean(client && capabilities.canManageSite));
   const [error, setError] = useState<string | null>(null);
   const [busyKey, setBusyKey] = useState<string | null>(null);
@@ -57,6 +62,7 @@ export const AdminPage: React.FC<AdminPageProps> = ({ adminClient, extraSettings
   const [copiedSecret, setCopiedSecret] = useState(false);
 
   const diagnosticsSupported = Boolean(client?.getSystemDiagnostics);
+  const pluginSettingsSupported = Boolean(client?.getPluginSettings && client?.updatePluginSettings);
 
   const loadDiagnostics = useCallback(async (): Promise<void> => {
     if (!client?.getSystemDiagnostics || !capabilities.canManageSite) {
@@ -76,6 +82,39 @@ export const AdminPage: React.FC<AdminPageProps> = ({ adminClient, extraSettings
       setDiagnosticsLoading(false);
     }
   }, [client, capabilities.canManageSite]);
+
+  const loadPluginSettings = useCallback(async (): Promise<void> => {
+    if (!client?.getPluginSettings || !capabilities.canManageSite) {
+      setPluginSettings([]);
+      setPluginSettingsLoading(false);
+      setPluginSettingsError(null);
+      return;
+    }
+    setPluginSettingsLoading(true);
+    setPluginSettingsError(null);
+    try {
+      const list = await client.getPluginSettings();
+      setPluginSettings(list);
+    } catch (err) {
+      setPluginSettingsError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setPluginSettingsLoading(false);
+    }
+  }, [client, capabilities.canManageSite]);
+
+  const handleUpdatePluginSettings = useCallback(
+    async (pluginId: string, input: PluginSettingsUpdateRequest): Promise<PluginSettingsSnapshot> => {
+      if (!client?.updatePluginSettings) {
+        throw new Error('Plugin settings updates are not supported by the active admin data source.');
+      }
+      const updated = await client.updatePluginSettings(pluginId, input);
+      setPluginSettings((prev) =>
+        prev.map((item) => (item.plugin_id === updated.plugin_id ? updated : item))
+      );
+      return updated;
+    },
+    [client]
+  );
 
   const copyText = (key: string, text: string): void => {
     const clipboard = typeof navigator !== 'undefined' ? navigator.clipboard : undefined;
@@ -125,7 +164,8 @@ export const AdminPage: React.FC<AdminPageProps> = ({ adminClient, extraSettings
   useEffect(() => {
     void loadAll();
     void loadDiagnostics();
-  }, [loadAll, loadDiagnostics]);
+    void loadPluginSettings();
+  }, [loadAll, loadDiagnostics, loadPluginSettings]);
 
   const handleToggleRole = async (user: UserRecord): Promise<void> => {
     if (!client) {
@@ -347,6 +387,12 @@ export const AdminPage: React.FC<AdminPageProps> = ({ adminClient, extraSettings
           diagnosticsError={diagnosticsError}
           diagnosticsSupported={diagnosticsSupported}
           onRefreshDiagnostics={loadDiagnostics}
+          pluginSettings={pluginSettings}
+          pluginSettingsLoading={pluginSettingsLoading}
+          pluginSettingsError={pluginSettingsError}
+          pluginSettingsSupported={pluginSettingsSupported}
+          onRefreshPluginSettings={loadPluginSettings}
+          onUpdatePluginSettings={handleUpdatePluginSettings}
           extraPanels={extraSettingsPanels}
         />
       </main>

@@ -5,6 +5,8 @@ import type {
   CreatedAgentTokenResponse,
   CreatedInviteResponse,
   InviteRecord,
+  PluginSettingsSnapshot,
+  PluginSettingsUpdateRequest,
   PublicAgentTokenRecord,
   UserRecord,
   UserRole,
@@ -12,6 +14,8 @@ import type {
 import { parseErrorEnvelope } from './httpClient.js';
 import {
   parseAdminDiagnosticsReport,
+  parseAdminPluginSettingsListResponse,
+  parseAdminPluginSettingsUpdateResponse,
   parseAgentTokensListResponse,
   parseCreatedAgentTokenResponse,
   parseCreatedInviteResponse,
@@ -92,6 +96,23 @@ export function createHttpAdminDataSource(transport: HttpTransportCallbacks): Ad
     },
     async getSystemDiagnostics(): Promise<AdminDiagnosticsReport> {
       return transport.requestJson('/api/admin/system', parseAdminDiagnosticsReport);
+    },
+    async getPluginSettings(): Promise<readonly PluginSettingsSnapshot[]> {
+      return transport.requestJson('/api/admin/plugin-settings', parseAdminPluginSettingsListResponse);
+    },
+    async updatePluginSettings(
+      pluginId: string,
+      input: PluginSettingsUpdateRequest
+    ): Promise<PluginSettingsSnapshot> {
+      return transport.requestJson(
+        `/api/admin/plugin-settings/${encodeURIComponent(pluginId)}`,
+        parseAdminPluginSettingsUpdateResponse,
+        {
+          method: 'PUT',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(input),
+        }
+      );
     },
   };
 }

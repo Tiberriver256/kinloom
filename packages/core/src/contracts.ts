@@ -19,6 +19,11 @@ import type { KinloomSiteConfig } from './schemas/config.js';
 import type { PluginRuntimeStatus, PluginStatusProbeResult } from './schemas/diagnostics.js';
 import type { ArchiveBundle, Pronunciation } from './schemas/entities.js';
 import type {
+  PluginSettingScalarValue,
+  PluginSettingsSchema,
+  PluginSettingsSecretWriteOp,
+} from './schemas/pluginSettings.js';
+import type {
   AgentTokenScope,
   ApiErrorEnvelope,
   EntityType,
@@ -249,17 +254,66 @@ export interface KinloomServerPluginRoute {
   handle(ctx: KinloomServerPluginContext): Promise<Response>;
 }
 
+export interface KinloomServerPluginReadonlySettingsContext {
+  readonly siteConfig: KinloomSiteConfig;
+  readonly ports: KinloomServerPorts;
+  readonly mode: 'private' | 'public';
+  readonly values: Readonly<Record<string, PluginSettingScalarValue>>;
+  readonly configuredSecrets: Readonly<Record<string, boolean>>;
+}
+
+export interface KinloomServerPluginSettingsUpdatedEvent {
+  readonly values: Readonly<Record<string, PluginSettingScalarValue>>;
+  readonly configuredSecrets: Readonly<Record<string, boolean>>;
+}
+
 export interface KinloomServerPlugin {
   readonly id: string;
   readonly name: string;
   readonly version?: string;
   readonly status?: PluginRuntimeStatus;
   readonly routes?: readonly KinloomServerPluginRoute[];
+  readonly settingsSchema?: PluginSettingsSchema;
   getStatus?(): PluginStatusProbeResult | Promise<PluginStatusProbeResult>;
+  getReadonlySettings?(
+    ctx: KinloomServerPluginReadonlySettingsContext
+  ):
+    | Readonly<Record<string, PluginSettingScalarValue>>
+    | Promise<Readonly<Record<string, PluginSettingScalarValue>>>;
+  onSettingsUpdated?(event: KinloomServerPluginSettingsUpdatedEvent): void | Promise<void>;
   onRevisionCommitted?(event: {
     revisions: readonly RevisionRecord[];
     headRevisionId: RevisionId;
   }): Promise<void>;
+}
+
+export interface StoredPluginSettingsRecord {
+  readonly plugin_id: string;
+  readonly values: Readonly<Record<string, PluginSettingScalarValue>>;
+  readonly updated_at: string;
+  readonly updated_by: string;
+}
+
+export interface StoredPluginSecretMetadata {
+  readonly configured: boolean;
+  readonly updated_at: string | null;
+}
+
+export interface PluginSettingsStore {
+  readonly adapterKind?: string;
+  getSettings(pluginId: string): Promise<StoredPluginSettingsRecord | null>;
+  getSecretMetadata(pluginId: string): Promise<Readonly<Record<string, StoredPluginSecretMetadata>>>;
+  getSecretValue?(pluginId: string, fieldKey: string): Promise<string | null>;
+  savePluginSettings(params: {
+    readonly pluginId: string;
+    readonly values: Readonly<Record<string, PluginSettingScalarValue>>;
+    readonly secretMutations: readonly PluginSettingsSecretWriteOp[];
+    readonly updatedBy: string;
+    readonly updatedAt: string;
+  }): Promise<{
+    readonly settings: StoredPluginSettingsRecord;
+    readonly secretMetadata: Readonly<Record<string, StoredPluginSecretMetadata>>;
+  }>;
 }
 
 export interface PronunciationAudioResult {
@@ -296,6 +350,7 @@ export interface KinloomServerPorts {
   assetHandler?: AssetHandler;
   pronunciationGenerator?: PronunciationAudioGenerator;
   pronunciationLexiconStore?: PronunciationLexiconStore;
+  pluginSettingsStore?: PluginSettingsStore;
   plugins?: readonly KinloomServerPlugin[];
 }
 

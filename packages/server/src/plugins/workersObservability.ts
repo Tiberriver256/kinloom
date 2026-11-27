@@ -1,4 +1,9 @@
-import type { Clock } from '@kinloom/core';
+import type {
+  Clock,
+  KinloomServerPluginReadonlySettingsContext,
+  PluginSettingScalarValue,
+  PluginSettingsSchema,
+} from '@kinloom/core';
 import type {
   KinloomServerPlugin,
   ServerRequestErrorEvent,
@@ -239,6 +244,141 @@ function readState(metadata: Map<string, unknown>): PerRequestObservabilityState
   return null;
 }
 
+const LOG_LEVEL_SEVERITY: Readonly<Record<WorkersObservabilityLogLevel, number>> = {
+  info: 0,
+  warn: 1,
+  error: 2,
+};
+
+function isLogLevel(value: unknown): value is WorkersObservabilityLogLevel {
+  return value === 'info' || value === 'warn' || value === 'error';
+}
+
+function buildWorkersObservabilitySettingsSchema(defaults: {
+  readonly emitServerTiming: boolean;
+  readonly includeRequestIdHeader: boolean;
+  readonly minLogLevel: WorkersObservabilityLogLevel;
+}): PluginSettingsSchema {
+  return {
+    title: 'Cloudflare Backend & Observability',
+    description:
+      'Inspect active Cloudflare runtime bindings and observability capabilities, and adjust safe request telemetry toggles.',
+    sections: [
+      {
+        id: 'runtime_status',
+        title: 'Runtime & Backend Status',
+        description:
+          'Read-only status derived from the active server ports and Worker deployment configuration.',
+        fields: [
+          {
+            key: 'runtime_platform',
+            label: 'Runtime Platform',
+            type: 'readonly',
+            defaultValue: 'portable-server',
+          },
+          {
+            key: 'storage_bindings',
+            label: 'Active Storage & Email Bindings',
+            type: 'readonly',
+            defaultValue: 'in-memory',
+          },
+          {
+            key: 'observability_status',
+            label: 'Observability Status',
+            type: 'readonly',
+            defaultValue: 'active',
+          },
+          {
+            key: 'server_timing_status',
+            label: 'Server-Timing Header',
+            type: 'readonly',
+            defaultValue: defaults.emitServerTiming ? 'enabled' : 'disabled',
+          },
+          {
+            key: 'security_telemetry_status',
+            label: 'Security Telemetry',
+            type: 'readonly',
+            defaultValue: 'disabled',
+          },
+          {
+            key: 'web_analytics_status',
+            label: 'Cloudflare Web Analytics',
+            type: 'readonly',
+            defaultValue: 'disabled',
+          },
+        ],
+      },
+      {
+        id: 'telemetry_controls',
+        title: 'Safe Telemetry Controls',
+        description: 'Runtime toggles for privacy-safe HTTP telemetry headers and structured log verbosity.',
+        fields: [
+          {
+            key: 'emit_server_timing',
+            label: 'Emit Server-Timing headers',
+            type: 'boolean',
+            defaultValue: defaults.emitServerTiming,
+            helpText:
+              'Include W3C Server-Timing span durations (d1, r2, bundle, total) on API and bundle responses.',
+          },
+          {
+            key: 'include_request_id_header',
+            label: 'Include X-Request-Id header',
+            type: 'boolean',
+            defaultValue: defaults.includeRequestIdHeader,
+            helpText: 'Propagate or generate a privacy-safe X-Request-Id correlation header on responses.',
+          },
+          {
+            key: 'log_level_threshold',
+            label: 'Minimum Structured Log Level',
+            type: 'select',
+            required: true,
+            defaultValue: defaults.minLogLevel,
+            helpText: 'Filter structured http_request telemetry logs by minimum severity level.',
+            options: [
+              { value: 'info', label: 'Info (all requests)' },
+              { value: 'warn', label: 'Warn (4xx and 5xx only)' },
+              { value: 'error', label: 'Error (5xx only)' },
+            ],
+          },
+        ],
+      },
+    ],
+  };
+}
+
+function buildWorkersReadonlySettings(
+  ctx: KinloomServerPluginReadonlySettingsContext,
+  state: {
+    readonly enabled: boolean;
+    readonly emitServerTiming: boolean;
+    readonly securityTelemetry: boolean;
+    readonly webAnalytics: boolean;
+  }
+): Readonly<Record<string, PluginSettingScalarValue>> {
+  const isWorkers = typeof navigator !== 'undefined' && navigator.userAgent === 'Cloudflare-Workers';
+  const hasCloudflareAdapter =
+    ctx.ports.repository.adapterKind === 'd1' ||
+    ctx.ports.bundleCache.adapterKind === 'r2' ||
+    ctx.ports.mediaStore.adapterKind === 'r2';
+  const platformLabel = isWorkers || hasCloudflareAdapter ? 'cloudflare-workers' : 'portable-server';
+  const bindingsSummary = [
+    `repository=${ctx.ports.repository.adapterKind ?? 'custom'}`,
+    `bundle_cache=${ctx.ports.bundleCache.adapterKind ?? 'custom'}`,
+    `media_store=${ctx.ports.mediaStore.adapterKind ?? 'custom'}`,
+    `email=${ctx.ports.emailSender.adapterKind ?? 'custom'}`,
+  ].join(', ');
+
+  return {
+    runtime_platform: platformLabel,
+    storage_bindings: bindingsSummary,
+    observability_status: state.enabled ? 'active' : 'disabled',
+    server_timing_status: state.enabled && state.emitServerTiming ? 'enabled' : 'disabled',
+    security_telemetry_status: state.enabled && state.securityTelemetry ? 'enabled' : 'disabled',
+    web_analytics_status: state.enabled && state.webAnalytics ? 'enabled' : 'disabled',
+  };
+}
+
 /**
  * Opt-in Kinloom server plugin for Cloudflare Workers Observability.
  * Emits privacy-safe structured JSON logs, X-Request-Id propagation, and RFC Server-Timing headers.
@@ -248,11 +388,17 @@ export function createWorkersObservabilityPlugin(
   options: WorkersObservabilityPluginOptions = {}
 ): KinloomServerPlugin {
   if (options.enabled === false) {
+    const disabledSchema = buildWorkersObservabilitySettingsSchema({
+      emitServerTiming: false,
+      includeRequestIdHeader: false,
+      minLogLevel: 'info',
+    });
     return {
       id: WORKERS_OBSERVABILITY_PLUGIN_ID,
       name: 'Cloudflare Workers Observability (disabled)',
       version: KINLOOM_SERVER_VERSION,
       status: 'disabled',
+      settingsSchema: disabledSchema,
       observabilityFlags: {
         enabled: false,
         serverTiming: false,
@@ -260,13 +406,26 @@ export function createWorkersObservabilityPlugin(
         webAnalytics: false,
       },
       getStatus: () => ({ status: 'disabled', detail: 'Disabled via plugin options' }),
+      getReadonlySettings: (ctx) =>
+        buildWorkersReadonlySettings(ctx, {
+          enabled: false,
+          emitServerTiming: false,
+          securityTelemetry: false,
+          webAnalytics: false,
+        }),
     };
   }
 
-  const emitServerTiming = options.emitServerTiming ?? true;
-  const includeRequestIdHeader = options.includeRequestIdHeader ?? true;
+  let emitServerTiming = options.emitServerTiming ?? true;
+  let includeRequestIdHeader = options.includeRequestIdHeader ?? true;
+  let minLogLevel: WorkersObservabilityLogLevel = 'info';
   const sink: WorkersObservabilitySink = options.sink ?? defaultWorkersObservabilitySink;
   const generateRequestId = options.generateRequestId ?? defaultGenerateRequestId;
+  const settingsSchema = buildWorkersObservabilitySettingsSchema({
+    emitServerTiming,
+    includeRequestIdHeader,
+    minLogLevel,
+  });
 
   function ensureState(request: Request, metadata: Map<string, unknown>): PerRequestObservabilityState {
     const existing = readState(metadata);
@@ -292,18 +451,22 @@ export function createWorkersObservabilityPlugin(
     : undefined;
 
   const documentContributions = createWebAnalyticsDocumentContributions(options.webAnalytics);
-  const activeFeatures: string[] = [];
-  if (emitServerTiming) {
-    activeFeatures.push('server-timing');
-  }
-  if (includeRequestIdHeader) {
-    activeFeatures.push('request-id');
-  }
-  if (securityEventHandler) {
-    activeFeatures.push('security-telemetry');
-  }
-  if (documentContributions) {
-    activeFeatures.push('web-analytics');
+
+  function describeActiveFeatures(): string {
+    const activeFeatures: string[] = [];
+    if (emitServerTiming) {
+      activeFeatures.push('server-timing');
+    }
+    if (includeRequestIdHeader) {
+      activeFeatures.push('request-id');
+    }
+    if (securityEventHandler) {
+      activeFeatures.push('security-telemetry');
+    }
+    if (documentContributions) {
+      activeFeatures.push('web-analytics');
+    }
+    return activeFeatures.length > 0 ? activeFeatures.join(', ') : 'structured-logs';
   }
 
   return {
@@ -311,16 +474,37 @@ export function createWorkersObservabilityPlugin(
     name: 'Cloudflare Workers Observability',
     version: KINLOOM_SERVER_VERSION,
     status: 'active',
-    observabilityFlags: {
-      enabled: true,
-      serverTiming: emitServerTiming,
-      securityTelemetry: Boolean(securityEventHandler),
-      webAnalytics: Boolean(documentContributions),
+    settingsSchema,
+    get observabilityFlags() {
+      return {
+        enabled: true,
+        serverTiming: emitServerTiming,
+        securityTelemetry: Boolean(securityEventHandler),
+        webAnalytics: Boolean(documentContributions),
+      };
     },
     getStatus: () => ({
       status: 'active',
-      detail: activeFeatures.length > 0 ? activeFeatures.join(', ') : 'structured-logs',
+      detail: describeActiveFeatures(),
     }),
+    getReadonlySettings: (ctx) =>
+      buildWorkersReadonlySettings(ctx, {
+        enabled: true,
+        emitServerTiming,
+        securityTelemetry: Boolean(securityEventHandler),
+        webAnalytics: Boolean(documentContributions),
+      }),
+    onSettingsUpdated: (event) => {
+      if (typeof event.values.emit_server_timing === 'boolean') {
+        emitServerTiming = event.values.emit_server_timing;
+      }
+      if (typeof event.values.include_request_id_header === 'boolean') {
+        includeRequestIdHeader = event.values.include_request_id_header;
+      }
+      if (isLogLevel(event.values.log_level_threshold)) {
+        minLogLevel = event.values.log_level_threshold;
+      }
+    },
     ...(documentContributions ? { documentContributions } : {}),
 
     onRequestStart(event: ServerRequestStartEvent): void {
@@ -363,11 +547,16 @@ export function createWorkersObservabilityPlugin(
         }
       }
 
+      const level = resolveLogLevel(event.status);
+      if (LOG_LEVEL_SEVERITY[level] < LOG_LEVEL_SEVERITY[minLogLevel]) {
+        return;
+      }
+
       const errorCode = sanitizeObservabilityErrorCode(event.errorCode ?? state.errorCode);
       const record: WorkersObservabilityLogRecord = {
         event: 'http_request',
         timestamp: readTimestampIso(options),
-        level: resolveLogLevel(event.status),
+        level,
         request_id: state.requestId,
         method: sanitizeMethod(telemetry.method),
         route: sanitizeRouteForLog(telemetry.route),

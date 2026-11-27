@@ -3,6 +3,7 @@ import type {
   Clock,
   EmailSender,
   KinloomSiteConfig,
+  PluginSettingsStore,
   PronunciationAudioGenerator,
   PronunciationLexiconStore,
 } from '@kinloom/core';
@@ -17,6 +18,7 @@ import {
 import { createCloudflareAssetHandler } from './adapters/cloudflareAssets.js';
 import { CloudflareEmailSender } from './adapters/cloudflareEmailSender.js';
 import { probeD1SchemaMigrationLevel } from './adapters/d1/schemaProbe.js';
+import { D1PluginSettingsStore } from './adapters/d1PluginSettingsStore.js';
 import { D1PronunciationLexiconStore } from './adapters/d1PronunciationLexiconStore.js';
 import { createD1ArchiveRepository } from './adapters/d1Repository.js';
 import { GeminiPronunciationAudioGenerator } from './adapters/geminiPronunciationGenerator.js';
@@ -33,12 +35,19 @@ export {
   CLOUDFLARE_WEB_ANALYTICS_PRIVACY_SUMMARY,
   CLOUDFLARE_WEB_ANALYTICS_SCRIPT_ORIGIN,
   type CloudflareWebAnalyticsToken,
+  createPronunciationPlugin,
   createWorkersObservabilityPlugin,
   type DynamicOgRequestOptions,
   handleDynamicOgRequest,
   isCloudflareWebAnalyticsToken,
   isWebAnalyticsEnabled,
   type KinloomServerPlugin,
+  PRONUNCIATION_PLUGIN_ID,
+  type PronunciationFallbackBackend,
+  type PronunciationPhonemeMode,
+  type PronunciationPluginOptions,
+  type PronunciationPluginRuntimeConfig,
+  type PronunciationTtsBackend,
   type RenderPrivacyPolicyOptions,
   renderCloudflareWebAnalyticsBeaconHtml,
   renderPrivacyPolicyHtml,
@@ -70,6 +79,7 @@ export {
   type CloudflareEmailSenderOptions,
   DEFAULT_EMAIL_FROM,
 } from './adapters/cloudflareEmailSender.js';
+export { D1PluginSettingsStore } from './adapters/d1PluginSettingsStore.js';
 export { D1PronunciationLexiconStore } from './adapters/d1PronunciationLexiconStore.js';
 export {
   createD1ArchiveRepository,
@@ -123,6 +133,7 @@ export interface CreateCloudflareWorkerOptions {
   authProvider?: AuthProvider;
   pronunciationGenerator?: PronunciationAudioGenerator;
   pronunciationLexiconStore?: PronunciationLexiconStore;
+  pluginSettingsStore?: PluginSettingsStore;
   onPluginError?: (pluginId: string, error: unknown) => void;
   buildCommitSha?: string;
   buildTimestamp?: string;
@@ -183,6 +194,7 @@ export function createCloudflareWorker(
           : undefined);
       const pronunciationLexiconStore =
         options.pronunciationLexiconStore ?? new D1PronunciationLexiconStore(env.DB);
+      const pluginSettingsStore = options.pluginSettingsStore ?? new D1PluginSettingsStore(env.DB);
 
       const server = createKinloomServer({
         siteConfig: options.siteConfig,
@@ -211,6 +223,7 @@ export function createCloudflareWorker(
           assetHandler,
           pronunciationGenerator,
           pronunciationLexiconStore,
+          pluginSettingsStore,
           plugins,
         },
       });

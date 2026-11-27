@@ -127,6 +127,7 @@ const EXACT_STATIC_ROUTES = new Set<string>([
   '/api/admin/agent-tokens',
   '/api/admin/users',
   '/api/admin/system',
+  '/api/admin/plugin-settings',
   '/privacy',
   '/og/site.svg',
   '/data/bundle.json',
@@ -226,6 +227,9 @@ export function normalizeServerRouteTemplate(
       }
       if (segments[2] === 'users' && segments.length === 4) {
         return '/api/admin/users/:email';
+      }
+      if (segments[2] === 'plugin-settings' && segments.length === 4) {
+        return '/api/admin/plugin-settings/:pluginId';
       }
       return '/api/admin/*';
     }

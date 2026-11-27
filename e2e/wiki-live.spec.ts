@@ -596,3 +596,91 @@ test('10. Admin Settings & Diagnostics enforces admin RBAC and renders redacted 
   const href = await ghLink.getAttribute('href');
   expect(href).toContain('https://github.com/Tiberriver256/kinloom/issues/new?template=bug_report.yml');
 });
+
+test('11. Declarative Plugin Settings UI enforces RBAC, masks write-only secrets, preserves secrets across partial saves, and supports explicit clear', async ({
+  page,
+}) => {
+  // 1. Unauthenticated caller receives 401; editor receives 403
+  const unauthRes = await page.request.get(`${wiki.baseUrl}/api/admin/plugin-settings`);
+  expect(unauthRes.status()).toBe(401);
+
+  await enrollEditorViaInviteAndMagicLink(page, 'plugins.editor@archive.example');
+  const editorRes = await page.request.get(`${wiki.baseUrl}/api/admin/plugin-settings`);
+  expect(editorRes.status()).toBe(403);
+
+  // 2. Sign in as administrator and open /admin
+  const sessionCookieName = getSessionCookieName(false);
+  const adminToken = await signSessionToken({
+    secret: SESSION_SECRET,
+    clock: wiki.ports.clock,
+    ttlSeconds: 3600,
+    payload: {
+      kind: 'user',
+      email: wiki.adminEmail,
+      display_name: 'Archive Steward',
+      role: 'admin',
+    },
+  });
+  await page.context().addCookies([
+    {
+      name: sessionCookieName,
+      value: adminToken,
+      url: wiki.baseUrl,
+    },
+  ]);
+
+  await page.goto(`${wiki.baseUrl}/admin`);
+  const pluginSection = page.getByTestId('admin-plugin-settings');
+  await expect(pluginSection).toBeVisible();
+  await expect(pluginSection).toContainText('Plugins & Integrations');
+
+  // Both reference adopters render automatically from settingsSchema
+  const obsCard = page.getByTestId('plugin-settings-card-kinloom-workers-observability');
+  const pronCard = page.getByTestId('plugin-settings-card-kinloom-pronunciation');
+  await expect(obsCard).toBeVisible();
+  await expect(pronCard).toBeVisible();
+  await expect(obsCard).toContainText('Cloudflare Backend & Observability');
+  await expect(pronCard).toContainText('Pronunciation & TTS Settings');
+
+  // 3. Set a write-only API key ({ type: 'string', secret: true }) on Pronunciation & TTS
+  const secretValue = 'AIzaSyE2EWriteOnlySecret_20261127';
+  await pronCard.getByRole('button', { name: 'Set Gemini API Key' }).click();
+  const keyInput = pronCard.locator('input[name="gemini_api_key"]');
+  await expect(keyInput).toHaveAttribute('type', 'password');
+  await keyInput.fill(secretValue);
+  await pronCard.getByRole('button', { name: 'Save Pronunciation & TTS Settings' }).click();
+  await expect(pronCard).toContainText('Settings saved.');
+  await expect(pronCard).toContainText('Configured');
+
+  // Verify secret NEVER appears in DOM, GET /api/admin/plugin-settings, or /api/bundle
+  const pageHtml = await page.content();
+  expect(pageHtml).not.toContain(secretValue);
+
+  const apiSettingsRes = await page.request.get(`${wiki.baseUrl}/api/admin/plugin-settings`);
+  expect(apiSettingsRes.status()).toBe(200);
+  const apiSettingsText = await apiSettingsRes.text();
+  expect(apiSettingsText).not.toContain(secretValue);
+
+  const bundleRes = await page.request.get(`${wiki.baseUrl}/api/bundle`);
+  expect(await bundleRes.text()).not.toContain(secretValue);
+
+  // 4. Reload /admin, edit an unrelated field (Default Voice), and confirm the stored secret stays intact
+  await page.reload();
+  const reloadedPronCard = page.getByTestId('plugin-settings-card-kinloom-pronunciation');
+  await expect(reloadedPronCard).toContainText('Configured');
+  await reloadedPronCard.locator('input[name="default_voice"]').fill('Kore');
+  await reloadedPronCard.getByRole('button', { name: 'Save Pronunciation & TTS Settings' }).click();
+  await expect(reloadedPronCard).toContainText('Settings saved.');
+  await expect(reloadedPronCard).toContainText('Configured');
+  expect(await wiki.ports.pluginSettingsStore.getSecretValue('kinloom-pronunciation', 'gemini_api_key')).toBe(
+    secretValue
+  );
+
+  // 5. Explicitly clear the secret and verify it is removed from storage
+  await reloadedPronCard.getByRole('button', { name: 'Clear Gemini API Key' }).click();
+  await reloadedPronCard.getByRole('button', { name: 'Save Pronunciation & TTS Settings' }).click();
+  await expect(reloadedPronCard).toContainText('Not Configured');
+  expect(
+    await wiki.ports.pluginSettingsStore.getSecretValue('kinloom-pronunciation', 'gemini_api_key')
+  ).toBeNull();
+});

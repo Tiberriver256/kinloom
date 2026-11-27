@@ -26,6 +26,8 @@ import {
 import {
   createInMemoryServerPorts,
   createKinloomServer,
+  createPronunciationPlugin,
+  createWorkersObservabilityPlugin,
   type InMemoryServerPortsBundle,
   type KinloomServer,
   sha256Hex,
@@ -404,7 +406,13 @@ export async function startLiveWikiTestServer(): Promise<LiveWikiTestHarness> {
 
   const server = createKinloomServer({
     siteConfig,
-    ports,
+    ports: {
+      ...ports,
+      plugins: [
+        createWorkersObservabilityPlugin({ clock: ports.clock, sink: () => {} }),
+        createPronunciationPlugin(),
+      ],
+    },
     sessionSecret: SESSION_SECRET,
     bootstrapAdminEmail: adminEmail,
   });

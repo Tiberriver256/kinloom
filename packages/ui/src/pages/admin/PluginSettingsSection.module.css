@@ -1,0 +1,329 @@
+/* Declarative Plugin Settings & Integrations Section */
+
+.plugin-settings-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.plugin-settings-header-copy {
+  min-width: 0;
+  flex: 1 1 280px;
+}
+
+.plugin-settings-subtitle {
+  margin: 0;
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+  line-height: 1.45;
+}
+
+.plugin-settings-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.plugin-card {
+  background: var(--surface-canvas);
+  border: 1px solid var(--border-decorative);
+  border-radius: var(--radius-sm);
+  padding: 16px;
+  min-width: 0;
+}
+
+.plugin-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border-decorative);
+}
+
+.plugin-card-title-group {
+  min-width: 0;
+  flex: 1 1 240px;
+}
+
+.plugin-card-title {
+  font-family: var(--font-serif);
+  font-size: 1.12rem;
+  margin: 0 0 4px;
+  color: var(--surface-header);
+}
+
+.plugin-card-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-mono);
+  font-size: 0.74rem;
+  color: var(--text-secondary);
+}
+
+.plugin-card-description {
+  margin: 6px 0 0;
+  font-size: 0.88rem;
+  color: var(--text-secondary);
+  line-height: 1.45;
+}
+
+.plugin-status-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 7px;
+  border-radius: var(--radius-sm);
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  border: 1px solid currentColor;
+  white-space: nowrap;
+}
+
+.plugin-status-pill:global(.is-active),
+.plugin-status-pill:global(.is-configured) {
+  background: var(--diff-add-bg);
+  color: var(--diff-add-fg);
+}
+
+.plugin-status-pill:global(.is-disabled),
+.plugin-status-pill:global(.is-unconfigured),
+.plugin-status-pill:global(.is-dirty) {
+  background: var(--badge-memory-bg);
+  color: var(--badge-memory-fg);
+}
+
+.plugin-status-pill:global(.is-degraded),
+.plugin-status-pill:global(.is-clearing) {
+  background: var(--diff-del-bg);
+  color: var(--diff-del-fg);
+}
+
+.plugin-fieldset {
+  border: 1px solid var(--border-decorative);
+  border-radius: var(--radius-sm);
+  background: var(--surface-card);
+  padding: 14px;
+  margin: 0 0 14px;
+}
+
+.plugin-legend {
+  font-family: var(--font-serif);
+  font-size: 0.98rem;
+  font-weight: 600;
+  color: var(--surface-header);
+  padding: 0 6px;
+}
+
+.plugin-section-desc {
+  margin: 0 0 12px;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  line-height: 1.45;
+}
+
+.plugin-readonly-dl {
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 10px 16px;
+}
+
+.plugin-readonly-item {
+  background: var(--surface-canvas);
+  border: 1px solid var(--border-decorative);
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+}
+
+.plugin-readonly-item dt {
+  font-family: var(--font-mono);
+  font-size: 0.74rem;
+  color: var(--text-secondary);
+  margin-bottom: 3px;
+}
+
+.plugin-readonly-item dd {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+  color: var(--text-primary);
+  overflow-wrap: anywhere;
+}
+
+.plugin-fields-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.plugin-field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.plugin-field-label {
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--surface-header);
+}
+
+.plugin-required-mark {
+  color: var(--status-conflict);
+  margin-inline-start: 3px;
+}
+
+.plugin-input,
+.plugin-select {
+  width: 100%;
+  max-width: 560px;
+  font: inherit;
+  font-size: max(1rem, 0.92rem);
+  min-height: 44px;
+  padding: 8px 11px;
+  border: 1px solid var(--border-control);
+  border-radius: var(--radius-sm);
+  background: var(--surface-card);
+  color: var(--text-primary);
+  box-sizing: border-box;
+}
+
+.plugin-input:focus-visible,
+.plugin-select:focus-visible {
+  outline: 2px solid var(--action-focus);
+  outline-offset: 2px;
+}
+
+.plugin-input[aria-invalid="true"],
+.plugin-select[aria-invalid="true"] {
+  border-color: var(--status-conflict);
+  background: var(--diff-del-bg);
+}
+
+.plugin-toggle-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+}
+
+.plugin-toggle-checkbox {
+  width: 20px;
+  height: 20px;
+  margin: 0;
+  accent-color: var(--surface-header);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.plugin-toggle-checkbox:focus-visible {
+  outline: 2px solid var(--action-focus);
+  outline-offset: 3px;
+}
+
+.plugin-toggle-label {
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--surface-header);
+  cursor: pointer;
+}
+
+.plugin-secret-box {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--border-decorative);
+  border-radius: var(--radius-sm);
+  background: var(--surface-canvas);
+  max-width: 620px;
+}
+
+.plugin-secret-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.plugin-secret-mask {
+  font-family: var(--font-mono);
+  font-size: 0.84rem;
+  letter-spacing: 0.12em;
+  color: var(--text-secondary);
+}
+
+.plugin-secret-input-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.plugin-secret-input-row .plugin-input {
+  flex: 1 1 240px;
+}
+
+.plugin-secret-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.plugin-help-text {
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
+
+.plugin-field-error {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--diff-del-fg);
+}
+
+.plugin-form-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding-top: 8px;
+}
+
+.plugin-form-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.plugin-feedback-status {
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.plugin-feedback-status:global(.is-success) {
+  color: var(--diff-add-fg);
+}
+
+.plugin-feedback-status:global(.is-error) {
+  color: var(--diff-del-fg);
+}
