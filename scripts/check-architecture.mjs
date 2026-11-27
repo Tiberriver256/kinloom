@@ -136,6 +136,22 @@ function parseStaticModuleSpecifiers(rawSource) {
   return results;
 }
 
+/**
+ * Parse dynamic `import('...')` specifiers with string-literal arguments.
+ */
+function parseDynamicModuleSpecifiers(rawSource) {
+  const code = maskSource(rawSource, { blankStrings: false });
+  const results = [];
+  const dynRe = /\bimport\s*\(\s*(['"])([^'"\n]+)\1\s*\)/g;
+  let match;
+  while ((match = dynRe.exec(code)) !== null) {
+    const spec = match[2];
+    const line = lineNumberAt(code, match.index);
+    results.push({ kind: 'dynamic-import', spec, isTypeOnly: false, line });
+  }
+  return results;
+}
+
 function resolveRelativeTsFile(fromRel, spec, fileSet) {
   if (!spec.startsWith('.')) {
     return null;
@@ -214,11 +230,13 @@ const packageFileSet = new Set(packageFiles);
 
 const sourceCache = new Map();
 const importsCache = new Map();
+const dynamicImportsCache = new Map();
 
 for (const file of allCheckedFiles) {
   const raw = fs.readFileSync(path.join(ROOT_DIR, file), 'utf8');
   sourceCache.set(file, raw);
   importsCache.set(file, parseStaticModuleSpecifiers(raw));
+  dynamicImportsCache.set(file, parseDynamicModuleSpecifiers(raw));
 }
 
 const violations = [];
@@ -227,25 +245,36 @@ function addViolation(rule, file, line, message) {
 }
 
 // ---------------------------------------------------------------------------
-// Invariant 1: 0 runtime AND 0 type-inclusive circular imports (Tarjan SCC)
+// Invariant 1: 0 runtime, 0 type-inclusive, AND 0 dynamic-import circular imports (Tarjan SCC)
 // ---------------------------------------------------------------------------
 const typeInclusiveAdj = new Map();
 const runtimeOnlyAdj = new Map();
+const dynamicInclusiveAdj = new Map();
 for (const file of packageFiles) {
   const allTargets = new Set();
   const runtimeTargets = new Set();
+  const dynamicTargets = new Set();
   for (const imp of importsCache.get(file)) {
     const resolved = resolveRelativeTsFile(file, imp.spec, packageFileSet);
     if (!resolved || resolved === file) {
       continue;
     }
     allTargets.add(resolved);
+    dynamicTargets.add(resolved);
     if (!imp.isTypeOnly) {
       runtimeTargets.add(resolved);
     }
   }
+  for (const dyn of dynamicImportsCache.get(file)) {
+    const resolved = resolveRelativeTsFile(file, dyn.spec, packageFileSet);
+    if (!resolved || resolved === file) {
+      continue;
+    }
+    dynamicTargets.add(resolved);
+  }
   typeInclusiveAdj.set(file, [...allTargets]);
   runtimeOnlyAdj.set(file, [...runtimeTargets]);
+  dynamicInclusiveAdj.set(file, [...dynamicTargets]);
 }
 
 const runtimeSccs = findTarjanSccs(packageFiles, runtimeOnlyAdj);
@@ -268,6 +297,16 @@ for (const scc of typeSccs) {
   );
 }
 
+const dynamicSccs = findTarjanSccs(packageFiles, dynamicInclusiveAdj);
+for (const scc of dynamicSccs) {
+  addViolation(
+    'no-circular-imports-dynamic',
+    scc[0],
+    1,
+    `Dynamic-import circular import SCC (${scc.length} files): ${scc.join(' <-> ')}`
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Invariant 2: 0 reverse-layer imports
 // ---------------------------------------------------------------------------
@@ -278,7 +317,6 @@ const SHARED_OPS_OWNERS = new Set([
   'shared',
   'livingnamematcher',
   'pronunciationchecks',
-  'livemediacollisions',
   'treehygiene',
 ]);
 
@@ -322,26 +360,40 @@ for (const file of packageFiles) {
     }
   }
 
-  // 2c. packages/cli/src/commands/ops/<cmd> -> peer ops commands
-  if (file.startsWith('packages/cli/src/commands/ops/')) {
+  // 2c. packages/cli/src/commands/ops/** peer-command & shared-layer directionality
+  if (
+    file.startsWith('packages/cli/src/commands/ops/') &&
+    file !== 'packages/cli/src/commands/ops/index.ts'
+  ) {
     const relFromOps = file.slice('packages/cli/src/commands/ops/'.length);
     const ownerFrom = normalizeOpsCommandOwner(relFromOps);
-    if (!SHARED_OPS_OWNERS.has(ownerFrom)) {
-      for (const imp of imports) {
-        const resolved = resolveRelativeTsFile(file, imp.spec, packageFileSet);
-        if (!resolved?.startsWith('packages/cli/src/commands/ops/')) {
-          continue;
-        }
-        const relToOps = resolved.slice('packages/cli/src/commands/ops/'.length);
-        const ownerTo = normalizeOpsCommandOwner(relToOps);
-        if (ownerTo !== ownerFrom && !SHARED_OPS_OWNERS.has(ownerTo)) {
+    const isFromSharedDir = file.startsWith('packages/cli/src/commands/ops/shared/');
+    const allOpsImports = [...imports, ...dynamicImportsCache.get(file)];
+    for (const imp of allOpsImports) {
+      const resolved = resolveRelativeTsFile(file, imp.spec, packageFileSet);
+      if (!resolved?.startsWith('packages/cli/src/commands/ops/')) {
+        continue;
+      }
+      const relToOps = resolved.slice('packages/cli/src/commands/ops/'.length);
+      const ownerTo = normalizeOpsCommandOwner(relToOps);
+      if (isFromSharedDir) {
+        if (ownerTo !== 'shared') {
           addViolation(
             'no-peer-ops-imports',
             file,
             imp.line,
-            `CLI ops command '${ownerFrom}' must not import peer ops command '${ownerTo}' via '${imp.spec}'; extract shared logic to commands/ops/shared/.`
+            `CLI shared ops module must not import peer ops command '${ownerTo}' via '${imp.spec}'; keep dependencies inside commands/ops/shared/.`
           );
         }
+        continue;
+      }
+      if (ownerTo !== ownerFrom && !SHARED_OPS_OWNERS.has(ownerTo)) {
+        addViolation(
+          'no-peer-ops-imports',
+          file,
+          imp.line,
+          `CLI ops command '${ownerFrom}' must not import peer ops command '${ownerTo}' via '${imp.spec}'; extract shared logic to commands/ops/shared/.`
+        );
       }
     }
   }
@@ -524,17 +576,28 @@ for (const file of packageFiles) {
     );
   }
 
-  // 4c. Zero raw fetch('/api/...') outside packages/ui/src/adapters/**
+  // 4c. Zero raw fetch/sendBeacon targeting api/ URLs outside packages/ui/src/adapters/**
   if (!file.startsWith('packages/ui/src/adapters/')) {
     const codeWithStrings = maskSource(sourceCache.get(file), { blankStrings: false });
-    const rawApiFetchRe = /\bfetch\s*\(\s*(['"`])\/api\//g;
-    while ((m = rawApiFetchRe.exec(codeWithStrings)) !== null) {
+    const rawApiTransportRe = /\b(?:fetch|sendBeacon)\s*\(\s*(['"`])(?:[^'"`\n]*?\/)?api\//g;
+    while ((m = rawApiTransportRe.exec(codeWithStrings)) !== null) {
       addViolation(
         'no-raw-ui-api-fetch',
         file,
         lineNumberAt(codeWithStrings, m.index),
-        'UI modules outside adapters/ must not call raw `fetch("/api/...")`; route HTTP I/O through ArchiveDataSource.'
+        'UI modules outside adapters/ must not call raw `fetch` or `navigator.sendBeacon` against `api/` URLs; route HTTP I/O through ArchiveDataSource or injectable transport.'
       );
+    }
+    if (/\b(?:fetch|sendBeacon)\s*\(/.test(masked)) {
+      const apiUrlBuilderRe = /(['"`])(?:[^'"`\n]*?(?:\/|\$\{[^}]+\}))?api\/[A-Za-z0-9_-]+/g;
+      while ((m = apiUrlBuilderRe.exec(codeWithStrings)) !== null) {
+        addViolation(
+          'no-raw-ui-api-fetch',
+          file,
+          lineNumberAt(codeWithStrings, m.index),
+          'UI modules outside adapters/ calling `fetch` or `sendBeacon` must not construct hardcoded `api/` URLs; inject endpoint/transport or route through ArchiveDataSource.'
+        );
+      }
     }
   }
 }
@@ -627,6 +690,6 @@ if (violations.length > 0) {
 
 console.log(
   `Architecture check PASSED (0 violations across ${allCheckedFiles.length} non-test TS/TSX files: ` +
-    `0 runtime cycles, 0 type cycles, 0 reverse-layer/adapter/cross-page-CSS/atom-drawer-CSS imports, ` +
-    `0 raw UI /api/ fetches, 0 pure-UI leaks, 0 escape hatches, 0 eager record-client imports, 0 ambient Date in privacy).`
+    `0 runtime cycles, 0 type cycles, 0 dynamic-import cycles, 0 reverse-layer/adapter/cross-page-CSS/atom-drawer-CSS imports, ` +
+    `0 raw UI /api/ fetch or sendBeacon calls, 0 pure-UI leaks, 0 escape hatches, 0 eager record-client imports, 0 ambient Date in privacy).`
 );

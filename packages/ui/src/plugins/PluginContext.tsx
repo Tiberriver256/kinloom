@@ -15,6 +15,9 @@ import type {
   KinloomUiPluginSlotContext,
   KinloomUiPluginSlotName,
 } from './types.js';
+import { RESERVED_UI_ROUTE_PATHS, validateAndCompileUiPlugins } from './validatePlugins.js';
+
+export { RESERVED_UI_ROUTE_PATHS, validateAndCompileUiPlugins };
 
 export interface KinloomPluginContextValue {
   readonly plugins: readonly KinloomUiPlugin[];
@@ -45,29 +48,7 @@ export const KinloomPluginProvider: React.FC<KinloomPluginProviderProps> = ({
   plugins = EMPTY_PLUGINS,
   children,
 }) => {
-  const value = useMemo<KinloomPluginContextValue>(() => {
-    const routes: (KinloomUiPluginRoute & { pluginId: string })[] = [];
-    const mediaRenderers: KinloomMediaRenderer[] = [];
-    const entityEditForms: Partial<Record<EntityType, EntityEditFormEntry>> = {};
-    const entityCreateForms: Partial<Record<EntityType, EntityCreateFormEntry>> = {};
-    for (const plugin of plugins) {
-      if (plugin.routes) {
-        for (const route of plugin.routes) {
-          routes.push({ ...route, pluginId: plugin.id });
-        }
-      }
-      if (plugin.mediaRenderers) {
-        mediaRenderers.push(...plugin.mediaRenderers);
-      }
-      if (plugin.entityEditForms) {
-        Object.assign(entityEditForms, plugin.entityEditForms);
-      }
-      if (plugin.entityCreateForms) {
-        Object.assign(entityCreateForms, plugin.entityCreateForms);
-      }
-    }
-    return { plugins, routes, mediaRenderers, entityEditForms, entityCreateForms };
-  }, [plugins]);
+  const value = useMemo<KinloomPluginContextValue>(() => validateAndCompileUiPlugins(plugins), [plugins]);
 
   const wrappedChildren = plugins.reduceRight<React.ReactNode>((acc, plugin) => {
     if (!plugin.provider) {

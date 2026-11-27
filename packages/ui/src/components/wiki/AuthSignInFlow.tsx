@@ -1,11 +1,10 @@
 import type { ArchiveDataSource } from '@kinloom/core';
-import { useMachine } from '@xstate/react';
 import type React from 'react';
 import { useEffect, useId, useRef, useState } from 'react';
 import { useArchiveData } from '../../context/ArchiveDataContext.js';
 import { scrollBehaviorForMotion } from '../../hooks/keyboardNav.js';
 import { cx, joinClasses } from '../../lib/cx.js';
-import { authSessionMachine } from '../../machines/authSessionMachine.js';
+import { AuthSessionActorContext } from '../../machines/authSessionMachine.js';
 import {
   type AuthFeedback,
   type AuthUrlError,
@@ -29,20 +28,12 @@ export interface AuthSignInFlowProps {
   feedbackRef?: React.RefObject<HTMLDivElement | null>;
 }
 
-function buildGoogleUrl(dataSource: ArchiveDataSource, nextPath: string, selectAccount: boolean): string {
-  const portUrl = dataSource.getGoogleSignInUrl?.(nextPath, { selectAccount });
-  if (portUrl) {
-    return portUrl;
-  }
-  const params = new URLSearchParams();
-  if (nextPath) {
-    params.set('next', nextPath);
-  }
-  if (selectAccount) {
-    params.set('select_account', '1');
-  }
-  const qs = params.toString();
-  return `/api/auth/google/start${qs ? `?${qs}` : ''}`;
+function buildGoogleUrl(
+  dataSource: ArchiveDataSource,
+  nextPath: string,
+  selectAccount: boolean
+): string | null {
+  return dataSource.getGoogleSignInUrl?.(nextPath, { selectAccount }) ?? null;
 }
 
 function defaultNavigateToInvite(path: string): void {
@@ -59,7 +50,9 @@ export const AuthSignInFlow: React.FC<AuthSignInFlowProps> = ({
   emailInputRef: externalEmailInputRef,
   feedbackRef: externalFeedbackRef,
 }) => {
-  const { dataSource, authProviders, session } = useArchiveData();
+  const { dataSource, authProviders } = useArchiveData();
+  const authActorRef = AuthSessionActorContext.useActorRef();
+  const authSnapshot = AuthSessionActorContext.useSelector((state) => state);
   const baseId = useId();
   const internalEmailInputRef = useRef<HTMLInputElement | null>(null);
   const internalFeedbackRef = useRef<HTMLDivElement | null>(null);
@@ -70,40 +63,21 @@ export const AuthSignInFlow: React.FC<AuthSignInFlowProps> = ({
   const sentTitleRef = useRef<HTMLParagraphElement | null>(null);
   const inviteOpenedByUserRef = useRef(false);
 
-  const [authSnapshot, sendAuth] = useMachine(authSessionMachine, {
-    input: {
-      dataSource,
-      initialSession:
-        session && session.principal_kind !== 'user'
-          ? session
-          : { authenticated: false, principal_kind: 'anonymous' },
-    },
-  });
-
   const [email, setEmail] = useState('');
   const [emailTouched, setEmailTouched] = useState(false);
   const [emailError, setEmailError] = useState<string | null>(null);
-
-  const [urlError, setUrlError] = useState<AuthUrlError | null>(initialUrlError);
 
   const [inviteOpen, setInviteOpen] = useState(false);
   const [inviteValue, setInviteValue] = useState('');
   const [inviteError, setInviteError] = useState<string | null>(null);
 
   useEffect(() => {
-    sendAuth({ type: 'SYNC_DATA_SOURCE', dataSource });
-  }, [dataSource, sendAuth]);
-
-  useEffect(() => {
-    setUrlError(initialUrlError);
-    if (initialUrlError) {
-      sendAuth({ type: 'CANCEL_MAGIC_LINK' });
-      sendAuth({ type: 'CLEAR_AUTH_ERROR' });
-    }
-  }, [initialUrlError, sendAuth]);
+    authActorRef.send({ type: 'SET_URL_ERROR', urlError: initialUrlError });
+  }, [authActorRef, initialUrlError]);
 
   const sending = authSnapshot.matches('requestingMagicLink');
   const resendCount = authSnapshot.context.magicLinkResendCount;
+  const urlError = authSnapshot.context.urlError;
   const sentTo =
     authSnapshot.matches('awaitingMagicLinkClick') ||
     (authSnapshot.matches('requestingMagicLink') && resendCount > 0)
@@ -168,6 +142,7 @@ export const AuthSignInFlow: React.FC<AuthSignInFlowProps> = ({
   const nextPath = getCleanNextPath();
   const googleStartUrl = buildGoogleUrl(dataSource, nextPath, false);
   const googleSwitchAccountUrl = buildGoogleUrl(dataSource, nextPath, true);
+  const canSignInWithGoogle = Boolean(authProviders.google && googleStartUrl);
 
   const emailInputId = `${baseId}-email`;
   const emailErrorId = `${baseId}-email-error`;
@@ -177,8 +152,7 @@ export const AuthSignInFlow: React.FC<AuthSignInFlowProps> = ({
   const inviteErrorId = `${baseId}-invite-error`;
 
   const clearFeedback = (): void => {
-    sendAuth({ type: 'CLEAR_AUTH_ERROR' });
-    setUrlError(null);
+    authActorRef.send({ type: 'CLEAR_AUTH_ERROR' });
   };
 
   const handleMagicLinkSubmit = (e: React.FormEvent): void => {
@@ -192,8 +166,7 @@ export const AuthSignInFlow: React.FC<AuthSignInFlowProps> = ({
       return;
     }
     setEmailError(null);
-    setUrlError(null);
-    sendAuth({ type: 'REQUEST_MAGIC_LINK', email: trimmed });
+    authActorRef.send({ type: 'REQUEST_MAGIC_LINK', email: trimmed });
   };
 
   const handleInviteSubmit = (e: React.FormEvent): void => {
@@ -209,7 +182,7 @@ export const AuthSignInFlow: React.FC<AuthSignInFlowProps> = ({
   };
 
   const handleUseDifferentEmail = (): void => {
-    sendAuth({ type: 'CANCEL_MAGIC_LINK' });
+    authActorRef.send({ type: 'CANCEL_MAGIC_LINK' });
     clearFeedback();
     setEmailError(null);
     window.setTimeout(() => {
@@ -225,7 +198,7 @@ export const AuthSignInFlow: React.FC<AuthSignInFlowProps> = ({
         <div className={cx(wikiPanelStyles, 'wiki-status-banner is-info')}>
           <p>
             Invited via <strong>{inviteLabel}</strong>.{' '}
-            {authProviders.google
+            {canSignInWithGoogle
               ? 'Sign in with your email or Google to add stories, photos, and updates.'
               : 'Enter your email below to receive a one-click sign-in link and add stories, photos, and updates.'}
           </p>
@@ -250,7 +223,7 @@ export const AuthSignInFlow: React.FC<AuthSignInFlowProps> = ({
           {activeFeedback.hint && (
             <p className={cx(wikiAuthStyles, 'wiki-auth-feedback-hint')}>{activeFeedback.hint}</p>
           )}
-          {activeFeedback.showSwitchGoogleAccount && (
+          {activeFeedback.showSwitchGoogleAccount && googleSwitchAccountUrl && (
             <div className={cx(wikiAuthStyles, 'wiki-auth-feedback-actions')}>
               <a
                 href={googleSwitchAccountUrl}
@@ -292,8 +265,7 @@ export const AuthSignInFlow: React.FC<AuthSignInFlowProps> = ({
                 className={cx(wikiChromeStyles, 'wiki-btn-secondary')}
                 disabled={sending}
                 onClick={() => {
-                  setUrlError(null);
-                  sendAuth({ type: 'RESEND_MAGIC_LINK', email: sentTo });
+                  authActorRef.send({ type: 'RESEND_MAGIC_LINK', email: sentTo });
                 }}
               >
                 {sending ? 'Sending link…' : 'Send another link'}
@@ -367,7 +339,7 @@ export const AuthSignInFlow: React.FC<AuthSignInFlowProps> = ({
           </form>
         ))}
 
-      {authProviders.google && (
+      {canSignInWithGoogle && googleStartUrl && (
         <>
           {authProviders.magicLink && (
             <div className={cx(wikiAuthStyles, 'wiki-divider-label')} aria-hidden="true">

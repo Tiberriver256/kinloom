@@ -101,33 +101,47 @@ function parseEntityPayloadChecked(raw: unknown, label: string): EntityPayload {
   return parsed.data;
 }
 
+function expectNullableNumber(value: unknown, label: string): number | null {
+  if (value === null || value === undefined) {
+    return null;
+  }
+  return expectNumber(value, label);
+}
+
+function expectBooleanOrBit(value: unknown, label: string): boolean {
+  if (typeof value === 'boolean') {
+    return value;
+  }
+  if (value === 0 || value === 1) {
+    return Boolean(value);
+  }
+  throw new Error(`Expected boolean (or 0/1) for ${label}`);
+}
+
 function parseRevisionLike(raw: unknown, label: string): RevisionRecord {
   const rec = expectRecord(raw, label);
   const revisionId = expectNumber(rec.revision_id, `${label}.revision_id`);
-  const entityTypeParsed = EntityTypeSchema.safeParse(rec.entity_type);
-  const entityType: EntityType = entityTypeParsed.success ? entityTypeParsed.data : 'person';
-  const actionParsed = RevisionActionSchema.safeParse(rec.action);
-  const action: RevisionAction = actionParsed.success ? actionParsed.data : 'update';
-  const authorTypeParsed = AuthorTypeSchema.safeParse(rec.author_type);
-  const authorType: AuthorType = authorTypeParsed.success ? authorTypeParsed.data : 'human';
+  const entityType: EntityType = EntityTypeSchema.parse(rec.entity_type);
+  const action: RevisionAction = RevisionActionSchema.parse(rec.action);
+  const authorType: AuthorType = AuthorTypeSchema.parse(rec.author_type);
   const beforeRaw = rec.before_json !== undefined ? rec.before_json : rec.before_snapshot;
   const afterRaw = rec.after_json !== undefined ? rec.after_json : rec.after_snapshot;
   return {
     revision_id: revisionId,
     batch_id: expectNullableString(rec.batch_id, `${label}.batch_id`),
     entity_type: entityType,
-    entity_id: typeof rec.entity_id === 'string' ? rec.entity_id : '',
-    parent_revision_id: typeof rec.parent_revision_id === 'number' ? rec.parent_revision_id : null,
+    entity_id: expectNonEmptyString(rec.entity_id, `${label}.entity_id`),
+    parent_revision_id: expectNullableNumber(rec.parent_revision_id, `${label}.parent_revision_id`),
     action,
-    reverted_revision_id: typeof rec.reverted_revision_id === 'number' ? rec.reverted_revision_id : null,
-    author_id: typeof rec.author_id === 'string' ? rec.author_id : '',
-    author_name: typeof rec.author_name === 'string' ? rec.author_name : '',
+    reverted_revision_id: expectNullableNumber(rec.reverted_revision_id, `${label}.reverted_revision_id`),
+    author_id: expectNonEmptyString(rec.author_id, `${label}.author_id`),
+    author_name: expectNonEmptyString(rec.author_name, `${label}.author_name`),
     author_type: authorType,
-    summary: typeof rec.summary === 'string' ? rec.summary : '',
-    has_primary_source: Boolean(rec.has_primary_source),
+    summary: expectString(rec.summary, `${label}.summary`),
+    has_primary_source: expectBooleanOrBit(rec.has_primary_source, `${label}.has_primary_source`),
     before_json: parseOptionalEntityPayload(beforeRaw, `${label}.before_json`),
     after_json: parseOptionalEntityPayload(afterRaw, `${label}.after_json`),
-    created_at: typeof rec.created_at === 'string' ? rec.created_at : '',
+    created_at: expectNonEmptyString(rec.created_at, `${label}.created_at`),
   };
 }
 

@@ -135,7 +135,23 @@ describe('HttpWikiDataSource', () => {
           return jsonResponse({
             media: { id: 'm1', kind: 'portrait', file: '/media/abc.jpg', caption: 'Portrait' },
             url: '/media/abc.jpg',
-            revision: { revision_id: 10 },
+            revision: {
+              revision_id: 10,
+              batch_id: null,
+              entity_type: 'media',
+              entity_id: 'm1',
+              parent_revision_id: null,
+              action: 'create',
+              reverted_revision_id: null,
+              author_id: 'a@example.com',
+              author_name: 'Admin',
+              author_type: 'human',
+              summary: 'Upload portrait',
+              has_primary_source: true,
+              before_json: null,
+              after_json: { id: 'm1' },
+              created_at: '2026-11-24T00:00:00Z',
+            },
             etag: '"r10"',
           });
         }
@@ -242,6 +258,93 @@ describe('HttpWikiDataSource', () => {
 
     corruptSession = true;
     await expect(ds.getSession()).rejects.toMatchObject({
+      name: 'ApiClientError',
+      code: 'INVALID_API_RESPONSE',
+    });
+  });
+
+  it('rejects malformed archive bundles, malformed revisions, and invalid media checklist items with INVALID_API_RESPONSE', async () => {
+    let mode: 'bad-bundle' | 'bad-rev-type' | 'bad-rev-action' | 'bad-rev-author' | 'bad-checklist' =
+      'bad-bundle';
+
+    const ds = new HttpWikiDataSource({
+      fetchImpl: async (input) => {
+        const url = String(input);
+        if (url === '/api/bundle') {
+          return jsonResponse({
+            meta: {
+              build_mode: 'public',
+              generated_at: '2026-11-24T00:00:00Z',
+              counts: {
+                people: 0,
+                living_redacted: 0,
+                events: 0,
+                residence_spans: 0,
+                places: 0,
+                sources: 0,
+              },
+            },
+            // Missing required top-level bundle arrays
+          });
+        }
+        if (url.startsWith('/api/revisions')) {
+          const baseRev = {
+            revision_id: 11,
+            batch_id: null,
+            entity_type: 'person',
+            entity_id: 'per_1',
+            parent_revision_id: null,
+            action: 'update',
+            reverted_revision_id: null,
+            author_id: 'editor@example.test',
+            author_name: 'Editor',
+            author_type: 'human',
+            summary: 'Edit',
+            has_primary_source: true,
+            before_json: null,
+            after_json: { id: 'per_1' },
+            created_at: '2026-11-24T00:00:00Z',
+          };
+          const badRev =
+            mode === 'bad-rev-type'
+              ? { ...baseRev, entity_type: 'unknown_entity' }
+              : mode === 'bad-rev-action'
+                ? { ...baseRev, action: 'obliterate' }
+                : { ...baseRev, author_type: 'mystery_bot' };
+          return jsonResponse({ items: [badRev], next_cursor: null });
+        }
+        if (url.endsWith('data/media-checklist.json')) {
+          return jsonResponse({ items: [{ id: 'bad_item', title: 'Missing required fields' }] });
+        }
+        return new Response('Not found', { status: 404 });
+      },
+    });
+
+    await expect(ds.loadArchive()).rejects.toMatchObject({
+      name: 'ApiClientError',
+      code: 'INVALID_API_RESPONSE',
+    });
+
+    mode = 'bad-rev-type';
+    await expect(ds.listRevisions()).rejects.toMatchObject({
+      name: 'ApiClientError',
+      code: 'INVALID_API_RESPONSE',
+    });
+
+    mode = 'bad-rev-action';
+    await expect(ds.listRevisions()).rejects.toMatchObject({
+      name: 'ApiClientError',
+      code: 'INVALID_API_RESPONSE',
+    });
+
+    mode = 'bad-rev-author';
+    await expect(ds.listRevisions()).rejects.toMatchObject({
+      name: 'ApiClientError',
+      code: 'INVALID_API_RESPONSE',
+    });
+
+    mode = 'bad-checklist';
+    await expect(ds.loadMediaChecklist()).rejects.toMatchObject({
       name: 'ApiClientError',
       code: 'INVALID_API_RESPONSE',
     });

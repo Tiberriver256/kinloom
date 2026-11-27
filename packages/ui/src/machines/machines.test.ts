@@ -16,7 +16,6 @@ import {
   type SaveEntityResult,
   type UploadActorOutcome,
   type UploadMediaActorInput,
-  type VerifyOutcome,
 } from './index.js';
 
 const BASE_PERSON: EntityPayload = {
@@ -309,22 +308,28 @@ describe('entityEditorMachine', () => {
 });
 
 describe('authSessionMachine', () => {
-  it('auto-enrolls invited non-member strictly as editor and never escalates to admin', async () => {
+  it('hydrates readOnlyInvite, preserves invite_viewer session while requesting magic link, and refreshes into authenticated.editor', async () => {
+    let hydratedAsEditor = false;
     const machine = authSessionMachine.provide({
       actors: {
-        hydrateSession: fromPromise<HydrateOutcome, { inviteToken: string | null }>(async () => ({
-          kind: 'invite_valid',
-          token: 'inv_reunion_2026',
-          label: 'Reunion invite',
-        })),
-        signInWithGoogle: fromPromise<VerifyOutcome, { inviteToken: string | null }>(async () => ({
-          kind: 'verified',
-          // Even if payload claims role: 'admin', non-member invite enrollment MUST stay editor!
-          isMember: false,
-          role: 'admin',
-          email: 'cousin@example.com',
-          displayName: 'Cousin Alex',
-        })),
+        hydrateSession: fromPromise<HydrateOutcome, { inviteToken: string | null }>(async () =>
+          hydratedAsEditor
+            ? {
+                kind: 'authenticated',
+                role: 'editor',
+                email: 'cousin@example.com',
+                displayName: 'Cousin Alex',
+              }
+            : {
+                kind: 'invite_valid',
+                token: 'inv_reunion_2026',
+                label: 'Reunion invite',
+              }
+        ),
+        requestMagicLink: fromPromise<
+          void,
+          { email: string; inviteToken: string | null; dataSource?: ArchiveDataSource }
+        >(async () => {}),
       },
     });
 
@@ -335,46 +340,57 @@ describe('authSessionMachine', () => {
     expect(invited.context.pendingInviteToken).toBe('inv_reunion_2026');
     expect(deriveSessionFromAuthSnapshot(invited).capabilities.canEdit).toBe(false);
 
-    actor.send({ type: 'SIGN_IN_GOOGLE' });
+    actor.send({ type: 'REQUEST_MAGIC_LINK', email: 'cousin@example.com' });
+    const awaiting = await waitFor(actor, (s) => s.matches('awaitingMagicLinkClick'));
+    // Still carries invite_viewer session while awaiting email link click
+    expect(deriveSessionFromAuthSnapshot(awaiting).session.principal_kind).toBe('invite_viewer');
+
+    // After server-side magic-link redirect completes, REFRESH_SESSION hydrates into editor
+    hydratedAsEditor = true;
+    actor.send({ type: 'REFRESH_SESSION' });
     const enrolled = await waitFor(actor, (s) => s.matches('authenticated'));
     expect(enrolled.matches({ authenticated: 'editor' })).toBe(true);
     expect(enrolled.matches({ authenticated: 'admin' })).toBe(false);
     expect(enrolled.context.pendingInviteToken).toBeNull();
-    expect(enrolled.context.autoEnrolledViaInvite).toBe(true);
     expect(deriveSessionFromAuthSnapshot(enrolled).capabilities.canEdit).toBe(true);
     expect(deriveSessionFromAuthSnapshot(enrolled).capabilities.canManageSite).toBe(false);
     actor.stop();
   });
 
-  it('transitions to inviteRevoked when invite is revoked mid-flight', async () => {
-    const machine = authSessionMachine.provide({
-      actors: {
-        hydrateSession: fromPromise<HydrateOutcome, { inviteToken: string | null }>(async () => ({
-          kind: 'invite_valid',
-          token: 'inv_old',
-          label: 'Old invite',
-        })),
-        requestMagicLink: fromPromise<
-          void,
-          { email: string; inviteToken: string | null; dataSource?: ArchiveDataSource }
-        >(async () => {}),
-        verifyMagicLink: fromPromise<VerifyOutcome, { token: string; inviteToken: string | null }>(
-          async () => ({ kind: 'invite_revoked' })
-        ),
+  it('routes SIGN_OUT through signingOut actor when logout port exists and returns to anonymous', async () => {
+    let logoutCalled = false;
+    const ds = {
+      getSession: async () => ({
+        session: {
+          authenticated: true,
+          principal_kind: 'user' as const,
+          email: 'admin@example.com',
+          displayName: 'Admin Alder',
+          role: 'admin' as const,
+        },
+        capabilities: {
+          canEdit: true,
+          canUploadMedia: true,
+          hasRevisionHistory: true,
+          hasTalk: true,
+          canManageSite: true,
+        },
+      }),
+      logout: async () => {
+        logoutCalled = true;
       },
-    });
+    } as unknown as ArchiveDataSource;
 
-    const actor = createActor(machine, { input: { initialInviteToken: 'inv_old' } });
+    const actor = createActor(authSessionMachine, { input: { dataSource: ds } });
     actor.start();
-    await waitFor(actor, (s) => s.matches('readOnlyInvite'));
+    const signedIn = await waitFor(actor, (s) => s.matches({ authenticated: 'admin' }));
+    expect(deriveSessionFromAuthSnapshot(signedIn).capabilities.canManageSite).toBe(true);
 
-    actor.send({ type: 'REQUEST_MAGIC_LINK', email: 'relative@example.com' });
-    await waitFor(actor, (s) => s.matches('awaitingMagicLinkClick'));
-
-    actor.send({ type: 'OPEN_MAGIC_LINK', token: 'ml_token' });
-    const revoked = await waitFor(actor, (s) => s.matches('inviteRevoked'));
-    expect(revoked.context.pendingInviteToken).toBeNull();
-    expect(deriveSessionFromAuthSnapshot(revoked).capabilities.canEdit).toBe(false);
+    actor.send({ type: 'SIGN_OUT' });
+    const signedOut = await waitFor(actor, (s) => s.matches('anonymous'));
+    expect(logoutCalled).toBe(true);
+    expect(deriveSessionFromAuthSnapshot(signedOut).session.principal_kind).toBe('anonymous');
+    expect(deriveSessionFromAuthSnapshot(signedOut).capabilities.canEdit).toBe(false);
     actor.stop();
   });
 });

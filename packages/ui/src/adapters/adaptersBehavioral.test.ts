@@ -75,7 +75,21 @@ describe('HttpWikiDataSource behavioral HTTP contract', () => {
       if (url.endsWith('data/media-checklist.json')) {
         if (checklistMode === '404') return new Response('Not found', { status: 404 });
         if (checklistMode === 'throw') throw new Error('offline');
-        return jsonRes({ items: [{ id: 'chk_1', title: '1880 Census', status: 'needed' }] });
+        return jsonRes({
+          items: [
+            {
+              person_id: 'per_1',
+              person_slug: 'henry-alder',
+              person_name: 'Henry Alder',
+              lifespan: '1855–1932',
+              obje_xref: '@M1@',
+              title: '1880 Census',
+              media_type: 'document',
+              form: 'jpg',
+              status: 'missing',
+            },
+          ],
+        });
       }
       return new Response('Not found', { status: 404 });
     };
@@ -428,7 +442,21 @@ describe('StaticDemoDataSource behavioral contract', () => {
       if (url.endsWith('data/media-checklist.json')) {
         if (mode === '404') return new Response('no', { status: 404 });
         if (mode === 'err') throw new Error('network');
-        return jsonRes({ items: [{ id: 'c1', title: 'Scan', status: 'needed' }] });
+        return jsonRes({
+          items: [
+            {
+              person_id: 'per_1',
+              person_slug: 'henry-alder',
+              person_name: 'Henry Alder',
+              lifespan: '1855–1932',
+              obje_xref: '@M1@',
+              title: 'Scan',
+              media_type: 'photo',
+              form: 'jpg',
+              status: 'missing',
+            },
+          ],
+        });
       }
       return new Response('404', { status: 404 });
     };
@@ -449,5 +477,10 @@ describe('StaticDemoDataSource behavioral contract', () => {
     await expect(ds.loadArchive()).rejects.toThrow(/HTTP 500/);
     await expect(ds.loadReadings()).rejects.toThrow(/HTTP 500/);
     expect(await ds.loadMediaChecklist()).toEqual([]);
+
+    const badChecklistDs = new StaticDemoDataSource('/demo', async () =>
+      jsonRes({ items: [{ title: 'Missing fields', status: 'needed' }] })
+    );
+    await expect(badChecklistDs.loadMediaChecklist()).rejects.toThrow();
   });
 });

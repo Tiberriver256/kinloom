@@ -40,11 +40,22 @@ test('error boundary catches a broken lazy route chunk and posts client telemetr
     });
   });
 
+  // Opt in to client telemetry via host meta tag (default static deployments emit zero telemetry POSTs).
+  await page.route('**/person/abraham-lincoln-1809', async (route) => {
+    const response = await route.fetch();
+    const html = await response.text();
+    const injected = html.replace(
+      '</head>',
+      '<meta name="kinloom-telemetry-endpoint" content="/telemetry/client-error" /></head>'
+    );
+    await route.fulfill({ response, body: injected });
+  });
+
   const telemetryPosted = page.waitForRequest(
-    (req) => req.url().includes('/api/client-error') && req.method() === 'POST'
+    (req) => req.url().includes('/telemetry/client-error') && req.method() === 'POST'
   );
 
-  await page.route('**/api/client-error', async (route) => {
+  await page.route('**/telemetry/client-error', async (route) => {
     await route.fulfill({ status: 204, body: '' });
   });
 

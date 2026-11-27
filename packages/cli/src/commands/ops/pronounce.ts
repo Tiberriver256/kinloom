@@ -1,9 +1,4 @@
-export { loadArchivePronunciationLexicon, runPronounceAuditCommand } from './pronounce/audit.js';
-export {
-  evaluatePersonOverrideRedundancy,
-  type OverrideRedundancyDecision,
-  runPronounceDeduplicateCommand,
-} from './pronounce/deduplicate.js';
+export { runPronounceDeduplicateCommand } from './pronounce/deduplicate.js';
 export {
   buildForvoLookupUrl,
   buildManualLookupSources,
@@ -44,3 +39,9 @@ export {
   type PronounceSourceTier,
   type PronounceUnsourcedEntry,
 } from './pronounce/types.js';
+export {
+  evaluatePersonOverrideRedundancy,
+  loadArchivePronunciationLexicon,
+  type OverrideRedundancyDecision,
+  runPronounceAuditCommand,
+} from './shared/pronunciation/index.js';

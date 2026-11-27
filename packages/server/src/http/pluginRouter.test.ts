@@ -244,4 +244,60 @@ describe('createKinloomServer plugin routing and startup validation', () => {
       })
     ).toThrow(/Conflicting server plugin route/);
   });
+
+  it('rejects plugin routes that collide with reserved built-in server route prefixes while allowing custom prefixes', async () => {
+    const siteConfig = createSyntheticSiteConfig();
+    const ports = createInMemoryServerPorts(siteConfig);
+
+    for (const badPrefix of ['/api/bundle', '/api/entities/custom', '/privacy', '/api', '/']) {
+      expect(() =>
+        createKinloomServer({
+          siteConfig,
+          ports: {
+            ...ports,
+            plugins: [
+              {
+                id: `bad-${badPrefix.replaceAll('/', '_')}`,
+                name: 'Reserved Collision Plugin',
+                routes: [
+                  {
+                    method: 'GET',
+                    pathPrefix: badPrefix,
+                    minRole: 'public',
+                    handle: jsonPluginHandler({}),
+                  },
+                ],
+              },
+            ],
+          },
+          sessionSecret: SECRET,
+        })
+      ).toThrow(RangeError);
+    }
+
+    const okServer = createKinloomServer({
+      siteConfig,
+      ports: {
+        ...ports,
+        plugins: [
+          {
+            id: 'custom-plugin',
+            name: 'Custom Plugin',
+            routes: [
+              {
+                method: 'GET',
+                pathPrefix: '/api/custom-plugin',
+                minRole: 'public',
+                handle: jsonPluginHandler({ ok: true }),
+              },
+            ],
+          },
+        ],
+      },
+      sessionSecret: SECRET,
+    });
+    const res = await okServer.fetch(new Request(`${ORIGIN}/api/custom-plugin`));
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true });
+  });
 });

@@ -538,12 +538,13 @@ describe('Deep behavioral interactions across MapPage, TimePage, PersonPage, Pla
     // clientTelemetry sendBeacon + unhandledrejection
     const beaconSpy = vi.fn(() => true);
     Object.defineProperty(navigator, 'sendBeacon', { value: beaconSpy, configurable: true });
-    const uninstall = installGlobalErrorHandlers();
+    const uninstall = installGlobalErrorHandlers({ endpoint: 'https://telemetry.example.test/errors' });
     reportClientError({ kind: 'blank_screen', message: 'Beacon test report', route: '/map' });
     const rejEvent = new Event('unhandledrejection') as Event & { reason?: unknown };
     rejEvent.reason = new Error('Unhandled promise test');
     window.dispatchEvent(rejEvent);
     uninstall();
+    expect(beaconSpy).toHaveBeenCalled();
     rafSpy.mockRestore();
   });
 });

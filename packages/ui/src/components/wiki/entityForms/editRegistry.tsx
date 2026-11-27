@@ -1,5 +1,6 @@
-import type { EntityPayload, EntityType } from '@kinloom/core';
+import { type EntityPayload, EntityPayloadSchema, type EntityType } from '@kinloom/core';
 import type React from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { cx } from '../../../lib/cx.js';
 import { cleanPronunciation } from '../pronunciation/pronunciationDraft.js';
 import formStyles from '../WikiForms.module.css';
@@ -265,25 +266,58 @@ const JsonFallbackEditFields: React.FC<EntityEditFieldProps> = ({
   isBusy,
   uiStyles = formStyles,
   replaceDraft,
-}) => (
-  <label className={cx(uiStyles, 'wiki-field wiki-field-full')}>
-    <span className={cx(uiStyles, 'wiki-field-label')}>Record details</span>
-    <textarea
-      className={cx(uiStyles, 'wiki-textarea wiki-mono')}
-      rows={8}
-      value={JSON.stringify(draft, null, 2)}
-      onChange={(e) => {
-        try {
-          const parsed = JSON.parse(e.target.value) as EntityPayload;
-          replaceDraft(parsed);
-        } catch {
-          // Ignore incomplete JSON while typing.
-        }
-      }}
-      disabled={isBusy}
-    />
-  </label>
-);
+}) => {
+  const errorId = useId();
+  const [rawText, setRawText] = useState<string>(() => JSON.stringify(draft, null, 2));
+  const [jsonError, setJsonError] = useState<string | null>(null);
+  const lastEmittedDraftRef = useRef<EntityPayload | null>(null);
+
+  useEffect(() => {
+    if (draft === lastEmittedDraftRef.current) {
+      return;
+    }
+    setRawText(JSON.stringify(draft, null, 2));
+    setJsonError(null);
+  }, [draft]);
+
+  return (
+    <label className={cx(uiStyles, 'wiki-field wiki-field-full')}>
+      <span className={cx(uiStyles, 'wiki-field-label')}>Record details</span>
+      <textarea
+        className={cx(uiStyles, 'wiki-textarea wiki-mono')}
+        rows={8}
+        value={rawText}
+        aria-invalid={jsonError ? 'true' : 'false'}
+        aria-describedby={jsonError ? errorId : undefined}
+        onChange={(e) => {
+          const nextText = e.target.value;
+          setRawText(nextText);
+          let parsed: unknown;
+          try {
+            parsed = JSON.parse(nextText);
+          } catch {
+            setJsonError('Enter valid JSON syntax for this record.');
+            return;
+          }
+          const validated = EntityPayloadSchema.safeParse(parsed);
+          if (!validated.success) {
+            setJsonError('Record details must be a JSON object, not an array or primitive value.');
+            return;
+          }
+          setJsonError(null);
+          lastEmittedDraftRef.current = validated.data;
+          replaceDraft(validated.data);
+        }}
+        disabled={isBusy}
+      />
+      {jsonError && (
+        <p id={errorId} className={cx(uiStyles, 'wiki-field-error')} role="alert">
+          {jsonError}
+        </p>
+      )}
+    </label>
+  );
+};
 
 function preparePronunciationDraft(draft: EntityPayload, forceNull: boolean): EntityPayload | null {
   const cleanedPronunciation = forceNull ? null : cleanPronunciation(draft.pronunciation, true);

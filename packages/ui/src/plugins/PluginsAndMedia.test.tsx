@@ -13,6 +13,7 @@ import type {
 } from '../components/wiki/entityForms/fieldTypes.js';
 import { ArchiveProvider } from '../context/ArchiveProvider.js';
 import { KinloomApp } from '../KinloomApp.js';
+import { validateAndCompileUiPlugins } from './PluginContext.js';
 import type { KinloomUiPlugin } from './types.js';
 
 const PluginSourceEditFields: React.FC<EntityEditFieldProps> = ({ draft, updateField }) => (
@@ -32,6 +33,8 @@ const PluginSourceEditFields: React.FC<EntityEditFieldProps> = ({ draft, updateF
 const PluginPlaceCreateFields: React.FC<EntityCreateFieldProps> = () => (
   <div data-testid="plugin-create-place-fields">Plugin place form</div>
 );
+
+const PluginDummyRoutePage: React.FC = () => <div>Custom</div>;
 
 declare global {
   var IS_REACT_ACT_ENVIRONMENT: boolean | undefined;
@@ -272,5 +275,115 @@ describe('KinloomUiPlugin seam and MediaPlayer', () => {
       root.unmount();
     });
     container.remove();
+  });
+
+  it('rejects invalid JSON primitives and arrays in JsonFallbackEditFields without mutating draft', async () => {
+    const container = document.createElement('div');
+    document.body.append(container);
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(
+        <ArchiveProvider siteConfig={siteConfig} initialBundle={testBundle}>
+          <EntityEditDrawer
+            open
+            entityType="source"
+            entityId="src_fallback"
+            revisionId={1}
+            initialData={{ id: 'src_fallback', citation: 'Original Register' }}
+            title="Fallback Source"
+            onClose={() => {}}
+          />
+        </ArchiveProvider>
+      );
+      await new Promise((r) => setTimeout(r, 20));
+    });
+
+    const textarea = container.querySelector<HTMLTextAreaElement>('textarea.wiki-mono');
+    expect(textarea).not.toBeNull();
+    const setTextareaValue = (val: string): void => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')?.set;
+      setter?.call(textarea, val);
+      textarea?.dispatchEvent(new Event('input', { bubbles: true }));
+    };
+
+    for (const invalidJson of ['123', '"abc"', '[]']) {
+      act(() => {
+        setTextareaValue(invalidJson);
+      });
+      expect(textarea?.getAttribute('aria-invalid')).toBe('true');
+      const alert = container.querySelector('[role="alert"]');
+      expect(alert?.textContent).toContain('JSON object');
+    }
+
+    // Valid object JSON clears validation error cleanly
+    act(() => {
+      setTextareaValue('{"id":"src_fallback","citation":"Updated Register"}');
+    });
+    expect(textarea?.getAttribute('aria-invalid')).toBe('false');
+    expect(container.querySelector('[role="alert"]')).toBeNull();
+
+    act(() => {
+      root.unmount();
+    });
+    container.remove();
+  });
+
+  it('throws RangeError on empty/duplicate UI plugin IDs, duplicate or reserved routes, and duplicate form overrides', () => {
+    const basePlaceCreateForm = {
+      kind: 'place' as const,
+      tabLabel: 'Custom Place',
+      Fields: PluginPlaceCreateFields,
+      validateAndBuild: () => ({
+        ok: true as const,
+        entityId: 'plc_1',
+        payload: { id: 'plc_1', name: 'One' },
+      }),
+    };
+
+    expect(() => validateAndCompileUiPlugins([{ id: '   ', name: 'Blank' }])).toThrow(RangeError);
+    expect(() =>
+      validateAndCompileUiPlugins([
+        { id: 'dup-ui', name: 'First' },
+        { id: ' dup-ui ', name: 'Second' },
+      ])
+    ).toThrow(RangeError);
+
+    // Reserved built-in routes (exact & parameterized structural collision)
+    for (const reservedPath of ['/', '/people', '/person/:slug', '/person/:id', '/places', '/admin']) {
+      expect(() =>
+        validateAndCompileUiPlugins([
+          {
+            id: `reserved-${reservedPath}`,
+            name: 'Reserved',
+            routes: [{ path: reservedPath, component: PluginDummyRoutePage }],
+          },
+        ])
+      ).toThrow(RangeError);
+    }
+
+    // Duplicate plugin route path across two plugins
+    expect(() =>
+      validateAndCompileUiPlugins([
+        { id: 'route-a', name: 'A', routes: [{ path: '/stories/', component: PluginDummyRoutePage }] },
+        { id: 'route-b', name: 'B', routes: [{ path: '/stories', component: PluginDummyRoutePage }] },
+      ])
+    ).toThrow(RangeError);
+
+    // Duplicate entityEditForms override for same EntityType
+    expect(() =>
+      validateAndCompileUiPlugins([
+        { id: 'edit-a', name: 'A', entityEditForms: { source: { Fields: PluginSourceEditFields } } },
+        { id: 'edit-b', name: 'B', entityEditForms: { source: { Fields: PluginSourceEditFields } } },
+      ])
+    ).toThrow(RangeError);
+
+    // Duplicate entityCreateForms override for same EntityType
+    expect(() =>
+      validateAndCompileUiPlugins([
+        { id: 'create-a', name: 'A', entityCreateForms: { place: basePlaceCreateForm } },
+        { id: 'create-b', name: 'B', entityCreateForms: { place: basePlaceCreateForm } },
+      ])
+    ).toThrow(RangeError);
   });
 });

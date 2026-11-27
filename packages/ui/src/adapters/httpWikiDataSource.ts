@@ -23,7 +23,7 @@ import type {
   TalkComment,
   UpsertPronunciationTermResult,
 } from '@kinloom/core';
-import { ArchiveBundleMetaSchema, ReadingsBundleSchema } from '@kinloom/core';
+import { ArchiveBundleSchema, MediaChecklistItemSchema, ReadingsBundleSchema } from '@kinloom/core';
 import { createHttpAdminDataSource } from './httpWiki/adminClient.js';
 import {
   ApiClientError,
@@ -136,11 +136,16 @@ export class HttpWikiDataSource implements ArchiveDataSource {
     }
 
     const raw: unknown = await res.json();
-    if (typeof raw !== 'object' || raw === null || !('meta' in raw)) {
-      throw new ApiClientError(res.status, 'INVALID_API_RESPONSE', 'Archive bundle payload missing meta');
+    let bundle: ArchiveBundle;
+    try {
+      bundle = ArchiveBundleSchema.parse(raw);
+    } catch (err) {
+      throw new ApiClientError(
+        res.status,
+        'INVALID_API_RESPONSE',
+        `Invalid archive bundle payload: ${err instanceof Error ? err.message : String(err)}`
+      );
     }
-    ArchiveBundleMetaSchema.parse((raw as { meta: unknown }).meta);
-    const bundle = raw as ArchiveBundle;
     const etag = res.headers.get('etag');
     this.cachedBundle = bundle;
     this.cachedEtag = etag;
@@ -163,20 +168,33 @@ export class HttpWikiDataSource implements ArchiveDataSource {
   }
 
   async loadMediaChecklist(): Promise<MediaChecklistItem[]> {
+    let res: Response;
     try {
-      const res = await this.fetchImpl(`${this.assetBase}data/media-checklist.json`, {
+      res = await this.fetchImpl(`${this.assetBase}data/media-checklist.json`, {
         credentials: 'same-origin',
       });
-      if (!res.ok) {
-        return [];
-      }
-      const raw: unknown = await res.json();
-      if (typeof raw === 'object' && raw !== null && 'items' in raw && Array.isArray(raw.items)) {
-        return raw.items as MediaChecklistItem[];
-      }
-      return [];
     } catch {
       return [];
+    }
+    if (!res.ok) {
+      return [];
+    }
+    const raw: unknown = await res.json();
+    if (typeof raw !== 'object' || raw === null || !('items' in raw) || !Array.isArray(raw.items)) {
+      throw new ApiClientError(
+        res.status,
+        'INVALID_API_RESPONSE',
+        'Invalid media checklist payload: expected object with items array'
+      );
+    }
+    try {
+      return raw.items.map((item) => MediaChecklistItemSchema.parse(item));
+    } catch (err) {
+      throw new ApiClientError(
+        res.status,
+        'INVALID_API_RESPONSE',
+        `Invalid media checklist payload: ${err instanceof Error ? err.message : String(err)}`
+      );
     }
   }
 
@@ -246,8 +264,16 @@ export class HttpWikiDataSource implements ArchiveDataSource {
     }
 
     const raw: unknown = await res.json();
-    const parsed = parseEntityWriteResponse(raw);
-    return { ok: true, ...parsed };
+    try {
+      const parsed = parseEntityWriteResponse(raw);
+      return { ok: true, ...parsed };
+    } catch (err) {
+      throw new ApiClientError(
+        res.status,
+        'INVALID_API_RESPONSE',
+        `Invalid response payload from /api/entities/${entityType}/${entityId}: ${err instanceof Error ? err.message : String(err)}`
+      );
+    }
   }
 
   async deleteEntity(
@@ -345,7 +371,15 @@ export class HttpWikiDataSource implements ArchiveDataSource {
       throw await parseErrorEnvelope(res);
     }
     const raw: unknown = await res.json();
-    return parseMediaUploadResponse(raw);
+    try {
+      return parseMediaUploadResponse(raw);
+    } catch (err) {
+      throw new ApiClientError(
+        res.status,
+        'INVALID_API_RESPONSE',
+        `Invalid response payload from /api/media/upload: ${err instanceof Error ? err.message : String(err)}`
+      );
+    }
   }
 
   async listTalkComments(entityType: EntityType, entityId: string): Promise<readonly TalkComment[]> {

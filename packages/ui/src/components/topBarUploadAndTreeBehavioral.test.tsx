@@ -394,7 +394,7 @@ describe('ExplorerTopBar, MediaUploaderModal, MilestoneStoryCard, TreePage canva
 
     // Global error handlers in clientTelemetry
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(null, { status: 204 }));
-    const uninstall = installGlobalErrorHandlers();
+    const uninstall = installGlobalErrorHandlers({ endpoint: 'https://telemetry.example.test/errors' });
     act(() => {
       window.dispatchEvent(
         new ErrorEvent('error', { message: 'Synthetic window error', filename: '/app.js' })

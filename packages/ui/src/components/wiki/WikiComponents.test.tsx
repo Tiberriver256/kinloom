@@ -860,6 +860,12 @@ describe('Wiki UI components and tree display polish helpers', () => {
       loadArchive: async () => ({ bundle: testBundle, etag: null, notModified: false }),
       loadReadings: async () => null,
       requestMagicLink: async () => ({ sent: true }),
+      ...(googleEnabled
+        ? {
+            getGoogleSignInUrl: (nextPath?: string) =>
+              `/api/auth/google/start${nextPath ? `?next=${encodeURIComponent(nextPath)}` : ''}`,
+          }
+        : {}),
       getSession: async () => ({
         session: { authenticated: false, principal_kind: 'anonymous' },
         capabilities: {

@@ -17,7 +17,7 @@ import type {
   KinloomVerifyCheck,
   KinloomVerifyCheckContext,
 } from '../../plugins.js';
-import { loadArchivePronunciationLexicon, runPronounceAuditCommand } from './pronounce.js';
+import { loadArchivePronunciationLexicon, runPronounceAuditCommand } from './shared/pronunciation/index.js';
 
 function isPlainRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);

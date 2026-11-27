@@ -4,6 +4,7 @@ import { useArchiveData } from '../context/ArchiveDataContext.js';
 import { useArchiveUi } from '../context/ArchiveUiContext.js';
 import { cx, joinClasses } from '../lib/cx.js';
 import { KINLOOM_VOCABULARY } from '../lib/vocabulary.js';
+import { AuthSessionActorContext } from '../machines/authSessionMachine.js';
 import { useKinloomPlugins } from '../plugins/PluginContext.js';
 import controlStyles from '../styles/Controls.module.css';
 import { initialsOf } from './Atoms.js';
@@ -12,15 +13,15 @@ import { SignInModal } from './wiki/SignInModal.js';
 import wikiChromeStyles from './wiki/WikiChrome.module.css';
 
 export const ExplorerTopBar: React.FC = () => {
-  const { siteConfig, featuredDocumentId, capabilities, session, dataSource, refreshSession } =
-    useArchiveData();
+  const { siteConfig, featuredDocumentId, capabilities, session, dataSource } = useArchiveData();
+  const authActorRef = AuthSessionActorContext.useActorRef();
+  const signingOut = AuthSessionActorContext.useSelector((state) => state.matches('signingOut'));
   const { activeYear, pivotTrail, openSourceReader, openSearch } = useArchiveUi();
   const { routes: pluginRoutes } = useKinloomPlugins();
   const location = useLocation();
   const navPluginRoutes = pluginRoutes.filter((r) => Boolean(r.navLabel));
 
   const [accountOpen, setAccountOpen] = useState(false);
-  const [signingOut, setSigningOut] = useState(false);
   const [signInOpen, setSignInOpen] = useState(false);
   const headerRef = useRef<HTMLElement | null>(null);
   const accountMenuRef = useRef<HTMLDivElement | null>(null);
@@ -98,18 +99,12 @@ export const ExplorerTopBar: React.FC = () => {
     openSourceReader({ sourceId: featuredDocumentId ?? '' });
   };
 
-  const handleLogout = async (): Promise<void> => {
+  const handleLogout = (): void => {
     if (!dataSource.logout) {
       return;
     }
-    setSigningOut(true);
-    try {
-      await dataSource.logout();
-      setAccountOpen(false);
-      await refreshSession();
-    } finally {
-      setSigningOut(false);
-    }
+    setAccountOpen(false);
+    authActorRef.send({ type: 'SIGN_OUT' });
   };
 
   return (
@@ -461,7 +456,7 @@ export const ExplorerTopBar: React.FC = () => {
                       className={cx(wikiChromeStyles, 'topbar-account-item is-danger')}
                       disabled={signingOut}
                       onClick={() => {
-                        void handleLogout();
+                        handleLogout();
                       }}
                     >
                       {signingOut ? 'Signing out…' : 'Sign Out'}

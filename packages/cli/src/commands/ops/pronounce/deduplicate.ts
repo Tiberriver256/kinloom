@@ -16,21 +16,22 @@ import { CliValidationError } from '../../../errors.js';
 import {
   evaluatePersonOverrideRedundancy,
   extractPromotableTokenFromPerson,
+  loadArchivePronunciationLexicon,
   normalizeIpaComparable,
   normalizeWhitespace,
   type PromotionCandidate,
-} from './deduplicateRules.js';
-import { loadArchivePronunciationLexicon } from './lexiconLoader.js';
-import type {
-  PronounceDeduplicateKeptOverride,
-  PronounceDeduplicateOptions,
-  PronounceDeduplicatePromotedToken,
-  PronounceDeduplicateRemovedOverride,
-  PronounceDeduplicateResult,
-  PronounceDeduplicateSkippedPromotion,
-} from './types.js';
+  type PronounceDeduplicateKeptOverride,
+  type PronounceDeduplicateOptions,
+  type PronounceDeduplicatePromotedToken,
+  type PronounceDeduplicateRemovedOverride,
+  type PronounceDeduplicateResult,
+  type PronounceDeduplicateSkippedPromotion,
+} from '../shared/pronunciation/index.js';
 
-export { evaluatePersonOverrideRedundancy, type OverrideRedundancyDecision } from './deduplicateRules.js';
+export {
+  evaluatePersonOverrideRedundancy,
+  type OverrideRedundancyDecision,
+} from '../shared/pronunciation/index.js';
 
 function formatDeduplicateText(result: Omit<PronounceDeduplicateResult, 'rendered'>): string {
   const s = result.summary;

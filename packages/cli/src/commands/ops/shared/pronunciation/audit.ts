@@ -13,7 +13,7 @@ import {
   resolvePersonPronunciation,
   resolvePlacePronunciation,
 } from '@kinloom/core';
-import { CliValidationError } from '../../../errors.js';
+import { CliValidationError } from '../../../../errors.js';
 import { formatAuditText } from './auditReport.js';
 import {
   detectHomonymousPlaceCollisions,
@@ -22,7 +22,7 @@ import {
   inspectNonTrivialPlaceReason,
   inspectPronunciationQuality,
 } from './auditRules.js';
-import { evaluatePersonOverrideRedundancy } from './deduplicate.js';
+import { evaluatePersonOverrideRedundancy } from './deduplicateRules.js';
 import { loadArchivePronunciationLexicon } from './lexiconLoader.js';
 import type {
   PronounceAuditOptions,

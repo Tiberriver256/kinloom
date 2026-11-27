@@ -26,7 +26,7 @@ import {
   pickActiveTimelineEventId,
   shouldRunInitialEventScroll,
 } from '../lib/timelineScroll.js';
-import { authSessionMachine, type VerifyOutcome } from './authSessionMachine.js';
+import { authSessionMachine } from './authSessionMachine.js';
 import { entityEditorMachine } from './entityEditorMachine.js';
 import {
   type AttachActorOutcome,
@@ -309,7 +309,7 @@ describe('Remaining XState machine behavioral edge transitions', () => {
     expect(ed.getSnapshot().matches('viewing')).toBe(true);
     ed.stop();
 
-    // authSessionMachine REFRESH_SESSION + magic link invalid
+    // authSessionMachine REFRESH_SESSION + magic link request error
     const authDs = {
       getSession: async () => ({
         session: { authenticated: false, principal_kind: 'anonymous' as const },
@@ -321,27 +321,16 @@ describe('Remaining XState machine behavioral edge transitions', () => {
           canManageSite: false,
         },
       }),
-      requestMagicLink: async () => ({ sent: true }),
+      requestMagicLink: async () => {
+        throw new Error('This email is not enrolled in this family archive.');
+      },
     } as unknown as ArchiveDataSource;
 
-    const testAuthMachine = authSessionMachine.provide({
-      actors: {
-        verifyMagicLink: fromPromise<VerifyOutcome, { token: string; inviteToken: string | null }>(
-          async () => ({
-            kind: 'invalid',
-            message: 'This email is not enrolled in this family archive.',
-          })
-        ),
-      },
-    });
-
-    const auth = createActor(testAuthMachine, { input: { dataSource: authDs } }).start();
+    const auth = createActor(authSessionMachine, { input: { dataSource: authDs } }).start();
     await waitFor(auth, (s) => s.matches('anonymous'));
     auth.send({ type: 'REFRESH_SESSION' });
     await waitFor(auth, (s) => s.matches('anonymous'));
     auth.send({ type: 'REQUEST_MAGIC_LINK', email: 'outsider@example.test' });
-    await waitFor(auth, (s) => s.matches('awaitingMagicLinkClick'));
-    auth.send({ type: 'OPEN_MAGIC_LINK', token: 'tok-403' });
     const snap = await waitFor(auth, (s) => s.matches('anonymous'));
     expect(snap.context.authError).toContain('not enrolled');
     auth.stop();

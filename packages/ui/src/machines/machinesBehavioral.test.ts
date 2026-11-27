@@ -7,13 +7,9 @@ import type {
 } from '@kinloom/core';
 import { asRevisionId } from '@kinloom/core';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { createActor, fromPromise, waitFor } from 'xstate';
+import { createActor, waitFor } from 'xstate';
 import { ApiClientError } from '../adapters/httpWikiDataSource.js';
-import {
-  authSessionMachine,
-  deriveSessionFromAuthSnapshot,
-  type VerifyOutcome,
-} from './authSessionMachine.js';
+import { authSessionMachine, deriveSessionFromAuthSnapshot } from './authSessionMachine.js';
 import { entityEditorMachine } from './entityEditorMachine.js';
 import { mediaUploadMachine } from './mediaUploadMachine.js';
 
@@ -123,32 +119,80 @@ describe('authSessionMachine behavioral transitions', () => {
     a3.stop();
   });
 
-  it('handles Google sign-in, magic link request/verify/cancel/resend, invite auto-enroll, revocation, and session expiry', async () => {
-    const googleQueue: Array<() => Promise<VerifyOutcome>> = [
-      async () => ({ kind: 'invalid', message: 'This email is not enrolled in this family archive.' }),
-      async () => {
-        throw new Error('HTTP 500 verifying Google sign-in');
-      },
-      async () => ({
-        kind: 'verified',
-        isMember: false,
-        role: 'editor',
-        email: 'cousin@example.test',
-        displayName: 'Cousin Mercer',
-      }),
-    ];
+  it('handles magic link request/resend/cancel/error, URL error state, refresh hydration, and sign-out', async () => {
     let magicLinkFailsOnce = true;
+    let sessionMode: 'anonymous' | 'invite' | 'admin' | 'editor' = 'anonymous';
+    let logoutFailOnce = false;
     const ds = {
-      getSession: async () => ({
-        session: { authenticated: false, principal_kind: 'anonymous' as const },
-        capabilities: {
-          canEdit: false,
-          canUploadMedia: false,
-          hasRevisionHistory: false,
-          hasTalk: false,
-          canManageSite: false,
-        },
-      }),
+      getSession: async () => {
+        if (sessionMode === 'admin') {
+          return {
+            session: {
+              authenticated: true,
+              principal_kind: 'user' as const,
+              email: 'admin@example.test',
+              displayName: 'Admin Alder',
+              role: 'admin' as const,
+            },
+            capabilities: {
+              canEdit: true,
+              canUploadMedia: true,
+              hasRevisionHistory: true,
+              hasTalk: true,
+              canManageSite: true,
+            },
+            authProviders: { google: true, magicLink: true },
+          };
+        }
+        if (sessionMode === 'editor') {
+          return {
+            session: {
+              authenticated: true,
+              principal_kind: 'user' as const,
+              email: 'ed@example.test',
+              displayName: 'Ed Alder',
+              role: 'editor' as const,
+            },
+            capabilities: {
+              canEdit: true,
+              canUploadMedia: true,
+              hasRevisionHistory: true,
+              hasTalk: true,
+              canManageSite: false,
+            },
+            authProviders: { google: false, magicLink: true },
+          };
+        }
+        if (sessionMode === 'invite') {
+          return {
+            session: {
+              authenticated: false,
+              principal_kind: 'invite_viewer' as const,
+              role: 'viewer' as const,
+              inviteLabel: 'Cousin Link',
+            },
+            capabilities: {
+              canEdit: false,
+              canUploadMedia: false,
+              hasRevisionHistory: false,
+              hasTalk: false,
+              canManageSite: false,
+            },
+            authProviders: { google: true, magicLink: true },
+          };
+        }
+        return {
+          session: { authenticated: false, principal_kind: 'anonymous' as const },
+          capabilities: {
+            canEdit: false,
+            canUploadMedia: false,
+            hasRevisionHistory: false,
+            hasTalk: false,
+            canManageSite: false,
+          },
+          authProviders: { google: true, magicLink: true },
+        };
+      },
       requestMagicLink: async () => {
         if (magicLinkFailsOnce) {
           magicLinkFailsOnce = false;
@@ -156,152 +200,79 @@ describe('authSessionMachine behavioral transitions', () => {
         }
         return { sent: true };
       },
+      logout: async () => {
+        if (logoutFailOnce) {
+          logoutFailOnce = false;
+          throw new Error('Transient logout failure');
+        }
+        sessionMode = 'anonymous';
+      },
     } as unknown as ArchiveDataSource;
 
-    const testMachine = authSessionMachine.provide({
-      actors: {
-        signInWithGoogle: fromPromise<VerifyOutcome, { inviteToken: string | null }>(async () => {
-          const next = googleQueue.shift();
-          return next ? next() : { kind: 'invalid', message: 'Unexpected call' };
-        }),
-        verifyMagicLink: fromPromise<VerifyOutcome, { token: string; inviteToken: string | null }>(
-          async () => ({
-            kind: 'verified',
-            isMember: true,
-            role: 'admin',
-            email: 'admin@example.test',
-            displayName: 'Admin Alder',
-          })
-        ),
-      },
-    });
-
-    const actor = createActor(testMachine, { input: { dataSource: ds } }).start();
+    const actor = createActor(authSessionMachine, { input: { dataSource: ds } }).start();
     await waitFor(actor, (s) => s.matches('anonymous'));
-
-    // Open revoked invite -> inviteRevoked -> dismiss -> anonymous
-    actor.send({ type: 'OPEN_INVITE', token: 'tok-bad', label: 'Old', revoked: true });
-    expect(actor.getSnapshot().matches('inviteRevoked')).toBe(true);
-    actor.send({ type: 'DISMISS_INVITE' });
-    expect(actor.getSnapshot().matches('anonymous')).toBe(true);
-
-    // Open valid invite -> readOnlyInvite
-    actor.send({ type: 'OPEN_INVITE', token: 'tok-ok', label: 'Cousin Link', revoked: false });
-    expect(actor.getSnapshot().matches('readOnlyInvite')).toBe(true);
-
-    // Google sign-in invalid -> returns to readOnlyInvite with error
-    actor.send({ type: 'SIGN_IN_GOOGLE' });
-    let snap = await waitFor(actor, (s) => s.matches('readOnlyInvite'));
-    expect(snap.context.authError).toContain('not enrolled');
-
-    // Google sign-in 500 error -> returns to readOnlyInvite with error
-    actor.send({ type: 'SIGN_IN_GOOGLE' });
-    snap = await waitFor(actor, (s) => s.matches('readOnlyInvite'));
-    expect(snap.context.authError).toContain('500');
-
-    // Google sign-in auto-enrolls via invite -> authenticated.editor
-    actor.send({ type: 'SIGN_IN_GOOGLE' });
-    snap = await waitFor(actor, (s) => s.matches({ authenticated: 'editor' }));
-    expect(snap.context.autoEnrolledViaInvite).toBe(true);
-
-    // Session expires -> sessionExpired -> sign out -> anonymous
-    actor.send({ type: 'SESSION_EXPIRED' });
-    expect(actor.getSnapshot().matches('sessionExpired')).toBe(true);
-    actor.send({ type: 'SIGN_OUT' });
-    expect(actor.getSnapshot().matches('anonymous')).toBe(true);
+    expect(deriveSessionFromAuthSnapshot(actor.getSnapshot()).authProviders.google).toBe(true);
 
     // Magic link request failure -> anonymous with error
     actor.send({ type: 'REQUEST_MAGIC_LINK', email: 'henry@example.test' });
-    snap = await waitFor(actor, (s) => s.matches('anonymous'));
+    let snap = await waitFor(actor, (s) => s.matches('anonymous'));
     expect(snap.context.authError).toContain('503');
 
-    // Magic link request success -> awaitingMagicLinkClick -> resend -> cancel -> verify admin
+    // Magic link request success -> awaitingMagicLinkClick -> resend -> cancel
     actor.send({ type: 'REQUEST_MAGIC_LINK', email: 'henry@example.test' });
     await waitFor(actor, (s) => s.matches('awaitingMagicLinkClick'));
 
     actor.send({ type: 'RESEND_MAGIC_LINK', email: 'henry@example.test' });
-    await waitFor(actor, (s) => s.matches('awaitingMagicLinkClick'));
+    snap = await waitFor(actor, (s) => s.matches('awaitingMagicLinkClick'));
+    expect(snap.context.magicLinkResendCount).toBe(1);
 
-    // Cancel magic link -> anonymous
-    actor.send({ type: 'CANCEL_MAGIC_LINK' });
+    // SET_URL_ERROR while awaiting returns to anonymous with urlError populated
+    actor.send({ type: 'SET_URL_ERROR', urlError: { code: 'MAGIC_LINK_EXPIRED', provider: 'magic_link' } });
     expect(actor.getSnapshot().matches('anonymous')).toBe(true);
+    expect(actor.getSnapshot().context.urlError?.code).toBe('MAGIC_LINK_EXPIRED');
 
-    // Request again and verify as admin
-    actor.send({ type: 'REQUEST_MAGIC_LINK', email: 'admin@example.test' });
+    actor.send({ type: 'CLEAR_AUTH_ERROR' });
+    expect(actor.getSnapshot().context.urlError).toBeNull();
+
+    // Refresh into invite -> request magic link -> cancel returns to readOnlyInvite
+    sessionMode = 'invite';
+    actor.send({ type: 'REFRESH_SESSION' });
+    await waitFor(actor, (s) => s.matches('readOnlyInvite'));
+
+    actor.send({ type: 'REQUEST_MAGIC_LINK', email: 'cousin@example.test' });
     await waitFor(actor, (s) => s.matches('awaitingMagicLinkClick'));
+    actor.send({ type: 'CANCEL_MAGIC_LINK' });
+    expect(actor.getSnapshot().matches('readOnlyInvite')).toBe(true);
 
-    actor.send({ type: 'OPEN_MAGIC_LINK', token: 'ml-admin' });
+    // Refresh into admin -> failed logout re-hydrates cleanly -> successful SIGN_OUT returns to anonymous
+    sessionMode = 'admin';
+    actor.send({ type: 'REFRESH_SESSION' });
     snap = await waitFor(actor, (s) => s.matches({ authenticated: 'admin' }));
     expect(snap.context.role).toBe('admin');
 
-    // Sign out from authenticated
+    logoutFailOnce = true;
     actor.send({ type: 'SIGN_OUT' });
-    expect(actor.getSnapshot().matches('anonymous')).toBe(true);
-    actor.stop();
-  });
+    await waitFor(actor, (s) => s.matches({ authenticated: 'admin' }));
 
-  it('handles magic link invalid/revoked responses and invite leave/revocation', async () => {
-    const ds = {
-      getSession: async () => ({
-        session: { authenticated: false, principal_kind: 'anonymous' as const },
-        capabilities: {
-          canEdit: false,
-          canUploadMedia: false,
-          hasRevisionHistory: false,
-          hasTalk: false,
-          canManageSite: false,
-        },
-      }),
-      requestMagicLink: async () => ({ sent: true }),
-    } as unknown as ArchiveDataSource;
+    actor.send({ type: 'SIGN_OUT' });
+    await waitFor(actor, (s) => s.matches('anonymous'));
+    expect(deriveSessionFromAuthSnapshot(actor.getSnapshot()).session.principal_kind).toBe('anonymous');
 
-    const testMachine = authSessionMachine.provide({
-      actors: {
-        verifyMagicLink: fromPromise<VerifyOutcome, { token: string; inviteToken: string | null }>(
-          async ({ input }) => {
-            if (input.token === 'expired') {
-              return { kind: 'invalid', message: 'Magic link is invalid or expired.' };
-            }
-            return {
-              kind: 'verified',
-              isMember: true,
-              role: 'editor',
-              email: 'ed@example.test',
-              displayName: 'Ed Alder',
-            };
-          }
-        ),
+    // SYNC_EXPLICIT_SESSION transitions synchronously into editor and SIGN_OUT without logout port returns immediately
+    actor.send({ type: 'SYNC_DATA_SOURCE', dataSource: undefined });
+    actor.send({
+      type: 'SYNC_EXPLICIT_SESSION',
+      session: {
+        authenticated: true,
+        principal_kind: 'user',
+        email: 'ed@example.test',
+        displayName: 'Ed Alder',
+        role: 'editor',
       },
     });
-
-    const actor = createActor(testMachine, { input: { dataSource: ds } }).start();
-    await waitFor(actor, (s) => s.matches('anonymous'));
-
-    // Open invite then leave
-    actor.send({ type: 'OPEN_INVITE', token: 'inv-1', label: 'Family', revoked: false });
-    actor.send({ type: 'LEAVE_INVITE' });
+    expect(actor.getSnapshot().matches({ authenticated: 'editor' })).toBe(true);
+    actor.send({ type: 'SIGN_OUT' });
     expect(actor.getSnapshot().matches('anonymous')).toBe(true);
-
-    // Open invite then server revokes
-    actor.send({ type: 'OPEN_INVITE', token: 'inv-2', label: 'Family', revoked: false });
-    actor.send({ type: 'INVITE_REVOKED_SERVER' });
-    expect(actor.getSnapshot().matches('inviteRevoked')).toBe(true);
-    actor.send({ type: 'DISMISS_INVITE' });
-
-    // Magic link verify returns invalid -> anonymous
-    actor.send({ type: 'REQUEST_MAGIC_LINK', email: 'ed@example.test' });
-    await waitFor(actor, (s) => s.matches('awaitingMagicLinkClick'));
-
-    actor.send({ type: 'OPEN_MAGIC_LINK', token: 'expired' });
-    const snap = await waitFor(actor, (s) => s.matches('anonymous'));
-    expect(snap.context.authError).toContain('expired');
-
-    // Magic link verify returns member editor
-    actor.send({ type: 'REQUEST_MAGIC_LINK', email: 'ed@example.test' });
-    await waitFor(actor, (s) => s.matches('awaitingMagicLinkClick'));
-    actor.send({ type: 'OPEN_MAGIC_LINK', token: 'valid-ed' });
-    const edSnap = await waitFor(actor, (s) => s.matches({ authenticated: 'editor' }));
-    expect(edSnap.context.email).toBe('ed@example.test');
     actor.stop();
   });
 });

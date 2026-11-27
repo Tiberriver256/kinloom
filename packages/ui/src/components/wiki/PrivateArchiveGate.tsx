@@ -16,7 +16,7 @@ export interface PrivateArchiveGateProps {
  * the visitor is anonymous and the archive bundle requires authentication.
  */
 export const PrivateArchiveGate: React.FC<PrivateArchiveGateProps> = ({ onNavigateToInvite }) => {
-  const { siteConfig, authProviders } = useArchiveData();
+  const { siteConfig, authProviders, dataSource } = useArchiveData();
   const [urlError, setUrlError] = useState<AuthUrlError | null>(null);
 
   useEffect(() => {
@@ -26,10 +26,11 @@ export const PrivateArchiveGate: React.FC<PrivateArchiveGateProps> = ({ onNaviga
     }
   }, []);
 
+  const canSignInWithGoogle = Boolean(authProviders.google && dataSource.getGoogleSignInUrl?.('/'));
   const leadCopy =
-    authProviders.google && authProviders.magicLink
+    canSignInWithGoogle && authProviders.magicLink
       ? 'Sign in with an invited family email link or your Google account. No password is needed.'
-      : authProviders.google
+      : canSignInWithGoogle
         ? 'Sign in with your invited Google account to open this family archive.'
         : 'Enter your invited family email address. No password is needed, and we will email you a one-click sign-in link.';
 

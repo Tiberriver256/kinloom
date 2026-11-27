@@ -19,13 +19,13 @@ import { deriveArchiveStatus, mergePronunciationLexicons } from '@kinloom/core';
 import type React from 'react';
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { createStaticArchiveDataSource } from '../adapters/staticDemoDataSource.js';
+import { AuthSessionActorContext, deriveSessionFromAuthSnapshot } from '../machines/authSessionMachine.js';
 import {
   type ArchiveCapabilities,
   type ArchiveDataLoader,
   type ArchiveSession,
   createStaticArchiveLoader,
   normalizeBaseUrl,
-  normalizeCapabilities,
   normalizeSessionProp,
   wrapLegacyLoader,
 } from './archiveDataHelpers.js';
@@ -79,46 +79,37 @@ export interface ArchiveDataContextValue {
 
 const ArchiveDataContext = createContext<ArchiveDataContextValue | null>(null);
 
-export const ArchiveDataProvider: React.FC<ArchiveDataProviderProps> = ({
+interface ArchiveDataProviderInnerProps {
+  siteConfig: KinloomSiteConfig;
+  resolvedBaseUrl: string;
+  resolvedDataSource: ArchiveDataSource;
+  initialBundle: ArchiveBundle | null;
+  initialReadings: ReadingsBundle | null;
+  sessionProp: ArchiveSession | null | undefined;
+  normalizedSessionProp: ArchiveSessionState | null;
+  capabilitiesProp: Partial<ArchiveCapabilities> | undefined;
+  children: React.ReactNode;
+}
+
+const ArchiveDataProviderInner: React.FC<ArchiveDataProviderInnerProps> = ({
   siteConfig,
-  loader,
-  dataSource,
-  baseUrl,
-  initialBundle = null,
-  initialReadings = null,
-  session: sessionProp,
-  capabilities: capabilitiesProp,
+  resolvedBaseUrl,
+  resolvedDataSource,
+  initialBundle,
+  initialReadings,
+  sessionProp,
+  normalizedSessionProp,
+  capabilitiesProp,
   children,
 }) => {
-  const resolvedBaseUrl = normalizeBaseUrl(baseUrl);
-  const resolvedDataSource = useMemo<ArchiveDataSource>(() => {
-    if (dataSource) {
-      return dataSource;
-    }
-    if (loader) {
-      return wrapLegacyLoader(loader);
-    }
-    return createStaticArchiveDataSource(resolvedBaseUrl);
-  }, [dataSource, loader, resolvedBaseUrl]);
-
-  const initialNormalizedSession = useMemo(() => normalizeSessionProp(sessionProp), [sessionProp]);
-  const initialNormalizedCaps = useMemo(
-    () => normalizeCapabilities(capabilitiesProp, initialNormalizedSession),
-    [capabilitiesProp, initialNormalizedSession]
-  );
+  const authActorRef = AuthSessionActorContext.useActorRef();
+  const authSnapshot = AuthSessionActorContext.useSelector((state) => state);
 
   const [bundle, setBundle] = useState<ArchiveBundle | null>(initialBundle);
   const [etag, setEtag] = useState<string | null>(null);
   const [loading, setLoading] = useState<boolean>(initialBundle === null);
   const [error, setError] = useState<string | null>(null);
   const [reloadTick, setReloadTick] = useState(0);
-
-  const [liveSession, setLiveSession] = useState<ArchiveSessionState | null>(initialNormalizedSession);
-  const [liveCapabilities, setLiveCapabilities] = useState<CoreArchiveCapabilities>(initialNormalizedCaps);
-  const [liveAuthProviders, setLiveAuthProviders] = useState<ArchiveAuthProviders>({
-    google: false,
-    magicLink: Boolean(resolvedDataSource.requestMagicLink),
-  });
 
   const [readings, setReadings] = useState<ReadingsBundle | null>(initialReadings);
   const [readingsLoading, setReadingsLoading] = useState(false);
@@ -128,70 +119,105 @@ export const ArchiveDataProvider: React.FC<ArchiveDataProviderProps> = ({
   const readingsFetchedRef = useRef(initialReadings !== null);
   const etagRef = useRef<string | null>(null);
   const hasBundleRef = useRef(initialBundle !== null);
+  const prevDataSourceRef = useRef(resolvedDataSource);
+  const prevSessionPropRef = useRef(sessionProp);
+  const prevCapabilitiesPropRef = useRef(capabilitiesProp);
 
   const setPronunciations = useCallback((next: Record<string, Pronunciation>) => {
     setLivePronunciations(next);
   }, []);
 
   useEffect(() => {
-    if (sessionProp !== undefined) {
-      setLiveSession(initialNormalizedSession);
+    if (prevDataSourceRef.current !== resolvedDataSource) {
+      prevDataSourceRef.current = resolvedDataSource;
+      authActorRef.send({ type: 'SYNC_DATA_SOURCE', dataSource: resolvedDataSource });
+      if (sessionProp === undefined && resolvedDataSource.getSession) {
+        authActorRef.send({ type: 'REFRESH_SESSION' });
+      }
     }
-  }, [sessionProp, initialNormalizedSession]);
+  }, [authActorRef, resolvedDataSource, sessionProp]);
 
   useEffect(() => {
-    if (capabilitiesProp !== undefined || sessionProp !== undefined) {
-      setLiveCapabilities(initialNormalizedCaps);
+    if (prevSessionPropRef.current !== sessionProp) {
+      prevSessionPropRef.current = sessionProp;
+      if (sessionProp !== undefined) {
+        authActorRef.send({ type: 'SYNC_EXPLICIT_SESSION', session: normalizedSessionProp });
+      } else if (resolvedDataSource.getSession) {
+        authActorRef.send({ type: 'REFRESH_SESSION' });
+      }
     }
-  }, [capabilitiesProp, sessionProp, initialNormalizedCaps]);
+  }, [authActorRef, sessionProp, normalizedSessionProp, resolvedDataSource]);
+
+  useEffect(() => {
+    if (prevCapabilitiesPropRef.current !== capabilitiesProp) {
+      prevCapabilitiesPropRef.current = capabilitiesProp;
+      authActorRef.send({ type: 'SYNC_CAPABILITIES_OVERRIDE', capabilities: capabilitiesProp });
+    }
+  }, [authActorRef, capabilitiesProp]);
+
+  const {
+    session: derivedSession,
+    capabilities,
+    authProviders,
+  } = useMemo(() => deriveSessionFromAuthSnapshot(authSnapshot), [authSnapshot]);
+
+  const session: ArchiveSessionState | null = authSnapshot.matches('hydrating') ? null : derivedSession;
+
+  const clearCachedArchiveState = useCallback(() => {
+    hasBundleRef.current = false;
+    etagRef.current = null;
+    setEtag(null);
+    setBundle(null);
+    setReadings(null);
+    readingsFetchedRef.current = false;
+  }, []);
+
+  const prevPrincipalKindRef = useRef<ArchiveSessionState['principal_kind'] | null>(
+    session?.principal_kind ?? null
+  );
+  useEffect(() => {
+    const prevKind = prevPrincipalKindRef.current;
+    const nextKind = session?.principal_kind ?? null;
+    if (nextKind !== null) {
+      prevPrincipalKindRef.current = nextKind;
+    }
+    if ((prevKind === 'user' || prevKind === 'invite_viewer') && nextKind === 'anonymous') {
+      clearCachedArchiveState();
+    }
+  }, [session?.principal_kind, clearCachedArchiveState]);
 
   const refreshSession = useCallback(async (): Promise<void> => {
     if (!resolvedDataSource.getSession) {
       return;
     }
-    try {
-      const res = await resolvedDataSource.getSession();
-      setLiveSession(res.session);
-      setLiveCapabilities(res.capabilities);
-      if (res.authProviders) {
-        setLiveAuthProviders(res.authProviders);
-      }
-      if (res.session.principal_kind === 'anonymous') {
-        hasBundleRef.current = false;
-        etagRef.current = null;
-        setEtag(null);
-        setBundle(null);
-        setReadings(null);
-        readingsFetchedRef.current = false;
-      }
-    } catch {
-      // Keep current session state on transient refresh failure.
-    }
-  }, [resolvedDataSource]);
-
-  useEffect(() => {
-    if (sessionProp !== undefined || !resolvedDataSource.getSession) {
-      return;
-    }
-    let cancelled = false;
-    void resolvedDataSource
-      .getSession()
-      .then((res) => {
-        if (!cancelled) {
-          setLiveSession(res.session);
-          setLiveCapabilities(res.capabilities);
-          if (res.authProviders) {
-            setLiveAuthProviders(res.authProviders);
-          }
+    await new Promise<void>((resolve) => {
+      let sawHydrating = false;
+      const sub = authActorRef.subscribe((snap) => {
+        if (snap.matches('hydrating')) {
+          sawHydrating = true;
+          return;
         }
-      })
-      .catch(() => {
-        // Leave anonymous/read-only state on error.
+        if (sawHydrating) {
+          sub.unsubscribe();
+          const refreshed = deriveSessionFromAuthSnapshot(snap);
+          if (refreshed.session.principal_kind === 'anonymous') {
+            clearCachedArchiveState();
+          }
+          resolve();
+        }
       });
-    return (): void => {
-      cancelled = true;
-    };
-  }, [resolvedDataSource, sessionProp]);
+      authActorRef.send({ type: 'REFRESH_SESSION' });
+      const current = authActorRef.getSnapshot();
+      if (!current.matches('hydrating')) {
+        sub.unsubscribe();
+        const refreshed = deriveSessionFromAuthSnapshot(current);
+        if (refreshed.session.principal_kind === 'anonymous') {
+          clearCachedArchiveState();
+        }
+        resolve();
+      }
+    });
+  }, [authActorRef, resolvedDataSource, clearCachedArchiveState]);
 
   const reloadArchive = useCallback(() => {
     setReloadTick((t) => t + 1);
@@ -264,7 +290,7 @@ export const ArchiveDataProvider: React.FC<ArchiveDataProviderProps> = ({
   // Fails silently in static/offline mode.
   // biome-ignore lint/correctness/useExhaustiveDependencies: re-fetch live pronunciations when reloadTick increments
   useEffect(() => {
-    if ((!liveCapabilities.canEdit && !archiveLoadedOverHttp) || !resolvedDataSource.loadPronunciations) {
+    if ((!capabilities.canEdit && !archiveLoadedOverHttp) || !resolvedDataSource.loadPronunciations) {
       return;
     }
     const controller = new AbortController();
@@ -283,7 +309,7 @@ export const ArchiveDataProvider: React.FC<ArchiveDataProviderProps> = ({
       cancelled = true;
       controller.abort();
     };
-  }, [resolvedDataSource, liveCapabilities.canEdit, archiveLoadedOverHttp, reloadTick]);
+  }, [resolvedDataSource, capabilities.canEdit, archiveLoadedOverHttp, reloadTick]);
 
   const pronunciations = useMemo<Readonly<Record<string, Pronunciation>>>(
     () =>
@@ -381,9 +407,9 @@ export const ArchiveDataProvider: React.FC<ArchiveDataProviderProps> = ({
       loadMediaChecklist,
       reloadArchive,
       refreshSession,
-      session: liveSession,
-      capabilities: liveCapabilities,
-      authProviders: liveAuthProviders,
+      session,
+      capabilities,
+      authProviders,
       pronunciations,
       setPronunciations,
     }),
@@ -407,15 +433,66 @@ export const ArchiveDataProvider: React.FC<ArchiveDataProviderProps> = ({
       loadMediaChecklist,
       reloadArchive,
       refreshSession,
-      liveSession,
-      liveCapabilities,
-      liveAuthProviders,
+      session,
+      capabilities,
+      authProviders,
       pronunciations,
       setPronunciations,
     ]
   );
 
   return <ArchiveDataContext.Provider value={value}>{children}</ArchiveDataContext.Provider>;
+};
+
+export const ArchiveDataProvider: React.FC<ArchiveDataProviderProps> = ({
+  siteConfig,
+  loader,
+  dataSource,
+  baseUrl,
+  initialBundle = null,
+  initialReadings = null,
+  session: sessionProp,
+  capabilities: capabilitiesProp,
+  children,
+}) => {
+  const resolvedBaseUrl = normalizeBaseUrl(baseUrl);
+  const resolvedDataSource = useMemo<ArchiveDataSource>(() => {
+    if (dataSource) {
+      return dataSource;
+    }
+    if (loader) {
+      return wrapLegacyLoader(loader);
+    }
+    return createStaticArchiveDataSource(resolvedBaseUrl);
+  }, [dataSource, loader, resolvedBaseUrl]);
+
+  const normalizedSessionProp = useMemo(() => normalizeSessionProp(sessionProp), [sessionProp]);
+
+  const initialActorOptionsRef = useRef({
+    input: {
+      dataSource: resolvedDataSource,
+      initialSession: normalizedSessionProp,
+      hasExplicitSession: sessionProp !== undefined,
+      capabilitiesOverride: capabilitiesProp,
+    },
+  });
+
+  return (
+    <AuthSessionActorContext.Provider options={initialActorOptionsRef.current}>
+      <ArchiveDataProviderInner
+        siteConfig={siteConfig}
+        resolvedBaseUrl={resolvedBaseUrl}
+        resolvedDataSource={resolvedDataSource}
+        initialBundle={initialBundle}
+        initialReadings={initialReadings}
+        sessionProp={sessionProp}
+        normalizedSessionProp={normalizedSessionProp}
+        capabilitiesProp={capabilitiesProp}
+      >
+        {children}
+      </ArchiveDataProviderInner>
+    </AuthSessionActorContext.Provider>
+  );
 };
 
 export function useOptionalArchiveData(): ArchiveDataContextValue | null {

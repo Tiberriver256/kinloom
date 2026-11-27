@@ -14,7 +14,19 @@ import ReactDOM from 'react-dom/client';
 import { demoStoryPlugin } from './demoStoryPlugin.js';
 import { demoSiteConfig } from './generated/siteConfig.js';
 
-installGlobalErrorHandlers();
+function readEnvFlag(name: string): string | undefined {
+  const env = import.meta.env as Record<string, string | undefined>;
+  return env[name];
+}
+
+function resolveTelemetryEndpoint(): string | undefined {
+  const meta = document.querySelector<HTMLMetaElement>('meta[name="kinloom-telemetry-endpoint"]');
+  const configured = meta?.content?.trim() || readEnvFlag('VITE_KINLOOM_TELEMETRY_ENDPOINT')?.trim();
+  return configured || undefined;
+}
+
+const telemetryEndpoint = resolveTelemetryEndpoint();
+installGlobalErrorHandlers(telemetryEndpoint ? { endpoint: telemetryEndpoint } : undefined);
 
 const rootElement = document.querySelector('#root');
 if (!rootElement) {
@@ -22,11 +34,6 @@ if (!rootElement) {
 }
 
 type BackendMode = 'static' | 'http';
-
-function readEnvFlag(name: string): string | undefined {
-  const env = import.meta.env as Record<string, string | undefined>;
-  return env[name];
-}
 
 function resolveBackendMode(): BackendMode {
   const meta = document.querySelector<HTMLMetaElement>('meta[name="kinloom-backend"]');

@@ -729,7 +729,7 @@ describe('Map, Tree, TopBar, Context, Telemetry, NarrativeAudio, and Pages behav
 
     const sendBeaconMock = vi.fn(() => true);
     Object.defineProperty(navigator, 'sendBeacon', { configurable: true, value: sendBeaconMock });
-    const uninstall = installGlobalErrorHandlers();
+    const uninstall = installGlobalErrorHandlers({ endpoint: 'https://telemetry.example.test/errors' });
     reportClientError({ kind: 'blank_screen', message: 'Empty mount', route: '/tree' });
     window.dispatchEvent(
       new ErrorEvent('error', { message: 'Script boom', error: new Error('Script boom') })

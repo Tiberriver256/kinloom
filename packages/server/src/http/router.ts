@@ -76,6 +76,25 @@ function pluginMethodsOverlap(methodA: string, methodB: string): boolean {
   return methodA === '*' || methodB === '*' || methodA === methodB;
 }
 
+const RESERVED_SERVER_ROUTE_PREFIXES: readonly string[] = [
+  '/api/bundle',
+  '/api/entities',
+  '/api/revisions',
+  '/api/batches',
+  '/api/export',
+  '/api/auth',
+  '/api/media',
+  '/api/talk',
+  '/api/admin',
+  '/api/pronunciations',
+  '/api/pronunciation',
+  '/privacy',
+  '/og',
+  '/invite',
+  '/media',
+  '/sources',
+];
+
 function validateAndCompilePluginRoutes(
   plugins: readonly KinloomServerPlugin[]
 ): readonly CompiledPluginRoute[] {
@@ -98,6 +117,17 @@ function validateAndCompilePluginRoutes(
         throw new RangeError(`Server plugin '${pluginId}' route method must be non-empty.`);
       }
       const normalizedPrefix = normalizePluginPathPrefix(route.pathPrefix, pluginId);
+
+      for (const reservedPrefix of RESERVED_SERVER_ROUTE_PREFIXES) {
+        if (
+          matchesPathPrefix(normalizedPrefix, reservedPrefix) ||
+          matchesPathPrefix(reservedPrefix, normalizedPrefix)
+        ) {
+          throw new RangeError(
+            `Server plugin '${pluginId}' route '${method} ${normalizedPrefix}' collides with reserved built-in route prefix '${reservedPrefix}'.`
+          );
+        }
+      }
 
       for (const existing of compiledRoutes) {
         if (

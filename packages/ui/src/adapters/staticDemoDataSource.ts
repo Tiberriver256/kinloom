@@ -6,7 +6,7 @@ import type {
   MediaChecklistItem,
   ReadingsBundle,
 } from '@kinloom/core';
-import { ArchiveBundleSchema, ReadingsBundleSchema } from '@kinloom/core';
+import { ArchiveBundleSchema, MediaChecklistItemSchema, ReadingsBundleSchema } from '@kinloom/core';
 
 const STATIC_ANONYMOUS_SESSION: ArchiveSessionState = {
   authenticated: false,
@@ -25,15 +25,6 @@ function normalizeBaseUrl(raw?: string): string {
   const envBase = typeof import.meta !== 'undefined' ? import.meta.env?.BASE_URL : undefined;
   const fallback = raw || envBase || '/';
   return fallback.endsWith('/') ? fallback : `${fallback}/`;
-}
-
-function isMediaChecklistResponse(data: unknown): data is { items: MediaChecklistItem[] } {
-  return (
-    typeof data === 'object' &&
-    data !== null &&
-    'items' in data &&
-    Array.isArray((data as { items: unknown }).items)
-  );
 }
 
 /**
@@ -79,17 +70,22 @@ export class StaticDemoDataSource implements ArchiveDataSource {
   }
 
   async loadMediaChecklist(): Promise<MediaChecklistItem[]> {
+    let res: Response;
     try {
-      const res = await this.fetchImpl(`${this.baseUrl}data/media-checklist.json`);
-      if (!res.ok) {
-        return [];
-      }
-      const raw: unknown = await res.json();
-      return isMediaChecklistResponse(raw) ? raw.items : [];
+      res = await this.fetchImpl(`${this.baseUrl}data/media-checklist.json`);
     } catch {
       return [];
     }
+    if (!res.ok) {
+      return [];
+    }
+    const raw: unknown = await res.json();
+    if (typeof raw !== 'object' || raw === null || !('items' in raw) || !Array.isArray(raw.items)) {
+      throw new Error('Invalid media-checklist.json payload: expected object with items array');
+    }
+    return raw.items.map((item) => MediaChecklistItemSchema.parse(item));
   }
+
   async getSession(): Promise<{
     session: ArchiveSessionState;
     capabilities: ArchiveCapabilities;

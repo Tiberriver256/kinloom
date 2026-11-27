@@ -1,29 +1,16 @@
-import type { ArchiveCapabilities, ArchiveSessionState } from '@kinloom/core';
+import type { ArchiveAuthProviders, ArchiveCapabilities, ArchiveSessionState } from '@kinloom/core';
 import { resolveCapabilities } from '@kinloom/core';
-import type { AuthSessionContext, HydrateOutcome, VerifyOutcome } from './types.js';
+import type { AuthSessionContext, HydrateOutcome } from './types.js';
 
-export function buildVerifiedAuthPatch(
-  output: VerifyOutcome,
-  role: 'admin' | 'editor',
-  autoEnrolledViaInvite: boolean
+export function buildHydratedPatch(
+  outcome: HydrateOutcome,
+  currentAuthProviders: ArchiveAuthProviders,
+  hasServerAuthProviders: boolean
 ): Partial<AuthSessionContext> {
-  if (output.kind !== 'verified') {
-    return {};
-  }
-  return {
-    pendingInviteToken: null,
-    inviteLabel: null,
-    email: output.email,
-    displayName: output.displayName,
-    role,
-    autoEnrolledViaInvite,
-    magicLinkResendCount: 0,
-    authError: null,
-    authErrorDetail: null,
-  };
-}
+  const nextProviders = outcome.authProviders ?? currentAuthProviders;
+  const nextHasServerProviders = outcome.authProviders !== undefined || hasServerAuthProviders;
+  const nextServerCapabilities = outcome.capabilities ?? null;
 
-export function buildHydratedPatch(outcome: HydrateOutcome): Partial<AuthSessionContext> {
   if (outcome.kind === 'authenticated') {
     return {
       initialSession: undefined,
@@ -32,10 +19,12 @@ export function buildHydratedPatch(outcome: HydrateOutcome): Partial<AuthSession
       email: outcome.email,
       displayName: outcome.displayName,
       role: outcome.role,
-      autoEnrolledViaInvite: false,
       magicLinkResendCount: 0,
       authError: null,
       authErrorDetail: null,
+      serverCapabilities: nextServerCapabilities,
+      authProviders: nextProviders,
+      hasServerAuthProviders: nextHasServerProviders,
     };
   }
   if (outcome.kind === 'invite_valid') {
@@ -44,10 +33,12 @@ export function buildHydratedPatch(outcome: HydrateOutcome): Partial<AuthSession
       pendingInviteToken: outcome.token,
       inviteLabel: outcome.label,
       role: null,
-      autoEnrolledViaInvite: false,
       magicLinkResendCount: 0,
       authError: null,
       authErrorDetail: null,
+      serverCapabilities: nextServerCapabilities,
+      authProviders: nextProviders,
+      hasServerAuthProviders: nextHasServerProviders,
     };
   }
   return {
@@ -57,10 +48,12 @@ export function buildHydratedPatch(outcome: HydrateOutcome): Partial<AuthSession
     email: null,
     displayName: null,
     role: null,
-    autoEnrolledViaInvite: false,
     magicLinkResendCount: 0,
     authError: null,
     authErrorDetail: null,
+    serverCapabilities: nextServerCapabilities,
+    authProviders: nextProviders,
+    hasServerAuthProviders: nextHasServerProviders,
   };
 }
 
@@ -76,16 +69,38 @@ export function formatAuthErrorMessage(err: unknown): string {
 
 export interface AuthSessionSnapshotLike {
   readonly context: AuthSessionContext;
-  matches(stateValue: 'readOnlyInvite' | { authenticated: 'admin' | 'editor' }): boolean;
+  matches(
+    stateValue:
+      | 'readOnlyInvite'
+      | 'requestingMagicLink'
+      | 'awaitingMagicLinkClick'
+      | 'signingOut'
+      | { authenticated: 'admin' | 'editor' }
+  ): boolean;
+}
+
+function normalizeCapabilitiesOverride(override: Partial<ArchiveCapabilities>): ArchiveCapabilities {
+  return {
+    canEdit: override.canEdit ?? false,
+    canUploadMedia: override.canUploadMedia ?? false,
+    hasRevisionHistory: override.hasRevisionHistory ?? false,
+    hasTalk: override.hasTalk ?? false,
+    canManageSite: override.canManageSite ?? false,
+  };
 }
 
 /**
- * Derive ArchiveSessionState and ArchiveCapabilities from an authSessionMachine snapshot.
+ * Derive ArchiveSessionState, ArchiveCapabilities, and ArchiveAuthProviders
+ * from an authSessionMachine snapshot.
  */
 export function deriveSessionFromAuthSnapshot(
   snapshot: AuthSessionSnapshotLike,
   options?: { allowTalk?: boolean; hasRevisionHistory?: boolean }
-): { session: ArchiveSessionState; capabilities: ArchiveCapabilities } {
+): {
+  session: ArchiveSessionState;
+  capabilities: ArchiveCapabilities;
+  authProviders: ArchiveAuthProviders;
+} {
   let session: ArchiveSessionState;
   if (snapshot.matches({ authenticated: 'admin' })) {
     session = {
@@ -103,7 +118,19 @@ export function deriveSessionFromAuthSnapshot(
       displayName: snapshot.context.displayName ?? undefined,
       role: 'editor',
     };
-  } else if (snapshot.matches('readOnlyInvite')) {
+  } else if (snapshot.matches('signingOut') && snapshot.context.role !== null) {
+    session = {
+      authenticated: true,
+      principal_kind: 'user',
+      email: snapshot.context.email ?? undefined,
+      displayName: snapshot.context.displayName ?? undefined,
+      role: snapshot.context.role,
+    };
+  } else if (
+    snapshot.matches('readOnlyInvite') ||
+    ((snapshot.matches('requestingMagicLink') || snapshot.matches('awaitingMagicLinkClick')) &&
+      snapshot.context.pendingInviteToken !== null)
+  ) {
     session = {
       authenticated: false,
       principal_kind: 'invite_viewer',
@@ -117,8 +144,20 @@ export function deriveSessionFromAuthSnapshot(
     };
   }
 
+  let capabilities: ArchiveCapabilities;
+  if (options) {
+    capabilities = resolveCapabilities(session, options);
+  } else if (snapshot.context.capabilitiesOverride) {
+    capabilities = normalizeCapabilitiesOverride(snapshot.context.capabilitiesOverride);
+  } else if (snapshot.context.serverCapabilities) {
+    capabilities = snapshot.context.serverCapabilities;
+  } else {
+    capabilities = resolveCapabilities(session);
+  }
+
   return {
     session,
-    capabilities: resolveCapabilities(session, options),
+    capabilities,
+    authProviders: snapshot.context.authProviders,
   };
 }

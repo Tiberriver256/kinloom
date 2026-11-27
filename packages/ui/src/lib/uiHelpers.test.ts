@@ -21,6 +21,7 @@ import {
   pickActiveTimelineEventId,
   readerNextPage,
   readerPrevPage,
+  reportClientError,
   resolveReaderPageIndex,
   sanitizeReport,
   sanitizeRoute,
@@ -211,6 +212,17 @@ describe('clientTelemetry', () => {
       route: '/person/abraham-lincoln-1809?event=e1&secret=xyz',
     });
     assert.equal(report.route, '/person/abraham-lincoln-1809?event=e1');
+
+    // Default reportClientError emits no network call; injectable transport receives sanitized payload.
+    const received: string[] = [];
+    reportClientError({ kind: 'window_error', message: 'Opt-in test error', route: '/tree' });
+    assert.equal(received.length, 0);
+    reportClientError(
+      { kind: 'window_error', message: 'Opt-in test error', route: '/tree' },
+      { transport: (payload) => received.push(payload) }
+    );
+    assert.equal(received.length, 1);
+    assert.ok(received[0].includes('Opt-in test error'));
   });
 });
 

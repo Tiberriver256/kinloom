@@ -1,5 +1,6 @@
 import {
   type ArchiveBundle,
+  ArchiveBundleSchema,
   type ArchiveRawSnapshot,
   type AtomicMutationOp,
   type AtomicMutationStore,
@@ -169,16 +170,34 @@ export class WikiCommitPipeline {
       const firstNewRevId = committedRevisions[0].revision_id;
       if (cached.status === 'hit') {
         if (cached.object.revision_id === firstNewRevId - 1) {
-          const previousBundle =
-            cached.object.parsedBundle ??
-            (JSON.parse(await readBodyToString(cached.object.body)) as ArchiveBundle);
-          const patched = await this.deps.bundleCache.applyMutationsAndStore(
-            previousBundle,
-            committedRevisions
-          );
-          return patched.etag;
-        }
-        if (typeof cached.object.body !== 'string') {
+          let previousBundle: ArchiveBundle | null = null;
+          if (cached.object.parsedBundle !== undefined) {
+            const parsed = ArchiveBundleSchema.safeParse(cached.object.parsedBundle);
+            if (parsed.success) {
+              previousBundle = parsed.data;
+            }
+            if (typeof cached.object.body !== 'string') {
+              await cached.object.body.cancel().catch(() => undefined);
+            }
+          } else {
+            try {
+              const decoded: unknown = JSON.parse(await readBodyToString(cached.object.body));
+              const parsed = ArchiveBundleSchema.safeParse(decoded);
+              if (parsed.success) {
+                previousBundle = parsed.data;
+              }
+            } catch {
+              previousBundle = null;
+            }
+          }
+          if (previousBundle !== null) {
+            const patched = await this.deps.bundleCache.applyMutationsAndStore(
+              previousBundle,
+              committedRevisions
+            );
+            return patched.etag;
+          }
+        } else if (typeof cached.object.body !== 'string') {
           await cached.object.body.cancel().catch(() => undefined);
         }
       }

@@ -599,9 +599,19 @@ describe('SourceReaderDrawer, GlobalSearchModal, MediaUploaderModal, and Atoms b
     expect(report.assetUrl).toBe('/invite/[redacted]/chunk.js');
 
     const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(null, { status: 204 }));
-    reportClientError({ kind: 'window_error', message: 'Synthetic test error', route: '/time' });
-    // Deduplicated second call should not emit a duplicate request
-    reportClientError({ kind: 'window_error', message: 'Synthetic test error', route: '/time' });
+    // Without configured endpoint/transport, default call emits zero network traffic
+    reportClientError({ kind: 'window_error', message: 'Unconfigured test error', route: '/time' });
+    expect(fetchSpy).not.toHaveBeenCalled();
+    // With explicit endpoint, deduplicated second call emits at most once
+    const telemetryEndpoint = { endpoint: 'https://telemetry.example.test/errors' };
+    reportClientError(
+      { kind: 'window_error', message: 'Synthetic test error', route: '/time' },
+      telemetryEndpoint
+    );
+    reportClientError(
+      { kind: 'window_error', message: 'Synthetic test error', route: '/time' },
+      telemetryEndpoint
+    );
     expect(fetchSpy.mock.calls.length).toBeLessThanOrEqual(1);
 
     const uninstall = installGlobalErrorHandlers();

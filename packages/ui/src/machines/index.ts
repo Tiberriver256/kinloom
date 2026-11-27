@@ -3,8 +3,8 @@ export type {
   AuthSessionEvent,
   AuthSessionInput,
   AuthSessionSnapshot,
+  AuthUrlErrorState,
   HydrateOutcome,
-  VerifyOutcome,
 } from './authSessionMachine.js';
 export {
   AuthSessionActorContext,

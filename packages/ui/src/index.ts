@@ -218,7 +218,13 @@ export type {
   PluginSlotProps,
 } from './plugins/PluginContext.js';
 // Extension & Plugin Seam
-export { KinloomPluginProvider, PluginSlot, useKinloomPlugins } from './plugins/PluginContext.js';
+export {
+  KinloomPluginProvider,
+  PluginSlot,
+  RESERVED_UI_ROUTE_PATHS,
+  useKinloomPlugins,
+  validateAndCompileUiPlugins,
+} from './plugins/PluginContext.js';
 export type {
   KinloomMediaRenderer,
   KinloomMediaRendererProps,

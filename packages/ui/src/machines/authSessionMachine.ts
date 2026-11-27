@@ -1,16 +1,9 @@
-import { canAutoEnrollViaInvite, canCompleteAdminAuth, canCompleteMemberEditorAuth } from '@kinloom/core';
 import { createActorContext } from '@xstate/react';
 import type { SnapshotFrom } from 'xstate';
 import { assign, setup } from 'xstate';
-import {
-  authSessionActors,
-  hydrateOutcomeFromSession,
-  readHydrateOutput,
-  readVerifyOutput,
-} from './authSession/actors.js';
+import { authSessionActors, hydrateOutcomeFromSession, readHydrateOutput } from './authSession/actors.js';
 import {
   buildHydratedPatch,
-  buildVerifiedAuthPatch,
   deriveSessionFromAuthSnapshot,
   formatAuthErrorMessage,
 } from './authSession/reducers.js';
@@ -18,11 +11,11 @@ import type {
   AuthSessionContext,
   AuthSessionEvent,
   AuthSessionInput,
+  AuthUrlErrorState,
   HydrateOutcome,
-  VerifyOutcome,
 } from './authSession/types.js';
 
-export type { AuthSessionContext, AuthSessionEvent, AuthSessionInput, HydrateOutcome, VerifyOutcome };
+export type { AuthSessionContext, AuthSessionEvent, AuthSessionInput, AuthUrlErrorState, HydrateOutcome };
 export { deriveSessionFromAuthSnapshot };
 
 export const authSessionMachine = setup({
@@ -34,6 +27,7 @@ export const authSessionMachine = setup({
   actors: authSessionActors,
   guards: {
     hasValidPendingInvite: ({ context }) => context.pendingInviteToken !== null,
+    hasLogoutPort: ({ context }) => Boolean(context.dataSource?.logout),
     isInitialAdminSession: ({ context }) =>
       context.initialSession != null &&
       hydrateOutcomeFromSession(context.initialSession).kind === 'authenticated' &&
@@ -46,8 +40,9 @@ export const authSessionMachine = setup({
       context.initialSession != null &&
       hydrateOutcomeFromSession(context.initialSession).kind === 'invite_valid',
     isInitialAnonymousSession: ({ context }) =>
-      context.initialSession != null &&
-      hydrateOutcomeFromSession(context.initialSession).kind === 'anonymous',
+      (context.initialSession != null &&
+        hydrateOutcomeFromSession(context.initialSession).kind === 'anonymous') ||
+      (context.hasExplicitSession && context.initialSession == null),
     isAdminHydration: ({ event }) => {
       const output = readHydrateOutput(event);
       return output !== null && output.kind === 'authenticated' && output.role === 'admin';
@@ -60,36 +55,6 @@ export const authSessionMachine = setup({
       const output = readHydrateOutput(event);
       return output !== null && output.kind === 'invite_valid';
     },
-    isRevokedInviteHydration: ({ event }) => {
-      const output = readHydrateOutput(event);
-      return output !== null && output.kind === 'invite_revoked';
-    },
-    isAdminAuthSuccess: ({ event }) => {
-      const output = readVerifyOutput(event);
-      return (
-        output !== null && output.kind === 'verified' && canCompleteAdminAuth(output.isMember, output.role)
-      );
-    },
-    isMemberEditorAuthSuccess: ({ event }) => {
-      const output = readVerifyOutput(event);
-      return (
-        output !== null &&
-        output.kind === 'verified' &&
-        canCompleteMemberEditorAuth(output.isMember, output.role)
-      );
-    },
-    isInviteAutoEnrollSuccess: ({ context, event }) => {
-      const output = readVerifyOutput(event);
-      return (
-        output !== null &&
-        output.kind === 'verified' &&
-        canAutoEnrollViaInvite(output.isMember, context.pendingInviteToken !== null)
-      );
-    },
-    isVerifyInviteRevoked: ({ context, event }) => {
-      const output = readVerifyOutput(event);
-      return context.pendingInviteToken !== null && output !== null && output.kind === 'invite_revoked';
-    },
   },
   actions: {
     clearToAnonymous: assign(() => ({
@@ -99,26 +64,15 @@ export const authSessionMachine = setup({
       email: null,
       displayName: null,
       role: null,
-      autoEnrolledViaInvite: false,
       magicLinkResendCount: 0,
       authError: null,
       authErrorDetail: null,
+      serverCapabilities: null,
     })),
     clearAuthError: assign(() => ({
       authError: null,
       authErrorDetail: null,
-    })),
-    markInviteRevoked: assign(() => ({
-      initialSession: undefined,
-      pendingInviteToken: null,
-      inviteLabel: null,
-      email: null,
-      displayName: null,
-      role: null,
-      autoEnrolledViaInvite: false,
-      magicLinkResendCount: 0,
-      authError: 'This invite link has expired or been revoked.',
-      authErrorDetail: null,
+      urlError: null,
     })),
   },
 }).createMachine({
@@ -130,17 +84,57 @@ export const authSessionMachine = setup({
     email: null,
     displayName: null,
     role: null,
-    autoEnrolledViaInvite: false,
     magicLinkResendCount: 0,
     authError: null,
     authErrorDetail: null,
+    urlError: null,
+    serverCapabilities: null,
+    capabilitiesOverride: input?.capabilitiesOverride,
+    authProviders: {
+      google: false,
+      magicLink: Boolean(input?.dataSource?.requestMagicLink),
+    },
+    hasServerAuthProviders: false,
+    hasExplicitSession: Boolean(input?.hasExplicitSession),
     initialSession: input?.initialSession,
     dataSource: input?.dataSource,
   }),
   on: {
     CLEAR_AUTH_ERROR: { actions: [{ type: 'clearAuthError' }] },
+    SET_URL_ERROR: {
+      actions: assign(({ event }) =>
+        event.urlError !== null
+          ? {
+              urlError: event.urlError,
+              authError: null,
+              authErrorDetail: null,
+            }
+          : { urlError: null }
+      ),
+    },
     SYNC_DATA_SOURCE: {
-      actions: assign(({ event }) => ({ dataSource: event.dataSource })),
+      actions: assign(({ context, event }) => ({
+        dataSource: event.dataSource,
+        authProviders: context.hasServerAuthProviders
+          ? context.authProviders
+          : {
+              ...context.authProviders,
+              magicLink: Boolean(event.dataSource?.requestMagicLink),
+            },
+      })),
+    },
+    SYNC_CAPABILITIES_OVERRIDE: {
+      actions: assign(({ event }) => ({
+        capabilitiesOverride: event.capabilities,
+      })),
+    },
+    SYNC_EXPLICIT_SESSION: {
+      target: '.hydrating',
+      actions: assign(({ event }) => ({
+        hasExplicitSession: true,
+        initialSession: event.session,
+        serverCapabilities: null,
+      })),
     },
   },
   states: {
@@ -152,7 +146,11 @@ export const authSessionMachine = setup({
           target: 'authenticated.admin',
           actions: assign(({ context }) =>
             context.initialSession
-              ? buildHydratedPatch(hydrateOutcomeFromSession(context.initialSession))
+              ? buildHydratedPatch(
+                  hydrateOutcomeFromSession(context.initialSession),
+                  context.authProviders,
+                  context.hasServerAuthProviders
+                )
               : {}
           ),
         },
@@ -161,7 +159,11 @@ export const authSessionMachine = setup({
           target: 'authenticated.editor',
           actions: assign(({ context }) =>
             context.initialSession
-              ? buildHydratedPatch(hydrateOutcomeFromSession(context.initialSession))
+              ? buildHydratedPatch(
+                  hydrateOutcomeFromSession(context.initialSession),
+                  context.authProviders,
+                  context.hasServerAuthProviders
+                )
               : {}
           ),
         },
@@ -170,7 +172,11 @@ export const authSessionMachine = setup({
           target: 'readOnlyInvite',
           actions: assign(({ context }) =>
             context.initialSession
-              ? buildHydratedPatch(hydrateOutcomeFromSession(context.initialSession))
+              ? buildHydratedPatch(
+                  hydrateOutcomeFromSession(context.initialSession),
+                  context.authProviders,
+                  context.hasServerAuthProviders
+                )
               : {}
           ),
         },
@@ -190,24 +196,30 @@ export const authSessionMachine = setup({
           {
             guard: 'isAdminHydration',
             target: 'authenticated.admin',
-            actions: assign(({ event }) => buildHydratedPatch(event.output)),
+            actions: assign(({ context, event }) =>
+              buildHydratedPatch(event.output, context.authProviders, context.hasServerAuthProviders)
+            ),
           },
           {
             guard: 'isEditorHydration',
             target: 'authenticated.editor',
-            actions: assign(({ event }) => buildHydratedPatch(event.output)),
+            actions: assign(({ context, event }) =>
+              buildHydratedPatch(event.output, context.authProviders, context.hasServerAuthProviders)
+            ),
           },
           {
             guard: 'isValidInviteHydration',
             target: 'readOnlyInvite',
-            actions: assign(({ event }) => buildHydratedPatch(event.output)),
+            actions: assign(({ context, event }) =>
+              buildHydratedPatch(event.output, context.authProviders, context.hasServerAuthProviders)
+            ),
           },
           {
-            guard: 'isRevokedInviteHydration',
-            target: 'inviteRevoked',
-            actions: [{ type: 'markInviteRevoked' }],
+            target: 'anonymous',
+            actions: assign(({ context, event }) =>
+              buildHydratedPatch(event.output, context.authProviders, context.hasServerAuthProviders)
+            ),
           },
-          { target: 'anonymous', actions: [{ type: 'clearToAnonymous' }] },
         ],
         onError: { target: 'anonymous', actions: [{ type: 'clearToAnonymous' }] },
       },
@@ -215,7 +227,6 @@ export const authSessionMachine = setup({
     anonymous: {
       tags: ['signedOut'],
       on: {
-        SIGN_IN_GOOGLE: { target: 'signingInGoogle' },
         REQUEST_MAGIC_LINK: {
           target: 'requestingMagicLink',
           actions: assign(({ event }) => ({
@@ -223,31 +234,18 @@ export const authSessionMachine = setup({
             magicLinkResendCount: 0,
             authError: null,
             authErrorDetail: null,
+            urlError: null,
           })),
         },
-        REFRESH_SESSION: { target: 'hydrating' },
-        OPEN_INVITE: [
-          {
-            guard: ({ event }) => event.revoked,
-            target: 'inviteRevoked',
-            actions: [{ type: 'markInviteRevoked' }],
-          },
-          {
-            target: 'readOnlyInvite',
-            actions: assign(({ event }) => ({
-              pendingInviteToken: event.token,
-              inviteLabel: event.label,
-              authError: null,
-              authErrorDetail: null,
-            })),
-          },
-        ],
+        REFRESH_SESSION: {
+          target: 'hydrating',
+          actions: assign(() => ({ hasExplicitSession: false, initialSession: undefined })),
+        },
       },
     },
     readOnlyInvite: {
       tags: ['readOnly', 'invited'],
       on: {
-        SIGN_IN_GOOGLE: { target: 'signingInGoogle' },
         REQUEST_MAGIC_LINK: {
           target: 'requestingMagicLink',
           actions: assign(({ event }) => ({
@@ -255,79 +253,13 @@ export const authSessionMachine = setup({
             magicLinkResendCount: 0,
             authError: null,
             authErrorDetail: null,
+            urlError: null,
           })),
         },
-        INVITE_REVOKED_SERVER: {
-          target: 'inviteRevoked',
-          actions: [{ type: 'markInviteRevoked' }],
+        REFRESH_SESSION: {
+          target: 'hydrating',
+          actions: assign(() => ({ hasExplicitSession: false, initialSession: undefined })),
         },
-        LEAVE_INVITE: { target: 'anonymous', actions: [{ type: 'clearToAnonymous' }] },
-        REFRESH_SESSION: { target: 'hydrating' },
-      },
-    },
-    signingInGoogle: {
-      tags: ['loading'],
-      invoke: {
-        src: 'signInWithGoogle',
-        input: ({ context }) => ({ inviteToken: context.pendingInviteToken }),
-        onDone: [
-          {
-            guard: 'isAdminAuthSuccess',
-            target: 'authenticated.admin',
-            actions: assign(({ event }) => buildVerifiedAuthPatch(event.output, 'admin', false)),
-          },
-          {
-            guard: 'isMemberEditorAuthSuccess',
-            target: 'authenticated.editor',
-            actions: assign(({ event }) => buildVerifiedAuthPatch(event.output, 'editor', false)),
-          },
-          {
-            guard: 'isInviteAutoEnrollSuccess',
-            target: 'authenticated.editor',
-            actions: assign(({ event }) => buildVerifiedAuthPatch(event.output, 'editor', true)),
-          },
-          {
-            guard: 'isVerifyInviteRevoked',
-            target: 'inviteRevoked',
-            actions: [{ type: 'markInviteRevoked' }],
-          },
-          {
-            guard: 'hasValidPendingInvite',
-            target: 'readOnlyInvite',
-            actions: assign(({ event }) => ({
-              authError: event.output.kind === 'invalid' ? event.output.message : 'Google sign-in failed.',
-              authErrorDetail: null,
-            })),
-          },
-          {
-            target: 'anonymous',
-            actions: assign(({ event }) => ({
-              pendingInviteToken: null,
-              authError:
-                event.output.kind === 'invalid'
-                  ? event.output.message
-                  : 'This email is not enrolled in this family archive.',
-              authErrorDetail: null,
-            })),
-          },
-        ],
-        onError: [
-          {
-            guard: 'hasValidPendingInvite',
-            target: 'readOnlyInvite',
-            actions: assign(({ event }) => ({
-              authError: formatAuthErrorMessage(event.error),
-              authErrorDetail: event.error,
-            })),
-          },
-          {
-            target: 'anonymous',
-            actions: assign(({ event }) => ({
-              authError: formatAuthErrorMessage(event.error),
-              authErrorDetail: event.error,
-            })),
-          },
-        ],
       },
     },
     requestingMagicLink: {
@@ -364,7 +296,6 @@ export const authSessionMachine = setup({
     awaitingMagicLinkClick: {
       tags: ['awaitingEmail'],
       on: {
-        OPEN_MAGIC_LINK: { target: 'verifyingMagicLink' },
         RESEND_MAGIC_LINK: {
           target: 'requestingMagicLink',
           actions: assign(({ context, event }) => ({
@@ -372,88 +303,57 @@ export const authSessionMachine = setup({
             magicLinkResendCount: context.magicLinkResendCount + 1,
             authError: null,
             authErrorDetail: null,
+            urlError: null,
           })),
         },
         CANCEL_MAGIC_LINK: [
           {
             guard: 'hasValidPendingInvite',
             target: 'readOnlyInvite',
-            actions: assign(() => ({ magicLinkResendCount: 0, authError: null, authErrorDetail: null })),
-          },
-          {
-            target: 'anonymous',
-            actions: assign(() => ({ magicLinkResendCount: 0, authError: null, authErrorDetail: null })),
-          },
-        ],
-      },
-    },
-    verifyingMagicLink: {
-      tags: ['loading'],
-      invoke: {
-        src: 'verifyMagicLink',
-        input: ({ context, event }) => ({
-          token: event.type === 'OPEN_MAGIC_LINK' ? event.token : '',
-          inviteToken: context.pendingInviteToken,
-        }),
-        onDone: [
-          {
-            guard: 'isAdminAuthSuccess',
-            target: 'authenticated.admin',
-            actions: assign(({ event }) => buildVerifiedAuthPatch(event.output, 'admin', false)),
-          },
-          {
-            guard: 'isMemberEditorAuthSuccess',
-            target: 'authenticated.editor',
-            actions: assign(({ event }) => buildVerifiedAuthPatch(event.output, 'editor', false)),
-          },
-          {
-            guard: 'isInviteAutoEnrollSuccess',
-            target: 'authenticated.editor',
-            actions: assign(({ event }) => buildVerifiedAuthPatch(event.output, 'editor', true)),
-          },
-          {
-            guard: 'isVerifyInviteRevoked',
-            target: 'inviteRevoked',
-            actions: [{ type: 'markInviteRevoked' }],
-          },
-          {
-            guard: 'hasValidPendingInvite',
-            target: 'readOnlyInvite',
-            actions: assign(({ event }) => ({
-              authError:
-                event.output.kind === 'invalid' ? event.output.message : 'Magic link verification failed.',
+            actions: assign(() => ({
+              magicLinkResendCount: 0,
+              authError: null,
               authErrorDetail: null,
             })),
           },
           {
             target: 'anonymous',
-            actions: assign(({ event }) => ({
-              pendingInviteToken: null,
-              authError:
-                event.output.kind === 'invalid'
-                  ? event.output.message
-                  : 'This email is not enrolled in this family archive.',
+            actions: assign(() => ({
+              magicLinkResendCount: 0,
+              authError: null,
               authErrorDetail: null,
             })),
           },
         ],
-        onError: [
+        SET_URL_ERROR: [
           {
-            guard: 'hasValidPendingInvite',
+            guard: ({ context, event }) => event.urlError !== null && context.pendingInviteToken !== null,
             target: 'readOnlyInvite',
             actions: assign(({ event }) => ({
-              authError: formatAuthErrorMessage(event.error),
-              authErrorDetail: event.error,
+              magicLinkResendCount: 0,
+              authError: null,
+              authErrorDetail: null,
+              urlError: event.urlError,
             })),
           },
           {
+            guard: ({ event }) => event.urlError !== null,
             target: 'anonymous',
             actions: assign(({ event }) => ({
-              authError: formatAuthErrorMessage(event.error),
-              authErrorDetail: event.error,
+              magicLinkResendCount: 0,
+              authError: null,
+              authErrorDetail: null,
+              urlError: event.urlError,
             })),
           },
+          {
+            actions: assign(() => ({ urlError: null })),
+          },
         ],
+        REFRESH_SESSION: {
+          target: 'hydrating',
+          actions: assign(() => ({ hasExplicitSession: false, initialSession: undefined })),
+        },
       },
     },
     authenticated: {
@@ -464,39 +364,35 @@ export const authSessionMachine = setup({
         admin: { tags: ['admin'] },
       },
       on: {
-        SESSION_EXPIRED: {
-          target: '#authSession.sessionExpired',
-          actions: assign(() => ({
-            role: null,
-            pendingInviteToken: null,
-            authError: 'Your session expired. Sign in again to keep editing.',
-            authErrorDetail: null,
-          })),
+        SIGN_OUT: [
+          {
+            guard: 'hasLogoutPort',
+            target: '#authSession.signingOut',
+          },
+          {
+            target: '#authSession.anonymous',
+            actions: [{ type: 'clearToAnonymous' }],
+          },
+        ],
+        REFRESH_SESSION: {
+          target: '#authSession.hydrating',
+          actions: assign(() => ({ hasExplicitSession: false, initialSession: undefined })),
         },
-        SIGN_OUT: { target: '#authSession.anonymous', actions: [{ type: 'clearToAnonymous' }] },
-        REFRESH_SESSION: { target: '#authSession.hydrating' },
       },
     },
-    sessionExpired: {
-      tags: ['expired'],
-      on: {
-        SIGN_IN_GOOGLE: { target: 'signingInGoogle' },
-        REQUEST_MAGIC_LINK: {
-          target: 'requestingMagicLink',
-          actions: assign(({ event }) => ({
-            email: event.email,
-            magicLinkResendCount: 0,
-            authError: null,
-            authErrorDetail: null,
-          })),
+    signingOut: {
+      tags: ['loading'],
+      invoke: {
+        src: 'signOutSession',
+        input: ({ context }) => ({ dataSource: context.dataSource }),
+        onDone: {
+          target: 'anonymous',
+          actions: [{ type: 'clearToAnonymous' }],
         },
-        SIGN_OUT: { target: 'anonymous', actions: [{ type: 'clearToAnonymous' }] },
-      },
-    },
-    inviteRevoked: {
-      tags: ['revoked'],
-      on: {
-        DISMISS_INVITE: { target: 'anonymous', actions: [{ type: 'clearToAnonymous' }] },
+        onError: {
+          target: 'hydrating',
+          actions: assign(() => ({ hasExplicitSession: false, initialSession: undefined })),
+        },
       },
     },
   },

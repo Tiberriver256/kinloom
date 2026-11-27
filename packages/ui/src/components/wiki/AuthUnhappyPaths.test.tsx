@@ -72,13 +72,30 @@ function setInputValue(el: HTMLInputElement, value: string): void {
 
 function makeAuthDataSource(options: {
   google?: boolean;
+  includeGoogleSignInUrl?: boolean;
   magicLink?: boolean;
   onRequestMagicLink?: (email: string) => Promise<{ sent: boolean }>;
 }): ArchiveDataSource {
+  const includeGoogleUrl = options.includeGoogleSignInUrl ?? options.google !== false;
   return {
     loadArchive: async () => ({ bundle: testBundle, etag: null, notModified: false }),
     loadReadings: async () => null,
     requestMagicLink: options.onRequestMagicLink ?? (async () => ({ sent: true })),
+    ...(includeGoogleUrl
+      ? {
+          getGoogleSignInUrl: (nextPath?: string, opts?: { selectAccount?: boolean }) => {
+            const params = new URLSearchParams();
+            if (nextPath) {
+              params.set('next', nextPath);
+            }
+            if (opts?.selectAccount) {
+              params.set('select_account', '1');
+            }
+            const qs = params.toString();
+            return `/api/auth/google/start${qs ? `?${qs}` : ''}`;
+          },
+        }
+      : {}),
     getSession: async () => ({
       session: { authenticated: false, principal_kind: 'anonymous' },
       capabilities: {
@@ -512,6 +529,26 @@ describe('PrivateArchiveGate, SignInModal, and AuthStatusBanner unhappy-path rec
       await new Promise((r) => setTimeout(r, 20));
     });
     expect(container.textContent).toContain('Could not reach the family archive');
+    unmount();
+  });
+
+  it('omits Google sign-in links when dataSource.getGoogleSignInUrl is not provided', async () => {
+    const ds = makeAuthDataSource({
+      google: true,
+      includeGoogleSignInUrl: false,
+      magicLink: true,
+    });
+    const { container, unmount } = renderIntoDom(
+      <ArchiveProvider siteConfig={siteConfig} dataSource={ds} initialBundle={testBundle}>
+        <PrivateArchiveGate />
+      </ArchiveProvider>
+    );
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 20));
+    });
+    const links = [...container.querySelectorAll<HTMLAnchorElement>('a')];
+    expect(links.some((a) => a.getAttribute('href')?.includes('/api/auth/google/start'))).toBe(false);
+    expect(container.textContent).not.toContain('Continue with Google');
     unmount();
   });
 });

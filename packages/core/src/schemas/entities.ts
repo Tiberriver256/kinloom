@@ -388,18 +388,20 @@ export type ReadingsBundle = z.infer<typeof ReadingsBundleSchema>;
 export type HistoricalContextItem = z.infer<typeof HistoricalContextItemSchema>;
 export type ArchiveBundle = z.infer<typeof ArchiveBundleSchema>;
 
-export interface MediaChecklistItem {
-  person_id: string;
-  person_slug: string;
-  person_name: string;
-  lifespan: string;
-  obje_xref: string;
-  title: string;
-  media_type: string;
-  form: string;
-  status?: 'digitized' | 'missing';
-  file?: string;
-}
+export const MediaChecklistItemSchema = z.object({
+  person_id: z.string().min(1),
+  person_slug: z.string().min(1),
+  person_name: z.string().min(1),
+  lifespan: z.string(),
+  obje_xref: z.string().min(1),
+  title: z.string().min(1),
+  media_type: z.string().min(1),
+  form: z.string().min(1),
+  status: z.enum(['digitized', 'missing']).optional(),
+  file: z.string().optional(),
+});
+
+export type MediaChecklistItem = z.infer<typeof MediaChecklistItemSchema>;
 
 export interface CoPresenceItem {
   person: Person;

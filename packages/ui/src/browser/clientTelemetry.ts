@@ -16,6 +16,15 @@ export interface ClientErrorReport {
   timestamp: string;
 }
 
+export type ClientTelemetryTransport = (payload: string) => void;
+
+export interface ClientTelemetryOptions {
+  /** Optional HTTP endpoint URL to receive JSON error reports via sendBeacon/fetch. */
+  endpoint?: string;
+  /** Optional custom transport callback receiving the serialized JSON error report. */
+  transport?: ClientTelemetryTransport;
+}
+
 export const CHUNK_RELOAD_STORAGE_KEY = 'kinloom_chunk_reload_at';
 const CHUNK_RELOAD_COOLDOWN_MS = 60_000;
 const MAX_REPORTS_PER_SESSION = 8;
@@ -45,6 +54,7 @@ const SAFE_ROUTE_QUERY_KEYS = new Set([
 ]);
 
 let globalHandlersInstalled = false;
+let configuredTelemetryOptions: ClientTelemetryOptions | null = null;
 const seenReportKeys: string[] = [];
 let sessionReportCount = 0;
 
@@ -176,22 +186,15 @@ function rememberReportKey(key: string): void {
   }
 }
 
-function clientErrorEndpoint(): string {
-  const base = (typeof import.meta !== 'undefined' && import.meta.env?.BASE_URL) || '/';
-  const normalized = base.endsWith('/') ? base : `${base}/`;
-  return `${normalized}api/client-error`;
-}
-
-function sendPayload(body: string): void {
-  const url = clientErrorEndpoint();
+function dispatchToEndpoint(endpoint: string, body: string): void {
   if (typeof navigator !== 'undefined' && typeof navigator.sendBeacon === 'function') {
     const blob = new Blob([body], { type: 'application/json' });
-    if (navigator.sendBeacon(url, blob)) {
+    if (navigator.sendBeacon(endpoint, blob)) {
       return;
     }
   }
   if (typeof fetch === 'function') {
-    void fetch(url, {
+    void fetch(endpoint, {
       method: 'POST',
       keepalive: true,
       headers: { 'Content-Type': 'application/json' },
@@ -202,8 +205,27 @@ function sendPayload(body: string): void {
   }
 }
 
-export function reportClientError(input: Partial<ClientErrorReport>): void {
+function sendPayload(body: string, options?: ClientTelemetryOptions): void {
+  const effective = options ?? configuredTelemetryOptions;
+  if (!effective) {
+    return;
+  }
+  if (effective.transport) {
+    effective.transport(body);
+    return;
+  }
+  const endpoint = effective.endpoint?.trim();
+  if (endpoint) {
+    dispatchToEndpoint(endpoint, body);
+  }
+}
+
+export function reportClientError(input: Partial<ClientErrorReport>, options?: ClientTelemetryOptions): void {
   try {
+    const effective = options ?? configuredTelemetryOptions;
+    if (!effective || (!effective.transport && !effective.endpoint?.trim())) {
+      return;
+    }
     if (sessionReportCount >= MAX_REPORTS_PER_SESSION) {
       return;
     }
@@ -214,7 +236,7 @@ export function reportClientError(input: Partial<ClientErrorReport>): void {
     }
     rememberReportKey(key);
     sessionReportCount += 1;
-    sendPayload(JSON.stringify(report));
+    sendPayload(JSON.stringify(report), effective);
   } catch {
     // Transport must never throw into app code.
   }
@@ -290,13 +312,14 @@ function onVitePreloadError(event: Event): void {
   handleChunkFailure(message, stack);
 }
 
-export function installGlobalErrorHandlers(): () => void {
+export function installGlobalErrorHandlers(options?: ClientTelemetryOptions): () => void {
   if (globalHandlersInstalled || typeof window === 'undefined') {
     return () => {
       /* Not installed */
     };
   }
   globalHandlersInstalled = true;
+  configuredTelemetryOptions = options ?? null;
   window.addEventListener('vite:preloadError', onVitePreloadError);
   window.addEventListener('error', onWindowError);
   window.addEventListener('unhandledrejection', onUnhandledRejection);
@@ -304,6 +327,7 @@ export function installGlobalErrorHandlers(): () => void {
     window.removeEventListener('vite:preloadError', onVitePreloadError);
     window.removeEventListener('error', onWindowError);
     window.removeEventListener('unhandledrejection', onUnhandledRejection);
+    configuredTelemetryOptions = null;
     globalHandlersInstalled = false;
   };
 }
