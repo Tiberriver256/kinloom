@@ -265,7 +265,12 @@ function mountTreeAtWidth(width: number, initialEntry = '/tree'): { container: H
   act(() => {
     root.render(
       <MemoryRouter initialEntries={[initialEntry]}>
-        <ArchiveProvider siteConfig={TEST_SITE_CONFIG} initialBundle={bundle}>
+        <ArchiveProvider
+          siteConfig={TEST_SITE_CONFIG}
+          initialBundle={bundle}
+          initialReadings={{ version: 1, documents: {}, event_page_map: {} }}
+          session={null}
+        >
           <TreePage />
         </ArchiveProvider>
       </MemoryRouter>
