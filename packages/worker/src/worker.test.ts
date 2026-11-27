@@ -24,7 +24,7 @@ import {
   runBackendAdapterContractTests,
 } from '@kinloom/server/testing';
 import { Miniflare } from 'miniflare';
-import { describe, expect, it, vi } from 'vitest';
+import { afterAll, describe, expect, it, vi } from 'vitest';
 import {
   buildMagicLinkEmailMessage,
   buildMagicLinkMimeMessage,
@@ -74,31 +74,107 @@ async function applySqlScript(db: D1Database, sqlScript: string): Promise<void> 
     .map((stmt) => stmt.trim())
     .filter((stmt) => stmt.length > 0);
 
-  for (const stmt of statements) {
-    await db.prepare(stmt).run();
+  if (statements.length > 0) {
+    await db.batch(statements.map((stmt) => db.prepare(stmt)));
   }
 }
 
-async function createMiniflareFixture(): Promise<MiniflareFixture> {
-  const mf = new Miniflare({
-    modules: true,
-    script: 'export default { fetch() { return new Response("ok"); } };',
-    d1Databases: { DB: 'kinloom-test-db' },
-    r2Buckets: { MEDIA_BUCKET: 'kinloom-test-bucket' },
-  });
+const RESET_D1_TABLES = [
+  'DELETE FROM talk_comments',
+  'DELETE FROM watchlists',
+  'DELETE FROM agent_tokens',
+  'DELETE FROM magic_links',
+  'DELETE FROM invites',
+  'DELETE FROM users',
+  'DELETE FROM kinship_edges',
+  'DELETE FROM revisions',
+  'DELETE FROM entities',
+  'DELETE FROM pronunciation_lexicon',
+  'DELETE FROM sqlite_sequence',
+] as const;
 
-  const db = (await mf.getD1Database('DB')) as unknown as D1Database;
-  const bucket = (await mf.getR2Bucket('MEDIA_BUCKET')) as unknown as R2Bucket;
-  await applySqlScript(db, INITIAL_MIGRATION_SQL);
-  await applySqlScript(db, PRONUNCIATIONS_MIGRATION_SQL);
+let sharedWorkerMf: Miniflare | null = null;
+let sharedWorkerDb: D1Database | null = null;
+let sharedWorkerBucket: R2Bucket | null = null;
+
+async function ensureSharedWorkerMiniflare(): Promise<{
+  mf: Miniflare;
+  db: D1Database;
+  bucket: R2Bucket;
+}> {
+  if (!sharedWorkerMf || !sharedWorkerDb || !sharedWorkerBucket) {
+    sharedWorkerMf = new Miniflare({
+      modules: true,
+      compatibilityDate: '2026-08-06',
+      script: `
+        export default {
+          async fetch(request, env) {
+            const url = new URL(request.url);
+            if (request.method === 'POST' && url.pathname === '/send') {
+              const builder = await request.json();
+              const result = await env.SEND_EMAIL.send(builder);
+              return Response.json(result);
+            }
+            return new Response('ok');
+          }
+        };
+      `,
+      d1Databases: {
+        DB: 'kinloom-test-db',
+        PRON_UNMIGRATED_DB: 'kinloom-pron-test-db',
+      },
+      r2Buckets: { MEDIA_BUCKET: 'kinloom-test-bucket' },
+      email: {
+        send_email: [{ name: 'SEND_EMAIL' }],
+      },
+    });
+    sharedWorkerDb = (await sharedWorkerMf.getD1Database('DB')) as unknown as D1Database;
+    sharedWorkerBucket = (await sharedWorkerMf.getR2Bucket('MEDIA_BUCKET')) as unknown as R2Bucket;
+    await applySqlScript(sharedWorkerDb, INITIAL_MIGRATION_SQL);
+    await applySqlScript(sharedWorkerDb, PRONUNCIATIONS_MIGRATION_SQL);
+  }
+  return { mf: sharedWorkerMf, db: sharedWorkerDb, bucket: sharedWorkerBucket };
+}
+
+interface ListableR2Bucket extends R2Bucket {
+  list(options?: { cursor?: string }): Promise<{
+    objects: Array<{ key: string }>;
+    truncated: boolean;
+    cursor?: string;
+  }>;
+}
+
+async function clearR2Bucket(bucket: R2Bucket): Promise<void> {
+  const listable = bucket as ListableR2Bucket;
+  let cursor: string | undefined;
+  do {
+    const listed = await listable.list(cursor ? { cursor } : undefined);
+    if (listed.objects.length > 0) {
+      await bucket.delete(listed.objects.map((obj: { key: string }) => obj.key));
+    }
+    cursor = listed.truncated ? listed.cursor : undefined;
+  } while (cursor);
+}
+
+afterAll(async () => {
+  if (sharedWorkerMf) {
+    await sharedWorkerMf.dispose();
+    sharedWorkerMf = null;
+    sharedWorkerDb = null;
+    sharedWorkerBucket = null;
+  }
+});
+
+async function createMiniflareFixture(): Promise<MiniflareFixture> {
+  const { mf, db, bucket } = await ensureSharedWorkerMiniflare();
+  await db.batch(RESET_D1_TABLES.map((sql) => db.prepare(sql)));
+  await clearR2Bucket(bucket);
 
   return {
     mf,
     db,
     bucket,
-    dispose: async () => {
-      await mf.dispose();
-    },
+    dispose: async () => {},
   };
 }
 
@@ -1488,35 +1564,15 @@ describe('createCloudflareWorker full HTTP lifecycle (Miniflare)', () => {
       expiresMinutes: 15,
     });
 
-    const mf = new Miniflare({
-      modules: true,
-      compatibilityDate: '2026-08-06',
-      script: `
-        export default {
-          async fetch(request, env) {
-            const builder = await request.json();
-            const result = await env.SEND_EMAIL.send(builder);
-            return Response.json(result);
-          }
-        };
-      `,
-      email: {
-        send_email: [{ name: 'SEND_EMAIL' }],
-      },
+    const { mf } = await ensureSharedWorkerMiniflare();
+    const res = await mf.dispatchFetch('http://localhost/send', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(payload),
     });
-
-    try {
-      const res = await mf.dispatchFetch('http://localhost/send', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-      expect(res.status).toBe(200);
-      const data = (await res.json()) as { messageId?: string };
-      expect(data.messageId).toMatch(/^<[^@]+@familyloom\.org>$/);
-    } finally {
-      await mf.dispose();
-    }
+    expect(res.status).toBe(200);
+    const data = (await res.json()) as { messageId?: string };
+    expect(data.messageId).toMatch(/^<[^@]+@familyloom\.org>$/);
   });
 
   it('serves GET /privacy as unauthenticated 200 text/html in private mode using siteConfig metadata', async () => {
@@ -1551,13 +1607,10 @@ describe('createCloudflareWorker full HTTP lifecycle (Miniflare)', () => {
   });
 
   it('D1PronunciationLexiconStore returns {} before migration and persists/updates/deletes after 0002_pronunciations.sql', async () => {
-    const mf = new Miniflare({
-      modules: true,
-      script: 'export default { fetch() { return new Response("ok"); } };',
-      d1Databases: { DB: 'kinloom-pron-test-db' },
-    });
-    try {
-      const db = (await mf.getD1Database('DB')) as unknown as D1Database;
+    const { mf } = await ensureSharedWorkerMiniflare();
+    {
+      const db = (await mf.getD1Database('PRON_UNMIGRATED_DB')) as unknown as D1Database;
+      await db.prepare('DROP TABLE IF EXISTS pronunciation_lexicon').run();
       const store = new D1PronunciationLexiconStore(db);
 
       // Before migration 0002, list() degrades gracefully to {}
@@ -1643,8 +1696,6 @@ describe('createCloudflareWorker full HTTP lifecycle (Miniflare)', () => {
           ],
         },
       });
-    } finally {
-      await mf.dispose();
     }
   });
 });

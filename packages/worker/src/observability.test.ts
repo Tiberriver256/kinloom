@@ -15,7 +15,7 @@ import {
   createSyntheticSiteConfig,
 } from '@kinloom/server/testing';
 import { Miniflare } from 'miniflare';
-import { describe, expect, it, vi } from 'vitest';
+import { afterAll, describe, expect, it, vi } from 'vitest';
 import {
   CLOUDFLARE_WEB_ANALYTICS_CONNECT_ORIGIN,
   CLOUDFLARE_WEB_ANALYTICS_PRIVACY_SUMMARY,
@@ -48,30 +48,67 @@ async function applySqlScript(db: D1Database, sqlScript: string): Promise<void> 
     .split(';')
     .map((stmt) => stmt.trim())
     .filter((stmt) => stmt.length > 0);
-  for (const stmt of statements) {
-    await db.prepare(stmt).run();
+  if (statements.length > 0) {
+    await db.batch(statements.map((stmt) => db.prepare(stmt)));
   }
 }
 
+let sharedObsMf: Miniflare | null = null;
+let sharedObsDb: D1Database | null = null;
+let sharedObsBucket: R2Bucket | null = null;
+
+afterAll(async () => {
+  if (sharedObsMf) {
+    await sharedObsMf.dispose();
+    sharedObsMf = null;
+    sharedObsDb = null;
+    sharedObsBucket = null;
+  }
+});
+
 async function createMiniflareEnv() {
-  const mf = new Miniflare({
-    modules: true,
-    script: 'export default { fetch() { return new Response("ok"); } };',
-    d1Databases: { DB: 'kinloom-obs-test-db' },
-    r2Buckets: { MEDIA_BUCKET: 'kinloom-obs-test-bucket' },
-  });
-  const db = (await mf.getD1Database('DB')) as unknown as D1Database;
-  const bucket = (await mf.getR2Bucket('MEDIA_BUCKET')) as unknown as R2Bucket;
-  await applySqlScript(db, INITIAL_MIGRATION_SQL);
-  await applySqlScript(db, PRONUNCIATIONS_MIGRATION_SQL);
+  if (!sharedObsMf || !sharedObsDb || !sharedObsBucket) {
+    sharedObsMf = new Miniflare({
+      modules: true,
+      script: 'export default { fetch() { return new Response("ok"); } };',
+      d1Databases: { DB: 'kinloom-obs-test-db' },
+      r2Buckets: { MEDIA_BUCKET: 'kinloom-obs-test-bucket' },
+    });
+    sharedObsDb = (await sharedObsMf.getD1Database('DB')) as unknown as D1Database;
+    sharedObsBucket = (await sharedObsMf.getR2Bucket('MEDIA_BUCKET')) as unknown as R2Bucket;
+    await applySqlScript(sharedObsDb, INITIAL_MIGRATION_SQL);
+    await applySqlScript(sharedObsDb, PRONUNCIATIONS_MIGRATION_SQL);
+  } else {
+    const db = sharedObsDb;
+    await db.batch([
+      db.prepare('DELETE FROM talk_comments'),
+      db.prepare('DELETE FROM watchlists'),
+      db.prepare('DELETE FROM agent_tokens'),
+      db.prepare('DELETE FROM magic_links'),
+      db.prepare('DELETE FROM invites'),
+      db.prepare('DELETE FROM users'),
+      db.prepare('DELETE FROM kinship_edges'),
+      db.prepare('DELETE FROM revisions'),
+      db.prepare('DELETE FROM entities'),
+      db.prepare('DELETE FROM pronunciation_lexicon'),
+      db.prepare('DELETE FROM sqlite_sequence'),
+    ]);
+    const listable = sharedObsBucket as R2Bucket & {
+      list(): Promise<{ objects: Array<{ key: string }> }>;
+    };
+    const listed = await listable.list();
+    if (listed.objects.length > 0) {
+      await sharedObsBucket.delete(listed.objects.map((o: { key: string }) => o.key));
+    }
+  }
   const env: KinloomWorkerEnv = {
-    DB: db,
-    MEDIA_BUCKET: bucket,
+    DB: sharedObsDb,
+    MEDIA_BUCKET: sharedObsBucket,
     SESSION_SECRET: CONTRACT_SESSION_SECRET,
     BOOTSTRAP_ADMIN_EMAIL: 'founder@example.test',
     ARCHIVE_MODE: 'private',
   };
-  return { mf, env };
+  return { mf: { dispose: async () => {} }, env };
 }
 
 describe('createCloudflareWorker optional Workers Observability plugin', () => {

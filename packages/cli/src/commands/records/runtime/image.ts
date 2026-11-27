@@ -508,6 +508,6 @@ export async function createSyntheticPng(
     },
     limitInputPixels: false,
   })
-    .png()
+    .png({ compressionLevel: 1 })
     .toBuffer();
 }

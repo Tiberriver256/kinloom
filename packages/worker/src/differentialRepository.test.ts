@@ -40,8 +40,8 @@ async function applySqlScript(db: D1Database, sqlScript: string): Promise<void> 
     .split(';')
     .map((stmt) => stmt.trim())
     .filter((stmt) => stmt.length > 0);
-  for (const stmt of statements) {
-    await db.prepare(stmt).run();
+  if (statements.length > 0) {
+    await db.batch(statements.map((stmt) => db.prepare(stmt)));
   }
 }
 
@@ -165,10 +165,12 @@ describe('Differential: InMemoryArchiveRepository vs Cloudflare D1 + R2 (Minifla
       let runCounter = 0;
       for (const ops of sequences) {
         runCounter += 1;
-        await db.prepare('DELETE FROM revisions').run();
-        await db.prepare('DELETE FROM entities').run();
-        await db.prepare('DELETE FROM kinship_edges').run();
-        await db.prepare('DELETE FROM sqlite_sequence').run();
+        await db.batch([
+          db.prepare('DELETE FROM revisions'),
+          db.prepare('DELETE FROM entities'),
+          db.prepare('DELETE FROM kinship_edges'),
+          db.prepare('DELETE FROM sqlite_sequence'),
+        ]);
 
         const memPorts = createInMemoryServerPorts(siteConfig);
         const clock = memPorts.clock;

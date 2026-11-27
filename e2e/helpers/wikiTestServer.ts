@@ -68,9 +68,14 @@ function injectLiveWikiMeta(html: string): string {
   return html.replace('</head>', `    ${tags}\n  </head>`);
 }
 
+let sharedAssetHandler: { fetch(request: Request): Promise<Response> } | null = null;
+
 function createDemoDistAssetHandler(distDir: string): {
   fetch(request: Request): Promise<Response>;
 } {
+  if (sharedAssetHandler) {
+    return sharedAssetHandler;
+  }
   const resolvedDist = path.resolve(distDir);
   const indexHtmlPath = path.join(resolvedDist, 'index.html');
   if (!fs.existsSync(indexHtmlPath)) {
@@ -79,8 +84,9 @@ function createDemoDistAssetHandler(distDir: string): {
     );
   }
   const indexHtml = injectLiveWikiMeta(fs.readFileSync(indexHtmlPath, 'utf8'));
+  const fileCache = new Map<string, { bytes: Uint8Array; contentType: string }>();
 
-  return {
+  sharedAssetHandler = {
     async fetch(request: Request): Promise<Response> {
       const url = new URL(request.url);
       let decodedPath = '/';
@@ -93,22 +99,34 @@ function createDemoDistAssetHandler(distDir: string): {
       const relPath = decodedPath.replace(/^\/+/, '');
       if (relPath && !relPath.includes('..')) {
         const candidate = path.resolve(resolvedDist, relPath);
+        if (candidate === indexHtmlPath) {
+          return new Response(indexHtml, {
+            status: 200,
+            headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' },
+          });
+        }
+        const cached = fileCache.get(candidate);
+        if (cached) {
+          return new Response(cached.bytes, {
+            status: 200,
+            headers: {
+              'content-type': cached.contentType,
+              'cache-control': 'no-cache',
+            },
+          });
+        }
         if (
           candidate.startsWith(`${resolvedDist}${path.sep}`) &&
           fs.existsSync(candidate) &&
           fs.statSync(candidate).isFile()
         ) {
-          if (candidate === indexHtmlPath) {
-            return new Response(indexHtml, {
-              status: 200,
-              headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' },
-            });
-          }
-          const bytes = fs.readFileSync(candidate);
-          return new Response(new Uint8Array(bytes), {
+          const bytes = new Uint8Array(fs.readFileSync(candidate));
+          const contentType = contentTypeForPath(candidate);
+          fileCache.set(candidate, { bytes, contentType });
+          return new Response(bytes, {
             status: 200,
             headers: {
-              'content-type': contentTypeForPath(candidate),
+              'content-type': contentType,
               'cache-control': 'no-cache',
             },
           });
@@ -121,126 +139,173 @@ function createDemoDistAssetHandler(distDir: string): {
       });
     },
   };
+  return sharedAssetHandler;
 }
 
-async function seedDemoRepository(
-  siteConfig: KinloomSiteConfig,
-  ports: InMemoryServerPortsBundle
-): Promise<void> {
-  const people = parsePeopleYaml(readDemoYaml('people.yaml'));
-  const places = parsePlacesYaml(readDemoYaml('places.yaml'));
-  const sources = parseSourcesYaml(readDemoYaml('sources.yaml'));
-  const kinship = parseKinshipYaml(readDemoYaml('kinship.yaml'));
-  const events = parseEventsYaml(readDemoYaml('events.yaml'));
-  const media = parseMediaYaml(readDemoYaml('media.yaml'));
-  const narratives = parseNarrativesYaml(readDemoYaml('narratives.yaml'));
+interface CachedDemoSeed {
+  readonly siteConfig: KinloomSiteConfig;
+  readonly ops: AtomicMutationOp[];
+  readonly mediaFiles: ReadonlyArray<{
+    readonly key: string;
+    readonly bytes: Uint8Array;
+    readonly contentType: string;
+    readonly sha256: string;
+  }>;
+  readonly agentHash: string;
+}
 
-  const livingIds = new Set<string>();
-  const ops: AtomicMutationOp[] = [];
+let cachedDemoSeedPromise: Promise<CachedDemoSeed> | null = null;
 
-  for (const person of people) {
-    const sanitized = sanitizePersonForWrite(person, siteConfig.privacy);
-    if (resolveEffectiveLiving(sanitized, siteConfig.privacy)) {
-      livingIds.add(sanitized.id);
-    }
-    ops.push({
-      entity_type: 'person',
-      entity_id: sanitized.id,
-      slug: sanitized.slug,
-      action: 'create',
-      expected_parent_revision_id: null,
-      summary: 'Seed demo person',
-      has_primary_source: true,
-      before_json: null,
-      after_json: sanitized as unknown as EntityPayload,
-    });
+async function getCachedDemoSeed(): Promise<CachedDemoSeed> {
+  if (!cachedDemoSeedPromise) {
+    cachedDemoSeedPromise = (async () => {
+      const siteConfig = parseKinloomConfigYaml(readDemoYaml('kinloom.config.yaml'));
+      const people = parsePeopleYaml(readDemoYaml('people.yaml'));
+      const places = parsePlacesYaml(readDemoYaml('places.yaml'));
+      const sources = parseSourcesYaml(readDemoYaml('sources.yaml'));
+      const kinship = parseKinshipYaml(readDemoYaml('kinship.yaml'));
+      const events = parseEventsYaml(readDemoYaml('events.yaml'));
+      const media = parseMediaYaml(readDemoYaml('media.yaml'));
+      const narratives = parseNarrativesYaml(readDemoYaml('narratives.yaml'));
+
+      const livingIds = new Set<string>();
+      const ops: AtomicMutationOp[] = [];
+
+      for (const person of people) {
+        const sanitized = sanitizePersonForWrite(person, siteConfig.privacy);
+        if (resolveEffectiveLiving(sanitized, siteConfig.privacy)) {
+          livingIds.add(sanitized.id);
+        }
+        ops.push({
+          entity_type: 'person',
+          entity_id: sanitized.id,
+          slug: sanitized.slug,
+          action: 'create',
+          expected_parent_revision_id: null,
+          summary: 'Seed demo person',
+          has_primary_source: true,
+          before_json: null,
+          after_json: sanitized as unknown as EntityPayload,
+        });
+      }
+
+      for (const place of places) {
+        ops.push({
+          entity_type: 'place',
+          entity_id: place.id,
+          slug: place.slug,
+          action: 'create',
+          expected_parent_revision_id: null,
+          summary: 'Seed demo place',
+          has_primary_source: true,
+          before_json: null,
+          after_json: place as unknown as EntityPayload,
+        });
+      }
+
+      for (const source of sources) {
+        ops.push({
+          entity_type: 'source',
+          entity_id: source.id,
+          slug: null,
+          action: 'create',
+          expected_parent_revision_id: null,
+          summary: 'Seed demo source',
+          has_primary_source: true,
+          before_json: null,
+          after_json: source as unknown as EntityPayload,
+        });
+      }
+
+      for (const ev of events) {
+        const sanitized = sanitizeEventForWrite(ev, livingIds, siteConfig.privacy);
+        ops.push({
+          entity_type: 'event',
+          entity_id: sanitized.id,
+          slug: null,
+          action: 'create',
+          expected_parent_revision_id: null,
+          summary: 'Seed demo event',
+          has_primary_source: true,
+          before_json: null,
+          after_json: sanitized as unknown as EntityPayload,
+        });
+      }
+
+      for (const item of media) {
+        ops.push({
+          entity_type: 'media',
+          entity_id: item.id,
+          slug: null,
+          action: 'create',
+          expected_parent_revision_id: null,
+          summary: 'Seed demo media',
+          has_primary_source: true,
+          before_json: null,
+          after_json: item as unknown as EntityPayload,
+        });
+      }
+
+      for (const narrative of narratives) {
+        ops.push({
+          entity_type: 'narrative',
+          entity_id: narrative.id,
+          slug: null,
+          action: 'create',
+          expected_parent_revision_id: null,
+          summary: 'Seed demo narrative',
+          has_primary_source: true,
+          before_json: null,
+          after_json: narrative as unknown as EntityPayload,
+        });
+      }
+
+      for (const edge of kinship) {
+        ops.push({
+          entity_type: 'kinship_edge',
+          entity_id: deriveKinshipEdgeId(edge),
+          slug: null,
+          action: 'create',
+          expected_parent_revision_id: null,
+          summary: 'Seed demo kinship edge',
+          has_primary_source: true,
+          before_json: null,
+          after_json: edge as unknown as EntityPayload,
+        });
+      }
+
+      const mediaFiles: Array<{
+        key: string;
+        bytes: Uint8Array;
+        contentType: string;
+        sha256: string;
+      }> = [];
+      if (fs.existsSync(DEMO_PUBLIC_MEDIA_DIR)) {
+        const files = fs.readdirSync(DEMO_PUBLIC_MEDIA_DIR);
+        for (const filename of files) {
+          const fullPath = path.join(DEMO_PUBLIC_MEDIA_DIR, filename);
+          if (!fs.statSync(fullPath).isFile()) {
+            continue;
+          }
+          const bytes = new Uint8Array(fs.readFileSync(fullPath));
+          const digest = await sha256Hex(bytes);
+          mediaFiles.push({
+            key: `media/${filename}`,
+            bytes,
+            contentType: contentTypeForPath(fullPath),
+            sha256: digest,
+          });
+        }
+      }
+
+      const agentHash = await sha256Hex(new TextEncoder().encode(DEFAULT_AGENT_TOKEN_SECRET));
+      return { siteConfig, ops, mediaFiles, agentHash };
+    })();
   }
+  return cachedDemoSeedPromise;
+}
 
-  for (const place of places) {
-    ops.push({
-      entity_type: 'place',
-      entity_id: place.id,
-      slug: place.slug,
-      action: 'create',
-      expected_parent_revision_id: null,
-      summary: 'Seed demo place',
-      has_primary_source: true,
-      before_json: null,
-      after_json: place as unknown as EntityPayload,
-    });
-  }
-
-  for (const source of sources) {
-    ops.push({
-      entity_type: 'source',
-      entity_id: source.id,
-      slug: null,
-      action: 'create',
-      expected_parent_revision_id: null,
-      summary: 'Seed demo source',
-      has_primary_source: true,
-      before_json: null,
-      after_json: source as unknown as EntityPayload,
-    });
-  }
-
-  for (const ev of events) {
-    const sanitized = sanitizeEventForWrite(ev, livingIds, siteConfig.privacy);
-    ops.push({
-      entity_type: 'event',
-      entity_id: sanitized.id,
-      slug: null,
-      action: 'create',
-      expected_parent_revision_id: null,
-      summary: 'Seed demo event',
-      has_primary_source: true,
-      before_json: null,
-      after_json: sanitized as unknown as EntityPayload,
-    });
-  }
-
-  for (const item of media) {
-    ops.push({
-      entity_type: 'media',
-      entity_id: item.id,
-      slug: null,
-      action: 'create',
-      expected_parent_revision_id: null,
-      summary: 'Seed demo media',
-      has_primary_source: true,
-      before_json: null,
-      after_json: item as unknown as EntityPayload,
-    });
-  }
-
-  for (const narrative of narratives) {
-    ops.push({
-      entity_type: 'narrative',
-      entity_id: narrative.id,
-      slug: null,
-      action: 'create',
-      expected_parent_revision_id: null,
-      summary: 'Seed demo narrative',
-      has_primary_source: true,
-      before_json: null,
-      after_json: narrative as unknown as EntityPayload,
-    });
-  }
-
-  for (const edge of kinship) {
-    ops.push({
-      entity_type: 'kinship_edge',
-      entity_id: deriveKinshipEdgeId(edge),
-      slug: null,
-      action: 'create',
-      expected_parent_revision_id: null,
-      summary: 'Seed demo kinship edge',
-      has_primary_source: true,
-      before_json: null,
-      after_json: edge as unknown as EntityPayload,
-    });
-  }
-
+async function seedDemoRepository(seed: CachedDemoSeed, ports: InMemoryServerPortsBundle): Promise<void> {
   const seedAuthor: RevisionAuthor = {
     author_id: 'system:seed',
     author_name: 'Initial seed',
@@ -251,7 +316,7 @@ async function seedDemoRepository(
     batch_id: null,
     author: seedAuthor,
     nowIso: ports.clock.nowIso(),
-    operations: ops,
+    operations: structuredClone(seed.ops),
   });
 
   if (committed.kind !== 'committed') {
@@ -261,22 +326,13 @@ async function seedDemoRepository(
   const snapshot = await ports.repository.loadActiveSnapshot();
   await ports.bundleCache.rebuildAndStore(snapshot);
 
-  if (fs.existsSync(DEMO_PUBLIC_MEDIA_DIR)) {
-    const files = fs.readdirSync(DEMO_PUBLIC_MEDIA_DIR);
-    for (const filename of files) {
-      const fullPath = path.join(DEMO_PUBLIC_MEDIA_DIR, filename);
-      if (!fs.statSync(fullPath).isFile()) {
-        continue;
-      }
-      const bytes = new Uint8Array(fs.readFileSync(fullPath));
-      const digest = await sha256Hex(bytes);
-      await ports.mediaStore.put({
-        key: `media/${filename}`,
-        body: bytes.buffer,
-        contentType: contentTypeForPath(fullPath),
-        sha256: digest,
-      });
-    }
+  for (const mediaFile of seed.mediaFiles) {
+    await ports.mediaStore.put({
+      key: mediaFile.key,
+      body: mediaFile.bytes.slice().buffer,
+      contentType: mediaFile.contentType,
+      sha256: mediaFile.sha256,
+    });
   }
 }
 
@@ -300,13 +356,14 @@ export interface LiveWikiTestHarness {
 }
 
 export async function startLiveWikiTestServer(): Promise<LiveWikiTestHarness> {
-  const siteConfig = parseKinloomConfigYaml(readDemoYaml('kinloom.config.yaml'));
+  const seed = await getCachedDemoSeed();
+  const siteConfig = structuredClone(seed.siteConfig);
   const ports = createInMemoryServerPorts(siteConfig, {
     initialIso: '2026-11-24T12:00:00.000Z',
   });
   ports.assetHandler = createDemoDistAssetHandler(DEMO_DIST_DIR);
 
-  await seedDemoRepository(siteConfig, ports);
+  await seedDemoRepository(seed, ports);
 
   const adminEmail = 'steward@archive.example';
   await ports.repository.upsertUser({
@@ -329,10 +386,9 @@ export async function startLiveWikiTestServer(): Promise<LiveWikiTestHarness> {
     last_used_at: null,
   });
 
-  const agentHash = await sha256Hex(new TextEncoder().encode(DEFAULT_AGENT_TOKEN_SECRET));
   await ports.repository.createAgentToken({
     token_id: 'tok_demo_research_agent',
-    token_hash: agentHash,
+    token_hash: seed.agentHash,
     label: 'Demo Research Agent',
     scope: 'write_batch',
     created_by: adminEmail,

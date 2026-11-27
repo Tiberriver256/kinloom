@@ -84,7 +84,7 @@ async function createSolidPng(
     },
     limitInputPixels: false,
   })
-    .png()
+    .png({ compressionLevel: 1 })
     .toBuffer();
   await writeFile(filePath, buf);
 }
@@ -126,7 +126,7 @@ async function createSyntheticSheetPng(filePath: string): Promise<void> {
         top: 700,
       },
     ])
-    .png()
+    .png({ compressionLevel: 1 })
     .toBuffer();
   await writeFile(filePath, buf);
 }
@@ -885,7 +885,7 @@ describe('prep-scan native client', () => {
     const samplePng = await sharp({
       create: { width: 320, height: 420, channels: 3, background: { r: 245, g: 242, b: 235 } },
     })
-      .png()
+      .png({ compressionLevel: 1 })
       .toBuffer();
 
     let pdftoppmCalls = 0;
@@ -900,7 +900,7 @@ describe('prep-scan native client', () => {
         pdftoppmCalls += 1;
         activeRenders += 1;
         maxConcurrency = Math.max(maxConcurrency, activeRenders);
-        await new Promise((resolve) => setTimeout(resolve, 35));
+        await new Promise((resolve) => setTimeout(resolve, 10));
         const fmtFlag = args[0];
         const pageNum = args[4];
         const prefix = args[args.length - 1];
@@ -1189,7 +1189,7 @@ describe('prep-scan native client', () => {
     const remotePng = await sharp({
       create: { width: 400, height: 300, channels: 3, background: { r: 230, g: 240, b: 215 } },
     })
-      .png()
+      .png({ compressionLevel: 1 })
       .toBuffer();
 
     const fetchImpl: typeof fetch = async (input) => {

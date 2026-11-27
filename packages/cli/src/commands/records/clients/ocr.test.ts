@@ -218,17 +218,13 @@ describe('ocr native client', () => {
     fs.mkdirSync(binDir, { recursive: true });
     await writeFile(imgPath, await createSyntheticPng(48, 48));
 
-    // Real Node script that writes its PID, traps SIGTERM (to prove SIGKILL escalation works!), and hangs.
+    // Real POSIX shell script that writes its PID immediately (~1ms), traps SIGTERM (to prove SIGKILL escalation works!), and hangs.
     const fakeTesseract = path.join(binDir, 'tesseract');
     await writeFile(
       fakeTesseract,
-      `${[
-        '#!/usr/bin/env node',
-        'const fs = require("node:fs");',
-        `fs.writeFileSync(${JSON.stringify(pidFile)}, String(process.pid));`,
-        'process.on("SIGTERM", () => { /* ignore SIGTERM to test SIGKILL escalation */ });',
-        'setInterval(() => {}, 10000);',
-      ].join('\n')}\n`,
+      `${['#!/bin/sh', 'trap "" TERM', `printf "%s" "$$" > "${pidFile}"`, 'while :; do sleep 1; done'].join(
+        '\n'
+      )}\n`,
       { mode: 0o755 }
     );
 
@@ -239,12 +235,12 @@ describe('ocr native client', () => {
     };
 
     const t0 = Date.now();
-    const res = await invokeOcr([imgPath, '--cache-dir', cacheDir, '--timeout', '1', '--json'], { env });
+    const res = await invokeOcr([imgPath, '--cache-dir', cacheDir, '--timeout', '0.08', '--json'], { env });
     const elapsedMs = Date.now() - t0;
 
     expect(res.exitCode).toBe(1);
     expect(elapsedMs).toBeLessThan(3500);
-    expect(res.stderr).toContain('timed out after 1s');
+    expect(res.stderr).toContain('timed out after 0.08s');
     const payload = JSON.parse(res.stdout) as {
       error_code: string;
       timeout_seconds: number;
@@ -252,14 +248,16 @@ describe('ocr native client', () => {
       message: string;
     };
     expect(payload.error_code).toBe('OCR_TIMEOUT');
-    expect(payload.timeout_seconds).toBe(1);
+    expect(payload.timeout_seconds).toBe(0.08);
     expect(payload.file).toBe(imgPath);
     expect(payload.message).toContain('timed out');
 
     // Verify the spawned child process is completely terminated (no hung/zombie process left behind).
     const childPid = Number.parseInt(fs.readFileSync(pidFile, 'utf8').trim(), 10);
     expect(Number.isInteger(childPid) && childPid > 0).toBe(true);
-    await new Promise((resolve) => setTimeout(resolve, 100));
+    for (let attempt = 0; attempt < 20 && isPidAlive(childPid); attempt += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
     expect(isPidAlive(childPid)).toBe(false);
   });
 
@@ -745,10 +743,10 @@ describe('ocr native client', () => {
       const base = path.basename(args[0]);
       try {
         if (base === 'page-02.png') {
-          // Simulate hung page that exceeds 0.25s timeout.
-          await new Promise((resolve) => setTimeout(resolve, 2000));
+          // Simulate hung page that exceeds 0.05s timeout.
+          await new Promise((resolve) => setTimeout(resolve, 400).unref());
         } else {
-          await new Promise((resolve) => setTimeout(resolve, 60));
+          await new Promise((resolve) => setTimeout(resolve, 10));
         }
         const text =
           base === 'page-01.png'
@@ -772,7 +770,7 @@ describe('ocr native client', () => {
         '--concurrency',
         '2',
         '--timeout',
-        '0.25',
+        '0.05',
         '--cache-dir',
         cacheDir,
         '--json',
@@ -819,7 +817,7 @@ describe('ocr native client', () => {
     expect(timedOutEntry).toMatchObject({
       status: 'timeout',
       error_code: 'OCR_TIMEOUT',
-      timeout_seconds: 0.25,
+      timeout_seconds: 0.05,
     });
 
     // Warm batch over only the 3 already-cached pages (via glob!) hits cache 100% and exits 0.

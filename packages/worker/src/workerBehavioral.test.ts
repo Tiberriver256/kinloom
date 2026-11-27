@@ -32,8 +32,8 @@ async function applySqlScript(db: D1Database, sqlScript: string): Promise<void> 
     .split(';')
     .map((stmt) => stmt.trim())
     .filter((stmt) => stmt.length > 0);
-  for (const stmt of statements) {
-    await db.prepare(stmt).run();
+  if (statements.length > 0) {
+    await db.batch(statements.map((stmt) => db.prepare(stmt)));
   }
 }
 

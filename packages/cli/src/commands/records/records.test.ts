@@ -493,7 +493,7 @@ describe('native TypeScript OCR, alias routing, and ubiquitous-language parity',
     const t0 = Date.now();
     const timeoutResult = await runRecordCommand(
       'ocr',
-      [imgPath, '--cache-dir', cacheDir, '--force', '--timeout', '1'],
+      [imgPath, '--cache-dir', cacheDir, '--force', '--timeout', '0.05'],
       {
         io: timeoutCapture.io,
         env: envWithHighOmp,
@@ -503,7 +503,7 @@ describe('native TypeScript OCR, alias routing, and ubiquitous-language parity',
     const elapsedMs = Date.now() - t0;
     expect(timeoutResult.exitCode).toBe(1);
     expect(elapsedMs).toBeLessThan(8000);
-    expect(timeoutCapture.stderr.join('\n')).toContain('timed out after 1s');
+    expect(timeoutCapture.stderr.join('\n')).toContain('timed out after 0.05s');
   });
 
   it('emits cached --boxes, --find, and --tsv layout output with OMP_THREAD_LIMIT=1', async () => {
