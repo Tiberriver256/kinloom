@@ -432,6 +432,15 @@ describe('TutorialModal first-login auto-open, persistence, Guide menu reopen, d
           },
         };
       }
+      if (patch.dismiss_checklist) {
+        serverOnboarding = {
+          ...serverOnboarding,
+          state: {
+            ...serverOnboarding.state,
+            checklist_visibility: 'dismissed',
+          },
+        };
+      }
       if (patch.complete_chapter_ids) {
         serverOnboarding = {
           ...serverOnboarding,
@@ -544,6 +553,12 @@ describe('TutorialModal first-login auto-open, persistence, Guide menu reopen, d
       await new Promise((r) => setTimeout(r, 40));
     });
     expect(secondMount.container.querySelector('[data-testid="tutorial-modal"]')).toBeNull();
+
+    // Dismiss inline landing guide strip so topbar Guide trigger surfaces (Issue #111 deduplication)
+    await act(async () => {
+      findButtonByText(secondMount.container, 'Dismiss')?.click();
+      await Promise.resolve();
+    });
 
     // Persistent post-first-login reopen via Guide -> "Jump to chapter…"
     const guideBtn = findButtonByText(secondMount.container, 'Guide');
