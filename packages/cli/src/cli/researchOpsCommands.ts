@@ -423,3 +423,62 @@ export async function runStatus(rest: readonly string[], ctx: CliDispatchContext
   writeRenderedOutput(ctx.io, result.rendered);
   return EXIT_OK;
 }
+
+export async function runPatch(rest: readonly string[], ctx: CliDispatchContext): Promise<CliExitCode> {
+  const { values, positionals } = safeParseArgs({
+    args: rest,
+    allowPositionals: true,
+    options: {
+      repo: { type: 'string' },
+      file: { type: 'string' },
+      'dry-run': { type: 'boolean', default: false },
+      'allow-living': { type: 'boolean', default: false },
+      json: { type: 'boolean', default: false },
+    },
+  });
+
+  if (positionals.length > 1) {
+    throw new CliValidationError(
+      'Too many positional arguments. Pass a single `<file-or-stdin>` path (or `-` for stdin).'
+    );
+  }
+  if (values.file !== undefined && positionals[0] !== undefined) {
+    throw new CliValidationError(
+      'Specify either a positional `<file-or-stdin>` argument or `--file`, not both.'
+    );
+  }
+
+  const patchFile = values.file ?? positionals[0] ?? '-';
+  const readStdin =
+    ctx.stdin === undefined
+      ? undefined
+      : typeof ctx.stdin === 'string'
+        ? () => ctx.stdin as string
+        : ctx.stdin;
+
+  const [{ runPatchCommand }, { measureCommand }] = await Promise.all([
+    import('../commands/ops/patch.js'),
+    import('../commands/ops/telemetry.js'),
+  ]);
+
+  const result = await measureCommand(
+    {
+      subcmd: values['dry-run'] ? 'patch --dry-run' : 'patch',
+      extractResultMeta: (res) => ({
+        exitCode: EXIT_OK,
+        bytesOut: Buffer.byteLength(res.rendered, 'utf8'),
+      }),
+    },
+    () =>
+      runPatchCommand({
+        repoDir: values.repo ?? ctx.cwd,
+        patchFile,
+        ...(readStdin !== undefined ? { readStdin } : {}),
+        dryRun: values['dry-run'],
+        allowLiving: values['allow-living'],
+        json: values.json,
+      })
+  );
+  writeRenderedOutput(ctx.io, result.rendered);
+  return EXIT_OK;
+}

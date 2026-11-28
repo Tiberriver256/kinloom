@@ -45,6 +45,7 @@ const BUILTIN_COMMAND_HANDLERS: Readonly<Record<BuiltInExecutableCommandName, Bu
   reconcile: async (rest, ctx) => (await import('./coreCommands.js')).runReconcile(rest, ctx),
   context: async (rest, ctx) => (await import('./researchOpsCommands.js')).runContext(rest, ctx),
   integrate: async (rest, ctx) => (await import('./researchOpsCommands.js')).runIntegrate(rest, ctx),
+  patch: async (rest, ctx) => (await import('./researchOpsCommands.js')).runPatch(rest, ctx),
   audit: async (rest, ctx) => (await import('./researchOpsCommands.js')).runAudit(rest, ctx),
   verify: async (rest, ctx) => (await import('./researchOpsCommands.js')).runVerify(rest, ctx),
   media: async (rest, ctx) => (await import('./researchOpsCommands.js')).runMedia(rest, ctx),

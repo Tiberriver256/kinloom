@@ -24,6 +24,7 @@ export async function runCli(argv: readonly string[], options?: RunCliOptions): 
   const ctx: CliDispatchContext = {
     io,
     rawIo: options?.io,
+    stdin: options?.stdin,
     cwd: options?.cwd ?? process.cwd(),
     fetchImpl: options?.fetchImpl,
     plugins: options?.plugins,

@@ -6,8 +6,11 @@ import type { KinloomCliPlugin } from '../pluginTypes.js';
 
 export { type CliIo, DEFAULT_IO } from '../io.js';
 
+export type CliStdinInput = string | (() => Promise<string> | string);
+
 export interface RunCliOptions {
   io?: CliIo;
+  stdin?: CliStdinInput | undefined;
   fetchImpl?: typeof fetch | undefined;
   cwd?: string | undefined;
   plugins?: readonly KinloomCliPlugin[];
@@ -17,6 +20,7 @@ export interface RunCliOptions {
 export interface CliDispatchContext {
   io: CliIo;
   rawIo?: CliIo | undefined;
+  stdin?: CliStdinInput | undefined;
   cwd: string;
   fetchImpl?: typeof fetch | undefined;
   plugins?: readonly KinloomCliPlugin[] | undefined;

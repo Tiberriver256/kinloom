@@ -6,6 +6,7 @@ import {
   INTEGRATE_HELP,
   MEDIA_HELP,
   MIGRATE_HELP,
+  PATCH_HELP,
   PRONOUNCE_HELP,
   SCREENSHOTS_HELP,
   STATUS_HELP,
@@ -163,6 +164,12 @@ Options:
     category: 'ops',
     summary: 'Validate and merge one or more person research packages into local YAML',
     help: INTEGRATE_HELP,
+  },
+  {
+    name: 'patch',
+    category: 'ops',
+    summary: 'Transactionally apply a multi-entity JSON/YAML patch with --allow-living guard',
+    help: PATCH_HELP,
   },
   {
     name: 'audit',
