@@ -1,0 +1,59 @@
+{
+  "schemaVersion": 1,
+  "chapterId": "core-navigation-search",
+  "title": "Navigating the Archive & Global Search",
+  "voice": "Charon",
+  "style": "Warm, clear archival museum narrator at a calm, unhurried pace.",
+  "fps": 30,
+  "width": 1280,
+  "height": 720,
+  "steps": [
+    {
+      "stepId": "nav-top-bar-axes",
+      "title": "Switch across primary archival views",
+      "demoRoute": "/",
+      "viewport": { "width": 1280, "height": 720 },
+      "theme": "light",
+      "captureActions": [
+        { "kind": "waitForSelector", "selector": "header" },
+        { "kind": "screenshot", "name": "people-index" }
+      ],
+      "callout": { "x": 180, "y": 14, "width": 520, "height": 34, "label": "Primary archive axes" },
+      "posterAlt": "Lincoln and Todd demo archive top bar highlighting People, Places, Evidence, Time, Tree, and Map links.",
+      "cues": [
+        {
+          "text": "The top navigation bar organizes the Lincoln and Todd demo archive into core axes: People, Places, Evidence and Sources, Time, Family Tree, and Migration Map.",
+          "pauseAfterSeconds": 0.4
+        },
+        {
+          "text": "You can switch views at any time without losing your place, or open the Reading Room to inspect primary record transcriptions.",
+          "pauseAfterSeconds": 0.5
+        }
+      ]
+    },
+    {
+      "stepId": "nav-global-search",
+      "title": "Find any record with Global Search",
+      "demoRoute": "/",
+      "viewport": { "width": 1280, "height": 720 },
+      "theme": "light",
+      "captureActions": [
+        { "kind": "waitForSelector", "selector": "button[aria-label='Search (/)']" },
+        { "kind": "click", "selector": "button[aria-label='Search (/)']" },
+        { "kind": "screenshot", "name": "global-search" }
+      ],
+      "callout": { "x": 860, "y": 14, "width": 110, "height": 34, "label": "Global Search (/)" },
+      "posterAlt": "Global Search modal open over the Lincoln and Todd archive ready to search people, places, events, and source pages.",
+      "cues": [
+        {
+          "text": "Press the slash key or Command K anywhere in Kinloom to open Global Search.",
+          "pauseAfterSeconds": 0.4
+        },
+        {
+          "text": "Type a surname such as Lincoln or Todd, a town like Springfield, or a historical year to jump directly to matching records.",
+          "pauseAfterSeconds": 0.5
+        }
+      ]
+    }
+  ]
+}

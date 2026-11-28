@@ -1,4 +1,4 @@
-import type { Narrative, Person } from '@kinloom/core';
+import type { KinloomTutorialChapterInput, Narrative, Person } from '@kinloom/core';
 import type React from 'react';
 import { initialsOf, resolveAssetUrl } from '../components/Atoms.js';
 import {
@@ -22,6 +22,7 @@ import { NarrativeAudioDock, NarrativeAudioMarginBar } from './narrativeAudio/Na
 import type {
   KinloomOnboardingContext,
   KinloomOnboardingStep,
+  KinloomTutorialContext,
   KinloomUiPlugin,
   KinloomUiPluginSlotContext,
 } from './types.js';
@@ -140,7 +141,7 @@ const NARRATIVE_AUDIO_DOCS = {
   ],
 } as const;
 
-function findFirstNarratedPublicPerson(ctx: KinloomOnboardingContext): Person | null {
+function findFirstNarratedPublicPerson(ctx: Pick<KinloomOnboardingContext, 'bundle'>): Person | null {
   const bundle = ctx.bundle;
   if (!bundle) {
     return null;
@@ -232,7 +233,7 @@ export function createNarrativeAudioPlugin(options: NarrativeAudioPluginOptions 
         {
           id: `${id}:listen-biography`,
           title: 'Listen to a narrated story',
-          description: `Open ${targetPerson.full_name}'s dossier and play a spoken family biography while you browse.`,
+          description: `Open ${targetPerson.full_name}'s Person Profile and play a spoken family biography while you browse.`,
           roles: ['viewer', 'editor'],
           order: 180,
           action: {
@@ -240,6 +241,51 @@ export function createNarrativeAudioPlugin(options: NarrativeAudioPluginOptions 
             to: `/person/${targetPerson.slug}`,
             label: `Listen on ${targetPerson.full_name}`,
           },
+          tutorialChapterId: `${id}:listening`,
+        },
+      ];
+    },
+    getTutorialChapters(ctx: KinloomTutorialContext): readonly KinloomTutorialChapterInput[] {
+      const targetPerson = findFirstNarratedPublicPerson(ctx);
+      if (!targetPerson) {
+        return [];
+      }
+      return [
+        {
+          id: `${id}:listening`,
+          title: 'Listening to Narrated Biographies & Stories',
+          summary:
+            'Play spoken family biographies from any Person Profile, jump to Editor’s Notes, and keep listening across pages.',
+          minRole: 'viewer',
+          order: 190,
+          estimatedSeconds: 45,
+          steps: [
+            {
+              id: 'narrative-audio-margin-bar',
+              title: 'Play a narrated biography from the margin bar',
+              instructions: `Open ${targetPerson.full_name}'s Person Profile and press the Listen button in the archival margin bar to start playback.`,
+              transcript: `When a Person Profile includes recorded audio, an archival margin bar appears above the biography. Select Listen to hear the spoken biography in the primary narrator voice (${defaultStoryVoice}).`,
+              targetRoute: `/person/${targetPerson.slug}`,
+              targetRouteLabel: `Open ${targetPerson.full_name}`,
+              highlights: [
+                'Shows the narrator voice and total runtime before you press play.',
+                'Supports 1×, 1.25×, 1.5×, and 2× playback speeds.',
+              ],
+            },
+            {
+              id: 'narrative-audio-notes-and-dock',
+              title: 'Jump to Editor’s Notes and browse with the persistent dock',
+              instructions:
+                'Use the Editor’s Notes button to skip directly to research commentary, and keep listening in the compact bottom dock as you explore other pages.',
+              transcript: `Select Editor’s Notes to jump straight to source commentary read in a secondary voice (${defaultNotesVoice}). Once started, the persistent bottom audio dock stays open across routes so you can inspect the Family Tree or Migration Map without interrupting playback.`,
+              targetRoute: '/tree',
+              targetRouteLabel: 'Explore Family Tree',
+              highlights: [
+                'Playback survives navigation across People, Places, Time, Tree, and Map.',
+                'Skip backward or forward 15 seconds or dismiss the dock at any time.',
+              ],
+            },
+          ],
         },
       ];
     },

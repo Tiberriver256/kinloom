@@ -6,3 +6,4 @@ export * from './pluginDatabase.js';
 export * from './pluginSettings.js';
 export * from './pureHelpers.js';
 export * from './revisions.js';
+export * from './tutorials.js';

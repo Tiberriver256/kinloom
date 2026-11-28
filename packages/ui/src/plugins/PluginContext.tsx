@@ -28,15 +28,19 @@ import type {
 } from './types.js';
 import {
   type CompiledKinloomOnboardingStep,
+  type CompiledKinloomTutorialChapter,
   RESERVED_UI_ROUTE_PATHS,
   resolveDynamicPluginOnboardingSteps,
+  resolveDynamicPluginTutorialChapters,
   validateAndCompileUiPlugins,
 } from './validatePlugins.js';
 
 export {
   type CompiledKinloomOnboardingStep,
+  type CompiledKinloomTutorialChapter,
   RESERVED_UI_ROUTE_PATHS,
   resolveDynamicPluginOnboardingSteps,
+  resolveDynamicPluginTutorialChapters,
   validateAndCompileUiPlugins,
 };
 
@@ -55,6 +59,7 @@ export interface KinloomPluginContextValue {
   readonly entityEditForms: Readonly<Partial<Record<EntityType, EntityEditFormEntry>>>;
   readonly entityCreateForms: Readonly<Partial<Record<EntityType, EntityCreateFormEntry>>>;
   readonly onboardingSteps: readonly CompiledKinloomOnboardingStep[];
+  readonly tutorialChapters: readonly CompiledKinloomTutorialChapter[];
   readonly apiClient: PluginApiClient;
   readonly subscribePluginSettings: (pluginId: string | '*', listener: PluginSettingsListener) => () => void;
   readonly notifyPluginSettingsUpdated: (event: PluginSettingsSyncEvent) => void;
@@ -87,6 +92,7 @@ const KinloomPluginContext = createContext<KinloomPluginContextValue>({
   entityEditForms: EMPTY_EDIT_FORMS,
   entityCreateForms: EMPTY_CREATE_FORMS,
   onboardingSteps: [],
+  tutorialChapters: [],
   apiClient: DEFAULT_PLUGIN_API_CLIENT,
   subscribePluginSettings: NOOP_SUBSCRIBE,
   notifyPluginSettingsUpdated: NOOP_NOTIFY,

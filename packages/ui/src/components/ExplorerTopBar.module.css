@@ -124,6 +124,14 @@
   font-weight: 700;
 }
 
+.topbar-guide-chapter-list {
+  display: flex;
+  flex-direction: column;
+  padding-left: 10px;
+  margin: 2px 0 4px;
+  border-left: 2px solid var(--border-decorative);
+}
+
 .topbar-mobile-guide-li {
   flex-direction: column;
   align-items: stretch;

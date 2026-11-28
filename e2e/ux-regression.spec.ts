@@ -466,6 +466,14 @@ test.describe('Wave 50B UX regression suite', () => {
       expect(magicEmail).toBeDefined();
       await page.goto(magicEmail!.magicLinkUrl);
       await expect(page.getByRole('button', { name: /Account menu for/ })).toBeVisible();
+      const firstLoginTutorial = page.getByTestId('tutorial-modal');
+      await expect(firstLoginTutorial).toBeVisible();
+      const dismissTutorialRes = page.waitForResponse(
+        (res) => res.url().includes('/api/auth/me/onboarding') && res.request().method() === 'PUT' && res.ok()
+      );
+      await firstLoginTutorial.getByRole('button', { name: 'Close' }).click();
+      await dismissTutorialRes;
+      await expect(firstLoginTutorial).toHaveCount(0);
 
       await page.goto(`${wiki.baseUrl}/person/abraham-lincoln-1809`);
       await expect(page.getByRole('heading', { name: 'Abraham Lincoln', exact: true })).toBeVisible();

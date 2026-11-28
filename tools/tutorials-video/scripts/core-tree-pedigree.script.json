@@ -1,0 +1,60 @@
+{
+  "schemaVersion": 1,
+  "chapterId": "core-tree-pedigree",
+  "title": "Exploring the Family Tree",
+  "voice": "Charon",
+  "style": "Warm, clear archival museum narrator at a calm, unhurried pace.",
+  "fps": 30,
+  "width": 1280,
+  "height": 720,
+  "steps": [
+    {
+      "stepId": "tree-chart-and-list",
+      "title": "Switch between Chart View and List View",
+      "demoRoute": "/tree",
+      "viewport": { "width": 1280, "height": 720 },
+      "theme": "light",
+      "captureActions": [
+        { "kind": "waitForSelector", "selector": "main" },
+        { "kind": "screenshot", "name": "tree-chart" },
+        { "kind": "click", "selector": "button:has-text('List')" },
+        { "kind": "screenshot", "name": "tree-list" }
+      ],
+      "callout": { "x": 920, "y": 96, "width": 180, "height": 40, "label": "Chart & List toggle" },
+      "posterAlt": "Family Tree page displaying the Chart and List view toggle over the Lincoln and Todd pedigree.",
+      "cues": [
+        {
+          "text": "Open Family Tree in the top bar to view ancestors, marriages, and descendants across generations.",
+          "pauseAfterSeconds": 0.4
+        },
+        {
+          "text": "Use the Chart and List buttons to switch between the pan-and-zoom diagram and a generation-by-generation card list.",
+          "pauseAfterSeconds": 0.5
+        }
+      ]
+    },
+    {
+      "stepId": "tree-branches-and-spotlight",
+      "title": "Filter branches and open the Focus Drawer",
+      "demoRoute": "/tree",
+      "viewport": { "width": 1280, "height": 720 },
+      "theme": "light",
+      "captureActions": [
+        { "kind": "waitForSelector", "selector": "main" },
+        { "kind": "screenshot", "name": "tree-branches" }
+      ],
+      "callout": { "x": 64, "y": 96, "width": 360, "height": 40, "label": "Branch filter & Direct Line" },
+      "posterAlt": "Family Tree toolbar showing the Family Branch filter, Direct Line toggle, and Find person search.",
+      "cues": [
+        {
+          "text": "Filter large archives by Family Branch, toggle Direct Line or Full Tree, and expand Other Children chips whenever you want sibling lines.",
+          "pauseAfterSeconds": 0.4
+        },
+        {
+          "text": "Select any relative to spotlight their lineage path and open vital details in the Focus Drawer.",
+          "pauseAfterSeconds": 0.5
+        }
+      ]
+    }
+  ]
+}

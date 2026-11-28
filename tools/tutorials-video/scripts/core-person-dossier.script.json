@@ -1,0 +1,81 @@
+{
+  "schemaVersion": 1,
+  "chapterId": "core-person-dossier",
+  "title": "Reading Person Profiles, Citations & Audio",
+  "voice": "Charon",
+  "style": "Warm, clear archival museum narrator at a calm, unhurried pace.",
+  "fps": 30,
+  "width": 1280,
+  "height": 720,
+  "steps": [
+    {
+      "stepId": "profile-facts-and-timeline",
+      "title": "Read vital facts, evidence badges, and Life Timeline",
+      "demoRoute": "/person/abraham-lincoln-1809",
+      "viewport": { "width": 1280, "height": 720 },
+      "theme": "light",
+      "captureActions": [
+        { "kind": "waitForSelector", "selector": "main" },
+        { "kind": "screenshot", "name": "lincoln-profile" }
+      ],
+      "callout": { "x": 120, "y": 110, "width": 540, "height": 120, "label": "Person Profile & Life Timeline" },
+      "posterAlt": "Abraham Lincoln Person Profile displaying vital dates, family connections, and cited timeline milestones.",
+      "cues": [
+        {
+          "text": "Open any Person Profile, such as Abraham Lincoln, to read vital facts, immediate family connections, and the chronological Life Timeline.",
+          "pauseAfterSeconds": 0.4
+        },
+        {
+          "text": "Green Cited badges mark facts backed by primary documents, while amber Family memory badges flag oral tradition still awaiting a source.",
+          "pauseAfterSeconds": 0.5
+        }
+      ]
+    },
+    {
+      "stepId": "profile-source-reader",
+      "title": "Inspect original scans in the Source Reader",
+      "demoRoute": "/evidence?tab=citations",
+      "viewport": { "width": 1280, "height": 720 },
+      "theme": "light",
+      "captureActions": [
+        { "kind": "waitForSelector", "selector": "main" },
+        { "kind": "screenshot", "name": "source-registry" }
+      ],
+      "callout": { "x": 96, "y": 150, "width": 480, "height": 90, "label": "Source Registry & Reader" },
+      "posterAlt": "Evidence and Sources view showing the Source Registry and citation links for the Lincoln and Todd archive.",
+      "cues": [
+        {
+          "text": "Select any citation pill to open the Source Inspector, or browse the Source Registry in Evidence and Sources.",
+          "pauseAfterSeconds": 0.4
+        },
+        {
+          "text": "Use Text, Side-by-Side, and Original Scan modes in the Source Reader to verify transcriptions directly against record scans.",
+          "pauseAfterSeconds": 0.5
+        }
+      ]
+    },
+    {
+      "stepId": "profile-pronunciations-and-audio",
+      "title": "Play Pronunciation Guides and narrated biographies",
+      "demoRoute": "/person/abraham-lincoln-1809",
+      "viewport": { "width": 1280, "height": 720 },
+      "theme": "light",
+      "captureActions": [
+        { "kind": "waitForSelector", "selector": "main" },
+        { "kind": "screenshot", "name": "pronunciation-and-audio" }
+      ],
+      "callout": { "x": 120, "y": 96, "width": 360, "height": 48, "label": "Pronunciation Guide & Narration" },
+      "posterAlt": "Person Profile header featuring Pronunciation Guide audio control and narrative biography section.",
+      "cues": [
+        {
+          "text": "When a historic name includes a Pronunciation Guide, press the speaker button beside the heading to hear how the name is spoken.",
+          "pauseAfterSeconds": 0.4
+        },
+        {
+          "text": "Narrated biographies play inline and stay active in the persistent bottom dock while you explore other records.",
+          "pauseAfterSeconds": 0.5
+        }
+      ]
+    }
+  ]
+}

@@ -1,4 +1,4 @@
-/* Accessible Keyboard Shortcuts & Quick Archive Guide Dialogs */
+/* Accessible Keyboard Shortcuts Dialog */
 
 .guide-dialog-backdrop {
   position: fixed;
@@ -103,53 +103,6 @@
   font-family: var(--font-mono);
   font-size: 0.78rem;
   font-weight: 600;
-}
-
-.guide-chapters-list {
-  list-style: none;
-  margin: 12px 0 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.guide-chapter-item {
-  padding: 9px 12px;
-  border: 1px solid var(--border-decorative);
-  border-radius: var(--radius-sm);
-  background: var(--surface-linen);
-}
-
-.guide-chapter-item.is-active {
-  border-color: var(--accent-primary);
-  background: var(--surface-card);
-}
-
-.guide-chapter-heading {
-  margin: 0 0 4px;
-  font-family: var(--font-serif);
-  font-size: 1rem;
-  font-weight: 700;
-  color: var(--surface-header);
-}
-
-.guide-chapter-body {
-  margin: 0;
-  font-size: 0.88rem;
-  line-height: 1.45;
-  color: var(--text-secondary);
-}
-
-.guide-dialog-footer {
-  margin-top: 16px;
-  padding-top: 12px;
-  border-top: 1px solid var(--border-decorative);
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 10px;
 }
 
 @media (max-width: 768px) {

@@ -2,6 +2,9 @@ import {
   type EntityType,
   isSafeInternalRoute,
   KinloomOnboardingStepSchema,
+  type KinloomTutorialChapter,
+  type KinloomTutorialChapterInput,
+  KinloomTutorialChapterSchema,
   type PluginDocumentation,
 } from '@kinloom/core';
 import type {
@@ -12,6 +15,7 @@ import type {
   KinloomMediaRenderer,
   KinloomOnboardingContext,
   KinloomOnboardingStep,
+  KinloomTutorialContext,
   KinloomUiPlugin,
   KinloomUiPluginRoute,
 } from './types.js';
@@ -20,6 +24,12 @@ export type CompiledKinloomOnboardingStep = KinloomOnboardingStep & {
   readonly pluginId: string;
 };
 
+export interface CompiledKinloomTutorialChapter extends KinloomTutorialChapter {
+  readonly source: 'core' | 'plugin';
+  readonly pluginId?: string;
+  readonly pluginName?: string;
+}
+
 export interface CompiledKinloomUiPlugins {
   readonly plugins: readonly KinloomUiPlugin[];
   readonly routes: readonly (KinloomUiPluginRoute & { pluginId: string })[];
@@ -27,6 +37,7 @@ export interface CompiledKinloomUiPlugins {
   readonly entityEditForms: Readonly<Partial<Record<EntityType, EntityEditFormEntry>>>;
   readonly entityCreateForms: Readonly<Partial<Record<EntityType, EntityCreateFormEntry>>>;
   readonly onboardingSteps: readonly CompiledKinloomOnboardingStep[];
+  readonly tutorialChapters: readonly CompiledKinloomTutorialChapter[];
 }
 
 export const RESERVED_UI_ROUTE_PATHS: readonly string[] = [
@@ -84,6 +95,22 @@ function compareCompiledOnboardingSteps(
     return orderA - orderB;
   }
   const byPlugin = a.pluginId.localeCompare(b.pluginId);
+  if (byPlugin !== 0) {
+    return byPlugin;
+  }
+  return a.id.localeCompare(b.id);
+}
+
+function compareCompiledTutorialChapters(
+  a: CompiledKinloomTutorialChapter,
+  b: CompiledKinloomTutorialChapter
+): number {
+  const orderA = a.order ?? 200;
+  const orderB = b.order ?? 200;
+  if (orderA !== orderB) {
+    return orderA - orderB;
+  }
+  const byPlugin = (a.pluginId ?? '').localeCompare(b.pluginId ?? '');
   if (byPlugin !== 0) {
     return byPlugin;
   }
@@ -175,6 +202,53 @@ function validatePluginOnboardingStep(
   };
 }
 
+function validatePluginTutorialChapter(
+  chapter: KinloomTutorialChapterInput,
+  pluginId: string,
+  pluginName: string,
+  seenChapterOwners: Map<string, string>
+): CompiledKinloomTutorialChapter {
+  const parsed = KinloomTutorialChapterSchema.safeParse(chapter);
+  if (!parsed.success) {
+    const issue = parsed.error.issues[0];
+    const pathLabel = issue?.path?.length ? issue.path.join('.') : 'chapter';
+    throw new RangeError(
+      `UI plugin '${pluginId}' tutorial chapter '${String(chapter?.id ?? '')}' has invalid ${pathLabel}: ${issue?.message ?? 'invalid schema'}.`
+    );
+  }
+
+  const normalizedId = parsed.data.id;
+  const lowerId = normalizedId.toLowerCase();
+  if (lowerId.startsWith('core-') || lowerId.startsWith('core:')) {
+    throw new RangeError(
+      `UI plugin '${pluginId}' tutorial chapter '${normalizedId}' cannot use reserved 'core-' or 'core:' prefix.`
+    );
+  }
+
+  const expectedPrefix = `${pluginId}:`;
+  if (!normalizedId.startsWith(expectedPrefix)) {
+    throw new RangeError(
+      `UI plugin '${pluginId}' tutorial chapter '${normalizedId}' must be namespaced with '${expectedPrefix}'.`
+    );
+  }
+
+  const existingOwner = seenChapterOwners.get(normalizedId);
+  if (existingOwner) {
+    throw new RangeError(
+      `Duplicate UI plugin tutorial chapter id '${normalizedId}' in plugin '${pluginId}' (already registered by plugin '${existingOwner}').`
+    );
+  }
+
+  seenChapterOwners.set(normalizedId, pluginId);
+
+  return {
+    ...parsed.data,
+    source: 'plugin',
+    pluginId,
+    pluginName,
+  };
+}
+
 /**
  * Fault-isolated resolver for dynamic `plugin.getOnboardingSteps(ctx)` hooks.
  * Invalid, spoofed (`core:*`), duplicate, or throwing plugin hooks are ignored safely.
@@ -221,8 +295,56 @@ export function resolveDynamicPluginOnboardingSteps(
 }
 
 /**
- * Validate UI plugin IDs, route paths, entity form overrides, and static onboarding steps at provider startup.
- * Throws RangeError on empty/duplicate IDs, reserved or duplicate routes, conflicting form overrides, or invalid onboarding steps.
+ * Fault-isolated resolver for dynamic `plugin.getTutorialChapters(ctx)` hooks.
+ * Invalid, spoofed (`core-*`/`core:*`), un-namespaced, duplicate, or throwing plugin hooks are dropped safely.
+ */
+export function resolveDynamicPluginTutorialChapters(
+  plugins: readonly KinloomUiPlugin[],
+  staticChapterIds: ReadonlySet<string>,
+  ctx: KinloomTutorialContext
+): readonly CompiledKinloomTutorialChapter[] {
+  const seenChapterOwners = new Map<string, string>();
+  for (const id of staticChapterIds) {
+    seenChapterOwners.set(id, 'static');
+  }
+  const resolved: CompiledKinloomTutorialChapter[] = [];
+
+  for (const plugin of plugins) {
+    if (typeof plugin.getTutorialChapters !== 'function') {
+      continue;
+    }
+    let rawChapters: readonly KinloomTutorialChapterInput[];
+    try {
+      const result = plugin.getTutorialChapters(ctx);
+      if (!Array.isArray(result)) {
+        continue;
+      }
+      rawChapters = result;
+    } catch {
+      continue;
+    }
+
+    const pluginId = plugin.id.trim();
+    for (const rawChapter of rawChapters) {
+      if (!rawChapter || typeof rawChapter !== 'object') {
+        continue;
+      }
+      try {
+        resolved.push(validatePluginTutorialChapter(rawChapter, pluginId, plugin.name, seenChapterOwners));
+      } catch {
+        // Ignore malformed or colliding dynamic plugin chapters rather than crashing the shell.
+      }
+    }
+  }
+
+  return resolved.toSorted(compareCompiledTutorialChapters);
+}
+
+/**
+ * Validate UI plugin IDs, route paths, entity form overrides, static onboarding steps,
+ * and static tutorial chapters at provider startup.
+ * Throws RangeError on empty/duplicate IDs, reserved or duplicate routes, conflicting form overrides,
+ * or invalid onboarding steps / tutorial chapters.
  */
 
 function assertValidUiPluginDocumentation(doc: PluginDocumentation, ownerLabel: string): void {
@@ -279,6 +401,7 @@ export function validateAndCompileUiPlugins(plugins: readonly KinloomUiPlugin[])
   const seenPluginIds = new Set<string>();
   const seenRouteOwners = new Map<string, { pluginId: string; path: string }>();
   const seenStepOwners = new Map<string, string>();
+  const seenChapterOwners = new Map<string, string>();
   const editFormOwners = new Map<EntityType, string>();
   const createFormOwners = new Map<EntityType, string>();
 
@@ -287,6 +410,7 @@ export function validateAndCompileUiPlugins(plugins: readonly KinloomUiPlugin[])
   const entityEditForms: Partial<Record<EntityType, EntityEditFormEntry>> = {};
   const entityCreateForms: Partial<Record<EntityType, EntityCreateFormEntry>> = {};
   const onboardingSteps: CompiledKinloomOnboardingStep[] = [];
+  const tutorialChapters: CompiledKinloomTutorialChapter[] = [];
 
   for (const plugin of plugins) {
     const pluginId = plugin.id.trim();
@@ -384,6 +508,14 @@ export function validateAndCompileUiPlugins(plugins: readonly KinloomUiPlugin[])
         onboardingSteps.push(validatePluginOnboardingStep(step, pluginId, seenStepOwners));
       }
     }
+
+    if (plugin.tutorialChapters) {
+      for (const chapter of plugin.tutorialChapters) {
+        tutorialChapters.push(
+          validatePluginTutorialChapter(chapter, pluginId, plugin.name, seenChapterOwners)
+        );
+      }
+    }
   }
 
   return {
@@ -393,5 +525,6 @@ export function validateAndCompileUiPlugins(plugins: readonly KinloomUiPlugin[])
     entityEditForms,
     entityCreateForms,
     onboardingSteps: onboardingSteps.toSorted(compareCompiledOnboardingSteps),
+    tutorialChapters: tutorialChapters.toSorted(compareCompiledTutorialChapters),
   };
 }

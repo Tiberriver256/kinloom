@@ -532,10 +532,10 @@ export const IndexPage: React.FC = () => {
                         type="button"
                         className={cx(controlStyles, 'pill-btn')}
                         onClick={() => {
-                          onboarding.openGuide('core-getting-started');
+                          onboarding.openGuide('core-navigation-search');
                         }}
                       >
-                        Open Quick Guide
+                        Open Archive Guide
                       </button>
                     ) : undefined
                   }
@@ -549,10 +549,10 @@ export const IndexPage: React.FC = () => {
                         type="button"
                         className={cx(controlStyles, 'pill-btn')}
                         onClick={() => {
-                          onboarding.openGuide('core-getting-started');
+                          onboarding.openGuide('core-navigation-search');
                         }}
                       >
-                        Open Quick Guide
+                        Open Archive Guide
                       </button>
                     ) : undefined
                   }

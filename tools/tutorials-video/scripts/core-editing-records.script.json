@@ -1,0 +1,84 @@
+{
+  "schemaVersion": 1,
+  "chapterId": "core-editing-records",
+  "title": "Editing Records, Citations & Uploading Scans",
+  "voice": "Charon",
+  "style": "Warm, clear archival museum narrator at a calm, unhurried pace.",
+  "fps": 30,
+  "width": 1280,
+  "height": 720,
+  "steps": [
+    {
+      "stepId": "edit-record-and-citations",
+      "title": "Create or edit records with source attribution",
+      "demoRoute": "/person/abraham-lincoln-1809",
+      "authRole": "editor",
+      "viewport": { "width": 1280, "height": 720 },
+      "theme": "light",
+      "captureActions": [
+        { "kind": "waitForSelector", "selector": "main" },
+        { "kind": "screenshot", "name": "editor-profile" }
+      ],
+      "callout": { "x": 820, "y": 96, "width": 220, "height": 40, "label": "Edit Page & Citations" },
+      "posterAlt": "Person Profile in editor mode showing the Edit Page drawer and citation attribution controls.",
+      "cues": [
+        {
+          "text": "Signed-in editors can select Edit Page on any Person Profile, Place Profile, or event to refine dates, biographies, and Family Notes.",
+          "pauseAfterSeconds": 0.4
+        },
+        {
+          "text": "Attach a primary citation whenever available, or mark oral history clearly as Family memory before saving.",
+          "pauseAfterSeconds": 0.5
+        }
+      ]
+    },
+    {
+      "stepId": "edit-conflicts-and-history",
+      "title": "Resolve Edit Conflicts and review Revision History",
+      "demoRoute": "/changes",
+      "authRole": "editor",
+      "viewport": { "width": 1280, "height": 720 },
+      "theme": "light",
+      "captureActions": [
+        { "kind": "waitForSelector", "selector": "main" },
+        { "kind": "screenshot", "name": "revision-history" }
+      ],
+      "callout": { "x": 84, "y": 116, "width": 520, "height": 90, "label": "Revision History & Revert" },
+      "posterAlt": "Revision History page listing versioned archival edits with field-level diff previews and revert controls.",
+      "cues": [
+        {
+          "text": "If two editors update the same record at once, Kinloom opens the Conflict Merge dialog so no work is silently overwritten.",
+          "pauseAfterSeconds": 0.4
+        },
+        {
+          "text": "Open Revision History at any time to inspect field-level diffs and safely revert an earlier revision.",
+          "pauseAfterSeconds": 0.5
+        }
+      ]
+    },
+    {
+      "stepId": "edit-upload-photos-and-privacy",
+      "title": "Upload Photos & Documents under the Living Privacy Rule",
+      "demoRoute": "/evidence?tab=media",
+      "authRole": "editor",
+      "viewport": { "width": 1280, "height": 720 },
+      "theme": "light",
+      "captureActions": [
+        { "kind": "waitForSelector", "selector": "main" },
+        { "kind": "screenshot", "name": "photos-and-documents" }
+      ],
+      "callout": { "x": 92, "y": 120, "width": 440, "height": 74, "label": "Photos & Documents & Privacy Rule" },
+      "posterAlt": "Photos and Documents gallery illustrating portrait, headstone, and document scan categories.",
+      "cues": [
+        {
+          "text": "Upload portraits, family photographs, headstones, and document scans directly from any deceased ancestor's Person Profile.",
+          "pauseAfterSeconds": 0.4
+        },
+        {
+          "text": "To protect living relatives, Kinloom enforces the Living Privacy Rule and blocks public portrait uploads for living individuals.",
+          "pauseAfterSeconds": 0.5
+        }
+      ]
+    }
+  ]
+}

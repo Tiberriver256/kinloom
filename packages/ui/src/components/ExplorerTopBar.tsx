@@ -31,6 +31,7 @@ export const ExplorerTopBar: React.FC = () => {
   const guideMenuId = useId();
   const [accountOpen, setAccountOpen] = useState(false);
   const [guideOpen, setGuideOpen] = useState(false);
+  const [chapterPickerOpen, setChapterPickerOpen] = useState(false);
   const [signInOpen, setSignInOpen] = useState(false);
   const headerRef = useRef<HTMLElement | null>(null);
   const accountMenuRef = useRef<HTMLDivElement | null>(null);
@@ -84,6 +85,7 @@ export const ExplorerTopBar: React.FC = () => {
   useEffect(() => {
     setAccountOpen(false);
     setGuideOpen(false);
+    setChapterPickerOpen(false);
   }, [location.pathname]);
 
   useEffect(() => {
@@ -173,10 +175,11 @@ export const ExplorerTopBar: React.FC = () => {
     }, 0);
   };
 
-  const handleOpenGuideDialog = (): void => {
+  const handleOpenGuideDialog = (chapterId?: string): void => {
     setAccountOpen(false);
     setGuideOpen(false);
-    onboarding?.openGuide();
+    setChapterPickerOpen(false);
+    onboarding?.openGuide(chapterId);
   };
 
   const handleOpenShortcuts = (): void => {
@@ -603,14 +606,16 @@ export const ExplorerTopBar: React.FC = () => {
                         aria-label="Guide and help"
                       >
                         <div className={cx(wikiChromeStyles, 'topbar-theme-group-label')} aria-hidden="true">
-                          Guide &amp; Help
+                          Guide &amp; Tutorials
                         </div>
                         <button
                           type="button"
                           className={cx(wikiChromeStyles, 'topbar-account-item')}
-                          onClick={handleOpenGuideDialog}
+                          onClick={() => {
+                            handleOpenGuideDialog();
+                          }}
                         >
-                          {onboarding.hasTutorialLauncher ? 'Interactive Tutorials' : 'Quick Archive Guide'}
+                          Interactive Tutorials
                         </button>
                         <button
                           type="button"
@@ -631,7 +636,7 @@ export const ExplorerTopBar: React.FC = () => {
                           className={cx(wikiChromeStyles, 'topbar-account-item')}
                           onClick={handleResetOnboarding}
                         >
-                          Reset Onboarding Progress
+                          Reset Tutorial &amp; Onboarding Progress
                         </button>
                       </div>
                     </li>
@@ -748,15 +753,27 @@ export const ExplorerTopBar: React.FC = () => {
                 ref={guideTriggerRef}
                 type="button"
                 className={cx(topBarStyles, `nav-pill nav-guide-btn ${guideOpen ? 'active' : ''}`)}
+                aria-label="Guide"
                 aria-haspopup="menu"
                 aria-expanded={guideOpen}
                 aria-controls={guideMenuId}
                 onClick={() => {
                   setAccountOpen(false);
+                  setChapterPickerOpen(false);
                   setGuideOpen((open) => !open);
                 }}
               >
                 <span>Guide</span>
+                {onboarding.tutorialCatalog.totalCount > 0 &&
+                  onboarding.tutorialCatalog.completedCount < onboarding.tutorialCatalog.totalCount && (
+                    <span
+                      className={cx(topBarStyles, 'topbar-guide-badge')}
+                      aria-hidden="true"
+                      title={`${onboarding.tutorialCatalog.completedCount} of ${onboarding.tutorialCatalog.totalCount} chapters completed`}
+                    >
+                      {onboarding.tutorialCatalog.completedCount}/{onboarding.tutorialCatalog.totalCount}
+                    </span>
+                  )}
               </button>
               {guideOpen && (
                 <div
@@ -772,18 +789,64 @@ export const ExplorerTopBar: React.FC = () => {
                   <button
                     type="button"
                     role="menuitem"
+                    aria-label="Interactive Tutorials"
                     className={cx(wikiChromeStyles, 'topbar-account-item')}
-                    onClick={handleOpenGuideDialog}
+                    onClick={() => {
+                      handleOpenGuideDialog();
+                    }}
                   >
-                    <span>
-                      {onboarding.hasTutorialLauncher ? 'Interactive Tutorials' : 'Quick Archive Guide'}
-                    </span>
-                    {onboarding.state.completed_chapter_ids.length > 0 && (
-                      <span className={cx(topBarStyles, 'topbar-guide-badge')}>
-                        {onboarding.state.completed_chapter_ids.length}
+                    <span>Interactive Tutorials</span>
+                    {onboarding.tutorialCatalog.totalCount > 0 && (
+                      <span className={cx(topBarStyles, 'topbar-guide-badge')} aria-hidden="true">
+                        {onboarding.tutorialCatalog.completedCount}/{onboarding.tutorialCatalog.totalCount}
                       </span>
                     )}
                   </button>
+                  {onboarding.tutorialCatalog.chapters.length > 0 && (
+                    <>
+                      <button
+                        type="button"
+                        role="menuitem"
+                        aria-expanded={chapterPickerOpen}
+                        className={cx(wikiChromeStyles, 'topbar-account-item')}
+                        onClick={() => {
+                          setChapterPickerOpen((open) => !open);
+                        }}
+                      >
+                        <span>Jump to chapter…</span>
+                        <span aria-hidden="true">{chapterPickerOpen ? '▴' : '▾'}</span>
+                      </button>
+                      {chapterPickerOpen && (
+                        <div
+                          className={cx(topBarStyles, 'topbar-guide-chapter-list')}
+                          role="group"
+                          aria-label="Tutorial chapters"
+                        >
+                          {onboarding.tutorialCatalog.chapters.map((chapter) => (
+                            <button
+                              key={chapter.id}
+                              type="button"
+                              role="menuitem"
+                              className={cx(wikiChromeStyles, 'topbar-account-item')}
+                              onClick={() => {
+                                handleOpenGuideDialog(chapter.id);
+                              }}
+                            >
+                              <span>{chapter.title}</span>
+                              {onboarding.state.completed_chapter_ids.includes(chapter.id) && (
+                                <>
+                                  <span className={cx(topBarStyles, 'topbar-guide-badge')} aria-hidden="true">
+                                    ✓
+                                  </span>
+                                  <span className="visually-hidden"> (completed)</span>
+                                </>
+                              )}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </>
+                  )}
                   <button
                     type="button"
                     role="menuitem"
@@ -807,7 +870,7 @@ export const ExplorerTopBar: React.FC = () => {
                     className={cx(wikiChromeStyles, 'topbar-account-item')}
                     onClick={handleResetOnboarding}
                   >
-                    Reset Onboarding Progress
+                    Reset Tutorial &amp; Onboarding Progress
                   </button>
                 </div>
               )}

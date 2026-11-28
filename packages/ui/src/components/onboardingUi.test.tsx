@@ -490,25 +490,31 @@ describe('OnboardingChecklistCard, Guide menu, persistence, and contextual empty
       findButtonByText(secondMount.container, 'Close')?.click();
     });
 
-    // Open Quick Archive Guide dialog via Guide menu and mark chapter read
+    // Open Interactive Tutorials modal via Guide menu and mark chapter complete
     await act(async () => {
       guideBtn?.click();
     });
     await act(async () => {
-      findButtonByText(secondMount.container, 'Quick Archive Guide')?.click();
+      findButtonByText(secondMount.container, 'Interactive Tutorials')?.click();
       await new Promise((r) => setTimeout(r, 20));
     });
-    expect(secondMount.container.textContent).toContain('Welcome to Kinloom');
+    expect(secondMount.container.textContent).toContain('Kinloom Archive Guide');
     await act(async () => {
-      findButtonByText(secondMount.container, 'Mark chapter read')?.click();
+      findButtonByText(secondMount.container, 'Next step')?.click();
+    });
+    await act(async () => {
+      findButtonByText(secondMount.container, 'Mark chapter complete')?.click();
+    });
+    await act(async () => {
+      findButtonByText(secondMount.container, 'Close')?.click();
     });
 
-    // Reset Onboarding Progress clears completed steps
+    // Reset Tutorial & Onboarding Progress clears completed steps
     await act(async () => {
       guideBtn?.click();
     });
     await act(async () => {
-      findButtonByText(secondMount.container, 'Reset Onboarding Progress')?.click();
+      findButtonByText(secondMount.container, 'Reset Tutorial & Onboarding Progress')?.click();
     });
     expect(secondMount.container.textContent).toContain('0 of 6 steps completed');
     await secondMount.unmount();

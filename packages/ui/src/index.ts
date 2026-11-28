@@ -164,6 +164,10 @@ export type { TreePedigreeRollProps } from './components/tree/TreePedigreeRoll.j
 export { TreePedigreeRoll } from './components/tree/TreePedigreeRoll.js';
 export type { TreeToolbarProps } from './components/tree/TreeToolbar.js';
 export { TreeToolbar } from './components/tree/TreeToolbar.js';
+export type { TutorialMediaStageProps } from './components/tutorials/TutorialMediaStage.js';
+export { TutorialMediaStage } from './components/tutorials/TutorialMediaStage.js';
+export type { TutorialModalProps } from './components/tutorials/TutorialModal.js';
+export { TutorialModal } from './components/tutorials/TutorialModal.js';
 export { AuthStatusBanner } from './components/wiki/AuthStatusBanner.js';
 export type {
   AuthErrorCode,
@@ -246,7 +250,12 @@ export type { ArchiveProviderProps } from './context/ArchiveProvider.js';
 export { ArchiveProvider } from './context/ArchiveProvider.js';
 export type { ArchiveUiContextValue, PivotCrumb } from './context/ArchiveUiContext.js';
 export { ArchiveUiProvider, useArchiveUi } from './context/ArchiveUiContext.js';
-export type { OnboardingContextValue, TutorialLauncher } from './context/OnboardingContext.js';
+export type {
+  CloseTutorialOptions,
+  OnboardingContextValue,
+  OpenTutorialOptions,
+  TutorialLauncher,
+} from './context/OnboardingContext.js';
 export { OnboardingProvider, useOnboarding, useOptionalOnboarding } from './context/OnboardingContext.js';
 export type { ThemePreferenceState } from './hooks/useThemePreference.js';
 export {
@@ -262,6 +271,7 @@ export { KinloomApp } from './KinloomApp.js';
 export * from './lib/adminDiagnostics.js';
 export * from './lib/archivalTreeModel.js';
 export * from './lib/bookPublishingModel.js';
+export * from './lib/coreTutorialChapters.js';
 export * from './lib/lightboxModel.js';
 export * from './lib/observabilityStatsModel.js';
 export * from './lib/onboardingModel.js';
@@ -277,6 +287,7 @@ export * from './lib/timelineScroll.js';
 export * from './lib/tokens.js';
 export * from './lib/treeGestures.js';
 export * from './lib/treeNodeDisplay.js';
+export * from './lib/tutorialModel.js';
 // UI-Only Helpers & Canonical Vocabulary
 export * from './lib/vocabulary.js';
 // XState v5 Statechart Actors
@@ -337,6 +348,7 @@ export {
 } from './plugins/openFinancePlugin.js';
 export type {
   CompiledKinloomOnboardingStep,
+  CompiledKinloomTutorialChapter,
   KinloomPluginContextValue,
   KinloomPluginProviderProps,
   KinloomPluginRuntimeContext,
@@ -350,6 +362,7 @@ export {
   PluginSlot,
   RESERVED_UI_ROUTE_PATHS,
   resolveDynamicPluginOnboardingSteps,
+  resolveDynamicPluginTutorialChapters,
   useKinloomPluginContext,
   useKinloomPlugins,
   validateAndCompileUiPlugins,
@@ -362,6 +375,7 @@ export type {
   KinloomOnboardingContext,
   KinloomOnboardingStep,
   KinloomOnboardingStepAction,
+  KinloomTutorialContext,
   KinloomUiPlugin,
   KinloomUiPluginNavMinRole,
   KinloomUiPluginRoute,

@@ -5,6 +5,7 @@ import type {
   ChangelogEntry,
   EntityType,
   KinloomSiteConfig,
+  KinloomTutorialChapterInput,
   MediaItem,
   Narrative,
   OnboardingRole,
@@ -31,6 +32,15 @@ export interface KinloomOnboardingContext {
   readonly capabilities: ArchiveCapabilities;
   readonly role: OnboardingRole;
   readonly completedStepIds: ReadonlySet<string>;
+}
+
+export interface KinloomTutorialContext {
+  readonly bundle: ArchiveBundle | null;
+  readonly siteConfig: KinloomSiteConfig;
+  readonly baseUrl: string;
+  readonly session: ArchiveSessionState | null;
+  readonly capabilities: ArchiveCapabilities;
+  readonly role: OnboardingRole;
 }
 
 export type KinloomOnboardingStepAction =
@@ -143,4 +153,8 @@ export interface KinloomUiPlugin {
   readonly entityCreateForms?: Readonly<Partial<Record<EntityType, EntityCreateFormEntry>>>;
   readonly onboardingSteps?: readonly KinloomOnboardingStep[];
   readonly getOnboardingSteps?: (ctx: KinloomOnboardingContext) => readonly KinloomOnboardingStep[];
+  /** Static declarative tutorial chapters validated fail-fast at plugin startup. */
+  readonly tutorialChapters?: readonly KinloomTutorialChapterInput[];
+  /** Optional runtime resolver for chapters that depend on archive bundle or capabilities. */
+  readonly getTutorialChapters?: (ctx: KinloomTutorialContext) => readonly KinloomTutorialChapterInput[];
 }

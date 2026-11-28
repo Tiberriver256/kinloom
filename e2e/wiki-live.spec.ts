@@ -27,6 +27,17 @@ test.afterEach(async () => {
   await wiki.close();
 });
 
+async function dismissFirstLoginTutorialModal(page: Page): Promise<void> {
+  const tutorialModal = page.getByTestId('tutorial-modal');
+  await expect(tutorialModal).toBeVisible();
+  const dismissResponse = page.waitForResponse(
+    (res) => res.url().includes('/api/auth/me/onboarding') && res.request().method() === 'PUT' && res.ok()
+  );
+  await tutorialModal.getByRole('button', { name: 'Close' }).click();
+  await dismissResponse;
+  await expect(tutorialModal).toHaveCount(0);
+}
+
 async function enrollEditorViaInviteAndMagicLink(page: Page, email: string): Promise<void> {
   await page.goto(`${wiki.baseUrl}/api/auth/invite/${wiki.inviteToken}`);
   const inviteNotice = page.getByRole('region', { name: 'Invite access notice' });
@@ -46,6 +57,7 @@ async function enrollEditorViaInviteAndMagicLink(page: Page, email: string): Pro
 
   await page.goto(sent!.magicLinkUrl);
   await expect(page.getByRole('button', { name: /Account menu for/ })).toBeVisible();
+  await dismissFirstLoginTutorialModal(page);
 }
 
 test('backend modularity: same KinloomApp responds to Static Files vs Live HTTP Wiki capabilities', async ({
@@ -115,6 +127,7 @@ test('1. read-only invite shows viewer banner and magic-link sign-in auto-enroll
 
   const accountBtn = page.getByRole('button', { name: /Account menu for/ });
   await expect(accountBtn).toBeVisible();
+  await dismissFirstLoginTutorialModal(page);
   await accountBtn.click();
   const accountMenu = page.getByRole('navigation', { name: 'Account options' });
   await expect(accountMenu.locator('.wiki-role-chip')).toHaveText('Editor');

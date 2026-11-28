@@ -1,7 +1,15 @@
 import type { ArchiveBundle, ArchiveDataSource, KinloomSiteConfig, ReadingsBundle } from '@kinloom/core';
 import type React from 'react';
-import { lazy, Suspense, useEffect } from 'react';
-import { BrowserRouter, MemoryRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom';
+import { lazy, Suspense, useEffect, useRef } from 'react';
+import {
+  BrowserRouter,
+  MemoryRouter,
+  Navigate,
+  Route,
+  Routes,
+  useLocation,
+  useNavigate,
+} from 'react-router-dom';
 import { registerKinloomServiceWorker } from './browser/registerServiceWorker.js';
 import { AppErrorBoundary } from './components/AppErrorBoundary.js';
 import statusShellStyles from './components/ArchiveStatusShell.module.css';
@@ -16,6 +24,7 @@ import { ArchiveProvider } from './context/ArchiveProvider.js';
 import { useArchiveUi } from './context/ArchiveUiContext.js';
 import { useOptionalOnboarding } from './context/OnboardingContext.js';
 import { cx } from './lib/cx.js';
+import { readTutorialQueryParam, stripTutorialQueryParam } from './lib/tutorialModel.js';
 import { IndexPage } from './pages/IndexPage.js';
 import { NotFoundPage } from './pages/NotFoundPage.js';
 import { PluginSlot, useKinloomPlugins } from './plugins/PluginContext.js';
@@ -78,9 +87,9 @@ const LazyKeyboardShortcutsDialog = lazy(async () => {
   const module = await import('./components/GuideOverlays.js');
   return { default: module.KeyboardShortcutsDialog };
 });
-const LazyQuickArchiveGuideDialog = lazy(async () => {
-  const module = await import('./components/GuideOverlays.js');
-  return { default: module.QuickArchiveGuideDialog };
+const LazyTutorialModal = lazy(async () => {
+  const module = await import('./components/tutorials/TutorialModal.js');
+  return { default: module.TutorialModal };
 });
 
 export interface KinloomAppProps {
@@ -121,19 +130,21 @@ const LazyShellOverlays: React.FC = () => {
       {sourceInspector !== null && <LazySourceInspectorDrawer />}
       {searchOpen && <LazyGlobalSearchModal />}
       {onboarding?.shortcutsDialogOpen && <LazyKeyboardShortcutsDialog />}
-      {onboarding?.guideDialogChapter !== null && onboarding?.guideDialogChapter !== undefined && (
-        <LazyQuickArchiveGuideDialog />
-      )}
+      {onboarding?.tutorialModalOpen && <LazyTutorialModal />}
     </Suspense>
   );
 };
 
 const RoutedAppShell: React.FC<{ siteTitle: string; baseUrl: string }> = ({ siteTitle, baseUrl }) => {
   const location = useLocation();
+  const navigate = useNavigate();
   const { routes: pluginRoutes } = useKinloomPlugins();
   const { bundle, loading, session } = useArchiveData();
+  const { searchOpen } = useArchiveUi();
   const onboarding = useOptionalOnboarding();
   const recordSignal = onboarding?.recordSignal;
+  const autoOpenedForSessionRef = useRef<string | null>(null);
+  const tutorialQueryOpenRef = useRef<boolean>(false);
 
   useEffect(() => {
     if (!recordSignal) {
@@ -145,6 +156,62 @@ const RoutedAppShell: React.FC<{ siteTitle: string; baseUrl: string }> = ({ site
       recordSignal('changes_visit');
     }
   }, [location.pathname, recordSignal]);
+
+  // First-login interactive tutorial modal auto-open (fires once per account session, never stacked).
+  const sessionKey = session?.principal_kind === 'user' ? (session.email ?? 'user') : 'anon';
+  const openTutorial = onboarding?.openTutorial;
+  const hydrated = Boolean(onboarding?.hydrated);
+  const shouldAutoOpen = Boolean(onboarding?.shouldAutoOpenTutorialModal);
+  const shortcutsOpen = Boolean(onboarding?.shortcutsDialogOpen);
+  const tutorialOpen = Boolean(onboarding?.tutorialModalOpen);
+  const visibleChapters = onboarding?.tutorialCatalog.chapters;
+
+  useEffect(() => {
+    if (!openTutorial || !hydrated || !shouldAutoOpen) {
+      return;
+    }
+    if (autoOpenedForSessionRef.current === sessionKey) {
+      return;
+    }
+    if (searchOpen || shortcutsOpen || tutorialOpen) {
+      return;
+    }
+    autoOpenedForSessionRef.current = sessionKey;
+    openTutorial({ autoOpened: true });
+  }, [openTutorial, hydrated, shouldAutoOpen, sessionKey, searchOpen, shortcutsOpen, tutorialOpen]);
+
+  // URL deep-link ?tutorial=<chapterId>: open authorized chapter and strip param on close without pushing history.
+  const requestedTutorialFromUrl = readTutorialQueryParam(location.search);
+  useEffect(() => {
+    if (!openTutorial || !requestedTutorialFromUrl || !visibleChapters) {
+      return;
+    }
+    if (tutorialQueryOpenRef.current) {
+      return;
+    }
+    if (!visibleChapters.some((chapter) => chapter.id === requestedTutorialFromUrl)) {
+      return;
+    }
+    tutorialQueryOpenRef.current = true;
+    openTutorial({ chapterId: requestedTutorialFromUrl, autoOpened: false });
+  }, [openTutorial, requestedTutorialFromUrl, visibleChapters]);
+
+  useEffect(() => {
+    if (!tutorialQueryOpenRef.current || tutorialOpen) {
+      return;
+    }
+    tutorialQueryOpenRef.current = false;
+    if (readTutorialQueryParam(location.search) !== null) {
+      navigate(
+        {
+          pathname: location.pathname,
+          search: stripTutorialQueryParam(location.search),
+          hash: location.hash,
+        },
+        { replace: true }
+      );
+    }
+  }, [tutorialOpen, location.pathname, location.search, location.hash, navigate]);
 
   if (!loading && bundle === null && session?.principal_kind === 'anonymous') {
     return (

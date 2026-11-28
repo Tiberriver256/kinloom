@@ -1,0 +1,84 @@
+{
+  "schemaVersion": 1,
+  "chapterId": "core-admin-settings",
+  "title": "Managing Members, Invites & Archive Settings",
+  "voice": "Charon",
+  "style": "Warm, clear archival museum narrator at a calm, unhurried pace.",
+  "fps": 30,
+  "width": 1280,
+  "height": 720,
+  "steps": [
+    {
+      "stepId": "admin-diagnostics-and-docs",
+      "title": "Check System Diagnostics and Admin Docs",
+      "demoRoute": "/admin#diagnostics",
+      "authRole": "admin",
+      "viewport": { "width": 1280, "height": 720 },
+      "theme": "light",
+      "captureActions": [
+        { "kind": "waitForSelector", "selector": "[data-testid='admin-system-diagnostics']" },
+        { "kind": "screenshot", "name": "admin-diagnostics" }
+      ],
+      "callout": { "x": 88, "y": 130, "width": 540, "height": 96, "label": "System Diagnostics & Docs" },
+      "posterAlt": "Site Administration showing live System Diagnostics health checks and built-in module documentation.",
+      "cues": [
+        {
+          "text": "Open Site Administration and check System Diagnostics to confirm database, media storage, and active plugin health.",
+          "pauseAfterSeconds": 0.4
+        },
+        {
+          "text": "Built-in Admin Docs and Changelogs give stewards version notes and configuration guidance directly inside the archive.",
+          "pauseAfterSeconds": 0.5
+        }
+      ]
+    },
+    {
+      "stepId": "admin-invites-and-members",
+      "title": "Issue Family Invites and enroll Editors",
+      "demoRoute": "/admin#invites",
+      "authRole": "admin",
+      "viewport": { "width": 1280, "height": 720 },
+      "theme": "light",
+      "captureActions": [
+        { "kind": "waitForSelector", "selector": "main" },
+        { "kind": "screenshot", "name": "admin-invites" }
+      ],
+      "callout": { "x": 88, "y": 150, "width": 460, "height": 88, "label": "Family Invites & Members" },
+      "posterAlt": "Site Administration Family Invites panel with revocable read-only links and member role management.",
+      "cues": [
+        {
+          "text": "Create labeled Family Invite links to share a private archive read-only with relatives, and revoke any link immediately if needed.",
+          "pauseAfterSeconds": 0.4
+        },
+        {
+          "text": "Enroll family stewards as Editors or Admins in the Members list to delegate record maintenance safely.",
+          "pauseAfterSeconds": 0.5
+        }
+      ]
+    },
+    {
+      "stepId": "admin-plugins-and-tokens",
+      "title": "Configure Plugin Settings and scoped Agent Tokens",
+      "demoRoute": "/admin#plugin-settings",
+      "authRole": "admin",
+      "viewport": { "width": 1280, "height": 720 },
+      "theme": "light",
+      "captureActions": [
+        { "kind": "waitForSelector", "selector": "[data-testid='admin-plugin-settings']" },
+        { "kind": "screenshot", "name": "admin-plugins-tokens" }
+      ],
+      "callout": { "x": 88, "y": 140, "width": 520, "height": 96, "label": "Plugin Settings & Agent Tokens" },
+      "posterAlt": "Site Administration Plugin Settings cards and scoped Agent Tokens section.",
+      "cues": [
+        {
+          "text": "Configure installed Plugin Settings directly in Site Administration without redeploying your worker.",
+          "pauseAfterSeconds": 0.4
+        },
+        {
+          "text": "Generate least-privilege Agent Tokens with read_backup or write_batch scopes for offline backups and scripted research.",
+          "pauseAfterSeconds": 0.5
+        }
+      ]
+    }
+  ]
+}

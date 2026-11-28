@@ -32,6 +32,7 @@ export default defineConfig({
             'packages/cli/src/**/*.test.ts',
             'packages/ui/src/**/*.test.ts',
             'scripts/**/*.test.ts',
+            'tools/tutorials-video/src/**/*.test.ts',
           ],
           exclude: JSDOM_TS_SUITES,
         },

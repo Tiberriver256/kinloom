@@ -185,9 +185,9 @@ export function buildCoreOnboardingSteps(ctx: KinloomOnboardingContext): readonl
     },
     {
       id: 'core:viewer:read-dossier',
-      title: 'Open an ancestor dossier',
+      title: 'Open a Person Profile',
       description:
-        'Open a person profile to read cited milestones, inspect a primary source scan, or play a name pronunciation.',
+        'Open a Person Profile to read cited milestones, inspect a primary source scan, or play a Pronunciation Guide.',
       roles: ['viewer'],
       order: 20,
       action: { kind: 'route', to: dossierRoute, label: dossierLabel },
@@ -207,12 +207,13 @@ export function buildCoreOnboardingSteps(ctx: KinloomOnboardingContext): readonl
     },
     {
       id: 'core:viewer:open-tutorials',
-      title: 'Read the quick archive guide',
-      description: 'Open the guide anytime from the Guide menu in the top bar for navigation tips.',
+      title: 'Explore the interactive archive guide',
+      description:
+        'Open Interactive Tutorials anytime from the Guide menu in the top bar for step-by-step orientation.',
       roles: ['viewer'],
       order: 40,
-      action: { kind: 'tutorial', chapterId: 'core-getting-started', label: 'Open Archive Guide' },
-      tutorialChapterId: 'core-getting-started',
+      action: { kind: 'tutorial', chapterId: 'core-navigation-search', label: 'Open Archive Guide' },
+      tutorialChapterId: 'core-navigation-search',
     },
 
     // Editor journey

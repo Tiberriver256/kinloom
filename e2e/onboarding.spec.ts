@@ -32,11 +32,46 @@ test.describe('Issue #54 Onboarding checklist, Guide menu, and 360px mobile over
     );
     expect(mobileOverflow).toBeLessThanOrEqual(1);
 
-    // Mobile Archive Menu contains Guide & Help controls
+    // Mobile Archive Menu contains Guide & Tutorials controls and opens real interactive TutorialModal
     await page.getByRole('button', { name: 'Archive menu' }).click();
+    await expect(page.getByRole('button', { name: 'Interactive Tutorials' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Getting Started Checklist' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Keyboard Shortcuts' })).toBeVisible();
-    await page.keyboard.press('Escape');
+    await page.getByRole('button', { name: 'Interactive Tutorials' }).click();
+
+    const tutorialModal = page.getByTestId('tutorial-modal');
+    await expect(tutorialModal).toBeVisible();
+    await expect(tutorialModal).toContainText('Kinloom Archive Guide');
+    await expect(tutorialModal).not.toContainText('Person Dossiers');
+
+    // Verify full-width subtitle (never squeezed beside buttons) and visible action footer at 360x800
+    const mobileMetrics = await tutorialModal.evaluate((dialog) => {
+      const shell = dialog.querySelector('[class*="tutorial-shell"]');
+      const desc = dialog.querySelector('[class*="tutorial-desc"]');
+      const footer = dialog.querySelector('footer');
+      return {
+        overflow: document.documentElement.scrollWidth - window.innerWidth,
+        shellWidth: shell ? shell.getBoundingClientRect().width : 0,
+        descWidth: desc ? desc.getBoundingClientRect().width : 0,
+        footerBottom: footer ? footer.getBoundingClientRect().bottom : 0,
+        viewportHeight: window.innerHeight,
+      };
+    });
+    expect(mobileMetrics.overflow).toBeLessThanOrEqual(1);
+    expect(mobileMetrics.descWidth).toBeGreaterThanOrEqual(mobileMetrics.shellWidth - 40);
+    expect(mobileMetrics.footerBottom).toBeLessThanOrEqual(mobileMetrics.viewportHeight);
+
+    // Interactive chapter picker + Try it now route navigation at 390x844
+    await page.setViewportSize({ width: 390, height: 844 });
+    await tutorialModal.getByRole('button', { name: /Chapters \(/ }).click();
+    await tutorialModal.getByRole('button', { name: /Exploring the Family Tree/ }).click();
+    await expect(tutorialModal).toContainText('Switch between Chart View and List View');
+    await tutorialModal.getByRole('button', { name: /Try it now:/ }).click();
+    await expect(tutorialModal).toHaveCount(0);
+    await expect(page).toHaveURL(/\/tree$/);
+
+    // Return to / for desktop checks
+    await page.goto(`${wiki.baseUrl}/`, { waitUntil: 'networkidle' });
 
     // 2. Desktop 1280x800 check: mark step, dismiss, reload, reopen via Guide menu, open shortcuts, reset
     await page.setViewportSize({ width: 1280, height: 800 });
@@ -45,10 +80,11 @@ test.describe('Issue #54 Onboarding checklist, Guide menu, and 360px mobile over
     );
     expect(desktopOverflow).toBeLessThanOrEqual(1);
 
+    // Opening Interactive Tutorials already auto-completed the guide step (1 of 5).
     await page.getByRole('button', { name: 'Mark "Explore the family tree" as completed' }).click();
-    await expect(card).toContainText('1 of 5 steps completed');
-    await page.getByRole('button', { name: 'Mark "Open an ancestor dossier" as completed' }).click();
     await expect(card).toContainText('2 of 5 steps completed');
+    await page.getByRole('button', { name: 'Mark "Open a Person Profile" as completed' }).click();
+    await expect(card).toContainText('3 of 5 steps completed');
     await expect(card).toContainText('Have family photos or corrections to share?');
 
     await page.getByRole('button', { name: 'Dismiss checklist' }).click();
@@ -69,7 +105,7 @@ test.describe('Issue #54 Onboarding checklist, Guide menu, and 360px mobile over
     await expect(page.getByRole('heading', { name: 'Keyboard Shortcuts' })).toHaveCount(0);
 
     await guideBtn.click();
-    await page.getByRole('menuitem', { name: 'Reset Onboarding Progress' }).click();
+    await page.getByRole('menuitem', { name: 'Reset Tutorial & Onboarding Progress' }).click();
     await expect(page.getByTestId('onboarding-checklist-card')).toContainText('0 of 5 steps completed');
   });
 

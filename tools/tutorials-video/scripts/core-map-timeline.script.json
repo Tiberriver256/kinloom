@@ -1,0 +1,58 @@
+{
+  "schemaVersion": 1,
+  "chapterId": "core-map-timeline",
+  "title": "Tracing the Migration Map & Time View",
+  "voice": "Charon",
+  "style": "Warm, clear archival museum narrator at a calm, unhurried pace.",
+  "fps": 30,
+  "width": 1280,
+  "height": 720,
+  "steps": [
+    {
+      "stepId": "map-migration-routes",
+      "title": "Play migration routes and filter historical eras",
+      "demoRoute": "/map",
+      "viewport": { "width": 1280, "height": 720 },
+      "theme": "light",
+      "captureActions": [
+        { "kind": "waitForSelector", "selector": "main" },
+        { "kind": "screenshot", "name": "migration-map" }
+      ],
+      "callout": { "x": 64, "y": 92, "width": 420, "height": 44, "label": "Era filters & Play Route" },
+      "posterAlt": "Migration Map charting Lincoln and Todd settlement stops from Massachusetts and Virginia to Kentucky and Illinois.",
+      "cues": [
+        {
+          "text": "Open the Migration Map to follow documented family movement across towns and states.",
+          "pauseAfterSeconds": 0.4
+        },
+        {
+          "text": "Filter by an individual or historical era, then press Play Route to step chronologically through every geocoded stop.",
+          "pauseAfterSeconds": 0.5
+        }
+      ]
+    },
+    {
+      "stepId": "time-year-scrubber",
+      "title": "Scrub historical years on the Time view",
+      "demoRoute": "/time?year=1860",
+      "viewport": { "width": 1280, "height": 720 },
+      "theme": "light",
+      "captureActions": [
+        { "kind": "waitForSelector", "selector": "main" },
+        { "kind": "screenshot", "name": "time-1860" }
+      ],
+      "callout": { "x": 88, "y": 126, "width": 620, "height": 52, "label": "Year scrubber & milestones" },
+      "posterAlt": "Time view set to 1860 showing Lincoln and Todd relatives alive in that year grouped by town.",
+      "cues": [
+        {
+          "text": "Open Time and drag the year slider or select a milestone year such as 1860 to see everyone alive at that moment.",
+          "pauseAfterSeconds": 0.4
+        },
+        {
+          "text": "Kinloom calculates each relative's age and location alongside contemporaneous local and wider historical notices.",
+          "pauseAfterSeconds": 0.5
+        }
+      ]
+    }
+  ]
+}
