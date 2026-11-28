@@ -246,11 +246,11 @@ export async function runMigrate(rest: readonly string[], ctx: CliDispatchContex
 
 export async function runDates(rest: readonly string[], ctx: CliDispatchContext): Promise<CliExitCode> {
   const sub = rest[0];
-  if (sub !== 'weekday' && sub !== 'diff' && sub !== 'age') {
+  if (sub !== 'weekday' && sub !== 'diff' && sub !== 'age' && sub !== 'convert') {
     throw new CliValidationError(
       sub
-        ? `Unknown dates subcommand '${sub}'. Expected \`weekday\`, \`diff\`, or \`age\`.`
-        : 'Missing dates subcommand. Expected `weekday`, `diff`, or `age`.'
+        ? `Unknown dates subcommand '${sub}'. Expected \`weekday\`, \`diff\`, \`age\`, or \`convert\`.`
+        : 'Missing dates subcommand. Expected `weekday`, `diff`, `age`, or `convert`.'
     );
   }
   const subArgs = rest.slice(1);
@@ -259,13 +259,14 @@ export async function runDates(rest: readonly string[], ctx: CliDispatchContext)
     allowPositionals: true,
     options: {
       at: { type: 'string', multiple: true },
+      from: { type: 'string' },
+      to: { type: 'string' },
+      region: { type: 'string' },
       json: { type: 'boolean', default: false },
     },
   });
-  const [{ runDatesCommand }, { measureCommand }] = await Promise.all([
-    import('../commands/ops/dates.js'),
-    import('../commands/ops/telemetry.js'),
-  ]);
+  const [{ parseCalendarRegion, parseCalendarSystem, runDatesCommand }, { measureCommand }] =
+    await Promise.all([import('../commands/ops/dates.js'), import('../commands/ops/telemetry.js')]);
   const result = await measureCommand(
     {
       subcmd: `dates ${sub}`,
@@ -275,6 +276,14 @@ export async function runDates(rest: readonly string[], ctx: CliDispatchContext)
       }),
     },
     async () => {
+      if (
+        sub !== 'convert' &&
+        (values.from !== undefined || values.to !== undefined || values.region !== undefined)
+      ) {
+        throw new CliValidationError(
+          'Options `--from`, `--to`, and `--region` are only valid with `kinloom dates convert`.'
+        );
+      }
       if (sub === 'weekday') {
         if (values.at && values.at.length > 0) {
           throw new CliValidationError('Option `--at` is only valid with `kinloom dates age`.');
@@ -301,6 +310,37 @@ export async function runDates(rest: readonly string[], ctx: CliDispatchContext)
           subcommand: 'diff',
           startDate: positionals[0] ?? '',
           endDate: positionals[1] ?? '',
+          json: values.json,
+        });
+      }
+      if (sub === 'convert') {
+        if (values.at && values.at.length > 0) {
+          throw new CliValidationError('Option `--at` is only valid with `kinloom dates age`.');
+        }
+        if (positionals.length !== 1) {
+          throw new CliValidationError(
+            'Usage: kinloom dates convert <YYYY-MM-DD> --from julian|swedish|gregorian --to gregorian|julian|swedish [--region gb|se-fi|nl] [--json]'
+          );
+        }
+        if (!values.from) {
+          throw new CliValidationError(
+            'Missing required option `--from <julian|swedish|gregorian>` for `kinloom dates convert`.'
+          );
+        }
+        if (!values.to) {
+          throw new CliValidationError(
+            'Missing required option `--to <gregorian|julian|swedish>` for `kinloom dates convert`.'
+          );
+        }
+        const from = parseCalendarSystem(values.from, '--from');
+        const to = parseCalendarSystem(values.to, '--to');
+        const region = values.region !== undefined ? parseCalendarRegion(values.region) : undefined;
+        return runDatesCommand({
+          subcommand: 'convert',
+          date: positionals[0] ?? '',
+          from,
+          to,
+          region,
           json: values.json,
         });
       }
